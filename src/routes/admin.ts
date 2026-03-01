@@ -400,15 +400,17 @@ adminRoutes.post('/init-db', async (c) => {
     }
 
     // Migration 0010: Remove old CHECK constraint on service_tier
-    // Old production DB had CHECK(service_tier IN ('immediate','urgent','regular'))
-    // New tiers are 'express' and 'standard'. SQLite requires table recreation to drop constraints.
+    // SAFETY: This migration only runs if the old constraint is detected.
+    // It backs up data, recreates the table, and restores. No data is lost.
+    // NOTE: If orders_new already exists from a failed previous run, clean it up first.
     try {
       const checkRow = await c.env.DB.prepare(
         "SELECT sql FROM sqlite_master WHERE type='table' AND name='orders'"
       ).first<any>()
       if (checkRow?.sql && checkRow.sql.includes("'immediate'")) {
-        // Old constraint detected — recreate orders table without it
-        await c.env.DB.prepare(`CREATE TABLE IF NOT EXISTS orders_new (
+        // Clean up any leftover temp table from failed migration
+        try { await c.env.DB.prepare('DROP TABLE IF EXISTS orders_migration_temp').run() } catch(e) {}
+        await c.env.DB.prepare(`CREATE TABLE orders_migration_temp (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           order_number TEXT UNIQUE NOT NULL,
           master_company_id INTEGER NOT NULL,
@@ -427,7 +429,9 @@ adminRoutes.post('/init-db', async (c) => {
           FOREIGN KEY (customer_company_id) REFERENCES customer_companies(id),
           FOREIGN KEY (customer_id) REFERENCES customers(id)
         )`).run()
-        await c.env.DB.prepare(`INSERT INTO orders_new SELECT
+        // Copy all existing data
+        const countBefore = await c.env.DB.prepare('SELECT COUNT(*) as cnt FROM orders').first<any>()
+        await c.env.DB.prepare(`INSERT INTO orders_migration_temp SELECT
           id, order_number, master_company_id, customer_company_id, customer_id,
           property_address, property_city, property_province, property_postal_code,
           latitude, longitude,
@@ -437,15 +441,21 @@ adminRoutes.post('/init-db', async (c) => {
           payment_intent_id, estimated_delivery, delivered_at, notes, is_trial,
           created_at, updated_at
         FROM orders`).run()
+        // Verify row count matches before dropping
+        const countAfter = await c.env.DB.prepare('SELECT COUNT(*) as cnt FROM orders_migration_temp').first<any>()
+        if (countAfter?.cnt !== countBefore?.cnt) {
+          await c.env.DB.prepare('DROP TABLE orders_migration_temp').run()
+          throw new Error(`Data verification failed: ${countBefore?.cnt} vs ${countAfter?.cnt} rows`)
+        }
         await c.env.DB.prepare('DROP TABLE orders').run()
-        await c.env.DB.prepare('ALTER TABLE orders_new RENAME TO orders').run()
+        await c.env.DB.prepare('ALTER TABLE orders_migration_temp RENAME TO orders').run()
         // Recreate indexes
         await c.env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)').run()
         await c.env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at)').run()
         await c.env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_orders_order_number ON orders(order_number)').run()
         await c.env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_orders_customer_id ON orders(customer_id)').run()
       }
-    } catch(e) {}
+    } catch(e) { console.error('Migration 0010 error:', e) }
 
     // Stripe tables
     await c.env.DB.prepare(`
@@ -481,17 +491,19 @@ adminRoutes.post('/init-db', async (c) => {
       )
     `).run()
 
-    // Seed default credit packages — Pricing: Single=$10, 10=$9/ea, 25=$8/ea, 50=$7/ea, 100=$6/ea
-    // Subscription: $49.99/month for CRM & business tools access
-    await c.env.DB.prepare(`DELETE FROM credit_packages`).run()
-    await c.env.DB.prepare(`
-      INSERT INTO credit_packages (id, name, description, credits, price_cents, sort_order)
-      VALUES
-        (1, '10 Pack', '10 reports — $9.00/ea — Save 10%', 10, 9000, 1),
-        (2, '25 Pack', '25 reports — $8.00/ea — Save 20%', 25, 20000, 2),
-        (3, '50 Pack', '50 reports — $7.00/ea — Save 30%', 50, 35000, 3),
-        (4, '100 Pack', '100 reports — best value — $6.00/ea — Save 40%', 100, 60000, 4)
-    `).run()
+    // Seed default credit packages — only if table is empty (never delete existing data)
+    // Pricing: Single=$10, 10=$9/ea, 25=$8/ea, 50=$7/ea, 100=$6/ea
+    const pkgCount = await c.env.DB.prepare('SELECT COUNT(*) as cnt FROM credit_packages').first<any>()
+    if (!pkgCount?.cnt || pkgCount.cnt === 0) {
+      await c.env.DB.prepare(`
+        INSERT INTO credit_packages (id, name, description, credits, price_cents, sort_order)
+        VALUES
+          (1, '10 Pack', '10 reports — $9.00/ea — Save 10%', 10, 9000, 1),
+          (2, '25 Pack', '25 reports — $8.00/ea — Save 20%', 25, 20000, 2),
+          (3, '50 Pack', '50 reports — $7.00/ea — Save 30%', 50, 35000, 3),
+          (4, '100 Pack', '100 reports — best value — $6.00/ea — Save 40%', 100, 60000, 4)
+      `).run()
+    }
 
     // Customer portal indexes
     const custIndexes = [
