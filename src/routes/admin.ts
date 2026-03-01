@@ -400,62 +400,10 @@ adminRoutes.post('/init-db', async (c) => {
     }
 
     // Migration 0010: Remove old CHECK constraint on service_tier
-    // SAFETY: This migration only runs if the old constraint is detected.
-    // It backs up data, recreates the table, and restores. No data is lost.
-    // NOTE: If orders_new already exists from a failed previous run, clean it up first.
-    try {
-      const checkRow = await c.env.DB.prepare(
-        "SELECT sql FROM sqlite_master WHERE type='table' AND name='orders'"
-      ).first<any>()
-      if (checkRow?.sql && checkRow.sql.includes("'immediate'")) {
-        // Clean up any leftover temp table from failed migration
-        try { await c.env.DB.prepare('DROP TABLE IF EXISTS orders_migration_temp').run() } catch(e) {}
-        await c.env.DB.prepare(`CREATE TABLE orders_migration_temp (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          order_number TEXT UNIQUE NOT NULL,
-          master_company_id INTEGER NOT NULL,
-          customer_company_id INTEGER,
-          customer_id INTEGER,
-          property_address TEXT NOT NULL, property_city TEXT, property_province TEXT, property_postal_code TEXT,
-          latitude REAL, longitude REAL,
-          homeowner_name TEXT NOT NULL, homeowner_phone TEXT, homeowner_email TEXT,
-          requester_name TEXT NOT NULL, requester_company TEXT, requester_email TEXT, requester_phone TEXT,
-          service_tier TEXT NOT NULL, price REAL NOT NULL,
-          status TEXT DEFAULT 'pending', payment_status TEXT DEFAULT 'unpaid',
-          payment_intent_id TEXT, estimated_delivery TEXT, delivered_at TEXT, notes TEXT,
-          is_trial INTEGER DEFAULT 0,
-          created_at TEXT DEFAULT (datetime('now')), updated_at TEXT DEFAULT (datetime('now')),
-          FOREIGN KEY (master_company_id) REFERENCES master_companies(id),
-          FOREIGN KEY (customer_company_id) REFERENCES customer_companies(id),
-          FOREIGN KEY (customer_id) REFERENCES customers(id)
-        )`).run()
-        // Copy all existing data
-        const countBefore = await c.env.DB.prepare('SELECT COUNT(*) as cnt FROM orders').first<any>()
-        await c.env.DB.prepare(`INSERT INTO orders_migration_temp SELECT
-          id, order_number, master_company_id, customer_company_id, customer_id,
-          property_address, property_city, property_province, property_postal_code,
-          latitude, longitude,
-          homeowner_name, homeowner_phone, homeowner_email,
-          requester_name, requester_company, requester_email, requester_phone,
-          service_tier, price, status, payment_status,
-          payment_intent_id, estimated_delivery, delivered_at, notes, is_trial,
-          created_at, updated_at
-        FROM orders`).run()
-        // Verify row count matches before dropping
-        const countAfter = await c.env.DB.prepare('SELECT COUNT(*) as cnt FROM orders_migration_temp').first<any>()
-        if (countAfter?.cnt !== countBefore?.cnt) {
-          await c.env.DB.prepare('DROP TABLE orders_migration_temp').run()
-          throw new Error(`Data verification failed: ${countBefore?.cnt} vs ${countAfter?.cnt} rows`)
-        }
-        await c.env.DB.prepare('DROP TABLE orders').run()
-        await c.env.DB.prepare('ALTER TABLE orders_migration_temp RENAME TO orders').run()
-        // Recreate indexes
-        await c.env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)').run()
-        await c.env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at)').run()
-        await c.env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_orders_order_number ON orders(order_number)').run()
-        await c.env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_orders_customer_id ON orders(customer_id)').run()
-      }
-    } catch(e) { console.error('Migration 0010 error:', e) }
+    // RETIRED — This migration was for the initial schema transition.
+    // Both local and production databases already use the new schema.
+    // No DROP TABLE or destructive operations remain in init-db.
+    // Kept as comment for historical reference only.
 
     // Stripe tables
     await c.env.DB.prepare(`
