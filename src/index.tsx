@@ -15,6 +15,7 @@ import { crmRoutes } from './routes/crm'
 import { propertyImageryRoutes } from './routes/property-imagery'
 import { blogRoutes } from './routes/blog'
 import { d2dRoutes } from './routes/d2d'
+import { secretaryRoutes } from './routes/secretary'
 import type { Bindings } from './types'
 
 const app = new Hono<{ Bindings: Bindings }>()
@@ -37,6 +38,7 @@ app.route('/api/crm', crmRoutes)
 app.route('/api/property-imagery', propertyImageryRoutes)
 app.route('/api/blog', blogRoutes)
 app.route('/api/d2d', d2dRoutes)
+app.route('/api/secretary', secretaryRoutes)
 
 // Health check
 app.get('/api/health', (c) => {
@@ -350,6 +352,12 @@ app.get('/customer/pipeline', (c) => c.html(getCrmSubPageHTML('pipeline', 'Sales
 app.get('/customer/d2d', (c) => {
   const mapsKey = c.env.GOOGLE_MAPS_API_KEY || ''
   return c.html(getD2DPageHTML(mapsKey))
+})
+
+// Roofer Secretary — AI Phone Answering Service
+app.get('/customer/secretary', (c) => {
+  const stripeKey = c.env.STRIPE_PUBLISHABLE_KEY || ''
+  return c.html(getSecretaryPageHTML(stripeKey))
 })
 
 export default app
@@ -1785,6 +1793,64 @@ function getCrmSubPageHTML(module: string, title: string, icon: string) {
     }
   </script>
   <script src="/static/crm-module.js"></script>
+</body>
+</html>`
+}
+
+// ============================================================
+// ROOFER SECRETARY PAGE — AI Phone Answering Service
+// ============================================================
+function getSecretaryPageHTML(stripePublishableKey: string) {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags()}
+  <title>Roofer Secretary - RoofReporterAI</title>
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <header class="bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
+          <div class="w-10 h-10 bg-accent-500 rounded-lg flex items-center justify-center">
+            <i class="fas fa-phone-alt text-white text-lg"></i>
+          </div>
+          <div>
+            <h1 class="text-lg font-bold">Roofer Secretary</h1>
+            <p class="text-brand-200 text-xs">AI Phone Answering Service</p>
+          </div>
+        </a>
+      </div>
+      <nav class="flex items-center space-x-3">
+        <span id="custGreeting" class="text-brand-200 text-sm hidden"><i class="fas fa-user-circle mr-1"></i><span id="custName"></span></span>
+        <a href="/customer/dashboard" class="text-brand-200 hover:text-white text-sm"><i class="fas fa-th-large mr-1"></i>Dashboard</a>
+        <button onclick="custLogout()" class="text-brand-200 hover:text-white text-sm"><i class="fas fa-sign-out-alt mr-1"></i>Logout</button>
+      </nav>
+    </div>
+  </header>
+  <main class="max-w-4xl mx-auto px-4 py-6">
+    <div id="secretary-root" data-stripe-key="${stripePublishableKey}"></div>
+  </main>
+  <script>
+    (function() {
+      var c = localStorage.getItem('rc_customer');
+      if (!c) { window.location.href = '/customer/login'; return; }
+      try {
+        var u = JSON.parse(c);
+        var g = document.getElementById('custGreeting');
+        var n = document.getElementById('custName');
+        if (g && n) { n.textContent = u.name || u.email; g.classList.remove('hidden'); }
+      } catch(e) {}
+    })();
+    function custLogout() {
+      var token = localStorage.getItem('rc_customer_token');
+      if (token) fetch('/api/customer/logout', { method: 'POST', headers: { 'Authorization': 'Bearer ' + token } })['catch'](function(){});
+      localStorage.removeItem('rc_customer');
+      localStorage.removeItem('rc_customer_token');
+      window.location.href = '/customer/login';
+    }
+  </script>
+  <script src="/static/secretary.js"></script>
 </body>
 </html>`
 }

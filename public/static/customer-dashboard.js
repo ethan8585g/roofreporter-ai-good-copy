@@ -22,14 +22,15 @@ document.addEventListener('DOMContentLoaded', async function() {
 async function loadDashData() {
   custState.loading = true;
   try {
-    var [profileRes, ordersRes, billingRes, crmCustRes, crmInvRes, crmPropRes, crmJobRes] = await Promise.all([
+    var [profileRes, ordersRes, billingRes, crmCustRes, crmInvRes, crmPropRes, crmJobRes, secRes] = await Promise.all([
       fetch('/api/customer/me', { headers: authHeaders() }),
       fetch('/api/customer/orders', { headers: authHeaders() }),
       fetch('/api/stripe/billing', { headers: authHeaders() }),
       fetch('/api/crm/customers', { headers: authHeaders() }).catch(function() { return { ok: false }; }),
       fetch('/api/crm/invoices', { headers: authHeaders() }).catch(function() { return { ok: false }; }),
       fetch('/api/crm/proposals', { headers: authHeaders() }).catch(function() { return { ok: false }; }),
-      fetch('/api/crm/jobs', { headers: authHeaders() }).catch(function() { return { ok: false }; })
+      fetch('/api/crm/jobs', { headers: authHeaders() }).catch(function() { return { ok: false }; }),
+      fetch('/api/secretary/status', { headers: authHeaders() }).catch(function() { return { ok: false }; })
     ]);
     if (profileRes.ok) {
       var pd = await profileRes.json();
@@ -88,7 +89,8 @@ function renderDashboard() {
     { id: 'proposals', href: '/customer/proposals', icon: 'fa-file-signature', label: 'Estimates / Proposals', desc: 'Sales documents', color: 'from-purple-500 to-purple-600', badge: s.proposals_open > 0 ? s.proposals_open + ' open' : '', badgeColor: 'bg-purple-500' },
     { id: 'jobs', href: '/customer/jobs', icon: 'fa-hard-hat', label: 'Job Management', desc: 'Calendar & scheduling', color: 'from-rose-500 to-rose-600', badge: s.jobs_scheduled > 0 ? s.jobs_scheduled + ' scheduled' : '', badgeColor: 'bg-rose-500' },
     { id: 'pipeline', href: '/customer/pipeline', icon: 'fa-funnel-dollar', label: 'Sales Pipeline', desc: 'Leads & to-do\'s', color: 'from-cyan-500 to-cyan-600', badge: 'Coming Soon', badgeColor: 'bg-gray-400' },
-    { id: 'd2d', href: '/customer/d2d', icon: 'fa-door-open', label: 'D2D Manager', desc: 'Door-to-door teams', color: 'from-orange-500 to-orange-600', badge: '', badgeColor: '' }
+    { id: 'd2d', href: '/customer/d2d', icon: 'fa-door-open', label: 'D2D Manager', desc: 'Door-to-door teams', color: 'from-orange-500 to-orange-600', badge: '', badgeColor: '' },
+    { id: 'secretary', href: '/customer/secretary', icon: 'fa-headset', label: 'Roofer Secretary', desc: 'AI phone answering service', color: 'from-violet-500 to-purple-700', badge: '$149/mo', badgeColor: 'bg-violet-500' }
   ];
 
   // DEV-ONLY: Add Property Imagery tile for dev account
