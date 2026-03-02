@@ -49,6 +49,10 @@ async function loadDashData() {
     if (crmPropRes.ok) { var d3 = await crmPropRes.json(); stats.proposals_open = (d3.stats && d3.stats.open_count) || 0; stats.proposals_sold = (d3.stats && d3.stats.sold_count) || 0; }
     if (crmJobRes.ok) { var d4 = await crmJobRes.json(); stats.jobs_scheduled = (d4.stats && d4.stats.scheduled) || 0; }
     custState.crmStats = stats;
+    // Secretary status
+    custState.secretaryActive = false;
+    custState.secretaryCalls = 0;
+    if (secRes.ok) { var secData = await secRes.json(); custState.secretaryActive = secData.has_active_subscription; custState.secretaryCalls = secData.total_calls || 0; }
   } catch(e) { console.error('Dashboard load error:', e); }
   custState.loading = false;
 }
@@ -90,7 +94,7 @@ function renderDashboard() {
     { id: 'jobs', href: '/customer/jobs', icon: 'fa-hard-hat', label: 'Job Management', desc: 'Calendar & scheduling', color: 'from-rose-500 to-rose-600', badge: s.jobs_scheduled > 0 ? s.jobs_scheduled + ' scheduled' : '', badgeColor: 'bg-rose-500' },
     { id: 'pipeline', href: '/customer/pipeline', icon: 'fa-funnel-dollar', label: 'Sales Pipeline', desc: 'Leads & to-do\'s', color: 'from-cyan-500 to-cyan-600', badge: 'Coming Soon', badgeColor: 'bg-gray-400' },
     { id: 'd2d', href: '/customer/d2d', icon: 'fa-door-open', label: 'D2D Manager', desc: 'Door-to-door teams', color: 'from-orange-500 to-orange-600', badge: '', badgeColor: '' },
-    { id: 'secretary', href: '/customer/secretary', icon: 'fa-headset', label: 'Roofer Secretary', desc: 'AI phone answering service', color: 'from-violet-500 to-purple-700', badge: '$149/mo', badgeColor: 'bg-violet-500' }
+    { id: 'secretary', href: '/customer/secretary', icon: 'fa-headset', label: 'Roofer Secretary', desc: 'AI phone answering service', color: 'from-violet-500 to-purple-700', badge: custState.secretaryActive ? (custState.secretaryCalls > 0 ? custState.secretaryCalls + ' calls' : 'Active') : '$149/mo', badgeColor: custState.secretaryActive ? 'bg-green-500' : 'bg-violet-500' }
   ];
 
   // DEV-ONLY: Add Property Imagery tile for dev account
