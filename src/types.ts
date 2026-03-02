@@ -411,6 +411,12 @@ export interface RoofReport {
     dsm_url: string | null
     mask_url: string | null
     flux_url: string | null
+    /** Base64 BMP data URL: high-res RGB aerial cropped to roof footprint via mask */
+    rgb_aerial_url?: string
+    /** Base64 BMP data URL: mask overlay visualization (roof pixels highlighted in blue) */
+    mask_overlay_url?: string
+    /** Base64 BMP data URL: annual flux heatmap (solar exposure per roof pixel) */
+    flux_heatmap_url?: string
 
     // Directional aerial satellite views — offset from center to show each side of roof
     north_url: string | null
@@ -447,6 +453,18 @@ export interface RoofReport {
 
   // ---- AI GEOMETRY OVERLAY — Gemini Vision facet polygons for satellite image overlay ----
   ai_geometry?: AIMeasurementAnalysis | null
+
+  // ---- SOLAR FLUX ANALYSIS (Annual kWh/m² exposure) ----
+  flux_analysis?: {
+    mean_kwh_m2: number
+    max_kwh_m2: number
+    min_kwh_m2: number
+    total_annual_kwh: number
+    valid_pixels: number
+    high_sun_pct: number
+    shaded_pct: number
+    peak_sun_hours_per_day: number
+  } | null
 
   // ---- RAS YIELD ANALYSIS (RoofReporterAI value-add) ----
   ras_yield?: RASYieldAnalysis

@@ -197,47 +197,63 @@ export async function analyzeRoofGeometry(
   // 5. Explicit guidance: trace every jog, bump, wing, and garage — not a rectangle
   // 6. Internal structural lines are secondary (ridge, hip, valley)
   // =============================================================================
-  const systemPrompt = `You are a precision roof measurement AI used by professional roofing contractors.
+  const systemPrompt = `You are a precision roof measurement AI used by professional roofing contractors in Alberta, Canada.
 Your ONLY task is to trace the EXACT roof outline of the one building whose roof is DEAD CENTER in this 640×640 pixel overhead satellite image.
 
 ==== COORDINATE SYSTEM ====
 • The image is exactly 640 × 640 pixels.
 • (0, 0) is the TOP-LEFT corner; (640, 640) is the BOTTOM-RIGHT corner.
 • All coordinates you return MUST be integers in the range 0–640.
+• Use the ACTUAL pixel positions — be precise to within 5 pixels.
 
-==== STEP 1 — OUTER PERIMETER (most important) ====
+==== IDENTIFICATION ====
+• Look at the CENTER of the image (around pixel 320,320).
+• The building whose roof is closest to the center is your TARGET.
+• IGNORE all other buildings, trees, fences, driveways, pools, sheds.
+• If there's a shadow from the target building, do NOT trace the shadow.
+
+==== STEP 1 — OUTER PERIMETER (most critical — 60% of your effort) ====
 Trace the COMPLETE outer boundary of the center building's roof.
 • Walk around the roof outline CLOCKWISE, starting from the top-left-most corner.
 • Place a vertex at EVERY corner, jog, bump, offset, wing junction, or direction change.
-  – Typical Alberta house: L-shape, T-shape, or rectangular + attached garage. The perimeter
-    must follow the ENTIRE structure including every bump-out, garage wing, front porch overhang.
-• Do NOT simplify to a rectangle. If the roof has 10 corners, return 10 points.
+  – Typical Alberta house shapes: L-shape, T-shape, rectangular + attached garage, hip roof with no gable ends.
+  – The perimeter MUST follow the ENTIRE structure including every bump-out, garage wing, covered porch overhang.
+• Do NOT simplify to a rectangle. If the roof has 8 corners, return 8 points. Complex houses may have 12-20 points.
 • For each vertex, label "edge_to_next" — the type of the edge FROM this point TO the next:
-  – EAVE: a lower roof edge (horizontal-ish, where gutters go, typically the longest edges along the base of the roof plane)
-  – RAKE: a sloped gable edge that follows the roof pitch upward to the peak (diagonal, found on gable ends)
-  – HIP: a diagonal edge where two sloped planes meet (runs from ridge end down to a corner, NOT along the gutter line)
-  – RIDGE: a peak line along the very top where two slopes meet (only if part of the outer perimeter, which is rare)
+  – EAVE: a lower horizontal roof edge (where gutters go, along the base of the roof plane, typically the longest horizontal runs)
+  – RAKE: a sloped gable edge on gable ends where you can see the pitched edge of the roof (only on houses with visible gable/triangular wall ends)
+  – HIP: a diagonal edge where two sloped planes meet at the roof's edge (runs from ridge end down to a corner, NOT along the gutter line — common on hip roofs where there are NO exposed triangular wall ends)
+  – RIDGE: a peak line along the very top (only if part of the outer perimeter, which is rare)
+
+EDGE CLASSIFICATION GUIDE:
+  - If the roof has TRIANGULAR wall ends visible → those diagonal slopes are RAKE edges
+  - If the roof has NO triangular wall ends and all edges slope smoothly into eaves → those diagonal edges are HIP edges
+  - All horizontal lower edges where gutters attach → EAVE edges
+  - Most Alberta homes are HIP roofs (4 slopes, no gable/triangular walls)
 
 ==== STEP 2 — INTERNAL STRUCTURAL LINES ====
 Identify the major internal lines visible on the roof:
-• RIDGE: the topmost horizontal peak line where two slope planes meet.
-• HIP: lines running diagonally from the end of a ridge down to a perimeter corner.
-• VALLEY: inward-angled lines where two roof planes slope toward each other (often at wing junctions).
+• RIDGE: the topmost horizontal peak line where two slope planes meet (usually runs roughly E-W through the center).
+• HIP: lines running diagonally from the end of a ridge down to a perimeter corner (4 hips on a standard hip roof).
+• VALLEY: inward-angled lines where two roof planes slope toward each other (often at wing junctions, L-shape transitions).
 
 ==== STEP 3 — ROOF FACETS ====
-Each roof plane/face visible from above is a facet.
+Each distinct roof plane/face visible from above is a facet.
 • Outline each facet as a polygon (its corners in pixel coords).
-• Estimate pitch as rise/run (e.g. "6/12") and compass azimuth in degrees.
+• Estimate pitch as rise/run (e.g. "6/12") and compass azimuth in degrees (0=North, 90=East, 180=South, 270=West).
+• Standard hip roof has 4 facets. L-shaped house may have 6-8 facets.
 
 ==== STEP 4 — OBSTRUCTIONS ====
 Mark visible obstructions: CHIMNEY, VENT, SKYLIGHT, HVAC (bounding box in pixels).
 
-==== CRITICAL RULES ====
-1. ONLY the CENTER building's roof. Ignore all neighbors, trees, driveways, fences.
-2. The perimeter must be TIGHT to the actual visible roof edge — not offset outward into the yard.
-3. If the building has an attached garage, covered porch, or bump-out, the perimeter INCLUDES those.
-4. Use INTEGERS for coordinates (no decimals).
-5. The perimeter array must form a CLOSED polygon (last point connects back to first).
+==== CRITICAL ACCURACY RULES ====
+1. ONLY the CENTER building's roof. Zero tolerance for neighboring roofs.
+2. The perimeter must be TIGHT to the actual visible roof edge — not offset outward into the yard, and not inward missing overhang.
+3. If the building has an attached garage, the perimeter INCLUDES the garage roof.
+4. Trace the DRIP LINE (outermost edge including overhangs), not the wall line.
+5. Use INTEGERS for coordinates (no decimals).
+6. The perimeter array must form a CLOSED polygon (last point connects back to first).
+7. Verify: the centroid of your perimeter should be near pixel (320, 320).
 
 ==== REQUIRED JSON OUTPUT ====
 {
@@ -255,7 +271,17 @@ Mark visible obstructions: CHIMNEY, VENT, SKYLIGHT, HVAC (bounding box in pixels
   ]
 }`
 
-  const userPrompt = `Analyze this 640×640 pixel overhead satellite image. The building in the DEAD CENTER of the image is the target. Trace its COMPLETE roof perimeter (every corner, wing, bump-out, garage) as a tight polygon in pixel coordinates. Then identify internal roof lines (ridges, hips, valleys), facets, and obstructions. Return ONLY the JSON.`
+  const userPrompt = `Analyze this 640×640 pixel overhead satellite image of a residential property in Alberta, Canada. The building in the DEAD CENTER of the image (near pixel 320,320) is the target. 
+
+Step 1: Trace its COMPLETE roof perimeter as a tight clockwise polygon in pixel coordinates. Include every corner, wing, bump-out, and garage. Be precise — trace the drip line (outermost edge including overhang).
+
+Step 2: Identify all internal structural lines (ridges, hips, valleys) with their start and end pixel coordinates.
+
+Step 3: Outline each individual roof facet (plane) with its polygon corners, estimated pitch, and compass azimuth.
+
+Step 4: Mark any visible obstructions (chimneys, vents, skylights).
+
+Return ONLY the JSON object with perimeter, facets, lines, and obstructions arrays.`
 
   const text = await callGemini({
     apiKey: env.apiKey,
@@ -310,6 +336,19 @@ Mark visible obstructions: CHIMNEY, VENT, SKYLIGHT, HVAC (bounding box in pixels
 
   // Clamp all coordinates to 0-640
   clampCoordinates(analysis)
+
+  // Validate: perimeter centroid should be near center (320,320)
+  // If too far off, the model may have traced the wrong building
+  if (analysis.perimeter && analysis.perimeter.length >= 3) {
+    const cx = analysis.perimeter.reduce((s, p) => s + p.x, 0) / analysis.perimeter.length
+    const cy = analysis.perimeter.reduce((s, p) => s + p.y, 0) / analysis.perimeter.length
+    const distFromCenter = Math.sqrt((cx - 320) ** 2 + (cy - 320) ** 2)
+    if (distFromCenter > 200) {
+      console.warn(`[Gemini] Perimeter centroid (${cx.toFixed(0)},${cy.toFixed(0)}) is ${distFromCenter.toFixed(0)}px from center — may have traced wrong building`)
+    } else {
+      console.log(`[Gemini] Perimeter centroid (${cx.toFixed(0)},${cy.toFixed(0)}), ${distFromCenter.toFixed(0)}px from center — looks correct`)
+    }
+  }
 
   console.log(`[Gemini] Final: ${analysis.perimeter.length} perimeter pts, ${analysis.facets.length} facets, ${analysis.lines.length} lines, ${analysis.obstructions.length} obstructions`)
 

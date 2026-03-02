@@ -99,6 +99,27 @@ export interface RoofAreaCalculation {
   materialSquares: number
 }
 
+export interface FluxAnalysis {
+  /** Mean annual solar flux across roof pixels (kWh/m²/year) */
+  meanFluxKwhM2: number
+  /** Maximum annual solar flux pixel (kWh/m²/year) */
+  maxFluxKwhM2: number
+  /** Minimum annual solar flux pixel (kWh/m²/year) */
+  minFluxKwhM2: number
+  /** Total annual energy across entire roof (kWh/year) */
+  totalAnnualKwh: number
+  /** Number of valid flux pixels analyzed */
+  validPixels: number
+  /** Percentage of roof receiving >1000 kWh/m²/year ("high sun" zones) */
+  highSunPct: number
+  /** Percentage of roof receiving <600 kWh/m²/year ("shaded" zones) */
+  shadedPct: number
+  /** Equivalent peak sun hours per day (meanFlux / 365) */
+  peakSunHoursPerDay: number
+  /** Base64 data URL of the flux heatmap visualization */
+  fluxHeatmapDataUrl: string
+}
+
 export interface DataLayersAnalysis {
   // Geocoded location
   latitude: number
@@ -119,12 +140,17 @@ export interface DataLayersAnalysis {
     validPixels: number
     pixelSizeMeters: number
   }
+  // Annual flux / solar exposure analysis
+  flux: FluxAnalysis | null
   // Image URLs (for report display)
   dsmUrl: string
   maskUrl: string
   rgbUrl: string
+  annualFluxUrl: string
   /** Base64 data URL of the Solar API's aerial RGB image (0.1-0.5m/pixel resolution) */
   rgbAerialDataUrl: string
+  /** Base64 data URL of the mask overlay visualization (roof highlighted in blue) */
+  maskOverlayDataUrl: string
   satelliteUrl: string
   /** High-res overhead satellite URL (640x640 square, optimal zoom for roof measurement) */
   satelliteOverheadUrl: string
@@ -303,9 +329,9 @@ async function convertRgbGeoTiffToDataUrl(
 
   console.log(`[RGB] Image: ${width}x${height}, ${rasters.length} bands`)
 
-  // Guard: skip conversion if image is too large (> 500x500 pixels = 750KB BMP)
+  // Guard: skip conversion if image is too large (> 800x800 pixels)
   // This prevents memory issues in Cloudflare Workers
-  if (width > 500 || height > 500) {
+  if (width > 800 || height > 800) {
     console.warn(`[RGB] Image too large for data URL embedding (${width}x${height}), skipping`)
     return ''
   }
@@ -712,12 +738,39 @@ export async function executeRoofOrder(
     }
   }
 
-  // Step 3b: RGB aerial GeoTIFF — DISABLED for now.
-  // The Solar API rgbUrl covers the entire 50m radius area (100m × 100m), not cropped to the roof.
-  // Without building-footprint-aware cropping, the raw GeoTIFF shows too much neighborhood
-  // context and looks worse than a properly zoomed Google Static Maps image.
-  // TODO: Future enhancement — use mask GeoTIFF to crop RGB to building footprint only.
+  // Step 3b: RGB aerial GeoTIFF — MASK-CROPPED
+  // Download the high-res RGB and use the mask to crop to just the building footprint.
+  // This gives us actual aerial photography (0.1-0.5m/pixel) focused on the roof only.
   let rgbAerialDataUrl = ''
+  let maskOverlayDataUrl = ''
+  try {
+    if (dataLayers.rgbUrl && maskGeoTiff) {
+      console.log(`[Pipeline] Step 3b: Converting RGB GeoTIFF with mask crop`)
+      rgbAerialDataUrl = await convertRgbWithMaskCrop(dataLayers.rgbUrl, apiKey, maskGeoTiff)
+      console.log(`[Pipeline] RGB aerial: ${rgbAerialDataUrl ? `${(rgbAerialDataUrl.length/1024).toFixed(0)}KB` : 'skipped'}`)
+    }
+    // Generate mask overlay visualization (roof highlighted on satellite)
+    if (maskGeoTiff) {
+      console.log(`[Pipeline] Step 3c: Generating mask overlay visualization`)
+      maskOverlayDataUrl = generateMaskOverlayBMP(maskGeoTiff, dsmGeoTiff)
+      console.log(`[Pipeline] Mask overlay: ${maskOverlayDataUrl ? `${(maskOverlayDataUrl.length/1024).toFixed(0)}KB` : 'skipped'}`)
+    }
+  } catch (rgbErr: any) {
+    console.warn(`[Pipeline] RGB/Mask visualization failed (non-critical): ${rgbErr.message}`)
+  }
+
+  // Step 3d: Annual Flux GeoTIFF — solar exposure analysis
+  let fluxAnalysis: FluxAnalysis | null = null
+  try {
+    if (dataLayers.annualFluxUrl) {
+      console.log(`[Pipeline] Step 3d: Downloading Annual Flux GeoTIFF`)
+      const fluxGeoTiff = await downloadGeoTIFF(dataLayers.annualFluxUrl, apiKey)
+      fluxAnalysis = analyzeAnnualFlux(fluxGeoTiff, maskGeoTiff, dsmGeoTiff.pixelSizeMeters)
+      console.log(`[Pipeline] Flux: mean=${fluxAnalysis.meanFluxKwhM2.toFixed(0)} kWh/m²/yr, total=${fluxAnalysis.totalAnnualKwh.toFixed(0)} kWh/yr, highSun=${fluxAnalysis.highSunPct.toFixed(1)}%`)
+    }
+  } catch (fluxErr: any) {
+    console.warn(`[Pipeline] Flux analysis failed (non-critical): ${fluxErr.message}`)
+  }
 
   // Step 4: Analyze DSM with mask
   console.log(`[Pipeline] Step 4: Analyzing DSM (${dsmGeoTiff.width}x${dsmGeoTiff.height} pixels)`)
@@ -851,15 +904,400 @@ export async function executeRoofOrder(
       validPixels: dsmAnalysis.validPixelCount,
       pixelSizeMeters: dsmAnalysis.pixelSizeMeters
     },
+    flux: fluxAnalysis,
     dsmUrl: dataLayers.dsmUrl,
     maskUrl: dataLayers.maskUrl || '',
     rgbUrl: dataLayers.rgbUrl || '',
+    annualFluxUrl: dataLayers.annualFluxUrl || '',
     rgbAerialDataUrl: rgbAerialDataUrl,
+    maskOverlayDataUrl: maskOverlayDataUrl,
     satelliteUrl,
     satelliteOverheadUrl,
     satelliteContextUrl,
     satelliteMediumUrl,
     durationMs,
     provider: 'google_solar_datalayers'
+  }
+}
+
+// ============================================================
+// RGB GEOTIFF WITH MASK CROP — Crop aerial imagery to roof footprint
+// Downloads the high-res RGB GeoTIFF and applies the building mask
+// to show only roof pixels (everything else becomes transparent/grey).
+// This produces a focused roof image at 0.1-0.5m/pixel resolution.
+// ============================================================
+async function convertRgbWithMaskCrop(
+  rgbUrl: string,
+  apiKey: string,
+  maskData: GeoTiffData
+): Promise<string> {
+  const fetchUrl = rgbUrl.includes('solar.googleapis.com')
+    ? `${rgbUrl}&key=${apiKey}`
+    : rgbUrl
+
+  const response = await fetch(fetchUrl)
+  if (!response.ok) {
+    throw new Error(`RGB GeoTIFF download failed (${response.status})`)
+  }
+
+  const arrayBuffer = await response.arrayBuffer()
+  const tiff = await geotiff.fromArrayBuffer(arrayBuffer)
+  const image = await tiff.getImage()
+  const rasters = await image.readRasters()
+  const width = image.getWidth()
+  const height = image.getHeight()
+
+  console.log(`[RGB-Crop] Image: ${width}x${height}, ${rasters.length} bands, mask: ${maskData.width}x${maskData.height}`)
+
+  // Skip if too large for Workers memory
+  if (width > 800 || height > 800) {
+    console.warn(`[RGB-Crop] Image too large (${width}x${height}), skipping`)
+    return ''
+  }
+
+  if (rasters.length < 3) return ''
+
+  const r = rasters[0] as any
+  const g = rasters[1] as any
+  const b = rasters[2] as any
+  const rawMask = maskData.rasters[0]
+
+  // Resample mask to RGB dimensions if they differ
+  const xRatio = maskData.width / width
+  const yRatio = maskData.height / height
+
+  // Find bounding box of roof pixels to crop tightly
+  let minX = width, maxX = 0, minY = height, maxY = 0
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const srcX = Math.min(Math.floor(x * xRatio), maskData.width - 1)
+      const srcY = Math.min(Math.floor(y * yRatio), maskData.height - 1)
+      if (rawMask[srcY * maskData.width + srcX] > 0) {
+        if (x < minX) minX = x
+        if (x > maxX) maxX = x
+        if (y < minY) minY = y
+        if (y > maxY) maxY = y
+      }
+    }
+  }
+
+  if (maxX <= minX || maxY <= minY) {
+    console.warn('[RGB-Crop] No roof pixels found in mask')
+    return ''
+  }
+
+  // Add 10px padding around the crop box
+  const pad = 10
+  minX = Math.max(0, minX - pad)
+  minY = Math.max(0, minY - pad)
+  maxX = Math.min(width - 1, maxX + pad)
+  maxY = Math.min(height - 1, maxY + pad)
+
+  const cropW = maxX - minX + 1
+  const cropH = maxY - minY + 1
+
+  // Limit cropped size
+  if (cropW > 500 || cropH > 500) {
+    console.warn(`[RGB-Crop] Crop too large (${cropW}x${cropH}), skipping`)
+    return ''
+  }
+
+  console.log(`[RGB-Crop] Cropping to ${cropW}x${cropH} (from ${minX},${minY} to ${maxX},${maxY})`)
+
+  // Build BMP with mask applied — non-roof pixels dimmed to 30% opacity
+  const rowSize = Math.ceil(cropW * 3 / 4) * 4
+  const pixelDataSize = rowSize * cropH
+  const fileSize = 54 + pixelDataSize
+  const bmp = new Uint8Array(fileSize)
+  const view = new DataView(bmp.buffer)
+
+  // BMP File Header
+  bmp[0] = 0x42; bmp[1] = 0x4D
+  view.setUint32(2, fileSize, true)
+  view.setUint32(10, 54, true)
+
+  // BMP Info Header
+  view.setUint32(14, 40, true)
+  view.setInt32(18, cropW, true)
+  view.setInt32(22, cropH, true)
+  view.setUint16(26, 1, true)
+  view.setUint16(28, 24, true)
+  view.setUint32(34, pixelDataSize, true)
+
+  // Pixel data with mask-based dimming
+  for (let cy = 0; cy < cropH; cy++) {
+    const srcY = cy + minY
+    const bmpRow = cropH - 1 - cy
+    for (let cx = 0; cx < cropW; cx++) {
+      const srcX = cx + minX
+      const srcIdx = srcY * width + srcX
+
+      // Check mask
+      const maskSrcX = Math.min(Math.floor(srcX * xRatio), maskData.width - 1)
+      const maskSrcY = Math.min(Math.floor(srcY * yRatio), maskData.height - 1)
+      const isRoof = rawMask[maskSrcY * maskData.width + maskSrcX] > 0
+
+      const dstIdx = 54 + bmpRow * rowSize + cx * 3
+      let rv = Math.max(0, Math.min(255, Math.round(r[srcIdx])))
+      let gv = Math.max(0, Math.min(255, Math.round(g[srcIdx])))
+      let bv = Math.max(0, Math.min(255, Math.round(b[srcIdx])))
+
+      if (!isRoof) {
+        // Dim non-roof pixels: blend to grey at 30%
+        rv = Math.round(rv * 0.3 + 60)
+        gv = Math.round(gv * 0.3 + 60)
+        bv = Math.round(bv * 0.3 + 60)
+      }
+
+      bmp[dstIdx]     = bv
+      bmp[dstIdx + 1] = gv
+      bmp[dstIdx + 2] = rv
+    }
+  }
+
+  // Convert to base64
+  let binary = ''
+  const chunkSize = 8192
+  for (let i = 0; i < bmp.length; i += chunkSize) {
+    const chunk = bmp.subarray(i, Math.min(i + chunkSize, bmp.length))
+    binary += String.fromCharCode(...chunk)
+  }
+  return `data:image/bmp;base64,${btoa(binary)}`
+}
+
+// ============================================================
+// MASK OVERLAY VISUALIZATION — Highlight roof pixels on DSM heightmap
+// Creates a BMP showing the DSM as a greyscale heightmap with
+// roof (mask) pixels highlighted in translucent blue.
+// This helps users visualize exactly which pixels the algorithm
+// considers to be "roof" vs "ground".
+// ============================================================
+function generateMaskOverlayBMP(
+  maskData: GeoTiffData,
+  dsmData: GeoTiffData
+): string {
+  const width = maskData.width
+  const height = maskData.height
+  const mask = maskData.rasters[0]
+
+  if (width > 500 || height > 500) {
+    console.warn(`[MaskOverlay] Image too large (${width}x${height}), skipping`)
+    return ''
+  }
+
+  // Get DSM for greyscale background — resample if dimensions differ
+  const dsm = dsmData.rasters[0]
+  const dsmW = dsmData.width
+  const dsmH = dsmData.height
+
+  // Find DSM height range for normalization
+  let minH = Infinity, maxH = -Infinity
+  for (let i = 0; i < dsm.length; i++) {
+    if (!isNaN(dsm[i]) && isFinite(dsm[i]) && dsm[i] > 0) {
+      if (dsm[i] < minH) minH = dsm[i]
+      if (dsm[i] > maxH) maxH = dsm[i]
+    }
+  }
+  const hRange = maxH - minH || 1
+
+  const rowSize = Math.ceil(width * 3 / 4) * 4
+  const pixelDataSize = rowSize * height
+  const fileSize = 54 + pixelDataSize
+  const bmp = new Uint8Array(fileSize)
+  const view = new DataView(bmp.buffer)
+
+  // Headers
+  bmp[0] = 0x42; bmp[1] = 0x4D
+  view.setUint32(2, fileSize, true)
+  view.setUint32(10, 54, true)
+  view.setUint32(14, 40, true)
+  view.setInt32(18, width, true)
+  view.setInt32(22, height, true)
+  view.setUint16(26, 1, true)
+  view.setUint16(28, 24, true)
+  view.setUint32(34, pixelDataSize, true)
+
+  const dsmXRatio = dsmW / width
+  const dsmYRatio = dsmH / height
+
+  for (let y = 0; y < height; y++) {
+    const bmpRow = height - 1 - y
+    for (let x = 0; x < width; x++) {
+      const idx = y * width + x
+      const isRoof = mask[idx] > 0
+
+      // Sample DSM height for greyscale
+      const dsmSrcX = Math.min(Math.floor(x * dsmXRatio), dsmW - 1)
+      const dsmSrcY = Math.min(Math.floor(y * dsmYRatio), dsmH - 1)
+      const h = dsm[dsmSrcY * dsmW + dsmSrcX]
+      const grey = (!isNaN(h) && isFinite(h) && h > 0)
+        ? Math.round(((h - minH) / hRange) * 200 + 40)
+        : 30
+
+      const dstIdx = 54 + bmpRow * rowSize + x * 3
+
+      if (isRoof) {
+        // Blue-cyan highlight for roof pixels
+        bmp[dstIdx]     = Math.min(255, grey + 100)  // Blue channel boosted
+        bmp[dstIdx + 1] = Math.min(255, Math.round(grey * 0.6 + 80))  // Green
+        bmp[dstIdx + 2] = Math.round(grey * 0.3)  // Red dimmed
+      } else {
+        // Dark greyscale for non-roof
+        const dark = Math.round(grey * 0.4)
+        bmp[dstIdx]     = dark
+        bmp[dstIdx + 1] = dark
+        bmp[dstIdx + 2] = dark
+      }
+    }
+  }
+
+  let binary = ''
+  const chunkSize = 8192
+  for (let i = 0; i < bmp.length; i += chunkSize) {
+    const chunk = bmp.subarray(i, Math.min(i + chunkSize, bmp.length))
+    binary += String.fromCharCode(...chunk)
+  }
+  return `data:image/bmp;base64,${btoa(binary)}`
+}
+
+// ============================================================
+// ANNUAL FLUX ANALYSIS — Extract solar exposure data from GeoTIFF
+// The Annual Flux GeoTIFF contains kWh/m²/year per pixel.
+// We mask it to roof pixels only and compute:
+//   - Mean, min, max flux
+//   - Total annual kWh yield
+//   - High-sun and shaded zone percentages
+//   - Equivalent peak sun hours per day
+//   - A heatmap data URL for visualization
+// ============================================================
+function analyzeAnnualFlux(
+  fluxData: GeoTiffData,
+  maskData: GeoTiffData | null,
+  pixelSizeMeters: number
+): FluxAnalysis {
+  const flux = fluxData.rasters[0]
+  const width = fluxData.width
+  const height = fluxData.height
+  const pixelAreaM2 = pixelSizeMeters * pixelSizeMeters
+
+  // Resample mask to flux dimensions if needed
+  let mask: number[] | null = null
+  if (maskData && maskData.rasters[0]) {
+    const raw = maskData.rasters[0]
+    if (maskData.width === width && maskData.height === height) {
+      mask = raw
+    } else {
+      mask = new Array(width * height)
+      const xR = maskData.width / width
+      const yR = maskData.height / height
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const sx = Math.min(Math.floor(x * xR), maskData.width - 1)
+          const sy = Math.min(Math.floor(y * yR), maskData.height - 1)
+          mask[y * width + x] = raw[sy * maskData.width + sx]
+        }
+      }
+    }
+  }
+
+  let sumFlux = 0, count = 0, minFlux = Infinity, maxFlux = -Infinity
+  let highSunCount = 0, shadedCount = 0
+  const validFluxValues: number[] = []
+
+  for (let i = 0; i < flux.length; i++) {
+    const v = flux[i]
+    if (isNaN(v) || !isFinite(v) || v <= 0) continue
+    if (mask && mask[i] <= 0) continue
+
+    validFluxValues.push(v)
+    sumFlux += v
+    count++
+    if (v < minFlux) minFlux = v
+    if (v > maxFlux) maxFlux = v
+    if (v >= 1000) highSunCount++
+    if (v < 600) shadedCount++
+  }
+
+  const meanFlux = count > 0 ? sumFlux / count : 0
+  const totalKwh = count > 0 ? sumFlux * pixelAreaM2 : 0
+
+  // Generate flux heatmap BMP visualization
+  let fluxHeatmapDataUrl = ''
+  if (width <= 500 && height <= 500 && count > 0) {
+    const fluxRange = (maxFlux - minFlux) || 1
+    const rowSize = Math.ceil(width * 3 / 4) * 4
+    const pixDataSize = rowSize * height
+    const fSize = 54 + pixDataSize
+    const bmp = new Uint8Array(fSize)
+    const dv = new DataView(bmp.buffer)
+
+    bmp[0] = 0x42; bmp[1] = 0x4D
+    dv.setUint32(2, fSize, true)
+    dv.setUint32(10, 54, true)
+    dv.setUint32(14, 40, true)
+    dv.setInt32(18, width, true)
+    dv.setInt32(22, height, true)
+    dv.setUint16(26, 1, true)
+    dv.setUint16(28, 24, true)
+    dv.setUint32(34, pixDataSize, true)
+
+    for (let y = 0; y < height; y++) {
+      const bmpRow = height - 1 - y
+      for (let x = 0; x < width; x++) {
+        const idx = y * width + x
+        const v = flux[idx]
+        const isMasked = mask ? mask[idx] <= 0 : false
+        const dstIdx = 54 + bmpRow * rowSize + x * 3
+
+        if (isNaN(v) || !isFinite(v) || v <= 0 || isMasked) {
+          // Dark background for non-roof
+          bmp[dstIdx] = 20; bmp[dstIdx + 1] = 20; bmp[dstIdx + 2] = 20
+        } else {
+          // Heatmap: blue (low) → green (mid) → yellow (high) → red (very high)
+          const t = Math.max(0, Math.min(1, (v - minFlux) / fluxRange))
+          let rv: number, gv: number, bv: number
+          if (t < 0.25) {
+            // Blue → Cyan
+            const s = t / 0.25
+            rv = 0; gv = Math.round(s * 180); bv = Math.round(180 + s * 75)
+          } else if (t < 0.5) {
+            // Cyan → Green
+            const s = (t - 0.25) / 0.25
+            rv = 0; gv = Math.round(180 + s * 75); bv = Math.round(255 - s * 255)
+          } else if (t < 0.75) {
+            // Green → Yellow
+            const s = (t - 0.5) / 0.25
+            rv = Math.round(s * 255); gv = 255; bv = 0
+          } else {
+            // Yellow → Red
+            const s = (t - 0.75) / 0.25
+            rv = 255; gv = Math.round(255 - s * 200); bv = 0
+          }
+          bmp[dstIdx] = bv; bmp[dstIdx + 1] = gv; bmp[dstIdx + 2] = rv
+        }
+      }
+    }
+
+    let binStr = ''
+    const cs = 8192
+    for (let i = 0; i < bmp.length; i += cs) {
+      const chunk = bmp.subarray(i, Math.min(i + cs, bmp.length))
+      binStr += String.fromCharCode(...chunk)
+    }
+    fluxHeatmapDataUrl = `data:image/bmp;base64,${btoa(binStr)}`
+  }
+
+  console.log(`[Flux] ${count} roof pixels: mean=${meanFlux.toFixed(0)} kWh/m²/yr, total=${totalKwh.toFixed(0)} kWh/yr`)
+
+  return {
+    meanFluxKwhM2: Math.round(meanFlux * 10) / 10,
+    maxFluxKwhM2: maxFlux === -Infinity ? 0 : Math.round(maxFlux * 10) / 10,
+    minFluxKwhM2: minFlux === Infinity ? 0 : Math.round(minFlux * 10) / 10,
+    totalAnnualKwh: Math.round(totalKwh),
+    validPixels: count,
+    highSunPct: count > 0 ? Math.round(highSunCount / count * 1000) / 10 : 0,
+    shadedPct: count > 0 ? Math.round(shadedCount / count * 1000) / 10 : 0,
+    peakSunHoursPerDay: Math.round(meanFlux / 365 * 100) / 100,
+    fluxHeatmapDataUrl
   }
 }
