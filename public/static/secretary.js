@@ -32,7 +32,7 @@
     connectStep: 1, // 1=method, 2=carrier+assign, 3=forwarding codes, 4=test
   };
 
-  // ── On load: check for Stripe redirect, then fetch status ──
+  // ── On load: check for Square redirect, then fetch status ──
   async function init() {
     var params = new URLSearchParams(window.location.search);
     if (params.get('setup') === 'true' && params.get('session_id')) {
@@ -178,7 +178,7 @@
           '<button onclick="secSubscribe()" id="subscribeBtn" class="w-full py-4 bg-gradient-to-r from-sky-500 to-blue-600 text-white rounded-xl font-bold text-lg hover:from-sky-600 hover:to-blue-700 transition-all shadow-lg hover:shadow-xl">' +
             '<i class="fas fa-lock mr-2"></i>Subscribe & Setup — $149/month</button>' +
         '</div>' +
-        '<p class="text-center text-xs text-gray-400 mb-8"><i class="fas fa-shield-alt mr-1"></i>Secure payment via Stripe &bull; Powered by LiveKit AI</p>' +
+        '<p class="text-center text-xs text-gray-400 mb-8"><i class="fas fa-shield-alt mr-1"></i>Secure payment via Square &bull; Powered by LiveKit AI</p>' +
       '</div>';
   }
 
@@ -196,7 +196,7 @@
 
   window.secSubscribe = async function() {
     var btn = document.getElementById('subscribeBtn');
-    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Redirecting to Stripe...'; }
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Redirecting to Square...'; }
     try {
       var res = await fetch('/api/secretary/subscribe', { method: 'POST', headers: authHeaders() });
       var data = await res.json();

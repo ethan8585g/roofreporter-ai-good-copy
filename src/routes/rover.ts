@@ -37,7 +37,7 @@ PRICING:
 - 3 FREE reports when you sign up (no credit card required)
 - After free trial: $8 CAD per Roof Measurement Report (instant delivery)
 - Credit packs available for volume discounts
-- All payments via secure Stripe checkout
+- All payments via secure Square checkout (Visa, Mastercard, Amex, Apple Pay, Google Pay, Cash App)
 
 KEY FEATURES:
 - Customer Portal: Order reports, view history, download PDFs

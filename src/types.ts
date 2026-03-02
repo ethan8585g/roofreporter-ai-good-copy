@@ -33,9 +33,10 @@ export type Bindings = {
   GOOGLE_CLOUD_ACCESS_TOKEN: string // OAuth2 token from 'gcloud auth print-access-token'
   GCP_SERVICE_ACCOUNT_KEY: string   // Full JSON of GCP service account key file (auto-generates access tokens)
 
-  // Stripe - stored as Cloudflare secrets, accessed server-side only
-  STRIPE_SECRET_KEY: string
-  STRIPE_PUBLISHABLE_KEY: string  // This one is safe for frontend (it's "publishable")
+  // Square Payment Processing — stored as Cloudflare secrets, accessed server-side only
+  SQUARE_ACCESS_TOKEN: string        // Production access token (server-side only)
+  SQUARE_APPLICATION_ID: string      // Application ID (safe for frontend — equivalent of Stripe publishable key)
+  SQUARE_LOCATION_ID: string         // Square location ID for payment processing
 
   // Email delivery
   GMAIL_SENDER_EMAIL: string // The Google Workspace user email to impersonate when sending via Gmail API
@@ -53,8 +54,9 @@ export type Bindings = {
   // Uses the same OAuth 2.0 Client ID as Gmail OAuth2 (or a separate one)
   GOOGLE_OAUTH_CLIENT_ID: string
 
-  // Stripe Webhook Secret — verifies webhook signatures
-  STRIPE_WEBHOOK_SECRET: string
+  // Square Webhook — verifies webhook signatures
+  SQUARE_WEBHOOK_SIGNATURE_KEY: string  // From Square Developer Dashboard > Webhooks
+  SQUARE_WEBHOOK_URL: string            // Your webhook notification URL
 
   // Admin Bootstrap — Used ONLY for initial admin account creation
   // Set these env vars, then remove after first login

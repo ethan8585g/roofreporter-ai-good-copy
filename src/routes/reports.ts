@@ -204,7 +204,7 @@ reportsRoutes.get('/:orderId/html', async (c) => {
 // ============================================================
 // ============================================================
 // EXPORTED: Direct report generation function (no HTTP self-fetch)
-// Called by stripe.ts use-credit and webhook flows directly
+// Called by square.ts use-credit and webhook flows directly
 // ============================================================
 export async function generateReportForOrder(
   orderId: number | string,

@@ -415,7 +415,7 @@ customerAuthRoutes.get('/profile', async (c) => {
   const customer = await c.env.DB.prepare(`
     SELECT id, email, name, phone, company_name, address, city, province, postal_code,
            google_avatar, report_credits, credits_used, free_trial_total, free_trial_used,
-           subscription_plan, subscription_status, stripe_customer_id,
+           subscription_plan, subscription_status, stripe_customer_id, square_customer_id,
            brand_business_name, brand_logo_url, brand_primary_color, brand_secondary_color,
            brand_tagline, brand_phone, brand_email, brand_website, brand_address,
            brand_license_number, brand_insurance_info,

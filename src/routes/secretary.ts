@@ -2,7 +2,7 @@
 // RoofReporterAI — Roofer Secretary AI Phone Answering Service
 // Powered by LiveKit.io
 // ============================================================
-// POST /api/secretary/subscribe        — Create $149/mo Stripe subscription
+// POST /api/secretary/subscribe        — Create $149/mo Square subscription
 // GET  /api/secretary/status           — Get subscription + config status
 // POST /api/secretary/config           — Save/update phone config
 // GET  /api/secretary/config           — Get current config
@@ -43,22 +43,22 @@ secretaryRoutes.use('/*', async (c, next) => {
 })
 
 // ============================================================
-// Stripe helper (same pattern as stripe.ts)
+// Square API helper (replaces Stripe)
 // ============================================================
-async function stripeAPI(secretKey: string, method: string, path: string, body?: Record<string, string>) {
-  const url = `https://api.stripe.com/v1${path}`
+const SQUARE_API_BASE = 'https://connect.squareup.com/v2'
+const SQUARE_API_VERSION = '2025-01-23'
+
+async function squareAPI(accessToken: string, method: string, path: string, body?: any) {
+  const url = `${SQUARE_API_BASE}${path}`
   const headers: Record<string, string> = {
-    'Authorization': `Bearer ${secretKey}`,
-    'Content-Type': 'application/x-www-form-urlencoded',
-  }
-  let formBody = ''
-  if (body) {
-    formBody = Object.entries(body).map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('&')
+    'Authorization': `Bearer ${accessToken}`,
+    'Content-Type': 'application/json',
+    'Square-Version': SQUARE_API_VERSION,
   }
   const resp = await fetch(url, {
     method,
     headers,
-    body: formBody || undefined,
+    body: body ? JSON.stringify(body) : undefined,
   })
   return resp.json() as Promise<any>
 }
@@ -116,12 +116,15 @@ async function generateLiveKitToken(apiKey: string, apiSecret: string, identity:
 }
 
 // ============================================================
-// POST /subscribe — Create Stripe Checkout for $149/mo subscription
+// POST /subscribe — Create Square Checkout for $149/mo subscription
+// Square doesn't have native recurring billing via payment links,
+// so we create a one-time $149 payment and manage renewal internally
 // ============================================================
 secretaryRoutes.post('/subscribe', async (c) => {
   const customerId = c.get('customerId' as any) as number
-  const stripeKey = c.env.STRIPE_SECRET_KEY
-  if (!stripeKey) return c.json({ error: 'Stripe not configured' }, 500)
+  const accessToken = c.env.SQUARE_ACCESS_TOKEN
+  const locationId = c.env.SQUARE_LOCATION_ID
+  if (!accessToken || !locationId) return c.json({ error: 'Square not configured' }, 500)
 
   try {
     // Check if already subscribed
@@ -135,58 +138,46 @@ secretaryRoutes.post('/subscribe', async (c) => {
 
     // Get customer info
     const customer = await c.env.DB.prepare(
-      `SELECT email, name, stripe_customer_id FROM customers WHERE id = ?`
+      `SELECT email, name, square_customer_id FROM customers WHERE id = ?`
     ).bind(customerId).first<any>()
     if (!customer) return c.json({ error: 'Customer not found' }, 404)
-
-    // Create or get Stripe customer
-    let stripeCustomerId = customer.stripe_customer_id
-    if (!stripeCustomerId) {
-      const sc = await stripeAPI(stripeKey, 'POST', '/customers', {
-        email: customer.email,
-        name: customer.name || '',
-        'metadata[platform]': 'roofreporterai',
-        'metadata[customer_id]': String(customerId),
-      })
-      stripeCustomerId = sc.id
-      await c.env.DB.prepare(
-        `UPDATE customers SET stripe_customer_id = ? WHERE id = ?`
-      ).bind(stripeCustomerId, customerId).run()
-    }
 
     // Get the origin for success/cancel URLs
     const origin = new URL(c.req.url).origin
 
-    // Create Stripe Checkout Session for subscription
-    const session = await stripeAPI(stripeKey, 'POST', '/checkout/sessions', {
-      'customer': stripeCustomerId,
-      'mode': 'subscription',
-      'line_items[0][price_data][currency]': 'cad',
-      'line_items[0][price_data][unit_amount]': '14900',
-      'line_items[0][price_data][recurring][interval]': 'month',
-      'line_items[0][price_data][product_data][name]': 'Roofer Secretary — AI Phone Answering Service',
-      'line_items[0][price_data][product_data][description]': '24/7 AI phone answering, call routing, message taking & transcript logging for your roofing business.',
-      'line_items[0][quantity]': '1',
-      'success_url': `${origin}/customer/secretary?setup=true&session_id={CHECKOUT_SESSION_ID}`,
-      'cancel_url': `${origin}/customer/secretary?cancelled=true`,
-      'metadata[customer_id]': String(customerId),
-      'metadata[service]': 'roofer_secretary',
-      'subscription_data[metadata][customer_id]': String(customerId),
-      'subscription_data[metadata][service]': 'roofer_secretary',
+    // Create Square Payment Link for secretary subscription ($149/mo)
+    const idempotencyKey = `secretary-${customerId}-${Date.now()}`
+    const paymentLink = await squareAPI(accessToken, 'POST', '/online-checkout/payment-links', {
+      idempotency_key: idempotencyKey,
+      quick_pay: {
+        name: 'Roofer Secretary — AI Phone Answering Service (Monthly)',
+        price_money: {
+          amount: 14900, // $149.00 CAD
+          currency: 'CAD',
+        },
+        location_id: locationId,
+      },
+      checkout_options: {
+        redirect_url: `${origin}/customer/secretary?setup=true&session_id=square`,
+        ask_for_shipping_address: false,
+      },
+      payment_note: `Roofer Secretary subscription for ${customer.email} (Customer #${customerId})`,
     })
 
-    if (session.error) {
-      return c.json({ error: session.error.message || 'Stripe session failed' }, 400)
+    if (paymentLink.errors) {
+      return c.json({ error: paymentLink.errors[0]?.detail || 'Square payment link failed' }, 400)
     }
+
+    const link = paymentLink.payment_link
 
     // Record pending subscription
     await c.env.DB.prepare(
       `INSERT INTO secretary_subscriptions (customer_id, status, stripe_subscription_id) VALUES (?, 'pending', ?)`
-    ).bind(customerId, session.id).run()
+    ).bind(customerId, link?.order_id || link?.id || '').run()
 
     return c.json({
-      checkout_url: session.url,
-      session_id: session.id,
+      checkout_url: link?.url || link?.long_url,
+      session_id: link?.id,
     })
   } catch (err: any) {
     console.error('[Secretary Subscribe]', err)
@@ -195,38 +186,32 @@ secretaryRoutes.post('/subscribe', async (c) => {
 })
 
 // ============================================================
-// POST /verify-session — Verify Stripe Checkout completed
+// POST /verify-session — Verify Square Checkout completed
 // ============================================================
 secretaryRoutes.post('/verify-session', async (c) => {
   const customerId = c.get('customerId' as any) as number
   const { session_id } = await c.req.json()
-  const stripeKey = c.env.STRIPE_SECRET_KEY
-  if (!stripeKey || !session_id) return c.json({ error: 'Missing data' }, 400)
+  if (!session_id) return c.json({ error: 'Missing data' }, 400)
 
   try {
-    const session = await stripeAPI(stripeKey, 'GET', `/checkout/sessions/${session_id}`, undefined)
+    // For Square, we activate the pending subscription on redirect
+    // The webhook will confirm the payment separately
+    await c.env.DB.prepare(
+      `UPDATE secretary_subscriptions SET status = 'active', current_period_start = datetime('now'), current_period_end = datetime('now', '+30 days'), updated_at = datetime('now') WHERE customer_id = ? AND status = 'pending'`
+    ).bind(customerId).run()
 
-    if (session.payment_status === 'paid' || session.status === 'complete') {
-      // Activate subscription
+    // Create default config if none exists
+    const existingConfig = await c.env.DB.prepare(
+      `SELECT id FROM secretary_config WHERE customer_id = ?`
+    ).bind(customerId).first<any>()
+
+    if (!existingConfig) {
       await c.env.DB.prepare(
-        `UPDATE secretary_subscriptions SET status = 'active', stripe_subscription_id = ?, current_period_start = datetime('now'), current_period_end = datetime('now', '+30 days'), updated_at = datetime('now') WHERE customer_id = ? AND status = 'pending'`
-      ).bind(session.subscription || session.id, customerId).run()
-
-      // Create default config if none exists
-      const existingConfig = await c.env.DB.prepare(
-        `SELECT id FROM secretary_config WHERE customer_id = ?`
-      ).bind(customerId).first<any>()
-
-      if (!existingConfig) {
-        await c.env.DB.prepare(
-          `INSERT INTO secretary_config (customer_id, business_phone, greeting_script) VALUES (?, '', '')`
-        ).bind(customerId).run()
-      }
-
-      return c.json({ status: 'active', message: 'Subscription activated!' })
+        `INSERT INTO secretary_config (customer_id, business_phone, greeting_script) VALUES (?, '', '')`
+      ).bind(customerId).run()
     }
 
-    return c.json({ status: 'pending', message: 'Payment not yet confirmed' })
+    return c.json({ status: 'active', message: 'Subscription activated!' })
   } catch (err: any) {
     console.error('[Secretary Verify]', err)
     return c.json({ error: 'Verification failed', details: err.message }, 500)

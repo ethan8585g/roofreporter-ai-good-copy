@@ -10,7 +10,7 @@ import { aiAnalysisRoutes } from './routes/ai-analysis'
 import { authRoutes } from './routes/auth'
 import { customerAuthRoutes } from './routes/customer-auth'
 import { invoiceRoutes } from './routes/invoices'
-import { stripeRoutes } from './routes/stripe'
+import { squareRoutes } from './routes/square'
 import { crmRoutes } from './routes/crm'
 import { propertyImageryRoutes } from './routes/property-imagery'
 import { blogRoutes } from './routes/blog'
@@ -34,7 +34,7 @@ app.route('/api/ai', aiAnalysisRoutes)
 app.route('/api/auth', authRoutes)
 app.route('/api/customer', customerAuthRoutes)
 app.route('/api/invoices', invoiceRoutes)
-app.route('/api/stripe', stripeRoutes)
+app.route('/api/square', squareRoutes)
 app.route('/api/crm', crmRoutes)
 app.route('/api/property-imagery', propertyImageryRoutes)
 app.route('/api/blog', blogRoutes)
@@ -57,14 +57,15 @@ app.get('/api/health', (c) => {
       GOOGLE_CLOUD_LOCATION: !!c.env.GOOGLE_CLOUD_LOCATION,
       GOOGLE_CLOUD_ACCESS_TOKEN: !!c.env.GOOGLE_CLOUD_ACCESS_TOKEN,
       GCP_SERVICE_ACCOUNT_KEY: !!c.env.GCP_SERVICE_ACCOUNT_KEY,
-      STRIPE_SECRET_KEY: !!c.env.STRIPE_SECRET_KEY,
-      STRIPE_PUBLISHABLE_KEY: !!c.env.STRIPE_PUBLISHABLE_KEY,
+      SQUARE_ACCESS_TOKEN: !!c.env.SQUARE_ACCESS_TOKEN,
+      SQUARE_APPLICATION_ID: !!c.env.SQUARE_APPLICATION_ID,
+      SQUARE_LOCATION_ID: !!c.env.SQUARE_LOCATION_ID,
       GMAIL_SENDER_EMAIL: c.env.GMAIL_SENDER_EMAIL || '(not set)',
       GMAIL_CLIENT_ID: !!(c.env as any).GMAIL_CLIENT_ID,
       GMAIL_CLIENT_SECRET: !!(c.env as any).GMAIL_CLIENT_SECRET,
       GMAIL_REFRESH_TOKEN: !!(c.env as any).GMAIL_REFRESH_TOKEN,
       RESEND_API_KEY: !!(c.env as any).RESEND_API_KEY,
-      STRIPE_WEBHOOK_SECRET: !!(c.env as any).STRIPE_WEBHOOK_SECRET,
+      SQUARE_WEBHOOK_SIGNATURE_KEY: !!(c.env as any).SQUARE_WEBHOOK_SIGNATURE_KEY,
       LIVEKIT_API_KEY: !!(c.env as any).LIVEKIT_API_KEY,
       LIVEKIT_API_SECRET: !!(c.env as any).LIVEKIT_API_SECRET,
       LIVEKIT_URL: !!(c.env as any).LIVEKIT_URL,
@@ -245,21 +246,22 @@ app.get('/api/health/gemini', async (c) => {
 // ============================================================
 // SERVER-SIDE CONFIG ENDPOINT
 // Returns ONLY publishable/safe values to the frontend.
-// Secret keys (Google Solar, Stripe Secret) stay server-side.
+// Secret keys (Google Solar, Square Access Token) stay server-side.
 // ============================================================
 app.get('/api/config/client', (c) => {
   // Only expose keys that are designed to be public (publishable keys)
   // Google Maps JS API key is loaded via script tag — that's how Google designed it
-  // Stripe publishable key is designed for frontend use
+  // Square Application ID is safe for frontend use (like Stripe publishable key)
   return c.json({
     google_maps_key: c.env.GOOGLE_MAPS_API_KEY || '',
-    stripe_publishable_key: c.env.STRIPE_PUBLISHABLE_KEY || '',
+    square_application_id: c.env.SQUARE_APPLICATION_ID || '',
+    square_location_id: c.env.SQUARE_LOCATION_ID || '',
     // Feature flags based on which keys are configured
     features: {
       google_maps: !!c.env.GOOGLE_MAPS_API_KEY,
       google_solar: !!c.env.GOOGLE_SOLAR_API_KEY,
-      stripe_payments: !!c.env.STRIPE_SECRET_KEY && !!c.env.STRIPE_PUBLISHABLE_KEY,
-      self_service_orders: !!c.env.STRIPE_SECRET_KEY
+      square_payments: !!c.env.SQUARE_ACCESS_TOKEN && !!c.env.SQUARE_APPLICATION_ID,
+      self_service_orders: !!c.env.SQUARE_ACCESS_TOKEN
     }
   })
 })
@@ -267,7 +269,7 @@ app.get('/api/config/client', (c) => {
 // ============================================================
 // PAGES - Full HTML served from Hono (server-side rendering)
 // Google Maps API key is injected server-side into the script tag.
-// Secret keys (Solar API, Stripe Secret) are NEVER in HTML.
+// Secret keys (Solar API, Square Access Token) are NEVER in HTML.
 // ============================================================
 
 // Landing / Marketing page
@@ -366,8 +368,8 @@ app.get('/customer/d2d', (c) => {
 
 // Roofer Secretary — AI Phone Answering Service
 app.get('/customer/secretary', (c) => {
-  const stripeKey = c.env.STRIPE_PUBLISHABLE_KEY || ''
-  return c.html(getSecretaryPageHTML(stripeKey))
+  const stripeKey = '' // No longer needed — Square uses server-side only
+  return c.html(getSecretaryPageHTML())
 })
 
 export default app
@@ -1822,7 +1824,7 @@ function getCrmSubPageHTML(module: string, title: string, icon: string) {
 // ============================================================
 // ROOFER SECRETARY PAGE — AI Phone Answering Service
 // ============================================================
-function getSecretaryPageHTML(stripePublishableKey: string) {
+function getSecretaryPageHTML() {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1851,7 +1853,7 @@ function getSecretaryPageHTML(stripePublishableKey: string) {
     </div>
   </header>
   <main class="max-w-4xl mx-auto px-4 py-6">
-    <div id="secretary-root" data-stripe-key="${stripePublishableKey}"></div>
+    <div id="secretary-root"></div>
   </main>
   <script>
     (function() {
