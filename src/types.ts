@@ -61,6 +61,18 @@ export type Bindings = {
   ADMIN_BOOTSTRAP_EMAIL: string
   ADMIN_BOOTSTRAP_PASSWORD: string
   ADMIN_BOOTSTRAP_NAME: string
+
+  // LiveKit — AI Voice Agent platform (Roofer Secretary)
+  // Get from: cloud.livekit.io → Project Settings → Keys
+  LIVEKIT_API_KEY: string       // e.g. "APIsvVZsCCaboLY"
+  LIVEKIT_API_SECRET: string    // The secret paired with the API key
+  LIVEKIT_URL: string           // e.g. "wss://roofreporterai-btkwkiwh.livekit.cloud"
+  LIVEKIT_SIP_URI: string       // e.g. "sip:xxxxx.sip.livekit.cloud" (from Project Settings)
+
+  // Twilio — SIP trunking + phone number pool for Roofer Secretary
+  // Get from: console.twilio.com → Account Info
+  TWILIO_ACCOUNT_SID: string    // e.g. "AC..."
+  TWILIO_AUTH_TOKEN: string     // Account auth token
 }
 
 // ============================================================

@@ -508,3 +508,770 @@ secretaryRoutes.post('/webhook/call-complete', async (c) => {
     return c.json({ error: err.message }, 500)
   }
 })
+
+// ============================================================
+// TELEPHONY INTEGRATION — Connect existing phone numbers
+// ============================================================
+// The core flow:
+// 1. Customer enters their existing business phone + carrier
+// 2. We assign a Twilio inbound number from our pool
+// 3. We create a LiveKit inbound trunk + dispatch rule for that number
+// 4. Customer sets up call forwarding from their carrier to our Twilio number
+// 5. Calls come in → Twilio → SIP → LiveKit → AI Agent answers
+// ============================================================
+
+// ── Twilio API helper ──
+async function twilioAPI(accountSid: string, authToken: string, method: string, path: string, body?: Record<string, string>) {
+  const url = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}${path}.json`
+  const headers: Record<string, string> = {
+    'Authorization': 'Basic ' + btoa(`${accountSid}:${authToken}`),
+    'Content-Type': 'application/x-www-form-urlencoded',
+  }
+  let formBody = ''
+  if (body) {
+    formBody = Object.entries(body).map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('&')
+  }
+  const resp = await fetch(url, { method, headers, body: formBody || undefined })
+  return resp.json() as Promise<any>
+}
+
+// ── LiveKit SIP API helper (uses LiveKit server-side REST API) ──
+async function livekitSipAPI(apiKey: string, apiSecret: string, livekitUrl: string, method: string, path: string, body?: any) {
+  // LiveKit REST API uses JWT auth same as room tokens but with special grants
+  const now = Math.floor(Date.now() / 1000)
+  const header = { alg: 'HS256', typ: 'JWT' }
+  const payload = {
+    iss: apiKey,
+    sub: 'server',
+    iat: now,
+    exp: now + 300, // 5 min
+    nbf: now,
+    video: { roomCreate: true, roomList: true, roomAdmin: true },
+    sip: { admin: true, call: true }
+  }
+  const headerB64 = base64urlEncode(JSON.stringify(header))
+  const payloadB64 = base64urlEncode(JSON.stringify(payload))
+  const signingInput = `${headerB64}.${payloadB64}`
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(apiSecret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
+  const signature = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(signingInput))
+  const sigB64 = base64urlEncode(new Uint8Array(signature))
+  const jwt = `${headerB64}.${payloadB64}.${sigB64}`
+
+  // LiveKit HTTP API endpoint (convert wss:// to https://)
+  const httpUrl = livekitUrl.replace('wss://', 'https://').replace(/\/$/, '')
+  const fullUrl = `${httpUrl}${path}`
+
+  const resp = await fetch(fullUrl, {
+    method,
+    headers: {
+      'Authorization': `Bearer ${jwt}`,
+      'Content-Type': 'application/json',
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  })
+  return resp.json() as Promise<any>
+}
+
+// ── Canadian carrier forwarding instructions database ──
+function getCarrierForwardingInfo(carrier: string, forwardToNumber: string) {
+  const formatted = forwardToNumber.replace(/^\+1/, '').replace(/\D/g, '')
+  const e164 = forwardToNumber.startsWith('+') ? forwardToNumber : `+1${formatted}`
+  const ten = formatted.length === 10 ? formatted : formatted.slice(-10)
+
+  const carriers: Record<string, {
+    name: string
+    activate_all: string
+    activate_noanswer: string
+    activate_busy: string
+    deactivate: string
+    notes: string
+    supports_conditional: boolean
+    estimated_setup_time: string
+  }> = {
+    rogers: {
+      name: 'Rogers / Chatr',
+      activate_all: `*72 ${ten}`,
+      activate_noanswer: `**61*${e164}*11*20#`,
+      activate_busy: `**67*${e164}*11#`,
+      deactivate: '*73',
+      notes: 'After dialing *72, wait for confirmation tone, then dial the forwarding number. You\'ll hear a confirmation beep.',
+      supports_conditional: true,
+      estimated_setup_time: '30 seconds'
+    },
+    telus: {
+      name: 'Telus / Koodo / Public Mobile',
+      activate_all: `*72 ${ten}`,
+      activate_noanswer: `**61*${e164}*11*20#`,
+      activate_busy: `**67*${e164}*11#`,
+      deactivate: '*73',
+      notes: 'Dial the code from your phone. Wait for the confirmation tone. Some Koodo plans may require enabling call forwarding in your account settings first.',
+      supports_conditional: true,
+      estimated_setup_time: '30 seconds'
+    },
+    bell: {
+      name: 'Bell / Virgin Plus / Lucky Mobile',
+      activate_all: `*72 ${ten}`,
+      activate_noanswer: `*92 ${ten}`,
+      activate_busy: `*90 ${ten}`,
+      deactivate: '*73',
+      notes: 'Bell uses *92 for no-answer forwarding and *90 for busy forwarding. Some plans charge $3-5/mo for call forwarding — check your plan.',
+      supports_conditional: true,
+      estimated_setup_time: '1 minute'
+    },
+    shaw: {
+      name: 'Shaw / Freedom Mobile',
+      activate_all: `*72 ${ten}`,
+      activate_noanswer: `**61*${e164}*11*20#`,
+      activate_busy: `**67*${e164}*11#`,
+      deactivate: '*73',
+      notes: 'Freedom Mobile uses standard GSM forwarding codes. Dial from your phone keypad.',
+      supports_conditional: true,
+      estimated_setup_time: '30 seconds'
+    },
+    sasktel: {
+      name: 'SaskTel',
+      activate_all: `*72 ${ten}`,
+      activate_noanswer: `*92 ${ten}`,
+      activate_busy: `*90 ${ten}`,
+      deactivate: '*73',
+      notes: 'SaskTel follows Bell-style forwarding codes.',
+      supports_conditional: true,
+      estimated_setup_time: '30 seconds'
+    },
+    fido: {
+      name: 'Fido',
+      activate_all: `*72 ${ten}`,
+      activate_noanswer: `**61*${e164}*11*20#`,
+      activate_busy: `**67*${e164}*11#`,
+      deactivate: '*73',
+      notes: 'Fido uses Rogers infrastructure — same forwarding codes apply.',
+      supports_conditional: true,
+      estimated_setup_time: '30 seconds'
+    },
+    voip: {
+      name: 'VoIP / Business Phone System',
+      activate_all: 'Configure in your VoIP admin panel',
+      activate_noanswer: 'Set "No Answer" forwarding in admin panel',
+      activate_busy: 'Set "Busy" forwarding in admin panel',
+      deactivate: 'Remove forwarding rule in admin panel',
+      notes: 'For VoIP systems (RingCentral, Vonage, 8x8, Ooma, etc.), log into your admin portal and set up a forwarding rule. Most VoIP systems also support direct SIP trunk connection — choose "SIP Trunk" method for better quality.',
+      supports_conditional: true,
+      estimated_setup_time: '5 minutes'
+    },
+    landline: {
+      name: 'Business Landline',
+      activate_all: `*72 ${ten}`,
+      activate_noanswer: `*92 ${ten}`,
+      activate_busy: `*90 ${ten}`,
+      deactivate: '*73',
+      notes: 'Pick up the handset, dial the code, wait for dial tone, then dial the number. You\'ll hear a short confirmation tone. Call forwarding may incur a monthly fee from your provider — typically $5-10/mo.',
+      supports_conditional: true,
+      estimated_setup_time: '1 minute'
+    },
+    other: {
+      name: 'Other Carrier',
+      activate_all: `*72 ${ten}`,
+      activate_noanswer: `Contact your carrier to set up conditional forwarding to ${ten}`,
+      activate_busy: `Contact your carrier to set up busy forwarding to ${ten}`,
+      deactivate: '*73',
+      notes: 'Most Canadian carriers support *72 for call forwarding. If this doesn\'t work, contact your carrier directly and ask them to enable "Call Forwarding No Answer" to your AI secretary number.',
+      supports_conditional: true,
+      estimated_setup_time: '2-5 minutes'
+    }
+  }
+
+  return carriers[carrier.toLowerCase()] || carriers['other']
+}
+
+// ============================================================
+// GET /phone-setup — Get full phone connection status & instructions
+// ============================================================
+secretaryRoutes.get('/phone-setup', async (c) => {
+  const customerId = c.get('customerId' as any) as number
+
+  const config = await c.env.DB.prepare(
+    `SELECT * FROM secretary_config WHERE customer_id = ?`
+  ).bind(customerId).first<any>()
+
+  if (!config) return c.json({ setup: null, message: 'Configure your secretary first' })
+
+  const result: any = {
+    business_phone: config.business_phone || '',
+    forwarding_method: config.forwarding_method || 'call_forwarding',
+    assigned_phone_number: config.assigned_phone_number || '',
+    connection_status: config.connection_status || 'not_connected',
+    carrier_name: config.carrier_name || '',
+    agent_voice: config.agent_voice || 'alloy',
+    agent_name: config.agent_name || 'Sarah',
+    livekit_inbound_trunk_id: config.livekit_inbound_trunk_id || '',
+    livekit_dispatch_rule_id: config.livekit_dispatch_rule_id || '',
+    last_test_at: config.last_test_at || null,
+    last_test_result: config.last_test_result || '',
+    last_test_details: config.last_test_details || '',
+  }
+
+  // If they have a carrier selected and an assigned number, include forwarding instructions
+  if (config.carrier_name && config.assigned_phone_number) {
+    result.forwarding_instructions = getCarrierForwardingInfo(config.carrier_name, config.assigned_phone_number)
+  }
+
+  return c.json({ setup: result })
+})
+
+// ============================================================
+// POST /phone-setup — Save phone connection preferences
+// ============================================================
+secretaryRoutes.post('/phone-setup', async (c) => {
+  const customerId = c.get('customerId' as any) as number
+  const { forwarding_method, carrier_name, agent_voice, agent_name } = await c.req.json()
+
+  if (!forwarding_method || !['call_forwarding', 'sip_trunk', 'livekit_number'].includes(forwarding_method)) {
+    return c.json({ error: 'Invalid forwarding method. Choose: call_forwarding, sip_trunk, or livekit_number' }, 400)
+  }
+
+  try {
+    await c.env.DB.prepare(
+      `UPDATE secretary_config SET forwarding_method = ?, carrier_name = ?, agent_voice = ?, agent_name = ?, updated_at = datetime('now') WHERE customer_id = ?`
+    ).bind(
+      forwarding_method,
+      carrier_name || '',
+      agent_voice || 'alloy',
+      agent_name || 'Sarah',
+      customerId
+    ).run()
+
+    return c.json({ success: true, message: 'Phone setup preferences saved' })
+  } catch (err: any) {
+    return c.json({ error: 'Failed to save phone setup', details: err.message }, 500)
+  }
+})
+
+// ============================================================
+// POST /assign-number — Assign a Twilio inbound number from pool
+// ============================================================
+secretaryRoutes.post('/assign-number', async (c) => {
+  const customerId = c.get('customerId' as any) as number
+  const isDev = c.get('isDev' as any) as boolean
+
+  // Check subscription
+  if (!isDev) {
+    const sub = await c.env.DB.prepare(
+      `SELECT status FROM secretary_subscriptions WHERE customer_id = ? AND status = 'active' ORDER BY id DESC LIMIT 1`
+    ).bind(customerId).first<any>()
+    if (!sub) return c.json({ error: 'Active subscription required' }, 403)
+  }
+
+  const config = await c.env.DB.prepare(
+    `SELECT * FROM secretary_config WHERE customer_id = ?`
+  ).bind(customerId).first<any>()
+  if (!config) return c.json({ error: 'Configure your secretary first' }, 400)
+
+  // Already have a number assigned?
+  if (config.assigned_phone_number) {
+    const info = config.carrier_name
+      ? getCarrierForwardingInfo(config.carrier_name, config.assigned_phone_number)
+      : null
+    return c.json({
+      already_assigned: true,
+      assigned_phone_number: config.assigned_phone_number,
+      forwarding_instructions: info,
+      message: 'You already have an AI answering number assigned'
+    })
+  }
+
+  try {
+    // Try to find an available number from the pool
+    let number = await c.env.DB.prepare(
+      `SELECT * FROM secretary_phone_pool WHERE status = 'available' ORDER BY RANDOM() LIMIT 1`
+    ).first<any>()
+
+    // If no number in pool, try to buy one from Twilio
+    const twilioSid = (c.env as any).TWILIO_ACCOUNT_SID
+    const twilioAuth = (c.env as any).TWILIO_AUTH_TOKEN
+
+    if (!number && twilioSid && twilioAuth) {
+      // Search for available Canadian local numbers (Alberta preferred)
+      const search = await twilioAPI(twilioSid, twilioAuth, 'GET',
+        `/AvailablePhoneNumbers/CA/Local?AreaCode=780&SmsEnabled=false&VoiceEnabled=true&PageSize=1`, undefined)
+
+      let phoneToCreate: any = null
+      if (search.available_phone_numbers?.length > 0) {
+        phoneToCreate = search.available_phone_numbers[0]
+      } else {
+        // Fallback: try any Canadian number
+        const searchAny = await twilioAPI(twilioSid, twilioAuth, 'GET',
+          `/AvailablePhoneNumbers/CA/Local?SmsEnabled=false&VoiceEnabled=true&PageSize=1`, undefined)
+        if (searchAny.available_phone_numbers?.length > 0) {
+          phoneToCreate = searchAny.available_phone_numbers[0]
+        }
+      }
+
+      if (phoneToCreate) {
+        // Purchase the number
+        const purchased = await twilioAPI(twilioSid, twilioAuth, 'POST', '/IncomingPhoneNumbers', {
+          PhoneNumber: phoneToCreate.phone_number,
+          FriendlyName: `RoofReporterAI Secretary - Customer ${customerId}`,
+        })
+
+        if (purchased.sid) {
+          // Add to our pool
+          await c.env.DB.prepare(
+            `INSERT INTO secretary_phone_pool (phone_number, phone_sid, region, status, assigned_to_customer_id, assigned_at) VALUES (?, ?, ?, 'assigned', ?, datetime('now'))`
+          ).bind(purchased.phone_number, purchased.sid, 'CA', customerId).run()
+
+          number = {
+            id: null, // just purchased
+            phone_number: purchased.phone_number,
+            phone_sid: purchased.sid,
+          }
+        }
+      }
+    }
+
+    // If still no number available (no Twilio configured or no numbers), use a placeholder
+    if (!number) {
+      // For dev/testing: assign a placeholder number
+      if (isDev) {
+        const placeholderNumber = '+17800000001'
+        await c.env.DB.prepare(
+          `INSERT OR IGNORE INTO secretary_phone_pool (phone_number, region, status, assigned_to_customer_id, assigned_at) VALUES (?, 'AB', 'assigned', ?, datetime('now'))`
+        ).bind(placeholderNumber, customerId).run()
+        number = { phone_number: placeholderNumber }
+      } else {
+        return c.json({
+          error: 'No phone numbers available. Please contact support.',
+          needs_twilio: !twilioSid,
+        }, 503)
+      }
+    }
+
+    // If from pool (not just purchased), mark as assigned
+    if (number.id) {
+      await c.env.DB.prepare(
+        `UPDATE secretary_phone_pool SET status = 'assigned', assigned_to_customer_id = ?, assigned_at = datetime('now'), updated_at = datetime('now') WHERE id = ?`
+      ).bind(customerId, number.id).run()
+    }
+
+    // Save to config
+    await c.env.DB.prepare(
+      `UPDATE secretary_config SET assigned_phone_number = ?, connection_status = 'pending_forwarding', updated_at = datetime('now') WHERE customer_id = ?`
+    ).bind(number.phone_number, customerId).run()
+
+    const info = config.carrier_name
+      ? getCarrierForwardingInfo(config.carrier_name, number.phone_number)
+      : null
+
+    return c.json({
+      success: true,
+      assigned_phone_number: number.phone_number,
+      forwarding_instructions: info,
+      message: 'AI answering number assigned! Follow the forwarding instructions to connect your existing number.'
+    })
+  } catch (err: any) {
+    console.error('[Secretary Assign Number]', err)
+    return c.json({ error: 'Failed to assign number', details: err.message }, 500)
+  }
+})
+
+// ============================================================
+// POST /setup-livekit — Create LiveKit inbound trunk + dispatch rule
+// This configures LiveKit to accept calls on the assigned number
+// ============================================================
+secretaryRoutes.post('/setup-livekit', async (c) => {
+  const customerId = c.get('customerId' as any) as number
+  const apiKey = (c.env as any).LIVEKIT_API_KEY
+  const apiSecret = (c.env as any).LIVEKIT_API_SECRET
+  const livekitUrl = (c.env as any).LIVEKIT_URL
+  const livekitSipUri = (c.env as any).LIVEKIT_SIP_URI
+
+  if (!apiKey || !apiSecret || !livekitUrl) {
+    return c.json({ error: 'LiveKit not configured on server' }, 500)
+  }
+
+  const config = await c.env.DB.prepare(
+    `SELECT * FROM secretary_config WHERE customer_id = ?`
+  ).bind(customerId).first<any>()
+  if (!config) return c.json({ error: 'Secretary not configured' }, 400)
+  if (!config.assigned_phone_number) return c.json({ error: 'No phone number assigned yet. Assign a number first.' }, 400)
+
+  // Already have LiveKit trunk set up?
+  if (config.livekit_inbound_trunk_id && config.livekit_dispatch_rule_id) {
+    return c.json({
+      already_configured: true,
+      trunk_id: config.livekit_inbound_trunk_id,
+      dispatch_rule_id: config.livekit_dispatch_rule_id,
+      sip_uri: livekitSipUri || '',
+      message: 'LiveKit telephony already configured for this customer'
+    })
+  }
+
+  try {
+    // Step 1: Create inbound trunk
+    // This tells LiveKit to accept calls to this phone number
+    const trunkResult = await livekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST', '/twirp/livekit.SIP/CreateSIPInboundTrunk', {
+      trunk: {
+        name: `secretary-${customerId}`,
+        numbers: [config.assigned_phone_number],
+        krisp_enabled: true,
+        metadata: JSON.stringify({
+          customer_id: customerId,
+          service: 'roofer_secretary',
+          business_phone: config.business_phone,
+        }),
+      }
+    })
+
+    const trunkId = trunkResult?.sip_trunk_id || trunkResult?.trunk?.sip_trunk_id || ''
+
+    // Step 2: Create dispatch rule
+    // Routes inbound calls to a unique room with agent dispatch
+    const dispatchResult = await livekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST', '/twirp/livekit.SIP/CreateSIPDispatchRule', {
+      trunk_ids: trunkId ? [trunkId] : [],
+      rule: {
+        dispatchRuleIndividual: {
+          roomPrefix: `secretary-${customerId}-`,
+          pin: '',
+        }
+      },
+      name: `secretary-dispatch-${customerId}`,
+      metadata: JSON.stringify({ customer_id: customerId }),
+    })
+
+    const dispatchId = dispatchResult?.sip_dispatch_rule_id || ''
+
+    // Save to config
+    await c.env.DB.prepare(
+      `UPDATE secretary_config SET livekit_inbound_trunk_id = ?, livekit_dispatch_rule_id = ?, livekit_sip_uri = ?, updated_at = datetime('now') WHERE customer_id = ?`
+    ).bind(trunkId, dispatchId, livekitSipUri || '', customerId).run()
+
+    // Update phone pool with trunk/dispatch IDs
+    if (trunkId) {
+      await c.env.DB.prepare(
+        `UPDATE secretary_phone_pool SET sip_trunk_id = ?, dispatch_rule_id = ?, updated_at = datetime('now') WHERE assigned_to_customer_id = ?`
+      ).bind(trunkId, dispatchId, customerId).run()
+    }
+
+    return c.json({
+      success: true,
+      trunk_id: trunkId,
+      dispatch_rule_id: dispatchId,
+      sip_uri: livekitSipUri || '',
+      message: 'LiveKit telephony configured! Inbound calls will now route to your AI secretary.'
+    })
+  } catch (err: any) {
+    console.error('[Secretary LiveKit Setup]', err)
+    return c.json({
+      error: 'Failed to configure LiveKit telephony',
+      details: err.message,
+      note: 'This may require manual setup in the LiveKit Cloud dashboard.'
+    }, 500)
+  }
+})
+
+// ============================================================
+// POST /configure-twilio-trunk — Configure Twilio SIP trunk to forward to LiveKit
+// ============================================================
+secretaryRoutes.post('/configure-twilio-trunk', async (c) => {
+  const customerId = c.get('customerId' as any) as number
+  const twilioSid = (c.env as any).TWILIO_ACCOUNT_SID
+  const twilioAuth = (c.env as any).TWILIO_AUTH_TOKEN
+  const livekitSipUri = (c.env as any).LIVEKIT_SIP_URI
+
+  if (!twilioSid || !twilioAuth) {
+    return c.json({
+      error: 'Twilio not configured',
+      manual_setup: true,
+      instructions: 'Configure TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN as Cloudflare secrets, or set up the SIP trunk manually in the Twilio console.',
+      livekit_sip_uri: livekitSipUri || 'Check your LiveKit project settings for SIP URI',
+    }, 500)
+  }
+
+  const config = await c.env.DB.prepare(
+    `SELECT * FROM secretary_config WHERE customer_id = ?`
+  ).bind(customerId).first<any>()
+  if (!config?.assigned_phone_number) return c.json({ error: 'No phone number assigned' }, 400)
+
+  try {
+    // Already have a Twilio trunk?
+    if (config.twilio_trunk_sid) {
+      return c.json({
+        already_configured: true,
+        trunk_sid: config.twilio_trunk_sid,
+        message: 'Twilio SIP trunk already configured'
+      })
+    }
+
+    // Step 1: Create SIP Trunk on Twilio
+    const trunk = await twilioAPI(twilioSid, twilioAuth, 'POST', '/SIPTrunking/Trunks', {
+      FriendlyName: `RoofReporterAI Secretary - ${customerId}`,
+    })
+
+    if (!trunk.sid) {
+      // Twilio Elastic SIP Trunking might use different API path
+      return c.json({
+        error: 'Failed to create Twilio SIP trunk',
+        manual_setup: true,
+        instructions: `Go to Twilio Console → Elastic SIP Trunking → Create Trunk. Set origination URI to: ${livekitSipUri || 'your LiveKit SIP URI'}`,
+        details: trunk.message || 'API error',
+      }, 500)
+    }
+
+    // Step 2: Set Origination URI (where Twilio sends calls → LiveKit)
+    if (livekitSipUri) {
+      const sipEndpoint = livekitSipUri.replace('sip:', '')
+      await twilioAPI(twilioSid, twilioAuth, 'POST', `/SIPTrunking/Trunks/${trunk.sid}/OriginationUrls`, {
+        FriendlyName: 'LiveKit SIP',
+        SipUrl: `sip:${sipEndpoint}`,
+        Weight: '1',
+        Priority: '1',
+        Enabled: 'true',
+      })
+    }
+
+    // Step 3: Associate phone number with trunk
+    const poolEntry = await c.env.DB.prepare(
+      `SELECT phone_sid FROM secretary_phone_pool WHERE assigned_to_customer_id = ? AND phone_sid IS NOT NULL LIMIT 1`
+    ).bind(customerId).first<any>()
+
+    if (poolEntry?.phone_sid) {
+      await twilioAPI(twilioSid, twilioAuth, 'POST', `/SIPTrunking/Trunks/${trunk.sid}/PhoneNumbers`, {
+        PhoneNumberSid: poolEntry.phone_sid,
+      })
+    }
+
+    // Save trunk SID
+    await c.env.DB.prepare(
+      `UPDATE secretary_config SET twilio_trunk_sid = ?, updated_at = datetime('now') WHERE customer_id = ?`
+    ).bind(trunk.sid, customerId).run()
+
+    return c.json({
+      success: true,
+      trunk_sid: trunk.sid,
+      message: 'Twilio SIP trunk created and configured to route calls to LiveKit'
+    })
+  } catch (err: any) {
+    console.error('[Secretary Twilio Trunk]', err)
+    return c.json({
+      error: 'Failed to configure Twilio trunk',
+      details: err.message,
+      manual_setup: true,
+      instructions: `Set up manually: Twilio Console → Elastic SIP Trunking → Create trunk → Set origination to ${livekitSipUri || 'your LiveKit SIP URI'}`,
+    }, 500)
+  }
+})
+
+// ============================================================
+// POST /test-connection — Test if call forwarding is working
+// Places a test call via Twilio to verify the connection
+// ============================================================
+secretaryRoutes.post('/test-connection', async (c) => {
+  const customerId = c.get('customerId' as any) as number
+  const twilioSid = (c.env as any).TWILIO_ACCOUNT_SID
+  const twilioAuth = (c.env as any).TWILIO_AUTH_TOKEN
+
+  const config = await c.env.DB.prepare(
+    `SELECT * FROM secretary_config WHERE customer_id = ?`
+  ).bind(customerId).first<any>()
+  if (!config) return c.json({ error: 'Secretary not configured' }, 400)
+  if (!config.assigned_phone_number) return c.json({ error: 'No AI answering number assigned' }, 400)
+
+  try {
+    let testResult = 'pending'
+    let testDetails = ''
+
+    if (twilioSid && twilioAuth) {
+      // Make a test call from Twilio to the roofer's business number
+      // If forwarding is set up, it should ring through to our LiveKit number
+      const call = await twilioAPI(twilioSid, twilioAuth, 'POST', '/Calls', {
+        To: config.business_phone,
+        From: config.assigned_phone_number,
+        Url: 'http://twimlets.com/holdmusic?Bucket=com.twilio.music.ambient', // simple test TwiML
+        Timeout: '15',
+        StatusCallback: `${new URL(c.req.url).origin}/api/secretary/webhook/test-result`,
+        StatusCallbackEvent: 'completed',
+        StatusCallbackMethod: 'POST',
+      })
+
+      if (call.sid) {
+        testResult = 'in_progress'
+        testDetails = `Test call initiated (SID: ${call.sid}). The AI will attempt to call your business number. If forwarding is configured correctly, the call will route to the AI secretary.`
+      } else {
+        testResult = 'failed'
+        testDetails = call.message || 'Failed to initiate test call'
+      }
+    } else {
+      // No Twilio — provide manual test instructions
+      testResult = 'manual'
+      testDetails = `Twilio not configured for automated testing. To test manually: 1) Call your business number (${config.business_phone}) from a different phone. 2) If forwarding is set up, you should hear the AI secretary answer. 3) Come back here and mark the test as passed or failed.`
+    }
+
+    // Record test result
+    await c.env.DB.prepare(
+      `UPDATE secretary_config SET last_test_at = datetime('now'), last_test_result = ?, last_test_details = ?, updated_at = datetime('now') WHERE customer_id = ?`
+    ).bind(testResult, testDetails, customerId).run()
+
+    return c.json({
+      test_result: testResult,
+      details: testDetails,
+      business_phone: config.business_phone,
+      assigned_number: config.assigned_phone_number,
+    })
+  } catch (err: any) {
+    console.error('[Secretary Test]', err)
+    return c.json({ error: 'Test failed', details: err.message }, 500)
+  }
+})
+
+// ============================================================
+// POST /confirm-connection — Customer manually confirms forwarding works
+// ============================================================
+secretaryRoutes.post('/confirm-connection', async (c) => {
+  const customerId = c.get('customerId' as any) as number
+  const { connected } = await c.req.json()
+
+  const newStatus = connected ? 'connected' : 'failed'
+  const details = connected
+    ? 'Customer confirmed call forwarding is working'
+    : 'Customer reported call forwarding is not working'
+
+  await c.env.DB.prepare(
+    `UPDATE secretary_config SET connection_status = ?, last_test_at = datetime('now'), last_test_result = ?, last_test_details = ?, updated_at = datetime('now') WHERE customer_id = ?`
+  ).bind(newStatus, connected ? 'success' : 'failed', details, customerId).run()
+
+  return c.json({
+    success: true,
+    connection_status: newStatus,
+    message: connected
+      ? 'Connection confirmed! Your AI secretary is ready to answer calls.'
+      : 'Connection marked as failed. Check your forwarding setup and try again.'
+  })
+})
+
+// ============================================================
+// GET /carriers — List available carriers with forwarding codes
+// ============================================================
+secretaryRoutes.get('/carriers', async (c) => {
+  const carriers = [
+    { id: 'rogers', name: 'Rogers', subbrands: 'Chatr' },
+    { id: 'telus', name: 'Telus', subbrands: 'Koodo, Public Mobile' },
+    { id: 'bell', name: 'Bell', subbrands: 'Virgin Plus, Lucky Mobile' },
+    { id: 'shaw', name: 'Freedom Mobile', subbrands: 'Shaw' },
+    { id: 'fido', name: 'Fido', subbrands: '' },
+    { id: 'sasktel', name: 'SaskTel', subbrands: '' },
+    { id: 'voip', name: 'VoIP / Business Phone System', subbrands: 'RingCentral, Vonage, 8x8, Ooma, Grasshopper' },
+    { id: 'landline', name: 'Business Landline', subbrands: 'Telus, Bell, Rogers landline service' },
+    { id: 'other', name: 'Other Carrier', subbrands: '' },
+  ]
+  return c.json({ carriers })
+})
+
+// ============================================================
+// GET /forwarding-instructions/:carrier — Get specific carrier instructions
+// ============================================================
+secretaryRoutes.get('/forwarding-instructions/:carrier', async (c) => {
+  const customerId = c.get('customerId' as any) as number
+  const carrier = c.req.param('carrier')
+
+  const config = await c.env.DB.prepare(
+    `SELECT assigned_phone_number FROM secretary_config WHERE customer_id = ?`
+  ).bind(customerId).first<any>()
+
+  const forwardTo = config?.assigned_phone_number || '+1XXXXXXXXXX'
+  const info = getCarrierForwardingInfo(carrier, forwardTo)
+
+  return c.json({
+    carrier: carrier,
+    forward_to_number: forwardTo,
+    instructions: info,
+    has_assigned_number: !!config?.assigned_phone_number,
+  })
+})
+
+// ============================================================
+// POST /webhook/test-result — Twilio callback for test call results
+// (No auth required — Twilio posts here)
+// ============================================================
+secretaryRoutes.post('/webhook/test-result', async (c) => {
+  try {
+    const body = await c.req.parseBody()
+    const callStatus = body.CallStatus as string || ''
+    const to = body.To as string || ''
+
+    // Find customer by their business phone
+    const config = await c.env.DB.prepare(
+      `SELECT customer_id FROM secretary_config WHERE business_phone LIKE ? OR business_phone LIKE ?`
+    ).bind(`%${to.replace('+1', '')}%`, `%${to}%`).first<any>()
+
+    if (config) {
+      const success = ['completed', 'in-progress'].includes(callStatus)
+      await c.env.DB.prepare(
+        `UPDATE secretary_config SET last_test_result = ?, last_test_details = ?, connection_status = ?, updated_at = datetime('now') WHERE customer_id = ?`
+      ).bind(
+        success ? 'success' : 'failed',
+        `Twilio test call status: ${callStatus}`,
+        success ? 'connected' : 'failed',
+        config.customer_id
+      ).run()
+    }
+
+    return c.text('OK')
+  } catch (err: any) {
+    console.error('[Secretary Test Webhook]', err)
+    return c.text('Error', 500)
+  }
+})
+
+// ============================================================
+// ADMIN: POST /admin/seed-numbers — Bulk add numbers to the pool
+// ============================================================
+secretaryRoutes.post('/admin/seed-numbers', async (c) => {
+  // Verify admin (check for admin session or special header)
+  const auth = c.req.header('Authorization')
+  if (!auth?.startsWith('Bearer ')) return c.json({ error: 'Auth required' }, 401)
+  const token = auth.slice(7)
+  const admin = await c.env.DB.prepare(
+    `SELECT id FROM admin_sessions WHERE session_token = ? AND expires_at > datetime('now')`
+  ).bind(token).first<any>()
+  if (!admin) return c.json({ error: 'Admin access required' }, 403)
+
+  const { numbers } = await c.req.json()
+  if (!numbers || !Array.isArray(numbers)) return c.json({ error: 'numbers array required' }, 400)
+
+  let added = 0
+  for (const num of numbers) {
+    try {
+      await c.env.DB.prepare(
+        `INSERT OR IGNORE INTO secretary_phone_pool (phone_number, phone_sid, region, status) VALUES (?, ?, ?, 'available')`
+      ).bind(num.phone_number, num.phone_sid || '', num.region || 'AB').run()
+      added++
+    } catch (e) { /* duplicate, skip */ }
+  }
+
+  return c.json({ success: true, added, total_submitted: numbers.length })
+})
+
+// ============================================================
+// GET /admin/phone-pool — View phone pool status
+// ============================================================
+secretaryRoutes.get('/admin/phone-pool', async (c) => {
+  const auth = c.req.header('Authorization')
+  if (!auth?.startsWith('Bearer ')) return c.json({ error: 'Auth required' }, 401)
+  const token = auth.slice(7)
+  const admin = await c.env.DB.prepare(
+    `SELECT id FROM admin_sessions WHERE session_token = ? AND expires_at > datetime('now')`
+  ).bind(token).first<any>()
+  if (!admin) return c.json({ error: 'Admin access required' }, 403)
+
+  const pool = await c.env.DB.prepare(
+    `SELECT sp.*, c.email as assigned_email, c.name as assigned_name FROM secretary_phone_pool sp LEFT JOIN customers c ON c.id = sp.assigned_to_customer_id ORDER BY sp.status, sp.created_at`
+  ).all<any>()
+
+  const stats = await c.env.DB.prepare(
+    `SELECT status, COUNT(*) as count FROM secretary_phone_pool GROUP BY status`
+  ).all<any>()
+
+  return c.json({
+    numbers: pool.results || [],
+    stats: stats.results || [],
+  })
+})

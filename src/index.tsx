@@ -63,6 +63,12 @@ app.get('/api/health', (c) => {
       GMAIL_REFRESH_TOKEN: !!(c.env as any).GMAIL_REFRESH_TOKEN,
       RESEND_API_KEY: !!(c.env as any).RESEND_API_KEY,
       STRIPE_WEBHOOK_SECRET: !!(c.env as any).STRIPE_WEBHOOK_SECRET,
+      LIVEKIT_API_KEY: !!(c.env as any).LIVEKIT_API_KEY,
+      LIVEKIT_API_SECRET: !!(c.env as any).LIVEKIT_API_SECRET,
+      LIVEKIT_URL: !!(c.env as any).LIVEKIT_URL,
+      LIVEKIT_SIP_URI: !!(c.env as any).LIVEKIT_SIP_URI,
+      TWILIO_ACCOUNT_SID: !!(c.env as any).TWILIO_ACCOUNT_SID,
+      TWILIO_AUTH_TOKEN: !!(c.env as any).TWILIO_AUTH_TOKEN,
       DB: !!c.env.DB
     },
     vertex_ai: {
