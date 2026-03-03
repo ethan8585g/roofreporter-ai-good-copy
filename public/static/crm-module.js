@@ -14,6 +14,12 @@
   function authHeaders() { return { 'Authorization': 'Bearer ' + getToken(), 'Content-Type': 'application/json' }; }
   function authHeadersOnly() { return { 'Authorization': 'Bearer ' + getToken() }; }
 
+  // Global unhandled promise rejection handler for CRM module
+  window.addEventListener('unhandledrejection', function(event) {
+    console.error('[CRM] Unhandled promise rejection:', event.reason);
+    if (typeof toast === 'function') toast('An error occurred. Please try again.', 'error');
+  });
+
   // ============================================================
   // ROUTER — Render the correct module
   // ============================================================
@@ -285,7 +291,8 @@
   window._crmDeleteCustomer = function(id) {
     if (!confirm('Delete this customer?')) return;
     fetch('/api/crm/customers/' + id, { method: 'DELETE', headers: authHeadersOnly() })
-      .then(function() { toast('Customer deleted'); loadCustomers(); });
+      .then(function() { toast('Customer deleted'); loadCustomers(); })
+      .catch(function(e) { toast('Failed to delete: ' + (e.message || 'Network error'), 'error'); });
   };
 
   // ============================================================
@@ -379,7 +386,8 @@
           };
           fetch('/api/crm/invoices', { method: 'POST', headers: authHeaders(), body: JSON.stringify(payload) })
             .then(function(r) { return r.json(); })
-            .then(function(res) { if (res.success) { closeModal(); toast('Invoice created!'); loadInvoices(); } else { toast(res.error || 'Failed', 'error'); } });
+            .then(function(res) { if (res.success) { closeModal(); toast('Invoice created!'); loadInvoices(); } else { toast(res.error || 'Failed', 'error'); } })
+            .catch(function(e) { toast('Failed to create invoice: ' + (e.message || 'Network error'), 'error'); });
         }, 'Create Invoice');
       });
   };
@@ -396,13 +404,15 @@
   window._crmMarkInvoice = function(id, status) {
     fetch('/api/crm/invoices/' + id, { method: 'PUT', headers: authHeaders(), body: JSON.stringify({ status: status }) })
       .then(function(r) { return r.json(); })
-      .then(function(res) { if (res.success) { toast('Invoice marked as ' + status); loadInvoices(window._invFilter); } });
+      .then(function(res) { if (res.success) { toast('Invoice marked as ' + status); loadInvoices(window._invFilter); } })
+      .catch(function(e) { toast('Failed: ' + (e.message || 'Network error'), 'error'); });
   };
 
   window._crmDeleteInvoice = function(id) {
     if (!confirm('Delete this invoice?')) return;
     fetch('/api/crm/invoices/' + id, { method: 'DELETE', headers: authHeadersOnly() })
-      .then(function() { toast('Invoice deleted'); loadInvoices(window._invFilter); });
+      .then(function() { toast('Invoice deleted'); loadInvoices(window._invFilter); })
+      .catch(function(e) { toast('Failed to delete: ' + (e.message || 'Network error'), 'error'); });
   };
 
   // ============================================================
@@ -492,7 +502,8 @@
           };
           fetch('/api/crm/proposals', { method: 'POST', headers: authHeaders(), body: JSON.stringify(payload) })
             .then(function(r) { return r.json(); })
-            .then(function(res) { if (res.success) { closeModal(); toast('Proposal created!'); loadProposals(); } else { toast(res.error || 'Failed', 'error'); } });
+            .then(function(res) { if (res.success) { closeModal(); toast('Proposal created!'); loadProposals(); } else { toast(res.error || 'Failed', 'error'); } })
+            .catch(function(e) { toast('Network error: ' + (e.message || 'Unknown'), 'error'); });
         }, 'Create Proposal');
       });
   };
@@ -500,7 +511,8 @@
   window._crmMarkProposal = function(id, status) {
     fetch('/api/crm/proposals/' + id, { method: 'PUT', headers: authHeaders(), body: JSON.stringify({ status: status }) })
       .then(function(r) { return r.json(); })
-      .then(function(res) { if (res.success) { toast('Proposal updated'); loadProposals(window._propFilter); } });
+      .then(function(res) { if (res.success) { toast('Proposal updated'); loadProposals(window._propFilter); } })
+      .catch(function(e) { toast('Network error: ' + (e.message || 'Unknown'), 'error'); });
   };
 
   window._crmSendProposal = function(id) {
@@ -546,7 +558,8 @@
   window._crmDeleteProposal = function(id) {
     if (!confirm('Delete this proposal?')) return;
     fetch('/api/crm/proposals/' + id, { method: 'DELETE', headers: authHeadersOnly() })
-      .then(function() { toast('Proposal deleted'); loadProposals(window._propFilter); });
+      .then(function() { toast('Proposal deleted'); loadProposals(window._propFilter); })
+      .catch(function(e) { toast('Failed to delete: ' + (e.message || 'Network error'), 'error'); });
   };
 
   // ============================================================
@@ -635,7 +648,8 @@
           };
           fetch('/api/crm/jobs', { method: 'POST', headers: authHeaders(), body: JSON.stringify(payload) })
             .then(function(r) { return r.json(); })
-            .then(function(res) { if (res.success) { closeModal(); toast('Job scheduled!'); loadJobs(); } else { toast(res.error || 'Failed', 'error'); } });
+            .then(function(res) { if (res.success) { closeModal(); toast('Job scheduled!'); loadJobs(); } else { toast(res.error || 'Failed', 'error'); } })
+            .catch(function(e) { toast('Failed to create job: ' + (e.message || 'Network error'), 'error'); });
         }, 'Schedule Job');
       });
   };
@@ -643,7 +657,8 @@
   window._crmMarkJob = function(id, status) {
     fetch('/api/crm/jobs/' + id, { method: 'PUT', headers: authHeaders(), body: JSON.stringify({ status: status }) })
       .then(function(r) { return r.json(); })
-      .then(function(res) { if (res.success) { toast('Job updated'); loadJobs(window._jobFilter); } });
+      .then(function(res) { if (res.success) { toast('Job updated'); loadJobs(window._jobFilter); } })
+      .catch(function(e) { toast('Failed to update job: ' + (e.message || 'Network error'), 'error'); });
   };
 
   window._crmViewJob = function(id) {
@@ -680,11 +695,13 @@
         if (j.notes) body += '<div class="pt-3 border-t"><p class="text-sm text-gray-500 italic">' + j.notes + '</p></div>';
         body += '</div>';
         showModal(j.title, body);
-      });
+      })
+      .catch(function(e) { toast('Failed to load job details', 'error'); });
   };
 
   window._crmToggleChecklist = function(jobId, itemId, checked) {
-    fetch('/api/crm/jobs/' + jobId + '/checklist/' + itemId, { method: 'PUT', headers: authHeaders(), body: JSON.stringify({ is_completed: checked }) });
+    fetch('/api/crm/jobs/' + jobId + '/checklist/' + itemId, { method: 'PUT', headers: authHeaders(), body: JSON.stringify({ is_completed: checked }) })
+      .catch(function(e) { toast('Failed to update checklist', 'error'); });
   };
 
   window._crmAddChecklistItem = function(jobId) {
@@ -734,7 +751,8 @@
   window._crmDeleteJob = function(id) {
     if (!confirm('Delete this job?')) return;
     fetch('/api/crm/jobs/' + id, { method: 'DELETE', headers: authHeadersOnly() })
-      .then(function() { toast('Job deleted'); loadJobs(window._jobFilter); });
+      .then(function() { toast('Job deleted'); loadJobs(window._jobFilter); })
+      .catch(function(e) { toast('Failed to delete: ' + (e.message || 'Network error'), 'error'); });
   };
 
   // ============================================================

@@ -1877,7 +1877,7 @@ function getD2DPageHTML(mapsApiKey: string) {
   ${getHeadTags()}
   <title>D2D Manager - RoofReporterAI</title>
   ${mapsScript}
-  <link rel="stylesheet" href="/static/d2d-module.css">
+  <link rel="stylesheet" href="/static/d2d-module.css?v=${Date.now()}">
 </head>
 <body class="bg-gray-50 min-h-screen">
   <header class="bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg">
