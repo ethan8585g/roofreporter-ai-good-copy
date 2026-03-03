@@ -93,7 +93,7 @@
     fetch('/api/customer/orders', { headers: authHeadersOnly() })
       .then(function(r) { return r.json(); })
       .then(function(data) {
-        var orders = (data.orders || []).filter(function(o) { return o.report_status === 'completed' || o.status === 'completed' || o.status === 'processing'; });
+        var orders = data.orders || [];
         renderReports(orders);
       })
       .catch(function() { root.innerHTML = '<p class="text-red-500">Failed to load reports.</p>'; });
@@ -107,7 +107,17 @@
     var html = '<div class="flex items-center justify-between mb-4"><h2 class="text-lg font-bold text-gray-800"><i class="fas fa-file-alt text-brand-500 mr-2"></i>Roof Report History (' + orders.length + ')</h2><a href="/customer/order" class="bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-brand-700"><i class="fas fa-plus mr-1"></i>New Report</a></div><div class="space-y-3">';
     for (var i = 0; i < orders.length; i++) {
       var o = orders[i];
-      html += '<div class="bg-white rounded-xl border p-4 hover:shadow-md transition-shadow"><div class="flex items-start justify-between"><div class="min-w-0"><div class="flex items-center gap-2 mb-1"><span class="font-mono text-xs font-bold text-brand-600">' + o.order_number + '</span>' + badge(o.status) + '</div><p class="text-gray-700 font-medium text-sm"><i class="fas fa-map-marker-alt text-red-400 mr-1"></i>' + o.property_address + '</p><div class="flex items-center gap-3 mt-2 text-xs text-gray-400"><span><i class="fas fa-calendar mr-1"></i>' + fmtDate(o.created_at) + '</span>' + (o.roof_area_sqft ? '<span><i class="fas fa-ruler-combined mr-1"></i>' + Math.round(o.roof_area_sqft) + ' sq ft</span>' : '') + '</div></div><div class="flex flex-col items-end gap-2 flex-shrink-0 ml-4"><a href="/api/reports/' + o.id + '/html" target="_blank" class="px-4 py-2 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700"><i class="fas fa-file-alt mr-1"></i>View Report</a><a href="/api/reports/' + o.id + '/pdf" target="_blank" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-xs font-medium hover:bg-gray-200"><i class="fas fa-download mr-1"></i>PDF</a></div></div></div>';
+      var isCompleted = (o.report_status === 'completed' || o.status === 'completed');
+      var isProcessing = (o.status === 'processing' || o.report_status === 'running');
+      var buttons = '';
+      if (isCompleted) {
+        buttons = '<a href="/api/reports/' + o.id + '/html" target="_blank" class="px-4 py-2 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700"><i class="fas fa-file-alt mr-1"></i>View Report</a><a href="/api/reports/' + o.id + '/pdf" target="_blank" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-xs font-medium hover:bg-gray-200"><i class="fas fa-download mr-1"></i>PDF</a>';
+      } else if (isProcessing) {
+        buttons = '<span class="px-4 py-2 bg-blue-50 text-blue-600 rounded-lg text-sm font-medium"><i class="fas fa-spinner fa-spin mr-1"></i>Generating...</span>';
+      } else {
+        buttons = '<span class="px-4 py-2 bg-gray-50 text-gray-500 rounded-lg text-xs font-medium">' + (o.status || 'pending') + '</span>';
+      }
+      html += '<div class="bg-white rounded-xl border p-4 hover:shadow-md transition-shadow"><div class="flex items-start justify-between"><div class="min-w-0"><div class="flex items-center gap-2 mb-1"><span class="font-mono text-xs font-bold text-brand-600">' + o.order_number + '</span>' + badge(o.status) + '</div><p class="text-gray-700 font-medium text-sm"><i class="fas fa-map-marker-alt text-red-400 mr-1"></i>' + o.property_address + '</p><div class="flex items-center gap-3 mt-2 text-xs text-gray-400"><span><i class="fas fa-calendar mr-1"></i>' + fmtDate(o.created_at) + '</span>' + (o.roof_area_sqft ? '<span><i class="fas fa-ruler-combined mr-1"></i>' + Math.round(o.roof_area_sqft) + ' sq ft</span>' : '') + '</div></div><div class="flex flex-col items-end gap-2 flex-shrink-0 ml-4">' + buttons + '</div></div></div>';
     }
     html += '</div>';
     root.innerHTML = html;
