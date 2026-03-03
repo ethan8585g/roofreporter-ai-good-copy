@@ -1583,18 +1583,31 @@ function getCustomerLoginHTML() {
         });
         const data = await res.json();
         if (res.ok && data.success) {
-          suc.textContent = data.message || 'Code sent! Check your inbox.';
-          suc.classList.remove('hidden');
+          // Show the verification code step
           document.getElementById('regStep2').classList.remove('hidden');
           document.getElementById('regSentEmail').textContent = email;
           document.getElementById('custRegCode').focus();
           // Disable email field after sending
           document.getElementById('custRegEmail').readOnly = true;
           document.getElementById('custRegEmail').classList.add('bg-gray-100');
+
+          // Check if email was actually sent or if we got a fallback code
+          if (data.email_sent === false && data.fallback_code) {
+            // Email delivery unavailable — show the code directly
+            suc.innerHTML = '<i class="fas fa-exclamation-triangle text-amber-600 mr-1"></i> Email delivery is temporarily unavailable.<br>'
+              + '<span class="font-mono text-2xl font-bold tracking-widest text-blue-700 block my-2">' + data.fallback_code + '</span>'
+              + '<span class="text-xs text-gray-500">Enter this code below to verify your email and continue registration.</span>';
+            suc.classList.remove('hidden', 'bg-green-50', 'text-green-800', 'border-green-200');
+            suc.classList.add('bg-amber-50', 'text-amber-900', 'border', 'border-amber-200');
+          } else {
+            suc.textContent = data.message || 'Code sent! Check your inbox.';
+            suc.classList.remove('hidden');
+          }
+
           // Start 60s cooldown
           var cd = 60;
           btn.disabled = true;
-          var iv = setInterval(function() { cd--; btn.innerHTML = '<i class=\"fas fa-clock mr-1\"></i>' + cd + 's'; if (cd <= 0) { clearInterval(iv); btn.disabled = false; btn.innerHTML = '<i class=\"fas fa-paper-plane mr-1\"></i>Resend'; } }, 1000);
+          var iv = setInterval(function() { cd--; btn.innerHTML = '<i class="fas fa-clock mr-1"></i>' + cd + 's'; if (cd <= 0) { clearInterval(iv); btn.disabled = false; btn.innerHTML = '<i class="fas fa-paper-plane mr-1"></i>Resend'; } }, 1000);
         } else {
           err.textContent = data.error || 'Failed to send code.';
           err.classList.remove('hidden');

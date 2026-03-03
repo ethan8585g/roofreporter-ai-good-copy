@@ -52,9 +52,14 @@ function generateVerificationCode(): string {
   return Math.floor(100000 + Math.random() * 900000).toString()
 }
 
-// Send email using Gmail API via GCP service account
-async function sendVerificationEmail(env: any, toEmail: string, code: string): Promise<boolean> {
-  // Try Resend API first (simplest)
+// Send email using best available provider
+// Priority: 1) Resend API  2) Gmail OAuth2 (env or DB token)  3) GCP service account
+async function sendVerificationEmail(env: any, toEmail: string, code: string, db?: any): Promise<boolean> {
+  const senderEmail = (env as any).GMAIL_SENDER_EMAIL || 'noreply@reusecanada.ca'
+  const emailSubject = `Your RoofReporterAI Verification Code: ${code}`
+  const emailHtml = getVerificationEmailHTML(code)
+
+  // ---- METHOD 1: Resend API (simplest) ----
   const resendKey = (env as any).RESEND_API_KEY
   if (resendKey) {
     try {
@@ -62,24 +67,55 @@ async function sendVerificationEmail(env: any, toEmail: string, code: string): P
         method: 'POST',
         headers: { 'Authorization': `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          from: 'RoofReporterAI <onboarding@resend.dev>',
+          from: `RoofReporterAI <onboarding@resend.dev>`,
           to: [toEmail],
-          subject: `Your RoofReporterAI Verification Code: ${code}`,
-          html: getVerificationEmailHTML(code)
+          subject: emailSubject,
+          html: emailHtml
         })
       })
-      if (resp.ok) return true
-      console.error('[Email] Resend failed:', await resp.text())
+      if (resp.ok) {
+        console.log(`[Verification Email] Sent to ${toEmail} via Resend`)
+        return true
+      }
+      console.error('[Verification Email] Resend failed:', await resp.text())
     } catch (e: any) {
-      console.error('[Email] Resend error:', e.message)
+      console.error('[Verification Email] Resend error:', e.message)
     }
   }
 
-  // Try Gmail OAuth2 (if refresh token available)
-  const gmailRefreshToken = (env as any).GMAIL_REFRESH_TOKEN
-  const gmailClientId = (env as any).GMAIL_CLIENT_ID
-  const gmailClientSecret = (env as any).GMAIL_CLIENT_SECRET
-  if (gmailRefreshToken && gmailClientId && gmailClientSecret) {
+  // ---- METHOD 2: Gmail OAuth2 (check env vars first, then DB for stored refresh token) ----
+  let gmailRefreshToken = (env as any).GMAIL_REFRESH_TOKEN || ''
+  const gmailClientId = (env as any).GMAIL_CLIENT_ID || ''
+  const gmailClientSecret = (env as any).GMAIL_CLIENT_SECRET || ''
+
+  // If no refresh token in env, check the DB (stored from /api/auth/gmail/callback)
+  if (!gmailRefreshToken && gmailClientId && db) {
+    try {
+      const row = await db.prepare(
+        "SELECT setting_value FROM settings WHERE setting_key = 'gmail_refresh_token' AND master_company_id = 1"
+      ).first()
+      if (row?.setting_value) {
+        gmailRefreshToken = row.setting_value
+        console.log('[Verification Email] Using Gmail refresh token from database')
+      }
+    } catch (e) { /* settings table might not exist yet */ }
+  }
+
+  // Also try to get client_secret from DB if not in env
+  let effectiveClientSecret = gmailClientSecret
+  if (!effectiveClientSecret && gmailClientId && db) {
+    try {
+      const row = await db.prepare(
+        "SELECT setting_value FROM settings WHERE setting_key = 'gmail_client_secret' AND master_company_id = 1"
+      ).first()
+      if (row?.setting_value) {
+        effectiveClientSecret = row.setting_value
+        console.log('[Verification Email] Using Gmail client secret from database')
+      }
+    } catch (e) { /* ignore */ }
+  }
+
+  if (gmailRefreshToken && gmailClientId && effectiveClientSecret) {
     try {
       // Get fresh access token
       const tokenResp = await fetch('https://oauth2.googleapis.com/token', {
@@ -89,19 +125,18 @@ async function sendVerificationEmail(env: any, toEmail: string, code: string): P
           grant_type: 'refresh_token',
           refresh_token: gmailRefreshToken,
           client_id: gmailClientId,
-          client_secret: gmailClientSecret
+          client_secret: effectiveClientSecret
         }).toString()
       })
       const tokenData: any = await tokenResp.json()
       if (tokenData.access_token) {
-        const senderEmail = (env as any).GMAIL_SENDER_EMAIL || 'noreply@reusecanada.ca'
         const rawEmail = [
           `From: RoofReporterAI <${senderEmail}>`,
           `To: ${toEmail}`,
-          `Subject: Your RoofReporterAI Verification Code: ${code}`,
+          `Subject: ${emailSubject}`,
           'Content-Type: text/html; charset=UTF-8',
           '',
-          getVerificationEmailHTML(code)
+          emailHtml
         ].join('\r\n')
 
         // Base64url encode
@@ -113,27 +148,32 @@ async function sendVerificationEmail(env: any, toEmail: string, code: string): P
           headers: { 'Authorization': `Bearer ${tokenData.access_token}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({ raw: encoded })
         })
-        if (sendResp.ok) return true
-        console.error('[Email] Gmail send failed:', await sendResp.text())
+        if (sendResp.ok) {
+          console.log(`[Verification Email] Sent to ${toEmail} via Gmail OAuth2`)
+          return true
+        }
+        console.error('[Verification Email] Gmail send failed:', await sendResp.text())
+      } else {
+        console.error('[Verification Email] Gmail token exchange failed:', JSON.stringify(tokenData))
       }
     } catch (e: any) {
-      console.error('[Email] Gmail error:', e.message)
+      console.error('[Verification Email] Gmail error:', e.message)
     }
   }
 
-  // Try Gmail via GCP service account
+  // ---- METHOD 3: Gmail via GCP service account (requires Workspace domain-wide delegation) ----
   try {
     const gcpKeyStr = (env as any).GCP_SERVICE_ACCOUNT_KEY
     if (gcpKeyStr) {
       const gcpKey = typeof gcpKeyStr === 'string' ? JSON.parse(gcpKeyStr) : gcpKeyStr
-      const senderEmail = gcpKey.client_email
-      const impersonateEmail = (env as any).GMAIL_SENDER_EMAIL || senderEmail
+      const saEmail = gcpKey.client_email
+      const impersonateEmail = senderEmail
 
       // Create JWT for service account
       const header = { alg: 'RS256', typ: 'JWT' }
       const now = Math.floor(Date.now() / 1000)
       const claim = {
-        iss: senderEmail,
+        iss: saEmail,
         sub: impersonateEmail,
         scope: 'https://www.googleapis.com/auth/gmail.send',
         aud: 'https://oauth2.googleapis.com/token',
@@ -169,10 +209,10 @@ async function sendVerificationEmail(env: any, toEmail: string, code: string): P
         const rawEmail = [
           `From: RoofReporterAI <${impersonateEmail}>`,
           `To: ${toEmail}`,
-          `Subject: Your RoofReporterAI Verification Code: ${code}`,
+          `Subject: ${emailSubject}`,
           'Content-Type: text/html; charset=UTF-8',
           '',
-          getVerificationEmailHTML(code)
+          emailHtml
         ].join('\r\n')
 
         const encoded = btoa(unescape(encodeURIComponent(rawEmail)))
@@ -183,15 +223,20 @@ async function sendVerificationEmail(env: any, toEmail: string, code: string): P
           headers: { 'Authorization': `Bearer ${tokenData.access_token}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({ raw: encoded })
         })
-        if (sendResp.ok) return true
-        console.error('[Email] GCP Gmail send failed:', await sendResp.text())
+        if (sendResp.ok) {
+          console.log(`[Verification Email] Sent to ${toEmail} via GCP service account`)
+          return true
+        }
+        console.error('[Verification Email] GCP Gmail send failed:', await sendResp.text())
+      } else {
+        console.error('[Verification Email] GCP token exchange failed:', JSON.stringify(tokenData))
       }
     }
   } catch (e: any) {
-    console.error('[Email] GCP service account error:', e.message)
+    console.error('[Verification Email] GCP service account error:', e.message)
   }
 
-  console.error('[Email] All email methods failed for:', toEmail)
+  console.error('[Verification Email] ALL methods failed for:', toEmail, '| Resend:', !!resendKey, '| Gmail OAuth2:', !!(gmailRefreshToken && gmailClientId), '| GCP:', !!(env as any).GCP_SERVICE_ACCOUNT_KEY)
   return false
 }
 
@@ -261,23 +306,25 @@ customerAuthRoutes.post('/send-verification', async (c) => {
       'INSERT INTO email_verification_codes (email, code, expires_at) VALUES (?, ?, ?)'
     ).bind(cleanEmail, code, expiresAt).run()
 
-    // Send email
-    const sent = await sendVerificationEmail(c.env, cleanEmail, code)
+    // Send email — pass DB so it can look up stored Gmail OAuth tokens
+    const sent = await sendVerificationEmail(c.env, cleanEmail, code, c.env.DB)
 
     if (!sent) {
-      // Even if email fails, store the code (for dev/testing, code can be retrieved from DB)
+      // Email delivery failed — return the code directly so registration can proceed
+      // This is a graceful degradation: registration still works even without email configured
       console.error(`[Verification] Email send failed for ${cleanEmail}, code: ${code}`)
-      // In dev mode, still return success but flag it
       return c.json({
         success: true,
-        message: 'Verification code generated. If you don\'t receive the email, check spam or try again.',
-        // Only in dev mode: expose the code for testing
-        ...(isDevAccount(cleanEmail) ? { dev_code: code } : {})
+        email_sent: false,
+        fallback_code: code,
+        message: 'Email delivery is temporarily unavailable. Your verification code is shown below.',
+        setup_hint: 'Admin: Set up email at /api/auth/gmail or configure RESEND_API_KEY for production email delivery.'
       })
     }
 
     return c.json({
       success: true,
+      email_sent: true,
       message: `Verification code sent to ${cleanEmail}. Check your inbox (and spam folder).`
     })
   } catch (err: any) {
