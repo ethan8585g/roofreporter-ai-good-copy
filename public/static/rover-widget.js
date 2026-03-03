@@ -2,6 +2,7 @@
 // ROVER AI CHATBOT — Frontend Widget
 // Injectable floating chat widget for all public pages
 // Connects to /api/rover/* endpoints
+// Includes contact form fallback when AI can't answer
 // ============================================================
 
 (function() {
@@ -21,7 +22,8 @@
     loading: false,
     leadSubmitted: false,
     minimized: false,
-    unread: 0
+    unread: 0,
+    contactFormShown: false
   };
 
   // Generate or restore session ID
@@ -138,7 +140,7 @@
       right: 0;
       width: 380px;
       max-width: calc(100vw - 32px);
-      height: 520px;
+      height: 540px;
       max-height: calc(100vh - 120px);
       background: white;
       border-radius: 20px;
@@ -342,6 +344,113 @@
       border-color: #0ea5e9;
     }
 
+    /* Contact form inside chat */
+    .rover-contact-form {
+      background: linear-gradient(135deg, #f0f9ff, #e0f2fe);
+      border: 1px solid #bae6fd;
+      border-radius: 12px;
+      padding: 16px;
+      margin: 8px 0;
+      animation: roverMsgIn 0.3s ease-out;
+      align-self: stretch;
+      max-width: 100%;
+    }
+    .rover-contact-form h4 {
+      margin: 0 0 12px;
+      font-size: 14px;
+      font-weight: 700;
+      color: #0369a1;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .rover-contact-form .rover-form-field {
+      margin-bottom: 10px;
+    }
+    .rover-contact-form label {
+      display: block;
+      font-size: 11px;
+      font-weight: 600;
+      color: #475569;
+      margin-bottom: 3px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .rover-contact-form input,
+    .rover-contact-form textarea {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      font-size: 13px;
+      outline: none;
+      transition: border-color 0.2s;
+      background: white;
+      box-sizing: border-box;
+      font-family: inherit;
+    }
+    .rover-contact-form input:focus,
+    .rover-contact-form textarea:focus {
+      border-color: #0ea5e9;
+      box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.1);
+    }
+    .rover-contact-form textarea {
+      height: 60px;
+      resize: vertical;
+    }
+    .rover-contact-form .rover-form-row {
+      display: flex;
+      gap: 8px;
+    }
+    .rover-contact-form .rover-form-row .rover-form-field {
+      flex: 1;
+    }
+    .rover-contact-submit {
+      width: 100%;
+      padding: 10px;
+      background: linear-gradient(135deg, #0ea5e9, #2563eb);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-top: 4px;
+    }
+    .rover-contact-submit:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3);
+    }
+    .rover-contact-submit:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+    .rover-contact-success {
+      text-align: center;
+      padding: 16px;
+      background: linear-gradient(135deg, #f0fdf4, #dcfce7);
+      border: 1px solid #86efac;
+      border-radius: 12px;
+      animation: roverMsgIn 0.3s ease-out;
+      align-self: stretch;
+    }
+    .rover-contact-success .success-icon {
+      font-size: 32px;
+      margin-bottom: 8px;
+    }
+    .rover-contact-success h4 {
+      margin: 0 0 4px;
+      font-size: 14px;
+      color: #166534;
+    }
+    .rover-contact-success p {
+      margin: 0;
+      font-size: 12px;
+      color: #4ade80;
+    }
+
     /* Mobile adjustments */
     @media (max-width: 440px) {
       #rover-chat {
@@ -356,6 +465,10 @@
         height: 56px;
       }
       #rover-greeting { max-width: 240px; }
+      .rover-contact-form .rover-form-row {
+        flex-direction: column;
+        gap: 0;
+      }
     }
   `;
   document.head.appendChild(style);
@@ -429,7 +542,9 @@
     // Process content: convert links and line breaks
     let html = esc(content)
       .replace(/\n/g, '<br>')
-      .replace(/(\/customer\/login|\/pricing|\/blog)/g, '<a href="$1" style="color:inherit;text-decoration:underline;font-weight:600">$1</a>');
+      .replace(/(\/customer\/login|\/pricing|\/blog)/g, '<a href="$1" style="color:inherit;text-decoration:underline;font-weight:600" target="_blank">$1</a>')
+      .replace(/(reports@reusecanada\.ca)/g, '<a href="mailto:$1" style="color:inherit;text-decoration:underline;font-weight:600">$1</a>')
+      .replace(/(roofreporterai\.com)/g, '<a href="https://$1" style="color:inherit;text-decoration:underline;font-weight:600" target="_blank">$1</a>');
     
     msg.innerHTML = html;
 
@@ -439,12 +554,13 @@
       actions.className = 'rover-actions';
       const buttons = [
         { text: '📊 What\'s in a report?', msg: 'What\'s included in a roof measurement report?' },
-        { text: '💰 Pricing', msg: 'How much does a report cost?' },
+        { text: '💰 How much?', msg: 'How much does a roof report cost?' },
         { text: '🆓 Free trial', msg: 'Can I try it for free?' },
-        { text: '📞 Contact info', msg: 'How can I contact your team?' }
+        { text: '📞 Contact us', msg: 'How can I contact your team?' },
+        { text: '🏆 Why RoofReporterAI?', msg: 'Why should I choose RoofReporterAI over competitors?' }
       ];
-      buttons.forEach(b => {
-        const btn = document.createElement('button');
+      buttons.forEach(function(b) {
+        var btn = document.createElement('button');
         btn.className = 'rover-action-btn';
         btn.textContent = b.text;
         btn.onclick = function() {
@@ -460,8 +576,112 @@
     messagesEl.scrollTop = messagesEl.scrollHeight;
   }
 
+  // Show contact form in chat
+  function showContactForm() {
+    if (state.contactFormShown) return; // Only show once
+    state.contactFormShown = true;
+
+    var formDiv = document.createElement('div');
+    formDiv.className = 'rover-contact-form';
+    formDiv.innerHTML = `
+      <h4>📋 Get in Touch</h4>
+      <div class="rover-form-row">
+        <div class="rover-form-field">
+          <label>Name</label>
+          <input type="text" id="rover-cf-name" placeholder="Your name">
+        </div>
+        <div class="rover-form-field">
+          <label>Company</label>
+          <input type="text" id="rover-cf-company" placeholder="Company name">
+        </div>
+      </div>
+      <div class="rover-form-row">
+        <div class="rover-form-field">
+          <label>Email *</label>
+          <input type="email" id="rover-cf-email" placeholder="you@company.com" required>
+        </div>
+        <div class="rover-form-field">
+          <label>Phone</label>
+          <input type="tel" id="rover-cf-phone" placeholder="780-555-0000">
+        </div>
+      </div>
+      <div class="rover-form-field">
+        <label>Message</label>
+        <textarea id="rover-cf-message" placeholder="How can we help you?"></textarea>
+      </div>
+      <button class="rover-contact-submit" onclick="window.__roverSubmitContact()">
+        Send to Our Team →
+      </button>
+    `;
+    messagesEl.appendChild(formDiv);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
+  // Submit contact form
+  window.__roverSubmitContact = async function() {
+    var name = document.getElementById('rover-cf-name');
+    var email = document.getElementById('rover-cf-email');
+    var phone = document.getElementById('rover-cf-phone');
+    var company = document.getElementById('rover-cf-company');
+    var message = document.getElementById('rover-cf-message');
+    var submitBtn = document.querySelector('.rover-contact-submit');
+
+    if (!email || !email.value.trim()) {
+      email.style.borderColor = '#ef4444';
+      email.focus();
+      return;
+    }
+
+    // Validate email format
+    if (!/\S+@\S+\.\S+/.test(email.value.trim())) {
+      email.style.borderColor = '#ef4444';
+      email.focus();
+      return;
+    }
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Sending...';
+
+    try {
+      var res = await fetch('/api/rover/lead', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_id: state.sessionId,
+          name: name ? name.value.trim() : '',
+          email: email.value.trim(),
+          phone: phone ? phone.value.trim() : '',
+          company: company ? company.value.trim() : '',
+          message: message ? message.value.trim() : ''
+        })
+      });
+
+      // Replace form with success message
+      var formEl = document.querySelector('.rover-contact-form');
+      if (formEl) {
+        var successDiv = document.createElement('div');
+        successDiv.className = 'rover-contact-success';
+        successDiv.innerHTML = `
+          <div class="success-icon">✅</div>
+          <h4>Message Sent!</h4>
+          <p>Our team will get back to you shortly at ${esc(email.value.trim())}</p>
+        `;
+        formEl.replaceWith(successDiv);
+      }
+
+      // Add Rover confirmation message
+      addMessage('assistant', "Thanks for reaching out! Our team has your info and will get back to you shortly. In the meantime, feel free to try our 3 free roof reports at /customer/login — no credit card needed! 🏠");
+
+      state.leadSubmitted = true;
+    } catch (e) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Send to Our Team →';
+      addMessage('assistant', "Sorry, I had trouble sending that. You can also email us directly at reports@reusecanada.ca and we'll get right back to you!");
+    }
+  };
+
   function showTyping() {
-    const typing = document.createElement('div');
+    var typing = document.createElement('div');
     typing.className = 'rover-typing';
     typing.id = 'rover-typing';
     typing.innerHTML = '<span></span><span></span><span></span>';
@@ -470,7 +690,7 @@
   }
 
   function hideTyping() {
-    const t = document.getElementById('rover-typing');
+    var t = document.getElementById('rover-typing');
     if (t) t.remove();
   }
 
@@ -487,11 +707,11 @@
 
       // If no messages yet, show greeting
       if (state.messages.length === 0) {
-        const greeting = "Hey! My name is Rover! Your RoofReporterAI expert helper! How can I help you today?";
+        var greeting = "Hey there! 🐕 I'm Rover, your RoofReporterAI expert helper! Ask me anything about our AI-powered roof measurement reports, pricing, or features. How can I help you today?";
         addMessage('assistant', greeting, true);
       }
 
-      setTimeout(() => inputEl.focus(), 300);
+      setTimeout(function() { inputEl.focus(); }, 300);
     }
   };
 
@@ -503,7 +723,7 @@
 
   // Send message
   window.__roverSend = async function() {
-    const msg = inputEl.value.trim();
+    var msg = inputEl.value.trim();
     if (!msg || state.loading) return;
 
     inputEl.value = '';
@@ -514,7 +734,7 @@
     showTyping();
 
     try {
-      const res = await fetch('/api/rover/chat', {
+      var res = await fetch('/api/rover/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -527,8 +747,26 @@
       hideTyping();
 
       if (res.ok) {
-        const data = await res.json();
-        addMessage('assistant', data.reply);
+        var data = await res.json();
+        
+        if (data.reply) {
+          addMessage('assistant', data.reply);
+        } else if (data.error) {
+          addMessage('assistant', data.error);
+        }
+
+        // Show contact form if API indicates it
+        if (data.show_contact_form) {
+          showContactForm();
+        }
+
+        // Check if the reply mentions filling out a contact form or reaching out
+        if (data.reply && (
+          data.reply.includes('fill out the contact form') ||
+          data.reply.includes('contact form below')
+        )) {
+          showContactForm();
+        }
 
         if (!state.open) {
           state.unread++;
@@ -536,11 +774,14 @@
           badgeEl.classList.add('show');
         }
       } else {
-        addMessage('assistant', "I'm having a quick technical hiccup! You can reach us at reports@reusecanada.ca or sign up at /customer/login for 3 free reports.");
+        // Server error — show fallback + contact form
+        addMessage('assistant', "I'm having a quick technical hiccup! You can reach us at reports@reusecanada.ca or sign up at /customer/login for 3 free reports. Or fill out the contact form below and our team will reach out! 😊");
+        showContactForm();
       }
     } catch (e) {
       hideTyping();
-      addMessage('assistant', "Oops, connection issue! Please try again in a moment, or visit /customer/login to get started with 3 free reports.");
+      addMessage('assistant', "Oops, connection issue! You can email us at reports@reusecanada.ca or fill out the contact form below. We'll get back to you right away!");
+      showContactForm();
     }
 
     state.loading = false;
@@ -562,15 +803,18 @@
   // ============================================================
   async function restoreHistory() {
     try {
-      const res = await fetch('/api/rover/history?session_id=' + state.sessionId);
+      var res = await fetch('/api/rover/history?session_id=' + state.sessionId);
       if (res.ok) {
-        const data = await res.json();
+        var data = await res.json();
         if (data.messages && data.messages.length > 0) {
           data.messages.forEach(function(m) {
             state.messages.push({ role: m.role, content: m.content });
-            const msgEl = document.createElement('div');
+            var msgEl = document.createElement('div');
             msgEl.className = 'rover-msg ' + m.role;
-            msgEl.innerHTML = esc(m.content).replace(/\n/g, '<br>');
+            msgEl.innerHTML = esc(m.content)
+              .replace(/\n/g, '<br>')
+              .replace(/(\/customer\/login|\/pricing|\/blog)/g, '<a href="$1" style="color:inherit;text-decoration:underline;font-weight:600" target="_blank">$1</a>')
+              .replace(/(reports@reusecanada\.ca)/g, '<a href="mailto:$1" style="color:inherit;text-decoration:underline;font-weight:600">$1</a>');
             messagesEl.appendChild(msgEl);
           });
         }
@@ -582,17 +826,16 @@
   // ============================================================
   // AUTO-SHOW GREETING AFTER DELAY
   // ============================================================
-  const greetingDismissed = sessionStorage.getItem('rover_greeting_dismissed');
+  var greetingDismissed = sessionStorage.getItem('rover_greeting_dismissed');
   if (!greetingDismissed) {
     setTimeout(function() {
       if (!state.open) {
         greetingEl.classList.add('show');
-        // Auto-hide after 10 seconds
         setTimeout(function() {
           if (!state.open) greetingEl.classList.remove('show');
         }, 10000);
       }
-    }, 5000); // Show after 5 seconds on page
+    }, 5000);
   }
 
   // ============================================================
