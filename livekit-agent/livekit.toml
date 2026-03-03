@@ -1,0 +1,12 @@
+[agent]
+name = "roofer-secretary"
+entry_point = "agent.py"
+
+[build]
+dockerfile = "Dockerfile"
+
+[env]
+LIVEKIT_URL = "wss://roofreporterai-btkwkiwh.livekit.cloud"
+LIVEKIT_API_KEY = "APIsvVZsCCaboLY"
+ROOFPORTER_API_URL = "https://roofing-measurement-tool.pages.dev"
+DEFAULT_GREETING = "Thank you for calling! My name is Sarah, how can I help you today?"

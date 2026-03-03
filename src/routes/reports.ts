@@ -59,7 +59,6 @@ function generateEnhancedImagery(lat: number, lng: number, apiKey: string, footp
   const quadLng = quadOffsetMeters * lngDegPerMeter
   
   const base = `https://maps.googleapis.com/maps/api/staticmap`
-  const sv = `https://maps.googleapis.com/maps/api/streetview`
   
   return {
     // ── PRIMARY: Dead-center overhead — zoomed out enough to see ENTIRE roof + surrounding context ──
@@ -89,9 +88,7 @@ function generateEnhancedImagery(lat: number, lng: number, apiKey: string, footp
     closeup_ne_url: `${base}?center=${lat + quadLat},${lng + quadLng}&zoom=${closeupZoom}&size=400x400&scale=2&maptype=satellite&key=${apiKey}`,
     closeup_sw_url: `${base}?center=${lat - quadLat},${lng - quadLng}&zoom=${closeupZoom}&size=400x400&scale=2&maptype=satellite&key=${apiKey}`,
     closeup_se_url: `${base}?center=${lat - quadLat},${lng + quadLng}&zoom=${closeupZoom}&size=400x400&scale=2&maptype=satellite&key=${apiKey}`,
-    
-    // ── STREET VIEW: Front curb-appeal reference (heading=0 for north-facing default, pitch=15° slight upward tilt) ──
-    street_view_url: `${sv}?size=640x480&scale=2&location=${lat},${lng}&heading=0&pitch=15&fov=90&key=${apiKey}`,
+    // Street view removed per user request
   }
 }
 
@@ -1953,7 +1950,7 @@ function generateProfessionalReportHTML(report: RoofReport): string {
   const southUrl = report.imagery?.south_url || ''
   const eastUrl = report.imagery?.east_url || ''
   const westUrl = report.imagery?.west_url || ''
-  const streetViewUrl = report.imagery?.street_view_url || ''
+  // Street view removed per user request
   const rgbAerialUrl = (report.imagery as any)?.rgb_aerial_url || ''
   const maskOverlayUrl = (report.imagery as any)?.mask_overlay_url || ''
   const fluxHeatmapUrl = (report.imagery as any)?.flux_heatmap_url || ''
@@ -2155,7 +2152,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
     <div style="border:1px solid #d5dae3;border-radius:5px;overflow:hidden">
       ${[
         ['Images &mdash; Top View', '2'],
-        ['Images &mdash; Side Views &amp; Street View', '3'],
+        ['Images &mdash; Side Views (Directional Aerial)', '3'],
         ['Roof Detection &amp; Solar Analysis', '4'],
         ['Length Diagram', '5'],
         ['Pitch Diagram', '6'],
@@ -2229,9 +2226,9 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
 
 <!-- ==================== PAGE 3: SIDE VIEWS ==================== -->
 <div class="page">
-  ${hdr('IMAGES', 'Side Views &amp; Street View')}
+  ${hdr('IMAGES', 'Side Views &mdash; Directional Aerial')}
   <div style="padding:16px 32px 50px">
-    <div style="font-size:10px;color:#4a5568;font-style:italic;margin-bottom:10px">The following images show different sides and angles of the structure.</div>
+    <div style="font-size:10px;color:#4a5568;font-style:italic;margin-bottom:10px">The following images show different sides and angles of the structure from satellite imagery.</div>
 
     <!-- N / S row -->
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
@@ -2256,13 +2253,6 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
         <div class="ic-label">West Side</div>
       </div>
     </div>
-
-    <!-- Street View -->
-    ${streetViewUrl ? `
-    <div class="ic">
-      <img src="${streetViewUrl}" alt="Street View" style="width:100%;height:190px;object-fit:cover;display:block" onerror="this.parentElement.style.display='none'">
-      <div class="ic-label">Street View &mdash; Front Elevation</div>
-    </div>` : ''}
   </div>
   ${ftr(3)}
 </div>
@@ -2461,11 +2451,6 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
   ${hdr('AREA DIAGRAM', 'Facet Areas in Square Feet')}
   <div style="padding:14px 32px 50px">
     <div style="font-size:10px;color:#4a5568;font-style:italic;margin-bottom:8px">Each roof facet displays its calculated true area in square feet, accounting for pitch angle.</div>
-
-    <!-- Roof diagram with area labels -->
-    <div style="text-align:center;border:1px solid #d5dae3;border-radius:4px;overflow:hidden;background:#fff;padding:16px">
-      <svg viewBox="0 0 500 280" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-height:300px">${generateRoofDiagramSVG(report.segments, facetColors)}</svg>
-    </div>
 
     <!-- Facet cards grid -->
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0">
@@ -3168,112 +3153,177 @@ function generateOverlayLegend(
   return html
 }
 
-// Generate SVG roof diagram from segments
+// Generate SVG roof diagram from segments — proportional to actual measurements
 function generateRoofDiagramSVG(segments: RoofSegment[], colors: string[]): string {
   if (segments.length === 0) return '<text x="250" y="140" text-anchor="middle" fill="#999" font-size="14">No segment data</text>'
   
   const n = segments.length
   const cx = 250, cy = 130
-  // Create a simplified overhead roof shape
-  // Main rectangle with ridge line, divided into colored facets
-  const w = 360, h = 180
+  const totalArea = segments.reduce((s, seg) => s + seg.true_area_sqft, 0)
+  const totalFootprint = segments.reduce((s, seg) => s + seg.footprint_area_sqft, 0)
+  
+  // Derive building dimensions from actual footprint area
+  // Use golden ratio (1.618:1) for a more realistic residential shape
+  const ratio = 1.618
+  const buildingWidthFt = Math.sqrt(totalFootprint / ratio)
+  const buildingLengthFt = buildingWidthFt * ratio
+  
+  // Scale to fit SVG viewBox (500x280) with padding
+  const maxW = 400, maxH = 200
+  const scaleFactor = Math.min(maxW / buildingLengthFt, maxH / buildingWidthFt)
+  const w = Math.round(buildingLengthFt * scaleFactor)
+  const h = Math.round(buildingWidthFt * scaleFactor)
   const left = cx - w/2, top = cy - h/2, right = cx + w/2, bottom = cy + h/2
   const ridgeY = cy
   
   let svg = ''
   
+  // Group segments by cardinal direction for intelligent placement
+  const segsByDir: Record<string, RoofSegment[]> = { N: [], S: [], E: [], W: [], other: [] }
+  segments.forEach(seg => {
+    const dir = seg.azimuth_direction
+    if (dir === 'N' || dir === 'NNE' || dir === 'NNW') segsByDir.N.push(seg)
+    else if (dir === 'S' || dir === 'SSE' || dir === 'SSW') segsByDir.S.push(seg)
+    else if (dir === 'E' || dir === 'ENE' || dir === 'ESE') segsByDir.E.push(seg)
+    else if (dir === 'W' || dir === 'WNW' || dir === 'WSW') segsByDir.W.push(seg)
+    else segsByDir.other.push(seg)
+  })
+  
+  // Calculate area-weighted pitch for ridge offset
+  const avgPitch = segments.reduce((s, seg) => s + seg.pitch_degrees * seg.true_area_sqft, 0) / totalArea
+  // Ridge inset proportional to pitch (steeper pitch = narrower ridge)
+  const ridgeInsetPct = Math.min(0.35, avgPitch / 90)
+  const ridgeInset = Math.round(w * ridgeInsetPct)
+  
   if (n <= 2) {
-    // Simple gable: top half and bottom half
-    svg += `<polygon points="${left},${ridgeY} ${cx},${top} ${right},${ridgeY}" fill="${colors[0]}80" stroke="#002F6C" stroke-width="1.5"/>`
-    svg += `<polygon points="${left},${ridgeY} ${cx},${bottom} ${right},${ridgeY}" fill="${colors[1] || colors[0]}80" stroke="#002F6C" stroke-width="1.5"/>`
-    svg += `<line x1="${left}" y1="${ridgeY}" x2="${right}" y2="${ridgeY}" stroke="#E53935" stroke-width="3"/>`
-    // Labels
+    // Simple gable: two facets with proportional sizing
     const s0 = segments[0], s1 = segments[1] || segments[0]
-    svg += `<text x="${cx}" y="${ridgeY-30}" text-anchor="middle" font-size="10" font-weight="700" fill="#002F6C">${s0.true_area_sqft} sq ft</text>`
-    svg += `<text x="${cx}" y="${ridgeY-18}" text-anchor="middle" font-size="9" fill="#335C8A">Pitch: ${s0.pitch_ratio}</text>`
-    svg += `<text x="${cx}" y="${ridgeY+38}" text-anchor="middle" font-size="10" font-weight="700" fill="#002F6C">${s1.true_area_sqft} sq ft</text>`
-    svg += `<text x="${cx}" y="${ridgeY+50}" text-anchor="middle" font-size="9" fill="#335C8A">Pitch: ${s1.pitch_ratio}</text>`
+    const pct0 = s0.true_area_sqft / totalArea
+    const pct1 = (s1.true_area_sqft) / totalArea
+    // Ridge height based on dominant facet proportion
+    const ridgeOffset = Math.round(h * (pct0 - 0.5) * 0.5) // slight asymmetry if facets differ
+    const actualRidgeY = ridgeY + ridgeOffset
+    
+    svg += `<polygon points="${left},${actualRidgeY} ${cx},${top} ${right},${actualRidgeY}" fill="${colors[0]}80" stroke="#002F6C" stroke-width="1.5"/>`
+    svg += `<polygon points="${left},${actualRidgeY} ${cx},${bottom} ${right},${actualRidgeY}" fill="${colors[1] || colors[0]}80" stroke="#002F6C" stroke-width="1.5"/>`
+    svg += `<line x1="${left}" y1="${actualRidgeY}" x2="${right}" y2="${actualRidgeY}" stroke="#E53935" stroke-width="3"/>`
+    // Labels with actual measurements
+    svg += `<text x="${cx}" y="${actualRidgeY-30}" text-anchor="middle" font-size="10" font-weight="700" fill="#002F6C">${s0.true_area_sqft.toLocaleString()} sq ft</text>`
+    svg += `<text x="${cx}" y="${actualRidgeY-18}" text-anchor="middle" font-size="9" fill="#335C8A">${s0.pitch_ratio} &middot; ${s0.azimuth_direction}</text>`
+    svg += `<text x="${cx}" y="${actualRidgeY+38}" text-anchor="middle" font-size="10" font-weight="700" fill="#002F6C">${s1.true_area_sqft.toLocaleString()} sq ft</text>`
+    svg += `<text x="${cx}" y="${actualRidgeY+50}" text-anchor="middle" font-size="9" fill="#335C8A">${s1.pitch_ratio} &middot; ${s1.azimuth_direction}</text>`
   } else if (n <= 4) {
-    // Hip roof: 4 triangular facets
-    const pts = [
-      // Top (N)
-      `${left},${top} ${right},${top} ${right-50},${ridgeY-10} ${left+50},${ridgeY-10}`,
-      // Bottom (S)
-      `${left},${bottom} ${right},${bottom} ${right-50},${ridgeY+10} ${left+50},${ridgeY+10}`,
-      // Left (W)
-      `${left},${top} ${left},${bottom} ${left+50},${ridgeY+10} ${left+50},${ridgeY-10}`,
-      // Right (E)
-      `${right},${top} ${right},${bottom} ${right-50},${ridgeY+10} ${right-50},${ridgeY-10}`
+    // Hip roof: 4 facets sized proportionally to their area
+    const areaPcts = segments.map(s => s.true_area_sqft / totalArea)
+    
+    // Ridge line endpoints based on hip geometry
+    const ridgeLeft = left + ridgeInset
+    const ridgeRight = right - ridgeInset
+    const ridgeTop = ridgeY - Math.round(h * 0.08)
+    const ridgeBot = ridgeY + Math.round(h * 0.08)
+    
+    // 4 facets: North (top), South (bottom), East (right), West (left)
+    const facetPts = [
+      // North face (top trapezoid)
+      `${left},${top} ${right},${top} ${ridgeRight},${ridgeTop} ${ridgeLeft},${ridgeTop}`,
+      // South face (bottom trapezoid)
+      `${left},${bottom} ${right},${bottom} ${ridgeRight},${ridgeBot} ${ridgeLeft},${ridgeBot}`,
+      // West face (left triangle)
+      `${left},${top} ${left},${bottom} ${ridgeLeft},${ridgeBot} ${ridgeLeft},${ridgeTop}`,
+      // East face (right triangle)
+      `${right},${top} ${right},${bottom} ${ridgeRight},${ridgeBot} ${ridgeRight},${ridgeTop}`
     ]
     const labelPos = [
-      {x:cx, y:ridgeY-45}, {x:cx, y:ridgeY+55}, {x:left+30, y:ridgeY}, {x:right-30, y:ridgeY}
+      { x: cx, y: top + Math.round((ridgeTop - top) * 0.5) },          // N
+      { x: cx, y: bottom - Math.round((bottom - ridgeBot) * 0.5) },     // S
+      { x: left + Math.round(ridgeInset * 0.45), y: ridgeY },            // W
+      { x: right - Math.round(ridgeInset * 0.45), y: ridgeY }            // E
     ]
+    
     for (let i = 0; i < Math.min(n, 4); i++) {
-      svg += `<polygon points="${pts[i]}" fill="${colors[i]}60" stroke="#002F6C" stroke-width="1.5"/>`
+      svg += `<polygon points="${facetPts[i]}" fill="${colors[i]}60" stroke="#002F6C" stroke-width="1.5"/>`
       const s = segments[i]
-      svg += `<text x="${labelPos[i].x}" y="${labelPos[i].y-4}" text-anchor="middle" font-size="9" font-weight="700" fill="#002F6C">${s.true_area_sqft} sq ft</text>`
-      svg += `<text x="${labelPos[i].x}" y="${labelPos[i].y+8}" text-anchor="middle" font-size="8" fill="#335C8A">Pitch: ${s.pitch_ratio}</text>`
+      svg += `<text x="${labelPos[i].x}" y="${labelPos[i].y - 6}" text-anchor="middle" font-size="9" font-weight="700" fill="#002F6C">${s.true_area_sqft.toLocaleString()} sq ft</text>`
+      svg += `<text x="${labelPos[i].x}" y="${labelPos[i].y + 6}" text-anchor="middle" font-size="8" fill="#335C8A">${s.pitch_ratio} &middot; ${s.azimuth_direction}</text>`
     }
     // Ridge line
-    svg += `<line x1="${left+50}" y1="${ridgeY}" x2="${right-50}" y2="${ridgeY}" stroke="#E53935" stroke-width="3"/>`
-    // Hip lines
-    svg += `<line x1="${left}" y1="${top}" x2="${left+50}" y2="${ridgeY}" stroke="#5B9BD5" stroke-width="2"/>`
-    svg += `<line x1="${right}" y1="${top}" x2="${right-50}" y2="${ridgeY}" stroke="#5B9BD5" stroke-width="2"/>`
-    svg += `<line x1="${left}" y1="${bottom}" x2="${left+50}" y2="${ridgeY}" stroke="#5B9BD5" stroke-width="2"/>`
-    svg += `<line x1="${right}" y1="${bottom}" x2="${right-50}" y2="${ridgeY}" stroke="#5B9BD5" stroke-width="2"/>`
+    svg += `<line x1="${ridgeLeft}" y1="${ridgeY}" x2="${ridgeRight}" y2="${ridgeY}" stroke="#E53935" stroke-width="3"/>`
+    // Hip lines from corners to ridge endpoints
+    svg += `<line x1="${left}" y1="${top}" x2="${ridgeLeft}" y2="${ridgeTop}" stroke="#F9A825" stroke-width="2"/>`
+    svg += `<line x1="${right}" y1="${top}" x2="${ridgeRight}" y2="${ridgeTop}" stroke="#F9A825" stroke-width="2"/>`
+    svg += `<line x1="${left}" y1="${bottom}" x2="${ridgeLeft}" y2="${ridgeBot}" stroke="#F9A825" stroke-width="2"/>`
+    svg += `<line x1="${right}" y1="${bottom}" x2="${ridgeRight}" y2="${ridgeBot}" stroke="#F9A825" stroke-width="2"/>`
   } else {
-    // Complex roof: main body + extensions
-    // Main body
-    const mw = 280, mh = 140
-    const ml = cx - mw/2, mt = cy - mh/2 - 10, mr = cx + mw/2, mb = cy + mh/2 - 10
-    // Extension (garage wing)
-    const ew = 120, eh = 100
-    const el = cx - mw/2 - 10, et = cy - 10, er = el + ew, eb = et + eh
+    // Complex roof: main body + wing extension
+    // Split segments into main body (~60%) and wing (~40%) based on area
+    const mainCount = Math.ceil(n * 0.6)
+    const mainFacets = segments.slice(0, mainCount)
+    const wingFacets = segments.slice(mainCount)
     
-    // Draw main facets
-    const mainFacets = segments.slice(0, Math.ceil(n * 0.6))
-    const wingFacets = segments.slice(Math.ceil(n * 0.6))
+    const mainArea = mainFacets.reduce((s, seg) => s + seg.footprint_area_sqft, 0)
+    const wingArea = wingFacets.reduce((s, seg) => s + seg.footprint_area_sqft, 0)
+    const mainPct = mainArea / totalFootprint
+    const wingPct = wingArea / totalFootprint
     
-    // Main top
-    svg += `<polygon points="${ml},${mt} ${mr},${mt} ${mr-40},${(mt+mb)/2} ${ml+40},${(mt+mb)/2}" fill="${colors[0]}60" stroke="#002F6C" stroke-width="1.5"/>`
-    svg += `<text x="${cx}" y="${mt+25}" text-anchor="middle" font-size="9" font-weight="700" fill="#002F6C">${mainFacets[0]?.true_area_sqft || ''} sq ft</text>`
-    svg += `<text x="${cx}" y="${mt+36}" text-anchor="middle" font-size="8" fill="#335C8A">Pitch: ${mainFacets[0]?.pitch_ratio || ''}</text>`
+    // Size main body and wing proportionally
+    const mw = Math.round(w * 0.75)
+    const mh = Math.round(h * Math.sqrt(mainPct) * 1.2)
+    const ml = cx - mw/2, mt = cy - mh/2 - 5, mr = cx + mw/2, mb = cy + mh/2 - 5
+    const mainRidgeY = (mt + mb) / 2
+    const mainRidgeInset = Math.round(mw * ridgeInsetPct)
     
-    // Main bottom
-    svg += `<polygon points="${ml},${mb} ${mr},${mb} ${mr-40},${(mt+mb)/2} ${ml+40},${(mt+mb)/2}" fill="${colors[1]}60" stroke="#002F6C" stroke-width="1.5"/>`
-    if (mainFacets[1]) {
-      svg += `<text x="${cx}" y="${mb-15}" text-anchor="middle" font-size="9" font-weight="700" fill="#002F6C">${mainFacets[1].true_area_sqft} sq ft</text>`
-      svg += `<text x="${cx}" y="${mb-4}" text-anchor="middle" font-size="8" fill="#335C8A">Pitch: ${mainFacets[1].pitch_ratio}</text>`
+    // Wing dimensions proportional to wing area
+    const ew = Math.round(w * Math.sqrt(wingPct) * 0.7)
+    const eh = Math.round(h * Math.sqrt(wingPct) * 0.8)
+    const el = ml - 8, et = cy - 5, er = el + ew, eb = et + eh
+    
+    // Main body facets
+    svg += `<polygon points="${ml},${mt} ${mr},${mt} ${mr-mainRidgeInset},${mainRidgeY} ${ml+mainRidgeInset},${mainRidgeY}" fill="${colors[0]}60" stroke="#002F6C" stroke-width="1.5"/>`
+    if (mainFacets[0]) {
+      svg += `<text x="${cx}" y="${mt+Math.round(mh*0.2)}" text-anchor="middle" font-size="9" font-weight="700" fill="#002F6C">${mainFacets[0].true_area_sqft.toLocaleString()} sq ft</text>`
+      svg += `<text x="${cx}" y="${mt+Math.round(mh*0.2)+12}" text-anchor="middle" font-size="8" fill="#335C8A">${mainFacets[0].pitch_ratio} &middot; ${mainFacets[0].azimuth_direction}</text>`
     }
     
-    // Main sides
-    svg += `<polygon points="${ml},${mt} ${ml},${mb} ${ml+40},${(mt+mb)/2}" fill="${colors[2]}60" stroke="#002F6C" stroke-width="1.5"/>`
-    svg += `<polygon points="${mr},${mt} ${mr},${mb} ${mr-40},${(mt+mb)/2}" fill="${colors[3]}60" stroke="#002F6C" stroke-width="1.5"/>`
+    svg += `<polygon points="${ml},${mb} ${mr},${mb} ${mr-mainRidgeInset},${mainRidgeY} ${ml+mainRidgeInset},${mainRidgeY}" fill="${colors[1]}60" stroke="#002F6C" stroke-width="1.5"/>`
+    if (mainFacets[1]) {
+      svg += `<text x="${cx}" y="${mb-Math.round(mh*0.15)}" text-anchor="middle" font-size="9" font-weight="700" fill="#002F6C">${mainFacets[1].true_area_sqft.toLocaleString()} sq ft</text>`
+      svg += `<text x="${cx}" y="${mb-Math.round(mh*0.15)+12}" text-anchor="middle" font-size="8" fill="#335C8A">${mainFacets[1].pitch_ratio} &middot; ${mainFacets[1].azimuth_direction}</text>`
+    }
     
-    // Ridge
-    svg += `<line x1="${ml+40}" y1="${(mt+mb)/2}" x2="${mr-40}" y2="${(mt+mb)/2}" stroke="#E53935" stroke-width="3"/>`
+    // Main side facets
+    svg += `<polygon points="${ml},${mt} ${ml},${mb} ${ml+mainRidgeInset},${mainRidgeY}" fill="${colors[2]}60" stroke="#002F6C" stroke-width="1.5"/>`
+    svg += `<polygon points="${mr},${mt} ${mr},${mb} ${mr-mainRidgeInset},${mainRidgeY}" fill="${colors[3]}60" stroke="#002F6C" stroke-width="1.5"/>`
+    
+    // Main ridge
+    svg += `<line x1="${ml+mainRidgeInset}" y1="${mainRidgeY}" x2="${mr-mainRidgeInset}" y2="${mainRidgeY}" stroke="#E53935" stroke-width="3"/>`
     
     // Wing
     if (wingFacets.length > 0) {
-      svg += `<polygon points="${el},${et} ${er},${et} ${(el+er)/2},${(et+eb)/2}" fill="${colors[4] || colors[0]}60" stroke="#002F6C" stroke-width="1.5"/>`
-      svg += `<polygon points="${el},${eb} ${er},${eb} ${(el+er)/2},${(et+eb)/2}" fill="${colors[5] || colors[1]}60" stroke="#002F6C" stroke-width="1.5"/>`
-      svg += `<text x="${(el+er)/2}" y="${et+20}" text-anchor="middle" font-size="8" font-weight="700" fill="#002F6C">${wingFacets[0]?.true_area_sqft || ''} sq ft</text>`
-      svg += `<line x1="${el}" y1="${(et+eb)/2}" x2="${er}" y2="${(et+eb)/2}" stroke="#E53935" stroke-width="2"/>`
-      // Valley
-      svg += `<line x1="${er}" y1="${et}" x2="${ml+20}" y2="${(mt+mb)/2-20}" stroke="#43A047" stroke-width="2" stroke-dasharray="4,2"/>`
-      svg += `<line x1="${er}" y1="${eb}" x2="${ml+20}" y2="${(mt+mb)/2+20}" stroke="#43A047" stroke-width="2" stroke-dasharray="4,2"/>`
+      const wingRidgeY = (et + eb) / 2
+      svg += `<polygon points="${el},${et} ${er},${et} ${(el+er)/2},${wingRidgeY}" fill="${colors[4] || colors[0]}60" stroke="#002F6C" stroke-width="1.5"/>`
+      svg += `<polygon points="${el},${eb} ${er},${eb} ${(el+er)/2},${wingRidgeY}" fill="${colors[5] || colors[1]}60" stroke="#002F6C" stroke-width="1.5"/>`
+      if (wingFacets[0]) {
+        svg += `<text x="${(el+er)/2}" y="${et+18}" text-anchor="middle" font-size="8" font-weight="700" fill="#002F6C">${wingFacets[0].true_area_sqft.toLocaleString()} sq ft</text>`
+      }
+      svg += `<line x1="${el}" y1="${wingRidgeY}" x2="${er}" y2="${wingRidgeY}" stroke="#E53935" stroke-width="2"/>`
+      // Valley lines where wing meets main body
+      svg += `<line x1="${er}" y1="${et}" x2="${ml+15}" y2="${mainRidgeY-15}" stroke="#1565C0" stroke-width="2" stroke-dasharray="4,2"/>`
+      svg += `<line x1="${er}" y1="${eb}" x2="${ml+15}" y2="${mainRidgeY+15}" stroke="#1565C0" stroke-width="2" stroke-dasharray="4,2"/>`
     }
     
     // Hip lines
-    svg += `<line x1="${ml}" y1="${mt}" x2="${ml+40}" y2="${(mt+mb)/2}" stroke="#5B9BD5" stroke-width="2"/>`
-    svg += `<line x1="${mr}" y1="${mt}" x2="${mr-40}" y2="${(mt+mb)/2}" stroke="#5B9BD5" stroke-width="2"/>`
-    svg += `<line x1="${ml}" y1="${mb}" x2="${ml+40}" y2="${(mt+mb)/2}" stroke="#5B9BD5" stroke-width="2"/>`
-    svg += `<line x1="${mr}" y1="${mb}" x2="${mr-40}" y2="${(mt+mb)/2}" stroke="#5B9BD5" stroke-width="2"/>`
+    svg += `<line x1="${ml}" y1="${mt}" x2="${ml+mainRidgeInset}" y2="${mainRidgeY}" stroke="#F9A825" stroke-width="2"/>`
+    svg += `<line x1="${mr}" y1="${mt}" x2="${mr-mainRidgeInset}" y2="${mainRidgeY}" stroke="#F9A825" stroke-width="2"/>`
+    svg += `<line x1="${ml}" y1="${mb}" x2="${ml+mainRidgeInset}" y2="${mainRidgeY}" stroke="#F9A825" stroke-width="2"/>`
+    svg += `<line x1="${mr}" y1="${mb}" x2="${mr-mainRidgeInset}" y2="${mainRidgeY}" stroke="#F9A825" stroke-width="2"/>`
   }
   
-  // Direction arrows
+  // Direction compass
   svg += `<text x="250" y="15" text-anchor="middle" font-size="10" font-weight="700" fill="#002F6C">N</text>`
   svg += `<polygon points="250,18 246,25 254,25" fill="#002F6C"/>`
+  
+  // Total area label at bottom
+  svg += `<text x="250" y="270" text-anchor="middle" font-size="9" font-weight="700" fill="#003366">Total: ${totalArea.toLocaleString()} sq ft &middot; ${segments.length} facets &middot; Footprint: ${totalFootprint.toLocaleString()} sq ft</text>`
   
   return svg
 }

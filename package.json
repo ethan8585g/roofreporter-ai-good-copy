@@ -19,6 +19,7 @@
     "geotiff-geokeys-to-proj4": "^2024.4.13",
     "hono": "^4.11.9",
     "jsonwebtoken": "^9.0.3",
+    "livekit-server-sdk": "^2.15.0",
     "proj4": "^2.20.2"
   },
   "devDependencies": {

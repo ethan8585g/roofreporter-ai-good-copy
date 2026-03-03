@@ -361,6 +361,114 @@ app.get('/customer/invoices', (c) => c.html(getCrmSubPageHTML('invoices', 'Invoi
 app.get('/customer/proposals', (c) => c.html(getCrmSubPageHTML('proposals', 'Proposals & Estimates', 'fa-file-signature')))
 app.get('/customer/jobs', (c) => c.html(getCrmSubPageHTML('jobs', 'Job Management', 'fa-hard-hat')))
 app.get('/customer/pipeline', (c) => c.html(getCrmSubPageHTML('pipeline', 'Sales Pipeline', 'fa-funnel-dollar')))
+
+// Public proposal view page — tracks views when customer opens shared link
+app.get('/proposal/view/:token', async (c) => {
+  try {
+    const token = c.req.param('token')
+    const proposal = await c.env.DB.prepare(`
+      SELECT cp.*, cc.name as customer_name, cc.email as customer_email, cc.phone as customer_phone,
+             cc.address as customer_address, cc.city as customer_city, cc.province as customer_province
+      FROM crm_proposals cp
+      LEFT JOIN crm_customers cc ON cc.id = cp.crm_customer_id
+      WHERE cp.share_token = ?
+    `).bind(token).first<any>()
+
+    if (!proposal) {
+      return c.html(`<!DOCTYPE html><html><head><title>Proposal Not Found</title></head><body style="font-family:system-ui;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#f3f4f6"><div style="text-align:center"><h1 style="color:#dc2626">Proposal Not Found</h1><p style="color:#6b7280">This proposal link is invalid or has expired.</p></div></body></html>`)
+    }
+
+    // Increment view count
+    await c.env.DB.prepare(`
+      UPDATE crm_proposals SET view_count = COALESCE(view_count, 0) + 1, last_viewed_at = datetime('now') WHERE id = ?
+    `).bind(proposal.id).run()
+
+    // Get owner (business) info for branding
+    const owner = await c.env.DB.prepare('SELECT name, email, phone FROM customers WHERE id = ?').bind(proposal.owner_id).first<any>()
+
+    // Render the proposal
+    const fullAddress = [proposal.property_address, proposal.customer_city, proposal.customer_province].filter(Boolean).join(', ')
+    return c.html(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Proposal - ${proposal.title}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <div class="max-w-3xl mx-auto px-4 py-8">
+    <!-- Header -->
+    <div class="bg-gradient-to-r from-sky-600 to-blue-700 rounded-t-2xl px-8 py-6 text-white">
+      <div class="flex items-center justify-between">
+        <div>
+          <h1 class="text-2xl font-bold">${proposal.title}</h1>
+          <p class="text-sky-200 text-sm mt-1">${proposal.proposal_number}</p>
+        </div>
+        <div class="text-right text-sm">
+          <p class="font-semibold">${owner?.name || 'RoofReporterAI'}</p>
+          ${owner?.phone ? `<p class="text-sky-200">${owner.phone}</p>` : ''}
+          ${owner?.email ? `<p class="text-sky-200">${owner.email}</p>` : ''}
+        </div>
+      </div>
+    </div>
+
+    <!-- Proposal Body -->
+    <div class="bg-white rounded-b-2xl shadow-xl px-8 py-6 space-y-6">
+      <!-- Customer Info -->
+      <div class="border-b pb-4">
+        <h3 class="text-sm font-bold text-gray-500 uppercase mb-2">Prepared For</h3>
+        <p class="text-lg font-semibold text-gray-800">${proposal.customer_name || 'Customer'}</p>
+        ${fullAddress ? `<p class="text-gray-500 text-sm"><i class="fas fa-map-marker-alt mr-1 text-red-400"></i>${fullAddress}</p>` : ''}
+      </div>
+
+      <!-- Scope of Work -->
+      ${proposal.scope_of_work ? `
+      <div class="border-b pb-4">
+        <h3 class="text-sm font-bold text-gray-500 uppercase mb-2">Scope of Work</h3>
+        <p class="text-gray-700 whitespace-pre-line">${proposal.scope_of_work}</p>
+      </div>` : ''}
+
+      <!-- Pricing -->
+      <div class="border-b pb-4">
+        <h3 class="text-sm font-bold text-gray-500 uppercase mb-3">Pricing</h3>
+        <div class="space-y-2">
+          ${proposal.labor_cost > 0 ? `<div class="flex justify-between text-sm"><span class="text-gray-600">Labor</span><span class="font-semibold">$${parseFloat(proposal.labor_cost).toFixed(2)}</span></div>` : ''}
+          ${proposal.material_cost > 0 ? `<div class="flex justify-between text-sm"><span class="text-gray-600">Materials</span><span class="font-semibold">$${parseFloat(proposal.material_cost).toFixed(2)}</span></div>` : ''}
+          ${proposal.other_cost > 0 ? `<div class="flex justify-between text-sm"><span class="text-gray-600">Other</span><span class="font-semibold">$${parseFloat(proposal.other_cost).toFixed(2)}</span></div>` : ''}
+          <div class="flex justify-between text-lg pt-2 border-t font-bold text-sky-700">
+            <span>Total</span>
+            <span>$${parseFloat(proposal.total_amount).toFixed(2)} CAD</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Notes -->
+      ${proposal.notes ? `
+      <div>
+        <h3 class="text-sm font-bold text-gray-500 uppercase mb-2">Notes</h3>
+        <p class="text-gray-600 text-sm whitespace-pre-line">${proposal.notes}</p>
+      </div>` : ''}
+
+      <!-- Valid Until -->
+      ${proposal.valid_until ? `
+      <div class="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm text-amber-700">
+        <i class="fas fa-clock mr-1"></i>This proposal is valid until <strong>${new Date(proposal.valid_until).toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' })}</strong>
+      </div>` : ''}
+    </div>
+
+    <!-- Footer -->
+    <div class="text-center mt-6 text-xs text-gray-400">
+      Powered by RoofReporterAI
+    </div>
+  </div>
+</body>
+</html>`)
+  } catch (err: any) {
+    return c.html(`<html><body><p>Error loading proposal</p></body></html>`, 500)
+  }
+})
 app.get('/customer/d2d', (c) => {
   const mapsKey = c.env.GOOGLE_MAPS_API_KEY || ''
   return c.html(getD2DPageHTML(mapsKey))

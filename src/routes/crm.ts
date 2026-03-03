@@ -240,7 +240,7 @@ crmRoutes.get('/proposals', async (c) => {
   const ownerId = await getOwnerId(c)
   if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
   const status = c.req.query('status') || ''
-  let q = `SELECT cp.*, cc.name as customer_name FROM crm_proposals cp LEFT JOIN crm_customers cc ON cc.id = cp.crm_customer_id WHERE cp.owner_id = ?`
+  let q = `SELECT cp.*, cc.name as customer_name, COALESCE(cp.view_count, 0) as view_count FROM crm_proposals cp LEFT JOIN crm_customers cc ON cc.id = cp.crm_customer_id WHERE cp.owner_id = ?`
   const params: any[] = [ownerId]
   if (status === 'open') q += ` AND cp.status IN ('draft','sent','viewed')`
   else if (status === 'sold') q += ` AND cp.status = 'accepted'`
@@ -298,6 +298,52 @@ crmRoutes.delete('/proposals/:id', async (c) => {
   if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
   await c.env.DB.prepare('DELETE FROM crm_proposals WHERE id = ? AND owner_id = ?').bind(c.req.param('id'), ownerId).run()
   return c.json({ success: true })
+})
+
+// Send proposal — generates share_token, marks as sent, returns trackable link
+crmRoutes.post('/proposals/:id/send', async (c) => {
+  const ownerId = await getOwnerId(c)
+  if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
+  const id = c.req.param('id')
+
+  const proposal = await c.env.DB.prepare('SELECT * FROM crm_proposals WHERE id = ? AND owner_id = ?').bind(id, ownerId).first<any>()
+  if (!proposal) return c.json({ error: 'Proposal not found' }, 404)
+
+  // Generate a unique share token if not already created
+  let shareToken = proposal.share_token
+  if (!shareToken) {
+    shareToken = crypto.randomUUID().replace(/-/g, '').substring(0, 16)
+  }
+
+  await c.env.DB.prepare(`
+    UPDATE crm_proposals SET status = 'sent', share_token = ?, sent_at = datetime('now'), view_count = COALESCE(view_count, 0), updated_at = datetime('now')
+    WHERE id = ? AND owner_id = ?
+  `).bind(shareToken, id, ownerId).run()
+
+  // Build the public link
+  const baseUrl = new URL(c.req.url).origin
+  const publicLink = `${baseUrl}/proposal/view/${shareToken}`
+
+  return c.json({ success: true, share_token: shareToken, public_link: publicLink })
+})
+
+// Get proposal view stats
+crmRoutes.get('/proposals/:id/views', async (c) => {
+  const ownerId = await getOwnerId(c)
+  if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
+  const id = c.req.param('id')
+
+  const proposal = await c.env.DB.prepare(
+    'SELECT view_count, last_viewed_at, share_token, sent_at FROM crm_proposals WHERE id = ? AND owner_id = ?'
+  ).bind(id, ownerId).first<any>()
+  if (!proposal) return c.json({ error: 'Proposal not found' }, 404)
+
+  return c.json({
+    view_count: proposal.view_count || 0,
+    last_viewed_at: proposal.last_viewed_at,
+    sent_at: proposal.sent_at,
+    share_token: proposal.share_token
+  })
 })
 
 // ============================================================
@@ -406,6 +452,43 @@ crmRoutes.put('/jobs/:jobId/checklist/:itemId', async (c) => {
   await c.env.DB.prepare(`
     UPDATE crm_job_checklist SET is_completed = ?, completed_at = ?, notes = ? WHERE id = ? AND job_id = ?
   `).bind(body.is_completed ? 1 : 0, body.is_completed ? new Date().toISOString() : null, body.notes || null, itemId, jobId).run()
+  return c.json({ success: true })
+})
+
+// Add custom checklist item
+crmRoutes.post('/jobs/:jobId/checklist', async (c) => {
+  const ownerId = await getOwnerId(c)
+  if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
+  const jobId = c.req.param('jobId')
+  const body = await c.req.json()
+  if (!body.label || !body.label.trim()) return c.json({ error: 'Checklist item label is required' }, 400)
+
+  // Verify job ownership
+  const job = await c.env.DB.prepare('SELECT id FROM crm_jobs WHERE id = ? AND owner_id = ?').bind(jobId, ownerId).first()
+  if (!job) return c.json({ error: 'Job not found' }, 404)
+
+  // Get max sort_order for this job
+  const maxOrder = await c.env.DB.prepare('SELECT COALESCE(MAX(sort_order), -1) as max_order FROM crm_job_checklist WHERE job_id = ?').bind(jobId).first<any>()
+  const nextOrder = (maxOrder?.max_order ?? -1) + 1
+
+  const result = await c.env.DB.prepare(
+    'INSERT INTO crm_job_checklist (job_id, item_type, label, sort_order) VALUES (?,?,?,?)'
+  ).bind(jobId, body.item_type || 'custom', body.label.trim(), nextOrder).run()
+
+  return c.json({ success: true, id: result.meta.last_row_id })
+})
+
+// Delete checklist item
+crmRoutes.delete('/jobs/:jobId/checklist/:itemId', async (c) => {
+  const ownerId = await getOwnerId(c)
+  if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
+  const { jobId, itemId } = c.req.param() as any
+
+  // Verify job ownership
+  const job = await c.env.DB.prepare('SELECT id FROM crm_jobs WHERE id = ? AND owner_id = ?').bind(jobId, ownerId).first()
+  if (!job) return c.json({ error: 'Job not found' }, 404)
+
+  await c.env.DB.prepare('DELETE FROM crm_job_checklist WHERE id = ? AND job_id = ?').bind(itemId, jobId).run()
   return c.json({ success: true })
 })
 

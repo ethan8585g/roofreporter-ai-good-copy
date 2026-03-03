@@ -610,6 +610,18 @@ adminRoutes.post('/init-db', async (c) => {
       'CREATE INDEX IF NOT EXISTS idx_crm_jobs_status ON crm_jobs(status)',
       'CREATE INDEX IF NOT EXISTS idx_crm_job_checklist_job ON crm_job_checklist(job_id)'
     ]
+
+    // Migration 0012: Proposal view tracking columns
+    const proposalTrackingCols = [
+      'view_count INTEGER DEFAULT 0',
+      'last_viewed_at TEXT',
+      'share_token TEXT',
+      'sent_at TEXT'
+    ]
+    for (const col of proposalTrackingCols) {
+      try { await c.env.DB.prepare(`ALTER TABLE crm_proposals ADD COLUMN ${col}`).run() } catch(e) {}
+    }
+    try { await c.env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_crm_proposals_share_token ON crm_proposals(share_token)').run() } catch(e) {}
     for (const idx of crmIndexes) {
       try { await c.env.DB.prepare(idx).run() } catch(e) {}
     }

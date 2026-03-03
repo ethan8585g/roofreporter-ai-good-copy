@@ -406,8 +406,9 @@
       html += '<div class="space-y-3">';
       for (var i = 0; i < proposals.length; i++) {
         var p = proposals[i];
-        html += '<div class="bg-white rounded-xl border p-4 hover:shadow-md transition-shadow"><div class="flex items-start justify-between"><div class="min-w-0"><div class="flex items-center gap-2 mb-1"><span class="font-mono text-xs font-bold text-amber-600">' + p.proposal_number + '</span>' + badge(p.status) + '</div><p class="text-gray-800 font-medium text-sm">' + p.title + '</p><p class="text-xs text-gray-500 mt-1"><i class="fas fa-user mr-1"></i>' + (p.customer_name || 'N/A') + (p.property_address ? ' &middot; <i class="fas fa-map-marker-alt mr-1"></i>' + p.property_address : '') + '</p></div><div class="flex flex-col items-end gap-1 flex-shrink-0 ml-4"><span class="text-lg font-black text-gray-800">' + money(p.total_amount) + '</span><div class="flex items-center gap-1">';
-        if (p.status === 'draft') html += '<button onclick="window._crmMarkProposal(' + p.id + ',\'sent\')" class="text-xs text-blue-600 hover:underline">Send</button>';
+        html += '<div class="bg-white rounded-xl border p-4 hover:shadow-md transition-shadow"><div class="flex items-start justify-between"><div class="min-w-0"><div class="flex items-center gap-2 mb-1"><span class="font-mono text-xs font-bold text-amber-600">' + p.proposal_number + '</span>' + badge(p.status) + (p.view_count > 0 ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-100 text-indigo-700"><i class="fas fa-eye mr-1"></i>' + p.view_count + ' view' + (p.view_count !== 1 ? 's' : '') + '</span>' : '') + '</div><p class="text-gray-800 font-medium text-sm">' + p.title + '</p><p class="text-xs text-gray-500 mt-1"><i class="fas fa-user mr-1"></i>' + (p.customer_name || 'N/A') + (p.property_address ? ' &middot; <i class="fas fa-map-marker-alt mr-1"></i>' + p.property_address : '') + '</p></div><div class="flex flex-col items-end gap-1 flex-shrink-0 ml-4"><span class="text-lg font-black text-gray-800">' + money(p.total_amount) + '</span><div class="flex items-center gap-1">';
+        if (p.status === 'draft') html += '<button onclick="window._crmSendProposal(' + p.id + ')" class="text-xs text-blue-600 hover:underline">Send</button>';
+        if (p.status === 'sent' || p.status === 'viewed') html += '<button onclick="window._crmCopyProposalLink(' + p.id + ')" class="text-xs text-blue-600 hover:underline"><i class="fas fa-link mr-0.5"></i>Link</button>';
         if (p.status !== 'accepted' && p.status !== 'declined') html += '<button onclick="window._crmMarkProposal(' + p.id + ',\'accepted\')" class="text-xs text-green-600 hover:underline">Won</button>';
         html += '<button onclick="window._crmDeleteProposal(' + p.id + ')" class="text-gray-400 hover:text-red-500"><i class="fas fa-trash text-xs"></i></button>';
         html += '</div></div></div></div>';
@@ -459,6 +460,46 @@
     fetch('/api/crm/proposals/' + id, { method: 'PUT', headers: authHeaders(), body: JSON.stringify({ status: status }) })
       .then(function(r) { return r.json(); })
       .then(function(res) { if (res.success) { toast('Proposal updated'); loadProposals(window._propFilter); } });
+  };
+
+  window._crmSendProposal = function(id) {
+    fetch('/api/crm/proposals/' + id + '/send', { method: 'POST', headers: authHeaders() })
+      .then(function(r) { return r.json(); })
+      .then(function(res) {
+        if (res.success) {
+          // Show the trackable link in a modal
+          var linkHtml = '<div class="space-y-4">' +
+            '<p class="text-sm text-gray-600">Your proposal has been marked as <strong>sent</strong>. Share this link with your customer — every time they open it, the view count will update automatically.</p>' +
+            '<div class="bg-gray-50 border rounded-lg p-3 flex items-center gap-2">' +
+              '<input type="text" id="proposalLink" value="' + res.public_link + '" class="flex-1 bg-transparent text-sm text-gray-800 font-mono border-0 outline-none" readonly>' +
+              '<button onclick="navigator.clipboard.writeText(document.getElementById(\'proposalLink\').value);this.innerHTML=\'<i class=\\\'fas fa-check\\\'></i>\';setTimeout(function(){},1500)" class="px-3 py-1.5 bg-brand-600 text-white rounded-lg text-xs font-semibold hover:bg-brand-700"><i class="fas fa-copy"></i></button>' +
+            '</div>' +
+            '<p class="text-xs text-gray-400"><i class="fas fa-info-circle mr-1"></i>You can copy this link anytime from the proposal list by clicking the "Link" button.</p>' +
+          '</div>';
+          showModal('Proposal Sent!', linkHtml);
+          loadProposals(window._propFilter);
+        } else {
+          toast(res.error || 'Failed to send proposal', 'error');
+        }
+      })
+      .catch(function() { toast('Network error', 'error'); });
+  };
+
+  window._crmCopyProposalLink = function(id) {
+    fetch('/api/crm/proposals/' + id + '/views', { headers: authHeadersOnly() })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.share_token) {
+          var link = window.location.origin + '/proposal/view/' + data.share_token;
+          navigator.clipboard.writeText(link).then(function() {
+            toast('Link copied! Views: ' + (data.view_count || 0));
+          }).catch(function() {
+            prompt('Copy this link:', link);
+          });
+        } else {
+          toast('No shareable link — send the proposal first.', 'error');
+        }
+      });
   };
 
   window._crmDeleteProposal = function(id) {
@@ -580,14 +621,20 @@
           (j.crew_size ? '<div><i class="fas fa-users mr-2 text-gray-400"></i>' + j.crew_size + ' crew</div>' : '') +
           '</div>';
 
+        // Checklist section — always show (even if empty, so user can add items)
+        body += '<div class="pt-3 border-t"><h4 class="text-xs font-bold text-gray-500 uppercase mb-2">Checklist</h4><div id="checklistItems" class="space-y-2">';
         if (checklist.length > 0) {
-          body += '<div class="pt-3 border-t"><h4 class="text-xs font-bold text-gray-500 uppercase mb-2">Checklist</h4><div class="space-y-2">';
           for (var k = 0; k < checklist.length; k++) {
             var item = checklist[k];
-            body += '<div class="flex items-center gap-3 bg-gray-50 rounded-lg px-3 py-2"><input type="checkbox" ' + (item.is_completed ? 'checked' : '') + ' onchange="window._crmToggleChecklist(' + j.id + ',' + item.id + ',this.checked)" class="w-4 h-4 text-brand-600 rounded border-gray-300"><span class="text-sm ' + (item.is_completed ? 'line-through text-gray-400' : 'text-gray-700') + '">' + item.label + '</span></div>';
+            body += '<div class="flex items-center gap-3 bg-gray-50 rounded-lg px-3 py-2" id="clItem' + item.id + '"><input type="checkbox" ' + (item.is_completed ? 'checked' : '') + ' onchange="window._crmToggleChecklist(' + j.id + ',' + item.id + ',this.checked)" class="w-4 h-4 text-brand-600 rounded border-gray-300"><span class="text-sm flex-1 ' + (item.is_completed ? 'line-through text-gray-400' : 'text-gray-700') + '">' + item.label + '</span><button onclick="window._crmDeleteChecklistItem(' + j.id + ',' + item.id + ')" class="text-gray-400 hover:text-red-500 ml-1 flex-shrink-0" title="Remove item"><i class="fas fa-times text-xs"></i></button></div>';
           }
-          body += '</div></div>';
+        } else {
+          body += '<p class="text-xs text-gray-400 italic" id="noChecklistMsg">No checklist items yet.</p>';
         }
+        body += '</div>';
+        // Add new checklist item form
+        body += '<div class="mt-3 flex items-center gap-2"><input type="text" id="newChecklistLabel" placeholder="Add checklist item..." class="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500" onkeydown="if(event.key===\'Enter\')window._crmAddChecklistItem(' + j.id + ')"><button onclick="window._crmAddChecklistItem(' + j.id + ')" class="px-3 py-2 bg-orange-600 text-white rounded-lg text-sm font-semibold hover:bg-orange-700 flex-shrink-0"><i class="fas fa-plus mr-1"></i>Add</button></div>';
+        body += '</div>';
 
         if (j.notes) body += '<div class="pt-3 border-t"><p class="text-sm text-gray-500 italic">' + j.notes + '</p></div>';
         body += '</div>';
@@ -597,6 +644,50 @@
 
   window._crmToggleChecklist = function(jobId, itemId, checked) {
     fetch('/api/crm/jobs/' + jobId + '/checklist/' + itemId, { method: 'PUT', headers: authHeaders(), body: JSON.stringify({ is_completed: checked }) });
+  };
+
+  window._crmAddChecklistItem = function(jobId) {
+    var input = document.getElementById('newChecklistLabel');
+    if (!input) return;
+    var label = input.value.trim();
+    if (!label) { toast('Enter a checklist item name', 'error'); return; }
+    fetch('/api/crm/jobs/' + jobId + '/checklist', { method: 'POST', headers: authHeaders(), body: JSON.stringify({ label: label, item_type: 'custom' }) })
+      .then(function(r) { return r.json(); })
+      .then(function(res) {
+        if (res.success) {
+          // Remove "no items" message if present
+          var noMsg = document.getElementById('noChecklistMsg');
+          if (noMsg) noMsg.remove();
+          // Add the new item to the checklist container
+          var container = document.getElementById('checklistItems');
+          if (container) {
+            var div = document.createElement('div');
+            div.className = 'flex items-center gap-3 bg-gray-50 rounded-lg px-3 py-2';
+            div.id = 'clItem' + res.id;
+            div.innerHTML = '<input type="checkbox" onchange="window._crmToggleChecklist(' + jobId + ',' + res.id + ',this.checked)" class="w-4 h-4 text-brand-600 rounded border-gray-300"><span class="text-sm flex-1 text-gray-700">' + label + '</span><button onclick="window._crmDeleteChecklistItem(' + jobId + ',' + res.id + ')" class="text-gray-400 hover:text-red-500 ml-1 flex-shrink-0" title="Remove item"><i class="fas fa-times text-xs"></i></button>';
+            container.appendChild(div);
+          }
+          input.value = '';
+          toast('Item added!');
+        } else {
+          toast(res.error || 'Failed to add item', 'error');
+        }
+      })
+      .catch(function() { toast('Network error', 'error'); });
+  };
+
+  window._crmDeleteChecklistItem = function(jobId, itemId) {
+    if (!confirm('Remove this checklist item?')) return;
+    fetch('/api/crm/jobs/' + jobId + '/checklist/' + itemId, { method: 'DELETE', headers: authHeadersOnly() })
+      .then(function(r) { return r.json(); })
+      .then(function(res) {
+        if (res.success) {
+          var el = document.getElementById('clItem' + itemId);
+          if (el) el.remove();
+          toast('Item removed');
+        }
+      })
+      .catch(function() { toast('Network error', 'error'); });
   };
 
   window._crmDeleteJob = function(id) {
