@@ -1466,7 +1466,7 @@ function getCustomerDashboardHTML() {
       window.location.href = '/customer/login';
     }
   </script>
-  <script src="/static/customer-dashboard.js"></script>
+  <script src="/static/customer-dashboard.js?v=${Date.now()}"></script>
   ${getRoverWidget()}
 </body>
 </html>`
@@ -2039,7 +2039,7 @@ function getCrmSubPageHTML(module: string, title: string, icon: string) {
       window.location.href = '/customer/login';
     }
   </script>
-  <script src="/static/crm-module.js"></script>
+  <script src="/static/crm-module.js?v=${Date.now()}"></script>
 </body>
 </html>`
 }

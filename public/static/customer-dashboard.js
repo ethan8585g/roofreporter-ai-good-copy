@@ -43,11 +43,11 @@ async function loadDashData() {
     if (ordersRes.ok) custState.orders = (await ordersRes.json()).orders || [];
     if (billingRes.ok) custState.billing = (await billingRes.json()).billing || null;
 
-    var stats = { customers: 0, invoices_owing: 0, invoices_paid: 0, proposals_open: 0, proposals_sold: 0, jobs_scheduled: 0 };
+    var stats = { customers: 0, invoices_owing: 0, invoices_paid: 0, proposals_open: 0, proposals_sold: 0, jobs_total: 0, jobs_scheduled: 0, jobs_in_progress: 0 };
     if (crmCustRes.ok) { var d = await crmCustRes.json(); stats.customers = (d.stats && d.stats.total) || 0; }
     if (crmInvRes.ok) { var d2 = await crmInvRes.json(); stats.invoices_owing = (d2.stats && d2.stats.total_owing) || 0; stats.invoices_paid = (d2.stats && d2.stats.total_paid) || 0; }
     if (crmPropRes.ok) { var d3 = await crmPropRes.json(); stats.proposals_open = (d3.stats && d3.stats.open_count) || 0; stats.proposals_sold = (d3.stats && d3.stats.sold_count) || 0; }
-    if (crmJobRes.ok) { var d4 = await crmJobRes.json(); stats.jobs_scheduled = (d4.stats && d4.stats.scheduled) || 0; }
+    if (crmJobRes.ok) { var d4 = await crmJobRes.json(); stats.jobs_total = (d4.stats && d4.stats.total) || 0; stats.jobs_scheduled = (d4.stats && d4.stats.scheduled) || 0; stats.jobs_in_progress = (d4.stats && d4.stats.in_progress) || 0; }
     custState.crmStats = stats;
     // Secretary status
     custState.secretaryActive = false;
@@ -91,7 +91,7 @@ function renderDashboard() {
     { id: 'invoices', href: '/customer/invoices', icon: 'fa-file-invoice-dollar', label: 'Invoices', desc: 'Billing & payments', color: 'from-amber-500 to-amber-600', badge: s.invoices_owing > 0 ? '$' + Number(s.invoices_owing).toFixed(0) + ' owing' : '', badgeColor: 'bg-amber-500' },
     { id: 'branding', href: '/customer/branding', icon: 'fa-palette', label: 'Custom Branding Setup', desc: 'Logo, colors, ads & identity', color: 'from-pink-500 to-fuchsia-600', badge: brandingBadge, badgeColor: brandingBadgeColor },
     { id: 'proposals', href: '/customer/proposals', icon: 'fa-file-signature', label: 'Estimates / Proposals', desc: 'Sales documents', color: 'from-purple-500 to-purple-600', badge: s.proposals_open > 0 ? s.proposals_open + ' open' : '', badgeColor: 'bg-purple-500' },
-    { id: 'jobs', href: '/customer/jobs', icon: 'fa-hard-hat', label: 'Job Management', desc: 'Calendar & scheduling', color: 'from-rose-500 to-rose-600', badge: s.jobs_scheduled > 0 ? s.jobs_scheduled + ' scheduled' : '', badgeColor: 'bg-rose-500' },
+    { id: 'jobs', href: '/customer/jobs', icon: 'fa-hard-hat', label: 'Job Management', desc: 'Calendar & scheduling', color: 'from-rose-500 to-rose-600', badge: s.jobs_total > 0 ? s.jobs_total + (s.jobs_in_progress > 0 ? ' (' + s.jobs_in_progress + ' active)' : '') : '', badgeColor: 'bg-rose-500' },
     { id: 'pipeline', href: '/customer/pipeline', icon: 'fa-funnel-dollar', label: 'Sales Pipeline', desc: 'Leads & to-do\'s', color: 'from-cyan-500 to-cyan-600', badge: 'Coming Soon', badgeColor: 'bg-gray-400' },
     { id: 'd2d', href: '/customer/d2d', icon: 'fa-door-open', label: 'D2D Manager', desc: 'Door-to-door teams', color: 'from-orange-500 to-orange-600', badge: '', badgeColor: '' },
     { id: 'secretary', href: '/customer/secretary', icon: 'fa-headset', label: 'Roofer Secretary', desc: 'AI phone answering service', color: 'from-violet-500 to-purple-700', badge: custState.secretaryActive ? (custState.secretaryCalls > 0 ? custState.secretaryCalls + ' calls' : 'Active') : '$149/mo', badgeColor: custState.secretaryActive ? 'bg-green-500' : 'bg-violet-500' }
