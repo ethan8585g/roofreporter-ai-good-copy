@@ -82,13 +82,83 @@
   // SELECT: Customer picker dropdown HTML
   // ============================================================
   function customerSelectHTML(customers, selectedId, fieldId) {
-    var html = '<select id="' + (fieldId || 'selCustomer') + '" class="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-brand-500"><option value="">Select a customer...</option>';
+    var fid = fieldId || 'selCustomer';
+    var html = '<div id="' + fid + 'Wrapper">';
+    // Toggle tabs: Existing vs New
+    html += '<div class="flex gap-1 mb-2 bg-gray-100 rounded-lg p-0.5">' +
+      '<button type="button" onclick="window._toggleCustMode(\'' + fid + '\', \'existing\')" id="' + fid + 'TabExisting" class="flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors bg-white shadow text-gray-800">Existing Customer</button>' +
+      '<button type="button" onclick="window._toggleCustMode(\'' + fid + '\', \'new\')" id="' + fid + 'TabNew" class="flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors text-gray-500 hover:text-gray-700">+ New Customer</button>' +
+      '</div>';
+    // Existing customer dropdown
+    html += '<div id="' + fid + 'Existing">';
+    html += '<select id="' + fid + '" class="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-brand-500"><option value="">Select a customer...</option>';
     for (var i = 0; i < customers.length; i++) {
       var c = customers[i];
-      html += '<option value="' + c.id + '"' + (c.id == selectedId ? ' selected' : '') + '>' + c.name + (c.company ? ' (' + c.company + ')' : '') + '</option>';
+      html += '<option value="' + c.id + '"' + (c.id == selectedId ? ' selected' : '') + '>' + c.name + (c.email ? ' — ' + c.email : '') + (c.company ? ' (' + c.company + ')' : '') + '</option>';
     }
-    html += '</select>';
+    html += '</select></div>';
+    // New customer inline form
+    html += '<div id="' + fid + 'New" style="display:none" class="space-y-2">' +
+      '<div class="grid grid-cols-2 gap-2">' +
+        '<input type="text" id="' + fid + 'NewName" class="w-full px-2.5 py-2 border border-gray-300 rounded-lg text-sm" placeholder="Full Name *">' +
+        '<input type="email" id="' + fid + 'NewEmail" class="w-full px-2.5 py-2 border border-gray-300 rounded-lg text-sm" placeholder="Email">' +
+      '</div>' +
+      '<div class="grid grid-cols-2 gap-2">' +
+        '<input type="tel" id="' + fid + 'NewPhone" class="w-full px-2.5 py-2 border border-gray-300 rounded-lg text-sm" placeholder="Phone">' +
+        '<input type="text" id="' + fid + 'NewCompany" class="w-full px-2.5 py-2 border border-gray-300 rounded-lg text-sm" placeholder="Company (optional)">' +
+      '</div>' +
+      '<input type="text" id="' + fid + 'NewAddress" class="w-full px-2.5 py-2 border border-gray-300 rounded-lg text-sm" placeholder="Address">' +
+      '<div class="grid grid-cols-3 gap-2">' +
+        '<input type="text" id="' + fid + 'NewCity" class="w-full px-2.5 py-2 border border-gray-300 rounded-lg text-sm" placeholder="City">' +
+        '<input type="text" id="' + fid + 'NewProvince" class="w-full px-2.5 py-2 border border-gray-300 rounded-lg text-sm" placeholder="Province" value="AB">' +
+        '<input type="text" id="' + fid + 'NewPostal" class="w-full px-2.5 py-2 border border-gray-300 rounded-lg text-sm" placeholder="Postal Code">' +
+      '</div>' +
+    '</div>';
+    html += '<input type="hidden" id="' + fid + 'Mode" value="existing">';
+    html += '</div>';
     return html;
+  }
+
+  window._toggleCustMode = function(fid, mode) {
+    document.getElementById(fid + 'Mode').value = mode;
+    document.getElementById(fid + 'Existing').style.display = mode === 'existing' ? '' : 'none';
+    document.getElementById(fid + 'New').style.display = mode === 'new' ? '' : 'none';
+    var tabEx = document.getElementById(fid + 'TabExisting');
+    var tabNew = document.getElementById(fid + 'TabNew');
+    if (mode === 'existing') {
+      tabEx.className = 'flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors bg-white shadow text-gray-800';
+      tabNew.className = 'flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors text-gray-500 hover:text-gray-700';
+    } else {
+      tabNew.className = 'flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors bg-white shadow text-gray-800';
+      tabEx.className = 'flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors text-gray-500 hover:text-gray-700';
+      // Focus name field
+      var nameField = document.getElementById(fid + 'NewName');
+      if (nameField) setTimeout(function() { nameField.focus(); }, 50);
+    }
+  };
+
+  // Helper: get customer ID or new customer data from the combined selector
+  function getCustomerFromSelector(fid) {
+    var mode = document.getElementById(fid + 'Mode').value;
+    if (mode === 'existing') {
+      var id = document.getElementById(fid).value;
+      return id ? { crm_customer_id: parseInt(id) } : null;
+    } else {
+      var name = document.getElementById(fid + 'NewName').value.trim();
+      if (!name) return null;
+      return {
+        new_customer: {
+          name: name,
+          email: document.getElementById(fid + 'NewEmail').value.trim() || null,
+          phone: document.getElementById(fid + 'NewPhone').value.trim() || null,
+          company: document.getElementById(fid + 'NewCompany').value.trim() || null,
+          address: document.getElementById(fid + 'NewAddress').value.trim() || null,
+          city: document.getElementById(fid + 'NewCity').value.trim() || null,
+          province: document.getElementById(fid + 'NewProvince').value.trim() || null,
+          postal_code: document.getElementById(fid + 'NewPostal').value.trim() || null
+        }
+      };
+    }
   }
 
   // ============================================================
@@ -367,8 +437,8 @@
           '<div><label class="block text-xs font-medium text-gray-600 mb-1">Notes</label><textarea id="invNotes" rows="2" class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" placeholder="Optional notes..."></textarea></div></div>';
 
         showModal('Create Invoice', body, function() {
-          var custId = document.getElementById('invCustomer').value;
-          if (!custId) { toast('Select a customer', 'error'); return; }
+          var custData = getCustomerFromSelector('invCustomer');
+          if (!custData) { toast('Select or add a customer', 'error'); return; }
           var rows = document.querySelectorAll('.invItemRow');
           var items = [];
           rows.forEach(function(r) {
@@ -378,12 +448,12 @@
             if (desc && price > 0) items.push({ description: desc, quantity: qty, unit_price: price });
           });
           if (items.length === 0) { toast('Add at least one line item', 'error'); return; }
-          var payload = {
-            crm_customer_id: parseInt(custId), items: items,
+          var payload = Object.assign({}, custData, {
+            items: items,
             due_date: document.getElementById('invDue').value || null,
             tax_rate: parseFloat(document.getElementById('invTax').value) || 5,
             notes: document.getElementById('invNotes').value.trim()
-          };
+          });
           fetch('/api/crm/invoices', { method: 'POST', headers: authHeaders(), body: JSON.stringify(payload) })
             .then(function(r) { return r.json(); })
             .then(function(res) { if (res.success) { closeModal(); toast('Invoice created!'); loadInvoices(); } else { toast(res.error || 'Failed', 'error'); } })
@@ -631,13 +701,13 @@
           '<div><label class="block text-xs font-medium text-gray-600 mb-1">Notes</label><textarea id="propNotes" rows="2" class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm"></textarea></div></div>';
 
         showModal('Create Proposal', body, function() {
-          var custId = document.getElementById('propCustomer').value;
+          var custData = getCustomerFromSelector('propCustomer');
           var title = document.getElementById('propTitle').value.trim();
-          if (!custId || !title) { toast('Customer and title required', 'error'); return; }
+          if (!custData || !title) { toast('Customer and title required', 'error'); return; }
 
           var items = getProposalItems();
-          var payload = {
-            crm_customer_id: parseInt(custId), title: title,
+          var payload = Object.assign({}, custData, {
+            title: title,
             property_address: document.getElementById('propAddress').value.trim(),
             scope_of_work: document.getElementById('propScope').value.trim(),
             items: items,
@@ -646,7 +716,7 @@
             warranty_terms: document.getElementById('propWarranty').value.trim() || null,
             payment_terms: document.getElementById('propPayment').value.trim() || null,
             notes: document.getElementById('propNotes').value.trim()
-          };
+          });
           fetch('/api/crm/proposals', { method: 'POST', headers: authHeaders(), body: JSON.stringify(payload) })
             .then(function(r) { return r.json(); })
             .then(function(res) { if (res.success) { closeModal(); toast('Proposal created!'); loadProposals(); } else { toast(res.error || 'Failed', 'error'); } })
@@ -744,13 +814,13 @@
         '<div><label class="block text-xs font-medium text-gray-600 mb-1">Notes</label><textarea id="propNotes" rows="2" class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm">' + (p.notes || '') + '</textarea></div></div>';
 
       showModal('Edit Proposal', body, function() {
-        var custId = document.getElementById('propCustomer').value;
+        var custData = getCustomerFromSelector('propCustomer');
         var title = document.getElementById('propTitle').value.trim();
-        if (!custId || !title) { toast('Customer and title required', 'error'); return; }
+        if (!custData || !title) { toast('Customer and title required', 'error'); return; }
 
         var updItems = getProposalItems();
-        var payload = {
-          crm_customer_id: parseInt(custId), title: title,
+        var payload = Object.assign({}, custData, {
+          title: title,
           property_address: document.getElementById('propAddress').value.trim(),
           scope_of_work: document.getElementById('propScope').value.trim(),
           items: updItems,
@@ -760,7 +830,7 @@
           payment_terms: document.getElementById('propPayment').value.trim() || null,
           notes: document.getElementById('propNotes').value.trim(),
           status: p.status
-        };
+        });
         fetch('/api/crm/proposals/' + id, { method: 'PUT', headers: authHeaders(), body: JSON.stringify(payload) })
           .then(function(r) { return r.json(); })
           .then(function(res) { if (res.success) { closeModal(); toast('Proposal updated!'); loadProposals(window._propFilter); } else { toast(res.error || 'Failed', 'error'); } })
@@ -955,15 +1025,15 @@
           var title = document.getElementById('jobTitle').value.trim();
           var date = document.getElementById('jobDate').value;
           if (!title || !date) { toast('Title and date required', 'error'); return; }
-          var payload = {
-            crm_customer_id: document.getElementById('jobCustomer').value ? parseInt(document.getElementById('jobCustomer').value) : null,
+          var custData = getCustomerFromSelector('jobCustomer');
+          var payload = Object.assign({}, custData || {}, {
             title: title, property_address: document.getElementById('jobAddress').value.trim(),
             scheduled_date: date, scheduled_time: document.getElementById('jobTime').value || null,
             job_type: document.getElementById('jobType').value,
             estimated_duration: document.getElementById('jobDuration').value.trim() || null,
             crew_size: parseInt(document.getElementById('jobCrew').value) || null,
             notes: document.getElementById('jobNotes').value.trim()
-          };
+          });
           fetch('/api/crm/jobs', { method: 'POST', headers: authHeaders(), body: JSON.stringify(payload) })
             .then(function(r) { return r.json(); })
             .then(function(res) { if (res.success) { closeModal(); toast('Job scheduled!'); loadJobs(); } else { toast(res.error || 'Failed', 'error'); } })

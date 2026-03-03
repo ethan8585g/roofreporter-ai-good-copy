@@ -17,6 +17,40 @@ async function getOwnerId(c: any): Promise<number | null> {
 }
 
 // ============================================================
+// HELPER: Resolve customer ID — auto-create if new_customer provided
+// ============================================================
+async function resolveCustomerId(c: any, ownerId: number, body: any): Promise<{ id: number | null; error?: string }> {
+  // If an existing customer ID is provided, use it
+  if (body.crm_customer_id) {
+    return { id: body.crm_customer_id }
+  }
+  // If new_customer payload is provided, auto-create a CRM customer
+  if (body.new_customer) {
+    const nc = body.new_customer
+    if (!nc.name || !nc.name.trim()) {
+      return { id: null, error: 'New customer name is required' }
+    }
+    try {
+      const result = await c.env.DB.prepare(`
+        INSERT INTO crm_customers (owner_id, name, email, phone, company, address, city, province, postal_code, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')
+      `).bind(
+        ownerId, nc.name.trim(), nc.email || null, nc.phone || null,
+        nc.company || null, nc.address || null, nc.city || null,
+        nc.province || null, nc.postal_code || null
+      ).run()
+      if (!result.meta.last_row_id) {
+        return { id: null, error: 'Failed to create customer' }
+      }
+      return { id: result.meta.last_row_id as number }
+    } catch (err: any) {
+      return { id: null, error: 'Failed to create customer: ' + err.message }
+    }
+  }
+  return { id: null, error: 'Customer is required' }
+}
+
+// ============================================================
 // CRM CUSTOMERS
 // ============================================================
 
@@ -181,8 +215,13 @@ crmRoutes.post('/invoices', async (c) => {
   const ownerId = await getOwnerId(c)
   if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
   try {
-    const { crm_customer_id, items, due_date, notes, terms, tax_rate } = await c.req.json()
-    if (!crm_customer_id) return c.json({ error: 'Customer is required' }, 400)
+    const body = await c.req.json()
+    const { items, due_date, notes, terms, tax_rate } = body
+
+    // Resolve customer — either existing or auto-create new
+    const custResult = await resolveCustomerId(c, ownerId, body)
+    if (!custResult.id) return c.json({ error: custResult.error || 'Customer is required' }, 400)
+    const customerId = custResult.id
 
     const taxR = tax_rate || 5.0
     let subtotal = 0
@@ -195,7 +234,7 @@ crmRoutes.post('/invoices', async (c) => {
     const result = await c.env.DB.prepare(`
       INSERT INTO crm_invoices (owner_id, crm_customer_id, invoice_number, subtotal, tax_rate, tax_amount, total, due_date, notes, terms, status)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft')
-    `).bind(ownerId, crm_customer_id, invNum, subtotal, taxR, taxAmt, total, due_date || null, notes || null, terms || 'Payment due within 30 days.').run()
+    `).bind(ownerId, customerId, invNum, subtotal, taxR, taxAmt, total, due_date || null, notes || null, terms || 'Payment due within 30 days.').run()
 
     const invoiceId = result.meta.last_row_id
     if (!invoiceId) {
@@ -319,7 +358,12 @@ crmRoutes.post('/proposals', async (c) => {
   if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
   try {
     const body = await c.req.json()
-    if (!body.crm_customer_id || !body.title) return c.json({ error: 'Customer and title required' }, 400)
+    if (!body.title) return c.json({ error: 'Title is required' }, 400)
+
+    // Resolve customer — either existing or auto-create new
+    const custResult = await resolveCustomerId(c, ownerId, body)
+    if (!custResult.id) return c.json({ error: custResult.error || 'Customer is required' }, 400)
+    const customerId = custResult.id
 
     const taxRate = body.tax_rate ?? 5.0
     let subtotal = 0
@@ -340,7 +384,7 @@ crmRoutes.post('/proposals', async (c) => {
         materials_detail, labor_cost, material_cost, other_cost, subtotal, tax_rate, tax_amount, total_amount,
         valid_until, notes, warranty_terms, payment_terms, status)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft')
-    `).bind(ownerId, body.crm_customer_id, propNum, body.title, body.property_address || null,
+    `).bind(ownerId, customerId, propNum, body.title, body.property_address || null,
       body.scope_of_work || null, body.materials_detail || null,
       body.labor_cost || 0, body.material_cost || 0, body.other_cost || 0,
       subtotal, taxRate, taxAmount, total,
@@ -381,6 +425,11 @@ crmRoutes.put('/proposals/:id', async (c) => {
       return c.json({ success: true })
     }
 
+    // Resolve customer — either existing or auto-create new
+    const custResult = await resolveCustomerId(c, ownerId, body)
+    if (!custResult.id) return c.json({ error: custResult.error || 'Customer is required' }, 400)
+    const customerId = custResult.id
+
     const taxRate = body.tax_rate ?? 5.0
     let subtotal = 0
     if (body.items && body.items.length > 0) {
@@ -396,7 +445,7 @@ crmRoutes.put('/proposals/:id', async (c) => {
         labor_cost=?, material_cost=?, other_cost=?, subtotal=?, tax_rate=?, tax_amount=?, total_amount=?,
         valid_until=?, notes=?, warranty_terms=?, payment_terms=?, status=?, updated_at=datetime('now')
       WHERE id=? AND owner_id=?
-    `).bind(body.crm_customer_id, body.title, body.property_address || null, body.scope_of_work || null,
+    `).bind(customerId, body.title, body.property_address || null, body.scope_of_work || null,
       body.materials_detail || null, body.labor_cost || 0, body.material_cost || 0, body.other_cost || 0,
       subtotal, taxRate, taxAmount, total, body.valid_until || null, body.notes || null,
       body.warranty_terms || null, body.payment_terms || null,
@@ -513,11 +562,18 @@ crmRoutes.post('/jobs', async (c) => {
   const body = await c.req.json()
   if (!body.title || !body.scheduled_date) return c.json({ error: 'Title and date required' }, 400)
 
+  // Resolve customer — either existing or auto-create new (optional for jobs)
+  let customerId = body.crm_customer_id || null
+  if (!customerId && body.new_customer && body.new_customer.name) {
+    const custResult = await resolveCustomerId(c, ownerId, body)
+    if (custResult.id) customerId = custResult.id
+  }
+
   const jobNum = genJobNum()
   const result = await c.env.DB.prepare(`
     INSERT INTO crm_jobs (owner_id, crm_customer_id, proposal_id, job_number, title, property_address, job_type, scheduled_date, scheduled_time, estimated_duration, crew_size, notes, status)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'scheduled')
-  `).bind(ownerId, body.crm_customer_id || null, body.proposal_id || null, jobNum, body.title, body.property_address || null, body.job_type || 'install', body.scheduled_date, body.scheduled_time || null, body.estimated_duration || null, body.crew_size || null, body.notes || null).run()
+  `).bind(ownerId, customerId, body.proposal_id || null, jobNum, body.title, body.property_address || null, body.job_type || 'install', body.scheduled_date, body.scheduled_time || null, body.estimated_duration || null, body.crew_size || null, body.notes || null).run()
 
   const jobId = result.meta.last_row_id
   // Seed default checklist
