@@ -217,7 +217,7 @@ export async function generateReportForOrder(
     if (!order) return { success: false, error: 'Order not found' }
 
     const existing = await env.DB.prepare(
-      'SELECT id, status, generation_attempts FROM reports WHERE order_id = ?'
+      'SELECT id, status, generation_attempts, generation_started_at FROM reports WHERE order_id = ?'
     ).bind(orderId).first<any>()
 
     // ---- STATE MACHINE: queued -> running -> completed/failed ----
@@ -225,9 +225,34 @@ export async function generateReportForOrder(
     const attemptNum = (existing?.generation_attempts || 0) + 1
     const maxAttempts = 3
 
+    // STALE-GENERATION GUARD — If stuck in 'generating' for > 2 minutes, it was killed
+    // by Cloudflare Workers wall-clock timeout and never reached the catch block.
+    // Reset it so the retry can proceed.
     if (existing && existing.status === 'generating') {
-      console.warn(`[GenerateDirect] Order ${orderId}: report already generating, skipping duplicate`)
-      return { success: false, error: 'Report generation already in progress' }
+      const startedAt = existing.generation_started_at
+      if (startedAt) {
+        const startedMs = new Date(startedAt + 'Z').getTime()
+        const staleMs = Date.now() - startedMs
+        if (staleMs > 120_000) {
+          // > 2 minutes = definitely stale (CF Workers max is 30s on free, 120s on paid)
+          console.warn(`[GenerateDirect] Order ${orderId}: generation stale (${Math.round(staleMs / 1000)}s old), resetting for retry`)
+          await env.DB.prepare(`
+            UPDATE reports SET status = 'failed', error_message = 'Generation timed out (stale after ${Math.round(staleMs / 1000)}s)', updated_at = datetime('now')
+            WHERE order_id = ?
+          `).bind(orderId).run()
+          // Fall through to retry below
+        } else {
+          console.warn(`[GenerateDirect] Order ${orderId}: report generating (started ${Math.round(staleMs / 1000)}s ago), skipping duplicate`)
+          return { success: false, error: 'Report generation already in progress' }
+        }
+      } else {
+        // No start time — definitely stale, reset it
+        console.warn(`[GenerateDirect] Order ${orderId}: stuck generating with no start time, resetting`)
+        await env.DB.prepare(`
+          UPDATE reports SET status = 'failed', error_message = 'Generation stuck (no start time)', updated_at = datetime('now')
+          WHERE order_id = ?
+        `).bind(orderId).run()
+      }
     }
 
     if (attemptNum > maxAttempts) {
@@ -263,102 +288,46 @@ export async function generateReportForOrder(
     let usedDataLayers = false
 
     if (solarApiKey && order.latitude && order.longitude) {
+      // STRATEGY: Use buildingInsights FIRST (fast, ~3s) to guarantee report completion.
+      // DataLayers (GeoTIFF downloads) is too slow for CF Workers timeout.
+      // DataLayers can be run separately via /generate-enhanced endpoint later.
       try {
-        console.log(`[GenerateDirect] Trying DataLayers pipeline for order ${orderId}`)
-        const address = [order.property_address, order.property_city, order.property_province].filter(Boolean).join(', ')
-        const dlResult = await executeRoofOrder(address, solarApiKey, mapsApiKey, {
-          lat: order.latitude, lng: order.longitude, radiusMeters: 50
-        })
-        const dlSegments = generateSegmentsFromDLAnalysis(dlResult)
-        const dlEdges = generateEdgesFromSegments(dlSegments, dlResult.area.flatAreaSqft)
-        const dlEdgeSummary = computeEdgeSummary(dlEdges)
-        const dlMaterials = computeMaterialEstimate(dlResult.area.trueAreaSqft, dlEdges, dlSegments)
-
-        reportData = buildDataLayersReport(orderId, order, dlResult, dlSegments, dlEdges, dlEdgeSummary, dlMaterials, mapsApiKey)
+        console.log(`[GenerateDirect] Using buildingInsights for order ${orderId} (fast mode — no GeoTIFF downloads)`)
+        reportData = await callGoogleSolarAPI(order.latitude, order.longitude, solarApiKey, typeof orderId === 'string' ? parseInt(orderId) : orderId, order, mapsApiKey)
         apiDuration = Date.now() - startTime
         reportData.metadata.api_duration_ms = apiDuration
-        usedDataLayers = true
-
+        usedDataLayers = false
+        
         await env.DB.prepare(`
           INSERT INTO api_requests_log (order_id, request_type, endpoint, response_status, duration_ms)
-          VALUES (?, 'solar_datalayers', 'dataLayers:get + GeoTIFF', 200, ?)
+          VALUES (?, 'google_solar_api', 'buildingInsights:findClosest', 200, ?)
         `).bind(orderId, apiDuration).run()
-        console.log(`[GenerateDirect] DataLayers success: ${dlResult.area.trueAreaSqft} sqft in ${apiDuration}ms`)
-      } catch (dlErr: any) {
-        console.warn(`[GenerateDirect] DataLayers failed (${dlErr.message}), falling back`)
-        try {
-          reportData = await callGoogleSolarAPI(order.latitude, order.longitude, solarApiKey, typeof orderId === 'string' ? parseInt(orderId) : orderId, order, mapsApiKey)
-          apiDuration = Date.now() - startTime
-          reportData.metadata.api_duration_ms = apiDuration
-          await env.DB.prepare(`
-            INSERT INTO api_requests_log (order_id, request_type, endpoint, response_status, duration_ms)
-            VALUES (?, 'google_solar_api', 'buildingInsights:findClosest', 200, ?)
-          `).bind(orderId, apiDuration).run()
-        } catch (apiErr: any) {
-          apiDuration = Date.now() - startTime
-          const isNotFound = apiErr.message.includes('404') || apiErr.message.includes('NOT_FOUND')
-          await env.DB.prepare(`
-            INSERT INTO api_requests_log (order_id, request_type, endpoint, response_status, response_payload, duration_ms)
-            VALUES (?, 'google_solar_api', 'buildingInsights:findClosest', ?, ?, ?)
-          `).bind(orderId, isNotFound ? 404 : 500, apiErr.message.substring(0, 500), apiDuration).run()
-          reportData = generateMockRoofReport(order, mapsApiKey)
-          reportData.metadata.provider = isNotFound
-            ? 'estimated (location not in Google Solar coverage — rural/acreage property)'
-            : `estimated (Solar API error: ${apiErr.message.substring(0, 100)})`
-          reportData.quality.notes = isNotFound
-            ? ['Google Solar API has no building model for this location.', 'Measurements are estimated. Field verification recommended.']
-            : [`Solar API error: ${apiErr.message.substring(0, 100)}`, 'Measurements are estimated. Field verification recommended.']
-        }
+        console.log(`[GenerateDirect] buildingInsights success in ${apiDuration}ms`)
+      } catch (apiErr: any) {
+        apiDuration = Date.now() - startTime
+        const isNotFound = apiErr.message.includes('404') || apiErr.message.includes('NOT_FOUND')
+        await env.DB.prepare(`
+          INSERT INTO api_requests_log (order_id, request_type, endpoint, response_status, response_payload, duration_ms)
+          VALUES (?, 'google_solar_api', 'buildingInsights:findClosest', ?, ?, ?)
+        `).bind(orderId, isNotFound ? 404 : 500, apiErr.message.substring(0, 500), apiDuration).run()
+        reportData = generateMockRoofReport(order, mapsApiKey)
+        reportData.metadata.provider = isNotFound
+          ? 'estimated (location not in Google Solar coverage — rural/acreage property)'
+          : `estimated (Solar API error: ${apiErr.message.substring(0, 100)})`
+        reportData.quality.notes = isNotFound
+          ? ['Google Solar API has no building model for this location.', 'Measurements are estimated. Field verification recommended.']
+          : [`Solar API error: ${apiErr.message.substring(0, 100)}`, 'Measurements are estimated. Field verification recommended.']
       }
     } else {
       reportData = generateMockRoofReport(order, mapsApiKey)
     }
 
-    // Gemini Vision AI overlay
-    try {
-      const overheadImageUrl = reportData.imagery?.satellite_overhead_url || reportData.imagery?.satellite_url
-      if (overheadImageUrl) {
-        console.log(`[GenerateDirect] Running Gemini Vision AI for overlay...`)
-        const geminiEnv = {
-          apiKey: env.GOOGLE_VERTEX_API_KEY,
-          accessToken: undefined as string | undefined,
-          project: env.GOOGLE_CLOUD_PROJECT,
-          location: env.GOOGLE_CLOUD_LOCATION || 'us-central1',
-          serviceAccountKey: env.GCP_SERVICE_ACCOUNT_KEY,
-        }
-        const aiGeometry = await analyzeRoofGeometry(overheadImageUrl, geminiEnv)
-        if (aiGeometry && aiGeometry.facets && aiGeometry.facets.length > 0) {
-          // Check if geometry exhausted retries (lower confidence)
-          if ((aiGeometry as any)._retryExhausted) {
-            console.warn(`[GenerateDirect] ⚠ AI Geometry used fallback (best-effort after retry exhaustion, score ${(aiGeometry as any)._bestScore}) — measurements may be less accurate`)
-          }
-          reportData.ai_geometry = aiGeometry
-          console.log(`[GenerateDirect] AI Geometry: ${aiGeometry.facets.length} facets, ${aiGeometry.lines.length} lines`)
-
-          // ── RE-GENERATE SEGMENTS FROM REAL POLYGON GEOMETRY ──
-          // Now that we have AI facets, replace the hardcoded-percentage segments
-          // with polygon-area-derived segments for accurate per-facet measurements.
-          const aiSegments = generateSegmentsFromAIGeometry(
-            aiGeometry,
-            reportData.total_footprint_sqft,
-            reportData.roof_pitch_degrees
-          )
-          if (aiSegments.length >= 2) {
-            console.log(`[GenerateDirect] Replaced ${reportData.segments.length} template segments with ${aiSegments.length} polygon-measured segments`)
-            reportData.segments = aiSegments
-            // Re-derive edges and materials from the new geometry-based segments
-            const newEdges = generateEdgesFromSegments(aiSegments, reportData.total_footprint_sqft)
-            const newEdgeSummary = computeEdgeSummary(newEdges)
-            const newMaterials = computeMaterialEstimate(reportData.total_true_area_sqft, newEdges, aiSegments)
-            reportData.edges = newEdges
-            reportData.edge_summary = newEdgeSummary
-            reportData.materials = newMaterials
-          }
-        }
-      }
-    } catch (geminiErr: any) {
-      console.warn(`[GenerateDirect] Gemini overlay failed (non-critical): ${geminiErr.message}`)
-    }
+    // Gemini Vision AI overlay — DISABLED for initial generation
+    // CF Workers/Pages has a strict 30s wall-clock limit.
+    // buildingInsights (~3s) + Gemini (~15-25s) = too close to limit, causing timeouts.
+    // Gemini Vision can be added later via /generate-enhanced or /ai-enhance endpoint.
+    // Reports 26-31 worked (11-16s), Report 32 was 22s (barely), Reports 33-35 timed out.
+    console.log(`[GenerateDirect] Skipping Gemini Vision (CF Workers timeout safety) — Solar API segments used. Use /generate-enhanced to add AI geometry later.`)
 
     const professionalHtml = generateProfessionalReportHTML(reportData)
     const edgeSummary = reportData.edge_summary
@@ -529,19 +498,96 @@ function buildDataLayersReport(orderId: any, order: any, dlResult: any, dlSegmen
 reportsRoutes.post('/:orderId/generate', async (c) => {
   try {
     const orderId = c.req.param('orderId')
-    const result = await generateReportForOrder(orderId, c.env)
-    if (!result.success) {
-      return c.json({ error: result.error || 'Failed to generate report' }, result.error === 'Order not found' ? 404 : 500)
+    
+    // Use waitUntil to run generation in background — return immediately to avoid client timeout
+    const generatePromise = generateReportForOrder(orderId, c.env)
+      .then(result => {
+        if (result.success) {
+          console.log(`[Generate] Order ${orderId}: completed (v${result.version}) via ${result.provider}`)
+        } else {
+          console.error(`[Generate] Order ${orderId}: ${result.error}`)
+        }
+      })
+      .catch(err => {
+        console.error(`[Generate] Order ${orderId} background error:`, err.message)
+      })
+    
+    if ((c as any).executionCtx?.waitUntil) {
+      ;(c as any).executionCtx.waitUntil(generatePromise)
+      return c.json({ success: true, message: 'Report generation started in background', orderId })
+    } else {
+      // Fallback for non-CF environments: await directly
+      const result = await generateReportForOrder(orderId, c.env)
+      if (!result.success) {
+        return c.json({ error: result.error || 'Failed to generate report' }, result.error === 'Order not found' ? 404 : 500)
+      }
+      return c.json({
+        success: true,
+        message: `Report generated successfully (v${result.version}) via ${result.provider}`,
+        report: result.report,
+        provider: result.provider,
+        version: result.version
+      })
     }
-    return c.json({
-      success: true,
-      message: `Report generated successfully (v${result.version}) via ${result.provider}`,
-      report: result.report,
-      provider: result.provider,
-      version: result.version
-    })
   } catch (err: any) {
     return c.json({ error: 'Failed to generate report', details: err.message }, 500)
+  }
+})
+
+// ============================================================
+// RETRY / RESET — Force-reset a stuck report so it can regenerate
+// Resets status to NULL + clears attempt counter
+// Uses waitUntil for background processing
+// ============================================================
+reportsRoutes.post('/:orderId/retry', async (c) => {
+  try {
+    const orderId = c.req.param('orderId')
+    const report = await c.env.DB.prepare(
+      'SELECT id, status, generation_attempts FROM reports WHERE order_id = ?'
+    ).bind(orderId).first<any>()
+    
+    if (!report) {
+      return c.json({ error: 'No report record found for this order' }, 404)
+    }
+    
+    const previousStatus = report.status
+    const previousAttempts = report.generation_attempts
+    
+    // Reset report to allow regeneration
+    await c.env.DB.prepare(`
+      UPDATE reports SET status = NULL, generation_attempts = 0, error_message = NULL, updated_at = datetime('now')
+      WHERE order_id = ?
+    `).bind(orderId).run()
+    
+    // Reset order status to paid (so it can re-trigger)
+    await c.env.DB.prepare(`
+      UPDATE orders SET status = 'paid', updated_at = datetime('now')
+      WHERE id = ?
+    `).bind(orderId).run()
+    
+    // Use waitUntil for background generation
+    const generatePromise = generateReportForOrder(orderId, c.env)
+      .then(result => {
+        console.log(`[Retry] Order ${orderId}: ${result.success ? 'SUCCESS' : result.error}`)
+      })
+      .catch(err => {
+        console.error(`[Retry] Order ${orderId} background error:`, err.message)
+      })
+    
+    if ((c as any).executionCtx?.waitUntil) {
+      ;(c as any).executionCtx.waitUntil(generatePromise)
+    } else {
+      await generatePromise
+    }
+    
+    return c.json({
+      success: true,
+      message: 'Report retry started in background',
+      previousStatus,
+      previousAttempts,
+    })
+  } catch (err: any) {
+    return c.json({ error: 'Retry failed', details: err.message }, 500)
   }
 })
 
@@ -559,6 +605,7 @@ reportsRoutes.post('/:orderId/generate', async (c) => {
 reportsRoutes.post('/:orderId/generate-enhanced', async (c) => {
   try {
     const orderId = c.req.param('orderId')
+    const enhancedPipelineStart = Date.now()  // Track wall-clock for CF Workers budget
     const { email_report, to_email } = await c.req.json().catch(() => ({} as any))
 
     const order = await c.env.DB.prepare(
@@ -705,10 +752,15 @@ reportsRoutes.post('/:orderId/generate-enhanced', async (c) => {
     }
 
     // ---- Run Gemini Vision AI to get roof facet polygons for overlay ----
+    // TIME-BUDGETED: Skip if we've already used too much wall-clock time
+    const enhancedElapsedMs = Date.now() - enhancedPipelineStart
+    const enhancedRemainingMs = 28_000 - enhancedElapsedMs  // 28s CF Workers safety margin
+    
+    if (enhancedRemainingMs >= 15_000) {
     try {
       const overheadImageUrl = reportData.imagery?.satellite_overhead_url || reportData.imagery?.satellite_url
       if (overheadImageUrl) {
-        console.log(`[Generate DL] Running Gemini Vision AI for roof polygon overlay...`)
+        console.log(`[Generate DL] Running Gemini Vision AI (${Math.round(enhancedRemainingMs/1000)}s budget remaining)...`)
         const geminiEnv = {
           apiKey: c.env.GOOGLE_VERTEX_API_KEY,
           accessToken: undefined as string | undefined,
@@ -745,6 +797,9 @@ reportsRoutes.post('/:orderId/generate-enhanced', async (c) => {
       }
     } catch (geminiErr: any) {
       console.warn(`[Generate DL] Gemini Vision overlay failed (non-critical): ${geminiErr.message}`)
+    }
+    } else {
+      console.warn(`[Generate DL] ⏱ Skipping Gemini Vision — only ${Math.round(enhancedRemainingMs/1000)}s remaining (need 15s). Solar segments will be used.`)
     }
 
     // Generate professional HTML report

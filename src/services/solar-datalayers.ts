@@ -678,6 +678,7 @@ export async function executeRoofOrder(
     skipMask?: boolean
     lat?: number
     lng?: number
+    fastMode?: boolean  // Skip RGB, mask overlay, flux — only DSM+mask for measurements
   }
 ): Promise<DataLayersAnalysis> {
   const startTime = Date.now()
@@ -741,8 +742,10 @@ export async function executeRoofOrder(
   // Step 3b: RGB aerial GeoTIFF — MASK-CROPPED
   // Download the high-res RGB and use the mask to crop to just the building footprint.
   // This gives us actual aerial photography (0.1-0.5m/pixel) focused on the roof only.
+  // FAST MODE: Skip these heavy downloads to stay within CF Workers timeout
   let rgbAerialDataUrl = ''
   let maskOverlayDataUrl = ''
+  if (!options?.fastMode) {
   try {
     if (dataLayers.rgbUrl && maskGeoTiff) {
       console.log(`[Pipeline] Step 3b: Converting RGB GeoTIFF with mask crop`)
@@ -758,9 +761,13 @@ export async function executeRoofOrder(
   } catch (rgbErr: any) {
     console.warn(`[Pipeline] RGB/Mask visualization failed (non-critical): ${rgbErr.message}`)
   }
+  } else {
+    console.log(`[Pipeline] Step 3b/3c: FAST MODE — skipping RGB & mask overlay downloads`)
+  }
 
   // Step 3d: Annual Flux GeoTIFF — solar exposure analysis
   let fluxAnalysis: FluxAnalysis | null = null
+  if (!options?.fastMode) {
   try {
     if (dataLayers.annualFluxUrl) {
       console.log(`[Pipeline] Step 3d: Downloading Annual Flux GeoTIFF`)
@@ -770,6 +777,9 @@ export async function executeRoofOrder(
     }
   } catch (fluxErr: any) {
     console.warn(`[Pipeline] Flux analysis failed (non-critical): ${fluxErr.message}`)
+  }
+  } else {
+    console.log(`[Pipeline] Step 3d: FAST MODE — skipping Flux GeoTIFF download`)
   }
 
   // Step 4: Analyze DSM with mask
