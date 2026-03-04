@@ -54,7 +54,7 @@
     var overlay = document.createElement('div');
     overlay.className = 'fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4';
     overlay.id = 'crmModal';
-    overlay.innerHTML = '<div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">' +
+    overlay.innerHTML = '<div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">' +
       '<div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between"><h3 class="font-bold text-gray-800">' + title + '</h3><button onclick="document.getElementById(\'crmModal\').remove()" class="text-gray-400 hover:text-gray-600 text-lg">&times;</button></div>' +
       '<div class="p-6" id="modalBody">' + bodyHtml + '</div>' +
       (onSave ? '<div class="px-6 py-4 border-t border-gray-100 flex justify-end gap-2"><button onclick="document.getElementById(\'crmModal\').remove()" class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg text-sm">Cancel</button><button id="modalSaveBtn" class="px-6 py-2 bg-brand-600 text-white rounded-lg text-sm font-semibold hover:bg-brand-700">' + (saveLabel || 'Save') + '</button></div>' : '') +
@@ -409,8 +409,10 @@
       html += '<div class="bg-white rounded-xl border overflow-hidden"><table class="w-full text-sm"><thead class="bg-gray-50"><tr><th class="px-4 py-3 text-left text-xs font-semibold text-gray-500">Invoice #</th><th class="px-4 py-3 text-left text-xs font-semibold text-gray-500">Customer</th><th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 hidden md:table-cell">Date</th><th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 hidden md:table-cell">Due</th><th class="px-4 py-3 text-center text-xs font-semibold text-gray-500">Status</th><th class="px-4 py-3 text-right text-xs font-semibold text-gray-500">Amount</th><th class="px-4 py-3"></th></tr></thead><tbody class="divide-y divide-gray-50">';
       for (var i = 0; i < invoices.length; i++) {
         var inv = invoices[i];
-        html += '<tr class="hover:bg-gray-50"><td class="px-4 py-3 font-mono text-xs font-bold text-brand-600">' + inv.invoice_number + '</td><td class="px-4 py-3 text-gray-700">' + (inv.customer_name || 'N/A') + '</td><td class="px-4 py-3 text-gray-500 text-xs hidden md:table-cell">' + fmtDate(inv.created_at) + '</td><td class="px-4 py-3 text-gray-500 text-xs hidden md:table-cell">' + fmtDate(inv.due_date) + '</td><td class="px-4 py-3 text-center">' + badge(inv.status) + '</td><td class="px-4 py-3 text-right font-semibold">' + money(inv.total) + '</td><td class="px-4 py-3 text-right"><div class="flex items-center gap-1 justify-end">';
-        if (inv.status === 'draft') html += '<button onclick="window._crmMarkInvoice(' + inv.id + ',\'sent\')" class="text-xs text-blue-600 hover:underline">Send</button>';
+        html += '<tr class="hover:bg-gray-50 cursor-pointer" onclick="window._crmViewInvoice(' + inv.id + ')"><td class="px-4 py-3 font-mono text-xs font-bold text-brand-600">' + inv.invoice_number + '</td><td class="px-4 py-3 text-gray-700">' + (inv.customer_name || 'N/A') + '</td><td class="px-4 py-3 text-gray-500 text-xs hidden md:table-cell">' + fmtDate(inv.created_at) + '</td><td class="px-4 py-3 text-gray-500 text-xs hidden md:table-cell">' + fmtDate(inv.due_date) + '</td><td class="px-4 py-3 text-center">' + badge(inv.status) + '</td><td class="px-4 py-3 text-right font-semibold">' + money(inv.total) + '</td><td class="px-4 py-3 text-right" onclick="event.stopPropagation()"><div class="flex items-center gap-1 justify-end">';
+        html += '<button onclick="window._crmViewInvoice(' + inv.id + ')" class="text-xs text-brand-600 hover:underline font-medium"><i class="fas fa-eye mr-0.5"></i>View</button>';
+        if (inv.status === 'draft') html += '<button onclick="window._crmEditInvoice(' + inv.id + ')" class="text-xs text-gray-600 hover:underline ml-2"><i class="fas fa-edit mr-0.5"></i>Edit</button>';
+        if (inv.status === 'draft') html += '<button onclick="window._crmMarkInvoice(' + inv.id + ',\'sent\')" class="text-xs text-blue-600 hover:underline ml-2">Send</button>';
         if (inv.status !== 'paid' && inv.status !== 'cancelled') html += '<button onclick="window._crmMarkInvoice(' + inv.id + ',\'paid\')" class="text-xs text-green-600 hover:underline ml-2">Mark Paid</button>';
         html += '<button onclick="window._crmDeleteInvoice(' + inv.id + ')" class="text-gray-400 hover:text-red-500 ml-2"><i class="fas fa-trash text-xs"></i></button>';
         html += '</div></td></tr>';
@@ -483,6 +485,143 @@
     fetch('/api/crm/invoices/' + id, { method: 'DELETE', headers: authHeadersOnly() })
       .then(function() { toast('Invoice deleted'); loadInvoices(window._invFilter); })
       .catch(function(e) { toast('Failed to delete: ' + (e.message || 'Network error'), 'error'); });
+  };
+
+  // ---- View Invoice Detail ----
+  window._crmViewInvoice = function(id) {
+    fetch('/api/crm/invoices/' + id, { headers: authHeadersOnly() })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        var inv = data.invoice;
+        var items = data.items || [];
+        if (!inv) { toast('Invoice not found', 'error'); return; }
+
+        var body = '<div class="space-y-4">';
+        // Header with invoice number and status
+        body += '<div class="flex items-center justify-between">';
+        body += '<div><span class="font-mono text-lg font-bold text-brand-600">' + inv.invoice_number + '</span></div>';
+        body += '<div class="flex items-center gap-2">' + badge(inv.status);
+        if (inv.status === 'draft') body += '<button onclick="closeModal();window._crmEditInvoice(' + id + ')" class="text-xs bg-gray-100 text-gray-700 px-3 py-1 rounded-lg hover:bg-gray-200"><i class="fas fa-edit mr-1"></i>Edit</button>';
+        body += '</div></div>';
+
+        // Customer info
+        body += '<div class="bg-gray-50 rounded-xl p-4">';
+        body += '<h4 class="text-xs font-semibold text-gray-500 uppercase mb-2"><i class="fas fa-user mr-1"></i>Bill To</h4>';
+        body += '<p class="font-semibold text-gray-800">' + (inv.customer_name || 'N/A') + '</p>';
+        if (inv.customer_email) body += '<p class="text-sm text-gray-600"><i class="fas fa-envelope mr-1 text-gray-400"></i>' + inv.customer_email + '</p>';
+        if (inv.customer_phone) body += '<p class="text-sm text-gray-600"><i class="fas fa-phone mr-1 text-gray-400"></i>' + inv.customer_phone + '</p>';
+        var addr = [inv.customer_address, inv.customer_city, inv.customer_province, inv.customer_postal].filter(Boolean).join(', ');
+        if (addr) body += '<p class="text-sm text-gray-600 mt-1"><i class="fas fa-map-marker-alt mr-1 text-gray-400"></i>' + addr + '</p>';
+        body += '</div>';
+
+        // Dates row
+        body += '<div class="grid grid-cols-3 gap-3">';
+        body += '<div class="bg-blue-50 rounded-xl p-3 text-center"><p class="text-xs text-blue-500 mb-1">Created</p><p class="text-sm font-semibold text-blue-700">' + fmtDate(inv.created_at) + '</p></div>';
+        body += '<div class="bg-amber-50 rounded-xl p-3 text-center"><p class="text-xs text-amber-500 mb-1">Due Date</p><p class="text-sm font-semibold text-amber-700">' + fmtDate(inv.due_date) + '</p></div>';
+        body += '<div class="bg-green-50 rounded-xl p-3 text-center"><p class="text-xs text-green-500 mb-1">Paid</p><p class="text-sm font-semibold text-green-700">' + (inv.paid_date ? fmtDate(inv.paid_date) : '—') + '</p></div>';
+        body += '</div>';
+
+        // Line items table
+        if (items.length > 0) {
+          body += '<div class="border border-gray-200 rounded-xl overflow-hidden">';
+          body += '<table class="w-full text-sm"><thead class="bg-gray-50"><tr><th class="px-4 py-2.5 text-left text-xs font-semibold text-gray-500">Description</th><th class="px-4 py-2.5 text-center text-xs font-semibold text-gray-500 w-16">Qty</th><th class="px-4 py-2.5 text-right text-xs font-semibold text-gray-500 w-24">Price</th><th class="px-4 py-2.5 text-right text-xs font-semibold text-gray-500 w-24">Amount</th></tr></thead><tbody class="divide-y divide-gray-100">';
+          for (var i = 0; i < items.length; i++) {
+            body += '<tr><td class="px-4 py-2.5 text-gray-700">' + items[i].description + '</td><td class="px-4 py-2.5 text-center text-gray-600">' + items[i].quantity + '</td><td class="px-4 py-2.5 text-right text-gray-600">' + money(items[i].unit_price) + '</td><td class="px-4 py-2.5 text-right font-medium text-gray-800">' + money(items[i].amount) + '</td></tr>';
+          }
+          body += '</tbody></table></div>';
+        }
+
+        // Totals
+        body += '<div class="bg-gray-50 rounded-xl p-4">';
+        body += '<div class="flex justify-between text-sm text-gray-600 mb-1"><span>Subtotal</span><span>' + money(inv.subtotal) + '</span></div>';
+        if (inv.tax_amount) body += '<div class="flex justify-between text-sm text-gray-600 mb-1"><span>Tax (' + (inv.tax_rate || 5) + '%)</span><span>' + money(inv.tax_amount) + '</span></div>';
+        if (inv.discount_amount) body += '<div class="flex justify-between text-sm text-gray-600 mb-1"><span>Discount</span><span class="text-green-600">-' + money(inv.discount_amount) + '</span></div>';
+        body += '<div class="flex justify-between text-lg font-bold text-gray-800 border-t border-gray-200 pt-2 mt-2"><span>Total</span><span>' + money(inv.total) + ' CAD</span></div>';
+        body += '</div>';
+
+        // Notes & Terms
+        if (inv.notes) body += '<div class="bg-blue-50 rounded-xl p-3"><h4 class="text-xs font-semibold text-blue-600 uppercase mb-1"><i class="fas fa-sticky-note mr-1"></i>Notes</h4><p class="text-sm text-blue-800">' + inv.notes + '</p></div>';
+        if (inv.terms) body += '<div class="bg-gray-50 rounded-xl p-3"><h4 class="text-xs font-semibold text-gray-500 uppercase mb-1"><i class="fas fa-file-contract mr-1"></i>Terms</h4><p class="text-sm text-gray-700">' + inv.terms + '</p></div>';
+
+        // Action buttons
+        body += '<div class="flex gap-2 pt-2">';
+        if (inv.status === 'draft') {
+          body += '<button onclick="closeModal();window._crmEditInvoice(' + id + ')" class="flex-1 py-2.5 bg-gray-100 text-gray-700 rounded-xl text-sm font-semibold hover:bg-gray-200"><i class="fas fa-edit mr-1"></i>Edit</button>';
+          body += '<button onclick="closeModal();window._crmMarkInvoice(' + id + ',\'sent\')" class="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700"><i class="fas fa-paper-plane mr-1"></i>Mark Sent</button>';
+        }
+        if (inv.status !== 'paid' && inv.status !== 'cancelled') body += '<button onclick="closeModal();window._crmMarkInvoice(' + id + ',\'paid\')" class="flex-1 py-2.5 bg-green-600 text-white rounded-xl text-sm font-semibold hover:bg-green-700"><i class="fas fa-check mr-1"></i>Mark Paid</button>';
+        body += '</div>';
+        body += '</div>';
+
+        showModal('Invoice Details', body);
+      })
+      .catch(function(e) { toast('Failed to load invoice: ' + (e.message || 'Network error'), 'error'); });
+  };
+
+  // ---- Edit Invoice ----
+  window._crmEditInvoice = function(id) {
+    Promise.all([
+      fetch('/api/crm/invoices/' + id, { headers: authHeadersOnly() }).then(function(r) { return r.json(); }),
+      fetch('/api/crm/customers', { headers: authHeadersOnly() }).then(function(r) { return r.json(); })
+    ]).then(function(results) {
+      var invData = results[0];
+      var custData = results[1];
+      var inv = invData.invoice;
+      var items = invData.items || [];
+      var custs = custData.customers || [];
+      if (!inv) { toast('Invoice not found', 'error'); return; }
+
+      var body = '<div class="space-y-3">' +
+        '<div><label class="block text-xs font-medium text-gray-600 mb-1">Customer *</label>' + customerSelectHTML(custs, inv.crm_customer_id, 'editInvCustomer') + '</div>' +
+        '<div id="editInvItems">';
+      // Populate existing items
+      if (items.length > 0) {
+        for (var i = 0; i < items.length; i++) {
+          body += '<div class="invItemRow grid grid-cols-12 gap-2 items-end' + (i > 0 ? ' mt-2' : '') + '"><div class="col-span-6">' + (i === 0 ? '<label class="block text-xs font-medium text-gray-600 mb-1">Description</label>' : '') + '<input type="text" class="invDesc w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" value="' + (items[i].description || '').replace(/"/g, '&quot;') + '"></div><div class="col-span-2">' + (i === 0 ? '<label class="block text-xs font-medium text-gray-600 mb-1">Qty</label>' : '') + '<input type="number" class="invQty w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" value="' + (items[i].quantity || 1) + '"></div><div class="col-span-3">' + (i === 0 ? '<label class="block text-xs font-medium text-gray-600 mb-1">Unit Price</label>' : '') + '<input type="number" class="invPrice w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" step="0.01" value="' + (items[i].unit_price || 0) + '"></div><div class="col-span-1"><button onclick="this.closest(\'.invItemRow\').remove()" class="text-red-400 hover:text-red-600 py-2"><i class="fas fa-times"></i></button></div></div>';
+        }
+      } else {
+        body += '<div class="invItemRow grid grid-cols-12 gap-2 items-end"><div class="col-span-6"><label class="block text-xs font-medium text-gray-600 mb-1">Description</label><input type="text" class="invDesc w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" placeholder="Roof installation"></div><div class="col-span-2"><label class="block text-xs font-medium text-gray-600 mb-1">Qty</label><input type="number" class="invQty w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" value="1"></div><div class="col-span-3"><label class="block text-xs font-medium text-gray-600 mb-1">Unit Price</label><input type="number" class="invPrice w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" step="0.01" placeholder="0.00"></div><div class="col-span-1"><button onclick="this.closest(\'.invItemRow\').remove()" class="text-red-400 hover:text-red-600 py-2"><i class="fas fa-times"></i></button></div></div>';
+      }
+      body += '</div>' +
+        '<button onclick="window._crmAddEditInvItem()" class="text-brand-600 text-xs font-medium hover:underline"><i class="fas fa-plus mr-1"></i>Add Line Item</button>' +
+        '<div class="grid grid-cols-2 gap-3"><div><label class="block text-xs font-medium text-gray-600 mb-1">Due Date</label><input type="date" id="editInvDue" class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" value="' + (inv.due_date || '') + '"></div><div><label class="block text-xs font-medium text-gray-600 mb-1">Tax Rate (%)</label><input type="number" id="editInvTax" value="' + (inv.tax_rate || 5) + '" class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" step="0.1"></div></div>' +
+        '<div><label class="block text-xs font-medium text-gray-600 mb-1">Notes</label><textarea id="editInvNotes" rows="2" class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm">' + (inv.notes || '') + '</textarea></div>' +
+        '<div><label class="block text-xs font-medium text-gray-600 mb-1">Terms</label><textarea id="editInvTerms" rows="2" class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm">' + (inv.terms || '') + '</textarea></div></div>';
+
+      showModal('Edit Invoice — ' + inv.invoice_number, body, function() {
+        var custInfo = getCustomerFromSelector('editInvCustomer');
+        if (!custInfo) { toast('Select or add a customer', 'error'); return; }
+        var rows = document.querySelectorAll('#editInvItems .invItemRow');
+        var updItems = [];
+        rows.forEach(function(r) {
+          var desc = r.querySelector('.invDesc').value.trim();
+          var qty = parseFloat(r.querySelector('.invQty').value) || 1;
+          var price = parseFloat(r.querySelector('.invPrice').value) || 0;
+          if (desc && price > 0) updItems.push({ description: desc, quantity: qty, unit_price: price });
+        });
+        if (updItems.length === 0) { toast('Add at least one line item', 'error'); return; }
+        var payload = Object.assign({}, custInfo, {
+          items: updItems,
+          due_date: document.getElementById('editInvDue').value || null,
+          tax_rate: parseFloat(document.getElementById('editInvTax').value) || 5,
+          notes: document.getElementById('editInvNotes').value.trim(),
+          terms: document.getElementById('editInvTerms').value.trim()
+        });
+        fetch('/api/crm/invoices/' + id, { method: 'PUT', headers: authHeaders(), body: JSON.stringify(payload) })
+          .then(function(r) { return r.json(); })
+          .then(function(res) { if (res.success) { closeModal(); toast('Invoice updated!'); loadInvoices(window._invFilter); } else { toast(res.error || 'Failed', 'error'); } })
+          .catch(function(e) { toast('Failed to update: ' + (e.message || 'Network error'), 'error'); });
+      }, 'Save Changes');
+    }).catch(function(e) { toast('Failed to load invoice: ' + (e.message || 'Network error'), 'error'); });
+  };
+
+  window._crmAddEditInvItem = function() {
+    var container = document.getElementById('editInvItems');
+    if (!container) return;
+    var row = document.createElement('div');
+    row.className = 'invItemRow grid grid-cols-12 gap-2 items-end mt-2';
+    row.innerHTML = '<div class="col-span-6"><input type="text" class="invDesc w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" placeholder="Description"></div><div class="col-span-2"><input type="number" class="invQty w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" value="1"></div><div class="col-span-3"><input type="number" class="invPrice w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" step="0.01" placeholder="0.00"></div><div class="col-span-1"><button onclick="this.closest(\'.invItemRow\').remove()" class="text-red-400 hover:text-red-600 py-2"><i class="fas fa-times"></i></button></div>';
+    container.appendChild(row);
   };
 
   // ============================================================
@@ -581,6 +720,7 @@
         html += '<div class="flex flex-col items-end gap-1 flex-shrink-0 ml-4">';
         html += '<span class="text-lg font-black text-gray-800">' + money(p.total_amount) + '</span>';
         html += '<div class="flex items-center gap-1.5 flex-wrap justify-end">';
+        html += '<button onclick="window._crmViewProposal(' + p.id + ')" class="text-xs text-brand-600 hover:underline font-medium"><i class="fas fa-eye mr-0.5"></i>View</button>';
         if (p.status === 'draft') {
           html += '<button onclick="window._crmEditProposal(' + p.id + ')" class="text-xs text-gray-500 hover:text-gray-700"><i class="fas fa-edit"></i></button>';
           html += '<button onclick="window._crmSendProposal(' + p.id + ')" class="text-xs text-blue-600 hover:underline font-medium"><i class="fas fa-paper-plane mr-0.5"></i>Send</button>';
@@ -941,6 +1081,99 @@
         body += '</div>';
         showModal('Proposal Views & Tracking', body);
       }).catch(function(e) { toast('Failed to load tracking data: ' + (e.message || 'Network error'), 'error'); });
+  };
+
+  // ---- View Proposal Detail ----
+  window._crmViewProposal = function(id) {
+    fetch('/api/crm/proposals/' + id, { headers: authHeadersOnly() })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        var p = data.proposal;
+        var items = data.items || [];
+        if (!p) { toast('Proposal not found', 'error'); return; }
+
+        var body = '<div class="space-y-4">';
+        // Header
+        body += '<div class="flex items-center justify-between flex-wrap gap-2">';
+        body += '<div><span class="font-mono text-lg font-bold text-amber-600">' + p.proposal_number + '</span></div>';
+        body += '<div class="flex items-center gap-2">' + badge(p.status);
+        if (p.view_count > 0) body += '<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-100 text-indigo-700"><i class="fas fa-eye mr-0.5"></i>' + p.view_count + ' views</span>';
+        if (p.status === 'draft') body += '<button onclick="closeModal();window._crmEditProposal(' + id + ')" class="text-xs bg-gray-100 text-gray-700 px-3 py-1 rounded-lg hover:bg-gray-200"><i class="fas fa-edit mr-1"></i>Edit</button>';
+        body += '</div></div>';
+
+        // Title & Customer
+        body += '<div><h3 class="text-base font-bold text-gray-800">' + (p.title || '') + '</h3></div>';
+        body += '<div class="bg-gray-50 rounded-xl p-4">';
+        body += '<h4 class="text-xs font-semibold text-gray-500 uppercase mb-2"><i class="fas fa-user mr-1"></i>Customer</h4>';
+        body += '<p class="font-semibold text-gray-800">' + (p.customer_name || 'N/A') + '</p>';
+        if (p.customer_email) body += '<p class="text-sm text-gray-600"><i class="fas fa-envelope mr-1 text-gray-400"></i>' + p.customer_email + '</p>';
+        if (p.customer_phone) body += '<p class="text-sm text-gray-600"><i class="fas fa-phone mr-1 text-gray-400"></i>' + p.customer_phone + '</p>';
+        var propAddr = [p.property_address || p.customer_address, p.customer_city, p.customer_province].filter(Boolean).join(', ');
+        if (propAddr) body += '<p class="text-sm text-gray-600 mt-1"><i class="fas fa-map-marker-alt mr-1 text-gray-400"></i>' + propAddr + '</p>';
+        body += '</div>';
+
+        // Scope of Work
+        if (p.scope_of_work) {
+          body += '<div class="bg-blue-50 rounded-xl p-4">';
+          body += '<h4 class="text-xs font-semibold text-blue-600 uppercase mb-2"><i class="fas fa-clipboard-list mr-1"></i>Scope of Work</h4>';
+          body += '<p class="text-sm text-blue-900 whitespace-pre-line">' + p.scope_of_work + '</p>';
+          body += '</div>';
+        }
+
+        // Line Items
+        if (items.length > 0) {
+          body += '<div class="border border-gray-200 rounded-xl overflow-hidden">';
+          body += '<table class="w-full text-sm"><thead class="bg-gray-50"><tr><th class="px-4 py-2.5 text-left text-xs font-semibold text-gray-500">Description</th><th class="px-4 py-2.5 text-center text-xs font-semibold text-gray-500 w-14">Qty</th><th class="px-4 py-2.5 text-center text-xs font-semibold text-gray-500 w-14">Unit</th><th class="px-4 py-2.5 text-right text-xs font-semibold text-gray-500 w-24">Price</th><th class="px-4 py-2.5 text-right text-xs font-semibold text-gray-500 w-24">Amount</th></tr></thead><tbody class="divide-y divide-gray-100">';
+          for (var i = 0; i < items.length; i++) {
+            var it = items[i];
+            body += '<tr><td class="px-4 py-2.5 text-gray-700">' + it.description + '</td><td class="px-4 py-2.5 text-center text-gray-600">' + it.quantity + '</td><td class="px-4 py-2.5 text-center text-gray-500 text-xs">' + (it.unit || 'ea') + '</td><td class="px-4 py-2.5 text-right text-gray-600">' + money(it.unit_price) + '</td><td class="px-4 py-2.5 text-right font-medium text-gray-800">' + money(it.amount) + '</td></tr>';
+          }
+          body += '</tbody></table></div>';
+        }
+
+        // Totals
+        body += '<div class="bg-gray-50 rounded-xl p-4">';
+        body += '<div class="flex justify-between text-sm text-gray-600 mb-1"><span>Subtotal</span><span>' + money(p.subtotal) + '</span></div>';
+        if (p.tax_amount) body += '<div class="flex justify-between text-sm text-gray-600 mb-1"><span>Tax (' + (p.tax_rate || 5) + '%)</span><span>' + money(p.tax_amount) + '</span></div>';
+        body += '<div class="flex justify-between text-lg font-bold text-gray-800 border-t border-gray-200 pt-2 mt-2"><span>Total</span><span>' + money(p.total_amount) + ' CAD</span></div>';
+        body += '</div>';
+
+        // Dates row
+        body += '<div class="grid grid-cols-3 gap-3">';
+        body += '<div class="bg-blue-50 rounded-xl p-3 text-center"><p class="text-xs text-blue-500 mb-1">Created</p><p class="text-sm font-semibold text-blue-700">' + fmtDate(p.created_at) + '</p></div>';
+        body += '<div class="bg-amber-50 rounded-xl p-3 text-center"><p class="text-xs text-amber-500 mb-1">Valid Until</p><p class="text-sm font-semibold text-amber-700">' + (p.valid_until ? fmtDate(p.valid_until) : '—') + '</p></div>';
+        body += '<div class="bg-green-50 rounded-xl p-3 text-center"><p class="text-xs text-green-500 mb-1">Sent</p><p class="text-sm font-semibold text-green-700">' + (p.sent_at ? fmtDate(p.sent_at) : '—') + '</p></div>';
+        body += '</div>';
+
+        // Warranty, Payment Terms, Notes
+        if (p.warranty_terms) body += '<div class="bg-purple-50 rounded-xl p-3"><h4 class="text-xs font-semibold text-purple-600 uppercase mb-1"><i class="fas fa-shield-alt mr-1"></i>Warranty</h4><p class="text-sm text-purple-800">' + p.warranty_terms + '</p></div>';
+        if (p.payment_terms) body += '<div class="bg-emerald-50 rounded-xl p-3"><h4 class="text-xs font-semibold text-emerald-600 uppercase mb-1"><i class="fas fa-credit-card mr-1"></i>Payment Terms</h4><p class="text-sm text-emerald-800">' + p.payment_terms + '</p></div>';
+        if (p.notes) body += '<div class="bg-gray-100 rounded-xl p-3"><h4 class="text-xs font-semibold text-gray-500 uppercase mb-1"><i class="fas fa-sticky-note mr-1"></i>Notes</h4><p class="text-sm text-gray-700">' + p.notes + '</p></div>';
+
+        // Share link (if exists)
+        if (p.share_token) {
+          var publicLink = window.location.origin + '/proposal/view/' + p.share_token;
+          body += '<div class="bg-brand-50 rounded-xl p-3"><h4 class="text-xs font-semibold text-brand-600 uppercase mb-2"><i class="fas fa-link mr-1"></i>Shareable Link</h4>';
+          body += '<div class="flex items-center gap-2"><input type="text" id="propViewLink" value="' + publicLink + '" class="flex-1 bg-white border border-brand-200 rounded-lg px-3 py-1.5 text-xs font-mono text-gray-700" readonly>';
+          body += '<button onclick="navigator.clipboard.writeText(document.getElementById(\'propViewLink\').value);toast(\'Link copied!\')" class="px-3 py-1.5 bg-brand-600 text-white rounded-lg text-xs font-semibold hover:bg-brand-700"><i class="fas fa-copy"></i></button></div></div>';
+        }
+
+        // Action buttons
+        body += '<div class="flex gap-2 pt-2 flex-wrap">';
+        if (p.status === 'draft') {
+          body += '<button onclick="closeModal();window._crmEditProposal(' + id + ')" class="flex-1 py-2.5 bg-gray-100 text-gray-700 rounded-xl text-sm font-semibold hover:bg-gray-200"><i class="fas fa-edit mr-1"></i>Edit</button>';
+          body += '<button onclick="closeModal();window._crmSendProposal(' + id + ')" class="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700"><i class="fas fa-paper-plane mr-1"></i>Send</button>';
+        }
+        if (p.status === 'sent' || p.status === 'viewed') {
+          body += '<button onclick="closeModal();window._crmSendProposal(' + id + ')" class="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700"><i class="fas fa-redo mr-1"></i>Resend</button>';
+        }
+        if (p.status !== 'accepted' && p.status !== 'declined') body += '<button onclick="closeModal();window._crmMarkProposal(' + id + ',\'accepted\')" class="flex-1 py-2.5 bg-green-600 text-white rounded-xl text-sm font-semibold hover:bg-green-700"><i class="fas fa-check mr-1"></i>Mark Won</button>';
+        body += '</div>';
+        body += '</div>';
+
+        showModal('Proposal Details', body);
+      })
+      .catch(function(e) { toast('Failed to load proposal: ' + (e.message || 'Network error'), 'error'); });
   };
 
   window._crmDeleteProposal = function(id) {
