@@ -10,7 +10,8 @@ const SA = {
   data: {},
   salesPeriod: 'monthly',
   signupsPeriod: 'monthly',
-  ordersFilter: ''
+  ordersFilter: '',
+  analyticsPeriod: '7d'
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -76,6 +77,10 @@ async function loadView(view) {
       case 'email-setup':
         const gmailStatusRes = await saFetch('/api/auth/gmail/status');
         if (gmailStatusRes) SA.data.emailSetup = await gmailStatusRes.json();
+        break;
+      case 'analytics':
+        const analyticsRes = await saFetch(`/api/analytics/dashboard?period=${SA.analyticsPeriod}`);
+        if (analyticsRes) SA.data.analytics = await analyticsRes.json();
         break;
     }
   } catch (e) {
@@ -166,6 +171,7 @@ function renderContent() {
     case 'marketing': root.innerHTML = renderMarketingView(); break;
     case 'email-outreach': break; // Handled by email-outreach.js
     case 'email-setup': root.innerHTML = renderEmailSetupView(); break;
+    case 'analytics': root.innerHTML = renderAnalyticsView(); break;
     default: root.innerHTML = renderUsersView();
   }
 }
@@ -874,3 +880,215 @@ async function testEmailDelivery() {
   }
   btn.disabled = false; btn.innerHTML = '<i class="fas fa-paper-plane mr-1"></i> Send Test';
 }
+
+// ============================================================
+// VIEW: SITE ANALYTICS — Every click tracked
+// ============================================================
+window.saChangeAnalyticsPeriod = function(p) {
+  SA.analyticsPeriod = p;
+  loadView('analytics');
+};
+
+function renderAnalyticsView() {
+  const d = SA.data.analytics || {};
+  const o = d.overview || {};
+  const pages = d.top_pages || [];
+  const countries = d.top_countries || [];
+  const referrers = d.top_referrers || [];
+  const visitors = d.recent_visitors || [];
+  const hourly = d.hourly_traffic || [];
+  const devices = d.device_breakdown || [];
+
+  // Country flag emoji helper
+  function countryFlag(code) {
+    if (!code || code.length !== 2) return '🌍';
+    const offset = 127397;
+    return String.fromCodePoint(...[...code.toUpperCase()].map(c => c.charCodeAt(0) + offset));
+  }
+
+  // Event type badge
+  function eventBadge(type) {
+    const m = {
+      pageview: 'bg-blue-100 text-blue-700',
+      click: 'bg-amber-100 text-amber-700',
+      page_exit: 'bg-gray-100 text-gray-500',
+      scroll: 'bg-indigo-100 text-indigo-700',
+      session_start: 'bg-green-100 text-green-700'
+    };
+    return '<span class="px-1.5 py-0.5 rounded-full text-[10px] font-medium ' + (m[type] || 'bg-gray-100 text-gray-600') + '">' + type + '</span>';
+  }
+
+  // Device icon
+  function deviceIcon(type) {
+    if (type === 'mobile') return '<i class="fas fa-mobile-alt text-blue-500"></i>';
+    if (type === 'tablet') return '<i class="fas fa-tablet-alt text-indigo-500"></i>';
+    if (type === 'bot') return '<i class="fas fa-robot text-gray-400"></i>';
+    return '<i class="fas fa-desktop text-gray-700"></i>';
+  }
+
+  // Sparkline-style hourly bar chart
+  const maxHourly = Math.max(...hourly.map(h => h.pageviews || 0), 1);
+  const hourlyBars = hourly.slice(-24).map(h => {
+    const pct = Math.round(((h.pageviews || 0) / maxHourly) * 100);
+    const hour = (h.hour || '').split(' ')[1] || '';
+    return '<div class="flex flex-col items-center gap-1" title="' + h.hour + ': ' + h.pageviews + ' views, ' + h.visitors + ' visitors">' +
+      '<div class="w-3 bg-red-200 rounded-t relative" style="height:40px">' +
+        '<div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-red-600 to-red-400 rounded-t" style="height:' + pct + '%"></div>' +
+      '</div>' +
+      '<span class="text-[8px] text-gray-400">' + hour.replace(':00','') + '</span>' +
+    '</div>';
+  }).join('');
+
+  // Device totals
+  const totalDeviceHits = devices.reduce((s, d) => s + (d.count || 0), 0) || 1;
+
+  const periodLabels = { '24h': 'Last 24 Hours', '7d': 'Last 7 Days', '30d': 'Last 30 Days', '90d': 'Last 90 Days' };
+
+  return `
+    <div class="mb-6 flex items-center justify-between">
+      <div>
+        <h2 class="text-2xl font-black text-gray-900"><i class="fas fa-chart-line mr-2 text-red-500"></i>Site Analytics</h2>
+        <p class="text-sm text-gray-500 mt-1">Every click, pageview, and visitor tracked in real time</p>
+      </div>
+      <div class="flex items-center gap-3">
+        <span class="text-xs text-gray-400">${periodLabels[d.period] || d.period}</span>
+        <select onchange="saChangeAnalyticsPeriod(this.value)" class="text-xs border border-gray-200 rounded-lg px-3 py-1.5 bg-white focus:ring-2 focus:ring-red-500 focus:border-red-500">
+          <option value="24h" ${SA.analyticsPeriod === '24h' ? 'selected' : ''}>Last 24 Hours</option>
+          <option value="7d" ${SA.analyticsPeriod === '7d' ? 'selected' : ''}>Last 7 Days</option>
+          <option value="30d" ${SA.analyticsPeriod === '30d' ? 'selected' : ''}>Last 30 Days</option>
+          <option value="90d" ${SA.analyticsPeriod === '90d' ? 'selected' : ''}>Last 90 Days</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- KPI Cards -->
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      ${samc('Total Pageviews', (o.pageviews || 0).toLocaleString(), 'fa-eye', 'blue', (o.total_events || 0).toLocaleString() + ' total events')}
+      ${samc('Unique Visitors', (o.unique_visitors || 0).toLocaleString(), 'fa-users', 'green', (o.sessions || 0).toLocaleString() + ' sessions')}
+      ${samc('Total Clicks', (o.clicks || 0).toLocaleString(), 'fa-mouse-pointer', 'amber', (o.unique_ips || 0).toLocaleString() + ' unique IPs')}
+      ${samc('Avg Time on Page', (o.avg_time_on_page || 0) + 's', 'fa-clock', 'purple', 'Avg scroll: ' + (o.avg_scroll_depth || 0) + '%')}
+    </div>
+
+    <!-- Hourly Traffic -->
+    ${saSection('Traffic (Last 24 Hours)', 'fa-chart-bar', hourly.length === 0 
+      ? '<p class="text-gray-400 text-sm text-center py-4">No traffic data yet. Events will appear here once visitors interact with your site.</p>'
+      : '<div class="flex items-end gap-0.5 justify-between h-16">' + hourlyBars + '</div>'
+    )}
+
+    <div class="grid lg:grid-cols-2 gap-6 mb-6">
+      <!-- Top Pages -->
+      ${saSection('Top Pages', 'fa-file-alt', pages.length === 0 
+        ? '<p class="text-gray-400 text-sm">No page data yet</p>' 
+        : '<div class="space-y-1.5 max-h-80 overflow-y-auto">' + pages.map(function(p) {
+            const maxViews = pages[0]?.views || 1;
+            const pct = Math.round((p.views / maxViews) * 100);
+            return '<div class="flex items-center gap-3 py-1.5 px-2 rounded-lg hover:bg-gray-50">' +
+              '<div class="flex-1 min-w-0">' +
+                '<div class="flex items-center gap-2">' +
+                  '<span class="text-xs font-mono text-gray-700 truncate max-w-[200px]" title="' + p.page_url + '">' + p.page_url + '</span>' +
+                '</div>' +
+                '<div class="w-full bg-gray-100 rounded-full h-1.5 mt-1"><div class="bg-red-500 h-1.5 rounded-full" style="width:' + pct + '%"></div></div>' +
+              '</div>' +
+              '<div class="text-right flex-shrink-0">' +
+                '<span class="text-sm font-bold text-gray-800">' + p.views + '</span>' +
+                '<span class="text-[10px] text-gray-400 block">' + (p.unique_visitors || 0) + ' uniq</span>' +
+              '</div>' +
+            '</div>';
+          }).join('') + '</div>'
+      )}
+
+      <!-- Top Countries -->
+      ${saSection('Visitors by Country', 'fa-globe', countries.length === 0 
+        ? '<p class="text-gray-400 text-sm">No country data yet</p>' 
+        : '<div class="space-y-1.5 max-h-80 overflow-y-auto">' + countries.map(function(c) {
+            return '<div class="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-gray-50">' +
+              '<div class="flex items-center gap-2">' +
+                '<span class="text-lg">' + countryFlag(c.country) + '</span>' +
+                '<span class="text-sm font-medium text-gray-700">' + (c.country || 'Unknown') + '</span>' +
+              '</div>' +
+              '<div class="text-right">' +
+                '<span class="text-sm font-bold text-gray-800">' + c.hits + '</span>' +
+                '<span class="text-[10px] text-gray-400 block">' + (c.visitors || 0) + ' visitors</span>' +
+              '</div>' +
+            '</div>';
+          }).join('') + '</div>'
+      )}
+    </div>
+
+    <div class="grid lg:grid-cols-2 gap-6 mb-6">
+      <!-- Top Referrers -->
+      ${saSection('Top Referrers', 'fa-external-link-alt', referrers.length === 0 
+        ? '<p class="text-gray-400 text-sm">No referrer data yet — visitors are arriving directly</p>'
+        : '<div class="space-y-1.5 max-h-60 overflow-y-auto">' + referrers.map(function(r) {
+            let domain = r.referrer;
+            try { domain = new URL(r.referrer).hostname; } catch(e) {}
+            return '<div class="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-gray-50">' +
+              '<span class="text-xs text-gray-600 truncate max-w-[250px]" title="' + r.referrer + '">' +
+                '<i class="fas fa-link mr-1 text-gray-400"></i>' + domain +
+              '</span>' +
+              '<div class="text-right flex-shrink-0">' +
+                '<span class="text-sm font-bold text-gray-800">' + r.hits + '</span>' +
+                '<span class="text-[10px] text-gray-400 block">' + (r.visitors || 0) + ' visitors</span>' +
+              '</div>' +
+            '</div>';
+          }).join('') + '</div>'
+      )}
+
+      <!-- Device Breakdown -->
+      ${saSection('Devices & Browsers', 'fa-laptop', devices.length === 0 
+        ? '<p class="text-gray-400 text-sm">No device data yet</p>'
+        : '<div class="space-y-3">' + devices.map(function(d) {
+            const pct = Math.round((d.count / totalDeviceHits) * 100);
+            return '<div class="flex items-center gap-3">' +
+              '<div class="w-8 text-center">' + deviceIcon(d.device_type) + '</div>' +
+              '<div class="flex-1">' +
+                '<div class="flex justify-between mb-0.5">' +
+                  '<span class="text-sm font-medium text-gray-700 capitalize">' + (d.device_type || 'unknown') + '</span>' +
+                  '<span class="text-xs text-gray-500">' + d.count + ' (' + pct + '%)</span>' +
+                '</div>' +
+                '<div class="w-full bg-gray-100 rounded-full h-2"><div class="bg-gradient-to-r from-red-500 to-rose-400 h-2 rounded-full" style="width:' + pct + '%"></div></div>' +
+              '</div>' +
+            '</div>';
+          }).join('') + '</div>'
+      )}
+    </div>
+
+    <!-- Live Event Feed -->
+    ${saSection('Live Event Feed (Last 50)', 'fa-stream', visitors.length === 0
+      ? '<p class="text-gray-400 text-sm text-center py-4">No events recorded yet. The tracker will capture every click and pageview automatically.</p>'
+      : '<div class="overflow-x-auto"><table class="w-full text-sm"><thead class="bg-gray-50"><tr>' +
+          '<th class="px-3 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase">Time</th>' +
+          '<th class="px-3 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase">Event</th>' +
+          '<th class="px-3 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase">Page</th>' +
+          '<th class="px-3 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase">Detail</th>' +
+          '<th class="px-3 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase">Location</th>' +
+          '<th class="px-3 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase">Device</th>' +
+          '<th class="px-3 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase">IP</th>' +
+        '</tr></thead><tbody class="divide-y divide-gray-50">' +
+        visitors.map(function(v) {
+          const detail = v.event_type === 'click' 
+            ? '<span class="text-[10px] text-amber-700" title="' + (v.click_element||'') + '">' + (v.click_text || v.click_element || '-').substring(0,40) + '</span>'
+            : v.event_type === 'page_exit' 
+              ? '<span class="text-[10px] text-gray-500">' + (v.time_on_page || 0) + 's / ' + (v.scroll_depth || 0) + '% scroll</span>'
+              : '<span class="text-[10px] text-gray-400">' + (v.referrer ? 'from ' + v.referrer.substring(0,30) : '-') + '</span>';
+          return '<tr class="hover:bg-red-50/30 transition-colors">' +
+            '<td class="px-3 py-1.5 text-[10px] text-gray-500 whitespace-nowrap">' + fmtDateTime(v.created_at) + '</td>' +
+            '<td class="px-3 py-1.5">' + eventBadge(v.event_type) + '</td>' +
+            '<td class="px-3 py-1.5 text-xs font-mono text-gray-700 max-w-[150px] truncate" title="' + v.page_url + '">' + (v.page_url || '/') + '</td>' +
+            '<td class="px-3 py-1.5">' + detail + '</td>' +
+            '<td class="px-3 py-1.5 text-[10px] text-gray-600">' + 
+              (v.country ? countryFlag(v.country) + ' ' : '') + (v.city || '') + (v.region ? ', ' + v.region : '') +
+            '</td>' +
+            '<td class="px-3 py-1.5 text-[10px] text-gray-500">' + deviceIcon(v.device_type) + ' ' + (v.browser || '') + ' / ' + (v.os || '') + '</td>' +
+            '<td class="px-3 py-1.5 text-[10px] font-mono text-gray-400">' + (v.ip_address || '-') + '</td>' +
+          '</tr>';
+        }).join('') +
+        '</tbody></table></div>',
+      '<button onclick="saRefreshAnalytics()" class="text-xs text-red-600 hover:text-red-800 font-medium"><i class="fas fa-sync-alt mr-1"></i>Refresh</button>'
+    )}
+  `;
+}
+
+window.saRefreshAnalytics = function() {
+  loadView('analytics');
+};

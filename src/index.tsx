@@ -18,12 +18,39 @@ import { d2dRoutes } from './routes/d2d'
 import { secretaryRoutes } from './routes/secretary'
 import { roverRoutes } from './routes/rover'
 import { emailOutreachRoutes } from './routes/email-outreach'
+import { analyticsRoutes } from './routes/analytics'
 import type { Bindings } from './types'
 
 const app = new Hono<{ Bindings: Bindings }>()
 
 // CORS for API routes
 app.use('/api/*', cors())
+
+// Analytics tracker injection middleware — auto-injects tracker.js into HTML pages
+// Skips API routes, static files, and the tracker itself
+app.use('*', async (c, next) => {
+  await next()
+  
+  // Only inject into HTML responses for non-API, non-static paths
+  const contentType = c.res.headers.get('content-type') || ''
+  if (!contentType.includes('text/html')) return
+  
+  const url = new URL(c.req.url)
+  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/static/')) return
+  
+  try {
+    const body = await c.res.text()
+    if (body.includes('</body>') && !body.includes('tracker.js')) {
+      const injected = body.replace('</body>', '<script src="/static/tracker.js" defer></script>\n</body>')
+      c.res = new Response(injected, {
+        status: c.res.status,
+        headers: c.res.headers
+      })
+    }
+  } catch(e) {
+    // If body read fails, pass through original response
+  }
+})
 
 // Mount API routes
 app.route('/api/orders', ordersRoutes)
@@ -43,6 +70,7 @@ app.route('/api/d2d', d2dRoutes)
 app.route('/api/secretary', secretaryRoutes)
 app.route('/api/rover', roverRoutes)
 app.route('/api/email-outreach', emailOutreachRoutes)
+app.route('/api/analytics', analyticsRoutes)
 
 // Health check
 app.get('/api/health', (c) => {
@@ -913,6 +941,10 @@ function getSuperAdminDashboardHTML() {
         <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('email-setup')">
           <i class="fas fa-cog w-5 text-center"></i>
           <span class="label text-sm font-medium">Email Setup</span>
+        </div>
+        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('analytics')">
+          <i class="fas fa-chart-line w-5 text-center"></i>
+          <span class="label text-sm font-medium">Site Analytics</span>
         </div>
         <div class="border-t border-gray-800 my-3"></div>
         <a href="/admin" class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400 no-underline">
