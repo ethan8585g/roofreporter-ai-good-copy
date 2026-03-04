@@ -76,12 +76,14 @@ function generateEnhancedImagery(lat: number, lng: number, apiKey: string, footp
     mask_url: '',
     flux_url: null as string | null,
     
-    // ── DIRECTIONAL AERIAL: Satellite images offset from center in each direction ──
-    // Uses dirZoom (mediumZoom = one notch out) so full roof stays visible with directional shift
-    north_url: `${base}?center=${lat + offsetLat},${lng}&zoom=${dirZoom}&size=640x400&scale=2&maptype=satellite&key=${apiKey}`,
-    south_url: `${base}?center=${lat - offsetLat},${lng}&zoom=${dirZoom}&size=640x400&scale=2&maptype=satellite&key=${apiKey}`,
-    east_url: `${base}?center=${lat},${lng + offsetLng}&zoom=${dirZoom}&size=640x400&scale=2&maptype=satellite&key=${apiKey}`,
-    west_url: `${base}?center=${lat},${lng - offsetLng}&zoom=${dirZoom}&size=640x400&scale=2&maptype=satellite&key=${apiKey}`,
+    // ── DIRECTIONAL VIEWS: Street View images looking at the house from each compass direction ──
+    // heading=0 means camera faces North (so we see the SOUTH side of the house)
+    // To show the NORTH side, camera must face South (heading=180), etc.
+    // pitch=15 tilts camera slightly up to capture roof lines
+    north_url: `https://maps.googleapis.com/maps/api/streetview?location=${lat},${lng}&size=640x400&heading=180&pitch=15&fov=90&key=${apiKey}`,
+    south_url: `https://maps.googleapis.com/maps/api/streetview?location=${lat},${lng}&size=640x400&heading=0&pitch=15&fov=90&key=${apiKey}`,
+    east_url:  `https://maps.googleapis.com/maps/api/streetview?location=${lat},${lng}&size=640x400&heading=270&pitch=15&fov=90&key=${apiKey}`,
+    west_url:  `https://maps.googleapis.com/maps/api/streetview?location=${lat},${lng}&size=640x400&heading=90&pitch=15&fov=90&key=${apiKey}`,
     
     // ── CLOSE-UP QUADRANTS: Slight zoom-in at 4 corners — shows roof detail without losing context ──
     closeup_nw_url: `${base}?center=${lat + quadLat},${lng - quadLng}&zoom=${closeupZoom}&size=400x400&scale=2&maptype=satellite&key=${apiKey}`,
@@ -1226,7 +1228,7 @@ function buildEmailWrapper(reportHtml: string, address: string, reportNum: strin
     <ul style="font-size:13px;color:#374151;line-height:1.8;margin:0 0 24px;padding-left:20px">
       <li><strong>Page 1:</strong> Cover &mdash; Key Measurements &amp; Property Summary</li>
       <li><strong>Page 2:</strong> Top View &mdash; Aerial Satellite Image with Overlay</li>
-      <li><strong>Page 3:</strong> Side Views &mdash; Directional Aerial (N/S/E/W)</li>
+      <li><strong>Page 3:</strong> Rotated Side Views &mdash; N / S / E / W Street-Level Perspectives</li>
       <li><strong>Page 4:</strong> Close-Up Detail &mdash; Quadrant Views &amp; Property Context</li>
       <li><strong>Page 5:</strong> Length Diagram &mdash; Segment Lengths &amp; Edge Types</li>
       <li><strong>Page 6:</strong> Pitch Diagram &mdash; Roof Pitch by Facet</li>
@@ -1822,7 +1824,7 @@ function generateEdgesFromSegments(
     pitch_factor: 1.0
   })
 
-  // If 4+ segments, add a secondary ridge for the wing
+  // Secondary ridge for the wing
   if (segments.length >= 4) {
     const wingRidgePlanFt = buildingWidthFt * 0.5
     edges.push({
@@ -1831,6 +1833,19 @@ function generateEdgesFromSegments(
       plan_length_ft: Math.round(wingRidgePlanFt),
       true_length_ft: Math.round(wingRidgePlanFt),
       adjacent_segments: [2, 3],
+      pitch_factor: 1.0
+    })
+  }
+
+  // Cross ridge connecting main and wing ridges
+  if (segments.length >= 4) {
+    const crossRidgePlanFt = buildingWidthFt * 0.35
+    edges.push({
+      edge_type: 'ridge',
+      label: 'Cross Ridge Line',
+      plan_length_ft: Math.round(crossRidgePlanFt),
+      true_length_ft: Math.round(crossRidgePlanFt),
+      adjacent_segments: [1, 2],
       pitch_factor: 1.0
     })
   }
@@ -2175,7 +2190,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
     <div style="border:1px solid #d5dae3;border-radius:5px;overflow:hidden">
       ${[
         ['Images &mdash; Top View', '2'],
-        ['Images &mdash; Side Views (Directional Aerial)', '3'],
+        ['Images &mdash; Rotated Side Views (N/S/E/W)', '3'],
         ['Close-Up Detail &amp; Property Context', '4'],
         ['Length Diagram', '5'],
         ['Pitch Diagram', '6'],
@@ -2247,33 +2262,33 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
   ${ftr(2)}
 </div>
 
-<!-- ==================== PAGE 3: SIDE VIEWS ==================== -->
+<!-- ==================== PAGE 3: ROTATED SIDE VIEWS ==================== -->
 <div class="page">
-  ${hdr('IMAGES', 'Side Views &mdash; Directional Aerial')}
+  ${hdr('IMAGES', 'Rotated Side Views &mdash; N / S / E / W')}
   <div style="padding:16px 32px 50px">
-    <div style="font-size:10px;color:#4a5568;font-style:italic;margin-bottom:10px">The following images show different sides and angles of the structure from satellite imagery.</div>
+    <div style="font-size:10px;color:#4a5568;font-style:italic;margin-bottom:10px">The same house viewed from four compass directions &mdash; North, South, East, and West &mdash; providing a rotated perspective of each side of the structure.</div>
 
     <!-- N / S row -->
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
       <div class="ic">
-        ${img(northUrl, 'North Side', '200px')}
-        <div class="ic-label">North Side</div>
+        ${img(northUrl, 'North Side View', '200px')}
+        <div class="ic-label"><i class="fas fa-compass" style="margin-right:4px"></i>North Side &mdash; Facing South</div>
       </div>
       <div class="ic">
-        ${img(southUrl, 'South Side', '200px')}
-        <div class="ic-label">South Side</div>
+        ${img(southUrl, 'South Side View', '200px')}
+        <div class="ic-label"><i class="fas fa-compass" style="margin-right:4px"></i>South Side &mdash; Facing North</div>
       </div>
     </div>
 
     <!-- E / W row -->
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
       <div class="ic">
-        ${img(eastUrl, 'East Side', '200px')}
-        <div class="ic-label">East Side</div>
+        ${img(eastUrl, 'East Side View', '200px')}
+        <div class="ic-label"><i class="fas fa-compass" style="margin-right:4px"></i>East Side &mdash; Facing West</div>
       </div>
       <div class="ic">
-        ${img(westUrl, 'West Side', '200px')}
-        <div class="ic-label">West Side</div>
+        ${img(westUrl, 'West Side View', '200px')}
+        <div class="ic-label"><i class="fas fa-compass" style="margin-right:4px"></i>West Side &mdash; Facing East</div>
       </div>
     </div>
   </div>
