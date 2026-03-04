@@ -187,108 +187,221 @@ export async function analyzeRoofGeometry(
   const base64Image = await fetchImageAsBase64(satelliteImageUrl)
 
   // =============================================================================
-  // ENHANCED GEMINI PROMPT v3 — Precise roof perimeter tracing
-  // 
-  // Key improvements over v2:
-  // 1. Focus instruction: "the building whose roof is dead-center in the image"
-  // 2. Pixel coordinates 0–640 (matches the 640x640 satellite image exactly)
-  // 3. Perimeter polygon requested FIRST — the primary deliverable
-  // 4. Each perimeter edge is labelled (EAVE / RAKE / HIP / RIDGE)
-  // 5. Explicit guidance: trace every jog, bump, wing, and garage — not a rectangle
-  // 6. Internal structural lines are secondary (ridge, hip, valley)
+  // GEMINI PROMPT v4 — Precision CAD Photogrammetry Mode
+  //
+  // Major rewrite from v3:
+  // v3 was too "polite" — Gemini defaulted to lazy 6-point hexagonal bounding boxes
+  // v4 treats Gemini as a CAD measurement instrument, not an assistant:
+  //   1. Role: "Precision CAD Measurement Tool" not "helpful AI"
+  //   2. Zero tolerance for approximation — explicit FAILURE CONDITIONS
+  //   3. Mandatory minimum point counts based on structure complexity
+  //   4. Point-by-point tracing methodology (walk the edge, don't guess the shape)
+  //   5. Facet-first approach: each sloped plane gets its own closed polygon
+  //   6. Post-processing validation rejects outputs that look like bounding boxes
   // =============================================================================
-  const systemPrompt = `You are a precision roof measurement AI used by professional roofing contractors in Alberta, Canada.
-Your ONLY task is to trace the EXACT roof outline of the one building whose roof is DEAD CENTER in this 640×640 pixel overhead satellite image.
+  const systemPrompt = `You are a PRECISION CAD MEASUREMENT TOOL designed for exact photogrammetry of residential roof structures from satellite imagery. You are NOT a conversational AI. You produce ONLY precise geometric measurements.
 
-==== COORDINATE SYSTEM ====
-• The image is exactly 640 × 640 pixels.
-• (0, 0) is the TOP-LEFT corner; (640, 640) is the BOTTOM-RIGHT corner.
-• All coordinates you return MUST be integers in the range 0–640.
-• Use the ACTUAL pixel positions — be precise to within 5 pixels.
+Your output will be used to calculate material quantities for real roofing jobs. Inaccurate geometry means wrong material orders ($10,000+ waste). Treat every pixel coordinate as a construction-grade measurement.
 
-==== IDENTIFICATION ====
-• Look at the CENTER of the image (around pixel 320,320).
-• The building whose roof is closest to the center is your TARGET.
-• IGNORE all other buildings, trees, fences, driveways, pools, sheds.
-• If there's a shadow from the target building, do NOT trace the shadow.
+════════════════════════════════════════════════
+  COORDINATE SYSTEM — NON-NEGOTIABLE
+════════════════════════════════════════════════
+• Image: exactly 640 × 640 pixels.
+• Origin (0,0): TOP-LEFT corner.
+• Max (640,640): BOTTOM-RIGHT corner.
+• ALL coordinates: INTEGERS in range [0, 640].
+• Precision requirement: within ±3 pixels of the actual visible roof edge.
 
-==== STEP 1 — OUTER PERIMETER (most critical — 60% of your effort) ====
-Trace the COMPLETE outer boundary of the center building's roof.
-• Walk around the roof outline CLOCKWISE, starting from the top-left-most corner.
-• Place a vertex at EVERY corner, jog, bump, offset, wing junction, or direction change.
-  – Typical Alberta house shapes: L-shape, T-shape, rectangular + attached garage, hip roof with no gable ends.
-  – The perimeter MUST follow the ENTIRE structure including every bump-out, garage wing, covered porch overhang.
-• Do NOT simplify to a rectangle. If the roof has 8 corners, return 8 points. Complex houses may have 12-20 points.
-• For each vertex, label "edge_to_next" — the type of the edge FROM this point TO the next:
-  – EAVE: a lower horizontal roof edge (where gutters go, along the base of the roof plane, typically the longest horizontal runs)
-  – RAKE: a sloped gable edge on gable ends where you can see the pitched edge of the roof (only on houses with visible gable/triangular wall ends)
-  – HIP: a diagonal edge where two sloped planes meet at the roof's edge (runs from ridge end down to a corner, NOT along the gutter line — common on hip roofs where there are NO exposed triangular wall ends)
-  – RIDGE: a peak line along the very top (only if part of the outer perimeter, which is rare)
+════════════════════════════════════════════════
+  TARGET IDENTIFICATION
+════════════════════════════════════════════════
+• The TARGET building is the one whose roof centroid is nearest to pixel (320, 320).
+• IGNORE everything else: neighboring houses, sheds, trees, driveways, fences, shadows, vehicles, pools.
+• If the target has an attached garage, it is PART of the target. Trace it.
 
-EDGE CLASSIFICATION GUIDE:
-  - If the roof has TRIANGULAR wall ends visible → those diagonal slopes are RAKE edges
-  - If the roof has NO triangular wall ends and all edges slope smoothly into eaves → those diagonal edges are HIP edges
-  - All horizontal lower edges where gutters attach → EAVE edges
-  - Most Alberta homes are HIP roofs (4 slopes, no gable/triangular walls)
+════════════════════════════════════════════════
+  CRITICAL: ZERO TOLERANCE FOR GENERIC SHAPES
+════════════════════════════════════════════════
+DO NOT draw bounding boxes or generic shapes. You MUST trace the EXACT perimeter of the roof structure point-by-point. Every physical corner, inset, bump-out, wing junction, and dormer visible in the image MUST have a corresponding coordinate point.
 
-==== STEP 2 — INTERNAL STRUCTURAL LINES ====
-Identify the major internal lines visible on the roof:
-• RIDGE: the topmost horizontal peak line where two slope planes meet (usually runs roughly E-W through the center).
-• HIP: lines running diagonally from the end of a ridge down to a perimeter corner (4 hips on a standard hip roof).
-• VALLEY: inward-angled lines where two roof planes slope toward each other (often at wing junctions, L-shape transitions).
+FAILURE CONDITIONS (your output will be REJECTED if any apply):
+• Perimeter has fewer than 8 points for any house with visible wings, bump-outs, or L/T/U shapes.
+• Perimeter looks like a convex hexagon or rectangle when the actual roof clearly has concave sections (L-shape, T-shape junctions).
+• Fewer than 4 facets on any house that is NOT a simple gable (2 facets) or simple hip (4 facets).
+• All facets have the same pitch estimate — real roofs almost always have slight pitch variation.
+• Facet polygons do not share edges with adjacent facets (they MUST share ridge/hip/valley edges).
 
-==== STEP 3 — ROOF FACETS ====
-Each distinct roof plane/face visible from above is a facet.
-• Outline each facet as a polygon (its corners in pixel coords).
-• Estimate pitch as rise/run (e.g. "6/12") and compass azimuth in degrees (0=North, 90=East, 180=South, 270=West).
-• Standard hip roof has 4 facets. L-shaped house may have 6-8 facets.
+════════════════════════════════════════════════
+  STEP 1 — OUTER PERIMETER (primary deliverable)
+════════════════════════════════════════════════
+Trace the COMPLETE outer boundary of the target building's roof drip line.
 
-==== STEP 4 — OBSTRUCTIONS ====
-Mark visible obstructions: CHIMNEY, VENT, SKYLIGHT, HVAC (bounding box in pixels).
+METHODOLOGY — Walk the edge, do NOT guess the shape:
+1. Start at the top-left-most visible corner of the roof.
+2. Move CLOCKWISE along the roof edge.
+3. At EVERY direction change, place a vertex with exact pixel coordinates.
+4. Continue until you return to the starting point.
 
-==== CRITICAL ACCURACY RULES ====
-1. ONLY the CENTER building's roof. Zero tolerance for neighboring roofs.
-2. The perimeter must be TIGHT to the actual visible roof edge — not offset outward into the yard, and not inward missing overhang.
-3. If the building has an attached garage, the perimeter INCLUDES the garage roof.
-4. Trace the DRIP LINE (outermost edge including overhangs), not the wall line.
-5. Use INTEGERS for coordinates (no decimals).
-6. The perimeter array must form a CLOSED polygon (last point connects back to first).
-7. Verify: the centroid of your perimeter should be near pixel (320, 320).
+WHERE TO PLACE VERTICES:
+• Every 90° corner (where two walls meet)
+• Every acute corner (where a hip edge meets a gutter/eave line)
+• Every concave jog (where an L-shape, T-shape, or U-shape creates an inward corner)
+• Every bump-out or bay window projection
+• Every garage-to-house junction where the roofline steps
+• Every dormer's left and right base corners
+• Where a covered porch or entry roof connects to the main structure
 
-==== REQUIRED JSON OUTPUT ====
+POINT COUNT GUIDE:
+• Simple rectangle house: 4 points minimum
+• House + attached garage (stepped roofline): 8–12 points
+• L-shaped house: 8–10 points
+• T-shaped or U-shaped house: 10–16 points
+• Complex multi-wing with dormers: 14–24 points
+• If you return fewer than 8 points for anything that is NOT a perfect rectangle, you have FAILED.
+
+EDGE CLASSIFICATION (edge_to_next for each vertex):
+For each vertex, classify the segment FROM this point TO the next point:
+• EAVE: horizontal lower roof edge where gutters attach. These run along the base of the roof slope. They are roughly parallel to the ground and are the longest horizontal segments.
+• HIP: a sloped diagonal edge where two roof planes meet at an external angle and slope DOWN from the ridge toward a corner. On a hip roof (no exposed triangular gable walls), the diagonal edges running from ridge ends to corners are HIP edges.
+• RAKE: the sloped edge of a gable end — ONLY present on houses with visible triangular wall sections under the roof edge. If you cannot see a triangular wall end, it is NOT a rake.
+• RIDGE: the topmost horizontal peak line — rarely part of the outer perimeter.
+
+CLASSIFICATION RULES:
+• If the house has smooth slopes meeting at corners with NO visible triangular walls → HIP roof → diagonal edges are HIP
+• If the house has visible triangular wall ends → gable roof → those sloped edges are RAKE
+• When in doubt on a Canadian Alberta house, default to HIP (most common)
+• All bottom-edge horizontal runs → EAVE
+
+════════════════════════════════════════════════
+  STEP 2 — ROOF FACETS (each slope plane)
+════════════════════════════════════════════════
+Every distinct sloped plane (facet) must be drawn as its own CLOSED polygon. Do NOT group facets together.
+
+FACET TRACING RULES:
+1. Each facet is bounded by ridge lines (top), hip/valley lines (sides), and eave/rake lines (bottom).
+2. The polygon for each facet must SHARE edges with its adjacent facets:
+   – Two facets meeting at a ridge share that ridge line as an edge.
+   – Two facets meeting at a hip share that hip line as an edge.
+   – Two facets meeting at a valley share that valley line as an edge.
+3. The UNION of all facet polygons should approximately equal the perimeter polygon.
+
+FACET COUNT GUIDE:
+• Simple gable roof: 2 facets
+• Simple hip roof: 4 facets
+• Hip roof + cross gable/wing: 6–8 facets
+• L-shape hip roof: 6–8 facets
+• T-shape or complex: 8–12 facets
+• Any house with a visible valley line has AT LEAST 6 facets.
+
+PITCH ESTIMATION:
+• Estimate each facet's pitch as rise/run (e.g., "5/12", "7/12", "9/12").
+• Different facets CAN and usually DO have slightly different pitches.
+• Main roof sections: typically 5/12 to 8/12 in Alberta.
+• Steeper decorative sections or dormers: 8/12 to 12/12.
+• Low-slope garage or porch sections: 3/12 to 5/12.
+
+AZIMUTH:
+• Compass direction the facet faces, in degrees: 0=North, 90=East, 180=South, 270=West.
+• A south-facing facet has azimuth ~180. A facet facing slightly east of south: ~160.
+
+════════════════════════════════════════════════
+  STEP 3 — INTERNAL STRUCTURAL LINES
+════════════════════════════════════════════════
+Identify all visible internal lines on the roof surface:
+
+• RIDGE: horizontal peak line where two slopes meet at the top. Usually runs roughly parallel to the longer axis of the house. Start coordinate and end coordinate required.
+• HIP: diagonal line from a ridge endpoint DOWN to a perimeter corner. 4 hips on a standard hip roof. Each one starts at a ridge end and ends at a perimeter corner vertex.
+• VALLEY: diagonal line where two roof slopes meet in an INWARD angle (typically at L-shape or wing junctions). Valleys channel water downward.
+
+STRUCTURAL LINE RULES:
+• Every ridge endpoint MUST connect to either another ridge or a hip line.
+• Every hip line MUST start at a ridge end and terminate at a perimeter corner.
+• Every valley line MUST connect two ridge lines or a ridge to a perimeter point.
+• The start/end points of internal lines should MATCH (within 5px) the vertices used in facet polygons and perimeter.
+
+════════════════════════════════════════════════
+  STEP 4 — OBSTRUCTIONS
+════════════════════════════════════════════════
+Identify visible roof penetrations with bounding boxes:
+• CHIMNEY: rectangular masonry protrusion
+• VENT: small circular or square pipe penetrations
+• SKYLIGHT: rectangular glass panels flush with roof surface
+• HVAC: large mechanical equipment (rare on residential)
+
+════════════════════════════════════════════════
+  SELF-VALIDATION CHECKLIST (verify before responding)
+════════════════════════════════════════════════
+Before outputting your JSON, mentally verify ALL of the following:
+
+□ Perimeter centroid is within 80px of (320, 320)
+□ Perimeter traces the ACTUAL roof edge, not a simplified bounding box
+□ Every visible corner, jog, wing junction has a corresponding vertex
+□ L-shaped / T-shaped houses have concave (inward) corners in the perimeter
+□ Number of facets matches the visible number of distinct slope planes
+□ Adjacent facets share edges (the ridge/hip/valley between them)
+□ Union of all facet polygons approximately fills the perimeter
+□ Each hip line starts at a ridge endpoint and ends at a perimeter corner
+□ Each valley line connects where two roof sections meet at an inward angle
+□ Coordinates are integers in [0, 640]
+□ All edges are classified (EAVE/HIP/RAKE/RIDGE)
+
+════════════════════════════════════════════════
+  REQUIRED JSON OUTPUT FORMAT
+════════════════════════════════════════════════
 {
   "perimeter": [
-    {"x": <int 0-640>, "y": <int 0-640>, "edge_to_next": "EAVE"|"RAKE"|"HIP"|"RIDGE"}
+    {"x": <int 0-640>, "y": <int 0-640>, "edge_to_next": "EAVE"|"RAKE"|"HIP"|"RIDGE"},
+    ...
   ],
   "facets": [
-    {"id": "f1", "points": [{"x": <int>, "y": <int>}, ...], "pitch": "6/12", "azimuth": "180"}
+    {
+      "id": "f1",
+      "points": [{"x": <int>, "y": <int>}, {"x": <int>, "y": <int>}, ...],
+      "pitch": "6/12",
+      "azimuth": "180"
+    },
+    ...
   ],
   "lines": [
-    {"type": "RIDGE"|"HIP"|"VALLEY", "start": {"x": <int>, "y": <int>}, "end": {"x": <int>, "y": <int>}}
+    {"type": "RIDGE"|"HIP"|"VALLEY", "start": {"x": <int>, "y": <int>}, "end": {"x": <int>, "y": <int>}},
+    ...
   ],
   "obstructions": [
-    {"type": "CHIMNEY"|"VENT"|"SKYLIGHT"|"HVAC", "boundingBox": {"min": {"x": <int>, "y": <int>}, "max": {"x": <int>, "y": <int>}}}
+    {"type": "CHIMNEY"|"VENT"|"SKYLIGHT"|"HVAC", "boundingBox": {"min": {"x": <int>, "y": <int>}, "max": {"x": <int>, "y": <int>}}},
+    ...
   ]
-}`
+}
 
-  const userPrompt = `Analyze this 640×640 pixel overhead satellite image of a residential property in Alberta, Canada. The building in the DEAD CENTER of the image (near pixel 320,320) is the target. 
+Return ONLY this JSON object. No explanation. No commentary. No markdown.`
 
-Step 1: Trace its COMPLETE roof perimeter as a tight clockwise polygon in pixel coordinates. Include every corner, wing, bump-out, and garage. Be precise — trace the drip line (outermost edge including overhang).
+  const userPrompt = `TASK: Precision roof geometry extraction from this 640×640 overhead satellite image.
 
-Step 2: Identify all internal structural lines (ridges, hips, valleys) with their start and end pixel coordinates.
+TARGET: The residential building whose roof centroid is nearest to pixel (320, 320). Alberta, Canada.
 
-Step 3: Outline each individual roof facet (plane) with its polygon corners, estimated pitch, and compass azimuth.
+Execute in this EXACT order:
 
-Step 4: Mark any visible obstructions (chimneys, vents, skylights).
+STEP 1 — PERIMETER TRACE:
+Starting at the top-left-most corner of the target roof, walk CLOCKWISE along the visible drip line (outermost roof edge including overhang). Place a vertex at EVERY direction change — every corner, every jog, every wing junction, every bump-out, every garage step. If the house is L-shaped, T-shaped, or has any non-rectangular features, you MUST include the concave (inward) corners. Classify each edge segment as EAVE, HIP, RAKE, or RIDGE.
 
-Return ONLY the JSON object with perimeter, facets, lines, and obstructions arrays.`
+STEP 2 — FACET POLYGONS:
+Trace each individual sloped roof plane as a separate closed polygon. Each facet's boundary follows ridge lines (top), hip/valley lines (sides), and eave/rake lines (bottom). Adjacent facets MUST share edges. Estimate each facet's pitch (rise/run like "6/12") and compass azimuth (0=N, 90=E, 180=S, 270=W).
+
+STEP 3 — STRUCTURAL LINES:
+Map every visible ridge, hip, and valley line with precise start/end pixel coordinates. Every ridge endpoint connects to a hip line. Every hip line terminates at a perimeter corner. Every valley line marks where two roof sections meet inward.
+
+STEP 4 — OBSTRUCTIONS:
+Mark chimneys, vents, skylights, and HVAC units with bounding boxes.
+
+PRECISION REQUIREMENT: ±3 pixels. This data drives material cost calculations for real construction projects.
+
+Return ONLY the JSON object.`
 
   const text = await callGemini({
     apiKey: env.apiKey,
     accessToken: env.accessToken,
     project: env.project,
     location: env.location,
-    model: 'gemini-2.0-flash',
+    model: 'gemini-2.5-flash',
     contents: [{
       parts: [
         {
@@ -305,7 +418,8 @@ Return ONLY the JSON object with perimeter, facets, lines, and obstructions arra
     },
     generationConfig: {
       responseMimeType: 'application/json',
-      temperature: 0.1
+      temperature: 0.05,
+      topP: 0.8
     }
   })
 
@@ -337,16 +451,47 @@ Return ONLY the JSON object with perimeter, facets, lines, and obstructions arra
   // Clamp all coordinates to 0-640
   clampCoordinates(analysis)
 
-  // Validate: perimeter centroid should be near center (320,320)
-  // If too far off, the model may have traced the wrong building
+  // ──────────────────────────────────────────────
+  // POST-PROCESSING VALIDATION: Reject lazy outputs
+  // ──────────────────────────────────────────────
+  
+  // Check 1: Perimeter centroid should be near center (320,320)
   if (analysis.perimeter && analysis.perimeter.length >= 3) {
     const cx = analysis.perimeter.reduce((s, p) => s + p.x, 0) / analysis.perimeter.length
     const cy = analysis.perimeter.reduce((s, p) => s + p.y, 0) / analysis.perimeter.length
     const distFromCenter = Math.sqrt((cx - 320) ** 2 + (cy - 320) ** 2)
     if (distFromCenter > 200) {
-      console.warn(`[Gemini] Perimeter centroid (${cx.toFixed(0)},${cy.toFixed(0)}) is ${distFromCenter.toFixed(0)}px from center — may have traced wrong building`)
+      console.warn(`[Gemini] ⚠ Perimeter centroid (${cx.toFixed(0)},${cy.toFixed(0)}) is ${distFromCenter.toFixed(0)}px from center — may have traced wrong building`)
     } else {
-      console.log(`[Gemini] Perimeter centroid (${cx.toFixed(0)},${cy.toFixed(0)}), ${distFromCenter.toFixed(0)}px from center — looks correct`)
+      console.log(`[Gemini] ✓ Perimeter centroid (${cx.toFixed(0)},${cy.toFixed(0)}), ${distFromCenter.toFixed(0)}px from center`)
+    }
+  }
+
+  // Check 2: Detect convex bounding box (lazy hexagon detection)
+  // A real roof with wings/bumps has CONCAVE sections (interior angles > 180°)
+  // If all interior angles are < 180°, the polygon is convex = likely a bounding box
+  if (analysis.perimeter && analysis.perimeter.length >= 6) {
+    const isConvex = checkPolygonConvexity(analysis.perimeter)
+    if (isConvex) {
+      console.warn(`[Gemini] ⚠ LAZY OUTPUT DETECTED: ${analysis.perimeter.length}-point perimeter is fully CONVEX (no concave corners). For complex roofs this likely means Gemini drew a bounding box instead of tracing the actual shape.`)
+    } else {
+      console.log(`[Gemini] ✓ Perimeter has concave sections — traces actual roof shape`)
+    }
+  }
+
+  // Check 3: Facet count sanity
+  if (analysis.facets.length < 2) {
+    console.warn(`[Gemini] ⚠ Only ${analysis.facets.length} facet(s) detected — most roofs have at least 4`)
+  } else if (analysis.facets.length >= 4) {
+    console.log(`[Gemini] ✓ ${analysis.facets.length} facets detected`)
+  }
+
+  // Check 4: Facets should share edges (adjacent facets have common vertices)
+  if (analysis.facets.length >= 2) {
+    const sharedEdgeCount = countSharedFacetEdges(analysis.facets)
+    console.log(`[Gemini] ✓ ${sharedEdgeCount} shared edges between adjacent facets`)
+    if (sharedEdgeCount === 0 && analysis.facets.length >= 4) {
+      console.warn(`[Gemini] ⚠ No shared edges between facets — facet polygons may be disconnected/overlapping incorrectly`)
     }
   }
 
@@ -592,4 +737,64 @@ function classifyEdge(a: { x: number; y: number }, b: { x: number; y: number }):
   if (dx > dy * 2) return 'EAVE'
   if (dy > dx * 2) return 'RAKE'
   return 'HIP'
+}
+
+// ============================================================
+// POST-PROCESSING VALIDATION HELPERS
+// Detect when Gemini returns lazy bounding boxes instead of real traces
+// ============================================================
+
+/**
+ * Check if a polygon is fully convex (all interior angles < 180°).
+ * A real complex roof perimeter (L-shape, T-shape, wings) has CONCAVE sections.
+ * If the polygon is fully convex with 6+ points, it's likely a lazy hexagonal bounding box.
+ */
+function checkPolygonConvexity(points: { x: number; y: number }[]): boolean {
+  if (points.length < 4) return true // triangles are always convex
+  const n = points.length
+  let sign = 0
+  for (let i = 0; i < n; i++) {
+    const p0 = points[i]
+    const p1 = points[(i + 1) % n]
+    const p2 = points[(i + 2) % n]
+    const cross = (p1.x - p0.x) * (p2.y - p1.y) - (p1.y - p0.y) * (p2.x - p1.x)
+    if (cross !== 0) {
+      if (sign === 0) {
+        sign = cross > 0 ? 1 : -1
+      } else if ((cross > 0 ? 1 : -1) !== sign) {
+        return false // found a reflex angle → polygon is concave → NOT a bounding box
+      }
+    }
+  }
+  return true // all angles have the same sign → fully convex → likely a bounding box
+}
+
+/**
+ * Count the number of edges shared between adjacent facets.
+ * Real roof facets share ridge/hip/valley edges with their neighbors.
+ * If facets share zero edges, they're probably drawn as isolated shapes.
+ */
+function countSharedFacetEdges(facets: { points?: { x: number; y: number }[] }[]): number {
+  const edgeKey = (a: { x: number; y: number }, b: { x: number; y: number }) => {
+    // Normalize edge direction and snap to nearest 5px for fuzzy matching
+    const ax = Math.round(a.x / 5) * 5, ay = Math.round(a.y / 5) * 5
+    const bx = Math.round(b.x / 5) * 5, by = Math.round(b.y / 5) * 5
+    const minX = Math.min(ax, bx), minY = Math.min(ay, by)
+    const maxX = Math.max(ax, bx), maxY = Math.max(ay, by)
+    return `${minX},${minY}-${maxX},${maxY}`
+  }
+
+  const edgeCounts: Record<string, number> = {}
+  for (const facet of facets) {
+    if (!facet.points || facet.points.length < 3) continue
+    for (let j = 0; j < facet.points.length; j++) {
+      const a = facet.points[j]
+      const b = facet.points[(j + 1) % facet.points.length]
+      const key = edgeKey(a, b)
+      edgeCounts[key] = (edgeCounts[key] || 0) + 1
+    }
+  }
+
+  // Shared edges appear in exactly 2 facets
+  return Object.values(edgeCounts).filter(c => c >= 2).length
 }
