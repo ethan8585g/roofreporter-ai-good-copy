@@ -193,7 +193,7 @@ export interface RoofSegment {
 // ============================================================
 
 /** Types of roof edges */
-export type EdgeType = 'ridge' | 'hip' | 'valley' | 'eave' | 'rake' | 'gable' | 'flashing' | 'step_flashing'
+export type EdgeType = 'ridge' | 'hip' | 'valley' | 'eave' | 'rake' | 'gable' | 'flashing' | 'step_flashing' | 'wall_flashing' | 'transition' | 'parapet'
 
 export interface EdgeMeasurement {
   /** Type of roof edge */
@@ -285,6 +285,25 @@ export interface MaterialEstimate {
 
   /** Shingle product assumed (default 3-tab vs architectural) */
   shingle_type: string
+
+  /** Multi-row waste calculation table (0%, 10%, 12%, 15%, 17%, 20%) */
+  waste_table: WasteRow[]
+}
+
+/** A single row in the multi-row waste calculation table */
+export interface WasteRow {
+  /** Waste percentage */
+  waste_pct: number
+  /** Total area at this waste % (sq ft) */
+  area_sqft: number
+  /** Roofing squares at this waste % */
+  squares: number
+  /** Bundle count at this waste % (3 bundles per square) */
+  bundles: number
+  /** Label: 'Measured' for 0%, 'Suggested' for the auto-calculated waste */
+  label: string
+  /** Whether this is the suggested/auto-selected row */
+  is_suggested: boolean
 }
 
 // ============================================================
@@ -768,6 +787,44 @@ export function computeMaterialEstimate(
   // 8. Roofing Nails (1.5 lbs per square for architectural)
   const nailLbs = Math.ceil(grossSquares * 1.5)
   const nailBoxes = Math.ceil(nailLbs / 30) // 30 lb box
+
+  // Step Flashing (where sloped roof meets wall)
+  const stepFlashEdges = edges.filter(e => e.edge_type === 'step_flashing')
+  const totalStepFlashFt = stepFlashEdges.reduce((s, e) => s + e.true_length_ft, 0)
+  if (totalStepFlashFt > 0) {
+    const stepPieces = Math.ceil(totalStepFlashFt * 1.5) // ~1.5 pieces per linear ft (overlap)
+    lineItems.push({
+      category: 'step_flashing',
+      description: 'Step Flashing (4×4 in, galvanized)',
+      unit: 'pieces',
+      net_quantity: Math.ceil(totalStepFlashFt * 1.5),
+      waste_pct: 10,
+      gross_quantity: Math.ceil(stepPieces * 1.1),
+      order_quantity: Math.ceil(stepPieces * 1.1),
+      order_unit: 'pieces',
+      unit_price_cad: 0.85,
+      line_total_cad: Math.round(Math.ceil(stepPieces * 1.1) * 0.85 * 100) / 100
+    })
+  }
+
+  // Wall Flashing (headwall/counter flashing)
+  const wallFlashEdges = edges.filter(e => e.edge_type === 'wall_flashing')
+  const totalWallFlashFt = wallFlashEdges.reduce((s, e) => s + e.true_length_ft, 0)
+  if (totalWallFlashFt > 0) {
+    const wallFlashPieces = Math.ceil(totalWallFlashFt / 10) // 10 ft sections
+    lineItems.push({
+      category: 'wall_flashing',
+      description: 'Wall/Headwall Flashing (10 ft sections)',
+      unit: 'pieces',
+      net_quantity: wallFlashPieces,
+      waste_pct: 10,
+      gross_quantity: Math.ceil(wallFlashPieces * 1.1),
+      order_quantity: Math.ceil(wallFlashPieces * 1.1),
+      order_unit: 'pieces',
+      unit_price_cad: 14.00,
+      line_total_cad: Math.round(Math.ceil(wallFlashPieces * 1.1) * 14.00 * 100) / 100
+    })
+  }
   lineItems.push({
     category: 'nails',
     description: '1-1/4" Galvanized Roofing Nails (30 lb box)',
@@ -800,6 +857,23 @@ export function computeMaterialEstimate(
 
   const totalCost = lineItems.reduce((sum, item) => sum + (item.line_total_cad || 0), 0)
 
+  // Build multi-row waste table: 0%, 10%, 12%, 15%, 17%, 20%
+  const wastePercentages = [0, 10, 12, 15, 17, 20]
+  const waste_table: WasteRow[] = wastePercentages.map(pct => {
+    const area = Math.round(netArea * (1 + pct / 100))
+    const sq = Math.ceil(area / 100 * 10) / 10
+    const bundles = Math.ceil(sq * 3)
+    const label = pct === 0 ? 'Measured' : pct === baseWaste ? 'Suggested' : ''
+    return {
+      waste_pct: pct,
+      area_sqft: area,
+      squares: sq,
+      bundles,
+      label,
+      is_suggested: pct === baseWaste
+    }
+  })
+
   return {
     net_area_sqft: Math.round(netArea),
     waste_pct: baseWaste,
@@ -810,7 +884,8 @@ export function computeMaterialEstimate(
     total_material_cost_cad: Math.round(totalCost * 100) / 100,
     complexity_factor: complexityFactor,
     complexity_class: complexityClass,
-    shingle_type: shingleType
+    shingle_type: shingleType,
+    waste_table
   }
 }
 
