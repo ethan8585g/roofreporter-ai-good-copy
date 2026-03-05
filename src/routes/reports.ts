@@ -2394,10 +2394,16 @@ function generateProfessionalReportHTML(report: RoofReport): string {
   const seUrl = (report.imagery as any)?.closeup_se_url || (report.imagery as any)?.se_closeup_url || ''
   const facetColors = ['#4A90D9','#E8634A','#5CB85C','#F5A623','#9B59B6','#E84393','#2ECC71','#F39C12','#3498DB','#8E44AD','#E67E22','#27AE60']
 
-  // Generate satellite overlay SVG from AI geometry
+  // Generate satellite overlay SVG from AI geometry (kept for Page 2 top view only)
   const overlaySVG = generateSatelliteOverlaySVG(report.ai_geometry, report.segments, report.edges, es, facetColors, report.total_footprint_sqft, report.roof_pitch_degrees)
   const hasOverlay = overlaySVG.length > 0
   const overlayLegend = hasOverlay ? generateOverlayLegend(es, !!(report.ai_geometry?.obstructions?.length)) : ''
+
+  // ── NEW: Professional CAD-style Blueprint SVGs (white background, no satellite) ──
+  // These replace the satellite overlays on pages 5-7 with Roofr-standard wireframe diagrams
+  const blueprintLengthSVG = generateBlueprintSVG(report.ai_geometry, report.segments, report.edges, es, report.total_footprint_sqft, report.roof_pitch_degrees, 'LENGTH')
+  const blueprintAreaSVG = generateBlueprintSVG(report.ai_geometry, report.segments, report.edges, es, report.total_footprint_sqft, report.roof_pitch_degrees, 'AREA')
+  const blueprintPitchSVG = generateBlueprintSVG(report.ai_geometry, report.segments, report.edges, es, report.total_footprint_sqft, report.roof_pitch_degrees, 'PITCH')
 
   // Generate perimeter side data
   const perimeterData = generatePerimeterSideData(report.ai_geometry, es)
@@ -2593,9 +2599,9 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
         ['Images &mdash; Top View', '2'],
         ['Images &mdash; Rotated Side Views (N/S/E/W)', '3'],
         ['Close-Up Detail &amp; Property Context', '4'],
-        ['Length Diagram &amp; Flashing Summary', '5'],
-        ['Pitch Diagram', '6'],
-        ['Area Diagram', '7'],
+        ['Length Blueprint &amp; Edge Summary', '5'],
+        ['Pitch Blueprint', '6'],
+        ['Area Blueprint', '7'],
         ['Pitch Class Summary, Waste Table &amp; Flashing', '8'],
         ['All Structures Totals &amp; Materials', '9']
       ].map(([title, pg], i) => `<div style="display:flex;justify-content:space-between;padding:6px 14px;font-size:10px;${i % 2 === 0 ? 'background:#f8f9fb' : 'background:#fff'};border-bottom:1px solid #eef0f4"><span style="font-weight:600;color:#1a1a2e">${title}</span><span style="color:#003366;font-weight:700">${pg}</span></div>`).join('')}
@@ -2768,7 +2774,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
 
 <!-- ==================== PAGE 5: LENGTH DIAGRAM ==================== -->
 <div class="page">
-  ${hdr('LENGTH DIAGRAM', 'Segment Lengths &amp; Edge Types')}
+  ${hdr('LENGTH BLUEPRINT', 'Edge Lengths &amp; Flashing Summary')}
   <div style="padding:14px 32px 50px">
     <div style="font-size:10px;color:#4a5568;font-style:italic;margin-bottom:8px">Diagram shows segment lengths rounded to the nearest whole number. Line colors indicate edge type per the legend below.</div>
 
@@ -2785,18 +2791,9 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
       <div style="display:flex;align-items:center;gap:4px"><span style="width:20px;height:3px;background:#4E342E;display:inline-block;border-radius:1px"></span>Parapet</div>
     </div>
 
-    <!-- Roof diagram with overlay or generated diagram -->
+    <!-- CAD-style Blueprint: LENGTH MODE (white background, no satellite) -->
     <div style="text-align:center;border:1px solid #d5dae3;border-radius:4px;overflow:hidden;background:#fff">
-      ${hasOverlay ? `
-        <div style="position:relative;width:100%;padding-bottom:60%">
-          ${overheadUrl ? `<img src="${overheadUrl}" alt="Roof" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;display:block;opacity:0.85">` : ''}
-          <svg viewBox="0 0 640 640" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none">${overlaySVG}</svg>
-        </div>
-      ` : `
-        <div style="padding:12px">
-          <svg viewBox="0 0 500 280" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-height:250px">${generateRoofDiagramSVG(report.segments, facetColors)}</svg>
-        </div>
-      `}
+      <svg viewBox="0 0 500 500" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-height:380px">${blueprintLengthSVG}</svg>
     </div>
 
     <!-- Total Line Lengths summary -->
@@ -2836,7 +2833,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
 
 <!-- ==================== PAGE 6: PITCH DIAGRAM ==================== -->
 <div class="page">
-  ${hdr('PITCH DIAGRAM', 'Roof Pitch by Facet')}
+  ${hdr('PITCH BLUEPRINT', 'Roof Pitch by Facet')}
   <div style="padding:14px 32px 50px">
     <div style="font-size:10px;color:#4a5568;font-style:italic;margin-bottom:8px">Pitch values are shown in rise per 12 inches of run. Blue shading indicates a pitch of 3/12 or greater. Gray shading indicates flat or low pitches.</div>
 
@@ -2846,9 +2843,9 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
       <div style="display:flex;align-items:center;gap:5px"><span style="width:18px;height:14px;background:#eeeeee;border:1px solid #bdbdbd;display:inline-block;border-radius:2px"></span><span style="font-weight:600">Flat / Low Pitch (&lt; 3/12)</span></div>
     </div>
 
-    <!-- Roof diagram with pitch overlay — use AI geometry when available -->
-    <div style="text-align:center;border:1px solid #d5dae3;border-radius:4px;overflow:hidden;background:#fff;padding:12px">
-      <svg viewBox="0 0 500 350" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-height:260px">${generatePitchDiagramSVG(report.ai_geometry, report.segments, facetColors)}</svg>
+    <!-- CAD-style Blueprint: PITCH MODE (white background, no satellite) -->
+    <div style="text-align:center;border:1px solid #d5dae3;border-radius:4px;overflow:hidden;background:#fff">
+      <svg viewBox="0 0 500 500" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-height:260px">${blueprintPitchSVG}</svg>
     </div>
 
     <!-- Pitch Breakdown Table -->
@@ -2888,22 +2885,13 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
 
 <!-- ==================== PAGE 7: AREA DIAGRAM ==================== -->
 <div class="page">
-  ${hdr('AREA DIAGRAM', 'Roofr-Style Facet Areas in Square Feet')}
+  ${hdr('AREA BLUEPRINT', 'True Surface Area by Facet')}
   <div style="padding:14px 32px 50px">
-    <div style="font-size:10px;color:#4a5568;font-style:italic;margin-bottom:8px">Each roof facet is color-coded and labeled with its true area, pitch, and compass direction — matching Roofr report standards.</div>
+    <div style="font-size:10px;color:#4a5568;font-style:italic;margin-bottom:8px">Professional CAD-style blueprint showing true 3D surface area (sq ft) for each roof facet, accounting for pitch slope factor.</div>
 
-    <!-- Roofr-style Roof Diagram with satellite overlay -->
-    <div style="text-align:center;border:1px solid #d5dae3;border-radius:4px;overflow:hidden;background:#f0f3f7;margin-bottom:10px">
-      ${hasOverlay ? `
-        <div style="position:relative;width:100%;padding-bottom:55%">
-          ${overheadUrl ? `<img src="${overheadUrl}" alt="Roof" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;display:block;opacity:0.75">` : ''}
-          <svg viewBox="0 0 640 640" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none">${overlaySVG}</svg>
-        </div>
-      ` : `
-        <div style="padding:12px">
-          <svg viewBox="0 0 500 350" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-height:250px">${generatePitchDiagramSVG(report.ai_geometry, report.segments, facetColors)}</svg>
-        </div>
-      `}
+    <!-- CAD-style Blueprint: AREA MODE (white background, no satellite) -->
+    <div style="text-align:center;border:1px solid #d5dae3;border-radius:4px;overflow:hidden;background:#fff;margin-bottom:10px">
+      <svg viewBox="0 0 500 500" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-height:320px">${blueprintAreaSVG}</svg>
     </div>
 
     <!-- Facet Color Legend -->
@@ -3532,15 +3520,506 @@ function smartEdgeFootage(
 }
 
 // ============================================================
-// Generate SVG overlay for satellite image — MEASURED ROOF DIAGRAM v3
+// PROFESSIONAL CAD-STYLE BLUEPRINT SVG GENERATOR v4
 //
-// Major changes from v2:
-// 1. Uses the perimeter polygon directly from Gemini (not convex hull)
-// 2. Each perimeter side is drawn and labeled with ft/in measurement
-// 3. Perimeter sides are color-coded by edge type (EAVE/RAKE/HIP/RIDGE)
-// 4. Pixel coordinates are already 0-640 (no S scaling needed)
-// 5. Internal lines (ridge/hip/valley) rendered on top
-// 6. Facet areas labeled at centroid
+// Replaces all previous overlay/diagram functions with a single
+// master function that generates clean, white-background wireframe
+// blueprints matching Roofr report standards.
+//
+// Three modes:
+//   'LENGTH' — Edge lengths in feet labeled at midpoints
+//   'AREA'   — True area (sq ft) labeled at facet centroids
+//   'PITCH'  — Pitch ratio + directional arrow at facet centroids
+//
+// Draws EXACT polygons from AI geometry (perimeter + facets).
+// No satellite image backgrounds. No semi-transparent overlays.
+// No fallback generic shapes — renders the real roof.
+// ============================================================
+type BlueprintMode = 'LENGTH' | 'AREA' | 'PITCH'
+
+function generateBlueprintSVG(
+  aiGeometry: AIMeasurementAnalysis | null | undefined,
+  segments: RoofSegment[],
+  edges: EdgeMeasurement[],
+  edgeSummary: { total_ridge_ft: number; total_hip_ft: number; total_valley_ft: number; total_eave_ft: number; total_rake_ft: number; total_step_flashing_ft?: number; total_wall_flashing_ft?: number; total_transition_ft?: number; total_parapet_ft?: number },
+  totalFootprintSqft: number,
+  avgPitchDeg: number,
+  mode: BlueprintMode = 'LENGTH'
+): string {
+  const SVG_SIZE = 500
+  const PAD = 45
+
+  // ====================================================================
+  // FALLBACK: If no AI geometry, generate a proportional wireframe from segments
+  // ====================================================================
+  if (!aiGeometry || (!aiGeometry.perimeter?.length && !aiGeometry.facets?.length)) {
+    return generateFallbackBlueprintSVG(segments, edges, edgeSummary, mode)
+  }
+
+  const hasPerimeter = aiGeometry.perimeter && aiGeometry.perimeter.length >= 3
+  const hasFacets = aiGeometry.facets && aiGeometry.facets.length >= 2
+
+  if (!hasPerimeter && !hasFacets) {
+    return generateFallbackBlueprintSVG(segments, edges, edgeSummary, mode)
+  }
+
+  // ====================================================================
+  // 1. COMPUTE BOUNDING BOX & SCALE to fit 500x500 canvas
+  // ====================================================================
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
+
+  if (hasPerimeter) {
+    aiGeometry.perimeter.forEach(p => { minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x); minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y) })
+  }
+  if (hasFacets) {
+    aiGeometry.facets.forEach(f => f.points?.forEach(p => { minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x); minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y) }))
+  }
+
+  const geoW = maxX - minX || 1
+  const geoH = maxY - minY || 1
+  const drawSize = SVG_SIZE - PAD * 2
+  const scale = Math.min(drawSize / geoW, drawSize / geoH) * 0.95
+  const offsetX = PAD + (drawSize - geoW * scale) / 2
+  const offsetY = PAD + (drawSize - geoH * scale) / 2
+
+  const tx = (x: number) => offsetX + (x - minX) * scale
+  const ty = (y: number) => offsetY + (y - minY) * scale
+
+  // ====================================================================
+  // EDGE COLORS for wireframe lines
+  // ====================================================================
+  const edgeLineColors: Record<string, string> = {
+    'RIDGE': '#C62828', 'HIP': '#E8A317', 'VALLEY': '#1565C0',
+    'EAVE': '#1B2838', 'RAKE': '#2E7D32',
+  }
+  const edgeLineWidths: Record<string, number> = {
+    'RIDGE': 2.5, 'HIP': 2, 'VALLEY': 2, 'EAVE': 1.8, 'RAKE': 1.8,
+  }
+
+  // ====================================================================
+  // DERIVE INTERNAL LINES if not provided by AI
+  // ====================================================================
+  if ((!aiGeometry.lines || aiGeometry.lines.length === 0) && hasFacets) {
+    const edgeKey = (a: { x: number; y: number }, b: { x: number; y: number }) =>
+      `${Math.round(Math.min(a.x, b.x))},${Math.round(Math.min(a.y, b.y))}-${Math.round(Math.max(a.x, b.x))},${Math.round(Math.max(a.y, b.y))}`
+    const edgeMap: Record<string, { start: { x: number; y: number }; end: { x: number; y: number }; count: number }> = {}
+    aiGeometry.facets.forEach(facet => {
+      if (!facet.points || facet.points.length < 3) return
+      for (let j = 0; j < facet.points.length; j++) {
+        const a = facet.points[j]
+        const b = facet.points[(j + 1) % facet.points.length]
+        const key = edgeKey(a, b)
+        if (!edgeMap[key]) edgeMap[key] = { start: a, end: b, count: 0 }
+        edgeMap[key].count++
+      }
+    })
+    const derivedLines: typeof aiGeometry.lines = []
+    for (const [, edge] of Object.entries(edgeMap)) {
+      if (edge.count >= 2) {
+        const dx = Math.abs(edge.end.x - edge.start.x)
+        const dy = Math.abs(edge.end.y - edge.start.y)
+        const lineType = dy < dx * 0.3 ? 'RIDGE' : 'HIP'
+        derivedLines.push({ type: lineType as any, start: edge.start, end: edge.end })
+      }
+    }
+    aiGeometry.lines = derivedLines
+  }
+
+  // ====================================================================
+  // 2. COMPUTE FACET DISPLAY DATA (real polygon area → sqft)
+  // ====================================================================
+  const facetData = computeFacetDisplayData(aiGeometry!, totalFootprintSqft, avgPitchDeg)
+
+  // Distribute measured footage to perimeter sides
+  const measuredByType = smartEdgeFootage(edgeSummary)
+
+  // Build perimeter side footage
+  let perimSideFt: number[] = []
+  if (hasPerimeter) {
+    const perim = aiGeometry.perimeter
+    const n = perim.length
+    const sidesByType: Record<string, { idx: number; pxLen: number }[]> = {}
+    for (let i = 0; i < n; i++) {
+      const p1 = perim[i], p2 = perim[(i + 1) % n]
+      const pxLen = Math.sqrt((p2.x - p1.x) ** 2 + (p2.y - p1.y) ** 2)
+      const type = p1.edge_to_next || 'EAVE'
+      if (!sidesByType[type]) sidesByType[type] = []
+      sidesByType[type].push({ idx: i, pxLen })
+    }
+    perimSideFt = new Array(n).fill(0)
+    for (const [type, sides] of Object.entries(sidesByType)) {
+      const totalPx = sides.reduce((s, sd) => s + sd.pxLen, 0)
+      const totalFt = measuredByType[type] || 0
+      if (totalPx > 0 && totalFt > 0) {
+        sides.forEach(sd => { perimSideFt[sd.idx] = (sd.pxLen / totalPx) * totalFt })
+      }
+    }
+  }
+
+  // Distribute internal line footage
+  const internalLinesByType: Record<string, { line: typeof aiGeometry.lines[0]; pxLen: number }[]> = {}
+  if (aiGeometry.lines) {
+    aiGeometry.lines.forEach(l => {
+      if (l.type === 'EAVE' || l.type === 'RAKE') return
+      if (!internalLinesByType[l.type]) internalLinesByType[l.type] = []
+      const pxLen = Math.sqrt((l.end.x - l.start.x) ** 2 + (l.end.y - l.start.y) ** 2)
+      internalLinesByType[l.type].push({ line: l, pxLen })
+    })
+  }
+  const internalMeasured: Record<string, number> = {
+    'RIDGE': edgeSummary.total_ridge_ft,
+    'HIP': edgeSummary.total_hip_ft,
+    'VALLEY': edgeSummary.total_valley_ft,
+  }
+
+  // ====================================================================
+  // 3. BUILD THE SVG
+  // ====================================================================
+  let svg = ''
+
+  // White background
+  svg += `<rect x="0" y="0" width="${SVG_SIZE}" height="${SVG_SIZE}" fill="#FFFFFF"/>`
+
+  // Thin border
+  svg += `<rect x="1" y="1" width="${SVG_SIZE - 2}" height="${SVG_SIZE - 2}" fill="none" stroke="#D5DAE3" stroke-width="0.5" rx="2"/>`
+
+  // ====================================================================
+  // 3a. DRAW FACET FILLS — very light blue
+  // ====================================================================
+  if (hasFacets) {
+    aiGeometry.facets.forEach((facet) => {
+      if (!facet.points || facet.points.length < 3) return
+      const points = facet.points.map(p => `${tx(p.x).toFixed(1)},${ty(p.y).toFixed(1)}`).join(' ')
+      svg += `<polygon points="${points}" fill="#E8F2FC" stroke="#003366" stroke-width="1" stroke-linejoin="round"/>`
+    })
+  }
+
+  // ====================================================================
+  // 3b. DRAW PERIMETER — crisp dark lines, point-by-point
+  // ====================================================================
+  if (hasPerimeter) {
+    const perim = aiGeometry.perimeter
+    const n = perim.length
+
+    // Perimeter outline
+    const perimPoints = perim.map(p => `${tx(p.x).toFixed(1)},${ty(p.y).toFixed(1)}`).join(' ')
+    svg += `<polygon points="${perimPoints}" fill="none" stroke="#1B2838" stroke-width="2" stroke-linejoin="round"/>`
+
+    // Color-coded perimeter sides
+    for (let i = 0; i < n; i++) {
+      const p1 = perim[i], p2 = perim[(i + 1) % n]
+      const type = p1.edge_to_next || 'EAVE'
+      const color = edgeLineColors[type] || '#1B2838'
+      const width = edgeLineWidths[type] || 1.8
+      svg += `<line x1="${tx(p1.x).toFixed(1)}" y1="${ty(p1.y).toFixed(1)}" x2="${tx(p2.x).toFixed(1)}" y2="${ty(p2.y).toFixed(1)}" stroke="${color}" stroke-width="${width}" stroke-linecap="round"/>`
+
+      // Vertex dots
+      svg += `<circle cx="${tx(p1.x).toFixed(1)}" cy="${ty(p1.y).toFixed(1)}" r="2.5" fill="${color}" stroke="#fff" stroke-width="0.8"/>`
+    }
+  }
+
+  // ====================================================================
+  // 3c. DRAW INTERNAL STRUCTURAL LINES (ridge, hip, valley)
+  // ====================================================================
+  if (aiGeometry.lines && aiGeometry.lines.length > 0) {
+    aiGeometry.lines.forEach(line => {
+      if (line.type === 'EAVE' || line.type === 'RAKE') return
+      const color = edgeLineColors[line.type] || '#003366'
+      const width = edgeLineWidths[line.type] || 1.5
+      const dash = line.type === 'VALLEY' ? ' stroke-dasharray="6,3"' : ''
+      svg += `<line x1="${tx(line.start.x).toFixed(1)}" y1="${ty(line.start.y).toFixed(1)}" x2="${tx(line.end.x).toFixed(1)}" y2="${ty(line.end.y).toFixed(1)}" stroke="${color}" stroke-width="${width}"${dash} stroke-linecap="round"/>`
+    })
+  }
+
+  // ====================================================================
+  // 4. MODE-SPECIFIC LABELS
+  // ====================================================================
+  if (mode === 'LENGTH') {
+    // ---- LENGTH MODE: Label every perimeter + internal line with footage ----
+    if (hasPerimeter) {
+      const perim = aiGeometry.perimeter
+      const n = perim.length
+      for (let i = 0; i < n; i++) {
+        if (perimSideFt[i] < 0.5) continue
+        const p1 = perim[i], p2 = perim[(i + 1) % n]
+        const mx = (tx(p1.x) + tx(p2.x)) / 2
+        const my = (ty(p1.y) + ty(p2.y)) / 2
+        const angle = lineAngleDeg(tx(p1.x), ty(p1.y), tx(p2.x), ty(p2.y))
+        const label = feetToFeetInches(perimSideFt[i])
+        const type = p1.edge_to_next || 'EAVE'
+        const color = edgeLineColors[type] || '#1B2838'
+
+        const pillW = Math.max(label.length * 6.5 + 10, 40)
+        svg += `<g transform="translate(${mx.toFixed(1)},${my.toFixed(1)}) rotate(${angle.toFixed(1)})">`
+        svg += `<rect x="${(-pillW / 2).toFixed(1)}" y="-9" width="${pillW.toFixed(1)}" height="16" rx="2" fill="#fff" stroke="${color}" stroke-width="0.8"/>`
+        svg += `<text x="0" y="3" text-anchor="middle" font-size="9" font-weight="700" fill="${color}" font-family="Inter,system-ui,sans-serif">${label}</text>`
+        svg += `</g>`
+      }
+    }
+
+    // Internal line labels
+    for (const [type, items] of Object.entries(internalLinesByType)) {
+      const totalPx = items.reduce((s, it) => s + it.pxLen, 0)
+      const totalFt = internalMeasured[type] || 0
+      const color = edgeLineColors[type] || '#C62828'
+
+      items.forEach(({ line: l, pxLen }) => {
+        const lineFt = totalPx > 0 && totalFt > 0 ? (pxLen / totalPx) * totalFt : 0
+        if (lineFt < 0.5) return
+        const mx = (tx(l.start.x) + tx(l.end.x)) / 2
+        const my = (ty(l.start.y) + ty(l.end.y)) / 2
+        const angle = lineAngleDeg(tx(l.start.x), ty(l.start.y), tx(l.end.x), ty(l.end.y))
+        const label = feetToFeetInches(lineFt)
+        const pillW = Math.max(label.length * 6.5 + 10, 40)
+
+        svg += `<g transform="translate(${mx.toFixed(1)},${my.toFixed(1)}) rotate(${angle.toFixed(1)})">`
+        svg += `<rect x="${(-pillW / 2).toFixed(1)}" y="-9" width="${pillW.toFixed(1)}" height="16" rx="2" fill="#fff" stroke="${color}" stroke-width="0.8"/>`
+        svg += `<text x="0" y="3" text-anchor="middle" font-size="9" font-weight="700" fill="${color}" font-family="Inter,system-ui,sans-serif">${label}</text>`
+        svg += `</g>`
+      })
+    }
+  }
+
+  else if (mode === 'AREA') {
+    // ---- AREA MODE: True area (sq ft) at centroid of each facet ----
+    if (hasFacets) {
+      aiGeometry.facets.forEach((facet, i) => {
+        if (!facet.points || facet.points.length < 3) return
+        const cx = facet.points.reduce((s, p) => s + tx(p.x), 0) / facet.points.length
+        const cy = facet.points.reduce((s, p) => s + ty(p.y), 0) / facet.points.length
+
+        // Get area from polygon computation or segment fallback
+        let areaText: string
+        if (facetData[i] && facetData[i].true_area_sqft > 0) {
+          areaText = `${facetData[i].true_area_sqft.toLocaleString()}`
+        } else {
+          const seg = segments[i] || segments[segments.length - 1] || segments[0]
+          areaText = seg ? `${seg.true_area_sqft.toLocaleString()}` : '—'
+        }
+
+        const pillW = Math.max(areaText.length * 7.5 + 14, 55)
+        svg += `<rect x="${(cx - pillW / 2).toFixed(1)}" y="${(cy - 10).toFixed(1)}" width="${pillW.toFixed(1)}" height="20" rx="3" fill="#003366" fill-opacity="0.9"/>`
+        svg += `<text x="${cx.toFixed(1)}" y="${(cy + 4).toFixed(1)}" text-anchor="middle" font-size="11" font-weight="800" fill="#fff" font-family="Inter,system-ui,sans-serif">${areaText} ft&sup2;</text>`
+      })
+    }
+  }
+
+  else if (mode === 'PITCH') {
+    // ---- PITCH MODE: Pitch number + directional arrow at centroid ----
+    if (hasFacets) {
+      aiGeometry.facets.forEach((facet, i) => {
+        if (!facet.points || facet.points.length < 3) return
+        const cx = facet.points.reduce((s, p) => s + tx(p.x), 0) / facet.points.length
+        const cy = facet.points.reduce((s, p) => s + ty(p.y), 0) / facet.points.length
+
+        const seg = segments[i] || segments[segments.length - 1] || segments[0]
+        if (!seg) return
+
+        // Extract pitch number (e.g., "5" from "5:12")
+        const pitchNum = seg.pitch_ratio.split(':')[0] || seg.pitch_ratio.split('/')[0] || '?'
+        const pitchDeg = seg.pitch_degrees
+
+        // Determine if this is a "pitched" (>= 3/12) or flat facet
+        const isFlat = pitchDeg < 14 // < 3:12
+        const bgColor = isFlat ? '#EEEEEE' : '#D6E8F7'
+        const textColor = isFlat ? '#666666' : '#003366'
+
+        // Background circle with pitch number
+        const r = 18
+        svg += `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${r}" fill="${bgColor}" stroke="#003366" stroke-width="1"/>`
+        svg += `<text x="${cx.toFixed(1)}" y="${(cy + 5).toFixed(1)}" text-anchor="middle" font-size="15" font-weight="900" fill="${textColor}" font-family="Inter,system-ui,sans-serif">${pitchNum}</text>`
+
+        // Directional arrow below the circle
+        const azDeg = seg.azimuth_degrees || 0
+        const arrowLen = 14
+        const arrowRad = (azDeg - 90) * Math.PI / 180 // SVG: 0=right, 90=down
+        const ax = cx + Math.cos(arrowRad) * (r + 4)
+        const ay = cy + Math.sin(arrowRad) * (r + 4)
+        const aex = ax + Math.cos(arrowRad) * arrowLen
+        const aey = ay + Math.sin(arrowRad) * arrowLen
+        svg += `<line x1="${ax.toFixed(1)}" y1="${ay.toFixed(1)}" x2="${aex.toFixed(1)}" y2="${aey.toFixed(1)}" stroke="${textColor}" stroke-width="1.5" marker-end="url(#arrowhead)"/>`
+      })
+
+      // Arrow marker definition
+      svg = `<defs><marker id="arrowhead" markerWidth="6" markerHeight="5" refX="5" refY="2.5" orient="auto"><polygon points="0 0,6 2.5,0 5" fill="#003366"/></marker></defs>` + svg
+    }
+  }
+
+  // ====================================================================
+  // 5. COMPASS ROSE (top-right)
+  // ====================================================================
+  const compassX = SVG_SIZE - 30, compassY = 30
+  svg += `<circle cx="${compassX}" cy="${compassY}" r="14" fill="#fff" stroke="#003366" stroke-width="1"/>`
+  svg += `<line x1="${compassX}" y1="${compassY + 10}" x2="${compassX}" y2="${compassY - 10}" stroke="#003366" stroke-width="1.5"/>`
+  svg += `<line x1="${compassX - 10}" y1="${compassY}" x2="${compassX + 10}" y2="${compassY}" stroke="#003366" stroke-width="0.8"/>`
+  svg += `<polygon points="${compassX},${compassY - 12} ${compassX - 3},${compassY - 6} ${compassX + 3},${compassY - 6}" fill="#C62828"/>`
+  svg += `<text x="${compassX}" y="${compassY - 16}" text-anchor="middle" font-size="9" font-weight="800" fill="#003366" font-family="Inter,system-ui,sans-serif">N</text>`
+
+  // ====================================================================
+  // 6. SUMMARY BAR (bottom)
+  // ====================================================================
+  const totalArea = segments.reduce((s, seg) => s + seg.true_area_sqft, 0)
+  const totalFootprint = segments.reduce((s, seg) => s + seg.footprint_area_sqft, 0)
+  const modeLabel = mode === 'LENGTH' ? 'LENGTH MEASUREMENT' : mode === 'AREA' ? 'AREA MEASUREMENT' : 'PITCH DIAGRAM'
+  svg += `<rect x="0" y="${SVG_SIZE - 24}" width="${SVG_SIZE}" height="24" fill="#003366" rx="0"/>`
+  svg += `<text x="10" y="${SVG_SIZE - 8}" font-size="8" font-weight="700" fill="#7EAFD4" font-family="Inter,system-ui,sans-serif">${modeLabel}</text>`
+  svg += `<text x="${SVG_SIZE - 10}" y="${SVG_SIZE - 8}" text-anchor="end" font-size="8" font-weight="600" fill="#fff" font-family="Inter,system-ui,sans-serif">${totalArea.toLocaleString()} ft&sup2; &middot; ${segments.length} facets &middot; ${totalFootprint.toLocaleString()} ft&sup2; footprint</text>`
+
+  return svg
+}
+
+// ============================================================
+// FALLBACK BLUEPRINT: When no AI geometry, build proportional wireframe
+// Uses segment areas + directions to create a geometrically-correct
+// schematic roof shape (gable, hip, or complex)
+// ============================================================
+function generateFallbackBlueprintSVG(
+  segments: RoofSegment[],
+  edges: EdgeMeasurement[],
+  edgeSummary: { total_ridge_ft: number; total_hip_ft: number; total_valley_ft: number; total_eave_ft: number; total_rake_ft: number },
+  mode: BlueprintMode
+): string {
+  const SVG_SIZE = 500
+  const PAD = 50
+  const n = segments.length
+
+  if (n === 0) return `<rect x="0" y="0" width="${SVG_SIZE}" height="${SVG_SIZE}" fill="#fff"/><text x="250" y="250" text-anchor="middle" fill="#999" font-size="14" font-family="Inter,system-ui,sans-serif">No segment data available</text>`
+
+  const totalArea = segments.reduce((s, seg) => s + seg.true_area_sqft, 0)
+  const totalFootprint = segments.reduce((s, seg) => s + seg.footprint_area_sqft, 0)
+
+  // Derive building dimensions
+  const ratio = 1.618
+  const bw = Math.sqrt(totalFootprint / ratio)
+  const bl = bw * ratio
+
+  const drawW = SVG_SIZE - PAD * 2, drawH = SVG_SIZE - PAD * 2 - 30
+  const sf = Math.min(drawW / bl, drawH / bw) * 0.85
+  const w = Math.round(bl * sf), h = Math.round(bw * sf)
+  const cx = SVG_SIZE / 2, cy = (SVG_SIZE - 24) / 2
+  const left = cx - w / 2, top = cy - h / 2, right = cx + w / 2, bottom = cy + h / 2
+
+  const avgPitch = segments.reduce((s, seg) => s + seg.pitch_degrees * seg.true_area_sqft, 0) / totalArea
+  const ridgeInset = Math.round(w * Math.min(0.3, avgPitch / 90))
+
+  let svg = ''
+  svg += `<rect x="0" y="0" width="${SVG_SIZE}" height="${SVG_SIZE}" fill="#FFFFFF"/>`
+  svg += `<rect x="1" y="1" width="${SVG_SIZE - 2}" height="${SVG_SIZE - 2}" fill="none" stroke="#D5DAE3" stroke-width="0.5" rx="2"/>`
+
+  interface FallbackFacet { points: { x: number; y: number }[]; seg: RoofSegment }
+  const fallbackFacets: FallbackFacet[] = []
+
+  if (n <= 2) {
+    // Gable
+    const ridgeY = cy
+    fallbackFacets.push({ points: [{ x: left, y: ridgeY }, { x: cx, y: top }, { x: right, y: ridgeY }], seg: segments[0] })
+    fallbackFacets.push({ points: [{ x: left, y: ridgeY }, { x: cx, y: bottom }, { x: right, y: ridgeY }], seg: segments[1] || segments[0] })
+    // Ridge
+    svg += `<line x1="${left}" y1="${ridgeY}" x2="${right}" y2="${ridgeY}" stroke="#C62828" stroke-width="2.5"/>`
+  } else if (n <= 4) {
+    // Hip
+    const rl = left + ridgeInset, rr = right - ridgeInset
+    fallbackFacets.push({ points: [{ x: left, y: top }, { x: right, y: top }, { x: rr, y: cy }, { x: rl, y: cy }], seg: segments[0] })
+    fallbackFacets.push({ points: [{ x: left, y: bottom }, { x: right, y: bottom }, { x: rr, y: cy }, { x: rl, y: cy }], seg: segments[1] })
+    fallbackFacets.push({ points: [{ x: left, y: top }, { x: left, y: bottom }, { x: rl, y: cy }], seg: segments[2] })
+    fallbackFacets.push({ points: [{ x: right, y: top }, { x: right, y: bottom }, { x: rr, y: cy }], seg: segments[3] || segments[2] })
+    svg += `<line x1="${rl}" y1="${cy}" x2="${rr}" y2="${cy}" stroke="#C62828" stroke-width="2.5"/>`
+    svg += `<line x1="${left}" y1="${top}" x2="${rl}" y2="${cy}" stroke="#E8A317" stroke-width="2"/>`
+    svg += `<line x1="${right}" y1="${top}" x2="${rr}" y2="${cy}" stroke="#E8A317" stroke-width="2"/>`
+    svg += `<line x1="${left}" y1="${bottom}" x2="${rl}" y2="${cy}" stroke="#E8A317" stroke-width="2"/>`
+    svg += `<line x1="${right}" y1="${bottom}" x2="${rr}" y2="${cy}" stroke="#E8A317" stroke-width="2"/>`
+  } else {
+    // Complex: main body + wing
+    const mainW = Math.round(w * 0.72), mainH = Math.round(h * 0.85)
+    const ml = cx - mainW / 2 + 20, mt = cy - mainH / 2 - 10, mr = ml + mainW, mb = mt + mainH
+    const mrl = ml + ridgeInset, mrr = mr - ridgeInset, mcy = (mt + mb) / 2
+
+    fallbackFacets.push({ points: [{ x: ml, y: mt }, { x: mr, y: mt }, { x: mrr, y: mcy }, { x: mrl, y: mcy }], seg: segments[0] })
+    fallbackFacets.push({ points: [{ x: ml, y: mb }, { x: mr, y: mb }, { x: mrr, y: mcy }, { x: mrl, y: mcy }], seg: segments[1] })
+    fallbackFacets.push({ points: [{ x: ml, y: mt }, { x: ml, y: mb }, { x: mrl, y: mcy }], seg: segments[2] })
+    fallbackFacets.push({ points: [{ x: mr, y: mt }, { x: mr, y: mb }, { x: mrr, y: mcy }], seg: segments[3] || segments[2] })
+
+    svg += `<line x1="${mrl}" y1="${mcy}" x2="${mrr}" y2="${mcy}" stroke="#C62828" stroke-width="2.5"/>`
+    svg += `<line x1="${ml}" y1="${mt}" x2="${mrl}" y2="${mcy}" stroke="#E8A317" stroke-width="2"/>`
+    svg += `<line x1="${mr}" y1="${mt}" x2="${mrr}" y2="${mcy}" stroke="#E8A317" stroke-width="2"/>`
+    svg += `<line x1="${ml}" y1="${mb}" x2="${mrl}" y2="${mcy}" stroke="#E8A317" stroke-width="2"/>`
+    svg += `<line x1="${mr}" y1="${mb}" x2="${mrr}" y2="${mcy}" stroke="#E8A317" stroke-width="2"/>`
+
+    // Wing
+    if (segments.length > 4) {
+      const ww = Math.round(w * 0.4), wh = Math.round(h * 0.45)
+      const wl = ml - ww + 10, wt = mcy - 5, wr = wl + ww, wb = wt + wh
+      const wcy = (wt + wb) / 2, wri = Math.round(ww * 0.25)
+      fallbackFacets.push({ points: [{ x: wl, y: wt }, { x: wr, y: wt }, { x: wr - wri, y: wcy }, { x: wl + wri, y: wcy }], seg: segments[4] })
+      if (segments[5]) fallbackFacets.push({ points: [{ x: wl, y: wb }, { x: wr, y: wb }, { x: wr - wri, y: wcy }, { x: wl + wri, y: wcy }], seg: segments[5] })
+      svg += `<line x1="${wl + wri}" y1="${wcy}" x2="${wr - wri}" y2="${wcy}" stroke="#C62828" stroke-width="2"/>`
+    }
+
+    // Extra segments: overlay as sub-labels
+    for (let i = Math.min(6, segments.length); i < segments.length; i++) {
+      // These are small facets, we skip geometry but show in labels
+    }
+  }
+
+  // Draw all facets
+  fallbackFacets.forEach(f => {
+    const points = f.points.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')
+    svg += `<polygon points="${points}" fill="#E8F2FC" stroke="#003366" stroke-width="1.5" stroke-linejoin="round"/>`
+  })
+
+  // Mode-specific labels
+  fallbackFacets.forEach((f, i) => {
+    const pcx = f.points.reduce((s, p) => s + p.x, 0) / f.points.length
+    const pcy = f.points.reduce((s, p) => s + p.y, 0) / f.points.length
+
+    if (mode === 'AREA') {
+      const areaText = `${f.seg.true_area_sqft.toLocaleString()}`
+      const pw = Math.max(areaText.length * 7.5 + 14, 55)
+      svg += `<rect x="${(pcx - pw / 2).toFixed(1)}" y="${(pcy - 10).toFixed(1)}" width="${pw.toFixed(1)}" height="20" rx="3" fill="#003366" fill-opacity="0.9"/>`
+      svg += `<text x="${pcx.toFixed(1)}" y="${(pcy + 4).toFixed(1)}" text-anchor="middle" font-size="11" font-weight="800" fill="#fff" font-family="Inter,system-ui,sans-serif">${areaText} ft&sup2;</text>`
+    } else if (mode === 'PITCH') {
+      const pitchNum = f.seg.pitch_ratio.split(':')[0] || '?'
+      const isFlat = f.seg.pitch_degrees < 14
+      svg += `<circle cx="${pcx.toFixed(1)}" cy="${pcy.toFixed(1)}" r="18" fill="${isFlat ? '#EEE' : '#D6E8F7'}" stroke="#003366" stroke-width="1"/>`
+      svg += `<text x="${pcx.toFixed(1)}" y="${(pcy + 5).toFixed(1)}" text-anchor="middle" font-size="15" font-weight="900" fill="${isFlat ? '#666' : '#003366'}" font-family="Inter,system-ui,sans-serif">${pitchNum}</text>`
+    } else {
+      // LENGTH: label edge lengths on the perimeter lines
+      for (let j = 0; j < f.points.length; j++) {
+        const p1 = f.points[j], p2 = f.points[(j + 1) % f.points.length]
+        const dist = Math.sqrt((p2.x - p1.x) ** 2 + (p2.y - p1.y) ** 2)
+        if (dist < 30) continue
+        const mx = (p1.x + p2.x) / 2, my = (p1.y + p2.y) / 2
+        const ftEst = Math.round(dist / sf)
+        const label = `${ftEst}'`
+        const angle = lineAngleDeg(p1.x, p1.y, p2.x, p2.y)
+        svg += `<g transform="translate(${mx.toFixed(1)},${my.toFixed(1)}) rotate(${angle.toFixed(1)})">`
+        svg += `<rect x="-18" y="-8" width="36" height="15" rx="2" fill="#fff" stroke="#003366" stroke-width="0.6"/>`
+        svg += `<text x="0" y="3" text-anchor="middle" font-size="8" font-weight="700" fill="#003366" font-family="Inter,system-ui,sans-serif">${label}</text>`
+        svg += `</g>`
+      }
+    }
+  })
+
+  // Compass
+  const compX = SVG_SIZE - 30, compY = 30
+  svg += `<circle cx="${compX}" cy="${compY}" r="14" fill="#fff" stroke="#003366" stroke-width="1"/>`
+  svg += `<line x1="${compX}" y1="${compY + 10}" x2="${compX}" y2="${compY - 10}" stroke="#003366" stroke-width="1.5"/>`
+  svg += `<polygon points="${compX},${compY - 12} ${compX - 3},${compY - 6} ${compX + 3},${compY - 6}" fill="#C62828"/>`
+  svg += `<text x="${compX}" y="${compY - 16}" text-anchor="middle" font-size="9" font-weight="800" fill="#003366" font-family="Inter,system-ui,sans-serif">N</text>`
+
+  // Summary bar
+  const modeLabel = mode === 'LENGTH' ? 'LENGTH MEASUREMENT' : mode === 'AREA' ? 'AREA MEASUREMENT' : 'PITCH DIAGRAM'
+  svg += `<rect x="0" y="${SVG_SIZE - 24}" width="${SVG_SIZE}" height="24" fill="#003366"/>`
+  svg += `<text x="10" y="${SVG_SIZE - 8}" font-size="8" font-weight="700" fill="#7EAFD4" font-family="Inter,system-ui,sans-serif">${modeLabel}</text>`
+  svg += `<text x="${SVG_SIZE - 10}" y="${SVG_SIZE - 8}" text-anchor="end" font-size="8" font-weight="600" fill="#fff" font-family="Inter,system-ui,sans-serif">${totalArea.toLocaleString()} ft&sup2; &middot; ${n} facets</text>`
+
+  return svg
+}
+
+// ============================================================
+// LEGACY WRAPPER — keeps backward compatibility for any code
+// that still references generateSatelliteOverlaySVG
+// Returns empty string since we no longer overlay on satellite
 // ============================================================
 function generateSatelliteOverlaySVG(
   aiGeometry: AIMeasurementAnalysis | null | undefined,
