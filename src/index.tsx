@@ -1394,13 +1394,14 @@ function getSettingsPageHTML() {
         </div>
         <div>
           <h1 class="text-xl font-bold">Settings</h1>
-          <p class="text-brand-200 text-xs">API Keys & Company Configuration</p>
+          <p class="text-brand-200 text-xs">Company Profile, API Keys & Pricing</p>
         </div>
       </div>
       <nav class="flex items-center space-x-4">
         <a href="/" class="text-brand-200 hover:text-white text-sm"><i class="fas fa-home mr-1"></i>Home</a>
         <a href="/order/new" class="text-brand-200 hover:text-white text-sm"><i class="fas fa-plus mr-1"></i>New Order</a>
         <a href="/admin" class="text-brand-200 hover:text-white text-sm"><i class="fas fa-tachometer-alt mr-1"></i>Admin</a>
+        <a href="/super-admin" class="text-yellow-300 hover:text-white text-sm font-semibold"><i class="fas fa-crown mr-1"></i>Super Admin</a>
       </nav>
     </div>
   </header>

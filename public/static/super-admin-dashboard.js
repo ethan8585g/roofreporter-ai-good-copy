@@ -1396,11 +1396,8 @@ async function savePricingSettings(e) {
 
     btn.innerHTML = '<i class="fas fa-check mr-1"></i> Saved!';
     btn.classList.replace('bg-red-600', 'bg-green-600');
-    setTimeout(() => {
-      btn.innerHTML = '<i class="fas fa-save mr-1"></i> Save Pricing';
-      btn.classList.replace('bg-green-600', 'bg-red-600');
-      btn.disabled = false;
-    }, 2000);
+    // Reload pricing data from DB to show updated values
+    setTimeout(() => { loadView('pricing'); }, 1500);
   } catch (err) {
     alert('Error saving pricing: ' + err.message);
     btn.innerHTML = '<i class="fas fa-save mr-1"></i> Save Pricing';
