@@ -187,16 +187,47 @@ reportsRoutes.get('/:orderId/html', async (c) => {
 
     if (!report) return c.json({ error: 'Report not found' }, 404)
 
-    // Always regenerate from raw data to ensure latest 9-page template is used
-    if (report.api_response_raw) {
-      const data = JSON.parse(report.api_response_raw) as RoofReport
-      const html = generateProfessionalReportHTML(data)
-      return c.html(html)
+    // Helper: Try to parse JSON as a full RoofReport and regenerate HTML
+    const tryRegenerate = (jsonStr: string): string | null => {
+      try {
+        const data = JSON.parse(jsonStr)
+        if (data && data.property && data.property.address && Array.isArray(data.segments) && data.segments.length > 0) {
+          return generateProfessionalReportHTML(data as RoofReport)
+        }
+      } catch (_) { /* not valid JSON or missing structure */ }
+      return null
     }
 
-    // Fallback to stored HTML only when raw data is not available
+    // Priority 1: Try api_response_raw (full RoofReport)
+    if (report.api_response_raw) {
+      const html = tryRegenerate(report.api_response_raw)
+      if (html && html.startsWith('<!DOCTYPE') || html?.startsWith('<html')) {
+        return c.html(html!)
+      }
+    }
+
+    // Priority 2: professional_report_html may contain a full RoofReport JSON 
+    // (enhance endpoint sometimes overwrites it with JSON instead of HTML)
     if (report.professional_report_html) {
-      return c.html(report.professional_report_html)
+      const stored = report.professional_report_html as string
+      // If it looks like HTML, return it directly
+      if (stored.trimStart().startsWith('<!DOCTYPE') || stored.trimStart().startsWith('<html')) {
+        return c.html(stored)
+      }
+      // Otherwise try to parse as RoofReport JSON and regenerate
+      const html = tryRegenerate(stored)
+      if (html) {
+        console.log(`[Report HTML] Regenerated HTML from JSON stored in professional_report_html for order ${orderId}`)
+        // Update DB with the real HTML so future requests are fast
+        try {
+          await c.env.DB.prepare(
+            `UPDATE reports SET professional_report_html = ? WHERE order_id = ?`
+          ).bind(html, parseInt(orderId)).run()
+        } catch (_) { /* non-critical */ }
+        return c.html(html)
+      }
+      // Last resort: return whatever is stored
+      return c.html(stored)
     }
 
     return c.json({ error: 'Report data not available' }, 404)
@@ -712,39 +743,40 @@ reportsRoutes.post('/:orderId/enhance', async (c) => {
           const professionalHtml = reportData ? generateProfessionalReportHTML(reportData) : null
           
           // Update DB with AI geometry + regenerated HTML + updated segments/edges/materials
-          const updateFields: string[] = ['ai_measurement_json = ?', 'ai_status = \'completed\'', 'ai_analyzed_at = datetime(\'now\')', 'api_response_raw = ?']
-          const updateValues: any[] = [JSON.stringify(aiGeometry)]
+          // Use paired arrays to keep fields and values perfectly aligned
+          const pairs: [string, any][] = [
+            ['ai_measurement_json = ?', JSON.stringify(aiGeometry)],
+            ['api_response_raw = ?', JSON.stringify(reportData)],
+          ]
           
           if (newEdges && aiSegments.length >= 2) {
-            updateFields.push('roof_segments = ?', 'edge_measurements = ?')
-            updateValues.push(JSON.stringify(aiSegments), JSON.stringify(newEdges))
+            pairs.push(['roof_segments = ?', JSON.stringify(aiSegments)])
+            pairs.push(['edge_measurements = ?', JSON.stringify(newEdges)])
           }
           if (newEdgeSummary) {
-            updateFields.push('total_ridge_ft = ?', 'total_hip_ft = ?', 'total_valley_ft = ?', 'total_eave_ft = ?', 'total_rake_ft = ?')
-            updateValues.push(newEdgeSummary.total_ridge_ft, newEdgeSummary.total_hip_ft, newEdgeSummary.total_valley_ft, newEdgeSummary.total_eave_ft, newEdgeSummary.total_rake_ft)
+            pairs.push(['total_ridge_ft = ?', newEdgeSummary.total_ridge_ft])
+            pairs.push(['total_hip_ft = ?', newEdgeSummary.total_hip_ft])
+            pairs.push(['total_valley_ft = ?', newEdgeSummary.total_valley_ft])
+            pairs.push(['total_eave_ft = ?', newEdgeSummary.total_eave_ft])
+            pairs.push(['total_rake_ft = ?', newEdgeSummary.total_rake_ft])
           }
           if (newMaterials) {
-            updateFields.push('material_estimate = ?', 'gross_squares = ?', 'bundle_count = ?', 'total_material_cost_cad = ?', 'complexity_class = ?')
-            updateValues.push(JSON.stringify(newMaterials), newMaterials.gross_squares, newMaterials.bundle_count, newMaterials.total_material_cost_cad, newMaterials.complexity_class)
+            pairs.push(['material_estimate = ?', JSON.stringify(newMaterials)])
+            pairs.push(['gross_squares = ?', newMaterials.gross_squares])
+            pairs.push(['bundle_count = ?', newMaterials.bundle_count])
+            pairs.push(['total_material_cost_cad = ?', newMaterials.total_material_cost_cad])
+            pairs.push(['complexity_class = ?', newMaterials.complexity_class])
           }
           if (professionalHtml) {
-            updateFields.push('professional_report_html = ?')
-            updateValues.push(professionalHtml)
+            pairs.push(['professional_report_html = ?', professionalHtml])
           }
-          updateFields.push("updated_at = datetime('now')")
-          updateValues.push(JSON.stringify(reportData))  // api_response_raw
-          updateValues.push(orderId)  // WHERE clause
+          
+          const updateFields = pairs.map(p => p[0])
+          updateFields.push("ai_status = 'completed'", "ai_analyzed_at = datetime('now')", "updated_at = datetime('now')")
+          const updateValues = [...pairs.map(p => p[1]), orderId]
           
           const sql = `UPDATE reports SET ${updateFields.join(', ')} WHERE order_id = ?`
-          
-          // Fix: api_response_raw binding — we pushed it to updateFields first but value last
-          // Reorder: put api_response_raw value after ai_measurement_json value
-          const orderedValues = [updateValues[0]]  // ai_measurement_json
-          orderedValues.push(...updateValues.slice(1, -2))  // middle values
-          orderedValues.push(updateValues[updateValues.length - 2])  // api_response_raw (JSON reportData)
-          orderedValues.push(updateValues[updateValues.length - 1])  // orderId
-          
-          await c.env.DB.prepare(sql).bind(...orderedValues).run()
+          await c.env.DB.prepare(sql).bind(...updateValues).run()
           
           console.log(`[Enhance] ✅ Order ${orderId}: DB updated with AI geometry (${aiGeometry.facets.length} facets, gemini-2.5-pro)`)
           
@@ -1257,12 +1289,29 @@ reportsRoutes.get('/:orderId/pdf', async (c) => {
     if (!report) return c.json({ error: 'Report not found' }, 404)
 
     let html = ''
-    // Always regenerate from raw data to ensure latest 9-page template
+    // Helper: Try to parse JSON as full RoofReport and regenerate HTML
+    const tryRegen = (s: string): string | null => {
+      try {
+        const d = JSON.parse(s)
+        if (d?.property?.address && Array.isArray(d.segments) && d.segments.length > 0) {
+          return generateProfessionalReportHTML(d as RoofReport)
+        }
+      } catch (_) {}
+      return null
+    }
+    // Try api_response_raw first
     if (report.api_response_raw) {
-      const data = JSON.parse(report.api_response_raw) as RoofReport
-      html = generateProfessionalReportHTML(data)
-    } else if (report.professional_report_html) {
-      html = report.professional_report_html
+      const h = tryRegen(report.api_response_raw)
+      if (h && (h.trimStart().startsWith('<!DOCTYPE') || h.trimStart().startsWith('<html'))) html = h
+    }
+    // Then professional_report_html (may be real HTML or JSON)
+    if (!html && report.professional_report_html) {
+      const stored = report.professional_report_html as string
+      if (stored.trimStart().startsWith('<!DOCTYPE') || stored.trimStart().startsWith('<html')) {
+        html = stored
+      } else {
+        html = tryRegen(stored) || stored
+      }
     }
     if (!html) return c.json({ error: 'Report HTML not available' }, 404)
 
@@ -1396,13 +1445,28 @@ reportsRoutes.post('/:orderId/email', async (c) => {
       return c.json({ error: 'No recipient email. Provide to_email in request body or ensure order has homeowner/requester email.' }, 400)
     }
 
-    // Get HTML report - always regenerate from raw data to ensure latest 9-page template
+    // Get HTML report - always regenerate from raw data to ensure latest 10-page template
     let reportHtml = ''
+    const tryRegenEmail = (s: string): string | null => {
+      try {
+        const d = JSON.parse(s)
+        if (d?.property?.address && Array.isArray(d.segments) && d.segments.length > 0) {
+          return generateProfessionalReportHTML(d as RoofReport)
+        }
+      } catch (_) {}
+      return null
+    }
     if (order.api_response_raw) {
-      const data = JSON.parse(order.api_response_raw) as RoofReport
-      reportHtml = generateProfessionalReportHTML(data)
-    } else if (order.professional_report_html) {
-      reportHtml = order.professional_report_html
+      const h = tryRegenEmail(order.api_response_raw)
+      if (h && (h.trimStart().startsWith('<!DOCTYPE') || h.trimStart().startsWith('<html'))) reportHtml = h
+    }
+    if (!reportHtml && order.professional_report_html) {
+      const stored = order.professional_report_html as string
+      if (stored.trimStart().startsWith('<!DOCTYPE') || stored.trimStart().startsWith('<html')) {
+        reportHtml = stored
+      } else {
+        reportHtml = tryRegenEmail(stored) || stored
+      }
     }
     if (!reportHtml) {
       return c.json({ error: 'Report not yet generated. Call POST /api/reports/:orderId/generate first.' }, 400)
