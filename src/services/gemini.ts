@@ -912,12 +912,37 @@ function pointsClose(a: { x: number; y: number }, b: { x: number; y: number }, t
   return Math.abs(a.x - b.x) <= threshold && Math.abs(a.y - b.y) <= threshold
 }
 
+/**
+ * Enhanced edge classification using geometric context.
+ * 
+ * For satellite images (top-down view on 640×640):
+ *   - EAVE: horizontal lower roof edge (gutterline). Near-horizontal (slope < 26°).
+ *     In top-down view, eaves run along the lower perimeter of the roof where gutters attach.
+ *   - RAKE: sloped edge of a gable end. Near-vertical in plan view (slope > 64°).
+ *     Only present on gable roofs with visible triangular wall ends.
+ *   - HIP: diagonal perimeter edge where two roof planes meet at an external angle.
+ *     Slope between 26° and 64° — the diagonal edges running from ridge ends to corners.
+ *   - RIDGE: topmost horizontal peak line. Rarely on outer perimeter.
+ *
+ * The angle thresholds (26° and 64°) are calibrated for Alberta hip/gable roofs:
+ *   - Pure horizontal = 0° (eave)
+ *   - 45° diagonal = hip
+ *   - Pure vertical = 90° (rake)
+ */
 function classifyEdge(a: { x: number; y: number }, b: { x: number; y: number }): 'EAVE' | 'RAKE' | 'HIP' | 'RIDGE' {
   const dx = Math.abs(b.x - a.x)
   const dy = Math.abs(b.y - a.y)
-  // Mostly horizontal = EAVE, mostly vertical = RAKE, diagonal = HIP
-  if (dx > dy * 2) return 'EAVE'
-  if (dy > dx * 2) return 'RAKE'
+  const edgeLen = Math.sqrt(dx * dx + dy * dy)
+  if (edgeLen < 2) return 'EAVE' // Degenerate edge — treat as eave
+
+  // Angle from horizontal (0° = horizontal eave, 90° = vertical rake)
+  const angleDeg = Math.atan2(dy, dx) * 180 / Math.PI
+
+  // Near-horizontal edges (angle < 26° from horizontal) → EAVE
+  if (angleDeg < 26) return 'EAVE'
+  // Near-vertical edges (angle > 64° from horizontal) → RAKE
+  if (angleDeg > 64) return 'RAKE'
+  // Diagonal edges → HIP (on perimeter; internal diagonals are classified separately)
   return 'HIP'
 }
 

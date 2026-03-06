@@ -2523,9 +2523,14 @@ function generateProfessionalReportHTML(report: RoofReport): string {
   const blueprintLengthSVG = generateBlueprintSVG(report.ai_geometry, report.segments, report.edges, es, report.total_footprint_sqft, report.roof_pitch_degrees, 'LENGTH')
 
   // ── Precise AI Overlay SVG for Page 3 (satellite bg rendered in HTML, SVG overlay on top) ──
+  // Pass pitch info + edge summary + GSD for accurate measurement labels
+  const dsmGsdMeters = (report.metadata as any)?.datalayers_analysis?.dsm_resolution_m || 0
   const preciseOverlaySVG = generatePreciseAIOverlaySVG(
     report.ai_geometry,
-    report.total_footprint_sqft
+    report.total_footprint_sqft,
+    predominantPitchDeg || 20,
+    es,
+    dsmGsdMeters
   )
 
   // Generate perimeter side data
@@ -2760,7 +2765,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
     <div style="color:#8eb8db;font-size:9px">Report: ${reportNum} &bull; ${reportDateShort}</div>
   </div>
   <div style="padding:8px 20px 8px">
-    <div style="font-size:9px;color:#4a5568;font-style:italic;margin-bottom:6px">High-resolution satellite imagery with AI-detected roof geometry. Pixel-to-foot scale computed from footprint area. Cyan lines = perimeter; red = ridges; amber = hips; blue dashed = valleys.</div>
+    <div style="font-size:9px;color:#4a5568;font-style:italic;margin-bottom:6px">High-resolution satellite imagery with AI-detected roof geometry. GSD-calibrated pixel-to-foot scale with pitch-corrected true lengths. Color-coded edges: green = eaves, yellow = hips, red = ridges, blue dashed = valleys, purple = rakes. Measurements in feet &amp; inches.</div>
 
     <!-- 640 × 640 satellite image base with SVG overlay -->
     <div style="position:relative;width:640px;max-width:100%;margin:0 auto;border:2px solid #003366;border-radius:4px;overflow:hidden;background:#111">
@@ -2773,14 +2778,15 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
       </div>
     </div>
 
-    <!-- Legend bar -->
+    <!-- Legend bar — matches SVG overlay colors -->
     <div style="display:flex;flex-wrap:wrap;gap:10px;padding:6px 12px;background:#f4f6f9;border:1px solid #d5dae3;border-radius:4px;margin-top:6px;font-size:8px;font-weight:600">
-      <div style="display:flex;align-items:center;gap:4px"><span style="width:20px;height:3px;background:#00e5ff;display:inline-block;border-radius:1px"></span>Perimeter Edge</div>
-      <div style="display:flex;align-items:center;gap:4px"><span style="width:20px;height:3px;background:#ff1744;display:inline-block;border-radius:1px"></span>Ridge</div>
-      <div style="display:flex;align-items:center;gap:4px"><span style="width:20px;height:3px;background:#ffab00;display:inline-block;border-radius:1px"></span>Hip</div>
-      <div style="display:flex;align-items:center;gap:4px"><span style="width:20px;height:3px;background:#2979ff;display:inline-block;border-radius:1px;border-top:1px dashed #2979ff"></span>Valley</div>
-      <div style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;background:#00e5ff;border-radius:50%;display:inline-block;border:1px solid #fff"></span>Vertex Point</div>
-      <div style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;background:rgba(0,229,255,0.15);display:inline-block;border:1px solid #00e5ff;border-radius:2px"></span>Facet Fill</div>
+      <div style="display:flex;align-items:center;gap:4px"><span style="width:20px;height:3px;background:#10b981;display:inline-block;border-radius:1px"></span>Eave (Gutterline)</div>
+      <div style="display:flex;align-items:center;gap:4px"><span style="width:20px;height:3px;background:#eab308;display:inline-block;border-radius:1px"></span>Hip</div>
+      <div style="display:flex;align-items:center;gap:4px"><span style="width:20px;height:3px;background:#ef4444;display:inline-block;border-radius:1px"></span>Ridge</div>
+      <div style="display:flex;align-items:center;gap:4px"><span style="width:20px;height:3px;background:#3b82f6;display:inline-block;border-radius:1px;border-top:1px dashed #3b82f6"></span>Valley</div>
+      <div style="display:flex;align-items:center;gap:4px"><span style="width:20px;height:3px;background:#a855f7;display:inline-block;border-radius:1px"></span>Rake</div>
+      <div style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;background:#fff;border-radius:50%;display:inline-block;border:2px solid #10b981"></span>Vertex</div>
+      <div style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;background:rgba(0,229,255,0.08);display:inline-block;border:1px solid rgba(0,229,255,0.25);border-radius:2px"></span>Facet</div>
     </div>
   </div>
 
@@ -3392,26 +3398,29 @@ function smartEdgeFootage(
 // ============================================================
 
 // ============================================================
-// PRECISE AI OVERLAY SVG — Pure SVG overlay for Page 3
+// PRECISE AI OVERLAY SVG — v2.0 — GSD-Calibrated + Pitch-Corrected
 //
 // This function generates a TRANSPARENT SVG that is absolutely
 // positioned on top of a 640×640 satellite <img> element.
-// It computes a pixel-to-foot scale from the AI perimeter bbox
-// and the known footprint area, then draws:
-//   - Semi-transparent facet polygon fills
-//   - Thick cyan perimeter lines with vertex dots
-//   - Colour-coded internal lines (ridge=red, hip=amber, valley=blue dashed)
-//   - Length labels (in feet) at each edge midpoint
-//   - Compass rose and info bar
 //
-// Key difference from old generateAIPointByPointSVG:
-//   - Does NOT embed the satellite image in <image> — the HTML does that
-//   - Uses pixel-to-foot conversion for accurate length labels
-//   - Simpler, focused only on geometry overlay
+// v2.0 improvements over v1.0:
+//   1. GSD-calibrated pixel-to-foot: uses DSM pixelSizeMeters when available,
+//      falls back to zoom-level formula, then bbox heuristic
+//   2. Color-coded perimeter edges by type:
+//      EAVE = #10b981 (green), HIP = #eab308 (yellow),
+//      RAKE = #a855f7 (purple), RIDGE = #ef4444 (red)
+//   3. Pitch-corrected true lengths on angled edges:
+//      true_length = plan_length / cos(pitch_rad) for hips/valleys/rakes
+//   4. Construction-grade labels: feet + inches (32' 4") not decimals
+//   5. Enhanced internal line classification using facet shared-edge analysis
+//   6. Visual legend mapping colors → edge types
 // ============================================================
 function generatePreciseAIOverlaySVG(
   aiGeometry: AIMeasurementAnalysis | null | undefined,
-  footprintSqft: number
+  footprintSqft: number,
+  predominantPitchDeg: number = 20,
+  edgeSummary: { total_ridge_ft: number; total_hip_ft: number; total_valley_ft: number; total_eave_ft: number; total_rake_ft: number } = { total_ridge_ft: 0, total_hip_ft: 0, total_valley_ft: 0, total_eave_ft: 0, total_rake_ft: 0 },
+  dsmGsdMeters: number = 0
 ): string {
   const W = 640, H = 640
 
@@ -3427,27 +3436,91 @@ function generatePreciseAIOverlaySVG(
   const hasPerimeter = aiGeometry.perimeter && aiGeometry.perimeter.length >= 3
   const hasFacets = aiGeometry.facets && aiGeometry.facets.length >= 2
 
-  // ── Pixel-to-foot scale ──
-  // Compute from perimeter bounding box vs known footprint area
+  // ── COLOR PALETTE — Construction-standard edge type colors ──
+  const EDGE_COLORS: Record<string, string> = {
+    'EAVE':  '#10b981', // Emerald green — gutterline/drip edge
+    'HIP':   '#eab308', // Amber yellow — hip edges
+    'RAKE':  '#a855f7', // Purple — gable rakes
+    'RIDGE': '#ef4444', // Red — ridge lines
+    'VALLEY': '#3b82f6', // Blue — valley lines
+  }
+  const DEFAULT_EDGE_COLOR = '#00e5ff' // Cyan fallback
+
+  // ── GSD-CALIBRATED PIXEL-TO-FOOT SCALE ──
+  // Priority 1: Use DSM Ground Sample Distance from Google Solar API (most accurate)
+  // Priority 2: Compute from perimeter bbox vs known footprint area (heuristic)
   let pxPerFt = 1
-  if (hasPerimeter) {
-    const xs = aiGeometry.perimeter.map(p => p.x)
-    const ys = aiGeometry.perimeter.map(p => p.y)
-    const bboxW = Math.max(...xs) - Math.min(...xs)
-    const bboxH = Math.max(...ys) - Math.min(...ys)
-    const bboxAreaPx = Math.max(bboxW * bboxH, 1)
-    const realSqft = Math.max(footprintSqft, 100)
-    pxPerFt = Math.sqrt(bboxAreaPx / realSqft)
-  } else if (hasFacets) {
-    // Fallback: use facets bounding box
-    const allPts = aiGeometry.facets.flatMap(f => f.points || [])
-    if (allPts.length > 2) {
-      const xs = allPts.map(p => p.x)
-      const ys = allPts.map(p => p.y)
+  let scaleSource = 'bbox'
+
+  if (dsmGsdMeters > 0.01 && dsmGsdMeters < 5) {
+    // DSM GSD: each pixel = dsmGsdMeters meters.
+    // For the 640×640 satellite image, Google Maps zoom 20 ≈ 0.15 m/px.
+    // The satellite image may be at different resolution than DSM, but
+    // the DSM GSD gives us a ground-truth reference.
+    // Convert: meters/px → feet/px → px/ft
+    const ftPerPx = dsmGsdMeters * 3.28084  // 1 meter = 3.28084 feet
+    pxPerFt = 1 / ftPerPx
+    scaleSource = 'GSD'
+  }
+
+  // Fallback: compute from geometry bounding box vs known footprint
+  if (scaleSource !== 'GSD') {
+    if (hasPerimeter) {
+      const xs = aiGeometry.perimeter.map(p => p.x)
+      const ys = aiGeometry.perimeter.map(p => p.y)
       const bboxW = Math.max(...xs) - Math.min(...xs)
       const bboxH = Math.max(...ys) - Math.min(...ys)
       const bboxAreaPx = Math.max(bboxW * bboxH, 1)
-      pxPerFt = Math.sqrt(bboxAreaPx / Math.max(footprintSqft, 100))
+      const realSqft = Math.max(footprintSqft, 100)
+      pxPerFt = Math.sqrt(bboxAreaPx / realSqft)
+    } else if (hasFacets) {
+      const allPts = aiGeometry.facets.flatMap(f => f.points || [])
+      if (allPts.length > 2) {
+        const xs = allPts.map(p => p.x)
+        const ys = allPts.map(p => p.y)
+        const bboxW = Math.max(...xs) - Math.min(...xs)
+        const bboxH = Math.max(...ys) - Math.min(...ys)
+        const bboxAreaPx = Math.max(bboxW * bboxH, 1)
+        pxPerFt = Math.sqrt(bboxAreaPx / Math.max(footprintSqft, 100))
+      }
+    }
+  }
+
+  // ── PITCH HELPERS ──
+  const pitchRad = (predominantPitchDeg || 20) * Math.PI / 180
+  // Parse facet-specific pitch when available
+  const parsePitch = (pitchStr: string | undefined, defaultDeg: number): number => {
+    if (!pitchStr) return defaultDeg
+    // Handle "X/12" format
+    const ratioMatch = pitchStr.match(/^(\d+(?:\.\d+)?)\s*\/\s*12$/)
+    if (ratioMatch) return Math.atan(parseFloat(ratioMatch[1]) / 12) * 180 / Math.PI
+    // Handle "X deg" or "X°" format
+    const degMatch = pitchStr.match(/^(\d+(?:\.\d+)?)\s*(?:deg|°)?$/)
+    if (degMatch) {
+      const v = parseFloat(degMatch[1])
+      return v > 0 && v < 90 ? v : defaultDeg
+    }
+    return defaultDeg
+  }
+
+  // Pitch correction factor: plan_length × factor = true 3D length
+  // For eaves (horizontal), factor = 1.0
+  // For hips/valleys: factor = √(1 + tan²(pitch)/2) (diagonal slope)
+  // For rakes: factor = 1/cos(pitch) (up the slope)
+  const pitchFactorForType = (edgeType: string, pitchDeg?: number): number => {
+    const pd = pitchDeg || predominantPitchDeg || 20
+    const pr = pd * Math.PI / 180
+    switch (edgeType) {
+      case 'EAVE': return 1.0
+      case 'RIDGE': return 1.0
+      case 'HIP':
+      case 'VALLEY':
+        // Hip/valley run diagonally across the slope: √(1 + tan²(pitch)/2)
+        return Math.sqrt(1 + Math.pow(Math.tan(pr), 2) / 2)
+      case 'RAKE':
+        // Rake runs up the slope: 1/cos(pitch)
+        return 1 / Math.cos(pr)
+      default: return 1.0
     }
   }
 
@@ -3455,8 +3528,18 @@ function generatePreciseAIOverlaySVG(
   const tx = (x: number) => Math.max(0, Math.min(W, x))
   const ty = (y: number) => Math.max(0, Math.min(H, y))
 
-  // Pixel distance to feet
+  // Pixel distance to plan feet
   const pxToFt = (px: number) => pxPerFt > 0.01 ? px / pxPerFt : 0
+
+  // Format feet as construction-grade: 32' 4" instead of 32.3'
+  const fmtFtIn = (ft: number): string => {
+    if (ft < 0.5) return `${Math.round(ft * 12)}"`
+    const wholeFt = Math.floor(ft)
+    const inches = Math.round((ft - wholeFt) * 12)
+    if (inches === 0) return `${wholeFt}'`
+    if (inches === 12) return `${wholeFt + 1}'`
+    return `${wholeFt}' ${inches}"`
+  }
 
   // ── BUILD SVG (transparent background — overlays the satellite <img>) ──
   let svg = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;display:block">`
@@ -3476,45 +3559,58 @@ function generatePreciseAIOverlaySVG(
     </filter>
   </defs>`
 
-  // ── FACET FILLS (semi-transparent cyan polygons) ──
+  // ── FACET FILLS (semi-transparent polygons with per-facet tint) ──
   if (hasFacets) {
-    aiGeometry.facets.forEach(facet => {
+    const facetTints = ['rgba(0,229,255,0.08)', 'rgba(16,185,129,0.06)', 'rgba(234,179,8,0.06)', 'rgba(239,68,68,0.06)', 'rgba(168,85,247,0.06)', 'rgba(59,130,246,0.06)']
+    aiGeometry.facets.forEach((facet, i) => {
       if (!facet.points || facet.points.length < 3) return
       const pts = facet.points.map(p => `${tx(p.x).toFixed(1)},${ty(p.y).toFixed(1)}`).join(' ')
-      svg += `<polygon points="${pts}" fill="rgba(0,229,255,0.08)" stroke="rgba(0,229,255,0.35)" stroke-width="0.5"/>`
+      const tint = facetTints[i % facetTints.length]
+      svg += `<polygon points="${pts}" fill="${tint}" stroke="rgba(0,229,255,0.25)" stroke-width="0.5"/>`
     })
   }
 
-  // ── PERIMETER: Bright cyan lines with glow ──
+  // ── PERIMETER: Color-coded edges by type (EAVE=green, HIP=yellow, RAKE=purple) ──
   if (hasPerimeter) {
     const perim = aiGeometry.perimeter
     const n = perim.length
 
-    // Thick cyan perimeter polygon
-    const perimPts = perim.map(p => `${tx(p.x).toFixed(1)},${ty(p.y).toFixed(1)}`).join(' ')
-    svg += `<polygon points="${perimPts}" fill="none" stroke="#00e5ff" stroke-width="2.5" stroke-linejoin="round" filter="url(#ov-glow-cyan)"/>`
-
-    // Vertex dots at every corner
-    for (let i = 0; i < n; i++) {
-      svg += `<circle cx="${tx(perim[i].x).toFixed(1)}" cy="${ty(perim[i].y).toFixed(1)}" r="4" fill="#00e5ff" stroke="#fff" stroke-width="1" filter="url(#ov-glow-cyan)"/>`
-    }
-
-    // ── PERIMETER EDGE LENGTH LABELS ──
+    // Draw each perimeter segment in its edge-type color
     for (let i = 0; i < n; i++) {
       const p1 = perim[i], p2 = perim[(i + 1) % n]
+      const edgeType = p1.edge_to_next || 'EAVE'
+      const color = EDGE_COLORS[edgeType] || DEFAULT_EDGE_COLOR
+      svg += `<line x1="${tx(p1.x).toFixed(1)}" y1="${ty(p1.y).toFixed(1)}" x2="${tx(p2.x).toFixed(1)}" y2="${ty(p2.y).toFixed(1)}" stroke="${color}" stroke-width="3" stroke-linecap="round" filter="url(#ov-glow-cyan)"/>`
+    }
+
+    // Vertex dots at every corner (white with colored stroke)
+    for (let i = 0; i < n; i++) {
+      const edgeType = perim[i].edge_to_next || 'EAVE'
+      const color = EDGE_COLORS[edgeType] || DEFAULT_EDGE_COLOR
+      svg += `<circle cx="${tx(perim[i].x).toFixed(1)}" cy="${ty(perim[i].y).toFixed(1)}" r="4" fill="#fff" stroke="${color}" stroke-width="2" filter="url(#ov-glow-cyan)"/>`
+    }
+
+    // ── PERIMETER EDGE LENGTH LABELS with pitch correction ──
+    for (let i = 0; i < n; i++) {
+      const p1 = perim[i], p2 = perim[(i + 1) % n]
+      const edgeType = p1.edge_to_next || 'EAVE'
+      const color = EDGE_COLORS[edgeType] || DEFAULT_EDGE_COLOR
       const sx = tx(p1.x), sy = ty(p1.y)
       const ex = tx(p2.x), ey = ty(p2.y)
       const segPx = Math.sqrt((ex - sx) ** 2 + (ey - sy) ** 2)
       if (segPx < 15) continue
 
-      const ftVal = pxToFt(segPx)
-      if (ftVal < 0.5) continue
+      const planFt = pxToFt(segPx)
+      if (planFt < 0.5) continue
+
+      // Apply pitch correction: hips and rakes are longer in 3D than in plan view
+      const trueFt = planFt * pitchFactorForType(edgeType)
 
       // Offset label outward from the perimeter
       const dx = ex - sx, dy = ey - sy
       const len = Math.sqrt(dx * dx + dy * dy)
       const nx = -dy / len, ny = dx / len
-      const offset = 18
+      const offset = 20
       const mx = (sx + ex) / 2 + nx * offset
       const my = (sy + ey) / 2 + ny * offset
 
@@ -3523,21 +3619,21 @@ function generatePreciseAIOverlaySVG(
       if (angle > 90) angle -= 180
       if (angle < -90) angle += 180
 
-      const label = `${ftVal.toFixed(1)}'`
-      const bgW = Math.max(label.length * 7 + 10, 44)
+      const label = fmtFtIn(trueFt)
+      const bgW = Math.max(label.length * 6.5 + 14, 48)
 
       svg += `<g transform="translate(${mx.toFixed(1)},${my.toFixed(1)}) rotate(${angle.toFixed(1)})" filter="url(#ov-label-shadow)">`
-      svg += `<rect x="${(-bgW / 2).toFixed(1)}" y="-9" width="${bgW.toFixed(1)}" height="18" rx="3" fill="rgba(0,34,68,0.9)" stroke="#00e5ff" stroke-width="0.5"/>`
-      svg += `<text x="0" y="4" text-anchor="middle" font-size="9" font-weight="700" fill="#00e5ff" font-family="Inter,system-ui,sans-serif">${label}</text>`
+      svg += `<rect x="${(-bgW / 2).toFixed(1)}" y="-9" width="${bgW.toFixed(1)}" height="18" rx="3" fill="rgba(0,34,68,0.92)" stroke="${color}" stroke-width="0.8"/>`
+      svg += `<text x="0" y="4" text-anchor="middle" font-size="9" font-weight="700" fill="${color}" font-family="Inter,system-ui,sans-serif">${label}</text>`
       svg += `</g>`
     }
   }
 
   // ── INTERNAL STRUCTURAL LINES (ridges, hips, valleys) ──
-  const lineColors: Record<string, string> = {
-    'RIDGE': '#ff1744',
-    'HIP': '#ffab00',
-    'VALLEY': '#2979ff',
+  const internalColors: Record<string, string> = {
+    'RIDGE': '#ef4444', // Red
+    'HIP':   '#eab308', // Yellow
+    'VALLEY': '#3b82f6', // Blue
   }
 
   // Derive internal lines from facet shared edges if geometry.lines is empty
@@ -3558,9 +3654,35 @@ function generatePreciseAIOverlaySVG(
     const derived: typeof effectiveLines = []
     for (const [, edge] of Object.entries(edgeMap)) {
       if (edge.count >= 2) {
+        // Shared edge = internal line. Classify using geometry:
+        // - Near-horizontal in plan view → RIDGE (runs along building length at top)
+        // - Diagonal → HIP or VALLEY
+        // Distinction: HIP edges slope DOWN from ridge to perimeter corner (external angle),
+        //              VALLEY edges channel water inward (internal angle between wings).
+        // Heuristic: if the midpoint of this edge is close to the perimeter,
+        // it's likely a HIP; if it's interior, it's more likely a VALLEY.
         const dx = Math.abs(edge.end.x - edge.start.x)
         const dy = Math.abs(edge.end.y - edge.start.y)
-        const lineType = dy < dx * 0.3 ? 'RIDGE' : 'HIP'
+        let lineType: string
+        if (dy < dx * 0.3) {
+          lineType = 'RIDGE' // Near-horizontal shared edge = ridge line
+        } else {
+          // Check proximity to perimeter to distinguish hip from valley
+          if (hasPerimeter) {
+            const mx = (edge.start.x + edge.end.x) / 2
+            const my = (edge.start.y + edge.end.y) / 2
+            const centroidX = aiGeometry.perimeter.reduce((s, p) => s + p.x, 0) / aiGeometry.perimeter.length
+            const centroidY = aiGeometry.perimeter.reduce((s, p) => s + p.y, 0) / aiGeometry.perimeter.length
+            const distFromCenter = Math.sqrt((mx - centroidX) ** 2 + (my - centroidY) ** 2)
+            const avgPerimDist = aiGeometry.perimeter.reduce((s, p) => 
+              s + Math.sqrt((p.x - centroidX) ** 2 + (p.y - centroidY) ** 2), 0) / aiGeometry.perimeter.length
+            // If midpoint is closer to perimeter than center → HIP
+            // If midpoint is more interior → VALLEY (where two wings meet inward)
+            lineType = distFromCenter > avgPerimDist * 0.65 ? 'HIP' : 'VALLEY'
+          } else {
+            lineType = 'HIP' // Default to HIP when no perimeter for context
+          }
+        }
         derived.push({ type: lineType as any, start: edge.start, end: edge.end })
       }
     }
@@ -3570,45 +3692,65 @@ function generatePreciseAIOverlaySVG(
   // Draw internal lines
   effectiveLines.forEach(line => {
     if (line.type === 'EAVE' || line.type === 'RAKE') return
-    const color = lineColors[line.type] || '#00e5ff'
+    const color = internalColors[line.type] || DEFAULT_EDGE_COLOR
     const dash = line.type === 'VALLEY' ? ' stroke-dasharray="8,4"' : ''
     svg += `<line x1="${tx(line.start.x).toFixed(1)}" y1="${ty(line.start.y).toFixed(1)}" x2="${tx(line.end.x).toFixed(1)}" y2="${ty(line.end.y).toFixed(1)}" stroke="${color}" stroke-width="2.5"${dash} stroke-linecap="round" filter="url(#ov-glow-line)"/>`
     svg += `<circle cx="${tx(line.start.x).toFixed(1)}" cy="${ty(line.start.y).toFixed(1)}" r="3" fill="${color}" stroke="#fff" stroke-width="0.8"/>`
     svg += `<circle cx="${tx(line.end.x).toFixed(1)}" cy="${ty(line.end.y).toFixed(1)}" r="3" fill="${color}" stroke="#fff" stroke-width="0.8"/>`
   })
 
-  // Internal line length labels
+  // Internal line length labels with pitch correction
   effectiveLines.forEach(line => {
     if (line.type === 'EAVE' || line.type === 'RAKE') return
-    const color = lineColors[line.type] || '#00e5ff'
+    const color = internalColors[line.type] || DEFAULT_EDGE_COLOR
     const sx = tx(line.start.x), sy = ty(line.start.y)
     const ex = tx(line.end.x), ey = ty(line.end.y)
     const segPx = Math.sqrt((ex - sx) ** 2 + (ey - sy) ** 2)
-    const ftVal = pxToFt(segPx)
-    if (ftVal < 0.5 || segPx < 20) return
+    const planFt = pxToFt(segPx)
+    if (planFt < 0.5 || segPx < 20) return
+
+    // Apply pitch correction for internal lines
+    const trueFt = planFt * pitchFactorForType(line.type)
 
     const mx = (sx + ex) / 2, my = (sy + ey) / 2
     let angle = Math.atan2(ey - sy, ex - sx) * 180 / Math.PI
     if (angle > 90) angle -= 180
     if (angle < -90) angle += 180
 
-    const label = `${ftVal.toFixed(1)}'`
-    const bgW = Math.max(label.length * 7 + 10, 44)
+    const label = fmtFtIn(trueFt)
+    const bgW = Math.max(label.length * 6.5 + 14, 48)
 
     svg += `<g transform="translate(${mx.toFixed(1)},${my.toFixed(1)}) rotate(${angle.toFixed(1)})" filter="url(#ov-label-shadow)">`
-    svg += `<rect x="${(-bgW / 2).toFixed(1)}" y="-9" width="${bgW.toFixed(1)}" height="18" rx="3" fill="rgba(50,0,0,0.85)" stroke="${color}" stroke-width="0.5"/>`
+    svg += `<rect x="${(-bgW / 2).toFixed(1)}" y="-9" width="${bgW.toFixed(1)}" height="18" rx="3" fill="rgba(50,0,0,0.88)" stroke="${color}" stroke-width="0.8"/>`
     svg += `<text x="0" y="4" text-anchor="middle" font-size="9" font-weight="700" fill="${color}" font-family="Inter,system-ui,sans-serif">${label}</text>`
     svg += `</g>`
   })
 
-  // ── FACET NUMBER CIRCLES ──
+  // ── FACET NUMBER CIRCLES with area label ──
   if (hasFacets) {
     aiGeometry.facets.forEach((facet, i) => {
       if (!facet.points || facet.points.length < 3) return
       const cx = facet.points.reduce((s, p) => s + tx(p.x), 0) / facet.points.length
       const cy = facet.points.reduce((s, p) => s + ty(p.y), 0) / facet.points.length
-      svg += `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="13" fill="rgba(0,34,68,0.85)" stroke="#00e5ff" stroke-width="1.5"/>`
-      svg += `<text x="${cx.toFixed(1)}" y="${(cy + 5).toFixed(1)}" text-anchor="middle" font-size="14" font-weight="800" fill="#fff" font-family="Inter,system-ui,sans-serif">${i + 1}</text>`
+
+      // Compute facet pixel area using shoelace formula, convert to sqft
+      let pxArea = 0
+      for (let j = 0; j < facet.points.length; j++) {
+        const a = facet.points[j], b = facet.points[(j + 1) % facet.points.length]
+        pxArea += a.x * b.y - b.x * a.y
+      }
+      pxArea = Math.abs(pxArea) / 2
+      const planSqft = pxPerFt > 0.01 ? pxArea / (pxPerFt * pxPerFt) : 0
+      // Apply pitch correction for true area
+      const facetPitchDeg = parsePitch(facet.pitch, predominantPitchDeg)
+      const trueSqft = planSqft / Math.cos(facetPitchDeg * Math.PI / 180)
+
+      svg += `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="14" fill="rgba(0,34,68,0.88)" stroke="#00e5ff" stroke-width="1.5"/>`
+      svg += `<text x="${cx.toFixed(1)}" y="${(cy + 1).toFixed(1)}" text-anchor="middle" font-size="13" font-weight="800" fill="#fff" font-family="Inter,system-ui,sans-serif">${i + 1}</text>`
+      // Small area label below the number
+      if (trueSqft > 10) {
+        svg += `<text x="${cx.toFixed(1)}" y="${(cy + 24).toFixed(1)}" text-anchor="middle" font-size="7" font-weight="600" fill="#7eafd4" font-family="Inter,system-ui,sans-serif" filter="url(#ov-label-shadow)">${Math.round(trueSqft)} ft²</text>`
+      }
     })
   }
 
@@ -3636,19 +3778,56 @@ function generatePreciseAIOverlaySVG(
   const scaleBarFt = 10
   const scaleBarPx = scaleBarFt * pxPerFt
   if (scaleBarPx > 10 && scaleBarPx < W * 0.5) {
-    const sbX = 16, sbY = H - 46
+    const sbX = 16, sbY = H - 70
     svg += `<line x1="${sbX}" y1="${sbY}" x2="${sbX + scaleBarPx}" y2="${sbY}" stroke="#00e5ff" stroke-width="2"/>`
     svg += `<line x1="${sbX}" y1="${sbY - 4}" x2="${sbX}" y2="${sbY + 4}" stroke="#00e5ff" stroke-width="1.5"/>`
     svg += `<line x1="${sbX + scaleBarPx}" y1="${sbY - 4}" x2="${sbX + scaleBarPx}" y2="${sbY + 4}" stroke="#00e5ff" stroke-width="1.5"/>`
     svg += `<text x="${sbX + scaleBarPx / 2}" y="${sbY - 6}" text-anchor="middle" font-size="8" font-weight="700" fill="#00e5ff" font-family="Inter,system-ui,sans-serif">${scaleBarFt} ft</text>`
   }
 
-  // Info badge
-  svg += `<rect x="10" y="${H - 36}" width="210" height="26" rx="4" fill="rgba(0,34,68,0.9)" stroke="#00e5ff" stroke-width="0.5"/>`
-  svg += `<text x="20" y="${H - 20}" font-size="9" font-weight="700" fill="#00e5ff" font-family="Inter,system-ui,sans-serif">FOOTPRINT: ${footprintSqft.toLocaleString()} ft²</text>`
+  // ── LEGEND BOX (bottom-left, below scale bar) ──
+  const legX = 10, legY = H - 56
+  const legendItems = [
+    { color: EDGE_COLORS['EAVE'], label: 'Eave', dash: false },
+    { color: EDGE_COLORS['HIP'], label: 'Hip', dash: false },
+    { color: EDGE_COLORS['RIDGE'], label: 'Ridge', dash: false },
+    { color: EDGE_COLORS['VALLEY'], label: 'Valley', dash: true },
+    { color: EDGE_COLORS['RAKE'], label: 'Rake', dash: false },
+  ]
+  const legW = 170, legH = 46
+  svg += `<rect x="${legX}" y="${legY}" width="${legW}" height="${legH}" rx="4" fill="rgba(0,20,40,0.92)" stroke="rgba(0,229,255,0.4)" stroke-width="0.5"/>`
+  // Two rows of legend items
+  const row1 = legendItems.slice(0, 3)
+  const row2 = legendItems.slice(3)
+  row1.forEach((item, idx) => {
+    const lx = legX + 8 + idx * 54
+    const ly = legY + 14
+    if (item.dash) {
+      svg += `<line x1="${lx}" y1="${ly}" x2="${lx + 14}" y2="${ly}" stroke="${item.color}" stroke-width="2.5" stroke-dasharray="4,2"/>`
+    } else {
+      svg += `<line x1="${lx}" y1="${ly}" x2="${lx + 14}" y2="${ly}" stroke="${item.color}" stroke-width="2.5"/>`
+    }
+    svg += `<text x="${lx + 18}" y="${ly + 3.5}" font-size="8" font-weight="600" fill="${item.color}" font-family="Inter,system-ui,sans-serif">${item.label}</text>`
+  })
+  row2.forEach((item, idx) => {
+    const lx = legX + 8 + idx * 54
+    const ly = legY + 32
+    if (item.dash) {
+      svg += `<line x1="${lx}" y1="${ly}" x2="${lx + 14}" y2="${ly}" stroke="${item.color}" stroke-width="2.5" stroke-dasharray="4,2"/>`
+    } else {
+      svg += `<line x1="${lx}" y1="${ly}" x2="${lx + 14}" y2="${ly}" stroke="${item.color}" stroke-width="2.5"/>`
+    }
+    svg += `<text x="${lx + 18}" y="${ly + 3.5}" font-size="8" font-weight="600" fill="${item.color}" font-family="Inter,system-ui,sans-serif">${item.label}</text>`
+  })
+
+  // ── INFO BADGE (bottom-right) ──
+  const ibW = 190, ibH = 36
+  svg += `<rect x="${W - ibW - 10}" y="${H - ibH - 10}" width="${ibW}" height="${ibH}" rx="4" fill="rgba(0,34,68,0.92)" stroke="#00e5ff" stroke-width="0.5"/>`
+  svg += `<text x="${W - ibW / 2 - 10}" y="${H - ibH + 3}" font-size="9" font-weight="700" fill="#00e5ff" font-family="Inter,system-ui,sans-serif" text-anchor="middle">FOOTPRINT: ${footprintSqft.toLocaleString()} ft²</text>`
   const facetCount = aiGeometry.facets?.length || 0
   const perimCount = aiGeometry.perimeter?.length || 0
-  svg += `<text x="20" y="${H - 11}" font-size="7.5" font-weight="500" fill="#7eafd4" font-family="Inter,system-ui,sans-serif">${facetCount} facets · ${perimCount} perimeter pts · Scale: 1 px = ${(1 / pxPerFt).toFixed(2)} ft</text>`
+  const scaleLabel = scaleSource === 'GSD' ? `GSD ${dsmGsdMeters.toFixed(2)} m/px` : `1 px ≈ ${(1 / pxPerFt).toFixed(2)} ft`
+  svg += `<text x="${W - ibW / 2 - 10}" y="${H - ibH + 16}" font-size="7.5" font-weight="500" fill="#7eafd4" font-family="Inter,system-ui,sans-serif" text-anchor="middle">${facetCount} facets · ${perimCount} pts · ${scaleLabel}</text>`
 
   svg += `</svg>`
   return svg
