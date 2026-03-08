@@ -76,6 +76,13 @@ export type Bindings = {
   TWILIO_ACCOUNT_SID: string    // e.g. "AC..."
   TWILIO_AUTH_TOKEN: string     // Account auth token
 
+  // Cloud Run Custom AI — Your Colab-trained roof analysis model
+  // Hosted on: collab-581996238660.europe-west1.run.app
+  // Falls back to Gemini when unavailable
+  CLOUD_RUN_AI_URL: string         // e.g. "https://collab-581996238660.europe-west1.run.app"
+  CLOUD_RUN_AI_TOKEN: string       // Optional: Cloud Run IAM auth token
+  CLOUD_RUN_TIMEOUT_MS: string     // Optional: override default 90s timeout
+
   // OpenAI-compatible API — Rover AI Chatbot
   // Used via GenSpark proxy for AI-powered chat responses
   OPENAI_API_KEY: string        // GenSpark LLM proxy key

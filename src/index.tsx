@@ -104,6 +104,8 @@ app.get('/api/health', (c) => {
       TWILIO_AUTH_TOKEN: !!(c.env as any).TWILIO_AUTH_TOKEN,
       OPENAI_API_KEY: !!(c.env as any).OPENAI_API_KEY,
       OPENAI_BASE_URL: !!(c.env as any).OPENAI_BASE_URL,
+      CLOUD_RUN_AI_URL: (c.env as any).CLOUD_RUN_AI_URL || 'https://collab-581996238660.europe-west1.run.app',
+      CLOUD_RUN_AI_TOKEN: !!(c.env as any).CLOUD_RUN_AI_TOKEN,
       DB: !!c.env.DB
     },
     vertex_ai: {
