@@ -761,6 +761,11 @@ app.get('/customer/secretary', (c) => {
   return c.html(getSecretaryPageHTML())
 })
 
+// Model Cards — Public reference pages for AI models
+app.get('/model-card/gemma-3', (c) => {
+  return c.html(getGemma3ModelCardHTML())
+})
+
 export default app
 
 // ============================================================
@@ -2411,6 +2416,458 @@ function getSecretaryPageHTML() {
     }
   </script>
   <script src="/static/secretary.js"></script>
+</body>
+</html>`
+}
+
+// ============================================================
+// GEMMA 3 MODEL CARD — Public reference page
+// ============================================================
+function getGemma3ModelCardHTML() {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gemma 3 Model Card - Google DeepMind</title>
+  <meta name="description" content="Gemma 3 — lightweight, open, multimodal models by Google DeepMind. Text + image understanding, 128K context, 140+ languages.">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/bash.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/bibtex.min.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            'gemma': { 50:'#eff6ff', 100:'#dbeafe', 200:'#bfdbfe', 300:'#93c5fd', 400:'#60a5fa', 500:'#4285F4', 600:'#2563eb', 700:'#1d4ed8', 800:'#1e40af', 900:'#1e3a8a' },
+            'google-blue':'#4285F4', 'google-red':'#EA4335', 'google-yellow':'#FBBC05', 'google-green':'#34A853'
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    .code-block { position: relative; }
+    .code-block .copy-btn { position: absolute; top: 8px; right: 8px; opacity: 0; transition: opacity 0.2s; }
+    .code-block:hover .copy-btn { opacity: 1; }
+    .toc-link { transition: all 0.2s; border-left: 3px solid transparent; }
+    .toc-link:hover, .toc-link.active { border-left-color: #4285F4; background: #eff6ff; color: #1d4ed8; }
+    .size-badge { transition: all 0.3s; cursor: pointer; }
+    .size-badge:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(66,133,244,0.3); }
+    .size-badge.selected { ring: 2px; ring-color: #4285F4; background: #eff6ff; }
+    .section-card { transition: all 0.2s; }
+    .section-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.08); }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    .animate-section { animation: fadeIn 0.5s ease-out; }
+    pre code { font-size: 0.85rem !important; line-height: 1.5 !important; }
+    .hljs { border-radius: 0.5rem; padding: 1.25rem !important; }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+
+  <!-- Header -->
+  <header class="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center space-x-4">
+        <div class="flex items-center space-x-2">
+          <div class="w-10 h-10 bg-gradient-to-br from-google-blue to-blue-600 rounded-xl flex items-center justify-center shadow-md">
+            <svg viewBox="0 0 24 24" class="w-6 h-6 text-white" fill="currentColor">
+              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+            </svg>
+          </div>
+          <div>
+            <h1 class="text-xl font-bold text-gray-900">Gemma 3</h1>
+            <p class="text-xs text-gray-500">Model Card &middot; Google DeepMind</p>
+          </div>
+        </div>
+      </div>
+      <div class="flex items-center space-x-3">
+        <a href="https://ai.google.dev/gemma" target="_blank" class="px-4 py-2 bg-google-blue text-white text-sm font-medium rounded-lg hover:bg-blue-600 transition shadow-sm">
+          <i class="fas fa-external-link-alt mr-1"></i> Model Page
+        </a>
+        <a href="/" class="text-gray-500 hover:text-gray-700 text-sm">
+          <i class="fas fa-home mr-1"></i> Home
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <div class="max-w-7xl mx-auto px-4 py-8 flex gap-8">
+
+    <!-- Sidebar TOC -->
+    <aside class="hidden lg:block w-56 flex-shrink-0">
+      <nav class="sticky top-20 space-y-1 text-sm" id="toc-nav">
+        <a href="#overview" class="toc-link block px-3 py-2 rounded-r text-gray-600">Overview</a>
+        <a href="#description" class="toc-link block px-3 py-2 rounded-r text-gray-600">Description</a>
+        <a href="#model-sizes" class="toc-link block px-3 py-2 rounded-r text-gray-600">Model Sizes</a>
+        <a href="#inputs-outputs" class="toc-link block px-3 py-2 rounded-r text-gray-600">Inputs & Outputs</a>
+        <a href="#usage" class="toc-link block px-3 py-2 rounded-r text-gray-600">Usage</a>
+        <a href="#multi-gpu" class="toc-link block px-3 py-2 rounded-r text-gray-600">Multi-GPU Example</a>
+        <a href="#resources" class="toc-link block px-3 py-2 rounded-r text-gray-600">Resources</a>
+        <a href="#citation" class="toc-link block px-3 py-2 rounded-r text-gray-600">Citation</a>
+      </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 min-w-0 space-y-8">
+
+      <!-- Overview Hero -->
+      <section id="overview" class="section-card bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden animate-section">
+        <div class="bg-gradient-to-r from-google-blue via-blue-500 to-indigo-600 px-8 py-10 text-white">
+          <div class="flex items-start justify-between flex-wrap gap-4">
+            <div>
+              <div class="flex items-center space-x-3 mb-3">
+                <span class="px-3 py-1 bg-white/20 rounded-full text-sm font-medium backdrop-blur-sm">Open Model</span>
+                <span class="px-3 py-1 bg-white/20 rounded-full text-sm font-medium backdrop-blur-sm">Multimodal</span>
+                <span class="px-3 py-1 bg-white/20 rounded-full text-sm font-medium backdrop-blur-sm">128K Context</span>
+              </div>
+              <h2 class="text-4xl font-extrabold mb-2">Gemma 3</h2>
+              <p class="text-blue-100 text-lg max-w-2xl">Lightweight, state-of-the-art open models built from the same research and technology used to create the Gemini models.</p>
+            </div>
+            <div class="text-right space-y-1">
+              <div class="text-blue-100 text-sm">Authors</div>
+              <div class="font-bold text-lg">Google DeepMind</div>
+              <div class="text-blue-200 text-sm">Model Page: <a href="https://ai.google.dev/gemma" class="underline hover:text-white">Gemma</a></div>
+            </div>
+          </div>
+        </div>
+        <div class="px-8 py-5 bg-blue-50/50 border-t border-blue-100 grid grid-cols-2 md:grid-cols-4 gap-4 text-center text-sm">
+          <div><div class="font-bold text-2xl text-google-blue">4</div><div class="text-gray-500">Model Sizes</div></div>
+          <div><div class="font-bold text-2xl text-google-blue">140+</div><div class="text-gray-500">Languages</div></div>
+          <div><div class="font-bold text-2xl text-google-blue">128K</div><div class="text-gray-500">Context Window</div></div>
+          <div><div class="font-bold text-2xl text-google-blue">8,192</div><div class="text-gray-500">Output Tokens</div></div>
+        </div>
+      </section>
+
+      <!-- Description -->
+      <section id="description" class="section-card bg-white rounded-2xl shadow-sm border border-gray-100 p-8 animate-section">
+        <h3 class="text-2xl font-bold text-gray-900 mb-4 flex items-center">
+          <i class="fas fa-info-circle text-google-blue mr-3"></i> Description
+        </h3>
+        <p class="text-gray-700 leading-relaxed mb-4">
+          Gemma is a family of lightweight, state-of-the-art open models from Google, built from the same research and technology used to create the Gemini models.
+          Gemma 3 models are <strong>multimodal</strong> &mdash; they take both <strong>text</strong> and <strong>images</strong> as input and generate <strong>text</strong> output, with
+          a <strong>128K token context window</strong>, <strong>multilingual support in over 140 languages</strong>, and available in multiple sizes.
+        </p>
+        <div class="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-5 border border-blue-100">
+          <h4 class="font-semibold text-gray-800 mb-3"><i class="fas fa-tasks text-google-blue mr-2"></i>Well-suited for:</h4>
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div class="flex items-center space-x-2 text-sm text-gray-700"><i class="fas fa-check-circle text-google-green"></i><span>Text generation</span></div>
+            <div class="flex items-center space-x-2 text-sm text-gray-700"><i class="fas fa-check-circle text-google-green"></i><span>Image understanding</span></div>
+            <div class="flex items-center space-x-2 text-sm text-gray-700"><i class="fas fa-check-circle text-google-green"></i><span>Question answering</span></div>
+            <div class="flex items-center space-x-2 text-sm text-gray-700"><i class="fas fa-check-circle text-google-green"></i><span>Summarization</span></div>
+            <div class="flex items-center space-x-2 text-sm text-gray-700"><i class="fas fa-check-circle text-google-green"></i><span>Reasoning</span></div>
+            <div class="flex items-center space-x-2 text-sm text-gray-700"><i class="fas fa-check-circle text-google-green"></i><span>Multilingual tasks</span></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Model Sizes -->
+      <section id="model-sizes" class="section-card bg-white rounded-2xl shadow-sm border border-gray-100 p-8 animate-section">
+        <h3 class="text-2xl font-bold text-gray-900 mb-6 flex items-center">
+          <i class="fas fa-cubes text-google-blue mr-3"></i> Model Sizes
+        </h3>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div class="size-badge bg-white border-2 border-gray-200 rounded-xl p-5 text-center hover:border-google-blue" onclick="selectSize(this, '1B')">
+            <div class="text-3xl font-extrabold text-google-blue mb-1">1B</div>
+            <div class="text-gray-500 text-sm font-medium">Parameters</div>
+            <div class="mt-3 text-xs text-gray-400">32K context</div>
+            <div class="text-xs text-gray-400">Text only</div>
+          </div>
+          <div class="size-badge bg-white border-2 border-gray-200 rounded-xl p-5 text-center hover:border-google-blue selected border-google-blue bg-blue-50/50" onclick="selectSize(this, '4B')">
+            <div class="text-3xl font-extrabold text-google-blue mb-1">4B</div>
+            <div class="text-gray-500 text-sm font-medium">Parameters</div>
+            <div class="mt-3 text-xs text-gray-400">128K context</div>
+            <div class="text-xs text-google-green font-medium">Text + Image</div>
+          </div>
+          <div class="size-badge bg-white border-2 border-gray-200 rounded-xl p-5 text-center hover:border-google-blue" onclick="selectSize(this, '12B')">
+            <div class="text-3xl font-extrabold text-google-blue mb-1">12B</div>
+            <div class="text-gray-500 text-sm font-medium">Parameters</div>
+            <div class="mt-3 text-xs text-gray-400">128K context</div>
+            <div class="text-xs text-google-green font-medium">Text + Image</div>
+          </div>
+          <div class="size-badge bg-white border-2 border-gray-200 rounded-xl p-5 text-center hover:border-google-blue" onclick="selectSize(this, '27B')">
+            <div class="text-3xl font-extrabold text-google-blue mb-1">27B</div>
+            <div class="text-gray-500 text-sm font-medium">Parameters</div>
+            <div class="mt-3 text-xs text-gray-400">128K context</div>
+            <div class="text-xs text-google-green font-medium">Text + Image</div>
+          </div>
+        </div>
+        <p class="text-xs text-gray-400 mt-4 text-center">Click a model size to highlight &mdash; the 1B variant uses a 32K context window; all others support 128K tokens.</p>
+      </section>
+
+      <!-- Inputs & Outputs -->
+      <section id="inputs-outputs" class="section-card bg-white rounded-2xl shadow-sm border border-gray-100 p-8 animate-section">
+        <h3 class="text-2xl font-bold text-gray-900 mb-6 flex items-center">
+          <i class="fas fa-exchange-alt text-google-blue mr-3"></i> Inputs & Outputs
+        </h3>
+        <div class="grid md:grid-cols-2 gap-6">
+          <div class="bg-green-50 rounded-xl p-6 border border-green-200">
+            <h4 class="font-bold text-green-800 mb-3 flex items-center"><i class="fas fa-sign-in-alt mr-2"></i>Inputs</h4>
+            <ul class="space-y-2 text-sm text-gray-700">
+              <li class="flex items-start space-x-2"><i class="fas fa-font text-green-600 mt-1"></i><span><strong>Text:</strong> String data (prompts, questions, instructions)</span></li>
+              <li class="flex items-start space-x-2"><i class="fas fa-image text-green-600 mt-1"></i><span><strong>Images:</strong> Normalized to <code class="bg-green-100 px-1 rounded">896 &times; 896</code> pixels (256 tokens each)</span></li>
+              <li class="flex items-start space-x-2"><i class="fas fa-ruler-horizontal text-green-600 mt-1"></i><span><strong>Total context:</strong> <code class="bg-green-100 px-1 rounded">128K</code> tokens (32K for 1B)</span></li>
+            </ul>
+          </div>
+          <div class="bg-amber-50 rounded-xl p-6 border border-amber-200">
+            <h4 class="font-bold text-amber-800 mb-3 flex items-center"><i class="fas fa-sign-out-alt mr-2"></i>Outputs</h4>
+            <ul class="space-y-2 text-sm text-gray-700">
+              <li class="flex items-start space-x-2"><i class="fas fa-font text-amber-600 mt-1"></i><span><strong>Text:</strong> Generated text (responses, answers, summaries)</span></li>
+              <li class="flex items-start space-x-2"><i class="fas fa-ruler-horizontal text-amber-600 mt-1"></i><span><strong>Max output:</strong> <code class="bg-amber-100 px-1 rounded">8,192</code> tokens</span></li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- Usage — Pipeline API -->
+      <section id="usage" class="section-card bg-white rounded-2xl shadow-sm border border-gray-100 p-8 animate-section">
+        <h3 class="text-2xl font-bold text-gray-900 mb-6 flex items-center">
+          <i class="fas fa-code text-google-blue mr-3"></i> Usage
+        </h3>
+
+        <!-- Install -->
+        <h4 class="font-semibold text-gray-800 mb-3">1. Install Transformers &ge; 4.50.0</h4>
+        <div class="code-block mb-6">
+          <button class="copy-btn px-3 py-1 bg-gray-700 text-gray-200 text-xs rounded hover:bg-gray-600 transition" onclick="copyCode(this)">
+            <i class="fas fa-copy mr-1"></i>Copy
+          </button>
+          <pre><code class="language-bash">pip install -U transformers</code></pre>
+        </div>
+
+        <!-- Pipeline Example -->
+        <h4 class="font-semibold text-gray-800 mb-3">2. Pipeline API Example</h4>
+        <p class="text-sm text-gray-600 mb-3">Using <code class="bg-gray-100 px-1 rounded">google/gemma-3-4b-it</code> with system/user messages and an image URL:</p>
+        <div class="code-block mb-6">
+          <button class="copy-btn px-3 py-1 bg-gray-700 text-gray-200 text-xs rounded hover:bg-gray-600 transition" onclick="copyCode(this)">
+            <i class="fas fa-copy mr-1"></i>Copy
+          </button>
+          <pre><code class="language-python">from transformers import pipeline
+import torch
+
+pipe = pipeline(
+    "image-text-to-text",
+    model="google/gemma-3-4b-it",
+    device="cuda",
+    torch_dtype=torch.bfloat16,
+)
+
+messages = [
+    {
+        "role": "system",
+        "content": [{"type": "text", "text": "You are a helpful assistant."}],
+    },
+    {
+        "role": "user",
+        "content": [
+            {"type": "image", "url": "https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/p-blog/candy.JPG"},
+            {"type": "text", "text": "What animal is in the image?"},
+        ],
+    },
+]
+
+output = pipe(text=messages, max_new_tokens=200)
+print(output[0]["generated_text"][-1]["content"])</code></pre>
+        </div>
+      </section>
+
+      <!-- Multi-GPU Example -->
+      <section id="multi-gpu" class="section-card bg-white rounded-2xl shadow-sm border border-gray-100 p-8 animate-section">
+        <h3 class="text-2xl font-bold text-gray-900 mb-6 flex items-center">
+          <i class="fas fa-server text-google-blue mr-3"></i> Multi-GPU Example
+        </h3>
+        <p class="text-sm text-gray-600 mb-4">Using <code class="bg-gray-100 px-1 rounded">accelerate</code>, <code class="bg-gray-100 px-1 rounded">AutoProcessor</code>, and <code class="bg-gray-100 px-1 rounded">Gemma3ForConditionalGeneration</code> for larger models across multiple GPUs:</p>
+        <div class="code-block mb-4">
+          <button class="copy-btn px-3 py-1 bg-gray-700 text-gray-200 text-xs rounded hover:bg-gray-600 transition" onclick="copyCode(this)">
+            <i class="fas fa-copy mr-1"></i>Copy
+          </button>
+          <pre><code class="language-python">from transformers import AutoProcessor, Gemma3ForConditionalGeneration
+from PIL import Image
+import requests
+import torch
+
+model_id = "google/gemma-3-27b-it"
+model = Gemma3ForConditionalGeneration.from_pretrained(
+    model_id, device_map="auto", torch_dtype=torch.bfloat16
+)
+processor = AutoProcessor.from_pretrained(model_id)
+
+# Load an image
+url = "https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/p-blog/candy.JPG"
+image = Image.open(requests.get(url, stream=True).raw)
+
+messages = [
+    {
+        "role": "system",
+        "content": [{"type": "text", "text": "You are a helpful assistant."}],
+    },
+    {
+        "role": "user",
+        "content": [
+            {"type": "image"},
+            {"type": "text", "text": "What do you see in this image? Describe in detail."},
+        ],
+    },
+]
+
+inputs = processor.apply_chat_template(
+    messages,
+    tokenize=True,
+    add_generation_prompt=True,
+    return_dict=True,
+    return_tensors="pt",
+    images=[image],
+).to(model.device)
+
+input_len = inputs["input_ids"].shape[-1]
+
+with torch.inference_mode():
+    generation = model.generate(**inputs, max_new_tokens=500, do_sample=False)
+    generation = generation[0][input_len:]
+
+decoded = processor.decode(generation, skip_special_tokens=True)
+print(decoded)
+# Sample output:
+# "The image shows a selection of colorful lollipops
+#  arranged in neat rows. The swirled patterns feature
+#  shades of pink, purple, yellow, blue, and green,
+#  creating a vibrant, candy-shop display."</code></pre>
+        </div>
+      </section>
+
+      <!-- Resources -->
+      <section id="resources" class="section-card bg-white rounded-2xl shadow-sm border border-gray-100 p-8 animate-section">
+        <h3 class="text-2xl font-bold text-gray-900 mb-6 flex items-center">
+          <i class="fas fa-book text-google-blue mr-3"></i> Resources
+        </h3>
+        <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <a href="https://goo.gle/Gemma3Report" target="_blank" class="flex items-center space-x-3 p-4 bg-blue-50 rounded-xl border border-blue-100 hover:border-google-blue hover:shadow-md transition group">
+            <div class="w-10 h-10 bg-google-blue/10 rounded-lg flex items-center justify-center group-hover:bg-google-blue/20 transition">
+              <i class="fas fa-file-alt text-google-blue"></i>
+            </div>
+            <div>
+              <div class="font-medium text-gray-800 text-sm">Technical Report</div>
+              <div class="text-xs text-gray-500">Gemma 3 Technical Report</div>
+            </div>
+          </a>
+          <a href="https://ai.google.dev/responsible" target="_blank" class="flex items-center space-x-3 p-4 bg-green-50 rounded-xl border border-green-100 hover:border-google-green hover:shadow-md transition group">
+            <div class="w-10 h-10 bg-google-green/10 rounded-lg flex items-center justify-center group-hover:bg-google-green/20 transition">
+              <i class="fas fa-shield-alt text-google-green"></i>
+            </div>
+            <div>
+              <div class="font-medium text-gray-800 text-sm">Responsible AI Toolkit</div>
+              <div class="text-xs text-gray-500">Safety & responsible use</div>
+            </div>
+          </a>
+          <a href="https://www.kaggle.com/models/google/gemma-3" target="_blank" class="flex items-center space-x-3 p-4 bg-purple-50 rounded-xl border border-purple-100 hover:border-purple-500 hover:shadow-md transition group">
+            <div class="w-10 h-10 bg-purple-500/10 rounded-lg flex items-center justify-center group-hover:bg-purple-500/20 transition">
+              <i class="fas fa-database text-purple-500"></i>
+            </div>
+            <div>
+              <div class="font-medium text-gray-800 text-sm">Gemma on Kaggle</div>
+              <div class="text-xs text-gray-500">Models, notebooks & datasets</div>
+            </div>
+          </a>
+          <a href="https://console.cloud.google.com/vertex-ai/publishers/google/model-garden/gemma3" target="_blank" class="flex items-center space-x-3 p-4 bg-amber-50 rounded-xl border border-amber-100 hover:border-google-yellow hover:shadow-md transition group">
+            <div class="w-10 h-10 bg-google-yellow/10 rounded-lg flex items-center justify-center group-hover:bg-google-yellow/20 transition">
+              <i class="fas fa-cloud text-google-yellow"></i>
+            </div>
+            <div>
+              <div class="font-medium text-gray-800 text-sm">Vertex Model Garden</div>
+              <div class="text-xs text-gray-500">Deploy on Google Cloud</div>
+            </div>
+          </a>
+          <a href="https://ai.google.dev/gemma/terms" target="_blank" class="flex items-center space-x-3 p-4 bg-red-50 rounded-xl border border-red-100 hover:border-google-red hover:shadow-md transition group">
+            <div class="w-10 h-10 bg-google-red/10 rounded-lg flex items-center justify-center group-hover:bg-google-red/20 transition">
+              <i class="fas fa-gavel text-google-red"></i>
+            </div>
+            <div>
+              <div class="font-medium text-gray-800 text-sm">Terms of Use</div>
+              <div class="text-xs text-gray-500">License & usage terms</div>
+            </div>
+          </a>
+          <a href="https://ai.google.dev/gemma" target="_blank" class="flex items-center space-x-3 p-4 bg-gray-50 rounded-xl border border-gray-200 hover:border-google-blue hover:shadow-md transition group">
+            <div class="w-10 h-10 bg-gray-200 rounded-lg flex items-center justify-center group-hover:bg-gray-300 transition">
+              <i class="fas fa-home text-gray-600"></i>
+            </div>
+            <div>
+              <div class="font-medium text-gray-800 text-sm">Gemma Model Page</div>
+              <div class="text-xs text-gray-500">Official landing page</div>
+            </div>
+          </a>
+        </div>
+      </section>
+
+      <!-- Citation -->
+      <section id="citation" class="section-card bg-white rounded-2xl shadow-sm border border-gray-100 p-8 animate-section">
+        <h3 class="text-2xl font-bold text-gray-900 mb-4 flex items-center">
+          <i class="fas fa-quote-left text-google-blue mr-3"></i> Citation
+        </h3>
+        <div class="code-block">
+          <button class="copy-btn px-3 py-1 bg-gray-700 text-gray-200 text-xs rounded hover:bg-gray-600 transition" onclick="copyCode(this)">
+            <i class="fas fa-copy mr-1"></i>Copy
+          </button>
+          <pre><code class="language-bibtex">@article{gemma_2025,
+    title   = {Gemma 3},
+    url     = {https://goo.gle/Gemma3Report},
+    publisher = {Kaggle},
+    author  = {Gemma Team},
+    year    = {2025}
+}</code></pre>
+        </div>
+      </section>
+
+      <!-- Footer -->
+      <footer class="text-center text-xs text-gray-400 py-8 border-t border-gray-200 mt-8">
+        <p>Gemma 3 Model Card &mdash; Data compiled from public Google DeepMind documentation.</p>
+        <p class="mt-1">Served by <a href="/" class="text-google-blue hover:underline">RoofReporterAI</a> on Cloudflare Pages.</p>
+      </footer>
+
+    </main>
+  </div>
+
+  <script>
+    // Highlight.js init
+    hljs.highlightAll();
+
+    // Copy button
+    function copyCode(btn) {
+      var code = btn.parentElement.querySelector('code');
+      navigator.clipboard.writeText(code.textContent).then(function() {
+        btn.innerHTML = '<i class="fas fa-check mr-1"></i>Copied!';
+        setTimeout(function() { btn.innerHTML = '<i class="fas fa-copy mr-1"></i>Copy'; }, 2000);
+      });
+    }
+
+    // Size badge selection
+    function selectSize(el, size) {
+      document.querySelectorAll('.size-badge').forEach(function(b) {
+        b.classList.remove('selected', 'border-google-blue', 'bg-blue-50/50');
+        b.classList.add('border-gray-200');
+      });
+      el.classList.add('selected', 'border-google-blue', 'bg-blue-50/50');
+      el.classList.remove('border-gray-200');
+    }
+
+    // TOC active tracking
+    var sections = document.querySelectorAll('section[id]');
+    var tocLinks = document.querySelectorAll('.toc-link');
+    var observer = new IntersectionObserver(function(entries) {
+      entries.forEach(function(entry) {
+        if (entry.isIntersecting) {
+          tocLinks.forEach(function(l) { l.classList.remove('active'); });
+          var activeLink = document.querySelector('.toc-link[href="#' + entry.target.id + '"]');
+          if (activeLink) activeLink.classList.add('active');
+        }
+      });
+    }, { rootMargin: '-20% 0% -70% 0%' });
+    sections.forEach(function(s) { observer.observe(s); });
+  </script>
+
 </body>
 </html>`
 }
