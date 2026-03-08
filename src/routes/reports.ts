@@ -5,7 +5,7 @@
 
 import { Hono } from 'hono'
 import type { Bindings, RoofReport } from '../types'
-import { computeMaterialEstimate } from '../types'
+import { computeMaterialEstimate } from '../utils/geo-math'
 import { validateAdminSession } from '../routes/auth'
 
 // Services
@@ -630,9 +630,19 @@ export async function generateReportForOrder(
       if (mergedVision.heat_score.total >= 60) { reportData.quality.confidence_score = Math.min(reportData.quality.confidence_score, 70); reportData.quality.field_verification_recommended = true }
     }
 
-    const html = generateProfessionalReportHTML(reportData)
+    console.log(`[Generate] Order ${orderId}: generating HTML report...`)
+    let html: string
+    try {
+      html = generateProfessionalReportHTML(reportData)
+      console.log(`[Generate] Order ${orderId}: HTML generated (${html.length} chars)`)
+    } catch (htmlErr: any) {
+      console.error(`[Generate] Order ${orderId}: HTML generation FAILED:`, htmlErr.message)
+      // Save report data even if HTML fails
+      html = `<html><body><h1>Report Generated</h1><p>HTML rendering failed: ${htmlErr.message}</p><pre>${JSON.stringify(reportData.property, null, 2)}</pre></body></html>`
+    }
     await repo.saveCompletedReport(env.DB, orderId, reportData, html, usedDL ? '3.0' : '2.0')
     await repo.markOrderStatus(env.DB, orderId, 'completed')
+    console.log(`[Generate] Order ${orderId}: ✅ COMPLETED (${reportData.segments?.length} segments, ${reportData.total_true_area_sqft} sqft)`)
     return { success: true, report: reportData, version: usedDL ? '3.0' : '2.0', provider: reportData.metadata?.provider || 'unknown' }
   } catch (err: any) {
     try { await repo.markReportFailed(env.DB, orderId, err.message); await repo.markOrderStatus(env.DB, orderId, 'failed') } catch {}

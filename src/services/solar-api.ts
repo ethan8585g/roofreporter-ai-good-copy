@@ -9,8 +9,8 @@ import type {
 } from '../types'
 import {
   trueAreaFromFootprint, pitchToRatio, degreesToCardinal,
-  computeMaterialEstimate
-} from '../types'
+  computeMaterialEstimate, hipValleyFactor, rakeFactor
+} from '../utils/geo-math'
 import { buildSolarGeometry, extractSolarGeometryData, getZoomForFootprint } from './solar-geometry'
 import type { SolarBuildingInsights } from './solar-geometry'
 

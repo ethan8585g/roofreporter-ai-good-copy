@@ -8,10 +8,13 @@ import type {
   RoofReport, RoofSegment, EdgeMeasurement, AIMeasurementAnalysis,
   PerimeterPoint, VisionFindings
 } from '../types'
-import { pitchToRatio } from '../types'
 import {
-  feetToFeetInches, smartEdgeFootage, SEGMENT_COLORS
+  pitchToRatio, feetToFeetInches, smartEdgeFootage, SEGMENT_COLORS
 } from '../utils/geo-math'
+import {
+  generateSatelliteOverlaySVG, generateOverlayLegend, generateBlueprintSVG,
+  generateArchitecturalDiagramSVG, generatePreciseAIOverlaySVG
+} from './svg-diagrams'
 
 export function generateProfessionalReportHTML(report: RoofReport): string {
   const prop = report.property || { address: 'Unknown' } as any

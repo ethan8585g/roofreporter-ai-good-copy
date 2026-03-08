@@ -10,7 +10,7 @@
 
 import { Hono } from 'hono'
 import type { Bindings, RASYieldAnalysis } from '../types'
-import { computeRASYieldAnalysis, trueAreaFromFootprint, pitchToRatio, degreesToCardinal } from '../types'
+import { computeRASYieldAnalysis, trueAreaFromFootprint, pitchToRatio, degreesToCardinal } from '../utils/geo-math'
 import { analyzeRoofGeometry, generateAIRoofingReport, quickMeasure } from '../services/gemini'
 
 export const aiAnalysisRoutes = new Hono<{ Bindings: Bindings }>()

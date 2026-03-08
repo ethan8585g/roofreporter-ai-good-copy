@@ -10,7 +10,7 @@ import type {
 import {
   trueAreaFromFootprint, pitchToRatio, degreesToCardinal,
   computeMaterialEstimate
-} from '../types'
+} from '../utils/geo-math'
 import { type DataLayersAnalysis } from './solar-datalayers'
 import {
   polygonPixelArea, computePixelToSqftScale,
