@@ -2,9 +2,9 @@
 
 ## Project Overview
 - **Name**: Reuse Canada Roof Measurement Reports
-- **Version**: 6.2 (Property Overlap Detection + Segment Toggle + Precise Coordinates)
+- **Version**: 7.0 (Cloud Run Custom AI + Reports Refactor)
 - **Goal**: Professional roof measurement reports for roofing contractors installing new roofs
-- **Features**: Marketing landing page, login/register system, admin dashboard with order management, Google Solar API, **Solar DataLayers GeoTIFF processing**, Material BOM, Edge Analysis, Gmail OAuth2 Email Delivery, PDF download, **Full CRM Suite** (Customers, Invoices, Proposals, Jobs, Sales Pipeline, D2D Manager), **Property Overlap Detection**, **Segment Toggle UI**
+- **Features**: Marketing landing page, login/register system, admin dashboard with order management, Google Solar API, **Solar DataLayers GeoTIFF processing**, Material BOM, Edge Analysis, Gmail OAuth2 Email Delivery, PDF download, **Full CRM Suite** (Customers, Invoices, Proposals, Jobs, Sales Pipeline, D2D Manager), **Property Overlap Detection**, **Segment Toggle UI**, **Cloud Run Custom AI (dual-path: Colab model + Gemini fallback)**, **AI Vision Inspection**, **Geospatial Utilities with unit tests**
 
 ## URLs
 - **Live Sandbox**: https://3000-ing8ae0z5fkhj91kq4pyi-dfc00ec5.sandbox.novita.ai
@@ -86,6 +86,11 @@ All CRM data is per-user (owner_id scoped) — each customer manages their own c
 | GET | `/api/orders` | List orders |
 | POST | `/api/reports/:id/generate` | Generate roof report (auto-selects best API: DataLayers > buildingInsights > mock) |
 | POST | `/api/reports/:id/generate-enhanced` | Force DataLayers pipeline (GeoTIFF DSM + buildingInsights hybrid) |
+| POST | `/api/reports/:id/cloud-ai-analyze` | **NEW** On-demand Cloud Run custom AI analysis (vision + geometry) |
+| GET | `/api/reports/cloud-ai/health` | **NEW** Cloud Run AI service health check + deployment status |
+| POST | `/api/reports/:id/vision-inspect` | Trigger Gemini vision scan (vulnerabilities/obstructions) |
+| GET | `/api/reports/:id/vision` | Get vision findings (filterable by category/severity/confidence) |
+| POST | `/api/reports/:id/enhance` | Gemini Pro geometry upgrade (AI facet detection) |
 | POST | `/api/reports/datalayers/analyze` | Standalone DataLayers analysis (no order required). Body: `{address}` or `{lat, lng}` |
 | GET | `/api/reports/:id/segments` | **NEW** Get all roof segments with exclusion state + overlap flag |
 | POST | `/api/reports/:id/toggle-segments` | **NEW** Exclude/include segments and recalculate report. Body: `{excluded_segments: [0,5,7]}` |
@@ -220,7 +225,8 @@ The v5.0 engine uses a **hybrid approach** combining the best of both Google Sol
 - **Backend**: Cloudflare Workers + Hono framework
 - **Frontend**: Vanilla JS + Tailwind CSS (CDN)
 - **Maps**: Google Maps JS API + Static Maps
-- **AI**: Google Solar API DataLayers + buildingInsights (primary) + Gemini 2.0 Flash (secondary/AI analysis)
+- **AI**: Google Solar API DataLayers + buildingInsights (primary) + Gemini 2.0 Flash (secondary/AI analysis) + **Cloud Run Custom AI Model (Colab-trained, dual-path)**
+- **Cloud Run**: `https://collab-581996238660.europe-west1.run.app` (GCP: chrome-cascade-487914-e0, europe-west1)
 - **GeoTIFF**: geotiff.js (pure JS, Cloudflare Workers compatible) for DSM processing
 - **Email**: Gmail OAuth2 (personal Gmail) / Resend API (alternative)
 - **Build**: Vite + TypeScript
@@ -235,6 +241,8 @@ The v5.0 engine uses a **hybrid approach** combining the best of both Google Sol
 | GOOGLE_CLOUD_PROJECT | GCP project ID | Yes |
 | GOOGLE_CLOUD_LOCATION | GCP location | Yes |
 | GCP_SERVICE_ACCOUNT_KEY | Full JSON service account key | Yes |
+| CLOUD_RUN_AI_URL | Cloud Run custom AI endpoint | Auto (defaults to collab URL) |
+| CLOUD_RUN_AI_TOKEN | Cloud Run IAM auth token | Optional |
 | GMAIL_CLIENT_ID | OAuth2 Client ID for Gmail | For email |
 | GMAIL_CLIENT_SECRET | OAuth2 Client Secret for Gmail | For email |
 | GMAIL_REFRESH_TOKEN | OAuth2 refresh token (auto-stored in DB) | Auto |
@@ -243,7 +251,98 @@ The v5.0 engine uses a **hybrid approach** combining the best of both Google Sol
 
 ## Version History
 
-### v5.0 (Current)
+### v7.0 (Current — Cloud Run Custom AI + Reports Refactor)
+- **NEW**: Cloud Run Custom AI Integration (dual-path architecture)
+  - PRIMARY: Your Colab-trained model on Cloud Run (`collab-581996238660.europe-west1.run.app`)
+  - FALLBACK: Gemini API (active when Cloud Run not yet deployed)
+  - Automatic HTML placeholder detection — graceful fallback with zero disruption
+  - Vision findings merger: combines Cloud Run + Gemini for maximum coverage
+  - Batch multi-image analysis support (satellite + aerial + close-ups)
+  - New endpoints: `GET /cloud-ai/health`, `POST /:orderId/cloud-ai-analyze`
+- **REFACTORED**: `reports.ts` reduced from 6,996 → 641 lines (thin controller layer)
+  - All logic extracted to services/repositories/templates
+  - Global error handler with ValidationError support
+  - Zod request validation via `src/utils/validation.ts`
+- **NEW**: `src/services/cloud-run-ai.ts` — Cloud Run client with response converters
+- **NEW**: `src/repositories/reports.ts` — All D1 database queries extracted
+- **NEW**: `src/utils/geo-math.ts` — Geospatial utilities with 30 unit tests
+- **NEW**: `src/utils/validation.ts` — Zod schemas for request validation
+- **EXTRACTED**: `src/services/solar-api.ts`, `report-engine.ts`, `email.ts`
+- **EXTRACTED**: `src/templates/svg-diagrams.ts` — All SVG diagram generators
+- **STUBBED**: `generateSatelliteOverlaySVG` (returns empty string)
+
+## Cloud Run Custom AI Integration
+
+### Architecture: Dual-Path AI Analysis
+```
+Report Generation Request
+    │
+    ├──▶ PATH 1: Cloud Run Custom AI (your Colab-trained model)
+    │      ├── POST /api/analyze → vision + geometry
+    │      ├── Converts to VisionFindings + AIMeasurementAnalysis
+    │      └── GPU-backed inference, unlimited processing time
+    │
+    ├──▶ PATH 2: Gemini API (automatic fallback)
+    │      ├── Gemini 2.0 Flash → vision scan
+    │      ├── Gemini 2.5 Pro → geometry analysis
+    │      └── 20-30s timeout per request
+    │
+    └──▶ MERGE: Combine findings for best coverage
+           ├── Cloud Run findings take priority (custom-trained)
+           ├── Gemini fills gaps for types Cloud Run missed
+           └── Spatial de-duplication (bounding box overlap > 30%)
+```
+
+### Cloud Run Service Details
+- **URL**: `https://collab-581996238660.europe-west1.run.app`
+- **GCP Project**: `chrome-cascade-487914-e0`
+- **Region**: `europe-west1`
+- **Service Name**: `collab`
+- **Current Revision**: `collab-00003-q95` (default container — custom model pending deployment)
+
+### API Contract for Your Colab Model
+When you deploy your custom model to Cloud Run, it should implement:
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/health` | GET | Health check returning JSON: `{status, model_version, gpu_available, capabilities}` |
+| `/api/analyze` | POST | Full analysis (vision + geometry) |
+| `/api/vision-inspect` | POST | Vision-only inspection |
+| `/api/geometry` | POST | Geometry-only analysis |
+
+**Request body**:
+```json
+{
+  "image_urls": ["https://maps.googleapis.com/maps/api/staticmap?..."],
+  "analysis_type": "full",
+  "coordinates": {"lat": 53.5461, "lng": -113.4938},
+  "address": "123 Main St, Edmonton, AB",
+  "known_footprint_sqft": 1500,
+  "known_pitch_deg": 25,
+  "image_meta": {"source": "google_maps_satellite", "zoom_level": 20, "resolution_px": 640}
+}
+```
+
+**Expected response**:
+```json
+{
+  "success": true,
+  "model_version": "reuse-canada-roof-v1.0",
+  "inference_time_ms": 2500,
+  "vision": {
+    "findings": [{"category": "vulnerability", "type": "missing_shingles", "severity": "high", "confidence": 85, ...}],
+    "overall_condition": "fair",
+    "summary": "Aging roof with visible wear patterns"
+  },
+  "geometry": {
+    "facets": [{"id": "F1", "points": [{"x": 100, "y": 200}, ...], "pitch_deg": 25, "azimuth_deg": 180}],
+    "lines": [{"type": "RIDGE", "start": {"x": 100, "y": 200}, "end": {"x": 300, "y": 200}}],
+    "overall_quality_score": 80
+  }
+}
+```
+
+### v5.0
 - **Added**: Solar DataLayers API integration with GeoTIFF DSM processing
   - Hybrid pipeline: buildingInsights (footprint) + DataLayers DSM (slope/pitch)
   - GeoTIFF parsing via geotiff.js (pure JS, Cloudflare Workers compatible)
@@ -287,19 +386,47 @@ The v5.0 engine uses a **hybrid approach** combining the best of both Google Sol
 - Added: Login/register page, auth system, admin auth guard
 - Added: New Order tab in admin, email report button
 
+## Project Structure (v7.0)
+```
+src/
+├── index.tsx                    # Main Hono app entry (routes + health)
+├── types.ts                     # All TypeScript types + Bindings
+├── routes/
+│   ├── reports.ts               # 641 lines — thin controller layer
+│   ├── admin.ts, auth.ts, crm.ts, ...
+├── services/
+│   ├── cloud-run-ai.ts          # ★ Cloud Run custom AI client
+│   ├── vision-analyzer.ts       # Gemini vision inspection
+│   ├── gemini.ts                # Gemini geometry analysis
+│   ├── solar-api.ts             # Google Solar API + mock data
+│   ├── report-engine.ts         # DataLayers report builder
+│   ├── solar-datalayers.ts      # GeoTIFF DSM processing
+│   ├── email.ts                 # Gmail OAuth2 + Resend
+│   └── gcp-auth.ts              # GCP token management
+├── repositories/
+│   └── reports.ts               # All D1 database queries
+├── templates/
+│   ├── report-html.ts           # Professional 3-page HTML
+│   └── svg-diagrams.ts          # All SVG diagram generators
+└── utils/
+    ├── geo-math.ts              # Geospatial utilities
+    ├── geo-math.test.ts         # 30 unit tests
+    └── validation.ts            # Zod request schemas
+```
+
 ## Next Steps
-1. **Gmail Setup**: Create OAuth2 credentials in GCP Console, visit `/api/auth/gmail` to authorize
-2. **Measurements**: For rural properties without API coverage, use Gemini AI vision analysis
-3. **Stripe Payments**: Set STRIPE_SECRET_KEY and STRIPE_PUBLISHABLE_KEY
-4. **Sales Pipeline**: Implement Kanban-style lead tracking (Lead → Contact → Proposal → Closed)
-5. **D2D Manager**: Territory maps, knock tracking, conversion stats, team management
-6. **FullCalendar Integration**: Add FullCalendar.js to Job Management for calendar-based scheduling
-7. **Proposal PDF**: Generate downloadable proposal PDFs from the Proposals module
-8. **Email Report PDF**: Enhance email endpoint to auto-trigger DataLayers generation + email
+1. **Deploy Colab Model to Cloud Run**: Push your trained model to the linked repo → automatic deployment
+2. **Gmail Setup**: Create OAuth2 credentials in GCP Console, visit `/api/auth/gmail` to authorize
+3. **Sales Pipeline**: Implement Kanban-style lead tracking (Lead → Contact → Proposal → Closed)
+4. **D2D Manager**: Territory maps, knock tracking, conversion stats, team management
+5. **Real PDF Generation**: Integrate Cloudflare Browser Rendering or Gotenberg for true PDF export
+6. **Cloudflare Queues**: Replace `waitUntil()` with Queues for heavy Gemini AI tasks
 
 ## Deployment
 - **Platform**: Cloudflare Pages (via Wrangler)
 - **Production**: https://roofing-measurement-tool.pages.dev
-- **Status**: Active (Cloudflare Pages + Sandbox)
-- **Last Updated**: 2026-02-15
+- **Cloud Run AI**: https://collab-581996238660.europe-west1.run.app
+- **GitHub**: https://github.com/ethan8585g/Roofreportai
+- **Status**: ✅ Active (Cloudflare Pages + Cloud Run AI)
+- **Last Updated**: 2026-03-08
 - **Build**: `npm run build` (Vite SSR)
