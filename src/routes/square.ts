@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import type { Bindings } from '../types'
 import { generateReportForOrder, enhanceReportInBackground } from './reports'
 import { isDevAccount } from './customer-auth'
+import { trackPaymentCompleted, trackCreditPurchase } from '../services/ga4-events'
 
 export const squareRoutes = new Hono<{ Bindings: Bindings }>()
 
@@ -786,8 +787,16 @@ squareRoutes.get('/verify-payment', async (c) => {
             await c.env.DB.prepare(
               'UPDATE customers SET report_credits = report_credits + ?, subscription_plan = CASE WHEN subscription_plan = "free" THEN "credits" ELSE subscription_plan END, updated_at = datetime("now") WHERE id = ?'
             ).bind(credits, customer.customer_id).run()
+            // Track credit purchase in GA4
+            trackCreditPurchase(c.env as any, String(customer.customer_id), credits, pendingPayment.amount || 0).catch(() => {})
           }
         }
+
+        // Track payment completion in GA4 (non-blocking)
+        trackPaymentCompleted(c.env as any, pendingPayment.square_order_id || '', pendingPayment.amount || 0, {
+          payment_type: pendingPayment.payment_type || 'unknown',
+          customer_id: String(customer.customer_id)
+        }).catch(() => {})
       }
 
       // Get updated customer data

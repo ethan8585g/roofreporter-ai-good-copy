@@ -11,7 +11,9 @@ const SA = {
   salesPeriod: 'monthly',
   signupsPeriod: 'monthly',
   ordersFilter: '',
-  analyticsPeriod: '7d'
+  analyticsPeriod: '7d',
+  ga4Period: '7d',
+  ga4Tab: 'overview'
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -81,6 +83,16 @@ async function loadView(view) {
       case 'analytics':
         const analyticsRes = await saFetch(`/api/analytics/dashboard?period=${SA.analyticsPeriod}`);
         if (analyticsRes) SA.data.analytics = await analyticsRes.json();
+        break;
+      case 'ga4':
+        const [ga4StatusRes, ga4ReportRes, ga4RealtimeRes] = await Promise.all([
+          saFetch('/api/analytics/ga4/status'),
+          saFetch(`/api/analytics/ga4/report?period=${SA.ga4Period}`),
+          saFetch('/api/analytics/ga4/realtime')
+        ]);
+        if (ga4StatusRes) SA.data.ga4_status = await ga4StatusRes.json();
+        if (ga4ReportRes) { const r = await ga4ReportRes.json(); SA.data.ga4_report = r.success ? r : null; }
+        if (ga4RealtimeRes) { const r = await ga4RealtimeRes.json(); SA.data.ga4_realtime = r.success ? r : null; }
         break;
       case 'pricing':
         const pricingRes = await saFetch('/api/settings/pricing/config');
@@ -178,6 +190,7 @@ function renderContent() {
     case 'email-outreach': break; // Handled by email-outreach.js
     case 'email-setup': root.innerHTML = renderEmailSetupView(); break;
     case 'analytics': root.innerHTML = renderAnalyticsView(); break;
+    case 'ga4': root.innerHTML = renderGA4View(); break;
     case 'pricing': root.innerHTML = renderPricingView(); break;
     default: root.innerHTML = renderUsersView();
   }
@@ -1098,6 +1111,433 @@ function renderAnalyticsView() {
 
 window.saRefreshAnalytics = function() {
   loadView('analytics');
+};
+
+// ============================================================
+// VIEW: GOOGLE ANALYTICS 4 — GA4 Data API + Realtime + Measurement Protocol
+// Full GA4 integration for super-admin monitoring
+// ============================================================
+
+window.saChangeGA4Period = function(p) {
+  SA.ga4Period = p;
+  loadView('ga4');
+};
+
+window.saSetGA4Tab = function(tab) {
+  SA.ga4Tab = tab;
+  renderContent();
+};
+
+window.saRefreshGA4 = function() {
+  loadView('ga4');
+};
+
+window.saTestGA4Event = function() {
+  saFetch('/api/analytics/ga4/event', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...saHeaders() },
+    body: JSON.stringify({
+      client_id: 'superadmin_test_' + Date.now(),
+      events: [{ name: 'admin_test_ping', params: { source: 'super_admin_dashboard', timestamp: new Date().toISOString() } }]
+    })
+  }).then(async r => {
+    if (!r) return;
+    const d = await r.json();
+    alert(d.success ? 'Test event sent successfully to GA4!' : 'Event send failed: ' + JSON.stringify(d));
+  });
+};
+
+function renderGA4View() {
+  const status = SA.data.ga4_status || {};
+  const report = SA.data.ga4_report || {};
+  const realtime = SA.data.ga4_realtime || {};
+  const tab = SA.ga4Tab || 'overview';
+
+  const periodLabels = { '24h': 'Last 24h', '7d': '7 Days', '30d': '30 Days', '90d': '90 Days', '365d': '1 Year' };
+
+  // Check if GA4 is configured at all
+  const ga4Configured = status.ga4_measurement_id || status.ga4_property_id;
+
+  // Helper: extract GA4 row data into readable format
+  function ga4Rows(dataset) {
+    if (!dataset || !dataset.rows) return [];
+    return dataset.rows;
+  }
+  function ga4Headers(dataset) {
+    if (!dataset || !dataset.headers) return [];
+    return dataset.headers;
+  }
+  function ga4Totals(dataset) {
+    if (!dataset || !dataset.totals) return {};
+    return dataset.totals;
+  }
+
+  // ── Tab navigation ──
+  const tabItems = [
+    { id: 'overview', label: 'Overview', icon: 'fa-tachometer-alt' },
+    { id: 'pages', label: 'Pages', icon: 'fa-file-alt' },
+    { id: 'sources', label: 'Traffic Sources', icon: 'fa-route' },
+    { id: 'geo', label: 'Geography', icon: 'fa-globe-americas' },
+    { id: 'realtime', label: 'Realtime', icon: 'fa-bolt' },
+    { id: 'config', label: 'Configuration', icon: 'fa-cog' }
+  ];
+
+  const tabNav = '<div class="flex gap-1 overflow-x-auto pb-2 mb-4">' +
+    tabItems.map(t => '<button onclick="saSetGA4Tab(\'' + t.id + '\')" class="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ' +
+      (tab === t.id ? 'bg-red-600 text-white shadow-md' : 'bg-white text-gray-500 hover:bg-gray-100 border border-gray-200') +
+      '"><i class="fas ' + t.icon + '"></i> ' + t.label + '</button>'
+    ).join('') + '</div>';
+
+  // ── Header ──
+  const header = '<div class="mb-4 flex items-center justify-between">' +
+    '<div>' +
+      '<h2 class="text-2xl font-black text-gray-900"><i class="fab fa-google mr-2 text-red-500"></i>Google Analytics 4</h2>' +
+      '<p class="text-sm text-gray-500 mt-1">GA4 Data API, Real-Time Reporting & Measurement Protocol</p>' +
+    '</div>' +
+    '<div class="flex items-center gap-3">' +
+      '<select onchange="saChangeGA4Period(this.value)" class="text-xs border border-gray-200 rounded-lg px-3 py-1.5 bg-white focus:ring-2 focus:ring-red-500">' +
+        ['24h','7d','30d','90d','365d'].map(p => '<option value="' + p + '"' + (SA.ga4Period === p ? ' selected' : '') + '>' + periodLabels[p] + '</option>').join('') +
+      '</select>' +
+      '<button onclick="saRefreshGA4()" class="px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs font-medium hover:bg-gray-50"><i class="fas fa-sync-alt mr-1"></i>Refresh</button>' +
+    '</div>' +
+  '</div>';
+
+  // ── Not configured banner ──
+  if (!ga4Configured && tab !== 'config') {
+    return header + tabNav +
+      '<div class="bg-amber-50 border border-amber-200 rounded-2xl p-8 text-center">' +
+        '<div class="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4"><i class="fab fa-google text-amber-600 text-2xl"></i></div>' +
+        '<h3 class="text-lg font-bold text-amber-800 mb-2">Google Analytics 4 Not Configured</h3>' +
+        '<p class="text-sm text-amber-700 mb-4">Set up GA4 environment variables to enable traffic monitoring via Google Analytics.</p>' +
+        '<button onclick="saSetGA4Tab(\'config\')" class="px-4 py-2 bg-amber-600 text-white rounded-xl text-sm font-semibold hover:bg-amber-700"><i class="fas fa-cog mr-1"></i>Configure GA4</button>' +
+      '</div>';
+  }
+
+  // ── OVERVIEW TAB ──
+  if (tab === 'overview') {
+    const summary = report.summary || {};
+    const totals = ga4Totals(summary);
+    const acq = report.acquisition || {};
+
+    const kpiCards = '<div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">' +
+      samc('Pageviews', (totals.screenPageViews || 0).toLocaleString(), 'fa-eye', 'blue', 'GA4 Data API') +
+      samc('Total Users', (totals.totalUsers || 0).toLocaleString(), 'fa-users', 'green', (totals.newUsers || 0).toLocaleString() + ' new users') +
+      samc('Sessions', (totals.sessions || 0).toLocaleString(), 'fa-clock', 'indigo', 'Avg duration: ' + fmtSeconds(totals.averageSessionDuration || 0)) +
+      samc('Bounce Rate', ((totals.bounceRate || 0) * 100).toFixed(1) + '%', 'fa-sign-out-alt', 'amber', (totals.engagedSessions || 0).toLocaleString() + ' engaged') +
+    '</div>';
+
+    // Acquisition source/medium table
+    const acqRows = ga4Rows(acq);
+    const acqTable = acqRows.length === 0 ? '<p class="text-gray-400 text-sm py-4">No acquisition data available.</p>'
+      : '<div class="overflow-x-auto"><table class="w-full text-sm"><thead class="bg-gray-50"><tr>' +
+          '<th class="px-3 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase">Source</th>' +
+          '<th class="px-3 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase">Medium</th>' +
+          '<th class="px-3 py-2 text-right text-[10px] font-semibold text-gray-500 uppercase">Sessions</th>' +
+          '<th class="px-3 py-2 text-right text-[10px] font-semibold text-gray-500 uppercase">Users</th>' +
+          '<th class="px-3 py-2 text-right text-[10px] font-semibold text-gray-500 uppercase">Engaged</th>' +
+          '<th class="px-3 py-2 text-right text-[10px] font-semibold text-gray-500 uppercase">Conversions</th>' +
+        '</tr></thead><tbody class="divide-y divide-gray-50">' +
+        acqRows.slice(0, 15).map(r => '<tr class="hover:bg-red-50/30">' +
+          '<td class="px-3 py-2 text-xs font-medium text-gray-700">' + (r[0] || '(direct)') + '</td>' +
+          '<td class="px-3 py-2 text-xs text-gray-500">' + (r[1] || '(none)') + '</td>' +
+          '<td class="px-3 py-2 text-xs text-right font-mono">' + (r[2] || 0) + '</td>' +
+          '<td class="px-3 py-2 text-xs text-right font-mono">' + (r[3] || 0) + '</td>' +
+          '<td class="px-3 py-2 text-xs text-right font-mono">' + (r[4] || 0) + '</td>' +
+          '<td class="px-3 py-2 text-xs text-right font-mono">' + (r[5] || 0) + '</td>' +
+        '</tr>').join('') +
+        '</tbody></table></div>';
+
+    // Device breakdown from GA4
+    const devData = report.devices || {};
+    const devRows = ga4Rows(devData);
+    const totalDevUsers = devRows.reduce((s, r) => s + (r[1] || 0), 0) || 1;
+    const deviceBars = devRows.length === 0 ? '<p class="text-gray-400 text-sm">No device data</p>'
+      : '<div class="space-y-3">' + devRows.map(r => {
+          const cat = r[0] || 'unknown';
+          const users = r[1] || 0;
+          const pct = Math.round((users / totalDevUsers) * 100);
+          const icons = { desktop: 'fa-desktop', mobile: 'fa-mobile-alt', tablet: 'fa-tablet-alt' };
+          return '<div class="flex items-center gap-3">' +
+            '<div class="w-8 text-center"><i class="fas ' + (icons[cat] || 'fa-question') + ' text-gray-700"></i></div>' +
+            '<div class="flex-1">' +
+              '<div class="flex justify-between mb-0.5"><span class="text-sm font-medium text-gray-700 capitalize">' + cat + '</span><span class="text-xs text-gray-500">' + users + ' users (' + pct + '%)</span></div>' +
+              '<div class="w-full bg-gray-100 rounded-full h-2"><div class="bg-gradient-to-r from-red-500 to-rose-400 h-2 rounded-full" style="width:' + pct + '%"></div></div>' +
+            '</div></div>';
+        }).join('') + '</div>';
+
+    return header + tabNav + kpiCards +
+      '<div class="grid lg:grid-cols-2 gap-6 mb-6">' +
+        saSection('User Acquisition (Source/Medium)', 'fa-route', acqTable) +
+        saSection('Devices (GA4)', 'fa-laptop', deviceBars) +
+      '</div>';
+  }
+
+  // ── PAGES TAB ──
+  if (tab === 'pages') {
+    const topPages = report.top_pages || {};
+    const pgRows = ga4Rows(topPages);
+    const maxPV = pgRows.length > 0 ? Math.max(...pgRows.map(r => r[1] || 0), 1) : 1;
+
+    const pagesContent = pgRows.length === 0 ? '<p class="text-gray-400 text-sm py-4">No page data from GA4 for this period.</p>'
+      : '<div class="space-y-1.5 max-h-[500px] overflow-y-auto">' + pgRows.map(r => {
+          const path = r[0] || '/';
+          const views = r[1] || 0;
+          const users = r[2] || 0;
+          const avgDur = r[3] || 0;
+          const bounce = r[4] || 0;
+          const pct = Math.round((views / maxPV) * 100);
+          return '<div class="flex items-center gap-3 py-2 px-3 rounded-lg hover:bg-gray-50">' +
+            '<div class="flex-1 min-w-0">' +
+              '<div class="flex items-center gap-2">' +
+                '<span class="text-xs font-mono text-gray-700 truncate max-w-[300px]" title="' + path + '">' + path + '</span>' +
+              '</div>' +
+              '<div class="w-full bg-gray-100 rounded-full h-1.5 mt-1"><div class="bg-red-500 h-1.5 rounded-full" style="width:' + pct + '%"></div></div>' +
+            '</div>' +
+            '<div class="text-right flex-shrink-0 flex gap-4">' +
+              '<div><span class="text-sm font-bold text-gray-800">' + views + '</span><span class="text-[10px] text-gray-400 block">views</span></div>' +
+              '<div><span class="text-sm font-bold text-gray-600">' + users + '</span><span class="text-[10px] text-gray-400 block">users</span></div>' +
+              '<div><span class="text-sm font-bold text-gray-600">' + fmtSeconds(avgDur) + '</span><span class="text-[10px] text-gray-400 block">avg time</span></div>' +
+              '<div><span class="text-sm font-bold ' + (bounce > 0.7 ? 'text-red-600' : bounce > 0.5 ? 'text-amber-600' : 'text-green-600') + '">' + (bounce * 100).toFixed(0) + '%</span><span class="text-[10px] text-gray-400 block">bounce</span></div>' +
+            '</div>' +
+          '</div>';
+        }).join('') + '</div>';
+
+    return header + tabNav + saSection('Top Pages (GA4 Data API)', 'fa-file-alt', pagesContent);
+  }
+
+  // ── TRAFFIC SOURCES TAB ──
+  if (tab === 'sources') {
+    const srcData = report.traffic_sources || {};
+    const srcRows = ga4Rows(srcData);
+
+    const channelContent = srcRows.length === 0 ? '<p class="text-gray-400 text-sm py-4">No traffic source data.</p>'
+      : '<div class="overflow-x-auto"><table class="w-full text-sm"><thead class="bg-gray-50"><tr>' +
+          '<th class="px-3 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase">Channel Group</th>' +
+          '<th class="px-3 py-2 text-right text-[10px] font-semibold text-gray-500 uppercase">Sessions</th>' +
+          '<th class="px-3 py-2 text-right text-[10px] font-semibold text-gray-500 uppercase">Users</th>' +
+          '<th class="px-3 py-2 text-right text-[10px] font-semibold text-gray-500 uppercase">Conversions</th>' +
+        '</tr></thead><tbody class="divide-y divide-gray-50">' +
+        srcRows.map(r => {
+          const channelIcons = {
+            'Organic Search': 'fa-search text-green-500', 'Direct': 'fa-link text-blue-500',
+            'Referral': 'fa-external-link-alt text-purple-500', 'Organic Social': 'fa-share-alt text-pink-500',
+            'Paid Search': 'fa-ad text-amber-500', 'Email': 'fa-envelope text-red-500',
+            'Paid Social': 'fa-bullhorn text-indigo-500', 'Display': 'fa-image text-teal-500'
+          };
+          const icon = channelIcons[r[0]] || 'fa-globe text-gray-400';
+          return '<tr class="hover:bg-red-50/30">' +
+            '<td class="px-3 py-2 text-xs font-medium text-gray-700"><i class="fas ' + icon + ' mr-2"></i>' + (r[0] || 'Unknown') + '</td>' +
+            '<td class="px-3 py-2 text-xs text-right font-mono font-bold">' + (r[1] || 0) + '</td>' +
+            '<td class="px-3 py-2 text-xs text-right font-mono">' + (r[2] || 0) + '</td>' +
+            '<td class="px-3 py-2 text-xs text-right font-mono">' + (r[3] || 0) + '</td>' +
+          '</tr>';
+        }).join('') +
+        '</tbody></table></div>';
+
+    // Acquisition detail
+    const acqRows2 = ga4Rows(report.acquisition || {});
+    const acqContent = acqRows2.length === 0 ? ''
+      : saSection('Acquisition Detail (Source / Medium)', 'fa-route',
+          '<div class="overflow-x-auto"><table class="w-full text-sm"><thead class="bg-gray-50"><tr>' +
+          '<th class="px-3 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase">Source</th>' +
+          '<th class="px-3 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase">Medium</th>' +
+          '<th class="px-3 py-2 text-right text-[10px] font-semibold text-gray-500 uppercase">Sessions</th>' +
+          '<th class="px-3 py-2 text-right text-[10px] font-semibold text-gray-500 uppercase">Users</th>' +
+          '<th class="px-3 py-2 text-right text-[10px] font-semibold text-gray-500 uppercase">Engaged</th>' +
+          '<th class="px-3 py-2 text-right text-[10px] font-semibold text-gray-500 uppercase">Conversions</th>' +
+          '</tr></thead><tbody class="divide-y divide-gray-50">' +
+          acqRows2.map(r => '<tr class="hover:bg-red-50/30">' +
+            '<td class="px-3 py-2 text-xs font-medium text-gray-700">' + (r[0] || '(direct)') + '</td>' +
+            '<td class="px-3 py-2 text-xs text-gray-500">' + (r[1] || '(none)') + '</td>' +
+            '<td class="px-3 py-2 text-xs text-right font-mono">' + (r[2] || 0) + '</td>' +
+            '<td class="px-3 py-2 text-xs text-right font-mono">' + (r[3] || 0) + '</td>' +
+            '<td class="px-3 py-2 text-xs text-right font-mono">' + (r[4] || 0) + '</td>' +
+            '<td class="px-3 py-2 text-xs text-right font-mono">' + (r[5] || 0) + '</td>' +
+          '</tr>').join('') +
+          '</tbody></table></div>');
+
+    return header + tabNav + saSection('Traffic Channels (GA4)', 'fa-route', channelContent) + acqContent;
+  }
+
+  // ── GEOGRAPHY TAB ──
+  if (tab === 'geo') {
+    const geoData = report.geography || {};
+    const geoRows = ga4Rows(geoData);
+    const maxGeoUsers = geoRows.length > 0 ? Math.max(...geoRows.map(r => r[2] || 0), 1) : 1;
+
+    function countryFlag(code) {
+      if (!code || code.length < 2) return '';
+      // GA4 returns full country names, not ISO codes, so we skip emoji
+      return '';
+    }
+
+    const geoContent = geoRows.length === 0 ? '<p class="text-gray-400 text-sm py-4">No geography data from GA4.</p>'
+      : '<div class="space-y-1.5 max-h-[500px] overflow-y-auto">' + geoRows.map(r => {
+          const country = r[0] || 'Unknown';
+          const city = r[1] || '';
+          const users = r[2] || 0;
+          const sessions = r[3] || 0;
+          const views = r[4] || 0;
+          const pct = Math.round((users / maxGeoUsers) * 100);
+          return '<div class="flex items-center gap-3 py-2 px-3 rounded-lg hover:bg-gray-50">' +
+            '<div class="flex-1 min-w-0">' +
+              '<div class="flex items-center gap-2">' +
+                '<i class="fas fa-map-marker-alt text-red-400 text-xs"></i>' +
+                '<span class="text-sm font-medium text-gray-700">' + country + (city ? ' <span class="text-gray-400">/ ' + city + '</span>' : '') + '</span>' +
+              '</div>' +
+              '<div class="w-full bg-gray-100 rounded-full h-1.5 mt-1"><div class="bg-gradient-to-r from-red-500 to-rose-400 h-1.5 rounded-full" style="width:' + pct + '%"></div></div>' +
+            '</div>' +
+            '<div class="text-right flex-shrink-0 flex gap-4">' +
+              '<div><span class="text-sm font-bold text-gray-800">' + users + '</span><span class="text-[10px] text-gray-400 block">users</span></div>' +
+              '<div><span class="text-sm font-bold text-gray-600">' + sessions + '</span><span class="text-[10px] text-gray-400 block">sessions</span></div>' +
+              '<div><span class="text-sm font-bold text-gray-600">' + views + '</span><span class="text-[10px] text-gray-400 block">views</span></div>' +
+            '</div>' +
+          '</div>';
+        }).join('') + '</div>';
+
+    return header + tabNav + saSection('Geography (GA4 Data API)', 'fa-globe-americas', geoContent);
+  }
+
+  // ── REALTIME TAB ──
+  if (tab === 'realtime') {
+    const rtPages = realtime.pages || {};
+    const rtGeo = realtime.geography || {};
+    const rtSources = realtime.sources || {};
+    const rtDevices = realtime.devices || {};
+
+    const rtPgRows = ga4Rows(rtPages);
+    const rtGeoRows = ga4Rows(rtGeo);
+    const rtSrcRows = ga4Rows(rtSources);
+    const rtDevRows = ga4Rows(rtDevices);
+
+    const totalActiveUsers = rtPgRows.reduce((s, r) => s + (r[1] || 0), 0);
+
+    const activeUsersBanner = '<div class="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-2xl p-6 mb-6 flex items-center gap-6">' +
+      '<div class="w-20 h-20 bg-green-100 rounded-2xl flex items-center justify-center"><i class="fas fa-users text-green-600 text-3xl"></i></div>' +
+      '<div>' +
+        '<p class="text-xs font-semibold text-green-600 uppercase tracking-wider">Active Users Right Now</p>' +
+        '<p class="text-5xl font-black text-green-800">' + totalActiveUsers + '</p>' +
+        '<p class="text-sm text-green-600 mt-1">Live via GA4 Realtime API</p>' +
+      '</div>' +
+      '<div class="ml-auto">' +
+        '<button onclick="saRefreshGA4()" class="px-4 py-2 bg-green-600 text-white rounded-xl text-sm font-semibold hover:bg-green-700 shadow-sm"><i class="fas fa-sync-alt mr-1 fa-spin"></i>Refresh</button>' +
+      '</div>' +
+    '</div>';
+
+    const rtPagesContent = rtPgRows.length === 0 ? '<p class="text-gray-400 text-sm">No active pages</p>'
+      : '<div class="space-y-1">' + rtPgRows.slice(0, 20).map(r => '<div class="flex items-center justify-between py-1.5 px-2 rounded hover:bg-gray-50">' +
+          '<span class="text-xs font-mono text-gray-700 truncate max-w-[300px]">' + (r[0] || '/') + '</span>' +
+          '<span class="text-sm font-bold text-green-700">' + (r[1] || 0) + ' <span class="text-[10px] text-gray-400">active</span></span>' +
+        '</div>').join('') + '</div>';
+
+    const rtGeoContent = rtGeoRows.length === 0 ? '<p class="text-gray-400 text-sm">No geo data</p>'
+      : '<div class="space-y-1">' + rtGeoRows.slice(0, 15).map(r => '<div class="flex items-center justify-between py-1.5 px-2 rounded hover:bg-gray-50">' +
+          '<span class="text-sm text-gray-700"><i class="fas fa-map-marker-alt text-red-400 mr-1"></i>' + (r[0] || 'Unknown') + '</span>' +
+          '<span class="text-sm font-bold text-green-700">' + (r[1] || 0) + '</span>' +
+        '</div>').join('') + '</div>';
+
+    const rtSrcContent = rtSrcRows.length === 0 ? '<p class="text-gray-400 text-sm">No source data</p>'
+      : '<div class="space-y-1">' + rtSrcRows.map(r => '<div class="flex items-center justify-between py-1.5 px-2 rounded hover:bg-gray-50">' +
+          '<span class="text-sm text-gray-700">' + (r[0] || 'Unknown') + '</span>' +
+          '<span class="text-sm font-bold text-green-700">' + (r[1] || 0) + '</span>' +
+        '</div>').join('') + '</div>';
+
+    const rtDevContent = rtDevRows.length === 0 ? '<p class="text-gray-400 text-sm">No device data</p>'
+      : '<div class="space-y-1">' + rtDevRows.map(r => {
+          const icons = { desktop: 'fa-desktop', mobile: 'fa-mobile-alt', tablet: 'fa-tablet-alt' };
+          return '<div class="flex items-center justify-between py-1.5 px-2 rounded hover:bg-gray-50">' +
+            '<span class="text-sm text-gray-700"><i class="fas ' + (icons[r[0]] || 'fa-question') + ' mr-2 text-gray-500"></i>' + (r[0] || 'Unknown') + '</span>' +
+            '<span class="text-sm font-bold text-green-700">' + (r[1] || 0) + '</span>' +
+          '</div>';
+        }).join('') + '</div>';
+
+    return header + tabNav + activeUsersBanner +
+      '<div class="grid lg:grid-cols-2 gap-6">' +
+        saSection('Active Pages', 'fa-file-alt', rtPagesContent) +
+        saSection('Active Countries', 'fa-globe', rtGeoContent) +
+        saSection('Active Sources', 'fa-route', rtSrcContent) +
+        saSection('Active Devices', 'fa-laptop', rtDevContent) +
+      '</div>';
+  }
+
+  // ── CONFIGURATION TAB ──
+  if (tab === 'config') {
+    const envItems = [
+      { key: 'GA4_MEASUREMENT_ID', value: status.ga4_measurement_id || '(not set)', ok: !!status.ga4_measurement_id, desc: 'GA4 Measurement ID (e.g. G-XXXXXXXXXX). Required for frontend tracking via gtag.js and server-side Measurement Protocol events.' },
+      { key: 'GA4_API_SECRET', value: status.ga4_api_secret ? 'Set' : '(not set)', ok: status.ga4_api_secret, desc: 'Measurement Protocol API Secret from GA4 Admin > Data Streams > Measurement Protocol. Required for server-side event tracking.' },
+      { key: 'GA4_PROPERTY_ID', value: status.ga4_property_id || '(not set)', ok: !!status.ga4_property_id, desc: 'GA4 Property ID (numeric or "properties/123456789"). Required for Data API report queries and Realtime API.' },
+      { key: 'GCP_SERVICE_ACCOUNT_KEY', value: status.gcp_service_account ? 'Set' : '(not set)', ok: status.gcp_service_account, desc: 'GCP Service Account JSON key with Analytics Viewer role. Used for OAuth2 authentication to the GA4 Data API.' }
+    ];
+
+    const capabilities = [
+      { label: 'Frontend GA4 Tracking (gtag.js)', ok: status.frontend_tracking, desc: 'Auto-injects GA4 gtag.js into all HTML pages' },
+      { label: 'Server-Side Event Tracking (Measurement Protocol)', ok: status.server_side_events, desc: 'Send backend events (report_generated, payment_completed) to GA4' },
+      { label: 'GA4 Data API (Reports)', ok: status.data_api, desc: 'Query pageviews, users, sessions, acquisition, geography data' },
+      { label: 'GA4 Realtime API', ok: status.realtime_api, desc: 'See active users, pages, and sources in real-time' }
+    ];
+
+    const envContent = '<div class="space-y-3">' + envItems.map(e =>
+      '<div class="flex items-start gap-3 p-3 rounded-xl ' + (e.ok ? 'bg-green-50 border border-green-200' : 'bg-gray-50 border border-gray-200') + '">' +
+        '<div class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ' + (e.ok ? 'bg-green-100' : 'bg-gray-200') + '"><i class="fas ' + (e.ok ? 'fa-check text-green-600' : 'fa-times text-gray-400') + '"></i></div>' +
+        '<div class="flex-1">' +
+          '<div class="flex items-center gap-2"><code class="text-xs font-mono font-bold text-gray-800">' + e.key + '</code>' +
+            '<span class="text-xs px-2 py-0.5 rounded-full font-medium ' + (e.ok ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-500') + '">' + e.value + '</span>' +
+          '</div>' +
+          '<p class="text-[11px] text-gray-500 mt-1">' + e.desc + '</p>' +
+        '</div>' +
+      '</div>'
+    ).join('') + '</div>';
+
+    const capContent = '<div class="space-y-2 mt-4">' + capabilities.map(c =>
+      '<div class="flex items-center gap-3 p-2 rounded-lg">' +
+        '<div class="w-6 h-6 rounded-full flex items-center justify-center ' + (c.ok ? 'bg-green-100' : 'bg-red-100') + '"><i class="fas ' + (c.ok ? 'fa-check text-green-600 text-xs' : 'fa-times text-red-500 text-xs') + '"></i></div>' +
+        '<div class="flex-1"><span class="text-sm font-medium ' + (c.ok ? 'text-green-800' : 'text-gray-500') + '">' + c.label + '</span>' +
+          '<p class="text-[10px] text-gray-400">' + c.desc + '</p>' +
+        '</div>' +
+      '</div>'
+    ).join('') + '</div>';
+
+    const setupGuide = '<div class="bg-blue-50 border border-blue-200 rounded-xl p-4 mt-4">' +
+      '<h4 class="font-bold text-blue-800 text-sm mb-2"><i class="fas fa-info-circle mr-1"></i>Setup Guide</h4>' +
+      '<ol class="text-xs text-blue-700 space-y-2 list-decimal list-inside">' +
+        '<li>Go to <a href="https://analytics.google.com" target="_blank" class="underline">Google Analytics</a> &rarr; create a GA4 property for your website</li>' +
+        '<li>Copy the <strong>Measurement ID</strong> (G-XXXXXXXXXX) from Admin &rarr; Data Streams</li>' +
+        '<li>Create a <strong>Measurement Protocol API Secret</strong> under the same Data Stream</li>' +
+        '<li>Note the <strong>Property ID</strong> (numeric) from Admin &rarr; Property Settings</li>' +
+        '<li>Ensure your GCP service account has <strong>Analytics Viewer</strong> role on the GA4 property</li>' +
+        '<li>Set all env vars in Cloudflare Pages: <code>GA4_MEASUREMENT_ID</code>, <code>GA4_API_SECRET</code>, <code>GA4_PROPERTY_ID</code></li>' +
+      '</ol>' +
+    '</div>';
+
+    const testSection = status.server_side_events
+      ? '<div class="mt-4"><button onclick="saTestGA4Event()" class="px-4 py-2 bg-red-600 text-white rounded-xl text-sm font-semibold hover:bg-red-700"><i class="fas fa-paper-plane mr-1"></i>Send Test Event to GA4</button><span class="text-xs text-gray-400 ml-2">Sends an admin_test_ping event via Measurement Protocol</span></div>'
+      : '';
+
+    return header + tabNav +
+      saSection('Environment Variables', 'fa-key', envContent) +
+      saSection('GA4 Capabilities', 'fa-check-double', capContent + testSection) +
+      '<div class="mb-6">' + setupGuide + '</div>';
+  }
+
+  return header + tabNav + '<p class="text-gray-400">Unknown tab</p>';
+}
+
+// Fix saTestGA4Event to use POST properly
+window.saTestGA4Event = async function() {
+  try {
+    const res = await fetch('/api/analytics/ga4/event', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...saHeaders() },
+      body: JSON.stringify({
+        client_id: 'superadmin_test_' + Date.now(),
+        events: [{ name: 'admin_test_ping', params: { source: 'super_admin_dashboard', timestamp: new Date().toISOString() } }]
+      })
+    });
+    const d = await res.json();
+    alert(d.success ? 'Test event sent successfully to GA4!' : 'Event send failed: ' + JSON.stringify(d));
+  } catch(e) {
+    alert('Error: ' + e.message);
+  }
 };
 
 // ============================================================

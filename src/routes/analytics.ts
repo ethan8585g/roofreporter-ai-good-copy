@@ -1,12 +1,17 @@
 // ============================================================
 // Site Analytics — Track every click, pageview, session
 // Server-side: lightweight beacon endpoint + admin query APIs
+// + Google Analytics 4 Data API + Measurement Protocol
 // ============================================================
 
 import { Hono } from 'hono'
 
 type Bindings = {
   DB: D1Database
+  GCP_SERVICE_ACCOUNT_KEY: string
+  GA4_MEASUREMENT_ID: string
+  GA4_API_SECRET: string
+  GA4_PROPERTY_ID: string
   [key: string]: any
 }
 
@@ -274,4 +279,409 @@ function parseUserAgent(ua: string): { browser: string; browserVersion: string; 
   else if (ua.includes('bot') || ua.includes('crawl') || ua.includes('spider') || ua.includes('Googlebot')) { deviceType = 'bot' }
 
   return { browser, browserVersion, os, deviceType }
+}
+
+// ============================================================
+// GOOGLE ANALYTICS 4 — Data API Integration
+// Queries GA4 property for report data via Google Analytics Data API v1beta
+// Uses GCP Service Account for authentication (same SA as Solar API)
+// ============================================================
+
+/** Generate OAuth2 access token from service account JSON key */
+async function getAccessTokenFromSA(saKeyJson: string): Promise<string | null> {
+  try {
+    const saKey = JSON.parse(saKeyJson)
+    const now = Math.floor(Date.now() / 1000)
+    const header = btoa(JSON.stringify({ alg: 'RS256', typ: 'JWT' }))
+    const claim = btoa(JSON.stringify({
+      iss: saKey.client_email,
+      scope: 'https://www.googleapis.com/auth/analytics.readonly',
+      aud: 'https://oauth2.googleapis.com/token',
+      iat: now,
+      exp: now + 3600
+    }))
+    
+    // Import private key for signing
+    const pemContents = saKey.private_key
+      .replace(/-----BEGIN PRIVATE KEY-----/, '')
+      .replace(/-----END PRIVATE KEY-----/, '')
+      .replace(/\n/g, '')
+    const binaryDer = Uint8Array.from(atob(pemContents), c => c.charCodeAt(0))
+    
+    const key = await crypto.subtle.importKey(
+      'pkcs8', binaryDer, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign']
+    )
+    
+    const signatureInput = new TextEncoder().encode(`${header}.${claim}`)
+    const signatureBuffer = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, signatureInput)
+    const signature = btoa(String.fromCharCode(...new Uint8Array(signatureBuffer)))
+      .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+    
+    const jwt = `${header}.${claim}.${signature}`
+    
+    const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwt}`
+    })
+    
+    if (!tokenRes.ok) return null
+    const tokenData: any = await tokenRes.json()
+    return tokenData.access_token || null
+  } catch (e: any) {
+    console.error('[GA4] SA token error:', e.message)
+    return null
+  }
+}
+
+// ============================================================
+// GET /ga4/report — Query GA4 Data API for report data
+// Returns pageviews, users, sessions, events, conversions
+// ============================================================
+analyticsRoutes.get('/ga4/report', async (c) => {
+  const propertyId = c.env.GA4_PROPERTY_ID
+  const saKey = c.env.GCP_SERVICE_ACCOUNT_KEY
+  if (!propertyId) return c.json({ error: 'GA4_PROPERTY_ID not configured', hint: 'Set GA4_PROPERTY_ID env var (e.g. "properties/123456789")' }, 400)
+  if (!saKey) return c.json({ error: 'GCP_SERVICE_ACCOUNT_KEY required for GA4 Data API' }, 400)
+
+  const accessToken = await getAccessTokenFromSA(saKey)
+  if (!accessToken) return c.json({ error: 'Failed to get access token from service account' }, 500)
+
+  const period = c.req.query('period') || '7d'
+  const daysBack = period === '30d' ? 30 : period === '90d' ? 90 : period === '24h' ? 1 : period === '365d' ? 365 : 7
+  const startDate = `${daysBack}daysAgo`
+
+  // Clean property ID — accept "properties/123" or just "123"
+  const propId = propertyId.startsWith('properties/') ? propertyId : `properties/${propertyId}`
+
+  try {
+    const reportRes = await fetch(`https://analyticsdata.googleapis.com/v1beta/${propId}:runReport`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        dateRanges: [{ startDate, endDate: 'today' }],
+        dimensions: [
+          { name: 'date' },
+          { name: 'pagePath' }
+        ],
+        metrics: [
+          { name: 'screenPageViews' },
+          { name: 'totalUsers' },
+          { name: 'sessions' },
+          { name: 'averageSessionDuration' },
+          { name: 'bounceRate' },
+          { name: 'engagedSessions' }
+        ],
+        orderBys: [{ dimension: { dimensionName: 'date' }, desc: true }],
+        limit: 500
+      })
+    })
+
+    if (!reportRes.ok) {
+      const errText = await reportRes.text()
+      console.error(`[GA4] Report API error ${reportRes.status}: ${errText.substring(0, 500)}`)
+      return c.json({ error: `GA4 API error: ${reportRes.status}`, details: errText.substring(0, 300) }, reportRes.status as any)
+    }
+
+    const reportData: any = await reportRes.json()
+
+    // Also run a summary report (no page dimension)
+    const summaryRes = await fetch(`https://analyticsdata.googleapis.com/v1beta/${propId}:runReport`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        dateRanges: [{ startDate, endDate: 'today' }],
+        metrics: [
+          { name: 'screenPageViews' },
+          { name: 'totalUsers' },
+          { name: 'newUsers' },
+          { name: 'sessions' },
+          { name: 'averageSessionDuration' },
+          { name: 'bounceRate' },
+          { name: 'engagedSessions' },
+          { name: 'eventCount' },
+          { name: 'conversions' }
+        ]
+      })
+    })
+
+    let summary: any = null
+    if (summaryRes.ok) summary = await summaryRes.json()
+
+    // Top pages report
+    const topPagesRes = await fetch(`https://analyticsdata.googleapis.com/v1beta/${propId}:runReport`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        dateRanges: [{ startDate, endDate: 'today' }],
+        dimensions: [{ name: 'pagePath' }],
+        metrics: [
+          { name: 'screenPageViews' },
+          { name: 'totalUsers' },
+          { name: 'averageSessionDuration' },
+          { name: 'bounceRate' }
+        ],
+        orderBys: [{ metric: { metricName: 'screenPageViews' }, desc: true }],
+        limit: 30
+      })
+    })
+
+    let topPages: any = null
+    if (topPagesRes.ok) topPages = await topPagesRes.json()
+
+    // Traffic sources
+    const sourcesRes = await fetch(`https://analyticsdata.googleapis.com/v1beta/${propId}:runReport`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        dateRanges: [{ startDate, endDate: 'today' }],
+        dimensions: [{ name: 'sessionDefaultChannelGroup' }],
+        metrics: [{ name: 'sessions' }, { name: 'totalUsers' }, { name: 'conversions' }],
+        orderBys: [{ metric: { metricName: 'sessions' }, desc: true }],
+        limit: 20
+      })
+    })
+
+    let sources: any = null
+    if (sourcesRes.ok) sources = await sourcesRes.json()
+
+    // Country breakdown
+    const geoRes = await fetch(`https://analyticsdata.googleapis.com/v1beta/${propId}:runReport`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        dateRanges: [{ startDate, endDate: 'today' }],
+        dimensions: [{ name: 'country' }, { name: 'city' }],
+        metrics: [{ name: 'totalUsers' }, { name: 'sessions' }, { name: 'screenPageViews' }],
+        orderBys: [{ metric: { metricName: 'totalUsers' }, desc: true }],
+        limit: 30
+      })
+    })
+
+    let geo: any = null
+    if (geoRes.ok) geo = await geoRes.json()
+
+    // Device category
+    const devicesRes = await fetch(`https://analyticsdata.googleapis.com/v1beta/${propId}:runReport`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        dateRanges: [{ startDate, endDate: 'today' }],
+        dimensions: [{ name: 'deviceCategory' }],
+        metrics: [{ name: 'totalUsers' }, { name: 'sessions' }, { name: 'screenPageViews' }],
+        orderBys: [{ metric: { metricName: 'totalUsers' }, desc: true }]
+      })
+    })
+
+    let deviceData: any = null
+    if (devicesRes.ok) deviceData = await devicesRes.json()
+
+    // User acquisition (source/medium)
+    const acquisitionRes = await fetch(`https://analyticsdata.googleapis.com/v1beta/${propId}:runReport`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        dateRanges: [{ startDate, endDate: 'today' }],
+        dimensions: [{ name: 'sessionSource' }, { name: 'sessionMedium' }],
+        metrics: [{ name: 'sessions' }, { name: 'totalUsers' }, { name: 'engagedSessions' }, { name: 'conversions' }],
+        orderBys: [{ metric: { metricName: 'sessions' }, desc: true }],
+        limit: 25
+      })
+    })
+
+    let acquisition: any = null
+    if (acquisitionRes.ok) acquisition = await acquisitionRes.json()
+
+    return c.json({
+      success: true,
+      period,
+      property_id: propId,
+      summary: formatGA4Response(summary),
+      top_pages: formatGA4Response(topPages),
+      traffic_sources: formatGA4Response(sources),
+      geography: formatGA4Response(geo),
+      devices: formatGA4Response(deviceData),
+      acquisition: formatGA4Response(acquisition),
+      daily_breakdown: formatGA4Response(reportData)
+    })
+
+  } catch (e: any) {
+    console.error('[GA4] Report error:', e.message)
+    return c.json({ error: e.message }, 500)
+  }
+})
+
+// ============================================================
+// GET /ga4/realtime — Query GA4 Realtime API
+// Returns users active right now, top pages, traffic sources
+// ============================================================
+analyticsRoutes.get('/ga4/realtime', async (c) => {
+  const propertyId = c.env.GA4_PROPERTY_ID
+  const saKey = c.env.GCP_SERVICE_ACCOUNT_KEY
+  if (!propertyId || !saKey) return c.json({ error: 'GA4_PROPERTY_ID and GCP_SERVICE_ACCOUNT_KEY required' }, 400)
+
+  const accessToken = await getAccessTokenFromSA(saKey)
+  if (!accessToken) return c.json({ error: 'Failed to get access token' }, 500)
+
+  const propId = propertyId.startsWith('properties/') ? propertyId : `properties/${propertyId}`
+
+  try {
+    // Active users right now
+    const realtimeRes = await fetch(`https://analyticsdata.googleapis.com/v1beta/${propId}:runRealtimeReport`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        dimensions: [{ name: 'unifiedScreenName' }],
+        metrics: [{ name: 'activeUsers' }],
+        limit: 20
+      })
+    })
+
+    if (!realtimeRes.ok) {
+      const errText = await realtimeRes.text()
+      return c.json({ error: `GA4 Realtime API error: ${realtimeRes.status}`, details: errText.substring(0, 300) }, realtimeRes.status as any)
+    }
+
+    const realtimeData: any = await realtimeRes.json()
+
+    // Realtime by country
+    const geoRealtimeRes = await fetch(`https://analyticsdata.googleapis.com/v1beta/${propId}:runRealtimeReport`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        dimensions: [{ name: 'country' }],
+        metrics: [{ name: 'activeUsers' }],
+        limit: 15
+      })
+    })
+
+    let geoRealtime: any = null
+    if (geoRealtimeRes.ok) geoRealtime = await geoRealtimeRes.json()
+
+    // Realtime by source
+    const sourceRealtimeRes = await fetch(`https://analyticsdata.googleapis.com/v1beta/${propId}:runRealtimeReport`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        dimensions: [{ name: 'sessionDefaultChannelGroup' }],
+        metrics: [{ name: 'activeUsers' }],
+        limit: 10
+      })
+    })
+
+    let sourceRealtime: any = null
+    if (sourceRealtimeRes.ok) sourceRealtime = await sourceRealtimeRes.json()
+
+    // Realtime by device
+    const deviceRealtimeRes = await fetch(`https://analyticsdata.googleapis.com/v1beta/${propId}:runRealtimeReport`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        dimensions: [{ name: 'deviceCategory' }],
+        metrics: [{ name: 'activeUsers' }]
+      })
+    })
+
+    let deviceRealtime: any = null
+    if (deviceRealtimeRes.ok) deviceRealtime = await deviceRealtimeRes.json()
+
+    return c.json({
+      success: true,
+      pages: formatGA4Response(realtimeData),
+      geography: formatGA4Response(geoRealtime),
+      sources: formatGA4Response(sourceRealtime),
+      devices: formatGA4Response(deviceRealtime)
+    })
+
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500)
+  }
+})
+
+// ============================================================
+// POST /ga4/event — Send server-side events via Measurement Protocol
+// Track backend events: report_generated, payment_completed, email_sent
+// ============================================================
+analyticsRoutes.post('/ga4/event', async (c) => {
+  const measurementId = c.env.GA4_MEASUREMENT_ID
+  const apiSecret = c.env.GA4_API_SECRET
+  if (!measurementId || !apiSecret) return c.json({ error: 'GA4_MEASUREMENT_ID and GA4_API_SECRET required' }, 400)
+
+  const body = await c.req.json()
+  const { client_id, user_id, events } = body
+
+  if (!client_id || !events || !Array.isArray(events)) {
+    return c.json({ error: 'client_id and events[] required' }, 400)
+  }
+
+  try {
+    const mpRes = await fetch(
+      `https://www.google-analytics.com/mp/collect?measurement_id=${measurementId}&api_secret=${apiSecret}`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          client_id,
+          user_id: user_id || undefined,
+          events: events.slice(0, 25)  // GA4 allows max 25 events per request
+        })
+      }
+    )
+
+    // Measurement Protocol returns 204 on success
+    return c.json({ success: mpRes.status === 204 || mpRes.status === 200, status: mpRes.status })
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500)
+  }
+})
+
+// ============================================================
+// GET /ga4/status — Check GA4 configuration status
+// ============================================================
+analyticsRoutes.get('/ga4/status', async (c) => {
+  return c.json({
+    ga4_measurement_id: c.env.GA4_MEASUREMENT_ID || null,
+    ga4_api_secret: !!c.env.GA4_API_SECRET,
+    ga4_property_id: c.env.GA4_PROPERTY_ID || null,
+    gcp_service_account: !!c.env.GCP_SERVICE_ACCOUNT_KEY,
+    frontend_tracking: !!c.env.GA4_MEASUREMENT_ID,
+    server_side_events: !!(c.env.GA4_MEASUREMENT_ID && c.env.GA4_API_SECRET),
+    data_api: !!(c.env.GA4_PROPERTY_ID && c.env.GCP_SERVICE_ACCOUNT_KEY),
+    realtime_api: !!(c.env.GA4_PROPERTY_ID && c.env.GCP_SERVICE_ACCOUNT_KEY)
+  })
+})
+
+// ============================================================
+// HELPER: Format GA4 API response into clean arrays
+// ============================================================
+function formatGA4Response(data: any): { headers: string[]; rows: any[][]; totals: any } | null {
+  if (!data || !data.rows) return null
+
+  const dimensionHeaders = (data.dimensionHeaders || []).map((h: any) => h.name)
+  const metricHeaders = (data.metricHeaders || []).map((h: any) => h.name)
+  const headers = [...dimensionHeaders, ...metricHeaders]
+
+  const rows = (data.rows || []).map((row: any) => {
+    const dims = (row.dimensionValues || []).map((v: any) => v.value)
+    const metrics = (row.metricValues || []).map((v: any) => {
+      const n = parseFloat(v.value)
+      return isNaN(n) ? v.value : n
+    })
+    return [...dims, ...metrics]
+  })
+
+  // Extract totals from first row of totals array
+  let totals: any = null
+  if (data.totals && data.totals.length > 0) {
+    totals = {}
+    const totalRow = data.totals[0]
+    ;(totalRow.metricValues || []).forEach((v: any, i: number) => {
+      const n = parseFloat(v.value)
+      totals[metricHeaders[i]] = isNaN(n) ? v.value : n
+    })
+  }
+
+  return { headers, rows, totals }
 }

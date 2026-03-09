@@ -32,6 +32,9 @@ import {
 // Repository
 import * as repo from '../repositories/reports'
 
+// GA4 Server-Side Event Tracking
+import { trackReportGenerated, trackReportEnhanced, trackEmailSent } from '../services/ga4-events'
+
 // Validation
 import { parseBody, ValidationError, toggleSegmentsBody, visionFilterQuery, datalayersAnalyzeBody, emailBody } from '../utils/validation'
 
@@ -509,6 +512,15 @@ reportsRoutes.post('/:orderId/generate-enhanced', async (c) => {
   const baseHtml = generateProfessionalReportHTML(reportData)
   const baseVer = '3.0'
   
+  // Track report generation event in GA4 (non-blocking)
+  trackReportGenerated(c.env, orderId, {
+    provider: reportData.metadata?.provider || 'google_solar',
+    accuracy: reportData.metadata?.accuracy_benchmark || 'unknown',
+    has_vision: !!reportData.vision_findings,
+    roof_area: reportData.roof_area_sqft || 0,
+    roof_pitch: reportData.roof_pitch_degrees || 0
+  }).catch(() => {})
+
   if (c.env.GEMINI_ENHANCE_API_KEY) {
     // Save base report with 'enhancing' status — customer sees "Polishing..." spinner
     await repo.saveCompletedReport(c.env.DB, orderId, reportData, baseHtml, baseVer)
@@ -691,6 +703,8 @@ reportsRoutes.post('/:orderId/email', async (c) => {
   else return c.json({ error: 'No email provider configured', fallback_url: `/api/reports/${orderId}/html` }, 400)
 
   await repo.logApiRequest(c.env.DB, orderId, 'email_sent', method, 200, 0, JSON.stringify({ to: recipient }))
+  // Track email event in GA4 (non-blocking)
+  trackEmailSent(c.env as any, 'report_email', recipient, { order_id: orderId, method }).catch(() => {})
   return c.json({ success: true, to: recipient, method })
 })
 
@@ -863,6 +877,9 @@ export async function enhanceReportInBackground(
       await env.DB.prepare(`UPDATE reports SET status = 'completed', updated_at = datetime('now') WHERE order_id = ?`).bind(orderId).run()
       await repo.markOrderStatus(env.DB, orderId, 'completed')
       console.log(`[Phase2] Order ${orderId}: ✅ Polished report saved (v${version}, ${html.length} chars)`)
+
+      // Track enhancement completion in GA4 (non-blocking)
+      trackReportEnhanced(env, String(orderId), { version, enhanced: true }).catch(() => {})
 
       // Send email with POLISHED report (not the base)
       if (emailOpts?.email_report && emailOpts.order) {

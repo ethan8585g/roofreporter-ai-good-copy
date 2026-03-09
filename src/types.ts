@@ -97,6 +97,11 @@ export type Bindings = {
   // Gemini Enhancement Engine — Dedicated API key from airoofreports GCP project
   // Used to call Gemini 2.5 Pro for post-generation report quality upgrade
   GEMINI_ENHANCE_API_KEY: string   // e.g. "AIzaSy..." — separate from GOOGLE_SOLAR_API_KEY
+
+  // Google Analytics 4 — Frontend tracking + Data API for admin analytics
+  GA4_MEASUREMENT_ID: string       // e.g. "G-XXXXXXXXXX" — GA4 Measurement ID for gtag.js
+  GA4_API_SECRET: string           // Measurement Protocol API secret for server-side events
+  GA4_PROPERTY_ID: string          // e.g. "properties/123456789" — for Analytics Data API queries
 }
 
 // ============================================================

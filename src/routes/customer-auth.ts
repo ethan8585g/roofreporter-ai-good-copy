@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import type { Bindings } from '../types'
+import { trackUserSignup } from '../services/ga4-events'
 
 export const customerAuthRoutes = new Hono<{ Bindings: Bindings }>()
 
@@ -440,6 +441,9 @@ customerAuthRoutes.post('/google', async (c) => {
         INSERT INTO user_activity_log (company_id, action, details)
         VALUES (1, 'free_trial_granted', ?)
       `).bind(`3 free trial reports granted to ${email} (Google sign-in)`).run()
+
+      // Track Google signup in GA4 (non-blocking)
+      trackUserSignup(c.env as any, String(customer.id), 'google', { email_domain: email.split('@')[1] || 'unknown' }).catch(() => {})
     }
 
     // Create session
@@ -554,6 +558,9 @@ customerAuthRoutes.post('/register', async (c) => {
       INSERT INTO user_activity_log (company_id, action, details)
       VALUES (1, 'customer_registered', ?)
     `).bind(`New customer: ${name} (${cleanEmail}) — 3 free trial reports granted — email verified`).run()
+
+    // Track signup in GA4 (non-blocking)
+    trackUserSignup(c.env as any, String(result.meta.last_row_id), 'email', { email_domain: cleanEmail.split('@')[1] || 'unknown' }).catch(() => {})
 
     return c.json({
       success: true,

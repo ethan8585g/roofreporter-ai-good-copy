@@ -26,7 +26,7 @@ const app = new Hono<{ Bindings: Bindings }>()
 // CORS for API routes
 app.use('/api/*', cors())
 
-// Analytics tracker injection middleware — auto-injects tracker.js into HTML pages
+// Analytics tracker injection middleware — auto-injects tracker.js + GA4 gtag.js into HTML pages
 // Skips API routes, static files, and the tracker itself
 app.use('*', async (c, next) => {
   await next()
@@ -41,7 +41,17 @@ app.use('*', async (c, next) => {
   try {
     const body = await c.res.text()
     if (body.includes('</body>') && !body.includes('tracker.js')) {
-      const injected = body.replace('</body>', '<script src="/static/tracker.js" defer></script>\n</body>')
+      // Build GA4 gtag.js snippet if measurement ID is configured
+      const ga4Id = (c.env as any).GA4_MEASUREMENT_ID || ''
+      const ga4Script = ga4Id ? `
+<!-- Google Analytics 4 -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=${ga4Id}"></script>
+<script>
+window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}
+gtag('js',new Date());gtag('config','${ga4Id}',{send_page_view:true,cookie_flags:'SameSite=None;Secure'});
+</script>` : ''
+      
+      const injected = body.replace('</body>', `${ga4Script}\n<script src="/static/tracker.js" defer></script>\n</body>`)
       c.res = new Response(injected, {
         status: c.res.status,
         headers: c.res.headers
@@ -109,6 +119,9 @@ app.get('/api/health', (c) => {
       REPORT_WEBHOOK_SECRET: !!(c.env as any).REPORT_WEBHOOK_SECRET,
       AI_STUDIO_ENHANCE_URL: (c.env as any).AI_STUDIO_ENHANCE_URL || false,
       GEMINI_ENHANCE_API_KEY: !!(c.env as any).GEMINI_ENHANCE_API_KEY,
+      GA4_MEASUREMENT_ID: (c.env as any).GA4_MEASUREMENT_ID || false,
+      GA4_API_SECRET: !!(c.env as any).GA4_API_SECRET,
+      GA4_PROPERTY_ID: (c.env as any).GA4_PROPERTY_ID || false,
       DB: !!c.env.DB
     },
     vertex_ai: {
@@ -955,6 +968,10 @@ function getSuperAdminDashboardHTML() {
         <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('analytics')">
           <i class="fas fa-chart-line w-5 text-center"></i>
           <span class="label text-sm font-medium">Site Analytics</span>
+        </div>
+        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('ga4')">
+          <i class="fab fa-google w-5 text-center"></i>
+          <span class="label text-sm font-medium">Google Analytics</span>
         </div>
         <div class="border-t border-gray-800 my-3"></div>
         <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('pricing')">
