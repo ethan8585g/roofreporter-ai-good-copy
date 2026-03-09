@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import type { Bindings } from '../types'
-import { generateReportForOrder, enhanceReportInBackground } from './reports'
+import { generateReportForOrder, enhanceReportInline } from './reports'
 import { isDevAccount } from './customer-auth'
 import { trackPaymentCompleted, trackCreditPurchase } from '../services/ga4-events'
 
@@ -27,9 +27,10 @@ async function geocodeAddress(address: string, apiKey: string): Promise<{ lat: n
 }
 
 // ============================================================
-// AUTO-GENERATE REPORT — 2-Phase Pipeline (no HTTP self-fetch)
-// Phase 1: generateReportForOrder (WELD + PAINT + POLISH)
-// Phase 2: enhanceReportInBackground (Gemini polishing)
+// AUTO-GENERATE REPORT — Inline Pipeline (no waitUntil)
+// Phase 1: generateReportForOrder (WELD + PAINT + POLISH) → saved as 'completed'
+// Phase 2: enhanceReportInline (Gemini polish) → overwrites if successful
+// Customer always gets the report immediately; enhancement is a bonus.
 // ============================================================
 async function triggerReportGeneration(orderId: number, env: Bindings, executionCtx?: any): Promise<boolean> {
   try {
@@ -37,16 +38,14 @@ async function triggerReportGeneration(orderId: number, env: Bindings, execution
     const result = await generateReportForOrder(orderId, env)
     console.log(`[Auto-Generate] Order ${orderId}: ${result.success ? 'SUCCESS' : result.error || 'FAILED'} — provider: ${result.provider || 'n/a'}`)
 
-    // Phase 2: Run enhancement in background if Phase 1 succeeded
-    if (result.success && result.report && result.enhancing) {
-      const enhancePromise = enhanceReportInBackground(orderId, result.report, env)
-        .then(ok => console.log(`[Auto-Generate Phase2] Order ${orderId}: Enhancement ${ok ? '✅' : '⚠️ skipped'}`))
-        .catch(e => console.error(`[Auto-Generate Phase2] Order ${orderId}:`, e.message))
-
-      if (executionCtx?.waitUntil) {
-        executionCtx.waitUntil(enhancePromise)
+    // Enhancement: run inline after base report is already saved as 'completed'
+    if (result.success && result.report && result.hasEnhanceKey) {
+      try {
+        const enhVer = await enhanceReportInline(orderId, result.report, env)
+        console.log(`[Auto-Generate] Order ${orderId}: Enhancement ${enhVer ? '✅ v' + enhVer : '⚠️ skipped'}`)
+      } catch (e: any) {
+        console.error(`[Auto-Generate] Order ${orderId}: Enhancement error (base report stands):`, e.message)
       }
-      // Don't await — return immediately
     }
 
     return result.success === true
@@ -468,14 +467,11 @@ squareRoutes.post('/use-credit', async (c) => {
 
     // ============================================================
     // AUTO-GENERATE REPORT — Trigger immediately after order creation
+    // Runs inline — report generation + enhancement happen synchronously
+    // Customer gets the completed report on their next dashboard load
     // ============================================================
     try {
-      const generatePromise = triggerReportGeneration(newOrderId, c.env, (c as any).executionCtx)
-      if ((c as any).executionCtx?.waitUntil) {
-        ;(c as any).executionCtx.waitUntil(generatePromise)
-      } else {
-        await generatePromise
-      }
+      await triggerReportGeneration(newOrderId, c.env)
     } catch (e: any) {
       console.warn(`[Use-Credit] Auto-generate error (non-fatal): ${e.message}`)
     }
@@ -658,14 +654,9 @@ squareRoutes.post('/webhook', async (c) => {
             "INSERT OR IGNORE INTO reports (order_id, status) VALUES (?, 'pending')"
           ).bind(webhookOrderId).run()
 
-          // Auto-trigger report generation
+          // Auto-trigger report generation (inline, no waitUntil)
           try {
-            const generatePromise = triggerReportGeneration(webhookOrderId, c.env, (c as any).executionCtx)
-            if ((c as any).executionCtx?.waitUntil) {
-              ;(c as any).executionCtx.waitUntil(generatePromise)
-            } else {
-              await generatePromise
-            }
+            await triggerReportGeneration(webhookOrderId, c.env)
           } catch (e: any) {
             console.warn(`[Square Webhook] Auto-generate error (non-fatal): ${e.message}`)
           }

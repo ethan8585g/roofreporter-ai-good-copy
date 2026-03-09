@@ -75,7 +75,7 @@ function renderDashboard() {
   var paidCredits = c.paid_credits_remaining || 0;
   var completedReports = custState.orders.filter(function(o) { return o.status === 'completed'; }).length;
   var processingReports = custState.orders.filter(function(o) { return o.status === 'processing'; }).length;
-  var enhancingReports = custState.orders.filter(function(o) { return o.enhancement_status === 'sent' || o.enhancement_status === 'pending' || o.status === 'enhancing'; }).length;
+  var enhancingReports = custState.orders.filter(function(o) { return o.enhancement_status === 'sent' || o.enhancement_status === 'pending' || o.report_status === 'enhancing'; }).length;
 
   // Determine branding setup completion status
   var brandingComplete = !!(c.brand_logo_url && c.brand_business_name);
@@ -222,12 +222,12 @@ function renderRecentOrders() {
   var html = '<div class="space-y-2">';
   for (var i = 0; i < orders.length; i++) {
     var o = orders[i];
-    var isEnhancing = o.status === 'enhancing' || o.enhancement_status === 'sent' || o.enhancement_status === 'pending';
+    var isEnhancing = o.report_status === 'enhancing' || o.enhancement_status === 'sent' || o.enhancement_status === 'pending';
     var statusClass = o.status === 'completed' ? 'bg-green-100 text-green-700' : (isEnhancing ? 'bg-purple-100 text-purple-700' : (o.status === 'processing' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'));
     var enhanceClass = o.enhancement_status === 'enhanced' ? 'bg-purple-100 text-purple-700' : (isEnhancing ? 'bg-amber-100 text-amber-700' : '');
     var enhanceBadge = o.enhancement_status === 'enhanced' ? '<span class="px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full text-[10px] font-bold"><i class="fas fa-magic mr-1"></i>AI Enhanced</span>' : (isEnhancing ? '<span class="px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full text-[10px] font-bold animate-pulse"><i class="fas fa-wand-magic-sparkles fa-spin mr-1"></i>Polishing...</span>' : '');
     var statusLabel = isEnhancing ? 'polishing' : o.status;
-    var reportReady = o.report_status === 'completed' && !isEnhancing;
+    var reportReady = (o.report_status === 'completed' || o.status === 'completed') && !isEnhancing;
     html += '<div class="flex items-center justify-between p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">' +
       '<div class="flex-1 min-w-0">' +
         '<p class="text-sm font-medium text-gray-800 truncate"><i class="fas fa-map-marker-alt text-red-400 mr-1.5 text-xs"></i>' + (o.property_address || 'Unknown') + '</p>' +
@@ -254,10 +254,10 @@ var _enhancePollTimer = null;
 function startEnhancementPolling() {
   if (_enhancePollTimer) clearInterval(_enhancePollTimer);
   var hasEnhancing = custState.orders.some(function(o) {
-    return o.status === 'enhancing' || o.status === 'processing' || o.enhancement_status === 'sent' || o.enhancement_status === 'pending';
+    return o.report_status === 'enhancing' || o.status === 'processing' || o.report_status === 'generating' || o.enhancement_status === 'sent' || o.enhancement_status === 'pending';
   });
   if (!hasEnhancing) return;
-  console.log('[Dashboard] Reports are being polished — auto-refreshing every 5s');
+  console.log('[Dashboard] Reports are being processed — auto-refreshing every 5s');
   _enhancePollTimer = setInterval(async function() {
     try {
       var ordersRes = await fetch('/api/customer/orders', { headers: authHeaders() });
@@ -267,7 +267,7 @@ function startEnhancementPolling() {
         renderDashboard();
         // Stop polling when all reports are done
         var stillEnhancing = custState.orders.some(function(o) {
-          return o.status === 'enhancing' || o.status === 'processing' || o.enhancement_status === 'sent' || o.enhancement_status === 'pending';
+          return o.report_status === 'enhancing' || o.status === 'processing' || o.report_status === 'generating' || o.enhancement_status === 'sent' || o.enhancement_status === 'pending';
         });
         if (!stillEnhancing) {
           console.log('[Dashboard] All reports polished — stopping auto-refresh');
