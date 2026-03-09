@@ -67,7 +67,7 @@ async function validateAdminOrCustomer(db: D1Database, authHeader: string | unde
 
 reportsRoutes.use('/*', async (c, next) => {
   const path = c.req.path
-  if (path.endsWith('/html') || path.endsWith('/pdf') || path.endsWith('/webhook-update') || path.endsWith('/enhancement-status')) return next()
+  if (path.endsWith('/html') || path.endsWith('/pdf') || path.endsWith('/webhook-update') || path.endsWith('/enhancement-status') || path.endsWith('/calculate-from-trace')) return next()
   const user = await validateAdminOrCustomer(c.env.DB, c.req.header('Authorization'))
   if (!user) return c.json({ error: 'Authentication required' }, 401)
   c.set('user' as any, user)
@@ -620,6 +620,113 @@ reportsRoutes.post('/:orderId/trace-remeasure', async (c) => {
     }
   })
 })
+// ============================================================
+// POST /calculate-from-trace — PUBLIC pre-order measurement engine
+// Runs BEFORE the user submits their order. No auth required.
+// Takes raw trace coordinates and returns full measurements.
+// This blocks report submission until the engine completes.
+// ============================================================
+reportsRoutes.post('/calculate-from-trace', async (c) => {
+  const startTime = Date.now()
+  try {
+    const body = await c.req.json()
+    const { trace, address, default_pitch } = body
+
+    if (!trace || !trace.eaves || !Array.isArray(trace.eaves)) {
+      return c.json({ error: 'Missing or invalid trace data. trace.eaves[] is required.' }, 400)
+    }
+
+    if (trace.eaves.length < 3) {
+      return c.json({ error: `Need at least 3 eave points to form a polygon. You have ${trace.eaves.length}. Trace every corner of the roof.` }, 400)
+    }
+
+    // Validate that eave points have lat/lng
+    for (let i = 0; i < trace.eaves.length; i++) {
+      const pt = trace.eaves[i]
+      if (pt.lat == null || pt.lng == null || isNaN(pt.lat) || isNaN(pt.lng)) {
+        return c.json({ error: `Eave point ${i + 1} has invalid coordinates.` }, 400)
+      }
+    }
+
+    // Use provided pitch or default to 5:12
+    const pitchRise = default_pitch || 5.0
+
+    // Convert trace UI format to engine payload
+    const enginePayload = traceUiToEnginePayload(
+      trace,
+      {
+        property_address: address || 'Pre-Order Measurement',
+        homeowner_name: '',
+        order_number: 'PRE-ORDER',
+      },
+      pitchRise
+    )
+
+    // Run the measurement engine
+    const engine = new RoofMeasurementEngine(enginePayload)
+    const report = engine.run()
+
+    const elapsed = Date.now() - startTime
+    console.log(`[CalculateFromTrace] Pre-order measurement completed in ${elapsed}ms — ` +
+      `footprint=${report.key_measurements.total_projected_footprint_ft2}sqft, ` +
+      `sloped=${report.key_measurements.total_roof_area_sloped_ft2}sqft, ` +
+      `eave_pts=${report.key_measurements.num_eave_points}, ` +
+      `pitch=${report.key_measurements.dominant_pitch_label}`)
+
+    // Return structured response for the order form UI
+    return c.json({
+      success: true,
+      calculation_ms: elapsed,
+      engine_version: report.report_meta.engine_version,
+
+      // Key numbers for the order form display
+      measurements: {
+        projected_footprint_sqft: report.key_measurements.total_projected_footprint_ft2,
+        true_area_sqft: report.key_measurements.total_roof_area_sloped_ft2,
+        net_squares: report.key_measurements.total_squares_net,
+        gross_squares: report.key_measurements.total_squares_gross_w_waste,
+        waste_pct: report.key_measurements.waste_factor_pct,
+        dominant_pitch: report.key_measurements.dominant_pitch_label,
+        dominant_pitch_deg: report.key_measurements.dominant_pitch_angle_deg,
+        num_faces: report.key_measurements.num_roof_faces,
+        num_eave_points: report.key_measurements.num_eave_points,
+        num_ridges: report.key_measurements.num_ridges,
+        num_hips: report.key_measurements.num_hips,
+        num_valleys: report.key_measurements.num_valleys,
+      },
+
+      // Linear edge measurements
+      edges: {
+        eaves_ft: report.linear_measurements.eaves_total_ft,
+        ridges_ft: report.linear_measurements.ridges_total_ft,
+        hips_ft: report.linear_measurements.hips_total_ft,
+        valleys_ft: report.linear_measurements.valleys_total_ft,
+        rakes_ft: report.linear_measurements.rakes_total_ft,
+        perimeter_ft: report.linear_measurements.perimeter_eave_rake_ft,
+        total_linear_ft: report.linear_measurements.eaves_total_ft + report.linear_measurements.ridges_total_ft + report.linear_measurements.hips_total_ft + report.linear_measurements.valleys_total_ft + report.linear_measurements.rakes_total_ft,
+      },
+
+      // Material estimates
+      materials: report.materials_estimate,
+
+      // Eave edge breakdown (individual edge lengths)
+      eave_edges: report.eave_edge_breakdown,
+
+      // Face details (area per roof face)
+      face_details: report.face_details,
+
+      // Advisory notes
+      advisory_notes: report.advisory_notes,
+
+      // Full engine report (for storage in order)
+      full_report: report,
+    })
+  } catch (err: any) {
+    console.error(`[CalculateFromTrace] Error:`, err.message)
+    return c.json({ error: 'Measurement calculation failed', details: err.message }, 500)
+  }
+})
+
 reportsRoutes.post('/:orderId/generate-enhanced', async (c) => {
   const orderId = c.req.param('orderId')
   const pipelineStart = Date.now()
@@ -1474,15 +1581,30 @@ export async function generateReportForOrder(
 
     // ── CUSTOMER PRICING & ROOF TRACE INJECTION ──
     // Parse roof_trace_json from order (if user traced the roof outline)
-    // ALSO: Run the RoofMeasurementEngine on trace data for independent verification
+    // PREFER pre-calculated measurements from the order form when available
+    // Otherwise, run the RoofMeasurementEngine inline for independent verification
     if (order.roof_trace_json) {
       try {
         const traceData = typeof order.roof_trace_json === 'string' ? JSON.parse(order.roof_trace_json) : order.roof_trace_json
         reportData.roof_trace = traceData
         console.log(`[Generate] Order ${orderId}: roof trace included (${traceData.eaves?.length || 0} eave pts, ${traceData.ridges?.length || 0} ridges, ${traceData.hips?.length || 0} hips)`)
 
-        // Run measurement engine on trace data for cross-verification
-        if (traceData.eaves && traceData.eaves.length >= 3) {
+        // Check for pre-calculated trace measurement from the order form
+        let traceResult: TraceReport | null = null
+        if ((order as any).trace_measurement_json) {
+          try {
+            traceResult = typeof (order as any).trace_measurement_json === 'string'
+              ? JSON.parse((order as any).trace_measurement_json)
+              : (order as any).trace_measurement_json
+            console.log(`[Generate] Order ${orderId}: Using PRE-CALCULATED trace measurement from order form — footprint=${traceResult?.key_measurements?.total_projected_footprint_ft2}sqft, sloped=${traceResult?.key_measurements?.total_roof_area_sloped_ft2}sqft`)
+          } catch (e: any) {
+            console.warn(`[Generate] Order ${orderId}: Failed to parse pre-calculated measurement, will re-run engine: ${e.message}`)
+            traceResult = null
+          }
+        }
+
+        // If no pre-calculated measurement, run engine inline
+        if (!traceResult && traceData.eaves && traceData.eaves.length >= 3) {
           try {
             const pitchDeg = reportData.roof_pitch_degrees || 20
             const pitchRise = Math.round(12 * Math.tan(pitchDeg * Math.PI / 180) * 10) / 10
@@ -1492,10 +1614,19 @@ export async function generateReportForOrder(
               pitchRise
             )
             const engine = new RoofMeasurementEngine(enginePayload)
-            const traceResult = engine.run()
-            ;(reportData as any).trace_measurement = traceResult
+            traceResult = engine.run()
+            console.log(`[Generate] Order ${orderId}: Inline trace measurement — footprint=${traceResult.key_measurements.total_projected_footprint_ft2}sqft, sloped=${traceResult.key_measurements.total_roof_area_sloped_ft2}sqft`)
+          } catch (tmErr: any) {
+            console.warn(`[Generate] Order ${orderId}: Trace measurement engine failed: ${tmErr.message}`)
+          }
+        }
 
-            // Generate trace-based SVG diagram (actual house shape)
+        // Store trace measurement in report data
+        if (traceResult) {
+          ;(reportData as any).trace_measurement = traceResult
+
+          // Generate trace-based SVG diagram (actual house shape)
+          try {
             const traceSVG = generateTraceBasedDiagramSVG(
               traceData,
               {
@@ -1512,9 +1643,8 @@ export async function generateReportForOrder(
               traceResult.key_measurements.total_roof_area_sloped_ft2
             )
             ;(reportData as any).trace_diagram_svg = traceSVG
-            console.log(`[Generate] Order ${orderId}: Trace measurement engine — footprint=${traceResult.key_measurements.total_projected_footprint_ft2}sqft, sloped=${traceResult.key_measurements.total_roof_area_sloped_ft2}sqft`)
-          } catch (tmErr: any) {
-            console.warn(`[Generate] Order ${orderId}: Trace measurement engine failed: ${tmErr.message}`)
+          } catch (svgErr: any) {
+            console.warn(`[Generate] Order ${orderId}: Trace SVG generation failed: ${svgErr.message}`)
           }
         }
       } catch (e: any) {

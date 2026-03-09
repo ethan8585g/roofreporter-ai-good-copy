@@ -34,6 +34,10 @@ const orderState = {
   // Pricing
   pricePerBundle: null,
   roofTraceJson: null,
+  // Measurement engine results (calculated before order submission)
+  measurementResult: null,
+  measurementLoading: false,
+  measurementError: null,
 };
 
 function getToken() { return localStorage.getItem('rc_customer_token') || ''; }
@@ -521,6 +525,19 @@ function renderReviewStep(root, progressBar) {
   const isTrialAvailable = freeTrialRemaining > 0;
   const credits = b.credits_remaining || 0;
   const hasTrace = orderState.roofTraceJson !== null;
+  const mLoading = orderState.measurementLoading;
+  const mResult = orderState.measurementResult;
+  const mError = orderState.measurementError;
+  const m = mResult?.measurements || {};
+  const edges = mResult?.edges || {};
+  const mats = mResult?.materials || {};
+  const notes = mResult?.advisory_notes || [];
+  const canSubmit = !mLoading && (mResult || !hasTrace); // Block Send while engine is running
+
+  // Compute price estimate if user entered price_per_bundle and we have gross squares
+  const grossSquares = m.gross_squares || 0;
+  const pricePerSq = orderState.pricePerBundle;
+  const priceEstimate = pricePerSq && grossSquares ? (grossSquares * pricePerSq) : null;
 
   root.innerHTML = `
     <div class="max-w-3xl mx-auto">
@@ -529,7 +546,7 @@ function renderReviewStep(root, progressBar) {
       <div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
         <div class="bg-gradient-to-r from-sky-500 to-blue-600 text-white p-6">
           <h2 class="text-xl font-bold"><i class="fas fa-clipboard-check mr-2"></i>Step 3: Review & Pay</h2>
-          <p class="text-brand-200 text-sm mt-1">Confirm details, set your pricing, and order your report</p>
+          <p class="text-brand-200 text-sm mt-1">Confirm details, review your roof measurements, and order your report</p>
         </div>
 
         <div class="p-6 space-y-5">
@@ -540,42 +557,173 @@ function renderReviewStep(root, progressBar) {
             <p class="text-xs text-gray-500 mt-1">Pin: ${orderState.lat}, ${orderState.lng}</p>
           </div>
 
-          <!-- Trace summary -->
           ${hasTrace ? `
-          <div class="bg-green-50 rounded-xl border border-green-200 p-4">
-            <h4 class="text-sm font-bold text-gray-700 mb-2"><i class="fas fa-draw-polygon text-green-500 mr-1"></i>Roof Trace</h4>
-            <div class="grid grid-cols-4 gap-3 text-sm">
-              <div class="text-center p-2 bg-white rounded-lg">
-                <div class="font-bold text-green-600">${orderState.roofTraceJson?.eaves?.length || 0}</div>
-                <div class="text-xs text-gray-500">Eave Pts</div>
-              </div>
-              <div class="text-center p-2 bg-white rounded-lg">
-                <div class="font-bold text-blue-600">${orderState.roofTraceJson?.ridges?.length || 0}</div>
-                <div class="text-xs text-gray-500">Ridges</div>
-              </div>
-              <div class="text-center p-2 bg-white rounded-lg">
-                <div class="font-bold text-amber-600">${orderState.roofTraceJson?.hips?.length || 0}</div>
-                <div class="text-xs text-gray-500">Hips</div>
-              </div>
-              <div class="text-center p-2 bg-white rounded-lg">
-                <div class="font-bold text-red-600">${orderState.roofTraceJson?.valleys?.length || 0}</div>
-                <div class="text-xs text-gray-500">Valleys</div>
+          <!-- ═══════════════════════════════════════════════════ -->
+          <!-- ROOF MEASUREMENT RESULTS — The core of the engine -->
+          <!-- ═══════════════════════════════════════════════════ -->
+          ${mLoading ? `
+          <div class="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border-2 border-blue-200 p-6">
+            <div class="flex items-center justify-center gap-3">
+              <div class="animate-spin rounded-full h-8 w-8 border-t-3 border-b-3 border-blue-600"></div>
+              <div>
+                <h4 class="font-bold text-blue-800">Calculating Roof Measurements...</h4>
+                <p class="text-sm text-blue-600 mt-0.5">Running measurement engine on ${orderState.roofTraceJson?.eaves?.length || 0} eave points, ${orderState.roofTraceJson?.ridges?.length || 0} ridges, ${orderState.roofTraceJson?.hips?.length || 0} hips, ${orderState.roofTraceJson?.valleys?.length || 0} valleys</p>
               </div>
             </div>
-            <p class="text-xs text-green-600 mt-2"><i class="fas fa-check-circle mr-1"></i>Traced outline will enhance report accuracy</p>
+            <div class="mt-4 w-full bg-blue-200 rounded-full h-1.5">
+              <div class="h-1.5 rounded-full bg-blue-600 animate-pulse" style="width: 60%"></div>
+            </div>
           </div>
+          ` : mError ? `
+          <div class="bg-red-50 rounded-xl border border-red-200 p-5">
+            <div class="flex items-center gap-2 mb-2">
+              <i class="fas fa-exclamation-triangle text-red-500"></i>
+              <h4 class="font-bold text-red-700">Measurement Error</h4>
+            </div>
+            <p class="text-sm text-red-600">${mError}</p>
+            <button onclick="retryMeasurement()" class="mt-3 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-semibold">
+              <i class="fas fa-redo mr-1"></i>Retry Measurement
+            </button>
+          </div>
+          ` : mResult ? `
+          <!-- Measurement Results Panel -->
+          <div class="bg-gradient-to-br from-emerald-50 via-green-50 to-teal-50 rounded-xl border-2 border-green-300 shadow-sm overflow-hidden">
+            <div class="bg-gradient-to-r from-green-600 to-emerald-600 px-5 py-3 flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <i class="fas fa-ruler-combined text-white text-lg"></i>
+                <h4 class="font-bold text-white text-sm">Roof Measurements — Calculated from Your Trace</h4>
+              </div>
+              <span class="bg-white/20 text-white px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider">${mResult.engine_version || 'v2.0'}</span>
+            </div>
+
+            <div class="p-5 space-y-4">
+              <!-- Big numbers: Footprint + True Area -->
+              <div class="grid grid-cols-2 gap-4">
+                <div class="bg-white rounded-xl p-4 border border-green-200 text-center shadow-sm">
+                  <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Projected Footprint</div>
+                  <div class="text-3xl font-black text-gray-900">${Math.round(m.projected_footprint_sqft || 0).toLocaleString()}</div>
+                  <div class="text-sm text-gray-500 font-medium">sq ft</div>
+                </div>
+                <div class="bg-white rounded-xl p-4 border border-green-200 text-center shadow-sm">
+                  <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">True Area (Sloped)</div>
+                  <div class="text-3xl font-black text-emerald-700">${Math.round(m.true_area_sqft || 0).toLocaleString()}</div>
+                  <div class="text-sm text-gray-500 font-medium">sq ft</div>
+                </div>
+              </div>
+
+              <!-- Squares + Pitch + Waste -->
+              <div class="grid grid-cols-4 gap-3">
+                <div class="bg-white rounded-lg p-3 border border-gray-200 text-center">
+                  <div class="text-xs text-gray-500 font-medium">Net Squares</div>
+                  <div class="text-xl font-bold text-gray-800">${(m.net_squares || 0).toFixed(1)}</div>
+                </div>
+                <div class="bg-white rounded-lg p-3 border border-gray-200 text-center">
+                  <div class="text-xs text-gray-500 font-medium">Gross (w/ waste)</div>
+                  <div class="text-xl font-bold text-amber-600">${(m.gross_squares || 0).toFixed(1)}</div>
+                </div>
+                <div class="bg-white rounded-lg p-3 border border-gray-200 text-center">
+                  <div class="text-xs text-gray-500 font-medium">Pitch</div>
+                  <div class="text-xl font-bold text-blue-600">${m.dominant_pitch || '?'}</div>
+                </div>
+                <div class="bg-white rounded-lg p-3 border border-gray-200 text-center">
+                  <div class="text-xs text-gray-500 font-medium">Waste</div>
+                  <div class="text-xl font-bold text-orange-500">${m.waste_pct || 15}%</div>
+                </div>
+              </div>
+
+              <!-- Edge Lengths -->
+              <div>
+                <h5 class="text-xs font-bold text-gray-600 uppercase tracking-wide mb-2"><i class="fas fa-ruler mr-1"></i>Linear Edge Measurements</h5>
+                <div class="grid grid-cols-3 sm:grid-cols-5 gap-2">
+                  <div class="bg-white rounded-lg p-2.5 border border-gray-200 text-center">
+                    <div class="w-5 h-0.5 bg-green-500 rounded mx-auto mb-1"></div>
+                    <div class="text-xs text-gray-500">Eaves</div>
+                    <div class="font-bold text-sm text-gray-800">${Math.round(edges.eaves_ft || 0)} ft</div>
+                  </div>
+                  <div class="bg-white rounded-lg p-2.5 border border-gray-200 text-center">
+                    <div class="w-5 h-0.5 bg-blue-500 rounded mx-auto mb-1"></div>
+                    <div class="text-xs text-gray-500">Ridges</div>
+                    <div class="font-bold text-sm text-gray-800">${Math.round(edges.ridges_ft || 0)} ft</div>
+                  </div>
+                  <div class="bg-white rounded-lg p-2.5 border border-gray-200 text-center">
+                    <div class="w-5 h-0.5 bg-amber-500 rounded mx-auto mb-1"></div>
+                    <div class="text-xs text-gray-500">Hips</div>
+                    <div class="font-bold text-sm text-gray-800">${Math.round(edges.hips_ft || 0)} ft</div>
+                  </div>
+                  <div class="bg-white rounded-lg p-2.5 border border-gray-200 text-center">
+                    <div class="w-5 h-0.5 bg-red-500 rounded mx-auto mb-1"></div>
+                    <div class="text-xs text-gray-500">Valleys</div>
+                    <div class="font-bold text-sm text-gray-800">${Math.round(edges.valleys_ft || 0)} ft</div>
+                  </div>
+                  <div class="bg-white rounded-lg p-2.5 border border-gray-200 text-center">
+                    <div class="w-5 h-0.5 bg-purple-500 rounded mx-auto mb-1"></div>
+                    <div class="text-xs text-gray-500">Rakes</div>
+                    <div class="font-bold text-sm text-gray-800">${Math.round(edges.rakes_ft || 0)} ft</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Individual Eave Edges -->
+              ${(mResult.eave_edges && mResult.eave_edges.length > 0) ? `
+              <div>
+                <h5 class="text-xs font-bold text-gray-600 uppercase tracking-wide mb-2"><i class="fas fa-draw-polygon mr-1"></i>Eave Edge Breakdown</h5>
+                <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  ${mResult.eave_edges.map((e, i) => `
+                    <div class="bg-white rounded-lg p-2 border border-gray-100 flex items-center justify-between text-sm">
+                      <span class="text-gray-500">Edge ${i + 1}</span>
+                      <span class="font-bold text-gray-800">${e.length_ft.toFixed(1)} ft</span>
+                    </div>
+                  `).join('')}
+                </div>
+              </div>
+              ` : ''}
+
+              <!-- Material Estimates -->
+              <div class="bg-amber-50 rounded-lg border border-amber-200 p-4">
+                <h5 class="text-xs font-bold text-amber-700 uppercase tracking-wide mb-2"><i class="fas fa-box-open mr-1"></i>Material Estimate</h5>
+                <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm">
+                  <div class="flex justify-between"><span class="text-gray-600">Shingle Bundles</span><span class="font-bold">${mats.shingles_bundles || 0}</span></div>
+                  <div class="flex justify-between"><span class="text-gray-600">Underlayment Rolls</span><span class="font-bold">${mats.underlayment_rolls || 0}</span></div>
+                  <div class="flex justify-between"><span class="text-gray-600">Ridge Cap</span><span class="font-bold">${Math.round(mats.ridge_cap_lf || 0)} lf</span></div>
+                  <div class="flex justify-between"><span class="text-gray-600">Starter Strip</span><span class="font-bold">${Math.round(mats.starter_strip_lf || 0)} lf</span></div>
+                  <div class="flex justify-between"><span class="text-gray-600">Drip Edge</span><span class="font-bold">${Math.round(mats.drip_edge_total_lf || 0)} lf</span></div>
+                  <div class="flex justify-between"><span class="text-gray-600">Valley Flashing</span><span class="font-bold">${Math.round(mats.valley_flashing_lf || 0)} lf</span></div>
+                </div>
+              </div>
+
+              <!-- Advisory Notes -->
+              ${notes.length > 0 ? `
+              <div class="bg-blue-50 rounded-lg border border-blue-200 p-3">
+                <h5 class="text-xs font-bold text-blue-700 uppercase tracking-wide mb-1"><i class="fas fa-lightbulb mr-1"></i>Advisory Notes</h5>
+                <ul class="text-xs text-blue-800 space-y-1">
+                  ${notes.map(n => `<li><i class="fas fa-info-circle text-blue-400 mr-1"></i>${n}</li>`).join('')}
+                </ul>
+              </div>
+              ` : ''}
+
+              <!-- Traced geometry summary -->
+              <div class="flex items-center gap-3 text-xs text-gray-500 pt-2 border-t border-green-200">
+                <span><i class="fas fa-draw-polygon text-green-500 mr-1"></i>${m.num_eave_points || 0} eave points</span>
+                <span><i class="fas fa-grip-lines text-blue-500 mr-1"></i>${m.num_ridges || 0} ridges</span>
+                <span><i class="fas fa-slash text-amber-500 mr-1"></i>${m.num_hips || 0} hips</span>
+                <span><i class="fas fa-angle-down text-red-500 mr-1"></i>${m.num_valleys || 0} valleys</span>
+                <span class="ml-auto text-green-600 font-medium"><i class="fas fa-check-circle mr-0.5"></i>Calculated in ${mResult.calculation_ms || '?'}ms</span>
+              </div>
+            </div>
+          </div>
+          ` : ''}
           ` : `
           <div class="bg-gray-50 rounded-xl border border-gray-200 p-3">
             <p class="text-xs text-gray-400"><i class="fas fa-info-circle mr-1"></i>No trace — standard satellite analysis will be used</p>
           </div>
           `}
 
-          <!-- Price per bundle input -->
+          <!-- Price per bundle input + live estimate -->
           <div class="bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl border border-amber-200 p-5">
             <h4 class="font-semibold text-gray-700 mb-2 flex items-center">
               <i class="fas fa-dollar-sign text-amber-500 mr-2"></i>Your Price Per Square (Optional)
             </h4>
-            <p class="text-xs text-gray-500 mb-3">Enter your rate per roofing square to include a cost estimate in your report. The report calculates total squares with 15% waste.</p>
+            <p class="text-xs text-gray-500 mb-3">Enter your rate per roofing square to include a cost estimate in your report. The report calculates total squares with ${m.waste_pct || 15}% waste.</p>
             <div class="grid md:grid-cols-2 gap-4">
               <div>
                 <label class="block text-xs font-medium text-gray-600 mb-1">Price Per Square (CAD)</label>
@@ -583,17 +731,17 @@ function renderReviewStep(root, progressBar) {
                   <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold">$</span>
                   <input type="number" step="0.01" min="0" max="9999" id="pricePerBundleInput"
                     value="${orderState.pricePerBundle || ''}"
-                    oninput="orderState.pricePerBundle = parseFloat(this.value) || null"
+                    oninput="orderState.pricePerBundle = parseFloat(this.value) || null; updatePriceEstimate();"
                     class="w-full pl-8 pr-4 py-3 border border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-sm font-medium"
                     placeholder="e.g. 350" />
                 </div>
                 <p class="text-xs text-gray-400 mt-1">Cost per roofing square (100 sq ft)</p>
               </div>
               <div class="flex items-center justify-center">
-                <div class="text-center p-3 bg-white rounded-lg border border-amber-200 w-full">
-                  <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Estimate</p>
-                  <p class="text-lg font-bold text-amber-600 mt-1">${orderState.pricePerBundle ? '(calculated in report)' : '--'}</p>
-                  <p class="text-xs text-gray-400 mt-1">Roof area + 15% waste × your rate</p>
+                <div class="text-center p-3 bg-white rounded-lg border border-amber-200 w-full" id="priceEstimateBox">
+                  <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Estimated Job Cost</p>
+                  <p class="text-2xl font-black mt-1 ${priceEstimate ? 'text-amber-600' : 'text-gray-300'}" id="priceEstimateValue">${priceEstimate ? '$' + priceEstimate.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '--'}</p>
+                  <p class="text-xs text-gray-400 mt-1">${grossSquares ? grossSquares.toFixed(1) + ' gross sq' + (pricePerSq ? ' x $' + pricePerSq : '') : 'Roof area + waste x your rate'}</p>
                 </div>
               </div>
             </div>
@@ -606,7 +754,11 @@ function renderReviewStep(root, progressBar) {
             <button onclick="backToTrace()" class="py-3 px-5 bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold rounded-xl transition-all text-sm">
               <i class="fas fa-arrow-left mr-1"></i>Back
             </button>
-            ${isTrialAvailable ? `
+            ${!canSubmit ? `
+              <button disabled class="flex-1 py-3 bg-gray-300 text-gray-500 font-bold rounded-xl cursor-not-allowed text-base">
+                <i class="fas fa-spinner fa-spin mr-2"></i>Measuring Roof...
+              </button>
+            ` : isTrialAvailable ? `
               <button onclick="useCredit()" id="creditBtn" class="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-all shadow-lg text-base">
                 <i class="fas fa-gift mr-2"></i>Use Free Trial (${freeTrialRemaining} left)
               </button>
@@ -873,12 +1025,15 @@ function goToTrace() {
 
 function skipTrace() {
   orderState.roofTraceJson = null;
+  orderState.measurementResult = null;
+  orderState.measurementError = null;
+  orderState.measurementLoading = false;
   orderState.step = 'review';
   renderOrderPage();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-function confirmTrace() {
+async function confirmTrace() {
   const eavesClosed = orderState.traceEavesPoints.length >= 3 && orderState.traceEavesPolygon;
   if (!eavesClosed) {
     showMsg('error', '<i class="fas fa-exclamation-triangle mr-1"></i>Close the eaves polygon by clicking the first point.');
@@ -892,9 +1047,41 @@ function confirmTrace() {
     valleys: orderState.traceValleyLines,
     traced_at: new Date().toISOString()
   };
+
+  // ── Run the measurement engine BEFORE going to review ──
+  orderState.measurementLoading = true;
+  orderState.measurementResult = null;
+  orderState.measurementError = null;
   orderState.step = 'review';
   renderOrderPage();
   window.scrollTo({ top: 0, behavior: 'smooth' });
+
+  try {
+    const res = await fetch('/api/reports/calculate-from-trace', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        trace: orderState.roofTraceJson,
+        address: orderState.address || `${orderState.lat}, ${orderState.lng}`,
+        default_pitch: 5.0
+      })
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      orderState.measurementResult = data;
+      orderState.measurementError = null;
+      console.log('[Measurement] Engine completed:', data.measurements.true_area_sqft, 'sqft true area');
+    } else {
+      orderState.measurementError = data.error || 'Measurement calculation failed';
+      console.error('[Measurement] Error:', data.error);
+    }
+  } catch (e) {
+    orderState.measurementError = 'Network error during measurement calculation';
+    console.error('[Measurement] Network error:', e);
+  }
+
+  orderState.measurementLoading = false;
+  renderOrderPage();
 }
 
 function backToPin() {
@@ -904,6 +1091,10 @@ function backToPin() {
 }
 
 function backToTrace() {
+  // Clear measurement results since trace may change
+  orderState.measurementResult = null;
+  orderState.measurementError = null;
+  orderState.measurementLoading = false;
   orderState.step = 'trace';
   renderOrderPage();
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -923,7 +1114,7 @@ function showMsg(type, msg) {
 }
 
 function buildOrderPayload() {
-  return {
+  const payload = {
     property_address: orderState.address || `${orderState.lat}, ${orderState.lng}`,
     property_city: orderState.city || '',
     property_province: orderState.province || '',
@@ -934,6 +1125,65 @@ function buildOrderPayload() {
     roof_trace_json: orderState.roofTraceJson ? JSON.stringify(orderState.roofTraceJson) : null,
     price_per_bundle: orderState.pricePerBundle || null,
   };
+  // Attach pre-calculated measurement data so the report engine can use it
+  if (orderState.measurementResult) {
+    payload.trace_measurement_json = JSON.stringify(orderState.measurementResult.full_report);
+  }
+  return payload;
+}
+
+// Live price estimate update when user types price per square
+function updatePriceEstimate() {
+  const m = orderState.measurementResult?.measurements || {};
+  const grossSquares = m.gross_squares || 0;
+  const pricePerSq = orderState.pricePerBundle;
+  const valueEl = document.getElementById('priceEstimateValue');
+  const boxEl = document.getElementById('priceEstimateBox');
+  if (!valueEl) return;
+  if (pricePerSq && grossSquares) {
+    const estimate = grossSquares * pricePerSq;
+    valueEl.textContent = '$' + estimate.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    valueEl.className = 'text-2xl font-black mt-1 text-amber-600';
+    if (boxEl) {
+      const subEl = boxEl.querySelector('p:last-child');
+      if (subEl) subEl.textContent = grossSquares.toFixed(1) + ' gross sq x $' + pricePerSq;
+    }
+  } else {
+    valueEl.textContent = '--';
+    valueEl.className = 'text-2xl font-black mt-1 text-gray-300';
+  }
+}
+
+// Retry measurement calculation if it failed
+async function retryMeasurement() {
+  if (!orderState.roofTraceJson) return;
+  orderState.measurementLoading = true;
+  orderState.measurementError = null;
+  renderOrderPage();
+
+  try {
+    const res = await fetch('/api/reports/calculate-from-trace', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        trace: orderState.roofTraceJson,
+        address: orderState.address || `${orderState.lat}, ${orderState.lng}`,
+        default_pitch: 5.0
+      })
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      orderState.measurementResult = data;
+      orderState.measurementError = null;
+    } else {
+      orderState.measurementError = data.error || 'Measurement calculation failed';
+    }
+  } catch (e) {
+    orderState.measurementError = 'Network error during measurement calculation';
+  }
+
+  orderState.measurementLoading = false;
+  renderOrderPage();
 }
 
 function selectTier(tier) {
