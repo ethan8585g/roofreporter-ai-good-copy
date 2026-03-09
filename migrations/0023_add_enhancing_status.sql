@@ -1,0 +1,11 @@
+-- Migration: Add 'enhancing' status to reports CHECK constraint
+-- Required for the 2-phase report architecture:
+--   Phase 1: WELD+PAINT+POLISH → status='enhancing' (customer sees "Polishing..." spinner)
+--   Phase 2: Gemini Enhancement via waitUntil() → status='completed'
+--
+-- SQLite does not support ALTER TABLE ... DROP CONSTRAINT, so we recreate the table.
+-- This migration was applied manually to production on 2026-03-09.
+
+-- Note: If applying fresh, the new CHECK constraint is:
+-- CHECK(status IN ('pending', 'generating', 'completed', 'failed', 'enhancing'))
+-- Already applied to production via table swap (reports → reports_new → reports)
