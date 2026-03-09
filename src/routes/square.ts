@@ -27,14 +27,16 @@ async function geocodeAddress(address: string, apiKey: string): Promise<{ lat: n
 }
 
 // ============================================================
-// AUTO-GENERATE REPORT — Inline Pipeline (no waitUntil)
+// AUTO-GENERATE REPORT — Background Pipeline via waitUntil()
 // Phase 1: generateReportForOrder (WELD + PAINT + POLISH) → saved as 'completed'
 // Phase 2: enhanceReportInline (Gemini polish) → overwrites if successful
-// Customer always gets the report immediately; enhancement is a bonus.
+// Customer is redirected to dashboard IMMEDIATELY — report appears via polling.
+// waitUntil() keeps the worker alive for background generation.
+// Auto-recovery handles any edge-case failures (reports stuck >90s).
 // ============================================================
-async function triggerReportGeneration(orderId: number, env: Bindings, executionCtx?: any): Promise<boolean> {
+async function triggerReportGeneration(orderId: number, env: Bindings): Promise<boolean> {
   try {
-    console.log(`[Auto-Generate] Triggering direct report generation for order ${orderId}`)
+    console.log(`[Auto-Generate] Triggering report generation for order ${orderId}`)
     const result = await generateReportForOrder(orderId, env)
     console.log(`[Auto-Generate] Order ${orderId}: ${result.success ? 'SUCCESS' : result.error || 'FAILED'} — provider: ${result.provider || 'n/a'}`)
 
@@ -364,7 +366,7 @@ squareRoutes.post('/use-credit', async (c) => {
     }
 
     const { property_address, property_city, property_province, property_postal_code,
-            service_tier, latitude, longitude } = await c.req.json()
+            service_tier, latitude, longitude, roof_trace_json, price_per_bundle } = await c.req.json()
 
     if (!property_address) return c.json({ error: 'Property address is required' }, 400)
 
@@ -403,8 +405,8 @@ squareRoutes.post('/use-credit', async (c) => {
         homeowner_name, homeowner_email,
         requester_name, requester_email,
         service_tier, price, status, payment_status, estimated_delivery,
-        notes, is_trial
-      ) VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'processing', ?, ?, ?, ?)
+        notes, is_trial, roof_trace_json, price_per_bundle
+      ) VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'processing', ?, ?, ?, ?, ?, ?)
     `).bind(
       orderNumber, customer.customer_id,
       property_address, property_city || null, property_province || null, property_postal_code || null,
@@ -412,7 +414,9 @@ squareRoutes.post('/use-credit', async (c) => {
       customer.name, customer.email,
       customer.name, customer.email,
       tier, price, paymentStatus, estimatedDelivery,
-      notes, isTrial ? 1 : 0
+      notes, isTrial ? 1 : 0,
+      roof_trace_json ? (typeof roof_trace_json === 'string' ? roof_trace_json : JSON.stringify(roof_trace_json)) : null,
+      price_per_bundle || null
     ).run()
 
     // Deduct from the correct bucket (DEV ACCOUNT: skip deduction)
@@ -466,14 +470,24 @@ squareRoutes.post('/use-credit', async (c) => {
     ).bind(newOrderId).run()
 
     // ============================================================
-    // AUTO-GENERATE REPORT — Trigger immediately after order creation
-    // Runs inline — report generation + enhancement happen synchronously
-    // Customer gets the completed report on their next dashboard load
+    // AUTO-GENERATE REPORT — Fire-and-forget via waitUntil()
+    // Customer is redirected to dashboard IMMEDIATELY (~1s response).
+    // Report generates in background (~20-40s) and appears via polling.
+    // waitUntil() keeps the worker alive for the generation pipeline.
+    // Auto-recovery handles edge-case failures (stuck >90s).
     // ============================================================
     try {
-      await triggerReportGeneration(newOrderId, c.env)
+      const generatePromise = triggerReportGeneration(newOrderId, c.env)
+      if ((c as any).executionCtx?.waitUntil) {
+        // Cloudflare Workers/Pages: background generation
+        ;(c as any).executionCtx.waitUntil(generatePromise)
+        console.log(`[Use-Credit] Order ${newOrderId}: Generation dispatched via waitUntil — responding immediately`)
+      } else {
+        // Local dev: await inline (no waitUntil available)
+        await generatePromise
+      }
     } catch (e: any) {
-      console.warn(`[Use-Credit] Auto-generate error (non-fatal): ${e.message}`)
+      console.warn(`[Use-Credit] Auto-generate dispatch error (non-fatal): ${e.message}`)
     }
 
     // Log activity
@@ -654,11 +668,17 @@ squareRoutes.post('/webhook', async (c) => {
             "INSERT OR IGNORE INTO reports (order_id, status) VALUES (?, 'pending')"
           ).bind(webhookOrderId).run()
 
-          // Auto-trigger report generation (inline, no waitUntil)
+          // Auto-trigger report generation (background via waitUntil)
           try {
-            await triggerReportGeneration(webhookOrderId, c.env)
+            const generatePromise = triggerReportGeneration(webhookOrderId, c.env)
+            if ((c as any).executionCtx?.waitUntil) {
+              ;(c as any).executionCtx.waitUntil(generatePromise)
+              console.log(`[Square Webhook] Order ${webhookOrderId}: Generation dispatched via waitUntil`)
+            } else {
+              await generatePromise
+            }
           } catch (e: any) {
-            console.warn(`[Square Webhook] Auto-generate error (non-fatal): ${e.message}`)
+            console.warn(`[Square Webhook] Auto-generate dispatch error (non-fatal): ${e.message}`)
           }
 
           await c.env.DB.prepare(`

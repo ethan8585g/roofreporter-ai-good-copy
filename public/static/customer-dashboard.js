@@ -219,22 +219,97 @@ function renderRecentOrders() {
       '<p class="text-sm text-gray-500 mb-3">No reports yet</p>' +
       '<a href="/customer/order" class="text-sm font-semibold text-brand-600 hover:text-brand-700"><i class="fas fa-plus mr-1"></i>Order your first report</a></div>';
   }
-  var html = '<div class="space-y-2">';
+
+  // Check for any actively generating reports — show them first as a vivid progress card
+  var generatingOrders = custState.orders.filter(function(o) {
+    return o.status === 'processing' || o.report_status === 'generating' || o.report_status === 'pending' ||
+           o.report_status === 'enhancing' || o.enhancement_status === 'sent' || o.enhancement_status === 'pending';
+  });
+
+  var html = '';
+
+  // Vivid generating banner for actively processing reports
+  if (generatingOrders.length > 0) {
+    html += '<div class="mb-4">';
+    for (var g = 0; g < generatingOrders.length; g++) {
+      var go = generatingOrders[g];
+      var isEnhancing = go.report_status === 'enhancing' || go.enhancement_status === 'sent' || go.enhancement_status === 'pending';
+      var isGenerating = !isEnhancing && (go.status === 'processing' || go.report_status === 'generating' || go.report_status === 'pending');
+      var createdAt = new Date(go.created_at).getTime();
+      var elapsed = Math.round((Date.now() - createdAt) / 1000);
+      var progressPercent = Math.min(95, Math.round((elapsed / 45) * 100)); // ~45s expected
+      var stepLabel = 'Initializing...';
+      if (elapsed < 5) stepLabel = 'Placing order...';
+      else if (elapsed < 12) stepLabel = 'Analyzing satellite imagery...';
+      else if (elapsed < 20) stepLabel = 'Measuring roof segments...';
+      else if (elapsed < 30) stepLabel = 'Computing materials & edges...';
+      else if (elapsed < 40) stepLabel = 'Building professional report...';
+      else if (isEnhancing) stepLabel = 'AI polishing report...';
+      else stepLabel = 'Finalizing report...';
+
+      if (isEnhancing) {
+        progressPercent = Math.min(95, 80 + Math.round((elapsed - 30) / 20 * 15));
+        stepLabel = 'AI polishing your report...';
+      }
+
+      html += '<div class="relative overflow-hidden bg-gradient-to-r from-blue-600 to-indigo-700 rounded-2xl p-5 shadow-lg border border-blue-500/30">' +
+        '<div class="absolute inset-0 opacity-10"><div style="background:repeating-linear-gradient(90deg,transparent,transparent 20px,rgba(255,255,255,0.1) 20px,rgba(255,255,255,0.1) 40px);width:200%;height:100%;animation:slideStripes 2s linear infinite"></div></div>' +
+        '<div class="relative z-10">' +
+          '<div class="flex items-center justify-between mb-3">' +
+            '<div class="flex items-center gap-3">' +
+              '<div class="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur">' +
+                '<div style="width:24px;height:24px;border:3px solid rgba(255,255,255,0.3);border-top-color:white;border-radius:50%;animation:spin 1s linear infinite"></div>' +
+              '</div>' +
+              '<div>' +
+                '<h4 class="text-white font-bold text-sm">' + (isEnhancing ? 'AI Enhancing Report' : 'Generating Roof Report') + '</h4>' +
+                '<p class="text-blue-200 text-xs truncate" style="max-width:220px">' +
+                  '<i class="fas fa-map-marker-alt mr-1"></i>' + (go.property_address || 'Processing...') +
+                '</p>' +
+              '</div>' +
+            '</div>' +
+            '<div class="text-right">' +
+              '<div class="text-white font-bold text-lg">' + progressPercent + '%</div>' +
+              '<div class="text-blue-200 text-xs">' + elapsed + 's elapsed</div>' +
+            '</div>' +
+          '</div>' +
+          // Progress bar
+          '<div class="w-full bg-white/20 rounded-full h-2 mb-2">' +
+            '<div class="h-2 rounded-full transition-all duration-1000 ease-out" style="width:' + progressPercent + '%;background:linear-gradient(90deg,#60a5fa,#818cf8,#a78bfa)"></div>' +
+          '</div>' +
+          '<div class="flex items-center justify-between">' +
+            '<p class="text-blue-100 text-xs font-medium"><i class="fas fa-cog fa-spin mr-1"></i>' + stepLabel + '</p>' +
+            '<p class="text-blue-200 text-xs">~20-40 seconds total</p>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    }
+    html += '</div>';
+  }
+
+  // CSS for stripe animation (inject once)
+  if (generatingOrders.length > 0 && !document.getElementById('genAnimStyles')) {
+    var styleEl = document.createElement('style');
+    styleEl.id = 'genAnimStyles';
+    styleEl.textContent = '@keyframes slideStripes{from{transform:translateX(0)}to{transform:translateX(-50%)}}@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}@keyframes celebrateIn{0%{transform:scale(0.8);opacity:0}50%{transform:scale(1.05)}100%{transform:scale(1);opacity:1}}';
+    document.head.appendChild(styleEl);
+  }
+
+  html += '<div class="space-y-2">';
   for (var i = 0; i < orders.length; i++) {
     var o = orders[i];
     var isEnhancing = o.report_status === 'enhancing' || o.enhancement_status === 'sent' || o.enhancement_status === 'pending';
-    var statusClass = o.status === 'completed' ? 'bg-green-100 text-green-700' : (isEnhancing ? 'bg-purple-100 text-purple-700' : (o.status === 'processing' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'));
-    var enhanceClass = o.enhancement_status === 'enhanced' ? 'bg-purple-100 text-purple-700' : (isEnhancing ? 'bg-amber-100 text-amber-700' : '');
+    var isProcessing = o.status === 'processing' || o.report_status === 'generating' || o.report_status === 'pending';
+    var statusClass = o.status === 'completed' ? 'bg-green-100 text-green-700' : (isEnhancing ? 'bg-purple-100 text-purple-700' : (isProcessing ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'));
     var enhanceBadge = o.enhancement_status === 'enhanced' ? '<span class="px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full text-[10px] font-bold"><i class="fas fa-magic mr-1"></i>AI Enhanced</span>' : (isEnhancing ? '<span class="px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full text-[10px] font-bold animate-pulse"><i class="fas fa-wand-magic-sparkles fa-spin mr-1"></i>Polishing...</span>' : '');
-    var statusLabel = isEnhancing ? 'polishing' : o.status;
-    var reportReady = (o.report_status === 'completed' || o.status === 'completed') && !isEnhancing;
+    var statusLabel = isEnhancing ? 'polishing' : (isProcessing ? 'generating' : o.status);
+    var reportReady = (o.report_status === 'completed' || o.status === 'completed') && !isEnhancing && !isProcessing;
     html += '<div class="flex items-center justify-between p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">' +
       '<div class="flex-1 min-w-0">' +
         '<p class="text-sm font-medium text-gray-800 truncate"><i class="fas fa-map-marker-alt text-red-400 mr-1.5 text-xs"></i>' + (o.property_address || 'Unknown') + '</p>' +
         '<p class="text-xs text-gray-500 mt-0.5">' + new Date(o.created_at).toLocaleDateString() + (o.roof_area_sqft ? ' &middot; ' + Math.round(o.roof_area_sqft) + ' sq ft' : '') + '</p>' +
       '</div>' +
       '<div class="flex items-center gap-2 ml-3">' +
-        '<span class="px-2 py-0.5 ' + statusClass + ' rounded-full text-[10px] font-bold capitalize">' + (isEnhancing ? '<i class="fas fa-wand-magic-sparkles fa-spin mr-1"></i>' : (o.status === 'processing' ? '<i class="fas fa-spinner fa-spin mr-1"></i>' : '')) + statusLabel + '</span>' +
+        '<span class="px-2 py-0.5 ' + statusClass + ' rounded-full text-[10px] font-bold capitalize">' + (isEnhancing ? '<i class="fas fa-wand-magic-sparkles fa-spin mr-1"></i>' : (isProcessing ? '<i class="fas fa-spinner fa-spin mr-1"></i>' : '')) + statusLabel + '</span>' +
         enhanceBadge +
         (reportReady ? '<a href="/api/reports/' + o.id + '/html" target="_blank" class="px-2.5 py-1 bg-brand-600 text-white rounded-lg text-xs font-medium hover:bg-brand-700"><i class="fas fa-eye mr-1"></i>View</a>' : '') +
       '</div>' +
@@ -245,36 +320,98 @@ function renderRecentOrders() {
 }
 
 // ============================================================
-// AUTO-POLLING: Refresh dashboard when reports are being polished
-// Checks every 5s until all enhancing reports are complete.
-// Customer sees "Polishing..." → automatically updates to "View"
-// when the AI-polished report is ready.
+// AUTO-POLLING: Refresh dashboard when reports are generating
+// Polls every 3s for fast feedback. When a report completes, 
+// shows a celebration toast and re-renders the dashboard.
 // ============================================================
 var _enhancePollTimer = null;
+var _prevProcessingIds = [];
 function startEnhancementPolling() {
   if (_enhancePollTimer) clearInterval(_enhancePollTimer);
-  var hasEnhancing = custState.orders.some(function(o) {
-    return o.report_status === 'enhancing' || o.status === 'processing' || o.report_status === 'generating' || o.enhancement_status === 'sent' || o.enhancement_status === 'pending';
+  var hasActive = custState.orders.some(function(o) {
+    return o.report_status === 'enhancing' || o.status === 'processing' || o.report_status === 'generating' || o.report_status === 'pending' || o.enhancement_status === 'sent' || o.enhancement_status === 'pending';
   });
-  if (!hasEnhancing) return;
-  console.log('[Dashboard] Reports are being processed — auto-refreshing every 5s');
+  // Track which orders are processing so we can detect completions
+  _prevProcessingIds = custState.orders.filter(function(o) {
+    return o.status === 'processing' || o.report_status === 'generating' || o.report_status === 'pending' || o.report_status === 'enhancing' || o.enhancement_status === 'sent' || o.enhancement_status === 'pending';
+  }).map(function(o) { return o.id; });
+
+  if (!hasActive) return;
+  console.log('[Dashboard] Reports generating — auto-refreshing every 3s');
   _enhancePollTimer = setInterval(async function() {
     try {
       var ordersRes = await fetch('/api/customer/orders', { headers: authHeaders() });
       if (ordersRes.ok) {
         var data = await ordersRes.json();
         custState.orders = data.orders || [];
+        
+        // Check if any previously-processing order is now complete
+        var nowProcessingIds = custState.orders.filter(function(o) {
+          return o.status === 'processing' || o.report_status === 'generating' || o.report_status === 'pending' || o.report_status === 'enhancing' || o.enhancement_status === 'sent' || o.enhancement_status === 'pending';
+        }).map(function(o) { return o.id; });
+        
+        var newlyCompleted = _prevProcessingIds.filter(function(id) { return nowProcessingIds.indexOf(id) === -1; });
+        _prevProcessingIds = nowProcessingIds;
+
+        // Show celebration toast for each newly completed report
+        if (newlyCompleted.length > 0) {
+          newlyCompleted.forEach(function(orderId) {
+            var order = custState.orders.find(function(o) { return o.id === orderId; });
+            showReportReadyToast(order);
+          });
+        }
+        
         renderDashboard();
+        
         // Stop polling when all reports are done
-        var stillEnhancing = custState.orders.some(function(o) {
-          return o.report_status === 'enhancing' || o.status === 'processing' || o.report_status === 'generating' || o.enhancement_status === 'sent' || o.enhancement_status === 'pending';
+        var stillActive = custState.orders.some(function(o) {
+          return o.report_status === 'enhancing' || o.status === 'processing' || o.report_status === 'generating' || o.report_status === 'pending' || o.enhancement_status === 'sent' || o.enhancement_status === 'pending';
         });
-        if (!stillEnhancing) {
-          console.log('[Dashboard] All reports polished — stopping auto-refresh');
+        if (!stillActive) {
+          console.log('[Dashboard] All reports complete — stopping auto-refresh');
           clearInterval(_enhancePollTimer);
           _enhancePollTimer = null;
         }
       }
     } catch(e) { /* silent */ }
-  }, 5000);
+  }, 3000);
+}
+
+// ============================================================
+// CELEBRATION TOAST — Slides in when a report completes
+// ============================================================
+function showReportReadyToast(order) {
+  var address = (order && order.property_address) || 'Your property';
+  var orderId = order ? order.id : '';
+  var toast = document.createElement('div');
+  toast.style.cssText = 'position:fixed;top:20px;right:20px;z-index:9999;max-width:380px;animation:slideInRight 0.4s ease-out';
+  toast.innerHTML = 
+    '<div style="background:linear-gradient(135deg,#059669,#10b981);border-radius:16px;padding:16px 20px;box-shadow:0 10px 30px rgba(5,150,105,0.4);border:1px solid rgba(255,255,255,0.2)">' +
+      '<div style="display:flex;align-items:center;gap:12px">' +
+        '<div style="width:40px;height:40px;background:rgba(255,255,255,0.2);border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0">' +
+          '<i class="fas fa-check-circle" style="color:white;font-size:20px"></i>' +
+        '</div>' +
+        '<div style="flex:1;min-width:0">' +
+          '<p style="color:white;font-weight:700;font-size:14px;margin:0">Report Ready!</p>' +
+          '<p style="color:rgba(255,255,255,0.8);font-size:12px;margin:2px 0 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + address + '</p>' +
+        '</div>' +
+        (orderId ? '<a href="/api/reports/' + orderId + '/html" target="_blank" style="background:white;color:#059669;padding:6px 14px;border-radius:10px;font-size:12px;font-weight:700;text-decoration:none;white-space:nowrap">View <i class="fas fa-arrow-right ml-1"></i></a>' : '') +
+      '</div>' +
+    '</div>';
+  
+  // Add animation styles if not already present
+  if (!document.getElementById('toastAnimStyles')) {
+    var s = document.createElement('style');
+    s.id = 'toastAnimStyles';
+    s.textContent = '@keyframes slideInRight{from{transform:translateX(120%);opacity:0}to{transform:translateX(0);opacity:1}}@keyframes slideOutRight{from{transform:translateX(0);opacity:1}to{transform:translateX(120%);opacity:0}}';
+    document.head.appendChild(s);
+  }
+  
+  document.body.appendChild(toast);
+  
+  // Remove after 8 seconds
+  setTimeout(function() {
+    toast.style.animation = 'slideOutRight 0.4s ease-in forwards';
+    setTimeout(function() { toast.remove(); }, 500);
+  }, 8000);
 }

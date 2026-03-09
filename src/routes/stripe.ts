@@ -420,7 +420,7 @@ stripeRoutes.post('/use-credit', async (c) => {
     }
 
     const { property_address, property_city, property_province, property_postal_code,
-            service_tier, latitude, longitude } = await c.req.json()
+            service_tier, latitude, longitude, roof_trace_json, price_per_bundle } = await c.req.json()
 
     if (!property_address) return c.json({ error: 'Property address is required' }, 400)
 
@@ -459,8 +459,8 @@ stripeRoutes.post('/use-credit', async (c) => {
         homeowner_name, homeowner_email,
         requester_name, requester_email,
         service_tier, price, status, payment_status, estimated_delivery,
-        notes, is_trial
-      ) VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'processing', ?, ?, ?, ?)
+        notes, is_trial, roof_trace_json, price_per_bundle
+      ) VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'processing', ?, ?, ?, ?, ?, ?)
     `).bind(
       orderNumber, customer.customer_id,
       property_address, property_city || null, property_province || null, property_postal_code || null,
@@ -468,7 +468,9 @@ stripeRoutes.post('/use-credit', async (c) => {
       customer.name, customer.email,
       customer.name, customer.email,
       tier, price, paymentStatus, estimatedDelivery,
-      notes, isTrial ? 1 : 0
+      notes, isTrial ? 1 : 0,
+      roof_trace_json ? (typeof roof_trace_json === 'string' ? roof_trace_json : JSON.stringify(roof_trace_json)) : null,
+      price_per_bundle || null
     ).run()
 
     // Deduct from the correct bucket (DEV ACCOUNT: skip deduction)

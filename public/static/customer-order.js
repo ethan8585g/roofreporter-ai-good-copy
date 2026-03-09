@@ -946,7 +946,7 @@ async function useCredit() {
   if (isNaN(lat) || isNaN(lng)) { showMsg('error', 'No coordinates.'); return; }
 
   const btn = document.getElementById('creditBtn');
-  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Generating Report...'; }
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Placing Order...'; }
 
   try {
     const res = await fetch('/api/square/use-credit', {
@@ -956,8 +956,9 @@ async function useCredit() {
     });
     const data = await res.json();
     if (res.ok && data.success) {
-      showMsg('success', '<i class="fas fa-check-circle mr-2"></i>Order placed! Report is being generated. Redirecting...');
-      setTimeout(() => { window.location.href = '/customer/dashboard'; }, 2000);
+      // Order placed! Backend generates report in background via waitUntil.
+      // Redirect to dashboard IMMEDIATELY — polling will show the report when ready.
+      showOrderSuccessOverlay(data.order);
     } else {
       showMsg('error', '<i class="fas fa-exclamation-triangle mr-1"></i>' + (data.error || 'Failed to use credit'));
       if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-coins mr-2"></i>Use Credit'; }
@@ -966,6 +967,47 @@ async function useCredit() {
     showMsg('error', '<i class="fas fa-exclamation-triangle mr-1"></i>Network error.');
     if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-coins mr-2"></i>Use Credit'; }
   }
+}
+
+// ============================================================
+// SUCCESS OVERLAY — Show animated confirmation then redirect
+// User sees a polished success screen for 1.5s, then goes to dashboard
+// ============================================================
+function showOrderSuccessOverlay(order) {
+  const address = order?.property_address || orderState.address || 'your property';
+  const orderNum = order?.order_number || '';
+  
+  // Create full-screen overlay
+  const overlay = document.createElement('div');
+  overlay.id = 'orderSuccessOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);backdrop-filter:blur(8px);animation:fadeIn 0.3s ease-out';
+  overlay.innerHTML = `
+    <div style="background:white;border-radius:24px;padding:48px 40px;max-width:440px;width:90%;text-align:center;box-shadow:0 25px 60px rgba(0,0,0,0.3);animation:scaleIn 0.4s ease-out">
+      <div style="width:80px;height:80px;margin:0 auto 20px;background:linear-gradient(135deg,#22c55e,#16a34a);border-radius:50%;display:flex;align-items:center;justify-content:center;animation:popIn 0.5s ease-out 0.2s both">
+        <i class="fas fa-check" style="color:white;font-size:36px"></i>
+      </div>
+      <h2 style="font-size:22px;font-weight:800;color:#111;margin-bottom:8px">Order Placed!</h2>
+      <p style="color:#6b7280;font-size:14px;margin-bottom:4px">${orderNum ? '<span style="font-family:monospace;background:#f3f4f6;padding:2px 8px;border-radius:6px;font-size:12px">' + orderNum + '</span><br>' : ''}
+        ${address}</p>
+      <div style="margin:20px auto;padding:16px;background:linear-gradient(135deg,#eff6ff,#dbeafe);border-radius:16px;border:1px solid #bfdbfe">
+        <div style="display:flex;align-items:center;justify-content:center;gap:8px">
+          <div class="animate-spin" style="width:20px;height:20px;border:3px solid #93c5fd;border-top-color:#2563eb;border-radius:50%"></div>
+          <span style="font-size:14px;font-weight:600;color:#1d4ed8">Generating your roof report...</span>
+        </div>
+        <p style="color:#3b82f6;font-size:12px;margin-top:6px">This takes 20-40 seconds. You'll see it on your dashboard.</p>
+      </div>
+      <p style="color:#9ca3af;font-size:12px;margin-top:12px"><i class="fas fa-arrow-right mr-1"></i>Redirecting to dashboard...</p>
+    </div>
+    <style>
+      @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
+      @keyframes scaleIn { from { transform: scale(0.8); opacity: 0 } to { transform: scale(1); opacity: 1 } }
+      @keyframes popIn { from { transform: scale(0); opacity: 0 } to { transform: scale(1); opacity: 1 } }
+    </style>
+  `;
+  document.body.appendChild(overlay);
+
+  // Redirect to dashboard after 1.5 seconds
+  setTimeout(() => { window.location.href = '/customer/dashboard'; }, 1500);
 }
 
 async function payWithSquare() {
