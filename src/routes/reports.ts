@@ -471,29 +471,26 @@ reportsRoutes.post('/:orderId/generate-enhanced', async (c) => {
   const mergedEnhVision = mergeVisionFindings(crEnhanceVision, geminiEnhVision)
   if (mergedEnhVision) reportData.vision_findings = mergedEnhVision
 
-  const html = generateProfessionalReportHTML(reportData)
-  const existing = await repo.getReportExistence(c.env.DB, orderId)
-  if (existing) { await repo.saveCompletedReport(c.env.DB, orderId, reportData, html, '3.0') }
-  else { await repo.saveCompletedReport(c.env.DB, orderId, reportData, html, '3.0') }
-  await repo.markOrderStatus(c.env.DB, orderId, 'completed')
-  await repo.logApiRequest(c.env.DB, orderId, 'solar_datalayers', 'dataLayers:get + GeoTIFF', 200, dlAnalysis.durationMs)
-
-  // ── Gemini Enhancement (non-blocking) ──
+  // ── Gemini Enhancement (INLINE — await before saving) ──
+  let finalData = reportData
   const enhanceKey2 = c.env.GEMINI_ENHANCE_API_KEY
   if (enhanceKey2) {
-    (async () => {
-      try {
-        await repo.markEnhancementSent(c.env.DB, orderId)
-        const satImg = reportData.imagery?.satellite_overhead_url || reportData.imagery?.satellite_url || null
-        const enhanced = await enhanceReportViaGemini(reportData, enhanceKey2, satImg, { timeoutMs: 25000 })
-        if (enhanced) {
-          const eHtml = generateProfessionalReportHTML(enhanced)
-          await repo.saveEnhancedReport(c.env.DB, orderId, eHtml, JSON.stringify(enhanced), (enhanced as any).enhancement?.version || '1.0', (enhanced as any).enhancement?.processing_time_ms || 0)
-          console.log(`[Enhance] Order ${orderId}: ✅ Enhanced (generate-enhanced path)`)
-        }
-      } catch (e: any) { console.warn(`[Enhance] ${orderId}: ${e.message}`); repo.markEnhancementFailed(c.env.DB, orderId, e.message).catch(() => {}) }
-    })()
+    try {
+      const satImg = reportData.imagery?.satellite_overhead_url || reportData.imagery?.satellite_url || null
+      console.log(`[Enhance] Order ${orderId}: Sending to Gemini 2.5 (generate-enhanced path)...`)
+      const enhanced = await enhanceReportViaGemini(reportData, enhanceKey2, satImg, { timeoutMs: 55000 })
+      if (enhanced) {
+        finalData = enhanced
+        console.log(`[Enhance] Order ${orderId}: ✅ Enhanced (generate-enhanced path)`)
+      }
+    } catch (e: any) { console.warn(`[Enhance] ${orderId}: ${e.message}`) }
   }
+
+  const html = generateProfessionalReportHTML(finalData)
+  const finalVer = (finalData as any).enhancement ? '3.1' : '3.0'
+  await repo.saveCompletedReport(c.env.DB, orderId, finalData, html, finalVer)
+  await repo.markOrderStatus(c.env.DB, orderId, 'completed')
+  await repo.logApiRequest(c.env.DB, orderId, 'solar_datalayers', 'dataLayers:get + GeoTIFF', 200, dlAnalysis.durationMs)
 
   // Optional email
   if (email_report) {
@@ -507,7 +504,7 @@ reportsRoutes.post('/:orderId/generate-enhanced', async (c) => {
     }
   }
 
-  return c.json({ success: true, message: 'Enhanced report generated (v3.0)', report: reportData })
+  return c.json({ success: true, message: `Report generated (v${finalVer})`, report: finalData })
 })
 
 // ============================================================
@@ -1014,104 +1011,58 @@ export async function generateReportForOrder(
 
     console.log(`[Generate] Order ${orderId}: generating HTML report...`)
     let html: string
+    let finalReportData = reportData
+
+    // ═══════════════════════════════════════════════════════════
+    // ENHANCE: Gemini 2.5 polishes the report BEFORE it goes
+    // to the customer. This is NOT fire-and-forget — we AWAIT
+    // the result. The customer only sees the final version.
+    // ═══════════════════════════════════════════════════════════
+    const enhanceKey = env.GEMINI_ENHANCE_API_KEY
+    if (enhanceKey) {
+      try {
+        await repo.markEnhancementSent(env.DB, orderId)
+        const satUrl2 = reportData.imagery?.satellite_overhead_url || reportData.imagery?.satellite_url || null
+        console.log(`[Enhance] Order ${orderId}: 🚀 Sending to Gemini 2.5 (airoofreports) — AWAITING before delivery...`)
+
+        const enhanced = await enhanceReportViaGemini(reportData, enhanceKey, satUrl2, {
+          timeoutMs: 55000,  // Generous timeout — customer waits for the polished version
+          focus: 'roofSegmentStats'
+        })
+
+        if (enhanced) {
+          finalReportData = enhanced
+          console.log(`[Enhance] Order ${orderId}: ✅ Enhancement complete — version ${enhanced.report_version}`)
+        } else {
+          console.warn(`[Enhance] Order ${orderId}: Enhancement returned null — delivering base report`)
+          await repo.markEnhancementFailed(env.DB, orderId, 'Gemini returned null')
+        }
+      } catch (enhErr: any) {
+        console.warn(`[Enhance] Order ${orderId}: Enhancement failed — delivering base report: ${enhErr.message}`)
+        await repo.markEnhancementFailed(env.DB, orderId, enhErr.message).catch(() => {})
+      }
+    } else {
+      console.log(`[Enhance] Order ${orderId}: No GEMINI_ENHANCE_API_KEY — delivering base report`)
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // SAVE: Generate final HTML from the (possibly enhanced) data
+    // and save as the one-and-only report the customer sees.
+    // ═══════════════════════════════════════════════════════════
     try {
-      html = generateProfessionalReportHTML(reportData)
+      html = generateProfessionalReportHTML(finalReportData)
       console.log(`[Generate] Order ${orderId}: HTML generated (${html.length} chars)`)
     } catch (htmlErr: any) {
       console.error(`[Generate] Order ${orderId}: HTML generation FAILED:`, htmlErr.message)
-      // Save report data even if HTML fails
-      html = `<html><body><h1>Report Generated</h1><p>HTML rendering failed: ${htmlErr.message}</p><pre>${JSON.stringify(reportData.property, null, 2)}</pre></body></html>`
+      html = `<html><body><h1>Report Generated</h1><p>HTML rendering failed: ${htmlErr.message}</p><pre>${JSON.stringify(finalReportData.property, null, 2)}</pre></body></html>`
     }
-    await repo.saveCompletedReport(env.DB, orderId, reportData, html, usedDL ? '3.0' : '2.0')
+
+    const finalVersion = (finalReportData as any).enhancement ? '3.1' : (usedDL ? '3.0' : '2.0')
+    await repo.saveCompletedReport(env.DB, orderId, finalReportData, html, finalVersion)
     await repo.markOrderStatus(env.DB, orderId, 'completed')
-    console.log(`[Generate] Order ${orderId}: ✅ COMPLETED (${reportData.segments?.length} segments, ${reportData.total_true_area_sqft} sqft)`)
+    console.log(`[Generate] Order ${orderId}: ✅ COMPLETED v${finalVersion} (${finalReportData.segments?.length} segments, ${finalReportData.total_true_area_sqft} sqft, enhanced=${!!(finalReportData as any).enhancement})`)
 
-    // ── FIRE-AND-FORGET: Enhance report via Gemini 2.5 Pro (airoofreports project) ──
-    // This is non-blocking — the initial report is already saved and accessible.
-    // The Gemini enhancement adds: executive summary, condition assessment,
-    // segment insights, material recommendations, risk factors, contractor notes.
-    // If enhancement succeeds, the upgraded report replaces the original in DB.
-    const enhanceKey = env.GEMINI_ENHANCE_API_KEY
-    if (enhanceKey) {
-      const enhancePromise = (async () => {
-        try {
-          await repo.markEnhancementSent(env.DB, orderId)
-          const satUrl2 = reportData.imagery?.satellite_overhead_url || reportData.imagery?.satellite_url || null
-          console.log(`[Enhance] Order ${orderId}: 🚀 Sending to Gemini 2.5 (airoofreports)...`)
-
-          const enhanced = await enhanceReportViaGemini(reportData, enhanceKey, satUrl2, {
-            timeoutMs: 25000,
-            focus: 'roofSegmentStats'
-          })
-
-          if (enhanced) {
-            // Re-generate HTML with enhanced data
-            const enhancedHtml = generateProfessionalReportHTML(enhanced)
-            await repo.saveEnhancedReport(
-              env.DB, orderId,
-              enhancedHtml, JSON.stringify(enhanced),
-              (enhanced as any).enhancement?.version || '1.0',
-              (enhanced as any).enhancement?.processing_time_ms || 0
-            )
-            console.log(`[Enhance] Order ${orderId}: ✅ Enhanced report saved (v${enhanced.report_version}, ${enhancedHtml.length} chars)`)
-          } else {
-            console.log(`[Enhance] Order ${orderId}: Enhancement returned null — original report preserved`)
-            await repo.markEnhancementFailed(env.DB, orderId, 'Gemini returned null (timeout or parse failure)')
-          }
-        } catch (enhErr: any) {
-          console.warn(`[Enhance] Order ${orderId}: Enhancement failed (non-critical): ${enhErr.message}`)
-          await repo.markEnhancementFailed(env.DB, orderId, enhErr.message).catch(() => {})
-        }
-      })()
-
-      // If Workers has waitUntil, use it for true fire-and-forget
-      // Otherwise the promise runs concurrently but we don't await it in the response
-      if ((globalThis as any).__enhancePromises) {
-        (globalThis as any).__enhancePromises.push(enhancePromise)
-      }
-    } else if (env.AI_STUDIO_ENHANCE_URL && env.REPORT_WEBHOOK_SECRET) {
-      // Legacy: External Cloud Run webhook (fallback if GEMINI_ENHANCE_API_KEY not set)
-      try {
-        await repo.markEnhancementSent(env.DB, orderId)
-        const enhancePayload = {
-          order_id: orderId,
-          report_data: reportData,
-          report_html: html,
-          property: {
-            address: order.property_address,
-            city: order.property_city || '',
-            province: order.property_province || '',
-            postal_code: order.property_postal_code || '',
-            latitude: order.latitude,
-            longitude: order.longitude,
-          },
-          roof_trace: reportData.roof_trace || null,
-          customer_pricing: {
-            price_per_bundle: order.price_per_bundle || null,
-            gross_squares: reportData.customer_gross_squares || null,
-            total_cost_estimate: reportData.customer_total_cost_estimate || null,
-          },
-          satellite_image_url: reportData.imagery?.satellite_overhead_url || reportData.imagery?.satellite_url || null,
-          callback_url: `https://roofing-measurement-tool.pages.dev/api/reports/${orderId}/webhook-update`,
-          webhook_token: env.REPORT_WEBHOOK_SECRET,
-          requested_focus: 'roofSegmentStats',
-          requested_at: new Date().toISOString(),
-        }
-        fetch(env.AI_STUDIO_ENHANCE_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${env.REPORT_WEBHOOK_SECRET}` },
-          body: JSON.stringify(enhancePayload),
-        }).then(res => console.log(`[Enhance] Order ${orderId}: Sent to AI Studio (status ${res.status})`))
-          .catch(err => { console.warn(`[Enhance] Order ${orderId}: AI Studio send failed: ${err.message}`); repo.markEnhancementFailed(env.DB, orderId, `Send failed: ${err.message}`).catch(() => {}) })
-        console.log(`[Enhance] Order ${orderId}: 🚀 Fire-and-forget sent to ${env.AI_STUDIO_ENHANCE_URL}`)
-      } catch (enhErr: any) {
-        console.warn(`[Enhance] Order ${orderId}: Enhancement setup failed (non-critical): ${enhErr.message}`)
-      }
-    } else {
-      console.log(`[Enhance] Order ${orderId}: Skipping AI enhancement (no GEMINI_ENHANCE_API_KEY or AI_STUDIO_ENHANCE_URL)`)
-    }
-
-    return { success: true, report: reportData, version: usedDL ? '3.0' : '2.0', provider: reportData.metadata?.provider || 'unknown' }
+    return { success: true, report: finalReportData, version: finalVersion, provider: finalReportData.metadata?.provider || 'unknown' }
   } catch (err: any) {
     try { await repo.markReportFailed(env.DB, orderId, err.message); await repo.markOrderStatus(env.DB, orderId, 'failed') } catch {}
     return { success: false, error: err.message }
