@@ -141,33 +141,67 @@ reportsRoutes.get('/:orderId/html', async (c) => {
 })
 
 // ============================================================
-// POST /:orderId/generate — Main report pipeline
+// POST /:orderId/generate — Main report pipeline (2-Phase)
+// Phase 1: WELD + PAINT + POLISH + quick AI → saves base report (status='enhancing')
+// Phase 2: Gemini Enhancement → runs in waitUntil() background → marks 'completed'
+// Customer NEVER sees the unpolished report.
 // ============================================================
 reportsRoutes.post('/:orderId/generate', async (c) => {
   const orderId = c.req.param('orderId')
-  const generatePromise = generateReportForOrder(orderId, c.env)
-    .then(r => console.log(`[Generate] Order ${orderId}: ${r.success ? 'OK' : r.error}`))
-    .catch(e => console.error(`[Generate] Order ${orderId} error:`, e.message))
-  if ((c as any).executionCtx?.waitUntil) {
-    ;(c as any).executionCtx.waitUntil(generatePromise)
-    return c.json({ success: true, message: 'Report generation started', orderId })
-  }
+
+  // Phase 1: Generate base report (WELD + PAINT + POLISH + quick AI scans)
+  // This must complete within ~25s (Cloudflare wall-clock limit)
   const result = await generateReportForOrder(orderId, c.env)
   if (!result.success) return c.json({ error: result.error }, result.error === 'Order not found' ? 404 : 500)
-  return c.json({ success: true, report: result.report, provider: result.provider, version: result.version })
+
+  // Phase 2: Gemini Enhancement — run in background via waitUntil()
+  // This can take 10-55s, safely outside the response deadline.
+  // Customer sees "Polishing your report..." until this completes.
+  if (result.report && c.env.GEMINI_ENHANCE_API_KEY) {
+    const enhancePromise = enhanceReportInBackground(orderId, result.report, c.env)
+      .then(ok => console.log(`[Phase2] Order ${orderId}: Enhancement ${ok ? '✅ complete' : '⚠️ skipped (base report delivered)'}`))
+      .catch(e => console.error(`[Phase2] Order ${orderId}: Enhancement error:`, e.message))
+
+    if ((c as any).executionCtx?.waitUntil) {
+      ;(c as any).executionCtx.waitUntil(enhancePromise)
+    }
+    // Don't await — respond immediately with base report status
+  }
+
+  return c.json({
+    success: true,
+    message: result.enhancing ? 'Report generated — polishing in progress' : 'Report generated',
+    orderId,
+    status: result.enhancing ? 'enhancing' : 'completed',
+    provider: result.provider,
+    version: result.version,
+    // Include report data so admin UI can show something immediately
+    report: result.report
+  })
 })
 
 // ============================================================
-// POST /:orderId/retry — Reset and re-generate
+// POST /:orderId/retry — Reset and re-generate (2-Phase)
 // ============================================================
 reportsRoutes.post('/:orderId/retry', async (c) => {
   const orderId = c.req.param('orderId')
   const report = await repo.getReportStatus(c.env.DB, orderId)
   if (!report) return c.json({ error: 'No report record found' }, 404)
   await repo.resetReportForRetry(c.env.DB, orderId)
-  const gen = generateReportForOrder(orderId, c.env).catch(e => console.error(`[Retry] ${orderId}:`, e.message))
-  if ((c as any).executionCtx?.waitUntil) (c as any).executionCtx.waitUntil(gen); else await gen
-  return c.json({ success: true, message: 'Retry started', previousStatus: report.status })
+
+  // Phase 1: Generate base report
+  const result = await generateReportForOrder(orderId, c.env).catch(e => {
+    console.error(`[Retry] ${orderId}:`, e.message)
+    return { success: false, error: e.message } as any
+  })
+
+  // Phase 2: Enhancement in background
+  if (result?.success && result.report && c.env.GEMINI_ENHANCE_API_KEY) {
+    const enhancePromise = enhanceReportInBackground(orderId, result.report, c.env)
+    if ((c as any).executionCtx?.waitUntil) (c as any).executionCtx.waitUntil(enhancePromise)
+  }
+
+  return c.json({ success: true, message: 'Retry started', previousStatus: report.status, status: result?.enhancing ? 'enhancing' : 'completed' })
 })
 
 // ============================================================
@@ -471,40 +505,47 @@ reportsRoutes.post('/:orderId/generate-enhanced', async (c) => {
   const mergedEnhVision = mergeVisionFindings(crEnhanceVision, geminiEnhVision)
   if (mergedEnhVision) reportData.vision_findings = mergedEnhVision
 
-  // ── Gemini Enhancement (INLINE — await before saving) ──
-  let finalData = reportData
-  const enhanceKey2 = c.env.GEMINI_ENHANCE_API_KEY
-  if (enhanceKey2) {
-    try {
-      const satImg = reportData.imagery?.satellite_overhead_url || reportData.imagery?.satellite_url || null
-      console.log(`[Enhance] Order ${orderId}: Sending to Gemini 2.5 (generate-enhanced path)...`)
-      const enhanced = await enhanceReportViaGemini(reportData, enhanceKey2, satImg, { timeoutMs: 55000 })
-      if (enhanced) {
-        finalData = enhanced
-        console.log(`[Enhance] Order ${orderId}: ✅ Enhanced (generate-enhanced path)`)
-      }
-    } catch (e: any) { console.warn(`[Enhance] ${orderId}: ${e.message}`) }
+  // ── PHASE 1 COMPLETE: Save base report (status='enhancing' if Gemini key present) ──
+  const baseHtml = generateProfessionalReportHTML(reportData)
+  const baseVer = '3.0'
+  
+  if (c.env.GEMINI_ENHANCE_API_KEY) {
+    // Save base report with 'enhancing' status — customer sees "Polishing..." spinner
+    await repo.saveCompletedReport(c.env.DB, orderId, reportData, baseHtml, baseVer)
+    await c.env.DB.prepare(`UPDATE reports SET status = 'enhancing', enhancement_status = 'pending', updated_at = datetime('now') WHERE order_id = ?`).bind(orderId).run()
+    await repo.markOrderStatus(c.env.DB, orderId, 'processing')
+    await repo.logApiRequest(c.env.DB, orderId, 'solar_datalayers', 'dataLayers:get + GeoTIFF', 200, dlAnalysis.durationMs)
+
+    // Phase 2: Enhancement in background via waitUntil()
+    const enhancePromise = enhanceReportInBackground(orderId, reportData, c.env, { email_report, to_email, order })
+      .then(ok => console.log(`[Phase2-Enhanced] Order ${orderId}: ${ok ? '✅ polished' : '⚠️ base report delivered'}`))
+      .catch(e => console.error(`[Phase2-Enhanced] Order ${orderId}:`, e.message))
+
+    if ((c as any).executionCtx?.waitUntil) {
+      ;(c as any).executionCtx.waitUntil(enhancePromise)
+    }
+
+    return c.json({ success: true, message: 'Report generated — polishing in progress', status: 'enhancing', version: baseVer, report: reportData })
   }
 
-  const html = generateProfessionalReportHTML(finalData)
-  const finalVer = (finalData as any).enhancement ? '3.1' : '3.0'
-  await repo.saveCompletedReport(c.env.DB, orderId, finalData, html, finalVer)
+  // No enhancement key — save as completed directly
+  await repo.saveCompletedReport(c.env.DB, orderId, reportData, baseHtml, baseVer)
   await repo.markOrderStatus(c.env.DB, orderId, 'completed')
   await repo.logApiRequest(c.env.DB, orderId, 'solar_datalayers', 'dataLayers:get + GeoTIFF', 200, dlAnalysis.durationMs)
 
-  // Optional email
+  // Optional email (no enhancement — send base report immediately)
   if (email_report) {
     const recipient = to_email || order.homeowner_email || order.requester_email
     if (recipient) {
       try {
-        const emailHtml = buildEmailWrapper(html, order.property_address, `RM-${new Date().toISOString().slice(0,10).replace(/-/g,'')}-${String(orderId).padStart(4,'0')}`, recipient)
+        const emailHtml = buildEmailWrapper(baseHtml, order.property_address, `RM-${new Date().toISOString().slice(0,10).replace(/-/g,'')}-${String(orderId).padStart(4,'0')}`, recipient)
         const rt = (c.env as any).GMAIL_REFRESH_TOKEN, ci = (c.env as any).GMAIL_CLIENT_ID, cs = (c.env as any).GMAIL_CLIENT_SECRET
         if (rt && ci && cs) await sendGmailOAuth2(ci, cs, rt, recipient, `Roof Report - ${order.property_address}`, emailHtml, c.env.GMAIL_SENDER_EMAIL)
       } catch {}
     }
   }
 
-  return c.json({ success: true, message: `Report generated (v${finalVer})`, report: finalData })
+  return c.json({ success: true, message: `Report generated (v${baseVer})`, status: 'completed', report: reportData })
 })
 
 // ============================================================
@@ -767,15 +808,103 @@ reportsRoutes.get('/:orderId/enhancement-status', async (c) => {
 
   const status = await repo.getEnhancementStatus(c.env.DB, orderId)
   if (!status) return c.json({ error: 'Report not found' }, 404)
-  return c.json({ success: true, orderId, ...status })
+
+  // Also fetch the report status to tell frontend if report is ready
+  const reportStatus = await repo.getReportStatus(c.env.DB, orderId)
+  const isReady = reportStatus?.status === 'completed'
+  const isEnhancing = reportStatus?.status === 'enhancing' || (status as any).enhancement_status === 'sent' || (status as any).enhancement_status === 'pending'
+
+  return c.json({
+    success: true,
+    orderId,
+    ...status,
+    report_status: reportStatus?.status || 'unknown',
+    is_ready: isReady,
+    is_enhancing: isEnhancing,
+    message: isReady
+      ? 'Report is ready — polished and complete'
+      : isEnhancing
+        ? 'Report is being polished by AI — please wait...'
+        : `Report status: ${reportStatus?.status || 'unknown'}`
+  })
 })
 
 // ============================================================
-// EXPORTED: Direct report generation (called by square.ts etc.)
+// PHASE 2: Background Gemini Enhancement
+// Called via waitUntil() after Phase 1 saves the base report.
+// This runs OUTSIDE the response deadline — can take up to 30s.
+// On completion: saves polished report + marks status='completed'.
+// On failure: marks enhancement_failed + status='completed' (base report stands).
+// ============================================================
+export async function enhanceReportInBackground(
+  orderId: number | string,
+  reportData: RoofReport,
+  env: Bindings,
+  emailOpts?: { email_report?: boolean; to_email?: string; order?: any }
+): Promise<boolean> {
+  const enhanceKey = env.GEMINI_ENHANCE_API_KEY
+  if (!enhanceKey) return false
+
+  try {
+    await repo.markEnhancementSent(env.DB, orderId)
+    const satUrl = reportData.imagery?.satellite_overhead_url || reportData.imagery?.satellite_url || null
+    console.log(`[Phase2] Order ${orderId}: 🚀 Gemini Enhancement starting (background)...`)
+
+    const enhanced = await enhanceReportViaGemini(reportData, enhanceKey, satUrl, {
+      timeoutMs: 25000,  // 25s — safe within waitUntil() 30s budget
+      focus: 'roofSegmentStats'
+    })
+
+    if (enhanced) {
+      const html = generateProfessionalReportHTML(enhanced)
+      const version = enhanced.report_version || '3.1'
+      await repo.saveEnhancedReport(env.DB, orderId, html, JSON.stringify(enhanced), version, 0)
+      // Mark report status as completed (customer can now see it)
+      await env.DB.prepare(`UPDATE reports SET status = 'completed', updated_at = datetime('now') WHERE order_id = ?`).bind(orderId).run()
+      await repo.markOrderStatus(env.DB, orderId, 'completed')
+      console.log(`[Phase2] Order ${orderId}: ✅ Polished report saved (v${version}, ${html.length} chars)`)
+
+      // Send email with POLISHED report (not the base)
+      if (emailOpts?.email_report && emailOpts.order) {
+        const recipient = emailOpts.to_email || emailOpts.order.homeowner_email || emailOpts.order.requester_email
+        if (recipient) {
+          try {
+            const emailHtml = buildEmailWrapper(html, emailOpts.order.property_address, `RM-${new Date().toISOString().slice(0,10).replace(/-/g,'')}-${String(orderId).padStart(4,'0')}`, recipient)
+            const rt = (env as any).GMAIL_REFRESH_TOKEN, ci = (env as any).GMAIL_CLIENT_ID, cs = (env as any).GMAIL_CLIENT_SECRET
+            if (rt && ci && cs) await sendGmailOAuth2(ci, cs, rt, recipient, `Roof Report - ${emailOpts.order.property_address}`, emailHtml, env.GMAIL_SENDER_EMAIL)
+          } catch {}
+        }
+      }
+
+      return true
+    } else {
+      // Enhancement returned null — deliver base report as-is
+      console.warn(`[Phase2] Order ${orderId}: Enhancement returned null — delivering base report`)
+      await repo.markEnhancementFailed(env.DB, orderId, 'Gemini returned null')
+      await env.DB.prepare(`UPDATE reports SET status = 'completed', updated_at = datetime('now') WHERE order_id = ?`).bind(orderId).run()
+      await repo.markOrderStatus(env.DB, orderId, 'completed')
+      return false
+    }
+  } catch (enhErr: any) {
+    console.warn(`[Phase2] Order ${orderId}: Enhancement failed — base report delivered: ${enhErr.message}`)
+    await repo.markEnhancementFailed(env.DB, orderId, enhErr.message).catch(() => {})
+    // Still mark as completed so customer can see the base report
+    try {
+      await env.DB.prepare(`UPDATE reports SET status = 'completed', updated_at = datetime('now') WHERE order_id = ?`).bind(orderId).run()
+      await repo.markOrderStatus(env.DB, orderId, 'completed')
+    } catch {}
+    return false
+  }
+}
+
+// ============================================================
+// PHASE 1: Generate base report (WELD + PAINT + POLISH + quick AI)
+// Must complete within ~25s (Cloudflare wall-clock limit).
+// Does NOT include Gemini Enhancement — that runs in Phase 2.
 // ============================================================
 export async function generateReportForOrder(
   orderId: number | string, env: Bindings
-): Promise<{ success: boolean; report?: RoofReport; error?: string; version?: string; provider?: string }> {
+): Promise<{ success: boolean; report?: RoofReport; error?: string; version?: string; provider?: string; enhancing?: boolean }> {
   try {
     const order = await repo.getOrderById(env.DB, orderId)
     if (!order) return { success: false, error: 'Order not found' }
@@ -1011,43 +1140,14 @@ export async function generateReportForOrder(
 
     console.log(`[Generate] Order ${orderId}: generating HTML report...`)
     let html: string
-    let finalReportData = reportData
+    const finalReportData = reportData
 
     // ═══════════════════════════════════════════════════════════
-    // ENHANCE: Gemini 2.5 polishes the report BEFORE it goes
-    // to the customer. This is NOT fire-and-forget — we AWAIT
-    // the result. The customer only sees the final version.
-    // ═══════════════════════════════════════════════════════════
-    const enhanceKey = env.GEMINI_ENHANCE_API_KEY
-    if (enhanceKey) {
-      try {
-        await repo.markEnhancementSent(env.DB, orderId)
-        const satUrl2 = reportData.imagery?.satellite_overhead_url || reportData.imagery?.satellite_url || null
-        console.log(`[Enhance] Order ${orderId}: 🚀 Sending to Gemini 2.5 (airoofreports) — AWAITING before delivery...`)
-
-        const enhanced = await enhanceReportViaGemini(reportData, enhanceKey, satUrl2, {
-          timeoutMs: 55000,  // Generous timeout — customer waits for the polished version
-          focus: 'roofSegmentStats'
-        })
-
-        if (enhanced) {
-          finalReportData = enhanced
-          console.log(`[Enhance] Order ${orderId}: ✅ Enhancement complete — version ${enhanced.report_version}`)
-        } else {
-          console.warn(`[Enhance] Order ${orderId}: Enhancement returned null — delivering base report`)
-          await repo.markEnhancementFailed(env.DB, orderId, 'Gemini returned null')
-        }
-      } catch (enhErr: any) {
-        console.warn(`[Enhance] Order ${orderId}: Enhancement failed — delivering base report: ${enhErr.message}`)
-        await repo.markEnhancementFailed(env.DB, orderId, enhErr.message).catch(() => {})
-      }
-    } else {
-      console.log(`[Enhance] Order ${orderId}: No GEMINI_ENHANCE_API_KEY — delivering base report`)
-    }
-
-    // ═══════════════════════════════════════════════════════════
-    // SAVE: Generate final HTML from the (possibly enhanced) data
-    // and save as the one-and-only report the customer sees.
+    // PHASE 1 SAVE: Save base report. If GEMINI_ENHANCE_API_KEY
+    // is set, mark status='enhancing' so the customer sees
+    // "Polishing your report..." — Phase 2 (waitUntil) handles
+    // the actual enhancement call and marks 'completed' when done.
+    // If no enhance key, mark completed immediately.
     // ═══════════════════════════════════════════════════════════
     try {
       html = generateProfessionalReportHTML(finalReportData)
@@ -1057,12 +1157,30 @@ export async function generateReportForOrder(
       html = `<html><body><h1>Report Generated</h1><p>HTML rendering failed: ${htmlErr.message}</p><pre>${JSON.stringify(finalReportData.property, null, 2)}</pre></body></html>`
     }
 
-    const finalVersion = (finalReportData as any).enhancement ? '3.1' : (usedDL ? '3.0' : '2.0')
-    await repo.saveCompletedReport(env.DB, orderId, finalReportData, html, finalVersion)
-    await repo.markOrderStatus(env.DB, orderId, 'completed')
-    console.log(`[Generate] Order ${orderId}: ✅ COMPLETED v${finalVersion} (${finalReportData.segments?.length} segments, ${finalReportData.total_true_area_sqft} sqft, enhanced=${!!(finalReportData as any).enhancement})`)
+    const baseVersion = usedDL ? '3.0' : '2.0'
+    const hasEnhanceKey = !!env.GEMINI_ENHANCE_API_KEY
 
-    return { success: true, report: finalReportData, version: finalVersion, provider: finalReportData.metadata?.provider || 'unknown' }
+    // Save base report to DB
+    await repo.saveCompletedReport(env.DB, orderId, finalReportData, html, baseVersion)
+
+    if (hasEnhanceKey) {
+      // Mark as 'enhancing' — Phase 2 will upgrade to 'completed' after polishing
+      await env.DB.prepare(`UPDATE reports SET status = 'enhancing', enhancement_status = 'pending', updated_at = datetime('now') WHERE order_id = ?`).bind(orderId).run()
+      await repo.markOrderStatus(env.DB, orderId, 'processing')
+      console.log(`[Generate] Order ${orderId}: ✅ Phase 1 COMPLETE (v${baseVersion}) — base report saved, status='enhancing'. Phase 2 will polish.`)
+    } else {
+      // No enhancement — mark completed immediately
+      await repo.markOrderStatus(env.DB, orderId, 'completed')
+      console.log(`[Generate] Order ${orderId}: ✅ COMPLETED v${baseVersion} (no enhancement key — delivering base report)`)
+    }
+
+    return {
+      success: true,
+      report: finalReportData,
+      version: baseVersion,
+      provider: finalReportData.metadata?.provider || 'unknown',
+      enhancing: hasEnhanceKey
+    }
   } catch (err: any) {
     try { await repo.markReportFailed(env.DB, orderId, err.message); await repo.markOrderStatus(env.DB, orderId, 'failed') } catch {}
     return { success: false, error: err.message }

@@ -17,6 +17,8 @@ document.addEventListener('DOMContentLoaded', async function() {
   }
   await loadDashData();
   renderDashboard();
+  // Auto-refresh when reports are being polished (every 5s)
+  startEnhancementPolling();
 });
 
 async function loadDashData() {
@@ -73,7 +75,7 @@ function renderDashboard() {
   var paidCredits = c.paid_credits_remaining || 0;
   var completedReports = custState.orders.filter(function(o) { return o.status === 'completed'; }).length;
   var processingReports = custState.orders.filter(function(o) { return o.status === 'processing'; }).length;
-  var enhancingReports = custState.orders.filter(function(o) { return o.enhancement_status === 'sent'; }).length;
+  var enhancingReports = custState.orders.filter(function(o) { return o.enhancement_status === 'sent' || o.enhancement_status === 'pending' || o.status === 'enhancing'; }).length;
 
   // Determine branding setup completion status
   var brandingComplete = !!(c.brand_logo_url && c.brand_business_name);
@@ -220,21 +222,59 @@ function renderRecentOrders() {
   var html = '<div class="space-y-2">';
   for (var i = 0; i < orders.length; i++) {
     var o = orders[i];
-    var statusClass = o.status === 'completed' ? 'bg-green-100 text-green-700' : (o.status === 'processing' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600');
-    var enhanceClass = o.enhancement_status === 'enhanced' ? 'bg-purple-100 text-purple-700' : (o.enhancement_status === 'sent' ? 'bg-amber-100 text-amber-700' : '');
-    var enhanceBadge = o.enhancement_status === 'enhanced' ? '<span class="px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full text-[10px] font-bold"><i class="fas fa-magic mr-1"></i>AI Enhanced</span>' : (o.enhancement_status === 'sent' ? '<span class="px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full text-[10px] font-bold animate-pulse"><i class="fas fa-magic fa-spin mr-1"></i>AI Enhancing</span>' : '');
+    var isEnhancing = o.status === 'enhancing' || o.enhancement_status === 'sent' || o.enhancement_status === 'pending';
+    var statusClass = o.status === 'completed' ? 'bg-green-100 text-green-700' : (isEnhancing ? 'bg-purple-100 text-purple-700' : (o.status === 'processing' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'));
+    var enhanceClass = o.enhancement_status === 'enhanced' ? 'bg-purple-100 text-purple-700' : (isEnhancing ? 'bg-amber-100 text-amber-700' : '');
+    var enhanceBadge = o.enhancement_status === 'enhanced' ? '<span class="px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full text-[10px] font-bold"><i class="fas fa-magic mr-1"></i>AI Enhanced</span>' : (isEnhancing ? '<span class="px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full text-[10px] font-bold animate-pulse"><i class="fas fa-wand-magic-sparkles fa-spin mr-1"></i>Polishing...</span>' : '');
+    var statusLabel = isEnhancing ? 'polishing' : o.status;
+    var reportReady = o.report_status === 'completed' && !isEnhancing;
     html += '<div class="flex items-center justify-between p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">' +
       '<div class="flex-1 min-w-0">' +
         '<p class="text-sm font-medium text-gray-800 truncate"><i class="fas fa-map-marker-alt text-red-400 mr-1.5 text-xs"></i>' + (o.property_address || 'Unknown') + '</p>' +
         '<p class="text-xs text-gray-500 mt-0.5">' + new Date(o.created_at).toLocaleDateString() + (o.roof_area_sqft ? ' &middot; ' + Math.round(o.roof_area_sqft) + ' sq ft' : '') + '</p>' +
       '</div>' +
       '<div class="flex items-center gap-2 ml-3">' +
-        '<span class="px-2 py-0.5 ' + statusClass + ' rounded-full text-[10px] font-bold capitalize">' + (o.status === 'processing' ? '<i class="fas fa-spinner fa-spin mr-1"></i>' : '') + o.status + '</span>' +
+        '<span class="px-2 py-0.5 ' + statusClass + ' rounded-full text-[10px] font-bold capitalize">' + (isEnhancing ? '<i class="fas fa-wand-magic-sparkles fa-spin mr-1"></i>' : (o.status === 'processing' ? '<i class="fas fa-spinner fa-spin mr-1"></i>' : '')) + statusLabel + '</span>' +
         enhanceBadge +
-        (o.report_status === 'completed' ? '<a href="/api/reports/' + o.id + '/html" target="_blank" class="px-2.5 py-1 bg-brand-600 text-white rounded-lg text-xs font-medium hover:bg-brand-700"><i class="fas fa-eye mr-1"></i>View</a>' : '') +
+        (reportReady ? '<a href="/api/reports/' + o.id + '/html" target="_blank" class="px-2.5 py-1 bg-brand-600 text-white rounded-lg text-xs font-medium hover:bg-brand-700"><i class="fas fa-eye mr-1"></i>View</a>' : '') +
       '</div>' +
     '</div>';
   }
   html += '</div>';
   return html;
+}
+
+// ============================================================
+// AUTO-POLLING: Refresh dashboard when reports are being polished
+// Checks every 5s until all enhancing reports are complete.
+// Customer sees "Polishing..." → automatically updates to "View"
+// when the AI-polished report is ready.
+// ============================================================
+var _enhancePollTimer = null;
+function startEnhancementPolling() {
+  if (_enhancePollTimer) clearInterval(_enhancePollTimer);
+  var hasEnhancing = custState.orders.some(function(o) {
+    return o.status === 'enhancing' || o.status === 'processing' || o.enhancement_status === 'sent' || o.enhancement_status === 'pending';
+  });
+  if (!hasEnhancing) return;
+  console.log('[Dashboard] Reports are being polished — auto-refreshing every 5s');
+  _enhancePollTimer = setInterval(async function() {
+    try {
+      var ordersRes = await fetch('/api/customer/orders', { headers: authHeaders() });
+      if (ordersRes.ok) {
+        var data = await ordersRes.json();
+        custState.orders = data.orders || [];
+        renderDashboard();
+        // Stop polling when all reports are done
+        var stillEnhancing = custState.orders.some(function(o) {
+          return o.status === 'enhancing' || o.status === 'processing' || o.enhancement_status === 'sent' || o.enhancement_status === 'pending';
+        });
+        if (!stillEnhancing) {
+          console.log('[Dashboard] All reports polished — stopping auto-refresh');
+          clearInterval(_enhancePollTimer);
+          _enhancePollTimer = null;
+        }
+      }
+    } catch(e) { /* silent */ }
+  }, 5000);
 }

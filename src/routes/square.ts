@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import type { Bindings } from '../types'
-import { generateReportForOrder } from './reports'
+import { generateReportForOrder, enhanceReportInBackground } from './reports'
 import { isDevAccount } from './customer-auth'
 
 export const squareRoutes = new Hono<{ Bindings: Bindings }>()
@@ -26,14 +26,28 @@ async function geocodeAddress(address: string, apiKey: string): Promise<{ lat: n
 }
 
 // ============================================================
-// AUTO-GENERATE REPORT — Direct function call (no HTTP self-fetch)
-// Uses the exported generateReportForOrder from reports.ts
+// AUTO-GENERATE REPORT — 2-Phase Pipeline (no HTTP self-fetch)
+// Phase 1: generateReportForOrder (WELD + PAINT + POLISH)
+// Phase 2: enhanceReportInBackground (Gemini polishing)
 // ============================================================
-async function triggerReportGeneration(orderId: number, env: Bindings): Promise<boolean> {
+async function triggerReportGeneration(orderId: number, env: Bindings, executionCtx?: any): Promise<boolean> {
   try {
     console.log(`[Auto-Generate] Triggering direct report generation for order ${orderId}`)
     const result = await generateReportForOrder(orderId, env)
     console.log(`[Auto-Generate] Order ${orderId}: ${result.success ? 'SUCCESS' : result.error || 'FAILED'} — provider: ${result.provider || 'n/a'}`)
+
+    // Phase 2: Run enhancement in background if Phase 1 succeeded
+    if (result.success && result.report && result.enhancing) {
+      const enhancePromise = enhanceReportInBackground(orderId, result.report, env)
+        .then(ok => console.log(`[Auto-Generate Phase2] Order ${orderId}: Enhancement ${ok ? '✅' : '⚠️ skipped'}`))
+        .catch(e => console.error(`[Auto-Generate Phase2] Order ${orderId}:`, e.message))
+
+      if (executionCtx?.waitUntil) {
+        executionCtx.waitUntil(enhancePromise)
+      }
+      // Don't await — return immediately
+    }
+
     return result.success === true
   } catch (err: any) {
     console.error(`[Auto-Generate] Order ${orderId} failed:`, err.message)
@@ -455,7 +469,7 @@ squareRoutes.post('/use-credit', async (c) => {
     // AUTO-GENERATE REPORT — Trigger immediately after order creation
     // ============================================================
     try {
-      const generatePromise = triggerReportGeneration(newOrderId, c.env)
+      const generatePromise = triggerReportGeneration(newOrderId, c.env, (c as any).executionCtx)
       if ((c as any).executionCtx?.waitUntil) {
         ;(c as any).executionCtx.waitUntil(generatePromise)
       } else {
@@ -645,7 +659,7 @@ squareRoutes.post('/webhook', async (c) => {
 
           // Auto-trigger report generation
           try {
-            const generatePromise = triggerReportGeneration(webhookOrderId, c.env)
+            const generatePromise = triggerReportGeneration(webhookOrderId, c.env, (c as any).executionCtx)
             if ((c as any).executionCtx?.waitUntil) {
               ;(c as any).executionCtx.waitUntil(generatePromise)
             } else {
