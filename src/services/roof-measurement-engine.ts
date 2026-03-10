@@ -1,11 +1,16 @@
 // ============================================================
-// RoofReporterAI — Roof Measurement Engine v2.0
-// TypeScript port of the Reuse Canada Python measurement engine.
+// RoofReporterAI — Roof Measurement Engine v3.0
 //
-// Processes GPS coordinate points traced by a roofer on aerial
-// imagery to generate precise, installer-ready roof measurements.
+// Core Philosophy:
+//   - ALL primary measurements from user-drawn GPS trace coordinates
+//   - WGS84 → local Cartesian (UTM-like) for meter-level accuracy
+//   - Shoelace formula for 2D footprint area
+//   - Pitch multiplier (from user input or Solar API DSM) for true 3D area
+//   - 3D edge lengths with proper line categorisation
+//   - Vertex snapping ensures closed, watertight polygon geometry
+//   - Google Solar API used ONLY for satellite imagery + optional DSM cross-check
 //
-// INPUT:  Trace JSON from customer-order.js tracing UI
+// INPUT:  Trace JSON { eaves: [{lat,lng}], ridges: [[{lat,lng}]], ... }
 // OUTPUT: Full measurement report — areas, lengths, squares, materials
 // ============================================================
 
@@ -13,15 +18,16 @@
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════
 
-const EARTH_RADIUS_M    = 6_371_000       // metres
-const M_TO_FT           = 3.28084         // metres -> feet
-const M2_TO_FT2         = 10.7639         // m^2 -> ft^2
-const SQFT_PER_SQUARE   = 100             // 1 roofing square = 100 sq ft
-const BUNDLES_PER_SQ    = 3               // standard architectural shingles
-const SQ_PER_UNDERLAY   = 4               // 1 roll underlayment ~ 4 squares
-const LF_PER_RIDGE_BUNDLE = 35            // ridge-cap linear feet per bundle
-const ICE_SHIELD_WIDTH_FT = 3.0           // ice & water shield width up from eave
-const NAIL_LBS_PER_SQ   = 2.5            // nails per square
+const EARTH_RADIUS_M    = 6_371_000        // metres
+const M_TO_FT           = 3.28084          // metres -> feet
+const M2_TO_FT2         = 10.7639          // m² -> ft²
+const SQFT_PER_SQUARE   = 100              // 1 roofing square = 100 sq ft
+const BUNDLES_PER_SQ    = 3                // standard architectural shingles
+const SQ_PER_UNDERLAY   = 4                // 1 roll underlayment ~ 4 squares
+const LF_PER_RIDGE_BUNDLE = 35             // ridge-cap linear feet per bundle
+const ICE_SHIELD_WIDTH_FT = 3.0            // ice & water shield width up from eave
+const NAIL_LBS_PER_SQ   = 2.5             // nails per square
+const SNAP_THRESHOLD_M   = 0.3             // vertex snapping: 30 cm tolerance
 
 // ═══════════════════════════════════════════════════════════════
 // TYPES
@@ -31,6 +37,15 @@ export interface TracePt {
   lat: number
   lng: number
   elevation?: number | null
+}
+
+/** Cartesian point in local metric coords (metres from origin) */
+interface CartesianPt {
+  x: number  // metres east of origin
+  y: number  // metres north of origin
+  z: number  // elevation in metres (0 if unknown)
+  lat: number
+  lng: number
 }
 
 export interface TraceLine {
@@ -67,15 +82,17 @@ export interface EaveEdge {
   edge_num: number
   from_pt: number
   to_pt: number
-  length_ft: number
+  length_2d_ft: number    // horizontal run on ground
+  length_3d_ft: number    // true length (= 2D for eaves, horizontal lines)
   bearing_deg: number
 }
 
 export interface LineDetail {
   id: string
   type: string
-  horiz_length_ft: number
-  sloped_length_ft: number
+  category: 'horizontal' | 'sloped'  // eave/ridge = horizontal; hip/valley/rake = sloped
+  horiz_length_ft: number             // 2D projected length
+  sloped_length_ft: number            // 3D true length
   num_pts: number
 }
 
@@ -152,91 +169,168 @@ export interface TraceReport {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// GEODESIC GEOMETRY PRIMITIVES
+// COORDINATE PROJECTION: WGS84 → Local Cartesian (metres)
+//
+// We use a simplified UTM-like equirectangular projection centred
+// on the polygon centroid.  For roof-scale areas (< 500 m span)
+// the error vs. full UTM is < 0.01 %.
 // ═══════════════════════════════════════════════════════════════
 
-/** Great-circle distance between two GPS points -> FEET. Accurate < 0.1 ft for roof-scale. */
-function haversineFt(a: TracePt, b: TracePt): number {
-  const phi1 = a.lat * Math.PI / 180
-  const phi2 = b.lat * Math.PI / 180
-  const dPhi = (b.lat - a.lat) * Math.PI / 180
-  const dLam = (b.lng - a.lng) * Math.PI / 180
-  const h = Math.sin(dPhi / 2) ** 2 + Math.cos(phi1) * Math.cos(phi2) * Math.sin(dLam / 2) ** 2
-  return 2 * EARTH_RADIUS_M * Math.asin(Math.sqrt(h)) * M_TO_FT
-}
+const DEG_TO_RAD = Math.PI / 180
 
-/** Sum of consecutive Haversine distances along a polyline -> feet. */
-function polylineLengthFt(pts: TracePt[]): number {
-  let total = 0
-  for (let i = 0; i < pts.length - 1; i++) {
-    total += haversineFt(pts[i], pts[i + 1])
-  }
-  return total
+/**
+ * Project an array of WGS84 points into a local Cartesian frame.
+ * Origin = centroid of the input points.
+ * Returns { x, y, z } in metres with original lat/lng preserved.
+ */
+function projectToCartesian(pts: TracePt[]): { origin: { lat: number; lng: number }; projected: CartesianPt[] } {
+  if (pts.length === 0) return { origin: { lat: 0, lng: 0 }, projected: [] }
+
+  // Compute centroid as projection origin
+  const sumLat = pts.reduce((s, p) => s + p.lat, 0)
+  const sumLng = pts.reduce((s, p) => s + p.lng, 0)
+  const originLat = sumLat / pts.length
+  const originLng = sumLng / pts.length
+
+  // Metres per degree at this latitude
+  const cosLat = Math.cos(originLat * DEG_TO_RAD)
+  const mPerDegLat = (Math.PI / 180) * EARTH_RADIUS_M      // ~111,320 m
+  const mPerDegLng = (Math.PI / 180) * EARTH_RADIUS_M * cosLat
+
+  const projected: CartesianPt[] = pts.map(p => ({
+    x: (p.lng - originLng) * mPerDegLng,
+    y: (p.lat - originLat) * mPerDegLat,
+    z: (p.elevation != null ? p.elevation : 0),
+    lat: p.lat,
+    lng: p.lng,
+  }))
+
+  return { origin: { lat: originLat, lng: originLng }, projected }
 }
 
 /**
- * Horizontal (projected) area of a GPS polygon -> sq ft.
- * Converts to local flat-Earth metres, then applies Shoelace theorem.
- * Accurate to < 0.5% for any residential roof footprint.
+ * Project a single WGS84 point using a pre-computed origin.
  */
-function polygonProjectedAreaFt2(pts: TracePt[]): number {
-  if (pts.length < 3) return 0
-  const o = pts[0]
-  const cosLat = Math.cos(o.lat * Math.PI / 180)
-
-  const coords = pts.map(p => ({
-    x: (p.lng - o.lng) * Math.PI / 180 * EARTH_RADIUS_M * cosLat,
-    y: (p.lat - o.lat) * Math.PI / 180 * EARTH_RADIUS_M
-  }))
-
-  let area = 0
-  const n = coords.length
-  for (let i = 0; i < n; i++) {
-    const j = (i + 1) % n
-    area += coords[i].x * coords[j].y
-    area -= coords[j].x * coords[i].y
+function projectPoint(p: TracePt, originLat: number, originLng: number): CartesianPt {
+  const cosLat = Math.cos(originLat * DEG_TO_RAD)
+  const mPerDegLat = (Math.PI / 180) * EARTH_RADIUS_M
+  const mPerDegLng = (Math.PI / 180) * EARTH_RADIUS_M * cosLat
+  return {
+    x: (p.lng - originLng) * mPerDegLng,
+    y: (p.lat - originLat) * mPerDegLat,
+    z: (p.elevation != null ? p.elevation : 0),
+    lat: p.lat,
+    lng: p.lng,
   }
-  return Math.abs(area) / 2 * M2_TO_FT2
 }
 
-/** Derive rise:12 pitch from two GPS points with known elevation. */
-function pitchFromElevation(low: TracePt, high: TracePt, runFt?: number): number | null {
-  if (low.elevation == null || high.elevation == null) return null
-  const riseFt = Math.abs(high.elevation - low.elevation) * M_TO_FT
-  const run = runFt ?? haversineFt(low, high)
-  if (run < 0.1) return null
-  return (riseFt / run) * 12
+// ═══════════════════════════════════════════════════════════════
+// VERTEX SNAPPING
+//
+// Ensures adjacent lines share exact coordinates.  Any endpoint
+// within SNAP_THRESHOLD_M of another is merged to the same (x,y).
+// This guarantees a fully closed polygon for the Shoelace formula.
+// ═══════════════════════════════════════════════════════════════
+
+interface SnapVertex { x: number; y: number; z: number; id: string }
+
+class VertexSnapper {
+  private vertices: SnapVertex[] = []
+
+  /** Register a vertex; returns the snapped (x,y,z). */
+  snap(x: number, y: number, z: number, id: string): SnapVertex {
+    for (const v of this.vertices) {
+      const dist = Math.sqrt((x - v.x) ** 2 + (y - v.y) ** 2)
+      if (dist < SNAP_THRESHOLD_M) {
+        // Average Z when merging (better elevation estimate)
+        if (z !== 0 && v.z !== 0) v.z = (v.z + z) / 2
+        else if (z !== 0) v.z = z
+        return v
+      }
+    }
+    const nv: SnapVertex = { x, y, z, id }
+    this.vertices.push(nv)
+    return nv
+  }
+
+  getAll(): SnapVertex[] { return this.vertices }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SHOELACE FORMULA — 2D polygon area in m²
+//
+// Standard surveyor's formula on projected (x, y) coordinates.
+// Input must be an ordered polygon ring (first ≠ last — we close it).
+// ═══════════════════════════════════════════════════════════════
+
+function shoelaceAreaM2(pts: { x: number; y: number }[]): number {
+  if (pts.length < 3) return 0
+  let area = 0
+  const n = pts.length
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n
+    area += pts[i].x * pts[j].y
+    area -= pts[j].x * pts[i].y
+  }
+  return Math.abs(area) / 2
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DISTANCE FUNCTIONS
+// ═══════════════════════════════════════════════════════════════
+
+/** 2D distance (plan/horizontal) in metres */
+function dist2D(a: { x: number; y: number }, b: { x: number; y: number }): number {
+  return Math.sqrt((b.x - a.x) ** 2 + (b.y - a.y) ** 2)
+}
+
+/** 3D distance (true length incl. elevation) in metres */
+function dist3D(a: CartesianPt, b: CartesianPt): number {
+  return Math.sqrt((b.x - a.x) ** 2 + (b.y - a.y) ** 2 + (b.z - a.z) ** 2)
+}
+
+/** Polyline 2D length in metres */
+function polyline2DLengthM(pts: { x: number; y: number }[]): number {
+  let total = 0
+  for (let i = 0; i < pts.length - 1; i++) total += dist2D(pts[i], pts[i + 1])
+  return total
+}
+
+/** Polyline 3D length in metres */
+function polyline3DLengthM(pts: CartesianPt[]): number {
+  let total = 0
+  for (let i = 0; i < pts.length - 1; i++) total += dist3D(pts[i], pts[i + 1])
+  return total
 }
 
 // ═══════════════════════════════════════════════════════════════
 // PITCH / SLOPE MATHS
 // ═══════════════════════════════════════════════════════════════
 
-/** slope_factor = sqrt(rise^2 + 12^2) / 12. Converts projected -> sloped. */
+/** slope_factor = sqrt(rise² + 12²) / 12. Converts projected → sloped. */
 function slopeFactor(rise: number): number {
   return Math.sqrt(rise * rise + 144) / 12
 }
 
-/** Hip/valley rafter slope factor (diagonal at 45-degree plan angle). */
+/** Hip/valley rafter slope factor (diagonal at 45° plan angle). */
 function hipSlopeFactor(rise: number): number {
   return Math.sqrt(rise * rise + 288) / Math.sqrt(288)
 }
 
-/** Rise:12 -> angle in degrees. */
+/** Rise:12 → angle in degrees. */
 function pitchAngleDeg(rise: number): number {
   return Math.atan(rise / 12) * 180 / Math.PI
 }
 
-/** Projected area -> actual sloped surface area (sq ft). */
-function slopedFromProjected(projFt2: number, rise: number): number {
-  return projFt2 * slopeFactor(rise)
+/** Projected area → actual sloped surface area (any unit²). */
+function slopedFromProjected(proj: number, rise: number): number {
+  return proj * slopeFactor(rise)
 }
 
 // ═══════════════════════════════════════════════════════════════
 // WASTE & MATERIAL HELPERS
 // ═══════════════════════════════════════════════════════════════
 
-/** Recommended shingle waste % based on pitch + complexity. Returns fraction (0.15 = 15%). */
 function wastePct(rise: number, complexity: string = 'medium'): number {
   const bases: Record<string, number> = { simple: 0.10, medium: 0.15, complex: 0.20 }
   let base = bases[complexity] ?? 0.15
@@ -245,7 +339,6 @@ function wastePct(rise: number, complexity: string = 'medium'): number {
   return base
 }
 
-/** Full material take-off for standard architectural shingle re-roof. */
 function materialsEstimate(
   netSquares: number, wasteFrac: number,
   eaveFt: number, ridgeFt: number, hipFt: number, valleyFt: number, rakeFt: number
@@ -276,6 +369,29 @@ function round(v: number, decimals: number): number {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// LINE CATEGORISATION
+//
+// Eaves & ridges are horizontal (z₁ ≈ z₂) → 2D length = true length.
+// Hips, valleys, rakes are sloped → use 3D distance or pitch multiplier.
+// If no elevation data, apply pitch factor from default_pitch.
+// ═══════════════════════════════════════════════════════════════
+
+type LineCategory = 'horizontal' | 'sloped'
+
+function categoriseLine(type: string): LineCategory {
+  switch (type) {
+    case 'eave':
+    case 'ridge':
+      return 'horizontal'
+    case 'hip':
+    case 'valley':
+    case 'rake':
+    default:
+      return 'sloped'
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
 // MAIN ENGINE CLASS
 // ═══════════════════════════════════════════════════════════════
 
@@ -288,12 +404,23 @@ export class RoofMeasurementEngine {
   private incWaste: boolean
   private timestamp: string
 
-  private eavesPoly: TracePt[]
-  private ridges: TraceLine[]
-  private hips: TraceLine[]
-  private valleys: TraceLine[]
-  private rakes: TraceLine[]
-  private faces: TraceFace[]
+  // Raw WGS84 inputs
+  private rawEaves: TracePt[]
+  private rawRidges: TraceLine[]
+  private rawHips: TraceLine[]
+  private rawValleys: TraceLine[]
+  private rawRakes: TraceLine[]
+  private rawFaces: TraceFace[]
+
+  // Projected Cartesian geometry (populated in constructor)
+  private origin: { lat: number; lng: number }
+  private snapper: VertexSnapper
+  private eavesCart: CartesianPt[]   // closed polygon
+  private ridgesCart: { id: string; pts: CartesianPt[]; pitch: number | null }[]
+  private hipsCart: { id: string; pts: CartesianPt[]; pitch: number | null }[]
+  private valleysCart: { id: string; pts: CartesianPt[]; pitch: number | null }[]
+  private rakesCart: { id: string; pts: CartesianPt[]; pitch: number | null }[]
+  private facesCart: { face_id: string; poly: CartesianPt[]; pitch: number; label: string }[]
 
   constructor(payload: TracePayload) {
     this.address    = payload.address || 'Unknown Address'
@@ -304,24 +431,53 @@ export class RoofMeasurementEngine {
     this.incWaste   = payload.include_waste !== false
     this.timestamp  = new Date().toISOString().replace('T', ' ').slice(0, 19) + ' UTC'
 
-    // Parse geometry
-    this.eavesPoly = (payload.eaves_outline || []).map(p => ({
-      lat: p.lat, lng: p.lng, elevation: p.elevation ?? null
-    }))
-    this.ridges  = this.parseLines(payload.ridges || [])
-    this.hips    = this.parseLines(payload.hips || [])
-    this.valleys = this.parseLines(payload.valleys || [])
-    this.rakes   = this.parseLines(payload.rakes || [])
-    this.faces   = this.parseFaces(payload.faces || [])
+    // Parse raw WGS84 inputs
+    this.rawEaves   = (payload.eaves_outline || []).map(p => ({ lat: p.lat, lng: p.lng, elevation: p.elevation ?? null }))
+    this.rawRidges  = this.parseLines(payload.ridges || [])
+    this.rawHips    = this.parseLines(payload.hips || [])
+    this.rawValleys = this.parseLines(payload.valleys || [])
+    this.rawRakes   = this.parseLines(payload.rakes || [])
+    this.rawFaces   = this.parseFaces(payload.faces || [])
 
-    // Auto-close eaves polygon if not already closed
-    if (this.eavesPoly.length >= 3) {
-      const first = this.eavesPoly[0]
-      const last  = this.eavesPoly[this.eavesPoly.length - 1]
-      if (first.lat !== last.lat || first.lng !== last.lng) {
-        this.eavesPoly.push({ ...first })
+    // ── STEP 1: Project all points to local Cartesian ──
+    const { origin, projected } = projectToCartesian(this.rawEaves)
+    this.origin = origin
+
+    // ── STEP 2: Vertex snapping ──
+    this.snapper = new VertexSnapper()
+
+    // Snap eaves polygon vertices
+    this.eavesCart = projected.map((p, i) => {
+      const snapped = this.snapper.snap(p.x, p.y, p.z, `eave_${i}`)
+      return { ...p, x: snapped.x, y: snapped.y, z: snapped.z }
+    })
+
+    // Auto-close eaves polygon (ensure first = last for Shoelace)
+    if (this.eavesCart.length >= 3) {
+      const first = this.eavesCart[0]
+      const last = this.eavesCart[this.eavesCart.length - 1]
+      if (dist2D(first, last) > 0.01) {
+        this.eavesCart.push({ ...first })
       }
     }
+
+    // Snap & project all line segments
+    this.ridgesCart  = this.projectLines(this.rawRidges, 'ridge')
+    this.hipsCart    = this.projectLines(this.rawHips, 'hip')
+    this.valleysCart = this.projectLines(this.rawValleys, 'valley')
+    this.rakesCart   = this.projectLines(this.rawRakes, 'rake')
+
+    // Snap & project face polygons
+    this.facesCart = this.rawFaces.map(f => ({
+      face_id: f.face_id,
+      pitch: f.pitch,
+      label: f.label || 'face',
+      poly: f.poly.map((p, i) => {
+        const cp = projectPoint(p, this.origin.lat, this.origin.lng)
+        const snapped = this.snapper.snap(cp.x, cp.y, cp.z, `face_${f.face_id}_${i}`)
+        return { ...cp, x: snapped.x, y: snapped.y, z: snapped.z }
+      })
+    }))
   }
 
   private parseLines(raw: any[]): TraceLine[] {
@@ -347,81 +503,150 @@ export class RoofMeasurementEngine {
     }))
   }
 
-  // ── Segment length helpers ──────────────────────────────────
-
-  private segLength(seg: TraceLine): number {
-    return polylineLengthFt(seg.pts)
+  private projectLines(lines: TraceLine[], prefix: string): { id: string; pts: CartesianPt[]; pitch: number | null }[] {
+    return lines.map((seg, i) => ({
+      id: seg.id || `${prefix}_${i + 1}`,
+      pitch: seg.pitch != null ? Number(seg.pitch) : null,
+      pts: seg.pts.map((p, j) => {
+        const cp = projectPoint(p, this.origin.lat, this.origin.lng)
+        const snapped = this.snapper.snap(cp.x, cp.y, cp.z, `${prefix}_${i}_${j}`)
+        return { ...cp, x: snapped.x, y: snapped.y, z: snapped.z }
+      })
+    }))
   }
 
-  private segSlopedLength(seg: TraceLine, hipMode: boolean = false): number {
-    const horiz = polylineLengthFt(seg.pts)
-    let elevPitch: number | null = null
-    if (seg.pts.length >= 2) {
-      elevPitch = pitchFromElevation(seg.pts[0], seg.pts[seg.pts.length - 1], horiz)
-    }
-    const rise = elevPitch ?? seg.pitch ?? this.defPitch
-    const sf = hipMode ? hipSlopeFactor(rise) : slopeFactor(rise)
-    return horiz * sf
+  // ── 2D FOOTPRINT AREA (Shoelace) ──────────────────────────
+
+  /**
+   * Compute the 2D projected footprint area of the eaves polygon
+   * using the Shoelace formula on Cartesian (x,y) coordinates.
+   * Returns area in sq ft.
+   */
+  computeFootprintSqft(): number {
+    // Use all points except the closing duplicate
+    const pts = this.eavesCart.length > 3
+      ? this.eavesCart.slice(0, -1)  // remove closing point for Shoelace
+      : this.eavesCart
+    const areaM2 = shoelaceAreaM2(pts)
+    return areaM2 * M2_TO_FT2
   }
 
-  // ── Eave edge breakdown ──────────────────────────────────────
+  // ── EAVE EDGE BREAKDOWN ──────────────────────────────────
 
   eaveEdges(): EaveEdge[] {
     const edges: EaveEdge[] = []
-    const pts = this.eavesPoly
-    const n = pts.length - 1  // last pt == first (closed)
-    if (n < 1) return edges
+    const pts = this.eavesCart
+    if (pts.length < 2) return edges
+
+    // Walk edges of the polygon (last pt closes to first)
+    const n = pts.length - 1  // last = first in closed polygon
     for (let i = 0; i < n; i++) {
       const a = pts[i], b = pts[i + 1]
-      const length = haversineFt(a, b)
-      const dLng = b.lng - a.lng
-      const dLat = b.lat - a.lat
-      const bearing = ((Math.atan2(dLng, dLat) * 180 / Math.PI) % 360 + 360) % 360
+      const len2D = dist2D(a, b) * M_TO_FT
+      // Eaves are horizontal lines → 2D = 3D (z₁ ≈ z₂ at eave level)
+      const len3D = len2D  // by definition for eaves
+      const bearing = ((Math.atan2(b.x - a.x, b.y - a.y) * 180 / Math.PI) % 360 + 360) % 360
       edges.push({
         edge_num:    i + 1,
         from_pt:     i + 1,
         to_pt:       (i % n) + 2,
-        length_ft:   round(length, 2),
+        length_2d_ft: round(len2D, 2),
+        length_3d_ft: round(len3D, 2),
         bearing_deg: round(bearing, 1),
       })
     }
     return edges
   }
 
-  // ── Face area calculation ────────────────────────────────────
+  // ── LINE DETAIL COMPUTATION ──────────────────────────────
+
+  /**
+   * Compute detailed measurements for a set of line segments.
+   *
+   * Line categorisation:
+   *   - Eaves / Ridges → HORIZONTAL: z₁ = z₂, so 2D length = true length
+   *   - Hips / Valleys / Rakes → SLOPED: use 3D distance or pitch multiplier
+   *
+   * For sloped lines without elevation data, we apply the pitch factor:
+   *   - Hips/Valleys: hipSlopeFactor(rise)  (diagonal at 45° plan angle)
+   *   - Rakes: slopeFactor(rise)            (straight up the slope)
+   */
+  lineDetails(
+    segs: { id: string; pts: CartesianPt[]; pitch: number | null }[],
+    kind: string,
+    isHipValley: boolean = false
+  ): LineDetail[] {
+    const cat = categoriseLine(kind)
+
+    return segs.map((seg, i) => {
+      const horiz = polyline2DLengthM(seg.pts) * M_TO_FT
+
+      let sloped: number
+      if (cat === 'horizontal') {
+        // Eaves & ridges: z₁ = z₂ → true length = horizontal length
+        sloped = horiz
+      } else {
+        // Check if we have real elevation data on endpoints
+        const hasZ = seg.pts.length >= 2 &&
+          seg.pts[0].z !== 0 && seg.pts[seg.pts.length - 1].z !== 0
+        if (hasZ) {
+          // Use actual 3D distance from DSM elevations
+          sloped = polyline3DLengthM(seg.pts) * M_TO_FT
+        } else {
+          // Apply pitch factor from user-specified or default pitch
+          const rise = seg.pitch ?? this.defPitch
+          const sf = isHipValley ? hipSlopeFactor(rise) : slopeFactor(rise)
+          sloped = horiz * sf
+        }
+      }
+
+      return {
+        id:               seg.id || `${kind}_${i + 1}`,
+        type:             kind,
+        category:         cat,
+        horiz_length_ft:  round(horiz, 2),
+        sloped_length_ft: round(sloped, 2),
+        num_pts:          seg.pts.length,
+      }
+    })
+  }
+
+  // ── FACE AREA CALCULATION ────────────────────────────────
 
   faceAreas(): FaceDetail[] {
     const results: FaceDetail[] = []
 
-    if (this.faces.length > 0) {
-      // STRATEGY A: explicit face polygons
-      for (const face of this.faces) {
-        const proj = polygonProjectedAreaFt2(face.poly)
-        const sloped = slopedFromProjected(proj, face.pitch)
+    if (this.facesCart.length > 0) {
+      // STRATEGY A: explicit face polygons from user trace
+      for (const face of this.facesCart) {
+        const projM2 = shoelaceAreaM2(face.poly)
+        const projFt2 = projM2 * M2_TO_FT2
+        const sloped = slopedFromProjected(projFt2, face.pitch)
         results.push({
           face_id:            face.face_id,
           pitch_rise:         face.pitch,
           pitch_label:        `${face.pitch}:12`,
           pitch_angle_deg:    round(pitchAngleDeg(face.pitch), 1),
           slope_factor:       round(slopeFactor(face.pitch), 4),
-          projected_area_ft2: round(proj, 1),
+          projected_area_ft2: round(projFt2, 1),
           sloped_area_ft2:    round(sloped, 1),
           squares:            round(sloped / SQFT_PER_SQUARE, 3),
         })
       }
-    } else if (this.eavesPoly.length >= 4) {
-      const totalProj = polygonProjectedAreaFt2(this.eavesPoly)
+    } else if (this.eavesCart.length >= 4) {
+      // Use eaves polygon footprint
+      const totalProjFt2 = this.computeFootprintSqft()
 
-      if (this.ridges.length > 0) {
-        // STRATEGY B: partition by ridge segments
-        const numFaces = this.ridges.length + 1
-        const faceProj = totalProj / numFaces
-        for (let i = 0; i < this.ridges.length; i++) {
-          const ridge = this.ridges[i]
-          const rise = ridge.pitch ?? this.defPitch
+      if (this.ridgesCart.length > 0) {
+        // STRATEGY B: divide footprint by number of faces (ridges + 1)
+        const numFaces = this.ridgesCart.length + 1
+        const faceProj = totalProjFt2 / numFaces
+        for (let i = 0; i < numFaces; i++) {
+          const ridge = i < this.ridgesCart.length ? this.ridgesCart[i] : null
+          const rise = ridge?.pitch ?? this.defPitch
           const sloped = slopedFromProjected(faceProj, rise)
           results.push({
-            face_id:            ridge.id || `face_${i + 1}`,
+            face_id:            ridge?.id || `face_${i + 1}`,
             pitch_rise:         rise,
             pitch_label:        `${rise}:12`,
             pitch_angle_deg:    round(pitchAngleDeg(rise), 1),
@@ -431,30 +656,17 @@ export class RoofMeasurementEngine {
             squares:            round(sloped / SQFT_PER_SQUARE, 3),
           })
         }
-        // Add one extra face for the last partition
-        const lastRise = this.ridges[this.ridges.length - 1].pitch ?? this.defPitch
-        const lastSloped = slopedFromProjected(faceProj, lastRise)
-        results.push({
-          face_id:            `face_${this.ridges.length + 1}`,
-          pitch_rise:         lastRise,
-          pitch_label:        `${lastRise}:12`,
-          pitch_angle_deg:    round(pitchAngleDeg(lastRise), 1),
-          slope_factor:       round(slopeFactor(lastRise), 4),
-          projected_area_ft2: round(faceProj, 1),
-          sloped_area_ft2:    round(lastSloped, 1),
-          squares:            round(lastSloped / SQFT_PER_SQUARE, 3),
-        })
       } else {
         // STRATEGY C: single face fallback
         const rise = this.defPitch
-        const sloped = slopedFromProjected(totalProj, rise)
+        const sloped = slopedFromProjected(totalProjFt2, rise)
         results.push({
           face_id:            'total_roof',
           pitch_rise:         rise,
           pitch_label:        `${rise}:12`,
           pitch_angle_deg:    round(pitchAngleDeg(rise), 1),
           slope_factor:       round(slopeFactor(rise), 4),
-          projected_area_ft2: round(totalProj, 1),
+          projected_area_ft2: round(totalProjFt2, 1),
           sloped_area_ft2:    round(sloped, 1),
           squares:            round(sloped / SQFT_PER_SQUARE, 3),
         })
@@ -464,18 +676,6 @@ export class RoofMeasurementEngine {
     return results
   }
 
-  // ── Line detail breakdown ────────────────────────────────────
-
-  lineDetails(segs: TraceLine[], kind: string, hipMode: boolean = false): LineDetail[] {
-    return segs.map((seg, i) => ({
-      id:               seg.id || `${kind}_${i + 1}`,
-      type:             kind,
-      horiz_length_ft:  round(this.segLength(seg), 2),
-      sloped_length_ft: round(this.segSlopedLength(seg, hipMode), 2),
-      num_pts:          seg.pts.length,
-    }))
-  }
-
   // ═══════════════════════════════════════════════════════════════
   // FULL CALCULATION RUN
   // ═══════════════════════════════════════════════════════════════
@@ -483,30 +683,30 @@ export class RoofMeasurementEngine {
   run(): TraceReport {
     // 1. Eave edge breakdown
     const edges = this.eaveEdges()
-    const totalEaveFt = edges.reduce((s, e) => s + e.length_ft, 0)
+    const totalEaveFt = edges.reduce((s, e) => s + e.length_2d_ft, 0)
 
-    // 2. Linear measurements
-    const ridgeSegs  = this.lineDetails(this.ridges,  'ridge',  false)
-    const hipSegs    = this.lineDetails(this.hips,    'hip',    true)
-    const valleySegs = this.lineDetails(this.valleys, 'valley', true)
-    const rakeSegs   = this.lineDetails(this.rakes,   'rake',   false)
+    // 2. Linear measurements with proper 3D / category handling
+    const ridgeSegs  = this.lineDetails(this.ridgesCart, 'ridge', false)
+    const hipSegs    = this.lineDetails(this.hipsCart, 'hip', true)
+    const valleySegs = this.lineDetails(this.valleysCart, 'valley', true)
+    const rakeSegs   = this.lineDetails(this.rakesCart, 'rake', false)
 
+    // Use sloped_length for hips/valleys/rakes; horiz for ridges (they're horizontal)
     const totalRidgeFt  = ridgeSegs.reduce((s, seg) => s + seg.sloped_length_ft, 0)
     const totalHipFt    = hipSegs.reduce((s, seg) => s + seg.sloped_length_ft, 0)
     const totalValleyFt = valleySegs.reduce((s, seg) => s + seg.sloped_length_ft, 0)
     const totalRakeFt   = rakeSegs.reduce((s, seg) => s + seg.sloped_length_ft, 0)
 
-    // 3. Face areas
+    // 3. Face areas (with pitch multiplier)
     const facesData   = this.faceAreas()
     const totalSloped = facesData.reduce((s, f) => s + f.sloped_area_ft2, 0)
     const totalProj   = facesData.reduce((s, f) => s + f.projected_area_ft2, 0)
     const netSquares  = totalSloped / SQFT_PER_SQUARE
 
-    // 4. Dominant pitch
+    // 4. Dominant pitch (most frequent among faces)
     const allPitches = facesData.map(f => f.pitch_rise)
     let domPitch = this.defPitch
     if (allPitches.length > 0) {
-      // Most frequent pitch value
       const freq = new Map<number, number>()
       allPitches.forEach(p => freq.set(p, (freq.get(p) || 0) + 1))
       let maxCount = 0
@@ -519,7 +719,7 @@ export class RoofMeasurementEngine {
     const wFrac = this.incWaste ? wastePct(domPitch, this.complexity) : 0
     const grossSquares = netSquares * (1 + wFrac)
 
-    // 6. Materials
+    // 6. Materials take-off
     const mat = materialsEstimate(
       netSquares, wFrac,
       totalEaveFt, totalRidgeFt, totalHipFt, totalValleyFt, totalRakeFt
@@ -531,15 +731,15 @@ export class RoofMeasurementEngine {
     // 8. Advisory notes
     const notes: string[] = []
     if (domPitch >= 9)
-      notes.push('STEEP PITCH >= 9:12 - Steep-slope labour & safety gear required.')
+      notes.push('STEEP PITCH >= 9:12 — Steep-slope labour & safety gear required.')
     if (domPitch < 4)
-      notes.push('LOW SLOPE < 4:12 - Verify manufacturer min-pitch. Extra underlayment layers recommended.')
+      notes.push('LOW SLOPE < 4:12 — Verify manufacturer min-pitch. Extra underlayment layers recommended.')
     if (totalValleyFt > 0)
-      notes.push(`Valleys present (${round(totalValleyFt, 1)} ft) - Recommend closed-cut or self-adhered valley install.`)
+      notes.push(`Valleys present (${round(totalValleyFt, 1)} ft) — Recommend closed-cut or self-adhered valley install.`)
     if (totalHipFt > 0)
       notes.push(`Hip roof confirmed (${round(totalHipFt, 1)} ft total hip length).`)
-    if (this.eavesPoly.length > 10)
-      notes.push('Complex perimeter (>10 eave points) - Allow extra cut waste.')
+    if (this.eavesCart.length > 10)
+      notes.push('Complex perimeter (>10 eave points) — Allow extra cut waste.')
 
     // 9. Assemble report
     return {
@@ -548,7 +748,7 @@ export class RoofMeasurementEngine {
         homeowner:      this.homeowner,
         order_id:       this.orderId,
         generated:      this.timestamp,
-        engine_version: 'RoofMeasurementEngine v2.0',
+        engine_version: 'RoofMeasurementEngine v3.0 (UTM + Shoelace)',
         powered_by:     'Reuse Canada / RoofReporterAI',
       },
       key_measurements: {
@@ -558,11 +758,11 @@ export class RoofMeasurementEngine {
         total_squares_gross_w_waste:   round(grossSquares, 2),
         waste_factor_pct:              round(wFrac * 100, 1),
         num_roof_faces:                facesData.length,
-        num_eave_points:               Math.max(0, this.eavesPoly.length - 1),
-        num_ridges:                    this.ridges.length,
-        num_hips:                      this.hips.length,
-        num_valleys:                   this.valleys.length,
-        num_rakes:                     this.rakes.length,
+        num_eave_points:               Math.max(0, this.eavesCart.length - 1),
+        num_ridges:                    this.ridgesCart.length,
+        num_hips:                      this.hipsCart.length,
+        num_valleys:                   this.valleysCart.length,
+        num_rakes:                     this.rakesCart.length,
         dominant_pitch_label:          `${domPitch}:12`,
         dominant_pitch_angle_deg:      round(pitchAngleDeg(domPitch), 1),
       },
@@ -652,4 +852,31 @@ export function traceUiToEnginePayload(
     rakes:          [],   // rakes not traced in current UI
     faces:          [],   // faces not traced in current UI
   }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// STANDALONE FUNCTIONS — for use outside the engine class
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Compute the footprint area (sq ft) of a lat/lng polygon
+ * using UTM-like projection + Shoelace formula.
+ * Standalone function — no class instantiation needed.
+ */
+export function computeFootprintFromLatLng(points: { lat: number; lng: number }[]): number {
+  if (points.length < 3) return 0
+  const pts: TracePt[] = points.map(p => ({ lat: p.lat, lng: p.lng }))
+  const { projected } = projectToCartesian(pts)
+  const areaM2 = shoelaceAreaM2(projected)
+  return areaM2 * M2_TO_FT2
+}
+
+/**
+ * Compute 2D edge length (ft) between two lat/lng points
+ * using Cartesian projection.
+ */
+export function computeEdgeLengthFt(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+  const pts: TracePt[] = [{ lat: a.lat, lng: a.lng }, { lat: b.lat, lng: b.lng }]
+  const { projected } = projectToCartesian(pts)
+  return dist2D(projected[0], projected[1]) * M_TO_FT
 }

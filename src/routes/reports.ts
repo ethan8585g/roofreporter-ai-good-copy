@@ -710,7 +710,11 @@ reportsRoutes.post('/calculate-from-trace', async (c) => {
       materials: report.materials_estimate,
 
       // Eave edge breakdown (individual edge lengths)
-      eave_edges: report.eave_edge_breakdown,
+      // Include length_ft alias for backward compat with frontend
+      eave_edges: report.eave_edge_breakdown.map(e => ({
+        ...e,
+        length_ft: e.length_2d_ft,  // backward compat alias
+      })),
 
       // Face details (area per roof face)
       face_details: report.face_details,

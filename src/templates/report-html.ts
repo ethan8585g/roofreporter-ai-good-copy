@@ -141,7 +141,7 @@ export function generateProfessionalReportHTML(report: RoofReport): string {
   </div>`
 
   // ========== Helper: page footer ==========
-  const TOTAL_PAGES = 6
+  const TOTAL_PAGES = 3
   const ftr = (pageNum: number) => `
   <div style="position:absolute;bottom:0;left:0;right:0;background:#f7f8fa;border-top:1px solid #dde;padding:5px 32px;display:flex;justify-content:space-between;font-size:7.5px;color:#888">
     <span style="font-weight:600;color:#003366">RoofReporterAI</span>
@@ -254,11 +254,8 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
     <div style="font-size:12px;font-weight:800;color:#003366;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Table of Contents</div>
     <div style="border:1px solid #d5dae3;border-radius:5px;overflow:hidden">
       ${[
-        ['Images &mdash; Top View', '2'],
-        ['AI Point-by-Point Blueprint', '3'],
-        ['Images &mdash; Rotated Side Views (N/S/E/W)', '4'],
-        ['Close-Up Detail &amp; Property Context', '5'],
-        ['Length Blueprint &amp; Edge Summary', '6'],
+        ['Satellite Imagery &amp; Roof Overlay', '2'],
+        ['Measurement Diagram, Edges &amp; Materials', '3'],
       ].map(([title, pg], i) => `<div style="display:flex;justify-content:space-between;padding:6px 14px;font-size:10px;${i % 2 === 0 ? 'background:#f8f9fb' : 'background:#fff'};border-bottom:1px solid #eef0f4"><span style="font-weight:600;color:#1a1a2e">${title}</span><span style="color:#003366;font-weight:700">${pg}</span></div>`).join('')}
     </div>
 
@@ -281,244 +278,148 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
   </div>
 </div>
 
-<!-- ==================== PAGE 2: TOP VIEW IMAGE ==================== -->
+<!-- ==================== PAGE 2: SATELLITE IMAGERY & ROOF OVERLAY ==================== -->
 <div class="page">
-  ${hdr('IMAGES', 'Top View &mdash; Aerial Photograph')}
-  <div style="padding:16px 32px 50px">
-    <div style="font-size:10px;color:#4a5568;font-style:italic;margin-bottom:10px">The following aerial image shows the overhead view of the structure for your reference.</div>
-
+  ${hdr('SATELLITE IMAGERY', 'Overhead View with AI Roof Overlay')}
+  <div style="padding:12px 32px 50px">
     <!-- Large overhead satellite with overlay -->
     <div style="position:relative;border:1px solid #d5dae3;border-radius:4px;overflow:hidden;background:#e8ecf1;text-align:center">
-      ${overheadUrl ? `<img src="${overheadUrl}" alt="Top View" style="width:100%;max-height:540px;object-fit:cover;display:block" onerror="this.style.display='none'">` : '<div style="height:540px;background:#e8ecf1;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:14px">Satellite imagery not available</div>'}
+      ${overheadUrl ? `<img src="${overheadUrl}" alt="Top View" style="width:100%;max-height:420px;object-fit:cover;display:block" onerror="this.style.display='none'">` : '<div style="height:420px;background:#e8ecf1;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:14px">Satellite imagery not available</div>'}
       ${hasOverlay ? `<svg viewBox="0 0 640 640" xmlns="http://www.w3.org/2000/svg" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none">${overlaySVG}</svg>` : ''}
     </div>
-    <div style="font-size:9px;font-weight:700;color:#003366;padding:6px 0;text-transform:uppercase;letter-spacing:0.5px">Top View &mdash; ${hasOverlay ? 'Measured Roof Overlay' : 'Overhead Satellite'}</div>
+    <div style="font-size:8px;font-weight:700;color:#003366;padding:4px 0;text-transform:uppercase;letter-spacing:0.5px">${hasOverlay ? 'Measured Roof Overlay on Satellite' : 'Overhead Satellite View'}</div>
     ${overlayLegend ? `<div style="margin-top:2px">${overlayLegend}</div>` : ''}
 
-    <!-- Quick measurement summary bar -->
-    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:12px">
-      <div style="text-align:center;padding:8px 4px;background:#003366;border-radius:4px">
-        <div style="font-size:7px;color:#7eafd4;font-weight:700;text-transform:uppercase;letter-spacing:0.5px">Area</div>
-        <div style="font-size:16px;font-weight:900;color:#fff">${report.total_true_area_sqft.toLocaleString()}</div>
-        <div style="font-size:7px;color:#7eafd4">sq ft</div>
+    <!-- Quick measurement bar -->
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:5px;margin-top:8px">
+      <div style="text-align:center;padding:6px 3px;background:#003366;border-radius:4px">
+        <div style="font-size:6.5px;color:#7eafd4;font-weight:700;text-transform:uppercase;letter-spacing:0.5px">Total Area</div>
+        <div style="font-size:14px;font-weight:900;color:#fff">${report.total_true_area_sqft.toLocaleString()}</div>
+        <div style="font-size:6.5px;color:#7eafd4">sq ft</div>
       </div>
-      <div style="text-align:center;padding:8px 4px;background:#003366;border-radius:4px">
-        <div style="font-size:7px;color:#7eafd4;font-weight:700;text-transform:uppercase;letter-spacing:0.5px">Facets</div>
-        <div style="font-size:16px;font-weight:900;color:#fff">${report.segments.length}</div>
-        <div style="font-size:7px;color:#7eafd4">planes</div>
+      <div style="text-align:center;padding:6px 3px;background:#003366;border-radius:4px">
+        <div style="font-size:6.5px;color:#7eafd4;font-weight:700;text-transform:uppercase;letter-spacing:0.5px">Facets</div>
+        <div style="font-size:14px;font-weight:900;color:#fff">${report.segments.length}</div>
+        <div style="font-size:6.5px;color:#7eafd4">planes</div>
       </div>
-      <div style="text-align:center;padding:8px 4px;background:#003366;border-radius:4px">
-        <div style="font-size:7px;color:#7eafd4;font-weight:700;text-transform:uppercase;letter-spacing:0.5px">Pitch</div>
-        <div style="font-size:16px;font-weight:900;color:#fff">${predominantPitch}</div>
-        <div style="font-size:7px;color:#7eafd4">predominant</div>
+      <div style="text-align:center;padding:6px 3px;background:#003366;border-radius:4px">
+        <div style="font-size:6.5px;color:#7eafd4;font-weight:700;text-transform:uppercase;letter-spacing:0.5px">Pitch</div>
+        <div style="font-size:14px;font-weight:900;color:#fff">${predominantPitch}</div>
+        <div style="font-size:6.5px;color:#7eafd4">predominant</div>
       </div>
-      <div style="text-align:center;padding:8px 4px;background:#003366;border-radius:4px">
-        <div style="font-size:7px;color:#7eafd4;font-weight:700;text-transform:uppercase;letter-spacing:0.5px">Squares</div>
-        <div style="font-size:16px;font-weight:900;color:#fff">${grossSquares}</div>
-        <div style="font-size:7px;color:#7eafd4">gross</div>
+      <div style="text-align:center;padding:6px 3px;background:#003366;border-radius:4px">
+        <div style="font-size:6.5px;color:#7eafd4;font-weight:700;text-transform:uppercase;letter-spacing:0.5px">Squares</div>
+        <div style="font-size:14px;font-weight:900;color:#fff">${grossSquares}</div>
+        <div style="font-size:6.5px;color:#7eafd4">gross</div>
       </div>
-      <div style="text-align:center;padding:8px 4px;background:#003366;border-radius:4px">
-        <div style="font-size:7px;color:#7eafd4;font-weight:700;text-transform:uppercase;letter-spacing:0.5px">Ridges</div>
-        <div style="font-size:16px;font-weight:900;color:#fff">${ridgeHipFt}</div>
-        <div style="font-size:7px;color:#7eafd4">ft</div>
+      <div style="text-align:center;padding:6px 3px;background:#003366;border-radius:4px">
+        <div style="font-size:6.5px;color:#7eafd4;font-weight:700;text-transform:uppercase;letter-spacing:0.5px">Ridge+Hip</div>
+        <div style="font-size:14px;font-weight:900;color:#fff">${ridgeHipFt}</div>
+        <div style="font-size:6.5px;color:#7eafd4">ft</div>
       </div>
+    </div>
+
+    <!-- N/S/E/W side views in compact strip -->
+    <div style="font-size:9px;font-weight:800;color:#003366;text-transform:uppercase;letter-spacing:0.8px;margin:10px 0 5px">Rotated Side Views</div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">
+      <div class="ic">${img(northUrl, 'North', '100px')}<div class="ic-label">North</div></div>
+      <div class="ic">${img(southUrl, 'South', '100px')}<div class="ic-label">South</div></div>
+      <div class="ic">${img(eastUrl, 'East', '100px')}<div class="ic-label">East</div></div>
+      <div class="ic">${img(westUrl, 'West', '100px')}<div class="ic-label">West</div></div>
     </div>
   </div>
   ${ftr(2)}
 </div>
 
-<!-- ==================== PAGE 3: PROFESSIONAL ROOF MEASUREMENT DIAGRAM ==================== -->
+<!-- ==================== PAGE 3: MEASUREMENT DIAGRAM, EDGES & MATERIALS ==================== -->
 <div class="page">
-  <div style="background:#002244;padding:10px 32px;display:flex;justify-content:space-between;align-items:center">
-    <div style="color:#fff;font-size:13px;font-weight:700;letter-spacing:1px">PROFESSIONAL ROOF MEASUREMENT REPORT</div>
-    <div style="color:#7eafd4;font-size:9px;text-align:right">Overhead view of the structure for your reference</div>
-  </div>
-  <div style="background:#003366;padding:6px 32px;display:flex;justify-content:space-between;align-items:center">
-    <div style="color:#fff;font-size:10px;font-weight:600">${fullAddress}</div>
-    <div style="color:#8eb8db;font-size:9px">Report: ${reportNum} &bull; ${reportDateShort}</div>
-  </div>
-
-  <!-- Architectural Measurement Diagram -->
-  <div style="padding:6px 12px 0">
-    <div style="max-width:700px;margin:0 auto">
-      ${architecturalDiagramSVG}
-    </div>
-    ${report.ai_geometry ? '<div style="text-align:center;margin-top:2px"><span style="font-size:6.5px;color:#94a3b8;font-style:italic">AI-Generated Roof Diagram &mdash; traced from satellite imagery by Gemini Vision</span></div>' : ''}
-  </div>
-
-  <!-- Bottom info row: satellite thumbnail + measurement notes -->
-  <div style="padding:3px 20px 0;display:flex;gap:12px;align-items:flex-start">
-    ${overheadUrl ? `<div style="flex:0 0 160px;position:relative;border:1px solid #ccc;border-radius:3px;overflow:hidden"><img src="${overheadUrl}" alt="Satellite" style="width:160px;height:160px;display:block;object-fit:cover" onerror="this.parentElement.style.display='none'"><div style="position:absolute;top:0;left:0;width:160px;height:160px">${preciseOverlaySVG}</div><div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,34,68,0.88);padding:2px 6px;text-align:center"><span style="font-size:6.5px;color:#7eafd4;font-weight:600">AI SATELLITE OVERLAY</span></div></div>` : ''}
-    <div style="flex:1;font-size:8px;color:#4a5568;line-height:1.45">
-      <div style="font-weight:700;margin-bottom:3px;color:#002244;font-size:8.5px">Measurement Notes</div>
-      <div>All dimensions shown in decimal feet. Crosshatch fills indicate individual roof facets (slope planes). Bold perimeter outline traces the complete drip line / gutter edge. Interior lines indicate ridges, hips, and valleys. Facets are numbered for reference.</div>
-      <div style="margin-top:4px;padding-top:3px;border-top:1px solid #e5e8ed;font-style:italic;color:#64748b">Pitch: ${predominantPitch} &bull; True Area: ${Math.round(report.total_true_area_sqft).toLocaleString()} ft&sup2; &bull; Footprint: ${Math.round(report.total_footprint_sqft).toLocaleString()} ft&sup2; &bull; Eaves: ${es.total_eave_ft} ft &bull; Ridge+Hip: ${ridgeHipFt} ft</div>
-    </div>
-  </div>
-
-  ${ftr(3)}
-</div>
-
-<!-- ==================== PAGE 4: ROTATED SIDE VIEWS ==================== -->
-<div class="page">
-  ${hdr('IMAGES', 'Rotated Side Views &mdash; N / S / E / W')}
-  <div style="padding:16px 32px 50px">
-    <div style="font-size:10px;color:#4a5568;font-style:italic;margin-bottom:10px">The same house viewed from four compass directions &mdash; North, South, East, and West &mdash; providing a rotated perspective of each side of the structure.</div>
-
-    <!-- N / S row -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
-      <div class="ic">
-        ${img(northUrl, 'North Side View', '200px')}
-        <div class="ic-label"><i class="fas fa-compass" style="margin-right:4px"></i>North Side &mdash; Facing South</div>
+  ${hdr('ROOF MEASUREMENTS', 'Diagram, Edge Lengths &amp; Materials')}
+  <div style="padding:10px 24px 50px">
+    <div style="display:grid;grid-template-columns:55% 45%;gap:10px">
+      <!-- LEFT: Architectural diagram -->
+      <div>
+        <div style="text-align:center;border:1px solid #d5dae3;border-radius:4px;overflow:hidden;background:#fff;max-height:280px">
+          ${architecturalDiagramSVG}
+        </div>
+        <div style="text-align:center;font-size:6px;color:#94a3b8;margin-top:2px">AI-Generated Roof Diagram &mdash; Measurements in feet</div>
       </div>
-      <div class="ic">
-        ${img(southUrl, 'South Side View', '200px')}
-        <div class="ic-label"><i class="fas fa-compass" style="margin-right:4px"></i>South Side &mdash; Facing North</div>
-      </div>
-    </div>
+      <!-- RIGHT: Edge summary + waste table -->
+      <div>
+        <!-- Color legend -->
+        <div style="display:flex;flex-wrap:wrap;gap:6px;padding:5px 8px;background:#f4f6f9;border:1px solid #d5dae3;border-radius:4px;margin-bottom:6px;font-size:7.5px;font-weight:600">
+          <div style="display:flex;align-items:center;gap:3px"><span style="width:14px;height:2.5px;background:#C62828;display:inline-block;border-radius:1px"></span>Ridge</div>
+          <div style="display:flex;align-items:center;gap:3px"><span style="width:14px;height:2.5px;background:#F9A825;display:inline-block;border-radius:1px"></span>Hip</div>
+          <div style="display:flex;align-items:center;gap:3px"><span style="width:14px;height:2.5px;background:#1565C0;display:inline-block;border-radius:1px"></span>Valley</div>
+          <div style="display:flex;align-items:center;gap:3px"><span style="width:14px;height:2.5px;background:#2E7D32;display:inline-block;border-radius:1px"></span>Rake</div>
+          <div style="display:flex;align-items:center;gap:3px"><span style="width:14px;height:2.5px;background:#212121;display:inline-block;border-radius:1px"></span>Eave</div>
+        </div>
 
-    <!-- E / W row -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
-      <div class="ic">
-        ${img(eastUrl, 'East Side View', '200px')}
-        <div class="ic-label"><i class="fas fa-compass" style="margin-right:4px"></i>East Side &mdash; Facing West</div>
-      </div>
-      <div class="ic">
-        ${img(westUrl, 'West Side View', '200px')}
-        <div class="ic-label"><i class="fas fa-compass" style="margin-right:4px"></i>West Side &mdash; Facing East</div>
-      </div>
-    </div>
-  </div>
-  ${ftr(4)}
-</div>
+        <!-- Total line lengths -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:6px">
+          <div style="text-align:center;padding:4px 2px;border:1.5px solid #C62828;border-radius:3px"><div style="color:#C62828;font-size:6px;text-transform:uppercase;letter-spacing:0.3px">Ridges</div><div style="font-size:13px;font-weight:900;color:#C62828">${es.total_ridge_ft}<span style="font-size:7px"> ft</span></div></div>
+          <div style="text-align:center;padding:4px 2px;border:1.5px solid #F9A825;border-radius:3px"><div style="color:#F9A825;font-size:6px;text-transform:uppercase;letter-spacing:0.3px">Hips</div><div style="font-size:13px;font-weight:900;color:#F9A825">${es.total_hip_ft}<span style="font-size:7px"> ft</span></div></div>
+          <div style="text-align:center;padding:4px 2px;border:1.5px solid #1565C0;border-radius:3px"><div style="color:#1565C0;font-size:6px;text-transform:uppercase;letter-spacing:0.3px">Valleys</div><div style="font-size:13px;font-weight:900;color:#1565C0">${es.total_valley_ft}<span style="font-size:7px"> ft</span></div></div>
+          <div style="text-align:center;padding:4px 2px;border:1.5px solid #212121;border-radius:3px"><div style="color:#212121;font-size:6px;text-transform:uppercase;letter-spacing:0.3px">Eaves</div><div style="font-size:13px;font-weight:900;color:#212121">${es.total_eave_ft}<span style="font-size:7px"> ft</span></div></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:6px">
+          <div style="text-align:center;padding:4px 2px;border:1.5px solid #2E7D32;border-radius:3px"><div style="color:#2E7D32;font-size:6px;text-transform:uppercase;letter-spacing:0.3px">Rakes</div><div style="font-size:13px;font-weight:900;color:#2E7D32">${es.total_rake_ft}<span style="font-size:7px"> ft</span></div></div>
+          <div style="text-align:center;padding:4px 2px;border:1.5px solid #003366;border-radius:3px"><div style="color:#003366;font-size:6px;text-transform:uppercase;letter-spacing:0.3px">Total Perimeter</div><div style="font-size:13px;font-weight:900;color:#003366">${totalDripEdge}<span style="font-size:7px"> ft</span></div></div>
+        </div>
 
-<!-- ==================== PAGE 5: CLOSE-UP DETAIL & PROPERTY CONTEXT ==================== -->
-<div class="page">
-  ${hdr('CLOSE-UP DETAIL', 'Roof Quadrant Views &amp; Property Context')}
-  <div style="padding:14px 32px 50px">
-    <div style="font-size:10px;color:#4a5568;font-style:italic;margin-bottom:10px">Close-up quadrant satellite views for detailed inspection of roof sections, plus wider property context imagery.</div>
+        <!-- Flashing summary -->
+        ${(stepFlashingFt > 0 || wallFlashingFt > 0) ? `
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:6px">
+          <div style="text-align:center;padding:3px 2px;background:#fff7ed;border:1px solid #fed7aa;border-radius:3px"><div style="font-size:6px;color:#92400e;text-transform:uppercase">Step Flash</div><div style="font-size:11px;font-weight:800;color:#92400e">${stepFlashingFt} ft</div></div>
+          <div style="text-align:center;padding:3px 2px;background:#faf5ff;border:1px solid #e9d5ff;border-radius:3px"><div style="font-size:6px;color:#6b21a8;text-transform:uppercase">Wall Flash</div><div style="font-size:11px;font-weight:800;color:#6b21a8">${wallFlashingFt} ft</div></div>
+        </div>
+        ` : ''}
 
-    <!-- Quadrant close-ups: NW / NE -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
-      <div class="ic">
-        ${img(nwUrl, 'Northwest Quadrant', '180px')}
-        <div class="ic-label">Northwest Quadrant</div>
-      </div>
-      <div class="ic">
-        ${img(neUrl, 'Northeast Quadrant', '180px')}
-        <div class="ic-label">Northeast Quadrant</div>
+        <!-- Waste factor table -->
+        ${mat.waste_table && mat.waste_table.length > 0 ? `
+        <div style="font-size:7px;font-weight:700;color:#003366;text-transform:uppercase;letter-spacing:0.3px;margin-bottom:3px">Waste Factor Table</div>
+        <table style="width:100%;border-collapse:collapse;font-size:7.5px">
+          <thead><tr style="background:#003366;color:#fff"><th style="padding:3px 5px;text-align:left;font-size:6.5px">Waste %</th><th style="padding:3px 5px;text-align:right;font-size:6.5px">Area (ft²)</th><th style="padding:3px 5px;text-align:right;font-size:6.5px">SQ</th></tr></thead>
+          <tbody>${mat.waste_table.slice(0, 5).map((w: any) => `<tr style="${w.is_suggested ? 'background:#e6f0fa;font-weight:700' : ''}"><td style="padding:2px 5px;border-bottom:1px solid #eee">${w.waste_pct}%${w.label ? ' (' + w.label + ')' : ''}</td><td style="padding:2px 5px;border-bottom:1px solid #eee;text-align:right">${w.area_sqft.toLocaleString()}</td><td style="padding:2px 5px;border-bottom:1px solid #eee;text-align:right;font-weight:700">${w.squares}</td></tr>`).join('')}</tbody>
+        </table>
+        ` : ''}
       </div>
     </div>
 
-    <!-- Quadrant close-ups: SW / SE -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
-      <div class="ic">
-        ${img(swUrl, 'Southwest Quadrant', '180px')}
-        <div class="ic-label">Southwest Quadrant</div>
-      </div>
-      <div class="ic">
-        ${img(seUrl, 'Southeast Quadrant', '180px')}
-        <div class="ic-label">Southeast Quadrant</div>
-      </div>
-    </div>
-
-    <!-- Property Context & Medium Views -->
-    <div style="font-size:10px;font-weight:800;color:#003366;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Property Context</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
-      <div class="ic">
-        ${img(mediumUrl, 'Property View', '195px')}
-        <div class="ic-label">Property &amp; Lot View</div>
-      </div>
-      <div class="ic">
-        ${img(contextUrl, 'Neighborhood Context', '195px')}
-        <div class="ic-label">Neighborhood Context</div>
-      </div>
-    </div>
-
-    <!-- Quick reference bar -->
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:8px">
-      <div style="text-align:center;padding:6px 4px;background:#f4f7fb;border:1px solid #d5dae3;border-radius:4px">
-        <div style="font-size:7px;color:#6b7a8d;font-weight:700;text-transform:uppercase">Total Area</div>
-        <div style="font-size:14px;font-weight:900;color:#003366">${report.total_true_area_sqft.toLocaleString()}</div>
-        <div style="font-size:7px;color:#6b7a8d">sq ft</div>
-      </div>
-      <div style="text-align:center;padding:6px 4px;background:#f4f7fb;border:1px solid #d5dae3;border-radius:4px">
-        <div style="font-size:7px;color:#6b7a8d;font-weight:700;text-transform:uppercase">Facets</div>
-        <div style="font-size:14px;font-weight:900;color:#003366">${report.segments.length}</div>
-        <div style="font-size:7px;color:#6b7a8d">planes</div>
-      </div>
-      <div style="text-align:center;padding:6px 4px;background:#f4f7fb;border:1px solid #d5dae3;border-radius:4px">
-        <div style="font-size:7px;color:#6b7a8d;font-weight:700;text-transform:uppercase">Pitch</div>
-        <div style="font-size:14px;font-weight:900;color:#003366">${predominantPitch}</div>
-        <div style="font-size:7px;color:#6b7a8d">predominant</div>
-      </div>
-      <div style="text-align:center;padding:6px 4px;background:#f4f7fb;border:1px solid #d5dae3;border-radius:4px">
-        <div style="font-size:7px;color:#6b7a8d;font-weight:700;text-transform:uppercase">Squares</div>
-        <div style="font-size:14px;font-weight:900;color:#003366">${grossSquares}</div>
-        <div style="font-size:7px;color:#6b7a8d">gross</div>
-      </div>
-    </div>
-  </div>
-  ${ftr(5)}
-</div>
-
-<!-- ==================== PAGE 6: LENGTH DIAGRAM ==================== -->
-<div class="page">
-  ${hdr('LENGTH BLUEPRINT', 'Edge Lengths &amp; Flashing Summary')}
-  <div style="padding:14px 32px 50px">
-    <div style="font-size:10px;color:#4a5568;font-style:italic;margin-bottom:8px">Diagram shows segment lengths rounded to the nearest whole number. Line colors indicate edge type per the legend below.</div>
-
-    <!-- Color Legend — EagleView style -->
-    <div style="display:flex;flex-wrap:wrap;gap:10px;padding:8px 12px;background:#f4f6f9;border:1px solid #d5dae3;border-radius:4px;margin-bottom:10px;font-size:8.5px;font-weight:600">
-      <div style="display:flex;align-items:center;gap:4px"><span style="width:20px;height:3px;background:#C62828;display:inline-block;border-radius:1px"></span>Ridge</div>
-      <div style="display:flex;align-items:center;gap:4px"><span style="width:20px;height:3px;background:#F9A825;display:inline-block;border-radius:1px"></span>Hip</div>
-      <div style="display:flex;align-items:center;gap:4px"><span style="width:20px;height:3px;background:#1565C0;display:inline-block;border-radius:1px"></span>Valley</div>
-      <div style="display:flex;align-items:center;gap:4px"><span style="width:20px;height:3px;background:#2E7D32;display:inline-block;border-radius:1px"></span>Rake</div>
-      <div style="display:flex;align-items:center;gap:4px"><span style="width:20px;height:3px;background:#212121;display:inline-block;border-radius:1px"></span>Eave</div>
-      <div style="display:flex;align-items:center;gap:4px"><span style="width:20px;height:3px;background:#E65100;display:inline-block;border-radius:1px"></span>Step Flash</div>
-      <div style="display:flex;align-items:center;gap:4px"><span style="width:20px;height:3px;background:#6A1B9A;display:inline-block;border-radius:1px"></span>Wall Flash</div>
-      <div style="display:flex;align-items:center;gap:4px"><span style="width:20px;height:3px;background:#00838F;display:inline-block;border-radius:1px"></span>Transition</div>
-      <div style="display:flex;align-items:center;gap:4px"><span style="width:20px;height:3px;background:#4E342E;display:inline-block;border-radius:1px"></span>Parapet</div>
-    </div>
-
-    <!-- CAD-style Blueprint: LENGTH MODE (white background, no satellite) -->
-    <div style="text-align:center;border:1px solid #d5dae3;border-radius:4px;overflow:hidden;background:#fff">
-      <svg viewBox="0 0 500 500" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-height:380px">${blueprintLengthSVG}</svg>
-    </div>
-
-    <!-- Total Line Lengths summary -->
-    <div style="font-size:10px;font-weight:800;color:#003366;text-transform:uppercase;letter-spacing:0.5px;margin:10px 0 6px">Total Line Lengths</div>
-    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:5px;font-size:9px;font-weight:600;margin-bottom:4px">
-      <div style="text-align:center;padding:5px 3px;border:2px solid #C62828;border-radius:4px"><div style="color:#C62828;font-size:7px;text-transform:uppercase;letter-spacing:0.5px">Ridges</div><div style="font-size:15px;font-weight:900;color:#C62828">${es.total_ridge_ft}</div><div style="font-size:7px;color:#888">ft</div></div>
-      <div style="text-align:center;padding:5px 3px;border:2px solid #F9A825;border-radius:4px"><div style="color:#F9A825;font-size:7px;text-transform:uppercase;letter-spacing:0.5px">Hips</div><div style="font-size:15px;font-weight:900;color:#F9A825">${es.total_hip_ft}</div><div style="font-size:7px;color:#888">ft</div></div>
-      <div style="text-align:center;padding:5px 3px;border:2px solid #1565C0;border-radius:4px"><div style="color:#1565C0;font-size:7px;text-transform:uppercase;letter-spacing:0.5px">Valleys</div><div style="font-size:15px;font-weight:900;color:#1565C0">${es.total_valley_ft}</div><div style="font-size:7px;color:#888">ft</div></div>
-      <div style="text-align:center;padding:5px 3px;border:2px solid #2E7D32;border-radius:4px"><div style="color:#2E7D32;font-size:7px;text-transform:uppercase;letter-spacing:0.5px">Rakes</div><div style="font-size:15px;font-weight:900;color:#2E7D32">${es.total_rake_ft}</div><div style="font-size:7px;color:#888">ft</div></div>
-      <div style="text-align:center;padding:5px 3px;border:2px solid #212121;border-radius:4px"><div style="color:#212121;font-size:7px;text-transform:uppercase;letter-spacing:0.5px">Eaves</div><div style="font-size:15px;font-weight:900;color:#212121">${es.total_eave_ft}</div><div style="font-size:7px;color:#888">ft</div></div>
-    </div>
-    <!-- Flashing & Transition row -->
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px;font-size:9px;font-weight:600">
-      <div style="text-align:center;padding:5px 3px;border:2px solid #E65100;border-radius:4px"><div style="color:#E65100;font-size:7px;text-transform:uppercase;letter-spacing:0.5px">Step Flash</div><div style="font-size:15px;font-weight:900;color:#E65100">${stepFlashingFt}</div><div style="font-size:7px;color:#888">ft</div></div>
-      <div style="text-align:center;padding:5px 3px;border:2px solid #6A1B9A;border-radius:4px"><div style="color:#6A1B9A;font-size:7px;text-transform:uppercase;letter-spacing:0.5px">Wall Flash</div><div style="font-size:15px;font-weight:900;color:#6A1B9A">${wallFlashingFt}</div><div style="font-size:7px;color:#888">ft</div></div>
-      <div style="text-align:center;padding:5px 3px;border:2px solid #00838F;border-radius:4px"><div style="color:#00838F;font-size:7px;text-transform:uppercase;letter-spacing:0.5px">Transitions</div><div style="font-size:15px;font-weight:900;color:#00838F">${transitionFt}</div><div style="font-size:7px;color:#888">ft</div></div>
-      <div style="text-align:center;padding:5px 3px;border:2px solid #4E342E;border-radius:4px"><div style="color:#4E342E;font-size:7px;text-transform:uppercase;letter-spacing:0.5px">Parapet</div><div style="font-size:15px;font-weight:900;color:#4E342E">${parapetFt}</div><div style="font-size:7px;color:#888">ft</div></div>
-    </div>
-
-    <!-- Edge Details Table -->
-    <div style="margin-top:8px;max-height:260px;overflow:hidden">
+    <!-- Edge Details Table (compact) -->
+    <div style="margin-top:6px">
+      <div style="font-size:8px;font-weight:800;color:#003366;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">Edge Details</div>
       <table class="ev-tbl">
-        <thead><tr><th>Edge Type</th><th>Label</th><th style="text-align:center">Plan Length (ft)</th><th>True Length (ft)</th></tr></thead>
+        <thead><tr><th>Edge Type</th><th>Label</th><th style="text-align:center">Plan (ft)</th><th>True (ft)</th></tr></thead>
         <tbody>
-          ${report.edges.slice(0, 16).map(e => {
+          ${report.edges.slice(0, 12).map(e => {
             const typeColors: Record<string, string> = { ridge: '#C62828', hip: '#F9A825', valley: '#1565C0', rake: '#2E7D32', eave: '#212121', step_flashing: '#E65100', wall_flashing: '#6A1B9A', transition: '#00838F', parapet: '#4E342E' }
             const edgeColor = typeColors[e.edge_type] || '#003366'
-            return `<tr><td><span style="display:inline-block;width:10px;height:3px;background:${edgeColor};border-radius:1px;margin-right:4px;vertical-align:middle"></span><span style="text-transform:capitalize;font-weight:600">${e.edge_type.replace('_', ' ')}</span></td><td>${e.label}</td><td style="text-align:center">${e.plan_length_ft}</td><td>${e.true_length_ft}</td></tr>`
+            return `<tr><td><span style="display:inline-block;width:8px;height:2.5px;background:${edgeColor};border-radius:1px;margin-right:3px;vertical-align:middle"></span><span style="text-transform:capitalize;font-weight:600;font-size:8px">${e.edge_type.replace('_', ' ')}</span></td><td style="font-size:8px">${e.label}</td><td style="text-align:center;font-size:8px">${e.plan_length_ft}</td><td style="font-size:8px;font-weight:700">${e.true_length_ft}</td></tr>`
           }).join('')}
-          <tr class="row-total"><td colspan="2">Total (${report.edges.length} edges)</td><td style="text-align:center">${Math.round(report.edges.reduce((s, e) => s + e.plan_length_ft, 0))}</td><td>${Math.round(report.edges.reduce((s, e) => s + e.true_length_ft, 0))}</td></tr>
+          <tr class="row-total"><td colspan="2" style="font-size:8px">Total (${report.edges.length} edges)</td><td style="text-align:center;font-size:8px">${Math.round(report.edges.reduce((s, e) => s + e.plan_length_ft, 0))}</td><td style="font-size:8px">${Math.round(report.edges.reduce((s, e) => s + e.true_length_ft, 0))}</td></tr>
         </tbody>
       </table>
     </div>
+
+    <!-- Compact materials summary -->
+    <div style="margin-top:6px">
+      <div style="font-size:8px;font-weight:800;color:#003366;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">Material Estimate (Architectural Shingles)</div>
+      <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:4px;font-size:7.5px">
+        <div style="text-align:center;padding:4px 2px;background:#f4f7fb;border:1px solid #d5dae3;border-radius:3px"><div style="font-size:6px;color:#6b7a8d;font-weight:700">Shingles</div><div style="font-size:12px;font-weight:900;color:#003366">${mat.bundle_count || Math.ceil((grossSquares || 0) * 3)}</div><div style="font-size:6px;color:#6b7a8d">bundles</div></div>
+        <div style="text-align:center;padding:4px 2px;background:#f4f7fb;border:1px solid #d5dae3;border-radius:3px"><div style="font-size:6px;color:#6b7a8d;font-weight:700">Underlay</div><div style="font-size:12px;font-weight:900;color:#003366">${mat.line_items?.find((i: any) => i.category === 'underlayment')?.order_quantity || Math.ceil((grossSquares || 0) / 4)}</div><div style="font-size:6px;color:#6b7a8d">rolls</div></div>
+        <div style="text-align:center;padding:4px 2px;background:#f4f7fb;border:1px solid #d5dae3;border-radius:3px"><div style="font-size:6px;color:#6b7a8d;font-weight:700">Ice Shield</div><div style="font-size:12px;font-weight:900;color:#003366">${mat.line_items?.find((i: any) => i.category === 'ice_shield')?.order_quantity || Math.ceil((es.total_eave_ft * 3) / 75)}</div><div style="font-size:6px;color:#6b7a8d">rolls</div></div>
+        <div style="text-align:center;padding:4px 2px;background:#f4f7fb;border:1px solid #d5dae3;border-radius:3px"><div style="font-size:6px;color:#6b7a8d;font-weight:700">Ridge Cap</div><div style="font-size:12px;font-weight:900;color:#003366">${mat.line_items?.find((i: any) => i.category === 'ridge_cap')?.order_quantity || Math.ceil(ridgeHipFt / 33)}</div><div style="font-size:6px;color:#6b7a8d">bundles</div></div>
+        <div style="text-align:center;padding:4px 2px;background:#f4f7fb;border:1px solid #d5dae3;border-radius:3px"><div style="font-size:6px;color:#6b7a8d;font-weight:700">Starter</div><div style="font-size:12px;font-weight:900;color:#003366">${mat.line_items?.find((i: any) => i.category === 'starter_strip')?.order_quantity || Math.ceil(starterStripFt / 105)}</div><div style="font-size:6px;color:#6b7a8d">bundles</div></div>
+        <div style="text-align:center;padding:4px 2px;background:#f4f7fb;border:1px solid #d5dae3;border-radius:3px"><div style="font-size:6px;color:#6b7a8d;font-weight:700">Drip Edge</div><div style="font-size:12px;font-weight:900;color:#003366">${Math.ceil(totalDripEdge / 10)}</div><div style="font-size:6px;color:#6b7a8d">10ft pcs</div></div>
+      </div>
+    </div>
+
+    <!-- Measurement methodology note -->
+    <div style="margin-top:6px;padding:5px 10px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:4px;font-size:6.5px;color:#0369a1;line-height:1.4">
+      <strong>Measurement Methodology:</strong> Primary measurements from user-drawn GPS trace coordinates using UTM projection &amp; Shoelace formula. Pitch multiplier applied for true 3D surface area. Google Solar API provides satellite imagery &amp; optional DSM elevation cross-check. Engine v3.0.
+    </div>
   </div>
-  ${ftr(6)}
+  ${ftr(3)}
 </div>
 
 <!-- Pages 7-10 and Legal Disclaimer removed — report truncated to 6 pages -->

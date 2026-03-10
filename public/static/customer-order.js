@@ -671,7 +671,7 @@ function renderReviewStep(root, progressBar) {
                   ${mResult.eave_edges.map((e, i) => `
                     <div class="bg-white rounded-lg p-2 border border-gray-100 flex items-center justify-between text-sm">
                       <span class="text-gray-500">Edge ${i + 1}</span>
-                      <span class="font-bold text-gray-800">${e.length_ft.toFixed(1)} ft</span>
+                      <span class="font-bold text-gray-800">${(e.length_2d_ft || e.length_ft || 0).toFixed(1)} ft</span>
                     </div>
                   `).join('')}
                 </div>
