@@ -173,8 +173,19 @@ export async function fetchSolarPitchAndImagery(
   const preciseLng = parseFloat(lng.toFixed(7))
 
   // Call buildingInsights — we ONLY extract pitch + imagery metadata
+  // Strict 10-second timeout to stay within Cloudflare Workers budget
   const url = `https://solar.googleapis.com/v1/buildingInsights:findClosest?location.latitude=${preciseLat}&location.longitude=${preciseLng}&requiredQuality=HIGH&key=${solarApiKey}`
-  const response = await fetch(url)
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 10_000)
+  let response: Response
+  try {
+    response = await fetch(url, { signal: controller.signal })
+  } catch (e: any) {
+    clearTimeout(timeoutId)
+    if (e.name === 'AbortError') throw new Error('Google Solar API timed out after 10s')
+    throw e
+  }
+  clearTimeout(timeoutId)
   if (!response.ok) {
     const errText = await response.text()
     throw new Error(`Google Solar API error ${response.status}: ${errText}`)

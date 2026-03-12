@@ -232,7 +232,12 @@ reportsRoutes.post('/:orderId/generate', async (c) => {
   // Generate base report (WELD + PAINT + POLISH — NO heavy AI)
   // This saves report as 'completed' immediately
   const result = await generateReportForOrder(orderId, c.env)
-  if (!result.success) return c.json({ error: result.error }, result.error === 'Order not found' ? 404 : 500)
+  if (!result.success) {
+    const status = result.error === 'Order not found' ? 404
+      : result.error === 'Already in progress' ? 409
+      : 500
+    return c.json({ error: result.error, hint: result.error?.includes('timed out') ? 'Click Retry to re-generate' : undefined }, status)
+  }
 
   // Enhancement and AI Imagery are NOT run inline anymore.
   // They caused Cloudflare Workers to timeout (>30s).
@@ -773,7 +778,7 @@ reportsRoutes.post('/calculate-from-trace', async (c) => {
   const startTime = Date.now()
   try {
     const body = await c.req.json()
-    const { trace, address, default_pitch } = body
+    const { trace, address, default_pitch, house_sqft } = body
 
     if (!trace || !trace.eaves || !Array.isArray(trace.eaves)) {
       return c.json({ error: 'Missing or invalid trace data. trace.eaves[] is required.' }, 400)
@@ -864,6 +869,22 @@ reportsRoutes.post('/calculate-from-trace', async (c) => {
 
       // Advisory notes
       advisory_notes: report.advisory_notes,
+
+      // Cross-validation against known house size
+      cross_validation: (() => {
+        if (!house_sqft || house_sqft <= 0) return null
+        const footprint = report.key_measurements.total_projected_footprint_ft2
+        const expectedMin = house_sqft * 1.05
+        const expectedMax = house_sqft * 1.25
+        const ratio = footprint / house_sqft
+        if (footprint < expectedMin) {
+          return { status: 'small', ratio: Math.round(ratio * 100) / 100, house_sqft, footprint: Math.round(footprint), msg: `Traced footprint (${Math.round(footprint)} sq ft) is smaller than expected for a ${house_sqft} sq ft house. Expected ~${Math.round(expectedMin)}-${Math.round(expectedMax)} sq ft with eave overhangs.` }
+        }
+        if (footprint > expectedMax) {
+          return { status: 'large', ratio: Math.round(ratio * 100) / 100, house_sqft, footprint: Math.round(footprint), msg: `Traced footprint (${Math.round(footprint)} sq ft) is larger than expected for a ${house_sqft} sq ft house. Expected ~${Math.round(expectedMin)}-${Math.round(expectedMax)} sq ft. Check trace accuracy.` }
+        }
+        return { status: 'ok', ratio: Math.round(ratio * 100) / 100, house_sqft, footprint: Math.round(footprint), msg: `Traced footprint (${Math.round(footprint)} sq ft) matches expected range for a ${house_sqft} sq ft house.` }
+      })(),
 
       // Full engine report (for storage in order)
       full_report: report,
@@ -1541,6 +1562,36 @@ export async function generateAIImageryForReport(
 export async function generateReportForOrder(
   orderId: number | string, env: Bindings
 ): Promise<{ success: boolean; report?: RoofReport; error?: string; version?: string; provider?: string; hasEnhanceKey?: boolean }> {
+  // ── GLOBAL 25-SECOND TIMEOUT ──
+  // Cloudflare Workers have a 30s CPU budget. We cap at 25s to ensure
+  // we always have time to mark the report as failed/completed and
+  // return a JSON response (never leave the order stuck as 'generating').
+  const GENERATION_TIMEOUT_MS = 25_000
+  const generationStart = Date.now()
+
+  const timeoutPromise = new Promise<{ success: false; error: string }>((resolve) => {
+    setTimeout(() => resolve({ success: false, error: `Report generation timed out after ${GENERATION_TIMEOUT_MS / 1000}s. This order will be retried automatically.` }), GENERATION_TIMEOUT_MS)
+  })
+
+  const generationPromise = _generateReportForOrderInner(orderId, env, generationStart)
+
+  const result = await Promise.race([generationPromise, timeoutPromise])
+
+  // If we timed out, ensure the report is marked failed so it's not stuck
+  if (!result.success && result.error?.includes('timed out')) {
+    try {
+      await repo.markReportFailed(env.DB, orderId, result.error)
+      await repo.markOrderStatus(env.DB, orderId, 'failed')
+      console.error(`[Generate] Order ${orderId}: TIMED OUT after ${Date.now() - generationStart}ms — marked as failed`)
+    } catch {}
+  }
+
+  return result
+}
+
+async function _generateReportForOrderInner(
+  orderId: number | string, env: Bindings, startTime: number
+): Promise<{ success: boolean; report?: RoofReport; error?: string; version?: string; provider?: string; hasEnhanceKey?: boolean }> {
   try {
     const order = await repo.getOrderById(env.DB, orderId)
     if (!order) return { success: false, error: 'Order not found' }
@@ -1560,8 +1611,10 @@ export async function generateReportForOrder(
         await repo.markOrderStatus(env.DB, orderId, 'completed')
       }
     }
-    if (attemptNum > 3) return { success: false, error: 'Max attempts exceeded' }
-    await repo.upsertGeneratingState(env.DB, orderId, attemptNum, !!existing)
+    // Allow retry even if max attempts exceeded — reset counter if status was 'failed'
+    if (attemptNum > 3 && existing?.status !== 'failed') return { success: false, error: 'Max attempts exceeded' }
+    const safeAttempt = attemptNum > 3 ? 1 : attemptNum
+    await repo.upsertGeneratingState(env.DB, orderId, safeAttempt, !!existing)
     await repo.markOrderStatus(env.DB, orderId, 'processing')
 
     const startTime = Date.now()
