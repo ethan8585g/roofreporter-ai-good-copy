@@ -9,7 +9,13 @@ const A = {
   tab: 'overview',
   data: null,
   orders: [],
-  gmailStatus: null
+  gmailStatus: null,
+  // Report Search state
+  searchQuery: '',
+  searchResults: null,
+  searchLoading: false,
+  searchError: null,
+  searchStats: null
 };
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -70,7 +76,8 @@ function render() {
     { id:'neworder', label:'New Order', icon:'fa-plus-circle' },
     { id:'blog', label:'Blog', icon:'fa-blog' },
     { id:'activity', label:'Activity Log', icon:'fa-history' },
-    { id:'sip', label:'SIP Bridge', icon:'fa-phone-volume' }
+    { id:'sip', label:'SIP Bridge', icon:'fa-phone-volume' },
+    { id:'search', label:'Report Search', icon:'fa-search' }
   ];
 
   root.innerHTML = `
@@ -96,6 +103,7 @@ function render() {
       ${A.tab === 'blog' ? renderBlog() : ''}
       ${A.tab === 'activity' ? renderActivity() : ''}
       ${A.tab === 'sip' ? renderSipBridge() : ''}
+      ${A.tab === 'search' ? renderReportSearch() : ''}
     </div>
   `;
 }
@@ -2158,4 +2166,198 @@ async function deleteSipTrunk(trunkId, name) {
   } catch(e) {
     alert('Error: ' + e.message);
   }
+}
+
+// ============================================================
+// REPORT SEARCH TAB — Semantic Vector Search
+// Uses Gemini text-embedding-004 + D1 cosine similarity
+// ============================================================
+
+async function loadSearchStats() {
+  try {
+    const res = await adminFetch('/api/reports/search-stats');
+    if (res && res.ok) A.searchStats = await res.json();
+  } catch(e) { console.error('Search stats error:', e); }
+}
+
+async function doReportSearch(query) {
+  if (!query || query.trim().length < 2) return;
+  A.searchQuery = query.trim();
+  A.searchLoading = true;
+  A.searchError = null;
+  A.searchResults = null;
+  render();
+
+  try {
+    const res = await fetch('/api/reports/search', {
+      method: 'POST',
+      headers: { ...adminHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: A.searchQuery, limit: 20, min_score: 0.25 })
+    });
+    const data = await res.json();
+    if (data.success) {
+      A.searchResults = data;
+    } else {
+      A.searchError = data.error || 'Search failed';
+    }
+  } catch(e) {
+    A.searchError = 'Network error: ' + e.message;
+  }
+  A.searchLoading = false;
+  render();
+}
+
+async function embedAllReports() {
+  const btn = document.getElementById('embedAllBtn');
+  if (btn) btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Embedding...';
+  if (btn) btn.disabled = true;
+
+  try {
+    const res = await fetch('/api/reports/embed-all', {
+      method: 'POST',
+      headers: { ...adminHeaders(), 'Content-Type': 'application/json' }
+    });
+    const data = await res.json();
+    if (data.success) {
+      alert('Embedded ' + data.embedded + ' reports (' + data.errors + ' errors)');
+      await loadSearchStats();
+      render();
+    } else {
+      alert('Embed failed: ' + (data.error || 'Unknown error'));
+    }
+  } catch(e) {
+    alert('Error: ' + e.message);
+  }
+  if (btn) { btn.innerHTML = '<i class="fas fa-database mr-2"></i>Embed All'; btn.disabled = false; }
+}
+
+function renderReportSearch() {
+  // Auto-load stats on first visit
+  if (!A.searchStats) { loadSearchStats().then(() => render()); }
+
+  const stats = A.searchStats || {};
+  const coveragePct = stats.coverage_pct || 0;
+  const totalEmbedded = stats.total_embedded || 0;
+  const totalReports = stats.total_completed_reports || 0;
+
+  return `
+    <div class="space-y-6">
+      <!-- Search Header -->
+      ${section('Semantic Report Search', 'fa-brain', `
+        <div class="space-y-4">
+          <p class="text-gray-600 text-sm">
+            Search across all roof reports using natural language. Examples:
+            <span class="text-blue-600 font-medium">"hip roof over 2000 sq ft"</span>,
+            <span class="text-blue-600 font-medium">"houses in Sherwood Park"</span>,
+            <span class="text-blue-600 font-medium">"steep pitch with ice shield issues"</span>,
+            <span class="text-blue-600 font-medium">"valley flashing needed"</span>
+          </p>
+          
+          <!-- Search Input -->
+          <div class="flex gap-2">
+            <div class="relative flex-1">
+              <i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"></i>
+              <input type="text" id="reportSearchInput" value="${A.searchQuery}"
+                placeholder="Search reports by address, measurements, roof type, materials, notes..."
+                class="w-full pl-11 pr-4 py-3 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                onkeydown="if(event.key==='Enter') doReportSearch(this.value)"
+              />
+            </div>
+            <button onclick="doReportSearch(document.getElementById('reportSearchInput').value)"
+              class="px-6 py-3 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 transition-colors flex items-center gap-2 whitespace-nowrap">
+              <i class="fas fa-search"></i> Search
+            </button>
+          </div>
+
+          <!-- Index Stats -->
+          <div class="flex items-center gap-4 text-xs text-gray-500">
+            <span><i class="fas fa-database mr-1"></i>${totalEmbedded} reports indexed</span>
+            <span><i class="fas fa-chart-pie mr-1"></i>${coveragePct}% coverage (${totalEmbedded}/${totalReports})</span>
+            ${totalReports > totalEmbedded ? `
+              <button id="embedAllBtn" onclick="embedAllReports()" 
+                class="px-3 py-1 bg-amber-100 text-amber-700 rounded-lg hover:bg-amber-200 transition-colors font-medium">
+                <i class="fas fa-database mr-1"></i>Embed ${totalReports - totalEmbedded} Missing
+              </button>
+            ` : '<span class="text-green-600"><i class="fas fa-check-circle mr-1"></i>All reports indexed</span>'}
+          </div>
+        </div>
+      `)}
+
+      <!-- Search Results -->
+      ${A.searchLoading ? `
+        <div class="flex items-center justify-center py-12">
+          <div class="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+          <span class="ml-3 text-gray-500">Searching reports...</span>
+        </div>
+      ` : ''}
+
+      ${A.searchError ? `
+        <div class="bg-red-50 border border-red-200 rounded-xl p-4 text-red-700 text-sm">
+          <i class="fas fa-exclamation-circle mr-2"></i>${A.searchError}
+        </div>
+      ` : ''}
+
+      ${A.searchResults ? renderSearchResults(A.searchResults) : ''}
+
+      ${!A.searchResults && !A.searchLoading && !A.searchError ? `
+        <div class="text-center py-16 text-gray-400">
+          <i class="fas fa-search text-5xl mb-4 block opacity-30"></i>
+          <p class="text-lg font-medium">Enter a search query above</p>
+          <p class="text-sm mt-1">Powered by Gemini text-embedding-004 semantic vectors</p>
+        </div>
+      ` : ''}
+    </div>
+  `;
+}
+
+function renderSearchResults(data) {
+  const results = data.results || [];
+  if (results.length === 0) {
+    return `
+      <div class="text-center py-12 text-gray-400">
+        <i class="fas fa-inbox text-4xl mb-3 block opacity-30"></i>
+        <p class="text-lg font-medium">No matching reports found</p>
+        <p class="text-sm mt-1">Try a different search query or broader terms</p>
+      </div>
+    `;
+  }
+
+  return section(
+    'Results (' + results.length + ' matches in ' + data.search_ms + 'ms)',
+    'fa-list-ol',
+    `<div class="space-y-3">
+      ${results.map((r, i) => {
+        const scorePct = Math.round(r.score * 100);
+        const scoreColor = scorePct >= 70 ? 'text-green-600 bg-green-50' : scorePct >= 50 ? 'text-blue-600 bg-blue-50' : 'text-amber-600 bg-amber-50';
+        return `
+          <div class="flex items-start gap-4 p-4 rounded-xl border border-gray-100 hover:border-blue-200 hover:bg-blue-50/30 transition-all cursor-pointer"
+               onclick="window.open('/admin/order/' + ${r.order_id}, '_blank')">
+            <!-- Rank -->
+            <div class="flex-shrink-0 w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-sm font-bold text-gray-500">
+              ${i + 1}
+            </div>
+            <!-- Details -->
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2 mb-1">
+                <span class="font-semibold text-gray-800 text-sm truncate">${r.property_address || 'Unknown Address'}</span>
+                <span class="text-xs px-2 py-0.5 rounded-full ${scoreColor} font-bold">${scorePct}%</span>
+              </div>
+              <div class="flex flex-wrap gap-3 text-xs text-gray-500">
+                ${r.homeowner_name ? '<span><i class="fas fa-user mr-1"></i>' + r.homeowner_name + '</span>' : ''}
+                ${r.total_footprint_sqft ? '<span><i class="fas fa-ruler-combined mr-1"></i>' + Math.round(r.total_footprint_sqft).toLocaleString() + ' sq ft footprint</span>' : ''}
+                ${r.total_true_area_sqft ? '<span><i class="fas fa-home mr-1"></i>' + Math.round(r.total_true_area_sqft).toLocaleString() + ' sq ft sloped</span>' : ''}
+                ${r.roof_pitch ? '<span><i class="fas fa-angle-double-up mr-1"></i>' + r.roof_pitch + '</span>' : ''}
+                ${r.num_segments ? '<span><i class="fas fa-layer-group mr-1"></i>' + r.num_segments + ' faces</span>' : ''}
+              </div>
+            </div>
+            <!-- Order link -->
+            <div class="flex-shrink-0 text-gray-400 text-xs">
+              <span class="font-mono">#${r.order_id}</span>
+              <i class="fas fa-external-link-alt ml-1"></i>
+            </div>
+          </div>
+        `;
+      }).join('')}
+    </div>`
+  );
 }
