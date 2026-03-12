@@ -1564,3 +1564,351 @@ secretaryRoutes.delete('/sip/trunk/:trunkId', async (c) => {
     return c.json({ error: 'Failed to delete trunk', details: err.message }, 500)
   }
 })
+
+// ============================================================
+// DISPATCH RULE MANAGEMENT — Full CRUD for LiveKit SIP Dispatch Rules
+// Deploy LiveKit agents directly from code with all configuration fields:
+// dispatch_rule_id, name, inbound routing (trunk_ids), destination room,
+// agents, rule_type, created_at
+// ============================================================
+
+// ── GET /sip/dispatch-rules — List all dispatch rules with full details ──
+secretaryRoutes.get('/sip/dispatch-rules', async (c) => {
+  const admin = await requireAdmin(c)
+  if (!admin) return c.json({ error: 'Admin access required' }, 403)
+
+  const apiKey = (c.env as any).LIVEKIT_API_KEY
+  const apiSecret = (c.env as any).LIVEKIT_API_SECRET
+  const livekitUrl = (c.env as any).LIVEKIT_URL
+  if (!apiKey || !apiSecret || !livekitUrl) return c.json({ error: 'LiveKit not configured' }, 500)
+
+  try {
+    // Fetch dispatch rules AND inbound trunks for cross-referencing
+    const [rulesResponse, trunksResponse] = await Promise.all([
+      livekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST', '/twirp/livekit.SIP/ListSIPDispatchRule', {}),
+      livekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST', '/twirp/livekit.SIP/ListSIPInboundTrunk', {}),
+    ])
+
+    const rules = rulesResponse?.items || []
+    const trunks = trunksResponse?.items || []
+
+    // Build trunk lookup by ID for enrichment
+    const trunkMap: Record<string, any> = {}
+    for (const t of trunks) {
+      const id = t.sip_trunk_id || t.trunk?.sip_trunk_id || ''
+      if (id) trunkMap[id] = t
+    }
+
+    // Enrich each dispatch rule with full details
+    const enriched = rules.map((rule: any) => {
+      const ruleId = rule.sip_dispatch_rule_id || ''
+      const name = rule.name || ''
+      const trunkIds = rule.trunk_ids || []
+      const metadata = rule.metadata || ''
+      const createdAt = rule.created_at || ''
+
+      // Determine rule type and destination room
+      let ruleType = 'unknown'
+      let destinationRoom = ''
+      let roomPrefix = ''
+      let pin = ''
+
+      if (rule.rule?.dispatchRuleIndividual) {
+        ruleType = 'individual'
+        roomPrefix = rule.rule.dispatchRuleIndividual.roomPrefix || ''
+        pin = rule.rule.dispatchRuleIndividual.pin || ''
+        destinationRoom = roomPrefix ? `${roomPrefix}{unique-id}` : '(auto-generated)'
+      } else if (rule.rule?.dispatchRuleDirect) {
+        ruleType = 'direct'
+        destinationRoom = rule.rule.dispatchRuleDirect.roomName || ''
+        pin = rule.rule.dispatchRuleDirect.pin || ''
+      } else if (rule.rule?.dispatchRuleCallee) {
+        ruleType = 'callee'
+        roomPrefix = rule.rule.dispatchRuleCallee.roomPrefix || ''
+        destinationRoom = roomPrefix ? `${roomPrefix}{callee-number}` : '(callee-based)'
+        pin = rule.rule.dispatchRuleCallee.pin || ''
+      }
+
+      // Map trunk IDs to their names/numbers for inbound routing display
+      const inboundRouting = trunkIds.map((tid: string) => {
+        const trunk = trunkMap[tid]
+        if (!trunk) return { trunk_id: tid, name: tid, numbers: [] }
+        return {
+          trunk_id: tid,
+          name: trunk.name || trunk.trunk?.name || tid,
+          numbers: trunk.numbers || trunk.trunk?.numbers || [],
+          krisp_enabled: trunk.krisp_enabled ?? trunk.trunk?.krisp_enabled ?? false,
+        }
+      })
+
+      // Parse metadata for agent info
+      let agents: any = {}
+      try { agents = metadata ? JSON.parse(metadata) : {} } catch (e) { agents = { raw: metadata } }
+
+      return {
+        dispatch_rule_id: ruleId,
+        name,
+        rule_type: ruleType,
+        inbound_routing: inboundRouting,
+        trunk_ids: trunkIds,
+        destination_room: destinationRoom,
+        room_prefix: roomPrefix,
+        pin,
+        agents,
+        metadata,
+        created_at: createdAt,
+      }
+    })
+
+    return c.json({
+      success: true,
+      dispatch_rules: enriched,
+      total: enriched.length,
+    })
+  } catch (err: any) {
+    console.error('[SIP] List dispatch rules error:', err.message)
+    return c.json({ error: 'Failed to list dispatch rules', details: err.message }, 500)
+  }
+})
+
+// ── POST /sip/dispatch-rule — Create a new dispatch rule ──
+// Supports individual (unique room per call), direct (fixed room), and callee (room by callee number)
+secretaryRoutes.post('/sip/dispatch-rule', async (c) => {
+  const admin = await requireAdmin(c)
+  if (!admin) return c.json({ error: 'Admin access required' }, 403)
+
+  const apiKey = (c.env as any).LIVEKIT_API_KEY
+  const apiSecret = (c.env as any).LIVEKIT_API_SECRET
+  const livekitUrl = (c.env as any).LIVEKIT_URL
+  if (!apiKey || !apiSecret || !livekitUrl) return c.json({ error: 'LiveKit not configured' }, 500)
+
+  const body = await c.req.json()
+  const {
+    name = 'roofreporterai-dispatch',
+    trunk_ids = [],                   // Array of SIP trunk IDs for inbound routing
+    rule_type = 'individual',         // 'individual' | 'direct' | 'callee'
+    room_prefix = 'secretary-',       // For individual/callee types
+    room_name = '',                   // For direct type (fixed room name)
+    pin = '',                         // Optional PIN for access control
+    metadata = '',                    // JSON string — agent config, customer_id, etc.
+    agents = {},                      // Agent configuration (stored in metadata)
+    hide_phone_number = false,        // Hide caller phone number from room
+    krisp_enabled = true,             // Noise cancellation
+    attributes = {},                  // Additional key-value attributes
+  } = body
+
+  // Validate rule type
+  const validTypes = ['individual', 'direct', 'callee']
+  if (!validTypes.includes(rule_type)) {
+    return c.json({ error: `Invalid rule_type. Must be one of: ${validTypes.join(', ')}` }, 400)
+  }
+  if (rule_type === 'direct' && !room_name) {
+    return c.json({ error: 'room_name is required for "direct" rule type' }, 400)
+  }
+
+  // Build the rule object based on type
+  let ruleObj: any = {}
+  if (rule_type === 'individual') {
+    ruleObj = { dispatchRuleIndividual: { roomPrefix: room_prefix, pin } }
+  } else if (rule_type === 'direct') {
+    ruleObj = { dispatchRuleDirect: { roomName: room_name, pin } }
+  } else if (rule_type === 'callee') {
+    ruleObj = { dispatchRuleCallee: { roomPrefix: room_prefix, pin } }
+  }
+
+  // Build metadata — merge agents config into metadata JSON
+  let finalMetadata = metadata
+  if (!finalMetadata && Object.keys(agents).length > 0) {
+    finalMetadata = JSON.stringify(agents)
+  }
+
+  try {
+    const payload: any = {
+      rule: ruleObj,
+      name,
+      metadata: finalMetadata,
+    }
+    if (trunk_ids.length > 0) payload.trunk_ids = trunk_ids
+    if (hide_phone_number) payload.hide_phone_number = hide_phone_number
+    if (krisp_enabled) payload.krisp_enabled = krisp_enabled
+    if (Object.keys(attributes).length > 0) payload.attributes = attributes
+
+    const result = await livekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST',
+      '/twirp/livekit.SIP/CreateSIPDispatchRule', payload)
+
+    const dispatchId = result?.sip_dispatch_rule_id || ''
+    console.log(`[SIP] Created dispatch rule: ${dispatchId} (${name}, type=${rule_type})`)
+
+    // Save to local DB for tracking
+    await c.env.DB.prepare(
+      `INSERT OR REPLACE INTO sip_dispatch_rules (dispatch_rule_id, name, rule_type, trunk_ids, room_prefix, room_name, pin, metadata, status, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', datetime('now'))`
+    ).bind(dispatchId, name, rule_type, JSON.stringify(trunk_ids), room_prefix, room_name, pin, finalMetadata).run().catch(() => {})
+
+    return c.json({
+      success: true,
+      dispatch_rule_id: dispatchId,
+      name,
+      rule_type,
+      trunk_ids,
+      destination_room: rule_type === 'direct' ? room_name : `${room_prefix}{id}`,
+      metadata: finalMetadata,
+      message: `Dispatch rule "${name}" created. Inbound calls will route to ${rule_type === 'direct' ? `room "${room_name}"` : `rooms prefixed "${room_prefix}"`}.`
+    })
+  } catch (err: any) {
+    console.error('[SIP] Create dispatch rule error:', err)
+    return c.json({ error: 'Failed to create dispatch rule', details: err.message }, 500)
+  }
+})
+
+// ── DELETE /sip/dispatch-rule/:ruleId — Delete a dispatch rule ──
+secretaryRoutes.delete('/sip/dispatch-rule/:ruleId', async (c) => {
+  const admin = await requireAdmin(c)
+  if (!admin) return c.json({ error: 'Admin access required' }, 403)
+
+  const apiKey = (c.env as any).LIVEKIT_API_KEY
+  const apiSecret = (c.env as any).LIVEKIT_API_SECRET
+  const livekitUrl = (c.env as any).LIVEKIT_URL
+  if (!apiKey || !apiSecret || !livekitUrl) return c.json({ error: 'LiveKit not configured' }, 500)
+
+  const ruleId = c.req.param('ruleId')
+
+  try {
+    await livekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST',
+      '/twirp/livekit.SIP/DeleteSIPDispatchRule', { sip_dispatch_rule_id: ruleId })
+
+    await c.env.DB.prepare(`DELETE FROM sip_dispatch_rules WHERE dispatch_rule_id = ?`).bind(ruleId).run().catch(() => {})
+    console.log(`[SIP] Deleted dispatch rule: ${ruleId}`)
+
+    return c.json({ success: true, deleted: ruleId })
+  } catch (err: any) {
+    console.error('[SIP] Delete dispatch rule error:', err)
+    return c.json({ error: 'Failed to delete dispatch rule', details: err.message }, 500)
+  }
+})
+
+// ── POST /sip/deploy-agent — One-click deploy: Create trunk + dispatch rule + agent config ──
+// This is the all-in-one endpoint to deploy a LiveKit agent directly from code
+secretaryRoutes.post('/sip/deploy-agent', async (c) => {
+  const admin = await requireAdmin(c)
+  if (!admin) return c.json({ error: 'Admin access required' }, 403)
+
+  const apiKey = (c.env as any).LIVEKIT_API_KEY
+  const apiSecret = (c.env as any).LIVEKIT_API_SECRET
+  const livekitUrl = (c.env as any).LIVEKIT_URL
+  if (!apiKey || !apiSecret || !livekitUrl) return c.json({ error: 'LiveKit not configured' }, 500)
+
+  const body = await c.req.json()
+  const {
+    name = 'RoofReporterAI Agent',
+    phone_number,                      // e.g. "+17809833335"
+    room_prefix = 'secretary-',
+    rule_type = 'individual',
+    krisp_enabled = true,
+    agent_config = {},                 // Agent metadata (voice, persona, directories, etc.)
+    allowed_addresses = ['0.0.0.0/0'], // IP allowlist
+  } = body
+
+  if (!phone_number) return c.json({ error: 'phone_number required (e.g. +17809833335)' }, 400)
+
+  try {
+    // Step 1: Create inbound SIP trunk
+    const trunkResult = await livekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST',
+      '/twirp/livekit.SIP/CreateSIPInboundTrunk', {
+        trunk: {
+          name: `${name} - Trunk`,
+          numbers: [phone_number],
+          krisp_enabled,
+          allowed_addresses,
+          metadata: JSON.stringify({
+            service: 'roofer_secretary',
+            deployed_via: 'api',
+            deployed_at: new Date().toISOString(),
+            ...agent_config,
+          }),
+        }
+      })
+
+    const trunkId = trunkResult?.sip_trunk_id || trunkResult?.trunk?.sip_trunk_id || ''
+    if (!trunkId) {
+      return c.json({ error: 'Failed to create inbound trunk', details: trunkResult }, 500)
+    }
+
+    // Step 2: Create dispatch rule linked to the trunk
+    let ruleObj: any = {}
+    let destinationRoom = ''
+    if (rule_type === 'individual') {
+      ruleObj = { dispatchRuleIndividual: { roomPrefix: room_prefix, pin: '' } }
+      destinationRoom = `${room_prefix}{unique-id}`
+    } else if (rule_type === 'direct') {
+      const roomName = body.room_name || `secretary-${phone_number.replace(/\D/g, '')}`
+      ruleObj = { dispatchRuleDirect: { roomName, pin: '' } }
+      destinationRoom = roomName
+    } else {
+      ruleObj = { dispatchRuleCallee: { roomPrefix: room_prefix, pin: '' } }
+      destinationRoom = `${room_prefix}{callee}`
+    }
+
+    const agentMetadata = JSON.stringify({
+      phone_number,
+      service: 'roofer_secretary',
+      agent_name: agent_config.agent_name || 'Secretary',
+      agent_voice: agent_config.agent_voice || 'alloy',
+      deployed_via: 'api',
+      deployed_at: new Date().toISOString(),
+      ...agent_config,
+    })
+
+    const dispatchResult = await livekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST',
+      '/twirp/livekit.SIP/CreateSIPDispatchRule', {
+        trunk_ids: [trunkId],
+        rule: ruleObj,
+        name: `${name} - Dispatch`,
+        metadata: agentMetadata,
+        krisp_enabled,
+      })
+
+    const dispatchId = dispatchResult?.sip_dispatch_rule_id || ''
+
+    // Step 3: Save to local DB
+    await c.env.DB.prepare(
+      `INSERT OR REPLACE INTO sip_trunks (trunk_id, trunk_type, name, phone_number, address, country_code, dispatch_rule_id, status, created_at)
+       VALUES (?, 'inbound', ?, ?, '', 'CA', ?, 'active', datetime('now'))`
+    ).bind(trunkId, `${name} - Trunk`, phone_number, dispatchId).run().catch(() => {})
+
+    await c.env.DB.prepare(
+      `INSERT OR REPLACE INTO sip_dispatch_rules (dispatch_rule_id, name, rule_type, trunk_ids, room_prefix, room_name, pin, metadata, status, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, '', ?, 'active', datetime('now'))`
+    ).bind(dispatchId, `${name} - Dispatch`, rule_type, JSON.stringify([trunkId]), room_prefix, destinationRoom, agentMetadata).run().catch(() => {})
+
+    console.log(`[SIP] Agent deployed: trunk=${trunkId}, dispatch=${dispatchId}, phone=${phone_number}`)
+
+    return c.json({
+      success: true,
+      deployment: {
+        sip_trunk_id: trunkId,
+        dispatch_rule_id: dispatchId,
+        name,
+        phone_number,
+        rule_type,
+        destination_room: destinationRoom,
+        inbound_routing: {
+          trunk_id: trunkId,
+          numbers: [phone_number],
+          allowed_addresses,
+          krisp_enabled,
+        },
+        agents: {
+          agent_name: agent_config.agent_name || 'Secretary',
+          agent_voice: agent_config.agent_voice || 'alloy',
+          metadata: agentMetadata,
+        },
+        created_at: new Date().toISOString(),
+      },
+      message: `Agent "${name}" deployed! Calls to ${phone_number} → ${destinationRoom}. Connect your LiveKit agent worker to handle rooms prefixed "${room_prefix}".`
+    })
+  } catch (err: any) {
+    console.error('[SIP] Deploy agent error:', err)
+    return c.json({ error: 'Failed to deploy agent', details: err.message }, 500)
+  }
+})

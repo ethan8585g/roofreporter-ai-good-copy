@@ -100,6 +100,14 @@ async function loadView(view) {
         const squareRes = await saFetch('/api/settings/square/status');
         if (squareRes) SA.data.square = await squareRes.json();
         break;
+      case 'livekit':
+        const [lkTrunksRes, lkRulesRes] = await Promise.all([
+          saFetch('/api/secretary/sip/trunks'),
+          saFetch('/api/secretary/sip/dispatch-rules'),
+        ]);
+        if (lkTrunksRes) SA.data.livekit_trunks = await lkTrunksRes.json();
+        if (lkRulesRes) SA.data.livekit_rules = await lkRulesRes.json();
+        break;
     }
   } catch (e) {
     console.error('Load error:', e);
@@ -192,6 +200,7 @@ function renderContent() {
     case 'analytics': root.innerHTML = renderAnalyticsView(); break;
     case 'ga4': root.innerHTML = renderGA4View(); break;
     case 'pricing': root.innerHTML = renderPricingView(); break;
+    case 'livekit': root.innerHTML = renderLiveKitView(); break;
     default: root.innerHTML = renderUsersView();
   }
 }
@@ -1986,3 +1995,425 @@ async function activatePackage(id) {
   }
 }
 window.activatePackage = activatePackage;
+
+// ============================================================
+// VIEW: LIVEKIT AGENTS — SIP Trunks, Dispatch Rules & Agent Deployment
+// ============================================================
+function renderLiveKitView() {
+  const trunksData = SA.data.livekit_trunks || {};
+  const rulesData = SA.data.livekit_rules || {};
+  const inboundTrunks = trunksData.inbound_trunks || [];
+  const outboundTrunks = trunksData.outbound_trunks || [];
+  const dispatchRules = rulesData.dispatch_rules || [];
+
+  return `<div class="slide-in space-y-6">
+    <!-- Header -->
+    <div class="flex items-center justify-between">
+      <div>
+        <h2 class="text-2xl font-black text-gray-900"><i class="fas fa-phone-alt mr-2 text-green-600"></i>LiveKit Agents</h2>
+        <p class="text-sm text-gray-500 mt-1">Manage SIP trunks, dispatch rules, and deploy voice agents</p>
+      </div>
+      <div class="flex gap-2">
+        <button onclick="lkShowDeployModal()" class="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-semibold hover:bg-green-700 transition-colors shadow-sm">
+          <i class="fas fa-rocket mr-1"></i>Deploy Agent
+        </button>
+        <button onclick="lkShowCreateRuleModal()" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors shadow-sm">
+          <i class="fas fa-plus mr-1"></i>New Dispatch Rule
+        </button>
+        <button onclick="loadView('livekit')" class="px-3 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm hover:bg-gray-200 transition-colors">
+          <i class="fas fa-sync-alt"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Stats Row -->
+    <div class="grid grid-cols-4 gap-4">
+      ${samc('Inbound Trunks', inboundTrunks.length, 'fa-phone-volume', 'green', 'Active SIP connections')}
+      ${samc('Outbound Trunks', outboundTrunks.length, 'fa-phone', 'blue', 'Outgoing call routes')}
+      ${samc('Dispatch Rules', dispatchRules.length, 'fa-random', 'purple', 'Call routing rules')}
+      ${samc('Active Agents', dispatchRules.filter(r => r.agents && (r.agents.service || r.agents.agent_name)).length, 'fa-robot', 'yellow', 'Deployed AI agents')}
+    </div>
+
+    <!-- Dispatch Rules Table -->
+    <div class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+      <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+        <h3 class="font-bold text-gray-900"><i class="fas fa-random mr-2 text-purple-500"></i>Dispatch Rules</h3>
+        <span class="text-xs text-gray-400">${dispatchRules.length} rule${dispatchRules.length !== 1 ? 's' : ''}</span>
+      </div>
+      ${dispatchRules.length === 0 ? `
+        <div class="px-6 py-12 text-center text-gray-400">
+          <i class="fas fa-random text-4xl mb-3 opacity-30"></i>
+          <p>No dispatch rules configured</p>
+          <p class="text-xs mt-1">Create a dispatch rule to route inbound calls to LiveKit rooms</p>
+        </div>
+      ` : `
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                <th class="px-4 py-3">Dispatch Rule ID</th>
+                <th class="px-4 py-3">Rule Name</th>
+                <th class="px-4 py-3">Inbound Routing</th>
+                <th class="px-4 py-3">Destination Room</th>
+                <th class="px-4 py-3">Agents</th>
+                <th class="px-4 py-3">Rule Type</th>
+                <th class="px-4 py-3">Created</th>
+                <th class="px-4 py-3 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-50">
+              ${dispatchRules.map(rule => {
+                const routing = (rule.inbound_routing || []).map(r =>
+                  '<span class="inline-flex items-center gap-1"><i class="fas fa-phone text-green-500 text-[10px]"></i>' +
+                  (r.numbers && r.numbers.length > 0 ? r.numbers.join(', ') : r.trunk_id) +
+                  '</span>'
+                ).join('<br>') || '<span class="text-gray-300">None</span>';
+
+                const agents = rule.agents || {};
+                let agentDisplay = '';
+                if (agents.agent_name) {
+                  agentDisplay = '<span class="inline-flex items-center gap-1 px-2 py-0.5 bg-yellow-50 text-yellow-700 rounded-full text-[11px] font-medium"><i class="fas fa-robot"></i> ' + agents.agent_name + '</span>';
+                } else if (agents.service) {
+                  agentDisplay = '<span class="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full text-[11px] font-medium"><i class="fas fa-cog"></i> ' + agents.service + '</span>';
+                } else if (agents.customer_id) {
+                  agentDisplay = '<span class="text-gray-500 text-xs">Customer #' + agents.customer_id + '</span>';
+                } else {
+                  agentDisplay = '<span class="text-gray-300 text-xs">—</span>';
+                }
+
+                const typeColors = {
+                  individual: 'bg-purple-100 text-purple-700',
+                  direct: 'bg-blue-100 text-blue-700',
+                  callee: 'bg-teal-100 text-teal-700',
+                  unknown: 'bg-gray-100 text-gray-500'
+                };
+                const typeClass = typeColors[rule.rule_type] || typeColors.unknown;
+
+                const createdStr = rule.created_at ? new Date(rule.created_at * 1000 || rule.created_at).toLocaleDateString('en-CA', { year: 'numeric', month: 'short', day: 'numeric' }) : '—';
+
+                return '<tr class="hover:bg-gray-50 transition-colors">' +
+                  '<td class="px-4 py-3"><code class="text-xs bg-gray-100 px-2 py-0.5 rounded font-mono">' + (rule.dispatch_rule_id || '—') + '</code></td>' +
+                  '<td class="px-4 py-3 font-medium text-gray-900">' + (rule.name || '(unnamed)') + '</td>' +
+                  '<td class="px-4 py-3 text-xs">' + routing + '</td>' +
+                  '<td class="px-4 py-3"><code class="text-xs text-purple-600 bg-purple-50 px-2 py-0.5 rounded">' + (rule.destination_room || '—') + '</code></td>' +
+                  '<td class="px-4 py-3">' + agentDisplay + '</td>' +
+                  '<td class="px-4 py-3"><span class="px-2 py-0.5 rounded-full text-[11px] font-semibold ' + typeClass + '">' + (rule.rule_type || 'unknown') + '</span></td>' +
+                  '<td class="px-4 py-3 text-xs text-gray-500">' + createdStr + '</td>' +
+                  '<td class="px-4 py-3 text-right"><button onclick="lkDeleteRule(\'' + rule.dispatch_rule_id + '\')" class="text-red-400 hover:text-red-600 text-xs transition-colors"><i class="fas fa-trash"></i></button></td>' +
+                '</tr>';
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+      `}
+    </div>
+
+    <!-- Inbound Trunks Table -->
+    <div class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+      <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+        <h3 class="font-bold text-gray-900"><i class="fas fa-phone-volume mr-2 text-green-500"></i>Inbound SIP Trunks</h3>
+        <span class="text-xs text-gray-400">${inboundTrunks.length} trunk${inboundTrunks.length !== 1 ? 's' : ''}</span>
+      </div>
+      ${inboundTrunks.length === 0 ? `
+        <div class="px-6 py-8 text-center text-gray-400">
+          <p class="text-sm">No inbound trunks configured</p>
+        </div>
+      ` : `
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                <th class="px-4 py-3">Trunk ID</th>
+                <th class="px-4 py-3">Name</th>
+                <th class="px-4 py-3">Phone Numbers</th>
+                <th class="px-4 py-3">Krisp</th>
+                <th class="px-4 py-3 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-50">
+              ${inboundTrunks.map(t => {
+                const tid = t.sip_trunk_id || t.trunk?.sip_trunk_id || '';
+                const name = t.name || t.trunk?.name || '(unnamed)';
+                const nums = (t.numbers || t.trunk?.numbers || []).join(', ') || '—';
+                const krisp = t.krisp_enabled ?? t.trunk?.krisp_enabled ?? false;
+                return '<tr class="hover:bg-gray-50">' +
+                  '<td class="px-4 py-3"><code class="text-xs bg-gray-100 px-2 py-0.5 rounded font-mono">' + tid + '</code></td>' +
+                  '<td class="px-4 py-3 font-medium">' + name + '</td>' +
+                  '<td class="px-4 py-3 text-xs">' + nums + '</td>' +
+                  '<td class="px-4 py-3">' + (krisp ? '<span class="text-green-600"><i class="fas fa-check-circle"></i></span>' : '<span class="text-gray-300">—</span>') + '</td>' +
+                  '<td class="px-4 py-3 text-right"><button onclick="lkDeleteTrunk(\'' + tid + '\')" class="text-red-400 hover:text-red-600 text-xs"><i class="fas fa-trash"></i></button></td>' +
+                '</tr>';
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+      `}
+    </div>
+
+    <!-- Deploy Agent Modal (hidden) -->
+    <div id="lk-deploy-modal" class="hidden fixed inset-0 z-50 bg-black/50 flex items-center justify-center">
+      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
+        <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+          <h3 class="font-bold text-gray-900"><i class="fas fa-rocket mr-2 text-green-500"></i>Deploy LiveKit Agent</h3>
+          <button onclick="lkCloseModals()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="p-6 space-y-4">
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1">Agent Name</label>
+            <input id="lk-deploy-name" type="text" value="RoofReporterAI Secretary" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-500" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1">Phone Number (E.164)</label>
+            <input id="lk-deploy-phone" type="text" placeholder="+17809833335" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-500" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1">Room Prefix</label>
+            <input id="lk-deploy-prefix" type="text" value="secretary-" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-500" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1">Rule Type</label>
+            <select id="lk-deploy-type" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-500">
+              <option value="individual">Individual (unique room per call)</option>
+              <option value="direct">Direct (fixed room name)</option>
+              <option value="callee">Callee (room by callee number)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1">Agent Voice</label>
+            <select id="lk-deploy-voice" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-500">
+              <option value="alloy">Alloy (neutral)</option>
+              <option value="echo">Echo (male)</option>
+              <option value="fable">Fable (expressive)</option>
+              <option value="onyx">Onyx (deep)</option>
+              <option value="nova">Nova (female)</option>
+              <option value="shimmer">Shimmer (warm)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1">Agent Persona / Notes (optional)</label>
+            <textarea id="lk-deploy-persona" rows="2" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-500" placeholder="e.g. Friendly roofing estimator assistant"></textarea>
+          </div>
+          <div class="flex items-center gap-2">
+            <input id="lk-deploy-krisp" type="checkbox" checked class="rounded border-gray-300 text-green-600 focus:ring-green-500" />
+            <label for="lk-deploy-krisp" class="text-sm text-gray-700">Enable Krisp noise cancellation</label>
+          </div>
+          <div id="lk-deploy-status" class="hidden text-sm"></div>
+          <button onclick="lkDeployAgent()" id="lk-deploy-btn" class="w-full bg-green-600 text-white py-2.5 rounded-lg font-semibold hover:bg-green-700 transition-colors">
+            <i class="fas fa-rocket mr-1"></i>Deploy Agent
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Create Rule Modal (hidden) -->
+    <div id="lk-rule-modal" class="hidden fixed inset-0 z-50 bg-black/50 flex items-center justify-center">
+      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
+        <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+          <h3 class="font-bold text-gray-900"><i class="fas fa-plus mr-2 text-blue-500"></i>Create Dispatch Rule</h3>
+          <button onclick="lkCloseModals()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="p-6 space-y-4">
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1">Rule Name</label>
+            <input id="lk-rule-name" type="text" value="roofreporterai-dispatch" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1">Rule Type</label>
+            <select id="lk-rule-type" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500">
+              <option value="individual">Individual (unique room per call)</option>
+              <option value="direct">Direct (fixed room name)</option>
+              <option value="callee">Callee (room by callee number)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1">Room Prefix / Room Name</label>
+            <input id="lk-rule-room" type="text" value="secretary-" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500" />
+            <p class="text-xs text-gray-400 mt-1">For "individual" or "callee": prefix. For "direct": fixed room name.</p>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1">Trunk IDs (comma-separated, optional)</label>
+            <input id="lk-rule-trunks" type="text" placeholder="ST_xxxx, ST_yyyy" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500" />
+            <p class="text-xs text-gray-400 mt-1">Leave empty to match all trunks, or specify specific trunk IDs</p>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1">PIN (optional)</label>
+            <input id="lk-rule-pin" type="text" placeholder="" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1">Metadata JSON (optional)</label>
+            <textarea id="lk-rule-metadata" rows="2" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 font-mono" placeholder='{"service":"roofer_secretary"}'></textarea>
+          </div>
+          <div id="lk-rule-status" class="hidden text-sm"></div>
+          <button onclick="lkCreateRule()" id="lk-rule-btn" class="w-full bg-blue-600 text-white py-2.5 rounded-lg font-semibold hover:bg-blue-700 transition-colors">
+            <i class="fas fa-plus mr-1"></i>Create Dispatch Rule
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+// LiveKit Modal Helpers
+function lkShowDeployModal() {
+  document.getElementById('lk-deploy-modal').classList.remove('hidden');
+}
+function lkShowCreateRuleModal() {
+  document.getElementById('lk-rule-modal').classList.remove('hidden');
+}
+function lkCloseModals() {
+  var m1 = document.getElementById('lk-deploy-modal');
+  var m2 = document.getElementById('lk-rule-modal');
+  if (m1) m1.classList.add('hidden');
+  if (m2) m2.classList.add('hidden');
+}
+window.lkShowDeployModal = lkShowDeployModal;
+window.lkShowCreateRuleModal = lkShowCreateRuleModal;
+window.lkCloseModals = lkCloseModals;
+
+// Deploy Agent
+async function lkDeployAgent() {
+  var btn = document.getElementById('lk-deploy-btn');
+  var statusEl = document.getElementById('lk-deploy-status');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Deploying...';
+  statusEl.classList.remove('hidden');
+  statusEl.className = 'text-sm text-blue-600';
+  statusEl.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Creating SIP trunk and dispatch rule...';
+
+  var payload = {
+    name: document.getElementById('lk-deploy-name').value,
+    phone_number: document.getElementById('lk-deploy-phone').value,
+    room_prefix: document.getElementById('lk-deploy-prefix').value,
+    rule_type: document.getElementById('lk-deploy-type').value,
+    krisp_enabled: document.getElementById('lk-deploy-krisp').checked,
+    agent_config: {
+      agent_name: document.getElementById('lk-deploy-name').value,
+      agent_voice: document.getElementById('lk-deploy-voice').value,
+      persona: document.getElementById('lk-deploy-persona').value,
+    }
+  };
+
+  try {
+    var res = await fetch('/api/secretary/sip/deploy-agent', {
+      method: 'POST',
+      headers: Object.assign({'Content-Type': 'application/json'}, saHeaders()),
+      body: JSON.stringify(payload)
+    });
+    var data = await res.json();
+    if (data.success) {
+      statusEl.className = 'text-sm text-green-600 bg-green-50 p-3 rounded-lg';
+      statusEl.innerHTML = '<i class="fas fa-check-circle mr-1"></i><strong>Deployed!</strong><br>' +
+        '<span class="text-xs">Trunk: <code>' + data.deployment.sip_trunk_id + '</code></span><br>' +
+        '<span class="text-xs">Dispatch: <code>' + data.deployment.dispatch_rule_id + '</code></span><br>' +
+        '<span class="text-xs">' + data.message + '</span>';
+      btn.innerHTML = '<i class="fas fa-check mr-1"></i>Deployed!';
+      setTimeout(function() { lkCloseModals(); loadView('livekit'); }, 2500);
+    } else {
+      statusEl.className = 'text-sm text-red-600 bg-red-50 p-3 rounded-lg';
+      statusEl.innerHTML = '<i class="fas fa-exclamation-circle mr-1"></i>' + (data.error || 'Unknown error');
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-rocket mr-1"></i>Deploy Agent';
+    }
+  } catch (err) {
+    statusEl.className = 'text-sm text-red-600 bg-red-50 p-3 rounded-lg';
+    statusEl.innerHTML = '<i class="fas fa-exclamation-circle mr-1"></i>Network error: ' + err.message;
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-rocket mr-1"></i>Deploy Agent';
+  }
+}
+window.lkDeployAgent = lkDeployAgent;
+
+// Create Dispatch Rule
+async function lkCreateRule() {
+  var btn = document.getElementById('lk-rule-btn');
+  var statusEl = document.getElementById('lk-rule-status');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Creating...';
+  statusEl.classList.remove('hidden');
+  statusEl.className = 'text-sm text-blue-600';
+  statusEl.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Creating dispatch rule...';
+
+  var ruleType = document.getElementById('lk-rule-type').value;
+  var roomVal = document.getElementById('lk-rule-room').value;
+  var trunksStr = document.getElementById('lk-rule-trunks').value.trim();
+  var trunkIds = trunksStr ? trunksStr.split(',').map(function(s) { return s.trim(); }).filter(Boolean) : [];
+
+  var payload = {
+    name: document.getElementById('lk-rule-name').value,
+    rule_type: ruleType,
+    trunk_ids: trunkIds,
+    pin: document.getElementById('lk-rule-pin').value,
+    metadata: document.getElementById('lk-rule-metadata').value,
+  };
+  if (ruleType === 'direct') {
+    payload.room_name = roomVal;
+  } else {
+    payload.room_prefix = roomVal;
+  }
+
+  try {
+    var res = await fetch('/api/secretary/sip/dispatch-rule', {
+      method: 'POST',
+      headers: Object.assign({'Content-Type': 'application/json'}, saHeaders()),
+      body: JSON.stringify(payload)
+    });
+    var data = await res.json();
+    if (data.success) {
+      statusEl.className = 'text-sm text-green-600 bg-green-50 p-3 rounded-lg';
+      statusEl.innerHTML = '<i class="fas fa-check-circle mr-1"></i><strong>Created!</strong> ID: <code>' + data.dispatch_rule_id + '</code>';
+      btn.innerHTML = '<i class="fas fa-check mr-1"></i>Created!';
+      setTimeout(function() { lkCloseModals(); loadView('livekit'); }, 2000);
+    } else {
+      statusEl.className = 'text-sm text-red-600 bg-red-50 p-3 rounded-lg';
+      statusEl.innerHTML = '<i class="fas fa-exclamation-circle mr-1"></i>' + (data.error || 'Unknown error');
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-plus mr-1"></i>Create Dispatch Rule';
+    }
+  } catch (err) {
+    statusEl.className = 'text-sm text-red-600 bg-red-50 p-3 rounded-lg';
+    statusEl.innerHTML = '<i class="fas fa-exclamation-circle mr-1"></i>Network error: ' + err.message;
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-plus mr-1"></i>Create Dispatch Rule';
+  }
+}
+window.lkCreateRule = lkCreateRule;
+
+// Delete Dispatch Rule
+async function lkDeleteRule(ruleId) {
+  if (!confirm('Delete dispatch rule ' + ruleId + '? This will stop routing calls for this rule.')) return;
+  try {
+    var res = await fetch('/api/secretary/sip/dispatch-rule/' + ruleId, {
+      method: 'DELETE',
+      headers: saHeaders()
+    });
+    var data = await res.json();
+    if (data.success) {
+      loadView('livekit');
+    } else {
+      alert('Error: ' + (data.error || 'Failed to delete'));
+    }
+  } catch (err) {
+    alert('Network error: ' + err.message);
+  }
+}
+window.lkDeleteRule = lkDeleteRule;
+
+// Delete Trunk
+async function lkDeleteTrunk(trunkId) {
+  if (!confirm('Delete SIP trunk ' + trunkId + '? This will disconnect the phone number.')) return;
+  try {
+    var res = await fetch('/api/secretary/sip/trunk/' + trunkId, {
+      method: 'DELETE',
+      headers: saHeaders()
+    });
+    var data = await res.json();
+    if (data.success) {
+      loadView('livekit');
+    } else {
+      alert('Error: ' + (data.error || 'Failed to delete'));
+    }
+  } catch (err) {
+    alert('Network error: ' + err.message);
+  }
+}
+window.lkDeleteTrunk = lkDeleteTrunk;
