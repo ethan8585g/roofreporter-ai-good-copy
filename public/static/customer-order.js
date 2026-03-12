@@ -34,6 +34,10 @@ const orderState = {
   // Pricing
   pricePerBundle: null,
   roofTraceJson: null,
+  // House size for cross-validation
+  houseSqft: null, // Known house living area in sq ft
+  liveFootprintSqft: null, // Computed live from eaves trace
+  livePerimeterFt: null, // Computed live from eaves trace
   // Measurement engine results (calculated before order submission)
   measurementResult: null,
   measurementLoading: false,
@@ -461,6 +465,27 @@ function renderPinStep(root, progressBar) {
             <i class="fas fa-location-arrow mr-1"></i>Go to Coords
           </button>
 
+          <!-- Known House Size (optional cross-validation) -->
+          <div class="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl border border-indigo-200 p-4">
+            <h4 class="font-semibold text-gray-700 mb-1 flex items-center text-sm">
+              <i class="fas fa-home text-indigo-500 mr-2"></i>Known House Size (Optional)
+            </h4>
+            <p class="text-xs text-gray-500 mb-2">Enter your house living area so we can cross-check the roof trace. The roof footprint is typically 10-15% larger than house sq ft (eave overhangs).</p>
+            <div class="flex items-center gap-3">
+              <div class="relative flex-1">
+                <input type="number" step="1" min="0" max="99999" id="houseSqftInput"
+                  value="${orderState.houseSqft || ''}"
+                  oninput="orderState.houseSqft = parseInt(this.value) || null;"
+                  class="w-full px-4 py-2.5 border border-indigo-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm font-medium"
+                  placeholder="e.g. 1750" />
+                <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 font-medium">sq ft</span>
+              </div>
+              <div class="text-xs text-indigo-600 font-medium whitespace-nowrap">
+                ${orderState.houseSqft ? `Expected roof: ~${Math.round(orderState.houseSqft * 1.12)}–${Math.round(orderState.houseSqft * 1.18)} sq ft` : ''}
+              </div>
+            </div>
+          </div>
+
           <div id="orderMsg" class="hidden p-4 rounded-xl text-sm"></div>
 
           <button onclick="goToTrace()" id="pinNextBtn"
@@ -487,7 +512,7 @@ function renderPinStep(root, progressBar) {
 // ============================================================
 function renderTraceStep(root, progressBar) {
   const modeInfo = {
-    eaves:  { color: '#22c55e', icon: 'fa-draw-polygon', label: 'Eaves Outline', desc: 'Click around the full eave perimeter. Click first point to close.' },
+    eaves:  { color: '#22c55e', icon: 'fa-draw-polygon', label: 'Eaves Outline', desc: 'Click each corner of the roof drip edge (outermost edge including overhangs). Click first point to close.' },
     ridge:  { color: '#3b82f6', icon: 'fa-grip-lines', label: 'Ridges', desc: 'Click start and end of each ridge line.' },
     hip:    { color: '#f59e0b', icon: 'fa-slash', label: 'Hips', desc: 'Click start and end of each hip line.' },
     valley: { color: '#ef4444', icon: 'fa-angle-down', label: 'Valleys', desc: 'Click start and end of each valley.' }
@@ -519,13 +544,13 @@ function renderTraceStep(root, progressBar) {
             <h4 class="text-xs font-bold text-gray-500 uppercase tracking-wide mb-3">Drawing Mode</h4>
             <div class="space-y-2">
               ${Object.entries(modeInfo).map(([key, info]) => `
-                <button onclick="setTraceMode('${key}')"
+                <button onclick="setTraceMode('${key}')" data-trace-mode="${key}"
                   class="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all
                     ${orderState.traceMode === key ? 'bg-gray-800 text-white shadow-md' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'}">
                   <div class="w-3 h-3 rounded-full" style="background:${info.color}"></div>
                   <i class="fas ${info.icon} text-xs"></i>
                   <span>${info.label}</span>
-                  <span class="ml-auto text-xs opacity-70">
+                  <span class="ml-auto text-xs opacity-70" data-trace-count="${key}">
                     ${key === 'eaves' ? eavesCount + ' pts' : key === 'ridge' ? ridgeCount : key === 'hip' ? hipCount : valleyCount}
                   </span>
                 </button>
@@ -536,11 +561,17 @@ function renderTraceStep(root, progressBar) {
           <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
             <h4 class="text-xs font-bold text-gray-500 uppercase tracking-wide mb-3">Summary</h4>
             <div class="space-y-2 text-sm">
-              <div class="flex justify-between"><span class="text-gray-500">Eaves</span><span class="font-semibold ${eavesClosed ? 'text-green-600' : 'text-gray-400'}">${eavesClosed ? 'Closed' : eavesCount + ' pts'}</span></div>
-              <div class="flex justify-between"><span class="text-gray-500">Ridges</span><span class="font-semibold">${ridgeCount}</span></div>
-              <div class="flex justify-between"><span class="text-gray-500">Hips</span><span class="font-semibold">${hipCount}</span></div>
-              <div class="flex justify-between"><span class="text-gray-500">Valleys</span><span class="font-semibold">${valleyCount}</span></div>
+              <div class="flex justify-between"><span class="text-gray-500">Eaves</span><span id="summary-eaves" class="font-semibold ${eavesClosed ? 'text-green-600' : 'text-gray-400'}">${eavesClosed ? 'Closed' : eavesCount + ' pts'}</span></div>
+              <div class="flex justify-between"><span class="text-gray-500">Ridges</span><span id="summary-ridges" class="font-semibold">${ridgeCount}</span></div>
+              <div class="flex justify-between"><span class="text-gray-500">Hips</span><span id="summary-hips" class="font-semibold">${hipCount}</span></div>
+              <div class="flex justify-between"><span class="text-gray-500">Valleys</span><span id="summary-valleys" class="font-semibold">${valleyCount}</span></div>
             </div>
+          </div>
+
+          <!-- Live Metrics Panel — real-time area/perimeter from eaves trace -->
+          <div id="liveMetricsPanel" class="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-xl shadow-sm border border-emerald-200 p-4">
+            <h4 class="text-xs font-bold text-emerald-700 uppercase tracking-wide mb-2"><i class="fas fa-ruler-combined mr-1"></i>Live Measurements</h4>
+            <p class="text-xs text-gray-400 text-center italic">Place 3+ eave points to see live measurements</p>
           </div>
 
           <div class="space-y-2">
@@ -553,10 +584,10 @@ function renderTraceStep(root, progressBar) {
         <div class="lg:col-span-3 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
           <div class="bg-gray-800 px-4 py-2 flex items-center justify-between">
             <div class="flex items-center gap-2">
-              <div class="w-3 h-3 rounded-full" style="background:${m.color}"></div>
-              <span class="text-xs font-medium text-gray-300 uppercase">${m.label} Mode</span>
+              <div id="traceModeDot" class="w-3 h-3 rounded-full" style="background:${m.color}"></div>
+              <span id="traceModeLabel" class="text-xs font-medium text-gray-300 uppercase">${m.label} Mode</span>
             </div>
-            <span class="text-xs text-gray-400">${m.desc}</span>
+            <span id="traceModeDesc" class="text-xs text-gray-400">${m.desc}</span>
           </div>
           <div id="traceMap" style="height: 480px; cursor: crosshair; background: #1a1a2e;"></div>
         </div>
@@ -567,6 +598,7 @@ function renderTraceStep(root, progressBar) {
         <div class="flex items-center gap-4 text-xs text-gray-500">
           <span><i class="fas fa-mouse-pointer mr-1"></i>Click = Add point</span>
           <span><i class="fas fa-draw-polygon mr-1" style="color:#22c55e"></i>Click 1st point to close eaves</span>
+          <span><i class="fas fa-expand-arrows-alt mr-1 text-indigo-400"></i>Trace the outermost roof edge (drip line), not the walls</span>
         </div>
         <div class="flex items-center gap-3">
           <button onclick="skipTrace()" class="px-4 py-2 text-gray-500 hover:text-gray-700 text-sm font-medium">
@@ -764,6 +796,29 @@ function renderReviewStep(root, progressBar) {
                 </div>
               </div>
 
+              <!-- Cross-Validation against House Size -->
+              ${mResult.cross_validation ? `
+              <div class="rounded-lg border p-3 ${mResult.cross_validation.status === 'ok' ? 'bg-green-50 border-green-200' : mResult.cross_validation.status === 'large' ? 'bg-amber-50 border-amber-300' : 'bg-red-50 border-red-300'}">
+                <div class="flex items-center gap-2 mb-1">
+                  <i class="fas ${mResult.cross_validation.status === 'ok' ? 'fa-check-circle text-green-600' : 'fa-exclamation-triangle text-amber-600'}"></i>
+                  <h5 class="text-xs font-bold uppercase tracking-wide ${mResult.cross_validation.status === 'ok' ? 'text-green-700' : 'text-amber-700'}">House Size Cross-Check</h5>
+                </div>
+                <p class="text-xs ${mResult.cross_validation.status === 'ok' ? 'text-green-800' : 'text-amber-800'}">${mResult.cross_validation.msg}</p>
+                <div class="flex gap-4 mt-2 text-xs text-gray-600">
+                  <span>House: <strong>${mResult.cross_validation.house_sqft.toLocaleString()} sq ft</strong></span>
+                  <span>Traced Footprint: <strong>${mResult.cross_validation.footprint.toLocaleString()} sq ft</strong></span>
+                  <span>Ratio: <strong>${mResult.cross_validation.ratio}x</strong></span>
+                </div>
+              </div>
+              ` : orderState.houseSqft ? `
+              <div class="bg-blue-50 rounded-lg border border-blue-200 p-3">
+                <div class="flex items-center gap-2">
+                  <i class="fas fa-home text-blue-500"></i>
+                  <span class="text-xs text-blue-700">House Size: <strong>${orderState.houseSqft.toLocaleString()} sq ft</strong> — Traced Footprint: <strong>${Math.round(m.projected_footprint_sqft || 0).toLocaleString()} sq ft</strong></span>
+                </div>
+              </div>
+              ` : ''}
+
               <!-- Advisory Notes -->
               ${notes.length > 0 ? `
               <div class="bg-blue-50 rounded-lg border border-blue-200 p-3">
@@ -862,7 +917,7 @@ function initTraceMap() {
 
   orderState.traceMap = new google.maps.Map(mapDiv, {
     center,
-    zoom: 20,
+    zoom: 21,
     mapTypeId: 'satellite',
     tilt: 0,
     fullscreenControl: true,
@@ -961,6 +1016,11 @@ function updateEavesFromPolygon() {
   for (let i = 0; i < path.getLength(); i++) {
     const pt = path.getAt(i);
     orderState.traceEavesPoints.push({ lat: pt.lat(), lng: pt.lng() });
+  }
+  // Recompute live metrics when polygon vertices are dragged
+  if (orderState.traceEavesPoints.length >= 3) {
+    computeLiveTraceMetrics(orderState.traceEavesPoints);
+    updateTraceUI();
   }
 }
 
@@ -1069,8 +1129,111 @@ function clearAllTraces() {
 }
 
 function updateTraceUI() {
-  // Re-render the whole trace step (map will re-init)
-  renderOrderPage();
+  // DO NOT re-render the whole page — that destroys the trace map!
+  // Instead, surgically update only the sidebar counters and button states.
+  const eavesCount = orderState.traceEavesPoints.length;
+  const ridgeCount = orderState.traceRidgeLines.length;
+  const hipCount = orderState.traceHipLines.length;
+  const valleyCount = orderState.traceValleyLines.length;
+  const eavesClosed = eavesCount >= 3 && orderState.traceEavesPolygon;
+
+  // ── Live area/perimeter computation from eaves points ──
+  if (eavesCount >= 3) {
+    computeLiveTraceMetrics(orderState.traceEavesPoints);
+  } else {
+    orderState.liveFootprintSqft = null;
+    orderState.livePerimeterFt = null;
+  }
+
+  // Update mode button counts
+  const modeCountMap = { eaves: eavesCount + ' pts', ridge: ridgeCount, hip: hipCount, valley: valleyCount };
+  document.querySelectorAll('[data-trace-count]').forEach(el => {
+    const key = el.getAttribute('data-trace-count');
+    if (modeCountMap[key] !== undefined) el.textContent = modeCountMap[key];
+  });
+
+  // Update summary panel
+  const summaryMap = { 'summary-eaves': eavesClosed ? 'Closed' : eavesCount + ' pts', 'summary-ridges': ridgeCount, 'summary-hips': hipCount, 'summary-valleys': valleyCount };
+  Object.entries(summaryMap).forEach(([id, val]) => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.textContent = val;
+      if (id === 'summary-eaves') el.className = 'font-semibold ' + (eavesClosed ? 'text-green-600' : 'text-gray-400');
+    }
+  });
+
+  // ── Update live metrics panel ──
+  const metricsPanel = document.getElementById('liveMetricsPanel');
+  if (metricsPanel) {
+    if (orderState.liveFootprintSqft && orderState.liveFootprintSqft > 0) {
+      const cv = getCrossValidation();
+      const cvHtml = cv ? (
+        cv.status === 'ok'
+          ? `<div class="mt-2 px-2 py-1.5 bg-green-100 border border-green-300 rounded-lg text-xs text-green-800"><i class="fas fa-check-circle mr-1"></i>${cv.msg}</div>`
+          : cv.status === 'large'
+            ? `<div class="mt-2 px-2 py-1.5 bg-amber-100 border border-amber-300 rounded-lg text-xs text-amber-800"><i class="fas fa-exclamation-triangle mr-1"></i>${cv.msg}</div>`
+            : `<div class="mt-2 px-2 py-1.5 bg-red-100 border border-red-300 rounded-lg text-xs text-red-800"><i class="fas fa-exclamation-triangle mr-1"></i>${cv.msg}</div>`
+      ) : '';
+
+      metricsPanel.innerHTML = `
+        <div class="space-y-2">
+          <div class="flex justify-between items-center">
+            <span class="text-gray-500 text-xs"><i class="fas fa-vector-square mr-1"></i>Footprint</span>
+            <span class="font-bold text-sm text-emerald-700">${orderState.liveFootprintSqft.toLocaleString()} sq ft</span>
+          </div>
+          <div class="flex justify-between items-center">
+            <span class="text-gray-500 text-xs"><i class="fas fa-ruler mr-1"></i>Perimeter</span>
+            <span class="font-bold text-sm text-gray-800">${orderState.livePerimeterFt.toLocaleString()} ft</span>
+          </div>
+          <div class="flex justify-between items-center">
+            <span class="text-gray-500 text-xs"><i class="fas fa-th mr-1"></i>Est. Squares</span>
+            <span class="font-bold text-sm text-blue-700">${(orderState.liveFootprintSqft / 100).toFixed(1)}</span>
+          </div>
+          ${cvHtml}
+        </div>
+      `;
+      metricsPanel.classList.remove('hidden');
+    } else {
+      metricsPanel.innerHTML = '<p class="text-xs text-gray-400 text-center italic">Place 3+ eave points to see live measurements</p>';
+      metricsPanel.classList.remove('hidden');
+    }
+  }
+
+  // Update mode bar text
+  const modeInfo = {
+    eaves:  { color: '#22c55e', label: 'Eaves Outline', desc: 'Click each corner of the roof drip edge (outermost edge including overhangs). Click first point to close.' },
+    ridge:  { color: '#3b82f6', label: 'Ridges', desc: 'Click start and end of each ridge line.' },
+    hip:    { color: '#f59e0b', label: 'Hips', desc: 'Click start and end of each hip line.' },
+    valley: { color: '#ef4444', label: 'Valleys', desc: 'Click start and end of each valley.' }
+  };
+  const mi = modeInfo[orderState.traceMode];
+  const modeLabel = document.getElementById('traceModeLabel');
+  const modeDesc = document.getElementById('traceModeDesc');
+  const modeDot = document.getElementById('traceModeDot');
+  if (modeLabel && mi) modeLabel.textContent = mi.label + ' Mode';
+  if (modeDesc && mi) modeDesc.textContent = mi.desc;
+  if (modeDot && mi) modeDot.style.background = mi.color;
+
+  // Update mode buttons active state
+  document.querySelectorAll('[data-trace-mode]').forEach(btn => {
+    const key = btn.getAttribute('data-trace-mode');
+    if (key === orderState.traceMode) {
+      btn.className = btn.className.replace(/bg-gray-50 text-gray-600 hover:bg-gray-100/g, '').replace(/bg-gray-800 text-white shadow-md/g, '') + ' bg-gray-800 text-white shadow-md';
+    } else {
+      btn.className = btn.className.replace(/bg-gray-800 text-white shadow-md/g, '').replace(/bg-gray-50 text-gray-600 hover:bg-gray-100/g, '') + ' bg-gray-50 text-gray-600 hover:bg-gray-100';
+    }
+  });
+
+  // Update confirm button
+  const nextBtn = document.getElementById('traceNextBtn');
+  if (nextBtn) {
+    nextBtn.disabled = !eavesClosed;
+    if (eavesClosed) {
+      nextBtn.className = nextBtn.className.replace('bg-gray-200 text-gray-400 cursor-not-allowed', 'bg-brand-600 hover:bg-brand-700 text-white');
+    } else {
+      nextBtn.className = nextBtn.className.replace('bg-brand-600 hover:bg-brand-700 text-white', 'bg-gray-200 text-gray-400 cursor-not-allowed');
+    }
+  }
 }
 
 function getDistanceM(a, b) {
@@ -1081,6 +1244,77 @@ function getDistanceM(a, b) {
   const lat2 = b.lat * Math.PI / 180;
   const x = Math.sin(dLat/2)**2 + Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLng/2)**2;
   return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1-x));
+}
+
+// ============================================================
+// LIVE AREA & PERIMETER CALCULATION (client-side Shoelace)
+// Computes footprint area and perimeter from eaves lat/lng in real-time.
+// Uses WGS84 → local Cartesian projection (same as server engine).
+// ============================================================
+function computeLiveTraceMetrics(pts) {
+  if (!pts || pts.length < 3) return { areaFt2: 0, perimeterFt: 0 };
+
+  const DEG2RAD = Math.PI / 180;
+  const EARTH_R = 6371000; // metres
+  const M2_TO_FT2 = 10.7639;
+  const M_TO_FT = 3.28084;
+
+  // Centroid for projection origin
+  const cLat = pts.reduce((s, p) => s + p.lat, 0) / pts.length;
+  const cLng = pts.reduce((s, p) => s + p.lng, 0) / pts.length;
+  const cosLat = Math.cos(cLat * DEG2RAD);
+  const mPerDegLat = DEG2RAD * EARTH_R;
+  const mPerDegLng = DEG2RAD * EARTH_R * cosLat;
+
+  // Project to local XY metres
+  const xy = pts.map(p => ({
+    x: (p.lng - cLng) * mPerDegLng,
+    y: (p.lat - cLat) * mPerDegLat
+  }));
+
+  // Shoelace area (m²)
+  let area = 0;
+  for (let i = 0; i < xy.length; i++) {
+    const j = (i + 1) % xy.length;
+    area += xy[i].x * xy[j].y;
+    area -= xy[j].x * xy[i].y;
+  }
+  area = Math.abs(area) / 2;
+
+  // Perimeter (m)
+  let perim = 0;
+  for (let i = 0; i < xy.length; i++) {
+    const j = (i + 1) % xy.length;
+    perim += Math.sqrt((xy[j].x - xy[i].x)**2 + (xy[j].y - xy[i].y)**2);
+  }
+
+  const areaFt2 = area * M2_TO_FT2;
+  const perimeterFt = perim * M_TO_FT;
+
+  // Store in orderState for cross-validation display
+  orderState.liveFootprintSqft = Math.round(areaFt2);
+  orderState.livePerimeterFt = Math.round(perimeterFt);
+
+  return { areaFt2: Math.round(areaFt2), perimeterFt: Math.round(perimeterFt) };
+}
+
+// Cross-validation: check traced area vs. known house size
+function getCrossValidation() {
+  if (!orderState.houseSqft || !orderState.liveFootprintSqft) return null;
+  const house = orderState.houseSqft;
+  const traced = orderState.liveFootprintSqft;
+  // Expected roof footprint = house sq ft + 10-15% for eave overhangs
+  const expectedMin = house * 1.05; // tight, minimal overhangs
+  const expectedMax = house * 1.25; // generous overhangs, covered porch
+  const ratio = traced / house;
+
+  if (traced < expectedMin) {
+    return { status: 'small', ratio, msg: `Traced footprint (${traced.toLocaleString()} sq ft) seems small for a ${house.toLocaleString()} sq ft house. Expected ~${Math.round(expectedMin).toLocaleString()}-${Math.round(expectedMax).toLocaleString()} sq ft with overhangs. Check that you traced the EAVE edges (roof drip edge), not the wall line.` };
+  }
+  if (traced > expectedMax) {
+    return { status: 'large', ratio, msg: `Traced footprint (${traced.toLocaleString()} sq ft) seems large for a ${house.toLocaleString()} sq ft house. Expected ~${Math.round(expectedMin).toLocaleString()}-${Math.round(expectedMax).toLocaleString()} sq ft. Make sure you traced only the ROOF edges, not the yard or driveway.` };
+  }
+  return { status: 'ok', ratio, msg: `Traced footprint (${traced.toLocaleString()} sq ft) matches expected range for a ${house.toLocaleString()} sq ft house.` };
 }
 
 // ============================================================
@@ -1136,7 +1370,8 @@ async function confirmTrace() {
       body: JSON.stringify({
         trace: orderState.roofTraceJson,
         address: orderState.address || `${orderState.lat}, ${orderState.lng}`,
-        default_pitch: 5.0
+        default_pitch: 5.0,
+        house_sqft: orderState.houseSqft || null
       })
     });
     const data = await res.json();
@@ -1197,6 +1432,7 @@ function buildOrderPayload() {
     longitude: parseFloat(orderState.lng),
     roof_trace_json: orderState.roofTraceJson ? JSON.stringify(orderState.roofTraceJson) : null,
     price_per_bundle: orderState.pricePerBundle || null,
+    house_sqft: orderState.houseSqft || null,
   };
   // Attach pre-calculated measurement data so the report engine can use it
   if (orderState.measurementResult) {
@@ -1241,7 +1477,8 @@ async function retryMeasurement() {
       body: JSON.stringify({
         trace: orderState.roofTraceJson,
         address: orderState.address || `${orderState.lat}, ${orderState.lng}`,
-        default_pitch: 5.0
+        default_pitch: 5.0,
+        house_sqft: orderState.houseSqft || null
       })
     });
     const data = await res.json();
