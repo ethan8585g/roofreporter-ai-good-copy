@@ -961,9 +961,7 @@ function getMainPageHTML(mapsApiKey: string) {
     <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
       <div class="flex items-center space-x-3">
         <a href="/" class="flex items-center space-x-3 hover:opacity-90 transition-opacity">
-          <div class="w-10 h-10 bg-accent-500 rounded-lg flex items-center justify-center">
-            <i class="fas fa-home text-white text-lg"></i>
-          </div>
+          <img src="/static/logo.png" alt="RoofReporterAI" class="w-10 h-10 rounded-lg object-cover">
           <div>
             <h1 class="text-xl font-bold">Order a Report</h1>
             <p class="text-brand-200 text-xs">RoofReporterAI</p>
@@ -1229,9 +1227,7 @@ function getOrderConfirmationHTML() {
   <header class="bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
       <div class="flex items-center space-x-3">
-        <div class="w-10 h-10 bg-accent-500 rounded-lg flex items-center justify-center">
-          <i class="fas fa-home text-white text-lg"></i>
-        </div>
+        <img src="/static/logo.png" alt="RoofReporterAI" class="w-10 h-10 rounded-lg object-cover">
         <div>
           <h1 class="text-xl font-bold">Order Confirmation</h1>
           <p class="text-brand-200 text-xs">Powered by RoofReporterAI</p>
@@ -1262,9 +1258,7 @@ function getLoginPageHTML() {
     <!-- Logo -->
     <div class="text-center mb-8">
       <a href="/" class="inline-flex items-center gap-3">
-        <div class="w-12 h-12 bg-red-600 rounded-xl flex items-center justify-center shadow-lg shadow-red-500/30">
-          <i class="fas fa-shield-alt text-white text-xl"></i>
-        </div>
+        <img src="/static/logo.png" alt="RoofReporterAI" class="w-12 h-12 rounded-xl object-cover shadow-lg">
         <div class="text-left">
           <span class="text-gray-800 font-bold text-2xl block">RoofReporterAI</span>
           <span class="text-gray-500 text-xs">Admin Access - Authorized Personnel Only</span>
@@ -1406,9 +1400,7 @@ function getLandingPageHTML() {
   <nav id="landing-nav" class="landing-nav fixed top-0 left-0 right-0 z-50">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
       <a href="/" class="flex items-center gap-3">
-        <div class="w-9 h-9 bg-gradient-to-br from-cyan-500 to-blue-500 rounded-lg flex items-center justify-center shadow-lg">
-          <i class="fas fa-home text-white text-sm"></i>
-        </div>
+        <img src="/static/logo.png" alt="RoofReporterAI" class="w-9 h-9 rounded-lg object-cover shadow-lg">
         <div class="leading-tight">
           <span class="text-white font-bold text-lg tracking-tight">RoofReporterAI</span>
           <span class="hidden sm:block text-gray-400 text-[10px] -mt-0.5">Measurement Reports & Business CRM</span>
@@ -1460,9 +1452,7 @@ function getLandingPageHTML() {
       <div class="grid md:grid-cols-4 gap-8">
         <div>
           <div class="flex items-center gap-3 mb-4">
-            <div class="w-9 h-9 bg-gradient-to-br from-cyan-500 to-blue-500 rounded-lg flex items-center justify-center">
-              <i class="fas fa-home text-white text-sm"></i>
-            </div>
+            <img src="/static/logo.png" alt="RoofReporterAI" class="w-9 h-9 rounded-lg object-cover">
             <span class="text-white font-bold text-lg tracking-tight">RoofReporterAI</span>
           </div>
           <p class="text-sm leading-relaxed text-gray-500">Professional AI-powered roof measurement reports, CRM, and business management for roofing companies across Canada.</p>
@@ -1538,9 +1528,7 @@ function getSettingsPageHTML() {
   <header class="bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
       <div class="flex items-center space-x-3">
-        <div class="w-10 h-10 bg-accent-500 rounded-lg flex items-center justify-center">
-          <i class="fas fa-cog text-white text-lg"></i>
-        </div>
+        <img src="/static/logo.png" alt="RoofReporterAI" class="w-10 h-10 rounded-lg object-cover">
         <div>
           <h1 class="text-xl font-bold">Settings</h1>
           <p class="text-brand-200 text-xs">Company Profile, API Keys & Pricing</p>
@@ -1579,9 +1567,7 @@ function getCustomerLoginHTML() {
     <!-- Logo -->
     <div class="text-center mb-8">
       <a href="/" class="inline-flex items-center gap-3">
-        <div class="w-12 h-12 bg-accent-500 rounded-xl flex items-center justify-center shadow-lg">
-          <i class="fas fa-home text-white text-xl"></i>
-        </div>
+        <img src="/static/logo.png" alt="RoofReporterAI" class="w-12 h-12 rounded-xl object-cover shadow-lg">
         <div class="text-left">
           <span class="text-gray-800 font-bold text-2xl block">RoofReporterAI</span>
           <span class="text-sky-600 text-xs">Customer Portal - Roof Reports & CRM</span>
@@ -1889,9 +1875,7 @@ function getCustomerDashboardHTML() {
     <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
       <div class="flex items-center space-x-3">
         <a href="/" class="flex items-center space-x-3 hover:opacity-90 transition-opacity">
-          <div class="w-10 h-10 bg-accent-500 rounded-lg flex items-center justify-center">
-            <i class="fas fa-home text-white text-lg"></i>
-          </div>
+          <img src="/static/logo.png" alt="RoofReporterAI" class="w-10 h-10 rounded-lg object-cover">
           <div>
             <h1 class="text-xl font-bold">My Dashboard</h1>
             <p class="text-brand-200 text-xs">RoofReporterAI - Roof Reports & CRM</p>
@@ -1946,9 +1930,7 @@ function getCustomerInvoiceHTML() {
     <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
       <div class="flex items-center space-x-3">
         <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
-          <div class="w-10 h-10 bg-accent-500 rounded-lg flex items-center justify-center">
-            <i class="fas fa-file-invoice-dollar text-white text-lg"></i>
-          </div>
+          <img src="/static/logo.png" alt="RoofReporterAI" class="w-10 h-10 rounded-lg object-cover">
           <div>
             <h1 class="text-xl font-bold">Invoice</h1>
             <p class="text-brand-200 text-xs">RoofReporterAI</p>
@@ -1988,7 +1970,7 @@ function getPricingPageHTML() {
   <nav class="bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
       <a href="/" class="flex items-center gap-3">
-        <div class="w-9 h-9 bg-accent-500 rounded-lg flex items-center justify-center"><i class="fas fa-home text-white"></i></div>
+        <img src="/static/logo.png" alt="RoofReporterAI" class="w-9 h-9 rounded-lg object-cover">
         <span class="text-white font-bold text-lg">RoofReporterAI</span>
       </a>
       <div class="flex items-center gap-4">
@@ -2033,7 +2015,7 @@ function getBlogListingHTML() {
   <nav class="bg-slate-900 text-white sticky top-0 z-50">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
       <a href="/" class="flex items-center gap-3">
-        <div class="w-9 h-9 bg-gradient-to-br from-cyan-500 to-blue-500 rounded-lg flex items-center justify-center"><i class="fas fa-home text-white text-sm"></i></div>
+        <img src="/static/logo.png" alt="RoofReporterAI" class="w-9 h-9 rounded-lg object-cover">
         <span class="text-white font-bold text-lg tracking-tight">RoofReporterAI</span>
       </a>
       <div class="hidden md:flex items-center gap-5">
@@ -2126,7 +2108,7 @@ function getBlogListingHTML() {
     <div class="max-w-7xl mx-auto px-4 py-12">
       <div class="flex flex-col md:flex-row items-center justify-between gap-4">
         <div class="flex items-center gap-3">
-          <div class="w-8 h-8 bg-gradient-to-br from-cyan-500 to-blue-500 rounded-lg flex items-center justify-center"><i class="fas fa-home text-white text-xs"></i></div>
+          <img src="/static/logo.png" alt="RoofReporterAI" class="w-8 h-8 rounded-lg object-cover">
           <span class="text-gray-300 font-bold">RoofReporterAI</span>
         </div>
         <div class="flex items-center gap-6 text-sm">
@@ -2165,7 +2147,7 @@ function getBlogPostHTML() {
   <nav class="bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg sticky top-0 z-50">
     <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
       <a href="/" class="flex items-center gap-3">
-        <div class="w-9 h-9 bg-accent-500 rounded-lg flex items-center justify-center"><i class="fas fa-home text-white"></i></div>
+        <img src="/static/logo.png" alt="RoofReporterAI" class="w-9 h-9 rounded-lg object-cover">
         <span class="text-white font-bold text-lg">RoofReporterAI</span>
       </a>
       <div class="hidden md:flex items-center gap-5">
@@ -2227,7 +2209,7 @@ function getBlogPostHTML() {
     <div class="max-w-7xl mx-auto px-4 py-12">
       <div class="flex flex-col md:flex-row items-center justify-between gap-4">
         <div class="flex items-center gap-3">
-          <div class="w-8 h-8 bg-accent-500 rounded-lg flex items-center justify-center"><i class="fas fa-home text-white text-sm"></i></div>
+          <img src="/static/logo.png" alt="RoofReporterAI" class="w-8 h-8 rounded-lg object-cover">
           <span class="text-gray-800 font-bold">RoofReporterAI</span>
         </div>
         <div class="flex items-center gap-6 text-sm">
@@ -2274,9 +2256,7 @@ function getLanderFunnelHTML() {
   <nav class="bg-slate-900 text-white">
     <div class="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
       <a href="/" class="flex items-center gap-2">
-        <div class="w-7 h-7 bg-gradient-to-br from-cyan-500 to-blue-500 rounded-md flex items-center justify-center">
-          <i class="fas fa-home text-white text-xs"></i>
-        </div>
+        <img src="/static/logo.png" alt="RoofReporterAI" class="w-7 h-7 rounded-md object-cover">
         <span class="text-white font-bold text-sm">RoofReporterAI</span>
       </a>
       <a href="/customer/login" class="bg-gradient-to-r from-cyan-500 to-blue-500 text-white text-sm font-semibold py-1.5 px-4 rounded-lg hover:opacity-90 transition-opacity">Sign Up Free</a>
@@ -2444,9 +2424,7 @@ function getLanderFunnelHTML() {
   <footer class="bg-slate-900 text-gray-500 py-8 border-t border-gray-800">
     <div class="max-w-4xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4">
       <div class="flex items-center gap-2">
-        <div class="w-6 h-6 bg-gradient-to-br from-cyan-500 to-blue-500 rounded flex items-center justify-center">
-          <i class="fas fa-home text-white text-[10px]"></i>
-        </div>
+        <img src="/static/logo.png" alt="RoofReporterAI" class="w-6 h-6 rounded object-cover">
         <span class="text-sm font-semibold text-gray-400">RoofReporterAI</span>
       </div>
       <div class="flex items-center gap-6 text-sm">
@@ -2500,7 +2478,7 @@ function getCustomerOrderPageHTML(mapsApiKey: string) {
   <header class="bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
       <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
-        <div class="w-10 h-10 bg-accent-500 rounded-lg flex items-center justify-center"><i class="fas fa-home text-white text-lg"></i></div>
+        <img src="/static/logo.png" alt="RoofReporterAI" class="w-10 h-10 rounded-lg object-cover">
         <div>
           <h1 class="text-xl font-bold">Order a Report</h1>
           <p class="text-brand-200 text-xs">RoofReporterAI</p>
@@ -2542,9 +2520,7 @@ function getVirtualTryOnPageHTML() {
     <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
       <div class="flex items-center space-x-3">
         <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
-          <div class="w-10 h-10 bg-gradient-to-br from-violet-500 to-purple-600 rounded-lg flex items-center justify-center">
-            <i class="fas fa-magic text-white text-lg"></i>
-          </div>
+          <img src="/static/logo.png" alt="RoofReporterAI" class="w-10 h-10 rounded-lg object-cover">
           <div>
             <h1 class="text-lg font-bold">Virtual Roof Try-On</h1>
             <p class="text-brand-200 text-xs">AI-Powered Roof Visualization</p>
@@ -2600,9 +2576,7 @@ function getTeamManagementPageHTML() {
     <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
       <div class="flex items-center space-x-3">
         <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
-          <div class="w-10 h-10 bg-gradient-to-br from-teal-500 to-emerald-600 rounded-lg flex items-center justify-center">
-            <i class="fas fa-users-cog text-white text-lg"></i>
-          </div>
+          <img src="/static/logo.png" alt="RoofReporterAI" class="w-10 h-10 rounded-lg object-cover">
           <div>
             <h1 class="text-lg font-bold">Team Management</h1>
             <p class="text-brand-200 text-xs">Add sales team members - $50/user/month</p>
@@ -2657,9 +2631,7 @@ function getJoinTeamPageHTML() {
   <header class="bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
       <a href="/" class="flex items-center space-x-3">
-        <div class="w-10 h-10 bg-accent-500 rounded-lg flex items-center justify-center">
-          <i class="fas fa-home text-white text-lg"></i>
-        </div>
+        <img src="/static/logo.png" alt="RoofReporterAI" class="w-10 h-10 rounded-lg object-cover">
         <div>
           <h1 class="text-xl font-bold">Team Invitation</h1>
           <p class="text-brand-200 text-xs">RoofReporterAI</p>
@@ -2787,9 +2759,7 @@ function getD2DPageHTML(mapsApiKey: string) {
     <div class="max-w-full mx-auto px-4 py-3 flex items-center justify-between">
       <div class="flex items-center space-x-3">
         <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
-          <div class="w-10 h-10 bg-accent-500 rounded-lg flex items-center justify-center">
-            <i class="fas fa-door-open text-white text-lg"></i>
-          </div>
+          <img src="/static/logo.png" alt="RoofReporterAI" class="w-10 h-10 rounded-lg object-cover">
           <div>
             <h1 class="text-lg font-bold">D2D Manager</h1>
             <p class="text-brand-200 text-xs">RoofReporterAI</p>
@@ -2859,9 +2829,7 @@ function getPropertyImageryPageHTML(mapsApiKey: string) {
     <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
       <div class="flex items-center space-x-3">
         <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90 transition-opacity">
-          <div class="w-10 h-10 bg-emerald-500 rounded-lg flex items-center justify-center shadow-lg">
-            <i class="fas fa-satellite text-white text-lg"></i>
-          </div>
+          <img src="/static/logo.png" alt="RoofReporterAI" class="w-10 h-10 rounded-lg object-cover shadow-lg">
           <div>
             <h1 class="text-xl font-bold">Property Imagery</h1>
             <p class="text-emerald-200 text-xs">Dev Tool — RoofReporterAI</p>
@@ -2912,9 +2880,7 @@ function getCrmSubPageHTML(module: string, title: string, icon: string) {
     <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
       <div class="flex items-center space-x-3">
         <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
-          <div class="w-10 h-10 bg-accent-500 rounded-lg flex items-center justify-center">
-            <i class="fas ${icon} text-white text-lg"></i>
-          </div>
+          <img src="/static/logo.png" alt="RoofReporterAI" class="w-10 h-10 rounded-lg object-cover">
           <div>
             <h1 class="text-lg font-bold">${title}</h1>
             <p class="text-brand-200 text-xs">RoofReporterAI</p>
@@ -2970,9 +2936,7 @@ function getSecretaryPageHTML() {
     <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
       <div class="flex items-center space-x-3">
         <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
-          <div class="w-10 h-10 bg-accent-500 rounded-lg flex items-center justify-center">
-            <i class="fas fa-phone-alt text-white text-lg"></i>
-          </div>
+          <img src="/static/logo.png" alt="RoofReporterAI" class="w-10 h-10 rounded-lg object-cover">
           <div>
             <h1 class="text-lg font-bold">Roofer Secretary</h1>
             <p class="text-brand-200 text-xs">AI Phone Answering Service</p>
