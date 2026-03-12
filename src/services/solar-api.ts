@@ -1,7 +1,7 @@
 // ============================================================
 // RoofReporterAI — Solar API & Report Data Generation
 // callGoogleSolarAPI, generateMockRoofReport, generateGPTRoofEstimate,
-// generateEnhancedImagery
+// generateEnhancedImagery, fetchSolarPitchAndImagery
 // ============================================================
 
 import type {
@@ -131,6 +131,102 @@ export function generateEnhancedImagery(lat: number, lng: number, apiKey: string
     closeup_sw_url: `${base}?center=${lat - quadLat},${lng - quadLng}&zoom=${closeupZoom}&size=400x400&scale=2&maptype=satellite&key=${apiKey}`,
     closeup_se_url: `${base}?center=${lat - quadLat},${lng + quadLng}&zoom=${closeupZoom}&size=400x400&scale=2&maptype=satellite&key=${apiKey}`,
     // Street view removed per user request
+  }
+}
+
+// ============================================================
+// fetchSolarPitchAndImagery — LIGHTWEIGHT Solar API call
+//
+// Calls buildingInsights ONLY to extract:
+//   1. Weighted average roof pitch (from segment pitchDegrees)
+//   2. Satellite imagery URLs (Google Maps Static API)
+//   3. Imagery quality + date metadata
+//
+// ALL area, footprint, segment counts, and geometry come from
+// the user-traced coordinates via RoofMeasurementEngine.
+// This function NEVER returns area or segment data.
+// ============================================================
+export interface SolarPitchAndImagery {
+  /** Weighted average pitch in degrees from buildingInsights segments */
+  pitch_degrees: number
+  /** Pitch as rise:12 ratio string */
+  pitch_ratio: string
+  /** Per-segment pitch data (degrees) for multi-slope reference */
+  segment_pitches: { pitch_degrees: number; azimuth_degrees: number; area_weight: number }[]
+  /** All imagery URLs (satellite, street view, quadrants) */
+  imagery: ReturnType<typeof generateEnhancedImagery>
+  /** Imagery quality: HIGH, MEDIUM, or BASE */
+  imagery_quality: string
+  /** Imagery date from Google Solar (YYYY-MM-DD) */
+  imagery_date?: string
+  /** API call duration */
+  api_duration_ms: number
+}
+
+export async function fetchSolarPitchAndImagery(
+  lat: number, lng: number,
+  solarApiKey: string, mapsApiKey: string,
+  footprintSqftHint: number = 1500
+): Promise<SolarPitchAndImagery> {
+  const startTime = Date.now()
+  const preciseLat = parseFloat(lat.toFixed(7))
+  const preciseLng = parseFloat(lng.toFixed(7))
+
+  // Call buildingInsights — we ONLY extract pitch + imagery metadata
+  const url = `https://solar.googleapis.com/v1/buildingInsights:findClosest?location.latitude=${preciseLat}&location.longitude=${preciseLng}&requiredQuality=HIGH&key=${solarApiKey}`
+  const response = await fetch(url)
+  if (!response.ok) {
+    const errText = await response.text()
+    throw new Error(`Google Solar API error ${response.status}: ${errText}`)
+  }
+
+  const data: any = await response.json()
+  const solarPotential = data.solarPotential
+
+  if (!solarPotential) {
+    throw new Error('No solar potential data returned for this location')
+  }
+
+  // Extract ONLY pitch from roofSegmentStats — weighted by segment area
+  const rawSegments = solarPotential.roofSegmentStats || []
+  const segmentPitches: SolarPitchAndImagery['segment_pitches'] = []
+  let totalWeight = 0
+  let weightedPitchSum = 0
+
+  for (const seg of rawSegments) {
+    const pitchDeg = seg.pitchDegrees || 0
+    const azimuthDeg = seg.azimuthDegrees || 0
+    const areaM2 = seg.stats?.areaMeters2 || 0
+    segmentPitches.push({ pitch_degrees: pitchDeg, azimuth_degrees: azimuthDeg, area_weight: areaM2 })
+    weightedPitchSum += pitchDeg * areaM2
+    totalWeight += areaM2
+  }
+
+  const avgPitch = totalWeight > 0 ? weightedPitchSum / totalWeight : 20 // default 20° if no data
+  const pitchRise = Math.round(12 * Math.tan(avgPitch * Math.PI / 180) * 10) / 10
+  const pitchRatio = `${pitchRise}:12`
+
+  // Imagery quality + date
+  const imageryQuality = data.imageryQuality || 'BASE'
+  const imageryDate = data.imageryDate
+    ? `${data.imageryDate.year}-${String(data.imageryDate.month).padStart(2, '0')}-${String(data.imageryDate.day).padStart(2, '0')}`
+    : undefined
+
+  // Generate satellite imagery URLs (uses footprint hint for zoom calculation)
+  const imagery = generateEnhancedImagery(lat, lng, mapsApiKey, footprintSqftHint)
+
+  console.log(`[SolarPitch] Extracted pitch=${avgPitch.toFixed(1)}° (${pitchRatio}), ` +
+    `${segmentPitches.length} segments, quality=${imageryQuality}, ` +
+    `${Date.now() - startTime}ms`)
+
+  return {
+    pitch_degrees: Math.round(avgPitch * 10) / 10,
+    pitch_ratio: pitchRatio,
+    segment_pitches: segmentPitches,
+    imagery,
+    imagery_quality: imageryQuality,
+    imagery_date: imageryDate,
+    api_duration_ms: Date.now() - startTime,
   }
 }
 

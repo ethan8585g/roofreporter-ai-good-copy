@@ -14,7 +14,8 @@ import { visionScan, computeHeatScore, filterFindings } from '../services/vision
 import type { VisionFindings } from '../types'
 import {
   callGoogleSolarAPI, generateMockRoofReport, generateGPTRoofEstimate,
-  generateEnhancedImagery, generateEdgesFromSegments, computeEdgeSummary
+  generateEnhancedImagery, generateEdgesFromSegments, computeEdgeSummary,
+  fetchSolarPitchAndImagery, type SolarPitchAndImagery
 } from '../services/solar-api'
 import { buildDataLayersReport, generateSegmentsFromDLAnalysis, generateSegmentsFromAIGeometry } from '../services/report-engine'
 import { executeRoofOrder, type DataLayersAnalysis } from '../services/solar-datalayers'
@@ -1355,11 +1356,18 @@ export async function generateAIImageryForReport(
   }
 }
 
+
 // ============================================================
-// PHASE 1: Generate base report (WELD + PAINT + POLISH + quick AI)
-// Must complete within ~25s (Cloudflare wall-clock limit).
-// Base report is saved as 'completed' immediately.
-// Enhancement is attempted inline as a bonus step.
+// REPORT GENERATION ENGINE v5.0
+//
+// ARCHITECTURE:
+//   PRIMARY: User-traced coordinates → RoofMeasurementEngine
+//            (ALL geometry, area, edges, perimeter, materials)
+//   SECONDARY: Google Solar API → pitch + satellite imagery ONLY
+//   BONUS: AI analysis (Cloud Run / Gemini) for visual inspection
+//
+// Google Solar buildingInsights is NEVER used for area, footprint,
+// segments, or edge calculations. Only pitch (slope) and imagery.
 // ============================================================
 export async function generateReportForOrder(
   orderId: number | string, env: Bindings
@@ -1375,7 +1383,6 @@ export async function generateReportForOrder(
       else if (staleMs < Infinity) return { success: false, error: 'Already in progress' }
       else { await repo.markReportFailed(env.DB, orderId, 'Stuck (no start time)') }
     }
-    // Auto-recover stuck 'enhancing' reports older than 90s
     if (existing?.status === 'enhancing') {
       const staleMs = existing.generation_started_at ? Date.now() - new Date(existing.generation_started_at + 'Z').getTime() : Infinity
       if (staleMs > 90_000) {
@@ -1388,146 +1395,314 @@ export async function generateReportForOrder(
     await repo.upsertGeneratingState(env.DB, orderId, attemptNum, !!existing)
     await repo.markOrderStatus(env.DB, orderId, 'processing')
 
-    let reportData: RoofReport
     const startTime = Date.now()
     const solarApiKey = env.GOOGLE_SOLAR_API_KEY
     const mapsApiKey = env.GOOGLE_MAPS_API_KEY || solarApiKey
-    let usedDL = false
+
+    // ═══════════════════════════════════════════════════════════
+    // STEP 1: PARSE TRACE DATA (required for measurements)
+    // The user MUST have traced eaves/ridges/hips/valleys on the
+    // map during ordering. This is the SOLE source of geometry.
+    // ═══════════════════════════════════════════════════════════
+    let traceData: any = null
+    let traceResult: TraceReport | null = null
+
+    if (order.roof_trace_json) {
+      try {
+        traceData = typeof order.roof_trace_json === 'string' ? JSON.parse(order.roof_trace_json) : order.roof_trace_json
+      } catch (e: any) {
+        console.warn(`[Generate] Order ${orderId}: Failed to parse roof_trace_json: ${e.message}`)
+      }
+    }
+
+    // Check for pre-calculated trace measurement from the order form
+    if ((order as any).trace_measurement_json) {
+      try {
+        traceResult = typeof (order as any).trace_measurement_json === 'string'
+          ? JSON.parse((order as any).trace_measurement_json)
+          : (order as any).trace_measurement_json
+        console.log(`[Generate] Order ${orderId}: Using PRE-CALCULATED trace measurement — ` +
+          `footprint=${traceResult?.key_measurements?.total_projected_footprint_ft2}sqft, ` +
+          `sloped=${traceResult?.key_measurements?.total_roof_area_sloped_ft2}sqft`)
+      } catch (e: any) {
+        console.warn(`[Generate] Order ${orderId}: Failed to parse pre-calculated measurement: ${e.message}`)
+        traceResult = null
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // STEP 2: FETCH SOLAR PITCH + IMAGERY (lightweight call)
+    // Only extracts weighted pitch and satellite image URLs.
+    // NO area, NO footprint, NO segments from Solar API.
+    // ═══════════════════════════════════════════════════════════
+    let solarPitch: SolarPitchAndImagery | null = null
+    let solarPitchDeg = 20 // sensible default if Solar unavailable
+    let solarPitchRise = 4.4 // ~20°
 
     if (solarApiKey && order.latitude && order.longitude) {
       try {
-        // ═══════════════════════════════════════════════════════════
-        // WELD: Call buildingInsights to get raw math, pitch, segments
-        // ═══════════════════════════════════════════════════════════
-        reportData = await callGoogleSolarAPI(order.latitude, order.longitude, solarApiKey, typeof orderId === 'string' ? parseInt(orderId) : orderId as number, order, mapsApiKey)
-        reportData.metadata.api_duration_ms = Date.now() - startTime
-        await repo.logApiRequest(env.DB, orderId, 'google_solar_api', 'buildingInsights:findClosest', 200, Date.now() - startTime)
-        console.log(`[Generate] Order ${orderId}: WELD complete — ${reportData.total_footprint_sqft} sqft, pitch ${reportData.roof_pitch_degrees}°, ${reportData.segments?.length} segments`)
-
-        // ═══════════════════════════════════════════════════════════
-        // PAINT: Pass center coords into DataLayers for GeoTIFF DSM/mask
-        //        Uses fastMode to skip heavy RGB/flux downloads and stay
-        //        within CF Workers timeout. DSM + mask = measurements.
-        // ═══════════════════════════════════════════════════════════
-        const paintStart = Date.now()
-        try {
-          const address = [order.property_address, order.property_city, order.property_province, order.property_postal_code].filter(Boolean).join(', ')
-          const dlAnalysis = await executeRoofOrder(address, solarApiKey, mapsApiKey, {
-            radiusMeters: 50,
-            lat: order.latitude,
-            lng: order.longitude,
-            fastMode: true  // Skip RGB, mask overlay, flux — only DSM+mask for measurements
-          })
-          usedDL = true
-          console.log(`[Generate] Order ${orderId}: PAINT complete — DSM pitch ${dlAnalysis.area.avgPitchDeg}°, flat ${dlAnalysis.area.flatAreaSqft} sqft, true ${dlAnalysis.area.trueAreaSqft} sqft (${Date.now() - paintStart}ms)`)
-
-          // ═══════════════════════════════════════════════════════════
-          // POLISH: Merge DataLayers precision with buildingInsights data
-          //
-          // buildingInsights gives us: segment count, per-segment pitch/azimuth,
-          //   panel layouts, bounding boxes, accurate building boundary.
-          // DataLayers DSM gives us: precise 3D slope from actual elevation data,
-          //   sub-meter pixel-level pitch, true 3D surface area calculation.
-          //
-          // Merge strategy:
-          //   - Use buildingInsights segments (richer per-facet data)
-          //   - Use DSM pitch if significantly different (>3° delta = DSM is more precise)
-          //   - Recalculate true area using the best pitch source
-          //   - Attach DataLayers metadata for report quality
-          // ═══════════════════════════════════════════════════════════
-          const biPitch = reportData.roof_pitch_degrees
-          const dsmPitch = dlAnalysis.area.avgPitchDeg
-          const pitchDelta = Math.abs(biPitch - dsmPitch)
-          const dlImageryQuality = dlAnalysis.imageryQuality
-
-          // Choose best pitch: if DSM and BI differ by >3°, trust DSM (actual elevation vs model)
-          // If delta ≤3°, use weighted average (60% DSM, 40% BI) for stability
-          let finalPitch: number
-          let pitchSource: string
-          if (pitchDelta > 3) {
-            finalPitch = dsmPitch
-            pitchSource = `DSM (${dsmPitch.toFixed(1)}° vs BI ${biPitch.toFixed(1)}°, Δ${pitchDelta.toFixed(1)}°)`
-          } else {
-            finalPitch = Math.round((dsmPitch * 0.6 + biPitch * 0.4) * 10) / 10
-            pitchSource = `hybrid (DSM ${dsmPitch.toFixed(1)}° × 0.6 + BI ${biPitch.toFixed(1)}° × 0.4)`
-          }
-
-          // Recalculate true area using best footprint (BI) + best pitch (DSM/hybrid)
-          const footprintSqft = reportData.total_footprint_sqft
-          const pitchRad = finalPitch * (Math.PI / 180)
-          const cosP = Math.cos(pitchRad)
-          const refinedTrueAreaSqft = cosP > 0 ? Math.round(footprintSqft / cosP) : footprintSqft
-          const refinedTrueAreaSqm = Math.round(refinedTrueAreaSqft / 10.7639 * 10) / 10
-
-          // Update report with POLISH'd values
-          const prevTrue = reportData.total_true_area_sqft
-          reportData.roof_pitch_degrees = finalPitch
-          reportData.roof_pitch_ratio = `${(Math.round(12 * Math.tan(finalPitch * Math.PI / 180) * 10) / 10)}:12`
-          reportData.total_true_area_sqft = refinedTrueAreaSqft
-          reportData.total_true_area_sqm = refinedTrueAreaSqm
-          reportData.area_multiplier = footprintSqft > 0 ? Math.round(refinedTrueAreaSqft / footprintSqft * 1000) / 1000 : 1
-
-          // Recalculate edges & materials with refined areas
-          reportData.edges = generateEdgesFromSegments(reportData.segments, footprintSqft)
-          reportData.edge_summary = computeEdgeSummary(reportData.edges)
-          reportData.materials = computeMaterialEstimate(refinedTrueAreaSqft, reportData.edges, reportData.segments)
-
-          // Attach DataLayers imagery URLs as enhanced imagery
-          if (dlAnalysis.rgbAerialDataUrl) (reportData.imagery as any).rgb_aerial_url = dlAnalysis.rgbAerialDataUrl
-          if (dlAnalysis.maskOverlayDataUrl) (reportData.imagery as any).mask_overlay_url = dlAnalysis.maskOverlayDataUrl
-
-          // Attach DSM metadata for quality reporting
-          ;(reportData as any).datalayers_analysis = {
-            dsm_pixels: dlAnalysis.dsm.validPixels,
-            dsm_resolution_m: dlAnalysis.dsm.pixelSizeMeters,
-            dsm_height_range_m: `${dlAnalysis.dsm.minHeight.toFixed(1)} – ${dlAnalysis.dsm.maxHeight.toFixed(1)}`,
-            imagery_quality: dlImageryQuality,
-            imagery_date: dlAnalysis.imageryDate,
-            pitch_source: pitchSource,
-            pitch_delta_deg: pitchDelta,
-            area_refinement: `${prevTrue} → ${refinedTrueAreaSqft} sqft (${prevTrue !== refinedTrueAreaSqft ? ((refinedTrueAreaSqft - prevTrue) / prevTrue * 100).toFixed(1) + '%' : 'no change'})`,
-            waste_factor: dlAnalysis.area.wasteFactor,
-            pitch_multiplier: dlAnalysis.area.pitchMultiplier,
-            duration_ms: Date.now() - paintStart
-          }
-
-          // Upgrade quality notes
-          reportData.quality.notes = reportData.quality.notes || []
-          reportData.quality.notes.push(
-            `Enhanced with DataLayers DSM: ${dlAnalysis.dsm.validPixels.toLocaleString()} pixels at ${dlAnalysis.dsm.pixelSizeMeters.toFixed(2)}m/px.`,
-            `Pitch source: ${pitchSource}. True area refined: ${prevTrue} → ${refinedTrueAreaSqft} sqft.`
-          )
-          if (dlImageryQuality === 'HIGH') {
-            reportData.quality.confidence_score = Math.max(reportData.quality.confidence_score, 95)
-          }
-
-          // Update metadata to reflect full pipeline
-          reportData.metadata.provider = 'google_solar_weld_paint_polish'
-          reportData.metadata.accuracy_benchmark = '98.77% (buildingInsights + DSM GeoTIFF hybrid)'
-          reportData.metadata.cost_per_query = '$0.225 CAD (buildingInsights $0.075 + dataLayers $0.15)'
-
-          await repo.logApiRequest(env.DB, orderId, 'solar_datalayers', 'dataLayers:get + DSM (PAINT)', 200, Date.now() - paintStart)
-          console.log(`[Generate] Order ${orderId}: POLISH complete — pitch ${pitchSource}, true area ${prevTrue} → ${refinedTrueAreaSqft} sqft, materials ${reportData.materials?.gross_squares} sq`)
-
-        } catch (dlErr: any) {
-          // PAINT failed — no regression, WELD report stands alone
-          console.warn(`[Generate] Order ${orderId}: PAINT (DataLayers) failed — WELD-only report will be used: ${dlErr.message}`)
-          reportData.quality.notes = reportData.quality.notes || []
-          reportData.quality.notes.push(`DataLayers enhancement skipped: ${dlErr.message.substring(0, 100)}`)
-          await repo.logApiRequest(env.DB, orderId, 'solar_datalayers', 'dataLayers:get (PAINT)', 500, Date.now() - paintStart, dlErr.message.substring(0, 500))
-        }
-
+        const footprintHint = traceResult?.key_measurements?.total_projected_footprint_ft2 || 1500
+        solarPitch = await fetchSolarPitchAndImagery(
+          order.latitude, order.longitude, solarApiKey, mapsApiKey || solarApiKey, footprintHint
+        )
+        solarPitchDeg = solarPitch.pitch_degrees
+        solarPitchRise = Math.round(12 * Math.tan(solarPitchDeg * Math.PI / 180) * 10) / 10
+        await repo.logApiRequest(env.DB, orderId, 'google_solar_api', 'buildingInsights:findClosest (pitch+imagery only)', 200, solarPitch.api_duration_ms)
+        console.log(`[Generate] Order ${orderId}: Solar pitch=${solarPitchDeg}° (${solarPitchRise}:12), quality=${solarPitch.imagery_quality}, ${solarPitch.api_duration_ms}ms`)
       } catch (e: any) {
-        // WELD failed — fall back to GPT estimate or mock
-        const is404 = e.message.includes('404') || e.message.includes('NOT_FOUND')
-        await repo.logApiRequest(env.DB, orderId, 'google_solar_api', 'buildingInsights:findClosest', is404 ? 404 : 500, Date.now() - startTime, e.message.substring(0, 500))
-        let gptEst = null
-        if (is404 && order.latitude && order.longitude) gptEst = await generateGPTRoofEstimate(order.property_address || '', order.latitude, order.longitude, env)
-        reportData = generateMockRoofReport(order, mapsApiKey, gptEst)
-        reportData.metadata.provider = is404 ? (gptEst ? `gpt-vision-estimate` : 'estimated (no coverage)') : `estimated (error)`
+        console.warn(`[Generate] Order ${orderId}: Solar API failed (non-critical, using default pitch): ${e.message}`)
+        await repo.logApiRequest(env.DB, orderId, 'google_solar_api', 'buildingInsights:findClosest (pitch+imagery only)', 500, Date.now() - startTime, e.message.substring(0, 500))
       }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // STEP 3: RUN TRACE MEASUREMENT ENGINE
+    // If we have trace data but no pre-calculated result,
+    // run the engine now using Solar pitch as default_pitch.
+    // This is the SOLE source of all measurements.
+    // ═══════════════════════════════════════════════════════════
+    if (!traceResult && traceData && traceData.eaves && traceData.eaves.length >= 3) {
+      try {
+        const enginePayload = traceUiToEnginePayload(
+          traceData,
+          {
+            property_address: order.property_address,
+            homeowner_name: order.homeowner_name,
+            order_number: order.order_number,
+          },
+          solarPitchRise
+        )
+        const engine = new RoofMeasurementEngine(enginePayload)
+        traceResult = engine.run()
+        console.log(`[Generate] Order ${orderId}: Trace engine computed — ` +
+          `footprint=${traceResult.key_measurements.total_projected_footprint_ft2}sqft, ` +
+          `sloped=${traceResult.key_measurements.total_roof_area_sloped_ft2}sqft, ` +
+          `eave_pts=${traceResult.key_measurements.num_eave_points}, ` +
+          `pitch=${traceResult.key_measurements.dominant_pitch_label}`)
+      } catch (tmErr: any) {
+        console.error(`[Generate] Order ${orderId}: Trace measurement engine FAILED: ${tmErr.message}`)
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // STEP 4: BUILD REPORT DATA
+    // PRIMARY: trace measurements for ALL geometry
+    // SECONDARY: Solar for imagery + pitch
+    // FALLBACK: if no trace, generate legacy Solar-based report
+    // ═══════════════════════════════════════════════════════════
+    let reportData: RoofReport
+
+    if (traceResult) {
+      // ─── PREFERRED PATH: Trace-Engine Report ───
+      const km = traceResult.key_measurements
+      const lm = traceResult.linear_measurements
+      const mat = traceResult.materials_estimate
+
+      // Build segments from trace face details (or single whole-roof)
+      const segments: any[] = traceResult.face_details.length > 0
+        ? traceResult.face_details.map((face, i) => ({
+            name: face.face_id || `Face ${i + 1}`,
+            footprint_area_sqft: Math.round(face.projected_area_ft2),
+            true_area_sqft: Math.round(face.sloped_area_ft2),
+            true_area_sqm: Math.round(face.sloped_area_ft2 * 0.0929 * 10) / 10,
+            pitch_degrees: Math.round(face.pitch_angle_deg * 10) / 10,
+            pitch_ratio: face.pitch_label,
+            azimuth_degrees: 0,
+            azimuth_direction: 'N/A',
+          }))
+        : [{
+            name: 'Total Roof (Traced)',
+            footprint_area_sqft: Math.round(km.total_projected_footprint_ft2),
+            true_area_sqft: Math.round(km.total_roof_area_sloped_ft2),
+            true_area_sqm: Math.round(km.total_roof_area_sloped_ft2 * 0.0929 * 10) / 10,
+            pitch_degrees: Math.round(km.dominant_pitch_angle_deg * 10) / 10,
+            pitch_ratio: km.dominant_pitch_label,
+            azimuth_degrees: 0,
+            azimuth_direction: 'N/A',
+          }]
+
+      // Build edges from trace line details
+      const traceEdges: any[] = []
+      for (const edge of traceResult.eave_edge_breakdown) {
+        traceEdges.push({
+          edge_type: 'eave', label: `Eave ${edge.edge_num}`,
+          plan_length_ft: Math.round(edge.length_2d_ft),
+          true_length_ft: Math.round(edge.length_2d_ft), pitch_factor: 1.0,
+        })
+      }
+      for (const seg of traceResult.ridge_details) {
+        traceEdges.push({
+          edge_type: 'ridge', label: seg.id,
+          plan_length_ft: Math.round(seg.horiz_length_ft),
+          true_length_ft: Math.round(seg.sloped_length_ft), pitch_factor: seg.slope_factor,
+        })
+      }
+      for (const seg of traceResult.hip_details) {
+        traceEdges.push({
+          edge_type: 'hip', label: seg.id,
+          plan_length_ft: Math.round(seg.horiz_length_ft),
+          true_length_ft: Math.round(seg.sloped_length_ft), pitch_factor: seg.slope_factor,
+        })
+      }
+      for (const seg of traceResult.valley_details) {
+        traceEdges.push({
+          edge_type: 'valley', label: seg.id,
+          plan_length_ft: Math.round(seg.horiz_length_ft),
+          true_length_ft: Math.round(seg.sloped_length_ft), pitch_factor: seg.slope_factor,
+        })
+      }
+      for (const seg of traceResult.rake_details) {
+        traceEdges.push({
+          edge_type: 'rake', label: seg.id,
+          plan_length_ft: Math.round(seg.horiz_length_ft),
+          true_length_ft: Math.round(seg.sloped_length_ft), pitch_factor: seg.slope_factor,
+        })
+      }
+
+      const traceEdgeSummary = {
+        total_ridge_ft: Math.round(lm.ridges_total_ft),
+        total_hip_ft: Math.round(lm.hips_total_ft),
+        total_valley_ft: Math.round(lm.valleys_total_ft),
+        total_eave_ft: Math.round(lm.eaves_total_ft),
+        total_rake_ft: Math.round(lm.rakes_total_ft),
+        total_perimeter_ft: Math.round(lm.perimeter_eave_rake_ft),
+        total_flashing_ft: 0,
+      }
+
+      const traceMaterials = {
+        total_squares: km.total_squares_net,
+        gross_squares: km.total_squares_gross_w_waste,
+        waste_factor: km.waste_factor_pct / 100,
+        bundles_3tab: mat.shingles_bundles,
+        underlayment_rolls: mat.underlayment_rolls,
+        ice_water_shield_lf: Math.round(mat.ice_water_shield_sqft / 3),
+        ridge_cap_lf: Math.round(mat.ridge_cap_lf),
+        drip_edge_lf: Math.round(mat.drip_edge_total_lf),
+        starter_strip_lf: Math.round(mat.starter_strip_lf),
+        valley_flashing_lf: Math.round(mat.valley_flashing_lf),
+        nails_lbs: mat.roofing_nails_lbs,
+        caulk_tubes: mat.caulk_tubes,
+      }
+
+      // Imagery: prefer Solar API, fallback to basic Maps Static
+      const imagery = solarPitch
+        ? { ...solarPitch.imagery, dsm_url: null, mask_url: null }
+        : {
+            ...generateEnhancedImagery(
+              order.latitude || 0, order.longitude || 0,
+              mapsApiKey || '', km.total_projected_footprint_ft2
+            ),
+            dsm_url: null, mask_url: null,
+          }
+
+      reportData = {
+        order_id: typeof orderId === 'string' ? parseInt(orderId) : orderId as number,
+        generated_at: new Date().toISOString(),
+        report_version: '5.0',
+        property: {
+          address: order.property_address,
+          city: order.property_city, province: order.property_province,
+          postal_code: order.property_postal_code,
+          homeowner_name: order.homeowner_name,
+          requester_name: order.requester_name,
+          requester_company: order.requester_company,
+          latitude: order.latitude, longitude: order.longitude,
+        },
+        total_footprint_sqft: Math.round(km.total_projected_footprint_ft2),
+        total_footprint_sqm: Math.round(km.total_projected_footprint_ft2 * 0.0929),
+        total_true_area_sqft: Math.round(km.total_roof_area_sloped_ft2),
+        total_true_area_sqm: Math.round(km.total_roof_area_sloped_ft2 * 0.0929 * 10) / 10,
+        area_multiplier: km.total_projected_footprint_ft2 > 0
+          ? Math.round(km.total_roof_area_sloped_ft2 / km.total_projected_footprint_ft2 * 1000) / 1000 : 1,
+        roof_pitch_degrees: Math.round(km.dominant_pitch_angle_deg * 10) / 10,
+        roof_pitch_ratio: km.dominant_pitch_label,
+        roof_azimuth_degrees: 0,
+        segments,
+        edges: traceEdges,
+        edge_summary: traceEdgeSummary,
+        materials: traceMaterials,
+        max_sunshine_hours: 0, num_panels_possible: 0, yearly_energy_kwh: 0,
+        imagery: imagery as any,
+        roof_trace: traceData,
+        excluded_segments: [],
+        quality: {
+          imagery_quality: (solarPitch?.imagery_quality || 'N/A') as any,
+          imagery_date: solarPitch?.imagery_date,
+          field_verification_recommended: false,
+          confidence_score: 95,
+          notes: [
+            `Measurement source: User-traced coordinate geometry (RoofMeasurementEngine v4.0).`,
+            `${km.num_eave_points} eave points, ${km.num_ridges} ridges, ${km.num_hips} hips, ${km.num_valleys} valleys traced.`,
+            `Footprint: ${km.total_projected_footprint_ft2} sqft (Shoelace formula on WGS84→Cartesian projection).`,
+            `Sloped area: ${km.total_roof_area_sloped_ft2} sqft (pitch-corrected: ${km.dominant_pitch_label}).`,
+            solarPitch ? `Solar API pitch: ${solarPitchDeg}° (${solarPitch.pitch_ratio}), imagery quality: ${solarPitch.imagery_quality}.` : 'Solar API: unavailable — using trace-derived pitch.',
+            ...(traceResult.advisory_notes || []),
+          ]
+        },
+        metadata: {
+          provider: 'trace_engine_v4',
+          api_duration_ms: Date.now() - startTime,
+          coordinates: { lat: order.latitude, lng: order.longitude },
+          solar_api_imagery_date: solarPitch?.imagery_date,
+          building_insights_quality: solarPitch?.imagery_quality,
+          accuracy_benchmark: 'GPS coordinate trace + Shoelace area + common-run hip/valley correction',
+          cost_per_query: solarPitch ? '$0.075 CAD (Solar API for pitch+imagery only)' : '$0.00 (trace-only)',
+        },
+      } as RoofReport
+
+      // Store trace measurement for reference
+      ;(reportData as any).trace_measurement = traceResult
+
+      // Generate trace-based SVG diagram
+      try {
+        const traceSVG = generateTraceBasedDiagramSVG(
+          traceData,
+          {
+            total_ridge_ft: lm.ridges_total_ft,
+            total_hip_ft: lm.hips_total_ft,
+            total_valley_ft: lm.valleys_total_ft,
+            total_eave_ft: lm.eaves_total_ft,
+            total_rake_ft: lm.rakes_total_ft,
+          },
+          km.total_projected_footprint_ft2,
+          km.dominant_pitch_angle_deg,
+          km.dominant_pitch_label,
+          km.total_squares_gross_w_waste,
+          km.total_roof_area_sloped_ft2
+        )
+        ;(reportData as any).trace_diagram_svg = traceSVG
+      } catch (svgErr: any) {
+        console.warn(`[Generate] Order ${orderId}: Trace SVG generation failed: ${svgErr.message}`)
+      }
+
+      console.log(`[Generate] Order ${orderId}: ✅ TRACE-ENGINE report built — ` +
+        `footprint=${km.total_projected_footprint_ft2}sqft, sloped=${km.total_roof_area_sloped_ft2}sqft, ` +
+        `pitch=${km.dominant_pitch_label}, squares=${km.total_squares_gross_w_waste}, ` +
+        `eave=${lm.eaves_total_ft}ft, ridge=${lm.ridges_total_ft}ft, hip=${lm.hips_total_ft}ft`)
+
     } else {
-      reportData = generateMockRoofReport(order, mapsApiKey)
+      // ─── FALLBACK PATH: No trace data — use legacy Solar API ───
+      console.warn(`[Generate] Order ${orderId}: ⚠️ NO TRACE DATA — falling back to Solar API full report`)
+
+      if (solarApiKey && order.latitude && order.longitude) {
+        try {
+          reportData = await callGoogleSolarAPI(order.latitude, order.longitude, solarApiKey, typeof orderId === 'string' ? parseInt(orderId) : orderId as number, order, mapsApiKey)
+          reportData.metadata.api_duration_ms = Date.now() - startTime
+          console.log(`[Generate] Order ${orderId}: Legacy Solar API report — ${reportData.total_footprint_sqft} sqft, pitch ${reportData.roof_pitch_degrees}°`)
+        } catch (e: any) {
+          const is404 = e.message.includes('404') || e.message.includes('NOT_FOUND')
+          let gptEst = null
+          if (is404 && order.latitude && order.longitude) gptEst = await generateGPTRoofEstimate(order.property_address || '', order.latitude, order.longitude, env)
+          reportData = generateMockRoofReport(order, mapsApiKey, gptEst)
+          reportData.metadata.provider = is404 ? (gptEst ? 'gpt-vision-estimate' : 'estimated (no coverage)') : 'estimated (error)'
+        }
+      } else {
+        reportData = generateMockRoofReport(order, mapsApiKey)
+      }
+
+      reportData.quality.notes = reportData.quality.notes || []
+      reportData.quality.notes.unshift('⚠️ NO ROOF TRACE DATA — measurements are Solar API estimates only. For accurate measurements, re-order with roof outline tracing.')
+      reportData.quality.confidence_score = Math.min(reportData.quality.confidence_score, 75)
     }
 
     // ── DUAL-PATH AI ANALYSIS: Cloud Run Custom Model + Gemini Fallback ──
@@ -1535,13 +1710,11 @@ export async function generateReportForOrder(
     let cloudRunVision: VisionFindings | null = null
     let cloudRunGeometry: any = null
 
-    // PATH 1: Try Cloud Run custom AI model first (your Colab-trained weights)
     const crConfig = buildCloudRunConfig(env)
     if (crConfig && satUrl) {
       try {
         const crResult = await analyzeViaCloudRun(crConfig, {
-          image_urls: [satUrl],
-          analysis_type: 'full',
+          image_urls: [satUrl], analysis_type: 'full',
           coordinates: order.latitude && order.longitude ? { lat: order.latitude, lng: order.longitude } : undefined,
           address: order.property_address || undefined,
           known_footprint_sqft: reportData.total_footprint_sqft,
@@ -1560,7 +1733,6 @@ export async function generateReportForOrder(
       } catch (e: any) { console.warn(`[Generate] Cloud Run AI failed (graceful fallback):`, e.message) }
     }
 
-    // PATH 2: Gemini fallback — geometry upgrade (skip if Cloud Run already succeeded)
     if (!cloudRunGeometry && satUrl && (env.GCP_SERVICE_ACCOUNT_KEY || env.GOOGLE_VERTEX_API_KEY)) {
       try {
         const geo = await analyzeRoofGeometry(satUrl, { apiKey: env.GOOGLE_VERTEX_API_KEY, project: env.GOOGLE_CLOUD_PROJECT, location: env.GOOGLE_CLOUD_LOCATION || 'us-central1', serviceAccountKey: env.GCP_SERVICE_ACCOUNT_KEY }, { maxRetries: 1, timeoutMs: 20000, acceptScore: 10, model: 'gemini-2.0-flash' })
@@ -1568,7 +1740,6 @@ export async function generateReportForOrder(
       } catch {}
     }
 
-    // PATH 2: Gemini fallback — vision scan
     let geminiVision: VisionFindings | null = null
     if (satUrl && (env.GCP_SERVICE_ACCOUNT_KEY || env.GOOGLE_VERTEX_API_KEY)) {
       try {
@@ -1576,90 +1747,16 @@ export async function generateReportForOrder(
       } catch {}
     }
 
-    // MERGE: Combine Cloud Run + Gemini findings for best coverage
     const mergedVision = mergeVisionFindings(cloudRunVision, geminiVision)
     if (mergedVision) {
       reportData.vision_findings = mergedVision
       if (mergedVision.heat_score.total >= 60) { reportData.quality.confidence_score = Math.min(reportData.quality.confidence_score, 70); reportData.quality.field_verification_recommended = true }
     }
 
-    // ── CUSTOMER PRICING & ROOF TRACE INJECTION ──
-    // Parse roof_trace_json from order (if user traced the roof outline)
-    // PREFER pre-calculated measurements from the order form when available
-    // Otherwise, run the RoofMeasurementEngine inline for independent verification
-    if (order.roof_trace_json) {
-      try {
-        const traceData = typeof order.roof_trace_json === 'string' ? JSON.parse(order.roof_trace_json) : order.roof_trace_json
-        reportData.roof_trace = traceData
-        console.log(`[Generate] Order ${orderId}: roof trace included (${traceData.eaves?.length || 0} eave pts, ${traceData.ridges?.length || 0} ridges, ${traceData.hips?.length || 0} hips)`)
-
-        // Check for pre-calculated trace measurement from the order form
-        let traceResult: TraceReport | null = null
-        if ((order as any).trace_measurement_json) {
-          try {
-            traceResult = typeof (order as any).trace_measurement_json === 'string'
-              ? JSON.parse((order as any).trace_measurement_json)
-              : (order as any).trace_measurement_json
-            console.log(`[Generate] Order ${orderId}: Using PRE-CALCULATED trace measurement from order form — footprint=${traceResult?.key_measurements?.total_projected_footprint_ft2}sqft, sloped=${traceResult?.key_measurements?.total_roof_area_sloped_ft2}sqft`)
-          } catch (e: any) {
-            console.warn(`[Generate] Order ${orderId}: Failed to parse pre-calculated measurement, will re-run engine: ${e.message}`)
-            traceResult = null
-          }
-        }
-
-        // If no pre-calculated measurement, run engine inline
-        if (!traceResult && traceData.eaves && traceData.eaves.length >= 3) {
-          try {
-            const pitchDeg = reportData.roof_pitch_degrees || 20
-            const pitchRise = Math.round(12 * Math.tan(pitchDeg * Math.PI / 180) * 10) / 10
-            const enginePayload = traceUiToEnginePayload(
-              traceData,
-              { property_address: order.property_address, homeowner_name: order.homeowner_name, order_number: order.order_number },
-              pitchRise
-            )
-            const engine = new RoofMeasurementEngine(enginePayload)
-            traceResult = engine.run()
-            console.log(`[Generate] Order ${orderId}: Inline trace measurement — footprint=${traceResult.key_measurements.total_projected_footprint_ft2}sqft, sloped=${traceResult.key_measurements.total_roof_area_sloped_ft2}sqft`)
-          } catch (tmErr: any) {
-            console.warn(`[Generate] Order ${orderId}: Trace measurement engine failed: ${tmErr.message}`)
-          }
-        }
-
-        // Store trace measurement in report data
-        if (traceResult) {
-          ;(reportData as any).trace_measurement = traceResult
-
-          // Generate trace-based SVG diagram (actual house shape)
-          try {
-            const traceSVG = generateTraceBasedDiagramSVG(
-              traceData,
-              {
-                total_ridge_ft: traceResult.linear_measurements.ridges_total_ft,
-                total_hip_ft: traceResult.linear_measurements.hips_total_ft,
-                total_valley_ft: traceResult.linear_measurements.valleys_total_ft,
-                total_eave_ft: traceResult.linear_measurements.eaves_total_ft,
-                total_rake_ft: traceResult.linear_measurements.rakes_total_ft,
-              },
-              traceResult.key_measurements.total_projected_footprint_ft2,
-              traceResult.key_measurements.dominant_pitch_angle_deg,
-              traceResult.key_measurements.dominant_pitch_label,
-              traceResult.key_measurements.total_squares_gross_w_waste,
-              traceResult.key_measurements.total_roof_area_sloped_ft2
-            )
-            ;(reportData as any).trace_diagram_svg = traceSVG
-          } catch (svgErr: any) {
-            console.warn(`[Generate] Order ${orderId}: Trace SVG generation failed: ${svgErr.message}`)
-          }
-        }
-      } catch (e: any) {
-        console.warn(`[Generate] Order ${orderId}: Failed to parse roof_trace_json:`, e.message)
-      }
-    }
-
-    // Compute customer cost estimate: total squares with 15% waste × price per bundle
+    // ── CUSTOMER PRICING ──
     if (order.price_per_bundle && order.price_per_bundle > 0) {
       const trueArea = reportData.total_true_area_sqft || 0
-      const wasteMultiplier = 1.15  // 15% waste
+      const wasteMultiplier = 1.15
       const grossSquares = Math.ceil((trueArea * wasteMultiplier) / 100 * 10) / 10
       reportData.customer_price_per_bundle = parseFloat(order.price_per_bundle)
       reportData.customer_gross_squares = grossSquares
@@ -1671,11 +1768,6 @@ export async function generateReportForOrder(
     let html: string
     const finalReportData = reportData
 
-    // ═══════════════════════════════════════════════════════════
-    // SAVE: Base report saved as 'completed' immediately.
-    // Enhancement runs inline after this (if key is set).
-    // Customer can see the report right away — no waiting.
-    // ═══════════════════════════════════════════════════════════
     try {
       html = generateProfessionalReportHTML(finalReportData)
       console.log(`[Generate] Order ${orderId}: HTML generated (${html.length} chars)`)
@@ -1684,17 +1776,12 @@ export async function generateReportForOrder(
       html = `<html><body><h1>Report Generated</h1><p>HTML rendering failed: ${htmlErr.message}</p><pre>${JSON.stringify(finalReportData.property, null, 2)}</pre></body></html>`
     }
 
-    const baseVersion = usedDL ? '3.0' : '2.0'
+    const baseVersion = '5.0'
     const hasEnhanceKey = !!env.GEMINI_ENHANCE_API_KEY
 
-    // ═══════════════════════════════════════════════════════════
-    // ALWAYS save base report as 'completed' — customer can see
-    // it immediately. Enhancement is a bonus step attempted inline.
-    // NO MORE waitUntil() — no more stuck 'enhancing' reports.
-    // ═══════════════════════════════════════════════════════════
     await repo.saveCompletedReport(env.DB, orderId, finalReportData, html, baseVersion)
     await repo.markOrderStatus(env.DB, orderId, 'completed')
-    console.log(`[Generate] Order ${orderId}: ✅ Base report saved as COMPLETED (v${baseVersion})`)
+    console.log(`[Generate] Order ${orderId}: ✅ Report saved as COMPLETED (v${baseVersion}, provider=${finalReportData.metadata?.provider || 'unknown'})`)
 
     return {
       success: true,
