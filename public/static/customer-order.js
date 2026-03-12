@@ -985,6 +985,8 @@ function closeEavesPolygon() {
   if (orderState.traceEavesPoints.length < 3) return;
   clearTraceOverlays();
 
+  // Create polygon as NON-editable. Editing is only enabled explicitly in eaves mode.
+  // This prevents Google Maps edit-vertex handles from stealing clicks in ridge/hip/valley mode.
   orderState.traceEavesPolygon = new google.maps.Polygon({
     paths: orderState.traceEavesPoints.map(p => new google.maps.LatLng(p.lat, p.lng)),
     map: orderState.traceMap,
@@ -993,9 +995,10 @@ function closeEavesPolygon() {
     strokeOpacity: 0.9,
     fillColor: '#22c55e',
     fillOpacity: 0.15,
-    editable: true,
+    editable: false,   // Start non-editable; toggled on only in eaves mode
     draggable: false,
-    clickable: false  // Let clicks pass through to map so ridges/hips/valleys can be placed on/near edges
+    clickable: false,   // Let clicks pass through to map
+    zIndex: 1           // Low z-index so markers & lines draw on top
   });
 
   const path = orderState.traceEavesPolygon.getPath();
@@ -1007,10 +1010,6 @@ function closeEavesPolygon() {
 
   showMsg('success', '<i class="fas fa-check-circle mr-1"></i>Eaves outline closed! Now add ridges and hips.');
   orderState.traceMode = 'ridge';
-  // Disable polygon editing while in ridge mode so it doesn't steal clicks
-  if (orderState.traceEavesPolygon) {
-    orderState.traceEavesPolygon.setEditable(false);
-  }
   updateTraceUI();
 }
 
@@ -1050,6 +1049,7 @@ function addTraceMarker(pt, color, label) {
     position: { lat: pt.lat, lng: pt.lng },
     map: orderState.traceMap,
     clickable: false,  // CRITICAL: Don't consume map clicks — let them pass through to the map
+    zIndex: 10,        // Draw markers above polygon fill
     icon: {
       url: 'data:image/svg+xml,' + encodeURIComponent(
         `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width="16" height="16">
@@ -1072,30 +1072,32 @@ function drawPolyline(points, color, weight, dashed) {
     strokeWeight: weight,
     strokeOpacity: dashed ? 0.6 : 0.9,
     clickable: false,  // Let clicks pass through to map
+    zIndex: 5          // Above polygon, below markers
   });
   orderState.tracePolylines.push(polyline);
 }
 
-function clearTraceOverlays() {
+// Clear visual overlays from the map.
+// keepPolygon=true preserves the eaves polygon object (used during undo in ridge/hip/valley mode)
+function clearTraceOverlays(keepPolygon) {
   orderState.traceMarkers.forEach(m => m.setMap(null));
   orderState.traceMarkers = [];
   orderState.tracePolylines.forEach(p => p.setMap(null));
   orderState.tracePolylines = [];
-  if (orderState.traceEavesPolygon) {
+  if (!keepPolygon && orderState.traceEavesPolygon) {
     orderState.traceEavesPolygon.setMap(null);
     orderState.traceEavesPolygon = null;
   }
 }
 
 function restoreTraceOverlays() {
-  // Only auto-close polygon during initial restore (page load), not after undo.
-  // The undo function handles its own restore to avoid auto-closing.
   if (orderState.traceEavesPoints.length >= 3 && orderState.traceEavesPolygon) {
-    // Polygon already exists — just re-draw markers on top
+    // Polygon already exists (keepPolygon was used) — just re-draw markers on top
     orderState.traceEavesPoints.forEach((p, i) => addTraceMarker(p, '#22c55e', i + 1));
   } else if (orderState.traceEavesPoints.length >= 3 && !orderState.traceEavesPolygon) {
     // No polygon yet and 3+ points — close it (happens on page restore)
     closeEavesPolygon();
+    return; // closeEavesPolygon already calls restoreLineOverlays
   } else if (orderState.traceEavesPoints.length > 0) {
     orderState.traceEavesPoints.forEach((p, i) => addTraceMarker(p, '#22c55e', i + 1));
     if (orderState.traceEavesPoints.length > 1) drawPolyline(orderState.traceEavesPoints, '#22c55e', 3, false);
@@ -1122,6 +1124,20 @@ function setTraceMode(mode) {
 
 function undoLastTrace() {
   const mode = orderState.traceMode;
+
+  // ── Priority 1: If there's a partial in-progress line (1 point placed), undo that first ──
+  if (mode !== 'eaves' && orderState.traceCurrentLine.length > 0) {
+    // Remove the visual marker for the partial point
+    if (orderState.traceMarkers.length > 0) {
+      const lastMarker = orderState.traceMarkers.pop();
+      lastMarker.setMap(null);
+    }
+    orderState.traceCurrentLine = [];
+    updateTraceUI();
+    return;
+  }
+
+  // ── Priority 2: Undo the last completed action for the current mode ──
   if (mode === 'eaves') {
     if (orderState.traceEavesPolygon) {
       orderState.traceEavesPolygon.setMap(null);
@@ -1139,25 +1155,33 @@ function undoLastTrace() {
   } else if (mode === 'ridge') {
     if (orderState.traceRidgeLines.length > 0) {
       orderState.traceRidgeLines.pop();
+      // Polygon still exists — keep it; just redraw markers & lines
+      clearTraceOverlays(true); // keepPolygon=true
+      restoreTraceOverlays();
     } else if (orderState.traceEavesPolygon) {
       // No ridges to undo — undo the eaves polygon closure instead
       orderState.traceEavesPolygon.setMap(null);
       orderState.traceEavesPolygon = null;
       orderState.traceMode = 'eaves';
+      clearTraceOverlays();
+      // Redraw eaves as open polyline (don't auto-close)
+      if (orderState.traceEavesPoints.length > 0) {
+        orderState.traceEavesPoints.forEach((p, i) => addTraceMarker(p, '#22c55e', i + 1));
+        if (orderState.traceEavesPoints.length > 1) drawPolyline(orderState.traceEavesPoints, '#22c55e', 3, false);
+      }
+      restoreLineOverlays();
     }
-    clearTraceOverlays();
-    restoreTraceOverlays();
   } else if (mode === 'hip') {
     if (orderState.traceHipLines.length > 0) {
       orderState.traceHipLines.pop();
     }
-    clearTraceOverlays();
+    clearTraceOverlays(true); // keepPolygon=true
     restoreTraceOverlays();
   } else if (mode === 'valley') {
     if (orderState.traceValleyLines.length > 0) {
       orderState.traceValleyLines.pop();
     }
-    clearTraceOverlays();
+    clearTraceOverlays(true); // keepPolygon=true
     restoreTraceOverlays();
   }
   orderState.traceCurrentLine = [];
