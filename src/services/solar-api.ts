@@ -48,27 +48,36 @@ function computeGeoPolygonAreaSqft(points: { lat: number; lng: number }[]): numb
 }
 
 export function generateEnhancedImagery(lat: number, lng: number, apiKey: string, footprintSqft: number = 1500) {
-  // Calculate zoom based on roof size — TIGHT on the roof for measurement.
+  // Calculate zoom based on roof size — ZOOMED IN but entire roof visible.
   // Google Maps zoom at scale=2 (1280px actual):
   //   Zoom 21 ≈ 15m across → excellent for small roofs (<150 m²)
   //   Zoom 20 ≈ 30m across → ideal for most residential (fills frame nicely)
   //   Zoom 19 ≈ 60m across → large residential / small commercial
   //   Zoom 18 ≈ 120m across → large commercial only
-  // ZOOM-OUT STRATEGY (v4.0):
-  // Report imagery zoomed out ONE notch from the tightest fit so the
-  // full building + surrounding context is always visible.
-  // This gives the Python/TS measurement engine enough pixel context
-  // to correlate GPS trace points with satellite features.
   //
-  //   Zoom 20 ≈ 30m across → large residential, was previously tightest
-  //   Zoom 19 ≈ 60m across → now DEFAULT for most residential (zoomed out 1)
-  //   Zoom 18 ≈ 120m across → large commercial (zoomed out 1)
+  // SMART ZOOM STRATEGY (v5.0):
+  // Use the TIGHT zoom level directly — no more zooming out one notch.
+  // Instead, we use a LARGER image canvas (800x800) so we get both:
+  //   1) More zoom = bigger roof in the image
+  //   2) More pixels = more surrounding context captured
+  // Combined with object-fit:contain in report HTML, the FULL image
+  // is always displayed without cropping.
+  //
+  // Roof size → zoom mapping (tighter than v4.0):
+  //   < 100 m² (small)   → Zoom 21 (very tight, ~15m across)
+  //   100-400 m² (medium) → Zoom 20 (tight, ~30m across)
+  //   400-800 m² (large)  → Zoom 20 (tight, ~30m across)
+  //   800-2000 m² (xlarge) → Zoom 19 (moderate, ~60m across)
+  //   > 2000 m² (commercial) → Zoom 19 (moderate, ~60m across)
   const footprintM2 = footprintSqft / 10.7639
-  const tightZoom = footprintM2 > 2000 ? 19 : footprintM2 > 800 ? 20 : 20
-  const roofZoom = tightZoom - 1      // ← ZOOMED OUT ONE NOTCH for report imagery
+  const roofZoom = footprintM2 > 2000 ? 19
+    : footprintM2 > 800 ? 19
+    : footprintM2 > 400 ? 20
+    : footprintM2 > 100 ? 20
+    : 21                               // ← TIGHT zoom, no offset — entire roof visible via larger canvas
   const mediumZoom = roofZoom - 1     // Bridge: property + neighbors
   const contextZoom = roofZoom - 3    // Wide neighborhood context
-  const closeupZoom = tightZoom       // Close-ups use original tight zoom
+  const closeupZoom = Math.min(roofZoom + 1, 21) // Close-ups one notch tighter
   
   // Geo-math for offsets
   // At lat ~53° N (Edmonton): 1° lat ≈ 111.3 km, 1° lng ≈ 67 km
@@ -101,9 +110,10 @@ export function generateEnhancedImagery(lat: number, lng: number, apiKey: string
   const base = `https://maps.googleapis.com/maps/api/staticmap`
   
   return {
-    // ── PRIMARY: Dead-center overhead — zoomed out enough to see ENTIRE roof + surrounding context ──
-    satellite_url: `${base}?center=${lat},${lng}&zoom=${roofZoom}&size=640x640&scale=2&maptype=satellite&key=${apiKey}`,
-    satellite_overhead_url: `${base}?center=${lat},${lng}&zoom=${roofZoom}&size=640x640&scale=2&maptype=satellite&key=${apiKey}`,
+    // ── PRIMARY: Dead-center overhead — TIGHT zoom on roof, larger canvas captures full roof + edges ──
+    // Using 800x800 @ scale=2 = 1600x1600px actual — more detail + more coverage than 640x640
+    satellite_url: `${base}?center=${lat},${lng}&zoom=${roofZoom}&size=800x800&scale=2&maptype=satellite&key=${apiKey}`,
+    satellite_overhead_url: `${base}?center=${lat},${lng}&zoom=${roofZoom}&size=800x800&scale=2&maptype=satellite&key=${apiKey}`,
     
     // ── MEDIUM: Property view — shows full lot (zoom-1 from overhead) ──
     satellite_medium_url: `${base}?center=${lat},${lng}&zoom=${mediumZoom}&size=640x640&scale=2&maptype=satellite&key=${apiKey}`,
