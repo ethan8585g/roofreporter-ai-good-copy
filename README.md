@@ -2,9 +2,9 @@
 
 ## Project Overview
 - **Name**: Reuse Canada Roof Measurement Reports
-- **Version**: 7.0 (Cloud Run Custom AI + Reports Refactor)
+- **Version**: 8.0 (Measurement Engine v4.0 — Python Reference + TS Port)
 - **Goal**: Professional roof measurement reports for roofing contractors installing new roofs
-- **Features**: Marketing landing page, login/register system, admin dashboard with order management, Google Solar API, **Solar DataLayers GeoTIFF processing**, Material BOM, Edge Analysis, Gmail OAuth2 Email Delivery, PDF download, **Full CRM Suite** (Customers, Invoices, Proposals, Jobs, Sales Pipeline, D2D Manager), **Property Overlap Detection**, **Segment Toggle UI**, **Cloud Run Custom AI (dual-path: Colab model + Gemini fallback)**, **AI Vision Inspection**, **Geospatial Utilities with unit tests**
+- **Features**: Marketing landing page, login/register system, admin dashboard with order management, Google Solar API, **Solar DataLayers GeoTIFF processing**, Material BOM, Edge Analysis, Gmail OAuth2 Email Delivery, PDF download, **Full CRM Suite** (Customers, Invoices, Proposals, Jobs, Sales Pipeline, D2D Manager), **Property Overlap Detection**, **Segment Toggle UI**, **Cloud Run Custom AI (dual-path: Colab model + Gemini fallback)**, **AI Vision Inspection**, **Geospatial Utilities with unit tests**, **Python Measurement Engine (roof_engine.py)**, **Multi-slope & Bi-slope Junction Support**, **Common Run Algorithm**, **Zoomed-out Satellite Imagery**
 
 ## URLs
 - **Live Sandbox**: https://3000-ing8ae0z5fkhj91kq4pyi-dfc00ec5.sandbox.novita.ai
@@ -72,6 +72,77 @@ Each logged-in customer gets a full roofing business CRM:
 
 All CRM data is per-user (owner_id scoped) — each customer manages their own contacts, invoices, proposals, and jobs independently.
 
+## Roof Measurement Engine v4.0
+
+### Architecture
+The measurement engine exists in two parallel implementations:
+
+| Component | Language | Location | Purpose |
+|-----------|----------|----------|---------|
+| **Python Reference** | Python 3.12+ | `tools/roof_engine.py` | Canonical reference, pytest tests, offline analysis |
+| **TypeScript Production** | TypeScript | `src/services/roof-measurement-engine.ts` | Cloudflare Workers runtime, API endpoints |
+
+### Core Features
+
+**Slope Input Formats** — `normalize_slope(value, type)`
+| Format | Example | Description |
+|--------|---------|-------------|
+| Pitch ratio | `"6:12"`, `"6/12"` | Rise per 12-inch run |
+| Decimal degrees | `26.57` | Direct angle |
+| Multiplier | `1.118` | Slope factor = √(rise²+144)/12 |
+| Radians | `0.4636` | Direct passthrough |
+| Auto-detect | `"6"` | Heuristic: ≤24 → pitch, <90 → degrees |
+
+**Multi-Slope Support**
+- `slope_map`: Maps plane names to slopes (e.g., `{"main": "6:12", "dormer": "12:12"}`)
+- Bi-slope junctions: `slope_ref: "main+dormer"` → averages both angles
+- Flagged as `is_bi_slope: true` in output
+
+**True Length Formulas** (θ in radians)
+| Edge Type | Category | Formula | Note |
+|-----------|----------|---------|------|
+| Eave | Horizontal | `true = 2D` | z₁ = z₂ at eave level |
+| Ridge | Horizontal | `true = 2D` | z₁ = z₂ at ridge level |
+| Rake | Sloped | `true = 2D / cos(θ)` | Straight up the slope |
+| Hip | Sloped | `true = √(L² + Δz²)` | Δz = R_common × tan(θ) |
+| Valley | Sloped | `true = √(L² + Δz²)` | Same as hip |
+
+**Common Run Algorithm** (hips/valleys):
+1. Find nearest eave segment to each endpoint
+2. Project endpoint perpendicularly onto eave line
+3. `R_common` = perpendicular distance
+4. `Δz = R_common × tan(θ)` = height gained
+5. `true_length = √(L_2d² + Δz²)`
+
+**Auto-Classification Heuristics** (when label missing):
+- Horizontal near bottom → eave
+- Horizontal near top → ridge
+- Nearly vertical (>75°) → rake
+- Diagonal 30–60° → hip or valley
+
+**Edge-Case Handling**:
+- Zero-length segments → silently discarded
+- Vertical θ (≥90°) → raises error
+- Flat roof (θ=0) → true_length = 2D, area multiplier = 1.0
+- Collinear hip projection outside eave → clamped to nearest endpoint
+- Duplicate segments (same label + coordinates) → deduplicated
+- Unit mismatch → auto-converts m→ft
+
+### Running Python Tests
+```bash
+cd tools && python3 -m pytest test_roof_engine.py -v
+# 26 tests: gable, hip, flat, mixed-slope dormer, edge cases
+```
+
+### Satellite Imagery (v4.0 — Zoomed Out)
+Report imagery now uses **tightZoom − 1** so the full building + surrounding context is visible:
+| Zoom Level | Coverage | Use |
+|------------|----------|-----|
+| `tightZoom` (20) | ~30m across | Close-up quadrant corners |
+| `roofZoom` (19) | ~60m across | **Primary report overhead** |
+| `mediumZoom` (18) | ~120m across | Property + neighbors |
+| `contextZoom` (16) | ~500m across | Neighborhood context |
+
 ## API Endpoints
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -97,6 +168,9 @@ All CRM data is per-user (owner_id scoped) — each customer manages their own c
 | GET | `/api/reports/:id/html` | Get professional HTML report |
 | GET | `/api/reports/:id/pdf` | Get PDF-ready HTML with print controls (browser Print → Save as PDF) |
 | POST | `/api/reports/:id/email` | Email report (supports `to_email`, `from_email`, `subject_override`) |
+| POST | `/api/reports/calculate-from-trace` | **v4.0** Pre-order measurement engine — accepts GPS trace, returns areas/edges/materials. Blocks order submission until complete. |
+| POST | `/api/reports/:id/trace-remeasure` | **v4.0** Run RoofMeasurementEngine on trace data, cross-check with Solar API, update report |
+| POST | `/api/reports/:id/trace-insights` | Compute roof footprints and edge summaries from user-traced coordinates |
 | GET | `/api/admin/dashboard` | Admin analytics |
 | POST | `/api/admin/init-db` | Initialize/migrate database |
 
