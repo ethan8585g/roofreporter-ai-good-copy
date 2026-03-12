@@ -145,9 +145,46 @@ export async function saveCompletedReport(
   db: D1Database, orderId: number | string,
   reportData: RoofReport, html: string, version: string
 ) {
-  const es = reportData.edge_summary
-  const m = reportData.materials
+  const es = reportData.edge_summary || {} as any
+  const m = reportData.materials || {} as any
   const satUrl = reportData.imagery?.satellite_overhead_url || reportData.imagery?.satellite_url || null
+
+  // D1 does NOT accept undefined — every bind value must be null, number, or string.
+  // Helper converts undefined to null and ensures numbers are valid.
+  const n = (v: any): number | null => (v === undefined || v === null || isNaN(v)) ? null : Number(v)
+  const s = (v: any): string | null => (v === undefined || v === null) ? null : String(v)
+
+  // Pre-save validation log — if any bind is still undefined, this helps diagnose
+  const bindValues = [
+    n(reportData.total_true_area_sqft), n(reportData.total_true_area_sqm),
+    n(reportData.total_footprint_sqft), n(reportData.total_footprint_sqm),
+    n(reportData.area_multiplier),
+    n(reportData.roof_pitch_degrees), s(reportData.roof_pitch_ratio),
+    n(reportData.roof_azimuth_degrees),
+    n(reportData.max_sunshine_hours), n(reportData.num_panels_possible),
+    n(reportData.yearly_energy_kwh), JSON.stringify(reportData.segments || []),
+    JSON.stringify(reportData.edges || []),
+    n(es.total_ridge_ft), n(es.total_hip_ft), n(es.total_valley_ft),
+    n(es.total_eave_ft), n(es.total_rake_ft),
+    JSON.stringify(m),
+    n(m.gross_squares), n(m.bundle_count),
+    n(m.total_material_cost_cad), s(m.complexity_class),
+    s(reportData.quality?.imagery_quality) ?? null, s(reportData.quality?.imagery_date) ?? null,
+    n(reportData.quality?.confidence_score), reportData.quality?.field_verification_recommended ? 1 : 0,
+    html, version, JSON.stringify(reportData),
+    satUrl,
+    reportData.vision_findings ? JSON.stringify(reportData.vision_findings) : null,
+    orderId
+  ]
+
+  // Safety check: ensure no undefined values slip through to D1
+  const undefinedIdx = bindValues.findIndex(v => v === undefined)
+  if (undefinedIdx >= 0) {
+    console.error(`[SaveReport] Order ${orderId}: UNDEFINED at bind index ${undefinedIdx} — replacing with null`)
+    for (let i = 0; i < bindValues.length; i++) {
+      if (bindValues[i] === undefined) bindValues[i] = null
+    }
+  }
 
   await db.prepare(`
     UPDATE reports SET
@@ -173,27 +210,7 @@ export async function saveCompletedReport(
       vision_findings_json = ?,
       status = 'completed', generation_completed_at = datetime('now'), updated_at = datetime('now')
     WHERE order_id = ?
-  `).bind(
-    reportData.total_true_area_sqft, reportData.total_true_area_sqm,
-    reportData.total_footprint_sqft, reportData.total_footprint_sqm,
-    reportData.area_multiplier,
-    reportData.roof_pitch_degrees, reportData.roof_pitch_ratio,
-    reportData.roof_azimuth_degrees,
-    reportData.max_sunshine_hours, reportData.num_panels_possible,
-    reportData.yearly_energy_kwh, JSON.stringify(reportData.segments),
-    JSON.stringify(reportData.edges),
-    es.total_ridge_ft, es.total_hip_ft, es.total_valley_ft,
-    es.total_eave_ft, es.total_rake_ft,
-    JSON.stringify(m),
-    m.gross_squares, m.bundle_count,
-    m.total_material_cost_cad, m.complexity_class,
-    reportData.quality.imagery_quality || null, reportData.quality.imagery_date || null,
-    reportData.quality.confidence_score, reportData.quality.field_verification_recommended ? 1 : 0,
-    html, version, JSON.stringify(reportData),
-    satUrl,
-    reportData.vision_findings ? JSON.stringify(reportData.vision_findings) : null,
-    orderId
-  ).run()
+  `).bind(...bindValues).run()
 }
 
 export async function markReportFailed(db: D1Database, orderId: number | string, errorMsg: string) {
