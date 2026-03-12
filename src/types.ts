@@ -16,6 +16,10 @@
 export type Bindings = {
   DB: D1Database
 
+  // Cloudflare Workers AI — built-in edge AI models
+  // Available: @cf/microsoft/resnet-50, @cf/meta/llama-3-8b-instruct, @cf/llava-hf/llava-1.5-7b-hf, etc.
+  AI: any  // Ai type from @cloudflare/workers-types
+
   // Google APIs - stored as Cloudflare secrets, accessed server-side only
   GOOGLE_SOLAR_API_KEY: string
   GOOGLE_MAPS_API_KEY: string

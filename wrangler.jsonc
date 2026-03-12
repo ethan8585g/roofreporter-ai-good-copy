@@ -10,5 +10,12 @@
       "database_name": "roofing-production",
       "database_id": "e64c0cf3-43fa-4f41-ac75-ed12694a26c5"
     }
-  ]
+  ],
+  // Cloudflare Workers AI — built-in AI models for image classification,
+  // measurement validation, and report enhancement at the edge.
+  // Available models: @cf/microsoft/resnet-50, @cf/meta/llama-3-8b-instruct,
+  // @cf/llava-hf/llava-1.5-7b-hf (vision), etc.
+  "ai": {
+    "binding": "AI"
+  }
 }
