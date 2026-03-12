@@ -466,7 +466,7 @@ secretaryRoutes.post('/livekit-token', async (c) => {
 
 // ============================================================
 // POST /webhook/call-complete — LiveKit calls this after each call
-// Records call log entry
+// Records call log entry + sends SMS transcript summary to owner
 // ============================================================
 secretaryRoutes.post('/webhook/call-complete', async (c) => {
   try {
@@ -493,12 +493,117 @@ secretaryRoutes.post('/webhook/call-complete', async (c) => {
       room_id || ''
     ).run()
 
+    // ── Send SMS transcript summary to the business owner (non-blocking) ──
+    const twilioSid = (c.env as any).TWILIO_ACCOUNT_SID
+    const twilioAuth = (c.env as any).TWILIO_AUTH_TOKEN
+    if (twilioSid && twilioAuth) {
+      sendCallSummaryViaSMS(
+        c.env.DB, twilioSid, twilioAuth,
+        customer_id, caller_phone || 'Unknown', caller_name || 'Unknown',
+        duration_seconds || 0, directory_routed || '',
+        summary || '', transcript || '', outcome || 'answered'
+      ).catch(e => console.warn(`[Secretary SMS] Non-critical SMS error for customer ${customer_id}:`, e.message))
+    }
+
     return c.json({ success: true })
   } catch (err: any) {
     console.error('[Secretary Webhook]', err)
     return c.json({ error: err.message }, 500)
   }
 })
+
+// ============================================================
+// SMS TRANSCRIPT SUMMARY — Sends post-call summary via Twilio
+// Texts the business owner after every AI-handled call
+// ============================================================
+async function sendCallSummaryViaSMS(
+  db: D1Database,
+  twilioSid: string, twilioAuth: string,
+  customerId: number, callerPhone: string, callerName: string,
+  durationSec: number, directoryRouted: string,
+  summary: string, transcript: string, outcome: string
+) {
+  // Get the owner's business phone from their secretary config
+  const config = await db.prepare(
+    `SELECT business_phone, assigned_phone_number, agent_name FROM secretary_config WHERE customer_id = ?`
+  ).bind(customerId).first<any>()
+
+  if (!config?.business_phone) {
+    console.log(`[Secretary SMS] No business phone for customer ${customerId} — skipping SMS`)
+    return
+  }
+
+  // Format the phone number for SMS delivery
+  let ownerPhone = config.business_phone.replace(/[^\d+]/g, '')
+  if (!ownerPhone.startsWith('+')) {
+    ownerPhone = ownerPhone.length === 10 ? `+1${ownerPhone}` : `+${ownerPhone}`
+  }
+
+  // Use the assigned AI number as the "from" number
+  let fromNumber = config.assigned_phone_number || ''
+  if (!fromNumber) {
+    const pool = await db.prepare(
+      `SELECT phone_number FROM secretary_phone_pool WHERE status = 'assigned' AND assigned_to_customer_id = ? LIMIT 1`
+    ).bind(customerId).first<any>()
+    fromNumber = pool?.phone_number || ''
+  }
+  if (!fromNumber) {
+    console.log(`[Secretary SMS] No "from" number available for customer ${customerId} — skipping SMS`)
+    return
+  }
+
+  // Build the SMS message (keep under 1600 chars for multi-part SMS)
+  const agentName = config.agent_name || 'AI Secretary'
+  const mins = Math.floor(durationSec / 60)
+  const secs = durationSec % 60
+  const durationStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`
+
+  let smsBody = `\n` +
+    `--- ${agentName} Call Summary ---\n` +
+    `Caller: ${callerName}${callerPhone !== 'Unknown' ? ' (' + callerPhone + ')' : ''}\n` +
+    `Duration: ${durationStr} | Outcome: ${outcome}\n`
+
+  if (directoryRouted) {
+    smsBody += `Routed to: ${directoryRouted}\n`
+  }
+
+  if (summary) {
+    smsBody += `\nSummary: ${summary.substring(0, 400)}\n`
+  }
+
+  if (transcript) {
+    const shortTranscript = transcript.length > 600
+      ? transcript.substring(0, 600) + '...'
+      : transcript
+    smsBody += `\nTranscript:\n${shortTranscript}\n`
+  }
+
+  smsBody += `\n--- End of ${agentName} Report ---`
+
+  // Send via Twilio SMS API
+  const url = `https://api.twilio.com/2010-04-01/Accounts/${twilioSid}/Messages.json`
+  const formBody = [
+    `To=${encodeURIComponent(ownerPhone)}`,
+    `From=${encodeURIComponent(fromNumber)}`,
+    `Body=${encodeURIComponent(smsBody.trim())}`,
+  ].join('&')
+
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Basic ' + btoa(`${twilioSid}:${twilioAuth}`),
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: formBody,
+  })
+
+  const result: any = await resp.json()
+  if (result.sid) {
+    console.log(`[Secretary SMS] Transcript summary sent to ${ownerPhone} (SID: ${result.sid})`)
+  } else {
+    console.warn(`[Secretary SMS] Failed to send to ${ownerPhone}:`, result.message || result.code || 'unknown error')
+  }
+}
 
 // ============================================================
 // TELEPHONY INTEGRATION — Connect existing phone numbers
