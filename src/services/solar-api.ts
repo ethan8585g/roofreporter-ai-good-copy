@@ -54,13 +54,21 @@ export function generateEnhancedImagery(lat: number, lng: number, apiKey: string
   //   Zoom 20 ≈ 30m across → ideal for most residential (fills frame nicely)
   //   Zoom 19 ≈ 60m across → large residential / small commercial
   //   Zoom 18 ≈ 120m across → large commercial only
-  // The roof MUST fill most of the image for measurement purposes.
-  // A 25m × 25m house (625 m²) at zoom 20 ≈ 30m fills ~83% of the frame — perfect.
+  // ZOOM-OUT STRATEGY (v4.0):
+  // Report imagery zoomed out ONE notch from the tightest fit so the
+  // full building + surrounding context is always visible.
+  // This gives the Python/TS measurement engine enough pixel context
+  // to correlate GPS trace points with satellite features.
+  //
+  //   Zoom 20 ≈ 30m across → large residential, was previously tightest
+  //   Zoom 19 ≈ 60m across → now DEFAULT for most residential (zoomed out 1)
+  //   Zoom 18 ≈ 120m across → large commercial (zoomed out 1)
   const footprintM2 = footprintSqft / 10.7639
-  const roofZoom = footprintM2 > 2000 ? 19 : footprintM2 > 800 ? 20 : 20
+  const tightZoom = footprintM2 > 2000 ? 19 : footprintM2 > 800 ? 20 : 20
+  const roofZoom = tightZoom - 1      // ← ZOOMED OUT ONE NOTCH for report imagery
   const mediumZoom = roofZoom - 1     // Bridge: property + neighbors
   const contextZoom = roofZoom - 3    // Wide neighborhood context
-  const closeupZoom = roofZoom  // Same zoom as overhead — we're just panning to corners, not zooming further
+  const closeupZoom = tightZoom       // Close-ups use original tight zoom
   
   // Geo-math for offsets
   // At lat ~53° N (Edmonton): 1° lat ≈ 111.3 km, 1° lng ≈ 67 km
