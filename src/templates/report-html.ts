@@ -246,9 +246,9 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
 
     <!-- RIGHT COLUMN: Aerial Satellite Image (~58%) -->
     <div style="flex:1;display:flex;flex-direction:column">
-      <div style="flex:1;border:1px solid #ccc;border-radius:4px;overflow:hidden;background:#e8ecf1;min-height:380px">
+      <div style="flex:1;border:1px solid #ccc;border-radius:4px;overflow:hidden;background:#1a2332;min-height:380px;display:flex;align-items:center;justify-content:center">
         ${overheadUrl
-          ? `<img src="${overheadUrl}" alt="Aerial View" style="width:100%;height:100%;object-fit:cover;display:block" onerror="this.parentElement.innerHTML='<div style=\\'height:380px;display:flex;align-items:center;justify-content:center;color:#999;font-size:13px\\'>Satellite imagery not available</div>'">`
+          ? `<img src="${overheadUrl}" alt="Aerial View" style="width:100%;height:100%;object-fit:contain;display:block" onerror="this.parentElement.innerHTML='<div style=\\'height:380px;display:flex;align-items:center;justify-content:center;color:#999;font-size:13px\\'>Satellite imagery not available</div>'">`
           : '<div style="height:380px;display:flex;align-items:center;justify-content:center;color:#999;font-size:13px">Satellite imagery not available</div>'}
       </div>
       <div style="font-size:7px;color:#888;text-align:right;margin-top:2px">&copy; Google Maps &mdash; Imagery for measurement reference only</div>
@@ -911,9 +911,9 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
 
     <!-- RIGHT COLUMN: Satellite Image -->
     <div>
-      <div style="border:1px solid #ddd;border-radius:4px;overflow:hidden;background:#e8ecf1">
+      <div style="border:1px solid #ddd;border-radius:4px;overflow:hidden;background:#1a2332;display:flex;align-items:center;justify-content:center">
         ${overheadUrl
-          ? `<img src="${overheadUrl}" alt="Aerial View" style="width:100%;height:340px;object-fit:cover;display:block" onerror="this.style.display='none'">`
+          ? `<img src="${overheadUrl}" alt="Aerial View" style="width:100%;height:340px;object-fit:contain;display:block" onerror="this.style.display='none'">`
           : `<div style="height:340px;background:#e8ecf1;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:12px">Satellite imagery not available</div>`
         }
       </div>

@@ -792,7 +792,9 @@ export async function quickMeasure(
   const mapsKey = env.mapsKey || env.apiKey
   if (!mapsKey) throw new Error('No Maps API key available')
 
-  const satelliteUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=20&size=640x640&maptype=satellite&key=${mapsKey}`
+  // NOTE: Analysis uses 640x640 to match coordinate system in Gemini prompt (0-640 range).
+  // Report display imagery uses 800x800 via generateEnhancedImagery() for better framing.
+  const satelliteUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=20&size=640x640&scale=2&maptype=satellite&key=${mapsKey}`
 
   const analysis = await analyzeRoofGeometry(satelliteUrl, env)
   if (!analysis) throw new Error('AI analysis returned empty result')

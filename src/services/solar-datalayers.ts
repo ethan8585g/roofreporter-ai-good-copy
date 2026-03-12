@@ -888,8 +888,9 @@ export async function executeRoofOrder(
   const contextZoom = roofZoom - 3
   const mediumZoom = roofZoom - 1
 
-  // Primary overhead satellite image (640x640 viewport, scale=2 for 1280x1280 actual pixels)
-  const satelliteOverheadUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=${roofZoom}&size=640x640&scale=2&maptype=satellite&key=${geocodeKey}`
+  // Primary overhead satellite image (800x800 viewport, scale=2 for 1600x1600 actual pixels)
+  // Larger canvas = more zoom while still capturing full roof edges
+  const satelliteOverheadUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=${roofZoom}&size=800x800&scale=2&maptype=satellite&key=${geocodeKey}`
   // Wider context view
   const satelliteContextUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=${contextZoom}&size=640x640&scale=2&maptype=satellite&key=${geocodeKey}`
   // Medium bridge view
