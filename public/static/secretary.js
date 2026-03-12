@@ -142,17 +142,17 @@
           '<div class="w-20 h-20 bg-white/20 rounded-2xl flex items-center justify-center mx-auto mb-4"><i class="fas fa-headset text-4xl"></i></div>' +
           '<h2 class="text-3xl font-extrabold mb-2">Roofer Secretary</h2>' +
           '<p class="text-sky-100 text-lg">AI-Powered Phone Answering Service</p>' +
-          '<p class="text-sky-200 text-sm mt-2">Never miss a customer call again. Works with your <strong>existing business phone number</strong> — no new number needed.</p>' +
+          '<p class="text-sky-200 text-sm mt-2">Never miss a customer call again. AI answers <strong>only when you can\'t</strong> — your phone rings first. Works with your existing business number.</p>' +
         '</div>' +
 
         '<div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 mb-6">' +
           '<h3 class="font-bold text-gray-800 text-lg mb-4"><i class="fas fa-check-circle text-green-500 mr-2"></i>What You Get</h3>' +
           '<div class="grid grid-cols-1 md:grid-cols-2 gap-3">' +
-            feature('fa-phone-alt', 'Keep Your Number', 'Connect to your existing business phone — no new number needed') +
-            feature('fa-clock', '24/7 Coverage', 'AI answers every call, day or night') +
+            feature('fa-phone-alt', 'Keep Your Number', 'Connects to your existing business phone — no new number needed') +
+            feature('fa-user-clock', 'Answers Only If You Can\'t', 'Your phone rings first. AI only picks up when you miss or are busy — like a real secretary') +
+            feature('fa-sms', 'SMS Call Summary', 'Get a text with a full transcript and summary after every AI-handled call') +
             feature('fa-route', 'Smart Routing', 'Route callers to Parts, Sales, Service, etc.') +
             feature('fa-comment-dots', 'Custom Greeting', 'Your business, your script, your personality') +
-            feature('fa-file-alt', 'Call Transcripts', 'Full transcript & AI summary of every call') +
             feature('fa-question-circle', 'FAQ Handling', 'AI answers common questions automatically') +
           '</div>' +
         '</div>' +
@@ -160,10 +160,10 @@
         '<div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 mb-6">' +
           '<h3 class="font-bold text-gray-800 text-lg mb-4"><i class="fas fa-plug text-sky-500 mr-2"></i>How It Works</h3>' +
           '<div class="space-y-4">' +
-            howStep(1, 'Subscribe & Configure', 'Set up your AI secretary with your custom greeting, Q&A, and call routing directories.') +
-            howStep(2, 'Connect Your Phone', 'We assign you an AI answering line. Set up simple call forwarding from your existing number — takes 30 seconds.') +
-            howStep(3, 'Calls Get Answered', 'When you can\'t pick up, calls forward to the AI. It greets callers, answers questions, routes to departments, and takes messages.') +
-            howStep(4, 'Review Call Logs', 'See every call with full transcripts, AI summaries, and which department was selected.') +
+            howStep(1, 'Subscribe & Configure', 'Set up your AI secretary with your greeting script, FAQ answers, and call routing departments.') +
+            howStep(2, 'Connect Your Phone', 'We assign an AI answering line. Set up no-answer call forwarding from your existing number — 30 seconds.') +
+            howStep(3, 'AI Answers When You Can\'t', 'Your phone rings first. If you don\'t answer or you\'re on another call, it forwards to the AI. The AI greets the caller, answers questions, routes to departments, and takes messages.') +
+            howStep(4, 'Get SMS Summary + Call Log', 'After every AI-handled call, you receive a text message with the caller info, transcript summary, and which department was selected. Full logs always in your dashboard.') +
           '</div>' +
         '</div>' +
 
@@ -173,7 +173,7 @@
             '<div class="text-right"><div class="text-4xl font-extrabold text-gray-900">$149<span class="text-lg font-normal text-gray-500">/mo</span></div><p class="text-xs text-gray-400">CAD + applicable taxes</p></div>' +
           '</div>' +
           '<div class="bg-sky-50 border border-sky-100 rounded-xl p-4 mb-4">' +
-            '<p class="text-sm text-sky-700"><i class="fas fa-info-circle mr-1"></i>Includes unlimited AI-answered calls, full transcripts, smart routing, and 24/7 coverage. Works with any Canadian carrier.</p>' +
+            '<p class="text-sm text-sky-700"><i class="fas fa-info-circle mr-1"></i>Includes unlimited AI-answered calls, SMS transcript summaries after every call, smart routing, and no-answer coverage. Works with any Canadian carrier.</p>' +
           '</div>' +
           '<button onclick="secSubscribe()" id="subscribeBtn" class="w-full py-4 bg-gradient-to-r from-sky-500 to-blue-600 text-white rounded-xl font-bold text-lg hover:from-sky-600 hover:to-blue-700 transition-all shadow-lg hover:shadow-xl">' +
             '<i class="fas fa-lock mr-2"></i>Subscribe & Setup — $149/month</button>' +
@@ -211,9 +211,9 @@
   function renderSetupTab() {
     var c = state.config || {};
     var dirs = state.directories.length > 0 ? state.directories : [
-      { name: 'Sales', phone_or_action: '', special_notes: '' },
-      { name: 'Service', phone_or_action: '', special_notes: '' },
-      { name: 'Parts', phone_or_action: '', special_notes: '' },
+      { name: 'Sales / Estimates', phone_or_action: '(780) 555-0101', special_notes: 'Free estimates, new roof quotes, storm damage assessments. Available Mon-Fri 8am-5pm.' },
+      { name: 'Service / Repairs', phone_or_action: '(780) 555-0102', special_notes: 'Emergency leak repairs, shingle replacement, flashing repairs. 24/7 emergency line.' },
+      { name: 'Office / Billing', phone_or_action: 'Take a message', special_notes: 'Invoice questions, payment arrangements, warranty claims. Office hours Mon-Fri 9am-4pm.' },
     ];
 
     var content = document.getElementById('secContent');
@@ -247,17 +247,17 @@
         '<div class="space-y-4 ml-9">' +
           '<div>' +
             '<label class="block text-sm font-semibold text-gray-700 mb-1"><i class="fas fa-phone mr-1 text-sky-500"></i>Your Business Phone Number</label>' +
-            '<input type="tel" id="secPhone" value="' + esc(c.business_phone || '') + '" placeholder="e.g. (780) 555-1234" class="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-sky-400 focus:border-sky-400">' +
-            '<p class="text-xs text-gray-400 mt-1">The number customers currently call — your existing business line</p></div>' +
+            '<input type="tel" id="secPhone" value="' + esc(c.business_phone || '') + '" placeholder="(780) 983-3335" class="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-sky-400 focus:border-sky-400">' +
+            '<p class="text-xs text-gray-400 mt-1">Your existing business line — the AI only answers when you don\'t pick up. SMS summaries sent to this number after each call.</p></div>' +
           '<div>' +
             '<label class="block text-sm font-semibold text-gray-700 mb-1"><i class="fas fa-comment-dots mr-1 text-sky-500"></i>How Should We Answer?</label>' +
-            '<textarea id="secGreeting" rows="4" maxlength="3000" placeholder="e.g. Thank you for calling ABC Roofing! My name is Sarah, how can I help you today? We offer free estimates, emergency repairs, and full roof replacements across the Edmonton area..." class="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-sky-400 focus:border-sky-400 resize-none">' + esc(c.greeting_script || '') + '</textarea></div>' +
+            '<textarea id="secGreeting" rows="4" maxlength="3000" placeholder="Thank you for calling Reuse Canada Roofing! My name is Sarah. Sorry we missed your call — I\'m the AI assistant and I can help you right away. We offer free roof estimates, emergency leak repairs, shingle replacements, and full roof installations across Edmonton, Sherwood Park, St. Albert, and all surrounding areas. How can I help you today?" class="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-sky-400 focus:border-sky-400 resize-none">' + esc(c.greeting_script || '') + '</textarea></div>' +
           '<div>' +
             '<label class="block text-sm font-semibold text-gray-700 mb-1"><i class="fas fa-question-circle mr-1 text-sky-500"></i>Common Q&A\'s</label>' +
-            '<textarea id="secQA" rows="5" maxlength="3000" placeholder="Q: What areas do you serve?\nA: We serve all of Edmonton, Sherwood Park, St. Albert, and surrounding areas.\n\nQ: Do you offer free estimates?\nA: Yes! We provide free on-site estimates." class="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-sky-400 focus:border-sky-400 resize-none font-mono text-xs">' + esc(c.common_qa || '') + '</textarea></div>' +
+            '<textarea id="secQA" rows="5" maxlength="3000" placeholder="Q: What areas do you serve?\nA: We serve Edmonton, Sherwood Park, St. Albert, Spruce Grove, Leduc, Fort Saskatchewan, Beaumont, and all surrounding areas within 100km of Edmonton.\n\nQ: Do you offer free estimates?\nA: Absolutely! We provide free no-obligation on-site estimates. We can usually get someone out within 1-2 business days.\n\nQ: Do you handle insurance claims?\nA: Yes, we work directly with all major insurance companies on storm damage and hail claims. We\'ll help you through the entire claims process.\n\nQ: What types of roofing do you do?\nA: We do asphalt shingles, metal roofing, flat roofs (TPO/EPDM), cedar shakes, and rubber roofing. Residential and commercial.\n\nQ: Are you licensed and insured?\nA: Yes, fully licensed, insured, and WCB covered. We\'re also a certified CertainTeed and GAF installer." class="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-sky-400 focus:border-sky-400 resize-none font-mono text-xs">' + esc(c.common_qa || '') + '</textarea></div>' +
           '<div>' +
             '<label class="block text-sm font-semibold text-gray-700 mb-1"><i class="fas fa-sticky-note mr-1 text-sky-500"></i>General Notes</label>' +
-            '<textarea id="secNotes" rows="3" maxlength="3000" placeholder="Any additional context, seasonal promotions, or special instructions..." class="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-sky-400 focus:border-sky-400 resize-none">' + esc(c.general_notes || '') + '</textarea></div>' +
+            '<textarea id="secNotes" rows="3" maxlength="3000" placeholder="Spring Special: 10% off all full roof replacements booked before June 30th. Mention this offer!\n\nWe\'re currently booking estimates 3-5 business days out due to high demand from recent hail storms.\n\nEmergency repairs (active leaks) — tell callers we offer same-day emergency service, have them press 2 for Service/Repairs.\n\nAfter hours: Take a detailed message with their name, phone, address, and description of the issue. Let them know we\'ll call back first thing next business day." class="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-sky-400 focus:border-sky-400 resize-none">' + esc(c.general_notes || '') + '</textarea></div>' +
           '<button onclick="secSaveConfig()" id="saveConfigBtn" class="px-6 py-3 bg-sky-500 text-white rounded-xl font-semibold text-sm hover:bg-sky-600 transition-all shadow"><i class="fas fa-save mr-2"></i>Save Configuration</button>' +
         '</div></div>' +
 
@@ -282,11 +282,11 @@
       '</div>' +
       '<div class="grid grid-cols-1 md:grid-cols-3 gap-3">' +
         '<div><label class="block text-xs font-medium text-gray-600 mb-1">Department Name</label>' +
-          '<input type="text" id="dirName' + i + '" value="' + esc(d.name || '') + '" placeholder="e.g. Sales" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-400"></div>' +
+          '<input type="text" id="dirName' + i + '" value="' + esc(d.name || '') + '" placeholder="e.g. Sales / Estimates" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-400"></div>' +
         '<div><label class="block text-xs font-medium text-gray-600 mb-1">Transfer To</label>' +
-          '<input type="text" id="dirAction' + i + '" value="' + esc(d.phone_or_action || '') + '" placeholder="(780) 555-1234 or take message" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-400"></div>' +
+          '<input type="text" id="dirAction' + i + '" value="' + esc(d.phone_or_action || '') + '" placeholder="(780) 555-0101 or Take a message" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-400"></div>' +
         '<div><label class="block text-xs font-medium text-gray-600 mb-1">Special Notes</label>' +
-          '<input type="text" id="dirNotes' + i + '" value="' + esc(d.special_notes || '') + '" placeholder="Hours, key contacts..." class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-400"></div>' +
+          '<input type="text" id="dirNotes' + i + '" value="' + esc(d.special_notes || '') + '" placeholder="Hours, key info, special instructions..." class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-400"></div>' +
       '</div></div>';
   }
 
@@ -348,12 +348,12 @@
     el.innerHTML =
       '<div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">' +
         '<h4 class="font-bold text-gray-800 mb-1">How do you want to connect?</h4>' +
-        '<p class="text-gray-500 text-sm mb-5">99% of roofers already have a business number. Keep using it — just forward unanswered calls to the AI.</p>' +
+        '<p class="text-gray-500 text-sm mb-5">Your phone rings first — the AI only answers when you can\'t pick up. You get an SMS transcript summary after every AI-handled call.</p>' +
 
         '<div class="space-y-3">' +
-          methodCard('call_forwarding', 'fa-phone-alt', 'Call Forwarding (Recommended)',
-            'Keep your existing number. Forward unanswered calls to the AI secretary.',
-            'Works with any carrier — Rogers, Telus, Bell, Freedom, landline, VoIP. Takes 30 seconds to set up. No hardware or software needed.',
+          methodCard('call_forwarding', 'fa-phone-alt', 'No-Answer Forwarding (Recommended)',
+            'Your phone rings first. If you don\'t pick up or you\'re busy, the AI answers. You get a text summary after each call.',
+            'Works with any carrier — Rogers, Telus, Bell, Freedom, landline, VoIP. Takes 30 seconds to set up. No hardware or software needed. You\'ll never miss a lead again.',
             current === 'call_forwarding') +
           methodCard('sip_trunk', 'fa-network-wired', 'SIP Trunk (Advanced)',
             'Connect your VoIP phone system directly to the AI via SIP.',
@@ -527,8 +527,8 @@
               '<div class="flex items-start gap-3">' +
                 '<span class="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-bold">A</span>' +
                 '<div class="flex-1">' +
-                  '<p class="font-semibold text-gray-800 text-sm">Forward ALL Calls</p>' +
-                  '<p class="text-xs text-gray-500 mb-2">Every incoming call goes to the AI — use when you\'re closed or away</p>' +
+                  '<p class="font-semibold text-gray-800 text-sm">Forward ALL Calls <span class="text-gray-400 font-normal">(After Hours Only)</span></p>' +
+                  '<p class="text-xs text-gray-500 mb-2">Use only when you\'re fully closed for the day or on vacation — every call goes straight to AI</p>' +
                   '<div class="bg-gray-900 text-green-400 rounded-lg px-4 py-3 font-mono text-lg select-all cursor-pointer" onclick="copyToClipboard(\'' + esc(fi.activate_all || '') + '\')">' +
                     esc(fi.activate_all || 'N/A') +
                   '</div>' +
@@ -539,8 +539,8 @@
               '<div class="flex items-start gap-3">' +
                 '<span class="px-2 py-0.5 bg-green-600 text-white rounded text-xs font-bold">B</span>' +
                 '<div class="flex-1">' +
-                  '<p class="font-semibold text-gray-800 text-sm">Forward When No Answer <span class="text-green-600">(Recommended)</span></p>' +
-                  '<p class="text-xs text-gray-500 mb-2">Your phone rings first — if you don\'t pick up, it forwards to the AI</p>' +
+                  '<p class="font-semibold text-gray-800 text-sm">Forward When No Answer <span class="text-green-600 font-bold">(RECOMMENDED)</span></p>' +
+                  '<p class="text-xs text-gray-500 mb-2">Your phone rings first — you get first crack at every call. If you don\'t pick up within ~20 seconds, the AI answers and you get a text summary</p>' +
                   '<div class="bg-gray-900 text-green-400 rounded-lg px-4 py-3 font-mono text-lg select-all cursor-pointer" onclick="copyToClipboard(\'' + esc(fi.activate_noanswer || '') + '\')">' +
                     esc(fi.activate_noanswer || 'N/A') +
                   '</div>' +
