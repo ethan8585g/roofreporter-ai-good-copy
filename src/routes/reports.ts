@@ -1934,6 +1934,7 @@ async function _generateReportForOrderInner(
         gross_squares: km.total_squares_gross_w_waste,
         waste_factor: km.waste_factor_pct / 100,
         bundles_3tab: mat.shingles_bundles,
+        bundle_count: mat.shingles_bundles,       // Alias: saveCompletedReport expects bundle_count
         underlayment_rolls: mat.underlayment_rolls,
         ice_water_shield_lf: Math.round(mat.ice_water_shield_sqft / 3),
         ridge_cap_lf: Math.round(mat.ridge_cap_lf),
@@ -1942,6 +1943,8 @@ async function _generateReportForOrderInner(
         valley_flashing_lf: Math.round(mat.valley_flashing_lf),
         nails_lbs: mat.roofing_nails_lbs,
         caulk_tubes: mat.caulk_tubes,
+        total_material_cost_cad: 0,               // Not computed in trace engine — placeholder
+        complexity_class: km.num_hips > 2 || km.num_valleys > 1 ? 'complex' : (km.num_hips > 0 ? 'moderate' : 'simple'),
       }
 
       // Imagery: prefer Solar API, fallback to basic Maps Static
