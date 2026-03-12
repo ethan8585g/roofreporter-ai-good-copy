@@ -614,9 +614,9 @@ export function calculateRoofArea(
   // Pitch ratio (X:12 format)
   const pitchRatio = pitchToRatio12(avgPitchDeg)
 
-  // Waste factor from execute_roof_order() template:
-  //   1.15 if area > 2000 sqft, else 1.05
-  const wasteFactor = trueAreaSqft > 2000 ? 1.15 : 1.05
+  // Waste factor: +5% safety margin per Reuse Canada standard
+  //   1.20 if area > 2000 sqft, else 1.10
+  const wasteFactor = trueAreaSqft > 2000 ? 1.20 : 1.10
 
   // Pitch multiplier from execute_roof_order() template:
   //   sqrt(1 + (pitch_deg/45)^2)
@@ -846,8 +846,8 @@ export async function executeRoofOrder(
   // Area multiplier
   const areaMultiplier = flatAreaSqft > 0 ? trueAreaSqft / flatAreaSqft : 1.0
 
-  // Waste factor: 1.15 if area > 2000 sqft, else 1.05
-  const wasteFactor = trueAreaSqft > 2000 ? 1.15 : 1.05
+  // Waste factor: +5% safety margin per Reuse Canada standard
+  const wasteFactor = trueAreaSqft > 2000 ? 1.20 : 1.10
 
   // Pitch multiplier: sqrt(1 + (pitch_deg/45)^2)
   const pitchMultiplier = Math.sqrt(1 + Math.pow(avgPitchDeg / 45, 2))

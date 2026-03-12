@@ -1874,7 +1874,7 @@ export async function generateReportForOrder(
     // ── CUSTOMER PRICING ──
     if (order.price_per_bundle && order.price_per_bundle > 0) {
       const trueArea = reportData.total_true_area_sqft || 0
-      const wasteMultiplier = 1.15
+      const wasteMultiplier = 1.20  // +5% safety margin per Reuse Canada standard
       const grossSquares = Math.ceil((trueArea * wasteMultiplier) / 100 * 10) / 10
       reportData.customer_price_per_bundle = parseFloat(order.price_per_bundle)
       reportData.customer_gross_squares = grossSquares

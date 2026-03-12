@@ -575,8 +575,9 @@ function categoriseLine(type: string): LineCategory {
 // ═══════════════════════════════════════════════════════════════
 
 function wastePct(rise: number, complexity: string = 'medium'): number {
-  const bases: Record<string, number> = { simple: 0.10, medium: 0.15, complex: 0.20 }
-  let base = bases[complexity] ?? 0.15
+  // Base waste: simple=15%, medium=20%, complex=25% (includes 5% additional safety margin)
+  const bases: Record<string, number> = { simple: 0.15, medium: 0.20, complex: 0.25 }
+  let base = bases[complexity] ?? 0.20
   if (rise >= 9) base += 0.05
   else if (rise >= 7) base += 0.02
   return base
