@@ -40,6 +40,9 @@ import * as repo from '../repositories/reports'
 // GA4 Server-Side Event Tracking
 import { trackReportGenerated, trackReportEnhanced, trackEmailSent } from '../services/ga4-events'
 
+// Report Semantic Search
+import { embedAndStoreReport, generateQueryEmbedding, searchReports, buildReportSearchText } from '../services/report-search'
+
 // Validation
 import { parseBody, ValidationError, toggleSegmentsBody, visionFilterQuery, datalayersAnalyzeBody, emailBody } from '../utils/validation'
 
@@ -893,6 +896,141 @@ reportsRoutes.post('/calculate-from-trace', async (c) => {
     console.error(`[CalculateFromTrace] Error:`, err.message)
     return c.json({ error: 'Measurement calculation failed', details: err.message }, 500)
   }
+})
+
+// ============================================================
+// POST /search — Semantic search across all roof reports
+// Uses Gemini text-embedding-004 for query embedding + cosine similarity
+// ============================================================
+reportsRoutes.post('/search', async (c) => {
+  const apiKey = c.env.GEMINI_ENHANCE_API_KEY || c.env.GOOGLE_VERTEX_API_KEY
+  if (!apiKey) return c.json({ error: 'No Gemini API key configured for embeddings' }, 500)
+
+  const { query, limit, min_score } = await c.req.json()
+  if (!query || typeof query !== 'string' || query.trim().length < 2) {
+    return c.json({ error: 'Search query is required (min 2 characters)' }, 400)
+  }
+
+  const startTime = Date.now()
+
+  try {
+    // Generate query embedding
+    const queryEmbedding = await generateQueryEmbedding(query.trim(), apiKey)
+    if (!queryEmbedding.length) {
+      return c.json({ error: 'Failed to generate query embedding' }, 500)
+    }
+
+    // Search against stored report embeddings
+    const results = await searchReports(
+      c.env.DB,
+      queryEmbedding,
+      limit || 10,
+      min_score || 0.3
+    )
+
+    const elapsed = Date.now() - startTime
+    console.log(`[Search] "${query.trim()}" → ${results.length} results in ${elapsed}ms`)
+
+    return c.json({
+      success: true,
+      query: query.trim(),
+      results,
+      total_results: results.length,
+      search_ms: elapsed,
+    })
+  } catch (err: any) {
+    console.error(`[Search] Error:`, err.message)
+    return c.json({ error: 'Search failed', details: err.message }, 500)
+  }
+})
+
+// ============================================================
+// POST /embed-all — Batch-embed all existing reports (admin tool)
+// Run once to backfill embeddings for all completed reports
+// ============================================================
+reportsRoutes.post('/embed-all', async (c) => {
+  const user = c.get('user' as any) as any
+  if (user?.role !== 'admin') return c.json({ error: 'Admin only' }, 403)
+
+  const apiKey = c.env.GEMINI_ENHANCE_API_KEY || c.env.GOOGLE_VERTEX_API_KEY
+  if (!apiKey) return c.json({ error: 'No Gemini API key configured for embeddings' }, 500)
+
+  // Get all completed reports that don't have embeddings yet
+  const reports = await c.env.DB.prepare(`
+    SELECT r.order_id, r.api_response_raw, o.service_tier, o.order_number
+    FROM reports r
+    JOIN orders o ON o.id = r.order_id
+    WHERE r.status IN ('completed', 'enhanced')
+      AND r.api_response_raw IS NOT NULL
+      AND r.order_id NOT IN (SELECT order_id FROM report_embeddings)
+    ORDER BY r.order_id DESC
+    LIMIT 50
+  `).all()
+
+  if (!reports.results?.length) {
+    return c.json({ success: true, message: 'No reports to embed', embedded: 0 })
+  }
+
+  let embedded = 0
+  let errors = 0
+  const details: any[] = []
+
+  for (const row of reports.results as any[]) {
+    try {
+      const reportData = JSON.parse(row.api_response_raw)
+      const result = await embedAndStoreReport(
+        c.env.DB, row.order_id, reportData, apiKey,
+        { service_tier: row.service_tier, order_number: row.order_number }
+      )
+      if (result.success) {
+        embedded++
+        details.push({ order_id: row.order_id, status: 'ok' })
+      } else {
+        errors++
+        details.push({ order_id: row.order_id, status: 'error', error: result.error })
+      }
+      // Rate limit: Gemini free tier is 1500 RPM, but be conservative
+      if (embedded % 5 === 0) await new Promise(r => setTimeout(r, 200))
+    } catch (e: any) {
+      errors++
+      details.push({ order_id: row.order_id, status: 'error', error: e.message })
+    }
+  }
+
+  console.log(`[EmbedAll] Embedded ${embedded}/${reports.results.length} reports (${errors} errors)`)
+
+  return c.json({
+    success: true,
+    total_found: reports.results.length,
+    embedded,
+    errors,
+    details,
+  })
+})
+
+// ============================================================
+// GET /search-stats — Embedding index stats
+// ============================================================
+reportsRoutes.get('/search-stats', async (c) => {
+  const stats = await c.env.DB.prepare(`
+    SELECT
+      COUNT(*) as total_embedded,
+      MIN(created_at) as oldest_embedding,
+      MAX(updated_at) as newest_embedding
+    FROM report_embeddings
+  `).first<any>()
+
+  const totalReports = await c.env.DB.prepare(`
+    SELECT COUNT(*) as total FROM reports WHERE status IN ('completed', 'enhanced')
+  `).first<any>()
+
+  return c.json({
+    total_embedded: stats?.total_embedded || 0,
+    total_completed_reports: totalReports?.total || 0,
+    coverage_pct: totalReports?.total > 0 ? Math.round((stats?.total_embedded || 0) / totalReports.total * 100) : 0,
+    oldest_embedding: stats?.oldest_embedding,
+    newest_embedding: stats?.newest_embedding,
+  })
 })
 
 reportsRoutes.post('/:orderId/generate-enhanced', async (c) => {
@@ -1965,6 +2103,14 @@ async function _generateReportForOrderInner(
     await repo.saveCompletedReport(env.DB, orderId, finalReportData, html, baseVersion)
     await repo.markOrderStatus(env.DB, orderId, 'completed')
     console.log(`[Generate] Order ${orderId}: ✅ Report saved as COMPLETED (v${baseVersion}, provider=${finalReportData.metadata?.provider || 'unknown'})`)
+
+    // ── AUTO-EMBED for semantic search (non-blocking) ──
+    const embedKey = env.GEMINI_ENHANCE_API_KEY || env.GOOGLE_VERTEX_API_KEY
+    if (embedKey) {
+      embedAndStoreReport(env.DB, typeof orderId === 'string' ? parseInt(orderId) : orderId as number, finalReportData, embedKey, order)
+        .then(r => { if (r.success) console.log(`[Generate] Order ${orderId}: ✅ Embedded for search`) })
+        .catch(e => console.warn(`[Generate] Order ${orderId}: ⚠️ Search embedding failed (non-critical): ${e.message}`))
+    }
 
     return {
       success: true,
