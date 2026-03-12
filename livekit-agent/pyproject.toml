@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "roofer-secretary-agent"
+version = "1.0.0"
+description = "AI voice receptionist for roofing businesses — powered by LiveKit Agents"
+requires-python = ">=3.10, <3.15"
+
+dependencies = [
+    "livekit-agents[silero,turn-detector]~=1.4",
+    "livekit-plugins-noise-cancellation~=0.2",
+    "python-dotenv",
+    "aiohttp>=3.9.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "ruff",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-dir]
+"" = "src"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
