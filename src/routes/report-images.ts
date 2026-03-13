@@ -283,25 +283,26 @@ reportImagesRoutes.post('/generate', async (c) => {
           ).join('\n')
         : ''
 
-      const prompt1 = `You are a professional architectural visualization expert. I'm providing ${refImages.length} satellite image(s) of a residential property roof.
+      const prompt1 = `You are a professional aerial imagery specialist creating EagleView-quality roof imagery for a formal measurement report.
 
-Your task: Create ONE single enhanced, high-quality overhead view that combines the best of both satellite images into a cleaner, sharper, more professional result. This is for a formal roof measurement report.
+I'm providing ${refImages.length} satellite image(s) of a residential property roof. Create ONE single, stunning EAGLE-VIEW overhead image.
 
-Requirements:
-- Create a CLEAN, sharp bird's-eye overhead view of the roof
-- Enhance visibility: improve contrast, sharpen roof edges, reduce haze/blur
-- Draw clean MEASUREMENT ANNOTATION LINES on the roof edges:
-  • RED lines along RIDGES
-  • BLUE lines along HIPS
-  • GREEN lines along VALLEYS  
-  • YELLOW lines along EAVES
-  • ORANGE lines along RAKES
-- Label each line with its measurement in feet
-- Color-code each roof facet/segment with a semi-transparent overlay (different pastel color per facet)
-- Add a small clean LEGEND in the bottom-right showing edge types + colors
-- Add "RoofReporterAI" as a small, professional watermark in the top-left corner
-- Dark navy (#002244) thin border around the entire image
-- Professional quality suitable for a formal PDF measurement report
+CRITICAL REQUIREMENTS:
+1. TRUE EAGLE-VIEW PERSPECTIVE — perfectly overhead/nadir view (looking straight down), like a drone at 200ft altitude
+2. ULTRA-HIGH CLARITY — Photorealistic, razor-sharp roof edges, individual shingle lines visible
+3. ACCURATE ROOF GEOMETRY — Maintain exact proportions and shape from the satellite images. Do NOT distort, stretch, or change the roof shape
+4. ENHANCED QUALITY — Fix any blur, cloud cover, shadow issues. Make it look like a clear, sunny day capture
+5. PROFESSIONAL COLOR GRADING — High contrast, vivid but natural colors, crisp shadows showing roof pitch/depth
+
+ANNOTATION OVERLAY (clean, precise lines):
+- RED lines (2px) along RIDGES with measurement labels
+- AMBER/GOLD lines (2px) along HIPS with measurement labels
+- GREEN lines (2px) along EAVES with measurement labels
+- BLUE dashed lines along VALLEYS (if any) with measurement labels
+- Each roof facet tinted with a different semi-transparent pastel overlay (20% opacity)
+- Small area label on each facet showing square footage
+- Clean LEGEND box (bottom-right): edge type colors + total area
+- "RoofReporterAI" small professional watermark (top-left corner)
 
 Property: ${address || 'Residential Property'}
 Total roof area: ${measurements?.total_area_sqft?.toLocaleString() || '?'} sq ft
@@ -309,7 +310,7 @@ Pitch: ${measurements?.pitch_ratio || '?'} (${measurements?.pitch_degrees || '?'
 ${edgeInfo}
 ${segmentInfo ? `Roof segments:\n${segmentInfo}` : ''}
 
-Style: Professional architectural measurement diagram. Clean, precise, high contrast. Think EagleView / GAF QuickMeasure quality.`
+OUTPUT: One single, professional eagle-view aerial photograph — enhanced to look like premium EagleView/Nearmap/Google Solar quality imagery. Sharp enough to see individual shingle courses. Measurement annotations overlaid cleanly.`
 
       image1 = await callGeminiImage(apiKey, prompt1, refImages, 45000)
     }
@@ -469,6 +470,139 @@ STYLE: Professional architectural technical drawing. Clean vector-like lines, pr
 
   console.log(`[ReportImages] ✅ Pipeline complete: ${images.length}/2 images in ${result.generation_time_ms}ms`)
   return c.json(result)
+})
+
+// ============================================================
+// POST /eagle-view — Regenerate ONLY the eagle-view satellite image
+// Higher quality, focused solely on the overhead roof photo
+// ============================================================
+reportImagesRoutes.post('/eagle-view', async (c) => {
+  const startTime = Date.now()
+  const body: ReportImageRequest = await c.req.json()
+
+  const apiKey = (c.env as any).GEMINI_ENHANCE_API_KEY || c.env.GOOGLE_VERTEX_API_KEY
+  if (!apiKey) return c.json({ error: 'Gemini API key not configured' }, 503)
+  const mapsKey = c.env.GOOGLE_MAPS_API_KEY || c.env.GOOGLE_SOLAR_API_KEY
+  if (!mapsKey) return c.json({ error: 'Google Maps API key required for satellite imagery' }, 503)
+
+  let lat = body.lat, lng = body.lng
+  let address = body.address || ''
+  let measurements = body.measurements
+  let reportJson: any = null
+
+  // Resolve from order_id
+  if (body.order_id) {
+    const report = await c.env.DB.prepare(
+      'SELECT report_json FROM reports WHERE order_id = ? ORDER BY id DESC LIMIT 1'
+    ).bind(body.order_id).first<any>()
+    if (report?.report_json) {
+      try {
+        reportJson = JSON.parse(report.report_json)
+        lat = lat || reportJson.property?.latitude || reportJson.metadata?.coordinates?.lat
+        lng = lng || reportJson.property?.longitude || reportJson.metadata?.coordinates?.lng
+        address = address || [reportJson.property?.address, reportJson.property?.city, reportJson.property?.province].filter(Boolean).join(', ')
+        measurements = measurements || {
+          total_area_sqft: reportJson.total_true_area_sqft,
+          total_footprint_sqft: reportJson.total_footprint_sqft,
+          pitch_degrees: reportJson.roof_pitch_degrees,
+          pitch_ratio: reportJson.roof_pitch_ratio,
+          segments: reportJson.segments?.map((s: any) => ({ name: s.name, true_area_sqft: s.true_area_sqft, pitch_degrees: s.pitch_degrees, azimuth_direction: s.azimuth_direction })),
+          edge_summary: reportJson.edge_summary,
+        }
+      } catch (e) { console.warn('[EagleView] Failed to parse report JSON') }
+    }
+  }
+
+  if (!lat || !lng) return c.json({ error: 'Coordinates required' }, 400)
+
+  // Fetch 3 satellite images at different zoom levels for maximum quality
+  console.log('[EagleView] Fetching 3 satellite images (zoom 21 + 20 + 19)...')
+  const [sat1, sat2, sat3] = await Promise.all([
+    fetchImageBase64(`https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=21&size=640x640&maptype=satellite&key=${mapsKey}`),
+    fetchImageBase64(`https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=20&size=640x640&maptype=satellite&key=${mapsKey}`),
+    fetchImageBase64(`https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=19&size=640x640&maptype=satellite&key=${mapsKey}`)
+  ])
+
+  const refImages = [sat1, sat2, sat3].filter(Boolean) as string[]
+  if (refImages.length === 0) return c.json({ error: 'Failed to fetch satellite images' }, 502)
+
+  console.log(`[EagleView] Got ${refImages.length} images, generating eagle-view...`)
+
+  const eaglePrompt = `You are a premium aerial imagery enhancement AI. Create the highest quality possible EAGLE-VIEW overhead roof image from these ${refImages.length} satellite photos.
+
+MISSION: Produce a PHOTOREALISTIC, ULTRA-SHARP eagle-view image of this roof — as if captured by a professional drone at 150-200ft altitude on a clear sunny day.
+
+CRITICAL — DO THIS:
+1. PERFECT NADIR (straight-down) perspective — zero angle, pure overhead
+2. PHOTOREALISTIC quality — this must look like an actual drone photograph, NOT a rendering
+3. RAZOR-SHARP edges — individual shingle courses and tab lines should be visible
+4. NATURAL lighting — bright, clear day, gentle shadows showing roof plane angles and depth
+5. TRUE-TO-LIFE colors — realistic shingle colors, realistic surroundings (grass, driveway, trees)
+6. ACCURATE PROPORTIONS — match the exact roof shape and geometry from the satellite images precisely
+7. NO distortion — maintain exact building footprint proportions
+
+ENHANCE:
+- Remove any cloud cover, haze, atmospheric blur
+- Sharpen all roof edges dramatically  
+- Increase detail resolution — make it look 4x higher resolution than the input
+- Correct any color cast or poor white balance
+- Add realistic shadow depth to show roof pitch angles clearly
+
+DO NOT:
+- Do NOT add text, annotations, measurement lines, or labels
+- Do NOT change the roof shape or footprint
+- Do NOT add objects that aren't in the original
+- Do NOT make it look like a 3D render or CGI — keep it photorealistic
+
+Property: ${address || 'Residential Property'}
+Roof area: ~${measurements?.total_area_sqft?.toLocaleString() || '?'} sq ft, Pitch: ${measurements?.pitch_ratio || '?'}
+
+OUTPUT: A single, stunning eagle-view aerial photograph that looks like it was captured by a $50,000 professional aerial imaging system (like EagleView, Nearmap, or Verisk). Ultra-sharp. Photorealistic.`
+
+  const eagleImage = await callGeminiImage(apiKey, eaglePrompt, refImages, 60000)
+
+  if (!eagleImage) {
+    return c.json({ success: false, error: 'Eagle-view generation failed', generation_time_ms: Date.now() - startTime }, 500)
+  }
+
+  const dataUrl = `data:image/png;base64,${eagleImage}`
+
+  // Update report JSON if order_id provided
+  if (body.order_id && reportJson) {
+    try {
+      reportJson.eagle_view_image = {
+        data_url: dataUrl,
+        generated_at: new Date().toISOString(),
+        generation_time_ms: Date.now() - startTime,
+        model: 'gemini-2.0-flash-exp'
+      }
+      // Also update the satellite overhead URL to use the eagle view
+      if (reportJson.imagery) {
+        reportJson.imagery.eagle_view_url = dataUrl
+      }
+      await c.env.DB.prepare(
+        'UPDATE reports SET report_json = ?, updated_at = datetime(\'now\') WHERE order_id = ?'
+      ).bind(JSON.stringify(reportJson), body.order_id).run()
+      console.log(`[EagleView] ✅ Saved eagle-view for order ${body.order_id}`)
+    } catch (e: any) {
+      console.warn(`[EagleView] DB save error: ${e.message}`)
+    }
+  }
+
+  console.log(`[EagleView] ✅ Eagle-view generated in ${Date.now() - startTime}ms (${Math.round(eagleImage.length / 1024)}KB)`)
+
+  return c.json({
+    success: true,
+    image: {
+      type: 'eagle_view',
+      label: 'Eagle-View Aerial Image',
+      description: 'AI-enhanced eagle-view overhead photograph — photorealistic, ultra-sharp drone-quality imagery.',
+      data_url: dataUrl,
+      generated_at: new Date().toISOString()
+    },
+    generation_time_ms: Date.now() - startTime,
+    model: 'gemini-2.0-flash-exp'
+  })
 })
 
 // ============================================================
