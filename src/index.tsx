@@ -24,6 +24,7 @@ import { virtualTryonRoutes } from './routes/virtual-tryon'
 import { teamRoutes } from './routes/team'
 import { agentsRoutes } from './routes/agents'
 import { workersAiRoutes } from './routes/workers-ai'
+import { reportImagesRoutes } from './routes/report-images'
 import type { Bindings } from './types'
 
 const app = new Hono<{ Bindings: Bindings }>()
@@ -177,6 +178,7 @@ app.route('/api/virtual-tryon', virtualTryonRoutes)
 app.route('/api/team', teamRoutes)
 app.route('/api/agents', agentsRoutes)
 app.route('/api/workers-ai', workersAiRoutes)
+app.route('/api/report-images', reportImagesRoutes)
 
 // Health check
 app.get('/api/health', (c) => {
