@@ -13,8 +13,6 @@
   ],
   // Cloudflare Workers AI — built-in AI models for image classification,
   // measurement validation, and report enhancement at the edge.
-  // Available models: @cf/microsoft/resnet-50, @cf/meta/llama-3-8b-instruct,
-  // @cf/llava-hf/llava-1.5-7b-hf (vision), etc.
   "ai": {
     "binding": "AI"
   }
