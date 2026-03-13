@@ -1,0 +1,583 @@
+// ============================================================
+// RoofReporterAI — Sales Call Center (Outbound AI Dialer)
+// Super Admin only — cold-calling roofing companies across NA
+// Completely separate from Roofer Secretary product
+// ============================================================
+// POST /api/call-center/campaigns              — Create campaign
+// GET  /api/call-center/campaigns              — List campaigns
+// PUT  /api/call-center/campaigns/:id          — Update campaign
+// DELETE /api/call-center/campaigns/:id        — Delete campaign
+// POST /api/call-center/prospects              — Add prospect(s)
+// GET  /api/call-center/prospects              — List prospects
+// PUT  /api/call-center/prospects/:id          — Update prospect
+// DELETE /api/call-center/prospects/:id        — Delete prospect
+// POST /api/call-center/prospects/import       — Bulk CSV import
+// POST /api/call-center/agents                 — Create AI agent
+// GET  /api/call-center/agents                 — List agents
+// PUT  /api/call-center/agents/:id             — Update agent
+// DELETE /api/call-center/agents/:id           — Delete agent
+// POST /api/call-center/agents/:id/start       — Start agent dialing
+// POST /api/call-center/agents/:id/stop        — Stop agent
+// POST /api/call-center/dial                   — Initiate outbound call
+// GET  /api/call-center/call-logs              — Call history
+// POST /api/call-center/call-complete          — Webhook: call ended
+// GET  /api/call-center/dashboard              — Stats overview
+// POST /api/call-center/livekit-token          — Generate LK token for outbound
+// GET  /api/call-center/next-prospect/:agentId — Get next prospect to call
+// ============================================================
+
+import { Hono } from 'hono'
+import type { Bindings } from '../types'
+
+export const callCenterRoutes = new Hono<{ Bindings: Bindings }>()
+
+// ── Superadmin auth guard ──
+async function requireSuperAdmin(c: any): Promise<boolean> {
+  const auth = c.req.header('Authorization')
+  if (!auth?.startsWith('Bearer ')) return false
+  const token = auth.slice(7)
+  const session = await c.env.DB.prepare(
+    `SELECT cs.customer_id, cu.email, cu.role FROM customer_sessions cs 
+     JOIN customers cu ON cu.id = cs.customer_id 
+     WHERE cs.session_token = ? AND cs.expires_at > datetime('now')`
+  ).bind(token).first<any>()
+  if (!session || session.role !== 'superadmin') return false
+  return true
+}
+
+callCenterRoutes.use('/*', async (c, next) => {
+  if (c.req.method === 'POST' && c.req.path.endsWith('/call-complete')) {
+    return next() // Webhook — no auth
+  }
+  const ok = await requireSuperAdmin(c)
+  if (!ok) return c.json({ error: 'Superadmin access required' }, 403)
+  return next()
+})
+
+// ============================================================
+// DASHBOARD — Overview stats
+// ============================================================
+callCenterRoutes.get('/dashboard', async (c) => {
+  try {
+    const [campaigns, agents, todayCalls, totalProspects, recentCalls] = await Promise.all([
+      c.env.DB.prepare('SELECT COUNT(*) as cnt, SUM(CASE WHEN status=\'active\' THEN 1 ELSE 0 END) as active FROM cc_campaigns').first<any>(),
+      c.env.DB.prepare('SELECT COUNT(*) as cnt, SUM(CASE WHEN status=\'calling\' THEN 1 ELSE 0 END) as active FROM cc_agents').first<any>(),
+      c.env.DB.prepare(`SELECT COUNT(*) as cnt, SUM(CASE WHEN call_status='connected' OR call_status='completed' THEN 1 ELSE 0 END) as connected, SUM(call_duration_seconds) as total_duration, SUM(CASE WHEN call_outcome='interested' OR call_outcome='demo_scheduled' THEN 1 ELSE 0 END) as hot_leads FROM cc_call_logs WHERE date(started_at) = date('now')`).first<any>(),
+      c.env.DB.prepare(`SELECT COUNT(*) as total, SUM(CASE WHEN status='new' OR status='queued' THEN 1 ELSE 0 END) as available, SUM(CASE WHEN status='interested' THEN 1 ELSE 0 END) as interested, SUM(CASE WHEN status='demo_scheduled' THEN 1 ELSE 0 END) as demos, SUM(CASE WHEN status='converted' THEN 1 ELSE 0 END) as converted, SUM(CASE WHEN status='not_interested' OR status='do_not_call' THEN 1 ELSE 0 END) as exhausted FROM cc_prospects`).first<any>(),
+      c.env.DB.prepare('SELECT cl.*, p.company_name, p.contact_name FROM cc_call_logs cl LEFT JOIN cc_prospects p ON p.id = cl.prospect_id ORDER BY cl.started_at DESC LIMIT 20').all<any>(),
+    ])
+
+    // Hourly breakdown for today
+    const { results: hourlyData } = await c.env.DB.prepare(
+      `SELECT strftime('%H', started_at) as hour, COUNT(*) as calls, SUM(CASE WHEN call_status='connected' OR call_status='completed' THEN 1 ELSE 0 END) as connects FROM cc_call_logs WHERE date(started_at) = date('now') GROUP BY hour ORDER BY hour`
+    ).all<any>()
+
+    return c.json({
+      campaigns: { total: campaigns?.cnt || 0, active: campaigns?.active || 0 },
+      agents: { total: agents?.cnt || 0, active: agents?.active || 0 },
+      today: {
+        calls: todayCalls?.cnt || 0,
+        connected: todayCalls?.connected || 0,
+        total_duration: todayCalls?.total_duration || 0,
+        hot_leads: todayCalls?.hot_leads || 0,
+        connect_rate: todayCalls?.cnt ? ((todayCalls?.connected || 0) / todayCalls.cnt * 100).toFixed(1) : '0.0',
+      },
+      prospects: {
+        total: totalProspects?.total || 0,
+        available: totalProspects?.available || 0,
+        interested: totalProspects?.interested || 0,
+        demos: totalProspects?.demos || 0,
+        converted: totalProspects?.converted || 0,
+        exhausted: totalProspects?.exhausted || 0,
+      },
+      recent_calls: recentCalls?.results || [],
+      hourly: hourlyData || [],
+    })
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500)
+  }
+})
+
+// ============================================================
+// CAMPAIGNS CRUD
+// ============================================================
+callCenterRoutes.get('/campaigns', async (c) => {
+  const { results } = await c.env.DB.prepare('SELECT * FROM cc_campaigns ORDER BY created_at DESC').all<any>()
+  return c.json({ campaigns: results })
+})
+
+callCenterRoutes.post('/campaigns', async (c) => {
+  const body = await c.req.json()
+  const { name, description, script_intro, script_value_prop, script_objections, script_closing, target_region, target_company_size, call_hours_start, call_hours_end, timezone, max_attempts, cooldown_hours } = body
+  if (!name) return c.json({ error: 'Campaign name required' }, 400)
+
+  const res = await c.env.DB.prepare(
+    `INSERT INTO cc_campaigns (name, description, script_intro, script_value_prop, script_objections, script_closing, target_region, target_company_size, call_hours_start, call_hours_end, timezone, max_attempts, cooldown_hours) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`
+  ).bind(
+    name, description || '', script_intro || '', script_value_prop || '', script_objections || '', script_closing || '',
+    target_region || '', target_company_size || '', call_hours_start || '09:00', call_hours_end || '17:00',
+    timezone || 'America/Edmonton', max_attempts || 3, cooldown_hours || 24
+  ).run()
+  return c.json({ success: true, id: res.meta.last_row_id })
+})
+
+callCenterRoutes.put('/campaigns/:id', async (c) => {
+  const id = parseInt(c.req.param('id'))
+  const body = await c.req.json()
+  const fields: string[] = []
+  const values: any[] = []
+
+  for (const [key, val] of Object.entries(body)) {
+    if (['name', 'description', 'script_intro', 'script_value_prop', 'script_objections', 'script_closing', 'target_region', 'target_company_size', 'call_hours_start', 'call_hours_end', 'timezone', 'status'].includes(key)) {
+      fields.push(`${key}=?`)
+      values.push(val)
+    }
+    if (['max_attempts', 'cooldown_hours'].includes(key)) {
+      fields.push(`${key}=?`)
+      values.push(parseInt(val as string))
+    }
+  }
+  if (fields.length === 0) return c.json({ error: 'No valid fields' }, 400)
+  fields.push("updated_at=datetime('now')")
+  values.push(id)
+
+  await c.env.DB.prepare(`UPDATE cc_campaigns SET ${fields.join(',')} WHERE id=?`).bind(...values).run()
+  return c.json({ success: true })
+})
+
+callCenterRoutes.delete('/campaigns/:id', async (c) => {
+  const id = parseInt(c.req.param('id'))
+  await c.env.DB.prepare('DELETE FROM cc_campaigns WHERE id=?').bind(id).run()
+  return c.json({ success: true })
+})
+
+// ============================================================
+// PROSPECTS CRUD
+// ============================================================
+callCenterRoutes.get('/prospects', async (c) => {
+  const campaign = c.req.query('campaign_id')
+  const status = c.req.query('status')
+  const search = c.req.query('search')
+  const page = parseInt(c.req.query('page') || '1')
+  const limit = Math.min(parseInt(c.req.query('limit') || '50'), 200)
+  const offset = (page - 1) * limit
+
+  let where = '1=1'
+  const params: any[] = []
+  if (campaign) { where += ' AND campaign_id=?'; params.push(parseInt(campaign)) }
+  if (status) { where += ' AND status=?'; params.push(status) }
+  if (search) { where += ' AND (company_name LIKE ? OR contact_name LIKE ? OR phone LIKE ? OR city LIKE ?)'; const s = `%${search}%`; params.push(s, s, s, s) }
+
+  const countRow = await c.env.DB.prepare(`SELECT COUNT(*) as cnt FROM cc_prospects WHERE ${where}`).bind(...params).first<any>()
+  const { results } = await c.env.DB.prepare(`SELECT * FROM cc_prospects WHERE ${where} ORDER BY priority ASC, created_at DESC LIMIT ? OFFSET ?`).bind(...params, limit, offset).all<any>()
+
+  return c.json({ prospects: results, total: countRow?.cnt || 0, page, limit })
+})
+
+callCenterRoutes.post('/prospects', async (c) => {
+  const body = await c.req.json()
+  // Support single or array
+  const items = Array.isArray(body) ? body : [body]
+  const inserted: number[] = []
+
+  for (const p of items) {
+    if (!p.phone || !p.company_name) continue
+    const res = await c.env.DB.prepare(
+      `INSERT INTO cc_prospects (company_name, contact_name, phone, email, website, city, province_state, country, company_size, lead_source, status, priority, tags, notes, campaign_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+    ).bind(
+      p.company_name, p.contact_name || '', p.phone, p.email || '', p.website || '',
+      p.city || '', p.province_state || '', p.country || 'CA', p.company_size || '',
+      p.lead_source || 'manual', 'new', p.priority || 5, p.tags || '', p.notes || '',
+      p.campaign_id || null
+    ).run()
+    inserted.push(res.meta.last_row_id as number)
+  }
+
+  // Update campaign prospect count
+  if (items[0]?.campaign_id) {
+    await c.env.DB.prepare(
+      `UPDATE cc_campaigns SET total_prospects = (SELECT COUNT(*) FROM cc_prospects WHERE campaign_id=?), updated_at=datetime('now') WHERE id=?`
+    ).bind(items[0].campaign_id, items[0].campaign_id).run()
+  }
+
+  return c.json({ success: true, inserted: inserted.length, ids: inserted })
+})
+
+callCenterRoutes.post('/prospects/import', async (c) => {
+  try {
+    const { csv_data, campaign_id } = await c.req.json()
+    if (!csv_data) return c.json({ error: 'csv_data required' }, 400)
+
+    const lines = csv_data.split('\n').filter((l: string) => l.trim())
+    if (lines.length < 2) return c.json({ error: 'CSV must have header + at least 1 row' }, 400)
+
+    const headers = lines[0].split(',').map((h: string) => h.trim().toLowerCase().replace(/[^a-z_]/g, ''))
+    let imported = 0
+    let skipped = 0
+
+    for (let i = 1; i < lines.length; i++) {
+      const vals = lines[i].split(',').map((v: string) => v.trim().replace(/^"|"$/g, ''))
+      const row: any = {}
+      headers.forEach((h: string, idx: number) => { row[h] = vals[idx] || '' })
+
+      const phone = row.phone || row.phone_number || row.telephone || ''
+      const company = row.company_name || row.company || row.business_name || row.name || ''
+      if (!phone || !company) { skipped++; continue }
+
+      await c.env.DB.prepare(
+        `INSERT INTO cc_prospects (company_name, contact_name, phone, email, website, city, province_state, country, company_size, lead_source, campaign_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)`
+      ).bind(
+        company, row.contact_name || row.contact || '', phone,
+        row.email || '', row.website || row.url || '',
+        row.city || '', row.province_state || row.province || row.state || '',
+        row.country || 'CA', row.company_size || row.size || '',
+        'import', campaign_id || null
+      ).run()
+      imported++
+    }
+
+    if (campaign_id) {
+      await c.env.DB.prepare(
+        `UPDATE cc_campaigns SET total_prospects = (SELECT COUNT(*) FROM cc_prospects WHERE campaign_id=?), updated_at=datetime('now') WHERE id=?`
+      ).bind(campaign_id, campaign_id).run()
+    }
+
+    return c.json({ success: true, imported, skipped, total_rows: lines.length - 1 })
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500)
+  }
+})
+
+callCenterRoutes.put('/prospects/:id', async (c) => {
+  const id = parseInt(c.req.param('id'))
+  const body = await c.req.json()
+  const allowed = ['company_name', 'contact_name', 'phone', 'email', 'website', 'city', 'province_state', 'country', 'company_size', 'status', 'priority', 'tags', 'notes', 'campaign_id', 'next_call_at', 'assigned_agent_id']
+  const fields: string[] = []
+  const values: any[] = []
+
+  for (const [key, val] of Object.entries(body)) {
+    if (allowed.includes(key)) { fields.push(`${key}=?`); values.push(val) }
+  }
+  if (fields.length === 0) return c.json({ error: 'No valid fields' }, 400)
+  fields.push("updated_at=datetime('now')")
+  values.push(id)
+
+  await c.env.DB.prepare(`UPDATE cc_prospects SET ${fields.join(',')} WHERE id=?`).bind(...values).run()
+  return c.json({ success: true })
+})
+
+callCenterRoutes.delete('/prospects/:id', async (c) => {
+  const id = parseInt(c.req.param('id'))
+  await c.env.DB.prepare('DELETE FROM cc_prospects WHERE id=?').bind(id).run()
+  return c.json({ success: true })
+})
+
+// ============================================================
+// AI AGENTS CRUD
+// ============================================================
+callCenterRoutes.get('/agents', async (c) => {
+  const { results } = await c.env.DB.prepare('SELECT * FROM cc_agents ORDER BY created_at DESC').all<any>()
+  return c.json({ agents: results })
+})
+
+callCenterRoutes.post('/agents', async (c) => {
+  const { name, voice_id, persona, livekit_room_prefix } = await c.req.json()
+  if (!name) return c.json({ error: 'Agent name required' }, 400)
+
+  const res = await c.env.DB.prepare(
+    `INSERT INTO cc_agents (name, voice_id, persona, livekit_room_prefix) VALUES (?,?,?,?)`
+  ).bind(name, voice_id || 'alloy', persona || '', livekit_room_prefix || 'sales-').run()
+  return c.json({ success: true, id: res.meta.last_row_id })
+})
+
+callCenterRoutes.put('/agents/:id', async (c) => {
+  const id = parseInt(c.req.param('id'))
+  const body = await c.req.json()
+  const allowed = ['name', 'voice_id', 'persona', 'status', 'livekit_room_prefix']
+  const fields: string[] = []
+  const values: any[] = []
+
+  for (const [key, val] of Object.entries(body)) {
+    if (allowed.includes(key)) { fields.push(`${key}=?`); values.push(val) }
+  }
+  if (fields.length === 0) return c.json({ error: 'No valid fields' }, 400)
+  fields.push("updated_at=datetime('now')")
+  values.push(id)
+
+  await c.env.DB.prepare(`UPDATE cc_agents SET ${fields.join(',')} WHERE id=?`).bind(...values).run()
+  return c.json({ success: true })
+})
+
+callCenterRoutes.delete('/agents/:id', async (c) => {
+  const id = parseInt(c.req.param('id'))
+  await c.env.DB.prepare('DELETE FROM cc_agents WHERE id=?').bind(id).run()
+  return c.json({ success: true })
+})
+
+// ============================================================
+// AGENT CONTROL — Start/Stop dialing
+// ============================================================
+callCenterRoutes.post('/agents/:id/start', async (c) => {
+  const id = parseInt(c.req.param('id'))
+  const { campaign_id } = await c.req.json()
+
+  const agent = await c.env.DB.prepare('SELECT * FROM cc_agents WHERE id=?').bind(id).first<any>()
+  if (!agent) return c.json({ error: 'Agent not found' }, 404)
+  if (agent.status === 'calling') return c.json({ error: 'Agent already active' }, 400)
+
+  await c.env.DB.prepare(
+    `UPDATE cc_agents SET status='calling', last_active_at=datetime('now'), updated_at=datetime('now') WHERE id=?`
+  ).bind(id).run()
+
+  return c.json({ success: true, agent_id: id, status: 'calling', message: 'Agent started — will begin dialing from the prospect queue' })
+})
+
+callCenterRoutes.post('/agents/:id/stop', async (c) => {
+  const id = parseInt(c.req.param('id'))
+  await c.env.DB.prepare(
+    `UPDATE cc_agents SET status='idle', current_prospect_id=NULL, current_room_name='', updated_at=datetime('now') WHERE id=?`
+  ).bind(id).run()
+  return c.json({ success: true, status: 'idle' })
+})
+
+// ============================================================
+// NEXT PROSPECT — Pull next number to dial
+// ============================================================
+callCenterRoutes.get('/next-prospect/:agentId', async (c) => {
+  const agentId = parseInt(c.req.param('agentId'))
+  const campaignId = c.req.query('campaign_id')
+
+  let where = `(status='new' OR status='queued') AND (next_call_at IS NULL OR next_call_at <= datetime('now'))`
+  const params: any[] = []
+  if (campaignId) { where += ' AND campaign_id=?'; params.push(parseInt(campaignId)) }
+
+  const prospect = await c.env.DB.prepare(
+    `SELECT * FROM cc_prospects WHERE ${where} ORDER BY priority ASC, created_at ASC LIMIT 1`
+  ).bind(...params).first<any>()
+
+  if (!prospect) return c.json({ prospect: null, message: 'No prospects available to call' })
+
+  // Mark it as calling
+  await c.env.DB.prepare(
+    `UPDATE cc_prospects SET status='calling', assigned_agent_id=?, updated_at=datetime('now') WHERE id=?`
+  ).bind(agentId, prospect.id).run()
+
+  // Update agent's current prospect
+  await c.env.DB.prepare(
+    `UPDATE cc_agents SET current_prospect_id=?, updated_at=datetime('now') WHERE id=?`
+  ).bind(prospect.id, agentId).run()
+
+  // Get campaign script if available
+  let script = null
+  if (prospect.campaign_id) {
+    script = await c.env.DB.prepare(
+      'SELECT script_intro, script_value_prop, script_objections, script_closing FROM cc_campaigns WHERE id=?'
+    ).bind(prospect.campaign_id).first<any>()
+  }
+
+  return c.json({ prospect, script })
+})
+
+// ============================================================
+// DIAL — Initiate an outbound call via LiveKit SIP
+// ============================================================
+callCenterRoutes.post('/dial', async (c) => {
+  const { prospect_id, agent_id, campaign_id } = await c.req.json()
+  if (!prospect_id || !agent_id) return c.json({ error: 'prospect_id and agent_id required' }, 400)
+
+  const prospect = await c.env.DB.prepare('SELECT * FROM cc_prospects WHERE id=?').bind(prospect_id).first<any>()
+  if (!prospect) return c.json({ error: 'Prospect not found' }, 404)
+
+  const agent = await c.env.DB.prepare('SELECT * FROM cc_agents WHERE id=?').bind(agent_id).first<any>()
+  if (!agent) return c.json({ error: 'Agent not found' }, 404)
+
+  const roomName = `${agent.livekit_room_prefix || 'sales-'}${Date.now()}-${prospect_id}`
+
+  // Create call log entry
+  const logRes = await c.env.DB.prepare(
+    `INSERT INTO cc_call_logs (prospect_id, campaign_id, agent_id, agent_name, phone_dialed, livekit_room_id, call_status) VALUES (?,?,?,?,?,?,?)`
+  ).bind(prospect_id, campaign_id || prospect.campaign_id || null, agent_id, agent.name, prospect.phone, roomName, 'initiated').run()
+
+  // Update prospect
+  await c.env.DB.prepare(
+    `UPDATE cc_prospects SET status='calling', total_calls=total_calls+1, last_called_at=datetime('now'), assigned_agent_id=?, updated_at=datetime('now') WHERE id=?`
+  ).bind(agent_id, prospect_id).run()
+
+  // Update agent
+  await c.env.DB.prepare(
+    `UPDATE cc_agents SET current_prospect_id=?, current_room_name=?, total_calls=total_calls+1, last_active_at=datetime('now'), updated_at=datetime('now') WHERE id=?`
+  ).bind(prospect_id, roomName, agent_id).run()
+
+  // Generate LiveKit token for the outbound call
+  const apiKey = (c.env as any).LIVEKIT_API_KEY
+  const apiSecret = (c.env as any).LIVEKIT_API_SECRET
+  const livekitUrl = (c.env as any).LIVEKIT_URL
+
+  let token = null
+  if (apiKey && apiSecret) {
+    token = await generateLiveKitJWT(apiKey, apiSecret, `sales-agent-${agent_id}`, roomName, JSON.stringify({
+      type: 'sales_outbound',
+      agent_id: agent_id,
+      agent_name: agent.name,
+      prospect_id: prospect_id,
+      company: prospect.company_name,
+      phone: prospect.phone,
+    }))
+  }
+
+  return c.json({
+    success: true,
+    call_log_id: logRes.meta.last_row_id,
+    room_name: roomName,
+    prospect: { id: prospect.id, company_name: prospect.company_name, contact_name: prospect.contact_name, phone: prospect.phone },
+    agent: { id: agent.id, name: agent.name },
+    livekit: token ? { token, url: livekitUrl, room: roomName } : null,
+  })
+})
+
+// ============================================================
+// LIVEKIT TOKEN — For admin to monitor calls in browser
+// ============================================================
+callCenterRoutes.post('/livekit-token', async (c) => {
+  const apiKey = (c.env as any).LIVEKIT_API_KEY
+  const apiSecret = (c.env as any).LIVEKIT_API_SECRET
+  const livekitUrl = (c.env as any).LIVEKIT_URL
+  if (!apiKey || !apiSecret) return c.json({ error: 'LiveKit not configured' }, 500)
+
+  const { room_name, identity } = await c.req.json()
+  if (!room_name) return c.json({ error: 'room_name required' }, 400)
+
+  const token = await generateLiveKitJWT(apiKey, apiSecret, identity || 'admin-monitor', room_name, JSON.stringify({ type: 'admin_monitor' }))
+  return c.json({ token, url: livekitUrl, room: room_name })
+})
+
+// ============================================================
+// CALL COMPLETE — Webhook from LiveKit agent
+// ============================================================
+callCenterRoutes.post('/call-complete', async (c) => {
+  try {
+    const { room_name, call_status, call_outcome, call_duration_seconds, talk_time_seconds, call_summary, call_transcript, caller_sentiment, objections_raised, follow_up_action, follow_up_date, prospect_id, agent_id } = await c.req.json()
+
+    // Update call log
+    if (room_name) {
+      await c.env.DB.prepare(
+        `UPDATE cc_call_logs SET call_status=?, call_outcome=?, call_duration_seconds=?, talk_time_seconds=?, call_summary=?, call_transcript=?, caller_sentiment=?, objections_raised=?, follow_up_action=?, follow_up_date=?, ended_at=datetime('now') WHERE livekit_room_id=?`
+      ).bind(
+        call_status || 'completed', call_outcome || '', call_duration_seconds || 0, talk_time_seconds || 0,
+        call_summary || '', call_transcript || '', caller_sentiment || '', objections_raised || '',
+        follow_up_action || '', follow_up_date || null, room_name
+      ).run()
+    }
+
+    // Update prospect status based on outcome
+    if (prospect_id && call_outcome) {
+      let newStatus = 'contacted'
+      if (call_outcome === 'interested') newStatus = 'interested'
+      else if (call_outcome === 'demo_scheduled') newStatus = 'demo_scheduled'
+      else if (call_outcome === 'not_interested') newStatus = 'not_interested'
+      else if (call_outcome === 'wrong_number' || call_outcome === 'bad_number') newStatus = 'bad_number'
+      else if (call_outcome === 'no_answer' || call_outcome === 'voicemail') newStatus = 'queued' // retry
+
+      const updates: string[] = [`status=?`, `updated_at=datetime('now')`]
+      const vals: any[] = [newStatus]
+      if (follow_up_date) { updates.push('next_call_at=?'); vals.push(follow_up_date) }
+      vals.push(prospect_id)
+
+      await c.env.DB.prepare(`UPDATE cc_prospects SET ${updates.join(',')} WHERE id=?`).bind(...vals).run()
+    }
+
+    // Update agent back to idle
+    if (agent_id) {
+      await c.env.DB.prepare(
+        `UPDATE cc_agents SET status='idle', current_prospect_id=NULL, current_room_name='', updated_at=datetime('now') WHERE id=?`
+      ).bind(agent_id).run()
+
+      // Recalculate agent stats
+      const stats = await c.env.DB.prepare(
+        `SELECT COUNT(*) as total, SUM(CASE WHEN call_status='connected' OR call_status='completed' THEN 1 ELSE 0 END) as connects, SUM(CASE WHEN call_outcome='interested' OR call_outcome='demo_scheduled' THEN 1 ELSE 0 END) as interested, AVG(call_duration_seconds) as avg_duration FROM cc_call_logs WHERE agent_id=?`
+      ).bind(agent_id).first<any>()
+
+      if (stats) {
+        await c.env.DB.prepare(
+          `UPDATE cc_agents SET total_calls=?, total_connects=?, total_interested=?, avg_call_duration_sec=?, success_rate=? WHERE id=?`
+        ).bind(
+          stats.total || 0, stats.connects || 0, stats.interested || 0,
+          stats.avg_duration || 0, stats.total ? ((stats.connects || 0) / stats.total * 100) : 0,
+          agent_id
+        ).run()
+      }
+    }
+
+    // Update campaign stats
+    const log = room_name ? await c.env.DB.prepare('SELECT campaign_id FROM cc_call_logs WHERE livekit_room_id=?').bind(room_name).first<any>() : null
+    if (log?.campaign_id) {
+      const cStats = await c.env.DB.prepare(
+        `SELECT COUNT(*) as total, SUM(CASE WHEN call_status='connected' OR call_status='completed' THEN 1 ELSE 0 END) as connects, SUM(CASE WHEN call_outcome='interested' THEN 1 ELSE 0 END) as interested, SUM(CASE WHEN call_outcome='demo_scheduled' THEN 1 ELSE 0 END) as demos, SUM(CASE WHEN call_outcome='converted' THEN 1 ELSE 0 END) as converted FROM cc_call_logs WHERE campaign_id=?`
+      ).bind(log.campaign_id).first<any>()
+
+      if (cStats) {
+        await c.env.DB.prepare(
+          `UPDATE cc_campaigns SET total_calls=?, total_connects=?, total_interested=?, total_demos=?, total_converted=?, updated_at=datetime('now') WHERE id=?`
+        ).bind(cStats.total || 0, cStats.connects || 0, cStats.interested || 0, cStats.demos || 0, cStats.converted || 0, log.campaign_id).run()
+      }
+    }
+
+    return c.json({ success: true })
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500)
+  }
+})
+
+// ============================================================
+// CALL LOGS
+// ============================================================
+callCenterRoutes.get('/call-logs', async (c) => {
+  const campaign = c.req.query('campaign_id')
+  const agent = c.req.query('agent_id')
+  const outcome = c.req.query('outcome')
+  const page = parseInt(c.req.query('page') || '1')
+  const limit = Math.min(parseInt(c.req.query('limit') || '50'), 200)
+  const offset = (page - 1) * limit
+
+  let where = '1=1'
+  const params: any[] = []
+  if (campaign) { where += ' AND cl.campaign_id=?'; params.push(parseInt(campaign)) }
+  if (agent) { where += ' AND cl.agent_id=?'; params.push(parseInt(agent)) }
+  if (outcome) { where += ' AND cl.call_outcome=?'; params.push(outcome) }
+
+  const countRow = await c.env.DB.prepare(`SELECT COUNT(*) as cnt FROM cc_call_logs cl WHERE ${where}`).bind(...params).first<any>()
+  const { results } = await c.env.DB.prepare(
+    `SELECT cl.*, p.company_name, p.contact_name, p.city, p.province_state FROM cc_call_logs cl LEFT JOIN cc_prospects p ON p.id = cl.prospect_id WHERE ${where} ORDER BY cl.started_at DESC LIMIT ? OFFSET ?`
+  ).bind(...params, limit, offset).all<any>()
+
+  return c.json({ call_logs: results, total: countRow?.cnt || 0, page, limit })
+})
+
+// ============================================================
+// LiveKit JWT Helper (Web Crypto API — no Node.js)
+// ============================================================
+async function generateLiveKitJWT(apiKey: string, apiSecret: string, identity: string, roomName: string, metadata?: string): Promise<string> {
+  function b64url(data: any): string {
+    const bytes = typeof data === 'string' ? new TextEncoder().encode(data) : new Uint8Array(data)
+    let binary = ''
+    bytes.forEach((b: number) => binary += String.fromCharCode(b))
+    return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+  }
+
+  const now = Math.floor(Date.now() / 1000)
+  const header = b64url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))
+  const payload = b64url(JSON.stringify({
+    iss: apiKey, sub: identity, iat: now, exp: now + 3600, nbf: now,
+    jti: `${identity}-${now}`,
+    video: {
+      room: roomName, roomJoin: true, roomCreate: true,
+      canPublish: true, canSubscribe: true, canPublishData: true,
+    },
+    sip: { call: true, admin: true },
+    metadata: metadata || '',
+  }))
+  const sigInput = `${header}.${payload}`
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(apiSecret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
+  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(sigInput))
+  return `${header}.${payload}.${b64url(sig)}`
+}
