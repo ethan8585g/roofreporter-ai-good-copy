@@ -1,0 +1,765 @@
+// ============================================================
+// RoofReporterAI — Sales Call Center Dashboard
+// Super Admin only — AI outbound dialer for selling RoofReporterAI
+// to roofing companies across North America
+// ============================================================
+
+(function() {
+  'use strict';
+
+  const CC = {
+    tab: 'overview',
+    data: {},
+    loading: false,
+    dialerRunning: false,
+    selectedCampaign: null,
+    prospectPage: 1,
+    callLogPage: 1,
+  };
+
+  // Expose to super-admin-dashboard.js
+  window.loadCallCenter = function() {
+    const root = document.getElementById('sa-root');
+    if (!root) return;
+    root.innerHTML = renderCallCenterShell();
+    ccLoadTab('overview');
+  };
+
+  function ccHeaders() {
+    const token = localStorage.getItem('rc_token');
+    return token ? { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' };
+  }
+
+  async function ccFetch(url, opts) {
+    try {
+      const res = await fetch(url, Object.assign({ headers: ccHeaders() }, opts || {}));
+      if (res.status === 401 || res.status === 403) { window.location.href = '/login'; return null; }
+      return await res.json();
+    } catch (e) { console.error('CC fetch error:', e); return null; }
+  }
+
+  // ============================================================
+  // SHELL & TABS
+  // ============================================================
+  function renderCallCenterShell() {
+    return `<div class="slide-in" id="cc-root">
+      <div class="flex items-center justify-between mb-6">
+        <div>
+          <h2 class="text-2xl font-black text-gray-900 flex items-center gap-3">
+            <div class="w-10 h-10 bg-gradient-to-br from-orange-500 to-red-600 rounded-xl flex items-center justify-center shadow-lg">
+              <i class="fas fa-headset text-white"></i>
+            </div>
+            AI Sales Call Center
+          </h2>
+          <p class="text-sm text-gray-500 mt-1">Outbound AI dialer — selling RoofReporterAI to roofing companies across North America</p>
+        </div>
+        <div class="flex gap-2">
+          <span id="cc-dialer-status" class="px-3 py-1.5 rounded-full text-xs font-bold ${CC.dialerRunning ? 'bg-green-100 text-green-700 animate-pulse' : 'bg-gray-100 text-gray-500'}">
+            <i class="fas fa-${CC.dialerRunning ? 'phone-volume' : 'pause'} mr-1"></i>${CC.dialerRunning ? 'DIALING' : 'IDLE'}
+          </span>
+        </div>
+      </div>
+
+      <!-- Tab Navigation -->
+      <div class="flex gap-1 mb-6 bg-gray-100 rounded-xl p-1">
+        ${['overview','agents','campaigns','prospects','call-logs'].map(t => 
+          `<button onclick="window.ccSetTab('${t}')" id="cc-tab-${t}" class="cc-tab px-4 py-2 rounded-lg text-sm font-medium transition-all ${CC.tab===t ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}">
+            <i class="fas fa-${t==='overview'?'chart-pie':t==='agents'?'robot':t==='campaigns'?'bullhorn':t==='prospects'?'building':t==='call-logs'?'list-alt':'circle'} mr-1.5"></i>
+            ${t==='overview'?'Overview':t==='agents'?'AI Agents':t==='campaigns'?'Campaigns':t==='prospects'?'Prospects':t==='call-logs'?'Call Logs':''}
+          </button>`
+        ).join('')}
+      </div>
+
+      <div id="cc-content">
+        <div class="flex items-center justify-center py-20">
+          <div class="w-8 h-8 border-4 border-orange-200 border-t-orange-600 rounded-full animate-spin"></div>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  window.ccSetTab = function(tab) {
+    CC.tab = tab;
+    document.querySelectorAll('.cc-tab').forEach(el => {
+      el.classList.remove('bg-white', 'text-gray-900', 'shadow-sm');
+      el.classList.add('text-gray-500');
+    });
+    const active = document.getElementById('cc-tab-' + tab);
+    if (active) { active.classList.add('bg-white', 'text-gray-900', 'shadow-sm'); active.classList.remove('text-gray-500'); }
+    ccLoadTab(tab);
+  };
+
+  async function ccLoadTab(tab) {
+    CC.loading = true;
+    const content = document.getElementById('cc-content');
+    if (content) content.innerHTML = '<div class="flex items-center justify-center py-20"><div class="w-8 h-8 border-4 border-orange-200 border-t-orange-600 rounded-full animate-spin"></div></div>';
+
+    switch (tab) {
+      case 'overview':
+        CC.data.dashboard = await ccFetch('/api/call-center/dashboard');
+        break;
+      case 'agents':
+        CC.data.agents = await ccFetch('/api/call-center/agents');
+        break;
+      case 'campaigns':
+        CC.data.campaigns = await ccFetch('/api/call-center/campaigns');
+        break;
+      case 'prospects':
+        CC.data.prospects = await ccFetch('/api/call-center/prospects?page=' + CC.prospectPage + '&limit=50');
+        break;
+      case 'call-logs':
+        CC.data.callLogs = await ccFetch('/api/call-center/call-logs?page=' + CC.callLogPage + '&limit=50');
+        break;
+    }
+    CC.loading = false;
+    renderTab(tab);
+  }
+
+  function renderTab(tab) {
+    const content = document.getElementById('cc-content');
+    if (!content) return;
+    switch (tab) {
+      case 'overview': content.innerHTML = renderOverview(); break;
+      case 'agents': content.innerHTML = renderAgents(); break;
+      case 'campaigns': content.innerHTML = renderCampaigns(); break;
+      case 'prospects': content.innerHTML = renderProspects(); break;
+      case 'call-logs': content.innerHTML = renderCallLogs(); break;
+    }
+  }
+
+  // ============================================================
+  // OVERVIEW TAB
+  // ============================================================
+  function renderOverview() {
+    const d = CC.data.dashboard || {};
+    const t = d.today || {};
+    const p = d.prospects || {};
+    const ag = d.agents || {};
+    const camp = d.campaigns || {};
+    const recent = d.recent_calls || [];
+
+    return `<div class="space-y-6">
+      <!-- KPI Cards -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="bg-gradient-to-br from-orange-500 to-red-600 rounded-xl p-5 text-white shadow-lg">
+          <p class="text-orange-100 text-xs font-medium uppercase tracking-wider">Today's Calls</p>
+          <p class="text-3xl font-black mt-1">${t.calls||0}</p>
+          <p class="text-orange-200 text-xs mt-1">${t.connected||0} connected (${t.connect_rate||0}%)</p>
+        </div>
+        <div class="bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl p-5 text-white shadow-lg">
+          <p class="text-green-100 text-xs font-medium uppercase tracking-wider">Hot Leads Today</p>
+          <p class="text-3xl font-black mt-1">${t.hot_leads||0}</p>
+          <p class="text-green-200 text-xs mt-1">Interested + Demos</p>
+        </div>
+        <div class="bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl p-5 text-white shadow-lg">
+          <p class="text-blue-100 text-xs font-medium uppercase tracking-wider">Active Agents</p>
+          <p class="text-3xl font-black mt-1">${ag.active||0}<span class="text-lg font-normal">/${ag.total||0}</span></p>
+          <p class="text-blue-200 text-xs mt-1">${camp.active||0} active campaign${camp.active!==1?'s':''}</p>
+        </div>
+        <div class="bg-gradient-to-br from-purple-500 to-violet-600 rounded-xl p-5 text-white shadow-lg">
+          <p class="text-purple-100 text-xs font-medium uppercase tracking-wider">Prospect Pipeline</p>
+          <p class="text-3xl font-black mt-1">${p.available||0}</p>
+          <p class="text-purple-200 text-xs mt-1">${p.total||0} total / ${p.interested||0} interested / ${p.demos||0} demos</p>
+        </div>
+      </div>
+
+      <!-- Pipeline Funnel -->
+      <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+        <h3 class="font-bold text-gray-900 mb-4"><i class="fas fa-filter mr-2 text-orange-500"></i>Sales Pipeline</h3>
+        <div class="grid grid-cols-6 gap-2">
+          ${[
+            {label:'Available', val:p.available||0, color:'blue'},
+            {label:'Contacted', val:(p.total||0)-(p.available||0)-(p.interested||0)-(p.demos||0)-(p.converted||0)-(p.exhausted||0), color:'yellow'},
+            {label:'Interested', val:p.interested||0, color:'orange'},
+            {label:'Demo Scheduled', val:p.demos||0, color:'purple'},
+            {label:'Converted', val:p.converted||0, color:'green'},
+            {label:'Exhausted', val:p.exhausted||0, color:'gray'},
+          ].map(s => `
+            <div class="text-center">
+              <div class="text-2xl font-black text-${s.color}-600">${s.val}</div>
+              <div class="text-[10px] text-gray-500 uppercase font-semibold mt-1">${s.label}</div>
+              <div class="mt-2 h-2 bg-${s.color}-100 rounded-full overflow-hidden">
+                <div class="h-full bg-${s.color}-500 rounded-full" style="width:${p.total ? Math.max(2, s.val/p.total*100) : 2}%"></div>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+
+      <!-- Recent Calls -->
+      <div class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-100">
+          <h3 class="font-bold text-gray-900"><i class="fas fa-clock mr-2 text-orange-500"></i>Recent Calls</h3>
+        </div>
+        ${recent.length === 0 ? '<div class="px-6 py-12 text-center text-gray-400"><i class="fas fa-phone-slash text-4xl mb-3 opacity-30"></i><p>No calls yet — create agents and campaigns to start dialing</p></div>' : `
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead><tr class="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                <th class="px-4 py-3">Time</th>
+                <th class="px-4 py-3">Company</th>
+                <th class="px-4 py-3">Phone</th>
+                <th class="px-4 py-3">Agent</th>
+                <th class="px-4 py-3">Duration</th>
+                <th class="px-4 py-3">Status</th>
+                <th class="px-4 py-3">Outcome</th>
+              </tr></thead>
+              <tbody class="divide-y divide-gray-50">${recent.map(cl => `
+                <tr class="hover:bg-gray-50 transition-colors">
+                  <td class="px-4 py-3 text-xs text-gray-500">${cl.started_at ? new Date(cl.started_at).toLocaleString('en-CA', {dateStyle:'short',timeStyle:'short'}) : '-'}</td>
+                  <td class="px-4 py-3 font-medium text-gray-900">${cl.company_name||'—'}<br><span class="text-xs text-gray-400">${cl.contact_name||''}</span></td>
+                  <td class="px-4 py-3 text-xs font-mono">${cl.phone_dialed||'—'}</td>
+                  <td class="px-4 py-3 text-xs">${cl.agent_name||'—'}</td>
+                  <td class="px-4 py-3 text-xs">${fmtDuration(cl.call_duration_seconds)}</td>
+                  <td class="px-4 py-3">${statusPill(cl.call_status)}</td>
+                  <td class="px-4 py-3">${outcomePill(cl.call_outcome)}</td>
+                </tr>
+              `).join('')}</tbody>
+            </table>
+          </div>
+        `}
+      </div>
+    </div>`;
+  }
+
+  // ============================================================
+  // AGENTS TAB
+  // ============================================================
+  function renderAgents() {
+    const agents = (CC.data.agents || {}).agents || [];
+    return `<div class="space-y-6">
+      <div class="flex items-center justify-between">
+        <p class="text-sm text-gray-500">${agents.length} agent${agents.length!==1?'s':''} configured</p>
+        <button onclick="window.ccShowCreateAgent()" class="px-4 py-2 bg-orange-600 text-white rounded-lg text-sm font-semibold hover:bg-orange-700 transition-colors shadow-sm">
+          <i class="fas fa-plus mr-1"></i>New AI Agent
+        </button>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        ${agents.length === 0 ? `
+          <div class="col-span-3 bg-white rounded-xl border-2 border-dashed border-gray-200 p-12 text-center">
+            <i class="fas fa-robot text-5xl text-gray-300 mb-4"></i>
+            <p class="text-gray-500 font-medium">No AI agents yet</p>
+            <p class="text-gray-400 text-sm mt-1">Create your first sales agent to start cold-calling roofing companies</p>
+            <button onclick="window.ccShowCreateAgent()" class="mt-4 px-5 py-2.5 bg-orange-600 text-white rounded-lg text-sm font-semibold hover:bg-orange-700">
+              <i class="fas fa-plus mr-1"></i>Create First Agent
+            </button>
+          </div>
+        ` : agents.map(a => `
+          <div class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-md transition-shadow">
+            <div class="p-5">
+              <div class="flex items-start justify-between">
+                <div class="flex items-center gap-3">
+                  <div class="w-12 h-12 bg-gradient-to-br ${a.status==='calling'?'from-green-400 to-emerald-600':'from-gray-300 to-gray-400'} rounded-xl flex items-center justify-center shadow-sm ${a.status==='calling'?'animate-pulse':''}">
+                    <i class="fas fa-robot text-white text-lg"></i>
+                  </div>
+                  <div>
+                    <h4 class="font-bold text-gray-900">${a.name}</h4>
+                    <p class="text-xs text-gray-400">Voice: ${a.voice_id || 'alloy'}</p>
+                  </div>
+                </div>
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${a.status==='calling'?'bg-green-100 text-green-700 animate-pulse':a.status==='paused'?'bg-yellow-100 text-yellow-700':'bg-gray-100 text-gray-500'}">${a.status||'idle'}</span>
+              </div>
+              ${a.persona ? `<p class="text-xs text-gray-500 mt-3 line-clamp-2">${a.persona}</p>` : ''}
+              <div class="grid grid-cols-3 gap-2 mt-4">
+                <div class="text-center p-2 bg-gray-50 rounded-lg">
+                  <div class="text-lg font-bold text-gray-900">${a.total_calls||0}</div>
+                  <div class="text-[10px] text-gray-400 uppercase">Calls</div>
+                </div>
+                <div class="text-center p-2 bg-gray-50 rounded-lg">
+                  <div class="text-lg font-bold text-green-600">${a.total_connects||0}</div>
+                  <div class="text-[10px] text-gray-400 uppercase">Connects</div>
+                </div>
+                <div class="text-center p-2 bg-gray-50 rounded-lg">
+                  <div class="text-lg font-bold text-orange-600">${a.total_interested||0}</div>
+                  <div class="text-[10px] text-gray-400 uppercase">Interested</div>
+                </div>
+              </div>
+            </div>
+            <div class="px-5 py-3 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
+              ${a.status === 'calling' ?
+                `<button onclick="window.ccStopAgent(${a.id})" class="px-3 py-1.5 bg-red-600 text-white rounded-lg text-xs font-semibold hover:bg-red-700"><i class="fas fa-stop mr-1"></i>Stop</button>` :
+                `<button onclick="window.ccStartAgent(${a.id})" class="px-3 py-1.5 bg-green-600 text-white rounded-lg text-xs font-semibold hover:bg-green-700"><i class="fas fa-play mr-1"></i>Start Dialing</button>`
+              }
+              <div class="flex gap-1">
+                <button onclick="window.ccEditAgent(${a.id})" class="px-2 py-1.5 text-gray-400 hover:text-blue-600 text-xs"><i class="fas fa-edit"></i></button>
+                <button onclick="window.ccDeleteAgent(${a.id})" class="px-2 py-1.5 text-gray-400 hover:text-red-600 text-xs"><i class="fas fa-trash"></i></button>
+              </div>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+
+    <!-- Create Agent Modal -->
+    <div id="cc-agent-modal" class="hidden fixed inset-0 z-50 bg-black/50 flex items-center justify-center">
+      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
+        <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+          <h3 class="font-bold text-gray-900"><i class="fas fa-robot mr-2 text-orange-500"></i>Create AI Sales Agent</h3>
+          <button onclick="document.getElementById('cc-agent-modal').classList.add('hidden')" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="p-6 space-y-4">
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1">Agent Name</label>
+            <input id="cc-agent-name" type="text" placeholder="e.g. Alex" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1">Voice</label>
+            <select id="cc-agent-voice" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-500">
+              <option value="alloy">Alloy — neutral, professional</option>
+              <option value="echo">Echo — male, authoritative</option>
+              <option value="nova">Nova — female, warm</option>
+              <option value="onyx">Onyx — deep, confident</option>
+              <option value="fable">Fable — expressive, engaging</option>
+              <option value="shimmer">Shimmer — warm, friendly</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1">Persona / Selling Style</label>
+            <textarea id="cc-agent-persona" rows="3" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-500" placeholder="e.g. Friendly and consultative sales approach. Focus on showing ROI and time savings. Open with asking about their current estimating workflow."></textarea>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1">Room Prefix</label>
+            <input id="cc-agent-prefix" type="text" value="sales-" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-500" />
+          </div>
+          <div id="cc-agent-status-msg" class="hidden text-sm"></div>
+          <button onclick="window.ccCreateAgent()" class="w-full bg-orange-600 text-white py-2.5 rounded-lg font-semibold hover:bg-orange-700 transition-colors">
+            <i class="fas fa-plus mr-1"></i>Create Agent
+          </button>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  // ============================================================
+  // CAMPAIGNS TAB
+  // ============================================================
+  function renderCampaigns() {
+    const campaigns = (CC.data.campaigns || {}).campaigns || [];
+    return `<div class="space-y-6">
+      <div class="flex items-center justify-between">
+        <p class="text-sm text-gray-500">${campaigns.length} campaign${campaigns.length!==1?'s':''}</p>
+        <button onclick="window.ccShowCreateCampaign()" class="px-4 py-2 bg-orange-600 text-white rounded-lg text-sm font-semibold hover:bg-orange-700 transition-colors shadow-sm">
+          <i class="fas fa-plus mr-1"></i>New Campaign
+        </button>
+      </div>
+
+      ${campaigns.length === 0 ? `
+        <div class="bg-white rounded-xl border-2 border-dashed border-gray-200 p-12 text-center">
+          <i class="fas fa-bullhorn text-5xl text-gray-300 mb-4"></i>
+          <p class="text-gray-500 font-medium">No campaigns yet</p>
+          <p class="text-gray-400 text-sm mt-1">Create a campaign with a sales script to start organizing your outreach</p>
+          <button onclick="window.ccShowCreateCampaign()" class="mt-4 px-5 py-2.5 bg-orange-600 text-white rounded-lg text-sm font-semibold hover:bg-orange-700"><i class="fas fa-plus mr-1"></i>Create First Campaign</button>
+        </div>
+      ` : campaigns.map(c => `
+        <div class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+          <div class="p-5">
+            <div class="flex items-start justify-between">
+              <div>
+                <h4 class="font-bold text-gray-900 text-lg">${c.name}</h4>
+                <p class="text-xs text-gray-400 mt-0.5">${c.description || 'No description'} &middot; ${c.target_region || 'All regions'}</p>
+              </div>
+              <span class="px-2.5 py-1 rounded-full text-xs font-bold uppercase ${c.status==='active'?'bg-green-100 text-green-700':c.status==='paused'?'bg-yellow-100 text-yellow-700':'bg-gray-100 text-gray-500'}">${c.status||'draft'}</span>
+            </div>
+            <div class="grid grid-cols-6 gap-3 mt-4">
+              ${[
+                {label:'Prospects', val:c.total_prospects||0, color:'blue'},
+                {label:'Calls', val:c.total_calls||0, color:'gray'},
+                {label:'Connects', val:c.total_connects||0, color:'green'},
+                {label:'Interested', val:c.total_interested||0, color:'orange'},
+                {label:'Demos', val:c.total_demos||0, color:'purple'},
+                {label:'Converted', val:c.total_converted||0, color:'emerald'},
+              ].map(s => `
+                <div class="text-center p-2 bg-gray-50 rounded-lg">
+                  <div class="text-lg font-bold text-${s.color}-600">${s.val}</div>
+                  <div class="text-[10px] text-gray-400 uppercase">${s.label}</div>
+                </div>
+              `).join('')}
+            </div>
+            ${c.script_intro ? `<div class="mt-3 p-3 bg-orange-50 rounded-lg"><p class="text-xs text-orange-700"><strong>Intro:</strong> ${c.script_intro.substring(0,150)}${c.script_intro.length>150?'...':''}</p></div>` : ''}
+          </div>
+          <div class="px-5 py-3 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
+            <div class="flex gap-2">
+              <span class="text-xs text-gray-400"><i class="fas fa-clock mr-1"></i>${c.call_hours_start||'09:00'} - ${c.call_hours_end||'17:00'} ${c.timezone||''}</span>
+              <span class="text-xs text-gray-400"><i class="fas fa-redo mr-1"></i>Max ${c.max_attempts||3} attempts</span>
+            </div>
+            <div class="flex gap-1">
+              ${c.status !== 'active' ? `<button onclick="window.ccUpdateCampaign(${c.id},'active')" class="px-3 py-1.5 bg-green-600 text-white rounded-lg text-xs font-semibold hover:bg-green-700"><i class="fas fa-play mr-1"></i>Activate</button>` : `<button onclick="window.ccUpdateCampaign(${c.id},'paused')" class="px-3 py-1.5 bg-yellow-500 text-white rounded-lg text-xs font-semibold hover:bg-yellow-600"><i class="fas fa-pause mr-1"></i>Pause</button>`}
+              <button onclick="window.ccDeleteCampaign(${c.id})" class="px-2 py-1.5 text-gray-400 hover:text-red-600 text-xs"><i class="fas fa-trash"></i></button>
+            </div>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+
+    <!-- Create Campaign Modal -->
+    <div id="cc-campaign-modal" class="hidden fixed inset-0 z-50 bg-black/50 flex items-center justify-center">
+      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
+        <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+          <h3 class="font-bold text-gray-900"><i class="fas fa-bullhorn mr-2 text-orange-500"></i>Create Sales Campaign</h3>
+          <button onclick="document.getElementById('cc-campaign-modal').classList.add('hidden')" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="p-6 space-y-4">
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-semibold text-gray-600 mb-1">Campaign Name</label>
+              <input id="cc-camp-name" type="text" placeholder="e.g. Alberta Roofers Q1" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-500" />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-gray-600 mb-1">Target Region</label>
+              <input id="cc-camp-region" type="text" placeholder="e.g. Alberta, Ontario, All Canada" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-500" />
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1">Description</label>
+            <input id="cc-camp-desc" type="text" placeholder="Campaign description" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-500" />
+          </div>
+          <div class="border-t border-gray-100 pt-4">
+            <p class="text-xs font-bold text-gray-700 uppercase mb-3"><i class="fas fa-scroll mr-1"></i>Sales Script</p>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1">Opening Intro</label>
+            <textarea id="cc-camp-intro" rows="3" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-500" placeholder="Hi, this is {agent_name} calling from RoofReporterAI. I'm reaching out to roofing companies in your area because we've built an AI-powered tool that generates instant roof measurement reports..."></textarea>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1">Value Proposition</label>
+            <textarea id="cc-camp-value" rows="3" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-500" placeholder="Our platform lets you get a complete roof report — measurements, pitch, materials estimate — in under 60 seconds, just from an address. No climbing ladders, no drone flights..."></textarea>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1">Objection Handling</label>
+            <textarea id="cc-camp-objections" rows="3" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-500" placeholder="Price objection: 'Each report costs about $15-30 which pays for itself on the first estimate. Compare that to spending an hour driving out to measure each roof manually.'&#10;Already have a tool: 'That's great — what tool are you using? We can often complement or improve on existing workflows...'"></textarea>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1">Closing / Call-to-Action</label>
+            <textarea id="cc-camp-closing" rows="2" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-500" placeholder="I'd love to show you a quick demo — I can run a report on one of your recent job sites right now. Can I get an email to send you a free sample report?"></textarea>
+          </div>
+          <div class="grid grid-cols-3 gap-4">
+            <div>
+              <label class="block text-xs font-semibold text-gray-600 mb-1">Call Hours Start</label>
+              <input id="cc-camp-start" type="time" value="09:00" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-gray-600 mb-1">Call Hours End</label>
+              <input id="cc-camp-end" type="time" value="17:00" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-gray-600 mb-1">Max Attempts</label>
+              <input id="cc-camp-attempts" type="number" value="3" min="1" max="10" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
+            </div>
+          </div>
+          <div id="cc-camp-status-msg" class="hidden text-sm"></div>
+          <button onclick="window.ccCreateCampaign()" class="w-full bg-orange-600 text-white py-2.5 rounded-lg font-semibold hover:bg-orange-700 transition-colors">
+            <i class="fas fa-bullhorn mr-1"></i>Create Campaign
+          </button>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  // ============================================================
+  // PROSPECTS TAB
+  // ============================================================
+  function renderProspects() {
+    const data = CC.data.prospects || {};
+    const prospects = data.prospects || [];
+    const total = data.total || 0;
+
+    return `<div class="space-y-4">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <input id="cc-prospect-search" type="text" placeholder="Search companies, contacts, cities..." class="border border-gray-200 rounded-lg px-3 py-2 text-sm w-72 focus:ring-2 focus:ring-orange-500" onkeydown="if(event.key==='Enter')window.ccSearchProspects()" />
+          <button onclick="window.ccSearchProspects()" class="px-3 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm hover:bg-gray-200"><i class="fas fa-search"></i></button>
+          <span class="text-xs text-gray-400">${total} total</span>
+        </div>
+        <div class="flex gap-2">
+          <button onclick="window.ccShowImportCSV()" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700"><i class="fas fa-file-csv mr-1"></i>Import CSV</button>
+          <button onclick="window.ccShowAddProspect()" class="px-4 py-2 bg-orange-600 text-white rounded-lg text-sm font-semibold hover:bg-orange-700"><i class="fas fa-plus mr-1"></i>Add Prospect</button>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+        ${prospects.length === 0 ? '<div class="px-6 py-12 text-center text-gray-400"><i class="fas fa-building text-4xl mb-3 opacity-30"></i><p>No prospects yet</p><p class="text-xs mt-1">Add prospects manually or import a CSV list</p></div>' : `
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead><tr class="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                <th class="px-4 py-3">Company</th>
+                <th class="px-4 py-3">Contact</th>
+                <th class="px-4 py-3">Phone</th>
+                <th class="px-4 py-3">Location</th>
+                <th class="px-4 py-3">Status</th>
+                <th class="px-4 py-3">Calls</th>
+                <th class="px-4 py-3">Last Called</th>
+                <th class="px-4 py-3 text-right">Actions</th>
+              </tr></thead>
+              <tbody class="divide-y divide-gray-50">${prospects.map(p => `
+                <tr class="hover:bg-gray-50 transition-colors">
+                  <td class="px-4 py-3 font-medium text-gray-900">${p.company_name}<br><span class="text-[10px] text-gray-400">${p.lead_source||''} ${p.tags ? '&middot; '+p.tags : ''}</span></td>
+                  <td class="px-4 py-3 text-xs">${p.contact_name||'—'}<br><span class="text-gray-400">${p.email||''}</span></td>
+                  <td class="px-4 py-3 text-xs font-mono">${p.phone}</td>
+                  <td class="px-4 py-3 text-xs">${[p.city,p.province_state].filter(Boolean).join(', ')}</td>
+                  <td class="px-4 py-3">${prospectStatusPill(p.status)}</td>
+                  <td class="px-4 py-3 text-center text-xs">${p.total_calls||0}</td>
+                  <td class="px-4 py-3 text-xs text-gray-400">${p.last_called_at ? new Date(p.last_called_at).toLocaleDateString('en-CA') : '—'}</td>
+                  <td class="px-4 py-3 text-right">
+                    <button onclick="window.ccDialProspect(${p.id})" class="text-green-600 hover:text-green-800 text-xs mr-2" title="Dial"><i class="fas fa-phone"></i></button>
+                    <button onclick="window.ccDeleteProspect(${p.id})" class="text-red-400 hover:text-red-600 text-xs" title="Delete"><i class="fas fa-trash"></i></button>
+                  </td>
+                </tr>
+              `).join('')}</tbody>
+            </table>
+          </div>
+          <div class="px-6 py-3 border-t border-gray-100 flex items-center justify-between">
+            <span class="text-xs text-gray-400">Page ${data.page||1} of ${Math.ceil(total/50)||1}</span>
+            <div class="flex gap-2">
+              ${data.page > 1 ? `<button onclick="CC.prospectPage--;window.ccSetTab('prospects')" class="px-3 py-1 bg-gray-100 rounded text-xs"><i class="fas fa-chevron-left"></i></button>` : ''}
+              ${total > data.page*50 ? `<button onclick="CC.prospectPage++;window.ccSetTab('prospects')" class="px-3 py-1 bg-gray-100 rounded text-xs"><i class="fas fa-chevron-right"></i></button>` : ''}
+            </div>
+          </div>
+        `}
+      </div>
+    </div>
+
+    <!-- Add Prospect Modal -->
+    <div id="cc-prospect-modal" class="hidden fixed inset-0 z-50 bg-black/50 flex items-center justify-center">
+      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4">
+        <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+          <h3 class="font-bold text-gray-900"><i class="fas fa-building mr-2 text-orange-500"></i>Add Prospect</h3>
+          <button onclick="document.getElementById('cc-prospect-modal').classList.add('hidden')" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="p-6 space-y-3">
+          <div class="grid grid-cols-2 gap-3">
+            <div><label class="block text-xs font-semibold text-gray-600 mb-1">Company Name *</label><input id="cc-p-company" type="text" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" /></div>
+            <div><label class="block text-xs font-semibold text-gray-600 mb-1">Contact Name</label><input id="cc-p-contact" type="text" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" /></div>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div><label class="block text-xs font-semibold text-gray-600 mb-1">Phone *</label><input id="cc-p-phone" type="tel" placeholder="+14035551234" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" /></div>
+            <div><label class="block text-xs font-semibold text-gray-600 mb-1">Email</label><input id="cc-p-email" type="email" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" /></div>
+          </div>
+          <div class="grid grid-cols-3 gap-3">
+            <div><label class="block text-xs font-semibold text-gray-600 mb-1">City</label><input id="cc-p-city" type="text" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" /></div>
+            <div><label class="block text-xs font-semibold text-gray-600 mb-1">Province/State</label><input id="cc-p-prov" type="text" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" /></div>
+            <div><label class="block text-xs font-semibold text-gray-600 mb-1">Country</label><select id="cc-p-country" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"><option value="CA">Canada</option><option value="US">United States</option></select></div>
+          </div>
+          <div><label class="block text-xs font-semibold text-gray-600 mb-1">Notes</label><textarea id="cc-p-notes" rows="2" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"></textarea></div>
+          <button onclick="window.ccAddProspect()" class="w-full bg-orange-600 text-white py-2.5 rounded-lg font-semibold hover:bg-orange-700"><i class="fas fa-plus mr-1"></i>Add Prospect</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- CSV Import Modal -->
+    <div id="cc-csv-modal" class="hidden fixed inset-0 z-50 bg-black/50 flex items-center justify-center">
+      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4">
+        <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+          <h3 class="font-bold text-gray-900"><i class="fas fa-file-csv mr-2 text-blue-500"></i>Import Prospects from CSV</h3>
+          <button onclick="document.getElementById('cc-csv-modal').classList.add('hidden')" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="p-6 space-y-4">
+          <div class="p-3 bg-blue-50 rounded-lg text-xs text-blue-700">
+            <strong>CSV Format:</strong> company_name, contact_name, phone, email, website, city, province_state, country<br>
+            First row must be headers. Phone and company_name are required.
+          </div>
+          <textarea id="cc-csv-data" rows="10" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs font-mono" placeholder="company_name,contact_name,phone,email,city,province_state&#10;ABC Roofing,John Smith,+14035551234,john@abc.com,Calgary,AB&#10;XYZ Contractors,Jane Doe,+17805559876,jane@xyz.com,Edmonton,AB"></textarea>
+          <div id="cc-csv-result" class="hidden text-sm"></div>
+          <button onclick="window.ccImportCSV()" class="w-full bg-blue-600 text-white py-2.5 rounded-lg font-semibold hover:bg-blue-700"><i class="fas fa-upload mr-1"></i>Import</button>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  // ============================================================
+  // CALL LOGS TAB
+  // ============================================================
+  function renderCallLogs() {
+    const data = CC.data.callLogs || {};
+    const logs = data.call_logs || [];
+    const total = data.total || 0;
+
+    return `<div class="space-y-4">
+      <div class="flex items-center justify-between">
+        <span class="text-sm text-gray-500">${total} total call${total!==1?'s':''}</span>
+        <button onclick="window.ccSetTab('call-logs')" class="px-3 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm hover:bg-gray-200"><i class="fas fa-sync-alt"></i></button>
+      </div>
+
+      <div class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+        ${logs.length === 0 ? '<div class="px-6 py-12 text-center text-gray-400"><i class="fas fa-list-alt text-4xl mb-3 opacity-30"></i><p>No call logs yet</p></div>' : `
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead><tr class="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                <th class="px-4 py-3">Time</th>
+                <th class="px-4 py-3">Company</th>
+                <th class="px-4 py-3">Phone</th>
+                <th class="px-4 py-3">Agent</th>
+                <th class="px-4 py-3">Duration</th>
+                <th class="px-4 py-3">Status</th>
+                <th class="px-4 py-3">Outcome</th>
+                <th class="px-4 py-3">Sentiment</th>
+                <th class="px-4 py-3">Summary</th>
+              </tr></thead>
+              <tbody class="divide-y divide-gray-50">${logs.map(cl => `
+                <tr class="hover:bg-gray-50 transition-colors">
+                  <td class="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">${cl.started_at ? new Date(cl.started_at).toLocaleString('en-CA', {dateStyle:'short',timeStyle:'short'}) : '-'}</td>
+                  <td class="px-4 py-3 font-medium text-gray-900">${cl.company_name||'—'}<br><span class="text-xs text-gray-400">${cl.contact_name||''}</span></td>
+                  <td class="px-4 py-3 text-xs font-mono">${cl.phone_dialed||'—'}</td>
+                  <td class="px-4 py-3 text-xs">${cl.agent_name||'—'}</td>
+                  <td class="px-4 py-3 text-xs">${fmtDuration(cl.call_duration_seconds)}</td>
+                  <td class="px-4 py-3">${statusPill(cl.call_status)}</td>
+                  <td class="px-4 py-3">${outcomePill(cl.call_outcome)}</td>
+                  <td class="px-4 py-3">${sentimentPill(cl.caller_sentiment)}</td>
+                  <td class="px-4 py-3 text-xs text-gray-500 max-w-xs truncate">${cl.call_summary||'—'}</td>
+                </tr>
+              `).join('')}</tbody>
+            </table>
+          </div>
+        `}
+      </div>
+    </div>`;
+  }
+
+  // ============================================================
+  // HELPER PILLS
+  // ============================================================
+  function statusPill(s) {
+    const m = {initiated:'bg-gray-100 text-gray-600',ringing:'bg-blue-100 text-blue-700',connected:'bg-green-100 text-green-700',completed:'bg-green-100 text-green-700',voicemail:'bg-yellow-100 text-yellow-700',no_answer:'bg-gray-100 text-gray-500',busy:'bg-red-100 text-red-600',failed:'bg-red-100 text-red-600'};
+    return `<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold ${m[s]||'bg-gray-100 text-gray-500'}">${(s||'—').replace(/_/g,' ')}</span>`;
+  }
+  function outcomePill(s) {
+    if (!s) return '<span class="text-gray-300 text-xs">—</span>';
+    const m = {interested:'bg-orange-100 text-orange-700',demo_scheduled:'bg-purple-100 text-purple-700',callback_requested:'bg-blue-100 text-blue-700',not_interested:'bg-gray-100 text-gray-500',wrong_number:'bg-red-100 text-red-600',voicemail_left:'bg-yellow-100 text-yellow-700',converted:'bg-green-100 text-green-700',hung_up:'bg-red-100 text-red-500'};
+    return `<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold ${m[s]||'bg-gray-100 text-gray-500'}">${(s||'').replace(/_/g,' ')}</span>`;
+  }
+  function sentimentPill(s) {
+    if (!s) return '<span class="text-gray-300 text-xs">—</span>';
+    const m = {positive:'text-green-600',neutral:'text-gray-500',negative:'text-red-500',hostile:'text-red-700'};
+    return `<span class="text-xs font-medium ${m[s]||'text-gray-400'}">${s}</span>`;
+  }
+  function prospectStatusPill(s) {
+    const m = {'new':'bg-blue-100 text-blue-700',queued:'bg-blue-50 text-blue-600',calling:'bg-yellow-100 text-yellow-700 animate-pulse',contacted:'bg-gray-100 text-gray-600',interested:'bg-orange-100 text-orange-700',demo_scheduled:'bg-purple-100 text-purple-700',converted:'bg-green-100 text-green-700',not_interested:'bg-gray-100 text-gray-400',do_not_call:'bg-red-100 text-red-600',bad_number:'bg-red-50 text-red-500'};
+    return `<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold ${m[s]||'bg-gray-100 text-gray-500'}">${(s||'new').replace(/_/g,' ')}</span>`;
+  }
+  function fmtDuration(sec) {
+    if (!sec || sec <= 0) return '—';
+    if (sec < 60) return sec + 's';
+    return Math.floor(sec/60) + 'm ' + (sec%60) + 's';
+  }
+
+  // ============================================================
+  // ACTIONS
+  // ============================================================
+  // Agents
+  window.ccShowCreateAgent = function() { document.getElementById('cc-agent-modal').classList.remove('hidden'); };
+  window.ccCreateAgent = async function() {
+    const name = document.getElementById('cc-agent-name').value.trim();
+    if (!name) return alert('Agent name required');
+    const data = await ccFetch('/api/call-center/agents', { method: 'POST', body: JSON.stringify({
+      name, voice_id: document.getElementById('cc-agent-voice').value,
+      persona: document.getElementById('cc-agent-persona').value,
+      livekit_room_prefix: document.getElementById('cc-agent-prefix').value,
+    }) });
+    if (data?.success) { document.getElementById('cc-agent-modal').classList.add('hidden'); ccLoadTab('agents'); }
+    else alert(data?.error || 'Failed');
+  };
+  window.ccStartAgent = async function(id) {
+    const data = await ccFetch('/api/call-center/agents/' + id + '/start', { method: 'POST', body: '{}' });
+    if (data?.success) ccLoadTab('agents');
+    else alert(data?.error || 'Failed to start');
+  };
+  window.ccStopAgent = async function(id) {
+    const data = await ccFetch('/api/call-center/agents/' + id + '/stop', { method: 'POST', body: '{}' });
+    if (data?.success) ccLoadTab('agents');
+  };
+  window.ccEditAgent = function(id) { alert('Edit agent ' + id + ' — coming soon'); };
+  window.ccDeleteAgent = async function(id) {
+    if (!confirm('Delete this AI agent?')) return;
+    await ccFetch('/api/call-center/agents/' + id, { method: 'DELETE' });
+    ccLoadTab('agents');
+  };
+
+  // Campaigns
+  window.ccShowCreateCampaign = function() { document.getElementById('cc-campaign-modal').classList.remove('hidden'); };
+  window.ccCreateCampaign = async function() {
+    const name = document.getElementById('cc-camp-name').value.trim();
+    if (!name) return alert('Campaign name required');
+    const data = await ccFetch('/api/call-center/campaigns', { method: 'POST', body: JSON.stringify({
+      name, description: document.getElementById('cc-camp-desc').value,
+      target_region: document.getElementById('cc-camp-region').value,
+      script_intro: document.getElementById('cc-camp-intro').value,
+      script_value_prop: document.getElementById('cc-camp-value').value,
+      script_objections: document.getElementById('cc-camp-objections').value,
+      script_closing: document.getElementById('cc-camp-closing').value,
+      call_hours_start: document.getElementById('cc-camp-start').value,
+      call_hours_end: document.getElementById('cc-camp-end').value,
+      max_attempts: parseInt(document.getElementById('cc-camp-attempts').value) || 3,
+    }) });
+    if (data?.success) { document.getElementById('cc-campaign-modal').classList.add('hidden'); ccLoadTab('campaigns'); }
+    else alert(data?.error || 'Failed');
+  };
+  window.ccUpdateCampaign = async function(id, status) {
+    await ccFetch('/api/call-center/campaigns/' + id, { method: 'PUT', body: JSON.stringify({ status }) });
+    ccLoadTab('campaigns');
+  };
+  window.ccDeleteCampaign = async function(id) {
+    if (!confirm('Delete this campaign?')) return;
+    await ccFetch('/api/call-center/campaigns/' + id, { method: 'DELETE' });
+    ccLoadTab('campaigns');
+  };
+
+  // Prospects
+  window.ccShowAddProspect = function() { document.getElementById('cc-prospect-modal').classList.remove('hidden'); };
+  window.ccAddProspect = async function() {
+    const company = document.getElementById('cc-p-company').value.trim();
+    const phone = document.getElementById('cc-p-phone').value.trim();
+    if (!company || !phone) return alert('Company name and phone required');
+    const data = await ccFetch('/api/call-center/prospects', { method: 'POST', body: JSON.stringify({
+      company_name: company, contact_name: document.getElementById('cc-p-contact').value,
+      phone, email: document.getElementById('cc-p-email').value,
+      city: document.getElementById('cc-p-city').value, province_state: document.getElementById('cc-p-prov').value,
+      country: document.getElementById('cc-p-country').value, notes: document.getElementById('cc-p-notes').value,
+    }) });
+    if (data?.success) { document.getElementById('cc-prospect-modal').classList.add('hidden'); ccLoadTab('prospects'); }
+    else alert(data?.error || 'Failed');
+  };
+  window.ccShowImportCSV = function() { document.getElementById('cc-csv-modal').classList.remove('hidden'); };
+  window.ccImportCSV = async function() {
+    const csv = document.getElementById('cc-csv-data').value.trim();
+    if (!csv) return alert('Paste CSV data');
+    const resultEl = document.getElementById('cc-csv-result');
+    resultEl.classList.remove('hidden');
+    resultEl.className = 'text-sm text-blue-600';
+    resultEl.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Importing...';
+    const data = await ccFetch('/api/call-center/prospects/import', { method: 'POST', body: JSON.stringify({ csv_data: csv }) });
+    if (data?.success) {
+      resultEl.className = 'text-sm text-green-600 bg-green-50 p-3 rounded-lg';
+      resultEl.innerHTML = '<i class="fas fa-check-circle mr-1"></i>Imported ' + data.imported + ' prospects (' + data.skipped + ' skipped)';
+      setTimeout(function() { document.getElementById('cc-csv-modal').classList.add('hidden'); ccLoadTab('prospects'); }, 2000);
+    } else {
+      resultEl.className = 'text-sm text-red-600 bg-red-50 p-3 rounded-lg';
+      resultEl.innerHTML = '<i class="fas fa-exclamation-circle mr-1"></i>' + (data?.error || 'Import failed');
+    }
+  };
+  window.ccSearchProspects = async function() {
+    const q = document.getElementById('cc-prospect-search').value.trim();
+    CC.prospectPage = 1;
+    CC.data.prospects = await ccFetch('/api/call-center/prospects?page=1&limit=50' + (q ? '&search=' + encodeURIComponent(q) : ''));
+    renderTab('prospects');
+  };
+  window.ccDeleteProspect = async function(id) {
+    if (!confirm('Delete this prospect?')) return;
+    await ccFetch('/api/call-center/prospects/' + id, { method: 'DELETE' });
+    ccLoadTab('prospects');
+  };
+  window.ccDialProspect = async function(id) {
+    const agents = (CC.data.agents || {}).agents || [];
+    if (agents.length === 0) {
+      CC.data.agents = await ccFetch('/api/call-center/agents');
+    }
+    const agentList = ((CC.data.agents || {}).agents || []);
+    if (agentList.length === 0) return alert('Create an AI agent first before dialing');
+    const agentId = agentList[0].id;
+    if (!confirm('Dial this prospect using agent "' + agentList[0].name + '"?')) return;
+    const data = await ccFetch('/api/call-center/dial', { method: 'POST', body: JSON.stringify({ prospect_id: id, agent_id: agentId }) });
+    if (data?.success) {
+      alert('Call initiated! Room: ' + data.room_name);
+      ccLoadTab('prospects');
+    } else alert(data?.error || 'Dial failed');
+  };
+
+})();

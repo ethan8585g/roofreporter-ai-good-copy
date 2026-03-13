@@ -100,6 +100,14 @@ async function loadView(view) {
         const squareRes = await saFetch('/api/settings/square/status');
         if (squareRes) SA.data.square = await squareRes.json();
         break;
+      case 'call-center':
+        // Handled by call-center.js module
+        if (typeof window.loadCallCenter === 'function') {
+          SA.loading = false;
+          window.loadCallCenter();
+          return;
+        }
+        break;
       case 'livekit':
         const [lkTrunksRes, lkRulesRes] = await Promise.all([
           saFetch('/api/secretary/sip/trunks'),
@@ -200,6 +208,7 @@ function renderContent() {
     case 'analytics': root.innerHTML = renderAnalyticsView(); break;
     case 'ga4': root.innerHTML = renderGA4View(); break;
     case 'pricing': root.innerHTML = renderPricingView(); break;
+    case 'call-center': break; // Handled by call-center.js
     case 'livekit': root.innerHTML = renderLiveKitView(); break;
     default: root.innerHTML = renderUsersView();
   }
