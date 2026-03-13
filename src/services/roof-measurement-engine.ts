@@ -980,25 +980,53 @@ export class RoofMeasurementEngine {
     } else if (this.eavesCart.length >= 4) {
       const totalProjFt2 = this.computeFootprintSqft()
 
-      if (this.ridgesCart.length > 0) {
-        const numFaces = this.ridgesCart.length + 1
-        const faceProj = totalProjFt2 / numFaces
-        for (let i = 0; i < numFaces; i++) {
-          const ridge = i < this.ridgesCart.length ? this.ridgesCart[i] : null
-          const { theta } = ridge ? this.resolveTheta(ridge) : { theta: this.defThetaRad }
-          const rise = 12 * Math.tan(theta)
-          const sloped = slopedFromProjected(faceProj, rise)
-          results.push({
-            face_id:            ridge?.id || `face_${i + 1}`,
-            pitch_rise:         round(rise, 1),
-            pitch_label:        `${round(rise, 1)}:12`,
-            pitch_angle_deg:    round(theta * 180 / Math.PI, 1),
-            slope_factor:       round(slopeFactor(rise), 4),
-            projected_area_ft2: round(faceProj, 1),
-            sloped_area_ft2:    round(sloped, 1),
-            squares:            round(sloped / SQFT_PER_SQUARE, 3),
-          })
+      if (this.ridgesCart.length > 0 && this.hipsCart.length > 0) {
+        // ── GEOMETRIC FACE SPLITTING ──
+        // Use ridge and hip endpoints to split the eave polygon into faces
+        // Each face is bounded by eave edges + hip/ridge lines
+        // This produces geometrically accurate per-face areas instead of equal division
+        
+        const facePolys = this.splitEavePolygonIntoFaces()
+        
+        if (facePolys.length > 0) {
+          let assignedArea = 0
+          for (let i = 0; i < facePolys.length; i++) {
+            const polyArea = shoelaceAreaM2(facePolys[i].pts) * M2_TO_FT2
+            const { theta } = facePolys[i].ridge ? this.resolveTheta(facePolys[i].ridge) : { theta: this.defThetaRad }
+            const rise = 12 * Math.tan(theta)
+            const sloped = slopedFromProjected(polyArea, rise)
+            assignedArea += polyArea
+            results.push({
+              face_id:            facePolys[i].id || `face_${String.fromCharCode(65 + i)}`,
+              pitch_rise:         round(rise, 1),
+              pitch_label:        `${round(rise, 1)}:12`,
+              pitch_angle_deg:    round(theta * 180 / Math.PI, 1),
+              slope_factor:       round(slopeFactor(rise), 4),
+              projected_area_ft2: round(polyArea, 1),
+              sloped_area_ft2:    round(sloped, 1),
+              squares:            round(sloped / SQFT_PER_SQUARE, 3),
+            })
+          }
+          
+          // If geometric splitting didn't capture all area (rounding), distribute remainder
+          const remainder = totalProjFt2 - assignedArea
+          if (Math.abs(remainder) > 1 && results.length > 0) {
+            const perFace = remainder / results.length
+            for (const r of results) {
+              r.projected_area_ft2 = round(r.projected_area_ft2 + perFace, 1)
+              const sloped = slopedFromProjected(r.projected_area_ft2, r.pitch_rise)
+              r.sloped_area_ft2 = round(sloped, 1)
+              r.squares = round(sloped / SQFT_PER_SQUARE, 3)
+            }
+          }
+        } else {
+          // Fallback: proportional split based on eave perimeter contribution
+          this.proportionalFaceSplit(results, totalProjFt2)
         }
+      } else if (this.ridgesCart.length > 0) {
+        // Has ridges but no hips — use proportional splitting based on
+        // ridge position relative to eave bounding box
+        this.proportionalFaceSplit(results, totalProjFt2)
       } else {
         const rise = this.defPitch
         const sloped = slopedFromProjected(totalProjFt2, rise)
@@ -1016,6 +1044,163 @@ export class RoofMeasurementEngine {
     }
 
     return results
+  }
+
+  // ── GEOMETRIC FACE SPLITTING ──────────────────────────
+  // For hip roofs: use ridge endpoints + hip endpoints to divide the
+  // eave polygon into individual face polygons, then Shoelace each.
+
+  private splitEavePolygonIntoFaces(): { id: string; pts: { x: number; y: number }[]; ridge: any }[] {
+    const faces: { id: string; pts: { x: number; y: number }[]; ridge: any }[] = []
+    
+    // Collect all interior points (ridge + hip endpoints)
+    const ridgePts: { x: number; y: number }[] = []
+    for (const r of this.ridgesCart) {
+      for (const p of r.pts) ridgePts.push({ x: p.x, y: p.y })
+    }
+    const hipPts: { x: number; y: number }[] = []
+    for (const h of this.hipsCart) {
+      for (const p of h.pts) hipPts.push({ x: p.x, y: p.y })
+    }
+
+    // For a standard hip roof: ridge runs along the long axis,
+    // hips connect ridge endpoints to eave corners.
+    // Faces: 2 main trapezoids (long sides) + 2 hip triangles (short ends)
+    if (this.ridgesCart.length === 1 && this.hipsCart.length >= 2) {
+      const ridge = this.ridgesCart[0]
+      const rStart = { x: ridge.pts[0].x, y: ridge.pts[0].y }
+      const rEnd = { x: ridge.pts[ridge.pts.length - 1].x, y: ridge.pts[ridge.pts.length - 1].y }
+
+      // Find the eave vertices closest to each ridge endpoint (hip corners)
+      const eaveVerts = this.eavesCart.slice(0, -1).map(p => ({ x: p.x, y: p.y }))
+      
+      // Sort eave points into left/right of the ridge line
+      const ridgeDx = rEnd.x - rStart.x, ridgeDy = rEnd.y - rStart.y
+      const leftSide: { x: number; y: number; idx: number }[] = []
+      const rightSide: { x: number; y: number; idx: number }[] = []
+
+      eaveVerts.forEach((p, idx) => {
+        const cross = (p.x - rStart.x) * ridgeDy - (p.y - rStart.y) * ridgeDx
+        if (cross >= 0) leftSide.push({ ...p, idx })
+        else rightSide.push({ ...p, idx })
+      })
+
+      // Sort each side by projection along ridge direction for proper polygon order
+      const ridgeLen = Math.sqrt(ridgeDx * ridgeDx + ridgeDy * ridgeDy) || 1
+      const ridgeUx = ridgeDx / ridgeLen, ridgeUy = ridgeDy / ridgeLen
+      const proj = (p: { x: number; y: number }) => (p.x - rStart.x) * ridgeUx + (p.y - rStart.y) * ridgeUy
+      leftSide.sort((a, b) => proj(a) - proj(b))
+      rightSide.sort((a, b) => proj(a) - proj(b))
+
+      // Find eave corners nearest to ridge start and ridge end
+      const distToRStart = (p: { x: number; y: number }) => Math.sqrt((p.x - rStart.x) ** 2 + (p.y - rStart.y) ** 2)
+      const distToREnd = (p: { x: number; y: number }) => Math.sqrt((p.x - rEnd.x) ** 2 + (p.y - rEnd.y) ** 2)
+      
+      const nearStart = [...eaveVerts].sort((a, b) => distToRStart(a) - distToRStart(b))
+      const nearEnd = [...eaveVerts].sort((a, b) => distToREnd(a) - distToREnd(b))
+      
+      // Hip end 1 (near ridge start): triangle from eave corners to ridge start
+      if (nearStart.length >= 2) {
+        const c1 = nearStart[0], c2 = nearStart[1]
+        faces.push({ id: 'face_A', pts: [c1, rStart, c2], ridge: null })
+      }
+
+      // Main face (left side): trapezoid from left eave points + ridge
+      if (leftSide.length >= 2) {
+        const mainPts = [...leftSide, rEnd, rStart]
+        faces.push({ id: 'face_B', pts: mainPts, ridge })
+      }
+
+      // Hip end 2 (near ridge end): triangle from eave corners to ridge end
+      if (nearEnd.length >= 2) {
+        const c1 = nearEnd[0], c2 = nearEnd[1]
+        faces.push({ id: 'face_C', pts: [c1, rEnd, c2], ridge: null })
+      }
+
+      // Main face (right side): trapezoid from right eave points + ridge
+      if (rightSide.length >= 2) {
+        const mainPts = [...rightSide, rEnd, rStart]
+        faces.push({ id: 'face_D', pts: mainPts, ridge })
+      }
+
+      return faces
+    }
+
+    // Generic fallback: return empty to trigger proportional split
+    return []
+  }
+
+  // ── PROPORTIONAL FACE SPLIT ──────────────────────────
+  // When geometric splitting isn't possible, use eave perimeter ratios
+  // and bounding box analysis to estimate per-face areas proportionally.
+  
+  private proportionalFaceSplit(results: FaceDetail[], totalProjFt2: number): void {
+    // Use eave polygon bounding box to determine roof aspect ratio
+    const eaveVerts = this.eavesCart.slice(0, -1)
+    if (eaveVerts.length < 4) {
+      // Can't determine proportions — single face
+      const rise = this.defPitch
+      const sloped = slopedFromProjected(totalProjFt2, rise)
+      results.push({
+        face_id: 'total_roof',
+        pitch_rise: rise,
+        pitch_label: `${rise}:12`,
+        pitch_angle_deg: round(pitchAngleDeg(rise), 1),
+        slope_factor: round(slopeFactor(rise), 4),
+        projected_area_ft2: round(totalProjFt2, 1),
+        sloped_area_ft2: round(sloped, 1),
+        squares: round(sloped / SQFT_PER_SQUARE, 3),
+      })
+      return
+    }
+
+    // Compute oriented bounding box width/height to find aspect ratio
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
+    eaveVerts.forEach(p => {
+      minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x)
+      minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y)
+    })
+    const bbW = (maxX - minX) * M_TO_FT
+    const bbH = (maxY - minY) * M_TO_FT
+    const longSide = Math.max(bbW, bbH)
+    const shortSide = Math.min(bbW, bbH)
+
+    // For a hip roof: estimate ridge length ≈ longSide - shortSide
+    // Hip triangle area ≈ shortSide/2 × shortSide/2 each (two triangles)
+    // Main trapezoid area ≈ (totalFootprint - 2×triangle) / 2 each
+    const estRidgeLen = Math.max(longSide - shortSide, 0)
+    const hipTriangleArea = (shortSide * shortSide) / 4  // each hip end triangle
+    const mainFaceArea = Math.max((totalProjFt2 - 2 * hipTriangleArea) / 2, totalProjFt2 / 4)
+    const adjustedHipArea = (totalProjFt2 - 2 * mainFaceArea) / 2
+
+    const numFaces = this.ridgesCart.length > 0 ? Math.max(this.ridgesCart.length + 1, 4) : 4
+
+    // Build proportional faces
+    const faceAreas = numFaces >= 4
+      ? [adjustedHipArea, mainFaceArea, adjustedHipArea, mainFaceArea]
+      : Array(numFaces).fill(totalProjFt2 / numFaces)
+
+    // Normalize so they sum exactly to total
+    const rawSum = faceAreas.reduce((s, a) => s + a, 0)
+    const scale = totalProjFt2 / rawSum
+
+    for (let i = 0; i < faceAreas.length; i++) {
+      const faceProj = faceAreas[i] * scale
+      const ridge = i < this.ridgesCart.length ? this.ridgesCart[i] : null
+      const { theta } = ridge ? this.resolveTheta(ridge) : { theta: this.defThetaRad }
+      const rise = 12 * Math.tan(theta)
+      const sloped = slopedFromProjected(faceProj, rise)
+      results.push({
+        face_id: `face_${String.fromCharCode(65 + i)}`,
+        pitch_rise: round(rise, 1),
+        pitch_label: `${round(rise, 1)}:12`,
+        pitch_angle_deg: round(theta * 180 / Math.PI, 1),
+        slope_factor: round(slopeFactor(rise), 4),
+        projected_area_ft2: round(faceProj, 1),
+        sloped_area_ft2: round(sloped, 1),
+        squares: round(sloped / SQFT_PER_SQUARE, 3),
+      })
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════
