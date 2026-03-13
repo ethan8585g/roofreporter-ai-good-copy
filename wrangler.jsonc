@@ -13,7 +13,9 @@
   ],
   // Cloudflare Workers AI — built-in AI models for image classification,
   // measurement validation, and report enhancement at the edge.
-  "ai": {
-    "binding": "AI"
-  }
+  // NOTE: Commented out for local sandbox dev (remote proxy fails).
+  // Re-enable for production deployment.
+  // "ai": {
+  //   "binding": "AI"
+  // }
 }
