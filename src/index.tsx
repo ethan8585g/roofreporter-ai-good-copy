@@ -971,6 +971,11 @@ function getRoverWidget() {
   return `<script src="/static/rover-widget.js" defer></script>`
 }
 
+// Rover AI Assistant — inject on authenticated customer pages
+function getRoverAssistant() {
+  return `<script src="/static/rover-assistant.js?v=${Date.now()}" defer></script>`
+}
+
 // ============================================================
 // CONTACT US LEAD CAPTURE — Reusable form for all public pages
 // ============================================================
@@ -2081,7 +2086,7 @@ function getCustomerDashboardHTML() {
     }
   </script>
   <script src="/static/customer-dashboard.js?v=${Date.now()}"></script>
-  ${getRoverWidget()}
+  ${getRoverAssistant()}
 </body>
 </html>`
 }
@@ -2120,6 +2125,7 @@ function getCustomerInvoiceHTML() {
     })();
   </script>
   <script src="/static/customer-invoice.js"></script>
+  ${getRoverAssistant()}
 </body>
 </html>`
 }
@@ -2668,7 +2674,7 @@ function getCustomerOrderPageHTML(mapsApiKey: string) {
     })();
   </script>
   <script src="/static/customer-order.js?v=${Date.now()}"></script>
-  ${getRoverWidget()}
+  ${getRoverAssistant()}
 </body>
 </html>`
 }
@@ -2725,6 +2731,7 @@ function getVirtualTryOnPageHTML() {
     }
   </script>
   <script src="/static/virtual-tryon.js"></script>
+  ${getRoverAssistant()}
 </body>
 </html>`
 }
@@ -2781,6 +2788,7 @@ function getTeamManagementPageHTML() {
     }
   </script>
   <script src="/static/team-management.js"></script>
+  ${getRoverAssistant()}
 </body>
 </html>`
 }
@@ -2962,6 +2970,7 @@ function getD2DPageHTML(mapsApiKey: string) {
     }
   </script>
   <script src="/static/d2d-module.js?v=${Date.now()}"></script>
+  ${getRoverAssistant()}
 </body>
 </html>`
 }
@@ -3032,6 +3041,7 @@ function getPropertyImageryPageHTML(mapsApiKey: string) {
     }
   </script>
   <script src="/static/property-imagery.js"></script>
+  ${getRoverAssistant()}
 </body>
 </html>`
 }
@@ -3085,6 +3095,7 @@ function getCrmSubPageHTML(module: string, title: string, icon: string) {
     }
   </script>
   <script src="/static/crm-module.js?v=${Date.now()}"></script>
+  ${getRoverAssistant()}
 </body>
 </html>`
 }
@@ -3141,6 +3152,7 @@ function getSecretaryPageHTML() {
     }
   </script>
   <script src="/static/secretary.js"></script>
+  ${getRoverAssistant()}
 </body>
 </html>`
 }

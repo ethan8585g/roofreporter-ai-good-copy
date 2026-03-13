@@ -1,6 +1,6 @@
 // ============================================================
-// ROVER AI CHATBOT — Backend API Routes
-// Live AI chat assistant for RoofReporterAI visitors
+// ROVER AI — Backend API Routes
+// Public chatbot for visitors + Authenticated AI Assistant for customers
 // Uses OpenAI-compatible API with model fallback chain
 // Stores every conversation in D1 for admin review
 // ============================================================
@@ -905,3 +905,247 @@ async function extractLeadInfo(db: D1Database, conversationId: number, message: 
     // Lead extraction is best-effort
   }
 }
+
+// ============================================================
+// AUTHENTICATED AI ASSISTANT — Context-aware for logged-in users
+// Knows the customer's name, reports, credits, CRM, secretary
+// Acts as a smart business assistant, not a sales chatbot
+// ============================================================
+
+// Validate customer session token → returns customer row or null
+async function validateCustomerSession(db: D1Database, authHeader?: string | null): Promise<any | null> {
+  if (!authHeader?.startsWith('Bearer ')) return null
+  const token = authHeader.slice(7)
+  try {
+    const session = await db.prepare(`
+      SELECT cs.customer_id, c.email, c.name, c.company_name, c.phone,
+             c.free_trial_remaining, c.paid_credits_remaining, c.status, c.is_active
+      FROM customer_sessions cs
+      JOIN customers c ON c.id = cs.customer_id
+      WHERE cs.session_token = ? AND cs.expires_at > datetime('now')
+    `).bind(token).first()
+    return session || null
+  } catch { return null }
+}
+
+// Build the assistant system prompt with customer context
+function buildAssistantSystemPrompt(customer: any, context: any): string {
+  const name = customer.name || 'there'
+  const company = customer.company_name || ''
+  const freeRemaining = customer.free_trial_remaining ?? 0
+  const paidCredits = customer.paid_credits_remaining ?? 0
+
+  return `You are Rover 🐕, the smart AI business assistant inside RoofReporterAI. You are speaking with an authenticated, logged-in customer — NOT a visitor. Behave as their personal AI assistant, not a sales chatbot.
+
+THE CUSTOMER:
+- Name: ${name}
+- Email: ${customer.email}
+- Company: ${company || 'Not set'}
+- Free trial reports remaining: ${freeRemaining}
+- Paid credits remaining: ${paidCredits}
+- Total completed reports: ${context.completedReports || 0}
+- Total orders: ${context.totalOrders || 0}
+- CRM customers: ${context.crmCustomers || 0}
+- CRM invoices outstanding: $${context.invoicesOwing || '0.00'}
+- Secretary AI active: ${context.secretaryActive ? 'Yes' : 'No'}
+- Team members: ${context.teamMembers || 0}
+
+YOUR ROLE AS ASSISTANT:
+You help them navigate the platform, answer questions about their data, suggest actions, and provide roofing business advice. You are a productivity tool, not a salesman.
+
+CAPABILITIES YOU CAN HELP WITH:
+1. ORDER A REPORT — Guide them to /customer/order. They have ${freeRemaining > 0 ? freeRemaining + ' free reports left' : (paidCredits > 0 ? paidCredits + ' credits available' : 'no credits — suggest buying at /pricing')}.
+2. VIEW REPORTS — Link them to /customer/reports to see past measurements.
+3. CRM — Help with customers (/customer/customers), invoices (/customer/invoices), proposals (/customer/proposals), jobs (/customer/jobs).
+4. VIRTUAL TRY-ON — AI roof visualization at /customer/virtual-tryon.
+5. D2D MANAGER — Door-to-door sales tracking at /customer/d2d.
+6. SECRETARY AI — ${context.secretaryActive ? 'Their AI secretary is active with ' + (context.secretaryCalls || 0) + ' calls handled. Manage at /customer/secretary.' : 'Not subscribed. $249/month for 24/7 AI phone answering. Set up at /customer/secretary.'}
+7. TEAM MANAGEMENT — Add team members at /customer/team. $50/user/month.
+8. SETTINGS & BRANDING — Customize branding at /customer/settings.
+9. BUY CREDITS — Volume discounts at /pricing.
+
+RESPONSE STYLE:
+- Be concise: 1-3 sentences unless the topic needs more.
+- Use their name naturally (not every message).
+- Be helpful and direct — they are already a customer, don't oversell.
+- If they ask about a feature, explain it and link directly to the page.
+- If they need help with roofing business decisions (pricing jobs, material selection, customer communication), give practical advice.
+- If they ask about their data (reports, invoices, credits), reference the numbers you know.
+- Format navigation as clickable links: /customer/order, /customer/reports, etc.
+- You can help draft professional emails, proposals, and customer communications.
+- If they report a bug or issue, acknowledge it and suggest emailing reports@reusecanada.ca.
+
+THINGS YOU SHOULD NOT DO:
+- Don't be overly salesy — they already bought in.
+- Don't guess data you don't have — say "I don't have that detail right now" if needed.
+- Don't make up report contents or numbers.
+- Keep it professional but friendly.`
+}
+
+// POST /api/rover/assistant — Authenticated AI assistant chat
+roverRoutes.post('/assistant', async (c) => {
+  try {
+    const customer = await validateCustomerSession(c.env.DB, c.req.header('Authorization'))
+    if (!customer) {
+      return c.json({ error: 'Authentication required' }, 401)
+    }
+
+    const body = await c.req.json()
+    const { session_id, message } = body
+
+    if (!session_id || !message) {
+      return c.json({ error: 'session_id and message are required' }, 400)
+    }
+
+    // Gather customer context from DB (parallel queries)
+    const [ordersResult, crmCustResult, crmInvResult, secResult, teamResult] = await Promise.all([
+      c.env.DB.prepare('SELECT COUNT(*) as total, SUM(CASE WHEN status = \'completed\' THEN 1 ELSE 0 END) as completed FROM orders WHERE customer_id = ?').bind(customer.customer_id).first().catch(() => null),
+      c.env.DB.prepare('SELECT COUNT(*) as total FROM crm_customers WHERE master_company_id = (SELECT id FROM master_companies WHERE owner_customer_id = ?)').bind(customer.customer_id).first().catch(() => null),
+      c.env.DB.prepare(`SELECT COALESCE(SUM(CASE WHEN status IN ('sent','viewed','overdue') THEN total ELSE 0 END), 0) as owing FROM crm_invoices WHERE master_company_id = (SELECT id FROM master_companies WHERE owner_customer_id = ?)`).bind(customer.customer_id).first().catch(() => null),
+      c.env.DB.prepare('SELECT COUNT(*) as active FROM secretary_subscriptions WHERE customer_id = ? AND status = \'active\'').bind(customer.customer_id).first().catch(() => null),
+      c.env.DB.prepare('SELECT COUNT(*) as total FROM team_members WHERE owner_customer_id = ? AND status = \'active\'').bind(customer.customer_id).first().catch(() => null),
+    ])
+
+    // Also get recent reports for context
+    const recentReports = await c.env.DB.prepare(
+      'SELECT property_address, roof_area_sqft, roof_pitch, status, created_at FROM orders WHERE customer_id = ? ORDER BY created_at DESC LIMIT 5'
+    ).bind(customer.customer_id).all().catch(() => ({ results: [] }))
+
+    const context = {
+      totalOrders: (ordersResult as any)?.total || 0,
+      completedReports: (ordersResult as any)?.completed || 0,
+      crmCustomers: (crmCustResult as any)?.total || 0,
+      invoicesOwing: Number((crmInvResult as any)?.owing || 0).toFixed(2),
+      secretaryActive: ((secResult as any)?.active || 0) > 0,
+      secretaryCalls: 0,
+      teamMembers: (teamResult as any)?.total || 0,
+      recentReports: (recentReports.results || []).map((r: any) => ({
+        address: r.property_address,
+        area: r.roof_area_sqft ? Math.round(r.roof_area_sqft) + ' sq ft' : 'N/A',
+        pitch: r.roof_pitch || 'N/A',
+        status: r.status,
+        date: r.created_at
+      }))
+    }
+
+    // Get or create assistant conversation (separate from public chatbot)
+    const assistantSessionId = `ast_${customer.customer_id}_${session_id}`
+    let conversation = await c.env.DB.prepare(
+      'SELECT * FROM rover_conversations WHERE session_id = ?'
+    ).bind(assistantSessionId).first()
+
+    if (!conversation) {
+      await c.env.DB.prepare(`
+        INSERT INTO rover_conversations (session_id, visitor_name, visitor_email, visitor_company, status, lead_status, lead_score, first_message_at, last_message_at, tags)
+        VALUES (?, ?, ?, ?, 'active', 'customer', 100, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'assistant,authenticated')
+      `).bind(assistantSessionId, customer.name || null, customer.email, customer.company_name || null).run()
+
+      conversation = await c.env.DB.prepare(
+        'SELECT * FROM rover_conversations WHERE session_id = ?'
+      ).bind(assistantSessionId).first()
+    }
+
+    if (!conversation) {
+      return c.json({ error: 'Failed to create conversation' }, 500)
+    }
+
+    const conversationId = conversation.id as number
+
+    // Store user message
+    await c.env.DB.prepare(
+      'INSERT INTO rover_messages (conversation_id, role, content) VALUES (?, \'user\', ?)'
+    ).bind(conversationId, message).run()
+
+    // Get conversation history (last 30 messages for assistant — more context than chatbot)
+    const history = await c.env.DB.prepare(
+      'SELECT role, content FROM rover_messages WHERE conversation_id = ? ORDER BY created_at ASC LIMIT 30'
+    ).bind(conversationId).all()
+
+    // Build system prompt with full customer context
+    const systemPrompt = buildAssistantSystemPrompt(customer, context)
+
+    // Include recent reports in context if relevant
+    let contextNote = ''
+    if (context.recentReports.length > 0) {
+      contextNote = '\n\nRECENT REPORTS:\n' + context.recentReports.map((r: any, i: number) =>
+        `${i + 1}. ${r.address} — ${r.area}, pitch ${r.pitch}, ${r.status} (${r.date})`
+      ).join('\n')
+    }
+
+    const messages: any[] = [
+      { role: 'system', content: systemPrompt + contextNote }
+    ]
+
+    // Add conversation history
+    for (const msg of (history.results || [])) {
+      messages.push({ role: msg.role, content: msg.content })
+    }
+
+    const apiKey = c.env.OPENAI_API_KEY
+    const baseUrl = c.env.OPENAI_BASE_URL || 'https://www.genspark.ai/api/llm_proxy/v1'
+
+    if (!apiKey) {
+      const fallback = `Hey ${customer.name || 'there'}! I'm having a quick connection issue right now, but here's what I can tell you: you have ${customer.free_trial_remaining || 0} free reports and ${customer.paid_credits_remaining || 0} paid credits. Head to /customer/order to generate a report, or /customer/reports to view past measurements. I'll be back online shortly!`
+      await c.env.DB.prepare(
+        'INSERT INTO rover_messages (conversation_id, role, content, model) VALUES (?, \'assistant\', ?, \'fallback\')'
+      ).bind(conversationId, fallback).run()
+      return c.json({ reply: fallback, session_id })
+    }
+
+    try {
+      const result = await callAI(apiKey, baseUrl, messages, 1500, 0.6)
+
+      await c.env.DB.prepare(
+        'INSERT INTO rover_messages (conversation_id, role, content, tokens_used, model, response_time_ms) VALUES (?, \'assistant\', ?, ?, ?, ?)'
+      ).bind(conversationId, result.content, result.tokensUsed, result.model, result.responseTimeMs).run()
+
+      await c.env.DB.prepare(
+        'UPDATE rover_conversations SET message_count = message_count + 2, last_message_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+      ).bind(conversationId).run()
+
+      return c.json({ reply: result.content, session_id, model: result.model })
+
+    } catch (aiError: any) {
+      console.error('[Rover Assistant] All AI models failed:', aiError.message)
+      const fallback = `I'm having a technical hiccup, ${customer.name || 'sorry'}! Try refreshing, or reach out to reports@reusecanada.ca if this persists. You can still use all features from your dashboard.`
+      await c.env.DB.prepare(
+        'INSERT INTO rover_messages (conversation_id, role, content, model) VALUES (?, \'assistant\', ?, \'fallback-smart\')'
+      ).bind(conversationId, fallback).run()
+      return c.json({ reply: fallback, session_id })
+    }
+
+  } catch (err: any) {
+    console.error('Rover assistant error:', err)
+    return c.json({
+      error: 'Assistant temporarily unavailable',
+      reply: "I'm having a quick hiccup! You can still access everything from your dashboard. If this persists, email reports@reusecanada.ca.",
+      session_id: (await c.req.json().catch(() => ({}))).session_id
+    }, 200)
+  }
+})
+
+// GET /api/rover/assistant/history — Authenticated assistant history
+roverRoutes.get('/assistant/history', async (c) => {
+  try {
+    const customer = await validateCustomerSession(c.env.DB, c.req.header('Authorization'))
+    if (!customer) return c.json({ error: 'Authentication required' }, 401)
+
+    const sessionId = c.req.query('session_id')
+    if (!sessionId) return c.json({ error: 'session_id required' }, 400)
+
+    const assistantSessionId = `ast_${customer.customer_id}_${sessionId}`
+    const conversation = await c.env.DB.prepare(
+      'SELECT id, status FROM rover_conversations WHERE session_id = ?'
+    ).bind(assistantSessionId).first()
+
+    if (!conversation) return c.json({ messages: [] })
+
+    const msgs = await c.env.DB.prepare(
+      'SELECT role, content, created_at FROM rover_messages WHERE conversation_id = ? ORDER BY created_at ASC'
+    ).bind(conversation.id).all()
+
+    return c.json({ messages: msgs.results || [], status: conversation.status })
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500)
+  }
+})
