@@ -110,6 +110,12 @@ export type Bindings = {
   GA4_MEASUREMENT_ID: string       // e.g. "G-XXXXXXXXXX" — GA4 Measurement ID for gtag.js
   GA4_API_SECRET: string           // Measurement Protocol API secret for server-side events
   GA4_PROPERTY_ID: string          // e.g. "properties/123456789" — for Analytics Data API queries
+
+  // Meta Connect — Facebook/Instagram Integration (Super Admin)
+  // Create a Meta App at: https://developers.facebook.com/apps/
+  META_APP_ID: string              // Facebook App ID (used for token exchange)
+  META_APP_SECRET: string          // Facebook App Secret (used for long-lived token exchange)
+  META_AD_ACCOUNT_ID: string       // Meta Ads Account ID (numeric, no 'act_' prefix)
 }
 
 // ============================================================

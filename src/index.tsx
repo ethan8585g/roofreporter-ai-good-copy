@@ -26,6 +26,7 @@ import { agentsRoutes } from './routes/agents'
 import { workersAiRoutes } from './routes/workers-ai'
 import { reportImagesRoutes } from './routes/report-images'
 import { callCenterRoutes } from './routes/call-center'
+import { metaConnectRoutes } from './routes/meta-connect'
 import type { Bindings } from './types'
 
 const app = new Hono<{ Bindings: Bindings }>()
@@ -181,6 +182,7 @@ app.route('/api/agents', agentsRoutes)
 app.route('/api/workers-ai', workersAiRoutes)
 app.route('/api/report-images', reportImagesRoutes)
 app.route('/api/call-center', callCenterRoutes)
+app.route('/api/meta', metaConnectRoutes)
 
 // Health check
 app.get('/api/health', (c) => {
@@ -1192,6 +1194,10 @@ function getSuperAdminDashboardHTML() {
           <i class="fas fa-headset w-5 text-center"></i>
           <span class="label text-sm font-medium">AI Call Center</span>
         </div>
+        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('meta-connect')">
+          <i class="fab fa-meta w-5 text-center"></i>
+          <span class="label text-sm font-medium">Meta Connect</span>
+        </div>
         <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('livekit')">
           <i class="fas fa-phone-alt w-5 text-center"></i>
           <span class="label text-sm font-medium">LiveKit Agents</span>
@@ -1254,6 +1260,7 @@ function getSuperAdminDashboardHTML() {
   </script>
   <script src="/static/super-admin-dashboard.js"></script>
   <script src="/static/call-center.js"></script>
+  <script src="/static/meta-connect.js"></script>
   <script src="/static/email-outreach.js"></script>
 </body>
 </html>`
