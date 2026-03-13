@@ -25,7 +25,7 @@ export function generateArchitecturalDiagramSVG(
   grossSquares: number
 ): string {
   const W = 700, H = 660
-  const PAD = 85            // generous padding for dimension lines
+  const PAD = 55            // padding for dimension lines — reduced for better fit
   const FOOTER_H = 56       // dark navy footer bar height
   const DIM_OFFSET = 22     // how far dimension line sits from roof edge
   const DIM_EXTEND = 6      // extension line overshoot past dimension line
@@ -70,7 +70,7 @@ export function generateArchitecturalDiagramSVG(
   const geoH = maxY - minY || 1
   const drawW = W - PAD * 2
   const drawH = H - PAD - 30 - FOOTER_H
-  const sc = Math.min(drawW / geoW, drawH / geoH) * 0.76
+  const sc = Math.min(drawW / geoW, drawH / geoH) * 0.92
   const oX = PAD + (drawW - geoW * sc) / 2
   const oY = 30 + (drawH - geoH * sc) / 2
 
@@ -166,8 +166,9 @@ export function generateArchitecturalDiagramSVG(
   let svg = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block;background:#fff">`
   svg += `<rect width="${W}" height="${H}" fill="#FFFFFF"/>`
 
-  // DEFS: crosshatch patterns (alternating for adjacent facets)
+  // DEFS: crosshatch patterns (alternating for adjacent facets) + clip rect to prevent overflow
   svg += `<defs>`
+  svg += `<clipPath id="ev-viewport"><rect x="0" y="0" width="${W}" height="${H}"/></clipPath>`
   svg += `<pattern id="ev-xhatch" patternUnits="userSpaceOnUse" width="5.5" height="5.5">`
   svg += `<line x1="0" y1="0" x2="5.5" y2="5.5" stroke="#B0B0B0" stroke-width="0.35"/>`
   svg += `<line x1="5.5" y1="0" x2="0" y2="5.5" stroke="#B0B0B0" stroke-width="0.35"/>`
@@ -177,6 +178,9 @@ export function generateArchitecturalDiagramSVG(
   svg += `<line x1="6.5" y1="0" x2="0" y2="6.5" stroke="#BCBCBC" stroke-width="0.35"/>`
   svg += `</pattern>`
   svg += `</defs>`
+
+  // Wrap all drawing content in viewport clip to prevent dimension labels from overflowing
+  svg += `<g clip-path="url(#ev-viewport)">`
 
   // FAINT PROPERTY CONTEXT (lot boundary, very light)
   if (hasPerimeter) {
@@ -375,6 +379,7 @@ export function generateArchitecturalDiagramSVG(
     svg += `<text x="${cx.toFixed(1)}" y="${fY + 38}" text-anchor="middle" font-size="17" font-weight="800" fill="#fff" ${FONT}>${d.value}</text>`
   })
 
+  svg += `</g>` // close ev-viewport clip group
   svg += `</svg>`
   return svg
 }
@@ -397,7 +402,7 @@ export function generateFallbackArchitecturalSVG(
   W: number, H: number
 ): string {
   const FOOTER_H = 56
-  const PAD = 85
+  const PAD = 55
   const FONT = `font-family="Inter,system-ui,-apple-system,sans-serif"`
 
   const EDGE_COLOR: Record<string, string> = {
@@ -413,7 +418,7 @@ export function generateFallbackArchitecturalSVG(
   const lengthFt = widthFt * aspectRatio
   const drawW = W - PAD * 2
   const drawH = H - PAD - 30 - FOOTER_H
-  const scaleFactor = Math.min(drawW / lengthFt, drawH / widthFt) * 0.70
+  const scaleFactor = Math.min(drawW / lengthFt, drawH / widthFt) * 0.88
 
   const cx = W / 2, cy = 30 + drawH / 2
   const hw = (lengthFt * scaleFactor) / 2
@@ -2344,8 +2349,8 @@ export function generateTraceBasedDiagramSVG(
   grossSquares: number,
   trueAreaSqft: number
 ): string {
-  const W = 700, H = 660
-  const PAD = 85
+  const W = 700, H = 700
+  const PAD = 60
   const FOOTER_H = 56
   const FONT = `font-family="Inter,system-ui,-apple-system,sans-serif"`
 
@@ -2398,10 +2403,10 @@ export function generateTraceBasedDiagramSVG(
   const geoW = maxX - minX || 1
   const geoH = maxY - minY || 1
   const drawW = W - PAD * 2
-  const drawH = H - PAD - 30 - FOOTER_H
-  const sc = Math.min(drawW / geoW, drawH / geoH) * 0.76
+  const drawH = H - PAD - 36 - FOOTER_H
+  const sc = Math.min(drawW / geoW, drawH / geoH) * 0.88
   const oX = PAD + (drawW - geoW * sc) / 2
-  const oY = 30 + (drawH - geoH * sc) / 2
+  const oY = 36 + (drawH - geoH * sc) / 2
 
   const tx = (x: number) => oX + (x - minX) * sc
   const ty = (y: number) => oY + (y - minY) * sc
@@ -2601,6 +2606,168 @@ export function generateTraceBasedDiagramSVG(
     const cx = barX + colW * i + colW / 2
     svg += `<text x="${cx.toFixed(1)}" y="${fY + 15}" text-anchor="middle" font-size="7" font-weight="700" fill="#7eafd4" ${FONT} letter-spacing="1.5">${d.label}</text>`
     svg += `<text x="${cx.toFixed(1)}" y="${fY + 38}" text-anchor="middle" font-size="${d.label === 'AREA' ? '12' : '17'}" font-weight="800" fill="#fff" ${FONT}>${d.value}</text>`
+  })
+
+  svg += `</svg>`
+  return svg
+}
+
+
+// ============================================================
+// SQUARES GRID OVERLAY DIAGRAM
+// Shows the roof outline with a grid of 10ft × 10ft squares
+// (each square = 1 roofing square = 100 sqft) overlaid.
+// ============================================================
+
+export function generateSquaresGridDiagramSVG(
+  roofTrace: {
+    eaves?: { lat: number; lng: number }[]
+    ridges?: { lat: number; lng: number }[][]
+    hips?: { lat: number; lng: number }[][]
+    valleys?: { lat: number; lng: number }[][]
+  },
+  totalTrueAreaSqft: number,
+  totalFootprintSqft: number,
+  grossSquares: number,
+  predominantPitch: string,
+  wastePct: number
+): string {
+  const W = 700, H = 600
+  const PAD = 50
+  const FOOTER_H = 50
+  const FONT = `font-family="Inter,system-ui,-apple-system,sans-serif"`
+
+  const eaves = roofTrace.eaves || []
+  if (eaves.length < 3) {
+    return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block;background:#fff">
+      <rect width="${W}" height="${H}" fill="#fff"/>
+      <text x="${W/2}" y="${H/2}" text-anchor="middle" fill="#999" font-size="14" ${FONT}>Insufficient data for squares grid</text>
+    </svg>`
+  }
+
+  const centLat = eaves.reduce((s, p) => s + p.lat, 0) / eaves.length
+  const centLng = eaves.reduce((s, p) => s + p.lng, 0) / eaves.length
+  const cosLat = Math.cos(centLat * Math.PI / 180)
+  const M_PER_DEG_LAT = 111320
+  const M_PER_DEG_LNG = 111320 * cosLat
+  const M_TO_FT = 3.28084
+  const FT_TO_M = 1 / M_TO_FT
+
+  const toXY = (p: { lat: number; lng: number }) => ({
+    x: (p.lng - centLng) * M_PER_DEG_LNG,
+    y: -(p.lat - centLat) * M_PER_DEG_LAT
+  })
+
+  const eavesXY = eaves.map(toXY)
+  const allPts = [...eavesXY]
+  const ridgesXY = (roofTrace.ridges || []).map(line => line.map(toXY))
+  const hipsXY = (roofTrace.hips || []).map(line => line.map(toXY))
+  ridgesXY.forEach(line => allPts.push(...line))
+  hipsXY.forEach(line => allPts.push(...line))
+
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
+  allPts.forEach(p => {
+    minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x)
+    minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y)
+  })
+
+  const geoW = maxX - minX || 1
+  const geoH = maxY - minY || 1
+  const drawW = W - PAD * 2
+  const drawH = H - PAD - FOOTER_H - 36
+  const sc = Math.min(drawW / geoW, drawH / geoH) * 0.85
+  const oX = PAD + (drawW - geoW * sc) / 2
+  const oY = 36 + (drawH - geoH * sc) / 2
+
+  const tx = (x: number) => oX + (x - minX) * sc
+  const ty = (y: number) => oY + (y - minY) * sc
+
+  function pointInPolygon(px: number, py: number, poly: { x: number; y: number }[]): boolean {
+    let inside = false
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const xi = poly[i].x, yi = poly[i].y
+      const xj = poly[j].x, yj = poly[j].y
+      if ((yi > py) !== (yj > py) && px < (xj - xi) * (py - yi) / (yj - yi) + xi) inside = !inside
+    }
+    return inside
+  }
+
+  const gridSizeM = 10 * FT_TO_M
+  let fullSquares = 0, partialSquares = 0
+  const squareCells: { cx: number; cy: number; coverage: number }[] = []
+
+  for (let gx = minX; gx < maxX; gx += gridSizeM) {
+    for (let gy = minY; gy < maxY; gy += gridSizeM) {
+      let hits = 0
+      for (let sx = 0; sx < 3; sx++) {
+        for (let sy = 0; sy < 3; sy++) {
+          if (pointInPolygon(gx + gridSizeM * (sx + 0.5) / 3, gy + gridSizeM * (sy + 0.5) / 3, eavesXY)) hits++
+        }
+      }
+      if (hits > 0) {
+        const coverage = hits / 9
+        if (coverage > 0.85) fullSquares++; else partialSquares++
+        squareCells.push({ cx: gx + gridSizeM / 2, cy: gy + gridSizeM / 2, coverage })
+      }
+    }
+  }
+
+  let svg = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block;background:#fff">`
+  svg += `<rect width="${W}" height="${H}" fill="#FFFFFF"/>`
+
+  const clipPts = eavesXY.map(p => `${tx(p.x).toFixed(1)},${ty(p.y).toFixed(1)}`).join(' ')
+  svg += `<defs><clipPath id="sq-clip"><polygon points="${clipPts}"/></clipPath></defs>`
+
+  svg += `<g clip-path="url(#sq-clip)">`
+  const sqSize = gridSizeM * sc
+  let sqNum = 0
+  squareCells.forEach(cell => {
+    const x = tx(cell.cx - gridSizeM / 2), y = ty(cell.cy - gridSizeM / 2)
+    const op = cell.coverage > 0.85 ? 0.32 : cell.coverage * 0.25
+    svg += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${sqSize.toFixed(1)}" height="${sqSize.toFixed(1)}" fill="#0d9668" fill-opacity="${op.toFixed(2)}" stroke="#0d9668" stroke-width="0.5" stroke-opacity="0.4"/>`
+    if (cell.coverage > 0.5) {
+      sqNum++
+      if (sqSize > 12) {
+        svg += `<text x="${tx(cell.cx).toFixed(1)}" y="${(ty(cell.cy) + 3).toFixed(1)}" text-anchor="middle" font-size="${Math.min(sqSize * 0.32, 8.5).toFixed(1)}" font-weight="600" fill="#0d9668" fill-opacity="0.65" ${FONT}>${sqNum}</text>`
+      }
+    }
+  })
+  svg += `</g>`
+
+  svg += `<polygon points="${clipPts}" fill="none" stroke="#1a1a1a" stroke-width="2.5"/>`
+  ridgesXY.forEach(line => { if (line.length >= 2) svg += `<line x1="${tx(line[0].x).toFixed(1)}" y1="${ty(line[0].y).toFixed(1)}" x2="${tx(line[line.length-1].x).toFixed(1)}" y2="${ty(line[line.length-1].y).toFixed(1)}" stroke="#dc2626" stroke-width="2"/>` })
+  hipsXY.forEach(line => { if (line.length >= 2) svg += `<line x1="${tx(line[0].x).toFixed(1)}" y1="${ty(line[0].y).toFixed(1)}" x2="${tx(line[line.length-1].x).toFixed(1)}" y2="${ty(line[line.length-1].y).toFixed(1)}" stroke="#d97706" stroke-width="1.5"/>` })
+  eavesXY.forEach(p => svg += `<circle cx="${tx(p.x).toFixed(1)}" cy="${ty(p.y).toFixed(1)}" r="2.5" fill="#1a1a1a"/>`)
+
+  svg += `<text x="${W / 2}" y="16" text-anchor="middle" font-size="11" font-weight="800" fill="#333" ${FONT}>ROOFING SQUARES GRID</text>`
+  svg += `<text x="${W / 2}" y="29" text-anchor="middle" font-size="7.5" fill="#888" ${FONT}>Each cell = 1 roofing square (10\u2032 \u00D7 10\u2032 = 100 ft\u00B2) \u2014 Numbered squares show coverage</text>`
+
+  svg += `<rect x="12" y="${H - FOOTER_H - 42}" width="112" height="34" rx="3" fill="#fff" stroke="#ddd" stroke-width="0.5" opacity="0.95"/>`
+  svg += `<rect x="17" y="${H - FOOTER_H - 35}" width="9" height="9" fill="#0d9668" fill-opacity="0.32" stroke="#0d9668" stroke-width="0.5"/>`
+  svg += `<text x="30" y="${H - FOOTER_H - 28}" font-size="7" fill="#333" ${FONT} font-weight="600">Full square (100 ft\u00B2)</text>`
+  svg += `<rect x="17" y="${H - FOOTER_H - 22}" width="9" height="9" fill="#0d9668" fill-opacity="0.1" stroke="#0d9668" stroke-width="0.5"/>`
+  svg += `<text x="30" y="${H - FOOTER_H - 15}" font-size="7" fill="#333" ${FONT} font-weight="600">Partial square</text>`
+
+  const cX = W - 36, cY = 34
+  svg += `<g transform="translate(${cX},${cY})"><circle cx="0" cy="0" r="13" fill="#fff" fill-opacity="0.85" stroke="#999" stroke-width="0.7"/><polygon points="0,-11 -3,-3 3,-3" fill="#C62828"/><polygon points="0,11 -3,3 3,3" fill="#999"/><text x="0" y="-15" text-anchor="middle" font-size="7" font-weight="800" fill="#333" ${FONT}>N</text></g>`
+
+  const fY = H - FOOTER_H
+  const barW = W * 0.94, barX2 = (W - barW) / 2, cols = 5, colW2 = barW / cols
+  svg += `<rect x="${barX2.toFixed(1)}" y="${fY}" width="${barW.toFixed(1)}" height="${FOOTER_H}" fill="#002244"/>`
+  for (let c2 = 1; c2 < cols; c2++) svg += `<line x1="${(barX2 + colW2 * c2).toFixed(1)}" y1="${fY + 6}" x2="${(barX2 + colW2 * c2).toFixed(1)}" y2="${fY + FOOTER_H - 6}" stroke="#0a3a5e" stroke-width="1"/>`
+
+  const netSq = Math.round(totalTrueAreaSqft / 100 * 10) / 10
+  const fd = [
+    { l: 'FOOTPRINT', v: `${Math.round(totalFootprintSqft).toLocaleString()} ft\u00B2` },
+    { l: 'SLOPED AREA', v: `${Math.round(totalTrueAreaSqft).toLocaleString()} ft\u00B2` },
+    { l: 'NET SQUARES', v: `${netSq}` },
+    { l: `+ ${wastePct}% WASTE`, v: `${grossSquares} SQ` },
+    { l: 'GRID CELLS', v: `${fullSquares} + ${partialSquares}` },
+  ]
+  fd.forEach((d, i) => {
+    const cx = barX2 + colW2 * i + colW2 / 2
+    svg += `<text x="${cx.toFixed(1)}" y="${fY + 13}" text-anchor="middle" font-size="6.5" font-weight="700" fill="#7eafd4" ${FONT} letter-spacing="1">${d.l}</text>`
+    svg += `<text x="${cx.toFixed(1)}" y="${fY + 34}" text-anchor="middle" font-size="${i <= 1 ? '11' : '14'}" font-weight="800" fill="#fff" ${FONT}>${d.v}</text>`
   })
 
   svg += `</svg>`

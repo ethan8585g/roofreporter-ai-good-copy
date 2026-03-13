@@ -14,7 +14,8 @@ import {
 } from '../utils/geo-math'
 import {
   generateSatelliteOverlaySVG, generateOverlayLegend, generateBlueprintSVG,
-  generateArchitecturalDiagramSVG, generatePreciseAIOverlaySVG
+  generateArchitecturalDiagramSVG, generatePreciseAIOverlaySVG,
+  generateSquaresGridDiagramSVG
 } from './svg-diagrams'
 
 export function generateProfessionalReportHTML(report: RoofReport): string {
@@ -67,9 +68,12 @@ export function generateProfessionalReportHTML(report: RoofReport): string {
   // IWB (Ice & Water Barrier) — eave-line × 3ft depth
   const iwbSqFt = Math.round(es.total_eave_ft * 3 * 10) / 10
 
-  // Satellite image
+  // Satellite image — prefer eagle-view if available, then enhanced satellite, then standard
+  const eagleViewUrl = (report as any).eagle_view_image?.data_url
+    || (report as any).report_showcase_images?.enhanced_satellite
+    || ''
   const satelliteUrl = report.imagery?.satellite_url || ''
-  const overheadUrl = report.imagery?.satellite_overhead_url || satelliteUrl
+  const overheadUrl = eagleViewUrl || report.imagery?.satellite_overhead_url || satelliteUrl
 
   // ── Waste factor table (4% through 15%) ──
   const wastePercentages = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
@@ -89,6 +93,23 @@ export function generateProfessionalReportHTML(report: RoofReport): string {
       report.total_footprint_sqft, report.roof_pitch_degrees || predominantPitchDeg || 20,
       predominantPitch, grossSquares
     )
+  }
+
+  // ── Squares Grid Diagram SVG ──
+  let squaresGridSVG = ''
+  if (report.roof_trace && (report.roof_trace as any).eaves && (report.roof_trace as any).eaves.length >= 3) {
+    try {
+      squaresGridSVG = generateSquaresGridDiagramSVG(
+        report.roof_trace as any,
+        report.total_true_area_sqft,
+        report.total_footprint_sqft,
+        grossSquares,
+        predominantPitch,
+        mat.waste_pct || 15
+      )
+    } catch (e) {
+      console.warn('Squares grid diagram generation failed:', e)
+    }
   }
 
   // ── Edge summary by type for Page 2 table ──
@@ -278,7 +299,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
   <!-- Footer bar -->
   <div style="position:absolute;bottom:0;left:0;right:0;height:28px;background:linear-gradient(90deg,${TEAL},${TEAL_DARK});display:flex;align-items:center;justify-content:space-between;padding:0 28px">
     <span style="color:#fff;font-size:9px;font-weight:700">Roof Reporter AI</span>
-    <span style="color:#E0F2F1;font-size:7.5px">roofreporterai.com &bull; Report: ${reportNum} &bull; ${reportDate} &bull; p.1/2</span>
+    <span style="color:#E0F2F1;font-size:7.5px">roofreporterai.com &bull; Report: ${reportNum} &bull; ${reportDate} &bull; p.1</span>
   </div>
 </div>
 
@@ -429,9 +450,69 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
   <!-- Footer bar -->
   <div style="position:absolute;bottom:0;left:0;right:0;height:28px;background:${RED};display:flex;align-items:center;justify-content:space-between;padding:0 28px">
     <span style="color:#fff;font-size:9px;font-weight:700">Roof Reporter AI</span>
-    <span style="color:#ffcdd2;font-size:7.5px">roofreporterai.com &bull; Report: ${reportNum} &bull; ${reportDate} &bull; p.2/2</span>
+    <span style="color:#ffcdd2;font-size:7.5px">roofreporterai.com &bull; Report: ${reportNum} &bull; ${reportDate} &bull; p.2</span>
   </div>
 </div>
+
+${squaresGridSVG ? `
+<!-- ==================== PAGE 3: ROOFING SQUARES GRID ==================== -->
+<div class="page">
+  <!-- Top green accent bar -->
+  <div style="height:4px;background:linear-gradient(90deg,#0d9668,#059669)"></div>
+
+  <!-- Title -->
+  <div style="padding:12px 28px 6px">
+    <div style="font-size:14px;font-weight:800;color:#222">Roofing Squares Grid<span style="font-weight:400;color:#555"> &mdash; Material Estimation</span></div>
+    <div style="font-size:11px;color:#555">${fullAddress}</div>
+  </div>
+
+  <!-- Squares Grid Diagram -->
+  <div style="padding:0 22px;margin-bottom:8px">
+    <div style="border:1px solid #d5dae3;border-radius:4px;overflow:hidden;background:#fff;text-align:center">
+      ${squaresGridSVG}
+    </div>
+    <div style="text-align:center;font-size:6.5px;color:#999;margin-top:2px">Each numbered cell = 1 roofing square (10' \u00D7 10' = 100 ft\u00B2). Grid overlaid on roof footprint for material estimation.</div>
+  </div>
+
+  <!-- Square Count Summary -->
+  <div style="padding:0 28px;margin-bottom:8px">
+    <div style="display:flex;gap:12px">
+      <div style="flex:1;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:6px;padding:12px;text-align:center">
+        <div style="font-size:8px;color:#065f46;font-weight:700;text-transform:uppercase;letter-spacing:0.5px">Net Roof Area</div>
+        <div style="font-size:22px;font-weight:900;color:#047857;margin:4px 0">${report.total_true_area_sqft.toLocaleString()}</div>
+        <div style="font-size:9px;color:#059669">sq ft (3D sloped)</div>
+      </div>
+      <div style="flex:1;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:12px;text-align:center">
+        <div style="font-size:8px;color:#065f46;font-weight:700;text-transform:uppercase;letter-spacing:0.5px">Footprint Area</div>
+        <div style="font-size:22px;font-weight:900;color:#15803d;margin:4px 0">${report.total_footprint_sqft.toLocaleString()}</div>
+        <div style="font-size:9px;color:#16a34a">sq ft (2D flat)</div>
+      </div>
+      <div style="flex:1;background:linear-gradient(135deg,#059669,#047857);border-radius:6px;padding:12px;text-align:center;color:#fff">
+        <div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;opacity:0.85">Total Squares</div>
+        <div style="font-size:22px;font-weight:900;margin:4px 0">${grossSquares} SQ</div>
+        <div style="font-size:9px;opacity:0.8">incl. ${mat.waste_pct || 15}% waste</div>
+      </div>
+      <div style="flex:1;background:#f0f9ff;border:1px solid #bae6fd;border-radius:6px;padding:12px;text-align:center">
+        <div style="font-size:8px;color:#0c4a6e;font-weight:700;text-transform:uppercase;letter-spacing:0.5px">Pitch Multiplier</div>
+        <div style="font-size:22px;font-weight:900;color:#0369a1;margin:4px 0">${predominantPitch}</div>
+        <div style="font-size:9px;color:#0284c7">&times;${report.area_multiplier.toFixed(4)}</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Methodology note -->
+  <div style="padding:0 28px">
+    <div style="padding:6px 10px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:3px;font-size:7px;color:#166534;line-height:1.5">
+      <strong>Grid Methodology:</strong> The roof footprint is divided into a 10\u2032 \u00D7 10\u2032 grid (each cell = 1 roofing square = 100 ft\u00B2). Cells are classified as <strong>full</strong> (>85% coverage) or <strong>partial</strong> (<85% coverage). The grid provides a visual material estimation overlay. Actual material orders should use the calculated <strong>${grossSquares} SQ</strong> (includes ${mat.waste_pct || 15}% waste factor for ${mat.complexity_class || 'standard'} roof complexity).
+    </div>
+  </div>
+
+  <!-- Footer bar -->
+  <div style="position:absolute;bottom:0;left:0;right:0;height:28px;background:linear-gradient(90deg,#059669,#047857);display:flex;align-items:center;justify-content:space-between;padding:0 28px">
+    <span style="color:#fff;font-size:9px;font-weight:700">Roof Reporter AI</span>
+    <span style="color:#a7f3d0;font-size:7.5px">roofreporterai.com &bull; Report: ${reportNum} &bull; ${reportDate} &bull; p.3</span>
+  </div>
+</div>` : ''}
 
 ${report.customer_price_per_bundle ? buildCustomerPricingHTML(report) : ''}
 
@@ -665,6 +746,23 @@ export function generateSimpleTwoPageReport(report: RoofReport): string {
     )
   }
 
+  // ── Squares Grid Diagram SVG (simple report) ──
+  let squaresGridSVG = ''
+  if (report.roof_trace && (report.roof_trace as any).eaves && (report.roof_trace as any).eaves.length >= 3) {
+    try {
+      squaresGridSVG = generateSquaresGridDiagramSVG(
+        report.roof_trace as any,
+        report.total_true_area_sqft,
+        report.total_footprint_sqft,
+        grossSquares,
+        predominantPitch,
+        mat.waste_pct || 15
+      )
+    } catch (e) {
+      console.warn('Simple report: squares grid failed:', e)
+    }
+  }
+
   // Edge summary for the measurement table
   const edgeRows: { type: string; color: string; count: number; totalFt: number }[] = []
   const edgeTypeMap: Record<string, { color: string; count: number; totalFt: number }> = {}
@@ -731,7 +829,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
 
   <!-- Main Diagram Section (~58% of page) -->
   <div style="padding:0 22px">
-    <div style="border:1px solid #ddd;border-radius:4px;overflow:hidden;background:#fff;max-height:460px">
+    <div style="border:1px solid #ddd;border-radius:4px;overflow:hidden;background:#fff;max-height:520px">
       ${diagramSVG}
     </div>
   </div>
@@ -839,7 +937,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
       </div>
       <span style="font-size:9px;font-weight:800;color:#00838F">ROOF REPORTER AI</span>
     </div>
-    <div style="font-size:6.5px;color:#999">&copy; Roof Reporter AI &bull; ${reportDate} &bull; p.1/2</div>
+    <div style="font-size:6.5px;color:#999">&copy; Roof Reporter AI &bull; ${reportDate} &bull; p.1/${squaresGridSVG ? '3' : '2'}</div>
   </div>
 </div>
 
@@ -962,9 +1060,63 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
   <!-- Page 2 Footer -->
   <div style="position:absolute;bottom:0;left:0;right:0;background:linear-gradient(135deg,#00696B,#00838F);padding:8px 22px;display:flex;justify-content:space-between;align-items:center">
     <span style="font-size:9px;font-weight:700;color:#fff">Roof Reporter AI</span>
-    <span style="font-size:7px;color:rgba(255,255,255,0.7)">&copy; Roof Reporter AI &bull; ${fullAddress} &bull; ${reportDate} &bull; p.2/2</span>
+    <span style="font-size:7px;color:rgba(255,255,255,0.7)">&copy; Roof Reporter AI &bull; ${fullAddress} &bull; ${reportDate} &bull; p.2/${squaresGridSVG ? '3' : '2'}</span>
   </div>
 </div>
+
+${squaresGridSVG ? `
+<!-- ==================== PAGE 3: ROOFING SQUARES GRID (Portrait 8.5×11) ==================== -->
+<div class="page page-portrait">
+  <!-- Teal top accent bar -->
+  <div style="height:6px;background:linear-gradient(90deg,#0d9668,#00BCD4)"></div>
+
+  <!-- Title + Address -->
+  <div style="padding:14px 28px 8px">
+    <div style="font-size:17px;font-weight:800;color:#1a1a1a;letter-spacing:0.3px">Roofing Squares Grid<span style="font-weight:400;color:#555"> &mdash; Visual Overlay</span></div>
+    <div style="font-size:10px;color:#444;margin-top:2px;font-weight:500">${fullAddress}</div>
+  </div>
+
+  <!-- Squares Grid Diagram -->
+  <div style="padding:0 22px">
+    <div style="border:1px solid #ddd;border-radius:4px;overflow:hidden;background:#fff">
+      ${squaresGridSVG}
+    </div>
+  </div>
+
+  <!-- Explanation text -->
+  <div style="padding:10px 22px 0">
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:4px;padding:10px 16px">
+      <div style="font-size:9px;font-weight:700;color:#166534;margin-bottom:4px">Understanding Roofing Squares</div>
+      <div style="font-size:7.5px;color:#15803d;line-height:1.5">
+        A <strong>roofing square</strong> is the industry standard unit of measurement, equal to a 10&prime; &times; 10&prime; area (100 ft&sup2;).
+        This grid overlays the roof outline with squares to visually show the total coverage needed.
+        <strong>Green cells</strong> represent full squares; <strong>lighter cells</strong> are partial squares at the roof edges.
+        The numbered cells count each full and partial square that falls within the roof boundary.
+        Total net area: <strong>${report.total_true_area_sqft.toLocaleString()} ft&sup2;</strong> = <strong>${netSquares} SQ</strong> (before waste factor).
+      </div>
+    </div>
+  </div>
+
+  <!-- Methodology note -->
+  <div style="padding:6px 22px 0">
+    <div style="font-size:7px;color:#999;text-align:center;line-height:1.4">
+      Grid calculated from GPS-traced eave coordinates. Each cell is tested using 9-point sampling within the eave polygon boundary.
+      This is a flat-plane projection &mdash; actual sloped area includes a pitch multiplier of ${report.area_multiplier?.toFixed(3) || '1.083'}.
+    </div>
+  </div>
+
+  <!-- Page 3 Footer -->
+  <div style="position:absolute;bottom:0;left:0;right:0;padding:6px 22px;display:flex;justify-content:space-between;align-items:center;border-top:1px solid #eee;background:#fff">
+    <div style="display:flex;align-items:center;gap:6px">
+      <div style="width:16px;height:16px;background:#0d9668;border-radius:3px;display:flex;align-items:center;justify-content:center">
+        <div style="width:8px;height:8px;border:1.5px solid #fff;border-radius:1px"></div>
+      </div>
+      <span style="font-size:9px;font-weight:800;color:#0d9668">ROOF REPORTER AI</span>
+    </div>
+    <div style="font-size:6.5px;color:#999">&copy; Roof Reporter AI &bull; ${reportDate} &bull; p.3/3</div>
+  </div>
+</div>
+` : ''}
 
 </body>
 </html>`
