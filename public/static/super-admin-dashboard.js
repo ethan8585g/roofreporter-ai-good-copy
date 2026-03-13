@@ -108,6 +108,14 @@ async function loadView(view) {
           return;
         }
         break;
+      case 'meta-connect':
+        // Handled by meta-connect.js module
+        if (typeof window.loadMetaConnect === 'function') {
+          SA.loading = false;
+          window.loadMetaConnect();
+          return;
+        }
+        break;
       case 'livekit':
         const [lkTrunksRes, lkRulesRes] = await Promise.all([
           saFetch('/api/secretary/sip/trunks'),
@@ -209,6 +217,7 @@ function renderContent() {
     case 'ga4': root.innerHTML = renderGA4View(); break;
     case 'pricing': root.innerHTML = renderPricingView(); break;
     case 'call-center': break; // Handled by call-center.js
+    case 'meta-connect': break; // Handled by meta-connect.js
     case 'livekit': root.innerHTML = renderLiveKitView(); break;
     default: root.innerHTML = renderUsersView();
   }
