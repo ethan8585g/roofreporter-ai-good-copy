@@ -296,7 +296,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
 
   <!-- Main diagram area -->
   <div style="padding:0 28px;margin-bottom:8px">
-    <div style="border:1px solid #d5dae3;border-radius:4px;overflow:hidden;background:#fff;text-align:center;max-height:380px">
+    <div style="border:1px solid #d5dae3;border-radius:4px;background:#fff;text-align:center">
       ${architecturalDiagramSVG}
     </div>
     <div style="text-align:center;font-size:6.5px;color:#999;margin-top:2px">AI-Generated Roof Diagram — All dimensions in feet. Pitch multiplier applied for true 3D area.</div>
@@ -464,7 +464,7 @@ ${report.segments.length >= 2 ? `
 
   <!-- Pitch Diagram SVG — Top-down wireframe of roof planes with pitch labels -->
   <div style="padding:0 22px;margin-bottom:8px">
-    <div style="border:1px solid #d5dae3;border-radius:4px;overflow:hidden;background:#fff;text-align:center;max-height:340px">
+    <div style="border:1px solid #d5dae3;border-radius:4px;background:#fff;text-align:center">
       ${architecturalDiagramSVG}
     </div>
     <div style="text-align:center;font-size:6.5px;color:#999;margin-top:2px">Roof plane wireframe with facet identification numbers. Pitch values mapped per plane below.</div>
@@ -880,7 +880,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
 
   <!-- Main Diagram Section (~58% of page) -->
   <div style="padding:0 22px">
-    <div style="border:1px solid #ddd;border-radius:4px;overflow:hidden;background:#fff;max-height:520px">
+    <div style="border:1px solid #ddd;border-radius:4px;background:#fff">
       ${diagramSVG}
     </div>
   </div>
