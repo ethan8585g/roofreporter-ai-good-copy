@@ -972,3 +972,277 @@ adminRoutes.get('/superadmin/marketing', async (c) => {
     return c.json({ error: 'Failed to load marketing data', details: err.message }, 500)
   }
 })
+
+// ============================================================
+// SUPERADMIN: ROOFER SECRETARY AI — Subscriber management, usage, revenue
+// ============================================================
+
+// GET /superadmin/secretary/overview — Full overview of all secretary subscribers
+adminRoutes.get('/superadmin/secretary/overview', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
+  try {
+    // Subscription stats
+    const subStats = await c.env.DB.prepare(`
+      SELECT
+        COUNT(*) as total_subscriptions,
+        SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active_count,
+        SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending_count,
+        SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) as cancelled_count,
+        SUM(CASE WHEN status = 'past_due' THEN 1 ELSE 0 END) as past_due_count,
+        SUM(CASE WHEN status = 'active' THEN monthly_price_cents ELSE 0 END) as monthly_mrr_cents
+      FROM secretary_subscriptions
+    `).first<any>()
+
+    // Call stats
+    const callStats = await c.env.DB.prepare(`
+      SELECT
+        COUNT(*) as total_calls,
+        SUM(call_duration_seconds) as total_seconds,
+        AVG(call_duration_seconds) as avg_duration,
+        SUM(CASE WHEN call_outcome = 'answered' THEN 1 ELSE 0 END) as answered,
+        SUM(CASE WHEN call_outcome = 'voicemail' THEN 1 ELSE 0 END) as voicemail,
+        SUM(CASE WHEN call_outcome = 'transferred' THEN 1 ELSE 0 END) as transferred,
+        SUM(CASE WHEN call_outcome = 'missed' THEN 1 ELSE 0 END) as missed
+      FROM secretary_call_logs
+    `).first<any>()
+
+    // Calls in last 30 days
+    const recentCallStats = await c.env.DB.prepare(`
+      SELECT
+        COUNT(*) as calls_30d,
+        SUM(call_duration_seconds) as seconds_30d,
+        COUNT(DISTINCT customer_id) as active_users_30d
+      FROM secretary_call_logs
+      WHERE created_at >= datetime('now', '-30 days')
+    `).first<any>()
+
+    // Calls in last 7 days
+    const weekCallStats = await c.env.DB.prepare(`
+      SELECT
+        COUNT(*) as calls_7d,
+        SUM(call_duration_seconds) as seconds_7d,
+        COUNT(DISTINCT customer_id) as active_users_7d
+      FROM secretary_call_logs
+      WHERE created_at >= datetime('now', '-7 days')
+    `).first<any>()
+
+    // Config stats (active service users)
+    const configStats = await c.env.DB.prepare(`
+      SELECT
+        COUNT(*) as total_configs,
+        SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END) as active_services
+      FROM secretary_config
+    `).first<any>()
+
+    // Messages & appointments
+    const msgStats = await c.env.DB.prepare(`
+      SELECT
+        (SELECT COUNT(*) FROM secretary_messages) as total_messages,
+        (SELECT COUNT(*) FROM secretary_messages WHERE is_read = 0) as unread_messages,
+        (SELECT COUNT(*) FROM secretary_appointments) as total_appointments,
+        (SELECT COUNT(*) FROM secretary_appointments WHERE status = 'pending') as pending_appointments,
+        (SELECT COUNT(*) FROM secretary_callbacks) as total_callbacks,
+        (SELECT COUNT(*) FROM secretary_callbacks WHERE status = 'pending') as pending_callbacks
+    `).first<any>()
+
+    return c.json({
+      subscriptions: subStats || {},
+      calls: callStats || {},
+      recent_calls: recentCallStats || {},
+      week_calls: weekCallStats || {},
+      configs: configStats || {},
+      messages: msgStats || {}
+    })
+  } catch (err: any) {
+    return c.json({ error: 'Failed to load secretary overview', details: err.message }, 500)
+  }
+})
+
+// GET /superadmin/secretary/subscribers — All subscribers with details
+adminRoutes.get('/superadmin/secretary/subscribers', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
+  try {
+    const subscribers = await c.env.DB.prepare(`
+      SELECT 
+        ss.id,
+        ss.customer_id,
+        ss.status,
+        ss.stripe_subscription_id,
+        ss.monthly_price_cents,
+        ss.current_period_start,
+        ss.current_period_end,
+        ss.cancelled_at,
+        ss.created_at,
+        ss.updated_at,
+        c.name as customer_name,
+        c.email as customer_email,
+        c.phone as customer_phone,
+        c.company as customer_company,
+        sc.business_phone,
+        sc.is_active as service_active,
+        sc.greeting_script,
+        (SELECT COUNT(*) FROM secretary_call_logs cl WHERE cl.customer_id = ss.customer_id) as total_calls,
+        (SELECT SUM(call_duration_seconds) FROM secretary_call_logs cl WHERE cl.customer_id = ss.customer_id) as total_call_seconds,
+        (SELECT COUNT(*) FROM secretary_call_logs cl WHERE cl.customer_id = ss.customer_id AND cl.created_at >= datetime('now', '-30 days')) as calls_30d,
+        (SELECT SUM(call_duration_seconds) FROM secretary_call_logs cl WHERE cl.customer_id = ss.customer_id AND cl.created_at >= datetime('now', '-30 days')) as seconds_30d,
+        (SELECT COUNT(*) FROM secretary_messages m WHERE m.customer_id = ss.customer_id) as total_messages,
+        (SELECT COUNT(*) FROM secretary_appointments a WHERE a.customer_id = ss.customer_id) as total_appointments
+      FROM secretary_subscriptions ss
+      LEFT JOIN customers c ON c.id = ss.customer_id
+      LEFT JOIN secretary_config sc ON sc.customer_id = ss.customer_id
+      ORDER BY ss.created_at DESC
+    `).all()
+
+    return c.json({ subscribers: subscribers.results || [] })
+  } catch (err: any) {
+    return c.json({ error: 'Failed to load subscribers', details: err.message }, 500)
+  }
+})
+
+// GET /superadmin/secretary/revenue — Revenue analytics & subscription lifecycle
+adminRoutes.get('/superadmin/secretary/revenue', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
+  try {
+    const period = c.req.query('period') || 'monthly'
+    let dateFormat: string, dateFilter: string
+    if (period === 'weekly') {
+      dateFormat = '%Y-W%W'
+      dateFilter = "datetime('now', '-90 days')"
+    } else if (period === 'daily') {
+      dateFormat = '%Y-%m-%d'
+      dateFilter = "datetime('now', '-30 days')"
+    } else {
+      dateFormat = '%Y-%m'
+      dateFilter = "datetime('now', '-12 months')"
+    }
+
+    // Revenue over time (from subscriptions)
+    const revenueByPeriod = await c.env.DB.prepare(`
+      SELECT 
+        strftime('${dateFormat}', ss.created_at) as period,
+        COUNT(*) as new_subs,
+        SUM(monthly_price_cents) as revenue_cents
+      FROM secretary_subscriptions ss
+      WHERE ss.created_at >= ${dateFilter}
+      GROUP BY period
+      ORDER BY period ASC
+    `).all()
+
+    // Current MRR breakdown
+    const mrr = await c.env.DB.prepare(`
+      SELECT
+        SUM(CASE WHEN status = 'active' THEN monthly_price_cents ELSE 0 END) as active_mrr_cents,
+        SUM(CASE WHEN status = 'past_due' THEN monthly_price_cents ELSE 0 END) as at_risk_mrr_cents,
+        COUNT(CASE WHEN status = 'active' THEN 1 END) as active_count,
+        COUNT(CASE WHEN status = 'cancelled' THEN 1 END) as churned_count,
+        COUNT(CASE WHEN status = 'past_due' THEN 1 END) as at_risk_count
+      FROM secretary_subscriptions
+    `).first<any>()
+
+    // Upcoming renewals (subscriptions expiring in next 30 days)
+    const upcomingRenewals = await c.env.DB.prepare(`
+      SELECT 
+        ss.id,
+        ss.customer_id,
+        ss.status,
+        ss.monthly_price_cents,
+        ss.current_period_end,
+        c.name as customer_name,
+        c.email as customer_email,
+        c.company as customer_company
+      FROM secretary_subscriptions ss
+      LEFT JOIN customers c ON c.id = ss.customer_id
+      WHERE ss.status = 'active'
+        AND ss.current_period_end IS NOT NULL
+        AND ss.current_period_end <= datetime('now', '+30 days')
+      ORDER BY ss.current_period_end ASC
+    `).all()
+
+    // Expired/past-due subscriptions
+    const expired = await c.env.DB.prepare(`
+      SELECT 
+        ss.id,
+        ss.customer_id,
+        ss.status,
+        ss.monthly_price_cents,
+        ss.current_period_end,
+        ss.cancelled_at,
+        c.name as customer_name,
+        c.email as customer_email,
+        c.company as customer_company
+      FROM secretary_subscriptions ss
+      LEFT JOIN customers c ON c.id = ss.customer_id
+      WHERE ss.status IN ('past_due', 'cancelled')
+      ORDER BY ss.updated_at DESC
+      LIMIT 50
+    `).all()
+
+    // Lifetime revenue
+    const lifetime = await c.env.DB.prepare(`
+      SELECT 
+        SUM(monthly_price_cents) as total_lifetime_cents,
+        COUNT(*) as total_subscriptions_ever,
+        MIN(created_at) as first_subscription
+      FROM secretary_subscriptions
+      WHERE status IN ('active', 'cancelled', 'past_due')
+    `).first<any>()
+
+    return c.json({
+      revenue_by_period: revenueByPeriod.results || [],
+      mrr: mrr || {},
+      upcoming_renewals: upcomingRenewals.results || [],
+      expired: expired.results || [],
+      lifetime: lifetime || {},
+      period
+    })
+  } catch (err: any) {
+    return c.json({ error: 'Failed to load revenue data', details: err.message }, 500)
+  }
+})
+
+// GET /superadmin/secretary/calls — Recent call logs across all subscribers
+adminRoutes.get('/superadmin/secretary/calls', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
+  try {
+    const limit = parseInt(c.req.query('limit') || '50')
+    const offset = parseInt(c.req.query('offset') || '0')
+    const customerId = c.req.query('customer_id')
+    
+    let whereClause = ''
+    const params: any[] = []
+    if (customerId) {
+      whereClause = 'WHERE cl.customer_id = ?'
+      params.push(parseInt(customerId))
+    }
+
+    const calls = await c.env.DB.prepare(`
+      SELECT 
+        cl.*,
+        c.name as customer_name,
+        c.email as customer_email,
+        c.company as customer_company
+      FROM secretary_call_logs cl
+      LEFT JOIN customers c ON c.id = cl.customer_id
+      ${whereClause}
+      ORDER BY cl.created_at DESC
+      LIMIT ? OFFSET ?
+    `).bind(...params, limit, offset).all()
+
+    const totalRes = await c.env.DB.prepare(`
+      SELECT COUNT(*) as count FROM secretary_call_logs cl ${whereClause}
+    `).bind(...params).first<any>()
+
+    return c.json({
+      calls: calls.results || [],
+      total: totalRes?.count || 0,
+      limit,
+      offset
+    })
+  } catch (err: any) {
+    return c.json({ error: 'Failed to load call logs', details: err.message }, 500)
+  }
+})
