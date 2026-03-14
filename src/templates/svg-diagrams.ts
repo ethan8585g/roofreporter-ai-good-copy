@@ -2350,8 +2350,9 @@ export function generateTraceBasedDiagramSVG(
   trueAreaSqft: number
 ): string {
   const W = 700, H = 700
-  const PAD = 75            // increased padding to prevent diagram clipping
+  const PAD = 60             // generous padding on all sides
   const FOOTER_H = 56
+  const LABEL_MARGIN = 50   // extra margin for dimension labels outside polygon (dimLine=22 + extEnd=28 + label text)
   const FONT = `font-family="Inter,system-ui,-apple-system,sans-serif"`
 
   const eaves = roofTrace.eaves || []
@@ -2402,12 +2403,18 @@ export function generateTraceBasedDiagramSVG(
 
   const geoW = maxX - minX || 1
   const geoH = maxY - minY || 1
-  const drawW = W - PAD * 2
-  const drawH = H - PAD - 36 - FOOTER_H
-  // Use 0.78 scale factor to ensure dimension lines + labels don't get clipped
-  const sc = Math.min(drawW / geoW, drawH / geoH) * 0.78
-  const oX = PAD + (drawW - geoW * sc) / 2
-  const oY = 36 + (drawH - geoH * sc) / 2
+  // Reserve space: PAD on each side + LABEL_MARGIN for dimension lines
+  const totalSidePad = PAD + LABEL_MARGIN
+  const TOP_RESERVE = totalSidePad   // symmetrical top padding for labels
+  const BOTTOM_RESERVE = totalSidePad + FOOTER_H  // labels + footer bar
+  const drawW = W - totalSidePad * 2
+  const drawH = H - TOP_RESERVE - BOTTOM_RESERVE
+  // Scale to fit — apply 0.92 safety factor to keep everything comfortably inside
+  const rawScale = Math.min(drawW / geoW, drawH / geoH)
+  const sc = rawScale * 0.92
+  // Center the roof in the drawable area
+  const oX = totalSidePad + (drawW - geoW * sc) / 2
+  const oY = TOP_RESERVE + (drawH - geoH * sc) / 2
 
   const tx = (x: number) => oX + (x - minX) * sc
   const ty = (y: number) => oY + (y - minY) * sc
@@ -2434,8 +2441,8 @@ export function generateTraceBasedDiagramSVG(
   svg += `</pattern>`
   svg += `</defs>`
 
-  // Faint lot outline
-  const lotPad = 48
+  // Faint lot outline (smaller than label margin so it stays inside reserved space)
+  const lotPad = 15
   const lotMinX = Math.min(...eavesXY.map(p => tx(p.x))) - lotPad
   const lotMaxX = Math.max(...eavesXY.map(p => tx(p.x))) + lotPad
   const lotMinY = Math.min(...eavesXY.map(p => ty(p.y))) - lotPad
@@ -2600,7 +2607,7 @@ export function generateTraceBasedDiagramSVG(
     { label: 'EAVE PTS', value: `${n}` },
     { label: 'PITCH', value: predominantPitch || `${avgPitchDeg.toFixed(0)}\u00B0` },
     { label: 'AREA', value: `${trueAreaSqft.toLocaleString()} ft²` },
-    { label: 'GROSS (SF)', value: `${Math.round(grossSquares).toLocaleString()}` },
+    { label: 'GROSS SF', value: `${Math.round(totalFootprintSqft).toLocaleString()}` },
     { label: 'LINEAR FT', value: `${totalLinFt}` },
   ]
   footerData.forEach((d, i) => {

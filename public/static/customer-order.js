@@ -633,16 +633,13 @@ function renderReviewStep(root, progressBar) {
   const mLoading = orderState.measurementLoading;
   const mResult = orderState.measurementResult;
   const mError = orderState.measurementError;
-  const m = mResult?.measurements || {};
-  const edges = mResult?.edges || {};
-  const mats = mResult?.materials || {};
-  const notes = mResult?.advisory_notes || [];
   const canSubmit = !mLoading && (mResult || !hasTrace); // Block Send while engine is running
 
-  // Compute price estimate if user entered price_per_bundle and we have gross squares
-  const grossSquares = m.gross_squares || 0;
-  const pricePerSq = orderState.pricePerBundle;
-  const priceEstimate = pricePerSq && grossSquares ? (grossSquares * pricePerSq) : null;
+  // Trace summary counts for display
+  const eaveCount = orderState.roofTraceJson?.eaves?.length || 0;
+  const ridgeCount = orderState.roofTraceJson?.ridges?.length || 0;
+  const hipCount = orderState.roofTraceJson?.hips?.length || 0;
+  const valleyCount = orderState.roofTraceJson?.valleys?.length || 0;
 
   root.innerHTML = `
     <div class="max-w-3xl mx-auto">
@@ -650,8 +647,8 @@ function renderReviewStep(root, progressBar) {
 
       <div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
         <div class="bg-gradient-to-r from-sky-500 to-blue-600 text-white p-6">
-          <h2 class="text-xl font-bold"><i class="fas fa-clipboard-check mr-2"></i>Step 3: Review & Pay</h2>
-          <p class="text-brand-200 text-sm mt-1">Confirm details, review your roof measurements, and order your report</p>
+          <h2 class="text-xl font-bold"><i class="fas fa-clipboard-check mr-2"></i>Step 3: Review & Order</h2>
+          <p class="text-brand-200 text-sm mt-1">Confirm your property details and order your professional roof report</p>
         </div>
 
         <div class="p-6 space-y-5">
@@ -663,16 +660,14 @@ function renderReviewStep(root, progressBar) {
           </div>
 
           ${hasTrace ? `
-          <!-- ═══════════════════════════════════════════════════ -->
-          <!-- ROOF MEASUREMENT RESULTS — The core of the engine -->
-          <!-- ═══════════════════════════════════════════════════ -->
+          <!-- Trace confirmation — no detailed measurements shown here -->
           ${mLoading ? `
           <div class="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border-2 border-blue-200 p-6">
             <div class="flex items-center justify-center gap-3">
               <div class="animate-spin rounded-full h-8 w-8 border-t-3 border-b-3 border-blue-600"></div>
               <div>
-                <h4 class="font-bold text-blue-800">Calculating Roof Measurements...</h4>
-                <p class="text-sm text-blue-600 mt-0.5">Running measurement engine on ${orderState.roofTraceJson?.eaves?.length || 0} eave points, ${orderState.roofTraceJson?.ridges?.length || 0} ridges, ${orderState.roofTraceJson?.hips?.length || 0} hips, ${orderState.roofTraceJson?.valleys?.length || 0} valleys</p>
+                <h4 class="font-bold text-blue-800">Processing Your Roof Trace...</h4>
+                <p class="text-sm text-blue-600 mt-0.5">Preparing your report data. This only takes a moment.</p>
               </div>
             </div>
             <div class="mt-4 w-full bg-blue-200 rounded-full h-1.5">
@@ -683,156 +678,30 @@ function renderReviewStep(root, progressBar) {
           <div class="bg-red-50 rounded-xl border border-red-200 p-5">
             <div class="flex items-center gap-2 mb-2">
               <i class="fas fa-exclamation-triangle text-red-500"></i>
-              <h4 class="font-bold text-red-700">Measurement Error</h4>
+              <h4 class="font-bold text-red-700">Processing Error</h4>
             </div>
             <p class="text-sm text-red-600">${mError}</p>
             <button onclick="retryMeasurement()" class="mt-3 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-semibold">
-              <i class="fas fa-redo mr-1"></i>Retry Measurement
+              <i class="fas fa-redo mr-1"></i>Retry
             </button>
           </div>
           ` : mResult ? `
-          <!-- Measurement Results Panel -->
-          <div class="bg-gradient-to-br from-emerald-50 via-green-50 to-teal-50 rounded-xl border-2 border-green-300 shadow-sm overflow-hidden">
-            <div class="bg-gradient-to-r from-green-600 to-emerald-600 px-5 py-3 flex items-center justify-between">
-              <div class="flex items-center gap-2">
-                <i class="fas fa-ruler-combined text-white text-lg"></i>
-                <h4 class="font-bold text-white text-sm">Roof Measurements — Calculated from Your Trace</h4>
+          <!-- Trace confirmed — measurements will appear in the report -->
+          <div class="bg-gradient-to-br from-emerald-50 to-green-50 rounded-xl border-2 border-green-300 p-5">
+            <div class="flex items-center gap-3 mb-3">
+              <div class="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
+                <i class="fas fa-check-circle text-green-600 text-xl"></i>
               </div>
-              <span class="bg-white/20 text-white px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider">${mResult.engine_version || 'v2.0'}</span>
+              <div>
+                <h4 class="font-bold text-green-800">Roof Trace Captured Successfully</h4>
+                <p class="text-sm text-green-600">Your trace data is ready. All detailed measurements, edge breakdowns, material estimates, and diagrams will be included in your professional report.</p>
+              </div>
             </div>
-
-            <div class="p-5 space-y-4">
-              <!-- Big numbers: Footprint + True Area -->
-              <div class="grid grid-cols-2 gap-4">
-                <div class="bg-white rounded-xl p-4 border border-green-200 text-center shadow-sm">
-                  <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Projected Footprint</div>
-                  <div class="text-3xl font-black text-gray-900">${Math.round(m.projected_footprint_sqft || 0).toLocaleString()}</div>
-                  <div class="text-sm text-gray-500 font-medium">sq ft</div>
-                </div>
-                <div class="bg-white rounded-xl p-4 border border-green-200 text-center shadow-sm">
-                  <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">True Area (Sloped)</div>
-                  <div class="text-3xl font-black text-emerald-700">${Math.round(m.true_area_sqft || 0).toLocaleString()}</div>
-                  <div class="text-sm text-gray-500 font-medium">sq ft</div>
-                </div>
-              </div>
-
-              <!-- Area + Pitch + Waste -->
-              <div class="grid grid-cols-3 gap-3">
-                <div class="bg-white rounded-lg p-3 border border-gray-200 text-center">
-                  <div class="text-xs text-gray-500 font-medium">Gross Area (w/ waste)</div>
-                  <div class="text-xl font-bold text-amber-600">${Math.round((m.true_area_sqft || 0) * (1 + (m.waste_pct || 15) / 100)).toLocaleString()} SF</div>
-                </div>
-                <div class="bg-white rounded-lg p-3 border border-gray-200 text-center">
-                  <div class="text-xs text-gray-500 font-medium">Pitch</div>
-                  <div class="text-xl font-bold text-blue-600">${m.dominant_pitch || '?'}</div>
-                </div>
-                <div class="bg-white rounded-lg p-3 border border-gray-200 text-center">
-                  <div class="text-xs text-gray-500 font-medium">Waste</div>
-                  <div class="text-xl font-bold text-orange-500">${m.waste_pct || 15}%</div>
-                </div>
-              </div>
-
-              <!-- Edge Lengths -->
-              <div>
-                <h5 class="text-xs font-bold text-gray-600 uppercase tracking-wide mb-2"><i class="fas fa-ruler mr-1"></i>Linear Edge Measurements</h5>
-                <div class="grid grid-cols-3 sm:grid-cols-5 gap-2">
-                  <div class="bg-white rounded-lg p-2.5 border border-gray-200 text-center">
-                    <div class="w-5 h-0.5 bg-green-500 rounded mx-auto mb-1"></div>
-                    <div class="text-xs text-gray-500">Eaves</div>
-                    <div class="font-bold text-sm text-gray-800">${Math.round(edges.eaves_ft || 0)} ft</div>
-                  </div>
-                  <div class="bg-white rounded-lg p-2.5 border border-gray-200 text-center">
-                    <div class="w-5 h-0.5 bg-blue-500 rounded mx-auto mb-1"></div>
-                    <div class="text-xs text-gray-500">Ridges</div>
-                    <div class="font-bold text-sm text-gray-800">${Math.round(edges.ridges_ft || 0)} ft</div>
-                  </div>
-                  <div class="bg-white rounded-lg p-2.5 border border-gray-200 text-center">
-                    <div class="w-5 h-0.5 bg-amber-500 rounded mx-auto mb-1"></div>
-                    <div class="text-xs text-gray-500">Hips</div>
-                    <div class="font-bold text-sm text-gray-800">${Math.round(edges.hips_ft || 0)} ft</div>
-                  </div>
-                  <div class="bg-white rounded-lg p-2.5 border border-gray-200 text-center">
-                    <div class="w-5 h-0.5 bg-red-500 rounded mx-auto mb-1"></div>
-                    <div class="text-xs text-gray-500">Valleys</div>
-                    <div class="font-bold text-sm text-gray-800">${Math.round(edges.valleys_ft || 0)} ft</div>
-                  </div>
-                  <div class="bg-white rounded-lg p-2.5 border border-gray-200 text-center">
-                    <div class="w-5 h-0.5 bg-purple-500 rounded mx-auto mb-1"></div>
-                    <div class="text-xs text-gray-500">Rakes</div>
-                    <div class="font-bold text-sm text-gray-800">${Math.round(edges.rakes_ft || 0)} ft</div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Individual Eave Edges -->
-              ${(mResult.eave_edges && mResult.eave_edges.length > 0) ? `
-              <div>
-                <h5 class="text-xs font-bold text-gray-600 uppercase tracking-wide mb-2"><i class="fas fa-draw-polygon mr-1"></i>Eave Edge Breakdown</h5>
-                <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  ${mResult.eave_edges.map((e, i) => `
-                    <div class="bg-white rounded-lg p-2 border border-gray-100 flex items-center justify-between text-sm">
-                      <span class="text-gray-500">Edge ${i + 1}</span>
-                      <span class="font-bold text-gray-800">${(e.length_2d_ft || e.length_ft || 0).toFixed(1)} ft</span>
-                    </div>
-                  `).join('')}
-                </div>
-              </div>
-              ` : ''}
-
-              <!-- Material Estimates -->
-              <div class="bg-amber-50 rounded-lg border border-amber-200 p-4">
-                <h5 class="text-xs font-bold text-amber-700 uppercase tracking-wide mb-2"><i class="fas fa-box-open mr-1"></i>Material Estimate</h5>
-                <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm">
-                  <div class="flex justify-between"><span class="text-gray-600">Shingle Bundles</span><span class="font-bold">${mats.shingles_bundles || 0}</span></div>
-                  <div class="flex justify-between"><span class="text-gray-600">Underlayment Rolls</span><span class="font-bold">${mats.underlayment_rolls || 0}</span></div>
-                  <div class="flex justify-between"><span class="text-gray-600">Ridge Cap</span><span class="font-bold">${Math.round(mats.ridge_cap_lf || 0)} lf</span></div>
-                  <div class="flex justify-between"><span class="text-gray-600">Starter Strip</span><span class="font-bold">${Math.round(mats.starter_strip_lf || 0)} lf</span></div>
-                  <div class="flex justify-between"><span class="text-gray-600">Drip Edge</span><span class="font-bold">${Math.round(mats.drip_edge_total_lf || 0)} lf</span></div>
-                  <div class="flex justify-between"><span class="text-gray-600">Valley Flashing</span><span class="font-bold">${Math.round(mats.valley_flashing_lf || 0)} lf</span></div>
-                </div>
-              </div>
-
-              <!-- Cross-Validation against House Size -->
-              ${mResult.cross_validation ? `
-              <div class="rounded-lg border p-3 ${mResult.cross_validation.status === 'ok' ? 'bg-green-50 border-green-200' : mResult.cross_validation.status === 'large' ? 'bg-amber-50 border-amber-300' : 'bg-red-50 border-red-300'}">
-                <div class="flex items-center gap-2 mb-1">
-                  <i class="fas ${mResult.cross_validation.status === 'ok' ? 'fa-check-circle text-green-600' : 'fa-exclamation-triangle text-amber-600'}"></i>
-                  <h5 class="text-xs font-bold uppercase tracking-wide ${mResult.cross_validation.status === 'ok' ? 'text-green-700' : 'text-amber-700'}">House Size Cross-Check</h5>
-                </div>
-                <p class="text-xs ${mResult.cross_validation.status === 'ok' ? 'text-green-800' : 'text-amber-800'}">${mResult.cross_validation.msg}</p>
-                <div class="flex gap-4 mt-2 text-xs text-gray-600">
-                  <span>House: <strong>${mResult.cross_validation.house_sqft.toLocaleString()} sq ft</strong></span>
-                  <span>Traced Footprint: <strong>${mResult.cross_validation.footprint.toLocaleString()} sq ft</strong></span>
-                  <span>Ratio: <strong>${mResult.cross_validation.ratio}x</strong></span>
-                </div>
-              </div>
-              ` : orderState.houseSqft ? `
-              <div class="bg-blue-50 rounded-lg border border-blue-200 p-3">
-                <div class="flex items-center gap-2">
-                  <i class="fas fa-home text-blue-500"></i>
-                  <span class="text-xs text-blue-700">House Size: <strong>${orderState.houseSqft.toLocaleString()} sq ft</strong> — Traced Footprint: <strong>${Math.round(m.projected_footprint_sqft || 0).toLocaleString()} sq ft</strong></span>
-                </div>
-              </div>
-              ` : ''}
-
-              <!-- Advisory Notes -->
-              ${notes.length > 0 ? `
-              <div class="bg-blue-50 rounded-lg border border-blue-200 p-3">
-                <h5 class="text-xs font-bold text-blue-700 uppercase tracking-wide mb-1"><i class="fas fa-lightbulb mr-1"></i>Advisory Notes</h5>
-                <ul class="text-xs text-blue-800 space-y-1">
-                  ${notes.map(n => `<li><i class="fas fa-info-circle text-blue-400 mr-1"></i>${n}</li>`).join('')}
-                </ul>
-              </div>
-              ` : ''}
-
-              <!-- Traced geometry summary -->
-              <div class="flex items-center gap-3 text-xs text-gray-500 pt-2 border-t border-green-200">
-                <span><i class="fas fa-draw-polygon text-green-500 mr-1"></i>${m.num_eave_points || 0} eave points</span>
-                <span><i class="fas fa-grip-lines text-blue-500 mr-1"></i>${m.num_ridges || 0} ridges</span>
-                <span><i class="fas fa-slash text-amber-500 mr-1"></i>${m.num_hips || 0} hips</span>
-                <span><i class="fas fa-angle-down text-red-500 mr-1"></i>${m.num_valleys || 0} valleys</span>
-                <span class="ml-auto text-green-600 font-medium"><i class="fas fa-check-circle mr-0.5"></i>Calculated in ${mResult.calculation_ms || '?'}ms</span>
-              </div>
+            <div class="flex items-center gap-4 text-xs text-gray-500 pt-3 border-t border-green-200">
+              <span><i class="fas fa-draw-polygon text-green-500 mr-1"></i>${eaveCount} eave points</span>
+              <span><i class="fas fa-grip-lines text-blue-500 mr-1"></i>${ridgeCount} ridges</span>
+              <span><i class="fas fa-slash text-amber-500 mr-1"></i>${hipCount} hips</span>
+              <span><i class="fas fa-angle-down text-red-500 mr-1"></i>${valleyCount} valleys</span>
             </div>
           </div>
           ` : ''}
@@ -842,32 +711,38 @@ function renderReviewStep(root, progressBar) {
           </div>
           `}
 
-          <!-- Price per bundle input + live estimate -->
+          <!-- What's Included in Your Report -->
+          <div class="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl border border-indigo-200 p-5">
+            <h4 class="font-semibold text-indigo-800 mb-3 flex items-center">
+              <i class="fas fa-file-alt text-indigo-500 mr-2"></i>What's Included in Your Report
+            </h4>
+            <div class="grid grid-cols-2 gap-3 text-sm">
+              <div class="flex items-start gap-2"><i class="fas fa-check text-green-500 mt-0.5"></i><span class="text-gray-700">Professional roof diagram with all dimensions</span></div>
+              <div class="flex items-start gap-2"><i class="fas fa-check text-green-500 mt-0.5"></i><span class="text-gray-700">Total roof area (footprint + true sloped)</span></div>
+              <div class="flex items-start gap-2"><i class="fas fa-check text-green-500 mt-0.5"></i><span class="text-gray-700">Edge-by-edge length breakdown</span></div>
+              <div class="flex items-start gap-2"><i class="fas fa-check text-green-500 mt-0.5"></i><span class="text-gray-700">Material estimates (bundles, rolls, etc.)</span></div>
+              <div class="flex items-start gap-2"><i class="fas fa-check text-green-500 mt-0.5"></i><span class="text-gray-700">Pitch & slope analysis per plane</span></div>
+              <div class="flex items-start gap-2"><i class="fas fa-check text-green-500 mt-0.5"></i><span class="text-gray-700">Waste calculations & advisory notes</span></div>
+            </div>
+          </div>
+
+          <!-- Price per square input (optional) -->
           <div class="bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl border border-amber-200 p-5">
             <h4 class="font-semibold text-gray-700 mb-2 flex items-center">
               <i class="fas fa-dollar-sign text-amber-500 mr-2"></i>Your Price Per Square (Optional)
             </h4>
-            <p class="text-xs text-gray-500 mb-3">Enter your rate per roofing square (100 sq ft) to include a cost estimate in your report. The report calculates total area with ${m.waste_pct || 15}% waste.</p>
-            <div class="grid md:grid-cols-2 gap-4">
-              <div>
-                <label class="block text-xs font-medium text-gray-600 mb-1">Price Per Square (CAD)</label>
-                <div class="relative">
-                  <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold">$</span>
-                  <input type="number" step="0.01" min="0" max="9999" id="pricePerBundleInput"
-                    value="${orderState.pricePerBundle || ''}"
-                    oninput="orderState.pricePerBundle = parseFloat(this.value) || null; updatePriceEstimate();"
-                    class="w-full pl-8 pr-4 py-3 border border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-sm font-medium"
-                    placeholder="e.g. 350" />
-                </div>
-                <p class="text-xs text-gray-400 mt-1">Cost per roofing square (100 sq ft)</p>
+            <p class="text-xs text-gray-500 mb-3">Enter your rate per roofing square (100 sq ft) to include a cost estimate in your report.</p>
+            <div>
+              <label class="block text-xs font-medium text-gray-600 mb-1">Price Per Square (CAD)</label>
+              <div class="relative max-w-xs">
+                <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold">$</span>
+                <input type="number" step="0.01" min="0" max="9999" id="pricePerBundleInput"
+                  value="${orderState.pricePerBundle || ''}"
+                  oninput="orderState.pricePerBundle = parseFloat(this.value) || null;"
+                  class="w-full pl-8 pr-4 py-3 border border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-sm font-medium"
+                  placeholder="e.g. 350" />
               </div>
-              <div class="flex items-center justify-center">
-                <div class="text-center p-3 bg-white rounded-lg border border-amber-200 w-full" id="priceEstimateBox">
-                  <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Estimated Job Cost</p>
-                  <p class="text-2xl font-black mt-1 ${priceEstimate ? 'text-amber-600' : 'text-gray-300'}" id="priceEstimateValue">${priceEstimate ? '$' + priceEstimate.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '--'}</p>
-                  <p class="text-xs text-gray-400 mt-1">${grossSquares ? Math.round(grossSquares * 100).toLocaleString() + ' gross SF' + (pricePerSq ? ' x $' + pricePerSq + '/sq' : '') : 'Roof area + waste x your rate'}</p>
-                </div>
-              </div>
+              <p class="text-xs text-gray-400 mt-1">This will appear on your report as an estimated job cost</p>
             </div>
           </div>
 
@@ -880,7 +755,7 @@ function renderReviewStep(root, progressBar) {
             </button>
             ${!canSubmit ? `
               <button disabled class="flex-1 py-3 bg-gray-300 text-gray-500 font-bold rounded-xl cursor-not-allowed text-base">
-                <i class="fas fa-spinner fa-spin mr-2"></i>Measuring Roof...
+                <i class="fas fa-spinner fa-spin mr-2"></i>Processing...
               </button>
             ` : isTrialAvailable ? `
               <button onclick="useCredit()" id="creditBtn" class="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-all shadow-lg text-base">
