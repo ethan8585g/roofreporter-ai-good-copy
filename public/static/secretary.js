@@ -293,7 +293,10 @@
           '<div>' +
             '<label class="block text-sm font-semibold text-gray-700 mb-1"><i class="fas fa-sticky-note mr-1 text-sky-500"></i>General Notes</label>' +
             '<textarea id="secNotes" rows="3" maxlength="3000" placeholder="Spring Special: 10% off all full roof replacements booked before June 30th. Mention this offer!\n\nWe\'re currently booking estimates 3-5 business days out due to high demand from recent hail storms.\n\nEmergency repairs (active leaks) — tell callers we offer same-day emergency service, have them press 2 for Service/Repairs.\n\nAfter hours: Take a detailed message with their name, phone, address, and description of the issue. Let them know we\'ll call back first thing next business day." class="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-sky-400 focus:border-sky-400 resize-none">' + esc(c.general_notes || '') + '</textarea></div>' +
+          '<div class="flex gap-3 flex-wrap">' +
           '<button onclick="secSaveConfig()" id="saveConfigBtn" class="px-6 py-3 bg-sky-500 text-white rounded-xl font-semibold text-sm hover:bg-sky-600 transition-all shadow"><i class="fas fa-save mr-2"></i>Save Configuration</button>' +
+          '<button onclick="secTestAgent()" class="px-6 py-3 bg-emerald-500 text-white rounded-xl font-semibold text-sm hover:bg-emerald-600 transition-all shadow"><i class="fas fa-microphone mr-2"></i>Test Agent</button>' +
+          '</div>' +
         '</div></div>' +
 
       // STEP 2: Directories
@@ -1218,6 +1221,186 @@
     await fetch('/api/secretary/callbacks/' + id, { method: 'PATCH', headers: authHeaders(), body: JSON.stringify({ status: status }) });
     loadAndRenderCallbacks();
   };
+
+  // ============================================================
+  // VOICE TEST AGENT — Browser microphone test
+  // Lets users talk to the AI secretary through the browser
+  // before deploying to their phone system
+  // ============================================================
+  var testState = { active: false, mediaRecorder: null, audioChunks: [], conversationHistory: [], processing: false };
+
+  window.secTestAgent = function() {
+    // Build the test modal
+    var existing = document.getElementById('voiceTestModal');
+    if (existing) existing.remove();
+
+    var modal = document.createElement('div');
+    modal.id = 'voiceTestModal';
+    modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm';
+    modal.innerHTML =
+      '<div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">' +
+        '<div class="bg-gradient-to-r from-emerald-500 to-teal-600 p-5 text-white">' +
+          '<div class="flex items-center justify-between">' +
+            '<div><h2 class="text-lg font-bold"><i class="fas fa-microphone-alt mr-2"></i>Test Your AI Secretary</h2>' +
+            '<p class="text-emerald-100 text-xs mt-1">Speak into your microphone to test how the AI will answer calls</p></div>' +
+            '<button onclick="secCloseTestModal()" class="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center hover:bg-white/30 transition-all"><i class="fas fa-times text-sm"></i></button>' +
+          '</div>' +
+        '</div>' +
+        '<div class="p-5">' +
+          '<div id="vtConversation" class="h-64 overflow-y-auto mb-4 space-y-3 p-3 bg-gray-50 rounded-xl border border-gray-200">' +
+            '<div class="text-center text-gray-400 text-sm py-8"><i class="fas fa-robot text-3xl block mb-2 text-emerald-300"></i>Press the microphone button and speak to test your AI secretary.<br><span class="text-xs">The AI will respond based on your saved configuration.</span></div>' +
+          '</div>' +
+          '<div id="vtStatus" class="text-center text-xs text-gray-400 mb-3 h-4"></div>' +
+          '<div class="flex items-center justify-center gap-4">' +
+            '<button onclick="secStartRecording()" id="vtRecordBtn" class="w-16 h-16 rounded-full bg-emerald-500 text-white flex items-center justify-center hover:bg-emerald-600 transition-all shadow-lg hover:shadow-xl active:scale-95">' +
+              '<i class="fas fa-microphone text-2xl"></i>' +
+            '</button>' +
+            '<button onclick="secStopRecording()" id="vtStopBtn" class="w-16 h-16 rounded-full bg-red-500 text-white flex items-center justify-center hover:bg-red-600 transition-all shadow-lg hidden animate-pulse">' +
+              '<i class="fas fa-stop text-2xl"></i>' +
+            '</button>' +
+            '<button onclick="secResetTest()" class="w-10 h-10 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center hover:bg-gray-300 transition-all" title="Reset conversation">' +
+              '<i class="fas fa-redo text-sm"></i>' +
+            '</button>' +
+          '</div>' +
+          '<p class="text-center text-xs text-gray-400 mt-3">Your microphone audio is transcribed and sent to the AI. No audio is stored.</p>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(modal);
+    testState.conversationHistory = [];
+    modal.addEventListener('click', function(e) { if (e.target === modal) secCloseTestModal(); });
+  };
+
+  window.secCloseTestModal = function() {
+    if (testState.mediaRecorder && testState.mediaRecorder.state !== 'inactive') {
+      testState.mediaRecorder.stop();
+    }
+    testState.active = false;
+    testState.conversationHistory = [];
+    var m = document.getElementById('voiceTestModal');
+    if (m) m.remove();
+  };
+
+  window.secResetTest = function() {
+    testState.conversationHistory = [];
+    var conv = document.getElementById('vtConversation');
+    if (conv) conv.innerHTML = '<div class="text-center text-gray-400 text-sm py-8"><i class="fas fa-robot text-3xl block mb-2 text-emerald-300"></i>Conversation reset. Press the microphone to start again.</div>';
+  };
+
+  window.secStartRecording = async function() {
+    if (testState.processing) return;
+    try {
+      var stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      testState.audioChunks = [];
+      var options = { mimeType: 'audio/webm;codecs=opus' };
+      if (!MediaRecorder.isTypeSupported(options.mimeType)) options = { mimeType: 'audio/webm' };
+      if (!MediaRecorder.isTypeSupported(options.mimeType)) options = {};
+      testState.mediaRecorder = new MediaRecorder(stream, options);
+      testState.mediaRecorder.ondataavailable = function(e) { if (e.data.size > 0) testState.audioChunks.push(e.data); };
+      testState.mediaRecorder.onstop = function() {
+        stream.getTracks().forEach(function(t) { t.stop(); });
+        if (testState.audioChunks.length > 0) processVoiceTest();
+      };
+      testState.mediaRecorder.start();
+      testState.active = true;
+      document.getElementById('vtRecordBtn').classList.add('hidden');
+      document.getElementById('vtStopBtn').classList.remove('hidden');
+      document.getElementById('vtStatus').textContent = 'Listening... speak now';
+      document.getElementById('vtStatus').className = 'text-center text-xs text-red-500 mb-3 h-4 font-semibold';
+    } catch(e) {
+      alert('Microphone access denied. Please allow microphone access in your browser settings.');
+    }
+  };
+
+  window.secStopRecording = function() {
+    if (testState.mediaRecorder && testState.mediaRecorder.state !== 'inactive') {
+      testState.mediaRecorder.stop();
+    }
+    testState.active = false;
+    document.getElementById('vtRecordBtn').classList.remove('hidden');
+    document.getElementById('vtStopBtn').classList.add('hidden');
+    document.getElementById('vtStatus').textContent = 'Processing...';
+    document.getElementById('vtStatus').className = 'text-center text-xs text-amber-500 mb-3 h-4 font-semibold';
+  };
+
+  async function processVoiceTest() {
+    testState.processing = true;
+    var conv = document.getElementById('vtConversation');
+    var statusEl = document.getElementById('vtStatus');
+
+    // Convert audio to blob and send for transcription
+    var audioBlob = new Blob(testState.audioChunks, { type: testState.mediaRecorder.mimeType || 'audio/webm' });
+
+    // Add user thinking bubble
+    conv.innerHTML += '<div class="flex justify-end"><div class="bg-sky-100 text-sky-800 rounded-xl rounded-tr-sm px-3 py-2 max-w-xs text-sm"><i class="fas fa-spinner fa-spin mr-1 text-xs"></i>Transcribing...</div></div>';
+    conv.scrollTop = conv.scrollHeight;
+
+    try {
+      // Step 1: Transcribe audio
+      var formData = new FormData();
+      formData.append('audio', audioBlob, 'recording.webm');
+      var transcribeRes = await fetch('/api/secretary/test/transcribe', { method: 'POST', headers: { 'Authorization': 'Bearer ' + getToken() }, body: formData });
+      var transcribeData = await transcribeRes.json();
+      
+      if (!transcribeData.text || transcribeData.text.trim() === '') {
+        // Remove thinking bubble
+        conv.lastChild.remove();
+        conv.innerHTML += '<div class="flex justify-end"><div class="bg-red-50 text-red-600 rounded-xl rounded-tr-sm px-3 py-2 max-w-xs text-sm"><i class="fas fa-exclamation-circle mr-1"></i>Could not understand. Try speaking louder.</div></div>';
+        conv.scrollTop = conv.scrollHeight;
+        testState.processing = false;
+        if (statusEl) { statusEl.textContent = 'Ready'; statusEl.className = 'text-center text-xs text-gray-400 mb-3 h-4'; }
+        return;
+      }
+
+      // Replace thinking bubble with actual text
+      conv.lastChild.remove();
+      var userText = transcribeData.text.trim();
+      conv.innerHTML += '<div class="flex justify-end"><div class="bg-sky-500 text-white rounded-xl rounded-tr-sm px-3 py-2 max-w-xs text-sm">' + esc(userText) + '</div></div>';
+      testState.conversationHistory.push({ role: 'user', content: userText });
+
+      // Add AI thinking bubble
+      conv.innerHTML += '<div class="flex justify-start"><div class="bg-emerald-50 text-emerald-800 rounded-xl rounded-tl-sm px-3 py-2 max-w-xs text-sm"><i class="fas fa-robot mr-1"></i><i class="fas fa-spinner fa-spin ml-1 text-xs"></i> Thinking...</div></div>';
+      conv.scrollTop = conv.scrollHeight;
+
+      // Step 2: Get AI response using current config
+      var greeting = document.getElementById('secGreeting') ? document.getElementById('secGreeting').value : (state.config?.greeting_script || '');
+      var qa = document.getElementById('secQA') ? document.getElementById('secQA').value : (state.config?.common_qa || '');
+      var notes = document.getElementById('secNotes') ? document.getElementById('secNotes').value : (state.config?.general_notes || '');
+
+      var aiRes = await fetch('/api/secretary/test/chat', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({
+          message: userText,
+          history: testState.conversationHistory.slice(0, -1),
+          greeting_script: greeting,
+          common_qa: qa,
+          general_notes: notes
+        })
+      });
+      var aiData = await aiRes.json();
+
+      // Replace thinking bubble with AI response
+      conv.lastChild.remove();
+      var aiText = aiData.response || 'Sorry, I had trouble responding. Please try again.';
+      conv.innerHTML += '<div class="flex justify-start"><div class="bg-emerald-50 text-emerald-800 rounded-xl rounded-tl-sm px-3 py-2 max-w-xs text-sm"><i class="fas fa-robot text-emerald-500 mr-1"></i>' + esc(aiText) + '</div></div>';
+      testState.conversationHistory.push({ role: 'assistant', content: aiText });
+      conv.scrollTop = conv.scrollHeight;
+
+      // Step 3: Text-to-speech playback
+      if (aiData.audio_url) {
+        var audio = new Audio(aiData.audio_url);
+        audio.play().catch(function() {});
+      }
+
+      if (statusEl) { statusEl.textContent = 'Press mic to continue the conversation'; statusEl.className = 'text-center text-xs text-emerald-500 mb-3 h-4'; }
+    } catch(e) {
+      conv.lastChild.remove();
+      conv.innerHTML += '<div class="flex justify-start"><div class="bg-red-50 text-red-600 rounded-xl rounded-tl-sm px-3 py-2 max-w-xs text-sm"><i class="fas fa-exclamation-triangle mr-1"></i>Error: ' + (e.message || 'Network error') + '</div></div>';
+      conv.scrollTop = conv.scrollHeight;
+      if (statusEl) { statusEl.textContent = 'Error occurred. Try again.'; statusEl.className = 'text-center text-xs text-red-500 mb-3 h-4'; }
+    }
+    testState.processing = false;
+  }
 
   init();
 })();

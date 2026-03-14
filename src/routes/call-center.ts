@@ -576,3 +576,67 @@ async function generateLiveKitJWT(apiKey: string, apiSecret: string, identity: s
   const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(sigInput))
   return `${header}.${payload}.${b64url(sig)}`
 }
+
+// ============================================================
+// VOICE TEST — Chat with call center agent via browser
+// ============================================================
+callCenterRoutes.post('/test/chat', async (c) => {
+  const { env } = c
+  const adminKey = c.req.header('x-admin-key')
+  if (adminKey !== env.SUPER_ADMIN_KEY) return c.json({ error: 'Unauthorized' }, 401)
+
+  try {
+    const body = await c.req.json<{
+      message: string
+      history?: { role: string; content: string }[]
+      persona?: string
+      agent_name?: string
+    }>()
+
+    const { message, history = [], persona = '', agent_name = 'Agent' } = body
+    if (!message) return c.json({ error: 'No message' }, 400)
+
+    const systemPrompt = `You are "${agent_name}", an AI sales agent for RoofReporterAI in TEST MODE. You are being tested by the admin through the browser before being deployed on real calls.
+
+YOUR PERSONA/SELLING STYLE:
+${persona || 'Professional, consultative sales approach. Focus on showing ROI and time savings.'}
+
+ABOUT THE PRODUCT (RoofReporterAI):
+- AI-powered instant roof measurement reports from satellite imagery
+- Reports include: total roof area (sq ft), edge lengths, pitch analysis, material estimates
+- Pricing: $10/report or volume discounts — first 2 reports FREE for new users
+- Accuracy: 2-5% vs. manual measurements
+- Speed: Reports delivered instantly after ordering
+- Also offers: Roofer Secretary AI ($249/mo phone answering), CRM, proposals, invoicing
+
+RULES:
+- Respond as if on a real cold call — brief, conversational, phone-appropriate
+- Your goal: qualify interest, book a demo/signup, collect contact info
+- Keep answers to 1-3 sentences max
+- Be warm, not pushy — consultative selling
+- This is TEST mode but respond exactly as you would on a real call`
+
+    const messages: any[] = [{ role: 'system', content: systemPrompt }]
+    for (const msg of history) messages.push({ role: msg.role, content: msg.content })
+    messages.push({ role: 'user', content: message })
+
+    const apiKey = env.OPENAI_API_KEY
+    const baseUrl = env.OPENAI_BASE_URL || 'https://www.genspark.ai/api/llm_proxy/v1'
+
+    const aiRes = await fetch(`${baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'gemini-2.5-flash', messages, max_tokens: 300, temperature: 0.7 })
+    })
+
+    if (!aiRes.ok) {
+      return c.json({ response: 'Sorry, I had trouble processing that. Could you try again?' })
+    }
+
+    const aiData: any = await aiRes.json()
+    return c.json({ response: aiData.choices?.[0]?.message?.content || 'Could you say that again?' })
+  } catch (err: any) {
+    console.error('[CCTest] Chat error:', err)
+    return c.json({ response: 'I apologize, I had a technical issue. Could you try again?' })
+  }
+})
