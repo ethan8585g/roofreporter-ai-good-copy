@@ -2222,7 +2222,7 @@ function renderSecretaryRevenueView() {
     ${saSection('Revenue Trend', 'fa-chart-area', `
       <div class="flex gap-2 mb-4">
         ${['daily', 'weekly', 'monthly'].map(p => 
-          '<button onclick="SA.secRevPeriod=\\''+p+'\\'; loadView(\\'secretary-revenue\\')" class="px-3 py-1.5 rounded-lg text-xs font-semibold ' + (currentPeriod === p ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200') + ' transition-colors">' + p.charAt(0).toUpperCase() + p.slice(1) + '</button>'
+          '<button onclick="SA.secRevPeriod=&quot;'+p+'&quot;; loadView(&quot;secretary-revenue&quot;)" class="px-3 py-1.5 rounded-lg text-xs font-semibold ' + (currentPeriod === p ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200') + ' transition-colors">' + p.charAt(0).toUpperCase() + p.slice(1) + '</button>'
         ).join('')}
       </div>
       ${periods.length === 0 ? '<div class="py-8 text-center text-gray-400">No revenue data yet</div>' : `

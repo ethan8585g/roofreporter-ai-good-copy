@@ -1160,60 +1160,60 @@ function getSuperAdminDashboardHTML() {
     <!-- Sidebar Navigation -->
     <aside class="sa-sidebar w-64 bg-slate-800 border-r border-slate-700 flex-shrink-0">
       <div class="p-4 space-y-1" id="sa-nav">
-        <div class="sa-nav-item active rounded-xl px-4 py-3 flex items-center gap-3" onclick="saSetView('users')">
+        <div class="sa-nav-item active rounded-xl px-4 py-3 flex items-center gap-3" onclick="saSetView('users', this)">
           <i class="fas fa-users w-5 text-center"></i>
           <span class="label text-sm font-medium">All Active Users</span>
         </div>
-        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('sales')">
+        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('sales', this)">
           <i class="fas fa-credit-card w-5 text-center"></i>
           <span class="label text-sm font-medium">Credit Pack Sales</span>
         </div>
-        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('orders')">
+        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('orders', this)">
           <i class="fas fa-clipboard-list w-5 text-center"></i>
           <span class="label text-sm font-medium">Order History</span>
         </div>
-        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('signups')">
+        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('signups', this)">
           <i class="fas fa-user-plus w-5 text-center"></i>
           <span class="label text-sm font-medium">New Sign-ups</span>
         </div>
-        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('marketing')">
+        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('marketing', this)">
           <i class="fas fa-bullhorn w-5 text-center"></i>
           <span class="label text-sm font-medium">Sales & Marketing</span>
         </div>
-        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('email-outreach')">
+        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('email-outreach', this)">
           <i class="fas fa-envelope-open-text w-5 text-center"></i>
           <span class="label text-sm font-medium">Email Outreach</span>
         </div>
-        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('email-setup')">
+        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('email-setup', this)">
           <i class="fas fa-cog w-5 text-center"></i>
           <span class="label text-sm font-medium">Email Setup</span>
         </div>
-        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('analytics')">
+        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('analytics', this)">
           <i class="fas fa-chart-line w-5 text-center"></i>
           <span class="label text-sm font-medium">Site Analytics</span>
         </div>
-        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('ga4')">
+        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('ga4', this)">
           <i class="fab fa-google w-5 text-center"></i>
           <span class="label text-sm font-medium">Google Analytics</span>
         </div>
         <div class="border-t border-gray-800 my-3"></div>
-        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('call-center')">
+        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('call-center', this)">
           <i class="fas fa-headset w-5 text-center"></i>
           <span class="label text-sm font-medium">AI Call Center</span>
         </div>
-        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('meta-connect')">
+        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('meta-connect', this)">
           <i class="fab fa-meta w-5 text-center"></i>
           <span class="label text-sm font-medium">Meta Connect</span>
         </div>
-        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('secretary-admin')">
+        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('secretary-admin', this)">
           <i class="fas fa-phone-volume w-5 text-center"></i>
           <span class="label text-sm font-medium">Roofer Secretary AI</span>
         </div>
-        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('heygen')">
+        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('heygen', this)">
           <i class="fas fa-video w-5 text-center"></i>
           <span class="label text-sm font-medium">HeyGen Videos</span>
         </div>
-        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('pricing')">
+        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('pricing', this)">
           <i class="fas fa-dollar-sign w-5 text-center"></i>
           <span class="label text-sm font-medium">Pricing & Billing</span>
         </div>
@@ -1257,14 +1257,16 @@ function getSuperAdminDashboardHTML() {
       localStorage.removeItem('rc_token');
       window.location.href = '/login';
     }
-    function saSetView(v) {
+    function saSetView(v, el) {
       // Update sidebar active state
-      document.querySelectorAll('.sa-nav-item').forEach(el => {
-        el.classList.remove('active');
-        el.classList.add('text-gray-400');
+      document.querySelectorAll('.sa-nav-item').forEach(function(n) {
+        n.classList.remove('active');
+        n.classList.add('text-gray-400');
       });
-      event.currentTarget.classList.add('active');
-      event.currentTarget.classList.remove('text-gray-400');
+      if (el) {
+        el.classList.add('active');
+        el.classList.remove('text-gray-400');
+      }
       // Delegate to JS module
       if (typeof window.saDashboardSetView === 'function') window.saDashboardSetView(v);
     }
