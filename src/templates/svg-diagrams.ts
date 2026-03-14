@@ -70,7 +70,7 @@ export function generateArchitecturalDiagramSVG(
   const geoH = maxY - minY || 1
   const drawW = W - PAD * 2
   const drawH = H - PAD - 30 - FOOTER_H
-  const sc = Math.min(drawW / geoW, drawH / geoH) * 0.92
+  const sc = Math.min(drawW / geoW, drawH / geoH) * 0.82
   const oX = PAD + (drawW - geoW * sc) / 2
   const oY = 30 + (drawH - geoH * sc) / 2
 
@@ -355,7 +355,7 @@ export function generateArchitecturalDiagramSVG(
   svg += `<text x="0" y="-17" text-anchor="middle" font-size="8" font-weight="800" fill="#333" ${FONT}>N</text>`
   svg += `</g>`
 
-  // FOOTER BAR: FACETS | PITCH | SQUARES | LINEAR FT
+  // FOOTER BAR: FACETS | PITCH | AREA | LINEAR FT
   const fY = H - FOOTER_H
   const barW = W * 0.94
   const barX = (W - barW) / 2
@@ -370,7 +370,7 @@ export function generateArchitecturalDiagramSVG(
   const footerData = [
     { label: 'FACETS', value: `${facetCount}` },
     { label: 'PITCH', value: predominantPitch || `${avgPitchDeg.toFixed(0)}\u00B0` },
-    { label: 'SQUARES', value: `${grossSquares}` },
+    { label: 'AREA (SF)', value: `${Math.round(grossSquares).toLocaleString()}` },
     { label: 'LINEAR FT', value: `${totalLinFt}` },
   ]
   footerData.forEach((d, i) => {
@@ -657,7 +657,7 @@ export function generateFallbackArchitecturalSVG(
   const fbData = [
     { label: 'FACETS', value: `${Math.max(segments.length, 2)}` },
     { label: 'PITCH', value: predominantPitch || `${avgPitchDeg.toFixed(0)}\u00B0` },
-    { label: 'SQUARES', value: `${grossSquares}` },
+    { label: 'AREA (SF)', value: `${Math.round(grossSquares).toLocaleString()}` },
     { label: 'LINEAR FT', value: `${totalLinFt}` },
   ]
   fbData.forEach((d, i) => {
@@ -2350,7 +2350,7 @@ export function generateTraceBasedDiagramSVG(
   trueAreaSqft: number
 ): string {
   const W = 700, H = 700
-  const PAD = 60
+  const PAD = 75            // increased padding to prevent diagram clipping
   const FOOTER_H = 56
   const FONT = `font-family="Inter,system-ui,-apple-system,sans-serif"`
 
@@ -2404,7 +2404,8 @@ export function generateTraceBasedDiagramSVG(
   const geoH = maxY - minY || 1
   const drawW = W - PAD * 2
   const drawH = H - PAD - 36 - FOOTER_H
-  const sc = Math.min(drawW / geoW, drawH / geoH) * 0.88
+  // Use 0.78 scale factor to ensure dimension lines + labels don't get clipped
+  const sc = Math.min(drawW / geoW, drawH / geoH) * 0.78
   const oX = PAD + (drawW - geoW * sc) / 2
   const oY = 36 + (drawH - geoH * sc) / 2
 
@@ -2599,7 +2600,7 @@ export function generateTraceBasedDiagramSVG(
     { label: 'EAVE PTS', value: `${n}` },
     { label: 'PITCH', value: predominantPitch || `${avgPitchDeg.toFixed(0)}\u00B0` },
     { label: 'AREA', value: `${trueAreaSqft.toLocaleString()} ft²` },
-    { label: 'SQUARES', value: `${grossSquares}` },
+    { label: 'GROSS (SF)', value: `${Math.round(grossSquares).toLocaleString()}` },
     { label: 'LINEAR FT', value: `${totalLinFt}` },
   ]
   footerData.forEach((d, i) => {
@@ -2675,7 +2676,7 @@ export function generateSquaresGridDiagramSVG(
   const geoH = maxY - minY || 1
   const drawW = W - PAD * 2
   const drawH = H - PAD - FOOTER_H - 36
-  const sc = Math.min(drawW / geoW, drawH / geoH) * 0.85
+  const sc = Math.min(drawW / geoW, drawH / geoH) * 0.80
   const oX = PAD + (drawW - geoW * sc) / 2
   const oY = 36 + (drawH - geoH * sc) / 2
 
