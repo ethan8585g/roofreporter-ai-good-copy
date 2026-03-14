@@ -13,7 +13,9 @@ const SA = {
   ordersFilter: '',
   analyticsPeriod: '7d',
   ga4Period: '7d',
-  ga4Tab: 'overview'
+  ga4Tab: 'overview',
+  secRevPeriod: 'monthly',
+  secCallsCustomerId: ''
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -126,37 +128,24 @@ async function loadView(view) {
           return;
         }
         break;
-      case 'livekit':
+      case 'secretary-admin':
         try {
-          const [lkTrunksRes, lkRulesRes] = await Promise.all([
-            saFetch('/api/secretary/sip/trunks'),
-            saFetch('/api/secretary/sip/dispatch-rules'),
+          const [secOverviewRes, secSubsRes] = await Promise.all([
+            saFetch('/api/admin/superadmin/secretary/overview'),
+            saFetch('/api/admin/superadmin/secretary/subscribers'),
           ]);
-          if (lkTrunksRes) {
-            const td = await lkTrunksRes.json();
-            SA.data.livekit_trunks = td.error ? { error: td.error } : td;
-          }
-          if (lkRulesRes) {
-            const rd = await lkRulesRes.json();
-            SA.data.livekit_rules = rd.error ? { error: rd.error } : rd;
-          }
-        } catch(lkErr) {
-          console.warn('LiveKit load error:', lkErr);
-          SA.data.livekit_trunks = { error: lkErr.message };
-          SA.data.livekit_rules = { error: lkErr.message };
+          if (secOverviewRes) SA.data.secretary_overview = await secOverviewRes.json();
+          if (secSubsRes) SA.data.secretary_subscribers = await secSubsRes.json();
+        } catch(secErr) {
+          console.warn('Secretary admin load error:', secErr);
         }
         break;
-      case 'livekit-agents':
-        // Uses same data as livekit call center
-        if (!SA.data.livekit_trunks) {
-          try {
-            const [lkTRes, lkRRes] = await Promise.all([
-              saFetch('/api/secretary/sip/trunks'),
-              saFetch('/api/secretary/sip/dispatch-rules'),
-            ]);
-            if (lkTRes) { const td = await lkTRes.json(); SA.data.livekit_trunks = td.error ? { error: td.error } : td; }
-            if (lkRRes) { const rd = await lkRRes.json(); SA.data.livekit_rules = rd.error ? { error: rd.error } : rd; }
-          } catch(e) { SA.data.livekit_trunks = { error: e.message }; }
+      case 'secretary-revenue':
+        try {
+          const secRevRes = await saFetch(`/api/admin/superadmin/secretary/revenue?period=${SA.secRevPeriod || 'monthly'}`);
+          if (secRevRes) SA.data.secretary_revenue = await secRevRes.json();
+        } catch(e) {
+          console.warn('Secretary revenue load error:', e);
         }
         break;
       case 'heygen':
@@ -261,8 +250,8 @@ function renderContent() {
     case 'pricing': root.innerHTML = renderPricingView(); break;
     case 'call-center': break; // Handled by call-center.js
     case 'meta-connect': break; // Handled by meta-connect.js
-    case 'livekit': root.innerHTML = renderLiveKitView(); break;
-    case 'livekit-agents': root.innerHTML = renderLiveKitAgentsView(); break;
+    case 'secretary-admin': root.innerHTML = renderSecretaryAdminView(); break;
+    case 'secretary-revenue': root.innerHTML = renderSecretaryRevenueView(); break;
     case 'heygen': break; // Handled by heygen.js
     default: root.innerHTML = renderUsersView();
   }
@@ -2060,636 +2049,268 @@ async function activatePackage(id) {
 window.activatePackage = activatePackage;
 
 // ============================================================
-// VIEW: LIVEKIT AGENTS — SIP Trunks, Dispatch Rules & Agent Deployment
+// VIEW: ROOFER SECRETARY AI — Admin Management Dashboard
 // ============================================================
-function renderLiveKitView() {
-  const trunksData = SA.data.livekit_trunks || {};
-  const rulesData = SA.data.livekit_rules || {};
-
-  // Handle configuration errors gracefully
-  if (trunksData.error || rulesData.error) {
-    return `<div class="slide-in space-y-6">
-      <div>
-        <h2 class="text-2xl font-black text-gray-900"><i class="fas fa-phone-alt mr-2 text-green-600"></i>LiveKit Call Center</h2>
-        <p class="text-sm text-gray-500 mt-1">Manage SIP trunks, dispatch rules, and deploy voice agents</p>
-      </div>
-      <div class="bg-amber-50 border border-amber-200 rounded-xl p-6 text-center">
-        <i class="fas fa-exclamation-triangle text-amber-500 text-3xl mb-3"></i>
-        <h3 class="font-bold text-amber-800 mb-2">LiveKit Configuration Required</h3>
-        <p class="text-amber-700 text-sm mb-4">${trunksData.error || rulesData.error || 'LiveKit API keys need to be configured.'}</p>
-        <code class="bg-white px-4 py-2 rounded-lg text-xs block max-w-xl mx-auto text-left">wrangler pages secret put LIVEKIT_API_KEY --project-name roofing-measurement-tool<br>wrangler pages secret put LIVEKIT_API_SECRET --project-name roofing-measurement-tool<br>wrangler pages secret put LIVEKIT_URL --project-name roofing-measurement-tool</code>
-        <button onclick="loadView('livekit')" class="mt-4 px-4 py-2 bg-amber-500 text-white rounded-lg text-sm font-semibold hover:bg-amber-600 transition-colors"><i class="fas fa-sync-alt mr-1"></i>Retry</button>
-      </div>
-    </div>`;
-  }
-
-  const inboundTrunks = trunksData.inbound_trunks || [];
-  const outboundTrunks = trunksData.outbound_trunks || [];
-  const dispatchRules = rulesData.dispatch_rules || [];
+function renderSecretaryAdminView() {
+  const ov = SA.data.secretary_overview || {};
+  const subs = ov.subscriptions || {};
+  const calls = ov.calls || {};
+  const recent = ov.recent_calls || {};
+  const week = ov.week_calls || {};
+  const configs = ov.configs || {};
+  const msgs = ov.messages || {};
+  const subsList = (SA.data.secretary_subscribers || {}).subscribers || [];
+  const mrrDollars = ((subs.monthly_mrr_cents || 0) / 100).toFixed(2);
 
   return `<div class="slide-in space-y-6">
     <!-- Header -->
     <div class="flex items-center justify-between">
       <div>
-        <h2 class="text-2xl font-black text-gray-900"><i class="fas fa-phone-alt mr-2 text-green-600"></i>LiveKit Call Center</h2>
-        <p class="text-sm text-gray-500 mt-1">Manage SIP trunks, dispatch rules, and deploy voice agents</p>
+        <h2 class="text-2xl font-black text-gray-900"><i class="fas fa-phone-volume mr-2 text-emerald-600"></i>Roofer Secretary AI</h2>
+        <p class="text-sm text-gray-500 mt-1">Monitor subscribers, call usage, and service health across all customers</p>
       </div>
       <div class="flex gap-2">
-        <button onclick="lkShowDeployModal()" class="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-semibold hover:bg-green-700 transition-colors shadow-sm">
-          <i class="fas fa-rocket mr-1"></i>Deploy Agent
+        <button onclick="SA.view='secretary-revenue'; loadView('secretary-revenue')" class="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-semibold hover:bg-emerald-700 transition-colors shadow-sm">
+          <i class="fas fa-chart-line mr-1"></i>Revenue & Billing
         </button>
-        <button onclick="lkShowCreateRuleModal()" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors shadow-sm">
-          <i class="fas fa-plus mr-1"></i>New Dispatch Rule
-        </button>
-        <button onclick="loadView('livekit')" class="px-3 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm hover:bg-gray-200 transition-colors">
+        <button onclick="loadView('secretary-admin')" class="px-3 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm hover:bg-gray-200 transition-colors">
           <i class="fas fa-sync-alt"></i>
         </button>
       </div>
     </div>
 
-    <!-- Stats Row -->
-    <div class="grid grid-cols-4 gap-4">
-      ${samc('Inbound Trunks', inboundTrunks.length, 'fa-phone-volume', 'green', 'Active SIP connections')}
-      ${samc('Outbound Trunks', outboundTrunks.length, 'fa-phone', 'blue', 'Outgoing call routes')}
-      ${samc('Dispatch Rules', dispatchRules.length, 'fa-random', 'purple', 'Call routing rules')}
-      ${samc('Active Agents', dispatchRules.filter(r => r.agents && (r.agents.service || r.agents.agent_name)).length, 'fa-robot', 'yellow', 'Deployed AI agents')}
+    <!-- Key Metrics -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      ${samc('Active Subscribers', subs.active_count || 0, 'fa-users', 'emerald', 'Paying $249/mo')}
+      ${samc('Monthly MRR', '$' + mrrDollars, 'fa-dollar-sign', 'green', (subs.active_count || 0) + ' active subs')}
+      ${samc('Total Calls (All Time)', calls.total_calls || 0, 'fa-phone', 'blue', fmtSeconds(calls.total_seconds || 0) + ' total')}
+      ${samc('Calls (30d)', recent.calls_30d || 0, 'fa-chart-bar', 'purple', (recent.active_users_30d || 0) + ' active users')}
     </div>
 
-    <!-- Dispatch Rules Table -->
-    <div class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-      <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-        <h3 class="font-bold text-gray-900"><i class="fas fa-random mr-2 text-purple-500"></i>Dispatch Rules</h3>
-        <span class="text-xs text-gray-400">${dispatchRules.length} rule${dispatchRules.length !== 1 ? 's' : ''}</span>
-      </div>
-      ${dispatchRules.length === 0 ? `
-        <div class="px-6 py-12 text-center text-gray-400">
-          <i class="fas fa-random text-4xl mb-3 opacity-30"></i>
-          <p>No dispatch rules configured</p>
-          <p class="text-xs mt-1">Create a dispatch rule to route inbound calls to LiveKit rooms</p>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      ${samc('Calls (7d)', week.calls_7d || 0, 'fa-calendar-week', 'sky', fmtSeconds(week.seconds_7d || 0))}
+      ${samc('Avg Call Duration', fmtSeconds(calls.avg_duration || 0), 'fa-clock', 'amber', 'Across all calls')}
+      ${samc('Active Services', configs.active_services || 0, 'fa-toggle-on', 'teal', 'of ' + (configs.total_configs || 0) + ' configured')}
+      ${samc('Pending/Past Due', (subs.pending_count || 0) + (subs.past_due_count || 0), 'fa-exclamation-triangle', 'red', (subs.cancelled_count || 0) + ' cancelled')}
+    </div>
+
+    <!-- Call Outcomes Breakdown -->
+    ${saSection('Call Outcomes', 'fa-chart-pie', `
+      <div class="grid grid-cols-4 gap-4">
+        <div class="text-center p-4 bg-green-50 rounded-xl">
+          <div class="text-2xl font-black text-green-700">${calls.answered || 0}</div>
+          <div class="text-xs text-green-600 font-semibold mt-1"><i class="fas fa-check-circle mr-1"></i>Answered</div>
         </div>
-      ` : `
+        <div class="text-center p-4 bg-blue-50 rounded-xl">
+          <div class="text-2xl font-black text-blue-700">${calls.transferred || 0}</div>
+          <div class="text-xs text-blue-600 font-semibold mt-1"><i class="fas fa-exchange-alt mr-1"></i>Transferred</div>
+        </div>
+        <div class="text-center p-4 bg-yellow-50 rounded-xl">
+          <div class="text-2xl font-black text-yellow-700">${calls.voicemail || 0}</div>
+          <div class="text-xs text-yellow-600 font-semibold mt-1"><i class="fas fa-voicemail mr-1"></i>Voicemail</div>
+        </div>
+        <div class="text-center p-4 bg-red-50 rounded-xl">
+          <div class="text-2xl font-black text-red-700">${calls.missed || 0}</div>
+          <div class="text-xs text-red-600 font-semibold mt-1"><i class="fas fa-phone-slash mr-1"></i>Missed</div>
+        </div>
+      </div>
+    `)}
+
+    <!-- Messages & Appointments -->
+    ${saSection('Messages & Appointments', 'fa-envelope', `
+      <div class="grid grid-cols-3 gap-4">
+        <div class="text-center p-4 bg-indigo-50 rounded-xl">
+          <div class="text-2xl font-black text-indigo-700">${msgs.total_messages || 0}</div>
+          <div class="text-xs text-indigo-600 font-semibold mt-1"><i class="fas fa-envelope mr-1"></i>Messages (${msgs.unread_messages || 0} unread)</div>
+        </div>
+        <div class="text-center p-4 bg-purple-50 rounded-xl">
+          <div class="text-2xl font-black text-purple-700">${msgs.total_appointments || 0}</div>
+          <div class="text-xs text-purple-600 font-semibold mt-1"><i class="fas fa-calendar mr-1"></i>Appointments (${msgs.pending_appointments || 0} pending)</div>
+        </div>
+        <div class="text-center p-4 bg-orange-50 rounded-xl">
+          <div class="text-2xl font-black text-orange-700">${msgs.total_callbacks || 0}</div>
+          <div class="text-xs text-orange-600 font-semibold mt-1"><i class="fas fa-phone-alt mr-1"></i>Callbacks (${msgs.pending_callbacks || 0} pending)</div>
+        </div>
+      </div>
+    `)}
+
+    <!-- Subscribers Table -->
+    ${saSection('All Subscribers', 'fa-list', `
+      ${subsList.length === 0 ? '<div class="py-8 text-center text-gray-400"><i class="fas fa-users text-4xl mb-3 block opacity-30"></i><p>No subscribers yet</p></div>' : `
         <div class="overflow-x-auto">
           <table class="w-full text-sm">
             <thead>
               <tr class="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                <th class="px-4 py-3">Dispatch Rule ID</th>
-                <th class="px-4 py-3">Rule Name</th>
-                <th class="px-4 py-3">Inbound Routing</th>
-                <th class="px-4 py-3">Destination Room</th>
-                <th class="px-4 py-3">Agents</th>
-                <th class="px-4 py-3">Rule Type</th>
-                <th class="px-4 py-3">Created</th>
-                <th class="px-4 py-3 text-right">Actions</th>
+                <th class="px-4 py-3">Customer</th>
+                <th class="px-4 py-3">Company</th>
+                <th class="px-4 py-3">Status</th>
+                <th class="px-4 py-3">Service</th>
+                <th class="px-4 py-3">Calls (30d)</th>
+                <th class="px-4 py-3">Minutes (30d)</th>
+                <th class="px-4 py-3">Total Calls</th>
+                <th class="px-4 py-3">Price</th>
+                <th class="px-4 py-3">Period End</th>
+                <th class="px-4 py-3">Subscribed</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-50">
-              ${dispatchRules.map(rule => {
-                const routing = (rule.inbound_routing || []).map(r =>
-                  '<span class="inline-flex items-center gap-1"><i class="fas fa-phone text-green-500 text-[10px]"></i>' +
-                  (r.numbers && r.numbers.length > 0 ? r.numbers.join(', ') : r.trunk_id) +
-                  '</span>'
-                ).join('<br>') || '<span class="text-gray-300">None</span>';
-
-                const agents = rule.agents || {};
-                let agentDisplay = '';
-                if (agents.agent_name) {
-                  agentDisplay = '<span class="inline-flex items-center gap-1 px-2 py-0.5 bg-yellow-50 text-yellow-700 rounded-full text-[11px] font-medium"><i class="fas fa-robot"></i> ' + agents.agent_name + '</span>';
-                } else if (agents.service) {
-                  agentDisplay = '<span class="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full text-[11px] font-medium"><i class="fas fa-cog"></i> ' + agents.service + '</span>';
-                } else if (agents.customer_id) {
-                  agentDisplay = '<span class="text-gray-500 text-xs">Customer #' + agents.customer_id + '</span>';
-                } else {
-                  agentDisplay = '<span class="text-gray-300 text-xs">—</span>';
-                }
-
-                const typeColors = {
-                  individual: 'bg-purple-100 text-purple-700',
-                  direct: 'bg-blue-100 text-blue-700',
-                  callee: 'bg-teal-100 text-teal-700',
-                  unknown: 'bg-gray-100 text-gray-500'
-                };
-                const typeClass = typeColors[rule.rule_type] || typeColors.unknown;
-
-                const createdStr = rule.created_at ? new Date(rule.created_at * 1000 || rule.created_at).toLocaleDateString('en-CA', { year: 'numeric', month: 'short', day: 'numeric' }) : '—';
-
+              ${subsList.map(s => {
+                const subColor = s.status === 'active' ? 'green' : s.status === 'past_due' ? 'red' : s.status === 'pending' ? 'yellow' : 'gray';
+                const serviceColor = s.service_active ? 'green' : 'gray';
                 return '<tr class="hover:bg-gray-50 transition-colors">' +
-                  '<td class="px-4 py-3"><code class="text-xs bg-gray-100 px-2 py-0.5 rounded font-mono">' + (rule.dispatch_rule_id || '—') + '</code></td>' +
-                  '<td class="px-4 py-3 font-medium text-gray-900">' + (rule.name || '(unnamed)') + '</td>' +
-                  '<td class="px-4 py-3 text-xs">' + routing + '</td>' +
-                  '<td class="px-4 py-3"><code class="text-xs text-purple-600 bg-purple-50 px-2 py-0.5 rounded">' + (rule.destination_room || '—') + '</code></td>' +
-                  '<td class="px-4 py-3">' + agentDisplay + '</td>' +
-                  '<td class="px-4 py-3"><span class="px-2 py-0.5 rounded-full text-[11px] font-semibold ' + typeClass + '">' + (rule.rule_type || 'unknown') + '</span></td>' +
-                  '<td class="px-4 py-3 text-xs text-gray-500">' + createdStr + '</td>' +
-                  '<td class="px-4 py-3 text-right"><button onclick="lkDeleteRule(\'' + rule.dispatch_rule_id + '\')" class="text-red-400 hover:text-red-600 text-xs transition-colors"><i class="fas fa-trash"></i></button></td>' +
+                  '<td class="px-4 py-3"><div class="font-medium text-gray-900">' + (s.customer_name || 'Unknown') + '</div><div class="text-xs text-gray-400">' + (s.customer_email || '') + '</div></td>' +
+                  '<td class="px-4 py-3 text-xs text-gray-600">' + (s.customer_company || '—') + '</td>' +
+                  '<td class="px-4 py-3"><span class="px-2 py-0.5 bg-' + subColor + '-100 text-' + subColor + '-700 rounded-full text-xs font-semibold capitalize">' + s.status + '</span></td>' +
+                  '<td class="px-4 py-3"><span class="px-2 py-0.5 bg-' + serviceColor + '-100 text-' + serviceColor + '-700 rounded-full text-xs font-semibold">' + (s.service_active ? 'Active' : 'Inactive') + '</span></td>' +
+                  '<td class="px-4 py-3 font-medium text-gray-900">' + (s.calls_30d || 0) + '</td>' +
+                  '<td class="px-4 py-3 text-gray-600">' + fmtSeconds(s.seconds_30d || 0) + '</td>' +
+                  '<td class="px-4 py-3 text-gray-600">' + (s.total_calls || 0) + ' <span class="text-xs text-gray-400">(' + fmtSeconds(s.total_call_seconds || 0) + ')</span></td>' +
+                  '<td class="px-4 py-3 font-semibold text-gray-900">$' + ((s.monthly_price_cents || 0) / 100).toFixed(0) + '/mo</td>' +
+                  '<td class="px-4 py-3 text-xs text-gray-500">' + fmtDate(s.current_period_end) + '</td>' +
+                  '<td class="px-4 py-3 text-xs text-gray-400">' + fmtDate(s.created_at) + '</td>' +
                 '</tr>';
               }).join('')}
             </tbody>
           </table>
         </div>
       `}
-    </div>
-
-    <!-- Inbound Trunks Table -->
-    <div class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-      <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-        <h3 class="font-bold text-gray-900"><i class="fas fa-phone-volume mr-2 text-green-500"></i>Inbound SIP Trunks</h3>
-        <span class="text-xs text-gray-400">${inboundTrunks.length} trunk${inboundTrunks.length !== 1 ? 's' : ''}</span>
-      </div>
-      ${inboundTrunks.length === 0 ? `
-        <div class="px-6 py-8 text-center text-gray-400">
-          <p class="text-sm">No inbound trunks configured</p>
-        </div>
-      ` : `
-        <div class="overflow-x-auto">
-          <table class="w-full text-sm">
-            <thead>
-              <tr class="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                <th class="px-4 py-3">Trunk ID</th>
-                <th class="px-4 py-3">Name</th>
-                <th class="px-4 py-3">Phone Numbers</th>
-                <th class="px-4 py-3">Krisp</th>
-                <th class="px-4 py-3 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-gray-50">
-              ${inboundTrunks.map(t => {
-                const tid = t.sip_trunk_id || t.trunk?.sip_trunk_id || '';
-                const name = t.name || t.trunk?.name || '(unnamed)';
-                const nums = (t.numbers || t.trunk?.numbers || []).join(', ') || '—';
-                const krisp = t.krisp_enabled ?? t.trunk?.krisp_enabled ?? false;
-                return '<tr class="hover:bg-gray-50">' +
-                  '<td class="px-4 py-3"><code class="text-xs bg-gray-100 px-2 py-0.5 rounded font-mono">' + tid + '</code></td>' +
-                  '<td class="px-4 py-3 font-medium">' + name + '</td>' +
-                  '<td class="px-4 py-3 text-xs">' + nums + '</td>' +
-                  '<td class="px-4 py-3">' + (krisp ? '<span class="text-green-600"><i class="fas fa-check-circle"></i></span>' : '<span class="text-gray-300">—</span>') + '</td>' +
-                  '<td class="px-4 py-3 text-right"><button onclick="lkDeleteTrunk(\'' + tid + '\')" class="text-red-400 hover:text-red-600 text-xs"><i class="fas fa-trash"></i></button></td>' +
-                '</tr>';
-              }).join('')}
-            </tbody>
-          </table>
-        </div>
-      `}
-    </div>
-
-    <!-- Deploy Agent Modal (hidden) -->
-    <div id="lk-deploy-modal" class="hidden fixed inset-0 z-50 bg-black/50 flex items-center justify-center">
-      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
-        <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-          <h3 class="font-bold text-gray-900"><i class="fas fa-rocket mr-2 text-green-500"></i>Deploy LiveKit Agent</h3>
-          <button onclick="lkCloseModals()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
-        </div>
-        <div class="p-6 space-y-4">
-          <div>
-            <label class="block text-xs font-semibold text-gray-600 mb-1">Agent Name</label>
-            <input id="lk-deploy-name" type="text" value="RoofReporterAI Secretary" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-500" />
-          </div>
-          <div>
-            <label class="block text-xs font-semibold text-gray-600 mb-1">Phone Number (E.164)</label>
-            <input id="lk-deploy-phone" type="text" placeholder="+17809833335" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-500" />
-          </div>
-          <div>
-            <label class="block text-xs font-semibold text-gray-600 mb-1">Room Prefix</label>
-            <input id="lk-deploy-prefix" type="text" value="secretary-" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-500" />
-          </div>
-          <div>
-            <label class="block text-xs font-semibold text-gray-600 mb-1">Rule Type</label>
-            <select id="lk-deploy-type" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-500">
-              <option value="individual">Individual (unique room per call)</option>
-              <option value="direct">Direct (fixed room name)</option>
-              <option value="callee">Callee (room by callee number)</option>
-            </select>
-          </div>
-          <div>
-            <label class="block text-xs font-semibold text-gray-600 mb-1">Agent Voice</label>
-            <select id="lk-deploy-voice" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-500">
-              <option value="alloy">Alloy (neutral)</option>
-              <option value="echo">Echo (male)</option>
-              <option value="fable">Fable (expressive)</option>
-              <option value="onyx">Onyx (deep)</option>
-              <option value="nova">Nova (female)</option>
-              <option value="shimmer">Shimmer (warm)</option>
-            </select>
-          </div>
-          <div>
-            <label class="block text-xs font-semibold text-gray-600 mb-1">Agent Persona / Notes (optional)</label>
-            <textarea id="lk-deploy-persona" rows="2" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-500" placeholder="e.g. Friendly roofing estimator assistant"></textarea>
-          </div>
-          <div class="flex items-center gap-2">
-            <input id="lk-deploy-krisp" type="checkbox" checked class="rounded border-gray-300 text-green-600 focus:ring-green-500" />
-            <label for="lk-deploy-krisp" class="text-sm text-gray-700">Enable Krisp noise cancellation</label>
-          </div>
-          <div id="lk-deploy-status" class="hidden text-sm"></div>
-          <button onclick="lkDeployAgent()" id="lk-deploy-btn" class="w-full bg-green-600 text-white py-2.5 rounded-lg font-semibold hover:bg-green-700 transition-colors">
-            <i class="fas fa-rocket mr-1"></i>Deploy Agent
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Create Rule Modal (hidden) -->
-    <div id="lk-rule-modal" class="hidden fixed inset-0 z-50 bg-black/50 flex items-center justify-center">
-      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
-        <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-          <h3 class="font-bold text-gray-900"><i class="fas fa-plus mr-2 text-blue-500"></i>Create Dispatch Rule</h3>
-          <button onclick="lkCloseModals()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
-        </div>
-        <div class="p-6 space-y-4">
-          <div>
-            <label class="block text-xs font-semibold text-gray-600 mb-1">Rule Name</label>
-            <input id="lk-rule-name" type="text" value="roofreporterai-dispatch" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500" />
-          </div>
-          <div>
-            <label class="block text-xs font-semibold text-gray-600 mb-1">Rule Type</label>
-            <select id="lk-rule-type" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500">
-              <option value="individual">Individual (unique room per call)</option>
-              <option value="direct">Direct (fixed room name)</option>
-              <option value="callee">Callee (room by callee number)</option>
-            </select>
-          </div>
-          <div>
-            <label class="block text-xs font-semibold text-gray-600 mb-1">Room Prefix / Room Name</label>
-            <input id="lk-rule-room" type="text" value="secretary-" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500" />
-            <p class="text-xs text-gray-400 mt-1">For "individual" or "callee": prefix. For "direct": fixed room name.</p>
-          </div>
-          <div>
-            <label class="block text-xs font-semibold text-gray-600 mb-1">Trunk IDs (comma-separated, optional)</label>
-            <input id="lk-rule-trunks" type="text" placeholder="ST_xxxx, ST_yyyy" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500" />
-            <p class="text-xs text-gray-400 mt-1">Leave empty to match all trunks, or specify specific trunk IDs</p>
-          </div>
-          <div>
-            <label class="block text-xs font-semibold text-gray-600 mb-1">PIN (optional)</label>
-            <input id="lk-rule-pin" type="text" placeholder="" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500" />
-          </div>
-          <div>
-            <label class="block text-xs font-semibold text-gray-600 mb-1">Metadata JSON (optional)</label>
-            <textarea id="lk-rule-metadata" rows="2" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 font-mono" placeholder='{"service":"roofer_secretary"}'></textarea>
-          </div>
-          <div id="lk-rule-status" class="hidden text-sm"></div>
-          <button onclick="lkCreateRule()" id="lk-rule-btn" class="w-full bg-blue-600 text-white py-2.5 rounded-lg font-semibold hover:bg-blue-700 transition-colors">
-            <i class="fas fa-plus mr-1"></i>Create Dispatch Rule
-          </button>
-        </div>
-      </div>
-    </div>
+    `, '<span class="text-xs text-gray-400">' + subsList.length + ' subscriber' + (subsList.length !== 1 ? 's' : '') + '</span>')}
   </div>`;
 }
 
-// LiveKit Modal Helpers
-function lkShowDeployModal() {
-  document.getElementById('lk-deploy-modal').classList.remove('hidden');
-}
-function lkShowCreateRuleModal() {
-  document.getElementById('lk-rule-modal').classList.remove('hidden');
-}
-function lkCloseModals() {
-  var m1 = document.getElementById('lk-deploy-modal');
-  var m2 = document.getElementById('lk-rule-modal');
-  if (m1) m1.classList.add('hidden');
-  if (m2) m2.classList.add('hidden');
-}
-window.lkShowDeployModal = lkShowDeployModal;
-window.lkShowCreateRuleModal = lkShowCreateRuleModal;
-window.lkCloseModals = lkCloseModals;
-
-// Deploy Agent
-async function lkDeployAgent() {
-  var btn = document.getElementById('lk-deploy-btn');
-  var statusEl = document.getElementById('lk-deploy-status');
-  btn.disabled = true;
-  btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Deploying...';
-  statusEl.classList.remove('hidden');
-  statusEl.className = 'text-sm text-blue-600';
-  statusEl.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Creating SIP trunk and dispatch rule...';
-
-  var payload = {
-    name: document.getElementById('lk-deploy-name').value,
-    phone_number: document.getElementById('lk-deploy-phone').value,
-    room_prefix: document.getElementById('lk-deploy-prefix').value,
-    rule_type: document.getElementById('lk-deploy-type').value,
-    krisp_enabled: document.getElementById('lk-deploy-krisp').checked,
-    agent_config: {
-      agent_name: document.getElementById('lk-deploy-name').value,
-      agent_voice: document.getElementById('lk-deploy-voice').value,
-      persona: document.getElementById('lk-deploy-persona').value,
-    }
-  };
-
-  try {
-    var res = await fetch('/api/secretary/sip/deploy-agent', {
-      method: 'POST',
-      headers: Object.assign({'Content-Type': 'application/json'}, saHeaders()),
-      body: JSON.stringify(payload)
-    });
-    var data = await res.json();
-    if (data.success) {
-      statusEl.className = 'text-sm text-green-600 bg-green-50 p-3 rounded-lg';
-      statusEl.innerHTML = '<i class="fas fa-check-circle mr-1"></i><strong>Deployed!</strong><br>' +
-        '<span class="text-xs">Trunk: <code>' + data.deployment.sip_trunk_id + '</code></span><br>' +
-        '<span class="text-xs">Dispatch: <code>' + data.deployment.dispatch_rule_id + '</code></span><br>' +
-        '<span class="text-xs">' + data.message + '</span>';
-      btn.innerHTML = '<i class="fas fa-check mr-1"></i>Deployed!';
-      setTimeout(function() { lkCloseModals(); loadView('livekit'); }, 2500);
-    } else {
-      statusEl.className = 'text-sm text-red-600 bg-red-50 p-3 rounded-lg';
-      statusEl.innerHTML = '<i class="fas fa-exclamation-circle mr-1"></i>' + (data.error || 'Unknown error');
-      btn.disabled = false;
-      btn.innerHTML = '<i class="fas fa-rocket mr-1"></i>Deploy Agent';
-    }
-  } catch (err) {
-    statusEl.className = 'text-sm text-red-600 bg-red-50 p-3 rounded-lg';
-    statusEl.innerHTML = '<i class="fas fa-exclamation-circle mr-1"></i>Network error: ' + err.message;
-    btn.disabled = false;
-    btn.innerHTML = '<i class="fas fa-rocket mr-1"></i>Deploy Agent';
-  }
-}
-window.lkDeployAgent = lkDeployAgent;
-
-// Create Dispatch Rule
-async function lkCreateRule() {
-  var btn = document.getElementById('lk-rule-btn');
-  var statusEl = document.getElementById('lk-rule-status');
-  btn.disabled = true;
-  btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Creating...';
-  statusEl.classList.remove('hidden');
-  statusEl.className = 'text-sm text-blue-600';
-  statusEl.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Creating dispatch rule...';
-
-  var ruleType = document.getElementById('lk-rule-type').value;
-  var roomVal = document.getElementById('lk-rule-room').value;
-  var trunksStr = document.getElementById('lk-rule-trunks').value.trim();
-  var trunkIds = trunksStr ? trunksStr.split(',').map(function(s) { return s.trim(); }).filter(Boolean) : [];
-
-  var payload = {
-    name: document.getElementById('lk-rule-name').value,
-    rule_type: ruleType,
-    trunk_ids: trunkIds,
-    pin: document.getElementById('lk-rule-pin').value,
-    metadata: document.getElementById('lk-rule-metadata').value,
-  };
-  if (ruleType === 'direct') {
-    payload.room_name = roomVal;
-  } else {
-    payload.room_prefix = roomVal;
-  }
-
-  try {
-    var res = await fetch('/api/secretary/sip/dispatch-rule', {
-      method: 'POST',
-      headers: Object.assign({'Content-Type': 'application/json'}, saHeaders()),
-      body: JSON.stringify(payload)
-    });
-    var data = await res.json();
-    if (data.success) {
-      statusEl.className = 'text-sm text-green-600 bg-green-50 p-3 rounded-lg';
-      statusEl.innerHTML = '<i class="fas fa-check-circle mr-1"></i><strong>Created!</strong> ID: <code>' + data.dispatch_rule_id + '</code>';
-      btn.innerHTML = '<i class="fas fa-check mr-1"></i>Created!';
-      setTimeout(function() { lkCloseModals(); loadView('livekit'); }, 2000);
-    } else {
-      statusEl.className = 'text-sm text-red-600 bg-red-50 p-3 rounded-lg';
-      statusEl.innerHTML = '<i class="fas fa-exclamation-circle mr-1"></i>' + (data.error || 'Unknown error');
-      btn.disabled = false;
-      btn.innerHTML = '<i class="fas fa-plus mr-1"></i>Create Dispatch Rule';
-    }
-  } catch (err) {
-    statusEl.className = 'text-sm text-red-600 bg-red-50 p-3 rounded-lg';
-    statusEl.innerHTML = '<i class="fas fa-exclamation-circle mr-1"></i>Network error: ' + err.message;
-    btn.disabled = false;
-    btn.innerHTML = '<i class="fas fa-plus mr-1"></i>Create Dispatch Rule';
-  }
-}
-window.lkCreateRule = lkCreateRule;
-
-// Delete Dispatch Rule
-async function lkDeleteRule(ruleId) {
-  if (!confirm('Delete dispatch rule ' + ruleId + '? This will stop routing calls for this rule.')) return;
-  try {
-    var res = await fetch('/api/secretary/sip/dispatch-rule/' + ruleId, {
-      method: 'DELETE',
-      headers: saHeaders()
-    });
-    var data = await res.json();
-    if (data.success) {
-      loadView('livekit');
-    } else {
-      alert('Error: ' + (data.error || 'Failed to delete'));
-    }
-  } catch (err) {
-    alert('Network error: ' + err.message);
-  }
-}
-window.lkDeleteRule = lkDeleteRule;
-
-// Delete Trunk
-async function lkDeleteTrunk(trunkId) {
-  if (!confirm('Delete SIP trunk ' + trunkId + '? This will disconnect the phone number.')) return;
-  try {
-    var res = await fetch('/api/secretary/sip/trunk/' + trunkId, {
-      method: 'DELETE',
-      headers: saHeaders()
-    });
-    var data = await res.json();
-    if (data.success) {
-      loadView('livekit');
-    } else {
-      alert('Error: ' + (data.error || 'Failed to delete'));
-    }
-  } catch (err) {
-    alert('Network error: ' + err.message);
-  }
-}
-window.lkDeleteTrunk = lkDeleteTrunk;
-
 // ============================================================
-// VIEW: LIVEKIT AGENTS — Create & manage custom LiveKit agents
+// VIEW: SECRETARY REVENUE — Financial tracking & subscription lifecycle
 // ============================================================
-function renderLiveKitAgentsView() {
-  const trunksData = SA.data.livekit_trunks || {};
-  const rulesData = SA.data.livekit_rules || {};
+function renderSecretaryRevenueView() {
+  const rev = SA.data.secretary_revenue || {};
+  const mrr = rev.mrr || {};
+  const lifetime = rev.lifetime || {};
+  const periods = rev.revenue_by_period || [];
+  const renewals = rev.upcoming_renewals || [];
+  const expired = rev.expired || [];
+  const activeMrrDollars = ((mrr.active_mrr_cents || 0) / 100).toFixed(2);
+  const atRiskMrrDollars = ((mrr.at_risk_mrr_cents || 0) / 100).toFixed(2);
+  const lifetimeDollars = ((lifetime.total_lifetime_cents || 0) / 100).toFixed(2);
+  const currentPeriod = rev.period || SA.secRevPeriod || 'monthly';
 
-  if (trunksData.error || rulesData.error) {
-    return `
-    <div class="mb-6">
-      <h2 class="text-2xl font-black text-gray-900"><i class="fas fa-robot mr-2 text-purple-600"></i>LiveKit Agents</h2>
-      <p class="text-sm text-gray-500 mt-1">Create and manage custom AI agents for various tasks</p>
-    </div>
-    <div class="bg-amber-50 border border-amber-200 rounded-xl p-6 text-center">
-      <i class="fas fa-exclamation-triangle text-amber-500 text-3xl mb-3"></i>
-      <h3 class="font-bold text-amber-800 mb-2">LiveKit Configuration Required</h3>
-      <p class="text-amber-700 text-sm mb-4">LiveKit API keys need to be configured to manage agents.</p>
-      <code class="bg-white px-4 py-2 rounded-lg text-xs block max-w-xl mx-auto text-left">wrangler pages secret put LIVEKIT_API_KEY --project-name roofing-measurement-tool<br>wrangler pages secret put LIVEKIT_API_SECRET --project-name roofing-measurement-tool<br>wrangler pages secret put LIVEKIT_URL --project-name roofing-measurement-tool</code>
-    </div>`;
-  }
-
-  const dispatchRules = rulesData.dispatch_rules || [];
-  const agents = dispatchRules.filter(r => r.agents && (r.agents.service || r.agents.agent_name));
-
-  return `
-    <div class="flex items-center justify-between mb-6">
+  return `<div class="slide-in space-y-6">
+    <!-- Header -->
+    <div class="flex items-center justify-between">
       <div>
-        <h2 class="text-2xl font-black text-gray-900"><i class="fas fa-robot mr-2 text-purple-600"></i>LiveKit Agents</h2>
-        <p class="text-sm text-gray-500 mt-1">Create and manage custom AI agents — voice bots, receptionists, outbound callers, and more</p>
+        <h2 class="text-2xl font-black text-gray-900"><i class="fas fa-chart-line mr-2 text-emerald-600"></i>Secretary AI Revenue & Billing</h2>
+        <p class="text-sm text-gray-500 mt-1">Track sales, MRR, renewals, and subscription lifecycle</p>
       </div>
-      <button onclick="lkShowCreateAgentModal()" class="px-5 py-2.5 bg-purple-600 text-white rounded-xl text-sm font-bold hover:bg-purple-700 transition-colors shadow-sm">
-        <i class="fas fa-plus mr-2"></i>Create Agent
-      </button>
-    </div>
-
-    <!-- Agent Types -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-      <div class="bg-gradient-to-br from-purple-50 to-violet-50 border border-purple-100 rounded-xl p-5">
-        <div class="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center mb-3"><i class="fas fa-headset text-purple-500"></i></div>
-        <h3 class="font-bold text-gray-900 text-sm">Voice Receptionist</h3>
-        <p class="text-xs text-gray-500 mt-1">Answers inbound calls, takes messages, routes to departments. Best for after-hours coverage.</p>
-        <button onclick="lkShowCreateAgentModal('receptionist')" class="mt-3 px-3 py-1.5 bg-purple-500 text-white rounded-lg text-xs font-semibold hover:bg-purple-600 transition-colors">Create</button>
-      </div>
-      <div class="bg-gradient-to-br from-blue-50 to-sky-50 border border-blue-100 rounded-xl p-5">
-        <div class="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center mb-3"><i class="fas fa-phone-volume text-blue-500"></i></div>
-        <h3 class="font-bold text-gray-900 text-sm">Outbound Sales Caller</h3>
-        <p class="text-xs text-gray-500 mt-1">Makes outbound calls to prospects, pitches services, books appointments. Great for lead follow-up.</p>
-        <button onclick="lkShowCreateAgentModal('sales')" class="mt-3 px-3 py-1.5 bg-blue-500 text-white rounded-lg text-xs font-semibold hover:bg-blue-600 transition-colors">Create</button>
-      </div>
-      <div class="bg-gradient-to-br from-emerald-50 to-green-50 border border-emerald-100 rounded-xl p-5">
-        <div class="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center mb-3"><i class="fas fa-clipboard-check text-emerald-500"></i></div>
-        <h3 class="font-bold text-gray-900 text-sm">Survey / Feedback Agent</h3>
-        <p class="text-xs text-gray-500 mt-1">Calls customers for satisfaction surveys, collects feedback, and rates service quality.</p>
-        <button onclick="lkShowCreateAgentModal('survey')" class="mt-3 px-3 py-1.5 bg-emerald-500 text-white rounded-lg text-xs font-semibold hover:bg-emerald-600 transition-colors">Create</button>
+      <div class="flex gap-2">
+        <button onclick="SA.view='secretary-admin'; loadView('secretary-admin')" class="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm font-semibold hover:bg-gray-200 transition-colors">
+          <i class="fas fa-arrow-left mr-1"></i>Back to Overview
+        </button>
+        <button onclick="loadView('secretary-revenue')" class="px-3 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm hover:bg-gray-200 transition-colors">
+          <i class="fas fa-sync-alt"></i>
+        </button>
       </div>
     </div>
 
-    <!-- Deployed Agents -->
-    <div class="bg-white border border-gray-100 rounded-xl shadow-sm">
-      <div class="p-5 border-b border-gray-100">
-        <h3 class="font-bold text-gray-900"><i class="fas fa-rocket mr-2 text-purple-500"></i>Deployed Agents (${agents.length})</h3>
+    <!-- Revenue Key Metrics -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      ${samc('Active MRR', '$' + activeMrrDollars, 'fa-dollar-sign', 'green', (mrr.active_count || 0) + ' active subs')}
+      ${samc('At-Risk MRR', '$' + atRiskMrrDollars, 'fa-exclamation-triangle', 'red', (mrr.at_risk_count || 0) + ' past due')}
+      ${samc('Lifetime Revenue', '$' + lifetimeDollars, 'fa-coins', 'amber', (lifetime.total_subscriptions_ever || 0) + ' total subs')}
+      ${samc('Churned', mrr.churned_count || 0, 'fa-user-minus', 'gray', 'Cancelled subs')}
+    </div>
+
+    <!-- Revenue Trend -->
+    ${saSection('Revenue Trend', 'fa-chart-area', `
+      <div class="flex gap-2 mb-4">
+        ${['daily', 'weekly', 'monthly'].map(p => 
+          '<button onclick="SA.secRevPeriod=\\''+p+'\\'; loadView(\\'secretary-revenue\\')" class="px-3 py-1.5 rounded-lg text-xs font-semibold ' + (currentPeriod === p ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200') + ' transition-colors">' + p.charAt(0).toUpperCase() + p.slice(1) + '</button>'
+        ).join('')}
       </div>
-      ${agents.length === 0 ? '<div class="p-8 text-center text-gray-400"><i class="fas fa-robot text-3xl mb-3 block text-gray-300"></i>No agents deployed yet. Create one above to get started.</div>' :
-        '<div class="divide-y divide-gray-50">' + agents.map(function(r) {
-          var agentName = (r.agents && r.agents.agent_name) || (r.agents && r.agents.service) || 'Unknown';
-          var room = r.room || {};
-          return '<div class="p-4 flex items-center justify-between hover:bg-gray-50 transition-colors">' +
-            '<div class="flex items-center gap-3">' +
-              '<div class="w-9 h-9 bg-purple-100 rounded-lg flex items-center justify-center"><i class="fas fa-robot text-purple-500 text-sm"></i></div>' +
-              '<div>' +
-                '<div class="font-semibold text-gray-900 text-sm">' + agentName + '</div>' +
-                '<div class="text-xs text-gray-400">Room: ' + (room.room_prefix || room.room || 'default') + ' &bull; Rule: ' + (r.sip_dispatch_rule_id || 'N/A').substring(0, 12) + '...</div>' +
+      ${periods.length === 0 ? '<div class="py-8 text-center text-gray-400">No revenue data yet</div>' : `
+        <div class="space-y-2">
+          ${periods.map(p => {
+            const dollars = ((p.revenue_cents || 0) / 100).toFixed(0);
+            const maxRevenue = Math.max(...periods.map(x => x.revenue_cents || 0), 1);
+            const pct = Math.round(((p.revenue_cents || 0) / maxRevenue) * 100);
+            return '<div class="flex items-center gap-3">' +
+              '<div class="w-20 text-xs text-gray-500 font-mono shrink-0">' + p.period + '</div>' +
+              '<div class="flex-1 bg-gray-100 rounded-full h-6 overflow-hidden">' +
+                '<div class="h-full bg-gradient-to-r from-emerald-400 to-emerald-600 rounded-full flex items-center px-2" style="width:' + Math.max(pct, 5) + '%">' +
+                  '<span class="text-[10px] font-bold text-white whitespace-nowrap">$' + dollars + '</span>' +
+                '</div>' +
               '</div>' +
-            '</div>' +
-            '<div class="flex items-center gap-2">' +
-              '<span class="px-2 py-1 bg-green-50 text-green-600 rounded-full text-[10px] font-bold">ACTIVE</span>' +
-              '<button onclick="lkDeleteRule(\'' + r.sip_dispatch_rule_id + '\')" class="px-2 py-1.5 text-red-400 hover:text-red-600 text-xs" title="Delete"><i class="fas fa-trash"></i></button>' +
-            '</div>' +
-          '</div>';
-        }).join('') + '</div>'}
-    </div>
-
-    <!-- Create Agent Modal -->
-    <div id="lkAgentModal" class="fixed inset-0 bg-black/50 z-50 items-center justify-center" style="display:none">
-      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-auto mt-20 overflow-hidden">
-        <div class="bg-gradient-to-r from-purple-600 to-violet-600 px-6 py-4 flex items-center justify-between">
-          <h3 class="text-white font-bold text-lg"><i class="fas fa-robot mr-2"></i>Create LiveKit Agent</h3>
-          <button onclick="lkCloseAgentModal()" class="text-white/70 hover:text-white"><i class="fas fa-times"></i></button>
+              '<div class="w-16 text-right text-xs font-semibold text-gray-700">' + (p.new_subs || 0) + ' new</div>' +
+            '</div>';
+          }).join('')}
         </div>
-        <div class="p-6 space-y-4">
-          <div>
-            <label class="block text-sm font-semibold text-gray-700 mb-1">Agent Type</label>
-            <select id="lkAgentType" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm">
-              <option value="receptionist">Voice Receptionist</option>
-              <option value="sales">Outbound Sales Caller</option>
-              <option value="survey">Survey / Feedback Agent</option>
-              <option value="custom">Custom Agent</option>
-            </select>
-          </div>
-          <div>
-            <label class="block text-sm font-semibold text-gray-700 mb-1">Agent Name</label>
-            <input id="lkAgentName" type="text" placeholder="e.g. RoofReporter Sales Bot" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm">
-          </div>
-          <div>
-            <label class="block text-sm font-semibold text-gray-700 mb-1">Voice</label>
-            <select id="lkAgentVoice" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm">
-              <option value="alloy">Alloy (Neutral)</option>
-              <option value="echo">Echo (Male)</option>
-              <option value="fable">Fable (Warm)</option>
-              <option value="onyx">Onyx (Deep Male)</option>
-              <option value="nova">Nova (Female)</option>
-              <option value="shimmer">Shimmer (Bright Female)</option>
-            </select>
-          </div>
-          <div>
-            <label class="block text-sm font-semibold text-gray-700 mb-1">System Prompt</label>
-            <textarea id="lkAgentPrompt" rows="5" placeholder="Describe what this agent should do, how it should respond, and any specific instructions..." class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm resize-vertical"></textarea>
-          </div>
-          <div>
-            <label class="block text-sm font-semibold text-gray-700 mb-1">Phone Number (for SIP routing)</label>
-            <input id="lkAgentPhone" type="text" placeholder="+17801234567 (optional)" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm">
-          </div>
-          <div id="lkAgentModalStatus"></div>
-          <button onclick="lkCreateAgent()" class="w-full py-3 bg-purple-600 text-white rounded-xl font-bold text-sm hover:bg-purple-700 transition-colors">
-            <i class="fas fa-rocket mr-2"></i>Deploy Agent
-          </button>
+      `}
+    `)}
+
+    <!-- Upcoming Renewals -->
+    ${saSection('Upcoming Renewals (Next 30 Days)', 'fa-calendar-alt', `
+      ${renewals.length === 0 ? '<div class="py-6 text-center text-gray-400"><i class="fas fa-check-circle text-green-400 text-xl mr-2"></i>No imminent renewals</div>' : `
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                <th class="px-4 py-3">Customer</th>
+                <th class="px-4 py-3">Company</th>
+                <th class="px-4 py-3">Amount</th>
+                <th class="px-4 py-3">Renewal Date</th>
+                <th class="px-4 py-3">Days Left</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-50">
+              ${renewals.map(r => {
+                const daysLeft = r.current_period_end ? Math.ceil((new Date(r.current_period_end) - new Date()) / 86400000) : 0;
+                const urgency = daysLeft <= 7 ? 'red' : daysLeft <= 14 ? 'amber' : 'green';
+                return '<tr class="hover:bg-gray-50 transition-colors">' +
+                  '<td class="px-4 py-3"><div class="font-medium text-gray-900">' + (r.customer_name || 'Unknown') + '</div><div class="text-xs text-gray-400">' + (r.customer_email || '') + '</div></td>' +
+                  '<td class="px-4 py-3 text-xs text-gray-600">' + (r.customer_company || '—') + '</td>' +
+                  '<td class="px-4 py-3 font-semibold text-gray-900">$' + ((r.monthly_price_cents || 0) / 100).toFixed(0) + '</td>' +
+                  '<td class="px-4 py-3 text-xs text-gray-500">' + fmtDate(r.current_period_end) + '</td>' +
+                  '<td class="px-4 py-3"><span class="px-2 py-0.5 bg-' + urgency + '-100 text-' + urgency + '-700 rounded-full text-xs font-bold">' + daysLeft + ' days</span></td>' +
+                '</tr>';
+              }).join('')}
+            </tbody>
+          </table>
         </div>
-      </div>
-    </div>`;
+      `}
+    `, '<span class="text-xs text-gray-400">' + renewals.length + ' renewal' + (renewals.length !== 1 ? 's' : '') + '</span>')}
+
+    <!-- Expired / Past Due -->
+    ${saSection('Past Due & Cancelled', 'fa-user-minus', `
+      ${expired.length === 0 ? '<div class="py-6 text-center text-gray-400"><i class="fas fa-smile text-green-400 text-xl mr-2"></i>No churned subscribers</div>' : `
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                <th class="px-4 py-3">Customer</th>
+                <th class="px-4 py-3">Company</th>
+                <th class="px-4 py-3">Status</th>
+                <th class="px-4 py-3">Amount Lost</th>
+                <th class="px-4 py-3">Period End</th>
+                <th class="px-4 py-3">Cancelled</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-50">
+              ${expired.map(e => {
+                const statusColor = e.status === 'past_due' ? 'red' : 'gray';
+                return '<tr class="hover:bg-gray-50 transition-colors">' +
+                  '<td class="px-4 py-3"><div class="font-medium text-gray-900">' + (e.customer_name || 'Unknown') + '</div><div class="text-xs text-gray-400">' + (e.customer_email || '') + '</div></td>' +
+                  '<td class="px-4 py-3 text-xs text-gray-600">' + (e.customer_company || '—') + '</td>' +
+                  '<td class="px-4 py-3"><span class="px-2 py-0.5 bg-' + statusColor + '-100 text-' + statusColor + '-700 rounded-full text-xs font-semibold capitalize">' + e.status + '</span></td>' +
+                  '<td class="px-4 py-3 font-semibold text-red-600">-$' + ((e.monthly_price_cents || 0) / 100).toFixed(0) + '/mo</td>' +
+                  '<td class="px-4 py-3 text-xs text-gray-500">' + fmtDate(e.current_period_end) + '</td>' +
+                  '<td class="px-4 py-3 text-xs text-gray-400">' + fmtDate(e.cancelled_at) + '</td>' +
+                '</tr>';
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+      `}
+    `, '<span class="text-xs text-gray-400">' + expired.length + ' record' + (expired.length !== 1 ? 's' : '') + '</span>')}
+
+    <!-- First Subscription Date -->
+    ${lifetime.first_subscription ? '<div class="text-center text-xs text-gray-400 mt-4"><i class="fas fa-calendar mr-1"></i>Secretary AI service since ' + fmtDate(lifetime.first_subscription) + '</div>' : ''}
+  </div>`;
 }
-
-function lkShowCreateAgentModal(type) {
-  var modal = document.getElementById('lkAgentModal');
-  if (modal) modal.style.display = 'flex';
-  if (type) {
-    var sel = document.getElementById('lkAgentType');
-    if (sel) sel.value = type;
-    // Auto-fill prompt based on type
-    var prompt = document.getElementById('lkAgentPrompt');
-    if (prompt && !prompt.value.trim()) {
-      var prompts = {
-        receptionist: 'You are a professional receptionist for a roofing company called RoofReporterAI. Answer inbound calls warmly, take messages for the team, answer basic questions about roof measurement reports, and route urgent calls. Be friendly, professional, and concise.',
-        sales: 'You are an outbound sales agent for RoofReporterAI. Your goal is to call potential roofing contractors and offer them our AI-powered roof measurement report service. Highlight: instant satellite-based measurements, 95%+ accuracy, professional PDF reports, and competitive pricing. Book a demo when possible.',
-        survey: 'You are a customer satisfaction survey agent for RoofReporterAI. Call customers who recently received a roof measurement report. Ask about their experience: accuracy, report quality, turnaround time, and likelihood to recommend. Rate satisfaction 1-10 and note any feedback.',
-      };
-      prompt.value = prompts[type] || '';
-    }
-  }
-}
-window.lkShowCreateAgentModal = lkShowCreateAgentModal;
-
-function lkCloseAgentModal() {
-  var modal = document.getElementById('lkAgentModal');
-  if (modal) modal.style.display = 'none';
-}
-window.lkCloseAgentModal = lkCloseAgentModal;
-
-async function lkCreateAgent() {
-  var name = document.getElementById('lkAgentName')?.value?.trim();
-  var agentType = document.getElementById('lkAgentType')?.value || 'custom';
-  var voice = document.getElementById('lkAgentVoice')?.value || 'alloy';
-  var prompt = document.getElementById('lkAgentPrompt')?.value?.trim();
-  var phone = document.getElementById('lkAgentPhone')?.value?.trim();
-  var status = document.getElementById('lkAgentModalStatus');
-
-  if (!name) { if (status) status.innerHTML = '<p class="text-red-500 text-xs">Agent name is required</p>'; return; }
-  if (!prompt) { if (status) status.innerHTML = '<p class="text-red-500 text-xs">System prompt is required</p>'; return; }
-
-  if (status) status.innerHTML = '<p class="text-blue-500 text-xs"><i class="fas fa-spinner fa-spin mr-1"></i>Deploying agent...</p>';
-
-  try {
-    var res = await fetch('/api/secretary/sip/deploy-agent', {
-      method: 'POST',
-      headers: { ...saHeaders(), 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        agent_name: name,
-        agent_type: agentType,
-        agent_voice: voice,
-        system_prompt: prompt,
-        phone_number: phone || undefined,
-      })
-    });
-    var data = await res.json();
-    if (data.success) {
-      if (status) status.innerHTML = '<p class="text-green-500 text-xs"><i class="fas fa-check-circle mr-1"></i>Agent deployed successfully!</p>';
-      setTimeout(function() { lkCloseAgentModal(); loadView('livekit-agents'); }, 2000);
-    } else {
-      if (status) status.innerHTML = '<p class="text-red-500 text-xs">Error: ' + (data.error || 'Deployment failed') + '</p>';
-    }
-  } catch(e) {
-    if (status) status.innerHTML = '<p class="text-red-500 text-xs">Network error: ' + e.message + '</p>';
-  }
-}
-window.lkCreateAgent = lkCreateAgent;
