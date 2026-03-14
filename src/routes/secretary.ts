@@ -2363,3 +2363,145 @@ secretaryRoutes.post('/sip/deploy-agent', async (c) => {
     return c.json({ error: 'Failed to deploy agent', details: err.message }, 500)
   }
 })
+
+// ============================================================
+// VOICE TEST — Transcribe audio & chat with AI secretary
+// Allows users to test the AI agent via browser microphone
+// ============================================================
+
+// POST /api/secretary/test/transcribe — Transcribe uploaded audio
+secretaryRoutes.post('/test/transcribe', async (c) => {
+  const { env } = c
+  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  if (!token) return c.json({ error: 'Auth required' }, 401)
+
+  try {
+    const formData = await c.req.formData()
+    const audioFile = formData.get('audio') as File | null
+    if (!audioFile) return c.json({ error: 'No audio file' }, 400)
+
+    // Use Whisper API for transcription via proxy
+    const apiKey = env.OPENAI_API_KEY
+    const baseUrl = env.OPENAI_BASE_URL || 'https://www.genspark.ai/api/llm_proxy/v1'
+
+    const whisperForm = new FormData()
+    whisperForm.append('file', audioFile, 'recording.webm')
+    whisperForm.append('model', 'whisper-1')
+    whisperForm.append('language', 'en')
+
+    const res = await fetch(`${baseUrl}/audio/transcriptions`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${apiKey}` },
+      body: whisperForm
+    })
+
+    if (!res.ok) {
+      // Fallback: return empty text so frontend shows "couldn't understand"
+      return c.json({ text: '' })
+    }
+
+    const data: any = await res.json()
+    return c.json({ text: data.text || '' })
+  } catch (err: any) {
+    console.error('[SecTest] Transcribe error:', err)
+    return c.json({ text: '' })
+  }
+})
+
+// POST /api/secretary/test/chat — Chat with AI using secretary config
+secretaryRoutes.post('/test/chat', async (c) => {
+  const { env } = c
+  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  if (!token) return c.json({ error: 'Auth required' }, 401)
+
+  try {
+    const body = await c.req.json<{
+      message: string
+      history?: { role: string; content: string }[]
+      greeting_script?: string
+      common_qa?: string
+      general_notes?: string
+    }>()
+
+    const { message, history = [], greeting_script = '', common_qa = '', general_notes = '' } = body
+    if (!message) return c.json({ error: 'No message' }, 400)
+
+    // Build system prompt from secretary config
+    const systemPrompt = `You are a professional AI phone secretary for a roofing company. You are currently in TEST MODE — the user is testing you through their browser before deploying you on their phone system.
+
+Respond exactly as you would on a real phone call. Be warm, professional, and helpful. Keep responses concise (1-3 sentences) as if speaking on the phone.
+
+YOUR GREETING/SCRIPT:
+${greeting_script || 'Thank you for calling! How can I help you today?'}
+
+COMMON Q&A:
+${common_qa || 'No specific Q&A provided.'}
+
+GENERAL NOTES:
+${general_notes || 'No additional notes.'}
+
+IMPORTANT RULES:
+- Respond naturally as a phone secretary would
+- Keep answers brief and conversational (phone-appropriate length)
+- If asked something not covered in Q&A, say you'll take a message and have someone call back
+- Be friendly and professional
+- This is a TEST call — behave exactly as you would on a real call`
+
+    const messages: any[] = [
+      { role: 'system', content: systemPrompt }
+    ]
+
+    // Add conversation history
+    for (const msg of history) {
+      messages.push({ role: msg.role, content: msg.content })
+    }
+    messages.push({ role: 'user', content: message })
+
+    const apiKey = env.OPENAI_API_KEY
+    const baseUrl = env.OPENAI_BASE_URL || 'https://www.genspark.ai/api/llm_proxy/v1'
+
+    const aiRes = await fetch(`${baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'gemini-2.5-flash',
+        messages,
+        max_tokens: 300,
+        temperature: 0.7
+      })
+    })
+
+    if (!aiRes.ok) {
+      // Try fallback model
+      const fallbackRes = await fetch(`${baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: 'gpt-5-nano',
+          messages,
+          max_tokens: 300,
+          temperature: 0.7
+        })
+      })
+      if (!fallbackRes.ok) {
+        return c.json({ response: 'Sorry, I had trouble processing that. Could you repeat yourself?' })
+      }
+      const fallbackData: any = await fallbackRes.json()
+      return c.json({ response: fallbackData.choices?.[0]?.message?.content || 'Could you repeat that please?' })
+    }
+
+    const aiData: any = await aiRes.json()
+    const responseText = aiData.choices?.[0]?.message?.content || 'Could you repeat that please?'
+
+    return c.json({ response: responseText })
+  } catch (err: any) {
+    console.error('[SecTest] Chat error:', err)
+    return c.json({ response: 'I apologize, I had a technical issue. Could you try again?' })
+  }
+})

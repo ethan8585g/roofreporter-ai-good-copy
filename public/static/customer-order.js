@@ -716,15 +716,11 @@ function renderReviewStep(root, progressBar) {
                 </div>
               </div>
 
-              <!-- Squares + Pitch + Waste -->
-              <div class="grid grid-cols-4 gap-3">
+              <!-- Area + Pitch + Waste -->
+              <div class="grid grid-cols-3 gap-3">
                 <div class="bg-white rounded-lg p-3 border border-gray-200 text-center">
-                  <div class="text-xs text-gray-500 font-medium">Net Squares</div>
-                  <div class="text-xl font-bold text-gray-800">${(m.net_squares || 0).toFixed(1)}</div>
-                </div>
-                <div class="bg-white rounded-lg p-3 border border-gray-200 text-center">
-                  <div class="text-xs text-gray-500 font-medium">Gross (w/ waste)</div>
-                  <div class="text-xl font-bold text-amber-600">${(m.gross_squares || 0).toFixed(1)}</div>
+                  <div class="text-xs text-gray-500 font-medium">Gross Area (w/ waste)</div>
+                  <div class="text-xl font-bold text-amber-600">${Math.round((m.true_area_sqft || 0) * (1 + (m.waste_pct || 15) / 100)).toLocaleString()} SF</div>
                 </div>
                 <div class="bg-white rounded-lg p-3 border border-gray-200 text-center">
                   <div class="text-xs text-gray-500 font-medium">Pitch</div>
@@ -851,7 +847,7 @@ function renderReviewStep(root, progressBar) {
             <h4 class="font-semibold text-gray-700 mb-2 flex items-center">
               <i class="fas fa-dollar-sign text-amber-500 mr-2"></i>Your Price Per Square (Optional)
             </h4>
-            <p class="text-xs text-gray-500 mb-3">Enter your rate per roofing square to include a cost estimate in your report. The report calculates total squares with ${m.waste_pct || 15}% waste.</p>
+            <p class="text-xs text-gray-500 mb-3">Enter your rate per roofing square (100 sq ft) to include a cost estimate in your report. The report calculates total area with ${m.waste_pct || 15}% waste.</p>
             <div class="grid md:grid-cols-2 gap-4">
               <div>
                 <label class="block text-xs font-medium text-gray-600 mb-1">Price Per Square (CAD)</label>
@@ -869,7 +865,7 @@ function renderReviewStep(root, progressBar) {
                 <div class="text-center p-3 bg-white rounded-lg border border-amber-200 w-full" id="priceEstimateBox">
                   <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Estimated Job Cost</p>
                   <p class="text-2xl font-black mt-1 ${priceEstimate ? 'text-amber-600' : 'text-gray-300'}" id="priceEstimateValue">${priceEstimate ? '$' + priceEstimate.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '--'}</p>
-                  <p class="text-xs text-gray-400 mt-1">${grossSquares ? grossSquares.toFixed(1) + ' gross sq' + (pricePerSq ? ' x $' + pricePerSq : '') : 'Roof area + waste x your rate'}</p>
+                  <p class="text-xs text-gray-400 mt-1">${grossSquares ? Math.round(grossSquares * 100).toLocaleString() + ' gross SF' + (pricePerSq ? ' x $' + pricePerSq + '/sq' : '') : 'Roof area + waste x your rate'}</p>
                 </div>
               </div>
             </div>
@@ -1258,7 +1254,7 @@ function updateTraceUI() {
             <span class="font-bold text-sm text-gray-800">${orderState.livePerimeterFt.toLocaleString()} ft</span>
           </div>
           <div class="flex justify-between items-center">
-            <span class="text-gray-500 text-xs"><i class="fas fa-th mr-1"></i>Est. Squares</span>
+            <span class="text-gray-500 text-xs"><i class="fas fa-th mr-1"></i>Est. Area</span>
             <span class="font-bold text-sm text-blue-700">${(orderState.liveFootprintSqft / 100).toFixed(1)}</span>
           </div>
           ${cvHtml}
@@ -1527,7 +1523,7 @@ function updatePriceEstimate() {
     valueEl.className = 'text-2xl font-black mt-1 text-amber-600';
     if (boxEl) {
       const subEl = boxEl.querySelector('p:last-child');
-      if (subEl) subEl.textContent = grossSquares.toFixed(1) + ' gross sq x $' + pricePerSq;
+      if (subEl) subEl.textContent = Math.round(grossSquares * 100).toLocaleString() + ' gross SF x $' + pricePerSq + '/sq';
     }
   } else {
     valueEl.textContent = '--';

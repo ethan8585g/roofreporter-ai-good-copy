@@ -32,8 +32,9 @@ export function generateProfessionalReportHTML(report: RoofReport): string {
   const reportNum = `${String(report.order_id).padStart(8, '0')}`
   const reportDate = new Date(report.generated_at).toLocaleDateString('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit' })
   const fullAddress = [prop.address, prop.city, prop.province, prop.postal_code].filter(Boolean).join(', ')
-  const netSquares = Math.round(report.total_true_area_sqft / 100 * 100) / 100
-  const grossSquares = mat.gross_squares || Math.round(netSquares * (1 + (mat.waste_pct || 15) / 100) * 100) / 100
+  // All areas in square feet (no roofing squares)
+  const netAreaSF = Math.round(report.total_true_area_sqft)
+  const grossAreaSF = Math.round(report.total_true_area_sqft * (1 + (mat.waste_pct || 15) / 100))
   const totalPerimeter = es.total_eave_ft + es.total_rake_ft
   const ridgeHipFt = es.total_ridge_ft + es.total_hip_ft
   const totalLinearFt = es.total_ridge_ft + es.total_hip_ft + es.total_valley_ft + es.total_eave_ft + es.total_rake_ft
@@ -46,23 +47,18 @@ export function generateProfessionalReportHTML(report: RoofReport): string {
   const predominantPitch = largestSeg?.pitch_ratio || report.roof_pitch_ratio || '0:12'
   const predominantPitchDeg = largestSeg?.pitch_degrees || report.roof_pitch_degrees || 0
 
-  // Slope classification by segment
+  // Slope classification by segment — in square feet
   // Industry-standard ranges: Flat 0-2:12, Low 2-4:12, Standard 4-9:12, Steep 9:12+
-  // (EagleView/GAF/CertainTeed use 4:12-9:12 as "standard walkable" range)
   const slopeClasses = { standard: 0, flat: 0, low: 0, steep: 0, high_roof: 0 }
   const segFaceLetters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
   report.segments.forEach(seg => {
     const rise = 12 * Math.tan(seg.pitch_degrees * Math.PI / 180)
-    const sq = seg.true_area_sqft / 100
-    if (rise <= 2) slopeClasses.flat += sq
-    else if (rise <= 4) slopeClasses.low += sq
-    else if (rise <= 9) slopeClasses.standard += sq
-    else slopeClasses.steep += sq
-    if ((seg.plane_height_meters || 0) > 3.5) slopeClasses.high_roof += sq
-  })
-  // Round slope classes
-  Object.keys(slopeClasses).forEach(k => {
-    (slopeClasses as any)[k] = Math.round((slopeClasses as any)[k] * 100) / 100
+    const sf = Math.round(seg.true_area_sqft)
+    if (rise <= 2) slopeClasses.flat += sf
+    else if (rise <= 4) slopeClasses.low += sf
+    else if (rise <= 9) slopeClasses.standard += sf
+    else slopeClasses.steep += sf
+    if ((seg.plane_height_meters || 0) > 3.5) slopeClasses.high_roof += sf
   })
 
   // IWB (Ice & Water Barrier) — eave-line × 3ft depth
@@ -75,11 +71,11 @@ export function generateProfessionalReportHTML(report: RoofReport): string {
   const satelliteUrl = report.imagery?.satellite_url || ''
   const overheadUrl = eagleViewUrl || report.imagery?.satellite_overhead_url || satelliteUrl
 
-  // ── Waste factor table (4% through 15%) ──
+  // ── Waste factor table (4% through 15%) — in square feet ──
   const wastePercentages = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
   const wasteTable = wastePercentages.map(pct => ({
     pct,
-    sq: Math.round(netSquares * (1 + pct / 100) * 100) / 100
+    sf: Math.round(report.total_true_area_sqft * (1 + pct / 100)).toLocaleString()
   }))
 
   // ── Architectural Diagram SVG ──
@@ -91,25 +87,8 @@ export function generateProfessionalReportHTML(report: RoofReport): string {
     architecturalDiagramSVG = generateArchitecturalDiagramSVG(
       report.ai_geometry, report.segments, report.edges, es,
       report.total_footprint_sqft, report.roof_pitch_degrees || predominantPitchDeg || 20,
-      predominantPitch, grossSquares
+      predominantPitch, grossAreaSF
     )
-  }
-
-  // ── Squares Grid Diagram SVG ──
-  let squaresGridSVG = ''
-  if (report.roof_trace && (report.roof_trace as any).eaves && (report.roof_trace as any).eaves.length >= 3) {
-    try {
-      squaresGridSVG = generateSquaresGridDiagramSVG(
-        report.roof_trace as any,
-        report.total_true_area_sqft,
-        report.total_footprint_sqft,
-        grossSquares,
-        predominantPitch,
-        mat.waste_pct || 15
-      )
-    } catch (e) {
-      console.warn('Squares grid diagram generation failed:', e)
-    }
   }
 
   // ── Edge summary by type for Page 2 table ──
@@ -211,7 +190,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
       <!-- Total Roof Area (highlighted) -->
       <div class="pt-row pt-hl" style="border-radius:4px 4px 0 0">
         <span class="pt-label" style="font-weight:800;font-size:11px">Total Roof Area</span>
-        <span class="pt-value" style="font-size:12px">${netSquares} SQ</span>
+        <span class="pt-value" style="font-size:12px">${netAreaSF.toLocaleString()} SF</span>
       </div>
 
       <!-- Slope classifications (only show categories with area) -->
@@ -221,23 +200,23 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
       </div>
       ${slopeClasses.standard > 0 ? `<div class="pt-row">
         <span class="pt-label">Standard Slope<span class="pt-sub">(4:12–9:12)</span></span>
-        <span class="pt-value">${slopeClasses.standard} SQ</span>
+        <span class="pt-value">${slopeClasses.standard.toLocaleString()} SF</span>
       </div>` : ''}
       ${slopeClasses.flat > 0 ? `<div class="pt-row">
         <span class="pt-label">Flat Slope<span class="pt-sub">(0:12–2:12)</span></span>
-        <span class="pt-value">${slopeClasses.flat} SQ</span>
+        <span class="pt-value">${slopeClasses.flat.toLocaleString()} SF</span>
       </div>` : ''}
       ${slopeClasses.low > 0 ? `<div class="pt-row">
         <span class="pt-label">Low Slope<span class="pt-sub">(2:12–4:12)</span></span>
-        <span class="pt-value">${slopeClasses.low} SQ</span>
+        <span class="pt-value">${slopeClasses.low.toLocaleString()} SF</span>
       </div>` : ''}
       ${slopeClasses.steep > 0 ? `<div class="pt-row">
         <span class="pt-label">Steep Slope<span class="pt-sub">(9:12 or greater)</span></span>
-        <span class="pt-value">${slopeClasses.steep} SQ</span>
+        <span class="pt-value">${slopeClasses.steep.toLocaleString()} SF</span>
       </div>` : ''}
       ${slopeClasses.high_roof > 0 ? `<div class="pt-row">
         <span class="pt-label">High Roof<span class="pt-sub">(over 1 storey)</span></span>
-        <span class="pt-value">${slopeClasses.high_roof} SQ</span>
+        <span class="pt-value">${slopeClasses.high_roof.toLocaleString()} SF</span>
       </div>` : ''}
       <div class="pt-row">
         <span class="pt-label">IWB<span class="pt-sub">(Ice &amp; Water Barrier)</span></span>
@@ -287,7 +266,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
   <div style="padding:10px 28px 0">
     <div style="font-size:10px;font-weight:800;color:${TEAL_DARK};text-transform:uppercase;letter-spacing:0.8px;text-align:center;margin-bottom:6px;border-bottom:1px solid #ccc;padding-bottom:4px">Waste Factor (Total Roof Area)</div>
     <div class="wf-grid">
-      ${wasteTable.map(w => `<div class="wf-cell"><span class="wf-cell-pct">${w.pct}%</span> — <span class="wf-cell-val">${w.sq} SQ</span></div>`).join('')}
+      ${wasteTable.map(w => `<div class="wf-cell"><span class="wf-cell-pct">${w.pct}%</span> — <span class="wf-cell-val">${w.sf} SF</span></div>`).join('')}
     </div>
   </div>
 
@@ -369,10 +348,10 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
       <!-- Total Area Summary (compact) -->
       <div style="margin-top:6px;border:1px solid #ddd;border-radius:4px;overflow:hidden">
         <div style="background:${TEAL};color:#fff;padding:4px 8px;font-size:7.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px">Total Area Summary</div>
-        <div style="display:flex;justify-content:space-between;padding:4px 8px;font-size:8px;border-bottom:1px solid #eee"><span>Total Roof Area</span><span style="font-weight:800">${netSquares} SQ</span></div>
+        <div style="display:flex;justify-content:space-between;padding:4px 8px;font-size:8px;border-bottom:1px solid #eee"><span>Total Roof Area</span><span style="font-weight:800">${netAreaSF.toLocaleString()} SF</span></div>
         <div style="display:flex;justify-content:space-between;padding:4px 8px;font-size:8px;border-bottom:1px solid #eee"><span>Total Perimeter</span><span style="font-weight:700">${totalPerimeter} LF</span></div>
         <div style="display:flex;justify-content:space-between;padding:4px 8px;font-size:8px;border-bottom:1px solid #eee"><span>Predominant Pitch</span><span style="font-weight:700">${predominantPitch}</span></div>
-        <div style="display:flex;justify-content:space-between;padding:4px 8px;font-size:8px;background:${TEAL_LIGHT}"><span style="font-weight:700;color:${TEAL_DARK}">Gross Area (w/${mat.waste_pct || 15}% waste)</span><span style="font-weight:900;color:${TEAL_DARK}">${grossSquares} SQ</span></div>
+        <div style="display:flex;justify-content:space-between;padding:4px 8px;font-size:8px;background:${TEAL_LIGHT}"><span style="font-weight:700;color:${TEAL_DARK}">Gross Area (w/${mat.waste_pct || 15}% waste)</span><span style="font-weight:900;color:${TEAL_DARK}">${grossAreaSF.toLocaleString()} SF</span></div>
       </div>
     </div>
 
@@ -385,28 +364,24 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
           <tr style="background:#1a1a2e;color:#fff">
             <th style="padding:4px 5px;text-align:left;font-size:7px;font-weight:700">Plane</th>
             <th style="padding:4px 5px;text-align:right;font-size:7px;font-weight:700">Area (SF)</th>
-            <th style="padding:4px 5px;text-align:right;font-size:7px;font-weight:700">SQ</th>
             <th style="padding:4px 5px;text-align:center;font-size:7px;font-weight:700">Pitch</th>
             <th style="padding:4px 5px;text-align:right;font-size:7px;font-weight:700">% Total</th>
           </tr>
         </thead>
         <tbody>
           ${report.segments.slice(0, 10).map((seg, idx) => {
-            const segSQ = Math.round(seg.true_area_sqft / 100 * 100) / 100
             const pctOfTotal = Math.round(seg.true_area_sqft / report.total_true_area_sqft * 1000) / 10
             return `<tr style="${idx % 2 === 0 ? 'background:#fafafa' : ''}">
               <td style="padding:3px 5px;border-bottom:1px solid #eee;font-weight:600">${segFaceLetters[idx]} <span style="font-weight:400;font-size:6.5px;color:#888">${seg.azimuth_direction || ''}</span></td>
               <td style="padding:3px 5px;border-bottom:1px solid #eee;text-align:right">${Math.round(seg.true_area_sqft).toLocaleString()}</td>
-              <td style="padding:3px 5px;border-bottom:1px solid #eee;text-align:right;font-weight:600">${segSQ}</td>
               <td style="padding:3px 5px;border-bottom:1px solid #eee;text-align:center">${seg.pitch_ratio}</td>
               <td style="padding:3px 5px;border-bottom:1px solid #eee;text-align:right;color:#555">${pctOfTotal}%</td>
             </tr>`
           }).join('')}
-          ${report.segments.length > 10 ? `<tr><td colspan="5" style="padding:3px 5px;font-size:7px;color:#888;text-align:center">+ ${report.segments.length - 10} more planes</td></tr>` : ''}
+          ${report.segments.length > 10 ? `<tr><td colspan="4" style="padding:3px 5px;font-size:7px;color:#888;text-align:center">+ ${report.segments.length - 10} more planes</td></tr>` : ''}
           <tr style="background:#eee;font-weight:800">
             <td style="padding:4px 5px;border-top:2px solid #333;font-size:8px">Total</td>
-            <td style="padding:4px 5px;border-top:2px solid #333;text-align:right;font-size:8px">${report.total_true_area_sqft.toLocaleString()}</td>
-            <td style="padding:4px 5px;border-top:2px solid #333;text-align:right;font-size:8px">${netSquares}</td>
+            <td style="padding:4px 5px;border-top:2px solid #333;text-align:right;font-size:8px">${report.total_true_area_sqft.toLocaleString()} SF</td>
             <td style="padding:4px 5px;border-top:2px solid #333;text-align:center;font-size:8px">${predominantPitch}</td>
             <td style="padding:4px 5px;border-top:2px solid #333;text-align:right;font-size:8px">100%</td>
           </tr>
@@ -419,15 +394,15 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
         <thead>
           <tr style="background:#f1f5f9;border-bottom:1.5px solid #cbd5e1">
             <th style="padding:3px 6px;text-align:left;font-weight:700;color:#475569">Pitch Range</th>
-            <th style="padding:3px 6px;text-align:right;font-weight:700;color:#475569">Roof Area (SQ)</th>
+            <th style="padding:3px 6px;text-align:right;font-weight:700;color:#475569">Roof Area (SF)</th>
             <th style="padding:3px 6px;text-align:right;font-weight:700;color:#475569">% of Total</th>
           </tr>
         </thead>
         <tbody>
-          ${slopeClasses.flat > 0 ? `<tr style="border-bottom:1px solid #eee"><td style="padding:3px 6px">Flat (0:12\u20132:12)</td><td style="padding:3px 6px;text-align:right;font-weight:600">${slopeClasses.flat} SQ</td><td style="padding:3px 6px;text-align:right;color:#555">${Math.round(slopeClasses.flat / netSquares * 1000) / 10}%</td></tr>` : ''}
-          ${slopeClasses.low > 0 ? `<tr style="border-bottom:1px solid #eee"><td style="padding:3px 6px">Low (2:12\u20134:12)</td><td style="padding:3px 6px;text-align:right;font-weight:600">${slopeClasses.low} SQ</td><td style="padding:3px 6px;text-align:right;color:#555">${Math.round(slopeClasses.low / netSquares * 1000) / 10}%</td></tr>` : ''}
-          ${slopeClasses.standard > 0 ? `<tr style="border-bottom:1px solid #eee;background:#f0fdf4"><td style="padding:3px 6px;font-weight:600;color:#166534">Standard (4:12\u20139:12)</td><td style="padding:3px 6px;text-align:right;font-weight:700;color:#166534">${slopeClasses.standard} SQ</td><td style="padding:3px 6px;text-align:right;color:#166534;font-weight:600">${Math.round(slopeClasses.standard / netSquares * 1000) / 10}%</td></tr>` : ''}
-          ${slopeClasses.steep > 0 ? `<tr style="border-bottom:1px solid #eee;background:#fef2f2"><td style="padding:3px 6px;font-weight:600;color:#991b1b">Steep (9:12+)</td><td style="padding:3px 6px;text-align:right;font-weight:700;color:#991b1b">${slopeClasses.steep} SQ</td><td style="padding:3px 6px;text-align:right;color:#991b1b;font-weight:600">${Math.round(slopeClasses.steep / netSquares * 1000) / 10}%</td></tr>` : ''}
+          ${slopeClasses.flat > 0 ? `<tr style="border-bottom:1px solid #eee"><td style="padding:3px 6px">Flat (0:12\u20132:12)</td><td style="padding:3px 6px;text-align:right;font-weight:600">${slopeClasses.flat.toLocaleString()} SF</td><td style="padding:3px 6px;text-align:right;color:#555">${Math.round(slopeClasses.flat / netAreaSF * 1000) / 10}%</td></tr>` : ''}
+          ${slopeClasses.low > 0 ? `<tr style="border-bottom:1px solid #eee"><td style="padding:3px 6px">Low (2:12\u20134:12)</td><td style="padding:3px 6px;text-align:right;font-weight:600">${slopeClasses.low.toLocaleString()} SF</td><td style="padding:3px 6px;text-align:right;color:#555">${Math.round(slopeClasses.low / netAreaSF * 1000) / 10}%</td></tr>` : ''}
+          ${slopeClasses.standard > 0 ? `<tr style="border-bottom:1px solid #eee;background:#f0fdf4"><td style="padding:3px 6px;font-weight:600;color:#166534">Standard (4:12\u20139:12)</td><td style="padding:3px 6px;text-align:right;font-weight:700;color:#166534">${slopeClasses.standard.toLocaleString()} SF</td><td style="padding:3px 6px;text-align:right;color:#166534;font-weight:600">${Math.round(slopeClasses.standard / netAreaSF * 1000) / 10}%</td></tr>` : ''}
+          ${slopeClasses.steep > 0 ? `<tr style="border-bottom:1px solid #eee;background:#fef2f2"><td style="padding:3px 6px;font-weight:600;color:#991b1b">Steep (9:12+)</td><td style="padding:3px 6px;text-align:right;font-weight:700;color:#991b1b">${slopeClasses.steep.toLocaleString()} SF</td><td style="padding:3px 6px;text-align:right;color:#991b1b;font-weight:600">${Math.round(slopeClasses.steep / netAreaSF * 1000) / 10}%</td></tr>` : ''}
         </tbody>
       </table>
     </div>
@@ -453,8 +428,8 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
         <div style="font-size:12px;font-weight:900;color:#EA580C">${es.total_hip_ft} <span style="font-size:7px;font-weight:600">LF</span></div>
       </div>
       <div style="flex:1;text-align:center;padding:5px 4px;background:${TEAL_LIGHT}">
-        <div style="font-size:6.5px;color:${TEAL_DARK};font-weight:700;text-transform:uppercase">Total SQ (w/waste)</div>
-        <div style="font-size:12px;font-weight:900;color:${TEAL_DARK}">${grossSquares} <span style="font-size:7px;font-weight:600">SQ</span></div>
+        <div style="font-size:6.5px;color:${TEAL_DARK};font-weight:700;text-transform:uppercase">Total Area (w/waste)</div>
+        <div style="font-size:12px;font-weight:900;color:${TEAL_DARK}">${grossAreaSF.toLocaleString()} <span style="font-size:7px;font-weight:600">SF</span></div>
       </div>
     </div>
   </div>
@@ -473,65 +448,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
   </div>
 </div>
 
-${squaresGridSVG ? `
-<!-- ==================== PAGE 3: ROOFING SQUARES GRID ==================== -->
-<div class="page">
-  <!-- Top green accent bar -->
-  <div style="height:4px;background:linear-gradient(90deg,#0d9668,#059669)"></div>
 
-  <!-- Title -->
-  <div style="padding:12px 28px 6px">
-    <div style="font-size:14px;font-weight:800;color:#222">Roofing Squares Grid<span style="font-weight:400;color:#555"> &mdash; Material Estimation</span></div>
-    <div style="font-size:11px;color:#555">${fullAddress}</div>
-  </div>
-
-  <!-- Squares Grid Diagram -->
-  <div style="padding:0 22px;margin-bottom:8px">
-    <div style="border:1px solid #d5dae3;border-radius:4px;overflow:hidden;background:#fff;text-align:center">
-      ${squaresGridSVG}
-    </div>
-    <div style="text-align:center;font-size:6.5px;color:#999;margin-top:2px">Each numbered cell = 1 roofing square (10' \u00D7 10' = 100 ft\u00B2). Grid overlaid on roof footprint for material estimation.</div>
-  </div>
-
-  <!-- Square Count Summary -->
-  <div style="padding:0 28px;margin-bottom:8px">
-    <div style="display:flex;gap:12px">
-      <div style="flex:1;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:6px;padding:12px;text-align:center">
-        <div style="font-size:8px;color:#065f46;font-weight:700;text-transform:uppercase;letter-spacing:0.5px">Net Roof Area</div>
-        <div style="font-size:22px;font-weight:900;color:#047857;margin:4px 0">${report.total_true_area_sqft.toLocaleString()}</div>
-        <div style="font-size:9px;color:#059669">sq ft (3D sloped)</div>
-      </div>
-      <div style="flex:1;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:12px;text-align:center">
-        <div style="font-size:8px;color:#065f46;font-weight:700;text-transform:uppercase;letter-spacing:0.5px">Footprint Area</div>
-        <div style="font-size:22px;font-weight:900;color:#15803d;margin:4px 0">${report.total_footprint_sqft.toLocaleString()}</div>
-        <div style="font-size:9px;color:#16a34a">sq ft (2D flat)</div>
-      </div>
-      <div style="flex:1;background:linear-gradient(135deg,#059669,#047857);border-radius:6px;padding:12px;text-align:center;color:#fff">
-        <div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;opacity:0.85">Total Squares</div>
-        <div style="font-size:22px;font-weight:900;margin:4px 0">${grossSquares} SQ</div>
-        <div style="font-size:9px;opacity:0.8">incl. ${mat.waste_pct || 15}% waste</div>
-      </div>
-      <div style="flex:1;background:#f0f9ff;border:1px solid #bae6fd;border-radius:6px;padding:12px;text-align:center">
-        <div style="font-size:8px;color:#0c4a6e;font-weight:700;text-transform:uppercase;letter-spacing:0.5px">Pitch Multiplier</div>
-        <div style="font-size:22px;font-weight:900;color:#0369a1;margin:4px 0">${predominantPitch}</div>
-        <div style="font-size:9px;color:#0284c7">&times;${report.area_multiplier.toFixed(4)}</div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Methodology note -->
-  <div style="padding:0 28px">
-    <div style="padding:6px 10px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:3px;font-size:7px;color:#166534;line-height:1.5">
-      <strong>Grid Methodology:</strong> The roof footprint is divided into a 10\u2032 \u00D7 10\u2032 grid (each cell = 1 roofing square = 100 ft\u00B2). Cells are classified as <strong>full</strong> (>85% coverage) or <strong>partial</strong> (<85% coverage). The grid provides a visual material estimation overlay. Actual material orders should use the calculated <strong>${grossSquares} SQ</strong> (includes ${mat.waste_pct || 15}% waste factor for ${mat.complexity_class || 'standard'} roof complexity).
-    </div>
-  </div>
-
-  <!-- Footer bar -->
-  <div style="position:absolute;bottom:0;left:0;right:0;height:28px;background:linear-gradient(90deg,#059669,#047857);display:flex;align-items:center;justify-content:space-between;padding:0 28px">
-    <span style="color:#fff;font-size:9px;font-weight:700">Roof Reporter AI</span>
-    <span style="color:#a7f3d0;font-size:7.5px">roofreporterai.com &bull; Report: ${reportNum} &bull; ${reportDate} &bull; p.3</span>
-  </div>
-</div>` : ''}
 
 <!-- ==================== PITCH DIAGRAM PAGE ==================== -->
 ${report.segments.length >= 2 ? `
@@ -561,7 +478,7 @@ ${report.segments.length >= 2 ? `
         <tr style="background:#1e1b4b;color:#fff">
           <th style="padding:6px 10px;text-align:left;font-size:8px;font-weight:700">Pitch Range</th>
           <th style="padding:6px 10px;text-align:left;font-size:8px;font-weight:700">Classification</th>
-          <th style="padding:6px 10px;text-align:right;font-size:8px;font-weight:700">Roof Area (SQ)</th>
+          <th style="padding:6px 10px;text-align:right;font-size:8px;font-weight:700">Roof Area (SF)</th>
           <th style="padding:6px 10px;text-align:right;font-size:8px;font-weight:700">Area (SF)</th>
           <th style="padding:6px 10px;text-align:right;font-size:8px;font-weight:700">% of Total</th>
           <th style="padding:6px 10px;text-align:center;font-size:8px;font-weight:700">Multiplier</th>
@@ -571,38 +488,38 @@ ${report.segments.length >= 2 ? `
         ${slopeClasses.flat > 0 ? `<tr style="border-bottom:1px solid #eee">
           <td style="padding:5px 10px;font-weight:600">0:12 \u2013 2:12</td>
           <td style="padding:5px 10px"><span style="padding:2px 8px;border-radius:3px;font-size:7.5px;font-weight:700;background:#dbeafe;color:#1d4ed8">FLAT</span></td>
-          <td style="padding:5px 10px;text-align:right;font-weight:700">${slopeClasses.flat} SQ</td>
-          <td style="padding:5px 10px;text-align:right">${Math.round(slopeClasses.flat * 100).toLocaleString()} SF</td>
-          <td style="padding:5px 10px;text-align:right;font-weight:600">${Math.round(slopeClasses.flat / netSquares * 1000) / 10}%</td>
+          <td style="padding:5px 10px;text-align:right;font-weight:700">${slopeClasses.flat.toLocaleString()} SF</td>
+          <td style="padding:5px 10px;text-align:right">${slopeClasses.flat.toLocaleString()} SF</td>
+          <td style="padding:5px 10px;text-align:right;font-weight:600">${Math.round(slopeClasses.flat / netAreaSF * 1000) / 10}%</td>
           <td style="padding:5px 10px;text-align:center;color:#555">1.0000\u20131.0154</td>
         </tr>` : ''}
         ${slopeClasses.low > 0 ? `<tr style="border-bottom:1px solid #eee;background:#fafafa">
           <td style="padding:5px 10px;font-weight:600">2:12 \u2013 4:12</td>
           <td style="padding:5px 10px"><span style="padding:2px 8px;border-radius:3px;font-size:7.5px;font-weight:700;background:#fef3c7;color:#92400e">LOW</span></td>
-          <td style="padding:5px 10px;text-align:right;font-weight:700">${slopeClasses.low} SQ</td>
-          <td style="padding:5px 10px;text-align:right">${Math.round(slopeClasses.low * 100).toLocaleString()} SF</td>
-          <td style="padding:5px 10px;text-align:right;font-weight:600">${Math.round(slopeClasses.low / netSquares * 1000) / 10}%</td>
+          <td style="padding:5px 10px;text-align:right;font-weight:700">${slopeClasses.low.toLocaleString()} SF</td>
+          <td style="padding:5px 10px;text-align:right">${slopeClasses.low.toLocaleString()} SF</td>
+          <td style="padding:5px 10px;text-align:right;font-weight:600">${Math.round(slopeClasses.low / netAreaSF * 1000) / 10}%</td>
           <td style="padding:5px 10px;text-align:center;color:#555">1.0154\u20131.0541</td>
         </tr>` : ''}
         ${slopeClasses.standard > 0 ? `<tr style="border-bottom:1px solid #eee;background:#f0fdf4">
           <td style="padding:5px 10px;font-weight:700;color:#166534">4:12 \u2013 9:12</td>
           <td style="padding:5px 10px"><span style="padding:2px 8px;border-radius:3px;font-size:7.5px;font-weight:700;background:#dcfce7;color:#166534">STANDARD</span></td>
-          <td style="padding:5px 10px;text-align:right;font-weight:800;color:#166534">${slopeClasses.standard} SQ</td>
-          <td style="padding:5px 10px;text-align:right;color:#166534">${Math.round(slopeClasses.standard * 100).toLocaleString()} SF</td>
-          <td style="padding:5px 10px;text-align:right;font-weight:700;color:#166534">${Math.round(slopeClasses.standard / netSquares * 1000) / 10}%</td>
+          <td style="padding:5px 10px;text-align:right;font-weight:800;color:#166534">${slopeClasses.standard.toLocaleString()} SF</td>
+          <td style="padding:5px 10px;text-align:right;color:#166534">${slopeClasses.standard.toLocaleString()} SF</td>
+          <td style="padding:5px 10px;text-align:right;font-weight:700;color:#166534">${Math.round(slopeClasses.standard / netAreaSF * 1000) / 10}%</td>
           <td style="padding:5px 10px;text-align:center;color:#166534;font-weight:600">1.0541\u20131.2500</td>
         </tr>` : ''}
         ${slopeClasses.steep > 0 ? `<tr style="border-bottom:1px solid #eee;background:#fef2f2">
           <td style="padding:5px 10px;font-weight:700;color:#991b1b">9:12+</td>
           <td style="padding:5px 10px"><span style="padding:2px 8px;border-radius:3px;font-size:7.5px;font-weight:700;background:#fecaca;color:#991b1b">STEEP</span></td>
-          <td style="padding:5px 10px;text-align:right;font-weight:800;color:#991b1b">${slopeClasses.steep} SQ</td>
-          <td style="padding:5px 10px;text-align:right;color:#991b1b">${Math.round(slopeClasses.steep * 100).toLocaleString()} SF</td>
-          <td style="padding:5px 10px;text-align:right;font-weight:700;color:#991b1b">${Math.round(slopeClasses.steep / netSquares * 1000) / 10}%</td>
+          <td style="padding:5px 10px;text-align:right;font-weight:800;color:#991b1b">${slopeClasses.steep.toLocaleString()} SF</td>
+          <td style="padding:5px 10px;text-align:right;color:#991b1b">${slopeClasses.steep.toLocaleString()} SF</td>
+          <td style="padding:5px 10px;text-align:right;font-weight:700;color:#991b1b">${Math.round(slopeClasses.steep / netAreaSF * 1000) / 10}%</td>
           <td style="padding:5px 10px;text-align:center;color:#991b1b;font-weight:600">1.2500+</td>
         </tr>` : ''}
         <tr style="background:#eef2ff;font-weight:800;border-top:2px solid #4338ca">
           <td colspan="2" style="padding:5px 10px;font-size:9px;color:#312e81">TOTAL</td>
-          <td style="padding:5px 10px;text-align:right;font-size:10px;color:#312e81">${netSquares} SQ</td>
+          <td style="padding:5px 10px;text-align:right;font-size:10px;color:#312e81">${netAreaSF.toLocaleString()} SF</td>
           <td style="padding:5px 10px;text-align:right;color:#312e81">${report.total_true_area_sqft.toLocaleString()} SF</td>
           <td style="padding:5px 10px;text-align:right;color:#312e81">100%</td>
           <td style="padding:5px 10px;text-align:center;color:#312e81">${report.area_multiplier.toFixed(4)}</td>
@@ -623,7 +540,7 @@ ${report.segments.length >= 2 ? `
           <th style="padding:4px 6px;text-align:center;font-weight:700;color:#475569">Pitch</th>
           <th style="padding:4px 6px;text-align:center;font-weight:700;color:#475569">Degrees</th>
           <th style="padding:4px 6px;text-align:right;font-weight:700;color:#475569">Area (SF)</th>
-          <th style="padding:4px 6px;text-align:right;font-weight:700;color:#475569">Area (SQ)</th>
+          <th style="padding:4px 6px;text-align:right;font-weight:700;color:#475569">Area (SF)</th>
           <th style="padding:4px 6px;text-align:center;font-weight:700;color:#475569">Classification</th>
         </tr>
       </thead>
@@ -640,7 +557,7 @@ ${report.segments.length >= 2 ? `
             <td style="padding:3px 6px;text-align:center;font-weight:700">${seg.pitch_ratio}</td>
             <td style="padding:3px 6px;text-align:center;color:#555">${seg.pitch_degrees.toFixed(1)}\u00B0</td>
             <td style="padding:3px 6px;text-align:right">${Math.round(seg.true_area_sqft).toLocaleString()}</td>
-            <td style="padding:3px 6px;text-align:right;font-weight:600">${(Math.round(seg.true_area_sqft / 100 * 100) / 100)}</td>
+            <td style="padding:3px 6px;text-align:right;font-weight:600">${(Math.round(seg.true_area_sqft)).toLocaleString()}</td>
             <td style="padding:3px 6px;text-align:center"><span style="padding:1px 6px;border-radius:2px;font-size:6.5px;font-weight:700;background:${classBg};color:${classColor}">${classification}</span></td>
           </tr>`
         }).join('')}
@@ -849,8 +766,8 @@ export function generateSimpleTwoPageReport(report: RoofReport): string {
 
   const fullAddress = [prop.address, prop.city, prop.province, prop.postal_code].filter(Boolean).join(', ')
   const reportDate = new Date(report.generated_at).toLocaleDateString('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit' })
-  const netSquares = Math.round(report.total_true_area_sqft / 100 * 100) / 100
-  const grossSquares = mat.gross_squares || Math.round(netSquares * 1.15 * 100) / 100
+  const netAreaSF = Math.round(report.total_true_area_sqft)
+  const grossAreaSF = Math.round(report.total_true_area_sqft * (1 + (mat.waste_pct || 15) / 100))
 
   // Predominant pitch from largest segment
   const largestSeg = [...report.segments].sort((a, b) => b.true_area_sqft - a.true_area_sqft)[0]
@@ -892,25 +809,8 @@ export function generateSimpleTwoPageReport(report: RoofReport): string {
     diagramSVG = generateArchitecturalDiagramSVG(
       report.ai_geometry, report.segments, report.edges, es,
       report.total_footprint_sqft, predominantPitchDeg,
-      predominantPitch, grossSquares
+      predominantPitch, grossAreaSF
     )
-  }
-
-  // ── Squares Grid Diagram SVG (simple report) ──
-  let squaresGridSVG = ''
-  if (report.roof_trace && (report.roof_trace as any).eaves && (report.roof_trace as any).eaves.length >= 3) {
-    try {
-      squaresGridSVG = generateSquaresGridDiagramSVG(
-        report.roof_trace as any,
-        report.total_true_area_sqft,
-        report.total_footprint_sqft,
-        grossSquares,
-        predominantPitch,
-        mat.waste_pct || 15
-      )
-    } catch (e) {
-      console.warn('Simple report: squares grid failed:', e)
-    }
   }
 
   // Edge summary for the measurement table
@@ -940,11 +840,11 @@ export function generateSimpleTwoPageReport(report: RoofReport): string {
     multiplier: Math.round(report.area_multiplier * 10000) / 10000
   }))
 
-  // Waste factor table: 4%-15%
+  // Waste factor table: 4%-15% — in square feet
   const wasteTableEntries = []
   for (let pct = 4; pct <= 15; pct++) {
-    const sq = Math.round(netSquares * (1 + pct / 100) * 100) / 100
-    wasteTableEntries.push({ pct, sq })
+    const sf = Math.round(report.total_true_area_sqft * (1 + pct / 100))
+    wasteTableEntries.push({ pct, sf })
   }
 
   return `<!DOCTYPE html>
@@ -1049,7 +949,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
           </tr>
           <tr style="border-top:2px solid #001a44;background:#e6edf5">
             <td style="padding:4px 6px;font-weight:800;font-size:8px;color:#001a44">Total (w/${mat.waste_pct || 15}% waste)</td>
-            <td colspan="3" style="padding:4px 6px;text-align:right;font-weight:900;font-size:9px;color:#001a44">${Math.round(report.total_true_area_sqft * (1 + (mat.waste_pct || 15) / 100)).toLocaleString()} SF (${grossSquares} SQ)</td>
+            <td colspan="3" style="padding:4px 6px;text-align:right;font-weight:900;font-size:9px;color:#001a44">${grossAreaSF.toLocaleString()} SF</td>
           </tr>
         </tbody>
       </table>
@@ -1080,8 +980,8 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
         <div style="font-size:10px;font-weight:900;color:#001a44">${totalPerimeter} <span style="font-size:6px">LF</span></div>
       </div>
       <div style="flex:1;text-align:center;padding:4px;background:#e0f7fa">
-        <div style="font-size:6px;color:#00695C;font-weight:700;text-transform:uppercase">Total SQ</div>
-        <div style="font-size:10px;font-weight:900;color:#00695C">${grossSquares} <span style="font-size:6px">SQ</span></div>
+        <div style="font-size:6px;color:#00695C;font-weight:700;text-transform:uppercase">Gross Area</div>
+        <div style="font-size:10px;font-weight:900;color:#00695C">${grossAreaSF.toLocaleString()} <span style="font-size:6px">SF</span></div>
       </div>
     </div>
   </div>
@@ -1108,7 +1008,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
       </div>
       <span style="font-size:9px;font-weight:800;color:#00838F">ROOF REPORTER AI</span>
     </div>
-    <div style="font-size:6.5px;color:#999">&copy; Roof Reporter AI &bull; ${reportDate} &bull; p.1/${squaresGridSVG ? '3' : '2'}</div>
+    <div style="font-size:6.5px;color:#999">&copy; Roof Reporter AI &bull; ${reportDate} &bull; p.1/2</div>
   </div>
 </div>
 
@@ -1145,17 +1045,17 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
       <!-- Total Roof Area highlight box -->
       <div style="background:linear-gradient(135deg,#00838F,#00ACC1);border-radius:5px;padding:8px 14px;display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
         <span style="font-size:11px;font-weight:700;color:#fff">Total Roof Area</span>
-        <span style="font-size:16px;font-weight:900;color:#fff">${netSquares} SQ</span>
+        <span style="font-size:16px;font-weight:900;color:#fff">${netAreaSF.toLocaleString()} SF</span>
       </div>
 
       <!-- Slope breakdown -->
       <div style="font-size:8px;color:#666;margin-bottom:2px;font-weight:600">Slope Breakdown &mdash; Predominant ${predominantPitch}</div>
       <div style="border:1px solid #e5e5e5;border-radius:4px;overflow:hidden;margin-bottom:6px">
-        ${standardSlopeArea > 0 ? `<div style="display:flex;justify-content:space-between;padding:4px 10px;font-size:8px;border-bottom:1px solid #eee"><span style="color:#555">Standard Slope (4:12–9:12)</span><span style="font-weight:700;color:#1a1a1a">${(standardSlopeArea / 100).toFixed(2)} SQ</span></div>` : ''}
-        ${flatSlopeArea > 0 ? `<div style="display:flex;justify-content:space-between;padding:4px 10px;font-size:8px;border-bottom:1px solid #eee"><span style="color:#555">Flat Slope (0:12–2:12)</span><span style="font-weight:700;color:#1a1a1a">${(flatSlopeArea / 100).toFixed(2)} SQ</span></div>` : ''}
-        ${lowSlopeArea > 0 ? `<div style="display:flex;justify-content:space-between;padding:4px 10px;font-size:8px;border-bottom:1px solid #eee"><span style="color:#555">Low Slope (2:12–4:12)</span><span style="font-weight:700;color:#1a1a1a">${(lowSlopeArea / 100).toFixed(2)} SQ</span></div>` : ''}
-        ${steepSlopeArea > 0 ? `<div style="display:flex;justify-content:space-between;padding:4px 10px;font-size:8px;border-bottom:1px solid #eee;background:#e0f7fa"><span style="color:#00695C;font-weight:600">Steep Slope (9:12 or greater)</span><span style="font-weight:800;color:#00695C">${(steepSlopeArea / 100).toFixed(2)} SQ</span></div>` : ''}
-        ${highRoofArea > 0 ? `<div style="display:flex;justify-content:space-between;padding:4px 10px;font-size:8px;border-bottom:1px solid #eee"><span style="color:#555">High Roof (over 1 story)</span><span style="font-weight:700;color:#1a1a1a">${(highRoofArea / 100).toFixed(2)} SQ</span></div>` : ''}
+        ${standardSlopeArea > 0 ? `<div style="display:flex;justify-content:space-between;padding:4px 10px;font-size:8px;border-bottom:1px solid #eee"><span style="color:#555">Standard Slope (4:12–9:12)</span><span style="font-weight:700;color:#1a1a1a">${Math.round(standardSlopeArea).toLocaleString()} SF</span></div>` : ''}
+        ${flatSlopeArea > 0 ? `<div style="display:flex;justify-content:space-between;padding:4px 10px;font-size:8px;border-bottom:1px solid #eee"><span style="color:#555">Flat Slope (0:12–2:12)</span><span style="font-weight:700;color:#1a1a1a">${Math.round(flatSlopeArea).toLocaleString()} SF</span></div>` : ''}
+        ${lowSlopeArea > 0 ? `<div style="display:flex;justify-content:space-between;padding:4px 10px;font-size:8px;border-bottom:1px solid #eee"><span style="color:#555">Low Slope (2:12–4:12)</span><span style="font-weight:700;color:#1a1a1a">${Math.round(lowSlopeArea).toLocaleString()} SF</span></div>` : ''}
+        ${steepSlopeArea > 0 ? `<div style="display:flex;justify-content:space-between;padding:4px 10px;font-size:8px;border-bottom:1px solid #eee;background:#e0f7fa"><span style="color:#00695C;font-weight:600">Steep Slope (9:12 or greater)</span><span style="font-weight:800;color:#00695C">${Math.round(steepSlopeArea).toLocaleString()} SF</span></div>` : ''}
+        ${highRoofArea > 0 ? `<div style="display:flex;justify-content:space-between;padding:4px 10px;font-size:8px;border-bottom:1px solid #eee"><span style="color:#555">High Roof (over 1 story)</span><span style="font-weight:700;color:#1a1a1a">${Math.round(highRoofArea).toLocaleString()} SF</span></div>` : ''}
         ${iwbSqft > 0 ? `<div style="display:flex;justify-content:space-between;padding:4px 10px;font-size:8px"><span style="color:#555">IWB (Ice &amp; Water Barrier)</span><span style="font-weight:700;color:#1a1a1a">${iwbSqft.toLocaleString()} SF</span></div>` : ''}
       </div>
 
@@ -1206,14 +1106,14 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
           ${wasteTableEntries.slice(0, 6).map(w => `
           <td style="padding:4px 6px;border:1px solid #ddd;text-align:center;${w.pct === (mat.waste_pct || 15) ? 'background:#e0f7fa;font-weight:800' : ''}">
             <div style="font-weight:700;color:#555">${w.pct}%</div>
-            <div style="font-weight:600;color:#1a1a1a;margin-top:1px">${w.sq} SQ</div>
+            <div style="font-weight:600;color:#1a1a1a;margin-top:1px">${w.sf.toLocaleString()} SF</div>
           </td>`).join('')}
         </tr>
         <tr>
           ${wasteTableEntries.slice(6).map(w => `
           <td style="padding:4px 6px;border:1px solid #ddd;text-align:center;${w.pct === (mat.waste_pct || 15) ? 'background:#e0f7fa;font-weight:800' : ''}">
             <div style="font-weight:700;color:#555">${w.pct}%</div>
-            <div style="font-weight:600;color:#1a1a1a;margin-top:1px">${w.sq} SQ</div>
+            <div style="font-weight:600;color:#1a1a1a;margin-top:1px">${w.sf.toLocaleString()} SF</div>
           </td>`).join('')}
         </tr>
       </tbody>
@@ -1231,63 +1131,9 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
   <!-- Page 2 Footer -->
   <div style="position:absolute;bottom:0;left:0;right:0;background:linear-gradient(135deg,#00696B,#00838F);padding:8px 22px;display:flex;justify-content:space-between;align-items:center">
     <span style="font-size:9px;font-weight:700;color:#fff">Roof Reporter AI</span>
-    <span style="font-size:7px;color:rgba(255,255,255,0.7)">&copy; Roof Reporter AI &bull; ${fullAddress} &bull; ${reportDate} &bull; p.2/${squaresGridSVG ? '3' : '2'}</span>
+    <span style="font-size:7px;color:rgba(255,255,255,0.7)">&copy; Roof Reporter AI &bull; ${fullAddress} &bull; ${reportDate} &bull; p.2/2</span>
   </div>
 </div>
-
-${squaresGridSVG ? `
-<!-- ==================== PAGE 3: ROOFING SQUARES GRID (Portrait 8.5×11) ==================== -->
-<div class="page page-portrait">
-  <!-- Teal top accent bar -->
-  <div style="height:6px;background:linear-gradient(90deg,#0d9668,#00BCD4)"></div>
-
-  <!-- Title + Address -->
-  <div style="padding:14px 28px 8px">
-    <div style="font-size:17px;font-weight:800;color:#1a1a1a;letter-spacing:0.3px">Roofing Squares Grid<span style="font-weight:400;color:#555"> &mdash; Visual Overlay</span></div>
-    <div style="font-size:10px;color:#444;margin-top:2px;font-weight:500">${fullAddress}</div>
-  </div>
-
-  <!-- Squares Grid Diagram -->
-  <div style="padding:0 22px">
-    <div style="border:1px solid #ddd;border-radius:4px;overflow:hidden;background:#fff">
-      ${squaresGridSVG}
-    </div>
-  </div>
-
-  <!-- Explanation text -->
-  <div style="padding:10px 22px 0">
-    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:4px;padding:10px 16px">
-      <div style="font-size:9px;font-weight:700;color:#166534;margin-bottom:4px">Understanding Roofing Squares</div>
-      <div style="font-size:7.5px;color:#15803d;line-height:1.5">
-        A <strong>roofing square</strong> is the industry standard unit of measurement, equal to a 10&prime; &times; 10&prime; area (100 ft&sup2;).
-        This grid overlays the roof outline with squares to visually show the total coverage needed.
-        <strong>Green cells</strong> represent full squares; <strong>lighter cells</strong> are partial squares at the roof edges.
-        The numbered cells count each full and partial square that falls within the roof boundary.
-        Total net area: <strong>${report.total_true_area_sqft.toLocaleString()} ft&sup2;</strong> = <strong>${netSquares} SQ</strong> (before waste factor).
-      </div>
-    </div>
-  </div>
-
-  <!-- Methodology note -->
-  <div style="padding:6px 22px 0">
-    <div style="font-size:7px;color:#999;text-align:center;line-height:1.4">
-      Grid calculated from GPS-traced eave coordinates. Each cell is tested using 9-point sampling within the eave polygon boundary.
-      This is a flat-plane projection &mdash; actual sloped area includes a pitch multiplier of ${report.area_multiplier?.toFixed(3) || '1.083'}.
-    </div>
-  </div>
-
-  <!-- Page 3 Footer -->
-  <div style="position:absolute;bottom:0;left:0;right:0;padding:6px 22px;display:flex;justify-content:space-between;align-items:center;border-top:1px solid #eee;background:#fff">
-    <div style="display:flex;align-items:center;gap:6px">
-      <div style="width:16px;height:16px;background:#0d9668;border-radius:3px;display:flex;align-items:center;justify-content:center">
-        <div style="width:8px;height:8px;border:1.5px solid #fff;border-radius:1px"></div>
-      </div>
-      <span style="font-size:9px;font-weight:800;color:#0d9668">ROOF REPORTER AI</span>
-    </div>
-    <div style="font-size:6.5px;color:#999">&copy; Roof Reporter AI &bull; ${reportDate} &bull; p.3/3</div>
-  </div>
-</div>
-` : ''}
 
 </body>
 </html>`

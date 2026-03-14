@@ -281,6 +281,7 @@
                 `<button onclick="window.ccStartAgent(${a.id})" class="px-3 py-1.5 bg-green-600 text-white rounded-lg text-xs font-semibold hover:bg-green-700"><i class="fas fa-play mr-1"></i>Start Dialing</button>`
               }
               <div class="flex gap-1">
+                <button onclick="window.ccTestAgent(${a.id})" class="px-2 py-1.5 text-emerald-500 hover:text-emerald-700 text-xs" title="Test Agent"><i class="fas fa-microphone"></i></button>
                 <button onclick="window.ccEditAgent(${a.id})" class="px-2 py-1.5 text-gray-400 hover:text-blue-600 text-xs"><i class="fas fa-edit"></i></button>
                 <button onclick="window.ccDeleteAgent(${a.id})" class="px-2 py-1.5 text-gray-400 hover:text-red-600 text-xs"><i class="fas fa-trash"></i></button>
               </div>
@@ -761,5 +762,169 @@
       ccLoadTab('prospects');
     } else alert(data?.error || 'Dial failed');
   };
+
+  // ============================================================
+  // VOICE TEST AGENT — Browser microphone test for Call Center
+  // ============================================================
+  let ccTestState = { active: false, mediaRecorder: null, audioChunks: [], conversationHistory: [], processing: false, agentId: null };
+
+  window.ccTestAgent = function(agentId) {
+    const agents = ((CC.data.agents || {}).agents || []);
+    const agent = agents.find(a => a.id === agentId);
+    const agentName = agent ? agent.name : 'Agent';
+    const agentPersona = agent ? (agent.persona || '') : '';
+
+    const existing = document.getElementById('ccVoiceTestModal');
+    if (existing) existing.remove();
+    ccTestState.agentId = agentId;
+    ccTestState.conversationHistory = [];
+
+    const modal = document.createElement('div');
+    modal.id = 'ccVoiceTestModal';
+    modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm';
+    modal.innerHTML = `
+      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">
+        <div class="bg-gradient-to-r from-orange-500 to-amber-600 p-5 text-white">
+          <div class="flex items-center justify-between">
+            <div><h2 class="text-lg font-bold"><i class="fas fa-microphone-alt mr-2"></i>Test Agent: ${agentName}</h2>
+            <p class="text-orange-100 text-xs mt-1">Speak into your mic — test the agent before deploying</p></div>
+            <button onclick="ccCloseTestModal()" class="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center hover:bg-white/30 transition-all"><i class="fas fa-times text-sm"></i></button>
+          </div>
+        </div>
+        <div class="p-5">
+          <div id="ccVtConversation" class="h-64 overflow-y-auto mb-4 space-y-3 p-3 bg-gray-50 rounded-xl border border-gray-200">
+            <div class="text-center text-gray-400 text-sm py-8"><i class="fas fa-robot text-3xl block mb-2 text-orange-300"></i>Press the microphone button and speak to test <strong>${agentName}</strong>.<br><span class="text-xs">The agent will respond using its configured persona.</span></div>
+          </div>
+          <div id="ccVtStatus" class="text-center text-xs text-gray-400 mb-3 h-4"></div>
+          <div class="flex items-center justify-center gap-4">
+            <button onclick="ccStartTestRecording()" id="ccVtRecordBtn" class="w-16 h-16 rounded-full bg-orange-500 text-white flex items-center justify-center hover:bg-orange-600 transition-all shadow-lg hover:shadow-xl active:scale-95">
+              <i class="fas fa-microphone text-2xl"></i>
+            </button>
+            <button onclick="ccStopTestRecording()" id="ccVtStopBtn" class="w-16 h-16 rounded-full bg-red-500 text-white flex items-center justify-center hover:bg-red-600 transition-all shadow-lg hidden animate-pulse">
+              <i class="fas fa-stop text-2xl"></i>
+            </button>
+            <button onclick="ccResetTest()" class="w-10 h-10 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center hover:bg-gray-300 transition-all" title="Reset conversation">
+              <i class="fas fa-redo text-sm"></i>
+            </button>
+          </div>
+          <p class="text-center text-xs text-gray-400 mt-3">Audio is transcribed and sent to the AI. No audio is stored.</p>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    modal.addEventListener('click', function(e) { if (e.target === modal) ccCloseTestModal(); });
+  };
+
+  window.ccCloseTestModal = function() {
+    if (ccTestState.mediaRecorder && ccTestState.mediaRecorder.state !== 'inactive') ccTestState.mediaRecorder.stop();
+    ccTestState.active = false;
+    ccTestState.conversationHistory = [];
+    const m = document.getElementById('ccVoiceTestModal');
+    if (m) m.remove();
+  };
+
+  window.ccResetTest = function() {
+    ccTestState.conversationHistory = [];
+    const conv = document.getElementById('ccVtConversation');
+    if (conv) conv.innerHTML = '<div class="text-center text-gray-400 text-sm py-8"><i class="fas fa-robot text-3xl block mb-2 text-orange-300"></i>Conversation reset. Press mic to start again.</div>';
+  };
+
+  window.ccStartTestRecording = async function() {
+    if (ccTestState.processing) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      ccTestState.audioChunks = [];
+      let options = { mimeType: 'audio/webm;codecs=opus' };
+      if (!MediaRecorder.isTypeSupported(options.mimeType)) options = { mimeType: 'audio/webm' };
+      if (!MediaRecorder.isTypeSupported(options.mimeType)) options = {};
+      ccTestState.mediaRecorder = new MediaRecorder(stream, options);
+      ccTestState.mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) ccTestState.audioChunks.push(e.data); };
+      ccTestState.mediaRecorder.onstop = () => {
+        stream.getTracks().forEach(t => t.stop());
+        if (ccTestState.audioChunks.length > 0) ccProcessVoiceTest();
+      };
+      ccTestState.mediaRecorder.start();
+      ccTestState.active = true;
+      document.getElementById('ccVtRecordBtn').classList.add('hidden');
+      document.getElementById('ccVtStopBtn').classList.remove('hidden');
+      document.getElementById('ccVtStatus').textContent = 'Listening... speak now';
+      document.getElementById('ccVtStatus').className = 'text-center text-xs text-red-500 mb-3 h-4 font-semibold';
+    } catch(e) {
+      alert('Microphone access denied. Please allow microphone access.');
+    }
+  };
+
+  window.ccStopTestRecording = function() {
+    if (ccTestState.mediaRecorder && ccTestState.mediaRecorder.state !== 'inactive') ccTestState.mediaRecorder.stop();
+    ccTestState.active = false;
+    document.getElementById('ccVtRecordBtn').classList.remove('hidden');
+    document.getElementById('ccVtStopBtn').classList.add('hidden');
+    document.getElementById('ccVtStatus').textContent = 'Processing...';
+    document.getElementById('ccVtStatus').className = 'text-center text-xs text-amber-500 mb-3 h-4 font-semibold';
+  };
+
+  async function ccProcessVoiceTest() {
+    ccTestState.processing = true;
+    const conv = document.getElementById('ccVtConversation');
+    const statusEl = document.getElementById('ccVtStatus');
+    const audioBlob = new Blob(ccTestState.audioChunks, { type: ccTestState.mediaRecorder.mimeType || 'audio/webm' });
+
+    conv.innerHTML += '<div class="flex justify-end"><div class="bg-blue-100 text-blue-800 rounded-xl rounded-tr-sm px-3 py-2 max-w-xs text-sm"><i class="fas fa-spinner fa-spin mr-1 text-xs"></i>Transcribing...</div></div>';
+    conv.scrollTop = conv.scrollHeight;
+
+    try {
+      // Transcribe via secretary test endpoint (shared)
+      const formData = new FormData();
+      formData.append('audio', audioBlob, 'recording.webm');
+      const transcribeRes = await fetch('/api/secretary/test/transcribe', { method: 'POST', headers: { 'Authorization': 'Bearer ' + CC.adminKey }, body: formData });
+      const transcribeData = await transcribeRes.json();
+
+      if (!transcribeData.text || transcribeData.text.trim() === '') {
+        conv.lastChild.remove();
+        conv.innerHTML += '<div class="flex justify-end"><div class="bg-red-50 text-red-600 rounded-xl rounded-tr-sm px-3 py-2 max-w-xs text-sm"><i class="fas fa-exclamation-circle mr-1"></i>Could not understand. Try speaking louder.</div></div>';
+        conv.scrollTop = conv.scrollHeight;
+        ccTestState.processing = false;
+        if (statusEl) { statusEl.textContent = 'Ready'; statusEl.className = 'text-center text-xs text-gray-400 mb-3 h-4'; }
+        return;
+      }
+
+      conv.lastChild.remove();
+      const userText = transcribeData.text.trim();
+      conv.innerHTML += '<div class="flex justify-end"><div class="bg-orange-500 text-white rounded-xl rounded-tr-sm px-3 py-2 max-w-xs text-sm">' + userText + '</div></div>';
+      ccTestState.conversationHistory.push({ role: 'user', content: userText });
+
+      conv.innerHTML += '<div class="flex justify-start"><div class="bg-orange-50 text-orange-800 rounded-xl rounded-tl-sm px-3 py-2 max-w-xs text-sm"><i class="fas fa-robot mr-1"></i><i class="fas fa-spinner fa-spin ml-1 text-xs"></i> Thinking...</div></div>';
+      conv.scrollTop = conv.scrollHeight;
+
+      // Get agent info
+      const agents = ((CC.data.agents || {}).agents || []);
+      const agent = agents.find(a => a.id === ccTestState.agentId);
+      const persona = agent ? (agent.persona || 'Professional sales agent for RoofReporterAI') : 'Professional sales agent';
+
+      // Chat via call-center test endpoint
+      const aiRes = await ccFetch('/api/call-center/test/chat', {
+        method: 'POST',
+        body: JSON.stringify({
+          message: userText,
+          history: ccTestState.conversationHistory.slice(0, -1),
+          persona: persona,
+          agent_name: agent ? agent.name : 'Agent'
+        })
+      });
+
+      conv.lastChild.remove();
+      const aiText = (aiRes && aiRes.response) || 'Sorry, I had trouble responding. Please try again.';
+      conv.innerHTML += '<div class="flex justify-start"><div class="bg-orange-50 text-orange-800 rounded-xl rounded-tl-sm px-3 py-2 max-w-xs text-sm"><i class="fas fa-robot text-orange-500 mr-1"></i>' + aiText + '</div></div>';
+      ccTestState.conversationHistory.push({ role: 'assistant', content: aiText });
+      conv.scrollTop = conv.scrollHeight;
+
+      if (statusEl) { statusEl.textContent = 'Press mic to continue'; statusEl.className = 'text-center text-xs text-orange-500 mb-3 h-4'; }
+    } catch(e) {
+      conv.lastChild.remove();
+      conv.innerHTML += '<div class="flex justify-start"><div class="bg-red-50 text-red-600 rounded-xl rounded-tl-sm px-3 py-2 max-w-xs text-sm"><i class="fas fa-exclamation-triangle mr-1"></i>Error: ' + (e.message || 'Network error') + '</div></div>';
+      conv.scrollTop = conv.scrollHeight;
+      if (statusEl) { statusEl.textContent = 'Error. Try again.'; statusEl.className = 'text-center text-xs text-red-500 mb-3 h-4'; }
+    }
+    ccTestState.processing = false;
+  }
 
 })();
