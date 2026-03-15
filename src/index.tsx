@@ -1230,6 +1230,10 @@ function getSuperAdminDashboardHTML() {
           <span class="label text-sm font-medium">Pricing & Billing</span>
         </div>
         <div class="border-t border-gray-800 my-3"></div>
+        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('ai-chat', this)">
+          <i class="fas fa-brain w-5 text-center"></i>
+          <span class="label text-sm font-medium">AI Site Manager</span>
+        </div>
         <a href="/admin" class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400 no-underline">
           <i class="fas fa-tachometer-alt w-5 text-center"></i>
           <span class="label text-sm font-medium">Operations Panel</span>
@@ -1283,6 +1287,7 @@ function getSuperAdminDashboardHTML() {
       if (typeof window.saDashboardSetView === 'function') window.saDashboardSetView(v);
     }
   </script>
+  <script src="/static/ai-admin-chat.js?v=${BUILD_VERSION}"></script>
   <script src="/static/super-admin-dashboard.js?v=${BUILD_VERSION}"></script>
   <script src="/static/call-center.js?v=${BUILD_VERSION}"></script>
   <script src="/static/meta-connect.js?v=${BUILD_VERSION}"></script>

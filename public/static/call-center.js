@@ -886,7 +886,14 @@
       persona: document.getElementById('cc-agent-persona').value,
       livekit_room_prefix: document.getElementById('cc-agent-prefix').value,
     }) });
-    if (data?.success) { document.getElementById('cc-agent-modal').classList.add('hidden'); ccLoadTab('agents'); }
+    if (data?.success) {
+      document.getElementById('cc-agent-modal').classList.add('hidden');
+      await ccLoadTab('agents');
+      // Auto-open voice test modal for the newly created agent
+      if (data.id) {
+        setTimeout(function() { window.ccTestAgent(data.id); }, 500);
+      }
+    }
     else alert(data?.error || 'Failed');
   };
   window.ccStartAgent = async function(id) {
