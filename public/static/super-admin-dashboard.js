@@ -253,6 +253,7 @@ function renderContent() {
     case 'secretary-admin': root.innerHTML = renderSecretaryAdminView(); break;
     case 'secretary-revenue': root.innerHTML = renderSecretaryRevenueView(); break;
     case 'heygen': break; // Handled by heygen.js
+    case 'ai-chat': root.innerHTML = (typeof renderAIChat === 'function') ? renderAIChat() : '<div class="p-8 text-gray-500">AI Chat module not loaded.</div>'; break;
     default: root.innerHTML = renderUsersView();
   }
 }
