@@ -77,7 +77,8 @@ function render() {
     { id:'blog', label:'Blog', icon:'fa-blog' },
     { id:'activity', label:'Activity Log', icon:'fa-history' },
     { id:'sip', label:'SIP Bridge', icon:'fa-phone-volume' },
-    { id:'search', label:'Report Search', icon:'fa-search' }
+    { id:'search', label:'Report Search', icon:'fa-search' },
+    { id:'ai-chat', label:'AI Site Manager', icon:'fa-brain' }
   ];
 
   root.innerHTML = `
@@ -104,6 +105,7 @@ function render() {
       ${A.tab === 'activity' ? renderActivity() : ''}
       ${A.tab === 'sip' ? renderSipBridge() : ''}
       ${A.tab === 'search' ? renderReportSearch() : ''}
+      ${A.tab === 'ai-chat' ? renderAIChat() : ''}
     </div>
   `;
 }

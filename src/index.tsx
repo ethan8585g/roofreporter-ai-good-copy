@@ -28,6 +28,7 @@ import { reportImagesRoutes } from './routes/report-images'
 import { callCenterRoutes } from './routes/call-center'
 import { metaConnectRoutes } from './routes/meta-connect'
 import { heygenRoutes } from './routes/heygen'
+import { aiAdminChatRoutes } from './routes/ai-admin-chat'
 import type { Bindings } from './types'
 
 const app = new Hono<{ Bindings: Bindings }>()
@@ -170,6 +171,7 @@ app.route('/api/orders', ordersRoutes)
 app.route('/api/companies', companiesRoutes)
 app.route('/api/settings', settingsRoutes)
 app.route('/api/reports', reportsRoutes)
+app.route('/api/ai-admin', aiAdminChatRoutes)
 app.route('/api/admin', adminRoutes)
 app.route('/api/ai', aiAnalysisRoutes)
 app.route('/api/auth', authRoutes)
@@ -1363,6 +1365,7 @@ function getAdminPageHTML() {
       window.location.href = '/login';
     }
   </script>
+  <script src="/static/ai-admin-chat.js?v=${BUILD_VERSION}"></script>
   <script src="/static/admin.js?v=${BUILD_VERSION}"></script>
 </body>
 </html>`
