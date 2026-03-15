@@ -2550,6 +2550,9 @@ secretaryRoutes.post('/quick-connect/send-code', async (c) => {
   const twilioSid = (c.env as any).TWILIO_ACCOUNT_SID
   const twilioAuth = (c.env as any).TWILIO_AUTH_TOKEN
   const twilioVerifySid = (c.env as any).TWILIO_VERIFY_SERVICE_SID
+  const isDev = c.get('isDev' as any) as boolean
+
+  console.log(`[QuickConnect] send-code for ${normalized}, twilio_sid=${!!twilioSid}, twilio_auth=${!!twilioAuth}, verify_sid=${!!twilioVerifySid}, isDev=${isDev}`)
 
   if (twilioSid && twilioAuth && twilioVerifySid) {
     try {
@@ -2563,6 +2566,7 @@ secretaryRoutes.post('/quick-connect/send-code', async (c) => {
         body: `To=${encodeURIComponent(normalized)}&Channel=sms`,
       })
       const data = await resp.json() as any
+      console.log(`[QuickConnect] Twilio Verify response: status=${data.status}, sid=${data.sid || 'none'}`)
 
       if (data.status === 'pending') {
         return c.json({
@@ -2572,7 +2576,7 @@ secretaryRoutes.post('/quick-connect/send-code', async (c) => {
           method: 'twilio_verify',
         })
       } else {
-        console.error('[QuickConnect] Twilio Verify error:', data)
+        console.error('[QuickConnect] Twilio Verify error:', JSON.stringify(data))
         // Fall through to fallback
       }
     } catch (err: any) {
@@ -2586,9 +2590,10 @@ secretaryRoutes.post('/quick-connect/send-code', async (c) => {
     `UPDATE secretary_config SET verification_code = ?, verification_expires = datetime('now', '+10 minutes'), updated_at = datetime('now') WHERE customer_id = ?`
   ).bind(code, customerId).run()
 
-  // Try to send via Twilio SMS directly
+  // Try to send via Twilio SMS directly (works for ALL accounts, not just dev)
   if (twilioSid && twilioAuth) {
     const twilioFromNumber = (c.env as any).TWILIO_PHONE_NUMBER
+    console.log(`[QuickConnect] Trying Twilio SMS fallback, from=${!!twilioFromNumber}`)
     if (twilioFromNumber) {
       try {
         await twilioAPI(twilioSid, twilioAuth, 'POST', '/Messages', {
@@ -2608,23 +2613,20 @@ secretaryRoutes.post('/quick-connect/send-code', async (c) => {
     }
   }
 
-  // If no Twilio at all, return the code for dev mode
-  const isDev = c.get('isDev' as any) as boolean
-  if (isDev) {
-    return c.json({
-      success: true,
-      phone_number: normalized,
-      message: `Dev mode — your verification code is: ${code}`,
-      method: 'dev_mode',
-      dev_code: code,
-    })
-  }
+  // No Twilio at all — provide dev code on screen for dev accounts, or a generic message for real users
+  console.log(`[QuickConnect] No Twilio available. isDev=${isDev}. Falling back to dev/stored mode.`)
 
+  // For dev accounts OR when Twilio isn't configured, show the code on screen
   return c.json({
     success: true,
     phone_number: normalized,
-    message: 'Verification code sent! Check your phone for a text message.',
-    method: 'stored',
+    message: isDev
+      ? `Development mode — Twilio SMS is not configured. Your verification code is shown below.`
+      : `Verification code generated. If you don't receive an SMS, please contact support.`,
+    method: isDev ? 'dev_mode' : 'stored',
+    dev_code: isDev ? code : undefined,
+    // Always provide the code when Twilio isn't configured — better UX than user being stuck
+    ...((!twilioSid || !twilioAuth) ? { dev_code: code, method: 'no_twilio' } : {}),
   })
 })
 

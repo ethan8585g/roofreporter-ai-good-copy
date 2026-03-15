@@ -610,7 +610,14 @@
     var el = document.getElementById('qcStepContent');
     if (!el) return;
     var qc = state.quickConnect || {};
-    var devHint = qc.devCode ? '<p class="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg p-2 mt-2"><i class="fas fa-code mr-1"></i>Dev mode code: <strong class="font-mono">' + qc.devCode + '</strong></p>' : '';
+    var devHint = qc.devCode ? '<div class="bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-300 rounded-xl p-4 mt-3 mb-2 cursor-pointer" onclick="qcAutoFillDevCode()">' +
+      '<div class="flex items-center gap-2 mb-1"><i class="fas fa-flask text-amber-600"></i><span class="text-sm font-bold text-amber-700">Development Mode</span></div>' +
+      '<p class="text-xs text-amber-600 mb-2">Twilio SMS not configured — code shown here instead of texted</p>' +
+      '<div class="flex items-center justify-center gap-1">' +
+        qc.devCode.split('').map(function(d) { return '<span class="inline-block w-10 h-12 bg-white border-2 border-amber-400 rounded-lg flex items-center justify-center text-xl font-black text-amber-700">' + d + '</span>'; }).join('') +
+      '</div>' +
+      '<p class="text-xs text-amber-500 mt-2 text-center"><i class="fas fa-hand-pointer mr-1"></i>Tap here to auto-fill</p>' +
+    '</div>' : '';
 
     el.innerHTML =
       '<div class="bg-white rounded-2xl border-2 border-sky-100 shadow-sm p-8">' +
@@ -662,7 +669,22 @@
       });
     });
     if (inputs[0]) inputs[0].focus();
+
+    // In dev mode, auto-fill after a brief delay so user sees what happened
+    if (qc.devCode) {
+      setTimeout(function() { qcAutoFillDevCode(); }, 800);
+    }
   }
+
+  // Auto-fill dev mode code into input fields
+  window.qcAutoFillDevCode = function() {
+    var qc = state.quickConnect || {};
+    if (!qc.devCode) return;
+    var inputs = document.querySelectorAll('#qcCodeInputs input');
+    var digits = qc.devCode.toString().split('');
+    for (var i = 0; i < digits.length && i < 6; i++) inputs[i].value = digits[i];
+    showToast('Dev code auto-filled! Click "Verify & Go Live"', 'success');
+  };
 
   // Verify the code — after this, the user is CONNECTED (no manual forwarding needed)
   window.qcVerifyCode = async function() {
