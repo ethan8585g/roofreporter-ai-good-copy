@@ -147,7 +147,7 @@ gtag('get','${ga4Id}','client_id',function(cid){
 })();
 </script>` : ''
       
-      const injected = body.replace('</body>', `${ga4Script}\n<script src="/static/tracker.js" defer></script>\n</body>`)
+      const injected = body.replace('</body>', `${ga4Script}\n<script src="/static/tracker.js?v=${BUILD_VERSION}" defer></script>\n</body>`)
       c.res = new Response(injected, {
         status: c.res.status,
         headers: c.res.headers
@@ -956,6 +956,9 @@ function getTailwindConfig() {
   </script>`
 }
 
+// Build-time version stamp for cache busting all static assets
+const BUILD_VERSION = Date.now().toString(36)
+
 function getHeadTags() {
   return `<meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -963,12 +966,12 @@ function getHeadTags() {
   <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
   ${getTailwindConfig()}
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
-  <link rel="stylesheet" href="/static/style.css">`
+  <link rel="stylesheet" href="/static/style.css?v=${BUILD_VERSION}">`
 }
 
 // Rover chatbot widget script tag — inject on public pages only
 function getRoverWidget() {
-  return `<script src="/static/rover-widget.js" defer></script>`
+  return `<script src="/static/rover-widget.js?v=${BUILD_VERSION}" defer></script>`
 }
 
 // Rover AI Assistant — inject on authenticated customer pages
@@ -1271,11 +1274,11 @@ function getSuperAdminDashboardHTML() {
       if (typeof window.saDashboardSetView === 'function') window.saDashboardSetView(v);
     }
   </script>
-  <script src="/static/super-admin-dashboard.js"></script>
-  <script src="/static/call-center.js"></script>
-  <script src="/static/meta-connect.js"></script>
-  <script src="/static/heygen.js"></script>
-  <script src="/static/email-outreach.js"></script>
+  <script src="/static/super-admin-dashboard.js?v=${BUILD_VERSION}"></script>
+  <script src="/static/call-center.js?v=${BUILD_VERSION}"></script>
+  <script src="/static/meta-connect.js?v=${BUILD_VERSION}"></script>
+  <script src="/static/heygen.js?v=${BUILD_VERSION}"></script>
+  <script src="/static/email-outreach.js?v=${BUILD_VERSION}"></script>
 </body>
 </html>`
 }
@@ -1353,7 +1356,7 @@ function getAdminPageHTML() {
       window.location.href = '/login';
     }
   </script>
-  <script src="/static/admin.js"></script>
+  <script src="/static/admin.js?v=${BUILD_VERSION}"></script>
 </body>
 </html>`
 }
@@ -1383,7 +1386,7 @@ function getOrderConfirmationHTML() {
     <div id="confirmation-root"></div>
   </main>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
-  <script src="/static/confirmation.js"></script>
+  <script src="/static/confirmation.js?v=${BUILD_VERSION}"></script>
 </body>
 </html>`
 }
@@ -1686,7 +1689,7 @@ function getLandingPageHTML() {
       }
     });
   </script>
-  <script src="/static/landing.js"></script>
+  <script src="/static/landing.js?v=${BUILD_VERSION}"></script>
   ${getRoverWidget()}
 </body>
 </html>`
@@ -1720,7 +1723,7 @@ function getSettingsPageHTML() {
   <main class="max-w-4xl mx-auto px-4 py-8">
     <div id="settings-root"></div>
   </main>
-  <script src="/static/settings.js"></script>
+  <script src="/static/settings.js?v=${BUILD_VERSION}"></script>
 </body>
 </html>`
 }
@@ -2126,7 +2129,7 @@ function getCustomerInvoiceHTML() {
       if (!c) { window.location.href = '/customer/login'; return; }
     })();
   </script>
-  <script src="/static/customer-invoice.js"></script>
+  <script src="/static/customer-invoice.js?v=${BUILD_VERSION}"></script>
   ${getRoverAssistant()}
 </body>
 </html>`
@@ -2165,7 +2168,7 @@ function getPricingPageHTML() {
     </div>
   </main>
   ${getContactFormHTML('pricing')}
-  <script src="/static/pricing.js"></script>
+  <script src="/static/pricing.js?v=${BUILD_VERSION}"></script>
   ${getRoverWidget()}
 </body>
 </html>`
@@ -2299,7 +2302,7 @@ function getBlogListingHTML() {
     </div>
   </footer>
 
-  <script src="/static/blog.js"></script>
+  <script src="/static/blog.js?v=${BUILD_VERSION}"></script>
   ${getRoverWidget()}
 </body>
 </html>`
@@ -2398,7 +2401,7 @@ function getBlogPostHTML() {
     </div>
   </footer>
 
-  <script src="/static/blog.js"></script>
+  <script src="/static/blog.js?v=${BUILD_VERSION}"></script>
   ${getRoverWidget()}
 </body>
 </html>`
@@ -2732,7 +2735,7 @@ function getVirtualTryOnPageHTML() {
       window.location.href = '/customer/login';
     }
   </script>
-  <script src="/static/virtual-tryon.js"></script>
+  <script src="/static/virtual-tryon.js?v=${BUILD_VERSION}"></script>
   ${getRoverAssistant()}
 </body>
 </html>`
@@ -2789,7 +2792,7 @@ function getTeamManagementPageHTML() {
       window.location.href = '/customer/login';
     }
   </script>
-  <script src="/static/team-management.js"></script>
+  <script src="/static/team-management.js?v=${BUILD_VERSION}"></script>
   ${getRoverAssistant()}
 </body>
 </html>`
@@ -3042,7 +3045,7 @@ function getPropertyImageryPageHTML(mapsApiKey: string) {
       window.location.href = '/customer/login';
     }
   </script>
-  <script src="/static/property-imagery.js"></script>
+  <script src="/static/property-imagery.js?v=${BUILD_VERSION}"></script>
   ${getRoverAssistant()}
 </body>
 </html>`
@@ -3153,7 +3156,7 @@ function getSecretaryPageHTML() {
       window.location.href = '/customer/login';
     }
   </script>
-  <script src="/static/secretary.js"></script>
+  <script src="/static/secretary.js?v=${BUILD_VERSION}"></script>
   ${getRoverAssistant()}
 </body>
 </html>`
