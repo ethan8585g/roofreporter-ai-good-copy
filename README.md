@@ -2,13 +2,13 @@
 
 ## Project Overview
 - **Name**: RoofReporterAI
-- **Version**: 9.2 (Secretary AI LiveKit Integration + Manual Phone Config)
+- **Version**: 9.3 (LiveKit Agent LIVE + Full Call Answering)
 - **Domain**: www.roofreporterai.com
 - **Production**: https://roofing-measurement-tool.pages.dev
 - **GitHub**: https://github.com/ethan8585g/roofreporter-ai-good-copy
 - **Platform**: Cloudflare Pages + Workers + D1
 - **Status**: Active
-- **Last Updated**: 2026-03-16 (v9.2)
+- **Last Updated**: 2026-03-16 (v9.3)
 
 ## Core Platform Features
 
@@ -52,16 +52,19 @@
 - Per-user data isolation (owner_id scoped)
 - D2D Manager, Email Outreach, Team Management
 
-### 7. Roofer Secretary AI (LiveKit + Twilio/SIP)
-- AI receptionist powered by LiveKit voice agents
-- **LIVE on production** — trunk `ST_acLimvCPo5ES`, dispatch `SDR_cZDM2nFXpW7o`
-- Inbound/outbound call handling via LiveKit SIP
-- Call forwarding: 780-983-3335 → +1(484) 964-9758 → LiveKit AI
+### 7. Roofer Secretary AI (LiveKit Voice Agent — LIVE)
+- **AI receptionist LIVE and answering calls** — powered by LiveKit Agents + Inference
+- **LiveKit Agent Worker**: Registered (Worker ID: `AW_u44mtZpi6GTD`, Region: US West B)
+- **SIP Infrastructure**: Trunk `ST_acLimvCPo5ES` + Dispatch `SDR_cZDM2nFXpW7o`
+- **Call Flow**: 780-983-3335 → forwarded → +1(484) 964-9758 → LiveKit SIP → AI Agent answers
+- **Voice Stack**: Deepgram Nova-3 STT → GPT-4.1-mini LLM → Cartesia Sonic-3 TTS
+- **Agent Name**: Sarah (professional female voice)
 - Three modes: Directory, Never-Voicemail Answering, Full AI Secretary
-- Manual phone entry flow: enter business phone + purchased AI phone → save → forwarding instructions → confirm → deploy LiveKit agent
-- Edit Phone Configuration modal for connected-state changes
-- FAQ knowledge base, appointment booking, callbacks, email notifications
-- Rick's Roofing greeting script (2,009 chars) + Q&A (3,000 chars) + General Notes (2,337 chars) configured
+- Rick's Roofing greeting script + Q&A + General Notes all configured
+- Function tools: take_message, schedule_estimate, handle_emergency, get_business_hours
+- Public agent-config API: `/api/secretary/agent-config/:customerId` (LiveKit agent fetches live config)
+- Webhook endpoints: message capture, appointment booking, call completion logging
+- Manual phone entry flow with carrier-specific forwarding instructions
 
 ---
 
@@ -338,9 +341,57 @@ Homeowner calls roofer → Roofer's Personal Cell
 
 ---
 
+## Recommended Next Steps
+
+### Phase 1 — Immediate (Next 1-2 Weeks)
+1. **Deploy LiveKit Agent to LiveKit Cloud** — Currently running from sandbox (dev mode). Need to deploy via `lk agent deploy` for persistent 24/7 operation. Requires LiveKit Cloud account browser auth.
+2. **End-to-End Call Test** — Place a real test call to 780-983-3335, verify it forwards to +14849649758, and confirm the AI agent answers with Rick's Roofing greeting.
+3. **Call Logging Dashboard** — Enhance the Secretary AI dashboard to show real-time call logs, messages captured by the agent, and appointment requests.
+4. **SMS Notification on Call** — When the AI takes a message or captures a lead, auto-send SMS to the roofer's phone with caller details.
+5. **Email Notification on Lead** — Send email with full call transcript when the AI captures an estimate request (name + phone + address).
+
+### Phase 2 — Short Term (2-4 Weeks)
+6. **Call Recording & Transcription** — Enable LiveKit room recording, store transcripts in D1, display in call logs dashboard.
+7. **Square Payment Link SMS** — For emergency tarping dispatch, agent triggers SMS with Square payment link to caller's phone.
+8. **Multi-Customer Support** — Enable the agent to handle calls for multiple roofing companies simultaneously (each with their own config/script).
+9. **Outbound Calling** — Add outbound call capability for follow-ups and callbacks using LiveKit SIP outbound trunks.
+10. **Customer Self-Service Portal** — Allow roofers to edit their greeting script, Q&A, directories, and business hours from the web dashboard.
+
+### Phase 3 — Medium Term (1-3 Months)
+11. **Notification Center** — Central hub for all alerts: new leads, missed calls, appointment requests, payment confirmations.
+12. **Mobile PWA** — Progressive Web App with push notifications for real-time lead alerts on roofer's phone.
+13. **Multilingual Support** — French and Spanish greeting scripts for Canadian bilingual markets.
+14. **Dark Mode** — Full dark theme support across all dashboards.
+15. **2FA / OAuth Login** — Google and Apple sign-in, two-factor authentication for customer accounts.
+
+### Phase 4 — Long Term (3-6 Months)
+16. **iOS App (Capacitor)** — Native iOS wrapper with camera, geolocation, push notifications, haptics.
+17. **AI Video Report** — Narrated video walkthrough of roof measurements using AI-generated voiceover.
+18. **Insurance Report Format** — Generate reports compatible with insurance claim requirements.
+19. **Supplier Marketplace** — Connect roofers with material suppliers (ABC Supply, Beacon, SRS).
+20. **White-Label Platform** — Allow other businesses (plumbers, HVAC, electricians) to use the AI Secretary under their own branding.
+
+---
+
 ## Version History
 
-### v9.1 (Current — 2026-03-16)
+### v9.3 (Current — 2026-03-16)
+- **LiveKit Agent LIVE** — Python voice agent registered with LiveKit Cloud (Worker `AW_u44mtZpi6GTD`)
+- Agent answers calls forwarded from 780-983-3335 to +14849649758 using Rick's Roofing script
+- Voice stack: Deepgram Nova-3 STT → GPT-4.1-mini → Cartesia Sonic-3 TTS
+- Public agent-config API endpoint (`/api/secretary/agent-config/:customerId`)
+- Public webhook endpoints for message capture, appointment booking, call completion
+- Function tools: take_message, schedule_estimate, handle_emergency, get_business_hours
+- Agent fetches live config from production API for each call
+- All 3 GitHub repos synced (origin, goodcopy, newrepo)
+
+### v9.2 (2026-03-16)
+- Manual phone entry flow for Secretary AI
+- Remove placeholder +17800000001, add real phone +14849649758
+- LiveKit SIP trunk and dispatch rule creation on activation
+- Edit Phone Configuration modal
+
+### v9.1 (2026-03-16)
 - **Onboarding Wizard** — 3-step guided signup at `/signup` (Phase 1, Item 1)
   - Step 1: Business Info (name, company, email verification, phone, city/province, password)
   - Step 2: Plan Selection (Starter $49/mo, Professional $149/mo, Enterprise $499/mo)

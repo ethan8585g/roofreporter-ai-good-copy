@@ -10,15 +10,16 @@ module.exports = {
         LIVEKIT_URL: 'wss://roofreporterai-btkwkiwh.livekit.cloud',
         LIVEKIT_API_KEY: 'APIsvVZsCCaboLY',
         LIVEKIT_API_SECRET: 'UwHeCz8KszKbdgSafJjCfsEdzlYmvJZLfchTBROPJryC',
-        DEFAULT_GREETING: 'Thank you for calling! My name is Sarah, how can I help you today?',
-        ROOFPORTER_API_URL: 'https://roofing-measurement-tool.pages.dev'
+        ROOFPORTER_API_URL: 'https://www.roofreporterai.com',
+        DEFAULT_GREETING: "Thank you for calling Rick's Roofing. This is Sarah. Are you calling for a new roof estimate or a repair today?"
       },
       watch: false,
       instances: 1,
       exec_mode: 'fork',
       autorestart: true,
-      max_restarts: 5,
-      restart_delay: 5000
+      max_restarts: 10,
+      restart_delay: 5000,
+      min_uptime: '10s'
     }
   ]
 }
