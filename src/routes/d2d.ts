@@ -430,3 +430,111 @@ d2dRoutes.get('/team/:id/overview', async (c) => {
     recent_pins: recentPins || []
   })
 })
+
+// ============================================================
+// CRM MODULE TOGGLE — Admin enables/disables D2D CRM modules
+// ============================================================
+d2dRoutes.get('/modules', async (c) => {
+  const user = await getUser(c)
+  if (!user) return c.json({ error: 'Not authenticated' }, 401)
+
+  const row = await c.env.DB.prepare(
+    "SELECT setting_value FROM settings WHERE setting_key = 'd2d_modules' AND master_company_id = ?"
+  ).bind(user.id).first<any>()
+
+  const defaults = {
+    turfs_enabled: true,
+    pins_enabled: true,
+    team_enabled: true,
+    map_view_enabled: true,
+    success_metrics_enabled: true,
+    route_planning_enabled: false,
+    incentives_enabled: false,
+  }
+
+  let modules = defaults
+  if (row?.setting_value) {
+    try { modules = { ...defaults, ...JSON.parse(row.setting_value) } } catch {}
+  }
+
+  return c.json({ modules })
+})
+
+d2dRoutes.put('/modules', async (c) => {
+  const user = await getUser(c)
+  if (!user) return c.json({ error: 'Not authenticated' }, 401)
+  const body = await c.req.json()
+
+  await c.env.DB.prepare(`
+    INSERT OR REPLACE INTO settings (master_company_id, setting_key, setting_value)
+    VALUES (?, 'd2d_modules', ?)
+  `).bind(user.id, JSON.stringify(body.modules || body)).run()
+
+  return c.json({ success: true, modules: body.modules || body })
+})
+
+// ============================================================
+// MAP PINS — Get all pins with lat/lng for map display
+// ============================================================
+d2dRoutes.get('/map-pins', async (c) => {
+  const user = await getUser(c)
+  if (!user) return c.json({ error: 'Not authenticated' }, 401)
+  await ensureD2DTables(c.env.DB)
+
+  const { team_member_id, turf_id, status } = c.req.query() as any
+  let query = 'SELECT p.*, t.name as turf_name, tm.name as member_name FROM d2d_pins p LEFT JOIN d2d_turfs t ON t.id = p.turf_id LEFT JOIN d2d_team_members tm ON tm.id = p.knocked_by WHERE p.owner_id = ?'
+  const params: any[] = [user.id]
+
+  if (team_member_id) { query += ' AND p.knocked_by = ?'; params.push(team_member_id) }
+  if (turf_id) { query += ' AND p.turf_id = ?'; params.push(turf_id) }
+  if (status) { query += ' AND p.status = ?'; params.push(status) }
+
+  query += ' ORDER BY p.knocked_at DESC LIMIT 500'
+  const { results } = await c.env.DB.prepare(query).bind(...params).all()
+  return c.json({ pins: results })
+})
+
+// ============================================================
+// ENHANCED STATS — Per-member and per-turf breakdown
+// ============================================================
+d2dRoutes.get('/stats/detailed', async (c) => {
+  const user = await getUser(c)
+  if (!user) return c.json({ error: 'Not authenticated' }, 401)
+  await ensureD2DTables(c.env.DB)
+
+  // Per-member stats
+  const memberStats = await c.env.DB.prepare(`
+    SELECT tm.id, tm.name, tm.email,
+      COUNT(p.id) as total_pins,
+      SUM(CASE WHEN p.status = 'yes' THEN 1 ELSE 0 END) as yes_count,
+      SUM(CASE WHEN p.status = 'no' THEN 1 ELSE 0 END) as no_count,
+      SUM(CASE WHEN p.status = 'no_answer' THEN 1 ELSE 0 END) as no_answer_count,
+      SUM(CASE WHEN p.status != 'not_knocked' THEN 1 ELSE 0 END) as knocked_count
+    FROM d2d_team_members tm
+    LEFT JOIN d2d_pins p ON p.knocked_by = tm.id
+    WHERE tm.owner_id = ? AND tm.is_active = 1
+    GROUP BY tm.id
+    ORDER BY yes_count DESC
+  `).bind(user.id).all()
+
+  // Per-turf stats
+  const turfStats = await c.env.DB.prepare(`
+    SELECT t.id, t.name, t.assigned_to, t.status,
+      COUNT(p.id) as total_pins,
+      SUM(CASE WHEN p.status = 'yes' THEN 1 ELSE 0 END) as yes_count,
+      SUM(CASE WHEN p.status = 'no' THEN 1 ELSE 0 END) as no_count
+    FROM d2d_turfs t
+    LEFT JOIN d2d_pins p ON p.turf_id = t.id
+    WHERE t.owner_id = ?
+    GROUP BY t.id
+    ORDER BY t.created_at DESC
+  `).bind(user.id).all()
+
+  return c.json({
+    member_stats: (memberStats.results || []).map((m: any) => ({
+      ...m,
+      success_rate: m.knocked_count > 0 ? Math.round((m.yes_count / m.knocked_count) * 100) : 0
+    })),
+    turf_stats: turfStats.results || []
+  })
+})

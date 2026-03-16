@@ -260,6 +260,9 @@ function renderContent() {
     case 'ai-chat': root.innerHTML = (typeof renderAIChat === 'function') ? renderAIChat() : '<div class="p-8 text-gray-500">AI Chat module not loaded.</div>'; break;
     case 'contact-forms': root.innerHTML = renderContactFormsView(); loadContactForms(); break;
     case 'seo-manager': root.innerHTML = renderSEOManagerView(); break;
+    case 'canva': root.innerHTML = renderCanvaView(); loadCanvaStatus(); break;
+    case 'pricing-engine': root.innerHTML = renderPricingEngineView(); loadPricingPresets(); break;
+    case 'paywall': root.innerHTML = renderPaywallView(); loadPaywallStatus(); break;
     default: root.innerHTML = renderUsersView();
   }
 }
@@ -2552,3 +2555,319 @@ window.seoLoadPageMeta = function() {
   document.getElementById('seo-keywords').value = '';
   document.getElementById('seo-og-image').value = '';
 };
+
+// ============================================================
+// VIEW: CANVA INTEGRATION
+// ============================================================
+function renderCanvaView() {
+  return `
+  <div class="space-y-6">
+    <div class="flex items-center justify-between">
+      <h2 class="text-xl font-bold text-gray-800"><i class="fas fa-palette mr-2 text-purple-500"></i>Canva Design Integration</h2>
+      <span id="canva-status-badge" class="text-xs px-3 py-1 rounded-full bg-gray-100 text-gray-500">Loading...</span>
+    </div>
+
+    <div class="bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-200 rounded-xl p-6">
+      <h3 class="font-bold text-gray-800 mb-2"><i class="fas fa-info-circle mr-1 text-purple-500"></i>How Canva Integration Works</h3>
+      <ol class="text-sm text-gray-600 space-y-1.5 list-decimal list-inside">
+        <li>Create your invoice/proposal/estimate templates in <a href="https://www.canva.com/design" target="_blank" class="text-purple-600 underline font-medium">Canva</a></li>
+        <li>Save each design URL below — organize by type (Invoice, Proposal, Estimate)</li>
+        <li>When generating customer documents, click "Edit in Canva" to open the template</li>
+        <li>Customize with customer details, save as PDF, and send via Gmail</li>
+      </ol>
+      <p class="text-xs text-gray-400 mt-3"><i class="fas fa-lock mr-1"></i>For full API automation (auto-fill customer data), a Canva for Teams subscription is required.</p>
+    </div>
+
+    <div class="bg-white border border-gray-200 rounded-xl p-6">
+      <h3 class="font-bold text-gray-800 mb-4">Add Design Template</h3>
+      <div class="grid md:grid-cols-3 gap-4 mb-4">
+        <div>
+          <label class="block text-xs font-medium text-gray-500 mb-1">Template Name</label>
+          <input id="canva-tpl-name" type="text" placeholder="e.g. Professional Invoice" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-400 focus:border-transparent">
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-500 mb-1">Type</label>
+          <select id="canva-tpl-type" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-400 focus:border-transparent">
+            <option value="invoice">Invoice</option>
+            <option value="proposal">Proposal</option>
+            <option value="estimate">Estimate</option>
+            <option value="receipt">Receipt</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-500 mb-1">Canva Design URL</label>
+          <input id="canva-tpl-url" type="url" placeholder="https://www.canva.com/design/..." class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-400 focus:border-transparent">
+        </div>
+      </div>
+      <button onclick="canvaAddTemplate()" class="bg-purple-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-purple-700"><i class="fas fa-plus mr-1"></i>Add Template</button>
+    </div>
+
+    <div id="canva-templates-list" class="space-y-3"></div>
+
+    <div class="bg-white border border-gray-200 rounded-xl p-6">
+      <h3 class="font-bold text-gray-800 mb-3">Canva API Key (Optional — for auto-fill)</h3>
+      <p class="text-xs text-gray-500 mb-3">Required only if you want Canva to auto-fill customer name, address, and amounts. Most users can skip this.</p>
+      <div class="flex gap-3">
+        <input id="canva-api-key" type="password" placeholder="Enter Canva API key..." class="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm">
+        <button onclick="canvaSaveApiKey()" class="bg-gray-700 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-800">Save Key</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+var canvaTemplates = [];
+
+async function loadCanvaStatus() {
+  try {
+    var resp = await saFetch('/api/admin/canva/status');
+    var data = await resp.json();
+    var badge = document.getElementById('canva-status-badge');
+    if (data.connected) {
+      badge.className = 'text-xs px-3 py-1 rounded-full bg-green-100 text-green-700';
+      badge.textContent = 'API Connected';
+    } else {
+      badge.className = 'text-xs px-3 py-1 rounded-full bg-yellow-100 text-yellow-700';
+      badge.textContent = 'URL-only Mode';
+    }
+    canvaTemplates = data.templates || [];
+    renderCanvaTemplatesList();
+  } catch (e) {}
+}
+
+function renderCanvaTemplatesList() {
+  var el = document.getElementById('canva-templates-list');
+  if (!el) return;
+  if (canvaTemplates.length === 0) {
+    el.innerHTML = '<div class="text-center py-8 text-gray-400"><i class="fas fa-palette text-3xl mb-2"></i><p>No templates yet. Add your first Canva design above.</p></div>';
+    return;
+  }
+  el.innerHTML = canvaTemplates.map(function(t, i) {
+    var typeColor = {invoice:'blue',proposal:'green',estimate:'amber',receipt:'purple'}[t.type] || 'gray';
+    return '<div class="bg-white border border-gray-200 rounded-lg p-4 flex items-center justify-between">' +
+      '<div class="flex items-center gap-3">' +
+        '<span class="text-xs px-2 py-0.5 rounded-full bg-' + typeColor + '-100 text-' + typeColor + '-700 font-medium uppercase">' + t.type + '</span>' +
+        '<div><p class="font-medium text-gray-800">' + t.name + '</p><p class="text-xs text-gray-400">' + (t.canva_url || '').substring(0, 50) + '...</p></div>' +
+      '</div>' +
+      '<div class="flex gap-2">' +
+        '<a href="' + t.canva_url + '" target="_blank" class="text-xs bg-purple-50 text-purple-700 px-3 py-1.5 rounded-lg hover:bg-purple-100"><i class="fas fa-external-link-alt mr-1"></i>Open in Canva</a>' +
+        '<button onclick="canvaRemoveTemplate(' + i + ')" class="text-xs bg-red-50 text-red-600 px-2 py-1.5 rounded-lg hover:bg-red-100"><i class="fas fa-trash"></i></button>' +
+      '</div></div>';
+  }).join('');
+}
+
+window.canvaAddTemplate = async function() {
+  var name = document.getElementById('canva-tpl-name').value.trim();
+  var type = document.getElementById('canva-tpl-type').value;
+  var url = document.getElementById('canva-tpl-url').value.trim();
+  if (!name || !url) return alert('Name and URL are required');
+  canvaTemplates.push({ name: name, type: type, canva_url: url });
+  await saFetch('/api/admin/canva/templates', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ templates: canvaTemplates })
+  });
+  document.getElementById('canva-tpl-name').value = '';
+  document.getElementById('canva-tpl-url').value = '';
+  renderCanvaTemplatesList();
+};
+
+window.canvaRemoveTemplate = async function(index) {
+  canvaTemplates.splice(index, 1);
+  await saFetch('/api/admin/canva/templates', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ templates: canvaTemplates })
+  });
+  renderCanvaTemplatesList();
+};
+
+window.canvaSaveApiKey = async function() {
+  var key = document.getElementById('canva-api-key').value.trim();
+  if (!key) return alert('Enter a Canva API key');
+  await saFetch('/api/admin/canva/connect', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ canva_api_key: key })
+  });
+  alert('Canva API key saved!');
+  loadCanvaStatus();
+};
+
+// ============================================================
+// VIEW: PRICING ENGINE PRESETS
+// ============================================================
+function renderPricingEngineView() {
+  return `
+  <div class="space-y-6">
+    <div class="flex items-center justify-between">
+      <h2 class="text-xl font-bold text-gray-800"><i class="fas fa-calculator mr-2 text-green-500"></i>Roofing Pricing Engine</h2>
+      <span class="text-xs px-3 py-1 rounded-full bg-green-100 text-green-700">From EagleView Analysis</span>
+    </div>
+
+    <div class="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-xl p-6">
+      <p class="text-sm text-gray-600">Configure your material & labor costs. These presets are used to auto-generate proposals from roof measurement reports.</p>
+    </div>
+
+    <div class="bg-white border border-gray-200 rounded-xl p-6">
+      <h3 class="font-bold text-gray-800 mb-4">Material Costs (per square = 100 sq ft)</h3>
+      <div class="grid md:grid-cols-3 gap-4">
+        <div><label class="block text-xs font-medium text-gray-500 mb-1">Shingles ($/sq)</label><input id="pe-shingles" type="number" step="0.01" value="145.00" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>
+        <div><label class="block text-xs font-medium text-gray-500 mb-1">Underlayment ($/sq)</label><input id="pe-underlay" type="number" step="0.01" value="25.00" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>
+        <div><label class="block text-xs font-medium text-gray-500 mb-1">Ice Shield ($/roll)</label><input id="pe-iceshield" type="number" step="0.01" value="85.00" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>
+      </div>
+    </div>
+
+    <div class="bg-white border border-gray-200 rounded-xl p-6">
+      <h3 class="font-bold text-gray-800 mb-4">Edge & Flashing Costs (per linear ft)</h3>
+      <div class="grid md:grid-cols-4 gap-4">
+        <div><label class="block text-xs font-medium text-gray-500 mb-1">Drip Edge ($/ft)</label><input id="pe-drip" type="number" step="0.01" value="1.50" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>
+        <div><label class="block text-xs font-medium text-gray-500 mb-1">Ridge Cap ($/ft)</label><input id="pe-ridge" type="number" step="0.01" value="3.25" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>
+        <div><label class="block text-xs font-medium text-gray-500 mb-1">Valley Flash ($/ft)</label><input id="pe-valley" type="number" step="0.01" value="2.75" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>
+        <div><label class="block text-xs font-medium text-gray-500 mb-1">Step Flash ($/ft)</label><input id="pe-step" type="number" step="0.01" value="3.50" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>
+      </div>
+    </div>
+
+    <div class="bg-white border border-gray-200 rounded-xl p-6">
+      <h3 class="font-bold text-gray-800 mb-4">Labor & Overhead</h3>
+      <div class="grid md:grid-cols-4 gap-4">
+        <div><label class="block text-xs font-medium text-gray-500 mb-1">Labor ($/sq)</label><input id="pe-labor" type="number" step="0.01" value="180.00" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>
+        <div><label class="block text-xs font-medium text-gray-500 mb-1">Tear-off ($/sq)</label><input id="pe-tearoff" type="number" step="0.01" value="45.00" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>
+        <div><label class="block text-xs font-medium text-gray-500 mb-1">Disposal ($/sq)</label><input id="pe-disposal" type="number" step="0.01" value="25.00" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>
+        <div><label class="block text-xs font-medium text-gray-500 mb-1">Waste Factor (%)</label><input id="pe-waste" type="number" step="1" value="15" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>
+      </div>
+    </div>
+
+    <div class="bg-white border border-gray-200 rounded-xl p-6">
+      <h3 class="font-bold text-gray-800 mb-4">Tax Rate</h3>
+      <div class="grid md:grid-cols-2 gap-4">
+        <div><label class="block text-xs font-medium text-gray-500 mb-1">Tax Rate (%)</label><input id="pe-tax" type="number" step="0.01" value="5.00" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>
+      </div>
+    </div>
+
+    <div class="flex gap-3">
+      <button onclick="savePricingPresets()" class="bg-green-600 text-white px-6 py-2.5 rounded-lg font-medium hover:bg-green-700"><i class="fas fa-save mr-2"></i>Save Presets</button>
+      <button onclick="resetPricingPresets()" class="bg-gray-200 text-gray-700 px-4 py-2.5 rounded-lg text-sm hover:bg-gray-300">Reset to Defaults</button>
+    </div>
+
+    <div id="pe-save-msg" class="hidden text-sm px-4 py-3 rounded-lg"></div>
+  </div>`;
+}
+
+async function loadPricingPresets() {
+  try {
+    var resp = await saFetch('/api/invoices/pricing/presets');
+    var data = await resp.json();
+    var p = data.presets || {};
+    if (p.shingles_per_square) document.getElementById('pe-shingles').value = p.shingles_per_square;
+    if (p.underlayment_per_square) document.getElementById('pe-underlay').value = p.underlayment_per_square;
+    if (p.ice_shield_per_roll) document.getElementById('pe-iceshield').value = p.ice_shield_per_roll;
+    if (p.drip_edge_per_ft) document.getElementById('pe-drip').value = p.drip_edge_per_ft;
+    if (p.ridge_cap_per_ft) document.getElementById('pe-ridge').value = p.ridge_cap_per_ft;
+    if (p.valley_flashing_per_ft) document.getElementById('pe-valley').value = p.valley_flashing_per_ft;
+    if (p.step_flashing_per_ft) document.getElementById('pe-step').value = p.step_flashing_per_ft;
+    if (p.labor_per_square) document.getElementById('pe-labor').value = p.labor_per_square;
+    if (p.tearoff_per_square) document.getElementById('pe-tearoff').value = p.tearoff_per_square;
+    if (p.disposal_per_square) document.getElementById('pe-disposal').value = p.disposal_per_square;
+    if (p.waste_factor != null) document.getElementById('pe-waste').value = Math.round(p.waste_factor * 100);
+    if (p.tax_rate != null) document.getElementById('pe-tax').value = (p.tax_rate * 100).toFixed(2);
+  } catch (e) {}
+}
+
+window.savePricingPresets = async function() {
+  var presets = {
+    shingles_per_square: parseFloat(document.getElementById('pe-shingles').value) || 145,
+    underlayment_per_square: parseFloat(document.getElementById('pe-underlay').value) || 25,
+    ice_shield_per_roll: parseFloat(document.getElementById('pe-iceshield').value) || 85,
+    drip_edge_per_ft: parseFloat(document.getElementById('pe-drip').value) || 1.50,
+    ridge_cap_per_ft: parseFloat(document.getElementById('pe-ridge').value) || 3.25,
+    valley_flashing_per_ft: parseFloat(document.getElementById('pe-valley').value) || 2.75,
+    step_flashing_per_ft: parseFloat(document.getElementById('pe-step').value) || 3.50,
+    labor_per_square: parseFloat(document.getElementById('pe-labor').value) || 180,
+    tearoff_per_square: parseFloat(document.getElementById('pe-tearoff').value) || 45,
+    disposal_per_square: parseFloat(document.getElementById('pe-disposal').value) || 25,
+    waste_factor: (parseFloat(document.getElementById('pe-waste').value) || 15) / 100,
+    tax_rate: (parseFloat(document.getElementById('pe-tax').value) || 5) / 100
+  };
+  var resp = await saFetch('/api/invoices/pricing/presets', {
+    method: 'PUT', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ presets: presets })
+  });
+  var data = await resp.json();
+  var msg = document.getElementById('pe-save-msg');
+  if (data.success) {
+    msg.className = 'text-sm px-4 py-3 rounded-lg bg-green-50 text-green-700 border border-green-200';
+    msg.innerHTML = '<i class="fas fa-check-circle mr-2"></i>Presets saved! These will be used when generating proposals from roof reports.';
+  } else {
+    msg.className = 'text-sm px-4 py-3 rounded-lg bg-red-50 text-red-700 border border-red-200';
+    msg.innerHTML = '<i class="fas fa-times-circle mr-2"></i>' + (data.error || 'Save failed');
+  }
+};
+
+window.resetPricingPresets = function() {
+  document.getElementById('pe-shingles').value = '145.00';
+  document.getElementById('pe-underlay').value = '25.00';
+  document.getElementById('pe-iceshield').value = '85.00';
+  document.getElementById('pe-drip').value = '1.50';
+  document.getElementById('pe-ridge').value = '3.25';
+  document.getElementById('pe-valley').value = '2.75';
+  document.getElementById('pe-step').value = '3.50';
+  document.getElementById('pe-labor').value = '180.00';
+  document.getElementById('pe-tearoff').value = '45.00';
+  document.getElementById('pe-disposal').value = '25.00';
+  document.getElementById('pe-waste').value = '15';
+  document.getElementById('pe-tax').value = '5.00';
+};
+
+// ============================================================
+// VIEW: PAYWALL / APP STORE READINESS
+// ============================================================
+function renderPaywallView() {
+  return `
+  <div class="space-y-6">
+    <h2 class="text-xl font-bold text-gray-800"><i class="fas fa-shield-alt mr-2 text-indigo-500"></i>Paywall & App Store Readiness</h2>
+    <div id="paywall-content" class="text-center py-12 text-gray-400"><i class="fas fa-spinner fa-spin text-2xl"></i><p class="mt-2">Checking readiness...</p></div>
+  </div>`;
+}
+
+async function loadPaywallStatus() {
+  try {
+    var resp = await saFetch('/api/admin/superadmin/paywall-status');
+    var d = await resp.json();
+    var el = document.getElementById('paywall-content');
+    if (!el) return;
+
+    var checkIcon = function(ok) { return ok ? '<i class="fas fa-check-circle text-green-500"></i>' : '<i class="fas fa-times-circle text-red-400"></i>'; };
+
+    el.innerHTML = `
+    <div class="grid md:grid-cols-3 gap-6 mb-6">
+      <div class="bg-white border border-gray-200 rounded-xl p-6">
+        <h3 class="font-bold text-gray-800 mb-3"><i class="fas fa-credit-card mr-2 text-blue-500"></i>Payment Gateway</h3>
+        <ul class="space-y-2 text-sm">
+          <li class="flex items-center gap-2">${checkIcon(d.payment_gateway.square_configured)} Square</li>
+          <li class="flex items-center gap-2">${checkIcon(d.payment_gateway.stripe_configured)} Stripe</li>
+        </ul>
+      </div>
+      <div class="bg-white border border-gray-200 rounded-xl p-6">
+        <h3 class="font-bold text-gray-800 mb-3"><i class="fas fa-tags mr-2 text-green-500"></i>Subscription Model</h3>
+        <ul class="space-y-2 text-sm">
+          <li class="flex items-center gap-2">${checkIcon(d.subscription_model.has_pricing)} Pricing Set${d.subscription_model.monthly_price_cents ? ' ($' + (d.subscription_model.monthly_price_cents / 100).toFixed(2) + '/mo)' : ''}</li>
+          <li class="flex items-center gap-2">${checkIcon(d.subscription_model.has_credit_packages)} Credit Packages</li>
+        </ul>
+      </div>
+      <div class="bg-white border border-gray-200 rounded-xl p-6">
+        <h3 class="font-bold text-gray-800 mb-3"><i class="fas fa-mobile-alt mr-2 text-indigo-500"></i>App Store</h3>
+        <ul class="space-y-2 text-sm">
+          <li class="flex items-center gap-2">${checkIcon(d.app_store_requirements.user_auth_system)} User Auth</li>
+          <li class="flex items-center gap-2">${checkIcon(d.app_store_requirements.free_trial_enabled)} Free Trial</li>
+          <li class="flex items-center gap-2">${checkIcon(d.app_store_requirements.terms_of_service)} Terms of Service</li>
+          <li class="flex items-center gap-2">${checkIcon(d.app_store_requirements.privacy_policy)} Privacy Policy</li>
+          <li class="flex items-center gap-2">${checkIcon(d.app_store_requirements.app_store_listing)} App Store Listing</li>
+        </ul>
+      </div>
+    </div>
+    <div class="bg-${d.overall_ready ? 'green' : 'amber'}-50 border border-${d.overall_ready ? 'green' : 'amber'}-200 rounded-xl p-6">
+      <h3 class="font-bold text-gray-800 mb-2">${d.overall_ready ? '<i class="fas fa-rocket mr-2 text-green-600"></i>Ready for Launch!' : '<i class="fas fa-exclamation-triangle mr-2 text-amber-600"></i>Missing Requirements'}</h3>
+      ${d.missing_for_launch.length > 0 ? '<ul class="text-sm text-gray-600 space-y-1 list-disc list-inside">' + d.missing_for_launch.map(function(m) { return '<li>' + m + '</li>'; }).join('') + '</ul>' : '<p class="text-sm text-green-700">All checks passed. You are ready to submit to the App Store.</p>'}
+    </div>`;
+  } catch (e) {
+    var el = document.getElementById('paywall-content');
+    if (el) el.innerHTML = '<div class="text-red-500">Failed to load paywall status</div>';
+  }
+}
