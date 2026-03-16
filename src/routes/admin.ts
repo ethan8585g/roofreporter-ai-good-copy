@@ -1246,3 +1246,82 @@ adminRoutes.get('/superadmin/secretary/calls', async (c) => {
     return c.json({ error: 'Failed to load call logs', details: err.message }, 500)
   }
 })
+
+// ============================================================
+// SEO MANAGER — Page meta tags and backlinks
+// ============================================================
+
+// Ensure SEO tables exist
+async function ensureSEOTables(db: D1Database) {
+  try {
+    await db.prepare(`CREATE TABLE IF NOT EXISTS seo_page_meta (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      page_key TEXT UNIQUE NOT NULL,
+      meta_title TEXT, meta_description TEXT, canonical_url TEXT,
+      keywords TEXT, og_image TEXT,
+      updated_at TEXT DEFAULT (datetime('now'))
+    )`).run()
+    await db.prepare(`CREATE TABLE IF NOT EXISTS seo_backlinks (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      target_page TEXT NOT NULL DEFAULT 'all',
+      url TEXT NOT NULL, anchor_text TEXT,
+      nofollow INTEGER DEFAULT 0, new_window INTEGER DEFAULT 1,
+      is_active INTEGER DEFAULT 1,
+      created_at TEXT DEFAULT (datetime('now'))
+    )`).run()
+  } catch(e) {}
+}
+
+// POST /superadmin/seo/page-meta — Save meta tags for a page
+adminRoutes.post('/superadmin/seo/page-meta', async (c) => {
+  await ensureSEOTables(c.env.DB)
+  const { page, meta_title, meta_description, canonical_url, keywords, og_image } = await c.req.json()
+  if (!page) return c.json({ error: 'Page key is required' }, 400)
+  
+  await c.env.DB.prepare(`INSERT INTO seo_page_meta (page_key, meta_title, meta_description, canonical_url, keywords, og_image, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+    ON CONFLICT(page_key) DO UPDATE SET meta_title=excluded.meta_title, meta_description=excluded.meta_description,
+    canonical_url=excluded.canonical_url, keywords=excluded.keywords, og_image=excluded.og_image, updated_at=datetime('now')
+  `).bind(page, meta_title || '', meta_description || '', canonical_url || '', keywords || '', og_image || '').run()
+  
+  return c.json({ success: true })
+})
+
+// GET /superadmin/seo/page-meta?page=homepage
+adminRoutes.get('/superadmin/seo/page-meta', async (c) => {
+  await ensureSEOTables(c.env.DB)
+  const page = c.req.query('page')
+  if (page) {
+    const meta = await c.env.DB.prepare('SELECT * FROM seo_page_meta WHERE page_key = ?').bind(page).first()
+    return c.json({ meta: meta || null })
+  }
+  const { results } = await c.env.DB.prepare('SELECT * FROM seo_page_meta ORDER BY page_key').all()
+  return c.json({ pages: results })
+})
+
+// POST /superadmin/seo/backlinks — Add a backlink
+adminRoutes.post('/superadmin/seo/backlinks', async (c) => {
+  await ensureSEOTables(c.env.DB)
+  const { target_page, url, anchor_text, nofollow, new_window } = await c.req.json()
+  if (!url) return c.json({ error: 'URL is required' }, 400)
+  
+  await c.env.DB.prepare(
+    `INSERT INTO seo_backlinks (target_page, url, anchor_text, nofollow, new_window) VALUES (?, ?, ?, ?, ?)`
+  ).bind(target_page || 'all', url, anchor_text || '', nofollow ? 1 : 0, new_window !== false ? 1 : 0).run()
+  
+  return c.json({ success: true })
+})
+
+// GET /superadmin/seo/backlinks — List all backlinks
+adminRoutes.get('/superadmin/seo/backlinks', async (c) => {
+  await ensureSEOTables(c.env.DB)
+  const { results } = await c.env.DB.prepare('SELECT * FROM seo_backlinks WHERE is_active = 1 ORDER BY created_at DESC').all()
+  return c.json({ backlinks: results })
+})
+
+// DELETE /superadmin/seo/backlinks/:id
+adminRoutes.delete('/superadmin/seo/backlinks/:id', async (c) => {
+  const id = c.req.param('id')
+  await c.env.DB.prepare('UPDATE seo_backlinks SET is_active = 0 WHERE id = ?').bind(id).run()
+  return c.json({ success: true })
+})

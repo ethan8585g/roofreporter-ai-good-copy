@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import type { Bindings } from '../types'
 import { resolveTeamOwner } from './team'
 import { trackLeadCapture } from '../services/ga4-events'
+import { sendGmailOAuth2 } from '../services/email'
 
 export const agentsRoutes = new Hono<{ Bindings: Bindings }>()
 
@@ -45,6 +46,41 @@ agentsRoutes.post('/leads', async (c) => {
       lead_company: company_name ? String(company_name).trim().substring(0, 50) : '',
       lead_email_domain: emailClean.split('@')[1] || 'unknown'
     }).catch(() => {})
+
+    // Send email notification to admin via Gmail OAuth2
+    try {
+      const ci = (c.env as any).GOOGLE_CLIENT_ID
+      const cs = (c.env as any).GOOGLE_CLIENT_SECRET
+      const rt = (c.env as any).GMAIL_REFRESH_TOKEN
+      const adminEmail = (c.env as any).ADMIN_NOTIFICATION_EMAIL
+
+      if (ci && cs && rt && adminEmail) {
+        const subject = `New Contact Form: ${String(name).trim()} — ${source_page || 'website'}`
+        const emailHtml = `
+          <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;background:#f8fafc;border-radius:12px;">
+            <div style="background:linear-gradient(135deg,#0891b2,#0ea5e9);padding:20px;border-radius:12px 12px 0 0;text-align:center;">
+              <h2 style="color:#fff;margin:0;font-size:22px;">New Contact Form Submission</h2>
+              <p style="color:#e0f2fe;margin:5px 0 0;font-size:13px;">RoofReporterAI — ${source_page || 'website'}</p>
+            </div>
+            <div style="background:#fff;padding:24px;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 12px 12px;">
+              <table style="width:100%;border-collapse:collapse;">
+                <tr><td style="padding:8px 0;color:#64748b;font-size:13px;width:120px;">Name</td><td style="padding:8px 0;font-weight:600;color:#1e293b;">${String(name).trim()}</td></tr>
+                <tr><td style="padding:8px 0;color:#64748b;font-size:13px;">Company</td><td style="padding:8px 0;color:#1e293b;">${company_name ? String(company_name).trim() : '<em style="color:#94a3b8">Not provided</em>'}</td></tr>
+                <tr><td style="padding:8px 0;color:#64748b;font-size:13px;">Phone</td><td style="padding:8px 0;color:#1e293b;">${phone ? String(phone).trim() : '<em style="color:#94a3b8">Not provided</em>'}</td></tr>
+                <tr><td style="padding:8px 0;color:#64748b;font-size:13px;">Email</td><td style="padding:8px 0;color:#1e293b;"><a href="mailto:${emailClean}" style="color:#0891b2;">${emailClean}</a></td></tr>
+              </table>
+              ${message ? `<div style="margin-top:16px;padding:16px;background:#f1f5f9;border-radius:8px;border-left:4px solid #0891b2;"><p style="margin:0 0 4px;font-size:12px;color:#64748b;font-weight:600;">MESSAGE</p><p style="margin:0;color:#334155;font-size:14px;line-height:1.5;">${String(message).trim().replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p></div>` : ''}
+              <p style="margin-top:20px;font-size:12px;color:#94a3b8;text-align:center;">View all leads in your <a href="https://roofreporterai.com/super-admin" style="color:#0891b2;">Super Admin Dashboard</a></p>
+            </div>
+          </div>
+        `
+        await sendGmailOAuth2(ci, cs, rt, adminEmail, subject, emailHtml, (c.env as any).GMAIL_SENDER_EMAIL || adminEmail)
+        console.log(`[Leads] Email notification sent to admin for lead: ${emailClean}`)
+      }
+    } catch (emailErr: any) {
+      console.error('[Leads] Failed to send admin email notification:', emailErr.message)
+      // Don't fail the lead submission if email fails
+    }
 
     return c.json({ success: true, message: 'Thank you! We will be in touch shortly.' })
   } catch (e: any) {

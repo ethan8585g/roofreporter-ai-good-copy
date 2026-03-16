@@ -280,6 +280,23 @@ function renderFullReport(r, orderId) {
           <h4 class="text-sm font-bold text-gray-700 mb-3 uppercase tracking-wider">
             <i class="fas fa-draw-polygon mr-1 text-brand-500"></i>Edge Breakdown
           </h4>
+          <!-- EagleView-style Report Summary -->
+          <div class="bg-gradient-to-r from-slate-50 to-blue-50 border border-slate-200 rounded-xl p-4 mb-4">
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
+              <div><p class="text-[10px] text-gray-500 uppercase font-semibold">Ridges + Hips</p><p class="text-lg font-black text-gray-800">${edgeSummary.total_ridges_hips_ft || ((edgeSummary.total_ridge_ft || 0) + (edgeSummary.total_hip_ft || 0))} ft</p></div>
+              <div><p class="text-[10px] text-gray-500 uppercase font-semibold">Valleys</p><p class="text-lg font-black text-gray-800">${edgeSummary.total_valley_ft || 0} ft</p></div>
+              <div><p class="text-[10px] text-gray-500 uppercase font-semibold">Drip Edge</p><p class="text-lg font-black text-sky-700">${edgeSummary.total_drip_edge_ft || ((edgeSummary.total_eave_ft || 0) + (edgeSummary.total_rake_ft || 0))} ft</p></div>
+              <div><p class="text-[10px] text-gray-500 uppercase font-semibold">Flashing</p><p class="text-lg font-black text-gray-800">${edgeSummary.total_flashing_ft || ((edgeSummary.total_step_flashing_ft || 0) + (edgeSummary.total_wall_flashing_ft || 0))} ft</p></div>
+            </div>
+            <div class="grid grid-cols-3 md:grid-cols-6 gap-2 mt-3 text-center">
+              <div class="bg-white/70 rounded-lg px-2 py-1.5"><p class="text-[9px] text-gray-400 uppercase">Eaves/Starter</p><p class="text-sm font-bold text-gray-700">${edgeSummary.total_eave_ft || 0} ft</p></div>
+              <div class="bg-white/70 rounded-lg px-2 py-1.5"><p class="text-[9px] text-gray-400 uppercase">Rakes</p><p class="text-sm font-bold text-gray-700">${edgeSummary.total_rake_ft || 0} ft</p></div>
+              <div class="bg-white/70 rounded-lg px-2 py-1.5"><p class="text-[9px] text-gray-400 uppercase">Step Flash</p><p class="text-sm font-bold text-gray-700">${edgeSummary.total_step_flashing_ft || 0} ft</p></div>
+              <div class="bg-white/70 rounded-lg px-2 py-1.5"><p class="text-[9px] text-gray-400 uppercase">Wall Flash</p><p class="text-sm font-bold text-gray-700">${edgeSummary.total_wall_flashing_ft || 0} ft</p></div>
+              <div class="bg-white/70 rounded-lg px-2 py-1.5"><p class="text-[9px] text-gray-400 uppercase">Total Facets</p><p class="text-sm font-bold text-gray-700">${segments.length}</p></div>
+              <div class="bg-white/70 rounded-lg px-2 py-1.5"><p class="text-[9px] text-gray-400 uppercase">Total Linear</p><p class="text-sm font-bold text-brand-700">${edgeSummary.total_linear_ft || 0} ft</p></div>
+            </div>
+          </div>
           <!-- Edge summary cards -->
           <div class="grid grid-cols-5 gap-2 mb-3">
             ${renderEdgeSummaryCard('Ridge', edgeSummary.total_ridge_ft, 'text-green-600', 'bg-green-50')}
@@ -385,6 +402,32 @@ function renderFullReport(r, orderId) {
               <p class="text-xs text-gray-500 uppercase">Est. Cost</p>
               <p class="text-xl font-bold text-green-700">$${(materials.total_material_cost_cad || 0).toLocaleString()}</p>
               <p class="text-xs text-gray-400">CAD</p>
+            </div>
+          </div>
+
+          <!-- EagleView-style Waste Factor Calculator Table -->
+          ${(() => {
+            const netSq = materials.net_squares || materials.gross_squares || Math.ceil(r.total_true_area_sqft / 100) || 0;
+            if (!netSq) return '';
+            const wasteSteps = [0, 5, 8, 10, 12, 13, 15, 18, 20, 25, 28];
+            return '<div class="bg-slate-50 border border-slate-200 rounded-xl p-4 mb-4">' +
+              '<div class="flex items-center gap-2 mb-3"><i class="fas fa-calculator text-slate-500"></i><span class="font-bold text-slate-700 text-sm">Waste Factor Calculator</span>' +
+              '<span class="text-xs text-slate-400 ml-auto">Net area: ' + netSq + ' squares (' + (netSq * 100) + ' sq ft)</span></div>' +
+              '<div class="grid grid-cols-4 md:grid-cols-6 gap-1.5">' +
+              wasteSteps.map(function(w) {
+                const sq = Math.ceil((netSq * (1 + w/100)) * 100) / 100;
+                const isRecommended = Math.abs(w - (materials.waste_pct || 13)) < 2;
+                return '<div class="text-center px-2 py-2 rounded-lg ' + (isRecommended ? 'bg-brand-100 border-2 border-brand-400 ring-2 ring-brand-200' : 'bg-white border border-slate-200') + '">' +
+                  '<p class="text-[10px] font-bold ' + (isRecommended ? 'text-brand-700' : 'text-slate-500') + '">' + w + '% waste</p>' +
+                  '<p class="text-sm font-black ' + (isRecommended ? 'text-brand-800' : 'text-slate-700') + '">' + sq.toFixed(1) + '</p>' +
+                  '<p class="text-[9px] text-slate-400">squares</p>' +
+                  (isRecommended ? '<p class="text-[8px] font-bold text-brand-600 mt-0.5">RECOMMENDED</p>' : '') +
+                '</div>';
+              }).join('') +
+              '</div>' +
+              '<p class="text-xs text-slate-400 mt-2"><i class="fas fa-info-circle mr-1"></i>Recommended waste factor is based on roof complexity. Squares are rounded up to nearest 1/3 for ordering. Complex roofs with many hips/valleys typically need 15-20% waste.</p>' +
+            '</div>';
+          })()}
             </div>
           </div>
 
