@@ -6,7 +6,5 @@ entry_point = "agent.py"
 dockerfile = "Dockerfile"
 
 [env]
-LIVEKIT_URL = "wss://roofreporterai-btkwkiwh.livekit.cloud"
-LIVEKIT_API_KEY = "APIsvVZsCCaboLY"
-ROOFPORTER_API_URL = "https://roofing-measurement-tool.pages.dev"
-DEFAULT_GREETING = "Thank you for calling! My name is Sarah, how can I help you today?"
+ROOFPORTER_API_URL = "https://www.roofreporterai.com"
+DEFAULT_GREETING = "Thank you for calling Rick's Roofing. This is Sarah. Are you calling for a new roof estimate or a repair today?"
