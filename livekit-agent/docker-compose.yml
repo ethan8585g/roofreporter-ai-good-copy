@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  roofer-secretary-agent:
+    build: .
+    container_name: roofer-secretary-agent
+    restart: always
+    env_file:
+      - .env
+    environment:
+      - LIVEKIT_URL=wss://roofreporterai-btkwkiwh.livekit.cloud
+      - ROOFPORTER_API_URL=https://www.roofreporterai.com
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
