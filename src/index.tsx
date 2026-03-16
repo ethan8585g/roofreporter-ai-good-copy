@@ -1003,23 +1003,27 @@ function getContactFormHTML(sourcePage: string = 'unknown') {
       <form id="lead-capture-form" onsubmit="return submitLeadForm(event, '${sourcePage}')" class="bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl p-8 space-y-5">
         <div class="grid md:grid-cols-2 gap-5">
           <div>
-            <label class="block text-sm font-medium text-gray-200 mb-1.5">Full Name <span class="text-red-400">*</span></label>
-            <input type="text" id="lead-name" required placeholder="John Smith" class="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:ring-2 focus:ring-cyan-400 focus:border-transparent outline-none">
+            <label class="block text-sm font-medium text-gray-200 mb-1.5">First Name <span class="text-red-400">*</span></label>
+            <input type="text" id="lead-first-name" required placeholder="John" class="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:ring-2 focus:ring-cyan-400 focus:border-transparent outline-none">
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-200 mb-1.5">Company Name</label>
-            <input type="text" id="lead-company" placeholder="ABC Roofing Ltd." class="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:ring-2 focus:ring-cyan-400 focus:border-transparent outline-none">
+            <label class="block text-sm font-medium text-gray-200 mb-1.5">Last Name <span class="text-red-400">*</span></label>
+            <input type="text" id="lead-last-name" required placeholder="Smith" class="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:ring-2 focus:ring-cyan-400 focus:border-transparent outline-none">
           </div>
         </div>
         <div class="grid md:grid-cols-2 gap-5">
           <div>
+            <label class="block text-sm font-medium text-gray-200 mb-1.5">Company Name</label>
+            <input type="text" id="lead-company" placeholder="ABC Roofing Ltd." class="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:ring-2 focus:ring-cyan-400 focus:border-transparent outline-none">
+          </div>
+          <div>
             <label class="block text-sm font-medium text-gray-200 mb-1.5">Phone Number</label>
             <input type="tel" id="lead-phone" placeholder="(780) 555-1234" class="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:ring-2 focus:ring-cyan-400 focus:border-transparent outline-none">
           </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-200 mb-1.5">Email Address <span class="text-red-400">*</span></label>
-            <input type="email" id="lead-email" required placeholder="john@abcroofing.com" class="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:ring-2 focus:ring-cyan-400 focus:border-transparent outline-none">
-          </div>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-200 mb-1.5">Email Address <span class="text-red-400">*</span></label>
+          <input type="email" id="lead-email" required placeholder="john@abcroofing.com" class="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:ring-2 focus:ring-cyan-400 focus:border-transparent outline-none">
         </div>
         <div>
           <label class="block text-sm font-medium text-gray-200 mb-1.5">How can we help?</label>
@@ -1041,11 +1045,15 @@ function getContactFormHTML(sourcePage: string = 'unknown') {
     btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Submitting...';
     msg.className = 'hidden';
     try {
+      var firstName = document.getElementById('lead-first-name').value.trim();
+      var lastName = document.getElementById('lead-last-name').value.trim();
       var res = await fetch('/api/agents/leads', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: document.getElementById('lead-name').value.trim(),
+          name: firstName + ' ' + lastName,
+          first_name: firstName,
+          last_name: lastName,
           company_name: document.getElementById('lead-company').value.trim(),
           phone: document.getElementById('lead-phone').value.trim(),
           email: document.getElementById('lead-email').value.trim(),
@@ -1236,6 +1244,18 @@ function getSuperAdminDashboardHTML() {
         <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('seo-manager', this)">
           <i class="fas fa-search-plus w-5 text-center"></i>
           <span class="label text-sm font-medium">SEO Manager</span>
+        </div>
+        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('canva', this)">
+          <i class="fas fa-palette w-5 text-center"></i>
+          <span class="label text-sm font-medium">Canva Designs</span>
+        </div>
+        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('pricing-engine', this)">
+          <i class="fas fa-calculator w-5 text-center"></i>
+          <span class="label text-sm font-medium">Pricing Engine</span>
+        </div>
+        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('paywall', this)">
+          <i class="fas fa-shield-alt w-5 text-center"></i>
+          <span class="label text-sm font-medium">Paywall / App Store</span>
         </div>
         <div class="border-t border-gray-800 my-3"></div>
         <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('ai-chat', this)">

@@ -1325,3 +1325,186 @@ adminRoutes.delete('/superadmin/seo/backlinks/:id', async (c) => {
   await c.env.DB.prepare('UPDATE seo_backlinks SET is_active = 0 WHERE id = ?').bind(id).run()
   return c.json({ success: true })
 })
+
+// ============================================================
+// CANVA INTEGRATION — Design templates for invoices/proposals
+// ============================================================
+
+// Save Canva API key
+adminRoutes.post('/canva/connect', async (c) => {
+  const { canva_api_key, canva_brand_template_id } = await c.req.json()
+  if (!canva_api_key) return c.json({ error: 'Canva API key is required' }, 400)
+
+  await c.env.DB.prepare(`
+    INSERT OR REPLACE INTO settings (master_company_id, setting_key, setting_value) VALUES (1, 'canva_api_key', ?)
+  `).bind(canva_api_key).run()
+
+  if (canva_brand_template_id) {
+    await c.env.DB.prepare(`
+      INSERT OR REPLACE INTO settings (master_company_id, setting_key, setting_value) VALUES (1, 'canva_brand_template_id', ?)
+    `).bind(canva_brand_template_id).run()
+  }
+
+  return c.json({ success: true, message: 'Canva connected successfully' })
+})
+
+// Get Canva status
+adminRoutes.get('/canva/status', async (c) => {
+  const apiKey = await c.env.DB.prepare(
+    "SELECT setting_value FROM settings WHERE setting_key = 'canva_api_key' AND master_company_id = 1"
+  ).first<any>()
+
+  const templateId = await c.env.DB.prepare(
+    "SELECT setting_value FROM settings WHERE setting_key = 'canva_brand_template_id' AND master_company_id = 1"
+  ).first<any>()
+
+  // Get saved templates
+  const templates = await c.env.DB.prepare(
+    "SELECT setting_value FROM settings WHERE setting_key = 'canva_templates' AND master_company_id = 1"
+  ).first<any>()
+
+  let savedTemplates: any[] = []
+  if (templates?.setting_value) {
+    try { savedTemplates = JSON.parse(templates.setting_value) } catch {}
+  }
+
+  return c.json({
+    connected: !!apiKey?.setting_value,
+    has_brand_template: !!templateId?.setting_value,
+    templates: savedTemplates,
+    canva_design_url: 'https://www.canva.com/design',
+    instructions: {
+      step_1: 'Create a free Canva account at canva.com',
+      step_2: 'Design your invoice/proposal/estimate template',
+      step_3: 'Use Canva Connect API or paste your design URL here',
+      step_4: 'Templates will be used when generating customer documents',
+      note: 'Canva Connect API requires a Canva for Teams subscription for full API access. Free users can paste design URLs for manual integration.'
+    }
+  })
+})
+
+// Save Canva design template URLs
+adminRoutes.post('/canva/templates', async (c) => {
+  const { templates } = await c.req.json()
+  // templates = [{ name: 'Invoice Template', type: 'invoice', canva_url: 'https://...', thumbnail_url: '' }]
+  
+  if (!Array.isArray(templates)) return c.json({ error: 'templates must be an array' }, 400)
+
+  await c.env.DB.prepare(`
+    INSERT OR REPLACE INTO settings (master_company_id, setting_key, setting_value) VALUES (1, 'canva_templates', ?)
+  `).bind(JSON.stringify(templates)).run()
+
+  return c.json({ success: true, count: templates.length })
+})
+
+// Generate a Canva design from template (creates a copy for customization)
+adminRoutes.post('/canva/generate', async (c) => {
+  const { template_type, customer_name, property_address, total_amount } = await c.req.json()
+
+  // Load Canva API key
+  const apiKeyRow = await c.env.DB.prepare(
+    "SELECT setting_value FROM settings WHERE setting_key = 'canva_api_key' AND master_company_id = 1"
+  ).first<any>()
+
+  if (!apiKeyRow?.setting_value) {
+    return c.json({
+      error: 'Canva API not configured',
+      fallback: 'Use the built-in HTML invoice generator or paste a Canva design URL',
+      instructions: 'Go to Admin Settings → Canva Integration → Connect your Canva API key'
+    }, 400)
+  }
+
+  // Try Canva Connect API to create an autofill design
+  try {
+    const resp = await fetch('https://api.canva.com/rest/v1/autofills', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKeyRow.setting_value}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        brand_template_id: template_type || 'default',
+        data: {
+          customer_name: customer_name || '',
+          property_address: property_address || '',
+          total_amount: total_amount ? `$${parseFloat(total_amount).toFixed(2)}` : '',
+          date: new Date().toLocaleDateString('en-CA'),
+          company_name: 'RoofReporterAI'
+        }
+      })
+    })
+
+    if (resp.ok) {
+      const result = await resp.json()
+      return c.json({ success: true, design: result })
+    } else {
+      const err = await resp.text()
+      return c.json({
+        error: 'Canva API error',
+        details: err,
+        fallback: 'You can manually open your Canva template and customize it'
+      }, 400)
+    }
+  } catch (err: any) {
+    return c.json({
+      error: 'Canva API unavailable',
+      details: err.message,
+      fallback: 'Use the built-in HTML invoice generator instead'
+    }, 500)
+  }
+})
+
+// ============================================================
+// PAYWALL / APP STORE READINESS CHECK
+// ============================================================
+adminRoutes.get('/superadmin/paywall-status', async (c) => {
+  // Check all payment/subscription infrastructure
+  const squareToken = !!(c.env as any).SQUARE_ACCESS_TOKEN
+  const squareLocation = !!(c.env as any).SQUARE_LOCATION_ID
+  const stripeKey = !!(c.env as any).STRIPE_SECRET_KEY
+
+  const creditPackages = await c.env.DB.prepare(
+    'SELECT COUNT(*) as count FROM credit_packages WHERE is_active = 1'
+  ).first<any>()
+
+  const pricingConfig = await c.env.DB.prepare(
+    "SELECT setting_value FROM settings WHERE setting_key = 'subscription_monthly_price_cents' AND master_company_id = 1"
+  ).first<any>()
+
+  const hasSubscriptionPricing = !!(pricingConfig?.setting_value && parseInt(pricingConfig.setting_value) > 0)
+
+  const checks = {
+    payment_gateway: {
+      square_configured: squareToken && squareLocation,
+      stripe_configured: !!stripeKey,
+      any_payment_active: squareToken || !!stripeKey,
+    },
+    subscription_model: {
+      has_pricing: hasSubscriptionPricing,
+      has_credit_packages: (creditPackages?.count || 0) > 0,
+      monthly_price_cents: parseInt(pricingConfig?.setting_value || '0'),
+    },
+    app_store_requirements: {
+      payment_gateway_active: squareToken || !!stripeKey,
+      subscription_pricing_set: hasSubscriptionPricing,
+      free_trial_enabled: true, // 3 free reports default
+      user_auth_system: true, // Google OAuth + email
+      terms_of_service: false, // TODO: needs legal review
+      privacy_policy: false, // TODO: needs legal review
+      app_store_listing: false, // TODO: not submitted yet
+    },
+    overall_ready: false,
+    missing_for_launch: [] as string[],
+  }
+
+  // Determine what's missing
+  if (!checks.payment_gateway.any_payment_active) checks.missing_for_launch.push('Configure Square or Stripe payment gateway')
+  if (!checks.subscription_model.has_pricing) checks.missing_for_launch.push('Set subscription pricing (monthly/annual)')
+  if (!checks.app_store_requirements.terms_of_service) checks.missing_for_launch.push('Add Terms of Service page')
+  if (!checks.app_store_requirements.privacy_policy) checks.missing_for_launch.push('Add Privacy Policy page')
+  if (!checks.app_store_requirements.app_store_listing) checks.missing_for_launch.push('Create App Store listing')
+
+  checks.overall_ready = checks.missing_for_launch.length === 0
+
+  return c.json(checks)
+})

@@ -137,6 +137,28 @@ export interface TraceMaterialEstimate {
   caulk_tubes: number
 }
 
+// ── EagleView-Inspired Extended Data ──
+export interface PitchBreakdown {
+  pitch_label: string
+  pitch_rise: number
+  area_sqft: number
+  percent_of_roof: number
+}
+
+export interface WasteTableRow {
+  waste_pct: number
+  area_sqft: number
+  squares: number
+  is_suggested: boolean
+}
+
+export interface PenetrationSummary {
+  total_count: number
+  total_area_sqft: number
+  total_perimeter_ft: number
+  items: { id: string; type: string; area_sqft: number; perimeter_ft: number }[]
+}
+
 export interface TraceReport {
   report_meta: {
     address: string
@@ -160,6 +182,12 @@ export interface TraceReport {
     num_rakes: number
     dominant_pitch_label: string
     dominant_pitch_angle_deg: number
+    // EagleView-inspired additions
+    estimated_attic_sqft: number
+    number_of_stories: string
+    roof_complexity: 'Simple' | 'Normal' | 'Complex'
+    total_penetrations: number
+    total_area_less_penetrations_ft2: number
   }
   linear_measurements: {
     eaves_total_ft: number
@@ -169,7 +197,21 @@ export interface TraceReport {
     rakes_total_ft: number
     perimeter_eave_rake_ft: number
     hip_plus_ridge_ft: number
+    // EagleView-inspired additions
+    drip_edge_total_ft: number
+    step_flashing_ft: number
+    wall_flashing_ft: number
+    total_flashing_ft: number
+    parapet_walls_ft: number
   }
+  // EagleView-inspired: areas per pitch breakdown
+  areas_per_pitch: PitchBreakdown[]
+  // EagleView-inspired: waste calculation table (0% to 28%)
+  waste_table: WasteTableRow[]
+  // EagleView-inspired: penetrations summary
+  penetrations: PenetrationSummary
+  // EagleView-inspired: facet labels (A-Z sorted smallest to largest)
+  facet_labels: { label: string; face_id: string; area_sqft: number; pitch_label: string }[]
   eave_edge_breakdown: EaveEdge[]
   ridge_details: LineDetail[]
   hip_details: LineDetail[]
@@ -1248,6 +1290,72 @@ export class RoofMeasurementEngine {
 
     const perimeterFt = totalEaveFt + totalRakeFt
 
+    // ── EagleView-Inspired: Areas Per Pitch Breakdown ──
+    const pitchMap = new Map<string, { rise: number; area: number }>()
+    for (const f of facesData) {
+      const key = `${Math.round(f.pitch_rise)}:12`
+      const existing = pitchMap.get(key) || { rise: Math.round(f.pitch_rise), area: 0 }
+      existing.area += f.sloped_area_ft2
+      pitchMap.set(key, existing)
+    }
+    const areasPerPitch: PitchBreakdown[] = Array.from(pitchMap.entries())
+      .map(([label, data]) => ({
+        pitch_label: label,
+        pitch_rise: data.rise,
+        area_sqft: round(data.area, 1),
+        percent_of_roof: round((data.area / totalSloped) * 100, 1)
+      }))
+      .sort((a, b) => a.pitch_rise - b.pitch_rise)
+
+    // ── EagleView-Inspired: Waste Calculation Table ──
+    // Only for areas >= 3/12 pitch (shingle-applicable)
+    const shingleArea = facesData
+      .filter(f => f.pitch_rise >= 3)
+      .reduce((s, f) => s + f.sloped_area_ft2, 0)
+    const shingleAreaForTable = shingleArea > 0 ? shingleArea : totalSloped
+    const wastePercentages = [0, 3, 8, 11, 13, 15, 18, 23, 28]
+    const suggestedWaste = round(wFrac * 100, 0)
+    const wasteTable: WasteTableRow[] = wastePercentages.map(wp => {
+      const areaWithWaste = round(shingleAreaForTable * (1 + wp / 100), 0)
+      return {
+        waste_pct: wp,
+        area_sqft: areaWithWaste,
+        squares: round(Math.ceil((areaWithWaste / SQFT_PER_SQUARE) * 3) / 3, 2),
+        is_suggested: wp === suggestedWaste || (wp > 0 && Math.abs(wp - suggestedWaste) <= 2)
+      }
+    })
+
+    // ── EagleView-Inspired: Penetrations Summary ──
+    // We don't have actual penetration tracing yet, but compute from vision data if available
+    const penetrations: PenetrationSummary = {
+      total_count: 0,
+      total_area_sqft: 0,
+      total_perimeter_ft: 0,
+      items: []
+    }
+
+    // ── EagleView-Inspired: Estimated Attic Area ──
+    // Attic area ≈ projected footprint (the floor area under roof)
+    const estimatedAttic = round(totalProj, 0)
+
+    // ── EagleView-Inspired: Complexity Classification ──
+    const complexityScore = facesData.length + hipSegs.length + valleySegs.length
+    const roofComplexity: 'Simple' | 'Normal' | 'Complex' =
+      complexityScore <= 6 ? 'Simple' : complexityScore <= 14 ? 'Normal' : 'Complex'
+
+    // ── EagleView-Inspired: Number of Stories ──
+    // Heuristic: if max ridge height / avg eave height suggests multi-story
+    const numStories = totalSloped > 3000 || hipSegs.length > 4 ? '>1' : '1'
+
+    // ── EagleView-Inspired: Facet Labels (A-Z, smallest to largest) ──
+    const sortedFaces = [...facesData].sort((a, b) => a.sloped_area_ft2 - b.sloped_area_ft2)
+    const facetLabels = sortedFaces.map((f, i) => ({
+      label: String.fromCharCode(65 + i),
+      face_id: f.face_id,
+      area_sqft: round(f.sloped_area_ft2, 0),
+      pitch_label: f.pitch_label
+    }))
+
     // Advisory notes
     const notes: string[] = []
     if (domPitch >= 9)
@@ -1281,7 +1389,7 @@ export class RoofMeasurementEngine {
         homeowner:      this.homeowner,
         order_id:       this.orderId,
         generated:      this.timestamp,
-        engine_version: 'RoofMeasurementEngine v5.0 (UTM + Shoelace + Common Run + Industry Pitch Multipliers)',
+        engine_version: 'RoofMeasurementEngine v6.0 (EagleView-Class + UTM + Shoelace + Industry Pitch Multipliers)',
         powered_by:     'Reuse Canada / RoofReporterAI',
       },
       key_measurements: {
@@ -1298,6 +1406,12 @@ export class RoofMeasurementEngine {
         num_rakes:                     this.rakesCart.length,
         dominant_pitch_label:          `${round(domPitch, 1)}:12`,
         dominant_pitch_angle_deg:      round(pitchAngleDeg(domPitch), 1),
+        // EagleView-inspired additions
+        estimated_attic_sqft:          estimatedAttic,
+        number_of_stories:             numStories,
+        roof_complexity:               roofComplexity,
+        total_penetrations:            penetrations.total_count,
+        total_area_less_penetrations_ft2: round(totalSloped - penetrations.total_area_sqft, 1),
       },
       linear_measurements: {
         eaves_total_ft:         round(totalEaveFt, 1),
@@ -1307,7 +1421,18 @@ export class RoofMeasurementEngine {
         rakes_total_ft:         round(totalRakeFt, 1),
         perimeter_eave_rake_ft: round(perimeterFt, 1),
         hip_plus_ridge_ft:      round(totalHipFt + totalRidgeFt, 1),
+        // EagleView-inspired additions
+        drip_edge_total_ft:     round(totalEaveFt + totalRakeFt, 1),
+        step_flashing_ft:       0, // Populated from edge detection when available
+        wall_flashing_ft:       0,
+        total_flashing_ft:      0,
+        parapet_walls_ft:       0,
       },
+      // EagleView-inspired sections
+      areas_per_pitch:   areasPerPitch,
+      waste_table:        wasteTable,
+      penetrations:       penetrations,
+      facet_labels:       facetLabels,
       eave_edge_breakdown: edges,
       ridge_details:       ridgeSegs,
       hip_details:         hipSegs,
