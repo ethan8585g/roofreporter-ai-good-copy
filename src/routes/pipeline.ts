@@ -34,14 +34,16 @@ pipelineRoutes.get('/notifications', async (c) => {
 })
 
 pipelineRoutes.post('/notifications/:id/read', async (c) => {
-  const id = c.req.param('id')
-  const admin = c.get('admin' as any) as any
-  if (id === 'all') {
-    await c.env.DB.prepare("UPDATE notifications SET is_read = 1 WHERE owner_id = ?").bind(admin.id).run()
-  } else {
-    await c.env.DB.prepare("UPDATE notifications SET is_read = 1 WHERE id = ? AND owner_id = ?").bind(id, admin.id).run()
-  }
-  return c.json({ success: true })
+  try {
+    const id = c.req.param('id')
+    const admin = c.get('admin' as any) as any
+    if (id === 'all') {
+      await c.env.DB.prepare("UPDATE notifications SET is_read = 1 WHERE owner_id = ?").bind(admin.id).run()
+    } else {
+      await c.env.DB.prepare("UPDATE notifications SET is_read = 1 WHERE id = ? AND owner_id = ?").bind(id, admin.id).run()
+    }
+    return c.json({ success: true })
+  } catch (err: any) { return c.json({ error: err.message }, 500) }
 })
 
 // ============================================================

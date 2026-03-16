@@ -1,0 +1,205 @@
+/* ============================================================
+   3D / 2D ROOF VISUALIZER — Sales Tool Styles
+   ============================================================ */
+
+#vis-container {
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  display: flex;
+  background: #0f172a;
+  overflow: hidden;
+}
+
+/* Three.js Canvas */
+#canvas-3d {
+  flex: 1;
+  position: relative;
+  min-height: 0;
+}
+#canvas-3d canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* 2D Overlay Canvas */
+#canvas-2d {
+  flex: 1;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #1e293b;
+  overflow: hidden;
+}
+#canvas-2d canvas, #canvas-2d img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+#streetview-stack {
+  position: relative;
+  display: inline-block;
+}
+#streetview-stack img,
+#streetview-stack canvas {
+  display: block;
+  max-width: 100%;
+  max-height: 70vh;
+}
+#roof-overlay-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  mix-blend-mode: multiply;
+}
+
+/* Side Panel */
+#vis-panel {
+  width: 340px;
+  min-width: 300px;
+  max-width: 380px;
+  background: #1e293b;
+  border-left: 1px solid #334155;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+/* Header bar */
+#vis-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: linear-gradient(135deg, #0f172a, #1e293b);
+  border-bottom: 1px solid #334155;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* Swatch grid */
+.swatch-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+.swatch-btn {
+  position: relative;
+  cursor: pointer;
+  border: 2px solid transparent;
+  border-radius: 10px;
+  padding: 3px;
+  background: #334155;
+  transition: all 0.2s ease;
+  overflow: hidden;
+}
+.swatch-btn:hover {
+  border-color: #60a5fa;
+  transform: scale(1.08);
+  box-shadow: 0 4px 12px rgba(96,165,250,0.3);
+}
+.swatch-btn.active {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px #3b82f6, 0 4px 12px rgba(59,130,246,0.4);
+}
+.swatch-color {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 7px;
+  display: block;
+}
+.swatch-label {
+  font-size: 9px;
+  color: #94a3b8;
+  text-align: center;
+  margin-top: 4px;
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Mode tabs */
+.vis-tab {
+  flex: 1;
+  padding: 10px 0;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: #64748b;
+  background: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.vis-tab:hover { color: #cbd5e1; }
+.vis-tab.active {
+  color: #3b82f6;
+  border-bottom-color: #3b82f6;
+}
+
+/* Loading spinner */
+.vis-loader {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15,23,42,0.85);
+  z-index: 10;
+}
+.vis-spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid #334155;
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: vis-spin 0.8s linear infinite;
+}
+@keyframes vis-spin { to { transform: rotate(360deg); } }
+
+/* Responsive */
+@media (max-width: 768px) {
+  #vis-container { flex-direction: column; }
+  #vis-panel { width: 100%; max-width: none; max-height: 45vh; border-left: none; border-top: 1px solid #334155; }
+  #canvas-3d, #canvas-2d { min-height: 45vh; }
+  .swatch-grid { grid-template-columns: repeat(5, 1fr); }
+}
+
+/* Screenshot flash */
+.screenshot-flash {
+  position: absolute;
+  inset: 0;
+  background: white;
+  opacity: 0;
+  pointer-events: none;
+  animation: flash-anim 0.3s ease-out;
+  z-index: 100;
+}
+@keyframes flash-anim { 0% { opacity: 0.8; } 100% { opacity: 0; } }
+
+/* Tooltip for swatches */
+.swatch-btn[title]:hover::after {
+  content: attr(title);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #0f172a;
+  color: #e2e8f0;
+  font-size: 10px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+  z-index: 30;
+  pointer-events: none;
+}
