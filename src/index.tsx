@@ -1229,6 +1229,14 @@ function getSuperAdminDashboardHTML() {
           <i class="fas fa-dollar-sign w-5 text-center"></i>
           <span class="label text-sm font-medium">Pricing & Billing</span>
         </div>
+        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('contact-forms', this)">
+          <i class="fas fa-inbox w-5 text-center"></i>
+          <span class="label text-sm font-medium">Contact Forms</span>
+        </div>
+        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('seo-manager', this)">
+          <i class="fas fa-search-plus w-5 text-center"></i>
+          <span class="label text-sm font-medium">SEO Manager</span>
+        </div>
         <div class="border-t border-gray-800 my-3"></div>
         <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('ai-chat', this)">
           <i class="fas fa-brain w-5 text-center"></i>

@@ -726,7 +726,7 @@ crmRoutes.get('/gmail/connect', async (c) => {
   authUrl.searchParams.set('client_id', clientId)
   authUrl.searchParams.set('redirect_uri', redirectUri)
   authUrl.searchParams.set('response_type', 'code')
-  authUrl.searchParams.set('scope', 'https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/userinfo.email')
+  authUrl.searchParams.set('scope', 'https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/calendar.events')
   authUrl.searchParams.set('access_type', 'offline')
   authUrl.searchParams.set('prompt', 'consent')
   authUrl.searchParams.set('state', state)
@@ -1115,5 +1115,64 @@ crmRoutes.get('/stats', async (c) => {
   } catch (e) {
     // Tables might not exist yet — return zeroes
     return c.json({ customers: 0, invoices_owing: 0, proposals_open: 0, jobs_upcoming: 0 })
+  }
+})
+
+// ============================================================
+// CRM MODULE TOGGLES — Admin can enable/disable CRM modules for team
+// ============================================================
+crmRoutes.get('/module-toggles', async (c) => {
+  const cust = await getCustomer(c)
+  if (!cust) return c.json({ error: 'Auth required' }, 401)
+  try {
+    await c.env.DB.prepare(`CREATE TABLE IF NOT EXISTS crm_module_toggles (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      owner_id INTEGER NOT NULL,
+      module_key TEXT NOT NULL,
+      enabled INTEGER DEFAULT 1,
+      UNIQUE(owner_id, module_key)
+    )`).run()
+
+    const { results } = await c.env.DB.prepare(
+      'SELECT module_key, enabled FROM crm_module_toggles WHERE owner_id = ?'
+    ).bind(cust.ownerId).all<any>()
+
+    const toggles: Record<string, boolean> = {
+      customers: true, proposals: true, invoices: true, jobs: true,
+      d2d: true, call_center: true, secretary: true, reports: true,
+      email_outreach: true, calendar: true
+    }
+    for (const r of (results || [])) {
+      toggles[r.module_key] = !!r.enabled
+    }
+    return c.json({ toggles })
+  } catch(e) {
+    return c.json({ toggles: {} })
+  }
+})
+
+crmRoutes.post('/module-toggles', async (c) => {
+  const cust = await getCustomer(c)
+  if (!cust) return c.json({ error: 'Auth required' }, 401)
+  const { module_key, enabled } = await c.req.json()
+  if (!module_key) return c.json({ error: 'module_key required' }, 400)
+
+  try {
+    await c.env.DB.prepare(`CREATE TABLE IF NOT EXISTS crm_module_toggles (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      owner_id INTEGER NOT NULL,
+      module_key TEXT NOT NULL,
+      enabled INTEGER DEFAULT 1,
+      UNIQUE(owner_id, module_key)
+    )`).run()
+
+    await c.env.DB.prepare(
+      `INSERT INTO crm_module_toggles (owner_id, module_key, enabled) VALUES (?, ?, ?)
+       ON CONFLICT(owner_id, module_key) DO UPDATE SET enabled = excluded.enabled`
+    ).bind(cust.ownerId, module_key, enabled ? 1 : 0).run()
+
+    return c.json({ success: true, module_key, enabled: !!enabled })
+  } catch(e: any) {
+    return c.json({ error: e.message }, 500)
   }
 })

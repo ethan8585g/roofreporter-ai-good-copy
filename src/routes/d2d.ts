@@ -349,3 +349,84 @@ d2dRoutes.get('/stats', async (c) => {
 
   return c.json({ stats })
 })
+
+// ============================================================
+// TURF ASSIGNMENT PUSH — Assign turf to team member + notify
+// ============================================================
+d2dRoutes.post('/turfs/:id/assign', async (c) => {
+  const user = await getUser(c)
+  if (!user) return c.json({ error: 'Not authenticated' }, 401)
+  await ensureD2DTables(c.env.DB)
+  const turfId = c.req.param('id')
+  const { team_member_id } = await c.req.json()
+
+  if (!team_member_id) return c.json({ error: 'team_member_id is required' }, 400)
+
+  // Verify ownership
+  const turf = await c.env.DB.prepare('SELECT * FROM d2d_turfs WHERE id = ? AND owner_id = ?').bind(turfId, user.id).first()
+  if (!turf) return c.json({ error: 'Turf not found' }, 404)
+
+  const member = await c.env.DB.prepare('SELECT * FROM d2d_team_members WHERE id = ? AND owner_id = ?').bind(team_member_id, user.id).first<any>()
+  if (!member) return c.json({ error: 'Team member not found' }, 404)
+
+  await c.env.DB.prepare(
+    'UPDATE d2d_turfs SET assigned_to = ?, status = ?, updated_at = datetime(\'now\') WHERE id = ?'
+  ).bind(team_member_id, 'assigned', turfId).run()
+
+  return c.json({
+    success: true,
+    message: `Turf assigned to ${member.name}`,
+    turf_id: parseInt(turfId),
+    assigned_to: { id: member.id, name: member.name, email: member.email }
+  })
+})
+
+// GET /team/:id/overview — Admin overview of a specific team member
+d2dRoutes.get('/team/:id/overview', async (c) => {
+  const user = await getUser(c)
+  if (!user) return c.json({ error: 'Not authenticated' }, 401)
+  await ensureD2DTables(c.env.DB)
+  const memberId = c.req.param('id')
+
+  const member = await c.env.DB.prepare(
+    'SELECT * FROM d2d_team_members WHERE id = ? AND owner_id = ?'
+  ).bind(memberId, user.id).first<any>()
+  if (!member) return c.json({ error: 'Team member not found' }, 404)
+
+  // Get assigned turfs
+  const { results: turfs } = await c.env.DB.prepare(
+    'SELECT * FROM d2d_turfs WHERE assigned_to = ? ORDER BY created_at DESC'
+  ).bind(memberId).all()
+
+  // Get pin stats for this member
+  const pinStats = await c.env.DB.prepare(`
+    SELECT
+      COUNT(*) as total_pins,
+      COUNT(CASE WHEN status = 'yes' THEN 1 END) as yes_count,
+      COUNT(CASE WHEN status = 'no' THEN 1 END) as no_count,
+      COUNT(CASE WHEN status = 'no_answer' THEN 1 END) as no_answer_count,
+      COUNT(CASE WHEN status = 'not_knocked' THEN 1 END) as not_knocked_count,
+      COUNT(CASE WHEN status = 'callback' THEN 1 END) as callback_count
+    FROM d2d_pins WHERE knocked_by = ?
+  `).bind(memberId).first<any>()
+
+  // Get recent pins
+  const { results: recentPins } = await c.env.DB.prepare(
+    'SELECT * FROM d2d_pins WHERE knocked_by = ? ORDER BY knocked_at DESC LIMIT 25'
+  ).bind(memberId).all()
+
+  // Calculate success rate
+  const totalKnocked = (pinStats?.total_pins || 0) - (pinStats?.not_knocked_count || 0)
+  const successRate = totalKnocked > 0 ? Math.round(((pinStats?.yes_count || 0) / totalKnocked) * 100) : 0
+
+  return c.json({
+    member,
+    turfs: turfs || [],
+    stats: {
+      ...(pinStats || {}),
+      total_knocked: totalKnocked,
+      success_rate: successRate
+    },
+    recent_pins: recentPins || []
+  })
+})

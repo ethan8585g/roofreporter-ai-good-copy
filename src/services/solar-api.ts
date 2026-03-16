@@ -490,14 +490,26 @@ export function generateEdgesFromSegments(
   return edges
 }
 export function computeEdgeSummary(edges: EdgeMeasurement[]) {
+  const totalEave = Math.round(edges.filter(e => e.edge_type === 'eave').reduce((s, e) => s + e.true_length_ft, 0))
+  const totalRake = Math.round(edges.filter(e => e.edge_type === 'rake').reduce((s, e) => s + e.true_length_ft, 0))
+  const totalRidge = Math.round(edges.filter(e => e.edge_type === 'ridge').reduce((s, e) => s + e.true_length_ft, 0))
+  const totalHip = Math.round(edges.filter(e => e.edge_type === 'hip').reduce((s, e) => s + e.true_length_ft, 0))
+  const totalValley = Math.round(edges.filter(e => e.edge_type === 'valley').reduce((s, e) => s + e.true_length_ft, 0))
+  const totalStepFlashing = Math.round(edges.filter(e => e.edge_type === 'step_flashing').reduce((s, e) => s + e.true_length_ft, 0))
+  const totalWallFlashing = Math.round(edges.filter(e => e.edge_type === 'wall_flashing').reduce((s, e) => s + e.true_length_ft, 0))
+  const totalFlashing = totalStepFlashing + totalWallFlashing
+
   return {
-    total_ridge_ft: Math.round(edges.filter(e => e.edge_type === 'ridge').reduce((s, e) => s + e.true_length_ft, 0)),
-    total_hip_ft: Math.round(edges.filter(e => e.edge_type === 'hip').reduce((s, e) => s + e.true_length_ft, 0)),
-    total_valley_ft: Math.round(edges.filter(e => e.edge_type === 'valley').reduce((s, e) => s + e.true_length_ft, 0)),
-    total_eave_ft: Math.round(edges.filter(e => e.edge_type === 'eave').reduce((s, e) => s + e.true_length_ft, 0)),
-    total_rake_ft: Math.round(edges.filter(e => e.edge_type === 'rake').reduce((s, e) => s + e.true_length_ft, 0)),
-    total_step_flashing_ft: Math.round(edges.filter(e => e.edge_type === 'step_flashing').reduce((s, e) => s + e.true_length_ft, 0)),
-    total_wall_flashing_ft: Math.round(edges.filter(e => e.edge_type === 'wall_flashing').reduce((s, e) => s + e.true_length_ft, 0)),
+    total_ridge_ft: totalRidge,
+    total_hip_ft: totalHip,
+    total_ridges_hips_ft: totalRidge + totalHip,
+    total_valley_ft: totalValley,
+    total_eave_ft: totalEave,
+    total_rake_ft: totalRake,
+    total_drip_edge_ft: totalEave + totalRake,
+    total_step_flashing_ft: totalStepFlashing,
+    total_wall_flashing_ft: totalWallFlashing,
+    total_flashing_ft: totalFlashing,
     total_transition_ft: Math.round(edges.filter(e => e.edge_type === 'transition').reduce((s, e) => s + e.true_length_ft, 0)),
     total_parapet_ft: Math.round(edges.filter(e => e.edge_type === 'parapet').reduce((s, e) => s + e.true_length_ft, 0)),
     total_linear_ft: Math.round(edges.reduce((s, e) => s + e.true_length_ft, 0))
