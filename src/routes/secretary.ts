@@ -281,6 +281,8 @@ secretaryRoutes.post('/config', async (c) => {
     business_phone, greeting_script, common_qa, general_notes,
     // Mode
     secretary_mode = 'directory',
+    // Agent persona
+    agent_name, agent_voice,
     // Answering-mode fields
     answering_fallback_action, answering_forward_number, answering_sms_notify,
     answering_email_notify, answering_notify_email,
@@ -306,7 +308,7 @@ secretaryRoutes.post('/config', async (c) => {
       await c.env.DB.prepare(
         `UPDATE secretary_config SET
           business_phone = ?, greeting_script = ?, common_qa = ?, general_notes = ?,
-          secretary_mode = ?,
+          secretary_mode = ?, agent_name = ?, agent_voice = ?,
           answering_fallback_action = ?, answering_forward_number = ?,
           answering_sms_notify = ?, answering_email_notify = ?, answering_notify_email = ?,
           full_can_book_appointments = ?, full_can_send_email = ?, full_can_schedule_callback = ?,
@@ -317,7 +319,7 @@ secretaryRoutes.post('/config', async (c) => {
         WHERE customer_id = ?`
       ).bind(
         business_phone, greeting_script, common_qa || '', general_notes || '',
-        secretary_mode,
+        secretary_mode, agent_name || 'Sarah', agent_voice || 'alloy',
         answering_fallback_action || 'take_message', answering_forward_number || '',
         answering_sms_notify ?? 1, answering_email_notify ?? 1, answering_notify_email || '',
         full_can_book_appointments ?? 1, full_can_send_email ?? 1, full_can_schedule_callback ?? 1,
@@ -331,17 +333,17 @@ secretaryRoutes.post('/config', async (c) => {
       await c.env.DB.prepare(
         `INSERT INTO secretary_config (
           customer_id, business_phone, greeting_script, common_qa, general_notes,
-          secretary_mode,
+          secretary_mode, agent_name, agent_voice,
           answering_fallback_action, answering_forward_number,
           answering_sms_notify, answering_email_notify, answering_notify_email,
           full_can_book_appointments, full_can_send_email, full_can_schedule_callback,
           full_can_answer_faq, full_can_take_payment_info, full_business_hours,
           full_booking_link, full_services_offered, full_pricing_info,
           full_service_area, full_email_from_name, full_email_signature
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
       ).bind(
         customerId, business_phone, greeting_script, common_qa || '', general_notes || '',
-        secretary_mode,
+        secretary_mode, agent_name || 'Sarah', agent_voice || 'alloy',
         answering_fallback_action || 'take_message', answering_forward_number || '',
         answering_sms_notify ?? 1, answering_email_notify ?? 1, answering_notify_email || '',
         full_can_book_appointments ?? 1, full_can_send_email ?? 1, full_can_schedule_callback ?? 1,
@@ -461,26 +463,175 @@ secretaryRoutes.post('/toggle', async (c) => {
 })
 
 // ============================================================
-// GET /calls — Call log history
+// GET /calls — Call log history (enhanced with filters)
 // ============================================================
 secretaryRoutes.get('/calls', async (c) => {
   const customerId = c.get('customerId' as any) as number
   const limit = parseInt(c.req.query('limit') || '50')
   const offset = parseInt(c.req.query('offset') || '0')
+  const filter = c.req.query('filter') || 'all' // all, leads, follow_up
+  const search = c.req.query('search') || ''
+
+  let whereClause = 'WHERE customer_id = ?'
+  const params: any[] = [customerId]
+
+  if (filter === 'leads') {
+    whereClause += ' AND is_lead = 1'
+  } else if (filter === 'follow_up') {
+    whereClause += ' AND follow_up_required = 1 AND follow_up_completed = 0'
+  }
+
+  if (search) {
+    whereClause += ' AND (caller_name LIKE ? OR caller_phone LIKE ? OR call_summary LIKE ?)'
+    const s = `%${search}%`
+    params.push(s, s, s)
+  }
 
   const calls = await c.env.DB.prepare(
-    `SELECT * FROM secretary_call_logs WHERE customer_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`
-  ).bind(customerId, limit, offset).all<any>()
+    `SELECT * FROM secretary_call_logs ${whereClause} ORDER BY created_at DESC LIMIT ? OFFSET ?`
+  ).bind(...params, limit, offset).all<any>()
 
   const total = await c.env.DB.prepare(
-    `SELECT COUNT(*) as cnt FROM secretary_call_logs WHERE customer_id = ?`
-  ).bind(customerId).first<any>()
+    `SELECT COUNT(*) as cnt FROM secretary_call_logs ${whereClause}`
+  ).bind(...params).first<any>()
 
   return c.json({
     calls: calls.results || [],
     total: total?.cnt || 0,
     limit,
     offset,
+  })
+})
+
+// ============================================================
+// GET /calls/:id — Single call detail with full transcript
+// ============================================================
+secretaryRoutes.get('/calls/:id', async (c) => {
+  const customerId = c.get('customerId' as any) as number
+  const callId = parseInt(c.req.param('id'))
+
+  const call = await c.env.DB.prepare(
+    `SELECT * FROM secretary_call_logs WHERE id = ? AND customer_id = ?`
+  ).bind(callId, customerId).first<any>()
+
+  if (!call) return c.json({ error: 'Call not found' }, 404)
+
+  // Get linked messages, appointments, callbacks
+  const messages = await c.env.DB.prepare(
+    `SELECT * FROM secretary_messages WHERE call_log_id = ? AND customer_id = ?`
+  ).bind(callId, customerId).all<any>()
+
+  const appointments = await c.env.DB.prepare(
+    `SELECT * FROM secretary_appointments WHERE call_log_id = ? AND customer_id = ?`
+  ).bind(callId, customerId).all<any>()
+
+  const callbacks = await c.env.DB.prepare(
+    `SELECT * FROM secretary_callbacks WHERE call_log_id = ? AND customer_id = ?`
+  ).bind(callId, customerId).all<any>()
+
+  return c.json({
+    call,
+    messages: messages.results || [],
+    appointments: appointments.results || [],
+    callbacks: callbacks.results || [],
+  })
+})
+
+// ============================================================
+// PUT /calls/:id — Update call lead status or follow-up info
+// ============================================================
+secretaryRoutes.put('/calls/:id', async (c) => {
+  const customerId = c.get('customerId' as any) as number
+  const callId = parseInt(c.req.param('id'))
+  const body = await c.req.json()
+  const { lead_status, lead_quality, follow_up_required, follow_up_notes, follow_up_completed, tags } = body
+
+  const sets: string[] = []
+  const vals: any[] = []
+
+  if (lead_status !== undefined) { sets.push('lead_status = ?'); vals.push(lead_status) }
+  if (lead_quality !== undefined) { sets.push('lead_quality = ?'); vals.push(lead_quality) }
+  if (follow_up_required !== undefined) { sets.push('follow_up_required = ?'); vals.push(follow_up_required ? 1 : 0) }
+  if (follow_up_notes !== undefined) { sets.push('follow_up_notes = ?'); vals.push(follow_up_notes) }
+  if (follow_up_completed !== undefined) { sets.push('follow_up_completed = ?'); vals.push(follow_up_completed ? 1 : 0) }
+  if (tags !== undefined) { sets.push('tags = ?'); vals.push(tags) }
+
+  if (sets.length === 0) return c.json({ error: 'No fields to update' }, 400)
+
+  await c.env.DB.prepare(
+    `UPDATE secretary_call_logs SET ${sets.join(', ')} WHERE id = ? AND customer_id = ?`
+  ).bind(...vals, callId, customerId).run()
+
+  return c.json({ success: true })
+})
+
+// ============================================================
+// GET /leads — Leads extracted from calls (is_lead = 1)
+// ============================================================
+secretaryRoutes.get('/leads', async (c) => {
+  const customerId = c.get('customerId' as any) as number
+  const limit = parseInt(c.req.query('limit') || '50')
+  const offset = parseInt(c.req.query('offset') || '0')
+  const status = c.req.query('status') || '' // new, contacted, qualified, converted, lost
+
+  let whereClause = 'WHERE customer_id = ? AND is_lead = 1'
+  const params: any[] = [customerId]
+  if (status) { whereClause += ' AND lead_status = ?'; params.push(status) }
+
+  const leads = await c.env.DB.prepare(
+    `SELECT * FROM secretary_call_logs ${whereClause} ORDER BY created_at DESC LIMIT ? OFFSET ?`
+  ).bind(...params, limit, offset).all<any>()
+
+  const total = await c.env.DB.prepare(
+    `SELECT COUNT(*) as cnt FROM secretary_call_logs ${whereClause}`
+  ).bind(...params).first<any>()
+
+  // Lead stage counts
+  const stages = await c.env.DB.prepare(
+    `SELECT lead_status, COUNT(*) as cnt FROM secretary_call_logs WHERE customer_id = ? AND is_lead = 1 GROUP BY lead_status`
+  ).bind(customerId).all<any>()
+
+  return c.json({
+    leads: leads.results || [],
+    total: total?.cnt || 0,
+    stages: stages.results || [],
+    limit,
+    offset,
+  })
+})
+
+// ============================================================
+// GET /call-stats — Dashboard stats for call center section
+// ============================================================
+secretaryRoutes.get('/call-stats', async (c) => {
+  const customerId = c.get('customerId' as any) as number
+
+  const [totalCalls, todayCalls, weekCalls, totalLeads, newLeads, followUps, avgDuration, outcomes] = await Promise.all([
+    c.env.DB.prepare(`SELECT COUNT(*) as cnt FROM secretary_call_logs WHERE customer_id = ?`).bind(customerId).first<any>(),
+    c.env.DB.prepare(`SELECT COUNT(*) as cnt FROM secretary_call_logs WHERE customer_id = ? AND created_at >= date('now')`).bind(customerId).first<any>(),
+    c.env.DB.prepare(`SELECT COUNT(*) as cnt FROM secretary_call_logs WHERE customer_id = ? AND created_at >= date('now', '-7 days')`).bind(customerId).first<any>(),
+    c.env.DB.prepare(`SELECT COUNT(*) as cnt FROM secretary_call_logs WHERE customer_id = ? AND is_lead = 1`).bind(customerId).first<any>(),
+    c.env.DB.prepare(`SELECT COUNT(*) as cnt FROM secretary_call_logs WHERE customer_id = ? AND is_lead = 1 AND lead_status = 'new'`).bind(customerId).first<any>(),
+    c.env.DB.prepare(`SELECT COUNT(*) as cnt FROM secretary_call_logs WHERE customer_id = ? AND follow_up_required = 1 AND follow_up_completed = 0`).bind(customerId).first<any>(),
+    c.env.DB.prepare(`SELECT AVG(call_duration_seconds) as avg_dur FROM secretary_call_logs WHERE customer_id = ? AND call_duration_seconds > 0`).bind(customerId).first<any>(),
+    c.env.DB.prepare(`SELECT call_outcome, COUNT(*) as cnt FROM secretary_call_logs WHERE customer_id = ? GROUP BY call_outcome`).bind(customerId).all<any>(),
+  ])
+
+  // Recent calls for the mini-list
+  const recentCalls = await c.env.DB.prepare(
+    `SELECT id, caller_phone, caller_name, call_duration_seconds, call_summary, call_outcome, is_lead, lead_status, sentiment, service_type, property_address, created_at FROM secretary_call_logs WHERE customer_id = ? ORDER BY created_at DESC LIMIT 5`
+  ).bind(customerId).all<any>()
+
+  return c.json({
+    total_calls: totalCalls?.cnt || 0,
+    today_calls: todayCalls?.cnt || 0,
+    week_calls: weekCalls?.cnt || 0,
+    total_leads: totalLeads?.cnt || 0,
+    new_leads: newLeads?.cnt || 0,
+    pending_follow_ups: followUps?.cnt || 0,
+    avg_duration_seconds: Math.round(avgDuration?.avg_dur || 0),
+    outcomes: outcomes.results || [],
+    recent_calls: recentCalls.results || [],
   })
 })
 
@@ -812,32 +963,79 @@ secretaryRoutes.post('/webhook/callback', async (c) => {
 
 // ============================================================
 // POST /webhook/call-complete — LiveKit calls this after each call
-// Records call log entry + sends SMS transcript summary to owner
+// Records call log entry with enhanced lead data + sends SMS summary
 // ============================================================
 secretaryRoutes.post('/webhook/call-complete', async (c) => {
   try {
     const body = await c.req.json()
     const {
-      customer_id, caller_phone, caller_name,
+      customer_id, caller_phone, caller_name, caller_email,
       duration_seconds, directory_routed,
-      summary, transcript, outcome, room_id
+      summary, transcript, outcome, room_id,
+      // Enhanced fields from agent
+      service_type, property_address, is_lead,
+      lead_quality, conversation_highlights, sentiment,
+      follow_up_required, follow_up_notes, tags,
+      // Linked data
+      messages_taken, appointments_booked
     } = body
 
     if (!customer_id) return c.json({ error: 'customer_id required' }, 400)
 
-    await c.env.DB.prepare(
-      `INSERT INTO secretary_call_logs (customer_id, caller_phone, caller_name, call_duration_seconds, directory_routed, call_summary, call_transcript, call_outcome, livekit_room_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    // Determine if this is a lead (caller provided name + phone = qualified lead)
+    const detectedLead = is_lead || (caller_name && caller_name !== 'Unknown' && caller_phone && caller_phone !== 'Unknown') ? 1 : 0
+
+    const result = await c.env.DB.prepare(
+      `INSERT INTO secretary_call_logs (
+        customer_id, caller_phone, caller_name, caller_email,
+        call_duration_seconds, directory_routed,
+        call_summary, call_transcript, call_outcome, livekit_room_id,
+        service_type, property_address, is_lead, lead_status, lead_quality,
+        conversation_highlights, sentiment,
+        follow_up_required, follow_up_notes, tags
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).bind(
       customer_id,
       caller_phone || 'Unknown',
       caller_name || 'Unknown',
+      caller_email || '',
       duration_seconds || 0,
       directory_routed || '',
       summary || '',
       transcript || '',
       outcome || 'answered',
-      room_id || ''
+      room_id || '',
+      service_type || '',
+      property_address || '',
+      detectedLead,
+      detectedLead ? 'new' : '',
+      lead_quality || (detectedLead ? 'warm' : 'unknown'),
+      conversation_highlights || '',
+      sentiment || 'neutral',
+      follow_up_required ? 1 : 0,
+      follow_up_notes || '',
+      tags || ''
     ).run()
+
+    const callLogId = result.meta?.last_row_id
+
+    // Link any messages the agent took during the call
+    if (messages_taken && Array.isArray(messages_taken) && messages_taken.length > 0) {
+      for (const msg of messages_taken) {
+        await c.env.DB.prepare(
+          `INSERT INTO secretary_messages (customer_id, caller_phone, caller_name, message_text, urgency, call_log_id) VALUES (?,?,?,?,?,?)`
+        ).bind(customer_id, msg.phone || caller_phone || '', msg.name || caller_name || '', msg.message || '', msg.urgency || 'normal', callLogId || null).run()
+      }
+    }
+
+    // Link any appointments the agent booked
+    if (appointments_booked && Array.isArray(appointments_booked) && appointments_booked.length > 0) {
+      for (const appt of appointments_booked) {
+        await c.env.DB.prepare(
+          `INSERT INTO secretary_appointments (customer_id, caller_phone, caller_name, appointment_type, property_address, notes, call_log_id) VALUES (?,?,?,?,?,?,?)`
+        ).bind(customer_id, caller_phone || '', caller_name || '', appt.service_type || 'estimate', appt.property_address || property_address || '', appt.notes || '', callLogId || null).run()
+      }
+    }
 
     // ── Send SMS transcript summary to the business owner (non-blocking) ──
     const twilioSid = (c.env as any).TWILIO_ACCOUNT_SID
@@ -851,7 +1049,7 @@ secretaryRoutes.post('/webhook/call-complete', async (c) => {
       ).catch(e => console.warn(`[Secretary SMS] Non-critical SMS error for customer ${customer_id}:`, e.message))
     }
 
-    return c.json({ success: true })
+    return c.json({ success: true, call_log_id: callLogId })
   } catch (err: any) {
     console.error('[Secretary Webhook]', err)
     return c.json({ error: err.message }, 500)
