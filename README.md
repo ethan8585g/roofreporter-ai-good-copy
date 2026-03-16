@@ -2,13 +2,13 @@
 
 ## Project Overview
 - **Name**: RoofReporterAI
-- **Version**: 9.3 (LiveKit Agent LIVE + Full Call Answering)
+- **Version**: 9.4 (LiveKit Agent Production-Ready + Cloud Deployment Package)
 - **Domain**: www.roofreporterai.com
 - **Production**: https://roofing-measurement-tool.pages.dev
 - **GitHub**: https://github.com/ethan8585g/roofreporter-ai-good-copy
 - **Platform**: Cloudflare Pages + Workers + D1
 - **Status**: Active
-- **Last Updated**: 2026-03-16 (v9.3)
+- **Last Updated**: 2026-03-16 (v9.4)
 
 ## Core Platform Features
 
@@ -52,9 +52,11 @@
 - Per-user data isolation (owner_id scoped)
 - D2D Manager, Email Outreach, Team Management
 
-### 7. Roofer Secretary AI (LiveKit Voice Agent — LIVE)
-- **AI receptionist LIVE and answering calls** — powered by LiveKit Agents + Inference
-- **LiveKit Agent Worker**: Registered (Worker ID: `AW_u44mtZpi6GTD`, Region: US West B)
+### 7. Roofer Secretary AI (LiveKit Voice Agent — DEPLOYMENT READY)
+- **AI receptionist verified and working** — powered by LiveKit Agents + Inference
+- **Deployment Package**: Complete in `livekit-agent/` — Dockerfile, livekit.toml, agent.py
+- **Deploy to LiveKit Cloud**: `lk cloud auth` → `lk agent create --yes .` (free tier: 1,000 min/mo)
+- **Deploy to VPS**: `docker-compose up -d` or `./deploy.sh` (~$5/mo)
 - **SIP Infrastructure**: Trunk `ST_acLimvCPo5ES` + Dispatch `SDR_cZDM2nFXpW7o`
 - **Call Flow**: 780-983-3335 → forwarded → +1(484) 964-9758 → LiveKit SIP → AI Agent answers
 - **Voice Stack**: Deepgram Nova-3 STT → GPT-4.1-mini LLM → Cartesia Sonic-3 TTS
@@ -343,9 +345,17 @@ Homeowner calls roofer → Roofer's Personal Cell
 
 ## Recommended Next Steps
 
-### Phase 1 — Immediate (Next 1-2 Weeks)
-1. **Deploy LiveKit Agent to LiveKit Cloud** — Currently running from sandbox (dev mode). Need to deploy via `lk agent deploy` for persistent 24/7 operation. Requires LiveKit Cloud account browser auth.
-2. **End-to-End Call Test** — Place a real test call to 780-983-3335, verify it forwards to +14849649758, and confirm the AI agent answers with Rick's Roofing greeting.
+### Phase 1 — Immediate (Next 1-2 Days)
+1. **Deploy LiveKit Agent to LiveKit Cloud (READY)** — Deployment package is complete in `livekit-agent/`. Run from your local machine:
+   ```bash
+   git clone https://github.com/ethan8585g/roofreporter-ai-good-copy.git
+   cd roofreporter-ai-good-copy/livekit-agent
+   lk cloud auth           # Opens browser → log in to LiveKit Cloud
+   lk agent create --yes . # Builds Docker image, uploads, registers agent
+   lk agent status          # Verify it's running
+   ```
+   See `livekit-agent/README.md` for full step-by-step guide. Free tier: 1,000 agent min/mo.
+2. **End-to-End Call Test** — Call 780-983-3335, verify forwarding to +14849649758, confirm Sarah answers with Rick's Roofing greeting.
 3. **Call Logging Dashboard** — Enhance the Secretary AI dashboard to show real-time call logs, messages captured by the agent, and appointment requests.
 4. **SMS Notification on Call** — When the AI takes a message or captures a lead, auto-send SMS to the roofer's phone with caller details.
 5. **Email Notification on Lead** — Send email with full call transcript when the AI captures an estimate request (name + phone + address).
@@ -375,7 +385,17 @@ Homeowner calls roofer → Roofer's Personal Cell
 
 ## Version History
 
-### v9.3 (Current — 2026-03-16)
+### v9.4 (Current — 2026-03-16)
+- **LiveKit Cloud Deployment Package READY** — Full `livekit-agent/` directory with Dockerfile, livekit.toml, agent.py
+- Production deployment: `lk cloud auth` + `lk agent create --yes .` (one-time browser login)
+- Alternative VPS deployment: Docker Compose or `deploy.sh` on any $5/mo server
+- LiveKit agent verified: auto-dispatches to rooms, fetches Rick's Roofing config from API, answers calls
+- Agent tested: room creation → job request → config loaded → session started → agent connected
+- Updated Dockerfile with health checks, optimized .dockerignore
+- Clean livekit.toml (no hardcoded credentials — LiveKit Cloud auto-injects)
+- Comprehensive `livekit-agent/README.md` deployment guide
+
+### v9.3 (2026-03-16)
 - **LiveKit Agent LIVE** — Python voice agent registered with LiveKit Cloud (Worker `AW_u44mtZpi6GTD`)
 - Agent answers calls forwarded from 780-983-3335 to +14849649758 using Rick's Roofing script
 - Voice stack: Deepgram Nova-3 STT → GPT-4.1-mini → Cartesia Sonic-3 TTS

@@ -5,6 +5,12 @@ entry_point = "agent.py"
 [build]
 dockerfile = "Dockerfile"
 
+# Environment variables — LiveKit Cloud auto-injects LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET
 [env]
 ROOFPORTER_API_URL = "https://www.roofreporterai.com"
 DEFAULT_GREETING = "Thank you for calling Rick's Roofing. This is Sarah. Are you calling for a new roof estimate or a repair today?"
+
+# Note: When deploying to LiveKit Cloud, you do NOT need to set
+# LIVEKIT_URL, LIVEKIT_API_KEY, or LIVEKIT_API_SECRET here.
+# LiveKit Cloud automatically injects these into the container.
+# The agent.py code reads them from os.environ at runtime.
