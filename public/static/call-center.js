@@ -1300,7 +1300,7 @@
 
         '<button onclick="window.ccPhoneSendCode()" id="ccSendCodeBtn" ' +
           'class="w-full mt-4 py-3 bg-gradient-to-r from-orange-500 to-red-600 text-white font-bold rounded-xl hover:shadow-lg transition-all flex items-center justify-center gap-2">' +
-          '<i class="fas fa-sms"></i> Send Verification Code' +
+          '<i class="fas fa-key"></i> Get Verification Code' +
         '</button>' +
       '</div>' +
 
@@ -1386,10 +1386,10 @@
           '</div>' +
         '</div>' +
 
-        // SMS confirmation
+        // LiveKit powered banner
         '<div class="bg-sky-50 border border-sky-100 rounded-xl p-4 mb-4">' +
-          '<p class="text-sm text-sky-800 font-semibold"><i class="fas fa-sms text-sky-500 mr-2"></i>Setup details sent via text</p>' +
-          '<p class="text-xs text-sky-600 mt-1">We\'ve texted your phone with the AI call center number and setup details. Check your messages.</p>' +
+          '<p class="text-sm text-sky-800 font-semibold"><i class="fas fa-phone-volume text-sky-500 mr-2"></i>AI Call Center Connected via LiveKit</p>' +
+          '<p class="text-xs text-sky-600 mt-1">Your AI call center is live and ready to handle incoming calls. Powered by LiveKit voice AI.</p>' +
         '</div>' +
 
         '<div class="bg-green-50 border border-green-100 rounded-xl p-4 mb-4">' +
@@ -1405,9 +1405,6 @@
         '<div class="flex gap-3">' +
           '<button onclick="window.ccPhoneDisconnect()" class="flex-1 py-2.5 border-2 border-red-200 text-red-600 rounded-xl text-sm font-bold hover:bg-red-50 transition-all">' +
             '<i class="fas fa-unlink mr-1"></i> Disconnect' +
-          '</button>' +
-          '<button onclick="window.ccPhoneResendSMS()" class="flex-1 py-2.5 border-2 border-sky-200 text-sky-600 rounded-xl text-sm font-bold hover:bg-sky-50 transition-all">' +
-            '<i class="fas fa-sms mr-1"></i> Resend Setup Text' +
           '</button>' +
           '<button onclick="window.ccPhoneReconnect()" class="flex-1 py-2.5 border-2 border-orange-200 text-orange-600 rounded-xl text-sm font-bold hover:bg-orange-50 transition-all">' +
             '<i class="fas fa-redo mr-1"></i> Reconfigure' +
@@ -1440,11 +1437,12 @@
     if (res && res.success) {
       ccPhoneState.phoneNumber = res.phone_number || phone;
       ccPhoneState.step = 2;
-      if (res.dev_code) ccPhoneState.devCode = res.dev_code;
+      if (res.verification_code) ccPhoneState.devCode = res.verification_code;
+      else if (res.dev_code) ccPhoneState.devCode = res.dev_code;
       renderTab('phone-setup');
     } else {
       alert((res && res.error) || 'Failed to send code. Please try again.');
-      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-sms mr-1"></i> Send Verification Code'; }
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-key mr-1"></i> Get Verification Code'; }
     }
   };
 
@@ -1493,11 +1491,12 @@
   window.ccPhoneResend = async function() {
     var res = await ccFetch('/api/call-center/quick-connect/send-code', { method: 'POST', body: JSON.stringify({ phone_number: ccPhoneState.phoneNumber }) });
     if (res && res.success) {
-      if (res.dev_code) {
-        ccPhoneState.devCode = res.dev_code;
+      var newCode = res.verification_code || res.dev_code;
+      if (newCode) {
+        ccPhoneState.devCode = newCode;
         renderTab('phone-setup');
       }
-      alert(res.message || 'New verification code sent!');
+      alert(res.message || 'New verification code generated!');
     } else {
       alert((res && res.error) || 'Failed to resend.');
     }
