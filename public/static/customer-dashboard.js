@@ -65,7 +65,15 @@ async function loadDashData() {
     // Secretary status
     custState.secretaryActive = false;
     custState.secretaryCalls = 0;
+    custState.secretaryStats = null;
     if (secRes.ok) { var secData = await secRes.json(); custState.secretaryActive = secData.has_active_subscription; custState.secretaryCalls = secData.total_calls || 0; }
+    // Fetch secretary call stats if active
+    if (custState.secretaryActive) {
+      try {
+        var statsRes = await fetch('/api/secretary/call-stats', { headers: authHeaders() });
+        if (statsRes.ok) custState.secretaryStats = await statsRes.json();
+      } catch(e) {}
+    }
     // Team members data
     custState.teamMembers = 0;
     custState.isTeamMember = false;
@@ -207,6 +215,9 @@ function renderDashboard() {
         '</a>';
       }).join('') +
     '</div>' +
+
+    // ── Secretary AI Call Center — Highly visible section ──
+    (custState.secretaryActive ? renderSecretaryCallCenter() : '') +
 
     // ── Recent Activity ──
     '<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">' +
@@ -483,6 +494,133 @@ function showReportReadyToast(order) {
     toast.style.animation = 'slideOutRight 0.4s ease-in forwards';
     setTimeout(function() { toast.remove(); }, 500);
   }, 8000);
+}
+
+// ============================================================
+// SECRETARY AI CALL CENTER — Highly visible dashboard section
+// Shows call stats, recent calls, new leads, and quick actions
+// ============================================================
+function renderSecretaryCallCenter() {
+  var st = custState.secretaryStats;
+  if (!st) return '';
+  
+  var totalCalls = st.total_calls || 0;
+  var todayCalls = st.today_calls || 0;
+  var weekCalls = st.week_calls || 0;
+  var totalLeads = st.total_leads || 0;
+  var newLeads = st.new_leads || 0;
+  var followUps = st.pending_follow_ups || 0;
+  var avgDur = st.avg_duration_seconds || 0;
+  var avgMin = Math.floor(avgDur / 60);
+  var avgSec = avgDur % 60;
+  var recentCalls = st.recent_calls || [];
+
+  return '<div class="mb-8">' +
+    // Section Header
+    '<div class="bg-gradient-to-r from-violet-600 via-purple-600 to-indigo-700 rounded-2xl shadow-xl overflow-hidden border border-purple-500/30">' +
+      '<div class="p-6">' +
+        // Title row
+        '<div class="flex items-center justify-between mb-5">' +
+          '<div class="flex items-center gap-3">' +
+            '<div class="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur shadow-lg">' +
+              '<i class="fas fa-headset text-white text-xl"></i>' +
+            '</div>' +
+            '<div>' +
+              '<h2 class="text-white font-black text-lg">AI Secretary Call Center</h2>' +
+              '<p class="text-purple-200 text-xs"><i class="fas fa-circle text-green-400 mr-1 text-[8px]"></i>Live — Sarah is answering your calls</p>' +
+            '</div>' +
+          '</div>' +
+          '<a href="/customer/secretary" class="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-semibold transition-all border border-white/20">' +
+            '<i class="fas fa-cog mr-1"></i>Manage' +
+          '</a>' +
+        '</div>' +
+
+        // Stats Row
+        '<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">' +
+          secretaryStatCard('fa-phone-alt', 'Total Calls', totalCalls, 'bg-white/10', 'text-white') +
+          secretaryStatCard('fa-calendar-day', 'Today', todayCalls, todayCalls > 0 ? 'bg-green-500/20' : 'bg-white/10', todayCalls > 0 ? 'text-green-300' : 'text-white') +
+          secretaryStatCard('fa-fire', 'New Leads', newLeads, newLeads > 0 ? 'bg-amber-500/20' : 'bg-white/10', newLeads > 0 ? 'text-amber-300' : 'text-white') +
+          secretaryStatCard('fa-clock', 'Avg Duration', (avgMin > 0 ? avgMin + 'm ' : '') + avgSec + 's', 'bg-white/10', 'text-white') +
+        '</div>' +
+
+        // Alert banners
+        (newLeads > 0 ? '<div class="bg-amber-500/20 border border-amber-400/30 rounded-xl p-3 mb-4 flex items-center gap-3">' +
+          '<div class="w-8 h-8 bg-amber-500 rounded-lg flex items-center justify-center flex-shrink-0"><i class="fas fa-fire-alt text-white text-sm"></i></div>' +
+          '<div class="flex-1"><p class="text-amber-100 text-sm font-bold">' + newLeads + ' New Lead' + (newLeads > 1 ? 's' : '') + ' Waiting!</p><p class="text-amber-200 text-xs">Callers provided their info — follow up to close the deal</p></div>' +
+          '<a href="/customer/secretary?tab=leads" class="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-white rounded-lg text-xs font-bold transition-all">View Leads <i class="fas fa-arrow-right ml-1"></i></a>' +
+        '</div>' : '') +
+        (followUps > 0 ? '<div class="bg-red-500/20 border border-red-400/30 rounded-xl p-3 mb-4 flex items-center gap-3">' +
+          '<div class="w-8 h-8 bg-red-500 rounded-lg flex items-center justify-center flex-shrink-0"><i class="fas fa-phone-missed text-white text-sm"></i></div>' +
+          '<div class="flex-1"><p class="text-red-100 text-sm font-bold">' + followUps + ' Follow-Up' + (followUps > 1 ? 's' : '') + ' Needed</p><p class="text-red-200 text-xs">Callers requested a callback</p></div>' +
+          '<a href="/customer/secretary?tab=calls&filter=follow_up" class="px-3 py-1.5 bg-red-500 hover:bg-red-400 text-white rounded-lg text-xs font-bold transition-all">Review <i class="fas fa-arrow-right ml-1"></i></a>' +
+        '</div>' : '') +
+
+        // Recent Calls List
+        (recentCalls.length > 0 ?
+          '<div class="bg-white/5 rounded-xl border border-white/10 overflow-hidden">' +
+            '<div class="px-4 py-3 border-b border-white/10 flex items-center justify-between">' +
+              '<h3 class="text-white font-bold text-sm"><i class="fas fa-list-ul mr-2 text-purple-300"></i>Recent Calls</h3>' +
+              '<a href="/customer/secretary?tab=calls" class="text-xs text-purple-300 hover:text-white font-medium">View All <i class="fas fa-arrow-right ml-1"></i></a>' +
+            '</div>' +
+            '<div class="divide-y divide-white/5">' +
+              recentCalls.map(function(call) {
+                var isLead = call.is_lead;
+                var timeAgo = getTimeAgo(call.created_at);
+                var durMin = Math.floor((call.call_duration_seconds || 0) / 60);
+                var durSec = (call.call_duration_seconds || 0) % 60;
+                var durStr = durMin > 0 ? durMin + ':' + (durSec < 10 ? '0' : '') + durSec : durSec + 's';
+                var sentimentIcon = call.sentiment === 'positive' ? 'fa-smile text-green-400' : (call.sentiment === 'negative' ? 'fa-frown text-red-400' : 'fa-meh text-gray-400');
+                var outcomeColor = call.call_outcome === 'answered' ? 'text-green-400' : (call.call_outcome === 'missed' ? 'text-red-400' : 'text-yellow-400');
+                return '<div class="px-4 py-3 hover:bg-white/5 transition-colors flex items-center gap-3">' +
+                  '<div class="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ' + (isLead ? 'bg-amber-500/20' : 'bg-white/10') + '">' +
+                    '<i class="fas ' + (isLead ? 'fa-fire text-amber-400' : 'fa-phone text-purple-300') + ' text-sm"></i>' +
+                  '</div>' +
+                  '<div class="flex-1 min-w-0">' +
+                    '<div class="flex items-center gap-2">' +
+                      '<p class="text-white text-sm font-semibold truncate">' + (call.caller_name || 'Unknown Caller') + '</p>' +
+                      (isLead ? '<span class="px-1.5 py-0.5 bg-amber-500/20 text-amber-300 rounded text-[9px] font-bold">LEAD</span>' : '') +
+                    '</div>' +
+                    '<p class="text-purple-300 text-xs truncate">' + (call.caller_phone || '') + (call.service_type ? ' — ' + call.service_type : '') + '</p>' +
+                  '</div>' +
+                  '<div class="text-right flex-shrink-0">' +
+                    '<p class="text-white text-xs font-medium">' + durStr + '</p>' +
+                    '<p class="text-purple-400 text-[10px]">' + timeAgo + '</p>' +
+                  '</div>' +
+                '</div>';
+              }).join('') +
+            '</div>' +
+          '</div>'
+        : '<div class="text-center py-8">' +
+            '<div class="w-14 h-14 bg-white/10 rounded-full flex items-center justify-center mx-auto mb-3"><i class="fas fa-phone-slash text-purple-300 text-xl"></i></div>' +
+            '<p class="text-purple-200 text-sm mb-1">No calls yet</p>' +
+            '<p class="text-purple-300 text-xs">Sarah is standing by. Calls to your business number will appear here.</p>' +
+          '</div>') +
+
+      '</div>' +
+    '</div>' +
+  '</div>';
+}
+
+function secretaryStatCard(icon, label, value, bgColor, textColor) {
+  return '<div class="' + bgColor + ' rounded-xl p-3 backdrop-blur">' +
+    '<div class="flex items-center gap-2 mb-1">' +
+      '<i class="fas ' + icon + ' ' + textColor + ' text-sm"></i>' +
+      '<span class="text-purple-200 text-xs">' + label + '</span>' +
+    '</div>' +
+    '<p class="' + textColor + ' text-xl font-black">' + value + '</p>' +
+  '</div>';
+}
+
+function getTimeAgo(dateStr) {
+  if (!dateStr) return '';
+  var now = Date.now();
+  var then = new Date(dateStr).getTime();
+  var diff = Math.floor((now - then) / 1000);
+  if (diff < 60) return 'just now';
+  if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+  if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+  if (diff < 604800) return Math.floor(diff / 86400) + 'd ago';
+  return new Date(dateStr).toLocaleDateString();
 }
 
 // ============================================================

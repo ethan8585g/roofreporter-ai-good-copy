@@ -42,6 +42,15 @@
     connectStep: 1,
     // Quick Connect state
     quickConnect: {},
+    // Leads
+    leads: [],
+    leadsCount: 0,
+    leadStages: [],
+    // Call detail modal
+    callDetail: null,
+    // Agent persona selection
+    selectedAgentName: '',
+    selectedAgentVoice: '',
   };
 
   // ── On load: check for Square redirect, then fetch status ──
@@ -76,6 +85,11 @@
         state.isActive = data.is_active;
         state.secretaryMode = data.secretary_mode || (data.config && data.config.secretary_mode) || 'directory';
         state.isDev = !!data.is_dev;
+        // Load agent persona from config
+        if (data.config) {
+          state.selectedAgentName = data.config.agent_name || 'Sarah';
+          state.selectedAgentVoice = data.config.agent_voice || 'alloy';
+        }
       }
     } catch(e) { console.error('Failed to load status', e); }
 
@@ -107,6 +121,20 @@
       }
     } catch(e) {}
 
+    // Load leads count
+    try {
+      var res4 = await fetch('/api/secretary/leads?limit=1', { headers: authOnly() });
+      if (res4.ok) {
+        var leadsData = await res4.json();
+        state.leadsCount = leadsData.total || 0;
+        state.leadStages = leadsData.stages || [];
+      }
+    } catch(e) {}
+
+    // Check URL params for tab deep-linking
+    var urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('tab')) state.activeTab = urlParams.get('tab');
+
     state.loading = false;
     render();
   }
@@ -133,10 +161,11 @@
       '<div class="flex flex-wrap gap-2 mb-6">' +
         tabBtn('setup', 'fa-cog', 'Setup & Config') +
         tabBtn('connect', 'fa-phone-alt', 'Connect Phone') +
+        tabBtn('calls', 'fa-history', 'Call Log' + (state.totalCalls > 0 ? ' (' + state.totalCalls + ')' : '')) +
+        tabBtn('leads', 'fa-fire', 'Leads' + (state.leadsCount > 0 ? ' (' + state.leadsCount + ')' : '')) +
         (state.secretaryMode === 'answering' ? tabBtn('messages', 'fa-envelope', 'Messages' + (state.unreadCount > 0 ? ' (' + state.unreadCount + ')' : '')) : '') +
         (state.secretaryMode === 'full' ? tabBtn('appointments', 'fa-calendar-check', 'Appointments' + (state.pendingAppts > 0 ? ' (' + state.pendingAppts + ')' : '')) : '') +
         (state.secretaryMode === 'full' ? tabBtn('callbacks', 'fa-phone-volume', 'Callbacks' + (state.pendingCallbacks > 0 ? ' (' + state.pendingCallbacks + ')' : '')) : '') +
-        tabBtn('calls', 'fa-history', 'Call Log' + (state.totalCalls > 0 ? ' (' + state.totalCalls + ')' : '')) +
       '</div>' +
       '<div id="secContent"></div>';
 
@@ -146,6 +175,7 @@
     else if (state.activeTab === 'appointments') loadAndRenderAppointments();
     else if (state.activeTab === 'callbacks') loadAndRenderCallbacks();
     else if (state.activeTab === 'calls') renderCallsTab();
+    else if (state.activeTab === 'leads') renderLeadsTab();
   }
 
   function tabBtn(id, icon, label) {
@@ -160,7 +190,7 @@
       (needsAttention ? ' <span class="w-2 h-2 bg-amber-500 rounded-full"></span>' : '') +
       '</button>';
   }
-  window.secSetTab = function(t) { state.activeTab = t; render(); if (t === 'calls') loadCalls(); if (t === 'messages') loadAndRenderMessages(); if (t === 'appointments') loadAndRenderAppointments(); if (t === 'callbacks') loadAndRenderCallbacks(); };
+  window.secSetTab = function(t) { state.activeTab = t; render(); if (t === 'calls') loadCalls(); if (t === 'leads') loadLeads(); if (t === 'messages') loadAndRenderMessages(); if (t === 'appointments') loadAndRenderAppointments(); if (t === 'callbacks') loadAndRenderCallbacks(); };
 
   // ============================================================
   // SUBSCRIPTION PAGE
@@ -287,6 +317,9 @@
         '</div>' +
       '</div>' +
 
+      // AGENT PERSONA — Choose voice & name
+      renderAgentPersonaSelector(c) +
+
       // STEP 1: Phone & Greeting
       '<div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 mb-6">' +
         '<h3 class="font-bold text-gray-800 text-lg mb-1"><span class="inline-flex items-center justify-center w-7 h-7 bg-sky-500 text-white rounded-full text-sm font-bold mr-2">1</span>Phone & Greeting Setup</h3>' +
@@ -326,6 +359,69 @@
       // MODE-SPECIFIC CONFIG
       renderModeSpecificConfig(c);
   }
+
+  // ── Agent Persona Selector — Choose your AI answering agent ──
+  function renderAgentPersonaSelector(c) {
+    var currentVoice = c.agent_voice || (state.phoneSetup && state.phoneSetup.agent_voice) || 'alloy';
+    var currentName = c.agent_name || (state.phoneSetup && state.phoneSetup.agent_name) || 'Sarah';
+
+    // Agent profiles with voice IDs and descriptions
+    var agents = [
+      { id: 'sarah', name: 'Sarah', voice: 'alloy', gender: 'Female', desc: 'Professional, warm, and confident. Ideal for a friendly front desk feel.', icon: 'fa-user-tie', color: 'from-pink-500 to-rose-600', badge: 'Most Popular' },
+      { id: 'emily', name: 'Emily', voice: 'shimmer', gender: 'Female', desc: 'Bright, energetic, and approachable. Great for high-energy sales teams.', icon: 'fa-smile-beam', color: 'from-purple-500 to-violet-600', badge: '' },
+      { id: 'jessica', name: 'Jessica', voice: 'nova', gender: 'Female', desc: 'Calm, authoritative, and trustworthy. Perfect for insurance and professional services.', icon: 'fa-user-shield', color: 'from-indigo-500 to-blue-600', badge: '' },
+      { id: 'james', name: 'James', voice: 'echo', gender: 'Male', desc: 'Deep, professional, and reassuring. Ideal for contractor and trade businesses.', icon: 'fa-hard-hat', color: 'from-sky-500 to-cyan-600', badge: '' },
+      { id: 'mike', name: 'Mike', voice: 'onyx', gender: 'Male', desc: 'Strong, confident, and direct. Great for sales-focused operations.', icon: 'fa-user-check', color: 'from-emerald-500 to-teal-600', badge: '' },
+      { id: 'alex', name: 'Alex', voice: 'fable', gender: 'Male', desc: 'Friendly, conversational, and relaxed. Perfect for a casual, personable vibe.', icon: 'fa-comments', color: 'from-amber-500 to-orange-600', badge: '' },
+    ];
+
+    var agentCards = agents.map(function(agent) {
+      var selected = (currentVoice === agent.voice && currentName === agent.name) || 
+                     (!agents.some(function(a) { return a.voice === currentVoice && a.name === currentName; }) && agent.id === 'sarah');
+      return '<div onclick="secSelectAgent(\'' + agent.name + '\', \'' + agent.voice + '\')" ' +
+        'class="cursor-pointer border-2 rounded-xl p-4 transition-all hover:shadow-lg ' +
+        (selected ? 'border-sky-500 shadow-lg ring-2 ring-sky-400/30 bg-sky-50' : 'border-gray-200 hover:border-gray-300 bg-white') + '">' +
+        '<div class="flex items-center gap-3 mb-2">' +
+          '<div class="w-11 h-11 bg-gradient-to-br ' + agent.color + ' rounded-full flex items-center justify-center shadow-lg flex-shrink-0">' +
+            '<i class="fas ' + agent.icon + ' text-white text-sm"></i>' +
+          '</div>' +
+          '<div class="flex-1 min-w-0">' +
+            '<div class="flex items-center gap-2">' +
+              '<p class="font-bold text-gray-800 text-sm">' + agent.name + '</p>' +
+              '<span class="px-1.5 py-0.5 rounded text-[9px] font-bold ' + (agent.gender === 'Female' ? 'bg-pink-100 text-pink-700' : 'bg-blue-100 text-blue-700') + '">' + agent.gender + '</span>' +
+              (agent.badge ? '<span class="px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded text-[9px] font-bold">' + agent.badge + '</span>' : '') +
+            '</div>' +
+            '<p class="text-xs text-gray-500 line-clamp-1">' + agent.desc + '</p>' +
+          '</div>' +
+          (selected ? '<span class="w-6 h-6 bg-sky-500 rounded-full flex items-center justify-center flex-shrink-0"><i class="fas fa-check text-white text-[10px]"></i></span>' : '<span class="w-6 h-6 border-2 border-gray-300 rounded-full flex-shrink-0"></span>') +
+        '</div>' +
+      '</div>';
+    }).join('');
+
+    return '<div class="bg-white rounded-2xl border-2 border-sky-200 shadow-sm p-6 mb-6">' +
+      '<div class="flex items-center gap-3 mb-1">' +
+        '<div class="w-10 h-10 bg-gradient-to-br from-sky-500 to-blue-600 rounded-xl flex items-center justify-center shadow"><i class="fas fa-user-astronaut text-white"></i></div>' +
+        '<div><h3 class="font-bold text-gray-800 text-lg">Choose Your AI Secretary Agent</h3>' +
+        '<p class="text-gray-500 text-sm">Select the voice and personality that represents your business</p></div>' +
+      '</div>' +
+      '<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mt-4">' + agentCards + '</div>' +
+      '<div class="mt-3 flex items-center gap-2">' +
+        '<div class="flex-1">' +
+          '<label class="block text-xs font-semibold text-gray-600 mb-1">Custom Agent Name</label>' +
+          '<input type="text" id="agentNameInput" value="' + esc(currentName) + '" placeholder="Sarah" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-400 focus:border-sky-400">' +
+        '</div>' +
+        '<div class="text-xs text-gray-400 self-end pb-2"><i class="fas fa-info-circle mr-1"></i>Your agent will introduce themselves with this name</div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  window.secSelectAgent = function(name, voice) {
+    state.selectedAgentName = name;
+    state.selectedAgentVoice = voice;
+    var input = document.getElementById('agentNameInput');
+    if (input) input.value = name;
+    render();
+  };
 
   // ── Mode-specific config sections ──
   function renderModeSpecificConfig(c) {
@@ -1143,10 +1239,24 @@
   // ============================================================
   // CALLS TAB
   // ============================================================
-  async function loadCalls() {
+  async function loadCalls(filter) {
+    var f = filter || state.callFilter || 'all';
+    state.callFilter = f;
+    var search = state.callSearch || '';
     try {
-      var res = await fetch('/api/secretary/calls?limit=50', { headers: authOnly() });
-      if (res.ok) { var data = await res.json(); state.calls = data.calls || []; renderCallsTab(); }
+      var url = '/api/secretary/calls?limit=50&filter=' + f;
+      if (search) url += '&search=' + encodeURIComponent(search);
+      var res = await fetch(url, { headers: authOnly() });
+      if (res.ok) { var data = await res.json(); state.calls = data.calls || []; state.totalCalls = data.total || 0; renderCallsTab(); }
+    } catch(e) {}
+  }
+
+  async function loadLeads(status) {
+    var url = '/api/secretary/leads?limit=50';
+    if (status) url += '&status=' + status;
+    try {
+      var res = await fetch(url, { headers: authOnly() });
+      if (res.ok) { var data = await res.json(); state.leads = data.leads || []; state.leadsCount = data.total || 0; state.leadStages = data.stages || []; renderLeadsTab(); }
     } catch(e) {}
   }
 
@@ -1154,40 +1264,314 @@
     var content = document.getElementById('secContent');
     if (!content) return;
 
-    if (state.calls.length === 0) {
+    if (state.calls.length === 0 && !state.callSearch) {
       content.innerHTML =
         '<div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-12 text-center">' +
           '<div class="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4"><i class="fas fa-phone-slash text-gray-400 text-2xl"></i></div>' +
           '<h3 class="font-bold text-gray-800 text-lg mb-1">No Calls Yet</h3>' +
-          '<p class="text-gray-500 text-sm">When your AI secretary handles calls, they\'ll appear here with full transcripts and summaries.</p>' +
+          '<p class="text-gray-500 text-sm">When your AI secretary handles calls, they\'ll appear here with full transcripts, lead info, and conversation summaries.</p>' +
           (state.phoneSetup?.connection_status !== 'connected' ? '<button onclick="secSetTab(\'connect\')" class="mt-4 px-6 py-3 bg-sky-500 text-white rounded-xl font-semibold text-sm hover:bg-sky-600 transition-all"><i class="fas fa-phone-alt mr-2"></i>Connect Your Phone First</button>' : '') +
         '</div>';
       return;
     }
 
+    var filterBtns = ['all', 'leads', 'follow_up'].map(function(f) {
+      var active = (state.callFilter || 'all') === f;
+      var labels = { all: 'All Calls', leads: 'Leads Only', follow_up: 'Needs Follow-Up' };
+      var icons = { all: 'fa-list', leads: 'fa-fire', follow_up: 'fa-exclamation-circle' };
+      return '<button onclick="secFilterCalls(\'' + f + '\')" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ' +
+        (active ? 'bg-violet-600 text-white shadow' : 'bg-gray-100 text-gray-600 hover:bg-gray-200') + '">' +
+        '<i class="fas ' + icons[f] + ' mr-1"></i>' + labels[f] + '</button>';
+    }).join('');
+
     content.innerHTML =
       '<div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">' +
-        '<div class="px-6 py-4 border-b border-gray-100"><h3 class="font-bold text-gray-800">Recent Calls <span class="text-gray-400 font-normal text-sm">(' + state.calls.length + ')</span></h3></div>' +
+        '<div class="px-6 py-4 border-b border-gray-100">' +
+          '<div class="flex flex-col md:flex-row md:items-center justify-between gap-3">' +
+            '<h3 class="font-bold text-gray-800 text-lg"><i class="fas fa-history text-violet-500 mr-2"></i>Call Log <span class="text-gray-400 font-normal text-sm">(' + state.totalCalls + ')</span></h3>' +
+            '<div class="flex items-center gap-2">' +
+              '<div class="relative">' +
+                '<input type="text" id="callSearchInput" placeholder="Search calls..." value="' + esc(state.callSearch || '') + '" class="pl-8 pr-3 py-1.5 border border-gray-200 rounded-lg text-xs focus:ring-2 focus:ring-violet-300 focus:border-violet-400 w-44" onkeyup="if(event.key===\'Enter\')secSearchCalls()">' +
+                '<i class="fas fa-search absolute left-2.5 top-2 text-gray-400 text-xs"></i>' +
+              '</div>' +
+              filterBtns +
+            '</div>' +
+          '</div>' +
+        '</div>' +
         '<div class="divide-y divide-gray-100">' +
+          (state.calls.length === 0 ? '<div class="p-8 text-center text-gray-400 text-sm"><i class="fas fa-search mr-2"></i>No calls match your filter</div>' :
           state.calls.map(function(call) {
             var oc = call.call_outcome === 'answered' ? 'text-green-600 bg-green-50' :
               call.call_outcome === 'transferred' ? 'text-blue-600 bg-blue-50' :
               call.call_outcome === 'voicemail' ? 'text-amber-600 bg-amber-50' : 'text-gray-600 bg-gray-50';
-            return '<div class="px-6 py-4 hover:bg-gray-50 transition-colors">' +
+            var sentimentIcon = call.sentiment === 'positive' ? 'fa-smile text-green-500' : (call.sentiment === 'negative' ? 'fa-frown text-red-500' : 'fa-meh text-gray-400');
+            var isLead = call.is_lead;
+            return '<div class="px-6 py-4 hover:bg-gray-50 transition-colors cursor-pointer" onclick="secViewCall(' + call.id + ')">' +
               '<div class="flex items-center justify-between mb-2">' +
                 '<div class="flex items-center gap-3">' +
-                  '<div class="w-10 h-10 bg-sky-100 rounded-full flex items-center justify-center"><i class="fas fa-phone text-sky-600"></i></div>' +
-                  '<div><p class="font-semibold text-gray-800 text-sm">' + esc(call.caller_name || 'Unknown Caller') + '</p>' +
-                    '<p class="text-xs text-gray-500">' + esc(call.caller_phone || '') + '</p></div></div>' +
-                '<div class="text-right">' +
-                  '<span class="px-2 py-0.5 rounded-full text-xs font-semibold ' + oc + '">' + (call.call_outcome || 'unknown') + '</span>' +
-                  '<p class="text-xs text-gray-400 mt-1">' + formatDuration(call.call_duration_seconds) + '</p></div></div>' +
-              (call.call_summary ? '<p class="text-sm text-gray-600 ml-13 bg-gray-50 rounded-lg p-3"><i class="fas fa-robot text-gray-400 mr-1"></i>' + esc(call.call_summary) + '</p>' : '') +
-              (call.directory_routed ? '<p class="text-xs text-gray-400 ml-13 mt-1"><i class="fas fa-arrow-right mr-1"></i>Routed to: <strong>' + esc(call.directory_routed) + '</strong></p>' : '') +
-              '<p class="text-xs text-gray-400 ml-13 mt-1">' + new Date(call.created_at).toLocaleString() + '</p>' +
+                  '<div class="w-10 h-10 rounded-full flex items-center justify-center ' + (isLead ? 'bg-amber-100' : 'bg-sky-100') + '">' +
+                    '<i class="fas ' + (isLead ? 'fa-fire text-amber-600' : 'fa-phone text-sky-600') + '"></i>' +
+                  '</div>' +
+                  '<div>' +
+                    '<div class="flex items-center gap-2">' +
+                      '<p class="font-semibold text-gray-800 text-sm">' + esc(call.caller_name || 'Unknown Caller') + '</p>' +
+                      (isLead ? '<span class="px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded text-[9px] font-bold">LEAD</span>' : '') +
+                      (call.follow_up_required && !call.follow_up_completed ? '<span class="px-1.5 py-0.5 bg-red-100 text-red-700 rounded text-[9px] font-bold">FOLLOW UP</span>' : '') +
+                    '</div>' +
+                    '<p class="text-xs text-gray-500">' + esc(call.caller_phone || '') +
+                      (call.service_type ? ' — <span class="text-violet-600 font-medium">' + esc(call.service_type) + '</span>' : '') +
+                      (call.property_address ? ' — <i class="fas fa-map-marker-alt text-red-400 ml-1 mr-0.5"></i>' + esc(call.property_address) : '') +
+                    '</p>' +
+                  '</div>' +
+                '</div>' +
+                '<div class="text-right flex-shrink-0">' +
+                  '<div class="flex items-center gap-2 justify-end">' +
+                    '<i class="fas ' + sentimentIcon + ' text-xs"></i>' +
+                    '<span class="px-2 py-0.5 rounded-full text-xs font-semibold ' + oc + '">' + (call.call_outcome || 'unknown') + '</span>' +
+                  '</div>' +
+                  '<p class="text-xs text-gray-400 mt-1">' + formatDuration(call.call_duration_seconds) + ' — ' + formatTimeAgo(call.created_at) + '</p>' +
+                '</div>' +
+              '</div>' +
+              (call.call_summary ? '<p class="text-sm text-gray-600 ml-13 bg-gray-50 rounded-lg p-3 line-clamp-2"><i class="fas fa-robot text-gray-400 mr-1"></i>' + esc(call.call_summary) + '</p>' : '') +
+              (call.conversation_highlights ? '<p class="text-xs text-violet-600 ml-13 mt-1"><i class="fas fa-star text-violet-400 mr-1"></i>' + esc(call.conversation_highlights).substring(0, 120) + '</p>' : '') +
+              '<div class="flex items-center gap-2 ml-13 mt-2">' +
+                '<button onclick="event.stopPropagation(); secViewCall(' + call.id + ')" class="text-xs text-violet-600 hover:text-violet-800 font-medium"><i class="fas fa-file-alt mr-1"></i>Full Transcript</button>' +
+                (isLead && call.lead_status === 'new' ? '<button onclick="event.stopPropagation(); secUpdateLeadStatus(' + call.id + ', \'contacted\')" class="text-xs text-green-600 hover:text-green-800 font-medium"><i class="fas fa-check mr-1"></i>Mark Contacted</button>' : '') +
+                (call.follow_up_required && !call.follow_up_completed ? '<button onclick="event.stopPropagation(); secCompleteFollowUp(' + call.id + ')" class="text-xs text-blue-600 hover:text-blue-800 font-medium"><i class="fas fa-check-double mr-1"></i>Follow-Up Done</button>' : '') +
+              '</div>' +
+            '</div>';
+          }).join('')) +
+        '</div>' +
+      '</div>';
+  }
+
+  // ── Leads Tab ──
+  function renderLeadsTab() {
+    var content = document.getElementById('secContent');
+    if (!content) return;
+
+    if (state.leads.length === 0 && state.leadsCount === 0) {
+      content.innerHTML =
+        '<div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-12 text-center">' +
+          '<div class="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4"><i class="fas fa-fire text-amber-500 text-2xl"></i></div>' +
+          '<h3 class="font-bold text-gray-800 text-lg mb-1">No Leads Yet</h3>' +
+          '<p class="text-gray-500 text-sm">When callers provide their name, phone, and address, they\'re automatically captured as leads. The AI marks callers as leads when they request an estimate, repair, or service.</p>' +
+        '</div>';
+      return;
+    }
+
+    // Stage filters
+    var stages = [
+      { id: '', label: 'All', icon: 'fa-list', color: 'violet' },
+      { id: 'new', label: 'New', icon: 'fa-fire', color: 'amber' },
+      { id: 'contacted', label: 'Contacted', icon: 'fa-phone-alt', color: 'blue' },
+      { id: 'qualified', label: 'Qualified', icon: 'fa-star', color: 'green' },
+      { id: 'converted', label: 'Converted', icon: 'fa-check-circle', color: 'emerald' },
+      { id: 'lost', label: 'Lost', icon: 'fa-times-circle', color: 'red' },
+    ];
+    var stageCountMap = {};
+    (state.leadStages || []).forEach(function(s) { stageCountMap[s.lead_status] = s.cnt; });
+
+    var stageFilter = stages.map(function(s) {
+      var cnt = s.id ? (stageCountMap[s.id] || 0) : state.leadsCount;
+      var active = (state.leadStatusFilter || '') === s.id;
+      return '<button onclick="secFilterLeads(\'' + s.id + '\')" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ' +
+        (active ? 'bg-' + s.color + '-600 text-white shadow' : 'bg-gray-100 text-gray-600 hover:bg-gray-200') + '">' +
+        '<i class="fas ' + s.icon + ' mr-1"></i>' + s.label + (cnt > 0 ? ' (' + cnt + ')' : '') + '</button>';
+    }).join('');
+
+    content.innerHTML =
+      '<div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">' +
+        '<div class="px-6 py-4 border-b border-gray-100">' +
+          '<div class="flex flex-col md:flex-row md:items-center justify-between gap-3">' +
+            '<h3 class="font-bold text-gray-800 text-lg"><i class="fas fa-fire text-amber-500 mr-2"></i>Leads <span class="text-gray-400 font-normal text-sm">(' + state.leadsCount + ')</span></h3>' +
+            '<div class="flex flex-wrap items-center gap-2">' + stageFilter + '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="divide-y divide-gray-100">' +
+          state.leads.map(function(lead) {
+            var statusColors = { new: 'bg-amber-100 text-amber-700', contacted: 'bg-blue-100 text-blue-700', qualified: 'bg-green-100 text-green-700', converted: 'bg-emerald-100 text-emerald-800', lost: 'bg-red-100 text-red-700' };
+            var sc = statusColors[lead.lead_status] || 'bg-gray-100 text-gray-600';
+            var qualityStars = lead.lead_quality === 'hot' ? 3 : (lead.lead_quality === 'warm' ? 2 : 1);
+            return '<div class="px-6 py-4 hover:bg-gray-50 transition-colors cursor-pointer" onclick="secViewCall(' + lead.id + ')">' +
+              '<div class="flex items-center justify-between">' +
+                '<div class="flex items-center gap-3">' +
+                  '<div class="w-11 h-11 bg-gradient-to-br from-amber-400 to-orange-500 rounded-full flex items-center justify-center shadow">' +
+                    '<i class="fas fa-user text-white text-sm"></i>' +
+                  '</div>' +
+                  '<div>' +
+                    '<div class="flex items-center gap-2">' +
+                      '<p class="font-bold text-gray-800">' + esc(lead.caller_name || 'Unknown') + '</p>' +
+                      '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold ' + sc + '">' + (lead.lead_status || 'new').toUpperCase() + '</span>' +
+                      '<span class="text-amber-400 text-xs">' + '★'.repeat(qualityStars) + '<span class="text-gray-300">' + '★'.repeat(3 - qualityStars) + '</span></span>' +
+                    '</div>' +
+                    '<p class="text-xs text-gray-500 mt-0.5">' +
+                      '<i class="fas fa-phone text-gray-400 mr-1"></i>' + esc(lead.caller_phone || '') +
+                      (lead.caller_email ? ' &middot; <i class="fas fa-envelope text-gray-400 mr-1"></i>' + esc(lead.caller_email) : '') +
+                    '</p>' +
+                    (lead.property_address ? '<p class="text-xs text-gray-500"><i class="fas fa-map-marker-alt text-red-400 mr-1"></i>' + esc(lead.property_address) + '</p>' : '') +
+                    (lead.service_type ? '<p class="text-xs text-violet-600 font-medium mt-0.5"><i class="fas fa-tools mr-1"></i>' + esc(lead.service_type) + '</p>' : '') +
+                  '</div>' +
+                '</div>' +
+                '<div class="text-right flex-shrink-0">' +
+                  '<p class="text-xs text-gray-400">' + formatTimeAgo(lead.created_at) + '</p>' +
+                  '<p class="text-xs text-gray-400 mt-0.5">' + formatDuration(lead.call_duration_seconds) + '</p>' +
+                  '<div class="flex items-center gap-1 mt-1 justify-end">' +
+                    '<select onclick="event.stopPropagation()" onchange="secUpdateLeadStatus(' + lead.id + ', this.value)" class="text-[10px] border border-gray-200 rounded px-1 py-0.5">' +
+                      '<option value="new"' + (lead.lead_status === 'new' ? ' selected' : '') + '>New</option>' +
+                      '<option value="contacted"' + (lead.lead_status === 'contacted' ? ' selected' : '') + '>Contacted</option>' +
+                      '<option value="qualified"' + (lead.lead_status === 'qualified' ? ' selected' : '') + '>Qualified</option>' +
+                      '<option value="converted"' + (lead.lead_status === 'converted' ? ' selected' : '') + '>Converted</option>' +
+                      '<option value="lost"' + (lead.lead_status === 'lost' ? ' selected' : '') + '>Lost</option>' +
+                    '</select>' +
+                  '</div>' +
+                '</div>' +
+              '</div>' +
+              (lead.call_summary ? '<p class="text-sm text-gray-600 mt-2 bg-gray-50 rounded-lg p-3 line-clamp-2"><i class="fas fa-robot text-gray-400 mr-1"></i>' + esc(lead.call_summary) + '</p>' : '') +
             '</div>';
           }).join('') +
-        '</div></div>';
+        '</div>' +
+      '</div>';
+  }
+
+  // ── Call Detail / Full Transcript Modal ──
+  window.secViewCall = async function(callId) {
+    try {
+      var res = await fetch('/api/secretary/calls/' + callId, { headers: authOnly() });
+      if (!res.ok) return;
+      var data = await res.json();
+      var call = data.call;
+      if (!call) return;
+      showCallDetailModal(call, data.messages || [], data.appointments || [], data.callbacks || []);
+    } catch(e) { console.error('Failed to load call detail', e); }
+  };
+
+  function showCallDetailModal(call, messages, appointments, callbacks) {
+    // Remove any existing modal
+    var existing = document.getElementById('callDetailModal');
+    if (existing) existing.remove();
+
+    var isLead = call.is_lead;
+    var sentimentLabel = call.sentiment === 'positive' ? 'Positive' : (call.sentiment === 'negative' ? 'Negative' : 'Neutral');
+    var sentimentColor = call.sentiment === 'positive' ? 'text-green-600 bg-green-50' : (call.sentiment === 'negative' ? 'text-red-600 bg-red-50' : 'text-gray-600 bg-gray-50');
+
+    var transcript = call.call_transcript || 'No transcript available for this call.';
+    // Format transcript lines
+    var transcriptHtml = esc(transcript).replace(/\n/g, '<br>').replace(/(Sarah|Agent|AI):/gi, '<span class="font-bold text-violet-600">$1:</span>').replace(/(Caller|Customer|User):/gi, '<span class="font-bold text-blue-600">$1:</span>');
+
+    var modal = document.createElement('div');
+    modal.id = 'callDetailModal';
+    modal.className = 'fixed inset-0 z-50 flex items-center justify-center p-4';
+    modal.innerHTML =
+      '<div class="absolute inset-0 bg-black/50 backdrop-blur-sm" onclick="document.getElementById(\'callDetailModal\').remove()"></div>' +
+      '<div class="relative bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">' +
+        // Header
+        '<div class="bg-gradient-to-r from-violet-600 to-purple-700 px-6 py-4 flex items-center justify-between">' +
+          '<div class="flex items-center gap-3">' +
+            '<div class="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">' +
+              '<i class="fas ' + (isLead ? 'fa-fire text-amber-300' : 'fa-phone text-white') + '"></i>' +
+            '</div>' +
+            '<div>' +
+              '<h3 class="text-white font-bold">' + esc(call.caller_name || 'Unknown Caller') + '</h3>' +
+              '<p class="text-purple-200 text-xs">' + esc(call.caller_phone || '') + ' — ' + new Date(call.created_at).toLocaleString() + '</p>' +
+            '</div>' +
+          '</div>' +
+          '<button onclick="document.getElementById(\'callDetailModal\').remove()" class="text-white/70 hover:text-white text-lg"><i class="fas fa-times"></i></button>' +
+        '</div>' +
+        // Info bar
+        '<div class="px-6 py-3 bg-gray-50 border-b border-gray-200 flex flex-wrap gap-3">' +
+          '<span class="px-2.5 py-1 rounded-full text-xs font-bold ' + (call.call_outcome === 'answered' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600') + '"><i class="fas fa-phone-alt mr-1"></i>' + (call.call_outcome || 'unknown') + '</span>' +
+          '<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-violet-100 text-violet-700"><i class="fas fa-clock mr-1"></i>' + formatDuration(call.call_duration_seconds) + '</span>' +
+          '<span class="px-2.5 py-1 rounded-full text-xs font-bold ' + sentimentColor + '"><i class="fas fa-' + (call.sentiment === 'positive' ? 'smile' : call.sentiment === 'negative' ? 'frown' : 'meh') + ' mr-1"></i>' + sentimentLabel + '</span>' +
+          (isLead ? '<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-700"><i class="fas fa-fire mr-1"></i>Lead — ' + (call.lead_status || 'new') + '</span>' : '') +
+          (call.service_type ? '<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-700"><i class="fas fa-tools mr-1"></i>' + esc(call.service_type) + '</span>' : '') +
+        '</div>' +
+        // Scrollable body
+        '<div class="flex-1 overflow-y-auto px-6 py-4 space-y-4">' +
+          // Contact info
+          (call.property_address ? '<div class="flex items-center gap-2 text-sm text-gray-600"><i class="fas fa-map-marker-alt text-red-400 w-5"></i><strong>Address:</strong> ' + esc(call.property_address) + '</div>' : '') +
+          (call.caller_email ? '<div class="flex items-center gap-2 text-sm text-gray-600"><i class="fas fa-envelope text-gray-400 w-5"></i><strong>Email:</strong> ' + esc(call.caller_email) + '</div>' : '') +
+          (call.directory_routed ? '<div class="flex items-center gap-2 text-sm text-gray-600"><i class="fas fa-arrow-right text-gray-400 w-5"></i><strong>Routed to:</strong> ' + esc(call.directory_routed) + '</div>' : '') +
+
+          // AI Summary
+          (call.call_summary ? '<div class="bg-violet-50 border border-violet-200 rounded-xl p-4"><h4 class="font-bold text-violet-800 text-sm mb-1"><i class="fas fa-robot mr-1"></i>AI Call Summary</h4><p class="text-sm text-violet-700">' + esc(call.call_summary) + '</p></div>' : '') +
+
+          // Highlights
+          (call.conversation_highlights ? '<div class="bg-amber-50 border border-amber-200 rounded-xl p-4"><h4 class="font-bold text-amber-800 text-sm mb-1"><i class="fas fa-star mr-1"></i>Key Highlights</h4><p class="text-sm text-amber-700">' + esc(call.conversation_highlights) + '</p></div>' : '') +
+
+          // Follow-up notes
+          (call.follow_up_notes ? '<div class="bg-red-50 border border-red-200 rounded-xl p-4"><h4 class="font-bold text-red-800 text-sm mb-1"><i class="fas fa-exclamation-circle mr-1"></i>Follow-Up Notes</h4><p class="text-sm text-red-700">' + esc(call.follow_up_notes) + '</p></div>' : '') +
+
+          // Messages taken
+          (messages.length > 0 ? '<div class="bg-blue-50 border border-blue-200 rounded-xl p-4"><h4 class="font-bold text-blue-800 text-sm mb-2"><i class="fas fa-envelope mr-1"></i>Messages Taken (' + messages.length + ')</h4>' +
+            messages.map(function(m) { return '<div class="text-sm text-blue-700 mb-1">• ' + esc(m.message_text) + (m.urgency !== 'normal' ? ' <span class="text-red-600 font-bold">(' + m.urgency + ')</span>' : '') + '</div>'; }).join('') +
+          '</div>' : '') +
+
+          // Appointments booked
+          (appointments.length > 0 ? '<div class="bg-green-50 border border-green-200 rounded-xl p-4"><h4 class="font-bold text-green-800 text-sm mb-2"><i class="fas fa-calendar-check mr-1"></i>Appointments Booked (' + appointments.length + ')</h4>' +
+            appointments.map(function(a) { return '<div class="text-sm text-green-700 mb-1">• ' + esc(a.appointment_type || 'Estimate') + (a.property_address ? ' at ' + esc(a.property_address) : '') + (a.notes ? ' — ' + esc(a.notes) : '') + '</div>'; }).join('') +
+          '</div>' : '') +
+
+          // Full Transcript
+          '<div class="bg-gray-50 border border-gray-200 rounded-xl p-4">' +
+            '<h4 class="font-bold text-gray-800 text-sm mb-3"><i class="fas fa-file-alt mr-1"></i>Full Call Transcript</h4>' +
+            '<div class="text-sm text-gray-700 leading-relaxed font-mono bg-white rounded-lg p-4 border border-gray-100 max-h-64 overflow-y-auto">' +
+              transcriptHtml +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+        // Footer actions
+        '<div class="px-6 py-3 border-t border-gray-200 bg-gray-50 flex items-center justify-between">' +
+          '<div class="flex gap-2">' +
+            (isLead ? '<select id="modalLeadStatus" onchange="secUpdateLeadStatus(' + call.id + ', this.value)" class="text-xs border border-gray-200 rounded-lg px-2 py-1.5">' +
+              '<option value="new"' + (call.lead_status === 'new' ? ' selected' : '') + '>New</option>' +
+              '<option value="contacted"' + (call.lead_status === 'contacted' ? ' selected' : '') + '>Contacted</option>' +
+              '<option value="qualified"' + (call.lead_status === 'qualified' ? ' selected' : '') + '>Qualified</option>' +
+              '<option value="converted"' + (call.lead_status === 'converted' ? ' selected' : '') + '>Converted</option>' +
+              '<option value="lost"' + (call.lead_status === 'lost' ? ' selected' : '') + '>Lost</option>' +
+            '</select>' : '') +
+          '</div>' +
+          '<button onclick="document.getElementById(\'callDetailModal\').remove()" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg text-sm font-medium transition-all">Close</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(modal);
+  }
+
+  // ── Call action handlers ──
+  window.secFilterCalls = function(filter) { state.callFilter = filter; loadCalls(filter); };
+  window.secSearchCalls = function() { state.callSearch = (document.getElementById('callSearchInput') || {}).value || ''; loadCalls(); };
+  window.secFilterLeads = function(status) { state.leadStatusFilter = status; loadLeads(status); };
+
+  window.secUpdateLeadStatus = async function(callId, status) {
+    try {
+      await fetch('/api/secretary/calls/' + callId, {
+        method: 'PUT', headers: authHeaders(),
+        body: JSON.stringify({ lead_status: status })
+      });
+      // Refresh data
+      if (state.activeTab === 'leads') loadLeads(state.leadStatusFilter);
+      else loadCalls();
+    } catch(e) {}
+  };
+
+  window.secCompleteFollowUp = async function(callId) {
+    try {
+      await fetch('/api/secretary/calls/' + callId, {
+        method: 'PUT', headers: authHeaders(),
+        body: JSON.stringify({ follow_up_completed: true })
+      });
+      loadCalls();
+    } catch(e) {}
+  };
+
+  function formatTimeAgo(dateStr) {
+    if (!dateStr) return '';
+    var diff = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+    if (diff < 60) return 'just now';
+    if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+    if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+    if (diff < 604800) return Math.floor(diff / 86400) + 'd ago';
+    return new Date(dateStr).toLocaleDateString();
   }
 
   // ── Shared functions ──
@@ -1231,6 +1615,9 @@
           common_qa: document.getElementById('secQA')?.value || '',
           general_notes: document.getElementById('secNotes')?.value || '',
           secretary_mode: state.secretaryMode,
+          // Agent persona
+          agent_name: document.getElementById('agentNameInput')?.value || state.selectedAgentName || 'Sarah',
+          agent_voice: state.selectedAgentVoice || (state.phoneSetup && state.phoneSetup.agent_voice) || 'alloy',
           // Answering mode
           answering_fallback_action: fallbackRadio ? fallbackRadio.value : 'take_message',
           answering_forward_number: document.getElementById('answeringFwdNum')?.value || '',
