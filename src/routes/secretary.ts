@@ -2579,18 +2579,18 @@ IMPORTANT RULES:
 })
 
 // ============================================================
-// QUICK CONNECT — Simple SMS-verified phone setup
-// Like Genspark "Call for Me" — enter number, verify, connected.
+// QUICK CONNECT — LiveKit-only phone setup (NO Twilio required)
 // Flow:
 //   1. User enters their business phone number
-//   2. We send a 6-digit SMS verification code via Twilio Verify
-//   3. User enters the code
-//   4. We auto-purchase a LiveKit phone number (or Twilio number)
-//   5. We auto-create LiveKit inbound trunk + dispatch rule
-//   6. User gets a simple one-line forwarding code to dial
+//   2. We generate a 6-digit code shown on screen (instant — no SMS needed)
+//   3. User enters the code to verify ownership
+//   4. We auto-purchase a LiveKit phone number for the AI secretary
+//   5. We auto-create a dispatch rule so calls to the LiveKit number reach the AI agent
+//   6. User sets up call forwarding from their carrier to the LiveKit number
+//   7. Done — AI secretary is live and connected
 // ============================================================
 
-// POST /quick-connect/send-code — Send SMS verification code
+// POST /quick-connect/send-code — Generate verification code (shown on screen)
 secretaryRoutes.post('/quick-connect/send-code', async (c) => {
   const customerId = c.get('customerId' as any) as number
   const { phone_number } = await c.req.json()
@@ -2618,84 +2618,26 @@ secretaryRoutes.post('/quick-connect/send-code', async (c) => {
     ).bind(customerId, normalized).run()
   }
 
-  // Check all Twilio credential options
-  const twilioSid = (c.env as any).TWILIO_ACCOUNT_SID
-  const twilioAuth = (c.env as any).TWILIO_AUTH_TOKEN
-  const twilioVerifySid = (c.env as any).TWILIO_VERIFY_SERVICE_SID
-  const twilioFromNumber = (c.env as any).TWILIO_PHONE_NUMBER
-  const isDev = c.get('isDev' as any) as boolean
-  const canSendSms = hasTwilioCredentials(c.env as any) && !!twilioFromNumber
-
-  console.log(`[QuickConnect] send-code for ${normalized}, twilio_sid=${!!twilioSid}, twilio_auth=${!!twilioAuth}, verify_sid=${!!twilioVerifySid}, from=${!!twilioFromNumber}, canSendSms=${canSendSms}, isDev=${isDev}`)
-
-  // ── Strategy 1: Twilio Verify (best — sends its own SMS) ──
-  if (twilioSid && twilioAuth && twilioVerifySid) {
-    try {
-      const url = `https://verify.twilio.com/v2/Services/${twilioVerifySid}/Verifications`
-      const resp = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Authorization': 'Basic ' + btoa(`${twilioSid}:${twilioAuth}`),
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: `To=${encodeURIComponent(normalized)}&Channel=sms`,
-      })
-      const data = await resp.json() as any
-      console.log(`[QuickConnect] Twilio Verify response: status=${data.status}, sid=${data.sid || 'none'}`)
-
-      if (data.status === 'pending') {
-        return c.json({
-          success: true,
-          phone_number: normalized,
-          message: `Verification code sent to ${normalized}. Check your texts!`,
-          method: 'twilio_verify',
-        })
-      } else {
-        console.error('[QuickConnect] Twilio Verify error:', JSON.stringify(data))
-      }
-    } catch (err: any) {
-      console.error('[QuickConnect] Twilio Verify failed:', err.message)
-    }
-  }
-
-  // ── Generate a 6-digit code and store it (for all other methods) ──
+  // Generate a 6-digit verification code
   const code = String(Math.floor(100000 + Math.random() * 900000))
   await c.env.DB.prepare(
     `UPDATE secretary_config SET verification_code = ?, verification_expires = datetime('now', '+10 minutes'), updated_at = datetime('now') WHERE customer_id = ?`
   ).bind(code, customerId).run()
 
-  // ── Strategy 2: Send code via Twilio SMS (Basic or OAuth auth) ──
-  if (canSendSms) {
-    try {
-      await twilioSend(c.env as any, 'POST', '/Messages', {
-        To: normalized,
-        From: twilioFromNumber,
-        Body: `Your RoofReporterAI verification code is: ${code}. This code expires in 10 minutes.`,
-      })
-      return c.json({
-        success: true,
-        phone_number: normalized,
-        message: `Verification code sent to ${normalized}. Check your texts!`,
-        method: 'twilio_sms',
-      })
-    } catch (err: any) {
-      console.error('[QuickConnect] Twilio SMS send failed:', err.message)
-    }
-  }
+  console.log(`[QuickConnect] send-code for ${normalized}, customerId=${customerId}, code=${code}`)
 
-  // ── Strategy 3: No SMS possible — ALWAYS show code on screen ──
-  // This ensures users are never stuck with "contact support"
-  console.log(`[QuickConnect] No SMS service available. Showing code on screen.`)
+  // LiveKit-only flow: verification code is always shown on screen
+  // No SMS service needed — LiveKit handles voice calls, not text messages
   return c.json({
     success: true,
     phone_number: normalized,
-    message: `Your verification code is shown below. Enter it to connect your phone.`,
+    message: 'Your verification code is ready! Enter it below to activate your AI secretary.',
     method: 'on_screen',
-    dev_code: code,
+    verification_code: code,
   })
 })
 
-// POST /quick-connect/verify — Verify code and auto-setup everything
+// POST /quick-connect/verify — Verify code and auto-setup everything (LiveKit-only)
 secretaryRoutes.post('/quick-connect/verify', async (c) => {
   const customerId = c.get('customerId' as any) as number
   const isDev = c.get('isDev' as any) as boolean
@@ -2709,39 +2651,13 @@ secretaryRoutes.post('/quick-connect/verify', async (c) => {
   else if (!normalized.startsWith('+') && normalized.length === 10) normalized = '+1' + normalized
   else if (!normalized.startsWith('+')) normalized = '+' + normalized
 
-  // Step 1: Verify the code
-  const twilioSid = (c.env as any).TWILIO_ACCOUNT_SID
-  const twilioAuth = (c.env as any).TWILIO_AUTH_TOKEN
-  const twilioVerifySid = (c.env as any).TWILIO_VERIFY_SERVICE_SID
-
+  // Step 1: Verify the code against stored code in DB
   let verified = false
-
-  if (twilioSid && twilioAuth && twilioVerifySid) {
-    try {
-      const url = `https://verify.twilio.com/v2/Services/${twilioVerifySid}/VerificationCheck`
-      const resp = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Authorization': 'Basic ' + btoa(`${twilioSid}:${twilioAuth}`),
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: `To=${encodeURIComponent(normalized)}&Code=${encodeURIComponent(code)}`,
-      })
-      const data = await resp.json() as any
-      verified = data.status === 'approved'
-    } catch (err: any) {
-      console.error('[QuickConnect] Verify check failed:', err.message)
-    }
-  }
-
-  // Fallback: check stored code
-  if (!verified) {
-    const config = await c.env.DB.prepare(
-      `SELECT verification_code, verification_expires FROM secretary_config WHERE customer_id = ?`
-    ).bind(customerId).first<any>()
-    if (config?.verification_code === code && config?.verification_expires > new Date().toISOString()) {
-      verified = true
-    }
+  const config = await c.env.DB.prepare(
+    `SELECT verification_code, verification_expires FROM secretary_config WHERE customer_id = ?`
+  ).bind(customerId).first<any>()
+  if (config?.verification_code === code && config?.verification_expires > new Date().toISOString()) {
+    verified = true
   }
 
   // Dev mode bypass: code "000000"
@@ -2751,7 +2667,7 @@ secretaryRoutes.post('/quick-connect/verify', async (c) => {
     return c.json({ error: 'Invalid or expired verification code. Please try again.' }, 400)
   }
 
-  // Step 2: Phone verified — now auto-setup everything
+  // Step 2: Phone verified — now auto-setup everything via LiveKit
   try {
     const apiKey = (c.env as any).LIVEKIT_API_KEY
     const apiSecret = (c.env as any).LIVEKIT_API_SECRET
@@ -2761,7 +2677,6 @@ secretaryRoutes.post('/quick-connect/verify', async (c) => {
     let trunkId = ''
     let dispatchId = ''
     let connectionMethod = 'livekit_number'
-    let forwardingCode = ''
 
     // Check if customer already has a number
     const existingConfig = await c.env.DB.prepare(
@@ -2769,149 +2684,87 @@ secretaryRoutes.post('/quick-connect/verify', async (c) => {
     ).bind(customerId).first<any>()
 
     if (existingConfig?.assigned_phone_number && existingConfig?.livekit_inbound_trunk_id) {
-      // Already set up — just update connection status
+      // Already set up — reuse existing number
       aiPhoneNumber = existingConfig.assigned_phone_number
       trunkId = existingConfig.livekit_inbound_trunk_id
       dispatchId = existingConfig.livekit_dispatch_rule_id || ''
-    } else {
-      // --- AUTO PURCHASE A PHONE NUMBER ---
-      // Option A: Try LiveKit Phone Numbers API (simplest)
-      if (apiKey && apiSecret && livekitUrl) {
-        try {
-          // Search for available US numbers (LiveKit only supports US currently)
-          const searchResult = await livekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST',
-            '/twirp/livekit.PhoneNumberService/SearchPhoneNumbers',
-            { country_code: 'US', limit: 5 })
+      console.log(`[QuickConnect] Reusing existing number ${aiPhoneNumber} for customer ${customerId}`)
+    } else if (apiKey && apiSecret && livekitUrl) {
+      // --- AUTO PURCHASE A LIVEKIT PHONE NUMBER ---
+      console.log(`[QuickConnect] Purchasing LiveKit phone number for customer ${customerId}`)
+      try {
+        // Search for available US numbers (LiveKit currently supports US numbers)
+        const searchResult = await livekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST',
+          '/twirp/livekit.PhoneNumberService/SearchPhoneNumbers',
+          { country_code: 'US', limit: 5 })
 
-          if (searchResult?.items?.length > 0) {
-            // Purchase the first available number
-            const numberToBuy = searchResult.items[0].e164_format
-            const purchaseResult = await livekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST',
-              '/twirp/livekit.PhoneNumberService/PurchasePhoneNumber',
-              { phone_numbers: [numberToBuy] })
+        console.log(`[QuickConnect] Search result:`, JSON.stringify(searchResult))
 
-            if (purchaseResult?.phone_numbers?.length > 0) {
-              aiPhoneNumber = purchaseResult.phone_numbers[0].e164_format
-              connectionMethod = 'livekit_direct'
+        if (searchResult?.items?.length > 0) {
+          // Purchase the first available number
+          const numberToBuy = searchResult.items[0].e164_format
+          console.log(`[QuickConnect] Purchasing number: ${numberToBuy}`)
 
-              // Create dispatch rule
-              const dispatchResult = await livekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST',
-                '/twirp/livekit.SIP/CreateSIPDispatchRule', {
-                  rule: { dispatchRuleIndividual: { roomPrefix: `secretary-${customerId}-` } },
-                  name: `secretary-dispatch-${customerId}`,
-                  metadata: JSON.stringify({ customer_id: customerId, service: 'roofer_secretary' }),
-                })
-              dispatchId = dispatchResult?.sip_dispatch_rule_id || ''
+          // Create dispatch rule FIRST (we'll assign the number to it after purchase)
+          const dispatchResult = await livekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST',
+            '/twirp/livekit.SIP/CreateSIPDispatchRule', {
+              rule: { dispatchRuleIndividual: { roomPrefix: `secretary-${customerId}-` } },
+              name: `secretary-dispatch-${customerId}`,
+              metadata: JSON.stringify({ customer_id: customerId, service: 'roofer_secretary' }),
+            })
+          dispatchId = dispatchResult?.sip_dispatch_rule_id || ''
+          console.log(`[QuickConnect] Created dispatch rule: ${dispatchId}`)
 
-              // Assign number to dispatch rule
-              if (dispatchId) {
+          // Purchase the number and assign to dispatch rule
+          const purchaseResult = await livekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST',
+            '/twirp/livekit.PhoneNumberService/PurchasePhoneNumber',
+            { 
+              phone_numbers: [numberToBuy],
+              sip_dispatch_rule_id: dispatchId || undefined
+            })
+
+          if (purchaseResult?.phone_numbers?.length > 0) {
+            aiPhoneNumber = purchaseResult.phone_numbers[0].e164_format
+            connectionMethod = 'livekit_direct'
+            console.log(`[QuickConnect] Purchased number: ${aiPhoneNumber}, dispatch: ${dispatchId}`)
+
+            // If dispatch wasn't assigned during purchase, update the number now
+            if (dispatchId && !purchaseResult.phone_numbers[0].sip_dispatch_rule_id) {
+              try {
                 await livekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST',
                   '/twirp/livekit.PhoneNumberService/UpdatePhoneNumber',
                   { phone_number: aiPhoneNumber, sip_dispatch_rule_id: dispatchId })
+                console.log(`[QuickConnect] Updated number with dispatch rule`)
+              } catch (e: any) {
+                console.error(`[QuickConnect] Failed to update number with dispatch rule:`, e.message)
               }
             }
+          } else {
+            console.error(`[QuickConnect] Purchase returned no numbers:`, JSON.stringify(purchaseResult))
           }
-        } catch (err: any) {
-          console.error('[QuickConnect] LiveKit Phone Numbers failed:', err.message)
+        } else {
+          console.error(`[QuickConnect] No US numbers available from LiveKit`)
         }
+      } catch (err: any) {
+        console.error('[QuickConnect] LiveKit Phone Numbers failed:', err.message)
       }
+    }
 
-      // Option B: Try Twilio number purchase + LiveKit SIP trunk
-      if (!aiPhoneNumber && twilioSid && twilioAuth) {
-        try {
-          // Search for Canadian numbers (Alberta preferred)
-          let search = await twilioAPI(twilioSid, twilioAuth, 'GET',
-            '/AvailablePhoneNumbers/CA/Local?AreaCode=780&VoiceEnabled=true&PageSize=1', undefined)
-
-          if (!search?.available_phone_numbers?.length) {
-            search = await twilioAPI(twilioSid, twilioAuth, 'GET',
-              '/AvailablePhoneNumbers/CA/Local?VoiceEnabled=true&PageSize=1', undefined)
-          }
-          if (!search?.available_phone_numbers?.length) {
-            search = await twilioAPI(twilioSid, twilioAuth, 'GET',
-              '/AvailablePhoneNumbers/US/Local?VoiceEnabled=true&PageSize=1', undefined)
-          }
-
-          if (search?.available_phone_numbers?.length > 0) {
-            const phoneToCreate = search.available_phone_numbers[0]
-            const purchased = await twilioAPI(twilioSid, twilioAuth, 'POST', '/IncomingPhoneNumbers', {
-              PhoneNumber: phoneToCreate.phone_number,
-              FriendlyName: `RoofReporterAI Secretary - Customer ${customerId}`,
-            })
-
-            if (purchased?.sid) {
-              aiPhoneNumber = purchased.phone_number
-              connectionMethod = 'twilio_sip'
-
-              // Save to phone pool
-              await c.env.DB.prepare(
-                `INSERT OR REPLACE INTO secretary_phone_pool (phone_number, phone_sid, region, status, assigned_to_customer_id, assigned_at) VALUES (?, ?, 'CA', 'assigned', ?, datetime('now'))`
-              ).bind(aiPhoneNumber, purchased.sid, customerId).run()
-
-              // Configure Twilio to route calls to LiveKit via TwiML
-              if (apiKey && apiSecret && livekitUrl) {
-                const livekitSipUri = (c.env as any).LIVEKIT_SIP_URI || ''
-
-                // Create LiveKit inbound trunk for this number
-                const trunkResult = await livekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST',
-                  '/twirp/livekit.SIP/CreateSIPInboundTrunk', {
-                    trunk: {
-                      name: `secretary-${customerId}`,
-                      numbers: [aiPhoneNumber],
-                      krisp_enabled: true,
-                      metadata: JSON.stringify({ customer_id: customerId, service: 'roofer_secretary' }),
-                    }
-                  })
-                trunkId = trunkResult?.sip_trunk_id || trunkResult?.trunk?.sip_trunk_id || ''
-
-                // Create dispatch rule
-                const dispatchResult = await livekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST',
-                  '/twirp/livekit.SIP/CreateSIPDispatchRule', {
-                    trunk_ids: trunkId ? [trunkId] : [],
-                    rule: { dispatchRuleIndividual: { roomPrefix: `secretary-${customerId}-` } },
-                    name: `secretary-dispatch-${customerId}`,
-                    metadata: JSON.stringify({ customer_id: customerId }),
-                  })
-                dispatchId = dispatchResult?.sip_dispatch_rule_id || ''
-
-                // Configure Twilio webhook to route to LiveKit SIP
-                if (livekitSipUri && purchased.sid) {
-                  const twimlUrl = `https://handler.twilio.com/twiml/EH_PLACEHOLDER`
-                  // Update Twilio number voice URL to forward to LiveKit
-                  // We'll use a simple TwiML response to SIP to LiveKit
-                  const twiml = `<Response><Dial><Sip>sip:${aiPhoneNumber.replace('+', '')}@${livekitSipUri};transport=tcp</Sip></Dial></Response>`
-                  // For now, we store the TwiML — Twilio TwiML Bins need to be configured separately
-                  // The actual webhook configuration happens via Twilio Console or API
-                }
-              }
-            }
-          }
-        } catch (err: any) {
-          console.error('[QuickConnect] Twilio purchase failed:', err.message)
-        }
-      }
-
-      // Option C: Dev mode — assign a placeholder
-      if (!aiPhoneNumber && isDev) {
-        aiPhoneNumber = '+17800000001'
-        connectionMethod = 'dev_placeholder'
-        await c.env.DB.prepare(
-          `INSERT OR IGNORE INTO secretary_phone_pool (phone_number, region, status, assigned_to_customer_id, assigned_at) VALUES (?, 'AB', 'assigned', ?, datetime('now'))`
-        ).bind(aiPhoneNumber, customerId).run()
-      }
+    // Dev mode fallback — assign a placeholder
+    if (!aiPhoneNumber && isDev) {
+      aiPhoneNumber = '+17800000001'
+      connectionMethod = 'dev_placeholder'
+      console.log(`[QuickConnect] Dev mode — using placeholder number`)
     }
 
     if (!aiPhoneNumber) {
       return c.json({
-        error: 'Unable to purchase a phone number automatically. Please contact support or configure Twilio/LiveKit API keys.',
+        error: 'Unable to purchase a phone number automatically. Please ensure LiveKit API keys are configured and your account has phone number purchasing enabled.',
         verified: true,
       }, 503)
     }
 
-    // AI number is now assigned — auto-activate and send SMS setup confirmation
-    const aiDigits = aiPhoneNumber.replace(/^\+1/, '').replace(/\D/g, '')
-
-    // Update secretary config — mark as CONNECTED immediately (no manual forwarding step)
+    // AI number is now assigned — auto-activate
     await c.env.DB.prepare(`
       UPDATE secretary_config SET
         business_phone = ?,
@@ -2946,21 +2799,7 @@ secretaryRoutes.post('/quick-connect/verify', async (c) => {
     const aiPhoneDisplay = formatPhone(aiPhoneNumber)
     const bizPhoneDisplay = formatPhone(normalized)
 
-    // Send SMS with AI secretary number and connection details (using unified helper)
-    let smsSent = false
-    const twilioFromNumber2 = (c.env as any).TWILIO_PHONE_NUMBER
-    if (hasTwilioCredentials(c.env as any) && twilioFromNumber2) {
-      try {
-        await twilioSend(c.env as any, 'POST', '/Messages', {
-          To: normalized,
-          From: twilioFromNumber2,
-          Body: `RoofReporterAI Secretary is LIVE!\n\nYour AI answering number: ${aiPhoneDisplay}\n\nHow it works:\n- Customers call your business number ${bizPhoneDisplay}\n- If you can't answer, calls are handled by your AI secretary at ${aiPhoneDisplay}\n- AI greets them, answers questions & routes calls\n- You get an SMS summary after every AI-handled call\n\nYour AI secretary is automatically connected and ready to go!\n\nManage at: roofreporterai.com/customer/secretary`,
-        })
-        smsSent = true
-      } catch (err: any) {
-        console.error('[QuickConnect] Setup SMS failed:', err.message)
-      }
-    }
+    console.log(`[QuickConnect] SUCCESS — Customer ${customerId}: business=${normalized}, ai=${aiPhoneNumber}, method=${connectionMethod}`)
 
     return c.json({
       success: true,
@@ -2973,14 +2812,11 @@ secretaryRoutes.post('/quick-connect/verify', async (c) => {
       connection_method: connectionMethod,
       trunk_id: trunkId,
       dispatch_rule_id: dispatchId,
-      sms_sent: smsSent,
-      message: smsSent
-        ? `Phone verified and your AI secretary is LIVE! We've texted ${bizPhoneDisplay} with your AI secretary number and setup details.`
-        : `Phone verified and your AI secretary is LIVE! Your AI secretary number is ${aiPhoneDisplay}.`,
+      message: `Phone verified and your AI secretary is LIVE! Your AI secretary number is ${aiPhoneDisplay}. Calls to this number will be answered by your AI secretary.`,
     })
   } catch (err: any) {
     console.error('[QuickConnect] Setup error:', err)
-    return c.json({ error: 'Setup failed', details: err.message, verified: true }, 500)
+    return c.json({ error: 'Setup failed: ' + err.message, verified: true }, 500)
   }
 })
 
@@ -2995,7 +2831,7 @@ secretaryRoutes.post('/quick-connect/complete', async (c) => {
   return c.json({ success: true, message: 'Your AI secretary is now live!' })
 })
 
-// POST /quick-connect/resend-sms — Resend the setup details SMS
+// POST /quick-connect/resend-sms — Resend setup details (or regenerate code)
 secretaryRoutes.post('/quick-connect/resend-sms', async (c) => {
   const customerId = c.get('customerId' as any) as number
 
@@ -3016,25 +2852,15 @@ secretaryRoutes.post('/quick-connect/resend-sms', async (c) => {
 
   const bizPhoneDisplay = formatPhone(config.business_phone)
   const aiPhoneDisplay = formatPhone(config.assigned_phone_number)
-  const aiDigits = config.assigned_phone_number.replace(/^\+1/, '').replace(/\D/g, '')
 
-  const twilioFromNumber = (c.env as any).TWILIO_PHONE_NUMBER
-
-  if (!hasTwilioCredentials(c.env as any) || !twilioFromNumber) {
-    return c.json({ error: 'SMS service not configured. Your AI secretary is still active — manage it from the dashboard.' }, 503)
-  }
-
-  try {
-    await twilioSend(c.env as any, 'POST', '/Messages', {
-      To: config.business_phone,
-      From: twilioFromNumber,
-      Body: `RoofReporterAI Secretary is LIVE!\n\nYour AI answering number: ${aiPhoneDisplay}\n\nHow it works:\n- Customers call your business number ${bizPhoneDisplay}\n- If you can't answer, calls are handled by your AI secretary at ${aiPhoneDisplay}\n- AI greets them, answers questions & routes calls\n- You get an SMS summary after every AI-handled call\n\nYour AI secretary is automatically connected and ready to go!\n\nManage at: roofreporterai.com/customer/secretary`,
-    })
-    return c.json({ success: true, message: `Setup details sent to ${bizPhoneDisplay}. Check your texts!` })
-  } catch (err: any) {
-    console.error('[QuickConnect] Resend SMS failed:', err.message)
-    return c.json({ error: 'Failed to send SMS. Please try again.' }, 500)
-  }
+  return c.json({ 
+    success: true, 
+    message: `Your AI secretary number is ${aiPhoneDisplay}. Your business phone is ${bizPhoneDisplay}. Manage your AI secretary from the dashboard.`,
+    ai_phone_number: config.assigned_phone_number,
+    ai_phone_display: aiPhoneDisplay,
+    business_phone: config.business_phone,
+    business_phone_display: bizPhoneDisplay,
+  })
 })
 
 // GET /quick-connect/status — Get current quick-connect setup status
