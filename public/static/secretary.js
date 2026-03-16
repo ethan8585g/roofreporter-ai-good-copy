@@ -190,7 +190,7 @@
           '<h3 class="font-bold text-gray-800 text-lg mb-4"><i class="fas fa-plug text-sky-500 mr-2"></i>How It Works</h3>' +
           '<div class="space-y-4">' +
             howStep(1, 'Subscribe & Configure', 'Set up your AI secretary with your greeting script, FAQ answers, and call routing departments.') +
-            howStep(2, 'Connect Via Text', 'Enter your business phone number and verify with a text message. That\'s it — your AI secretary goes live instantly.') +
+            howStep(2, 'Connect Your Phone', 'Enter your business phone number and verify with a code on screen. That\'s it — your AI secretary goes live instantly.') +
             howStep(3, 'AI Answers When You Can\'t', 'Your phone rings first. If you don\'t answer or you\'re on another call, the AI picks up. It greets the caller, answers questions, routes to departments, and takes messages.') +
             howStep(4, 'Get SMS Summary + Call Log', 'After every AI-handled call, you receive a text message with the caller info, transcript summary, and which department was selected. Full logs always in your dashboard.') +
           '</div>' +
@@ -595,7 +595,9 @@
         state.quickConnect = state.quickConnect || {};
         state.quickConnect.codeSent = true;
         state.quickConnect.phone = data.phone_number;
-        if (data.dev_code) state.quickConnect.devCode = data.dev_code;
+        // Accept code from either field name (dev_code or verification_code)
+        var theCode = data.dev_code || data.verification_code;
+        if (theCode) state.quickConnect.devCode = theCode;
         showToast(data.message, 'success');
         renderConnectTab();
       } else {
@@ -619,12 +621,8 @@
       '<p class="text-xs text-sky-500 mt-2 text-center"><i class="fas fa-hand-pointer mr-1"></i>Tap here to auto-fill</p>' +
     '</div>' : '';
 
-    var headerText = qc.devCode 
-      ? '<h4 class="text-xl font-extrabold text-gray-800 mb-2">Enter Your Verification Code</h4>'
-      : '<h4 class="text-xl font-extrabold text-gray-800 mb-2">Check your phone!</h4>';
-    var subText = qc.devCode
-      ? '<p class="text-gray-500 text-sm mb-2">Your verification code for <strong class="text-gray-700">' + formatPhone(qc.phone || '') + '</strong> is shown below</p>'
-      : '<p class="text-gray-500 text-sm mb-2">We sent a 6-digit code to <strong class="text-gray-700">' + formatPhone(qc.phone || '') + '</strong></p>';
+    var headerText = '<h4 class="text-xl font-extrabold text-gray-800 mb-2">Enter Your Verification Code</h4>';
+    var subText = '<p class="text-gray-500 text-sm mb-2">Your verification code for <strong class="text-gray-700">' + formatPhone(qc.phone || '') + '</strong> is shown below. Enter it to connect your AI secretary.</p>';
 
     el.innerHTML =
       '<div class="bg-white rounded-2xl border-2 border-sky-100 shadow-sm p-8">' +

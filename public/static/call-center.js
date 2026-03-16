@@ -1293,7 +1293,7 @@
 
       '<div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">' +
         '<label class="block text-sm font-bold text-gray-700 mb-2"><i class="fas fa-phone mr-2 text-orange-500"></i>Your Business Phone Number</label>' +
-        '<p class="text-xs text-gray-400 mb-3">We\'ll send a verification code to this number.</p>' +
+        '<p class="text-xs text-gray-400 mb-3">Your verification code will be displayed on screen.</p>' +
         '<input type="tel" id="ccPhoneInput" value="' + (biz || '') + '" placeholder="(780) 555-1234" ' +
           'class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-lg font-mono focus:border-orange-500 focus:ring-2 focus:ring-orange-200 outline-none transition-all" ' +
           'oninput="window.ccFormatPhoneInput(this)">' +
@@ -1305,7 +1305,7 @@
       '</div>' +
 
       '<div class="mt-6 bg-blue-50 rounded-xl p-4 border border-blue-100">' +
-        '<p class="text-sm text-blue-700"><i class="fas fa-shield-alt mr-2"></i><strong>How it works:</strong> We verify your phone via SMS, then auto-provision a dedicated AI line for your call center. No SIP trunks, no carrier setup — just enter, verify, connect.</p>' +
+        '<p class="text-sm text-blue-700"><i class="fas fa-shield-alt mr-2"></i><strong>How it works:</strong> Enter your phone number, verify with a code shown on screen, then we auto-provision a dedicated AI line for your call center. No SIP trunks, no carrier setup — just enter, verify, connect.</p>' +
       '</div>' +
     '</div>';
   }
@@ -1323,10 +1323,8 @@
       '<p class="text-xs text-sky-500 mt-2 text-center"><i class="fas fa-hand-pointer mr-1"></i>Tap here to auto-fill</p>' +
     '</div>' : '';
     
-    var headerText = devCode ? 'Enter Your Verification Code' : 'Enter Verification Code';
-    var subText = devCode 
-      ? 'Your verification code for <strong>' + (ph || 'your phone') + '</strong> is shown below'
-      : 'We sent a 6-digit code to <strong>' + (ph || 'your phone') + '</strong>';
+    var headerText = 'Enter Your Verification Code';
+    var subText = 'Your verification code for <strong>' + (ph || 'your phone') + '</strong> is shown below. Enter it to connect your AI phone line.';
 
     return '<div class="max-w-lg mx-auto">' +
       '<div class="text-center mb-8">' +
