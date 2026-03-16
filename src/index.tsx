@@ -556,6 +556,146 @@ app.get('/customer/team', (c) => c.html(getTeamManagementPageHTML()))
 app.get('/customer/join-team', (c) => c.html(getJoinTeamPageHTML()))
 
 // ============================================================
+// 3D ROOF VISUALIZER — Interactive roofing sales tool
+// ============================================================
+app.get('/visualizer/:orderId', async (c) => {
+  const orderId = c.req.param('orderId')
+  let address = 'Customer Property'
+  let lat = '', lng = ''
+  try {
+    const order = await c.env.DB.prepare(
+      'SELECT property_address, latitude, longitude FROM orders WHERE id = ?'
+    ).bind(orderId).first<any>()
+    if (order) {
+      address = order.property_address || address
+      lat = order.latitude || ''
+      lng = order.longitude || ''
+    }
+  } catch {}
+  const googleKey = (c.env as any).GOOGLE_MAPS_API_KEY || ''
+
+  return c.html(`<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>3D Roof Visualizer — ${address}</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+<link href="/static/css/visualizer.css" rel="stylesheet">
+
+<!-- Three.js + OrbitControls via CDN (ES5 UMD build for compatibility) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+  // OrbitControls inline (from Three.js r128 examples - UMD compatible)
+  // This must come after THREE is loaded
+</script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.min.js"></script>
+</head>
+<body class="bg-slate-900 text-white overflow-hidden">
+
+<div id="vis-container">
+  <!-- Header Bar -->
+  <div id="vis-header" class="absolute top-0 left-0 right-0 z-20 bg-gradient-to-r from-slate-900/95 to-slate-800/95 backdrop-blur border-b border-slate-700 px-4 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <a href="/customer/reports" class="text-gray-400 hover:text-white transition-colors">
+        <i class="fas fa-arrow-left"></i>
+      </a>
+      <div>
+        <h1 class="text-sm font-bold text-white"><i class="fas fa-cube mr-1 text-blue-400"></i>3D Roof Visualizer</h1>
+        <p class="text-[10px] text-gray-400">${address}</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-2">
+      <span id="vis-current-color" class="text-xs text-gray-400 hidden md:inline mr-2">Onyx Black (shingle)</span>
+      <button onclick="toggleAutoRotate()" id="btn-auto-rotate" class="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-xs font-medium transition-all"><i class="fas fa-pause mr-1"></i>Pause</button>
+      <button onclick="resetCamera()" class="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-xs font-medium transition-all"><i class="fas fa-sync mr-1"></i>Reset</button>
+      <button onclick="takeScreenshot()" class="px-3 py-1.5 bg-green-600 hover:bg-green-700 rounded-lg text-xs font-medium transition-all"><i class="fas fa-camera mr-1"></i>Screenshot</button>
+      <button onclick="shareVisualization()" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 rounded-lg text-xs font-medium transition-all"><i class="fas fa-share mr-1"></i>Share</button>
+    </div>
+  </div>
+
+  <!-- Main Canvas Area -->
+  <div class="flex flex-1 pt-[52px]" style="height: calc(100vh - 52px)">
+    <!-- 3D Canvas -->
+    <div id="canvas-3d" class="flex-1 relative" style="display:flex">
+      <div class="vis-loader" id="vis-3d-loader">
+        <div class="vis-spinner"></div>
+        <p style="color:#94a3b8;font-size:13px;margin-top:12px">Initializing 3D engine...</p>
+      </div>
+    </div>
+    <!-- 2D Canvas (hidden by default) -->
+    <div id="canvas-2d" class="flex-1 relative" style="display:none"></div>
+
+    <!-- Right Panel: Color Swatches -->
+    <div id="vis-panel">
+      <!-- Mode Tabs -->
+      <div class="flex border-b border-slate-700">
+        <button class="vis-tab active" data-mode="3d" onclick="switchVisMode('3d')"><i class="fas fa-cube mr-1"></i>3D Model</button>
+        <button class="vis-tab" data-mode="2d" onclick="switchVisMode('2d')"><i class="fas fa-image mr-1"></i>Street View</button>
+      </div>
+
+      <div class="p-4 space-y-5 overflow-y-auto flex-1">
+        <!-- Shingles Section -->
+        <div>
+          <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
+            <i class="fas fa-layer-group mr-1 text-amber-400"></i>Asphalt Shingles
+          </h3>
+          <div class="swatch-grid" id="shingle-swatches"></div>
+        </div>
+
+        <div class="border-t border-slate-700"></div>
+
+        <!-- Metal Section -->
+        <div>
+          <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
+            <i class="fas fa-shield-alt mr-1 text-blue-400"></i>Sheet Metal
+          </h3>
+          <div class="swatch-grid" id="metal-swatches"></div>
+        </div>
+
+        <div class="border-t border-slate-700"></div>
+
+        <!-- Info Cards -->
+        <div class="bg-slate-800 rounded-xl p-4 border border-slate-700">
+          <h4 class="text-xs font-bold text-gray-300 mb-2"><i class="fas fa-info-circle mr-1 text-blue-400"></i>How It Works</h4>
+          <ul class="text-[10px] text-gray-500 space-y-1.5 leading-relaxed">
+            <li><i class="fas fa-mouse-pointer mr-1 text-gray-600"></i>Click & drag to rotate the house</li>
+            <li><i class="fas fa-search-plus mr-1 text-gray-600"></i>Scroll to zoom in/out</li>
+            <li><i class="fas fa-palette mr-1 text-gray-600"></i>Click any color swatch to preview</li>
+            <li><i class="fas fa-camera mr-1 text-gray-600"></i>Take screenshots to share with customers</li>
+          </ul>
+        </div>
+
+        <div class="bg-gradient-to-br from-blue-900/30 to-purple-900/30 rounded-xl p-4 border border-blue-800/30">
+          <p class="text-[10px] text-blue-300 font-medium">
+            <i class="fas fa-magic mr-1"></i>Pro Tip: Use the screenshot tool to include color previews in your proposals. Customers love seeing their home with new roofing before committing!
+          </p>
+        </div>
+
+        <p class="text-center text-[9px] text-gray-600 pb-2">Powered by RoofReporterAI</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/static/js/3d_visualizer.js?v=${BUILD_VERSION}"></script>
+<script>
+  // Initialize with report data
+  document.addEventListener('DOMContentLoaded', function() {
+    initVisualizer({
+      order_id: '${orderId}',
+      address: '${address.replace(/'/g, "\\'")}',
+      latitude: '${lat}',
+      longitude: '${lng}',
+      google_maps_key: '${googleKey}'
+    });
+  });
+</script>
+</body>
+</html>`)
+})
+
+// ============================================================
 // PUBLIC TIERED PROPOSAL COMPARISON — Good/Better/Best side-by-side
 // ============================================================
 app.get('/proposal/compare/:groupId', async (c) => {
@@ -1367,7 +1507,7 @@ app.get('/terms', (c) => {
       <p>Roof measurements provided by the Service are estimates based on satellite data and AI analysis. <strong>They are not a substitute for physical on-site measurements.</strong> RoofReporterAI does not guarantee the accuracy of measurements and shall not be liable for any discrepancies between estimated and actual measurements. Always verify measurements before ordering materials or committing to project costs.</p>
 
       <h2 class="text-lg font-bold text-gray-800">5. Payment Terms</h2>
-      <p>Credit packs and subscriptions are charged at the time of purchase. Payments are processed securely via Stripe or Square. All prices are in Canadian Dollars (CAD) unless otherwise stated. Credit packs are non-refundable once report generation has begun. Subscription renewals are automatic unless cancelled before the renewal date.</p>
+      <p>Credit packs and subscriptions are charged at the time of purchase. Payments are processed securely via Square. All prices are in Canadian Dollars (CAD) unless otherwise stated. Credit packs are non-refundable once report generation has begun. Subscription renewals are automatic unless cancelled before the renewal date.</p>
 
       <h2 class="text-lg font-bold text-gray-800">6. Free Trial</h2>
       <p>New accounts receive complimentary report credits as indicated during signup. No payment is required for trial reports. Trial credits have no cash value and expire after 90 days.</p>
@@ -1417,7 +1557,7 @@ app.get('/privacy', (c) => {
       <h2 class="text-lg font-bold text-gray-800">1. Information We Collect</h2>
       <p><strong>Account Information:</strong> Name, email address, phone number, company name, and business address provided during registration.</p>
       <p><strong>Property Data:</strong> Street addresses, GPS coordinates, and satellite imagery data used to generate roof measurement reports.</p>
-      <p><strong>Payment Information:</strong> Credit card and billing details processed securely through Stripe and/or Square. We do not store credit card numbers on our servers.</p>
+      <p><strong>Payment Information:</strong> Credit card and billing details processed securely through Square. We do not store credit card numbers on our servers.</p>
       <p><strong>Usage Data:</strong> Pages visited, features used, report generation history, and device/browser information collected via Google Analytics 4.</p>
 
       <h2 class="text-lg font-bold text-gray-800">2. How We Use Your Information</h2>
@@ -1427,7 +1567,7 @@ app.get('/privacy', (c) => {
       <p>We share data with the following third-party services as necessary to operate the platform:</p>
       <ul class="list-disc list-inside space-y-1">
         <li><strong>Google Solar API / Maps:</strong> Property coordinates for satellite imagery and solar data</li>
-        <li><strong>Stripe / Square:</strong> Payment processing</li>
+        <li><strong>Square:</strong> Payment processing</li>
         <li><strong>Google Analytics 4:</strong> Anonymous usage analytics</li>
         <li><strong>Google Gmail API:</strong> Sending proposals and invoices on your behalf (when connected)</li>
         <li><strong>Cloudflare:</strong> Hosting, CDN, and security</li>

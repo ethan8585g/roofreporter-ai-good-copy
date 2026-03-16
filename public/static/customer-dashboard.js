@@ -377,6 +377,7 @@ function renderRecentOrders() {
         enhanceBadge +
         imageryBadge +
         (reportReady ? '<a href="/api/reports/' + o.id + '/html" target="_blank" class="px-2.5 py-1 bg-brand-600 text-white rounded-lg text-xs font-medium hover:bg-brand-700"><i class="fas fa-eye mr-1"></i>View</a>' : '') +
+        (reportReady ? '<a href="/visualizer/' + o.id + '" target="_blank" class="px-2.5 py-1 bg-purple-600 text-white rounded-lg text-xs font-medium hover:bg-purple-700"><i class="fas fa-cube mr-1"></i>3D</a>' : '') +
       '</div>' +
     '</div>';
   }

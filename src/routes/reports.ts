@@ -196,6 +196,54 @@ reportsRoutes.get('/:orderId/segments', async (c) => {
 })
 
 // ============================================================
+// GET /:orderId/3d-data — Data for 3D Roof Visualizer
+// ============================================================
+reportsRoutes.get('/:orderId/3d-data', async (c) => {
+  const orderId = c.req.param('orderId')
+  try {
+    const order = await c.env.DB.prepare(
+      'SELECT id, property_address, latitude, longitude, homeowner_name, homeowner_email FROM orders WHERE id = ?'
+    ).bind(orderId).first<any>()
+    if (!order) return c.json({ error: 'Order not found' }, 404)
+
+    // Get report data for satellite image
+    const report = await c.env.DB.prepare(
+      'SELECT satellite_image_url, api_response_raw, total_true_area_sqft, roof_pitch_degrees FROM reports WHERE order_id = ?'
+    ).bind(orderId).first<any>()
+
+    let satelliteUrl = report?.satellite_image_url || ''
+    if (!satelliteUrl && report?.api_response_raw) {
+      try {
+        const d = JSON.parse(report.api_response_raw)
+        satelliteUrl = d.imagery?.satellite_overhead_url || d.imagery?.satellite_url || ''
+      } catch {}
+    }
+
+    // Build Street View URL if coordinates available
+    let streetViewUrl = ''
+    const googleKey = (c.env as any).GOOGLE_MAPS_API_KEY || ''
+    if (order.latitude && order.longitude && googleKey) {
+      streetViewUrl = `https://maps.googleapis.com/maps/api/streetview?size=640x480&location=${order.latitude},${order.longitude}&fov=80&pitch=15&source=outdoor&key=${googleKey}`
+    }
+
+    return c.json({
+      report_id: orderId,
+      address: order.property_address || 'Unknown Address',
+      latitude: order.latitude || null,
+      longitude: order.longitude || null,
+      customer_name: order.homeowner_name || '',
+      satellite_url: satelliteUrl,
+      street_view_url: streetViewUrl,
+      roof_area_sqft: report?.total_true_area_sqft || 0,
+      roof_pitch: report?.roof_pitch_degrees || 0,
+      google_maps_key: googleKey
+    })
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500)
+  }
+})
+
+// ============================================================
 // GET /:orderId/html — Rendered report HTML (no auth for iframes)
 // ============================================================
 reportsRoutes.get('/:orderId/html', async (c) => {
