@@ -507,7 +507,7 @@
         (isConnected ? '<span class="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-semibold"><i class="fas fa-check-circle mr-1"></i>Connected</span>' :
          '<span class="px-3 py-1 bg-sky-50 text-sky-600 rounded-full text-sm font-medium">~30 seconds</span>') +
       '</div>' +
-      '<p class="text-gray-500 text-sm mb-4">Enter your business phone, verify via text, and your AI secretary is live. We\'ll text you all the setup details.</p>' +
+      '<p class="text-gray-500 text-sm mb-4">Enter your business phone, verify with a code, and your AI secretary is live. Powered by LiveKit.</p>' +
       '<div class="flex items-center gap-1">';
     for (var si = 0; si < steps.length; si++) {
       var s = steps[si];
@@ -544,7 +544,7 @@
           '<div class="w-16 h-16 bg-sky-100 rounded-full flex items-center justify-center mx-auto mb-4">' +
             '<i class="fas fa-mobile-alt text-sky-500 text-2xl"></i></div>' +
           '<h4 class="text-xl font-extrabold text-gray-800 mb-2">What\'s your business phone number?</h4>' +
-          '<p class="text-gray-500 text-sm mb-6">We\'ll send a quick verification text to confirm it\'s yours. Then your AI secretary will be live in under a minute.</p>' +
+          '<p class="text-gray-500 text-sm mb-6">We\'ll generate a verification code to confirm it\'s yours. Then your AI secretary will be live in under a minute.</p>' +
 
           '<div class="relative mb-4">' +
             '<div class="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none">' +
@@ -557,7 +557,7 @@
           '<button onclick="qcSendCode()" id="qcSendBtn" class="w-full py-4 bg-sky-500 text-white rounded-2xl font-bold text-base hover:bg-sky-600 transition-all shadow-lg hover:shadow-xl">' +
             '<i class="fas fa-paper-plane mr-2"></i>Send Verification Code</button>' +
 
-          '<p class="text-xs text-gray-400 mt-4"><i class="fas fa-lock mr-1"></i>We\'ll send a 6-digit code via SMS. Standard messaging rates may apply.</p>' +
+          '<p class="text-xs text-gray-400 mt-4"><i class="fas fa-lock mr-1"></i>A 6-digit verification code will appear on screen for you to enter.</p>' +
         '</div>' +
       '</div>';
 
@@ -614,7 +614,7 @@
     var qc = state.quickConnect || {};
     var codeHint = qc.devCode ? '<div class="bg-gradient-to-r from-sky-50 to-indigo-50 border-2 border-sky-300 rounded-xl p-4 mt-3 mb-2 cursor-pointer" onclick="qcAutoFillDevCode()">' +
       '<div class="flex items-center gap-2 mb-1"><i class="fas fa-key text-sky-600"></i><span class="text-sm font-bold text-sky-700">Your Verification Code</span></div>' +
-      '<p class="text-xs text-sky-600 mb-2">Enter this code below or tap to auto-fill</p>' +
+      '<p class="text-xs text-sky-600 mb-2">Enter this code below or tap to auto-fill — powered by LiveKit</p>' +
       '<div class="flex items-center justify-center gap-1">' +
         qc.devCode.split('').map(function(d) { return '<span class="inline-block w-10 h-12 bg-white border-2 border-sky-400 rounded-lg flex items-center justify-center text-xl font-black text-sky-700">' + d + '</span>'; }).join('') +
       '</div>' +
@@ -688,7 +688,7 @@
     var inputs = document.querySelectorAll('#qcCodeInputs input');
     var digits = qc.devCode.toString().split('');
     for (var i = 0; i < digits.length && i < 6; i++) inputs[i].value = digits[i];
-    showToast('Dev code auto-filled! Click "Verify & Go Live"', 'success');
+    showToast('Code auto-filled! Click "Verify & Go Live"', 'success');
   };
 
   // Verify the code — after this, the user is CONNECTED (no manual forwarding needed)
@@ -743,22 +743,19 @@
     var qc = state.quickConnect || {};
     var bizPhone = qc.business_phone_display || formatPhone(qc.business_phone || ps.business_phone || '');
     var aiPhone = qc.ai_phone_display || formatPhone(qc.ai_phone_number || ps.assigned_phone_number || '');
-    var smsSent = qc.sms_sent;
 
     el.innerHTML =
       '<div class="bg-white rounded-2xl border-2 border-green-200 shadow-sm p-8 text-center">' +
         '<div class="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">' +
           '<i class="fas fa-check-circle text-green-500 text-4xl"></i></div>' +
         '<h3 class="text-2xl font-extrabold text-gray-800 mb-2">Your AI Secretary is LIVE!</h3>' +
-        '<p class="text-gray-500 mb-6">Every call to your business number is now backed by AI. Never miss a lead again.</p>' +
+        '<p class="text-gray-500 mb-6">Every call to your business number is now backed by AI. Powered by LiveKit — never miss a lead again.</p>' +
 
-        // SMS confirmation banner
-        (smsSent ?
-          '<div class="bg-sky-50 border border-sky-200 rounded-xl p-4 mb-6 text-left max-w-lg mx-auto">' +
-            '<p class="text-sm text-sky-800 font-semibold"><i class="fas fa-sms text-sky-500 mr-2"></i>Setup details texted to your phone</p>' +
-            '<p class="text-xs text-sky-600 mt-1">We\'ve sent your AI secretary number and forwarding instructions via text message to ' + bizPhone + '. Check your texts!</p>' +
-          '</div>'
-        : '') +
+        // LiveKit powered banner
+        '<div class="bg-sky-50 border border-sky-200 rounded-xl p-4 mb-6 text-left max-w-lg mx-auto">' +
+          '<p class="text-sm text-sky-800 font-semibold"><i class="fas fa-phone-volume text-sky-500 mr-2"></i>AI Secretary Connected via LiveKit</p>' +
+          '<p class="text-xs text-sky-600 mt-1">Your AI secretary is ready to answer calls. When customers call your AI number, LiveKit\'s voice AI will handle the conversation professionally.</p>' +
+        '</div>' +
 
         '<div class="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-lg mx-auto mb-6">' +
           '<div class="bg-gray-50 rounded-xl p-4">' +
@@ -796,10 +793,9 @@
         '<div class="flex justify-center gap-3 mb-6">' +
           '<button onclick="secSetTab(\'setup\')" class="px-6 py-3 bg-sky-500 text-white rounded-xl font-semibold text-sm hover:bg-sky-600 transition-all shadow"><i class="fas fa-cog mr-2"></i>Edit Configuration</button>' +
           '<button onclick="secSetTab(\'calls\')" class="px-6 py-3 bg-gray-100 text-gray-700 rounded-xl font-semibold text-sm hover:bg-gray-200 transition-all"><i class="fas fa-phone-volume mr-2"></i>View Call Log</button>' +
-          '<button onclick="qcResendSetupSMS()" id="qcResendBtn" class="px-6 py-3 bg-purple-50 text-purple-700 rounded-xl font-semibold text-sm hover:bg-purple-100 transition-all border border-purple-200"><i class="fas fa-sms mr-2"></i>Resend Setup Text</button>' +
         '</div>' +
 
-        '<p class="text-xs text-gray-400 text-center">Need help? Contact support or check the text message we sent to your phone for setup details.</p>' +
+        '<p class="text-xs text-gray-400 text-center">Need help? Contact support. Your AI secretary is powered by LiveKit voice AI technology.</p>' +
       '</div>';
   }
 

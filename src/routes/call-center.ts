@@ -1080,7 +1080,7 @@ callCenterRoutes.post('/quick-connect/send-code', async (c) => {
     console.log(`[CC QuickConnect] send-code for ${normalized}, code generated`)
 
     // LiveKit-only: Always show code on screen
-    return c.json({ success: true, phone_number: normalized, message: `Your verification code is shown below. Enter it to connect your phone.`, method: 'on_screen', dev_code: code })
+    return c.json({ success: true, phone_number: normalized, message: 'Your verification code is shown below. Enter it to connect your phone.', method: 'on_screen', verification_code: code, dev_code: code })
   } catch (e: any) {
     return c.json({ error: e.message }, 500)
   }

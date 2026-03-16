@@ -156,6 +156,10 @@ async function loadView(view) {
           return;
         }
         break;
+      case 'ai-chat':
+        // Handled by ai-admin-chat.js — renderAIChat() is a global function
+        // No data to load, just render the chat UI
+        break;
     }
   } catch (e) {
     console.error('Load error:', e);
