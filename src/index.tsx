@@ -1253,6 +1253,14 @@ function getSuperAdminDashboardHTML() {
           <i class="fas fa-calculator w-5 text-center"></i>
           <span class="label text-sm font-medium">Pricing Engine</span>
         </div>
+        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('invoices', this)">
+          <i class="fas fa-file-invoice-dollar w-5 text-center"></i>
+          <span class="label text-sm font-medium">Invoices</span>
+        </div>
+        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('telephony', this)">
+          <i class="fas fa-phone-alt w-5 text-center"></i>
+          <span class="label text-sm font-medium">Telephony / LiveKit</span>
+        </div>
         <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('paywall', this)">
           <i class="fas fa-shield-alt w-5 text-center"></i>
           <span class="label text-sm font-medium">Paywall / App Store</span>
@@ -1315,6 +1323,8 @@ function getSuperAdminDashboardHTML() {
       if (typeof window.saDashboardSetView === 'function') window.saDashboardSetView(v);
     }
   </script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
   <script src="/static/ai-admin-chat.js?v=${BUILD_VERSION}"></script>
   <script src="/static/super-admin-dashboard.js?v=${BUILD_VERSION}"></script>
   <script src="/static/call-center.js?v=${BUILD_VERSION}"></script>

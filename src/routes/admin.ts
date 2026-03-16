@@ -1508,3 +1508,191 @@ adminRoutes.get('/superadmin/paywall-status', async (c) => {
 
   return c.json(checks)
 })
+
+// ============================================================
+// TELEPHONY / LIVEKIT — Configuration & Management
+// ============================================================
+
+// GET /superadmin/telephony-status — Get all telephony config
+adminRoutes.get('/superadmin/telephony-status', async (c) => {
+  const livekitUrl = (c.env as any).LIVEKIT_URL || ''
+  const livekitKey = (c.env as any).LIVEKIT_API_KEY || ''
+  const livekitSecret = (c.env as any).LIVEKIT_API_SECRET || ''
+
+  // Load saved telephony config from DB
+  const configs = await c.env.DB.prepare(
+    "SELECT setting_key, setting_value FROM settings WHERE master_company_id = 1 AND setting_key LIKE 'telephony_%'"
+  ).all<any>()
+
+  const cfg: Record<string, string> = {}
+  for (const row of configs.results || []) {
+    cfg[row.setting_key.replace('telephony_', '')] = row.setting_value
+  }
+
+  // Load phone numbers
+  let phoneNumbers: any[] = []
+  try {
+    const pnRows = await c.env.DB.prepare(
+      "SELECT * FROM telephony_numbers WHERE is_active = 1 ORDER BY created_at DESC"
+    ).all<any>()
+    phoneNumbers = pnRows.results || []
+  } catch { /* table may not exist yet */ }
+
+  return c.json({
+    livekit_configured: !!(livekitUrl && livekitKey),
+    livekit_url: livekitUrl,
+    livekit_api_key: livekitKey ? '••••' + livekitKey.slice(-4) : '',
+    livekit_api_secret: livekitSecret ? true : false,
+    sip_provider: cfg.sip_provider || 'twilio',
+    business_number: cfg.business_number || '',
+    forward_to_number: cfg.forward_to_number || '',
+    forwarding_mode: cfg.forwarding_mode || 'always',
+    business_hours_start: cfg.business_hours_start || '08:00',
+    business_hours_end: cfg.business_hours_end || '17:00',
+    sip_trunk_name: cfg.sip_trunk_name || 'RoofReporter-Inbound',
+    sip_trunk_number: cfg.sip_trunk_number || '',
+    sip_server_host: cfg.sip_server_host || '',
+    sip_username: cfg.sip_username || '',
+    sip_password: cfg.sip_password ? true : false,
+    phone_numbers: phoneNumbers,
+    phone_numbers_count: phoneNumbers.length,
+    sip_trunk_count: cfg.sip_trunk_number ? 1 : 0,
+    active_forwards: cfg.business_number && cfg.forward_to_number ? 1 : 0,
+  })
+})
+
+// PUT /superadmin/telephony-config — Save LiveKit config
+adminRoutes.put('/superadmin/telephony-config', async (c) => {
+  const body = await c.req.json()
+  const fields: Record<string, string> = {}
+  if (body.sip_provider) fields.telephony_sip_provider = body.sip_provider
+
+  // Save to settings table
+  for (const [key, value] of Object.entries(fields)) {
+    await c.env.DB.prepare(
+      "INSERT OR REPLACE INTO settings (master_company_id, setting_key, setting_value) VALUES (1, ?, ?)"
+    ).bind(key, value as string).run()
+  }
+
+  // Note: LiveKit URL/Key/Secret should be set via wrangler secret put
+  // for production security. We'll save a note that they're configured.
+  if (body.livekit_url) {
+    await c.env.DB.prepare(
+      "INSERT OR REPLACE INTO settings (master_company_id, setting_key, setting_value) VALUES (1, 'telephony_livekit_url_configured', ?)"
+    ).bind(body.livekit_url).run()
+  }
+
+  return c.json({ success: true })
+})
+
+// PUT /superadmin/telephony-forwarding — Save call forwarding config
+adminRoutes.put('/superadmin/telephony-forwarding', async (c) => {
+  const body = await c.req.json()
+  const fields: Record<string, string> = {
+    telephony_business_number: body.business_number || '',
+    telephony_forward_to_number: body.forward_to_number || '',
+    telephony_forwarding_mode: body.forwarding_mode || 'always',
+    telephony_business_hours_start: body.business_hours_start || '08:00',
+    telephony_business_hours_end: body.business_hours_end || '17:00',
+  }
+
+  for (const [key, value] of Object.entries(fields)) {
+    await c.env.DB.prepare(
+      "INSERT OR REPLACE INTO settings (master_company_id, setting_key, setting_value) VALUES (1, ?, ?)"
+    ).bind(key, value).run()
+  }
+
+  // Check if we can configure via API (Twilio/Telnyx)
+  let apiConfigured = false
+  const provider = body.sip_provider || 'manual'
+  // For Twilio/Telnyx, API-based forwarding would be configured here
+  // For TELUS/manual, user follows the instructions in the UI
+
+  return c.json({ success: true, api_configured: apiConfigured, provider })
+})
+
+// PUT /superadmin/telephony-sip-trunk — Save SIP trunk config
+adminRoutes.put('/superadmin/telephony-sip-trunk', async (c) => {
+  const body = await c.req.json()
+  const fields: Record<string, string> = {
+    telephony_sip_trunk_name: body.sip_trunk_name || 'RoofReporter-Inbound',
+    telephony_sip_trunk_number: body.sip_trunk_number || '',
+    telephony_sip_server_host: body.sip_server_host || '',
+    telephony_sip_username: body.sip_username || '',
+  }
+  if (body.sip_password) {
+    fields.telephony_sip_password = body.sip_password
+  }
+
+  for (const [key, value] of Object.entries(fields)) {
+    await c.env.DB.prepare(
+      "INSERT OR REPLACE INTO settings (master_company_id, setting_key, setting_value) VALUES (1, ?, ?)"
+    ).bind(key, value).run()
+  }
+
+  return c.json({ success: true })
+})
+
+// GET /superadmin/telephony-search-numbers — Search available numbers
+adminRoutes.get('/superadmin/telephony-search-numbers', async (c) => {
+  const areaCode = c.req.query('area_code') || '403'
+  const type = c.req.query('type') || 'local'
+
+  // In a full implementation, this would call Twilio/Telnyx API
+  // For now, return sample numbers for the area code
+  const sampleNumbers = [
+    { number: '+1' + areaCode + '5550101', monthly_cost: '1.00', type },
+    { number: '+1' + areaCode + '5550102', monthly_cost: '1.00', type },
+    { number: '+1' + areaCode + '5550103', monthly_cost: '1.00', type },
+    { number: '+1' + areaCode + '5550104', monthly_cost: '1.00', type },
+    { number: '+1' + areaCode + '5550105', monthly_cost: '1.00', type },
+  ]
+
+  return c.json({
+    numbers: sampleNumbers,
+    note: 'Connect your Twilio/Telnyx API keys to search real available numbers.'
+  })
+})
+
+// POST /superadmin/telephony-purchase-number — Purchase a number
+adminRoutes.post('/superadmin/telephony-purchase-number', async (c) => {
+  const { number } = await c.req.json()
+  if (!number) return c.json({ error: 'Number is required' }, 400)
+
+  // Create telephony_numbers table if needed
+  await c.env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS telephony_numbers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      number TEXT NOT NULL,
+      label TEXT DEFAULT '',
+      type TEXT DEFAULT 'local',
+      provider TEXT DEFAULT 'manual',
+      forwarding_active INTEGER DEFAULT 0,
+      forward_to TEXT DEFAULT '',
+      is_active INTEGER DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `).run()
+
+  await c.env.DB.prepare(
+    "INSERT INTO telephony_numbers (number, type, provider) VALUES (?, 'local', 'manual')"
+  ).bind(number).run()
+
+  return c.json({ success: true, number })
+})
+
+// POST /superadmin/telephony-sip-test — Test SIP connection
+adminRoutes.post('/superadmin/telephony-sip-test', async (c) => {
+  // Verify SIP trunk configuration exists
+  const host = await c.env.DB.prepare(
+    "SELECT setting_value FROM settings WHERE setting_key = 'telephony_sip_server_host' AND master_company_id = 1"
+  ).first<any>()
+
+  if (!host?.setting_value) {
+    return c.json({ success: false, error: 'No SIP server host configured' })
+  }
+
+  // In production, we'd attempt an OPTIONS or REGISTER to the SIP server
+  // For now, verify the config exists
+  return c.json({ success: true, message: 'SIP configuration verified. Full connectivity test requires an active SIP trunk.' })
+})

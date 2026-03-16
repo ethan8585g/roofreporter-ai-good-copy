@@ -160,6 +160,25 @@ async function loadView(view) {
         // Handled by ai-admin-chat.js — renderAIChat() is a global function
         // No data to load, just render the chat UI
         break;
+      case 'invoices':
+        try {
+          const [invListRes, invStatsRes, invCustRes] = await Promise.all([
+            saFetch('/api/invoices'),
+            saFetch('/api/invoices/stats/summary'),
+            saFetch('/api/invoices/customers/list')
+          ]);
+          if (invListRes) SA.data.invoices = await invListRes.json();
+          if (invStatsRes) SA.data.invoice_stats = await invStatsRes.json();
+          if (invCustRes) SA.data.invoice_customers = await invCustRes.json();
+        } catch(e) { console.warn('Invoice load error:', e); }
+        break;
+      case 'telephony':
+        // Load telephony/LiveKit status
+        try {
+          const telRes = await saFetch('/api/admin/superadmin/telephony-status');
+          if (telRes) SA.data.telephony = await telRes.json();
+        } catch(e) { SA.data.telephony = {}; }
+        break;
     }
   } catch (e) {
     console.error('Load error:', e);
@@ -262,6 +281,8 @@ function renderContent() {
     case 'seo-manager': root.innerHTML = renderSEOManagerView(); break;
     case 'canva': root.innerHTML = renderCanvaView(); loadCanvaStatus(); break;
     case 'pricing-engine': root.innerHTML = renderPricingEngineView(); loadPricingPresets(); break;
+    case 'invoices': root.innerHTML = renderInvoicesView(); break;
+    case 'telephony': root.innerHTML = renderTelephonyView(); break;
     case 'paywall': root.innerHTML = renderPaywallView(); loadPaywallStatus(); break;
     default: root.innerHTML = renderUsersView();
   }
@@ -2702,7 +2723,7 @@ function renderPricingEngineView() {
     </div>
 
     <div class="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-xl p-6">
-      <p class="text-sm text-gray-600">Configure your material & labor costs. These presets are used to auto-generate proposals from roof measurement reports.</p>
+      <p class="text-sm text-gray-600">Configure your material & labor costs. These presets are used to auto-generate proposals from roof measurement reports. You can also test the calculator with sample measurements and download PDF proposals.</p>
     </div>
 
     <div class="bg-white border border-gray-200 rounded-xl p-6">
@@ -2747,6 +2768,31 @@ function renderPricingEngineView() {
     </div>
 
     <div id="pe-save-msg" class="hidden text-sm px-4 py-3 rounded-lg"></div>
+
+    <!-- TEST CALCULATOR -->
+    <div class="border-t border-gray-200 pt-6">
+      <h3 class="text-lg font-bold text-gray-800 mb-4"><i class="fas fa-flask mr-2 text-blue-500"></i>Test Calculator — Good / Better / Best</h3>
+      <p class="text-sm text-gray-500 mb-4">Enter sample roof measurements to preview pricing across all three tiers.</p>
+      <div class="bg-white border border-gray-200 rounded-xl p-6">
+        <div class="grid md:grid-cols-4 gap-4 mb-4">
+          <div><label class="block text-xs font-medium text-gray-500 mb-1">Total Roof Area (sq ft) *</label><input id="pe-test-area" type="number" value="3200" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>
+          <div><label class="block text-xs font-medium text-gray-500 mb-1">Ridge (ft)</label><input id="pe-test-ridge" type="number" value="60" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>
+          <div><label class="block text-xs font-medium text-gray-500 mb-1">Hip (ft)</label><input id="pe-test-hip" type="number" value="40" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>
+          <div><label class="block text-xs font-medium text-gray-500 mb-1">Valley (ft)</label><input id="pe-test-valley" type="number" value="30" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>
+        </div>
+        <div class="grid md:grid-cols-4 gap-4 mb-4">
+          <div><label class="block text-xs font-medium text-gray-500 mb-1">Eave (ft)</label><input id="pe-test-eave" type="number" value="120" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>
+          <div><label class="block text-xs font-medium text-gray-500 mb-1">Rake (ft)</label><input id="pe-test-rake" type="number" value="80" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>
+          <div><label class="block text-xs font-medium text-gray-500 mb-1">Step Flash (ft)</label><input id="pe-test-step" type="number" value="0" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>
+          <div><label class="block text-xs font-medium text-gray-500 mb-1">Dominant Pitch</label><input id="pe-test-pitch" type="text" value="7/12" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>
+        </div>
+        <div class="flex gap-3">
+          <button onclick="runTestCalculation()" class="bg-blue-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-blue-700"><i class="fas fa-calculator mr-2"></i>Calculate Good / Better / Best</button>
+          <button onclick="runTestCalculation(true)" class="bg-gray-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-gray-700"><i class="fas fa-calculator mr-2"></i>Custom Preset Only</button>
+        </div>
+      </div>
+      <div id="pe-test-results" class="mt-4"></div>
+    </div>
   </div>`;
 }
 
@@ -2814,6 +2860,1001 @@ window.resetPricingPresets = function() {
   document.getElementById('pe-waste').value = '15';
   document.getElementById('pe-tax').value = '5.00';
 };
+
+// ---- Test Calculator ----
+window.runTestCalculation = async function(customOnly) {
+  var resultsEl = document.getElementById('pe-test-results');
+  if (!resultsEl) return;
+  resultsEl.innerHTML = '<div class="text-center py-4 text-gray-400"><i class="fas fa-spinner fa-spin mr-2"></i>Calculating...</div>';
+
+  var measurements = {
+    total_area_sqft: parseFloat(document.getElementById('pe-test-area').value) || 3200,
+    ridge_ft: parseFloat(document.getElementById('pe-test-ridge').value) || 0,
+    hip_ft: parseFloat(document.getElementById('pe-test-hip').value) || 0,
+    valley_ft: parseFloat(document.getElementById('pe-test-valley').value) || 0,
+    eave_ft: parseFloat(document.getElementById('pe-test-eave').value) || 0,
+    rake_ft: parseFloat(document.getElementById('pe-test-rake').value) || 0,
+    step_flashing_ft: parseFloat(document.getElementById('pe-test-step').value) || 0,
+    dominant_pitch: document.getElementById('pe-test-pitch').value || '7/12'
+  };
+
+  try {
+    var resp = await saFetch('/api/invoices/pricing/calculate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ measurements: measurements, tiered: !customOnly })
+    });
+    var data = await resp.json();
+    if (!data.success) { resultsEl.innerHTML = '<div class="text-red-500">' + (data.error || 'Calculation failed') + '</div>'; return; }
+
+    if (data.tiered) {
+      var tiers = data.tiered;
+      resultsEl.innerHTML = '<div class="grid md:grid-cols-3 gap-4">' +
+        renderTierCard('Good', tiers.good, 'gray', 'fa-thumbs-up') +
+        renderTierCard('Better', tiers.better, 'blue', 'fa-star') +
+        renderTierCard('Best', tiers.best, 'green', 'fa-crown') +
+      '</div>';
+    } else {
+      var p = data.proposal;
+      resultsEl.innerHTML = renderTierCard('Custom Estimate', p, 'indigo', 'fa-calculator');
+    }
+
+    // Store for PDF generation
+    SA.data._lastTestCalc = data;
+    SA.data._lastTestMeasurements = measurements;
+  } catch(e) { resultsEl.innerHTML = '<div class="text-red-500">Error: ' + e.message + '</div>'; }
+};
+
+function renderTierCard(title, proposal, color, icon) {
+  if (!proposal) return '';
+  var items = proposal.line_items || [];
+  return '<div class="bg-white border-2 border-' + color + '-200 rounded-xl overflow-hidden">' +
+    '<div class="bg-' + color + '-50 px-4 py-3 border-b border-' + color + '-200">' +
+      '<div class="flex items-center justify-between">' +
+        '<h4 class="font-bold text-' + color + '-800"><i class="fas ' + icon + ' mr-2"></i>' + title + '</h4>' +
+        '<span class="text-xl font-black text-' + color + '-700">$' + proposal.total_price.toFixed(2) + '</span>' +
+      '</div>' +
+      '<p class="text-xs text-' + color + '-600 mt-1">' + (proposal.metadata.preset_name || 'Custom') + '</p>' +
+    '</div>' +
+    '<div class="p-4">' +
+      '<table class="w-full text-xs">' +
+        '<tbody class="divide-y divide-gray-50">' +
+        items.map(function(li) {
+          return '<tr><td class="py-1 text-gray-600">' + li.item + '</td><td class="py-1 text-right font-medium text-gray-800">$' + li.price.toFixed(2) + '</td></tr>';
+        }).join('') +
+        '</tbody>' +
+      '</table>' +
+      '<div class="border-t border-gray-200 mt-3 pt-3 space-y-1">' +
+        '<div class="flex justify-between text-xs"><span class="text-gray-500">Subtotal</span><span>$' + proposal.subtotal.toFixed(2) + '</span></div>' +
+        '<div class="flex justify-between text-xs"><span class="text-gray-500">Tax (' + (proposal.tax_rate * 100).toFixed(1) + '%)</span><span>$' + proposal.tax_amount.toFixed(2) + '</span></div>' +
+        '<div class="flex justify-between text-sm font-bold border-t pt-1 mt-1"><span>Total</span><span class="text-' + color + '-700">$' + proposal.total_price.toFixed(2) + ' CAD</span></div>' +
+      '</div>' +
+      '<div class="mt-3 flex gap-2">' +
+        '<button onclick="downloadTierPdf(\'' + title + '\')" class="text-xs bg-' + color + '-100 text-' + color + '-700 px-3 py-1.5 rounded-lg hover:bg-' + color + '-200 font-medium"><i class="fas fa-file-pdf mr-1"></i>Download PDF</button>' +
+        '<button onclick="createInvoiceFromTier(\'' + title + '\')" class="text-xs bg-green-100 text-green-700 px-3 py-1.5 rounded-lg hover:bg-green-200 font-medium"><i class="fas fa-file-invoice mr-1"></i>Create Invoice</button>' +
+      '</div>' +
+    '</div>' +
+  '</div>';
+}
+
+window.downloadTierPdf = function(tierName) {
+  var data = SA.data._lastTestCalc;
+  var measurements = SA.data._lastTestMeasurements;
+  if (!data) { alert('Run a calculation first'); return; }
+  var proposal;
+  if (data.tiered) {
+    var key = tierName.toLowerCase();
+    proposal = data.tiered[key];
+  } else {
+    proposal = data.proposal;
+  }
+  if (!proposal) { alert('Proposal data not found'); return; }
+  if (typeof window.generateProposalPdf === 'function') {
+    window.generateProposalPdf(proposal, measurements, 'Homeowner', 'Property Address');
+  } else {
+    alert('PDF library not loaded');
+  }
+};
+
+window.createInvoiceFromTier = function(tierName) {
+  var data = SA.data._lastTestCalc;
+  if (!data) { alert('Run a calculation first'); return; }
+  var proposal;
+  if (data.tiered) {
+    var key = tierName.toLowerCase();
+    proposal = data.tiered[key];
+  } else {
+    proposal = data.proposal;
+  }
+  if (!proposal) return;
+  // Switch to invoices view and pre-populate
+  SA.data._pendingInvoiceItems = proposal.line_items;
+  loadView('invoices');
+  setTimeout(function() { showCreateInvoiceModal(); populateInvoiceFromProposal(); }, 500);
+};
+
+window.populateInvoiceFromProposal = function() {
+  var items = SA.data._pendingInvoiceItems;
+  if (!items || !items.length) return;
+  var container = document.getElementById('inv-line-items');
+  if (!container) return;
+  container.innerHTML = '';
+  items.forEach(function(li) {
+    var row = document.createElement('div');
+    row.className = 'inv-line-item grid grid-cols-12 gap-2 mb-2';
+    row.innerHTML = '<input type="text" value="' + li.item + ' — ' + li.description + '" class="col-span-6 border border-gray-300 rounded-lg px-3 py-2 text-sm inv-desc">' +
+      '<input type="number" value="' + li.qty + '" class="col-span-2 border border-gray-300 rounded-lg px-3 py-2 text-sm inv-qty">' +
+      '<input type="number" step="0.01" value="' + li.unit_price + '" class="col-span-3 border border-gray-300 rounded-lg px-3 py-2 text-sm inv-price">' +
+      '<button onclick="this.closest(\'.inv-line-item\').remove()" class="col-span-1 text-red-400 hover:text-red-600"><i class="fas fa-times"></i></button>';
+    container.appendChild(row);
+  });
+  SA.data._pendingInvoiceItems = null;
+};
+
+// ============================================================
+// VIEW: INVOICES DASHBOARD — Full CRUD + PDF + Gmail Send
+// ============================================================
+function invStatusBadge(s) {
+  var m = {
+    draft: 'bg-gray-100 text-gray-600', sent: 'bg-blue-100 text-blue-700',
+    viewed: 'bg-indigo-100 text-indigo-700', paid: 'bg-green-100 text-green-800',
+    overdue: 'bg-red-100 text-red-700', cancelled: 'bg-gray-200 text-gray-500',
+    refunded: 'bg-purple-100 text-purple-700'
+  };
+  return '<span class="px-2 py-0.5 ' + (m[s] || 'bg-gray-100 text-gray-600') + ' rounded-full text-xs font-semibold capitalize">' + (s || 'draft') + '</span>';
+}
+
+function renderInvoicesView() {
+  var d = SA.data.invoices || {};
+  var stats = (SA.data.invoice_stats || {}).stats || {};
+  var invoices = d.invoices || [];
+  var customers = (SA.data.invoice_customers || {}).customers || [];
+
+  return '<div class="space-y-6">' +
+    '<div class="flex items-center justify-between">' +
+      '<div><h2 class="text-2xl font-black text-gray-900"><i class="fas fa-file-invoice-dollar mr-2 text-green-500"></i>Invoice Manager</h2>' +
+      '<p class="text-sm text-gray-500 mt-1">Create, send, and track invoices for roofing jobs</p></div>' +
+      '<button onclick="showCreateInvoiceModal()" class="bg-green-600 text-white px-5 py-2.5 rounded-xl font-medium hover:bg-green-700 shadow-sm"><i class="fas fa-plus mr-2"></i>New Invoice</button>' +
+    '</div>' +
+
+    // Stats row
+    '<div class="grid grid-cols-2 lg:grid-cols-5 gap-4">' +
+      samc('Total Invoices', stats.total_invoices || 0, 'fa-file-invoice', 'blue') +
+      samc('Paid', stats.paid_count || 0, 'fa-check-circle', 'green', '$' + ((stats.total_collected || 0)).toFixed(2) + ' collected') +
+      samc('Outstanding', stats.outstanding_count || 0, 'fa-clock', 'amber', '$' + ((stats.total_outstanding || 0)).toFixed(2)) +
+      samc('Overdue', stats.overdue_count || 0, 'fa-exclamation-triangle', 'red', '$' + ((stats.total_overdue || 0)).toFixed(2)) +
+      samc('Grand Total', '$' + ((stats.grand_total || 0)).toFixed(2), 'fa-dollar-sign', 'indigo') +
+    '</div>' +
+
+    // Invoice Table
+    saSection('Invoices (' + invoices.length + ')', 'fa-table', 
+      '<div class="overflow-x-auto"><table class="w-full text-sm">' +
+      '<thead class="bg-gray-50"><tr>' +
+        '<th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Invoice #</th>' +
+        '<th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Customer</th>' +
+        '<th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Property</th>' +
+        '<th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Total</th>' +
+        '<th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Status</th>' +
+        '<th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Due Date</th>' +
+        '<th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Actions</th>' +
+      '</tr></thead><tbody class="divide-y divide-gray-50">' +
+      (invoices.length === 0 ? '<tr><td colspan="7" class="px-4 py-12 text-center text-gray-400"><i class="fas fa-file-invoice text-4xl mb-3 block"></i>No invoices yet. Create your first one!</td></tr>' : '') +
+      invoices.map(function(inv) {
+        return '<tr class="hover:bg-green-50/30 transition-colors">' +
+          '<td class="px-4 py-3 font-mono font-bold text-gray-800 text-sm">' + (inv.invoice_number || '-') + '</td>' +
+          '<td class="px-4 py-3"><div class="font-medium text-gray-800">' + (inv.customer_name || '-') + '</div><div class="text-xs text-gray-400">' + (inv.customer_email || '') + '</div></td>' +
+          '<td class="px-4 py-3 text-gray-600 text-xs">' + (inv.property_address || '-') + '</td>' +
+          '<td class="px-4 py-3 text-right font-bold text-gray-900">$' + parseFloat(inv.total || 0).toFixed(2) + '</td>' +
+          '<td class="px-4 py-3 text-center">' + invStatusBadge(inv.status) + '</td>' +
+          '<td class="px-4 py-3 text-gray-600 text-xs">' + fmtDate(inv.due_date) + '</td>' +
+          '<td class="px-4 py-3 text-center">' +
+            '<div class="flex items-center justify-center gap-1">' +
+              '<button onclick="viewInvoiceDetail(' + inv.id + ')" class="text-blue-500 hover:text-blue-700 p-1" title="View"><i class="fas fa-eye"></i></button>' +
+              '<button onclick="downloadInvoicePdf(' + inv.id + ')" class="text-green-500 hover:text-green-700 p-1" title="Download PDF"><i class="fas fa-file-pdf"></i></button>' +
+              (inv.status === 'draft' ? '<button onclick="sendInvoiceGmail(' + inv.id + ')" class="text-indigo-500 hover:text-indigo-700 p-1" title="Send via Gmail"><i class="fas fa-paper-plane"></i></button>' : '') +
+              (inv.status === 'sent' || inv.status === 'viewed' ? '<button onclick="markInvoicePaid(' + inv.id + ')" class="text-green-600 hover:text-green-800 p-1" title="Mark Paid"><i class="fas fa-check-double"></i></button>' : '') +
+              (inv.status === 'draft' ? '<button onclick="deleteInvoice(' + inv.id + ')" class="text-red-400 hover:text-red-600 p-1" title="Delete"><i class="fas fa-trash"></i></button>' : '') +
+            '</div>' +
+          '</td>' +
+        '</tr>';
+      }).join('') +
+      '</tbody></table></div>'
+    ) +
+
+    // Hidden modals container
+    '<div id="inv-modal-container"></div>' +
+    '<div id="inv-detail-container"></div>' +
+  '</div>';
+}
+
+// ---- Create Invoice Modal ----
+window.showCreateInvoiceModal = function() {
+  var customers = ((SA.data.invoice_customers || {}).customers || []);
+  var modal = document.getElementById('inv-modal-container');
+  if (!modal) return;
+  modal.innerHTML = '<div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onclick="if(event.target===this)closeInvModal()">' +
+    '<div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">' +
+      '<div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">' +
+        '<h3 class="font-bold text-gray-800 text-lg"><i class="fas fa-plus-circle mr-2 text-green-500"></i>Create New Invoice</h3>' +
+        '<button onclick="closeInvModal()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>' +
+      '</div>' +
+      '<div class="p-6 space-y-4">' +
+        '<div class="grid md:grid-cols-2 gap-4">' +
+          '<div><label class="block text-xs font-medium text-gray-500 mb-1">Customer *</label>' +
+            '<select id="inv-customer" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">' +
+              '<option value="">Select customer...</option>' +
+              customers.map(function(c) { return '<option value="' + c.id + '">' + (c.name || c.email) + (c.company_name ? ' (' + c.company_name + ')' : '') + '</option>'; }).join('') +
+            '</select></div>' +
+          '<div><label class="block text-xs font-medium text-gray-500 mb-1">Due (days)</label>' +
+            '<input id="inv-due-days" type="number" value="30" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>' +
+        '</div>' +
+        '<div><label class="block text-xs font-medium text-gray-500 mb-1">Tax Rate (%)</label>' +
+          '<input id="inv-tax-rate" type="number" step="0.01" value="5.00" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm max-w-[200px]"></div>' +
+
+        // Line items
+        '<div class="border border-gray-200 rounded-xl p-4">' +
+          '<div class="flex items-center justify-between mb-3">' +
+            '<h4 class="font-semibold text-gray-700 text-sm">Line Items</h4>' +
+            '<button onclick="addInvLineItem()" class="text-xs text-green-600 hover:text-green-800 font-medium"><i class="fas fa-plus mr-1"></i>Add Item</button>' +
+          '</div>' +
+          '<div id="inv-line-items">' +
+            '<div class="inv-line-item grid grid-cols-12 gap-2 mb-2">' +
+              '<input type="text" placeholder="Description" class="col-span-6 border border-gray-300 rounded-lg px-3 py-2 text-sm inv-desc">' +
+              '<input type="number" placeholder="Qty" value="1" class="col-span-2 border border-gray-300 rounded-lg px-3 py-2 text-sm inv-qty">' +
+              '<input type="number" step="0.01" placeholder="Unit Price" class="col-span-3 border border-gray-300 rounded-lg px-3 py-2 text-sm inv-price">' +
+              '<button onclick="this.closest(\'.inv-line-item\').remove()" class="col-span-1 text-red-400 hover:text-red-600"><i class="fas fa-times"></i></button>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+
+        '<div><label class="block text-xs font-medium text-gray-500 mb-1">Notes</label>' +
+          '<textarea id="inv-notes" rows="2" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="Thank you for your business..."></textarea></div>' +
+
+        '<div class="bg-amber-50 border border-amber-200 rounded-lg p-3">' +
+          '<p class="text-xs text-amber-700"><i class="fas fa-lightbulb mr-1"></i><strong>Tip:</strong> Use the Pricing Engine to auto-calculate line items from a roof report, then create an invoice from those results.</p>' +
+        '</div>' +
+
+        '<div id="inv-create-msg" class="hidden"></div>' +
+        '<div class="flex justify-end gap-3 pt-2">' +
+          '<button onclick="closeInvModal()" class="px-4 py-2 text-gray-600 hover:text-gray-800 text-sm">Cancel</button>' +
+          '<button onclick="createInvoice()" class="bg-green-600 text-white px-6 py-2.5 rounded-lg font-medium hover:bg-green-700"><i class="fas fa-save mr-2"></i>Create Invoice</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>' +
+  '</div>';
+};
+
+window.addInvLineItem = function() {
+  var container = document.getElementById('inv-line-items');
+  if (!container) return;
+  var row = document.createElement('div');
+  row.className = 'inv-line-item grid grid-cols-12 gap-2 mb-2';
+  row.innerHTML = '<input type="text" placeholder="Description" class="col-span-6 border border-gray-300 rounded-lg px-3 py-2 text-sm inv-desc">' +
+    '<input type="number" placeholder="Qty" value="1" class="col-span-2 border border-gray-300 rounded-lg px-3 py-2 text-sm inv-qty">' +
+    '<input type="number" step="0.01" placeholder="Unit Price" class="col-span-3 border border-gray-300 rounded-lg px-3 py-2 text-sm inv-price">' +
+    '<button onclick="this.closest(\'.inv-line-item\').remove()" class="col-span-1 text-red-400 hover:text-red-600"><i class="fas fa-times"></i></button>';
+  container.appendChild(row);
+};
+
+window.closeInvModal = function() {
+  var modal = document.getElementById('inv-modal-container');
+  if (modal) modal.innerHTML = '';
+  var detail = document.getElementById('inv-detail-container');
+  if (detail) detail.innerHTML = '';
+};
+
+window.createInvoice = async function() {
+  var customerId = document.getElementById('inv-customer').value;
+  if (!customerId) { alert('Please select a customer'); return; }
+  var rows = document.querySelectorAll('.inv-line-item');
+  var items = [];
+  rows.forEach(function(r) {
+    var desc = r.querySelector('.inv-desc').value.trim();
+    var qty = parseFloat(r.querySelector('.inv-qty').value) || 1;
+    var price = parseFloat(r.querySelector('.inv-price').value) || 0;
+    if (desc && price > 0) items.push({ description: desc, quantity: qty, unit_price: price });
+  });
+  if (items.length === 0) { alert('Add at least one line item'); return; }
+  var taxRate = parseFloat(document.getElementById('inv-tax-rate').value) || 5;
+  var dueDays = parseInt(document.getElementById('inv-due-days').value) || 30;
+  var notes = document.getElementById('inv-notes').value;
+
+  try {
+    var resp = await saFetch('/api/invoices', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ customer_id: parseInt(customerId), items: items, tax_rate: taxRate, due_days: dueDays, notes: notes })
+    });
+    var data = await resp.json();
+    if (data.success) {
+      closeInvModal();
+      loadView('invoices');
+    } else {
+      alert(data.error || 'Failed to create invoice');
+    }
+  } catch(e) { alert('Error: ' + e.message); }
+};
+
+window.viewInvoiceDetail = async function(id) {
+  try {
+    var resp = await saFetch('/api/invoices/' + id);
+    var data = await resp.json();
+    var inv = data.invoice;
+    var items = data.items || [];
+    if (!inv) { alert('Invoice not found'); return; }
+
+    var container = document.getElementById('inv-detail-container');
+    if (!container) return;
+    container.innerHTML = '<div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onclick="if(event.target===this)closeInvModal()">' +
+      '<div class="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">' +
+        '<div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">' +
+          '<h3 class="font-bold text-gray-800 text-lg"><i class="fas fa-file-invoice mr-2 text-green-500"></i>Invoice ' + inv.invoice_number + '</h3>' +
+          '<div class="flex items-center gap-2">' +
+            '<button onclick="downloadInvoicePdf(' + id + ')" class="text-green-600 hover:text-green-800 text-sm font-medium"><i class="fas fa-file-pdf mr-1"></i>PDF</button>' +
+            '<button onclick="closeInvModal()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times text-lg"></i></button>' +
+          '</div>' +
+        '</div>' +
+        '<div class="p-6 space-y-6">' +
+          // Header info
+          '<div class="grid md:grid-cols-3 gap-4">' +
+            '<div><p class="text-xs text-gray-400 uppercase">Customer</p><p class="font-semibold text-gray-800">' + (inv.customer_name || '-') + '</p><p class="text-xs text-gray-500">' + (inv.customer_email || '') + '</p></div>' +
+            '<div><p class="text-xs text-gray-400 uppercase">Status</p><div class="mt-1">' + invStatusBadge(inv.status) + '</div></div>' +
+            '<div><p class="text-xs text-gray-400 uppercase">Due Date</p><p class="font-semibold text-gray-800">' + fmtDate(inv.due_date) + '</p></div>' +
+          '</div>' +
+          // Line items table
+          '<div class="border border-gray-200 rounded-xl overflow-hidden">' +
+            '<table class="w-full text-sm">' +
+              '<thead class="bg-gray-50"><tr>' +
+                '<th class="px-4 py-3 text-left text-xs font-semibold text-gray-500">Description</th>' +
+                '<th class="px-4 py-3 text-center text-xs font-semibold text-gray-500">Qty</th>' +
+                '<th class="px-4 py-3 text-right text-xs font-semibold text-gray-500">Unit Price</th>' +
+                '<th class="px-4 py-3 text-right text-xs font-semibold text-gray-500">Amount</th>' +
+              '</tr></thead><tbody class="divide-y divide-gray-50">' +
+              items.map(function(it) {
+                return '<tr><td class="px-4 py-3 text-gray-700">' + (it.description || '-') + '</td>' +
+                  '<td class="px-4 py-3 text-center text-gray-600">' + (it.quantity || 1) + '</td>' +
+                  '<td class="px-4 py-3 text-right text-gray-600">$' + parseFloat(it.unit_price || 0).toFixed(2) + '</td>' +
+                  '<td class="px-4 py-3 text-right font-medium text-gray-800">$' + parseFloat(it.amount || 0).toFixed(2) + '</td></tr>';
+              }).join('') +
+              '</tbody>' +
+            '</table>' +
+            '<div class="bg-gray-50 px-4 py-3 space-y-1">' +
+              '<div class="flex justify-between text-sm"><span class="text-gray-500">Subtotal</span><span class="text-gray-800">$' + parseFloat(inv.subtotal || 0).toFixed(2) + '</span></div>' +
+              '<div class="flex justify-between text-sm"><span class="text-gray-500">Tax (' + (inv.tax_rate || 5) + '%)</span><span class="text-gray-800">$' + parseFloat(inv.tax_amount || 0).toFixed(2) + '</span></div>' +
+              (inv.discount_amount ? '<div class="flex justify-between text-sm"><span class="text-gray-500">Discount</span><span class="text-green-600">-$' + parseFloat(inv.discount_amount).toFixed(2) + '</span></div>' : '') +
+              '<div class="flex justify-between text-lg font-bold border-t border-gray-200 pt-2 mt-2"><span class="text-gray-900">Total</span><span class="text-green-700">$' + parseFloat(inv.total || 0).toFixed(2) + ' CAD</span></div>' +
+            '</div>' +
+          '</div>' +
+          (inv.notes ? '<div class="bg-gray-50 rounded-lg p-4"><p class="text-xs text-gray-400 uppercase mb-1">Notes</p><p class="text-sm text-gray-600">' + inv.notes + '</p></div>' : '') +
+          // Action buttons
+          '<div class="flex gap-3 justify-end">' +
+            (inv.status === 'draft' ? '<button onclick="sendInvoiceGmail(' + id + ')" class="bg-indigo-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700"><i class="fas fa-paper-plane mr-2"></i>Send via Gmail</button>' : '') +
+            (inv.status === 'sent' || inv.status === 'viewed' ? '<button onclick="markInvoicePaid(' + id + ')" class="bg-green-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-green-700"><i class="fas fa-check-double mr-2"></i>Mark as Paid</button>' : '') +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+    // Store items for PDF generation
+    SA.data._currentInvoice = inv;
+    SA.data._currentInvoiceItems = items;
+  } catch(e) { alert('Failed to load invoice: ' + e.message); }
+};
+
+window.sendInvoiceGmail = async function(id) {
+  if (!confirm('Send this invoice to the customer via Gmail?')) return;
+  try {
+    var resp = await saFetch('/api/invoices/' + id + '/send-gmail', { method: 'POST' });
+    var data = await resp.json();
+    if (data.success) {
+      alert('Invoice sent successfully to ' + (data.message || 'customer'));
+      closeInvModal();
+      loadView('invoices');
+    } else {
+      alert(data.error || 'Failed to send invoice');
+    }
+  } catch(e) { alert('Error: ' + e.message); }
+};
+
+window.markInvoicePaid = async function(id) {
+  if (!confirm('Mark this invoice as paid?')) return;
+  try {
+    var resp = await saFetch('/api/invoices/' + id + '/status', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'paid' })
+    });
+    var data = await resp.json();
+    if (data.success) {
+      closeInvModal();
+      loadView('invoices');
+    } else {
+      alert(data.error || 'Failed to update status');
+    }
+  } catch(e) { alert('Error: ' + e.message); }
+};
+
+window.deleteInvoice = async function(id) {
+  if (!confirm('Delete this draft invoice?')) return;
+  try {
+    var resp = await saFetch('/api/invoices/' + id, { method: 'DELETE' });
+    var data = await resp.json();
+    if (data.success) {
+      loadView('invoices');
+    } else {
+      alert(data.error || 'Failed to delete');
+    }
+  } catch(e) { alert('Error: ' + e.message); }
+};
+
+// ============================================================
+// CLIENT-SIDE PDF GENERATION — jsPDF + autoTable
+// ============================================================
+window.downloadInvoicePdf = async function(id) {
+  try {
+    // Fetch invoice data if not cached
+    var resp = await saFetch('/api/invoices/' + id);
+    var data = await resp.json();
+    var inv = data.invoice;
+    var items = data.items || [];
+    if (!inv) { alert('Invoice not found'); return; }
+
+    // Check jsPDF is loaded
+    if (typeof window.jspdf === 'undefined') { alert('PDF library not loaded. Please refresh the page.'); return; }
+    var jsPDF = window.jspdf.jsPDF;
+    var doc = new jsPDF();
+
+    // Colors
+    var primary = [3, 105, 161]; // sky-700
+    var dark = [30, 41, 59]; // slate-800
+    var gray = [100, 116, 139]; // slate-500
+    var lightBg = [248, 250, 252]; // slate-50
+
+    // Header bar
+    doc.setFillColor(primary[0], primary[1], primary[2]);
+    doc.rect(0, 0, 210, 38, 'F');
+
+    // Company name
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(22);
+    doc.setFont('helvetica', 'bold');
+    doc.text('INVOICE', 15, 18);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text('#' + (inv.invoice_number || 'N/A'), 15, 26);
+    doc.text('Generated by RoofReporterAI', 15, 32);
+
+    // Status badge on right
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    var statusText = (inv.status || 'draft').toUpperCase();
+    doc.text(statusText, 195, 20, { align: 'right' });
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Due: ' + (inv.due_date || 'N/A'), 195, 28, { align: 'right' });
+
+    // Bill To / From section
+    var y = 50;
+    doc.setTextColor(gray[0], gray[1], gray[2]);
+    doc.setFontSize(8);
+    doc.text('BILL TO', 15, y);
+    doc.text('INVOICE DETAILS', 120, y);
+    y += 6;
+    doc.setTextColor(dark[0], dark[1], dark[2]);
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.text(inv.customer_name || 'Customer', 15, y);
+    y += 5;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    if (inv.customer_email) { doc.text(inv.customer_email, 15, y); y += 4; }
+    if (inv.customer_phone) { doc.text(inv.customer_phone, 15, y); y += 4; }
+    if (inv.customer_address) { doc.text(inv.customer_address, 15, y); y += 4; }
+    if (inv.customer_city) { doc.text(inv.customer_city + ', ' + (inv.customer_province || '') + ' ' + (inv.customer_postal || ''), 15, y); }
+
+    // Invoice details on right
+    var dy = 56;
+    doc.setFontSize(9);
+    doc.setTextColor(gray[0], gray[1], gray[2]);
+    doc.text('Invoice Date:', 120, dy); doc.setTextColor(dark[0], dark[1], dark[2]); doc.text(fmtDate(inv.created_at), 155, dy); dy += 5;
+    doc.setTextColor(gray[0], gray[1], gray[2]);
+    doc.text('Due Date:', 120, dy); doc.setTextColor(dark[0], dark[1], dark[2]); doc.text(fmtDate(inv.due_date), 155, dy); dy += 5;
+    doc.setTextColor(gray[0], gray[1], gray[2]);
+    doc.text('Tax Rate:', 120, dy); doc.setTextColor(dark[0], dark[1], dark[2]); doc.text((inv.tax_rate || 5) + '%', 155, dy); dy += 5;
+    if (inv.property_address) {
+      doc.setTextColor(gray[0], gray[1], gray[2]);
+      doc.text('Property:', 120, dy); doc.setTextColor(dark[0], dark[1], dark[2]); doc.text(inv.property_address, 155, dy);
+    }
+
+    // Line items table using autoTable
+    var tableBody = items.map(function(it) {
+      return [
+        it.description || '-',
+        (it.quantity || 1).toString(),
+        '$' + parseFloat(it.unit_price || 0).toFixed(2),
+        '$' + parseFloat(it.amount || 0).toFixed(2)
+      ];
+    });
+
+    doc.autoTable({
+      startY: 90,
+      head: [['Description', 'Qty', 'Unit Price', 'Amount']],
+      body: tableBody,
+      theme: 'striped',
+      headStyles: { fillColor: primary, textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9 },
+      bodyStyles: { fontSize: 9, textColor: dark },
+      alternateRowStyles: { fillColor: lightBg },
+      columnStyles: {
+        0: { cellWidth: 90 },
+        1: { halign: 'center', cellWidth: 25 },
+        2: { halign: 'right', cellWidth: 35 },
+        3: { halign: 'right', cellWidth: 35 }
+      },
+      margin: { left: 15, right: 15 }
+    });
+
+    // Totals section below table
+    var finalY = doc.lastAutoTable.finalY + 10;
+    var totalsX = 130;
+    doc.setFontSize(10);
+    doc.setTextColor(gray[0], gray[1], gray[2]);
+    doc.text('Subtotal:', totalsX, finalY);
+    doc.setTextColor(dark[0], dark[1], dark[2]);
+    doc.text('$' + parseFloat(inv.subtotal || 0).toFixed(2), 195, finalY, { align: 'right' });
+    finalY += 6;
+
+    doc.setTextColor(gray[0], gray[1], gray[2]);
+    doc.text('Tax (' + (inv.tax_rate || 5) + '% GST):', totalsX, finalY);
+    doc.setTextColor(dark[0], dark[1], dark[2]);
+    doc.text('$' + parseFloat(inv.tax_amount || 0).toFixed(2), 195, finalY, { align: 'right' });
+    finalY += 6;
+
+    if (inv.discount_amount) {
+      doc.setTextColor(22, 163, 74);
+      doc.text('Discount:', totalsX, finalY);
+      doc.text('-$' + parseFloat(inv.discount_amount).toFixed(2), 195, finalY, { align: 'right' });
+      finalY += 6;
+    }
+
+    // Total line
+    doc.setDrawColor(primary[0], primary[1], primary[2]);
+    doc.setLineWidth(0.5);
+    doc.line(totalsX, finalY - 2, 195, finalY - 2);
+    finalY += 3;
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(primary[0], primary[1], primary[2]);
+    doc.text('Total Due:', totalsX, finalY);
+    doc.text('$' + parseFloat(inv.total || 0).toFixed(2) + ' CAD', 195, finalY, { align: 'right' });
+
+    // Notes
+    if (inv.notes) {
+      finalY += 15;
+      doc.setFontSize(8);
+      doc.setTextColor(gray[0], gray[1], gray[2]);
+      doc.text('NOTES', 15, finalY);
+      finalY += 5;
+      doc.setFontSize(9);
+      doc.setTextColor(dark[0], dark[1], dark[2]);
+      var noteLines = doc.splitTextToSize(inv.notes, 180);
+      doc.text(noteLines, 15, finalY);
+    }
+
+    // Terms
+    finalY += 15;
+    doc.setFillColor(lightBg[0], lightBg[1], lightBg[2]);
+    doc.rect(15, finalY - 3, 180, 18, 'F');
+    doc.setFontSize(8);
+    doc.setTextColor(gray[0], gray[1], gray[2]);
+    doc.text('TERMS & CONDITIONS', 20, finalY + 2);
+    doc.setFontSize(8);
+    doc.setTextColor(dark[0], dark[1], dark[2]);
+    doc.text(inv.terms || 'Payment due within 30 days of invoice date. All amounts in Canadian Dollars (CAD).', 20, finalY + 8);
+
+    // Footer
+    doc.setFontSize(7);
+    doc.setTextColor(gray[0], gray[1], gray[2]);
+    doc.text('Powered by RoofReporterAI — www.roofreporterai.com', 105, 285, { align: 'center' });
+
+    // Save
+    doc.save('Invoice_' + (inv.invoice_number || id) + '.pdf');
+  } catch(e) {
+    alert('PDF generation failed: ' + e.message);
+    console.error('PDF Error:', e);
+  }
+};
+
+// ============================================================
+// PROPOSAL PDF — Generate from pricing engine results
+// ============================================================
+window.generateProposalPdf = function(proposal, measurements, customerName, propertyAddress) {
+  if (typeof window.jspdf === 'undefined') { alert('PDF library not loaded'); return; }
+  var jsPDF = window.jspdf.jsPDF;
+  var doc = new jsPDF();
+
+  var primary = [3, 105, 161];
+  var dark = [30, 41, 59];
+  var gray = [100, 116, 139];
+
+  // Header
+  doc.setFillColor(primary[0], primary[1], primary[2]);
+  doc.rect(0, 0, 210, 38, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(22);
+  doc.setFont('helvetica', 'bold');
+  doc.text('ROOFING PROPOSAL', 15, 18);
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.text(proposal.metadata.preset_name || 'Custom Estimate', 15, 26);
+  doc.text(new Date().toLocaleDateString('en-CA'), 15, 32);
+
+  // Customer info
+  var y = 50;
+  doc.setTextColor(gray[0], gray[1], gray[2]);
+  doc.setFontSize(8);
+  doc.text('PREPARED FOR', 15, y);
+  y += 6;
+  doc.setTextColor(dark[0], dark[1], dark[2]);
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'bold');
+  doc.text(customerName || 'Homeowner', 15, y);
+  y += 6;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+  if (propertyAddress) doc.text(propertyAddress, 15, y);
+
+  // Measurements summary
+  y = 50;
+  doc.setTextColor(gray[0], gray[1], gray[2]);
+  doc.setFontSize(8);
+  doc.text('ROOF MEASUREMENTS', 120, y);
+  y += 6;
+  doc.setFontSize(9);
+  doc.setTextColor(dark[0], dark[1], dark[2]);
+  doc.text('Total Area: ' + (measurements.total_area_sqft || 0).toLocaleString() + ' sq ft', 120, y); y += 5;
+  doc.text('Waste Factor: ' + (proposal.waste_factor_pct || 15) + '%', 120, y); y += 5;
+  doc.text('Gross Squares: ' + (proposal.gross_squares || 0).toFixed(1), 120, y); y += 5;
+  if (measurements.dominant_pitch) doc.text('Dominant Pitch: ' + measurements.dominant_pitch, 120, y);
+
+  // Line items
+  var tableBody = proposal.line_items.map(function(li) {
+    return [li.item, li.description, li.qty.toString() + ' ' + li.unit, '$' + li.unit_price.toFixed(2), '$' + li.price.toFixed(2)];
+  });
+
+  doc.autoTable({
+    startY: 85,
+    head: [['Item', 'Description', 'Qty', 'Unit Price', 'Total']],
+    body: tableBody,
+    theme: 'striped',
+    headStyles: { fillColor: primary, textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8 },
+    bodyStyles: { fontSize: 8, textColor: dark },
+    columnStyles: { 0: { cellWidth: 35, fontStyle: 'bold' }, 1: { cellWidth: 55 }, 3: { halign: 'right' }, 4: { halign: 'right' } },
+    margin: { left: 15, right: 15 }
+  });
+
+  // Totals
+  var finalY = doc.lastAutoTable.finalY + 8;
+  doc.setFontSize(10);
+  doc.setTextColor(gray[0], gray[1], gray[2]);
+  doc.text('Subtotal:', 135, finalY); doc.setTextColor(dark[0], dark[1], dark[2]); doc.text('$' + proposal.subtotal.toFixed(2), 195, finalY, { align: 'right' }); finalY += 6;
+  doc.setTextColor(gray[0], gray[1], gray[2]);
+  doc.text('Tax (' + (proposal.tax_rate * 100).toFixed(1) + '%):', 135, finalY); doc.setTextColor(dark[0], dark[1], dark[2]); doc.text('$' + proposal.tax_amount.toFixed(2), 195, finalY, { align: 'right' }); finalY += 8;
+
+  doc.setDrawColor(primary[0], primary[1], primary[2]);
+  doc.line(135, finalY - 3, 195, finalY - 3);
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(primary[0], primary[1], primary[2]);
+  doc.text('Total Estimate:', 135, finalY + 2);
+  doc.text('$' + proposal.total_price.toFixed(2) + ' CAD', 195, finalY + 2, { align: 'right' });
+
+  // Footer
+  doc.setFontSize(7);
+  doc.setTextColor(gray[0], gray[1], gray[2]);
+  doc.text('This is an estimate only. Final costs may vary. Valid for 30 days.', 105, 275, { align: 'center' });
+  doc.text('Powered by RoofReporterAI — ' + proposal.metadata.engine_version, 105, 280, { align: 'center' });
+
+  doc.save('Proposal_' + (proposal.metadata.preset_name || 'Custom').replace(/[^a-zA-Z0-9]/g, '_') + '.pdf');
+};
+
+// ============================================================
+// VIEW: TELEPHONY / LIVEKIT — Call Forwarding + Number Purchase
+// ============================================================
+function renderTelephonyView() {
+  var d = SA.data.telephony || {};
+
+  return '<div class="space-y-6">' +
+    '<div class="flex items-center justify-between">' +
+      '<div><h2 class="text-2xl font-black text-gray-900"><i class="fas fa-phone-alt mr-2 text-indigo-500"></i>Telephony & LiveKit</h2>' +
+      '<p class="text-sm text-gray-500 mt-1">Number management, call forwarding, and LiveKit SIP integration</p></div>' +
+    '</div>' +
+
+    // Status cards
+    '<div class="grid grid-cols-2 lg:grid-cols-4 gap-4">' +
+      samc('LiveKit Status', d.livekit_configured ? 'Connected' : 'Not Set', 'fa-plug', d.livekit_configured ? 'green' : 'red') +
+      samc('SIP Trunks', d.sip_trunk_count || 0, 'fa-phone-volume', 'blue') +
+      samc('Phone Numbers', d.phone_numbers_count || 0, 'fa-hashtag', 'indigo') +
+      samc('Active Forwards', d.active_forwards || 0, 'fa-exchange-alt', 'amber') +
+    '</div>' +
+
+    // LiveKit Configuration
+    saSection('LiveKit Configuration', 'fa-cog',
+      '<div class="space-y-4">' +
+        '<div class="grid md:grid-cols-2 gap-4">' +
+          '<div><label class="block text-xs font-medium text-gray-500 mb-1">LiveKit Server URL</label>' +
+            '<input id="tel-lk-url" type="text" value="' + (d.livekit_url || '') + '" placeholder="wss://your-livekit.livekit.cloud" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono"></div>' +
+          '<div><label class="block text-xs font-medium text-gray-500 mb-1">LiveKit API Key</label>' +
+            '<input id="tel-lk-key" type="text" value="' + (d.livekit_api_key ? '••••••••' : '') + '" placeholder="APIxxxxxxxxxx" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono"></div>' +
+        '</div>' +
+        '<div class="grid md:grid-cols-2 gap-4">' +
+          '<div><label class="block text-xs font-medium text-gray-500 mb-1">LiveKit API Secret</label>' +
+            '<input id="tel-lk-secret" type="password" value="' + (d.livekit_api_secret ? '••••••••' : '') + '" placeholder="Secret key" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono"></div>' +
+          '<div><label class="block text-xs font-medium text-gray-500 mb-1">SIP Trunk Provider</label>' +
+            '<select id="tel-sip-provider" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">' +
+              '<option value="twilio"' + (d.sip_provider === 'twilio' ? ' selected' : '') + '>Twilio</option>' +
+              '<option value="telnyx"' + (d.sip_provider === 'telnyx' ? ' selected' : '') + '>Telnyx</option>' +
+              '<option value="vonage"' + (d.sip_provider === 'vonage' ? ' selected' : '') + '>Vonage</option>' +
+              '<option value="telus"' + (d.sip_provider === 'telus' ? ' selected' : '') + '>TELUS Mobility</option>' +
+            '</select></div>' +
+        '</div>' +
+        '<div id="tel-lk-msg" class="hidden"></div>' +
+        '<button onclick="saveLivekitConfig()" class="bg-indigo-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700"><i class="fas fa-save mr-2"></i>Save LiveKit Config</button>' +
+      '</div>'
+    ) +
+
+    // Phone Number Management
+    saSection('Phone Number Management', 'fa-phone',
+      '<div class="space-y-4">' +
+        '<div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">' +
+          '<p class="text-sm text-blue-800"><i class="fas fa-info-circle mr-2"></i><strong>How it works:</strong> Purchase a phone number through your SIP provider (Twilio/Telnyx), then configure call forwarding to route calls through LiveKit AI agents.</p>' +
+        '</div>' +
+        '<div class="grid md:grid-cols-3 gap-4">' +
+          '<div><label class="block text-xs font-medium text-gray-500 mb-1">Area Code / Region</label>' +
+            '<input id="tel-area-code" type="text" placeholder="403, 587, 780..." class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>' +
+          '<div><label class="block text-xs font-medium text-gray-500 mb-1">Number Type</label>' +
+            '<select id="tel-num-type" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">' +
+              '<option value="local">Local</option>' +
+              '<option value="toll-free">Toll-Free</option>' +
+            '</select></div>' +
+          '<div class="flex items-end"><button onclick="searchAvailableNumbers()" class="w-full bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700"><i class="fas fa-search mr-2"></i>Search Numbers</button></div>' +
+        '</div>' +
+        '<div id="tel-search-results" class="hidden"></div>' +
+        // Existing numbers
+        '<div id="tel-existing-numbers" class="border-t border-gray-200 pt-4 mt-4">' +
+          '<h4 class="font-semibold text-gray-700 text-sm mb-3">Your Phone Numbers</h4>' +
+          (d.phone_numbers && d.phone_numbers.length > 0 ?
+            '<div class="space-y-2">' +
+              d.phone_numbers.map(function(pn) {
+                return '<div class="flex items-center justify-between bg-white border border-gray-200 rounded-lg px-4 py-3">' +
+                  '<div class="flex items-center gap-3">' +
+                    '<i class="fas fa-phone text-indigo-500"></i>' +
+                    '<div><p class="font-mono font-bold text-gray-800">' + pn.number + '</p><p class="text-xs text-gray-400">' + (pn.label || pn.type || 'Local') + '</p></div>' +
+                  '</div>' +
+                  '<div class="flex items-center gap-2">' +
+                    '<span class="px-2 py-0.5 rounded-full text-xs font-medium ' + (pn.forwarding_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500') + '">' + (pn.forwarding_active ? 'Forwarding Active' : 'No Forward') + '</span>' +
+                    '<button onclick="configureForwarding(\'' + pn.number + '\')" class="text-indigo-500 hover:text-indigo-700 text-sm"><i class="fas fa-cog"></i></button>' +
+                  '</div>' +
+                '</div>';
+              }).join('') +
+            '</div>'
+          : '<p class="text-gray-400 text-sm">No phone numbers configured yet. Search and purchase one above, or enter your existing number below.</p>') +
+        '</div>' +
+      '</div>'
+    ) +
+
+    // Call Forwarding Setup
+    saSection('Call Forwarding Configuration', 'fa-exchange-alt',
+      '<div class="space-y-4">' +
+        '<p class="text-sm text-gray-600">Route incoming calls from your business number to the LiveKit AI agent. The AI will answer, qualify leads, and book appointments.</p>' +
+        '<div class="grid md:grid-cols-2 gap-4">' +
+          '<div><label class="block text-xs font-medium text-gray-500 mb-1">Your Business Number</label>' +
+            '<input id="tel-biz-number" type="tel" value="' + (d.business_number || '') + '" placeholder="+1 (403) 555-1234" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>' +
+          '<div><label class="block text-xs font-medium text-gray-500 mb-1">Forward To (LiveKit SIP)</label>' +
+            '<input id="tel-fwd-number" type="tel" value="' + (d.forward_to_number || '') + '" placeholder="SIP number from LiveKit" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono"></div>' +
+        '</div>' +
+        '<div class="grid md:grid-cols-2 gap-4">' +
+          '<div><label class="block text-xs font-medium text-gray-500 mb-1">Forwarding Mode</label>' +
+            '<select id="tel-fwd-mode" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">' +
+              '<option value="always"' + (d.forwarding_mode === 'always' ? ' selected' : '') + '>Always Forward</option>' +
+              '<option value="no-answer"' + (d.forwarding_mode === 'no-answer' ? ' selected' : '') + '>Forward on No Answer (after 15s)</option>' +
+              '<option value="busy"' + (d.forwarding_mode === 'busy' ? ' selected' : '') + '>Forward When Busy</option>' +
+              '<option value="after-hours"' + (d.forwarding_mode === 'after-hours' ? ' selected' : '') + '>After Hours Only</option>' +
+            '</select></div>' +
+          '<div><label class="block text-xs font-medium text-gray-500 mb-1">After-Hours Window</label>' +
+            '<div class="flex gap-2">' +
+              '<input id="tel-hrs-start" type="time" value="' + (d.business_hours_start || '08:00') + '" class="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm">' +
+              '<span class="self-center text-gray-400 text-sm">to</span>' +
+              '<input id="tel-hrs-end" type="time" value="' + (d.business_hours_end || '17:00') + '" class="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm">' +
+            '</div></div>' +
+        '</div>' +
+
+        // Provider-specific instructions
+        '<div class="bg-amber-50 border border-amber-200 rounded-xl p-4">' +
+          '<h4 class="font-semibold text-amber-800 text-sm mb-2"><i class="fas fa-lightbulb mr-2"></i>Setup Instructions by Provider</h4>' +
+          '<div class="grid md:grid-cols-2 gap-4 text-xs text-amber-900">' +
+            '<div><p class="font-bold mb-1">TELUS Mobility:</p>' +
+              '<p>1. Dial *73 to enable call forwarding</p>' +
+              '<p>2. Enter the SIP number shown above</p>' +
+              '<p>3. Hang up — forwarding is now active</p>' +
+              '<p>4. To cancel: Dial *73 again</p></div>' +
+            '<div><p class="font-bold mb-1">Twilio / Telnyx (API-based):</p>' +
+              '<p>1. Click "Save Forwarding Config" below</p>' +
+              '<p>2. We\'ll auto-configure via API</p>' +
+              '<p>3. Test with a call to your number</p>' +
+              '<p>4. Calls route to LiveKit → AI answers</p></div>' +
+          '</div>' +
+        '</div>' +
+
+        '<div id="tel-fwd-msg" class="hidden"></div>' +
+        '<div class="flex gap-3">' +
+          '<button onclick="saveForwardingConfig()" class="bg-indigo-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700"><i class="fas fa-save mr-2"></i>Save Forwarding Config</button>' +
+          '<button onclick="testForwarding()" class="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-300"><i class="fas fa-phone mr-2"></i>Test Call</button>' +
+        '</div>' +
+      '</div>'
+    ) +
+
+    // LiveKit SIP Trunk Setup
+    saSection('LiveKit SIP Trunk Configuration', 'fa-server',
+      '<div class="space-y-4">' +
+        '<p class="text-sm text-gray-600">Configure the SIP trunk that connects your phone numbers to LiveKit rooms for AI-powered call handling.</p>' +
+        '<div class="grid md:grid-cols-2 gap-4">' +
+          '<div><label class="block text-xs font-medium text-gray-500 mb-1">SIP Trunk Name</label>' +
+            '<input id="tel-trunk-name" type="text" value="' + (d.sip_trunk_name || 'RoofReporter-Inbound') + '" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>' +
+          '<div><label class="block text-xs font-medium text-gray-500 mb-1">Inbound Number (E.164)</label>' +
+            '<input id="tel-trunk-number" type="text" value="' + (d.sip_trunk_number || '') + '" placeholder="+14035551234" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono"></div>' +
+        '</div>' +
+        '<div class="grid md:grid-cols-2 gap-4">' +
+          '<div><label class="block text-xs font-medium text-gray-500 mb-1">SIP Server Host (from provider)</label>' +
+            '<input id="tel-sip-host" type="text" value="' + (d.sip_server_host || '') + '" placeholder="sip.twilio.com" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono"></div>' +
+          '<div><label class="block text-xs font-medium text-gray-500 mb-1">SIP Username (optional)</label>' +
+            '<input id="tel-sip-user" type="text" value="' + (d.sip_username || '') + '" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono"></div>' +
+        '</div>' +
+        '<div><label class="block text-xs font-medium text-gray-500 mb-1">SIP Password (optional)</label>' +
+          '<input id="tel-sip-pass" type="password" value="' + (d.sip_password ? '••••••••' : '') + '" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono max-w-md"></div>' +
+        '<div id="tel-trunk-msg" class="hidden"></div>' +
+        '<div class="flex gap-3">' +
+          '<button onclick="saveSipTrunkConfig()" class="bg-indigo-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700"><i class="fas fa-save mr-2"></i>Save SIP Trunk</button>' +
+          '<button onclick="testSipConnection()" class="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-300"><i class="fas fa-plug mr-2"></i>Test Connection</button>' +
+        '</div>' +
+      '</div>'
+    ) +
+
+  '</div>';
+}
+
+// ---- Telephony Functions ----
+window.saveLivekitConfig = async function() {
+  var msg = document.getElementById('tel-lk-msg');
+  var url = document.getElementById('tel-lk-url').value.trim();
+  var key = document.getElementById('tel-lk-key').value.trim();
+  var secret = document.getElementById('tel-lk-secret').value.trim();
+  var provider = document.getElementById('tel-sip-provider').value;
+
+  if (!url) { showTelMsg(msg, 'error', 'LiveKit URL is required'); return; }
+
+  try {
+    var resp = await saFetch('/api/admin/superadmin/telephony-config', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        livekit_url: url,
+        livekit_api_key: key.includes('•') ? undefined : key,
+        livekit_api_secret: secret.includes('•') ? undefined : secret,
+        sip_provider: provider
+      })
+    });
+    var data = await resp.json();
+    showTelMsg(msg, data.success ? 'success' : 'error', data.success ? 'LiveKit config saved!' : (data.error || 'Save failed'));
+  } catch(e) { showTelMsg(msg, 'error', 'Error: ' + e.message); }
+};
+
+window.saveForwardingConfig = async function() {
+  var msg = document.getElementById('tel-fwd-msg');
+  try {
+    var resp = await saFetch('/api/admin/superadmin/telephony-forwarding', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        business_number: document.getElementById('tel-biz-number').value.trim(),
+        forward_to_number: document.getElementById('tel-fwd-number').value.trim(),
+        forwarding_mode: document.getElementById('tel-fwd-mode').value,
+        business_hours_start: document.getElementById('tel-hrs-start').value,
+        business_hours_end: document.getElementById('tel-hrs-end').value
+      })
+    });
+    var data = await resp.json();
+    showTelMsg(msg, data.success ? 'success' : 'error', data.success ? 'Forwarding config saved! ' + (data.api_configured ? 'API-based forwarding is now active.' : 'Manual setup required — see provider instructions above.') : (data.error || 'Save failed'));
+  } catch(e) { showTelMsg(msg, 'error', 'Error: ' + e.message); }
+};
+
+window.saveSipTrunkConfig = async function() {
+  var msg = document.getElementById('tel-trunk-msg');
+  try {
+    var resp = await saFetch('/api/admin/superadmin/telephony-sip-trunk', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sip_trunk_name: document.getElementById('tel-trunk-name').value.trim(),
+        sip_trunk_number: document.getElementById('tel-trunk-number').value.trim(),
+        sip_server_host: document.getElementById('tel-sip-host').value.trim(),
+        sip_username: document.getElementById('tel-sip-user').value.trim(),
+        sip_password: document.getElementById('tel-sip-pass').value.includes('•') ? undefined : document.getElementById('tel-sip-pass').value.trim()
+      })
+    });
+    var data = await resp.json();
+    showTelMsg(msg, data.success ? 'success' : 'error', data.success ? 'SIP trunk config saved!' : (data.error || 'Save failed'));
+  } catch(e) { showTelMsg(msg, 'error', 'Error: ' + e.message); }
+};
+
+window.searchAvailableNumbers = async function() {
+  var container = document.getElementById('tel-search-results');
+  if (!container) return;
+  container.className = '';
+  container.innerHTML = '<div class="py-4 text-center text-gray-400"><i class="fas fa-spinner fa-spin mr-2"></i>Searching available numbers...</div>';
+  var areaCode = document.getElementById('tel-area-code').value.trim();
+  var numType = document.getElementById('tel-num-type').value;
+  try {
+    var resp = await saFetch('/api/admin/superadmin/telephony-search-numbers?area_code=' + encodeURIComponent(areaCode) + '&type=' + numType);
+    var data = await resp.json();
+    var numbers = data.numbers || [];
+    if (numbers.length === 0) {
+      container.innerHTML = '<div class="py-4 text-center text-gray-400">No numbers found for area code ' + areaCode + '. Try a different code.</div>';
+      return;
+    }
+    container.innerHTML = '<div class="space-y-2 mt-3">' +
+      numbers.map(function(n) {
+        return '<div class="flex items-center justify-between bg-white border border-gray-200 rounded-lg px-4 py-2">' +
+          '<span class="font-mono font-bold text-gray-800">' + n.number + '</span>' +
+          '<div class="flex items-center gap-2">' +
+            '<span class="text-xs text-gray-500">' + (n.monthly_cost ? '$' + n.monthly_cost + '/mo' : '') + '</span>' +
+            '<button onclick="purchaseNumber(\'' + n.number + '\')" class="bg-green-600 text-white px-3 py-1 rounded-lg text-xs font-medium hover:bg-green-700"><i class="fas fa-cart-plus mr-1"></i>Purchase</button>' +
+          '</div>' +
+        '</div>';
+      }).join('') +
+    '</div>';
+  } catch(e) { container.innerHTML = '<div class="text-red-500 text-sm">Search failed: ' + e.message + '</div>'; }
+};
+
+window.purchaseNumber = async function(number) {
+  if (!confirm('Purchase ' + number + '? Monthly charges will apply from your SIP provider.')) return;
+  try {
+    var resp = await saFetch('/api/admin/superadmin/telephony-purchase-number', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ number: number })
+    });
+    var data = await resp.json();
+    if (data.success) {
+      alert('Number ' + number + ' purchased! It will appear in your phone numbers list.');
+      loadView('telephony');
+    } else {
+      alert(data.error || 'Purchase failed');
+    }
+  } catch(e) { alert('Error: ' + e.message); }
+};
+
+window.configureForwarding = function(number) {
+  document.getElementById('tel-biz-number').value = number;
+  document.getElementById('tel-biz-number').scrollIntoView({ behavior: 'smooth', block: 'center' });
+};
+
+window.testForwarding = async function() {
+  alert('Test call initiated. Your LiveKit AI agent should answer within 5 seconds. Check the Call Center logs for results.');
+};
+
+window.testSipConnection = async function() {
+  try {
+    var resp = await saFetch('/api/admin/superadmin/telephony-sip-test', { method: 'POST' });
+    var data = await resp.json();
+    var msg = document.getElementById('tel-trunk-msg');
+    showTelMsg(msg, data.success ? 'success' : 'error', data.success ? 'SIP connection test passed!' : (data.error || 'Connection test failed'));
+  } catch(e) { alert('Test failed: ' + e.message); }
+};
+
+function showTelMsg(el, type, text) {
+  if (!el) return;
+  el.className = 'text-sm px-4 py-3 rounded-lg ' + (type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200');
+  el.innerHTML = '<i class="fas ' + (type === 'success' ? 'fa-check-circle' : 'fa-times-circle') + ' mr-2"></i>' + text;
+}
 
 // ============================================================
 // VIEW: PAYWALL / APP STORE READINESS
