@@ -1342,21 +1342,12 @@ secretaryRoutes.post('/assign-number', async (c) => {
       }
     }
 
-    // If still no number available (no Twilio configured or no numbers), use a placeholder
+    // If still no number available (no Twilio configured or no numbers)
     if (!number) {
-      // For dev/testing: assign a placeholder number
-      if (isDev) {
-        const placeholderNumber = '+17800000001'
-        await c.env.DB.prepare(
-          `INSERT OR IGNORE INTO secretary_phone_pool (phone_number, region, status, assigned_to_customer_id, assigned_at) VALUES (?, 'AB', 'assigned', ?, datetime('now'))`
-        ).bind(placeholderNumber, customerId).run()
-        number = { phone_number: placeholderNumber }
-      } else {
-        return c.json({
-          error: 'No phone numbers available. Please contact support.',
-          needs_twilio: !twilioSid,
-        }, 503)
-      }
+      return c.json({
+        error: 'No phone numbers available. Please purchase a number from Twilio, Vonage, or Telnyx and enter it manually in the Connect Phone tab.',
+        needs_manual: true,
+      }, 503)
     }
 
     // If from pool (not just purchased), mark as assigned
@@ -2579,27 +2570,95 @@ IMPORTANT RULES:
 })
 
 // ============================================================
-// QUICK CONNECT — LiveKit-only phone setup (NO Twilio, NO SMS)
-// Simplified 3-step flow:
-//   1. User enters business phone → we auto-purchase a LiveKit number
-//   2. User sets up call forwarding from their carrier to the LiveKit number
-//   3. User clicks "Activate" — AI secretary goes live
-// No verification codes, no SMS, just LiveKit API.
+// QUICK CONNECT — Phone setup for AI Secretary
+// Two paths:
+//   A) LiveKit auto-purchase: if LIVEKIT keys configured, auto-buy a number
+//   B) Manual entry: user enters their OWN purchased number (Twilio/Vonage/Telnyx/LiveKit)
+// Flow:
+//   1. Enter business phone + AI phone number (or auto-purchase)
+//   2. Save → get carrier forwarding instructions
+//   3. Set up call forwarding → press Confirm → deploy agent to LiveKit
 // ============================================================
 
+// Helper: normalize phone to E.164
+function normalizePhone(raw: string): string {
+  let n = raw.replace(/[\s\-\(\)\.]/g, '')
+  if (n.startsWith('1') && n.length === 11) n = '+' + n
+  else if (!n.startsWith('+') && n.length === 10) n = '+1' + n
+  else if (!n.startsWith('+')) n = '+' + n
+  return n
+}
+
+// Helper: format phone for display
+function formatPhoneDisplay(n: string): string {
+  if (!n) return ''
+  const d = n.replace(/^\+1/, '').replace(/\D/g, '')
+  if (d.length === 10) return `(${d.slice(0,3)}) ${d.slice(3,6)}-${d.slice(6)}`
+  return n
+}
+
+// POST /quick-connect/save-phones — Save business phone + manually entered AI phone number
+// This is the primary path: user enters both phone numbers themselves
+secretaryRoutes.post('/quick-connect/save-phones', async (c) => {
+  const customerId = c.get('customerId' as any) as number
+  const { business_phone, ai_phone_number } = await c.req.json()
+
+  if (!business_phone) return c.json({ error: 'Your business phone number is required' }, 400)
+  if (!ai_phone_number) return c.json({ error: 'Your AI phone number (purchased from Twilio/Vonage/Telnyx) is required' }, 400)
+
+  const normalizedBiz = normalizePhone(business_phone)
+  const normalizedAi = normalizePhone(ai_phone_number)
+
+  // Validate both are proper phone numbers (10+ digits after normalization)
+  const bizDigits = normalizedBiz.replace(/\D/g, '')
+  const aiDigits = normalizedAi.replace(/\D/g, '')
+  if (bizDigits.length < 10) return c.json({ error: 'Business phone number must be at least 10 digits' }, 400)
+  if (aiDigits.length < 10) return c.json({ error: 'AI phone number must be at least 10 digits' }, 400)
+  if (normalizedBiz === normalizedAi) return c.json({ error: 'Business phone and AI phone cannot be the same number' }, 400)
+
+  // Ensure config row exists
+  const existing = await c.env.DB.prepare(
+    `SELECT id FROM secretary_config WHERE customer_id = ?`
+  ).bind(customerId).first<any>()
+
+  if (!existing) {
+    await c.env.DB.prepare(
+      `INSERT INTO secretary_config (customer_id, business_phone, assigned_phone_number, connection_status, forwarding_method, phone_verified, created_at, updated_at) VALUES (?, ?, ?, 'pending_forwarding', 'manual_entry', 1, datetime('now'), datetime('now'))`
+    ).bind(customerId, normalizedBiz, normalizedAi).run()
+  } else {
+    await c.env.DB.prepare(`
+      UPDATE secretary_config SET
+        business_phone = ?,
+        assigned_phone_number = ?,
+        connection_status = 'pending_forwarding',
+        forwarding_method = 'manual_entry',
+        phone_verified = 1,
+        updated_at = datetime('now')
+      WHERE customer_id = ?
+    `).bind(normalizedBiz, normalizedAi, customerId).run()
+  }
+
+  console.log(`[QuickConnect] Phones saved — Customer ${customerId}: biz=${normalizedBiz}, ai=${normalizedAi}`)
+
+  return c.json({
+    success: true,
+    business_phone: normalizedBiz,
+    business_phone_display: formatPhoneDisplay(normalizedBiz),
+    ai_phone_number: normalizedAi,
+    ai_phone_display: formatPhoneDisplay(normalizedAi),
+    message: `Phone numbers saved! Now set up call forwarding from ${formatPhoneDisplay(normalizedBiz)} to ${formatPhoneDisplay(normalizedAi)}, then press Confirm.`,
+  })
+})
+
 // POST /quick-connect/purchase-number — Enter phone + auto-purchase LiveKit number
+// Fallback: if LiveKit purchase fails, returns needs_manual=true so frontend shows manual entry
 secretaryRoutes.post('/quick-connect/purchase-number', async (c) => {
   const customerId = c.get('customerId' as any) as number
-  const isDev = c.get('isDev' as any) as boolean
   const { phone_number } = await c.req.json()
 
   if (!phone_number) return c.json({ error: 'Phone number is required' }, 400)
 
-  // Normalize phone number to E.164
-  let normalized = phone_number.replace(/[\s\-\(\)\.]/g, '')
-  if (normalized.startsWith('1') && normalized.length === 11) normalized = '+' + normalized
-  else if (!normalized.startsWith('+') && normalized.length === 10) normalized = '+1' + normalized
-  else if (!normalized.startsWith('+')) normalized = '+' + normalized
+  const normalized = normalizePhone(phone_number)
 
   // Ensure config row exists
   const existing = await c.env.DB.prepare(
@@ -2616,20 +2675,15 @@ secretaryRoutes.post('/quick-connect/purchase-number', async (c) => {
     ).bind(normalized, customerId).run()
   }
 
-  // Check if customer already has a number
-  if (existing?.assigned_phone_number && existing?.livekit_dispatch_rule_id) {
-    const formatPhone = (n: string) => {
-      const d = n.replace(/^\+1/, '').replace(/\D/g, '')
-      if (d.length === 10) return `(${d.slice(0,3)}) ${d.slice(3,6)}-${d.slice(6)}`
-      return n
-    }
+  // Check if customer already has a real number (not a placeholder)
+  if (existing?.assigned_phone_number && !existing.assigned_phone_number.includes('0000') && existing?.livekit_dispatch_rule_id) {
     console.log(`[QuickConnect] Reusing existing number ${existing.assigned_phone_number} for customer ${customerId}`)
     return c.json({
       success: true,
       ai_phone_number: existing.assigned_phone_number,
-      ai_phone_display: formatPhone(existing.assigned_phone_number),
+      ai_phone_display: formatPhoneDisplay(existing.assigned_phone_number),
       business_phone: normalized,
-      business_phone_display: formatPhone(normalized),
+      business_phone_display: formatPhoneDisplay(normalized),
       dispatch_rule_id: existing.livekit_dispatch_rule_id || '',
       message: 'Your AI number is already set up! Proceed to call forwarding.',
     })
@@ -2648,7 +2702,6 @@ secretaryRoutes.post('/quick-connect/purchase-number', async (c) => {
     try {
       console.log(`[QuickConnect] Purchasing LiveKit phone number for customer ${customerId}`)
 
-      // Search for available US numbers
       const searchResult = await livekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST',
         '/twirp/livekit.PhoneNumberService/SearchPhoneNumbers',
         { country_code: 'US', limit: 5 })
@@ -2659,7 +2712,6 @@ secretaryRoutes.post('/quick-connect/purchase-number', async (c) => {
         const numberToBuy = searchResult.items[0].e164_format
         console.log(`[QuickConnect] Purchasing number: ${numberToBuy}`)
 
-        // Create dispatch rule
         const dispatchResult = await livekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST',
           '/twirp/livekit.SIP/CreateSIPDispatchRule', {
             rule: { dispatchRuleIndividual: { roomPrefix: `secretary-${customerId}-` } },
@@ -2667,9 +2719,7 @@ secretaryRoutes.post('/quick-connect/purchase-number', async (c) => {
             metadata: JSON.stringify({ customer_id: customerId, service: 'roofer_secretary' }),
           })
         dispatchId = dispatchResult?.sip_dispatch_rule_id || ''
-        console.log(`[QuickConnect] Created dispatch rule: ${dispatchId}`)
 
-        // Purchase the number and assign to dispatch rule
         const purchaseResult = await livekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST',
           '/twirp/livekit.PhoneNumberService/PurchasePhoneNumber',
           { phone_numbers: [numberToBuy], sip_dispatch_rule_id: dispatchId || undefined })
@@ -2679,7 +2729,6 @@ secretaryRoutes.post('/quick-connect/purchase-number', async (c) => {
           connectionMethod = 'livekit_direct'
           console.log(`[QuickConnect] Purchased number: ${aiPhoneNumber}, dispatch: ${dispatchId}`)
 
-          // Ensure dispatch is linked
           if (dispatchId && !purchaseResult.phone_numbers[0].sip_dispatch_rule_id) {
             try {
               await livekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST',
@@ -2689,31 +2738,26 @@ secretaryRoutes.post('/quick-connect/purchase-number', async (c) => {
               console.error(`[QuickConnect] Failed to update dispatch link:`, e.message)
             }
           }
-        } else {
-          console.error(`[QuickConnect] Purchase returned no numbers`)
         }
-      } else {
-        console.error(`[QuickConnect] No US numbers available from LiveKit`)
       }
     } catch (err: any) {
       console.error('[QuickConnect] LiveKit Phone Numbers failed:', err.message)
     }
   }
 
-  // Dev mode fallback — assign a placeholder
-  if (!aiPhoneNumber && isDev) {
-    aiPhoneNumber = '+17800000001'
-    connectionMethod = 'dev_placeholder'
-    console.log(`[QuickConnect] Dev mode — using placeholder number`)
-  }
-
+  // If auto-purchase failed, tell frontend to show manual entry form instead
   if (!aiPhoneNumber) {
+    console.log(`[QuickConnect] Auto-purchase failed — prompting manual entry for customer ${customerId}`)
     return c.json({
-      error: 'Unable to purchase a phone number. Please ensure LiveKit API keys are configured and phone number purchasing is enabled on your LiveKit account.',
-    }, 503)
+      success: false,
+      needs_manual: true,
+      business_phone: normalized,
+      business_phone_display: formatPhoneDisplay(normalized),
+      message: 'Auto-purchase not available. Please enter the phone number you purchased from Twilio, Vonage, or Telnyx.',
+    })
   }
 
-  // Save the purchased number — status stays 'pending_forwarding' until user activates
+  // Save the purchased number
   await c.env.DB.prepare(`
     UPDATE secretary_config SET
       business_phone = ?,
@@ -2721,56 +2765,120 @@ secretaryRoutes.post('/quick-connect/purchase-number', async (c) => {
       connection_status = 'pending_forwarding',
       forwarding_method = ?,
       livekit_dispatch_rule_id = ?,
-      verification_code = NULL,
-      verification_expires = NULL,
       phone_verified = 1,
       updated_at = datetime('now')
     WHERE customer_id = ?
   `).bind(normalized, aiPhoneNumber, connectionMethod, dispatchId || '', customerId).run()
-
-  const formatPhone = (n: string) => {
-    const d = n.replace(/^\+1/, '').replace(/\D/g, '')
-    if (d.length === 10) return `(${d.slice(0,3)}) ${d.slice(3,6)}-${d.slice(6)}`
-    return n
-  }
 
   console.log(`[QuickConnect] Number purchased — Customer ${customerId}: business=${normalized}, ai=${aiPhoneNumber}`)
 
   return c.json({
     success: true,
     ai_phone_number: aiPhoneNumber,
-    ai_phone_display: formatPhone(aiPhoneNumber),
+    ai_phone_display: formatPhoneDisplay(aiPhoneNumber),
     business_phone: normalized,
-    business_phone_display: formatPhone(normalized),
+    business_phone_display: formatPhoneDisplay(normalized),
     dispatch_rule_id: dispatchId,
     connection_method: connectionMethod,
-    message: `Your AI secretary number is ${formatPhone(aiPhoneNumber)}. Now set up call forwarding from your carrier.`,
+    message: `Your AI secretary number is ${formatPhoneDisplay(aiPhoneNumber)}. Now set up call forwarding from your carrier.`,
   })
 })
 
-// POST /quick-connect/activate — User confirms forwarding is set up, activate the AI secretary
+// POST /quick-connect/activate — User confirms forwarding is set up, deploy agent to LiveKit + activate
 secretaryRoutes.post('/quick-connect/activate', async (c) => {
   const customerId = c.get('customerId' as any) as number
 
   const config = await c.env.DB.prepare(
-    `SELECT assigned_phone_number FROM secretary_config WHERE customer_id = ?`
+    `SELECT * FROM secretary_config WHERE customer_id = ?`
   ).bind(customerId).first<any>()
 
   if (!config?.assigned_phone_number) {
-    return c.json({ error: 'No AI phone number assigned yet. Please purchase a number first.' }, 400)
+    return c.json({ error: 'No AI phone number saved yet. Please enter your business phone and AI phone number first.' }, 400)
+  }
+  if (!config?.business_phone) {
+    return c.json({ error: 'No business phone number saved. Please enter your business phone number first.' }, 400)
   }
 
+  // --- DEPLOY LIVEKIT AGENT ---
+  // Create inbound trunk + dispatch rule if not already configured
+  const apiKey = (c.env as any).LIVEKIT_API_KEY
+  const apiSecret = (c.env as any).LIVEKIT_API_SECRET
+  const livekitUrl = (c.env as any).LIVEKIT_URL
+  let trunkId = config.livekit_inbound_trunk_id || ''
+  let dispatchId = config.livekit_dispatch_rule_id || ''
+  let livekitDeployed = false
+  let livekitError = ''
+
+  if (apiKey && apiSecret && livekitUrl) {
+    try {
+      // Create inbound trunk if not exists
+      if (!trunkId) {
+        console.log(`[QuickConnect] Creating LiveKit inbound trunk for customer ${customerId}`)
+        const trunkResult = await livekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST',
+          '/twirp/livekit.SIP/CreateSIPInboundTrunk', {
+            trunk: {
+              name: `secretary-${customerId}`,
+              numbers: [config.assigned_phone_number],
+              krisp_enabled: true,
+              metadata: JSON.stringify({
+                customer_id: customerId,
+                service: 'roofer_secretary',
+                business_phone: config.business_phone,
+              }),
+            }
+          })
+        trunkId = trunkResult?.sip_trunk_id || trunkResult?.trunk?.sip_trunk_id || ''
+        console.log(`[QuickConnect] Created inbound trunk: ${trunkId}`)
+      }
+
+      // Create dispatch rule if not exists
+      if (!dispatchId) {
+        console.log(`[QuickConnect] Creating LiveKit dispatch rule for customer ${customerId}`)
+        const dispatchResult = await livekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST',
+          '/twirp/livekit.SIP/CreateSIPDispatchRule', {
+            trunk_ids: trunkId ? [trunkId] : [],
+            rule: { dispatchRuleIndividual: { roomPrefix: `secretary-${customerId}-` } },
+            name: `secretary-dispatch-${customerId}`,
+            metadata: JSON.stringify({ customer_id: customerId }),
+          })
+        dispatchId = dispatchResult?.sip_dispatch_rule_id || ''
+        console.log(`[QuickConnect] Created dispatch rule: ${dispatchId}`)
+      }
+
+      livekitDeployed = !!(trunkId || dispatchId)
+    } catch (err: any) {
+      console.error('[QuickConnect] LiveKit deployment error:', err.message)
+      livekitError = err.message
+    }
+  } else {
+    console.log(`[QuickConnect] LiveKit API keys not configured — agent deployment skipped. Customer ${customerId} phones saved for manual LiveKit setup.`)
+  }
+
+  // Update config with connection status + LiveKit IDs
   await c.env.DB.prepare(`
     UPDATE secretary_config SET
       connection_status = 'connected',
       is_active = 1,
+      livekit_inbound_trunk_id = COALESCE(?, livekit_inbound_trunk_id),
+      livekit_dispatch_rule_id = COALESCE(?, livekit_dispatch_rule_id),
       updated_at = datetime('now')
     WHERE customer_id = ?
-  `).bind(customerId).run()
+  `).bind(trunkId || null, dispatchId || null, customerId).run()
 
-  console.log(`[QuickConnect] ACTIVATED — Customer ${customerId} AI secretary is LIVE`)
+  console.log(`[QuickConnect] ACTIVATED — Customer ${customerId}, trunk=${trunkId}, dispatch=${dispatchId}, livekit_deployed=${livekitDeployed}`)
 
-  return c.json({ success: true, message: 'Your AI secretary is now LIVE! Calls forwarded to your AI number will be answered by your AI agent.' })
+  return c.json({
+    success: true,
+    livekit_deployed: livekitDeployed,
+    trunk_id: trunkId,
+    dispatch_rule_id: dispatchId,
+    livekit_error: livekitError || undefined,
+    business_phone: config.business_phone,
+    ai_phone_number: config.assigned_phone_number,
+    message: livekitDeployed
+      ? 'Your AI secretary is now LIVE and connected to LiveKit! Calls forwarded to your AI number will be answered by your AI agent.'
+      : 'Your AI secretary configuration is saved and activated! LiveKit agent deployment will complete when API keys are configured. Your forwarding setup is ready.',
+  })
 })
 
 // POST /quick-connect/disconnect — Disconnect the AI secretary

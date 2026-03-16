@@ -479,10 +479,10 @@
   };
 
   // ============================================================
-  // CONNECT PHONE TAB — LiveKit-Only Setup (No SMS, No Twilio)
-  // Step 1: Enter phone + purchase AI number via LiveKit API
-  // Step 2: Set up call forwarding (Telus for dev, generic for others)  
-  // Step 3: Activate AI secretary
+  // CONNECT PHONE TAB — Real Phone Setup Flow
+  // Step 1: Enter your business phone + your purchased AI phone number
+  // Step 2: Save → get carrier forwarding instructions → set up forwarding
+  // Step 3: Press Confirm → deploy agent to LiveKit → LIVE
   // ============================================================
   function renderConnectTab() {
     var content = document.getElementById('secContent');
@@ -491,15 +491,20 @@
     var qc = state.quickConnect || {};
     var isConnected = ps.connection_status === 'connected' || qc.connected;
     var hasAiNumber = !!(qc.ai_phone_number || ps.assigned_phone_number);
+    // Filter out placeholder numbers
+    if (hasAiNumber) {
+      var aiNum = qc.ai_phone_number || ps.assigned_phone_number || '';
+      if (aiNum.includes('0000')) hasAiNumber = false; // Placeholder
+    }
 
     // Determine current step
     var step = 1;
-    if (isConnected) step = 3;
+    if (isConnected && hasAiNumber) step = 3;
     else if (hasAiNumber) step = 2;
 
     var steps = [
-      { num: 1, label: 'Get AI Number', icon: 'fa-phone-alt', done: step > 1 },
-      { num: 2, label: 'Call Forwarding', icon: 'fa-random', done: step > 2 },
+      { num: 1, label: 'Enter Phone Numbers', icon: 'fa-phone-alt', done: step > 1 },
+      { num: 2, label: 'Set Up Call Forwarding', icon: 'fa-random', done: step > 2 },
       { num: 3, label: 'Live!', icon: 'fa-bolt', done: step >= 3 },
     ];
 
@@ -509,7 +514,7 @@
         (isConnected ? '<span class="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-semibold"><i class="fas fa-check-circle mr-1"></i>Connected</span>' :
          '<span class="px-3 py-1 bg-sky-50 text-sky-600 rounded-full text-sm font-medium">3 easy steps</span>') +
       '</div>' +
-      '<p class="text-gray-500 text-sm mb-4">Get a dedicated AI phone number, set up call forwarding from your carrier, and your AI secretary handles calls you can\'t take.</p>' +
+      '<p class="text-gray-500 text-sm mb-4">Enter your business phone number and the AI phone number you purchased from Twilio, Vonage, or Telnyx. Set up call forwarding, confirm, and your AI secretary goes live.</p>' +
       '<div class="flex items-center gap-1">';
     for (var si = 0; si < steps.length; si++) {
       var s = steps[si];
@@ -533,57 +538,135 @@
     else renderQCGetNumber();
   }
 
-  // ── Step 1: Enter phone number + auto-purchase LiveKit AI number ──
+  // ── Step 1: Enter BOTH phone numbers — business + AI purchased number ──
   function renderQCGetNumber() {
     var el = document.getElementById('qcStepContent');
     if (!el) return;
-    var existingPhone = (state.phoneSetup || {}).business_phone || '';
+    var existingBizPhone = state._editBizPhone || (state.phoneSetup || {}).business_phone || (state.config || {}).business_phone || '';
+    var existingAiPhone = state._editAiPhone || (state.quickConnect || {}).ai_phone_number || (state.phoneSetup || {}).assigned_phone_number || '';
+    // Clear temp edit state
+    state._editBizPhone = '';
+    state._editAiPhone = '';
+    // Clear placeholder numbers
+    if (existingAiPhone && existingAiPhone.includes('0000')) existingAiPhone = '';
 
     el.innerHTML =
       '<div class="bg-white rounded-2xl border-2 border-sky-100 shadow-sm p-8">' +
-        '<div class="max-w-md mx-auto text-center">' +
-          '<div class="w-16 h-16 bg-sky-100 rounded-full flex items-center justify-center mx-auto mb-4">' +
-            '<i class="fas fa-mobile-alt text-sky-500 text-2xl"></i></div>' +
-          '<h4 class="text-xl font-extrabold text-gray-800 mb-2">Enter Your Business Phone Number</h4>' +
-          '<p class="text-gray-500 text-sm mb-6">We\'ll purchase a dedicated AI phone number via LiveKit that will answer calls on your behalf when you can\'t pick up.</p>' +
-
-          '<div class="relative mb-4">' +
-            '<div class="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none">' +
-              '<span class="text-gray-400 font-mono text-lg">+1</span></div>' +
-            '<input type="tel" id="qcPhoneInput" value="' + esc(existingPhone.replace(/^\+1/, '')) + '" placeholder="(780) 983-3335" ' +
-              'class="w-full pl-14 pr-4 py-4 text-lg font-mono border-2 border-gray-300 rounded-2xl focus:ring-4 focus:ring-sky-200 focus:border-sky-500 transition-all text-center" ' +
-              'maxlength="14" autocomplete="tel">' +
+        '<div class="max-w-lg mx-auto">' +
+          '<div class="text-center mb-6">' +
+            '<div class="w-16 h-16 bg-sky-100 rounded-full flex items-center justify-center mx-auto mb-4">' +
+              '<i class="fas fa-mobile-alt text-sky-500 text-2xl"></i></div>' +
+            '<h4 class="text-xl font-extrabold text-gray-800 mb-2">Set Up Your Phone Numbers</h4>' +
+            '<p class="text-gray-500 text-sm">Enter your regular business cell number and the AI phone number you purchased from Twilio, Vonage, or Telnyx.</p>' +
           '</div>' +
 
-          '<button onclick="qcPurchaseNumber()" id="qcPurchaseBtn" class="w-full py-4 bg-sky-500 text-white rounded-2xl font-bold text-base hover:bg-sky-600 transition-all shadow-lg hover:shadow-xl">' +
-            '<i class="fas fa-phone-alt mr-2"></i>Get My AI Phone Number</button>' +
+          // Business Phone Number
+          '<div class="mb-5">' +
+            '<label class="block text-sm font-semibold text-gray-700 mb-2"><i class="fas fa-phone text-sky-500 mr-1"></i>Your Business Phone Number</label>' +
+            '<p class="text-xs text-gray-400 mb-2">This is your regular cell phone number — the one your customers call. You\'ll forward unanswered calls from this number to the AI.</p>' +
+            '<div class="relative">' +
+              '<div class="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none">' +
+                '<span class="text-gray-400 font-mono text-lg">+1</span></div>' +
+              '<input type="tel" id="qcBizPhoneInput" value="' + esc(existingBizPhone.replace(/^\+1/, '')) + '" placeholder="(780) 983-3335" ' +
+                'class="w-full pl-14 pr-4 py-4 text-lg font-mono border-2 border-gray-300 rounded-2xl focus:ring-4 focus:ring-sky-200 focus:border-sky-500 transition-all text-center" ' +
+                'maxlength="14" autocomplete="tel">' +
+            '</div>' +
+          '</div>' +
 
-          '<p class="text-xs text-gray-400 mt-4"><i class="fas fa-lock mr-1"></i>A US phone number will be purchased via LiveKit and assigned to your AI secretary.</p>' +
+          // AI Phone Number (purchased from Twilio/Vonage/Telnyx)
+          '<div class="mb-5">' +
+            '<label class="block text-sm font-semibold text-gray-700 mb-2"><i class="fas fa-robot text-emerald-500 mr-1"></i>AI Phone Number (Purchased for the AI)</label>' +
+            '<p class="text-xs text-gray-400 mb-2">This is the phone number you purchased from <strong>Twilio</strong>, <strong>Vonage</strong>, or <strong>Telnyx</strong> for the AI to answer calls on. You\'ll forward your cell to this number.</p>' +
+            '<div class="relative">' +
+              '<div class="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none">' +
+                '<span class="text-gray-400 font-mono text-lg">+1</span></div>' +
+              '<input type="tel" id="qcAiPhoneInput" value="' + esc(existingAiPhone.replace(/^\+1/, '')) + '" placeholder="(484) 964-9758" ' +
+                'class="w-full pl-14 pr-4 py-4 text-lg font-mono border-2 border-emerald-300 rounded-2xl focus:ring-4 focus:ring-emerald-200 focus:border-emerald-500 transition-all text-center bg-emerald-50/50" ' +
+                'maxlength="14" autocomplete="tel">' +
+            '</div>' +
+          '</div>' +
+
+          // Purchase help
+          '<div class="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6">' +
+            '<p class="text-sm font-semibold text-amber-800 mb-2"><i class="fas fa-lightbulb text-amber-500 mr-1"></i>Don\'t have an AI phone number yet?</p>' +
+            '<p class="text-xs text-amber-700 mb-2">You need to purchase a phone number from one of these VoIP/SIP providers to use with LiveKit:</p>' +
+            '<div class="flex flex-wrap gap-2">' +
+              '<a href="https://www.twilio.com/phone-numbers" target="_blank" class="text-xs bg-white border border-amber-200 rounded-lg px-3 py-1.5 text-amber-700 hover:bg-amber-100 font-medium"><i class="fas fa-external-link-alt mr-1"></i>Twilio</a>' +
+              '<a href="https://www.vonage.com/communications-apis/numbers/" target="_blank" class="text-xs bg-white border border-amber-200 rounded-lg px-3 py-1.5 text-amber-700 hover:bg-amber-100 font-medium"><i class="fas fa-external-link-alt mr-1"></i>Vonage</a>' +
+              '<a href="https://telnyx.com/products/phone-numbers" target="_blank" class="text-xs bg-white border border-amber-200 rounded-lg px-3 py-1.5 text-amber-700 hover:bg-amber-100 font-medium"><i class="fas fa-external-link-alt mr-1"></i>Telnyx</a>' +
+              '<a href="https://docs.livekit.io/agents/quickstarts/sip/" target="_blank" class="text-xs bg-white border border-amber-200 rounded-lg px-3 py-1.5 text-amber-700 hover:bg-amber-100 font-medium"><i class="fas fa-external-link-alt mr-1"></i>LiveKit SIP</a>' +
+            '</div>' +
+            '<p class="text-xs text-amber-600 mt-2">Pre-configured dev number: <strong class="font-mono">+1 (484) 964-9758</strong> (LiveKit-provided)</p>' +
+          '</div>' +
+
+          '<button onclick="qcSavePhones()" id="qcSaveBtn" class="w-full py-4 bg-sky-500 text-white rounded-2xl font-bold text-base hover:bg-sky-600 transition-all shadow-lg hover:shadow-xl">' +
+            '<i class="fas fa-save mr-2"></i>Save Phone Numbers & Continue</button>' +
+
+          '<p class="text-xs text-gray-400 mt-4 text-center"><i class="fas fa-lock mr-1"></i>Your phone numbers are stored securely and used only for call forwarding setup.</p>' +
         '</div>' +
       '</div>';
 
-    var phoneInput = document.getElementById('qcPhoneInput');
-    if (phoneInput) {
-      phoneInput.addEventListener('input', function() {
-        var v = this.value.replace(/\D/g, '').slice(0, 10);
-        if (v.length >= 7) this.value = '(' + v.slice(0,3) + ') ' + v.slice(3,6) + '-' + v.slice(6);
-        else if (v.length >= 4) this.value = '(' + v.slice(0,3) + ') ' + v.slice(3);
-        else if (v.length > 0) this.value = '(' + v;
-      });
-      phoneInput.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') { e.preventDefault(); qcPurchaseNumber(); }
-      });
-    }
+    // Add phone formatting to both inputs
+    ['qcBizPhoneInput', 'qcAiPhoneInput'].forEach(function(inputId) {
+      var phoneInput = document.getElementById(inputId);
+      if (phoneInput) {
+        phoneInput.addEventListener('input', function() {
+          var v = this.value.replace(/\D/g, '').slice(0, 10);
+          if (v.length >= 7) this.value = '(' + v.slice(0,3) + ') ' + v.slice(3,6) + '-' + v.slice(6);
+          else if (v.length >= 4) this.value = '(' + v.slice(0,3) + ') ' + v.slice(3);
+          else if (v.length > 0) this.value = '(' + v;
+        });
+      }
+    });
   }
 
-  // Purchase a LiveKit phone number — no SMS verification needed
+  // Save both phone numbers (manual entry flow)
+  window.qcSavePhones = async function() {
+    var bizInput = document.getElementById('qcBizPhoneInput');
+    var aiInput = document.getElementById('qcAiPhoneInput');
+    var bizRaw = bizInput ? bizInput.value.replace(/\D/g, '') : '';
+    var aiRaw = aiInput ? aiInput.value.replace(/\D/g, '') : '';
+
+    if (bizRaw.length < 10) { showToast('Please enter a valid 10-digit business phone number', 'error'); return; }
+    if (aiRaw.length < 10) { showToast('Please enter a valid 10-digit AI phone number', 'error'); return; }
+    if (bizRaw === aiRaw) { showToast('Business phone and AI phone cannot be the same number', 'error'); return; }
+
+    var btn = document.getElementById('qcSaveBtn');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving phone numbers...'; }
+
+    try {
+      var res = await fetch('/api/secretary/quick-connect/save-phones', {
+        method: 'POST', headers: authHeaders(),
+        body: JSON.stringify({ business_phone: bizRaw, ai_phone_number: aiRaw })
+      });
+      var data = await res.json();
+      if (data.success) {
+        state.quickConnect = state.quickConnect || {};
+        state.quickConnect.ai_phone_number = data.ai_phone_number;
+        state.quickConnect.ai_phone_display = data.ai_phone_display;
+        state.quickConnect.business_phone = data.business_phone;
+        state.quickConnect.business_phone_display = data.business_phone_display;
+        if (state.phoneSetup) {
+          state.phoneSetup.assigned_phone_number = data.ai_phone_number;
+          state.phoneSetup.business_phone = data.business_phone;
+          state.phoneSetup.connection_status = 'pending_forwarding';
+        } else {
+          state.phoneSetup = { assigned_phone_number: data.ai_phone_number, business_phone: data.business_phone, connection_status: 'pending_forwarding' };
+        }
+        showToast('Phone numbers saved! Now set up call forwarding.', 'success');
+        renderConnectTab();
+      } else {
+        showToast(data.error || 'Failed to save phone numbers', 'error');
+      }
+    } catch(e) { showToast('Network error — check your connection', 'error'); }
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save mr-2"></i>Save Phone Numbers & Continue'; }
+  };
+
+  // Legacy: purchase-number still works if LiveKit keys are configured
   window.qcPurchaseNumber = async function() {
-    var input = document.getElementById('qcPhoneInput');
+    var input = document.getElementById('qcBizPhoneInput');
     var rawPhone = input ? input.value.replace(/\D/g, '') : '';
     if (rawPhone.length < 10) { showToast('Please enter a valid 10-digit phone number', 'error'); return; }
-
-    var btn = document.getElementById('qcPurchaseBtn');
-    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Purchasing your AI number...'; }
 
     try {
       var res = await fetch('/api/secretary/quick-connect/purchase-number', {
@@ -606,16 +689,17 @@
         }
         showToast('AI phone number purchased! Now set up call forwarding.', 'success');
         renderConnectTab();
+      } else if (data.needs_manual) {
+        // Auto-purchase failed — manual entry is already shown
+        showToast('Auto-purchase not available. Please enter your AI phone number manually.', 'info');
       } else {
         showToast(data.error || 'Failed to purchase number', 'error');
       }
     } catch(e) { showToast('Network error — check your connection', 'error'); }
-    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-phone-alt mr-2"></i>Get My AI Phone Number'; }
   };
 
   // ── Step 2: Call Forwarding Instructions ──
-  // For dev account (Telus): show exact Telus forwarding codes
-  // For all others: generic "contact your carrier" guidance
+  // Shows both phone numbers, forwarding instructions per carrier, and Edit/Confirm buttons
   function renderQCForwarding() {
     var el = document.getElementById('qcStepContent');
     if (!el) return;
@@ -624,14 +708,11 @@
     var aiPhone = qc.ai_phone_display || formatPhone(qc.ai_phone_number || ps.assigned_phone_number || '');
     var aiPhoneRaw = qc.ai_phone_number || ps.assigned_phone_number || '';
     var bizPhone = qc.business_phone_display || formatPhone(qc.business_phone || ps.business_phone || '');
-    var isDev = state.isDev;
+    var bizPhoneRaw = qc.business_phone || ps.business_phone || '';
     var mode = state.secretaryMode || 'directory';
 
-    // Only show the carrier-specific forwarding form for Directory mode
-    var carrierFormHtml = '';
-    if (mode === 'directory') {
-      carrierFormHtml = renderCarrierForwardingForm(aiPhoneRaw, isDev);
-    }
+    // Always show carrier forwarding form
+    var carrierFormHtml = renderCarrierForwardingForm(aiPhoneRaw, false);
 
     el.innerHTML =
       '<div class="bg-white rounded-2xl border-2 border-amber-100 shadow-sm p-8">' +
@@ -640,34 +721,66 @@
             '<div class="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">' +
               '<i class="fas fa-random text-amber-500 text-2xl"></i></div>' +
             '<h4 class="text-xl font-extrabold text-gray-800 mb-2">Set Up Call Forwarding</h4>' +
-            '<p class="text-gray-500 text-sm">Forward unanswered calls from your phone to your new AI number so the AI secretary can pick up when you can\'t.</p>' +
+            '<p class="text-gray-500 text-sm">Forward unanswered calls from your business phone to your AI number so the AI secretary can pick up when you can\'t.</p>' +
           '</div>' +
 
-          // AI Number display card
-          '<div class="bg-sky-50 border-2 border-sky-200 rounded-xl p-5 mb-6 text-center">' +
-            '<p class="text-xs text-sky-600 uppercase tracking-wide font-semibold mb-1">Your AI Secretary Number</p>' +
-            '<p class="font-mono font-black text-sky-800 text-2xl mb-2">' + aiPhone + '</p>' +
-            '<button onclick="copyToClipboard(\'' + esc(aiPhoneRaw) + '\')" class="text-sm text-sky-500 hover:text-sky-700 font-medium"><i class="fas fa-copy mr-1"></i>Copy Number</button>' +
+          // Both phone numbers display
+          '<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">' +
+            '<div class="bg-gray-50 border border-gray-200 rounded-xl p-4 text-center">' +
+              '<p class="text-xs text-gray-500 uppercase tracking-wide font-semibold mb-1">Your Business Phone</p>' +
+              '<p class="font-mono font-bold text-gray-800 text-lg">' + bizPhone + '</p>' +
+              '<p class="text-xs text-gray-400 mt-1">Forwards unanswered calls →</p>' +
+            '</div>' +
+            '<div class="bg-sky-50 border-2 border-sky-200 rounded-xl p-4 text-center">' +
+              '<p class="text-xs text-sky-600 uppercase tracking-wide font-semibold mb-1">AI Secretary Number</p>' +
+              '<p class="font-mono font-black text-sky-800 text-lg">' + aiPhone + '</p>' +
+              '<button onclick="copyToClipboard(\'' + esc(aiPhoneRaw) + '\')" class="text-xs text-sky-500 hover:text-sky-700 font-medium mt-1"><i class="fas fa-copy mr-1"></i>Copy</button>' +
+            '</div>' +
           '</div>' +
 
-          // Forwarding instructions
-          (isDev ? renderTelusForwarding(aiPhoneRaw) : renderGenericForwarding(aiPhoneRaw)) +
+          // Edit phone numbers button
+          '<div class="text-center mb-4">' +
+            '<button onclick="qcEditPhones()" class="text-sm text-sky-600 hover:text-sky-800 font-semibold"><i class="fas fa-edit mr-1"></i>Edit Phone Numbers</button>' +
+          '</div>' +
+
+          // Forwarding instructions — always show generic with carrier selector
+          renderGenericForwarding(aiPhoneRaw) +
 
           carrierFormHtml +
 
-          // Activate button
+          // Confirm + Activate button
           '<div class="mt-6 text-center">' +
             '<button onclick="qcActivate()" id="qcActivateBtn" class="w-full py-4 bg-green-500 text-white rounded-2xl font-bold text-base hover:bg-green-600 transition-all shadow-lg hover:shadow-xl">' +
-              '<i class="fas fa-check-circle mr-2"></i>I\'ve Set Up Call Forwarding — Activate My AI Secretary</button>' +
-            '<p class="text-xs text-gray-400 mt-3">You can always come back and update your forwarding later.</p>' +
+              '<i class="fas fa-check-circle mr-2"></i>I\'ve Set Up Call Forwarding — Confirm & Activate</button>' +
+            '<p class="text-xs text-gray-400 mt-3">This will save your configuration and deploy the AI agent to your LiveKit account.</p>' +
           '</div>' +
 
           '<div class="mt-4 text-center">' +
-            '<button onclick="state.quickConnect={};state.phoneSetup=null;renderConnectTab()" class="text-sm text-gray-500 hover:text-gray-600 font-semibold"><i class="fas fa-arrow-left mr-1"></i>Start Over</button>' +
+            '<button onclick="qcGoBack()" class="text-sm text-gray-500 hover:text-gray-600 font-semibold"><i class="fas fa-arrow-left mr-1"></i>Go Back & Edit Phone Numbers</button>' +
           '</div>' +
         '</div>' +
       '</div>';
   }
+
+  // Edit phone numbers — go back to step 1 with existing data
+  window.qcEditPhones = function() {
+    // Reset connection status so we go back to step 1 but keep data
+    if (state.phoneSetup) state.phoneSetup.connection_status = 'pending_forwarding';
+    // Clear the assigned number temporarily to show step 1
+    var savedAi = state.quickConnect?.ai_phone_number || state.phoneSetup?.assigned_phone_number || '';
+    var savedBiz = state.quickConnect?.business_phone || state.phoneSetup?.business_phone || '';
+    state.quickConnect = { ai_phone_number: '', business_phone: savedBiz };
+    if (state.phoneSetup) state.phoneSetup.assigned_phone_number = '';
+    // Store originals so step 1 can pre-fill
+    state._editBizPhone = savedBiz;
+    state._editAiPhone = savedAi;
+    renderConnectTab();
+  };
+
+  // Go back from step 2 to step 1
+  window.qcGoBack = function() {
+    window.qcEditPhones();
+  };
 
   // Telus-specific forwarding instructions (for dev/test account)
   function renderTelusForwarding(aiNumber) {
@@ -790,10 +903,10 @@
       '</div>';
   };
 
-  // Activate the AI secretary (Step 2 → Step 3)
+  // Activate the AI secretary (Step 2 → Step 3) — deploys agent to LiveKit
   window.qcActivate = async function() {
     var btn = document.getElementById('qcActivateBtn');
-    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Activating your AI secretary...'; }
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Deploying AI agent to LiveKit & activating...'; }
 
     try {
       var res = await fetch('/api/secretary/quick-connect/activate', {
@@ -803,19 +916,24 @@
       if (data.success) {
         state.quickConnect = state.quickConnect || {};
         state.quickConnect.connected = true;
+        state.quickConnect.business_phone = data.business_phone || state.quickConnect.business_phone;
+        state.quickConnect.ai_phone_number = data.ai_phone_number || state.quickConnect.ai_phone_number;
         if (state.phoneSetup) {
           state.phoneSetup.connection_status = 'connected';
         } else {
-          state.phoneSetup = { connection_status: 'connected' };
+          state.phoneSetup = { connection_status: 'connected', assigned_phone_number: data.ai_phone_number, business_phone: data.business_phone };
         }
         state.isActive = true;
-        showToast('Your AI secretary is now LIVE!', 'success');
+        var msg = data.livekit_deployed
+          ? 'Your AI secretary is now LIVE and deployed to LiveKit!'
+          : 'Configuration saved and activated! LiveKit deployment will complete when API keys are configured.';
+        showToast(msg, 'success');
         renderConnectTab();
       } else {
         showToast(data.error || 'Activation failed', 'error');
       }
     } catch(e) { showToast('Network error', 'error'); }
-    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-check-circle mr-2"></i>I\'ve Set Up Call Forwarding — Activate My AI Secretary'; }
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-check-circle mr-2"></i>I\'ve Set Up Call Forwarding — Confirm & Activate'; }
   };
 
   // ── Step 3: CONNECTED — AI Secretary is Live ──
@@ -826,6 +944,8 @@
     var qc = state.quickConnect || {};
     var bizPhone = qc.business_phone_display || formatPhone(qc.business_phone || ps.business_phone || '');
     var aiPhone = qc.ai_phone_display || formatPhone(qc.ai_phone_number || ps.assigned_phone_number || '');
+    var bizPhoneRaw = qc.business_phone || ps.business_phone || '';
+    var aiPhoneRaw = qc.ai_phone_number || ps.assigned_phone_number || '';
 
     el.innerHTML =
       '<div class="bg-white rounded-2xl border-2 border-green-200 shadow-sm p-8 text-center">' +
@@ -846,7 +966,7 @@
           '<div class="bg-sky-50 rounded-xl p-4">' +
             '<p class="text-xs text-sky-600 uppercase tracking-wide">AI Secretary Number</p>' +
             '<p class="font-mono font-bold text-sky-800 text-lg mt-1">' + aiPhone + '</p>' +
-            '<button onclick="copyToClipboard(\'' + esc(qc.ai_phone_number || ps.assigned_phone_number || '') + '\')" class="text-xs text-sky-500 hover:text-sky-700 mt-1"><i class="fas fa-copy mr-1"></i>Copy</button></div>' +
+            '<button onclick="copyToClipboard(\'' + esc(aiPhoneRaw) + '\')" class="text-xs text-sky-500 hover:text-sky-700 mt-1"><i class="fas fa-copy mr-1"></i>Copy</button></div>' +
         '</div>' +
 
         '<div class="bg-emerald-50 border border-emerald-200 rounded-xl p-5 mb-6 text-left max-w-lg mx-auto">' +
@@ -867,8 +987,9 @@
           '</div>' +
         '</div>' +
 
-        '<div class="flex justify-center gap-3 mb-6">' +
-          '<button onclick="secSetTab(\'setup\')" class="px-6 py-3 bg-sky-500 text-white rounded-xl font-semibold text-sm hover:bg-sky-600 transition-all shadow"><i class="fas fa-cog mr-2"></i>Edit Configuration</button>' +
+        '<div class="flex justify-center gap-3 mb-6 flex-wrap">' +
+          '<button onclick="qcOpenPhoneConfig()" class="px-6 py-3 bg-sky-500 text-white rounded-xl font-semibold text-sm hover:bg-sky-600 transition-all shadow"><i class="fas fa-edit mr-2"></i>Edit Phone Configuration</button>' +
+          '<button onclick="secSetTab(\'setup\')" class="px-6 py-3 bg-gray-100 text-gray-700 rounded-xl font-semibold text-sm hover:bg-gray-200 transition-all"><i class="fas fa-cog mr-2"></i>Edit AI Settings</button>' +
           '<button onclick="secSetTab(\'calls\')" class="px-6 py-3 bg-gray-100 text-gray-700 rounded-xl font-semibold text-sm hover:bg-gray-200 transition-all"><i class="fas fa-phone-volume mr-2"></i>View Call Log</button>' +
         '</div>' +
 
@@ -879,6 +1000,104 @@
         '<p class="text-xs text-gray-400 text-center">Need help? Contact support. Your AI secretary is powered by LiveKit voice AI.</p>' +
       '</div>';
   }
+
+  // ── Phone Config Modal — Edit phone numbers while connected ──
+  window.qcOpenPhoneConfig = function() {
+    var existing = document.getElementById('phoneConfigModal');
+    if (existing) existing.remove();
+
+    var qc = state.quickConnect || {};
+    var ps = state.phoneSetup || {};
+    var bizPhone = qc.business_phone || ps.business_phone || '';
+    var aiPhone = qc.ai_phone_number || ps.assigned_phone_number || '';
+
+    var modal = document.createElement('div');
+    modal.id = 'phoneConfigModal';
+    modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm';
+    modal.innerHTML =
+      '<div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">' +
+        '<div class="bg-gradient-to-r from-sky-500 to-blue-600 p-5 text-white">' +
+          '<div class="flex items-center justify-between">' +
+            '<div><h2 class="text-lg font-bold"><i class="fas fa-phone-alt mr-2"></i>Edit Phone Configuration</h2>' +
+            '<p class="text-sky-100 text-xs mt-1">Update your business phone and AI phone numbers</p></div>' +
+            '<button onclick="document.getElementById(\'phoneConfigModal\').remove()" class="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center hover:bg-white/30 transition-all"><i class="fas fa-times text-sm"></i></button>' +
+          '</div>' +
+        '</div>' +
+        '<div class="p-6">' +
+          '<div class="mb-5">' +
+            '<label class="block text-sm font-semibold text-gray-700 mb-2"><i class="fas fa-phone text-sky-500 mr-1"></i>Your Business Phone Number</label>' +
+            '<p class="text-xs text-gray-400 mb-2">Your regular cell number that customers call</p>' +
+            '<div class="relative">' +
+              '<div class="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none"><span class="text-gray-400 font-mono">+1</span></div>' +
+              '<input type="tel" id="pcBizPhone" value="' + esc(bizPhone.replace(/^\+1/, '')) + '" placeholder="(780) 983-3335" ' +
+                'class="w-full pl-12 pr-4 py-3 font-mono border-2 border-gray-300 rounded-xl focus:ring-4 focus:ring-sky-200 focus:border-sky-500 text-center" maxlength="14">' +
+            '</div>' +
+          '</div>' +
+          '<div class="mb-5">' +
+            '<label class="block text-sm font-semibold text-gray-700 mb-2"><i class="fas fa-robot text-emerald-500 mr-1"></i>AI Phone Number (Purchased)</label>' +
+            '<p class="text-xs text-gray-400 mb-2">Phone number purchased from Twilio/Vonage/Telnyx for the AI</p>' +
+            '<div class="relative">' +
+              '<div class="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none"><span class="text-gray-400 font-mono">+1</span></div>' +
+              '<input type="tel" id="pcAiPhone" value="' + esc(aiPhone.replace(/^\+1/, '')) + '" placeholder="(484) 964-9758" ' +
+                'class="w-full pl-12 pr-4 py-3 font-mono border-2 border-emerald-300 rounded-xl focus:ring-4 focus:ring-emerald-200 focus:border-emerald-500 text-center bg-emerald-50/50" maxlength="14">' +
+            '</div>' +
+          '</div>' +
+          '<div class="flex gap-3">' +
+            '<button onclick="qcSavePhoneConfig()" id="pcSaveBtn" class="flex-1 py-3 bg-sky-500 text-white rounded-xl font-bold hover:bg-sky-600 transition-all shadow"><i class="fas fa-save mr-2"></i>Save Changes</button>' +
+            '<button onclick="document.getElementById(\'phoneConfigModal\').remove()" class="px-6 py-3 bg-gray-100 text-gray-700 rounded-xl font-semibold hover:bg-gray-200 transition-all">Cancel</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(modal);
+    modal.addEventListener('click', function(e) { if (e.target === modal) modal.remove(); });
+
+    // Add phone formatting
+    ['pcBizPhone', 'pcAiPhone'].forEach(function(id) {
+      var inp = document.getElementById(id);
+      if (inp) inp.addEventListener('input', function() {
+        var v = this.value.replace(/\D/g, '').slice(0, 10);
+        if (v.length >= 7) this.value = '(' + v.slice(0,3) + ') ' + v.slice(3,6) + '-' + v.slice(6);
+        else if (v.length >= 4) this.value = '(' + v.slice(0,3) + ') ' + v.slice(3);
+        else if (v.length > 0) this.value = '(' + v;
+      });
+    });
+  };
+
+  // Save phone config from modal
+  window.qcSavePhoneConfig = async function() {
+    var bizRaw = (document.getElementById('pcBizPhone')?.value || '').replace(/\D/g, '');
+    var aiRaw = (document.getElementById('pcAiPhone')?.value || '').replace(/\D/g, '');
+    if (bizRaw.length < 10 || aiRaw.length < 10) { showToast('Both phone numbers must be at least 10 digits', 'error'); return; }
+    if (bizRaw === aiRaw) { showToast('Business phone and AI phone cannot be the same', 'error'); return; }
+
+    var btn = document.getElementById('pcSaveBtn');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving...'; }
+
+    try {
+      var res = await fetch('/api/secretary/quick-connect/save-phones', {
+        method: 'POST', headers: authHeaders(),
+        body: JSON.stringify({ business_phone: bizRaw, ai_phone_number: aiRaw })
+      });
+      var data = await res.json();
+      if (data.success) {
+        state.quickConnect = state.quickConnect || {};
+        state.quickConnect.ai_phone_number = data.ai_phone_number;
+        state.quickConnect.ai_phone_display = data.ai_phone_display;
+        state.quickConnect.business_phone = data.business_phone;
+        state.quickConnect.business_phone_display = data.business_phone_display;
+        if (state.phoneSetup) {
+          state.phoneSetup.assigned_phone_number = data.ai_phone_number;
+          state.phoneSetup.business_phone = data.business_phone;
+        }
+        showToast('Phone numbers updated!', 'success');
+        document.getElementById('phoneConfigModal')?.remove();
+        renderConnectTab();
+      } else {
+        showToast(data.error || 'Failed to save', 'error');
+      }
+    } catch(e) { showToast('Network error', 'error'); }
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save mr-2"></i>Save Changes'; }
+  };
 
   window.qcUpdateBizPhone = async function() {
     var input = document.getElementById('connectedBizPhone');
