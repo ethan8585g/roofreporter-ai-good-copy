@@ -35,6 +35,14 @@ import {
   type CloudRunAIConfig, type CloudRunHealthResponse
 } from '../services/cloud-run-ai'
 
+// SAM 3 + Gemini CV Segmentation Pipeline
+import {
+  runUnifiedSegmentation, segmentWithSAM3, segmentWithGemini,
+  fetchHighResImagery, convertToAIMeasurement, calculateGSD,
+  pixelsToSquareFeet, pixelsToLinearFeet,
+  type UnifiedSegmentationResult, type SAM3SegmentationResult, type GeminiSegmentationResult
+} from '../services/sam3-segmentation'
+
 // Repository
 import * as repo from '../repositories/reports'
 
@@ -1990,6 +1998,226 @@ Respond in this exact JSON format:
     console.error('[Damage Report] Error:', err.message)
     return c.json({ error: 'Damage analysis failed: ' + err.message }, 500)
   }
+})
+
+// ============================================================
+// POST /:orderId/cv-segment — SAM 3 + Gemini CV Segmentation Pipeline
+// Runs multi-tier computer vision on satellite imagery:
+//   Tier 1: SAM 3 (facebook/sam3) via HuggingFace Inference API
+//   Tier 2: Gemini 3 Flash structured roof segmentation
+//   Tier 3: Fallback to existing RANSAC edge classifier
+// Returns enriched segments, edges, obstructions, and measurements.
+// ============================================================
+reportsRoutes.post('/:orderId/cv-segment', async (c) => {
+  const orderId = c.req.param('orderId')
+  const env = c.env
+
+  try {
+    const report = await repo.getReportForVision(env.DB, orderId)
+    if (!report) return c.json({ error: 'Report not found' }, 404)
+    const order = await repo.getOrderById(env.DB, orderId)
+
+    // Get satellite image URL
+    let imgUrl = report.satellite_image_url as string | null
+    if (!imgUrl && report.api_response_raw) {
+      try { const d = JSON.parse(report.api_response_raw); imgUrl = d.imagery?.satellite_overhead_url || d.imagery?.satellite_url } catch {}
+    }
+    if (!imgUrl && order?.latitude && order?.longitude) {
+      imgUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${order.latitude},${order.longitude}&zoom=20&size=640x640&scale=2&maptype=satellite&key=${env.GOOGLE_MAPS_API_KEY}`
+    }
+    if (!imgUrl) return c.json({ error: 'No satellite image available for CV segmentation' }, 400)
+
+    const lat = order?.latitude || 0
+    const lng = order?.longitude || 0
+    const zoom = 20 // Google Maps satellite zoom level
+
+    // Run unified multi-tier segmentation
+    const segResult = await runUnifiedSegmentation(
+      {
+        HF_API_TOKEN: (env as any).HF_API_TOKEN,
+        SAM3_ENDPOINT_URL: (env as any).SAM3_ENDPOINT_URL,
+        GEMINI_API_KEY: (env as any).GEMINI_API_KEY || (env as any).GOOGLE_VERTEX_API_KEY,
+      },
+      imgUrl,
+      lat,
+      lng,
+      zoom,
+      640,
+      640,
+    )
+
+    // Convert to AIMeasurementAnalysis format for report engine compatibility
+    const aiMeasurement = convertToAIMeasurement(segResult, lat, lng)
+
+    // Store CV segmentation results alongside report (non-blocking)
+    const segJson = JSON.stringify({
+      cv_segmentation: segResult,
+      ai_measurement: aiMeasurement,
+      timestamp: new Date().toISOString(),
+    })
+
+    try {
+      await env.DB.prepare(`
+        UPDATE reports SET
+          cv_segmentation_json = ?,
+          cv_segmentation_at = datetime('now'),
+          updated_at = datetime('now')
+        WHERE order_id = ?
+      `).bind(segJson, orderId).run()
+    } catch {
+      // Column may not exist yet — non-critical
+    }
+
+    return c.json({
+      success: true,
+      order_id: orderId,
+      segmentation: segResult,
+      ai_measurement: aiMeasurement,
+      meta: {
+        tiers_used: segResult.processing_tiers_used,
+        inference_ms: segResult.total_inference_ms,
+        gsd_meters: segResult.gsd_meters,
+        num_segments: segResult.segments.length,
+        num_edges: segResult.edges.length,
+        num_obstructions: segResult.obstructions.length,
+      }
+    })
+  } catch (err: any) {
+    console.error('[CV-Segment] Error:', err.message)
+    return c.json({ error: 'CV segmentation failed: ' + err.message }, 500)
+  }
+})
+
+// ============================================================
+// POST /cv-segment/standalone — Direct CV segmentation (no order required)
+// For testing, API integration, and real-time analysis
+// ============================================================
+reportsRoutes.post('/cv-segment/standalone', async (c) => {
+  const env = c.env
+
+  try {
+    const body = await c.req.json() as {
+      image_url?: string
+      lat: number
+      lng: number
+      zoom?: number
+      provider?: string
+    }
+
+    if (!body.lat || !body.lng) return c.json({ error: 'lat and lng required' }, 400)
+
+    const zoom = body.zoom || 20
+    let imgUrl = body.image_url
+
+    // If no image URL, generate from Google Maps
+    if (!imgUrl) {
+      imgUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${body.lat},${body.lng}&zoom=${zoom}&size=640x640&scale=2&maptype=satellite&key=${env.GOOGLE_MAPS_API_KEY}`
+    }
+
+    // Try high-res imagery provider if specified
+    if (body.provider && body.provider !== 'google_maps') {
+      const hiRes = await fetchHighResImagery(
+        {
+          provider: body.provider as any,
+          api_key: (env as any)[`${body.provider.toUpperCase()}_API_KEY`],
+          endpoint_url: (env as any)[`${body.provider.toUpperCase()}_ENDPOINT_URL`],
+        },
+        body.lat,
+        body.lng,
+        { zoom, size: 640 }
+      )
+      if (hiRes) {
+        imgUrl = hiRes.image_url
+      }
+    }
+
+    if (!imgUrl) return c.json({ error: 'No image source available' }, 400)
+
+    const segResult = await runUnifiedSegmentation(
+      {
+        HF_API_TOKEN: (env as any).HF_API_TOKEN,
+        SAM3_ENDPOINT_URL: (env as any).SAM3_ENDPOINT_URL,
+        GEMINI_API_KEY: (env as any).GEMINI_API_KEY || (env as any).GOOGLE_VERTEX_API_KEY,
+      },
+      imgUrl,
+      body.lat,
+      body.lng,
+      zoom,
+      640,
+      640,
+    )
+
+    const aiMeasurement = convertToAIMeasurement(segResult, body.lat, body.lng)
+
+    return c.json({
+      success: true,
+      segmentation: segResult,
+      ai_measurement: aiMeasurement,
+      meta: {
+        tiers_used: segResult.processing_tiers_used,
+        inference_ms: segResult.total_inference_ms,
+        gsd_meters: segResult.gsd_meters,
+        image_url: imgUrl,
+      }
+    })
+  } catch (err: any) {
+    return c.json({ error: 'CV segmentation failed: ' + err.message }, 500)
+  }
+})
+
+// ============================================================
+// GET /cv-capabilities — Lists available CV tiers and imagery providers
+// ============================================================
+reportsRoutes.get('/cv-capabilities', async (c) => {
+  const env = c.env as any
+  return c.json({
+    tiers: {
+      tier_1_sam3: {
+        available: !!env.HF_API_TOKEN,
+        model: 'facebook/sam3',
+        description: 'Meta SAM 3 — Promptable Concept Segmentation (PCS). 270K concepts, instance masks, text/box prompts.',
+        capabilities: ['roof_facet_segmentation', 'ridge_detection', 'chimney_detection', 'skylight_detection', 'obstruction_detection'],
+        endpoint: env.SAM3_ENDPOINT_URL || 'huggingface-inference-api',
+      },
+      tier_2_gemini: {
+        available: !!(env.GEMINI_API_KEY || env.GOOGLE_VERTEX_API_KEY),
+        model: 'gemini-2.0-flash',
+        description: 'Google Gemini 3 Flash — Structured roof segmentation with architectural reasoning.',
+        capabilities: ['pitch_estimation', 'material_identification', 'condition_assessment', 'edge_classification', 'complexity_scoring'],
+      },
+      tier_3_ransac: {
+        available: true,
+        model: 'RANSAC Edge Classifier v1.0',
+        description: 'DSM-based planar segmentation. Pure geometry — no neural network.',
+        capabilities: ['plane_fitting', 'edge_classification', 'pitch_calculation'],
+      },
+    },
+    imagery_providers: {
+      google_solar: { available: !!env.GOOGLE_SOLAR_API_KEY, gsd_meters: 0.1, description: 'Google Solar API RGB GeoTIFF' },
+      google_maps: { available: !!env.GOOGLE_MAPS_API_KEY, gsd_meters: 0.089, description: 'Google Maps Satellite Tile (zoom 20)' },
+      nearmap: { available: !!env.NEARMAP_API_KEY, gsd_meters: 0.075, description: 'Nearmap 7.5cm aerial imagery' },
+      eagleview: { available: !!env.EAGLEVIEW_API_KEY, gsd_meters: 0.05, description: 'EagleView ConnectExplorer ortho' },
+      hover: { available: !!env.HOVER_API_KEY, gsd_meters: 0.03, description: 'Hover smartphone photogrammetry' },
+    },
+    sam3_info: {
+      version: 'SAM 3 (2025)',
+      repo: 'https://github.com/facebookresearch/sam3',
+      huggingface: 'https://huggingface.co/facebook/sam3',
+      key_features: [
+        'Open-vocabulary Promptable Concept Segmentation (PCS) — 270K concepts',
+        'Instance segmentation with per-mask confidence scores',
+        'Text + visual (box) prompts, including negative exclusions',
+        'Video tracking for drone flyover analysis',
+        'Streaming inference for real-time applications',
+        '75-80% human performance on SA-CO benchmark',
+      ],
+      roofing_prompts: [
+        'roof segment', 'roof facet', 'ridge line', 'hip line', 'valley',
+        'dormer', 'chimney', 'skylight', 'vent pipe', 'satellite dish',
+        'gutter', 'downspout', 'solar panel', 'antenna', 'flashing',
+      ],
+    },
+  })
 })
 
 // ============================================================
