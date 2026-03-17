@@ -2,13 +2,13 @@
 
 ## Project Overview
 - **Name**: RoofReporterAI
-- **Version**: 9.6 (Onboarding Config, Phone Marketplace, Google OAuth, Meta Connect Fix)
+- **Version**: 10.1 (Edge Detection Fix, Material BOM Engine, Cost Calculator, Export APIs)
 - **Domain**: www.roofreporterai.com
 - **Production**: https://roofing-measurement-tool.pages.dev
 - **GitHub**: https://github.com/ethan8585g/roofreporter-ai-good-copy
 - **Platform**: Cloudflare Pages + Workers + D1
 - **Status**: Active
-- **Last Updated**: 2026-03-17 (v9.6)
+- **Last Updated**: 2026-03-17 (v10.1)
 
 ## Core Platform Features
 
@@ -456,7 +456,33 @@ Homeowner calls roofer → Roofer's Personal Cell
 
 ## Version History
 
-### v10.0 (Current — 2026-03-17)
+### v10.1 (Current — 2026-03-17)
+- **0 LF Edge Detection Fix** — Auto-infer ridge/hip/valley/rake from eave polygon geometry
+  - OBB (Oriented Bounding Box) analysis for building aspect ratio
+  - Hip vs gable auto-classification from polygon vertex count
+  - L-shape/T-shape concave corner detection for valley inference
+  - Synthetic ridge generation along primary axis with hip inset
+  - ≥85% accuracy for common Canadian residential roof types
+- **MaterialEstimationEngine v1.0** — Comprehensive Bill of Materials calculator
+  - 12 material categories: shingles, starter strip, ridge cap, drip edge (Type C/D), ice & water barrier, underlayment, valley flashing, nails, caulk, pipe boots, ridge vent
+  - Canadian market pricing (2026): IKO/GAF/CertainTeed product standards
+  - Industry-standard coverage rates with <5% variance target
+- **Material BOM Report Page** — New Page 3 in professional reports
+  - Summary cards (bundles, rolls, pieces), detailed line items table
+  - Cost breakdown with GST, per-square and per-sqft rates
+  - Measurement inputs reference panel
+- **Interactive Cost Calculator** — Client-side real-time widget
+  - Waste factor slider (5%–25%), price per square slider ($150–$600)
+  - Instant gross area, gross squares, total cost recalculation (no page reload)
+- **Export API** — `GET /api/reports/:id/material-bom`
+  - JSON (default), Xactimate XML, AccuLynx CSV, JobNimbus JSON formats
+  - File download with proper Content-Disposition headers
+- **White-Label Database Schema** — Migration 0047
+  - `white_label_branding` table: logo, colors, fonts, contact, disclaimers
+  - `material_estimates` table: BOM storage per report with export caching
+- **Deployment**: https://35669193.roofing-measurement-tool.pages.dev
+
+### v10.0 (2026-03-17)
 - **Complete Landing Page Strategic Redesign** — Full conversion-optimized overhaul
   - **Hero Section**: Urgency messaging ("Join 10,000+ Canadian Roofers"), benefit-first headline ("Never Climb a Roof Again"), A/B tested orange CTA buttons for higher contrast, inline hero email capture form, 4.9/5 star rating badge
   - **Announcement Bar**: Animated urgency bar with "Limited Time" CTA at top of page
