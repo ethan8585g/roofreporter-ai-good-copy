@@ -166,7 +166,24 @@ Return a JSON object with these fields:
     }
 
     // ── Apply enhancements to the report ──
+    // SAFETY GUARD: Only add commentary fields. NEVER modify core measurements.
+    // The measurements come from Google Solar API (buildingInsights + DataLayers DSM)
+    // and are the ground truth. Gemini enhancement only adds professional analysis text.
     const enhanced = { ...report }
+
+    // Explicitly preserve core measurement fields (defense against accidental Gemini overwrite)
+    const protectedFields = [
+      'total_footprint_sqft', 'total_footprint_sqm', 'total_true_area_sqft', 'total_true_area_sqm',
+      'area_multiplier', 'roof_pitch_degrees', 'roof_pitch_ratio', 'roof_azimuth_degrees',
+      'edges', 'edge_summary', 'materials', 'imagery', 'flux_analysis', 'metadata'
+    ]
+    // If Gemini somehow returned fields that overlap with measurements, strip them
+    for (const field of protectedFields) {
+      if (enhancement[field] !== undefined) {
+        console.warn(`[GeminiEnhance] BLOCKED: Gemini tried to override protected field "${field}" — ignoring`)
+        delete enhancement[field]
+      }
+    }
 
     // Executive summary
     if (enhancement.executive_summary) {
@@ -178,14 +195,16 @@ Return a JSON object with these fields:
       (enhanced as any).roof_condition_assessment = enhancement.roof_condition_assessment
     }
 
-    // Segment insights — attach notes to each segment
+    // Segment insights — attach notes to each segment (NEVER modify measurements)
     if (enhancement.segment_insights && Array.isArray(enhancement.segment_insights)) {
       enhanced.segments = [...(enhanced.segments || [])]
       for (const insight of enhancement.segment_insights) {
         const idx = insight.segment_index
         if (idx >= 0 && idx < enhanced.segments.length) {
+          // Only add the ai_insight text — preserve all existing segment measurements
+          const existingSegment = enhanced.segments[idx]
           enhanced.segments[idx] = {
-            ...enhanced.segments[idx],
+            ...existingSegment,
             ai_insight: insight.note
           } as any
         }
