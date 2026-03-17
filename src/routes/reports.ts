@@ -20,9 +20,10 @@ import {
 } from '../services/solar-api'
 import { buildDataLayersReport, generateSegmentsFromDLAnalysis, generateSegmentsFromAIGeometry } from '../services/report-engine'
 import { executeRoofOrder, type DataLayersAnalysis } from '../services/solar-datalayers'
-import { generateProfessionalReportHTML, buildVisionFindingsHTML, generateSimpleTwoPageReport } from '../templates/report-html'
+import { generateProfessionalReportHTML, buildVisionFindingsHTML, generateSimpleTwoPageReport, buildMaterialBOMHTML } from '../templates/report-html'
 import { generateTraceBasedDiagramSVG } from '../templates/svg-diagrams'
 import { RoofMeasurementEngine, traceUiToEnginePayload, calculateRoofSpecs, ROOF_PITCH_MULTIPLIERS, HIP_VALLEY_MULTIPLIERS, type TraceReport } from '../services/roof-measurement-engine'
+import { estimateMaterials, generateXactimateXML, generateAccuLynxCSV, generateJobNimbusJSON, type DetailedMaterialBOM } from '../services/material-estimation-engine'
 import { enhanceReportViaGemini } from '../services/gemini-enhance'
 import { generateReportImagery, buildAIImageryHTML } from '../services/ai-image-generation'
 import { buildEmailWrapper, sendGmailEmail, sendViaResend, sendGmailOAuth2 } from '../services/email'
@@ -48,7 +49,31 @@ import { parseBody, ValidationError, toggleSegmentsBody, visionFilterQuery, data
 
 export const reportsRoutes = new Hono<{ Bindings: Bindings }>()
 
-// ── GLOBAL ERROR HANDLER ──
+// ── HELPER: Auto-compute material BOM for any report ──
+function attachMaterialBOM(reportData: any): void {
+  if (!reportData || !reportData.edge_summary) return
+  try {
+    const es = reportData.edge_summary
+    const pitchRise = reportData.roof_pitch_degrees
+      ? Math.round(12 * Math.tan(reportData.roof_pitch_degrees * Math.PI / 180) * 10) / 10
+      : 5
+    const bom = estimateMaterials({
+      address: reportData.property?.address || 'Unknown',
+      net_area_sqft: reportData.total_true_area_sqft || 0,
+      waste_factor_pct: reportData.materials?.waste_pct || 15,
+      total_eave_lf: es.total_eave_ft || 0,
+      total_ridge_lf: es.total_ridge_ft || 0,
+      total_hip_lf: es.total_hip_ft || 0,
+      total_valley_lf: es.total_valley_ft || 0,
+      total_rake_lf: es.total_rake_ft || 0,
+      pitch_rise: pitchRise,
+      complexity: reportData.materials?.complexity_class || 'medium'
+    })
+    reportData.material_bom = bom
+  } catch (e) {
+    console.error('[MaterialBOM] Error computing BOM:', e)
+  }
+}// ── GLOBAL ERROR HANDLER ──
 reportsRoutes.onError((err, c) => {
   if (err instanceof ValidationError) return c.json({ error: err.message }, 400)
   console.error(`[Reports] Unhandled error: ${err.message}`)
@@ -86,6 +111,7 @@ function tryRegenHtml(jsonStr: string): string | null {
   try {
     const d = JSON.parse(jsonStr)
     if (d?.property?.address && Array.isArray(d.segments) && d.segments.length > 0) {
+      attachMaterialBOM(d)
       return generateProfessionalReportHTML(d as RoofReport)
     }
   } catch {}
@@ -778,7 +804,8 @@ reportsRoutes.post('/:orderId/trace-remeasure', async (c) => {
       `Engine sloped area: ${traceReport.key_measurements.total_roof_area_sloped_ft2} sqft (vs Solar API ${solarApiData.true_area_sqft || 'N/A'} sqft).`
     )
 
-    // Regenerate HTML with the trace diagram injected
+    // Regenerate HTML with the trace diagram injected + material BOM
+    attachMaterialBOM(reportData)
     const html = generateProfessionalReportHTML(reportData)
 
     // Save updated report
@@ -1327,6 +1354,74 @@ reportsRoutes.get('/:orderId/pdf', async (c) => {
 <body><div class="print-controls"><span>RoofReporterAI | ${addr}</span><button onclick="window.print()">Download PDF</button></div>
 ${html}<script>if(new URLSearchParams(location.search).get('print')==='1')setTimeout(()=>window.print(),500)</script></body></html>`
   return new Response(pdfHtml, { headers: { 'Content-Type': 'text/html; charset=utf-8', 'Content-Disposition': `inline; filename="Roof_Report_${safe}.pdf"` } })
+})
+
+// ============================================================
+// GET /:orderId/material-bom — Generate Material Bill of Quantities
+// ============================================================
+reportsRoutes.get('/:orderId/material-bom', async (c) => {
+  const db = c.env.DB
+  const orderId = c.req.param('orderId')
+  const report = await repo.getReportForPdf(db, orderId)
+  if (!report) return c.json({ error: 'Report not found' }, 404)
+
+  let reportData: any = null
+  try {
+    if (report.api_response_raw) reportData = JSON.parse(report.api_response_raw)
+  } catch {}
+  if (!reportData) return c.json({ error: 'Report data not available' }, 404)
+
+  const es = reportData.edge_summary || {}
+  const pitchRise = reportData.roof_pitch_degrees
+    ? Math.round(12 * Math.tan(reportData.roof_pitch_degrees * Math.PI / 180) * 10) / 10
+    : 5
+
+  const bom = estimateMaterials({
+    address: reportData.property?.address || report.property_address || 'Unknown',
+    net_area_sqft: reportData.total_true_area_sqft || 0,
+    waste_factor_pct: reportData.materials?.waste_pct || 15,
+    total_eave_lf: es.total_eave_ft || 0,
+    total_ridge_lf: es.total_ridge_ft || 0,
+    total_hip_lf: es.total_hip_ft || 0,
+    total_valley_lf: es.total_valley_ft || 0,
+    total_rake_lf: es.total_rake_ft || 0,
+    pitch_rise: pitchRise,
+    complexity: reportData.materials?.complexity_class || 'medium'
+  })
+
+  const format = c.req.query('format') || 'json'
+
+  if (format === 'xactimate' || format === 'xml') {
+    const xml = generateXactimateXML(bom)
+    return new Response(xml, {
+      headers: {
+        'Content-Type': 'application/xml; charset=utf-8',
+        'Content-Disposition': `attachment; filename="RoofReporter_BOM_${orderId}.xml"`
+      }
+    })
+  }
+
+  if (format === 'acculynx' || format === 'csv') {
+    const csv = generateAccuLynxCSV(bom)
+    return new Response(csv, {
+      headers: {
+        'Content-Type': 'text/csv; charset=utf-8',
+        'Content-Disposition': `attachment; filename="RoofReporter_BOM_${orderId}.csv"`
+      }
+    })
+  }
+
+  if (format === 'jobnimbus') {
+    const json = generateJobNimbusJSON(bom)
+    return new Response(json, {
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Content-Disposition': `attachment; filename="RoofReporter_BOM_${orderId}_jobnimbus.json"`
+      }
+    })
+  }
+
+  return c.json(bom)
 })
 
 // ============================================================
