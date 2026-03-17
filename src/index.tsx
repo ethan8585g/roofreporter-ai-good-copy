@@ -34,6 +34,8 @@ import { stripeRoutes } from './routes/stripe'
 import { customerCallsRoutes } from './routes/customer-cold-call'
 import { homeDesignerRoutes } from './routes/home-designer'
 import { sam3Routes } from './routes/sam3-analysis'
+import { calendarRoutes } from './routes/calendar'
+import { salesRoutes } from './routes/sales'
 import type { Bindings } from './types'
 
 const app = new Hono<{ Bindings: Bindings }>()
@@ -297,6 +299,8 @@ app.route('/api/meta', metaConnectRoutes)
 app.route('/api/heygen', heygenRoutes)
 app.route('/api/home-designer', homeDesignerRoutes)
 app.route('/api/sam3', sam3Routes)
+app.route('/api/calendar', calendarRoutes)
+app.route('/api/sales', salesRoutes)
 
 // Health check
 app.get('/api/health', (c) => {
@@ -705,6 +709,12 @@ app.get('/customer/virtual-tryon', (c) => c.html(getVirtualTryOnPageHTML()))
 
 // Home Designer — Hover-style multi-photo roof visualization
 app.get('/customer/home-designer', (c) => c.html(getHomeDesignerPageHTML()))
+
+// Google Calendar — Sync jobs to Google Calendar
+app.get('/customer/calendar', (c) => c.html(getCalendarPageHTML()))
+
+// Sales Engine — Lead scoring, follow-ups, onboarding, referrals
+app.get('/customer/sales', (c) => c.html(getSalesPageHTML()))
 
 // Team Management — Add/manage sales team members ($50/user/month)
 app.get('/customer/team', (c) => c.html(getTeamManagementPageHTML()))
@@ -4042,6 +4052,406 @@ function getHomeDesignerPageHTML() {
     }
   </script>
   <script src="/static/home-designer.js?v=${BUILD_VERSION}"></script>
+  ${getRoverAssistant()}
+</body>
+</html>`
+}
+
+// ============================================================
+// GOOGLE CALENDAR PAGE — Sync CRM jobs with Google Calendar
+// ============================================================
+function getCalendarPageHTML() {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags()}
+  <title>Calendar - RoofReporterAI</title>
+  <style>
+    .cal-event { transition: all 0.2s; }
+    .cal-event:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+    .slot-card { cursor: pointer; }
+    .slot-card:hover { background: #f0f9ff; border-color: #7dd3fc; }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <header class="bg-gradient-to-r from-sky-600 to-blue-700 text-white shadow-lg">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
+          <span class="logo-mark w-10 h-10"><img src="/static/logo.png" alt="RoofReporterAI"></span>
+          <div>
+            <h1 class="text-lg font-bold">Google Calendar</h1>
+            <p class="text-sky-200 text-xs">Sync Jobs & Schedule</p>
+          </div>
+        </a>
+      </div>
+      <nav class="flex items-center space-x-3">
+        <a href="/customer/jobs" class="text-sky-200 hover:text-white text-sm"><i class="fas fa-hard-hat mr-1"></i>Jobs</a>
+        <a href="/customer/dashboard" class="text-sky-200 hover:text-white text-sm"><i class="fas fa-th-large mr-1"></i>Dashboard</a>
+        <button onclick="custLogout()" class="text-sky-200 hover:text-white text-sm"><i class="fas fa-sign-out-alt mr-1"></i>Logout</button>
+      </nav>
+    </div>
+  </header>
+  <main class="max-w-6xl mx-auto px-4 py-6">
+    <div id="cal-root">
+      <div class="text-center py-12"><div class="animate-spin text-sky-500 text-2xl inline-block"><i class="fas fa-spinner"></i></div><p class="text-gray-400 text-sm mt-2">Loading calendar...</p></div>
+    </div>
+  </main>
+  <script>
+    (function() {
+      var c = localStorage.getItem('rc_customer');
+      if (!c) { window.location.href = '/customer/login'; return; }
+    })();
+    function custLogout() {
+      var token = localStorage.getItem('rc_customer_token');
+      if (token) fetch('/api/customer/logout', { method: 'POST', headers: { 'Authorization': 'Bearer ' + token } })['catch'](function(){});
+      localStorage.removeItem('rc_customer');
+      localStorage.removeItem('rc_customer_token');
+      window.location.href = '/customer/login';
+    }
+
+    var token = localStorage.getItem('rc_customer_token') || '';
+    var root = document.getElementById('cal-root');
+
+    function api(method, path, body) {
+      var opts = { method: method, headers: { 'Content-Type': 'application/json' } };
+      if (token) opts.headers['Authorization'] = 'Bearer ' + token;
+      if (body) opts.body = JSON.stringify(body);
+      return fetch('/api/calendar' + path, opts).then(function(r) { return r.json(); });
+    }
+
+    function loadCalendar() {
+      Promise.all([
+        api('GET', '/status'),
+        api('GET', '/events?days=30'),
+        api('GET', '/availability?days=7')
+      ]).then(function(results) {
+        var status = results[0];
+        var eventsData = results[1];
+        var availability = results[2];
+        renderCalendar(status, eventsData, availability);
+      }).catch(function(err) {
+        root.innerHTML = '<div class="bg-white rounded-2xl shadow p-8 text-center"><p class="text-red-500"><i class="fas fa-exclamation-triangle mr-2"></i>' + err.message + '</p></div>';
+      });
+    }
+
+    function renderCalendar(status, eventsData, availability) {
+      var connected = status.connected;
+      var events = eventsData.google_events || [];
+      var slots = availability.available_slots || [];
+
+      var connectSection = '';
+      if (!connected) {
+        connectSection = '<div class="bg-amber-50 border border-amber-200 rounded-xl p-6 mb-6">' +
+          '<div class="flex items-center gap-4">' +
+            '<div class="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center"><i class="fas fa-calendar-alt text-amber-600 text-xl"></i></div>' +
+            '<div class="flex-1">' +
+              '<h3 class="font-bold text-amber-800">Google Calendar Not Connected</h3>' +
+              '<p class="text-amber-700 text-sm">Connect Gmail first (Settings → Gmail Integration). Calendar access is included automatically.</p>' +
+            '</div>' +
+            '<a href="/customer/dashboard" class="px-4 py-2 bg-amber-500 text-white rounded-lg text-sm font-medium hover:bg-amber-600">Go to Settings</a>' +
+          '</div>' +
+        '</div>';
+      }
+
+      var eventsHtml = '';
+      if (events.length > 0) {
+        events.forEach(function(e) {
+          var start = e.start_time ? new Date(e.start_time) : new Date();
+          var dateStr = start.toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric' });
+          var timeStr = e.all_day ? 'All Day' : start.toLocaleTimeString('en-CA', { hour: '2-digit', minute: '2-digit' });
+          eventsHtml += '<div class="cal-event bg-white rounded-xl border border-gray-200 p-4 flex items-center gap-4">' +
+            '<div class="w-12 h-12 bg-sky-100 rounded-xl flex flex-col items-center justify-center">' +
+              '<span class="text-[10px] text-sky-500 uppercase">' + dateStr.split(' ')[0] + '</span>' +
+              '<span class="text-lg font-bold text-sky-700">' + start.getDate() + '</span>' +
+            '</div>' +
+            '<div class="flex-1 min-w-0">' +
+              '<p class="font-semibold text-gray-800 truncate">' + (e.title || 'Untitled') + '</p>' +
+              '<p class="text-xs text-gray-500">' + dateStr + ' &bull; ' + timeStr + (e.location ? ' &bull; ' + e.location : '') + '</p>' +
+            '</div>' +
+            '<a href="' + (e.html_link || '#') + '" target="_blank" class="text-sky-500 hover:text-sky-700 text-sm"><i class="fas fa-external-link-alt"></i></a>' +
+          '</div>';
+        });
+      } else if (connected) {
+        eventsHtml = '<div class="text-center py-6"><i class="fas fa-calendar-check text-gray-300 text-3xl mb-2"></i><p class="text-gray-400 text-sm">No upcoming events in the next 30 days</p></div>';
+      }
+
+      var slotsHtml = '';
+      slots.slice(0, 10).forEach(function(s) {
+        var d = new Date(s.start);
+        slotsHtml += '<div class="slot-card bg-white rounded-lg border border-gray-200 p-3 text-center" onclick="createQuickEvent(\\'' + s.start + '\\',\\'' + s.end + '\\')">' +
+          '<p class="text-xs text-gray-500">' + d.toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric' }) + '</p>' +
+          '<p class="font-bold text-sky-700 text-sm">' + s.time + '</p>' +
+        '</div>';
+      });
+
+      root.innerHTML = connectSection +
+        '<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">' +
+          // Events column
+          '<div class="lg:col-span-2 space-y-3">' +
+            '<div class="flex items-center justify-between mb-2">' +
+              '<h2 class="text-lg font-bold text-gray-800"><i class="fas fa-calendar text-sky-500 mr-2"></i>Upcoming Events</h2>' +
+              (connected ? '<div class="flex gap-2">' +
+                '<button onclick="syncAllJobs()" class="px-3 py-1.5 bg-sky-600 text-white rounded-lg text-xs font-medium hover:bg-sky-700"><i class="fas fa-sync mr-1"></i>Sync All Jobs</button>' +
+                '<button onclick="showCreateEvent()" class="px-3 py-1.5 bg-green-600 text-white rounded-lg text-xs font-medium hover:bg-green-700"><i class="fas fa-plus mr-1"></i>New Event</button>' +
+              '</div>' : '') +
+            '</div>' +
+            '<div class="space-y-2">' + eventsHtml + '</div>' +
+          '</div>' +
+          // Available slots column
+          '<div>' +
+            '<h3 class="text-sm font-bold text-gray-700 mb-3"><i class="fas fa-clock text-green-500 mr-1"></i>Available Slots (Next 7 Days)</h3>' +
+            '<div class="grid grid-cols-2 gap-2">' + slotsHtml + '</div>' +
+            (connected ? '<p class="text-[10px] text-gray-400 mt-2 text-center">Click a slot to create an event</p>' : '') +
+          '</div>' +
+        '</div>';
+    }
+
+    function syncAllJobs() {
+      root.innerHTML = '<div class="text-center py-12"><div class="animate-spin text-sky-500 text-2xl inline-block"><i class="fas fa-spinner"></i></div><p class="text-gray-400 text-sm mt-2">Syncing all jobs to Google Calendar...</p></div>';
+      api('POST', '/sync-all-jobs').then(function(res) {
+        alert(res.success ? 'Synced ' + res.synced + ' jobs to Google Calendar!' : (res.error || 'Sync failed'));
+        loadCalendar();
+      }).catch(function(err) { alert('Error: ' + err.message); loadCalendar(); });
+    }
+
+    function showCreateEvent() {
+      var title = prompt('Event title:');
+      if (!title) return;
+      var date = prompt('Date (YYYY-MM-DD):', new Date().toISOString().split('T')[0]);
+      if (!date) return;
+      var time = prompt('Start time (HH:MM):', '09:00');
+      if (!time) return;
+      var loc = prompt('Location (optional):', '');
+
+      api('POST', '/events', {
+        title: title,
+        start_time: date + 'T' + time + ':00',
+        end_time: date + 'T' + (parseInt(time) + 2).toString().padStart(2, '0') + ':00:00',
+        location: loc || undefined,
+        event_type: 'general'
+      }).then(function(res) {
+        if (res.success) { alert('Event created!'); loadCalendar(); }
+        else alert(res.error || 'Failed to create event');
+      }).catch(function(err) { alert('Error: ' + err.message); });
+    }
+
+    function createQuickEvent(start, end) {
+      var title = prompt('Event title for this slot:');
+      if (!title) return;
+      api('POST', '/events', { title: title, start_time: start, end_time: end })
+        .then(function(res) {
+          if (res.success) { alert('Event created!'); loadCalendar(); }
+          else alert(res.error || 'Failed');
+        });
+    }
+
+    loadCalendar();
+  </script>
+  ${getRoverAssistant()}
+</body>
+</html>`
+}
+
+// ============================================================
+// SALES ENGINE PAGE — Lead scoring, follow-ups, onboarding
+// ============================================================
+function getSalesPageHTML() {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags()}
+  <title>Sales Engine - RoofReporterAI</title>
+  <style>
+    .kpi-card { transition: all 0.2s; }
+    .kpi-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+    .lead-row { transition: all 0.15s; }
+    .lead-row:hover { background: #f8fafc; }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <header class="bg-gradient-to-r from-indigo-600 to-purple-700 text-white shadow-lg">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
+          <span class="logo-mark w-10 h-10"><img src="/static/logo.png" alt="RoofReporterAI"></span>
+          <div>
+            <h1 class="text-lg font-bold">Sales Engine</h1>
+            <p class="text-indigo-200 text-xs">Leads, Follow-ups & Onboarding</p>
+          </div>
+        </a>
+      </div>
+      <nav class="flex items-center space-x-3">
+        <a href="/customer/pipeline" class="text-indigo-200 hover:text-white text-sm"><i class="fas fa-funnel-dollar mr-1"></i>Pipeline</a>
+        <a href="/customer/dashboard" class="text-indigo-200 hover:text-white text-sm"><i class="fas fa-th-large mr-1"></i>Dashboard</a>
+        <button onclick="custLogout()" class="text-indigo-200 hover:text-white text-sm"><i class="fas fa-sign-out-alt mr-1"></i>Logout</button>
+      </nav>
+    </div>
+  </header>
+  <main class="max-w-7xl mx-auto px-4 py-6">
+    <div id="sales-root">
+      <div class="text-center py-12"><div class="animate-spin text-indigo-500 text-2xl inline-block"><i class="fas fa-spinner"></i></div><p class="text-gray-400 text-sm mt-2">Loading sales dashboard...</p></div>
+    </div>
+  </main>
+  <script>
+    (function() {
+      var c = localStorage.getItem('rc_customer');
+      if (!c) { window.location.href = '/customer/login'; return; }
+    })();
+    function custLogout() {
+      var token = localStorage.getItem('rc_customer_token');
+      if (token) fetch('/api/customer/logout', { method: 'POST', headers: { 'Authorization': 'Bearer ' + token } })['catch'](function(){});
+      localStorage.removeItem('rc_customer'); localStorage.removeItem('rc_customer_token');
+      window.location.href = '/customer/login';
+    }
+
+    var token = localStorage.getItem('rc_customer_token') || '';
+    var root = document.getElementById('sales-root');
+
+    function api(method, path, body) {
+      var opts = { method: method, headers: { 'Content-Type': 'application/json' } };
+      if (token) opts.headers['Authorization'] = 'Bearer ' + token;
+      if (body) opts.body = JSON.stringify(body);
+      return fetch('/api/sales' + path, opts).then(function(r) { return r.json(); });
+    }
+
+    function loadDashboard() {
+      Promise.all([
+        api('GET', '/dashboard'),
+        api('GET', '/follow-ups?filter=due'),
+        api('GET', '/leads?sort=score')
+      ]).then(function(r) {
+        renderDashboard(r[0], r[1], r[2]);
+      }).catch(function() {
+        root.innerHTML = '<div class="bg-white rounded-2xl shadow p-8 text-center"><p class="text-gray-500">No sales data yet. Add your first lead to get started!</p><button onclick="showAddLead()" class="mt-4 px-6 py-2 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700"><i class="fas fa-plus mr-2"></i>Add First Lead</button></div>';
+      });
+    }
+
+    function renderDashboard(dash, followUps, leads) {
+      var k = dash.kpis || {};
+      var l = dash.leads || {};
+      var fu = dash.follow_ups || {};
+
+      var kpiHtml = '<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">' +
+        kpiCard('Pipeline Value', '$' + (k.pipeline_value || 0).toLocaleString(), 'fa-dollar-sign', 'from-sky-500 to-blue-600') +
+        kpiCard('Won Revenue', '$' + (k.won_value || 0).toLocaleString(), 'fa-trophy', 'from-green-500 to-emerald-600') +
+        kpiCard('Conversion Rate', (k.conversion_rate || 0) + '%', 'fa-chart-line', 'from-indigo-500 to-purple-600') +
+        kpiCard('Avg Lead Score', (k.avg_lead_score || 0) + '/100', 'fa-star', 'from-amber-500 to-orange-600') +
+      '</div>';
+
+      // Follow-ups section
+      var fuList = (followUps.follow_ups || []).slice(0, 8);
+      var fuHtml = '<div class="bg-white rounded-2xl shadow border border-gray-200 p-5 mb-6">' +
+        '<div class="flex items-center justify-between mb-3">' +
+          '<h3 class="font-bold text-gray-800"><i class="fas fa-bell text-amber-500 mr-2"></i>Due Follow-ups <span class="text-sm font-normal text-red-500">(' + (fu.overdue || 0) + ' overdue)</span></h3>' +
+        '</div>';
+      
+      if (fuList.length > 0) {
+        fuHtml += '<div class="space-y-2">';
+        fuList.forEach(function(f) {
+          var isOverdue = f.due_date < new Date().toISOString().split('T')[0];
+          fuHtml += '<div class="flex items-center gap-3 p-3 rounded-xl border ' + (isOverdue ? 'border-red-200 bg-red-50' : 'border-gray-200') + '">' +
+            '<div class="w-8 h-8 rounded-lg flex items-center justify-center ' + (f.action_type === 'call' ? 'bg-green-100' : 'bg-blue-100') + '">' +
+              '<i class="fas ' + (f.action_type === 'call' ? 'fa-phone text-green-600' : 'fa-envelope text-blue-600') + ' text-sm"></i>' +
+            '</div>' +
+            '<div class="flex-1 min-w-0">' +
+              '<p class="text-sm font-medium text-gray-800 truncate">' + f.title + '</p>' +
+              '<p class="text-xs text-gray-500">' + (f.lead_name || '') + ' &bull; Due: ' + f.due_date + '</p>' +
+            '</div>' +
+            '<button onclick="completeFollowUp(' + f.id + ')" class="px-3 py-1 bg-green-600 text-white rounded-lg text-xs font-medium hover:bg-green-700"><i class="fas fa-check mr-1"></i>Done</button>' +
+          '</div>';
+        });
+        fuHtml += '</div>';
+      } else {
+        fuHtml += '<p class="text-center text-gray-400 text-sm py-4">No pending follow-ups!</p>';
+      }
+      fuHtml += '</div>';
+
+      // Leads table
+      var leadsList = (leads.leads || []).slice(0, 15);
+      var leadsHtml = '<div class="bg-white rounded-2xl shadow border border-gray-200 overflow-hidden">' +
+        '<div class="p-5 flex items-center justify-between border-b border-gray-200">' +
+          '<h3 class="font-bold text-gray-800"><i class="fas fa-users text-indigo-500 mr-2"></i>Top Leads by Score</h3>' +
+          '<button onclick="showAddLead()" class="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-medium hover:bg-indigo-700"><i class="fas fa-plus mr-1"></i>Add Lead</button>' +
+        '</div>';
+
+      if (leadsList.length > 0) {
+        leadsHtml += '<div class="overflow-x-auto"><table class="w-full text-sm"><thead class="bg-gray-50"><tr>' +
+          '<th class="text-left px-4 py-2 text-xs font-bold text-gray-500 uppercase">Name</th>' +
+          '<th class="text-left px-4 py-2 text-xs font-bold text-gray-500 uppercase">Source</th>' +
+          '<th class="text-center px-4 py-2 text-xs font-bold text-gray-500 uppercase">Score</th>' +
+          '<th class="text-left px-4 py-2 text-xs font-bold text-gray-500 uppercase">Stage</th>' +
+          '<th class="text-right px-4 py-2 text-xs font-bold text-gray-500 uppercase">Value</th>' +
+          '<th class="text-center px-4 py-2 text-xs font-bold text-gray-500 uppercase">Action</th>' +
+        '</tr></thead><tbody>';
+        leadsList.forEach(function(lead) {
+          var scoreColor = lead.lead_score >= 70 ? 'bg-green-500' : (lead.lead_score >= 40 ? 'bg-amber-500' : 'bg-red-500');
+          leadsHtml += '<tr class="lead-row border-t border-gray-100">' +
+            '<td class="px-4 py-3"><p class="font-medium text-gray-800">' + lead.name + '</p><p class="text-xs text-gray-400">' + (lead.phone || lead.email || '') + '</p></td>' +
+            '<td class="px-4 py-3 text-xs text-gray-600">' + (lead.source || '').replace(/_/g, ' ') + '</td>' +
+            '<td class="px-4 py-3 text-center"><span class="inline-block px-2 py-1 text-white text-xs font-bold rounded-full ' + scoreColor + '">' + lead.lead_score + '</span></td>' +
+            '<td class="px-4 py-3"><span class="px-2 py-0.5 bg-sky-100 text-sky-700 text-xs rounded-full font-medium">' + (lead.stage || 'new') + '</span></td>' +
+            '<td class="px-4 py-3 text-right font-medium text-gray-800">$' + (lead.estimated_value || 0).toLocaleString() + '</td>' +
+            '<td class="px-4 py-3 text-center"><button onclick="advanceLead(' + lead.id + ',\\'' + lead.stage + '\\')" class="px-2 py-1 bg-sky-600 text-white text-xs rounded-lg hover:bg-sky-700"><i class="fas fa-arrow-right"></i></button></td>' +
+          '</tr>';
+        });
+        leadsHtml += '</tbody></table></div>';
+      } else {
+        leadsHtml += '<div class="p-8 text-center"><i class="fas fa-seedling text-gray-300 text-3xl mb-2"></i><p class="text-gray-400 text-sm">No leads yet. Add your first lead to start tracking!</p></div>';
+      }
+      leadsHtml += '</div>';
+
+      root.innerHTML = kpiHtml + fuHtml + leadsHtml;
+    }
+
+    function kpiCard(label, value, icon, gradient) {
+      return '<div class="kpi-card bg-white rounded-xl border border-gray-200 p-4">' +
+        '<div class="flex items-center gap-3">' +
+          '<div class="w-10 h-10 bg-gradient-to-br ' + gradient + ' rounded-xl flex items-center justify-center"><i class="fas ' + icon + ' text-white"></i></div>' +
+          '<div><p class="text-2xl font-bold text-gray-800">' + value + '</p><p class="text-xs text-gray-500">' + label + '</p></div>' +
+        '</div></div>';
+    }
+
+    function completeFollowUp(id) {
+      var outcome = prompt('Outcome notes (optional):');
+      api('POST', '/follow-ups/' + id + '/complete', { outcome: outcome || 'completed' })
+        .then(function() { loadDashboard(); });
+    }
+
+    var stageOrder = ['new', 'contacted', 'qualified', 'proposal_sent', 'negotiation', 'won'];
+    function advanceLead(id, currentStage) {
+      var idx = stageOrder.indexOf(currentStage);
+      var nextStage = idx >= 0 && idx < stageOrder.length - 1 ? stageOrder[idx + 1] : null;
+      if (!nextStage) { alert('Lead is already at the final stage'); return; }
+      if (!confirm('Move lead to "' + nextStage + '" stage?')) return;
+      api('POST', '/leads/' + id + '/advance', { stage: nextStage })
+        .then(function(res) {
+          if (res.success) loadDashboard();
+          else alert(res.error || 'Failed');
+        });
+    }
+
+    function showAddLead() {
+      var name = prompt('Lead name:');
+      if (!name) return;
+      var phone = prompt('Phone (optional):');
+      var source = prompt('Source (website, referral, door_knock_yes, google_ads, cold_call, storm_response):', 'website');
+      var value = prompt('Estimated job value ($):', '8000');
+      api('POST', '/leads', {
+        name: name,
+        phone: phone || undefined,
+        source: source || 'website',
+        estimated_value: parseFloat(value) || 8000
+      }).then(function(res) {
+        if (res.success) {
+          alert('Lead added! Score: ' + res.lead_score + '/100');
+          loadDashboard();
+        } else alert(res.error || 'Failed');
+      });
+    }
+
+    loadDashboard();
+  </script>
   ${getRoverAssistant()}
 </body>
 </html>`
