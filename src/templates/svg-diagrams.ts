@@ -344,6 +344,18 @@ export function generateArchitecturalDiagramSVG(
     })
   }
 
+  // GEOMETRY CONFIDENCE BADGE (below compass, top-right)
+  const geoConfidence = (aiGeometry as any)?._geometryConfidence || (hasPerimeter && hasFacets ? 'high' : 'medium')
+  const softAccepted = (aiGeometry as any)?._softAccepted || false
+  const confColors: Record<string, { bg: string; text: string; icon: string }> = {
+    'high': { bg: '#dcfce7', text: '#166534', icon: 'AI Traced' },
+    'medium': { bg: '#fef3c7', text: '#92400e', icon: 'AI Est.' },
+    'low': { bg: '#fef2f2', text: '#991b1b', icon: 'Approx.' },
+  }
+  const conf = confColors[geoConfidence] || confColors['medium']
+  svg += `<rect x="${W - 78}" y="52" width="66" height="16" rx="8" fill="${conf.bg}" stroke="#ddd" stroke-width="0.5"/>`
+  svg += `<text x="${W - 45}" y="63" text-anchor="middle" font-size="7" font-weight="700" fill="${conf.text}" ${FONT}>${conf.icon}</text>`
+
   // COMPASS ROSE (top-right corner)
   const cX = W - 42, cY = 32
   svg += `<g transform="translate(${cX},${cY})">`
@@ -643,8 +655,12 @@ export function generateFallbackArchitecturalSVG(
   svg += `<text x="0" y="-17" text-anchor="middle" font-size="8" font-weight="800" fill="#333" ${FONT}>N</text>`
   svg += `</g>`
 
+  // Schematic confidence badge (fallback = always "Schematic")
+  svg += `<rect x="${W - 82}" y="52" width="70" height="16" rx="8" fill="#fef2f2" stroke="#fca5a5" stroke-width="0.5"/>`
+  svg += `<text x="${W - 47}" y="63" text-anchor="middle" font-size="7" font-weight="700" fill="#991b1b" ${FONT}>Schematic</text>`
+
   // Note: "Estimated from Solar API data"
-  svg += `<text x="${W / 2}" y="${H - FOOTER_H - 8}" text-anchor="middle" font-size="7" fill="#94a3b8" ${FONT} font-style="italic">Estimated from Solar API data &mdash; run AI Enhancement for precise geometry</text>`
+  svg += `<text x="${W / 2}" y="${H - FOOTER_H - 8}" text-anchor="middle" font-size="7" fill="#94a3b8" ${FONT} font-style="italic">Schematic layout &mdash; measurements from Google Solar API are accurate</text>`
 
   // Footer bar (4 columns)
   const fY = H - FOOTER_H

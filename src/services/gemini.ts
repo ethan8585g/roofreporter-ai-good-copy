@@ -620,6 +620,24 @@ If the roof has wings or bumps, your perimeter MUST have concave vertices. A ful
         }
       }
 
+      // Check 6: Perimeter pixel-area sanity — if perimeter is way too small or large
+      // relative to the image, the geometry is likely wrong (traced wrong building or junk data)
+      if (analysis.perimeter.length >= 3) {
+        const polyArea = shoelaceArea(analysis.perimeter.map(p => [p.x, p.y]))
+        const imgArea = 640 * 640
+        const coverageRatio = polyArea / imgArea
+        if (coverageRatio < 0.01) {
+          failures.push(`TINY_PERIMETER: Perimeter covers only ${(coverageRatio * 100).toFixed(1)}% of image — likely traced a chimney or vent, not the roof`)
+          console.warn(`[Gemini] ✗ Perimeter area ${polyArea.toFixed(0)}px² is tiny (${(coverageRatio * 100).toFixed(1)}% of image)`)
+        } else if (coverageRatio > 0.85) {
+          failures.push(`HUGE_PERIMETER: Perimeter covers ${(coverageRatio * 100).toFixed(0)}% of image — likely traced the lot boundary, not the roof`)
+          console.warn(`[Gemini] ✗ Perimeter area ${polyArea.toFixed(0)}px² covers ${(coverageRatio * 100).toFixed(0)}% of image`)
+        } else {
+          qualityScore += 5  // reasonable perimeter size
+          console.log(`[Gemini] ✓ Perimeter covers ${(coverageRatio * 100).toFixed(1)}% of image (reasonable)`)
+        }
+      }
+
       // Log quality assessment
       console.log(`[Gemini] Attempt ${attempt} quality score: ${qualityScore}/100, failures: ${failures.length}`)
       console.log(`[Gemini] Stats: ${analysis.perimeter.length} perim pts, ${analysis.facets.length} facets, ${analysis.lines.length} lines, ${sharedEdgeCount} shared edges`)
@@ -638,16 +656,31 @@ If the roof has wings or bumps, your perimeter MUST have concave vertices. A ful
       // OR if we have usable geometry (facets >= 2) and this is the last attempt
       if (failures.length === 0 && qualityScore >= ACCEPT_SCORE) {
         // ✅ PASSED — geometry is usable, accept immediately
-        console.log(`[Gemini] ✅ Attempt ${attempt} PASSED validation (score ${qualityScore}) — accepting`)
+        ;(analysis as any)._geometryConfidence = qualityScore >= 70 ? 'high' : qualityScore >= 45 ? 'medium' : 'low'
+        console.log(`[Gemini] ✅ Attempt ${attempt} PASSED validation (score ${qualityScore}, confidence: ${(analysis as any)._geometryConfidence}) — accepting`)
         return analysis
       }
       
       // EARLY ACCEPT: If we have decent geometry and only soft failures, accept on last attempt
-      // This prevents complex roofs from always falling back to generic SVG
-      if (attempt >= MAX_RETRIES && qualityScore >= 15 && analysis.facets.length >= 2) {
+      // Raised threshold from 15→25 to prevent inaccurate diagrams from garbage geometry.
+      // Also require 3+ facets for soft accept (2 facets = trivial gable, not worth forcing).
+      if (attempt >= MAX_RETRIES && qualityScore >= 25 && analysis.facets.length >= 3) {
         console.log(`[Gemini] ✅ Attempt ${attempt} SOFT ACCEPT (score ${qualityScore}, ${analysis.facets.length} facets) — usable geometry on final attempt`)
         ;(analysis as any)._softAccepted = true
+        ;(analysis as any)._geometryConfidence = qualityScore >= 50 ? 'high' : qualityScore >= 35 ? 'medium' : 'low'
         return analysis
+      }
+      // Still accept 2-facet simple roofs if quality is decent (score >= 30)
+      if (attempt >= MAX_RETRIES && qualityScore >= 30 && analysis.facets.length >= 2 && analysis.perimeter.length >= 4) {
+        console.log(`[Gemini] ✅ Attempt ${attempt} SOFT ACCEPT simple roof (score ${qualityScore}, ${analysis.facets.length} facets)`)
+        ;(analysis as any)._softAccepted = true
+        ;(analysis as any)._geometryConfidence = qualityScore >= 45 ? 'medium' : 'low'
+        return analysis
+      }
+      // If even final attempt produced low-quality geometry (score < 25 with failures),
+      // return null so the pipeline uses the fallback diagram instead of a broken AI one
+      if (attempt >= MAX_RETRIES && qualityScore < 25) {
+        console.warn(`[Gemini] ✗ Final attempt score ${qualityScore} < 25 — rejecting in favor of fallback diagram`)
       }
 
       if (failures.length > 0) {
@@ -992,6 +1025,21 @@ function checkPolygonConvexity(points: { x: number; y: number }[]): boolean {
     }
   }
   return true // all angles have the same sign → fully convex → likely a bounding box
+}
+
+/**
+ * Shoelace formula: compute absolute area of a polygon from coordinate pairs.
+ * Used to sanity-check that Gemini's perimeter covers a reasonable portion of the image.
+ */
+function shoelaceArea(points: number[][]): number {
+  let area = 0
+  const n = points.length
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n
+    area += points[i][0] * points[j][1]
+    area -= points[j][0] * points[i][1]
+  }
+  return Math.abs(area) / 2
 }
 
 /**
