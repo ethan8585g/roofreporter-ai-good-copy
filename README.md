@@ -380,7 +380,7 @@ Homeowner calls roofer → Roofer's Personal Cell
 
 ---
 
-## Recommended Next Steps (v9.5)
+## Recommended Next Steps (v9.6)
 
 ### Phase 1 — Immediate Priority (Next 1-2 Days)
 1. **Deploy LiveKit Agent to LiveKit Cloud (READY)** — Deployment package is complete in `livekit-agent/`. Run from your local machine:
@@ -392,39 +392,45 @@ Homeowner calls roofer → Roofer's Personal Cell
    lk agent status          # Verify it's running
    ```
 2. **End-to-End Call Test with Full Logging** — Call 780-983-3335, verify AI answers, check that the call appears in the dashboard Call Center section with full transcript, summary, sentiment, and lead detection.
-3. **Update LiveKit Agent to Post Enhanced Data** — Modify `livekit-agent/agent.py` `on_call_end` to post these additional fields to `/api/secretary/webhook/call-complete`:
-   - `caller_email`, `service_type`, `property_address` (extracted from conversation)
-   - `is_lead: true/false` (if caller provided name + phone + wanted estimate)
-   - `conversation_highlights` (key points from conversation)
-   - `sentiment` (positive/neutral/negative based on caller tone)
-   - `follow_up_required: true/false`, `follow_up_notes`
-   - `messages_taken` array, `appointments_booked` array
-4. **SMS Lead Notification** — When AI captures a lead (name + phone + address), auto-SMS the business owner: "New lead: John Smith (780-555-1234) needs roof estimate at 123 Main St. Call logged in dashboard."
-5. **Email Lead Notification** — Send email with full call transcript + AI summary when estimate requests are captured.
+3. **Connect Cold Call Center to LiveKit Outbound SIP** — Wire the customer cold-call center to LiveKit's outbound SIP dialing:
+   - When customer clicks "Start Calling" on a list, the backend requests a LiveKit SIP outbound call to the next prospect's phone
+   - On call-complete webhook from LiveKit agent, post to `/api/customer-calls/call-complete` with transcript, summary, sentiment, lead detection
+   - Auto-advance to next prospect in queue
+4. **Build Cold Call LiveKit Agent (livekit-agent/cold-call-agent.py)** — Create a sales-specific AI agent that:
+   - Uses the customer's saved script (intro, pitch, objections, closing) from `/api/customer-calls/config`
+   - Detects interest level, books appointments, handles objections
+   - Posts comprehensive call data to the webhook on call end
+5. **SMS Lead Notification** — When AI captures a lead (name + phone + interested), auto-SMS the business owner
+6. **Email Lead Notification** — Send email with full call transcript + AI summary when interest is detected
 
 ### Phase 2 — Short Term (2-4 Weeks)
-6. **Call Recording & Audio Playback** — Enable LiveKit room recording, store audio URL in D1, add "Play Recording" button in call detail modal.
-7. **Agent Voice Preview** — Add "Listen to Voice" button in Agent Persona Selector so users can hear each agent's voice before choosing.
-8. **Push Notifications (PWA)** — Browser push notifications for new leads and missed calls using service worker.
-9. **Multi-Customer Agent** — Enable the LiveKit agent to handle calls for multiple roofing companies simultaneously, each with unique config/greeting.
-10. **Outbound Calling** — Add outbound call capability for follow-ups and callbacks using LiveKit SIP outbound trunks.
-11. **Square Payment Link SMS** — For emergency tarping dispatch, agent triggers SMS with Square payment link to caller's phone.
+7. **Call Recording & Audio Playback** — Enable LiveKit room recording, store audio URL in D1, add "Play Recording" button in call detail modal
+8. **Auto-Scheduler** — Allow customers to schedule cold call campaigns (e.g., "Call from 9am-5pm MST, Mon-Fri, max 50 calls/day")
+9. **LinkedIn Scraper Integration** — Build or integrate a LinkedIn scraping tool that auto-populates prospect lists with contact info, company, title
+10. **A/B Script Testing** — Allow multiple script variants per campaign with conversion tracking
+11. **Agent Voice Preview** — Add "Listen to Voice" button in Agent Settings so users can hear each voice before choosing
+12. **Push Notifications (PWA)** — Browser push notifications for new leads and missed calls
+13. **Multi-Customer Agent** — Enable LiveKit agent to handle calls for multiple roofing companies simultaneously
+14. **Outbound Calling for Secretary** — Add outbound call capability for follow-ups and callbacks using LiveKit SIP outbound trunks
+15. **Square Payment Link SMS** — For emergency tarping dispatch, agent triggers SMS with Square payment link
 
 ### Phase 3 — Medium Term (1-3 Months)
-12. **Notification Center** — In-app notification bell with real-time alerts for new leads, missed calls, appointment requests.
-13. **Mobile PWA** — manifest.json + service worker for installable progressive web app with push notifications.
-14. **French/Spanish Language Support** — Multilingual agent scripts and greeting templates.
-15. **Dark Mode** — Full dashboard dark mode toggle.
-16. **2FA / OAuth** — Google/Apple sign-in + optional two-factor authentication.
-17. **Analytics Dashboard** — Call volume trends, lead conversion rates, peak call hours, response time metrics.
-18. **Calendar Integration** — Sync booked appointments with Google Calendar / Outlook.
+16. **Real-Time Dashboard Updates** — WebSocket or SSE for live call status updates (ringing, connected, completed) without page refresh
+17. **Prospect Scoring AI** — Use AI to auto-score prospects based on company size, location, website activity before calling
+18. **CRM Integration** — Auto-create CRM contacts from cold call leads; sync appointment bookings to Jobs module
+19. **Notification Center** — In-app notification bell with real-time alerts for new leads, callbacks, appointments
+20. **Mobile PWA** — manifest.json + service worker for installable progressive web app
+21. **French/Spanish Language Support** — Multilingual agent scripts and greeting templates
+22. **Analytics Dashboard** — Call volume trends, lead conversion rates, peak call hours, response time metrics, A/B test results
+23. **Calendar Integration** — Sync booked appointments with Google Calendar / Outlook
 
 ### Phase 4 — Long Term (3-6 Months)
-19. **Native iOS App (Capacitor)** — Wrap in Capacitor for App Store deployment with push notifications, camera access, GPS.
-20. **AI-Generated Video Roof Reports** — Narrated video walkthrough of measurement data using AI voiceover.
-21. **Insurance-Compatible Report Format** — Xactimate/Symbility-compatible output for insurance claim submissions.
-22. **Supplier Marketplace** — Connect roofers with material suppliers (ABC Supply, Beacon, SRS).
-23. **White-Label Program** — Custom domain, logo, colors ($999 setup + $299/mo).
+24. **Native iOS App (Capacitor)** — Wrap in Capacitor for App Store deployment with push notifications, camera, GPS
+25. **AI-Generated Video Roof Reports** — Narrated video walkthrough of measurement data using AI voiceover
+26. **Insurance-Compatible Report Format** — Xactimate/Symbility-compatible output for insurance claim submissions
+27. **Supplier Marketplace** — Connect roofers with material suppliers (ABC Supply, Beacon, SRS)
+28. **White-Label Program** — Custom domain, logo, colors ($999 setup + $299/mo)
+29. **Outbound Marketing Campaigns** — AI-generated email + phone follow-up sequences for converted leads
 24. **Outbound Marketing Calls** — AI agent proactively calls leads who haven't responded within 48 hours.
 
 ---
@@ -438,7 +444,36 @@ Homeowner calls roofer → Roofer's Personal Cell
 
 ## Version History
 
-### v9.5 (Current — 2026-03-16)
+### v9.6 (Current — 2026-03-17)
+- **Customer Cold Call Center** — Full AI outbound dialer dashboard for each customer
+  - Page route: `/customer/cold-calls`
+  - Dashboard tile added to customer navigation grid (orange, "Cold Call Center")
+  - 6-tab interface: Overview, Prospect Lists, All Prospects, Call Logs, Leads, Agent Settings
+- **Prospect List Management**
+  - Create named lists (LinkedIn Scrapes, Google Maps, etc.)
+  - CSV bulk import with flexible column mapping (contact_name, phone, email, linkedin_url, etc.)
+  - Smart duplicate detection by phone number
+  - Progress tracking (% called, leads found)
+- **Call Log Dashboard**
+  - Real-time call history with outcome filtering: All/Answered/No Answer/Voicemail/Interested/Appointment/Callback/DNC
+  - Each call shows: AI summary, conversation highlights, sentiment, duration, outcome badge
+  - Clickable transcript viewer — full word-by-word conversation in chat bubble format
+  - Agent notes per call, lead quality ratings, follow-up flags
+- **Leads & Appointments Panel**
+  - AI-identified hot leads with quality stars, appointment status, contact info
+  - Alert banners for new leads, pending callbacks, booked appointments
+  - Direct links to view full transcripts
+- **Agent Configuration**
+  - 6 voice options: Alloy (neutral), Echo (male authoritative), Fable (male warm), Onyx (male deep), Nova (female warm), Shimmer (female energetic)
+  - Custom agent name and business name
+  - 4-section script builder: Intro, Pitch, Objection Handling, Closing
+  - Callback number configuration
+- **Prospect Funnel Visualization** — pipeline view (Queue → Called → Leads → Appointments → DNC)
+- **Backend API**: 20+ endpoints at `/api/customer-calls/*` with customer auth isolation
+- **DB Migration 0046**: 4 new tables (cust_cc_lists, cust_cc_prospects, cust_cc_call_logs, cust_cc_config)
+- All 3 GitHub repos synced, deployed to Cloudflare Pages
+
+### v9.5 (2026-03-16)
 - **Secretary AI Call Center Dashboard** — Highly visible section on customer dashboard
   - Live call stats (total/today/week calls, new leads, follow-ups, avg duration)
   - New lead alerts + follow-up needed alerts with direct links
