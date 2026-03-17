@@ -3215,38 +3215,122 @@ function getCustomerLoginHTML() {
     }
 
     // ============================================================
-    // GOOGLE SIGN-IN — Uses OAuth 2.0 popup flow
+    // GOOGLE SIGN-IN — Uses Google Identity Services (GIS) library
+    // Modern approach: loads the GIS script, renders button, handles callback
+    // Falls back to OAuth redirect if GIS fails
     // ============================================================
+    var _gisLoaded = false;
+    function loadGIS(clientId) {
+      return new Promise(function(resolve, reject) {
+        if (_gisLoaded && window.google && window.google.accounts) { resolve(); return; }
+        var s = document.createElement('script');
+        s.src = 'https://accounts.google.com/gsi/client';
+        s.async = true;
+        s.defer = true;
+        s.onload = function() { _gisLoaded = true; resolve(); };
+        s.onerror = function() { reject(new Error('Failed to load Google Identity Services')); };
+        document.head.appendChild(s);
+      });
+    }
+
     async function signInWithGoogle() {
-      // Use Google Identity Services (GIS) to get an ID token
-      // Since GIS library may not be loaded, we use the OAuth 2.0 redirect flow
+      var errEl = document.getElementById('custLoginError');
       try {
-        // Fetch the Google OAuth client ID from the server
-        const configRes = await fetch('/api/public/google-oauth-config');
-        const configData = await configRes.json();
-        const clientId = configData.client_id;
+        var configRes = await fetch('/api/public/google-oauth-config');
+        var configData = await configRes.json();
+        var clientId = configData.client_id;
         
         if (!clientId) {
-          // Fallback: try a simple popup-based approach
-          alert('Google Sign-In is not yet configured. Please register with email instead, or contact support.');
+          if (errEl) { errEl.textContent = 'Google Sign-In is not yet configured. Please register with email/password instead.'; errEl.classList.remove('hidden'); }
           return;
         }
-        
-        // Use Google's OAuth 2.0 token endpoint with implicit flow
-        const redirectUri = window.location.origin + '/customer/google-callback';
-        const scope = 'openid email profile';
-        const authUrl = 'https://accounts.google.com/o/oauth2/v2/auth?'
-          + 'client_id=' + encodeURIComponent(clientId)
-          + '&redirect_uri=' + encodeURIComponent(redirectUri)
-          + '&response_type=token id_token'
-          + '&scope=' + encodeURIComponent(scope)
-          + '&nonce=' + Date.now()
-          + '&prompt=select_account';
-        
-        window.location.href = authUrl;
+
+        // Use GIS renderButton in a popup — most reliable, no redirect URI issues
+        try {
+          await loadGIS(clientId);
+          google.accounts.id.initialize({
+            client_id: clientId,
+            callback: handleGoogleCredential,
+            auto_select: false,
+            ux_mode: 'popup',
+          });
+          // Render the official Google button into a hidden container then auto-click it
+          // This triggers the popup-based sign-in (no redirect URI needed)
+          var gBtnContainer = document.getElementById('gsi-btn-container');
+          if (!gBtnContainer) {
+            gBtnContainer = document.createElement('div');
+            gBtnContainer.id = 'gsi-btn-container';
+            gBtnContainer.style.position = 'fixed';
+            gBtnContainer.style.left = '-9999px';
+            document.body.appendChild(gBtnContainer);
+          }
+          google.accounts.id.renderButton(gBtnContainer, {
+            type: 'standard',
+            theme: 'outline',
+            size: 'large',
+            text: 'signin_with',
+            width: 320,
+          });
+          // Short delay for button to render, then click it
+          setTimeout(function() {
+            var gBtn = gBtnContainer.querySelector('div[role="button"]') || gBtnContainer.querySelector('iframe');
+            if (gBtn) {
+              gBtn.click();
+            } else {
+              // If renderButton didn't create a clickable element, try One Tap
+              google.accounts.id.prompt(function(notification) {
+                if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+                  if (errEl) { errEl.textContent = 'Google popup was blocked. Please allow popups for this site and try again.'; errEl.classList.remove('hidden'); }
+                }
+              });
+            }
+          }, 200);
+        } catch(gisErr) {
+          console.warn('GIS failed:', gisErr);
+          if (errEl) { errEl.textContent = 'Google Sign-In is not available right now. Please use email and password to sign in.'; errEl.classList.remove('hidden'); }
+        }
       } catch(e) {
-        alert('Google Sign-In is not available. Please use email/password to sign in.');
+        if (errEl) { errEl.textContent = 'Google Sign-In is not available. Please use email/password.'; errEl.classList.remove('hidden'); }
       }
+    }
+
+    async function handleGoogleCredential(response) {
+      var errEl = document.getElementById('custLoginError');
+      if (!response || !response.credential) {
+        if (errEl) { errEl.textContent = 'Google Sign-In failed — no credential received.'; errEl.classList.remove('hidden'); }
+        return;
+      }
+      try {
+        var res = await fetch('/api/customer/google', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ credential: response.credential })
+        });
+        var data = await res.json();
+        if (data.success) {
+          localStorage.setItem('rc_customer', JSON.stringify(data.customer));
+          localStorage.setItem('rc_customer_token', data.token);
+          window.location.href = '/customer/dashboard';
+        } else {
+          if (errEl) { errEl.textContent = data.error || 'Google sign-in failed.'; errEl.classList.remove('hidden'); }
+        }
+      } catch(e) {
+        if (errEl) { errEl.textContent = 'Network error during Google sign-in.'; errEl.classList.remove('hidden'); }
+      }
+    }
+
+    function doGoogleOAuthRedirect(clientId) {
+      // Fallback: use authorization code flow (not implicit) — more compatible
+      var redirectUri = window.location.origin + '/customer/google-callback';
+      var scope = 'openid email profile';
+      var authUrl = 'https://accounts.google.com/o/oauth2/v2/auth?'
+        + 'client_id=' + encodeURIComponent(clientId)
+        + '&redirect_uri=' + encodeURIComponent(redirectUri)
+        + '&response_type=id_token'
+        + '&scope=' + encodeURIComponent(scope)
+        + '&nonce=' + Date.now()
+        + '&prompt=select_account';
+      window.location.href = authUrl;
     }
   </script>
   ${getRoverWidget()}

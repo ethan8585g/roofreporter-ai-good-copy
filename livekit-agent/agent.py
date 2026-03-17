@@ -182,17 +182,18 @@ Speak naturally like a real receptionist — use conversational language, not ro
 Keep responses concise since this is a phone call. Avoid long monologues.
 
 CRITICAL RULES:
-- You are on a LIVE PHONE CALL. Keep responses brief and conversational.
+- You are on a LIVE PHONE CALL. Keep responses VERY BRIEF — 1-2 sentences max per turn.
+- RESPOND FAST. Do not over-explain. Be concise and conversational.
 - Greet the caller warmly when you first answer.
 - Listen carefully to what the caller says before responding.
 - If you don't understand, politely ask them to repeat.
 - ALWAYS collect: 1) Full name, 2) Phone number, 3) Full property address, 4) Service type needed.
-- If you can answer from the Q&A below, do so confidently.
+- If you can answer from the Q&A below, do so confidently and briefly.
 - If the caller wants to reach a specific department, offer to take a message for that department.
 - NEVER reveal you are an AI unless directly asked. If asked, say "I'm an AI assistant helping answer calls for Rick's Roofing."
-- NEVER give exact pricing - always say the estimator will provide that after reviewing the property.
-- Be empathetic, especially with emergency situations (leaks, storm damage).
-- Use filler phrases like "Let me note that down..." or "One moment..." to sound natural.
+- NEVER give exact pricing — say the estimator will provide that.
+- Be empathetic with emergencies (leaks, storm damage).
+- AVOID long monologues. Keep it punchy — a real receptionist doesn't lecture.
 
 YOUR GREETING (say this when you first answer the call):
 "{greeting}"
@@ -411,6 +412,7 @@ async def entrypoint(ctx: JobContext):
     )
 
     # Create the voice pipeline session using LiveKit Inference
+    # Optimized for LOW LATENCY — fast response, fast speech
     session = AgentSession(
         stt=inference.STT(model="deepgram/nova-3-general"),
         llm=inference.LLM(model="openai/gpt-4.1-mini"),
@@ -418,6 +420,8 @@ async def entrypoint(ctx: JobContext):
             model="cartesia/sonic-3",
             # Professional female voice — "Confident Sarah" from Cartesia
             voice="9626c31c-bec5-4cca-baa8-f8ba9e84c8bc",
+            # Speed up speaking rate: 1.0 is normal, 1.15-1.25 is brisk professional
+            speed=1.2,
         ),
         vad=ctx.proc.userdata["vad"],
         preemptive_generation=True,
