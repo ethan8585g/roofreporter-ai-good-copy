@@ -380,30 +380,21 @@ Homeowner calls roofer → Roofer's Personal Cell
 
 ---
 
-## Recommended Next Steps (v9.6)
+## Recommended Next Steps (v10.0)
 
 ### Phase 1 — Immediate Priority (Next 1-2 Days)
-1. **Configure Google OAuth** — Set `GOOGLE_OAUTH_CLIENT_ID` in Cloudflare Pages secrets
+1. **A/B Test Landing Page CTAs** — Track conversion rates on orange vs cyan CTAs via the analytics_events table
+   - Monitor `cta_click` events in the DB: `SELECT event, json_extract(data,'$.location') as location, COUNT(*) FROM analytics_events GROUP BY location`
+   - Compare hero form signups vs direct `/signup` navigations
+2. **Configure Google OAuth** — Set `GOOGLE_OAUTH_CLIENT_ID` in Cloudflare Pages secrets
    - Create OAuth 2.0 Client at https://console.cloud.google.com/apis/credentials
    - Add authorized redirect URI: `https://www.roofreporterai.com/customer/google-callback`
    - Add `https://roofing-measurement-tool.pages.dev/customer/google-callback` too
-   - Set `GOOGLE_OAUTH_CLIENT_ID` env var in Cloudflare dashboard
-2. **Configure Meta/Facebook App** — Set `META_APP_ID` and `META_APP_SECRET` in Cloudflare Pages secrets
-   - Create app at https://developers.facebook.com/apps/
-   - Add "Facebook Login" product, set redirect URI to your domain
-   - Copy App ID and App Secret to Cloudflare env vars
-3. **Configure Twilio for Phone Marketplace** — Set `TWILIO_ACCOUNT_SID` and `TWILIO_AUTH_TOKEN` in Cloudflare secrets
-   - Sign up at https://www.twilio.com/
-   - Get Account SID and Auth Token from Console dashboard
-4. **Configure AdMob for iOS App Store** — In Super Admin → Onboarding Config:
-   - Create AdMob account at https://admob.google.com/
-   - Create a Banner ad unit and an Interstitial ad unit
-   - Paste both Unit IDs into the Onboarding Config panel
-5. **Set Onboarding Pricing** — Visit Super Admin → Onboarding Config
-   - Configure setup fee (if any), monthly sub ($49.99), annual sub ($499.99)
-   - Create report pack discounts for signup (e.g., 5-pack at 10% off, 15-pack at 25% off)
-   - Toggle feature gating for free vs paid tiers
-6. **Deploy LiveKit Agent to LiveKit Cloud (READY)** — Deployment package is complete in `livekit-agent/`. Run from your local machine:
+3. **Configure Meta/Facebook App** — Set `META_APP_ID` and `META_APP_SECRET` in Cloudflare Pages secrets
+4. **Configure Twilio for Phone Marketplace** — Set `TWILIO_ACCOUNT_SID` and `TWILIO_AUTH_TOKEN` in Cloudflare secrets
+5. **Configure AdMob for iOS App Store** — In Super Admin → Onboarding Config
+6. **Set Onboarding Pricing** — Visit Super Admin → Onboarding Config
+7. **Deploy LiveKit Agent to LiveKit Cloud (READY)** — Deployment package is complete in `livekit-agent/`. Run from your local machine:
    ```bash
    git clone https://github.com/ethan8585g/roofreporter-ai-good-copy.git
    cd roofreporter-ai-good-copy/livekit-agent
@@ -433,38 +424,60 @@ Homeowner calls roofer → Roofer's Personal Cell
 13. **Multi-Customer Agent** — Enable LiveKit agent to handle calls for multiple roofing companies simultaneously
 14. **Outbound Calling for Secretary** — Add outbound call capability for follow-ups and callbacks using LiveKit SIP outbound trunks
 15. **Square Payment Link SMS** — For emergency tarping dispatch, agent triggers SMS with Square payment link
+16. **Video Testimonials** — 15-30 second customer testimonial videos on landing page
+17. **Email Drip Sequence** — Day 1-7 onboarding drip (welcome, first report tips, CRM intro, secretary demo, upsell team)
+18. **In-App Onboarding Checklist** — "Complete Your First 5 Estimates" gamification checklist
 
 ### Phase 3 — Medium Term (1-3 Months)
-16. **Real-Time Dashboard Updates** — WebSocket or SSE for live call status updates (ringing, connected, completed) without page refresh
-17. **Prospect Scoring AI** — Use AI to auto-score prospects based on company size, location, website activity before calling
-18. **CRM Integration** — Auto-create CRM contacts from cold call leads; sync appointment bookings to Jobs module
-19. **Notification Center** — In-app notification bell with real-time alerts for new leads, callbacks, appointments
-20. **Mobile PWA** — manifest.json + service worker for installable progressive web app
-21. **French/Spanish Language Support** — Multilingual agent scripts and greeting templates
-22. **Analytics Dashboard** — Call volume trends, lead conversion rates, peak call hours, response time metrics, A/B test results
-23. **Calendar Integration** — Sync booked appointments with Google Calendar / Outlook
+19. **Real-Time Dashboard Updates** — WebSocket or SSE for live call status updates
+20. **Prospect Scoring AI** — Use AI to auto-score prospects based on company size, location, website activity
+21. **CRM Integration** — Auto-create CRM contacts from cold call leads; sync appointment bookings
+22. **Notification Center** — In-app notification bell with real-time alerts
+23. **Mobile PWA** — manifest.json + service worker for installable progressive web app
+24. **Industry Landing Pages** — Separate landing pages for Residential, Insurance, Solar verticals
+25. **Video Testimonial Library** — Dedicated testimonial page with filtered video testimonials
+26. **Free Resource Library** — Downloadable templates, checklists, ROI worksheets (gated for lead capture)
+27. **Chatbot (Rover) Optimization** — Improve Rover AI assistant for lead qualification on landing page
+28. **Pricing Comparison Tool** — Interactive tool showing cost vs competitors (EagleView, drone services)
+29. **Analytics Dashboard** — Call volume trends, lead conversion rates, landing page A/B test results
 
 ### Phase 4 — Long Term (3-6 Months)
-24. **Native iOS App (Capacitor)** — Wrap in Capacitor for App Store deployment with push notifications, camera, GPS
-25. **AI-Generated Video Roof Reports** — Narrated video walkthrough of measurement data using AI voiceover
-26. **Insurance-Compatible Report Format** — Xactimate/Symbility-compatible output for insurance claim submissions
-27. **Supplier Marketplace** — Connect roofers with material suppliers (ABC Supply, Beacon, SRS)
-28. **White-Label Program** — Custom domain, logo, colors ($999 setup + $299/mo)
-29. **Outbound Marketing Campaigns** — AI-generated email + phone follow-up sequences for converted leads
-24. **Outbound Marketing Calls** — AI agent proactively calls leads who haven't responded within 48 hours.
-
----
-
-## Version History
-18. **Insurance Report Format** — Generate reports compatible with insurance claim requirements.
-19. **Supplier Marketplace** — Connect roofers with material suppliers (ABC Supply, Beacon, SRS).
-20. **White-Label Platform** — Allow other businesses (plumbers, HVAC, electricians) to use the AI Secretary under their own branding.
+30. **Native iOS App (Capacitor)** — Wrap in Capacitor for App Store deployment
+31. **AI-Generated Video Roof Reports** — Narrated video walkthrough of measurement data
+32. **Insurance-Compatible Report Format** — Xactimate/Symbility-compatible output
+33. **Supplier Marketplace** — Connect roofers with material suppliers (ABC Supply, Beacon, SRS)
+34. **White-Label Program** — Custom domain, logo, colors ($999 setup + $299/mo)
+35. **Affiliate Program** — $100 per referral, partner with field-service platforms
+36. **Monthly Webinars** — Educational content for customer engagement and lead nurture
+37. **Community Hub** — Slack/Discord community for roofers using RoofReporterAI
+38. **Blog Pillar Pages** — SEO-optimized long-form content for organic traffic
 
 ---
 
 ## Version History
 
-### v9.6 (Current — 2026-03-17)
+### v10.0 (Current — 2026-03-17)
+- **Complete Landing Page Strategic Redesign** — Full conversion-optimized overhaul
+  - **Hero Section**: Urgency messaging ("Join 10,000+ Canadian Roofers"), benefit-first headline ("Never Climb a Roof Again"), A/B tested orange CTA buttons for higher contrast, inline hero email capture form, 4.9/5 star rating badge
+  - **Announcement Bar**: Animated urgency bar with "Limited Time" CTA at top of page
+  - **Trust Badges Bar**: PCI DSS, SSL, Google Cloud Partner, Square Verified, Cloudflare Protected, Canadian Owned badges below hero
+  - **Social Proof Logos**: 8 customer company logos (Prairie Roofing Co., Atlas Exteriors, Apex Contracting, Summit Roofworks, Northern Shield, Keystone, Western Roof Pros, Pinnacle Exteriors)
+  - **Feature-to-Benefit Translation**: All feature cards now lead with benefits ("Save 2+ hours per estimate", "Quote with 98% confidence", "Your AI admin that never sleeps") + contextual CTAs on every card
+  - **Case Studies Section**: Two ROI-driven case studies (Prairie Roofing: $6,400/yr savings, +23% close rate; Atlas Exteriors: 32 hrs/mo saved, +41% revenue growth) with before/after metrics
+  - **Industry Sections**: Dedicated panels for Residential Roofing, Insurance & Adjusters, Solar Installers with industry-specific features and CTAs
+  - **Pricing Overhaul**: 3-tier pricing (Free Trial / Per Report $8 / B2B Volume $5), full competitor comparison table (vs EagleView, vs Manual/Drone), add-on cards
+  - **Interactive ROI Calculator**: Slider-based widget calculates monthly time saved, cost savings, RoofReporterAI cost, net savings, and ROI percentage
+  - **Expanded Testimonials**: 4 testimonials (up from 3), each with a key metric badge (saves $1,500+/mo, 99% accuracy, +23% close rate, 40% more leads)
+  - **Security & Privacy Section**: Compliance badges, encryption details, PIPEDA compliance, integration partner logos (Google, Square, Cloudflare, Gemini)
+  - **Sticky CTA Bar**: Fixed bottom bar appears after scrolling past hero — "Get 3 Free Reports — No CC Required" with orange CTA
+  - **Exit-Intent Popup**: Shows when mouse leaves viewport or after 60s — "Wait! Don't Leave Empty-Handed" with email capture
+  - **Mobile Optimization**: All buttons 44px+ touch targets, simplified forms, scalable responsive text
+  - **Funnel Analytics Tracking**: New `analytics_events` table + `POST /api/agents/track` endpoint for event tracking (page views, CTA clicks, form submissions, popup interactions)
+  - **Simplified Contact Form**: Reduced from 6 fields to 4 (Full Name, Email, Company, Phone — removed Last Name + Message textarea)
+  - **Footer Redesign**: Inline email signup form, trust badge icons, additional links (B2B pricing, case studies)
+  - **Updated Navigation**: Orange "Start Free" CTA button, separate Login link, streamlined mobile menu with 44px tap targets
+
+### v9.6 (2026-03-17)
 - **Customer Onboarding Configuration** — Super Admin can fully customize signup experience
   - Configurable setup fees, monthly/annual subscription pricing
   - Report pack discounts (bundles offered during signup)
