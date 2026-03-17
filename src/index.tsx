@@ -32,6 +32,8 @@ import { aiAdminChatRoutes } from './routes/ai-admin-chat'
 import { pipelineRoutes } from './routes/pipeline'
 import { stripeRoutes } from './routes/stripe'
 import { customerCallsRoutes } from './routes/customer-cold-call'
+import { homeDesignerRoutes } from './routes/home-designer'
+import { sam3Routes } from './routes/sam3-analysis'
 import type { Bindings } from './types'
 
 const app = new Hono<{ Bindings: Bindings }>()
@@ -293,6 +295,8 @@ app.route('/api/call-center', callCenterRoutes)
 app.route('/api/customer-calls', customerCallsRoutes)
 app.route('/api/meta', metaConnectRoutes)
 app.route('/api/heygen', heygenRoutes)
+app.route('/api/home-designer', homeDesignerRoutes)
+app.route('/api/sam3', sam3Routes)
 
 // Health check
 app.get('/api/health', (c) => {
@@ -698,6 +702,9 @@ app.get('/customer/pipeline', (c) => c.html(getCrmSubPageHTML('pipeline', 'Sales
 
 // Virtual Try-On — AI Roof Visualization
 app.get('/customer/virtual-tryon', (c) => c.html(getVirtualTryOnPageHTML()))
+
+// Home Designer — Hover-style multi-photo roof visualization
+app.get('/customer/home-designer', (c) => c.html(getHomeDesignerPageHTML()))
 
 // Team Management — Add/manage sales team members ($50/user/month)
 app.get('/customer/team', (c) => c.html(getTeamManagementPageHTML()))
@@ -3967,6 +3974,74 @@ function getVirtualTryOnPageHTML() {
     }
   </script>
   <script src="/static/virtual-tryon.js?v=${BUILD_VERSION}"></script>
+  ${getRoverAssistant()}
+</body>
+</html>`
+}
+
+// ============================================================
+// HOME DESIGNER PAGE — Hover-style multi-photo roof visualization
+// ============================================================
+function getHomeDesignerPageHTML() {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags()}
+  <title>Home Designer - RoofReporterAI</title>
+  <style>
+    @media print {
+      header, nav, .no-print { display: none !important; }
+      body { background: white !important; }
+      .max-w-5xl { max-width: 100% !important; }
+    }
+    .scrollbar-hide::-webkit-scrollbar { display: none; }
+    .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+    .line-clamp-3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <header class="bg-gradient-to-r from-sky-600 to-blue-700 text-white shadow-lg no-print">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
+          <span class="logo-mark w-10 h-10"><img src="/static/logo.png" alt="RoofReporterAI"></span>
+          <div>
+            <h1 class="text-lg font-bold">Home Designer</h1>
+            <p class="text-sky-200 text-xs">Hover-Style Roof Visualization</p>
+          </div>
+        </a>
+      </div>
+      <nav class="flex items-center space-x-3">
+        <span id="custGreeting" class="text-sky-200 text-sm hidden"><i class="fas fa-user-circle mr-1"></i><span id="custName"></span></span>
+        <a href="/customer/virtual-tryon" class="text-sky-200 hover:text-white text-sm"><i class="fas fa-magic mr-1"></i>Try-On</a>
+        <a href="/customer/dashboard" class="text-sky-200 hover:text-white text-sm"><i class="fas fa-th-large mr-1"></i>Dashboard</a>
+        <button onclick="custLogout()" class="text-sky-200 hover:text-white text-sm"><i class="fas fa-sign-out-alt mr-1"></i>Logout</button>
+      </nav>
+    </div>
+  </header>
+  <main class="max-w-6xl mx-auto px-4 py-6">
+    <div id="designer-root"></div>
+  </main>
+  <script>
+    (function() {
+      var c = localStorage.getItem('rc_customer');
+      if (!c) { window.location.href = '/customer/login'; return; }
+      try {
+        var u = JSON.parse(c);
+        var g = document.getElementById('custGreeting');
+        var n = document.getElementById('custName');
+        if (g && n) { n.textContent = u.name || u.email; g.classList.remove('hidden'); }
+      } catch(e) {}
+    })();
+    function custLogout() {
+      var token = localStorage.getItem('rc_customer_token');
+      if (token) fetch('/api/customer/logout', { method: 'POST', headers: { 'Authorization': 'Bearer ' + token } })['catch'](function(){});
+      localStorage.removeItem('rc_customer');
+      localStorage.removeItem('rc_customer_token');
+      window.location.href = '/customer/login';
+    }
+  </script>
+  <script src="/static/home-designer.js?v=${BUILD_VERSION}"></script>
   ${getRoverAssistant()}
 </body>
 </html>`
