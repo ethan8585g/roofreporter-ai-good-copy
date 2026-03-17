@@ -31,6 +31,7 @@ import { heygenRoutes } from './routes/heygen'
 import { aiAdminChatRoutes } from './routes/ai-admin-chat'
 import { pipelineRoutes } from './routes/pipeline'
 import { stripeRoutes } from './routes/stripe'
+import { customerCallsRoutes } from './routes/customer-cold-call'
 import type { Bindings } from './types'
 
 const app = new Hono<{ Bindings: Bindings }>()
@@ -289,6 +290,7 @@ app.route('/api/agents', agentsRoutes)
 app.route('/api/workers-ai', workersAiRoutes)
 app.route('/api/report-images', reportImagesRoutes)
 app.route('/api/call-center', callCenterRoutes)
+app.route('/api/customer-calls', customerCallsRoutes)
 app.route('/api/meta', metaConnectRoutes)
 app.route('/api/heygen', heygenRoutes)
 
@@ -1842,6 +1844,11 @@ app.get('/customer/d2d', (c) => {
 app.get('/customer/secretary', (c) => {
   const stripeKey = '' // No longer needed — Square uses server-side only
   return c.html(getSecretaryPageHTML())
+})
+
+// Customer Cold Call Center — AI Outbound Dialer
+app.get('/customer/cold-calls', (c) => {
+  return c.html(getColdCallPageHTML())
 })
 
 // Model Cards — Public reference pages for AI models
@@ -4218,6 +4225,68 @@ function getSecretaryPageHTML() {
     }
   </script>
   <script src="/static/secretary.js?v=${BUILD_VERSION}"></script>
+  ${getRoverAssistant()}
+</body>
+</html>`
+}
+
+// ============================================================
+// CUSTOMER COLD CALL CENTER — AI Outbound Dialer Page
+// ============================================================
+function getColdCallPageHTML() {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags()}
+  <title>Cold Call Center - RoofReporterAI</title>
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <header class="bg-gradient-to-r from-orange-500 to-red-600 text-white shadow-lg">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
+          <span class="logo-mark w-10 h-10"><img src="/static/logo.png" alt="RoofReporterAI"></span>
+          <div>
+            <h1 class="text-lg font-bold">Cold Call Center</h1>
+            <p class="text-orange-200 text-xs">AI Outbound Sales Dialer</p>
+          </div>
+        </a>
+      </div>
+      <nav class="flex items-center space-x-3">
+        <span id="custGreeting" class="text-orange-200 text-sm hidden"><i class="fas fa-user-circle mr-1"></i><span id="custName"></span></span>
+        <a href="/customer/dashboard" class="text-orange-200 hover:text-white text-sm"><i class="fas fa-th-large mr-1"></i>Dashboard</a>
+        <button onclick="custLogout()" class="text-orange-200 hover:text-white text-sm"><i class="fas fa-sign-out-alt mr-1"></i>Logout</button>
+      </nav>
+    </div>
+  </header>
+  <main class="max-w-7xl mx-auto px-4 py-6">
+    <div id="cold-call-root">
+      <div class="flex items-center justify-center py-20">
+        <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-orange-500"></div>
+        <span class="ml-4 text-gray-500 text-lg">Loading Cold Call Center...</span>
+      </div>
+    </div>
+  </main>
+  <script>
+    (function() {
+      var c = localStorage.getItem('rc_customer');
+      if (!c) { window.location.href = '/customer/login'; return; }
+      try {
+        var u = JSON.parse(c);
+        var g = document.getElementById('custGreeting');
+        var n = document.getElementById('custName');
+        if (g && n) { n.textContent = u.name || u.email; g.classList.remove('hidden'); }
+      } catch(e) {}
+    })();
+    function custLogout() {
+      var token = localStorage.getItem('rc_customer_token');
+      if (token) fetch('/api/customer/logout', { method: 'POST', headers: { 'Authorization': 'Bearer ' + token } })['catch'](function(){});
+      localStorage.removeItem('rc_customer');
+      localStorage.removeItem('rc_customer_token');
+      window.location.href = '/customer/login';
+    }
+  </script>
+  <script src="/static/customer-cold-call.js?v=${BUILD_VERSION}"></script>
   ${getRoverAssistant()}
 </body>
 </html>`

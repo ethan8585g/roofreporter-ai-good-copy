@@ -2,13 +2,13 @@
 
 ## Project Overview
 - **Name**: RoofReporterAI
-- **Version**: 9.4 (LiveKit Agent Production-Ready + Cloud Deployment Package)
+- **Version**: 9.5 (Secretary AI Call Center Dashboard + Agent Persona Selection)
 - **Domain**: www.roofreporterai.com
 - **Production**: https://roofing-measurement-tool.pages.dev
 - **GitHub**: https://github.com/ethan8585g/roofreporter-ai-good-copy
 - **Platform**: Cloudflare Pages + Workers + D1
 - **Status**: Active
-- **Last Updated**: 2026-03-16 (v9.4)
+- **Last Updated**: 2026-03-16 (v9.5)
 
 ## Core Platform Features
 
@@ -60,13 +60,50 @@
 - **SIP Infrastructure**: Trunk `ST_acLimvCPo5ES` + Dispatch `SDR_cZDM2nFXpW7o`
 - **Call Flow**: 780-983-3335 → forwarded → +1(484) 964-9758 → LiveKit SIP → AI Agent answers
 - **Voice Stack**: Deepgram Nova-3 STT → GPT-4.1-mini LLM → Cartesia Sonic-3 TTS
-- **Agent Name**: Sarah (professional female voice)
+- **Agent Persona Selection**: 6 AI agents (3 female, 3 male) with unique voice personalities
+  - **Female**: Sarah (warm/professional), Emily (bright/energetic), Jessica (calm/authoritative)
+  - **Male**: James (deep/reassuring), Mike (strong/confident), Alex (friendly/conversational)
+  - Custom agent name field — agent introduces itself by chosen name
 - Three modes: Directory, Never-Voicemail Answering, Full AI Secretary
 - Rick's Roofing greeting script + Q&A + General Notes all configured
 - Function tools: take_message, schedule_estimate, handle_emergency, get_business_hours
 - Public agent-config API: `/api/secretary/agent-config/:customerId` (LiveKit agent fetches live config)
 - Webhook endpoints: message capture, appointment booking, call completion logging
 - Manual phone entry flow with carrier-specific forwarding instructions
+
+### 8. Secretary AI Call Center Dashboard (NEW in v9.5)
+- **Dashboard Call Center Section**: Highly visible gradient-styled section on customer dashboard
+  - Live stats: Total calls, today's calls, new leads, avg call duration
+  - New lead alerts with direct link to leads tab
+  - Follow-up needed alerts for pending callbacks
+  - 5 most recent calls with caller info, outcome badge, duration, time ago
+- **Call Log Tab** (Secretary page):
+  - Search calls by name, phone, or summary
+  - Filter: All Calls, Leads Only, Needs Follow-Up
+  - Each call shows: caller name/phone, lead badge, follow-up badge, outcome, sentiment icon, duration, AI summary, conversation highlights
+  - Click any call → Full Transcript Modal
+- **Full Transcript Viewer**:
+  - Complete word-by-word call transcript with speaker color coding (Agent: purple, Caller: blue)
+  - AI-generated call summary, key highlights, follow-up notes
+  - Linked messages taken, appointments booked during the call
+  - Contact info: property address, email, service type
+  - Sentiment badge (positive/neutral/negative), outcome badge, duration
+  - Lead status management via dropdown in footer
+- **Leads Tab**:
+  - Auto-captured from calls (caller name + phone + request = lead)
+  - Pipeline stages: New → Contacted → Qualified → Converted / Lost
+  - Lead quality stars (cold/warm/hot)
+  - Service type, property address, email, phone
+  - Click-to-view full call transcript
+  - Stage filter with counts per stage
+  - Inline status change via dropdown
+- **Enhanced Backend Endpoints**:
+  - `GET /api/secretary/call-stats` — aggregated stats for dashboard
+  - `GET /api/secretary/calls?filter=all|leads|follow_up&search=...` — filtered call log
+  - `GET /api/secretary/calls/:id` — full transcript + linked data
+  - `PUT /api/secretary/calls/:id` — update lead status, follow-up completion
+  - `GET /api/secretary/leads?status=new|contacted|qualified|converted|lost` — leads pipeline
+  - `POST /api/secretary/webhook/call-complete` — enhanced with is_lead, sentiment, highlights, service_type, property_address
 
 ---
 
@@ -343,40 +380,56 @@ Homeowner calls roofer → Roofer's Personal Cell
 
 ---
 
-## Recommended Next Steps
+## Recommended Next Steps (v9.5)
 
-### Phase 1 — Immediate (Next 1-2 Days)
+### Phase 1 — Immediate Priority (Next 1-2 Days)
 1. **Deploy LiveKit Agent to LiveKit Cloud (READY)** — Deployment package is complete in `livekit-agent/`. Run from your local machine:
    ```bash
    git clone https://github.com/ethan8585g/roofreporter-ai-good-copy.git
    cd roofreporter-ai-good-copy/livekit-agent
-   lk cloud auth           # Opens browser → log in to LiveKit Cloud
+   lk cloud auth           # Opens browser -> log in to LiveKit Cloud
    lk agent create --yes . # Builds Docker image, uploads, registers agent
    lk agent status          # Verify it's running
    ```
-   See `livekit-agent/README.md` for full step-by-step guide. Free tier: 1,000 agent min/mo.
-2. **End-to-End Call Test** — Call 780-983-3335, verify forwarding to +14849649758, confirm Sarah answers with Rick's Roofing greeting.
-3. **Call Logging Dashboard** — Enhance the Secretary AI dashboard to show real-time call logs, messages captured by the agent, and appointment requests.
-4. **SMS Notification on Call** — When the AI takes a message or captures a lead, auto-send SMS to the roofer's phone with caller details.
-5. **Email Notification on Lead** — Send email with full call transcript when the AI captures an estimate request (name + phone + address).
+2. **End-to-End Call Test with Full Logging** — Call 780-983-3335, verify AI answers, check that the call appears in the dashboard Call Center section with full transcript, summary, sentiment, and lead detection.
+3. **Update LiveKit Agent to Post Enhanced Data** — Modify `livekit-agent/agent.py` `on_call_end` to post these additional fields to `/api/secretary/webhook/call-complete`:
+   - `caller_email`, `service_type`, `property_address` (extracted from conversation)
+   - `is_lead: true/false` (if caller provided name + phone + wanted estimate)
+   - `conversation_highlights` (key points from conversation)
+   - `sentiment` (positive/neutral/negative based on caller tone)
+   - `follow_up_required: true/false`, `follow_up_notes`
+   - `messages_taken` array, `appointments_booked` array
+4. **SMS Lead Notification** — When AI captures a lead (name + phone + address), auto-SMS the business owner: "New lead: John Smith (780-555-1234) needs roof estimate at 123 Main St. Call logged in dashboard."
+5. **Email Lead Notification** — Send email with full call transcript + AI summary when estimate requests are captured.
 
 ### Phase 2 — Short Term (2-4 Weeks)
-6. **Call Recording & Transcription** — Enable LiveKit room recording, store transcripts in D1, display in call logs dashboard.
-7. **Square Payment Link SMS** — For emergency tarping dispatch, agent triggers SMS with Square payment link to caller's phone.
-8. **Multi-Customer Support** — Enable the agent to handle calls for multiple roofing companies simultaneously (each with their own config/script).
-9. **Outbound Calling** — Add outbound call capability for follow-ups and callbacks using LiveKit SIP outbound trunks.
-10. **Customer Self-Service Portal** — Allow roofers to edit their greeting script, Q&A, directories, and business hours from the web dashboard.
+6. **Call Recording & Audio Playback** — Enable LiveKit room recording, store audio URL in D1, add "Play Recording" button in call detail modal.
+7. **Agent Voice Preview** — Add "Listen to Voice" button in Agent Persona Selector so users can hear each agent's voice before choosing.
+8. **Push Notifications (PWA)** — Browser push notifications for new leads and missed calls using service worker.
+9. **Multi-Customer Agent** — Enable the LiveKit agent to handle calls for multiple roofing companies simultaneously, each with unique config/greeting.
+10. **Outbound Calling** — Add outbound call capability for follow-ups and callbacks using LiveKit SIP outbound trunks.
+11. **Square Payment Link SMS** — For emergency tarping dispatch, agent triggers SMS with Square payment link to caller's phone.
 
 ### Phase 3 — Medium Term (1-3 Months)
-11. **Notification Center** — Central hub for all alerts: new leads, missed calls, appointment requests, payment confirmations.
-12. **Mobile PWA** — Progressive Web App with push notifications for real-time lead alerts on roofer's phone.
-13. **Multilingual Support** — French and Spanish greeting scripts for Canadian bilingual markets.
-14. **Dark Mode** — Full dark theme support across all dashboards.
-15. **2FA / OAuth Login** — Google and Apple sign-in, two-factor authentication for customer accounts.
+12. **Notification Center** — In-app notification bell with real-time alerts for new leads, missed calls, appointment requests.
+13. **Mobile PWA** — manifest.json + service worker for installable progressive web app with push notifications.
+14. **French/Spanish Language Support** — Multilingual agent scripts and greeting templates.
+15. **Dark Mode** — Full dashboard dark mode toggle.
+16. **2FA / OAuth** — Google/Apple sign-in + optional two-factor authentication.
+17. **Analytics Dashboard** — Call volume trends, lead conversion rates, peak call hours, response time metrics.
+18. **Calendar Integration** — Sync booked appointments with Google Calendar / Outlook.
 
 ### Phase 4 — Long Term (3-6 Months)
-16. **iOS App (Capacitor)** — Native iOS wrapper with camera, geolocation, push notifications, haptics.
-17. **AI Video Report** — Narrated video walkthrough of roof measurements using AI-generated voiceover.
+19. **Native iOS App (Capacitor)** — Wrap in Capacitor for App Store deployment with push notifications, camera access, GPS.
+20. **AI-Generated Video Roof Reports** — Narrated video walkthrough of measurement data using AI voiceover.
+21. **Insurance-Compatible Report Format** — Xactimate/Symbility-compatible output for insurance claim submissions.
+22. **Supplier Marketplace** — Connect roofers with material suppliers (ABC Supply, Beacon, SRS).
+23. **White-Label Program** — Custom domain, logo, colors ($999 setup + $299/mo).
+24. **Outbound Marketing Calls** — AI agent proactively calls leads who haven't responded within 48 hours.
+
+---
+
+## Version History
 18. **Insurance Report Format** — Generate reports compatible with insurance claim requirements.
 19. **Supplier Marketplace** — Connect roofers with material suppliers (ABC Supply, Beacon, SRS).
 20. **White-Label Platform** — Allow other businesses (plumbers, HVAC, electricians) to use the AI Secretary under their own branding.
@@ -385,7 +438,27 @@ Homeowner calls roofer → Roofer's Personal Cell
 
 ## Version History
 
-### v9.4 (Current — 2026-03-16)
+### v9.5 (Current — 2026-03-16)
+- **Secretary AI Call Center Dashboard** — Highly visible section on customer dashboard
+  - Live call stats (total/today/week calls, new leads, follow-ups, avg duration)
+  - New lead alerts + follow-up needed alerts with direct links
+  - Recent calls mini-list with sentiment, outcome, and duration
+- **Full Call Log** with search, filter (all/leads/follow_up), and clickable transcript viewer
+- **Full Transcript Modal** — click any call to see complete word-by-word conversation
+  - AI summary, key highlights, follow-up notes, linked messages/appointments
+  - Speaker color coding (Agent: purple, Caller: blue)
+- **Leads Pipeline** — auto-captured leads with stage management (new/contacted/qualified/converted/lost)
+  - Quality stars, service type, property address, inline status change
+- **Agent Persona Selector** — 6 AI agents (3 female, 3 male):
+  - Sarah (warm/professional), Emily (bright/energetic), Jessica (calm/authoritative)
+  - James (deep/reassuring), Mike (strong/confident), Alex (friendly/conversational)
+  - Custom agent name field
+- Backend: config POST now persists agent_name + agent_voice
+- Enhanced webhook/call-complete accepts full lead data, sentiment, highlights
+- All DB migration columns verified in production D1
+- All 3 GitHub repos synced
+
+### v9.4 (2026-03-16)
 - **LiveKit Cloud Deployment Package READY** — Full `livekit-agent/` directory with Dockerfile, livekit.toml, agent.py
 - Production deployment: `lk cloud auth` + `lk agent create --yes .` (one-time browser login)
 - Alternative VPS deployment: Docker Compose or `deploy.sh` on any $5/mo server
