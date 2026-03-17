@@ -1,12 +1,5 @@
-project_subdomain = "roofreporterai-btkwkiwh"
+[project]
+  subdomain = "roofreporterai-btkwkiwh"
 
 [agent]
-name = "roofer-secretary"
-entry_point = "agent.py"
-
-[build]
-dockerfile = "Dockerfile"
-
-[env]
-ROOFPORTER_API_URL = "https://www.roofreporterai.com"
-DEFAULT_GREETING = "Thank you for calling Rick's Roofing. This is Sarah. Are you calling for a new roof estimate or a repair today?"
+  id = "CA_McGBLzwzRDve"
