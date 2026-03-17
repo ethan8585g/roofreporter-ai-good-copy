@@ -13,6 +13,7 @@
 
   var root = document.getElementById('designer-root');
   var token = localStorage.getItem('rc_customer_token') || '';
+  var MAX_PHOTO_SIZE_MB = 15;
 
   // ── State ──
   var state = {

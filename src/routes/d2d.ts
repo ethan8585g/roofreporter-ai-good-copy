@@ -373,11 +373,62 @@ d2dRoutes.post('/turfs/:id/assign', async (c) => {
     'UPDATE d2d_turfs SET assigned_to = ?, status = ?, updated_at = datetime(\'now\') WHERE id = ?'
   ).bind(team_member_id, 'assigned', turfId).run()
 
+  // Create in-app notification for the team member
+  try {
+    if (member.customer_id) {
+      await c.env.DB.prepare(
+        "INSERT INTO notifications (owner_id, type, title, message, link) VALUES (?, 'turf_assigned', ?, ?, '/customer/d2d')"
+      ).bind(member.customer_id, `New Turf Assigned: ${(turf as any).name}`, `You've been assigned the "${(turf as any).name}" turf for door knocking. Open your D2D Manager to see the territory.`).run()
+    }
+  } catch {}
+
+  // Send email notification to team member
+  try {
+    if (member.email) {
+      const ownerInfo = await c.env.DB.prepare('SELECT name, company_name, brand_business_name FROM customers WHERE id = ?').bind(user.id).first<any>()
+      const businessName = ownerInfo?.brand_business_name || ownerInfo?.company_name || ownerInfo?.name || 'Your Team'
+
+      const resendKey = (c.env as any).RESEND_API_KEY
+      if (resendKey) {
+        const emailHtml = `<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;background:#f8fafc">
+<div style="background:linear-gradient(135deg,#2563eb,#7c3aed);padding:24px;border-radius:12px 12px 0 0;text-align:center">
+  <h1 style="color:#fff;margin:0;font-size:20px">New Door Knocking Turf Assigned</h1>
+</div>
+<div style="background:#fff;padding:24px;border:1px solid #e2e8f0;border-radius:0 0 12px 12px">
+  <p style="font-size:16px;color:#1e293b">Hey <strong>${member.name}</strong>,</p>
+  <p style="color:#475569;line-height:1.6">${businessName} just assigned you a new door knocking territory:</p>
+  <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:16px;margin:16px 0;text-align:center">
+    <p style="margin:0;font-size:18px;font-weight:700;color:#0369a1">${(turf as any).name}</p>
+    ${(turf as any).description ? `<p style="margin:8px 0 0;color:#475569;font-size:13px">${(turf as any).description}</p>` : ''}
+  </div>
+  <p style="color:#475569;font-size:14px">Log in to your D2D Manager to view the territory map, track your door knocks, and log results.</p>
+  <div style="text-align:center;margin:24px 0">
+    <a href="${new URL(c.req.url).origin}/customer/d2d" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:12px 28px;border-radius:8px;font-weight:600;font-size:14px">Open D2D Manager</a>
+  </div>
+</div>
+<p style="text-align:center;color:#94a3b8;font-size:11px;margin-top:16px">&copy; ${new Date().getFullYear()} RoofReporterAI</p>
+</body></html>`
+
+        await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            from: 'RoofReporterAI <onboarding@resend.dev>',
+            to: [member.email],
+            subject: `New Turf Assigned: ${(turf as any).name} — ${businessName}`,
+            html: emailHtml
+          })
+        }).catch(() => {})
+      }
+    }
+  } catch {}
+
   return c.json({
     success: true,
     message: `Turf assigned to ${member.name}`,
     turf_id: parseInt(turfId),
-    assigned_to: { id: member.id, name: member.name, email: member.email }
+    assigned_to: { id: member.id, name: member.name, email: member.email },
+    notification_sent: !!member.email
   })
 })
 
