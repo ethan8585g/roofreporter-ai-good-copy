@@ -25,6 +25,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
 window.saDashboardSetView = function(v) {
   SA.view = v;
+  // Reset secretary manager sub-views when navigating from sidebar
+  if (v === 'secretary-manager') { SA.smView = 'list'; SA.smDetail = null; SA.smCustomerId = null; }
   loadView(v);
 };
 
@@ -139,6 +141,21 @@ async function loadView(view) {
           if (secSubsRes) SA.data.secretary_subscribers = await secSubsRes.json();
         } catch(secErr) {
           console.warn('Secretary admin load error:', secErr);
+        }
+        break;
+      case 'secretary-manager':
+        // Reset sub-view to list when navigating from sidebar (not from internal navigation)
+        if (!SA.smView || SA.smView === 'list') SA.smView = 'list';
+        // Only load data for list view; detail view loads its own data
+        if (SA.smView === 'list') {
+          try {
+            const [smConfigsRes, smPoolRes] = await Promise.all([
+              saFetch('/api/admin/superadmin/livekit/secretary-configs'),
+              saFetch('/api/admin/superadmin/livekit/phone-pool'),
+            ]);
+            if (smConfigsRes) SA.data.sm_configs = await smConfigsRes.json();
+            if (smPoolRes) SA.data.sm_pool = await smPoolRes.json();
+          } catch(smErr) { console.warn('Secretary Manager load error:', smErr); }
         }
         break;
       case 'secretary-revenue':
@@ -318,6 +335,7 @@ function renderContent() {
     case 'call-center': break; // Handled by call-center.js
     case 'meta-connect': break; // Handled by meta-connect.js
     case 'secretary-admin': root.innerHTML = renderSecretaryAdminView(); break;
+    case 'secretary-manager': root.innerHTML = renderSecretaryManagerView(); break;
     case 'secretary-revenue': root.innerHTML = renderSecretaryRevenueView(); break;
     case 'heygen': break; // Handled by heygen.js
     case 'ai-chat': root.innerHTML = (typeof renderAIChat === 'function') ? renderAIChat() : '<div class="p-8 text-gray-500">AI Chat module not loaded.</div>'; break;
@@ -5483,4 +5501,565 @@ async function lkDeleteNumber(encodedNumber) {
     if (data.success) { loadView('livekit-agents'); }
     else { alert('Error: ' + (data.error || 'Unknown')); }
   } catch(e) { alert('Error: ' + e.message); }
+}
+
+// ============================================================
+// SECRETARY MANAGER — Full Customer Secretary AI Management Hub
+// ============================================================
+
+// State for secretary manager sub-views
+SA.smView = 'list'; // list | detail | onboard
+SA.smCustomerId = null;
+SA.smDetail = null;
+
+function renderSecretaryManagerView() {
+  if (SA.smView === 'detail' && SA.smDetail) return renderSMDetailView();
+  if (SA.smView === 'onboard') return renderSMOnboardView();
+  return renderSMListView();
+}
+
+// ─── LIST VIEW — All customers with secretary configs ───
+function renderSMListView() {
+  var d = SA.data.sm_configs || {};
+  var configs = d.configs || [];
+  var poolData = SA.data.sm_pool || {};
+  var pool = poolData.numbers || [];
+  var poolStats = poolData.stats || [];
+  var availableCount = 0;
+  var assignedCount = 0;
+  poolStats.forEach(function(s) { if (s.status === 'available') availableCount = s.count; if (s.status === 'assigned') assignedCount = s.count; });
+
+  var activeCount = configs.filter(function(c) { return c.is_active === 1; }).length;
+  var connectedCount = configs.filter(function(c) { return c.connection_status === 'connected'; }).length;
+  var totalCalls = configs.reduce(function(sum, c) { return sum + (c.total_calls || 0); }, 0);
+
+  var rows = configs.map(function(c) {
+    var activeBadge = c.is_active === 1
+      ? '<span class="inline-flex items-center gap-1 px-2 py-0.5 bg-green-100 text-green-800 rounded-full text-[11px] font-semibold"><span class="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span>Active</span>'
+      : '<span class="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full text-[11px] font-semibold">Inactive</span>';
+    var connBadge = c.connection_status === 'connected'
+      ? '<span class="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full text-[10px] font-bold">Connected</span>'
+      : c.connection_status === 'pending_forwarding'
+        ? '<span class="px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded-full text-[10px] font-bold">Pending</span>'
+        : '<span class="px-2 py-0.5 bg-red-100 text-red-600 rounded-full text-[10px] font-bold">Disconnected</span>';
+    var modeBadge = c.secretary_mode === 'full'
+      ? '<span class="px-2 py-0.5 bg-purple-100 text-purple-700 rounded text-[10px] font-bold">Full</span>'
+      : c.secretary_mode === 'answering'
+        ? '<span class="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-[10px] font-bold">Answering</span>'
+        : c.secretary_mode === 'directory'
+          ? '<span class="px-2 py-0.5 bg-sky-100 text-sky-700 rounded text-[10px] font-bold">Directory</span>'
+          : '<span class="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded text-[10px] font-bold">' + (c.secretary_mode || 'N/A') + '</span>';
+
+    return '<tr class="border-b border-gray-100 hover:bg-blue-50/50 cursor-pointer transition-colors" onclick="smOpenDetail(' + c.customer_id + ')">' +
+      '<td class="px-4 py-3.5"><div class="font-bold text-gray-800 text-sm">' + (c.customer_name || c.email || 'ID:' + c.customer_id) + '</div><div class="text-[11px] text-gray-400 mt-0.5">' + (c.email || '') + '</div></td>' +
+      '<td class="px-4 py-3.5 text-center">' + activeBadge + '</td>' +
+      '<td class="px-4 py-3.5 text-center">' + connBadge + '</td>' +
+      '<td class="px-4 py-3.5 text-center">' + modeBadge + '</td>' +
+      '<td class="px-4 py-3.5"><div class="font-mono text-xs text-gray-600">' + (c.assigned_phone_number || '<span class="text-gray-300">—</span>') + '</div></td>' +
+      '<td class="px-4 py-3.5 text-sm text-gray-600">' + (c.agent_name || 'Sarah') + '</td>' +
+      '<td class="px-4 py-3.5 text-center"><span class="text-sm font-bold text-gray-700">' + (c.total_calls || 0) + '</span><span class="text-[10px] text-gray-400 block">' + (c.calls_7d || 0) + ' this wk</span></td>' +
+      '<td class="px-4 py-3.5">' +
+        '<div class="flex items-center gap-1">' +
+          '<button onclick="event.stopPropagation();smOpenDetail(' + c.customer_id + ')" class="p-1.5 rounded-lg hover:bg-blue-100 text-blue-500" title="Open Full Editor"><i class="fas fa-edit text-xs"></i></button>' +
+          '<button onclick="event.stopPropagation();smQuickToggle(' + c.customer_id + ')" class="p-1.5 rounded-lg hover:bg-' + (c.is_active === 1 ? 'red' : 'green') + '-100 text-' + (c.is_active === 1 ? 'red' : 'green') + '-500" title="' + (c.is_active === 1 ? 'Deactivate' : 'Activate') + '"><i class="fas fa-power-off text-xs"></i></button>' +
+        '</div>' +
+      '</td>' +
+    '</tr>';
+  }).join('');
+
+  return '<div class="space-y-6">' +
+    // Header
+    '<div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">' +
+      '<div>' +
+        '<h2 class="text-2xl font-black text-gray-900"><i class="fas fa-user-headset mr-2 text-teal-500"></i>Roofer Secretary Manager</h2>' +
+        '<p class="text-sm text-gray-500 mt-1">Onboard customers, configure their AI secretary agents, manage phone numbers & LiveKit connections</p>' +
+      '</div>' +
+      '<div class="flex gap-2">' +
+        '<button onclick="smShowOnboard()" class="px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-sm font-bold shadow-md hover:shadow-lg transition-all"><i class="fas fa-user-plus mr-2"></i>Onboard New Customer</button>' +
+        '<button onclick="loadView(\'secretary-manager\')" class="px-4 py-2.5 bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 rounded-xl text-sm font-semibold"><i class="fas fa-sync mr-1"></i>Refresh</button>' +
+      '</div>' +
+    '</div>' +
+
+    // KPI Cards
+    '<div class="grid grid-cols-2 md:grid-cols-5 gap-3">' +
+      samc('Total Customers', configs.length, 'fa-users', 'teal', '') +
+      samc('Active Agents', activeCount, 'fa-robot', 'green', activeCount + '/' + configs.length + ' enabled') +
+      samc('Connected', connectedCount, 'fa-link', 'blue', 'LiveKit telephony') +
+      samc('Total Calls', totalCalls, 'fa-phone-alt', 'purple', 'all time') +
+      samc('Phone Pool', availableCount + ' avail', 'fa-sim-card', 'amber', assignedCount + ' assigned') +
+    '</div>' +
+
+    // Customer Table
+    '<div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">' +
+      '<div class="p-4 border-b bg-gray-50 flex items-center justify-between">' +
+        '<h3 class="font-bold text-gray-800"><i class="fas fa-list mr-2 text-gray-400"></i>All Secretary Customers</h3>' +
+        '<div class="flex gap-2">' +
+          '<button onclick="smBulkToggle(true)" class="text-[11px] px-3 py-1.5 bg-green-50 text-green-700 rounded-lg font-semibold hover:bg-green-100"><i class="fas fa-play mr-1"></i>Activate All</button>' +
+          '<button onclick="smBulkToggle(false)" class="text-[11px] px-3 py-1.5 bg-red-50 text-red-600 rounded-lg font-semibold hover:bg-red-100"><i class="fas fa-stop mr-1"></i>Deactivate All</button>' +
+        '</div>' +
+      '</div>' +
+      (configs.length === 0
+        ? '<div class="p-12 text-center"><i class="fas fa-user-headset text-4xl text-gray-200 mb-4"></i><p class="text-gray-400 mb-4">No customers with Secretary AI configured yet</p><button onclick="smShowOnboard()" class="px-6 py-2.5 bg-teal-600 text-white rounded-xl text-sm font-bold"><i class="fas fa-user-plus mr-2"></i>Onboard First Customer</button></div>'
+        : '<div class="overflow-x-auto"><table class="w-full"><thead><tr class="bg-gray-50/80 text-[11px] text-gray-500 uppercase tracking-wider"><th class="px-4 py-3 text-left">Customer</th><th class="px-4 py-3 text-center">Status</th><th class="px-4 py-3 text-center">Connection</th><th class="px-4 py-3 text-center">Mode</th><th class="px-4 py-3 text-left">AI Phone #</th><th class="px-4 py-3 text-left">Agent Name</th><th class="px-4 py-3 text-center">Calls</th><th class="px-4 py-3 text-left">Actions</th></tr></thead><tbody>' + rows + '</tbody></table></div>') +
+    '</div>' +
+
+    // Quick Actions
+    '<div class="bg-gradient-to-r from-teal-50 to-cyan-50 border border-teal-200 rounded-2xl p-5">' +
+      '<div class="flex items-center gap-3">' +
+        '<div class="w-10 h-10 bg-teal-100 rounded-xl flex items-center justify-center"><i class="fas fa-rocket text-teal-600"></i></div>' +
+        '<div>' +
+          '<h4 class="font-bold text-teal-900">Quick Actions</h4>' +
+          '<p class="text-xs text-teal-700">Manage your Roofer Secretary AI fleet from here</p>' +
+        '</div>' +
+      '</div>' +
+      '<div class="flex flex-wrap gap-2 mt-4">' +
+        '<button onclick="smShowOnboard()" class="px-4 py-2 bg-teal-600 text-white rounded-lg text-xs font-bold hover:bg-teal-700"><i class="fas fa-user-plus mr-1"></i>Onboard Customer</button>' +
+        '<button onclick="saDashboardSetView(\'customer-onboarding\')" class="px-4 py-2 bg-white text-gray-700 border border-teal-200 rounded-lg text-xs font-semibold hover:bg-teal-50"><i class="fas fa-list-check mr-1"></i>Onboarding History</button>' +
+        '<button onclick="saDashboardSetView(\'livekit-agents\')" class="px-4 py-2 bg-white text-gray-700 border border-teal-200 rounded-lg text-xs font-semibold hover:bg-teal-50"><i class="fas fa-server mr-1"></i>LiveKit Agents</button>' +
+        '<button onclick="saDashboardSetView(\'phone-marketplace\')" class="px-4 py-2 bg-white text-gray-700 border border-teal-200 rounded-lg text-xs font-semibold hover:bg-teal-50"><i class="fas fa-sim-card mr-1"></i>Phone Numbers</button>' +
+        '<button onclick="saDashboardSetView(\'secretary-admin\')" class="px-4 py-2 bg-white text-gray-700 border border-teal-200 rounded-lg text-xs font-semibold hover:bg-teal-50"><i class="fas fa-chart-bar mr-1"></i>Secretary Analytics</button>' +
+      '</div>' +
+    '</div>' +
+
+  '</div>' + '<div id="sm-modal"></div>';
+}
+
+// ─── DETAIL VIEW — Full customer agent editor ───
+function renderSMDetailView() {
+  var d = SA.smDetail;
+  if (!d) return '<div class="p-8 text-gray-400">Loading customer details...</div>';
+  var cust = d.customer || {};
+  var cfg = d.config || {};
+  var dirs = d.directories || [];
+  var sub = d.subscription || {};
+  var stats = d.call_stats || {};
+
+  // Build directory editor rows (up to 4)
+  var dirRows = '';
+  for (var i = 0; i < 4; i++) {
+    var dir = dirs[i] || {};
+    dirRows += '<div class="grid grid-cols-3 gap-2 items-center">' +
+      '<input id="sm-dir-name-' + i + '" class="border border-gray-200 rounded-lg px-3 py-2 text-sm" value="' + (dir.name || '').replace(/"/g, '&quot;') + '" placeholder="e.g., Sales">' +
+      '<input id="sm-dir-phone-' + i + '" class="border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono" value="' + (dir.phone_or_action || '').replace(/"/g, '&quot;') + '" placeholder="+1 403 555 1234">' +
+      '<input id="sm-dir-notes-' + i + '" class="border border-gray-200 rounded-lg px-3 py-2 text-sm" value="' + (dir.special_notes || '').replace(/"/g, '&quot;') + '" placeholder="Special notes...">' +
+    '</div>';
+  }
+
+  var voiceOptions = ['alloy', 'shimmer', 'nova', 'echo', 'onyx', 'fable', 'ash', 'coral', 'sage', 'ballad', 'verse'];
+  var voiceSelect = voiceOptions.map(function(v) {
+    return '<option value="' + v + '"' + (cfg.agent_voice === v ? ' selected' : '') + '>' + v.charAt(0).toUpperCase() + v.slice(1) + '</option>';
+  }).join('');
+
+  var modeOptions = [
+    { val: 'full', label: 'Full Secretary — handles everything (booking, FAQ, email, callbacks)' },
+    { val: 'answering', label: 'Answering Service — take messages, forward urgent calls' },
+    { val: 'directory', label: 'Directory — route callers to departments' },
+    { val: 'receptionist', label: 'Receptionist — general reception and routing' },
+    { val: 'always_on', label: 'Always On — never sends to voicemail' }
+  ];
+  var modeSelect = modeOptions.map(function(m) {
+    return '<option value="' + m.val + '"' + (cfg.secretary_mode === m.val ? ' selected' : '') + '>' + m.label + '</option>';
+  }).join('');
+
+  return '<div class="space-y-6">' +
+    // Back button + header
+    '<div class="flex items-center gap-3">' +
+      '<button onclick="SA.smView=\'list\';SA.smDetail=null;loadView(\'secretary-manager\')" class="w-10 h-10 bg-gray-100 hover:bg-gray-200 rounded-xl flex items-center justify-center transition-colors"><i class="fas fa-arrow-left text-gray-500"></i></button>' +
+      '<div class="flex-1">' +
+        '<h2 class="text-2xl font-black text-gray-900"><i class="fas fa-user-edit mr-2 text-blue-500"></i>' + (cust.brand_business_name || cust.name || cust.email || 'Customer #' + cust.id) + '</h2>' +
+        '<p class="text-sm text-gray-500">' + (cust.email || '') + ' · Customer ID: ' + cust.id + ' · Created: ' + fmtDate(cust.created_at) + '</p>' +
+      '</div>' +
+      '<div class="flex gap-2">' +
+        '<button onclick="smSaveConfig(' + cust.id + ')" class="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold shadow-md"><i class="fas fa-save mr-2"></i>Save All Changes</button>' +
+        '<button onclick="smSetupLiveKit(' + cust.id + ')" class="px-4 py-2.5 bg-violet-600 hover:bg-violet-700 text-white rounded-xl text-sm font-bold shadow-md" title="Create SIP trunk & dispatch rule"><i class="fas fa-phone-volume mr-2"></i>Setup LiveKit</button>' +
+      '</div>' +
+    '</div>' +
+
+    // KPI row
+    '<div class="grid grid-cols-2 md:grid-cols-4 gap-3">' +
+      samc('Status', cfg.is_active === 1 ? 'Active' : 'Inactive', 'fa-power-off', cfg.is_active === 1 ? 'green' : 'red', '') +
+      samc('Total Calls', stats.total || 0, 'fa-phone', 'blue', fmtSeconds(stats.total_seconds || 0) + ' total') +
+      samc('Leads Captured', stats.leads || 0, 'fa-user-check', 'purple', '') +
+      samc('Subscription', sub.status || 'none', 'fa-credit-card', sub.status === 'active' ? 'green' : 'yellow', sub.current_period_end ? 'Ends ' + fmtDate(sub.current_period_end) : '') +
+    '</div>' +
+
+    // ─── SECTION 1: Core Identity ───
+    '<div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">' +
+      '<h3 class="text-lg font-bold text-gray-800 mb-4"><i class="fas fa-id-card mr-2 text-blue-400"></i>Agent Identity & Voice</h3>' +
+      '<div class="grid grid-cols-1 md:grid-cols-3 gap-4">' +
+        '<div><label class="text-xs font-semibold text-gray-500 block mb-1.5">Agent Name</label><input id="sm-agent-name" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm font-semibold focus:border-blue-400 focus:ring-2 focus:ring-blue-100" value="' + (cfg.agent_name || 'Sarah').replace(/"/g, '&quot;') + '"></div>' +
+        '<div><label class="text-xs font-semibold text-gray-500 block mb-1.5">Voice</label><select id="sm-agent-voice" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:border-blue-400">' + voiceSelect + '</select></div>' +
+        '<div><label class="text-xs font-semibold text-gray-500 block mb-1.5">Secretary Mode</label><select id="sm-sec-mode" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:border-blue-400">' + modeSelect + '</select></div>' +
+      '</div>' +
+      '<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">' +
+        '<div class="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">' +
+          '<label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="sm-is-active" class="w-5 h-5 rounded" ' + (cfg.is_active === 1 ? 'checked' : '') + '><span class="text-sm font-semibold text-gray-700">Agent Active (accepting calls)</span></label>' +
+        '</div>' +
+        '<div class="p-3 bg-gray-50 rounded-xl">' +
+          '<div class="text-xs font-semibold text-gray-500 mb-1">Connection Status</div>' +
+          '<select id="sm-conn-status" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">' +
+            '<option value="not_connected"' + (cfg.connection_status === 'not_connected' ? ' selected' : '') + '>Not Connected</option>' +
+            '<option value="pending_forwarding"' + (cfg.connection_status === 'pending_forwarding' ? ' selected' : '') + '>Pending Forwarding</option>' +
+            '<option value="connected"' + (cfg.connection_status === 'connected' ? ' selected' : '') + '>Connected</option>' +
+            '<option value="failed"' + (cfg.connection_status === 'failed' ? ' selected' : '') + '>Failed</option>' +
+          '</select>' +
+        '</div>' +
+      '</div>' +
+    '</div>' +
+
+    // ─── SECTION 2: Phone Configuration ───
+    '<div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">' +
+      '<h3 class="text-lg font-bold text-gray-800 mb-4"><i class="fas fa-phone-alt mr-2 text-green-400"></i>Phone Configuration</h3>' +
+      '<div class="grid grid-cols-1 md:grid-cols-3 gap-4">' +
+        '<div><label class="text-xs font-semibold text-gray-500 block mb-1.5">Business Phone (customer\'s cell)</label><input id="sm-biz-phone" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm font-mono focus:border-green-400" value="' + (cfg.business_phone || '').replace(/"/g, '&quot;') + '" placeholder="+1 403 555 1234"></div>' +
+        '<div><label class="text-xs font-semibold text-gray-500 block mb-1.5">Assigned AI Number (SIP/LiveKit)</label><input id="sm-ai-number" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm font-mono focus:border-green-400" value="' + (cfg.assigned_phone_number || '').replace(/"/g, '&quot;') + '" placeholder="+1 484 964 9758"></div>' +
+        '<div><label class="text-xs font-semibold text-gray-500 block mb-1.5">Carrier Name</label><input id="sm-carrier" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:border-green-400" value="' + (cfg.carrier_name || '').replace(/"/g, '&quot;') + '" placeholder="Telus, Rogers, Bell..."></div>' +
+      '</div>' +
+      '<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">' +
+        '<div><label class="text-xs font-semibold text-gray-500 block mb-1.5">Forwarding Method</label><select id="sm-fwd-method" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm">' +
+          '<option value="call_forwarding"' + (cfg.forwarding_method === 'call_forwarding' ? ' selected' : '') + '>Call Forwarding (*21*)</option>' +
+          '<option value="busy_forwarding"' + (cfg.forwarding_method === 'busy_forwarding' ? ' selected' : '') + '>Busy Forwarding (*67*)</option>' +
+          '<option value="no_answer_forwarding"' + (cfg.forwarding_method === 'no_answer_forwarding' ? ' selected' : '') + '>No-Answer Forwarding (*61*)</option>' +
+          '<option value="manual"' + (cfg.forwarding_method === 'manual' ? ' selected' : '') + '>Manual Configuration</option>' +
+        '</select></div>' +
+        '<div><label class="text-xs font-semibold text-gray-500 block mb-1.5">Forward-To Number (answering mode)</label><input id="sm-fwd-number" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm font-mono" value="' + (cfg.answering_forward_number || '').replace(/"/g, '&quot;') + '" placeholder="+1 403 555 5678"></div>' +
+      '</div>' +
+      (cfg.livekit_inbound_trunk_id ? '<div class="mt-4 p-3 bg-violet-50 rounded-xl border border-violet-200"><p class="text-xs text-violet-700"><i class="fas fa-check-circle mr-1 text-violet-500"></i><strong>LiveKit configured:</strong> Trunk: <code class="font-mono">' + cfg.livekit_inbound_trunk_id + '</code> | Dispatch: <code class="font-mono">' + (cfg.livekit_dispatch_rule_id || 'N/A') + '</code></p></div>' : '<div class="mt-4 p-3 bg-amber-50 rounded-xl border border-amber-200"><p class="text-xs text-amber-700"><i class="fas fa-exclamation-triangle mr-1"></i>LiveKit SIP trunk not configured. Click <strong>Setup LiveKit</strong> above after assigning a phone number.</p></div>') +
+    '</div>' +
+
+    // ─── SECTION 3: Greeting & Conversation ───
+    '<div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">' +
+      '<h3 class="text-lg font-bold text-gray-800 mb-4"><i class="fas fa-comment-dots mr-2 text-purple-400"></i>Greeting & Conversation Script</h3>' +
+      '<div><label class="text-xs font-semibold text-gray-500 block mb-1.5">Opening Greeting</label><textarea id="sm-greeting" rows="3" class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-sm focus:border-purple-400 focus:ring-2 focus:ring-purple-100">' + (cfg.greeting_script || '').replace(/</g, '&lt;') + '</textarea></div>' +
+      '<div class="mt-4"><label class="text-xs font-semibold text-gray-500 block mb-1.5">Common Q&A <span class="text-gray-400 font-normal">(one per line: Q: question | A: answer)</span></label><textarea id="sm-qa" rows="5" class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-sm font-mono focus:border-purple-400">' + (cfg.common_qa || '').replace(/</g, '&lt;') + '</textarea></div>' +
+      '<div class="mt-4"><label class="text-xs font-semibold text-gray-500 block mb-1.5">General Notes for Agent <span class="text-gray-400 font-normal">(business context, special instructions)</span></label><textarea id="sm-notes" rows="4" class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-sm focus:border-purple-400">' + (cfg.general_notes || '').replace(/</g, '&lt;') + '</textarea></div>' +
+    '</div>' +
+
+    // ─── SECTION 4: Directories ───
+    '<div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">' +
+      '<h3 class="text-lg font-bold text-gray-800 mb-4"><i class="fas fa-sitemap mr-2 text-sky-400"></i>Call Routing Directories <span class="text-sm font-normal text-gray-400">(2-4 departments)</span></h3>' +
+      '<div class="grid grid-cols-3 gap-2 mb-2 text-[11px] text-gray-500 font-semibold uppercase tracking-wider"><span>Department Name</span><span>Phone / Action</span><span>Special Notes</span></div>' +
+      '<div class="space-y-2">' + dirRows + '</div>' +
+    '</div>' +
+
+    // ─── SECTION 5: Full Secretary Capabilities ───
+    '<div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">' +
+      '<h3 class="text-lg font-bold text-gray-800 mb-4"><i class="fas fa-cogs mr-2 text-amber-400"></i>Full Secretary Settings</h3>' +
+      '<div class="grid grid-cols-1 md:grid-cols-2 gap-6">' +
+        // Left column — toggles
+        '<div class="space-y-3">' +
+          '<label class="flex items-center gap-3 p-3 bg-gray-50 rounded-xl cursor-pointer hover:bg-gray-100"><input type="checkbox" id="sm-can-book" class="w-5 h-5 rounded" ' + (cfg.full_can_book_appointments ? 'checked' : '') + '><span class="text-sm font-medium text-gray-700">Can book appointments</span></label>' +
+          '<label class="flex items-center gap-3 p-3 bg-gray-50 rounded-xl cursor-pointer hover:bg-gray-100"><input type="checkbox" id="sm-can-email" class="w-5 h-5 rounded" ' + (cfg.full_can_send_email ? 'checked' : '') + '><span class="text-sm font-medium text-gray-700">Can send email summaries</span></label>' +
+          '<label class="flex items-center gap-3 p-3 bg-gray-50 rounded-xl cursor-pointer hover:bg-gray-100"><input type="checkbox" id="sm-can-callback" class="w-5 h-5 rounded" ' + (cfg.full_can_schedule_callback ? 'checked' : '') + '><span class="text-sm font-medium text-gray-700">Can schedule callbacks</span></label>' +
+          '<label class="flex items-center gap-3 p-3 bg-gray-50 rounded-xl cursor-pointer hover:bg-gray-100"><input type="checkbox" id="sm-can-faq" class="w-5 h-5 rounded" ' + (cfg.full_can_answer_faq ? 'checked' : '') + '><span class="text-sm font-medium text-gray-700">Can answer FAQs</span></label>' +
+          '<label class="flex items-center gap-3 p-3 bg-gray-50 rounded-xl cursor-pointer hover:bg-gray-100"><input type="checkbox" id="sm-can-payment" class="w-5 h-5 rounded" ' + (cfg.full_can_take_payment_info ? 'checked' : '') + '><span class="text-sm font-medium text-gray-700">Can take payment info</span></label>' +
+        '</div>' +
+        // Right column — text fields
+        '<div class="space-y-4">' +
+          '<div><label class="text-xs font-semibold text-gray-500 block mb-1">Booking Link</label><input id="sm-booking-link" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" value="' + (cfg.full_booking_link || '').replace(/"/g, '&quot;') + '" placeholder="https://calendly.com/..."></div>' +
+          '<div><label class="text-xs font-semibold text-gray-500 block mb-1">Services Offered</label><textarea id="sm-services" rows="2" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">' + (cfg.full_services_offered || '').replace(/</g, '&lt;') + '</textarea></div>' +
+          '<div><label class="text-xs font-semibold text-gray-500 block mb-1">Pricing Info</label><textarea id="sm-pricing" rows="2" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">' + (cfg.full_pricing_info || '').replace(/</g, '&lt;') + '</textarea></div>' +
+          '<div><label class="text-xs font-semibold text-gray-500 block mb-1">Service Area</label><input id="sm-area" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" value="' + (cfg.full_service_area || '').replace(/"/g, '&quot;') + '" placeholder="Calgary, AB and surrounding areas"></div>' +
+          '<div><label class="text-xs font-semibold text-gray-500 block mb-1">Business Hours</label><input id="sm-hours" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" value="' + (cfg.full_business_hours || '').replace(/"/g, '&quot;') + '" placeholder="Mon-Fri 8am-6pm, Sat 9am-3pm"></div>' +
+        '</div>' +
+      '</div>' +
+    '</div>' +
+
+    // ─── SECTION 6: Answering Service Config ───
+    '<div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">' +
+      '<h3 class="text-lg font-bold text-gray-800 mb-4"><i class="fas fa-phone-square mr-2 text-rose-400"></i>Answering Service Settings</h3>' +
+      '<div class="grid grid-cols-1 md:grid-cols-3 gap-4">' +
+        '<div><label class="text-xs font-semibold text-gray-500 block mb-1.5">Fallback Action</label><select id="sm-fallback" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">' +
+          '<option value="voicemail"' + (cfg.answering_fallback_action === 'voicemail' ? ' selected' : '') + '>Voicemail</option>' +
+          '<option value="forward"' + (cfg.answering_fallback_action === 'forward' ? ' selected' : '') + '>Forward to Number</option>' +
+          '<option value="sms"' + (cfg.answering_fallback_action === 'sms' ? ' selected' : '') + '>Send SMS</option>' +
+        '</select></div>' +
+        '<div><label class="text-xs font-semibold text-gray-500 block mb-1.5">SMS Notifications</label><select id="sm-sms-notify" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">' +
+          '<option value="1"' + (cfg.answering_sms_notify ? ' selected' : '') + '>Enabled</option><option value="0"' + (!cfg.answering_sms_notify ? ' selected' : '') + '>Disabled</option></select></div>' +
+        '<div><label class="text-xs font-semibold text-gray-500 block mb-1.5">Email Notifications</label><select id="sm-email-notify" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">' +
+          '<option value="1"' + (cfg.answering_email_notify ? ' selected' : '') + '>Enabled</option><option value="0"' + (!cfg.answering_email_notify ? ' selected' : '') + '>Disabled</option></select></div>' +
+      '</div>' +
+      '<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">' +
+        '<div><label class="text-xs font-semibold text-gray-500 block mb-1.5">Notification Email Address</label><input id="sm-notify-email" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" value="' + (cfg.answering_notify_email || '').replace(/"/g, '&quot;') + '" placeholder="notifications@company.ca"></div>' +
+        '<div><label class="text-xs font-semibold text-gray-500 block mb-1.5">Email From Name</label><input id="sm-email-from" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" value="' + (cfg.full_email_from_name || '').replace(/"/g, '&quot;') + '" placeholder="ABC Roofing"></div>' +
+      '</div>' +
+    '</div>' +
+
+    // Save bar
+    '<div class="flex justify-between items-center bg-white rounded-2xl shadow-sm border border-gray-100 p-4">' +
+      '<button onclick="SA.smView=\'list\';SA.smDetail=null;loadView(\'secretary-manager\')" class="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-xl text-sm font-semibold"><i class="fas fa-arrow-left mr-2"></i>Back to List</button>' +
+      '<div class="flex gap-2">' +
+        '<button onclick="smSetupLiveKit(' + cust.id + ')" class="px-4 py-2.5 bg-violet-500 hover:bg-violet-600 text-white rounded-xl text-sm font-bold"><i class="fas fa-phone-volume mr-2"></i>Setup LiveKit Telephony</button>' +
+        '<button onclick="smSaveConfig(' + cust.id + ')" class="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold shadow-lg"><i class="fas fa-save mr-2"></i>Save All Changes</button>' +
+      '</div>' +
+    '</div>' +
+  '</div>';
+}
+
+// ─── ONBOARD VIEW — Create new customer with secretary ───
+function renderSMOnboardView() {
+  return '<div class="space-y-6">' +
+    '<div class="flex items-center gap-3">' +
+      '<button onclick="SA.smView=\'list\';loadView(\'secretary-manager\')" class="w-10 h-10 bg-gray-100 hover:bg-gray-200 rounded-xl flex items-center justify-center transition-colors"><i class="fas fa-arrow-left text-gray-500"></i></button>' +
+      '<div><h2 class="text-2xl font-black text-gray-900"><i class="fas fa-user-plus mr-2 text-teal-500"></i>Onboard New Roofer Customer</h2><p class="text-sm text-gray-500">Create account, configure Secretary AI, assign phone number — all in one step</p></div>' +
+    '</div>' +
+
+    // Account Info
+    '<div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">' +
+      '<h3 class="font-bold text-gray-800 mb-4"><i class="fas fa-building mr-2 text-blue-400"></i>Business & Account Details</h3>' +
+      '<div class="grid grid-cols-1 md:grid-cols-3 gap-4">' +
+        '<div><label class="text-xs font-semibold text-gray-500 block mb-1.5">Business Name *</label><input id="smo-business" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:border-teal-400" placeholder="ABC Roofing Ltd"></div>' +
+        '<div><label class="text-xs font-semibold text-gray-500 block mb-1.5">Contact Name *</label><input id="smo-name" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:border-teal-400" placeholder="John Smith"></div>' +
+        '<div><label class="text-xs font-semibold text-gray-500 block mb-1.5">Email (becomes username) *</label><input id="smo-email" type="email" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:border-teal-400" placeholder="john@abcroofing.ca"></div>' +
+      '</div>' +
+      '<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">' +
+        '<div><label class="text-xs font-semibold text-gray-500 block mb-1.5">Password *</label><input id="smo-password" type="text" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:border-teal-400" placeholder="Secure password"></div>' +
+        '<div><label class="text-xs font-semibold text-gray-500 block mb-1.5">Phone Number (business line)</label><input id="smo-phone" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm font-mono focus:border-teal-400" placeholder="+1 403 555 1234"></div>' +
+        '<div><label class="text-xs font-semibold text-gray-500 block mb-1.5">Carrier</label><input id="smo-carrier" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:border-teal-400" placeholder="Telus, Rogers, Bell..."></div>' +
+      '</div>' +
+    '</div>' +
+
+    // Secretary Config
+    '<div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">' +
+      '<h3 class="font-bold text-gray-800 mb-4"><i class="fas fa-robot mr-2 text-purple-400"></i>Secretary AI Configuration</h3>' +
+      '<div class="grid grid-cols-1 md:grid-cols-3 gap-4">' +
+        '<div><label class="text-xs font-semibold text-gray-500 block mb-1.5">Agent Name</label><input id="smo-agent-name" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm" value="Sarah"></div>' +
+        '<div><label class="text-xs font-semibold text-gray-500 block mb-1.5">Voice</label><select id="smo-voice" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm"><option value="alloy" selected>Alloy</option><option value="shimmer">Shimmer</option><option value="nova">Nova</option><option value="echo">Echo</option><option value="onyx">Onyx</option><option value="fable">Fable</option><option value="ash">Ash</option><option value="coral">Coral</option><option value="sage">Sage</option></select></div>' +
+        '<div><label class="text-xs font-semibold text-gray-500 block mb-1.5">Mode</label><select id="smo-mode" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm"><option value="full">Full Secretary</option><option value="answering">Answering Service</option><option value="directory">Directory</option><option value="receptionist">Receptionist</option><option value="always_on">Always On</option></select></div>' +
+      '</div>' +
+      '<div class="mt-4"><label class="text-xs font-semibold text-gray-500 block mb-1.5">Greeting Script</label><textarea id="smo-greeting" rows="3" class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-sm" placeholder="Thank you for calling [Business Name]. Our AI receptionist is here to help. How may I direct your call?"></textarea></div>' +
+      '<div class="mt-4"><label class="text-xs font-semibold text-gray-500 block mb-1.5">Common Q&A</label><textarea id="smo-qa" rows="3" class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-sm font-mono" placeholder="Q: What are your hours? | A: Monday to Friday, 8am to 6pm"></textarea></div>' +
+      '<div class="mt-4"><label class="text-xs font-semibold text-gray-500 block mb-1.5">General Notes / Business Context</label><textarea id="smo-notes" rows="3" class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-sm" placeholder="We specialize in residential re-roofing in the Calgary area..."></textarea></div>' +
+    '</div>' +
+
+    // Phone Numbers
+    '<div class="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl border border-blue-200 p-6">' +
+      '<h3 class="font-bold text-blue-800 mb-4"><i class="fas fa-phone-alt mr-2"></i>Phone Number Assignment</h3>' +
+      '<div class="grid grid-cols-1 md:grid-cols-2 gap-4">' +
+        '<div><label class="text-xs font-bold text-blue-700 block mb-1.5"><span class="w-5 h-5 bg-blue-200 rounded-full inline-flex items-center justify-center text-[10px] mr-1">1</span>Customer\'s Personal Cell</label><input id="smo-personal-phone" class="w-full border-2 border-blue-200 rounded-xl px-4 py-2.5 text-sm font-mono focus:border-blue-500" placeholder="+1 403 555 1234"><p class="text-[10px] text-blue-600 mt-1">They forward FROM this # when unavailable</p></div>' +
+        '<div><label class="text-xs font-bold text-purple-700 block mb-1.5"><span class="w-5 h-5 bg-purple-200 rounded-full inline-flex items-center justify-center text-[10px] mr-1">2</span>AI Agent Phone (SIP)</label><input id="smo-agent-phone" class="w-full border-2 border-purple-200 rounded-xl px-4 py-2.5 text-sm font-mono focus:border-purple-500" placeholder="+1 484 964 9758"><p class="text-[10px] text-purple-600 mt-1">Twilio/LiveKit # the AI uses for calls</p></div>' +
+      '</div>' +
+    '</div>' +
+
+    // Directories
+    '<div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">' +
+      '<h3 class="font-bold text-gray-800 mb-4"><i class="fas fa-sitemap mr-2 text-sky-400"></i>Call Directories (optional, 2-4)</h3>' +
+      '<div class="grid grid-cols-3 gap-2 mb-2 text-[11px] text-gray-500 font-semibold uppercase tracking-wider"><span>Department</span><span>Phone / Action</span><span>Notes</span></div>' +
+      '<div class="space-y-2">' +
+        '<div class="grid grid-cols-3 gap-2"><input id="smo-dir0-name" class="border border-gray-200 rounded-lg px-3 py-2 text-sm" placeholder="Sales"><input id="smo-dir0-phone" class="border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono" placeholder="+1 403 555 1111"><input id="smo-dir0-notes" class="border border-gray-200 rounded-lg px-3 py-2 text-sm" placeholder="Main sales line"></div>' +
+        '<div class="grid grid-cols-3 gap-2"><input id="smo-dir1-name" class="border border-gray-200 rounded-lg px-3 py-2 text-sm" placeholder="Service"><input id="smo-dir1-phone" class="border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono" placeholder="+1 403 555 2222"><input id="smo-dir1-notes" class="border border-gray-200 rounded-lg px-3 py-2 text-sm" placeholder="Existing customer repairs"></div>' +
+        '<div class="grid grid-cols-3 gap-2"><input id="smo-dir2-name" class="border border-gray-200 rounded-lg px-3 py-2 text-sm" placeholder="Emergency"><input id="smo-dir2-phone" class="border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono" placeholder="+1 403 555 3333"><input id="smo-dir2-notes" class="border border-gray-200 rounded-lg px-3 py-2 text-sm" placeholder="After hours urgent"></div>' +
+        '<div class="grid grid-cols-3 gap-2"><input id="smo-dir3-name" class="border border-gray-200 rounded-lg px-3 py-2 text-sm" placeholder="Billing"><input id="smo-dir3-phone" class="border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono" placeholder="+1 403 555 4444"><input id="smo-dir3-notes" class="border border-gray-200 rounded-lg px-3 py-2 text-sm" placeholder="Payment inquiries"></div>' +
+      '</div>' +
+    '</div>' +
+
+    // Submit
+    '<div class="flex justify-between items-center">' +
+      '<button onclick="SA.smView=\'list\';loadView(\'secretary-manager\')" class="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-xl text-sm font-semibold"><i class="fas fa-arrow-left mr-2"></i>Cancel</button>' +
+      '<button onclick="smOnboardCustomer()" class="px-8 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-sm font-bold shadow-lg hover:shadow-xl transition-all"><i class="fas fa-rocket mr-2"></i>Create Account & Configure Secretary AI</button>' +
+    '</div>' +
+  '</div>';
+}
+
+// ─── SECRETARY MANAGER ACTION FUNCTIONS ───
+
+function smShowOnboard() {
+  SA.smView = 'onboard';
+  SA.loading = false;
+  renderContent();
+}
+
+async function smOpenDetail(customerId) {
+  SA.smView = 'detail';
+  SA.smCustomerId = customerId;
+  SA.loading = true;
+  renderContent();
+  try {
+    var res = await saFetch('/api/admin/superadmin/secretary-manager/customer/' + customerId);
+    if (res) {
+      SA.smDetail = await res.json();
+    }
+  } catch(e) {
+    SA.smDetail = { customer: { id: customerId }, config: {}, directories: [], subscription: {}, call_stats: {} };
+    console.error('Error loading customer detail:', e);
+  }
+  SA.loading = false;
+  renderContent();
+}
+
+async function smSaveConfig(customerId) {
+  // Gather directories
+  var directories = [];
+  for (var i = 0; i < 4; i++) {
+    var nameEl = document.getElementById('sm-dir-name-' + i);
+    var phoneEl = document.getElementById('sm-dir-phone-' + i);
+    var notesEl = document.getElementById('sm-dir-notes-' + i);
+    if (nameEl && nameEl.value.trim()) {
+      directories.push({ name: nameEl.value.trim(), phone_or_action: phoneEl ? phoneEl.value : '', special_notes: notesEl ? notesEl.value : '' });
+    }
+  }
+
+  var payload = {
+    agent_name: document.getElementById('sm-agent-name').value,
+    agent_voice: document.getElementById('sm-agent-voice').value,
+    secretary_mode: document.getElementById('sm-sec-mode').value,
+    is_active: document.getElementById('sm-is-active').checked ? 1 : 0,
+    connection_status: document.getElementById('sm-conn-status').value,
+    business_phone: document.getElementById('sm-biz-phone').value,
+    assigned_phone_number: document.getElementById('sm-ai-number').value,
+    carrier_name: document.getElementById('sm-carrier').value,
+    forwarding_method: document.getElementById('sm-fwd-method').value,
+    answering_forward_number: document.getElementById('sm-fwd-number').value,
+    greeting_script: document.getElementById('sm-greeting').value,
+    common_qa: document.getElementById('sm-qa').value,
+    general_notes: document.getElementById('sm-notes').value,
+    // Full secretary settings
+    full_can_book_appointments: document.getElementById('sm-can-book').checked ? 1 : 0,
+    full_can_send_email: document.getElementById('sm-can-email').checked ? 1 : 0,
+    full_can_schedule_callback: document.getElementById('sm-can-callback').checked ? 1 : 0,
+    full_can_answer_faq: document.getElementById('sm-can-faq').checked ? 1 : 0,
+    full_can_take_payment_info: document.getElementById('sm-can-payment').checked ? 1 : 0,
+    full_booking_link: document.getElementById('sm-booking-link').value,
+    full_services_offered: document.getElementById('sm-services').value,
+    full_pricing_info: document.getElementById('sm-pricing').value,
+    full_service_area: document.getElementById('sm-area').value,
+    full_business_hours: document.getElementById('sm-hours').value,
+    // Answering settings
+    answering_fallback_action: document.getElementById('sm-fallback').value,
+    answering_sms_notify: document.getElementById('sm-sms-notify').value === '1' ? 1 : 0,
+    answering_email_notify: document.getElementById('sm-email-notify').value === '1' ? 1 : 0,
+    answering_notify_email: document.getElementById('sm-notify-email').value,
+    full_email_from_name: document.getElementById('sm-email-from').value,
+    directories: directories
+  };
+
+  try {
+    var res = await saFetch('/api/admin/superadmin/secretary-manager/customer/' + customerId + '/config', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    var data = await res.json();
+    if (data.success) {
+      alert('Secretary AI configuration saved for customer #' + customerId);
+      smOpenDetail(customerId);
+    } else {
+      alert('Error: ' + (data.error || 'Failed to save'));
+    }
+  } catch(e) {
+    alert('Error saving config: ' + e.message);
+  }
+}
+
+async function smQuickToggle(customerId) {
+  try {
+    var res = await saFetch('/api/admin/superadmin/livekit/secretary-config/toggle', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ customer_id: customerId })
+    });
+    var data = await res.json();
+    if (data.success) {
+      loadView('secretary-manager');
+    } else { alert('Error: ' + (data.error || 'Unknown')); }
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+async function smBulkToggle(activate) {
+  var action = activate ? 'ACTIVATE' : 'DEACTIVATE';
+  if (!confirm(action + ' all secretary agents? This affects every customer.')) return;
+  try {
+    var res = await saFetch('/api/admin/superadmin/livekit/secretary-config/bulk-toggle', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ activate: activate })
+    });
+    var data = await res.json();
+    if (data.success) {
+      alert(data.message + ' (' + (data.rows_changed || 0) + ' customers affected)');
+      loadView('secretary-manager');
+    } else { alert('Error: ' + (data.error || 'Unknown')); }
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+async function smSetupLiveKit(customerId) {
+  if (!confirm('Set up LiveKit SIP trunk and dispatch rule for customer #' + customerId + '?\n\nThis will create the telephony infrastructure for their AI secretary to receive calls.')) return;
+  try {
+    var res = await saFetch('/api/admin/superadmin/secretary-manager/setup-livekit/' + customerId, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    var data = await res.json();
+    if (data.success) {
+      alert('LiveKit telephony configured!\n\nTrunk ID: ' + data.trunk_id + '\nDispatch Rule: ' + data.dispatch_rule_id + '\n\nThe customer\'s AI secretary will now receive calls on their assigned number.');
+      smOpenDetail(customerId);
+    } else if (data.already_configured) {
+      alert('Already configured!\n\nTrunk: ' + data.trunk_id + '\nDispatch: ' + data.dispatch_rule_id);
+    } else {
+      alert('Error: ' + (data.error || 'Failed'));
+    }
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+async function smOnboardCustomer() {
+  var email = (document.getElementById('smo-email') || {}).value || '';
+  var password = (document.getElementById('smo-password') || {}).value || '';
+  var contactName = (document.getElementById('smo-name') || {}).value || '';
+  var businessName = (document.getElementById('smo-business') || {}).value || '';
+
+  if (!email || !password || !contactName) {
+    alert('Email, Password, and Contact Name are required.');
+    return;
+  }
+
+  // Gather directories
+  var directories = [];
+  for (var i = 0; i < 4; i++) {
+    var dn = (document.getElementById('smo-dir' + i + '-name') || {}).value || '';
+    var dp = (document.getElementById('smo-dir' + i + '-phone') || {}).value || '';
+    var dno = (document.getElementById('smo-dir' + i + '-notes') || {}).value || '';
+    if (dn.trim()) directories.push({ name: dn.trim(), phone_or_action: dp, special_notes: dno });
+  }
+
+  var payload = {
+    business_name: businessName,
+    contact_name: contactName,
+    email: email,
+    phone: (document.getElementById('smo-phone') || {}).value || '',
+    password: password,
+    agent_name: (document.getElementById('smo-agent-name') || {}).value || 'Sarah',
+    agent_voice: (document.getElementById('smo-voice') || {}).value || 'alloy',
+    greeting_script: (document.getElementById('smo-greeting') || {}).value || '',
+    common_qa: (document.getElementById('smo-qa') || {}).value || '',
+    general_notes: (document.getElementById('smo-notes') || {}).value || '',
+    secretary_mode: (document.getElementById('smo-mode') || {}).value || 'full',
+    assigned_phone_number: (document.getElementById('smo-agent-phone') || {}).value || '',
+    carrier_name: (document.getElementById('smo-carrier') || {}).value || '',
+    directories: directories
+  };
+
+  try {
+    var res = await saFetch('/api/admin/superadmin/secretary-manager/onboard', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    var data = await res.json();
+    if (data.success) {
+      var msg = 'Customer onboarded successfully!\n\n';
+      msg += 'Customer ID: ' + data.customer_id + '\n';
+      msg += 'Email/Login: ' + data.email + '\n\n';
+      msg += 'NEXT STEPS:\n';
+      msg += '1. Open their profile (click OK, then their row in the list)\n';
+      msg += '2. Click "Setup LiveKit" to create their SIP trunk\n';
+      msg += '3. Customer forwards their cell to the AI number\n';
+      alert(msg);
+      SA.smView = 'list';
+      loadView('secretary-manager');
+    } else {
+      alert('Error: ' + (data.error || 'Failed to create customer'));
+    }
+  } catch(e) {
+    alert('Error creating customer: ' + e.message);
+  }
 }
