@@ -17,6 +17,7 @@ import {
   generateArchitecturalDiagramSVG, generatePreciseAIOverlaySVG,
   generateSquaresGridDiagramSVG
 } from './svg-diagrams'
+import type { DetailedMaterialBOM } from './material-estimation-engine'
 
 export function generateProfessionalReportHTML(report: RoofReport): string {
   // ── Safe defaults ──
@@ -611,6 +612,8 @@ ${report.segments.length >= 2 ? `
 
 ${report.customer_price_per_bundle ? buildCustomerPricingHTML(report) : ''}
 
+${(report as any).material_bom ? buildMaterialBOMHTML((report as any).material_bom, reportNum, reportDate) : ''}
+
 ${report.vision_findings ? buildVisionFindingsHTML(report.vision_findings) : ''}
 
 </body>
@@ -1193,6 +1196,191 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
 }
 
 // ============================================================
+// MATERIAL BOM PAGE — Detailed Bill of Materials
+// Professional-grade material estimation with line items
+// ============================================================
+export function buildMaterialBOMHTML(bom: DetailedMaterialBOM, reportNum: string, reportDate: string): string {
+  if (!bom || !bom.line_items || bom.line_items.length === 0) return ''
+
+  const categoryColors: Record<string, string> = {
+    shingles: '#DC2626',
+    starter: '#EA580C',
+    ridge_cap: '#D97706',
+    drip_edge: '#059669',
+    ice_water: '#2563EB',
+    underlayment: '#7C3AED',
+    flashing: '#DB2777',
+    fasteners: '#64748B',
+    sealant: '#0891B2',
+    ventilation: '#16A34A',
+    accessory: '#78716C'
+  }
+
+  const categoryLabels: Record<string, string> = {
+    shingles: 'Shingles',
+    starter: 'Starter Strip',
+    ridge_cap: 'Ridge Cap',
+    drip_edge: 'Drip Edge',
+    ice_water: 'Ice & Water Barrier',
+    underlayment: 'Underlayment',
+    flashing: 'Flashing',
+    fasteners: 'Fasteners',
+    sealant: 'Sealant',
+    ventilation: 'Ventilation',
+    accessory: 'Accessories'
+  }
+
+  const itemRows = bom.line_items.map((item, idx) => {
+    const catColor = categoryColors[item.category] || '#64748B'
+    return `<tr style="border-bottom:1px solid #eee;${idx % 2 === 0 ? '' : 'background:#fafafa'}">
+      <td style="padding:4px 6px;font-size:8px">
+        <span style="display:inline-block;width:6px;height:6px;background:${catColor};border-radius:50%;margin-right:4px;vertical-align:middle"></span>
+        <span style="font-weight:600">${item.name}</span>
+      </td>
+      <td style="padding:4px 6px;font-size:7.5px;text-align:center">${item.quantity}</td>
+      <td style="padding:4px 6px;font-size:7.5px;text-align:center">${item.unit}</td>
+      <td style="padding:4px 6px;font-size:7.5px;text-align:right">$${item.unit_cost_cad.toFixed(2)}</td>
+      <td style="padding:4px 6px;font-size:7.5px;text-align:right;font-weight:700">$${item.total_cost_cad.toFixed(2)}</td>
+    </tr>`
+  }).join('')
+
+  return `
+<!-- ==================== MATERIAL BOM PAGE ==================== -->
+<div class="page" style="page-break-before:always">
+  <div class="page-content">
+  <!-- Top green accent bar -->
+  <div style="height:4px;background:linear-gradient(90deg,#059669,#10B981)"></div>
+
+  <!-- Header -->
+  <div style="padding:10px 28px 6px;display:flex;justify-content:space-between;align-items:center">
+    <div>
+      <div style="font-size:14px;font-weight:800;color:#222">
+        <span style="display:inline-block;width:24px;height:24px;background:#059669;color:white;text-align:center;line-height:24px;border-radius:4px;font-size:12px;margin-right:8px">&#9776;</span>
+        Material Bill of Quantities
+      </div>
+      <div style="font-size:9px;color:#555;margin-top:2px">Detailed BOM — ${bom.input.predominant_pitch} pitch · ${bom.input.waste_factor_pct}% waste factor · ${bom.input.complexity} complexity</div>
+    </div>
+    <div style="text-align:right">
+      <div style="font-size:9px;color:#888">${bom.project_address}</div>
+      <div style="font-size:8px;color:#aaa">Generated ${reportDate}</div>
+    </div>
+  </div>
+
+  <!-- Summary Cards -->
+  <div style="padding:0 28px;margin-bottom:8px">
+    <div style="display:flex;gap:6px">
+      <div style="flex:1;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:4px;padding:6px 10px;text-align:center">
+        <div style="font-size:6.5px;color:#059669;font-weight:700;text-transform:uppercase">Shingle Bundles</div>
+        <div style="font-size:16px;font-weight:900;color:#059669">${bom.totals.shingle_bundles}</div>
+      </div>
+      <div style="flex:1;background:#fff7ed;border:1px solid #fed7aa;border-radius:4px;padding:6px 10px;text-align:center">
+        <div style="font-size:6.5px;color:#EA580C;font-weight:700;text-transform:uppercase">Ridge Cap Bdl</div>
+        <div style="font-size:16px;font-weight:900;color:#EA580C">${bom.totals.ridge_cap_bundles}</div>
+      </div>
+      <div style="flex:1;background:#eff6ff;border:1px solid #bfdbfe;border-radius:4px;padding:6px 10px;text-align:center">
+        <div style="font-size:6.5px;color:#2563EB;font-weight:700;text-transform:uppercase">I&W Rolls</div>
+        <div style="font-size:16px;font-weight:900;color:#2563EB">${bom.totals.ice_water_barrier_rolls}</div>
+      </div>
+      <div style="flex:1;background:#f5f3ff;border:1px solid #c4b5fd;border-radius:4px;padding:6px 10px;text-align:center">
+        <div style="font-size:6.5px;color:#7C3AED;font-weight:700;text-transform:uppercase">Underlay Rolls</div>
+        <div style="font-size:16px;font-weight:900;color:#7C3AED">${bom.totals.underlayment_rolls}</div>
+      </div>
+      <div style="flex:1;background:#f0fdf4;border:1px solid #86efac;border-radius:4px;padding:6px 10px;text-align:center">
+        <div style="font-size:6.5px;color:#16A34A;font-weight:700;text-transform:uppercase">Drip Edge Pcs</div>
+        <div style="font-size:16px;font-weight:900;color:#16A34A">${bom.totals.drip_edge_total_pcs}</div>
+      </div>
+      <div style="flex:1;background:#f8fafc;border:1px solid #e2e8f0;border-radius:4px;padding:6px 10px;text-align:center">
+        <div style="font-size:6.5px;color:#64748B;font-weight:700;text-transform:uppercase">Nail Boxes</div>
+        <div style="font-size:16px;font-weight:900;color:#64748B">${bom.totals.roofing_nails_boxes}</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Material Line Items Table -->
+  <div style="padding:0 28px;margin-bottom:8px">
+    <table style="width:100%;border-collapse:collapse;font-size:8px">
+      <thead>
+        <tr style="background:#0f172a;color:#fff">
+          <th style="padding:5px 6px;text-align:left;font-size:7px;font-weight:700">Material</th>
+          <th style="padding:5px 6px;text-align:center;font-size:7px;font-weight:700;width:50px">Qty</th>
+          <th style="padding:5px 6px;text-align:center;font-size:7px;font-weight:700;width:90px">Unit</th>
+          <th style="padding:5px 6px;text-align:right;font-size:7px;font-weight:700;width:65px">Unit Cost</th>
+          <th style="padding:5px 6px;text-align:right;font-size:7px;font-weight:700;width:75px">Total (CAD)</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${itemRows}
+        <tr style="background:#f1f5f9;border-top:2px solid #0f172a;font-weight:800">
+          <td colspan="3" style="padding:5px 6px;font-size:9px;color:#0f172a">MATERIALS SUBTOTAL</td>
+          <td style="padding:5px 6px;text-align:right;font-size:7px;color:#64748b">before tax</td>
+          <td style="padding:5px 6px;text-align:right;font-size:9px;color:#0f172a">$${bom.cost_summary.materials_subtotal_cad.toFixed(2)}</td>
+        </tr>
+        <tr style="background:#f8fafc">
+          <td colspan="3" style="padding:4px 6px;font-size:8px;color:#64748b">GST (5%)</td>
+          <td></td>
+          <td style="padding:4px 6px;text-align:right;font-size:8px;color:#64748b">$${bom.cost_summary.tax_estimate_cad.toFixed(2)}</td>
+        </tr>
+        <tr style="background:linear-gradient(135deg,#059669,#10B981);color:white;font-weight:900">
+          <td colspan="3" style="padding:6px;font-size:10px">ESTIMATED MATERIAL TOTAL</td>
+          <td style="padding:6px;text-align:right;font-size:8px;opacity:0.8">$${bom.cost_summary.cost_per_square_cad.toFixed(2)}/sq</td>
+          <td style="padding:6px;text-align:right;font-size:11px">$${bom.cost_summary.materials_total_cad.toFixed(2)}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Input Measurements Summary (compact) -->
+  <div style="padding:0 28px;margin-bottom:6px">
+    <div style="display:flex;gap:8px">
+      <div style="flex:1;border:1px solid #e2e8f0;border-radius:4px;padding:6px 10px">
+        <div style="font-size:7px;font-weight:700;color:#059669;text-transform:uppercase;margin-bottom:4px">Measurement Inputs</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:2px;font-size:7.5px">
+          <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Net Roof Area</span><span style="font-weight:700">${bom.input.net_roof_area_sqft.toLocaleString()} SF</span></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Gross Area</span><span style="font-weight:700">${bom.input.gross_roof_area_sqft.toLocaleString()} SF</span></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Net Squares</span><span style="font-weight:700">${bom.input.net_squares}</span></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Gross Squares</span><span style="font-weight:700">${bom.input.gross_squares}</span></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Eave</span><span style="font-weight:700">${bom.input.total_eave_lf} LF</span></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Ridge</span><span style="font-weight:700">${bom.input.total_ridge_lf} LF</span></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Hip</span><span style="font-weight:700">${bom.input.total_hip_lf} LF</span></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Valley</span><span style="font-weight:700">${bom.input.total_valley_lf} LF</span></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Rake</span><span style="font-weight:700">${bom.input.total_rake_lf} LF</span></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Perimeter</span><span style="font-weight:700">${bom.input.total_perimeter_lf} LF</span></div>
+        </div>
+      </div>
+      <div style="flex:1;border:1px solid #e2e8f0;border-radius:4px;padding:6px 10px">
+        <div style="font-size:7px;font-weight:700;color:#059669;text-transform:uppercase;margin-bottom:4px">Key Quantities</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:2px;font-size:7.5px">
+          <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Starter Strip</span><span style="font-weight:700">${bom.totals.starter_strip_lf} LF</span></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Ridge Cap</span><span style="font-weight:700">${bom.totals.ridge_cap_lf} LF</span></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:#64748b">I&W Shield</span><span style="font-weight:700">${bom.totals.ice_water_barrier_sqft} SF</span></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Valley Flash</span><span style="font-weight:700">${bom.totals.valley_flashing_lf} LF</span></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Nails</span><span style="font-weight:700">${bom.totals.roofing_nails_lbs} lbs</span></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Caulk</span><span style="font-weight:700">${bom.totals.caulk_tubes} tubes</span></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Pipe Boots</span><span style="font-weight:700">${bom.totals.pipe_boot_collars} pcs</span></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:#64748b">Drip Edge</span><span style="font-weight:700">${bom.totals.drip_edge_total_pcs} pcs</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Disclaimer -->
+  <div style="padding:0 28px">
+    <div style="padding:5px 10px;background:#fffbeb;border:1px solid #fde68a;border-radius:3px;font-size:6.5px;color:#92400e;line-height:1.4">
+      <strong>BOM DISCLAIMER:</strong> Material quantities are estimates based on AI-measured roof dimensions. Actual requirements may vary based on: shingle type (3-tab vs. architectural vs. designer), local building code requirements, existing roof conditions, penetrations, and installation methods. Pricing reflects average Canadian retail — confirm with your local supplier. A 10-15% waste factor is included. This estimate does not include labour costs, tear-off/disposal, or permit fees.
+    </div>
+  </div>
+
+  </div><!-- end page-content -->
+
+  <!-- Footer bar -->
+  <div class="page-footer" style="background:linear-gradient(90deg,#059669,#10B981)">
+    <span style="color:#fff;font-size:9px;font-weight:700">Roof Reporter AI</span>
+    <span style="color:#a7f3d0;font-size:7.5px">roofreporterai.com &bull; Report: ${reportNum} &bull; ${reportDate} &bull; Material BOM</span>
+  </div>
+</div>`
+}
+
+// ============================================================
 // Customer Pricing Estimate — Page Section
 // Shows cost estimate based on customer-provided price per bundle
 // ============================================================
@@ -1296,5 +1484,56 @@ function buildCustomerPricingHTML(report: RoofReport): string {
   <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:14px 16px;font-size:9px;color:#92400e;line-height:1.6">
     <strong style="font-size:10px">ESTIMATE DISCLAIMER:</strong> This cost estimate is based on the client-provided rate of $${pricePerBundle}/square and AI-measured roof area with 15% waste factor. Actual costs may vary depending on: roof complexity, existing material removal, structural repairs, flashing details, code requirements, and regional pricing. This estimate does not include additional materials (underlayment, flashing, vents, etc.). A professional on-site assessment is recommended for a final quote.
   </div>
+
+  <!-- Interactive Cost Calculator (client-side, no reload) -->
+  <div style="margin-top:24px;background:#f8fafc;border-radius:12px;border:1px solid #e2e8f0;padding:24px;page-break-inside:avoid">
+    <div style="font-size:14px;font-weight:800;color:#334155;margin-bottom:16px">
+      <span style="display:inline-block;width:22px;height:22px;background:#059669;color:white;text-align:center;line-height:22px;border-radius:4px;font-size:12px;margin-right:8px">&#9783;</span>
+      Interactive Cost Calculator
+    </div>
+    <div style="display:flex;gap:20px;flex-wrap:wrap">
+      <div style="flex:1;min-width:220px">
+        <label style="display:block;font-size:10px;font-weight:700;color:#64748b;margin-bottom:4px">Waste Factor (%)</label>
+        <input type="range" id="calc-waste" min="5" max="25" value="15" step="1" style="width:100%;accent-color:#059669" oninput="updateCalc()">
+        <div style="display:flex;justify-content:space-between;font-size:9px;color:#94a3b8;margin-top:2px"><span>5%</span><span id="calc-waste-val" style="color:#059669;font-weight:800">15%</span><span>25%</span></div>
+      </div>
+      <div style="flex:1;min-width:220px">
+        <label style="display:block;font-size:10px;font-weight:700;color:#64748b;margin-bottom:4px">Price Per Square ($CAD)</label>
+        <input type="range" id="calc-price" min="150" max="600" value="${pricePerBundle}" step="10" style="width:100%;accent-color:#4338ca" oninput="updateCalc()">
+        <div style="display:flex;justify-content:space-between;font-size:9px;color:#94a3b8;margin-top:2px"><span>$150</span><span id="calc-price-val" style="color:#4338ca;font-weight:800">$${pricePerBundle}</span><span>$600</span></div>
+      </div>
+    </div>
+    <div style="display:flex;gap:12px;margin-top:16px;flex-wrap:wrap">
+      <div style="flex:1;min-width:120px;background:#ecfdf5;border-radius:8px;padding:12px;text-align:center;border:1px solid #a7f3d0">
+        <div style="font-size:8px;color:#059669;font-weight:700;text-transform:uppercase">Gross Squares</div>
+        <div id="calc-squares" style="font-size:22px;font-weight:900;color:#059669">${grossSquares}</div>
+      </div>
+      <div style="flex:1;min-width:120px;background:#eff6ff;border-radius:8px;padding:12px;text-align:center;border:1px solid #bfdbfe">
+        <div style="font-size:8px;color:#2563EB;font-weight:700;text-transform:uppercase">Gross Area (SF)</div>
+        <div id="calc-area" style="font-size:22px;font-weight:900;color:#2563EB">${Math.round(trueArea * 1.15).toLocaleString()}</div>
+      </div>
+      <div style="flex:2;min-width:180px;background:linear-gradient(135deg,#1e3a5f,#0f172a);border-radius:8px;padding:12px;text-align:center;color:white">
+        <div style="font-size:8px;font-weight:700;text-transform:uppercase;opacity:0.7">Estimated Total Cost</div>
+        <div id="calc-total" style="font-size:28px;font-weight:900;color:#fbbf24">$${totalCost.toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+        <div style="font-size:9px;opacity:0.5">CAD</div>
+      </div>
+    </div>
+    <div style="text-align:center;margin-top:8px;font-size:8px;color:#94a3b8">Drag sliders to adjust waste factor and pricing — calculations update in real time</div>
+  </div>
+  <script>
+    const BASE_AREA = ${trueArea};
+    function updateCalc() {
+      const w = parseInt(document.getElementById('calc-waste').value);
+      const p = parseInt(document.getElementById('calc-price').value);
+      const gross = BASE_AREA * (1 + w / 100);
+      const sq = Math.ceil(gross / 100 * 10) / 10;
+      const total = sq * p;
+      document.getElementById('calc-waste-val').textContent = w + '%';
+      document.getElementById('calc-price-val').textContent = '$' + p;
+      document.getElementById('calc-squares').textContent = sq.toFixed(1);
+      document.getElementById('calc-area').textContent = Math.round(gross).toLocaleString();
+      document.getElementById('calc-total').textContent = '$' + total.toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+  </script>
 </div>`
 }
