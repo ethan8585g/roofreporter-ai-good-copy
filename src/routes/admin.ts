@@ -1762,6 +1762,488 @@ adminRoutes.post('/superadmin/telephony-sip-test', async (c) => {
 })
 
 // ============================================================
+// LIVEKIT CLOUD AGENT MANAGEMENT — Deploy, monitor, manage agents
+// Full Super Admin panel for LiveKit agent operations:
+//   - List all deployed agents (Cloud + local workers)
+//   - View agent health, CPU, memory, replicas
+//   - List/create/delete SIP trunks and dispatch rules
+//   - List active rooms and participants
+//   - View all secretary configs across customers
+//   - One-click agent diagnostics
+// ============================================================
+
+// Helper: LiveKit JWT generator for admin operations
+function lkBase64urlEncode(data: Uint8Array | string): string {
+  let str: string
+  if (typeof data === 'string') { str = btoa(data) }
+  else { let b = ''; for (let i = 0; i < data.length; i++) b += String.fromCharCode(data[i]); str = btoa(b) }
+  return str.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
+async function livekitAdminAPI(apiKey: string, apiSecret: string, livekitUrl: string, method: string, path: string, body?: any) {
+  const now = Math.floor(Date.now() / 1000)
+  const header = { alg: 'HS256', typ: 'JWT' }
+  const payload: any = {
+    iss: apiKey, sub: 'server', iat: now, exp: now + 300, nbf: now,
+    video: { roomCreate: true, roomList: true, roomAdmin: true },
+    sip: { admin: true, call: true }
+  }
+  const hB64 = lkBase64urlEncode(JSON.stringify(header))
+  const pB64 = lkBase64urlEncode(JSON.stringify(payload))
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(apiSecret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
+  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(`${hB64}.${pB64}`))
+  const jwt = `${hB64}.${pB64}.${lkBase64urlEncode(new Uint8Array(sig))}`
+  const httpUrl = livekitUrl.replace('wss://', 'https://').replace(/\/$/, '')
+  const resp = await fetch(`${httpUrl}${path}`, {
+    method, headers: { 'Authorization': `Bearer ${jwt}`, 'Content-Type': 'application/json' },
+    body: body ? JSON.stringify(body) : undefined,
+  })
+  const text = await resp.text()
+  try { return JSON.parse(text) } catch { return { raw: text, status: resp.status } }
+}
+
+// Helper: LiveKit Cloud Management API (agents.livekit.cloud)
+async function livekitCloudAPI(apiKey: string, apiSecret: string, method: string, path: string, body?: any) {
+  const now = Math.floor(Date.now() / 1000)
+  const header = { alg: 'HS256', typ: 'JWT' }
+  const payload: any = { iss: apiKey, sub: 'server', iat: now, exp: now + 300, nbf: now, video: { roomAdmin: true }, sip: { admin: true } }
+  const hB64 = lkBase64urlEncode(JSON.stringify(header))
+  const pB64 = lkBase64urlEncode(JSON.stringify(payload))
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(apiSecret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
+  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(`${hB64}.${pB64}`))
+  const jwt = `${hB64}.${pB64}.${lkBase64urlEncode(new Uint8Array(sig))}`
+  const resp = await fetch(`https://agents.livekit.cloud${path}`, {
+    method, headers: { 'Authorization': `Bearer ${jwt}`, 'Content-Type': 'application/json' },
+    body: body ? JSON.stringify(body) : undefined,
+  })
+  const text = await resp.text()
+  try { return JSON.parse(text) } catch { return { raw: text, status: resp.status } }
+}
+
+// ── GET /superadmin/livekit/overview — Complete LiveKit system overview ──
+adminRoutes.get('/superadmin/livekit/overview', async (c) => {
+  const apiKey = (c.env as any).LIVEKIT_API_KEY || ''
+  const apiSecret = (c.env as any).LIVEKIT_API_SECRET || ''
+  const livekitUrl = (c.env as any).LIVEKIT_URL || ''
+  const livekitSipUri = (c.env as any).LIVEKIT_SIP_URI || ''
+
+  if (!apiKey || !apiSecret || !livekitUrl) {
+    return c.json({ configured: false, error: 'LiveKit credentials not configured. Set LIVEKIT_API_KEY, LIVEKIT_API_SECRET, LIVEKIT_URL as Cloudflare secrets.' })
+  }
+
+  try {
+    // Parallel fetch: rooms, inbound trunks, outbound trunks, dispatch rules, phone numbers
+    const [rooms, inbound, outbound, rules, phones] = await Promise.all([
+      livekitAdminAPI(apiKey, apiSecret, livekitUrl, 'POST', '/twirp/livekit.RoomService/ListRooms', {}).catch(() => ({ items: [] })),
+      livekitAdminAPI(apiKey, apiSecret, livekitUrl, 'POST', '/twirp/livekit.SIP/ListSIPInboundTrunk', {}).catch(() => ({ items: [] })),
+      livekitAdminAPI(apiKey, apiSecret, livekitUrl, 'POST', '/twirp/livekit.SIP/ListSIPOutboundTrunk', {}).catch(() => ({ items: [] })),
+      livekitAdminAPI(apiKey, apiSecret, livekitUrl, 'POST', '/twirp/livekit.SIP/ListSIPDispatchRule', {}).catch(() => ({ items: [] })),
+      livekitAdminAPI(apiKey, apiSecret, livekitUrl, 'POST', '/twirp/livekit.PhoneNumberService/ListPhoneNumbers', {}).catch(() => ({ items: [] })),
+    ])
+
+    // Try to get cloud agents
+    let cloudAgents: any = { items: [] }
+    try {
+      cloudAgents = await livekitCloudAPI(apiKey, apiSecret, 'POST', '/twirp/livekit.CloudAgent/ListAgents', { project_id: '' })
+    } catch { /* Cloud API may not be available */ }
+
+    // Count active secretary configs from DB
+    const [activeConfigs, totalSubs, totalCalls] = await Promise.all([
+      c.env.DB.prepare("SELECT COUNT(*) as cnt FROM secretary_config WHERE is_active = 1").first<any>(),
+      c.env.DB.prepare("SELECT COUNT(*) as cnt FROM secretary_subscriptions WHERE status = 'active'").first<any>(),
+      c.env.DB.prepare("SELECT COUNT(*) as cnt FROM secretary_call_logs").first<any>(),
+    ])
+
+    return c.json({
+      configured: true,
+      livekit_url: livekitUrl,
+      livekit_sip_uri: livekitSipUri,
+      api_key_preview: apiKey.slice(0, 6) + '...' + apiKey.slice(-4),
+      active_rooms: (rooms?.rooms || rooms?.items || []).length,
+      rooms: (rooms?.rooms || rooms?.items || []).map((r: any) => ({
+        name: r.name, sid: r.sid, num_participants: r.num_participants || 0,
+        creation_time: r.creation_time, metadata: r.metadata,
+      })),
+      inbound_trunks: (inbound?.items || []).map((t: any) => ({
+        id: t.sip_trunk_id || t.trunk?.sip_trunk_id,
+        name: t.name || t.trunk?.name,
+        numbers: t.numbers || t.trunk?.numbers || [],
+        krisp: t.krisp_enabled ?? t.trunk?.krisp_enabled,
+        metadata: t.metadata || t.trunk?.metadata || '',
+      })),
+      outbound_trunks: (outbound?.items || []).map((t: any) => ({
+        id: t.sip_trunk_id || t.trunk?.sip_trunk_id,
+        name: t.name || t.trunk?.name,
+        numbers: t.numbers || t.trunk?.numbers || [],
+        address: t.address || t.trunk?.address || '',
+      })),
+      dispatch_rules: (rules?.items || []).map((r: any) => ({
+        id: r.sip_dispatch_rule_id,
+        name: r.name,
+        trunk_ids: r.trunk_ids || [],
+        rule_type: r.rule?.dispatchRuleIndividual ? 'individual' : r.rule?.dispatchRuleDirect ? 'direct' : 'callee',
+        room_prefix: r.rule?.dispatchRuleIndividual?.roomPrefix || r.rule?.dispatchRuleCallee?.roomPrefix || '',
+        room_name: r.rule?.dispatchRuleDirect?.roomName || '',
+        metadata: r.metadata || '',
+      })),
+      phone_numbers: (phones?.items || []).map((p: any) => ({
+        number: p.phone_number || p.e164_format,
+        name: p.name || p.friendly_name || '',
+        trunk_id: p.sip_trunk_id || '',
+        dispatch_rule_id: p.sip_dispatch_rule_id || '',
+      })),
+      cloud_agents: (cloudAgents?.items || cloudAgents?.agents || []),
+      stats: {
+        active_secretaries: activeConfigs?.cnt || 0,
+        active_subscriptions: totalSubs?.cnt || 0,
+        total_calls_handled: totalCalls?.cnt || 0,
+        inbound_trunk_count: (inbound?.items || []).length,
+        outbound_trunk_count: (outbound?.items || []).length,
+        dispatch_rule_count: (rules?.items || []).length,
+        phone_number_count: (phones?.items || []).length,
+      },
+    })
+  } catch (err: any) {
+    return c.json({ configured: true, error: err.message, livekit_url: livekitUrl })
+  }
+})
+
+// ── GET /superadmin/livekit/agents — List all Cloud-deployed agents with health ──
+adminRoutes.get('/superadmin/livekit/agents', async (c) => {
+  const apiKey = (c.env as any).LIVEKIT_API_KEY || ''
+  const apiSecret = (c.env as any).LIVEKIT_API_SECRET || ''
+  if (!apiKey || !apiSecret) return c.json({ error: 'LiveKit not configured' }, 500)
+
+  try {
+    const agents = await livekitCloudAPI(apiKey, apiSecret, 'POST', '/twirp/livekit.CloudAgent/ListAgents', {})
+    return c.json({ agents: agents?.items || agents?.agents || [], raw: agents })
+  } catch (err: any) {
+    return c.json({ error: err.message, agents: [] })
+  }
+})
+
+// ── POST /superadmin/livekit/agent/delete — Delete a Cloud agent ──
+adminRoutes.post('/superadmin/livekit/agent/delete', async (c) => {
+  const apiKey = (c.env as any).LIVEKIT_API_KEY || ''
+  const apiSecret = (c.env as any).LIVEKIT_API_SECRET || ''
+  if (!apiKey || !apiSecret) return c.json({ error: 'LiveKit not configured' }, 500)
+
+  const { agent_id } = await c.req.json()
+  if (!agent_id) return c.json({ error: 'agent_id required' }, 400)
+
+  try {
+    const result = await livekitCloudAPI(apiKey, apiSecret, 'POST', '/twirp/livekit.CloudAgent/DeleteAgent', { agent_id })
+    return c.json({ success: true, result, message: `Agent ${agent_id} deletion requested. Note: Builder agents can only be deleted from the LiveKit Cloud dashboard.` })
+  } catch (err: any) {
+    return c.json({ error: err.message })
+  }
+})
+
+// ── GET /superadmin/livekit/rooms — List active rooms with participants ──
+adminRoutes.get('/superadmin/livekit/rooms', async (c) => {
+  const apiKey = (c.env as any).LIVEKIT_API_KEY || ''
+  const apiSecret = (c.env as any).LIVEKIT_API_SECRET || ''
+  const livekitUrl = (c.env as any).LIVEKIT_URL || ''
+  if (!apiKey || !apiSecret || !livekitUrl) return c.json({ error: 'LiveKit not configured' }, 500)
+
+  try {
+    const rooms = await livekitAdminAPI(apiKey, apiSecret, livekitUrl, 'POST', '/twirp/livekit.RoomService/ListRooms', {})
+    const roomList = rooms?.rooms || rooms?.items || []
+
+    // Get participants for each room
+    const enriched = await Promise.all(roomList.map(async (r: any) => {
+      try {
+        const parts = await livekitAdminAPI(apiKey, apiSecret, livekitUrl, 'POST', '/twirp/livekit.RoomService/ListParticipants', { room: r.name })
+        return { ...r, participants: parts?.participants || [] }
+      } catch { return { ...r, participants: [] } }
+    }))
+
+    return c.json({ rooms: enriched })
+  } catch (err: any) {
+    return c.json({ error: err.message, rooms: [] })
+  }
+})
+
+// ── POST /superadmin/livekit/room/delete — Delete a room ──
+adminRoutes.post('/superadmin/livekit/room/delete', async (c) => {
+  const apiKey = (c.env as any).LIVEKIT_API_KEY || ''
+  const apiSecret = (c.env as any).LIVEKIT_API_SECRET || ''
+  const livekitUrl = (c.env as any).LIVEKIT_URL || ''
+  if (!apiKey || !apiSecret || !livekitUrl) return c.json({ error: 'LiveKit not configured' }, 500)
+
+  const { room_name } = await c.req.json()
+  if (!room_name) return c.json({ error: 'room_name required' }, 400)
+
+  try {
+    await livekitAdminAPI(apiKey, apiSecret, livekitUrl, 'POST', '/twirp/livekit.RoomService/DeleteRoom', { room: room_name })
+    return c.json({ success: true, message: `Room ${room_name} deleted` })
+  } catch (err: any) {
+    return c.json({ error: err.message })
+  }
+})
+
+// ── POST /superadmin/livekit/trunk/create — Create SIP trunk (inbound or outbound) ──
+adminRoutes.post('/superadmin/livekit/trunk/create', async (c) => {
+  const apiKey = (c.env as any).LIVEKIT_API_KEY || ''
+  const apiSecret = (c.env as any).LIVEKIT_API_SECRET || ''
+  const livekitUrl = (c.env as any).LIVEKIT_URL || ''
+  if (!apiKey || !apiSecret || !livekitUrl) return c.json({ error: 'LiveKit not configured' }, 500)
+
+  const body = await c.req.json()
+  const { type = 'inbound', name, phone_number, krisp_enabled = true, allowed_addresses, address, auth_username, auth_password } = body
+  if (!phone_number) return c.json({ error: 'phone_number required' }, 400)
+
+  try {
+    let result: any
+    if (type === 'outbound') {
+      const trunk: any = { name: name || 'Outbound', numbers: [phone_number], transport: 0, media_encryption: 0 }
+      if (address) trunk.address = address
+      if (auth_username) trunk.auth_username = auth_username
+      if (auth_password) trunk.auth_password = auth_password
+      result = await livekitAdminAPI(apiKey, apiSecret, livekitUrl, 'POST', '/twirp/livekit.SIP/CreateSIPOutboundTrunk', { trunk })
+    } else {
+      const trunk: any = { name: name || 'Inbound', numbers: [phone_number], krisp_enabled, media_encryption: 0 }
+      if (allowed_addresses) trunk.allowed_addresses = allowed_addresses
+      result = await livekitAdminAPI(apiKey, apiSecret, livekitUrl, 'POST', '/twirp/livekit.SIP/CreateSIPInboundTrunk', { trunk })
+    }
+    const trunkId = result?.sip_trunk_id || result?.trunk?.sip_trunk_id || ''
+    return c.json({ success: true, trunk_id: trunkId, result })
+  } catch (err: any) {
+    return c.json({ error: err.message })
+  }
+})
+
+// ── POST /superadmin/livekit/trunk/delete — Delete SIP trunk ──
+adminRoutes.post('/superadmin/livekit/trunk/delete', async (c) => {
+  const apiKey = (c.env as any).LIVEKIT_API_KEY || ''
+  const apiSecret = (c.env as any).LIVEKIT_API_SECRET || ''
+  const livekitUrl = (c.env as any).LIVEKIT_URL || ''
+  if (!apiKey || !apiSecret || !livekitUrl) return c.json({ error: 'LiveKit not configured' }, 500)
+
+  const { trunk_id } = await c.req.json()
+  if (!trunk_id) return c.json({ error: 'trunk_id required' }, 400)
+
+  try {
+    await livekitAdminAPI(apiKey, apiSecret, livekitUrl, 'POST', '/twirp/livekit.SIP/DeleteSIPTrunk', { sip_trunk_id: trunk_id })
+    return c.json({ success: true, message: `Trunk ${trunk_id} deleted` })
+  } catch (err: any) {
+    return c.json({ error: err.message })
+  }
+})
+
+// ── POST /superadmin/livekit/dispatch/create — Create dispatch rule ──
+adminRoutes.post('/superadmin/livekit/dispatch/create', async (c) => {
+  const apiKey = (c.env as any).LIVEKIT_API_KEY || ''
+  const apiSecret = (c.env as any).LIVEKIT_API_SECRET || ''
+  const livekitUrl = (c.env as any).LIVEKIT_URL || ''
+  if (!apiKey || !apiSecret || !livekitUrl) return c.json({ error: 'LiveKit not configured' }, 500)
+
+  const body = await c.req.json()
+  const { name, trunk_ids = [], rule_type = 'individual', room_prefix = 'secretary-', room_name, metadata = '' } = body
+
+  let ruleObj: any = {}
+  if (rule_type === 'individual') ruleObj = { dispatchRuleIndividual: { roomPrefix: room_prefix } }
+  else if (rule_type === 'direct') ruleObj = { dispatchRuleDirect: { roomName: room_name || '' } }
+  else ruleObj = { dispatchRuleCallee: { roomPrefix: room_prefix } }
+
+  try {
+    const result = await livekitAdminAPI(apiKey, apiSecret, livekitUrl, 'POST', '/twirp/livekit.SIP/CreateSIPDispatchRule', {
+      rule: ruleObj, name: name || 'dispatch-rule', trunk_ids, metadata,
+    })
+    return c.json({ success: true, dispatch_rule_id: result?.sip_dispatch_rule_id, result })
+  } catch (err: any) {
+    return c.json({ error: err.message })
+  }
+})
+
+// ── POST /superadmin/livekit/dispatch/delete — Delete dispatch rule ──
+adminRoutes.post('/superadmin/livekit/dispatch/delete', async (c) => {
+  const apiKey = (c.env as any).LIVEKIT_API_KEY || ''
+  const apiSecret = (c.env as any).LIVEKIT_API_SECRET || ''
+  const livekitUrl = (c.env as any).LIVEKIT_URL || ''
+  if (!apiKey || !apiSecret || !livekitUrl) return c.json({ error: 'LiveKit not configured' }, 500)
+
+  const { dispatch_rule_id } = await c.req.json()
+  if (!dispatch_rule_id) return c.json({ error: 'dispatch_rule_id required' }, 400)
+
+  try {
+    await livekitAdminAPI(apiKey, apiSecret, livekitUrl, 'POST', '/twirp/livekit.SIP/DeleteSIPDispatchRule', { sip_dispatch_rule_id: dispatch_rule_id })
+    return c.json({ success: true, message: `Dispatch rule ${dispatch_rule_id} deleted` })
+  } catch (err: any) {
+    return c.json({ error: err.message })
+  }
+})
+
+// ── GET /superadmin/livekit/secretary-configs — All secretary configs across customers ──
+adminRoutes.get('/superadmin/livekit/secretary-configs', async (c) => {
+  try {
+    const configs = await c.env.DB.prepare(`
+      SELECT sc.*, c.email, c.name as customer_name,
+        (SELECT COUNT(*) FROM secretary_call_logs cl WHERE cl.customer_id = sc.customer_id) as total_calls,
+        (SELECT COUNT(*) FROM secretary_call_logs cl WHERE cl.customer_id = sc.customer_id AND cl.created_at >= datetime('now', '-7 days')) as calls_7d,
+        ss.status as subscription_status
+      FROM secretary_config sc
+      LEFT JOIN customers c ON c.id = sc.customer_id
+      LEFT JOIN secretary_subscriptions ss ON ss.customer_id = sc.customer_id AND ss.status = 'active'
+      ORDER BY sc.is_active DESC, sc.updated_at DESC
+    `).all<any>()
+
+    return c.json({ configs: configs.results || [] })
+  } catch (err: any) {
+    return c.json({ error: err.message, configs: [] })
+  }
+})
+
+// ── POST /superadmin/livekit/test-call — Create a test room to verify agent responds ──
+adminRoutes.post('/superadmin/livekit/test-call', async (c) => {
+  const apiKey = (c.env as any).LIVEKIT_API_KEY || ''
+  const apiSecret = (c.env as any).LIVEKIT_API_SECRET || ''
+  const livekitUrl = (c.env as any).LIVEKIT_URL || ''
+  if (!apiKey || !apiSecret || !livekitUrl) return c.json({ error: 'LiveKit not configured' }, 500)
+
+  const { room_prefix = 'secretary-2-', customer_id } = await c.req.json()
+  const roomName = `${room_prefix}test-${Date.now()}`
+
+  try {
+    // Create room
+    const room = await livekitAdminAPI(apiKey, apiSecret, livekitUrl, 'POST', '/twirp/livekit.RoomService/CreateRoom', {
+      name: roomName, empty_timeout: 30, max_participants: 5,
+      metadata: JSON.stringify({ customer_id: customer_id || 2, test: true }),
+    })
+
+    // Create dispatch for agent
+    const dispatch = await livekitAdminAPI(apiKey, apiSecret, livekitUrl, 'POST', '/twirp/livekit.AgentDispatchService/CreateDispatch', {
+      room: roomName, agent_name: '', metadata: JSON.stringify({ customer_id: customer_id || 2 }),
+    })
+
+    return c.json({
+      success: true,
+      room_name: roomName, room_sid: room?.sid || room?.room?.sid || '',
+      dispatch_id: dispatch?.dispatch_id || dispatch?.agent_dispatch_id || '',
+      message: `Test room "${roomName}" created with agent dispatch. Check if agent joins within 10 seconds.`,
+      check_url: `/api/admin/superadmin/livekit/rooms`,
+    })
+  } catch (err: any) {
+    return c.json({ error: err.message })
+  }
+})
+
+// ── POST /superadmin/livekit/cleanup-test — Delete test room ──
+adminRoutes.post('/superadmin/livekit/cleanup-test', async (c) => {
+  const apiKey = (c.env as any).LIVEKIT_API_KEY || ''
+  const apiSecret = (c.env as any).LIVEKIT_API_SECRET || ''
+  const livekitUrl = (c.env as any).LIVEKIT_URL || ''
+  if (!apiKey || !apiSecret || !livekitUrl) return c.json({ error: 'LiveKit not configured' }, 500)
+
+  const { room_name } = await c.req.json()
+  if (!room_name) return c.json({ error: 'room_name required' }, 400)
+
+  try {
+    await livekitAdminAPI(apiKey, apiSecret, livekitUrl, 'POST', '/twirp/livekit.RoomService/DeleteRoom', { room: room_name })
+    return c.json({ success: true })
+  } catch (err: any) {
+    return c.json({ error: err.message })
+  }
+})
+
+// ── POST /superadmin/livekit/secretary-config/toggle — Toggle a customer's secretary on/off ──
+adminRoutes.post('/superadmin/livekit/secretary-config/toggle', async (c) => {
+  const { customer_id } = await c.req.json()
+  if (!customer_id) return c.json({ error: 'customer_id required' }, 400)
+  try {
+    const config = await c.env.DB.prepare('SELECT id, is_active FROM secretary_config WHERE customer_id = ?').bind(customer_id).first<any>()
+    if (!config) return c.json({ error: 'No secretary config for this customer' }, 404)
+    const newState = config.is_active === 1 ? 0 : 1
+    await c.env.DB.prepare("UPDATE secretary_config SET is_active = ?, updated_at = datetime('now') WHERE customer_id = ?").bind(newState, customer_id).run()
+    return c.json({ success: true, is_active: newState === 1, customer_id })
+  } catch (err: any) { return c.json({ error: err.message }, 500) }
+})
+
+// ── PUT /superadmin/livekit/secretary-config/:customerId — Edit a customer's secretary config ──
+adminRoutes.put('/superadmin/livekit/secretary-config/:customerId', async (c) => {
+  const customerId = parseInt(c.req.param('customerId'))
+  const body = await c.req.json()
+  try {
+    const config = await c.env.DB.prepare('SELECT id FROM secretary_config WHERE customer_id = ?').bind(customerId).first<any>()
+    if (!config) return c.json({ error: 'No secretary config for this customer' }, 404)
+    const fields: string[] = []
+    const vals: any[] = []
+    const allowed = ['business_phone', 'greeting_script', 'common_qa', 'general_notes', 'secretary_mode', 'agent_name', 'agent_voice', 'assigned_phone_number', 'connection_status', 'carrier_name', 'forwarding_method']
+    for (const key of allowed) {
+      if (body[key] !== undefined) { fields.push(`${key} = ?`); vals.push(body[key]) }
+    }
+    if (fields.length === 0) return c.json({ error: 'No valid fields to update' }, 400)
+    fields.push("updated_at = datetime('now')")
+    vals.push(customerId)
+    await c.env.DB.prepare(`UPDATE secretary_config SET ${fields.join(', ')} WHERE customer_id = ?`).bind(...vals).run()
+    return c.json({ success: true, message: `Secretary config updated for customer ${customerId}` })
+  } catch (err: any) { return c.json({ error: err.message }, 500) }
+})
+
+// ── POST /superadmin/livekit/secretary-config/bulk-toggle — Activate or deactivate ALL secretaries ──
+adminRoutes.post('/superadmin/livekit/secretary-config/bulk-toggle', async (c) => {
+  const { activate } = await c.req.json()
+  try {
+    const result = await c.env.DB.prepare("UPDATE secretary_config SET is_active = ?, updated_at = datetime('now')").bind(activate ? 1 : 0).run()
+    return c.json({ success: true, message: `All secretaries ${activate ? 'activated' : 'deactivated'}`, rows_changed: result.meta?.changes || 0 })
+  } catch (err: any) { return c.json({ error: err.message }, 500) }
+})
+
+// ── GET /superadmin/livekit/phone-pool — View full phone pool with assignment info ──
+adminRoutes.get('/superadmin/livekit/phone-pool', async (c) => {
+  try {
+    const pool = await c.env.DB.prepare(`
+      SELECT sp.*, c.email as assigned_email, c.name as assigned_name
+      FROM secretary_phone_pool sp
+      LEFT JOIN customers c ON c.id = sp.assigned_to_customer_id
+      ORDER BY sp.status, sp.created_at DESC
+    `).all<any>()
+    const stats = await c.env.DB.prepare(`
+      SELECT status, COUNT(*) as count FROM secretary_phone_pool GROUP BY status
+    `).all<any>()
+    return c.json({ numbers: pool.results || [], stats: stats.results || [] })
+  } catch (err: any) { return c.json({ error: err.message, numbers: [], stats: [] }) }
+})
+
+// ── POST /superadmin/livekit/phone-pool/add — Add a number to the pool ──
+adminRoutes.post('/superadmin/livekit/phone-pool/add', async (c) => {
+  const { phone_number, phone_sid, region } = await c.req.json()
+  if (!phone_number) return c.json({ error: 'phone_number required' }, 400)
+  try {
+    await c.env.DB.prepare(
+      "INSERT OR IGNORE INTO secretary_phone_pool (phone_number, phone_sid, region, status) VALUES (?, ?, ?, 'available')"
+    ).bind(phone_number, phone_sid || '', region || 'AB').run()
+    return c.json({ success: true, message: `${phone_number} added to pool` })
+  } catch (err: any) { return c.json({ error: err.message }, 500) }
+})
+
+// ── POST /superadmin/livekit/phone-pool/release — Release a number back to the pool ──
+adminRoutes.post('/superadmin/livekit/phone-pool/release', async (c) => {
+  const { phone_number } = await c.req.json()
+  if (!phone_number) return c.json({ error: 'phone_number required' }, 400)
+  try {
+    // Clear from customer config
+    await c.env.DB.prepare(
+      "UPDATE secretary_config SET assigned_phone_number = '', connection_status = 'not_connected', updated_at = datetime('now') WHERE assigned_phone_number = ?"
+    ).bind(phone_number).run()
+    // Release in pool
+    await c.env.DB.prepare(
+      "UPDATE secretary_phone_pool SET status = 'available', assigned_to_customer_id = NULL, assigned_at = NULL, updated_at = datetime('now') WHERE phone_number = ?"
+    ).bind(phone_number).run()
+    return c.json({ success: true, message: `${phone_number} released back to pool` })
+  } catch (err: any) { return c.json({ error: err.message }, 500) }
+})
+
+// ── DELETE /superadmin/livekit/phone-pool/:number — Remove a number from pool entirely ──
+adminRoutes.delete('/superadmin/livekit/phone-pool/:number', async (c) => {
+  const number = decodeURIComponent(c.req.param('number'))
+  try {
+    await c.env.DB.prepare('DELETE FROM secretary_phone_pool WHERE phone_number = ?').bind(number).run()
+    return c.json({ success: true })
+  } catch (err: any) { return c.json({ error: err.message }, 500) }
+})
+
+// ============================================================
 // CUSTOMER ONBOARDING — Create accounts + set up Secretary AI
 // ============================================================
 adminRoutes.get('/superadmin/onboarding/list', async (c) => {

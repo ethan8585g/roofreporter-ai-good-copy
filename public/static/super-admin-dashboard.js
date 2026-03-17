@@ -15,7 +15,8 @@ const SA = {
   ga4Period: '7d',
   ga4Tab: 'overview',
   secRevPeriod: 'monthly',
-  secCallsCustomerId: ''
+  secCallsCustomerId: '',
+  lkTab: 'overview'
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -179,6 +180,18 @@ async function loadView(view) {
           if (telRes) SA.data.telephony = await telRes.json();
         } catch(e) { SA.data.telephony = {}; }
         break;
+      case 'livekit-agents':
+        try {
+          const [lkRes, lkConfigsRes, lkPoolRes] = await Promise.all([
+            saFetch('/api/admin/superadmin/livekit/overview'),
+            saFetch('/api/admin/superadmin/livekit/secretary-configs'),
+            saFetch('/api/admin/superadmin/livekit/phone-pool'),
+          ]);
+          if (lkRes) SA.data.livekit = await lkRes.json();
+          if (lkConfigsRes) SA.data.livekitConfigs = await lkConfigsRes.json();
+          if (lkPoolRes) SA.data.livekitPool = await lkPoolRes.json();
+        } catch(e) { SA.data.livekit = { configured: false, error: e.message }; }
+        break;
       case 'customer-onboarding':
         try {
           const obRes = await saFetch('/api/admin/superadmin/onboarding/list');
@@ -315,6 +328,7 @@ function renderContent() {
     case 'pricing-engine': root.innerHTML = renderPricingEngineView(); loadPricingPresets(); break;
     case 'invoices': root.innerHTML = renderInvoicesView(); break;
     case 'telephony': root.innerHTML = renderTelephonyView(); break;
+    case 'livekit-agents': root.innerHTML = renderLiveKitAgentsView(); break;
     case 'revenue-pipeline': root.innerHTML = renderRevenuePipelineView(); loadRevenuePipeline(); break;
     case 'notifications-admin': root.innerHTML = renderNotificationsAdminView(); loadNotifications(); break;
     case 'webhooks': root.innerHTML = renderWebhooksView(); loadWebhooks(); break;
@@ -4785,4 +4799,688 @@ async function deleteScript(id) {
     await saFetch('/api/admin/superadmin/sales-scripts/' + id, { method: 'DELETE' });
     loadView('call-center-manage');
   } catch(e) { alert('Error deleting script'); }
+}
+
+// ============================================================
+// LIVEKIT AGENTS — Full Management Dashboard with Tabs
+// ============================================================
+function renderLiveKitAgentsView() {
+  var d = SA.data.livekit || {};
+  if (!d.configured) {
+    return saSection('LiveKit Agent Management', 'fa-robot',
+      '<div class="text-center py-12">' +
+        '<div class="w-16 h-16 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-4"><i class="fas fa-exclamation-triangle text-2xl text-red-500"></i></div>' +
+        '<h3 class="text-lg font-bold text-gray-800 mb-2">LiveKit Not Configured</h3>' +
+        '<p class="text-gray-500 mb-6 max-w-md mx-auto">' + (d.error || 'Set LIVEKIT_API_KEY, LIVEKIT_API_SECRET, and LIVEKIT_URL as Cloudflare Pages secrets.') + '</p>' +
+        '<div class="bg-gray-50 rounded-xl p-4 text-left max-w-lg mx-auto font-mono text-xs text-gray-600">' +
+          '<p class="mb-1">npx wrangler pages secret put LIVEKIT_API_KEY --project-name roofing-measurement-tool</p>' +
+          '<p class="mb-1">npx wrangler pages secret put LIVEKIT_API_SECRET --project-name roofing-measurement-tool</p>' +
+          '<p>npx wrangler pages secret put LIVEKIT_URL --project-name roofing-measurement-tool</p>' +
+        '</div>' +
+      '</div>');
+  }
+
+  var tab = SA.lkTab || 'overview';
+  var tabs = [
+    { id: 'overview', label: 'System Overview', icon: 'fa-tachometer-alt' },
+    { id: 'configs', label: 'Secretary Configs', icon: 'fa-users-cog' },
+    { id: 'phone-pool', label: 'Phone Pool', icon: 'fa-phone-square-alt' },
+    { id: 'deploy', label: 'Deploy Agent', icon: 'fa-rocket' },
+  ];
+  var tabsHtml = '<div class="flex flex-wrap gap-2 mb-6 border-b border-gray-200 pb-3">';
+  tabs.forEach(function(t) {
+    var active = t.id === tab;
+    tabsHtml += '<button onclick="SA.lkTab=\'' + t.id + '\';renderContent()" class="px-4 py-2 rounded-lg text-sm font-semibold transition ' +
+      (active ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 text-gray-600 hover:bg-gray-200') + '">' +
+      '<i class="fas ' + t.icon + ' mr-1.5"></i>' + t.label + '</button>';
+  });
+  tabsHtml += '<button onclick="loadView(\'livekit-agents\')" class="ml-auto px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-xs font-semibold text-gray-600 transition"><i class="fas fa-sync-alt mr-1"></i>Refresh All</button></div>';
+
+  var content = '';
+  if (tab === 'overview') content = renderLKOverviewTab(d);
+  else if (tab === 'configs') content = renderLKConfigsTab();
+  else if (tab === 'phone-pool') content = renderLKPhonePoolTab();
+  else if (tab === 'deploy') content = renderLKDeployTab();
+
+  return tabsHtml + content + '<div id="lk-modal"></div>';
+}
+
+function renderLKOverviewTab(d) {
+  var st = d.stats || {};
+  var err = d.error ? '<div class="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-800"><i class="fas fa-exclamation-triangle mr-2"></i>' + d.error + '</div>' : '';
+
+  var header =
+    '<div class="flex flex-wrap items-center gap-3 mb-6">' +
+      '<div class="flex items-center gap-2 bg-teal-50 text-teal-700 px-3 py-1.5 rounded-full text-xs font-semibold"><i class="fas fa-plug"></i> ' + (d.livekit_url || 'N/A') + '</div>' +
+      '<div class="flex items-center gap-2 bg-blue-50 text-blue-700 px-3 py-1.5 rounded-full text-xs font-semibold"><i class="fas fa-key"></i> ' + (d.api_key_preview || 'N/A') + '</div>' +
+      (d.livekit_sip_uri ? '<div class="flex items-center gap-2 bg-purple-50 text-purple-700 px-3 py-1.5 rounded-full text-xs font-semibold"><i class="fas fa-phone-volume"></i> ' + d.livekit_sip_uri + '</div>' : '') +
+    '</div>';
+
+  var stats =
+    '<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">' +
+      lkStatCard('Active Rooms', d.active_rooms || 0, 'fa-door-open', d.active_rooms > 0 ? 'bg-green-50 text-green-700' : 'bg-gray-50 text-gray-600') +
+      lkStatCard('Inbound Trunks', st.inbound_trunk_count || 0, 'fa-phone-alt', 'bg-blue-50 text-blue-700') +
+      lkStatCard('Dispatch Rules', st.dispatch_rule_count || 0, 'fa-route', 'bg-purple-50 text-purple-700') +
+      lkStatCard('Active Secretaries', st.active_secretaries || 0, 'fa-headset', 'bg-teal-50 text-teal-700') +
+      lkStatCard('Total Calls', st.total_calls_handled || 0, 'fa-chart-line', 'bg-indigo-50 text-indigo-700') +
+      lkStatCard('Phone Numbers', st.phone_number_count || 0, 'fa-mobile-alt', 'bg-orange-50 text-orange-700') +
+    '</div>';
+
+  // Active Rooms
+  var roomsHtml = '';
+  var rooms = d.rooms || [];
+  if (rooms.length === 0) {
+    roomsHtml = '<p class="text-gray-400 text-sm py-4 text-center">No active rooms</p>';
+  } else {
+    roomsHtml = '<div class="space-y-2">';
+    rooms.forEach(function(r) {
+      roomsHtml += '<div class="flex items-center justify-between p-3 bg-green-50 rounded-lg">' +
+        '<div><span class="font-semibold text-sm text-gray-800">' + r.name + '</span>' +
+        '<span class="ml-2 text-xs text-gray-500">SID: ' + (r.sid || '').slice(0,12) + '...</span></div>' +
+        '<div class="flex items-center gap-2">' +
+          '<span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">' + (r.num_participants || 0) + ' participants</span>' +
+          '<button onclick="lkDeleteRoom(\'' + r.name + '\')" class="text-xs text-red-500 hover:text-red-700"><i class="fas fa-trash"></i></button>' +
+        '</div></div>';
+    });
+    roomsHtml += '</div>';
+  }
+
+  // Cloud Agents
+  var agentsHtml = '';
+  var agents = d.cloud_agents || [];
+  if (agents.length === 0) {
+    agentsHtml = '<div class="text-center py-6">' +
+      '<p class="text-gray-400 text-sm mb-3">No Cloud agents detected</p>' +
+      '<button onclick="SA.lkTab=\'deploy\';renderContent()" class="px-4 py-2 bg-blue-500 text-white rounded-lg text-sm font-semibold hover:bg-blue-600"><i class="fas fa-rocket mr-1"></i>Go to Deploy Guide</button>' +
+      '</div>';
+  } else {
+    agentsHtml = '<div class="space-y-2">';
+    agents.forEach(function(a) {
+      var id = a.agent_id || a.id || a.cloud_agent_id || 'unknown';
+      var name = a.name || a.agent_name || id;
+      var status = a.status || a.state || 'unknown';
+      var statusColor = status === 'Running' || status === 'running' ? 'bg-green-100 text-green-700' :
+                        status === 'Stopped' || status === 'stopped' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700';
+      agentsHtml += '<div class="flex items-center justify-between p-3 bg-white border border-gray-100 rounded-lg">' +
+        '<div>' +
+          '<span class="font-semibold text-sm text-gray-800">' + name + '</span>' +
+          '<span class="ml-2 text-xs text-gray-400">' + id + '</span>' +
+        '</div>' +
+        '<div class="flex items-center gap-2">' +
+          '<span class="text-xs ' + statusColor + ' px-2 py-0.5 rounded-full">' + status + '</span>' +
+          (a.version ? '<span class="text-xs text-gray-400">' + a.version + '</span>' : '') +
+          (a.region ? '<span class="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">' + a.region + '</span>' : '') +
+          '<button onclick="lkDeleteAgent(\'' + id + '\')" class="text-xs text-red-500 hover:text-red-700"><i class="fas fa-trash"></i></button>' +
+        '</div></div>';
+    });
+    agentsHtml += '</div>';
+  }
+
+  // Inbound Trunks
+  var trunksHtml = '';
+  var trunks = d.inbound_trunks || [];
+  if (trunks.length === 0) {
+    trunksHtml = '<p class="text-gray-400 text-sm py-4 text-center">No inbound trunks</p>';
+  } else {
+    trunksHtml = '<div class="overflow-x-auto"><table class="w-full text-sm">' +
+      '<thead><tr class="text-left text-xs text-gray-500 border-b"><th class="pb-2 pr-4">Name</th><th class="pb-2 pr-4">Numbers</th><th class="pb-2 pr-4">Trunk ID</th><th class="pb-2 pr-4">Krisp</th><th class="pb-2">Actions</th></tr></thead><tbody>';
+    trunks.forEach(function(t) {
+      var nums = (t.numbers || []).join(', ') || '-';
+      trunksHtml += '<tr class="border-b border-gray-50">' +
+        '<td class="py-2 pr-4 font-medium">' + (t.name || '-') + '</td>' +
+        '<td class="py-2 pr-4 font-mono text-xs">' + nums + '</td>' +
+        '<td class="py-2 pr-4 text-xs text-gray-400">' + (t.id || '-').slice(0, 16) + '</td>' +
+        '<td class="py-2 pr-4">' + (t.krisp ? '<span class="text-green-500">OK</span>' : '<span class="text-gray-300">Off</span>') + '</td>' +
+        '<td class="py-2"><button onclick="lkDeleteTrunk(\'' + t.id + '\')" class="text-xs text-red-500 hover:text-red-700"><i class="fas fa-trash"></i></button></td>' +
+        '</tr>';
+    });
+    trunksHtml += '</tbody></table></div>';
+  }
+
+  // Dispatch Rules
+  var rulesHtml = '';
+  var rules = d.dispatch_rules || [];
+  if (rules.length === 0) {
+    rulesHtml = '<p class="text-gray-400 text-sm py-4 text-center">No dispatch rules</p>';
+  } else {
+    rulesHtml = '<div class="overflow-x-auto"><table class="w-full text-sm">' +
+      '<thead><tr class="text-left text-xs text-gray-500 border-b"><th class="pb-2 pr-4">Name</th><th class="pb-2 pr-4">Type</th><th class="pb-2 pr-4">Room Pattern</th><th class="pb-2 pr-4">Trunks</th><th class="pb-2">Actions</th></tr></thead><tbody>';
+    rules.forEach(function(r) {
+      var pattern = r.room_prefix ? r.room_prefix + '*' : (r.room_name || '-');
+      rulesHtml += '<tr class="border-b border-gray-50">' +
+        '<td class="py-2 pr-4 font-medium">' + (r.name || '-') + '</td>' +
+        '<td class="py-2 pr-4"><span class="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">' + (r.rule_type || '-') + '</span></td>' +
+        '<td class="py-2 pr-4 font-mono text-xs">' + pattern + '</td>' +
+        '<td class="py-2 pr-4 text-xs text-gray-400">' + (r.trunk_ids || []).length + ' trunk(s)</td>' +
+        '<td class="py-2"><button onclick="lkDeleteDispatch(\'' + r.id + '\')" class="text-xs text-red-500 hover:text-red-700"><i class="fas fa-trash"></i></button></td>' +
+        '</tr>';
+    });
+    rulesHtml += '</tbody></table></div>';
+  }
+
+  // Phone Numbers
+  var phonesHtml = '';
+  var phoneNums = d.phone_numbers || [];
+  if (phoneNums.length === 0) {
+    phonesHtml = '<p class="text-gray-400 text-sm py-4 text-center">No LiveKit phone numbers</p>';
+  } else {
+    phonesHtml = '<div class="space-y-2">';
+    phoneNums.forEach(function(p) {
+      phonesHtml += '<div class="flex items-center justify-between p-2 bg-gray-50 rounded-lg">' +
+        '<span class="font-mono text-sm font-semibold">' + (p.number || '-') + '</span>' +
+        '<span class="text-xs text-gray-500">' + (p.name || '') + '</span>' +
+        '</div>';
+    });
+    phonesHtml += '</div>';
+  }
+
+  return err + header + stats +
+    '<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">' +
+      saSection('Active Rooms (' + rooms.length + ')', 'fa-door-open', roomsHtml) +
+      saSection('Cloud Agents (' + agents.length + ')', 'fa-robot', agentsHtml) +
+    '</div>' +
+    '<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">' +
+      saSection('Inbound SIP Trunks (' + trunks.length + ')', 'fa-phone-alt', trunksHtml,
+        '<button onclick="lkShowCreateTrunk()" class="px-3 py-1.5 bg-teal-500 text-white rounded-lg text-xs font-semibold hover:bg-teal-600 transition"><i class="fas fa-plus mr-1"></i>Create Trunk</button>') +
+      saSection('Dispatch Rules (' + rules.length + ')', 'fa-route', rulesHtml,
+        '<button onclick="lkShowCreateDispatch()" class="px-3 py-1.5 bg-blue-500 text-white rounded-lg text-xs font-semibold hover:bg-blue-600 transition"><i class="fas fa-plus mr-1"></i>Create Rule</button>') +
+    '</div>' +
+    '<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">' +
+      saSection('LiveKit Phone Numbers (' + phoneNums.length + ')', 'fa-mobile-alt', phonesHtml) +
+      saSection('Agent Test', 'fa-vial',
+        '<p class="text-sm text-gray-600 mb-3">Create a test room to verify your LiveKit agent is responding to dispatch events.</p>' +
+        '<div class="flex gap-2">' +
+          '<input id="lk-test-prefix" type="text" value="secretary-2-" placeholder="Room prefix" class="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono">' +
+          '<button onclick="lkTestCall()" class="px-4 py-2 bg-green-500 text-white rounded-lg text-sm font-semibold hover:bg-green-600 transition"><i class="fas fa-phone mr-1"></i>Test Agent</button>' +
+        '</div>' +
+        '<div id="lk-test-result" class="mt-3"></div>') +
+    '</div>';
+}
+
+// ── Secretary Configs Tab ──
+function renderLKConfigsTab() {
+  var configs = (SA.data.livekitConfigs || {}).configs || [];
+  var activeCount = configs.filter(function(c) { return c.is_active === 1; }).length;
+
+  var bulkHtml =
+    '<div class="flex items-center gap-3 mb-4">' +
+      '<span class="text-sm text-gray-600"><strong>' + activeCount + '</strong> of ' + configs.length + ' active</span>' +
+      '<button onclick="lkBulkToggle(true)" class="px-3 py-1.5 bg-green-500 text-white rounded-lg text-xs font-semibold hover:bg-green-600"><i class="fas fa-power-off mr-1"></i>Activate All</button>' +
+      '<button onclick="lkBulkToggle(false)" class="px-3 py-1.5 bg-red-500 text-white rounded-lg text-xs font-semibold hover:bg-red-600"><i class="fas fa-stop mr-1"></i>Deactivate All</button>' +
+    '</div>';
+
+  if (configs.length === 0) {
+    return saSection('All Secretary Configurations', 'fa-users-cog',
+      bulkHtml + '<p class="text-gray-400 text-sm py-6 text-center">No secretary configs found. Onboard customers first.</p>');
+  }
+
+  var tableHtml = '<div class="overflow-x-auto"><table class="w-full text-sm">' +
+    '<thead><tr class="text-left text-xs text-gray-500 border-b">' +
+      '<th class="pb-2 pr-3">Customer</th>' +
+      '<th class="pb-2 pr-3">Mode</th>' +
+      '<th class="pb-2 pr-3">Agent</th>' +
+      '<th class="pb-2 pr-3">Business Phone</th>' +
+      '<th class="pb-2 pr-3">AI Number</th>' +
+      '<th class="pb-2 pr-3">Connection</th>' +
+      '<th class="pb-2 pr-3">Calls (7d)</th>' +
+      '<th class="pb-2 pr-3">Status</th>' +
+      '<th class="pb-2">Actions</th>' +
+    '</tr></thead><tbody>';
+
+  configs.forEach(function(cfg) {
+    var isActive = cfg.is_active === 1;
+    var statusBg = isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500';
+    var connColor = cfg.connection_status === 'connected' ? 'text-green-600' : cfg.connection_status === 'pending_forwarding' ? 'text-yellow-600' : 'text-red-500';
+    tableHtml += '<tr class="border-b border-gray-50 hover:bg-gray-50">' +
+      '<td class="py-2.5 pr-3"><div class="font-medium text-gray-800">' + (cfg.customer_name || 'Customer #' + cfg.customer_id) + '</div><div class="text-xs text-gray-400">' + (cfg.email || '') + '</div></td>' +
+      '<td class="py-2.5 pr-3"><span class="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">' + (cfg.secretary_mode || 'directory') + '</span></td>' +
+      '<td class="py-2.5 pr-3"><span class="text-sm">' + (cfg.agent_name || 'Sarah') + '</span><span class="text-xs text-gray-400 ml-1">(' + (cfg.agent_voice || 'alloy') + ')</span></td>' +
+      '<td class="py-2.5 pr-3 font-mono text-xs">' + (cfg.business_phone || '-') + '</td>' +
+      '<td class="py-2.5 pr-3 font-mono text-xs">' + (cfg.assigned_phone_number || '<span class="text-red-400">None</span>') + '</td>' +
+      '<td class="py-2.5 pr-3"><span class="text-xs font-semibold ' + connColor + '">' + (cfg.connection_status || 'not_connected').replace(/_/g, ' ') + '</span></td>' +
+      '<td class="py-2.5 pr-3 text-center"><span class="font-semibold">' + (cfg.calls_7d || 0) + '</span><span class="text-xs text-gray-400"> / ' + (cfg.total_calls || 0) + '</span></td>' +
+      '<td class="py-2.5 pr-3"><span class="text-xs px-2 py-0.5 rounded-full font-semibold ' + statusBg + '">' + (isActive ? 'ACTIVE' : 'PAUSED') + '</span></td>' +
+      '<td class="py-2.5">' +
+        '<div class="flex items-center gap-1">' +
+          '<button onclick="lkToggleConfig(' + cfg.customer_id + ')" class="px-2 py-1 ' + (isActive ? 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200' : 'bg-green-100 text-green-700 hover:bg-green-200') + ' rounded text-xs font-semibold"><i class="fas ' + (isActive ? 'fa-pause' : 'fa-play') + '"></i></button>' +
+          '<button onclick="lkEditConfig(' + cfg.customer_id + ',' + JSON.stringify(JSON.stringify(cfg)).replace(/'/g, "\\'") + ')" class="px-2 py-1 bg-blue-100 text-blue-700 hover:bg-blue-200 rounded text-xs font-semibold"><i class="fas fa-edit"></i></button>' +
+        '</div>' +
+      '</td></tr>';
+  });
+  tableHtml += '</tbody></table></div>';
+
+  return saSection('All Secretary Configurations (' + configs.length + ')', 'fa-users-cog', bulkHtml + tableHtml);
+}
+
+// ── Phone Pool Tab ──
+function renderLKPhonePoolTab() {
+  var poolData = SA.data.livekitPool || {};
+  var numbers = poolData.numbers || [];
+  var poolStats = poolData.stats || [];
+
+  var statCards = '<div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">';
+  var available = 0, assigned = 0, total = numbers.length;
+  poolStats.forEach(function(s) {
+    if (s.status === 'available') available = s.count;
+    if (s.status === 'assigned') assigned = s.count;
+  });
+  statCards += lkStatCard('Total Numbers', total, 'fa-phone-square', 'bg-gray-50 text-gray-700');
+  statCards += lkStatCard('Available', available, 'fa-check-circle', 'bg-green-50 text-green-700');
+  statCards += lkStatCard('Assigned', assigned, 'fa-user-check', 'bg-blue-50 text-blue-700');
+  statCards += lkStatCard('Other', total - available - assigned, 'fa-exclamation-circle', 'bg-yellow-50 text-yellow-700');
+  statCards += '</div>';
+
+  var addHtml =
+    '<div class="flex gap-2 mb-4">' +
+      '<input id="lk-pool-number" type="text" placeholder="+14031234567" class="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono">' +
+      '<input id="lk-pool-region" type="text" placeholder="AB" value="AB" class="w-20 border border-gray-300 rounded-lg px-3 py-2 text-sm">' +
+      '<button onclick="lkAddToPool()" class="px-4 py-2 bg-teal-500 text-white rounded-lg text-sm font-semibold hover:bg-teal-600"><i class="fas fa-plus mr-1"></i>Add Number</button>' +
+    '</div>';
+
+  if (numbers.length === 0) {
+    return statCards + saSection('Phone Number Pool', 'fa-phone-square-alt',
+      addHtml + '<p class="text-gray-400 text-sm py-6 text-center">No numbers in pool. Add Twilio numbers above or use the Phone Marketplace to purchase.</p>');
+  }
+
+  var tableHtml = '<div class="overflow-x-auto"><table class="w-full text-sm">' +
+    '<thead><tr class="text-left text-xs text-gray-500 border-b">' +
+      '<th class="pb-2 pr-3">Phone Number</th>' +
+      '<th class="pb-2 pr-3">Status</th>' +
+      '<th class="pb-2 pr-3">Assigned To</th>' +
+      '<th class="pb-2 pr-3">Region</th>' +
+      '<th class="pb-2 pr-3">SIP Trunk</th>' +
+      '<th class="pb-2">Actions</th>' +
+    '</tr></thead><tbody>';
+
+  numbers.forEach(function(n) {
+    var statusColor = n.status === 'available' ? 'bg-green-100 text-green-700' : n.status === 'assigned' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500';
+    tableHtml += '<tr class="border-b border-gray-50 hover:bg-gray-50">' +
+      '<td class="py-2.5 pr-3 font-mono font-semibold">' + n.phone_number + '</td>' +
+      '<td class="py-2.5 pr-3"><span class="text-xs px-2 py-0.5 rounded-full font-semibold ' + statusColor + '">' + (n.status || 'unknown') + '</span></td>' +
+      '<td class="py-2.5 pr-3">' + (n.assigned_name ? '<span class="text-sm">' + n.assigned_name + '</span><span class="text-xs text-gray-400 ml-1">(' + (n.assigned_email || '') + ')</span>' : '<span class="text-gray-400">-</span>') + '</td>' +
+      '<td class="py-2.5 pr-3 text-xs">' + (n.region || '-') + '</td>' +
+      '<td class="py-2.5 pr-3 text-xs text-gray-400 font-mono">' + (n.sip_trunk_id ? n.sip_trunk_id.slice(0,12) + '...' : '-') + '</td>' +
+      '<td class="py-2.5">' +
+        '<div class="flex items-center gap-1">' +
+          (n.status === 'assigned' ? '<button onclick="lkReleaseNumber(\'' + n.phone_number + '\')" class="px-2 py-1 bg-yellow-100 text-yellow-700 hover:bg-yellow-200 rounded text-xs font-semibold" title="Release back to pool"><i class="fas fa-undo"></i></button>' : '') +
+          '<button onclick="lkDeleteNumber(\'' + encodeURIComponent(n.phone_number) + '\')" class="px-2 py-1 bg-red-100 text-red-700 hover:bg-red-200 rounded text-xs font-semibold" title="Remove from pool"><i class="fas fa-trash"></i></button>' +
+        '</div>' +
+      '</td></tr>';
+  });
+  tableHtml += '</tbody></table></div>';
+
+  return statCards + saSection('Phone Number Pool (' + numbers.length + ')', 'fa-phone-square-alt', addHtml + tableHtml);
+}
+
+// ── Deploy Agent Tab ──
+function renderLKDeployTab() {
+  return saSection('Deploy Sarah (Roofer Secretary Agent)', 'fa-rocket',
+    '<div class="space-y-6">' +
+      // Step 1: Prerequisites
+      '<div class="bg-blue-50 rounded-xl p-5">' +
+        '<h4 class="font-bold text-blue-800 mb-3"><i class="fas fa-clipboard-check mr-2"></i>Step 1: Prerequisites</h4>' +
+        '<ul class="space-y-2 text-sm text-blue-700">' +
+          '<li class="flex items-start gap-2"><i class="fas fa-check-circle mt-0.5 text-blue-400"></i>LiveKit Cloud project: <strong>roofreporterai</strong> (subdomain: roofreporterai-btkwkiwh)</li>' +
+          '<li class="flex items-start gap-2"><i class="fas fa-check-circle mt-0.5 text-blue-400"></i>GitHub repo: <a href="https://github.com/ethan8585g/roofreporter-ai-good-copy" target="_blank" class="underline">roofreporter-ai-good-copy</a></li>' +
+          '<li class="flex items-start gap-2"><i class="fas fa-check-circle mt-0.5 text-blue-400"></i>Agent code: <code class="font-mono bg-blue-100 px-1 rounded">livekit-agent/</code> directory</li>' +
+          '<li class="flex items-start gap-2"><i class="fas fa-check-circle mt-0.5 text-blue-400"></i>Phone number: +1 (484) 964-9758 (LiveKit PSTN)</li>' +
+        '</ul>' +
+      '</div>' +
+      // Step 2: Delete template agents
+      '<div class="bg-yellow-50 rounded-xl p-5">' +
+        '<h4 class="font-bold text-yellow-800 mb-3"><i class="fas fa-trash-alt mr-2"></i>Step 2: Delete Template Agents</h4>' +
+        '<p class="text-sm text-yellow-700 mb-3">Before deploying Sarah, remove any default/template agents from your LiveKit Cloud project.</p>' +
+        '<div class="bg-white rounded-lg p-3 font-mono text-xs text-gray-700 space-y-1">' +
+          '<p>1. Go to <a href="https://cloud.livekit.io" target="_blank" class="text-blue-600 underline font-semibold">cloud.livekit.io</a></p>' +
+          '<p>2. Select project <strong>roofreporterai</strong></p>' +
+          '<p>3. Click <strong>Agents</strong> tab</p>' +
+          '<p>4. Delete all existing agents (template/builder agents)</p>' +
+        '</div>' +
+        '<p class="text-xs text-yellow-600 mt-2"><i class="fas fa-info-circle mr-1"></i>Builder agents cannot be deleted via CLI. You must use the LiveKit Cloud dashboard.</p>' +
+      '</div>' +
+      // Step 3: Install CLI & Deploy
+      '<div class="bg-green-50 rounded-xl p-5">' +
+        '<h4 class="font-bold text-green-800 mb-3"><i class="fas fa-terminal mr-2"></i>Step 3: Deploy via LiveKit CLI</h4>' +
+        '<p class="text-sm text-green-700 mb-3">Run these commands from your local machine (not the sandbox — DNS resolution for livekit.cloud is blocked in sandbox):</p>' +
+        '<div class="bg-white rounded-lg p-4 font-mono text-xs text-gray-800 space-y-2 overflow-x-auto">' +
+          '<p class="text-gray-400"># Install LiveKit CLI (if not already installed)</p>' +
+          '<p>brew install livekit-cli</p>' +
+          '<p class="text-gray-400 mt-3"># Authenticate with LiveKit Cloud</p>' +
+          '<p>lk cloud auth</p>' +
+          '<p class="text-gray-400 mt-3"># Set default project</p>' +
+          '<p>lk project set-default "roofreporterai-btkwkiwh"</p>' +
+          '<p class="text-gray-400 mt-3"># Navigate to the agent directory</p>' +
+          '<p>cd roofreporter-ai-good-copy/livekit-agent</p>' +
+          '<p class="text-gray-400 mt-3"># Deploy the agent (first time)</p>' +
+          '<p>lk agent create --yes --region us-east .</p>' +
+          '<p class="text-gray-400 mt-3"># Or update an existing deployment</p>' +
+          '<p>lk agent deploy --yes .</p>' +
+        '</div>' +
+      '</div>' +
+      // Step 4: Verify
+      '<div class="bg-purple-50 rounded-xl p-5">' +
+        '<h4 class="font-bold text-purple-800 mb-3"><i class="fas fa-check-double mr-2"></i>Step 4: Verify Agent is Running</h4>' +
+        '<p class="text-sm text-purple-700 mb-3">After deployment, verify the agent is live:</p>' +
+        '<div class="bg-white rounded-lg p-3 font-mono text-xs text-gray-800 space-y-1">' +
+          '<p>lk agent list --project roofreporterai</p>' +
+        '</div>' +
+        '<p class="text-sm text-purple-700 mt-3">Then use the <strong>Agent Test</strong> panel on the System Overview tab to create a test room and verify the agent responds.</p>' +
+        '<div class="mt-3"><button onclick="SA.lkTab=\'overview\';renderContent()" class="px-4 py-2 bg-purple-500 text-white rounded-lg text-sm font-semibold hover:bg-purple-600"><i class="fas fa-vial mr-1"></i>Go to Agent Test</button></div>' +
+      '</div>' +
+      // Step 5: Environment variables
+      '<div class="bg-gray-50 rounded-xl p-5">' +
+        '<h4 class="font-bold text-gray-800 mb-3"><i class="fas fa-cog mr-2"></i>Step 5: Environment Variables (Agent)</h4>' +
+        '<p class="text-sm text-gray-600 mb-3">The agent uses these environment variables. LiveKit Cloud injects LIVEKIT_URL/KEY/SECRET automatically. The custom ones are set in livekit.toml:</p>' +
+        '<div class="bg-white rounded-lg p-3 font-mono text-xs text-gray-700 space-y-1 overflow-x-auto">' +
+          '<p>LIVEKIT_URL=wss://roofreporterai-btkwkiwh.livekit.cloud <span class="text-green-500"># auto-injected</span></p>' +
+          '<p>LIVEKIT_API_KEY=APIsvVZsCCaboLY <span class="text-green-500"># auto-injected</span></p>' +
+          '<p>LIVEKIT_API_SECRET=UwHeCz... <span class="text-green-500"># auto-injected</span></p>' +
+          '<p>ROOFPORTER_API_URL=https://www.roofreporterai.com <span class="text-blue-500"># set in livekit.toml</span></p>' +
+          '<p>DEFAULT_GREETING="Thank you for calling..." <span class="text-blue-500"># set in livekit.toml</span></p>' +
+        '</div>' +
+      '</div>' +
+      // Quick Actions
+      '<div class="bg-white border border-gray-200 rounded-xl p-5">' +
+        '<h4 class="font-bold text-gray-800 mb-3"><i class="fas fa-bolt mr-2"></i>Quick Actions</h4>' +
+        '<div class="flex flex-wrap gap-3">' +
+          '<a href="https://cloud.livekit.io" target="_blank" class="px-4 py-2 bg-gray-800 text-white rounded-lg text-sm font-semibold hover:bg-gray-900"><i class="fas fa-external-link-alt mr-1"></i>LiveKit Dashboard</a>' +
+          '<a href="https://github.com/ethan8585g/roofreporter-ai-good-copy" target="_blank" class="px-4 py-2 bg-gray-700 text-white rounded-lg text-sm font-semibold hover:bg-gray-800"><i class="fab fa-github mr-1"></i>GitHub Repo</a>' +
+          '<button onclick="SA.lkTab=\'overview\';renderContent()" class="px-4 py-2 bg-blue-500 text-white rounded-lg text-sm font-semibold hover:bg-blue-600"><i class="fas fa-tachometer-alt mr-1"></i>System Overview</button>' +
+          '<button onclick="SA.lkTab=\'configs\';renderContent()" class="px-4 py-2 bg-teal-500 text-white rounded-lg text-sm font-semibold hover:bg-teal-600"><i class="fas fa-users-cog mr-1"></i>Secretary Configs</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>');
+}
+
+function lkStatCard(label, value, icon, color) {
+  return '<div class="' + color + ' rounded-xl p-3 text-center">' +
+    '<i class="fas ' + icon + ' text-lg mb-1 opacity-60"></i>' +
+    '<div class="text-xl font-bold">' + value + '</div>' +
+    '<div class="text-xs opacity-80">' + label + '</div>' +
+  '</div>';
+}
+
+// LiveKit Action Functions
+async function lkDeleteRoom(name) {
+  if (!confirm('Delete room "' + name + '"?')) return;
+  try {
+    await saFetch('/api/admin/superadmin/livekit/room/delete', { method: 'POST', body: JSON.stringify({ room_name: name }) });
+    loadView('livekit-agents');
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+async function lkDeleteAgent(id) {
+  if (!confirm('Delete agent ' + id + '?\n\nNote: Builder/template agents can only be deleted from cloud.livekit.io dashboard.')) return;
+  try {
+    var res = await saFetch('/api/admin/superadmin/livekit/agent/delete', { method: 'POST', body: JSON.stringify({ agent_id: id }) });
+    var data = await res.json();
+    alert(data.message || 'Deletion requested');
+    loadView('livekit-agents');
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+async function lkDeleteTrunk(id) {
+  if (!confirm('Delete SIP trunk ' + id + '?')) return;
+  try {
+    await saFetch('/api/admin/superadmin/livekit/trunk/delete', { method: 'POST', body: JSON.stringify({ trunk_id: id }) });
+    loadView('livekit-agents');
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+async function lkDeleteDispatch(id) {
+  if (!confirm('Delete dispatch rule ' + id + '?')) return;
+  try {
+    await saFetch('/api/admin/superadmin/livekit/dispatch/delete', { method: 'POST', body: JSON.stringify({ dispatch_rule_id: id }) });
+    loadView('livekit-agents');
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+function lkShowCreateTrunk() {
+  document.getElementById('lk-modal').innerHTML =
+    '<div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center" onclick="if(event.target===this)this.remove()">' +
+      '<div class="bg-white rounded-2xl p-6 max-w-lg w-full mx-4 shadow-2xl">' +
+        '<h3 class="text-lg font-bold mb-4"><i class="fas fa-phone-alt mr-2 text-teal-500"></i>Create Inbound SIP Trunk</h3>' +
+        '<div class="space-y-3">' +
+          '<div><label class="text-xs font-semibold text-gray-600 block mb-1">Trunk Name</label><input id="lk-trunk-name" type="text" value="secretary-inbound" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>' +
+          '<div><label class="text-xs font-semibold text-gray-600 block mb-1">Phone Number (E.164)</label><input id="lk-trunk-phone" type="text" placeholder="+14849649758" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono"></div>' +
+          '<div class="flex items-center gap-2"><input id="lk-trunk-krisp" type="checkbox" checked><label class="text-sm">Enable Krisp noise cancellation</label></div>' +
+        '</div>' +
+        '<div class="flex justify-end gap-2 mt-6">' +
+          '<button onclick="document.getElementById(\'lk-modal\').innerHTML=\'\'" class="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm font-semibold">Cancel</button>' +
+          '<button onclick="lkCreateTrunk()" class="px-4 py-2 bg-teal-500 text-white rounded-lg text-sm font-semibold hover:bg-teal-600">Create Trunk</button>' +
+        '</div>' +
+      '</div></div>';
+}
+
+async function lkCreateTrunk() {
+  var name = document.getElementById('lk-trunk-name').value;
+  var phone = document.getElementById('lk-trunk-phone').value;
+  var krisp = document.getElementById('lk-trunk-krisp').checked;
+  if (!phone) { alert('Phone number required'); return; }
+  try {
+    var res = await saFetch('/api/admin/superadmin/livekit/trunk/create', {
+      method: 'POST', body: JSON.stringify({ type: 'inbound', name: name, phone_number: phone, krisp_enabled: krisp })
+    });
+    var data = await res.json();
+    if (data.success) { alert('Trunk created: ' + data.trunk_id); document.getElementById('lk-modal').innerHTML = ''; loadView('livekit-agents'); }
+    else alert('Error: ' + (data.error || 'Unknown'));
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+function lkShowCreateDispatch() {
+  document.getElementById('lk-modal').innerHTML =
+    '<div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center" onclick="if(event.target===this)this.remove()">' +
+      '<div class="bg-white rounded-2xl p-6 max-w-lg w-full mx-4 shadow-2xl">' +
+        '<h3 class="text-lg font-bold mb-4"><i class="fas fa-route mr-2 text-blue-500"></i>Create Dispatch Rule</h3>' +
+        '<div class="space-y-3">' +
+          '<div><label class="text-xs font-semibold text-gray-600 block mb-1">Rule Name</label><input id="lk-disp-name" type="text" value="secretary-dispatch" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>' +
+          '<div><label class="text-xs font-semibold text-gray-600 block mb-1">Room Prefix</label><input id="lk-disp-prefix" type="text" value="secretary-2-" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono"></div>' +
+          '<div><label class="text-xs font-semibold text-gray-600 block mb-1">Trunk IDs (comma-separated)</label><input id="lk-disp-trunks" type="text" placeholder="ST_abc123, ST_def456" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono"></div>' +
+          '<div><label class="text-xs font-semibold text-gray-600 block mb-1">Metadata (JSON)</label><input id="lk-disp-meta" type="text" value=\'{"customer_id":2}\' class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono"></div>' +
+        '</div>' +
+        '<div class="flex justify-end gap-2 mt-6">' +
+          '<button onclick="document.getElementById(\'lk-modal\').innerHTML=\'\'" class="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm font-semibold">Cancel</button>' +
+          '<button onclick="lkCreateDispatch()" class="px-4 py-2 bg-blue-500 text-white rounded-lg text-sm font-semibold hover:bg-blue-600">Create Rule</button>' +
+        '</div>' +
+      '</div></div>';
+}
+
+async function lkCreateDispatch() {
+  var name = document.getElementById('lk-disp-name').value;
+  var prefix = document.getElementById('lk-disp-prefix').value;
+  var trunkStr = document.getElementById('lk-disp-trunks').value;
+  var meta = document.getElementById('lk-disp-meta').value;
+  var trunks = trunkStr ? trunkStr.split(',').map(function(s) { return s.trim(); }).filter(Boolean) : [];
+  try {
+    var res = await saFetch('/api/admin/superadmin/livekit/dispatch/create', {
+      method: 'POST', body: JSON.stringify({ name: name, trunk_ids: trunks, room_prefix: prefix, metadata: meta })
+    });
+    var data = await res.json();
+    if (data.success) { alert('Dispatch rule created: ' + data.dispatch_rule_id); document.getElementById('lk-modal').innerHTML = ''; loadView('livekit-agents'); }
+    else alert('Error: ' + (data.error || 'Unknown'));
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+async function lkTestCall() {
+  var prefix = document.getElementById('lk-test-prefix').value || 'secretary-2-';
+  var resultDiv = document.getElementById('lk-test-result');
+  resultDiv.innerHTML = '<div class="flex items-center gap-2 text-sm text-blue-600"><div class="w-4 h-4 border-2 border-blue-300 border-t-blue-600 rounded-full animate-spin"></div>Creating test room...</div>';
+  try {
+    var res = await saFetch('/api/admin/superadmin/livekit/test-call', {
+      method: 'POST', body: JSON.stringify({ room_prefix: prefix, customer_id: 2 })
+    });
+    var data = await res.json();
+    if (data.success) {
+      resultDiv.innerHTML =
+        '<div class="p-3 bg-green-50 border border-green-200 rounded-lg text-sm">' +
+          '<p class="font-semibold text-green-800 mb-1"><i class="fas fa-check-circle mr-1"></i>Test room created</p>' +
+          '<p class="text-green-700">Room: <code class="font-mono">' + data.room_name + '</code></p>' +
+          '<p class="text-green-700 text-xs mt-1">Dispatch ID: ' + (data.dispatch_id || 'N/A') + '</p>' +
+          '<p class="text-green-600 text-xs mt-2">Waiting 10s for agent to join...</p>' +
+        '</div>';
+      // Check after delay
+      setTimeout(async function() {
+        try {
+          var rr = await saFetch('/api/admin/superadmin/livekit/rooms');
+          var rd = await rr.json();
+          var found = (rd.rooms || []).find(function(r) { return r.name === data.room_name; });
+          if (found && found.participants && found.participants.length > 0) {
+            var agentParts = found.participants.filter(function(p) { return (p.identity || '').includes('agent'); });
+            resultDiv.innerHTML =
+              '<div class="p-3 bg-green-50 border border-green-200 rounded-lg text-sm">' +
+                '<p class="font-bold text-green-800"><i class="fas fa-check-circle mr-1"></i>AGENT IS LIVE! (' + agentParts.length + ' agent(s) joined)</p>' +
+                '<p class="text-green-700 text-xs mt-1">Room: ' + data.room_name + ' — ' + found.participants.length + ' total participants</p>' +
+              '</div>';
+          } else {
+            resultDiv.innerHTML =
+              '<div class="p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm">' +
+                '<p class="font-semibold text-yellow-800"><i class="fas fa-exclamation-triangle mr-1"></i>No agent joined within 10s</p>' +
+                '<p class="text-yellow-700 text-xs mt-1">The roofer-secretary agent may not be deployed to LiveKit Cloud. Deploy it using the CLI or ensure it\'s running.</p>' +
+              '</div>';
+          }
+          // Cleanup test room
+          saFetch('/api/admin/superadmin/livekit/cleanup-test', { method: 'POST', body: JSON.stringify({ room_name: data.room_name }) }).catch(function(){});
+        } catch(e) { resultDiv.innerHTML += '<p class="text-red-500 text-xs mt-1">Check error: ' + e.message + '</p>'; }
+      }, 10000);
+    } else {
+      resultDiv.innerHTML = '<div class="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">' + (data.error || 'Failed') + '</div>';
+    }
+  } catch(e) {
+    resultDiv.innerHTML = '<div class="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">' + e.message + '</div>';
+  }
+}
+
+// ============================================================
+// LIVEKIT CONFIG & POOL ACTION FUNCTIONS
+// ============================================================
+
+// Toggle individual secretary config on/off
+async function lkToggleConfig(customerId) {
+  try {
+    var res = await saFetch('/api/admin/superadmin/livekit/secretary-config/toggle', {
+      method: 'POST', body: JSON.stringify({ customer_id: customerId })
+    });
+    var data = await res.json();
+    if (data.success) {
+      loadView('livekit-agents');
+    } else { alert('Error: ' + (data.error || 'Unknown')); }
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+// Bulk toggle all secretaries
+async function lkBulkToggle(activate) {
+  var action = activate ? 'ACTIVATE' : 'DEACTIVATE';
+  if (!confirm(action + ' all secretary configurations? This affects all customers.')) return;
+  try {
+    var res = await saFetch('/api/admin/superadmin/livekit/secretary-config/bulk-toggle', {
+      method: 'POST', body: JSON.stringify({ activate: activate })
+    });
+    var data = await res.json();
+    if (data.success) {
+      alert(data.message + ' (' + (data.rows_changed || 0) + ' rows changed)');
+      loadView('livekit-agents');
+    } else { alert('Error: ' + (data.error || 'Unknown')); }
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+// Edit a customer secretary config (opens modal)
+function lkEditConfig(customerId, cfgJson) {
+  var cfg;
+  try { cfg = JSON.parse(cfgJson); } catch { cfg = {}; }
+  document.getElementById('lk-modal').innerHTML =
+    '<div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center overflow-y-auto py-8" onclick="if(event.target===this)this.remove()">' +
+      '<div class="bg-white rounded-2xl p-6 max-w-lg w-full mx-4 shadow-2xl">' +
+        '<h3 class="text-lg font-bold mb-4"><i class="fas fa-edit mr-2 text-blue-500"></i>Edit Secretary Config — Customer #' + customerId + '</h3>' +
+        '<div class="space-y-3 max-h-96 overflow-y-auto">' +
+          '<div><label class="text-xs font-semibold text-gray-600 block mb-1">Agent Name</label><input id="lk-cfg-agent-name" type="text" value="' + (cfg.agent_name || 'Sarah') + '" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>' +
+          '<div><label class="text-xs font-semibold text-gray-600 block mb-1">Agent Voice</label><select id="lk-cfg-agent-voice" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">' +
+            '<option value="alloy"' + (cfg.agent_voice === 'alloy' ? ' selected' : '') + '>Alloy (female)</option>' +
+            '<option value="shimmer"' + (cfg.agent_voice === 'shimmer' ? ' selected' : '') + '>Shimmer (female)</option>' +
+            '<option value="nova"' + (cfg.agent_voice === 'nova' ? ' selected' : '') + '>Nova (female)</option>' +
+            '<option value="echo"' + (cfg.agent_voice === 'echo' ? ' selected' : '') + '>Echo (male)</option>' +
+            '<option value="onyx"' + (cfg.agent_voice === 'onyx' ? ' selected' : '') + '>Onyx (male)</option>' +
+            '<option value="fable"' + (cfg.agent_voice === 'fable' ? ' selected' : '') + '>Fable (British)</option>' +
+          '</select></div>' +
+          '<div><label class="text-xs font-semibold text-gray-600 block mb-1">Secretary Mode</label><select id="lk-cfg-mode" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">' +
+            '<option value="directory"' + (cfg.secretary_mode === 'directory' ? ' selected' : '') + '>Directory</option>' +
+            '<option value="answering"' + (cfg.secretary_mode === 'answering' ? ' selected' : '') + '>Answering</option>' +
+            '<option value="full"' + (cfg.secretary_mode === 'full' ? ' selected' : '') + '>Full Secretary</option>' +
+          '</select></div>' +
+          '<div><label class="text-xs font-semibold text-gray-600 block mb-1">Business Phone</label><input id="lk-cfg-biz-phone" type="text" value="' + (cfg.business_phone || '') + '" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono"></div>' +
+          '<div><label class="text-xs font-semibold text-gray-600 block mb-1">AI Number (assigned)</label><input id="lk-cfg-ai-number" type="text" value="' + (cfg.assigned_phone_number || '') + '" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono"></div>' +
+          '<div><label class="text-xs font-semibold text-gray-600 block mb-1">Connection Status</label><select id="lk-cfg-conn" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">' +
+            '<option value="not_connected"' + (cfg.connection_status === 'not_connected' ? ' selected' : '') + '>Not Connected</option>' +
+            '<option value="pending_forwarding"' + (cfg.connection_status === 'pending_forwarding' ? ' selected' : '') + '>Pending Forwarding</option>' +
+            '<option value="connected"' + (cfg.connection_status === 'connected' ? ' selected' : '') + '>Connected</option>' +
+            '<option value="failed"' + (cfg.connection_status === 'failed' ? ' selected' : '') + '>Failed</option>' +
+          '</select></div>' +
+          '<div><label class="text-xs font-semibold text-gray-600 block mb-1">Greeting Script</label><textarea id="lk-cfg-greeting" rows="3" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">' + (cfg.greeting_script || '') + '</textarea></div>' +
+        '</div>' +
+        '<div class="flex justify-end gap-2 mt-6">' +
+          '<button onclick="document.getElementById(\'lk-modal\').innerHTML=\'\'" class="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm font-semibold">Cancel</button>' +
+          '<button onclick="lkSaveConfig(' + customerId + ')" class="px-4 py-2 bg-blue-500 text-white rounded-lg text-sm font-semibold hover:bg-blue-600">Save Changes</button>' +
+        '</div>' +
+      '</div></div>';
+}
+
+async function lkSaveConfig(customerId) {
+  var payload = {
+    agent_name: document.getElementById('lk-cfg-agent-name').value,
+    agent_voice: document.getElementById('lk-cfg-agent-voice').value,
+    secretary_mode: document.getElementById('lk-cfg-mode').value,
+    business_phone: document.getElementById('lk-cfg-biz-phone').value,
+    assigned_phone_number: document.getElementById('lk-cfg-ai-number').value,
+    connection_status: document.getElementById('lk-cfg-conn').value,
+    greeting_script: document.getElementById('lk-cfg-greeting').value,
+  };
+  try {
+    var res = await saFetch('/api/admin/superadmin/livekit/secretary-config/' + customerId, {
+      method: 'PUT', body: JSON.stringify(payload)
+    });
+    var data = await res.json();
+    if (data.success) {
+      document.getElementById('lk-modal').innerHTML = '';
+      loadView('livekit-agents');
+    } else { alert('Error: ' + (data.error || 'Unknown')); }
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+// Phone pool actions
+async function lkAddToPool() {
+  var number = document.getElementById('lk-pool-number').value.trim();
+  var region = document.getElementById('lk-pool-region').value.trim();
+  if (!number) { alert('Phone number is required'); return; }
+  try {
+    var res = await saFetch('/api/admin/superadmin/livekit/phone-pool/add', {
+      method: 'POST', body: JSON.stringify({ phone_number: number, region: region || 'AB' })
+    });
+    var data = await res.json();
+    if (data.success) {
+      document.getElementById('lk-pool-number').value = '';
+      loadView('livekit-agents');
+    } else { alert('Error: ' + (data.error || 'Unknown')); }
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+async function lkReleaseNumber(number) {
+  if (!confirm('Release ' + number + ' back to the available pool? This will disconnect it from the assigned customer.')) return;
+  try {
+    var res = await saFetch('/api/admin/superadmin/livekit/phone-pool/release', {
+      method: 'POST', body: JSON.stringify({ phone_number: number })
+    });
+    var data = await res.json();
+    if (data.success) { loadView('livekit-agents'); }
+    else { alert('Error: ' + (data.error || 'Unknown')); }
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+async function lkDeleteNumber(encodedNumber) {
+  var number = decodeURIComponent(encodedNumber);
+  if (!confirm('Permanently remove ' + number + ' from the phone pool? This cannot be undone.')) return;
+  try {
+    var res = await saFetch('/api/admin/superadmin/livekit/phone-pool/' + encodedNumber, { method: 'DELETE' });
+    var data = await res.json();
+    if (data.success) { loadView('livekit-agents'); }
+    else { alert('Error: ' + (data.error || 'Unknown')); }
+  } catch(e) { alert('Error: ' + e.message); }
 }
