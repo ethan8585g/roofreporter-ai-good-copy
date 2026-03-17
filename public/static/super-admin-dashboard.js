@@ -225,14 +225,14 @@ async function loadView(view) {
 // HELPERS
 // ============================================================
 function samc(label, value, icon, color, sub) {
-  return `<div class="metric-card bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
+  return `<div class="metric-card bg-white rounded-2xl p-5">
     <div class="flex items-start justify-between">
       <div>
-        <p class="text-xs font-medium text-gray-400 uppercase tracking-wider">${label}</p>
-        <p class="text-2xl font-black text-gray-900 mt-1">${value}</p>
-        ${sub ? `<p class="text-xs text-gray-400 mt-1">${sub}</p>` : ''}
+        <p class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">${label}</p>
+        <p class="text-[26px] font-extrabold text-slate-800 mt-1 leading-tight">${value}</p>
+        ${sub ? `<p class="text-[11px] text-slate-400 mt-1.5">${sub}</p>` : ''}
       </div>
-      <div class="w-10 h-10 bg-${color}-100 rounded-xl flex items-center justify-center"><i class="fas ${icon} text-${color}-500"></i></div>
+      <div class="w-11 h-11 bg-${color}-50 rounded-xl flex items-center justify-center"><i class="fas ${icon} text-${color}-500 text-sm"></i></div>
     </div>
   </div>`;
 }
@@ -259,20 +259,17 @@ function payBadge(s) {
 }
 
 function saSection(title, icon, content, actions) {
-  return `<div class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden mb-6">
-    <div class="px-6 py-4 border-b border-gray-50 flex items-center justify-between">
-      <div class="flex items-center gap-2">
-        <i class="fas ${icon} text-red-500"></i>
-        <h3 class="font-bold text-gray-800 text-sm">${title}</h3>
-      </div>
+  return `<div class="sa-section">
+    <div class="sa-section-header">
+      <h3><i class="fas ${icon}"></i>${title}</h3>
       ${actions || ''}
     </div>
-    <div class="p-6">${content}</div>
+    <div class="sa-section-body">${content}</div>
   </div>`;
 }
 
 function periodDropdown(current, onchangeFn) {
-  return `<select onchange="${onchangeFn}(this.value)" class="text-xs border border-gray-200 rounded-lg px-3 py-1.5 bg-white focus:ring-2 focus:ring-red-500 focus:border-red-500">
+  return `<select onchange="${onchangeFn}(this.value)" class="text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500 font-medium text-slate-600 appearance-none cursor-pointer">
     <option value="daily" ${current === 'daily' ? 'selected' : ''}>Daily (Last 30 Days)</option>
     <option value="weekly" ${current === 'weekly' ? 'selected' : ''}>Weekly (Last 12 Weeks)</option>
     <option value="monthly" ${current === 'monthly' ? 'selected' : ''}>Monthly (Last 12 Months)</option>
@@ -287,9 +284,9 @@ function renderContent() {
   if (!root) return;
 
   if (SA.loading) {
-    root.innerHTML = `<div class="flex items-center justify-center py-20">
-      <div class="w-8 h-8 border-4 border-red-200 border-t-red-600 rounded-full animate-spin"></div>
-      <span class="ml-3 text-gray-500">Loading dashboard...</span>
+    root.innerHTML = `<div class="flex flex-col items-center justify-center py-24">
+      <div class="w-10 h-10 border-[3px] border-teal-100 border-t-teal-500 rounded-full animate-spin"></div>
+      <span class="mt-4 text-slate-400 text-sm font-medium">Loading dashboard...</span>
     </div>`;
     return;
   }
@@ -339,7 +336,7 @@ function renderUsersView() {
 
   return `
     <div class="mb-6">
-      <h2 class="text-2xl font-black text-gray-900"><i class="fas fa-users mr-2 text-red-500"></i>All Active Users</h2>
+      <h2 class="text-2xl font-black text-gray-900"><i class="fas fa-users mr-2 text-teal-500"></i>All Users</h2>
       <p class="text-sm text-gray-500 mt-1">Complete user registry with account details, credits, and order history</p>
     </div>
 
@@ -372,10 +369,10 @@ function renderUsersView() {
           <tbody class="divide-y divide-gray-50">
             ${users.length === 0 ? '<tr><td colspan="11" class="px-4 py-8 text-center text-gray-400">No registered users yet</td></tr>' : ''}
             ${users.map(u => `
-              <tr class="hover:bg-red-50/30 transition-colors">
+              <tr class="hover:bg-teal-50/30 transition-colors">
                 <td class="px-4 py-3">
                   <div class="flex items-center gap-2">
-                    ${u.google_avatar ? `<img src="${u.google_avatar}" class="w-8 h-8 rounded-full border-2 border-white shadow-sm">` : `<div class="w-8 h-8 bg-gradient-to-br from-red-500 to-rose-600 rounded-full flex items-center justify-center text-white text-xs font-bold">${(u.name||'?')[0].toUpperCase()}</div>`}
+                    ${u.google_avatar ? `<img src="${u.google_avatar}" class="w-8 h-8 rounded-full border-2 border-white shadow-sm">` : `<div class="w-8 h-8 bg-gradient-to-br from-teal-500 to-teal-600 rounded-full flex items-center justify-center text-white text-xs font-bold">${(u.name||'?')[0].toUpperCase()}</div>`}
                     <div>
                       <p class="font-semibold text-gray-800 text-sm">${u.name || '-'}</p>
                       <p class="text-[10px] text-gray-400">${u.email}</p>
@@ -428,7 +425,7 @@ function renderSalesView() {
   return `
     <div class="mb-6 flex items-center justify-between">
       <div>
-        <h2 class="text-2xl font-black text-gray-900"><i class="fas fa-credit-card mr-2 text-red-500"></i>Credit Pack & Report Sales</h2>
+        <h2 class="text-2xl font-black text-gray-900"><i class="fas fa-credit-card mr-2 text-teal-500"></i>Credit Pack & Report Sales</h2>
         <p class="text-sm text-gray-500 mt-1">Revenue tracking from individual reports and credit pack purchases</p>
       </div>
       ${periodDropdown(SA.salesPeriod, 'saChangeSalesPeriod')}
@@ -446,7 +443,7 @@ function renderSalesView() {
     ${saSection('Credit Packages Available', 'fa-box-open', `
       <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
         ${packages.map(p => `
-          <div class="border border-gray-200 rounded-xl p-4 text-center hover:border-red-300 hover:shadow-md transition-all">
+          <div class="border border-gray-200 rounded-xl p-4 text-center hover:border-teal-300 hover:shadow-md transition-all">
             <p class="text-2xl font-black text-gray-900">${p.credits}</p>
             <p class="text-xs font-semibold text-gray-500 uppercase">${p.name}</p>
             <p class="text-lg font-bold text-red-600 mt-1">$${(p.price_cents / 100).toFixed(2)}</p>
@@ -560,10 +557,10 @@ function renderOrdersView() {
   return `
     <div class="mb-6 flex items-center justify-between">
       <div>
-        <h2 class="text-2xl font-black text-gray-900"><i class="fas fa-clipboard-list mr-2 text-red-500"></i>Order History & Logistics</h2>
+        <h2 class="text-2xl font-black text-gray-900"><i class="fas fa-clipboard-list mr-2 text-teal-500"></i>Order History & Logistics</h2>
         <p class="text-sm text-gray-500 mt-1">Report address, order date, pricing, and software completion time</p>
       </div>
-      <select onchange="saFilterOrders(this.value)" class="text-xs border border-gray-200 rounded-lg px-3 py-1.5 bg-white focus:ring-2 focus:ring-red-500">
+      <select onchange="saFilterOrders(this.value)" class="text-xs border border-gray-200 rounded-lg px-3 py-1.5 bg-white focus:ring-2 focus:ring-teal-500">
         <option value="" ${SA.ordersFilter === '' ? 'selected' : ''}>All Statuses</option>
         <option value="pending" ${SA.ordersFilter === 'pending' ? 'selected' : ''}>Pending</option>
         <option value="processing" ${SA.ordersFilter === 'processing' ? 'selected' : ''}>Processing</option>
@@ -605,7 +602,7 @@ function renderOrdersView() {
             ${orders.map(o => {
               const procTime = o.processing_seconds;
               return `
-              <tr class="hover:bg-red-50/30 transition-colors">
+              <tr class="hover:bg-teal-50/30 transition-colors">
                 <td class="px-3 py-2">
                   <span class="font-mono text-xs font-bold text-gray-700">${o.order_number || '-'}</span>
                   ${o.is_trial ? '<span class="ml-1 text-[9px] bg-blue-100 text-blue-700 px-1 rounded">TRIAL</span>' : ''}
@@ -655,7 +652,7 @@ function renderSignupsView() {
   return `
     <div class="mb-6 flex items-center justify-between">
       <div>
-        <h2 class="text-2xl font-black text-gray-900"><i class="fas fa-user-plus mr-2 text-red-500"></i>New User Sign-ups</h2>
+        <h2 class="text-2xl font-black text-gray-900"><i class="fas fa-user-plus mr-2 text-teal-500"></i>New User Sign-ups</h2>
         <p class="text-sm text-gray-500 mt-1">Registration trends, sign-up method breakdown, and conversion tracking</p>
       </div>
       ${periodDropdown(SA.signupsPeriod, 'saChangeSignupsPeriod')}
@@ -681,7 +678,7 @@ function renderSignupsView() {
             return `<div class="flex items-center gap-3">
               <span class="text-xs font-mono text-gray-600 w-24 flex-shrink-0">${p.period}</span>
               <div class="flex-1 bg-gray-100 rounded-full h-6 overflow-hidden relative">
-                <div class="absolute inset-y-0 left-0 bg-gradient-to-r from-red-500 to-rose-400 rounded-full transition-all" style="width:${pct}%"></div>
+                <div class="absolute inset-y-0 left-0 bg-gradient-to-r from-teal-500 to-teal-400 rounded-full transition-all" style="width:${pct}%"></div>
                 <div class="absolute inset-0 flex items-center px-3">
                   <span class="text-xs font-bold text-white drop-shadow-sm">${p.signups}</span>
                   <span class="text-[10px] text-white/80 ml-2">(${p.google_signups || 0} Google, ${p.email_signups || 0} Email)</span>
@@ -699,7 +696,7 @@ function renderSignupsView() {
           ${recent.map(u => `
             <div class="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-gray-50 transition-colors">
               <div class="flex items-center gap-3">
-                ${u.google_avatar ? `<img src="${u.google_avatar}" class="w-8 h-8 rounded-full">` : `<div class="w-8 h-8 bg-gradient-to-br from-red-500 to-rose-600 rounded-full flex items-center justify-center text-white text-xs font-bold">${(u.name||'?')[0].toUpperCase()}</div>`}
+                ${u.google_avatar ? `<img src="${u.google_avatar}" class="w-8 h-8 rounded-full">` : `<div class="w-8 h-8 bg-gradient-to-br from-teal-500 to-teal-600 rounded-full flex items-center justify-center text-white text-xs font-bold">${(u.name||'?')[0].toUpperCase()}</div>`}
                 <div>
                   <p class="text-sm font-medium text-gray-800">${u.name}</p>
                   <p class="text-[10px] text-gray-400">${u.email} ${u.company_name ? '· ' + u.company_name : ''}</p>
@@ -734,13 +731,13 @@ function renderMarketingView() {
 
   return `
     <div class="mb-6">
-      <h2 class="text-2xl font-black text-gray-900"><i class="fas fa-bullhorn mr-2 text-red-500"></i>Internal Sales & Marketing</h2>
+      <h2 class="text-2xl font-black text-gray-900"><i class="fas fa-bullhorn mr-2 text-teal-500"></i>Internal Sales & Marketing</h2>
       <p class="text-sm text-gray-500 mt-1">CRM overview, proposals, invoices, leads, and conversion funnel</p>
     </div>
 
     <!-- Conversion Funnel -->
     <div class="bg-gradient-to-r from-gray-900 to-gray-800 rounded-2xl p-6 mb-6 text-white">
-      <h3 class="font-bold text-lg mb-4"><i class="fas fa-funnel-dollar mr-2 text-red-400"></i>Conversion Funnel</h3>
+      <h3 class="font-bold text-lg mb-4"><i class="fas fa-funnel-dollar mr-2 text-teal-400"></i>Conversion Funnel</h3>
       <div class="grid grid-cols-5 gap-4">
         <div class="text-center">
           <div class="w-16 h-16 mx-auto bg-blue-500/20 rounded-2xl flex items-center justify-center mb-2">
@@ -947,7 +944,7 @@ function renderEmailSetupView() {
           <p class="text-sm text-gray-500 mt-1">${hasRefreshToken ? 'Gmail is authorized to send emails from <strong>' + senderEmail + '</strong>.' : 'Click the button below to sign in with Google and grant email sending permission.'}</p>
         </div>
       </div>
-      ${hasClientSecret ? '<a href="/api/auth/gmail" class="inline-flex items-center gap-2 px-6 py-3 ' + (hasRefreshToken ? 'bg-gray-100 hover:bg-gray-200 text-gray-700' : 'bg-red-600 hover:bg-red-700 text-white') + ' rounded-xl font-semibold text-sm transition-colors"><svg class="w-5 h-5" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>' + (hasRefreshToken ? 'Re-authorize Gmail' : 'Sign in with Google') + '</a>' : '<p class="text-sm text-gray-400"><i class="fas fa-arrow-up mr-1"></i> Complete Step 1 first.</p>'}
+      ${hasClientSecret ? '<a href="/api/auth/gmail" class="inline-flex items-center gap-2 px-6 py-3 ' + (hasRefreshToken ? 'bg-gray-100 hover:bg-gray-200 text-gray-700' : 'bg-teal-600 hover:bg-teal-700 text-white') + ' rounded-xl font-semibold text-sm transition-colors"><svg class="w-5 h-5" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>' + (hasRefreshToken ? 'Re-authorize Gmail' : 'Sign in with Google') + '</a>' : '<p class="text-sm text-gray-400"><i class="fas fa-arrow-up mr-1"></i> Complete Step 1 first.</p>'}
     </div>
 
     <!-- Step 3: Test -->
@@ -1023,12 +1020,12 @@ async function testEmailDelivery() {
       result.className = 'mt-3 p-3 rounded-xl text-sm bg-amber-50 text-amber-800 border border-amber-200';
       result.innerHTML = '<i class="fas fa-exclamation-triangle mr-1"></i> Email delivery failed. Fallback code: <strong class="font-mono text-lg">' + data.fallback_code + '</strong><br><span class="text-xs">Complete Gmail OAuth setup above to fix.</span>';
     } else {
-      result.className = 'mt-3 p-3 rounded-xl text-sm bg-red-50 text-red-800 border border-red-200';
+      result.className = 'mt-3 p-3 rounded-xl text-sm bg-red-50 text-red-800 border border-teal-200';
       result.innerHTML = '<i class="fas fa-times-circle mr-1"></i> ' + (data.error || 'Failed.');
     }
   } catch (e) {
     result.classList.remove('hidden');
-    result.className = 'mt-3 p-3 rounded-xl text-sm bg-red-50 text-red-800 border border-red-200';
+    result.className = 'mt-3 p-3 rounded-xl text-sm bg-red-50 text-red-800 border border-teal-200';
     result.innerHTML = '<i class="fas fa-times-circle mr-1"></i> Network error.';
   }
   btn.disabled = false; btn.innerHTML = '<i class="fas fa-paper-plane mr-1"></i> Send Test';
@@ -1085,8 +1082,8 @@ function renderAnalyticsView() {
     const pct = Math.round(((h.pageviews || 0) / maxHourly) * 100);
     const hour = (h.hour || '').split(' ')[1] || '';
     return '<div class="flex flex-col items-center gap-1" title="' + h.hour + ': ' + h.pageviews + ' views, ' + h.visitors + ' visitors">' +
-      '<div class="w-3 bg-red-200 rounded-t relative" style="height:40px">' +
-        '<div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-red-600 to-red-400 rounded-t" style="height:' + pct + '%"></div>' +
+      '<div class="w-3 bg-teal-200 rounded-t relative" style="height:40px">' +
+        '<div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-teal-600 to-teal-400 rounded-t" style="height:' + pct + '%"></div>' +
       '</div>' +
       '<span class="text-[8px] text-gray-400">' + hour.replace(':00','') + '</span>' +
     '</div>';
@@ -1100,12 +1097,12 @@ function renderAnalyticsView() {
   return `
     <div class="mb-6 flex items-center justify-between">
       <div>
-        <h2 class="text-2xl font-black text-gray-900"><i class="fas fa-chart-line mr-2 text-red-500"></i>Site Analytics</h2>
+        <h2 class="text-2xl font-black text-gray-900"><i class="fas fa-chart-line mr-2 text-teal-500"></i>Site Analytics</h2>
         <p class="text-sm text-gray-500 mt-1">Every click, pageview, and visitor tracked in real time</p>
       </div>
       <div class="flex items-center gap-3">
         <span class="text-xs text-gray-400">${periodLabels[d.period] || d.period}</span>
-        <select onchange="saChangeAnalyticsPeriod(this.value)" class="text-xs border border-gray-200 rounded-lg px-3 py-1.5 bg-white focus:ring-2 focus:ring-red-500 focus:border-red-500">
+        <select onchange="saChangeAnalyticsPeriod(this.value)" class="text-xs border border-gray-200 rounded-lg px-3 py-1.5 bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500">
           <option value="24h" ${SA.analyticsPeriod === '24h' ? 'selected' : ''}>Last 24 Hours</option>
           <option value="7d" ${SA.analyticsPeriod === '7d' ? 'selected' : ''}>Last 7 Days</option>
           <option value="30d" ${SA.analyticsPeriod === '30d' ? 'selected' : ''}>Last 30 Days</option>
@@ -1140,7 +1137,7 @@ function renderAnalyticsView() {
                 '<div class="flex items-center gap-2">' +
                   '<span class="text-xs font-mono text-gray-700 truncate max-w-[200px]" title="' + p.page_url + '">' + p.page_url + '</span>' +
                 '</div>' +
-                '<div class="w-full bg-gray-100 rounded-full h-1.5 mt-1"><div class="bg-red-500 h-1.5 rounded-full" style="width:' + pct + '%"></div></div>' +
+                '<div class="w-full bg-gray-100 rounded-full h-1.5 mt-1"><div class="bg-teal-500 h-1.5 rounded-full" style="width:' + pct + '%"></div></div>' +
               '</div>' +
               '<div class="text-right flex-shrink-0">' +
                 '<span class="text-sm font-bold text-gray-800">' + p.views + '</span>' +
@@ -1199,7 +1196,7 @@ function renderAnalyticsView() {
                   '<span class="text-sm font-medium text-gray-700 capitalize">' + (d.device_type || 'unknown') + '</span>' +
                   '<span class="text-xs text-gray-500">' + d.count + ' (' + pct + '%)</span>' +
                 '</div>' +
-                '<div class="w-full bg-gray-100 rounded-full h-2"><div class="bg-gradient-to-r from-red-500 to-rose-400 h-2 rounded-full" style="width:' + pct + '%"></div></div>' +
+                '<div class="w-full bg-gray-100 rounded-full h-2"><div class="bg-gradient-to-r from-teal-500 to-teal-400 h-2 rounded-full" style="width:' + pct + '%"></div></div>' +
               '</div>' +
             '</div>';
           }).join('') + '</div>'
@@ -1224,7 +1221,7 @@ function renderAnalyticsView() {
             : v.event_type === 'page_exit' 
               ? '<span class="text-[10px] text-gray-500">' + (v.time_on_page || 0) + 's / ' + (v.scroll_depth || 0) + '% scroll</span>'
               : '<span class="text-[10px] text-gray-400">' + (v.referrer ? 'from ' + v.referrer.substring(0,30) : '-') + '</span>';
-          return '<tr class="hover:bg-red-50/30 transition-colors">' +
+          return '<tr class="hover:bg-teal-50/30 transition-colors">' +
             '<td class="px-3 py-1.5 text-[10px] text-gray-500 whitespace-nowrap">' + fmtDateTime(v.created_at) + '</td>' +
             '<td class="px-3 py-1.5">' + eventBadge(v.event_type) + '</td>' +
             '<td class="px-3 py-1.5 text-xs font-mono text-gray-700 max-w-[150px] truncate" title="' + v.page_url + '">' + (v.page_url || '/') + '</td>' +
@@ -1237,7 +1234,7 @@ function renderAnalyticsView() {
           '</tr>';
         }).join('') +
         '</tbody></table></div>',
-      '<button onclick="saRefreshAnalytics()" class="text-xs text-red-600 hover:text-red-800 font-medium"><i class="fas fa-sync-alt mr-1"></i>Refresh</button>'
+      '<button onclick="saRefreshAnalytics()" class="text-xs text-teal-600 hover:text-teal-800 font-medium"><i class="fas fa-sync-alt mr-1"></i>Refresh</button>'
     )}
   `;
 }
@@ -1317,18 +1314,18 @@ function renderGA4View() {
 
   const tabNav = '<div class="flex gap-1 overflow-x-auto pb-2 mb-4">' +
     tabItems.map(t => '<button onclick="saSetGA4Tab(\'' + t.id + '\')" class="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ' +
-      (tab === t.id ? 'bg-red-600 text-white shadow-md' : 'bg-white text-gray-500 hover:bg-gray-100 border border-gray-200') +
+      (tab === t.id ? 'bg-teal-600 text-white shadow-md' : 'bg-white text-gray-500 hover:bg-gray-100 border border-gray-200') +
       '"><i class="fas ' + t.icon + '"></i> ' + t.label + '</button>'
     ).join('') + '</div>';
 
   // ── Header ──
   const header = '<div class="mb-4 flex items-center justify-between">' +
     '<div>' +
-      '<h2 class="text-2xl font-black text-gray-900"><i class="fab fa-google mr-2 text-red-500"></i>Google Analytics 4</h2>' +
+      '<h2 class="text-2xl font-black text-gray-900"><i class="fab fa-google mr-2 text-teal-500"></i>Google Analytics 4</h2>' +
       '<p class="text-sm text-gray-500 mt-1">GA4 Data API, Real-Time Reporting & Measurement Protocol</p>' +
     '</div>' +
     '<div class="flex items-center gap-3">' +
-      '<select onchange="saChangeGA4Period(this.value)" class="text-xs border border-gray-200 rounded-lg px-3 py-1.5 bg-white focus:ring-2 focus:ring-red-500">' +
+      '<select onchange="saChangeGA4Period(this.value)" class="text-xs border border-gray-200 rounded-lg px-3 py-1.5 bg-white focus:ring-2 focus:ring-teal-500">' +
         ['24h','7d','30d','90d','365d'].map(p => '<option value="' + p + '"' + (SA.ga4Period === p ? ' selected' : '') + '>' + periodLabels[p] + '</option>').join('') +
       '</select>' +
       '<button onclick="saRefreshGA4()" class="px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs font-medium hover:bg-gray-50"><i class="fas fa-sync-alt mr-1"></i>Refresh</button>' +
@@ -1370,7 +1367,7 @@ function renderGA4View() {
           '<th class="px-3 py-2 text-right text-[10px] font-semibold text-gray-500 uppercase">Engaged</th>' +
           '<th class="px-3 py-2 text-right text-[10px] font-semibold text-gray-500 uppercase">Conversions</th>' +
         '</tr></thead><tbody class="divide-y divide-gray-50">' +
-        acqRows.slice(0, 15).map(r => '<tr class="hover:bg-red-50/30">' +
+        acqRows.slice(0, 15).map(r => '<tr class="hover:bg-teal-50/30">' +
           '<td class="px-3 py-2 text-xs font-medium text-gray-700">' + (r[0] || '(direct)') + '</td>' +
           '<td class="px-3 py-2 text-xs text-gray-500">' + (r[1] || '(none)') + '</td>' +
           '<td class="px-3 py-2 text-xs text-right font-mono">' + (r[2] || 0) + '</td>' +
@@ -1394,7 +1391,7 @@ function renderGA4View() {
             '<div class="w-8 text-center"><i class="fas ' + (icons[cat] || 'fa-question') + ' text-gray-700"></i></div>' +
             '<div class="flex-1">' +
               '<div class="flex justify-between mb-0.5"><span class="text-sm font-medium text-gray-700 capitalize">' + cat + '</span><span class="text-xs text-gray-500">' + users + ' users (' + pct + '%)</span></div>' +
-              '<div class="w-full bg-gray-100 rounded-full h-2"><div class="bg-gradient-to-r from-red-500 to-rose-400 h-2 rounded-full" style="width:' + pct + '%"></div></div>' +
+              '<div class="w-full bg-gray-100 rounded-full h-2"><div class="bg-gradient-to-r from-teal-500 to-teal-400 h-2 rounded-full" style="width:' + pct + '%"></div></div>' +
             '</div></div>';
         }).join('') + '</div>';
 
@@ -1424,7 +1421,7 @@ function renderGA4View() {
               '<div class="flex items-center gap-2">' +
                 '<span class="text-xs font-mono text-gray-700 truncate max-w-[300px]" title="' + path + '">' + path + '</span>' +
               '</div>' +
-              '<div class="w-full bg-gray-100 rounded-full h-1.5 mt-1"><div class="bg-red-500 h-1.5 rounded-full" style="width:' + pct + '%"></div></div>' +
+              '<div class="w-full bg-gray-100 rounded-full h-1.5 mt-1"><div class="bg-teal-500 h-1.5 rounded-full" style="width:' + pct + '%"></div></div>' +
             '</div>' +
             '<div class="text-right flex-shrink-0 flex gap-4">' +
               '<div><span class="text-sm font-bold text-gray-800">' + views + '</span><span class="text-[10px] text-gray-400 block">views</span></div>' +
@@ -1458,7 +1455,7 @@ function renderGA4View() {
             'Paid Social': 'fa-bullhorn text-indigo-500', 'Display': 'fa-image text-teal-500'
           };
           const icon = channelIcons[r[0]] || 'fa-globe text-gray-400';
-          return '<tr class="hover:bg-red-50/30">' +
+          return '<tr class="hover:bg-teal-50/30">' +
             '<td class="px-3 py-2 text-xs font-medium text-gray-700"><i class="fas ' + icon + ' mr-2"></i>' + (r[0] || 'Unknown') + '</td>' +
             '<td class="px-3 py-2 text-xs text-right font-mono font-bold">' + (r[1] || 0) + '</td>' +
             '<td class="px-3 py-2 text-xs text-right font-mono">' + (r[2] || 0) + '</td>' +
@@ -1479,7 +1476,7 @@ function renderGA4View() {
           '<th class="px-3 py-2 text-right text-[10px] font-semibold text-gray-500 uppercase">Engaged</th>' +
           '<th class="px-3 py-2 text-right text-[10px] font-semibold text-gray-500 uppercase">Conversions</th>' +
           '</tr></thead><tbody class="divide-y divide-gray-50">' +
-          acqRows2.map(r => '<tr class="hover:bg-red-50/30">' +
+          acqRows2.map(r => '<tr class="hover:bg-teal-50/30">' +
             '<td class="px-3 py-2 text-xs font-medium text-gray-700">' + (r[0] || '(direct)') + '</td>' +
             '<td class="px-3 py-2 text-xs text-gray-500">' + (r[1] || '(none)') + '</td>' +
             '<td class="px-3 py-2 text-xs text-right font-mono">' + (r[2] || 0) + '</td>' +
@@ -1518,7 +1515,7 @@ function renderGA4View() {
                 '<i class="fas fa-map-marker-alt text-red-400 text-xs"></i>' +
                 '<span class="text-sm font-medium text-gray-700">' + country + (city ? ' <span class="text-gray-400">/ ' + city + '</span>' : '') + '</span>' +
               '</div>' +
-              '<div class="w-full bg-gray-100 rounded-full h-1.5 mt-1"><div class="bg-gradient-to-r from-red-500 to-rose-400 h-1.5 rounded-full" style="width:' + pct + '%"></div></div>' +
+              '<div class="w-full bg-gray-100 rounded-full h-1.5 mt-1"><div class="bg-gradient-to-r from-teal-500 to-teal-400 h-1.5 rounded-full" style="width:' + pct + '%"></div></div>' +
             '</div>' +
             '<div class="text-right flex-shrink-0 flex gap-4">' +
               '<div><span class="text-sm font-bold text-gray-800">' + users + '</span><span class="text-[10px] text-gray-400 block">users</span></div>' +
@@ -1643,7 +1640,7 @@ function renderGA4View() {
     '</div>';
 
     const testSection = status.server_side_events
-      ? '<div class="mt-4"><button onclick="saTestGA4Event()" class="px-4 py-2 bg-red-600 text-white rounded-xl text-sm font-semibold hover:bg-red-700"><i class="fas fa-paper-plane mr-1"></i>Send Test Event to GA4</button><span class="text-xs text-gray-400 ml-2">Sends an admin_test_ping event via Measurement Protocol</span></div>'
+      ? '<div class="mt-4"><button onclick="saTestGA4Event()" class="px-4 py-2 bg-teal-600 text-white rounded-xl text-sm font-semibold hover:bg-red-700"><i class="fas fa-paper-plane mr-1"></i>Send Test Event to GA4</button><span class="text-xs text-gray-400 ml-2">Sends an admin_test_ping event via Measurement Protocol</span></div>'
       : '';
 
     return header + tabNav +
@@ -1688,12 +1685,12 @@ function renderPricingView() {
 
   return `
     <div class="mb-6">
-      <h2 class="text-2xl font-black text-gray-900"><i class="fas fa-dollar-sign mr-2 text-red-500"></i>Pricing & Billing</h2>
+      <h2 class="text-2xl font-black text-gray-900"><i class="fas fa-dollar-sign mr-2 text-teal-500"></i>Pricing & Billing</h2>
       <p class="text-sm text-gray-500 mt-1">Manage report pricing, credit packages, subscriptions, and Square payment terminal</p>
     </div>
 
     <!-- Square Status Banner -->
-    <div class="mb-6 rounded-2xl p-5 ${sq.connected ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}">
+    <div class="mb-6 rounded-2xl p-5 ${sq.connected ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-teal-200'}">
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-3">
           <div class="w-12 h-12 rounded-xl flex items-center justify-center ${sq.connected ? 'bg-green-100' : 'bg-red-100'}">
@@ -1734,7 +1731,7 @@ function renderPricingView() {
               <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold">$</span>
               <input type="number" step="0.01" min="0" id="pricePerReport"
                 value="${(p.price_per_report_cents / 100).toFixed(2)}"
-                class="w-full pl-8 pr-4 py-3 border border-gray-200 rounded-xl text-sm font-mono focus:ring-2 focus:ring-red-500 focus:border-red-500">
+                class="w-full pl-8 pr-4 py-3 border border-gray-200 rounded-xl text-sm font-mono focus:ring-2 focus:ring-teal-500 focus:border-teal-500">
             </div>
             <p class="text-[10px] text-gray-400">Default charge for a single roof measurement report</p>
           </div>
@@ -1744,7 +1741,7 @@ function renderPricingView() {
             <label class="block text-sm font-semibold text-gray-700"><i class="fas fa-gift mr-1 text-purple-500"></i> Free Trial Reports</label>
             <input type="number" min="0" max="50" id="freeTrialReports"
               value="${p.free_trial_reports || 3}"
-              class="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm font-mono focus:ring-2 focus:ring-red-500 focus:border-red-500">
+              class="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm font-mono focus:ring-2 focus:ring-teal-500 focus:border-teal-500">
             <p class="text-[10px] text-gray-400">Number of free reports for new users</p>
           </div>
 
@@ -1755,7 +1752,7 @@ function renderPricingView() {
               <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold">$</span>
               <input type="number" step="0.01" min="0" id="subscriptionMonthly"
                 value="${(p.subscription_monthly_price_cents / 100).toFixed(2)}"
-                class="w-full pl-8 pr-4 py-3 border border-gray-200 rounded-xl text-sm font-mono focus:ring-2 focus:ring-red-500 focus:border-red-500">
+                class="w-full pl-8 pr-4 py-3 border border-gray-200 rounded-xl text-sm font-mono focus:ring-2 focus:ring-teal-500 focus:border-teal-500">
             </div>
             <p class="text-[10px] text-gray-400">Monthly fee for full CRM + unlimited reports (after free trial)</p>
           </div>
@@ -1767,7 +1764,7 @@ function renderPricingView() {
               <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold">$</span>
               <input type="number" step="0.01" min="0" id="subscriptionAnnual"
                 value="${(p.subscription_annual_price_cents / 100).toFixed(2)}"
-                class="w-full pl-8 pr-4 py-3 border border-gray-200 rounded-xl text-sm font-mono focus:ring-2 focus:ring-red-500 focus:border-red-500">
+                class="w-full pl-8 pr-4 py-3 border border-gray-200 rounded-xl text-sm font-mono focus:ring-2 focus:ring-teal-500 focus:border-teal-500">
             </div>
             <p class="text-[10px] text-gray-400">Annual fee (discounted) for full CRM + unlimited reports</p>
           </div>
@@ -1779,7 +1776,7 @@ function renderPricingView() {
               <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold">$</span>
               <input type="number" step="0.01" min="0" id="secretaryMonthly"
                 value="${(p.secretary_monthly_price_cents / 100).toFixed(2)}"
-                class="w-full pl-8 pr-4 py-3 border border-gray-200 rounded-xl text-sm font-mono focus:ring-2 focus:ring-red-500 focus:border-red-500">
+                class="w-full pl-8 pr-4 py-3 border border-gray-200 rounded-xl text-sm font-mono focus:ring-2 focus:ring-teal-500 focus:border-teal-500">
             </div>
             <p class="text-[10px] text-gray-400">Monthly subscription for AI receptionist / call answering</p>
           </div>
@@ -1791,7 +1788,7 @@ function renderPricingView() {
               <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold">$</span>
               <input type="number" step="0.01" min="0" id="secretaryPerCall"
                 value="${(p.secretary_per_call_price_cents / 100).toFixed(2)}"
-                class="w-full pl-8 pr-4 py-3 border border-gray-200 rounded-xl text-sm font-mono focus:ring-2 focus:ring-red-500 focus:border-red-500">
+                class="w-full pl-8 pr-4 py-3 border border-gray-200 rounded-xl text-sm font-mono focus:ring-2 focus:ring-teal-500 focus:border-teal-500">
             </div>
             <p class="text-[10px] text-gray-400">Per-call fee if using pay-as-you-go model</p>
           </div>
@@ -1801,14 +1798,14 @@ function renderPricingView() {
         <div class="mt-6 space-y-2">
           <label class="block text-sm font-semibold text-gray-700"><i class="fas fa-list-check mr-1 text-sky-500"></i> Subscription Features (comma-separated)</label>
           <textarea id="subscriptionFeatures" rows="3"
-            class="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
+            class="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
             placeholder="Unlimited reports, Full CRM access, AI Secretary, Custom branding, Priority support">${p.subscription_features || ''}</textarea>
           <p class="text-[10px] text-gray-400">Features shown on public pricing page for the subscription plan</p>
         </div>
 
         <div class="mt-6 flex items-center justify-between">
           <p class="text-xs text-gray-400"><i class="fas fa-info-circle mr-1"></i> Changes take effect immediately for new transactions</p>
-          <button type="submit" id="savePricingBtn" class="px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-semibold text-sm transition-colors">
+          <button type="submit" id="savePricingBtn" class="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-semibold text-sm transition-colors">
             <i class="fas fa-save mr-1"></i> Save Pricing
           </button>
         </div>
@@ -1824,11 +1821,11 @@ function renderPricingView() {
         ${activePackages.map(pkg => renderPackageCard(pkg, true)).join('')}
 
         <!-- Add New Package Card -->
-        <div onclick="showAddPackageModal()" class="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center cursor-pointer hover:border-red-400 hover:bg-red-50/30 transition-all group">
-          <div class="w-12 h-12 bg-gray-100 group-hover:bg-red-100 rounded-xl flex items-center justify-center mx-auto mb-3 transition-colors">
-            <i class="fas fa-plus text-gray-400 group-hover:text-red-500 text-lg transition-colors"></i>
+        <div onclick="showAddPackageModal()" class="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center cursor-pointer hover:border-teal-400 hover:bg-teal-50/30 transition-all group">
+          <div class="w-12 h-12 bg-gray-100 group-hover:bg-teal-100 rounded-xl flex items-center justify-center mx-auto mb-3 transition-colors">
+            <i class="fas fa-plus text-gray-400 group-hover:text-teal-500 text-lg transition-colors"></i>
           </div>
-          <p class="text-sm font-semibold text-gray-500 group-hover:text-red-600 transition-colors">Add Package</p>
+          <p class="text-sm font-semibold text-gray-500 group-hover:text-teal-600 transition-colors">Add Package</p>
           <p class="text-[10px] text-gray-400">Create a new credit pack</p>
         </div>
       </div>
@@ -1856,25 +1853,25 @@ function renderPricingView() {
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">Package Name</label>
               <input type="text" id="pkgName" placeholder="e.g. 10 Pack" required
-                class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500">
+                class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500">
             </div>
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
               <input type="text" id="pkgDesc" placeholder="e.g. 10 reports, $9 each"
-                class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500">
+                class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500">
             </div>
             <div class="grid grid-cols-2 gap-4">
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Credits (Reports)</label>
                 <input type="number" id="pkgCredits" min="1" required
-                  class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-mono focus:ring-2 focus:ring-red-500 focus:border-red-500">
+                  class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-mono focus:ring-2 focus:ring-teal-500 focus:border-teal-500">
               </div>
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Total Price (CAD)</label>
                 <div class="relative">
                   <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold">$</span>
                   <input type="number" step="0.01" min="0.01" id="pkgPrice" required
-                    class="w-full pl-8 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm font-mono focus:ring-2 focus:ring-red-500 focus:border-red-500">
+                    class="w-full pl-8 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm font-mono focus:ring-2 focus:ring-teal-500 focus:border-teal-500">
                 </div>
               </div>
             </div>
@@ -1882,11 +1879,11 @@ function renderPricingView() {
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Sort Order</label>
                 <input type="number" id="pkgSort" min="0" value="0"
-                  class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-mono focus:ring-2 focus:ring-red-500 focus:border-red-500">
+                  class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-mono focus:ring-2 focus:ring-teal-500 focus:border-teal-500">
               </div>
               <div class="flex items-end">
                 <label class="flex items-center gap-2 cursor-pointer py-2.5">
-                  <input type="checkbox" id="pkgActive" checked class="w-4 h-4 text-red-600 rounded focus:ring-red-500">
+                  <input type="checkbox" id="pkgActive" checked class="w-4 h-4 text-red-600 rounded focus:ring-teal-500">
                   <span class="text-sm font-medium text-gray-700">Active (visible)</span>
                 </label>
               </div>
@@ -1897,7 +1894,7 @@ function renderPricingView() {
           </div>
           <div class="flex gap-3 mt-6">
             <button type="button" onclick="closePkgModal()" class="flex-1 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 rounded-xl text-sm font-medium transition-colors">Cancel</button>
-            <button type="submit" id="pkgSaveBtn" class="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-semibold transition-colors">
+            <button type="submit" id="pkgSaveBtn" class="flex-1 px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-sm font-semibold transition-colors">
               <i class="fas fa-save mr-1"></i> Save
             </button>
           </div>
@@ -1927,7 +1924,7 @@ function renderPackageCard(pkg, isActive) {
           <i class="fas fa-edit mr-1"></i> Edit
         </button>
         ${isActive
-          ? `<button onclick="deactivatePackage(${pkg.id})" class="px-3 py-2 bg-red-50 hover:bg-red-100 rounded-lg text-xs font-medium text-red-600 transition-colors" title="Deactivate"><i class="fas fa-eye-slash"></i></button>`
+          ? `<button onclick="deactivatePackage(${pkg.id})" class="px-3 py-2 bg-teal-50 hover:bg-teal-100 rounded-lg text-xs font-medium text-teal-600 transition-colors" title="Deactivate"><i class="fas fa-eye-slash"></i></button>`
           : `<button onclick="activatePackage(${pkg.id})" class="px-3 py-2 bg-green-50 hover:bg-green-100 rounded-lg text-xs font-medium text-green-600 transition-colors" title="Reactivate"><i class="fas fa-eye"></i></button>`
         }
       </div>
@@ -1968,7 +1965,7 @@ async function savePricingSettings(e) {
     }
 
     btn.innerHTML = '<i class="fas fa-check mr-1"></i> Saved!';
-    btn.classList.replace('bg-red-600', 'bg-green-600');
+    btn.classList.replace('bg-teal-600', 'bg-green-600');
     // Reload pricing data from DB to show updated values
     setTimeout(() => { loadView('pricing'); }, 1500);
   } catch (err) {
@@ -2714,7 +2711,7 @@ async function loadOnboardingConfig() {
       <div id="obc-features-list"></div>
     </div>
 
-    <button onclick="obcSave()" id="obc-save-btn" class="px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-semibold text-sm"><i class="fas fa-save mr-1"></i>Save Onboarding Configuration</button>
+    <button onclick="obcSave()" id="obc-save-btn" class="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-semibold text-sm"><i class="fas fa-save mr-1"></i>Save Onboarding Configuration</button>
   `;
 
   renderObcPacks();
@@ -2780,7 +2777,7 @@ window.obcSave = async function() {
       body: JSON.stringify(onboardCfg)
     });
     if (res && res.ok) {
-      btn.innerHTML = '<i class="fas fa-check mr-1"></i>Saved!'; btn.classList.replace('bg-red-600','bg-green-600');
+      btn.innerHTML = '<i class="fas fa-check mr-1"></i>Saved!'; btn.classList.replace('bg-teal-600','bg-green-600');
       setTimeout(function(){ loadView('onboarding-config'); }, 1500);
     } else { alert('Save failed'); btn.disabled = false; btn.innerHTML = '<i class="fas fa-save mr-1"></i>Save'; }
   } catch(e) { alert('Error: ' + e.message); btn.disabled = false; btn.innerHTML = '<i class="fas fa-save mr-1"></i>Save'; }
@@ -3006,7 +3003,7 @@ window.savePricingPresets = async function() {
     msg.className = 'text-sm px-4 py-3 rounded-lg bg-green-50 text-green-700 border border-green-200';
     msg.innerHTML = '<i class="fas fa-check-circle mr-2"></i>Presets saved! These will be used when generating proposals from roof reports.';
   } else {
-    msg.className = 'text-sm px-4 py-3 rounded-lg bg-red-50 text-red-700 border border-red-200';
+    msg.className = 'text-sm px-4 py-3 rounded-lg bg-red-50 text-red-700 border border-teal-200';
     msg.innerHTML = '<i class="fas fa-times-circle mr-2"></i>' + (data.error || 'Save failed');
   }
 };
@@ -4017,7 +4014,7 @@ window.testSipConnection = async function() {
 
 function showTelMsg(el, type, text) {
   if (!el) return;
-  el.className = 'text-sm px-4 py-3 rounded-lg ' + (type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200');
+  el.className = 'text-sm px-4 py-3 rounded-lg ' + (type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-teal-200');
   el.innerHTML = '<i class="fas ' + (type === 'success' ? 'fa-check-circle' : 'fa-times-circle') + ' mr-2"></i>' + text;
 }
 
@@ -4039,7 +4036,7 @@ async function loadPaywallStatus() {
     var el = document.getElementById('paywall-content');
     if (!el) return;
 
-    var checkIcon = function(ok) { return ok ? '<i class="fas fa-check-circle text-green-500"></i>' : '<i class="fas fa-times-circle text-red-400"></i>'; };
+    var checkIcon = function(ok) { return ok ? '<i class="fas fa-check-circle text-green-500"></i>' : '<i class="fas fa-times-circle text-teal-400"></i>'; };
 
     el.innerHTML = `
     <div class="grid md:grid-cols-3 gap-6 mb-6">
@@ -4384,7 +4381,7 @@ function renderCustomerOnboardingView() {
       '<td class="px-4 py-3 text-center">' + secBadge + '</td>' +
       '<td class="px-4 py-3 text-center">' + modeBadge + '</td>' +
       '<td class="px-4 py-3 text-xs text-gray-400">' + fmtDate(c.created_at) + '</td>' +
-      '<td class="px-4 py-3"><button onclick="toggleSecretaryMode(' + c.id + ', ' + (c.secretary_enabled ? 0 : 1) + ')" class="text-xs ' + (c.secretary_enabled ? 'text-red-600 hover:text-red-800' : 'text-green-600 hover:text-green-800') + ' font-medium">' + (c.secretary_enabled ? '<i class="fas fa-power-off mr-1"></i>Disable' : '<i class="fas fa-play mr-1"></i>Enable') + '</button></td>' +
+      '<td class="px-4 py-3"><button onclick="toggleSecretaryMode(' + c.id + ', ' + (c.secretary_enabled ? 0 : 1) + ')" class="text-xs ' + (c.secretary_enabled ? 'text-teal-600 hover:text-teal-800' : 'text-green-600 hover:text-green-800') + ' font-medium">' + (c.secretary_enabled ? '<i class="fas fa-power-off mr-1"></i>Disable' : '<i class="fas fa-play mr-1"></i>Enable') + '</button></td>' +
       '</tr>';
   }).join('');
 
@@ -4413,7 +4410,7 @@ function renderCustomerOnboardingView() {
     '<div class="mt-3 bg-white rounded-xl p-3 border border-amber-200">' +
     '<p class="text-xs font-bold text-gray-700 mb-1"><i class="fas fa-external-link-alt mr-1 text-amber-600"></i>Recommended SIP Phone Providers:</p>' +
     '<div class="flex flex-wrap gap-2">' +
-    '<a href="https://www.twilio.com/en-us/phone-numbers" target="_blank" class="px-3 py-1.5 bg-red-50 border border-red-200 rounded-lg text-xs font-bold text-red-700 hover:bg-red-100 transition-colors"><i class="fas fa-phone mr-1"></i>Twilio — Buy Phone Number</a>' +
+    '<a href="https://www.twilio.com/en-us/phone-numbers" target="_blank" class="px-3 py-1.5 bg-red-50 border border-teal-200 rounded-lg text-xs font-bold text-red-700 hover:bg-red-100 transition-colors"><i class="fas fa-phone mr-1"></i>Twilio — Buy Phone Number</a>' +
     '<a href="https://www.vonage.com/communications-apis/phone-numbers/" target="_blank" class="px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-lg text-xs font-bold text-blue-700 hover:bg-blue-100 transition-colors"><i class="fas fa-phone mr-1"></i>Vonage Numbers</a>' +
     '<a href="https://telnyx.com/products/phone-numbers" target="_blank" class="px-3 py-1.5 bg-green-50 border border-green-200 rounded-lg text-xs font-bold text-green-700 hover:bg-green-100 transition-colors"><i class="fas fa-phone mr-1"></i>Telnyx Numbers</a>' +
     '</div>' +
