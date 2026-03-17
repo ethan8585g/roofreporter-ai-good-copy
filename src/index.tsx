@@ -2131,182 +2131,181 @@ function getSuperAdminDashboardHTML() {
   ${getHeadTags()}
   <title>Super Admin Dashboard - RoofReporterAI</title>
   <style>
-    .sa-sidebar { transition: width 0.3s ease; }
+    :root { --brand: #0d9488; --brand-light: #14b8a6; --brand-dark: #0f766e; --brand-50: #f0fdfa; --brand-100: #ccfbf1; --sidebar-bg: #0f172a; --sidebar-hover: rgba(20,184,166,0.1); --sidebar-active-bg: linear-gradient(135deg, #0d9488, #14b8a6); }
+    * { scrollbar-width: thin; scrollbar-color: #334155 transparent; }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+    .sa-sidebar { transition: width 0.3s cubic-bezier(0.4,0,0.2,1); }
     .sa-sidebar .label { transition: opacity 0.2s ease; }
-    .sa-nav-item { transition: all 0.2s ease; cursor: pointer; }
-    .sa-nav-item:hover { background: rgba(255,255,255,0.08); }
-    .sa-nav-item.active { background: linear-gradient(135deg, #dc2626, #ef4444); color: white; box-shadow: 0 4px 12px rgba(220,38,38,0.3); }
-    .metric-card { transition: all 0.3s ease; }
-    .metric-card:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(0,0,0,0.1); }
-    @keyframes slideIn { from { opacity:0; transform:translateY(10px) } to { opacity:1; transform:translateY(0) } }
-    .slide-in { animation: slideIn 0.4s ease-out; }
-    .sa-kpi { background: linear-gradient(135deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02)); border: 1px solid rgba(255,255,255,0.1); }
+    .sa-nav-item { transition: all 0.2s cubic-bezier(0.4,0,0.2,1); cursor: pointer; border-radius: 10px; }
+    .sa-nav-item:hover { background: var(--sidebar-hover); color: #e2e8f0; }
+    .sa-nav-item.active { background: var(--sidebar-active-bg); color: white !important; box-shadow: 0 4px 15px rgba(13,148,136,0.35); }
+    .sa-nav-item.active i { color: white !important; }
+    .sa-nav-group-label { font-size: 10px; letter-spacing: 1.2px; text-transform: uppercase; color: #475569; font-weight: 700; padding: 10px 16px 6px; }
+    .metric-card { transition: all 0.3s cubic-bezier(0.4,0,0.2,1); border: 1px solid #e2e8f0; }
+    .metric-card:hover { transform: translateY(-3px); box-shadow: 0 12px 30px rgba(0,0,0,0.08); border-color: #99f6e4; }
+    @keyframes slideIn { from { opacity:0; transform:translateY(12px) } to { opacity:1; transform:translateY(0) } }
+    .slide-in { animation: slideIn 0.35s ease-out; }
+    .sa-section { background: white; border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.04); overflow: hidden; margin-bottom: 24px; }
+    .sa-section:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.06); }
+    .sa-section-header { padding: 16px 24px; border-bottom: 1px solid #f1f5f9; display: flex; align-items: center; justify-content: space-between; }
+    .sa-section-header h3 { font-size: 14px; font-weight: 700; color: #1e293b; display: flex; align-items: center; gap: 8px; }
+    .sa-section-header h3 i { color: var(--brand); font-size: 13px; }
+    .sa-section-body { padding: 24px; }
+    table thead { background: #f8fafc; }
+    table thead th { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #64748b; padding: 10px 16px; }
+    table tbody tr { transition: background 0.15s; }
+    table tbody tr:hover { background: #f0fdfa; }
+    table tbody td { padding: 10px 16px; font-size: 13px; color: #334155; }
+    .badge { display: inline-flex; align-items: center; padding: 2px 10px; border-radius: 9999px; font-size: 11px; font-weight: 600; }
+    .header-bar { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); backdrop-filter: blur(12px); }
   </style>
 </head>
-<body class="bg-gray-100 min-h-screen">
-  <!-- Super Admin Top Bar -->
-  <header class="bg-slate-700 text-white shadow-xl sticky top-0 z-50">
-    <div class="max-w-full mx-auto px-4 md:px-6 h-14 flex items-center justify-between">
+<body class="bg-slate-50 min-h-screen font-sans antialiased">
+  <!-- Header Bar -->
+  <header class="header-bar text-white shadow-xl sticky top-0 z-50">
+    <div class="max-w-full mx-auto px-4 md:px-6 h-[60px] flex items-center justify-between">
       <div class="flex items-center gap-3">
-        <button onclick="document.getElementById('sa-sidebar').classList.toggle('hidden');document.getElementById('sa-sidebar').classList.toggle('fixed');document.getElementById('sa-sidebar').classList.toggle('inset-0');document.getElementById('sa-sidebar').classList.toggle('z-40');" class="md:hidden text-gray-300 hover:text-white">
+        <button onclick="document.getElementById('sa-sidebar').classList.toggle('hidden');document.getElementById('sa-sidebar').classList.toggle('fixed');document.getElementById('sa-sidebar').classList.toggle('inset-0');document.getElementById('sa-sidebar').classList.toggle('z-40');" class="md:hidden text-gray-300 hover:text-white p-2 rounded-lg hover:bg-white/10">
           <i class="fas fa-bars text-lg"></i>
         </button>
-        <div class="w-8 h-8 bg-red-600 rounded-lg flex items-center justify-center">
-          <i class="fas fa-crown text-white text-sm"></i>
-        </div>
-        <div class="leading-tight">
-          <span class="text-white font-bold text-sm">ROOFREPORTERAI</span>
-          <span class="text-gray-400 text-[10px] block -mt-0.5">Super Admin Command Center</span>
-        </div>
+        <a href="/" class="flex items-center gap-3 hover:opacity-90 transition-opacity no-underline">
+          <div class="w-9 h-9 bg-gradient-to-br from-teal-400 to-teal-600 rounded-xl flex items-center justify-center shadow-lg shadow-teal-500/20">
+            <i class="fas fa-chart-pie text-white text-sm"></i>
+          </div>
+          <div class="leading-tight hidden sm:block">
+            <span class="text-white font-bold text-[15px] tracking-tight">RoofReporterAI</span>
+            <span class="text-slate-400 text-[10px] block -mt-0.5 font-medium">Command Center</span>
+          </div>
+        </a>
       </div>
-      <div class="flex items-center gap-2 md:gap-4">
-        <span id="saUserGreeting" class="text-gray-300 text-xs hidden">
-          <i class="fas fa-crown mr-1 text-yellow-400"></i><span id="saUserName"></span>
-          <span class="ml-1 px-1.5 py-0.5 bg-red-600/30 text-red-300 rounded text-[10px] font-bold">SUPER ADMIN</span>
+      <div class="flex items-center gap-1 md:gap-3">
+        <span id="saUserGreeting" class="text-slate-300 text-xs hidden items-center gap-2 mr-2">
+          <span class="w-7 h-7 bg-gradient-to-br from-teal-400 to-teal-600 rounded-full flex items-center justify-center text-white text-[10px] font-bold" id="saUserInitial">A</span>
+          <span id="saUserName" class="hidden sm:inline font-medium"></span>
+          <span class="px-2 py-0.5 bg-teal-500/20 text-teal-300 rounded-md text-[10px] font-bold hidden sm:inline">ADMIN</span>
         </span>
-        <a href="/admin" class="text-gray-400 hover:text-white text-xs transition-colors"><i class="fas fa-tachometer-alt mr-1"></i>Ops Panel</a>
-        <a href="/" target="_blank" class="text-gray-400 hover:text-white text-xs transition-colors"><i class="fas fa-external-link-alt mr-1"></i>View Site</a>
-        <a href="/settings" class="text-gray-400 hover:text-white text-xs transition-colors"><i class="fas fa-cog mr-1"></i>Settings</a>
-        <button onclick="saLogout()" class="text-gray-400 hover:text-red-400 text-xs transition-colors"><i class="fas fa-sign-out-alt mr-1"></i>Logout</button>
+        <a href="/admin" class="px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 text-xs transition-all"><i class="fas fa-tachometer-alt mr-1"></i><span class="hidden md:inline">Ops Panel</span></a>
+        <a href="/" target="_blank" class="px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 text-xs transition-all"><i class="fas fa-external-link-alt"></i></a>
+        <button onclick="saLogout()" class="px-3 py-2 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10 text-xs transition-all"><i class="fas fa-sign-out-alt"></i></button>
       </div>
     </div>
   </header>
 
-  <div class="flex min-h-[calc(100vh-56px)]">
-    <!-- Sidebar Navigation -->
-    <aside id="sa-sidebar" class="sa-sidebar w-64 bg-slate-800 border-r border-slate-700 flex-shrink-0 hidden md:block overflow-y-auto max-h-[calc(100vh-56px)]">
-      <div class="p-4 space-y-1" id="sa-nav">
-        <div class="sa-nav-item active rounded-xl px-4 py-3 flex items-center gap-3" onclick="saSetView('users', this)">
-          <i class="fas fa-users w-5 text-center"></i>
-          <span class="label text-sm font-medium">All Active Users</span>
+  <div class="flex min-h-[calc(100vh-60px)]">
+    <!-- Sidebar -->
+    <aside id="sa-sidebar" class="sa-sidebar w-[260px] flex-shrink-0 hidden md:flex flex-col overflow-y-auto max-h-[calc(100vh-60px)]" style="background:var(--sidebar-bg)">
+      <div class="p-3 space-y-0.5 flex-1" id="sa-nav">
+        <p class="sa-nav-group-label mt-1">Overview</p>
+        <div class="sa-nav-item active px-3 py-2.5 flex items-center gap-3" onclick="saSetView('users', this)">
+          <i class="fas fa-users w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">All Users</span>
         </div>
-        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('sales', this)">
-          <i class="fas fa-credit-card w-5 text-center"></i>
-          <span class="label text-sm font-medium">Credit Pack Sales</span>
+        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('sales', this)">
+          <i class="fas fa-credit-card w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Credit Sales</span>
         </div>
-        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('orders', this)">
-          <i class="fas fa-clipboard-list w-5 text-center"></i>
-          <span class="label text-sm font-medium">Order History</span>
+        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('orders', this)">
+          <i class="fas fa-clipboard-list w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Order History</span>
         </div>
-        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('signups', this)">
-          <i class="fas fa-user-plus w-5 text-center"></i>
-          <span class="label text-sm font-medium">New Sign-ups</span>
+        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('signups', this)">
+          <i class="fas fa-user-plus w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Sign-ups</span>
         </div>
-        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('marketing', this)">
-          <i class="fas fa-bullhorn w-5 text-center"></i>
-          <span class="label text-sm font-medium">Sales & Marketing</span>
+        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('marketing', this)">
+          <i class="fas fa-bullhorn w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Sales & Marketing</span>
         </div>
-        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('email-outreach', this)">
-          <i class="fas fa-envelope-open-text w-5 text-center"></i>
-          <span class="label text-sm font-medium">Email Outreach</span>
+
+        <p class="sa-nav-group-label mt-3">Channels</p>
+        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('email-outreach', this)">
+          <i class="fas fa-envelope-open-text w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Email Outreach</span>
         </div>
-        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('email-setup', this)">
-          <i class="fas fa-cog w-5 text-center"></i>
-          <span class="label text-sm font-medium">Email Setup</span>
+        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('email-setup', this)">
+          <i class="fas fa-at w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Email Setup</span>
         </div>
-        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('analytics', this)">
-          <i class="fas fa-chart-line w-5 text-center"></i>
-          <span class="label text-sm font-medium">Site Analytics</span>
+        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('call-center', this)">
+          <i class="fas fa-headset w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">AI Call Center</span>
         </div>
-        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('ga4', this)">
-          <i class="fab fa-google w-5 text-center"></i>
-          <span class="label text-sm font-medium">Google Analytics</span>
+        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('meta-connect', this)">
+          <i class="fab fa-meta w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Meta Connect</span>
         </div>
-        <div class="border-t border-gray-800 my-3"></div>
-        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('call-center', this)">
-          <i class="fas fa-headset w-5 text-center"></i>
-          <span class="label text-sm font-medium">AI Call Center</span>
+        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('heygen', this)">
+          <i class="fas fa-video w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">HeyGen Videos</span>
         </div>
-        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('meta-connect', this)">
-          <i class="fab fa-meta w-5 text-center"></i>
-          <span class="label text-sm font-medium">Meta Connect</span>
+
+        <p class="sa-nav-group-label mt-3">Analytics</p>
+        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('analytics', this)">
+          <i class="fas fa-chart-line w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Site Analytics</span>
         </div>
-        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('secretary-admin', this)">
-          <i class="fas fa-phone-volume w-5 text-center"></i>
-          <span class="label text-sm font-medium">Roofer Secretary AI</span>
+        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('ga4', this)">
+          <i class="fab fa-google w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Google Analytics</span>
         </div>
-        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('heygen', this)">
-          <i class="fas fa-video w-5 text-center"></i>
-          <span class="label text-sm font-medium">HeyGen Videos</span>
+        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('revenue-pipeline', this)">
+          <i class="fas fa-funnel-dollar w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Revenue Pipeline</span>
         </div>
-        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('pricing', this)">
-          <i class="fas fa-dollar-sign w-5 text-center"></i>
-          <span class="label text-sm font-medium">Pricing & Billing</span>
+
+        <p class="sa-nav-group-label mt-3">Services</p>
+        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('secretary-admin', this)">
+          <i class="fas fa-phone-volume w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Secretary AI</span>
         </div>
-        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('contact-forms', this)">
-          <i class="fas fa-inbox w-5 text-center"></i>
-          <span class="label text-sm font-medium">Contact Forms</span>
+        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('telephony', this)">
+          <i class="fas fa-phone-alt w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Telephony / LiveKit</span>
         </div>
-        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('seo-manager', this)">
-          <i class="fas fa-search-plus w-5 text-center"></i>
-          <span class="label text-sm font-medium">SEO Manager</span>
+        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('phone-marketplace', this)">
+          <i class="fas fa-sim-card w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Phone Marketplace</span>
         </div>
-        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('onboarding-config', this)">
-          <i class="fas fa-sliders-h w-5 text-center"></i>
-          <span class="label text-sm font-medium">Onboarding Config</span>
+
+        <p class="sa-nav-group-label mt-3">Billing</p>
+        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('pricing', this)">
+          <i class="fas fa-dollar-sign w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Pricing & Billing</span>
         </div>
-        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('phone-marketplace', this)">
-          <i class="fas fa-sim-card w-5 text-center"></i>
-          <span class="label text-sm font-medium">Phone Marketplace</span>
+        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('pricing-engine', this)">
+          <i class="fas fa-calculator w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Pricing Engine</span>
         </div>
-        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('pricing-engine', this)">
-          <i class="fas fa-calculator w-5 text-center"></i>
-          <span class="label text-sm font-medium">Pricing Engine</span>
+        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('invoices', this)">
+          <i class="fas fa-file-invoice-dollar w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Invoices</span>
         </div>
-        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('invoices', this)">
-          <i class="fas fa-file-invoice-dollar w-5 text-center"></i>
-          <span class="label text-sm font-medium">Invoices</span>
+        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('service-invoices', this)">
+          <i class="fas fa-file-invoice w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Service Invoices</span>
         </div>
-        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('telephony', this)">
-          <i class="fas fa-phone-alt w-5 text-center"></i>
-          <span class="label text-sm font-medium">Telephony / LiveKit</span>
+        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('paywall', this)">
+          <i class="fas fa-shield-alt w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Paywall / App Store</span>
         </div>
-        <div class="border-t border-gray-800 my-3"></div>
-        <p class="px-4 py-1 text-[10px] text-gray-600 uppercase tracking-wider font-bold">Customer Ops</p>
-        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('customer-onboarding', this)">
-          <i class="fas fa-user-cog w-5 text-center"></i>
-          <span class="label text-sm font-medium">Customer Onboarding</span>
+
+        <p class="sa-nav-group-label mt-3">Customer Ops</p>
+        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('customer-onboarding', this)">
+          <i class="fas fa-user-cog w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Onboarding</span>
         </div>
-        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('service-invoices', this)">
-          <i class="fas fa-file-invoice w-5 text-center"></i>
-          <span class="label text-sm font-medium">Cold Call Invoices</span>
+        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('call-center-manage', this)">
+          <i class="fas fa-headset w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Call Center Mgmt</span>
         </div>
-        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('call-center-manage', this)">
-          <i class="fas fa-headset w-5 text-center"></i>
-          <span class="label text-sm font-medium">Call Center Mgmt</span>
+        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('contact-forms', this)">
+          <i class="fas fa-inbox w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Contact Forms</span>
         </div>
-        <div class="border-t border-gray-800 my-3"></div>
-        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('revenue-pipeline', this)">
-          <i class="fas fa-funnel-dollar w-5 text-center"></i>
-          <span class="label text-sm font-medium">Revenue Pipeline</span>
+        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('notifications-admin', this)">
+          <i class="fas fa-bell w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Notifications</span>
         </div>
-        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('notifications-admin', this)">
-          <i class="fas fa-bell w-5 text-center"></i>
-          <span class="label text-sm font-medium">Notifications</span>
+
+        <p class="sa-nav-group-label mt-3">Settings</p>
+        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('seo-manager', this)">
+          <i class="fas fa-search-plus w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">SEO Manager</span>
         </div>
-        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('webhooks', this)">
-          <i class="fas fa-plug w-5 text-center"></i>
-          <span class="label text-sm font-medium">Webhooks</span>
+        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('onboarding-config', this)">
+          <i class="fas fa-sliders-h w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Onboarding Config</span>
         </div>
-        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('paywall', this)">
-          <i class="fas fa-shield-alt w-5 text-center"></i>
-          <span class="label text-sm font-medium">Paywall / App Store</span>
+        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('webhooks', this)">
+          <i class="fas fa-plug w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Webhooks</span>
         </div>
-        <div class="border-t border-gray-800 my-3"></div>
-        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('ai-chat', this)">
-          <i class="fas fa-brain w-5 text-center"></i>
-          <span class="label text-sm font-medium">AI Site Manager</span>
+        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('ai-chat', this)">
+          <i class="fas fa-brain w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">AI Site Manager</span>
         </div>
-        <a href="/admin" class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400 no-underline">
-          <i class="fas fa-tachometer-alt w-5 text-center"></i>
-          <span class="label text-sm font-medium">Operations Panel</span>
+        <a href="/admin" class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400 no-underline">
+          <i class="fas fa-tachometer-alt w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Operations Panel</span>
         </a>
       </div>
     </aside>
 
     <!-- Main Content -->
-    <main class="flex-1 p-3 md:p-6 overflow-y-auto">
-      <div id="sa-root"></div>
+    <main class="flex-1 p-4 md:p-8 overflow-y-auto bg-slate-50">
+      <div id="sa-root" class="max-w-[1400px] mx-auto"></div>
     </main>
   </div>
 
@@ -2325,9 +2324,12 @@ function getSuperAdminDashboardHTML() {
         }
         const greeting = document.getElementById('saUserGreeting');
         const nameEl = document.getElementById('saUserName');
+        const initialEl = document.getElementById('saUserInitial');
         if (greeting && nameEl) {
           nameEl.textContent = u.name || u.email;
+          if (initialEl) initialEl.textContent = (u.name || u.email || 'A')[0].toUpperCase();
           greeting.classList.remove('hidden');
+          greeting.classList.add('flex');
         }
       } catch(e) { window.location.href = '/login'; }
     })();
@@ -2380,42 +2382,50 @@ function getAdminPageHTML() {
   ${getHeadTags()}
   <title>Admin Control Panel - RoofReporterAI</title>
   <style>
-    .admin-sidebar { transition: width 0.3s ease; }
-    .admin-sidebar .label { transition: opacity 0.2s ease; }
-    .tab-active { background: linear-gradient(135deg, #1e40af, #3b82f6); color: white; box-shadow: 0 4px 12px rgba(59,130,246,0.3); }
-    .metric-card { transition: all 0.3s ease; }
-    .metric-card:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(0,0,0,0.1); }
-    @keyframes slideIn { from { opacity:0; transform:translateY(10px) } to { opacity:1; transform:translateY(0) } }
-    .slide-in { animation: slideIn 0.4s ease-out; }
+    :root { --brand: #0d9488; --brand-light: #14b8a6; }
+    * { scrollbar-width: thin; scrollbar-color: #cbd5e1 transparent; }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+    .metric-card { transition: all 0.3s cubic-bezier(0.4,0,0.2,1); border: 1px solid #e2e8f0; }
+    .metric-card:hover { transform: translateY(-3px); box-shadow: 0 12px 30px rgba(0,0,0,0.08); border-color: #99f6e4; }
+    @keyframes slideIn { from { opacity:0; transform:translateY(12px) } to { opacity:1; transform:translateY(0) } }
+    .slide-in { animation: slideIn 0.35s ease-out; }
+    table thead { background: #f8fafc; }
+    table thead th { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #64748b; }
+    table tbody tr { transition: background 0.15s; }
+    table tbody tr:hover { background: #f0fdfa; }
   </style>
 </head>
-<body class="bg-gray-100 min-h-screen">
+<body class="bg-slate-50 min-h-screen font-sans antialiased">
   <!-- Admin Top Bar -->
-  <header class="bg-slate-700 text-white shadow-xl sticky top-0 z-50">
-    <div class="max-w-full mx-auto px-6 h-14 flex items-center justify-between">
+  <header class="sticky top-0 z-50 text-white shadow-xl" style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%)">
+    <div class="max-w-full mx-auto px-6 h-[60px] flex items-center justify-between">
       <div class="flex items-center gap-3">
-        <div class="w-8 h-8 bg-red-600 rounded-lg flex items-center justify-center">
-          <i class="fas fa-shield-alt text-white text-sm"></i>
-        </div>
-        <div class="leading-tight">
-          <span class="text-white font-bold text-sm">ROOFREPORTERAI</span>
-          <span class="text-gray-400 text-[10px] block -mt-0.5">Admin Control Panel</span>
-        </div>
+        <a href="/" class="flex items-center gap-3 hover:opacity-90 transition-opacity no-underline">
+          <div class="w-9 h-9 bg-gradient-to-br from-teal-400 to-teal-600 rounded-xl flex items-center justify-center shadow-lg shadow-teal-500/20">
+            <i class="fas fa-shield-alt text-white text-sm"></i>
+          </div>
+          <div class="leading-tight">
+            <span class="text-white font-bold text-[15px] tracking-tight">RoofReporterAI</span>
+            <span class="text-slate-400 text-[10px] block -mt-0.5 font-medium">Operations Panel</span>
+          </div>
+        </a>
       </div>
-      <div class="flex items-center gap-4">
-        <span id="userGreeting" class="text-gray-300 text-xs hidden">
-          <i class="fas fa-user-shield mr-1 text-red-400"></i><span id="userName"></span>
-          <span class="ml-1 px-1.5 py-0.5 bg-red-600/20 text-red-300 rounded text-[10px] font-bold">ADMIN</span>
+      <div class="flex items-center gap-1 md:gap-3">
+        <span id="userGreeting" class="text-slate-300 text-xs hidden items-center gap-2 mr-2">
+          <span class="w-7 h-7 bg-gradient-to-br from-teal-400 to-teal-600 rounded-full flex items-center justify-center text-white text-[10px] font-bold" id="userInitial">A</span>
+          <span id="userName" class="hidden sm:inline font-medium"></span>
+          <span class="px-2 py-0.5 bg-teal-500/20 text-teal-300 rounded-md text-[10px] font-bold hidden sm:inline">ADMIN</span>
         </span>
-        <a href="/super-admin" class="text-yellow-400 hover:text-yellow-300 text-xs transition-colors font-semibold"><i class="fas fa-crown mr-1"></i>Super Admin</a>
-        <a href="/" class="text-gray-400 hover:text-white text-xs transition-colors"><i class="fas fa-external-link-alt mr-1"></i>View Site</a>
-        <a href="/settings" class="text-gray-400 hover:text-white text-xs transition-colors"><i class="fas fa-cog mr-1"></i>Settings</a>
-        <button onclick="doLogout()" class="text-gray-400 hover:text-red-400 text-xs transition-colors"><i class="fas fa-sign-out-alt mr-1"></i>Logout</button>
+        <a href="/super-admin" class="px-3 py-2 rounded-lg text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 text-xs font-semibold transition-all"><i class="fas fa-crown mr-1"></i><span class="hidden md:inline">Super Admin</span></a>
+        <a href="/" target="_blank" class="px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 text-xs transition-all"><i class="fas fa-external-link-alt"></i></a>
+        <button onclick="doLogout()" class="px-3 py-2 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10 text-xs transition-all"><i class="fas fa-sign-out-alt"></i></button>
       </div>
     </div>
   </header>
 
-  <div class="max-w-[1600px] mx-auto px-6 py-6">
+  <div class="max-w-[1500px] mx-auto px-4 md:px-8 py-8">
     <div id="admin-root"></div>
   </div>
 
@@ -2434,9 +2444,12 @@ function getAdminPageHTML() {
         }
         const greeting = document.getElementById('userGreeting');
         const nameEl = document.getElementById('userName');
+        const initialEl = document.getElementById('userInitial');
         if (greeting && nameEl) {
           nameEl.textContent = u.name || u.email;
+          if (initialEl) initialEl.textContent = (u.name || u.email || 'A')[0].toUpperCase();
           greeting.classList.remove('hidden');
+          greeting.classList.add('flex');
         }
       } catch(e) { window.location.href = '/login'; }
     })();
