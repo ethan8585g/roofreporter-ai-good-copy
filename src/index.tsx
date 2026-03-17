@@ -2000,7 +2000,7 @@ function getContactFormHTML(sourcePage: string = 'unknown') {
           </div>
         </div>
         <div id="lead-form-msg" class="hidden text-sm font-medium px-4 py-3 rounded-lg"></div>
-        <button type="submit" id="lead-submit-btn" class="w-full bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-400 hover:to-red-400 text-white font-bold py-4 px-8 rounded-xl shadow-lg transition-all hover:scale-[1.01] text-lg min-h-[56px]">
+        <button type="submit" id="lead-submit-btn" class="w-full bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-400 hover:to-cyan-500 text-white font-bold py-4 px-8 rounded-xl shadow-lg transition-all hover:scale-[1.01] text-lg min-h-[56px]">
           <i class="fas fa-rocket mr-2"></i>Get Started — 3 Free Reports
         </button>
         <p class="text-center text-gray-400 text-xs">No credit card required. Setup in 2 minutes.</p>
@@ -2693,7 +2693,7 @@ function getLandingPageHTML() {
         <a href="/blog" class="text-gray-300 hover:text-white text-sm font-medium transition-colors">Blog</a>
         <a href="#faq" class="text-gray-300 hover:text-white text-sm font-medium transition-colors">FAQ</a>
         <a href="/customer/login" class="text-gray-300 hover:text-white text-sm font-medium transition-colors">Login</a>
-        <a href="/signup" class="bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-400 hover:to-red-400 text-white font-bold py-2.5 px-5 rounded-lg text-sm transition-all hover:scale-105 shadow-lg shadow-orange-500/25 min-h-[40px] flex items-center gap-1">
+        <a href="/signup" class="bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-400 hover:to-cyan-500 text-white font-bold py-2.5 px-5 rounded-lg text-sm transition-all hover:scale-105 shadow-lg shadow-teal-500/25 min-h-[40px] flex items-center gap-1">
           <i class="fas fa-rocket mr-1"></i>Start Free
         </a>
       </div>
@@ -2713,7 +2713,7 @@ function getLandingPageHTML() {
         <a href="/blog" class="text-gray-300 hover:text-white text-sm py-3 px-3 rounded-lg hover:bg-white/5 transition-all min-h-[44px] flex items-center" onclick="document.getElementById('mobile-menu').classList.add('hidden')">Blog</a>
         <a href="#faq" class="text-gray-300 hover:text-white text-sm py-3 px-3 rounded-lg hover:bg-white/5 transition-all min-h-[44px] flex items-center" onclick="document.getElementById('mobile-menu').classList.add('hidden')">FAQ</a>
         <a href="/customer/login" class="text-gray-300 hover:text-white text-sm py-3 px-3 rounded-lg hover:bg-white/5 transition-all min-h-[44px] flex items-center" onclick="document.getElementById('mobile-menu').classList.add('hidden')"><i class="fas fa-sign-in-alt mr-2"></i>Login</a>
-        <a href="/signup" class="bg-gradient-to-r from-orange-500 to-red-500 text-white font-bold py-3 px-5 rounded-lg text-sm text-center mt-2 min-h-[48px] flex items-center justify-center gap-2"><i class="fas fa-rocket"></i>Start Free — 3 Reports On Us</a>
+        <a href="/signup" class="bg-gradient-to-r from-teal-500 to-cyan-600 text-white font-bold py-3 px-5 rounded-lg text-sm text-center mt-2 min-h-[48px] flex items-center justify-center gap-2"><i class="fas fa-rocket"></i>Start Free — 3 Reports On Us</a>
       </div>
     </div>
   </nav>
@@ -2773,7 +2773,7 @@ function getLandingPageHTML() {
           <form onsubmit="return footerQuickSignup(event)" class="space-y-2.5">
             <input type="email" id="footer-email" required placeholder="you@company.com" class="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm placeholder-gray-500 focus:ring-2 focus:ring-cyan-400 focus:border-transparent outline-none">
             <input type="text" id="footer-company" placeholder="Company name" class="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm placeholder-gray-500 focus:ring-2 focus:ring-cyan-400 focus:border-transparent outline-none">
-            <button type="submit" class="w-full bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-400 hover:to-red-400 text-white font-bold py-2.5 px-4 rounded-lg text-sm transition-all hover:scale-[1.02] shadow-lg min-h-[44px]">
+            <button type="submit" class="w-full bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-400 hover:to-cyan-500 text-white font-bold py-2.5 px-4 rounded-lg text-sm transition-all hover:scale-[1.02] shadow-lg min-h-[44px]">
               <i class="fas fa-rocket mr-1"></i>Start Free
             </button>
           </form>
@@ -4404,28 +4404,28 @@ function getColdCallPageHTML() {
   <title>Cold Call Center - RoofReporterAI</title>
 </head>
 <body class="bg-gray-50 min-h-screen">
-  <header class="bg-gradient-to-r from-orange-500 to-red-600 text-white shadow-lg">
+  <header class="bg-gradient-to-r from-teal-500 to-cyan-700 text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
       <div class="flex items-center space-x-3">
         <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
           <span class="logo-mark w-10 h-10"><img src="/static/logo.png" alt="RoofReporterAI"></span>
           <div>
             <h1 class="text-lg font-bold">Cold Call Center</h1>
-            <p class="text-orange-200 text-xs">AI Outbound Sales Dialer</p>
+            <p class="text-teal-200 text-xs">AI Outbound Sales Dialer</p>
           </div>
         </a>
       </div>
       <nav class="flex items-center space-x-3">
-        <span id="custGreeting" class="text-orange-200 text-sm hidden"><i class="fas fa-user-circle mr-1"></i><span id="custName"></span></span>
-        <a href="/customer/dashboard" class="text-orange-200 hover:text-white text-sm"><i class="fas fa-th-large mr-1"></i>Dashboard</a>
-        <button onclick="custLogout()" class="text-orange-200 hover:text-white text-sm"><i class="fas fa-sign-out-alt mr-1"></i>Logout</button>
+        <span id="custGreeting" class="text-teal-200 text-sm hidden"><i class="fas fa-user-circle mr-1"></i><span id="custName"></span></span>
+        <a href="/customer/dashboard" class="text-teal-200 hover:text-white text-sm"><i class="fas fa-th-large mr-1"></i>Dashboard</a>
+        <button onclick="custLogout()" class="text-teal-200 hover:text-white text-sm"><i class="fas fa-sign-out-alt mr-1"></i>Logout</button>
       </nav>
     </div>
   </header>
   <main class="max-w-7xl mx-auto px-4 py-6">
     <div id="cold-call-root">
       <div class="flex items-center justify-center py-20">
-        <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-orange-500"></div>
+        <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-teal-500"></div>
         <span class="ml-4 text-gray-500 text-lg">Loading Cold Call Center...</span>
       </div>
     </div>

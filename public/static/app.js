@@ -1545,7 +1545,7 @@ function renderStep5() {
         </div>
 
         <!-- Price Per Bundle (Square) for Customer Cost Estimate -->
-        <div class="bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl border border-amber-200 p-5">
+        <div class="bg-gradient-to-r from-teal-50 to-cyan-50 rounded-xl border border-teal-200 p-5">
           <h4 class="font-semibold text-gray-700 mb-3 flex items-center">
             <i class="fas fa-dollar-sign text-amber-500 mr-2"></i>Customer Price Estimate (Optional)
           </h4>

@@ -115,7 +115,7 @@ function animateCounter(el) {
 // ============================================================
 function renderAnnouncementBar() {
   return `
-    <div class="bg-gradient-to-r from-orange-500 via-red-500 to-orange-500 text-white text-center py-2.5 px-4 text-sm font-semibold relative overflow-hidden">
+    <div class="bg-gradient-to-r from-teal-600 via-teal-500 to-cyan-500 text-white text-center py-2.5 px-4 text-sm font-semibold relative overflow-hidden">
       <div class="absolute inset-0 opacity-20" style="background: repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(255,255,255,0.1) 10px, rgba(255,255,255,0.1) 20px);"></div>
       <div class="relative flex items-center justify-center gap-3 flex-wrap">
         <span class="animate-pulse">&#x1F525;</span>
@@ -174,12 +174,12 @@ function renderHero() {
           <!-- Left content: 3 cols -->
           <div class="lg:col-span-3">
             <!-- Urgency badge -->
-            <div class="inline-flex items-center gap-2 bg-orange-500/15 border border-orange-400/30 rounded-full px-5 py-2 mb-6 backdrop-blur-sm">
+            <div class="inline-flex items-center gap-2 bg-teal-500/15 border border-teal-400/30 rounded-full px-5 py-2 mb-6 backdrop-blur-sm">
               <span class="relative flex h-2.5 w-2.5">
-                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
-                <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-orange-400"></span>
+                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-75"></span>
+                <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-teal-400"></span>
               </span>
-              <span class="text-sm font-semibold text-orange-200 tracking-wide">Trusted by 5,000+ Canadian Roofers</span>
+              <span class="text-sm font-semibold text-teal-200 tracking-wide">Trusted by 5,000+ Canadian Roofers</span>
             </div>
 
             <h1 class="text-4xl sm:text-5xl lg:text-6xl font-black leading-[1.08] text-white mb-6 tracking-tight">
@@ -192,9 +192,9 @@ function renderHero() {
               Satellite-powered roof measurement reports in under 60 seconds. 3D area, pitch, edges, materials, and solar analysis &mdash; plus a full CRM, AI phone secretary, and team management. <strong class="text-white">Start with 3 free estimates today.</strong>
             </p>
 
-            <!-- A/B CTA — Orange primary (higher contrast) -->
+            <!-- A/B CTA — Teal primary (brand color) -->
             <div class="flex flex-col sm:flex-row gap-4 mb-8">
-              <a href="/signup" onclick="rrTrack('cta_click',{location:'hero_primary',variant:'orange'})" class="group inline-flex items-center justify-center gap-3 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-400 hover:to-red-400 text-white font-bold py-4 px-10 rounded-xl text-lg shadow-2xl shadow-orange-500/30 transition-all duration-300 hover:scale-[1.03] min-h-[56px]">
+              <a href="/signup" onclick="rrTrack('cta_click',{location:'hero_primary',variant:'teal'})" class="group inline-flex items-center justify-center gap-3 bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-400 hover:to-cyan-500 text-white font-bold py-4 px-10 rounded-xl text-lg shadow-2xl shadow-teal-500/30 transition-all duration-300 hover:scale-[1.03] min-h-[56px]">
                 <i class="fas fa-rocket"></i>
                 Start 3 Free Estimates
                 <i class="fas fa-arrow-right text-sm group-hover:translate-x-1 transition-transform"></i>
@@ -243,7 +243,7 @@ function renderHero() {
               <form id="hero-quick-form" onsubmit="return heroQuickSignup(event)" class="space-y-3">
                 <input type="email" id="hero-email" required placeholder="you@roofingcompany.com" class="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3.5 text-white placeholder-gray-400 focus:ring-2 focus:ring-cyan-400 focus:border-transparent outline-none text-sm">
                 <input type="text" id="hero-company" placeholder="Company name (optional)" class="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3.5 text-white placeholder-gray-400 focus:ring-2 focus:ring-cyan-400 focus:border-transparent outline-none text-sm">
-                <button type="submit" class="w-full bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-400 hover:to-red-400 text-white font-bold py-3.5 rounded-xl shadow-lg transition-all hover:scale-[1.02] text-sm min-h-[48px]">
+                <button type="submit" class="w-full bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-400 hover:to-cyan-500 text-white font-bold py-3.5 rounded-xl shadow-lg transition-all hover:scale-[1.02] text-sm min-h-[48px]">
                   <i class="fas fa-rocket mr-2"></i>Start Free &mdash; 3 Reports On Us
                 </button>
                 <div id="hero-form-msg" class="hidden text-sm text-center py-2"></div>
@@ -442,7 +442,7 @@ function renderHowItWorks() {
   const steps = [
     { num: 1, icon: 'fas fa-search-location', color: 'from-red-500 to-rose-500', title: 'Enter the Address', desc: 'Search any Canadian address. Google Maps pinpoints the exact roof instantly.' },
     { num: 2, icon: 'fas fa-sliders-h', color: 'from-blue-500 to-indigo-500', title: 'Configure Details', desc: "Add homeowner info, company details, and delivery options. Takes 30 seconds." },
-    { num: 3, icon: 'fas fa-credit-card', color: 'from-amber-500 to-orange-500', title: 'Order Instantly', desc: 'First 3 reports are FREE. Then just $8 CAD per report. Instant Square checkout.' },
+    { num: 3, icon: 'fas fa-credit-card', color: 'from-teal-500 to-emerald-500', title: 'Order Instantly', desc: 'First 3 reports are FREE. Then just $8 CAD per report. Instant Square checkout.' },
     { num: 4, icon: 'fas fa-file-pdf', color: 'from-cyan-500 to-blue-500', title: 'Get Your PDF', desc: 'Professional report with area, pitch, edges, BOM, solar data. Under 60 seconds.' },
   ];
 
@@ -479,7 +479,7 @@ function renderHowItWorks() {
         </div>
 
         <div class="text-center mt-14 scroll-animate opacity-0 translate-y-8 transition-all duration-700">
-          <a href="/signup" onclick="rrTrack('cta_click',{location:'how_it_works'})" class="group inline-flex items-center gap-3 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-400 hover:to-red-400 text-white font-bold py-4 px-10 rounded-xl text-lg shadow-xl shadow-orange-500/20 transition-all duration-300 hover:scale-[1.02] min-h-[56px]">
+          <a href="/signup" onclick="rrTrack('cta_click',{location:'how_it_works'})" class="group inline-flex items-center gap-3 bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-400 hover:to-cyan-500 text-white font-bold py-4 px-10 rounded-xl text-lg shadow-xl shadow-teal-500/20 transition-all duration-300 hover:scale-[1.02] min-h-[56px]">
             <i class="fas fa-rocket"></i>
             Start Free &mdash; 3 Reports Included
             <i class="fas fa-arrow-right text-sm group-hover:translate-x-1 transition-transform"></i>
@@ -624,7 +624,7 @@ function renderFeatureGrid() {
         </div>
 
         <div class="text-center mt-12 scroll-animate opacity-0 translate-y-8 transition-all duration-700">
-          <a href="/signup" onclick="rrTrack('cta_click',{location:'feature_grid'})" class="inline-flex items-center gap-2 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-400 hover:to-red-400 text-white font-bold py-3.5 px-8 rounded-xl shadow-lg transition-all hover:scale-[1.02] min-h-[48px]">
+          <a href="/signup" onclick="rrTrack('cta_click',{location:'feature_grid'})" class="inline-flex items-center gap-2 bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-400 hover:to-cyan-500 text-white font-bold py-3.5 px-8 rounded-xl shadow-lg transition-all hover:scale-[1.02] min-h-[48px]">
             <i class="fas fa-gift"></i> Get 3 Free Reports Now
           </a>
         </div>
@@ -744,7 +744,7 @@ function renderIndustrySections() {
     {
       icon: 'fas fa-solar-panel',
       title: 'Solar Installers',
-      color: 'from-amber-500 to-orange-500',
+      color: 'from-teal-500 to-emerald-500',
       desc: 'Every roof report includes solar potential analysis &mdash; panel count, yearly energy, sunshine hours. Identify solar-ready roofs and upsell installations.',
       features: ['Solar potential on every report', 'Panel count & energy estimates', 'Roof azimuth & tilt data', 'Sunshine hours analysis']
     }
@@ -754,7 +754,7 @@ function renderIndustrySections() {
     <section class="py-24 bg-gradient-to-b from-gray-50 to-white">
       <div class="max-w-7xl mx-auto px-4">
         <div class="text-center mb-16 scroll-animate opacity-0 translate-y-8 transition-all duration-700">
-          <div class="inline-flex items-center gap-2 bg-orange-50 text-orange-700 rounded-full px-4 py-1.5 text-sm font-semibold mb-4">
+          <div class="inline-flex items-center gap-2 bg-teal-50 text-teal-700 rounded-full px-4 py-1.5 text-sm font-semibold mb-4">
             <i class="fas fa-industry"></i> Built for Your Business
           </div>
           <h2 class="text-3xl lg:text-5xl font-black text-gray-900 mb-4 tracking-tight">Solutions by Industry</h2>
@@ -823,22 +823,22 @@ function renderPricing() {
 
           <!-- Per Report — MOST POPULAR -->
           <div class="scroll-animate opacity-0 translate-y-8 transition-all duration-700 relative" style="transition-delay:100ms">
-            <div class="absolute -top-4 left-1/2 -translate-x-1/2 bg-gradient-to-r from-orange-500 to-red-500 text-white text-xs font-bold px-5 py-1.5 rounded-full shadow-lg z-10">MOST POPULAR</div>
-            <div class="bg-white rounded-2xl border-2 border-orange-300 shadow-xl shadow-orange-500/10 p-8">
-              <div class="text-sm font-bold text-orange-600 uppercase tracking-wider mb-2">Per Report</div>
+            <div class="absolute -top-4 left-1/2 -translate-x-1/2 bg-gradient-to-r from-teal-500 to-cyan-600 text-white text-xs font-bold px-5 py-1.5 rounded-full shadow-lg z-10">MOST POPULAR</div>
+            <div class="bg-white rounded-2xl border-2 border-teal-300 shadow-xl shadow-teal-500/10 p-8">
+              <div class="text-sm font-bold text-teal-600 uppercase tracking-wider mb-2">Per Report</div>
               <div class="flex items-baseline gap-1 mb-2">
                 <span class="text-5xl font-black text-gray-900">$8</span>
                 <span class="text-xl text-gray-400">CAD</span>
                 <span class="text-sm text-gray-400 ml-1">/ report</span>
               </div>
               <p class="text-sm text-gray-500 mb-1">Professional measurement report</p>
-              <p class="text-xs text-orange-600 font-semibold mb-6"><i class="fas fa-gift mr-1"></i>First 3 reports FREE</p>
+              <p class="text-xs text-teal-600 font-semibold mb-6"><i class="fas fa-gift mr-1"></i>First 3 reports FREE</p>
               <ul class="space-y-3 mb-8">
                 ${['Full 3D area with pitch adjustment', 'Complete edge breakdown', 'Material BOM with pricing', 'Individual segment analysis', 'Solar potential analysis', 'Professional PDF download', 'Email delivery included', 'AI measurement overlay', 'Instant delivery (<60s)'].map(f => `
-                  <li class="flex items-start gap-2.5 text-sm text-gray-600"><i class="fas fa-check text-orange-500 mt-0.5 text-xs"></i>${f}</li>
+                  <li class="flex items-start gap-2.5 text-sm text-gray-600"><i class="fas fa-check text-teal-500 mt-0.5 text-xs"></i>${f}</li>
                 `).join('')}
               </ul>
-              <a href="/signup" onclick="rrTrack('cta_click',{location:'pricing',plan:'per_report'})" class="block text-center py-3.5 rounded-xl font-bold bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-400 hover:to-red-400 text-white shadow-lg transition-all hover:scale-[1.02] min-h-[48px]">
+              <a href="/signup" onclick="rrTrack('cta_click',{location:'pricing',plan:'per_report'})" class="block text-center py-3.5 rounded-xl font-bold bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-400 hover:to-cyan-500 text-white shadow-lg transition-all hover:scale-[1.02] min-h-[48px]">
                 Get Started Free
               </a>
             </div>
@@ -904,7 +904,7 @@ function renderPricing() {
               <thead>
                 <tr class="border-b-2 border-gray-200">
                   <th class="text-left py-3 px-4 font-bold text-gray-900">Feature</th>
-                  <th class="text-center py-3 px-4 font-bold text-orange-600 bg-orange-50 rounded-t-lg">RoofReporterAI</th>
+                  <th class="text-center py-3 px-4 font-bold text-teal-600 bg-teal-50 rounded-t-lg">RoofReporterAI</th>
                   <th class="text-center py-3 px-4 font-bold text-gray-500">EagleView</th>
                   <th class="text-center py-3 px-4 font-bold text-gray-500">Manual / Drone</th>
                 </tr>
@@ -923,7 +923,7 @@ function renderPricing() {
                 ].map((row, i) => `
                   <tr class="border-b border-gray-100 ${i % 2 === 0 ? 'bg-gray-50' : ''}">
                     <td class="py-3 px-4 font-medium text-gray-700">${row[0]}</td>
-                    <td class="py-3 px-4 text-center font-semibold text-gray-900 bg-orange-50/50">${row[1]}</td>
+                    <td class="py-3 px-4 text-center font-semibold text-gray-900 bg-teal-50/50">${row[1]}</td>
                     <td class="py-3 px-4 text-center text-gray-500">${row[2]}</td>
                     <td class="py-3 px-4 text-center text-gray-500">${row[3]}</td>
                   </tr>
@@ -983,7 +983,7 @@ function renderROICalculator() {
               </div>
               <div class="bg-white/5 rounded-xl p-5 border border-white/10">
                 <div class="text-xs text-gray-400 uppercase tracking-wider font-bold mb-1">RoofReporterAI Cost</div>
-                <div id="roi-cost" class="text-3xl font-black text-orange-400">$320/mo</div>
+                <div id="roi-cost" class="text-3xl font-black text-teal-400">$320/mo</div>
               </div>
               <div class="bg-gradient-to-r from-green-500/10 to-emerald-500/10 rounded-xl p-5 border border-green-500/30">
                 <div class="text-xs text-green-400 uppercase tracking-wider font-bold mb-1">Net Monthly Savings</div>
@@ -993,7 +993,7 @@ function renderROICalculator() {
             </div>
           </div>
           <div class="text-center mt-8">
-            <a href="/signup" onclick="rrTrack('cta_click',{location:'roi_calculator'})" class="inline-flex items-center gap-2 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-400 hover:to-red-400 text-white font-bold py-3.5 px-8 rounded-xl shadow-lg transition-all hover:scale-[1.02] min-h-[48px]">
+            <a href="/signup" onclick="rrTrack('cta_click',{location:'roi_calculator'})" class="inline-flex items-center gap-2 bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-400 hover:to-cyan-500 text-white font-bold py-3.5 px-8 rounded-xl shadow-lg transition-all hover:scale-[1.02] min-h-[48px]">
               <i class="fas fa-rocket"></i> Start Saving Today &mdash; 3 Free Reports
             </a>
           </div>
@@ -1288,7 +1288,7 @@ function renderFinalCTA() {
       </div>
 
       <div class="relative max-w-4xl mx-auto px-4 text-center scroll-animate opacity-0 translate-y-8 transition-all duration-700">
-        <div class="inline-flex items-center gap-2 bg-orange-500/20 text-orange-300 rounded-full px-4 py-1.5 text-sm font-bold mb-6">
+        <div class="inline-flex items-center gap-2 bg-teal-500/20 text-teal-300 rounded-full px-4 py-1.5 text-sm font-bold mb-6">
           <span class="animate-pulse">&#x1F525;</span> Join 5,000+ Canadian Roofers Already Using AI
         </div>
         <h2 class="text-4xl lg:text-5xl font-black text-white mb-6 tracking-tight leading-tight">
@@ -1299,7 +1299,7 @@ function renderFinalCTA() {
         </p>
 
         <div class="flex flex-col sm:flex-row gap-4 justify-center mb-8">
-          <a href="/signup" onclick="rrTrack('cta_click',{location:'final_cta',variant:'orange'})" class="group inline-flex items-center justify-center gap-3 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-400 hover:to-red-400 text-white font-bold py-4 px-10 rounded-xl text-lg shadow-2xl shadow-orange-500/30 transition-all duration-300 hover:scale-[1.03] min-h-[56px]">
+          <a href="/signup" onclick="rrTrack('cta_click',{location:'final_cta',variant:'teal'})" class="group inline-flex items-center justify-center gap-3 bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-400 hover:to-cyan-500 text-white font-bold py-4 px-10 rounded-xl text-lg shadow-2xl shadow-teal-500/30 transition-all duration-300 hover:scale-[1.03] min-h-[56px]">
             <i class="fas fa-rocket"></i>
             Start Free &mdash; 3 Reports On Us
             <i class="fas fa-arrow-right text-sm group-hover:translate-x-1 transition-transform"></i>
@@ -1346,7 +1346,7 @@ function injectStickyCTABar() {
       </div>
       <div class="flex items-center gap-3 flex-1 sm:flex-none justify-end">
         <span class="text-gray-400 text-sm hidden md:inline">Get 3 Free Reports &mdash; No CC Required</span>
-        <a href="/signup" onclick="rrTrack('cta_click',{location:'sticky_bar'})" class="bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-400 hover:to-red-400 text-white font-bold py-2.5 px-6 rounded-lg text-sm shadow-lg transition-all hover:scale-105 whitespace-nowrap min-h-[44px] flex items-center gap-2">
+        <a href="/signup" onclick="rrTrack('cta_click',{location:'sticky_bar'})" class="bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-400 hover:to-cyan-500 text-white font-bold py-2.5 px-6 rounded-lg text-sm shadow-lg transition-all hover:scale-105 whitespace-nowrap min-h-[44px] flex items-center gap-2">
           <i class="fas fa-rocket"></i> Start Free
         </a>
         <button onclick="document.getElementById('sticky-cta-bar').style.transform='translateY(100%)'" class="text-gray-500 hover:text-white p-1 transition-colors"><i class="fas fa-times text-xs"></i></button>
@@ -1374,9 +1374,9 @@ function injectExitIntentPopup() {
   popup.className = 'fixed inset-0 z-[100] hidden items-center justify-center bg-black/60 backdrop-blur-sm';
   popup.innerHTML = `
     <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden transform scale-95 opacity-0 transition-all duration-300" id="exit-popup-inner">
-      <div class="bg-gradient-to-r from-orange-500 to-red-500 p-6 text-white text-center">
+      <div class="bg-gradient-to-r from-teal-500 to-cyan-600 p-6 text-white text-center">
         <h3 class="text-2xl font-black mb-2">Wait! Don't Leave Empty-Handed</h3>
-        <p class="text-orange-100 text-sm">Get 3 free professional roof measurement reports &mdash; no credit card required.</p>
+        <p class="text-teal-100 text-sm">Get 3 free professional roof measurement reports &mdash; no credit card required.</p>
       </div>
       <div class="p-6">
         <div class="space-y-4 mb-6">
@@ -1394,8 +1394,8 @@ function injectExitIntentPopup() {
           </div>
         </div>
         <form onsubmit="return exitPopupSubmit(event)" class="space-y-3">
-          <input type="email" id="exit-email" required placeholder="Enter your email" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm">
-          <button type="submit" class="w-full bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-400 hover:to-red-400 text-white font-bold py-3 rounded-xl shadow-lg transition-all hover:scale-[1.02] min-h-[48px] text-sm">
+          <input type="email" id="exit-email" required placeholder="Enter your email" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-sm">
+          <button type="submit" class="w-full bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-400 hover:to-cyan-500 text-white font-bold py-3 rounded-xl shadow-lg transition-all hover:scale-[1.02] min-h-[48px] text-sm">
             <i class="fas fa-gift mr-2"></i>Claim My 3 Free Reports
           </button>
         </form>
