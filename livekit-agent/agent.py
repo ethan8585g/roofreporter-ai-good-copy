@@ -420,8 +420,6 @@ async def entrypoint(ctx: JobContext):
             model="cartesia/sonic-3",
             # Professional female voice — "Confident Sarah" from Cartesia
             voice="9626c31c-bec5-4cca-baa8-f8ba9e84c8bc",
-            # Speed up speaking rate: 1.0 is normal, 1.15-1.25 is brisk professional
-            speed=1.2,
         ),
         vad=ctx.proc.userdata["vad"],
         preemptive_generation=True,

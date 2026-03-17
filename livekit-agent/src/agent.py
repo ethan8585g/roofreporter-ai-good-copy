@@ -430,8 +430,6 @@ async def entrypoint(ctx: JobContext):
         tts=inference.TTS(
             model="cartesia/sonic-3",
             voice="9626c31c-bec5-4cca-baa8-f8ba9e84c8bc",
-            # Speed up speaking rate: 1.0 = normal, 1.2 = brisk professional pace
-            speed=1.2,
         ),
         # Turn detection for natural conversation flow
         turn_detection=MultilingualModel(),
