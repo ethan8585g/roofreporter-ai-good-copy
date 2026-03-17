@@ -710,6 +710,10 @@ app.get('/customer/virtual-tryon', (c) => c.html(getVirtualTryOnPageHTML()))
 // Home Designer — Hover-style multi-photo roof visualization
 app.get('/customer/home-designer', (c) => c.html(getHomeDesignerPageHTML()))
 
+// SAM 3 Satellite Image Analyzer — AI roof segmentation on satellite imagery
+app.get('/customer/sam3-analyzer', (c) => c.html(getSAM3AnalyzerPageHTML()))
+app.get('/customer/sam3-analyzer/:orderId', (c) => c.html(getSAM3AnalyzerPageHTML(c.req.param('orderId'))))
+
 // Google Calendar — Sync jobs to Google Calendar
 app.get('/customer/calendar', (c) => c.html(getCalendarPageHTML()))
 
@@ -4052,6 +4056,69 @@ function getHomeDesignerPageHTML() {
     }
   </script>
   <script src="/static/home-designer.js?v=${BUILD_VERSION}"></script>
+  ${getRoverAssistant()}
+</body>
+</html>`
+}
+
+function getSAM3AnalyzerPageHTML(orderId?: string) {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags()}
+  <title>SAM 3 Roof Analyzer - RoofReporterAI</title>
+  <style>
+    @media print {
+      header, nav, .no-print { display: none !important; }
+      body { background: white !important; }
+    }
+    .scrollbar-thin::-webkit-scrollbar { width: 4px; }
+    .scrollbar-thin::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 4px; }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <header class="bg-gradient-to-r from-slate-800 to-slate-900 text-white shadow-lg no-print">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
+          <span class="logo-mark w-10 h-10"><img src="/static/logo.png" alt="RoofReporterAI"></span>
+          <div>
+            <h1 class="text-lg font-bold">SAM 3 Roof Analyzer</h1>
+            <p class="text-slate-400 text-xs">AI Satellite Image Segmentation</p>
+          </div>
+        </a>
+      </div>
+      <nav class="flex items-center space-x-3">
+        <span id="custGreeting" class="text-slate-300 text-sm hidden"><i class="fas fa-user-circle mr-1"></i><span id="custName"></span></span>
+        <a href="/customer/home-designer" class="text-slate-300 hover:text-white text-sm"><i class="fas fa-home mr-1"></i>Designer</a>
+        <a href="/customer/dashboard" class="text-slate-300 hover:text-white text-sm"><i class="fas fa-th-large mr-1"></i>Dashboard</a>
+        <button onclick="custLogout()" class="text-slate-300 hover:text-white text-sm"><i class="fas fa-sign-out-alt mr-1"></i>Logout</button>
+      </nav>
+    </div>
+  </header>
+  <main class="max-w-6xl mx-auto px-4 py-6">
+    <div id="sam3-root"${orderId ? ` data-order-id="${orderId}"` : ''}></div>
+  </main>
+  <script>
+    (function() {
+      var c = localStorage.getItem('rc_customer');
+      if (!c) { window.location.href = '/customer/login'; return; }
+      try {
+        var u = JSON.parse(c);
+        var g = document.getElementById('custGreeting');
+        var n = document.getElementById('custName');
+        if (g && n) { n.textContent = u.name || u.email; g.classList.remove('hidden'); }
+      } catch(e) {}
+    })();
+    function custLogout() {
+      var token = localStorage.getItem('rc_customer_token');
+      if (token) fetch('/api/customer/logout', { method: 'POST', headers: { 'Authorization': 'Bearer ' + token } })['catch'](function(){});
+      localStorage.removeItem('rc_customer');
+      localStorage.removeItem('rc_customer_token');
+      window.location.href = '/customer/login';
+    }
+  </script>
+  <script src="/static/sam3-analyzer.js?v=${BUILD_VERSION}"></script>
   ${getRoverAssistant()}
 </body>
 </html>`
