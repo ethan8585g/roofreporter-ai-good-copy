@@ -2159,7 +2159,136 @@ adminRoutes.post('/superadmin/livekit/secretary-config/toggle', async (c) => {
   } catch (err: any) { return c.json({ error: err.message }, 500) }
 })
 
-// ── PUT /superadmin/livekit/secretary-config/:customerId — Edit a customer's secretary config ──
+// ── GET /superadmin/secretary-manager/customer/:customerId — Full customer secretary detail ──
+adminRoutes.get('/superadmin/secretary-manager/customer/:customerId', async (c) => {
+  const customerId = parseInt(c.req.param('customerId'))
+  try {
+    const customer = await c.env.DB.prepare('SELECT id, name, email, phone, company_name, brand_business_name, is_active, created_at FROM customers WHERE id = ?').bind(customerId).first<any>()
+    if (!customer) return c.json({ error: 'Customer not found' }, 404)
+    const config = await c.env.DB.prepare('SELECT * FROM secretary_config WHERE customer_id = ?').bind(customerId).first<any>()
+    const dirs = config ? await c.env.DB.prepare('SELECT * FROM secretary_directories WHERE config_id = ? ORDER BY sort_order').bind(config.id).all<any>() : { results: [] }
+    const sub = await c.env.DB.prepare("SELECT * FROM secretary_subscriptions WHERE customer_id = ? AND status IN ('active','pending','past_due') ORDER BY id DESC LIMIT 1").bind(customerId).first<any>()
+    const callStats = await c.env.DB.prepare(`SELECT COUNT(*) as total, SUM(call_duration_seconds) as total_seconds, SUM(CASE WHEN is_lead=1 THEN 1 ELSE 0 END) as leads FROM secretary_call_logs WHERE customer_id = ?`).bind(customerId).first<any>()
+    return c.json({ customer, config: config || null, directories: dirs.results || [], subscription: sub || null, call_stats: callStats || {} })
+  } catch (err: any) { return c.json({ error: err.message }, 500) }
+})
+
+// ── PUT /superadmin/secretary-manager/customer/:customerId/config — Full config update with directories ──
+adminRoutes.put('/superadmin/secretary-manager/customer/:customerId/config', async (c) => {
+  const customerId = parseInt(c.req.param('customerId'))
+  const body = await c.req.json()
+  try {
+    let config = await c.env.DB.prepare('SELECT id FROM secretary_config WHERE customer_id = ?').bind(customerId).first<any>()
+    // Auto-create config if it doesn't exist
+    if (!config) {
+      await c.env.DB.prepare("INSERT INTO secretary_config (customer_id, business_phone, greeting_script) VALUES (?, '', '')").bind(customerId).run()
+      config = await c.env.DB.prepare('SELECT id FROM secretary_config WHERE customer_id = ?').bind(customerId).first<any>()
+    }
+    // Update all config fields
+    const fields: string[] = []
+    const vals: any[] = []
+    const allowed = [
+      'business_phone', 'greeting_script', 'common_qa', 'general_notes',
+      'secretary_mode', 'agent_name', 'agent_voice',
+      'assigned_phone_number', 'connection_status', 'carrier_name', 'forwarding_method',
+      'answering_fallback_action', 'answering_forward_number',
+      'answering_sms_notify', 'answering_email_notify', 'answering_notify_email',
+      'full_can_book_appointments', 'full_can_send_email', 'full_can_schedule_callback',
+      'full_can_answer_faq', 'full_can_take_payment_info', 'full_business_hours',
+      'full_booking_link', 'full_services_offered', 'full_pricing_info',
+      'full_service_area', 'full_email_from_name', 'full_email_signature',
+      'is_active'
+    ]
+    for (const key of allowed) {
+      if (body[key] !== undefined) { fields.push(`${key} = ?`); vals.push(body[key]) }
+    }
+    if (fields.length > 0) {
+      fields.push("updated_at = datetime('now')")
+      vals.push(customerId)
+      await c.env.DB.prepare(`UPDATE secretary_config SET ${fields.join(', ')} WHERE customer_id = ?`).bind(...vals).run()
+    }
+    // Update directories if provided
+    if (body.directories && Array.isArray(body.directories)) {
+      await c.env.DB.prepare('DELETE FROM secretary_directories WHERE config_id = ? AND customer_id = ?').bind(config!.id, customerId).run()
+      for (let i = 0; i < body.directories.length; i++) {
+        const d = body.directories[i]
+        await c.env.DB.prepare('INSERT INTO secretary_directories (customer_id, config_id, name, phone_or_action, special_notes, sort_order) VALUES (?, ?, ?, ?, ?, ?)').bind(customerId, config!.id, d.name?.trim() || '', d.phone_or_action || '', d.special_notes || '', i).run()
+      }
+    }
+    return c.json({ success: true, message: `Full secretary config updated for customer ${customerId}` })
+  } catch (err: any) { return c.json({ error: err.message }, 500) }
+})
+
+// ── POST /superadmin/secretary-manager/onboard — One-step onboard: create customer + secretary + phone + LiveKit ──
+adminRoutes.post('/superadmin/secretary-manager/onboard', async (c) => {
+  const body = await c.req.json()
+  const { business_name, contact_name, email, phone, password, agent_name, agent_voice, greeting_script, common_qa, general_notes, secretary_mode, directories, assigned_phone_number, carrier_name } = body
+  if (!email || !password || !contact_name) return c.json({ error: 'Email, password, and contact name are required' }, 400)
+  try {
+    // Check for existing account
+    const existing = await c.env.DB.prepare('SELECT id FROM customers WHERE email = ?').bind(email).first<any>()
+    if (existing) return c.json({ error: 'Account with this email already exists', customer_id: existing.id }, 400)
+    // Hash password
+    const data = new TextEncoder().encode(password + 'roofreporter_salt_2024')
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data)
+    const hashedPassword = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('')
+    // Create customer
+    const result = await c.env.DB.prepare("INSERT INTO customers (name, email, password_hash, phone, company_name, brand_business_name, is_active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 1, datetime('now'), datetime('now'))").bind(contact_name, email, hashedPassword, phone || '', business_name || '', business_name || '').run()
+    const customerId = result.meta.last_row_id as number
+    // Create secretary config
+    await c.env.DB.prepare(`INSERT INTO secretary_config (customer_id, business_phone, greeting_script, common_qa, general_notes, secretary_mode, agent_name, agent_voice, assigned_phone_number, carrier_name, forwarding_method, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'call_forwarding', 1)`).bind(
+      customerId, phone || '', greeting_script || `Thank you for calling ${business_name || contact_name}. How may I help you today?`,
+      common_qa || '', general_notes || '', secretary_mode || 'full',
+      agent_name || 'Sarah', agent_voice || 'alloy',
+      assigned_phone_number || '', carrier_name || ''
+    ).run()
+    // Save directories
+    if (directories && Array.isArray(directories) && directories.length > 0) {
+      const cfg = await c.env.DB.prepare('SELECT id FROM secretary_config WHERE customer_id = ?').bind(customerId).first<any>()
+      for (let i = 0; i < directories.length; i++) {
+        const d = directories[i]
+        await c.env.DB.prepare('INSERT INTO secretary_directories (customer_id, config_id, name, phone_or_action, special_notes, sort_order) VALUES (?, ?, ?, ?, ?, ?)').bind(customerId, cfg!.id, d.name?.trim() || '', d.phone_or_action || '', d.special_notes || '', i).run()
+      }
+    }
+    // Create active subscription
+    await c.env.DB.prepare("INSERT INTO secretary_subscriptions (customer_id, status, current_period_start, current_period_end, created_at) VALUES (?, 'active', datetime('now'), datetime('now', '+30 days'), datetime('now'))").bind(customerId).run()
+    // Track onboarding
+    try {
+      await c.env.DB.prepare("INSERT INTO onboarded_customers (customer_id, business_name, contact_name, email, phone, secretary_enabled, secretary_phone_number, secretary_mode, notes) VALUES (?, ?, ?, ?, ?, 1, ?, ?, 'Onboarded via Secretary Manager')").bind(customerId, business_name || '', contact_name, email, phone || '', assigned_phone_number || '', secretary_mode || 'full').run()
+    } catch {}
+    return c.json({ success: true, customer_id: customerId, email, message: `${contact_name} onboarded with Secretary AI. Login: ${email}` })
+  } catch (err: any) { return c.json({ error: err.message }, 500) }
+})
+
+// ── POST /superadmin/secretary-manager/setup-livekit/:customerId — Set up LiveKit trunk + dispatch for a customer ──
+adminRoutes.post('/superadmin/secretary-manager/setup-livekit/:customerId', async (c) => {
+  const customerId = parseInt(c.req.param('customerId'))
+  const apiKey = (c.env as any).LIVEKIT_API_KEY || ''
+  const apiSecret = (c.env as any).LIVEKIT_API_SECRET || ''
+  const livekitUrl = (c.env as any).LIVEKIT_URL || ''
+  if (!apiKey || !apiSecret || !livekitUrl) return c.json({ error: 'LiveKit not configured' }, 500)
+  const config = await c.env.DB.prepare('SELECT * FROM secretary_config WHERE customer_id = ?').bind(customerId).first<any>()
+  if (!config) return c.json({ error: 'No secretary config' }, 400)
+  if (!config.assigned_phone_number) return c.json({ error: 'Assign a phone number first' }, 400)
+  if (config.livekit_inbound_trunk_id && config.livekit_dispatch_rule_id) {
+    return c.json({ already_configured: true, trunk_id: config.livekit_inbound_trunk_id, dispatch_rule_id: config.livekit_dispatch_rule_id })
+  }
+  try {
+    const trunkResult = await livekitAdminAPI(apiKey, apiSecret, livekitUrl, 'POST', '/twirp/livekit.SIP/CreateSIPInboundTrunk', {
+      trunk: { name: `secretary-${customerId}`, numbers: [config.assigned_phone_number], krisp_enabled: true, metadata: JSON.stringify({ customer_id: customerId, service: 'roofer_secretary', business_phone: config.business_phone }) }
+    })
+    const trunkId = trunkResult?.sip_trunk_id || trunkResult?.trunk?.sip_trunk_id || ''
+    const dispatchResult = await livekitAdminAPI(apiKey, apiSecret, livekitUrl, 'POST', '/twirp/livekit.SIP/CreateSIPDispatchRule', {
+      trunk_ids: trunkId ? [trunkId] : [], rule: { dispatchRuleIndividual: { roomPrefix: `secretary-${customerId}-` } },
+      name: `secretary-dispatch-${customerId}`, metadata: JSON.stringify({ customer_id: customerId }),
+    })
+    const dispatchId = dispatchResult?.sip_dispatch_rule_id || ''
+    await c.env.DB.prepare("UPDATE secretary_config SET livekit_inbound_trunk_id = ?, livekit_dispatch_rule_id = ?, connection_status = 'connected', updated_at = datetime('now') WHERE customer_id = ?").bind(trunkId, dispatchId, customerId).run()
+    return c.json({ success: true, trunk_id: trunkId, dispatch_rule_id: dispatchId })
+  } catch (err: any) { return c.json({ error: err.message }, 500) }
+})
+
+// ── PUT /superadmin/livekit/secretary-config/:customerId — Edit a customer's secretary config (legacy) ──
 adminRoutes.put('/superadmin/livekit/secretary-config/:customerId', async (c) => {
   const customerId = parseInt(c.req.param('customerId'))
   const body = await c.req.json()
