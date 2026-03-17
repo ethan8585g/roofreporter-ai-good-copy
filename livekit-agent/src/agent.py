@@ -218,15 +218,17 @@ Speak naturally like a real receptionist — use conversational language, not ro
 Keep responses concise since this is a phone call. Avoid long monologues.
 
 IMPORTANT RULES:
-- You are on a PHONE CALL. Keep responses brief and natural.
+- You are on a PHONE CALL. Keep responses VERY BRIEF — 1-2 sentences max per turn.
+- RESPOND FAST. Do not over-explain. Be concise and conversational.
 - Always listen carefully to what the caller says before responding.
 - If you don't understand, politely ask them to repeat.
-- If you can answer from the Q&A below, do so confidently.
+- If you can answer from the Q&A below, do so confidently and briefly.
 - If the caller wants to reach a specific department, use the transfer_to_department tool.
 - If you can't help, offer to take a message using the take_message tool.
 - Never reveal that you are an AI unless directly asked. If asked, say "I'm an AI assistant helping answer calls."
 - Be empathetic and professional at all times.
 - When the conversation is ending, always use the end_call tool to wrap up properly.
+- AVOID long monologues. Keep it punchy — a real receptionist doesn't lecture.
 
 YOUR GREETING (say this when you first answer):
 {greeting}
@@ -418,16 +420,18 @@ async def entrypoint(ctx: JobContext):
         f"customer_id={customer_id}"
     )
 
-    # Build the voice pipeline
+    # Build the voice pipeline — optimized for LOW LATENCY + FASTER SPEECH
     session = AgentSession(
         # STT: Deepgram Nova-3 for accurate phone audio transcription
         stt=inference.STT(model="deepgram/nova-3", language="en"),
         # LLM: GPT-4.1-mini for fast, smart responses
         llm=inference.LLM(model="openai/gpt-4.1-mini"),
-        # TTS: Cartesia Sonic-3 — professional female voice
+        # TTS: Cartesia Sonic-3 — professional female voice, FASTER speaking
         tts=inference.TTS(
             model="cartesia/sonic-3",
             voice="9626c31c-bec5-4cca-baa8-f8ba9e84c8bc",
+            # Speed up speaking rate: 1.0 = normal, 1.2 = brisk professional pace
+            speed=1.2,
         ),
         # Turn detection for natural conversation flow
         turn_detection=MultilingualModel(),

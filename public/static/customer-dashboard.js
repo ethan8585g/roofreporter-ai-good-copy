@@ -113,163 +113,166 @@ function renderDashboard() {
   // Determine trial/credits exhausted state
   var trialsExhausted = freeTrialRemaining <= 0 && paidCredits <= 0;
 
-  // Build the nav modules
-  var modules = [
-    { id: 'order', href: '/customer/order', icon: 'fa-plus-circle', label: 'Order New Report', desc: 'Get a roof measurement', color: 'from-blue-600 to-blue-700', badge: (freeTrialRemaining > 0 ? freeTrialRemaining + ' free' : (paidCredits > 0 ? paidCredits + ' credits' : 'Buy Credits')), badgeColor: freeTrialRemaining > 0 ? 'bg-green-500' : (paidCredits > 0 ? 'bg-blue-500' : 'bg-amber-500'), primary: true },
-    { id: 'reports', href: '/customer/reports', icon: 'fa-file-alt', label: 'Roof Report History', desc: 'View past measurements', color: 'from-indigo-500 to-indigo-600', badge: completedReports > 0 ? completedReports.toString() : '', badgeColor: 'bg-indigo-500' },
-    { id: 'virtual-tryon', href: '/customer/virtual-tryon', icon: 'fa-magic', label: 'Virtual Roof Try-On', desc: 'AI roof visualization', color: 'from-violet-500 to-purple-600', badge: 'New', badgeColor: 'bg-violet-500' },
-    { id: 'home-designer', href: '/customer/home-designer', icon: 'fa-home', label: 'Home Designer', desc: 'Hover-style visualizer', color: 'from-sky-500 to-blue-600', badge: 'New', badgeColor: 'bg-sky-500' },
-    { id: 'sam3-analyzer', href: '/customer/sam3-analyzer', icon: 'fa-satellite', label: 'SAM 3 Analyzer', desc: 'AI satellite segmentation', color: 'from-slate-600 to-slate-800', badge: 'New', badgeColor: 'bg-cyan-500' },
-    { id: 'customers', href: '/customer/customers', icon: 'fa-users', label: 'Customers', desc: 'CRM & contacts', color: 'from-emerald-500 to-emerald-600', badge: s.customers > 0 ? s.customers.toString() : '', badgeColor: 'bg-emerald-500' },
-    { id: 'invoices', href: '/customer/invoices', icon: 'fa-file-invoice-dollar', label: 'Invoices', desc: 'Billing & payments', color: 'from-amber-500 to-amber-600', badge: s.invoices_owing > 0 ? '$' + Number(s.invoices_owing).toFixed(0) + ' owing' : '', badgeColor: 'bg-amber-500' },
-    { id: 'proposals', href: '/customer/proposals', icon: 'fa-file-signature', label: 'Estimates / Proposals', desc: 'Sales documents', color: 'from-purple-500 to-purple-600', badge: s.proposals_open > 0 ? s.proposals_open + ' open' : '', badgeColor: 'bg-purple-500' },
-    { id: 'jobs', href: '/customer/jobs', icon: 'fa-hard-hat', label: 'Job Management', desc: 'Calendar & scheduling', color: 'from-rose-500 to-rose-600', badge: s.jobs_total > 0 ? s.jobs_total + (s.jobs_in_progress > 0 ? ' (' + s.jobs_in_progress + ' active)' : '') : '', badgeColor: 'bg-rose-500' },
-    { id: 'pipeline', href: '/customer/pipeline', icon: 'fa-funnel-dollar', label: 'Sales Pipeline', desc: 'Leads & to-do\'s', color: 'from-cyan-500 to-cyan-600', badge: '', badgeColor: 'bg-cyan-500' },
-    { id: 'sales', href: '/customer/sales', icon: 'fa-chart-line', label: 'Sales Engine', desc: 'Lead scoring & follow-ups', color: 'from-indigo-500 to-purple-600', badge: 'New', badgeColor: 'bg-indigo-500' },
-    { id: 'calendar', href: '/customer/calendar', icon: 'fa-calendar-alt', label: 'Google Calendar', desc: 'Sync jobs & schedule', color: 'from-green-500 to-emerald-600', badge: 'New', badgeColor: 'bg-green-500' },
-    { id: 'd2d', href: '/customer/d2d', icon: 'fa-door-open', label: 'D2D Manager', desc: 'Door-to-door teams', color: 'from-teal-500 to-teal-600', badge: '', badgeColor: '' },
-    { id: 'team', href: '/customer/team', icon: 'fa-users-cog', label: 'Sales Team', desc: 'Add team members', color: 'from-teal-500 to-emerald-600', badge: custState.teamMembers > 0 ? custState.teamMembers + ' members' : '$50/user/mo', badgeColor: custState.teamMembers > 0 ? 'bg-teal-500' : 'bg-gray-400' },
-    { id: 'secretary', href: '/customer/secretary', icon: 'fa-headset', label: 'Roofer Secretary', desc: 'AI phone answering service', color: 'from-violet-500 to-purple-700', badge: custState.secretaryActive ? (custState.secretaryCalls > 0 ? custState.secretaryCalls + ' calls' : 'Active') : '$249/mo', badgeColor: custState.secretaryActive ? 'bg-green-500' : 'bg-violet-500' },
-    { id: 'cold-calls', href: '/customer/cold-calls', icon: 'fa-phone-volume', label: 'Cold Call Center', desc: 'AI outbound sales dialer', color: 'from-teal-500 to-cyan-700', badge: 'New', badgeColor: 'bg-teal-500' }
+  // Build sidebar nav sections (grouped for cleaner layout)
+  // REMOVED: SAM 3 Analyzer, Cold Call Center
+  var sidebarSections = [
+    { title: 'Roof Reports', items: [
+      { href: '/customer/order', icon: 'fa-plus-circle', label: 'Order Report', badge: (freeTrialRemaining > 0 ? freeTrialRemaining + ' free' : (paidCredits > 0 ? paidCredits + ' credits' : '')), badgeColor: freeTrialRemaining > 0 ? 'bg-green-500' : 'bg-blue-500', primary: true },
+      { href: '/customer/reports', icon: 'fa-file-alt', label: 'Report History', badge: completedReports > 0 ? completedReports.toString() : '', badgeColor: 'bg-indigo-500' },
+      { href: '/customer/virtual-tryon', icon: 'fa-magic', label: 'Virtual Try-On', badge: '', badgeColor: '' },
+      { href: '/customer/home-designer', icon: 'fa-home', label: 'Home Designer', badge: '', badgeColor: '' },
+    ]},
+    { title: 'CRM & Sales', items: [
+      { href: '/customer/customers', icon: 'fa-users', label: 'Customers', badge: s.customers > 0 ? s.customers.toString() : '', badgeColor: 'bg-emerald-500' },
+      { href: '/customer/invoices', icon: 'fa-file-invoice-dollar', label: 'Invoices', badge: s.invoices_owing > 0 ? '$' + Number(s.invoices_owing).toFixed(0) : '', badgeColor: 'bg-amber-500' },
+      { href: '/customer/proposals', icon: 'fa-file-signature', label: 'Proposals', badge: s.proposals_open > 0 ? s.proposals_open + ' open' : '', badgeColor: 'bg-purple-500' },
+      { href: '/customer/pipeline', icon: 'fa-funnel-dollar', label: 'Pipeline', badge: '', badgeColor: '' },
+    ]},
+    { title: 'Operations', items: [
+      { href: '/customer/jobs', icon: 'fa-hard-hat', label: 'Jobs', badge: s.jobs_in_progress > 0 ? s.jobs_in_progress + ' active' : '', badgeColor: 'bg-rose-500' },
+      { href: '/customer/calendar', icon: 'fa-calendar-alt', label: 'Calendar', badge: '', badgeColor: '' },
+      { href: '/customer/d2d', icon: 'fa-door-open', label: 'D2D Manager', badge: '', badgeColor: '' },
+      { href: '/customer/sales', icon: 'fa-chart-line', label: 'Sales Engine', badge: '', badgeColor: '' },
+    ]},
+    { title: 'Team & AI', items: [
+      { href: '/customer/team', icon: 'fa-users-cog', label: 'Sales Team', badge: custState.teamMembers > 0 ? custState.teamMembers + '' : '', badgeColor: 'bg-teal-500' },
+      { href: '/customer/secretary', icon: 'fa-headset', label: 'AI Secretary', badge: custState.secretaryActive ? (custState.secretaryCalls > 0 ? custState.secretaryCalls + ' calls' : 'Active') : '$249/mo', badgeColor: custState.secretaryActive ? 'bg-green-500' : 'bg-violet-500' },
+    ]},
   ];
 
-  // DEV-ONLY: Add Property Imagery tile for dev account
+  // DEV-ONLY: Add Property Imagery
   if (c.is_dev) {
-    modules.push({ id: 'property-imagery', href: '/customer/property-imagery', icon: 'fa-satellite', label: 'Property Imagery', desc: 'Satellite PDF — 4 zoom views', color: 'from-emerald-500 to-teal-600', badge: 'Dev Tool', badgeColor: 'bg-amber-500' });
+    sidebarSections[0].items.push({ href: '/customer/property-imagery', icon: 'fa-satellite', label: 'Property Imagery', badge: 'Dev', badgeColor: 'bg-amber-500' });
   }
 
+  // Build sidebar HTML
+  var sidebarHTML = '<nav class="space-y-5">';
+  sidebarSections.forEach(function(section) {
+    sidebarHTML += '<div>' +
+      '<h4 class="text-[10px] font-bold uppercase tracking-wider text-gray-400 px-3 mb-1.5">' + section.title + '</h4>' +
+      '<div class="space-y-0.5">';
+    section.items.forEach(function(item) {
+      var isActive = window.location.pathname === item.href;
+      sidebarHTML += '<a href="' + item.href + '" class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-all ' +
+        (item.primary ? 'bg-brand-50 text-brand-700 font-bold border border-brand-200 hover:bg-brand-100' :
+         (isActive ? 'bg-gray-100 text-gray-900 font-semibold' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900')) + '">' +
+        '<i class="fas ' + item.icon + ' w-4 text-center text-xs ' + (item.primary ? 'text-brand-600' : 'text-gray-400') + '"></i>' +
+        '<span class="flex-1 truncate">' + item.label + '</span>' +
+        (item.badge ? '<span class="px-1.5 py-0.5 ' + item.badgeColor + ' text-white rounded text-[9px] font-bold leading-none">' + item.badge + '</span>' : '') +
+      '</a>';
+    });
+    sidebarHTML += '</div></div>';
+  });
+  // Sidebar footer
+  sidebarHTML += '<div class="pt-3 border-t border-gray-100">' +
+    '<a href="/pricing" class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-500 hover:bg-gray-50 hover:text-gray-700 transition-all">' +
+      '<i class="fas fa-coins w-4 text-center text-xs text-gray-400"></i><span>Buy Credits</span></a>' +
+    '<a href="/customer/login" onclick="localStorage.removeItem(\'rc_customer\');localStorage.removeItem(\'rc_customer_token\')" class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-400 hover:bg-red-50 hover:text-red-600 transition-all">' +
+      '<i class="fas fa-sign-out-alt w-4 text-center text-xs"></i><span>Sign Out</span></a>' +
+  '</div></nav>';
+
   root.innerHTML =
-    // ── Welcome + Quick Stats ──
-    '<div class="mb-6">' +
-      '<div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 md:p-6">' +
-        '<div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">' +
-          '<div class="flex items-center gap-4">' +
-            (c.google_avatar ? '<img src="' + c.google_avatar + '" class="w-14 h-14 rounded-full border-2 border-brand-200 shadow" alt="">' :
-              '<div class="w-14 h-14 bg-gradient-to-br from-brand-500 to-brand-700 rounded-full flex items-center justify-center shadow"><i class="fas fa-user text-white text-xl"></i></div>') +
-            '<div>' +
-              '<h2 class="text-xl font-bold text-gray-900">Welcome back, ' + (c.name || 'User') + '</h2>' +
-              '<p class="text-sm text-gray-500">' + (c.company_name ? c.company_name + ' &middot; ' : '') + (c.email || '') + '</p>' +
-            '</div>' +
-          '</div>' +
-          // Quick stats row
-          '<div class="flex items-center gap-2 flex-wrap">' +
-            (freeTrialRemaining > 0 ? '<div class="px-3 py-1.5 bg-green-50 border border-green-200 rounded-full text-xs font-bold text-green-700"><i class="fas fa-gift mr-1"></i>' + freeTrialRemaining + ' Free Trial</div>' : '') +
-            (paidCredits > 0 ? '<div class="px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-full text-xs font-bold text-blue-700"><i class="fas fa-coins mr-1"></i>' + paidCredits + ' Credits</div>' : '') +
-            '<div class="px-3 py-1.5 bg-indigo-50 border border-indigo-200 rounded-full text-xs font-bold text-indigo-700"><i class="fas fa-file-alt mr-1"></i>' + completedReports + ' Reports</div>' +
-            (processingReports > 0 ? '<div class="px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-full text-xs font-bold text-amber-700 animate-pulse"><i class="fas fa-spinner fa-spin mr-1"></i>' + processingReports + ' Generating</div>' : '') +
-            (enhancingReports > 0 ? '<div class="px-3 py-1.5 bg-purple-50 border border-purple-200 rounded-full text-xs font-bold text-purple-700 animate-pulse"><i class="fas fa-magic mr-1"></i>' + enhancingReports + ' AI Enhancing</div>' : '') +
+    // ── Sidebar + Main Content Layout ──
+    '<div class="flex gap-6 min-h-[calc(100vh-120px)]">' +
+
+    // ═══ LEFT SIDEBAR ═══
+    '<aside class="hidden lg:block w-56 flex-shrink-0">' +
+      '<div class="sticky top-6">' +
+        // User avatar mini
+        '<div class="flex items-center gap-3 px-3 py-3 mb-4 bg-white rounded-xl border border-gray-200 shadow-sm">' +
+          (c.google_avatar ? '<img src="' + c.google_avatar + '" class="w-9 h-9 rounded-full border border-gray-200" alt="">' :
+            '<div class="w-9 h-9 bg-gradient-to-br from-brand-500 to-brand-700 rounded-full flex items-center justify-center"><i class="fas fa-user text-white text-xs"></i></div>') +
+          '<div class="min-w-0">' +
+            '<p class="text-sm font-bold text-gray-800 truncate">' + (c.name || 'User') + '</p>' +
+            '<p class="text-[10px] text-gray-400 truncate">' + (c.company_name || c.email || '') + '</p>' +
           '</div>' +
         '</div>' +
+        sidebarHTML +
       '</div>' +
+    '</aside>' +
+
+    // ═══ MAIN CONTENT ═══
+    '<main class="flex-1 min-w-0">' +
+
+    // ── Quick Stats Bar ──
+    '<div class="flex items-center gap-2 flex-wrap mb-5">' +
+      (freeTrialRemaining > 0 ? '<div class="px-3 py-1.5 bg-green-50 border border-green-200 rounded-full text-xs font-bold text-green-700"><i class="fas fa-gift mr-1"></i>' + freeTrialRemaining + ' Free Trial</div>' : '') +
+      (paidCredits > 0 ? '<div class="px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-full text-xs font-bold text-blue-700"><i class="fas fa-coins mr-1"></i>' + paidCredits + ' Credits</div>' : '') +
+      '<div class="px-3 py-1.5 bg-indigo-50 border border-indigo-200 rounded-full text-xs font-bold text-indigo-700"><i class="fas fa-file-alt mr-1"></i>' + completedReports + ' Reports</div>' +
+      (processingReports > 0 ? '<div class="px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-full text-xs font-bold text-amber-700 animate-pulse"><i class="fas fa-spinner fa-spin mr-1"></i>' + processingReports + ' Generating</div>' : '') +
+      (enhancingReports > 0 ? '<div class="px-3 py-1.5 bg-purple-50 border border-purple-200 rounded-full text-xs font-bold text-purple-700 animate-pulse"><i class="fas fa-magic mr-1"></i>' + enhancingReports + ' AI Enhancing</div>' : '') +
+      // Mobile menu toggle
+      '<button onclick="document.getElementById(\'mobileSidebar\').classList.toggle(\'hidden\')" class="lg:hidden ml-auto px-3 py-1.5 bg-gray-100 rounded-full text-xs font-medium text-gray-600 hover:bg-gray-200 transition-colors"><i class="fas fa-bars mr-1"></i>Menu</button>' +
     '</div>' +
 
-    // ── Trial Exhausted Upsell Banner (shows when 3 free trials used and no paid credits) ──
+    // ── Mobile Sidebar (hidden by default) ──
+    '<div id="mobileSidebar" class="hidden lg:hidden bg-white rounded-2xl border border-gray-200 shadow-sm p-4 mb-5">' + sidebarHTML + '</div>' +
+
+    // ── Trial Exhausted Upsell Banner ──
     (trialsExhausted ? 
-      '<div class="bg-gradient-to-r from-brand-800 to-brand-900 rounded-2xl p-6 mb-6 shadow-xl border border-brand-700">' +
-        '<div class="flex flex-col md:flex-row items-center gap-4">' +
-          '<div class="w-16 h-16 bg-amber-500 rounded-2xl flex items-center justify-center shadow-lg flex-shrink-0"><i class="fas fa-crown text-white text-2xl"></i></div>' +
-          '<div class="flex-1 text-center md:text-left">' +
-            '<h3 class="text-white font-black text-lg">Your 3 Free Trial Reports Are Used Up!</h3>' +
-            '<p class="text-brand-200 text-sm mt-1">Upgrade to a credit pack to keep ordering reports. Packs start at just <strong class="text-amber-400">$5.00/report</strong> — save up to 38%!</p>' +
+      '<div class="bg-gradient-to-r from-brand-800 to-brand-900 rounded-2xl p-5 mb-5 shadow-xl border border-brand-700">' +
+        '<div class="flex flex-col sm:flex-row items-center gap-4">' +
+          '<div class="w-12 h-12 bg-amber-500 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0"><i class="fas fa-crown text-white text-lg"></i></div>' +
+          '<div class="flex-1 text-center sm:text-left">' +
+            '<h3 class="text-white font-black text-base">Free Trial Used Up!</h3>' +
+            '<p class="text-brand-200 text-xs mt-0.5">Packs start at <strong class="text-amber-400">$5.00/report</strong> — save up to 38%</p>' +
           '</div>' +
-          '<div class="flex gap-3 flex-shrink-0">' +
-            '<a href="/pricing" class="px-6 py-3 bg-amber-500 hover:bg-amber-400 text-gray-900 font-black rounded-xl shadow-lg transition-all hover:scale-105 text-sm"><i class="fas fa-tags mr-2"></i>View Credit Packs</a>' +
-            '<a href="/customer/order" class="px-6 py-3 bg-white/10 hover:bg-white/20 text-white font-semibold rounded-xl transition-all text-sm border border-white/20"><i class="fas fa-credit-card mr-2"></i>Pay Per Report</a>' +
+          '<div class="flex gap-2 flex-shrink-0">' +
+            '<a href="/pricing" class="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-gray-900 font-black rounded-lg shadow transition-all hover:scale-105 text-xs"><i class="fas fa-tags mr-1"></i>Credit Packs</a>' +
           '</div>' +
         '</div>' +
       '</div>' : '') +
 
-    // ── Team Context Banner (shows when logged in as team member) ──
+    // ── Team Context Banner ──
     (custState.isTeamMember ? 
-      '<div class="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-2xl p-5 mb-6 shadow-lg border border-blue-500/30">' +
-        '<div class="flex items-center gap-4">' +
-          '<div class="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0 backdrop-blur">' +
-            '<i class="fas fa-users text-white text-xl"></i>' +
+      '<div class="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-xl p-4 mb-5 shadow-lg border border-blue-500/30">' +
+        '<div class="flex items-center gap-3">' +
+          '<div class="w-9 h-9 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0"><i class="fas fa-users text-white text-sm"></i></div>' +
+          '<div class="flex-1 min-w-0">' +
+            '<p class="text-white font-bold text-xs">Team Access <span class="px-1.5 py-0.5 bg-white/20 rounded text-[9px] text-blue-100 uppercase ml-1">' + (custState.teamRole || 'member') + '</span></p>' +
+            '<p class="text-blue-200 text-[10px] truncate">Accessing <strong class="text-white">' + (custState.teamOwnerCompany || custState.teamOwnerName || 'Team') + '</strong>\u2019s account</p>' +
           '</div>' +
-          '<div class="flex-1">' +
-            '<div class="flex items-center gap-2">' +
-              '<h3 class="text-white font-bold text-sm">Team Account Access</h3>' +
-              '<span class="px-2 py-0.5 bg-white/20 rounded-full text-[10px] font-bold text-blue-100 uppercase">' + (custState.teamRole || 'member') + '</span>' +
-            '</div>' +
-            '<p class="text-blue-200 text-xs mt-0.5">You are accessing <strong class="text-white">' + (custState.teamOwnerCompany || custState.teamOwnerName || 'Team') + '</strong>\u2019s account. All reports, CRM, and features are shared.</p>' +
-          '</div>' +
-          '<a href="/customer/team" class="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg text-xs font-semibold transition-all border border-white/20 flex-shrink-0">' +
-            '<i class="fas fa-users-cog mr-1"></i>View Team' +
-          '</a>' +
         '</div>' +
       '</div>' : '') +
 
-    // ── Navigation Grid ──
-    '<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">' +
-      modules.map(function(m) {
-        var isPrimary = m.primary;
-        return '<a href="' + m.href + '" class="group relative bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden transition-all hover:shadow-lg hover:-translate-y-1 hover:border-brand-300 ' + (isPrimary ? 'col-span-2 md:col-span-2 ring-2 ring-brand-200' : '') + '">' +
-          '<div class="p-5 ' + (isPrimary ? 'md:p-6' : '') + '">' +
-            // Icon
-            '<div class="w-12 h-12 ' + (isPrimary ? 'w-14 h-14' : '') + ' bg-gradient-to-br ' + m.color + ' rounded-xl flex items-center justify-center mb-3 shadow-lg group-hover:scale-110 transition-transform">' +
-              '<i class="fas ' + m.icon + ' text-white ' + (isPrimary ? 'text-xl' : 'text-lg') + '"></i>' +
-            '</div>' +
-            // Text
-            '<h3 class="font-bold text-gray-900 ' + (isPrimary ? 'text-lg' : 'text-sm') + ' mb-0.5">' + m.label + '</h3>' +
-            '<p class="text-xs text-gray-500">' + m.desc + '</p>' +
-            // Badge
-            (m.badge ? '<div class="mt-2"><span class="inline-block px-2 py-0.5 ' + m.badgeColor + ' text-white rounded-full text-[10px] font-bold">' + m.badge + '</span></div>' : '') +
-          '</div>' +
-          // Arrow indicator
-          '<div class="absolute top-4 right-4 text-gray-300 group-hover:text-brand-500 transition-colors"><i class="fas fa-arrow-right text-sm"></i></div>' +
-        '</a>';
-      }).join('') +
-    '</div>' +
-
-    // ── Secretary AI Call Center — Highly visible section ──
+    // ── Secretary AI Call Center ──
     (custState.secretaryActive ? renderSecretaryCallCenter() : '') +
 
-    // ── Recent Activity ──
-    '<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">' +
-      // Recent Orders
-      '<div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">' +
-        '<div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">' +
-          '<h3 class="font-bold text-gray-800 text-sm"><i class="fas fa-clock text-brand-500 mr-2"></i>Recent Reports</h3>' +
-          '<a href="/customer/reports" class="text-xs text-brand-600 hover:text-brand-700 font-medium">View All <i class="fas fa-arrow-right ml-1"></i></a>' +
-        '</div>' +
-        '<div class="p-4">' + renderRecentOrders() + '</div>' +
+    // ── Recent Reports ──
+    '<div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-5">' +
+      '<div class="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between">' +
+        '<h3 class="font-bold text-gray-800 text-sm"><i class="fas fa-clock text-brand-500 mr-2"></i>Recent Reports</h3>' +
+        '<a href="/customer/reports" class="text-xs text-brand-600 hover:text-brand-700 font-medium">View All <i class="fas fa-arrow-right ml-1"></i></a>' +
       '</div>' +
+      '<div class="p-4">' + renderRecentOrders() + '</div>' +
+    '</div>' +
 
-      // Quick Actions & Billing
-      '<div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">' +
-        '<div class="px-5 py-4 border-b border-gray-100">' +
-          '<h3 class="font-bold text-gray-800 text-sm"><i class="fas fa-bolt text-amber-500 mr-2"></i>Quick Actions & Billing</h3>' +
-        '</div>' +
-        '<div class="p-4 space-y-3">' +
-          '<a href="/customer/order" class="flex items-center gap-3 p-3 bg-blue-50 hover:bg-blue-100 rounded-xl transition-colors">' +
-            '<div class="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center"><i class="fas fa-plus text-white"></i></div>' +
-            '<div><p class="font-semibold text-gray-800 text-sm">Order New Roof Report</p><p class="text-xs text-gray-500">' + (freeTrialRemaining > 0 ? freeTrialRemaining + ' free trial reports remaining' : (paidCredits > 0 ? paidCredits + ' credits available' : 'Pay per report or buy credit packs')) + '</p></div>' +
-          '</a>' +
-          '<a href="/customer/customers" class="flex items-center gap-3 p-3 bg-emerald-50 hover:bg-emerald-100 rounded-xl transition-colors">' +
-            '<div class="w-10 h-10 bg-emerald-500 rounded-lg flex items-center justify-center"><i class="fas fa-user-plus text-white"></i></div>' +
-            '<div><p class="font-semibold text-gray-800 text-sm">Add New Customer</p><p class="text-xs text-gray-500">Build your CRM database</p></div>' +
-          '</a>' +
-          '<a href="/customer/invoices" class="flex items-center gap-3 p-3 bg-amber-50 hover:bg-amber-100 rounded-xl transition-colors">' +
-            '<div class="w-10 h-10 bg-amber-500 rounded-lg flex items-center justify-center"><i class="fas fa-file-invoice-dollar text-white"></i></div>' +
-            '<div><p class="font-semibold text-gray-800 text-sm">Create Invoice</p><p class="text-xs text-gray-500">' + (s.invoices_owing > 0 ? '$' + Number(s.invoices_owing).toFixed(2) + ' outstanding' : 'Bill your customers') + '</p></div>' +
-          '</a>' +
-          '<a href="/pricing" class="flex items-center gap-3 p-3 bg-purple-50 hover:bg-purple-100 rounded-xl transition-colors">' +
-            '<div class="w-10 h-10 bg-purple-500 rounded-lg flex items-center justify-center"><i class="fas fa-coins text-white"></i></div>' +
-            '<div><p class="font-semibold text-gray-800 text-sm">Buy Report Credits</p><p class="text-xs text-gray-500">Save up to 52% — packs from $4.75/report</p></div>' +
-          '</a>' +
-        '</div>' +
-      '</div>' +
+    // ── Quick Actions Row (compact) ──
+    '<div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">' +
+      '<a href="/customer/order" class="flex items-center gap-2 p-3 bg-blue-50 hover:bg-blue-100 rounded-xl transition-colors border border-blue-100">' +
+        '<div class="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center flex-shrink-0"><i class="fas fa-plus text-white text-xs"></i></div>' +
+        '<div class="min-w-0"><p class="font-semibold text-gray-800 text-xs truncate">New Report</p></div>' +
+      '</a>' +
+      '<a href="/customer/customers" class="flex items-center gap-2 p-3 bg-emerald-50 hover:bg-emerald-100 rounded-xl transition-colors border border-emerald-100">' +
+        '<div class="w-8 h-8 bg-emerald-500 rounded-lg flex items-center justify-center flex-shrink-0"><i class="fas fa-user-plus text-white text-xs"></i></div>' +
+        '<div class="min-w-0"><p class="font-semibold text-gray-800 text-xs truncate">Add Customer</p></div>' +
+      '</a>' +
+      '<a href="/customer/invoices" class="flex items-center gap-2 p-3 bg-amber-50 hover:bg-amber-100 rounded-xl transition-colors border border-amber-100">' +
+        '<div class="w-8 h-8 bg-amber-500 rounded-lg flex items-center justify-center flex-shrink-0"><i class="fas fa-file-invoice-dollar text-white text-xs"></i></div>' +
+        '<div class="min-w-0"><p class="font-semibold text-gray-800 text-xs truncate">Invoice</p></div>' +
+      '</a>' +
+      '<a href="/pricing" class="flex items-center gap-2 p-3 bg-purple-50 hover:bg-purple-100 rounded-xl transition-colors border border-purple-100">' +
+        '<div class="w-8 h-8 bg-purple-500 rounded-lg flex items-center justify-center flex-shrink-0"><i class="fas fa-coins text-white text-xs"></i></div>' +
+        '<div class="min-w-0"><p class="font-semibold text-gray-800 text-xs truncate">Buy Credits</p></div>' +
+      '</a>' +
     '</div>' +
 
     // ── Auto-Email Settings ──
-    '<div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-8">' +
-      '<div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">' +
-        '<h3 class="font-bold text-gray-800 text-sm"><i class="fas fa-envelope text-cyan-500 mr-2"></i>Report Delivery Settings</h3>' +
-      '</div>' +
-      '<div class="p-5 flex items-center justify-between">' +
+    '<div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden mb-5">' +
+      '<div class="p-4 flex items-center justify-between">' +
         '<div>' +
-          '<p class="font-medium text-gray-800 text-sm">Auto-email reports when ready</p>' +
-          '<p class="text-xs text-gray-500 mt-0.5">Automatically send every completed roof report to your email address (' + (c.email || '') + ')</p>' +
+          '<p class="font-medium text-gray-800 text-sm"><i class="fas fa-envelope text-cyan-500 mr-1.5"></i>Auto-email reports when ready</p>' +
+          '<p class="text-xs text-gray-400 mt-0.5">Send completed reports to ' + (c.email || 'your email') + '</p>' +
         '</div>' +
         '<label class="relative inline-flex items-center cursor-pointer">' +
           '<input type="checkbox" id="auto-email-toggle" class="sr-only peer" onchange="toggleAutoEmail(this.checked)">' +
@@ -279,9 +282,12 @@ function renderDashboard() {
     '</div>' +
 
     // Footer
-    '<div class="text-center py-6 text-xs text-gray-400">' +
+    '<div class="text-center py-4 text-xs text-gray-400">' +
       '<p>Powered by <strong>RoofReporterAI</strong> &middot; Antigravity Gemini Roof Measurement Suite</p>' +
-    '</div>';
+    '</div>' +
+
+    '</main>' + // end main
+    '</div>'; // end flex layout
 }
 
 function renderRecentOrders() {
