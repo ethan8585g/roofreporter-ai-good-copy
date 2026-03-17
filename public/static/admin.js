@@ -547,7 +547,7 @@ function renderOrdersTable(orders) {
           <td class="px-3 py-2 text-gray-500 text-xs">${fmtDate(o.created_at)}</td>
           <td class="px-3 py-2">
             <div class="flex gap-0.5">
-              ${o.status === 'completed' ? `<a href="/api/reports/${o.id}/html" target="_blank" class="p-1 text-gray-400 hover:text-blue-600" title="View Report"><i class="fas fa-file-alt"></i></a><button onclick="emailReport(${o.id})" class="p-1 text-gray-400 hover:text-green-600" title="Email"><i class="fas fa-envelope"></i></button><button onclick="openSegmentToggle(${o.id})" class="p-1 text-gray-400 hover:text-orange-600" title="Toggle Segments"><i class="fas fa-layer-group"></i></button>` : `<button onclick="generateReport(${o.id})" class="p-1 text-gray-400 hover:text-indigo-600" title="Generate"><i class="fas fa-cog"></i></button>`}
+              ${o.status === 'completed' ? `<a href="/api/reports/${o.id}/html" target="_blank" class="p-1 text-gray-400 hover:text-blue-600" title="View Report"><i class="fas fa-file-alt"></i></a><button onclick="emailReport(${o.id})" class="p-1 text-gray-400 hover:text-green-600" title="Email"><i class="fas fa-envelope"></i></button><button onclick="openSegmentToggle(${o.id})" class="p-1 text-gray-400 hover:text-teal-600" title="Toggle Segments"><i class="fas fa-layer-group"></i></button>` : `<button onclick="generateReport(${o.id})" class="p-1 text-gray-400 hover:text-indigo-600" title="Generate"><i class="fas fa-cog"></i></button>`}
             </div>
           </td>
         </tr>`).join('')}
