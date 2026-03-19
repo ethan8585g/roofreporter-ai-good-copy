@@ -29,6 +29,7 @@ import { callCenterRoutes } from './routes/call-center'
 import { metaConnectRoutes } from './routes/meta-connect'
 import { heygenRoutes } from './routes/heygen'
 import { aiAdminChatRoutes } from './routes/ai-admin-chat'
+import { geminiRoutes } from './routes/gemini'
 import { pipelineRoutes } from './routes/pipeline'
 import { stripeRoutes } from './routes/stripe'
 import { customerCallsRoutes } from './routes/customer-cold-call'
@@ -182,6 +183,7 @@ app.route('/api/companies', companiesRoutes)
 app.route('/api/settings', settingsRoutes)
 app.route('/api/reports', reportsRoutes)
 app.route('/api/ai-admin', aiAdminChatRoutes)
+app.route('/api/gemini', geminiRoutes)
 app.route('/api/admin', adminRoutes)
 app.route('/api/ai', aiAnalysisRoutes)
 app.route('/api/auth', authRoutes)
@@ -2287,6 +2289,14 @@ function getSuperAdminDashboardHTML() {
           <i class="fas fa-bell w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Notifications</span>
         </div>
 
+        <p class="sa-nav-group-label mt-3">AI / Gemini</p>
+        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('gemini-command', this)">
+          <i class="fas fa-terminal w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Gemini Command</span>
+        </div>
+        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('ai-chat', this)">
+          <i class="fas fa-brain w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">AI Site Manager</span>
+        </div>
+
         <p class="sa-nav-group-label mt-3">Settings</p>
         <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('seo-manager', this)">
           <i class="fas fa-search-plus w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">SEO Manager</span>
@@ -2296,9 +2306,6 @@ function getSuperAdminDashboardHTML() {
         </div>
         <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('webhooks', this)">
           <i class="fas fa-plug w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Webhooks</span>
-        </div>
-        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('ai-chat', this)">
-          <i class="fas fa-brain w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">AI Site Manager</span>
         </div>
         <a href="/admin" class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400 no-underline">
           <i class="fas fa-tachometer-alt w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Operations Panel</span>

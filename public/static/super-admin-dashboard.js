@@ -243,6 +243,15 @@ async function loadView(view) {
           if (pnRes) SA.data.phone_numbers = await pnRes.json();
         } catch(e) { SA.data.phone_numbers = { numbers: [] }; }
         break;
+      case 'gemini-command':
+        // Check Gemini API status on first load
+        if (!SA.data.gemini_status) {
+          try {
+            const gRes = await saFetch('/api/gemini/status');
+            if (gRes) SA.data.gemini_status = await gRes.json();
+          } catch(e) { SA.data.gemini_status = { configured: false, error: e.message }; }
+        }
+        break;
     }
   } catch (e) {
     console.error('Load error:', e);
@@ -354,6 +363,7 @@ function renderContent() {
     case 'customer-onboarding': root.innerHTML = renderCustomerOnboardingView(); break;
     case 'service-invoices': root.innerHTML = renderServiceInvoicesView(); break;
     case 'call-center-manage': root.innerHTML = renderCallCenterManageView(); break;
+    case 'gemini-command': root.innerHTML = renderGeminiCommandView(); break;
     default: root.innerHTML = renderUsersView();
   }
 }
@@ -5821,14 +5831,17 @@ function renderSMOnboardView() {
 
     // Secretary Config
     '<div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">' +
-      '<h3 class="font-bold text-gray-800 mb-4"><i class="fas fa-robot mr-2 text-purple-400"></i>Secretary AI Configuration</h3>' +
+      '<div class="flex items-center justify-between mb-4">' +
+        '<h3 class="font-bold text-gray-800"><i class="fas fa-robot mr-2 text-purple-400"></i>Secretary AI Configuration</h3>' +
+        '<button onclick="geminiAutoGenerateConfig()" class="px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white rounded-xl text-xs font-bold shadow-md hover:shadow-lg transition-all"><i class="fas fa-magic mr-1.5"></i>AI Auto-Generate Config</button>' +
+      '</div>' +
       '<div class="grid grid-cols-1 md:grid-cols-3 gap-4">' +
         '<div><label class="text-xs font-semibold text-gray-500 block mb-1.5">Agent Name</label><input id="smo-agent-name" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm" value="Sarah"></div>' +
         '<div><label class="text-xs font-semibold text-gray-500 block mb-1.5">Voice</label><select id="smo-voice" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm"><option value="alloy" selected>Alloy</option><option value="shimmer">Shimmer</option><option value="nova">Nova</option><option value="echo">Echo</option><option value="onyx">Onyx</option><option value="fable">Fable</option><option value="ash">Ash</option><option value="coral">Coral</option><option value="sage">Sage</option></select></div>' +
         '<div><label class="text-xs font-semibold text-gray-500 block mb-1.5">Mode</label><select id="smo-mode" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm"><option value="full">Full Secretary</option><option value="answering">Answering Service</option><option value="directory">Directory</option><option value="receptionist">Receptionist</option><option value="always_on">Always On</option></select></div>' +
       '</div>' +
-      '<div class="mt-4"><label class="text-xs font-semibold text-gray-500 block mb-1.5">Greeting Script</label><textarea id="smo-greeting" rows="3" class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-sm" placeholder="Thank you for calling [Business Name]. Our AI receptionist is here to help. How may I direct your call?"></textarea></div>' +
-      '<div class="mt-4"><label class="text-xs font-semibold text-gray-500 block mb-1.5">Common Q&A</label><textarea id="smo-qa" rows="3" class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-sm font-mono" placeholder="Q: What are your hours? | A: Monday to Friday, 8am to 6pm"></textarea></div>' +
+      '<div class="mt-4"><div class="flex items-center justify-between mb-1.5"><label class="text-xs font-semibold text-gray-500">Greeting Script</label><button onclick="geminiGenerateGreeting()" class="text-xs text-purple-500 hover:text-purple-700 font-medium"><i class="fas fa-magic mr-1"></i>AI Generate</button></div><textarea id="smo-greeting" rows="3" class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-sm" placeholder="Thank you for calling [Business Name]. Our AI receptionist is here to help. How may I direct your call?"></textarea></div>' +
+      '<div class="mt-4"><div class="flex items-center justify-between mb-1.5"><label class="text-xs font-semibold text-gray-500">Common Q&A</label><button onclick="geminiGenerateQA()" class="text-xs text-purple-500 hover:text-purple-700 font-medium"><i class="fas fa-magic mr-1"></i>AI Generate</button></div><textarea id="smo-qa" rows="3" class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-sm font-mono" placeholder="Q: What are your hours? | A: Monday to Friday, 8am to 6pm"></textarea></div>' +
       '<div class="mt-4"><label class="text-xs font-semibold text-gray-500 block mb-1.5">General Notes / Business Context</label><textarea id="smo-notes" rows="3" class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-sm" placeholder="We specialize in residential re-roofing in the Calgary area..."></textarea></div>' +
     '</div>' +
 
@@ -6062,4 +6075,483 @@ async function smOnboardCustomer() {
   } catch(e) {
     alert('Error creating customer: ' + e.message);
   }
+}
+
+// ============================================================
+// GEMINI AI COMMAND TERMINAL
+// Full-featured AI command center for platform management
+// ============================================================
+
+// Gemini conversation state
+if (!SA.geminiMessages) SA.geminiMessages = [];
+if (!SA.geminiLoading) SA.geminiLoading = false;
+
+function renderGeminiCommandView() {
+  const status = SA.data.gemini_status || {};
+  const isConfigured = status.configured && status.status === 'ok';
+
+  return `
+  <div class="slide-in">
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <h1 class="text-2xl font-bold text-slate-800 flex items-center gap-3">
+          <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
+            <i class="fas fa-terminal text-white text-sm"></i>
+          </div>
+          Gemini AI Command Center
+        </h1>
+        <p class="text-slate-500 text-sm mt-1">Powered by Google Gemini 2.5 Flash — your AI co-pilot for platform management</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="px-3 py-1.5 rounded-full text-xs font-bold ${isConfigured ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">
+          <i class="fas ${isConfigured ? 'fa-check-circle' : 'fa-exclamation-triangle'} mr-1"></i>
+          ${isConfigured ? 'Gemini Connected' : 'Not Configured'}
+        </span>
+        <button onclick="geminiClearHistory()" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-xs font-medium text-slate-600 transition-all">
+          <i class="fas fa-trash mr-1"></i>Clear History
+        </button>
+      </div>
+    </div>
+
+    ${!isConfigured ? `
+    <div class="sa-section mb-6">
+      <div class="sa-section-body bg-amber-50 border border-amber-200 rounded-xl">
+        <div class="flex items-start gap-3">
+          <i class="fas fa-exclamation-triangle text-amber-500 text-xl mt-0.5"></i>
+          <div>
+            <h3 class="font-bold text-amber-800 text-sm">Gemini API Key Required</h3>
+            <p class="text-amber-700 text-xs mt-1">Set <code class="bg-amber-100 px-1.5 py-0.5 rounded text-[11px]">GEMINI_API_KEY</code> or <code class="bg-amber-100 px-1.5 py-0.5 rounded text-[11px]">GOOGLE_VERTEX_API_KEY</code> in your Cloudflare secrets.</p>
+            <p class="text-amber-600 text-[11px] mt-1">Get a free API key at <a href="https://aistudio.google.com/apikey" target="_blank" class="underline">aistudio.google.com</a> — 60 requests/min free tier</p>
+          </div>
+        </div>
+      </div>
+    </div>` : ''}
+
+    <!-- Quick Actions Grid -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+      <button onclick="geminiQuickAction('summarize')" class="group bg-white border border-slate-200 hover:border-blue-300 hover:shadow-md rounded-xl p-4 text-left transition-all">
+        <div class="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center mb-2 group-hover:bg-blue-200 transition-all"><i class="fas fa-chart-pie text-blue-600 text-sm"></i></div>
+        <p class="text-xs font-bold text-slate-700">Platform Summary</p>
+        <p class="text-[10px] text-slate-400 mt-0.5">Stats, health & KPIs</p>
+      </button>
+      <button onclick="geminiQuickAction('secretary-strategy')" class="group bg-white border border-slate-200 hover:border-purple-300 hover:shadow-md rounded-xl p-4 text-left transition-all">
+        <div class="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center mb-2 group-hover:bg-purple-200 transition-all"><i class="fas fa-phone-volume text-purple-600 text-sm"></i></div>
+        <p class="text-xs font-bold text-slate-700">Secretary Strategy</p>
+        <p class="text-[10px] text-slate-400 mt-0.5">Growth & optimization</p>
+      </button>
+      <button onclick="geminiQuickAction('marketing-ideas')" class="group bg-white border border-slate-200 hover:border-green-300 hover:shadow-md rounded-xl p-4 text-left transition-all">
+        <div class="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center mb-2 group-hover:bg-green-200 transition-all"><i class="fas fa-bullhorn text-green-600 text-sm"></i></div>
+        <p class="text-xs font-bold text-slate-700">Marketing Ideas</p>
+        <p class="text-[10px] text-slate-400 mt-0.5">Campaigns & copy</p>
+      </button>
+      <button onclick="geminiQuickAction('pricing-advice')" class="group bg-white border border-slate-200 hover:border-amber-300 hover:shadow-md rounded-xl p-4 text-left transition-all">
+        <div class="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center mb-2 group-hover:bg-amber-200 transition-all"><i class="fas fa-dollar-sign text-amber-600 text-sm"></i></div>
+        <p class="text-xs font-bold text-slate-700">Pricing Advice</p>
+        <p class="text-[10px] text-slate-400 mt-0.5">Plans & packages</p>
+      </button>
+    </div>
+
+    <!-- Quick Action Row 2 -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+      <button onclick="geminiQuickAction('generate-config')" class="group bg-white border border-slate-200 hover:border-teal-300 hover:shadow-md rounded-xl p-4 text-left transition-all">
+        <div class="w-8 h-8 bg-teal-100 rounded-lg flex items-center justify-center mb-2 group-hover:bg-teal-200 transition-all"><i class="fas fa-magic text-teal-600 text-sm"></i></div>
+        <p class="text-xs font-bold text-slate-700">Generate Agent Config</p>
+        <p class="text-[10px] text-slate-400 mt-0.5">AI secretary setup</p>
+      </button>
+      <button onclick="geminiQuickAction('blog-post')" class="group bg-white border border-slate-200 hover:border-indigo-300 hover:shadow-md rounded-xl p-4 text-left transition-all">
+        <div class="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center mb-2 group-hover:bg-indigo-200 transition-all"><i class="fas fa-pen-nib text-indigo-600 text-sm"></i></div>
+        <p class="text-xs font-bold text-slate-700">Write Blog Post</p>
+        <p class="text-[10px] text-slate-400 mt-0.5">SEO content</p>
+      </button>
+      <button onclick="geminiQuickAction('analyze-calls')" class="group bg-white border border-slate-200 hover:border-rose-300 hover:shadow-md rounded-xl p-4 text-left transition-all">
+        <div class="w-8 h-8 bg-rose-100 rounded-lg flex items-center justify-center mb-2 group-hover:bg-rose-200 transition-all"><i class="fas fa-chart-bar text-rose-600 text-sm"></i></div>
+        <p class="text-xs font-bold text-slate-700">Call Analytics</p>
+        <p class="text-[10px] text-slate-400 mt-0.5">Performance review</p>
+      </button>
+      <button onclick="geminiQuickAction('competitive')" class="group bg-white border border-slate-200 hover:border-cyan-300 hover:shadow-md rounded-xl p-4 text-left transition-all">
+        <div class="w-8 h-8 bg-cyan-100 rounded-lg flex items-center justify-center mb-2 group-hover:bg-cyan-200 transition-all"><i class="fas fa-chess text-cyan-600 text-sm"></i></div>
+        <p class="text-xs font-bold text-slate-700">Competitive Intel</p>
+        <p class="text-[10px] text-slate-400 mt-0.5">Market positioning</p>
+      </button>
+    </div>
+
+    <!-- Chat Terminal -->
+    <div class="sa-section" style="border: 2px solid #e2e8f0;">
+      <div class="sa-section-header bg-gradient-to-r from-slate-800 to-slate-900">
+        <h3 class="text-white" style="color:white"><i class="fas fa-terminal mr-2" style="color:#60a5fa"></i>AI Terminal</h3>
+        <div class="flex items-center gap-2">
+          <span class="text-[10px] text-slate-400 font-mono">gemini-2.5-flash</span>
+          <div class="w-2 h-2 rounded-full ${isConfigured ? 'bg-green-400 animate-pulse' : 'bg-red-400'}"></div>
+        </div>
+      </div>
+
+      <!-- Message Area -->
+      <div id="gemini-chat-area" class="bg-slate-900 overflow-y-auto" style="height:450px; padding:20px;">
+        ${SA.geminiMessages.length === 0 ? `
+        <div class="text-center py-12">
+          <div class="w-16 h-16 bg-gradient-to-br from-blue-500/20 to-purple-500/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <i class="fas fa-robot text-blue-400 text-2xl"></i>
+          </div>
+          <h3 class="text-slate-300 font-bold text-lg mb-2">Gemini AI Command Center</h3>
+          <p class="text-slate-500 text-sm max-w-md mx-auto mb-4">Ask anything about your platform, customers, agents, marketing strategy, or generate content. Use the quick actions above or type below.</p>
+          <div class="flex flex-wrap justify-center gap-2">
+            <button onclick="geminiSendFromSuggestion('How many active customers do I have and what is the revenue trend?')" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-lg text-xs transition-all border border-slate-700">Revenue trend</button>
+            <button onclick="geminiSendFromSuggestion('Generate a cold email for roofing companies about our AI Secretary service')" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-lg text-xs transition-all border border-slate-700">Cold email</button>
+            <button onclick="geminiSendFromSuggestion('What are the top 5 things I should do this week to grow RoofReporterAI?')" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-lg text-xs transition-all border border-slate-700">Weekly priorities</button>
+            <button onclick="geminiSendFromSuggestion('Write a Google Ads headline and description for AI Roofer Secretary')" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-lg text-xs transition-all border border-slate-700">Google Ads copy</button>
+          </div>
+        </div>` : SA.geminiMessages.map(function(m, i) {
+          return geminiRenderMessage(m);
+        }).join('')}
+        ${SA.geminiLoading ? `
+        <div class="flex items-start gap-3 mt-4">
+          <div class="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center flex-shrink-0">
+            <i class="fas fa-robot text-white text-xs"></i>
+          </div>
+          <div class="bg-slate-800 rounded-xl px-4 py-3 max-w-[85%]">
+            <div class="flex items-center gap-2">
+              <div class="flex gap-1">
+                <div class="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style="animation-delay:0ms"></div>
+                <div class="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style="animation-delay:150ms"></div>
+                <div class="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style="animation-delay:300ms"></div>
+              </div>
+              <span class="text-slate-500 text-xs">Gemini is thinking...</span>
+            </div>
+          </div>
+        </div>` : ''}
+      </div>
+
+      <!-- Input Area -->
+      <div class="bg-slate-800 border-t border-slate-700 p-4">
+        <div class="flex gap-3">
+          <div class="flex-1 relative">
+            <textarea id="gemini-input" rows="2" class="w-full bg-slate-900 border border-slate-600 rounded-xl px-4 py-3 text-white text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-slate-500" placeholder="Ask Gemini anything about your platform..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();geminiSend()}"></textarea>
+          </div>
+          <button onclick="geminiSend()" id="gemini-send-btn" class="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white px-5 rounded-xl font-bold text-sm transition-all hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed self-end" style="height:50px">
+            <i class="fas fa-paper-plane"></i>
+          </button>
+        </div>
+        <div class="flex items-center justify-between mt-2">
+          <p class="text-[10px] text-slate-500"><i class="fas fa-bolt mr-1 text-amber-400"></i>Shift+Enter for new line. Enter to send.</p>
+          <p class="text-[10px] text-slate-500 font-mono">${SA.geminiMessages.length} messages</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Capabilities Grid -->
+    <div class="grid md:grid-cols-3 gap-4 mt-6">
+      <div class="bg-white rounded-xl border border-slate-200 p-5">
+        <h4 class="text-sm font-bold text-slate-700 mb-3"><i class="fas fa-database mr-2 text-blue-500"></i>Platform Intelligence</h4>
+        <ul class="text-xs text-slate-500 space-y-1.5">
+          <li><i class="fas fa-check text-green-500 mr-1.5"></i>Customer & revenue analytics</li>
+          <li><i class="fas fa-check text-green-500 mr-1.5"></i>Order history & trends</li>
+          <li><i class="fas fa-check text-green-500 mr-1.5"></i>Secretary agent performance</li>
+          <li><i class="fas fa-check text-green-500 mr-1.5"></i>Strategic recommendations</li>
+        </ul>
+      </div>
+      <div class="bg-white rounded-xl border border-slate-200 p-5">
+        <h4 class="text-sm font-bold text-slate-700 mb-3"><i class="fas fa-pen-nib mr-2 text-purple-500"></i>Content Generation</h4>
+        <ul class="text-xs text-slate-500 space-y-1.5">
+          <li><i class="fas fa-check text-green-500 mr-1.5"></i>Blog posts & SEO content</li>
+          <li><i class="fas fa-check text-green-500 mr-1.5"></i>Email campaigns & outreach</li>
+          <li><i class="fas fa-check text-green-500 mr-1.5"></i>Google Ads / Meta ad copy</li>
+          <li><i class="fas fa-check text-green-500 mr-1.5"></i>Secretary greetings & Q&A</li>
+        </ul>
+      </div>
+      <div class="bg-white rounded-xl border border-slate-200 p-5">
+        <h4 class="text-sm font-bold text-slate-700 mb-3"><i class="fas fa-cog mr-2 text-teal-500"></i>Agent Configuration</h4>
+        <ul class="text-xs text-slate-500 space-y-1.5">
+          <li><i class="fas fa-check text-green-500 mr-1.5"></i>Auto-generate full configs</li>
+          <li><i class="fas fa-check text-green-500 mr-1.5"></i>Greeting script generation</li>
+          <li><i class="fas fa-check text-green-500 mr-1.5"></i>Q&A bank creation</li>
+          <li><i class="fas fa-check text-green-500 mr-1.5"></i>Call analysis & optimization</li>
+        </ul>
+      </div>
+    </div>
+  </div>`;
+}
+
+function geminiRenderMessage(m) {
+  if (m.role === 'user') {
+    return '<div class="flex items-start gap-3 mb-4 justify-end">' +
+      '<div class="bg-blue-600 rounded-xl px-4 py-3 max-w-[85%]">' +
+        '<p class="text-white text-sm whitespace-pre-wrap">' + escapeHtml(m.content) + '</p>' +
+      '</div>' +
+      '<div class="w-8 h-8 bg-teal-600 rounded-lg flex items-center justify-center flex-shrink-0">' +
+        '<i class="fas fa-user text-white text-xs"></i>' +
+      '</div>' +
+    '</div>';
+  }
+  // assistant
+  return '<div class="flex items-start gap-3 mb-4">' +
+    '<div class="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center flex-shrink-0">' +
+      '<i class="fas fa-robot text-white text-xs"></i>' +
+    '</div>' +
+    '<div class="bg-slate-800 rounded-xl px-4 py-3 max-w-[85%] border border-slate-700">' +
+      '<div class="text-slate-200 text-sm gemini-response">' + geminiFormatResponse(m.content) + '</div>' +
+      (m.usage ? '<p class="text-[10px] text-slate-600 mt-2 font-mono">tokens: ' + (m.usage.totalTokenCount || '?') + '</p>' : '') +
+    '</div>' +
+    '<button onclick="geminiCopyMessage(this)" class="self-start mt-1 text-slate-600 hover:text-white text-xs transition-all" title="Copy"><i class="fas fa-copy"></i></button>' +
+  '</div>';
+}
+
+function escapeHtml(str) {
+  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function geminiFormatResponse(text) {
+  if (!text) return '';
+  // Convert markdown-like formatting to HTML
+  var html = escapeHtml(text);
+  // Bold
+  html = html.replace(/\*\*(.+?)\*\*/g, '<strong class="text-white">$1</strong>');
+  // Code blocks
+  html = html.replace(/```([\s\S]*?)```/g, '<pre class="bg-slate-900 rounded-lg p-3 mt-2 mb-2 text-xs text-green-400 overflow-x-auto border border-slate-700"><code>$1</code></pre>');
+  // Inline code
+  html = html.replace(/`([^`]+)`/g, '<code class="bg-slate-900 px-1.5 py-0.5 rounded text-[11px] text-blue-300">$1</code>');
+  // Bullet points
+  html = html.replace(/^[\-\*] (.+)$/gm, '<div class="flex gap-2 my-0.5"><span class="text-blue-400 mt-0.5">&#8226;</span><span>$1</span></div>');
+  // Numbered lists
+  html = html.replace(/^(\d+)\. (.+)$/gm, '<div class="flex gap-2 my-0.5"><span class="text-blue-400 font-bold min-w-[20px]">$1.</span><span>$2</span></div>');
+  // Headers
+  html = html.replace(/^### (.+)$/gm, '<h4 class="text-white font-bold text-sm mt-3 mb-1">$1</h4>');
+  html = html.replace(/^## (.+)$/gm, '<h3 class="text-white font-bold mt-3 mb-1">$1</h3>');
+  // Line breaks
+  html = html.replace(/\n/g, '<br>');
+  return html;
+}
+
+function geminiCopyMessage(btn) {
+  var msgDiv = btn.previousElementSibling.querySelector('.gemini-response');
+  if (msgDiv) {
+    navigator.clipboard.writeText(msgDiv.innerText).then(function() {
+      btn.innerHTML = '<i class="fas fa-check text-green-400"></i>';
+      setTimeout(function() { btn.innerHTML = '<i class="fas fa-copy"></i>'; }, 1500);
+    });
+  }
+}
+
+function geminiClearHistory() {
+  if (!confirm('Clear all Gemini conversation history?')) return;
+  SA.geminiMessages = [];
+  renderContent();
+}
+
+function geminiQuickAction(action) {
+  var prompts = {
+    'summarize': 'Give me a comprehensive platform status summary: active customers, total orders, revenue trends, active secretary agents, recent signups, and top 3 priorities for this week.',
+    'secretary-strategy': 'Analyze our Roofer Secretary AI product. What is the growth strategy? How do we get more roofing companies to subscribe at $249/month? Give me 5 specific, actionable ideas with expected ROI.',
+    'marketing-ideas': 'Generate 5 marketing campaign ideas for RoofReporterAI targeting roofing contractors in Alberta and Ontario. Include Google Ads headlines, Facebook ad concepts, and email subject lines.',
+    'pricing-advice': 'Review our pricing structure: Express reports (1 credit), Standard reports (2 credits), Pro reports (3 credits). Secretary AI is $249/month. Credit packs range from $29 (5 credits) to $499 (100 credits). What adjustments would maximize revenue?',
+    'generate-config': 'I need to onboard a new customer. Their business is "Maple Leaf Roofing" in Calgary, Alberta. They do residential re-roofing, siding, and gutter installation. Generate a complete AI secretary configuration including greeting, Q&A, directories, and agent settings.',
+    'blog-post': 'Write a 600-word SEO blog post titled "Why Every Roofing Company Needs an AI Phone Secretary in 2026". Target keywords: AI roofing secretary, automated phone answering for roofers, roofing business automation. Include a compelling intro, 4 key benefits, and a call-to-action.',
+    'analyze-calls': 'Analyze the overall performance of our AI secretary agents across all customers. What are the common call patterns? What improvements should we make to the greeting scripts, Q&A banks, and call routing? Provide specific optimization suggestions.',
+    'competitive': 'Analyze the competitive landscape for AI phone answering services targeting roofing companies in Canada. Who are the main competitors? What is our unique advantage with the LiveKit + AI Secretary approach? How should we position against Smith.ai, Ruby Receptionist, and similar services?'
+  };
+  var prompt = prompts[action] || action;
+  document.getElementById('gemini-input').value = prompt;
+  geminiSend();
+}
+
+function geminiSendFromSuggestion(text) {
+  document.getElementById('gemini-input').value = text;
+  geminiSend();
+}
+
+async function geminiSend() {
+  var input = document.getElementById('gemini-input');
+  var prompt = (input.value || '').trim();
+  if (!prompt) return;
+  input.value = '';
+
+  // Add user message
+  SA.geminiMessages.push({ role: 'user', content: prompt });
+  SA.geminiLoading = true;
+  renderContent();
+  scrollGeminiToBottom();
+
+  try {
+    // Use the /command endpoint for DB-aware responses, or /chat for multi-turn
+    var useCommand = SA.geminiMessages.length <= 2;
+    var body, url;
+
+    if (useCommand) {
+      url = '/api/gemini/command';
+      body = JSON.stringify({ prompt: prompt });
+    } else {
+      url = '/api/gemini/chat';
+      // Send last 20 messages for context
+      var msgs = SA.geminiMessages.slice(-20).map(function(m) {
+        return { role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content };
+      });
+      body = JSON.stringify({ messages: msgs });
+    }
+
+    var res = await fetch(url, {
+      method: 'POST',
+      headers: { ...saHeaders(), 'Content-Type': 'application/json' },
+      body: body
+    });
+    var data = await res.json();
+    var reply = data.reply || data.text || 'No response received.';
+
+    SA.geminiMessages.push({
+      role: 'assistant',
+      content: reply,
+      usage: data.usage || null
+    });
+  } catch(err) {
+    SA.geminiMessages.push({
+      role: 'assistant',
+      content: 'Error: ' + err.message
+    });
+  }
+
+  SA.geminiLoading = false;
+  renderContent();
+  scrollGeminiToBottom();
+}
+
+function scrollGeminiToBottom() {
+  setTimeout(function() {
+    var area = document.getElementById('gemini-chat-area');
+    if (area) area.scrollTop = area.scrollHeight;
+  }, 100);
+}
+
+// ============================================================
+// GEMINI AI-ASSIST FOR SECRETARY MANAGER — Auto-generate config
+// Called from the Onboard New Customer form
+// ============================================================
+
+async function geminiAutoGenerateConfig() {
+  var biz = document.getElementById('smo-business')?.value || '';
+  var contact = document.getElementById('smo-name')?.value || '';
+  if (!biz) { alert('Enter a business name first'); return; }
+
+  var btn = event.target.closest('button');
+  var origHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>AI Generating...';
+
+  try {
+    var res = await fetch('/api/gemini/generate-config', {
+      method: 'POST',
+      headers: { ...saHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        business_name: biz,
+        contact_name: contact,
+        business_description: document.getElementById('smo-notes')?.value || '',
+        service_area: 'Alberta, Canada'
+      })
+    });
+    var data = await res.json();
+    if (!data.success || !data.config) {
+      alert('AI generation failed: ' + (data.error || 'No config returned'));
+      btn.disabled = false; btn.innerHTML = origHtml;
+      return;
+    }
+
+    var cfg = data.config;
+
+    // Fill in the form fields from AI-generated config
+    var nameField = document.getElementById('smo-agent-name');
+    if (nameField && cfg.agent_name) nameField.value = cfg.agent_name;
+
+    var voiceField = document.getElementById('smo-voice');
+    if (voiceField && cfg.agent_voice) voiceField.value = cfg.agent_voice;
+
+    var greetField = document.getElementById('smo-greeting');
+    if (greetField && cfg.greeting_script) greetField.value = cfg.greeting_script;
+
+    var qaField = document.getElementById('smo-qa');
+    if (qaField && cfg.common_qa) qaField.value = cfg.common_qa;
+
+    var notesField = document.getElementById('smo-notes');
+    if (notesField && cfg.general_notes) notesField.value = cfg.general_notes;
+
+    // Fill directories if generated
+    if (cfg.directories && Array.isArray(cfg.directories)) {
+      cfg.directories.forEach(function(dir, idx) {
+        if (idx < 4) {
+          var nameEl = document.getElementById('smo-dir' + idx + '-name');
+          var phoneEl = document.getElementById('smo-dir' + idx + '-phone');
+          var notesEl = document.getElementById('smo-dir' + idx + '-notes');
+          if (nameEl) nameEl.value = dir.name || '';
+          if (phoneEl) phoneEl.value = dir.phone_or_action || '';
+          if (notesEl) notesEl.value = dir.special_notes || '';
+        }
+      });
+    }
+
+    btn.innerHTML = '<i class="fas fa-check text-green-400 mr-1"></i>Config Generated!';
+    setTimeout(function() { btn.disabled = false; btn.innerHTML = origHtml; }, 2000);
+
+  } catch(e) {
+    alert('AI generation error: ' + e.message);
+    btn.disabled = false; btn.innerHTML = origHtml;
+  }
+}
+
+async function geminiGenerateGreeting() {
+  var biz = document.getElementById('smo-business')?.value || 'Roofing Company';
+  var agentName = document.getElementById('smo-agent-name')?.value || 'Sarah';
+
+  var btn = event.target.closest('button');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
+
+  try {
+    var res = await fetch('/api/gemini/generate-greeting', {
+      method: 'POST',
+      headers: { ...saHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ business_name: biz, agent_name: agentName })
+    });
+    var data = await res.json();
+    if (data.greetings) {
+      var greetField = document.getElementById('smo-greeting');
+      if (greetField) {
+        // Extract the first option
+        var lines = data.greetings.split('\n').filter(function(l) { return l.trim(); });
+        var first = '';
+        for (var i = 0; i < lines.length; i++) {
+          if (lines[i].match(/\[Option 1\]/i)) {
+            first = lines[i].replace(/\[Option 1\]/i, '').trim();
+            if (!first && lines[i+1]) first = lines[i+1].trim();
+            break;
+          }
+        }
+        greetField.value = first || lines[0] || data.greetings.substring(0, 300);
+      }
+    }
+  } catch(e) { console.warn('Greeting generation failed:', e); }
+
+  btn.disabled = false;
+  btn.innerHTML = '<i class="fas fa-magic mr-1"></i>AI Generate';
+}
+
+async function geminiGenerateQA() {
+  var biz = document.getElementById('smo-business')?.value || 'Roofing Company';
+  var services = document.getElementById('smo-notes')?.value || '';
+
+  var btn = event.target.closest('button');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
+
+  try {
+    var res = await fetch('/api/gemini/generate-qa', {
+      method: 'POST',
+      headers: { ...saHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ business_name: biz, services: services })
+    });
+    var data = await res.json();
+    if (data.qa) {
+      var qaField = document.getElementById('smo-qa');
+      if (qaField) qaField.value = data.qa;
+    }
+  } catch(e) { console.warn('Q&A generation failed:', e); }
+
+  btn.disabled = false;
+  btn.innerHTML = '<i class="fas fa-magic mr-1"></i>AI Generate';
 }
