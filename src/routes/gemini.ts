@@ -42,7 +42,7 @@ async function callGemini(env: any, prompt: string, opts?: {
   maxOutputTokens?: number
   jsonMode?: boolean
 }): Promise<{ text: string; usage?: any; error?: string }> {
-  const model = opts?.model || 'gemini-2.5-flash-preview-05-20'
+  const model = opts?.model || 'gemini-2.5-flash'
   const apiKey = env.GEMINI_API_KEY || env.GOOGLE_VERTEX_API_KEY
   
   if (!apiKey) {
@@ -96,7 +96,7 @@ async function callGeminiMultiTurn(env: any, messages: Array<{ role: string; con
   temperature?: number
   maxOutputTokens?: number
 }): Promise<{ text: string; usage?: any; error?: string }> {
-  const model = opts?.model || 'gemini-2.5-flash-preview-05-20'
+  const model = opts?.model || 'gemini-2.5-flash'
   const apiKey = env.GEMINI_API_KEY || env.GOOGLE_VERTEX_API_KEY
   
   if (!apiKey) {
@@ -164,7 +164,7 @@ geminiRoutes.get('/status', async (c) => {
     status: result.error ? 'error' : 'ok',
     response: result.text?.trim(),
     error: result.error || undefined,
-    model: 'gemini-2.5-flash-preview-05-20',
+    model: 'gemini-2.5-flash',
     usage: result.usage
   })
 })
