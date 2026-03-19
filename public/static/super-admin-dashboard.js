@@ -6244,9 +6244,9 @@ function renderGeminiCommandView() {
       <div class="bg-white rounded-xl border border-slate-200 p-5">
         <h4 class="text-sm font-bold text-slate-700 mb-3"><i class="fas fa-database mr-2 text-blue-500"></i>Platform Intelligence</h4>
         <ul class="text-xs text-slate-500 space-y-1.5">
-          <li><i class="fas fa-check text-green-500 mr-1.5"></i>Customer & revenue analytics</li>
-          <li><i class="fas fa-check text-green-500 mr-1.5"></i>Order history & trends</li>
-          <li><i class="fas fa-check text-green-500 mr-1.5"></i>Secretary agent performance</li>
+          <li><i class="fas fa-check text-green-500 mr-1.5"></i>Live customer, order & call data</li>
+          <li><i class="fas fa-check text-green-500 mr-1.5"></i>Secretary agent performance review</li>
+          <li><i class="fas fa-check text-green-500 mr-1.5"></i>Lead pipeline & conversion analysis</li>
           <li><i class="fas fa-check text-green-500 mr-1.5"></i>Strategic recommendations</li>
         </ul>
       </div>
@@ -6260,12 +6260,12 @@ function renderGeminiCommandView() {
         </ul>
       </div>
       <div class="bg-white rounded-xl border border-slate-200 p-5">
-        <h4 class="text-sm font-bold text-slate-700 mb-3"><i class="fas fa-cog mr-2 text-teal-500"></i>Agent Configuration</h4>
+        <h4 class="text-sm font-bold text-slate-700 mb-3"><i class="fas fa-info-circle mr-2 text-amber-500"></i>Limitations</h4>
         <ul class="text-xs text-slate-500 space-y-1.5">
-          <li><i class="fas fa-check text-green-500 mr-1.5"></i>Auto-generate full configs</li>
-          <li><i class="fas fa-check text-green-500 mr-1.5"></i>Greeting script generation</li>
-          <li><i class="fas fa-check text-green-500 mr-1.5"></i>Q&A bank creation</li>
-          <li><i class="fas fa-check text-green-500 mr-1.5"></i>Call analysis & optimization</li>
+          <li><i class="fas fa-eye text-blue-500 mr-1.5"></i>Read-only — sees live DB data</li>
+          <li><i class="fas fa-times text-red-400 mr-1.5"></i>Cannot edit configs or toggle agents</li>
+          <li><i class="fas fa-times text-red-400 mr-1.5"></i>Cannot create accounts or send email</li>
+          <li><i class="fas fa-arrow-right text-slate-400 mr-1.5"></i>Will guide you to the right panel</li>
         </ul>
       </div>
     </div>
@@ -6372,8 +6372,8 @@ async function geminiSend() {
   scrollGeminiToBottom();
 
   try {
-    // Use the /command endpoint for DB-aware responses, or /chat for multi-turn
-    var useCommand = SA.geminiMessages.length <= 2;
+    // Always use /command for first message (DB-aware), /chat for follow-ups (multi-turn context)
+    var useCommand = SA.geminiMessages.filter(function(m) { return m.role === 'user'; }).length <= 1;
     var body, url;
 
     if (useCommand) {
