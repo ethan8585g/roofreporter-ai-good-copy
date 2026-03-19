@@ -37,6 +37,7 @@ import { homeDesignerRoutes } from './routes/home-designer'
 import { sam3Routes } from './routes/sam3-analysis'
 import { calendarRoutes } from './routes/calendar'
 import { salesRoutes } from './routes/sales'
+import { platformAdmin } from './routes/platform-admin'
 import type { Bindings } from './types'
 
 const app = new Hono<{ Bindings: Bindings }>()
@@ -214,6 +215,7 @@ app.route('/api/home-designer', homeDesignerRoutes)
 app.route('/api/sam3', sam3Routes)
 app.route('/api/calendar', calendarRoutes)
 app.route('/api/sales', salesRoutes)
+app.route('/api/admin/platform', platformAdmin)
 
 // Health check
 app.get('/api/health', (c) => {
@@ -2208,6 +2210,29 @@ function getSuperAdminDashboardHTML() {
           <i class="fas fa-brain w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">AI Site Manager</span>
         </div>
 
+        <p class="sa-nav-group-label mt-3">Platform Admin</p>
+        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('enhanced-onboarding', this)">
+          <i class="fas fa-user-plus w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Enhanced Onboarding</span>
+        </div>
+        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('service-panel', this)">
+          <i class="fas fa-server w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Service Panel</span>
+        </div>
+        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('membership-config', this)">
+          <i class="fas fa-crown w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Membership Tiers</span>
+        </div>
+        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('agent-personas', this)">
+          <i class="fas fa-theater-masks w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Agent Personas</span>
+        </div>
+        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('cold-call-centre', this)">
+          <i class="fas fa-phone-alt w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Cold-Call Centre</span>
+        </div>
+        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('live-dashboard', this)">
+          <i class="fas fa-satellite-dish w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Live Dashboard</span>
+        </div>
+        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('transcript-flagging', this)">
+          <i class="fas fa-flag w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Agent Fine-Tuning</span>
+        </div>
+
         <p class="sa-nav-group-label mt-3">Settings</p>
         <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('seo-manager', this)">
           <i class="fas fa-search-plus w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">SEO Manager</span>
@@ -2292,6 +2317,7 @@ function getSuperAdminDashboardHTML() {
   </script>
   <script src="/static/heygen.js?v=${BUILD_VERSION}"></script>
   <script src="/static/email-outreach.js?v=${BUILD_VERSION}"></script>
+  <script src="/static/platform-admin.js?v=${BUILD_VERSION}"></script>
 </body>
 </html>`
 }
