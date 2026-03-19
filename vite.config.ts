@@ -5,13 +5,18 @@ import { defineConfig } from 'vite'
 
 export default defineConfig({
   plugins: [
-    build(),
+    build({
+      entry: 'src/index.tsx',
+      outputDir: 'dist'
+    }),
     devServer({
       adapter,
       entry: 'src/index.tsx'
     })
   ],
   build: {
-    outDir: 'dist'
+    outDir: 'dist',
+    minify: false,
+    sourcemap: false
   }
 })

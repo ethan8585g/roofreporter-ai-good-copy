@@ -3,7 +3,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "node build.mjs",
+    "build:vite": "vite build",
     "preview": "wrangler pages dev dist",
     "deploy": "npm run build && wrangler pages deploy dist",
     "deploy:prod": "npm run build && wrangler pages deploy dist --project-name roofing-measurement-tool",
@@ -15,7 +16,6 @@
     "clean-port": "fuser -k 3000/tcp 2>/dev/null || true"
   },
   "dependencies": {
-    "@google/genai": "^1.46.0",
     "geotiff": "^3.0.3",
     "geotiff-geokeys-to-proj4": "^2024.4.13",
     "hono": "^4.11.9",
