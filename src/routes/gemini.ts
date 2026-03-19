@@ -180,6 +180,18 @@ geminiRoutes.post('/chat', async (c) => {
     return c.json({ error: 'No messages provided' }, 400)
   }
 
+  // Pull live stats for context even in chat mode
+  let liveStats = ''
+  try {
+    const [custCount, orderCount, secCount, callCount] = await Promise.all([
+      c.env.DB.prepare('SELECT COUNT(*) as c FROM customers WHERE is_active = 1').first<any>(),
+      c.env.DB.prepare('SELECT COUNT(*) as c FROM orders').first<any>(),
+      c.env.DB.prepare('SELECT COUNT(*) as c FROM secretary_config WHERE is_active = 1').first<any>(),
+      c.env.DB.prepare('SELECT COUNT(*) as c FROM secretary_call_logs').first<any>()
+    ])
+    liveStats = `\nLive Stats: ${custCount?.c || 0} active customers, ${orderCount?.c || 0} orders, ${secCount?.c || 0} active secretary agents, ${callCount?.c || 0} total calls.`
+  } catch {}
+
   const defaultSystem = `You are the Gemini AI Assistant for RoofReporterAI — a Canadian roofing measurement and AI secretary platform. You help the super admin manage the platform, configure Roofer Secretary AI agents, onboard customers, and analyze business data.
 
 Key Platform Features:
@@ -187,8 +199,13 @@ Key Platform Features:
 - Roofer Secretary AI — AI phone answering agents for roofing companies (powered by LiveKit + OpenAI TTS)
 - CRM, invoicing, customer management, email outreach
 - Multi-tier pricing (express/standard/pro reports)
+${liveStats}
 
-You are speaking with the platform owner/superadmin. Be concise, technical when needed, and action-oriented. When generating content for secretary AI configs, make it professional and tailored to roofing businesses.`
+CURRENT CAPABILITIES:
+✅ CAN DO: Analyze data, give strategic advice, generate content (emails, ads, blog posts, greetings, Q&A), suggest pricing, competitive analysis, marketing ideas
+❌ CANNOT DO YET: Directly modify database records, toggle services, create accounts, send emails. For those actions, tell the admin exactly which dashboard section to use.
+
+You are speaking with the platform owner/superadmin. Be concise, technical when needed, and action-oriented.`
 
   const result = await callGeminiMultiTurn(c.env, messages, {
     systemInstruction: system_prompt || defaultSystem,
@@ -397,43 +414,96 @@ Be concise and actionable.`
 })
 
 // ── POST /command — Super admin command terminal (DB-aware Gemini) ──
+// Pulls RICH platform data so Gemini gives actually useful answers
 geminiRoutes.post('/command', async (c) => {
   const { prompt, context } = await c.req.json<{ prompt: string; context?: string }>()
 
   if (!prompt) return c.json({ error: 'prompt required' }, 400)
 
-  // Gather platform context
+  // ── Gather comprehensive platform context from DB ──
   let platformContext = ''
   try {
-    const [custCount, orderCount, secCount, callCount] = await Promise.all([
+    const [
+      custCount, orderCount, secCount, callCount,
+      recentCustomers, recentCalls, recentOrders,
+      secretaryConfigs, callStats, leadStats,
+      weeklySignups, activeSubscriptions
+    ] = await Promise.all([
       c.env.DB.prepare('SELECT COUNT(*) as c FROM customers WHERE is_active = 1').first<any>(),
       c.env.DB.prepare('SELECT COUNT(*) as c FROM orders').first<any>(),
       c.env.DB.prepare('SELECT COUNT(*) as c FROM secretary_config WHERE is_active = 1').first<any>(),
-      c.env.DB.prepare('SELECT COUNT(*) as c FROM secretary_call_logs').first<any>()
+      c.env.DB.prepare('SELECT COUNT(*) as c FROM secretary_call_logs').first<any>(),
+      // Recent customers (last 10)
+      c.env.DB.prepare(`SELECT id, email, name, company_name, created_at FROM customers WHERE is_active = 1 ORDER BY created_at DESC LIMIT 10`).all<any>().catch(() => ({ results: [] })),
+      // Recent calls (last 20)
+      c.env.DB.prepare(`SELECT cl.id, cl.customer_id, cl.caller_phone, cl.caller_name, cl.call_duration_seconds, cl.call_summary, cl.call_outcome, cl.is_lead, cl.lead_quality, cl.sentiment, cl.created_at, sc.agent_name, c.company_name as customer_company FROM secretary_call_logs cl LEFT JOIN secretary_config sc ON cl.customer_id = sc.customer_id LEFT JOIN customers c ON cl.customer_id = c.id ORDER BY cl.created_at DESC LIMIT 20`).all<any>().catch(() => ({ results: [] })),
+      // Recent orders (last 10)
+      c.env.DB.prepare(`SELECT o.id, o.customer_id, o.address, o.tier, o.status, o.created_at, c.email, c.company_name FROM orders o LEFT JOIN customers c ON o.customer_id = c.id ORDER BY o.created_at DESC LIMIT 10`).all<any>().catch(() => ({ results: [] })),
+      // Secretary configs (all active)
+      c.env.DB.prepare(`SELECT sc.customer_id, sc.agent_name, sc.secretary_mode, sc.is_active, sc.business_phone, c.email, c.company_name FROM secretary_config sc LEFT JOIN customers c ON sc.customer_id = c.id WHERE sc.is_active = 1`).all<any>().catch(() => ({ results: [] })),
+      // Call stats (today, this week, this month)
+      c.env.DB.prepare(`SELECT COUNT(*) as today_calls FROM secretary_call_logs WHERE created_at >= date('now')`).first<any>().catch(() => ({})),
+      // Lead stats
+      c.env.DB.prepare(`SELECT COUNT(*) as total_leads, SUM(CASE WHEN lead_status = 'new' THEN 1 ELSE 0 END) as new_leads, SUM(CASE WHEN lead_status = 'contacted' THEN 1 ELSE 0 END) as contacted_leads, SUM(CASE WHEN lead_status = 'converted' THEN 1 ELSE 0 END) as converted_leads FROM secretary_call_logs WHERE is_lead = 1`).first<any>().catch(() => ({})),
+      // Signups this week
+      c.env.DB.prepare(`SELECT COUNT(*) as c FROM customers WHERE created_at >= date('now', '-7 days')`).first<any>().catch(() => ({})),
+      // Active secretary subscriptions
+      c.env.DB.prepare(`SELECT COUNT(*) as c FROM secretary_subscriptions WHERE status = 'active'`).first<any>().catch(() => ({})),
     ])
-    platformContext = `\nLive Platform Stats: ${custCount?.c || 0} active customers, ${orderCount?.c || 0} orders, ${secCount?.c || 0} active secretary agents, ${callCount?.c || 0} total calls.`
-  } catch {}
+
+    const custList = (recentCustomers?.results || []).map((c: any) => 
+      `  - ${c.company_name || c.name || c.email} (ID:${c.id}, email:${c.email}, joined:${c.created_at})`
+    ).join('\n')
+
+    const callList = (recentCalls?.results || []).map((cl: any) =>
+      `  - [${cl.created_at}] ${cl.caller_name || 'Unknown'} → ${cl.customer_company || 'Customer#'+cl.customer_id} | Agent:${cl.agent_name || '?'} | ${cl.call_duration_seconds || 0}s | Outcome:${cl.call_outcome || '?'} | Lead:${cl.is_lead ? 'YES ('+cl.lead_quality+')' : 'no'} | Summary: ${(cl.call_summary || 'none').substring(0, 100)}`
+    ).join('\n')
+
+    const orderList = (recentOrders?.results || []).map((o: any) =>
+      `  - Order#${o.id} [${o.created_at}] ${o.company_name || o.email || 'Customer#'+o.customer_id} | ${o.address} | Tier:${o.tier} | Status:${o.status}`
+    ).join('\n')
+
+    const agentList = (secretaryConfigs?.results || []).map((sc: any) =>
+      `  - ${sc.company_name || 'Customer#'+sc.customer_id} (${sc.email}) | Agent:${sc.agent_name} | Mode:${sc.secretary_mode} | Phone:${sc.business_phone || 'not set'}`
+    ).join('\n')
+
+    platformContext = `
+═══ LIVE PLATFORM DATA ═══
+Overview: ${custCount?.c || 0} active customers | ${orderCount?.c || 0} total orders | ${secCount?.c || 0} active secretary agents | ${callCount?.c || 0} total calls
+Signups this week: ${weeklySignups?.c || 0} | Active subscriptions: ${activeSubscriptions?.c || 0}
+Today's calls: ${callStats?.today_calls || 0}
+Leads: ${leadStats?.total_leads || 0} total (${leadStats?.new_leads || 0} new, ${leadStats?.contacted_leads || 0} contacted, ${leadStats?.converted_leads || 0} converted)
+
+Recent Customers (last 10):
+${custList || '  (none)'}
+
+Active Secretary Agents:
+${agentList || '  (none)'}
+
+Recent Call Logs (last 20):
+${callList || '  (no calls recorded)'}
+
+Recent Orders (last 10):
+${orderList || '  (none)'}
+═══════════════════════════`
+  } catch (e: any) {
+    platformContext = `\n[DB query error: ${e.message}]`
+  }
 
   const systemPrompt = `You are the Gemini AI Command Center for RoofReporterAI — a Canadian roofing measurement SaaS platform with AI Secretary phone agents.
 
 Platform: RoofReporterAI (roofreporterai.com)
 Owner: Reuse Canada / RoofReporterAI
 Tech Stack: Hono + Cloudflare Workers + D1 + LiveKit + Square Payments
-Key Features: Roofing reports, AI Secretary phone agents, CRM, invoicing, email outreach, property imagery
+Key Features: Roofing measurement reports (Google Solar API + AI analysis), Roofer Secretary AI phone agents ($249/mo, powered by LiveKit + OpenAI TTS), CRM, invoicing, email outreach, property imagery, virtual try-on
 ${platformContext}
 ${context ? '\nAdditional Context: ' + context : ''}
 
-You can help with:
-- Strategic business decisions and analysis
-- Secretary AI configuration advice
-- Customer onboarding strategy
-- Marketing and sales copy
-- Technical architecture questions
-- Pricing strategy
-- Content generation (blog, email, scripts)
-- Call center optimization
-- Competitive analysis
+CURRENT CAPABILITIES — Be honest about what you can and cannot do:
+✅ CAN DO: Analyze the platform data shown above, give strategic advice, generate content (emails, ads, blog posts, scripts), generate secretary configs/greetings/Q&A, analyze call patterns, suggest pricing, competitive analysis, marketing ideas
+❌ CANNOT DO YET: Directly modify database records, toggle services, create accounts, send emails, or make API calls. For those actions, tell the admin exactly which dashboard section to use or which API endpoint to call.
 
+When the admin asks about specific customers, calls, orders — USE THE REAL DATA ABOVE. Don't make up numbers.
 Be concise, actionable, and business-focused. The admin is a CEO-level operator who needs fast, clear answers.`
 
   const result = await callGemini(c.env, prompt, {

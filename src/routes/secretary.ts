@@ -37,6 +37,13 @@ async function getCustomerInfo(c: any): Promise<{ id: number; email: string; eff
 }
 
 secretaryRoutes.use('/*', async (c, next) => {
+  // ── Skip auth for public endpoints (webhooks from LiveKit agent, agent-config) ──
+  const path = new URL(c.req.url).pathname
+  const publicPaths = ['/webhook/', '/agent-config/']
+  if (publicPaths.some(p => path.includes(p))) {
+    return next()
+  }
+
   const info = await getCustomerInfo(c)
   if (!info) return c.json({ error: 'Authentication required' }, 401)
   // Team members access the owner's secretary subscription & config
