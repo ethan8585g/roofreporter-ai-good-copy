@@ -3342,32 +3342,43 @@ function getCustomerDashboardHTML() {
 <html lang="en">
 <head>
   ${getHeadTags()}
-  <title>My Dashboard - RoofReporterAI</title>
+  <title>Dashboard - RoofReporterAI</title>
+  <style>
+    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif; }
+    .rfr-topbar { height: 64px; background: #FFFFFF; border-bottom: 1px solid #E2E8F0; display: flex; align-items: center; justify-content: space-between; padding: 0 24px; position: sticky; top: 0; z-index: 40; }
+    .rfr-topbar-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+    .rfr-topbar-logo img { height: 32px; width: 32px; border-radius: 8px; }
+    .rfr-topbar-title { font-size: 16px; font-weight: 700; color: #0F172A; }
+    .rfr-topbar-subtitle { font-size: 11px; color: #94A3B8; }
+    .rfr-topbar-nav { display: flex; align-items: center; gap: 16px; }
+    .rfr-topbar-nav a, .rfr-topbar-nav button { font-size: 13px; color: #64748B; text-decoration: none; background: none; border: none; cursor: pointer; padding: 6px 10px; border-radius: 6px; transition: all 0.15s; }
+    .rfr-topbar-nav a:hover, .rfr-topbar-nav button:hover { background: #F1F5F9; color: #0F172A; }
+    .rfr-topbar-user { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #475569; }
+    .rfr-topbar-avatar { width: 28px; height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: white; background: #2563EB; }
+  </style>
 </head>
-<body class="bg-gray-50 min-h-screen">
-  <header class="bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg">
-    <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
-      <div class="flex items-center space-x-3">
-        <a href="/" class="flex items-center space-x-3 hover:opacity-90 transition-opacity">
-          <span class="logo-mark w-10 h-10"><img src="/static/logo.png" alt="RoofReporterAI"></span>
-          <div>
-            <h1 class="text-xl font-bold">My Dashboard</h1>
-            <p class="text-brand-200 text-xs">RoofReporterAI - Roof Reports & CRM</p>
-          </div>
-        </a>
+<body style="background:#F8FAFC;min-height:100vh">
+  <!-- Roofr-style Top Bar -->
+  <div class="rfr-topbar">
+    <a href="/" class="rfr-topbar-logo">
+      <img src="/static/logo.png" alt="RoofReporterAI">
+      <div>
+        <div class="rfr-topbar-title">RoofReporterAI</div>
+        <div class="rfr-topbar-subtitle">Roof Reports & CRM</div>
       </div>
-      <nav class="flex items-center space-x-4">
-        <span id="custGreeting" class="text-brand-200 text-sm hidden"><i class="fas fa-user-circle mr-1"></i><span id="custName"></span></span>
-        <a href="/" class="text-brand-200 hover:text-white text-sm"><i class="fas fa-home mr-1"></i>Home</a>
-        <button onclick="custLogout()" class="text-brand-200 hover:text-white text-sm"><i class="fas fa-sign-out-alt mr-1"></i>Logout</button>
-      </nav>
+    </a>
+    <div class="rfr-topbar-nav">
+      <span id="custGreeting" class="rfr-topbar-user" style="display:none">
+        <span class="rfr-topbar-avatar" id="custAvatar"></span>
+        <span id="custName"></span>
+      </span>
+      <a href="/"><i class="fas fa-home" style="margin-right:4px"></i>Home</a>
+      <button onclick="custLogout()"><i class="fas fa-sign-out-alt" style="margin-right:4px"></i>Logout</button>
     </div>
-  </header>
-  <main class="max-w-7xl mx-auto px-4 py-8">
-    <div id="customer-root"></div>
-  </main>
+  </div>
+  <!-- Dashboard Mount Point -->
+  <div id="customer-root"></div>
   <script>
-    // Auth guard
     (function() {
       var c = localStorage.getItem('rc_customer');
       if (!c) { window.location.href = '/customer/login'; return; }
@@ -3375,7 +3386,12 @@ function getCustomerDashboardHTML() {
         var u = JSON.parse(c);
         var g = document.getElementById('custGreeting');
         var n = document.getElementById('custName');
-        if (g && n) { n.textContent = u.name || u.email; g.classList.remove('hidden'); }
+        var a = document.getElementById('custAvatar');
+        if (g && n) {
+          n.textContent = u.name || u.email;
+          g.style.display = 'flex';
+          if (a) a.textContent = (u.name || u.email || 'U').substring(0,2).toUpperCase();
+        }
       } catch(e) {}
     })();
     function custLogout() {
