@@ -578,6 +578,20 @@ export interface RoofReport {
   /** Human-readable details about why the overlap flag was raised */
   property_overlap_details?: string[]
 
+  // ---- GOOGLE AERIAL VIEW (3D Flyover Video) ----
+  /** Google Aerial View API 3D drone-style flyover video.
+   *  Currently US addresses only — null for Canadian properties.
+   *  Video URIs are short-lived; videoId can be cached/stored. */
+  aerial_view?: {
+    state: 'ACTIVE' | 'PROCESSING' | 'NOT_FOUND' | 'NO_3D_IMAGERY' | 'ERROR'
+    videoId?: string
+    thumbnailUrl?: string    // landscape IMAGE URI (short-lived)
+    videoUrl?: string        // landscape MP4 URI (short-lived)
+    captureDate?: string     // YYYY-MM-DD
+    duration?: string        // e.g. "40s"
+    error?: string
+  } | null
+
   // ---- AI-GENERATED IMAGERY (Gemini Image Generation Layer) ----
   /** AI-generated professional report images created from satellite data and measurements.
    *  Generated as a background phase after base report + enhancement complete.

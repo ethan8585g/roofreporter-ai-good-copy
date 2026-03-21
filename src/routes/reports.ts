@@ -28,6 +28,9 @@ import { enhanceReportViaGemini } from '../services/gemini-enhance'
 import { generateReportImagery, buildAIImageryHTML } from '../services/ai-image-generation'
 import { buildEmailWrapper, sendGmailEmail, sendViaResend, sendGmailOAuth2 } from '../services/email'
 
+// Google Aerial View API (3D flyover videos)
+import { fetchAerialViewForReport, isLikelyUSAddress, lookupVideo, type AerialVideoResult } from '../services/aerial-view'
+
 // Cloud Run Custom AI (Colab-trained model)
 import {
   buildCloudRunConfig, checkCloudRunHealth, analyzeViaCloudRun, batchAnalyzeViaCloudRun,
@@ -1765,6 +1768,81 @@ reportsRoutes.get('/:orderId/ai-imagery-status', async (c) => {
 })
 
 // ============================================================
+// GET /:orderId/aerial-view — Get fresh Aerial View video URIs
+// ============================================================
+// Video URIs are short-lived — this endpoint fetches fresh ones.
+// If the report already has a cached videoId, uses that for faster lookup.
+// Falls back to address-based lookup if no videoId cached.
+// ============================================================
+reportsRoutes.get('/:orderId/aerial-view', async (c) => {
+  const orderId = c.req.param('orderId')
+  const user = await validateAdminOrCustomer(c.env.DB, c.req.header('Authorization'))
+  if (!user) return c.json({ error: 'Authentication required' }, 401)
+
+  const mapsApiKey = c.env.GOOGLE_MAPS_API_KEY
+  if (!mapsApiKey) return c.json({ error: 'Google Maps API key not configured' }, 500)
+
+  // Get order address + any cached videoId from report data
+  const order = await repo.getOrderById(c.env.DB, orderId)
+  if (!order) return c.json({ error: 'Order not found' }, 404)
+
+  const reportRow = await repo.getReportRawData(c.env.DB, orderId)
+  let cachedVideoId: string | undefined
+  if (reportRow?.api_response_raw) {
+    try {
+      const data = JSON.parse(reportRow.api_response_raw)
+      cachedVideoId = data.aerial_view?.videoId
+    } catch {}
+  }
+
+  const address = order.property_address
+  if (!address) return c.json({ error: 'No property address' }, 400)
+
+  // Check if US address
+  if (!isLikelyUSAddress(address)) {
+    return c.json({
+      success: false,
+      state: 'NOT_SUPPORTED',
+      message: 'Google Aerial View is currently available for US addresses only',
+    })
+  }
+
+  // Fetch fresh video URIs
+  const result = cachedVideoId
+    ? await lookupVideo(address, mapsApiKey, { videoId: cachedVideoId, timeoutMs: 8000 })
+    : await fetchAerialViewForReport(address, mapsApiKey, { requestRenderIfMissing: true, timeoutMs: 6000 })
+
+  // If we got a new videoId, update the stored report data
+  if (result.videoId && result.videoId !== cachedVideoId && reportRow?.api_response_raw) {
+    try {
+      const data = JSON.parse(reportRow.api_response_raw)
+      data.aerial_view = {
+        state: result.state,
+        videoId: result.videoId,
+        thumbnailUrl: result.thumbnailUrl,
+        videoUrl: result.videoUrl,
+        captureDate: result.captureDate,
+        duration: result.duration,
+      }
+      await c.env.DB.prepare(`UPDATE reports SET api_response_raw = ? WHERE order_id = ?`)
+        .bind(JSON.stringify(data), orderId).run()
+    } catch {}
+  }
+
+  return c.json({
+    success: result.state === 'ACTIVE',
+    state: result.state,
+    videoId: result.videoId,
+    thumbnailUrl: result.thumbnailUrl,
+    videoUrl: result.videoUrl,
+    captureDate: result.captureDate,
+    duration: result.duration,
+    error: result.error,
+    uris: result.uris,
+  })
+})
+
+// ============================================================
 // POST /recovery/stuck — Auto-recover reports stuck in 'enhancing' or 'generating'
 // Admin endpoint that finds and fixes reports stuck > 90s
 // ============================================================
@@ -2466,6 +2544,32 @@ async function _generateReportForOrderInner(
     }
 
     // ═══════════════════════════════════════════════════════════
+    // STEP 2b: FETCH GOOGLE AERIAL VIEW (3D flyover video)
+    // Non-blocking, best-effort. US addresses only.
+    // Uses GOOGLE_MAPS_API_KEY (Aerial View API shares Maps key).
+    // If not available, report still generates normally.
+    // ═══════════════════════════════════════════════════════════
+    let aerialView: AerialVideoResult | null = null
+    if (mapsApiKey && order.property_address) {
+      try {
+        const addr = order.property_address
+        if (isLikelyUSAddress(addr)) {
+          aerialView = await fetchAerialViewForReport(addr, mapsApiKey, {
+            requestRenderIfMissing: true,
+            timeoutMs: 5000,
+          })
+          const logStatus = aerialView.state === 'ACTIVE' ? 200 : aerialView.state === 'PROCESSING' ? 202 : 404
+          await repo.logApiRequest(env.DB, orderId, 'google_aerial_view', `lookupVideo (${aerialView.state})`, logStatus, 0)
+          console.log(`[Generate] Order ${orderId}: Aerial View ${aerialView.state}${aerialView.videoId ? ` (videoId: ${aerialView.videoId})` : ''}${aerialView.captureDate ? ` captured: ${aerialView.captureDate}` : ''}`)
+        } else {
+          console.log(`[Generate] Order ${orderId}: Skipping Aerial View — Canadian address detected`)
+        }
+      } catch (e: any) {
+        console.warn(`[Generate] Order ${orderId}: Aerial View failed (non-critical): ${e.message}`)
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════
     // STEP 3: RUN TRACE MEASUREMENT ENGINE
     // If we have trace data but no pre-calculated result,
     // run the engine now using Solar pitch as default_pitch.
@@ -2661,6 +2765,14 @@ async function _generateReportForOrderInner(
           accuracy_benchmark: 'GPS coordinate trace + Shoelace area + common-run hip/valley correction',
           cost_per_query: solarPitch ? '$0.075 CAD (Solar API for pitch+imagery only)' : '$0.00 (trace-only)',
         },
+        aerial_view: aerialView && (aerialView.state === 'ACTIVE' || aerialView.state === 'PROCESSING') ? {
+          state: aerialView.state,
+          videoId: aerialView.videoId,
+          thumbnailUrl: aerialView.thumbnailUrl,
+          videoUrl: aerialView.videoUrl,
+          captureDate: aerialView.captureDate,
+          duration: aerialView.duration,
+        } : null,
       } as RoofReport
 
       // Store trace measurement for reference
@@ -2716,6 +2828,20 @@ async function _generateReportForOrderInner(
       reportData.quality.notes = reportData.quality.notes || []
       reportData.quality.notes.unshift('⚠️ NO ROOF TRACE DATA — measurements are Solar API estimates only. For accurate measurements, re-order with roof outline tracing.')
       reportData.quality.confidence_score = Math.min(reportData.quality.confidence_score, 75)
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // STEP 4b: ATTACH AERIAL VIEW DATA (both trace + fallback paths)
+    // ═══════════════════════════════════════════════════════════
+    if (aerialView && (aerialView.state === 'ACTIVE' || aerialView.state === 'PROCESSING') && !reportData.aerial_view) {
+      reportData.aerial_view = {
+        state: aerialView.state,
+        videoId: aerialView.videoId,
+        thumbnailUrl: aerialView.thumbnailUrl,
+        videoUrl: aerialView.videoUrl,
+        captureDate: aerialView.captureDate,
+        duration: aerialView.duration,
+      }
     }
 
     // ── AI ANALYSIS REMOVED FROM BASE REPORT ──
