@@ -1151,41 +1151,6 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
     </div>
   </div>
 
-  ${report.aerial_view?.state === 'ACTIVE' && report.aerial_view?.videoUrl ? `
-  <!-- Google Aerial View — 3D Flyover Video -->
-  <div style="padding:8px 22px 0">
-    <div style="background:linear-gradient(135deg,#0f172a,#1e293b);border-radius:6px;overflow:hidden;border:1px solid #334155">
-      <div style="display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:1px solid #334155">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 8-6 4 6 4V8Z"/><rect x="2" y="6" width="14" height="12" rx="2" ry="2"/></svg>
-        <span style="font-size:10px;font-weight:700;color:#f1f5f9;letter-spacing:0.5px">3D Aerial Flyover</span>
-        <span style="font-size:7px;color:#64748b;margin-left:auto">Google Aerial View${report.aerial_view.captureDate ? ` &bull; ${report.aerial_view.captureDate}` : ''}${report.aerial_view.duration ? ` &bull; ${report.aerial_view.duration}` : ''}</span>
-      </div>
-      <div style="position:relative;background:#000;text-align:center">
-        <video 
-          controls 
-          preload="metadata" 
-          ${report.aerial_view.thumbnailUrl ? `poster="${report.aerial_view.thumbnailUrl}"` : ''}
-          style="width:100%;max-height:280px;display:block"
-        >
-          <source src="${report.aerial_view.videoUrl}" type="video/mp4">
-          Your browser does not support video playback.
-        </video>
-      </div>
-      <div style="padding:4px 14px;font-size:7px;color:#475569;text-align:center">
-        Photorealistic 3D aerial view &copy; Google Maps &bull; This is a photorealistic aerial view of ${prop.address || 'the property'} provided by Google Maps
-      </div>
-    </div>
-  </div>
-  ` : report.aerial_view?.state === 'PROCESSING' && report.aerial_view?.videoId ? `
-  <!-- Aerial View Processing Banner -->
-  <div style="padding:8px 22px 0">
-    <div style="background:#fefce8;border:1px solid #fde68a;border-radius:6px;padding:10px 14px;display:flex;align-items:center;gap:8px">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ca8a04" stroke-width="2"><path d="m22 8-6 4 6 4V8Z"/><rect x="2" y="6" width="14" height="12" rx="2" ry="2"/></svg>
-      <span style="font-size:8px;color:#713f12;font-weight:600">3D Aerial Flyover rendering &mdash; Google is generating a photorealistic flyover video for this property. Check back in 1-3 hours.</span>
-    </div>
-  </div>
-  ` : ''}
-
   <!-- Waste Factor Table (full width) -->
   <div style="padding:8px 22px 0">
     <div style="font-size:9px;font-weight:800;color:#333;text-align:center;margin-bottom:4px">Waste Factor (Total Roof Area)</div>
