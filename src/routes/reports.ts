@@ -2452,8 +2452,9 @@ async function _generateReportForOrderInner(
     if (solarApiKey && order.latitude && order.longitude) {
       try {
         const footprintHint = traceResult?.key_measurements?.total_projected_footprint_ft2 || 1500
+        const nearmapKey = (env as any).NEARMAP_API_KEY || undefined
         solarPitch = await fetchSolarPitchAndImagery(
-          order.latitude, order.longitude, solarApiKey, mapsApiKey || solarApiKey, footprintHint
+          order.latitude, order.longitude, solarApiKey, mapsApiKey || solarApiKey, footprintHint, nearmapKey
         )
         solarPitchDeg = solarPitch.pitch_degrees
         solarPitchRise = Math.round(12 * Math.tan(solarPitchDeg * Math.PI / 180) * 10) / 10
@@ -2597,16 +2598,32 @@ async function _generateReportForOrderInner(
         complexity_class: km.num_hips > 2 || km.num_valleys > 1 ? 'complex' : (km.num_hips > 0 ? 'moderate' : 'simple'),
       }
 
-      // Imagery: prefer Solar API, fallback to basic Maps Static
-      const imagery = solarPitch
-        ? { ...solarPitch.imagery, dsm_url: null, mask_url: null }
-        : {
+      // Imagery: prefer Solar API (which now auto-uses Nearmap if key set), fallback to basic Maps Static
+      let imagery: any
+      if (solarPitch) {
+        imagery = { ...solarPitch.imagery, dsm_url: null, mask_url: null }
+      } else {
+        // No Solar API available — try Nearmap directly, then fall back to Google Maps Static
+        const nearmapKey = (env as any).NEARMAP_API_KEY
+        if (nearmapKey && order.latitude && order.longitude) {
+          try {
+            const { fetchNearmapImageryForReport } = await import('../services/nearmap')
+            const nmResult = await fetchNearmapImageryForReport(order.latitude, order.longitude, nearmapKey, km.total_projected_footprint_ft2)
+            if (nmResult) {
+              imagery = { ...nmResult.imagery, dsm_url: null, mask_url: null }
+            }
+          } catch {}
+        }
+        if (!imagery) {
+          imagery = {
             ...generateEnhancedImagery(
               order.latitude || 0, order.longitude || 0,
               mapsApiKey || '', km.total_projected_footprint_ft2
             ),
             dsm_url: null, mask_url: null,
           }
+        }
+      }
 
       reportData = {
         order_id: typeof orderId === 'string' ? parseInt(orderId) : orderId as number,
@@ -2699,7 +2716,8 @@ async function _generateReportForOrderInner(
 
       if (solarApiKey && order.latitude && order.longitude) {
         try {
-          reportData = await callGoogleSolarAPI(order.latitude, order.longitude, solarApiKey, typeof orderId === 'string' ? parseInt(orderId) : orderId as number, order, mapsApiKey)
+          const nearmapFallback = (env as any).NEARMAP_API_KEY || undefined
+          reportData = await callGoogleSolarAPI(order.latitude, order.longitude, solarApiKey, typeof orderId === 'string' ? parseInt(orderId) : orderId as number, order, mapsApiKey, nearmapFallback)
           reportData.metadata.api_duration_ms = Date.now() - startTime
           console.log(`[Generate] Order ${orderId}: Legacy Solar API report — ${reportData.total_footprint_sqft} sqft, pitch ${reportData.roof_pitch_degrees}°`)
         } catch (e: any) {
@@ -2716,6 +2734,19 @@ async function _generateReportForOrderInner(
       reportData.quality.notes = reportData.quality.notes || []
       reportData.quality.notes.unshift('⚠️ NO ROOF TRACE DATA — measurements are Solar API estimates only. For accurate measurements, re-order with roof outline tracing.')
       reportData.quality.confidence_score = Math.min(reportData.quality.confidence_score, 75)
+
+      // Override imagery with Nearmap for mock/fallback reports (sync generateMockRoofReport can't call Nearmap)
+      const nearmapKeyForFallback = (env as any).NEARMAP_API_KEY
+      if (nearmapKeyForFallback && order.latitude && order.longitude && reportData.imagery) {
+        try {
+          const { fetchNearmapImageryForReport: fetchNM } = await import('../services/nearmap')
+          const nmFallback = await fetchNM(order.latitude, order.longitude, nearmapKeyForFallback, reportData.total_footprint_sqft || 1500)
+          if (nmFallback) {
+            reportData.imagery = { ...reportData.imagery, ...nmFallback.imagery, dsm_url: null, mask_url: null }
+            console.log(`[Generate] Order ${orderId}: Fallback imagery upgraded to Nearmap (7.5cm/px)`)
+          }
+        } catch {}
+      }
     }
 
     // ── AI ANALYSIS REMOVED FROM BASE REPORT ──

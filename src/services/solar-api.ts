@@ -13,6 +13,7 @@ import {
 } from '../utils/geo-math'
 import { buildSolarGeometry, extractSolarGeometryData, getZoomForFootprint } from './solar-geometry'
 import type { SolarBuildingInsights } from './solar-geometry'
+import { fetchNearmapImageryForReport } from './nearmap'
 
 /**
  * Compute the area of a geographic polygon (array of {lat, lng} points) in square feet.
@@ -176,7 +177,8 @@ export interface SolarPitchAndImagery {
 export async function fetchSolarPitchAndImagery(
   lat: number, lng: number,
   solarApiKey: string, mapsApiKey: string,
-  footprintSqftHint: number = 1500
+  footprintSqftHint: number = 1500,
+  nearmapApiKey?: string
 ): Promise<SolarPitchAndImagery> {
   const startTime = Date.now()
   const preciseLat = parseFloat(lat.toFixed(7))
@@ -233,12 +235,39 @@ export async function fetchSolarPitchAndImagery(
     ? `${data.imageryDate.year}-${String(data.imageryDate.month).padStart(2, '0')}-${String(data.imageryDate.day).padStart(2, '0')}`
     : undefined
 
-  // Generate satellite imagery URLs (uses footprint hint for zoom calculation)
-  const imagery = generateEnhancedImagery(lat, lng, mapsApiKey, footprintSqftHint)
+  // Generate satellite imagery URLs — prefer Nearmap (7.5cm/px) over Google Maps Static
+  let imagery: ReturnType<typeof generateEnhancedImagery>
+  let imageryProvider = 'google_maps_static'
+
+  if (nearmapApiKey) {
+    try {
+      const nearmapResult = await fetchNearmapImageryForReport(lat, lng, nearmapApiKey, footprintSqftHint, { timeoutMs: 5000 })
+      if (nearmapResult) {
+        // Nearmap coverage available — use it for all imagery
+        imagery = {
+          ...nearmapResult.imagery,
+          // Keep DSM/mask/flux null (Solar API provides those separately)
+          dsm_url: '',
+          mask_url: '',
+          flux_url: null,
+        } as any
+        imageryProvider = 'nearmap'
+        console.log(`[SolarPitch] Using Nearmap imagery (7.5cm/px) — latest survey: ${nearmapResult.coverage.latestSurveyDate}`)
+      } else {
+        imagery = generateEnhancedImagery(lat, lng, mapsApiKey, footprintSqftHint)
+        console.log(`[SolarPitch] Nearmap: no coverage — using Google Maps Static`)
+      }
+    } catch (e: any) {
+      console.warn(`[SolarPitch] Nearmap failed (${e.message}) — using Google Maps Static`)
+      imagery = generateEnhancedImagery(lat, lng, mapsApiKey, footprintSqftHint)
+    }
+  } else {
+    imagery = generateEnhancedImagery(lat, lng, mapsApiKey, footprintSqftHint)
+  }
 
   console.log(`[SolarPitch] Extracted pitch=${avgPitch.toFixed(1)}° (${pitchRatio}), ` +
     `${segmentPitches.length} segments, quality=${imageryQuality}, ` +
-    `${Date.now() - startTime}ms`)
+    `provider=${imageryProvider}, ${Date.now() - startTime}ms`)
 
   return {
     pitch_degrees: Math.round(avgPitch * 10) / 10,
@@ -534,7 +563,7 @@ export function computeEdgeSummary(edges: EdgeMeasurement[]) {
 // ============================================================
 export async function callGoogleSolarAPI(
   lat: number, lng: number, apiKey: string,
-  orderId: number, order: any, mapsKey?: string
+  orderId: number, order: any, mapsKey?: string, nearmapApiKey?: string
 ): Promise<RoofReport> {
   const imageKey = mapsKey || apiKey  // Prefer MAPS key for image APIs
 
@@ -816,11 +845,21 @@ export async function callGoogleSolarAPI(
     max_sunshine_hours: Math.round(maxSunshine * 10) / 10,
     num_panels_possible: maxPanels,
     yearly_energy_kwh: Math.round(yearlyEnergy),
-    imagery: {
-      ...generateEnhancedImagery(lat, lng, imageKey, totalFootprintSqft),
-      dsm_url: null,
-      mask_url: null,
-    },
+    imagery: await (async () => {
+      // Prefer Nearmap (7.5cm/px) over Google Maps Static for satellite imagery
+      if (nearmapApiKey && lat && lng) {
+        try {
+          const nmResult = await fetchNearmapImageryForReport(lat, lng, nearmapApiKey, totalFootprintSqft, { timeoutMs: 5000 })
+          if (nmResult) {
+            console.log(`[SolarAPI] Using Nearmap imagery (7.5cm/px) — survey: ${nmResult.coverage.latestSurveyDate}`)
+            return { ...nmResult.imagery, dsm_url: null, mask_url: null } as any
+          }
+        } catch (e: any) {
+          console.warn(`[SolarAPI] Nearmap failed (${e.message}) — falling back to Google Maps Static`)
+        }
+      }
+      return { ...generateEnhancedImagery(lat, lng, imageKey, totalFootprintSqft), dsm_url: null, mask_url: null }
+    })(),
     // Solar-derived AI geometry (panel convex hulls + segment boundingBoxes → pixel polygons)
     // Provides real roof geometry from Google's building model WITHOUT needing Gemini Vision.
     // Gemini can override this later with higher-quality vision-based geometry.

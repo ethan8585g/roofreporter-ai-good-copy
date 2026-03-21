@@ -120,6 +120,13 @@ export type Bindings = {
   // ── HeyGen AI Video Generation ─────────────────────────
   // Get your API key at: https://app.heygen.com/settings?nav=API
   HEYGEN_API_KEY: string           // e.g. "your-heygen-api-key" — for AI avatar video generation
+
+  // ── Nearmap Aerial Imagery ─────────────────────────────
+  // High-resolution (7.5cm/pixel) aerial imagery for roof reports.
+  // Covers major Canadian metros (Edmonton, Calgary) + US cities.
+  // When set, report imagery prefers Nearmap over Google Maps Static.
+  // Get from: https://admin.nearmap.com/account/user-management/#/integration/api-apps
+  NEARMAP_API_KEY: string          // e.g. "your-nearmap-api-key"
 }
 
 // ============================================================
