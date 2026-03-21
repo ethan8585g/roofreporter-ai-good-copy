@@ -641,7 +641,8 @@ function renderReportsTable() {
         '<td>' + (o.roof_area_sqft ? Math.round(o.roof_area_sqft).toLocaleString() + ' sq ft' : '—') + '</td>' +
         '<td style="white-space:nowrap">' +
           (reportReady ? '<a href="/api/reports/' + o.id + '/html" target="_blank" style="color:#2563EB;text-decoration:none;font-size:12px;font-weight:600;margin-right:12px"><i class="fas fa-eye" style="margin-right:3px"></i>View</a>' : '') +
-          (reportReady ? '<a href="/visualizer/' + o.id + '" target="_blank" style="color:#7C3AED;text-decoration:none;font-size:12px;font-weight:600"><i class="fas fa-cube" style="margin-right:3px"></i>3D</a>' : '') +
+          (reportReady ? '<a href="/visualizer/' + o.id + '" target="_blank" style="color:#7C3AED;text-decoration:none;font-size:12px;font-weight:600;margin-right:12px"><i class="fas fa-cube" style="margin-right:3px"></i>3D</a>' : '') +
+          (reportReady ? '<a href="#" onclick="loadAerialView(' + o.id + ',this);return false;" style="color:#0EA5E9;text-decoration:none;font-size:12px;font-weight:600" title="3D Aerial Flyover"><i class="fas fa-video" style="margin-right:3px"></i>Flyover</a>' : '') +
           (isProcessing ? '<span style="font-size:12px;color:#2563EB" class="rfr-pulse">Processing...</span>' : '') +
           (isEnhancing ? '<span style="font-size:12px;color:#7C3AED" class="rfr-pulse">Polishing...</span>' : '') +
         '</td>' +
@@ -879,4 +880,91 @@ async function triggerAsyncImagery(orderId) {
   } catch(e) {
     console.warn('[Dashboard] Imagery trigger failed:', e.message);
   }
+}
+
+// ── Google Aerial View — 3D Flyover Video ──
+async function loadAerialView(orderId, linkEl) {
+  try {
+    linkEl.innerHTML = '<i class="fas fa-spinner fa-spin" style="margin-right:3px"></i>Loading...';
+    linkEl.style.pointerEvents = 'none';
+
+    var res = await fetch('/api/reports/' + orderId + '/aerial-view', { headers: authHeaders() });
+    var data = await res.json();
+
+    if (data.success && data.videoUrl) {
+      // Open modal with video player
+      showAerialViewModal(data, orderId);
+      linkEl.innerHTML = '<i class="fas fa-video" style="margin-right:3px"></i>Flyover';
+      linkEl.style.pointerEvents = '';
+    } else if (data.state === 'PROCESSING') {
+      linkEl.innerHTML = '<i class="fas fa-clock" style="margin-right:3px;color:#F59E0B"></i>Rendering...';
+      linkEl.title = 'Google is generating a 3D flyover — check back in 1-3 hours';
+      setTimeout(function() {
+        linkEl.innerHTML = '<i class="fas fa-video" style="margin-right:3px"></i>Flyover';
+        linkEl.style.pointerEvents = '';
+      }, 5000);
+    } else if (data.state === 'NOT_SUPPORTED') {
+      linkEl.innerHTML = '<i class="fas fa-video" style="margin-right:3px;color:#94A3B8"></i>US Only';
+      linkEl.title = 'Google Aerial View is currently available for US addresses only';
+      linkEl.style.color = '#94A3B8';
+    } else {
+      linkEl.innerHTML = '<i class="fas fa-video" style="margin-right:3px;color:#94A3B8"></i>N/A';
+      linkEl.title = data.error || 'Aerial view not available for this location';
+      linkEl.style.color = '#94A3B8';
+      setTimeout(function() {
+        linkEl.innerHTML = '<i class="fas fa-video" style="margin-right:3px"></i>Flyover';
+        linkEl.style.pointerEvents = '';
+        linkEl.style.color = '#0EA5E9';
+      }, 5000);
+    }
+  } catch(e) {
+    console.warn('[Dashboard] Aerial view failed:', e.message);
+    linkEl.innerHTML = '<i class="fas fa-video" style="margin-right:3px"></i>Flyover';
+    linkEl.style.pointerEvents = '';
+  }
+}
+
+function showAerialViewModal(data, orderId) {
+  // Remove any existing modal
+  var existing = document.getElementById('aerial-view-modal');
+  if (existing) existing.remove();
+
+  var modal = document.createElement('div');
+  modal.id = 'aerial-view-modal';
+  modal.style.cssText = 'position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.8);backdrop-filter:blur(4px)';
+  modal.onclick = function(e) { if (e.target === modal) modal.remove(); };
+
+  var content = document.createElement('div');
+  content.style.cssText = 'background:#0F172A;border-radius:12px;overflow:hidden;max-width:900px;width:95%;max-height:90vh;box-shadow:0 25px 50px rgba(0,0,0,0.5)';
+
+  var header = '<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid #1E293B">' +
+    '<div style="display:flex;align-items:center;gap:10px">' +
+      '<i class="fas fa-video" style="color:#0EA5E9;font-size:16px"></i>' +
+      '<span style="font-size:16px;font-weight:700;color:#F1F5F9">3D Aerial Flyover</span>' +
+      (data.captureDate ? '<span style="font-size:11px;color:#64748B;margin-left:8px">Captured: ' + data.captureDate + '</span>' : '') +
+    '</div>' +
+    '<button onclick="document.getElementById(\'aerial-view-modal\').remove()" style="background:none;border:none;color:#94A3B8;cursor:pointer;font-size:20px;padding:4px 8px;border-radius:6px;transition:all 0.2s" onmouseover="this.style.background=\'#1E293B\';this.style.color=\'#F1F5F9\'" onmouseout="this.style.background=\'none\';this.style.color=\'#94A3B8\'">&times;</button>' +
+  '</div>';
+
+  var videoSection = '<div style="background:#000;text-align:center">' +
+    '<video controls autoplay preload="auto"' +
+    (data.thumbnailUrl ? ' poster="' + data.thumbnailUrl + '"' : '') +
+    ' style="width:100%;max-height:70vh;display:block">' +
+      '<source src="' + data.videoUrl + '" type="video/mp4">' +
+      'Your browser does not support video playback.' +
+    '</video>' +
+  '</div>';
+
+  var footer = '<div style="padding:10px 20px;font-size:11px;color:#475569;text-align:center;border-top:1px solid #1E293B">' +
+    'Photorealistic 3D aerial view &copy; Google Maps' +
+    (data.duration ? ' &bull; Duration: ' + data.duration : '') +
+  '</div>';
+
+  content.innerHTML = header + videoSection + footer;
+  modal.appendChild(content);
+  document.body.appendChild(modal);
+
+  // Close on Escape key
+  var escHandler = function(e) { if (e.key === 'Escape') { modal.remove(); document.removeEventListener('keydown', escHandler); } };
+  document.addEventListener('keydown', escHandler);
 }
