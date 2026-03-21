@@ -254,6 +254,7 @@ app.get('/api/health', (c) => {
       REPORT_WEBHOOK_SECRET: !!(c.env as any).REPORT_WEBHOOK_SECRET,
       AI_STUDIO_ENHANCE_URL: (c.env as any).AI_STUDIO_ENHANCE_URL || false,
       GEMINI_ENHANCE_API_KEY: !!(c.env as any).GEMINI_ENHANCE_API_KEY,
+      NEARMAP_API_KEY: !!(c.env as any).NEARMAP_API_KEY,
       GA4_MEASUREMENT_ID: (c.env as any).GA4_MEASUREMENT_ID || false,
       GA4_API_SECRET: !!(c.env as any).GA4_API_SECRET,
       GA4_PROPERTY_ID: (c.env as any).GA4_PROPERTY_ID || false,
