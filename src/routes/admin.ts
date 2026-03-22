@@ -2704,3 +2704,215 @@ adminRoutes.delete('/superadmin/sales-scripts/:id', async (c) => {
   await c.env.DB.prepare('DELETE FROM sales_scripts WHERE id = ?').bind(c.req.param('id')).run()
   return c.json({ success: true })
 })
+
+// ============================================================
+// SECRETARY AI — Enhanced Monitoring & Minutes Tracking
+// Provides real-time agent monitoring, per-customer minutes usage,
+// call analytics drill-down, and IT help / troubleshooting tools
+// ============================================================
+
+// ── GET /superadmin/secretary/monitor — Live monitoring dashboard data ──
+// Returns: all active agents, live call status, minutes usage by customer,
+// system health checks, and recent activity feed
+adminRoutes.get('/superadmin/secretary/monitor', async (c) => {
+  try {
+    // All secretary configs with customer info
+    const configsRes = await c.env.DB.prepare(`
+      SELECT sc.customer_id, sc.is_active, sc.connection_status, sc.secretary_mode,
+             sc.assigned_phone_number, sc.business_phone, sc.agent_name, sc.agent_voice,
+             sc.livekit_inbound_trunk_id, sc.livekit_dispatch_rule_id,
+             sc.carrier_name, sc.forwarding_method, sc.updated_at,
+             cu.name as customer_name, cu.email as customer_email, cu.phone as customer_phone,
+             cu.brand_business_name,
+             ss.status as sub_status, ss.current_period_end as sub_expires
+      FROM secretary_config sc
+      JOIN customers cu ON cu.id = sc.customer_id
+      LEFT JOIN secretary_subscriptions ss ON ss.customer_id = sc.customer_id AND ss.status IN ('active','pending','past_due')
+      ORDER BY sc.is_active DESC, sc.updated_at DESC
+    `).all<any>()
+    const configs = configsRes.results || []
+
+    // Per-customer call stats (last 30 days + all time)
+    const statsRes = await c.env.DB.prepare(`
+      SELECT customer_id,
+        COUNT(*) as total_calls,
+        SUM(call_duration_seconds) as total_seconds,
+        SUM(CASE WHEN created_at >= datetime('now', '-30 days') THEN 1 ELSE 0 END) as calls_30d,
+        SUM(CASE WHEN created_at >= datetime('now', '-30 days') THEN call_duration_seconds ELSE 0 END) as seconds_30d,
+        SUM(CASE WHEN created_at >= datetime('now', '-7 days') THEN 1 ELSE 0 END) as calls_7d,
+        SUM(CASE WHEN created_at >= datetime('now', '-7 days') THEN call_duration_seconds ELSE 0 END) as seconds_7d,
+        SUM(CASE WHEN created_at >= date('now') THEN 1 ELSE 0 END) as calls_today,
+        SUM(CASE WHEN created_at >= date('now') THEN call_duration_seconds ELSE 0 END) as seconds_today,
+        SUM(CASE WHEN is_lead = 1 THEN 1 ELSE 0 END) as total_leads,
+        AVG(call_duration_seconds) as avg_duration,
+        MAX(created_at) as last_call_at
+      FROM secretary_call_logs
+      GROUP BY customer_id
+    `).all<any>()
+    const statsMap: Record<number, any> = {}
+    for (const s of (statsRes.results || [])) { statsMap[s.customer_id] = s }
+
+    // Merge stats into configs
+    const enriched = configs.map((cfg: any) => ({
+      ...cfg,
+      stats: statsMap[cfg.customer_id] || {
+        total_calls: 0, total_seconds: 0, calls_30d: 0, seconds_30d: 0,
+        calls_7d: 0, seconds_7d: 0, calls_today: 0, seconds_today: 0,
+        total_leads: 0, avg_duration: 0, last_call_at: null
+      }
+    }))
+
+    // Global totals
+    const globalRes = await c.env.DB.prepare(`
+      SELECT
+        COUNT(*) as total_calls,
+        SUM(call_duration_seconds) as total_seconds,
+        SUM(CASE WHEN created_at >= date('now') THEN 1 ELSE 0 END) as today_calls,
+        SUM(CASE WHEN created_at >= date('now') THEN call_duration_seconds ELSE 0 END) as today_seconds,
+        SUM(CASE WHEN created_at >= datetime('now', '-7 days') THEN 1 ELSE 0 END) as week_calls,
+        SUM(CASE WHEN created_at >= datetime('now', '-7 days') THEN call_duration_seconds ELSE 0 END) as week_seconds,
+        SUM(CASE WHEN created_at >= datetime('now', '-30 days') THEN 1 ELSE 0 END) as month_calls,
+        SUM(CASE WHEN created_at >= datetime('now', '-30 days') THEN call_duration_seconds ELSE 0 END) as month_seconds,
+        SUM(CASE WHEN is_lead = 1 THEN 1 ELSE 0 END) as total_leads,
+        AVG(call_duration_seconds) as avg_duration
+      FROM secretary_call_logs
+    `).first<any>()
+
+    // Recent activity feed (last 20 calls across all customers)
+    const recentRes = await c.env.DB.prepare(`
+      SELECT cl.*, cu.name as customer_name, cu.email as customer_email,
+             sc.agent_name, sc.business_phone as sec_business_phone
+      FROM secretary_call_logs cl
+      LEFT JOIN customers cu ON cu.id = cl.customer_id
+      LEFT JOIN secretary_config sc ON sc.customer_id = cl.customer_id
+      ORDER BY cl.created_at DESC LIMIT 20
+    `).all<any>()
+
+    return c.json({
+      agents: enriched,
+      global: globalRes || {},
+      recent_calls: recentRes.results || [],
+      summary: {
+        total_agents: configs.length,
+        active_agents: configs.filter((c: any) => c.is_active === 1).length,
+        connected_agents: configs.filter((c: any) => c.connection_status === 'connected').length,
+        total_minutes_alltime: Math.round((globalRes?.total_seconds || 0) / 60),
+        total_minutes_30d: Math.round((globalRes?.month_seconds || 0) / 60),
+        total_minutes_7d: Math.round((globalRes?.week_seconds || 0) / 60),
+        total_minutes_today: Math.round((globalRes?.today_seconds || 0) / 60),
+      }
+    })
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500)
+  }
+})
+
+// ── GET /superadmin/secretary/customer/:id/calls — Full call history for a specific customer ──
+adminRoutes.get('/superadmin/secretary/customer/:id/calls', async (c) => {
+  const customerId = parseInt(c.req.param('id'))
+  const limit = parseInt(c.req.query('limit') || '100')
+  const offset = parseInt(c.req.query('offset') || '0')
+  try {
+    const calls = await c.env.DB.prepare(
+      `SELECT * FROM secretary_call_logs WHERE customer_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`
+    ).bind(customerId, limit, offset).all<any>()
+    const total = await c.env.DB.prepare(
+      `SELECT COUNT(*) as cnt FROM secretary_call_logs WHERE customer_id = ?`
+    ).bind(customerId).first<any>()
+    return c.json({ calls: calls.results || [], total: total?.cnt || 0 })
+  } catch (err: any) { return c.json({ error: err.message }, 500) }
+})
+
+// ── GET /superadmin/secretary/customer/:id/minutes — Detailed minutes breakdown ──
+adminRoutes.get('/superadmin/secretary/customer/:id/minutes', async (c) => {
+  const customerId = parseInt(c.req.param('id'))
+  try {
+    // Daily breakdown for the last 30 days
+    const dailyRes = await c.env.DB.prepare(`
+      SELECT date(created_at) as call_date,
+             COUNT(*) as call_count,
+             SUM(call_duration_seconds) as total_seconds,
+             AVG(call_duration_seconds) as avg_seconds,
+             SUM(CASE WHEN is_lead = 1 THEN 1 ELSE 0 END) as leads
+      FROM secretary_call_logs
+      WHERE customer_id = ? AND created_at >= datetime('now', '-30 days')
+      GROUP BY date(created_at)
+      ORDER BY call_date DESC
+    `).bind(customerId).all<any>()
+
+    // Overall stats
+    const overall = await c.env.DB.prepare(`
+      SELECT COUNT(*) as total_calls, SUM(call_duration_seconds) as total_seconds,
+             AVG(call_duration_seconds) as avg_seconds, MAX(created_at) as last_call,
+             SUM(CASE WHEN is_lead = 1 THEN 1 ELSE 0 END) as total_leads
+      FROM secretary_call_logs WHERE customer_id = ?
+    `).bind(customerId).first<any>()
+
+    return c.json({
+      customer_id: customerId,
+      daily: dailyRes.results || [],
+      overall: overall || {},
+      total_minutes: Math.round((overall?.total_seconds || 0) / 60),
+    })
+  } catch (err: any) { return c.json({ error: err.message }, 500) }
+})
+
+// ── POST /superadmin/secretary/it-help — IT troubleshooting actions ──
+// Actions: test_call, reset_trunk, check_forwarding, force_reconnect, view_logs
+adminRoutes.post('/superadmin/secretary/it-help', async (c) => {
+  const { customer_id, action } = await c.req.json()
+  if (!customer_id || !action) return c.json({ error: 'customer_id and action required' }, 400)
+  try {
+    const config = await c.env.DB.prepare('SELECT * FROM secretary_config WHERE customer_id = ?').bind(customer_id).first<any>()
+    if (!config) return c.json({ error: 'No secretary config found' }, 404)
+
+    switch (action) {
+      case 'check_status': {
+        const sub = await c.env.DB.prepare("SELECT status, current_period_end FROM secretary_subscriptions WHERE customer_id = ? AND status IN ('active','pending') ORDER BY id DESC LIMIT 1").bind(customer_id).first<any>()
+        const lastCall = await c.env.DB.prepare('SELECT * FROM secretary_call_logs WHERE customer_id = ? ORDER BY created_at DESC LIMIT 1').bind(customer_id).first<any>()
+        const callCount24h = await c.env.DB.prepare("SELECT COUNT(*) as cnt FROM secretary_call_logs WHERE customer_id = ? AND created_at >= datetime('now', '-24 hours')").bind(customer_id).first<any>()
+        return c.json({
+          success: true,
+          diagnostic: {
+            agent_active: config.is_active === 1,
+            connection_status: config.connection_status,
+            has_trunk: !!config.livekit_inbound_trunk_id,
+            has_dispatch: !!config.livekit_dispatch_rule_id,
+            has_phone: !!config.assigned_phone_number,
+            has_greeting: !!(config.greeting_script && config.greeting_script.length > 10),
+            subscription: sub ? sub.status : 'none',
+            sub_expires: sub?.current_period_end || null,
+            last_call: lastCall?.created_at || null,
+            calls_24h: callCount24h?.cnt || 0,
+            carrier: config.carrier_name || 'unknown',
+            forwarding_method: config.forwarding_method || 'unknown',
+            business_phone: config.business_phone || '',
+            ai_phone: config.assigned_phone_number || '',
+            issues: [] as string[],
+          }
+        })
+      }
+      case 'force_reconnect': {
+        await c.env.DB.prepare("UPDATE secretary_config SET connection_status = 'connected', is_active = 1, updated_at = datetime('now') WHERE customer_id = ?").bind(customer_id).run()
+        return c.json({ success: true, message: `Force reconnected customer ${customer_id}. Agent is now active.` })
+      }
+      case 'force_disconnect': {
+        await c.env.DB.prepare("UPDATE secretary_config SET connection_status = 'disconnected', is_active = 0, updated_at = datetime('now') WHERE customer_id = ?").bind(customer_id).run()
+        return c.json({ success: true, message: `Force disconnected customer ${customer_id}. Agent is now inactive.` })
+      }
+      case 'reset_config': {
+        await c.env.DB.prepare("UPDATE secretary_config SET connection_status = 'pending_forwarding', livekit_inbound_trunk_id = NULL, livekit_dispatch_rule_id = NULL, updated_at = datetime('now') WHERE customer_id = ?").bind(customer_id).run()
+        return c.json({ success: true, message: `Reset LiveKit config for customer ${customer_id}. They will need to re-setup LiveKit telephony.` })
+      }
+      case 'recent_logs': {
+        const logs = await c.env.DB.prepare(`
+          SELECT id, caller_phone, caller_name, call_duration_seconds, call_outcome, call_summary, is_lead, sentiment, created_at
+          FROM secretary_call_logs WHERE customer_id = ? ORDER BY created_at DESC LIMIT 10
+        `).bind(customer_id).all<any>()
+        return c.json({ success: true, logs: logs.results || [] })
+      }
+      default:
+        return c.json({ error: `Unknown action: ${action}` }, 400)
+    }
+  } catch (err: any) { return c.json({ error: err.message }, 500) }
+})

@@ -2162,6 +2162,9 @@ function getSuperAdminDashboardHTML() {
         <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('secretary-manager', this)">
           <i class="fas fa-user-headset w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Secretary Manager</span>
         </div>
+        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('secretary-monitor', this)">
+          <i class="fas fa-satellite-dish w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Secretary Monitor</span>
+        </div>
         <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('secretary-admin', this)">
           <i class="fas fa-phone-volume w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Secretary Analytics</span>
         </div>
