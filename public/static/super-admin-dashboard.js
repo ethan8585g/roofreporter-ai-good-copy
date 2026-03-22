@@ -243,6 +243,12 @@ async function loadView(view) {
           if (pnRes) SA.data.phone_numbers = await pnRes.json();
         } catch(e) { SA.data.phone_numbers = { numbers: [] }; }
         break;
+      case 'secretary-monitor':
+        try {
+          const smRes = await saFetch('/api/admin/superadmin/secretary/monitor');
+          if (smRes) SA.data.secretary_monitor = await smRes.json();
+        } catch(e) { SA.data.secretary_monitor = { agents: [], global: {}, recent_calls: [], summary: {} }; }
+        break;
       case 'gemini-command':
         // Check Gemini API status on first load
         if (!SA.data.gemini_status) {
@@ -354,6 +360,7 @@ function renderContent() {
     case 'meta-connect': break; // Handled by meta-connect.js
     case 'secretary-admin': root.innerHTML = renderSecretaryAdminView(); break;
     case 'secretary-manager': root.innerHTML = renderSecretaryManagerView(); break;
+    case 'secretary-monitor': root.innerHTML = renderSecretaryMonitorView(); break;
     case 'secretary-revenue': root.innerHTML = renderSecretaryRevenueView(); break;
     case 'heygen': break; // Handled by heygen.js
     case 'ai-chat': root.innerHTML = (typeof renderAIChat === 'function') ? renderAIChat() : '<div class="p-8 text-gray-500">AI Chat module not loaded.</div>'; break;
@@ -6571,4 +6578,157 @@ async function geminiGenerateQA() {
 
   btn.disabled = false;
   btn.innerHTML = '<i class="fas fa-magic mr-1"></i>AI Generate';
+}
+
+// ============================================================
+// SECRETARY AI MONITOR — Real-Time Agent Monitoring Dashboard
+// Minutes tracking, per-customer analytics, IT help tools
+// ============================================================
+
+function renderSecretaryMonitorView() {
+  var d = SA.data.secretary_monitor || {};
+  var agents = d.agents || [];
+  var global = d.global || {};
+  var summary = d.summary || {};
+  var recent = d.recent_calls || [];
+
+  var agentRows = agents.map(function(a) {
+    var s = a.stats || {};
+    var isActive = a.is_active === 1;
+    var isConnected = a.connection_status === 'connected';
+    var mins30d = Math.round((s.seconds_30d || 0) / 60);
+    var minsTotal = Math.round((s.total_seconds || 0) / 60);
+    var statusDot = isActive && isConnected ? '<span class="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse inline-block"></span>' :
+                    isActive ? '<span class="w-2.5 h-2.5 bg-yellow-500 rounded-full inline-block"></span>' :
+                    '<span class="w-2.5 h-2.5 bg-gray-300 rounded-full inline-block"></span>';
+    var lastCallAgo = s.last_call_at ? smTimeAgo(s.last_call_at) : 'Never';
+
+    return '<tr class="border-b border-gray-100 hover:bg-blue-50/40 transition-colors">' +
+      '<td class="px-4 py-3"><div class="flex items-center gap-2.5">' + statusDot + '<div><div class="font-bold text-gray-800 text-sm">' + (a.brand_business_name || a.customer_name || a.customer_email) + '</div><div class="text-[10px] text-gray-400">' + (a.customer_email || '') + ' · ID: ' + a.customer_id + '</div></div></div></td>' +
+      '<td class="px-3 py-3 text-center"><span class="text-sm font-semibold">' + (a.agent_name || 'Sarah') + '</span><br><span class="text-[10px] text-gray-400">' + (a.agent_voice || 'alloy') + '</span></td>' +
+      '<td class="px-3 py-3 text-center"><div class="text-lg font-black text-blue-700">' + mins30d + '</div><div class="text-[10px] text-gray-400">' + minsTotal + ' total</div></td>' +
+      '<td class="px-3 py-3 text-center"><span class="font-bold text-gray-700">' + (s.calls_30d || 0) + '</span><br><span class="text-[10px] text-gray-400">' + (s.calls_today || 0) + ' today</span></td>' +
+      '<td class="px-3 py-3 text-center"><span class="font-bold text-purple-700">' + (s.total_leads || 0) + '</span></td>' +
+      '<td class="px-3 py-3 text-center"><span class="text-xs text-gray-500">' + fmtSeconds(s.avg_duration || 0) + '</span></td>' +
+      '<td class="px-3 py-3"><span class="text-xs text-gray-400">' + lastCallAgo + '</span></td>' +
+      '<td class="px-3 py-3"><div class="flex items-center gap-1">' +
+        '<button onclick="smMonitorCustomer(' + a.customer_id + ')" class="p-1.5 rounded-lg hover:bg-blue-100 text-blue-500" title="View Details"><i class="fas fa-chart-line text-xs"></i></button>' +
+        '<button onclick="smITHelp(' + a.customer_id + ')" class="p-1.5 rounded-lg hover:bg-amber-100 text-amber-500" title="IT Help"><i class="fas fa-wrench text-xs"></i></button>' +
+        '<button onclick="smOpenDetail(' + a.customer_id + ')" class="p-1.5 rounded-lg hover:bg-green-100 text-green-500" title="Edit Config"><i class="fas fa-edit text-xs"></i></button>' +
+      '</div></td></tr>';
+  }).join('');
+
+  var activityFeed = recent.slice(0, 10).map(function(call) {
+    var outcomeColor = call.call_outcome === 'answered' ? 'text-green-600 bg-green-50' : 'text-gray-600 bg-gray-50';
+    return '<div class="flex items-center gap-3 py-2.5 border-b border-gray-100 last:border-0">' +
+      '<div class="w-8 h-8 rounded-full flex items-center justify-center ' + (call.is_lead ? 'bg-amber-100' : 'bg-sky-100') + '"><i class="fas ' + (call.is_lead ? 'fa-fire text-amber-600' : 'fa-phone text-sky-600') + ' text-xs"></i></div>' +
+      '<div class="flex-1 min-w-0"><div class="flex items-center gap-2"><span class="font-semibold text-gray-800 text-sm truncate">' + (call.caller_name || call.caller_phone || 'Unknown') + '</span><span class="text-[10px] text-gray-400">→</span><span class="text-[10px] text-blue-600 font-medium">' + (call.customer_name || '') + '</span></div><p class="text-[11px] text-gray-500 truncate">' + (call.call_summary || 'No summary') + '</p></div>' +
+      '<div class="text-right flex-shrink-0"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold ' + outcomeColor + '">' + (call.call_outcome || '') + '</span><div class="text-[10px] text-gray-400 mt-0.5">' + smTimeAgo(call.created_at) + '</div></div></div>';
+  }).join('');
+
+  return '<div class="space-y-6">' +
+    '<div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">' +
+      '<div><h2 class="text-2xl font-black text-gray-900"><i class="fas fa-satellite-dish mr-2 text-teal-500"></i>Secretary AI — Live Monitor</h2><p class="text-sm text-gray-500 mt-1">Real-time agent status, minutes tracking, call analytics, and IT support tools</p></div>' +
+      '<div class="flex gap-2"><button onclick="loadView(\'secretary-monitor\')" class="px-4 py-2.5 bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 rounded-xl text-sm font-semibold"><i class="fas fa-sync mr-1"></i>Refresh</button><button onclick="saDashboardSetView(\'secretary-manager\')" class="px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-sm font-bold shadow"><i class="fas fa-cog mr-2"></i>Manage Agents</button></div>' +
+    '</div>' +
+    '<div class="grid grid-cols-2 md:grid-cols-6 gap-3">' +
+      samc('Active Agents', (summary.active_agents || 0) + '/' + (summary.total_agents || 0), 'fa-robot', 'green', (summary.connected_agents || 0) + ' connected') +
+      samc('Min Today', summary.total_minutes_today || 0, 'fa-clock', 'blue', (global.today_calls || 0) + ' calls') +
+      samc('Min (7d)', summary.total_minutes_7d || 0, 'fa-calendar-week', 'indigo', (global.week_calls || 0) + ' calls') +
+      samc('Min (30d)', summary.total_minutes_30d || 0, 'fa-calendar', 'purple', (global.month_calls || 0) + ' calls') +
+      samc('All-Time Min', summary.total_minutes_alltime || 0, 'fa-history', 'teal', (global.total_calls || 0) + ' calls') +
+      samc('Leads', global.total_leads || 0, 'fa-fire', 'amber', 'Avg ' + fmtSeconds(global.avg_duration || 0)) +
+    '</div>' +
+    '<div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">' +
+      '<div class="p-4 border-b bg-gray-50 flex items-center justify-between"><h3 class="font-bold text-gray-800"><i class="fas fa-users mr-2 text-gray-400"></i>Per-Customer Agent Status & Minutes</h3></div>' +
+      (agents.length === 0 ? '<div class="p-12 text-center"><i class="fas fa-satellite-dish text-4xl text-gray-200 mb-4"></i><p class="text-gray-400 mb-4">No secretary agents configured.</p></div>'
+        : '<div class="overflow-x-auto"><table class="w-full"><thead><tr class="bg-gray-50/80 text-[11px] text-gray-500 uppercase tracking-wider"><th class="px-4 py-3 text-left">Customer</th><th class="px-3 py-3 text-center">Agent</th><th class="px-3 py-3 text-center">Min (30d)</th><th class="px-3 py-3 text-center">Calls (30d)</th><th class="px-3 py-3 text-center">Leads</th><th class="px-3 py-3 text-center">Avg Dur</th><th class="px-3 py-3 text-left">Last Call</th><th class="px-3 py-3 text-left">Actions</th></tr></thead><tbody>' + agentRows + '</tbody></table></div>') +
+    '</div>' +
+    '<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">' +
+      '<div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5"><h3 class="font-bold text-gray-800 mb-4"><i class="fas fa-stream mr-2 text-blue-400"></i>Recent Call Activity</h3>' +
+        (recent.length === 0 ? '<div class="text-center py-8 text-gray-400"><i class="fas fa-phone-slash text-3xl block mb-2"></i>No calls yet</div>' : '<div>' + activityFeed + '</div>') + '</div>' +
+      '<div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5"><h3 class="font-bold text-gray-800 mb-4"><i class="fas fa-headset mr-2 text-amber-400"></i>IT Help & Troubleshooting</h3>' +
+        '<div class="space-y-3">' +
+          '<div class="p-4 bg-amber-50 border border-amber-200 rounded-xl"><p class="font-semibold text-amber-800 text-sm mb-2"><i class="fas fa-user-cog mr-1"></i>Select customer</p>' +
+            '<select id="itHelpCustomerSelect" class="w-full border border-amber-200 rounded-lg px-3 py-2 text-sm bg-white"><option value="">Choose...</option>' +
+              agents.map(function(a) { return '<option value="' + a.customer_id + '">' + (a.brand_business_name || a.customer_name || a.customer_email) + '</option>'; }).join('') + '</select></div>' +
+          '<div class="grid grid-cols-2 gap-2">' +
+            '<button onclick="smITAction(\'check_status\')" class="px-3 py-2.5 bg-blue-50 text-blue-700 rounded-xl text-xs font-bold hover:bg-blue-100"><i class="fas fa-stethoscope mr-1"></i>Diagnostic</button>' +
+            '<button onclick="smITAction(\'force_reconnect\')" class="px-3 py-2.5 bg-green-50 text-green-700 rounded-xl text-xs font-bold hover:bg-green-100"><i class="fas fa-plug mr-1"></i>Force Reconnect</button>' +
+            '<button onclick="smITAction(\'force_disconnect\')" class="px-3 py-2.5 bg-red-50 text-red-600 rounded-xl text-xs font-bold hover:bg-red-100"><i class="fas fa-unlink mr-1"></i>Disconnect</button>' +
+            '<button onclick="smITAction(\'reset_config\')" class="px-3 py-2.5 bg-amber-50 text-amber-700 rounded-xl text-xs font-bold hover:bg-amber-100"><i class="fas fa-redo mr-1"></i>Reset LiveKit</button>' +
+            '<button onclick="smITAction(\'recent_logs\')" class="px-3 py-2.5 bg-purple-50 text-purple-700 rounded-xl text-xs font-bold hover:bg-purple-100 col-span-2"><i class="fas fa-file-alt mr-1"></i>Recent Logs</button></div>' +
+          '<div id="itHelpResult" class="hidden mt-3"></div></div></div>' +
+    '</div></div>';
+}
+
+window.smITAction = async function(action) {
+  var sel = document.getElementById('itHelpCustomerSelect');
+  var cid = sel ? sel.value : '';
+  if (!cid) { alert('Select a customer first'); return; }
+  var el = document.getElementById('itHelpResult');
+  if (el) { el.classList.remove('hidden'); el.innerHTML = '<div class="text-center py-3"><i class="fas fa-spinner fa-spin text-blue-500"></i></div>'; }
+  try {
+    var res = await saFetch('/api/admin/superadmin/secretary/it-help', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ customer_id: parseInt(cid), action: action }) });
+    var data = await res.json();
+    if (data.success) {
+      if (action === 'check_status' && data.diagnostic) {
+        var d = data.diagnostic; var issues = [];
+        if (!d.agent_active) issues.push('Agent INACTIVE');
+        if (d.connection_status !== 'connected') issues.push('Status: ' + d.connection_status);
+        if (!d.has_trunk) issues.push('No SIP trunk'); if (!d.has_dispatch) issues.push('No dispatch rule');
+        if (!d.has_phone) issues.push('No AI phone #'); if (!d.has_greeting) issues.push('Greeting missing');
+        if (d.subscription !== 'active') issues.push('Sub: ' + d.subscription);
+        el.innerHTML = '<div class="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm"><h4 class="font-bold text-blue-800 mb-2"><i class="fas fa-clipboard-check mr-1"></i>Diagnostic</h4><div class="grid grid-cols-2 gap-1 text-xs">' +
+          '<span class="text-gray-600">Active:</span><span class="font-bold ' + (d.agent_active ? 'text-green-600' : 'text-red-600') + '">' + (d.agent_active ? 'YES' : 'NO') + '</span>' +
+          '<span class="text-gray-600">Connection:</span><span class="font-bold">' + d.connection_status + '</span>' +
+          '<span class="text-gray-600">Trunk:</span><span class="font-bold ' + (d.has_trunk ? 'text-green-600' : 'text-red-600') + '">' + (d.has_trunk ? 'OK' : 'MISSING') + '</span>' +
+          '<span class="text-gray-600">Dispatch:</span><span class="font-bold ' + (d.has_dispatch ? 'text-green-600' : 'text-red-600') + '">' + (d.has_dispatch ? 'OK' : 'MISSING') + '</span>' +
+          '<span class="text-gray-600">AI Phone:</span><span class="font-mono">' + (d.ai_phone || 'NONE') + '</span>' +
+          '<span class="text-gray-600">Biz Phone:</span><span class="font-mono">' + (d.business_phone || 'NONE') + '</span>' +
+          '<span class="text-gray-600">Carrier:</span><span>' + d.carrier + '</span>' +
+          '<span class="text-gray-600">Sub:</span><span class="font-bold">' + d.subscription + '</span>' +
+          '<span class="text-gray-600">Last Call:</span><span>' + (d.last_call ? smTimeAgo(d.last_call) : 'Never') + '</span>' +
+          '<span class="text-gray-600">24h Calls:</span><span class="font-bold">' + d.calls_24h + '</span></div>' +
+          (issues.length > 0 ? '<div class="mt-3 p-2 bg-red-50 border border-red-200 rounded-lg"><p class="text-xs font-bold text-red-700 mb-1"><i class="fas fa-exclamation-triangle mr-1"></i>Issues:</p>' + issues.map(function(i) { return '<p class="text-xs text-red-600">• ' + i + '</p>'; }).join('') + '</div>' : '<div class="mt-3 p-2 bg-green-50 border border-green-200 rounded-lg"><p class="text-xs font-bold text-green-700"><i class="fas fa-check-circle mr-1"></i>All checks passed</p></div>') + '</div>';
+      } else if (action === 'recent_logs' && data.logs) {
+        el.innerHTML = '<div class="bg-purple-50 border border-purple-200 rounded-xl p-4"><h4 class="font-bold text-purple-800 text-sm mb-2">Recent Logs (' + data.logs.length + ')</h4>' +
+          (data.logs.length === 0 ? '<p class="text-xs text-gray-500">No calls</p>' :
+            '<div class="space-y-1 max-h-48 overflow-y-auto">' + data.logs.map(function(l) { return '<div class="flex items-center justify-between text-xs py-1 border-b border-purple-100"><span class="font-semibold">' + (l.caller_name || l.caller_phone || '?') + '</span><span>' + fmtSeconds(l.call_duration_seconds) + '</span><span class="text-' + (l.call_outcome === 'answered' ? 'green' : 'gray') + '-600">' + l.call_outcome + '</span><span class="text-gray-400">' + smTimeAgo(l.created_at) + '</span></div>'; }).join('') + '</div>') + '</div>';
+      } else {
+        el.innerHTML = '<div class="bg-green-50 border border-green-200 rounded-xl p-3 text-sm text-green-700"><i class="fas fa-check-circle mr-1"></i>' + (data.message || 'Done') + '</div>';
+        setTimeout(function() { loadView('secretary-monitor'); }, 1500);
+      }
+    } else { el.innerHTML = '<div class="bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-700"><i class="fas fa-times-circle mr-1"></i>' + (data.error || 'Failed') + '</div>'; }
+  } catch(e) { if (el) el.innerHTML = '<div class="bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-700">Error: ' + e.message + '</div>'; }
+};
+
+window.smMonitorCustomer = async function(cid) {
+  try {
+    var res = await saFetch('/api/admin/superadmin/secretary/customer/' + cid + '/minutes');
+    if (!res) return; var data = await res.json();
+    var ov = data.overall || {}; var daily = data.daily || [];
+    var totalMins = Math.round((ov.total_seconds || 0) / 60);
+    var modal = document.createElement('div'); modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm'; modal.id = 'monitorModal';
+    modal.innerHTML = '<div class="bg-white rounded-2xl shadow-2xl max-w-2xl w-full mx-4 max-h-[85vh] overflow-hidden flex flex-col">' +
+      '<div class="bg-gradient-to-r from-blue-600 to-indigo-700 px-6 py-4 flex items-center justify-between"><div><h3 class="text-white font-bold text-lg"><i class="fas fa-chart-line mr-2"></i>Minutes & Analytics</h3><p class="text-blue-200 text-xs">Customer #' + cid + '</p></div><button onclick="document.getElementById(\'monitorModal\').remove()" class="text-white/70 hover:text-white"><i class="fas fa-times text-lg"></i></button></div>' +
+      '<div class="p-6 overflow-y-auto flex-1">' +
+        '<div class="grid grid-cols-4 gap-3 mb-5">' + samc('Total Min', totalMins, 'fa-clock', 'blue', ov.total_calls + ' calls') + samc('Calls', ov.total_calls || 0, 'fa-phone', 'green', '') + samc('Leads', ov.total_leads || 0, 'fa-fire', 'amber', '') + samc('Avg', fmtSeconds(ov.avg_seconds || 0), 'fa-stopwatch', 'purple', '') + '</div>' +
+        '<h4 class="font-bold text-gray-800 mb-3"><i class="fas fa-calendar mr-1 text-blue-400"></i>Daily (30d)</h4>' +
+        (daily.length === 0 ? '<p class="text-gray-400 text-sm text-center py-4">No calls in 30 days</p>' :
+          '<div class="overflow-x-auto max-h-64"><table class="w-full text-sm"><thead class="bg-gray-50 sticky top-0"><tr><th class="px-3 py-2 text-left text-xs text-gray-500">Date</th><th class="px-3 py-2 text-center text-xs text-gray-500">Calls</th><th class="px-3 py-2 text-center text-xs text-gray-500">Min</th><th class="px-3 py-2 text-center text-xs text-gray-500">Avg</th><th class="px-3 py-2 text-center text-xs text-gray-500">Leads</th></tr></thead><tbody>' +
+          daily.map(function(dd) { return '<tr class="border-b border-gray-100"><td class="px-3 py-2">' + dd.call_date + '</td><td class="px-3 py-2 text-center font-bold">' + dd.call_count + '</td><td class="px-3 py-2 text-center font-bold text-blue-700">' + Math.round((dd.total_seconds || 0) / 60) + '</td><td class="px-3 py-2 text-center text-gray-500">' + fmtSeconds(dd.avg_seconds || 0) + '</td><td class="px-3 py-2 text-center text-amber-600 font-bold">' + (dd.leads || 0) + '</td></tr>'; }).join('') + '</tbody></table></div>') +
+      '</div><div class="px-6 py-3 border-t bg-gray-50 flex justify-end"><button onclick="document.getElementById(\'monitorModal\').remove()" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg text-sm font-medium">Close</button></div></div>';
+    document.body.appendChild(modal); modal.addEventListener('click', function(e) { if (e.target === modal) modal.remove(); });
+  } catch(e) { alert('Error: ' + e.message); }
+};
+
+window.smITHelp = function(cid) { var sel = document.getElementById('itHelpCustomerSelect'); if (sel) sel.value = String(cid); smITAction('check_status'); };
+
+function smTimeAgo(dateStr) {
+  if (!dateStr) return 'Never';
+  var diff = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+  if (diff < 60) return 'just now'; if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+  if (diff < 86400) return Math.floor(diff / 3600) + 'h ago'; if (diff < 604800) return Math.floor(diff / 86400) + 'd ago';
+  return fmtDate(dateStr);
 }
