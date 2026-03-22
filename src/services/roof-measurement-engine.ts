@@ -1,19 +1,27 @@
 // ============================================================
-// RoofReporterAI — Roof Measurement Engine v4.0
+// RoofReporterAI — Roof Measurement Engine v5.0 — PHASE 1
+// USER-DRAWN ONLY — NO AUTO-INFERENCE
 //
 // PORTED from tools/roof_engine.py — Python reference impl.
 //
 // Core Philosophy:
-//   - ALL primary measurements from user-drawn GPS trace coordinates
+//   - ALL measurements come STRICTLY from what the user traced on the map
+//   - NO guessing of ridges, hips, valleys — if user didn't draw it, it's not in the report
 //   - WGS84 → local Cartesian (UTM-like) for meter-level accuracy
 //   - Shoelace formula for 2D footprint area
 //   - normalize_slope() accepts pitch A:B, decimal degrees, multiplier
 //   - Multi-slope roofs: segment.slope_ref → slope_map; bi-slope junctions
-//   - Auto-classify segments via geometric heuristics when label missing
 //   - Common-run algorithm for hips/valleys: project ridge onto nearest eave
 //   - Explicit edge-case handling: zero-length, vertical θ, flat, collinear
 //   - Vertex snapping ensures closed, watertight polygon geometry
 //   - Google Solar API used ONLY for satellite imagery + optional DSM cross-check
+//
+// PHASE 1 REMOVED:
+//   - inferEdgesFromEavePolygon() — auto-guessed ridges/hips from eave polygon
+//   - findEaveCorners() — quadrant-based corner detection for inference
+//   - findConcaveCorners() — L/T-shape detection for valley inference
+//   - proportionalFaceSplit() — estimated face areas by bounding-box ratio
+//   Phase 2 (AI auto-trace) can be added later without breaking anything.
 //
 // INPUT:  Trace JSON { eaves: [{lat,lng}], ridges: [[{lat,lng}]], ... }
 //         OR segment-based { segments: [...], slope_map: {...}, default_slope }
@@ -755,16 +763,13 @@ export class RoofMeasurementEngine {
     this.rakesCart   = this.projectLines(this.rawRakes, 'rake')
 
     // ═══════════════════════════════════════════════════════════════
-    // AUTO-INFERENCE: When only eaves are traced and no ridges/hips/rakes
-    // are provided, infer them from the eave polygon geometry.
-    // This fixes the "0 LF" issue for ridge/hip/valley/rake.
+    // PHASE 1: NO AUTO-INFERENCE
+    // If only eaves are drawn, report uses total footprint + default pitch.
+    // Ridges/hips/valleys/rakes only appear if the user actually drew them.
+    // Phase 2 will add AI auto-trace to fill in missing lines.
     // ═══════════════════════════════════════════════════════════════
-    if (this.eavesCart.length >= 4 &&
-        this.ridgesCart.length === 0 &&
-        this.hipsCart.length === 0 &&
-        this.rakesCart.length === 0 &&
-        this.facesCart.length === 0) {
-      this.inferEdgesFromEavePolygon()
+    if (this.eavesCart.length < 3) {
+      throw new Error('Eaves outline required (minimum 3 points). User must trace the drip edge.')
     }
 
     this.facesCart = this.rawFaces.map(f => ({
@@ -780,325 +785,13 @@ export class RoofMeasurementEngine {
   }
 
   // ═══════════════════════════════════════════════════════════════
-  // AUTO-INFERENCE OF ROOF EDGES FROM EAVE POLYGON
-  //
-  // When only the eave outline is traced (no ridges/hips/valleys),
-  // we infer the roof structure from the polygon geometry:
-  //
-  // Algorithm:
-  //   1. Compute Oriented Bounding Box (OBB) of eave polygon
-  //   2. Determine primary axis (long side = ridge direction)
-  //   3. Compute building aspect ratio to classify roof type:
-  //      - Aspect ratio ≈ 1:1 → Hip pyramid (4 hips, no ridge)
-  //      - Aspect ratio > 1.15 → Standard hip (1 ridge + 4 hips)
-  //      - Rectangular with gable trace → Gable (1 ridge + 2 rakes)
-  //   4. Generate synthetic ridge line along primary axis
-  //   5. Generate hip/rake lines from ridge endpoints to corners
-  //   6. Generate rake edges for gable ends
-  //
-  // Typical Canadian residential results:
-  //   - Bungalow: 1 ridge ~30ft, 4 hips ~15ft each, 4 eave runs
-  //   - 2-storey: 1 ridge ~40ft, 4 hips ~18ft each
-  //   - L-shape: 2 ridges, 2 valleys, 6+ hips
-  //
-  // This inference alone brings ridge/hip accuracy to ≥85%.
-  // Combined with DSM edge classifier, ≥90% is achievable.
+  // PHASE 1: AUTO-INFERENCE REMOVED
+  // The following functions were removed in v5.0 Phase 1:
+  //   - inferEdgesFromEavePolygon()
+  //   - findEaveCorners()
+  //   - findConcaveCorners()
+  // They will return in Phase 2 as AI-assisted auto-trace.
   // ═══════════════════════════════════════════════════════════════
-
-  private inferEdgesFromEavePolygon(): void {
-    const pts = this.eavesCart.length > 3 &&
-      dist2D(this.eavesCart[0], this.eavesCart[this.eavesCart.length - 1]) < 0.5
-        ? this.eavesCart.slice(0, -1)
-        : this.eavesCart
-
-    if (pts.length < 4) return
-
-    // ── Step 1: Compute bounding box ──
-    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
-    pts.forEach(p => {
-      if (p.x < minX) minX = p.x
-      if (p.x > maxX) maxX = p.x
-      if (p.y < minY) minY = p.y
-      if (p.y > maxY) maxY = p.y
-    })
-    const bbW = maxX - minX  // metres (X-axis extent)
-    const bbH = maxY - minY  // metres (Y-axis extent)
-
-    if (bbW < 1 || bbH < 1) return // Too small
-
-    // ── Step 2: Determine primary axis ──
-    // Long axis = ridge direction
-    const isXLong = bbW >= bbH
-    const longM = Math.max(bbW, bbH)
-    const shortM = Math.min(bbW, bbH)
-    const aspectRatio = longM / shortM
-
-    // ── Step 3: Find corner points of the eave polygon ──
-    // For a rectangular-ish polygon, find the 4 extreme corner points
-    const corners = this.findEaveCorners(pts, minX, maxX, minY, maxY, isXLong)
-
-    // ── Step 4: Compute ridge line ──
-    // Ridge sits at the midpoint of the short axis, running along the long axis
-    // For a hip roof, ridge is shorter than the building (inset by shortM/2 from each end)
-    const ridgeInsetM = shortM / 2  // standard hip geometry
-
-    let ridgeStart: CartesianPt
-    let ridgeEnd: CartesianPt
-
-    if (isXLong) {
-      const midY = (minY + maxY) / 2
-      ridgeStart = { x: minX + ridgeInsetM, y: midY, z: 0, lat: 0, lng: 0 }
-      ridgeEnd   = { x: maxX - ridgeInsetM, y: midY, z: 0, lat: 0, lng: 0 }
-    } else {
-      const midX = (minX + maxX) / 2
-      ridgeStart = { x: midX, y: minY + ridgeInsetM, z: 0, lat: 0, lng: 0 }
-      ridgeEnd   = { x: midX, y: maxY - ridgeInsetM, z: 0, lat: 0, lng: 0 }
-    }
-
-    // Only generate ridge if building is long enough (aspect > 1.15)
-    const ridgeLenM = dist2D(ridgeStart, ridgeEnd)
-    if (ridgeLenM > 0.5) {
-      this.ridgesCart.push({
-        id: 'inferred_ridge_1',
-        pts: [ridgeStart, ridgeEnd],
-        pitch: null,
-        slope_ref: 'default'
-      })
-    }
-
-    // ── Step 5: Generate hip lines from ridge endpoints to eave corners ──
-    if (corners.length >= 4 && ridgeLenM > 0.5) {
-      // Sort corners into pairs closest to each ridge endpoint
-      const nearStart = [...corners].sort((a, b) =>
-        dist2D(a, ridgeStart) - dist2D(b, ridgeStart)
-      )
-      const nearEnd = [...corners].sort((a, b) =>
-        dist2D(a, ridgeEnd) - dist2D(b, ridgeEnd)
-      )
-
-      // Hip lines: ridge start to 2 nearest corners
-      if (nearStart.length >= 2) {
-        this.hipsCart.push({
-          id: 'inferred_hip_1',
-          pts: [ridgeStart, nearStart[0]],
-          pitch: null,
-          slope_ref: 'default'
-        })
-        this.hipsCart.push({
-          id: 'inferred_hip_2',
-          pts: [ridgeStart, nearStart[1]],
-          pitch: null,
-          slope_ref: 'default'
-        })
-      }
-
-      // Hip lines: ridge end to 2 nearest corners
-      if (nearEnd.length >= 2) {
-        this.hipsCart.push({
-          id: 'inferred_hip_3',
-          pts: [ridgeEnd, nearEnd[0]],
-          pitch: null,
-          slope_ref: 'default'
-        })
-        this.hipsCart.push({
-          id: 'inferred_hip_4',
-          pts: [ridgeEnd, nearEnd[1]],
-          pitch: null,
-          slope_ref: 'default'
-        })
-      }
-    } else if (corners.length >= 4 && aspectRatio < 1.15) {
-      // Near-square roof: hip pyramid (no ridge, 4 hips from centre)
-      const centreX = (minX + maxX) / 2
-      const centreY = (minY + maxY) / 2
-      const apex: CartesianPt = { x: centreX, y: centreY, z: 0, lat: 0, lng: 0 }
-
-      corners.forEach((corner, i) => {
-        this.hipsCart.push({
-          id: `inferred_hip_${i + 1}`,
-          pts: [apex, corner],
-          pitch: null,
-          slope_ref: 'default'
-        })
-      })
-    }
-
-    // ── Step 6: Detect L-shape / T-shape for valley inference ──
-    // If the polygon has more than 4 significant corners (non-convex),
-    // it likely has interior angles > 180° indicating valleys
-    if (pts.length >= 6) {
-      const concaveCorners = this.findConcaveCorners(pts)
-      if (concaveCorners.length > 0) {
-        // Each concave corner indicates a valley
-        for (let i = 0; i < concaveCorners.length; i++) {
-          const cc = concaveCorners[i]
-          // Valley runs from the concave corner toward the nearest ridge point
-          const ridgePts = this.ridgesCart.length > 0
-            ? this.ridgesCart.flatMap(r => r.pts)
-            : [{ x: (minX + maxX) / 2, y: (minY + maxY) / 2, z: 0, lat: 0, lng: 0 } as CartesianPt]
-
-          const nearestRidge = ridgePts.reduce((best, p) =>
-            dist2D(p, cc) < dist2D(best, cc) ? p : best
-          , ridgePts[0])
-
-          this.valleysCart.push({
-            id: `inferred_valley_${i + 1}`,
-            pts: [cc, nearestRidge],
-            pitch: null,
-            slope_ref: 'default'
-          })
-        }
-      }
-    }
-
-    // ── Step 7: Infer rake edges for gable-end detection ──
-    // If the polygon is rectangular with < 5 significant points,
-    // it's likely a simple gable (2 rakes at each end)
-    if (pts.length <= 5 && aspectRatio > 1.3 && this.hipsCart.length === 0) {
-      // Pure gable: no hips, but rakes at short ends
-      // Rake runs from eave to ridge endpoint on each short side
-      if (isXLong) {
-        const midY = (minY + maxY) / 2
-        // Left gable
-        const gLeft1: CartesianPt = { x: minX, y: minY, z: 0, lat: 0, lng: 0 }
-        const gLeft2: CartesianPt = { x: minX, y: maxY, z: 0, lat: 0, lng: 0 }
-        const gLeftPeak: CartesianPt = { x: minX, y: midY, z: 0, lat: 0, lng: 0 }
-        this.rakesCart.push(
-          { id: 'inferred_rake_1', pts: [gLeft1, gLeftPeak], pitch: null, slope_ref: 'default' },
-          { id: 'inferred_rake_2', pts: [gLeft2, gLeftPeak], pitch: null, slope_ref: 'default' }
-        )
-        // Right gable
-        const gRight1: CartesianPt = { x: maxX, y: minY, z: 0, lat: 0, lng: 0 }
-        const gRight2: CartesianPt = { x: maxX, y: maxY, z: 0, lat: 0, lng: 0 }
-        const gRightPeak: CartesianPt = { x: maxX, y: midY, z: 0, lat: 0, lng: 0 }
-        this.rakesCart.push(
-          { id: 'inferred_rake_3', pts: [gRight1, gRightPeak], pitch: null, slope_ref: 'default' },
-          { id: 'inferred_rake_4', pts: [gRight2, gRightPeak], pitch: null, slope_ref: 'default' }
-        )
-      } else {
-        const midX = (minX + maxX) / 2
-        const gBot1: CartesianPt = { x: minX, y: minY, z: 0, lat: 0, lng: 0 }
-        const gBot2: CartesianPt = { x: maxX, y: minY, z: 0, lat: 0, lng: 0 }
-        const gBotPeak: CartesianPt = { x: midX, y: minY, z: 0, lat: 0, lng: 0 }
-        this.rakesCart.push(
-          { id: 'inferred_rake_1', pts: [gBot1, gBotPeak], pitch: null, slope_ref: 'default' },
-          { id: 'inferred_rake_2', pts: [gBot2, gBotPeak], pitch: null, slope_ref: 'default' }
-        )
-        const gTop1: CartesianPt = { x: minX, y: maxY, z: 0, lat: 0, lng: 0 }
-        const gTop2: CartesianPt = { x: maxX, y: maxY, z: 0, lat: 0, lng: 0 }
-        const gTopPeak: CartesianPt = { x: midX, y: maxY, z: 0, lat: 0, lng: 0 }
-        this.rakesCart.push(
-          { id: 'inferred_rake_3', pts: [gTop1, gTopPeak], pitch: null, slope_ref: 'default' },
-          { id: 'inferred_rake_4', pts: [gTop2, gTopPeak], pitch: null, slope_ref: 'default' }
-        )
-      }
-    }
-
-    console.log(`[Engine] Auto-inferred edges from eave polygon: ` +
-      `${this.ridgesCart.length} ridges, ${this.hipsCart.length} hips, ` +
-      `${this.valleysCart.length} valleys, ${this.rakesCart.length} rakes`)
-  }
-
-  /**
-   * Find the 4 primary corner points of the eave polygon.
-   * Uses the farthest-from-centroid method combined with quadrant analysis.
-   */
-  private findEaveCorners(
-    pts: CartesianPt[],
-    minX: number, maxX: number, minY: number, maxY: number,
-    isXLong: boolean
-  ): CartesianPt[] {
-    // For each quadrant relative to the centroid, find the farthest point
-    const cx = (minX + maxX) / 2
-    const cy = (minY + maxY) / 2
-    const quadrants: { pt: CartesianPt; dist: number }[] = [
-      { pt: pts[0], dist: 0 }, // NW quadrant
-      { pt: pts[0], dist: 0 }, // NE quadrant
-      { pt: pts[0], dist: 0 }, // SW quadrant
-      { pt: pts[0], dist: 0 }, // SE quadrant
-    ]
-
-    for (const p of pts) {
-      const dx = p.x - cx
-      const dy = p.y - cy
-      const d = Math.sqrt(dx * dx + dy * dy)
-      const qi = (dx >= 0 ? 0 : 1) + (dy >= 0 ? 0 : 2)
-      if (d > quadrants[qi].dist) {
-        quadrants[qi] = { pt: p, dist: d }
-      }
-    }
-
-    // Deduplicate close corners
-    const corners: CartesianPt[] = []
-    for (const q of quadrants) {
-      if (q.dist > 0.3) { // at least 30cm from centroid
-        const isDuplicate = corners.some(c => dist2D(c, q.pt) < 0.5)
-        if (!isDuplicate) corners.push(q.pt)
-      }
-    }
-
-    return corners
-  }
-
-  /**
-   * Find concave (reflex) corners in the eave polygon.
-   * These indicate L-shape, T-shape, or U-shape buildings where valleys form.
-   */
-  private findConcaveCorners(pts: CartesianPt[]): CartesianPt[] {
-    const concave: CartesianPt[] = []
-    const n = pts.length
-
-    for (let i = 0; i < n; i++) {
-      const prev = pts[(i - 1 + n) % n]
-      const curr = pts[i]
-      const next = pts[(i + 1) % n]
-
-      // Cross product to determine turn direction
-      const cross = (curr.x - prev.x) * (next.y - curr.y) - (curr.y - prev.y) * (next.x - curr.x)
-
-      // Interior angle: check if the polygon is predominantly CW or CCW
-      // For reflex angles in a CCW polygon, cross < 0
-      // We also check that the angle is significant (not just a slight bend)
-      const angle = Math.abs(Math.atan2(cross,
-        (curr.x - prev.x) * (next.x - curr.x) + (curr.y - prev.y) * (next.y - curr.y)
-      )) * 180 / Math.PI
-
-      // Concave corner: cross product sign differs from polygon winding AND angle > 45°
-      if (cross < -0.01 && angle > 45) {
-        concave.push(curr)
-      }
-    }
-
-    // Check polygon winding: if total signed area is negative, polygon is CW
-    // and we need to flip the concavity test
-    const signedArea = shoelaceAreaM2(pts)
-    const totalCross = pts.reduce((sum, _, i) => {
-      const prev = pts[(i - 1 + n) % n]
-      const curr = pts[i]
-      const next = pts[(i + 1) % n]
-      return sum + ((curr.x - prev.x) * (next.y - curr.y) - (curr.y - prev.y) * (next.x - curr.x))
-    }, 0)
-
-    // If polygon is CW (totalCross < 0), our concave test was correct
-    // If polygon is CCW (totalCross > 0), we need the positive cross points
-    if (totalCross > 0) {
-      concave.length = 0
-      for (let i = 0; i < n; i++) {
-        const prev = pts[(i - 1 + n) % n]
-        const curr = pts[i]
-        const next = pts[(i + 1) % n]
-        const cross = (curr.x - prev.x) * (next.y - curr.y) - (curr.y - prev.y) * (next.x - curr.x)
-        const angle = Math.abs(Math.atan2(cross,
-          (curr.x - prev.x) * (next.x - curr.x) + (curr.y - prev.y) * (next.y - curr.y)
-        )) * 180 / Math.PI
-        if (cross > 0.01 && angle > 45) {
-          concave.push(curr)
-        }
-      }
-    }
-
-    return concave
-  }
 
   private parseLines(raw: any[]): TraceLine[] {
     return raw.map(seg => ({
@@ -1356,12 +1049,11 @@ export class RoofMeasurementEngine {
     } else if (this.eavesCart.length >= 4) {
       const totalProjFt2 = this.computeFootprintSqft()
 
-      if (this.ridgesCart.length > 0 && this.hipsCart.length > 0) {
+      // PHASE 1: Only attempt geometric split if user actually drew ridges + hips
+      if (this.ridgesCart.length > 0 && this.hipsCart.length >= 2) {
         // ── GEOMETRIC FACE SPLITTING ──
-        // Use ridge and hip endpoints to split the eave polygon into faces
-        // Each face is bounded by eave edges + hip/ridge lines
-        // This produces geometrically accurate per-face areas instead of equal division
-        
+        // User drew ridge + hip lines — split the eave polygon into faces
+        // using their actual traced geometry. 100% user-drawn, no guessing.
         const facePolys = this.splitEavePolygonIntoFaces()
         
         if (facePolys.length > 0) {
@@ -1395,15 +1087,12 @@ export class RoofMeasurementEngine {
               r.squares = round(sloped / SQFT_PER_SQUARE, 3)
             }
           }
-        } else {
-          // Fallback: proportional split based on eave perimeter contribution
-          this.proportionalFaceSplit(results, totalProjFt2)
         }
-      } else if (this.ridgesCart.length > 0) {
-        // Has ridges but no hips — use proportional splitting based on
-        // ridge position relative to eave bounding box
-        this.proportionalFaceSplit(results, totalProjFt2)
-      } else {
+      }
+
+      // CLEAN FALLBACK: single total face (100% accurate total area, no guessing)
+      // Applies when: only eaves drawn, or geometric split produced nothing
+      if (results.length === 0) {
         const rise = this.defPitch
         const sloped = slopedFromProjected(totalProjFt2, rise)
         results.push({
@@ -1506,78 +1195,9 @@ export class RoofMeasurementEngine {
     return []
   }
 
-  // ── PROPORTIONAL FACE SPLIT ──────────────────────────
-  // When geometric splitting isn't possible, use eave perimeter ratios
-  // and bounding box analysis to estimate per-face areas proportionally.
-  
-  private proportionalFaceSplit(results: FaceDetail[], totalProjFt2: number): void {
-    // Use eave polygon bounding box to determine roof aspect ratio
-    const eaveVerts = this.eavesCart.slice(0, -1)
-    if (eaveVerts.length < 4) {
-      // Can't determine proportions — single face
-      const rise = this.defPitch
-      const sloped = slopedFromProjected(totalProjFt2, rise)
-      results.push({
-        face_id: 'total_roof',
-        pitch_rise: rise,
-        pitch_label: `${rise}:12`,
-        pitch_angle_deg: round(pitchAngleDeg(rise), 1),
-        slope_factor: round(slopeFactor(rise), 4),
-        projected_area_ft2: round(totalProjFt2, 1),
-        sloped_area_ft2: round(sloped, 1),
-        squares: round(sloped / SQFT_PER_SQUARE, 3),
-      })
-      return
-    }
-
-    // Compute oriented bounding box width/height to find aspect ratio
-    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
-    eaveVerts.forEach(p => {
-      minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x)
-      minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y)
-    })
-    const bbW = (maxX - minX) * M_TO_FT
-    const bbH = (maxY - minY) * M_TO_FT
-    const longSide = Math.max(bbW, bbH)
-    const shortSide = Math.min(bbW, bbH)
-
-    // For a hip roof: estimate ridge length ≈ longSide - shortSide
-    // Hip triangle area ≈ shortSide/2 × shortSide/2 each (two triangles)
-    // Main trapezoid area ≈ (totalFootprint - 2×triangle) / 2 each
-    const estRidgeLen = Math.max(longSide - shortSide, 0)
-    const hipTriangleArea = (shortSide * shortSide) / 4  // each hip end triangle
-    const mainFaceArea = Math.max((totalProjFt2 - 2 * hipTriangleArea) / 2, totalProjFt2 / 4)
-    const adjustedHipArea = (totalProjFt2 - 2 * mainFaceArea) / 2
-
-    const numFaces = this.ridgesCart.length > 0 ? Math.max(this.ridgesCart.length + 1, 4) : 4
-
-    // Build proportional faces
-    const faceAreas = numFaces >= 4
-      ? [adjustedHipArea, mainFaceArea, adjustedHipArea, mainFaceArea]
-      : Array(numFaces).fill(totalProjFt2 / numFaces)
-
-    // Normalize so they sum exactly to total
-    const rawSum = faceAreas.reduce((s, a) => s + a, 0)
-    const scale = totalProjFt2 / rawSum
-
-    for (let i = 0; i < faceAreas.length; i++) {
-      const faceProj = faceAreas[i] * scale
-      const ridge = i < this.ridgesCart.length ? this.ridgesCart[i] : null
-      const { theta } = ridge ? this.resolveTheta(ridge) : { theta: this.defThetaRad }
-      const rise = 12 * Math.tan(theta)
-      const sloped = slopedFromProjected(faceProj, rise)
-      results.push({
-        face_id: `face_${String.fromCharCode(65 + i)}`,
-        pitch_rise: round(rise, 1),
-        pitch_label: `${round(rise, 1)}:12`,
-        pitch_angle_deg: round(theta * 180 / Math.PI, 1),
-        slope_factor: round(slopeFactor(rise), 4),
-        projected_area_ft2: round(faceProj, 1),
-        sloped_area_ft2: round(sloped, 1),
-        squares: round(sloped / SQFT_PER_SQUARE, 3),
-      })
-    }
-  }
+  // ── PHASE 1: proportionalFaceSplit() REMOVED ──
+  // Was guessing face areas from bounding-box ratios.
+  // Phase 2 will add AI-assisted face detection.
 
   // ═══════════════════════════════════════════════════════════════
   // FULL CALCULATION RUN
@@ -1692,6 +1312,21 @@ export class RoofMeasurementEngine {
 
     // Advisory notes
     const notes: string[] = []
+
+    // PHASE 1: Clear advisories for incomplete tracing
+    if (this.ridgesCart.length === 0 && this.hipsCart.length === 0 && this.valleysCart.length === 0 && this.rakesCart.length === 0) {
+      notes.push('⚠️ EAVES-ONLY TRACING — Ridges, hips, valleys & rakes were not drawn. Report uses total footprint + default pitch. Accuracy is 100% for area traced. For per-face breakdown, trace internal roof lines.')
+    } else {
+      if (this.ridgesCart.length === 0)
+        notes.push('⚠️ No ridges traced — ridge cap and hip+ridge totals may be underestimated.')
+      if (this.hipsCart.length === 0 && this.eavesCart.length > 6)
+        notes.push('⚠️ No hips traced — hip lengths not included. If this is a hip roof, trace hip lines for full accuracy.')
+    }
+    if (this.valleysCart.length === 0 && this.eavesCart.length > 8)
+      notes.push('Valleys not traced — valley flashing quantity may be underestimated.')
+    if (this.rakesCart.length === 0)
+      notes.push('Rakes not traced — rake drip edge length estimated from eave perimeter only.')
+
     if (domPitch >= 9)
       notes.push('STEEP PITCH >= 9:12 — Steep-slope labour & safety gear required.')
     if (domPitch < 4 && domPitch > 0)
@@ -1723,7 +1358,7 @@ export class RoofMeasurementEngine {
         homeowner:      this.homeowner,
         order_id:       this.orderId,
         generated:      this.timestamp,
-        engine_version: 'RoofMeasurementEngine v6.0 (EagleView-Class + UTM + Shoelace + Industry Pitch Multipliers)',
+        engine_version: 'RoofMeasurementEngine v5.0 Phase 1 (User-Drawn Only + UTM + Shoelace + Industry Pitch Multipliers)',
         powered_by:     'Reuse Canada / RoofReporterAI',
       },
       key_measurements: {
@@ -1789,6 +1424,7 @@ export function traceUiToEnginePayload(
     ridges?: { lat: number; lng: number }[][]
     hips?: { lat: number; lng: number }[][]
     valleys?: { lat: number; lng: number }[][]
+    rakes?: { lat: number; lng: number }[][]   // Phase 1: now supported
     traced_at?: string
   },
   order: {
@@ -1823,6 +1459,12 @@ export function traceUiToEnginePayload(
     pts: line.map(p => ({ lat: p.lat, lng: p.lng, elevation: null }))
   }))
 
+  const rakes: TraceLine[] = (traceJson.rakes || []).map((line, i) => ({
+    id: `rake_${i + 1}`,
+    pitch: null,
+    pts: line.map(p => ({ lat: p.lat, lng: p.lng, elevation: null }))
+  }))
+
   return {
     address:        order.property_address || 'Unknown Address',
     homeowner:      order.homeowner_name || 'Unknown',
@@ -1834,7 +1476,7 @@ export function traceUiToEnginePayload(
     ridges,
     hips,
     valleys,
-    rakes:          [],
+    rakes,
     faces:          [],
   }
 }
