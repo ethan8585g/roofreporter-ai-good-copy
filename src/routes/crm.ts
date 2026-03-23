@@ -700,10 +700,12 @@ crmRoutes.get('/gmail/connect', async (c) => {
   const ownerId = await getOwnerId(c)
   if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
 
-  const clientId = (c.env as any).GMAIL_CLIENT_ID || (c.env as any).GOOGLE_OAUTH_CLIENT_ID
+  // IMPORTANT: Use GOOGLE_OAUTH_CLIENT_ID first — that's the client with redirect URIs configured in Google Console
+  const clientId = (c.env as any).GOOGLE_OAUTH_CLIENT_ID || (c.env as any).GMAIL_CLIENT_ID
   if (!clientId) {
     return c.json({ error: 'Gmail integration is not configured. GMAIL_CLIENT_ID is required. Contact your administrator.' }, 400)
   }
+  console.log(`[Gmail Connect] Using client_id=${clientId.substring(0,20)}..., ownerId=${ownerId}`)
 
   // Verify client secret is available (env or DB) before sending user to Google
   let clientSecret = (c.env as any).GMAIL_CLIENT_SECRET || ''
@@ -755,6 +757,7 @@ crmRoutes.get('/gmail/connect', async (c) => {
   authUrl.searchParams.set('prompt', 'consent')
   authUrl.searchParams.set('state', state)
 
+  console.log(`[Gmail Connect] Generated auth_url with redirect_uri=${redirectUri}, client_id=${clientId.substring(0,20)}...`)
   return c.json({ auth_url: authUrl.toString() })
 })
 
@@ -779,7 +782,8 @@ crmRoutes.get('/gmail/callback', async (c) => {
     return c.html(`<!DOCTYPE html><html><head><title>Gmail Connection</title></head><body><p>Invalid state. Please try again.</p></body></html>`)
   }
 
-  const clientId = (c.env as any).GMAIL_CLIENT_ID || (c.env as any).GOOGLE_OAUTH_CLIENT_ID
+  // IMPORTANT: Use same client ID order as /gmail/connect to ensure redirect_uri matches
+  const clientId = (c.env as any).GOOGLE_OAUTH_CLIENT_ID || (c.env as any).GMAIL_CLIENT_ID
   // Read client_secret from DB if not in env (admin may have stored it via /api/auth/gmail/setup)
   let clientSecret = (c.env as any).GMAIL_CLIENT_SECRET || ''
   if (!clientSecret) {

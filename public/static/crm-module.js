@@ -765,15 +765,28 @@
 
   window._crmConnectGmail = function() {
     closeModal();
+    console.log('[CRM Gmail] Starting Gmail OAuth flow...');
     fetch('/api/crm/gmail/connect', { headers: authHeadersOnly() })
-      .then(function(r) { return r.json(); })
+      .then(function(r) {
+        console.log('[CRM Gmail] Response status:', r.status);
+        return r.json();
+      })
       .then(function(data) {
+        console.log('[CRM Gmail] Response:', JSON.stringify(data));
         if (data.auth_url) {
-          window.open(data.auth_url, 'gmailOAuth', 'width=600,height=700');
+          var popup = window.open(data.auth_url, 'gmailOAuth', 'width=600,height=700');
+          if (!popup || popup.closed) {
+            toast('Popup blocked! Please allow popups for this site.', 'error');
+          }
+        } else if (data.error) {
+          toast(data.error, 'error');
         } else {
-          toast(data.error || 'Gmail not configured', 'error');
+          toast('Gmail not configured', 'error');
         }
-      }).catch(function(e) { toast('Failed to start Gmail connection: ' + (e.message || 'Network error'), 'error'); });
+      }).catch(function(e) {
+        console.error('[CRM Gmail] Error:', e);
+        toast('Failed to start Gmail connection: ' + (e.message || 'Network error'), 'error');
+      });
   };
 
   window._crmDisconnectGmail = function() {

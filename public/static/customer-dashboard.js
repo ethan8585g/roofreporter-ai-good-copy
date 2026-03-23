@@ -132,15 +132,29 @@ function _loadSettingsContent() {
 
 // Gmail connect/disconnect from settings panel
 window._settingsConnectGmail = function() {
+  console.log('[Gmail Connect] Starting Gmail OAuth flow...');
   fetch('/api/crm/gmail/connect', { headers: authHeaders() })
-    .then(function(r) { return r.json(); })
+    .then(function(r) {
+      console.log('[Gmail Connect] Response status:', r.status);
+      return r.json();
+    })
     .then(function(data) {
+      console.log('[Gmail Connect] Response data:', JSON.stringify(data));
       if (data.auth_url) {
-        window.open(data.auth_url, 'gmailOAuth', 'width=600,height=700');
+        console.log('[Gmail Connect] Opening OAuth popup...');
+        var popup = window.open(data.auth_url, 'gmailOAuth', 'width=600,height=700');
+        if (!popup || popup.closed) {
+          alert('Popup was blocked! Please allow popups for this site and try again.');
+        }
+      } else if (data.error) {
+        alert('Gmail Connection Error: ' + data.error + (data.fix ? '\n\n' + data.fix : ''));
       } else {
-        alert(data.error || 'Gmail not configured. Contact support.');
+        alert('Gmail not configured. Contact support.');
       }
-    }).catch(function(e) { alert('Failed to start Gmail connection: ' + (e.message || 'Network error')); });
+    }).catch(function(e) {
+      console.error('[Gmail Connect] Error:', e);
+      alert('Failed to start Gmail connection: ' + (e.message || 'Network error'));
+    });
 };
 
 window._settingsDisconnectGmail = function() {

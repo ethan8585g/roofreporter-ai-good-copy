@@ -605,7 +605,7 @@ authRoutes.post('/gmail/setup', async (c) => {
 authRoutes.get('/gmail', async (c) => {
   // Allow without auth for browser redirect flow (OAuth callback)
   
-  const clientId = (c.env as any).GMAIL_CLIENT_ID
+  const clientId = (c.env as any).GOOGLE_OAUTH_CLIENT_ID || (c.env as any).GMAIL_CLIENT_ID
   if (!clientId) {
     return c.json({
       error: 'GMAIL_CLIENT_ID not configured',
@@ -666,7 +666,7 @@ authRoutes.get('/gmail/callback', async (c) => {
     </body></html>`)
   }
 
-  const clientId = (c.env as any).GMAIL_CLIENT_ID
+  const clientId = (c.env as any).GOOGLE_OAUTH_CLIENT_ID || (c.env as any).GMAIL_CLIENT_ID
   // Read client secret from env or DB
   let clientSecret = (c.env as any).GMAIL_CLIENT_SECRET || ''
   if (!clientSecret) {
