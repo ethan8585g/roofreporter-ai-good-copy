@@ -392,4 +392,25 @@ virtualTryonRoutes.get('/styles', async (c) => {
   })
 })
 
+// ============================================================
+// GET /config-status — Check if Virtual Try-On is configured
+// ============================================================
+
+virtualTryonRoutes.get('/config-status', async (c) => {
+  const hasKey = !!(c.env as any).REPLICATE_API_KEY
+  return c.json({
+    success: true,
+    configured: hasKey,
+    message: hasKey
+      ? 'Virtual Try-On is ready to use.'
+      : 'Virtual Try-On requires REPLICATE_API_KEY. Add it via: npx wrangler pages secret put REPLICATE_API_KEY --project-name roofing-measurement-tool',
+    setup_steps: hasKey ? null : [
+      '1. Sign up at https://replicate.com and get an API token',
+      '2. Run: npx wrangler pages secret put REPLICATE_API_KEY --project-name roofing-measurement-tool',
+      '3. Paste your Replicate API token when prompted (starts with r8_...)',
+      '4. Redeploy the app or wait for the next deployment',
+    ],
+  })
+})
+
 export { virtualTryonRoutes }

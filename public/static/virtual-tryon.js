@@ -44,6 +44,30 @@
     return fetch('/api/virtual-tryon' + path, opts).then(function (r) { return r.json(); });
   }
 
+  // ── Config check — warn if REPLICATE_API_KEY missing ──
+  var _configChecked = false;
+  var _configOk = true;
+  function checkConfig() {
+    if (_configChecked) return;
+    _configChecked = true;
+    api('GET', '/config-status')
+      .then(function(data) {
+        if (!data.configured) {
+          _configOk = false;
+          var banner = document.createElement('div');
+          banner.style.cssText = 'background:linear-gradient(135deg,#FEF3C7,#FFFBEB);border:1px solid #F59E0B;border-radius:12px;padding:16px 20px;margin-bottom:16px;';
+          banner.innerHTML = '<div style="display:flex;align-items:flex-start;gap:12px">' +
+            '<div style="width:36px;height:36px;border-radius:10px;background:#FDE68A;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="fas fa-exclamation-triangle" style="color:#D97706"></i></div>' +
+            '<div><p style="font-size:14px;font-weight:600;color:#92400E;margin:0">Virtual Try-On Not Configured</p>' +
+            '<p style="font-size:12px;color:#A16207;margin:4px 0 0">REPLICATE_API_KEY is required to enable AI roof visualization.</p>' +
+            (data.setup_steps ? '<div style="margin-top:8px;padding:8px 12px;background:rgba(255,255,255,0.7);border-radius:8px;font-size:11px;color:#78350F;line-height:1.6">' + data.setup_steps.join('<br>') + '</div>' : '') +
+            '</div></div>';
+          root.parentElement.insertBefore(banner, root);
+        }
+      }).catch(function() { /* ignore */ });
+  }
+  checkConfig();
+
   // ── Render Router ──
   function render() {
     switch (state.step) {

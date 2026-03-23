@@ -700,9 +700,26 @@ crmRoutes.get('/gmail/connect', async (c) => {
   const ownerId = await getOwnerId(c)
   if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
 
-  const clientId = (c.env as any).GMAIL_CLIENT_ID
+  const clientId = (c.env as any).GMAIL_CLIENT_ID || (c.env as any).GOOGLE_OAUTH_CLIENT_ID
   if (!clientId) {
-    return c.json({ error: 'Gmail integration is not configured. Contact support.' }, 400)
+    return c.json({ error: 'Gmail integration is not configured. GMAIL_CLIENT_ID is required. Contact your administrator.' }, 400)
+  }
+
+  // Verify client secret is available (env or DB) before sending user to Google
+  let clientSecret = (c.env as any).GMAIL_CLIENT_SECRET || ''
+  if (!clientSecret) {
+    try {
+      const csRow = await c.env.DB.prepare(
+        "SELECT setting_value FROM settings WHERE setting_key = 'gmail_client_secret' AND master_company_id = 1"
+      ).first<any>()
+      if (csRow?.setting_value) clientSecret = csRow.setting_value
+    } catch (e) { /* ignore */ }
+  }
+  if (!clientSecret) {
+    return c.json({
+      error: 'Gmail OAuth is partially configured. GMAIL_CLIENT_SECRET is missing.',
+      fix: 'Set GMAIL_CLIENT_SECRET via: npx wrangler pages secret put GMAIL_CLIENT_SECRET --project-name roofing-measurement-tool, or save it via Admin Dashboard → Settings → Email Setup.'
+    }, 400)
   }
 
   const url = new URL(c.req.url)
@@ -710,16 +727,23 @@ crmRoutes.get('/gmail/connect', async (c) => {
 
   const state = `${ownerId}:${crypto.randomUUID().replace(/-/g, '').substring(0, 16)}`
   
-  // Store state in a temp session
+  // Store state in customer_sessions metadata (avoids FK issues with settings table)
   try {
-    await c.env.DB.prepare(
-      "INSERT OR REPLACE INTO settings (master_company_id, setting_key, setting_value) VALUES (?, ?, ?)"
-    ).bind(ownerId, 'gmail_oauth_state', state).run()
-  } catch(e) {
-    // If settings table doesn't have this key, create it
     await c.env.DB.prepare(`
-      CREATE TABLE IF NOT EXISTS customer_gmail_state (id INTEGER PRIMARY KEY, customer_id INTEGER, state TEXT, created_at TEXT DEFAULT (datetime('now')))
+      CREATE TABLE IF NOT EXISTS customer_oauth_state (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        customer_id INTEGER NOT NULL,
+        state_key TEXT NOT NULL,
+        state_value TEXT NOT NULL,
+        created_at TEXT DEFAULT (datetime('now')),
+        UNIQUE(customer_id, state_key)
+      )
     `).run().catch(() => {})
+    await c.env.DB.prepare(
+      "INSERT OR REPLACE INTO customer_oauth_state (customer_id, state_key, state_value) VALUES (?, 'gmail_oauth_state', ?)"
+    ).bind(ownerId, state).run()
+  } catch(e) {
+    console.warn('[Gmail Connect] Failed to store OAuth state:', (e as any).message)
   }
 
   const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth')
@@ -755,8 +779,8 @@ crmRoutes.get('/gmail/callback', async (c) => {
     return c.html(`<!DOCTYPE html><html><head><title>Gmail Connection</title></head><body><p>Invalid state. Please try again.</p></body></html>`)
   }
 
-  const clientId = (c.env as any).GMAIL_CLIENT_ID
-  // BUG FIX: Read client_secret from DB if not in env (admin may have stored it via /api/auth/gmail/setup)
+  const clientId = (c.env as any).GMAIL_CLIENT_ID || (c.env as any).GOOGLE_OAUTH_CLIENT_ID
+  // Read client_secret from DB if not in env (admin may have stored it via /api/auth/gmail/setup)
   let clientSecret = (c.env as any).GMAIL_CLIENT_SECRET || ''
   if (!clientSecret) {
     try {
@@ -771,11 +795,15 @@ crmRoutes.get('/gmail/callback', async (c) => {
   const redirectUri = `${url.protocol}//${url.host}/api/crm/gmail/callback`
 
   if (!clientId || !clientSecret) {
-    return c.html(`<!DOCTYPE html><html><head><title>Gmail Connection</title><script src="https://cdn.tailwindcss.com"></script></head>
+    const missing = !clientId ? 'GMAIL_CLIENT_ID' : 'GMAIL_CLIENT_SECRET'
+    console.error(`[Gmail Callback] Missing credential: ${missing}. clientId=${!!clientId}, clientSecret=${!!clientSecret}`)
+    return c.html(`<!DOCTYPE html><html><head><title>Gmail Connection</title><script src="https://cdn.tailwindcss.com"></script>
+<link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet"></head>
 <body class="bg-gray-50 min-h-screen flex items-center justify-center"><div class="bg-white rounded-2xl shadow-xl p-8 max-w-md text-center">
 <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4"><i class="fas fa-exclamation-triangle text-red-500 text-2xl"></i></div>
 <h2 class="text-xl font-bold text-gray-800 mb-2">Configuration Error</h2>
-<p class="text-gray-600 mb-4">Gmail OAuth credentials are not configured. Ask your admin to set up GMAIL_CLIENT_ID and GMAIL_CLIENT_SECRET.</p>
+<p class="text-gray-600 mb-4">Gmail OAuth is partially configured. <strong>${missing}</strong> is missing.</p>
+<p class="text-sm text-gray-500 mb-4">Ask your admin to set this via:<br><code class="bg-gray-100 px-2 py-1 rounded text-xs">npx wrangler pages secret put ${missing}</code></p>
 <button onclick="window.close()" class="bg-sky-600 text-white px-6 py-2 rounded-lg font-semibold">Close</button>
 </div></body></html>`)
   }

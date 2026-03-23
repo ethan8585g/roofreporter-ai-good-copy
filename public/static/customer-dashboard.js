@@ -32,6 +32,136 @@ var COLORS = {
   purpleBg: '#EDE9FE',
 };
 
+// ============================================================
+// CUSTOMER SETTINGS PANEL — In-page modal for account settings
+// Gmail Integration, Calendar, Profile, Notifications
+// ============================================================
+window._openCustomerSettings = function() {
+  // Remove any existing settings overlay
+  var existing = document.getElementById('custSettingsOverlay');
+  if (existing) existing.remove();
+
+  var overlay = document.createElement('div');
+  overlay.id = 'custSettingsOverlay';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;animation:fadeIn .2s ease';
+  overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
+
+  var panel = document.createElement('div');
+  panel.style.cssText = 'background:white;border-radius:16px;width:90%;max-width:640px;max-height:85vh;overflow-y:auto;box-shadow:0 25px 50px rgba(0,0,0,0.25);position:relative;';
+
+  // Header
+  panel.innerHTML = '<div style="padding:20px 24px;border-bottom:1px solid #E2E8F0;display:flex;align-items:center;justify-content:space-between">' +
+    '<div><h2 style="font-size:18px;font-weight:700;color:#0F172A;margin:0">Settings</h2><p style="font-size:12px;color:#94A3B8;margin:2px 0 0">Account, integrations & preferences</p></div>' +
+    '<button onclick="document.getElementById(\'custSettingsOverlay\').remove()" style="width:32px;height:32px;border-radius:8px;border:1px solid #E2E8F0;background:white;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#64748B;font-size:14px"><i class="fas fa-times"></i></button>' +
+  '</div>' +
+  '<div id="custSettingsBody" style="padding:20px 24px"><div style="text-align:center;padding:40px"><i class="fas fa-spinner fa-spin" style="font-size:24px;color:#94A3B8"></i></div></div>';
+
+  overlay.appendChild(panel);
+  document.body.appendChild(overlay);
+
+  // Load settings content
+  _loadSettingsContent();
+};
+
+function _loadSettingsContent() {
+  var body = document.getElementById('custSettingsBody');
+  if (!body) return;
+
+  // Check Gmail status
+  fetch('/api/crm/gmail/status', { headers: authHeaders() })
+    .then(function(r) { return r.json(); })
+    .then(function(gmailData) {
+      var c = custState.customer || {};
+      var gmailConnected = !!gmailData.connected;
+      var gmailEmail = gmailData.email || '';
+
+      var html = '';
+
+      // Profile Section
+      html += '<div style="margin-bottom:24px">' +
+        '<h3 style="font-size:14px;font-weight:600;color:#0F172A;margin:0 0 12px"><i class="fas fa-user" style="color:#2563EB;margin-right:8px"></i>Account</h3>' +
+        '<div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:12px;padding:16px">' +
+          '<div style="display:flex;gap:16px;flex-wrap:wrap">' +
+            '<div style="flex:1;min-width:200px"><p style="font-size:11px;color:#94A3B8;margin:0 0 2px">Name</p><p style="font-size:13px;font-weight:500;color:#0F172A;margin:0">' + (c.name || 'Not set') + '</p></div>' +
+            '<div style="flex:1;min-width:200px"><p style="font-size:11px;color:#94A3B8;margin:0 0 2px">Email</p><p style="font-size:13px;font-weight:500;color:#0F172A;margin:0">' + (c.email || 'Not set') + '</p></div>' +
+          '</div>' +
+          '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:12px">' +
+            '<div style="flex:1;min-width:200px"><p style="font-size:11px;color:#94A3B8;margin:0 0 2px">Company</p><p style="font-size:13px;font-weight:500;color:#0F172A;margin:0">' + (c.company_name || 'Not set') + '</p></div>' +
+            '<div style="flex:1;min-width:200px"><p style="font-size:11px;color:#94A3B8;margin:0 0 2px">Plan</p><p style="font-size:13px;font-weight:500;color:#0F172A;margin:0">' + (c.plan || 'Free Trial') + '</p></div>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+
+      // Gmail Integration Section
+      html += '<div style="margin-bottom:24px">' +
+        '<h3 style="font-size:14px;font-weight:600;color:#0F172A;margin:0 0 12px"><i class="fab fa-google" style="color:#EA4335;margin-right:8px"></i>Gmail Integration</h3>' +
+        '<div style="background:' + (gmailConnected ? '#F0FDF4' : '#FFFBEB') + ';border:1px solid ' + (gmailConnected ? '#BBF7D0' : '#FDE68A') + ';border-radius:12px;padding:16px">';
+
+      if (gmailConnected) {
+        html += '<div style="display:flex;align-items:center;gap:12px">' +
+          '<div style="width:40px;height:40px;border-radius:10px;background:#DCFCE7;display:flex;align-items:center;justify-content:center"><i class="fas fa-check-circle" style="color:#16A34A;font-size:18px"></i></div>' +
+          '<div style="flex:1"><p style="font-size:13px;font-weight:600;color:#166534;margin:0">Gmail Connected</p><p style="font-size:12px;color:#15803D;margin:2px 0 0">' + gmailEmail + '</p></div>' +
+          '<button onclick="window._settingsDisconnectGmail()" style="padding:6px 12px;border:1px solid #FCA5A5;background:#FEF2F2;color:#DC2626;border-radius:8px;font-size:12px;cursor:pointer">Disconnect</button>' +
+        '</div>' +
+        '<p style="font-size:11px;color:#166534;margin:8px 0 0;padding-top:8px;border-top:1px solid #BBF7D0"><i class="fas fa-info-circle" style="margin-right:4px"></i>Send proposals & receive calendar sync via this connected account.</p>';
+      } else {
+        html += '<div style="display:flex;align-items:center;gap:12px">' +
+          '<div style="width:40px;height:40px;border-radius:10px;background:#FEF3C7;display:flex;align-items:center;justify-content:center"><i class="fas fa-exclamation-triangle" style="color:#D97706;font-size:18px"></i></div>' +
+          '<div style="flex:1"><p style="font-size:13px;font-weight:600;color:#92400E;margin:0">Gmail Not Connected</p><p style="font-size:12px;color:#A16207;margin:2px 0 0">Connect Gmail to send proposals and sync your calendar.</p></div>' +
+        '</div>' +
+        '<button onclick="window._settingsConnectGmail()" style="margin-top:12px;width:100%;padding:10px;background:#2563EB;color:white;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px"><i class="fab fa-google"></i>Connect Gmail Account</button>';
+      }
+      html += '</div></div>';
+
+      // Quick Links
+      html += '<div style="margin-bottom:16px">' +
+        '<h3 style="font-size:14px;font-weight:600;color:#0F172A;margin:0 0 12px"><i class="fas fa-link" style="color:#6366F1;margin-right:8px"></i>Quick Links</h3>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
+          '<a href="/customer/calendar" style="display:flex;align-items:center;gap:8px;padding:12px;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:10px;text-decoration:none;color:#475569;font-size:13px;transition:all .15s" onmouseover="this.style.background=\'#F1F5F9\';this.style.borderColor=\'#CBD5E1\'" onmouseout="this.style.background=\'#F8FAFC\';this.style.borderColor=\'#E2E8F0\'"><i class="fas fa-calendar" style="color:#0891B2"></i>Calendar</a>' +
+          '<a href="/customer/team" style="display:flex;align-items:center;gap:8px;padding:12px;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:10px;text-decoration:none;color:#475569;font-size:13px;transition:all .15s" onmouseover="this.style.background=\'#F1F5F9\';this.style.borderColor=\'#CBD5E1\'" onmouseout="this.style.background=\'#F8FAFC\';this.style.borderColor=\'#E2E8F0\'"><i class="fas fa-user-friends" style="color:#7C3AED"></i>Team</a>' +
+          '<a href="/pricing" style="display:flex;align-items:center;gap:8px;padding:12px;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:10px;text-decoration:none;color:#475569;font-size:13px;transition:all .15s" onmouseover="this.style.background=\'#F1F5F9\';this.style.borderColor=\'#CBD5E1\'" onmouseout="this.style.background=\'#F8FAFC\';this.style.borderColor=\'#E2E8F0\'"><i class="fas fa-coins" style="color:#D97706"></i>Buy Credits</a>' +
+          '<a href="#" onclick="custLogout();return false;" style="display:flex;align-items:center;gap:8px;padding:12px;background:#FEF2F2;border:1px solid #FECACA;border-radius:10px;text-decoration:none;color:#DC2626;font-size:13px;transition:all .15s" onmouseover="this.style.background=\'#FEE2E2\'" onmouseout="this.style.background=\'#FEF2F2\'"><i class="fas fa-sign-out-alt"></i>Sign Out</a>' +
+        '</div>' +
+      '</div>';
+
+      body.innerHTML = html;
+    }).catch(function() {
+      body.innerHTML = '<div style="text-align:center;padding:40px"><p style="color:#EF4444"><i class="fas fa-exclamation-triangle" style="margin-right:8px"></i>Failed to load settings.</p><button onclick="window._openCustomerSettings()" style="margin-top:12px;padding:8px 16px;background:#2563EB;color:white;border:none;border-radius:8px;cursor:pointer">Retry</button></div>';
+    });
+}
+
+// Gmail connect/disconnect from settings panel
+window._settingsConnectGmail = function() {
+  fetch('/api/crm/gmail/connect', { headers: authHeaders() })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.auth_url) {
+        window.open(data.auth_url, 'gmailOAuth', 'width=600,height=700');
+      } else {
+        alert(data.error || 'Gmail not configured. Contact support.');
+      }
+    }).catch(function(e) { alert('Failed to start Gmail connection: ' + (e.message || 'Network error')); });
+};
+
+window._settingsDisconnectGmail = function() {
+  if (!confirm('Disconnect Gmail? You won\'t be able to email proposals until you reconnect.')) return;
+  fetch('/api/crm/gmail/disconnect', { method: 'POST', headers: authHeaders() })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.success) { _loadSettingsContent(); }
+    }).catch(function(e) { alert('Failed: ' + (e.message || 'Network error')); });
+};
+
+// Listen for Gmail OAuth popup completion (for settings panel)
+window.addEventListener('message', function(e) {
+  if (e.data && e.data.type === 'gmail_connected') {
+    // Reload settings panel if open
+    if (document.getElementById('custSettingsOverlay')) {
+      _loadSettingsContent();
+    }
+  }
+});
+
 document.addEventListener('DOMContentLoaded', async function() {
   var params = new URLSearchParams(window.location.search);
   if (params.get('payment') === 'success') {
@@ -44,6 +174,11 @@ document.addEventListener('DOMContentLoaded', async function() {
   renderDashboard();
   startEnhancementPolling();
   loadAutoEmailPref();
+  // Auto-open settings panel if redirected from Calendar or other pages with ?open=settings
+  if (params.get('open') === 'settings') {
+    window.history.replaceState({}, '', '/customer/dashboard');
+    setTimeout(function() { if (window._openCustomerSettings) window._openCustomerSettings(); }, 300);
+  }
   // Auto-trigger enhancement for completed reports
   setTimeout(function() {
     (custState.orders || []).forEach(function(o) {
@@ -347,7 +482,7 @@ function renderSidebar(c, s) {
   html += '<div style="margin-top:auto;padding:12px 16px;border-top:1px solid #E2E8F0">' +
     '<a href="/pricing" class="rfr-nav-item" style="border-left:none;border-radius:8px;margin-bottom:2px"><i class="fas fa-arrow-circle-up" style="color:#2563EB"></i><span class="rfr-nav-label" style="color:#2563EB;font-weight:600">Upgrade</span></a>' +
     '<a href="#" class="rfr-nav-item" style="border-left:none;border-radius:8px;margin-bottom:2px"><i class="fas fa-question-circle"></i><span class="rfr-nav-label">Help & Support</span></a>' +
-    '<a href="/customer/login" onclick="localStorage.removeItem(\'rc_customer\');localStorage.removeItem(\'rc_customer_token\')" class="rfr-nav-item" style="border-left:none;border-radius:8px"><i class="fas fa-cog"></i><span class="rfr-nav-label">Settings</span></a>' +
+    '<a href="#" onclick="window._openCustomerSettings();return false;" class="rfr-nav-item" style="border-left:none;border-radius:8px"><i class="fas fa-cog"></i><span class="rfr-nav-label">Settings</span></a>' +
   '</div>';
 
   html += '</aside>';

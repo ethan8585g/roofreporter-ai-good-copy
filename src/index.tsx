@@ -4280,7 +4280,7 @@ function getCalendarPageHTML() {
               '<h3 class="font-bold text-amber-800">Google Calendar Not Connected</h3>' +
               '<p class="text-amber-700 text-sm">Connect Gmail first (Settings → Gmail Integration). Calendar access is included automatically.</p>' +
             '</div>' +
-            '<a href="/customer/dashboard" class="px-4 py-2 bg-amber-500 text-white rounded-lg text-sm font-medium hover:bg-amber-600">Go to Settings</a>' +
+            '<a href="/customer/dashboard?open=settings" class="px-4 py-2 bg-amber-500 text-white rounded-lg text-sm font-medium hover:bg-amber-600">Go to Settings</a>' +
           '</div>' +
         '</div>';
       }
