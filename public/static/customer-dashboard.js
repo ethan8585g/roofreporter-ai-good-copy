@@ -287,8 +287,6 @@ function renderSidebar(c, s) {
     { section: 'Roof Reports', items: [
       { href: '/customer/order', icon: 'fa-plus-circle', label: 'New Report', badge: freeTrialRemaining > 0 ? freeTrialRemaining + ' free' : (paidCredits > 0 ? paidCredits : ''), badgeClass: freeTrialRemaining > 0 ? 'rfr-badge-green' : 'rfr-badge-blue' },
       { href: '/customer/reports', icon: 'fa-file-alt', label: 'Report History', badge: completedReports > 0 ? completedReports : '', badgeClass: 'rfr-badge-gray' },
-      { href: '/customer/virtual-tryon', icon: 'fa-magic', label: 'Virtual Try-On' },
-      { href: '/customer/home-designer', icon: 'fa-home', label: 'Home Designer' },
     ]},
     { section: 'CRM', items: [
       { href: '/customer/customers', icon: 'fa-address-book', label: 'Contacts', badge: s.customers > 0 ? s.customers : '', badgeClass: 'rfr-badge-gray' },
@@ -641,7 +639,9 @@ function renderReportsTable() {
         '<td>' + (o.roof_area_sqft ? Math.round(o.roof_area_sqft).toLocaleString() + ' sq ft' : '—') + '</td>' +
         '<td style="white-space:nowrap">' +
           (reportReady ? '<a href="/api/reports/' + o.id + '/html" target="_blank" style="color:#2563EB;text-decoration:none;font-size:12px;font-weight:600;margin-right:12px"><i class="fas fa-eye" style="margin-right:3px"></i>View</a>' : '') +
-          (reportReady ? '<a href="/visualizer/' + o.id + '" target="_blank" style="color:#7C3AED;text-decoration:none;font-size:12px;font-weight:600"><i class="fas fa-cube" style="margin-right:3px"></i>3D</a>' : '') +
+          (reportReady ? '<a href="/visualizer/' + o.id + '" target="_blank" style="color:#7C3AED;text-decoration:none;font-size:12px;font-weight:600;margin-right:12px"><i class="fas fa-cube" style="margin-right:3px"></i>3D</a>' : '') +
+          (reportReady ? '<a href="/customer/virtual-tryon" target="_blank" style="color:#059669;text-decoration:none;font-size:12px;font-weight:600;margin-right:12px"><i class="fas fa-magic" style="margin-right:3px"></i>Try-On</a>' : '') +
+          (reportReady ? '<a href="/customer/home-designer" target="_blank" style="color:#D97706;text-decoration:none;font-size:12px;font-weight:600"><i class="fas fa-home" style="margin-right:3px"></i>Design</a>' : '') +
           (isProcessing ? '<span style="font-size:12px;color:#2563EB" class="rfr-pulse">Processing...</span>' : '') +
           (isEnhancing ? '<span style="font-size:12px;color:#7C3AED" class="rfr-pulse">Polishing...</span>' : '') +
         '</td>' +
