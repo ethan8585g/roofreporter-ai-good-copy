@@ -27,7 +27,6 @@ import { workersAiRoutes } from './routes/workers-ai'
 import { reportImagesRoutes } from './routes/report-images'
 import { callCenterRoutes } from './routes/call-center'
 import { metaConnectRoutes } from './routes/meta-connect'
-import { heygenRoutes } from './routes/heygen'
 import { aiAdminChatRoutes } from './routes/ai-admin-chat'
 import { geminiRoutes } from './routes/gemini'
 import { pipelineRoutes } from './routes/pipeline'
@@ -210,7 +209,6 @@ app.route('/api/report-images', reportImagesRoutes)
 app.route('/api/call-center', callCenterRoutes)
 app.route('/api/customer-calls', customerCallsRoutes)
 app.route('/api/meta', metaConnectRoutes)
-app.route('/api/heygen', heygenRoutes)
 app.route('/api/home-designer', homeDesignerRoutes)
 app.route('/api/sam3', sam3Routes)
 app.route('/api/calendar', calendarRoutes)
@@ -2143,9 +2141,6 @@ function getSuperAdminDashboardHTML() {
         <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('meta-connect', this)">
           <i class="fab fa-meta w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Meta Connect</span>
         </div>
-        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('heygen', this)">
-          <i class="fas fa-video w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">HeyGen Videos</span>
-        </div>
 
         <p class="sa-nav-group-label mt-3">Analytics</p>
         <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('analytics', this)">
@@ -2319,7 +2314,6 @@ function getSuperAdminDashboardHTML() {
     };
     (function(d,s,id){ var js,fjs=d.getElementsByTagName(s)[0]; if(d.getElementById(id)) return; js=d.createElement(s); js.id=id; js.src='https://connect.facebook.net/en_US/sdk.js'; fjs.parentNode.insertBefore(js,fjs); }(document,'script','facebook-jssdk'));
   </script>
-  <script src="/static/heygen.js?v=${BUILD_VERSION}"></script>
   <script src="/static/email-outreach.js?v=${BUILD_VERSION}"></script>
   <script src="/static/platform-admin.js?v=${BUILD_VERSION}"></script>
 </body>

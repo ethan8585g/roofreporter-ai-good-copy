@@ -822,13 +822,24 @@ crmRoutes.get('/gmail/callback', async (c) => {
   })
 
   const tokenData: any = await tokenResp.json()
+  console.log(`[Gmail Callback] Token exchange status=${tokenResp.status}, has_refresh=${!!tokenData.refresh_token}, has_access=${!!tokenData.access_token}, error=${tokenData.error || 'none'}`)
+
   if (!tokenResp.ok || !tokenData.refresh_token) {
-    return c.html(`<!DOCTYPE html><html><head><title>Gmail Connection</title><script src="https://cdn.tailwindcss.com"></script></head>
+    const errDetail = tokenData.error_description || tokenData.error || 'Could not obtain refresh token'
+    const isRedirectMismatch = errDetail.includes('redirect_uri_mismatch')
+    const hint = isRedirectMismatch
+      ? `<p class="text-sm text-amber-700 bg-amber-50 p-3 rounded-lg mt-3"><strong>Fix:</strong> Add this exact redirect URI to your Google Cloud Console → APIs & Services → Credentials → OAuth 2.0 Client IDs → Authorized redirect URIs:<br><code class="text-xs bg-white px-2 py-1 rounded border mt-1 block">${redirectUri}</code></p>`
+      : (!tokenData.refresh_token && tokenResp.ok)
+        ? `<p class="text-sm text-amber-700 bg-amber-50 p-3 rounded-lg mt-3"><strong>Note:</strong> No refresh token was returned. This can happen if you've previously authorized this app. Go to <a href="https://myaccount.google.com/connections" target="_blank" class="underline">Google Account → Third-party connections</a>, revoke access to RoofReporterAI, and try again.</p>`
+        : ''
+    return c.html(`<!DOCTYPE html><html><head><title>Gmail Connection</title><script src="https://cdn.tailwindcss.com"></script>
+<link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet"></head>
 <body class="bg-gray-50 min-h-screen flex items-center justify-center"><div class="bg-white rounded-2xl shadow-xl p-8 max-w-md text-center">
 <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4"><i class="fas fa-exclamation-triangle text-red-500 text-2xl"></i></div>
 <h2 class="text-xl font-bold text-gray-800 mb-2">Token Exchange Failed</h2>
-<p class="text-gray-600 mb-4">${tokenData.error_description || 'Could not obtain refresh token'}</p>
-<button onclick="window.close()" class="bg-sky-600 text-white px-6 py-2 rounded-lg font-semibold">Close</button>
+<p class="text-gray-600 mb-2">${errDetail}</p>
+${hint}
+<button onclick="window.close()" class="mt-4 bg-sky-600 text-white px-6 py-2 rounded-lg font-semibold">Close</button>
 </div></body></html>`)
   }
 
@@ -883,6 +894,66 @@ crmRoutes.post('/gmail/disconnect', async (c) => {
   ).bind(ownerId).run()
 
   return c.json({ success: true })
+})
+
+// Gmail OAuth Diagnostic — helps troubleshoot connection issues
+crmRoutes.get('/gmail/diagnostic', async (c) => {
+  const ownerId = await getOwnerId(c)
+  if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
+
+  const clientId = (c.env as any).GMAIL_CLIENT_ID || (c.env as any).GOOGLE_OAUTH_CLIENT_ID || ''
+  let clientSecretStatus = 'NOT SET'
+  if ((c.env as any).GMAIL_CLIENT_SECRET) {
+    clientSecretStatus = 'set_in_env'
+  } else {
+    try {
+      const csRow = await c.env.DB.prepare(
+        "SELECT setting_value FROM settings WHERE setting_key = 'gmail_client_secret' AND master_company_id = 1"
+      ).first<any>()
+      if (csRow?.setting_value) clientSecretStatus = 'set_in_db'
+    } catch (e) { /* ignore */ }
+  }
+
+  const url = new URL(c.req.url)
+  const redirectUri = `${url.protocol}//${url.host}/api/crm/gmail/callback`
+
+  const customer = await c.env.DB.prepare(
+    'SELECT gmail_connected_email, gmail_connected_at FROM customers WHERE id = ?'
+  ).bind(ownerId).first<any>()
+
+  return c.json({
+    success: true,
+    diagnostic: {
+      customer_id: ownerId,
+      gmail_client_id: clientId ? clientId.substring(0, 20) + '...' : 'NOT SET',
+      gmail_client_secret: clientSecretStatus,
+      redirect_uri: redirectUri,
+      currently_connected: !!customer?.gmail_connected_email,
+      connected_email: customer?.gmail_connected_email || null,
+      required_google_console_setup: {
+        authorized_redirect_uris: [
+          redirectUri,
+          `${url.protocol}//${url.host}/api/auth/gmail/callback`,
+        ],
+        authorized_javascript_origins: [
+          `${url.protocol}//${url.host}`,
+        ],
+        apis_to_enable: [
+          'Gmail API',
+          'Google Calendar API',
+        ],
+        oauth_consent_screen: {
+          user_type: 'External (add test users) OR publish for all users',
+          scopes: [
+            'https://www.googleapis.com/auth/gmail.send',
+            'https://www.googleapis.com/auth/userinfo.email',
+            'https://www.googleapis.com/auth/calendar',
+            'https://www.googleapis.com/auth/calendar.events',
+          ]
+        }
+      }
+    }
+  })
 })
 
 // ============================================================

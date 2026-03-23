@@ -166,14 +166,6 @@ async function loadView(view) {
           console.warn('Secretary revenue load error:', e);
         }
         break;
-      case 'heygen':
-        // Handled by heygen.js module
-        if (typeof window.loadHeyGen === 'function') {
-          SA.loading = false;
-          window.loadHeyGen();
-          return;
-        }
-        break;
       case 'ai-chat':
         // Handled by ai-admin-chat.js — renderAIChat() is a global function
         // No data to load, just render the chat UI
@@ -362,7 +354,6 @@ function renderContent() {
     case 'secretary-manager': root.innerHTML = renderSecretaryManagerView(); break;
     case 'secretary-monitor': root.innerHTML = renderSecretaryMonitorView(); break;
     case 'secretary-revenue': root.innerHTML = renderSecretaryRevenueView(); break;
-    case 'heygen': break; // Handled by heygen.js
     case 'ai-chat': root.innerHTML = (typeof renderAIChat === 'function') ? renderAIChat() : '<div class="p-8 text-gray-500">AI Chat module not loaded.</div>'; break;
     case 'contact-forms': root.innerHTML = renderContactFormsView(); loadContactForms(); break;
     case 'seo-manager': root.innerHTML = renderSEOManagerView(); break;
