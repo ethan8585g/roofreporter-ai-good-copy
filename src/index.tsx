@@ -28,6 +28,7 @@ import { reportImagesRoutes } from './routes/report-images'
 import { callCenterRoutes } from './routes/call-center'
 import { metaConnectRoutes } from './routes/meta-connect'
 import { heygenRoutes } from './routes/heygen'
+import { visualizerApiRoutes } from './routes/visualizer-api'
 import { aiAdminChatRoutes } from './routes/ai-admin-chat'
 import { geminiRoutes } from './routes/gemini'
 import { pipelineRoutes } from './routes/pipeline'
@@ -216,6 +217,7 @@ app.route('/api/sam3', sam3Routes)
 app.route('/api/calendar', calendarRoutes)
 app.route('/api/sales', salesRoutes)
 app.route('/api/admin/platform', platformAdmin)
+app.route('/api/visualizer', visualizerApiRoutes)
 
 // Health check
 app.get('/api/health', (c) => {
@@ -647,6 +649,22 @@ app.get('/customer/join-team', (c) => c.html(getJoinTeamPageHTML()))
 // ============================================================
 app.get('/visualizer/:orderId', async (c) => {
   const orderId = c.req.param('orderId')
+
+  // Check if photos exist to determine if we should show the upload wall
+  let hasPhotos = false;
+  try {
+    // Attempt to check for photos. Note: if table doesn't exist yet, it'll error, but we'll catch it
+    const photoCount = await c.env.DB.prepare(
+      'SELECT COUNT(*) as count FROM visualizer_photos WHERE order_id = ?'
+    ).bind(orderId).first<any>()
+    if (photoCount && photoCount.count >= 4) {
+      hasPhotos = true;
+    }
+  } catch (e) {
+    // If the table doesn't exist, we probably haven't run migrations. We'll proceed to the visualizer for now
+    console.error("Error checking visualizer_photos:", e)
+  }
+
   let address = 'Customer Property'
   let lat = '', lng = ''
   try {
@@ -660,6 +678,189 @@ app.get('/visualizer/:orderId', async (c) => {
     }
   } catch {}
   const googleKey = (c.env as any).GOOGLE_MAPS_API_KEY || ''
+
+  // If missing photos and not explicitly overriding via ?ready=1 query string, show wall
+  if (!hasPhotos && c.req.query('ready') !== '1') {
+    return c.html(`<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>3D Roof Visualizer Setup — ${address}</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+<style>
+  .drop-zone { border: 2px dashed #3b82f6; background: rgba(59, 130, 246, 0.05); transition: all 0.2s; }
+  .drop-zone.dragover { background: rgba(59, 130, 246, 0.15); border-color: #2563eb; }
+  .photo-preview { aspect-ratio: 4/3; object-fit: cover; width: 100%; border-radius: 0.5rem; }
+  .loader-spinner { animation: spin 1s linear infinite; }
+  @keyframes spin { 100% { transform: rotate(360deg); } }
+</style>
+</head>
+<body class="bg-slate-900 text-white min-h-screen flex flex-col">
+
+<header class="bg-gradient-to-r from-slate-900 to-slate-800 border-b border-slate-700 px-6 py-4 flex items-center justify-between">
+  <div>
+    <h1 class="text-lg font-bold text-white"><i class="fas fa-cube mr-2 text-blue-400"></i>3D Visualizer Setup</h1>
+    <p class="text-xs text-gray-400">${address}</p>
+  </div>
+  <a href="/customer/reports" class="text-sm font-medium text-gray-400 hover:text-white transition-colors">
+    <i class="fas fa-times mr-1"></i>Cancel
+  </a>
+</header>
+
+<main class="flex-1 flex flex-col items-center justify-center p-6 max-w-4xl mx-auto w-full">
+  <div class="bg-slate-800 rounded-2xl shadow-xl border border-slate-700 p-8 w-full">
+
+    <div class="text-center mb-8">
+      <div class="w-16 h-16 bg-blue-900/50 rounded-full flex items-center justify-center mx-auto mb-4 border border-blue-500/30">
+        <i class="fas fa-camera text-2xl text-blue-400"></i>
+      </div>
+      <h2 class="text-2xl font-bold mb-2">Upload Property Photos</h2>
+      <p class="text-gray-400 max-w-lg mx-auto">
+        To unlock the 3D Visualizer, please upload 4-6 high-quality exterior photos of the house.
+        <br><span class="text-amber-400 text-sm font-medium">Take photos from street view showing each corner.</span>
+      </p>
+    </div>
+
+    <div id="upload-area" class="drop-zone rounded-xl p-8 text-center cursor-pointer mb-6" onclick="document.getElementById('file-input').click()">
+      <i class="fas fa-cloud-upload-alt text-4xl text-blue-500 mb-3"></i>
+      <p class="text-lg font-medium text-white mb-1">Click to browse or drag & drop</p>
+      <p class="text-sm text-gray-400">JPG, PNG, or WEBP (max 15MB each)</p>
+      <input type="file" id="file-input" class="hidden" multiple accept="image/jpeg, image/png, image/webp" onchange="handleFiles(this.files)">
+    </div>
+
+    <!-- Preview Grid -->
+    <div id="preview-grid" class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8 hidden">
+      <!-- Generated via JS -->
+    </div>
+
+    <!-- Loading State -->
+    <div id="loading-state" class="hidden text-center py-6">
+      <i class="fas fa-spinner loader-spinner text-3xl text-blue-500 mb-3"></i>
+      <p class="text-gray-300">Uploading and processing photos...</p>
+    </div>
+
+    <!-- Action Bar -->
+    <div class="flex justify-between items-center pt-6 border-t border-slate-700">
+      <p id="count-status" class="text-sm text-gray-400"><span id="photo-count">0</span> / 4 minimum photos</p>
+      <button id="btn-continue" onclick="submitPhotos()" class="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg font-bold text-white transition-all flex items-center gap-2" disabled>
+        Launch Visualizer <i class="fas fa-arrow-right"></i>
+      </button>
+    </div>
+
+  </div>
+</main>
+
+<script>
+  const orderId = '${orderId}';
+  let selectedFiles = [];
+
+  // Drag and drop setup
+  const dropZone = document.getElementById('upload-area');
+  ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+    dropZone.addEventListener(eventName, preventDefaults, false);
+  });
+  function preventDefaults(e) { e.preventDefault(); e.stopPropagation(); }
+  ['dragenter', 'dragover'].forEach(eventName => {
+    dropZone.addEventListener(eventName, () => dropZone.classList.add('dragover'), false);
+  });
+  ['dragleave', 'drop'].forEach(eventName => {
+    dropZone.addEventListener(eventName, () => dropZone.classList.remove('dragover'), false);
+  });
+  dropZone.addEventListener('drop', (e) => handleFiles(e.dataTransfer.files), false);
+
+  function handleFiles(files) {
+    if (!files || files.length === 0) return;
+    const newFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
+    selectedFiles = [...selectedFiles, ...newFiles].slice(0, 8); // Max 8 photos
+    renderPreviews();
+  }
+
+  function removeFile(index) {
+    selectedFiles.splice(index, 1);
+    renderPreviews();
+  }
+
+  function renderPreviews() {
+    const grid = document.getElementById('preview-grid');
+    const countText = document.getElementById('photo-count');
+    const btn = document.getElementById('btn-continue');
+
+    countText.textContent = selectedFiles.length;
+    btn.disabled = selectedFiles.length < 4; // Require at least 4
+
+    if (selectedFiles.length === 0) {
+      grid.classList.add('hidden');
+      return;
+    }
+
+    grid.classList.remove('hidden');
+    grid.innerHTML = '';
+
+    selectedFiles.forEach((file, index) => {
+      const angleLabels = ['Front Left', 'Front Right', 'Back Left', 'Back Right', 'Extra 1', 'Extra 2', 'Extra 3', 'Extra 4'];
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const div = document.createElement('div');
+        div.className = 'relative group rounded-xl overflow-hidden bg-slate-800 border border-slate-700';
+        div.innerHTML = \`
+          <img src="\${e.target.result}" class="photo-preview opacity-90 group-hover:opacity-100 transition-opacity">
+          <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
+          <div class="absolute bottom-3 left-3 right-3 flex justify-between items-center">
+            <span class="text-xs font-bold text-white bg-black/50 px-2 py-1 rounded">\${angleLabels[index]}</span>
+          </div>
+          <button onclick="removeFile(\${index})" class="absolute top-2 right-2 w-8 h-8 bg-red-600 hover:bg-red-700 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center shadow-lg">
+            <i class="fas fa-times"></i>
+          </button>
+        \`;
+        grid.appendChild(div);
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function submitPhotos() {
+    if (selectedFiles.length < 4) return;
+
+    document.getElementById('btn-continue').disabled = true;
+    document.getElementById('upload-area').classList.add('hidden');
+    document.getElementById('preview-grid').classList.add('opacity-50', 'pointer-events-none');
+    document.getElementById('loading-state').classList.remove('hidden');
+
+    try {
+      // Convert files to base64
+      const photos = await Promise.all(selectedFiles.map(file => {
+        return new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onload = (e) => resolve({ data: e.target.result, angle: 'corner' });
+          reader.readAsDataURL(file);
+        });
+      }));
+
+      const res = await fetch('/api/visualizer/' + orderId + '/photos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ photos })
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Upload failed');
+
+      // Redirect to actual visualizer with a query param indicating readiness
+      window.location.href = '/visualizer/' + orderId + '?ready=1';
+
+    } catch (err) {
+      alert('Error uploading photos: ' + err.message);
+      document.getElementById('btn-continue').disabled = false;
+      document.getElementById('upload-area').classList.remove('hidden');
+      document.getElementById('preview-grid').classList.remove('opacity-50', 'pointer-events-none');
+      document.getElementById('loading-state').classList.add('hidden');
+    }
+  }
+</script>
+</body>
+</html>`)
+  }
 
   return c.html(`<!DOCTYPE html>
 <html lang="en">
@@ -738,6 +939,26 @@ app.get('/visualizer/:orderId', async (c) => {
             <i class="fas fa-shield-alt mr-1 text-blue-400"></i>Sheet Metal
           </h3>
           <div class="swatch-grid" id="metal-swatches"></div>
+        </div>
+
+        <div class="border-t border-slate-700"></div>
+
+        <!-- Siding Section -->
+        <div>
+          <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
+            <i class="fas fa-home mr-1 text-emerald-400"></i>Siding
+          </h3>
+          <div class="swatch-grid" id="siding-swatches"></div>
+        </div>
+
+        <div class="border-t border-slate-700"></div>
+
+        <!-- Gutters Section -->
+        <div>
+          <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
+            <i class="fas fa-water mr-1 text-cyan-400"></i>Gutters
+          </h3>
+          <div class="swatch-grid" id="gutter-swatches"></div>
         </div>
 
         <div class="border-t border-slate-700"></div>

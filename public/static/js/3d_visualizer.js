@@ -34,18 +34,53 @@
     { name: 'Charcoal Metal',   hex: '#2F3640', type: 'metal', metalness: 0.70, roughness: 0.30 },
   ];
 
+  const SIDING_COLORS = [
+    { name: 'White',          hex: '#F5F5F5', type: 'siding', metalness: 0.0, roughness: 0.9 },
+    { name: 'Almond',         hex: '#EADFC9', type: 'siding', metalness: 0.0, roughness: 0.9 },
+    { name: 'Pewter',         hex: '#A9A9A9', type: 'siding', metalness: 0.0, roughness: 0.9 },
+    { name: 'Clay',           hex: '#B5A695', type: 'siding', metalness: 0.0, roughness: 0.9 },
+    { name: 'Slate Blue',     hex: '#5A7D9A', type: 'siding', metalness: 0.0, roughness: 0.9 },
+    { name: 'Sage Green',     hex: '#8A9A5B', type: 'siding', metalness: 0.0, roughness: 0.9 },
+    { name: 'Barn Red',       hex: '#8B0000', type: 'siding', metalness: 0.0, roughness: 0.9 },
+    { name: 'Charcoal',       hex: '#36454F', type: 'siding', metalness: 0.0, roughness: 0.9 },
+  ];
+
+  const GUTTER_COLORS = [
+    { name: 'White',          hex: '#FFFFFF', type: 'gutter', metalness: 0.5, roughness: 0.5 },
+    { name: 'Black',          hex: '#111111', type: 'gutter', metalness: 0.5, roughness: 0.5 },
+    { name: 'Bronze',         hex: '#4A3B32', type: 'gutter', metalness: 0.6, roughness: 0.4 },
+    { name: 'Almond',         hex: '#EADFC9', type: 'gutter', metalness: 0.3, roughness: 0.7 },
+  ];
+
   // ── State ──
   let scene, camera, renderer, controls, animationId;
   let roofMeshes = [];
+  let sidingMeshes = [];
+  let gutterMeshes = [];
   let autoRotate = true;
   let currentMode = '3d'; // '3d' or '2d'
   let currentColor = SHINGLE_COLORS[0];
+  let currentSiding = SIDING_COLORS[0];
+  let currentGutter = GUTTER_COLORS[0];
   let reportData = null;
+  let userPhotos = [];
+  let currentPhotoIndex = 0;
 
   // ── Initialize ──
-  window.initVisualizer = function(data) {
+  window.initVisualizer = async function(data) {
     reportData = data;
     buildSwatchPanel();
+
+    try {
+      if (reportData.order_id) {
+        const res = await fetch('/api/visualizer/' + reportData.order_id + '/photos');
+        const json = await res.json();
+        if (json.success && json.photos) {
+           userPhotos = json.photos.map(p => p.photo_url);
+        }
+      }
+    } catch(e) { console.error("Failed to load user photos", e); }
+
     if (currentMode === '3d') {
       init3DScene();
     } else {
@@ -188,26 +223,30 @@
 
   function buildHouse(THREE) {
     roofMeshes = [];
+    sidingMeshes = [];
+    gutterMeshes = [];
 
     // ── Main body ──
     const bodyW = 8, bodyH = 4, bodyD = 10;
     const bodyGeo = new THREE.BoxGeometry(bodyW, bodyH, bodyD);
-    const bodyMat = new THREE.MeshStandardMaterial({ color: 0xf5f0e8, roughness: 0.8 });
+    const bodyMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(currentSiding.hex), roughness: currentSiding.roughness });
     const body = new THREE.Mesh(bodyGeo, bodyMat);
     body.position.set(0, bodyH / 2, 0);
     body.castShadow = true;
     body.receiveShadow = true;
     scene.add(body);
+    sidingMeshes.push(body);
 
     // ── Garage extension ──
     const garW = 5, garH = 3.5, garD = 6;
     const garGeo = new THREE.BoxGeometry(garW, garH, garD);
-    const garMat = new THREE.MeshStandardMaterial({ color: 0xede8dd, roughness: 0.8 });
+    const garMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(currentSiding.hex), roughness: currentSiding.roughness });
     const garage = new THREE.Mesh(garGeo, garMat);
     garage.position.set(bodyW / 2 + garW / 2 - 0.5, garH / 2, -2);
     garage.castShadow = true;
     garage.receiveShadow = true;
     scene.add(garage);
+    sidingMeshes.push(garage);
 
     // ── Garage door ──
     const gdGeo = new THREE.PlaneGeometry(3.5, 2.8);
@@ -280,6 +319,19 @@
     found.position.set(0, 0.2, 0);
     scene.add(found);
 
+    // ── Gutters ──
+    const gutterMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(currentGutter.hex), roughness: currentGutter.roughness, metalness: currentGutter.metalness });
+    const gutterGeoMain = new THREE.BoxGeometry(bodyW + 0.4, 0.15, 0.15);
+    const gutterFront = new THREE.Mesh(gutterGeoMain, gutterMat);
+    gutterFront.position.set(0, bodyH, bodyD / 2 + 0.2);
+    scene.add(gutterFront);
+    gutterMeshes.push(gutterFront);
+
+    const gutterBack = new THREE.Mesh(gutterGeoMain, gutterMat);
+    gutterBack.position.set(0, bodyH, -bodyD / 2 - 0.2);
+    scene.add(gutterBack);
+    gutterMeshes.push(gutterBack);
+
     // ── Simple trees ──
     addTree(THREE, -8, 0, -4);
     addTree(THREE, -9, 0, 3);
@@ -304,32 +356,61 @@
     scene.add(foliage);
   }
 
-  function createRoofMaterial(THREE, colorDef) {
+  function createMaterial(THREE, colorDef) {
     return new THREE.MeshStandardMaterial({
       color: new THREE.Color(colorDef.hex),
       roughness: colorDef.roughness,
-      metalness: colorDef.metalness,
+      metalness: colorDef.metalness || 0,
       flatShading: colorDef.type === 'shingle',
     });
   }
 
-  // ── Change roof color ──
-  function changeRoofColor(colorDef) {
-    currentColor = colorDef;
-    if (currentMode === '3d' && window.THREE) {
-      const THREE = window.THREE;
-      const newMat = createRoofMaterial(THREE, colorDef);
-      roofMeshes.forEach(mesh => {
-        if (mesh.material) mesh.material.dispose();
-        mesh.material = newMat.clone();
-      });
+  // ── Change materials ──
+  function changeMaterial(colorDef) {
+    if (colorDef.type === 'shingle' || colorDef.type === 'metal') {
+      currentColor = colorDef;
+      if (currentMode === '3d' && window.THREE) {
+        const THREE = window.THREE;
+        const newMat = createMaterial(THREE, colorDef);
+        roofMeshes.forEach(mesh => {
+          if (mesh.material) mesh.material.dispose();
+          mesh.material = newMat.clone();
+        });
+      }
+      if (currentMode === '2d') {
+        apply2DRoofOverlay();
+      }
+      const label = document.getElementById('vis-current-color');
+      if (label) label.textContent = colorDef.name + ' (' + colorDef.type + ')';
     }
-    if (currentMode === '2d') {
-      apply2DRoofOverlay(colorDef);
+    else if (colorDef.type === 'siding') {
+      currentSiding = colorDef;
+      if (currentMode === '3d' && window.THREE) {
+        const THREE = window.THREE;
+        const newMat = createMaterial(THREE, colorDef);
+        sidingMeshes.forEach(mesh => {
+          if (mesh.material) mesh.material.dispose();
+          mesh.material = newMat.clone();
+        });
+      }
+      if (currentMode === '2d') {
+        apply2DRoofOverlay();
+      }
     }
-    // Update label
-    const label = document.getElementById('vis-current-color');
-    if (label) label.textContent = colorDef.name + ' (' + colorDef.type + ')';
+    else if (colorDef.type === 'gutter') {
+      currentGutter = colorDef;
+      if (currentMode === '3d' && window.THREE) {
+        const THREE = window.THREE;
+        const newMat = createMaterial(THREE, colorDef);
+        gutterMeshes.forEach(mesh => {
+          if (mesh.material) mesh.material.dispose();
+          mesh.material = newMat.clone();
+        });
+      }
+      if (currentMode === '2d') {
+        apply2DRoofOverlay();
+      }
+    }
   }
 
   // ============================================================
@@ -339,27 +420,41 @@
     const container = document.getElementById('canvas-2d');
     if (!container) return;
 
-    if (!reportData || !reportData.latitude || !reportData.longitude) {
-      container.innerHTML = '<div class="vis-loader"><p style="color:#94a3b8;text-align:center;padding:20px"><i class="fas fa-map-marker-alt" style="font-size:32px;opacity:0.3;display:block;margin-bottom:12px"></i>No GPS coordinates available for this report.<br>The 2D Street View overlay requires latitude/longitude.</p></div>';
-      return;
+    let imageUrl = '';
+
+    if (userPhotos && userPhotos.length > 0) {
+      // Use uploaded photo instead of street view
+      imageUrl = userPhotos[currentPhotoIndex];
+    } else {
+      // Fallback to street view if no photos uploaded
+      if (!reportData || !reportData.latitude || !reportData.longitude) {
+        container.innerHTML = '<div class="vis-loader"><p style="color:#94a3b8;text-align:center;padding:20px"><i class="fas fa-map-marker-alt" style="font-size:32px;opacity:0.3;display:block;margin-bottom:12px"></i>No GPS coordinates available for this report.<br>The 2D Street View overlay requires latitude/longitude.</p></div>';
+        return;
+      }
+
+      const googleKey = reportData.google_maps_key || '';
+      if (!googleKey) {
+        container.innerHTML = '<div class="vis-loader"><p style="color:#f59e0b;text-align:center;padding:20px"><i class="fas fa-key" style="font-size:32px;opacity:0.3;display:block;margin-bottom:12px"></i>Google Maps API key not configured.<br>Street View imagery requires a valid API key.</p></div>';
+        return;
+      }
+
+      const lat = reportData.latitude;
+      const lng = reportData.longitude;
+      imageUrl = `https://maps.googleapis.com/maps/api/streetview?size=640x480&location=${lat},${lng}&fov=80&pitch=15&source=outdoor&key=${googleKey}`;
     }
 
-    const googleKey = reportData.google_maps_key || '';
-    if (!googleKey) {
-      container.innerHTML = '<div class="vis-loader"><p style="color:#f59e0b;text-align:center;padding:20px"><i class="fas fa-key" style="font-size:32px;opacity:0.3;display:block;margin-bottom:12px"></i>Google Maps API key not configured.<br>Street View imagery requires a valid API key.</p></div>';
-      return;
-    }
-
-    const lat = reportData.latitude;
-    const lng = reportData.longitude;
-    const svUrl = `https://maps.googleapis.com/maps/api/streetview?size=640x480&location=${lat},${lng}&fov=80&pitch=15&source=outdoor&key=${googleKey}`;
-
-    container.innerHTML = '<div class="vis-loader" id="vis-2d-loader"><div class="vis-spinner"></div><p style="color:#94a3b8;font-size:13px;margin-top:12px">Loading Street View...</p></div>';
+    container.innerHTML = '<div class="vis-loader" id="vis-2d-loader"><div class="vis-spinner"></div><p style="color:#94a3b8;font-size:13px;margin-top:12px">Loading Property Photo...</p></div>';
 
     const img = new Image();
     img.crossOrigin = 'anonymous';
     img.onload = function() {
       container.innerHTML = '';
+      const wrapper = document.createElement('div');
+      wrapper.style.display = 'flex';
+      wrapper.style.flexDirection = 'column';
+      wrapper.style.alignItems = 'center';
+      wrapper.style.width = '100%';
+
       const stack = document.createElement('div');
       stack.id = 'streetview-stack';
       stack.appendChild(img);
@@ -371,19 +466,41 @@
       overlay.height = img.naturalHeight;
       stack.appendChild(overlay);
 
-      container.appendChild(stack);
+      wrapper.appendChild(stack);
+
+      // Add navigation controls if multiple photos
+      if (userPhotos && userPhotos.length > 1) {
+         const nav = document.createElement('div');
+         nav.className = 'mt-4 flex gap-2 justify-center';
+         nav.innerHTML = `
+           <button class="px-3 py-1 bg-slate-700 hover:bg-slate-600 rounded text-sm text-white" onclick="changePhoto(-1)"><i class="fas fa-chevron-left"></i></button>
+           <span class="text-sm text-gray-400 py-1 px-2">Photo ${currentPhotoIndex + 1} of ${userPhotos.length}</span>
+           <button class="px-3 py-1 bg-slate-700 hover:bg-slate-600 rounded text-sm text-white" onclick="changePhoto(1)"><i class="fas fa-chevron-right"></i></button>
+         `;
+         wrapper.appendChild(nav);
+      }
+
+      container.appendChild(wrapper);
       container.dataset.loaded = '1';
 
-      // Apply current color
-      apply2DRoofOverlay(currentColor);
+      // Apply current colors
+      apply2DRoofOverlay();
     };
     img.onerror = function() {
-      container.innerHTML = '<div class="vis-loader"><p style="color:#ef4444">Street View image unavailable for this address</p></div>';
+      container.innerHTML = '<div class="vis-loader"><p style="color:#ef4444">Image unavailable for this property</p></div>';
     };
-    img.src = svUrl;
+    img.src = imageUrl;
   }
 
-  function apply2DRoofOverlay(colorDef) {
+  window.changePhoto = function(dir) {
+    if (!userPhotos || userPhotos.length === 0) return;
+    currentPhotoIndex += dir;
+    if (currentPhotoIndex < 0) currentPhotoIndex = userPhotos.length - 1;
+    if (currentPhotoIndex >= userPhotos.length) currentPhotoIndex = 0;
+    init2DScene();
+  };
+
+  function apply2DRoofOverlay() {
     const overlay = document.getElementById('roof-overlay-canvas');
     if (!overlay) return;
     const ctx = overlay.getContext('2d');
@@ -392,23 +509,51 @@
 
     ctx.clearRect(0, 0, w, h);
 
-    // Draw a semi-transparent color overlay on the upper portion of the image (approximate roof area)
-    // In production this would use an AI-generated mask, but for now we use a gradient approximation
-    ctx.save();
+    // Draw siding
+    if (currentSiding) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(w * 0.05, h * 0.55);
+      ctx.lineTo(w * 0.95, h * 0.55);
+      ctx.lineTo(w * 0.95, h * 0.95);
+      ctx.lineTo(w * 0.05, h * 0.95);
+      ctx.closePath();
+      ctx.clip();
 
-    // Create a triangular/trapezoidal roof mask (approximate)
-    ctx.beginPath();
-    ctx.moveTo(w * 0.05, h * 0.55);  // lower-left of roof area
-    ctx.lineTo(w * 0.50, h * 0.08);  // peak
-    ctx.lineTo(w * 0.95, h * 0.55);  // lower-right of roof area
-    ctx.closePath();
-    ctx.clip();
+      ctx.fillStyle = currentSiding.hex;
+      ctx.globalAlpha = 0.4;
+      ctx.fillRect(0, 0, w, h);
+      ctx.restore();
+    }
 
-    ctx.fillStyle = colorDef.hex;
-    ctx.globalAlpha = colorDef.type === 'metal' ? 0.45 : 0.38;
-    ctx.fillRect(0, 0, w, h);
+    // Draw roof
+    if (currentColor) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(w * 0.05, h * 0.55);  // lower-left of roof area
+      ctx.lineTo(w * 0.50, h * 0.08);  // peak
+      ctx.lineTo(w * 0.95, h * 0.55);  // lower-right of roof area
+      ctx.closePath();
+      ctx.clip();
 
-    ctx.restore();
+      ctx.fillStyle = currentColor.hex;
+      ctx.globalAlpha = currentColor.type === 'metal' ? 0.45 : 0.38;
+      ctx.fillRect(0, 0, w, h);
+      ctx.restore();
+    }
+
+    // Draw gutters
+    if (currentGutter) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(w * 0.05, h * 0.55);
+      ctx.lineTo(w * 0.95, h * 0.55);
+      ctx.lineWidth = 8;
+      ctx.strokeStyle = currentGutter.hex;
+      ctx.globalAlpha = 0.9;
+      ctx.stroke();
+      ctx.restore();
+    }
   }
 
   // ============================================================
@@ -417,28 +562,43 @@
   function buildSwatchPanel() {
     const shingleGrid = document.getElementById('shingle-swatches');
     const metalGrid = document.getElementById('metal-swatches');
+    const sidingGrid = document.getElementById('siding-swatches');
+    const gutterGrid = document.getElementById('gutter-swatches');
     if (!shingleGrid || !metalGrid) return;
 
     shingleGrid.innerHTML = '';
     metalGrid.innerHTML = '';
+    if (sidingGrid) sidingGrid.innerHTML = '';
+    if (gutterGrid) gutterGrid.innerHTML = '';
 
     SHINGLE_COLORS.forEach(function(c, i) {
-      shingleGrid.appendChild(createSwatchButton(c, i === 0));
+      shingleGrid.appendChild(createSwatchButton(c, i === 0, 'roof-group'));
     });
     METAL_COLORS.forEach(function(c) {
-      metalGrid.appendChild(createSwatchButton(c, false));
+      metalGrid.appendChild(createSwatchButton(c, false, 'roof-group'));
     });
+    if (sidingGrid) {
+      SIDING_COLORS.forEach(function(c, i) {
+        sidingGrid.appendChild(createSwatchButton(c, i === 0, 'siding-group'));
+      });
+    }
+    if (gutterGrid) {
+      GUTTER_COLORS.forEach(function(c, i) {
+        gutterGrid.appendChild(createSwatchButton(c, i === 0, 'gutter-group'));
+      });
+    }
   }
 
-  function createSwatchButton(colorDef, isActive) {
+  function createSwatchButton(colorDef, isActive, groupName) {
     const btn = document.createElement('button');
-    btn.className = 'swatch-btn' + (isActive ? ' active' : '');
+    btn.className = 'swatch-btn ' + groupName + (isActive ? ' active' : '');
     btn.title = colorDef.name;
     btn.innerHTML = '<span class="swatch-color" style="background:' + colorDef.hex + '"></span><span class="swatch-label">' + colorDef.name + '</span>';
     btn.onclick = function() {
-      document.querySelectorAll('.swatch-btn').forEach(function(b) { b.classList.remove('active'); });
+      // only remove active class from buttons in the same group
+      document.querySelectorAll('.' + groupName).forEach(function(b) { b.classList.remove('active'); });
       btn.classList.add('active');
-      changeRoofColor(colorDef);
+      changeMaterial(colorDef);
     };
     return btn;
   }
