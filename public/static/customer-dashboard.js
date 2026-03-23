@@ -287,8 +287,6 @@ function renderSidebar(c, s) {
     { section: 'Roof Reports', items: [
       { href: '/customer/order', icon: 'fa-plus-circle', label: 'New Report', badge: freeTrialRemaining > 0 ? freeTrialRemaining + ' free' : (paidCredits > 0 ? paidCredits : ''), badgeClass: freeTrialRemaining > 0 ? 'rfr-badge-green' : 'rfr-badge-blue' },
       { href: '/customer/reports', icon: 'fa-file-alt', label: 'Report History', badge: completedReports > 0 ? completedReports : '', badgeClass: 'rfr-badge-gray' },
-      { href: '/customer/virtual-tryon', icon: 'fa-magic', label: 'Virtual Try-On' },
-      { href: '/customer/home-designer', icon: 'fa-home', label: 'Home Designer' },
     ]},
     { section: 'CRM', items: [
       { href: '/customer/customers', icon: 'fa-address-book', label: 'Contacts', badge: s.customers > 0 ? s.customers : '', badgeClass: 'rfr-badge-gray' },

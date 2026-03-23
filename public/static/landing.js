@@ -388,7 +388,7 @@ function renderValueProp() {
     {
       icon: 'fas fa-users-cog',
       title: 'Your AI Admin That Never Sleeps',
-      desc: 'AI Secretary answers calls 24/7, books appointments, qualifies leads. Full CRM, invoicing, D2D manager, virtual try-on. Run your whole business from one platform.',
+      desc: 'AI Secretary answers calls 24/7, books appointments, qualifies leads. Full CRM, invoicing, D2D manager, 3D visualizer. Run your whole business from one platform.',
       cta: 'Explore Platform',
       ctaLink: '#features',
       img: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=600&q=80&auto=format&fit=crop'
@@ -528,10 +528,10 @@ function renderPlatformShowcase() {
     },
     {
       title: 'Show Homeowners Their New Roof Before They Buy',
-      subtitle: 'Virtual Roof Try-On',
-      desc: 'AI-powered visualization that lets homeowners see exactly what their roof will look like with different materials and colors. Remove uncertainty, close more deals, and upsell premium materials.',
+      subtitle: '3D Roof Visualizer',
+      desc: 'AI-powered visualization that lets homeowners see exactly what their roof, siding, and gutters will look like with different materials and colors. Remove uncertainty, close more deals, and upsell premium materials.',
       benefit: 'Increase average ticket size by 15% with visual selling',
-      cta: 'See Virtual Try-On',
+      cta: 'Try The Visualizer',
       ctaLink: '/signup',
       img: 'https://images.unsplash.com/photo-1570129477492-45c003edd2be?w=800&q=80&auto=format&fit=crop',
       reverse: true
@@ -732,7 +732,7 @@ function renderIndustrySections() {
       title: 'Residential Roofing',
       color: 'from-blue-500 to-indigo-500',
       desc: 'Quote every residential job in 60 seconds. Accurate BOM, professional reports that impress homeowners, and a CRM to manage your pipeline.',
-      features: ['3D area & pitch analysis', 'Material BOM with pricing', 'Virtual try-on for upsells', 'Homeowner-ready PDF reports']
+      features: ['3D area & pitch analysis', 'Material BOM with pricing', '3D visualizer for upsells', 'Homeowner-ready PDF reports']
     },
     {
       icon: 'fas fa-file-contract',
@@ -812,7 +812,7 @@ function renderPricing() {
             </div>
             <p class="text-sm text-gray-500 mb-6">3 free reports + full platform access</p>
             <ul class="space-y-3 mb-8">
-              ${['3 professional PDF reports', 'Full CRM & invoicing', 'Customer management', 'Proposals & job tracking', 'Door-to-door manager', 'Virtual roof try-on', 'Team collaboration'].map(f => `
+              ${['3 professional PDF reports', 'Full CRM & invoicing', 'Customer management', 'Proposals & job tracking', 'Door-to-door manager', '3D Roof Visualizer', 'Team collaboration'].map(f => `
                 <li class="flex items-start gap-2.5 text-sm text-gray-600"><i class="fas fa-check text-emerald-500 mt-0.5 text-xs"></i>${f}</li>
               `).join('')}
             </ul>
@@ -915,7 +915,7 @@ function renderPricing() {
                   ['Price Per Report', 'From $5 CAD', '$50-100+ USD', '$200+ labor cost'],
                   ['Free CRM Included', '<i class="fas fa-check-circle text-green-500"></i>', '<i class="fas fa-times-circle text-red-400"></i>', '<i class="fas fa-times-circle text-red-400"></i>'],
                   ['AI Phone Secretary', '<i class="fas fa-check-circle text-green-500"></i>', '<i class="fas fa-times-circle text-red-400"></i>', '<i class="fas fa-times-circle text-red-400"></i>'],
-                  ['Virtual Roof Try-On', '<i class="fas fa-check-circle text-green-500"></i>', '<i class="fas fa-times-circle text-red-400"></i>', '<i class="fas fa-times-circle text-red-400"></i>'],
+                  ['3D Roof Visualizer', '<i class="fas fa-check-circle text-green-500"></i>', '<i class="fas fa-times-circle text-red-400"></i>', '<i class="fas fa-times-circle text-red-400"></i>'],
                   ['Team Management', '<i class="fas fa-check-circle text-green-500"></i>', 'Extra cost', '<i class="fas fa-times-circle text-red-400"></i>'],
                   ['Solar Analysis', '<i class="fas fa-check-circle text-green-500"></i> Free', 'Extra cost', '<i class="fas fa-times-circle text-red-400"></i>'],
                   ['D2D Sales Manager', '<i class="fas fa-check-circle text-green-500"></i>', '<i class="fas fa-times-circle text-red-400"></i>', '<i class="fas fa-times-circle text-red-400"></i>'],

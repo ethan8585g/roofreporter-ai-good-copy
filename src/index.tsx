@@ -20,7 +20,6 @@ import { secretaryRoutes } from './routes/secretary'
 import { roverRoutes } from './routes/rover'
 import { emailOutreachRoutes } from './routes/email-outreach'
 import { analyticsRoutes } from './routes/analytics'
-import { virtualTryonRoutes } from './routes/virtual-tryon'
 import { teamRoutes } from './routes/team'
 import { agentsRoutes } from './routes/agents'
 import { workersAiRoutes } from './routes/workers-ai'
@@ -34,7 +33,6 @@ import { geminiRoutes } from './routes/gemini'
 import { pipelineRoutes } from './routes/pipeline'
 import { stripeRoutes } from './routes/stripe'
 import { customerCallsRoutes } from './routes/customer-cold-call'
-import { homeDesignerRoutes } from './routes/home-designer'
 import { sam3Routes } from './routes/sam3-analysis'
 import { calendarRoutes } from './routes/calendar'
 import { salesRoutes } from './routes/sales'
@@ -203,7 +201,6 @@ app.route('/api/secretary', secretaryRoutes)
 app.route('/api/rover', roverRoutes)
 app.route('/api/email-outreach', emailOutreachRoutes)
 app.route('/api/analytics', analyticsRoutes)
-app.route('/api/virtual-tryon', virtualTryonRoutes)
 app.route('/api/team', teamRoutes)
 app.route('/api/agents', agentsRoutes)
 app.route('/api/workers-ai', workersAiRoutes)
@@ -212,7 +209,6 @@ app.route('/api/call-center', callCenterRoutes)
 app.route('/api/customer-calls', customerCallsRoutes)
 app.route('/api/meta', metaConnectRoutes)
 app.route('/api/heygen', heygenRoutes)
-app.route('/api/home-designer', homeDesignerRoutes)
 app.route('/api/sam3', sam3Routes)
 app.route('/api/calendar', calendarRoutes)
 app.route('/api/sales', salesRoutes)
@@ -621,12 +617,6 @@ app.get('/customer/invoices', (c) => c.html(getCrmSubPageHTML('invoices', 'Invoi
 app.get('/customer/proposals', (c) => c.html(getCrmSubPageHTML('proposals', 'Proposals & Estimates', 'fa-file-signature')))
 app.get('/customer/jobs', (c) => c.html(getCrmSubPageHTML('jobs', 'Job Management', 'fa-hard-hat')))
 app.get('/customer/pipeline', (c) => c.html(getCrmSubPageHTML('pipeline', 'Sales Pipeline', 'fa-funnel-dollar')))
-
-// Virtual Try-On — AI Roof Visualization
-app.get('/customer/virtual-tryon', (c) => c.html(getVirtualTryOnPageHTML()))
-
-// Home Designer — Hover-style multi-photo roof visualization
-app.get('/customer/home-designer', (c) => c.html(getHomeDesignerPageHTML()))
 
 // SAM 3 Satellite Image Analyzer — AI roof segmentation on satellite imagery
 app.get('/customer/sam3-analyzer', (c) => c.html(getSAM3AnalyzerPageHTML()))
@@ -4102,7 +4092,7 @@ function getLanderFunnelHTML() {
         ${[
           { icon: 'fas fa-phone-alt', title: 'AI Phone Secretary', desc: '24/7 AI answers calls, books leads. $149/mo.', color: 'from-indigo-500 to-purple-500' },
           { icon: 'fas fa-th-large', title: 'Full CRM', desc: 'Customers, invoices, proposals, jobs. FREE.', color: 'from-cyan-500 to-blue-500' },
-          { icon: 'fas fa-palette', title: 'Virtual Try-On', desc: 'AI roof visualization for homeowners.', color: 'from-pink-500 to-rose-500' },
+          { icon: 'fas fa-palette', title: '3D Visualizer', desc: 'AI roof visualization for homeowners.', color: 'from-pink-500 to-rose-500' },
           { icon: 'fas fa-door-open', title: 'D2D Manager', desc: 'Door-to-door sales tracking & maps.', color: 'from-emerald-500 to-teal-500' },
         ].map(f => '<div class="scroll-animate bg-white rounded-xl p-6 border border-gray-200 hover:shadow-xl transition-all text-center"><div class="w-12 h-12 mx-auto mb-3 rounded-xl bg-gradient-to-br ' + f.color + ' flex items-center justify-center"><i class="' + f.icon + ' text-white"></i></div><h3 class="font-bold text-gray-900 text-sm mb-1">' + f.title + '</h3><p class="text-xs text-gray-500">' + f.desc + '</p></div>').join('')}
       </div>
@@ -4218,130 +4208,7 @@ function getCustomerOrderPageHTML(mapsApiKey: string) {
 </html>`
 }
 
-// ============================================================
-// VIRTUAL TRY-ON PAGE — AI Roof Visualization
-// ============================================================
-function getVirtualTryOnPageHTML() {
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  ${getHeadTags()}
-  <title>Virtual Try-On - RoofReporterAI</title>
-</head>
-<body class="bg-gray-50 min-h-screen">
-  <header class="bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg">
-    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
-      <div class="flex items-center space-x-3">
-        <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
-          <span class="logo-mark w-10 h-10"><img src="/static/logo.png" alt="RoofReporterAI"></span>
-          <div>
-            <h1 class="text-lg font-bold">Virtual Roof Try-On</h1>
-            <p class="text-brand-200 text-xs">AI-Powered Roof Visualization</p>
-          </div>
-        </a>
-      </div>
-      <nav class="flex items-center space-x-3">
-        <span id="custGreeting" class="text-brand-200 text-sm hidden"><i class="fas fa-user-circle mr-1"></i><span id="custName"></span></span>
-        <a href="/customer/dashboard" class="text-brand-200 hover:text-white text-sm"><i class="fas fa-th-large mr-1"></i>Dashboard</a>
-        <button onclick="custLogout()" class="text-brand-200 hover:text-white text-sm"><i class="fas fa-sign-out-alt mr-1"></i>Logout</button>
-      </nav>
-    </div>
-  </header>
-  <main class="max-w-6xl mx-auto px-4 py-6">
-    <div id="tryon-root"></div>
-  </main>
-  <script>
-    (function() {
-      var c = localStorage.getItem('rc_customer');
-      if (!c) { window.location.href = '/customer/login'; return; }
-      try {
-        var u = JSON.parse(c);
-        var g = document.getElementById('custGreeting');
-        var n = document.getElementById('custName');
-        if (g && n) { n.textContent = u.name || u.email; g.classList.remove('hidden'); }
-      } catch(e) {}
-    })();
-    function custLogout() {
-      var token = localStorage.getItem('rc_customer_token');
-      if (token) fetch('/api/customer/logout', { method: 'POST', headers: { 'Authorization': 'Bearer ' + token } })['catch'](function(){});
-      localStorage.removeItem('rc_customer');
-      localStorage.removeItem('rc_customer_token');
-      window.location.href = '/customer/login';
-    }
-  </script>
-  <script src="/static/virtual-tryon.js?v=${BUILD_VERSION}"></script>
-  ${getRoverAssistant()}
-</body>
-</html>`
-}
 
-// ============================================================
-// HOME DESIGNER PAGE — Hover-style multi-photo roof visualization
-// ============================================================
-function getHomeDesignerPageHTML() {
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  ${getHeadTags()}
-  <title>Home Designer - RoofReporterAI</title>
-  <style>
-    @media print {
-      header, nav, .no-print { display: none !important; }
-      body { background: white !important; }
-      .max-w-5xl { max-width: 100% !important; }
-    }
-    .scrollbar-hide::-webkit-scrollbar { display: none; }
-    .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
-    .line-clamp-3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-  </style>
-</head>
-<body class="bg-gray-50 min-h-screen">
-  <header class="bg-gradient-to-r from-sky-600 to-blue-700 text-white shadow-lg no-print">
-    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
-      <div class="flex items-center space-x-3">
-        <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
-          <span class="logo-mark w-10 h-10"><img src="/static/logo.png" alt="RoofReporterAI"></span>
-          <div>
-            <h1 class="text-lg font-bold">Home Designer</h1>
-            <p class="text-sky-200 text-xs">Hover-Style Roof Visualization</p>
-          </div>
-        </a>
-      </div>
-      <nav class="flex items-center space-x-3">
-        <span id="custGreeting" class="text-sky-200 text-sm hidden"><i class="fas fa-user-circle mr-1"></i><span id="custName"></span></span>
-        <a href="/customer/virtual-tryon" class="text-sky-200 hover:text-white text-sm"><i class="fas fa-magic mr-1"></i>Try-On</a>
-        <a href="/customer/dashboard" class="text-sky-200 hover:text-white text-sm"><i class="fas fa-th-large mr-1"></i>Dashboard</a>
-        <button onclick="custLogout()" class="text-sky-200 hover:text-white text-sm"><i class="fas fa-sign-out-alt mr-1"></i>Logout</button>
-      </nav>
-    </div>
-  </header>
-  <main class="max-w-6xl mx-auto px-4 py-6">
-    <div id="designer-root"></div>
-  </main>
-  <script>
-    (function() {
-      var c = localStorage.getItem('rc_customer');
-      if (!c) { window.location.href = '/customer/login'; return; }
-      try {
-        var u = JSON.parse(c);
-        var g = document.getElementById('custGreeting');
-        var n = document.getElementById('custName');
-        if (g && n) { n.textContent = u.name || u.email; g.classList.remove('hidden'); }
-      } catch(e) {}
-    })();
-    function custLogout() {
-      var token = localStorage.getItem('rc_customer_token');
-      if (token) fetch('/api/customer/logout', { method: 'POST', headers: { 'Authorization': 'Bearer ' + token } })['catch'](function(){});
-      localStorage.removeItem('rc_customer');
-      localStorage.removeItem('rc_customer_token');
-      window.location.href = '/customer/login';
-    }
-  </script>
-  <script src="/static/home-designer.js?v=${BUILD_VERSION}"></script>
-  ${getRoverAssistant()}
-</body>
-</html>`
-}
 
 function getSAM3AnalyzerPageHTML(orderId?: string) {
   return `<!DOCTYPE html>
