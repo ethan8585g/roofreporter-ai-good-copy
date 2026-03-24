@@ -1270,7 +1270,11 @@
           '<div class="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4"><i class="fas fa-phone-slash text-gray-400 text-2xl"></i></div>' +
           '<h3 class="font-bold text-gray-800 text-lg mb-1">No Calls Yet</h3>' +
           '<p class="text-gray-500 text-sm">When your AI secretary handles calls, they\'ll appear here with full transcripts, lead info, and conversation summaries.</p>' +
-          (state.phoneSetup?.connection_status !== 'connected' ? '<button onclick="secSetTab(\'connect\')" class="mt-4 px-6 py-3 bg-sky-500 text-white rounded-xl font-semibold text-sm hover:bg-sky-600 transition-all"><i class="fas fa-phone-alt mr-2"></i>Connect Your Phone First</button>' : '') +
+          '<div class="flex flex-wrap gap-3 justify-center mt-4">' +
+            (state.phoneSetup?.connection_status !== 'connected' ? '<button onclick="secSetTab(\'connect\')" class="px-6 py-3 bg-sky-500 text-white rounded-xl font-semibold text-sm hover:bg-sky-600 transition-all"><i class="fas fa-phone-alt mr-2"></i>Connect Your Phone First</button>' : '') +
+            (state.isDev ? '<button onclick="secSimulateCall()" class="px-6 py-3 bg-violet-500 text-white rounded-xl font-semibold text-sm hover:bg-violet-600 transition-all"><i class="fas fa-vial mr-2"></i>Simulate Test Call</button>' : '') +
+          '</div>' +
+          (state.isDev ? '<p class="text-xs text-gray-400 mt-3"><i class="fas fa-flask mr-1"></i>Dev mode: Use "Simulate Test Call" to generate sample call data and verify the UI.</p>' : '') +
         '</div>';
       return;
     }
@@ -1541,6 +1545,20 @@
   window.secFilterCalls = function(filter) { state.callFilter = filter; loadCalls(filter); };
   window.secSearchCalls = function() { state.callSearch = (document.getElementById('callSearchInput') || {}).value || ''; loadCalls(); };
   window.secFilterLeads = function(status) { state.leadStatusFilter = status; loadLeads(status); };
+
+  window.secSimulateCall = async function() {
+    try {
+      var res = await fetch('/api/secretary/simulate-call', { method: 'POST', headers: authHeaders() });
+      if (res.ok) {
+        var data = await res.json();
+        alert('✅ ' + data.message);
+        loadCalls();
+      } else {
+        var err = await res.json().catch(function() { return {}; });
+        alert('❌ ' + (err.error || 'Failed to simulate call'));
+      }
+    } catch(e) { alert('❌ Network error: ' + e.message); }
+  };
 
   window.secUpdateLeadStatus = async function(callId, status) {
     try {

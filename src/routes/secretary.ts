@@ -643,6 +643,142 @@ secretaryRoutes.get('/call-stats', async (c) => {
 })
 
 // ============================================================
+// POST /simulate-call — Insert a simulated test call for UI verification
+// Dev accounts only — validates the call log UI is working
+// ============================================================
+secretaryRoutes.post('/simulate-call', async (c) => {
+  const customerId = c.get('customerId' as any) as number
+  const isDev = c.get('isDev' as any) as boolean
+
+  if (!isDev) return c.json({ error: 'Simulation only available for dev accounts' }, 403)
+
+  const names = ['John Smith', 'Maria Garcia', 'David Johnson', 'Sarah Williams', 'Mike Brown']
+  const services = ['Roof Inspection', 'Shingle Replacement', 'Leak Repair', 'Storm Damage Assessment', 'Gutter Cleaning']
+  const summaries = [
+    'Homeowner requested a roof inspection after recent hailstorm. Has visible damage on north side. Wants estimate within the week.',
+    'Called about replacing aging shingles. Home is 20 years old. Interested in architectural shingles upgrade.',
+    'Emergency leak repair needed. Water staining on ceiling in master bedroom. Available any day this week.',
+    'Insurance claim filed for storm damage. Needs certified inspector report. Adjuster visiting next Tuesday.',
+    'Routine gutter cleaning and inspection. Also interested in gutter guard installation quote.'
+  ]
+  const idx = Math.floor(Math.random() * names.length)
+  const phone = `(${Math.floor(Math.random() * 900) + 100}) ${Math.floor(Math.random() * 900) + 100}-${Math.floor(Math.random() * 9000) + 1000}`
+  const duration = Math.floor(Math.random() * 240) + 30
+  const outcomes = ['answered', 'answered', 'answered', 'transferred', 'voicemail']
+  const sentiments = ['positive', 'positive', 'neutral', 'neutral', 'negative']
+
+  const result = await c.env.DB.prepare(
+    `INSERT INTO secretary_call_logs (
+      customer_id, caller_phone, caller_name, caller_email,
+      call_duration_seconds, directory_routed,
+      call_summary, call_transcript, call_outcome, livekit_room_id,
+      service_type, property_address, is_lead, lead_status, lead_quality,
+      conversation_highlights, sentiment,
+      follow_up_required, follow_up_notes, tags
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(
+    customerId,
+    phone,
+    names[idx],
+    `${names[idx].toLowerCase().replace(' ', '.')}@email.com`,
+    duration,
+    '',
+    summaries[idx],
+    `AI Secretary: Hello, thanks for calling. How can I help you today?\nCaller: Hi, I'm ${names[idx]}. ${summaries[idx]}\nAI Secretary: I'd be happy to help with that. Let me get some information to pass along to our team...`,
+    outcomes[idx],
+    `sim-room-${Date.now()}`,
+    services[idx],
+    `${Math.floor(Math.random() * 9000) + 1000} ${['Oak', 'Maple', 'Elm', 'Pine', 'Cedar'][idx]} St, Edmonton, AB`,
+    1,
+    'new',
+    ['hot', 'warm', 'warm', 'cold', 'warm'][idx],
+    'Homeowner interested in service. Has specific timeline. Good lead potential.',
+    sentiments[idx],
+    idx % 2 === 0 ? 1 : 0,
+    idx % 2 === 0 ? 'Follow up with estimate within 48 hours' : '',
+    services[idx].toLowerCase().replace(' ', '-')
+  ).run()
+
+  return c.json({
+    success: true,
+    call_id: result.meta?.last_row_id,
+    message: `Simulated call from ${names[idx]} added to call log. Refresh the Call Log tab to see it.`,
+  })
+})
+
+// ============================================================
+// GET /diagnostic — Full system diagnostic for secretary service
+// Shows LiveKit status, Twilio status, webhook URLs, and config
+// ============================================================
+secretaryRoutes.get('/diagnostic', async (c) => {
+  const customerId = c.get('customerId' as any) as number
+  const isDev = c.get('isDev' as any) as boolean
+
+  if (!isDev) return c.json({ error: 'Diagnostic only available for dev accounts' }, 403)
+
+  const config = await c.env.DB.prepare(
+    `SELECT * FROM secretary_config WHERE customer_id = ?`
+  ).bind(customerId).first<any>()
+
+  const callCount = await c.env.DB.prepare(
+    `SELECT COUNT(*) as total FROM secretary_call_logs WHERE customer_id = ?`
+  ).bind(customerId).first<any>()
+
+  const origin = new URL(c.req.url).origin
+
+  return c.json({
+    customer_id: customerId,
+    is_dev: isDev,
+    config_exists: !!config,
+    business_phone: config?.business_phone || null,
+    ai_phone_number: config?.assigned_phone_number || null,
+    connection_status: config?.connection_status || null,
+    is_active: config?.is_active === 1,
+    secretary_mode: config?.secretary_mode || null,
+    livekit: {
+      api_key_set: !!(c.env as any).LIVEKIT_API_KEY,
+      api_secret_set: !!(c.env as any).LIVEKIT_API_SECRET,
+      url: (c.env as any).LIVEKIT_URL || null,
+      sip_uri: (c.env as any).LIVEKIT_SIP_URI || null,
+      inbound_trunk_id: config?.livekit_inbound_trunk_id || null,
+      dispatch_rule_id: config?.livekit_dispatch_rule_id || null,
+    },
+    twilio: {
+      account_sid_set: !!(c.env as any).TWILIO_ACCOUNT_SID,
+      auth_token_set: !!(c.env as any).TWILIO_AUTH_TOKEN,
+      oauth_client_id_set: !!(c.env as any).TWILIO_OAUTH_CLIENT_ID,
+      oauth_secret_set: !!(c.env as any).TWILIO_OAUTH_CLIENT_SECRET,
+    },
+    openai: {
+      api_key_set: !!(c.env as any).OPENAI_API_KEY,
+      base_url: (c.env as any).OPENAI_BASE_URL || null,
+    },
+    webhook_urls: {
+      call_complete: `${origin}/api/secretary/webhook/call-complete`,
+      message: `${origin}/api/secretary/webhook/message`,
+      appointment: `${origin}/api/secretary/webhook/appointment`,
+      callback: `${origin}/api/secretary/webhook/callback`,
+      test_result: `${origin}/api/secretary/webhook/test-result`,
+    },
+    total_call_logs: callCount?.total || 0,
+    last_test: config?.last_test_at ? {
+      at: config.last_test_at,
+      result: config.last_test_result,
+      details: config.last_test_details,
+    } : null,
+    call_flow: 'Customer Phone → Forward to AI Number → Twilio SIP → LiveKit Trunk → AI Agent → webhook/call-complete logs the call',
+    troubleshooting: [
+      callCount?.total === 0 ? '⚠️ No call logs found. Either no calls have been forwarded to the AI number, or the LiveKit agent is not posting to the webhook.' : '✅ Call logs found.',
+      config?.connection_status === 'connected' ? '✅ Connection status is "connected".' : '⚠️ Connection not established. Complete the phone setup wizard.',
+      config?.livekit_inbound_trunk_id ? '✅ LiveKit inbound trunk configured.' : '⚠️ LiveKit inbound trunk NOT configured. Run Quick Connect activation.',
+      config?.livekit_dispatch_rule_id ? '✅ LiveKit dispatch rule configured.' : '⚠️ LiveKit dispatch rule NOT configured.',
+      (c.env as any).TWILIO_ACCOUNT_SID ? '✅ Twilio credentials configured.' : '⚠️ Twilio not configured — test calls and SMS summaries unavailable.',
+      (c.env as any).LIVEKIT_API_KEY ? '✅ LiveKit API keys configured.' : '⚠️ LiveKit API keys missing.',
+    ],
+  })
+})
+
+// ============================================================
 // POST /livekit-token — Generate LiveKit agent token for this customer's room
 // Used by LiveKit agent to connect and handle inbound calls
 // ============================================================
