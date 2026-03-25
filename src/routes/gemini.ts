@@ -111,7 +111,7 @@ async function callOpenAIFallback(env: any, prompt: string, opts?: any): Promise
       method: 'POST',
       headers: { 'Authorization': `Bearer ${env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: 'gpt-5-mini',
         messages: [
           ...(opts?.systemInstruction ? [{ role: 'system', content: opts.systemInstruction }] : []),
           { role: 'user', content: prompt }
@@ -136,7 +136,7 @@ async function callOpenAIMultiTurnFallback(env: any, messages: Array<{ role: str
     const resp = await fetch(`${env.OPENAI_BASE_URL}/chat/completions`, {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: 'gpt-4o-mini', messages: apiMessages, temperature: opts?.temperature ?? 0.7, max_tokens: opts?.maxOutputTokens ?? 4096 })
+      body: JSON.stringify({ model: 'gpt-5-mini', messages: apiMessages, temperature: opts?.temperature ?? 0.7, max_tokens: opts?.maxOutputTokens ?? 4096 })
     })
     if (!resp.ok) {
       const errData: any = await resp.json().catch(() => ({}))
@@ -235,7 +235,7 @@ geminiRoutes.get('/status', async (c) => {
     ? false // Gemini succeeded
     : !!(result.text && !result.error) // Got a response via fallback
   const actualBackend = geminiKey && !usedOpenAIFallback ? 'gemini' : (hasOpenAI ? 'openai' : 'none')
-  const actualModel = actualBackend === 'gemini' ? 'gemini-2.5-flash' : 'gpt-4o-mini'
+  const actualModel = actualBackend === 'gemini' ? 'gemini-2.5-flash' : 'gpt-5-mini'
   
   return c.json({
     configured: true,
