@@ -187,7 +187,9 @@
       var isProcessing = (o.status === 'processing' || o.report_status === 'running');
       var buttons = '';
       if (isCompleted) {
-        buttons = '<a href="/api/reports/' + o.id + '/html" target="_blank" class="px-4 py-2 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700"><i class="fas fa-file-alt mr-1"></i>View Report</a><a href="/api/reports/' + o.id + '/pdf" target="_blank" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-xs font-medium hover:bg-gray-200"><i class="fas fa-download mr-1"></i>PDF</a>';
+        buttons = '<a href="/api/reports/' + o.id + '/html" target="_blank" class="px-4 py-2 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700"><i class="fas fa-file-alt mr-1"></i>View Report</a>' +
+          '<a href="/api/reports/' + o.id + '/pdf" target="_blank" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-xs font-medium hover:bg-gray-200"><i class="fas fa-download mr-1"></i>PDF</a>' +
+          '<a href="/customer/home-designer?report_id=' + o.id + '&address=' + encodeURIComponent(o.property_address || '') + '" class="px-4 py-2 bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white rounded-lg text-xs font-medium hover:from-violet-600 hover:to-fuchsia-600 shadow-sm"><i class="fas fa-magic mr-1"></i>Roof Visualizer</a>';
       } else if (isProcessing) {
         buttons = '<span class="px-4 py-2 bg-blue-50 text-blue-600 rounded-lg text-sm font-medium"><i class="fas fa-spinner fa-spin mr-1"></i>Generating...</span>';
       } else {

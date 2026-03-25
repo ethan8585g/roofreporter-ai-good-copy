@@ -436,8 +436,7 @@ function renderSidebar(c, s) {
     { section: 'Roof Reports', items: [
       { href: '/customer/order', icon: 'fa-plus-circle', label: 'New Report', badge: freeTrialRemaining > 0 ? freeTrialRemaining + ' free' : (paidCredits > 0 ? paidCredits : ''), badgeClass: freeTrialRemaining > 0 ? 'rfr-badge-green' : 'rfr-badge-blue' },
       { href: '/customer/reports', icon: 'fa-file-alt', label: 'Report History', badge: completedReports > 0 ? completedReports : '', badgeClass: 'rfr-badge-gray' },
-      { href: '/customer/virtual-tryon', icon: 'fa-magic', label: 'Virtual Try-On' },
-      { href: '/customer/home-designer', icon: 'fa-home', label: 'Home Designer' },
+      // Roof Visualizer is now accessible per-report from Report History
     ]},
     { section: 'CRM', items: [
       { href: '/customer/customers', icon: 'fa-address-book', label: 'Contacts', badge: s.customers > 0 ? s.customers : '', badgeClass: 'rfr-badge-gray' },
@@ -803,7 +802,7 @@ function renderReportsTable() {
   return html;
 }
 
-// ── Generating Reports Progress Cards ──
+// ── Generating Reports — Minimal notification banner ──
 function renderGeneratingReports() {
   var generatingOrders = custState.orders.filter(function(o) {
     return o.status === 'processing' || o.report_status === 'generating' || o.report_status === 'pending' ||
@@ -811,51 +810,15 @@ function renderGeneratingReports() {
            o.ai_imagery_status === 'generating';
   });
   if (generatingOrders.length === 0) return '';
-
-  var html = '<div style="margin-bottom:20px">';
-  generatingOrders.forEach(function(go) {
-    var isEnhancing = go.report_status === 'enhancing' || go.enhancement_status === 'sent' || go.enhancement_status === 'pending';
-    var isGenerating = !isEnhancing && (go.status === 'processing' || go.report_status === 'generating' || go.report_status === 'pending');
-    var isImagery = go.ai_imagery_status === 'generating';
-    var cardTitle = isImagery && !isGenerating && !isEnhancing ? 'Creating AI Imagery' : (isEnhancing ? 'AI Enhancing Report' : 'Generating Roof Report');
-    var createdAt = new Date(go.created_at).getTime();
-    var elapsed = Math.round((Date.now() - createdAt) / 1000);
-    var progressPercent = Math.min(95, Math.round((elapsed / 90) * 100));
-    var stepLabel = 'Initializing...';
-    if (elapsed < 5) stepLabel = 'Placing order...';
-    else if (elapsed < 12) stepLabel = 'Analyzing satellite imagery...';
-    else if (elapsed < 20) stepLabel = 'Measuring roof segments...';
-    else if (elapsed < 30) stepLabel = 'Computing materials & edges...';
-    else if (elapsed < 40) stepLabel = 'Building professional report...';
-    else if (isEnhancing) stepLabel = 'AI polishing report...';
-    else if (elapsed < 55) stepLabel = 'Enhancing with AI insights...';
-    else if (elapsed < 75) stepLabel = 'Generating AI imagery...';
-    else if (elapsed < 85) stepLabel = 'Creating professional visuals...';
-    else stepLabel = 'Finalizing report...';
-    if (isEnhancing) {
-      progressPercent = Math.min(95, 70 + Math.round((elapsed - 30) / 60 * 25));
-      stepLabel = 'AI polishing your report...';
-    }
-
-    html += '<div style="background:linear-gradient(135deg,#1E40AF,#2563EB,#3B82F6);border-radius:12px;padding:20px;margin-bottom:12px;position:relative;overflow:hidden;border:1px solid rgba(59,130,246,0.3)">' +
-      '<div style="position:absolute;inset:0;opacity:0.08"><div style="background:repeating-linear-gradient(90deg,transparent,transparent 20px,rgba(255,255,255,0.3) 20px,rgba(255,255,255,0.3) 40px);width:200%;height:100%;animation:rfrSlideStripes 2s linear infinite"></div></div>' +
-      '<div style="position:relative;z-index:1">' +
-        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">' +
-          '<div style="display:flex;align-items:center;gap:10px">' +
-            '<div style="width:40px;height:40px;background:rgba(255,255,255,0.15);border-radius:10px;display:flex;align-items:center;justify-content:center">' +
-              '<div style="width:24px;height:24px;border:3px solid rgba(255,255,255,0.3);border-top-color:white;border-radius:50%;animation:rfrSpin 1s linear infinite"></div>' +
-            '</div>' +
-            '<div><div style="color:white;font-size:14px;font-weight:700">' + cardTitle + '</div><div style="color:#93C5FD;font-size:12px"><i class="fas fa-map-marker-alt" style="margin-right:4px"></i>' + (go.property_address || 'Processing...') + '</div></div>' +
-          '</div>' +
-          '<div style="text-align:right"><div style="color:white;font-size:22px;font-weight:800">' + progressPercent + '%</div><div style="color:#93C5FD;font-size:11px">' + elapsed + 's</div></div>' +
-        '</div>' +
-        '<div style="background:rgba(255,255,255,0.2);border-radius:6px;height:6px;overflow:hidden"><div style="height:100%;border-radius:6px;transition:width 1s ease-out;background:linear-gradient(90deg,#60A5FA,#818CF8,#A78BFA);width:' + progressPercent + '%"></div></div>' +
-        '<div style="display:flex;justify-content:space-between;margin-top:8px"><span style="color:#BFDBFE;font-size:11px"><i class="fas fa-cog rfr-spin" style="margin-right:4px"></i>' + stepLabel + '</span><span style="color:#93C5FD;font-size:11px">~45-90s total</span></div>' +
-      '</div>' +
-    '</div>';
-  });
-  html += '</div>';
-  return html;
+  var count = generatingOrders.length;
+  var label = count === 1 
+    ? '<i class="fas fa-map-marker-alt" style="margin-right:4px;opacity:0.7"></i>' + (generatingOrders[0].property_address || 'Your report') 
+    : count + ' reports';
+  return '<div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:10px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:10px">' +
+    '<div style="width:8px;height:8px;background:#3B82F6;border-radius:50%;animation:rfrPulse 1.5s ease-in-out infinite"></div>' +
+    '<span style="color:#475569;font-size:13px;font-weight:500">' + label + ' — generating now</span>' +
+    '<span style="color:#94A3B8;font-size:11px;margin-left:auto">Auto-refreshes when ready</span>' +
+  '</div>';
 }
 
 // ── Utility Functions ──
