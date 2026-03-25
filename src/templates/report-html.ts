@@ -244,15 +244,19 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
         <span class="pt-value">${iwbSqFt} SF</span>
       </div>
 
-      <!-- Sub section: Roof Planes / Structures -->
+      <!-- Sub section: Roof Planes / Structures / Multiplier -->
       <div style="display:flex;gap:0;margin-top:6px;border:1px solid #e0e0e0;border-radius:4px;overflow:hidden">
         <div style="flex:1;padding:5px 10px;text-align:center;border-right:1px solid #e0e0e0">
           <div style="font-size:8px;color:#888;font-weight:600;text-transform:uppercase">Roof Planes</div>
           <div style="font-size:16px;font-weight:900;color:${TEAL_DARK}">${report.segments.length}</div>
         </div>
-        <div style="flex:1;padding:5px 10px;text-align:center">
+        <div style="flex:1;padding:5px 10px;text-align:center;border-right:1px solid #e0e0e0">
           <div style="font-size:8px;color:#888;font-weight:600;text-transform:uppercase">Structures</div>
           <div style="font-size:16px;font-weight:900;color:${TEAL_DARK}">1</div>
+        </div>
+        <div style="flex:1;padding:5px 10px;text-align:center">
+          <div style="font-size:8px;color:#888;font-weight:600;text-transform:uppercase">Pitch Mult.</div>
+          <div style="font-size:16px;font-weight:900;color:${TEAL_DARK}">${report.area_multiplier.toFixed(3)}x</div>
         </div>
       </div>
 
@@ -293,8 +297,8 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
 
   <!-- Disclaimer -->
   <div style="padding:8px 28px 0;font-size:7px;color:#888;line-height:1.5;text-align:center">
-    REPORT IS PROVIDED FOR ESTIMATION PURPOSES ONLY. ACTUAL MEASUREMENTS MAY VARY.
-    &copy; ${new Date().getFullYear()} RoofReporterAI. All imagery &copy; Google.
+    REPORT IS PROVIDED FOR ESTIMATION PURPOSES ONLY. ACTUAL MEASUREMENTS MAY VARY. FIELD VERIFICATION RECOMMENDED.
+    &copy; ${new Date().getFullYear()} RoofReporterAI. All imagery &copy; Google. Engine v6.0.
   </div>
 
   </div><!-- end page-content -->
@@ -566,8 +570,8 @@ ${report.segments.length >= 2 ? `
           <th style="padding:4px 6px;text-align:center;font-weight:700;color:#475569">Direction</th>
           <th style="padding:4px 6px;text-align:center;font-weight:700;color:#475569">Pitch</th>
           <th style="padding:4px 6px;text-align:center;font-weight:700;color:#475569">Degrees</th>
-          <th style="padding:4px 6px;text-align:right;font-weight:700;color:#475569">Area (SF)</th>
-          <th style="padding:4px 6px;text-align:right;font-weight:700;color:#475569">Area (SF)</th>
+          <th style="padding:4px 6px;text-align:right;font-weight:700;color:#475569">Footprint (SF)</th>
+          <th style="padding:4px 6px;text-align:right;font-weight:700;color:#475569">True Area (SF)</th>
           <th style="padding:4px 6px;text-align:center;font-weight:700;color:#475569">Classification</th>
         </tr>
       </thead>
@@ -583,8 +587,8 @@ ${report.segments.length >= 2 ? `
             <td style="padding:3px 6px;text-align:center;font-weight:600">${seg.azimuth_direction || '\u2014'}</td>
             <td style="padding:3px 6px;text-align:center;font-weight:700">${seg.pitch_ratio}</td>
             <td style="padding:3px 6px;text-align:center;color:#555">${seg.pitch_degrees.toFixed(1)}\u00B0</td>
-            <td style="padding:3px 6px;text-align:right">${Math.round(seg.true_area_sqft).toLocaleString()}</td>
-            <td style="padding:3px 6px;text-align:right;font-weight:600">${(Math.round(seg.true_area_sqft)).toLocaleString()}</td>
+            <td style="padding:3px 6px;text-align:right">${Math.round(seg.footprint_sqft || seg.true_area_sqft / (report.area_multiplier || 1)).toLocaleString()}</td>
+            <td style="padding:3px 6px;text-align:right;font-weight:600">${Math.round(seg.true_area_sqft).toLocaleString()}</td>
             <td style="padding:3px 6px;text-align:center"><span style="padding:1px 6px;border-radius:2px;font-size:6.5px;font-weight:700;background:${classBg};color:${classColor}">${classification}</span></td>
           </tr>`
         }).join('')}

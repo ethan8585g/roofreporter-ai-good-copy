@@ -1564,6 +1564,326 @@ app.get('/invoice/pay/:id', async (c) => {
 })
 
 // ============================================================
+// PUBLIC INTERACTIVE INVOICE — Secure web link (no auth needed)
+// Clients view, download report, pay, and e-sign
+// ============================================================
+app.get('/invoice/view/:token', async (c) => {
+  try {
+    const token = c.req.param('token')
+    const db = c.env.DB
+
+    // Validate token
+    const tokenRow = await db.prepare(`
+      SELECT t.*, i.id as invoice_id FROM invoice_access_tokens t
+      JOIN invoices i ON i.id = t.invoice_id
+      WHERE t.access_token = ?
+    `).bind(token).first<any>()
+
+    if (!tokenRow) return c.html(errorPage('Invoice Not Found', 'This link is invalid or has expired.'))
+
+    // Track view
+    await db.prepare("UPDATE invoice_access_tokens SET views = views + 1, last_viewed_at = datetime('now') WHERE access_token = ?").bind(token).run()
+
+    // Mark as viewed if sent
+    await db.prepare("UPDATE invoices SET status = CASE WHEN status = 'sent' THEN 'viewed' ELSE status END, updated_at = datetime('now') WHERE id = ?").bind(tokenRow.invoice_id).run()
+
+    // Fetch invoice with customer and order data
+    const invoice = await db.prepare(`
+      SELECT i.*, c.name as customer_name, c.email as customer_email, c.phone as customer_phone,
+             c.company_name as customer_company, c.address as customer_address,
+             c.city as customer_city, c.province as customer_province, c.postal_code as customer_postal,
+             o.order_number, o.property_address,
+             cu.name as contractor_name, cu.brand_business_name, cu.brand_logo_url, cu.brand_primary_color
+      FROM invoices i
+      LEFT JOIN customers c ON c.id = i.customer_id
+      LEFT JOIN orders o ON o.id = i.order_id
+      LEFT JOIN customers cu ON cu.id = (SELECT id FROM customers WHERE role = 'admin' OR is_admin = 1 LIMIT 1)
+      WHERE i.id = ?
+    `).bind(tokenRow.invoice_id).first<any>()
+
+    if (!invoice) return c.html(errorPage('Invoice Not Found', 'This invoice could not be loaded.'))
+
+    // Line items
+    const items = await db.prepare('SELECT * FROM invoice_items WHERE invoice_id = ? ORDER BY sort_order').bind(tokenRow.invoice_id).all()
+
+    // Billing schedule (if progress billing)
+    const schedule = await db.prepare('SELECT * FROM invoice_billing_schedule WHERE invoice_id = ? ORDER BY sort_order').bind(tokenRow.invoice_id).all()
+
+    // Change orders
+    const changeOrders = await db.prepare('SELECT * FROM invoice_change_orders WHERE invoice_id = ? ORDER BY created_at').bind(tokenRow.invoice_id).all()
+
+    // E-signature status
+    const signature = await db.prepare('SELECT * FROM invoice_signatures WHERE invoice_id = ? ORDER BY signed_at DESC LIMIT 1').bind(tokenRow.invoice_id).first<any>()
+
+    const isPaid = invoice.status === 'paid'
+    const isSigned = !!signature
+    const primaryColor = invoice.brand_primary_color || '#0369a1'
+    const businessName = invoice.brand_business_name || invoice.contractor_name || 'RoofReporterAI'
+    const propertyAddr = invoice.property_address || ''
+
+    // Build line items HTML
+    let materialItems = '', laborItems = '', disposalItems = '', otherItems = ''
+    for (const it of (items.results || []) as any[]) {
+      const cat = (it as any).category || 'material'
+      const row = `<tr class="border-b border-gray-100 hover:bg-gray-50/50"><td class="py-3 px-3 text-gray-700 text-sm">${it.description}</td><td class="py-3 px-2 text-center text-sm text-gray-500">${it.quantity}</td><td class="py-3 px-2 text-right text-sm text-gray-500">$${parseFloat(it.unit_price).toFixed(2)}</td><td class="py-3 px-2 text-right font-semibold text-sm">$${parseFloat(it.amount).toFixed(2)}</td></tr>`
+      if (cat === 'labor') laborItems += row
+      else if (cat === 'disposal' || cat === 'recycling') disposalItems += row
+      else materialItems += row
+    }
+
+    // Build billing schedule HTML
+    let scheduleHtml = ''
+    if (schedule.results && schedule.results.length > 0) {
+      scheduleHtml = `<div class="mt-8"><h3 class="text-lg font-bold text-gray-800 mb-4"><i class="fas fa-calendar-check mr-2 text-sky-600"></i>Payment Schedule</h3><div class="space-y-3">`
+      for (const ms of schedule.results as any[]) {
+        const msPaid = ms.status === 'paid'
+        scheduleHtml += `<div class="flex items-center justify-between p-4 rounded-xl border ${msPaid ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200'}">
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-full flex items-center justify-center ${msPaid ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-500'}"><i class="fas ${msPaid ? 'fa-check' : 'fa-clock'} text-sm"></i></div>
+            <div><p class="font-semibold text-sm ${msPaid ? 'text-green-800' : 'text-gray-800'}">${ms.label}</p><p class="text-xs text-gray-500">${ms.trigger_description || ''}</p></div>
+          </div>
+          <div class="text-right"><p class="font-bold text-lg ${msPaid ? 'text-green-700' : 'text-gray-800'}">$${parseFloat(ms.amount).toFixed(2)}</p><p class="text-xs ${msPaid ? 'text-green-600' : 'text-gray-400'}">${ms.percentage}% ${msPaid ? '— Paid' : ''}</p></div>
+        </div>`
+      }
+      scheduleHtml += '</div></div>'
+    }
+
+    // Build change orders HTML
+    let coHtml = ''
+    if (changeOrders.results && changeOrders.results.length > 0) {
+      coHtml = `<div class="mt-8"><h3 class="text-lg font-bold text-gray-800 mb-4"><i class="fas fa-file-medical mr-2 text-amber-600"></i>Change Orders</h3><div class="space-y-3">`
+      for (const co of changeOrders.results as any[]) {
+        const coApproved = (co as any).status === 'approved'
+        coHtml += `<div class="p-4 rounded-xl border ${coApproved ? 'bg-blue-50 border-blue-200' : 'bg-amber-50 border-amber-200'}">
+          <div class="flex justify-between items-start"><div><p class="font-bold text-sm">${(co as any).change_order_number}</p><p class="text-sm text-gray-600 mt-1">${(co as any).description}</p>${(co as any).reason ? `<p class="text-xs text-gray-400 mt-1">Reason: ${(co as any).reason}</p>` : ''}</div>
+          <div class="text-right"><p class="font-bold text-lg ${(co as any).amount_change >= 0 ? 'text-amber-700' : 'text-green-700'}">${(co as any).amount_change >= 0 ? '+' : ''}$${parseFloat((co as any).amount_change).toFixed(2)}</p><p class="text-xs ${coApproved ? 'text-blue-600' : 'text-amber-600'}">${coApproved ? 'Approved' : 'Pending'}</p></div></div>
+        </div>`
+      }
+      coHtml += '</div></div>'
+    }
+
+    const baseUrl = new URL(c.req.url).origin
+
+    return c.html(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Invoice ${invoice.invoice_number} — ${businessName}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+    body { font-family: 'Inter', system-ui, -apple-system, sans-serif; }
+    .sig-pad { border: 2px dashed #cbd5e1; border-radius: 12px; cursor: crosshair; touch-action: none; }
+    .sig-pad.active { border-color: ${primaryColor}; border-style: solid; }
+    @media print { .no-print { display: none !important; } body { background: white; } }
+  </style>
+</head>
+<body class="bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen">
+  <div class="max-w-4xl mx-auto py-8 px-4">
+    <!-- Status Banner -->
+    ${isPaid ? `<div class="bg-green-50 border border-green-300 rounded-2xl p-6 mb-6 text-center no-print"><i class="fas fa-check-circle text-green-500 text-4xl mb-2"></i><h2 class="text-xl font-bold text-green-800">Payment Complete</h2><p class="text-green-600 text-sm mt-1">Thank you for your payment.</p></div>` : ''}
+
+    <!-- Invoice Card -->
+    <div class="bg-white rounded-3xl shadow-2xl overflow-hidden">
+      <!-- Header -->
+      <div class="bg-gradient-to-r from-sky-800 to-sky-600 px-8 py-8 text-white relative overflow-hidden">
+        <div class="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/3"></div>
+        <div class="relative z-10 flex justify-between items-start">
+          <div>
+            ${invoice.brand_logo_url ? `<img src="${invoice.brand_logo_url}" alt="${businessName}" class="h-10 mb-3 brightness-0 invert">` : `<h2 class="text-xl font-black tracking-tight">${businessName}</h2>`}
+            <p class="text-sky-200 text-sm mt-1">INVOICE #${invoice.invoice_number}</p>
+            <p class="text-sky-300 text-xs mt-1">${propertyAddr ? `Property: ${propertyAddr}` : ''}</p>
+          </div>
+          <div class="text-right">
+            <span class="inline-block px-4 py-1.5 rounded-full text-xs font-bold tracking-wider ${isPaid ? 'bg-green-500' : isSigned ? 'bg-blue-400' : 'bg-white/20'}">${isPaid ? 'PAID' : isSigned ? 'APPROVED' : (invoice.status || 'DRAFT').toUpperCase()}</span>
+            <p class="text-sky-200 text-xs mt-3">Issued: ${invoice.issue_date || 'N/A'}</p>
+            <p class="text-sky-200 text-xs">Due: ${invoice.due_date || 'N/A'}</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bill To / Total -->
+      <div class="px-8 py-6 border-b border-gray-100">
+        <div class="grid md:grid-cols-2 gap-6">
+          <div>
+            <p class="text-xs text-gray-400 uppercase tracking-wider mb-2 font-bold">Bill To</p>
+            <p class="font-bold text-gray-900 text-lg">${invoice.customer_name || 'Customer'}</p>
+            ${invoice.customer_company ? `<p class="text-sm text-gray-500">${invoice.customer_company}</p>` : ''}
+            ${invoice.customer_email ? `<p class="text-sm text-gray-500">${invoice.customer_email}</p>` : ''}
+            ${invoice.customer_phone ? `<p class="text-sm text-gray-500">${invoice.customer_phone}</p>` : ''}
+          </div>
+          <div class="text-right">
+            <p class="text-xs text-gray-400 uppercase tracking-wider mb-2 font-bold">Amount Due</p>
+            <p class="text-4xl font-black" style="color:${primaryColor}">$${parseFloat(invoice.total).toFixed(2)}</p>
+            <p class="text-xs text-gray-400 mt-1">Canadian Dollars (CAD)</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Line Items -->
+      <div class="px-8 py-6">
+        ${materialItems ? `<h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3"><i class="fas fa-box mr-1"></i>Materials</h3>
+        <table class="w-full mb-6"><thead><tr class="border-b-2 border-gray-200"><th class="text-left py-2 px-3 text-xs text-gray-400 uppercase">Description</th><th class="text-center py-2 px-2 text-xs text-gray-400 uppercase">Qty</th><th class="text-right py-2 px-2 text-xs text-gray-400 uppercase">Unit Price</th><th class="text-right py-2 px-2 text-xs text-gray-400 uppercase">Amount</th></tr></thead><tbody>${materialItems}</tbody></table>` : ''}
+
+        ${laborItems ? `<h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3"><i class="fas fa-hard-hat mr-1"></i>Labor</h3>
+        <table class="w-full mb-6"><thead><tr class="border-b-2 border-gray-200"><th class="text-left py-2 px-3 text-xs text-gray-400 uppercase">Description</th><th class="text-center py-2 px-2 text-xs text-gray-400 uppercase">Qty</th><th class="text-right py-2 px-2 text-xs text-gray-400 uppercase">Unit Price</th><th class="text-right py-2 px-2 text-xs text-gray-400 uppercase">Amount</th></tr></thead><tbody>${laborItems}</tbody></table>` : ''}
+
+        ${disposalItems ? `<h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3"><i class="fas fa-recycle mr-1"></i>Disposal & Recycling</h3>
+        <table class="w-full mb-6"><thead><tr class="border-b-2 border-gray-200"><th class="text-left py-2 px-3 text-xs text-gray-400 uppercase">Description</th><th class="text-center py-2 px-2 text-xs text-gray-400 uppercase">Qty</th><th class="text-right py-2 px-2 text-xs text-gray-400 uppercase">Unit Price</th><th class="text-right py-2 px-2 text-xs text-gray-400 uppercase">Amount</th></tr></thead><tbody>${disposalItems}</tbody></table>` : ''}
+
+        <!-- Totals -->
+        <div class="border-t-2 border-gray-200 pt-4 space-y-2 max-w-sm ml-auto">
+          <div class="flex justify-between text-sm"><span class="text-gray-500">Subtotal</span><span class="font-medium">$${parseFloat(invoice.subtotal || 0).toFixed(2)}</span></div>
+          <div class="flex justify-between text-sm"><span class="text-gray-500">Tax (${invoice.tax_rate || 5}% GST)</span><span class="font-medium">$${parseFloat(invoice.tax_amount || 0).toFixed(2)}</span></div>
+          ${invoice.discount_amount ? `<div class="flex justify-between text-sm"><span class="text-gray-500">Discount</span><span class="font-medium text-green-600">-$${parseFloat(invoice.discount_amount).toFixed(2)}</span></div>` : ''}
+          <div class="flex justify-between text-2xl font-black pt-3 border-t-2 border-gray-300"><span style="color:${primaryColor}">Total</span><span style="color:${primaryColor}">$${parseFloat(invoice.total).toFixed(2)} CAD</span></div>
+        </div>
+      </div>
+
+      ${scheduleHtml ? `<div class="px-8 pb-6">${scheduleHtml}</div>` : ''}
+      ${coHtml ? `<div class="px-8 pb-6">${coHtml}</div>` : ''}
+
+      <!-- Download Report Button -->
+      ${invoice.order_id ? `<div class="px-8 py-4 bg-gray-50 border-t no-print">
+        <div class="flex items-center justify-between">
+          <div><p class="text-sm font-bold text-gray-700"><i class="fas fa-file-pdf mr-2 text-red-500"></i>Roof Measurement Report</p><p class="text-xs text-gray-400">Download the original measurement report for this project</p></div>
+          <a href="${baseUrl}/api/reports/${invoice.order_id}/html" target="_blank" class="bg-sky-600 hover:bg-sky-700 text-white px-5 py-2.5 rounded-lg font-bold text-sm transition-colors"><i class="fas fa-download mr-2"></i>View Report</a>
+        </div>
+      </div>` : ''}
+
+      <!-- E-Signature Section -->
+      ${!isSigned && !isPaid ? `<div class="px-8 py-6 bg-blue-50 border-t no-print" id="sig-section">
+        <h3 class="text-lg font-bold text-gray-800 mb-2"><i class="fas fa-signature mr-2 text-blue-600"></i>Approve & Sign</h3>
+        <p class="text-sm text-gray-500 mb-4">By signing below, you approve this invoice and authorize the work described above to proceed.</p>
+        <div class="grid md:grid-cols-2 gap-4 mb-4">
+          <div><label class="text-xs font-bold text-gray-500 uppercase">Full Name</label><input id="sig-name" type="text" placeholder="Your full name" class="w-full mt-1 px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-400 focus:border-blue-400 outline-none"></div>
+          <div><label class="text-xs font-bold text-gray-500 uppercase">Email</label><input id="sig-email" type="email" placeholder="Your email" class="w-full mt-1 px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-400 focus:border-blue-400 outline-none"></div>
+        </div>
+        <label class="text-xs font-bold text-gray-500 uppercase">Signature</label>
+        <canvas id="sig-canvas" width="600" height="150" class="sig-pad w-full mt-1 bg-white"></canvas>
+        <div class="flex items-center justify-between mt-3">
+          <button onclick="clearSig()" class="text-sm text-gray-400 hover:text-gray-600"><i class="fas fa-undo mr-1"></i>Clear</button>
+          <button onclick="submitSignature()" id="sig-btn" class="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-xl font-bold text-sm shadow-lg transition-all"><i class="fas fa-check mr-2"></i>Sign & Approve</button>
+        </div>
+      </div>` : ''}
+
+      ${isSigned ? `<div class="px-8 py-4 bg-green-50 border-t">
+        <div class="flex items-center gap-3"><i class="fas fa-check-circle text-green-500 text-xl"></i><div><p class="font-bold text-green-800 text-sm">Signed by ${signature.signer_name}</p><p class="text-xs text-green-600">${new Date(signature.signed_at).toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</p></div></div>
+      </div>` : ''}
+
+      <!-- Pay Button -->
+      ${!isPaid ? `<div class="px-8 py-8 text-center no-print bg-gradient-to-b from-white to-gray-50">
+        <button onclick="payNow()" id="payBtn" class="bg-gradient-to-r from-green-600 to-green-500 hover:from-green-700 hover:to-green-600 text-white px-12 py-5 rounded-2xl font-bold text-lg shadow-xl transition-all hover:shadow-2xl hover:scale-105"><i class="fas fa-credit-card mr-3"></i>Pay Now — $${parseFloat(invoice.total).toFixed(2)} CAD</button>
+        <p class="text-xs text-gray-400 mt-3"><i class="fas fa-lock mr-1"></i>Secured by Square Payment Processing</p>
+      </div>` : ''}
+
+      ${invoice.notes ? `<div class="px-8 py-4 bg-gray-50 border-t"><p class="text-xs text-gray-400 uppercase mb-1 font-bold">Notes & Terms</p><p class="text-sm text-gray-600">${invoice.notes}</p></div>` : ''}
+    </div>
+
+    <!-- Print / Download -->
+    <div class="text-center mt-6 space-x-4 no-print">
+      <button onclick="window.print()" class="text-sm text-gray-500 hover:text-gray-700"><i class="fas fa-print mr-1"></i>Print Invoice</button>
+    </div>
+    <p class="text-center text-xs text-gray-400 mt-4">Powered by <a href="/" class="text-sky-600 hover:underline">RoofReporterAI</a></p>
+  </div>
+
+  <script>
+    // E-Signature canvas
+    var canvas = document.getElementById('sig-canvas');
+    var sigData = '';
+    if (canvas) {
+      var ctx = canvas.getContext('2d');
+      var drawing = false;
+      canvas.addEventListener('pointerdown', function(e) { drawing = true; canvas.classList.add('active'); ctx.beginPath(); ctx.moveTo(e.offsetX, e.offsetY); });
+      canvas.addEventListener('pointermove', function(e) { if (!drawing) return; ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.strokeStyle = '#1e293b'; ctx.lineTo(e.offsetX, e.offsetY); ctx.stroke(); });
+      canvas.addEventListener('pointerup', function() { drawing = false; canvas.classList.remove('active'); sigData = canvas.toDataURL(); });
+      canvas.addEventListener('pointerleave', function() { drawing = false; canvas.classList.remove('active'); });
+    }
+    function clearSig() { if (canvas) { var ctx2 = canvas.getContext('2d'); ctx2.clearRect(0, 0, canvas.width, canvas.height); sigData = ''; } }
+    function submitSignature() {
+      var name = document.getElementById('sig-name').value.trim();
+      var email = document.getElementById('sig-email').value.trim();
+      if (!name) { alert('Please enter your full name.'); return; }
+      if (!sigData) { alert('Please sign the pad above.'); return; }
+      var btn = document.getElementById('sig-btn');
+      btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Submitting...';
+      fetch('/api/invoices/public/${token}/sign', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ signer_name: name, signer_email: email, signature_data: sigData })
+      }).then(function(r) { return r.json(); }).then(function(d) {
+        if (d.success) { location.reload(); } else { alert(d.error || 'Error'); btn.disabled = false; btn.innerHTML = '<i class="fas fa-check mr-2"></i>Sign & Approve'; }
+      }).catch(function() { alert('Network error'); btn.disabled = false; });
+    }
+    function payNow() {
+      var btn = document.getElementById('payBtn');
+      btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Redirecting...';
+      fetch('/api/invoices/${tokenRow.invoice_id}/payment-link', { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+        .then(function(r) { return r.json(); })
+        .then(function(d) { if (d.payment_url) { window.location.href = d.payment_url; } else { alert(d.error || 'Payment unavailable'); btn.disabled = false; btn.innerHTML = '<i class="fas fa-credit-card mr-3"></i>Pay Now'; } })
+        .catch(function() { alert('Network error'); btn.disabled = false; });
+    }
+  </script>
+</body>
+</html>`)
+  } catch (err: any) {
+    console.error('[PublicInvoice]', err)
+    return c.html(errorPage('Error', 'Something went wrong loading this invoice.'))
+  }
+})
+
+// ============================================================
+// PUBLIC E-SIGNATURE ENDPOINT (no admin auth)
+// ============================================================
+app.post('/api/invoices/public/:token/sign', async (c) => {
+  try {
+    const token = c.req.param('token')
+    const { signer_name, signer_email, signature_data } = await c.req.json()
+    const db = c.env.DB
+
+    if (!signer_name) return c.json({ error: 'Name is required' }, 400)
+    if (!signature_data) return c.json({ error: 'Signature is required' }, 400)
+
+    // Find invoice by token
+    const inv = await db.prepare(`
+      SELECT i.id FROM invoices i WHERE i.public_token = ?
+    `).bind(token).first<any>()
+    if (!inv) return c.json({ error: 'Invoice not found' }, 404)
+
+    // Check if already signed
+    const existing = await db.prepare('SELECT id FROM invoice_signatures WHERE invoice_id = ?').bind(inv.id).first()
+    if (existing) return c.json({ error: 'Invoice already signed' }, 400)
+
+    // Save signature
+    await db.prepare(`
+      INSERT INTO invoice_signatures (invoice_id, signer_name, signer_email, signature_data, ip_address, user_agent)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).bind(
+      inv.id, signer_name, signer_email || null, signature_data,
+      c.req.header('CF-Connecting-IP') || c.req.header('X-Forwarded-For') || 'unknown',
+      c.req.header('User-Agent') || 'unknown'
+    ).run()
+
+    // Update invoice
+    await db.prepare("UPDATE invoices SET signed_at = datetime('now'), signed_by = ?, updated_at = datetime('now') WHERE id = ?").bind(signer_name, inv.id).run()
+
+    // Log
+    await db.prepare(`
+      INSERT INTO user_activity_log (company_id, action, details)
+      VALUES (1, 'invoice_signed', ?)
+    `).bind(`Invoice #${inv.id} signed by ${signer_name} (${signer_email || 'no email'})`).run()
+
+    return c.json({ success: true, message: 'Invoice signed successfully' })
+  } catch (err: any) {
+    return c.json({ error: 'Failed to save signature', details: err.message }, 500)
+  }
+})
+
+function errorPage(title: string, message: string): string {
+  return `<!DOCTYPE html><html><head><title>${title}</title><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-gray-50 min-h-screen flex items-center justify-center"><div class="text-center max-w-md px-6"><div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4"><i class="fas fa-exclamation-triangle text-red-500 text-2xl"></i></div><h1 class="text-2xl font-bold text-gray-800 mb-2">${title}</h1><p class="text-gray-500">${message}</p><a href="/" class="mt-6 inline-block text-sky-600 hover:underline text-sm">Back to RoofReporterAI</a></div></body></html>`
+}
+
+// ============================================================
 // TERMS OF SERVICE
 // ============================================================
 app.get('/terms', (c) => {

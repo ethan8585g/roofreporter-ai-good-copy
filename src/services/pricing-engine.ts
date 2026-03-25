@@ -20,6 +20,15 @@ export interface RoofPresetCosts {
   tearoff_per_square: number       // $/square (e.g. 45.00)
   disposal_per_square: number      // $/square (e.g. 25.00)
   
+  // Steep-roof premium (applied when pitch >= 8:12)
+  steep_labor_premium_pct: number  // decimal (e.g. 0.25 = 25% extra for steep)
+  steep_pitch_threshold: number    // rise:12 threshold (e.g. 8 = 8:12)
+  
+  // Recycling & disposal fees
+  recycling_fee_per_square: number // $/square for recycling (e.g. 15.00)
+  dumpster_flat_fee: number        // flat fee per dumpster (e.g. 450.00)
+  dumpster_sqft_per_unit: number   // sqft of tearoff per dumpster (e.g. 3000)
+  
   // Ice & water shield
   ice_shield_per_roll: number      // $/roll (e.g. 85.00)
   
@@ -94,6 +103,11 @@ export const DEFAULT_PRESETS: RoofPresetCosts = {
   labor_per_square: 180.00,
   tearoff_per_square: 45.00,
   disposal_per_square: 25.00,
+  steep_labor_premium_pct: 0.25,   // 25% extra labor for steep roofs
+  steep_pitch_threshold: 8,         // 8:12 and above = steep premium
+  recycling_fee_per_square: 12.00,  // recycling processing fee
+  dumpster_flat_fee: 450.00,        // per dumpster rental
+  dumpster_sqft_per_unit: 3000,     // sqft of tearoff material per dumpster
   ice_shield_per_roll: 85.00,
   waste_factor: 0.15,
   tax_rate: 0.05,
@@ -236,29 +250,63 @@ export function calculateProposal(
     })
   }
 
-  // 8. Labor
-  const laborCost = grossSquares * presets.labor_per_square
+  // 8. Labor (with steep-roof premium)
+  const pitchStr = measurements.dominant_pitch || ''
+  const pitchRise = pitchStr ? parseInt(pitchStr.split(':')[0]) || 0 : 0
+  const isSteep = pitchRise >= (presets.steep_pitch_threshold || 8)
+  const laborRate = isSteep
+    ? presets.labor_per_square * (1 + (presets.steep_labor_premium_pct || 0.25))
+    : presets.labor_per_square
+  const laborCost = grossSquares * laborRate
   lineItems.push({
-    item: 'Installation Labor',
-    description: `Professional installation`,
+    item: isSteep ? 'Installation Labor (Steep-Roof Premium)' : 'Installation Labor',
+    description: isSteep
+      ? `Professional installation — ${pitchStr} pitch (${Math.round((presets.steep_labor_premium_pct || 0.25) * 100)}% steep premium applied)`
+      : `Professional installation`,
     qty: round2(grossSquares),
     unit: 'Squares',
-    unit_price: presets.labor_per_square,
+    unit_price: round2(laborRate),
     price: round2(laborCost)
   })
 
-  // 9. Tear-off & Disposal
-  const tearoffCost = grossSquares * (presets.tearoff_per_square + presets.disposal_per_square)
+  // 9. Tear-off
+  const tearoffCost = grossSquares * presets.tearoff_per_square
   lineItems.push({
-    item: 'Tear-off & Disposal',
-    description: `Remove existing roofing + dumpster/disposal`,
+    item: 'Tear-off (Existing Roofing)',
+    description: `Remove existing roofing material`,
     qty: round2(grossSquares),
     unit: 'Squares',
-    unit_price: presets.tearoff_per_square + presets.disposal_per_square,
+    unit_price: presets.tearoff_per_square,
     price: round2(tearoffCost)
   })
 
-  // 10. Custom items
+  // 10. Disposal & Dumpster
+  const dumpsterCount = Math.ceil(measurements.total_area_sqft / (presets.dumpster_sqft_per_unit || 3000))
+  const disposalCost = grossSquares * presets.disposal_per_square
+  const dumpsterCost = dumpsterCount * (presets.dumpster_flat_fee || 450)
+  lineItems.push({
+    item: 'Disposal & Dumpster Rental',
+    description: `Waste disposal + ${dumpsterCount} dumpster${dumpsterCount > 1 ? 's' : ''} rental`,
+    qty: dumpsterCount,
+    unit: 'Dumpsters',
+    unit_price: round2(presets.dumpster_flat_fee || 450),
+    price: round2(dumpsterCost)
+  })
+
+  // 11. Recycling Fee (environmental processing)
+  if (presets.recycling_fee_per_square && presets.recycling_fee_per_square > 0) {
+    const recyclingCost = grossSquares * presets.recycling_fee_per_square
+    lineItems.push({
+      item: 'Recycling & Environmental Fee',
+      description: `Asphalt shingle recycling processing fee`,
+      qty: round2(grossSquares),
+      unit: 'Squares',
+      unit_price: presets.recycling_fee_per_square,
+      price: round2(recyclingCost)
+    })
+  }
+
+  // 12. Custom items
   if (presets.custom_items) {
     for (const ci of presets.custom_items) {
       lineItems.push({
@@ -363,6 +411,55 @@ export function extractMeasurementsFromReport(reportData: any): RoofMeasurements
     wall_flashing_ft: es.total_wall_flashing_ft || 0,
     dominant_pitch: reportData?.roof_pitch_ratio || '',
     num_facets: (reportData?.segments || []).length,
+  }
+}
+
+// ============================================================
+// PROGRESS BILLING SCHEDULE — Generate deposit + progress + final
+// ============================================================
+export interface ProgressBillingSchedule {
+  deposit: { pct: number; amount: number; description: string; due: string }
+  progress_payments: { pct: number; amount: number; description: string; trigger: string }[]
+  final: { pct: number; amount: number; description: string; due: string }
+  total: number
+}
+
+export function generateProgressBilling(
+  totalAmount: number,
+  depositPct: number = 30,
+  progressSteps: { pct: number; trigger: string }[] = [{ pct: 40, trigger: 'Materials delivered & tear-off complete' }]
+): ProgressBillingSchedule {
+  const depositAmount = round2(totalAmount * depositPct / 100)
+  let remaining = totalAmount - depositAmount
+  
+  const progressPayments = progressSteps.map(step => {
+    const amount = round2(totalAmount * step.pct / 100)
+    remaining -= amount
+    return {
+      pct: step.pct,
+      amount,
+      description: `Progress Payment (${step.pct}%)`,
+      trigger: step.trigger
+    }
+  })
+
+  const finalPct = 100 - depositPct - progressSteps.reduce((s, p) => s + p.pct, 0)
+
+  return {
+    deposit: {
+      pct: depositPct,
+      amount: depositAmount,
+      description: `Deposit (${depositPct}%) — Due upon contract signing`,
+      due: 'Upon contract signing'
+    },
+    progress_payments: progressPayments,
+    final: {
+      pct: finalPct,
+      amount: round2(remaining),
+      description: `Final Balance (${finalPct}%) — Due upon project completion`,
+      due: 'Upon completion & final walkthrough'
+    },
+    total: totalAmount
   }
 }
 

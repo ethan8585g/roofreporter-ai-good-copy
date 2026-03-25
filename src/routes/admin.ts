@@ -334,6 +334,85 @@ adminRoutes.post('/init-db', async (c) => {
         invoice_id INTEGER NOT NULL, description TEXT NOT NULL,
         quantity REAL DEFAULT 1, unit_price REAL DEFAULT 0,
         amount REAL DEFAULT 0, sort_order INTEGER DEFAULT 0,
+        category TEXT DEFAULT 'material',
+        FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE CASCADE
+      )
+    `).run()
+
+    // Invoice progress billing schedule
+    await c.env.DB.prepare(`
+      CREATE TABLE IF NOT EXISTS invoice_billing_schedule (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        invoice_id INTEGER NOT NULL,
+        label TEXT NOT NULL,
+        percentage REAL NOT NULL,
+        amount REAL NOT NULL,
+        trigger_description TEXT,
+        status TEXT DEFAULT 'pending',
+        due_date TEXT,
+        paid_date TEXT,
+        payment_reference TEXT,
+        sort_order INTEGER DEFAULT 0,
+        created_at TEXT DEFAULT (datetime('now')),
+        FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE CASCADE
+      )
+    `).run()
+
+    // Change orders (appended to invoice)
+    await c.env.DB.prepare(`
+      CREATE TABLE IF NOT EXISTS invoice_change_orders (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        invoice_id INTEGER NOT NULL,
+        change_order_number TEXT NOT NULL,
+        description TEXT NOT NULL,
+        reason TEXT,
+        amount_change REAL DEFAULT 0,
+        status TEXT DEFAULT 'pending',
+        approved_at TEXT,
+        approved_by TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
+        FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE CASCADE
+      )
+    `).run()
+
+    // Change order line items
+    await c.env.DB.prepare(`
+      CREATE TABLE IF NOT EXISTS invoice_change_order_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        change_order_id INTEGER NOT NULL,
+        description TEXT NOT NULL,
+        quantity REAL DEFAULT 1,
+        unit_price REAL DEFAULT 0,
+        amount REAL DEFAULT 0,
+        FOREIGN KEY (change_order_id) REFERENCES invoice_change_orders(id) ON DELETE CASCADE
+      )
+    `).run()
+
+    // E-signature records
+    await c.env.DB.prepare(`
+      CREATE TABLE IF NOT EXISTS invoice_signatures (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        invoice_id INTEGER NOT NULL,
+        signer_name TEXT NOT NULL,
+        signer_email TEXT,
+        signature_data TEXT,
+        ip_address TEXT,
+        user_agent TEXT,
+        signed_at TEXT DEFAULT (datetime('now')),
+        FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE CASCADE
+      )
+    `).run()
+
+    // Public invoice access tokens
+    await c.env.DB.prepare(`
+      CREATE TABLE IF NOT EXISTS invoice_access_tokens (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        invoice_id INTEGER NOT NULL,
+        access_token TEXT UNIQUE NOT NULL,
+        expires_at TEXT,
+        views INTEGER DEFAULT 0,
+        last_viewed_at TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
         FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE CASCADE
       )
     `).run()
@@ -346,6 +425,20 @@ adminRoutes.post('/init-db', async (c) => {
         FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE
       )
     `).run()
+
+    // Invoice table migrations (add columns safely)
+    const invoiceCols = [
+      'payment_link TEXT',
+      'public_token TEXT',
+      'billing_type TEXT DEFAULT \'standard\'',
+      'signed_at TEXT',
+      'signed_by TEXT',
+      'report_data_json TEXT',
+      'property_address TEXT'
+    ]
+    for (const col of invoiceCols) {
+      try { await c.env.DB.prepare(`ALTER TABLE invoices ADD COLUMN ${col}`).run() } catch(e) {}
+    }
 
     // Add customer_id to orders if not present
     try { await c.env.DB.prepare('ALTER TABLE orders ADD COLUMN customer_id INTEGER REFERENCES customers(id)').run() } catch(e) {}
