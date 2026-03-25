@@ -37,14 +37,26 @@ function saHeaders() {
 }
 
 async function saFetch(url, opts) {
-  const res = await fetch(url, { headers: saHeaders(), ...(opts || {}) });
+  // CRITICAL: Merge headers properly — don't let opts.headers overwrite auth token
+  var mergedOpts = Object.assign({}, opts || {});
+  mergedOpts.headers = Object.assign({}, saHeaders(), mergedOpts.headers || {});
+  const res = await fetch(url, mergedOpts);
   if (res.status === 401 || res.status === 403) {
     // Check if this is a service-level auth error (not session expiry)
     // Don't logout for API endpoints that may return 403 for missing config
     try {
       const clone = res.clone();
       const body = await clone.json();
-      if (body.error && (body.error.includes('not configured') || body.error.includes('Admin access') || body.error.includes('Super admin'))) {
+      if (body.error && (
+        body.error.includes('not configured') || 
+        body.error.includes('Admin access') || 
+        body.error.includes('Super admin') || 
+        body.error.includes('Admin authentication') || 
+        body.error.includes('Forbidden') || 
+        body.error.includes('Superadmin required') ||
+        body.error.includes('Unauthorized') ||
+        body.error.includes('required')
+      )) {
         // Service-level issue, not session expiry — return error response without logout
         return res;
       }
@@ -167,8 +179,8 @@ async function loadView(view) {
         }
         break;
       case 'ai-chat':
-        // Handled by ai-admin-chat.js — renderAIChat() is a global function
-        // No data to load, just render the chat UI
+        // Redirected to Gemini Command Center
+        SA.currentView = 'gemini-command';
         break;
       case 'invoices':
         try {
@@ -354,7 +366,7 @@ function renderContent() {
     case 'secretary-manager': root.innerHTML = renderSecretaryManagerView(); break;
     case 'secretary-monitor': root.innerHTML = renderSecretaryMonitorView(); break;
     case 'secretary-revenue': root.innerHTML = renderSecretaryRevenueView(); break;
-    case 'ai-chat': root.innerHTML = (typeof renderAIChat === 'function') ? renderAIChat() : '<div class="p-8 text-gray-500">AI Chat module not loaded.</div>'; break;
+    case 'ai-chat': root.innerHTML = renderGeminiCommandView(); break; // Redirect to Gemini
     case 'contact-forms': root.innerHTML = renderContactFormsView(); loadContactForms(); break;
     case 'seo-manager': root.innerHTML = renderSEOManagerView(); break;
     case 'onboarding-config': root.innerHTML = renderOnboardingConfigView(); loadOnboardingConfig(); break;
@@ -6104,6 +6116,8 @@ if (!SA.geminiLoading) SA.geminiLoading = false;
 function renderGeminiCommandView() {
   const status = SA.data.gemini_status || {};
   const isConfigured = status.configured && status.status === 'ok';
+  const aiBackend = status.backend || (status.model === 'openai-fallback' ? 'openai' : 'gemini');
+  const aiModel = status.model || 'gemini-2.5-flash';
 
   return `
   <div class="slide-in">
@@ -6135,9 +6149,9 @@ function renderGeminiCommandView() {
         <div class="flex items-start gap-3">
           <i class="fas fa-exclamation-triangle text-amber-500 text-xl mt-0.5"></i>
           <div>
-            <h3 class="font-bold text-amber-800 text-sm">Gemini API Key Required</h3>
-            <p class="text-amber-700 text-xs mt-1">Set <code class="bg-amber-100 px-1.5 py-0.5 rounded text-[11px]">GEMINI_API_KEY</code> or <code class="bg-amber-100 px-1.5 py-0.5 rounded text-[11px]">GOOGLE_VERTEX_API_KEY</code> in your Cloudflare secrets.</p>
-            <p class="text-amber-600 text-[11px] mt-1">Get a free API key at <a href="https://aistudio.google.com/apikey" target="_blank" class="underline">aistudio.google.com</a> — 60 requests/min free tier</p>
+            <h3 class="font-bold text-amber-800 text-sm">AI API Configuration</h3>
+            <p class="text-amber-700 text-xs mt-1">${status.error || 'AI backend not responding.'}${aiBackend === 'openai' ? ' Using OpenAI as fallback.' : ''}</p>
+            <p class="text-amber-600 text-[11px] mt-1">For best results, set <code class="bg-amber-100 px-1.5 py-0.5 rounded text-[11px]">GEMINI_API_KEY</code> in Cloudflare secrets. Get a free key at <a href="https://aistudio.google.com/apikey" target="_blank" class="underline">aistudio.google.com</a></p>
           </div>
         </div>
       </div>
@@ -6196,7 +6210,7 @@ function renderGeminiCommandView() {
       <div class="sa-section-header bg-gradient-to-r from-slate-800 to-slate-900">
         <h3 class="text-white" style="color:white"><i class="fas fa-terminal mr-2" style="color:#60a5fa"></i>AI Terminal</h3>
         <div class="flex items-center gap-2">
-          <span class="text-[10px] text-slate-400 font-mono">gemini-2.5-flash</span>
+          <span class="text-[10px] text-slate-400 font-mono">${aiModel}${aiBackend === 'openai' ? ' (OpenAI)' : ''}</span>
           <div class="w-2 h-2 rounded-full ${isConfigured ? 'bg-green-400 animate-pulse' : 'bg-red-400'}"></div>
         </div>
       </div>

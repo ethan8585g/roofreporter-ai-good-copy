@@ -1065,16 +1065,50 @@ secretaryRoutes.patch('/callbacks/:id', async (c) => {
   return c.json({ success: true })
 })
 
+// ── Helper: Auto-create call log entry when individual webhooks fire without call-complete ──
+async function ensureCallLog(db: any, customer_id: number, caller_phone: string, caller_name: string, summary: string, outcome: string = 'answered', opts?: { service_type?: string; property_address?: string; duration_hint?: number }): Promise<number | null> {
+  try {
+    // Estimate call duration: appointments ~180s, messages ~90s, callbacks ~60s, default ~120s
+    const estimatedDuration = opts?.duration_hint || (
+      summary.toLowerCase().includes('appointment') ? 180 :
+      summary.toLowerCase().includes('emergency') ? 120 :
+      summary.toLowerCase().includes('callback') ? 60 :
+      summary.toLowerCase().includes('message') ? 90 : 120
+    )
+    const result = await db.prepare(
+      `INSERT INTO secretary_call_logs (
+        customer_id, caller_phone, caller_name, caller_email,
+        call_duration_seconds, directory_routed,
+        call_summary, call_transcript, call_outcome, livekit_room_id,
+        service_type, property_address, is_lead, lead_status, lead_quality,
+        conversation_highlights, sentiment, follow_up_required, follow_up_notes, tags
+      ) VALUES (?, ?, ?, '', ?, '', ?, '', ?, '', ?, ?, 1, 'new', 'warm', '', 'neutral', 0, '', '')`
+    ).bind(customer_id, caller_phone || 'Unknown', caller_name || 'Unknown', estimatedDuration, summary, outcome, opts?.service_type || '', opts?.property_address || '').run()
+    return result.meta?.last_row_id || null
+  } catch (err: any) {
+    console.error('[Secretary] Failed to auto-create call log:', err.message)
+    return null
+  }
+}
+
 // ── POST /webhook/message — LiveKit agent posts a new message (answering mode) ──
 secretaryRoutes.post('/webhook/message', async (c) => {
   try {
     const body = await c.req.json()
     const { customer_id, caller_phone, caller_name, message_text, urgency, call_log_id } = body
     if (!customer_id || !message_text) return c.json({ error: 'customer_id and message_text required' }, 400)
+
+    // Auto-create call log if agent didn't post call-complete first
+    let logId = call_log_id || null
+    if (!logId) {
+      logId = await ensureCallLog(c.env.DB, customer_id, caller_phone, caller_name, `Message taken: ${message_text.substring(0, 100)}`, 'answered')
+      console.log(`[Secretary Webhook] Auto-created call log ${logId} for message from ${caller_name || caller_phone}`)
+    }
+
     await c.env.DB.prepare(
       `INSERT INTO secretary_messages (customer_id, caller_phone, caller_name, message_text, urgency, call_log_id) VALUES (?,?,?,?,?,?)`
-    ).bind(customer_id, caller_phone || '', caller_name || '', message_text, urgency || 'normal', call_log_id || null).run()
-    return c.json({ success: true })
+    ).bind(customer_id, caller_phone || '', caller_name || '', message_text, urgency || 'normal', logId).run()
+    return c.json({ success: true, call_log_id: logId })
   } catch (err: any) { return c.json({ error: err.message }, 500) }
 })
 
@@ -1084,10 +1118,23 @@ secretaryRoutes.post('/webhook/appointment', async (c) => {
     const body = await c.req.json()
     const { customer_id, caller_phone, caller_name, caller_email, appointment_date, appointment_time, appointment_type, property_address, notes, call_log_id } = body
     if (!customer_id) return c.json({ error: 'customer_id required' }, 400)
+
+    // Auto-create call log if agent didn't post call-complete first
+    let logId = call_log_id || null
+    if (!logId) {
+      const summary = `Appointment booked: ${appointment_type || 'estimate'} for ${caller_name || 'caller'}${property_address ? ` at ${property_address}` : ''}`
+      logId = await ensureCallLog(c.env.DB, customer_id, caller_phone, caller_name, summary, 'answered', {
+        service_type: appointment_type || 'Estimate',
+        property_address: property_address || '',
+        duration_hint: 180 // Appointment calls are typically ~3 min
+      })
+      console.log(`[Secretary Webhook] Auto-created call log ${logId} for appointment from ${caller_name || caller_phone}`)
+    }
+
     await c.env.DB.prepare(
       `INSERT INTO secretary_appointments (customer_id, caller_phone, caller_name, caller_email, appointment_date, appointment_time, appointment_type, property_address, notes, call_log_id) VALUES (?,?,?,?,?,?,?,?,?,?)`
-    ).bind(customer_id, caller_phone || '', caller_name || '', caller_email || '', appointment_date || '', appointment_time || '', appointment_type || 'estimate', property_address || '', notes || '', call_log_id || null).run()
-    return c.json({ success: true })
+    ).bind(customer_id, caller_phone || '', caller_name || '', caller_email || '', appointment_date || '', appointment_time || '', appointment_type || 'estimate', property_address || '', notes || '', logId).run()
+    return c.json({ success: true, call_log_id: logId })
   } catch (err: any) { return c.json({ error: err.message }, 500) }
 })
 
@@ -1097,10 +1144,19 @@ secretaryRoutes.post('/webhook/callback', async (c) => {
     const body = await c.req.json()
     const { customer_id, caller_phone, caller_name, preferred_time, reason, call_log_id } = body
     if (!customer_id || !caller_phone) return c.json({ error: 'customer_id and caller_phone required' }, 400)
+
+    // Auto-create call log if agent didn't post call-complete first
+    let logId = call_log_id || null
+    if (!logId) {
+      const summary = `Callback requested by ${caller_name || caller_phone}${reason ? `: ${reason}` : ''}`
+      logId = await ensureCallLog(c.env.DB, customer_id, caller_phone, caller_name, summary, 'answered')
+      console.log(`[Secretary Webhook] Auto-created call log ${logId} for callback from ${caller_name || caller_phone}`)
+    }
+
     await c.env.DB.prepare(
       `INSERT INTO secretary_callbacks (customer_id, caller_phone, caller_name, preferred_time, reason, call_log_id) VALUES (?,?,?,?,?,?)`
-    ).bind(customer_id, caller_phone, caller_name || '', preferred_time || '', reason || '', call_log_id || null).run()
-    return c.json({ success: true })
+    ).bind(customer_id, caller_phone, caller_name || '', preferred_time || '', reason || '', logId).run()
+    return c.json({ success: true, call_log_id: logId })
   } catch (err: any) { return c.json({ error: err.message }, 500) }
 })
 

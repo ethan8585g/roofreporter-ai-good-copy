@@ -27,7 +27,7 @@ import { workersAiRoutes } from './routes/workers-ai'
 import { reportImagesRoutes } from './routes/report-images'
 import { callCenterRoutes } from './routes/call-center'
 import { metaConnectRoutes } from './routes/meta-connect'
-import { aiAdminChatRoutes } from './routes/ai-admin-chat'
+// AI Site Manager removed — consolidated into Gemini Command Center
 import { geminiRoutes } from './routes/gemini'
 import { pipelineRoutes } from './routes/pipeline'
 import { stripeRoutes } from './routes/stripe'
@@ -182,7 +182,7 @@ app.route('/api/orders', ordersRoutes)
 app.route('/api/companies', companiesRoutes)
 app.route('/api/settings', settingsRoutes)
 app.route('/api/reports', reportsRoutes)
-app.route('/api/ai-admin', aiAdminChatRoutes)
+// app.route('/api/ai-admin', aiAdminChatRoutes) // Removed — use /api/gemini/* instead
 app.route('/api/gemini', geminiRoutes)
 app.route('/api/admin', adminRoutes)
 app.route('/api/ai', aiAnalysisRoutes)
@@ -2205,9 +2205,7 @@ function getSuperAdminDashboardHTML() {
         <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('gemini-command', this)">
           <i class="fas fa-terminal w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Gemini Command</span>
         </div>
-        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('ai-chat', this)">
-          <i class="fas fa-brain w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">AI Site Manager</span>
-        </div>
+        <!-- AI Site Manager removed — consolidated into Gemini Command Center -->
 
         <p class="sa-nav-group-label mt-3">Platform Admin</p>
         <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('enhanced-onboarding', this)">
@@ -2299,7 +2297,6 @@ function getSuperAdminDashboardHTML() {
   </script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
-  <script src="/static/ai-admin-chat.js?v=${BUILD_VERSION}"></script>
   <script src="/static/super-admin-dashboard.js?v=${BUILD_VERSION}"></script>
   <script src="/static/call-center.js?v=${BUILD_VERSION}"></script>
   <script src="/static/meta-connect.js?v=${BUILD_VERSION}"></script>
@@ -2404,7 +2401,6 @@ function getAdminPageHTML() {
       window.location.href = '/login';
     }
   </script>
-  <script src="/static/ai-admin-chat.js?v=${BUILD_VERSION}"></script>
   <script src="/static/admin.js?v=${BUILD_VERSION}"></script>
 </body>
 </html>`

@@ -770,45 +770,58 @@ async function paLoadLiveDashboard() {
   if (!el) return;
   try {
     var res = await paFetch('/live-dashboard');
+    if (!res || !res.ok) { el.innerHTML = '<p class="text-red-500">Failed to load dashboard data. Check admin session.</p>'; return; }
     var data = await res.json();
     PA.liveDash = data;
+    var msgs = data.messages || {};
     el.innerHTML =
-      // Stat cards
-      '<div class="grid grid-cols-5 gap-4">' +
-        paStatCard('Active Calls', data.active_calls, 'fa-phone-volume', 'bg-green-500', 'animate-pulse') +
-        paStatCard('Today Calls', data.today?.total || 0, 'fa-calendar-day', 'bg-blue-500') +
+      // Stat cards — Secretary data
+      '<div class="grid grid-cols-2 md:grid-cols-5 gap-4">' +
+        paStatCard('Today Calls', data.today?.total || 0, 'fa-phone-volume', 'bg-blue-500') +
         paStatCard('Today Leads', data.today?.leads || 0, 'fa-user-check', 'bg-violet-500') +
-        paStatCard('Avg Duration', Math.round(data.today?.avg_duration || 0) + 's', 'fa-clock', 'bg-amber-500') +
-        paStatCard('30d Cost', '$' + ((data.cost_summary?.total_cost || 0) / 100).toFixed(2), 'fa-dollar-sign', 'bg-red-500') +
+        paStatCard('7d Calls', data.week?.total || 0, 'fa-calendar-week', 'bg-green-500') +
+        paStatCard('30d Calls', data.month?.total || 0, 'fa-calendar', 'bg-amber-500') +
+        paStatCard('Avg Duration', Math.round(data.today?.avg_duration || 0) + 's', 'fa-clock', 'bg-teal-500') +
+      '</div>' +
+
+      // Quick alerts
+      '<div class="grid grid-cols-3 gap-4">' +
+        '<div class="bg-blue-50 rounded-xl p-4 border border-blue-100"><div class="text-xs text-blue-600 font-semibold mb-1"><i class="fas fa-envelope mr-1"></i>Unread Messages</div><div class="text-2xl font-bold text-blue-800">' + (msgs.unread_messages || 0) + '</div></div>' +
+        '<div class="bg-violet-50 rounded-xl p-4 border border-violet-100"><div class="text-xs text-violet-600 font-semibold mb-1"><i class="fas fa-calendar-check mr-1"></i>Pending Appointments</div><div class="text-2xl font-bold text-violet-800">' + (msgs.pending_appointments || 0) + '</div></div>' +
+        '<div class="bg-amber-50 rounded-xl p-4 border border-amber-100"><div class="text-xs text-amber-600 font-semibold mb-1"><i class="fas fa-phone-volume mr-1"></i>Pending Callbacks</div><div class="text-2xl font-bold text-amber-800">' + (msgs.pending_callbacks || 0) + '</div></div>' +
       '</div>' +
 
       // Recent calls
       '<div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">' +
-        '<h3 class="font-bold text-gray-700 mb-4"><i class="fas fa-list mr-2 text-blue-500"></i>Recent Calls</h3>' +
+        '<h3 class="font-bold text-gray-700 mb-4"><i class="fas fa-list mr-2 text-blue-500"></i>Recent Secretary Calls</h3>' +
         (data.recent_calls && data.recent_calls.length > 0 ?
           '<div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="text-xs text-gray-500 border-b">' +
-            '<th class="py-2 text-left">Time</th><th class="text-left">Prospect</th><th class="text-left">Outcome</th><th class="text-left">Duration</th><th class="text-left">Agent</th>' +
+            '<th class="py-2 text-left">Time</th><th class="text-left">Caller</th><th class="text-left">Service</th><th class="text-left">Outcome</th><th class="text-left">Duration</th><th class="text-left">Lead</th>' +
           '</tr></thead><tbody>' +
           data.recent_calls.map(function(call) {
-            var color = call.outcome === 'interested' ? 'text-green-600 bg-green-50' : call.outcome === 'appointment_set' ? 'text-violet-600 bg-violet-50' : call.outcome === 'no_answer' ? 'text-gray-400 bg-gray-50' : 'text-gray-600 bg-gray-50';
-            return '<tr class="border-b border-gray-50"><td class="py-2 text-gray-500">' + new Date(call.created_at).toLocaleString() + '</td>' +
-              '<td>' + (call.prospect_name || call.phone_number || '-') + '</td>' +
-              '<td><span class="px-2 py-0.5 rounded text-xs font-semibold ' + color + '">' + (call.outcome || '-') + '</span></td>' +
-              '<td>' + (call.duration_seconds || 0) + 's</td>' +
-              '<td>' + (call.agent_name || '-') + '</td></tr>';
+            var color = call.call_outcome === 'answered' ? 'text-green-600 bg-green-50' : call.call_outcome === 'transferred' ? 'text-blue-600 bg-blue-50' : call.call_outcome === 'voicemail' ? 'text-amber-600 bg-amber-50' : 'text-gray-600 bg-gray-50';
+            return '<tr class="border-b border-gray-50"><td class="py-2 text-gray-500 text-xs">' + new Date(call.created_at).toLocaleString() + '</td>' +
+              '<td class="font-medium">' + (call.caller_name || call.caller_phone || '-') + '</td>' +
+              '<td class="text-xs">' + (call.service_type || '-') + '</td>' +
+              '<td><span class="px-2 py-0.5 rounded text-xs font-semibold ' + color + '">' + (call.call_outcome || '-') + '</span></td>' +
+              '<td>' + (call.call_duration_seconds || 0) + 's</td>' +
+              '<td>' + (call.is_lead ? '<span class="px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-xs font-bold">LEAD</span>' : '-') + '</td></tr>';
           }).join('') +
-          '</tbody></table></div>' : '<p class="text-gray-400 text-sm">No calls yet</p>') +
+          '</tbody></table></div>' : '<p class="text-gray-400 text-sm">No calls yet — calls will appear here as the AI Secretary handles them.</p>') +
       '</div>' +
 
-      // Top agents
+      // Active secretary agents
       '<div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">' +
-        '<h3 class="font-bold text-gray-700 mb-4"><i class="fas fa-trophy mr-2 text-amber-500"></i>Top Agents</h3>' +
+        '<h3 class="font-bold text-gray-700 mb-4"><i class="fas fa-headset mr-2 text-green-500"></i>Active AI Secretaries</h3>' +
         (data.top_agents && data.top_agents.length > 0 ?
-          '<div class="grid grid-cols-5 gap-3">' + data.top_agents.map(function(a) {
-            return '<div class="text-center p-3 rounded-xl border border-gray-100"><div class="font-bold text-gray-800">' + a.name + '</div>' +
-              '<div class="text-xs text-gray-500">' + a.total_calls + ' calls</div>' +
-              '<div class="text-xs text-green-600 font-semibold">' + (a.success_rate * 100).toFixed(1) + '% success</div></div>';
-          }).join('') + '</div>' : '<p class="text-gray-400 text-sm">No agent data</p>') +
+          '<div class="grid grid-cols-2 md:grid-cols-4 gap-3">' + data.top_agents.map(function(a) {
+            return '<div class="text-center p-4 rounded-xl border border-gray-100 bg-gradient-to-br from-white to-green-50">' +
+              '<div class="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-2"><i class="fas fa-headset text-green-600"></i></div>' +
+              '<div class="font-bold text-gray-800">' + (a.name || 'Sarah') + '</div>' +
+              '<div class="text-[10px] text-gray-400">' + (a.company || a.customer_name || '') + '</div>' +
+              '<div class="text-xs text-green-600 font-semibold mt-1">' + (a.total_calls || 0) + ' calls</div>' +
+              '<div class="text-[10px] text-gray-500">' + (a.mode || 'directory') + ' mode</div></div>';
+          }).join('') + '</div>' : '<p class="text-gray-400 text-sm">No active secretaries</p>') +
       '</div>';
   } catch(e) { el.innerHTML = '<p class="text-red-500">' + e.message + '</p>'; }
 }

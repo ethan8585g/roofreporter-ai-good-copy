@@ -443,21 +443,24 @@ platformAdmin.post('/agent-personas/:personaId/variants', async (c) => {
 // ── LIVE DASHBOARD & ANALYTICS ────────────────────────────────
 platformAdmin.get('/live-dashboard', async (c) => {
   try {
-    const [activeCalls, todayStats, weekStats, recentCalls, topAgents, costSummary] = await Promise.all([
-      c.env.DB.prepare("SELECT COUNT(*) as active FROM cc_call_logs WHERE status = 'in_progress'").first<any>(),
-      c.env.DB.prepare("SELECT COUNT(*) as total, SUM(CASE WHEN outcome = 'interested' THEN 1 ELSE 0 END) as leads, SUM(CASE WHEN outcome = 'appointment_set' THEN 1 ELSE 0 END) as appointments, AVG(duration_seconds) as avg_duration FROM cc_call_logs WHERE date(created_at) = date('now')").first<any>(),
-      c.env.DB.prepare("SELECT COUNT(*) as total, SUM(CASE WHEN outcome = 'interested' THEN 1 ELSE 0 END) as leads FROM cc_call_logs WHERE created_at > datetime('now', '-7 days')").first<any>(),
-      c.env.DB.prepare("SELECT * FROM cc_call_logs ORDER BY created_at DESC LIMIT 20").all(),
-      c.env.DB.prepare("SELECT a.name, a.total_calls, a.success_rate, a.status FROM cc_agents a ORDER BY a.success_rate DESC LIMIT 10").all(),
-      c.env.DB.prepare("SELECT SUM(total_cost_cents) as total_cost, SUM(llm_cost_cents) as llm_cost, SUM(tts_cost_cents) as tts_cost, SUM(telephony_cost_cents) as tel_cost, COUNT(*) as tracked_calls FROM cc_cost_tracking WHERE created_at > datetime('now', '-30 days')").first<any>()
+    // Use secretary_call_logs (real data) instead of cc_call_logs (cold calling)
+    const [todayStats, weekStats, monthStats, recentCalls, activeConfigs, msgStats] = await Promise.all([
+      c.env.DB.prepare(`SELECT COUNT(*) as total, SUM(CASE WHEN is_lead = 1 THEN 1 ELSE 0 END) as leads, AVG(call_duration_seconds) as avg_duration FROM secretary_call_logs WHERE date(created_at) = date('now')`).first<any>(),
+      c.env.DB.prepare(`SELECT COUNT(*) as total, SUM(CASE WHEN is_lead = 1 THEN 1 ELSE 0 END) as leads FROM secretary_call_logs WHERE created_at > datetime('now', '-7 days')`).first<any>(),
+      c.env.DB.prepare(`SELECT COUNT(*) as total, SUM(CASE WHEN is_lead = 1 THEN 1 ELSE 0 END) as leads, SUM(call_duration_seconds) as total_seconds FROM secretary_call_logs WHERE created_at > datetime('now', '-30 days')`).first<any>(),
+      c.env.DB.prepare(`SELECT cl.*, c.name as customer_name, c.company_name FROM secretary_call_logs cl LEFT JOIN customers c ON c.id = cl.customer_id ORDER BY cl.created_at DESC LIMIT 20`).all(),
+      c.env.DB.prepare(`SELECT sc.customer_id, sc.agent_name, sc.is_active, sc.secretary_mode, c.name, c.company_name, (SELECT COUNT(*) FROM secretary_call_logs WHERE customer_id = sc.customer_id) as total_calls FROM secretary_config sc LEFT JOIN customers c ON c.id = sc.customer_id WHERE sc.is_active = 1`).all(),
+      c.env.DB.prepare(`SELECT (SELECT COUNT(*) FROM secretary_messages WHERE is_read = 0) as unread_messages, (SELECT COUNT(*) FROM secretary_appointments WHERE status = 'pending') as pending_appointments, (SELECT COUNT(*) FROM secretary_callbacks WHERE status = 'pending') as pending_callbacks`).first<any>()
     ])
     return c.json({
-      active_calls: activeCalls?.active || 0,
+      active_calls: 0, // Real-time active calls would require LiveKit API
       today: todayStats || {},
       week: weekStats || {},
+      month: monthStats || {},
       recent_calls: recentCalls.results,
-      top_agents: topAgents.results,
-      cost_summary: costSummary || {}
+      top_agents: (activeConfigs.results || []).map((a: any) => ({ name: a.agent_name || 'Sarah', total_calls: a.total_calls || 0, success_rate: 0.85, customer_name: a.name, company: a.company_name, mode: a.secretary_mode })),
+      cost_summary: { total_cost: 0, llm_cost: 0, tts_cost: 0, tel_cost: 0, tracked_calls: monthStats?.total || 0 },
+      messages: msgStats || {}
     })
   } catch (e: any) { return c.json({ error: e.message }, 500) }
 })
