@@ -206,6 +206,42 @@ secretaryRoutes.post('/subscribe', async (c) => {
 })
 
 // ============================================================
+// POST /enroll-inquiry — Contact form for secretary enrollment
+// Replaces Square checkout for non-onboarded users
+// ============================================================
+secretaryRoutes.post('/enroll-inquiry', async (c) => {
+  const customerId = c.get('customerId' as any) as number
+  try {
+    const body = await c.req.json()
+    const { name, email, phone, company_name, message } = body
+    if (!name && !email) return c.json({ error: 'Name and email are required' }, 400)
+
+    // Save inquiry to DB
+    try {
+      await c.env.DB.prepare(`
+        CREATE TABLE IF NOT EXISTS contact_form_submissions (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          customer_id INTEGER, name TEXT, email TEXT, phone TEXT,
+          company_name TEXT, message TEXT,
+          form_type TEXT DEFAULT 'secretary_enrollment',
+          status TEXT DEFAULT 'new',
+          created_at TEXT DEFAULT (datetime('now'))
+        )
+      `).run()
+    } catch(e) {}
+
+    await c.env.DB.prepare(
+      `INSERT INTO contact_form_submissions (customer_id, name, email, phone, company_name, message, form_type)
+       VALUES (?, ?, ?, ?, ?, ?, 'secretary_enrollment')`
+    ).bind(customerId, name || '', email || '', phone || '', company_name || '', message || '').run()
+
+    return c.json({ success: true, message: 'Thank you! Our team will contact you within 24 hours to set up your AI Secretary.' })
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500)
+  }
+})
+
+// ============================================================
 // POST /verify-session — Verify Square Checkout completed
 // ============================================================
 secretaryRoutes.post('/verify-session', async (c) => {
@@ -755,6 +791,8 @@ secretaryRoutes.get('/diagnostic', async (c) => {
     },
     webhook_urls: {
       call_complete: `${origin}/api/secretary/webhook/call-complete`,
+      room_event: `${origin}/api/secretary/webhook/room-event`,
+      twilio_status: `${origin}/api/secretary/webhook/twilio-status`,
       message: `${origin}/api/secretary/webhook/message`,
       appointment: `${origin}/api/secretary/webhook/appointment`,
       callback: `${origin}/api/secretary/webhook/callback`,
@@ -766,7 +804,7 @@ secretaryRoutes.get('/diagnostic', async (c) => {
       result: config.last_test_result,
       details: config.last_test_details,
     } : null,
-    call_flow: 'Customer Phone → Forward to AI Number → Twilio SIP → LiveKit Trunk → AI Agent → webhook/call-complete logs the call',
+    call_flow: 'Customer Phone → Forward to AI Number → Twilio SIP → LiveKit Trunk → AI Agent → webhook/call-complete logs the call. Backup: webhook/room-event catches ALL room closes (even 2s no-answer). Twilio webhook/twilio-status catches busy/failed/no-answer.',
     troubleshooting: [
       callCount?.total === 0 ? '⚠️ No call logs found. Either no calls have been forwarded to the AI number, or the LiveKit agent is not posting to the webhook.' : '✅ Call logs found.',
       config?.connection_status === 'connected' ? '✅ Connection status is "connected".' : '⚠️ Connection not established. Complete the phone setup wizard.',
@@ -2087,6 +2125,204 @@ secretaryRoutes.get('/forwarding-instructions/:carrier', async (c) => {
     instructions: info,
     has_assigned_number: !!config?.assigned_phone_number,
   })
+})
+
+// ============================================================
+// POST /webhook/room-event — LiveKit Room Webhook
+// Catches ALL room lifecycle events to ensure every call is logged.
+// LiveKit posts here for: room_started, room_finished,
+// participant_joined, participant_left, etc.
+// This is the CATCH-ALL to ensure short/no-answer calls are recorded.
+// ============================================================
+secretaryRoutes.post('/webhook/room-event', async (c) => {
+  try {
+    const body = await c.req.json()
+    const eventType = body.event || ''
+    const room = body.room || {}
+    const participant = body.participant || {}
+    const roomName = room.name || ''  // e.g. "secretary-123-abc"
+    const roomSid = room.sid || ''
+
+    console.log(`[LiveKit Room Event] ${eventType} — room=${roomName}, sid=${roomSid}`)
+
+    // Extract customer_id from room name: "secretary-{customerId}-{suffix}"
+    const match = roomName.match(/^secretary-(\d+)-/)
+    if (!match) {
+      console.log('[LiveKit Room Event] Non-secretary room, ignoring:', roomName)
+      return c.json({ ok: true })
+    }
+    const customerId = parseInt(match[1])
+
+    // We care about room_finished — this fires when the room closes,
+    // even if the call was 2 seconds and no one spoke.
+    if (eventType === 'room_finished') {
+      const createdAt = room.creation_time ? new Date(room.creation_time * 1000) : new Date()
+      const endedAt = new Date()
+      const durationSec = Math.max(1, Math.round((endedAt.getTime() - createdAt.getTime()) / 1000))
+
+      // Check if a call log already exists for this room (from call-complete webhook)
+      const existing = await c.env.DB.prepare(
+        `SELECT id FROM secretary_call_logs WHERE customer_id = ? AND livekit_room_id = ? LIMIT 1`
+      ).bind(customerId, roomSid).first<any>()
+
+      if (existing) {
+        // Call was already logged by call-complete webhook — update duration if needed
+        if (durationSec > 0) {
+          await c.env.DB.prepare(
+            `UPDATE secretary_call_logs SET call_duration_seconds = CASE WHEN call_duration_seconds < 1 THEN ? ELSE call_duration_seconds END WHERE id = ?`
+          ).bind(durationSec, existing.id).run()
+        }
+        console.log(`[LiveKit Room Event] room_finished — call log ${existing.id} already exists for room ${roomSid}`)
+      } else {
+        // NO call-complete webhook fired — this is a missed/short/no-answer call.
+        // Create a call log entry so it shows up in the dashboard.
+        const callerPhone = room.metadata ? (() => { try { const m = JSON.parse(room.metadata); return m.caller_phone || m.from || ''; } catch { return ''; } })() : ''
+        const callerName = room.metadata ? (() => { try { const m = JSON.parse(room.metadata); return m.caller_name || ''; } catch { return ''; } })() : ''
+        const numParticipants = room.num_participants || 0
+
+        // Determine outcome — if duration < 5s or 0 participants, it was unanswered
+        let outcome = 'answered'
+        let summary = 'Call handled by AI Secretary'
+        if (durationSec <= 5 || numParticipants <= 1) {
+          outcome = 'missed'
+          summary = durationSec <= 2 ? 'Caller hung up immediately (no response)' :
+                    durationSec <= 5 ? 'Very short call — caller disconnected before AI could respond' :
+                    'Call ended before conversation began'
+        }
+
+        await c.env.DB.prepare(
+          `INSERT INTO secretary_call_logs (
+            customer_id, caller_phone, caller_name, caller_email,
+            call_duration_seconds, directory_routed,
+            call_summary, call_transcript, call_outcome, livekit_room_id,
+            service_type, property_address, is_lead, lead_status, lead_quality,
+            conversation_highlights, sentiment,
+            follow_up_required, follow_up_notes, tags
+          ) VALUES (?, ?, ?, '', ?, '', ?, '', ?, ?, '', '', 0, '', 'unknown', '', 'neutral', 0, '', ?)`
+        ).bind(
+          customerId,
+          callerPhone || 'Unknown',
+          callerName || 'Unknown',
+          durationSec,
+          summary,
+          outcome,
+          roomSid,
+          outcome === 'missed' ? 'missed,short-call' : ''
+        ).run()
+
+        console.log(`[LiveKit Room Event] room_finished — created NEW call log for room ${roomSid} (${durationSec}s, ${outcome})`)
+      }
+    }
+
+    // Also track participant_joined to capture caller phone from SIP headers
+    if (eventType === 'participant_joined' && participant.kind === 'SIP') {
+      // The SIP participant has the caller's phone in metadata or identity
+      const sipPhone = participant.identity || ''
+      const sipMeta = participant.metadata || ''
+      console.log(`[LiveKit Room Event] SIP participant joined room ${roomName}: ${sipPhone}`)
+      // Store temporarily so room_finished can pick it up
+      try {
+        await c.env.DB.prepare(
+          `INSERT OR REPLACE INTO secretary_room_participants (room_sid, participant_identity, metadata, joined_at) VALUES (?, ?, ?, datetime('now'))`
+        ).bind(roomSid, sipPhone, sipMeta).run()
+      } catch (e: any) {
+        // Table may not exist yet — non-critical
+        console.log(`[LiveKit Room Event] Could not store participant (table may not exist): ${e.message}`)
+      }
+    }
+
+    return c.json({ ok: true })
+  } catch (err: any) {
+    console.error('[LiveKit Room Event Error]', err.message)
+    return c.json({ error: err.message }, 500)
+  }
+})
+
+// ============================================================
+// POST /webhook/twilio-status — Twilio Call Status Callback
+// Catches ALL Twilio call lifecycle events — ensures logging
+// even when the call never reaches LiveKit (busy, no-answer, failed)
+// ============================================================
+secretaryRoutes.post('/webhook/twilio-status', async (c) => {
+  try {
+    const body = await c.req.parseBody()
+    const callStatus = body.CallStatus as string || ''
+    const from = body.From as string || ''
+    const to = body.To as string || ''
+    const callSid = body.CallSid as string || ''
+    const callDuration = parseInt(body.CallDuration as string || '0') || 0
+
+    console.log(`[Twilio Status] ${callStatus} from=${from} to=${to} dur=${callDuration}s sid=${callSid}`)
+
+    // Only log terminal statuses
+    const terminalStatuses = ['completed', 'busy', 'no-answer', 'failed', 'canceled']
+    if (!terminalStatuses.includes(callStatus)) {
+      return c.text('OK')
+    }
+
+    // Find which customer this call was for (by the AI number that received it)
+    const config = await c.env.DB.prepare(
+      `SELECT customer_id FROM secretary_config WHERE assigned_phone_number LIKE ? OR assigned_phone_number LIKE ?`
+    ).bind(`%${to.replace('+1', '')}%`, `%${to}%`).first<any>()
+
+    if (!config) {
+      console.log(`[Twilio Status] No secretary config found for number ${to}`)
+      return c.text('OK')
+    }
+
+    const customerId = config.customer_id
+
+    // Check if a call log already exists (from call-complete or room-event webhook)
+    const existing = await c.env.DB.prepare(
+      `SELECT id FROM secretary_call_logs WHERE customer_id = ? AND caller_phone LIKE ? AND created_at >= datetime('now', '-5 minutes') ORDER BY id DESC LIMIT 1`
+    ).bind(customerId, `%${from.replace('+1', '')}%`).first<any>()
+
+    if (existing) {
+      // Update duration if available
+      if (callDuration > 0) {
+        await c.env.DB.prepare(
+          `UPDATE secretary_call_logs SET call_duration_seconds = ? WHERE id = ? AND (call_duration_seconds < 1 OR call_duration_seconds IS NULL)`
+        ).bind(callDuration, existing.id).run()
+      }
+      return c.text('OK')
+    }
+
+    // No existing log — create one for missed/failed calls
+    if (callStatus !== 'completed') {
+      const outcomeMap: Record<string, string> = {
+        'busy': 'busy', 'no-answer': 'no_answer', 'failed': 'failed', 'canceled': 'canceled'
+      }
+      const summaryMap: Record<string, string> = {
+        'busy': 'Caller reached busy signal — line was in use',
+        'no-answer': 'Call went unanswered — neither human nor AI picked up',
+        'failed': 'Call connection failed — possible network/carrier issue',
+        'canceled': 'Caller hung up before connection was established'
+      }
+
+      await c.env.DB.prepare(
+        `INSERT INTO secretary_call_logs (
+          customer_id, caller_phone, caller_name, caller_email,
+          call_duration_seconds, directory_routed,
+          call_summary, call_transcript, call_outcome, livekit_room_id,
+          service_type, property_address, is_lead, lead_status, lead_quality,
+          conversation_highlights, sentiment, follow_up_required, follow_up_notes, tags
+        ) VALUES (?, ?, 'Unknown', '', ?, '', ?, '', ?, ?, '', '', 0, '', 'unknown', '', 'neutral', 0, '', ?)`
+      ).bind(
+        customerId, from || 'Unknown', callDuration,
+        summaryMap[callStatus] || `Call ended with status: ${callStatus}`,
+        outcomeMap[callStatus] || callStatus,
+        callSid,
+        `twilio-${callStatus}`
+      ).run()
+
+      console.log(`[Twilio Status] Created call log for ${callStatus} call from ${from} to customer ${customerId}`)
+    }
+
+    return c.text('OK')
+  } catch (err: any) {
+    console.error('[Twilio Status Error]', err.message)
+    return c.text('Error', 500)
+  }
 })
 
 // ============================================================

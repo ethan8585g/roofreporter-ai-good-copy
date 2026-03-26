@@ -193,21 +193,25 @@
   window.secSetTab = function(t) { state.activeTab = t; render(); if (t === 'calls') loadCalls(); if (t === 'leads') loadLeads(); if (t === 'messages') loadAndRenderMessages(); if (t === 'appointments') loadAndRenderAppointments(); if (t === 'callbacks') loadAndRenderCallbacks(); };
 
   // ============================================================
-  // SUBSCRIPTION PAGE
+  // SUBSCRIPTION PAGE — Contact Us for Enrolment
   // ============================================================
   function renderSubscriptionPage() {
+    // Pre-fill from customer data if available
+    var custData = {};
+    try { custData = JSON.parse(localStorage.getItem('rc_customer') || '{}'); } catch(e) {}
+
     root.innerHTML =
-      '<div class="max-w-2xl mx-auto">' +
-        '<div class="bg-gradient-to-br from-sky-500 to-blue-700 rounded-2xl p-8 text-white text-center mb-8 shadow-xl">' +
+      '<div class="max-w-2xl mx-auto px-4">' +
+        '<div class="bg-gradient-to-br from-sky-500 to-blue-700 rounded-2xl p-6 sm:p-8 text-white text-center mb-8 shadow-xl">' +
           '<div class="w-20 h-20 bg-white/20 rounded-2xl flex items-center justify-center mx-auto mb-4"><i class="fas fa-headset text-4xl"></i></div>' +
-          '<h2 class="text-3xl font-extrabold mb-2">Roofer Secretary</h2>' +
-          '<p class="text-sky-100 text-lg">AI-Powered Phone Answering Service</p>' +
+          '<h2 class="text-2xl sm:text-3xl font-extrabold mb-2">Roofer Secretary</h2>' +
+          '<p class="text-sky-100 text-base sm:text-lg">AI-Powered Phone Answering Service</p>' +
           '<p class="text-sky-200 text-sm mt-2">Never miss a customer call again. AI answers <strong>only when you can\'t</strong> — your phone rings first. Works with your existing business number.</p>' +
         '</div>' +
 
-        '<div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 mb-6">' +
+        '<div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 sm:p-6 mb-6">' +
           '<h3 class="font-bold text-gray-800 text-lg mb-4"><i class="fas fa-check-circle text-green-500 mr-2"></i>What You Get</h3>' +
-          '<div class="grid grid-cols-1 md:grid-cols-2 gap-3">' +
+          '<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">' +
             feature('fa-phone-alt', 'Keep Your Number', 'Connects to your existing business phone — no new number needed') +
             feature('fa-user-clock', 'Answers Only If You Can\'t', 'Your phone rings first. AI only picks up when you miss or are busy — like a real secretary') +
             feature('fa-sms', 'SMS Call Summary', 'Get a text with a full transcript and summary after every AI-handled call') +
@@ -217,28 +221,44 @@
           '</div>' +
         '</div>' +
 
-        '<div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 mb-6">' +
+        '<div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 sm:p-6 mb-6">' +
           '<h3 class="font-bold text-gray-800 text-lg mb-4"><i class="fas fa-plug text-sky-500 mr-2"></i>How It Works</h3>' +
           '<div class="space-y-4">' +
-            howStep(1, 'Subscribe & Configure', 'Set up your AI secretary with your greeting script, FAQ answers, and call routing departments.') +
-            howStep(2, 'Connect Your Phone', 'Enter your business phone number and verify with a code on screen. That\'s it — your AI secretary goes live instantly.') +
-            howStep(3, 'AI Answers When You Can\'t', 'Your phone rings first. If you don\'t answer or you\'re on another call, the AI picks up. It greets the caller, answers questions, routes to departments, and takes messages.') +
-            howStep(4, 'Get SMS Summary + Call Log', 'After every AI-handled call, you receive a text message with the caller info, transcript summary, and which department was selected. Full logs always in your dashboard.') +
+            howStep(1, 'Request Enrolment', 'Fill out the form below and our team will contact you to get started.') +
+            howStep(2, 'Personalized Setup', 'We\'ll configure your AI secretary with your greeting script, FAQ answers, and call routing departments.') +
+            howStep(3, 'Connect Your Phone', 'Enter your business phone number and verify. Your AI secretary goes live instantly.') +
+            howStep(4, 'AI Answers When You Can\'t', 'Your phone rings first. If you don\'t answer, the AI picks up, greets the caller, answers questions, routes to departments, and takes messages.') +
           '</div>' +
         '</div>' +
 
-        '<div class="bg-white rounded-2xl border-2 border-sky-500 shadow-lg p-6 mb-6">' +
-          '<div class="flex items-center justify-between mb-4">' +
-            '<div><h3 class="font-bold text-gray-800 text-xl">Monthly Subscription</h3><p class="text-gray-500 text-sm">Cancel anytime. No contracts.</p></div>' +
-            '<div class="text-right"><div class="text-4xl font-extrabold text-gray-900">$249<span class="text-lg font-normal text-gray-500">/mo</span></div><p class="text-xs text-gray-400">CAD or USD + applicable taxes</p></div>' +
+        // ── Contact Us for Enrolment Form ──
+        '<div class="bg-white rounded-2xl border-2 border-sky-500 shadow-lg p-4 sm:p-6 mb-6">' +
+          '<div class="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 gap-2">' +
+            '<div><h3 class="font-bold text-gray-800 text-xl"><i class="fas fa-paper-plane text-sky-500 mr-2"></i>Contact Us for Enrolment</h3><p class="text-gray-500 text-sm mt-1">Our team will personally set up your AI Secretary</p></div>' +
+            '<div class="text-right"><div class="text-2xl sm:text-3xl font-extrabold text-sky-600">$249<span class="text-sm font-normal text-gray-500">/mo CAD</span></div></div>' +
           '</div>' +
-          '<div class="bg-sky-50 border border-sky-100 rounded-xl p-4 mb-4">' +
-            '<p class="text-sm text-sky-700"><i class="fas fa-info-circle mr-1"></i>Includes unlimited AI-answered calls, SMS transcript summaries after every call, smart routing, and no-answer coverage. Works with any Canadian carrier.</p>' +
+          '<div id="enrollFormContainer">' +
+            '<div class="space-y-4">' +
+              '<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">' +
+                '<div><label class="block text-sm font-medium text-gray-700 mb-1">Full Name *</label>' +
+                  '<input type="text" id="enrollName" value="' + (custData.name || '') + '" class="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none" placeholder="John Smith"></div>' +
+                '<div><label class="block text-sm font-medium text-gray-700 mb-1">Email *</label>' +
+                  '<input type="email" id="enrollEmail" value="' + (custData.email || '') + '" class="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none" placeholder="john@roofingco.com"></div>' +
+              '</div>' +
+              '<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">' +
+                '<div><label class="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>' +
+                  '<input type="tel" id="enrollPhone" value="' + (custData.phone || '') + '" class="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none" placeholder="(780) 555-0123"></div>' +
+                '<div><label class="block text-sm font-medium text-gray-700 mb-1">Company Name</label>' +
+                  '<input type="text" id="enrollCompany" value="' + (custData.company_name || custData.brand_business_name || '') + '" class="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none" placeholder="ABC Roofing Ltd."></div>' +
+              '</div>' +
+              '<div><label class="block text-sm font-medium text-gray-700 mb-1">Message (optional)</label>' +
+                '<textarea id="enrollMessage" rows="3" class="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none resize-none" placeholder="Tell us about your business and how many calls you typically receive..."></textarea></div>' +
+            '</div>' +
+            '<button onclick="secSubmitEnrollment()" id="enrollBtn" class="w-full mt-4 py-4 bg-gradient-to-r from-sky-500 to-blue-600 text-white rounded-xl font-bold text-lg hover:from-sky-600 hover:to-blue-700 transition-all shadow-lg hover:shadow-xl">' +
+              '<i class="fas fa-paper-plane mr-2"></i>Request Enrolment</button>' +
           '</div>' +
-          '<button onclick="secSubscribe()" id="subscribeBtn" class="w-full py-4 bg-gradient-to-r from-sky-500 to-blue-600 text-white rounded-xl font-bold text-lg hover:from-sky-600 hover:to-blue-700 transition-all shadow-lg hover:shadow-xl">' +
-            '<i class="fas fa-lock mr-2"></i>Subscribe & Setup — $249/month</button>' +
         '</div>' +
-        '<p class="text-center text-xs text-gray-400 mb-8"><i class="fas fa-shield-alt mr-1"></i>Secure payment via Square &bull; Powered by LiveKit AI</p>' +
+        '<p class="text-center text-xs text-gray-400 mb-8"><i class="fas fa-shield-alt mr-1"></i>Our team will contact you within 24 hours &bull; Powered by LiveKit AI</p>' +
       '</div>';
   }
 
@@ -254,15 +274,34 @@
       '<div><p class="font-semibold text-gray-800">' + title + '</p><p class="text-gray-500 text-sm">' + desc + '</p></div></div>';
   }
 
-  window.secSubscribe = async function() {
-    var btn = document.getElementById('subscribeBtn');
-    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Redirecting to Square...'; }
+  window.secSubmitEnrollment = async function() {
+    var btn = document.getElementById('enrollBtn');
+    var name = document.getElementById('enrollName').value.trim();
+    var email = document.getElementById('enrollEmail').value.trim();
+    var phone = document.getElementById('enrollPhone').value.trim();
+    var company = document.getElementById('enrollCompany').value.trim();
+    var message = document.getElementById('enrollMessage').value.trim();
+    if (!name || !email) { alert('Please enter your name and email.'); return; }
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Submitting...'; }
     try {
-      var res = await fetch('/api/secretary/subscribe', { method: 'POST', headers: authHeaders() });
+      var res = await fetch('/api/secretary/enroll-inquiry', {
+        method: 'POST', headers: authHeaders(),
+        body: JSON.stringify({ name: name, email: email, phone: phone, company_name: company, message: message })
+      });
       var data = await res.json();
-      if (data.checkout_url) { window.location.href = data.checkout_url; }
-      else { alert(data.error || 'Failed to create subscription'); if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-lock mr-2"></i>Subscribe & Setup — $249/month'; } }
-    } catch(e) { alert('Network error. Please try again.'); if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-lock mr-2"></i>Subscribe & Setup — $249/month'; } }
+      if (data.success) {
+        document.getElementById('enrollFormContainer').innerHTML =
+          '<div class="text-center py-8">' +
+            '<div class="w-16 h-16 bg-green-100 rounded-2xl flex items-center justify-center mx-auto mb-4"><i class="fas fa-check-circle text-green-500 text-3xl"></i></div>' +
+            '<h3 class="text-xl font-bold text-gray-800 mb-2">Enrolment Request Received!</h3>' +
+            '<p class="text-gray-500">Thank you, ' + name + '. Our team will contact you within 24 hours to set up your AI Secretary service.</p>' +
+            '<p class="text-gray-400 text-sm mt-4"><i class="fas fa-phone mr-1"></i>Questions? Call us anytime.</p>' +
+          '</div>';
+      } else {
+        alert(data.error || 'Failed to submit. Please try again.');
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-paper-plane mr-2"></i>Request Enrolment'; }
+      }
+    } catch(e) { alert('Network error. Please try again.'); if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-paper-plane mr-2"></i>Request Enrolment'; } }
   };
 
   // ============================================================

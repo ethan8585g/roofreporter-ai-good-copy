@@ -309,15 +309,110 @@ function injectDashboardStyles() {
     .rfr-bar-labels { display: flex; gap: 4px; margin-top: 6px; }
     .rfr-bar-labels span { flex: 1; text-align: center; font-size: 10px; color: #94A3B8; }
     
-    /* Mobile responsive */
+    /* ═══ MOBILE RESPONSIVE — Full cell phone support ═══ */
+    
+    /* Tablet (768–1024px) */
     @media (max-width: 1024px) {
       .rfr-sidebar { display: none; }
-      .rfr-sidebar.mobile-open { display: block; position: fixed; top: 0; left: 0; z-index: 50; height: 100vh; box-shadow: 0 0 40px rgba(0,0,0,0.2); }
+      .rfr-sidebar.mobile-open { 
+        display: block; position: fixed; top: 0; left: 0; z-index: 1000; 
+        height: 100vh; width: 280px; box-shadow: 0 0 40px rgba(0,0,0,0.3);
+        overflow-y: auto; -webkit-overflow-scrolling: touch;
+      }
+      .rfr-mobile-overlay {
+        position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0,0,0,0.4); z-index: 999;
+      }
       .rfr-content { padding: 16px; }
+      .rfr-mobile-bar { display: flex !important; }
     }
-    @media (max-width: 640px) {
-      .rfr-metric-value { font-size: 22px; }
-      .rfr-content { padding: 12px; }
+    
+    /* Phone (max-width: 768px) */
+    @media (max-width: 768px) {
+      .rfr-content { padding: 12px; max-width: 100%; }
+      
+      /* Metric cards — 2 column on phone */
+      .rfr-content > div > div[style*="grid-template-columns:repeat(auto-fit,minmax(180px"] {
+        grid-template-columns: 1fr 1fr !important; gap: 8px !important;
+      }
+      .rfr-metric-card { padding: 14px !important; }
+      .rfr-metric-value { font-size: 22px !important; }
+      .rfr-metric-label { font-size: 11px !important; }
+      .rfr-metric-sub { font-size: 10px !important; }
+      
+      /* Two-column layout → stack on mobile */
+      div[style*="grid-template-columns:1fr 1fr"] {
+        grid-template-columns: 1fr !important;
+      }
+      
+      /* Chart card responsive */
+      .rfr-chart-card { margin-bottom: 12px; }
+      .rfr-chart-header { padding: 14px 16px 0; }
+      .rfr-chart-body { padding: 12px 16px 16px; }
+      .rfr-chart-title { font-size: 14px !important; }
+      
+      /* Secretary panel responsive */
+      .rfr-secretary-panel { padding: 16px !important; }
+      .rfr-secretary-stat { padding: 10px !important; }
+      .rfr-secretary-stat div:last-child { font-size: 18px !important; }
+      
+      /* Table responsive — horizontal scroll */
+      .rfr-table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 0 -12px; padding: 0 12px; }
+      .rfr-table { min-width: 560px; }
+      .rfr-table thead th { font-size: 10px !important; padding: 8px 10px !important; white-space: nowrap; }
+      .rfr-table tbody td { padding: 8px 10px !important; font-size: 12px !important; }
+      
+      /* Quick action cards — 2 column */
+      div[style*="grid-template-columns:repeat(auto-fit,minmax(220px"] {
+        grid-template-columns: 1fr 1fr !important; gap: 8px !important;
+      }
+      .rfr-action-card { padding: 12px !important; flex-direction: column; text-align: center; gap: 8px !important; }
+      .rfr-action-icon { width: 32px !important; height: 32px !important; margin: 0 auto; }
+      .rfr-action-label { font-size: 12px !important; }
+      .rfr-action-desc { font-size: 10px !important; }
+      
+      /* Buttons responsive */
+      .rfr-btn { font-size: 12px; padding: 6px 12px; }
+      
+      /* Tabs responsive */
+      .rfr-tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; flex-wrap: nowrap; }
+      .rfr-tab { white-space: nowrap; padding: 8px 14px; font-size: 12px; flex-shrink: 0; }
+      
+      /* Header responsive */
+      div[style*="display:flex"][style*="justify-content:space-between"][style*="margin-bottom:24px"] {
+        flex-direction: column !important; gap: 12px !important;
+      }
+      
+      /* Badges responsive */
+      .rfr-badge { font-size: 10px !important; padding: 2px 8px !important; }
+    }
+    
+    /* Small phone (max-width: 400px) */
+    @media (max-width: 400px) {
+      .rfr-content { padding: 8px; }
+      .rfr-content > div > div[style*="grid-template-columns:repeat(auto-fit,minmax(180px"] {
+        grid-template-columns: 1fr 1fr !important; gap: 6px !important;
+      }
+      .rfr-metric-card { padding: 10px !important; }
+      .rfr-metric-value { font-size: 18px !important; }
+      div[style*="grid-template-columns:repeat(auto-fit,minmax(220px"] {
+        grid-template-columns: 1fr !important;
+      }
+      .rfr-action-card { flex-direction: row; text-align: left; }
+    }
+    
+    /* Touch-friendly enhancements */
+    @media (hover: none) and (pointer: coarse) {
+      .rfr-nav-item { padding: 12px 16px; min-height: 44px; }
+      .rfr-btn { min-height: 44px; }
+      .rfr-tab { min-height: 44px; display: flex; align-items: center; }
+      .rfr-action-card { min-height: 56px; }
+    }
+    
+    /* Safe area insets for notched phones */
+    @supports (padding: env(safe-area-inset-bottom)) {
+      .rfr-mobile-bar { padding-top: env(safe-area-inset-top); }
+      .rfr-content { padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
     }
   `;
   document.head.appendChild(s);
@@ -404,9 +499,11 @@ function renderDashboard() {
       renderSidebar(c, s) +
       // ═══ MAIN CONTENT ═══
       '<div class="rfr-main">' +
-        // Mobile menu bar
-        '<div style="display:none;padding:12px 16px;border-bottom:1px solid #E2E8F0;background:white" class="rfr-mobile-bar">' +
-          '<button onclick="toggleMobileSidebar()" style="background:none;border:1px solid #E2E8F0;border-radius:8px;padding:6px 12px;font-size:13px;color:#475569;cursor:pointer"><i class="fas fa-bars" style="margin-right:6px"></i>Menu</button>' +
+        // Mobile menu bar — sticky top navigation
+        '<div style="display:none;padding:10px 16px;border-bottom:1px solid #E2E8F0;background:white;position:sticky;top:0;z-index:100;align-items:center;justify-content:space-between" class="rfr-mobile-bar">' +
+          '<button onclick="toggleMobileSidebar()" style="background:none;border:1px solid #E2E8F0;border-radius:8px;padding:8px 14px;font-size:13px;color:#475569;cursor:pointer;min-height:40px"><i class="fas fa-bars" style="margin-right:6px"></i>Menu</button>' +
+          '<span style="font-size:14px;font-weight:700;color:#0F172A"><i class="fas fa-hard-hat" style="color:#2563EB;margin-right:6px"></i>RoofReporterAI</span>' +
+          '<a href="/customer/order" style="background:#2563EB;color:white;border:none;border-radius:8px;padding:8px 12px;font-size:12px;font-weight:600;text-decoration:none;min-height:40px;display:flex;align-items:center"><i class="fas fa-plus"></i></a>' +
         '</div>' +
         '<div class="rfr-content">' +
           renderMainContent(c, b, s) +
@@ -769,7 +866,7 @@ function renderReportsTable() {
       '<a href="/customer/order" class="rfr-btn rfr-btn-primary" style="font-size:12px"><i class="fas fa-plus"></i>Order your first report</a>' +
     '</div>';
   } else {
-    html += '<div style="overflow-x:auto"><table class="rfr-table"><thead><tr>' +
+    html += '<div class="rfr-table-wrapper" style="overflow-x:auto;-webkit-overflow-scrolling:touch"><table class="rfr-table"><thead><tr>' +
       '<th>Status</th><th>Address</th><th>Date</th><th>Roof Area</th><th>Actions</th>' +
     '</tr></thead><tbody>';
     orders.forEach(function(o) {
@@ -843,7 +940,25 @@ function getTimeAgo(dateStr) {
 
 function toggleMobileSidebar() {
   var sidebar = document.getElementById('rfrSidebar');
-  if (sidebar) sidebar.classList.toggle('mobile-open');
+  var existingOverlay = document.getElementById('rfr-mobile-overlay');
+  if (!sidebar) return;
+  
+  if (sidebar.classList.contains('mobile-open')) {
+    // Close
+    sidebar.classList.remove('mobile-open');
+    if (existingOverlay) existingOverlay.remove();
+    document.body.style.overflow = '';
+  } else {
+    // Open
+    sidebar.classList.add('mobile-open');
+    document.body.style.overflow = 'hidden';
+    // Add overlay backdrop
+    var overlay = document.createElement('div');
+    overlay.id = 'rfr-mobile-overlay';
+    overlay.className = 'rfr-mobile-overlay';
+    overlay.onclick = function() { toggleMobileSidebar(); };
+    document.body.appendChild(overlay);
+  }
 }
 
 function addMobileResponsive() {
@@ -851,6 +966,14 @@ function addMobileResponsive() {
   var style = document.createElement('style');
   style.textContent = '@media(max-width:1024px){.rfr-mobile-bar{display:flex!important}}';
   document.head.appendChild(style);
+  
+  // Add viewport meta tag if missing
+  if (!document.querySelector('meta[name="viewport"]')) {
+    var meta = document.createElement('meta');
+    meta.name = 'viewport';
+    meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover';
+    document.head.appendChild(meta);
+  }
 }
 
 // ============================================================

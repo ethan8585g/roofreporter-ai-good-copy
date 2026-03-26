@@ -736,6 +736,39 @@ adminRoutes.post('/init-db', async (c) => {
       try { await c.env.DB.prepare(idx).run() } catch(e) {}
     }
 
+    // Migration: secretary_room_participants table for tracking LiveKit room events
+    try {
+      await c.env.DB.prepare(`
+        CREATE TABLE IF NOT EXISTS secretary_room_participants (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          room_sid TEXT NOT NULL,
+          participant_identity TEXT,
+          metadata TEXT,
+          joined_at TEXT DEFAULT (datetime('now')),
+          UNIQUE(room_sid, participant_identity)
+        )
+      `).run()
+    } catch(e) {}
+    try { await c.env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_room_participants_sid ON secretary_room_participants(room_sid)').run() } catch(e) {}
+
+    // Migration: Add contact_form_submissions table for secretary enrollment inquiries
+    try {
+      await c.env.DB.prepare(`
+        CREATE TABLE IF NOT EXISTS contact_form_submissions (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          customer_id INTEGER,
+          name TEXT,
+          email TEXT,
+          phone TEXT,
+          company_name TEXT,
+          message TEXT,
+          form_type TEXT DEFAULT 'secretary_enrollment',
+          status TEXT DEFAULT 'new',
+          created_at TEXT DEFAULT (datetime('now'))
+        )
+      `).run()
+    } catch(e) {}
+
     return c.json({ success: true, message: 'Database initialized successfully' })
   } catch (err: any) {
     return c.json({ error: 'Failed to initialize database', details: err.message }, 500)
@@ -2511,9 +2544,7 @@ adminRoutes.post('/superadmin/onboarding/create', async (c) => {
     }
 
     // Create the customer account (roofer user)
-    const { createHash } = await import('node:crypto')
-    const passwordHash = createHash ? undefined : password // Workers don't have crypto.createHash
-    // Use Web Crypto for password hashing
+    // Use Web Crypto for password hashing (Cloudflare Workers compatible)
     const encoder = new TextEncoder()
     const data = encoder.encode(password + 'roofreporter_salt_2024')
     const hashBuffer = await crypto.subtle.digest('SHA-256', data)
@@ -2521,9 +2552,9 @@ adminRoutes.post('/superadmin/onboarding/create', async (c) => {
     const hashedPassword = hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
 
     const result = await c.env.DB.prepare(`
-      INSERT INTO customers (name, email, password, phone, role, tier, credits, is_active, created_at)
-      VALUES (?, ?, ?, ?, 'admin', 'pro', 5, 1, datetime('now'))
-    `).bind(contact_name, email, hashedPassword, phone || '').run()
+      INSERT INTO customers (name, email, password_hash, phone, company_name, brand_business_name, is_active, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, 1, datetime('now'), datetime('now'))
+    `).bind(contact_name, email, hashedPassword, phone || '', business_name || '', business_name || '').run()
 
     const customerId = result.meta.last_row_id as number
 

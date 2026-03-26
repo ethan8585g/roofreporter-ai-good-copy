@@ -6,6 +6,36 @@
 (function() {
   'use strict';
 
+  // ── Inject mobile responsive styles for CRM module ──
+  (function injectCrmMobileStyles() {
+    if (document.getElementById('crm-mobile-styles')) return;
+    var s = document.createElement('style');
+    s.id = 'crm-mobile-styles';
+    s.textContent = `
+      @media (max-width: 768px) {
+        #crm-root table { font-size: 11px !important; display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        #crm-root table th, #crm-root table td { padding: 6px 8px !important; white-space: nowrap; }
+        #crm-root .grid.md\\:grid-cols-2, #crm-root .grid.md\\:grid-cols-3, #crm-root .grid.md\\:grid-cols-4 { grid-template-columns: 1fr !important; }
+        #crm-root .grid.grid-cols-2 { grid-template-columns: 1fr !important; }
+        #crm-root .grid.grid-cols-3 { grid-template-columns: 1fr !important; }
+        #crm-root .grid.grid-cols-4 { grid-template-columns: 1fr 1fr !important; }
+        #crmModal > div { max-width: 95vw !important; width: 95vw !important; margin: 8px; }
+        #crmModal .p-6 { padding: 12px !important; }
+        #crmModal .px-6 { padding-left: 12px !important; padding-right: 12px !important; }
+        #crm-root .flex.gap-3 { flex-wrap: wrap; }
+        #crm-root .flex.gap-4 { flex-wrap: wrap; }
+        #crm-root input, #crm-root textarea, #crm-root select { font-size: 16px !important; }
+        #crm-root button { min-height: 40px; }
+      }
+      @media (max-width: 400px) {
+        #crm-root .text-2xl { font-size: 20px !important; }
+        #crm-root .text-3xl { font-size: 22px !important; }
+        main.max-w-7xl { padding-left: 8px !important; padding-right: 8px !important; }
+      }
+    `;
+    document.head.appendChild(s);
+  })();
+
   const root = document.getElementById('crm-root');
   if (!root) return;
   const MODULE = root.getAttribute('data-module') || 'reports';

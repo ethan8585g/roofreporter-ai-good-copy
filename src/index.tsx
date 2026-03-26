@@ -1890,53 +1890,96 @@ app.get('/terms', (c) => {
   return c.html(`<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Terms of Service — RoofReporterAI</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+  <style>
+    .legal-section { scroll-margin-top: 80px; }
+    @media (max-width: 640px) { .legal-nav { display: none; } h1 { font-size: 24px !important; } }
+  </style>
 </head>
 <body class="bg-gray-50 min-h-screen">
-  <div class="max-w-3xl mx-auto px-6 py-12">
-    <h1 class="text-3xl font-bold text-gray-900 mb-6">Terms of Service</h1>
-    <p class="text-sm text-gray-400 mb-8">Last updated: March 16, 2026</p>
-    <div class="prose prose-gray max-w-none space-y-6 text-gray-700 text-sm leading-relaxed">
-      <h2 class="text-lg font-bold text-gray-800">1. Acceptance of Terms</h2>
-      <p>By accessing or using RoofReporterAI ("Service"), you agree to be bound by these Terms of Service. If you do not agree to these terms, do not use the Service. The Service is operated by RoofReporterAI and is intended for roofing professionals and their customers in Canada and the United States.</p>
-
-      <h2 class="text-lg font-bold text-gray-800">2. Description of Service</h2>
-      <p>RoofReporterAI provides AI-powered roofing measurement reports, proposal generation, invoicing, CRM tools, and related services for roofing contractors. The Service uses Google Solar API, satellite imagery, and proprietary algorithms to generate roof measurements and material estimates.</p>
-
-      <h2 class="text-lg font-bold text-gray-800">3. Account Registration</h2>
-      <p>You must register an account to use the Service. You are responsible for maintaining the confidentiality of your account credentials and for all activities under your account. You must provide accurate and complete information during registration.</p>
-
-      <h2 class="text-lg font-bold text-gray-800">4. Measurement Accuracy Disclaimer</h2>
-      <p>Roof measurements provided by the Service are estimates based on satellite data and AI analysis. <strong>They are not a substitute for physical on-site measurements.</strong> RoofReporterAI does not guarantee the accuracy of measurements and shall not be liable for any discrepancies between estimated and actual measurements. Always verify measurements before ordering materials or committing to project costs.</p>
-
-      <h2 class="text-lg font-bold text-gray-800">5. Payment Terms</h2>
-      <p>Credit packs and subscriptions are charged at the time of purchase. Payments are processed securely via Square. All prices are in Canadian Dollars (CAD) unless otherwise stated. Credit packs are non-refundable once report generation has begun. Subscription renewals are automatic unless cancelled before the renewal date.</p>
-
-      <h2 class="text-lg font-bold text-gray-800">6. Free Trial</h2>
-      <p>New accounts receive complimentary report credits as indicated during signup. No payment is required for trial reports. Trial credits have no cash value and expire after 90 days.</p>
-
-      <h2 class="text-lg font-bold text-gray-800">7. Intellectual Property</h2>
-      <p>Reports, proposals, and documents generated through the Service are owned by the account holder. The underlying technology, algorithms, UI designs, and branding remain the property of RoofReporterAI. You may not reverse-engineer, copy, or redistribute the Service.</p>
-
-      <h2 class="text-lg font-bold text-gray-800">8. Data & Privacy</h2>
-      <p>Your use of the Service is also governed by our <a href="/privacy" class="text-blue-600 underline">Privacy Policy</a>. By using the Service, you consent to the collection and use of information as described therein.</p>
-
-      <h2 class="text-lg font-bold text-gray-800">9. Limitation of Liability</h2>
-      <p>RoofReporterAI shall not be liable for any indirect, incidental, special, consequential, or punitive damages, or any loss of profits, revenue, data, or goodwill, whether in an action in contract, tort, or otherwise, arising from your use of the Service. Our total liability shall not exceed the amount paid by you in the 12 months preceding the claim.</p>
-
-      <h2 class="text-lg font-bold text-gray-800">10. Termination</h2>
-      <p>We reserve the right to suspend or terminate your account at any time for violation of these terms. You may close your account at any time by contacting support. Upon termination, your access to reports and data will be revoked after a 30-day grace period.</p>
-
-      <h2 class="text-lg font-bold text-gray-800">11. Governing Law</h2>
-      <p>These Terms are governed by the laws of the Province of Alberta, Canada, without regard to conflict of law principles. Any disputes shall be resolved in the courts of Alberta.</p>
-
-      <h2 class="text-lg font-bold text-gray-800">12. Contact</h2>
-      <p>For questions about these Terms, contact us at <strong>support@roofreporterai.com</strong></p>
+  <nav class="bg-white border-b border-gray-200 sticky top-0 z-10">
+    <div class="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
+      <a href="/" class="flex items-center gap-2 text-sm font-semibold text-gray-800"><i class="fas fa-hard-hat text-blue-600"></i> RoofReporterAI</a>
+      <div class="flex gap-4">
+        <a href="/privacy" class="text-xs text-blue-600 hover:underline">Privacy Policy</a>
+        <a href="/" class="text-xs text-gray-500 hover:underline">Home</a>
+      </div>
     </div>
-    <div class="mt-12 border-t pt-6 text-center text-xs text-gray-400">
-      <a href="/" class="text-blue-600 hover:underline">Back to RoofReporterAI</a> · <a href="/privacy" class="text-blue-600 hover:underline">Privacy Policy</a>
+  </nav>
+  <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+  <div class="max-w-3xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
+    <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Terms of Service</h1>
+    <p class="text-sm text-gray-400 mb-2">Effective Date: March 26, 2026 &middot; Last Updated: March 26, 2026</p>
+    <p class="text-xs text-gray-400 mb-8">This agreement constitutes a legally binding End-User License Agreement (EULA) between you and RoofReporterAI.</p>
+
+    <div class="prose prose-gray max-w-none space-y-6 text-gray-700 text-sm leading-relaxed">
+      <h2 class="text-lg font-bold text-gray-800 legal-section" id="acceptance">1. Acceptance of Terms</h2>
+      <p>By downloading, installing, or using the RoofReporterAI application ("App") or website at www.roofreporterai.com ("Service"), you agree to be bound by these Terms of Service and our <a href="/privacy" class="text-blue-600 underline">Privacy Policy</a>. If you do not agree to these terms, do not use the Service. This agreement is between you and RoofReporterAI (operated in Alberta, Canada), not with Apple Inc. or any other app store operator. The Service is intended for roofing professionals, contractors, and their customers in Canada and the United States.</p>
+
+      <h2 class="text-lg font-bold text-gray-800 legal-section" id="eligibility">2. Eligibility & Age Restriction</h2>
+      <p>You must be at least <strong>18 years of age</strong> to use this Service. By using the App, you represent and warrant that you are at least 18 years old and have the legal capacity to enter into this agreement. The Service is designed for business professionals and is not intended for use by minors.</p>
+
+      <h2 class="text-lg font-bold text-gray-800 legal-section" id="description">3. Description of Service</h2>
+      <p>RoofReporterAI provides AI-powered roofing measurement reports, proposal generation, invoicing, CRM tools, AI phone answering ("Roofer Secretary"), and related services for roofing contractors. The Service uses Google Solar API, satellite imagery, and proprietary algorithms to generate roof measurements and material estimates. Features may vary based on your subscription plan.</p>
+
+      <h2 class="text-lg font-bold text-gray-800 legal-section" id="account">4. Account Registration & Security</h2>
+      <p>You must register an account to use the Service. You are responsible for: (a) maintaining the confidentiality of your account credentials; (b) all activities under your account; (c) providing accurate and complete information during registration; (d) notifying us immediately of any unauthorized use of your account. We may suspend or terminate accounts suspected of unauthorized access.</p>
+
+      <h2 class="text-lg font-bold text-gray-800 legal-section" id="accuracy">5. Measurement Accuracy Disclaimer</h2>
+      <p>Roof measurements provided by the Service are <strong>estimates</strong> based on satellite data and AI analysis. <strong>They are not a substitute for physical on-site measurements.</strong> RoofReporterAI does not guarantee the accuracy of measurements and shall not be liable for any discrepancies between estimated and actual measurements. Always verify measurements before ordering materials or committing to project costs. Material estimates are for reference only and should be verified with your supplier.</p>
+
+      <h2 class="text-lg font-bold text-gray-800 legal-section" id="subscriptions">6. Subscriptions & Auto-Renewal</h2>
+      <p><strong>Credit Packs:</strong> One-time purchases of report credits processed via Square. Non-refundable once report generation has begun.</p>
+      <p><strong>Roofer Secretary Service:</strong> Monthly subscription at $249 CAD/USD. Subscriptions renew automatically each month. You may cancel at any time by contacting our team. Cancellation takes effect at the end of the current billing period. No prorated refunds are provided for partial months.</p>
+      <p><strong>Free Trial:</strong> New accounts receive complimentary report credits as indicated during signup. No payment is required for trial reports. Trial credits have no cash value and expire after 90 days.</p>
+      <p><strong>Payment Processing:</strong> All payments are processed securely via Square. Prices are in Canadian Dollars (CAD) unless otherwise stated. You agree to pay all charges at the prices in effect when incurred.</p>
+      <p><strong>Apple App Store Purchases:</strong> If you subscribe through the Apple App Store, payment will be charged to your Apple ID account. Subscriptions automatically renew unless auto-renew is turned off at least 24 hours before the end of the current period. You can manage subscriptions and turn off auto-renewal in your Apple ID Account Settings. Apple's standard terms for auto-renewing subscriptions apply.</p>
+
+      <h2 class="text-lg font-bold text-gray-800 legal-section" id="ip">7. Intellectual Property</h2>
+      <p>Reports, proposals, and documents generated through the Service are owned by the account holder. The underlying technology, algorithms, AI models, UI designs, brand assets, and software code remain the exclusive property of RoofReporterAI. You may not reverse-engineer, decompile, disassemble, copy, or redistribute any part of the Service or App.</p>
+
+      <h2 class="text-lg font-bold text-gray-800 legal-section" id="acceptable-use">8. Acceptable Use Policy</h2>
+      <p>You agree not to: (a) use the Service for any unlawful purpose; (b) attempt to gain unauthorized access to any portion of the Service; (c) interfere with or disrupt the Service; (d) upload malicious code, viruses, or harmful data; (e) use automated tools to scrape or extract data from the Service; (f) impersonate another person or entity; (g) share your account credentials with third parties; (h) resell or redistribute the Service without written authorization.</p>
+
+      <h2 class="text-lg font-bold text-gray-800 legal-section" id="ai-services">9. AI-Powered Services</h2>
+      <p>Certain features of the Service use artificial intelligence, including roof measurement analysis, AI phone answering, and report generation. AI outputs are generated algorithmically and may contain errors or inaccuracies. You are responsible for reviewing and verifying all AI-generated content before relying on it for business decisions. RoofReporterAI does not guarantee the accuracy, completeness, or fitness for purpose of AI-generated outputs.</p>
+
+      <h2 class="text-lg font-bold text-gray-800 legal-section" id="privacy">10. Data & Privacy</h2>
+      <p>Your use of the Service is governed by our <a href="/privacy" class="text-blue-600 underline">Privacy Policy</a>. By using the Service, you consent to the collection and use of information as described therein. We are committed to protecting your personal information in compliance with PIPEDA (Canada), CCPA (California), and applicable data protection regulations.</p>
+
+      <h2 class="text-lg font-bold text-gray-800 legal-section" id="third-party">11. Third-Party Services</h2>
+      <p>The Service integrates with third-party services including Google Maps/Solar API, Square (payments), LiveKit (phone calls), and Twilio (SMS). Your use of these integrations is subject to the respective third-party terms of service. RoofReporterAI is not responsible for third-party service availability, changes, or policies.</p>
+
+      <h2 class="text-lg font-bold text-gray-800 legal-section" id="liability">12. Limitation of Liability</h2>
+      <p>TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, RoofReporterAI shall not be liable for any indirect, incidental, special, consequential, or punitive damages, including but not limited to loss of profits, revenue, data, goodwill, or business opportunities, whether in contract, tort, or otherwise, arising from your use of the Service. Our total aggregate liability shall not exceed the amount paid by you to RoofReporterAI in the 12 months preceding the claim. Some jurisdictions do not allow the exclusion of certain warranties or limitation of liability for consequential damages, so the above limitations may not apply to you.</p>
+
+      <h2 class="text-lg font-bold text-gray-800 legal-section" id="indemnification">13. Indemnification</h2>
+      <p>You agree to indemnify, defend, and hold harmless RoofReporterAI, its officers, directors, employees, and agents from and against any claims, damages, losses, liabilities, and expenses (including reasonable legal fees) arising from or related to your use of the Service, your violation of these Terms, or your violation of any rights of a third party.</p>
+
+      <h2 class="text-lg font-bold text-gray-800 legal-section" id="termination">14. Termination</h2>
+      <p>We reserve the right to suspend or terminate your account at any time for violation of these Terms or for any other reason at our sole discretion. You may close your account at any time by contacting support at <strong>support@roofreporterai.com</strong>. Upon termination: (a) your access to the Service will be revoked; (b) your data will be retained for 30 days, after which it may be permanently deleted; (c) you may request a data export within the 30-day grace period; (d) active subscriptions will be cancelled effective at the end of the current billing period.</p>
+
+      <h2 class="text-lg font-bold text-gray-800 legal-section" id="apple">15. Apple App Store Terms</h2>
+      <p>If you download the App from the Apple App Store: (a) this agreement is between you and RoofReporterAI, not Apple; (b) Apple has no obligation to furnish maintenance or support services with respect to the App; (c) in the event of any failure of the App to conform to any applicable warranty, Apple's sole obligation shall be to refund the purchase price (if any); (d) Apple is not responsible for addressing any claims relating to the App; (e) Apple and Apple's subsidiaries are third-party beneficiaries of this agreement and may enforce it against you; (f) you are not located in a country subject to a U.S. Government embargo; (g) you will comply with all applicable third-party terms of agreement when using the App.</p>
+
+      <h2 class="text-lg font-bold text-gray-800 legal-section" id="changes">16. Changes to Terms</h2>
+      <p>We may update these Terms from time to time. Material changes will be communicated via email to registered users or through in-app notifications at least 14 days before they take effect. Your continued use of the Service after changes take effect constitutes acceptance of the updated Terms. If you do not agree with the changes, you must stop using the Service.</p>
+
+      <h2 class="text-lg font-bold text-gray-800 legal-section" id="governing-law">17. Governing Law & Dispute Resolution</h2>
+      <p>These Terms are governed by the laws of the Province of Alberta, Canada, without regard to conflict of law principles. Any disputes arising from these Terms or the Service shall first be attempted to be resolved through good-faith negotiation. If negotiation fails, disputes shall be submitted to binding arbitration in Alberta, Canada, in accordance with the Arbitration Act of Alberta. Each party shall bear its own costs.</p>
+
+      <h2 class="text-lg font-bold text-gray-800 legal-section" id="contact">18. Contact Information</h2>
+      <p>For questions, concerns, or requests regarding these Terms:</p>
+      <p><strong>Email:</strong> support@roofreporterai.com</p>
+      <p><strong>Location:</strong> Alberta, Canada</p>
+      <p><strong>Website:</strong> <a href="https://www.roofreporterai.com" class="text-blue-600 underline">www.roofreporterai.com</a></p>
+    </div>
+    <div class="mt-12 border-t pt-6 text-center text-xs text-gray-400 space-y-2">
+      <p>&copy; ${new Date().getFullYear()} RoofReporterAI. All rights reserved.</p>
+      <p><a href="/" class="text-blue-600 hover:underline">Back to RoofReporterAI</a> &middot; <a href="/privacy" class="text-blue-600 hover:underline">Privacy Policy</a></p>
     </div>
   </div>
 </body>
@@ -1950,59 +1993,149 @@ app.get('/privacy', (c) => {
   return c.html(`<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Privacy Policy — RoofReporterAI</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+  <style>
+    .legal-section { scroll-margin-top: 80px; }
+    @media (max-width: 640px) { h1 { font-size: 24px !important; } }
+  </style>
 </head>
 <body class="bg-gray-50 min-h-screen">
-  <div class="max-w-3xl mx-auto px-6 py-12">
-    <h1 class="text-3xl font-bold text-gray-900 mb-6">Privacy Policy</h1>
-    <p class="text-sm text-gray-400 mb-8">Last updated: March 16, 2026</p>
+  <nav class="bg-white border-b border-gray-200 sticky top-0 z-10">
+    <div class="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
+      <a href="/" class="flex items-center gap-2 text-sm font-semibold text-gray-800"><i class="fas fa-hard-hat text-blue-600"></i> RoofReporterAI</a>
+      <div class="flex gap-4">
+        <a href="/terms" class="text-xs text-blue-600 hover:underline">Terms of Service</a>
+        <a href="/" class="text-xs text-gray-500 hover:underline">Home</a>
+      </div>
+    </div>
+  </nav>
+  <div class="max-w-3xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
+    <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Privacy Policy</h1>
+    <p class="text-sm text-gray-400 mb-8">Effective Date: March 26, 2026 &middot; Last Updated: March 26, 2026</p>
+
     <div class="prose prose-gray max-w-none space-y-6 text-gray-700 text-sm leading-relaxed">
-      <h2 class="text-lg font-bold text-gray-800">1. Information We Collect</h2>
+
+      <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
+        <p class="text-blue-800 text-sm font-medium"><i class="fas fa-info-circle mr-2"></i><strong>Summary:</strong> We collect only what's needed to provide our roofing measurement and CRM services. We never sell your personal data. You can request deletion of your data at any time.</p>
+      </div>
+
+      <h2 class="text-lg font-bold text-gray-800 legal-section" id="collect">1. Information We Collect</h2>
       <p><strong>Account Information:</strong> Name, email address, phone number, company name, and business address provided during registration.</p>
       <p><strong>Property Data:</strong> Street addresses, GPS coordinates, and satellite imagery data used to generate roof measurement reports.</p>
-      <p><strong>Payment Information:</strong> Credit card and billing details processed securely through Square. We do not store credit card numbers on our servers.</p>
-      <p><strong>Usage Data:</strong> Pages visited, features used, report generation history, and device/browser information collected via Google Analytics 4.</p>
+      <p><strong>Payment Information:</strong> Credit card and billing details processed securely through Square. <strong>We do not store credit card numbers on our servers.</strong> All payment data is handled by Square's PCI-DSS compliant systems.</p>
+      <p><strong>Call & Communication Data:</strong> If you use the Roofer Secretary AI phone service, we record call metadata (duration, phone number, timestamp), AI-generated transcripts, and call summaries. Calls are processed by LiveKit and Twilio.</p>
+      <p><strong>Usage Data:</strong> Pages visited, features used, report generation history, device type, browser information, and IP address collected via Google Analytics 4. This data is anonymized and aggregated.</p>
+      <p><strong>Device Information (Mobile App):</strong> When using our iOS app, we may collect device model, OS version, app version, and crash reports to improve app stability and performance.</p>
 
-      <h2 class="text-lg font-bold text-gray-800">2. How We Use Your Information</h2>
-      <p>We use your information to: (a) provide and improve the Service; (b) generate roof measurement reports and proposals; (c) process payments; (d) send transactional emails (invoices, proposals, receipts); (e) analyze usage patterns to improve the platform; (f) communicate service updates and new features.</p>
+      <h2 class="text-lg font-bold text-gray-800 legal-section" id="use">2. How We Use Your Information</h2>
+      <p>We use your information to:</p>
+      <ul class="list-disc list-inside space-y-1">
+        <li>Provide and operate the Service (roof measurements, reports, CRM, invoicing)</li>
+        <li>Process payments and manage your subscription</li>
+        <li>Send transactional communications (invoices, proposals, receipts, call summaries)</li>
+        <li>Improve the Service and develop new features</li>
+        <li>Analyze usage patterns for platform optimization</li>
+        <li>Communicate important service updates</li>
+        <li>Prevent fraud and ensure security</li>
+        <li>Comply with legal obligations</li>
+      </ul>
+      <p>We do <strong>NOT</strong> use your data for: selling to third parties, targeted advertising, or profiling for purposes unrelated to the Service.</p>
 
-      <h2 class="text-lg font-bold text-gray-800">3. Third-Party Services</h2>
-      <p>We share data with the following third-party services as necessary to operate the platform:</p>
+      <h2 class="text-lg font-bold text-gray-800 legal-section" id="sharing">3. Third-Party Services & Data Sharing</h2>
+      <p>We share data with the following third-party services strictly as necessary to operate the platform:</p>
       <ul class="list-disc list-inside space-y-1">
         <li><strong>Google Solar API / Maps:</strong> Property coordinates for satellite imagery and solar data</li>
-        <li><strong>Square:</strong> Payment processing</li>
-        <li><strong>Google Analytics 4:</strong> Anonymous usage analytics</li>
-        <li><strong>Google Gmail API:</strong> Sending proposals and invoices on your behalf (when connected)</li>
-        <li><strong>Cloudflare:</strong> Hosting, CDN, and security</li>
-        <li><strong>LiveKit:</strong> AI phone call handling (when enabled)</li>
+        <li><strong>Square:</strong> Payment processing (PCI-DSS Level 1 certified)</li>
+        <li><strong>Google Analytics 4:</strong> Anonymized usage analytics</li>
+        <li><strong>Google Gmail API:</strong> Sending proposals and invoices on your behalf (only when you explicitly connect your Gmail)</li>
+        <li><strong>Cloudflare:</strong> Hosting, CDN, DDoS protection, and edge computing</li>
+        <li><strong>LiveKit:</strong> AI phone call handling and voice processing (when Roofer Secretary is enabled)</li>
+        <li><strong>Twilio:</strong> SMS notifications and phone number management</li>
+        <li><strong>Apple (App Store):</strong> App distribution, crash reporting, and in-app purchase processing</li>
       </ul>
+      <p>We do <strong>NOT</strong> sell, rent, or trade your personal information to third parties for marketing purposes.</p>
 
-      <h2 class="text-lg font-bold text-gray-800">4. Data Retention</h2>
-      <p>Account data is retained for the duration of your account. Roof measurement reports are retained for 2 years after generation. Payment records are retained for 7 years as required by Canadian tax law. You may request deletion of your data at any time by contacting support.</p>
+      <h2 class="text-lg font-bold text-gray-800 legal-section" id="retention">4. Data Retention</h2>
+      <ul class="list-disc list-inside space-y-1">
+        <li><strong>Account data:</strong> Retained for the duration of your account plus 30 days after deletion request</li>
+        <li><strong>Roof measurement reports:</strong> Retained for 2 years after generation</li>
+        <li><strong>Call recordings/transcripts:</strong> Retained for 12 months</li>
+        <li><strong>Payment records:</strong> Retained for 7 years as required by Canadian tax law</li>
+        <li><strong>Analytics data:</strong> Anonymized and aggregated, retained indefinitely</li>
+      </ul>
+      <p>You may request early deletion of your data at any time (see Section 8).</p>
 
-      <h2 class="text-lg font-bold text-gray-800">5. Data Security</h2>
-      <p>We implement industry-standard security measures including HTTPS encryption, secure password hashing, OAuth 2.0 authentication, and Cloudflare DDoS protection. All data is stored on Cloudflare's globally distributed infrastructure with automatic encryption at rest.</p>
+      <h2 class="text-lg font-bold text-gray-800 legal-section" id="security">5. Data Security</h2>
+      <p>We implement industry-standard security measures including:</p>
+      <ul class="list-disc list-inside space-y-1">
+        <li>HTTPS/TLS encryption for all data in transit</li>
+        <li>Secure password hashing (SHA-256 with salt)</li>
+        <li>OAuth 2.0 authentication for third-party integrations</li>
+        <li>Cloudflare DDoS protection and Web Application Firewall</li>
+        <li>Automatic encryption at rest on Cloudflare's global infrastructure</li>
+        <li>Regular security audits and vulnerability assessments</li>
+        <li>Role-based access control for internal systems</li>
+      </ul>
+      <p>While we strive to protect your data, no method of transmission over the Internet is 100% secure. We cannot guarantee absolute security.</p>
 
-      <h2 class="text-lg font-bold text-gray-800">6. Cookies</h2>
-      <p>We use essential cookies for authentication and session management. Google Analytics uses cookies for usage tracking. You may disable non-essential cookies in your browser settings.</p>
+      <h2 class="text-lg font-bold text-gray-800 legal-section" id="cookies">6. Cookies & Tracking</h2>
+      <p><strong>Essential Cookies:</strong> Used for authentication, session management, and core functionality. Required for the Service to operate.</p>
+      <p><strong>Analytics Cookies:</strong> Google Analytics uses cookies for anonymized usage tracking. You may disable these in your browser settings without affecting core functionality.</p>
+      <p>We do not use advertising cookies or cross-site tracking pixels.</p>
 
-      <h2 class="text-lg font-bold text-gray-800">7. Your Rights (PIPEDA Compliance)</h2>
-      <p>Under Canada's Personal Information Protection and Electronic Documents Act (PIPEDA), you have the right to: (a) access your personal information; (b) request correction of inaccurate data; (c) withdraw consent for data collection; (d) request deletion of your data. To exercise these rights, contact <strong>privacy@roofreporterai.com</strong>.</p>
+      <h2 class="text-lg font-bold text-gray-800 legal-section" id="pipeda">7. Your Rights — PIPEDA Compliance (Canada)</h2>
+      <p>Under Canada's Personal Information Protection and Electronic Documents Act (PIPEDA), you have the right to:</p>
+      <ul class="list-disc list-inside space-y-1">
+        <li><strong>Access:</strong> Request a copy of all personal information we hold about you</li>
+        <li><strong>Correction:</strong> Request correction of inaccurate or incomplete data</li>
+        <li><strong>Withdrawal of Consent:</strong> Withdraw consent for data collection (may affect Service availability)</li>
+        <li><strong>Deletion:</strong> Request complete deletion of your personal data</li>
+        <li><strong>Portability:</strong> Request your data in a portable format (JSON/CSV)</li>
+      </ul>
+      <p>To exercise any of these rights, contact <strong>privacy@roofreporterai.com</strong>. We will respond within 30 days.</p>
 
-      <h2 class="text-lg font-bold text-gray-800">8. Children's Privacy</h2>
-      <p>The Service is not intended for individuals under 18 years of age. We do not knowingly collect personal information from minors.</p>
+      <h2 class="text-lg font-bold text-gray-800 legal-section" id="deletion">8. Data Deletion & Account Closure</h2>
+      <p>You may request deletion of your account and all associated data at any time by:</p>
+      <ul class="list-disc list-inside space-y-1">
+        <li>Emailing <strong>support@roofreporterai.com</strong> with the subject "Data Deletion Request"</li>
+        <li>Using the "Delete Account" option in your account settings (when available)</li>
+      </ul>
+      <p>Upon receiving a deletion request, we will: (a) confirm receipt within 48 hours; (b) process deletion within 30 days; (c) permanently remove all personal data except records required by law (e.g., payment records for tax compliance); (d) notify you upon completion. Active subscriptions will be cancelled as part of account deletion.</p>
 
-      <h2 class="text-lg font-bold text-gray-800">9. Changes to This Policy</h2>
-      <p>We may update this Privacy Policy from time to time. We will notify registered users of material changes via email. Continued use of the Service after changes constitutes acceptance of the updated policy.</p>
+      <h2 class="text-lg font-bold text-gray-800 legal-section" id="ccpa">9. California Privacy Rights (CCPA/CPRA)</h2>
+      <p>If you are a California resident, you have additional rights under the California Consumer Privacy Act (CCPA) and California Privacy Rights Act (CPRA):</p>
+      <ul class="list-disc list-inside space-y-1">
+        <li><strong>Right to Know:</strong> Request details about categories and specific pieces of personal information collected</li>
+        <li><strong>Right to Delete:</strong> Request deletion of personal information</li>
+        <li><strong>Right to Opt-Out:</strong> We do not sell personal information, so this right does not apply. However, you may still opt out of analytics tracking.</li>
+        <li><strong>Non-Discrimination:</strong> We will not discriminate against you for exercising your privacy rights</li>
+      </ul>
+      <p>To submit a CCPA request, email <strong>privacy@roofreporterai.com</strong> or call us. We will verify your identity before processing requests.</p>
 
-      <h2 class="text-lg font-bold text-gray-800">10. Contact</h2>
-      <p>For privacy inquiries: <strong>privacy@roofreporterai.com</strong></p>
-      <p>Data Protection Officer: RoofReporterAI, Alberta, Canada</p>
+      <h2 class="text-lg font-bold text-gray-800 legal-section" id="children">10. Children's Privacy</h2>
+      <p>The Service is <strong>not intended for individuals under 18 years of age</strong>. We do not knowingly collect personal information from children under 18. If we become aware that we have collected data from a minor, we will promptly delete it. If you believe a minor has provided us with personal information, please contact us immediately.</p>
+
+      <h2 class="text-lg font-bold text-gray-800 legal-section" id="international">11. International Data Transfers</h2>
+      <p>Your data may be processed in Canada, the United States, and other countries where our service providers operate (including Cloudflare's global edge network). We ensure appropriate safeguards are in place for international data transfers in compliance with PIPEDA and applicable laws.</p>
+
+      <h2 class="text-lg font-bold text-gray-800 legal-section" id="changes">12. Changes to This Policy</h2>
+      <p>We may update this Privacy Policy from time to time. Material changes will be communicated via email to registered users or through in-app notifications at least 14 days before they take effect. The "Last Updated" date will be revised accordingly. Continued use of the Service after changes take effect constitutes acceptance of the updated policy.</p>
+
+      <h2 class="text-lg font-bold text-gray-800 legal-section" id="contact">13. Contact Information</h2>
+      <p>For privacy inquiries or data requests:</p>
+      <p><strong>Privacy Officer:</strong> RoofReporterAI</p>
+      <p><strong>Email:</strong> privacy@roofreporterai.com</p>
+      <p><strong>General Support:</strong> support@roofreporterai.com</p>
+      <p><strong>Location:</strong> Alberta, Canada</p>
+      <p><strong>Website:</strong> <a href="https://www.roofreporterai.com" class="text-blue-600 underline">www.roofreporterai.com</a></p>
     </div>
-    <div class="mt-12 border-t pt-6 text-center text-xs text-gray-400">
-      <a href="/" class="text-blue-600 hover:underline">Back to RoofReporterAI</a> · <a href="/terms" class="text-blue-600 hover:underline">Terms of Service</a>
+    <div class="mt-12 border-t pt-6 text-center text-xs text-gray-400 space-y-2">
+      <p>&copy; ${new Date().getFullYear()} RoofReporterAI. All rights reserved.</p>
+      <p><a href="/" class="text-blue-600 hover:underline">Back to RoofReporterAI</a> &middot; <a href="/terms" class="text-blue-600 hover:underline">Terms of Service</a></p>
     </div>
   </div>
 </body>
@@ -3669,6 +3802,22 @@ function getCustomerDashboardHTML() {
     .rfr-topbar-nav a:hover, .rfr-topbar-nav button:hover { background: #F1F5F9; color: #0F172A; }
     .rfr-topbar-user { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #475569; }
     .rfr-topbar-avatar { width: 28px; height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: white; background: #2563EB; }
+    /* Mobile responsive top bar */
+    @media (max-width: 768px) {
+      .rfr-topbar { height: 52px; padding: 0 12px; }
+      .rfr-topbar-logo img { height: 28px; width: 28px; }
+      .rfr-topbar-title { font-size: 14px; }
+      .rfr-topbar-subtitle { display: none; }
+      .rfr-topbar-nav { gap: 6px; }
+      .rfr-topbar-nav a, .rfr-topbar-nav button { font-size: 11px; padding: 6px 8px; }
+      .rfr-topbar-nav a span, .rfr-topbar-nav button span { display: none; }
+      .rfr-topbar-user span:not(.rfr-topbar-avatar) { display: none; }
+    }
+    @media (max-width: 400px) {
+      .rfr-topbar { height: 48px; padding: 0 8px; }
+      .rfr-topbar-title { font-size: 13px; }
+      .rfr-topbar-nav a, .rfr-topbar-nav button { padding: 4px 6px; font-size: 11px; }
+    }
   </style>
 </head>
 <body style="background:#F8FAFC;min-height:100vh">
