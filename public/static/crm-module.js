@@ -817,7 +817,24 @@
           '<div><label class="block text-xs font-medium text-gray-600 mb-1">Customer *</label>' + customerSelectHTML(custs, '', 'propCustomer') + '</div>' +
           '<div><label class="block text-xs font-medium text-gray-600 mb-1">Title *</label><input type="text" id="propTitle" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="e.g. Full Roof Replacement – 2,200 sq ft"></div>' +
           '<div><label class="block text-xs font-medium text-gray-600 mb-1">Property Address</label><input type="text" id="propAddress" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"></div>' +
-          '<div><label class="block text-xs font-medium text-gray-600 mb-1">Scope of Work</label><textarea id="propScope" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="Remove existing shingles, inspect decking, install new underlayment and architectural shingles..."></textarea></div>';
+          '<div><label class="block text-xs font-medium text-gray-600 mb-1">Scope of Work</label><textarea id="propScope" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="Remove existing shingles, inspect decking, install new underlayment and architectural shingles..."></textarea></div>' +
+          '<div><label class="block text-xs font-medium text-gray-600 mb-1"><i class="fas fa-file-alt mr-1 text-indigo-500"></i>Attach Roof Report <span class="text-gray-400 font-normal">(optional)</span></label><select id="propLinkedReport" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"><option value="">— No report attached —</option></select><p class="text-[10px] text-gray-400 mt-1">Attach a completed roof report to include with this proposal.</p></div>';
+
+        // Populate the roof report dropdown
+        fetch('/api/customer/orders', { headers: authHeadersOnly() })
+          .then(function(r) { return r.json(); })
+          .then(function(d) {
+            var orders = (d.orders || []).filter(function(o) { return o.status === 'completed' || o.report_id; });
+            var sel = document.getElementById('propLinkedReport');
+            if (sel && orders.length > 0) {
+              orders.forEach(function(o) {
+                var opt = document.createElement('option');
+                opt.value = o.id;
+                opt.textContent = (o.address || 'Order #' + o.id) + (o.created_at ? ' — ' + o.created_at.substring(0, 10) : '');
+                sel.appendChild(opt);
+              });
+            }
+          }).catch(function() {});
 
         // Line items section
         body += '<div class="border border-gray-200 rounded-xl p-3">' +
@@ -855,7 +872,8 @@
             valid_until: document.getElementById('propValid').value || null,
             warranty_terms: document.getElementById('propWarranty').value.trim() || null,
             payment_terms: document.getElementById('propPayment').value.trim() || null,
-            notes: document.getElementById('propNotes').value.trim()
+            notes: document.getElementById('propNotes').value.trim(),
+            linked_order_id: document.getElementById('propLinkedReport') && document.getElementById('propLinkedReport').value ? parseInt(document.getElementById('propLinkedReport').value) : null
           });
           fetch('/api/crm/proposals', { method: 'POST', headers: authHeaders(), body: JSON.stringify(payload) })
             .then(function(r) { return r.json(); })

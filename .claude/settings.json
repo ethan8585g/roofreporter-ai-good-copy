@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ssh-keygen -t ed25519 -C \"roofreporterai-deploy\" -f ~/.ssh/github_roofreporter -N \"\")",
+      "Bash(git -C /Users/ethan/Documents/roofreporter-ai-good-copy/.claude/worktrees/adoring-gates remote set-url origin git@github.com:ethan8585g/roofreporter-ai-good-copy.git)",
+      "Bash(ssh -T git@github.com)",
+      "Bash(git -C /Users/ethan/Documents/roofreporter-ai-good-copy/.claude/worktrees/adoring-gates push origin claude/adoring-gates)",
+      "Bash(gh pr:*)",
+      "Read(//Users/ethan/Documents/roofreporter-ai-good-copy/.claire/worktrees/adoring-gates/public/static/**)",
+      "Bash(echo $CLOUDFLARE_API_TOKEN)",
+      "Bash(unset CLOUDFLARE_API_TOKEN)"
+    ]
+  }
+}

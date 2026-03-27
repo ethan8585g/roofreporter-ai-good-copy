@@ -145,7 +145,6 @@ function renderDashboard() {
           '<p class="px-3 mb-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Reports</p>' +
           navLink('/customer/order', 'fa-plus-circle', 'Order New Report', creditBadge || null, creditBadgeColor) +
           navLink('/customer/reports', 'fa-file-alt', 'Report History', completedReports > 0 ? completedReports + '' : null, 'bg-indigo-500') +
-          navLink('/customer/virtual-tryon', 'fa-magic', 'Roof Visualizer', 'New', 'bg-violet-500') +
         '</div>' +
         // CRM
         '<div>' +
