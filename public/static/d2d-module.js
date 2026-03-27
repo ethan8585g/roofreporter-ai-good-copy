@@ -300,34 +300,57 @@
 
     var html = '<div class="flex items-center justify-between mb-3">' +
       '<h3 class="font-bold text-gray-800 text-sm">Team Members <span class="text-gray-400 font-normal">(' + team.length + ')</span></h3>' +
-      '<button class="d2d-btn d2d-btn-primary d2d-btn-sm" onclick="window.d2d.addMember()"><i class="fas fa-plus mr-1"></i>Add Member</button>' +
+      (viewerRole === 'owner' ? '<button class="d2d-btn d2d-btn-primary d2d-btn-sm" onclick="window.d2d.addMember()"><i class="fas fa-plus mr-1"></i>Add Member</button>' : '') +
     '</div>';
 
     if (team.length === 0) {
-      html += '<div class="d2d-empty"><i class="fas fa-users"></i><p>No team members yet.<br>Add your sales team to assign turfs.</p></div>';
+      html += '<div class="d2d-empty"><i class="fas fa-users"></i><p>No team members yet.' + (viewerRole === 'owner' ? '<br>Add your door knockers to assign turfs &amp; track activity.' : '') + '</p></div>';
     } else {
       for (var i = 0; i < team.length; i++) {
         var m = team[i];
+        var totalKnocks = (m.knock_count || 0);
+        var yesCount = (m.yes_count || 0);
+        var convRate = totalKnocks > 0 ? Math.round((yesCount / totalKnocks) * 100) : 0;
+        var lastActive = m.last_activity ? fmtDate(m.last_activity) : 'No activity';
+        var perms = null;
+        try { perms = m.permissions ? JSON.parse(m.permissions) : null; } catch(e) {}
+        var permBadges = '';
+        if (perms) {
+          if (perms.d2d === 'assigned') permBadges += '<span class="px-1.5 py-0.5 bg-amber-50 text-amber-700 rounded text-[9px] font-semibold">Assigned Turfs Only</span> ';
+          if (perms.reports === false) permBadges += '<span class="px-1.5 py-0.5 bg-red-50 text-red-600 rounded text-[9px] font-semibold">No Reports</span> ';
+          if (perms.crm === false) permBadges += '<span class="px-1.5 py-0.5 bg-red-50 text-red-600 rounded text-[9px] font-semibold">No CRM</span> ';
+        }
+
         html += '<div class="d2d-card">' +
+          // Header row
           '<div class="flex items-center justify-between">' +
             '<div class="flex items-center gap-2">' +
-              '<div style="width:32px;height:32px;border-radius:50%;background:' + (m.color || '#3B82F6') + ';display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:12px">' + (m.name || '?').charAt(0).toUpperCase() + '</div>' +
+              '<div style="width:34px;height:34px;border-radius:50%;background:' + (m.color || '#3B82F6') + ';display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:13px;flex-shrink:0">' + (m.name || '?').charAt(0).toUpperCase() + '</div>' +
               '<div>' +
                 '<div class="font-semibold text-gray-800 text-sm">' + escH(m.name) + '</div>' +
-                '<div class="text-[10px] text-gray-400 capitalize"><i class="fas ' + (m.role === 'manager' ? 'fa-user-tie' : 'fa-user') + ' mr-1"></i>' + (m.role || 'salesperson') +
+                '<div class="text-[10px] text-gray-400 capitalize"><i class="fas ' + (m.role === 'manager' ? 'fa-user-tie' : 'fa-walking') + ' mr-1"></i>' + (m.role || 'salesperson') +
                   (m.email ? ' · ' + escH(m.email) : '') + '</div>' +
               '</div>' +
             '</div>' +
-            '<div class="flex gap-1">' +
-              '<button class="text-gray-400 hover:text-sky-500 text-xs" onclick="window.d2d.editMember(' + m.id + ')" title="Edit"><i class="fas fa-pen"></i></button>' +
-              '<button class="text-gray-400 hover:text-red-500 text-xs" onclick="window.d2d.deleteMember(' + m.id + ')" title="Remove"><i class="fas fa-trash"></i></button>' +
-            '</div>' +
+            (viewerRole === 'owner' ? '<div class="flex gap-1">' +
+              '<button class="text-gray-400 hover:text-sky-500 text-xs p-1" onclick="window.d2d.editMember(' + m.id + ')" title="Edit Settings"><i class="fas fa-cog"></i></button>' +
+              '<button class="text-gray-400 hover:text-red-500 text-xs p-1" onclick="window.d2d.deleteMember(' + m.id + ')" title="Remove"><i class="fas fa-trash"></i></button>' +
+            '</div>' : '<div></div>') +
           '</div>' +
-          '<div class="mt-2 grid grid-cols-3 gap-1 text-center text-[10px]">' +
-            '<div class="bg-sky-50 text-sky-700 rounded px-1 py-0.5"><b>' + (m.turf_count||0) + '</b> Turfs</div>' +
-            '<div class="bg-gray-50 text-gray-700 rounded px-1 py-0.5"><b>' + (m.knock_count||0) + '</b> Knocks</div>' +
-            '<div class="bg-green-50 text-green-700 rounded px-1 py-0.5"><b>' + (m.yes_count||0) + '</b> Yes</div>' +
+          // Stats grid
+          '<div class="mt-2 grid grid-cols-4 gap-1 text-center text-[10px]">' +
+            '<div class="bg-sky-50 text-sky-700 rounded px-1 py-1"><div class="font-bold text-sm">' + (m.turf_count||0) + '</div><div>Turfs</div></div>' +
+            '<div class="bg-gray-50 text-gray-700 rounded px-1 py-1"><div class="font-bold text-sm">' + totalKnocks + '</div><div>Knocks</div></div>' +
+            '<div class="bg-green-50 text-green-700 rounded px-1 py-1"><div class="font-bold text-sm">' + yesCount + '</div><div>Yes</div></div>' +
+            '<div class="bg-purple-50 text-purple-700 rounded px-1 py-1"><div class="font-bold text-sm">' + convRate + '%</div><div>Rate</div></div>' +
           '</div>' +
+          // Last activity + permissions badges
+          '<div class="mt-2 flex items-center justify-between">' +
+            '<div class="text-[10px] text-gray-400"><i class="fas fa-clock mr-1"></i>' + lastActive + '</div>' +
+            (permBadges ? '<div class="flex gap-1 flex-wrap">' + permBadges + '</div>' : '') +
+          '</div>' +
+          // View activity button
+          (totalKnocks > 0 ? '<button class="mt-2 w-full d2d-btn d2d-btn-outline d2d-btn-sm" onclick="window.d2d.filterPinsByMember(' + m.id + ',\'' + escAttr(m.name) + '\')"><i class="fas fa-map-pin mr-1"></i>View ' + totalKnocks + ' Pin' + (totalKnocks !== 1 ? 's' : '') + '</button>' : '') +
         '</div>';
       }
     }
@@ -1140,6 +1163,66 @@
   // ============================================================
   // TEAM MEMBER ACTIONS
   // ============================================================
+
+  function buildPermissionsHtml(perms, prefix) {
+    var d2dAll = !perms || perms.d2d !== 'assigned';
+    return '<div class="mt-1 p-3 bg-gray-50 rounded-xl border border-gray-200 space-y-3">' +
+      // D2D turf visibility
+      '<div>' +
+        '<p class="text-[11px] font-semibold text-gray-500 mb-1.5">D2D Turf Visibility</p>' +
+        '<div class="flex gap-2">' +
+          '<button type="button" data-perm="d2d" data-val="all" class="' + prefix + '-perm-d2d flex-1 text-xs py-1.5 rounded-lg border-2 font-semibold transition-all ' + (d2dAll ? 'border-sky-500 bg-sky-50 text-sky-700' : 'border-gray-200 text-gray-500') + '"><i class="fas fa-globe mr-1"></i>All Turfs</button>' +
+          '<button type="button" data-perm="d2d" data-val="assigned" class="' + prefix + '-perm-d2d flex-1 text-xs py-1.5 rounded-lg border-2 font-semibold transition-all ' + (!d2dAll ? 'border-sky-500 bg-sky-50 text-sky-700' : 'border-gray-200 text-gray-500') + '"><i class="fas fa-user-tag mr-1"></i>Assigned Only</button>' +
+        '</div>' +
+      '</div>' +
+      // Feature toggles
+      '<div class="grid grid-cols-2 gap-2">' +
+        buildPermToggle(prefix, 'reports', 'fa-file-alt', 'Reports', !perms || perms.reports !== false) +
+        buildPermToggle(prefix, 'crm', 'fa-briefcase', 'CRM', !perms || perms.crm !== false) +
+        buildPermToggle(prefix, 'secretary', 'fa-headset', 'Secretary', perms && perms.secretary === true) +
+        buildPermToggle(prefix, 'team', 'fa-users-cog', 'Team Mgmt', perms && perms.team === true) +
+      '</div>' +
+    '</div>';
+  }
+
+  function buildPermToggle(prefix, key, icon, label, checked) {
+    return '<label class="flex items-center gap-2 cursor-pointer p-2 bg-white rounded-lg border border-gray-100">' +
+      '<div class="relative flex-shrink-0">' +
+        '<input type="checkbox" id="' + prefix + '-perm-' + key + '" class="sr-only peer" ' + (checked ? 'checked' : '') + '>' +
+        '<div class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[\'\'] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-sky-500"></div>' +
+      '</div>' +
+      '<span class="text-xs font-medium text-gray-700"><i class="fas ' + icon + ' mr-1 text-gray-400"></i>' + label + '</span>' +
+    '</label>';
+  }
+
+  function readPermissions(prefix) {
+    var d2dBtns = document.querySelectorAll('.' + prefix + '-perm-d2d');
+    var d2dVal = 'all';
+    d2dBtns.forEach(function(btn) { if (btn.style.borderColor === 'rgb(14, 165, 233)' || btn.classList.contains('border-sky-500')) { d2dVal = btn.getAttribute('data-val'); } });
+    // Better: check which button has active class
+    d2dBtns.forEach(function(btn) { if (btn.getAttribute('data-val') === 'assigned' && btn.classList.contains('text-sky-700')) d2dVal = 'assigned'; });
+    return {
+      d2d: d2dVal,
+      reports: document.getElementById(prefix + '-perm-reports') ? document.getElementById(prefix + '-perm-reports').checked : true,
+      crm: document.getElementById(prefix + '-perm-crm') ? document.getElementById(prefix + '-perm-crm').checked : true,
+      secretary: document.getElementById(prefix + '-perm-secretary') ? document.getElementById(prefix + '-perm-secretary').checked : false,
+      team: document.getElementById(prefix + '-perm-team') ? document.getElementById(prefix + '-perm-team').checked : false
+    };
+  }
+
+  function attachPermButtons(prefix) {
+    document.querySelectorAll('.' + prefix + '-perm-d2d').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        document.querySelectorAll('.' + prefix + '-perm-d2d').forEach(function(b) {
+          b.className = b.className.replace(/border-sky-500 bg-sky-50 text-sky-700/g, '').replace(/border-gray-200 text-gray-500/g, '').trim();
+          b.classList.add('border-gray-200', 'text-gray-500');
+        });
+        btn.classList.remove('border-gray-200', 'text-gray-500');
+        btn.classList.add('border-sky-500', 'bg-sky-50', 'text-sky-700');
+      });
+    });
+  }
+
   function addMember() {
     var colorGrid = '';
     for (var ci = 0; ci < COLORS.length; ci++) {
@@ -1149,23 +1232,44 @@
     var overlay = document.createElement('div');
     overlay.className = 'fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4';
     overlay.id = 'd2dModal';
-    overlay.innerHTML = '<div class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">' +
-      '<div class="px-6 py-4 border-b border-gray-100"><h3 class="font-bold text-gray-800"><i class="fas fa-user-plus mr-2 text-sky-500"></i>Add Team Member</h3></div>' +
-      '<div class="p-6 space-y-4">' +
-        '<div><label class="text-xs font-semibold text-gray-600 mb-1 block">Name *</label><input id="memberName" class="d2d-input" placeholder="Full name" autofocus></div>' +
-        '<div><label class="text-xs font-semibold text-gray-600 mb-1 block">Email</label><input id="memberEmail" class="d2d-input" type="email" placeholder="email@example.com"></div>' +
-        '<div><label class="text-xs font-semibold text-gray-600 mb-1 block">Phone</label><input id="memberPhone" class="d2d-input" type="tel" placeholder="(555) 123-4567"></div>' +
-        '<div><label class="text-xs font-semibold text-gray-600 mb-1 block">Role</label><select id="memberRole" class="d2d-select"><option value="salesperson">Salesperson</option><option value="manager">Manager</option></select></div>' +
-        '<div><label class="text-xs font-semibold text-gray-600 mb-1 block">Color</label><div class="d2d-color-grid" id="memberColorGrid">' + colorGrid + '</div></div>' +
+    overlay.innerHTML = '<div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden" style="max-height:90vh;display:flex;flex-direction:column">' +
+      '<div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between flex-shrink-0">' +
+        '<h3 class="font-bold text-gray-800"><i class="fas fa-user-plus mr-2 text-sky-500"></i>Add Team Member</h3>' +
+        '<button onclick="document.getElementById(\'d2dModal\').remove()" class="text-gray-400 hover:text-gray-600 text-lg">&times;</button>' +
       '</div>' +
-      '<div class="px-6 py-4 border-t border-gray-100 flex justify-end gap-2">' +
+      '<div class="p-6 space-y-4 overflow-y-auto flex-1">' +
+        // Basic info
+        '<div class="grid grid-cols-2 gap-3">' +
+          '<div class="col-span-2"><label class="text-xs font-semibold text-gray-600 mb-1 block">Full Name *</label><input id="memberName" class="d2d-input" placeholder="e.g. John Smith" autofocus></div>' +
+          '<div><label class="text-xs font-semibold text-gray-600 mb-1 block">Phone</label><input id="memberPhone" class="d2d-input" type="tel" placeholder="(555) 123-4567"></div>' +
+          '<div><label class="text-xs font-semibold text-gray-600 mb-1 block">Role</label><select id="memberRole" class="d2d-select"><option value="salesperson">Salesperson</option><option value="manager">Manager</option></select></div>' +
+        '</div>' +
+        // Login credentials section
+        '<div class="border border-dashed border-sky-300 bg-sky-50/50 rounded-xl p-4">' +
+          '<p class="text-xs font-bold text-sky-700 mb-3"><i class="fas fa-key mr-1.5"></i>Login Credentials <span class="font-normal text-sky-500">(optional — set so they can log in to the platform)</span></p>' +
+          '<div class="space-y-2">' +
+            '<div><label class="text-xs font-semibold text-gray-600 mb-1 block">Email / Username</label><input id="memberEmail" class="d2d-input" type="email" placeholder="their-email@example.com"></div>' +
+            '<div><label class="text-xs font-semibold text-gray-600 mb-1 block">Password</label><input id="memberPassword" class="d2d-input" type="password" placeholder="Min 6 characters"></div>' +
+          '</div>' +
+          '<p class="text-[10px] text-sky-600 mt-2"><i class="fas fa-info-circle mr-1"></i>They will log in at /customer/login with this email &amp; password and access your account\'s D2D data.</p>' +
+        '</div>' +
+        // Permissions
+        '<div>' +
+          '<label class="text-xs font-semibold text-gray-600 mb-1 block"><i class="fas fa-shield-alt mr-1 text-gray-400"></i>Access Permissions</label>' +
+          buildPermissionsHtml(null, 'new') +
+        '</div>' +
+        // Color
+        '<div><label class="text-xs font-semibold text-gray-600 mb-1 block">Map Color</label><div class="d2d-color-grid" id="memberColorGrid">' + colorGrid + '</div></div>' +
+      '</div>' +
+      '<div class="px-6 py-4 border-t border-gray-100 flex justify-end gap-2 flex-shrink-0">' +
         '<button onclick="document.getElementById(\'d2dModal\').remove()" class="d2d-btn d2d-btn-outline">Cancel</button>' +
-        '<button id="saveMemberBtn" class="d2d-btn d2d-btn-primary"><i class="fas fa-save mr-1"></i>Save</button>' +
+        '<button id="saveMemberBtn" class="d2d-btn d2d-btn-primary"><i class="fas fa-save mr-1"></i>Add Member</button>' +
       '</div>' +
     '</div>';
 
     document.body.appendChild(overlay);
     overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
+    attachPermButtons('new');
 
     var selectedColor = COLORS[0];
     document.querySelectorAll('#memberColorGrid .d2d-color-swatch').forEach(function(sw) {
@@ -1178,24 +1282,36 @@
 
     document.getElementById('saveMemberBtn').addEventListener('click', function() {
       var name = document.getElementById('memberName').value.trim();
+      var email = document.getElementById('memberEmail').value.trim();
+      var password = document.getElementById('memberPassword').value;
       if (!name) { toast('Name is required', 'error'); return; }
+      if (password && password.length < 6) { toast('Password must be at least 6 characters', 'error'); return; }
+      if (password && !email) { toast('Email is required when setting a password', 'error'); return; }
+
+      var btn = document.getElementById('saveMemberBtn');
+      btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Adding...';
 
       api('POST', '/team', {
         name: name,
-        email: document.getElementById('memberEmail').value.trim(),
+        email: email || null,
         phone: document.getElementById('memberPhone').value.trim(),
         role: document.getElementById('memberRole').value,
-        color: selectedColor
+        color: selectedColor,
+        password: password || null,
+        permissions: readPermissions('new')
       }).then(function(r) {
-        if (r.success) { toast('Team member added!'); overlay.remove(); loadAll(); }
-        else { toast(r.error || 'Failed to add member', 'error'); }
-      });
+        if (r.success) { toast('Team member added!' + (password ? ' They can now log in.' : '')); overlay.remove(); loadAll(); }
+        else { toast(r.error || 'Failed to add member', 'error'); btn.disabled = false; btn.innerHTML = '<i class="fas fa-save mr-1"></i>Add Member'; }
+      }).catch(function(err) { toast('Network error', 'error'); btn.disabled = false; btn.innerHTML = '<i class="fas fa-save mr-1"></i>Add Member'; });
     });
   }
 
   function editMember(id) {
     var m = team.find(function(t) { return t.id == id; });
     if (!m) return;
+
+    var perms = null;
+    try { perms = m.permissions ? JSON.parse(m.permissions) : null; } catch(e) {}
 
     var colorGrid = '';
     for (var ci = 0; ci < COLORS.length; ci++) {
@@ -1205,16 +1321,34 @@
     var overlay = document.createElement('div');
     overlay.className = 'fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4';
     overlay.id = 'd2dModal';
-    overlay.innerHTML = '<div class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">' +
-      '<div class="px-6 py-4 border-b border-gray-100"><h3 class="font-bold text-gray-800"><i class="fas fa-user-edit mr-2 text-sky-500"></i>Edit Team Member</h3></div>' +
-      '<div class="p-6 space-y-4">' +
-        '<div><label class="text-xs font-semibold text-gray-600 mb-1 block">Name</label><input id="editMemberName" class="d2d-input" value="' + escAttr(m.name) + '"></div>' +
-        '<div><label class="text-xs font-semibold text-gray-600 mb-1 block">Email</label><input id="editMemberEmail" class="d2d-input" type="email" value="' + escAttr(m.email || '') + '"></div>' +
-        '<div><label class="text-xs font-semibold text-gray-600 mb-1 block">Phone</label><input id="editMemberPhone" class="d2d-input" type="tel" value="' + escAttr(m.phone || '') + '"></div>' +
-        '<div><label class="text-xs font-semibold text-gray-600 mb-1 block">Role</label><select id="editMemberRole" class="d2d-select"><option value="salesperson"' + (m.role !== 'manager' ? ' selected' : '') + '>Salesperson</option><option value="manager"' + (m.role === 'manager' ? ' selected' : '') + '>Manager</option></select></div>' +
-        '<div><label class="text-xs font-semibold text-gray-600 mb-1 block">Color</label><div class="d2d-color-grid" id="editMemberColorGrid">' + colorGrid + '</div></div>' +
+    overlay.innerHTML = '<div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden" style="max-height:90vh;display:flex;flex-direction:column">' +
+      '<div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between flex-shrink-0">' +
+        '<h3 class="font-bold text-gray-800"><i class="fas fa-user-edit mr-2 text-sky-500"></i>Edit ' + escH(m.name) + '</h3>' +
+        '<button onclick="document.getElementById(\'d2dModal\').remove()" class="text-gray-400 hover:text-gray-600 text-lg">&times;</button>' +
       '</div>' +
-      '<div class="px-6 py-4 border-t border-gray-100 flex justify-end gap-2">' +
+      '<div class="p-6 space-y-4 overflow-y-auto flex-1">' +
+        '<div class="grid grid-cols-2 gap-3">' +
+          '<div class="col-span-2"><label class="text-xs font-semibold text-gray-600 mb-1 block">Name</label><input id="editMemberName" class="d2d-input" value="' + escAttr(m.name) + '"></div>' +
+          '<div><label class="text-xs font-semibold text-gray-600 mb-1 block">Phone</label><input id="editMemberPhone" class="d2d-input" type="tel" value="' + escAttr(m.phone || '') + '"></div>' +
+          '<div><label class="text-xs font-semibold text-gray-600 mb-1 block">Role</label><select id="editMemberRole" class="d2d-select"><option value="salesperson"' + (m.role !== 'manager' ? ' selected' : '') + '>Salesperson</option><option value="manager"' + (m.role === 'manager' ? ' selected' : '') + '>Manager</option></select></div>' +
+        '</div>' +
+        // Login credentials
+        '<div class="border border-dashed border-sky-300 bg-sky-50/50 rounded-xl p-4">' +
+          '<p class="text-xs font-bold text-sky-700 mb-3"><i class="fas fa-key mr-1.5"></i>Login Credentials</p>' +
+          '<div class="space-y-2">' +
+            '<div><label class="text-xs font-semibold text-gray-600 mb-1 block">Email / Username</label><input id="editMemberEmail" class="d2d-input" type="email" value="' + escAttr(m.email || '') + '"></div>' +
+            '<div><label class="text-xs font-semibold text-gray-600 mb-1 block">New Password <span class="font-normal text-gray-400">(leave blank to keep existing)</span></label><input id="editMemberPassword" class="d2d-input" type="password" placeholder="Min 6 characters"></div>' +
+          '</div>' +
+        '</div>' +
+        // Permissions
+        '<div>' +
+          '<label class="text-xs font-semibold text-gray-600 mb-1 block"><i class="fas fa-shield-alt mr-1 text-gray-400"></i>Access Permissions</label>' +
+          buildPermissionsHtml(perms, 'edit') +
+        '</div>' +
+        // Color
+        '<div><label class="text-xs font-semibold text-gray-600 mb-1 block">Map Color</label><div class="d2d-color-grid" id="editMemberColorGrid">' + colorGrid + '</div></div>' +
+      '</div>' +
+      '<div class="px-6 py-4 border-t border-gray-100 flex justify-end gap-2 flex-shrink-0">' +
         '<button onclick="document.getElementById(\'d2dModal\').remove()" class="d2d-btn d2d-btn-outline">Cancel</button>' +
         '<button id="updateMemberBtn" class="d2d-btn d2d-btn-primary"><i class="fas fa-save mr-1"></i>Update</button>' +
       '</div>' +
@@ -1222,6 +1356,7 @@
 
     document.body.appendChild(overlay);
     overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
+    attachPermButtons('edit');
 
     var selectedColor = m.color || COLORS[0];
     document.querySelectorAll('#editMemberColorGrid .d2d-color-swatch').forEach(function(sw) {
@@ -1233,16 +1368,24 @@
     });
 
     document.getElementById('updateMemberBtn').addEventListener('click', function() {
+      var password = document.getElementById('editMemberPassword').value;
+      if (password && password.length < 6) { toast('Password must be at least 6 characters', 'error'); return; }
+
+      var btn = document.getElementById('updateMemberBtn');
+      btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Saving...';
+
       api('PUT', '/team/' + id, {
         name: document.getElementById('editMemberName').value.trim(),
-        email: document.getElementById('editMemberEmail').value.trim(),
+        email: document.getElementById('editMemberEmail').value.trim() || null,
         phone: document.getElementById('editMemberPhone').value.trim(),
         role: document.getElementById('editMemberRole').value,
-        color: selectedColor
+        color: selectedColor,
+        password: password || null,
+        permissions: readPermissions('edit')
       }).then(function(r) {
         if (r.success) { toast('Team member updated!'); overlay.remove(); loadAll(); }
-        else { toast(r.error || 'Failed to update', 'error'); }
-      });
+        else { toast(r.error || 'Failed to update', 'error'); btn.disabled = false; btn.innerHTML = '<i class="fas fa-save mr-1"></i>Update'; }
+      }).catch(function(err) { toast('Network error', 'error'); btn.disabled = false; btn.innerHTML = '<i class="fas fa-save mr-1"></i>Update'; });
     });
   }
 
@@ -1252,6 +1395,21 @@
       if (r.success) { toast('Team member removed'); loadAll(); }
       else { toast(r.error || 'Failed to remove member', 'error'); }
     }).catch(function(err) { toast('Network error: ' + (err.message || 'Unknown'), 'error'); });
+  }
+
+  function filterPinsByMember(memberId, memberName) {
+    api('GET', '/pins?member_id=' + memberId).then(function(r) {
+      pins = r.pins || [];
+      renderPinsPanel();
+      // Switch to pins tab
+      document.querySelectorAll('.d2d-tab').forEach(function(t) { t.classList.remove('active'); });
+      document.querySelectorAll('.d2d-panel').forEach(function(p) { p.classList.remove('active'); });
+      var pinsTab = document.querySelector('.d2d-tab[data-tab="pins"]');
+      var pinsPanel = document.getElementById('panelPins');
+      if (pinsTab) pinsTab.classList.add('active');
+      if (pinsPanel) pinsPanel.classList.add('active');
+      toast('Showing ' + (r.pins || []).length + ' pins for ' + memberName, 'info');
+    });
   }
 
   // ============================================================
@@ -1273,6 +1431,7 @@
     deleteTurf: deleteTurf,
     focusPin: focusPin,
     filterPins: filterPins,
+    filterPinsByMember: filterPinsByMember,
     updatePinStatus: updatePinStatus,
     assignPin: assignPin,
     addPinNotes: addPinNotes,
