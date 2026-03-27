@@ -8,7 +8,6 @@
 import { Hono } from 'hono'
 import type { Bindings } from '../types'
 import { validateAdminSession } from './auth'
-import { getAccessToken } from '../services/gcp-auth'
 
 export const roverRoutes = new Hono<{ Bindings: Bindings }>()
 
@@ -249,23 +248,31 @@ RESPONSE GUIDELINES
 10. Be honest — if a feature doesn't exist yet, say "we're working on that" rather than making promises`
 
 // ============================================================
-// AI CALL HELPERS
-// Two backends: OpenAI-compatible (genspark proxy) + Gemini via service account
+// AI CALL — OpenAI API (api.openai.com) via OPENAI_API_KEY
+// One key, one endpoint, no fallbacks.
 // ============================================================
-
-// OpenAI-compatible chat completions (genspark proxy or any OpenAI endpoint)
-async function callOpenAI(
-  apiKey: string,
-  baseUrl: string,
+async function callAI(
+  env: any,
   messages: any[],
   maxTokens: number = 1000,
   temperature: number = 0.7
 ): Promise<{ content: string; model: string; tokensUsed: number; responseTimeMs: number }> {
+  // Try keys that could be real OpenAI keys (sk-...). genspark_gtp_key is likely the real one.
+  const candidates = [
+    (env as any).genspark_gtp_key,
+    env.OPENAI_API_KEY,
+  ].filter((k: any) => k && String(k).startsWith('sk-'))
+
+  const apiKey = candidates[0] || env.OPENAI_API_KEY || (env as any).genspark_gtp_key
+  if (!apiKey) throw new Error('No OpenAI API key configured')
+
   const startTime = Date.now()
-  const url = baseUrl.replace(/\/$/, '') + '/chat/completions'
-  const response = await fetch(url, {
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    },
     body: JSON.stringify({
       model: 'gpt-4o-mini',
       messages,
@@ -274,87 +281,22 @@ async function callOpenAI(
     }),
   })
   const responseTimeMs = Date.now() - startTime
+
   if (!response.ok) {
     const errText = await response.text()
-    throw new Error(`OpenAI ${response.status}: ${errText.slice(0, 200)}`)
+    throw new Error(`OpenAI ${response.status}: ${errText.slice(0, 300)}`)
   }
+
   const data: any = await response.json()
   const content = data.choices?.[0]?.message?.content
   if (!content || content.trim() === '') throw new Error('OpenAI returned empty response')
-  return { content: content.trim(), model: 'gpt-4o-mini', tokensUsed: data.usage?.total_tokens || 0, responseTimeMs }
-}
 
-// Gemini via service account Bearer token (Vertex AI endpoint)
-async function callGeminiServiceAccount(
-  serviceAccountJson: string,
-  messages: any[],
-  maxTokens: number = 1000,
-  temperature: number = 0.7
-): Promise<{ content: string; model: string; tokensUsed: number; responseTimeMs: number }> {
-  const startTime = Date.now()
-  const accessToken = await getAccessToken(serviceAccountJson)
-  // Extract project from service account JSON
-  let project = 'roofreporterai'
-  try { project = JSON.parse(serviceAccountJson).project_id || project } catch (_) {}
-  const location = 'us-central1'
-  const model = 'gemini-2.0-flash'
-  const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/${model}:generateContent`
-
-  const systemMsg = messages.find((m: any) => m.role === 'system')
-  const convoMsgs = messages.filter((m: any) => m.role !== 'system')
-  const contents = convoMsgs.map((m: any) => ({
-    role: m.role === 'assistant' ? 'model' : 'user',
-    parts: [{ text: m.content }]
-  }))
-  const body: any = { contents, generationConfig: { maxOutputTokens: maxTokens, temperature } }
-  if (systemMsg) body.systemInstruction = { parts: [{ text: systemMsg.content }] }
-
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
-    body: JSON.stringify(body),
-  })
-  const responseTimeMs = Date.now() - startTime
-  if (!response.ok) {
-    const errText = await response.text()
-    throw new Error(`Gemini SA ${response.status}: ${errText.slice(0, 200)}`)
+  return {
+    content: content.trim(),
+    model: 'gpt-4o-mini',
+    tokensUsed: data.usage?.total_tokens || 0,
+    responseTimeMs,
   }
-  const data: any = await response.json()
-  const content = data.candidates?.[0]?.content?.parts?.[0]?.text
-  if (!content || content.trim() === '') throw new Error('Gemini returned empty response')
-  return { content: content.trim(), model, tokensUsed: data.usageMetadata?.totalTokenCount || 0, responseTimeMs }
-}
-
-// callAI — tries OpenAI/genspark first, then Gemini service account
-async function callAI(
-  env: any,
-  messages: any[],
-  maxTokens: number = 1000,
-  temperature: number = 0.7
-): Promise<{ content: string; model: string; tokensUsed: number; responseTimeMs: number }> {
-  // 1. Try OpenAI-compatible endpoint (genspark proxy)
-  const openaiKey = env.OPENAI_API_KEY || env.genspark_gtp_key
-  const openaiBase = env.OPENAI_BASE_URL || 'https://www.genspark.ai/api/llm_proxy/v1'
-  if (openaiKey) {
-    try {
-      return await callOpenAI(openaiKey, openaiBase, messages, maxTokens, temperature)
-    } catch (e: any) {
-      console.warn('[Rover] OpenAI attempt failed:', e.message)
-    }
-  }
-
-  // 2. Try Gemini via GCP service account
-  const saKey = env.GCP_SERVICE_ACCOUNT_JSON || env.GCP_SERVICE_ACCOUNT_KEY
-  if (saKey) {
-    try {
-      const decoded = saKey.includes('{') ? saKey : atob(saKey)
-      return await callGeminiServiceAccount(decoded, messages, maxTokens, temperature)
-    } catch (e: any) {
-      console.warn('[Rover] Gemini SA attempt failed:', e.message)
-    }
-  }
-
-  throw new Error('All AI backends failed — no working credentials')
 }
 
 // ============================================================
