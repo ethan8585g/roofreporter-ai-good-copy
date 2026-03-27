@@ -17,18 +17,8 @@ document.addEventListener('DOMContentLoaded', async function() {
   }
   await loadDashData();
   renderDashboard();
-  // Auto-refresh when reports are being polished (every 5s)
+  // Auto-refresh when reports are generating
   startEnhancementPolling();
-
-  // Auto-trigger enhancement for any completed orders that haven't been enhanced yet
-  setTimeout(function() {
-    (custState.orders || []).forEach(function(o) {
-      if (o.status === 'completed' && o.report_status === 'completed' &&
-          (!o.enhancement_status || o.enhancement_status === 'none' || o.enhancement_status === null)) {
-        triggerAsyncEnhancement(o.id);
-      }
-    });
-  }, 2000);
 });
 
 async function loadDashData() {
@@ -99,7 +89,7 @@ function renderDashboard() {
   var paidCredits = c.paid_credits_remaining || 0;
   var completedReports = custState.orders.filter(function(o) { return o.status === 'completed'; }).length;
   var processingReports = custState.orders.filter(function(o) { return o.status === 'processing'; }).length;
-  var enhancingReports = custState.orders.filter(function(o) { return o.enhancement_status === 'sent' || o.enhancement_status === 'pending' || o.report_status === 'enhancing'; }).length;
+  var enhancingReports = 0;
   var trialsExhausted = freeTrialRemaining <= 0 && paidCredits <= 0;
 
   // Helper: nav link
@@ -212,7 +202,6 @@ function renderDashboard() {
           (paidCredits > 0 ? '<div class="px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-full text-xs font-bold text-blue-700"><i class="fas fa-coins mr-1"></i>' + paidCredits + ' Credits</div>' : '') +
           '<div class="px-3 py-1.5 bg-indigo-50 border border-indigo-200 rounded-full text-xs font-bold text-indigo-700"><i class="fas fa-file-alt mr-1"></i>' + completedReports + ' Reports</div>' +
           (processingReports > 0 ? '<div class="px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-full text-xs font-bold text-amber-700 animate-pulse"><i class="fas fa-spinner fa-spin mr-1"></i>' + processingReports + ' Generating</div>' : '') +
-          (enhancingReports > 0 ? '<div class="px-3 py-1.5 bg-purple-50 border border-purple-200 rounded-full text-xs font-bold text-purple-700 animate-pulse"><i class="fas fa-magic mr-1"></i>' + enhancingReports + ' AI Enhancing</div>' : '') +
         '</div>' +
       '</div>' +
 
@@ -321,7 +310,6 @@ function renderRecentOrders() {
   // Check for any actively generating reports — show them first as a vivid progress card
   var generatingOrders = custState.orders.filter(function(o) {
     return o.status === 'processing' || o.report_status === 'generating' || o.report_status === 'pending' ||
-           o.report_status === 'enhancing' || o.enhancement_status === 'sent' || o.enhancement_status === 'pending' ||
            o.ai_imagery_status === 'generating';
   });
 
@@ -332,10 +320,9 @@ function renderRecentOrders() {
     html += '<div class="mb-4">';
     for (var g = 0; g < generatingOrders.length; g++) {
       var go = generatingOrders[g];
-      var isEnhancing = go.report_status === 'enhancing' || go.enhancement_status === 'sent' || go.enhancement_status === 'pending';
-      var isGenerating = !isEnhancing && (go.status === 'processing' || go.report_status === 'generating' || go.report_status === 'pending');
+      var isGenerating = go.status === 'processing' || go.report_status === 'generating' || go.report_status === 'pending';
       var isGeneratingImagery = go.ai_imagery_status === 'generating';
-      var cardTitle = isGeneratingImagery && !isGenerating && !isEnhancing ? 'Creating AI Report Imagery' : (isEnhancing ? 'AI Enhancing Report' : 'Generating Roof Report');
+      var cardTitle = isGeneratingImagery && !isGenerating ? 'Creating AI Report Imagery' : 'Generating Roof Report';
       var createdAt = new Date(go.created_at).getTime();
       var elapsed = Math.round((Date.now() - createdAt) / 1000);
       var progressPercent = Math.min(95, Math.round((elapsed / 90) * 100)); // ~90s expected with AI imagery
@@ -345,16 +332,10 @@ function renderRecentOrders() {
       else if (elapsed < 20) stepLabel = 'Measuring roof segments...';
       else if (elapsed < 30) stepLabel = 'Computing materials & edges...';
       else if (elapsed < 40) stepLabel = 'Building professional report...';
-      else if (isEnhancing) stepLabel = 'AI polishing report...';
-      else if (elapsed < 55) stepLabel = 'Enhancing with AI insights...';
+      else if (elapsed < 55) stepLabel = 'Building measurement report...';
       else if (elapsed < 75) stepLabel = 'Generating AI report imagery...';
       else if (elapsed < 85) stepLabel = 'Creating professional visuals...';
       else stepLabel = 'Finalizing perfect report...';
-
-      if (isEnhancing) {
-        progressPercent = Math.min(95, 70 + Math.round((elapsed - 30) / 60 * 25));
-        stepLabel = 'AI polishing your report...';
-      }
 
       html += '<div class="relative overflow-hidden bg-gradient-to-r from-blue-600 to-indigo-700 rounded-2xl p-5 shadow-lg border border-blue-500/30">' +
         '<div class="absolute inset-0 opacity-10"><div style="background:repeating-linear-gradient(90deg,transparent,transparent 20px,rgba(255,255,255,0.1) 20px,rgba(255,255,255,0.1) 40px);width:200%;height:100%;animation:slideStripes 2s linear infinite"></div></div>' +
@@ -401,22 +382,16 @@ function renderRecentOrders() {
   html += '<div class="space-y-2">';
   for (var i = 0; i < orders.length; i++) {
     var o = orders[i];
-    var isEnhancing = o.report_status === 'enhancing' || o.enhancement_status === 'sent' || o.enhancement_status === 'pending';
     var isProcessing = o.status === 'processing' || o.report_status === 'generating' || o.report_status === 'pending';
-    var statusClass = o.status === 'completed' ? 'bg-green-100 text-green-700' : (isEnhancing ? 'bg-purple-100 text-purple-700' : (isProcessing ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'));
-    var enhanceBadge = o.enhancement_status === 'enhanced' ? '<span class="px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full text-[10px] font-bold"><i class="fas fa-magic mr-1"></i>AI Enhanced</span>' : (isEnhancing ? '<span class="px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full text-[10px] font-bold animate-pulse"><i class="fas fa-wand-magic-sparkles fa-spin mr-1"></i>Polishing...</span>' : '');
-    var imageryBadge = o.ai_imagery_status === 'completed' ? '<span class="px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full text-[10px] font-bold"><i class="fas fa-images mr-1"></i>AI Imagery</span>' : (o.ai_imagery_status === 'generating' ? '<span class="px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full text-[10px] font-bold animate-pulse"><i class="fas fa-palette fa-spin mr-1"></i>Creating...</span>' : '');
-    var statusLabel = isEnhancing ? 'polishing' : (isProcessing ? 'generating' : o.status);
-    var reportReady = (o.report_status === 'completed' || o.status === 'completed') && !isEnhancing && !isProcessing;
+    var statusClass = o.status === 'completed' ? 'bg-green-100 text-green-700' : (isProcessing ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600');
+    var reportReady = (o.report_status === 'completed' || o.status === 'completed') && !isProcessing;
     html += '<div class="flex items-center justify-between p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">' +
       '<div class="flex-1 min-w-0">' +
         '<p class="text-sm font-medium text-gray-800 truncate"><i class="fas fa-map-marker-alt text-red-400 mr-1.5 text-xs"></i>' + (o.property_address || 'Unknown') + '</p>' +
         '<p class="text-xs text-gray-500 mt-0.5">' + new Date(o.created_at).toLocaleDateString() + (o.roof_area_sqft ? ' &middot; ' + Math.round(o.roof_area_sqft) + ' sq ft' : '') + '</p>' +
       '</div>' +
       '<div class="flex items-center gap-2 ml-3">' +
-        '<span class="px-2 py-0.5 ' + statusClass + ' rounded-full text-[10px] font-bold capitalize">' + (isEnhancing ? '<i class="fas fa-wand-magic-sparkles fa-spin mr-1"></i>' : (isProcessing ? '<i class="fas fa-spinner fa-spin mr-1"></i>' : '')) + statusLabel + '</span>' +
-        enhanceBadge +
-        imageryBadge +
+        '<span class="px-2 py-0.5 ' + statusClass + ' rounded-full text-[10px] font-bold capitalize">' + (isProcessing ? '<i class="fas fa-spinner fa-spin mr-1"></i>' : '') + (isProcessing ? 'generating' : o.status) + '</span>' +
         (reportReady ? '<a href="/api/reports/' + o.id + '/html" target="_blank" class="px-2.5 py-1 bg-brand-600 text-white rounded-lg text-xs font-medium hover:bg-brand-700"><i class="fas fa-eye mr-1"></i>View</a>' : '') +
       '</div>' +
     '</div>';
@@ -435,11 +410,11 @@ var _prevProcessingIds = [];
 function startEnhancementPolling() {
   if (_enhancePollTimer) clearInterval(_enhancePollTimer);
   var hasActive = custState.orders.some(function(o) {
-    return o.report_status === 'enhancing' || o.status === 'processing' || o.report_status === 'generating' || o.report_status === 'pending' || o.enhancement_status === 'sent' || o.enhancement_status === 'pending' || o.ai_imagery_status === 'generating';
+    return o.status === 'processing' || o.report_status === 'generating' || o.report_status === 'pending' || o.ai_imagery_status === 'generating';
   });
   // Track which orders are processing so we can detect completions
   _prevProcessingIds = custState.orders.filter(function(o) {
-    return o.status === 'processing' || o.report_status === 'generating' || o.report_status === 'pending' || o.report_status === 'enhancing' || o.enhancement_status === 'sent' || o.enhancement_status === 'pending' || o.ai_imagery_status === 'generating';
+    return o.status === 'processing' || o.report_status === 'generating' || o.report_status === 'pending' || o.ai_imagery_status === 'generating';
   }).map(function(o) { return o.id; });
 
   if (!hasActive) return;
@@ -453,7 +428,7 @@ function startEnhancementPolling() {
         
         // Check if any previously-processing order is now complete
         var nowProcessingIds = custState.orders.filter(function(o) {
-          return o.status === 'processing' || o.report_status === 'generating' || o.report_status === 'pending' || o.report_status === 'enhancing' || o.enhancement_status === 'sent' || o.enhancement_status === 'pending' || o.ai_imagery_status === 'generating';
+          return o.status === 'processing' || o.report_status === 'generating' || o.report_status === 'pending' || o.ai_imagery_status === 'generating';
         }).map(function(o) { return o.id; });
         
         var newlyCompleted = _prevProcessingIds.filter(function(id) { return nowProcessingIds.indexOf(id) === -1; });
@@ -465,8 +440,6 @@ function startEnhancementPolling() {
           newlyCompleted.forEach(function(orderId) {
             var order = custState.orders.find(function(o) { return o.id === orderId; });
             showReportReadyToast(order);
-            // Fire-and-forget: trigger enhancement in its own HTTP request
-            triggerAsyncEnhancement(orderId);
           });
         }
         
@@ -474,7 +447,7 @@ function startEnhancementPolling() {
         
         // Stop polling when all reports are done
         var stillActive = custState.orders.some(function(o) {
-          return o.report_status === 'enhancing' || o.status === 'processing' || o.report_status === 'generating' || o.report_status === 'pending' || o.enhancement_status === 'sent' || o.enhancement_status === 'pending' || o.ai_imagery_status === 'generating';
+          return o.status === 'processing' || o.report_status === 'generating' || o.report_status === 'pending' || o.ai_imagery_status === 'generating';
         });
         if (!stillActive) {
           console.log('[Dashboard] All reports complete — stopping auto-refresh');
