@@ -2,14 +2,14 @@
 
 ## Project Overview
 - **Name**: RoofReporterAI
-- **Version**: 11.0 (Smart Invoice System, E-Signatures, Progress Billing, Report Accuracy Fixes)
+- **Version**: 12.0 (Cold Call Centre, Mobile Responsive, Apple-Compliant Legal Pages)
 - **Domain**: www.roofreporterai.com
 - **Production**: https://roofing-measurement-tool.pages.dev
 - **GitHub**: https://github.com/ethan8585g/roofreporter-ai-good-copy
 - **Platform**: Cloudflare Pages + Workers + D1
 - **Status**: Active
-- **Last Updated**: 2026-03-25 (v11.0)
-- **Codebase**: 56,728 lines TypeScript/JS across 63 source files, 36 routes, 19 services, 36 DB tables
+- **Last Updated**: 2026-03-27 (v12.0)
+- **Codebase**: ~58,000 lines TypeScript/JS across 65+ source files, 40 routes, 20 services, 47+ DB tables
 
 ---
 
@@ -57,7 +57,20 @@
 - LiveKit + Twilio SIP integration for inbound call handling
 - AI agent answers calls with configurable greeting/script
 - Webhook-based call logging (messages, appointments, callbacks)
+- LiveKit room event webhooks — logs ALL calls including <2s no-answer
+- Twilio status callback webhooks — captures calls that end before LiveKit
 - Super Admin dashboard with call analytics and revenue tracking
+
+### 5. Cold Call Centre (Super Admin) — NEW v12.0
+- **AI Outbound Dialer**: Configure agents with phone (+1-240-212-2251) for outbound cold calls
+- **7-Tab Interface**: Agents | SIP Mapping | Campaigns | Lead Lists | Call Logs | Live Transcripts | Analytics
+- **Agent Management**: Create/edit AI agents with persona, operating hours, max calls/day, timezone
+- **Lead List Upload**: CSV file upload or paste — auto-imports company_name, contact_name, phone, email, city, state, job_title
+- **Call Logs**: Full call history table with status badges, outcome tracking, transcript preview
+- **Live Transcripts**: Real-time call monitoring with auto-refresh, expandable transcript cards
+- **Transcript Capture**: Every outbound call captures a full live transcript via Deepgram STT
+- **Campaign Scheduling**: Operating days/hours, max concurrent calls, DNC list management
+- **Analytics**: Call disposition breakdown, cost tracking, daily trends
 
 ### 5. CRM & Business Tools
 - Customer management, invoice tracking, job management
@@ -122,8 +135,8 @@
 ## Data Architecture
 
 ### Database: Cloudflare D1 (SQLite)
-- **36 tables** covering: orders, reports, customers, invoices, CRM, secretary, analytics, blog, sales, call-center, calendar, D2D, email outreach
-- **New tables (v11.0)**: `invoice_billing_schedule`, `invoice_change_orders`, `invoice_change_order_items`, `invoice_signatures`, `invoice_access_tokens`
+- **47+ tables** covering: orders, reports, customers, invoices, CRM, secretary, analytics, blog, sales, call-center, calendar, D2D, email outreach, cold-call centre
+- **New tables (v12.0)**: `cc_agents`, `cc_agent_personas`, `cc_phone_config`, `cc_campaigns`, `cc_prospects`, `cc_call_logs`, `sip_trunks`, `sales_scripts`, `membership_tiers`, `cc_transcript_flags`, `secretary_room_participants`, `contact_form_submissions`
 
 ### Storage Services
 - **D1**: All relational data (customers, orders, reports, invoices, CRM)
@@ -138,9 +151,22 @@
 - **Tech Stack**: Hono + TypeScript + TailwindCSS (CDN) + D1
 - **Build**: `npm run build` (Vite + esbuild, ~300ms)
 - **Deploy**: `npx wrangler pages deploy dist --project-name roofing-measurement-tool`
-- **Last Deployed**: 2026-03-25
+- **Last Deployed**: 2026-03-27
 
 ---
+
+## v12.0 Changelog (2026-03-27)
+1. **Cold Call Centre (Super Admin)**: Full AI outbound dialer — agents, campaigns, lead lists, transcripts
+2. **Agent Setup**: Phone +1-240-212-2251 pre-configured for outbound, LiveKit SIP
+3. **Lead List Upload**: CSV file upload + paste with auto-import into campaigns
+4. **Live Transcript Monitor**: Real-time outbound call transcripts with auto-refresh
+5. **Call Log History**: Full call logs with status, outcome, duration, transcript detail view
+6. **Call Logging Fix**: LiveKit room-event and Twilio status webhooks capture ALL calls (even <2s no-answer)
+7. **Password Column Fix**: Onboarding uses `password_hash` matching customers table schema
+8. **Enrollment Form**: Square checkout replaced with "Contact Us for Enrolment" form for non-onboarded users
+9. **Mobile Responsive**: Full cell phone support — dashboard, CRM, secretary, all pages
+10. **Apple-Compliant Legal**: Terms of Service and Privacy Policy meeting App Store requirements
+11. **11 New DB Tables**: Full cold-call infrastructure added to init-db schema
 
 ## v11.0 Changelog (2026-03-25)
 1. **Smart Invoice Auto-Generation**: One-click from roof report to billable invoice
