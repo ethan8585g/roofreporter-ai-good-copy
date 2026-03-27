@@ -381,18 +381,19 @@ roverRoutes.post('/chat', async (c) => {
       messages.push({ role: msg.role, content: msg.content })
     }
 
-    // Resolve Gemini API key — try all known key names
-    const apiKey = c.env.GEMINI_API_KEY ||
-      c.env.GEMINI_ENHANCE_API_KEY ||
-      (c.env as any).default_gemini_googleaistudio_key ||
-      (c.env as any).google_ai_studio_secret_key ||
-      c.env.GOOGLE_VERTEX_API_KEY
-    const baseUrl = ''
+    // Resolve Gemini API key — try all known key names in order, use first that works
+    const apiKeys = [
+      c.env.GEMINI_API_KEY,
+      c.env.GEMINI_ENHANCE_API_KEY,
+      (c.env as any).default_gemini_googleaistudio_key,
+      (c.env as any).google_ai_studio_secret_key,
+      c.env.GOOGLE_VERTEX_API_KEY,
+    ].filter(Boolean)
 
-    if (!apiKey) {
+    if (apiKeys.length === 0) {
       // No API key — provide helpful fallback
       const fallback = getFallbackResponse(message)
-      
+
       await c.env.DB.prepare(`
         INSERT INTO rover_messages (conversation_id, role, content, model)
         VALUES (?, 'assistant', ?, 'fallback')
@@ -405,8 +406,19 @@ roverRoutes.post('/chat', async (c) => {
       return c.json({ reply: fallback, session_id })
     }
 
+    let result: any = null
+    let lastError: any = null
+    for (const key of apiKeys) {
+      try {
+        result = await callAI(key, '', messages, 1000, 0.7)
+        break
+      } catch (e) {
+        lastError = e
+      }
+    }
+
     try {
-      const result = await callAI(apiKey, baseUrl, messages, 1000, 0.7)
+      if (!result) throw lastError
 
       // Store assistant reply
       await c.env.DB.prepare(`
@@ -1097,14 +1109,15 @@ roverRoutes.post('/assistant', async (c) => {
       messages.push({ role: msg.role, content: msg.content })
     }
 
-    const apiKey = c.env.GEMINI_API_KEY ||
-      c.env.GEMINI_ENHANCE_API_KEY ||
-      (c.env as any).default_gemini_googleaistudio_key ||
-      (c.env as any).google_ai_studio_secret_key ||
-      c.env.GOOGLE_VERTEX_API_KEY
-    const baseUrl = ''
+    const apiKeys = [
+      c.env.GEMINI_API_KEY,
+      c.env.GEMINI_ENHANCE_API_KEY,
+      (c.env as any).default_gemini_googleaistudio_key,
+      (c.env as any).google_ai_studio_secret_key,
+      c.env.GOOGLE_VERTEX_API_KEY,
+    ].filter(Boolean)
 
-    if (!apiKey) {
+    if (apiKeys.length === 0) {
       const fallback = `Hey ${customer.name || 'there'}! I'm having a quick connection issue right now, but here's what I can tell you: you have ${customer.free_trial_remaining || 0} free reports and ${customer.paid_credits_remaining || 0} paid credits. Head to /customer/order to generate a report, or /customer/reports to view past measurements. I'll be back online shortly!`
       await c.env.DB.prepare(
         'INSERT INTO rover_messages (conversation_id, role, content, model) VALUES (?, \'assistant\', ?, \'fallback\')'
@@ -1112,8 +1125,19 @@ roverRoutes.post('/assistant', async (c) => {
       return c.json({ reply: fallback, session_id })
     }
 
+    let result: any = null
+    let lastError: any = null
+    for (const key of apiKeys) {
+      try {
+        result = await callAI(key, '', messages, 1500, 0.6)
+        break
+      } catch (e) {
+        lastError = e
+      }
+    }
+
     try {
-      const result = await callAI(apiKey, baseUrl, messages, 1500, 0.6)
+      if (!result) throw lastError
 
       await c.env.DB.prepare(
         'INSERT INTO rover_messages (conversation_id, role, content, tokens_used, model, response_time_ms) VALUES (?, \'assistant\', ?, ?, ?, ?)'

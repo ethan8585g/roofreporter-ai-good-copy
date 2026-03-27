@@ -888,10 +888,8 @@ function renderStep2TracePhase() {
               <button onclick="addAnotherEaveLayer()" class="w-full px-3 py-2 bg-green-50 hover:bg-green-100 text-green-700 rounded-lg text-sm font-medium transition-all border border-green-200">
                 <i class="fas fa-plus mr-1"></i>Add Another Eave Layer
               </button>
-            ` : ''}
-            ${eavesClosed && state.traceMode !== 'eaves' && !state.traceEavesSaved ? `
-              <button onclick="saveEavesAndClear()" class="w-full px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-semibold transition-all shadow">
-                <i class="fas fa-eye-slash mr-1"></i>Save Eaves &amp; Clear Map
+              <button onclick="finishEavesAndNext()" class="w-full px-3 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-sm font-semibold transition-all shadow-md">
+                Next — Trace Ridges &amp; Hips <i class="fas fa-arrow-right ml-1"></i>
               </button>
             ` : ''}
             ${state.traceEavesSaved ? `
@@ -1260,16 +1258,16 @@ function clearCurrentMode() {
 
 function addAnotherEaveLayer() {
   // Already in eaves mode — user just needs to start clicking again
-  // (closeEavesPolygon already reset traceEavesPoints)
   showToast('Start clicking to trace the next eave layer', 'info');
   updateTraceSummaryUI();
 }
 
-function saveEavesAndClear() {
-  // Save the eaves data (already in state), clear visual overlays from map
+function finishEavesAndNext() {
+  // Save eaves, clear all overlays, switch to ridge mode
   state.traceEavesSaved = true;
   clearTraceOverlays();
-  showToast('Eaves saved! Map cleared — now trace ridges, hips, and valleys.', 'success');
+  state.traceMode = 'ridge';
+  showToast('Eaves saved! Map cleared — now trace ridges and hips.', 'success');
   updateTraceSummaryUI();
 }
 
