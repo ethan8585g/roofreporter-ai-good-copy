@@ -31,3 +31,4 @@ Thumbs.db
 .idea/
 __pycache__/
 .pytest_cache/
+core
