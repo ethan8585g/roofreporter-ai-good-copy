@@ -478,9 +478,19 @@ app.get('/login', (c) => {
   return c.html(getLoginPageHTML())
 })
 
+// Admin Password Reset Page (linked from reset email)
+app.get('/reset-password', (c) => {
+  return c.html(getAdminResetPasswordHTML())
+})
+
 // Customer Login/Register Page (email/password)
 app.get('/customer/login', (c) => {
   return c.html(getCustomerLoginHTML())
+})
+
+// Customer Password Reset Page (linked from reset email)
+app.get('/customer/reset-password', (c) => {
+  return c.html(getCustomerResetPasswordHTML())
 })
 
 // Customer Dashboard
@@ -1437,8 +1447,36 @@ function getLoginPageHTML() {
         <button onclick="doLogin()" class="w-full mt-6 py-3 bg-sky-600 hover:bg-sky-700 text-white font-bold rounded-xl transition-all hover:scale-[1.02] shadow-lg">
           <i class="fas fa-sign-in-alt mr-2"></i>Access Admin Panel
         </button>
+        <div class="text-center mt-3">
+          <button onclick="showAdminForgot()" class="text-sm text-sky-600 hover:text-sky-800 hover:underline transition-colors">
+            <i class="fas fa-key mr-1"></i>Forgot password?
+          </button>
+        </div>
+      </div>
 
-        <div class="mt-6 pt-4 border-t border-gray-100 text-center">
+      <!-- Admin Forgot Password Panel -->
+      <div id="adminForgotPanel" class="hidden p-8 pt-0">
+        <div class="mb-4 p-3 bg-sky-50 border border-sky-200 rounded-xl">
+          <p class="text-sm text-sky-800"><i class="fas fa-info-circle mr-1"></i>Enter your admin email and we'll send a reset link.</p>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Admin Email</label>
+          <input type="email" id="adminForgotEmail" placeholder="admin@reusecanada.ca" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-sky-500 text-sm" onkeyup="if(event.key==='Enter')doAdminForgot()">
+        </div>
+        <div id="adminForgotError" class="hidden mt-3 p-3 bg-red-50 text-red-700 rounded-lg text-sm"></div>
+        <div id="adminForgotSuccess" class="hidden mt-3 p-3 bg-green-50 text-green-700 rounded-lg text-sm"></div>
+        <button onclick="doAdminForgot()" id="adminForgotBtn" class="w-full mt-4 py-3 bg-sky-600 hover:bg-sky-700 text-white font-bold rounded-xl transition-all hover:scale-[1.02] shadow-lg">
+          <i class="fas fa-paper-plane mr-2"></i>Send Reset Link
+        </button>
+        <div class="text-center mt-3">
+          <button onclick="showAdminForgot(false)" class="text-sm text-gray-400 hover:text-gray-600 transition-colors">
+            <i class="fas fa-arrow-left mr-1"></i>Back to Sign In
+          </button>
+        </div>
+      </div>
+
+      <div class="px-8 pb-8 pt-0 border-t border-gray-100">
+        <div class="mt-4 text-center">
           <p class="text-xs text-gray-400 mb-2">Not an administrator?</p>
           <a href="/customer/login" class="text-brand-600 font-semibold text-sm hover:underline"><i class="fas fa-user mr-1"></i>Go to Customer Portal</a>
         </div>
@@ -1461,6 +1499,43 @@ function getLoginPageHTML() {
         } catch(e) {}
       }
     })();
+
+    function showAdminForgot(show = true) {
+      document.getElementById('adminForgotPanel').classList.toggle('hidden', !show);
+      const loginFields = document.querySelector('.space-y-4');
+      if (loginFields) loginFields.classList.toggle('hidden', show);
+      document.getElementById('loginError').classList.add('hidden');
+      document.querySelector('button[onclick="doLogin()"]').classList.toggle('hidden', show);
+      const forgotLink = document.querySelector('button[onclick="showAdminForgot()"]');
+      if (forgotLink) forgotLink.classList.toggle('hidden', show);
+      if (show) document.getElementById('adminForgotEmail').focus();
+    }
+
+    async function doAdminForgot() {
+      const email = document.getElementById('adminForgotEmail').value.trim();
+      const err = document.getElementById('adminForgotError');
+      const suc = document.getElementById('adminForgotSuccess');
+      const btn = document.getElementById('adminForgotBtn');
+      err.classList.add('hidden'); suc.classList.add('hidden');
+      if (!email) { err.textContent = 'Please enter your email address.'; err.classList.remove('hidden'); return; }
+      btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Sending...';
+      try {
+        const res = await fetch('/api/auth/forgot-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email })
+        });
+        const data = await res.json();
+        suc.textContent = data.message || 'If an admin account exists, a reset link has been sent. Check your inbox.';
+        suc.classList.remove('hidden');
+        btn.innerHTML = '<i class="fas fa-check mr-2"></i>Email Sent';
+      } catch(e) {
+        err.textContent = 'Network error. Please try again.';
+        err.classList.remove('hidden');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-paper-plane mr-2"></i>Send Reset Link';
+      }
+    }
 
     async function doLogin() {
       const email = document.getElementById('loginEmail').value.trim();
@@ -1495,6 +1570,223 @@ function getLoginPageHTML() {
       } catch (e) {
         errDiv.textContent = 'Network error. Please try again.';
         errDiv.classList.remove('hidden');
+      }
+    }
+  </script>
+</body>
+</html>`
+}
+
+function getAdminResetPasswordHTML() {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags()}
+  <title>Reset Admin Password - RoofReporterAI</title>
+</head>
+<body class="bg-gradient-to-br from-sky-100 via-blue-50 to-white min-h-screen flex items-center justify-center">
+  <div class="w-full max-w-md mx-auto px-4">
+    <div class="text-center mb-8">
+      <a href="/" class="inline-flex items-center gap-3">
+        <img src="/static/logo.png" alt="RoofReporterAI" class="w-12 h-12 rounded-xl object-cover shadow-lg">
+        <div class="text-left">
+          <span class="text-gray-800 font-bold text-2xl block">RoofReporterAI</span>
+          <span class="text-gray-500 text-xs">Admin Access</span>
+        </div>
+      </a>
+    </div>
+
+    <div class="bg-white rounded-2xl shadow-2xl overflow-hidden border border-gray-200">
+      <div class="bg-gradient-to-r from-sky-600 to-blue-700 px-8 py-4">
+        <div class="flex items-center gap-2">
+          <i class="fas fa-key text-yellow-300"></i>
+          <span class="text-white font-semibold text-sm">Admin Password Reset</span>
+        </div>
+      </div>
+      <div class="p-8">
+        <h2 class="text-xl font-bold text-gray-800 mb-1">Set New Admin Password</h2>
+        <p class="text-sm text-gray-500 mb-6">Choose a strong password for your admin account.</p>
+
+        <div id="resetInvalid" class="hidden p-4 bg-red-50 border border-red-200 rounded-xl mb-4">
+          <p class="text-sm text-red-800 font-semibold"><i class="fas fa-exclamation-circle mr-1"></i>This reset link is invalid or has expired.</p>
+          <p class="text-sm text-red-600 mt-1">Please <a href="/login" class="underline font-medium">return to admin login</a> and request a new one.</p>
+        </div>
+
+        <div id="resetForm">
+          <div class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">New Password</label>
+              <input type="password" id="newPassword" placeholder="At least 8 characters" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-sky-500 text-sm">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Confirm New Password</label>
+              <input type="password" id="confirmPassword" placeholder="Repeat your new password" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-sky-500 text-sm" onkeyup="if(event.key==='Enter')doReset()">
+            </div>
+          </div>
+          <div id="resetError" class="hidden mt-4 p-3 bg-red-50 text-red-700 rounded-lg text-sm"></div>
+          <button onclick="doReset()" id="resetBtn" class="w-full mt-5 py-3 bg-sky-600 hover:bg-sky-700 text-white font-bold rounded-xl transition-all hover:scale-[1.02] shadow-lg">
+            <i class="fas fa-lock mr-2"></i>Set New Password
+          </button>
+        </div>
+
+        <div id="resetSuccess" class="hidden p-4 bg-green-50 border border-green-200 rounded-xl">
+          <p class="text-sm text-green-800 font-semibold"><i class="fas fa-check-circle mr-1"></i>Admin password updated successfully!</p>
+          <a href="/login" class="mt-4 block text-center py-2.5 bg-sky-600 hover:bg-sky-700 text-white font-semibold rounded-xl text-sm transition-all">
+            <i class="fas fa-sign-in-alt mr-1"></i>Go to Admin Login
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const token = new URLSearchParams(window.location.search).get('token');
+    if (!token) {
+      document.getElementById('resetForm').classList.add('hidden');
+      document.getElementById('resetInvalid').classList.remove('hidden');
+    }
+
+    async function doReset() {
+      const newPw = document.getElementById('newPassword').value;
+      const confPw = document.getElementById('confirmPassword').value;
+      const err = document.getElementById('resetError');
+      const btn = document.getElementById('resetBtn');
+      err.classList.add('hidden');
+      if (!newPw) { err.textContent = 'Please enter a new password.'; err.classList.remove('hidden'); return; }
+      if (newPw.length < 8) { err.textContent = 'Admin password must be at least 8 characters.'; err.classList.remove('hidden'); return; }
+      if (newPw !== confPw) { err.textContent = 'Passwords do not match.'; err.classList.remove('hidden'); return; }
+      btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Updating...';
+      try {
+        const res = await fetch('/api/auth/reset-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token, new_password: newPw })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          document.getElementById('resetForm').classList.add('hidden');
+          document.getElementById('resetSuccess').classList.remove('hidden');
+        } else {
+          err.textContent = data.error || 'Failed to reset password.';
+          err.classList.remove('hidden');
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fas fa-lock mr-2"></i>Set New Password';
+          if (data.error && data.error.includes('expired')) {
+            document.getElementById('resetForm').classList.add('hidden');
+            document.getElementById('resetInvalid').classList.remove('hidden');
+          }
+        }
+      } catch(e) {
+        err.textContent = 'Network error. Please try again.';
+        err.classList.remove('hidden');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-lock mr-2"></i>Set New Password';
+      }
+    }
+  </script>
+</body>
+</html>`
+}
+
+function getCustomerResetPasswordHTML() {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags()}
+  <title>Reset Password - RoofReporterAI</title>
+</head>
+<body class="bg-gradient-to-br from-sky-100 via-blue-50 to-white min-h-screen flex items-center justify-center">
+  <div class="w-full max-w-md mx-auto px-4">
+    <div class="text-center mb-8">
+      <a href="/" class="inline-flex items-center gap-3">
+        <img src="/static/logo.png" alt="RoofReporterAI" class="w-12 h-12 rounded-xl object-cover shadow-lg">
+        <div class="text-left">
+          <span class="text-gray-800 font-bold text-2xl block">RoofReporterAI</span>
+          <span class="text-sky-600 text-xs">Customer Portal</span>
+        </div>
+      </a>
+    </div>
+
+    <div class="bg-white rounded-2xl shadow-2xl overflow-hidden">
+      <div class="p-8">
+        <h2 class="text-xl font-bold text-gray-800 mb-1">Set New Password</h2>
+        <p class="text-sm text-gray-500 mb-6">Choose a new password for your account.</p>
+
+        <div id="resetInvalid" class="hidden p-4 bg-red-50 border border-red-200 rounded-xl mb-4">
+          <p class="text-sm text-red-800 font-semibold"><i class="fas fa-exclamation-circle mr-1"></i>This reset link is invalid or has expired.</p>
+          <p class="text-sm text-red-600 mt-1">Please <a href="/customer/login" class="underline font-medium">request a new one</a>.</p>
+        </div>
+
+        <div id="resetForm">
+          <div class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">New Password</label>
+              <input type="password" id="newPassword" placeholder="At least 6 characters" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-500 text-sm">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Confirm New Password</label>
+              <input type="password" id="confirmPassword" placeholder="Repeat your new password" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-500 text-sm" onkeyup="if(event.key==='Enter')doReset()">
+            </div>
+          </div>
+          <div id="resetError" class="hidden mt-4 p-3 bg-red-50 text-red-700 rounded-lg text-sm"></div>
+          <button onclick="doReset()" id="resetBtn" class="w-full mt-5 py-3 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl transition-all hover:scale-[1.02] shadow-lg shadow-brand-500/25">
+            <i class="fas fa-lock mr-2"></i>Set New Password
+          </button>
+        </div>
+
+        <div id="resetSuccess" class="hidden p-4 bg-green-50 border border-green-200 rounded-xl">
+          <p class="text-sm text-green-800 font-semibold"><i class="fas fa-check-circle mr-1"></i>Password updated successfully!</p>
+          <p class="text-sm text-green-600 mt-1">You can now sign in with your new password.</p>
+          <a href="/customer/login" class="mt-4 block text-center py-2.5 bg-brand-600 hover:bg-brand-700 text-white font-semibold rounded-xl text-sm transition-all">
+            <i class="fas fa-sign-in-alt mr-1"></i>Go to Sign In
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const token = new URLSearchParams(window.location.search).get('token');
+    if (!token) {
+      document.getElementById('resetForm').classList.add('hidden');
+      document.getElementById('resetInvalid').classList.remove('hidden');
+    }
+
+    async function doReset() {
+      const newPw = document.getElementById('newPassword').value;
+      const confPw = document.getElementById('confirmPassword').value;
+      const err = document.getElementById('resetError');
+      const btn = document.getElementById('resetBtn');
+      err.classList.add('hidden');
+      if (!newPw) { err.textContent = 'Please enter a new password.'; err.classList.remove('hidden'); return; }
+      if (newPw.length < 6) { err.textContent = 'Password must be at least 6 characters.'; err.classList.remove('hidden'); return; }
+      if (newPw !== confPw) { err.textContent = 'Passwords do not match.'; err.classList.remove('hidden'); return; }
+      btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Updating...';
+      try {
+        const res = await fetch('/api/customer/reset-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token, new_password: newPw })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          document.getElementById('resetForm').classList.add('hidden');
+          document.getElementById('resetSuccess').classList.remove('hidden');
+        } else {
+          err.textContent = data.error || 'Failed to reset password.';
+          err.classList.remove('hidden');
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fas fa-lock mr-2"></i>Set New Password';
+          if (data.error && data.error.includes('expired')) {
+            document.getElementById('resetForm').classList.add('hidden');
+            document.getElementById('resetInvalid').classList.remove('hidden');
+          }
+        }
+      } catch(e) {
+        err.textContent = 'Network error. Please try again.';
+        err.classList.remove('hidden');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-lock mr-2"></i>Set New Password';
       }
     }
   </script>
@@ -1778,6 +2070,32 @@ function getCustomerLoginHTML() {
           <button onclick="doCustLogin()" class="w-full mt-5 py-3 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl transition-all hover:scale-[1.02] shadow-lg shadow-brand-500/25">
             <i class="fas fa-sign-in-alt mr-2"></i>Sign In
           </button>
+          <div class="text-center mt-3">
+            <button onclick="showForgot()" class="text-sm text-sky-600 hover:text-sky-800 hover:underline transition-colors">
+              <i class="fas fa-key mr-1"></i>Forgot your password?
+            </button>
+          </div>
+        </div>
+
+        <!-- Forgot Password Panel -->
+        <div id="custForgotForm" class="hidden">
+          <div class="mb-4 p-3 bg-sky-50 border border-sky-200 rounded-xl">
+            <p class="text-sm text-sky-800"><i class="fas fa-info-circle mr-1"></i>Enter your email and we'll send you a link to reset your password.</p>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+            <input type="email" id="forgotEmail" placeholder="you@company.com" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-sm" onkeyup="if(event.key==='Enter')doForgot()">
+          </div>
+          <div id="forgotError" class="hidden mt-3 p-3 bg-red-50 text-red-700 rounded-lg text-sm"></div>
+          <div id="forgotSuccess" class="hidden mt-3 p-3 bg-green-50 text-green-700 rounded-lg text-sm"></div>
+          <button onclick="doForgot()" id="forgotBtn" class="w-full mt-4 py-3 bg-sky-600 hover:bg-sky-700 text-white font-bold rounded-xl transition-all hover:scale-[1.02] shadow-lg">
+            <i class="fas fa-paper-plane mr-2"></i>Send Reset Link
+          </button>
+          <div class="text-center mt-3">
+            <button onclick="showForgot(false)" class="text-sm text-gray-400 hover:text-gray-600 transition-colors">
+              <i class="fas fa-arrow-left mr-1"></i>Back to Sign In
+            </button>
+          </div>
         </div>
 
         <!-- Register Form - Step 1: Email Verification -->
@@ -1886,6 +2204,39 @@ function getCustomerLoginHTML() {
         rt.classList.remove('text-gray-500');
         lt.classList.remove('bg-brand-50','text-brand-700','border-b-2','border-brand-500');
         lt.classList.add('text-gray-500');
+      }
+    }
+
+    function showForgot(show = true) {
+      document.getElementById('custLoginForm').classList.toggle('hidden', show);
+      document.getElementById('custForgotForm').classList.toggle('hidden', !show);
+      document.getElementById('custRegForm').classList.add('hidden');
+      if (show) document.getElementById('forgotEmail').focus();
+    }
+
+    async function doForgot() {
+      const email = document.getElementById('forgotEmail').value.trim();
+      const err = document.getElementById('forgotError');
+      const suc = document.getElementById('forgotSuccess');
+      const btn = document.getElementById('forgotBtn');
+      err.classList.add('hidden'); suc.classList.add('hidden');
+      if (!email) { err.textContent = 'Please enter your email address.'; err.classList.remove('hidden'); return; }
+      btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Sending...';
+      try {
+        const res = await fetch('/api/customer/forgot-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email })
+        });
+        const data = await res.json();
+        suc.textContent = data.message || 'If an account exists, a reset link has been sent. Check your inbox (and spam folder).';
+        suc.classList.remove('hidden');
+        btn.innerHTML = '<i class="fas fa-check mr-2"></i>Email Sent';
+      } catch(e) {
+        err.textContent = 'Network error. Please try again.';
+        err.classList.remove('hidden');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-paper-plane mr-2"></i>Send Reset Link';
       }
     }
 

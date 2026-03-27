@@ -281,6 +281,118 @@ authRoutes.post('/change-password', async (c) => {
 })
 
 // ============================================================
+// ADMIN FORGOT PASSWORD — Send reset link to admin email
+// ============================================================
+authRoutes.post('/forgot-password', async (c) => {
+  try {
+    const { email } = await c.req.json()
+    const cleanEmail = email?.toLowerCase().trim()
+    if (!cleanEmail) return c.json({ error: 'Email is required' }, 400)
+
+    // Always return success to prevent email enumeration
+    const admin = await c.env.DB.prepare(
+      'SELECT id, name FROM admin_users WHERE email = ? AND is_active = 1'
+    ).bind(cleanEmail).first<any>()
+
+    if (admin) {
+      const recent = await c.env.DB.prepare(
+        "SELECT COUNT(*) as cnt FROM password_reset_tokens WHERE email = ? AND account_type = 'admin' AND created_at > datetime('now', '-1 hour')"
+      ).bind(cleanEmail).first<any>()
+
+      if (!recent || recent.cnt < 3) {
+        const token = crypto.randomUUID() + '-' + crypto.randomUUID()
+        const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString()
+
+        await c.env.DB.prepare(
+          "UPDATE password_reset_tokens SET used = 1 WHERE email = ? AND account_type = 'admin' AND used = 0"
+        ).bind(cleanEmail).run()
+
+        await c.env.DB.prepare(
+          "INSERT INTO password_reset_tokens (email, token, account_type, expires_at) VALUES (?, ?, 'admin', ?)"
+        ).bind(cleanEmail, token, expiresAt).run()
+
+        const baseUrl = (c.env as any).APP_BASE_URL || 'https://www.roofreporterai.com'
+        const resetUrl = `${baseUrl}/reset-password?token=${token}`
+        const resendKey = (c.env as any).RESEND_API_KEY
+        const html = `<div style="font-family:-apple-system,sans-serif;max-width:480px;margin:0 auto;padding:40px 20px"><div style="text-align:center;margin-bottom:32px"><h1 style="color:#1e3a5f;font-size:24px;margin:16px 0 4px">RoofReporterAI</h1><p style="color:#6b7280;font-size:14px;margin:0">Admin Password Reset</p></div><div style="background:#f8fafc;border-radius:16px;padding:32px;text-align:center"><p style="color:#374151;font-size:16px;margin:0 0 8px">Hi ${admin.name || 'Admin'},</p><p style="color:#6b7280;font-size:14px;margin:0 0 28px">Click below to reset your admin password. This link expires in 1 hour.</p><a href="${resetUrl}" style="display:inline-block;background:#0ea5e9;color:white;font-weight:700;font-size:15px;padding:14px 32px;border-radius:10px;text-decoration:none">Reset Admin Password</a><p style="color:#9ca3af;font-size:12px;margin:24px 0 0">If you didn't request this, your password remains unchanged.</p></div></div>`
+
+        if (resendKey) {
+          try {
+            await fetch('https://api.resend.com/emails', {
+              method: 'POST',
+              headers: { 'Authorization': `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ from: `RoofReporterAI <onboarding@resend.dev>`, to: [cleanEmail], subject: 'Reset your RoofReporterAI admin password', html })
+            })
+          } catch {}
+        } else {
+          // Fallback: Gmail OAuth2
+          const gmailRefreshToken = (c.env as any).GMAIL_REFRESH_TOKEN || ''
+          const gmailClientId = (c.env as any).GMAIL_CLIENT_ID || ''
+          const gmailClientSecret = (c.env as any).GMAIL_CLIENT_SECRET || ''
+          if (gmailRefreshToken && gmailClientId && gmailClientSecret) {
+            try {
+              const tokenResp = await fetch('https://oauth2.googleapis.com/token', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: gmailRefreshToken, client_id: gmailClientId, client_secret: gmailClientSecret }).toString()
+              })
+              const tokenData: any = await tokenResp.json()
+              if (tokenData.access_token) {
+                const rawEmail = [`From: RoofReporterAI <noreply@reusecanada.ca>`, `To: ${cleanEmail}`, `Subject: Reset your RoofReporterAI admin password`, 'Content-Type: text/html; charset=UTF-8', '', html].join('\r\n')
+                const encoded = btoa(unescape(encodeURIComponent(rawEmail))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+                await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+                  method: 'POST',
+                  headers: { 'Authorization': `Bearer ${tokenData.access_token}`, 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ raw: encoded })
+                })
+              }
+            } catch {}
+          }
+        }
+      }
+    }
+
+    return c.json({ success: true, message: 'If an admin account with that email exists, a reset link has been sent.' })
+  } catch (err: any) {
+    return c.json({ error: 'Failed to process request', details: err.message }, 500)
+  }
+})
+
+// ============================================================
+// ADMIN RESET PASSWORD — Validate token and set new password
+// ============================================================
+authRoutes.post('/reset-password', async (c) => {
+  try {
+    const { token, new_password } = await c.req.json()
+    if (!token || !new_password) return c.json({ error: 'Token and new password are required' }, 400)
+    if (new_password.length < 8) return c.json({ error: 'Password must be at least 8 characters' }, 400)
+
+    const record = await c.env.DB.prepare(
+      "SELECT * FROM password_reset_tokens WHERE token = ? AND account_type = 'admin' AND used = 0 AND expires_at > datetime('now')"
+    ).bind(token).first<any>()
+
+    if (!record) {
+      return c.json({ error: 'This reset link is invalid or has expired. Please request a new one.' }, 400)
+    }
+
+    const { hash, salt } = await hashPassword(new_password)
+    const storedHash = `${salt}:${hash}`
+
+    await c.env.DB.prepare(
+      "UPDATE admin_users SET password_hash = ?, updated_at = datetime('now') WHERE email = ?"
+    ).bind(storedHash, record.email).run()
+
+    await c.env.DB.prepare(
+      'UPDATE password_reset_tokens SET used = 1 WHERE token = ?'
+    ).bind(token).run()
+
+    return c.json({ success: true, message: 'Admin password updated. You can now sign in.' })
+  } catch (err: any) {
+    return c.json({ error: 'Failed to reset password', details: err.message }, 500)
+  }
+})
+
+// ============================================================
 // ADMIN LOGOUT — Invalidate session
 // ============================================================
 authRoutes.post('/logout', async (c) => {
