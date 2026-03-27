@@ -381,8 +381,11 @@ roverRoutes.post('/chat', async (c) => {
       messages.push({ role: msg.role, content: msg.content })
     }
 
-    // Call AI with fallback chain
-    const apiKey = c.env.GOOGLE_VERTEX_API_KEY
+    // Resolve Gemini API key — prefer AI Studio keys over the blocked GOOGLE_VERTEX_API_KEY
+    const apiKey = c.env.GEMINI_ENHANCE_API_KEY ||
+      (c.env as any).default_gemini_googleaistudio_key ||
+      (c.env as any).google_ai_studio_secret_key ||
+      c.env.GOOGLE_VERTEX_API_KEY
     const baseUrl = ''
 
     if (!apiKey) {
@@ -1086,7 +1089,10 @@ roverRoutes.post('/assistant', async (c) => {
       messages.push({ role: msg.role, content: msg.content })
     }
 
-    const apiKey = c.env.GOOGLE_VERTEX_API_KEY
+    const apiKey = c.env.GEMINI_ENHANCE_API_KEY ||
+      (c.env as any).default_gemini_googleaistudio_key ||
+      (c.env as any).google_ai_studio_secret_key ||
+      c.env.GOOGLE_VERTEX_API_KEY
     const baseUrl = ''
 
     if (!apiKey) {
@@ -1112,8 +1118,7 @@ roverRoutes.post('/assistant', async (c) => {
 
     } catch (aiError: any) {
       console.error('[Rover Assistant] Gemini error:', aiError.message)
-      const errDetail = aiError.message?.slice(0, 300) || 'unknown'
-      const fallback = `[DEBUG] Gemini error: ${errDetail}`
+      const fallback = `I'm having a technical hiccup, ${customer.name || 'sorry'}! Try refreshing, or reach out to reports@reusecanada.ca if this persists. You can still use all features from your dashboard.`
       await c.env.DB.prepare(
         'INSERT INTO rover_messages (conversation_id, role, content, model) VALUES (?, \'assistant\', ?, \'fallback-smart\')'
       ).bind(conversationId, fallback).run()

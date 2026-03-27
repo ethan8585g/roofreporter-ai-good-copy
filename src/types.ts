@@ -87,8 +87,12 @@ export type Bindings = {
   CLOUD_RUN_AI_TOKEN: string       // Optional: Cloud Run IAM auth token
   CLOUD_RUN_TIMEOUT_MS: string     // Optional: override default 90s timeout
 
-  // OpenAI-compatible API — Rover AI Chatbot
-  // Used via GenSpark proxy for AI-powered chat responses
+  // Gemini AI Studio keys — for Rover chatbot and report enhancement
+  GEMINI_ENHANCE_API_KEY: string           // Google AI Studio key (AIzaSy... format) — primary Gemini key
+  default_gemini_googleaistudio_key: string // Alternate Google AI Studio key
+  google_ai_studio_secret_key: string       // Alternate Google AI Studio key
+
+  // OpenAI-compatible API (legacy Genspark proxy — unused)
   OPENAI_API_KEY: string        // GenSpark LLM proxy key
   OPENAI_BASE_URL: string       // e.g. "https://www.genspark.ai/api/llm_proxy/v1"
 
