@@ -476,8 +476,11 @@
   window._crmMarkInvoice = function(id, status) {
     fetch('/api/crm/invoices/' + id, { method: 'PUT', headers: authHeaders(), body: JSON.stringify({ status: status }) })
       .then(function(r) { return r.json(); })
-      .then(function(res) { if (res.success) { toast('Invoice marked as ' + status); loadInvoices(window._invFilter); } })
-      .catch(function(e) { toast('Failed: ' + (e.message || 'Network error'), 'error'); });
+      .then(function(res) {
+        if (res.success) { toast('Invoice marked as ' + status); loadInvoices(window._invFilter); }
+        else { toast(res.error || 'Failed to update invoice', 'error'); }
+      })
+      .catch(function(e) { toast('Network error: ' + (e.message || 'Unknown'), 'error'); });
   };
 
   window._crmDeleteInvoice = function(id) {
@@ -1002,7 +1005,10 @@
   window._crmMarkProposal = function(id, status) {
     fetch('/api/crm/proposals/' + id, { method: 'PUT', headers: authHeaders(), body: JSON.stringify({ status: status }) })
       .then(function(r) { return r.json(); })
-      .then(function(res) { if (res.success) { toast('Proposal updated'); loadProposals(window._propFilter); } })
+      .then(function(res) {
+        if (res.success) { toast('Proposal updated'); loadProposals(window._propFilter); }
+        else { toast(res.error || 'Failed to update proposal', 'error'); }
+      })
       .catch(function(e) { toast('Network error: ' + (e.message || 'Unknown'), 'error'); });
   };
 
