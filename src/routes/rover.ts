@@ -257,13 +257,7 @@ async function callAI(
   maxTokens: number = 1000,
   temperature: number = 0.7
 ): Promise<{ content: string; model: string; tokensUsed: number; responseTimeMs: number }> {
-  // Try keys that could be real OpenAI keys (sk-...). genspark_gtp_key is likely the real one.
-  const candidates = [
-    (env as any).genspark_gtp_key,
-    env.OPENAI_API_KEY,
-  ].filter((k: any) => k && String(k).startsWith('sk-'))
-
-  const apiKey = candidates[0] || env.OPENAI_API_KEY || (env as any).genspark_gtp_key
+  const apiKey = (env as any).openai_ || env.OPENAI_API_KEY
   if (!apiKey) throw new Error('No OpenAI API key configured')
 
   const startTime = Date.now()
