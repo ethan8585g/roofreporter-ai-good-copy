@@ -12,13 +12,10 @@ import { validateAdminSession } from './auth'
 export const roverRoutes = new Hono<{ Bindings: Bindings }>()
 
 // ============================================================
-// MODEL CONFIGURATION — Fallback chain for reliability
+// MODEL CONFIGURATION
 // ============================================================
-const MODELS = {
-  primary: 'gemini-2.5-flash',    // Fast, reliable, great for chat
-  fallback1: 'gpt-5-nano',        // Good backup, reasoning model
-  fallback2: 'claude-haiku-4-5',  // Another reliable option
-}
+const GEMINI_MODEL = 'gemini-2.0-flash'
+const GEMINI_REST_BASE = 'https://generativelanguage.googleapis.com/v1beta/models'
 
 // ============================================================
 // ROVER SYSTEM PROMPT — Comprehensive RoofReporterAI expert
@@ -251,65 +248,64 @@ RESPONSE GUIDELINES
 10. Be honest — if a feature doesn't exist yet, say "we're working on that" rather than making promises`
 
 // ============================================================
-// AI CALL HELPER — With model fallback chain
+// AI CALL HELPER — Uses Gemini REST API (same key used throughout the app)
 // ============================================================
+// messages format: [{role: 'system'|'user'|'assistant', content: string}]
+// The system message is extracted and passed as systemInstruction.
 async function callAI(
   apiKey: string,
-  baseUrl: string,
+  _baseUrl: string,       // kept for signature compat, unused
   messages: any[],
   maxTokens: number = 1000,
   temperature: number = 0.7
 ): Promise<{ content: string; model: string; tokensUsed: number; responseTimeMs: number }> {
-  const modelsToTry = [MODELS.primary, MODELS.fallback1, MODELS.fallback2]
-  
-  for (const model of modelsToTry) {
-    try {
-      const startTime = Date.now()
-      
-      const response = await fetch(`${baseUrl}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-          model,
-          messages,
-          max_tokens: maxTokens,
-          temperature
-        })
-      })
+  const startTime = Date.now()
 
-      const responseTimeMs = Date.now() - startTime
+  // Separate system prompt from conversation
+  const systemMsg = messages.find((m: any) => m.role === 'system')
+  const convoMsgs = messages.filter((m: any) => m.role !== 'system')
 
-      if (!response.ok) {
-        console.error(`[Rover] Model ${model} returned ${response.status}:`, await response.text())
-        continue // Try next model
-      }
+  // Convert to Gemini format (OpenAI 'assistant' → Gemini 'model')
+  const contents = convoMsgs.map((m: any) => ({
+    role: m.role === 'assistant' ? 'model' : 'user',
+    parts: [{ text: m.content }]
+  }))
 
-      const data: any = await response.json()
-      const content = data.choices?.[0]?.message?.content
-
-      // Check for empty content (reasoning models can exhaust tokens on thinking)
-      if (!content || content.trim() === '') {
-        console.error(`[Rover] Model ${model} returned empty content (reasoning tokens may have consumed all output)`)
-        continue // Try next model
-      }
-
-      return {
-        content: content.trim(),
-        model,
-        tokensUsed: data.usage?.total_tokens || 0,
-        responseTimeMs
-      }
-    } catch (err: any) {
-      console.error(`[Rover] Model ${model} failed:`, err.message)
-      continue // Try next model
-    }
+  const body: any = {
+    contents,
+    generationConfig: { maxOutputTokens: maxTokens, temperature },
+  }
+  if (systemMsg) {
+    body.systemInstruction = { parts: [{ text: systemMsg.content }] }
   }
 
-  // All models failed
-  throw new Error('All AI models failed to generate a response')
+  const url = `${GEMINI_REST_BASE}/${GEMINI_MODEL}:generateContent?key=${apiKey}`
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+
+  const responseTimeMs = Date.now() - startTime
+
+  if (!response.ok) {
+    const errText = await response.text()
+    throw new Error(`Gemini ${response.status}: ${errText.slice(0, 200)}`)
+  }
+
+  const data: any = await response.json()
+  const content = data.candidates?.[0]?.content?.parts?.[0]?.text
+
+  if (!content || content.trim() === '') {
+    throw new Error('Gemini returned empty response')
+  }
+
+  return {
+    content: content.trim(),
+    model: GEMINI_MODEL,
+    tokensUsed: (data.usageMetadata?.totalTokenCount) || 0,
+    responseTimeMs,
+  }
 }
 
 // ============================================================
@@ -386,8 +382,8 @@ roverRoutes.post('/chat', async (c) => {
     }
 
     // Call AI with fallback chain
-    const apiKey = c.env.OPENAI_API_KEY
-    const baseUrl = c.env.OPENAI_BASE_URL || 'https://www.genspark.ai/api/llm_proxy/v1'
+    const apiKey = c.env.GOOGLE_VERTEX_API_KEY
+    const baseUrl = ''
 
     if (!apiKey) {
       // No API key — provide helpful fallback
@@ -1081,8 +1077,8 @@ roverRoutes.post('/assistant', async (c) => {
       messages.push({ role: msg.role, content: msg.content })
     }
 
-    const apiKey = c.env.OPENAI_API_KEY
-    const baseUrl = c.env.OPENAI_BASE_URL || 'https://www.genspark.ai/api/llm_proxy/v1'
+    const apiKey = c.env.GOOGLE_VERTEX_API_KEY
+    const baseUrl = ''
 
     if (!apiKey) {
       const fallback = `Hey ${customer.name || 'there'}! I'm having a quick connection issue right now, but here's what I can tell you: you have ${customer.free_trial_remaining || 0} free reports and ${customer.paid_credits_remaining || 0} paid credits. Head to /customer/order to generate a report, or /customer/reports to view past measurements. I'll be back online shortly!`
