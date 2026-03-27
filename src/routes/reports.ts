@@ -503,42 +503,46 @@ reportsRoutes.post('/:orderId/trace-insights', async (c) => {
 
   const trace = typeof order.roof_trace_json === 'string' ? JSON.parse(order.roof_trace_json) : order.roof_trace_json
 
-  if (!trace.eaves || trace.eaves.length < 3) {
+  // Resolve eaves sections — supports single-polygon (legacy) and multi-section (new) formats
+  const rawEaves = trace.eaves_sections && trace.eaves_sections.length > 0
+    ? (trace.eaves_sections as { lat: number; lng: number }[][]).filter((s: any[]) => s.length >= 3)
+    : Array.isArray(trace.eaves) && trace.eaves.length > 0 && Array.isArray(trace.eaves[0])
+      ? (trace.eaves as { lat: number; lng: number }[][]).filter((s: any[]) => s.length >= 3)
+      : trace.eaves && (trace.eaves as any[]).length >= 3 ? [trace.eaves as { lat: number; lng: number }[]] : []
+
+  if (rawEaves.length === 0) {
     return c.json({ error: 'Invalid trace data — eaves polygon requires at least 3 points' }, 400)
   }
 
-  // Compute polygon area from eaves outline
-  const eavePoints = trace.eaves as { lat: number; lng: number }[]
-  const cLat = eavePoints.reduce((s: number, p: { lat: number }) => s + p.lat, 0) / eavePoints.length
-  const cLng = eavePoints.reduce((s: number, p: { lng: number }) => s + p.lng, 0) / eavePoints.length
-  const cosLat = Math.cos(cLat * Math.PI / 180)
   const M_PER_DEG_LAT = 111320
-  const M_PER_DEG_LNG = 111320 * cosLat
 
-  const projected = eavePoints.map(p => ({
-    x: (p.lng - cLng) * M_PER_DEG_LNG,
-    y: (p.lat - cLat) * M_PER_DEG_LAT
-  }))
-
-  let areaM2 = 0
-  const n = projected.length
-  for (let i = 0; i < n; i++) {
-    const j = (i + 1) % n
-    areaM2 += projected[i].x * projected[j].y
-    areaM2 -= projected[j].x * projected[i].y
+  // Compute area + perimeter for each section, sum areas
+  const computeSection = (pts: { lat: number; lng: number }[]) => {
+    const cLat = pts.reduce((s, p) => s + p.lat, 0) / pts.length
+    const cLng = pts.reduce((s, p) => s + p.lng, 0) / pts.length
+    const M_PER_DEG_LNG = 111320 * Math.cos(cLat * Math.PI / 180)
+    const proj = pts.map(p => ({ x: (p.lng - cLng) * M_PER_DEG_LNG, y: (p.lat - cLat) * M_PER_DEG_LAT }))
+    let area = 0, perim = 0
+    const n = proj.length
+    for (let i = 0; i < n; i++) {
+      const j = (i + 1) % n
+      area += proj[i].x * proj[j].y - proj[j].x * proj[i].y
+      const dx = proj[j].x - proj[i].x, dy = proj[j].y - proj[i].y
+      perim += Math.sqrt(dx * dx + dy * dy)
+    }
+    return { areaM2: Math.abs(area) / 2, perimeterM: perim, center: { lat: cLat, lng: cLng } }
   }
-  areaM2 = Math.abs(areaM2) / 2
-  const areaSqft = Math.round(areaM2 * 10.7639)
 
-  // Compute perimeter from eaves outline
-  let perimeterM = 0
-  for (let i = 0; i < n; i++) {
-    const j = (i + 1) % n
-    const dx = projected[j].x - projected[i].x
-    const dy = projected[j].y - projected[i].y
-    perimeterM += Math.sqrt(dx * dx + dy * dy)
-  }
+  // Primary section (largest) for perimeter/center; all sections contribute area
+  const sections = rawEaves.map(computeSection)
+  const primarySec = sections.reduce((best, s) => s.areaM2 > best.areaM2 ? s : best, sections[0])
+  const totalAreaM2 = sections.reduce((s, sec) => s + sec.areaM2, 0)
+  const areaM2 = totalAreaM2
+  const areaSqft = Math.round(totalAreaM2 * 10.7639)
+  const perimeterM = primarySec.perimeterM
   const perimeterFt = Math.round(perimeterM * 3.28084)
+  const n = rawEaves[0].length
+  const eavePoints = rawEaves[0]
 
   // Count ridge/hip/valley lines and compute their total lengths
   const computeLineLength = (line: { lat: number; lng: number }[]) => {
@@ -563,11 +567,12 @@ reportsRoutes.post('/:orderId/trace-insights', async (c) => {
     traced_at: trace.traced_at,
     eaves_polygon: {
       vertices: eavePoints.length,
+      section_count: rawEaves.length,
       area_m2: Math.round(areaM2 * 100) / 100,
       area_sqft: areaSqft,
       perimeter_m: Math.round(perimeterM * 100) / 100,
       perimeter_ft: perimeterFt,
-      center: { lat: cLat, lng: cLng }
+      center: primarySec.center
     },
     edge_summary: {
       ridge_count: (trace.ridges || []).length,
@@ -612,7 +617,9 @@ reportsRoutes.post('/:orderId/trace-remeasure', async (c) => {
 
   const trace = typeof order.roof_trace_json === 'string' ? JSON.parse(order.roof_trace_json) : order.roof_trace_json
 
-  if (!trace.eaves || trace.eaves.length < 3) {
+  const hasEaves = (trace.eaves_sections && trace.eaves_sections.length > 0 && trace.eaves_sections[0].length >= 3)
+    || (Array.isArray(trace.eaves) && trace.eaves.length >= 3)
+  if (!hasEaves) {
     return c.json({ error: 'Need at least 3 eave points. Trace every corner of the house.' }, 400)
   }
 

@@ -53,7 +53,8 @@ const state = {
   // Tracing state
   traceMap: null,
   traceMode: 'eaves', // 'eaves', 'ridge', 'hip', 'valley'
-  traceEavesPoints: [],
+  traceEavesPoints: [],     // in-progress section being drawn
+  traceEavesSections: [],   // [{points:[{lat,lng},...]}] completed closed sections
   traceRidgeLines: [],
   traceHipLines: [],
   traceValleyLines: [],
@@ -791,10 +792,12 @@ function renderStep2TracePhase() {
   };
   const m = modeInfo[state.traceMode] || modeInfo.eaves;
   const eavesCount = state.traceEavesPoints.length;
+  const eavesSections = state.traceEavesSections.length;
   const ridgeCount = state.traceRidgeLines.length;
   const hipCount = state.traceHipLines.length;
   const valleyCount = state.traceValleyLines.length;
-  const eavesClosed = eavesCount >= 3 && state.traceEavesPolygon;
+  // Eaves is "complete" if at least one section is closed
+  const eavesClosed = eavesSections > 0;
 
   return `
     <div class="max-w-5xl mx-auto">
@@ -846,7 +849,7 @@ function renderStep2TracePhase() {
                   <i class="fas ${info.icon} text-xs"></i>
                   <span>${info.label}</span>
                   <span class="ml-auto text-xs opacity-70">
-                    ${key === 'eaves' ? eavesCount + ' pts' : key === 'ridge' ? ridgeCount : key === 'hip' ? hipCount : valleyCount}
+                    ${key === 'eaves' ? (eavesSections > 0 ? eavesSections + (eavesSections === 1 ? ' sect' : ' sects') + (eavesCount > 0 ? '+' + eavesCount : '') : eavesCount + ' pts') : key === 'ridge' ? ridgeCount : key === 'hip' ? hipCount : valleyCount}
                   </span>
                 </button>
               `).join('')}
@@ -860,7 +863,7 @@ function renderStep2TracePhase() {
               <div class="flex justify-between items-center">
                 <span class="text-gray-500"><i class="fas fa-draw-polygon mr-1" style="color:#22c55e"></i>Eaves</span>
                 <span class="font-semibold ${eavesClosed ? 'text-green-600' : 'text-gray-400'}">
-                  ${eavesClosed ? '<i class="fas fa-check-circle mr-1"></i>Closed' : eavesCount + ' points'}
+                  ${eavesClosed ? '<i class="fas fa-check-circle mr-1"></i>' + eavesSections + ' section' + (eavesSections > 1 ? 's' : '') + (eavesCount > 0 ? ' + drawing' : '') : eavesCount + ' points'}
                 </span>
               </div>
               <div class="flex justify-between items-center">
@@ -883,8 +886,8 @@ function renderStep2TracePhase() {
             <button onclick="undoLastTrace()" class="w-full px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg text-sm font-medium transition-all">
               <i class="fas fa-undo mr-1"></i>Undo Last
             </button>
-            <button onclick="clearAllTraces()" class="w-full px-3 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-sm font-medium transition-all">
-              <i class="fas fa-trash mr-1"></i>Clear All
+            <button onclick="clearCurrentMode()" class="w-full px-3 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-sm font-medium transition-all">
+              <i class="fas fa-trash mr-1"></i>Clear Mode
             </button>
           </div>
         </div>
@@ -909,7 +912,7 @@ function renderStep2TracePhase() {
         <div class="flex items-center gap-4 text-xs text-gray-500">
           <span><i class="fas fa-mouse-pointer mr-1"></i>Click = Add point</span>
           <span><i class="fas fa-mouse mr-1"></i>Double-click = Finish line</span>
-          <span><i class="fas fa-draw-polygon mr-1" style="color:#22c55e"></i>Eaves: click first point to close</span>
+          <span><i class="fas fa-draw-polygon mr-1" style="color:#22c55e"></i>Eaves: click first point to close. Add multiple sections for complex roofs.</span>
         </div>
         <div class="flex items-center gap-3">
           <button onclick="skipTracing()" class="px-4 py-2 text-gray-500 hover:text-gray-700 text-sm font-medium transition-all">
@@ -1023,48 +1026,25 @@ function handleTraceClick(pt) {
 function closeEavesPolygon() {
   if (state.traceEavesPoints.length < 3) return;
 
-  // Remove old eaves polyline
+  const sectionPts = [...state.traceEavesPoints];
+
+  // Save the new section
+  state.traceEavesSections.push({ points: sectionPts });
+  state.traceEavesPoints = [];
+  state.traceEavesPolygon = null;
+
+  // Redraw all eaves overlays (we're in eaves mode)
   clearTraceOverlays();
+  redrawEavesOverlays();
 
-  // Draw filled polygon
-  state.traceEavesPolygon = new google.maps.Polygon({
-    paths: state.traceEavesPoints.map(p => new google.maps.LatLng(p.lat, p.lng)),
-    map: state.traceMap,
-    strokeColor: '#22c55e',
-    strokeWeight: 3,
-    strokeOpacity: 0.9,
-    fillColor: '#22c55e',
-    fillOpacity: 0.15,
-    editable: true,
-    draggable: false
-  });
-
-  // Listen for polygon edits
-  const path = state.traceEavesPolygon.getPath();
-  google.maps.event.addListener(path, 'set_at', () => updateEavesFromPolygon());
-  google.maps.event.addListener(path, 'insert_at', () => updateEavesFromPolygon());
-
-  // Redraw markers
-  state.traceEavesPoints.forEach((p, i) => {
-    addTraceMarker(p, '#22c55e', i + 1);
-  });
-
-  // Redraw other lines
-  restoreLineOverlays();
-
-  showToast('Eaves outline closed! Now add ridges and hips.', 'success');
-  state.traceMode = 'ridge';
+  const n = state.traceEavesSections.length;
+  showToast(`Eaves section ${n} closed! Trace another section or switch to Ridges.`, 'success');
+  // Don't auto-switch mode — user decides when to move on
   updateTraceSummaryUI();
 }
 
 function updateEavesFromPolygon() {
-  if (!state.traceEavesPolygon) return;
-  const path = state.traceEavesPolygon.getPath();
-  state.traceEavesPoints = [];
-  for (let i = 0; i < path.getLength(); i++) {
-    const pt = path.getAt(i);
-    state.traceEavesPoints.push({ lat: pt.lat(), lng: pt.lng() });
-  }
+  // Legacy no-op — section polygons now update via per-section listeners in redrawEavesOverlays()
 }
 
 function finishCurrentLine() {
@@ -1135,70 +1115,129 @@ function clearTraceOverlays() {
 }
 
 function restoreTraceOverlays() {
-  // Restore eaves
-  if (state.traceEavesPoints.length >= 3 && state.traceEavesPolygon === null) {
-    // Check if we have a closed polygon
-    closeEavesPolygon();
-  } else if (state.traceEavesPoints.length > 0) {
+  // On map init, only draw the currently-active mode's overlays
+  redrawActiveModeOverlays();
+}
+
+function redrawActiveModeOverlays() {
+  clearTraceOverlays();
+  const mode = state.traceMode;
+  if (mode === 'eaves') {
+    redrawEavesOverlays();
+  } else if (mode === 'ridge') {
+    state.traceRidgeLines.forEach(line => {
+      line.forEach(p => addTraceMarker(p, '#3b82f6', null));
+      drawTracePolyline(line, '#3b82f6', 2.5, false);
+    });
+  } else if (mode === 'hip') {
+    state.traceHipLines.forEach(line => {
+      line.forEach(p => addTraceMarker(p, '#f59e0b', null));
+      drawTracePolyline(line, '#f59e0b', 2.5, false);
+    });
+  } else if (mode === 'valley') {
+    state.traceValleyLines.forEach(line => {
+      line.forEach(p => addTraceMarker(p, '#ef4444', null));
+      drawTracePolyline(line, '#ef4444', 2.5, false);
+    });
+  }
+}
+
+function redrawEavesOverlays() {
+  // Draw each completed eaves section as an editable polygon
+  state.traceEavesSections.forEach((section, idx) => {
+    const polygon = new google.maps.Polygon({
+      paths: section.points.map(p => new google.maps.LatLng(p.lat, p.lng)),
+      map: state.traceMap,
+      strokeColor: '#22c55e',
+      strokeWeight: 3,
+      strokeOpacity: 0.9,
+      fillColor: '#22c55e',
+      fillOpacity: 0.15,
+      editable: true,
+      draggable: false
+    });
+    // Sync vertex edits back to state
+    const path = polygon.getPath();
+    const sec = state.traceEavesSections[idx];
+    const syncPts = () => {
+      sec.points = [];
+      for (let i = 0; i < path.getLength(); i++) {
+        const pt = path.getAt(i);
+        sec.points.push({ lat: pt.lat(), lng: pt.lng() });
+      }
+    };
+    google.maps.event.addListener(path, 'set_at', syncPts);
+    google.maps.event.addListener(path, 'insert_at', syncPts);
+    state.tracePolylines.push(polygon);
+    // Center label
+    const cx = section.points.reduce((s, p) => s + p.lat, 0) / section.points.length;
+    const cy = section.points.reduce((s, p) => s + p.lng, 0) / section.points.length;
+    addTraceMarker({ lat: cx, lng: cy }, '#22c55e', `S${idx + 1}`);
+  });
+  // Draw in-progress section points
+  if (state.traceEavesPoints.length > 0) {
     state.traceEavesPoints.forEach((p, i) => addTraceMarker(p, '#22c55e', i + 1));
     if (state.traceEavesPoints.length > 1) {
       drawTracePolyline(state.traceEavesPoints, '#22c55e', 3, false);
     }
   }
-  restoreLineOverlays();
-}
-
-function restoreLineOverlays() {
-  state.traceRidgeLines.forEach(line => drawTracePolyline(line, '#3b82f6', 2.5, false));
-  state.traceHipLines.forEach(line => drawTracePolyline(line, '#f59e0b', 2.5, false));
-  state.traceValleyLines.forEach(line => drawTracePolyline(line, '#ef4444', 2.5, false));
 }
 
 function setTraceMode(mode) {
   // Finish any pending line
   if (state.traceCurrentLine.length > 0) finishCurrentLine();
   state.traceMode = mode;
-  // Partial re-render of mode selector only
+  // Show only the active mode's overlays
+  redrawActiveModeOverlays();
   updateTraceSummaryUI();
 }
 
 function undoLastTrace() {
   const mode = state.traceMode;
   if (mode === 'eaves') {
-    if (state.traceEavesPolygon) {
-      state.traceEavesPolygon.setMap(null);
-      state.traceEavesPolygon = null;
-    }
     if (state.traceEavesPoints.length > 0) {
+      // Undo last point in current in-progress section
       state.traceEavesPoints.pop();
+    } else if (state.traceEavesSections.length > 0) {
+      // Undo last completed section
+      state.traceEavesSections.pop();
     }
-  } else if (mode === 'ridge' && state.traceRidgeLines.length > 0) {
-    state.traceRidgeLines.pop();
-  } else if (mode === 'hip' && state.traceHipLines.length > 0) {
-    state.traceHipLines.pop();
-  } else if (mode === 'valley' && state.traceValleyLines.length > 0) {
-    state.traceValleyLines.pop();
+  } else if (mode === 'ridge') {
+    if (state.traceCurrentLine.length > 0) state.traceCurrentLine = [];
+    else if (state.traceRidgeLines.length > 0) state.traceRidgeLines.pop();
+  } else if (mode === 'hip') {
+    if (state.traceCurrentLine.length > 0) state.traceCurrentLine = [];
+    else if (state.traceHipLines.length > 0) state.traceHipLines.pop();
+  } else if (mode === 'valley') {
+    if (state.traceCurrentLine.length > 0) state.traceCurrentLine = [];
+    else if (state.traceValleyLines.length > 0) state.traceValleyLines.pop();
   }
-  state.traceCurrentLine = [];
 
-  // Redraw everything
-  clearTraceOverlays();
-  restoreTraceOverlays();
+  redrawActiveModeOverlays();
   updateTraceSummaryUI();
   showToast('Undo complete', 'info');
 }
 
-function clearAllTraces() {
-  if (!confirm('Clear all traced lines? This cannot be undone.')) return;
-  state.traceEavesPoints = [];
-  state.traceRidgeLines = [];
-  state.traceHipLines = [];
-  state.traceValleyLines = [];
+function clearCurrentMode() {
+  const mode = state.traceMode;
+  const modeLabel = { eaves: 'eaves sections', ridge: 'ridge lines', hip: 'hip lines', valley: 'valley lines' }[mode] || mode;
+  if (!confirm(`Clear all ${modeLabel}? Other modes will not be affected.`)) return;
+  if (mode === 'eaves') {
+    state.traceEavesPoints = [];
+    state.traceEavesSections = [];
+    state.traceEavesPolygon = null;
+  } else if (mode === 'ridge') {
+    state.traceRidgeLines = [];
+  } else if (mode === 'hip') {
+    state.traceHipLines = [];
+  } else if (mode === 'valley') {
+    state.traceValleyLines = [];
+  }
   state.traceCurrentLine = [];
-  clearTraceOverlays();
+  redrawActiveModeOverlays();
   state.formData.roof_trace_json = null;
   updateTraceSummaryUI();
-  showToast('All traces cleared', 'info');
+  showToast(`${modeLabel.charAt(0).toUpperCase() + modeLabel.slice(1)} cleared`, 'info');
 }
 
 function updateTraceSummaryUI() {
@@ -1219,8 +1258,16 @@ function getLatLngDistance(a, b) {
 }
 
 function compileTraceData() {
+  // Collect all completed eaves sections; include in-progress if >= 3 pts
+  const allSections = state.traceEavesSections.map(s => s.points);
+  if (state.traceEavesPoints.length >= 3) {
+    allSections.push([...state.traceEavesPoints]);
+  }
   return {
-    eaves: state.traceEavesPoints,
+    // eaves: flat array (first section) for backward compat with single-section reports
+    eaves: allSections.length > 0 ? allSections[0] : [],
+    // eaves_sections: all sections for multi-section measurement
+    eaves_sections: allSections,
     ridges: state.traceRidgeLines,
     hips: state.traceHipLines,
     valleys: state.traceValleyLines,
@@ -1229,16 +1276,13 @@ function compileTraceData() {
 }
 
 function confirmTraceAndProceed() {
-  const eavesClosed = state.traceEavesPoints.length >= 3 && state.traceEavesPolygon;
-  if (!eavesClosed) {
-    showToast('Please draw the complete eaves outline (close the polygon by clicking the first point)', 'error');
+  const hasClosedSection = state.traceEavesSections.length > 0;
+  if (!hasClosedSection) {
+    showToast('Please close at least one eaves outline (click the first point to close the polygon)', 'error');
     return;
   }
 
-  // Update polygon vertices in case user edited them
-  updateEavesFromPolygon();
-
-  // Compile and save trace data
+  // Compile and save trace data (includes all sections)
   state.formData.roof_trace_json = compileTraceData();
 
   showToast('Roof trace saved!', 'success');

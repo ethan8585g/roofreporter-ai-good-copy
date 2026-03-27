@@ -75,6 +75,11 @@ export interface TracePayload {
   complexity?: 'simple' | 'medium' | 'complex'
   include_waste?: boolean
   eaves_outline: TracePt[]
+  // Multi-section eaves: each entry is an independent closed eaves polygon.
+  // Used for buildings with separate roof sections (garage, porch, dormer, etc.).
+  // Total footprint = sum of all section areas. Engine uses the largest section
+  // for linear/face geometry; remaining sections contribute area only.
+  eaves_sections?: TracePt[][]
   ridges?: TraceLine[]
   hips?: TraceLine[]
   valleys?: TraceLine[]
@@ -637,6 +642,7 @@ export class RoofMeasurementEngine {
 
   // Raw WGS84 inputs
   private rawEaves: TracePt[]
+  private rawEavesSections: TracePt[][] // extra sections for multi-section roofs
   private rawRidges: TraceLine[]
   private rawHips: TraceLine[]
   private rawValleys: TraceLine[]
@@ -679,6 +685,10 @@ export class RoofMeasurementEngine {
 
     // Parse raw WGS84 inputs
     this.rawEaves   = (payload.eaves_outline || []).map(p => ({ lat: p.lat, lng: p.lng, elevation: p.elevation ?? null }))
+    // Extra eaves sections: filter to those different from the primary outline
+    this.rawEavesSections = (payload.eaves_sections || [])
+      .filter(sec => sec !== payload.eaves_outline && sec.length >= 3)
+      .map(sec => sec.map(p => ({ lat: p.lat, lng: p.lng, elevation: p.elevation ?? null })))
     this.rawRidges  = this.parseLines(payload.ridges || [])
     this.rawHips    = this.parseLines(payload.hips || [])
     this.rawValleys = this.parseLines(payload.valleys || [])
@@ -1222,8 +1232,22 @@ export class RoofMeasurementEngine {
     const totalRakeFt   = rakeSegs.reduce((s, seg) => s + seg.sloped_length_ft, 0)
 
     const facesData   = this.faceAreas()
-    const totalSloped = facesData.reduce((s, f) => s + f.sloped_area_ft2, 0)
-    const totalProj   = facesData.reduce((s, f) => s + f.projected_area_ft2, 0)
+    let totalSloped = facesData.reduce((s, f) => s + f.sloped_area_ft2, 0)
+    let totalProj   = facesData.reduce((s, f) => s + f.projected_area_ft2, 0)
+
+    // Add footprint areas from extra eaves sections (garages, porches, dormers, etc.)
+    // Each extra section is measured independently and added to the total
+    if (this.rawEavesSections.length > 0) {
+      const domRise = this.defPitch
+      for (const secPts of this.rawEavesSections) {
+        const { projected: secCart } = projectToCartesian(secPts)
+        const secProjFt2 = shoelaceAreaM2(secCart) * M2_TO_FT2
+        const secSloped  = slopedFromProjected(secProjFt2, domRise)
+        totalProj   += secProjFt2
+        totalSloped += secSloped
+      }
+    }
+
     const netSquares  = totalSloped / SQFT_PER_SQUARE
 
     // Dominant pitch
@@ -1260,6 +1284,8 @@ export class RoofMeasurementEngine {
       notes.push(`Hip roof confirmed (${round(totalHipFt, 1)} ft total hip length).`)
     if (this.eavesCart.length > 10)
       notes.push('Complex perimeter (>10 eave points) — Allow extra cut waste.')
+    if (this.rawEavesSections.length > 0)
+      notes.push(`Multi-section roof: ${this.rawEavesSections.length + 1} separate eaves polygon(s) detected (e.g. garage, porch, dormer). Areas summed using dominant pitch ${round(this.defPitch, 1)}:12.`)
 
     // Check for bi-slope junctions
     const biSlopeSegs = [...hipSegs, ...valleySegs].filter(s => s.is_bi_slope)
@@ -1326,7 +1352,8 @@ export class RoofMeasurementEngine {
 
 export function traceUiToEnginePayload(
   traceJson: {
-    eaves?: { lat: number; lng: number }[]
+    eaves?: { lat: number; lng: number }[] | { lat: number; lng: number }[][]
+    eaves_sections?: { lat: number; lng: number }[][]
     ridges?: { lat: number; lng: number }[][]
     hips?: { lat: number; lng: number }[][]
     valleys?: { lat: number; lng: number }[][]
@@ -1342,7 +1369,29 @@ export function traceUiToEnginePayload(
   },
   defaultPitch: number = 5.0
 ): TracePayload {
-  const eavesOutline: TracePt[] = (traceJson.eaves || []).map(p => ({
+  // Resolve multi-section eaves: prefer eaves_sections, fall back to eaves (which may be
+  // a flat array [old single-section] or an array of arrays [new multi-section format])
+  let allSections: { lat: number; lng: number }[][] = []
+  if (traceJson.eaves_sections && traceJson.eaves_sections.length > 0) {
+    allSections = traceJson.eaves_sections.filter(s => s.length >= 3)
+  } else if (Array.isArray(traceJson.eaves)) {
+    if (traceJson.eaves.length > 0 && Array.isArray((traceJson.eaves as any)[0])) {
+      // Array of arrays (new format)
+      allSections = (traceJson.eaves as { lat: number; lng: number }[][]).filter(s => s.length >= 3)
+    } else {
+      // Flat array (old single-section format)
+      const flat = traceJson.eaves as { lat: number; lng: number }[]
+      if (flat.length >= 3) allSections = [flat]
+    }
+  }
+
+  // Primary outline = largest section (most eave points)
+  const primary = allSections.length > 0
+    ? allSections.reduce((best, s) => s.length > best.length ? s : best, allSections[0])
+    : []
+  const extraSections = allSections.filter(s => s !== primary)
+
+  const eavesOutline: TracePt[] = primary.map(p => ({
     lat: p.lat, lng: p.lng, elevation: null
   }))
 
@@ -1372,6 +1421,9 @@ export function traceUiToEnginePayload(
     complexity:     'medium',
     include_waste:  true,
     eaves_outline:  eavesOutline,
+    eaves_sections: extraSections.length > 0
+      ? extraSections.map(sec => sec.map(p => ({ lat: p.lat, lng: p.lng })))
+      : undefined,
     ridges,
     hips,
     valleys,
