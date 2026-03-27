@@ -8,6 +8,7 @@
 import { Hono } from 'hono'
 import type { Bindings } from '../types'
 import { validateAdminSession } from './auth'
+import { getAccessToken } from '../services/gcp-auth'
 
 export const roverRoutes = new Hono<{ Bindings: Bindings }>()
 
@@ -248,64 +249,112 @@ RESPONSE GUIDELINES
 10. Be honest — if a feature doesn't exist yet, say "we're working on that" rather than making promises`
 
 // ============================================================
-// AI CALL HELPER — Uses Gemini REST API (same key used throughout the app)
+// AI CALL HELPERS
+// Two backends: OpenAI-compatible (genspark proxy) + Gemini via service account
 // ============================================================
-// messages format: [{role: 'system'|'user'|'assistant', content: string}]
-// The system message is extracted and passed as systemInstruction.
-async function callAI(
+
+// OpenAI-compatible chat completions (genspark proxy or any OpenAI endpoint)
+async function callOpenAI(
   apiKey: string,
-  _baseUrl: string,       // kept for signature compat, unused
+  baseUrl: string,
   messages: any[],
   maxTokens: number = 1000,
   temperature: number = 0.7
 ): Promise<{ content: string; model: string; tokensUsed: number; responseTimeMs: number }> {
   const startTime = Date.now()
+  const url = baseUrl.replace(/\/$/, '') + '/chat/completions'
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+    body: JSON.stringify({
+      model: 'gpt-4o-mini',
+      messages,
+      max_tokens: maxTokens,
+      temperature,
+    }),
+  })
+  const responseTimeMs = Date.now() - startTime
+  if (!response.ok) {
+    const errText = await response.text()
+    throw new Error(`OpenAI ${response.status}: ${errText.slice(0, 200)}`)
+  }
+  const data: any = await response.json()
+  const content = data.choices?.[0]?.message?.content
+  if (!content || content.trim() === '') throw new Error('OpenAI returned empty response')
+  return { content: content.trim(), model: 'gpt-4o-mini', tokensUsed: data.usage?.total_tokens || 0, responseTimeMs }
+}
 
-  // Separate system prompt from conversation
+// Gemini via service account Bearer token (Vertex AI endpoint)
+async function callGeminiServiceAccount(
+  serviceAccountJson: string,
+  messages: any[],
+  maxTokens: number = 1000,
+  temperature: number = 0.7
+): Promise<{ content: string; model: string; tokensUsed: number; responseTimeMs: number }> {
+  const startTime = Date.now()
+  const accessToken = await getAccessToken(serviceAccountJson)
+  // Extract project from service account JSON
+  let project = 'roofreporterai'
+  try { project = JSON.parse(serviceAccountJson).project_id || project } catch (_) {}
+  const location = 'us-central1'
+  const model = 'gemini-2.0-flash'
+  const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/${model}:generateContent`
+
   const systemMsg = messages.find((m: any) => m.role === 'system')
   const convoMsgs = messages.filter((m: any) => m.role !== 'system')
-
-  // Convert to Gemini format (OpenAI 'assistant' → Gemini 'model')
   const contents = convoMsgs.map((m: any) => ({
     role: m.role === 'assistant' ? 'model' : 'user',
     parts: [{ text: m.content }]
   }))
+  const body: any = { contents, generationConfig: { maxOutputTokens: maxTokens, temperature } }
+  if (systemMsg) body.systemInstruction = { parts: [{ text: systemMsg.content }] }
 
-  const body: any = {
-    contents,
-    generationConfig: { maxOutputTokens: maxTokens, temperature },
-  }
-  if (systemMsg) {
-    body.systemInstruction = { parts: [{ text: systemMsg.content }] }
-  }
-
-  const url = `${GEMINI_REST_BASE}/${GEMINI_MODEL}:generateContent?key=${apiKey}`
   const response = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
     body: JSON.stringify(body),
   })
-
   const responseTimeMs = Date.now() - startTime
-
   if (!response.ok) {
     const errText = await response.text()
-    throw new Error(`Gemini ${response.status}: ${errText.slice(0, 200)}`)
+    throw new Error(`Gemini SA ${response.status}: ${errText.slice(0, 200)}`)
   }
-
   const data: any = await response.json()
   const content = data.candidates?.[0]?.content?.parts?.[0]?.text
+  if (!content || content.trim() === '') throw new Error('Gemini returned empty response')
+  return { content: content.trim(), model, tokensUsed: data.usageMetadata?.totalTokenCount || 0, responseTimeMs }
+}
 
-  if (!content || content.trim() === '') {
-    throw new Error('Gemini returned empty response')
+// callAI — tries OpenAI/genspark first, then Gemini service account
+async function callAI(
+  env: any,
+  messages: any[],
+  maxTokens: number = 1000,
+  temperature: number = 0.7
+): Promise<{ content: string; model: string; tokensUsed: number; responseTimeMs: number }> {
+  // 1. Try OpenAI-compatible endpoint (genspark proxy)
+  const openaiKey = env.OPENAI_API_KEY || env.genspark_gtp_key
+  const openaiBase = env.OPENAI_BASE_URL || 'https://www.genspark.ai/api/llm_proxy/v1'
+  if (openaiKey) {
+    try {
+      return await callOpenAI(openaiKey, openaiBase, messages, maxTokens, temperature)
+    } catch (e: any) {
+      console.warn('[Rover] OpenAI attempt failed:', e.message)
+    }
   }
 
-  return {
-    content: content.trim(),
-    model: GEMINI_MODEL,
-    tokensUsed: (data.usageMetadata?.totalTokenCount) || 0,
-    responseTimeMs,
+  // 2. Try Gemini via GCP service account
+  const saKey = env.GCP_SERVICE_ACCOUNT_JSON || env.GCP_SERVICE_ACCOUNT_KEY
+  if (saKey) {
+    try {
+      const decoded = saKey.includes('{') ? saKey : atob(saKey)
+      return await callGeminiServiceAccount(decoded, messages, maxTokens, temperature)
+    } catch (e: any) {
+      console.warn('[Rover] Gemini SA attempt failed:', e.message)
+    }
   }
+
+  throw new Error('All AI backends failed — no working credentials')
 }
 
 // ============================================================
@@ -381,44 +430,9 @@ roverRoutes.post('/chat', async (c) => {
       messages.push({ role: msg.role, content: msg.content })
     }
 
-    // Resolve Gemini API key — try all known key names in order, use first that works
-    const apiKeys = [
-      c.env.GEMINI_API_KEY,
-      c.env.GEMINI_ENHANCE_API_KEY,
-      (c.env as any).default_gemini_googleaistudio_key,
-      (c.env as any).google_ai_studio_secret_key,
-      c.env.GOOGLE_VERTEX_API_KEY,
-    ].filter(Boolean)
-
-    if (apiKeys.length === 0) {
-      // No API key — provide helpful fallback
-      const fallback = getFallbackResponse(message)
-
-      await c.env.DB.prepare(`
-        INSERT INTO rover_messages (conversation_id, role, content, model)
-        VALUES (?, 'assistant', ?, 'fallback')
-      `).bind(conversationId, fallback).run()
-
-      await c.env.DB.prepare(`
-        UPDATE rover_conversations SET message_count = message_count + 2, last_message_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?
-      `).bind(conversationId).run()
-
-      return c.json({ reply: fallback, session_id })
-    }
-
-    let result: any = null
-    let lastError: any = null
-    for (const key of apiKeys) {
-      try {
-        result = await callAI(key, '', messages, 1000, 0.7)
-        break
-      } catch (e) {
-        lastError = e
-      }
-    }
-
     try {
-      if (!result) throw lastError
+      const result = await callAI(c.env, messages, 1000, 0.7)
+      if (!result) throw new Error('No result')
 
       // Store assistant reply
       await c.env.DB.prepare(`
@@ -566,31 +580,26 @@ roverRoutes.post('/end', async (c) => {
         .map((m: any) => `${m.role === 'user' ? 'Visitor' : 'Rover'}: ${m.content}`)
         .join('\n')
 
-      const apiKey = c.env.OPENAI_API_KEY
-      const baseUrl = c.env.OPENAI_BASE_URL || 'https://www.genspark.ai/api/llm_proxy/v1'
+      try {
+        const result = await callAI(c.env, [
+          {
+            role: 'system',
+            content: 'Summarize this customer chat conversation in 1-2 sentences. Focus on: what the visitor wanted, whether they seem like a qualified lead, and any contact info they shared. Be concise.'
+          },
+          { role: 'user', content: transcript }
+        ], 200, 0.3)
 
-      if (apiKey) {
-        try {
-          const result = await callAI(apiKey, baseUrl, [
-            {
-              role: 'system',
-              content: 'Summarize this customer chat conversation in 1-2 sentences. Focus on: what the visitor wanted, whether they seem like a qualified lead, and any contact info they shared. Be concise.'
-            },
-            { role: 'user', content: transcript }
-          ], 200, 0.3)
-
-          if (result.content) {
-            await c.env.DB.prepare(
-              'UPDATE rover_conversations SET summary = ? WHERE session_id = ?'
-            ).bind(result.content, session_id).run()
-          }
-        } catch (e) { /* summary generation is best-effort */ }
-      }
+        if (result.content) {
+          await c.env.DB.prepare(
+            'UPDATE rover_conversations SET summary = ? WHERE session_id = ?'
+          ).bind(result.content, session_id).run()
+        }
+      } catch (e) { /* summary generation is best-effort */ }
     }
 
     await c.env.DB.prepare(`
-      UPDATE rover_conversations 
-      SET status = 'ended', ended_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP 
+      UPDATE rover_conversations
+      SET status = 'ended', ended_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
       WHERE session_id = ?
     `).bind(session_id).run()
 
@@ -1109,35 +1118,9 @@ roverRoutes.post('/assistant', async (c) => {
       messages.push({ role: msg.role, content: msg.content })
     }
 
-    const apiKeys = [
-      c.env.GEMINI_API_KEY,
-      c.env.GEMINI_ENHANCE_API_KEY,
-      (c.env as any).default_gemini_googleaistudio_key,
-      (c.env as any).google_ai_studio_secret_key,
-      c.env.GOOGLE_VERTEX_API_KEY,
-    ].filter(Boolean)
-
-    if (apiKeys.length === 0) {
-      const fallback = `Hey ${customer.name || 'there'}! I'm having a quick connection issue right now, but here's what I can tell you: you have ${customer.free_trial_remaining || 0} free reports and ${customer.paid_credits_remaining || 0} paid credits. Head to /customer/order to generate a report, or /customer/reports to view past measurements. I'll be back online shortly!`
-      await c.env.DB.prepare(
-        'INSERT INTO rover_messages (conversation_id, role, content, model) VALUES (?, \'assistant\', ?, \'fallback\')'
-      ).bind(conversationId, fallback).run()
-      return c.json({ reply: fallback, session_id })
-    }
-
-    let result: any = null
-    let lastError: any = null
-    for (const key of apiKeys) {
-      try {
-        result = await callAI(key, '', messages, 1500, 0.6)
-        break
-      } catch (e) {
-        lastError = e
-      }
-    }
-
     try {
-      if (!result) throw lastError
+      const result = await callAI(c.env, messages, 1500, 0.6)
+      if (!result) throw new Error('No result')
 
       await c.env.DB.prepare(
         'INSERT INTO rover_messages (conversation_id, role, content, tokens_used, model, response_time_ms) VALUES (?, \'assistant\', ?, ?, ?, ?)'
