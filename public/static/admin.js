@@ -43,14 +43,20 @@ async function adminFetch(url) {
 async function loadAll() {
   A.loading = true;
   try {
-    const [statsRes, ordersRes, gmailRes] = await Promise.all([
+    const [statsRes, ordersRes, gmailRes, invRes, propRes, estRes] = await Promise.all([
       adminFetch('/api/auth/admin-stats'),
       adminFetch('/api/orders?limit=100'),
-      fetch('/api/auth/gmail/status').catch(() => null)
+      fetch('/api/auth/gmail/status').catch(() => null),
+      adminFetch('/api/invoices?document_type=invoice'),
+      adminFetch('/api/invoices?document_type=proposal'),
+      adminFetch('/api/invoices?document_type=estimate')
     ]);
     if (statsRes) A.data = await statsRes.json();
     if (ordersRes) { const od = await ordersRes.json(); A.orders = od.orders || []; }
     if (gmailRes && gmailRes.ok) A.gmailStatus = await gmailRes.json();
+    if (invRes && invRes.ok) { const id = await invRes.json(); A.data.invoices = id.invoices || []; }
+    if (propRes && propRes.ok) { const pd = await propRes.json(); A.data.proposals = pd.invoices || []; }
+    if (estRes && estRes.ok) { const ed = await estRes.json(); A.data.estimates = ed.invoices || []; }
   } catch (e) { console.error('Load error:', e); }
   A.loading = false;
 }
@@ -556,15 +562,29 @@ function renderOrdersTable(orders) {
 }
 
 // ============================================================
-// INVOICING TAB
+// INVOICING TAB  (Invoices + Proposals + Estimates)
 // ============================================================
+let invSubTab = 'invoices'; // 'invoices' | 'proposals' | 'estimates'
+
 function renderInvoicing() {
   const d = A.data;
   const is = d.invoice_stats || {};
   const invoices = d.invoices || [];
+  const proposals = d.proposals || [];
+  const estimates = d.estimates || [];
   const custs = d.customers || [];
+  const orders = A.orders || [];
+
+  const activeList = invSubTab === 'proposals' ? proposals : invSubTab === 'estimates' ? estimates : invoices;
+  const docType    = invSubTab === 'proposals' ? 'proposal' : invSubTab === 'estimates' ? 'estimate' : 'invoice';
+  const docLabel   = invSubTab === 'proposals' ? 'Proposal' : invSubTab === 'estimates' ? 'Estimate' : 'Invoice';
+  const formId     = 'invFormWrap';
+
+  // Only orders that have a completed/in-progress report (for proposal attach)
+  const ordersWithReport = orders.filter(o => o.report_status && ['completed','enhancing','processing'].includes(o.report_status));
 
   return `
+    <!-- KPI Row -->
     <div class="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
       ${mc('Total Invoices', is.total_invoices || 0, 'fa-file-invoice-dollar', 'blue')}
       ${mc('Collected', $$(is.total_collected), 'fa-check-circle', 'green')}
@@ -573,80 +593,138 @@ function renderInvoicing() {
       ${mc('Draft', $$(is.total_draft), 'fa-edit', 'gray')}
     </div>
 
-    <!-- Create Invoice Form -->
+    <!-- Sub-tab Navigation -->
+    <div class="flex gap-1 mb-5 bg-gray-100 rounded-xl p-1 w-fit">
+      <button onclick="setInvSubTab('invoices')" class="px-4 py-2 rounded-lg text-sm font-semibold transition-all ${invSubTab==='invoices' ? 'bg-white shadow text-blue-700' : 'text-gray-500 hover:text-gray-700'}">
+        <i class="fas fa-file-invoice-dollar mr-1.5"></i>Invoices
+        <span class="ml-1.5 px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded text-xs">${invoices.length}</span>
+      </button>
+      <button onclick="setInvSubTab('proposals')" class="px-4 py-2 rounded-lg text-sm font-semibold transition-all ${invSubTab==='proposals' ? 'bg-white shadow text-purple-700' : 'text-gray-500 hover:text-gray-700'}">
+        <i class="fas fa-file-contract mr-1.5"></i>Proposals
+        <span class="ml-1.5 px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded text-xs">${proposals.length}</span>
+      </button>
+      <button onclick="setInvSubTab('estimates')" class="px-4 py-2 rounded-lg text-sm font-semibold transition-all ${invSubTab==='estimates' ? 'bg-white shadow text-orange-700' : 'text-gray-500 hover:text-gray-700'}">
+        <i class="fas fa-calculator mr-1.5"></i>Estimates
+        <span class="ml-1.5 px-1.5 py-0.5 bg-orange-100 text-orange-700 rounded text-xs">${estimates.length}</span>
+      </button>
+    </div>
+
+    <!-- Create Document Form -->
     <div class="bg-white rounded-xl border border-gray-100 shadow-sm mb-6">
       <div class="px-6 py-4 border-b border-gray-50 flex items-center justify-between">
-        <div class="flex items-center gap-2"><i class="fas fa-plus-circle text-green-500"></i><h3 class="font-bold text-gray-800 text-sm">Create Invoice</h3></div>
+        <div class="flex items-center gap-2">
+          <i class="fas fa-plus-circle ${invSubTab==='proposals' ? 'text-purple-500' : invSubTab==='estimates' ? 'text-orange-500' : 'text-green-500'}"></i>
+          <h3 class="font-bold text-gray-800 text-sm">Create ${docLabel}</h3>
+          ${invSubTab==='proposals' ? '<span class="text-xs text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full">Attach Roof Report</span>' : ''}
+        </div>
         <button onclick="toggleInvForm()" id="invToggle" class="text-sm text-blue-600 hover:text-blue-700"><i class="fas fa-chevron-down mr-1"></i>Show Form</button>
       </div>
-      <div id="invFormWrap" class="hidden p-6">
+      <div id="${formId}" class="hidden p-6">
+        <!-- Hidden doc type -->
+        <input type="hidden" id="invDocType" value="${docType}">
+
         <div class="grid md:grid-cols-2 gap-4 mb-4">
-          <div><label class="block text-xs font-semibold text-gray-500 mb-1 uppercase">Customer *</label>
+          <div>
+            <label class="block text-xs font-semibold text-gray-500 mb-1 uppercase">Customer *</label>
             <select id="invCust" class="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500">
               <option value="">Select customer...</option>
-              ${custs.map(c => `<option value="${c.id}">${c.name} (${c.email})</option>`).join('')}
+              ${custs.map(c => `<option value="${c.id}">${c.name}${c.company_name ? ' — ' + c.company_name : ''} (${c.email})</option>`).join('')}
             </select>
           </div>
-          <div><label class="block text-xs font-semibold text-gray-500 mb-1 uppercase">Related Order</label>
-            <select id="invOrder" class="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm">
+          <div>
+            <label class="block text-xs font-semibold text-gray-500 mb-1 uppercase">
+              ${invSubTab === 'proposals' ? '📎 Attach Roof Report (Order)' : 'Related Order'}
+            </label>
+            <select id="invOrder" class="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm ${invSubTab === 'proposals' ? 'border-purple-300 focus:ring-purple-400' : ''}">
               <option value="">None</option>
-              ${A.orders.map(o => `<option value="${o.id}">${o.order_number} - ${o.property_address}</option>`).join('')}
+              ${(invSubTab === 'proposals' ? ordersWithReport : orders).map(o =>
+                `<option value="${o.id}">${o.order_number} — ${(o.property_address||'').substring(0,40)}${o.report_status ? ' ✓ Report' : ''}</option>`
+              ).join('')}
             </select>
+            ${invSubTab === 'proposals' ? '<p class="text-xs text-purple-600 mt-1"><i class="fas fa-info-circle mr-1"></i>Select an order with a completed report to attach it to this proposal.</p>' : ''}
           </div>
         </div>
+
+        ${invSubTab === 'proposals' ? `
+        <!-- Proposal Notes -->
+        <div class="mb-4 p-4 bg-purple-50 rounded-xl border border-purple-100">
+          <label class="block text-xs font-semibold text-purple-700 mb-2 uppercase"><i class="fas fa-sticky-note mr-1"></i>Proposal Cover Note</label>
+          <textarea id="invProposalNote" rows="3" placeholder="e.g. Based on our roof measurement report for your property, we are pleased to present the following proposal for roof replacement..." class="w-full px-3 py-2 border border-purple-200 rounded-lg text-sm focus:ring-2 focus:ring-purple-400 resize-none"></textarea>
+          <p class="text-xs text-purple-500 mt-1">This note will appear at the top of your proposal, above the line items.</p>
+        </div>` : ''}
+
         <div class="mb-4">
           <label class="block text-xs font-semibold text-gray-500 mb-2 uppercase">Line Items</label>
           <div id="invLines">
-            <div class="flex gap-2 mb-2 inv-line"><input type="text" placeholder="Description" class="flex-1 px-3 py-2 border rounded-lg text-sm inv-desc"><input type="number" placeholder="Qty" value="1" class="w-16 px-2 py-2 border rounded-lg text-sm inv-qty"><input type="number" placeholder="$" step="0.01" class="w-24 px-2 py-2 border rounded-lg text-sm inv-price"><button onclick="addInvLine()" class="px-3 py-2 bg-green-100 text-green-700 rounded-lg text-sm hover:bg-green-200"><i class="fas fa-plus"></i></button></div>
+            <div class="flex gap-2 mb-2 inv-line">
+              <input type="text" placeholder="${invSubTab === 'proposals' ? 'e.g. Roof Replacement — 25 squares GAF Timberline' : 'Description'}" class="flex-1 px-3 py-2 border rounded-lg text-sm inv-desc">
+              <input type="number" placeholder="Qty" value="1" class="w-16 px-2 py-2 border rounded-lg text-sm inv-qty">
+              <input type="number" placeholder="$" step="0.01" class="w-24 px-2 py-2 border rounded-lg text-sm inv-price">
+              <button onclick="addInvLine()" class="px-3 py-2 bg-green-100 text-green-700 rounded-lg text-sm hover:bg-green-200"><i class="fas fa-plus"></i></button>
+            </div>
           </div>
+          <button onclick="addInvLine()" class="mt-1 text-xs text-blue-600 hover:underline"><i class="fas fa-plus mr-1"></i>Add line</button>
         </div>
+
         <div class="grid grid-cols-3 gap-4 mb-4">
           <div><label class="block text-xs font-semibold text-gray-500 mb-1">GST %</label><input type="number" id="invTax" value="5" class="w-full px-3 py-2 border rounded-lg text-sm"></div>
           <div><label class="block text-xs font-semibold text-gray-500 mb-1">Discount $</label><input type="number" id="invDisc" value="0" class="w-full px-3 py-2 border rounded-lg text-sm"></div>
-          <div><label class="block text-xs font-semibold text-gray-500 mb-1">Due (days)</label><input type="number" id="invDue" value="30" class="w-full px-3 py-2 border rounded-lg text-sm"></div>
+          <div><label class="block text-xs font-semibold text-gray-500 mb-1">${invSubTab === 'proposal' ? 'Valid (days)' : 'Due (days)'}</label><input type="number" id="invDue" value="30" class="w-full px-3 py-2 border rounded-lg text-sm"></div>
         </div>
+
         <div id="invErr" class="hidden mb-3 p-3 bg-red-50 text-red-700 rounded-lg text-sm"></div>
-        <button onclick="createInvoice()" class="px-6 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition-colors"><i class="fas fa-save mr-1"></i>Create Invoice</button>
+        <button onclick="createInvoice()" class="px-6 py-2.5 ${invSubTab==='proposals' ? 'bg-purple-600 hover:bg-purple-700' : invSubTab==='estimates' ? 'bg-orange-600 hover:bg-orange-700' : 'bg-blue-600 hover:bg-blue-700'} text-white rounded-xl text-sm font-semibold transition-colors">
+          <i class="fas fa-save mr-1"></i>Create ${docLabel}
+        </button>
       </div>
     </div>
 
-    <!-- Invoices Table -->
-    ${section('All Invoices (' + invoices.length + ')', 'fa-file-invoice-dollar', `
+    <!-- Documents Table -->
+    ${section(docLabel + 's (' + activeList.length + ')', invSubTab==='proposals' ? 'fa-file-contract' : invSubTab==='estimates' ? 'fa-calculator' : 'fa-file-invoice-dollar', `
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
           <thead class="bg-gray-50"><tr>
-            <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500">Invoice #</th>
+            <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500">#</th>
             <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500">Customer</th>
-            <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500">Order</th>
+            <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500">${invSubTab === 'proposals' ? 'Report Attached' : 'Order'}</th>
             <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500">Issued</th>
-            <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500">Due</th>
+            <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500">${invSubTab === 'proposals' ? 'Valid Until' : 'Due'}</th>
             <th class="px-4 py-2 text-right text-xs font-semibold text-gray-500">Total</th>
             <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500">Status</th>
             <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500">Actions</th>
           </tr></thead>
           <tbody class="divide-y divide-gray-50">
-            ${invoices.map(inv => `<tr class="hover:bg-blue-50/40">
-              <td class="px-4 py-2 font-mono text-xs font-bold text-blue-600">${inv.invoice_number}</td>
+            ${activeList.map(inv => `<tr class="hover:bg-blue-50/40">
+              <td class="px-4 py-2 font-mono text-xs font-bold ${invSubTab==='proposals' ? 'text-purple-600' : invSubTab==='estimates' ? 'text-orange-600' : 'text-blue-600'}">${inv.invoice_number}</td>
               <td class="px-4 py-2 text-sm text-gray-700">${inv.customer_name||'-'} ${inv.customer_company ? '<span class="text-xs text-gray-400">('+inv.customer_company+')</span>' : ''}</td>
-              <td class="px-4 py-2 text-xs font-mono text-gray-500">${inv.order_number||'-'}</td>
+              <td class="px-4 py-2 text-xs text-gray-500">
+                ${inv.order_number ? `<span class="font-mono">${inv.order_number}</span>
+                  ${inv.has_report ? '<span class="ml-1 px-1.5 py-0.5 bg-green-100 text-green-700 rounded text-xs font-medium"><i class="fas fa-file-pdf mr-0.5"></i>Report</span>' : ''}` : '<span class="text-gray-300">—</span>'}
+              </td>
               <td class="px-4 py-2 text-xs text-gray-500">${fmtDate(inv.issue_date)}</td>
               <td class="px-4 py-2 text-xs text-gray-500">${fmtDate(inv.due_date)}</td>
               <td class="px-4 py-2 text-right font-bold">${$$(inv.total)}</td>
               <td class="px-4 py-2">${invBadge(inv.status)}</td>
               <td class="px-4 py-2">
-                <div class="flex gap-1">
-                  ${inv.status==='draft' ? `<button onclick="sendInvoice(${inv.id})" class="p-1 text-gray-400 hover:text-blue-600" title="Send"><i class="fas fa-paper-plane"></i></button>` : ''}
-                  ${['sent','viewed','overdue'].includes(inv.status) ? `<button onclick="markPaid(${inv.id})" class="p-1 text-gray-400 hover:text-green-600" title="Mark Paid"><i class="fas fa-check-circle"></i></button>` : ''}
-                  ${inv.status==='draft' ? `<button onclick="delInvoice(${inv.id})" class="p-1 text-gray-400 hover:text-red-600" title="Delete"><i class="fas fa-trash"></i></button>` : ''}
+                <div class="flex gap-1 items-center">
+                  ${inv.status==='draft' ? `<button onclick="sendInvoice(${inv.id})" class="px-2 py-1 text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 rounded font-medium" title="Send ${docLabel}"><i class="fas fa-paper-plane mr-1"></i>Send</button>` : ''}
+                  ${['sent','viewed','overdue'].includes(inv.status) ? `<button onclick="resendInvoice(${inv.id})" class="px-2 py-1 text-xs bg-gray-50 hover:bg-gray-100 text-gray-600 rounded font-medium" title="Resend"><i class="fas fa-redo mr-1"></i>Resend</button>` : ''}
+                  ${['sent','viewed','overdue'].includes(inv.status) && invSubTab==='invoices' ? `<button onclick="markPaid(${inv.id})" class="px-2 py-1 text-xs bg-green-50 hover:bg-green-100 text-green-700 rounded font-medium" title="Mark Paid"><i class="fas fa-check mr-1"></i>Paid</button>` : ''}
+                  ${inv.status==='draft' ? `<button onclick="delInvoice(${inv.id})" class="p-1 text-gray-300 hover:text-red-500" title="Delete"><i class="fas fa-trash"></i></button>` : ''}
                 </div>
               </td>
             </tr>`).join('')}
-            ${invoices.length === 0 ? '<tr><td colspan="8" class="px-4 py-8 text-center text-gray-400">No invoices created yet</td></tr>' : ''}
+            ${activeList.length === 0 ? `<tr><td colspan="8" class="px-4 py-10 text-center text-gray-400"><i class="fas ${invSubTab==='proposals' ? 'fa-file-contract' : invSubTab==='estimates' ? 'fa-calculator' : 'fa-file-invoice-dollar'} text-2xl mb-2 block opacity-30"></i>No ${docLabel.toLowerCase()}s yet</td></tr>` : ''}
           </tbody>
         </table>
       </div>
     `)}
   `;
+}
+
+function setInvSubTab(tab) {
+  invSubTab = tab;
+  render();
 }
 
 // ============================================================
@@ -1045,6 +1123,7 @@ async function createInvoice() {
   const cid = document.getElementById('invCust').value;
   const oid = document.getElementById('invOrder').value;
   const err = document.getElementById('invErr');
+  const docType = document.getElementById('invDocType')?.value || 'invoice';
   err.classList.add('hidden');
   if (!cid) { err.textContent = 'Select a customer.'; err.classList.remove('hidden'); return; }
   const rows = document.querySelectorAll('.inv-line');
@@ -1056,12 +1135,15 @@ async function createInvoice() {
     if (d && p > 0) items.push({ description:d, quantity:q, unit_price:p });
   });
   if (!items.length) { err.textContent = 'Add at least one line item.'; err.classList.remove('hidden'); return; }
+  const proposalNote = docType === 'proposal' ? (document.getElementById('invProposalNote')?.value?.trim() || null) : null;
   try {
-    const r = await fetch('/api/invoices', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({
+    const r = await fetch('/api/invoices', { method:'POST', headers:{ ...adminHeaders(), 'Content-Type':'application/json' }, body: JSON.stringify({
       customer_id: parseInt(cid), order_id: oid ? parseInt(oid) : null, items,
       tax_rate: parseFloat(document.getElementById('invTax').value)||5,
       discount_amount: parseFloat(document.getElementById('invDisc').value)||0,
-      due_days: parseInt(document.getElementById('invDue').value)||30
+      due_days: parseInt(document.getElementById('invDue').value)||30,
+      document_type: docType,
+      notes: proposalNote
     })});
     const d = await r.json();
     if (r.ok && d.success) { await loadAll(); render(); setTab('invoicing'); }
@@ -1072,26 +1154,43 @@ async function createInvoice() {
 async function sendInvoice(id) {
   if (!confirm('Send invoice to customer?')) return;
   try {
-    const r = await fetch('/api/invoices/' + id + '/send', { method:'POST' });
+    const r = await fetch('/api/invoices/' + id + '/send', { method:'POST', headers: adminHeaders() });
     const d = await r.json();
     if (r.ok) { alert('Invoice sent to ' + (d.customer_email||'customer')); await loadAll(); render(); }
-    else alert('Failed: ' + (d.error||''));
+    else alert('Failed: ' + (d.error||'Unknown error'));
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+async function resendInvoice(id) {
+  if (!confirm('Resend invoice to customer?')) return;
+  try {
+    const r = await fetch('/api/invoices/' + id + '/send', { method:'POST', headers: adminHeaders() });
+    const d = await r.json();
+    if (r.ok) { alert('Invoice resent to ' + (d.customer_email||'customer')); await loadAll(); render(); }
+    else alert('Resend failed: ' + (d.error||'Unknown error'));
   } catch(e) { alert('Error: ' + e.message); }
 }
 
 async function markPaid(id) {
   if (!confirm('Mark invoice as paid?')) return;
   try {
-    const r = await fetch('/api/invoices/' + id + '/status', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({status:'paid'}) });
-    if (r.ok) { await loadAll(); render(); } else alert('Failed');
+    const r = await fetch('/api/invoices/' + id + '/status', {
+      method: 'PATCH',
+      headers: { ...adminHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'paid' })
+    });
+    const d = await r.json();
+    if (r.ok) { await loadAll(); render(); }
+    else alert('Failed: ' + (d.error||'Unknown error'));
   } catch(e) { alert('Error: ' + e.message); }
 }
 
 async function delInvoice(id) {
   if (!confirm('Delete this draft invoice?')) return;
   try {
-    const r = await fetch('/api/invoices/' + id, { method:'DELETE' });
-    if (r.ok) { await loadAll(); render(); } else alert('Failed');
+    const r = await fetch('/api/invoices/' + id, { method:'DELETE', headers: adminHeaders() });
+    if (r.ok) { await loadAll(); render(); }
+    else { const d = await r.json(); alert('Failed: ' + (d.error||'')); }
   } catch(e) { alert('Error: ' + e.message); }
 }
 

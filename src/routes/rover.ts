@@ -381,8 +381,9 @@ roverRoutes.post('/chat', async (c) => {
       messages.push({ role: msg.role, content: msg.content })
     }
 
-    // Resolve Gemini API key — prefer AI Studio keys over the blocked GOOGLE_VERTEX_API_KEY
-    const apiKey = c.env.GEMINI_ENHANCE_API_KEY ||
+    // Resolve Gemini API key — try all known key names
+    const apiKey = c.env.GEMINI_API_KEY ||
+      c.env.GEMINI_ENHANCE_API_KEY ||
       (c.env as any).default_gemini_googleaistudio_key ||
       (c.env as any).google_ai_studio_secret_key ||
       c.env.GOOGLE_VERTEX_API_KEY
@@ -1096,7 +1097,8 @@ roverRoutes.post('/assistant', async (c) => {
       messages.push({ role: msg.role, content: msg.content })
     }
 
-    const apiKey = c.env.GEMINI_ENHANCE_API_KEY ||
+    const apiKey = c.env.GEMINI_API_KEY ||
+      c.env.GEMINI_ENHANCE_API_KEY ||
       (c.env as any).default_gemini_googleaistudio_key ||
       (c.env as any).google_ai_studio_secret_key ||
       c.env.GOOGLE_VERTEX_API_KEY

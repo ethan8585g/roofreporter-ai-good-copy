@@ -88,6 +88,7 @@ export type Bindings = {
   CLOUD_RUN_TIMEOUT_MS: string     // Optional: override default 90s timeout
 
   // Gemini AI Studio keys — for Rover chatbot and report enhancement
+  GEMINI_API_KEY: string                   // Primary Gemini key (set in wrangler secrets)
   GEMINI_ENHANCE_API_KEY: string           // Google AI Studio key (AIzaSy... format) — primary Gemini key
   default_gemini_googleaistudio_key: string // Alternate Google AI Studio key
   google_ai_studio_secret_key: string       // Alternate Google AI Studio key
@@ -104,7 +105,7 @@ export type Bindings = {
 
   // Gemini Enhancement Engine — Dedicated API key from airoofreports GCP project
   // Used to call Gemini 2.5 Pro for post-generation report quality upgrade
-  GEMINI_ENHANCE_API_KEY: string   // e.g. "AIzaSy..." — separate from GOOGLE_SOLAR_API_KEY
+  // (GEMINI_ENHANCE_API_KEY already declared above)
 
   // Replicate — AI Image Generation (Virtual Try-On roof visualization)
   // Get from: replicate.com → Account Settings → API Tokens

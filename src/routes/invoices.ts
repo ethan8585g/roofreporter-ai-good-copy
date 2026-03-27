@@ -28,9 +28,14 @@ invoiceRoutes.get('/', async (c) => {
     const status = c.req.query('status')
     const customerId = c.req.query('customer_id')
     
+    const docType = c.req.query('document_type')
+
     let query = `
       SELECT i.*, c.name as customer_name, c.email as customer_email, c.company_name as customer_company,
-             o.order_number, o.property_address
+             o.order_number, o.property_address,
+             CASE WHEN o.id IS NOT NULL THEN (
+               SELECT COUNT(*) FROM reports r WHERE r.order_id = o.id AND r.status IN ('completed','enhancing')
+             ) ELSE 0 END as has_report
       FROM invoices i
       LEFT JOIN customers c ON c.id = i.customer_id
       LEFT JOIN orders o ON o.id = i.order_id
@@ -40,6 +45,8 @@ invoiceRoutes.get('/', async (c) => {
 
     if (status) { query += ' AND i.status = ?'; params.push(status) }
     if (customerId) { query += ' AND i.customer_id = ?'; params.push(customerId) }
+    if (docType) { query += ' AND i.document_type = ?'; params.push(docType) }
+    else { query += " AND (i.document_type IS NULL OR i.document_type = 'invoice')" }
 
     query += ' ORDER BY i.created_at DESC'
 
@@ -92,14 +99,19 @@ invoiceRoutes.get('/:id', async (c) => {
 })
 
 // ============================================================
-// CREATE INVOICE
+// CREATE INVOICE / PROPOSAL / ESTIMATE
 // ============================================================
 invoiceRoutes.post('/', async (c) => {
   try {
-    const { customer_id, order_id, items, notes, terms, due_days, tax_rate, discount_amount } = await c.req.json()
+    const {
+      customer_id, order_id, items, notes, terms, due_days, tax_rate, discount_amount,
+      document_type
+    } = await c.req.json()
 
     if (!customer_id) return c.json({ error: 'customer_id is required' }, 400)
     if (!items || !items.length) return c.json({ error: 'At least one line item is required' }, 400)
+
+    const docType = ['invoice', 'proposal', 'estimate'].includes(document_type) ? document_type : 'invoice'
 
     // Verify customer exists
     const customer = await c.env.DB.prepare('SELECT id, name FROM customers WHERE id = ?').bind(customer_id).first()
@@ -114,8 +126,6 @@ invoiceRoutes.post('/', async (c) => {
     for (const item of items) {
       subtotal += (item.quantity || 1) * (item.unit_price || 0)
     }
-    
-    // taxRateVal is a percentage (e.g. 5.0 = 5% GST)
     const taxAmount = Math.round(subtotal * (taxRateVal / 100) * 100) / 100
     const total = Math.round((subtotal + taxAmount - discountVal) * 100) / 100
 
@@ -123,16 +133,21 @@ invoiceRoutes.post('/', async (c) => {
     const dueDate = new Date()
     dueDate.setDate(dueDate.getDate() + (due_days || 30))
 
+    const defaultTerms = docType === 'proposal'
+      ? 'This proposal is valid for 30 days from the date of issue.'
+      : docType === 'estimate'
+        ? 'This estimate is approximate and subject to change upon site inspection.'
+        : 'Payment due within 30 days of invoice date.'
+
     const result = await c.env.DB.prepare(`
-      INSERT INTO invoices (invoice_number, customer_id, order_id, subtotal, tax_rate, tax_amount, 
-                            discount_amount, total, status, due_date, notes, terms, created_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?)
+      INSERT INTO invoices (invoice_number, customer_id, order_id, subtotal, tax_rate, tax_amount,
+                            discount_amount, total, status, due_date, notes, terms, created_by, document_type)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?)
     `).bind(
       invoiceNumber, customer_id, order_id || null,
       Math.round(subtotal * 100) / 100, taxRateVal, Math.round(taxAmount * 100) / 100,
       discountVal, total, dueDate.toISOString().slice(0, 10),
-      notes || null, terms || 'Payment due within 30 days of invoice date.',
-      'admin'
+      notes || null, terms || defaultTerms, 'admin', docType
     ).run()
 
     const invoiceId = result.meta.last_row_id
@@ -143,7 +158,6 @@ invoiceRoutes.post('/', async (c) => {
       const qty = item.quantity || 1
       const price = item.unit_price || 0
       const amount = Math.round(qty * price * 100) / 100
-      
       await c.env.DB.prepare(`
         INSERT INTO invoice_items (invoice_id, description, quantity, unit_price, amount, sort_order)
         VALUES (?, ?, ?, ?, ?, ?)
@@ -152,15 +166,15 @@ invoiceRoutes.post('/', async (c) => {
 
     await c.env.DB.prepare(`
       INSERT INTO user_activity_log (company_id, action, details)
-      VALUES (1, 'invoice_created', ?)
-    `).bind(`Invoice ${invoiceNumber} for $${total} CAD`).run()
+      VALUES (1, 'document_created', ?)
+    `).bind(`${docType.charAt(0).toUpperCase() + docType.slice(1)} ${invoiceNumber} for $${total} CAD`).run()
 
     return c.json({
       success: true,
-      invoice: { id: invoiceId, invoice_number: invoiceNumber, total, status: 'draft' }
+      invoice: { id: invoiceId, invoice_number: invoiceNumber, total, status: 'draft', document_type: docType }
     }, 201)
   } catch (err: any) {
-    return c.json({ error: 'Failed to create invoice', details: err.message }, 500)
+    return c.json({ error: 'Failed to create document', details: err.message }, 500)
   }
 })
 
@@ -196,19 +210,42 @@ invoiceRoutes.patch('/:id/status', async (c) => {
 })
 
 // ============================================================
-// SEND INVOICE (mark as sent + email)
+// SEND INVOICE / PROPOSAL / ESTIMATE (mark as sent + build email payload)
 // ============================================================
 invoiceRoutes.post('/:id/send', async (c) => {
   try {
     const id = c.req.param('id')
     const invoice = await c.env.DB.prepare(`
-      SELECT i.*, c.email as customer_email, c.name as customer_name
+      SELECT i.*, c.email as customer_email, c.name as customer_name, c.phone as customer_phone,
+             c.company_name as customer_company,
+             o.order_number, o.property_address, o.id as linked_order_id
       FROM invoices i
       JOIN customers c ON c.id = i.customer_id
+      LEFT JOIN orders o ON o.id = i.order_id
       WHERE i.id = ?
     `).bind(id).first<any>()
 
-    if (!invoice) return c.json({ error: 'Invoice not found' }, 404)
+    if (!invoice) return c.json({ error: 'Document not found' }, 404)
+
+    const items = await c.env.DB.prepare(
+      'SELECT * FROM invoice_items WHERE invoice_id = ? ORDER BY sort_order'
+    ).bind(id).all()
+
+    // Check if a completed report exists for the linked order
+    let reportUrl: string | null = null
+    let reportData: any = null
+    if (invoice.linked_order_id) {
+      reportData = await c.env.DB.prepare(`
+        SELECT r.id, r.status, o.order_number, o.property_address
+        FROM reports r
+        JOIN orders o ON o.id = r.order_id
+        WHERE r.order_id = ? AND r.status IN ('completed','enhancing')
+        LIMIT 1
+      `).bind(invoice.linked_order_id).first<any>()
+      if (reportData) {
+        reportUrl = `/customer/reports/${reportData.id}`
+      }
+    }
 
     // Mark as sent
     await c.env.DB.prepare(`
@@ -216,20 +253,33 @@ invoiceRoutes.post('/:id/send', async (c) => {
       WHERE id = ?
     `).bind(id).run()
 
-    // TODO: Email the invoice to customer
-    // For now, just return success
+    const docType = invoice.document_type || 'invoice'
+    const docLabel = docType.charAt(0).toUpperCase() + docType.slice(1)
+
     await c.env.DB.prepare(`
       INSERT INTO user_activity_log (company_id, action, details)
-      VALUES (1, 'invoice_sent', ?)
-    `).bind(`Invoice ${invoice.invoice_number} sent to ${invoice.customer_email}`).run()
+      VALUES (1, 'document_sent', ?)
+    `).bind(`${docLabel} ${invoice.invoice_number} sent to ${invoice.customer_email}`).run()
 
     return c.json({
       success: true,
-      message: `Invoice ${invoice.invoice_number} marked as sent`,
-      customer_email: invoice.customer_email
+      message: `${docLabel} ${invoice.invoice_number} marked as sent`,
+      document_type: docType,
+      customer_email: invoice.customer_email,
+      customer_name: invoice.customer_name,
+      invoice_number: invoice.invoice_number,
+      total: invoice.total,
+      items: items.results,
+      // Report attachment info (null when no report is linked)
+      attached_report: reportData ? {
+        report_id: reportData.id,
+        order_number: reportData.order_number,
+        property_address: reportData.property_address,
+        report_url: reportUrl
+      } : null
     })
   } catch (err: any) {
-    return c.json({ error: 'Failed to send invoice', details: err.message }, 500)
+    return c.json({ error: 'Failed to send document', details: err.message }, 500)
   }
 })
 
