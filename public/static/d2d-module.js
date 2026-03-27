@@ -11,6 +11,7 @@
   // --- State ---
   var map, geocoder;
   var turfs = [], pins = [], team = [], stats = {};
+  var viewerRole = 'owner'; // 'owner' | 'member' — populated from /stats response
   var selectedTurfId = null;
   var activeTool = 'pointer'; // pointer | pin | turf
   var turfPolygons = {};  // id -> google.maps.Polygon
@@ -87,11 +88,7 @@
       '</div>' +
       '<div class="d2d-map-area">' +
         '<div id="d2dMap" style="width:100%;height:100%"></div>' +
-        '<div class="d2d-toolbar" id="d2dToolbar">' +
-          '<div class="d2d-tool active" data-tool="pointer" title="Select / Navigate"><i class="fas fa-mouse-pointer"></i></div>' +
-          '<div class="d2d-tool" data-tool="turf" title="Draw Turf Zone"><i class="fas fa-draw-polygon"></i></div>' +
-          '<div class="d2d-tool" data-tool="pin" title="Place Door Pin"><i class="fas fa-map-pin"></i></div>' +
-        '</div>' +
+        '<div class="d2d-toolbar" id="d2dToolbar"></div>' +
         // Instruction banner (hidden by default)
         '<div id="d2dBanner" style="position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:10;background:#fff;padding:8px 20px;border-radius:10px;box-shadow:0 2px 12px rgba(0,0,0,.15);font-size:13px;font-weight:600;white-space:nowrap;display:none;"></div>' +
         // Finish drawing button (hidden by default)
@@ -118,18 +115,6 @@
       });
     });
 
-    // Tool switching
-    document.querySelectorAll('.d2d-tool').forEach(function(tool) {
-      tool.addEventListener('click', function() {
-        var t = tool.getAttribute('data-tool');
-        if (t === 'turf') {
-          startDrawTurf();
-        } else {
-          if (isDrawing) cancelDrawing();
-          setActiveTool(t);
-        }
-      });
-    });
   }
 
   function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
@@ -199,11 +184,11 @@
 
     var html = '<div class="flex items-center justify-between mb-3">' +
       '<h3 class="font-bold text-gray-800 text-sm">Turfs <span class="text-gray-400 font-normal">(' + turfs.length + ')</span></h3>' +
-      '<button class="d2d-btn d2d-btn-primary d2d-btn-sm" onclick="window.d2d.startDrawTurf()"><i class="fas fa-plus mr-1"></i>New Turf</button>' +
+      (viewerRole === 'owner' ? '<button class="d2d-btn d2d-btn-primary d2d-btn-sm" onclick="window.d2d.startDrawTurf()"><i class="fas fa-plus mr-1"></i>New Turf</button>' : '') +
     '</div>';
 
     if (turfs.length === 0) {
-      html += '<div class="d2d-empty"><i class="fas fa-map-marked-alt"></i><p>No turfs yet.<br>Click "New Turf" or use the polygon tool to draw one on the map.</p></div>';
+      html += '<div class="d2d-empty"><i class="fas fa-map-marked-alt"></i><p>No turfs yet.' + (viewerRole === 'owner' ? '<br>Click "New Turf" or use the polygon tool to draw one on the map.' : '') + '</p></div>';
     } else {
       for (var i = 0; i < turfs.length; i++) {
         var t = turfs[i];
@@ -218,10 +203,10 @@
                 (t.assigned_name ? '<div class="text-xs text-gray-500"><i class="fas fa-user mr-1"></i>' + escH(t.assigned_name) + '</div>' : '<div class="text-xs text-gray-400">Unassigned</div>') +
               '</div>' +
             '</div>' +
-            '<div class="flex gap-1">' +
+            (viewerRole === 'owner' ? '<div class="flex gap-1">' +
               '<button class="text-gray-400 hover:text-sky-500 text-xs" onclick="event.stopPropagation();window.d2d.editTurf(' + t.id + ')" title="Edit"><i class="fas fa-pen"></i></button>' +
               '<button class="text-gray-400 hover:text-red-500 text-xs" onclick="event.stopPropagation();window.d2d.deleteTurf(' + t.id + ')" title="Delete"><i class="fas fa-trash"></i></button>' +
-            '</div>' +
+            '</div>' : '<div></div>') +
           '</div>' +
           '<div class="mt-2 grid grid-cols-4 gap-1 text-center text-[10px]">' +
             '<div class="pin-yes rounded px-1 py-0.5"><b>' + (t.yes_count||0) + '</b> Yes</div>' +
@@ -431,6 +416,7 @@
       pins = (results[1].pins || []);
       team = (results[2].members || []);
       stats = results[3].stats || {};
+      viewerRole = results[3].viewer_role || 'owner';
       renderAll();
       renderMapObjects();
     }).catch(function(err) {
@@ -438,7 +424,29 @@
     });
   }
 
+  function renderToolbar() {
+    var tb = document.getElementById('d2dToolbar');
+    if (!tb) return;
+    tb.innerHTML =
+      '<div class="d2d-tool active" data-tool="pointer" title="Select / Navigate"><i class="fas fa-mouse-pointer"></i></div>' +
+      (viewerRole === 'owner' ? '<div class="d2d-tool" data-tool="turf" title="Draw Turf Zone"><i class="fas fa-draw-polygon"></i></div>' : '') +
+      '<div class="d2d-tool" data-tool="pin" title="Place Door Pin"><i class="fas fa-map-pin"></i></div>';
+    // Re-attach tool click handlers
+    tb.querySelectorAll('.d2d-tool').forEach(function(tool) {
+      tool.addEventListener('click', function() {
+        var t = tool.getAttribute('data-tool');
+        if (t === 'turf') {
+          startDrawTurf();
+        } else {
+          if (isDrawing) cancelDrawing();
+          setActiveTool(t);
+        }
+      });
+    });
+  }
+
   function renderAll() {
+    renderToolbar();
     renderStats();
     renderTurfsPanel();
     renderPinsPanel();
@@ -561,10 +569,10 @@
       '<div class="d2d-info-row"><span class="d2d-info-label">Yes</span><span class="d2d-info-value" style="color:#22c55e">' + (turf.yes_count||0) + '</span></div>' +
       '<div class="d2d-info-row"><span class="d2d-info-label">No</span><span class="d2d-info-value" style="color:#ef4444">' + (turf.no_count||0) + '</span></div>' +
       '<div class="d2d-info-row"><span class="d2d-info-label">No Answer</span><span class="d2d-info-value" style="color:#f59e0b">' + (turf.no_answer_count||0) + '</span></div>' +
-      '<div style="margin-top:8px;display:flex;gap:4px">' +
+      (viewerRole === 'owner' ? '<div style="margin-top:8px;display:flex;gap:4px">' +
         '<button onclick="window.d2d.editTurf(' + turf.id + ')" class="d2d-btn d2d-btn-outline d2d-btn-sm"><i class="fas fa-pen mr-1"></i>Edit</button>' +
         '<button onclick="window.d2d.deleteTurf(' + turf.id + ')" class="d2d-btn d2d-btn-danger d2d-btn-sm"><i class="fas fa-trash mr-1"></i>Delete</button>' +
-      '</div>' +
+      '</div>' : '') +
     '</div>';
     infoWindow.setContent(html);
     infoWindow.setPosition(latLng);

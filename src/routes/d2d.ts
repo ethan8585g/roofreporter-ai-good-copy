@@ -203,6 +203,7 @@ d2dRoutes.get('/turfs', async (c) => {
 d2dRoutes.post('/turfs', async (c) => {
   const user = await getUser(c)
   if (!user) return c.json({ error: 'Not authenticated' }, 401)
+  if (user.isTeamMember) return c.json({ error: 'Only the account owner can manage turfs' }, 403)
   await ensureD2DTables(c.env.DB)
 
   const { name, description, polygon, center_lat, center_lng, color, assigned_to } = await c.req.json()
@@ -225,6 +226,7 @@ d2dRoutes.post('/turfs', async (c) => {
 d2dRoutes.put('/turfs/:id', async (c) => {
   const user = await getUser(c)
   if (!user) return c.json({ error: 'Not authenticated' }, 401)
+  if (user.isTeamMember) return c.json({ error: 'Only the account owner can manage turfs' }, 403)
   const id = c.req.param('id')
   const { name, description, polygon, color, assigned_to, status } = await c.req.json()
 
@@ -247,6 +249,7 @@ d2dRoutes.put('/turfs/:id', async (c) => {
 d2dRoutes.delete('/turfs/:id', async (c) => {
   const user = await getUser(c)
   if (!user) return c.json({ error: 'Not authenticated' }, 401)
+  if (user.isTeamMember) return c.json({ error: 'Only the account owner can manage turfs' }, 403)
   const id = c.req.param('id')
   // Delete pins first, then the turf
   await c.env.DB.prepare('DELETE FROM d2d_pins WHERE turf_id = ? AND owner_id = ?').bind(id, user.id).run()
@@ -347,5 +350,5 @@ d2dRoutes.get('/stats', async (c) => {
       (SELECT COUNT(*) FROM d2d_pins WHERE owner_id = ? AND status = 'not_knocked') as total_not_knocked
   `).bind(user.id, user.id, user.id, user.id, user.id, user.id, user.id).first()
 
-  return c.json({ stats })
+  return c.json({ stats, viewer_role: user.isTeamMember ? 'member' : 'owner' })
 })

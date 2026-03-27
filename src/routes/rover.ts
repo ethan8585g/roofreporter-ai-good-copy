@@ -915,13 +915,22 @@ async function validateCustomerSession(db: D1Database, authHeader?: string | nul
   try {
     const session = await db.prepare(`
       SELECT cs.customer_id, c.email, c.name, c.company_name, c.phone,
-             c.free_trial_remaining, c.paid_credits_remaining, c.status, c.is_active
+             c.free_trial_total, c.free_trial_used, c.report_credits, c.credits_used,
+             c.status, c.is_active
       FROM customer_sessions cs
       JOIN customers c ON c.id = cs.customer_id
       WHERE cs.session_token = ? AND cs.expires_at > datetime('now')
     `).bind(token).first()
-    return session || null
-  } catch { return null }
+    if (!session) return null
+    // Compute derived credit fields
+    const s = session as any
+    s.free_trial_remaining = Math.max(0, (s.free_trial_total || 3) - (s.free_trial_used || 0))
+    s.paid_credits_remaining = Math.max(0, (s.report_credits || 0) - (s.credits_used || 0))
+    return s
+  } catch (e) {
+    console.error('[Rover] validateCustomerSession error:', e)
+    return null
+  }
 }
 
 // Build the assistant system prompt with customer context
