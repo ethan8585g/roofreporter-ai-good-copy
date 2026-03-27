@@ -2,14 +2,14 @@
 
 ## Project Overview
 - **Name**: RoofReporterAI
-- **Version**: 12.0 (Cold Call Centre, Mobile Responsive, Apple-Compliant Legal Pages)
+- **Version**: 12.1 (CC Schema Fix, Banner Removal, Call Log Hardening)
 - **Domain**: www.roofreporterai.com
 - **Production**: https://roofing-measurement-tool.pages.dev
 - **GitHub**: https://github.com/ethan8585g/roofreporter-ai-good-copy
 - **Platform**: Cloudflare Pages + Workers + D1
 - **Status**: Active
 - **Last Updated**: 2026-03-27 (v12.0)
-- **Codebase**: ~58,000 lines TypeScript/JS across 65+ source files, 40 routes, 20 services, 47+ DB tables
+- **Codebase**: ~58,500 lines TypeScript/JS across 65+ source files, 40 routes, 20 services, 49+ DB tables
 
 ---
 
@@ -135,8 +135,8 @@
 ## Data Architecture
 
 ### Database: Cloudflare D1 (SQLite)
-- **47+ tables** covering: orders, reports, customers, invoices, CRM, secretary, analytics, blog, sales, call-center, calendar, D2D, email outreach, cold-call centre
-- **New tables (v12.0)**: `cc_agents`, `cc_agent_personas`, `cc_phone_config`, `cc_campaigns`, `cc_prospects`, `cc_call_logs`, `sip_trunks`, `sales_scripts`, `membership_tiers`, `cc_transcript_flags`, `secretary_room_participants`, `contact_form_submissions`
+- **49+ tables** covering: orders, reports, customers, invoices, CRM, secretary, analytics, blog, sales, call-center, calendar, D2D, email outreach, cold-call centre
+- **New tables (v12.0+)**: `cc_agents`, `cc_agent_personas`, `cc_phone_config`, `cc_campaigns`, `cc_prospects`, `cc_call_logs`, `sip_trunks`, `sales_scripts`, `membership_tiers`, `cc_transcript_flags`, `cc_contact_lists`, `cc_contact_list_members`, `secretary_room_participants`, `contact_form_submissions`
 
 ### Storage Services
 - **D1**: All relational data (customers, orders, reports, invoices, CRM)
@@ -154,6 +154,14 @@
 - **Last Deployed**: 2026-03-27
 
 ---
+
+## v12.1 Changelog (2026-03-27)
+1. **Removed announcement banner** that blocked the nav menu on landing page
+2. **Fixed CC schema mismatches**: All cc_* table schemas now include every column used by both admin.ts and call-center.ts routes
+3. **Hardened CC call logs**: Transcript display handles both `transcript` and `call_transcript` columns; phone display handles both `phone_number` and `phone_dialed`
+4. **Fixed call-complete webhook**: Now updates both `livekit_room_id` and `livekit_room_name` lookups, writes to both transcript columns and sentiment columns
+5. **Added missing tables**: `cc_contact_lists` and `cc_contact_list_members` for reusable named prospect lists
+6. **GitHub repo cleaned**: Removed 561MB workerd core dump from history, added `core` to .gitignore
 
 ## v12.0 Changelog (2026-03-27)
 1. **Cold Call Centre (Super Admin)**: Full AI outbound dialer — agents, campaigns, lead lists, transcripts
