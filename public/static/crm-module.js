@@ -6,36 +6,6 @@
 (function() {
   'use strict';
 
-  // ── Inject mobile responsive styles for CRM module ──
-  (function injectCrmMobileStyles() {
-    if (document.getElementById('crm-mobile-styles')) return;
-    var s = document.createElement('style');
-    s.id = 'crm-mobile-styles';
-    s.textContent = `
-      @media (max-width: 768px) {
-        #crm-root table { font-size: 11px !important; display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
-        #crm-root table th, #crm-root table td { padding: 6px 8px !important; white-space: nowrap; }
-        #crm-root .grid.md\\:grid-cols-2, #crm-root .grid.md\\:grid-cols-3, #crm-root .grid.md\\:grid-cols-4 { grid-template-columns: 1fr !important; }
-        #crm-root .grid.grid-cols-2 { grid-template-columns: 1fr !important; }
-        #crm-root .grid.grid-cols-3 { grid-template-columns: 1fr !important; }
-        #crm-root .grid.grid-cols-4 { grid-template-columns: 1fr 1fr !important; }
-        #crmModal > div { max-width: 95vw !important; width: 95vw !important; margin: 8px; }
-        #crmModal .p-6 { padding: 12px !important; }
-        #crmModal .px-6 { padding-left: 12px !important; padding-right: 12px !important; }
-        #crm-root .flex.gap-3 { flex-wrap: wrap; }
-        #crm-root .flex.gap-4 { flex-wrap: wrap; }
-        #crm-root input, #crm-root textarea, #crm-root select { font-size: 16px !important; }
-        #crm-root button { min-height: 40px; }
-      }
-      @media (max-width: 400px) {
-        #crm-root .text-2xl { font-size: 20px !important; }
-        #crm-root .text-3xl { font-size: 22px !important; }
-        main.max-w-7xl { padding-left: 8px !important; padding-right: 8px !important; }
-      }
-    `;
-    document.head.appendChild(s);
-  })();
-
   const root = document.getElementById('crm-root');
   if (!root) return;
   const MODULE = root.getAttribute('data-module') || 'reports';
@@ -217,9 +187,7 @@
       var isProcessing = (o.status === 'processing' || o.report_status === 'running');
       var buttons = '';
       if (isCompleted) {
-        buttons = '<a href="/api/reports/' + o.id + '/html" target="_blank" class="px-4 py-2 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700"><i class="fas fa-file-alt mr-1"></i>View Report</a>' +
-          '<a href="/api/reports/' + o.id + '/pdf" target="_blank" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-xs font-medium hover:bg-gray-200"><i class="fas fa-download mr-1"></i>PDF</a>' +
-          '<a href="/customer/home-designer?report_id=' + o.id + '&address=' + encodeURIComponent(o.property_address || '') + '" class="px-4 py-2 bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white rounded-lg text-xs font-medium hover:from-violet-600 hover:to-fuchsia-600 shadow-sm"><i class="fas fa-magic mr-1"></i>Roof Visualizer</a>';
+        buttons = '<a href="/api/reports/' + o.id + '/html" target="_blank" class="px-4 py-2 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700"><i class="fas fa-file-alt mr-1"></i>View Report</a><a href="/api/reports/' + o.id + '/pdf" target="_blank" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-xs font-medium hover:bg-gray-200"><i class="fas fa-download mr-1"></i>PDF</a><a href="/customer/virtual-tryon?report_id=' + o.id + '" class="px-4 py-2 bg-violet-600 text-white rounded-lg text-xs font-medium hover:bg-violet-700"><i class="fas fa-house-user mr-1"></i>Roof Visualizer</a>';
       } else if (isProcessing) {
         buttons = '<span class="px-4 py-2 bg-blue-50 text-blue-600 rounded-lg text-sm font-medium"><i class="fas fa-spinner fa-spin mr-1"></i>Generating...</span>';
       } else {
@@ -797,28 +765,15 @@
 
   window._crmConnectGmail = function() {
     closeModal();
-    console.log('[CRM Gmail] Starting Gmail OAuth flow...');
     fetch('/api/crm/gmail/connect', { headers: authHeadersOnly() })
-      .then(function(r) {
-        console.log('[CRM Gmail] Response status:', r.status);
-        return r.json();
-      })
+      .then(function(r) { return r.json(); })
       .then(function(data) {
-        console.log('[CRM Gmail] Response:', JSON.stringify(data));
         if (data.auth_url) {
-          var popup = window.open(data.auth_url, 'gmailOAuth', 'width=600,height=700');
-          if (!popup || popup.closed) {
-            toast('Popup blocked! Please allow popups for this site.', 'error');
-          }
-        } else if (data.error) {
-          toast(data.error, 'error');
+          window.open(data.auth_url, 'gmailOAuth', 'width=600,height=700');
         } else {
-          toast('Gmail not configured', 'error');
+          toast(data.error || 'Gmail not configured', 'error');
         }
-      }).catch(function(e) {
-        console.error('[CRM Gmail] Error:', e);
-        toast('Failed to start Gmail connection: ' + (e.message || 'Network error'), 'error');
-      });
+      }).catch(function(e) { toast('Failed to start Gmail connection: ' + (e.message || 'Network error'), 'error'); });
   };
 
   window._crmDisconnectGmail = function() {
@@ -862,7 +817,24 @@
           '<div><label class="block text-xs font-medium text-gray-600 mb-1">Customer *</label>' + customerSelectHTML(custs, '', 'propCustomer') + '</div>' +
           '<div><label class="block text-xs font-medium text-gray-600 mb-1">Title *</label><input type="text" id="propTitle" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="e.g. Full Roof Replacement – 2,200 sq ft"></div>' +
           '<div><label class="block text-xs font-medium text-gray-600 mb-1">Property Address</label><input type="text" id="propAddress" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"></div>' +
-          '<div><label class="block text-xs font-medium text-gray-600 mb-1">Scope of Work</label><textarea id="propScope" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="Remove existing shingles, inspect decking, install new underlayment and architectural shingles..."></textarea></div>';
+          '<div><label class="block text-xs font-medium text-gray-600 mb-1">Scope of Work</label><textarea id="propScope" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="Remove existing shingles, inspect decking, install new underlayment and architectural shingles..."></textarea></div>' +
+          '<div><label class="block text-xs font-medium text-gray-600 mb-1"><i class="fas fa-file-alt mr-1 text-indigo-500"></i>Attach Roof Report <span class="text-gray-400 font-normal">(optional)</span></label><select id="propLinkedReport" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"><option value="">— No report attached —</option></select><p class="text-[10px] text-gray-400 mt-1">Attach a completed roof report to include with this proposal.</p></div>';
+
+        // Populate the roof report dropdown
+        fetch('/api/customer/orders', { headers: authHeadersOnly() })
+          .then(function(r) { return r.json(); })
+          .then(function(d) {
+            var orders = (d.orders || []).filter(function(o) { return o.status === 'completed' || o.report_id; });
+            var sel = document.getElementById('propLinkedReport');
+            if (sel && orders.length > 0) {
+              orders.forEach(function(o) {
+                var opt = document.createElement('option');
+                opt.value = o.id;
+                opt.textContent = (o.address || 'Order #' + o.id) + (o.created_at ? ' — ' + o.created_at.substring(0, 10) : '');
+                sel.appendChild(opt);
+              });
+            }
+          }).catch(function() {});
 
         // Line items section
         body += '<div class="border border-gray-200 rounded-xl p-3">' +
@@ -900,7 +872,8 @@
             valid_until: document.getElementById('propValid').value || null,
             warranty_terms: document.getElementById('propWarranty').value.trim() || null,
             payment_terms: document.getElementById('propPayment').value.trim() || null,
-            notes: document.getElementById('propNotes').value.trim()
+            notes: document.getElementById('propNotes').value.trim(),
+            linked_order_id: document.getElementById('propLinkedReport') && document.getElementById('propLinkedReport').value ? parseInt(document.getElementById('propLinkedReport').value) : null
           });
           fetch('/api/crm/proposals', { method: 'POST', headers: authHeaders(), body: JSON.stringify(payload) })
             .then(function(r) { return r.json(); })

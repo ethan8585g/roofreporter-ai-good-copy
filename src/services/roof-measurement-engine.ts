@@ -1,27 +1,19 @@
 // ============================================================
-// RoofReporterAI — Roof Measurement Engine v5.0 — PHASE 1
-// USER-DRAWN ONLY — NO AUTO-INFERENCE
+// RoofReporterAI — Roof Measurement Engine v4.0
 //
 // PORTED from tools/roof_engine.py — Python reference impl.
 //
 // Core Philosophy:
-//   - ALL measurements come STRICTLY from what the user traced on the map
-//   - NO guessing of ridges, hips, valleys — if user didn't draw it, it's not in the report
+//   - ALL primary measurements from user-drawn GPS trace coordinates
 //   - WGS84 → local Cartesian (UTM-like) for meter-level accuracy
 //   - Shoelace formula for 2D footprint area
 //   - normalize_slope() accepts pitch A:B, decimal degrees, multiplier
 //   - Multi-slope roofs: segment.slope_ref → slope_map; bi-slope junctions
+//   - Auto-classify segments via geometric heuristics when label missing
 //   - Common-run algorithm for hips/valleys: project ridge onto nearest eave
 //   - Explicit edge-case handling: zero-length, vertical θ, flat, collinear
 //   - Vertex snapping ensures closed, watertight polygon geometry
 //   - Google Solar API used ONLY for satellite imagery + optional DSM cross-check
-//
-// PHASE 1 REMOVED:
-//   - inferEdgesFromEavePolygon() — auto-guessed ridges/hips from eave polygon
-//   - findEaveCorners() — quadrant-based corner detection for inference
-//   - findConcaveCorners() — L/T-shape detection for valley inference
-//   - proportionalFaceSplit() — estimated face areas by bounding-box ratio
-//   Phase 2 (AI auto-trace) can be added later without breaking anything.
 //
 // INPUT:  Trace JSON { eaves: [{lat,lng}], ridges: [[{lat,lng}]], ... }
 //         OR segment-based { segments: [...], slope_map: {...}, default_slope }
@@ -83,6 +75,11 @@ export interface TracePayload {
   complexity?: 'simple' | 'medium' | 'complex'
   include_waste?: boolean
   eaves_outline: TracePt[]
+  // Multi-section eaves: each entry is an independent closed eaves polygon.
+  // Used for buildings with separate roof sections (garage, porch, dormer, etc.).
+  // Total footprint = sum of all section areas. Engine uses the largest section
+  // for linear/face geometry; remaining sections contribute area only.
+  eaves_sections?: TracePt[][]
   ridges?: TraceLine[]
   hips?: TraceLine[]
   valleys?: TraceLine[]
@@ -145,28 +142,6 @@ export interface TraceMaterialEstimate {
   caulk_tubes: number
 }
 
-// ── EagleView-Inspired Extended Data ──
-export interface PitchBreakdown {
-  pitch_label: string
-  pitch_rise: number
-  area_sqft: number
-  percent_of_roof: number
-}
-
-export interface WasteTableRow {
-  waste_pct: number
-  area_sqft: number
-  squares: number
-  is_suggested: boolean
-}
-
-export interface PenetrationSummary {
-  total_count: number
-  total_area_sqft: number
-  total_perimeter_ft: number
-  items: { id: string; type: string; area_sqft: number; perimeter_ft: number }[]
-}
-
 export interface TraceReport {
   report_meta: {
     address: string
@@ -190,12 +165,6 @@ export interface TraceReport {
     num_rakes: number
     dominant_pitch_label: string
     dominant_pitch_angle_deg: number
-    // EagleView-inspired additions
-    estimated_attic_sqft: number
-    number_of_stories: string
-    roof_complexity: 'Simple' | 'Normal' | 'Complex'
-    total_penetrations: number
-    total_area_less_penetrations_ft2: number
   }
   linear_measurements: {
     eaves_total_ft: number
@@ -205,21 +174,7 @@ export interface TraceReport {
     rakes_total_ft: number
     perimeter_eave_rake_ft: number
     hip_plus_ridge_ft: number
-    // EagleView-inspired additions
-    drip_edge_total_ft: number
-    step_flashing_ft: number
-    wall_flashing_ft: number
-    total_flashing_ft: number
-    parapet_walls_ft: number
   }
-  // EagleView-inspired: areas per pitch breakdown
-  areas_per_pitch: PitchBreakdown[]
-  // EagleView-inspired: waste calculation table (0% to 28%)
-  waste_table: WasteTableRow[]
-  // EagleView-inspired: penetrations summary
-  penetrations: PenetrationSummary
-  // EagleView-inspired: facet labels (A-Z sorted smallest to largest)
-  facet_labels: { label: string; face_id: string; area_sqft: number; pitch_label: string }[]
   eave_edge_breakdown: EaveEdge[]
   ridge_details: LineDetail[]
   hip_details: LineDetail[]
@@ -687,6 +642,7 @@ export class RoofMeasurementEngine {
 
   // Raw WGS84 inputs
   private rawEaves: TracePt[]
+  private rawEavesSections: TracePt[][] // extra sections for multi-section roofs
   private rawRidges: TraceLine[]
   private rawHips: TraceLine[]
   private rawValleys: TraceLine[]
@@ -729,6 +685,10 @@ export class RoofMeasurementEngine {
 
     // Parse raw WGS84 inputs
     this.rawEaves   = (payload.eaves_outline || []).map(p => ({ lat: p.lat, lng: p.lng, elevation: p.elevation ?? null }))
+    // Extra eaves sections: filter to those different from the primary outline
+    this.rawEavesSections = (payload.eaves_sections || [])
+      .filter(sec => sec !== payload.eaves_outline && sec.length >= 3)
+      .map(sec => sec.map(p => ({ lat: p.lat, lng: p.lng, elevation: p.elevation ?? null })))
     this.rawRidges  = this.parseLines(payload.ridges || [])
     this.rawHips    = this.parseLines(payload.hips || [])
     this.rawValleys = this.parseLines(payload.valleys || [])
@@ -762,16 +722,6 @@ export class RoofMeasurementEngine {
     this.valleysCart = this.projectLines(this.rawValleys, 'valley')
     this.rakesCart   = this.projectLines(this.rawRakes, 'rake')
 
-    // ═══════════════════════════════════════════════════════════════
-    // PHASE 1: NO AUTO-INFERENCE
-    // If only eaves are drawn, report uses total footprint + default pitch.
-    // Ridges/hips/valleys/rakes only appear if the user actually drew them.
-    // Phase 2 will add AI auto-trace to fill in missing lines.
-    // ═══════════════════════════════════════════════════════════════
-    if (this.eavesCart.length < 3) {
-      throw new Error('Eaves outline required (minimum 3 points). User must trace the drip edge.')
-    }
-
     this.facesCart = this.rawFaces.map(f => ({
       face_id: f.face_id,
       pitch: f.pitch,
@@ -783,15 +733,6 @@ export class RoofMeasurementEngine {
       })
     }))
   }
-
-  // ═══════════════════════════════════════════════════════════════
-  // PHASE 1: AUTO-INFERENCE REMOVED
-  // The following functions were removed in v5.0 Phase 1:
-  //   - inferEdgesFromEavePolygon()
-  //   - findEaveCorners()
-  //   - findConcaveCorners()
-  // They will return in Phase 2 as AI-assisted auto-trace.
-  // ═══════════════════════════════════════════════════════════════
 
   private parseLines(raw: any[]): TraceLine[] {
     return raw.map(seg => ({
@@ -1049,11 +990,12 @@ export class RoofMeasurementEngine {
     } else if (this.eavesCart.length >= 4) {
       const totalProjFt2 = this.computeFootprintSqft()
 
-      // PHASE 1: Only attempt geometric split if user actually drew ridges + hips
-      if (this.ridgesCart.length > 0 && this.hipsCart.length >= 2) {
+      if (this.ridgesCart.length > 0 && this.hipsCart.length > 0) {
         // ── GEOMETRIC FACE SPLITTING ──
-        // User drew ridge + hip lines — split the eave polygon into faces
-        // using their actual traced geometry. 100% user-drawn, no guessing.
+        // Use ridge and hip endpoints to split the eave polygon into faces
+        // Each face is bounded by eave edges + hip/ridge lines
+        // This produces geometrically accurate per-face areas instead of equal division
+        
         const facePolys = this.splitEavePolygonIntoFaces()
         
         if (facePolys.length > 0) {
@@ -1087,12 +1029,15 @@ export class RoofMeasurementEngine {
               r.squares = round(sloped / SQFT_PER_SQUARE, 3)
             }
           }
+        } else {
+          // Fallback: proportional split based on eave perimeter contribution
+          this.proportionalFaceSplit(results, totalProjFt2)
         }
-      }
-
-      // CLEAN FALLBACK: single total face (100% accurate total area, no guessing)
-      // Applies when: only eaves drawn, or geometric split produced nothing
-      if (results.length === 0) {
+      } else if (this.ridgesCart.length > 0) {
+        // Has ridges but no hips — use proportional splitting based on
+        // ridge position relative to eave bounding box
+        this.proportionalFaceSplit(results, totalProjFt2)
+      } else {
         const rise = this.defPitch
         const sloped = slopedFromProjected(totalProjFt2, rise)
         results.push({
@@ -1195,9 +1140,78 @@ export class RoofMeasurementEngine {
     return []
   }
 
-  // ── PHASE 1: proportionalFaceSplit() REMOVED ──
-  // Was guessing face areas from bounding-box ratios.
-  // Phase 2 will add AI-assisted face detection.
+  // ── PROPORTIONAL FACE SPLIT ──────────────────────────
+  // When geometric splitting isn't possible, use eave perimeter ratios
+  // and bounding box analysis to estimate per-face areas proportionally.
+  
+  private proportionalFaceSplit(results: FaceDetail[], totalProjFt2: number): void {
+    // Use eave polygon bounding box to determine roof aspect ratio
+    const eaveVerts = this.eavesCart.slice(0, -1)
+    if (eaveVerts.length < 4) {
+      // Can't determine proportions — single face
+      const rise = this.defPitch
+      const sloped = slopedFromProjected(totalProjFt2, rise)
+      results.push({
+        face_id: 'total_roof',
+        pitch_rise: rise,
+        pitch_label: `${rise}:12`,
+        pitch_angle_deg: round(pitchAngleDeg(rise), 1),
+        slope_factor: round(slopeFactor(rise), 4),
+        projected_area_ft2: round(totalProjFt2, 1),
+        sloped_area_ft2: round(sloped, 1),
+        squares: round(sloped / SQFT_PER_SQUARE, 3),
+      })
+      return
+    }
+
+    // Compute oriented bounding box width/height to find aspect ratio
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
+    eaveVerts.forEach(p => {
+      minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x)
+      minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y)
+    })
+    const bbW = (maxX - minX) * M_TO_FT
+    const bbH = (maxY - minY) * M_TO_FT
+    const longSide = Math.max(bbW, bbH)
+    const shortSide = Math.min(bbW, bbH)
+
+    // For a hip roof: estimate ridge length ≈ longSide - shortSide
+    // Hip triangle area ≈ shortSide/2 × shortSide/2 each (two triangles)
+    // Main trapezoid area ≈ (totalFootprint - 2×triangle) / 2 each
+    const estRidgeLen = Math.max(longSide - shortSide, 0)
+    const hipTriangleArea = (shortSide * shortSide) / 4  // each hip end triangle
+    const mainFaceArea = Math.max((totalProjFt2 - 2 * hipTriangleArea) / 2, totalProjFt2 / 4)
+    const adjustedHipArea = (totalProjFt2 - 2 * mainFaceArea) / 2
+
+    const numFaces = this.ridgesCart.length > 0 ? Math.max(this.ridgesCart.length + 1, 4) : 4
+
+    // Build proportional faces
+    const faceAreas = numFaces >= 4
+      ? [adjustedHipArea, mainFaceArea, adjustedHipArea, mainFaceArea]
+      : Array(numFaces).fill(totalProjFt2 / numFaces)
+
+    // Normalize so they sum exactly to total
+    const rawSum = faceAreas.reduce((s, a) => s + a, 0)
+    const scale = totalProjFt2 / rawSum
+
+    for (let i = 0; i < faceAreas.length; i++) {
+      const faceProj = faceAreas[i] * scale
+      const ridge = i < this.ridgesCart.length ? this.ridgesCart[i] : null
+      const { theta } = ridge ? this.resolveTheta(ridge) : { theta: this.defThetaRad }
+      const rise = 12 * Math.tan(theta)
+      const sloped = slopedFromProjected(faceProj, rise)
+      results.push({
+        face_id: `face_${String.fromCharCode(65 + i)}`,
+        pitch_rise: round(rise, 1),
+        pitch_label: `${round(rise, 1)}:12`,
+        pitch_angle_deg: round(theta * 180 / Math.PI, 1),
+        slope_factor: round(slopeFactor(rise), 4),
+        projected_area_ft2: round(faceProj, 1),
+        sloped_area_ft2: round(sloped, 1),
+        squares: round(sloped / SQFT_PER_SQUARE, 3),
+      })
+    }
+  }
 
   // ═══════════════════════════════════════════════════════════════
   // FULL CALCULATION RUN
@@ -1218,8 +1232,22 @@ export class RoofMeasurementEngine {
     const totalRakeFt   = rakeSegs.reduce((s, seg) => s + seg.sloped_length_ft, 0)
 
     const facesData   = this.faceAreas()
-    const totalSloped = facesData.reduce((s, f) => s + f.sloped_area_ft2, 0)
-    const totalProj   = facesData.reduce((s, f) => s + f.projected_area_ft2, 0)
+    let totalSloped = facesData.reduce((s, f) => s + f.sloped_area_ft2, 0)
+    let totalProj   = facesData.reduce((s, f) => s + f.projected_area_ft2, 0)
+
+    // Add footprint areas from extra eaves sections (garages, porches, dormers, etc.)
+    // Each extra section is measured independently and added to the total
+    if (this.rawEavesSections.length > 0) {
+      const domRise = this.defPitch
+      for (const secPts of this.rawEavesSections) {
+        const { projected: secCart } = projectToCartesian(secPts)
+        const secProjFt2 = shoelaceAreaM2(secCart) * M2_TO_FT2
+        const secSloped  = slopedFromProjected(secProjFt2, domRise)
+        totalProj   += secProjFt2
+        totalSloped += secSloped
+      }
+    }
+
     const netSquares  = totalSloped / SQFT_PER_SQUARE
 
     // Dominant pitch
@@ -1244,89 +1272,8 @@ export class RoofMeasurementEngine {
 
     const perimeterFt = totalEaveFt + totalRakeFt
 
-    // ── EagleView-Inspired: Areas Per Pitch Breakdown ──
-    const pitchMap = new Map<string, { rise: number; area: number }>()
-    for (const f of facesData) {
-      const key = `${Math.round(f.pitch_rise)}:12`
-      const existing = pitchMap.get(key) || { rise: Math.round(f.pitch_rise), area: 0 }
-      existing.area += f.sloped_area_ft2
-      pitchMap.set(key, existing)
-    }
-    const areasPerPitch: PitchBreakdown[] = Array.from(pitchMap.entries())
-      .map(([label, data]) => ({
-        pitch_label: label,
-        pitch_rise: data.rise,
-        area_sqft: round(data.area, 1),
-        percent_of_roof: round((data.area / totalSloped) * 100, 1)
-      }))
-      .sort((a, b) => a.pitch_rise - b.pitch_rise)
-
-    // ── EagleView-Inspired: Waste Calculation Table ──
-    // Only for areas >= 3/12 pitch (shingle-applicable)
-    const shingleArea = facesData
-      .filter(f => f.pitch_rise >= 3)
-      .reduce((s, f) => s + f.sloped_area_ft2, 0)
-    const shingleAreaForTable = shingleArea > 0 ? shingleArea : totalSloped
-    const wastePercentages = [0, 3, 8, 11, 13, 15, 18, 23, 28]
-    const suggestedWaste = round(wFrac * 100, 0)
-    const wasteTable: WasteTableRow[] = wastePercentages.map(wp => {
-      const areaWithWaste = round(shingleAreaForTable * (1 + wp / 100), 0)
-      return {
-        waste_pct: wp,
-        area_sqft: areaWithWaste,
-        squares: round(Math.ceil((areaWithWaste / SQFT_PER_SQUARE) * 3) / 3, 2),
-        is_suggested: wp === suggestedWaste || (wp > 0 && Math.abs(wp - suggestedWaste) <= 2)
-      }
-    })
-
-    // ── EagleView-Inspired: Penetrations Summary ──
-    // We don't have actual penetration tracing yet, but compute from vision data if available
-    const penetrations: PenetrationSummary = {
-      total_count: 0,
-      total_area_sqft: 0,
-      total_perimeter_ft: 0,
-      items: []
-    }
-
-    // ── EagleView-Inspired: Estimated Attic Area ──
-    // Attic area ≈ projected footprint (the floor area under roof)
-    const estimatedAttic = round(totalProj, 0)
-
-    // ── EagleView-Inspired: Complexity Classification ──
-    const complexityScore = facesData.length + hipSegs.length + valleySegs.length
-    const roofComplexity: 'Simple' | 'Normal' | 'Complex' =
-      complexityScore <= 6 ? 'Simple' : complexityScore <= 14 ? 'Normal' : 'Complex'
-
-    // ── EagleView-Inspired: Number of Stories ──
-    // Heuristic: if max ridge height / avg eave height suggests multi-story
-    const numStories = totalSloped > 3000 || hipSegs.length > 4 ? '>1' : '1'
-
-    // ── EagleView-Inspired: Facet Labels (A-Z, smallest to largest) ──
-    const sortedFaces = [...facesData].sort((a, b) => a.sloped_area_ft2 - b.sloped_area_ft2)
-    const facetLabels = sortedFaces.map((f, i) => ({
-      label: String.fromCharCode(65 + i),
-      face_id: f.face_id,
-      area_sqft: round(f.sloped_area_ft2, 0),
-      pitch_label: f.pitch_label
-    }))
-
     // Advisory notes
     const notes: string[] = []
-
-    // PHASE 1: Clear advisories for incomplete tracing
-    if (this.ridgesCart.length === 0 && this.hipsCart.length === 0 && this.valleysCart.length === 0 && this.rakesCart.length === 0) {
-      notes.push('⚠️ EAVES-ONLY TRACING — Ridges, hips, valleys & rakes were not drawn. Report uses total footprint + default pitch. Accuracy is 100% for area traced. For per-face breakdown, trace internal roof lines.')
-    } else {
-      if (this.ridgesCart.length === 0)
-        notes.push('⚠️ No ridges traced — ridge cap and hip+ridge totals may be underestimated.')
-      if (this.hipsCart.length === 0 && this.eavesCart.length > 6)
-        notes.push('⚠️ No hips traced — hip lengths not included. If this is a hip roof, trace hip lines for full accuracy.')
-    }
-    if (this.valleysCart.length === 0 && this.eavesCart.length > 8)
-      notes.push('Valleys not traced — valley flashing quantity may be underestimated.')
-    if (this.rakesCart.length === 0)
-      notes.push('Rakes not traced — rake drip edge length estimated from eave perimeter only.')
-
     if (domPitch >= 9)
       notes.push('STEEP PITCH >= 9:12 — Steep-slope labour & safety gear required.')
     if (domPitch < 4 && domPitch > 0)
@@ -1337,6 +1284,8 @@ export class RoofMeasurementEngine {
       notes.push(`Hip roof confirmed (${round(totalHipFt, 1)} ft total hip length).`)
     if (this.eavesCart.length > 10)
       notes.push('Complex perimeter (>10 eave points) — Allow extra cut waste.')
+    if (this.rawEavesSections.length > 0)
+      notes.push(`Multi-section roof: ${this.rawEavesSections.length + 1} separate eaves polygon(s) detected (e.g. garage, porch, dormer). Areas summed using dominant pitch ${round(this.defPitch, 1)}:12.`)
 
     // Check for bi-slope junctions
     const biSlopeSegs = [...hipSegs, ...valleySegs].filter(s => s.is_bi_slope)
@@ -1358,7 +1307,7 @@ export class RoofMeasurementEngine {
         homeowner:      this.homeowner,
         order_id:       this.orderId,
         generated:      this.timestamp,
-        engine_version: 'RoofMeasurementEngine v5.0 Phase 1 (User-Drawn Only + UTM + Shoelace + Industry Pitch Multipliers)',
+        engine_version: 'RoofMeasurementEngine v5.0 (UTM + Shoelace + Common Run + Industry Pitch Multipliers)',
         powered_by:     'Reuse Canada / RoofReporterAI',
       },
       key_measurements: {
@@ -1375,12 +1324,6 @@ export class RoofMeasurementEngine {
         num_rakes:                     this.rakesCart.length,
         dominant_pitch_label:          `${round(domPitch, 1)}:12`,
         dominant_pitch_angle_deg:      round(pitchAngleDeg(domPitch), 1),
-        // EagleView-inspired additions
-        estimated_attic_sqft:          estimatedAttic,
-        number_of_stories:             numStories,
-        roof_complexity:               roofComplexity,
-        total_penetrations:            penetrations.total_count,
-        total_area_less_penetrations_ft2: round(totalSloped - penetrations.total_area_sqft, 1),
       },
       linear_measurements: {
         eaves_total_ft:         round(totalEaveFt, 1),
@@ -1390,18 +1333,7 @@ export class RoofMeasurementEngine {
         rakes_total_ft:         round(totalRakeFt, 1),
         perimeter_eave_rake_ft: round(perimeterFt, 1),
         hip_plus_ridge_ft:      round(totalHipFt + totalRidgeFt, 1),
-        // EagleView-inspired additions
-        drip_edge_total_ft:     round(totalEaveFt + totalRakeFt, 1),
-        step_flashing_ft:       0, // Populated from edge detection when available
-        wall_flashing_ft:       0,
-        total_flashing_ft:      0,
-        parapet_walls_ft:       0,
       },
-      // EagleView-inspired sections
-      areas_per_pitch:   areasPerPitch,
-      waste_table:        wasteTable,
-      penetrations:       penetrations,
-      facet_labels:       facetLabels,
       eave_edge_breakdown: edges,
       ridge_details:       ridgeSegs,
       hip_details:         hipSegs,
@@ -1420,11 +1352,11 @@ export class RoofMeasurementEngine {
 
 export function traceUiToEnginePayload(
   traceJson: {
-    eaves?: { lat: number; lng: number }[]
+    eaves?: { lat: number; lng: number }[] | { lat: number; lng: number }[][]
+    eaves_sections?: { lat: number; lng: number }[][]
     ridges?: { lat: number; lng: number }[][]
     hips?: { lat: number; lng: number }[][]
     valleys?: { lat: number; lng: number }[][]
-    rakes?: { lat: number; lng: number }[][]   // Phase 1: now supported
     traced_at?: string
   },
   order: {
@@ -1437,7 +1369,29 @@ export function traceUiToEnginePayload(
   },
   defaultPitch: number = 5.0
 ): TracePayload {
-  const eavesOutline: TracePt[] = (traceJson.eaves || []).map(p => ({
+  // Resolve multi-section eaves: prefer eaves_sections, fall back to eaves (which may be
+  // a flat array [old single-section] or an array of arrays [new multi-section format])
+  let allSections: { lat: number; lng: number }[][] = []
+  if (traceJson.eaves_sections && traceJson.eaves_sections.length > 0) {
+    allSections = traceJson.eaves_sections.filter(s => s.length >= 3)
+  } else if (Array.isArray(traceJson.eaves)) {
+    if (traceJson.eaves.length > 0 && Array.isArray((traceJson.eaves as any)[0])) {
+      // Array of arrays (new format)
+      allSections = (traceJson.eaves as { lat: number; lng: number }[][]).filter(s => s.length >= 3)
+    } else {
+      // Flat array (old single-section format)
+      const flat = traceJson.eaves as { lat: number; lng: number }[]
+      if (flat.length >= 3) allSections = [flat]
+    }
+  }
+
+  // Primary outline = largest section (most eave points)
+  const primary = allSections.length > 0
+    ? allSections.reduce((best, s) => s.length > best.length ? s : best, allSections[0])
+    : []
+  const extraSections = allSections.filter(s => s !== primary)
+
+  const eavesOutline: TracePt[] = primary.map(p => ({
     lat: p.lat, lng: p.lng, elevation: null
   }))
 
@@ -1459,12 +1413,6 @@ export function traceUiToEnginePayload(
     pts: line.map(p => ({ lat: p.lat, lng: p.lng, elevation: null }))
   }))
 
-  const rakes: TraceLine[] = (traceJson.rakes || []).map((line, i) => ({
-    id: `rake_${i + 1}`,
-    pitch: null,
-    pts: line.map(p => ({ lat: p.lat, lng: p.lng, elevation: null }))
-  }))
-
   return {
     address:        order.property_address || 'Unknown Address',
     homeowner:      order.homeowner_name || 'Unknown',
@@ -1473,10 +1421,13 @@ export function traceUiToEnginePayload(
     complexity:     'medium',
     include_waste:  true,
     eaves_outline:  eavesOutline,
+    eaves_sections: extraSections.length > 0
+      ? extraSections.map(sec => sec.map(p => ({ lat: p.lat, lng: p.lng })))
+      : undefined,
     ridges,
     hips,
     valleys,
-    rakes,
+    rakes:          [],
     faces:          [],
   }
 }

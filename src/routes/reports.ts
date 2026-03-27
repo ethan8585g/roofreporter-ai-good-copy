@@ -20,10 +20,9 @@ import {
 } from '../services/solar-api'
 import { buildDataLayersReport, generateSegmentsFromDLAnalysis, generateSegmentsFromAIGeometry } from '../services/report-engine'
 import { executeRoofOrder, type DataLayersAnalysis } from '../services/solar-datalayers'
-import { generateProfessionalReportHTML, buildVisionFindingsHTML, generateSimpleTwoPageReport, buildMaterialBOMHTML } from '../templates/report-html'
+import { generateProfessionalReportHTML, buildVisionFindingsHTML, generateSimpleTwoPageReport } from '../templates/report-html'
 import { generateTraceBasedDiagramSVG } from '../templates/svg-diagrams'
 import { RoofMeasurementEngine, traceUiToEnginePayload, calculateRoofSpecs, ROOF_PITCH_MULTIPLIERS, HIP_VALLEY_MULTIPLIERS, type TraceReport } from '../services/roof-measurement-engine'
-import { estimateMaterials, generateXactimateXML, generateAccuLynxCSV, generateJobNimbusJSON, type DetailedMaterialBOM } from '../services/material-estimation-engine'
 import { enhanceReportViaGemini } from '../services/gemini-enhance'
 import { generateReportImagery, buildAIImageryHTML } from '../services/ai-image-generation'
 import { buildEmailWrapper, sendGmailEmail, sendViaResend, sendGmailOAuth2 } from '../services/email'
@@ -34,14 +33,6 @@ import {
   convertToVisionFindings, convertToAIGeometry, mergeVisionFindings,
   type CloudRunAIConfig, type CloudRunHealthResponse
 } from '../services/cloud-run-ai'
-
-// SAM 3 + Gemini CV Segmentation Pipeline
-import {
-  runUnifiedSegmentation, segmentWithSAM3, segmentWithGemini,
-  fetchHighResImagery, convertToAIMeasurement, calculateGSD,
-  pixelsToSquareFeet, pixelsToLinearFeet,
-  type UnifiedSegmentationResult, type SAM3SegmentationResult, type GeminiSegmentationResult
-} from '../services/sam3-segmentation'
 
 // Repository
 import * as repo from '../repositories/reports'
@@ -57,31 +48,7 @@ import { parseBody, ValidationError, toggleSegmentsBody, visionFilterQuery, data
 
 export const reportsRoutes = new Hono<{ Bindings: Bindings }>()
 
-// ── HELPER: Auto-compute material BOM for any report ──
-function attachMaterialBOM(reportData: any): void {
-  if (!reportData || !reportData.edge_summary) return
-  try {
-    const es = reportData.edge_summary
-    const pitchRise = reportData.roof_pitch_degrees
-      ? Math.round(12 * Math.tan(reportData.roof_pitch_degrees * Math.PI / 180) * 10) / 10
-      : 5
-    const bom = estimateMaterials({
-      address: reportData.property?.address || 'Unknown',
-      net_area_sqft: reportData.total_true_area_sqft || 0,
-      waste_factor_pct: reportData.materials?.waste_pct || 15,
-      total_eave_lf: es.total_eave_ft || 0,
-      total_ridge_lf: es.total_ridge_ft || 0,
-      total_hip_lf: es.total_hip_ft || 0,
-      total_valley_lf: es.total_valley_ft || 0,
-      total_rake_lf: es.total_rake_ft || 0,
-      pitch_rise: pitchRise,
-      complexity: reportData.materials?.complexity_class || 'medium'
-    })
-    reportData.material_bom = bom
-  } catch (e) {
-    console.error('[MaterialBOM] Error computing BOM:', e)
-  }
-}// ── GLOBAL ERROR HANDLER ──
+// ── GLOBAL ERROR HANDLER ──
 reportsRoutes.onError((err, c) => {
   if (err instanceof ValidationError) return c.json({ error: err.message }, 400)
   console.error(`[Reports] Unhandled error: ${err.message}`)
@@ -119,7 +86,6 @@ function tryRegenHtml(jsonStr: string): string | null {
   try {
     const d = JSON.parse(jsonStr)
     if (d?.property?.address && Array.isArray(d.segments) && d.segments.length > 0) {
-      attachMaterialBOM(d)
       return generateProfessionalReportHTML(d as RoofReport)
     }
   } catch {}
@@ -230,74 +196,13 @@ reportsRoutes.get('/:orderId/segments', async (c) => {
 })
 
 // ============================================================
-// GET /:orderId/3d-data — Data for 3D Roof Visualizer
-// ============================================================
-reportsRoutes.get('/:orderId/3d-data', async (c) => {
-  const orderId = c.req.param('orderId')
-  try {
-    const order = await c.env.DB.prepare(
-      'SELECT id, property_address, latitude, longitude, homeowner_name, homeowner_email FROM orders WHERE id = ?'
-    ).bind(orderId).first<any>()
-    if (!order) return c.json({ error: 'Order not found' }, 404)
-
-    // Get report data for satellite image
-    const report = await c.env.DB.prepare(
-      'SELECT satellite_image_url, api_response_raw, total_true_area_sqft, roof_pitch_degrees FROM reports WHERE order_id = ?'
-    ).bind(orderId).first<any>()
-
-    let satelliteUrl = report?.satellite_image_url || ''
-    if (!satelliteUrl && report?.api_response_raw) {
-      try {
-        const d = JSON.parse(report.api_response_raw)
-        satelliteUrl = d.imagery?.satellite_overhead_url || d.imagery?.satellite_url || ''
-      } catch {}
-    }
-
-    // Build Street View URL if coordinates available
-    let streetViewUrl = ''
-    const googleKey = (c.env as any).GOOGLE_MAPS_API_KEY || ''
-    if (order.latitude && order.longitude && googleKey) {
-      streetViewUrl = `https://maps.googleapis.com/maps/api/streetview?size=640x480&location=${order.latitude},${order.longitude}&fov=80&pitch=15&source=outdoor&key=${googleKey}`
-    }
-
-    return c.json({
-      report_id: orderId,
-      address: order.property_address || 'Unknown Address',
-      latitude: order.latitude || null,
-      longitude: order.longitude || null,
-      customer_name: order.homeowner_name || '',
-      satellite_url: satelliteUrl,
-      street_view_url: streetViewUrl,
-      roof_area_sqft: report?.total_true_area_sqft || 0,
-      roof_pitch: report?.roof_pitch_degrees || 0,
-      google_maps_key: googleKey
-    })
-  } catch (err: any) {
-    return c.json({ error: err.message }, 500)
-  }
-})
-
-// ============================================================
 // GET /:orderId/html — Rendered report HTML (no auth for iframes)
 // ============================================================
 reportsRoutes.get('/:orderId/html', async (c) => {
-  const orderId = c.req.param('orderId')
-  const row = await repo.getReportHtml(c.env.DB, orderId)
+  const row = await repo.getReportHtml(c.env.DB, c.req.param('orderId'))
   if (!row) return c.json({ error: 'Report not found' }, 404)
-  let html = resolveHtml(row.professional_report_html, row.api_response_raw)
+  const html = resolveHtml(row.professional_report_html, row.api_response_raw)
   if (!html) return c.json({ error: 'Report data not available' }, 404)
-
-  // Append damage report page if it exists
-  try {
-    const dmgRow = await c.env.DB.prepare(
-      'SELECT damage_report_html FROM reports WHERE order_id = ? AND damage_report_html IS NOT NULL AND damage_report_html != ?'
-    ).bind(orderId, '').first<any>()
-    if (dmgRow?.damage_report_html) {
-      // Insert before </html>
-      html = html.replace('</html>', dmgRow.damage_report_html + '\n</html>')
-    }
-  } catch {}
-
   return c.html(html)
 })
 
@@ -598,42 +503,46 @@ reportsRoutes.post('/:orderId/trace-insights', async (c) => {
 
   const trace = typeof order.roof_trace_json === 'string' ? JSON.parse(order.roof_trace_json) : order.roof_trace_json
 
-  if (!trace.eaves || trace.eaves.length < 3) {
+  // Resolve eaves sections — supports single-polygon (legacy) and multi-section (new) formats
+  const rawEaves = trace.eaves_sections && trace.eaves_sections.length > 0
+    ? (trace.eaves_sections as { lat: number; lng: number }[][]).filter((s: any[]) => s.length >= 3)
+    : Array.isArray(trace.eaves) && trace.eaves.length > 0 && Array.isArray(trace.eaves[0])
+      ? (trace.eaves as { lat: number; lng: number }[][]).filter((s: any[]) => s.length >= 3)
+      : trace.eaves && (trace.eaves as any[]).length >= 3 ? [trace.eaves as { lat: number; lng: number }[]] : []
+
+  if (rawEaves.length === 0) {
     return c.json({ error: 'Invalid trace data — eaves polygon requires at least 3 points' }, 400)
   }
 
-  // Compute polygon area from eaves outline
-  const eavePoints = trace.eaves as { lat: number; lng: number }[]
-  const cLat = eavePoints.reduce((s: number, p: { lat: number }) => s + p.lat, 0) / eavePoints.length
-  const cLng = eavePoints.reduce((s: number, p: { lng: number }) => s + p.lng, 0) / eavePoints.length
-  const cosLat = Math.cos(cLat * Math.PI / 180)
   const M_PER_DEG_LAT = 111320
-  const M_PER_DEG_LNG = 111320 * cosLat
 
-  const projected = eavePoints.map(p => ({
-    x: (p.lng - cLng) * M_PER_DEG_LNG,
-    y: (p.lat - cLat) * M_PER_DEG_LAT
-  }))
-
-  let areaM2 = 0
-  const n = projected.length
-  for (let i = 0; i < n; i++) {
-    const j = (i + 1) % n
-    areaM2 += projected[i].x * projected[j].y
-    areaM2 -= projected[j].x * projected[i].y
+  // Compute area + perimeter for each section, sum areas
+  const computeSection = (pts: { lat: number; lng: number }[]) => {
+    const cLat = pts.reduce((s, p) => s + p.lat, 0) / pts.length
+    const cLng = pts.reduce((s, p) => s + p.lng, 0) / pts.length
+    const M_PER_DEG_LNG = 111320 * Math.cos(cLat * Math.PI / 180)
+    const proj = pts.map(p => ({ x: (p.lng - cLng) * M_PER_DEG_LNG, y: (p.lat - cLat) * M_PER_DEG_LAT }))
+    let area = 0, perim = 0
+    const n = proj.length
+    for (let i = 0; i < n; i++) {
+      const j = (i + 1) % n
+      area += proj[i].x * proj[j].y - proj[j].x * proj[i].y
+      const dx = proj[j].x - proj[i].x, dy = proj[j].y - proj[i].y
+      perim += Math.sqrt(dx * dx + dy * dy)
+    }
+    return { areaM2: Math.abs(area) / 2, perimeterM: perim, center: { lat: cLat, lng: cLng } }
   }
-  areaM2 = Math.abs(areaM2) / 2
-  const areaSqft = Math.round(areaM2 * 10.7639)
 
-  // Compute perimeter from eaves outline
-  let perimeterM = 0
-  for (let i = 0; i < n; i++) {
-    const j = (i + 1) % n
-    const dx = projected[j].x - projected[i].x
-    const dy = projected[j].y - projected[i].y
-    perimeterM += Math.sqrt(dx * dx + dy * dy)
-  }
+  // Primary section (largest) for perimeter/center; all sections contribute area
+  const sections = rawEaves.map(computeSection)
+  const primarySec = sections.reduce((best, s) => s.areaM2 > best.areaM2 ? s : best, sections[0])
+  const totalAreaM2 = sections.reduce((s, sec) => s + sec.areaM2, 0)
+  const areaM2 = totalAreaM2
+  const areaSqft = Math.round(totalAreaM2 * 10.7639)
+  const perimeterM = primarySec.perimeterM
   const perimeterFt = Math.round(perimeterM * 3.28084)
+  const n = rawEaves[0].length
+  const eavePoints = rawEaves[0]
 
   // Count ridge/hip/valley lines and compute their total lengths
   const computeLineLength = (line: { lat: number; lng: number }[]) => {
@@ -658,11 +567,12 @@ reportsRoutes.post('/:orderId/trace-insights', async (c) => {
     traced_at: trace.traced_at,
     eaves_polygon: {
       vertices: eavePoints.length,
+      section_count: rawEaves.length,
       area_m2: Math.round(areaM2 * 100) / 100,
       area_sqft: areaSqft,
       perimeter_m: Math.round(perimeterM * 100) / 100,
       perimeter_ft: perimeterFt,
-      center: { lat: cLat, lng: cLng }
+      center: primarySec.center
     },
     edge_summary: {
       ridge_count: (trace.ridges || []).length,
@@ -707,7 +617,9 @@ reportsRoutes.post('/:orderId/trace-remeasure', async (c) => {
 
   const trace = typeof order.roof_trace_json === 'string' ? JSON.parse(order.roof_trace_json) : order.roof_trace_json
 
-  if (!trace.eaves || trace.eaves.length < 3) {
+  const hasEaves = (trace.eaves_sections && trace.eaves_sections.length > 0 && trace.eaves_sections[0].length >= 3)
+    || (Array.isArray(trace.eaves) && trace.eaves.length >= 3)
+  if (!hasEaves) {
     return c.json({ error: 'Need at least 3 eave points. Trace every corner of the house.' }, 400)
   }
 
@@ -812,8 +724,7 @@ reportsRoutes.post('/:orderId/trace-remeasure', async (c) => {
       `Engine sloped area: ${traceReport.key_measurements.total_roof_area_sloped_ft2} sqft (vs Solar API ${solarApiData.true_area_sqft || 'N/A'} sqft).`
     )
 
-    // Regenerate HTML with the trace diagram injected + material BOM
-    attachMaterialBOM(reportData)
+    // Regenerate HTML with the trace diagram injected
     const html = generateProfessionalReportHTML(reportData)
 
     // Save updated report
@@ -1365,74 +1276,6 @@ ${html}<script>if(new URLSearchParams(location.search).get('print')==='1')setTim
 })
 
 // ============================================================
-// GET /:orderId/material-bom — Generate Material Bill of Quantities
-// ============================================================
-reportsRoutes.get('/:orderId/material-bom', async (c) => {
-  const db = c.env.DB
-  const orderId = c.req.param('orderId')
-  const report = await repo.getReportForPdf(db, orderId)
-  if (!report) return c.json({ error: 'Report not found' }, 404)
-
-  let reportData: any = null
-  try {
-    if (report.api_response_raw) reportData = JSON.parse(report.api_response_raw)
-  } catch {}
-  if (!reportData) return c.json({ error: 'Report data not available' }, 404)
-
-  const es = reportData.edge_summary || {}
-  const pitchRise = reportData.roof_pitch_degrees
-    ? Math.round(12 * Math.tan(reportData.roof_pitch_degrees * Math.PI / 180) * 10) / 10
-    : 5
-
-  const bom = estimateMaterials({
-    address: reportData.property?.address || report.property_address || 'Unknown',
-    net_area_sqft: reportData.total_true_area_sqft || 0,
-    waste_factor_pct: reportData.materials?.waste_pct || 15,
-    total_eave_lf: es.total_eave_ft || 0,
-    total_ridge_lf: es.total_ridge_ft || 0,
-    total_hip_lf: es.total_hip_ft || 0,
-    total_valley_lf: es.total_valley_ft || 0,
-    total_rake_lf: es.total_rake_ft || 0,
-    pitch_rise: pitchRise,
-    complexity: reportData.materials?.complexity_class || 'medium'
-  })
-
-  const format = c.req.query('format') || 'json'
-
-  if (format === 'xactimate' || format === 'xml') {
-    const xml = generateXactimateXML(bom)
-    return new Response(xml, {
-      headers: {
-        'Content-Type': 'application/xml; charset=utf-8',
-        'Content-Disposition': `attachment; filename="RoofReporter_BOM_${orderId}.xml"`
-      }
-    })
-  }
-
-  if (format === 'acculynx' || format === 'csv') {
-    const csv = generateAccuLynxCSV(bom)
-    return new Response(csv, {
-      headers: {
-        'Content-Type': 'text/csv; charset=utf-8',
-        'Content-Disposition': `attachment; filename="RoofReporter_BOM_${orderId}.csv"`
-      }
-    })
-  }
-
-  if (format === 'jobnimbus') {
-    const json = generateJobNimbusJSON(bom)
-    return new Response(json, {
-      headers: {
-        'Content-Type': 'application/json; charset=utf-8',
-        'Content-Disposition': `attachment; filename="RoofReporter_BOM_${orderId}_jobnimbus.json"`
-      }
-    })
-  }
-
-  return c.json(bom)
-})
-
-// ============================================================
 // POST /datalayers/analyze — Quick standalone analysis
 // ============================================================
 reportsRoutes.post('/datalayers/analyze', async (c) => {
@@ -1805,422 +1648,6 @@ reportsRoutes.post('/recovery/stuck', async (c) => {
 })
 
 // ============================================================
-// AI DAMAGE REPORT — Gemini satellite imagery analysis for roof damage
-// Analyzes for hail damage, missing shingles, wear, and generates
-// a damage summary designed as a sales tool for roofers
-// ============================================================
-reportsRoutes.post('/:orderId/damage-report', async (c) => {
-  const orderId = c.req.param('orderId')
-
-  const report = await repo.getReportForVision(c.env.DB, orderId)
-  if (!report) return c.json({ error: 'Report not found' }, 404)
-  const order = await repo.getOrderById(c.env.DB, orderId)
-
-  // Get satellite image
-  let imgUrl = report.satellite_image_url as string | null
-  if (!imgUrl && report.api_response_raw) {
-    try { const d = JSON.parse(report.api_response_raw); imgUrl = d.imagery?.satellite_overhead_url || d.imagery?.satellite_url } catch {}
-  }
-  if (!imgUrl && order?.latitude && order?.longitude) {
-    imgUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${order.latitude},${order.longitude}&zoom=20&size=640x640&scale=2&maptype=satellite&key=${c.env.GOOGLE_MAPS_API_KEY}`
-  }
-  if (!imgUrl) return c.json({ error: 'No satellite image available for damage analysis' }, 400)
-
-  const geminiKey = c.env.GEMINI_ENHANCE_API_KEY || (c.env as any).GOOGLE_VERTEX_API_KEY
-  if (!geminiKey) return c.json({ error: 'Gemini API key not configured' }, 400)
-
-  try {
-    // Fetch the satellite image
-    const imgResp = await fetch(imgUrl)
-    if (!imgResp.ok) throw new Error('Failed to fetch satellite image')
-    const imgBuffer = await imgResp.arrayBuffer()
-    const imgBase64 = btoa(String.fromCharCode(...new Uint8Array(imgBuffer)))
-    const mimeType = imgResp.headers.get('content-type') || 'image/jpeg'
-
-    // Call Gemini with damage analysis prompt
-    const geminiResp = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{
-            parts: [
-              { inline_data: { mime_type: mimeType, data: imgBase64 } },
-              { text: `You are an expert roof condition inspector analyzing this satellite/aerial image of a residential roof in Alberta, Canada. Your goal is to create a DAMAGE ASSESSMENT REPORT that helps a roofing contractor close deals.
-
-ANALYZE THE IMAGE FOR:
-1. HAIL DAMAGE indicators — Look for: random dent patterns, circular marks, granule displacement patterns, bruised/dimpled shingles
-2. MISSING SHINGLES — Exposed underlayment, gaps in shingle coverage, dark patches where shingles should be
-3. WIND DAMAGE — Lifted tabs, creased or bent shingles, flipped shingle sections
-4. AGING/WEAR — Curling shingles, granule loss (dark streaks), fading, color inconsistency
-5. STRUCTURAL ISSUES — Sagging ridge, wave patterns, ponding evidence
-6. MOSS/ALGAE/DEBRIS — Green growth, dark streaks (algae), debris accumulation
-7. FLASHING CONDITION — Rust stains, gaps at penetrations, deteriorated valley metal
-8. GUTTER/EDGE — Detached gutters, fascia damage, drip edge issues
-
-For each finding, provide:
-- description: What you see
-- severity: "low" | "moderate" | "high" | "critical"
-- location: Where on the roof
-- recommendation: What should be done
-
-Then write a DAMAGE SUMMARY (2-3 paragraphs) that:
-- Summarizes the overall condition in plain language a homeowner understands
-- Emphasizes urgency where appropriate ("Alberta's freeze-thaw cycles will worsen this...")
-- Mentions that addressing issues now prevents costly interior water damage
-- Notes that insurance may cover hail/storm damage claims
-- Uses professional but persuasive tone (subtle sales tool, not aggressive)
-
-Respond in this exact JSON format:
-{
-  "overall_condition": "poor" | "fair" | "good" | "excellent",
-  "overall_score": 1-10,
-  "urgency_level": "routine" | "soon" | "urgent" | "emergency",
-  "findings": [
-    { "type": "hail_damage|missing_shingles|wind_damage|aging|structural|moss_algae|flashing|gutter", "description": "...", "severity": "low|moderate|high|critical", "location": "...", "recommendation": "..." }
-  ],
-  "damage_summary": "... 2-3 paragraph summary for the homeowner ...",
-  "insurance_note": "... note about potential insurance claim eligibility ...",
-  "estimated_remaining_life": "X-Y years",
-  "recommended_action": "... what should the homeowner do next ..."
-}` }
-            ]
-          }],
-          generationConfig: { temperature: 0.3, maxOutputTokens: 4096 }
-        })
-      }
-    )
-
-    const geminiData: any = await geminiResp.json()
-    const textContent = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || ''
-
-    // Parse JSON from Gemini response
-    let analysis: any = {}
-    try {
-      const jsonMatch = textContent.match(/\{[\s\S]*\}/)
-      if (jsonMatch) analysis = JSON.parse(jsonMatch[0])
-    } catch {
-      analysis = { overall_condition: 'unknown', overall_score: 5, findings: [], damage_summary: textContent, urgency_level: 'routine' }
-    }
-
-    // Generate the damage report HTML page
-    const findings = analysis.findings || []
-    const severityColors: Record<string, string> = { critical: '#dc2626', high: '#ea580c', moderate: '#d97706', low: '#65a30d' }
-    const severityBg: Record<string, string> = { critical: '#fef2f2', high: '#fff7ed', moderate: '#fffbeb', low: '#f7fee7' }
-
-    let findingsHtml = ''
-    for (const f of findings) {
-      const col = severityColors[f.severity] || '#6b7280'
-      const bg = severityBg[f.severity] || '#f9fafb'
-      findingsHtml += `
-        <div style="display:flex;gap:12px;padding:10px;background:${bg};border-radius:8px;border-left:4px solid ${col};margin-bottom:8px">
-          <div style="flex:1">
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-              <span style="background:${col};color:#fff;font-size:9px;font-weight:700;padding:2px 8px;border-radius:12px;text-transform:uppercase">${f.severity}</span>
-              <span style="font-size:11px;font-weight:700;color:#1e293b;text-transform:capitalize">${(f.type || '').replace(/_/g, ' ')}</span>
-            </div>
-            <p style="font-size:10px;color:#475569;margin:0;line-height:1.4">${f.description}</p>
-            <p style="font-size:9px;color:#94a3b8;margin:4px 0 0 0"><b>Location:</b> ${f.location || 'General'} · <b>Action:</b> ${f.recommendation || 'Inspection recommended'}</p>
-          </div>
-        </div>`
-    }
-
-    const conditionColors: Record<string, string> = { poor: '#dc2626', fair: '#d97706', good: '#65a30d', excellent: '#16a34a' }
-    const condColor = conditionColors[analysis.overall_condition] || '#6b7280'
-    const urgencyColors: Record<string, string> = { emergency: '#dc2626', urgent: '#ea580c', soon: '#d97706', routine: '#65a30d' }
-    const urgColor = urgencyColors[analysis.urgency_level] || '#6b7280'
-
-    const damageHtml = `
-<div class="page" style="page-break-before:always">
-  <div style="padding:28px;flex:1">
-    <div style="text-align:center;margin-bottom:20px">
-      <h2 style="font-size:20px;font-weight:800;color:#0f172a;margin:0">AI Roof Damage Assessment</h2>
-      <p style="font-size:11px;color:#64748b;margin:4px 0 0 0">Satellite Imagery Analysis — Powered by Gemini AI</p>
-    </div>
-
-    <div style="display:flex;gap:12px;margin-bottom:16px">
-      <div style="flex:1;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px;text-align:center">
-        <p style="font-size:9px;color:#94a3b8;text-transform:uppercase;letter-spacing:1px;margin:0">Overall Condition</p>
-        <p style="font-size:24px;font-weight:900;color:${condColor};margin:4px 0 0 0;text-transform:uppercase">${analysis.overall_condition || 'N/A'}</p>
-        <p style="font-size:10px;color:#64748b;margin:2px 0 0 0">Score: ${analysis.overall_score || '?'}/10</p>
-      </div>
-      <div style="flex:1;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px;text-align:center">
-        <p style="font-size:9px;color:#94a3b8;text-transform:uppercase;letter-spacing:1px;margin:0">Urgency Level</p>
-        <p style="font-size:24px;font-weight:900;color:${urgColor};margin:4px 0 0 0;text-transform:uppercase">${analysis.urgency_level || 'N/A'}</p>
-        <p style="font-size:10px;color:#64748b;margin:2px 0 0 0">Est. Life: ${analysis.estimated_remaining_life || 'Unknown'}</p>
-      </div>
-      <div style="flex:1;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px;text-align:center">
-        <p style="font-size:9px;color:#94a3b8;text-transform:uppercase;letter-spacing:1px;margin:0">Issues Found</p>
-        <p style="font-size:24px;font-weight:900;color:#0f172a;margin:4px 0 0 0">${findings.length}</p>
-        <p style="font-size:10px;color:#64748b;margin:2px 0 0 0">${findings.filter((f: any) => f.severity === 'critical' || f.severity === 'high').length} high priority</p>
-      </div>
-    </div>
-
-    <div style="margin-bottom:16px">
-      <h3 style="font-size:12px;font-weight:700;color:#0f172a;margin:0 0 8px 0;text-transform:uppercase;letter-spacing:0.5px">Damage Findings</h3>
-      ${findingsHtml || '<p style="font-size:11px;color:#64748b;text-align:center;padding:20px">No significant damage detected from satellite imagery</p>'}
-    </div>
-
-    <div style="background:linear-gradient(135deg,#f0f9ff,#e0f2fe);border:1px solid #bae6fd;border-radius:12px;padding:16px;margin-bottom:12px">
-      <h3 style="font-size:12px;font-weight:700;color:#0369a1;margin:0 0 8px 0">Damage Assessment Summary</h3>
-      <p style="font-size:10px;color:#334155;line-height:1.6;margin:0;white-space:pre-line">${analysis.damage_summary || 'Detailed analysis pending.'}</p>
-    </div>
-
-    ${analysis.insurance_note ? `
-    <div style="background:#fefce8;border:1px solid #fde68a;border-radius:8px;padding:12px;margin-bottom:12px">
-      <p style="font-size:10px;color:#92400e;margin:0"><b>Insurance Note:</b> ${analysis.insurance_note}</p>
-    </div>` : ''}
-
-    ${analysis.recommended_action ? `
-    <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:12px">
-      <p style="font-size:10px;color:#166534;margin:0"><b>Recommended Action:</b> ${analysis.recommended_action}</p>
-    </div>` : ''}
-  </div>
-  <div class="page-footer" style="background:#dc2626">
-    <span style="color:#fff;font-size:7px;letter-spacing:0.5px">AI DAMAGE ASSESSMENT</span>
-    <span style="color:#fca5a5;font-size:7px">This analysis is AI-generated from satellite imagery and should be confirmed by on-site inspection</span>
-  </div>
-</div>`
-
-    // Save to database
-    await c.env.DB.prepare(
-      "UPDATE reports SET damage_report_html = ?, damage_analysis_json = ?, updated_at = datetime('now') WHERE order_id = ?"
-    ).bind(damageHtml, JSON.stringify(analysis), orderId).run()
-
-    return c.json({
-      success: true,
-      analysis,
-      damage_html: damageHtml,
-      satellite_url: imgUrl
-    })
-  } catch (err: any) {
-    console.error('[Damage Report] Error:', err.message)
-    return c.json({ error: 'Damage analysis failed: ' + err.message }, 500)
-  }
-})
-
-// ============================================================
-// POST /:orderId/cv-segment — SAM 3 + Gemini CV Segmentation Pipeline
-// Runs multi-tier computer vision on satellite imagery:
-//   Tier 1: SAM 3 (facebook/sam3) via HuggingFace Inference API
-//   Tier 2: Gemini 3 Flash structured roof segmentation
-//   Tier 3: Fallback to existing RANSAC edge classifier
-// Returns enriched segments, edges, obstructions, and measurements.
-// ============================================================
-reportsRoutes.post('/:orderId/cv-segment', async (c) => {
-  const orderId = c.req.param('orderId')
-  const env = c.env
-
-  try {
-    const report = await repo.getReportForVision(env.DB, orderId)
-    if (!report) return c.json({ error: 'Report not found' }, 404)
-    const order = await repo.getOrderById(env.DB, orderId)
-
-    // Get satellite image URL
-    let imgUrl = report.satellite_image_url as string | null
-    if (!imgUrl && report.api_response_raw) {
-      try { const d = JSON.parse(report.api_response_raw); imgUrl = d.imagery?.satellite_overhead_url || d.imagery?.satellite_url } catch {}
-    }
-    if (!imgUrl && order?.latitude && order?.longitude) {
-      imgUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${order.latitude},${order.longitude}&zoom=20&size=640x640&scale=2&maptype=satellite&key=${env.GOOGLE_MAPS_API_KEY}`
-    }
-    if (!imgUrl) return c.json({ error: 'No satellite image available for CV segmentation' }, 400)
-
-    const lat = order?.latitude || 0
-    const lng = order?.longitude || 0
-    const zoom = 20 // Google Maps satellite zoom level
-
-    // Run unified multi-tier segmentation
-    const segResult = await runUnifiedSegmentation(
-      {
-        HF_API_TOKEN: (env as any).HF_API_TOKEN,
-        SAM3_ENDPOINT_URL: (env as any).SAM3_ENDPOINT_URL,
-        GEMINI_API_KEY: (env as any).GEMINI_API_KEY || (env as any).GOOGLE_VERTEX_API_KEY,
-      },
-      imgUrl,
-      lat,
-      lng,
-      zoom,
-      640,
-      640,
-    )
-
-    // Convert to AIMeasurementAnalysis format for report engine compatibility
-    const aiMeasurement = convertToAIMeasurement(segResult, lat, lng)
-
-    // Store CV segmentation results alongside report (non-blocking)
-    const segJson = JSON.stringify({
-      cv_segmentation: segResult,
-      ai_measurement: aiMeasurement,
-      timestamp: new Date().toISOString(),
-    })
-
-    try {
-      await env.DB.prepare(`
-        UPDATE reports SET
-          cv_segmentation_json = ?,
-          cv_segmentation_at = datetime('now'),
-          updated_at = datetime('now')
-        WHERE order_id = ?
-      `).bind(segJson, orderId).run()
-    } catch {
-      // Column may not exist yet — non-critical
-    }
-
-    return c.json({
-      success: true,
-      order_id: orderId,
-      segmentation: segResult,
-      ai_measurement: aiMeasurement,
-      meta: {
-        tiers_used: segResult.processing_tiers_used,
-        inference_ms: segResult.total_inference_ms,
-        gsd_meters: segResult.gsd_meters,
-        num_segments: segResult.segments.length,
-        num_edges: segResult.edges.length,
-        num_obstructions: segResult.obstructions.length,
-      }
-    })
-  } catch (err: any) {
-    console.error('[CV-Segment] Error:', err.message)
-    return c.json({ error: 'CV segmentation failed: ' + err.message }, 500)
-  }
-})
-
-// ============================================================
-// POST /cv-segment/standalone — Direct CV segmentation (no order required)
-// For testing, API integration, and real-time analysis
-// ============================================================
-reportsRoutes.post('/cv-segment/standalone', async (c) => {
-  const env = c.env
-
-  try {
-    const body = await c.req.json() as {
-      image_url?: string
-      lat: number
-      lng: number
-      zoom?: number
-      provider?: string
-    }
-
-    if (!body.lat || !body.lng) return c.json({ error: 'lat and lng required' }, 400)
-
-    const zoom = body.zoom || 20
-    let imgUrl = body.image_url
-
-    // If no image URL, generate from Google Maps
-    if (!imgUrl) {
-      imgUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${body.lat},${body.lng}&zoom=${zoom}&size=640x640&scale=2&maptype=satellite&key=${env.GOOGLE_MAPS_API_KEY}`
-    }
-
-    // Try high-res imagery provider if specified
-    if (body.provider && body.provider !== 'google_maps') {
-      const hiRes = await fetchHighResImagery(
-        {
-          provider: body.provider as any,
-          api_key: (env as any)[`${body.provider.toUpperCase()}_API_KEY`],
-          endpoint_url: (env as any)[`${body.provider.toUpperCase()}_ENDPOINT_URL`],
-        },
-        body.lat,
-        body.lng,
-        { zoom, size: 640 }
-      )
-      if (hiRes) {
-        imgUrl = hiRes.image_url
-      }
-    }
-
-    if (!imgUrl) return c.json({ error: 'No image source available' }, 400)
-
-    const segResult = await runUnifiedSegmentation(
-      {
-        HF_API_TOKEN: (env as any).HF_API_TOKEN,
-        SAM3_ENDPOINT_URL: (env as any).SAM3_ENDPOINT_URL,
-        GEMINI_API_KEY: (env as any).GEMINI_API_KEY || (env as any).GOOGLE_VERTEX_API_KEY,
-      },
-      imgUrl,
-      body.lat,
-      body.lng,
-      zoom,
-      640,
-      640,
-    )
-
-    const aiMeasurement = convertToAIMeasurement(segResult, body.lat, body.lng)
-
-    return c.json({
-      success: true,
-      segmentation: segResult,
-      ai_measurement: aiMeasurement,
-      meta: {
-        tiers_used: segResult.processing_tiers_used,
-        inference_ms: segResult.total_inference_ms,
-        gsd_meters: segResult.gsd_meters,
-        image_url: imgUrl,
-      }
-    })
-  } catch (err: any) {
-    return c.json({ error: 'CV segmentation failed: ' + err.message }, 500)
-  }
-})
-
-// ============================================================
-// GET /cv-capabilities — Lists available CV tiers and imagery providers
-// ============================================================
-reportsRoutes.get('/cv-capabilities', async (c) => {
-  const env = c.env as any
-  return c.json({
-    tiers: {
-      tier_1_sam3: {
-        available: !!env.HF_API_TOKEN,
-        model: 'facebook/sam3',
-        description: 'Meta SAM 3 — Promptable Concept Segmentation (PCS). 270K concepts, instance masks, text/box prompts.',
-        capabilities: ['roof_facet_segmentation', 'ridge_detection', 'chimney_detection', 'skylight_detection', 'obstruction_detection'],
-        endpoint: env.SAM3_ENDPOINT_URL || 'huggingface-inference-api',
-      },
-      tier_2_gemini: {
-        available: !!(env.GEMINI_API_KEY || env.GOOGLE_VERTEX_API_KEY),
-        model: 'gemini-2.0-flash',
-        description: 'Google Gemini 3 Flash — Structured roof segmentation with architectural reasoning.',
-        capabilities: ['pitch_estimation', 'material_identification', 'condition_assessment', 'edge_classification', 'complexity_scoring'],
-      },
-      tier_3_ransac: {
-        available: true,
-        model: 'RANSAC Edge Classifier v1.0',
-        description: 'DSM-based planar segmentation. Pure geometry — no neural network.',
-        capabilities: ['plane_fitting', 'edge_classification', 'pitch_calculation'],
-      },
-    },
-    imagery_providers: {
-      google_solar: { available: !!env.GOOGLE_SOLAR_API_KEY, gsd_meters: 0.1, description: 'Google Solar API RGB GeoTIFF' },
-      google_maps: { available: !!env.GOOGLE_MAPS_API_KEY, gsd_meters: 0.089, description: 'Google Maps Satellite Tile (zoom 20)' },
-      nearmap: { available: !!env.NEARMAP_API_KEY, gsd_meters: 0.075, description: 'Nearmap 7.5cm aerial imagery' },
-      eagleview: { available: !!env.EAGLEVIEW_API_KEY, gsd_meters: 0.05, description: 'EagleView ConnectExplorer ortho' },
-      hover: { available: !!env.HOVER_API_KEY, gsd_meters: 0.03, description: 'Hover smartphone photogrammetry' },
-    },
-    sam3_info: {
-      version: 'SAM 3 (2025)',
-      repo: 'https://github.com/facebookresearch/sam3',
-      huggingface: 'https://huggingface.co/facebook/sam3',
-      key_features: [
-        'Open-vocabulary Promptable Concept Segmentation (PCS) — 270K concepts',
-        'Instance segmentation with per-mask confidence scores',
-        'Text + visual (box) prompts, including negative exclusions',
-        'Video tracking for drone flyover analysis',
-        'Streaming inference for real-time applications',
-        '75-80% human performance on SA-CO benchmark',
-      ],
-      roofing_prompts: [
-        'roof segment', 'roof facet', 'ridge line', 'hip line', 'valley',
-        'dormer', 'chimney', 'skylight', 'vent pipe', 'satellite dish',
-        'gutter', 'downspout', 'solar panel', 'antenna', 'flashing',
-      ],
-    },
-  })
-})
-
-// ============================================================
 // INLINE ENHANCEMENT: Gemini polish with strict timeout
 // Report is ALREADY saved as 'completed' before this runs.
 // On success: overwrites with polished version (stays 'completed').
@@ -2452,9 +1879,8 @@ async function _generateReportForOrderInner(
     if (solarApiKey && order.latitude && order.longitude) {
       try {
         const footprintHint = traceResult?.key_measurements?.total_projected_footprint_ft2 || 1500
-        const nearmapKey = (env as any).NEARMAP_API_KEY || undefined
         solarPitch = await fetchSolarPitchAndImagery(
-          order.latitude, order.longitude, solarApiKey, mapsApiKey || solarApiKey, footprintHint, nearmapKey
+          order.latitude, order.longitude, solarApiKey, mapsApiKey || solarApiKey, footprintHint
         )
         solarPitchDeg = solarPitch.pitch_degrees
         solarPitchRise = Math.round(12 * Math.tan(solarPitchDeg * Math.PI / 180) * 10) / 10
@@ -2598,32 +2024,16 @@ async function _generateReportForOrderInner(
         complexity_class: km.num_hips > 2 || km.num_valleys > 1 ? 'complex' : (km.num_hips > 0 ? 'moderate' : 'simple'),
       }
 
-      // Imagery: prefer Solar API (which now auto-uses Nearmap if key set), fallback to basic Maps Static
-      let imagery: any
-      if (solarPitch) {
-        imagery = { ...solarPitch.imagery, dsm_url: null, mask_url: null }
-      } else {
-        // No Solar API available — try Nearmap directly, then fall back to Google Maps Static
-        const nearmapKey = (env as any).NEARMAP_API_KEY
-        if (nearmapKey && order.latitude && order.longitude) {
-          try {
-            const { fetchNearmapImageryForReport } = await import('../services/nearmap')
-            const nmResult = await fetchNearmapImageryForReport(order.latitude, order.longitude, nearmapKey, km.total_projected_footprint_ft2)
-            if (nmResult) {
-              imagery = { ...nmResult.imagery, dsm_url: null, mask_url: null }
-            }
-          } catch {}
-        }
-        if (!imagery) {
-          imagery = {
+      // Imagery: prefer Solar API, fallback to basic Maps Static
+      const imagery = solarPitch
+        ? { ...solarPitch.imagery, dsm_url: null, mask_url: null }
+        : {
             ...generateEnhancedImagery(
               order.latitude || 0, order.longitude || 0,
               mapsApiKey || '', km.total_projected_footprint_ft2
             ),
             dsm_url: null, mask_url: null,
           }
-        }
-      }
 
       reportData = {
         order_id: typeof orderId === 'string' ? parseInt(orderId) : orderId as number,
@@ -2716,8 +2126,7 @@ async function _generateReportForOrderInner(
 
       if (solarApiKey && order.latitude && order.longitude) {
         try {
-          const nearmapFallback = (env as any).NEARMAP_API_KEY || undefined
-          reportData = await callGoogleSolarAPI(order.latitude, order.longitude, solarApiKey, typeof orderId === 'string' ? parseInt(orderId) : orderId as number, order, mapsApiKey, nearmapFallback)
+          reportData = await callGoogleSolarAPI(order.latitude, order.longitude, solarApiKey, typeof orderId === 'string' ? parseInt(orderId) : orderId as number, order, mapsApiKey)
           reportData.metadata.api_duration_ms = Date.now() - startTime
           console.log(`[Generate] Order ${orderId}: Legacy Solar API report — ${reportData.total_footprint_sqft} sqft, pitch ${reportData.roof_pitch_degrees}°`)
         } catch (e: any) {
@@ -2734,19 +2143,6 @@ async function _generateReportForOrderInner(
       reportData.quality.notes = reportData.quality.notes || []
       reportData.quality.notes.unshift('⚠️ NO ROOF TRACE DATA — measurements are Solar API estimates only. For accurate measurements, re-order with roof outline tracing.')
       reportData.quality.confidence_score = Math.min(reportData.quality.confidence_score, 75)
-
-      // Override imagery with Nearmap for mock/fallback reports (sync generateMockRoofReport can't call Nearmap)
-      const nearmapKeyForFallback = (env as any).NEARMAP_API_KEY
-      if (nearmapKeyForFallback && order.latitude && order.longitude && reportData.imagery) {
-        try {
-          const { fetchNearmapImageryForReport: fetchNM } = await import('../services/nearmap')
-          const nmFallback = await fetchNM(order.latitude, order.longitude, nearmapKeyForFallback, reportData.total_footprint_sqft || 1500)
-          if (nmFallback) {
-            reportData.imagery = { ...reportData.imagery, ...nmFallback.imagery, dsm_url: null, mask_url: null }
-            console.log(`[Generate] Order ${orderId}: Fallback imagery upgraded to Nearmap (7.5cm/px)`)
-          }
-        } catch {}
-      }
     }
 
     // ── AI ANALYSIS REMOVED FROM BASE REPORT ──

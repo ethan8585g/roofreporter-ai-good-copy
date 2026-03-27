@@ -37,13 +37,6 @@ async function getCustomerInfo(c: any): Promise<{ id: number; email: string; eff
 }
 
 secretaryRoutes.use('/*', async (c, next) => {
-  // ── Skip auth for public endpoints (webhooks from LiveKit agent, agent-config) ──
-  const path = new URL(c.req.url).pathname
-  const publicPaths = ['/webhook/', '/agent-config/']
-  if (publicPaths.some(p => path.includes(p))) {
-    return next()
-  }
-
   const info = await getCustomerInfo(c)
   if (!info) return c.json({ error: 'Authentication required' }, 401)
   // Team members access the owner's secretary subscription & config
@@ -206,42 +199,6 @@ secretaryRoutes.post('/subscribe', async (c) => {
 })
 
 // ============================================================
-// POST /enroll-inquiry — Contact form for secretary enrollment
-// Replaces Square checkout for non-onboarded users
-// ============================================================
-secretaryRoutes.post('/enroll-inquiry', async (c) => {
-  const customerId = c.get('customerId' as any) as number
-  try {
-    const body = await c.req.json()
-    const { name, email, phone, company_name, message } = body
-    if (!name && !email) return c.json({ error: 'Name and email are required' }, 400)
-
-    // Save inquiry to DB
-    try {
-      await c.env.DB.prepare(`
-        CREATE TABLE IF NOT EXISTS contact_form_submissions (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          customer_id INTEGER, name TEXT, email TEXT, phone TEXT,
-          company_name TEXT, message TEXT,
-          form_type TEXT DEFAULT 'secretary_enrollment',
-          status TEXT DEFAULT 'new',
-          created_at TEXT DEFAULT (datetime('now'))
-        )
-      `).run()
-    } catch(e) {}
-
-    await c.env.DB.prepare(
-      `INSERT INTO contact_form_submissions (customer_id, name, email, phone, company_name, message, form_type)
-       VALUES (?, ?, ?, ?, ?, ?, 'secretary_enrollment')`
-    ).bind(customerId, name || '', email || '', phone || '', company_name || '', message || '').run()
-
-    return c.json({ success: true, message: 'Thank you! Our team will contact you within 24 hours to set up your AI Secretary.' })
-  } catch (err: any) {
-    return c.json({ error: err.message }, 500)
-  }
-})
-
-// ============================================================
 // POST /verify-session — Verify Square Checkout completed
 // ============================================================
 secretaryRoutes.post('/verify-session', async (c) => {
@@ -324,8 +281,6 @@ secretaryRoutes.post('/config', async (c) => {
     business_phone, greeting_script, common_qa, general_notes,
     // Mode
     secretary_mode = 'directory',
-    // Agent persona
-    agent_name, agent_voice,
     // Answering-mode fields
     answering_fallback_action, answering_forward_number, answering_sms_notify,
     answering_email_notify, answering_notify_email,
@@ -351,7 +306,7 @@ secretaryRoutes.post('/config', async (c) => {
       await c.env.DB.prepare(
         `UPDATE secretary_config SET
           business_phone = ?, greeting_script = ?, common_qa = ?, general_notes = ?,
-          secretary_mode = ?, agent_name = ?, agent_voice = ?,
+          secretary_mode = ?,
           answering_fallback_action = ?, answering_forward_number = ?,
           answering_sms_notify = ?, answering_email_notify = ?, answering_notify_email = ?,
           full_can_book_appointments = ?, full_can_send_email = ?, full_can_schedule_callback = ?,
@@ -362,7 +317,7 @@ secretaryRoutes.post('/config', async (c) => {
         WHERE customer_id = ?`
       ).bind(
         business_phone, greeting_script, common_qa || '', general_notes || '',
-        secretary_mode, agent_name || 'Sarah', agent_voice || 'alloy',
+        secretary_mode,
         answering_fallback_action || 'take_message', answering_forward_number || '',
         answering_sms_notify ?? 1, answering_email_notify ?? 1, answering_notify_email || '',
         full_can_book_appointments ?? 1, full_can_send_email ?? 1, full_can_schedule_callback ?? 1,
@@ -376,17 +331,17 @@ secretaryRoutes.post('/config', async (c) => {
       await c.env.DB.prepare(
         `INSERT INTO secretary_config (
           customer_id, business_phone, greeting_script, common_qa, general_notes,
-          secretary_mode, agent_name, agent_voice,
+          secretary_mode,
           answering_fallback_action, answering_forward_number,
           answering_sms_notify, answering_email_notify, answering_notify_email,
           full_can_book_appointments, full_can_send_email, full_can_schedule_callback,
           full_can_answer_faq, full_can_take_payment_info, full_business_hours,
           full_booking_link, full_services_offered, full_pricing_info,
           full_service_area, full_email_from_name, full_email_signature
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
       ).bind(
         customerId, business_phone, greeting_script, common_qa || '', general_notes || '',
-        secretary_mode, agent_name || 'Sarah', agent_voice || 'alloy',
+        secretary_mode,
         answering_fallback_action || 'take_message', answering_forward_number || '',
         answering_sms_notify ?? 1, answering_email_notify ?? 1, answering_notify_email || '',
         full_can_book_appointments ?? 1, full_can_send_email ?? 1, full_can_schedule_callback ?? 1,
@@ -506,313 +461,26 @@ secretaryRoutes.post('/toggle', async (c) => {
 })
 
 // ============================================================
-// GET /calls — Call log history (enhanced with filters)
+// GET /calls — Call log history
 // ============================================================
 secretaryRoutes.get('/calls', async (c) => {
   const customerId = c.get('customerId' as any) as number
   const limit = parseInt(c.req.query('limit') || '50')
   const offset = parseInt(c.req.query('offset') || '0')
-  const filter = c.req.query('filter') || 'all' // all, leads, follow_up
-  const search = c.req.query('search') || ''
-
-  let whereClause = 'WHERE customer_id = ?'
-  const params: any[] = [customerId]
-
-  if (filter === 'leads') {
-    whereClause += ' AND is_lead = 1'
-  } else if (filter === 'follow_up') {
-    whereClause += ' AND follow_up_required = 1 AND follow_up_completed = 0'
-  }
-
-  if (search) {
-    whereClause += ' AND (caller_name LIKE ? OR caller_phone LIKE ? OR call_summary LIKE ?)'
-    const s = `%${search}%`
-    params.push(s, s, s)
-  }
 
   const calls = await c.env.DB.prepare(
-    `SELECT * FROM secretary_call_logs ${whereClause} ORDER BY created_at DESC LIMIT ? OFFSET ?`
-  ).bind(...params, limit, offset).all<any>()
+    `SELECT * FROM secretary_call_logs WHERE customer_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`
+  ).bind(customerId, limit, offset).all<any>()
 
   const total = await c.env.DB.prepare(
-    `SELECT COUNT(*) as cnt FROM secretary_call_logs ${whereClause}`
-  ).bind(...params).first<any>()
+    `SELECT COUNT(*) as cnt FROM secretary_call_logs WHERE customer_id = ?`
+  ).bind(customerId).first<any>()
 
   return c.json({
     calls: calls.results || [],
     total: total?.cnt || 0,
     limit,
     offset,
-  })
-})
-
-// ============================================================
-// GET /calls/:id — Single call detail with full transcript
-// ============================================================
-secretaryRoutes.get('/calls/:id', async (c) => {
-  const customerId = c.get('customerId' as any) as number
-  const callId = parseInt(c.req.param('id'))
-
-  const call = await c.env.DB.prepare(
-    `SELECT * FROM secretary_call_logs WHERE id = ? AND customer_id = ?`
-  ).bind(callId, customerId).first<any>()
-
-  if (!call) return c.json({ error: 'Call not found' }, 404)
-
-  // Get linked messages, appointments, callbacks
-  const messages = await c.env.DB.prepare(
-    `SELECT * FROM secretary_messages WHERE call_log_id = ? AND customer_id = ?`
-  ).bind(callId, customerId).all<any>()
-
-  const appointments = await c.env.DB.prepare(
-    `SELECT * FROM secretary_appointments WHERE call_log_id = ? AND customer_id = ?`
-  ).bind(callId, customerId).all<any>()
-
-  const callbacks = await c.env.DB.prepare(
-    `SELECT * FROM secretary_callbacks WHERE call_log_id = ? AND customer_id = ?`
-  ).bind(callId, customerId).all<any>()
-
-  return c.json({
-    call,
-    messages: messages.results || [],
-    appointments: appointments.results || [],
-    callbacks: callbacks.results || [],
-  })
-})
-
-// ============================================================
-// PUT /calls/:id — Update call lead status or follow-up info
-// ============================================================
-secretaryRoutes.put('/calls/:id', async (c) => {
-  const customerId = c.get('customerId' as any) as number
-  const callId = parseInt(c.req.param('id'))
-  const body = await c.req.json()
-  const { lead_status, lead_quality, follow_up_required, follow_up_notes, follow_up_completed, tags } = body
-
-  const sets: string[] = []
-  const vals: any[] = []
-
-  if (lead_status !== undefined) { sets.push('lead_status = ?'); vals.push(lead_status) }
-  if (lead_quality !== undefined) { sets.push('lead_quality = ?'); vals.push(lead_quality) }
-  if (follow_up_required !== undefined) { sets.push('follow_up_required = ?'); vals.push(follow_up_required ? 1 : 0) }
-  if (follow_up_notes !== undefined) { sets.push('follow_up_notes = ?'); vals.push(follow_up_notes) }
-  if (follow_up_completed !== undefined) { sets.push('follow_up_completed = ?'); vals.push(follow_up_completed ? 1 : 0) }
-  if (tags !== undefined) { sets.push('tags = ?'); vals.push(tags) }
-
-  if (sets.length === 0) return c.json({ error: 'No fields to update' }, 400)
-
-  await c.env.DB.prepare(
-    `UPDATE secretary_call_logs SET ${sets.join(', ')} WHERE id = ? AND customer_id = ?`
-  ).bind(...vals, callId, customerId).run()
-
-  return c.json({ success: true })
-})
-
-// ============================================================
-// GET /leads — Leads extracted from calls (is_lead = 1)
-// ============================================================
-secretaryRoutes.get('/leads', async (c) => {
-  const customerId = c.get('customerId' as any) as number
-  const limit = parseInt(c.req.query('limit') || '50')
-  const offset = parseInt(c.req.query('offset') || '0')
-  const status = c.req.query('status') || '' // new, contacted, qualified, converted, lost
-
-  let whereClause = 'WHERE customer_id = ? AND is_lead = 1'
-  const params: any[] = [customerId]
-  if (status) { whereClause += ' AND lead_status = ?'; params.push(status) }
-
-  const leads = await c.env.DB.prepare(
-    `SELECT * FROM secretary_call_logs ${whereClause} ORDER BY created_at DESC LIMIT ? OFFSET ?`
-  ).bind(...params, limit, offset).all<any>()
-
-  const total = await c.env.DB.prepare(
-    `SELECT COUNT(*) as cnt FROM secretary_call_logs ${whereClause}`
-  ).bind(...params).first<any>()
-
-  // Lead stage counts
-  const stages = await c.env.DB.prepare(
-    `SELECT lead_status, COUNT(*) as cnt FROM secretary_call_logs WHERE customer_id = ? AND is_lead = 1 GROUP BY lead_status`
-  ).bind(customerId).all<any>()
-
-  return c.json({
-    leads: leads.results || [],
-    total: total?.cnt || 0,
-    stages: stages.results || [],
-    limit,
-    offset,
-  })
-})
-
-// ============================================================
-// GET /call-stats — Dashboard stats for call center section
-// ============================================================
-secretaryRoutes.get('/call-stats', async (c) => {
-  const customerId = c.get('customerId' as any) as number
-
-  const [totalCalls, todayCalls, weekCalls, totalLeads, newLeads, followUps, avgDuration, outcomes] = await Promise.all([
-    c.env.DB.prepare(`SELECT COUNT(*) as cnt FROM secretary_call_logs WHERE customer_id = ?`).bind(customerId).first<any>(),
-    c.env.DB.prepare(`SELECT COUNT(*) as cnt FROM secretary_call_logs WHERE customer_id = ? AND created_at >= date('now')`).bind(customerId).first<any>(),
-    c.env.DB.prepare(`SELECT COUNT(*) as cnt FROM secretary_call_logs WHERE customer_id = ? AND created_at >= date('now', '-7 days')`).bind(customerId).first<any>(),
-    c.env.DB.prepare(`SELECT COUNT(*) as cnt FROM secretary_call_logs WHERE customer_id = ? AND is_lead = 1`).bind(customerId).first<any>(),
-    c.env.DB.prepare(`SELECT COUNT(*) as cnt FROM secretary_call_logs WHERE customer_id = ? AND is_lead = 1 AND lead_status = 'new'`).bind(customerId).first<any>(),
-    c.env.DB.prepare(`SELECT COUNT(*) as cnt FROM secretary_call_logs WHERE customer_id = ? AND follow_up_required = 1 AND follow_up_completed = 0`).bind(customerId).first<any>(),
-    c.env.DB.prepare(`SELECT AVG(call_duration_seconds) as avg_dur FROM secretary_call_logs WHERE customer_id = ? AND call_duration_seconds > 0`).bind(customerId).first<any>(),
-    c.env.DB.prepare(`SELECT call_outcome, COUNT(*) as cnt FROM secretary_call_logs WHERE customer_id = ? GROUP BY call_outcome`).bind(customerId).all<any>(),
-  ])
-
-  // Recent calls for the mini-list
-  const recentCalls = await c.env.DB.prepare(
-    `SELECT id, caller_phone, caller_name, call_duration_seconds, call_summary, call_outcome, is_lead, lead_status, sentiment, service_type, property_address, created_at FROM secretary_call_logs WHERE customer_id = ? ORDER BY created_at DESC LIMIT 5`
-  ).bind(customerId).all<any>()
-
-  return c.json({
-    total_calls: totalCalls?.cnt || 0,
-    today_calls: todayCalls?.cnt || 0,
-    week_calls: weekCalls?.cnt || 0,
-    total_leads: totalLeads?.cnt || 0,
-    new_leads: newLeads?.cnt || 0,
-    pending_follow_ups: followUps?.cnt || 0,
-    avg_duration_seconds: Math.round(avgDuration?.avg_dur || 0),
-    outcomes: outcomes.results || [],
-    recent_calls: recentCalls.results || [],
-  })
-})
-
-// ============================================================
-// POST /simulate-call — Insert a simulated test call for UI verification
-// Dev accounts only — validates the call log UI is working
-// ============================================================
-secretaryRoutes.post('/simulate-call', async (c) => {
-  const customerId = c.get('customerId' as any) as number
-  const isDev = c.get('isDev' as any) as boolean
-
-  if (!isDev) return c.json({ error: 'Simulation only available for dev accounts' }, 403)
-
-  const names = ['John Smith', 'Maria Garcia', 'David Johnson', 'Sarah Williams', 'Mike Brown']
-  const services = ['Roof Inspection', 'Shingle Replacement', 'Leak Repair', 'Storm Damage Assessment', 'Gutter Cleaning']
-  const summaries = [
-    'Homeowner requested a roof inspection after recent hailstorm. Has visible damage on north side. Wants estimate within the week.',
-    'Called about replacing aging shingles. Home is 20 years old. Interested in architectural shingles upgrade.',
-    'Emergency leak repair needed. Water staining on ceiling in master bedroom. Available any day this week.',
-    'Insurance claim filed for storm damage. Needs certified inspector report. Adjuster visiting next Tuesday.',
-    'Routine gutter cleaning and inspection. Also interested in gutter guard installation quote.'
-  ]
-  const idx = Math.floor(Math.random() * names.length)
-  const phone = `(${Math.floor(Math.random() * 900) + 100}) ${Math.floor(Math.random() * 900) + 100}-${Math.floor(Math.random() * 9000) + 1000}`
-  const duration = Math.floor(Math.random() * 240) + 30
-  const outcomes = ['answered', 'answered', 'answered', 'transferred', 'voicemail']
-  const sentiments = ['positive', 'positive', 'neutral', 'neutral', 'negative']
-
-  const result = await c.env.DB.prepare(
-    `INSERT INTO secretary_call_logs (
-      customer_id, caller_phone, caller_name, caller_email,
-      call_duration_seconds, directory_routed,
-      call_summary, call_transcript, call_outcome, livekit_room_id,
-      service_type, property_address, is_lead, lead_status, lead_quality,
-      conversation_highlights, sentiment,
-      follow_up_required, follow_up_notes, tags
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).bind(
-    customerId,
-    phone,
-    names[idx],
-    `${names[idx].toLowerCase().replace(' ', '.')}@email.com`,
-    duration,
-    '',
-    summaries[idx],
-    `AI Secretary: Hello, thanks for calling. How can I help you today?\nCaller: Hi, I'm ${names[idx]}. ${summaries[idx]}\nAI Secretary: I'd be happy to help with that. Let me get some information to pass along to our team...`,
-    outcomes[idx],
-    `sim-room-${Date.now()}`,
-    services[idx],
-    `${Math.floor(Math.random() * 9000) + 1000} ${['Oak', 'Maple', 'Elm', 'Pine', 'Cedar'][idx]} St, Edmonton, AB`,
-    1,
-    'new',
-    ['hot', 'warm', 'warm', 'cold', 'warm'][idx],
-    'Homeowner interested in service. Has specific timeline. Good lead potential.',
-    sentiments[idx],
-    idx % 2 === 0 ? 1 : 0,
-    idx % 2 === 0 ? 'Follow up with estimate within 48 hours' : '',
-    services[idx].toLowerCase().replace(' ', '-')
-  ).run()
-
-  return c.json({
-    success: true,
-    call_id: result.meta?.last_row_id,
-    message: `Simulated call from ${names[idx]} added to call log. Refresh the Call Log tab to see it.`,
-  })
-})
-
-// ============================================================
-// GET /diagnostic — Full system diagnostic for secretary service
-// Shows LiveKit status, Twilio status, webhook URLs, and config
-// ============================================================
-secretaryRoutes.get('/diagnostic', async (c) => {
-  const customerId = c.get('customerId' as any) as number
-  const isDev = c.get('isDev' as any) as boolean
-
-  if (!isDev) return c.json({ error: 'Diagnostic only available for dev accounts' }, 403)
-
-  const config = await c.env.DB.prepare(
-    `SELECT * FROM secretary_config WHERE customer_id = ?`
-  ).bind(customerId).first<any>()
-
-  const callCount = await c.env.DB.prepare(
-    `SELECT COUNT(*) as total FROM secretary_call_logs WHERE customer_id = ?`
-  ).bind(customerId).first<any>()
-
-  const origin = new URL(c.req.url).origin
-
-  return c.json({
-    customer_id: customerId,
-    is_dev: isDev,
-    config_exists: !!config,
-    business_phone: config?.business_phone || null,
-    ai_phone_number: config?.assigned_phone_number || null,
-    connection_status: config?.connection_status || null,
-    is_active: config?.is_active === 1,
-    secretary_mode: config?.secretary_mode || null,
-    livekit: {
-      api_key_set: !!(c.env as any).LIVEKIT_API_KEY,
-      api_secret_set: !!(c.env as any).LIVEKIT_API_SECRET,
-      url: (c.env as any).LIVEKIT_URL || null,
-      sip_uri: (c.env as any).LIVEKIT_SIP_URI || null,
-      inbound_trunk_id: config?.livekit_inbound_trunk_id || null,
-      dispatch_rule_id: config?.livekit_dispatch_rule_id || null,
-    },
-    twilio: {
-      account_sid_set: !!(c.env as any).TWILIO_ACCOUNT_SID,
-      auth_token_set: !!(c.env as any).TWILIO_AUTH_TOKEN,
-      oauth_client_id_set: !!(c.env as any).TWILIO_OAUTH_CLIENT_ID,
-      oauth_secret_set: !!(c.env as any).TWILIO_OAUTH_CLIENT_SECRET,
-    },
-    openai: {
-      api_key_set: !!(c.env as any).OPENAI_API_KEY,
-      base_url: (c.env as any).OPENAI_BASE_URL || null,
-    },
-    webhook_urls: {
-      call_complete: `${origin}/api/secretary/webhook/call-complete`,
-      room_event: `${origin}/api/secretary/webhook/room-event`,
-      twilio_status: `${origin}/api/secretary/webhook/twilio-status`,
-      message: `${origin}/api/secretary/webhook/message`,
-      appointment: `${origin}/api/secretary/webhook/appointment`,
-      callback: `${origin}/api/secretary/webhook/callback`,
-      test_result: `${origin}/api/secretary/webhook/test-result`,
-    },
-    total_call_logs: callCount?.total || 0,
-    last_test: config?.last_test_at ? {
-      at: config.last_test_at,
-      result: config.last_test_result,
-      details: config.last_test_details,
-    } : null,
-    call_flow: 'Customer Phone → Forward to AI Number → Twilio SIP → LiveKit Trunk → AI Agent → webhook/call-complete logs the call. Backup: webhook/room-event catches ALL room closes (even 2s no-answer). Twilio webhook/twilio-status catches busy/failed/no-answer.',
-    troubleshooting: [
-      callCount?.total === 0 ? '⚠️ No call logs found. Either no calls have been forwarded to the AI number, or the LiveKit agent is not posting to the webhook.' : '✅ Call logs found.',
-      config?.connection_status === 'connected' ? '✅ Connection status is "connected".' : '⚠️ Connection not established. Complete the phone setup wizard.',
-      config?.livekit_inbound_trunk_id ? '✅ LiveKit inbound trunk configured.' : '⚠️ LiveKit inbound trunk NOT configured. Run Quick Connect activation.',
-      config?.livekit_dispatch_rule_id ? '✅ LiveKit dispatch rule configured.' : '⚠️ LiveKit dispatch rule NOT configured.',
-      (c.env as any).TWILIO_ACCOUNT_SID ? '✅ Twilio credentials configured.' : '⚠️ Twilio not configured — test calls and SMS summaries unavailable.',
-      (c.env as any).LIVEKIT_API_KEY ? '✅ LiveKit API keys configured.' : '⚠️ LiveKit API keys missing.',
-    ],
   })
 })
 
@@ -1103,50 +771,16 @@ secretaryRoutes.patch('/callbacks/:id', async (c) => {
   return c.json({ success: true })
 })
 
-// ── Helper: Auto-create call log entry when individual webhooks fire without call-complete ──
-async function ensureCallLog(db: any, customer_id: number, caller_phone: string, caller_name: string, summary: string, outcome: string = 'answered', opts?: { service_type?: string; property_address?: string; duration_hint?: number }): Promise<number | null> {
-  try {
-    // Estimate call duration: appointments ~180s, messages ~90s, callbacks ~60s, default ~120s
-    const estimatedDuration = opts?.duration_hint || (
-      summary.toLowerCase().includes('appointment') ? 180 :
-      summary.toLowerCase().includes('emergency') ? 120 :
-      summary.toLowerCase().includes('callback') ? 60 :
-      summary.toLowerCase().includes('message') ? 90 : 120
-    )
-    const result = await db.prepare(
-      `INSERT INTO secretary_call_logs (
-        customer_id, caller_phone, caller_name, caller_email,
-        call_duration_seconds, directory_routed,
-        call_summary, call_transcript, call_outcome, livekit_room_id,
-        service_type, property_address, is_lead, lead_status, lead_quality,
-        conversation_highlights, sentiment, follow_up_required, follow_up_notes, tags
-      ) VALUES (?, ?, ?, '', ?, '', ?, '', ?, '', ?, ?, 1, 'new', 'warm', '', 'neutral', 0, '', '')`
-    ).bind(customer_id, caller_phone || 'Unknown', caller_name || 'Unknown', estimatedDuration, summary, outcome, opts?.service_type || '', opts?.property_address || '').run()
-    return result.meta?.last_row_id || null
-  } catch (err: any) {
-    console.error('[Secretary] Failed to auto-create call log:', err.message)
-    return null
-  }
-}
-
 // ── POST /webhook/message — LiveKit agent posts a new message (answering mode) ──
 secretaryRoutes.post('/webhook/message', async (c) => {
   try {
     const body = await c.req.json()
     const { customer_id, caller_phone, caller_name, message_text, urgency, call_log_id } = body
     if (!customer_id || !message_text) return c.json({ error: 'customer_id and message_text required' }, 400)
-
-    // Auto-create call log if agent didn't post call-complete first
-    let logId = call_log_id || null
-    if (!logId) {
-      logId = await ensureCallLog(c.env.DB, customer_id, caller_phone, caller_name, `Message taken: ${message_text.substring(0, 100)}`, 'answered')
-      console.log(`[Secretary Webhook] Auto-created call log ${logId} for message from ${caller_name || caller_phone}`)
-    }
-
     await c.env.DB.prepare(
       `INSERT INTO secretary_messages (customer_id, caller_phone, caller_name, message_text, urgency, call_log_id) VALUES (?,?,?,?,?,?)`
-    ).bind(customer_id, caller_phone || '', caller_name || '', message_text, urgency || 'normal', logId).run()
-    return c.json({ success: true, call_log_id: logId })
+    ).bind(customer_id, caller_phone || '', caller_name || '', message_text, urgency || 'normal', call_log_id || null).run()
+    return c.json({ success: true })
   } catch (err: any) { return c.json({ error: err.message }, 500) }
 })
 
@@ -1156,23 +790,10 @@ secretaryRoutes.post('/webhook/appointment', async (c) => {
     const body = await c.req.json()
     const { customer_id, caller_phone, caller_name, caller_email, appointment_date, appointment_time, appointment_type, property_address, notes, call_log_id } = body
     if (!customer_id) return c.json({ error: 'customer_id required' }, 400)
-
-    // Auto-create call log if agent didn't post call-complete first
-    let logId = call_log_id || null
-    if (!logId) {
-      const summary = `Appointment booked: ${appointment_type || 'estimate'} for ${caller_name || 'caller'}${property_address ? ` at ${property_address}` : ''}`
-      logId = await ensureCallLog(c.env.DB, customer_id, caller_phone, caller_name, summary, 'answered', {
-        service_type: appointment_type || 'Estimate',
-        property_address: property_address || '',
-        duration_hint: 180 // Appointment calls are typically ~3 min
-      })
-      console.log(`[Secretary Webhook] Auto-created call log ${logId} for appointment from ${caller_name || caller_phone}`)
-    }
-
     await c.env.DB.prepare(
       `INSERT INTO secretary_appointments (customer_id, caller_phone, caller_name, caller_email, appointment_date, appointment_time, appointment_type, property_address, notes, call_log_id) VALUES (?,?,?,?,?,?,?,?,?,?)`
-    ).bind(customer_id, caller_phone || '', caller_name || '', caller_email || '', appointment_date || '', appointment_time || '', appointment_type || 'estimate', property_address || '', notes || '', logId).run()
-    return c.json({ success: true, call_log_id: logId })
+    ).bind(customer_id, caller_phone || '', caller_name || '', caller_email || '', appointment_date || '', appointment_time || '', appointment_type || 'estimate', property_address || '', notes || '', call_log_id || null).run()
+    return c.json({ success: true })
   } catch (err: any) { return c.json({ error: err.message }, 500) }
 })
 
@@ -1182,97 +803,41 @@ secretaryRoutes.post('/webhook/callback', async (c) => {
     const body = await c.req.json()
     const { customer_id, caller_phone, caller_name, preferred_time, reason, call_log_id } = body
     if (!customer_id || !caller_phone) return c.json({ error: 'customer_id and caller_phone required' }, 400)
-
-    // Auto-create call log if agent didn't post call-complete first
-    let logId = call_log_id || null
-    if (!logId) {
-      const summary = `Callback requested by ${caller_name || caller_phone}${reason ? `: ${reason}` : ''}`
-      logId = await ensureCallLog(c.env.DB, customer_id, caller_phone, caller_name, summary, 'answered')
-      console.log(`[Secretary Webhook] Auto-created call log ${logId} for callback from ${caller_name || caller_phone}`)
-    }
-
     await c.env.DB.prepare(
       `INSERT INTO secretary_callbacks (customer_id, caller_phone, caller_name, preferred_time, reason, call_log_id) VALUES (?,?,?,?,?,?)`
-    ).bind(customer_id, caller_phone, caller_name || '', preferred_time || '', reason || '', logId).run()
-    return c.json({ success: true, call_log_id: logId })
+    ).bind(customer_id, caller_phone, caller_name || '', preferred_time || '', reason || '', call_log_id || null).run()
+    return c.json({ success: true })
   } catch (err: any) { return c.json({ error: err.message }, 500) }
 })
 
 // ============================================================
 // POST /webhook/call-complete — LiveKit calls this after each call
-// Records call log entry with enhanced lead data + sends SMS summary
+// Records call log entry + sends SMS transcript summary to owner
 // ============================================================
 secretaryRoutes.post('/webhook/call-complete', async (c) => {
   try {
     const body = await c.req.json()
     const {
-      customer_id, caller_phone, caller_name, caller_email,
+      customer_id, caller_phone, caller_name,
       duration_seconds, directory_routed,
-      summary, transcript, outcome, room_id,
-      // Enhanced fields from agent
-      service_type, property_address, is_lead,
-      lead_quality, conversation_highlights, sentiment,
-      follow_up_required, follow_up_notes, tags,
-      // Linked data
-      messages_taken, appointments_booked
+      summary, transcript, outcome, room_id
     } = body
 
     if (!customer_id) return c.json({ error: 'customer_id required' }, 400)
 
-    // Determine if this is a lead (caller provided name + phone = qualified lead)
-    const detectedLead = is_lead || (caller_name && caller_name !== 'Unknown' && caller_phone && caller_phone !== 'Unknown') ? 1 : 0
-
-    const result = await c.env.DB.prepare(
-      `INSERT INTO secretary_call_logs (
-        customer_id, caller_phone, caller_name, caller_email,
-        call_duration_seconds, directory_routed,
-        call_summary, call_transcript, call_outcome, livekit_room_id,
-        service_type, property_address, is_lead, lead_status, lead_quality,
-        conversation_highlights, sentiment,
-        follow_up_required, follow_up_notes, tags
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    await c.env.DB.prepare(
+      `INSERT INTO secretary_call_logs (customer_id, caller_phone, caller_name, call_duration_seconds, directory_routed, call_summary, call_transcript, call_outcome, livekit_room_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).bind(
       customer_id,
       caller_phone || 'Unknown',
       caller_name || 'Unknown',
-      caller_email || '',
       duration_seconds || 0,
       directory_routed || '',
       summary || '',
       transcript || '',
       outcome || 'answered',
-      room_id || '',
-      service_type || '',
-      property_address || '',
-      detectedLead,
-      detectedLead ? 'new' : '',
-      lead_quality || (detectedLead ? 'warm' : 'unknown'),
-      conversation_highlights || '',
-      sentiment || 'neutral',
-      follow_up_required ? 1 : 0,
-      follow_up_notes || '',
-      tags || ''
+      room_id || ''
     ).run()
-
-    const callLogId = result.meta?.last_row_id
-
-    // Link any messages the agent took during the call
-    if (messages_taken && Array.isArray(messages_taken) && messages_taken.length > 0) {
-      for (const msg of messages_taken) {
-        await c.env.DB.prepare(
-          `INSERT INTO secretary_messages (customer_id, caller_phone, caller_name, message_text, urgency, call_log_id) VALUES (?,?,?,?,?,?)`
-        ).bind(customer_id, msg.phone || caller_phone || '', msg.name || caller_name || '', msg.message || '', msg.urgency || 'normal', callLogId || null).run()
-      }
-    }
-
-    // Link any appointments the agent booked
-    if (appointments_booked && Array.isArray(appointments_booked) && appointments_booked.length > 0) {
-      for (const appt of appointments_booked) {
-        await c.env.DB.prepare(
-          `INSERT INTO secretary_appointments (customer_id, caller_phone, caller_name, appointment_type, property_address, notes, call_log_id) VALUES (?,?,?,?,?,?,?)`
-        ).bind(customer_id, caller_phone || '', caller_name || '', appt.service_type || 'estimate', appt.property_address || property_address || '', appt.notes || '', callLogId || null).run()
-      }
-    }
 
     // ── Send SMS transcript summary to the business owner (non-blocking) ──
     const twilioSid = (c.env as any).TWILIO_ACCOUNT_SID
@@ -1286,7 +851,7 @@ secretaryRoutes.post('/webhook/call-complete', async (c) => {
       ).catch(e => console.warn(`[Secretary SMS] Non-critical SMS error for customer ${customer_id}:`, e.message))
     }
 
-    return c.json({ success: true, call_log_id: callLogId })
+    return c.json({ success: true })
   } catch (err: any) {
     console.error('[Secretary Webhook]', err)
     return c.json({ error: err.message }, 500)
@@ -1397,7 +962,7 @@ async function sendCallSummaryViaSMS(
 // 5. Calls come in → Twilio → SIP → LiveKit → AI Agent answers
 // ============================================================
 
-// ── Twilio API helper (supports both Basic auth and OAuth Bearer token) ──
+// ── Twilio API helper ──
 async function twilioAPI(accountSid: string, authToken: string, method: string, path: string, body?: Record<string, string>) {
   const url = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}${path}.json`
   const headers: Record<string, string> = {
@@ -1410,78 +975,6 @@ async function twilioAPI(accountSid: string, authToken: string, method: string, 
   }
   const resp = await fetch(url, { method, headers, body: formBody || undefined })
   return resp.json() as Promise<any>
-}
-
-// ── Twilio OAuth helper — get access token then call API with Bearer auth ──
-let _twilioOAuthToken: { token: string; expires: number } | null = null
-
-async function getTwilioOAuthToken(clientId: string, clientSecret: string): Promise<string | null> {
-  // Return cached token if still valid (with 60s buffer)
-  if (_twilioOAuthToken && Date.now() < _twilioOAuthToken.expires - 60000) {
-    return _twilioOAuthToken.token
-  }
-  try {
-    const resp = await fetch('https://oauth.twilio.com/v2/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: `client_id=${encodeURIComponent(clientId)}&client_secret=${encodeURIComponent(clientSecret)}&grant_type=client_credentials`,
-    })
-    const data = await resp.json() as any
-    if (data.access_token) {
-      _twilioOAuthToken = { token: data.access_token, expires: Date.now() + (data.expires_in || 3600) * 1000 }
-      return data.access_token
-    }
-    console.error('[TwilioOAuth] Token request failed:', JSON.stringify(data))
-    return null
-  } catch (err: any) {
-    console.error('[TwilioOAuth] Token request error:', err.message)
-    return null
-  }
-}
-
-async function twilioOAuthAPI(accountSid: string, clientId: string, clientSecret: string, method: string, path: string, body?: Record<string, string>) {
-  const token = await getTwilioOAuthToken(clientId, clientSecret)
-  if (!token) throw new Error('Failed to obtain Twilio OAuth token')
-  
-  const url = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}${path}.json`
-  const headers: Record<string, string> = {
-    'Authorization': `Bearer ${token}`,
-    'Content-Type': 'application/x-www-form-urlencoded',
-  }
-  let formBody = ''
-  if (body) {
-    formBody = Object.entries(body).map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('&')
-  }
-  const resp = await fetch(url, { method, headers, body: formBody || undefined })
-  return resp.json() as Promise<any>
-}
-
-// ── Unified Twilio helper — tries OAuth first, falls back to Basic auth ──
-async function twilioSend(env: any, method: string, path: string, body?: Record<string, string>) {
-  const sid = env.TWILIO_ACCOUNT_SID
-  const auth = env.TWILIO_AUTH_TOKEN
-  const oauthClientId = env.TWILIO_OAUTH_CLIENT_ID
-  const oauthClientSecret = env.TWILIO_OAUTH_CLIENT_SECRET
-  
-  // Try OAuth first (if configured)
-  if (sid && oauthClientId && oauthClientSecret) {
-    try {
-      return await twilioOAuthAPI(sid, oauthClientId, oauthClientSecret, method, path, body)
-    } catch (err: any) {
-      console.error('[TwilioSend] OAuth failed, trying Basic auth:', err.message)
-    }
-  }
-  // Fall back to Basic auth
-  if (sid && auth) {
-    return await twilioAPI(sid, auth, method, path, body)
-  }
-  throw new Error('No Twilio credentials configured (need TWILIO_ACCOUNT_SID + either AUTH_TOKEN or OAUTH_CLIENT_ID/SECRET)')
-}
-
-// Helper to check if ANY Twilio sending is possible
-function hasTwilioCredentials(env: any): boolean {
-  const sid = env.TWILIO_ACCOUNT_SID
-  return !!(sid && (env.TWILIO_AUTH_TOKEN || (env.TWILIO_OAUTH_CLIENT_ID && env.TWILIO_OAUTH_CLIENT_SECRET)))
 }
 
 // ── LiveKit SIP API helper (uses LiveKit server-side REST API) ──
@@ -1777,12 +1270,21 @@ secretaryRoutes.post('/assign-number', async (c) => {
       }
     }
 
-    // If still no number available (no Twilio configured or no numbers)
+    // If still no number available (no Twilio configured or no numbers), use a placeholder
     if (!number) {
-      return c.json({
-        error: 'No phone numbers available. Please purchase a number from Twilio, Vonage, or Telnyx and enter it manually in the Connect Phone tab.',
-        needs_manual: true,
-      }, 503)
+      // For dev/testing: assign a placeholder number
+      if (isDev) {
+        const placeholderNumber = '+17800000001'
+        await c.env.DB.prepare(
+          `INSERT OR IGNORE INTO secretary_phone_pool (phone_number, region, status, assigned_to_customer_id, assigned_at) VALUES (?, 'AB', 'assigned', ?, datetime('now'))`
+        ).bind(placeholderNumber, customerId).run()
+        number = { phone_number: placeholderNumber }
+      } else {
+        return c.json({
+          error: 'No phone numbers available. Please contact support.',
+          needs_twilio: !twilioSid,
+        }, 503)
+      }
     }
 
     // If from pool (not just purchased), mark as assigned
@@ -2125,204 +1627,6 @@ secretaryRoutes.get('/forwarding-instructions/:carrier', async (c) => {
     instructions: info,
     has_assigned_number: !!config?.assigned_phone_number,
   })
-})
-
-// ============================================================
-// POST /webhook/room-event — LiveKit Room Webhook
-// Catches ALL room lifecycle events to ensure every call is logged.
-// LiveKit posts here for: room_started, room_finished,
-// participant_joined, participant_left, etc.
-// This is the CATCH-ALL to ensure short/no-answer calls are recorded.
-// ============================================================
-secretaryRoutes.post('/webhook/room-event', async (c) => {
-  try {
-    const body = await c.req.json()
-    const eventType = body.event || ''
-    const room = body.room || {}
-    const participant = body.participant || {}
-    const roomName = room.name || ''  // e.g. "secretary-123-abc"
-    const roomSid = room.sid || ''
-
-    console.log(`[LiveKit Room Event] ${eventType} — room=${roomName}, sid=${roomSid}`)
-
-    // Extract customer_id from room name: "secretary-{customerId}-{suffix}"
-    const match = roomName.match(/^secretary-(\d+)-/)
-    if (!match) {
-      console.log('[LiveKit Room Event] Non-secretary room, ignoring:', roomName)
-      return c.json({ ok: true })
-    }
-    const customerId = parseInt(match[1])
-
-    // We care about room_finished — this fires when the room closes,
-    // even if the call was 2 seconds and no one spoke.
-    if (eventType === 'room_finished') {
-      const createdAt = room.creation_time ? new Date(room.creation_time * 1000) : new Date()
-      const endedAt = new Date()
-      const durationSec = Math.max(1, Math.round((endedAt.getTime() - createdAt.getTime()) / 1000))
-
-      // Check if a call log already exists for this room (from call-complete webhook)
-      const existing = await c.env.DB.prepare(
-        `SELECT id FROM secretary_call_logs WHERE customer_id = ? AND livekit_room_id = ? LIMIT 1`
-      ).bind(customerId, roomSid).first<any>()
-
-      if (existing) {
-        // Call was already logged by call-complete webhook — update duration if needed
-        if (durationSec > 0) {
-          await c.env.DB.prepare(
-            `UPDATE secretary_call_logs SET call_duration_seconds = CASE WHEN call_duration_seconds < 1 THEN ? ELSE call_duration_seconds END WHERE id = ?`
-          ).bind(durationSec, existing.id).run()
-        }
-        console.log(`[LiveKit Room Event] room_finished — call log ${existing.id} already exists for room ${roomSid}`)
-      } else {
-        // NO call-complete webhook fired — this is a missed/short/no-answer call.
-        // Create a call log entry so it shows up in the dashboard.
-        const callerPhone = room.metadata ? (() => { try { const m = JSON.parse(room.metadata); return m.caller_phone || m.from || ''; } catch { return ''; } })() : ''
-        const callerName = room.metadata ? (() => { try { const m = JSON.parse(room.metadata); return m.caller_name || ''; } catch { return ''; } })() : ''
-        const numParticipants = room.num_participants || 0
-
-        // Determine outcome — if duration < 5s or 0 participants, it was unanswered
-        let outcome = 'answered'
-        let summary = 'Call handled by AI Secretary'
-        if (durationSec <= 5 || numParticipants <= 1) {
-          outcome = 'missed'
-          summary = durationSec <= 2 ? 'Caller hung up immediately (no response)' :
-                    durationSec <= 5 ? 'Very short call — caller disconnected before AI could respond' :
-                    'Call ended before conversation began'
-        }
-
-        await c.env.DB.prepare(
-          `INSERT INTO secretary_call_logs (
-            customer_id, caller_phone, caller_name, caller_email,
-            call_duration_seconds, directory_routed,
-            call_summary, call_transcript, call_outcome, livekit_room_id,
-            service_type, property_address, is_lead, lead_status, lead_quality,
-            conversation_highlights, sentiment,
-            follow_up_required, follow_up_notes, tags
-          ) VALUES (?, ?, ?, '', ?, '', ?, '', ?, ?, '', '', 0, '', 'unknown', '', 'neutral', 0, '', ?)`
-        ).bind(
-          customerId,
-          callerPhone || 'Unknown',
-          callerName || 'Unknown',
-          durationSec,
-          summary,
-          outcome,
-          roomSid,
-          outcome === 'missed' ? 'missed,short-call' : ''
-        ).run()
-
-        console.log(`[LiveKit Room Event] room_finished — created NEW call log for room ${roomSid} (${durationSec}s, ${outcome})`)
-      }
-    }
-
-    // Also track participant_joined to capture caller phone from SIP headers
-    if (eventType === 'participant_joined' && participant.kind === 'SIP') {
-      // The SIP participant has the caller's phone in metadata or identity
-      const sipPhone = participant.identity || ''
-      const sipMeta = participant.metadata || ''
-      console.log(`[LiveKit Room Event] SIP participant joined room ${roomName}: ${sipPhone}`)
-      // Store temporarily so room_finished can pick it up
-      try {
-        await c.env.DB.prepare(
-          `INSERT OR REPLACE INTO secretary_room_participants (room_sid, participant_identity, metadata, joined_at) VALUES (?, ?, ?, datetime('now'))`
-        ).bind(roomSid, sipPhone, sipMeta).run()
-      } catch (e: any) {
-        // Table may not exist yet — non-critical
-        console.log(`[LiveKit Room Event] Could not store participant (table may not exist): ${e.message}`)
-      }
-    }
-
-    return c.json({ ok: true })
-  } catch (err: any) {
-    console.error('[LiveKit Room Event Error]', err.message)
-    return c.json({ error: err.message }, 500)
-  }
-})
-
-// ============================================================
-// POST /webhook/twilio-status — Twilio Call Status Callback
-// Catches ALL Twilio call lifecycle events — ensures logging
-// even when the call never reaches LiveKit (busy, no-answer, failed)
-// ============================================================
-secretaryRoutes.post('/webhook/twilio-status', async (c) => {
-  try {
-    const body = await c.req.parseBody()
-    const callStatus = body.CallStatus as string || ''
-    const from = body.From as string || ''
-    const to = body.To as string || ''
-    const callSid = body.CallSid as string || ''
-    const callDuration = parseInt(body.CallDuration as string || '0') || 0
-
-    console.log(`[Twilio Status] ${callStatus} from=${from} to=${to} dur=${callDuration}s sid=${callSid}`)
-
-    // Only log terminal statuses
-    const terminalStatuses = ['completed', 'busy', 'no-answer', 'failed', 'canceled']
-    if (!terminalStatuses.includes(callStatus)) {
-      return c.text('OK')
-    }
-
-    // Find which customer this call was for (by the AI number that received it)
-    const config = await c.env.DB.prepare(
-      `SELECT customer_id FROM secretary_config WHERE assigned_phone_number LIKE ? OR assigned_phone_number LIKE ?`
-    ).bind(`%${to.replace('+1', '')}%`, `%${to}%`).first<any>()
-
-    if (!config) {
-      console.log(`[Twilio Status] No secretary config found for number ${to}`)
-      return c.text('OK')
-    }
-
-    const customerId = config.customer_id
-
-    // Check if a call log already exists (from call-complete or room-event webhook)
-    const existing = await c.env.DB.prepare(
-      `SELECT id FROM secretary_call_logs WHERE customer_id = ? AND caller_phone LIKE ? AND created_at >= datetime('now', '-5 minutes') ORDER BY id DESC LIMIT 1`
-    ).bind(customerId, `%${from.replace('+1', '')}%`).first<any>()
-
-    if (existing) {
-      // Update duration if available
-      if (callDuration > 0) {
-        await c.env.DB.prepare(
-          `UPDATE secretary_call_logs SET call_duration_seconds = ? WHERE id = ? AND (call_duration_seconds < 1 OR call_duration_seconds IS NULL)`
-        ).bind(callDuration, existing.id).run()
-      }
-      return c.text('OK')
-    }
-
-    // No existing log — create one for missed/failed calls
-    if (callStatus !== 'completed') {
-      const outcomeMap: Record<string, string> = {
-        'busy': 'busy', 'no-answer': 'no_answer', 'failed': 'failed', 'canceled': 'canceled'
-      }
-      const summaryMap: Record<string, string> = {
-        'busy': 'Caller reached busy signal — line was in use',
-        'no-answer': 'Call went unanswered — neither human nor AI picked up',
-        'failed': 'Call connection failed — possible network/carrier issue',
-        'canceled': 'Caller hung up before connection was established'
-      }
-
-      await c.env.DB.prepare(
-        `INSERT INTO secretary_call_logs (
-          customer_id, caller_phone, caller_name, caller_email,
-          call_duration_seconds, directory_routed,
-          call_summary, call_transcript, call_outcome, livekit_room_id,
-          service_type, property_address, is_lead, lead_status, lead_quality,
-          conversation_highlights, sentiment, follow_up_required, follow_up_notes, tags
-        ) VALUES (?, ?, 'Unknown', '', ?, '', ?, '', ?, ?, '', '', 0, '', 'unknown', '', 'neutral', 0, '', ?)`
-      ).bind(
-        customerId, from || 'Unknown', callDuration,
-        summaryMap[callStatus] || `Call ended with status: ${callStatus}`,
-        outcomeMap[callStatus] || callStatus,
-        callSid,
-        `twilio-${callStatus}`
-      ).run()
-
-      console.log(`[Twilio Status] Created call log for ${callStatus} call from ${from} to customer ${customerId}`)
-    }
-
-    return c.text('OK')
-  } catch (err: any) {
-    console.error('[Twilio Status Error]', err.message)
-    return c.text('Error', 500)
-  }
 })
 
 // ============================================================
@@ -3203,331 +2507,411 @@ IMPORTANT RULES:
 })
 
 // ============================================================
-// QUICK CONNECT — Phone setup for AI Secretary
-// Two paths:
-//   A) LiveKit auto-purchase: if LIVEKIT keys configured, auto-buy a number
-//   B) Manual entry: user enters their OWN purchased number (Twilio/Vonage/Telnyx/LiveKit)
+// QUICK CONNECT — Simple SMS-verified phone setup
+// Like Genspark "Call for Me" — enter number, verify, connected.
 // Flow:
-//   1. Enter business phone + AI phone number (or auto-purchase)
-//   2. Save → get carrier forwarding instructions
-//   3. Set up call forwarding → press Confirm → deploy agent to LiveKit
+//   1. User enters their business phone number
+//   2. We send a 6-digit SMS verification code via Twilio Verify
+//   3. User enters the code
+//   4. We auto-purchase a LiveKit phone number (or Twilio number)
+//   5. We auto-create LiveKit inbound trunk + dispatch rule
+//   6. User gets a simple one-line forwarding code to dial
 // ============================================================
 
-// Helper: normalize phone to E.164
-function normalizePhone(raw: string): string {
-  let n = raw.replace(/[\s\-\(\)\.]/g, '')
-  if (n.startsWith('1') && n.length === 11) n = '+' + n
-  else if (!n.startsWith('+') && n.length === 10) n = '+1' + n
-  else if (!n.startsWith('+')) n = '+' + n
-  return n
-}
-
-// Helper: format phone for display
-function formatPhoneDisplay(n: string): string {
-  if (!n) return ''
-  const d = n.replace(/^\+1/, '').replace(/\D/g, '')
-  if (d.length === 10) return `(${d.slice(0,3)}) ${d.slice(3,6)}-${d.slice(6)}`
-  return n
-}
-
-// POST /quick-connect/save-phones — Save business phone + manually entered AI phone number
-// This is the primary path: user enters both phone numbers themselves
-secretaryRoutes.post('/quick-connect/save-phones', async (c) => {
-  const customerId = c.get('customerId' as any) as number
-  const { business_phone, ai_phone_number } = await c.req.json()
-
-  if (!business_phone) return c.json({ error: 'Your business phone number is required' }, 400)
-  if (!ai_phone_number) return c.json({ error: 'Your AI phone number (purchased from Twilio/Vonage/Telnyx) is required' }, 400)
-
-  const normalizedBiz = normalizePhone(business_phone)
-  const normalizedAi = normalizePhone(ai_phone_number)
-
-  // Validate both are proper phone numbers (10+ digits after normalization)
-  const bizDigits = normalizedBiz.replace(/\D/g, '')
-  const aiDigits = normalizedAi.replace(/\D/g, '')
-  if (bizDigits.length < 10) return c.json({ error: 'Business phone number must be at least 10 digits' }, 400)
-  if (aiDigits.length < 10) return c.json({ error: 'AI phone number must be at least 10 digits' }, 400)
-  if (normalizedBiz === normalizedAi) return c.json({ error: 'Business phone and AI phone cannot be the same number' }, 400)
-
-  // Ensure config row exists
-  const existing = await c.env.DB.prepare(
-    `SELECT id FROM secretary_config WHERE customer_id = ?`
-  ).bind(customerId).first<any>()
-
-  if (!existing) {
-    await c.env.DB.prepare(
-      `INSERT INTO secretary_config (customer_id, business_phone, assigned_phone_number, connection_status, forwarding_method, phone_verified, created_at, updated_at) VALUES (?, ?, ?, 'pending_forwarding', 'manual_entry', 1, datetime('now'), datetime('now'))`
-    ).bind(customerId, normalizedBiz, normalizedAi).run()
-  } else {
-    await c.env.DB.prepare(`
-      UPDATE secretary_config SET
-        business_phone = ?,
-        assigned_phone_number = ?,
-        connection_status = 'pending_forwarding',
-        forwarding_method = 'manual_entry',
-        phone_verified = 1,
-        updated_at = datetime('now')
-      WHERE customer_id = ?
-    `).bind(normalizedBiz, normalizedAi, customerId).run()
-  }
-
-  console.log(`[QuickConnect] Phones saved — Customer ${customerId}: biz=${normalizedBiz}, ai=${normalizedAi}`)
-
-  return c.json({
-    success: true,
-    business_phone: normalizedBiz,
-    business_phone_display: formatPhoneDisplay(normalizedBiz),
-    ai_phone_number: normalizedAi,
-    ai_phone_display: formatPhoneDisplay(normalizedAi),
-    message: `Phone numbers saved! Now set up call forwarding from ${formatPhoneDisplay(normalizedBiz)} to ${formatPhoneDisplay(normalizedAi)}, then press Confirm.`,
-  })
-})
-
-// POST /quick-connect/purchase-number — Enter phone + auto-purchase LiveKit number
-// Fallback: if LiveKit purchase fails, returns needs_manual=true so frontend shows manual entry
-secretaryRoutes.post('/quick-connect/purchase-number', async (c) => {
+// POST /quick-connect/send-code — Send SMS verification code
+secretaryRoutes.post('/quick-connect/send-code', async (c) => {
   const customerId = c.get('customerId' as any) as number
   const { phone_number } = await c.req.json()
 
   if (!phone_number) return c.json({ error: 'Phone number is required' }, 400)
 
-  const normalized = normalizePhone(phone_number)
+  // Normalize phone number to E.164
+  let normalized = phone_number.replace(/[\s\-\(\)\.]/g, '')
+  if (normalized.startsWith('1') && normalized.length === 11) normalized = '+' + normalized
+  else if (!normalized.startsWith('+') && normalized.length === 10) normalized = '+1' + normalized
+  else if (!normalized.startsWith('+')) normalized = '+' + normalized
 
-  // Ensure config row exists
+  // Save the business phone to config
   const existing = await c.env.DB.prepare(
-    `SELECT id, assigned_phone_number, livekit_inbound_trunk_id, livekit_dispatch_rule_id FROM secretary_config WHERE customer_id = ?`
+    `SELECT id FROM secretary_config WHERE customer_id = ?`
   ).bind(customerId).first<any>()
 
-  if (!existing) {
-    await c.env.DB.prepare(
-      `INSERT INTO secretary_config (customer_id, business_phone, created_at, updated_at) VALUES (?, ?, datetime('now'), datetime('now'))`
-    ).bind(customerId, normalized).run()
-  } else {
+  if (existing) {
     await c.env.DB.prepare(
       `UPDATE secretary_config SET business_phone = ?, updated_at = datetime('now') WHERE customer_id = ?`
     ).bind(normalized, customerId).run()
+  } else {
+    await c.env.DB.prepare(
+      `INSERT INTO secretary_config (customer_id, business_phone, created_at, updated_at) VALUES (?, ?, datetime('now'), datetime('now'))`
+    ).bind(customerId, normalized).run()
   }
 
-  // Check if customer already has a real number (not a placeholder)
-  if (existing?.assigned_phone_number && !existing.assigned_phone_number.includes('0000') && existing?.livekit_dispatch_rule_id) {
-    console.log(`[QuickConnect] Reusing existing number ${existing.assigned_phone_number} for customer ${customerId}`)
+  // Try Twilio Verify SMS
+  const twilioSid = (c.env as any).TWILIO_ACCOUNT_SID
+  const twilioAuth = (c.env as any).TWILIO_AUTH_TOKEN
+  const twilioVerifySid = (c.env as any).TWILIO_VERIFY_SERVICE_SID
+
+  if (twilioSid && twilioAuth && twilioVerifySid) {
+    try {
+      const url = `https://verify.twilio.com/v2/Services/${twilioVerifySid}/Verifications`
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Basic ' + btoa(`${twilioSid}:${twilioAuth}`),
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: `To=${encodeURIComponent(normalized)}&Channel=sms`,
+      })
+      const data = await resp.json() as any
+
+      if (data.status === 'pending') {
+        return c.json({
+          success: true,
+          phone_number: normalized,
+          message: `Verification code sent to ${normalized}. Check your texts!`,
+          method: 'twilio_verify',
+        })
+      } else {
+        console.error('[QuickConnect] Twilio Verify error:', data)
+        // Fall through to fallback
+      }
+    } catch (err: any) {
+      console.error('[QuickConnect] Twilio Verify failed:', err.message)
+    }
+  }
+
+  // Fallback: Generate a code and store it (for when Twilio Verify isn't configured)
+  const code = String(Math.floor(100000 + Math.random() * 900000))
+  await c.env.DB.prepare(
+    `UPDATE secretary_config SET verification_code = ?, verification_expires = datetime('now', '+10 minutes'), updated_at = datetime('now') WHERE customer_id = ?`
+  ).bind(code, customerId).run()
+
+  // Try to send via Twilio SMS directly
+  if (twilioSid && twilioAuth) {
+    const twilioFromNumber = (c.env as any).TWILIO_PHONE_NUMBER
+    if (twilioFromNumber) {
+      try {
+        await twilioAPI(twilioSid, twilioAuth, 'POST', '/Messages', {
+          To: normalized,
+          From: twilioFromNumber,
+          Body: `Your RoofReporterAI Secretary verification code is: ${code}. This code expires in 10 minutes.`,
+        })
+        return c.json({
+          success: true,
+          phone_number: normalized,
+          message: `Verification code sent to ${normalized}. Check your texts!`,
+          method: 'twilio_sms',
+        })
+      } catch (err: any) {
+        console.error('[QuickConnect] Twilio SMS failed:', err.message)
+      }
+    }
+  }
+
+  // If no Twilio at all, return the code for dev mode
+  const isDev = c.get('isDev' as any) as boolean
+  if (isDev) {
     return c.json({
       success: true,
-      ai_phone_number: existing.assigned_phone_number,
-      ai_phone_display: formatPhoneDisplay(existing.assigned_phone_number),
-      business_phone: normalized,
-      business_phone_display: formatPhoneDisplay(normalized),
-      dispatch_rule_id: existing.livekit_dispatch_rule_id || '',
-      message: 'Your AI number is already set up! Proceed to call forwarding.',
+      phone_number: normalized,
+      message: `Dev mode — your verification code is: ${code}`,
+      method: 'dev_mode',
+      dev_code: code,
     })
   }
 
-  // --- AUTO PURCHASE A LIVEKIT PHONE NUMBER ---
-  const apiKey = (c.env as any).LIVEKIT_API_KEY
-  const apiSecret = (c.env as any).LIVEKIT_API_SECRET
-  const livekitUrl = (c.env as any).LIVEKIT_URL
+  return c.json({
+    success: true,
+    phone_number: normalized,
+    message: 'Verification code sent! Check your phone for a text message.',
+    method: 'stored',
+  })
+})
 
-  let aiPhoneNumber = ''
-  let dispatchId = ''
-  let connectionMethod = 'livekit_number'
+// POST /quick-connect/verify — Verify code and auto-setup everything
+secretaryRoutes.post('/quick-connect/verify', async (c) => {
+  const customerId = c.get('customerId' as any) as number
+  const isDev = c.get('isDev' as any) as boolean
+  const { phone_number, code } = await c.req.json()
 
-  if (apiKey && apiSecret && livekitUrl) {
+  if (!code) return c.json({ error: 'Verification code is required' }, 400)
+
+  // Normalize phone number
+  let normalized = (phone_number || '').replace(/[\s\-\(\)\.]/g, '')
+  if (normalized.startsWith('1') && normalized.length === 11) normalized = '+' + normalized
+  else if (!normalized.startsWith('+') && normalized.length === 10) normalized = '+1' + normalized
+  else if (!normalized.startsWith('+')) normalized = '+' + normalized
+
+  // Step 1: Verify the code
+  const twilioSid = (c.env as any).TWILIO_ACCOUNT_SID
+  const twilioAuth = (c.env as any).TWILIO_AUTH_TOKEN
+  const twilioVerifySid = (c.env as any).TWILIO_VERIFY_SERVICE_SID
+
+  let verified = false
+
+  if (twilioSid && twilioAuth && twilioVerifySid) {
     try {
-      console.log(`[QuickConnect] Purchasing LiveKit phone number for customer ${customerId}`)
+      const url = `https://verify.twilio.com/v2/Services/${twilioVerifySid}/VerificationCheck`
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Basic ' + btoa(`${twilioSid}:${twilioAuth}`),
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: `To=${encodeURIComponent(normalized)}&Code=${encodeURIComponent(code)}`,
+      })
+      const data = await resp.json() as any
+      verified = data.status === 'approved'
+    } catch (err: any) {
+      console.error('[QuickConnect] Verify check failed:', err.message)
+    }
+  }
 
-      const searchResult = await livekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST',
-        '/twirp/livekit.PhoneNumberService/SearchPhoneNumbers',
-        { country_code: 'US', limit: 5 })
+  // Fallback: check stored code
+  if (!verified) {
+    const config = await c.env.DB.prepare(
+      `SELECT verification_code, verification_expires FROM secretary_config WHERE customer_id = ?`
+    ).bind(customerId).first<any>()
+    if (config?.verification_code === code && config?.verification_expires > new Date().toISOString()) {
+      verified = true
+    }
+  }
 
-      console.log(`[QuickConnect] Search result:`, JSON.stringify(searchResult))
+  // Dev mode bypass: code "000000"
+  if (!verified && isDev && code === '000000') verified = true
 
-      if (searchResult?.items?.length > 0) {
-        const numberToBuy = searchResult.items[0].e164_format
-        console.log(`[QuickConnect] Purchasing number: ${numberToBuy}`)
+  if (!verified) {
+    return c.json({ error: 'Invalid or expired verification code. Please try again.' }, 400)
+  }
 
-        const dispatchResult = await livekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST',
-          '/twirp/livekit.SIP/CreateSIPDispatchRule', {
-            rule: { dispatchRuleIndividual: { roomPrefix: `secretary-${customerId}-` } },
-            name: `secretary-dispatch-${customerId}`,
-            metadata: JSON.stringify({ customer_id: customerId, service: 'roofer_secretary' }),
-          })
-        dispatchId = dispatchResult?.sip_dispatch_rule_id || ''
+  // Step 2: Phone verified — now auto-setup everything
+  try {
+    const apiKey = (c.env as any).LIVEKIT_API_KEY
+    const apiSecret = (c.env as any).LIVEKIT_API_SECRET
+    const livekitUrl = (c.env as any).LIVEKIT_URL
 
-        const purchaseResult = await livekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST',
-          '/twirp/livekit.PhoneNumberService/PurchasePhoneNumber',
-          { phone_numbers: [numberToBuy], sip_dispatch_rule_id: dispatchId || undefined })
+    let aiPhoneNumber = ''
+    let trunkId = ''
+    let dispatchId = ''
+    let connectionMethod = 'livekit_number'
+    let forwardingCode = ''
 
-        if (purchaseResult?.phone_numbers?.length > 0) {
-          aiPhoneNumber = purchaseResult.phone_numbers[0].e164_format
-          connectionMethod = 'livekit_direct'
-          console.log(`[QuickConnect] Purchased number: ${aiPhoneNumber}, dispatch: ${dispatchId}`)
+    // Check if customer already has a number
+    const existingConfig = await c.env.DB.prepare(
+      `SELECT assigned_phone_number, livekit_inbound_trunk_id, livekit_dispatch_rule_id FROM secretary_config WHERE customer_id = ?`
+    ).bind(customerId).first<any>()
 
-          if (dispatchId && !purchaseResult.phone_numbers[0].sip_dispatch_rule_id) {
-            try {
-              await livekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST',
-                '/twirp/livekit.PhoneNumberService/UpdatePhoneNumber',
-                { phone_number: aiPhoneNumber, sip_dispatch_rule_id: dispatchId })
-            } catch (e: any) {
-              console.error(`[QuickConnect] Failed to update dispatch link:`, e.message)
+    if (existingConfig?.assigned_phone_number && existingConfig?.livekit_inbound_trunk_id) {
+      // Already set up — just update connection status
+      aiPhoneNumber = existingConfig.assigned_phone_number
+      trunkId = existingConfig.livekit_inbound_trunk_id
+      dispatchId = existingConfig.livekit_dispatch_rule_id || ''
+    } else {
+      // --- AUTO PURCHASE A PHONE NUMBER ---
+      // Option A: Try LiveKit Phone Numbers API (simplest)
+      if (apiKey && apiSecret && livekitUrl) {
+        try {
+          // Search for available US numbers (LiveKit only supports US currently)
+          const searchResult = await livekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST',
+            '/twirp/livekit.PhoneNumberService/SearchPhoneNumbers',
+            { country_code: 'US', limit: 5 })
+
+          if (searchResult?.items?.length > 0) {
+            // Purchase the first available number
+            const numberToBuy = searchResult.items[0].e164_format
+            const purchaseResult = await livekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST',
+              '/twirp/livekit.PhoneNumberService/PurchasePhoneNumber',
+              { phone_numbers: [numberToBuy] })
+
+            if (purchaseResult?.phone_numbers?.length > 0) {
+              aiPhoneNumber = purchaseResult.phone_numbers[0].e164_format
+              connectionMethod = 'livekit_direct'
+
+              // Create dispatch rule
+              const dispatchResult = await livekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST',
+                '/twirp/livekit.SIP/CreateSIPDispatchRule', {
+                  rule: { dispatchRuleIndividual: { roomPrefix: `secretary-${customerId}-` } },
+                  name: `secretary-dispatch-${customerId}`,
+                  metadata: JSON.stringify({ customer_id: customerId, service: 'roofer_secretary' }),
+                })
+              dispatchId = dispatchResult?.sip_dispatch_rule_id || ''
+
+              // Assign number to dispatch rule
+              if (dispatchId) {
+                await livekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST',
+                  '/twirp/livekit.PhoneNumberService/UpdatePhoneNumber',
+                  { phone_number: aiPhoneNumber, sip_dispatch_rule_id: dispatchId })
+              }
             }
           }
+        } catch (err: any) {
+          console.error('[QuickConnect] LiveKit Phone Numbers failed:', err.message)
         }
       }
-    } catch (err: any) {
-      console.error('[QuickConnect] LiveKit Phone Numbers failed:', err.message)
-    }
-  }
 
-  // If auto-purchase failed, tell frontend to show manual entry form instead
-  if (!aiPhoneNumber) {
-    console.log(`[QuickConnect] Auto-purchase failed — prompting manual entry for customer ${customerId}`)
-    return c.json({
-      success: false,
-      needs_manual: true,
-      business_phone: normalized,
-      business_phone_display: formatPhoneDisplay(normalized),
-      message: 'Auto-purchase not available. Please enter the phone number you purchased from Twilio, Vonage, or Telnyx.',
-    })
-  }
+      // Option B: Try Twilio number purchase + LiveKit SIP trunk
+      if (!aiPhoneNumber && twilioSid && twilioAuth) {
+        try {
+          // Search for Canadian numbers (Alberta preferred)
+          let search = await twilioAPI(twilioSid, twilioAuth, 'GET',
+            '/AvailablePhoneNumbers/CA/Local?AreaCode=780&VoiceEnabled=true&PageSize=1', undefined)
 
-  // Save the purchased number
-  await c.env.DB.prepare(`
-    UPDATE secretary_config SET
-      business_phone = ?,
-      assigned_phone_number = ?,
-      connection_status = 'pending_forwarding',
-      forwarding_method = ?,
-      livekit_dispatch_rule_id = ?,
-      phone_verified = 1,
-      updated_at = datetime('now')
-    WHERE customer_id = ?
-  `).bind(normalized, aiPhoneNumber, connectionMethod, dispatchId || '', customerId).run()
+          if (!search?.available_phone_numbers?.length) {
+            search = await twilioAPI(twilioSid, twilioAuth, 'GET',
+              '/AvailablePhoneNumbers/CA/Local?VoiceEnabled=true&PageSize=1', undefined)
+          }
+          if (!search?.available_phone_numbers?.length) {
+            search = await twilioAPI(twilioSid, twilioAuth, 'GET',
+              '/AvailablePhoneNumbers/US/Local?VoiceEnabled=true&PageSize=1', undefined)
+          }
 
-  console.log(`[QuickConnect] Number purchased — Customer ${customerId}: business=${normalized}, ai=${aiPhoneNumber}`)
+          if (search?.available_phone_numbers?.length > 0) {
+            const phoneToCreate = search.available_phone_numbers[0]
+            const purchased = await twilioAPI(twilioSid, twilioAuth, 'POST', '/IncomingPhoneNumbers', {
+              PhoneNumber: phoneToCreate.phone_number,
+              FriendlyName: `RoofReporterAI Secretary - Customer ${customerId}`,
+            })
 
-  return c.json({
-    success: true,
-    ai_phone_number: aiPhoneNumber,
-    ai_phone_display: formatPhoneDisplay(aiPhoneNumber),
-    business_phone: normalized,
-    business_phone_display: formatPhoneDisplay(normalized),
-    dispatch_rule_id: dispatchId,
-    connection_method: connectionMethod,
-    message: `Your AI secretary number is ${formatPhoneDisplay(aiPhoneNumber)}. Now set up call forwarding from your carrier.`,
-  })
-})
+            if (purchased?.sid) {
+              aiPhoneNumber = purchased.phone_number
+              connectionMethod = 'twilio_sip'
 
-// POST /quick-connect/activate — User confirms forwarding is set up, deploy agent to LiveKit + activate
-secretaryRoutes.post('/quick-connect/activate', async (c) => {
-  const customerId = c.get('customerId' as any) as number
+              // Save to phone pool
+              await c.env.DB.prepare(
+                `INSERT OR REPLACE INTO secretary_phone_pool (phone_number, phone_sid, region, status, assigned_to_customer_id, assigned_at) VALUES (?, ?, 'CA', 'assigned', ?, datetime('now'))`
+              ).bind(aiPhoneNumber, purchased.sid, customerId).run()
 
-  const config = await c.env.DB.prepare(
-    `SELECT * FROM secretary_config WHERE customer_id = ?`
-  ).bind(customerId).first<any>()
+              // Configure Twilio to route calls to LiveKit via TwiML
+              if (apiKey && apiSecret && livekitUrl) {
+                const livekitSipUri = (c.env as any).LIVEKIT_SIP_URI || ''
 
-  if (!config?.assigned_phone_number) {
-    return c.json({ error: 'No AI phone number saved yet. Please enter your business phone and AI phone number first.' }, 400)
-  }
-  if (!config?.business_phone) {
-    return c.json({ error: 'No business phone number saved. Please enter your business phone number first.' }, 400)
-  }
+                // Create LiveKit inbound trunk for this number
+                const trunkResult = await livekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST',
+                  '/twirp/livekit.SIP/CreateSIPInboundTrunk', {
+                    trunk: {
+                      name: `secretary-${customerId}`,
+                      numbers: [aiPhoneNumber],
+                      krisp_enabled: true,
+                      metadata: JSON.stringify({ customer_id: customerId, service: 'roofer_secretary' }),
+                    }
+                  })
+                trunkId = trunkResult?.sip_trunk_id || trunkResult?.trunk?.sip_trunk_id || ''
 
-  // --- DEPLOY LIVEKIT AGENT ---
-  // Create inbound trunk + dispatch rule if not already configured
-  const apiKey = (c.env as any).LIVEKIT_API_KEY
-  const apiSecret = (c.env as any).LIVEKIT_API_SECRET
-  const livekitUrl = (c.env as any).LIVEKIT_URL
-  let trunkId = config.livekit_inbound_trunk_id || ''
-  let dispatchId = config.livekit_dispatch_rule_id || ''
-  let livekitDeployed = false
-  let livekitError = ''
+                // Create dispatch rule
+                const dispatchResult = await livekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST',
+                  '/twirp/livekit.SIP/CreateSIPDispatchRule', {
+                    trunk_ids: trunkId ? [trunkId] : [],
+                    rule: { dispatchRuleIndividual: { roomPrefix: `secretary-${customerId}-` } },
+                    name: `secretary-dispatch-${customerId}`,
+                    metadata: JSON.stringify({ customer_id: customerId }),
+                  })
+                dispatchId = dispatchResult?.sip_dispatch_rule_id || ''
 
-  if (apiKey && apiSecret && livekitUrl) {
-    try {
-      // Create inbound trunk if not exists
-      if (!trunkId) {
-        console.log(`[QuickConnect] Creating LiveKit inbound trunk for customer ${customerId}`)
-        const trunkResult = await livekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST',
-          '/twirp/livekit.SIP/CreateSIPInboundTrunk', {
-            trunk: {
-              name: `secretary-${customerId}`,
-              numbers: [config.assigned_phone_number],
-              krisp_enabled: true,
-              metadata: JSON.stringify({
-                customer_id: customerId,
-                service: 'roofer_secretary',
-                business_phone: config.business_phone,
-              }),
+                // Configure Twilio webhook to route to LiveKit SIP
+                if (livekitSipUri && purchased.sid) {
+                  const twimlUrl = `https://handler.twilio.com/twiml/EH_PLACEHOLDER`
+                  // Update Twilio number voice URL to forward to LiveKit
+                  // We'll use a simple TwiML response to SIP to LiveKit
+                  const twiml = `<Response><Dial><Sip>sip:${aiPhoneNumber.replace('+', '')}@${livekitSipUri};transport=tcp</Sip></Dial></Response>`
+                  // For now, we store the TwiML — Twilio TwiML Bins need to be configured separately
+                  // The actual webhook configuration happens via Twilio Console or API
+                }
+              }
             }
-          })
-        trunkId = trunkResult?.sip_trunk_id || trunkResult?.trunk?.sip_trunk_id || ''
-        console.log(`[QuickConnect] Created inbound trunk: ${trunkId}`)
+          }
+        } catch (err: any) {
+          console.error('[QuickConnect] Twilio purchase failed:', err.message)
+        }
       }
 
-      // Create dispatch rule if not exists
-      if (!dispatchId) {
-        console.log(`[QuickConnect] Creating LiveKit dispatch rule for customer ${customerId}`)
-        const dispatchResult = await livekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST',
-          '/twirp/livekit.SIP/CreateSIPDispatchRule', {
-            trunk_ids: trunkId ? [trunkId] : [],
-            rule: { dispatchRuleIndividual: { roomPrefix: `secretary-${customerId}-` } },
-            name: `secretary-dispatch-${customerId}`,
-            metadata: JSON.stringify({ customer_id: customerId }),
-          })
-        dispatchId = dispatchResult?.sip_dispatch_rule_id || ''
-        console.log(`[QuickConnect] Created dispatch rule: ${dispatchId}`)
+      // Option C: Dev mode — assign a placeholder
+      if (!aiPhoneNumber && isDev) {
+        aiPhoneNumber = '+17800000001'
+        connectionMethod = 'dev_placeholder'
+        await c.env.DB.prepare(
+          `INSERT OR IGNORE INTO secretary_phone_pool (phone_number, region, status, assigned_to_customer_id, assigned_at) VALUES (?, 'AB', 'assigned', ?, datetime('now'))`
+        ).bind(aiPhoneNumber, customerId).run()
       }
-
-      livekitDeployed = !!(trunkId || dispatchId)
-    } catch (err: any) {
-      console.error('[QuickConnect] LiveKit deployment error:', err.message)
-      livekitError = err.message
     }
-  } else {
-    console.log(`[QuickConnect] LiveKit API keys not configured — agent deployment skipped. Customer ${customerId} phones saved for manual LiveKit setup.`)
+
+    if (!aiPhoneNumber) {
+      return c.json({
+        error: 'Unable to purchase a phone number automatically. Please contact support or configure Twilio/LiveKit API keys.',
+        verified: true,
+      }, 503)
+    }
+
+    // Generate the simple forwarding code
+    const aiDigits = aiPhoneNumber.replace(/^\+1/, '').replace(/\D/g, '')
+    forwardingCode = `*72${aiDigits}`
+
+    // Update secretary config with everything
+    await c.env.DB.prepare(`
+      UPDATE secretary_config SET
+        business_phone = ?,
+        assigned_phone_number = ?,
+        connection_status = 'verified',
+        forwarding_method = ?,
+        livekit_inbound_trunk_id = ?,
+        livekit_dispatch_rule_id = ?,
+        verification_code = NULL,
+        verification_expires = NULL,
+        phone_verified = 1,
+        phone_verified_at = datetime('now'),
+        updated_at = datetime('now')
+      WHERE customer_id = ?
+    `).bind(
+      normalized,
+      aiPhoneNumber,
+      connectionMethod,
+      trunkId || '',
+      dispatchId || '',
+      customerId
+    ).run()
+
+    // Format numbers for display
+    const formatPhone = (n: string) => {
+      const d = n.replace(/^\+1/, '').replace(/\D/g, '')
+      if (d.length === 10) return `(${d.slice(0,3)}) ${d.slice(3,6)}-${d.slice(6)}`
+      return n
+    }
+
+    return c.json({
+      success: true,
+      verified: true,
+      business_phone: normalized,
+      business_phone_display: formatPhone(normalized),
+      ai_phone_number: aiPhoneNumber,
+      ai_phone_display: formatPhone(aiPhoneNumber),
+      connection_method: connectionMethod,
+      trunk_id: trunkId,
+      dispatch_rule_id: dispatchId,
+      forwarding_code: forwardingCode,
+      disable_forwarding_code: '*73',
+      instructions: {
+        step1: `Pick up your business phone (${formatPhone(normalized)})`,
+        step2: `Dial: ${forwardingCode}`,
+        step3: 'Wait for the confirmation tone (2 beeps)',
+        step4: 'Done! Calls to your number now forward to the AI when you don\'t answer.',
+        disable: 'To disable: Dial *73 from your business phone',
+      },
+      message: 'Phone verified and AI secretary number assigned! Follow the simple forwarding instructions to go live.',
+    })
+  } catch (err: any) {
+    console.error('[QuickConnect] Setup error:', err)
+    return c.json({ error: 'Setup failed', details: err.message, verified: true }, 500)
   }
-
-  // Update config with connection status + LiveKit IDs
-  await c.env.DB.prepare(`
-    UPDATE secretary_config SET
-      connection_status = 'connected',
-      is_active = 1,
-      livekit_inbound_trunk_id = COALESCE(?, livekit_inbound_trunk_id),
-      livekit_dispatch_rule_id = COALESCE(?, livekit_dispatch_rule_id),
-      updated_at = datetime('now')
-    WHERE customer_id = ?
-  `).bind(trunkId || null, dispatchId || null, customerId).run()
-
-  console.log(`[QuickConnect] ACTIVATED — Customer ${customerId}, trunk=${trunkId}, dispatch=${dispatchId}, livekit_deployed=${livekitDeployed}`)
-
-  return c.json({
-    success: true,
-    livekit_deployed: livekitDeployed,
-    trunk_id: trunkId,
-    dispatch_rule_id: dispatchId,
-    livekit_error: livekitError || undefined,
-    business_phone: config.business_phone,
-    ai_phone_number: config.assigned_phone_number,
-    message: livekitDeployed
-      ? 'Your AI secretary is now LIVE and connected to LiveKit! Calls forwarded to your AI number will be answered by your AI agent.'
-      : 'Your AI secretary configuration is saved and activated! LiveKit agent deployment will complete when API keys are configured. Your forwarding setup is ready.',
-  })
 })
 
-// POST /quick-connect/disconnect — Disconnect the AI secretary
-secretaryRoutes.post('/quick-connect/disconnect', async (c) => {
+// POST /quick-connect/complete — Mark connection as fully active
+secretaryRoutes.post('/quick-connect/complete', async (c) => {
   const customerId = c.get('customerId' as any) as number
 
-  await c.env.DB.prepare(`
-    UPDATE secretary_config SET
-      connection_status = 'disconnected',
-      is_active = 0,
-      updated_at = datetime('now')
-    WHERE customer_id = ?
-  `).bind(customerId).run()
+  await c.env.DB.prepare(
+    `UPDATE secretary_config SET connection_status = 'connected', is_active = 1, updated_at = datetime('now') WHERE customer_id = ?`
+  ).bind(customerId).run()
 
-  console.log(`[QuickConnect] DISCONNECTED — Customer ${customerId}`)
-  return c.json({ success: true, message: 'AI secretary disconnected. Remember to disable call forwarding on your carrier.' })
+  return c.json({ success: true, message: 'Your AI secretary is now live!' })
 })
 
 // GET /quick-connect/status — Get current quick-connect setup status
@@ -3547,6 +2931,8 @@ secretaryRoutes.get('/quick-connect/status', async (c) => {
     return n
   }
 
+  const aiDigits = (config.assigned_phone_number || '').replace(/^\+1/, '').replace(/\D/g, '')
+
   return c.json({
     status: config.connection_status || 'not_started',
     business_phone: config.business_phone || '',
@@ -3557,66 +2943,7 @@ secretaryRoutes.get('/quick-connect/status', async (c) => {
     is_active: !!config.is_active,
     has_trunk: !!config.livekit_inbound_trunk_id,
     has_dispatch: !!config.livekit_dispatch_rule_id,
+    forwarding_code: aiDigits ? `*72${aiDigits}` : '',
+    disable_forwarding_code: '*73',
   })
-})
-
-// ============================================================
-// GET /agent-config/:customerId — Public endpoint for LiveKit agent
-// Returns the secretary configuration for a specific customer.
-// Used by the Python LiveKit agent to load greeting, Q&A, etc.
-// No auth required — called by the agent server, not by users.
-// ============================================================
-secretaryRoutes.get('/agent-config/:customerId', async (c) => {
-  const customerId = parseInt(c.req.param('customerId'), 10)
-  if (!customerId || isNaN(customerId)) {
-    return c.json({ success: false, error: 'Invalid customer ID' }, 400)
-  }
-
-  try {
-    const config = await c.env.DB.prepare(
-      `SELECT customer_id, business_phone, greeting_script, common_qa, general_notes,
-              agent_name, agent_voice, agent_language, secretary_mode,
-              answering_fallback_action, answering_forward_number,
-              full_can_book_appointments, full_can_send_email, full_can_schedule_callback,
-              full_can_answer_faq, full_business_hours, full_services_offered,
-              full_pricing_info, full_service_area
-       FROM secretary_config WHERE customer_id = ?`
-    ).bind(customerId).first<any>()
-
-    if (!config) {
-      return c.json({ success: false, error: 'Secretary not configured for this customer' }, 404)
-    }
-
-    // Load directories
-    const dirResult = await c.env.DB.prepare(
-      `SELECT sc.id as config_id FROM secretary_config sc WHERE sc.customer_id = ?`
-    ).bind(customerId).first<any>()
-
-    let directories: any[] = []
-    if (dirResult?.config_id) {
-      const dirs = await c.env.DB.prepare(
-        `SELECT name, phone_or_action, special_notes FROM secretary_directories WHERE config_id = ? ORDER BY sort_order`
-      ).bind(dirResult.config_id).all<any>()
-      directories = dirs.results || []
-    }
-
-    return c.json({
-      success: true,
-      config: {
-        customer_id: config.customer_id,
-        business_phone: config.business_phone,
-        greeting_script: config.greeting_script || '',
-        common_qa: config.common_qa || '',
-        general_notes: config.general_notes || '',
-        agent_name: config.agent_name || 'Sarah',
-        agent_voice: config.agent_voice || 'alloy',
-        agent_language: config.agent_language || 'en',
-        secretary_mode: config.secretary_mode || 'full',
-        directories,
-      }
-    })
-  } catch (err: any) {
-    console.error('[AgentConfig] Error:', err.message)
-    return c.json({ success: false, error: 'Failed to load agent config' }, 500)
-  }
 })

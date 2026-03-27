@@ -27,29 +27,13 @@ import { workersAiRoutes } from './routes/workers-ai'
 import { reportImagesRoutes } from './routes/report-images'
 import { callCenterRoutes } from './routes/call-center'
 import { metaConnectRoutes } from './routes/meta-connect'
-// AI Site Manager removed — consolidated into Gemini Command Center
-import { geminiRoutes } from './routes/gemini'
-import { pipelineRoutes } from './routes/pipeline'
-import { stripeRoutes } from './routes/stripe'
-import { customerCallsRoutes } from './routes/customer-cold-call'
-import { homeDesignerRoutes } from './routes/home-designer'
-import { sam3Routes } from './routes/sam3-analysis'
-import { calendarRoutes } from './routes/calendar'
-import { salesRoutes } from './routes/sales'
-import { platformAdmin } from './routes/platform-admin'
+import { heygenRoutes } from './routes/heygen'
 import type { Bindings } from './types'
 
 const app = new Hono<{ Bindings: Bindings }>()
 
 // CORS for API routes
 app.use('/api/*', cors())
-
-// Cache control for static JS/CSS — prevent stale browser cache
-app.use('/static/*', async (c, next) => {
-  await next()
-  // Short cache with must-revalidate so browsers check for fresh versions
-  c.header('Cache-Control', 'public, max-age=300, must-revalidate')
-})
 
 // Analytics tracker injection middleware — auto-injects tracker.js + GA4 gtag.js into HTML pages
 // Skips API routes, static files, and the tracker itself
@@ -111,11 +95,8 @@ gtag('config','${ga4Id}',{
     if (p === '/') return 'Landing';
     if (p.startsWith('/customer/dashboard')) return 'Dashboard';
     if (p.startsWith('/customer/login')) return 'Auth';
-    if (p.startsWith('/signup')) return 'Signup';
     if (p.startsWith('/customer/order')) return 'Order';
     if (p.startsWith('/customer/')) return 'CRM';
-    if (p.startsWith('/portal')) return 'Portal';
-    if (p.startsWith('/service-invoice')) return 'ServiceInvoice';
     if (p.startsWith('/blog')) return 'Blog';
     if (p.startsWith('/pricing')) return 'Pricing';
     if (p.startsWith('/lander')) return 'Lander';
@@ -166,7 +147,7 @@ gtag('get','${ga4Id}','client_id',function(cid){
 })();
 </script>` : ''
       
-      const injected = body.replace('</body>', `${ga4Script}\n<script src="/static/tracker.js?v=${BUILD_VERSION}" defer></script>\n</body>`)
+      const injected = body.replace('</body>', `${ga4Script}\n<script src="/static/tracker.js" defer></script>\n</body>`)
       c.res = new Response(injected, {
         status: c.res.status,
         headers: c.res.headers
@@ -182,21 +163,16 @@ app.route('/api/orders', ordersRoutes)
 app.route('/api/companies', companiesRoutes)
 app.route('/api/settings', settingsRoutes)
 app.route('/api/reports', reportsRoutes)
-// app.route('/api/ai-admin', aiAdminChatRoutes) // Removed — use /api/gemini/* instead
-app.route('/api/gemini', geminiRoutes)
 app.route('/api/admin', adminRoutes)
 app.route('/api/ai', aiAnalysisRoutes)
 app.route('/api/auth', authRoutes)
 app.route('/api/customer', customerAuthRoutes)
 app.route('/api/invoices', invoiceRoutes)
-app.route('/api/pipeline', pipelineRoutes)
-app.route('/api/stripe', stripeRoutes)
 app.route('/api/square', squareRoutes)
 app.route('/api/crm', crmRoutes)
 app.route('/api/property-imagery', propertyImageryRoutes)
 app.route('/api/blog', blogRoutes)
 app.route('/api/d2d', d2dRoutes)
-// Secretary routes — webhooks and agent-config are public (auth skipped in secretary.ts middleware)
 app.route('/api/secretary', secretaryRoutes)
 app.route('/api/rover', roverRoutes)
 app.route('/api/email-outreach', emailOutreachRoutes)
@@ -207,13 +183,8 @@ app.route('/api/agents', agentsRoutes)
 app.route('/api/workers-ai', workersAiRoutes)
 app.route('/api/report-images', reportImagesRoutes)
 app.route('/api/call-center', callCenterRoutes)
-app.route('/api/customer-calls', customerCallsRoutes)
 app.route('/api/meta', metaConnectRoutes)
-app.route('/api/home-designer', homeDesignerRoutes)
-app.route('/api/sam3', sam3Routes)
-app.route('/api/calendar', calendarRoutes)
-app.route('/api/sales', salesRoutes)
-app.route('/api/admin/platform', platformAdmin)
+app.route('/api/heygen', heygenRoutes)
 
 // Health check
 app.get('/api/health', (c) => {
@@ -252,7 +223,6 @@ app.get('/api/health', (c) => {
       REPORT_WEBHOOK_SECRET: !!(c.env as any).REPORT_WEBHOOK_SECRET,
       AI_STUDIO_ENHANCE_URL: (c.env as any).AI_STUDIO_ENHANCE_URL || false,
       GEMINI_ENHANCE_API_KEY: !!(c.env as any).GEMINI_ENHANCE_API_KEY,
-      NEARMAP_API_KEY: !!(c.env as any).NEARMAP_API_KEY,
       GA4_MEASUREMENT_ID: (c.env as any).GA4_MEASUREMENT_ID || false,
       GA4_API_SECRET: !!(c.env as any).GA4_API_SECRET,
       GA4_PROPERTY_ID: (c.env as any).GA4_PROPERTY_ID || false,
@@ -508,66 +478,19 @@ app.get('/login', (c) => {
   return c.html(getLoginPageHTML())
 })
 
+// Admin Password Reset Page (linked from reset email)
+app.get('/reset-password', (c) => {
+  return c.html(getAdminResetPasswordHTML())
+})
+
 // Customer Login/Register Page (email/password)
 app.get('/customer/login', (c) => {
   return c.html(getCustomerLoginHTML())
 })
 
-// Signup Wizard — 3-step onboarding (Business Info → Plan → Activate)
-app.get('/signup', (c) => {
-  return c.html(getSignupWizardHTML())
-})
-
-// Google OAuth callback for customer sign-in
-app.get('/customer/google-callback', (c) => {
-  return c.html(`<!DOCTYPE html>
-<html><head><title>Google Sign-In</title></head>
-<body>
-<script>
-  // Extract id_token from URL hash
-  var hash = window.location.hash.substring(1);
-  var params = new URLSearchParams(hash);
-  var idToken = params.get('id_token');
-  if (idToken) {
-    fetch('/api/customer/google', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ credential: idToken })
-    }).then(r => r.json()).then(data => {
-      if (data.success) {
-        localStorage.setItem('rc_customer', JSON.stringify(data.customer));
-        localStorage.setItem('rc_customer_token', data.token);
-        window.location.href = '/customer/dashboard';
-      } else {
-        alert('Google sign-in failed: ' + (data.error || 'Unknown error'));
-        window.location.href = '/customer/login';
-      }
-    }).catch(() => {
-      alert('Google sign-in failed. Please try again.');
-      window.location.href = '/customer/login';
-    });
-  } else {
-    alert('Google sign-in failed. No token received.');
-    window.location.href = '/customer/login';
-  }
-</script>
-<div style="display:flex;justify-content:center;align-items:center;min-height:100vh;font-family:sans-serif;color:#666">
-  <div style="text-align:center"><div style="width:40px;height:40px;border:4px solid #ddd;border-top:4px solid #4285f4;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto"></div><p style="margin-top:16px">Signing in with Google...</p></div>
-</div>
-<style>@keyframes spin{to{transform:rotate(360deg)}}</style>
-</body></html>`)
-})
-
-// Google OAuth config endpoint (public - returns client ID only)
-app.get('/api/public/google-oauth-config', (c) => {
-  const clientId = (c.env as any).GOOGLE_OAUTH_CLIENT_ID || (c.env as any).GMAIL_CLIENT_ID || ''
-  return c.json({ client_id: clientId })
-})
-
-// Meta/Facebook App ID endpoint (for FB SDK initialization)
-app.get('/api/public/meta-app-id', (c) => {
-  const appId = (c.env as any).META_APP_ID || ''
-  return c.json({ app_id: appId })
+// Customer Password Reset Page (linked from reset email)
+app.get('/customer/reset-password', (c) => {
+  return c.html(getCustomerResetPasswordHTML())
 })
 
 // Customer Dashboard
@@ -621,499 +544,11 @@ app.get('/customer/pipeline', (c) => c.html(getCrmSubPageHTML('pipeline', 'Sales
 // Virtual Try-On — AI Roof Visualization
 app.get('/customer/virtual-tryon', (c) => c.html(getVirtualTryOnPageHTML()))
 
-// Home Designer — Hover-style multi-photo roof visualization
-app.get('/customer/home-designer', (c) => c.html(getHomeDesignerPageHTML()))
-
-// SAM 3 Satellite Image Analyzer — AI roof segmentation on satellite imagery
-app.get('/customer/sam3-analyzer', (c) => c.html(getSAM3AnalyzerPageHTML()))
-app.get('/customer/sam3-analyzer/:orderId', (c) => c.html(getSAM3AnalyzerPageHTML(c.req.param('orderId'))))
-
-// Google Calendar — Sync jobs to Google Calendar
-app.get('/customer/calendar', (c) => c.html(getCalendarPageHTML()))
-
-// Sales Engine — Lead scoring, follow-ups, onboarding, referrals
-app.get('/customer/sales', (c) => c.html(getSalesPageHTML()))
-
 // Team Management — Add/manage sales team members ($50/user/month)
 app.get('/customer/team', (c) => c.html(getTeamManagementPageHTML()))
 
 // Join Team — Accept invitation (public landing with auth redirect)
 app.get('/customer/join-team', (c) => c.html(getJoinTeamPageHTML()))
-
-// ============================================================
-// 3D ROOF VISUALIZER — Interactive roofing sales tool
-// ============================================================
-app.get('/visualizer/:orderId', async (c) => {
-  const orderId = c.req.param('orderId')
-  let address = 'Customer Property'
-  let lat = '', lng = ''
-  try {
-    const order = await c.env.DB.prepare(
-      'SELECT property_address, latitude, longitude FROM orders WHERE id = ?'
-    ).bind(orderId).first<any>()
-    if (order) {
-      address = order.property_address || address
-      lat = order.latitude || ''
-      lng = order.longitude || ''
-    }
-  } catch {}
-  const googleKey = (c.env as any).GOOGLE_MAPS_API_KEY || ''
-
-  return c.html(`<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>3D Roof Visualizer — ${address}</title>
-<script src="https://cdn.tailwindcss.com"></script>
-<link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
-<link href="/static/css/visualizer.css" rel="stylesheet">
-
-<!-- Three.js + OrbitControls via CDN (ES5 UMD build for compatibility) -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script>
-  // OrbitControls inline (from Three.js r128 examples - UMD compatible)
-  // This must come after THREE is loaded
-</script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.min.js"></script>
-</head>
-<body class="bg-slate-900 text-white overflow-hidden">
-
-<div id="vis-container">
-  <!-- Header Bar -->
-  <div id="vis-header" class="absolute top-0 left-0 right-0 z-20 bg-gradient-to-r from-slate-900/95 to-slate-800/95 backdrop-blur border-b border-slate-700 px-4 py-3 flex items-center justify-between">
-    <div class="flex items-center gap-3">
-      <a href="/customer/reports" class="text-gray-400 hover:text-white transition-colors">
-        <i class="fas fa-arrow-left"></i>
-      </a>
-      <div>
-        <h1 class="text-sm font-bold text-white"><i class="fas fa-cube mr-1 text-blue-400"></i>3D Roof Visualizer</h1>
-        <p class="text-[10px] text-gray-400">${address}</p>
-      </div>
-    </div>
-    <div class="flex items-center gap-2">
-      <span id="vis-current-color" class="text-xs text-gray-400 hidden md:inline mr-2">Onyx Black (shingle)</span>
-      <button onclick="toggleAutoRotate()" id="btn-auto-rotate" class="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-xs font-medium transition-all"><i class="fas fa-pause mr-1"></i>Pause</button>
-      <button onclick="resetCamera()" class="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-xs font-medium transition-all"><i class="fas fa-sync mr-1"></i>Reset</button>
-      <button onclick="takeScreenshot()" class="px-3 py-1.5 bg-green-600 hover:bg-green-700 rounded-lg text-xs font-medium transition-all"><i class="fas fa-camera mr-1"></i>Screenshot</button>
-      <button onclick="shareVisualization()" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 rounded-lg text-xs font-medium transition-all"><i class="fas fa-share mr-1"></i>Share</button>
-    </div>
-  </div>
-
-  <!-- Main Canvas Area -->
-  <div class="flex flex-1 pt-[52px]" style="height: calc(100vh - 52px)">
-    <!-- 3D Canvas -->
-    <div id="canvas-3d" class="flex-1 relative" style="display:flex">
-      <div class="vis-loader" id="vis-3d-loader">
-        <div class="vis-spinner"></div>
-        <p style="color:#94a3b8;font-size:13px;margin-top:12px">Initializing 3D engine...</p>
-      </div>
-    </div>
-    <!-- 2D Canvas (hidden by default) -->
-    <div id="canvas-2d" class="flex-1 relative" style="display:none"></div>
-
-    <!-- Right Panel: Color Swatches -->
-    <div id="vis-panel">
-      <!-- Mode Tabs -->
-      <div class="flex border-b border-slate-700">
-        <button class="vis-tab active" data-mode="3d" onclick="switchVisMode('3d')"><i class="fas fa-cube mr-1"></i>3D Model</button>
-        <button class="vis-tab" data-mode="2d" onclick="switchVisMode('2d')"><i class="fas fa-image mr-1"></i>Street View</button>
-      </div>
-
-      <div class="p-4 space-y-5 overflow-y-auto flex-1">
-        <!-- Shingles Section -->
-        <div>
-          <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
-            <i class="fas fa-layer-group mr-1 text-amber-400"></i>Asphalt Shingles
-          </h3>
-          <div class="swatch-grid" id="shingle-swatches"></div>
-        </div>
-
-        <div class="border-t border-slate-700"></div>
-
-        <!-- Metal Section -->
-        <div>
-          <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
-            <i class="fas fa-shield-alt mr-1 text-blue-400"></i>Sheet Metal
-          </h3>
-          <div class="swatch-grid" id="metal-swatches"></div>
-        </div>
-
-        <div class="border-t border-slate-700"></div>
-
-        <!-- Info Cards -->
-        <div class="bg-slate-800 rounded-xl p-4 border border-slate-700">
-          <h4 class="text-xs font-bold text-gray-300 mb-2"><i class="fas fa-info-circle mr-1 text-blue-400"></i>How It Works</h4>
-          <ul class="text-[10px] text-gray-500 space-y-1.5 leading-relaxed">
-            <li><i class="fas fa-mouse-pointer mr-1 text-gray-600"></i>Click & drag to rotate the house</li>
-            <li><i class="fas fa-search-plus mr-1 text-gray-600"></i>Scroll to zoom in/out</li>
-            <li><i class="fas fa-palette mr-1 text-gray-600"></i>Click any color swatch to preview</li>
-            <li><i class="fas fa-camera mr-1 text-gray-600"></i>Take screenshots to share with customers</li>
-          </ul>
-        </div>
-
-        <div class="bg-gradient-to-br from-blue-900/30 to-purple-900/30 rounded-xl p-4 border border-blue-800/30">
-          <p class="text-[10px] text-blue-300 font-medium">
-            <i class="fas fa-magic mr-1"></i>Pro Tip: Use the screenshot tool to include color previews in your proposals. Customers love seeing their home with new roofing before committing!
-          </p>
-        </div>
-
-        <p class="text-center text-[9px] text-gray-600 pb-2">Powered by RoofReporterAI</p>
-      </div>
-    </div>
-  </div>
-</div>
-
-<script src="/static/js/3d_visualizer.js?v=${BUILD_VERSION}"></script>
-<script>
-  // Initialize with report data
-  document.addEventListener('DOMContentLoaded', function() {
-    initVisualizer({
-      order_id: '${orderId}',
-      address: '${address.replace(/'/g, "\\'")}',
-      latitude: '${lat}',
-      longitude: '${lng}',
-      google_maps_key: '${googleKey}'
-    });
-  });
-</script>
-</body>
-</html>`)
-})
-
-// ============================================================
-// PUBLIC TIERED PROPOSAL COMPARISON — Good/Better/Best side-by-side
-// ============================================================
-app.get('/proposal/compare/:groupId', async (c) => {
-  try {
-    const groupId = c.req.param('groupId')
-    
-    // Get all proposals in this group
-    const proposalsResult = await c.env.DB.prepare(`
-      SELECT cp.*, cc.name as customer_name, cc.email as customer_email, cc.phone as customer_phone,
-             cc.address as customer_address, cc.city as customer_city, cc.province as customer_province, cc.postal_code as customer_postal
-      FROM crm_proposals cp
-      LEFT JOIN crm_customers cc ON cc.id = cp.crm_customer_id
-      WHERE cp.proposal_group_id = ?
-      ORDER BY cp.tier_order ASC
-    `).bind(groupId).all<any>()
-
-    const proposals = proposalsResult.results || []
-    if (proposals.length === 0) {
-      return c.html(`<!DOCTYPE html><html><head><title>Proposals Not Found</title><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-gray-50 min-h-screen flex items-center justify-center"><div class="text-center"><div class="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4"><i class="fas fa-exclamation-triangle text-red-500 text-2xl"></i></div><h1 class="text-2xl font-bold text-gray-800 mb-2">Proposals Not Found</h1><p class="text-gray-500">This proposal link is invalid or has expired.</p></div></body></html>`)
-    }
-
-    // Increment view counts
-    for (const p of proposals) {
-      await c.env.DB.prepare(
-        "UPDATE crm_proposals SET view_count = COALESCE(view_count, 0) + 1, last_viewed_at = datetime('now'), status = CASE WHEN status = 'sent' THEN 'viewed' ELSE status END WHERE id = ?"
-      ).bind(p.id).run()
-    }
-
-    // Track view
-    const ip = c.req.header('cf-connecting-ip') || c.req.header('x-forwarded-for') || 'unknown'
-    const ua = c.req.header('user-agent') || ''
-    for (const p of proposals) {
-      try { await c.env.DB.prepare('INSERT INTO proposal_view_log (proposal_id, ip_address, user_agent, referrer) VALUES (?, ?, ?, ?)').bind(p.id, ip, ua.substring(0, 500), '').run() } catch {}
-    }
-
-    // Get owner branding
-    const owner = await c.env.DB.prepare(
-      'SELECT name, email, phone, brand_business_name, brand_logo_url, brand_primary_color, brand_secondary_color, brand_tagline, brand_phone, brand_email, brand_website, brand_address, brand_license_number, brand_insurance_info FROM customers WHERE id = ?'
-    ).bind(proposals[0].owner_id).first<any>()
-
-    const businessName = owner?.brand_business_name || owner?.name || 'RoofReporterAI'
-    const primaryColor = owner?.brand_primary_color || '#0369a1'
-    const secondaryColor = owner?.brand_secondary_color || '#0ea5e9'
-    const brandPhone = owner?.brand_phone || owner?.phone || ''
-    const brandEmail = owner?.brand_email || owner?.email || ''
-    const brandWebsite = owner?.brand_website || ''
-    const brandAddress = owner?.brand_address || ''
-    const brandLicense = owner?.brand_license_number || ''
-    const brandInsurance = owner?.brand_insurance_info || ''
-    const brandTagline = owner?.brand_tagline || ''
-    const logoUrl = owner?.brand_logo_url || ''
-    const customerName = proposals[0].customer_name || 'Customer'
-    const fullAddress = [proposals[0].property_address, proposals[0].customer_city, proposals[0].customer_province, proposals[0].customer_postal].filter(Boolean).join(', ')
-    const proposalDate = proposals[0].created_at ? new Date(proposals[0].created_at).toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' }) : ''
-    const validUntil = proposals[0].valid_until ? new Date(proposals[0].valid_until).toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' }) : ''
-
-    // Get line items for each
-    const proposalsWithItems = []
-    for (const p of proposals) {
-      const itemsResult = await c.env.DB.prepare('SELECT * FROM crm_proposal_items WHERE proposal_id = ? ORDER BY sort_order').bind(p.id).all()
-      proposalsWithItems.push({ ...p, items: itemsResult.results || [] })
-    }
-
-    const anyAccepted = proposals.some((p: any) => p.status === 'accepted')
-    const anyDeclined = proposals.some((p: any) => p.status === 'declined')
-    const isResponded = anyAccepted || anyDeclined
-
-    // Tier badge config — 3 qualities of roofing shingles
-    const tierConfig: Record<string, any> = {
-      'Good': { icon: 'fa-star', color: 'blue', bg: 'bg-blue-50', border: 'border-blue-200', badge: 'bg-blue-100 text-blue-700', gradient: 'from-blue-500 to-blue-600', desc: '25-Year 3-Tab Shingles — Standard flat-profile shingles. Proven, economical protection with manufacturer warranty.' },
-      'Better': { icon: 'fa-medal', color: 'purple', bg: 'bg-purple-50', border: 'border-purple-200', badge: 'bg-purple-100 text-purple-700', gradient: 'from-purple-500 to-purple-600', popular: true, desc: '30-Year Architectural — Dimensional laminate shingles with 130 km/h wind rating, thicker profile, and enhanced curb appeal.' },
-      'Best': { icon: 'fa-crown', color: 'amber', bg: 'bg-amber-50', border: 'border-amber-200', badge: 'bg-amber-100 text-amber-700', gradient: 'from-amber-500 to-amber-600', desc: '50-Year Designer / Luxury — Class 4 impact-resistant, 210 km/h wind rating, ice & water shield, limited lifetime warranty.' }
-    }
-
-    // Build tier cards HTML
-    let tierCardsHtml = ''
-    for (const p of proposalsWithItems) {
-      const tier = tierConfig[p.tier_label] || tierConfig['Good']
-      const isPopular = tier.popular
-      const pAccepted = p.status === 'accepted'
-      const pDeclined = p.status === 'declined'
-      
-      let itemsList = ''
-      for (const it of p.items as any[]) {
-        itemsList += `<li class="flex justify-between py-2 border-b border-gray-50 text-sm">
-          <span class="text-gray-600">${it.description}</span>
-          <span class="font-medium text-gray-800">$${parseFloat(it.amount).toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-        </li>`
-      }
-
-      tierCardsHtml += `
-      <div class="relative ${isPopular ? 'md:-mt-4 md:mb-4' : ''}" data-tier="${p.tier_label}">
-        ${isPopular ? '<div class="absolute -top-4 left-1/2 -translate-x-1/2 z-10"><span class="bg-gradient-to-r from-purple-600 to-purple-500 text-white text-xs font-bold px-4 py-1.5 rounded-full shadow-lg uppercase tracking-wider"><i class="fas fa-fire mr-1"></i>Most Popular</span></div>' : ''}
-        <div class="bg-white rounded-2xl shadow-lg ${isPopular ? 'ring-2 ring-purple-400 shadow-purple-100' : 'border border-gray-200'} overflow-hidden h-full flex flex-col ${pAccepted ? 'ring-2 ring-green-400' : ''} ${pDeclined ? 'opacity-60' : ''}">
-          <!-- Tier Header -->
-          <div class="bg-gradient-to-r ${tier.gradient} px-6 py-5 text-white text-center">
-            <i class="fas ${tier.icon} text-2xl mb-2 opacity-80"></i>
-            <h3 class="text-xl font-bold">${p.tier_label}</h3>
-            <p class="text-white/70 text-xs mt-1">${tier.desc}</p>
-          </div>
-          
-          <!-- Price -->
-          <div class="px-6 py-5 text-center border-b border-gray-100">
-            <p class="text-4xl font-black text-gray-800">$${parseFloat(p.total_amount).toLocaleString('en-CA', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</p>
-            <p class="text-xs text-gray-400 mt-1">Total incl. ${p.tax_rate || 5}% GST</p>
-          </div>
-
-          <!-- Line Items -->
-          <div class="px-6 py-4 flex-1">
-            <ul class="space-y-0">${itemsList}</ul>
-            <div class="mt-4 pt-3 border-t border-gray-200 space-y-1 text-sm">
-              <div class="flex justify-between text-gray-500"><span>Subtotal</span><span>$${parseFloat(p.subtotal || 0).toFixed(2)}</span></div>
-              <div class="flex justify-between text-gray-500"><span>Tax (${p.tax_rate || 5}% GST)</span><span>$${parseFloat(p.tax_amount || 0).toFixed(2)}</span></div>
-              <div class="flex justify-between font-bold text-gray-800 pt-1 border-t border-gray-200"><span>Total</span><span>$${parseFloat(p.total_amount).toFixed(2)} CAD</span></div>
-            </div>
-          </div>
-
-          <!-- Action -->
-          <div class="px-6 pb-6">
-            ${pAccepted ? `
-              <div class="bg-green-50 border border-green-200 rounded-xl p-4 text-center">
-                <i class="fas fa-check-circle text-green-500 text-2xl mb-1"></i>
-                <p class="font-bold text-green-700 text-sm">Accepted</p>
-                ${p.accepted_at ? `<p class="text-green-500 text-xs mt-0.5">${new Date(p.accepted_at).toLocaleDateString('en-CA')}</p>` : ''}
-              </div>
-            ` : pDeclined ? `
-              <div class="bg-gray-100 rounded-xl p-4 text-center">
-                <p class="font-bold text-gray-500 text-sm">Declined</p>
-              </div>
-            ` : `
-              <button onclick="selectTier('${p.share_token}', '${p.tier_label}', ${parseFloat(p.total_amount).toFixed(2)})" class="w-full bg-gradient-to-r ${tier.gradient} hover:opacity-90 text-white py-3.5 rounded-xl font-bold text-sm transition-all hover:shadow-lg select-btn" data-token="${p.share_token}">
-                <i class="fas fa-check-circle mr-2"></i>Select ${p.tier_label} Package
-              </button>
-            `}
-          </div>
-        </div>
-      </div>`
-    }
-
-    return c.html(`<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Roofing Proposal — ${businessName}</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
-  <style>
-    @media print { .no-print { display: none !important; } body { background: white; } }
-    .brand-gradient { background: linear-gradient(135deg, ${primaryColor}, ${secondaryColor}); }
-    .brand-text { color: ${primaryColor}; }
-    .signature-pad { border: 2px dashed #d1d5db; border-radius: 12px; height: 100px; cursor: crosshair; touch-action: none; }
-    .signature-pad.active { border-color: ${primaryColor}; }
-  </style>
-</head>
-<body class="bg-gray-100 min-h-screen">
-  <!-- Top bar -->
-  <div class="no-print fixed top-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-sm border-b border-gray-200">
-    <div class="max-w-6xl mx-auto px-4 py-2 flex items-center justify-between">
-      <span class="text-sm text-gray-500"><i class="fas fa-file-signature mr-1"></i>Roofing Proposal</span>
-      <button onclick="window.print()" class="px-3 py-1.5 text-xs font-medium bg-gray-100 hover:bg-gray-200 rounded-lg text-gray-700"><i class="fas fa-print mr-1"></i>Print</button>
-    </div>
-  </div>
-
-  <div class="max-w-6xl mx-auto px-4 pt-16 pb-12">
-    <!-- Company Header -->
-    <div class="brand-gradient rounded-2xl px-8 py-8 text-white relative overflow-hidden mb-8">
-      <div class="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-32 translate-x-32"></div>
-      <div class="relative z-10 flex flex-col md:flex-row items-start justify-between gap-4">
-        <div>
-          ${logoUrl ? `<img src="${logoUrl}" alt="${businessName}" class="h-14 mb-3 rounded-lg bg-white/20 p-1">` : ''}
-          <h1 class="text-2xl md:text-3xl font-bold">${businessName}</h1>
-          ${brandTagline ? `<p class="text-white/70 text-sm mt-1">${brandTagline}</p>` : ''}
-        </div>
-        <div class="text-right text-sm space-y-0.5 text-white/80">
-          ${brandPhone ? `<p><i class="fas fa-phone mr-1.5"></i>${brandPhone}</p>` : ''}
-          ${brandEmail ? `<p><i class="fas fa-envelope mr-1.5"></i>${brandEmail}</p>` : ''}
-          ${brandWebsite ? `<p><i class="fas fa-globe mr-1.5"></i>${brandWebsite}</p>` : ''}
-          ${brandAddress ? `<p class="mt-2 text-white/60"><i class="fas fa-map-marker-alt mr-1.5"></i>${brandAddress}</p>` : ''}
-        </div>
-      </div>
-    </div>
-
-    <!-- Customer Info Bar -->
-    <div class="bg-white rounded-xl shadow-sm border border-gray-200 px-6 py-5 mb-8">
-      <div class="flex flex-col md:flex-row justify-between gap-4">
-        <div>
-          <p class="text-xs uppercase tracking-widest text-gray-400 font-semibold mb-1">Prepared For</p>
-          <p class="text-xl font-bold text-gray-800">${customerName}</p>
-          ${fullAddress ? `<p class="text-sm text-gray-500 mt-1"><i class="fas fa-map-marker-alt mr-1 text-red-400"></i>${fullAddress}</p>` : ''}
-        </div>
-        <div class="text-right space-y-1">
-          ${proposalDate ? `<p class="text-xs text-gray-400">Issued: ${proposalDate}</p>` : ''}
-          ${validUntil ? `<p class="text-xs text-gray-400">Valid Until: ${validUntil}</p>` : ''}
-        </div>
-      </div>
-    </div>
-
-    <!-- Section Title -->
-    <div class="text-center mb-8">
-      <h2 class="text-2xl font-bold text-gray-800">Choose Your Roofing Package</h2>
-      <p class="text-gray-500 mt-2 max-w-xl mx-auto">We've prepared three options to fit your budget and protection needs. All packages include professional installation, cleanup, and warranty.</p>
-    </div>
-
-    <!-- Tier Cards -->
-    <div class="grid md:grid-cols-${proposals.length} gap-6 mb-8 items-start">
-      ${tierCardsHtml}
-    </div>
-
-    <!-- Signature + Confirm Modal -->
-    <div id="confirmModal" class="hidden fixed inset-0 bg-black/50 z-[100] flex items-center justify-center no-print">
-      <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full mx-4 p-8">
-        <h3 class="text-xl font-bold text-gray-800 mb-2 text-center">Confirm Your Selection</h3>
-        <p class="text-center text-gray-500 text-sm mb-1">You selected the <strong id="selectedTierName" class="text-gray-800"></strong> package</p>
-        <p class="text-center text-2xl font-black brand-text mb-6" id="selectedTierPrice"></p>
-        
-        <!-- Signature -->
-        <div class="mb-5">
-          <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Your Signature (optional)</label>
-          <canvas id="signaturePad" class="signature-pad w-full bg-white" width="600" height="100"></canvas>
-          <div class="flex justify-end mt-1">
-            <button onclick="clearSignature()" class="text-xs text-gray-400 hover:text-gray-600"><i class="fas fa-eraser mr-1"></i>Clear</button>
-          </div>
-        </div>
-
-        <div class="flex gap-3">
-          <button onclick="confirmAccept()" id="confirmBtn" class="flex-1 brand-gradient text-white py-3.5 rounded-xl font-bold text-sm transition-all hover:opacity-90">
-            <i class="fas fa-check-circle mr-2"></i>Accept & Proceed
-          </button>
-          <button onclick="closeModal()" class="px-6 py-3.5 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-xl font-semibold text-sm">Cancel</button>
-        </div>
-      </div>
-    </div>
-
-    ${isResponded ? '' : `
-    <!-- Decline All -->
-    <div class="text-center mb-8 no-print">
-      <button onclick="declineAll()" class="text-sm text-gray-400 hover:text-gray-600 underline">Not interested? Decline all options</button>
-    </div>`}
-
-    <!-- Footer -->
-    <div class="bg-white rounded-xl border border-gray-200 p-6 mb-6">
-      <div class="grid md:grid-cols-3 gap-6 text-center">
-        <div><i class="fas fa-shield-alt text-green-500 text-2xl mb-2"></i><h4 class="font-bold text-gray-700 text-sm">Fully Insured</h4><p class="text-xs text-gray-400">Licensed, bonded & insured</p></div>
-        <div><i class="fas fa-certificate text-blue-500 text-2xl mb-2"></i><h4 class="font-bold text-gray-700 text-sm">Warranty Included</h4><p class="text-xs text-gray-400">Manufacturer + workmanship warranty</p></div>
-        <div><i class="fas fa-broom text-purple-500 text-2xl mb-2"></i><h4 class="font-bold text-gray-700 text-sm">Full Cleanup</h4><p class="text-xs text-gray-400">Magnetic nail sweep + debris haul</p></div>
-      </div>
-    </div>
-
-    ${brandLicense || brandInsurance ? `
-    <div class="text-center text-xs text-gray-400 space-y-0.5">
-      ${brandLicense ? `<p><i class="fas fa-id-card mr-1"></i>License: ${brandLicense}</p>` : ''}
-      ${brandInsurance ? `<p><i class="fas fa-shield-alt mr-1"></i>${brandInsurance}</p>` : ''}
-    </div>` : ''}
-    <div class="text-center mt-4 text-xs text-gray-400"><p>Powered by <span class="font-semibold">RoofReporterAI</span></p></div>
-  </div>
-
-  <script>
-    var selectedToken = null;
-    var selectedTier = null;
-    var selectedPrice = 0;
-
-    // Signature pad
-    var canvas, ctx, drawing = false, hasSignature = false;
-    function initSignaturePad() {
-      canvas = document.getElementById('signaturePad');
-      if (!canvas) return;
-      ctx = canvas.getContext('2d');
-      canvas.width = canvas.offsetWidth * 2;
-      canvas.height = 200;
-      ctx.scale(2, 2);
-      ctx.strokeStyle = '#1e293b';
-      ctx.lineWidth = 2;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      function getPos(e) { var r = canvas.getBoundingClientRect(); return { x: (e.touches ? e.touches[0].clientX : e.clientX) - r.left, y: (e.touches ? e.touches[0].clientY : e.clientY) - r.top }; }
-      canvas.addEventListener('mousedown', function(e) { drawing = true; ctx.beginPath(); var p = getPos(e); ctx.moveTo(p.x, p.y); });
-      canvas.addEventListener('mousemove', function(e) { if (!drawing) return; var p = getPos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); hasSignature = true; });
-      canvas.addEventListener('mouseup', function() { drawing = false; });
-      canvas.addEventListener('mouseleave', function() { drawing = false; });
-      canvas.addEventListener('touchstart', function(e) { e.preventDefault(); drawing = true; ctx.beginPath(); var p = getPos(e); ctx.moveTo(p.x, p.y); });
-      canvas.addEventListener('touchmove', function(e) { e.preventDefault(); if (!drawing) return; var p = getPos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); hasSignature = true; });
-      canvas.addEventListener('touchend', function() { drawing = false; });
-    }
-
-    function clearSignature() { if (ctx && canvas) { ctx.clearRect(0, 0, canvas.width, canvas.height); hasSignature = false; } }
-
-    function selectTier(token, tierName, price) {
-      selectedToken = token;
-      selectedTier = tierName;
-      selectedPrice = price;
-      document.getElementById('selectedTierName').textContent = tierName;
-      document.getElementById('selectedTierPrice').textContent = '$' + parseFloat(price).toLocaleString('en-CA', { minimumFractionDigits: 2 }) + ' CAD';
-      document.getElementById('confirmModal').classList.remove('hidden');
-      setTimeout(initSignaturePad, 100);
-    }
-
-    function closeModal() { document.getElementById('confirmModal').classList.add('hidden'); }
-
-    function confirmAccept() {
-      if (!selectedToken) return;
-      var signature = null;
-      if (hasSignature && canvas) { try { signature = canvas.toDataURL('image/png'); } catch(e) {} }
-      var btn = document.getElementById('confirmBtn');
-      btn.disabled = true;
-      btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Processing...';
-
-      fetch('/api/crm/proposals/respond/' + selectedToken, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'accept', signature: signature })
-      })
-      .then(function(r) { return r.json(); })
-      .then(function(data) { if (data.success) { location.reload(); } else { alert(data.error || 'Error'); btn.disabled = false; btn.innerHTML = '<i class="fas fa-check-circle mr-2"></i>Accept & Proceed'; } })
-      .catch(function() { alert('Network error'); btn.disabled = false; btn.innerHTML = '<i class="fas fa-check-circle mr-2"></i>Accept & Proceed'; });
-    }
-
-    function declineAll() {
-      if (!confirm('Are you sure you want to decline all options?')) return;
-      var tokens = ${JSON.stringify(proposals.filter((p: any) => !['accepted', 'declined'].includes(p.status)).map((p: any) => p.share_token))};
-      var promises = tokens.map(function(t) {
-        return fetch('/api/crm/proposals/respond/' + t, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'decline' }) });
-      });
-      Promise.all(promises).then(function() { location.reload(); }).catch(function() { location.reload(); });
-    }
-  </script>
-</body>
-</html>`)
-  } catch (err: any) {
-    console.error('[Proposal Compare] Error:', err.message)
-    return c.html(`<!DOCTYPE html><html><head><title>Error</title><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-gray-50 min-h-screen flex items-center justify-center"><div class="text-center"><h1 class="text-xl font-bold text-red-600">Error Loading Proposals</h1><p class="text-gray-500 mt-2">Please try refreshing the page.</p></div></body></html>`, 500)
-  }
-})
 
 // Public proposal view page — tracks views when customer opens shared link
 app.get('/proposal/view/:token', async (c) => {
@@ -1480,801 +915,6 @@ app.get('/proposal/view/:token', async (c) => {
     return c.html(`<!DOCTYPE html><html><head><title>Error</title><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-gray-50 min-h-screen flex items-center justify-center"><div class="text-center"><h1 class="text-xl font-bold text-red-600">Error Loading Proposal</h1><p class="text-gray-500 mt-2">Please try refreshing the page.</p></div></body></html>`, 500)
   }
 })
-
-// ============================================================
-// PUBLIC INVOICE PAY PAGE — Customer views & pays invoice
-// ============================================================
-app.get('/invoice/pay/:id', async (c) => {
-  try {
-    const id = c.req.param('id')
-    const status = c.req.query('status')
-    const invoice = await c.env.DB.prepare(`
-      SELECT i.*, c.name as customer_name, c.email as customer_email
-      FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id WHERE i.id = ?
-    `).bind(id).first<any>()
-
-    if (!invoice) return c.html(`<!DOCTYPE html><html><head><title>Invoice Not Found</title><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-gray-50 min-h-screen flex items-center justify-center"><div class="text-center"><h1 class="text-2xl font-bold text-gray-800">Invoice Not Found</h1></div></body></html>`)
-
-    // Get line items
-    const items = await c.env.DB.prepare('SELECT * FROM invoice_items WHERE invoice_id = ? ORDER BY sort_order').bind(id).all()
-
-    const isPaid = invoice.status === 'paid' || status === 'success'
-    if (status === 'success' && invoice.status !== 'paid') {
-      await c.env.DB.prepare("UPDATE invoices SET status = 'paid', paid_date = date('now'), updated_at = datetime('now') WHERE id = ?").bind(id).run()
-    }
-
-    let itemsHtml = ''
-    for (const it of (items.results || []) as any[]) {
-      itemsHtml += `<tr class="border-b border-gray-100"><td class="py-3 px-2 text-gray-700">${it.description}</td><td class="py-3 px-2 text-center">${it.quantity}</td><td class="py-3 px-2 text-right">$${parseFloat(it.unit_price).toFixed(2)}</td><td class="py-3 px-2 text-right font-medium">$${parseFloat(it.amount).toFixed(2)}</td></tr>`
-    }
-
-    return c.html(`<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Invoice ${invoice.invoice_number}</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
-</head>
-<body class="bg-gray-100 min-h-screen py-8 px-4">
-  <div class="max-w-3xl mx-auto">
-    ${status === 'success' ? `<div class="bg-green-50 border border-green-200 rounded-xl p-6 mb-6 text-center"><i class="fas fa-check-circle text-green-500 text-4xl mb-2"></i><h2 class="text-xl font-bold text-green-800">Payment Successful!</h2><p class="text-green-600 text-sm mt-1">Thank you. Your payment has been received.</p></div>` : ''}
-    ${status === 'cancelled' ? `<div class="bg-amber-50 border border-amber-200 rounded-xl p-6 mb-6 text-center"><i class="fas fa-exclamation-circle text-amber-500 text-3xl mb-2"></i><h2 class="text-lg font-bold text-amber-800">Payment Cancelled</h2><p class="text-amber-600 text-sm mt-1">You can try again when ready.</p></div>` : ''}
-    <div class="bg-white rounded-2xl shadow-xl overflow-hidden">
-      <div class="bg-gradient-to-r from-sky-700 to-sky-600 px-8 py-6 text-white">
-        <div class="flex justify-between items-start">
-          <div><h1 class="text-2xl font-bold">INVOICE</h1><p class="text-sky-200 text-sm mt-1">#${invoice.invoice_number}</p></div>
-          <div class="text-right"><span class="inline-block px-3 py-1 rounded-full text-xs font-bold ${isPaid ? 'bg-green-500' : 'bg-white/20'}">${isPaid ? 'PAID' : (invoice.status || 'DRAFT').toUpperCase()}</span><p class="text-sky-200 text-xs mt-2">Due: ${invoice.due_date || 'N/A'}</p></div>
-        </div>
-      </div>
-      <div class="px-8 py-6">
-        <div class="grid md:grid-cols-2 gap-4 mb-6">
-          <div><p class="text-xs text-gray-400 uppercase mb-1">Bill To</p><p class="font-bold text-gray-800">${invoice.customer_name || 'Customer'}</p><p class="text-sm text-gray-500">${invoice.customer_email || ''}</p></div>
-          <div class="text-right"><p class="text-xs text-gray-400 uppercase mb-1">Total Due</p><p class="text-3xl font-black text-sky-700">$${parseFloat(invoice.total).toFixed(2)}</p><p class="text-xs text-gray-400">CAD</p></div>
-        </div>
-        ${itemsHtml ? `<table class="w-full text-sm mb-6"><thead><tr class="border-b-2 border-gray-200"><th class="text-left py-2 px-2 text-gray-500">Description</th><th class="text-center py-2 px-2 text-gray-500">Qty</th><th class="text-right py-2 px-2 text-gray-500">Price</th><th class="text-right py-2 px-2 text-gray-500">Amount</th></tr></thead><tbody>${itemsHtml}</tbody></table>` : ''}
-        <div class="border-t-2 border-gray-200 pt-4 space-y-2">
-          <div class="flex justify-between text-sm"><span class="text-gray-500">Subtotal</span><span>$${parseFloat(invoice.subtotal || 0).toFixed(2)}</span></div>
-          <div class="flex justify-between text-sm"><span class="text-gray-500">Tax (${invoice.tax_rate || 5}% GST)</span><span>$${parseFloat(invoice.tax_amount || 0).toFixed(2)}</span></div>
-          <div class="flex justify-between text-xl font-bold pt-2 border-t border-gray-200"><span class="text-sky-700">Total</span><span class="text-sky-700">$${parseFloat(invoice.total).toFixed(2)} CAD</span></div>
-        </div>
-        ${!isPaid ? `<div class="mt-8 text-center"><button onclick="payNow()" id="payBtn" class="bg-green-600 hover:bg-green-700 text-white px-10 py-4 rounded-xl font-bold text-lg shadow-lg transition-all hover:shadow-xl"><i class="fas fa-credit-card mr-2"></i>Pay Now — $${parseFloat(invoice.total).toFixed(2)} CAD</button><p class="text-xs text-gray-400 mt-2"><i class="fas fa-lock mr-1"></i>Secured by Square</p></div>` : ''}
-      </div>
-      ${invoice.notes ? `<div class="px-8 py-4 bg-gray-50 border-t"><p class="text-xs text-gray-400 uppercase mb-1">Notes</p><p class="text-sm text-gray-600">${invoice.notes}</p></div>` : ''}
-    </div>
-    <p class="text-center text-xs text-gray-400 mt-6">Powered by RoofReporterAI</p>
-  </div>
-  <script>
-    function payNow() {
-      var btn = document.getElementById('payBtn');
-      btn.disabled = true;
-      btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Redirecting to payment...';
-      fetch('/api/invoices/${id}/payment-link', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      }).then(function(r) { return r.json(); }).then(function(data) {
-        if (data.payment_url) { window.location.href = data.payment_url; }
-        else { alert(data.error || 'Payment not available'); btn.disabled = false; btn.innerHTML = '<i class="fas fa-credit-card mr-2"></i>Pay Now'; }
-      }).catch(function() { alert('Network error'); btn.disabled = false; });
-    }
-  </script>
-</body>
-</html>`)
-  } catch { return c.html('<h1>Error</h1>', 500) }
-})
-
-// ============================================================
-// PUBLIC INTERACTIVE INVOICE — Secure web link (no auth needed)
-// Clients view, download report, pay, and e-sign
-// ============================================================
-app.get('/invoice/view/:token', async (c) => {
-  try {
-    const token = c.req.param('token')
-    const db = c.env.DB
-
-    // Validate token
-    const tokenRow = await db.prepare(`
-      SELECT t.*, i.id as invoice_id FROM invoice_access_tokens t
-      JOIN invoices i ON i.id = t.invoice_id
-      WHERE t.access_token = ?
-    `).bind(token).first<any>()
-
-    if (!tokenRow) return c.html(errorPage('Invoice Not Found', 'This link is invalid or has expired.'))
-
-    // Track view
-    await db.prepare("UPDATE invoice_access_tokens SET views = views + 1, last_viewed_at = datetime('now') WHERE access_token = ?").bind(token).run()
-
-    // Mark as viewed if sent
-    await db.prepare("UPDATE invoices SET status = CASE WHEN status = 'sent' THEN 'viewed' ELSE status END, updated_at = datetime('now') WHERE id = ?").bind(tokenRow.invoice_id).run()
-
-    // Fetch invoice with customer and order data
-    const invoice = await db.prepare(`
-      SELECT i.*, c.name as customer_name, c.email as customer_email, c.phone as customer_phone,
-             c.company_name as customer_company, c.address as customer_address,
-             c.city as customer_city, c.province as customer_province, c.postal_code as customer_postal,
-             o.order_number, o.property_address,
-             cu.name as contractor_name, cu.brand_business_name, cu.brand_logo_url, cu.brand_primary_color
-      FROM invoices i
-      LEFT JOIN customers c ON c.id = i.customer_id
-      LEFT JOIN orders o ON o.id = i.order_id
-      LEFT JOIN customers cu ON cu.id = (SELECT id FROM customers WHERE role = 'admin' OR is_admin = 1 LIMIT 1)
-      WHERE i.id = ?
-    `).bind(tokenRow.invoice_id).first<any>()
-
-    if (!invoice) return c.html(errorPage('Invoice Not Found', 'This invoice could not be loaded.'))
-
-    // Line items
-    const items = await db.prepare('SELECT * FROM invoice_items WHERE invoice_id = ? ORDER BY sort_order').bind(tokenRow.invoice_id).all()
-
-    // Billing schedule (if progress billing)
-    const schedule = await db.prepare('SELECT * FROM invoice_billing_schedule WHERE invoice_id = ? ORDER BY sort_order').bind(tokenRow.invoice_id).all()
-
-    // Change orders
-    const changeOrders = await db.prepare('SELECT * FROM invoice_change_orders WHERE invoice_id = ? ORDER BY created_at').bind(tokenRow.invoice_id).all()
-
-    // E-signature status
-    const signature = await db.prepare('SELECT * FROM invoice_signatures WHERE invoice_id = ? ORDER BY signed_at DESC LIMIT 1').bind(tokenRow.invoice_id).first<any>()
-
-    const isPaid = invoice.status === 'paid'
-    const isSigned = !!signature
-    const primaryColor = invoice.brand_primary_color || '#0369a1'
-    const businessName = invoice.brand_business_name || invoice.contractor_name || 'RoofReporterAI'
-    const propertyAddr = invoice.property_address || ''
-
-    // Build line items HTML
-    let materialItems = '', laborItems = '', disposalItems = '', otherItems = ''
-    for (const it of (items.results || []) as any[]) {
-      const cat = (it as any).category || 'material'
-      const row = `<tr class="border-b border-gray-100 hover:bg-gray-50/50"><td class="py-3 px-3 text-gray-700 text-sm">${it.description}</td><td class="py-3 px-2 text-center text-sm text-gray-500">${it.quantity}</td><td class="py-3 px-2 text-right text-sm text-gray-500">$${parseFloat(it.unit_price).toFixed(2)}</td><td class="py-3 px-2 text-right font-semibold text-sm">$${parseFloat(it.amount).toFixed(2)}</td></tr>`
-      if (cat === 'labor') laborItems += row
-      else if (cat === 'disposal' || cat === 'recycling') disposalItems += row
-      else materialItems += row
-    }
-
-    // Build billing schedule HTML
-    let scheduleHtml = ''
-    if (schedule.results && schedule.results.length > 0) {
-      scheduleHtml = `<div class="mt-8"><h3 class="text-lg font-bold text-gray-800 mb-4"><i class="fas fa-calendar-check mr-2 text-sky-600"></i>Payment Schedule</h3><div class="space-y-3">`
-      for (const ms of schedule.results as any[]) {
-        const msPaid = ms.status === 'paid'
-        scheduleHtml += `<div class="flex items-center justify-between p-4 rounded-xl border ${msPaid ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200'}">
-          <div class="flex items-center gap-3">
-            <div class="w-8 h-8 rounded-full flex items-center justify-center ${msPaid ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-500'}"><i class="fas ${msPaid ? 'fa-check' : 'fa-clock'} text-sm"></i></div>
-            <div><p class="font-semibold text-sm ${msPaid ? 'text-green-800' : 'text-gray-800'}">${ms.label}</p><p class="text-xs text-gray-500">${ms.trigger_description || ''}</p></div>
-          </div>
-          <div class="text-right"><p class="font-bold text-lg ${msPaid ? 'text-green-700' : 'text-gray-800'}">$${parseFloat(ms.amount).toFixed(2)}</p><p class="text-xs ${msPaid ? 'text-green-600' : 'text-gray-400'}">${ms.percentage}% ${msPaid ? '— Paid' : ''}</p></div>
-        </div>`
-      }
-      scheduleHtml += '</div></div>'
-    }
-
-    // Build change orders HTML
-    let coHtml = ''
-    if (changeOrders.results && changeOrders.results.length > 0) {
-      coHtml = `<div class="mt-8"><h3 class="text-lg font-bold text-gray-800 mb-4"><i class="fas fa-file-medical mr-2 text-amber-600"></i>Change Orders</h3><div class="space-y-3">`
-      for (const co of changeOrders.results as any[]) {
-        const coApproved = (co as any).status === 'approved'
-        coHtml += `<div class="p-4 rounded-xl border ${coApproved ? 'bg-blue-50 border-blue-200' : 'bg-amber-50 border-amber-200'}">
-          <div class="flex justify-between items-start"><div><p class="font-bold text-sm">${(co as any).change_order_number}</p><p class="text-sm text-gray-600 mt-1">${(co as any).description}</p>${(co as any).reason ? `<p class="text-xs text-gray-400 mt-1">Reason: ${(co as any).reason}</p>` : ''}</div>
-          <div class="text-right"><p class="font-bold text-lg ${(co as any).amount_change >= 0 ? 'text-amber-700' : 'text-green-700'}">${(co as any).amount_change >= 0 ? '+' : ''}$${parseFloat((co as any).amount_change).toFixed(2)}</p><p class="text-xs ${coApproved ? 'text-blue-600' : 'text-amber-600'}">${coApproved ? 'Approved' : 'Pending'}</p></div></div>
-        </div>`
-      }
-      coHtml += '</div></div>'
-    }
-
-    const baseUrl = new URL(c.req.url).origin
-
-    return c.html(`<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Invoice ${invoice.invoice_number} — ${businessName}</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
-    body { font-family: 'Inter', system-ui, -apple-system, sans-serif; }
-    .sig-pad { border: 2px dashed #cbd5e1; border-radius: 12px; cursor: crosshair; touch-action: none; }
-    .sig-pad.active { border-color: ${primaryColor}; border-style: solid; }
-    @media print { .no-print { display: none !important; } body { background: white; } }
-  </style>
-</head>
-<body class="bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen">
-  <div class="max-w-4xl mx-auto py-8 px-4">
-    <!-- Status Banner -->
-    ${isPaid ? `<div class="bg-green-50 border border-green-300 rounded-2xl p-6 mb-6 text-center no-print"><i class="fas fa-check-circle text-green-500 text-4xl mb-2"></i><h2 class="text-xl font-bold text-green-800">Payment Complete</h2><p class="text-green-600 text-sm mt-1">Thank you for your payment.</p></div>` : ''}
-
-    <!-- Invoice Card -->
-    <div class="bg-white rounded-3xl shadow-2xl overflow-hidden">
-      <!-- Header -->
-      <div class="bg-gradient-to-r from-sky-800 to-sky-600 px-8 py-8 text-white relative overflow-hidden">
-        <div class="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/3"></div>
-        <div class="relative z-10 flex justify-between items-start">
-          <div>
-            ${invoice.brand_logo_url ? `<img src="${invoice.brand_logo_url}" alt="${businessName}" class="h-10 mb-3 brightness-0 invert">` : `<h2 class="text-xl font-black tracking-tight">${businessName}</h2>`}
-            <p class="text-sky-200 text-sm mt-1">INVOICE #${invoice.invoice_number}</p>
-            <p class="text-sky-300 text-xs mt-1">${propertyAddr ? `Property: ${propertyAddr}` : ''}</p>
-          </div>
-          <div class="text-right">
-            <span class="inline-block px-4 py-1.5 rounded-full text-xs font-bold tracking-wider ${isPaid ? 'bg-green-500' : isSigned ? 'bg-blue-400' : 'bg-white/20'}">${isPaid ? 'PAID' : isSigned ? 'APPROVED' : (invoice.status || 'DRAFT').toUpperCase()}</span>
-            <p class="text-sky-200 text-xs mt-3">Issued: ${invoice.issue_date || 'N/A'}</p>
-            <p class="text-sky-200 text-xs">Due: ${invoice.due_date || 'N/A'}</p>
-          </div>
-        </div>
-      </div>
-
-      <!-- Bill To / Total -->
-      <div class="px-8 py-6 border-b border-gray-100">
-        <div class="grid md:grid-cols-2 gap-6">
-          <div>
-            <p class="text-xs text-gray-400 uppercase tracking-wider mb-2 font-bold">Bill To</p>
-            <p class="font-bold text-gray-900 text-lg">${invoice.customer_name || 'Customer'}</p>
-            ${invoice.customer_company ? `<p class="text-sm text-gray-500">${invoice.customer_company}</p>` : ''}
-            ${invoice.customer_email ? `<p class="text-sm text-gray-500">${invoice.customer_email}</p>` : ''}
-            ${invoice.customer_phone ? `<p class="text-sm text-gray-500">${invoice.customer_phone}</p>` : ''}
-          </div>
-          <div class="text-right">
-            <p class="text-xs text-gray-400 uppercase tracking-wider mb-2 font-bold">Amount Due</p>
-            <p class="text-4xl font-black" style="color:${primaryColor}">$${parseFloat(invoice.total).toFixed(2)}</p>
-            <p class="text-xs text-gray-400 mt-1">Canadian Dollars (CAD)</p>
-          </div>
-        </div>
-      </div>
-
-      <!-- Line Items -->
-      <div class="px-8 py-6">
-        ${materialItems ? `<h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3"><i class="fas fa-box mr-1"></i>Materials</h3>
-        <table class="w-full mb-6"><thead><tr class="border-b-2 border-gray-200"><th class="text-left py-2 px-3 text-xs text-gray-400 uppercase">Description</th><th class="text-center py-2 px-2 text-xs text-gray-400 uppercase">Qty</th><th class="text-right py-2 px-2 text-xs text-gray-400 uppercase">Unit Price</th><th class="text-right py-2 px-2 text-xs text-gray-400 uppercase">Amount</th></tr></thead><tbody>${materialItems}</tbody></table>` : ''}
-
-        ${laborItems ? `<h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3"><i class="fas fa-hard-hat mr-1"></i>Labor</h3>
-        <table class="w-full mb-6"><thead><tr class="border-b-2 border-gray-200"><th class="text-left py-2 px-3 text-xs text-gray-400 uppercase">Description</th><th class="text-center py-2 px-2 text-xs text-gray-400 uppercase">Qty</th><th class="text-right py-2 px-2 text-xs text-gray-400 uppercase">Unit Price</th><th class="text-right py-2 px-2 text-xs text-gray-400 uppercase">Amount</th></tr></thead><tbody>${laborItems}</tbody></table>` : ''}
-
-        ${disposalItems ? `<h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3"><i class="fas fa-recycle mr-1"></i>Disposal & Recycling</h3>
-        <table class="w-full mb-6"><thead><tr class="border-b-2 border-gray-200"><th class="text-left py-2 px-3 text-xs text-gray-400 uppercase">Description</th><th class="text-center py-2 px-2 text-xs text-gray-400 uppercase">Qty</th><th class="text-right py-2 px-2 text-xs text-gray-400 uppercase">Unit Price</th><th class="text-right py-2 px-2 text-xs text-gray-400 uppercase">Amount</th></tr></thead><tbody>${disposalItems}</tbody></table>` : ''}
-
-        <!-- Totals -->
-        <div class="border-t-2 border-gray-200 pt-4 space-y-2 max-w-sm ml-auto">
-          <div class="flex justify-between text-sm"><span class="text-gray-500">Subtotal</span><span class="font-medium">$${parseFloat(invoice.subtotal || 0).toFixed(2)}</span></div>
-          <div class="flex justify-between text-sm"><span class="text-gray-500">Tax (${invoice.tax_rate || 5}% GST)</span><span class="font-medium">$${parseFloat(invoice.tax_amount || 0).toFixed(2)}</span></div>
-          ${invoice.discount_amount ? `<div class="flex justify-between text-sm"><span class="text-gray-500">Discount</span><span class="font-medium text-green-600">-$${parseFloat(invoice.discount_amount).toFixed(2)}</span></div>` : ''}
-          <div class="flex justify-between text-2xl font-black pt-3 border-t-2 border-gray-300"><span style="color:${primaryColor}">Total</span><span style="color:${primaryColor}">$${parseFloat(invoice.total).toFixed(2)} CAD</span></div>
-        </div>
-      </div>
-
-      ${scheduleHtml ? `<div class="px-8 pb-6">${scheduleHtml}</div>` : ''}
-      ${coHtml ? `<div class="px-8 pb-6">${coHtml}</div>` : ''}
-
-      <!-- Download Report Button -->
-      ${invoice.order_id ? `<div class="px-8 py-4 bg-gray-50 border-t no-print">
-        <div class="flex items-center justify-between">
-          <div><p class="text-sm font-bold text-gray-700"><i class="fas fa-file-pdf mr-2 text-red-500"></i>Roof Measurement Report</p><p class="text-xs text-gray-400">Download the original measurement report for this project</p></div>
-          <a href="${baseUrl}/api/reports/${invoice.order_id}/html" target="_blank" class="bg-sky-600 hover:bg-sky-700 text-white px-5 py-2.5 rounded-lg font-bold text-sm transition-colors"><i class="fas fa-download mr-2"></i>View Report</a>
-        </div>
-      </div>` : ''}
-
-      <!-- E-Signature Section -->
-      ${!isSigned && !isPaid ? `<div class="px-8 py-6 bg-blue-50 border-t no-print" id="sig-section">
-        <h3 class="text-lg font-bold text-gray-800 mb-2"><i class="fas fa-signature mr-2 text-blue-600"></i>Approve & Sign</h3>
-        <p class="text-sm text-gray-500 mb-4">By signing below, you approve this invoice and authorize the work described above to proceed.</p>
-        <div class="grid md:grid-cols-2 gap-4 mb-4">
-          <div><label class="text-xs font-bold text-gray-500 uppercase">Full Name</label><input id="sig-name" type="text" placeholder="Your full name" class="w-full mt-1 px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-400 focus:border-blue-400 outline-none"></div>
-          <div><label class="text-xs font-bold text-gray-500 uppercase">Email</label><input id="sig-email" type="email" placeholder="Your email" class="w-full mt-1 px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-400 focus:border-blue-400 outline-none"></div>
-        </div>
-        <label class="text-xs font-bold text-gray-500 uppercase">Signature</label>
-        <canvas id="sig-canvas" width="600" height="150" class="sig-pad w-full mt-1 bg-white"></canvas>
-        <div class="flex items-center justify-between mt-3">
-          <button onclick="clearSig()" class="text-sm text-gray-400 hover:text-gray-600"><i class="fas fa-undo mr-1"></i>Clear</button>
-          <button onclick="submitSignature()" id="sig-btn" class="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-xl font-bold text-sm shadow-lg transition-all"><i class="fas fa-check mr-2"></i>Sign & Approve</button>
-        </div>
-      </div>` : ''}
-
-      ${isSigned ? `<div class="px-8 py-4 bg-green-50 border-t">
-        <div class="flex items-center gap-3"><i class="fas fa-check-circle text-green-500 text-xl"></i><div><p class="font-bold text-green-800 text-sm">Signed by ${signature.signer_name}</p><p class="text-xs text-green-600">${new Date(signature.signed_at).toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</p></div></div>
-      </div>` : ''}
-
-      <!-- Pay Button -->
-      ${!isPaid ? `<div class="px-8 py-8 text-center no-print bg-gradient-to-b from-white to-gray-50">
-        <button onclick="payNow()" id="payBtn" class="bg-gradient-to-r from-green-600 to-green-500 hover:from-green-700 hover:to-green-600 text-white px-12 py-5 rounded-2xl font-bold text-lg shadow-xl transition-all hover:shadow-2xl hover:scale-105"><i class="fas fa-credit-card mr-3"></i>Pay Now — $${parseFloat(invoice.total).toFixed(2)} CAD</button>
-        <p class="text-xs text-gray-400 mt-3"><i class="fas fa-lock mr-1"></i>Secured by Square Payment Processing</p>
-      </div>` : ''}
-
-      ${invoice.notes ? `<div class="px-8 py-4 bg-gray-50 border-t"><p class="text-xs text-gray-400 uppercase mb-1 font-bold">Notes & Terms</p><p class="text-sm text-gray-600">${invoice.notes}</p></div>` : ''}
-    </div>
-
-    <!-- Print / Download -->
-    <div class="text-center mt-6 space-x-4 no-print">
-      <button onclick="window.print()" class="text-sm text-gray-500 hover:text-gray-700"><i class="fas fa-print mr-1"></i>Print Invoice</button>
-    </div>
-    <p class="text-center text-xs text-gray-400 mt-4">Powered by <a href="/" class="text-sky-600 hover:underline">RoofReporterAI</a></p>
-  </div>
-
-  <script>
-    // E-Signature canvas
-    var canvas = document.getElementById('sig-canvas');
-    var sigData = '';
-    if (canvas) {
-      var ctx = canvas.getContext('2d');
-      var drawing = false;
-      canvas.addEventListener('pointerdown', function(e) { drawing = true; canvas.classList.add('active'); ctx.beginPath(); ctx.moveTo(e.offsetX, e.offsetY); });
-      canvas.addEventListener('pointermove', function(e) { if (!drawing) return; ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.strokeStyle = '#1e293b'; ctx.lineTo(e.offsetX, e.offsetY); ctx.stroke(); });
-      canvas.addEventListener('pointerup', function() { drawing = false; canvas.classList.remove('active'); sigData = canvas.toDataURL(); });
-      canvas.addEventListener('pointerleave', function() { drawing = false; canvas.classList.remove('active'); });
-    }
-    function clearSig() { if (canvas) { var ctx2 = canvas.getContext('2d'); ctx2.clearRect(0, 0, canvas.width, canvas.height); sigData = ''; } }
-    function submitSignature() {
-      var name = document.getElementById('sig-name').value.trim();
-      var email = document.getElementById('sig-email').value.trim();
-      if (!name) { alert('Please enter your full name.'); return; }
-      if (!sigData) { alert('Please sign the pad above.'); return; }
-      var btn = document.getElementById('sig-btn');
-      btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Submitting...';
-      fetch('/api/invoices/public/${token}/sign', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ signer_name: name, signer_email: email, signature_data: sigData })
-      }).then(function(r) { return r.json(); }).then(function(d) {
-        if (d.success) { location.reload(); } else { alert(d.error || 'Error'); btn.disabled = false; btn.innerHTML = '<i class="fas fa-check mr-2"></i>Sign & Approve'; }
-      }).catch(function() { alert('Network error'); btn.disabled = false; });
-    }
-    function payNow() {
-      var btn = document.getElementById('payBtn');
-      btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Redirecting...';
-      fetch('/api/invoices/${tokenRow.invoice_id}/payment-link', { method: 'POST', headers: { 'Content-Type': 'application/json' } })
-        .then(function(r) { return r.json(); })
-        .then(function(d) { if (d.payment_url) { window.location.href = d.payment_url; } else { alert(d.error || 'Payment unavailable'); btn.disabled = false; btn.innerHTML = '<i class="fas fa-credit-card mr-3"></i>Pay Now'; } })
-        .catch(function() { alert('Network error'); btn.disabled = false; });
-    }
-  </script>
-</body>
-</html>`)
-  } catch (err: any) {
-    console.error('[PublicInvoice]', err)
-    return c.html(errorPage('Error', 'Something went wrong loading this invoice.'))
-  }
-})
-
-// ============================================================
-// PUBLIC E-SIGNATURE ENDPOINT (no admin auth)
-// ============================================================
-app.post('/api/invoices/public/:token/sign', async (c) => {
-  try {
-    const token = c.req.param('token')
-    const { signer_name, signer_email, signature_data } = await c.req.json()
-    const db = c.env.DB
-
-    if (!signer_name) return c.json({ error: 'Name is required' }, 400)
-    if (!signature_data) return c.json({ error: 'Signature is required' }, 400)
-
-    // Find invoice by token
-    const inv = await db.prepare(`
-      SELECT i.id FROM invoices i WHERE i.public_token = ?
-    `).bind(token).first<any>()
-    if (!inv) return c.json({ error: 'Invoice not found' }, 404)
-
-    // Check if already signed
-    const existing = await db.prepare('SELECT id FROM invoice_signatures WHERE invoice_id = ?').bind(inv.id).first()
-    if (existing) return c.json({ error: 'Invoice already signed' }, 400)
-
-    // Save signature
-    await db.prepare(`
-      INSERT INTO invoice_signatures (invoice_id, signer_name, signer_email, signature_data, ip_address, user_agent)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).bind(
-      inv.id, signer_name, signer_email || null, signature_data,
-      c.req.header('CF-Connecting-IP') || c.req.header('X-Forwarded-For') || 'unknown',
-      c.req.header('User-Agent') || 'unknown'
-    ).run()
-
-    // Update invoice
-    await db.prepare("UPDATE invoices SET signed_at = datetime('now'), signed_by = ?, updated_at = datetime('now') WHERE id = ?").bind(signer_name, inv.id).run()
-
-    // Log
-    await db.prepare(`
-      INSERT INTO user_activity_log (company_id, action, details)
-      VALUES (1, 'invoice_signed', ?)
-    `).bind(`Invoice #${inv.id} signed by ${signer_name} (${signer_email || 'no email'})`).run()
-
-    return c.json({ success: true, message: 'Invoice signed successfully' })
-  } catch (err: any) {
-    return c.json({ error: 'Failed to save signature', details: err.message }, 500)
-  }
-})
-
-function errorPage(title: string, message: string): string {
-  return `<!DOCTYPE html><html><head><title>${title}</title><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-gray-50 min-h-screen flex items-center justify-center"><div class="text-center max-w-md px-6"><div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4"><i class="fas fa-exclamation-triangle text-red-500 text-2xl"></i></div><h1 class="text-2xl font-bold text-gray-800 mb-2">${title}</h1><p class="text-gray-500">${message}</p><a href="/" class="mt-6 inline-block text-sky-600 hover:underline text-sm">Back to RoofReporterAI</a></div></body></html>`
-}
-
-// ============================================================
-// TERMS OF SERVICE
-// ============================================================
-app.get('/terms', (c) => {
-  return c.html(`<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>Terms of Service — RoofReporterAI</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
-  <style>
-    .legal-section { scroll-margin-top: 80px; }
-    @media (max-width: 640px) { .legal-nav { display: none; } h1 { font-size: 24px !important; } }
-  </style>
-</head>
-<body class="bg-gray-50 min-h-screen">
-  <nav class="bg-white border-b border-gray-200 sticky top-0 z-10">
-    <div class="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
-      <a href="/" class="flex items-center gap-2 text-sm font-semibold text-gray-800"><i class="fas fa-hard-hat text-blue-600"></i> RoofReporterAI</a>
-      <div class="flex gap-4">
-        <a href="/privacy" class="text-xs text-blue-600 hover:underline">Privacy Policy</a>
-        <a href="/" class="text-xs text-gray-500 hover:underline">Home</a>
-      </div>
-    </div>
-  </nav>
-  <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
-  <div class="max-w-3xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
-    <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Terms of Service</h1>
-    <p class="text-sm text-gray-400 mb-2">Effective Date: March 26, 2026 &middot; Last Updated: March 26, 2026</p>
-    <p class="text-xs text-gray-400 mb-8">This agreement constitutes a legally binding End-User License Agreement (EULA) between you and RoofReporterAI.</p>
-
-    <div class="prose prose-gray max-w-none space-y-6 text-gray-700 text-sm leading-relaxed">
-      <h2 class="text-lg font-bold text-gray-800 legal-section" id="acceptance">1. Acceptance of Terms</h2>
-      <p>By downloading, installing, or using the RoofReporterAI application ("App") or website at www.roofreporterai.com ("Service"), you agree to be bound by these Terms of Service and our <a href="/privacy" class="text-blue-600 underline">Privacy Policy</a>. If you do not agree to these terms, do not use the Service. This agreement is between you and RoofReporterAI (operated in Alberta, Canada), not with Apple Inc. or any other app store operator. The Service is intended for roofing professionals, contractors, and their customers in Canada and the United States.</p>
-
-      <h2 class="text-lg font-bold text-gray-800 legal-section" id="eligibility">2. Eligibility & Age Restriction</h2>
-      <p>You must be at least <strong>18 years of age</strong> to use this Service. By using the App, you represent and warrant that you are at least 18 years old and have the legal capacity to enter into this agreement. The Service is designed for business professionals and is not intended for use by minors.</p>
-
-      <h2 class="text-lg font-bold text-gray-800 legal-section" id="description">3. Description of Service</h2>
-      <p>RoofReporterAI provides AI-powered roofing measurement reports, proposal generation, invoicing, CRM tools, AI phone answering ("Roofer Secretary"), and related services for roofing contractors. The Service uses Google Solar API, satellite imagery, and proprietary algorithms to generate roof measurements and material estimates. Features may vary based on your subscription plan.</p>
-
-      <h2 class="text-lg font-bold text-gray-800 legal-section" id="account">4. Account Registration & Security</h2>
-      <p>You must register an account to use the Service. You are responsible for: (a) maintaining the confidentiality of your account credentials; (b) all activities under your account; (c) providing accurate and complete information during registration; (d) notifying us immediately of any unauthorized use of your account. We may suspend or terminate accounts suspected of unauthorized access.</p>
-
-      <h2 class="text-lg font-bold text-gray-800 legal-section" id="accuracy">5. Measurement Accuracy Disclaimer</h2>
-      <p>Roof measurements provided by the Service are <strong>estimates</strong> based on satellite data and AI analysis. <strong>They are not a substitute for physical on-site measurements.</strong> RoofReporterAI does not guarantee the accuracy of measurements and shall not be liable for any discrepancies between estimated and actual measurements. Always verify measurements before ordering materials or committing to project costs. Material estimates are for reference only and should be verified with your supplier.</p>
-
-      <h2 class="text-lg font-bold text-gray-800 legal-section" id="subscriptions">6. Subscriptions & Auto-Renewal</h2>
-      <p><strong>Credit Packs:</strong> One-time purchases of report credits processed via Square. Non-refundable once report generation has begun.</p>
-      <p><strong>Roofer Secretary Service:</strong> Monthly subscription at $249 CAD/USD. Subscriptions renew automatically each month. You may cancel at any time by contacting our team. Cancellation takes effect at the end of the current billing period. No prorated refunds are provided for partial months.</p>
-      <p><strong>Free Trial:</strong> New accounts receive complimentary report credits as indicated during signup. No payment is required for trial reports. Trial credits have no cash value and expire after 90 days.</p>
-      <p><strong>Payment Processing:</strong> All payments are processed securely via Square. Prices are in Canadian Dollars (CAD) unless otherwise stated. You agree to pay all charges at the prices in effect when incurred.</p>
-      <p><strong>Apple App Store Purchases:</strong> If you subscribe through the Apple App Store, payment will be charged to your Apple ID account. Subscriptions automatically renew unless auto-renew is turned off at least 24 hours before the end of the current period. You can manage subscriptions and turn off auto-renewal in your Apple ID Account Settings. Apple's standard terms for auto-renewing subscriptions apply.</p>
-
-      <h2 class="text-lg font-bold text-gray-800 legal-section" id="ip">7. Intellectual Property</h2>
-      <p>Reports, proposals, and documents generated through the Service are owned by the account holder. The underlying technology, algorithms, AI models, UI designs, brand assets, and software code remain the exclusive property of RoofReporterAI. You may not reverse-engineer, decompile, disassemble, copy, or redistribute any part of the Service or App.</p>
-
-      <h2 class="text-lg font-bold text-gray-800 legal-section" id="acceptable-use">8. Acceptable Use Policy</h2>
-      <p>You agree not to: (a) use the Service for any unlawful purpose; (b) attempt to gain unauthorized access to any portion of the Service; (c) interfere with or disrupt the Service; (d) upload malicious code, viruses, or harmful data; (e) use automated tools to scrape or extract data from the Service; (f) impersonate another person or entity; (g) share your account credentials with third parties; (h) resell or redistribute the Service without written authorization.</p>
-
-      <h2 class="text-lg font-bold text-gray-800 legal-section" id="ai-services">9. AI-Powered Services</h2>
-      <p>Certain features of the Service use artificial intelligence, including roof measurement analysis, AI phone answering, and report generation. AI outputs are generated algorithmically and may contain errors or inaccuracies. You are responsible for reviewing and verifying all AI-generated content before relying on it for business decisions. RoofReporterAI does not guarantee the accuracy, completeness, or fitness for purpose of AI-generated outputs.</p>
-
-      <h2 class="text-lg font-bold text-gray-800 legal-section" id="privacy">10. Data & Privacy</h2>
-      <p>Your use of the Service is governed by our <a href="/privacy" class="text-blue-600 underline">Privacy Policy</a>. By using the Service, you consent to the collection and use of information as described therein. We are committed to protecting your personal information in compliance with PIPEDA (Canada), CCPA (California), and applicable data protection regulations.</p>
-
-      <h2 class="text-lg font-bold text-gray-800 legal-section" id="third-party">11. Third-Party Services</h2>
-      <p>The Service integrates with third-party services including Google Maps/Solar API, Square (payments), LiveKit (phone calls), and Twilio (SMS). Your use of these integrations is subject to the respective third-party terms of service. RoofReporterAI is not responsible for third-party service availability, changes, or policies.</p>
-
-      <h2 class="text-lg font-bold text-gray-800 legal-section" id="liability">12. Limitation of Liability</h2>
-      <p>TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, RoofReporterAI shall not be liable for any indirect, incidental, special, consequential, or punitive damages, including but not limited to loss of profits, revenue, data, goodwill, or business opportunities, whether in contract, tort, or otherwise, arising from your use of the Service. Our total aggregate liability shall not exceed the amount paid by you to RoofReporterAI in the 12 months preceding the claim. Some jurisdictions do not allow the exclusion of certain warranties or limitation of liability for consequential damages, so the above limitations may not apply to you.</p>
-
-      <h2 class="text-lg font-bold text-gray-800 legal-section" id="indemnification">13. Indemnification</h2>
-      <p>You agree to indemnify, defend, and hold harmless RoofReporterAI, its officers, directors, employees, and agents from and against any claims, damages, losses, liabilities, and expenses (including reasonable legal fees) arising from or related to your use of the Service, your violation of these Terms, or your violation of any rights of a third party.</p>
-
-      <h2 class="text-lg font-bold text-gray-800 legal-section" id="termination">14. Termination</h2>
-      <p>We reserve the right to suspend or terminate your account at any time for violation of these Terms or for any other reason at our sole discretion. You may close your account at any time by contacting support at <strong>support@roofreporterai.com</strong>. Upon termination: (a) your access to the Service will be revoked; (b) your data will be retained for 30 days, after which it may be permanently deleted; (c) you may request a data export within the 30-day grace period; (d) active subscriptions will be cancelled effective at the end of the current billing period.</p>
-
-      <h2 class="text-lg font-bold text-gray-800 legal-section" id="apple">15. Apple App Store Terms</h2>
-      <p>If you download the App from the Apple App Store: (a) this agreement is between you and RoofReporterAI, not Apple; (b) Apple has no obligation to furnish maintenance or support services with respect to the App; (c) in the event of any failure of the App to conform to any applicable warranty, Apple's sole obligation shall be to refund the purchase price (if any); (d) Apple is not responsible for addressing any claims relating to the App; (e) Apple and Apple's subsidiaries are third-party beneficiaries of this agreement and may enforce it against you; (f) you are not located in a country subject to a U.S. Government embargo; (g) you will comply with all applicable third-party terms of agreement when using the App.</p>
-
-      <h2 class="text-lg font-bold text-gray-800 legal-section" id="changes">16. Changes to Terms</h2>
-      <p>We may update these Terms from time to time. Material changes will be communicated via email to registered users or through in-app notifications at least 14 days before they take effect. Your continued use of the Service after changes take effect constitutes acceptance of the updated Terms. If you do not agree with the changes, you must stop using the Service.</p>
-
-      <h2 class="text-lg font-bold text-gray-800 legal-section" id="governing-law">17. Governing Law & Dispute Resolution</h2>
-      <p>These Terms are governed by the laws of the Province of Alberta, Canada, without regard to conflict of law principles. Any disputes arising from these Terms or the Service shall first be attempted to be resolved through good-faith negotiation. If negotiation fails, disputes shall be submitted to binding arbitration in Alberta, Canada, in accordance with the Arbitration Act of Alberta. Each party shall bear its own costs.</p>
-
-      <h2 class="text-lg font-bold text-gray-800 legal-section" id="contact">18. Contact Information</h2>
-      <p>For questions, concerns, or requests regarding these Terms:</p>
-      <p><strong>Email:</strong> support@roofreporterai.com</p>
-      <p><strong>Location:</strong> Alberta, Canada</p>
-      <p><strong>Website:</strong> <a href="https://www.roofreporterai.com" class="text-blue-600 underline">www.roofreporterai.com</a></p>
-    </div>
-    <div class="mt-12 border-t pt-6 text-center text-xs text-gray-400 space-y-2">
-      <p>&copy; ${new Date().getFullYear()} RoofReporterAI. All rights reserved.</p>
-      <p><a href="/" class="text-blue-600 hover:underline">Back to RoofReporterAI</a> &middot; <a href="/privacy" class="text-blue-600 hover:underline">Privacy Policy</a></p>
-    </div>
-  </div>
-</body>
-</html>`)
-})
-
-// ============================================================
-// PRIVACY POLICY
-// ============================================================
-app.get('/privacy', (c) => {
-  return c.html(`<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>Privacy Policy — RoofReporterAI</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
-  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
-  <style>
-    .legal-section { scroll-margin-top: 80px; }
-    @media (max-width: 640px) { h1 { font-size: 24px !important; } }
-  </style>
-</head>
-<body class="bg-gray-50 min-h-screen">
-  <nav class="bg-white border-b border-gray-200 sticky top-0 z-10">
-    <div class="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
-      <a href="/" class="flex items-center gap-2 text-sm font-semibold text-gray-800"><i class="fas fa-hard-hat text-blue-600"></i> RoofReporterAI</a>
-      <div class="flex gap-4">
-        <a href="/terms" class="text-xs text-blue-600 hover:underline">Terms of Service</a>
-        <a href="/" class="text-xs text-gray-500 hover:underline">Home</a>
-      </div>
-    </div>
-  </nav>
-  <div class="max-w-3xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
-    <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Privacy Policy</h1>
-    <p class="text-sm text-gray-400 mb-8">Effective Date: March 26, 2026 &middot; Last Updated: March 26, 2026</p>
-
-    <div class="prose prose-gray max-w-none space-y-6 text-gray-700 text-sm leading-relaxed">
-
-      <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
-        <p class="text-blue-800 text-sm font-medium"><i class="fas fa-info-circle mr-2"></i><strong>Summary:</strong> We collect only what's needed to provide our roofing measurement and CRM services. We never sell your personal data. You can request deletion of your data at any time.</p>
-      </div>
-
-      <h2 class="text-lg font-bold text-gray-800 legal-section" id="collect">1. Information We Collect</h2>
-      <p><strong>Account Information:</strong> Name, email address, phone number, company name, and business address provided during registration.</p>
-      <p><strong>Property Data:</strong> Street addresses, GPS coordinates, and satellite imagery data used to generate roof measurement reports.</p>
-      <p><strong>Payment Information:</strong> Credit card and billing details processed securely through Square. <strong>We do not store credit card numbers on our servers.</strong> All payment data is handled by Square's PCI-DSS compliant systems.</p>
-      <p><strong>Call & Communication Data:</strong> If you use the Roofer Secretary AI phone service, we record call metadata (duration, phone number, timestamp), AI-generated transcripts, and call summaries. Calls are processed by LiveKit and Twilio.</p>
-      <p><strong>Usage Data:</strong> Pages visited, features used, report generation history, device type, browser information, and IP address collected via Google Analytics 4. This data is anonymized and aggregated.</p>
-      <p><strong>Device Information (Mobile App):</strong> When using our iOS app, we may collect device model, OS version, app version, and crash reports to improve app stability and performance.</p>
-
-      <h2 class="text-lg font-bold text-gray-800 legal-section" id="use">2. How We Use Your Information</h2>
-      <p>We use your information to:</p>
-      <ul class="list-disc list-inside space-y-1">
-        <li>Provide and operate the Service (roof measurements, reports, CRM, invoicing)</li>
-        <li>Process payments and manage your subscription</li>
-        <li>Send transactional communications (invoices, proposals, receipts, call summaries)</li>
-        <li>Improve the Service and develop new features</li>
-        <li>Analyze usage patterns for platform optimization</li>
-        <li>Communicate important service updates</li>
-        <li>Prevent fraud and ensure security</li>
-        <li>Comply with legal obligations</li>
-      </ul>
-      <p>We do <strong>NOT</strong> use your data for: selling to third parties, targeted advertising, or profiling for purposes unrelated to the Service.</p>
-
-      <h2 class="text-lg font-bold text-gray-800 legal-section" id="sharing">3. Third-Party Services & Data Sharing</h2>
-      <p>We share data with the following third-party services strictly as necessary to operate the platform:</p>
-      <ul class="list-disc list-inside space-y-1">
-        <li><strong>Google Solar API / Maps:</strong> Property coordinates for satellite imagery and solar data</li>
-        <li><strong>Square:</strong> Payment processing (PCI-DSS Level 1 certified)</li>
-        <li><strong>Google Analytics 4:</strong> Anonymized usage analytics</li>
-        <li><strong>Google Gmail API:</strong> Sending proposals and invoices on your behalf (only when you explicitly connect your Gmail)</li>
-        <li><strong>Cloudflare:</strong> Hosting, CDN, DDoS protection, and edge computing</li>
-        <li><strong>LiveKit:</strong> AI phone call handling and voice processing (when Roofer Secretary is enabled)</li>
-        <li><strong>Twilio:</strong> SMS notifications and phone number management</li>
-        <li><strong>Apple (App Store):</strong> App distribution, crash reporting, and in-app purchase processing</li>
-      </ul>
-      <p>We do <strong>NOT</strong> sell, rent, or trade your personal information to third parties for marketing purposes.</p>
-
-      <h2 class="text-lg font-bold text-gray-800 legal-section" id="retention">4. Data Retention</h2>
-      <ul class="list-disc list-inside space-y-1">
-        <li><strong>Account data:</strong> Retained for the duration of your account plus 30 days after deletion request</li>
-        <li><strong>Roof measurement reports:</strong> Retained for 2 years after generation</li>
-        <li><strong>Call recordings/transcripts:</strong> Retained for 12 months</li>
-        <li><strong>Payment records:</strong> Retained for 7 years as required by Canadian tax law</li>
-        <li><strong>Analytics data:</strong> Anonymized and aggregated, retained indefinitely</li>
-      </ul>
-      <p>You may request early deletion of your data at any time (see Section 8).</p>
-
-      <h2 class="text-lg font-bold text-gray-800 legal-section" id="security">5. Data Security</h2>
-      <p>We implement industry-standard security measures including:</p>
-      <ul class="list-disc list-inside space-y-1">
-        <li>HTTPS/TLS encryption for all data in transit</li>
-        <li>Secure password hashing (SHA-256 with salt)</li>
-        <li>OAuth 2.0 authentication for third-party integrations</li>
-        <li>Cloudflare DDoS protection and Web Application Firewall</li>
-        <li>Automatic encryption at rest on Cloudflare's global infrastructure</li>
-        <li>Regular security audits and vulnerability assessments</li>
-        <li>Role-based access control for internal systems</li>
-      </ul>
-      <p>While we strive to protect your data, no method of transmission over the Internet is 100% secure. We cannot guarantee absolute security.</p>
-
-      <h2 class="text-lg font-bold text-gray-800 legal-section" id="cookies">6. Cookies & Tracking</h2>
-      <p><strong>Essential Cookies:</strong> Used for authentication, session management, and core functionality. Required for the Service to operate.</p>
-      <p><strong>Analytics Cookies:</strong> Google Analytics uses cookies for anonymized usage tracking. You may disable these in your browser settings without affecting core functionality.</p>
-      <p>We do not use advertising cookies or cross-site tracking pixels.</p>
-
-      <h2 class="text-lg font-bold text-gray-800 legal-section" id="pipeda">7. Your Rights — PIPEDA Compliance (Canada)</h2>
-      <p>Under Canada's Personal Information Protection and Electronic Documents Act (PIPEDA), you have the right to:</p>
-      <ul class="list-disc list-inside space-y-1">
-        <li><strong>Access:</strong> Request a copy of all personal information we hold about you</li>
-        <li><strong>Correction:</strong> Request correction of inaccurate or incomplete data</li>
-        <li><strong>Withdrawal of Consent:</strong> Withdraw consent for data collection (may affect Service availability)</li>
-        <li><strong>Deletion:</strong> Request complete deletion of your personal data</li>
-        <li><strong>Portability:</strong> Request your data in a portable format (JSON/CSV)</li>
-      </ul>
-      <p>To exercise any of these rights, contact <strong>privacy@roofreporterai.com</strong>. We will respond within 30 days.</p>
-
-      <h2 class="text-lg font-bold text-gray-800 legal-section" id="deletion">8. Data Deletion & Account Closure</h2>
-      <p>You may request deletion of your account and all associated data at any time by:</p>
-      <ul class="list-disc list-inside space-y-1">
-        <li>Emailing <strong>support@roofreporterai.com</strong> with the subject "Data Deletion Request"</li>
-        <li>Using the "Delete Account" option in your account settings (when available)</li>
-      </ul>
-      <p>Upon receiving a deletion request, we will: (a) confirm receipt within 48 hours; (b) process deletion within 30 days; (c) permanently remove all personal data except records required by law (e.g., payment records for tax compliance); (d) notify you upon completion. Active subscriptions will be cancelled as part of account deletion.</p>
-
-      <h2 class="text-lg font-bold text-gray-800 legal-section" id="ccpa">9. California Privacy Rights (CCPA/CPRA)</h2>
-      <p>If you are a California resident, you have additional rights under the California Consumer Privacy Act (CCPA) and California Privacy Rights Act (CPRA):</p>
-      <ul class="list-disc list-inside space-y-1">
-        <li><strong>Right to Know:</strong> Request details about categories and specific pieces of personal information collected</li>
-        <li><strong>Right to Delete:</strong> Request deletion of personal information</li>
-        <li><strong>Right to Opt-Out:</strong> We do not sell personal information, so this right does not apply. However, you may still opt out of analytics tracking.</li>
-        <li><strong>Non-Discrimination:</strong> We will not discriminate against you for exercising your privacy rights</li>
-      </ul>
-      <p>To submit a CCPA request, email <strong>privacy@roofreporterai.com</strong> or call us. We will verify your identity before processing requests.</p>
-
-      <h2 class="text-lg font-bold text-gray-800 legal-section" id="children">10. Children's Privacy</h2>
-      <p>The Service is <strong>not intended for individuals under 18 years of age</strong>. We do not knowingly collect personal information from children under 18. If we become aware that we have collected data from a minor, we will promptly delete it. If you believe a minor has provided us with personal information, please contact us immediately.</p>
-
-      <h2 class="text-lg font-bold text-gray-800 legal-section" id="international">11. International Data Transfers</h2>
-      <p>Your data may be processed in Canada, the United States, and other countries where our service providers operate (including Cloudflare's global edge network). We ensure appropriate safeguards are in place for international data transfers in compliance with PIPEDA and applicable laws.</p>
-
-      <h2 class="text-lg font-bold text-gray-800 legal-section" id="changes">12. Changes to This Policy</h2>
-      <p>We may update this Privacy Policy from time to time. Material changes will be communicated via email to registered users or through in-app notifications at least 14 days before they take effect. The "Last Updated" date will be revised accordingly. Continued use of the Service after changes take effect constitutes acceptance of the updated policy.</p>
-
-      <h2 class="text-lg font-bold text-gray-800 legal-section" id="contact">13. Contact Information</h2>
-      <p>For privacy inquiries or data requests:</p>
-      <p><strong>Privacy Officer:</strong> RoofReporterAI</p>
-      <p><strong>Email:</strong> privacy@roofreporterai.com</p>
-      <p><strong>General Support:</strong> support@roofreporterai.com</p>
-      <p><strong>Location:</strong> Alberta, Canada</p>
-      <p><strong>Website:</strong> <a href="https://www.roofreporterai.com" class="text-blue-600 underline">www.roofreporterai.com</a></p>
-    </div>
-    <div class="mt-12 border-t pt-6 text-center text-xs text-gray-400 space-y-2">
-      <p>&copy; ${new Date().getFullYear()} RoofReporterAI. All rights reserved.</p>
-      <p><a href="/" class="text-blue-600 hover:underline">Back to RoofReporterAI</a> &middot; <a href="/terms" class="text-blue-600 hover:underline">Terms of Service</a></p>
-    </div>
-  </div>
-</body>
-</html>`)
-})
-
-// ============================================================
-// SERVICE INVOICE — Public payment page for cold-call invoices
-// ============================================================
-app.get('/service-invoice/:id', async (c) => {
-  try {
-    const id = c.req.param('id')
-    const status = c.req.query('status') || ''
-    const invoice = await c.env.DB.prepare(
-      'SELECT * FROM service_invoices WHERE id = ?'
-    ).bind(id).first<any>()
-    if (!invoice) return c.html('<html><body><h1>Invoice Not Found</h1></body></html>', 404)
-    const isPaid = invoice.status === 'paid'
-    const items = JSON.parse(invoice.items || '[]')
-    const itemsHtml = items.map((it: any) => `<tr class="border-b border-gray-100"><td class="py-2 px-2 text-gray-700 text-sm">${it.description}</td><td class="py-2 px-2 text-right text-gray-700 text-sm">$${parseFloat(it.price || it.amount || 0).toFixed(2)}</td></tr>`).join('')
-    return c.html(`<!DOCTYPE html>
-<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Service Invoice ${invoice.invoice_number}</title>
-<script src="https://cdn.tailwindcss.com"></script>
-<link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
-</head><body class="bg-gray-100 min-h-screen py-8 px-4">
-<div class="max-w-3xl mx-auto">
-  ${status === 'success' ? '<div class="bg-green-50 border border-green-200 rounded-xl p-6 mb-6 text-center"><i class="fas fa-check-circle text-green-500 text-4xl mb-2"></i><h2 class="text-xl font-bold text-green-800">Payment Successful!</h2><p class="text-green-600 text-sm mt-1">Thank you for your payment.</p></div>' : ''}
-  <div class="bg-white rounded-2xl shadow-xl overflow-hidden">
-    <div class="bg-gradient-to-r from-amber-600 to-amber-500 px-8 py-6 text-white">
-      <div class="flex justify-between items-start">
-        <div><h1 class="text-2xl font-bold">SERVICE INVOICE</h1><p class="text-amber-100 text-sm mt-1">#${invoice.invoice_number}</p></div>
-        <div class="text-right"><span class="inline-block px-3 py-1 rounded-full text-xs font-bold ${isPaid ? 'bg-green-500' : 'bg-white/20'}">${isPaid ? 'PAID' : (invoice.status || 'DRAFT').toUpperCase()}</span><p class="text-amber-100 text-xs mt-2">Due: ${invoice.due_date || 'N/A'}</p></div>
-      </div>
-    </div>
-    <div class="px-8 py-6">
-      <div class="grid md:grid-cols-2 gap-4 mb-6">
-        <div><p class="text-xs text-gray-400 uppercase mb-1">Bill To</p><p class="font-bold text-gray-800">${invoice.customer_name || 'Customer'}</p><p class="text-sm text-gray-500">${invoice.customer_email || ''}</p></div>
-        <div class="text-right"><p class="text-xs text-gray-400 uppercase mb-1">Total Due</p><p class="text-3xl font-black text-amber-600">$${parseFloat(invoice.total).toFixed(2)}</p><p class="text-xs text-gray-400">CAD</p></div>
-      </div>
-      ${itemsHtml ? `<table class="w-full text-sm mb-6"><thead><tr class="border-b-2 border-gray-200"><th class="text-left py-2 px-2 text-gray-500">Description</th><th class="text-right py-2 px-2 text-gray-500">Amount</th></tr></thead><tbody>${itemsHtml}</tbody></table>` : ''}
-      <div class="border-t-2 border-gray-200 pt-4 space-y-2">
-        <div class="flex justify-between text-sm"><span class="text-gray-500">Subtotal</span><span>$${parseFloat(invoice.subtotal || 0).toFixed(2)}</span></div>
-        <div class="flex justify-between text-sm"><span class="text-gray-500">GST (${invoice.tax_rate || 5}%)</span><span>$${parseFloat(invoice.tax_amount || 0).toFixed(2)}</span></div>
-        <div class="flex justify-between text-xl font-bold pt-2 border-t border-gray-200"><span class="text-amber-600">Total</span><span class="text-amber-600">$${parseFloat(invoice.total).toFixed(2)} CAD</span></div>
-      </div>
-      ${!isPaid && invoice.payment_link ? `<div class="mt-8 text-center"><a href="${invoice.payment_link}" class="inline-block bg-green-600 hover:bg-green-700 text-white px-10 py-4 rounded-xl font-bold text-lg shadow-lg transition-all hover:shadow-xl"><i class="fas fa-credit-card mr-2"></i>Pay Now — $${parseFloat(invoice.total).toFixed(2)} CAD</a><p class="text-xs text-gray-400 mt-2"><i class="fas fa-lock mr-1"></i>Secured by Square</p></div>` : ''}
-    </div>
-    ${invoice.notes ? `<div class="px-8 py-4 bg-gray-50 border-t"><p class="text-xs text-gray-400 uppercase mb-1">Notes</p><p class="text-sm text-gray-600">${invoice.notes}</p></div>` : ''}
-  </div>
-  <p class="text-center text-xs text-gray-400 mt-6"><a href="/">RoofReporterAI</a> · Roofer Secretary AI Service</p>
-</div>
-</body></html>`)
-  } catch { return c.html('<h1>Error</h1>', 500) }
-})
-
-// ============================================================
-// CUSTOMER PORTAL — Homeowner views their proposal & invoice history
-// ============================================================
-app.get('/portal/:email', async (c) => {
-  const email = decodeURIComponent(c.req.param('email'))
-  return c.html(`<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>My Projects — RoofReporterAI</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
-</head>
-<body class="bg-gray-50 min-h-screen">
-  <header class="bg-gradient-to-r from-sky-700 to-sky-600 text-white shadow">
-    <div class="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
-      <div class="flex items-center gap-3">
-        <i class="fas fa-hard-hat text-2xl"></i>
-        <div><h1 class="text-lg font-bold">My Roofing Projects</h1><p class="text-sky-200 text-xs">${email}</p></div>
-      </div>
-    </div>
-  </header>
-  <main class="max-w-4xl mx-auto px-4 py-8" id="portal-root">
-    <div class="flex items-center justify-center py-12"><div class="animate-spin w-8 h-8 border-4 border-sky-200 border-t-sky-600 rounded-full"></div><span class="ml-3 text-gray-500">Loading your projects...</span></div>
-  </main>
-  <script>
-    (async function() {
-      const root = document.getElementById('portal-root');
-      try {
-        const res = await fetch('/api/crm/customer-portal/${encodeURIComponent(email)}');
-        const data = await res.json();
-        
-        let html = '<div class="space-y-8">';
-        
-        // Proposals
-        html += '<section><h2 class="text-xl font-bold text-gray-800 mb-4"><i class="fas fa-file-signature mr-2 text-sky-600"></i>Proposals</h2>';
-        if (data.proposals && data.proposals.length > 0) {
-          html += '<div class="grid gap-4">';
-          data.proposals.forEach(function(p) {
-            var statusColor = { accepted: 'green', declined: 'red', sent: 'blue', viewed: 'yellow', draft: 'gray' }[p.status] || 'gray';
-            html += '<div class="bg-white rounded-xl border border-gray-200 p-5 hover:shadow-md transition-shadow">' +
-              '<div class="flex justify-between items-start">' +
-              '<div><h3 class="font-bold text-gray-800">' + p.title + '</h3>' +
-              '<p class="text-sm text-gray-500 mt-0.5">' + p.proposal_number + (p.tier_label ? ' · ' + p.tier_label : '') + '</p></div>' +
-              '<div class="text-right"><span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-bold bg-' + statusColor + '-100 text-' + statusColor + '-700">' + (p.status || 'draft').toUpperCase() + '</span>' +
-              '<p class="text-lg font-bold text-gray-800 mt-1">$' + parseFloat(p.total_amount || 0).toLocaleString('en-CA', {minimumFractionDigits: 2}) + '</p></div></div>' +
-              (p.share_token ? '<div class="mt-3"><a href="/proposal/view/' + p.share_token + '" class="text-sm text-sky-600 hover:underline"><i class="fas fa-external-link-alt mr-1"></i>View Proposal</a></div>' : '') +
-              '</div>';
-          });
-          html += '</div>';
-        } else { html += '<p class="text-gray-400 text-sm">No proposals yet.</p>'; }
-        html += '</section>';
-        
-        // Invoices
-        html += '<section><h2 class="text-xl font-bold text-gray-800 mb-4"><i class="fas fa-file-invoice-dollar mr-2 text-green-600"></i>Invoices</h2>';
-        if (data.invoices && data.invoices.length > 0) {
-          html += '<div class="grid gap-4">';
-          data.invoices.forEach(function(inv) {
-            var statusColor = { paid: 'green', sent: 'blue', viewed: 'yellow', overdue: 'red', draft: 'gray' }[inv.status] || 'gray';
-            html += '<div class="bg-white rounded-xl border border-gray-200 p-5 hover:shadow-md transition-shadow">' +
-              '<div class="flex justify-between items-start">' +
-              '<div><h3 class="font-bold text-gray-800">' + inv.invoice_number + '</h3>' +
-              (inv.due_date ? '<p class="text-sm text-gray-500 mt-0.5">Due: ' + inv.due_date + '</p>' : '') + '</div>' +
-              '<div class="text-right"><span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-bold bg-' + statusColor + '-100 text-' + statusColor + '-700">' + (inv.status || 'draft').toUpperCase() + '</span>' +
-              '<p class="text-lg font-bold text-gray-800 mt-1">$' + parseFloat(inv.total || 0).toLocaleString('en-CA', {minimumFractionDigits: 2}) + '</p></div></div>' +
-              '<div class="mt-3 flex gap-3"><a href="/invoice/pay/' + inv.id + '" class="text-sm text-sky-600 hover:underline"><i class="fas fa-external-link-alt mr-1"></i>View Invoice</a>' +
-              (inv.status !== 'paid' ? '<a href="/invoice/pay/' + inv.id + '" class="text-sm text-green-600 hover:underline"><i class="fas fa-credit-card mr-1"></i>Pay Now</a>' : '<span class="text-sm text-green-600"><i class="fas fa-check-circle mr-1"></i>Paid' + (inv.paid_date ? ' ' + inv.paid_date : '') + '</span>') +
-              '</div></div>';
-          });
-          html += '</div>';
-        } else { html += '<p class="text-gray-400 text-sm">No invoices yet.</p>'; }
-        html += '</section></div>';
-        
-        root.innerHTML = html;
-      } catch(e) {
-        root.innerHTML = '<div class="text-center py-12"><i class="fas fa-exclamation-triangle text-red-400 text-3xl mb-3"></i><p class="text-gray-600">Error loading your projects. Please try again.</p></div>';
-      }
-    })();
-  </script>
-</body>
-</html>`)
-})
-
 app.get('/customer/d2d', (c) => {
   const mapsKey = c.env.GOOGLE_MAPS_API_KEY || ''
   return c.html(getD2DPageHTML(mapsKey))
@@ -2284,11 +924,6 @@ app.get('/customer/d2d', (c) => {
 app.get('/customer/secretary', (c) => {
   const stripeKey = '' // No longer needed — Square uses server-side only
   return c.html(getSecretaryPageHTML())
-})
-
-// Customer Cold Call Center — AI Outbound Dialer
-app.get('/customer/cold-calls', (c) => {
-  return c.html(getColdCallPageHTML())
 })
 
 // Model Cards — Public reference pages for AI models
@@ -2304,14 +939,6 @@ export default app
 
 function getTailwindConfig() {
   return `<script>
-    // Suppress Tailwind CDN production warning banner
-    if (typeof window !== 'undefined') {
-      var _origWarn = console.warn;
-      console.warn = function() {
-        if (arguments[0] && typeof arguments[0] === 'string' && arguments[0].indexOf('cdn.tailwindcss.com') > -1) return;
-        _origWarn.apply(console, arguments);
-      };
-    }
     tailwind.config = {
       theme: {
         extend: {
@@ -2336,18 +963,8 @@ function getTailwindConfig() {
         }
       }
     }
-  </script>
-  <style>
-    /* Hide Tailwind CDN production warning banner */
-    [data-tailwind-warning], .tailwind-warning,
-    body > div:first-child[style*="position: fixed"][style*="background"][style*="z-index"]:not(#landing-root):not(#app):not(#customer-root):not([class]) {
-      display: none !important;
-    }
-  </style>`
+  </script>`
 }
-
-// Build-time version stamp for cache busting all static assets
-const BUILD_VERSION = Date.now().toString(36)
 
 function getHeadTags() {
   return `<meta charset="UTF-8">
@@ -2356,12 +973,12 @@ function getHeadTags() {
   <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
   ${getTailwindConfig()}
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
-  <link rel="stylesheet" href="/static/style.css?v=${BUILD_VERSION}">`
+  <link rel="stylesheet" href="/static/style.css">`
 }
 
 // Rover chatbot widget script tag — inject on public pages only
 function getRoverWidget() {
-  return `<script src="/static/rover-widget.js?v=${BUILD_VERSION}" defer></script>`
+  return `<script src="/static/rover-widget.js" defer></script>`
 }
 
 // Rover AI Assistant — inject on authenticated customer pages
@@ -2379,34 +996,38 @@ function getContactFormHTML(sourcePage: string = 'unknown') {
       <div class="text-center mb-10">
         <span class="inline-block bg-cyan-500/20 text-cyan-300 text-xs font-bold px-3 py-1 rounded-full mb-4">GET IN TOUCH</span>
         <h2 class="text-3xl md:text-4xl font-bold text-white mb-3">Ready to Transform Your Roofing Business?</h2>
-        <p class="text-gray-300 max-w-xl mx-auto">Fill out the form below and our team will reach out within 24 hours to get you set up.</p>
+        <p class="text-gray-300 max-w-xl mx-auto">Fill out the form below and our team will reach out within 24 hours to get you set up with AI-powered roof measurement reports.</p>
       </div>
       <form id="lead-capture-form" onsubmit="return submitLeadForm(event, '${sourcePage}')" class="bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl p-8 space-y-5">
         <div class="grid md:grid-cols-2 gap-5">
           <div>
             <label class="block text-sm font-medium text-gray-200 mb-1.5">Full Name <span class="text-red-400">*</span></label>
-            <input type="text" id="lead-first-name" required placeholder="John Smith" class="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:ring-2 focus:ring-cyan-400 focus:border-transparent outline-none min-h-[48px]">
+            <input type="text" id="lead-name" required placeholder="John Smith" class="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:ring-2 focus:ring-cyan-400 focus:border-transparent outline-none">
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-200 mb-1.5">Email Address <span class="text-red-400">*</span></label>
-            <input type="email" id="lead-email" required placeholder="john@abcroofing.com" class="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:ring-2 focus:ring-cyan-400 focus:border-transparent outline-none min-h-[48px]">
+            <label class="block text-sm font-medium text-gray-200 mb-1.5">Company Name</label>
+            <input type="text" id="lead-company" placeholder="ABC Roofing Ltd." class="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:ring-2 focus:ring-cyan-400 focus:border-transparent outline-none">
           </div>
         </div>
         <div class="grid md:grid-cols-2 gap-5">
           <div>
-            <label class="block text-sm font-medium text-gray-200 mb-1.5">Company Name</label>
-            <input type="text" id="lead-company" placeholder="ABC Roofing Ltd." class="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:ring-2 focus:ring-cyan-400 focus:border-transparent outline-none min-h-[48px]">
+            <label class="block text-sm font-medium text-gray-200 mb-1.5">Phone Number</label>
+            <input type="tel" id="lead-phone" placeholder="(780) 555-1234" class="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:ring-2 focus:ring-cyan-400 focus:border-transparent outline-none">
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-200 mb-1.5">Phone Number</label>
-            <input type="tel" id="lead-phone" placeholder="(780) 555-1234" class="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:ring-2 focus:ring-cyan-400 focus:border-transparent outline-none min-h-[48px]">
+            <label class="block text-sm font-medium text-gray-200 mb-1.5">Email Address <span class="text-red-400">*</span></label>
+            <input type="email" id="lead-email" required placeholder="john@abcroofing.com" class="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:ring-2 focus:ring-cyan-400 focus:border-transparent outline-none">
           </div>
         </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-200 mb-1.5">How can we help?</label>
+          <textarea id="lead-message" rows="3" placeholder="Tell us about your roofing business and what you're looking for..." class="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:ring-2 focus:ring-cyan-400 focus:border-transparent outline-none resize-none"></textarea>
+        </div>
         <div id="lead-form-msg" class="hidden text-sm font-medium px-4 py-3 rounded-lg"></div>
-        <button type="submit" id="lead-submit-btn" class="w-full bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-400 hover:to-cyan-500 text-white font-bold py-4 px-8 rounded-xl shadow-lg transition-all hover:scale-[1.01] text-lg min-h-[56px]">
-          <i class="fas fa-rocket mr-2"></i>Get Started — 3 Free Reports
+        <button type="submit" id="lead-submit-btn" class="w-full bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-white font-bold py-4 px-8 rounded-xl shadow-lg transition-all hover:scale-[1.01] text-lg">
+          <i class="fas fa-paper-plane mr-2"></i>Get Started — It's Free
         </button>
-        <p class="text-center text-gray-400 text-xs">No credit card required. Setup in 2 minutes.</p>
+        <p class="text-center text-gray-400 text-xs">No credit card required. 3 free reports included.</p>
       </form>
     </div>
   </section>
@@ -2418,22 +1039,16 @@ function getContactFormHTML(sourcePage: string = 'unknown') {
     btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Submitting...';
     msg.className = 'hidden';
     try {
-      var fullName = document.getElementById('lead-first-name').value.trim();
-      var nameParts = fullName.split(' ');
-      var firstName = nameParts[0] || '';
-      var lastName = nameParts.slice(1).join(' ') || '';
       var res = await fetch('/api/agents/leads', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: fullName,
-          first_name: firstName,
-          last_name: lastName,
+          name: document.getElementById('lead-name').value.trim(),
           company_name: document.getElementById('lead-company').value.trim(),
-          phone: (document.getElementById('lead-phone') || {}).value ? document.getElementById('lead-phone').value.trim() : '',
+          phone: document.getElementById('lead-phone').value.trim(),
           email: document.getElementById('lead-email').value.trim(),
           source_page: source,
-          message: ''
+          message: document.getElementById('lead-message').value.trim()
         })
       });
       var data = await res.json();
@@ -2449,7 +1064,7 @@ function getContactFormHTML(sourcePage: string = 'unknown') {
       msg.className = 'text-sm font-medium px-4 py-3 rounded-lg bg-red-500/20 text-red-300 border border-red-500/30';
       msg.innerHTML = '<i class="fas fa-exclamation-circle mr-2"></i>Network error. Please try again.';
     }
-    btn.disabled = false; btn.innerHTML = '<i class="fas fa-rocket mr-2"></i>Get Started — 3 Free Reports';
+    btn.disabled = false; btn.innerHTML = '<i class="fas fa-paper-plane mr-2"></i>Get Started — It\\'s Free';
   }
   </script>`
 }
@@ -2481,7 +1096,7 @@ function getMainPageHTML(mapsApiKey: string) {
     <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
       <div class="flex items-center space-x-3">
         <a href="/" class="flex items-center space-x-3 hover:opacity-90 transition-opacity">
-          <span class="logo-mark w-10 h-10"><img src="/static/logo.png" alt="RoofReporterAI"></span>
+          <img src="/static/logo.png" alt="RoofReporterAI" class="w-10 h-10 rounded-lg object-cover">
           <div>
             <h1 class="text-xl font-bold">Order a Report</h1>
             <p class="text-brand-200 text-xs">RoofReporterAI</p>
@@ -2513,210 +1128,116 @@ function getSuperAdminDashboardHTML() {
   ${getHeadTags()}
   <title>Super Admin Dashboard - RoofReporterAI</title>
   <style>
-    :root { --brand: #0d9488; --brand-light: #14b8a6; --brand-dark: #0f766e; --brand-50: #f0fdfa; --brand-100: #ccfbf1; --sidebar-bg: #0f172a; --sidebar-hover: rgba(20,184,166,0.1); --sidebar-active-bg: linear-gradient(135deg, #0d9488, #14b8a6); }
-    * { scrollbar-width: thin; scrollbar-color: #334155 transparent; }
-    ::-webkit-scrollbar { width: 6px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
-    .sa-sidebar { transition: width 0.3s cubic-bezier(0.4,0,0.2,1); }
+    .sa-sidebar { transition: width 0.3s ease; }
     .sa-sidebar .label { transition: opacity 0.2s ease; }
-    .sa-nav-item { transition: all 0.2s cubic-bezier(0.4,0,0.2,1); cursor: pointer; border-radius: 10px; }
-    .sa-nav-item:hover { background: var(--sidebar-hover); color: #e2e8f0; }
-    .sa-nav-item.active { background: var(--sidebar-active-bg); color: white !important; box-shadow: 0 4px 15px rgba(13,148,136,0.35); }
-    .sa-nav-item.active i { color: white !important; }
-    .sa-nav-group-label { font-size: 10px; letter-spacing: 1.2px; text-transform: uppercase; color: #475569; font-weight: 700; padding: 10px 16px 6px; }
-    .metric-card { transition: all 0.3s cubic-bezier(0.4,0,0.2,1); border: 1px solid #e2e8f0; }
-    .metric-card:hover { transform: translateY(-3px); box-shadow: 0 12px 30px rgba(0,0,0,0.08); border-color: #99f6e4; }
-    @keyframes slideIn { from { opacity:0; transform:translateY(12px) } to { opacity:1; transform:translateY(0) } }
-    .slide-in { animation: slideIn 0.35s ease-out; }
-    .sa-section { background: white; border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.04); overflow: hidden; margin-bottom: 24px; }
-    .sa-section:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.06); }
-    .sa-section-header { padding: 16px 24px; border-bottom: 1px solid #f1f5f9; display: flex; align-items: center; justify-content: space-between; }
-    .sa-section-header h3 { font-size: 14px; font-weight: 700; color: #1e293b; display: flex; align-items: center; gap: 8px; }
-    .sa-section-header h3 i { color: var(--brand); font-size: 13px; }
-    .sa-section-body { padding: 24px; }
-    table thead { background: #f8fafc; }
-    table thead th { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #64748b; padding: 10px 16px; }
-    table tbody tr { transition: background 0.15s; }
-    table tbody tr:hover { background: #f0fdfa; }
-    table tbody td { padding: 10px 16px; font-size: 13px; color: #334155; }
-    .badge { display: inline-flex; align-items: center; padding: 2px 10px; border-radius: 9999px; font-size: 11px; font-weight: 600; }
-    .header-bar { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); backdrop-filter: blur(12px); }
+    .sa-nav-item { transition: all 0.2s ease; cursor: pointer; }
+    .sa-nav-item:hover { background: rgba(255,255,255,0.08); }
+    .sa-nav-item.active { background: linear-gradient(135deg, #dc2626, #ef4444); color: white; box-shadow: 0 4px 12px rgba(220,38,38,0.3); }
+    .metric-card { transition: all 0.3s ease; }
+    .metric-card:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(0,0,0,0.1); }
+    @keyframes slideIn { from { opacity:0; transform:translateY(10px) } to { opacity:1; transform:translateY(0) } }
+    .slide-in { animation: slideIn 0.4s ease-out; }
+    .sa-kpi { background: linear-gradient(135deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02)); border: 1px solid rgba(255,255,255,0.1); }
   </style>
 </head>
-<body class="bg-slate-50 min-h-screen font-sans antialiased">
-  <!-- Header Bar -->
-  <header class="header-bar text-white shadow-xl sticky top-0 z-50">
-    <div class="max-w-full mx-auto px-4 md:px-6 h-[60px] flex items-center justify-between">
+<body class="bg-gray-100 min-h-screen">
+  <!-- Super Admin Top Bar -->
+  <header class="bg-slate-700 text-white shadow-xl sticky top-0 z-50">
+    <div class="max-w-full mx-auto px-6 h-14 flex items-center justify-between">
       <div class="flex items-center gap-3">
-        <button onclick="document.getElementById('sa-sidebar').classList.toggle('hidden');document.getElementById('sa-sidebar').classList.toggle('fixed');document.getElementById('sa-sidebar').classList.toggle('inset-0');document.getElementById('sa-sidebar').classList.toggle('z-40');" class="md:hidden text-gray-300 hover:text-white p-2 rounded-lg hover:bg-white/10">
-          <i class="fas fa-bars text-lg"></i>
-        </button>
-        <a href="/" class="flex items-center gap-3 hover:opacity-90 transition-opacity no-underline">
-          <div class="w-9 h-9 bg-gradient-to-br from-teal-400 to-teal-600 rounded-xl flex items-center justify-center shadow-lg shadow-teal-500/20">
-            <i class="fas fa-chart-pie text-white text-sm"></i>
-          </div>
-          <div class="leading-tight hidden sm:block">
-            <span class="text-white font-bold text-[15px] tracking-tight">RoofReporterAI</span>
-            <span class="text-slate-400 text-[10px] block -mt-0.5 font-medium">Command Center</span>
-          </div>
-        </a>
+        <div class="w-8 h-8 bg-red-600 rounded-lg flex items-center justify-center">
+          <i class="fas fa-crown text-white text-sm"></i>
+        </div>
+        <div class="leading-tight">
+          <span class="text-white font-bold text-sm">ROOFREPORTERAI</span>
+          <span class="text-gray-400 text-[10px] block -mt-0.5">Super Admin Command Center</span>
+        </div>
       </div>
-      <div class="flex items-center gap-1 md:gap-3">
-        <span id="saUserGreeting" class="text-slate-300 text-xs hidden items-center gap-2 mr-2">
-          <span class="w-7 h-7 bg-gradient-to-br from-teal-400 to-teal-600 rounded-full flex items-center justify-center text-white text-[10px] font-bold" id="saUserInitial">A</span>
-          <span id="saUserName" class="hidden sm:inline font-medium"></span>
-          <span class="px-2 py-0.5 bg-teal-500/20 text-teal-300 rounded-md text-[10px] font-bold hidden sm:inline">ADMIN</span>
+      <div class="flex items-center gap-4">
+        <span id="saUserGreeting" class="text-gray-300 text-xs hidden">
+          <i class="fas fa-crown mr-1 text-yellow-400"></i><span id="saUserName"></span>
+          <span class="ml-1 px-1.5 py-0.5 bg-red-600/30 text-red-300 rounded text-[10px] font-bold">SUPER ADMIN</span>
         </span>
-        <a href="/admin" class="px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 text-xs transition-all"><i class="fas fa-tachometer-alt mr-1"></i><span class="hidden md:inline">Ops Panel</span></a>
-        <a href="/" target="_blank" class="px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 text-xs transition-all"><i class="fas fa-external-link-alt"></i></a>
-        <button onclick="saLogout()" class="px-3 py-2 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10 text-xs transition-all"><i class="fas fa-sign-out-alt"></i></button>
+        <a href="/admin" class="text-gray-400 hover:text-white text-xs transition-colors"><i class="fas fa-tachometer-alt mr-1"></i>Ops Panel</a>
+        <a href="/" target="_blank" class="text-gray-400 hover:text-white text-xs transition-colors"><i class="fas fa-external-link-alt mr-1"></i>View Site</a>
+        <a href="/settings" class="text-gray-400 hover:text-white text-xs transition-colors"><i class="fas fa-cog mr-1"></i>Settings</a>
+        <button onclick="saLogout()" class="text-gray-400 hover:text-red-400 text-xs transition-colors"><i class="fas fa-sign-out-alt mr-1"></i>Logout</button>
       </div>
     </div>
   </header>
 
-  <div class="flex min-h-[calc(100vh-60px)]">
-    <!-- Sidebar -->
-    <aside id="sa-sidebar" class="sa-sidebar w-[260px] flex-shrink-0 hidden md:flex flex-col overflow-y-auto max-h-[calc(100vh-60px)]" style="background:var(--sidebar-bg)">
-      <div class="p-3 space-y-0.5 flex-1" id="sa-nav">
-        <p class="sa-nav-group-label mt-1">Overview</p>
-        <div class="sa-nav-item active px-3 py-2.5 flex items-center gap-3" onclick="saSetView('users', this)">
-          <i class="fas fa-users w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">All Users</span>
+  <div class="flex min-h-[calc(100vh-56px)]">
+    <!-- Sidebar Navigation -->
+    <aside class="sa-sidebar w-64 bg-slate-800 border-r border-slate-700 flex-shrink-0">
+      <div class="p-4 space-y-1" id="sa-nav">
+        <div class="sa-nav-item active rounded-xl px-4 py-3 flex items-center gap-3" onclick="saSetView('users', this)">
+          <i class="fas fa-users w-5 text-center"></i>
+          <span class="label text-sm font-medium">All Active Users</span>
         </div>
-        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('sales', this)">
-          <i class="fas fa-credit-card w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Credit Sales</span>
+        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('sales', this)">
+          <i class="fas fa-credit-card w-5 text-center"></i>
+          <span class="label text-sm font-medium">Credit Pack Sales</span>
         </div>
-        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('orders', this)">
-          <i class="fas fa-clipboard-list w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Order History</span>
+        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('orders', this)">
+          <i class="fas fa-clipboard-list w-5 text-center"></i>
+          <span class="label text-sm font-medium">Order History</span>
         </div>
-        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('signups', this)">
-          <i class="fas fa-user-plus w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Sign-ups</span>
+        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('signups', this)">
+          <i class="fas fa-user-plus w-5 text-center"></i>
+          <span class="label text-sm font-medium">New Sign-ups</span>
         </div>
-        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('marketing', this)">
-          <i class="fas fa-bullhorn w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Sales & Marketing</span>
+        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('marketing', this)">
+          <i class="fas fa-bullhorn w-5 text-center"></i>
+          <span class="label text-sm font-medium">Sales & Marketing</span>
         </div>
-
-        <p class="sa-nav-group-label mt-3">Channels</p>
-        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('email-outreach', this)">
-          <i class="fas fa-envelope-open-text w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Email Outreach</span>
+        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('email-outreach', this)">
+          <i class="fas fa-envelope-open-text w-5 text-center"></i>
+          <span class="label text-sm font-medium">Email Outreach</span>
         </div>
-        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('email-setup', this)">
-          <i class="fas fa-at w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Email Setup</span>
+        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('email-setup', this)">
+          <i class="fas fa-cog w-5 text-center"></i>
+          <span class="label text-sm font-medium">Email Setup</span>
         </div>
-        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('call-center', this)">
-          <i class="fas fa-headset w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">AI Call Center</span>
+        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('analytics', this)">
+          <i class="fas fa-chart-line w-5 text-center"></i>
+          <span class="label text-sm font-medium">Site Analytics</span>
         </div>
-        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('meta-connect', this)">
-          <i class="fab fa-meta w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Meta Connect</span>
+        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('ga4', this)">
+          <i class="fab fa-google w-5 text-center"></i>
+          <span class="label text-sm font-medium">Google Analytics</span>
         </div>
-
-        <p class="sa-nav-group-label mt-3">Analytics</p>
-        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('analytics', this)">
-          <i class="fas fa-chart-line w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Site Analytics</span>
+        <div class="border-t border-gray-800 my-3"></div>
+        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('call-center', this)">
+          <i class="fas fa-headset w-5 text-center"></i>
+          <span class="label text-sm font-medium">AI Call Center</span>
         </div>
-        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('ga4', this)">
-          <i class="fab fa-google w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Google Analytics</span>
+        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('meta-connect', this)">
+          <i class="fab fa-meta w-5 text-center"></i>
+          <span class="label text-sm font-medium">Meta Connect</span>
         </div>
-        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('revenue-pipeline', this)">
-          <i class="fas fa-funnel-dollar w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Revenue Pipeline</span>
+        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('secretary-admin', this)">
+          <i class="fas fa-phone-volume w-5 text-center"></i>
+          <span class="label text-sm font-medium">Roofer Secretary AI</span>
         </div>
-
-        <p class="sa-nav-group-label mt-3">Services</p>
-        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('secretary-manager', this)">
-          <i class="fas fa-user-headset w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Secretary Manager</span>
+        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('heygen', this)">
+          <i class="fas fa-video w-5 text-center"></i>
+          <span class="label text-sm font-medium">HeyGen Videos</span>
         </div>
-        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('secretary-monitor', this)">
-          <i class="fas fa-satellite-dish w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Secretary Monitor</span>
+        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('pricing', this)">
+          <i class="fas fa-dollar-sign w-5 text-center"></i>
+          <span class="label text-sm font-medium">Pricing & Billing</span>
         </div>
-        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('secretary-admin', this)">
-          <i class="fas fa-phone-volume w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Secretary Analytics</span>
-        </div>
-        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('telephony', this)">
-          <i class="fas fa-phone-alt w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Telephony / LiveKit</span>
-        </div>
-        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('phone-marketplace', this)">
-          <i class="fas fa-sim-card w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Phone Marketplace</span>
-        </div>
-
-        <p class="sa-nav-group-label mt-3">Billing</p>
-        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('pricing', this)">
-          <i class="fas fa-dollar-sign w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Pricing & Billing</span>
-        </div>
-        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('pricing-engine', this)">
-          <i class="fas fa-calculator w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Pricing Engine</span>
-        </div>
-        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('invoices', this)">
-          <i class="fas fa-file-invoice-dollar w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Invoices</span>
-        </div>
-        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('service-invoices', this)">
-          <i class="fas fa-file-invoice w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Service Invoices</span>
-        </div>
-        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('paywall', this)">
-          <i class="fas fa-shield-alt w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Paywall / App Store</span>
-        </div>
-
-        <p class="sa-nav-group-label mt-3">Customer Ops</p>
-        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('customer-onboarding', this)">
-          <i class="fas fa-user-cog w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Onboarding</span>
-        </div>
-        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('call-center-manage', this)">
-          <i class="fas fa-headset w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Call Center Mgmt</span>
-        </div>
-        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('contact-forms', this)">
-          <i class="fas fa-inbox w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Contact Forms</span>
-        </div>
-        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('notifications-admin', this)">
-          <i class="fas fa-bell w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Notifications</span>
-        </div>
-
-        <p class="sa-nav-group-label mt-3">AI / Gemini</p>
-        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('gemini-command', this)">
-          <i class="fas fa-terminal w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Gemini Command</span>
-        </div>
-        <!-- AI Site Manager removed — consolidated into Gemini Command Center -->
-
-        <p class="sa-nav-group-label mt-3">Platform Admin</p>
-        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('enhanced-onboarding', this)">
-          <i class="fas fa-user-plus w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Enhanced Onboarding</span>
-        </div>
-        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('service-panel', this)">
-          <i class="fas fa-server w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Service Panel</span>
-        </div>
-        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('membership-config', this)">
-          <i class="fas fa-crown w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Membership Tiers</span>
-        </div>
-        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('agent-personas', this)">
-          <i class="fas fa-theater-masks w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Agent Personas</span>
-        </div>
-        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('cold-call-centre', this)">
-          <i class="fas fa-phone-alt w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Cold-Call Centre</span>
-        </div>
-        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('live-dashboard', this)">
-          <i class="fas fa-satellite-dish w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Live Dashboard</span>
-        </div>
-        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('transcript-flagging', this)">
-          <i class="fas fa-flag w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Agent Fine-Tuning</span>
-        </div>
-
-        <p class="sa-nav-group-label mt-3">Settings</p>
-        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('seo-manager', this)">
-          <i class="fas fa-search-plus w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">SEO Manager</span>
-        </div>
-        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('onboarding-config', this)">
-          <i class="fas fa-sliders-h w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Onboarding Config</span>
-        </div>
-        <div class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400" onclick="saSetView('webhooks', this)">
-          <i class="fas fa-plug w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Webhooks</span>
-        </div>
-        <a href="/admin" class="sa-nav-item px-3 py-2.5 flex items-center gap-3 text-slate-400 no-underline">
-          <i class="fas fa-tachometer-alt w-5 text-center text-sm"></i><span class="label text-[13px] font-medium">Operations Panel</span>
+        <div class="border-t border-gray-800 my-3"></div>
+        <a href="/admin" class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400 no-underline">
+          <i class="fas fa-tachometer-alt w-5 text-center"></i>
+          <span class="label text-sm font-medium">Operations Panel</span>
         </a>
       </div>
     </aside>
 
     <!-- Main Content -->
-    <main class="flex-1 p-4 md:p-8 overflow-y-auto bg-slate-50">
-      <div id="sa-root" class="max-w-[1400px] mx-auto"></div>
+    <main class="flex-1 p-6 overflow-y-auto">
+      <div id="sa-root"></div>
     </main>
   </div>
 
@@ -2735,12 +1256,9 @@ function getSuperAdminDashboardHTML() {
         }
         const greeting = document.getElementById('saUserGreeting');
         const nameEl = document.getElementById('saUserName');
-        const initialEl = document.getElementById('saUserInitial');
         if (greeting && nameEl) {
           nameEl.textContent = u.name || u.email;
-          if (initialEl) initialEl.textContent = (u.name || u.email || 'A')[0].toUpperCase();
           greeting.classList.remove('hidden');
-          greeting.classList.add('flex');
         }
       } catch(e) { window.location.href = '/login'; }
     })();
@@ -2763,24 +1281,11 @@ function getSuperAdminDashboardHTML() {
       if (typeof window.saDashboardSetView === 'function') window.saDashboardSetView(v);
     }
   </script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
-  <script src="/static/super-admin-dashboard.js?v=${BUILD_VERSION}"></script>
-  <script src="/static/call-center.js?v=${BUILD_VERSION}"></script>
-  <script src="/static/meta-connect.js?v=${BUILD_VERSION}"></script>
-  <!-- Facebook SDK for Meta Connect -->
-  <div id="fb-root"></div>
-  <script>
-    window.fbAsyncInit = function() {
-      FB.init({ appId: '', version: 'v21.0', cookie: true, xfbml: false, status: false });
-      // Try to get app ID from server
-      fetch('/api/public/meta-app-id')
-        .then(r => r.json()).then(d => { if (d.app_id) FB._appId = d.app_id; FB.init({ appId: d.app_id || '', version: 'v21.0', cookie: true, xfbml: false }); }).catch(() => {});
-    };
-    (function(d,s,id){ var js,fjs=d.getElementsByTagName(s)[0]; if(d.getElementById(id)) return; js=d.createElement(s); js.id=id; js.src='https://connect.facebook.net/en_US/sdk.js'; fjs.parentNode.insertBefore(js,fjs); }(document,'script','facebook-jssdk'));
-  </script>
-  <script src="/static/email-outreach.js?v=${BUILD_VERSION}"></script>
-  <script src="/static/platform-admin.js?v=${BUILD_VERSION}"></script>
+  <script src="/static/super-admin-dashboard.js"></script>
+  <script src="/static/call-center.js"></script>
+  <script src="/static/meta-connect.js"></script>
+  <script src="/static/heygen.js"></script>
+  <script src="/static/email-outreach.js"></script>
 </body>
 </html>`
 }
@@ -2792,50 +1297,42 @@ function getAdminPageHTML() {
   ${getHeadTags()}
   <title>Admin Control Panel - RoofReporterAI</title>
   <style>
-    :root { --brand: #0d9488; --brand-light: #14b8a6; }
-    * { scrollbar-width: thin; scrollbar-color: #cbd5e1 transparent; }
-    ::-webkit-scrollbar { width: 6px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
-    .metric-card { transition: all 0.3s cubic-bezier(0.4,0,0.2,1); border: 1px solid #e2e8f0; }
-    .metric-card:hover { transform: translateY(-3px); box-shadow: 0 12px 30px rgba(0,0,0,0.08); border-color: #99f6e4; }
-    @keyframes slideIn { from { opacity:0; transform:translateY(12px) } to { opacity:1; transform:translateY(0) } }
-    .slide-in { animation: slideIn 0.35s ease-out; }
-    table thead { background: #f8fafc; }
-    table thead th { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #64748b; }
-    table tbody tr { transition: background 0.15s; }
-    table tbody tr:hover { background: #f0fdfa; }
+    .admin-sidebar { transition: width 0.3s ease; }
+    .admin-sidebar .label { transition: opacity 0.2s ease; }
+    .tab-active { background: linear-gradient(135deg, #1e40af, #3b82f6); color: white; box-shadow: 0 4px 12px rgba(59,130,246,0.3); }
+    .metric-card { transition: all 0.3s ease; }
+    .metric-card:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(0,0,0,0.1); }
+    @keyframes slideIn { from { opacity:0; transform:translateY(10px) } to { opacity:1; transform:translateY(0) } }
+    .slide-in { animation: slideIn 0.4s ease-out; }
   </style>
 </head>
-<body class="bg-slate-50 min-h-screen font-sans antialiased">
+<body class="bg-gray-100 min-h-screen">
   <!-- Admin Top Bar -->
-  <header class="sticky top-0 z-50 text-white shadow-xl" style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%)">
-    <div class="max-w-full mx-auto px-6 h-[60px] flex items-center justify-between">
+  <header class="bg-slate-700 text-white shadow-xl sticky top-0 z-50">
+    <div class="max-w-full mx-auto px-6 h-14 flex items-center justify-between">
       <div class="flex items-center gap-3">
-        <a href="/" class="flex items-center gap-3 hover:opacity-90 transition-opacity no-underline">
-          <div class="w-9 h-9 bg-gradient-to-br from-teal-400 to-teal-600 rounded-xl flex items-center justify-center shadow-lg shadow-teal-500/20">
-            <i class="fas fa-shield-alt text-white text-sm"></i>
-          </div>
-          <div class="leading-tight">
-            <span class="text-white font-bold text-[15px] tracking-tight">RoofReporterAI</span>
-            <span class="text-slate-400 text-[10px] block -mt-0.5 font-medium">Operations Panel</span>
-          </div>
-        </a>
+        <div class="w-8 h-8 bg-red-600 rounded-lg flex items-center justify-center">
+          <i class="fas fa-shield-alt text-white text-sm"></i>
+        </div>
+        <div class="leading-tight">
+          <span class="text-white font-bold text-sm">ROOFREPORTERAI</span>
+          <span class="text-gray-400 text-[10px] block -mt-0.5">Admin Control Panel</span>
+        </div>
       </div>
-      <div class="flex items-center gap-1 md:gap-3">
-        <span id="userGreeting" class="text-slate-300 text-xs hidden items-center gap-2 mr-2">
-          <span class="w-7 h-7 bg-gradient-to-br from-teal-400 to-teal-600 rounded-full flex items-center justify-center text-white text-[10px] font-bold" id="userInitial">A</span>
-          <span id="userName" class="hidden sm:inline font-medium"></span>
-          <span class="px-2 py-0.5 bg-teal-500/20 text-teal-300 rounded-md text-[10px] font-bold hidden sm:inline">ADMIN</span>
+      <div class="flex items-center gap-4">
+        <span id="userGreeting" class="text-gray-300 text-xs hidden">
+          <i class="fas fa-user-shield mr-1 text-red-400"></i><span id="userName"></span>
+          <span class="ml-1 px-1.5 py-0.5 bg-red-600/20 text-red-300 rounded text-[10px] font-bold">ADMIN</span>
         </span>
-        <a href="/super-admin" class="px-3 py-2 rounded-lg text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 text-xs font-semibold transition-all"><i class="fas fa-crown mr-1"></i><span class="hidden md:inline">Super Admin</span></a>
-        <a href="/" target="_blank" class="px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 text-xs transition-all"><i class="fas fa-external-link-alt"></i></a>
-        <button onclick="doLogout()" class="px-3 py-2 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10 text-xs transition-all"><i class="fas fa-sign-out-alt"></i></button>
+        <a href="/super-admin" class="text-yellow-400 hover:text-yellow-300 text-xs transition-colors font-semibold"><i class="fas fa-crown mr-1"></i>Super Admin</a>
+        <a href="/" class="text-gray-400 hover:text-white text-xs transition-colors"><i class="fas fa-external-link-alt mr-1"></i>View Site</a>
+        <a href="/settings" class="text-gray-400 hover:text-white text-xs transition-colors"><i class="fas fa-cog mr-1"></i>Settings</a>
+        <button onclick="doLogout()" class="text-gray-400 hover:text-red-400 text-xs transition-colors"><i class="fas fa-sign-out-alt mr-1"></i>Logout</button>
       </div>
     </div>
   </header>
 
-  <div class="max-w-[1500px] mx-auto px-4 md:px-8 py-8">
+  <div class="max-w-[1600px] mx-auto px-6 py-6">
     <div id="admin-root"></div>
   </div>
 
@@ -2854,12 +1351,9 @@ function getAdminPageHTML() {
         }
         const greeting = document.getElementById('userGreeting');
         const nameEl = document.getElementById('userName');
-        const initialEl = document.getElementById('userInitial');
         if (greeting && nameEl) {
           nameEl.textContent = u.name || u.email;
-          if (initialEl) initialEl.textContent = (u.name || u.email || 'A')[0].toUpperCase();
           greeting.classList.remove('hidden');
-          greeting.classList.add('flex');
         }
       } catch(e) { window.location.href = '/login'; }
     })();
@@ -2869,7 +1363,7 @@ function getAdminPageHTML() {
       window.location.href = '/login';
     }
   </script>
-  <script src="/static/admin.js?v=${BUILD_VERSION}"></script>
+  <script src="/static/admin.js"></script>
 </body>
 </html>`
 }
@@ -2885,7 +1379,7 @@ function getOrderConfirmationHTML() {
   <header class="bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
       <div class="flex items-center space-x-3">
-        <span class="logo-mark w-10 h-10"><img src="/static/logo.png" alt="RoofReporterAI"></span>
+        <img src="/static/logo.png" alt="RoofReporterAI" class="w-10 h-10 rounded-lg object-cover">
         <div>
           <h1 class="text-xl font-bold">Order Confirmation</h1>
           <p class="text-brand-200 text-xs">Powered by RoofReporterAI</p>
@@ -2899,7 +1393,7 @@ function getOrderConfirmationHTML() {
     <div id="confirmation-root"></div>
   </main>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
-  <script src="/static/confirmation.js?v=${BUILD_VERSION}"></script>
+  <script src="/static/confirmation.js"></script>
 </body>
 </html>`
 }
@@ -2916,7 +1410,7 @@ function getLoginPageHTML() {
     <!-- Logo -->
     <div class="text-center mb-8">
       <a href="/" class="inline-flex items-center gap-3">
-        <span class="logo-mark logo-mark-light w-12 h-12"><img src="/static/logo.png" alt="RoofReporterAI"></span>
+        <img src="/static/logo.png" alt="RoofReporterAI" class="w-12 h-12 rounded-xl object-cover shadow-lg">
         <div class="text-left">
           <span class="text-gray-800 font-bold text-2xl block">RoofReporterAI</span>
           <span class="text-gray-500 text-xs">Admin Access - Authorized Personnel Only</span>
@@ -2953,8 +1447,36 @@ function getLoginPageHTML() {
         <button onclick="doLogin()" class="w-full mt-6 py-3 bg-sky-600 hover:bg-sky-700 text-white font-bold rounded-xl transition-all hover:scale-[1.02] shadow-lg">
           <i class="fas fa-sign-in-alt mr-2"></i>Access Admin Panel
         </button>
+        <div class="text-center mt-3">
+          <button onclick="showAdminForgot()" class="text-sm text-sky-600 hover:text-sky-800 hover:underline transition-colors">
+            <i class="fas fa-key mr-1"></i>Forgot password?
+          </button>
+        </div>
+      </div>
 
-        <div class="mt-6 pt-4 border-t border-gray-100 text-center">
+      <!-- Admin Forgot Password Panel -->
+      <div id="adminForgotPanel" class="hidden p-8 pt-0">
+        <div class="mb-4 p-3 bg-sky-50 border border-sky-200 rounded-xl">
+          <p class="text-sm text-sky-800"><i class="fas fa-info-circle mr-1"></i>Enter your admin email and we'll send a reset link.</p>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Admin Email</label>
+          <input type="email" id="adminForgotEmail" placeholder="admin@reusecanada.ca" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-sky-500 text-sm" onkeyup="if(event.key==='Enter')doAdminForgot()">
+        </div>
+        <div id="adminForgotError" class="hidden mt-3 p-3 bg-red-50 text-red-700 rounded-lg text-sm"></div>
+        <div id="adminForgotSuccess" class="hidden mt-3 p-3 bg-green-50 text-green-700 rounded-lg text-sm"></div>
+        <button onclick="doAdminForgot()" id="adminForgotBtn" class="w-full mt-4 py-3 bg-sky-600 hover:bg-sky-700 text-white font-bold rounded-xl transition-all hover:scale-[1.02] shadow-lg">
+          <i class="fas fa-paper-plane mr-2"></i>Send Reset Link
+        </button>
+        <div class="text-center mt-3">
+          <button onclick="showAdminForgot(false)" class="text-sm text-gray-400 hover:text-gray-600 transition-colors">
+            <i class="fas fa-arrow-left mr-1"></i>Back to Sign In
+          </button>
+        </div>
+      </div>
+
+      <div class="px-8 pb-8 pt-0 border-t border-gray-100">
+        <div class="mt-4 text-center">
           <p class="text-xs text-gray-400 mb-2">Not an administrator?</p>
           <a href="/customer/login" class="text-brand-600 font-semibold text-sm hover:underline"><i class="fas fa-user mr-1"></i>Go to Customer Portal</a>
         </div>
@@ -2977,6 +1499,43 @@ function getLoginPageHTML() {
         } catch(e) {}
       }
     })();
+
+    function showAdminForgot(show = true) {
+      document.getElementById('adminForgotPanel').classList.toggle('hidden', !show);
+      const loginFields = document.querySelector('.space-y-4');
+      if (loginFields) loginFields.classList.toggle('hidden', show);
+      document.getElementById('loginError').classList.add('hidden');
+      document.querySelector('button[onclick="doLogin()"]').classList.toggle('hidden', show);
+      const forgotLink = document.querySelector('button[onclick="showAdminForgot()"]');
+      if (forgotLink) forgotLink.classList.toggle('hidden', show);
+      if (show) document.getElementById('adminForgotEmail').focus();
+    }
+
+    async function doAdminForgot() {
+      const email = document.getElementById('adminForgotEmail').value.trim();
+      const err = document.getElementById('adminForgotError');
+      const suc = document.getElementById('adminForgotSuccess');
+      const btn = document.getElementById('adminForgotBtn');
+      err.classList.add('hidden'); suc.classList.add('hidden');
+      if (!email) { err.textContent = 'Please enter your email address.'; err.classList.remove('hidden'); return; }
+      btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Sending...';
+      try {
+        const res = await fetch('/api/auth/forgot-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email })
+        });
+        const data = await res.json();
+        suc.textContent = data.message || 'If an admin account exists, a reset link has been sent. Check your inbox.';
+        suc.classList.remove('hidden');
+        btn.innerHTML = '<i class="fas fa-check mr-2"></i>Email Sent';
+      } catch(e) {
+        err.textContent = 'Network error. Please try again.';
+        err.classList.remove('hidden');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-paper-plane mr-2"></i>Send Reset Link';
+      }
+    }
 
     async function doLogin() {
       const email = document.getElementById('loginEmail').value.trim();
@@ -3011,6 +1570,223 @@ function getLoginPageHTML() {
       } catch (e) {
         errDiv.textContent = 'Network error. Please try again.';
         errDiv.classList.remove('hidden');
+      }
+    }
+  </script>
+</body>
+</html>`
+}
+
+function getAdminResetPasswordHTML() {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags()}
+  <title>Reset Admin Password - RoofReporterAI</title>
+</head>
+<body class="bg-gradient-to-br from-sky-100 via-blue-50 to-white min-h-screen flex items-center justify-center">
+  <div class="w-full max-w-md mx-auto px-4">
+    <div class="text-center mb-8">
+      <a href="/" class="inline-flex items-center gap-3">
+        <img src="/static/logo.png" alt="RoofReporterAI" class="w-12 h-12 rounded-xl object-cover shadow-lg">
+        <div class="text-left">
+          <span class="text-gray-800 font-bold text-2xl block">RoofReporterAI</span>
+          <span class="text-gray-500 text-xs">Admin Access</span>
+        </div>
+      </a>
+    </div>
+
+    <div class="bg-white rounded-2xl shadow-2xl overflow-hidden border border-gray-200">
+      <div class="bg-gradient-to-r from-sky-600 to-blue-700 px-8 py-4">
+        <div class="flex items-center gap-2">
+          <i class="fas fa-key text-yellow-300"></i>
+          <span class="text-white font-semibold text-sm">Admin Password Reset</span>
+        </div>
+      </div>
+      <div class="p-8">
+        <h2 class="text-xl font-bold text-gray-800 mb-1">Set New Admin Password</h2>
+        <p class="text-sm text-gray-500 mb-6">Choose a strong password for your admin account.</p>
+
+        <div id="resetInvalid" class="hidden p-4 bg-red-50 border border-red-200 rounded-xl mb-4">
+          <p class="text-sm text-red-800 font-semibold"><i class="fas fa-exclamation-circle mr-1"></i>This reset link is invalid or has expired.</p>
+          <p class="text-sm text-red-600 mt-1">Please <a href="/login" class="underline font-medium">return to admin login</a> and request a new one.</p>
+        </div>
+
+        <div id="resetForm">
+          <div class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">New Password</label>
+              <input type="password" id="newPassword" placeholder="At least 8 characters" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-sky-500 text-sm">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Confirm New Password</label>
+              <input type="password" id="confirmPassword" placeholder="Repeat your new password" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-sky-500 text-sm" onkeyup="if(event.key==='Enter')doReset()">
+            </div>
+          </div>
+          <div id="resetError" class="hidden mt-4 p-3 bg-red-50 text-red-700 rounded-lg text-sm"></div>
+          <button onclick="doReset()" id="resetBtn" class="w-full mt-5 py-3 bg-sky-600 hover:bg-sky-700 text-white font-bold rounded-xl transition-all hover:scale-[1.02] shadow-lg">
+            <i class="fas fa-lock mr-2"></i>Set New Password
+          </button>
+        </div>
+
+        <div id="resetSuccess" class="hidden p-4 bg-green-50 border border-green-200 rounded-xl">
+          <p class="text-sm text-green-800 font-semibold"><i class="fas fa-check-circle mr-1"></i>Admin password updated successfully!</p>
+          <a href="/login" class="mt-4 block text-center py-2.5 bg-sky-600 hover:bg-sky-700 text-white font-semibold rounded-xl text-sm transition-all">
+            <i class="fas fa-sign-in-alt mr-1"></i>Go to Admin Login
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const token = new URLSearchParams(window.location.search).get('token');
+    if (!token) {
+      document.getElementById('resetForm').classList.add('hidden');
+      document.getElementById('resetInvalid').classList.remove('hidden');
+    }
+
+    async function doReset() {
+      const newPw = document.getElementById('newPassword').value;
+      const confPw = document.getElementById('confirmPassword').value;
+      const err = document.getElementById('resetError');
+      const btn = document.getElementById('resetBtn');
+      err.classList.add('hidden');
+      if (!newPw) { err.textContent = 'Please enter a new password.'; err.classList.remove('hidden'); return; }
+      if (newPw.length < 8) { err.textContent = 'Admin password must be at least 8 characters.'; err.classList.remove('hidden'); return; }
+      if (newPw !== confPw) { err.textContent = 'Passwords do not match.'; err.classList.remove('hidden'); return; }
+      btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Updating...';
+      try {
+        const res = await fetch('/api/auth/reset-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token, new_password: newPw })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          document.getElementById('resetForm').classList.add('hidden');
+          document.getElementById('resetSuccess').classList.remove('hidden');
+        } else {
+          err.textContent = data.error || 'Failed to reset password.';
+          err.classList.remove('hidden');
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fas fa-lock mr-2"></i>Set New Password';
+          if (data.error && data.error.includes('expired')) {
+            document.getElementById('resetForm').classList.add('hidden');
+            document.getElementById('resetInvalid').classList.remove('hidden');
+          }
+        }
+      } catch(e) {
+        err.textContent = 'Network error. Please try again.';
+        err.classList.remove('hidden');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-lock mr-2"></i>Set New Password';
+      }
+    }
+  </script>
+</body>
+</html>`
+}
+
+function getCustomerResetPasswordHTML() {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags()}
+  <title>Reset Password - RoofReporterAI</title>
+</head>
+<body class="bg-gradient-to-br from-sky-100 via-blue-50 to-white min-h-screen flex items-center justify-center">
+  <div class="w-full max-w-md mx-auto px-4">
+    <div class="text-center mb-8">
+      <a href="/" class="inline-flex items-center gap-3">
+        <img src="/static/logo.png" alt="RoofReporterAI" class="w-12 h-12 rounded-xl object-cover shadow-lg">
+        <div class="text-left">
+          <span class="text-gray-800 font-bold text-2xl block">RoofReporterAI</span>
+          <span class="text-sky-600 text-xs">Customer Portal</span>
+        </div>
+      </a>
+    </div>
+
+    <div class="bg-white rounded-2xl shadow-2xl overflow-hidden">
+      <div class="p-8">
+        <h2 class="text-xl font-bold text-gray-800 mb-1">Set New Password</h2>
+        <p class="text-sm text-gray-500 mb-6">Choose a new password for your account.</p>
+
+        <div id="resetInvalid" class="hidden p-4 bg-red-50 border border-red-200 rounded-xl mb-4">
+          <p class="text-sm text-red-800 font-semibold"><i class="fas fa-exclamation-circle mr-1"></i>This reset link is invalid or has expired.</p>
+          <p class="text-sm text-red-600 mt-1">Please <a href="/customer/login" class="underline font-medium">request a new one</a>.</p>
+        </div>
+
+        <div id="resetForm">
+          <div class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">New Password</label>
+              <input type="password" id="newPassword" placeholder="At least 6 characters" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-500 text-sm">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Confirm New Password</label>
+              <input type="password" id="confirmPassword" placeholder="Repeat your new password" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-500 text-sm" onkeyup="if(event.key==='Enter')doReset()">
+            </div>
+          </div>
+          <div id="resetError" class="hidden mt-4 p-3 bg-red-50 text-red-700 rounded-lg text-sm"></div>
+          <button onclick="doReset()" id="resetBtn" class="w-full mt-5 py-3 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl transition-all hover:scale-[1.02] shadow-lg shadow-brand-500/25">
+            <i class="fas fa-lock mr-2"></i>Set New Password
+          </button>
+        </div>
+
+        <div id="resetSuccess" class="hidden p-4 bg-green-50 border border-green-200 rounded-xl">
+          <p class="text-sm text-green-800 font-semibold"><i class="fas fa-check-circle mr-1"></i>Password updated successfully!</p>
+          <p class="text-sm text-green-600 mt-1">You can now sign in with your new password.</p>
+          <a href="/customer/login" class="mt-4 block text-center py-2.5 bg-brand-600 hover:bg-brand-700 text-white font-semibold rounded-xl text-sm transition-all">
+            <i class="fas fa-sign-in-alt mr-1"></i>Go to Sign In
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const token = new URLSearchParams(window.location.search).get('token');
+    if (!token) {
+      document.getElementById('resetForm').classList.add('hidden');
+      document.getElementById('resetInvalid').classList.remove('hidden');
+    }
+
+    async function doReset() {
+      const newPw = document.getElementById('newPassword').value;
+      const confPw = document.getElementById('confirmPassword').value;
+      const err = document.getElementById('resetError');
+      const btn = document.getElementById('resetBtn');
+      err.classList.add('hidden');
+      if (!newPw) { err.textContent = 'Please enter a new password.'; err.classList.remove('hidden'); return; }
+      if (newPw.length < 6) { err.textContent = 'Password must be at least 6 characters.'; err.classList.remove('hidden'); return; }
+      if (newPw !== confPw) { err.textContent = 'Passwords do not match.'; err.classList.remove('hidden'); return; }
+      btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Updating...';
+      try {
+        const res = await fetch('/api/customer/reset-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token, new_password: newPw })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          document.getElementById('resetForm').classList.add('hidden');
+          document.getElementById('resetSuccess').classList.remove('hidden');
+        } else {
+          err.textContent = data.error || 'Failed to reset password.';
+          err.classList.remove('hidden');
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fas fa-lock mr-2"></i>Set New Password';
+          if (data.error && data.error.includes('expired')) {
+            document.getElementById('resetForm').classList.add('hidden');
+            document.getElementById('resetInvalid').classList.remove('hidden');
+          }
+        }
+      } catch(e) {
+        err.textContent = 'Network error. Please try again.';
+        err.classList.remove('hidden');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-lock mr-2"></i>Set New Password';
       }
     }
   </script>
@@ -3084,36 +1860,6 @@ function getLandingPageHTML() {
       backdrop-filter: blur(16px);
       box-shadow: 0 4px 30px rgba(0,0,0,0.3);
     }
-    /* Mobile touch targets */
-    @media (max-width: 768px) {
-      button, a.inline-flex, input[type="submit"] {
-        min-height: 44px;
-      }
-    }
-    /* Range slider styling */
-    input[type="range"] {
-      -webkit-appearance: none;
-      height: 6px;
-      border-radius: 3px;
-      background: rgba(255,255,255,0.1);
-    }
-    input[type="range"]::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      width: 20px;
-      height: 20px;
-      border-radius: 50%;
-      background: #22d3ee;
-      cursor: pointer;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-    }
-    input[type="range"]::-moz-range-thumb {
-      width: 20px;
-      height: 20px;
-      border-radius: 50%;
-      background: #22d3ee;
-      cursor: pointer;
-      border: none;
-    }
   </style>
 </head>
 <body class="bg-white min-h-screen">
@@ -3121,7 +1867,7 @@ function getLandingPageHTML() {
   <nav id="landing-nav" class="landing-nav fixed top-0 left-0 right-0 z-50">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
       <a href="/" class="flex items-center gap-3">
-        <span class="logo-mark w-9 h-9"><img src="/static/logo.png" alt="RoofReporterAI"></span>
+        <img src="/static/logo.png" alt="RoofReporterAI" class="w-9 h-9 rounded-lg object-cover shadow-lg">
         <div class="leading-tight">
           <span class="text-white font-bold text-lg tracking-tight">RoofReporterAI</span>
           <span class="hidden sm:block text-gray-400 text-[10px] -mt-0.5">Measurement Reports & Business CRM</span>
@@ -3129,15 +1875,15 @@ function getLandingPageHTML() {
       </a>
 
       <!-- Desktop nav -->
-      <div class="hidden md:flex items-center gap-5">
+      <div class="hidden md:flex items-center gap-6">
         <a href="#how-it-works" class="text-gray-300 hover:text-white text-sm font-medium transition-colors">How It Works</a>
         <a href="#features" class="text-gray-300 hover:text-white text-sm font-medium transition-colors">Platform</a>
         <a href="#pricing" class="text-gray-300 hover:text-white text-sm font-medium transition-colors">Pricing</a>
         <a href="/blog" class="text-gray-300 hover:text-white text-sm font-medium transition-colors">Blog</a>
+        <a href="/lander" class="text-gray-300 hover:text-white text-sm font-medium transition-colors">Get Started</a>
         <a href="#faq" class="text-gray-300 hover:text-white text-sm font-medium transition-colors">FAQ</a>
-        <a href="/customer/login" class="text-gray-300 hover:text-white text-sm font-medium transition-colors">Login</a>
-        <a href="/signup" class="bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-400 hover:to-cyan-500 text-white font-bold py-2.5 px-5 rounded-lg text-sm transition-all hover:scale-105 shadow-lg shadow-teal-500/25 min-h-[40px] flex items-center gap-1">
-          <i class="fas fa-rocket mr-1"></i>Start Free
+        <a href="/customer/login" class="bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-white font-semibold py-2 px-5 rounded-lg text-sm transition-all hover:scale-105 shadow-lg shadow-cyan-500/25">
+          <i class="fas fa-sign-in-alt mr-1"></i>Login
         </a>
       </div>
 
@@ -3150,13 +1896,13 @@ function getLandingPageHTML() {
     <!-- Mobile menu -->
     <div id="mobile-menu" class="hidden md:hidden bg-slate-900/98 backdrop-blur-xl border-t border-white/10">
       <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col gap-1">
-        <a href="#how-it-works" class="text-gray-300 hover:text-white text-sm py-3 px-3 rounded-lg hover:bg-white/5 transition-all min-h-[44px] flex items-center" onclick="document.getElementById('mobile-menu').classList.add('hidden')">How It Works</a>
-        <a href="#features" class="text-gray-300 hover:text-white text-sm py-3 px-3 rounded-lg hover:bg-white/5 transition-all min-h-[44px] flex items-center" onclick="document.getElementById('mobile-menu').classList.add('hidden')">Platform</a>
-        <a href="#pricing" class="text-gray-300 hover:text-white text-sm py-3 px-3 rounded-lg hover:bg-white/5 transition-all min-h-[44px] flex items-center" onclick="document.getElementById('mobile-menu').classList.add('hidden')">Pricing</a>
-        <a href="/blog" class="text-gray-300 hover:text-white text-sm py-3 px-3 rounded-lg hover:bg-white/5 transition-all min-h-[44px] flex items-center" onclick="document.getElementById('mobile-menu').classList.add('hidden')">Blog</a>
-        <a href="#faq" class="text-gray-300 hover:text-white text-sm py-3 px-3 rounded-lg hover:bg-white/5 transition-all min-h-[44px] flex items-center" onclick="document.getElementById('mobile-menu').classList.add('hidden')">FAQ</a>
-        <a href="/customer/login" class="text-gray-300 hover:text-white text-sm py-3 px-3 rounded-lg hover:bg-white/5 transition-all min-h-[44px] flex items-center" onclick="document.getElementById('mobile-menu').classList.add('hidden')"><i class="fas fa-sign-in-alt mr-2"></i>Login</a>
-        <a href="/signup" class="bg-gradient-to-r from-teal-500 to-cyan-600 text-white font-bold py-3 px-5 rounded-lg text-sm text-center mt-2 min-h-[48px] flex items-center justify-center gap-2"><i class="fas fa-rocket"></i>Start Free — 3 Reports On Us</a>
+        <a href="#how-it-works" class="text-gray-300 hover:text-white text-sm py-2.5 px-3 rounded-lg hover:bg-white/5 transition-all" onclick="document.getElementById('mobile-menu').classList.add('hidden')">How It Works</a>
+        <a href="#features" class="text-gray-300 hover:text-white text-sm py-2.5 px-3 rounded-lg hover:bg-white/5 transition-all" onclick="document.getElementById('mobile-menu').classList.add('hidden')">Platform</a>
+        <a href="#pricing" class="text-gray-300 hover:text-white text-sm py-2.5 px-3 rounded-lg hover:bg-white/5 transition-all" onclick="document.getElementById('mobile-menu').classList.add('hidden')">Pricing</a>
+        <a href="/blog" class="text-gray-300 hover:text-white text-sm py-2.5 px-3 rounded-lg hover:bg-white/5 transition-all" onclick="document.getElementById('mobile-menu').classList.add('hidden')">Blog</a>
+        <a href="/lander" class="text-gray-300 hover:text-white text-sm py-2.5 px-3 rounded-lg hover:bg-white/5 transition-all" onclick="document.getElementById('mobile-menu').classList.add('hidden')">Get Started</a>
+        <a href="#faq" class="text-gray-300 hover:text-white text-sm py-2.5 px-3 rounded-lg hover:bg-white/5 transition-all" onclick="document.getElementById('mobile-menu').classList.add('hidden')">FAQ</a>
+        <a href="/customer/login" class="bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-semibold py-2.5 px-5 rounded-lg text-sm text-center mt-2"><i class="fas fa-sign-in-alt mr-1"></i>Login / Sign Up</a>
       </div>
     </div>
   </nav>
@@ -3173,7 +1919,7 @@ function getLandingPageHTML() {
       <div class="grid md:grid-cols-4 gap-8">
         <div>
           <div class="flex items-center gap-3 mb-4">
-            <span class="logo-mark w-9 h-9"><img src="/static/logo.png" alt="RoofReporterAI"></span>
+            <img src="/static/logo.png" alt="RoofReporterAI" class="w-9 h-9 rounded-lg object-cover">
             <span class="text-white font-bold text-lg tracking-tight">RoofReporterAI</span>
           </div>
           <p class="text-sm leading-relaxed text-gray-500">Professional AI-powered roof measurement reports, CRM, and business management for roofing companies across Canada.</p>
@@ -3181,12 +1927,6 @@ function getLandingPageHTML() {
             <a href="#" class="text-gray-500 hover:text-cyan-400 transition-colors"><i class="fab fa-facebook text-lg"></i></a>
             <a href="#" class="text-gray-500 hover:text-cyan-400 transition-colors"><i class="fab fa-instagram text-lg"></i></a>
             <a href="#" class="text-gray-500 hover:text-cyan-400 transition-colors"><i class="fab fa-linkedin text-lg"></i></a>
-          </div>
-          <!-- Trust badges -->
-          <div class="flex items-center gap-3 mt-6 flex-wrap">
-            <span class="text-[10px] text-gray-600 bg-gray-800 px-2 py-1 rounded"><i class="fas fa-shield-alt text-green-500 mr-1"></i>PCI DSS</span>
-            <span class="text-[10px] text-gray-600 bg-gray-800 px-2 py-1 rounded"><i class="fas fa-lock text-blue-500 mr-1"></i>SSL</span>
-            <span class="text-[10px] text-gray-600 bg-gray-800 px-2 py-1 rounded"><i class="fas fa-maple-leaf text-red-500 mr-1"></i>Canadian</span>
           </div>
         </div>
         <div>
@@ -3196,8 +1936,7 @@ function getLandingPageHTML() {
             <li><a href="#features" class="hover:text-cyan-400 transition-colors">AI Roofer Secretary</a></li>
             <li><a href="#features" class="hover:text-cyan-400 transition-colors">CRM & Invoicing</a></li>
             <li><a href="#features" class="hover:text-cyan-400 transition-colors">Virtual Roof Try-On</a></li>
-            <li><a href="#pricing" class="hover:text-cyan-400 transition-colors">Pricing & Plans</a></li>
-            <li><a href="#pricing" class="hover:text-cyan-400 transition-colors">B2B Volume Pricing</a></li>
+            <li><a href="#pricing" class="hover:text-cyan-400 transition-colors">Pricing</a></li>
           </ul>
         </div>
         <div>
@@ -3207,19 +1946,15 @@ function getLandingPageHTML() {
             <li><a href="#how-it-works" class="hover:text-cyan-400 transition-colors">How It Works</a></li>
             <li><a href="#faq" class="hover:text-cyan-400 transition-colors">FAQ</a></li>
             <li><a href="/lander" class="hover:text-cyan-400 transition-colors">Get Started Guide</a></li>
-            <li><a href="mailto:reports@reusecanada.ca" class="hover:text-cyan-400 transition-colors">Contact Us</a></li>
+            <li><a href="mailto:reports@reusecanada.ca" class="hover:text-cyan-400 transition-colors">Contact</a></li>
           </ul>
         </div>
         <div>
-          <h4 class="text-white font-semibold mb-4 text-sm uppercase tracking-wider">Get Started Free</h4>
-          <p class="text-sm text-gray-500 mb-4">3 free reports. Full CRM. No credit card.</p>
-          <form onsubmit="return footerQuickSignup(event)" class="space-y-2.5">
-            <input type="email" id="footer-email" required placeholder="you@company.com" class="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm placeholder-gray-500 focus:ring-2 focus:ring-cyan-400 focus:border-transparent outline-none">
-            <input type="text" id="footer-company" placeholder="Company name" class="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm placeholder-gray-500 focus:ring-2 focus:ring-cyan-400 focus:border-transparent outline-none">
-            <button type="submit" class="w-full bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-400 hover:to-cyan-500 text-white font-bold py-2.5 px-4 rounded-lg text-sm transition-all hover:scale-[1.02] shadow-lg min-h-[44px]">
-              <i class="fas fa-rocket mr-1"></i>Start Free
-            </button>
-          </form>
+          <h4 class="text-white font-semibold mb-4 text-sm uppercase tracking-wider">Get Started</h4>
+          <p class="text-sm text-gray-500 mb-4">Start with 3 free reports. No credit card required.</p>
+          <a href="/customer/login" class="inline-block bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-white font-semibold py-2.5 px-6 rounded-lg text-sm transition-all shadow-lg">
+            Sign Up Free
+          </a>
         </div>
       </div>
       <div class="border-t border-gray-800 mt-12 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
@@ -3232,20 +1967,6 @@ function getLandingPageHTML() {
     </div>
   </footer>
 
-  <!-- Footer quick signup -->
-  <script>
-  function footerQuickSignup(e) {
-    e.preventDefault();
-    var email = document.getElementById('footer-email').value.trim();
-    if (!email) return false;
-    var params = new URLSearchParams({ email: email });
-    var company = document.getElementById('footer-company').value.trim();
-    if (company) params.set('company', company);
-    window.location.href = '/signup?' + params.toString();
-    return false;
-  }
-  </script>
-
   <!-- Navbar scroll effect -->
   <script>
     window.addEventListener('scroll', () => {
@@ -3257,7 +1978,7 @@ function getLandingPageHTML() {
       }
     });
   </script>
-  <script src="/static/landing.js?v=${BUILD_VERSION}"></script>
+  <script src="/static/landing.js"></script>
   ${getRoverWidget()}
 </body>
 </html>`
@@ -3274,7 +1995,7 @@ function getSettingsPageHTML() {
   <header class="bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
       <div class="flex items-center space-x-3">
-        <span class="logo-mark w-10 h-10"><img src="/static/logo.png" alt="RoofReporterAI"></span>
+        <img src="/static/logo.png" alt="RoofReporterAI" class="w-10 h-10 rounded-lg object-cover">
         <div>
           <h1 class="text-xl font-bold">Settings</h1>
           <p class="text-brand-200 text-xs">Company Profile, API Keys & Pricing</p>
@@ -3291,7 +2012,7 @@ function getSettingsPageHTML() {
   <main class="max-w-4xl mx-auto px-4 py-8">
     <div id="settings-root"></div>
   </main>
-  <script src="/static/settings.js?v=${BUILD_VERSION}"></script>
+  <script src="/static/settings.js"></script>
 </body>
 </html>`
 }
@@ -3313,7 +2034,7 @@ function getCustomerLoginHTML() {
     <!-- Logo -->
     <div class="text-center mb-8">
       <a href="/" class="inline-flex items-center gap-3">
-        <span class="logo-mark logo-mark-light w-12 h-12"><img src="/static/logo.png" alt="RoofReporterAI"></span>
+        <img src="/static/logo.png" alt="RoofReporterAI" class="w-12 h-12 rounded-xl object-cover shadow-lg">
         <div class="text-left">
           <span class="text-gray-800 font-bold text-2xl block">RoofReporterAI</span>
           <span class="text-sky-600 text-xs">Customer Portal - Roof Reports & CRM</span>
@@ -3349,16 +2070,30 @@ function getCustomerLoginHTML() {
           <button onclick="doCustLogin()" class="w-full mt-5 py-3 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl transition-all hover:scale-[1.02] shadow-lg shadow-brand-500/25">
             <i class="fas fa-sign-in-alt mr-2"></i>Sign In
           </button>
-
-          <!-- Google Sign-In -->
-          <div class="relative my-5">
-            <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-gray-200"></div></div>
-            <div class="relative flex justify-center text-xs"><span class="bg-white px-3 text-gray-400">or continue with</span></div>
+          <div class="text-center mt-3">
+            <button onclick="showForgot()" class="text-sm text-sky-600 hover:text-sky-800 hover:underline transition-colors">
+              <i class="fas fa-key mr-1"></i>Forgot your password?
+            </button>
           </div>
-          <div id="googleSignInBtn" class="flex justify-center">
-            <button onclick="signInWithGoogle()" class="w-full flex items-center justify-center gap-3 py-3 border-2 border-gray-200 hover:border-gray-300 rounded-xl transition-all hover:bg-gray-50 group">
-              <svg class="w-5 h-5" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
-              <span class="font-semibold text-gray-700 group-hover:text-gray-900 text-sm">Sign in with Google</span>
+        </div>
+
+        <!-- Forgot Password Panel -->
+        <div id="custForgotForm" class="hidden">
+          <div class="mb-4 p-3 bg-sky-50 border border-sky-200 rounded-xl">
+            <p class="text-sm text-sky-800"><i class="fas fa-info-circle mr-1"></i>Enter your email and we'll send you a link to reset your password.</p>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+            <input type="email" id="forgotEmail" placeholder="you@company.com" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-sm" onkeyup="if(event.key==='Enter')doForgot()">
+          </div>
+          <div id="forgotError" class="hidden mt-3 p-3 bg-red-50 text-red-700 rounded-lg text-sm"></div>
+          <div id="forgotSuccess" class="hidden mt-3 p-3 bg-green-50 text-green-700 rounded-lg text-sm"></div>
+          <button onclick="doForgot()" id="forgotBtn" class="w-full mt-4 py-3 bg-sky-600 hover:bg-sky-700 text-white font-bold rounded-xl transition-all hover:scale-[1.02] shadow-lg">
+            <i class="fas fa-paper-plane mr-2"></i>Send Reset Link
+          </button>
+          <div class="text-center mt-3">
+            <button onclick="showForgot(false)" class="text-sm text-gray-400 hover:text-gray-600 transition-colors">
+              <i class="fas fa-arrow-left mr-1"></i>Back to Sign In
             </button>
           </div>
         </div>
@@ -3440,17 +2175,10 @@ function getCustomerLoginHTML() {
     </div>
 
     <!-- Links -->
-    <div class="text-center mt-6 space-y-3">
-      <div class="bg-white/80 backdrop-blur rounded-xl p-4 shadow-sm border border-gray-100">
-        <p class="text-sm text-gray-600 mb-2">New to RoofReporterAI?</p>
-        <a href="/signup" class="inline-flex items-center gap-2 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-400 hover:to-emerald-400 text-white font-bold py-2.5 px-6 rounded-xl text-sm transition-all hover:scale-[1.02] shadow-lg shadow-green-500/25">
-          <i class="fas fa-rocket"></i>Start Free Trial — No Credit Card
-        </a>
-      </div>
-      <div class="space-x-4">
-        <a href="/login" class="text-gray-400 hover:text-gray-600 text-sm transition-colors"><i class="fas fa-shield-alt mr-1"></i>Admin Login</a>
-        <a href="/" class="text-gray-400 hover:text-gray-600 text-sm transition-colors"><i class="fas fa-arrow-left mr-1"></i>Back to homepage</a>
-      </div>
+    <div class="text-center mt-6 space-y-2">
+      <a href="/login" class="text-brand-300 hover:text-white text-sm transition-colors"><i class="fas fa-shield-alt mr-1"></i>Admin Login</a>
+      <span class="text-brand-700 mx-2">|</span>
+      <a href="/" class="text-brand-300 hover:text-white text-sm transition-colors"><i class="fas fa-arrow-left mr-1"></i>Back to homepage</a>
     </div>
   </div>
 
@@ -3476,6 +2204,39 @@ function getCustomerLoginHTML() {
         rt.classList.remove('text-gray-500');
         lt.classList.remove('bg-brand-50','text-brand-700','border-b-2','border-brand-500');
         lt.classList.add('text-gray-500');
+      }
+    }
+
+    function showForgot(show = true) {
+      document.getElementById('custLoginForm').classList.toggle('hidden', show);
+      document.getElementById('custForgotForm').classList.toggle('hidden', !show);
+      document.getElementById('custRegForm').classList.add('hidden');
+      if (show) document.getElementById('forgotEmail').focus();
+    }
+
+    async function doForgot() {
+      const email = document.getElementById('forgotEmail').value.trim();
+      const err = document.getElementById('forgotError');
+      const suc = document.getElementById('forgotSuccess');
+      const btn = document.getElementById('forgotBtn');
+      err.classList.add('hidden'); suc.classList.add('hidden');
+      if (!email) { err.textContent = 'Please enter your email address.'; err.classList.remove('hidden'); return; }
+      btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Sending...';
+      try {
+        const res = await fetch('/api/customer/forgot-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email })
+        });
+        const data = await res.json();
+        suc.textContent = data.message || 'If an account exists, a reset link has been sent. Check your inbox (and spam folder).';
+        suc.classList.remove('hidden');
+        btn.innerHTML = '<i class="fas fa-check mr-2"></i>Email Sent';
+      } catch(e) {
+        err.textContent = 'Network error. Please try again.';
+        err.classList.remove('hidden');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-paper-plane mr-2"></i>Send Reset Link';
       }
     }
 
@@ -3622,178 +2383,7 @@ function getCustomerLoginHTML() {
         }
       } catch(e) { err.textContent = 'Network error.'; err.classList.remove('hidden'); }
     }
-
-    // ============================================================
-    // GOOGLE SIGN-IN — Uses Google Identity Services (GIS) library
-    // Modern approach: loads the GIS script, renders button, handles callback
-    // Falls back to OAuth redirect if GIS fails
-    // ============================================================
-    var _gisLoaded = false;
-    function loadGIS(clientId) {
-      return new Promise(function(resolve, reject) {
-        if (_gisLoaded && window.google && window.google.accounts) { resolve(); return; }
-        var s = document.createElement('script');
-        s.src = 'https://accounts.google.com/gsi/client';
-        s.async = true;
-        s.defer = true;
-        s.onload = function() { _gisLoaded = true; resolve(); };
-        s.onerror = function() { reject(new Error('Failed to load Google Identity Services')); };
-        document.head.appendChild(s);
-      });
-    }
-
-    async function signInWithGoogle() {
-      var errEl = document.getElementById('custLoginError');
-      try {
-        var configRes = await fetch('/api/public/google-oauth-config');
-        var configData = await configRes.json();
-        var clientId = configData.client_id;
-        
-        if (!clientId) {
-          if (errEl) { errEl.textContent = 'Google Sign-In is not yet configured. Please register with email/password instead.'; errEl.classList.remove('hidden'); }
-          return;
-        }
-
-        // Use GIS renderButton in a popup — most reliable, no redirect URI issues
-        try {
-          await loadGIS(clientId);
-          google.accounts.id.initialize({
-            client_id: clientId,
-            callback: handleGoogleCredential,
-            auto_select: false,
-            ux_mode: 'popup',
-          });
-          // Render the official Google button into a hidden container then auto-click it
-          // This triggers the popup-based sign-in (no redirect URI needed)
-          var gBtnContainer = document.getElementById('gsi-btn-container');
-          if (!gBtnContainer) {
-            gBtnContainer = document.createElement('div');
-            gBtnContainer.id = 'gsi-btn-container';
-            gBtnContainer.style.position = 'fixed';
-            gBtnContainer.style.left = '-9999px';
-            document.body.appendChild(gBtnContainer);
-          }
-          google.accounts.id.renderButton(gBtnContainer, {
-            type: 'standard',
-            theme: 'outline',
-            size: 'large',
-            text: 'signin_with',
-            width: 320,
-          });
-          // Short delay for button to render, then click it
-          setTimeout(function() {
-            var gBtn = gBtnContainer.querySelector('div[role="button"]') || gBtnContainer.querySelector('iframe');
-            if (gBtn) {
-              gBtn.click();
-            } else {
-              // If renderButton didn't create a clickable element, try One Tap
-              google.accounts.id.prompt(function(notification) {
-                if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-                  if (errEl) { errEl.textContent = 'Google popup was blocked. Please allow popups for this site and try again.'; errEl.classList.remove('hidden'); }
-                }
-              });
-            }
-          }, 200);
-        } catch(gisErr) {
-          console.warn('GIS failed:', gisErr);
-          if (errEl) { errEl.textContent = 'Google Sign-In is not available right now. Please use email and password to sign in.'; errEl.classList.remove('hidden'); }
-        }
-      } catch(e) {
-        if (errEl) { errEl.textContent = 'Google Sign-In is not available. Please use email/password.'; errEl.classList.remove('hidden'); }
-      }
-    }
-
-    async function handleGoogleCredential(response) {
-      var errEl = document.getElementById('custLoginError');
-      if (!response || !response.credential) {
-        if (errEl) { errEl.textContent = 'Google Sign-In failed — no credential received.'; errEl.classList.remove('hidden'); }
-        return;
-      }
-      try {
-        var res = await fetch('/api/customer/google', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ credential: response.credential })
-        });
-        var data = await res.json();
-        if (data.success) {
-          localStorage.setItem('rc_customer', JSON.stringify(data.customer));
-          localStorage.setItem('rc_customer_token', data.token);
-          window.location.href = '/customer/dashboard';
-        } else {
-          if (errEl) { errEl.textContent = data.error || 'Google sign-in failed.'; errEl.classList.remove('hidden'); }
-        }
-      } catch(e) {
-        if (errEl) { errEl.textContent = 'Network error during Google sign-in.'; errEl.classList.remove('hidden'); }
-      }
-    }
-
-    function doGoogleOAuthRedirect(clientId) {
-      // Fallback: use authorization code flow (not implicit) — more compatible
-      var redirectUri = window.location.origin + '/customer/google-callback';
-      var scope = 'openid email profile';
-      var authUrl = 'https://accounts.google.com/o/oauth2/v2/auth?'
-        + 'client_id=' + encodeURIComponent(clientId)
-        + '&redirect_uri=' + encodeURIComponent(redirectUri)
-        + '&response_type=id_token'
-        + '&scope=' + encodeURIComponent(scope)
-        + '&nonce=' + Date.now()
-        + '&prompt=select_account';
-      window.location.href = authUrl;
-    }
   </script>
-  ${getRoverWidget()}
-</body>
-</html>`
-}
-
-// ============================================================
-// SIGNUP WIZARD — 3-Step Onboarding (Business Info → Plan → Activate)
-// ============================================================
-function getSignupWizardHTML() {
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  ${getHeadTags()}
-  <title>Get Started - RoofReporterAI</title>
-  <meta name="description" content="Sign up for RoofReporterAI — AI-powered satellite roof measurement reports for Canadian roofing contractors. 14-day free trial.">
-  <style>
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(12px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-    .animate-fadeIn { animation: fadeIn 0.35s ease-out; }
-  </style>
-</head>
-<body class="bg-gradient-to-br from-slate-50 via-blue-50/30 to-white min-h-screen">
-  <!-- Minimal Top Bar -->
-  <div class="bg-white/80 backdrop-blur border-b border-gray-200/60">
-    <div class="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
-      <a href="/" class="flex items-center gap-2 hover:opacity-80 transition-opacity">
-        <span class="logo-mark logo-mark-light w-8 h-8"><img src="/static/logo.png" alt="RoofReporterAI"></span>
-        <span class="text-gray-800 font-bold text-lg">RoofReporterAI</span>
-      </a>
-      <a href="/customer/login" class="text-sm text-gray-500 hover:text-gray-700 transition-colors">
-        Already have an account? <span class="font-semibold text-blue-600">Sign in</span>
-      </a>
-    </div>
-  </div>
-
-  <!-- Wizard Container -->
-  <main class="max-w-5xl mx-auto px-4 py-8 sm:py-12">
-    <div id="wizard-root"></div>
-  </main>
-
-  <!-- Footer -->
-  <footer class="py-6 text-center text-xs text-gray-400 border-t border-gray-100">
-    <div class="max-w-5xl mx-auto px-4 flex flex-wrap justify-center gap-x-4 gap-y-1">
-      <a href="/terms" class="hover:text-gray-600">Terms</a>
-      <a href="/privacy" class="hover:text-gray-600">Privacy</a>
-      <span>&copy; ${new Date().getFullYear()} RoofReporterAI — Alberta, Canada</span>
-    </div>
-  </footer>
-
-  <script src="/static/js/signup-wizard.js?v=${BUILD_VERSION}"></script>
   ${getRoverWidget()}
 </body>
 </html>`
@@ -3804,59 +2394,32 @@ function getCustomerDashboardHTML() {
 <html lang="en">
 <head>
   ${getHeadTags()}
-  <title>Dashboard - RoofReporterAI</title>
-  <style>
-    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif; }
-    .rfr-topbar { height: 64px; background: #FFFFFF; border-bottom: 1px solid #E2E8F0; display: flex; align-items: center; justify-content: space-between; padding: 0 24px; position: sticky; top: 0; z-index: 40; }
-    .rfr-topbar-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; }
-    .rfr-topbar-logo img { height: 32px; width: 32px; border-radius: 8px; }
-    .rfr-topbar-title { font-size: 16px; font-weight: 700; color: #0F172A; }
-    .rfr-topbar-subtitle { font-size: 11px; color: #94A3B8; }
-    .rfr-topbar-nav { display: flex; align-items: center; gap: 16px; }
-    .rfr-topbar-nav a, .rfr-topbar-nav button { font-size: 13px; color: #64748B; text-decoration: none; background: none; border: none; cursor: pointer; padding: 6px 10px; border-radius: 6px; transition: all 0.15s; }
-    .rfr-topbar-nav a:hover, .rfr-topbar-nav button:hover { background: #F1F5F9; color: #0F172A; }
-    .rfr-topbar-user { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #475569; }
-    .rfr-topbar-avatar { width: 28px; height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: white; background: #2563EB; }
-    /* Mobile responsive top bar */
-    @media (max-width: 768px) {
-      .rfr-topbar { height: 52px; padding: 0 12px; }
-      .rfr-topbar-logo img { height: 28px; width: 28px; }
-      .rfr-topbar-title { font-size: 14px; }
-      .rfr-topbar-subtitle { display: none; }
-      .rfr-topbar-nav { gap: 6px; }
-      .rfr-topbar-nav a, .rfr-topbar-nav button { font-size: 11px; padding: 6px 8px; }
-      .rfr-topbar-nav a span, .rfr-topbar-nav button span { display: none; }
-      .rfr-topbar-user span:not(.rfr-topbar-avatar) { display: none; }
-    }
-    @media (max-width: 400px) {
-      .rfr-topbar { height: 48px; padding: 0 8px; }
-      .rfr-topbar-title { font-size: 13px; }
-      .rfr-topbar-nav a, .rfr-topbar-nav button { padding: 4px 6px; font-size: 11px; }
-    }
-  </style>
+  <title>My Dashboard - RoofReporterAI</title>
 </head>
-<body style="background:#F8FAFC;min-height:100vh">
-  <!-- Roofr-style Top Bar -->
-  <div class="rfr-topbar">
-    <a href="/" class="rfr-topbar-logo">
-      <img src="/static/logo.png" alt="RoofReporterAI">
-      <div>
-        <div class="rfr-topbar-title">RoofReporterAI</div>
-        <div class="rfr-topbar-subtitle">Roof Reports & CRM</div>
+<body class="bg-gray-50 min-h-screen">
+  <header class="bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg">
+    <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <a href="/" class="flex items-center space-x-3 hover:opacity-90 transition-opacity">
+          <img src="/static/logo.png" alt="RoofReporterAI" class="w-10 h-10 rounded-lg object-cover">
+          <div>
+            <h1 class="text-xl font-bold">My Dashboard</h1>
+            <p class="text-brand-200 text-xs">RoofReporterAI - Roof Reports & CRM</p>
+          </div>
+        </a>
       </div>
-    </a>
-    <div class="rfr-topbar-nav">
-      <span id="custGreeting" class="rfr-topbar-user" style="display:none">
-        <span class="rfr-topbar-avatar" id="custAvatar"></span>
-        <span id="custName"></span>
-      </span>
-      <a href="/"><i class="fas fa-home" style="margin-right:4px"></i>Home</a>
-      <button onclick="custLogout()"><i class="fas fa-sign-out-alt" style="margin-right:4px"></i>Logout</button>
+      <nav class="flex items-center space-x-4">
+        <span id="custGreeting" class="text-brand-200 text-sm hidden"><i class="fas fa-user-circle mr-1"></i><span id="custName"></span></span>
+        <a href="/" class="text-brand-200 hover:text-white text-sm"><i class="fas fa-home mr-1"></i>Home</a>
+        <button onclick="custLogout()" class="text-brand-200 hover:text-white text-sm"><i class="fas fa-sign-out-alt mr-1"></i>Logout</button>
+      </nav>
     </div>
-  </div>
-  <!-- Dashboard Mount Point -->
-  <div id="customer-root"></div>
+  </header>
+  <main class="max-w-7xl mx-auto px-4 py-8">
+    <div id="customer-root"></div>
+  </main>
   <script>
+    // Auth guard
     (function() {
       var c = localStorage.getItem('rc_customer');
       if (!c) { window.location.href = '/customer/login'; return; }
@@ -3864,12 +2427,7 @@ function getCustomerDashboardHTML() {
         var u = JSON.parse(c);
         var g = document.getElementById('custGreeting');
         var n = document.getElementById('custName');
-        var a = document.getElementById('custAvatar');
-        if (g && n) {
-          n.textContent = u.name || u.email;
-          g.style.display = 'flex';
-          if (a) a.textContent = (u.name || u.email || 'U').substring(0,2).toUpperCase();
-        }
+        if (g && n) { n.textContent = u.name || u.email; g.classList.remove('hidden'); }
       } catch(e) {}
     })();
     function custLogout() {
@@ -3898,7 +2456,7 @@ function getCustomerInvoiceHTML() {
     <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
       <div class="flex items-center space-x-3">
         <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
-          <span class="logo-mark w-10 h-10"><img src="/static/logo.png" alt="RoofReporterAI"></span>
+          <img src="/static/logo.png" alt="RoofReporterAI" class="w-10 h-10 rounded-lg object-cover">
           <div>
             <h1 class="text-xl font-bold">Invoice</h1>
             <p class="text-brand-200 text-xs">RoofReporterAI</p>
@@ -3919,7 +2477,7 @@ function getCustomerInvoiceHTML() {
       if (!c) { window.location.href = '/customer/login'; return; }
     })();
   </script>
-  <script src="/static/customer-invoice.js?v=${BUILD_VERSION}"></script>
+  <script src="/static/customer-invoice.js"></script>
   ${getRoverAssistant()}
 </body>
 </html>`
@@ -3939,12 +2497,12 @@ function getPricingPageHTML() {
   <nav class="bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
       <a href="/" class="flex items-center gap-3">
-        <span class="logo-mark w-9 h-9"><img src="/static/logo.png" alt="RoofReporterAI"></span>
+        <img src="/static/logo.png" alt="RoofReporterAI" class="w-9 h-9 rounded-lg object-cover">
         <span class="text-white font-bold text-lg">RoofReporterAI</span>
       </a>
       <div class="flex items-center gap-4">
         <a href="/" class="text-brand-200 hover:text-white text-sm">Home</a>
-        <a href="/signup" class="bg-accent-500 hover:bg-accent-600 text-white font-semibold py-2 px-5 rounded-lg text-sm"><i class="fas fa-sign-in-alt mr-1"></i>Get Started</a>
+        <a href="/customer/login" class="bg-accent-500 hover:bg-accent-600 text-white font-semibold py-2 px-5 rounded-lg text-sm"><i class="fas fa-sign-in-alt mr-1"></i>Get Started</a>
       </div>
     </div>
   </nav>
@@ -3958,7 +2516,7 @@ function getPricingPageHTML() {
     </div>
   </main>
   ${getContactFormHTML('pricing')}
-  <script src="/static/pricing.js?v=${BUILD_VERSION}"></script>
+  <script src="/static/pricing.js"></script>
   ${getRoverWidget()}
 </body>
 </html>`
@@ -3984,7 +2542,7 @@ function getBlogListingHTML() {
   <nav class="bg-slate-900 text-white sticky top-0 z-50">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
       <a href="/" class="flex items-center gap-3">
-        <span class="logo-mark w-9 h-9"><img src="/static/logo.png" alt="RoofReporterAI"></span>
+        <img src="/static/logo.png" alt="RoofReporterAI" class="w-9 h-9 rounded-lg object-cover">
         <span class="text-white font-bold text-lg tracking-tight">RoofReporterAI</span>
       </a>
       <div class="hidden md:flex items-center gap-5">
@@ -4077,7 +2635,7 @@ function getBlogListingHTML() {
     <div class="max-w-7xl mx-auto px-4 py-12">
       <div class="flex flex-col md:flex-row items-center justify-between gap-4">
         <div class="flex items-center gap-3">
-          <span class="logo-mark w-8 h-8"><img src="/static/logo.png" alt="RoofReporterAI"></span>
+          <img src="/static/logo.png" alt="RoofReporterAI" class="w-8 h-8 rounded-lg object-cover">
           <span class="text-gray-300 font-bold">RoofReporterAI</span>
         </div>
         <div class="flex items-center gap-6 text-sm">
@@ -4092,7 +2650,7 @@ function getBlogListingHTML() {
     </div>
   </footer>
 
-  <script src="/static/blog.js?v=${BUILD_VERSION}"></script>
+  <script src="/static/blog.js"></script>
   ${getRoverWidget()}
 </body>
 </html>`
@@ -4116,14 +2674,14 @@ function getBlogPostHTML() {
   <nav class="bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg sticky top-0 z-50">
     <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
       <a href="/" class="flex items-center gap-3">
-        <span class="logo-mark w-9 h-9"><img src="/static/logo.png" alt="RoofReporterAI"></span>
+        <img src="/static/logo.png" alt="RoofReporterAI" class="w-9 h-9 rounded-lg object-cover">
         <span class="text-white font-bold text-lg">RoofReporterAI</span>
       </a>
       <div class="hidden md:flex items-center gap-5">
         <a href="/" class="text-brand-200 hover:text-white text-sm">Home</a>
         <a href="/pricing" class="text-brand-200 hover:text-white text-sm">Pricing</a>
         <a href="/blog" class="text-white font-semibold text-sm">Blog</a>
-        <a href="/signup" class="bg-accent-500 hover:bg-accent-600 text-white font-semibold py-2 px-5 rounded-lg text-sm"><i class="fas fa-sign-in-alt mr-1"></i>Get Started</a>
+        <a href="/customer/login" class="bg-accent-500 hover:bg-accent-600 text-white font-semibold py-2 px-5 rounded-lg text-sm"><i class="fas fa-sign-in-alt mr-1"></i>Get Started</a>
       </div>
       <button class="md:hidden text-white text-xl" onclick="document.getElementById('bp-mobile').classList.toggle('hidden')"><i class="fas fa-bars"></i></button>
     </div>
@@ -4131,7 +2689,7 @@ function getBlogPostHTML() {
       <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col gap-3">
         <a href="/" class="text-brand-200 hover:text-white text-sm py-2">Home</a>
         <a href="/blog" class="text-white font-semibold text-sm py-2">Blog</a>
-        <a href="/signup" class="bg-accent-500 text-white font-semibold py-2.5 px-5 rounded-lg text-sm text-center mt-2"><i class="fas fa-sign-in-alt mr-1"></i>Get Started</a>
+        <a href="/customer/login" class="bg-accent-500 text-white font-semibold py-2.5 px-5 rounded-lg text-sm text-center mt-2"><i class="fas fa-sign-in-alt mr-1"></i>Get Started</a>
       </div>
     </div>
   </nav>
@@ -4158,7 +2716,7 @@ function getBlogPostHTML() {
       <h3 class="text-xl font-bold text-gray-900 mb-2">Ready to streamline your roof measurements?</h3>
       <p class="text-gray-600 mb-6 max-w-lg mx-auto">Join hundreds of roofing professionals who save hours on every estimate with AI-powered measurement reports.</p>
       <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
-        <a href="/signup" class="bg-accent-500 hover:bg-accent-600 text-white font-semibold py-3 px-8 rounded-lg transition-all hover:scale-105 shadow-lg shadow-accent-500/25"><i class="fas fa-rocket mr-2"></i>Start Free Trial</a>
+        <a href="/customer/login" class="bg-accent-500 hover:bg-accent-600 text-white font-semibold py-3 px-8 rounded-lg transition-all hover:scale-105 shadow-lg shadow-accent-500/25"><i class="fas fa-rocket mr-2"></i>Start Free Trial</a>
         <a href="/pricing" class="text-sky-600 hover:text-sky-700 font-semibold text-sm"><i class="fas fa-tag mr-1"></i>View Pricing</a>
       </div>
     </div>
@@ -4178,7 +2736,7 @@ function getBlogPostHTML() {
     <div class="max-w-7xl mx-auto px-4 py-12">
       <div class="flex flex-col md:flex-row items-center justify-between gap-4">
         <div class="flex items-center gap-3">
-          <span class="logo-mark w-8 h-8"><img src="/static/logo.png" alt="RoofReporterAI"></span>
+          <img src="/static/logo.png" alt="RoofReporterAI" class="w-8 h-8 rounded-lg object-cover">
           <span class="text-gray-800 font-bold">RoofReporterAI</span>
         </div>
         <div class="flex items-center gap-6 text-sm">
@@ -4191,7 +2749,7 @@ function getBlogPostHTML() {
     </div>
   </footer>
 
-  <script src="/static/blog.js?v=${BUILD_VERSION}"></script>
+  <script src="/static/blog.js"></script>
   ${getRoverWidget()}
 </body>
 </html>`
@@ -4225,10 +2783,10 @@ function getLanderFunnelHTML() {
   <nav class="bg-slate-900 text-white">
     <div class="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
       <a href="/" class="flex items-center gap-2">
-        <span class="logo-mark w-7 h-7"><img src="/static/logo.png" alt="RoofReporterAI"></span>
+        <img src="/static/logo.png" alt="RoofReporterAI" class="w-7 h-7 rounded-md object-cover">
         <span class="text-white font-bold text-sm">RoofReporterAI</span>
       </a>
-      <a href="/signup" class="bg-gradient-to-r from-cyan-500 to-blue-500 text-white text-sm font-semibold py-1.5 px-4 rounded-lg hover:opacity-90 transition-opacity">Sign Up Free</a>
+      <a href="/customer/login" class="bg-gradient-to-r from-cyan-500 to-blue-500 text-white text-sm font-semibold py-1.5 px-4 rounded-lg hover:opacity-90 transition-opacity">Sign Up Free</a>
     </div>
   </nav>
 
@@ -4255,7 +2813,7 @@ function getLanderFunnelHTML() {
             Get a <strong class="text-white">professional roof measurement report</strong> from satellite imagery in under 60 seconds. Accurate area, pitch, edge breakdowns, and a full material BOM — everything you need to quote a job.
           </p>
 
-          <a href="/signup" class="group inline-flex items-center gap-3 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-400 hover:to-emerald-400 text-white font-bold py-4 px-10 rounded-xl text-lg shadow-2xl shadow-green-500/25 transition-all hover:scale-[1.02] mb-6">
+          <a href="/customer/login" class="group inline-flex items-center gap-3 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-400 hover:to-emerald-400 text-white font-bold py-4 px-10 rounded-xl text-lg shadow-2xl shadow-green-500/25 transition-all hover:scale-[1.02] mb-6">
             <i class="fas fa-rocket"></i>
             Claim Your 3 Free Reports
             <i class="fas fa-arrow-right text-sm group-hover:translate-x-1 transition-transform"></i>
@@ -4377,7 +2935,7 @@ function getLanderFunnelHTML() {
       <p class="text-lg text-gray-300 mb-10 max-w-xl mx-auto">
         Sign up in 30 seconds, get 3 free professional roof measurement reports, and access the full CRM — no credit card required.
       </p>
-      <a href="/signup" class="group inline-flex items-center gap-3 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-400 hover:to-emerald-400 text-white font-bold py-4 px-12 rounded-xl text-lg shadow-2xl shadow-green-500/25 transition-all hover:scale-[1.02]">
+      <a href="/customer/login" class="group inline-flex items-center gap-3 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-400 hover:to-emerald-400 text-white font-bold py-4 px-12 rounded-xl text-lg shadow-2xl shadow-green-500/25 transition-all hover:scale-[1.02]">
         <i class="fas fa-rocket"></i>
         Start Free Now
         <i class="fas fa-arrow-right text-sm group-hover:translate-x-1 transition-transform"></i>
@@ -4393,7 +2951,7 @@ function getLanderFunnelHTML() {
   <footer class="bg-slate-900 text-gray-500 py-8 border-t border-gray-800">
     <div class="max-w-4xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4">
       <div class="flex items-center gap-2">
-        <span class="logo-mark w-6 h-6"><img src="/static/logo.png" alt="RoofReporterAI"></span>
+        <img src="/static/logo.png" alt="RoofReporterAI" class="w-6 h-6 rounded object-cover">
         <span class="text-sm font-semibold text-gray-400">RoofReporterAI</span>
       </div>
       <div class="flex items-center gap-6 text-sm">
@@ -4447,7 +3005,7 @@ function getCustomerOrderPageHTML(mapsApiKey: string) {
   <header class="bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
       <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
-        <span class="logo-mark w-10 h-10"><img src="/static/logo.png" alt="RoofReporterAI"></span>
+        <img src="/static/logo.png" alt="RoofReporterAI" class="w-10 h-10 rounded-lg object-cover">
         <div>
           <h1 class="text-xl font-bold">Order a Report</h1>
           <p class="text-brand-200 text-xs">RoofReporterAI</p>
@@ -4482,17 +3040,17 @@ function getVirtualTryOnPageHTML() {
 <html lang="en">
 <head>
   ${getHeadTags()}
-  <title>Virtual Try-On - RoofReporterAI</title>
+  <title>Roof Visualizer - RoofReporterAI</title>
 </head>
 <body class="bg-gray-50 min-h-screen">
   <header class="bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
       <div class="flex items-center space-x-3">
         <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
-          <span class="logo-mark w-10 h-10"><img src="/static/logo.png" alt="RoofReporterAI"></span>
+          <img src="/static/logo.png" alt="RoofReporterAI" class="w-10 h-10 rounded-lg object-cover">
           <div>
-            <h1 class="text-lg font-bold">Virtual Roof Try-On</h1>
-            <p class="text-brand-200 text-xs">AI-Powered Roof Visualization</p>
+            <h1 class="text-lg font-bold">Roof Visualizer</h1>
+            <p class="text-brand-200 text-xs">AI-Powered Material &amp; Color Preview</p>
           </div>
         </a>
       </div>
@@ -4525,538 +3083,7 @@ function getVirtualTryOnPageHTML() {
       window.location.href = '/customer/login';
     }
   </script>
-  <script src="/static/virtual-tryon.js?v=${BUILD_VERSION}"></script>
-  ${getRoverAssistant()}
-</body>
-</html>`
-}
-
-// ============================================================
-// HOME DESIGNER PAGE — Hover-style multi-photo roof visualization
-// ============================================================
-function getHomeDesignerPageHTML() {
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  ${getHeadTags()}
-  <title>Home Designer - RoofReporterAI</title>
-  <style>
-    @media print {
-      header, nav, .no-print { display: none !important; }
-      body { background: white !important; }
-      .max-w-5xl { max-width: 100% !important; }
-    }
-    .scrollbar-hide::-webkit-scrollbar { display: none; }
-    .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
-    .line-clamp-3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-  </style>
-</head>
-<body class="bg-gray-50 min-h-screen">
-  <header class="bg-gradient-to-r from-sky-600 to-blue-700 text-white shadow-lg no-print">
-    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
-      <div class="flex items-center space-x-3">
-        <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
-          <span class="logo-mark w-10 h-10"><img src="/static/logo.png" alt="RoofReporterAI"></span>
-          <div>
-            <h1 class="text-lg font-bold">Home Designer</h1>
-            <p class="text-sky-200 text-xs">Hover-Style Roof Visualization</p>
-          </div>
-        </a>
-      </div>
-      <nav class="flex items-center space-x-3">
-        <span id="custGreeting" class="text-sky-200 text-sm hidden"><i class="fas fa-user-circle mr-1"></i><span id="custName"></span></span>
-        <a href="/customer/virtual-tryon" class="text-sky-200 hover:text-white text-sm"><i class="fas fa-magic mr-1"></i>Try-On</a>
-        <a href="/customer/dashboard" class="text-sky-200 hover:text-white text-sm"><i class="fas fa-th-large mr-1"></i>Dashboard</a>
-        <button onclick="custLogout()" class="text-sky-200 hover:text-white text-sm"><i class="fas fa-sign-out-alt mr-1"></i>Logout</button>
-      </nav>
-    </div>
-  </header>
-  <main class="max-w-6xl mx-auto px-4 py-6">
-    <div id="designer-root"></div>
-  </main>
-  <script>
-    (function() {
-      var c = localStorage.getItem('rc_customer');
-      if (!c) { window.location.href = '/customer/login'; return; }
-      try {
-        var u = JSON.parse(c);
-        var g = document.getElementById('custGreeting');
-        var n = document.getElementById('custName');
-        if (g && n) { n.textContent = u.name || u.email; g.classList.remove('hidden'); }
-      } catch(e) {}
-    })();
-    function custLogout() {
-      var token = localStorage.getItem('rc_customer_token');
-      if (token) fetch('/api/customer/logout', { method: 'POST', headers: { 'Authorization': 'Bearer ' + token } })['catch'](function(){});
-      localStorage.removeItem('rc_customer');
-      localStorage.removeItem('rc_customer_token');
-      window.location.href = '/customer/login';
-    }
-  </script>
-  <script src="/static/home-designer.js?v=${BUILD_VERSION}"></script>
-  ${getRoverAssistant()}
-</body>
-</html>`
-}
-
-function getSAM3AnalyzerPageHTML(orderId?: string) {
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  ${getHeadTags()}
-  <title>SAM 3 Roof Analyzer - RoofReporterAI</title>
-  <style>
-    @media print {
-      header, nav, .no-print { display: none !important; }
-      body { background: white !important; }
-    }
-    .scrollbar-thin::-webkit-scrollbar { width: 4px; }
-    .scrollbar-thin::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 4px; }
-  </style>
-</head>
-<body class="bg-gray-50 min-h-screen">
-  <header class="bg-gradient-to-r from-slate-800 to-slate-900 text-white shadow-lg no-print">
-    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
-      <div class="flex items-center space-x-3">
-        <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
-          <span class="logo-mark w-10 h-10"><img src="/static/logo.png" alt="RoofReporterAI"></span>
-          <div>
-            <h1 class="text-lg font-bold">SAM 3 Roof Analyzer</h1>
-            <p class="text-slate-400 text-xs">AI Satellite Image Segmentation</p>
-          </div>
-        </a>
-      </div>
-      <nav class="flex items-center space-x-3">
-        <span id="custGreeting" class="text-slate-300 text-sm hidden"><i class="fas fa-user-circle mr-1"></i><span id="custName"></span></span>
-        <a href="/customer/home-designer" class="text-slate-300 hover:text-white text-sm"><i class="fas fa-home mr-1"></i>Designer</a>
-        <a href="/customer/dashboard" class="text-slate-300 hover:text-white text-sm"><i class="fas fa-th-large mr-1"></i>Dashboard</a>
-        <button onclick="custLogout()" class="text-slate-300 hover:text-white text-sm"><i class="fas fa-sign-out-alt mr-1"></i>Logout</button>
-      </nav>
-    </div>
-  </header>
-  <main class="max-w-6xl mx-auto px-4 py-6">
-    <div id="sam3-root"${orderId ? ` data-order-id="${orderId}"` : ''}></div>
-  </main>
-  <script>
-    (function() {
-      var c = localStorage.getItem('rc_customer');
-      if (!c) { window.location.href = '/customer/login'; return; }
-      try {
-        var u = JSON.parse(c);
-        var g = document.getElementById('custGreeting');
-        var n = document.getElementById('custName');
-        if (g && n) { n.textContent = u.name || u.email; g.classList.remove('hidden'); }
-      } catch(e) {}
-    })();
-    function custLogout() {
-      var token = localStorage.getItem('rc_customer_token');
-      if (token) fetch('/api/customer/logout', { method: 'POST', headers: { 'Authorization': 'Bearer ' + token } })['catch'](function(){});
-      localStorage.removeItem('rc_customer');
-      localStorage.removeItem('rc_customer_token');
-      window.location.href = '/customer/login';
-    }
-  </script>
-  <script src="/static/sam3-analyzer.js?v=${BUILD_VERSION}"></script>
-  ${getRoverAssistant()}
-</body>
-</html>`
-}
-
-// ============================================================
-// GOOGLE CALENDAR PAGE — Sync CRM jobs with Google Calendar
-// ============================================================
-function getCalendarPageHTML() {
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  ${getHeadTags()}
-  <title>Calendar - RoofReporterAI</title>
-  <style>
-    .cal-event { transition: all 0.2s; }
-    .cal-event:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
-    .slot-card { cursor: pointer; }
-    .slot-card:hover { background: #f0f9ff; border-color: #7dd3fc; }
-  </style>
-</head>
-<body class="bg-gray-50 min-h-screen">
-  <header class="bg-gradient-to-r from-sky-600 to-blue-700 text-white shadow-lg">
-    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
-      <div class="flex items-center space-x-3">
-        <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
-          <span class="logo-mark w-10 h-10"><img src="/static/logo.png" alt="RoofReporterAI"></span>
-          <div>
-            <h1 class="text-lg font-bold">Google Calendar</h1>
-            <p class="text-sky-200 text-xs">Sync Jobs & Schedule</p>
-          </div>
-        </a>
-      </div>
-      <nav class="flex items-center space-x-3">
-        <a href="/customer/jobs" class="text-sky-200 hover:text-white text-sm"><i class="fas fa-hard-hat mr-1"></i>Jobs</a>
-        <a href="/customer/dashboard" class="text-sky-200 hover:text-white text-sm"><i class="fas fa-th-large mr-1"></i>Dashboard</a>
-        <button onclick="custLogout()" class="text-sky-200 hover:text-white text-sm"><i class="fas fa-sign-out-alt mr-1"></i>Logout</button>
-      </nav>
-    </div>
-  </header>
-  <main class="max-w-6xl mx-auto px-4 py-6">
-    <div id="cal-root">
-      <div class="text-center py-12"><div class="animate-spin text-sky-500 text-2xl inline-block"><i class="fas fa-spinner"></i></div><p class="text-gray-400 text-sm mt-2">Loading calendar...</p></div>
-    </div>
-  </main>
-  <script>
-    (function() {
-      var c = localStorage.getItem('rc_customer');
-      if (!c) { window.location.href = '/customer/login'; return; }
-    })();
-    function custLogout() {
-      var token = localStorage.getItem('rc_customer_token');
-      if (token) fetch('/api/customer/logout', { method: 'POST', headers: { 'Authorization': 'Bearer ' + token } })['catch'](function(){});
-      localStorage.removeItem('rc_customer');
-      localStorage.removeItem('rc_customer_token');
-      window.location.href = '/customer/login';
-    }
-
-    var token = localStorage.getItem('rc_customer_token') || '';
-    var root = document.getElementById('cal-root');
-
-    function api(method, path, body) {
-      var opts = { method: method, headers: { 'Content-Type': 'application/json' } };
-      if (token) opts.headers['Authorization'] = 'Bearer ' + token;
-      if (body) opts.body = JSON.stringify(body);
-      return fetch('/api/calendar' + path, opts).then(function(r) { return r.json(); });
-    }
-
-    function loadCalendar() {
-      Promise.all([
-        api('GET', '/status'),
-        api('GET', '/events?days=30'),
-        api('GET', '/availability?days=7')
-      ]).then(function(results) {
-        var status = results[0];
-        var eventsData = results[1];
-        var availability = results[2];
-        renderCalendar(status, eventsData, availability);
-      }).catch(function(err) {
-        root.innerHTML = '<div class="bg-white rounded-2xl shadow p-8 text-center"><p class="text-red-500"><i class="fas fa-exclamation-triangle mr-2"></i>' + err.message + '</p></div>';
-      });
-    }
-
-    function renderCalendar(status, eventsData, availability) {
-      var connected = status.connected;
-      var events = eventsData.google_events || [];
-      var slots = availability.available_slots || [];
-
-      var connectSection = '';
-      if (!connected) {
-        connectSection = '<div class="bg-amber-50 border border-amber-200 rounded-xl p-6 mb-6">' +
-          '<div class="flex items-center gap-4">' +
-            '<div class="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center"><i class="fas fa-calendar-alt text-amber-600 text-xl"></i></div>' +
-            '<div class="flex-1">' +
-              '<h3 class="font-bold text-amber-800">Google Calendar Not Connected</h3>' +
-              '<p class="text-amber-700 text-sm">Connect Gmail first (Settings → Gmail Integration). Calendar access is included automatically.</p>' +
-            '</div>' +
-            '<a href="/customer/dashboard?open=settings" class="px-4 py-2 bg-amber-500 text-white rounded-lg text-sm font-medium hover:bg-amber-600">Go to Settings</a>' +
-          '</div>' +
-        '</div>';
-      }
-
-      var eventsHtml = '';
-      if (events.length > 0) {
-        events.forEach(function(e) {
-          var start = e.start_time ? new Date(e.start_time) : new Date();
-          var dateStr = start.toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric' });
-          var timeStr = e.all_day ? 'All Day' : start.toLocaleTimeString('en-CA', { hour: '2-digit', minute: '2-digit' });
-          eventsHtml += '<div class="cal-event bg-white rounded-xl border border-gray-200 p-4 flex items-center gap-4">' +
-            '<div class="w-12 h-12 bg-sky-100 rounded-xl flex flex-col items-center justify-center">' +
-              '<span class="text-[10px] text-sky-500 uppercase">' + dateStr.split(' ')[0] + '</span>' +
-              '<span class="text-lg font-bold text-sky-700">' + start.getDate() + '</span>' +
-            '</div>' +
-            '<div class="flex-1 min-w-0">' +
-              '<p class="font-semibold text-gray-800 truncate">' + (e.title || 'Untitled') + '</p>' +
-              '<p class="text-xs text-gray-500">' + dateStr + ' &bull; ' + timeStr + (e.location ? ' &bull; ' + e.location : '') + '</p>' +
-            '</div>' +
-            '<a href="' + (e.html_link || '#') + '" target="_blank" class="text-sky-500 hover:text-sky-700 text-sm"><i class="fas fa-external-link-alt"></i></a>' +
-          '</div>';
-        });
-      } else if (connected) {
-        eventsHtml = '<div class="text-center py-6"><i class="fas fa-calendar-check text-gray-300 text-3xl mb-2"></i><p class="text-gray-400 text-sm">No upcoming events in the next 30 days</p></div>';
-      }
-
-      var slotsHtml = '';
-      slots.slice(0, 10).forEach(function(s) {
-        var d = new Date(s.start);
-        slotsHtml += '<div class="slot-card bg-white rounded-lg border border-gray-200 p-3 text-center" onclick="createQuickEvent(\\'' + s.start + '\\',\\'' + s.end + '\\')">' +
-          '<p class="text-xs text-gray-500">' + d.toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric' }) + '</p>' +
-          '<p class="font-bold text-sky-700 text-sm">' + s.time + '</p>' +
-        '</div>';
-      });
-
-      root.innerHTML = connectSection +
-        '<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">' +
-          // Events column
-          '<div class="lg:col-span-2 space-y-3">' +
-            '<div class="flex items-center justify-between mb-2">' +
-              '<h2 class="text-lg font-bold text-gray-800"><i class="fas fa-calendar text-sky-500 mr-2"></i>Upcoming Events</h2>' +
-              (connected ? '<div class="flex gap-2">' +
-                '<button onclick="syncAllJobs()" class="px-3 py-1.5 bg-sky-600 text-white rounded-lg text-xs font-medium hover:bg-sky-700"><i class="fas fa-sync mr-1"></i>Sync All Jobs</button>' +
-                '<button onclick="showCreateEvent()" class="px-3 py-1.5 bg-green-600 text-white rounded-lg text-xs font-medium hover:bg-green-700"><i class="fas fa-plus mr-1"></i>New Event</button>' +
-              '</div>' : '') +
-            '</div>' +
-            '<div class="space-y-2">' + eventsHtml + '</div>' +
-          '</div>' +
-          // Available slots column
-          '<div>' +
-            '<h3 class="text-sm font-bold text-gray-700 mb-3"><i class="fas fa-clock text-green-500 mr-1"></i>Available Slots (Next 7 Days)</h3>' +
-            '<div class="grid grid-cols-2 gap-2">' + slotsHtml + '</div>' +
-            (connected ? '<p class="text-[10px] text-gray-400 mt-2 text-center">Click a slot to create an event</p>' : '') +
-          '</div>' +
-        '</div>';
-    }
-
-    function syncAllJobs() {
-      root.innerHTML = '<div class="text-center py-12"><div class="animate-spin text-sky-500 text-2xl inline-block"><i class="fas fa-spinner"></i></div><p class="text-gray-400 text-sm mt-2">Syncing all jobs to Google Calendar...</p></div>';
-      api('POST', '/sync-all-jobs').then(function(res) {
-        alert(res.success ? 'Synced ' + res.synced + ' jobs to Google Calendar!' : (res.error || 'Sync failed'));
-        loadCalendar();
-      }).catch(function(err) { alert('Error: ' + err.message); loadCalendar(); });
-    }
-
-    function showCreateEvent() {
-      var title = prompt('Event title:');
-      if (!title) return;
-      var date = prompt('Date (YYYY-MM-DD):', new Date().toISOString().split('T')[0]);
-      if (!date) return;
-      var time = prompt('Start time (HH:MM):', '09:00');
-      if (!time) return;
-      var loc = prompt('Location (optional):', '');
-
-      api('POST', '/events', {
-        title: title,
-        start_time: date + 'T' + time + ':00',
-        end_time: date + 'T' + (parseInt(time) + 2).toString().padStart(2, '0') + ':00:00',
-        location: loc || undefined,
-        event_type: 'general'
-      }).then(function(res) {
-        if (res.success) { alert('Event created!'); loadCalendar(); }
-        else alert(res.error || 'Failed to create event');
-      }).catch(function(err) { alert('Error: ' + err.message); });
-    }
-
-    function createQuickEvent(start, end) {
-      var title = prompt('Event title for this slot:');
-      if (!title) return;
-      api('POST', '/events', { title: title, start_time: start, end_time: end })
-        .then(function(res) {
-          if (res.success) { alert('Event created!'); loadCalendar(); }
-          else alert(res.error || 'Failed');
-        });
-    }
-
-    loadCalendar();
-  </script>
-  ${getRoverAssistant()}
-</body>
-</html>`
-}
-
-// ============================================================
-// SALES ENGINE PAGE — Lead scoring, follow-ups, onboarding
-// ============================================================
-function getSalesPageHTML() {
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  ${getHeadTags()}
-  <title>Sales Engine - RoofReporterAI</title>
-  <style>
-    .kpi-card { transition: all 0.2s; }
-    .kpi-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
-    .lead-row { transition: all 0.15s; }
-    .lead-row:hover { background: #f8fafc; }
-  </style>
-</head>
-<body class="bg-gray-50 min-h-screen">
-  <header class="bg-gradient-to-r from-indigo-600 to-purple-700 text-white shadow-lg">
-    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
-      <div class="flex items-center space-x-3">
-        <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
-          <span class="logo-mark w-10 h-10"><img src="/static/logo.png" alt="RoofReporterAI"></span>
-          <div>
-            <h1 class="text-lg font-bold">Sales Engine</h1>
-            <p class="text-indigo-200 text-xs">Leads, Follow-ups & Onboarding</p>
-          </div>
-        </a>
-      </div>
-      <nav class="flex items-center space-x-3">
-        <a href="/customer/pipeline" class="text-indigo-200 hover:text-white text-sm"><i class="fas fa-funnel-dollar mr-1"></i>Pipeline</a>
-        <a href="/customer/dashboard" class="text-indigo-200 hover:text-white text-sm"><i class="fas fa-th-large mr-1"></i>Dashboard</a>
-        <button onclick="custLogout()" class="text-indigo-200 hover:text-white text-sm"><i class="fas fa-sign-out-alt mr-1"></i>Logout</button>
-      </nav>
-    </div>
-  </header>
-  <main class="max-w-7xl mx-auto px-4 py-6">
-    <div id="sales-root">
-      <div class="text-center py-12"><div class="animate-spin text-indigo-500 text-2xl inline-block"><i class="fas fa-spinner"></i></div><p class="text-gray-400 text-sm mt-2">Loading sales dashboard...</p></div>
-    </div>
-  </main>
-  <script>
-    (function() {
-      var c = localStorage.getItem('rc_customer');
-      if (!c) { window.location.href = '/customer/login'; return; }
-    })();
-    function custLogout() {
-      var token = localStorage.getItem('rc_customer_token');
-      if (token) fetch('/api/customer/logout', { method: 'POST', headers: { 'Authorization': 'Bearer ' + token } })['catch'](function(){});
-      localStorage.removeItem('rc_customer'); localStorage.removeItem('rc_customer_token');
-      window.location.href = '/customer/login';
-    }
-
-    var token = localStorage.getItem('rc_customer_token') || '';
-    var root = document.getElementById('sales-root');
-
-    function api(method, path, body) {
-      var opts = { method: method, headers: { 'Content-Type': 'application/json' } };
-      if (token) opts.headers['Authorization'] = 'Bearer ' + token;
-      if (body) opts.body = JSON.stringify(body);
-      return fetch('/api/sales' + path, opts).then(function(r) { return r.json(); });
-    }
-
-    function loadDashboard() {
-      Promise.all([
-        api('GET', '/dashboard'),
-        api('GET', '/follow-ups?filter=due'),
-        api('GET', '/leads?sort=score')
-      ]).then(function(r) {
-        renderDashboard(r[0], r[1], r[2]);
-      }).catch(function() {
-        root.innerHTML = '<div class="bg-white rounded-2xl shadow p-8 text-center"><p class="text-gray-500">No sales data yet. Add your first lead to get started!</p><button onclick="showAddLead()" class="mt-4 px-6 py-2 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700"><i class="fas fa-plus mr-2"></i>Add First Lead</button></div>';
-      });
-    }
-
-    function renderDashboard(dash, followUps, leads) {
-      var k = dash.kpis || {};
-      var l = dash.leads || {};
-      var fu = dash.follow_ups || {};
-
-      var kpiHtml = '<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">' +
-        kpiCard('Pipeline Value', '$' + (k.pipeline_value || 0).toLocaleString(), 'fa-dollar-sign', 'from-sky-500 to-blue-600') +
-        kpiCard('Won Revenue', '$' + (k.won_value || 0).toLocaleString(), 'fa-trophy', 'from-green-500 to-emerald-600') +
-        kpiCard('Conversion Rate', (k.conversion_rate || 0) + '%', 'fa-chart-line', 'from-indigo-500 to-purple-600') +
-        kpiCard('Avg Lead Score', (k.avg_lead_score || 0) + '/100', 'fa-star', 'from-amber-500 to-orange-600') +
-      '</div>';
-
-      // Follow-ups section
-      var fuList = (followUps.follow_ups || []).slice(0, 8);
-      var fuHtml = '<div class="bg-white rounded-2xl shadow border border-gray-200 p-5 mb-6">' +
-        '<div class="flex items-center justify-between mb-3">' +
-          '<h3 class="font-bold text-gray-800"><i class="fas fa-bell text-amber-500 mr-2"></i>Due Follow-ups <span class="text-sm font-normal text-red-500">(' + (fu.overdue || 0) + ' overdue)</span></h3>' +
-        '</div>';
-      
-      if (fuList.length > 0) {
-        fuHtml += '<div class="space-y-2">';
-        fuList.forEach(function(f) {
-          var isOverdue = f.due_date < new Date().toISOString().split('T')[0];
-          fuHtml += '<div class="flex items-center gap-3 p-3 rounded-xl border ' + (isOverdue ? 'border-red-200 bg-red-50' : 'border-gray-200') + '">' +
-            '<div class="w-8 h-8 rounded-lg flex items-center justify-center ' + (f.action_type === 'call' ? 'bg-green-100' : 'bg-blue-100') + '">' +
-              '<i class="fas ' + (f.action_type === 'call' ? 'fa-phone text-green-600' : 'fa-envelope text-blue-600') + ' text-sm"></i>' +
-            '</div>' +
-            '<div class="flex-1 min-w-0">' +
-              '<p class="text-sm font-medium text-gray-800 truncate">' + f.title + '</p>' +
-              '<p class="text-xs text-gray-500">' + (f.lead_name || '') + ' &bull; Due: ' + f.due_date + '</p>' +
-            '</div>' +
-            '<button onclick="completeFollowUp(' + f.id + ')" class="px-3 py-1 bg-green-600 text-white rounded-lg text-xs font-medium hover:bg-green-700"><i class="fas fa-check mr-1"></i>Done</button>' +
-          '</div>';
-        });
-        fuHtml += '</div>';
-      } else {
-        fuHtml += '<p class="text-center text-gray-400 text-sm py-4">No pending follow-ups!</p>';
-      }
-      fuHtml += '</div>';
-
-      // Leads table
-      var leadsList = (leads.leads || []).slice(0, 15);
-      var leadsHtml = '<div class="bg-white rounded-2xl shadow border border-gray-200 overflow-hidden">' +
-        '<div class="p-5 flex items-center justify-between border-b border-gray-200">' +
-          '<h3 class="font-bold text-gray-800"><i class="fas fa-users text-indigo-500 mr-2"></i>Top Leads by Score</h3>' +
-          '<button onclick="showAddLead()" class="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-medium hover:bg-indigo-700"><i class="fas fa-plus mr-1"></i>Add Lead</button>' +
-        '</div>';
-
-      if (leadsList.length > 0) {
-        leadsHtml += '<div class="overflow-x-auto"><table class="w-full text-sm"><thead class="bg-gray-50"><tr>' +
-          '<th class="text-left px-4 py-2 text-xs font-bold text-gray-500 uppercase">Name</th>' +
-          '<th class="text-left px-4 py-2 text-xs font-bold text-gray-500 uppercase">Source</th>' +
-          '<th class="text-center px-4 py-2 text-xs font-bold text-gray-500 uppercase">Score</th>' +
-          '<th class="text-left px-4 py-2 text-xs font-bold text-gray-500 uppercase">Stage</th>' +
-          '<th class="text-right px-4 py-2 text-xs font-bold text-gray-500 uppercase">Value</th>' +
-          '<th class="text-center px-4 py-2 text-xs font-bold text-gray-500 uppercase">Action</th>' +
-        '</tr></thead><tbody>';
-        leadsList.forEach(function(lead) {
-          var scoreColor = lead.lead_score >= 70 ? 'bg-green-500' : (lead.lead_score >= 40 ? 'bg-amber-500' : 'bg-red-500');
-          leadsHtml += '<tr class="lead-row border-t border-gray-100">' +
-            '<td class="px-4 py-3"><p class="font-medium text-gray-800">' + lead.name + '</p><p class="text-xs text-gray-400">' + (lead.phone || lead.email || '') + '</p></td>' +
-            '<td class="px-4 py-3 text-xs text-gray-600">' + (lead.source || '').replace(/_/g, ' ') + '</td>' +
-            '<td class="px-4 py-3 text-center"><span class="inline-block px-2 py-1 text-white text-xs font-bold rounded-full ' + scoreColor + '">' + lead.lead_score + '</span></td>' +
-            '<td class="px-4 py-3"><span class="px-2 py-0.5 bg-sky-100 text-sky-700 text-xs rounded-full font-medium">' + (lead.stage || 'new') + '</span></td>' +
-            '<td class="px-4 py-3 text-right font-medium text-gray-800">$' + (lead.estimated_value || 0).toLocaleString() + '</td>' +
-            '<td class="px-4 py-3 text-center"><button onclick="advanceLead(' + lead.id + ',\\'' + lead.stage + '\\')" class="px-2 py-1 bg-sky-600 text-white text-xs rounded-lg hover:bg-sky-700"><i class="fas fa-arrow-right"></i></button></td>' +
-          '</tr>';
-        });
-        leadsHtml += '</tbody></table></div>';
-      } else {
-        leadsHtml += '<div class="p-8 text-center"><i class="fas fa-seedling text-gray-300 text-3xl mb-2"></i><p class="text-gray-400 text-sm">No leads yet. Add your first lead to start tracking!</p></div>';
-      }
-      leadsHtml += '</div>';
-
-      root.innerHTML = kpiHtml + fuHtml + leadsHtml;
-    }
-
-    function kpiCard(label, value, icon, gradient) {
-      return '<div class="kpi-card bg-white rounded-xl border border-gray-200 p-4">' +
-        '<div class="flex items-center gap-3">' +
-          '<div class="w-10 h-10 bg-gradient-to-br ' + gradient + ' rounded-xl flex items-center justify-center"><i class="fas ' + icon + ' text-white"></i></div>' +
-          '<div><p class="text-2xl font-bold text-gray-800">' + value + '</p><p class="text-xs text-gray-500">' + label + '</p></div>' +
-        '</div></div>';
-    }
-
-    function completeFollowUp(id) {
-      var outcome = prompt('Outcome notes (optional):');
-      api('POST', '/follow-ups/' + id + '/complete', { outcome: outcome || 'completed' })
-        .then(function() { loadDashboard(); });
-    }
-
-    var stageOrder = ['new', 'contacted', 'qualified', 'proposal_sent', 'negotiation', 'won'];
-    function advanceLead(id, currentStage) {
-      var idx = stageOrder.indexOf(currentStage);
-      var nextStage = idx >= 0 && idx < stageOrder.length - 1 ? stageOrder[idx + 1] : null;
-      if (!nextStage) { alert('Lead is already at the final stage'); return; }
-      if (!confirm('Move lead to "' + nextStage + '" stage?')) return;
-      api('POST', '/leads/' + id + '/advance', { stage: nextStage })
-        .then(function(res) {
-          if (res.success) loadDashboard();
-          else alert(res.error || 'Failed');
-        });
-    }
-
-    function showAddLead() {
-      var name = prompt('Lead name:');
-      if (!name) return;
-      var phone = prompt('Phone (optional):');
-      var source = prompt('Source (website, referral, door_knock_yes, google_ads, cold_call, storm_response):', 'website');
-      var value = prompt('Estimated job value ($):', '8000');
-      api('POST', '/leads', {
-        name: name,
-        phone: phone || undefined,
-        source: source || 'website',
-        estimated_value: parseFloat(value) || 8000
-      }).then(function(res) {
-        if (res.success) {
-          alert('Lead added! Score: ' + res.lead_score + '/100');
-          loadDashboard();
-        } else alert(res.error || 'Failed');
-      });
-    }
-
-    loadDashboard();
-  </script>
+  <script src="/static/virtual-tryon.js"></script>
   ${getRoverAssistant()}
 </body>
 </html>`
@@ -5077,7 +3104,7 @@ function getTeamManagementPageHTML() {
     <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
       <div class="flex items-center space-x-3">
         <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
-          <span class="logo-mark w-10 h-10"><img src="/static/logo.png" alt="RoofReporterAI"></span>
+          <img src="/static/logo.png" alt="RoofReporterAI" class="w-10 h-10 rounded-lg object-cover">
           <div>
             <h1 class="text-lg font-bold">Team Management</h1>
             <p class="text-brand-200 text-xs">Add sales team members - $50/user/month</p>
@@ -5113,7 +3140,7 @@ function getTeamManagementPageHTML() {
       window.location.href = '/customer/login';
     }
   </script>
-  <script src="/static/team-management.js?v=${BUILD_VERSION}"></script>
+  <script src="/static/team-management.js"></script>
   ${getRoverAssistant()}
 </body>
 </html>`
@@ -5133,7 +3160,7 @@ function getJoinTeamPageHTML() {
   <header class="bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
       <a href="/" class="flex items-center space-x-3">
-        <span class="logo-mark w-10 h-10"><img src="/static/logo.png" alt="RoofReporterAI"></span>
+        <img src="/static/logo.png" alt="RoofReporterAI" class="w-10 h-10 rounded-lg object-cover">
         <div>
           <h1 class="text-xl font-bold">Team Invitation</h1>
           <p class="text-brand-200 text-xs">RoofReporterAI</p>
@@ -5261,7 +3288,7 @@ function getD2DPageHTML(mapsApiKey: string) {
     <div class="max-w-full mx-auto px-4 py-3 flex items-center justify-between">
       <div class="flex items-center space-x-3">
         <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
-          <span class="logo-mark w-10 h-10"><img src="/static/logo.png" alt="RoofReporterAI"></span>
+          <img src="/static/logo.png" alt="RoofReporterAI" class="w-10 h-10 rounded-lg object-cover">
           <div>
             <h1 class="text-lg font-bold">D2D Manager</h1>
             <p class="text-brand-200 text-xs">RoofReporterAI</p>
@@ -5332,7 +3359,7 @@ function getPropertyImageryPageHTML(mapsApiKey: string) {
     <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
       <div class="flex items-center space-x-3">
         <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90 transition-opacity">
-          <span class="logo-mark w-10 h-10"><img src="/static/logo.png" alt="RoofReporterAI"></span>
+          <img src="/static/logo.png" alt="RoofReporterAI" class="w-10 h-10 rounded-lg object-cover shadow-lg">
           <div>
             <h1 class="text-xl font-bold">Property Imagery</h1>
             <p class="text-emerald-200 text-xs">Dev Tool — RoofReporterAI</p>
@@ -5366,7 +3393,7 @@ function getPropertyImageryPageHTML(mapsApiKey: string) {
       window.location.href = '/customer/login';
     }
   </script>
-  <script src="/static/property-imagery.js?v=${BUILD_VERSION}"></script>
+  <script src="/static/property-imagery.js"></script>
   ${getRoverAssistant()}
 </body>
 </html>`
@@ -5384,7 +3411,7 @@ function getCrmSubPageHTML(module: string, title: string, icon: string) {
     <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
       <div class="flex items-center space-x-3">
         <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
-          <span class="logo-mark w-10 h-10"><img src="/static/logo.png" alt="RoofReporterAI"></span>
+          <img src="/static/logo.png" alt="RoofReporterAI" class="w-10 h-10 rounded-lg object-cover">
           <div>
             <h1 class="text-lg font-bold">${title}</h1>
             <p class="text-brand-200 text-xs">RoofReporterAI</p>
@@ -5441,7 +3468,7 @@ function getSecretaryPageHTML() {
     <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
       <div class="flex items-center space-x-3">
         <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
-          <span class="logo-mark w-10 h-10"><img src="/static/logo.png" alt="RoofReporterAI"></span>
+          <img src="/static/logo.png" alt="RoofReporterAI" class="w-10 h-10 rounded-lg object-cover">
           <div>
             <h1 class="text-lg font-bold">Roofer Secretary</h1>
             <p class="text-brand-200 text-xs">AI Phone Answering Service</p>
@@ -5477,69 +3504,7 @@ function getSecretaryPageHTML() {
       window.location.href = '/customer/login';
     }
   </script>
-  <script src="/static/secretary.js?v=${BUILD_VERSION}"></script>
-  ${getRoverAssistant()}
-</body>
-</html>`
-}
-
-// ============================================================
-// CUSTOMER COLD CALL CENTER — AI Outbound Dialer Page
-// ============================================================
-function getColdCallPageHTML() {
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  ${getHeadTags()}
-  <title>Cold Call Center - RoofReporterAI</title>
-</head>
-<body class="bg-gray-50 min-h-screen">
-  <header class="bg-gradient-to-r from-teal-500 to-cyan-700 text-white shadow-lg">
-    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
-      <div class="flex items-center space-x-3">
-        <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
-          <span class="logo-mark w-10 h-10"><img src="/static/logo.png" alt="RoofReporterAI"></span>
-          <div>
-            <h1 class="text-lg font-bold">Cold Call Center</h1>
-            <p class="text-teal-200 text-xs">AI Outbound Sales Dialer</p>
-          </div>
-        </a>
-      </div>
-      <nav class="flex items-center space-x-3">
-        <span id="custGreeting" class="text-teal-200 text-sm hidden"><i class="fas fa-user-circle mr-1"></i><span id="custName"></span></span>
-        <a href="/customer/dashboard" class="text-teal-200 hover:text-white text-sm"><i class="fas fa-th-large mr-1"></i>Dashboard</a>
-        <button onclick="custLogout()" class="text-teal-200 hover:text-white text-sm"><i class="fas fa-sign-out-alt mr-1"></i>Logout</button>
-      </nav>
-    </div>
-  </header>
-  <main class="max-w-7xl mx-auto px-4 py-6">
-    <div id="cold-call-root">
-      <div class="flex items-center justify-center py-20">
-        <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-teal-500"></div>
-        <span class="ml-4 text-gray-500 text-lg">Loading Cold Call Center...</span>
-      </div>
-    </div>
-  </main>
-  <script>
-    (function() {
-      var c = localStorage.getItem('rc_customer');
-      if (!c) { window.location.href = '/customer/login'; return; }
-      try {
-        var u = JSON.parse(c);
-        var g = document.getElementById('custGreeting');
-        var n = document.getElementById('custName');
-        if (g && n) { n.textContent = u.name || u.email; g.classList.remove('hidden'); }
-      } catch(e) {}
-    })();
-    function custLogout() {
-      var token = localStorage.getItem('rc_customer_token');
-      if (token) fetch('/api/customer/logout', { method: 'POST', headers: { 'Authorization': 'Bearer ' + token } })['catch'](function(){});
-      localStorage.removeItem('rc_customer');
-      localStorage.removeItem('rc_customer_token');
-      window.location.href = '/customer/login';
-    }
-  </script>
-  <script src="/static/customer-cold-call.js?v=${BUILD_VERSION}"></script>
+  <script src="/static/secretary.js"></script>
   ${getRoverAssistant()}
 </body>
 </html>`

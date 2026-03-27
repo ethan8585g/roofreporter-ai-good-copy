@@ -22,7 +22,6 @@
 // ============================================================
 
 import * as geotiff from 'geotiff'
-import { fetchNearmapImageryForReport } from './nearmap'
 
 // ============================================================
 // CONSTANTS
@@ -680,7 +679,6 @@ export async function executeRoofOrder(
     lat?: number
     lng?: number
     fastMode?: boolean  // Skip RGB, mask overlay, flux — only DSM+mask for measurements
-    nearmapApiKey?: string  // If set, prefer Nearmap 7.5cm/px imagery over Google Maps Static
   }
 ): Promise<DataLayersAnalysis> {
   const startTime = Date.now()
@@ -890,40 +888,14 @@ export async function executeRoofOrder(
   const contextZoom = roofZoom - 3
   const mediumZoom = roofZoom - 1
 
-  // ── IMAGERY: Prefer Nearmap (7.5cm/px) over Google Maps Static ──
-  let satelliteOverheadUrl: string
-  let satelliteContextUrl: string
-  let satelliteMediumUrl: string
-  let imageryProvider = 'google_maps_static'
-
-  if (options?.nearmapApiKey) {
-    try {
-      const nmResult = await fetchNearmapImageryForReport(lat, lng, options.nearmapApiKey, areaCalc.flatAreaSqft, { timeoutMs: 5000 })
-      if (nmResult) {
-        satelliteOverheadUrl = nmResult.imagery.satellite_overhead_url
-        satelliteContextUrl = nmResult.imagery.satellite_context_url
-        satelliteMediumUrl = nmResult.imagery.satellite_medium_url
-        imageryProvider = 'nearmap'
-        console.log(`[Pipeline] Using Nearmap imagery (7.5cm/px) — survey: ${nmResult.coverage.latestSurveyDate}`)
-      } else {
-        satelliteOverheadUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=${roofZoom}&size=800x800&scale=2&maptype=satellite&key=${geocodeKey}`
-        satelliteContextUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=${contextZoom}&size=640x640&scale=2&maptype=satellite&key=${geocodeKey}`
-        satelliteMediumUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=${mediumZoom}&size=640x640&scale=2&maptype=satellite&key=${geocodeKey}`
-        console.log(`[Pipeline] Nearmap: no coverage — using Google Maps Static`)
-      }
-    } catch (e: any) {
-      console.warn(`[Pipeline] Nearmap failed (${e.message}) — using Google Maps Static`)
-      satelliteOverheadUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=${roofZoom}&size=800x800&scale=2&maptype=satellite&key=${geocodeKey}`
-      satelliteContextUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=${contextZoom}&size=640x640&scale=2&maptype=satellite&key=${geocodeKey}`
-      satelliteMediumUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=${mediumZoom}&size=640x640&scale=2&maptype=satellite&key=${geocodeKey}`
-    }
-  } else {
-    // Default: Google Maps Static API
-    satelliteOverheadUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=${roofZoom}&size=800x800&scale=2&maptype=satellite&key=${geocodeKey}`
-    satelliteContextUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=${contextZoom}&size=640x640&scale=2&maptype=satellite&key=${geocodeKey}`
-    satelliteMediumUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=${mediumZoom}&size=640x640&scale=2&maptype=satellite&key=${geocodeKey}`
-  }
-  // Legacy compatible URL
+  // Primary overhead satellite image (800x800 viewport, scale=2 for 1600x1600 actual pixels)
+  // Larger canvas = more zoom while still capturing full roof edges
+  const satelliteOverheadUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=${roofZoom}&size=800x800&scale=2&maptype=satellite&key=${geocodeKey}`
+  // Wider context view
+  const satelliteContextUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=${contextZoom}&size=640x640&scale=2&maptype=satellite&key=${geocodeKey}`
+  // Medium bridge view
+  const satelliteMediumUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=${mediumZoom}&size=640x640&scale=2&maptype=satellite&key=${geocodeKey}`
+  // Legacy compatible URL (rectangular, used as fallback)
   const satelliteUrl = satelliteOverheadUrl
 
   console.log(`[Pipeline] Complete in ${durationMs}ms: flat=${areaCalc.flatAreaSqft} sqft → true=${areaCalc.trueAreaSqft} sqft, pitch=${areaCalc.avgPitchDeg}° (${pitchRatio}), material=${areaCalc.materialSquares} sq`)

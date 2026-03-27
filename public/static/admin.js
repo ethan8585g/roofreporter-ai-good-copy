@@ -43,14 +43,20 @@ async function adminFetch(url) {
 async function loadAll() {
   A.loading = true;
   try {
-    const [statsRes, ordersRes, gmailRes] = await Promise.all([
+    const [statsRes, ordersRes, gmailRes, invRes, propRes, estRes] = await Promise.all([
       adminFetch('/api/auth/admin-stats'),
       adminFetch('/api/orders?limit=100'),
-      fetch('/api/auth/gmail/status').catch(() => null)
+      fetch('/api/auth/gmail/status').catch(() => null),
+      adminFetch('/api/invoices?document_type=invoice'),
+      adminFetch('/api/invoices?document_type=proposal'),
+      adminFetch('/api/invoices?document_type=estimate')
     ]);
     if (statsRes) A.data = await statsRes.json();
     if (ordersRes) { const od = await ordersRes.json(); A.orders = od.orders || []; }
     if (gmailRes && gmailRes.ok) A.gmailStatus = await gmailRes.json();
+    if (invRes && invRes.ok) { const id = await invRes.json(); A.data.invoices = id.invoices || []; }
+    if (propRes && propRes.ok) { const pd = await propRes.json(); A.data.proposals = pd.invoices || []; }
+    if (estRes && estRes.ok) { const ed = await estRes.json(); A.data.estimates = ed.invoices || []; }
   } catch (e) { console.error('Load error:', e); }
   A.loading = false;
 }
@@ -61,7 +67,7 @@ function render() {
   const root = document.getElementById('admin-root');
   if (!root) return;
   if (A.loading) {
-    root.innerHTML = '<div class="flex flex-col items-center justify-center py-24"><div class="w-10 h-10 border-[3px] border-teal-100 border-t-teal-500 rounded-full animate-spin"></div><span class="mt-4 text-slate-400 text-sm font-medium">Loading admin panel...</span></div>';
+    root.innerHTML = '<div class="flex items-center justify-center py-20"><div class="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div><span class="ml-3 text-gray-500">Loading admin panel...</span></div>';
     return;
   }
 
@@ -77,15 +83,14 @@ function render() {
     { id:'blog', label:'Blog', icon:'fa-blog' },
     { id:'activity', label:'Activity Log', icon:'fa-history' },
     { id:'sip', label:'SIP Bridge', icon:'fa-phone-volume' },
-    { id:'search', label:'Report Search', icon:'fa-search' },
-    { id:'ai-chat', label:'AI Site Manager', icon:'fa-brain' }
+    { id:'search', label:'Report Search', icon:'fa-search' }
   ];
 
   root.innerHTML = `
     <!-- Tab Navigation -->
     <div class="flex gap-1.5 mb-6 overflow-x-auto pb-1">
       ${tabs.map(t => `
-        <button onclick="setTab('${t.id}')" class="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium whitespace-nowrap transition-all ${A.tab === t.id ? 'bg-teal-600 text-white shadow-md shadow-teal-500/20' : 'bg-white text-slate-600 hover:bg-teal-50 border border-slate-200'}">
+        <button onclick="setTab('${t.id}')" class="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium whitespace-nowrap transition-all ${A.tab === t.id ? 'tab-active' : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'}">
           <i class="fas ${t.icon} text-xs"></i>${t.label}
         </button>
       `).join('')}
@@ -105,7 +110,6 @@ function render() {
       ${A.tab === 'activity' ? renderActivity() : ''}
       ${A.tab === 'sip' ? renderSipBridge() : ''}
       ${A.tab === 'search' ? renderReportSearch() : ''}
-      ${A.tab === 'ai-chat' ? renderAIChat() : ''}
     </div>
   `;
 }
@@ -114,14 +118,14 @@ function render() {
 // HELPER FUNCTIONS
 // ============================================================
 function mc(label, value, icon, color, sub) {
-  return `<div class="metric-card bg-white rounded-2xl border border-gray-100 p-5" style="transition:all 0.3s cubic-bezier(0.4,0,0.2,1)">
+  return `<div class="metric-card bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
     <div class="flex items-start justify-between">
       <div>
-        <p class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">${label}</p>
-        <p class="text-[26px] font-extrabold text-slate-800 mt-1 leading-tight">${value}</p>
-        ${sub ? `<p class="text-[11px] text-slate-400 mt-1.5">${sub}</p>` : ''}
+        <p class="text-xs font-medium text-gray-400 uppercase tracking-wider">${label}</p>
+        <p class="text-2xl font-black text-gray-900 mt-1">${value}</p>
+        ${sub ? `<p class="text-xs text-gray-400 mt-1">${sub}</p>` : ''}
       </div>
-      <div class="w-11 h-11 bg-${color}-50 rounded-xl flex items-center justify-center"><i class="fas ${icon} text-${color}-500 text-sm"></i></div>
+      <div class="w-10 h-10 bg-${color}-100 rounded-xl flex items-center justify-center"><i class="fas ${icon} text-${color}-500"></i></div>
     </div>
   </div>`;
 }
@@ -153,10 +157,10 @@ function invBadge(s) {
 }
 
 function section(title, icon, content) {
-  return `<div class="bg-white rounded-2xl border border-gray-100 overflow-hidden mb-6" style="box-shadow:0 1px 3px rgba(0,0,0,0.04)">
+  return `<div class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden mb-6">
     <div class="px-6 py-4 border-b border-gray-50 flex items-center gap-2">
-      <i class="fas ${icon} text-teal-500 text-sm"></i>
-      <h3 class="font-bold text-slate-800 text-sm">${title}</h3>
+      <i class="fas ${icon} text-blue-500"></i>
+      <h3 class="font-bold text-gray-800 text-sm">${title}</h3>
     </div>
     <div class="p-6">${content}</div>
   </div>`;
@@ -322,10 +326,10 @@ function renderUsers() {
           </thead>
           <tbody class="divide-y divide-gray-50">
             ${custs.map(c => `
-              <tr class="hover:bg-teal-50/50 transition-colors">
+              <tr class="hover:bg-blue-50/50 transition-colors">
                 <td class="px-4 py-3">
                   <div class="flex items-center gap-2">
-                    ${c.google_avatar ? `<img src="${c.google_avatar}" class="w-8 h-8 rounded-full border-2 border-white shadow-sm">` : `<div class="w-8 h-8 bg-gradient-to-br from-teal-500 to-teal-600 rounded-full flex items-center justify-center text-white text-xs font-bold">${(c.name||'?')[0].toUpperCase()}</div>`}
+                    ${c.google_avatar ? `<img src="${c.google_avatar}" class="w-8 h-8 rounded-full border-2 border-white shadow-sm">` : `<div class="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center text-white text-xs font-bold">${(c.name||'?')[0].toUpperCase()}</div>`}
                     <div>
                       <p class="font-semibold text-gray-800 text-sm">${c.name}</p>
                       ${c.google_id ? '<span class="text-[10px] text-gray-400"><i class="fab fa-google mr-0.5"></i>Google</span>' : '<span class="text-[10px] text-gray-400"><i class="fas fa-envelope mr-0.5"></i>Email</span>'}
@@ -344,7 +348,7 @@ function renderUsers() {
                 <td class="px-4 py-3">
                   <div class="flex gap-1">
                     <button onclick="createInvoiceFor(${c.id},'${c.name.replace(/'/g,"\\'")}')" class="p-1.5 text-gray-400 hover:text-green-600 transition-colors" title="Create Invoice"><i class="fas fa-file-invoice-dollar"></i></button>
-                    <button onclick="emailUser('${c.email}')" class="p-1.5 text-gray-400 hover:text-teal-600 transition-colors" title="Email"><i class="fas fa-envelope"></i></button>
+                    <button onclick="emailUser('${c.email}')" class="p-1.5 text-gray-400 hover:text-blue-600 transition-colors" title="Email"><i class="fas fa-envelope"></i></button>
                   </div>
                 </td>
               </tr>
@@ -395,7 +399,7 @@ function renderEarnings() {
                 <span class="text-gray-600 font-medium">${m.month}</span>
                 <span class="font-bold text-gray-800">${$$(m.revenue)} <span class="text-gray-400 font-normal text-xs">(${m.order_count} orders)</span></span>
               </div>
-              <div class="w-full bg-gray-100 rounded-full h-3"><div class="bg-gradient-to-r from-teal-500 to-teal-600 h-3 rounded-full transition-all" style="width:${pct}%"></div></div>
+              <div class="w-full bg-gray-100 rounded-full h-3"><div class="bg-gradient-to-r from-blue-500 to-indigo-500 h-3 rounded-full transition-all" style="width:${pct}%"></div></div>
             </div>`;
           }).join('')}
         </div>
@@ -449,7 +453,7 @@ function renderEarnings() {
           <tbody class="divide-y divide-gray-50">
             ${payments.slice(0,20).map(p => `<tr class="hover:bg-gray-50">
               <td class="px-4 py-2 text-xs text-gray-500">${fmtDate(p.created_at)}</td>
-              <td class="px-4 py-2 text-xs font-mono text-teal-600">${p.order_number||'-'}</td>
+              <td class="px-4 py-2 text-xs font-mono text-blue-600">${p.order_number||'-'}</td>
               <td class="px-4 py-2 text-xs text-gray-600">${p.property_address||'-'}</td>
               <td class="px-4 py-2 text-right font-bold">${$$(p.amount)}</td>
               <td class="px-4 py-2 text-xs text-gray-500 capitalize">${p.payment_method||'square'}</td>
@@ -536,7 +540,7 @@ function renderOrdersTable(orders) {
         <th class="px-3 py-2 text-left text-xs font-semibold text-gray-500">Actions</th>
       </tr></thead>
       <tbody class="divide-y divide-gray-50">
-        ${orders.map(o => `<tr class="hover:bg-teal-50/40 transition-colors">
+        ${orders.map(o => `<tr class="hover:bg-blue-50/40 transition-colors">
           <td class="px-3 py-2 font-mono text-xs font-bold text-blue-600"><a href="/order/${o.id}" class="hover:underline">${o.order_number}</a></td>
           <td class="px-3 py-2 text-gray-600 text-xs max-w-[180px] truncate">${o.property_address}</td>
           <td class="px-3 py-2 text-gray-600 text-xs">${o.customer_name || o.homeowner_name || '-'}</td>
@@ -547,7 +551,7 @@ function renderOrdersTable(orders) {
           <td class="px-3 py-2 text-gray-500 text-xs">${fmtDate(o.created_at)}</td>
           <td class="px-3 py-2">
             <div class="flex gap-0.5">
-              ${o.status === 'completed' ? `<a href="/api/reports/${o.id}/html" target="_blank" class="p-1 text-gray-400 hover:text-teal-600" title="View Report"><i class="fas fa-file-alt"></i></a><button onclick="emailReport(${o.id})" class="p-1 text-gray-400 hover:text-green-600" title="Email"><i class="fas fa-envelope"></i></button><button onclick="openSegmentToggle(${o.id})" class="p-1 text-gray-400 hover:text-teal-600" title="Toggle Segments"><i class="fas fa-layer-group"></i></button>` : `<button onclick="generateReport(${o.id})" class="p-1 text-gray-400 hover:text-indigo-600" title="Generate"><i class="fas fa-cog"></i></button>`}
+              ${o.status === 'completed' ? `<a href="/api/reports/${o.id}/html" target="_blank" class="p-1 text-gray-400 hover:text-blue-600" title="View Report"><i class="fas fa-file-alt"></i></a><button onclick="emailReport(${o.id})" class="p-1 text-gray-400 hover:text-green-600" title="Email"><i class="fas fa-envelope"></i></button><button onclick="openSegmentToggle(${o.id})" class="p-1 text-gray-400 hover:text-orange-600" title="Toggle Segments"><i class="fas fa-layer-group"></i></button>` : `<button onclick="generateReport(${o.id})" class="p-1 text-gray-400 hover:text-indigo-600" title="Generate"><i class="fas fa-cog"></i></button>`}
             </div>
           </td>
         </tr>`).join('')}
@@ -558,15 +562,29 @@ function renderOrdersTable(orders) {
 }
 
 // ============================================================
-// INVOICING TAB
+// INVOICING TAB  (Invoices + Proposals + Estimates)
 // ============================================================
+let invSubTab = 'invoices'; // 'invoices' | 'proposals' | 'estimates'
+
 function renderInvoicing() {
   const d = A.data;
   const is = d.invoice_stats || {};
   const invoices = d.invoices || [];
+  const proposals = d.proposals || [];
+  const estimates = d.estimates || [];
   const custs = d.customers || [];
+  const orders = A.orders || [];
+
+  const activeList = invSubTab === 'proposals' ? proposals : invSubTab === 'estimates' ? estimates : invoices;
+  const docType    = invSubTab === 'proposals' ? 'proposal' : invSubTab === 'estimates' ? 'estimate' : 'invoice';
+  const docLabel   = invSubTab === 'proposals' ? 'Proposal' : invSubTab === 'estimates' ? 'Estimate' : 'Invoice';
+  const formId     = 'invFormWrap';
+
+  // Only orders that have a completed/in-progress report (for proposal attach)
+  const ordersWithReport = orders.filter(o => o.report_status && ['completed','enhancing','processing'].includes(o.report_status));
 
   return `
+    <!-- KPI Row -->
     <div class="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
       ${mc('Total Invoices', is.total_invoices || 0, 'fa-file-invoice-dollar', 'blue')}
       ${mc('Collected', $$(is.total_collected), 'fa-check-circle', 'green')}
@@ -575,80 +593,138 @@ function renderInvoicing() {
       ${mc('Draft', $$(is.total_draft), 'fa-edit', 'gray')}
     </div>
 
-    <!-- Create Invoice Form -->
+    <!-- Sub-tab Navigation -->
+    <div class="flex gap-1 mb-5 bg-gray-100 rounded-xl p-1 w-fit">
+      <button onclick="setInvSubTab('invoices')" class="px-4 py-2 rounded-lg text-sm font-semibold transition-all ${invSubTab==='invoices' ? 'bg-white shadow text-blue-700' : 'text-gray-500 hover:text-gray-700'}">
+        <i class="fas fa-file-invoice-dollar mr-1.5"></i>Invoices
+        <span class="ml-1.5 px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded text-xs">${invoices.length}</span>
+      </button>
+      <button onclick="setInvSubTab('proposals')" class="px-4 py-2 rounded-lg text-sm font-semibold transition-all ${invSubTab==='proposals' ? 'bg-white shadow text-purple-700' : 'text-gray-500 hover:text-gray-700'}">
+        <i class="fas fa-file-contract mr-1.5"></i>Proposals
+        <span class="ml-1.5 px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded text-xs">${proposals.length}</span>
+      </button>
+      <button onclick="setInvSubTab('estimates')" class="px-4 py-2 rounded-lg text-sm font-semibold transition-all ${invSubTab==='estimates' ? 'bg-white shadow text-orange-700' : 'text-gray-500 hover:text-gray-700'}">
+        <i class="fas fa-calculator mr-1.5"></i>Estimates
+        <span class="ml-1.5 px-1.5 py-0.5 bg-orange-100 text-orange-700 rounded text-xs">${estimates.length}</span>
+      </button>
+    </div>
+
+    <!-- Create Document Form -->
     <div class="bg-white rounded-xl border border-gray-100 shadow-sm mb-6">
       <div class="px-6 py-4 border-b border-gray-50 flex items-center justify-between">
-        <div class="flex items-center gap-2"><i class="fas fa-plus-circle text-green-500"></i><h3 class="font-bold text-gray-800 text-sm">Create Invoice</h3></div>
+        <div class="flex items-center gap-2">
+          <i class="fas fa-plus-circle ${invSubTab==='proposals' ? 'text-purple-500' : invSubTab==='estimates' ? 'text-orange-500' : 'text-green-500'}"></i>
+          <h3 class="font-bold text-gray-800 text-sm">Create ${docLabel}</h3>
+          ${invSubTab==='proposals' ? '<span class="text-xs text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full">Attach Roof Report</span>' : ''}
+        </div>
         <button onclick="toggleInvForm()" id="invToggle" class="text-sm text-blue-600 hover:text-blue-700"><i class="fas fa-chevron-down mr-1"></i>Show Form</button>
       </div>
-      <div id="invFormWrap" class="hidden p-6">
+      <div id="${formId}" class="hidden p-6">
+        <!-- Hidden doc type -->
+        <input type="hidden" id="invDocType" value="${docType}">
+
         <div class="grid md:grid-cols-2 gap-4 mb-4">
-          <div><label class="block text-xs font-semibold text-gray-500 mb-1 uppercase">Customer *</label>
-            <select id="invCust" class="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-teal-500">
+          <div>
+            <label class="block text-xs font-semibold text-gray-500 mb-1 uppercase">Customer *</label>
+            <select id="invCust" class="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500">
               <option value="">Select customer...</option>
-              ${custs.map(c => `<option value="${c.id}">${c.name} (${c.email})</option>`).join('')}
+              ${custs.map(c => `<option value="${c.id}">${c.name}${c.company_name ? ' — ' + c.company_name : ''} (${c.email})</option>`).join('')}
             </select>
           </div>
-          <div><label class="block text-xs font-semibold text-gray-500 mb-1 uppercase">Related Order</label>
-            <select id="invOrder" class="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm">
+          <div>
+            <label class="block text-xs font-semibold text-gray-500 mb-1 uppercase">
+              ${invSubTab === 'proposals' ? '📎 Attach Roof Report (Order)' : 'Related Order'}
+            </label>
+            <select id="invOrder" class="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm ${invSubTab === 'proposals' ? 'border-purple-300 focus:ring-purple-400' : ''}">
               <option value="">None</option>
-              ${A.orders.map(o => `<option value="${o.id}">${o.order_number} - ${o.property_address}</option>`).join('')}
+              ${(invSubTab === 'proposals' ? ordersWithReport : orders).map(o =>
+                `<option value="${o.id}">${o.order_number} — ${(o.property_address||'').substring(0,40)}${o.report_status ? ' ✓ Report' : ''}</option>`
+              ).join('')}
             </select>
+            ${invSubTab === 'proposals' ? '<p class="text-xs text-purple-600 mt-1"><i class="fas fa-info-circle mr-1"></i>Select an order with a completed report to attach it to this proposal.</p>' : ''}
           </div>
         </div>
+
+        ${invSubTab === 'proposals' ? `
+        <!-- Proposal Notes -->
+        <div class="mb-4 p-4 bg-purple-50 rounded-xl border border-purple-100">
+          <label class="block text-xs font-semibold text-purple-700 mb-2 uppercase"><i class="fas fa-sticky-note mr-1"></i>Proposal Cover Note</label>
+          <textarea id="invProposalNote" rows="3" placeholder="e.g. Based on our roof measurement report for your property, we are pleased to present the following proposal for roof replacement..." class="w-full px-3 py-2 border border-purple-200 rounded-lg text-sm focus:ring-2 focus:ring-purple-400 resize-none"></textarea>
+          <p class="text-xs text-purple-500 mt-1">This note will appear at the top of your proposal, above the line items.</p>
+        </div>` : ''}
+
         <div class="mb-4">
           <label class="block text-xs font-semibold text-gray-500 mb-2 uppercase">Line Items</label>
           <div id="invLines">
-            <div class="flex gap-2 mb-2 inv-line"><input type="text" placeholder="Description" class="flex-1 px-3 py-2 border rounded-lg text-sm inv-desc"><input type="number" placeholder="Qty" value="1" class="w-16 px-2 py-2 border rounded-lg text-sm inv-qty"><input type="number" placeholder="$" step="0.01" class="w-24 px-2 py-2 border rounded-lg text-sm inv-price"><button onclick="addInvLine()" class="px-3 py-2 bg-green-100 text-green-700 rounded-lg text-sm hover:bg-green-200"><i class="fas fa-plus"></i></button></div>
+            <div class="flex gap-2 mb-2 inv-line">
+              <input type="text" placeholder="${invSubTab === 'proposals' ? 'e.g. Roof Replacement — 25 squares GAF Timberline' : 'Description'}" class="flex-1 px-3 py-2 border rounded-lg text-sm inv-desc">
+              <input type="number" placeholder="Qty" value="1" class="w-16 px-2 py-2 border rounded-lg text-sm inv-qty">
+              <input type="number" placeholder="$" step="0.01" class="w-24 px-2 py-2 border rounded-lg text-sm inv-price">
+              <button onclick="addInvLine()" class="px-3 py-2 bg-green-100 text-green-700 rounded-lg text-sm hover:bg-green-200"><i class="fas fa-plus"></i></button>
+            </div>
           </div>
+          <button onclick="addInvLine()" class="mt-1 text-xs text-blue-600 hover:underline"><i class="fas fa-plus mr-1"></i>Add line</button>
         </div>
+
         <div class="grid grid-cols-3 gap-4 mb-4">
           <div><label class="block text-xs font-semibold text-gray-500 mb-1">GST %</label><input type="number" id="invTax" value="5" class="w-full px-3 py-2 border rounded-lg text-sm"></div>
           <div><label class="block text-xs font-semibold text-gray-500 mb-1">Discount $</label><input type="number" id="invDisc" value="0" class="w-full px-3 py-2 border rounded-lg text-sm"></div>
-          <div><label class="block text-xs font-semibold text-gray-500 mb-1">Due (days)</label><input type="number" id="invDue" value="30" class="w-full px-3 py-2 border rounded-lg text-sm"></div>
+          <div><label class="block text-xs font-semibold text-gray-500 mb-1">${invSubTab === 'proposal' ? 'Valid (days)' : 'Due (days)'}</label><input type="number" id="invDue" value="30" class="w-full px-3 py-2 border rounded-lg text-sm"></div>
         </div>
+
         <div id="invErr" class="hidden mb-3 p-3 bg-red-50 text-red-700 rounded-lg text-sm"></div>
-        <button onclick="createInvoice()" class="px-6 py-2.5 bg-teal-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition-colors"><i class="fas fa-save mr-1"></i>Create Invoice</button>
+        <button onclick="createInvoice()" class="px-6 py-2.5 ${invSubTab==='proposals' ? 'bg-purple-600 hover:bg-purple-700' : invSubTab==='estimates' ? 'bg-orange-600 hover:bg-orange-700' : 'bg-blue-600 hover:bg-blue-700'} text-white rounded-xl text-sm font-semibold transition-colors">
+          <i class="fas fa-save mr-1"></i>Create ${docLabel}
+        </button>
       </div>
     </div>
 
-    <!-- Invoices Table -->
-    ${section('All Invoices (' + invoices.length + ')', 'fa-file-invoice-dollar', `
+    <!-- Documents Table -->
+    ${section(docLabel + 's (' + activeList.length + ')', invSubTab==='proposals' ? 'fa-file-contract' : invSubTab==='estimates' ? 'fa-calculator' : 'fa-file-invoice-dollar', `
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
           <thead class="bg-gray-50"><tr>
-            <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500">Invoice #</th>
+            <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500">#</th>
             <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500">Customer</th>
-            <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500">Order</th>
+            <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500">${invSubTab === 'proposals' ? 'Report Attached' : 'Order'}</th>
             <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500">Issued</th>
-            <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500">Due</th>
+            <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500">${invSubTab === 'proposals' ? 'Valid Until' : 'Due'}</th>
             <th class="px-4 py-2 text-right text-xs font-semibold text-gray-500">Total</th>
             <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500">Status</th>
             <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500">Actions</th>
           </tr></thead>
           <tbody class="divide-y divide-gray-50">
-            ${invoices.map(inv => `<tr class="hover:bg-teal-50/40">
-              <td class="px-4 py-2 font-mono text-xs font-bold text-blue-600">${inv.invoice_number}</td>
+            ${activeList.map(inv => `<tr class="hover:bg-blue-50/40">
+              <td class="px-4 py-2 font-mono text-xs font-bold ${invSubTab==='proposals' ? 'text-purple-600' : invSubTab==='estimates' ? 'text-orange-600' : 'text-blue-600'}">${inv.invoice_number}</td>
               <td class="px-4 py-2 text-sm text-gray-700">${inv.customer_name||'-'} ${inv.customer_company ? '<span class="text-xs text-gray-400">('+inv.customer_company+')</span>' : ''}</td>
-              <td class="px-4 py-2 text-xs font-mono text-gray-500">${inv.order_number||'-'}</td>
+              <td class="px-4 py-2 text-xs text-gray-500">
+                ${inv.order_number ? `<span class="font-mono">${inv.order_number}</span>
+                  ${inv.has_report ? '<span class="ml-1 px-1.5 py-0.5 bg-green-100 text-green-700 rounded text-xs font-medium"><i class="fas fa-file-pdf mr-0.5"></i>Report</span>' : ''}` : '<span class="text-gray-300">—</span>'}
+              </td>
               <td class="px-4 py-2 text-xs text-gray-500">${fmtDate(inv.issue_date)}</td>
               <td class="px-4 py-2 text-xs text-gray-500">${fmtDate(inv.due_date)}</td>
               <td class="px-4 py-2 text-right font-bold">${$$(inv.total)}</td>
               <td class="px-4 py-2">${invBadge(inv.status)}</td>
               <td class="px-4 py-2">
-                <div class="flex gap-1">
-                  ${inv.status==='draft' ? `<button onclick="sendInvoice(${inv.id})" class="p-1 text-gray-400 hover:text-teal-600" title="Send"><i class="fas fa-paper-plane"></i></button>` : ''}
-                  ${['sent','viewed','overdue'].includes(inv.status) ? `<button onclick="markPaid(${inv.id})" class="p-1 text-gray-400 hover:text-green-600" title="Mark Paid"><i class="fas fa-check-circle"></i></button>` : ''}
-                  ${inv.status==='draft' ? `<button onclick="delInvoice(${inv.id})" class="p-1 text-gray-400 hover:text-red-600" title="Delete"><i class="fas fa-trash"></i></button>` : ''}
+                <div class="flex gap-1 items-center">
+                  ${inv.status==='draft' ? `<button onclick="sendInvoice(${inv.id})" class="px-2 py-1 text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 rounded font-medium" title="Send ${docLabel}"><i class="fas fa-paper-plane mr-1"></i>Send</button>` : ''}
+                  ${['sent','viewed','overdue'].includes(inv.status) ? `<button onclick="resendInvoice(${inv.id})" class="px-2 py-1 text-xs bg-gray-50 hover:bg-gray-100 text-gray-600 rounded font-medium" title="Resend"><i class="fas fa-redo mr-1"></i>Resend</button>` : ''}
+                  ${['sent','viewed','overdue'].includes(inv.status) && invSubTab==='invoices' ? `<button onclick="markPaid(${inv.id})" class="px-2 py-1 text-xs bg-green-50 hover:bg-green-100 text-green-700 rounded font-medium" title="Mark Paid"><i class="fas fa-check mr-1"></i>Paid</button>` : ''}
+                  ${inv.status==='draft' ? `<button onclick="delInvoice(${inv.id})" class="p-1 text-gray-300 hover:text-red-500" title="Delete"><i class="fas fa-trash"></i></button>` : ''}
                 </div>
               </td>
             </tr>`).join('')}
-            ${invoices.length === 0 ? '<tr><td colspan="8" class="px-4 py-8 text-center text-gray-400">No invoices created yet</td></tr>' : ''}
+            ${activeList.length === 0 ? `<tr><td colspan="8" class="px-4 py-10 text-center text-gray-400"><i class="fas ${invSubTab==='proposals' ? 'fa-file-contract' : invSubTab==='estimates' ? 'fa-calculator' : 'fa-file-invoice-dollar'} text-2xl mb-2 block opacity-30"></i>No ${docLabel.toLowerCase()}s yet</td></tr>` : ''}
           </tbody>
         </table>
       </div>
     `)}
   `;
+}
+
+function setInvSubTab(tab) {
+  invSubTab = tab;
+  render();
 }
 
 // ============================================================
@@ -792,7 +868,7 @@ function renderNewOrder() {
   return `<div class="bg-white rounded-xl border border-gray-100 shadow-sm p-8 max-w-2xl mx-auto">
     <h3 class="text-xl font-bold text-gray-800 mb-6"><i class="fas fa-plus-circle mr-2 text-blue-500"></i>Create Order & Generate Report</h3>
     <div class="space-y-4">
-      <div><label class="block text-xs font-semibold text-gray-500 mb-1 uppercase">Property Address *</label><input type="text" id="noAddr" placeholder="123 Main Street" class="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-teal-500"></div>
+      <div><label class="block text-xs font-semibold text-gray-500 mb-1 uppercase">Property Address *</label><input type="text" id="noAddr" placeholder="123 Main Street" class="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500"></div>
       <div class="grid grid-cols-3 gap-3">
         <div><label class="block text-xs font-semibold text-gray-500 mb-1">City</label><input type="text" id="noCity" placeholder="Edmonton" class="w-full px-3 py-2.5 border rounded-xl text-sm"></div>
         <div><label class="block text-xs font-semibold text-gray-500 mb-1">Province</label><input type="text" id="noProv" value="AB" class="w-full px-3 py-2.5 border rounded-xl text-sm"></div>
@@ -816,7 +892,7 @@ function renderNewOrder() {
       </div>
       <div id="noErr" class="hidden p-3 bg-red-50 text-red-700 rounded-lg text-sm"></div>
       <div id="noOk" class="hidden p-3 bg-green-50 text-green-700 rounded-lg text-sm"></div>
-      <button onclick="submitOrder()" class="w-full py-3 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-xl transition-all hover:scale-[1.01] shadow-lg"><i class="fas fa-paper-plane mr-2"></i>Create Order & Generate Report</button>
+      <button onclick="submitOrder()" class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-all hover:scale-[1.01] shadow-lg"><i class="fas fa-paper-plane mr-2"></i>Create Order & Generate Report</button>
     </div>
   </div>`;
 }
@@ -953,7 +1029,7 @@ async function openSegmentToggle(orderId) {
         <div class="px-6 py-3 border-t bg-gray-50 flex items-center justify-between">
           <button onclick="closeSegToggle()" class="px-4 py-2 text-gray-600 hover:text-gray-800 text-sm">Cancel</button>
           <button onclick="applySegmentToggle(${orderId})" id="seg-apply-btn"
-            class="px-6 py-2 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-lg text-sm transition-all shadow">
+            class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-sm transition-all shadow">
             <i class="fas fa-check mr-1"></i>Apply & Recalculate
           </button>
         </div>
@@ -1047,6 +1123,7 @@ async function createInvoice() {
   const cid = document.getElementById('invCust').value;
   const oid = document.getElementById('invOrder').value;
   const err = document.getElementById('invErr');
+  const docType = document.getElementById('invDocType')?.value || 'invoice';
   err.classList.add('hidden');
   if (!cid) { err.textContent = 'Select a customer.'; err.classList.remove('hidden'); return; }
   const rows = document.querySelectorAll('.inv-line');
@@ -1058,12 +1135,15 @@ async function createInvoice() {
     if (d && p > 0) items.push({ description:d, quantity:q, unit_price:p });
   });
   if (!items.length) { err.textContent = 'Add at least one line item.'; err.classList.remove('hidden'); return; }
+  const proposalNote = docType === 'proposal' ? (document.getElementById('invProposalNote')?.value?.trim() || null) : null;
   try {
-    const r = await fetch('/api/invoices', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({
+    const r = await fetch('/api/invoices', { method:'POST', headers:{ ...adminHeaders(), 'Content-Type':'application/json' }, body: JSON.stringify({
       customer_id: parseInt(cid), order_id: oid ? parseInt(oid) : null, items,
       tax_rate: parseFloat(document.getElementById('invTax').value)||5,
       discount_amount: parseFloat(document.getElementById('invDisc').value)||0,
-      due_days: parseInt(document.getElementById('invDue').value)||30
+      due_days: parseInt(document.getElementById('invDue').value)||30,
+      document_type: docType,
+      notes: proposalNote
     })});
     const d = await r.json();
     if (r.ok && d.success) { await loadAll(); render(); setTab('invoicing'); }
@@ -1074,26 +1154,43 @@ async function createInvoice() {
 async function sendInvoice(id) {
   if (!confirm('Send invoice to customer?')) return;
   try {
-    const r = await fetch('/api/invoices/' + id + '/send', { method:'POST' });
+    const r = await fetch('/api/invoices/' + id + '/send', { method:'POST', headers: adminHeaders() });
     const d = await r.json();
     if (r.ok) { alert('Invoice sent to ' + (d.customer_email||'customer')); await loadAll(); render(); }
-    else alert('Failed: ' + (d.error||''));
+    else alert('Failed: ' + (d.error||'Unknown error'));
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+async function resendInvoice(id) {
+  if (!confirm('Resend invoice to customer?')) return;
+  try {
+    const r = await fetch('/api/invoices/' + id + '/send', { method:'POST', headers: adminHeaders() });
+    const d = await r.json();
+    if (r.ok) { alert('Invoice resent to ' + (d.customer_email||'customer')); await loadAll(); render(); }
+    else alert('Resend failed: ' + (d.error||'Unknown error'));
   } catch(e) { alert('Error: ' + e.message); }
 }
 
 async function markPaid(id) {
   if (!confirm('Mark invoice as paid?')) return;
   try {
-    const r = await fetch('/api/invoices/' + id + '/status', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({status:'paid'}) });
-    if (r.ok) { await loadAll(); render(); } else alert('Failed');
+    const r = await fetch('/api/invoices/' + id + '/status', {
+      method: 'PATCH',
+      headers: { ...adminHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'paid' })
+    });
+    const d = await r.json();
+    if (r.ok) { await loadAll(); render(); }
+    else alert('Failed: ' + (d.error||'Unknown error'));
   } catch(e) { alert('Error: ' + e.message); }
 }
 
 async function delInvoice(id) {
   if (!confirm('Delete this draft invoice?')) return;
   try {
-    const r = await fetch('/api/invoices/' + id, { method:'DELETE' });
-    if (r.ok) { await loadAll(); render(); } else alert('Failed');
+    const r = await fetch('/api/invoices/' + id, { method:'DELETE', headers: adminHeaders() });
+    if (r.ok) { await loadAll(); render(); }
+    else { const d = await r.json(); alert('Failed: ' + (d.error||'')); }
   } catch(e) { alert('Error: ' + e.message); }
 }
 
@@ -1367,7 +1464,7 @@ async function loadRoverData() {
 function renderRover() {
   if (!roverStats) {
     loadRoverData().then(() => render());
-    return '<div class="text-center py-12"><div class="w-8 h-8 border-4 border-blue-200 border-t-teal-500 rounded-full animate-spin mx-auto"></div><p class="text-gray-400 mt-3 text-sm">Loading Rover data...</p></div>';
+    return '<div class="text-center py-12"><div class="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto"></div><p class="text-gray-400 mt-3 text-sm">Loading Rover data...</p></div>';
   }
 
   if (roverViewingConvo) return renderRoverConvoDetail();
@@ -1479,7 +1576,7 @@ function renderRover() {
           <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
           <input type="text" value="${roverSearch}" placeholder="Search by name, email, or summary..." 
             onkeyup="if(event.key==='Enter'){roverSearch=this.value;roverPage=1;loadRoverData().then(()=>render())}"
-            class="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-400">
+            class="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-400">
         </div>
         <button onclick="roverSearch='';roverFilter='';roverLeadFilter='';roverPage=1;loadRoverData().then(()=>render())" class="text-gray-400 hover:text-gray-600 text-sm px-3 py-2">
           <i class="fas fa-times mr-1"></i>Clear
@@ -1502,7 +1599,7 @@ function renderRover() {
           </thead>
           <tbody class="divide-y divide-gray-50">
             ${roverConversations.map(c => `
-              <tr class="hover:bg-teal-50/40 transition-colors cursor-pointer" onclick="viewRoverConvo(${c.id})">
+              <tr class="hover:bg-blue-50/40 transition-colors cursor-pointer" onclick="viewRoverConvo(${c.id})">
                 <td class="px-3 py-2">
                   <div class="flex items-center gap-2">
                     <div class="w-7 h-7 ${c.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'} rounded-full flex items-center justify-center text-xs font-bold">
@@ -1531,7 +1628,7 @@ function renderRover() {
                 <td class="px-3 py-2 text-xs text-gray-400">${fmtDateTime(c.last_message_at || c.created_at)}</td>
                 <td class="px-3 py-2">
                   <div class="flex gap-1" onclick="event.stopPropagation()">
-                    <button onclick="viewRoverConvo(${c.id})" class="p-1 text-gray-400 hover:text-teal-600" title="View"><i class="fas fa-eye"></i></button>
+                    <button onclick="viewRoverConvo(${c.id})" class="p-1 text-gray-400 hover:text-blue-600" title="View"><i class="fas fa-eye"></i></button>
                     <button onclick="deleteRoverConvo(${c.id})" class="p-1 text-gray-400 hover:text-red-600" title="Delete"><i class="fas fa-trash"></i></button>
                   </div>
                 </td>
@@ -1669,7 +1766,7 @@ function renderRoverConvoDetail() {
               <label class="block text-xs font-semibold text-gray-500 mb-1">Admin Notes</label>
               <textarea id="rover-notes" rows="3" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" placeholder="Add your notes...">${(c.admin_notes||'').replace(/</g,'&lt;')}</textarea>
             </div>
-            <button onclick="saveRoverConvoUpdate(${c.id})" class="w-full py-2 bg-teal-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700">
+            <button onclick="saveRoverConvoUpdate(${c.id})" class="w-full py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700">
               <i class="fas fa-save mr-1"></i>Save Changes
             </button>
           </div>
@@ -1780,7 +1877,7 @@ function renderSipBridge() {
     <!-- Quick Actions -->
     ${section('Quick Actions', 'fa-bolt', `
       <div class="flex flex-wrap gap-3">
-        <button onclick="sipCreateMode='outbound';render()" class="px-4 py-2.5 bg-teal-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition-all shadow-lg hover:shadow-xl">
+        <button onclick="sipCreateMode='outbound';render()" class="px-4 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition-all shadow-lg hover:shadow-xl">
           <i class="fas fa-plus mr-2"></i>New Outbound Trunk
         </button>
         <button onclick="sipCreateMode='inbound';render()" class="px-4 py-2.5 bg-green-600 text-white rounded-xl text-sm font-semibold hover:bg-green-700 transition-all shadow-lg hover:shadow-xl">
@@ -2261,12 +2358,12 @@ function renderReportSearch() {
               <i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"></i>
               <input type="text" id="reportSearchInput" value="${A.searchQuery}"
                 placeholder="Search reports by address, measurements, roof type, materials, notes..."
-                class="w-full pl-11 pr-4 py-3 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-teal-500 focus:border-blue-500 outline-none"
+                class="w-full pl-11 pr-4 py-3 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                 onkeydown="if(event.key==='Enter') doReportSearch(this.value)"
               />
             </div>
             <button onclick="doReportSearch(document.getElementById('reportSearchInput').value)"
-              class="px-6 py-3 bg-teal-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 transition-colors flex items-center gap-2 whitespace-nowrap">
+              class="px-6 py-3 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 transition-colors flex items-center gap-2 whitespace-nowrap">
               <i class="fas fa-search"></i> Search
             </button>
           </div>
@@ -2288,7 +2385,7 @@ function renderReportSearch() {
       <!-- Search Results -->
       ${A.searchLoading ? `
         <div class="flex items-center justify-center py-12">
-          <div class="w-8 h-8 border-4 border-blue-200 border-t-teal-500 rounded-full animate-spin"></div>
+          <div class="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
           <span class="ml-3 text-gray-500">Searching reports...</span>
         </div>
       ` : ''}

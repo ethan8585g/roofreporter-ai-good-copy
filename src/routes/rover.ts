@@ -12,13 +12,10 @@ import { validateAdminSession } from './auth'
 export const roverRoutes = new Hono<{ Bindings: Bindings }>()
 
 // ============================================================
-// MODEL CONFIGURATION — Fallback chain for reliability
+// MODEL CONFIGURATION
 // ============================================================
-const MODELS = {
-  primary: 'gemini-2.5-flash',    // Fast, reliable, great for chat
-  fallback1: 'gpt-5-nano',        // Good backup, reasoning model
-  fallback2: 'claude-haiku-4-5',  // Another reliable option
-}
+const GEMINI_MODEL = 'gemini-2.0-flash'
+const GEMINI_REST_BASE = 'https://generativelanguage.googleapis.com/v1beta/models'
 
 // ============================================================
 // ROVER SYSTEM PROMPT — Comprehensive RoofReporterAI expert
@@ -251,65 +248,64 @@ RESPONSE GUIDELINES
 10. Be honest — if a feature doesn't exist yet, say "we're working on that" rather than making promises`
 
 // ============================================================
-// AI CALL HELPER — With model fallback chain
+// AI CALL HELPER — Uses Gemini REST API (same key used throughout the app)
 // ============================================================
+// messages format: [{role: 'system'|'user'|'assistant', content: string}]
+// The system message is extracted and passed as systemInstruction.
 async function callAI(
   apiKey: string,
-  baseUrl: string,
+  _baseUrl: string,       // kept for signature compat, unused
   messages: any[],
   maxTokens: number = 1000,
   temperature: number = 0.7
 ): Promise<{ content: string; model: string; tokensUsed: number; responseTimeMs: number }> {
-  const modelsToTry = [MODELS.primary, MODELS.fallback1, MODELS.fallback2]
-  
-  for (const model of modelsToTry) {
-    try {
-      const startTime = Date.now()
-      
-      const response = await fetch(`${baseUrl}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-          model,
-          messages,
-          max_tokens: maxTokens,
-          temperature
-        })
-      })
+  const startTime = Date.now()
 
-      const responseTimeMs = Date.now() - startTime
+  // Separate system prompt from conversation
+  const systemMsg = messages.find((m: any) => m.role === 'system')
+  const convoMsgs = messages.filter((m: any) => m.role !== 'system')
 
-      if (!response.ok) {
-        console.error(`[Rover] Model ${model} returned ${response.status}:`, await response.text())
-        continue // Try next model
-      }
+  // Convert to Gemini format (OpenAI 'assistant' → Gemini 'model')
+  const contents = convoMsgs.map((m: any) => ({
+    role: m.role === 'assistant' ? 'model' : 'user',
+    parts: [{ text: m.content }]
+  }))
 
-      const data: any = await response.json()
-      const content = data.choices?.[0]?.message?.content
-
-      // Check for empty content (reasoning models can exhaust tokens on thinking)
-      if (!content || content.trim() === '') {
-        console.error(`[Rover] Model ${model} returned empty content (reasoning tokens may have consumed all output)`)
-        continue // Try next model
-      }
-
-      return {
-        content: content.trim(),
-        model,
-        tokensUsed: data.usage?.total_tokens || 0,
-        responseTimeMs
-      }
-    } catch (err: any) {
-      console.error(`[Rover] Model ${model} failed:`, err.message)
-      continue // Try next model
-    }
+  const body: any = {
+    contents,
+    generationConfig: { maxOutputTokens: maxTokens, temperature },
+  }
+  if (systemMsg) {
+    body.systemInstruction = { parts: [{ text: systemMsg.content }] }
   }
 
-  // All models failed
-  throw new Error('All AI models failed to generate a response')
+  const url = `${GEMINI_REST_BASE}/${GEMINI_MODEL}:generateContent?key=${apiKey}`
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+
+  const responseTimeMs = Date.now() - startTime
+
+  if (!response.ok) {
+    const errText = await response.text()
+    throw new Error(`Gemini ${response.status}: ${errText.slice(0, 200)}`)
+  }
+
+  const data: any = await response.json()
+  const content = data.candidates?.[0]?.content?.parts?.[0]?.text
+
+  if (!content || content.trim() === '') {
+    throw new Error('Gemini returned empty response')
+  }
+
+  return {
+    content: content.trim(),
+    model: GEMINI_MODEL,
+    tokensUsed: (data.usageMetadata?.totalTokenCount) || 0,
+    responseTimeMs,
+  }
 }
 
 // ============================================================
@@ -385,9 +381,13 @@ roverRoutes.post('/chat', async (c) => {
       messages.push({ role: msg.role, content: msg.content })
     }
 
-    // Call AI with fallback chain
-    const apiKey = c.env.OPENAI_API_KEY
-    const baseUrl = c.env.OPENAI_BASE_URL || 'https://www.genspark.ai/api/llm_proxy/v1'
+    // Resolve Gemini API key — try all known key names
+    const apiKey = c.env.GEMINI_API_KEY ||
+      c.env.GEMINI_ENHANCE_API_KEY ||
+      (c.env as any).default_gemini_googleaistudio_key ||
+      (c.env as any).google_ai_studio_secret_key ||
+      c.env.GOOGLE_VERTEX_API_KEY
+    const baseUrl = ''
 
     if (!apiKey) {
       // No API key — provide helpful fallback
@@ -913,19 +913,35 @@ async function extractLeadInfo(db: D1Database, conversationId: number, message: 
 // ============================================================
 
 // Validate customer session token → returns customer row or null
+// Uses the same two-query pattern as customer-auth.ts to avoid JOIN column issues
 async function validateCustomerSession(db: D1Database, authHeader?: string | null): Promise<any | null> {
   if (!authHeader?.startsWith('Bearer ')) return null
-  const token = authHeader.slice(7)
+  const token = authHeader.replace('Bearer ', '').trim()
+  if (!token) return null
   try {
-    const session = await db.prepare(`
-      SELECT cs.customer_id, c.email, c.name, c.company_name, c.phone,
-             c.free_trial_remaining, c.paid_credits_remaining, c.status, c.is_active
-      FROM customer_sessions cs
-      JOIN customers c ON c.id = cs.customer_id
-      WHERE cs.session_token = ? AND cs.expires_at > datetime('now')
-    `).bind(token).first()
-    return session || null
-  } catch { return null }
+    // Step 1: validate session token
+    const session = await db.prepare(
+      "SELECT customer_id FROM customer_sessions WHERE session_token = ? AND expires_at > datetime('now')"
+    ).bind(token).first<any>()
+    if (!session) return null
+
+    // Step 2: get customer details
+    const customer = await db.prepare(
+      `SELECT id, email, name, company_name, phone,
+              report_credits, credits_used, free_trial_total, free_trial_used, is_active
+       FROM customers WHERE id = ?`
+    ).bind(session.customer_id).first<any>()
+    if (!customer) return null
+
+    // Attach customer_id and computed credit fields
+    customer.customer_id = customer.id
+    customer.free_trial_remaining = Math.max(0, (customer.free_trial_total || 3) - (customer.free_trial_used || 0))
+    customer.paid_credits_remaining = Math.max(0, (customer.report_credits || 0) - (customer.credits_used || 0))
+    return customer
+  } catch (e) {
+    console.error('[Rover] validateCustomerSession error:', e)
+    return null
+  }
 }
 
 // Build the assistant system prompt with customer context
@@ -1081,8 +1097,12 @@ roverRoutes.post('/assistant', async (c) => {
       messages.push({ role: msg.role, content: msg.content })
     }
 
-    const apiKey = c.env.OPENAI_API_KEY
-    const baseUrl = c.env.OPENAI_BASE_URL || 'https://www.genspark.ai/api/llm_proxy/v1'
+    const apiKey = c.env.GEMINI_API_KEY ||
+      c.env.GEMINI_ENHANCE_API_KEY ||
+      (c.env as any).default_gemini_googleaistudio_key ||
+      (c.env as any).google_ai_studio_secret_key ||
+      c.env.GOOGLE_VERTEX_API_KEY
+    const baseUrl = ''
 
     if (!apiKey) {
       const fallback = `Hey ${customer.name || 'there'}! I'm having a quick connection issue right now, but here's what I can tell you: you have ${customer.free_trial_remaining || 0} free reports and ${customer.paid_credits_remaining || 0} paid credits. Head to /customer/order to generate a report, or /customer/reports to view past measurements. I'll be back online shortly!`
@@ -1106,7 +1126,7 @@ roverRoutes.post('/assistant', async (c) => {
       return c.json({ reply: result.content, session_id, model: result.model })
 
     } catch (aiError: any) {
-      console.error('[Rover Assistant] All AI models failed:', aiError.message)
+      console.error('[Rover Assistant] Gemini error:', aiError.message)
       const fallback = `I'm having a technical hiccup, ${customer.name || 'sorry'}! Try refreshing, or reach out to reports@reusecanada.ca if this persists. You can still use all features from your dashboard.`
       await c.env.DB.prepare(
         'INSERT INTO rover_messages (conversation_id, role, content, model) VALUES (?, \'assistant\', ?, \'fallback-smart\')'

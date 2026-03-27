@@ -87,8 +87,13 @@ export type Bindings = {
   CLOUD_RUN_AI_TOKEN: string       // Optional: Cloud Run IAM auth token
   CLOUD_RUN_TIMEOUT_MS: string     // Optional: override default 90s timeout
 
-  // OpenAI-compatible API — Rover AI Chatbot
-  // Used via GenSpark proxy for AI-powered chat responses
+  // Gemini AI Studio keys — for Rover chatbot and report enhancement
+  GEMINI_API_KEY: string                   // Primary Gemini key (set in wrangler secrets)
+  GEMINI_ENHANCE_API_KEY: string           // Google AI Studio key (AIzaSy... format) — primary Gemini key
+  default_gemini_googleaistudio_key: string // Alternate Google AI Studio key
+  google_ai_studio_secret_key: string       // Alternate Google AI Studio key
+
+  // OpenAI-compatible API (legacy Genspark proxy — unused)
   OPENAI_API_KEY: string        // GenSpark LLM proxy key
   OPENAI_BASE_URL: string       // e.g. "https://www.genspark.ai/api/llm_proxy/v1"
 
@@ -100,7 +105,7 @@ export type Bindings = {
 
   // Gemini Enhancement Engine — Dedicated API key from airoofreports GCP project
   // Used to call Gemini 2.5 Pro for post-generation report quality upgrade
-  GEMINI_ENHANCE_API_KEY: string   // e.g. "AIzaSy..." — separate from GOOGLE_SOLAR_API_KEY
+  // (GEMINI_ENHANCE_API_KEY already declared above)
 
   // Replicate — AI Image Generation (Virtual Try-On roof visualization)
   // Get from: replicate.com → Account Settings → API Tokens
@@ -117,13 +122,9 @@ export type Bindings = {
   META_APP_SECRET: string          // Facebook App Secret (used for long-lived token exchange)
   META_AD_ACCOUNT_ID: string       // Meta Ads Account ID (numeric, no 'act_' prefix)
 
-
-  // ── Nearmap Aerial Imagery ─────────────────────────────
-  // High-resolution (7.5cm/pixel) aerial imagery for roof reports.
-  // Covers major Canadian metros (Edmonton, Calgary) + US cities.
-  // When set, report imagery prefers Nearmap over Google Maps Static.
-  // Get from: https://admin.nearmap.com/account/user-management/#/integration/api-apps
-  NEARMAP_API_KEY: string          // e.g. "your-nearmap-api-key"
+  // ── HeyGen AI Video Generation ─────────────────────────
+  // Get your API key at: https://app.heygen.com/settings?nav=API
+  HEYGEN_API_KEY: string           // e.g. "your-heygen-api-key" — for AI avatar video generation
 }
 
 // ============================================================

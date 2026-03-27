@@ -1,10 +1,12 @@
 // ============================================================
-// RoofReporterAI — Virtual Try-On Frontend
+// RoofReporterAI — Roof Visualizer
 //
-// Full interactive UI: upload photo → draw roof mask on canvas
-// → select style/color → dispatch to AI → poll → display result.
-//
-// Uses HTML5 Canvas for mask drawing (no dependencies).
+// Flow:
+//   1. Upload 4–6 house photos (labeled by corner/side)
+//   2. AI (Gemini) analyzes photos → returns roof geometry
+//   3. SVG house diagram + material/color picker (instant preview)
+//   4. Optional: AI photo preview via Replicate inpainting
+//      (mask editor → Replicate → before/after result)
 // ============================================================
 
 (function () {
@@ -13,699 +15,819 @@
   var root = document.getElementById('tryon-root');
   var token = localStorage.getItem('rc_customer_token') || '';
 
-  // ── State ──
+  // ── State ──────────────────────────────────────────────────
   var state = {
-    step: 1,               // 1=upload, 2=mask, 3=style, 4=processing, 5=result
-    originalImage: null,    // Image element
-    originalBase64: null,   // base64 data URI
-    maskBase64: null,       // base64 data URI (white mask on black)
-    roofStyle: 'metal',
-    roofColor: 'charcoal grey',
+    step: 1,         // 1=upload, 2=analyzing, 3=visualizer, 4=mask, 5=processing, 6=result
+    photos: [],      // [{label, dataUrl, base64, mimeType}]
+    geometry: null,  // from Gemini
+    style: 'asphalt',
+    colorHex: '#4a4a4a',
+    colorLabel: 'Charcoal Grey',
+    // AI preview
+    aiPhotoIdx: 0,
+    maskBase64: null,
     jobId: null,
-    pollTimer: null,
     resultUrl: null,
     errorMsg: null,
-    history: [],
+    pollTimer: null,
     brushSize: 30,
     isErasing: false,
   };
 
-  // ── Canvas refs (set during mask step) ──
+  // Canvas refs for mask step
   var imgCanvas, imgCtx, maskCanvas, maskCtx, overlayCanvas, overlayCtx;
 
-  // ── API helper ──
+  // ── API helper ─────────────────────────────────────────────
   function api(method, path, body) {
-    var opts = {
-      method: method,
-      headers: { 'Content-Type': 'application/json' },
-    };
+    var opts = { method: method, headers: { 'Content-Type': 'application/json' } };
     if (token) opts.headers['Authorization'] = 'Bearer ' + token;
     if (body) opts.body = JSON.stringify(body);
     return fetch('/api/virtual-tryon' + path, opts).then(function (r) { return r.json(); });
   }
 
-  // ── Config check — warn if REPLICATE_API_KEY missing ──
-  var _configChecked = false;
-  var _configOk = true;
-  function checkConfig() {
-    if (_configChecked) return;
-    _configChecked = true;
-    api('GET', '/config-status')
-      .then(function(data) {
-        if (!data.configured) {
-          _configOk = false;
-          var banner = document.createElement('div');
-          banner.style.cssText = 'background:linear-gradient(135deg,#FEF3C7,#FFFBEB);border:1px solid #F59E0B;border-radius:12px;padding:16px 20px;margin-bottom:16px;';
-          banner.innerHTML = '<div style="display:flex;align-items:flex-start;gap:12px">' +
-            '<div style="width:36px;height:36px;border-radius:10px;background:#FDE68A;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="fas fa-exclamation-triangle" style="color:#D97706"></i></div>' +
-            '<div><p style="font-size:14px;font-weight:600;color:#92400E;margin:0">Virtual Try-On Not Configured</p>' +
-            '<p style="font-size:12px;color:#A16207;margin:4px 0 0">REPLICATE_API_KEY is required to enable AI roof visualization.</p>' +
-            (data.setup_steps ? '<div style="margin-top:8px;padding:8px 12px;background:rgba(255,255,255,0.7);border-radius:8px;font-size:11px;color:#78350F;line-height:1.6">' + data.setup_steps.join('<br>') + '</div>' : '') +
-            '</div></div>';
-          root.parentElement.insertBefore(banner, root);
-        }
-      }).catch(function() { /* ignore */ });
-  }
-  checkConfig();
-
-  // ── Render Router ──
+  // ── Render router ──────────────────────────────────────────
   function render() {
     switch (state.step) {
       case 1: renderUpload(); break;
-      case 2: renderMaskEditor(); break;
-      case 3: renderStylePicker(); break;
-      case 4: renderProcessing(); break;
-      case 5: renderResult(); break;
+      case 2: renderAnalyzing(); break;
+      case 3: renderVisualizer(); break;
+      case 4: renderMaskEditor(); break;
+      case 5: renderProcessing(); break;
+      case 6: renderResult(); break;
     }
   }
 
+  // ── Data ───────────────────────────────────────────────────
+  var PHOTO_SLOTS = [
+    { id: 'front-left',  label: 'Front Left',  icon: 'fa-sign-out-alt fa-flip-horizontal' },
+    { id: 'front-right', label: 'Front Right', icon: 'fa-sign-out-alt' },
+    { id: 'back-left',   label: 'Back Left',   icon: 'fa-sign-out-alt fa-flip-horizontal' },
+    { id: 'back-right',  label: 'Back Right',  icon: 'fa-sign-out-alt' },
+    { id: 'side-left',   label: 'Left Side',   icon: 'fa-arrows-alt-h' },
+    { id: 'side-right',  label: 'Right Side',  icon: 'fa-arrows-alt-h' },
+  ];
+
+  var MATERIALS = [
+    { id: 'asphalt', label: 'Architectural Shingles', icon: 'fa-home' },
+    { id: 'metal',   label: 'Standing Seam Metal',    icon: 'fa-industry' },
+    { id: 'tile',    label: 'Clay / Concrete Tile',   icon: 'fa-building' },
+    { id: 'slate',   label: 'Natural Slate',          icon: 'fa-gem' },
+    { id: 'cedar',   label: 'Cedar Shake',            icon: 'fa-tree' },
+  ];
+
+  var COLORS = [
+    { hex: '#4a4a4a', label: 'Charcoal Grey' },
+    { hex: '#1e1e1e', label: 'Matte Black' },
+    { hex: '#5c3d2e', label: 'Dark Bronze' },
+    { hex: '#2d6a2d', label: 'Forest Green' },
+    { hex: '#8b1a1a', label: 'Barn Red' },
+    { hex: '#3a5570', label: 'Slate Blue' },
+    { hex: '#5a7a6a', label: 'Aged Copper' },
+    { hex: '#9a9a9a', label: 'Galvalume Silver' },
+    { hex: '#c8a87a', label: 'Sandstone Tan' },
+    { hex: '#7a4a2a', label: 'Cedar Brown' },
+  ];
+
+  function slotLabel(id) {
+    var s = PHOTO_SLOTS.find(function (x) { return x.id === id; });
+    return s ? s.label : id;
+  }
+  function matLabel(id) {
+    var m = MATERIALS.find(function (x) { return x.id === id; });
+    return m ? m.label : id;
+  }
+  function cap(str) { return str ? str.charAt(0).toUpperCase() + str.slice(1) : ''; }
+
   // ════════════════════════════════════════════════════════
-  // STEP 1: Upload Photo
+  // STEP 1: Multi-photo upload
   // ════════════════════════════════════════════════════════
 
   function renderUpload() {
+    var uploaded = state.photos.length;
+    var canGo = uploaded >= 2;
+
     root.innerHTML =
-      '<div class="max-w-2xl mx-auto">' +
-        '<div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 md:p-8">' +
-          '<div class="text-center mb-8">' +
-            '<div class="w-16 h-16 bg-gradient-to-br from-violet-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">' +
-              '<i class="fas fa-magic text-white text-2xl"></i>' +
-            '</div>' +
-            '<h2 class="text-2xl font-bold text-gray-900 mb-2">Virtual Roof Try-On</h2>' +
-            '<p class="text-gray-500 max-w-md mx-auto">Upload a photo of any house, paint over the roof area, choose a new style, and our AI will generate a photorealistic preview of the new roof.</p>' +
-          '</div>' +
+      '<div class="max-w-4xl mx-auto space-y-4">' +
 
-          // Upload area
-          '<div id="uploadZone" class="border-2 border-dashed border-gray-300 rounded-xl p-10 text-center cursor-pointer hover:border-violet-400 hover:bg-violet-50 transition-all group" onclick="document.getElementById(\'fileInput\').click()">' +
-            '<input type="file" id="fileInput" accept="image/*" class="hidden" onchange="window._tryonHandleFile(this)">' +
-            '<div class="flex flex-col items-center">' +
-              '<div class="w-14 h-14 bg-gray-100 group-hover:bg-violet-100 rounded-full flex items-center justify-center mb-4 transition-colors">' +
-                '<i class="fas fa-cloud-upload-alt text-2xl text-gray-400 group-hover:text-violet-500 transition-colors"></i>' +
-              '</div>' +
-              '<p class="text-lg font-semibold text-gray-700 mb-1">Drop a photo here or click to browse</p>' +
-              '<p class="text-sm text-gray-400">JPG, PNG — max 10MB — exterior house photo works best</p>' +
+        // Header
+        '<div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">' +
+          '<div class="flex items-start gap-4">' +
+            '<div class="w-14 h-14 bg-gradient-to-br from-violet-500 to-purple-700 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-lg">' +
+              '<i class="fas fa-house-user text-white text-2xl"></i>' +
             '</div>' +
-          '</div>' +
-
-          // Tips
-          '<div class="mt-6 bg-amber-50 border border-amber-200 rounded-xl p-4">' +
-            '<h4 class="font-semibold text-amber-800 text-sm mb-2"><i class="fas fa-lightbulb mr-1"></i>Tips for Best Results</h4>' +
-            '<ul class="text-sm text-amber-700 space-y-1">' +
-              '<li><i class="fas fa-check text-amber-500 mr-1"></i>Use a front-facing photo with clear roof visibility</li>' +
-              '<li><i class="fas fa-check text-amber-500 mr-1"></i>Daylight photos produce more realistic results</li>' +
-              '<li><i class="fas fa-check text-amber-500 mr-1"></i>Avoid heavily obstructed roofs (trees covering &gt;50%)</li>' +
-            '</ul>' +
+            '<div>' +
+              '<h2 class="text-xl font-bold text-gray-900">Roof Visualizer</h2>' +
+              '<p class="text-gray-500 text-sm mt-1">Upload 4–6 photos of your house from each corner. Our AI will analyze the structure and let you instantly preview different roofing materials and colors.</p>' +
+            '</div>' +
           '</div>' +
         '</div>' +
 
-        // History section
-        '<div id="historySection" class="mt-6"></div>' +
+        // Photo grid
+        '<div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">' +
+          '<div class="flex items-center justify-between mb-4">' +
+            '<h3 class="font-semibold text-gray-800 text-sm"><i class="fas fa-camera text-violet-500 mr-2"></i>House Photos</h3>' +
+            '<span class="text-xs text-gray-400">' + uploaded + ' / 6 uploaded</span>' +
+          '</div>' +
+          '<div class="grid grid-cols-2 md:grid-cols-3 gap-3">' +
+            PHOTO_SLOTS.map(function (slot) {
+              var photo = state.photos.find(function (p) { return p.label === slot.id; });
+              return '<div>' +
+                (photo
+                  ? '<div class="relative rounded-xl overflow-hidden border-2 border-violet-400">' +
+                      '<img src="' + photo.dataUrl + '" class="w-full h-32 object-cover">' +
+                      '<div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>' +
+                      '<p class="absolute bottom-2 left-2 text-white text-xs font-medium">' + slot.label + '</p>' +
+                      '<button onclick="window._vizRemove(\'' + slot.id + '\')" class="absolute top-2 right-2 w-7 h-7 bg-red-500 hover:bg-red-600 text-white rounded-full text-xs flex items-center justify-center"><i class="fas fa-times"></i></button>' +
+                    '</div>'
+                  : '<label class="block cursor-pointer">' +
+                      '<input type="file" accept="image/*" class="hidden" onchange="window._vizFile(this,\'' + slot.id + '\')">' +
+                      '<div class="border-2 border-dashed border-gray-200 rounded-xl h-32 flex flex-col items-center justify-center hover:border-violet-400 hover:bg-violet-50 transition-all">' +
+                        '<i class="fas fa-plus text-gray-300 text-2xl mb-2"></i>' +
+                        '<p class="text-xs font-medium text-gray-400">' + slot.label + '</p>' +
+                      '</div>' +
+                    '</label>'
+                ) +
+              '</div>';
+            }).join('') +
+          '</div>' +
+          (!canGo ? '<p class="text-center text-xs text-amber-600 mt-4"><i class="fas fa-info-circle mr-1"></i>Upload at least 2 photos to continue</p>' : '') +
+        '</div>' +
+
+        // Analyze button
+        '<button onclick="window._vizAnalyze()" ' +
+          (canGo ? '' : 'disabled ') +
+          'class="w-full py-4 rounded-2xl font-bold text-lg shadow-lg transition-all ' +
+          (canGo ? 'bg-gradient-to-r from-violet-600 to-purple-700 text-white hover:from-violet-700 hover:to-purple-800' : 'bg-gray-100 text-gray-400 cursor-not-allowed') + '">' +
+          '<i class="fas fa-wand-magic-sparkles mr-2"></i>Analyze My House' +
+        '</button>' +
+
       '</div>';
-
-    // Load history
-    loadHistory();
-
-    // Drag-and-drop
-    var zone = document.getElementById('uploadZone');
-    if (zone) {
-      zone.addEventListener('dragover', function (e) { e.preventDefault(); zone.classList.add('border-violet-400', 'bg-violet-50'); });
-      zone.addEventListener('dragleave', function () { zone.classList.remove('border-violet-400', 'bg-violet-50'); });
-      zone.addEventListener('drop', function (e) {
-        e.preventDefault();
-        zone.classList.remove('border-violet-400', 'bg-violet-50');
-        if (e.dataTransfer.files.length > 0) handleFile(e.dataTransfer.files[0]);
-      });
-    }
   }
 
-  // ── File handling ──
-  window._tryonHandleFile = function (input) {
-    if (input.files && input.files[0]) handleFile(input.files[0]);
-  };
-
-  function handleFile(file) {
-    if (!file.type.startsWith('image/')) {
-      alert('Please upload an image file (JPG, PNG).');
-      return;
-    }
-    if (file.size > 10 * 1024 * 1024) {
-      alert('Image too large. Max 10MB.');
-      return;
-    }
-
+  window._vizFile = function (input, slotId) {
+    if (!input.files || !input.files[0]) return;
+    var file = input.files[0];
+    if (file.size > 20 * 1024 * 1024) { alert('Max 20MB per photo.'); return; }
     var reader = new FileReader();
     reader.onload = function (e) {
+      // Compress to max 1024px before storing (display + Gemini analysis + Replicate)
       var img = new Image();
       img.onload = function () {
-        state.originalImage = img;
-        state.originalBase64 = e.target.result;
-        state.step = 2;
+        var maxDim = 1024;
+        var scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+        var cv = document.createElement('canvas');
+        cv.width = Math.round(img.width * scale);
+        cv.height = Math.round(img.height * scale);
+        cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+        var dataUrl = cv.toDataURL('image/jpeg', 0.88);
+        state.photos = state.photos.filter(function (p) { return p.label !== slotId; });
+        state.photos.push({ label: slotId, dataUrl: dataUrl, base64: dataUrl.split(',')[1], mimeType: 'image/jpeg' });
         render();
       };
       img.src = e.target.result;
     };
     reader.readAsDataURL(file);
+  };
+
+  window._vizRemove = function (slotId) {
+    state.photos = state.photos.filter(function (p) { return p.label !== slotId; });
+    render();
+  };
+
+  window._vizAnalyze = function () {
+    if (state.photos.length < 2) return;
+    state.step = 2;
+    render();
+  };
+
+  // ════════════════════════════════════════════════════════
+  // STEP 2: Analyzing (Gemini Vision call)
+  // ════════════════════════════════════════════════════════
+
+  function renderAnalyzing() {
+    root.innerHTML =
+      '<div class="max-w-lg mx-auto">' +
+        '<div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-12 text-center">' +
+          '<div class="relative w-24 h-24 mx-auto mb-6">' +
+            '<div class="absolute inset-0 rounded-full border-4 border-gray-100"></div>' +
+            '<div class="absolute inset-0 rounded-full border-4 border-t-violet-500 border-r-purple-500 border-b-transparent border-l-transparent animate-spin"></div>' +
+            '<div class="absolute inset-3 bg-gradient-to-br from-violet-500 to-purple-700 rounded-full flex items-center justify-center">' +
+              '<i class="fas fa-house-user text-white text-2xl"></i>' +
+            '</div>' +
+          '</div>' +
+          '<h3 class="text-xl font-bold text-gray-900 mb-2">Analyzing Your House</h3>' +
+          '<p class="text-sm text-gray-500 mb-6">AI is studying your photos...</p>' +
+          '<div class="space-y-3 text-left max-w-xs mx-auto" id="checkList">' +
+            '<div id="chk0" class="flex items-center gap-3 text-sm text-gray-400"><div class="w-5 h-5 rounded-full border-2 border-gray-200 flex-shrink-0 animate-pulse"></div>Identifying roof type...</div>' +
+            '<div id="chk1" class="flex items-center gap-3 text-sm text-gray-400"><div class="w-5 h-5 rounded-full border-2 border-gray-200 flex-shrink-0"></div>Measuring proportions...</div>' +
+            '<div id="chk2" class="flex items-center gap-3 text-sm text-gray-400"><div class="w-5 h-5 rounded-full border-2 border-gray-200 flex-shrink-0"></div>Detecting house features...</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+
+    function tick(id, text, delay) {
+      setTimeout(function () {
+        var el = document.getElementById(id);
+        if (el) el.innerHTML = '<div class="w-5 h-5 rounded-full bg-green-400 flex-shrink-0 flex items-center justify-center"><i class="fas fa-check text-white" style="font-size:9px"></i></div><span class="text-green-700 font-medium">' + text + '</span>';
+      }, delay);
+    }
+    tick('chk0', 'Roof type identified', 1400);
+    tick('chk1', 'Proportions measured', 2600);
+
+    var images = state.photos.map(function (p) {
+      return { label: p.label, base64: p.base64, mimeType: p.mimeType };
+    });
+
+    api('POST', '/analyze-house', { images: images })
+      .then(function (res) {
+        state.geometry = (res.success && res.geometry) ? res.geometry : defaultGeo();
+        tick('chk2', 'Features detected', 0);
+        setTimeout(function () { state.step = 3; render(); }, 700);
+      })
+      .catch(function () {
+        state.geometry = defaultGeo();
+        state.step = 3;
+        render();
+      });
+  }
+
+  function defaultGeo() {
+    return { roof_type: 'gable', pitch_estimate: 'medium', stories: 1, width_depth_ratio: 1.6, num_facets: 2, house_style: 'ranch' };
   }
 
   // ════════════════════════════════════════════════════════
-  // STEP 2: Mask Editor — Draw over the roof
+  // STEP 3: Visualizer — SVG diagram + material/color picker
+  // ════════════════════════════════════════════════════════
+
+  function renderVisualizer() {
+    var geo = state.geometry || defaultGeo();
+
+    root.innerHTML =
+      '<div class="max-w-5xl mx-auto space-y-4">' +
+
+        // Main visualizer card
+        '<div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">' +
+
+          // Header bar
+          '<div class="flex items-center justify-between px-5 py-3 border-b border-gray-100 bg-gray-50">' +
+            '<div>' +
+              '<h3 class="font-bold text-gray-900 text-sm"><i class="fas fa-house-user text-violet-500 mr-2"></i>Roof Visualizer</h3>' +
+              '<p class="text-xs text-gray-400 mt-0.5">' +
+                cap(geo.roof_type) + ' roof · ' + cap(geo.pitch_estimate) + ' pitch' +
+                (geo.stories ? ' · ' + geo.stories + (geo.stories === 1 ? ' story' : ' stories') : '') +
+              '</p>' +
+            '</div>' +
+            '<button onclick="window._vizGoUpload()" class="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1"><i class="fas fa-arrow-left"></i>New Photos</button>' +
+          '</div>' +
+
+          // Two-column layout
+          '<div class="grid grid-cols-1 md:grid-cols-5">' +
+
+            // SVG diagram panel (3 cols)
+            '<div class="md:col-span-3 bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center p-6 min-h-64">' +
+              '<div class="w-full max-w-lg" id="svgWrap">' +
+                buildHouseSVG(geo, state.style, state.colorHex) +
+              '</div>' +
+            '</div>' +
+
+            // Controls panel (2 cols)
+            '<div class="md:col-span-2 p-5 border-t md:border-t-0 md:border-l border-gray-100 flex flex-col gap-4">' +
+
+              // Material picker
+              '<div>' +
+                '<h4 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Roof Material</h4>' +
+                '<div class="space-y-1">' +
+                  MATERIALS.map(function (m) {
+                    var sel = m.id === state.style;
+                    return '<button onclick="window._vizStyle(\'' + m.id + '\')" class="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm transition-all ' +
+                      (sel ? 'bg-violet-50 border-2 border-violet-400 text-violet-700 font-semibold' : 'border-2 border-transparent text-gray-600 hover:bg-gray-50') + '">' +
+                      '<i class="fas ' + m.icon + ' w-4 text-center ' + (sel ? 'text-violet-500' : 'text-gray-400') + '"></i>' +
+                      m.label +
+                      (sel ? '<i class="fas fa-check-circle text-violet-400 ml-auto text-xs"></i>' : '') +
+                    '</button>';
+                  }).join('') +
+                '</div>' +
+              '</div>' +
+
+              // Color picker
+              '<div>' +
+                '<h4 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Color</h4>' +
+                '<div class="grid grid-cols-5 gap-1.5">' +
+                  COLORS.map(function (col) {
+                    var sel = col.hex === state.colorHex;
+                    return '<button onclick="window._vizColor(\'' + col.hex + '\',\'' + col.label + '\')" title="' + col.label + '" class="relative rounded-lg border-2 p-0.5 transition-all ' +
+                      (sel ? 'border-violet-500 shadow-md scale-110' : 'border-transparent hover:border-gray-300') + '">' +
+                      '<div class="w-full aspect-square rounded-md shadow-inner" style="background:' + col.hex + '"></div>' +
+                      (sel ? '<div class="absolute inset-0 flex items-center justify-center"><i class="fas fa-check text-white text-[9px] drop-shadow-sm"></i></div>' : '') +
+                    '</button>';
+                  }).join('') +
+                '</div>' +
+                '<p class="text-xs text-gray-500 mt-2 font-medium">' + state.colorLabel + '</p>' +
+              '</div>' +
+
+              // Selected summary + AI button
+              '<div class="mt-auto pt-2">' +
+                '<div class="flex items-center gap-2 p-3 bg-gray-50 rounded-xl border border-gray-200 mb-3">' +
+                  '<div class="w-6 h-6 rounded-full border border-gray-300 flex-shrink-0 shadow-inner" style="background:' + state.colorHex + '"></div>' +
+                  '<div>' +
+                    '<p class="text-xs font-semibold text-gray-700">' + matLabel(state.style) + '</p>' +
+                    '<p class="text-xs text-gray-400">' + state.colorLabel + '</p>' +
+                  '</div>' +
+                '</div>' +
+                (state.photos.length > 0
+                  ? '<button onclick="window._vizOpenAI(0)" class="w-full py-2.5 bg-gradient-to-r from-violet-600 to-purple-700 text-white rounded-xl font-semibold text-sm hover:from-violet-700 hover:to-purple-800 shadow transition-all">' +
+                      '<i class="fas fa-magic mr-1.5"></i>Generate AI Photo Preview' +
+                    '</button>'
+                  : ''
+                ) +
+              '</div>' +
+
+            '</div>' +
+          '</div>' +
+        '</div>' +
+
+        // Photo gallery with hover tint
+        (state.photos.length > 0
+          ? '<div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-5">' +
+              '<h3 class="font-semibold text-gray-800 text-sm mb-3"><i class="fas fa-images text-violet-500 mr-2"></i>Your House — Click to Generate AI Preview</h3>' +
+              '<div class="grid grid-cols-2 md:grid-cols-3 gap-3">' +
+                state.photos.map(function (photo, idx) {
+                  return '<div class="relative rounded-xl overflow-hidden border border-gray-200 cursor-pointer group hover:shadow-lg transition-shadow" onclick="window._vizOpenAI(' + idx + ')">' +
+                    '<img src="' + photo.dataUrl + '" class="w-full h-36 object-cover group-hover:scale-105 transition-transform duration-300">' +
+                    '<div class="absolute inset-0 transition-opacity duration-200" style="background:' + state.colorHex + ';mix-blend-mode:multiply;opacity:0"></div>' +
+                    '<div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>' +
+                    '<div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">' +
+                      '<span class="bg-violet-600 text-white text-xs px-3 py-1.5 rounded-full font-semibold shadow"><i class="fas fa-magic mr-1"></i>AI Preview</span>' +
+                    '</div>' +
+                    '<p class="absolute bottom-2 left-2 text-white text-xs font-medium">' + slotLabel(photo.label) + '</p>' +
+                  '</div>';
+                }).join('') +
+              '</div>' +
+              '<p class="text-xs text-center text-gray-400 mt-3"><i class="fas fa-info-circle mr-1"></i>AI preview paints the roof area with your chosen material using Stable Diffusion</p>' +
+            '</div>'
+          : ''
+        ) +
+
+      '</div>';
+  }
+
+  window._vizStyle = function (s) { state.style = s; renderVisualizer(); };
+  window._vizColor = function (hex, label) { state.colorHex = hex; state.colorLabel = label; renderVisualizer(); };
+  window._vizGoUpload = function () { state.step = 1; render(); };
+  window._vizOpenAI = function (idx) {
+    state.aiPhotoIdx = idx;
+    state.maskBase64 = null;
+    state.step = 4;
+    render();
+  };
+
+  // ════════════════════════════════════════════════════════
+  // SVG HOUSE DIAGRAM BUILDER
+  // ════════════════════════════════════════════════════════
+
+  function buildHouseSVG(geo, style, colorHex) {
+    var type = (geo.roof_type || 'gable').toLowerCase();
+    var pitch = (geo.pitch_estimate || 'medium').toLowerCase();
+    var stories = parseInt(geo.stories) || 1;
+
+    var W = 500, H = 370;
+    var hL = 65, hR = 435;
+    var hW = hR - hL;
+    var mid = (hL + hR) / 2;
+    var wallTop = stories >= 2 ? 185 : 215;
+    var wallBot = 330;
+
+    // Roof apex height
+    var apexDrop = pitch === 'steep' ? 95 : (pitch === 'low' ? 38 : 68);
+    var apexY = wallTop - apexDrop;
+
+    var fill = colorHex;
+    var dark = darken(colorHex, 0.28);
+    var mid2 = darken(colorHex, 0.12);
+    var patId = 'rp_' + style;
+
+    var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" xmlns="http://www.w3.org/2000/svg" class="w-full" style="filter:drop-shadow(0 4px 16px rgba(0,0,0,0.14))">' +
+      '<defs>' + patternDef(patId, style, colorHex) + '</defs>' +
+      '<ellipse cx="' + mid + '" cy="352" rx="185" ry="11" fill="rgba(0,0,0,0.07)"/>';
+
+    if (type === 'hip') {
+      svg += roofHip(hL, hR, mid, wallTop, apexY, fill, dark, patId);
+    } else if (type === 'flat') {
+      svg += roofFlat(hL, hR, wallTop, fill, dark, patId);
+    } else if (type === 'shed') {
+      svg += roofShed(hL, hR, wallTop, apexY, fill, dark, patId);
+    } else {
+      svg += roofGable(hL, hR, mid, wallTop, apexY, fill, dark, patId, type);
+    }
+
+    // House walls
+    svg += '<rect x="' + hL + '" y="' + wallTop + '" width="' + hW + '" height="' + (wallBot - wallTop) + '" fill="#f7f3ec" stroke="#c8b898" stroke-width="2"/>';
+
+    // Facade details (windows + door)
+    svg += facade(hL, hW, wallTop, wallBot, stories);
+
+    // Foundation strip
+    svg += '<rect x="' + (hL - 10) + '" y="' + wallBot + '" width="' + (hW + 20) + '" height="13" fill="#d6c9a8" stroke="#bfad8a" stroke-width="1" rx="2"/>';
+
+    svg += '</svg>';
+    return svg;
+  }
+
+  // ── Roof shapes ────────────────────────────────────────
+
+  function roofGable(l, r, mid, wallTop, apexY, fill, dark, patId, type) {
+    var o = '';
+    // Shadow triangle below eave (depth effect)
+    o += '<polygon points="' + l + ',' + wallTop + ' ' + r + ',' + wallTop + ' ' + (r + 14) + ',' + (wallTop + 10) + ' ' + (l - 14) + ',' + (wallTop + 10) + '" fill="rgba(0,0,0,0.06)"/>';
+    // Main roof surface
+    o += '<polygon points="' + l + ',' + wallTop + ' ' + mid + ',' + apexY + ' ' + r + ',' + wallTop + '" fill="' + fill + '"/>';
+    // Material texture overlay
+    o += '<polygon points="' + l + ',' + wallTop + ' ' + mid + ',' + apexY + ' ' + r + ',' + wallTop + '" fill="url(#' + patId + ')" opacity="0.45"/>';
+    // Edges
+    o += '<polyline points="' + (l - 6) + ',' + (wallTop + 1) + ' ' + mid + ',' + (apexY - 2) + ' ' + (r + 6) + ',' + (wallTop + 1) + '" stroke="' + dark + '" stroke-width="2.5" fill="none" stroke-linejoin="round"/>';
+    // Fascia / eave board
+    o += '<line x1="' + (l - 8) + '" y1="' + wallTop + '" x2="' + (r + 8) + '" y2="' + wallTop + '" stroke="#8b7355" stroke-width="4.5" stroke-linecap="round"/>';
+    // Ridge cap
+    o += '<circle cx="' + mid + '" cy="' + apexY + '" r="4" fill="' + dark + '"/>';
+    return o;
+  }
+
+  function roofHip(l, r, mid, wallTop, apexY, fill, dark, patId) {
+    var rL = mid - 90, rR = mid + 90;
+    var o = '';
+    o += '<polygon points="' + l + ',' + wallTop + ' ' + r + ',' + wallTop + ' ' + (r + 14) + ',' + (wallTop + 10) + ' ' + (l - 14) + ',' + (wallTop + 10) + '" fill="rgba(0,0,0,0.06)"/>';
+    // Front face (trapezoid)
+    o += '<polygon points="' + l + ',' + wallTop + ' ' + r + ',' + wallTop + ' ' + rR + ',' + apexY + ' ' + rL + ',' + apexY + '" fill="' + fill + '"/>';
+    o += '<polygon points="' + l + ',' + wallTop + ' ' + r + ',' + wallTop + ' ' + rR + ',' + apexY + ' ' + rL + ',' + apexY + '" fill="url(#' + patId + ')" opacity="0.45"/>';
+    // Left hip panel (darker)
+    o += '<polygon points="' + l + ',' + wallTop + ' ' + rL + ',' + apexY + ' ' + l + ',' + (apexY + 18) + '" fill="' + dark + '" opacity="0.25"/>';
+    // Right hip panel
+    o += '<polygon points="' + r + ',' + wallTop + ' ' + rR + ',' + apexY + ' ' + r + ',' + (apexY + 18) + '" fill="' + dark + '" opacity="0.25"/>';
+    // Ridge line
+    o += '<line x1="' + rL + '" y1="' + apexY + '" x2="' + rR + '" y2="' + apexY + '" stroke="' + dark + '" stroke-width="3.5" stroke-linecap="round"/>';
+    // Hip lines
+    o += '<line x1="' + l + '" y1="' + wallTop + '" x2="' + rL + '" y2="' + apexY + '" stroke="' + dark + '" stroke-width="2"/>';
+    o += '<line x1="' + r + '" y1="' + wallTop + '" x2="' + rR + '" y2="' + apexY + '" stroke="' + dark + '" stroke-width="2"/>';
+    // Fascia
+    o += '<line x1="' + (l - 8) + '" y1="' + wallTop + '" x2="' + (r + 8) + '" y2="' + wallTop + '" stroke="#8b7355" stroke-width="4.5" stroke-linecap="round"/>';
+    return o;
+  }
+
+  function roofFlat(l, r, wallTop, fill, dark, patId) {
+    var rTop = wallTop - 18;
+    var o = '';
+    o += '<rect x="' + (l - 12) + '" y="' + rTop + '" width="' + (r - l + 24) + '" height="18" fill="' + fill + '"/>';
+    o += '<rect x="' + (l - 12) + '" y="' + rTop + '" width="' + (r - l + 24) + '" height="18" fill="url(#' + patId + ')" opacity="0.45"/>';
+    o += '<line x1="' + (l - 14) + '" y1="' + rTop + '" x2="' + (r + 14) + '" y2="' + rTop + '" stroke="' + dark + '" stroke-width="3" stroke-linecap="round"/>';
+    o += '<line x1="' + (l - 14) + '" y1="' + wallTop + '" x2="' + (r + 14) + '" y2="' + wallTop + '" stroke="#8b7355" stroke-width="4.5" stroke-linecap="round"/>';
+    return o;
+  }
+
+  function roofShed(l, r, wallTop, apexY, fill, dark, patId) {
+    var highY = apexY;
+    var lowY = wallTop;
+    var o = '';
+    o += '<polygon points="' + (l - 8) + ',' + lowY + ' ' + l + ',' + highY + ' ' + r + ',' + highY + ' ' + (r + 8) + ',' + lowY + '" fill="' + fill + '"/>';
+    o += '<polygon points="' + (l - 8) + ',' + lowY + ' ' + l + ',' + highY + ' ' + r + ',' + highY + ' ' + (r + 8) + ',' + lowY + '" fill="url(#' + patId + ')" opacity="0.45"/>';
+    o += '<line x1="' + (l - 10) + '" y1="' + lowY + '" x2="' + (r + 10) + '" y2="' + highY + '" stroke="' + dark + '" stroke-width="2.5"/>';
+    o += '<line x1="' + (l - 10) + '" y1="' + lowY + '" x2="' + (r + 10) + '" y2="' + lowY + '" stroke="#8b7355" stroke-width="4.5" stroke-linecap="round"/>';
+    return o;
+  }
+
+  // ── Facade (windows + door) ─────────────────────────────
+
+  function facade(l, w, wallTop, wallBot, stories) {
+    var mid = l + w / 2;
+    var wH = wallBot - wallTop;
+    var trim = '#8b7355';
+    var o = '';
+
+    if (stories >= 2) {
+      var floorY = wallTop + wH * 0.46;
+      o += '<line x1="' + l + '" y1="' + floorY + '" x2="' + (l + w) + '" y2="' + floorY + '" stroke="#d6c6a6" stroke-width="1.5"/>';
+      // Upper floor windows
+      o += win(l + w * 0.12, wallTop + wH * 0.07, 58, 46, trim);
+      o += win(l + w * 0.60, wallTop + wH * 0.07, 58, 46, trim);
+      // Lower floor windows
+      o += win(l + w * 0.10, wallTop + wH * 0.56, 58, 48, trim);
+      o += win(l + w * 0.62, wallTop + wH * 0.56, 58, 48, trim);
+      // Door
+      o += door(mid - 28, wallTop + wH * 0.58, 56, wH * 0.42, trim);
+    } else {
+      o += win(l + w * 0.10, wallTop + wH * 0.20, 66, 54, trim);
+      o += win(l + w * 0.64, wallTop + wH * 0.20, 66, 54, trim);
+      o += door(mid - 28, wallTop + wH * 0.38, 56, wH * 0.62, trim);
+    }
+    return o;
+  }
+
+  function win(x, y, w, h, trim) {
+    return '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" fill="#b8dce8" stroke="' + trim + '" stroke-width="2" rx="2"/>' +
+      '<line x1="' + (x + w / 2) + '" y1="' + y + '" x2="' + (x + w / 2) + '" y2="' + (y + h) + '" stroke="' + trim + '" stroke-width="1.5"/>' +
+      '<line x1="' + x + '" y1="' + (y + h / 2) + '" x2="' + (x + w) + '" y2="' + (y + h / 2) + '" stroke="' + trim + '" stroke-width="1.5"/>';
+  }
+
+  function door(x, y, w, h, trim) {
+    return '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" fill="' + trim + '" stroke="#5d4037" stroke-width="1.5" rx="3"/>' +
+      '<circle cx="' + (x + w * 0.73) + '" cy="' + (y + h * 0.5) + '" r="4" fill="#e0a030"/>';
+  }
+
+  // ── Material pattern SVG defs ───────────────────────────
+
+  function patternDef(id, style, hex) {
+    var d = darken(hex, 0.38);
+    switch (style) {
+      case 'metal':
+        return '<pattern id="' + id + '" patternUnits="userSpaceOnUse" width="400" height="10">' +
+          '<line x1="0" y1="5" x2="400" y2="5" stroke="' + d + '" stroke-width="1.8"/>' +
+        '</pattern>';
+      case 'tile':
+        return '<pattern id="' + id + '" patternUnits="userSpaceOnUse" width="22" height="16">' +
+          '<path d="M0,16 Q11,6 22,16" fill="none" stroke="' + d + '" stroke-width="1.6"/>' +
+          '<path d="M-11,8 Q0,-2 11,8" fill="none" stroke="' + d + '" stroke-width="1.6"/>' +
+        '</pattern>';
+      case 'slate':
+        return '<pattern id="' + id + '" patternUnits="userSpaceOnUse" width="26" height="14">' +
+          '<rect x="1" y="1" width="24" height="12" fill="none" stroke="' + d + '" stroke-width="1"/>' +
+          '<line x1="13" y1="1" x2="13" y2="13" stroke="' + d + '" stroke-width="0.5" opacity="0.5"/>' +
+        '</pattern>';
+      case 'cedar':
+        return '<pattern id="' + id + '" patternUnits="userSpaceOnUse" width="10" height="400">' +
+          '<line x1="0" y1="0" x2="0" y2="400" stroke="' + d + '" stroke-width="1.2"/>' +
+          '<line x1="5" y1="0" x2="5" y2="400" stroke="' + d + '" stroke-width="0.6" opacity="0.6"/>' +
+        '</pattern>';
+      default: // asphalt
+        return '<pattern id="' + id + '" patternUnits="userSpaceOnUse" width="12" height="12">' +
+          '<path d="M0,12 L12,0" stroke="' + d + '" stroke-width="1.2"/>' +
+          '<path d="M-2,2 L2,-2" stroke="' + d + '" stroke-width="1.2"/>' +
+          '<path d="M10,14 L14,10" stroke="' + d + '" stroke-width="1.2"/>' +
+        '</pattern>';
+    }
+  }
+
+  // ── Color helpers ───────────────────────────────────────
+
+  function darken(hex, amt) {
+    hex = hex.replace('#', '');
+    if (hex.length === 3) hex = hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
+    var r = Math.max(0, Math.round(parseInt(hex.slice(0,2),16) * (1-amt)));
+    var g = Math.max(0, Math.round(parseInt(hex.slice(2,4),16) * (1-amt)));
+    var b = Math.max(0, Math.round(parseInt(hex.slice(4,6),16) * (1-amt)));
+    return '#'+r.toString(16).padStart(2,'0')+g.toString(16).padStart(2,'0')+b.toString(16).padStart(2,'0');
+  }
+
+  // ════════════════════════════════════════════════════════
+  // STEP 4: Mask Editor (AI photo preview)
   // ════════════════════════════════════════════════════════
 
   function renderMaskEditor() {
-    var img = state.originalImage;
-    // Scale image to fit (max 800px wide)
-    var scale = Math.min(1, 800 / img.width);
-    var w = Math.round(img.width * scale);
-    var h = Math.round(img.height * scale);
+    var photo = state.photos[state.aiPhotoIdx];
+    if (!photo) { state.step = 3; render(); return; }
+    var img = new Image();
+    img.onload = function () {
+      var scale = Math.min(1, 720 / img.width, 520 / img.height);
+      var w = Math.round(img.width * scale);
+      var h = Math.round(img.height * scale);
+      buildMaskUI(img, w, h, photo);
+    };
+    img.src = photo.dataUrl;
+  }
 
+  function buildMaskUI(img, w, h, photo) {
+    var selMat = matLabel(state.style);
     root.innerHTML =
       '<div class="max-w-4xl mx-auto">' +
-        '<div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 md:p-6">' +
-
-          // Header
-          '<div class="flex items-center justify-between mb-4">' +
+        '<div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-4">' +
+          '<div class="flex items-center justify-between mb-3">' +
             '<div>' +
-              '<h3 class="text-lg font-bold text-gray-900"><i class="fas fa-paint-brush text-violet-500 mr-2"></i>Paint the Roof Area</h3>' +
-              '<p class="text-sm text-gray-500">Paint over the entire roof surface. The AI will replace only the painted area.</p>' +
+              '<h3 class="font-bold text-gray-900 text-sm"><i class="fas fa-paint-brush text-violet-500 mr-2"></i>Paint the Roof Area</h3>' +
+              '<p class="text-sm text-gray-500">Paint over the roof — AI will replace it with <strong>' + state.colorLabel + ' ' + selMat + '</strong>.</p>' +
             '</div>' +
-            '<button onclick="window._tryonBack(1)" class="text-sm text-gray-500 hover:text-gray-700"><i class="fas fa-arrow-left mr-1"></i>Back</button>' +
+            '<button onclick="window._vizBackTo3()" class="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1"><i class="fas fa-arrow-left"></i>Back</button>' +
           '</div>' +
-
-          // Toolbar
-          '<div class="flex flex-wrap items-center gap-3 mb-4 p-3 bg-gray-50 rounded-xl">' +
+          '<div class="flex flex-wrap items-center gap-2 mb-3 p-3 bg-gray-50 rounded-xl">' +
+            '<button id="mBrush" onclick="window._vizBrush(false)" class="px-3 py-1.5 rounded-lg text-sm font-medium bg-violet-600 text-white"><i class="fas fa-paint-brush mr-1"></i>Brush</button>' +
+            '<button id="mEraser" onclick="window._vizBrush(true)" class="px-3 py-1.5 rounded-lg text-sm font-medium bg-gray-200 text-gray-700"><i class="fas fa-eraser mr-1"></i>Eraser</button>' +
             '<div class="flex items-center gap-2">' +
-              '<button id="brushBtn" onclick="window._tryonSetBrush(false)" class="px-3 py-1.5 rounded-lg text-sm font-medium bg-violet-600 text-white"><i class="fas fa-paint-brush mr-1"></i>Brush</button>' +
-              '<button id="eraserBtn" onclick="window._tryonSetBrush(true)" class="px-3 py-1.5 rounded-lg text-sm font-medium bg-gray-200 text-gray-700 hover:bg-gray-300"><i class="fas fa-eraser mr-1"></i>Eraser</button>' +
+              '<span class="text-xs text-gray-400">Size:</span>' +
+              '<input type="range" id="mSize" min="5" max="80" value="' + state.brushSize + '" class="w-24 accent-violet-500" oninput="window._vizBrushSz(this.value)">' +
+              '<span id="mSzLbl" class="text-xs font-mono text-gray-400 w-6">' + state.brushSize + '</span>' +
             '</div>' +
-            '<div class="flex items-center gap-2">' +
-              '<span class="text-xs text-gray-500">Size:</span>' +
-              '<input type="range" id="brushSlider" min="5" max="80" value="' + state.brushSize + '" class="w-24 accent-violet-500" oninput="window._tryonBrushSize(this.value)">' +
-              '<span id="brushSizeLabel" class="text-xs font-mono text-gray-500 w-6">' + state.brushSize + '</span>' +
-            '</div>' +
-            '<button onclick="window._tryonClearMask()" class="px-3 py-1.5 rounded-lg text-sm font-medium bg-red-100 text-red-700 hover:bg-red-200"><i class="fas fa-trash-alt mr-1"></i>Clear</button>' +
+            '<button onclick="window._vizClearM()" class="px-3 py-1.5 rounded-lg text-sm font-medium bg-red-100 text-red-600"><i class="fas fa-trash mr-1"></i>Clear</button>' +
             '<div class="flex-1"></div>' +
-            '<button onclick="window._tryonConfirmMask()" class="px-5 py-2 rounded-xl text-sm font-bold bg-violet-600 text-white hover:bg-violet-700 shadow"><i class="fas fa-check mr-1"></i>Done — Choose Style</button>' +
+            '<button onclick="window._vizDoAI()" class="px-5 py-2 rounded-xl text-sm font-bold bg-violet-600 text-white hover:bg-violet-700 shadow">' +
+              '<i class="fas fa-magic mr-1"></i>Generate Preview' +
+            '</button>' +
           '</div>' +
-
-          // Canvas stack
-          '<div id="canvasContainer" class="relative mx-auto border border-gray-300 rounded-lg overflow-hidden cursor-crosshair" style="width:' + w + 'px;height:' + h + 'px;">' +
-            '<canvas id="imgCanvas" width="' + w + '" height="' + h + '" class="absolute inset-0"></canvas>' +
-            '<canvas id="maskCanvas" width="' + w + '" height="' + h + '" class="absolute inset-0" style="opacity:0"></canvas>' +
-            '<canvas id="overlayCanvas" width="' + w + '" height="' + h + '" class="absolute inset-0"></canvas>' +
+          '<div id="cvWrap" class="relative mx-auto border border-gray-200 rounded-xl overflow-hidden cursor-crosshair" style="width:' + w + 'px;height:' + h + 'px;max-width:100%">' +
+            '<canvas id="cvImg" width="' + w + '" height="' + h + '" class="absolute inset-0"></canvas>' +
+            '<canvas id="cvMask" width="' + w + '" height="' + h + '" class="absolute inset-0" style="opacity:0"></canvas>' +
+            '<canvas id="cvOver" width="' + w + '" height="' + h + '" class="absolute inset-0"></canvas>' +
           '</div>' +
-
-          '<p class="text-xs text-gray-400 text-center mt-2"><i class="fas fa-info-circle mr-1"></i>The pink overlay shows the area that will be replaced by the AI.</p>' +
+          '<p class="text-xs text-center text-gray-400 mt-2">Purple overlay = area AI will replace</p>' +
         '</div>' +
       '</div>';
 
-    // Initialize canvases
-    imgCanvas = document.getElementById('imgCanvas');
-    imgCtx = imgCanvas.getContext('2d');
-    maskCanvas = document.getElementById('maskCanvas');
-    maskCtx = maskCanvas.getContext('2d');
-    overlayCanvas = document.getElementById('overlayCanvas');
-    overlayCtx = overlayCanvas.getContext('2d');
+    imgCanvas    = document.getElementById('cvImg');   imgCtx    = imgCanvas.getContext('2d');
+    maskCanvas   = document.getElementById('cvMask');  maskCtx   = maskCanvas.getContext('2d');
+    overlayCanvas = document.getElementById('cvOver'); overlayCtx = overlayCanvas.getContext('2d');
 
-    // Draw original image
     imgCtx.drawImage(img, 0, 0, w, h);
+    maskCtx.fillStyle = '#000'; maskCtx.fillRect(0, 0, w, h);
 
-    // Mask starts as all black (no mask)
-    maskCtx.fillStyle = '#000000';
-    maskCtx.fillRect(0, 0, w, h);
-
-    // Setup drawing
-    var drawing = false;
-    var lastX, lastY;
-
-    function drawAt(x, y) {
-      var radius = state.brushSize / 2;
-
-      // Draw on mask (white = masked area, black = keep)
-      maskCtx.globalCompositeOperation = state.isErasing ? 'destination-out' : 'source-over';
-      maskCtx.fillStyle = '#ffffff';
-      maskCtx.beginPath();
-      maskCtx.arc(x, y, radius, 0, Math.PI * 2);
-      maskCtx.fill();
-
-      // Draw overlay (semi-transparent pink)
-      overlayCtx.globalCompositeOperation = state.isErasing ? 'destination-out' : 'source-over';
-      overlayCtx.fillStyle = 'rgba(168, 85, 247, 0.35)';
-      overlayCtx.beginPath();
-      overlayCtx.arc(x, y, radius, 0, Math.PI * 2);
-      overlayCtx.fill();
-    }
-
-    function drawLine(x1, y1, x2, y2) {
-      var dist = Math.sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1));
-      var steps = Math.max(1, Math.floor(dist / 3));
-      for (var i = 0; i <= steps; i++) {
-        var t = i / steps;
-        drawAt(x1 + (x2 - x1) * t, y1 + (y2 - y1) * t);
-      }
-    }
-
-    function getPos(e) {
+    // Drawing events
+    var drawing = false, lx = 0, ly = 0;
+    function pt(e) {
       var rect = overlayCanvas.getBoundingClientRect();
-      var scaleX = overlayCanvas.width / rect.width;
-      var scaleY = overlayCanvas.height / rect.height;
-      var clientX, clientY;
-      if (e.touches) {
-        clientX = e.touches[0].clientX;
-        clientY = e.touches[0].clientY;
-      } else {
-        clientX = e.clientX;
-        clientY = e.clientY;
-      }
-      return {
-        x: (clientX - rect.left) * scaleX,
-        y: (clientY - rect.top) * scaleY
-      };
+      var sx = overlayCanvas.width / rect.width, sy = overlayCanvas.height / rect.height;
+      var cx = e.touches ? e.touches[0].clientX : e.clientX;
+      var cy = e.touches ? e.touches[0].clientY : e.clientY;
+      return { x: (cx - rect.left) * sx, y: (cy - rect.top) * sy };
     }
-
-    function startDraw(e) {
-      e.preventDefault();
-      drawing = true;
-      var pos = getPos(e);
-      lastX = pos.x;
-      lastY = pos.y;
-      drawAt(pos.x, pos.y);
+    function dot(x, y) {
+      var r = state.brushSize / 2;
+      var op = state.isErasing ? 'destination-out' : 'source-over';
+      maskCtx.globalCompositeOperation = op;
+      maskCtx.fillStyle = '#fff'; maskCtx.beginPath(); maskCtx.arc(x, y, r, 0, Math.PI*2); maskCtx.fill();
+      overlayCtx.globalCompositeOperation = op;
+      overlayCtx.fillStyle = 'rgba(168,85,247,0.38)'; overlayCtx.beginPath(); overlayCtx.arc(x, y, r, 0, Math.PI*2); overlayCtx.fill();
     }
-
-    function moveDraw(e) {
-      e.preventDefault();
-      if (!drawing) return;
-      var pos = getPos(e);
-      drawLine(lastX, lastY, pos.x, pos.y);
-      lastX = pos.x;
-      lastY = pos.y;
+    function stroke(x1,y1,x2,y2) {
+      var d = Math.hypot(x2-x1,y2-y1), steps = Math.max(1,Math.floor(d/3));
+      for (var i = 0; i <= steps; i++) { var t=i/steps; dot(x1+(x2-x1)*t, y1+(y2-y1)*t); }
     }
-
-    function stopDraw(e) {
-      if (e) e.preventDefault();
-      drawing = false;
-    }
-
-    overlayCanvas.addEventListener('mousedown', startDraw);
-    overlayCanvas.addEventListener('mousemove', moveDraw);
-    overlayCanvas.addEventListener('mouseup', stopDraw);
-    overlayCanvas.addEventListener('mouseleave', stopDraw);
-    overlayCanvas.addEventListener('touchstart', startDraw, { passive: false });
-    overlayCanvas.addEventListener('touchmove', moveDraw, { passive: false });
-    overlayCanvas.addEventListener('touchend', stopDraw);
+    overlayCanvas.addEventListener('mousedown',  function(e){drawing=true;var p=pt(e);lx=p.x;ly=p.y;dot(p.x,p.y);});
+    overlayCanvas.addEventListener('mousemove',  function(e){if(!drawing)return;var p=pt(e);stroke(lx,ly,p.x,p.y);lx=p.x;ly=p.y;});
+    overlayCanvas.addEventListener('mouseup',    function(){drawing=false;});
+    overlayCanvas.addEventListener('mouseleave', function(){drawing=false;});
+    overlayCanvas.addEventListener('touchstart', function(e){e.preventDefault();drawing=true;var p=pt(e);lx=p.x;ly=p.y;dot(p.x,p.y);},{passive:false});
+    overlayCanvas.addEventListener('touchmove',  function(e){e.preventDefault();if(!drawing)return;var p=pt(e);stroke(lx,ly,p.x,p.y);lx=p.x;ly=p.y;},{passive:false});
+    overlayCanvas.addEventListener('touchend',   function(){drawing=false;});
   }
 
-  // Toolbar actions
-  window._tryonSetBrush = function (erasing) {
-    state.isErasing = erasing;
-    var brushBtn = document.getElementById('brushBtn');
-    var eraserBtn = document.getElementById('eraserBtn');
-    if (brushBtn && eraserBtn) {
-      brushBtn.className = erasing
-        ? 'px-3 py-1.5 rounded-lg text-sm font-medium bg-gray-200 text-gray-700 hover:bg-gray-300'
-        : 'px-3 py-1.5 rounded-lg text-sm font-medium bg-violet-600 text-white';
-      eraserBtn.className = erasing
-        ? 'px-3 py-1.5 rounded-lg text-sm font-medium bg-violet-600 text-white'
-        : 'px-3 py-1.5 rounded-lg text-sm font-medium bg-gray-200 text-gray-700 hover:bg-gray-300';
-    }
+  window._vizBrush = function(erase) {
+    state.isErasing = erase;
+    document.getElementById('mBrush').className  = erase ? 'px-3 py-1.5 rounded-lg text-sm font-medium bg-gray-200 text-gray-700' : 'px-3 py-1.5 rounded-lg text-sm font-medium bg-violet-600 text-white';
+    document.getElementById('mEraser').className = erase ? 'px-3 py-1.5 rounded-lg text-sm font-medium bg-violet-600 text-white' : 'px-3 py-1.5 rounded-lg text-sm font-medium bg-gray-200 text-gray-700';
   };
-
-  window._tryonBrushSize = function (val) {
-    state.brushSize = parseInt(val);
-    var label = document.getElementById('brushSizeLabel');
-    if (label) label.textContent = val;
+  window._vizBrushSz = function(v) { state.brushSize = parseInt(v); var el=document.getElementById('mSzLbl'); if(el) el.textContent=v; };
+  window._vizClearM  = function() {
+    if(maskCtx){maskCtx.fillStyle='#000';maskCtx.fillRect(0,0,maskCanvas.width,maskCanvas.height);}
+    if(overlayCtx) overlayCtx.clearRect(0,0,overlayCanvas.width,overlayCanvas.height);
   };
-
-  window._tryonClearMask = function () {
-    if (maskCtx && overlayCtx) {
-      maskCtx.fillStyle = '#000000';
-      maskCtx.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
-      overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
-    }
-  };
-
-  window._tryonConfirmMask = function () {
-    // Check if mask has any painted area
-    var data = maskCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height).data;
-    var whitePx = 0;
-    for (var i = 0; i < data.length; i += 4) {
-      if (data[i] > 128) whitePx++;
-    }
-    var coverage = whitePx / (maskCanvas.width * maskCanvas.height);
-
-    if (coverage < 0.01) {
-      alert('Please paint over the roof area first. The painted area (shown in purple) is what the AI will replace.');
-      return;
-    }
-    if (coverage > 0.90) {
-      if (!confirm('You\'ve painted over 90% of the image. The AI works best when only the roof is masked. Continue anyway?')) return;
-    }
-
-    // Export mask as base64 PNG
+  window._vizDoAI = function() {
+    var data = maskCtx.getImageData(0,0,maskCanvas.width,maskCanvas.height).data;
+    var wp = 0; for(var i=0;i<data.length;i+=4){if(data[i]>128)wp++;}
+    if(wp/(maskCanvas.width*maskCanvas.height) < 0.01){alert('Paint over the roof area first.');return;}
     state.maskBase64 = maskCanvas.toDataURL('image/png');
-    state.step = 3;
-    render();
+    state.step = 5; render();
   };
-
-  window._tryonBack = function (step) {
-    state.step = step;
-    render();
-  };
+  window._vizBackTo3 = function() { state.step = 3; render(); };
 
   // ════════════════════════════════════════════════════════
-  // STEP 3: Style & Color Picker
-  // ════════════════════════════════════════════════════════
-
-  function renderStylePicker() {
-    var styles = [
-      { id: 'metal', label: 'Standing Seam Metal', icon: 'fa-industry', popular: true },
-      { id: 'asphalt', label: 'Architectural Shingles', icon: 'fa-home', popular: true },
-      { id: 'tile', label: 'Clay / Concrete Tile', icon: 'fa-building', popular: false },
-      { id: 'slate', label: 'Natural Slate', icon: 'fa-gem', popular: false },
-      { id: 'cedar', label: 'Cedar Shake', icon: 'fa-tree', popular: false },
-    ];
-
-    var colors = [
-      { id: 'charcoal grey', label: 'Charcoal Grey', hex: '#36454F', popular: true },
-      { id: 'matte black', label: 'Matte Black', hex: '#1a1a1a', popular: true },
-      { id: 'dark bronze', label: 'Dark Bronze', hex: '#4a3728', popular: true },
-      { id: 'forest green', label: 'Forest Green', hex: '#228B22' },
-      { id: 'barn red', label: 'Barn Red', hex: '#7C0A02' },
-      { id: 'slate blue', label: 'Slate Blue', hex: '#6A7B8B' },
-      { id: 'weathered copper', label: 'Weathered Copper', hex: '#6D8B74' },
-      { id: 'galvalume silver', label: 'Galvalume Silver', hex: '#C0C0C0' },
-      { id: 'sandstone tan', label: 'Sandstone Tan', hex: '#C2B280' },
-      { id: 'colonial red', label: 'Colonial Red', hex: '#9B1B30' },
-    ];
-
-    root.innerHTML =
-      '<div class="max-w-3xl mx-auto">' +
-        '<div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">' +
-
-          '<div class="flex items-center justify-between mb-6">' +
-            '<div>' +
-              '<h3 class="text-lg font-bold text-gray-900"><i class="fas fa-swatchbook text-violet-500 mr-2"></i>Choose Roof Style</h3>' +
-              '<p class="text-sm text-gray-500">Select the material and color for your virtual roof preview.</p>' +
-            '</div>' +
-            '<button onclick="window._tryonBack(2)" class="text-sm text-gray-500 hover:text-gray-700"><i class="fas fa-arrow-left mr-1"></i>Edit Mask</button>' +
-          '</div>' +
-
-          // Preview thumbnail
-          '<div class="flex items-start gap-4 mb-6 p-3 bg-gray-50 rounded-xl">' +
-            '<img src="' + state.originalBase64 + '" class="w-32 h-24 object-cover rounded-lg border border-gray-200">' +
-            '<div>' +
-              '<p class="text-sm font-medium text-gray-700">Your Photo</p>' +
-              '<p class="text-xs text-gray-400">Mask applied — roof area selected</p>' +
-              '<span class="inline-block mt-1 px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full font-medium"><i class="fas fa-check mr-1"></i>Ready</span>' +
-            '</div>' +
-          '</div>' +
-
-          // Roof Style
-          '<h4 class="font-semibold text-gray-800 text-sm mb-3">Roof Material</h4>' +
-          '<div class="grid grid-cols-2 md:grid-cols-3 gap-2 mb-6">' +
-            styles.map(function (s) {
-              var sel = s.id === state.roofStyle;
-              return '<button onclick="window._tryonSetStyle(\'' + s.id + '\')" class="relative p-3 rounded-xl border-2 text-left transition-all ' +
-                (sel ? 'border-violet-500 bg-violet-50 ring-2 ring-violet-200' : 'border-gray-200 hover:border-gray-300') + '">' +
-                '<i class="fas ' + s.icon + ' text-lg ' + (sel ? 'text-violet-600' : 'text-gray-400') + '"></i>' +
-                '<p class="text-sm font-medium mt-1 ' + (sel ? 'text-violet-700' : 'text-gray-700') + '">' + s.label + '</p>' +
-                (s.popular ? '<span class="absolute top-1 right-1 px-1.5 py-0.5 bg-amber-100 text-amber-700 text-[10px] rounded-full font-medium">Popular</span>' : '') +
-                (sel ? '<i class="fas fa-check-circle text-violet-500 absolute bottom-2 right-2"></i>' : '') +
-              '</button>';
-            }).join('') +
-          '</div>' +
-
-          // Roof Color
-          '<h4 class="font-semibold text-gray-800 text-sm mb-3">Roof Color</h4>' +
-          '<div class="grid grid-cols-3 md:grid-cols-5 gap-2 mb-6">' +
-            colors.map(function (col) {
-              var sel = col.id === state.roofColor;
-              return '<button onclick="window._tryonSetColor(\'' + col.id + '\')" class="p-2 rounded-xl border-2 text-center transition-all ' +
-                (sel ? 'border-violet-500 ring-2 ring-violet-200' : 'border-gray-200 hover:border-gray-300') + '">' +
-                '<div class="w-8 h-8 rounded-full mx-auto mb-1 border border-gray-300 shadow-inner" style="background:' + col.hex + '"></div>' +
-                '<p class="text-[11px] font-medium ' + (sel ? 'text-violet-700' : 'text-gray-600') + '">' + col.label + '</p>' +
-              '</button>';
-            }).join('') +
-          '</div>' +
-
-          // Generate button
-          '<button onclick="window._tryonGenerate()" class="w-full py-3 bg-gradient-to-r from-violet-600 to-purple-600 text-white font-bold rounded-xl hover:from-violet-700 hover:to-purple-700 shadow-lg transition-all text-base">' +
-            '<i class="fas fa-magic mr-2"></i>Generate Virtual Roof Preview' +
-          '</button>' +
-
-          '<p class="text-xs text-gray-400 text-center mt-3">AI generation typically takes 10-20 seconds</p>' +
-        '</div>' +
-      '</div>';
-  }
-
-  window._tryonSetStyle = function (id) {
-    state.roofStyle = id;
-    renderStylePicker();
-  };
-
-  window._tryonSetColor = function (id) {
-    state.roofColor = id;
-    renderStylePicker();
-  };
-
-  // ════════════════════════════════════════════════════════
-  // Dispatch Generation
-  // ════════════════════════════════════════════════════════
-
-  window._tryonGenerate = function () {
-    state.step = 4;
-    state.errorMsg = null;
-    state.resultUrl = null;
-    render();
-
-    api('POST', '/generate', {
-      original_image: state.originalBase64,
-      mask_image: state.maskBase64,
-      roof_style: state.roofStyle,
-      roof_color: state.roofColor,
-    }).then(function (res) {
-      if (res.success && res.job_id) {
-        state.jobId = res.job_id;
-        startPolling();
-      } else {
-        state.errorMsg = res.error || 'Failed to start generation';
-        state.step = 5;
-        render();
-      }
-    }).catch(function (err) {
-      state.errorMsg = 'Network error: ' + err.message;
-      state.step = 5;
-      render();
-    });
-  };
-
-  // ════════════════════════════════════════════════════════
-  // STEP 4: Processing / Polling
+  // STEP 5: AI Processing (Replicate)
   // ════════════════════════════════════════════════════════
 
   function renderProcessing() {
-    var elapsed = state.jobId ? '...' : '';
-
+    var photo = state.photos[state.aiPhotoIdx];
+    var selMat = matLabel(state.style);
     root.innerHTML =
-      '<div class="max-w-xl mx-auto">' +
-        '<div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 text-center">' +
-          '<div class="relative w-24 h-24 mx-auto mb-6">' +
-            '<div class="absolute inset-0 rounded-full border-4 border-gray-200"></div>' +
-            '<div class="absolute inset-0 rounded-full border-4 border-violet-500 border-t-transparent animate-spin"></div>' +
-            '<div class="absolute inset-3 bg-gradient-to-br from-violet-500 to-purple-600 rounded-full flex items-center justify-center">' +
-              '<i class="fas fa-magic text-white text-2xl"></i>' +
+      '<div class="max-w-md mx-auto">' +
+        '<div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-10 text-center">' +
+          '<div class="relative w-20 h-20 mx-auto mb-5">' +
+            '<div class="absolute inset-0 rounded-full border-4 border-gray-100"></div>' +
+            '<div class="absolute inset-0 rounded-full border-4 border-t-violet-500 border-r-purple-500 border-b-transparent border-l-transparent animate-spin"></div>' +
+            '<div class="absolute inset-2.5 bg-gradient-to-br from-violet-500 to-purple-700 rounded-full flex items-center justify-center">' +
+              '<i class="fas fa-magic text-white text-xl"></i>' +
             '</div>' +
           '</div>' +
-          '<h3 class="text-xl font-bold text-gray-900 mb-2">Generating Your Virtual Roof</h3>' +
-          '<p class="text-gray-500 mb-4">Our AI is creating a photorealistic preview of your ' + state.roofColor + ' ' + state.roofStyle + ' roof...</p>' +
-          '<div id="pollStatus" class="text-sm text-gray-400"><i class="fas fa-clock mr-1"></i>This usually takes 10-20 seconds</div>' +
-          '<div class="mt-6">' +
-            '<div class="w-full bg-gray-200 rounded-full h-2 overflow-hidden">' +
-              '<div id="progressBar" class="bg-gradient-to-r from-violet-500 to-purple-500 h-2 rounded-full transition-all duration-500" style="width: 10%"></div>' +
-            '</div>' +
+          '<h3 class="text-xl font-bold text-gray-900 mb-1.5">Generating Preview</h3>' +
+          '<p class="text-gray-500 text-sm mb-4">Creating <strong>' + state.colorLabel + ' ' + selMat + '</strong>...</p>' +
+          '<div id="aiStatus" class="text-sm text-gray-400 mb-4"><i class="fas fa-clock mr-1"></i>Usually 10–20 seconds</div>' +
+          '<div class="w-full bg-gray-100 rounded-full h-2 overflow-hidden">' +
+            '<div id="aiBar" class="bg-gradient-to-r from-violet-500 to-purple-500 h-2 rounded-full transition-all duration-500" style="width:8%"></div>' +
           '</div>' +
-          '<button onclick="window._tryonCancel()" class="mt-6 text-sm text-gray-400 hover:text-red-500"><i class="fas fa-times mr-1"></i>Cancel</button>' +
+          '<button onclick="window._vizCancelAI()" class="mt-5 text-xs text-gray-400 hover:text-red-500"><i class="fas fa-times mr-1"></i>Cancel</button>' +
         '</div>' +
       '</div>';
 
     // Animate progress bar
-    animateProgress();
-  }
+    var pv = 8;
+    function anim() {
+      var bar = document.getElementById('aiBar');
+      if (!bar || state.step !== 5) return;
+      pv = Math.min(pv + Math.random() * 6 + 1, 88);
+      bar.style.width = pv + '%';
+      setTimeout(anim, 1000);
+    }
+    anim();
 
-  var progressVal = 10;
-  function animateProgress() {
-    var bar = document.getElementById('progressBar');
-    if (!bar || state.step !== 4) return;
-    progressVal = Math.min(progressVal + Math.random() * 5, 90);
-    bar.style.width = progressVal + '%';
-    setTimeout(animateProgress, 1000);
-  }
-
-  function startPolling() {
-    progressVal = 10;
-    if (state.pollTimer) clearInterval(state.pollTimer);
-    state.pollTimer = setInterval(pollStatus, 2000);
-  }
-
-  function pollStatus() {
-    if (!state.jobId) return;
-    api('GET', '/status/' + state.jobId).then(function (res) {
-      var statusEl = document.getElementById('pollStatus');
-
-      if (res.status === 'succeeded') {
-        clearInterval(state.pollTimer);
-        state.resultUrl = res.final_image_url;
-        state.step = 5;
-        // Set progress to 100% briefly before transition
-        var bar = document.getElementById('progressBar');
-        if (bar) bar.style.width = '100%';
-        setTimeout(render, 500);
-      } else if (res.status === 'failed') {
-        clearInterval(state.pollTimer);
-        state.errorMsg = res.error_message || 'AI generation failed. Please try again.';
-        state.step = 5;
-        render();
-      } else if (res.status === 'cancelled') {
-        clearInterval(state.pollTimer);
-        state.step = 3;
-        render();
+    // Dispatch to Replicate
+    api('POST', '/generate', {
+      original_image: photo.dataUrl,
+      mask_image: state.maskBase64,
+      roof_style: state.style,
+      roof_color: state.colorLabel.toLowerCase(),
+    }).then(function (res) {
+      if (res.success && res.job_id) {
+        state.jobId = res.job_id;
+        state.pollTimer = setInterval(function () {
+          api('GET', '/status/' + state.jobId).then(function (r) {
+            if (r.status === 'succeeded') {
+              clearInterval(state.pollTimer);
+              var bar = document.getElementById('aiBar');
+              if (bar) bar.style.width = '100%';
+              state.resultUrl = r.final_image_url;
+              setTimeout(function () { state.step = 6; render(); }, 400);
+            } else if (r.status === 'failed') {
+              clearInterval(state.pollTimer);
+              state.errorMsg = r.error_message || 'Generation failed. Please try again.';
+              state.step = 6; render();
+            } else {
+              var el = document.getElementById('aiStatus');
+              if (el) el.innerHTML = '<i class="fas fa-cog fa-spin mr-1"></i>Processing… ' + Math.round((r.elapsed_ms||0)/1000) + 's';
+            }
+          }).catch(function(){});
+        }, 2000);
       } else {
-        // Still processing
-        if (statusEl) {
-          var sec = Math.round((res.elapsed_ms || 0) / 1000);
-          statusEl.innerHTML = '<i class="fas fa-cog fa-spin mr-1"></i>Processing... ' + sec + 's elapsed';
-        }
+        state.errorMsg = res.error || 'AI generation failed.';
+        state.step = 6; render();
       }
-    }).catch(function () {
-      // Network hiccup — keep polling
+    }).catch(function (e) {
+      state.errorMsg = 'Network error: ' + e.message;
+      state.step = 6; render();
     });
   }
 
-  window._tryonCancel = function () {
+  window._vizCancelAI = function () {
     if (state.pollTimer) clearInterval(state.pollTimer);
-    if (state.jobId) {
-      api('POST', '/cancel/' + state.jobId).catch(function () { });
-    }
-    state.step = 3;
-    render();
+    if (state.jobId) api('POST', '/cancel/' + state.jobId).catch(function(){});
+    state.step = 3; render();
   };
 
   // ════════════════════════════════════════════════════════
-  // STEP 5: Result Display
+  // STEP 6: Result
   // ════════════════════════════════════════════════════════
 
   function renderResult() {
-    var hasResult = !!state.resultUrl;
-    var hasError = !!state.errorMsg;
-
+    var photo = state.photos[state.aiPhotoIdx];
+    var selMat = matLabel(state.style);
     root.innerHTML =
       '<div class="max-w-4xl mx-auto">' +
-        '<div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">' +
-
-          (hasError && !hasResult ?
-            // Error state
-            '<div class="text-center py-8">' +
-              '<div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">' +
-                '<i class="fas fa-exclamation-triangle text-red-500 text-2xl"></i>' +
-              '</div>' +
+        (state.errorMsg && !state.resultUrl
+          ? // Error
+            '<div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-10 text-center">' +
+              '<div class="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4"><i class="fas fa-exclamation-triangle text-red-500 text-xl"></i></div>' +
               '<h3 class="text-xl font-bold text-gray-900 mb-2">Generation Failed</h3>' +
-              '<p class="text-gray-500 mb-4">' + state.errorMsg + '</p>' +
-              '<div class="flex justify-center gap-3">' +
-                '<button onclick="window._tryonGenerate()" class="px-6 py-2 bg-violet-600 text-white rounded-xl font-medium hover:bg-violet-700"><i class="fas fa-redo mr-1"></i>Try Again</button>' +
-                '<button onclick="window._tryonBack(2)" class="px-6 py-2 bg-gray-200 text-gray-700 rounded-xl font-medium hover:bg-gray-300"><i class="fas fa-paint-brush mr-1"></i>Edit Mask</button>' +
-                '<button onclick="window._tryonBack(1)" class="px-6 py-2 bg-gray-100 text-gray-600 rounded-xl font-medium hover:bg-gray-200"><i class="fas fa-upload mr-1"></i>New Photo</button>' +
+              '<p class="text-gray-500 text-sm mb-5">' + state.errorMsg + '</p>' +
+              '<div class="flex justify-center flex-wrap gap-3">' +
+                '<button onclick="window._vizDoAI()" class="px-5 py-2 bg-violet-600 text-white rounded-xl text-sm font-medium hover:bg-violet-700"><i class="fas fa-redo mr-1"></i>Try Again</button>' +
+                '<button onclick="window._vizBackTo3()" class="px-5 py-2 bg-gray-200 text-gray-700 rounded-xl text-sm font-medium"><i class="fas fa-paint-brush mr-1"></i>Edit Mask</button>' +
+                '<button onclick="window._vizReturnVis()" class="px-5 py-2 bg-gray-100 text-gray-600 rounded-xl text-sm font-medium"><i class="fas fa-palette mr-1"></i>Visualizer</button>' +
               '</div>' +
             '</div>'
-          :
-            // Success state — side-by-side comparison
-            '<div>' +
-              '<div class="flex items-center justify-between mb-4">' +
+          : // Success
+            '<div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-5">' +
+              '<div class="flex items-center justify-between mb-4 flex-wrap gap-2">' +
                 '<div>' +
-                  '<h3 class="text-lg font-bold text-gray-900"><i class="fas fa-check-circle text-green-500 mr-2"></i>Your Virtual Roof Preview</h3>' +
-                  '<p class="text-sm text-gray-500">' + state.roofColor + ' ' + state.roofStyle + ' roof — AI generated</p>' +
+                  '<h3 class="font-bold text-gray-900"><i class="fas fa-check-circle text-green-500 mr-2"></i>AI Preview Ready</h3>' +
+                  '<p class="text-sm text-gray-500">' + state.colorLabel + ' ' + selMat + '</p>' +
                 '</div>' +
-                '<div class="flex gap-2">' +
-                  '<button onclick="window._tryonDownload()" class="px-4 py-2 bg-violet-600 text-white rounded-xl text-sm font-medium hover:bg-violet-700"><i class="fas fa-download mr-1"></i>Download</button>' +
-                  '<button onclick="window._tryonBack(3)" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-xl text-sm font-medium hover:bg-gray-300"><i class="fas fa-palette mr-1"></i>Try Another Style</button>' +
-                  '<button onclick="window._tryonBack(1)" class="px-4 py-2 bg-gray-100 text-gray-600 rounded-xl text-sm font-medium hover:bg-gray-200"><i class="fas fa-camera mr-1"></i>New Photo</button>' +
+                '<div class="flex gap-2 flex-wrap">' +
+                  '<button onclick="window._vizDL()" class="px-4 py-2 bg-violet-600 text-white rounded-xl text-sm font-medium hover:bg-violet-700"><i class="fas fa-download mr-1"></i>Download</button>' +
+                  '<button onclick="window._vizReturnVis()" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-xl text-sm font-medium"><i class="fas fa-palette mr-1"></i>Try Another Style</button>' +
                 '</div>' +
               '</div>' +
-
-              // Before / After comparison
-              '<div class="grid grid-cols-1 md:grid-cols-2 gap-4">' +
+              '<div class="grid grid-cols-2 gap-4">' +
                 '<div>' +
-                  '<p class="text-sm font-medium text-gray-500 mb-2 text-center"><i class="fas fa-clock mr-1"></i>Before</p>' +
-                  '<img src="' + state.originalBase64 + '" class="w-full rounded-xl border border-gray-200 shadow-sm">' +
+                  '<p class="text-xs text-gray-400 mb-2 text-center font-medium">Before</p>' +
+                  '<img src="' + (photo ? photo.dataUrl : '') + '" class="w-full rounded-xl border border-gray-200">' +
                 '</div>' +
                 '<div>' +
-                  '<p class="text-sm font-medium text-violet-600 mb-2 text-center"><i class="fas fa-magic mr-1"></i>After — AI Preview</p>' +
-                  '<img id="resultImage" src="' + (state.resultUrl || '') + '" class="w-full rounded-xl border-2 border-violet-300 shadow-lg" onerror="this.parentElement.innerHTML=\'<div class=\\\'p-8 text-center text-gray-400 bg-gray-50 rounded-xl border\\\'><i class=\\\'fas fa-image text-3xl mb-2\\\'></i><p>Image loading...</p></div>\'">' +
+                  '<p class="text-xs text-violet-600 mb-2 text-center font-semibold"><i class="fas fa-magic mr-1"></i>After — AI Preview</p>' +
+                  '<img src="' + (state.resultUrl || '') + '" class="w-full rounded-xl border-2 border-violet-300 shadow-lg">' +
                 '</div>' +
               '</div>' +
-
-              // Disclaimer
-              '<div class="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-xl">' +
-                '<p class="text-xs text-amber-700"><i class="fas fa-info-circle mr-1"></i><strong>Disclaimer:</strong> This AI-generated preview is an approximation. Actual installed roofs will vary based on material, installation technique, lighting conditions, and architectural details. Use for visualization purposes only.</p>' +
-              '</div>' +
+              '<p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl p-2.5 mt-4"><i class="fas fa-info-circle mr-1"></i>AI-generated preview. Actual installed results will vary.</p>' +
             '</div>'
-          ) +
-        '</div>' +
+        ) +
       '</div>';
   }
 
-  window._tryonDownload = function () {
+  window._vizReturnVis = function () {
+    state.resultUrl = null; state.errorMsg = null; state.maskBase64 = null; state.jobId = null;
+    state.step = 3; render();
+  };
+  window._vizDL = function () {
     if (!state.resultUrl) return;
     var a = document.createElement('a');
     a.href = state.resultUrl;
-    a.download = 'virtual-roof-preview-' + state.roofStyle + '-' + state.roofColor.replace(/\s/g, '-') + '.png';
+    a.download = 'roof-preview-' + state.style + '-' + state.colorLabel.replace(/\s/g,'-') + '.png';
     a.target = '_blank';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
   };
 
-  // ════════════════════════════════════════════════════════
-  // History
-  // ════════════════════════════════════════════════════════
-
-  function loadHistory() {
-    var section = document.getElementById('historySection');
-    if (!section || !token) return;
-
-    api('GET', '/history').then(function (res) {
-      if (!res.success || !res.jobs || res.jobs.length === 0) return;
-
-      var html =
-        '<div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-5">' +
-          '<h3 class="font-bold text-gray-800 text-sm mb-3"><i class="fas fa-history text-violet-500 mr-2"></i>Recent Generations</h3>' +
-          '<div class="grid grid-cols-2 md:grid-cols-4 gap-3">';
-
-      res.jobs.forEach(function (job) {
-        var statusBadge = job.status === 'succeeded'
-          ? '<span class="text-[10px] px-1.5 py-0.5 bg-green-100 text-green-700 rounded-full font-medium">Done</span>'
-          : job.status === 'processing'
-            ? '<span class="text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded-full font-medium">Processing</span>'
-            : '<span class="text-[10px] px-1.5 py-0.5 bg-red-100 text-red-700 rounded-full font-medium">Failed</span>';
-
-        html += '<div class="border border-gray-200 rounded-xl overflow-hidden hover:shadow-md transition-shadow">';
-        if (job.final_image_url) {
-          html += '<img src="' + job.final_image_url + '" class="w-full h-28 object-cover">';
-        } else {
-          html += '<div class="w-full h-28 bg-gray-100 flex items-center justify-center"><i class="fas fa-image text-gray-300 text-xl"></i></div>';
-        }
-        html += '<div class="p-2">' +
-          '<div class="flex items-center justify-between">' +
-            '<span class="text-[11px] font-medium text-gray-600">' + (job.roof_style || 'metal') + '</span>' +
-            statusBadge +
-          '</div>' +
-          '<p class="text-[10px] text-gray-400 mt-0.5">' + (job.created_at || '').split('T')[0] + '</p>' +
-        '</div></div>';
-      });
-
-      html += '</div></div>';
-      section.innerHTML = html;
-    }).catch(function () { });
-  }
-
-  // ── Initialize ──
+  // ── Boot ───────────────────────────────────────────────
   render();
+
 })();

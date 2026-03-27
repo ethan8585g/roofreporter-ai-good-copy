@@ -5,15 +5,37 @@ import { resolveTeamOwner } from './team'
 export const d2dRoutes = new Hono<{ Bindings: Bindings }>()
 
 // ============================================================
-// AUTH MIDDLEWARE — Validate customer session token
-// Team members resolve to the owner's D2D data
+// PASSWORD HASHING — same algo as customer-auth.ts
 // ============================================================
-async function getUser(c: any): Promise<{ id: number; role?: string; effectiveOwnerId: number; isTeamMember: boolean } | null> {
+async function hashPassword(password: string, salt?: string): Promise<{ hash: string; salt: string }> {
+  const s = salt || crypto.randomUUID()
+  const data = new TextEncoder().encode(password + s)
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data)
+  const hashHex = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('')
+  return { hash: hashHex, salt: s }
+}
+
+// ============================================================
+// AUTH MIDDLEWARE — Validate customer session token
+// Team members resolve to the owner's D2D data.
+// Also loads per-member D2D permissions for access control.
+// ============================================================
+interface D2DUser {
+  id: number               // effective owner ID (used for all DB queries)
+  rawCustomerId: number    // the logged-in customer's own ID
+  role: string
+  effectiveOwnerId: number
+  isTeamMember: boolean
+  d2dMemberId: number | null
+  d2dPermissions: { d2d: string; reports: boolean; crm: boolean; secretary: boolean; team: boolean } | null
+}
+
+async function getUser(c: any): Promise<D2DUser | null> {
   const auth = c.req.header('Authorization')
   if (!auth || !auth.startsWith('Bearer ')) return null
   const token = auth.slice(7)
   const session = await c.env.DB.prepare(
-    "SELECT cs.customer_id, cu.name, cu.email FROM customer_sessions cs JOIN customers cu ON cu.id = cs.customer_id WHERE cs.session_token = ? AND cs.expires_at > datetime('now')"
+    "SELECT cs.customer_id FROM customer_sessions cs JOIN customers cu ON cu.id = cs.customer_id WHERE cs.session_token = ? AND cs.expires_at > datetime('now')"
   ).bind(token).first<any>()
   if (!session) return null
 
@@ -21,12 +43,31 @@ async function getUser(c: any): Promise<{ id: number; role?: string; effectiveOw
   const teamInfo = await resolveTeamOwner(c.env.DB, session.customer_id)
   const effectiveId = teamInfo.ownerId
 
-  // Check if user has a d2d_team_members entry for role
-  const member = await c.env.DB.prepare(
-    'SELECT role FROM d2d_team_members WHERE customer_id = ?'
-  ).bind(effectiveId).first<any>()
+  // Look up this specific user's D2D team member record (by their own customer_id)
+  let d2dMember: any = null
+  if (teamInfo.isTeamMember) {
+    d2dMember = await c.env.DB.prepare(
+      'SELECT id, role, permissions FROM d2d_team_members WHERE customer_id = ? AND owner_id = ? AND is_active = 1'
+    ).bind(session.customer_id, effectiveId).first<any>()
+  }
 
-  return { id: effectiveId, role: member?.role || 'member', effectiveOwnerId: effectiveId, isTeamMember: teamInfo.isTeamMember }
+  let d2dPermissions: any = null
+  if (teamInfo.isTeamMember) {
+    d2dPermissions = { d2d: 'all', reports: true, crm: true, secretary: false, team: false }
+    if (d2dMember?.permissions) {
+      try { d2dPermissions = { ...d2dPermissions, ...JSON.parse(d2dMember.permissions) } } catch (e) {}
+    }
+  }
+
+  return {
+    id: effectiveId,
+    rawCustomerId: session.customer_id,
+    role: d2dMember?.role || (teamInfo.isTeamMember ? 'salesperson' : 'owner'),
+    effectiveOwnerId: effectiveId,
+    isTeamMember: teamInfo.isTeamMember,
+    d2dMemberId: d2dMember?.id || null,
+    d2dPermissions
+  }
 }
 
 // ============================================================
@@ -52,6 +93,11 @@ async function ensureD2DTables(db: any) {
         FOREIGN KEY (owner_id) REFERENCES customers(id)
       )
     `).run()
+
+    // Add permissions column if it doesn't exist yet
+    try {
+      await db.prepare(`ALTER TABLE d2d_team_members ADD COLUMN permissions TEXT DEFAULT '{"d2d":"all","reports":true,"crm":true,"secretary":false,"team":false}'`).run()
+    } catch (e) {}
 
     await db.prepare(`
       CREATE TABLE IF NOT EXISTS d2d_turfs (
@@ -116,36 +162,105 @@ d2dRoutes.get('/team', async (c) => {
   await ensureD2DTables(c.env.DB)
 
   const members = await c.env.DB.prepare(
-    `SELECT tm.*, 
+    `SELECT tm.*,
       (SELECT COUNT(*) FROM d2d_turfs t WHERE t.assigned_to = tm.id) as turf_count,
       (SELECT COUNT(*) FROM d2d_pins p WHERE p.knocked_by = tm.id) as knock_count,
-      (SELECT COUNT(*) FROM d2d_pins p WHERE p.knocked_by = tm.id AND p.status = 'yes') as yes_count
+      (SELECT COUNT(*) FROM d2d_pins p WHERE p.knocked_by = tm.id AND p.status = 'yes') as yes_count,
+      (SELECT COUNT(*) FROM d2d_pins p WHERE p.knocked_by = tm.id AND p.status = 'no') as no_count,
+      (SELECT COUNT(*) FROM d2d_pins p WHERE p.knocked_by = tm.id AND p.status = 'no_answer') as no_answer_count,
+      (SELECT MAX(p.knocked_at) FROM d2d_pins p WHERE p.knocked_by = tm.id) as last_activity
      FROM d2d_team_members tm WHERE tm.owner_id = ? AND tm.is_active = 1 ORDER BY tm.name`
   ).bind(user.id).all()
 
   return c.json({ members: members.results })
 })
 
-// CREATE team member
+// TEAM ACTIVITY — per-member summary for admin tracking
+d2dRoutes.get('/team/activity', async (c) => {
+  const user = await getUser(c)
+  if (!user) return c.json({ error: 'Not authenticated' }, 401)
+  if (user.isTeamMember) return c.json({ error: 'Forbidden' }, 403)
+  await ensureD2DTables(c.env.DB)
+
+  const activity = await c.env.DB.prepare(`
+    SELECT tm.id, tm.name, tm.color, tm.email, tm.role,
+      COUNT(DISTINCT p.id) as total_knocks,
+      SUM(CASE WHEN p.status = 'yes' THEN 1 ELSE 0 END) as yes_count,
+      SUM(CASE WHEN p.status = 'no' THEN 1 ELSE 0 END) as no_count,
+      SUM(CASE WHEN p.status = 'no_answer' THEN 1 ELSE 0 END) as no_answer_count,
+      (SELECT COUNT(*) FROM d2d_turfs t WHERE t.assigned_to = tm.id AND t.owner_id = ?) as turf_count,
+      MAX(p.knocked_at) as last_activity
+    FROM d2d_team_members tm
+    LEFT JOIN d2d_pins p ON p.knocked_by = tm.id AND p.owner_id = ?
+    WHERE tm.owner_id = ? AND tm.is_active = 1
+    GROUP BY tm.id
+    ORDER BY total_knocks DESC
+  `).bind(user.id, user.id, user.id).all()
+
+  return c.json({ activity: activity.results })
+})
+
+// CREATE team member — also creates a customer login account when password is provided
 d2dRoutes.post('/team', async (c) => {
   const user = await getUser(c)
   if (!user) return c.json({ error: 'Not authenticated' }, 401)
   await ensureD2DTables(c.env.DB)
 
-  const { name, email, phone, role, color } = await c.req.json()
+  const { name, email, phone, role, color, password, permissions } = await c.req.json()
   if (!name) return c.json({ error: 'Name is required' }, 400)
 
-  // Check if this email matches an existing customer account
-  let customerId = null
-  if (email) {
-    const existing = await c.env.DB.prepare('SELECT id FROM customers WHERE email = ?').bind(email).first<any>()
+  let customerId: number | null = null
+
+  // If password is provided, create/update a customer account for this member
+  if (password && email) {
+    const cleanEmail = email.toLowerCase().trim()
+    if (password.length < 6) return c.json({ error: 'Password must be at least 6 characters' }, 400)
+
+    const { hash, salt } = await hashPassword(password)
+    const storedHash = `${salt}:${hash}`
+
+    const existing = await c.env.DB.prepare('SELECT id FROM customers WHERE email = ?').bind(cleanEmail).first<any>()
+    if (existing) {
+      // Update their password
+      await c.env.DB.prepare('UPDATE customers SET password_hash = ?, is_active = 1 WHERE id = ?').bind(storedHash, existing.id).run()
+      customerId = existing.id
+    } else {
+      // Create new customer account (no free trial credits — they use the owner's account)
+      const newCust = await c.env.DB.prepare(
+        `INSERT INTO customers (email, name, phone, password_hash, email_verified, report_credits, credits_used, free_trial_total, free_trial_used, is_active)
+         VALUES (?, ?, ?, ?, 1, 0, 0, 0, 0, 1)`
+      ).bind(cleanEmail, name, phone || null, storedHash).run()
+      customerId = newCust.meta.last_row_id as number
+    }
+
+    // Ensure they are in the team_members table so resolveTeamOwner works when they log in
+    const now = new Date().toISOString()
+    const existingTeamMember = await c.env.DB.prepare(
+      'SELECT id FROM team_members WHERE owner_id = ? AND member_customer_id = ?'
+    ).bind(user.id, customerId).first<any>()
+
+    if (!existingTeamMember) {
+      await c.env.DB.prepare(
+        `INSERT INTO team_members (owner_id, member_customer_id, email, name, role, status, joined_at)
+         VALUES (?, ?, ?, ?, 'member', 'active', ?)`
+      ).bind(user.id, customerId, email.toLowerCase().trim(), name, now).run()
+    } else {
+      await c.env.DB.prepare(
+        `UPDATE team_members SET status = 'active', member_customer_id = ?, name = ?, email = ? WHERE id = ?`
+      ).bind(customerId, name, email.toLowerCase().trim(), existingTeamMember.id).run()
+    }
+  } else if (email) {
+    // No password — just link to existing account if found
+    const existing = await c.env.DB.prepare('SELECT id FROM customers WHERE email = ?').bind(email.toLowerCase().trim()).first<any>()
     if (existing) customerId = existing.id
   }
 
+  const permStr = permissions ? JSON.stringify(permissions) : '{"d2d":"all","reports":true,"crm":true,"secretary":false,"team":false}'
+
   const result = await c.env.DB.prepare(
-    `INSERT INTO d2d_team_members (owner_id, customer_id, name, email, phone, role, color)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`
-  ).bind(user.id, customerId, name, email || null, phone || null, role || 'salesperson', color || '#3B82F6').run()
+    `INSERT INTO d2d_team_members (owner_id, customer_id, name, email, phone, role, color, permissions)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(user.id, customerId, name, email || null, phone || null, role || 'salesperson', color || '#3B82F6', permStr).run()
 
   return c.json({ success: true, id: result.meta.last_row_id })
 })
@@ -155,13 +270,32 @@ d2dRoutes.put('/team/:id', async (c) => {
   const user = await getUser(c)
   if (!user) return c.json({ error: 'Not authenticated' }, 401)
   const id = c.req.param('id')
-  const { name, email, phone, role, color, is_active } = await c.req.json()
+  const { name, email, phone, role, color, is_active, password, permissions } = await c.req.json()
 
-  await c.env.DB.prepare(
-    `UPDATE d2d_team_members SET name = COALESCE(?, name), email = COALESCE(?, email),
-     phone = COALESCE(?, phone), role = COALESCE(?, role), color = COALESCE(?, color),
-     is_active = COALESCE(?, is_active) WHERE id = ? AND owner_id = ?`
-  ).bind(name, email, phone, role, color, is_active, id, user.id).run()
+  // If new password provided, update the linked customer account
+  if (password && password.length >= 6) {
+    const member = await c.env.DB.prepare('SELECT customer_id FROM d2d_team_members WHERE id = ? AND owner_id = ?').bind(id, user.id).first<any>()
+    if (member?.customer_id) {
+      const { hash, salt } = await hashPassword(password)
+      await c.env.DB.prepare('UPDATE customers SET password_hash = ? WHERE id = ?').bind(`${salt}:${hash}`, member.customer_id).run()
+    }
+  }
+
+  const permStr = permissions !== undefined ? JSON.stringify(permissions) : undefined
+
+  let q = `UPDATE d2d_team_members SET name = COALESCE(?, name), email = COALESCE(?, email),
+    phone = COALESCE(?, phone), role = COALESCE(?, role), color = COALESCE(?, color),
+    is_active = COALESCE(?, is_active)`
+  const params: any[] = [name, email, phone, role, color, is_active !== undefined ? is_active : null]
+
+  if (permStr !== undefined) {
+    q += ', permissions = ?'
+    params.push(permStr)
+  }
+  q += ' WHERE id = ? AND owner_id = ?'
+  params.push(id, user.id)
+
+  await c.env.DB.prepare(q).bind(...params).run()
 
   return c.json({ success: true })
 })
@@ -179,23 +313,30 @@ d2dRoutes.delete('/team/:id', async (c) => {
 // TURFS
 // ============================================================
 
-// LIST turfs
+// LIST turfs — filtered by permissions for team members
 d2dRoutes.get('/turfs', async (c) => {
   const user = await getUser(c)
   if (!user) return c.json({ error: 'Not authenticated' }, 401)
   await ensureD2DTables(c.env.DB)
 
-  const turfs = await c.env.DB.prepare(
-    `SELECT t.*, tm.name as assigned_name, tm.color as member_color,
+  let q = `SELECT t.*, tm.name as assigned_name, tm.color as member_color,
       (SELECT COUNT(*) FROM d2d_pins p WHERE p.turf_id = t.id) as total_pins,
       (SELECT COUNT(*) FROM d2d_pins p WHERE p.turf_id = t.id AND p.status = 'yes') as yes_count,
       (SELECT COUNT(*) FROM d2d_pins p WHERE p.turf_id = t.id AND p.status = 'no') as no_count,
       (SELECT COUNT(*) FROM d2d_pins p WHERE p.turf_id = t.id AND p.status = 'no_answer') as no_answer_count,
       (SELECT COUNT(*) FROM d2d_pins p WHERE p.turf_id = t.id AND p.status = 'not_knocked') as not_knocked_count
      FROM d2d_turfs t LEFT JOIN d2d_team_members tm ON tm.id = t.assigned_to
-     WHERE t.owner_id = ? ORDER BY t.created_at DESC`
-  ).bind(user.id).all()
+     WHERE t.owner_id = ?`
+  const params: any[] = [user.id]
 
+  // Team members with 'assigned' permission see only their own turfs
+  if (user.isTeamMember && user.d2dPermissions?.d2d === 'assigned' && user.d2dMemberId) {
+    q += ' AND t.assigned_to = ?'
+    params.push(user.d2dMemberId)
+  }
+
+  q += ' ORDER BY t.created_at DESC'
+  const turfs = await c.env.DB.prepare(q).bind(...params).all()
   return c.json({ turfs: turfs.results })
 })
 
@@ -203,6 +344,7 @@ d2dRoutes.get('/turfs', async (c) => {
 d2dRoutes.post('/turfs', async (c) => {
   const user = await getUser(c)
   if (!user) return c.json({ error: 'Not authenticated' }, 401)
+  if (user.isTeamMember) return c.json({ error: 'Only the account owner can manage turfs' }, 403)
   await ensureD2DTables(c.env.DB)
 
   const { name, description, polygon, center_lat, center_lng, color, assigned_to } = await c.req.json()
@@ -225,6 +367,7 @@ d2dRoutes.post('/turfs', async (c) => {
 d2dRoutes.put('/turfs/:id', async (c) => {
   const user = await getUser(c)
   if (!user) return c.json({ error: 'Not authenticated' }, 401)
+  if (user.isTeamMember) return c.json({ error: 'Only the account owner can manage turfs' }, 403)
   const id = c.req.param('id')
   const { name, description, polygon, color, assigned_to, status } = await c.req.json()
 
@@ -247,8 +390,8 @@ d2dRoutes.put('/turfs/:id', async (c) => {
 d2dRoutes.delete('/turfs/:id', async (c) => {
   const user = await getUser(c)
   if (!user) return c.json({ error: 'Not authenticated' }, 401)
+  if (user.isTeamMember) return c.json({ error: 'Only the account owner can manage turfs' }, 403)
   const id = c.req.param('id')
-  // Delete pins first, then the turf
   await c.env.DB.prepare('DELETE FROM d2d_pins WHERE turf_id = ? AND owner_id = ?').bind(id, user.id).run()
   await c.env.DB.prepare('DELETE FROM d2d_turfs WHERE id = ? AND owner_id = ?').bind(id, user.id).run()
   return c.json({ success: true })
@@ -258,7 +401,7 @@ d2dRoutes.delete('/turfs/:id', async (c) => {
 // PINS (Door Knocks)
 // ============================================================
 
-// LIST pins for a turf (or all)
+// LIST pins — filtered by permissions for team members
 d2dRoutes.get('/pins', async (c) => {
   const user = await getUser(c)
   if (!user) return c.json({ error: 'Not authenticated' }, 401)
@@ -266,6 +409,7 @@ d2dRoutes.get('/pins', async (c) => {
 
   const turfId = c.req.query('turf_id')
   const status = c.req.query('status')
+  const memberId = c.req.query('member_id')
 
   let q = `SELECT p.*, tm.name as knocked_by_name, t.name as turf_name
      FROM d2d_pins p
@@ -273,8 +417,16 @@ d2dRoutes.get('/pins', async (c) => {
      LEFT JOIN d2d_turfs t ON t.id = p.turf_id
      WHERE p.owner_id = ?`
   const params: any[] = [user.id]
+
+  // Team members with 'assigned' permission see only pins in their turfs
+  if (user.isTeamMember && user.d2dPermissions?.d2d === 'assigned' && user.d2dMemberId) {
+    q += ' AND t.assigned_to = ?'
+    params.push(user.d2dMemberId)
+  }
+
   if (turfId) { q += ' AND p.turf_id = ?'; params.push(turfId) }
   if (status) { q += ' AND p.status = ?'; params.push(status) }
+  if (memberId) { q += ' AND p.knocked_by = ?'; params.push(memberId) }
   q += ' ORDER BY p.updated_at DESC'
 
   const pins = await c.env.DB.prepare(q).bind(...params).all()
@@ -347,245 +499,5 @@ d2dRoutes.get('/stats', async (c) => {
       (SELECT COUNT(*) FROM d2d_pins WHERE owner_id = ? AND status = 'not_knocked') as total_not_knocked
   `).bind(user.id, user.id, user.id, user.id, user.id, user.id, user.id).first()
 
-  return c.json({ stats })
-})
-
-// ============================================================
-// TURF ASSIGNMENT PUSH — Assign turf to team member + notify
-// ============================================================
-d2dRoutes.post('/turfs/:id/assign', async (c) => {
-  const user = await getUser(c)
-  if (!user) return c.json({ error: 'Not authenticated' }, 401)
-  await ensureD2DTables(c.env.DB)
-  const turfId = c.req.param('id')
-  const { team_member_id } = await c.req.json()
-
-  if (!team_member_id) return c.json({ error: 'team_member_id is required' }, 400)
-
-  // Verify ownership
-  const turf = await c.env.DB.prepare('SELECT * FROM d2d_turfs WHERE id = ? AND owner_id = ?').bind(turfId, user.id).first()
-  if (!turf) return c.json({ error: 'Turf not found' }, 404)
-
-  const member = await c.env.DB.prepare('SELECT * FROM d2d_team_members WHERE id = ? AND owner_id = ?').bind(team_member_id, user.id).first<any>()
-  if (!member) return c.json({ error: 'Team member not found' }, 404)
-
-  await c.env.DB.prepare(
-    'UPDATE d2d_turfs SET assigned_to = ?, status = ?, updated_at = datetime(\'now\') WHERE id = ?'
-  ).bind(team_member_id, 'assigned', turfId).run()
-
-  // Create in-app notification for the team member
-  try {
-    if (member.customer_id) {
-      await c.env.DB.prepare(
-        "INSERT INTO notifications (owner_id, type, title, message, link) VALUES (?, 'turf_assigned', ?, ?, '/customer/d2d')"
-      ).bind(member.customer_id, `New Turf Assigned: ${(turf as any).name}`, `You've been assigned the "${(turf as any).name}" turf for door knocking. Open your D2D Manager to see the territory.`).run()
-    }
-  } catch {}
-
-  // Send email notification to team member
-  try {
-    if (member.email) {
-      const ownerInfo = await c.env.DB.prepare('SELECT name, company_name, brand_business_name FROM customers WHERE id = ?').bind(user.id).first<any>()
-      const businessName = ownerInfo?.brand_business_name || ownerInfo?.company_name || ownerInfo?.name || 'Your Team'
-
-      const resendKey = (c.env as any).RESEND_API_KEY
-      if (resendKey) {
-        const emailHtml = `<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;background:#f8fafc">
-<div style="background:linear-gradient(135deg,#2563eb,#7c3aed);padding:24px;border-radius:12px 12px 0 0;text-align:center">
-  <h1 style="color:#fff;margin:0;font-size:20px">New Door Knocking Turf Assigned</h1>
-</div>
-<div style="background:#fff;padding:24px;border:1px solid #e2e8f0;border-radius:0 0 12px 12px">
-  <p style="font-size:16px;color:#1e293b">Hey <strong>${member.name}</strong>,</p>
-  <p style="color:#475569;line-height:1.6">${businessName} just assigned you a new door knocking territory:</p>
-  <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:16px;margin:16px 0;text-align:center">
-    <p style="margin:0;font-size:18px;font-weight:700;color:#0369a1">${(turf as any).name}</p>
-    ${(turf as any).description ? `<p style="margin:8px 0 0;color:#475569;font-size:13px">${(turf as any).description}</p>` : ''}
-  </div>
-  <p style="color:#475569;font-size:14px">Log in to your D2D Manager to view the territory map, track your door knocks, and log results.</p>
-  <div style="text-align:center;margin:24px 0">
-    <a href="${new URL(c.req.url).origin}/customer/d2d" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:12px 28px;border-radius:8px;font-weight:600;font-size:14px">Open D2D Manager</a>
-  </div>
-</div>
-<p style="text-align:center;color:#94a3b8;font-size:11px;margin-top:16px">&copy; ${new Date().getFullYear()} RoofReporterAI</p>
-</body></html>`
-
-        await fetch('https://api.resend.com/emails', {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            from: 'RoofReporterAI <onboarding@resend.dev>',
-            to: [member.email],
-            subject: `New Turf Assigned: ${(turf as any).name} — ${businessName}`,
-            html: emailHtml
-          })
-        }).catch(() => {})
-      }
-    }
-  } catch {}
-
-  return c.json({
-    success: true,
-    message: `Turf assigned to ${member.name}`,
-    turf_id: parseInt(turfId),
-    assigned_to: { id: member.id, name: member.name, email: member.email },
-    notification_sent: !!member.email
-  })
-})
-
-// GET /team/:id/overview — Admin overview of a specific team member
-d2dRoutes.get('/team/:id/overview', async (c) => {
-  const user = await getUser(c)
-  if (!user) return c.json({ error: 'Not authenticated' }, 401)
-  await ensureD2DTables(c.env.DB)
-  const memberId = c.req.param('id')
-
-  const member = await c.env.DB.prepare(
-    'SELECT * FROM d2d_team_members WHERE id = ? AND owner_id = ?'
-  ).bind(memberId, user.id).first<any>()
-  if (!member) return c.json({ error: 'Team member not found' }, 404)
-
-  // Get assigned turfs
-  const { results: turfs } = await c.env.DB.prepare(
-    'SELECT * FROM d2d_turfs WHERE assigned_to = ? ORDER BY created_at DESC'
-  ).bind(memberId).all()
-
-  // Get pin stats for this member
-  const pinStats = await c.env.DB.prepare(`
-    SELECT
-      COUNT(*) as total_pins,
-      COUNT(CASE WHEN status = 'yes' THEN 1 END) as yes_count,
-      COUNT(CASE WHEN status = 'no' THEN 1 END) as no_count,
-      COUNT(CASE WHEN status = 'no_answer' THEN 1 END) as no_answer_count,
-      COUNT(CASE WHEN status = 'not_knocked' THEN 1 END) as not_knocked_count,
-      COUNT(CASE WHEN status = 'callback' THEN 1 END) as callback_count
-    FROM d2d_pins WHERE knocked_by = ?
-  `).bind(memberId).first<any>()
-
-  // Get recent pins
-  const { results: recentPins } = await c.env.DB.prepare(
-    'SELECT * FROM d2d_pins WHERE knocked_by = ? ORDER BY knocked_at DESC LIMIT 25'
-  ).bind(memberId).all()
-
-  // Calculate success rate
-  const totalKnocked = (pinStats?.total_pins || 0) - (pinStats?.not_knocked_count || 0)
-  const successRate = totalKnocked > 0 ? Math.round(((pinStats?.yes_count || 0) / totalKnocked) * 100) : 0
-
-  return c.json({
-    member,
-    turfs: turfs || [],
-    stats: {
-      ...(pinStats || {}),
-      total_knocked: totalKnocked,
-      success_rate: successRate
-    },
-    recent_pins: recentPins || []
-  })
-})
-
-// ============================================================
-// CRM MODULE TOGGLE — Admin enables/disables D2D CRM modules
-// ============================================================
-d2dRoutes.get('/modules', async (c) => {
-  const user = await getUser(c)
-  if (!user) return c.json({ error: 'Not authenticated' }, 401)
-
-  const row = await c.env.DB.prepare(
-    "SELECT setting_value FROM settings WHERE setting_key = 'd2d_modules' AND master_company_id = ?"
-  ).bind(user.id).first<any>()
-
-  const defaults = {
-    turfs_enabled: true,
-    pins_enabled: true,
-    team_enabled: true,
-    map_view_enabled: true,
-    success_metrics_enabled: true,
-    route_planning_enabled: false,
-    incentives_enabled: false,
-  }
-
-  let modules = defaults
-  if (row?.setting_value) {
-    try { modules = { ...defaults, ...JSON.parse(row.setting_value) } } catch {}
-  }
-
-  return c.json({ modules })
-})
-
-d2dRoutes.put('/modules', async (c) => {
-  const user = await getUser(c)
-  if (!user) return c.json({ error: 'Not authenticated' }, 401)
-  const body = await c.req.json()
-
-  await c.env.DB.prepare(`
-    INSERT OR REPLACE INTO settings (master_company_id, setting_key, setting_value)
-    VALUES (?, 'd2d_modules', ?)
-  `).bind(user.id, JSON.stringify(body.modules || body)).run()
-
-  return c.json({ success: true, modules: body.modules || body })
-})
-
-// ============================================================
-// MAP PINS — Get all pins with lat/lng for map display
-// ============================================================
-d2dRoutes.get('/map-pins', async (c) => {
-  const user = await getUser(c)
-  if (!user) return c.json({ error: 'Not authenticated' }, 401)
-  await ensureD2DTables(c.env.DB)
-
-  const { team_member_id, turf_id, status } = c.req.query() as any
-  let query = 'SELECT p.*, t.name as turf_name, tm.name as member_name FROM d2d_pins p LEFT JOIN d2d_turfs t ON t.id = p.turf_id LEFT JOIN d2d_team_members tm ON tm.id = p.knocked_by WHERE p.owner_id = ?'
-  const params: any[] = [user.id]
-
-  if (team_member_id) { query += ' AND p.knocked_by = ?'; params.push(team_member_id) }
-  if (turf_id) { query += ' AND p.turf_id = ?'; params.push(turf_id) }
-  if (status) { query += ' AND p.status = ?'; params.push(status) }
-
-  query += ' ORDER BY p.knocked_at DESC LIMIT 500'
-  const { results } = await c.env.DB.prepare(query).bind(...params).all()
-  return c.json({ pins: results })
-})
-
-// ============================================================
-// ENHANCED STATS — Per-member and per-turf breakdown
-// ============================================================
-d2dRoutes.get('/stats/detailed', async (c) => {
-  const user = await getUser(c)
-  if (!user) return c.json({ error: 'Not authenticated' }, 401)
-  await ensureD2DTables(c.env.DB)
-
-  // Per-member stats
-  const memberStats = await c.env.DB.prepare(`
-    SELECT tm.id, tm.name, tm.email,
-      COUNT(p.id) as total_pins,
-      SUM(CASE WHEN p.status = 'yes' THEN 1 ELSE 0 END) as yes_count,
-      SUM(CASE WHEN p.status = 'no' THEN 1 ELSE 0 END) as no_count,
-      SUM(CASE WHEN p.status = 'no_answer' THEN 1 ELSE 0 END) as no_answer_count,
-      SUM(CASE WHEN p.status != 'not_knocked' THEN 1 ELSE 0 END) as knocked_count
-    FROM d2d_team_members tm
-    LEFT JOIN d2d_pins p ON p.knocked_by = tm.id
-    WHERE tm.owner_id = ? AND tm.is_active = 1
-    GROUP BY tm.id
-    ORDER BY yes_count DESC
-  `).bind(user.id).all()
-
-  // Per-turf stats
-  const turfStats = await c.env.DB.prepare(`
-    SELECT t.id, t.name, t.assigned_to, t.status,
-      COUNT(p.id) as total_pins,
-      SUM(CASE WHEN p.status = 'yes' THEN 1 ELSE 0 END) as yes_count,
-      SUM(CASE WHEN p.status = 'no' THEN 1 ELSE 0 END) as no_count
-    FROM d2d_turfs t
-    LEFT JOIN d2d_pins p ON p.turf_id = t.id
-    WHERE t.owner_id = ?
-    GROUP BY t.id
-    ORDER BY t.created_at DESC
-  `).bind(user.id).all()
-
-  return c.json({
-    member_stats: (memberStats.results || []).map((m: any) => ({
-      ...m,
-      success_rate: m.knocked_count > 0 ? Math.round((m.yes_count / m.knocked_count) * 100) : 0
-    })),
-    turf_stats: turfStats.results || []
-  })
+  return c.json({ stats, viewer_role: user.isTeamMember ? 'member' : 'owner' })
 })

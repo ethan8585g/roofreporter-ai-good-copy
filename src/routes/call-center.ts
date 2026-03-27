@@ -461,11 +461,11 @@ callCenterRoutes.post('/call-complete', async (c) => {
     // Update call log
     if (room_name) {
       await c.env.DB.prepare(
-        `UPDATE cc_call_logs SET call_status=?, call_outcome=?, call_duration_seconds=?, talk_time_seconds=?, call_summary=?, transcript=?, call_transcript=?, caller_sentiment=?, sentiment=?, objections_raised=?, follow_up_action=?, follow_up_date=?, ended_at=datetime('now') WHERE livekit_room_id=? OR livekit_room_name=?`
+        `UPDATE cc_call_logs SET call_status=?, call_outcome=?, call_duration_seconds=?, talk_time_seconds=?, call_summary=?, call_transcript=?, caller_sentiment=?, objections_raised=?, follow_up_action=?, follow_up_date=?, ended_at=datetime('now') WHERE livekit_room_id=?`
       ).bind(
         call_status || 'completed', call_outcome || '', call_duration_seconds || 0, talk_time_seconds || 0,
-        call_summary || '', call_transcript || '', call_transcript || '', caller_sentiment || '', caller_sentiment || '', objections_raised || '',
-        follow_up_action || '', follow_up_date || null, room_name, room_name
+        call_summary || '', call_transcript || '', caller_sentiment || '', objections_raised || '',
+        follow_up_action || '', follow_up_date || null, room_name
       ).run()
     }
 
@@ -509,7 +509,7 @@ callCenterRoutes.post('/call-complete', async (c) => {
     }
 
     // Update campaign stats
-    const log = room_name ? await c.env.DB.prepare('SELECT campaign_id FROM cc_call_logs WHERE livekit_room_id=? OR livekit_room_name=?').bind(room_name, room_name).first<any>() : null
+    const log = room_name ? await c.env.DB.prepare('SELECT campaign_id FROM cc_call_logs WHERE livekit_room_id=?').bind(room_name).first<any>() : null
     if (log?.campaign_id) {
       const cStats = await c.env.DB.prepare(
         `SELECT COUNT(*) as total, SUM(CASE WHEN call_status='connected' OR call_status='completed' THEN 1 ELSE 0 END) as connects, SUM(CASE WHEN call_outcome='interested' THEN 1 ELSE 0 END) as interested, SUM(CASE WHEN call_outcome='demo_scheduled' THEN 1 ELSE 0 END) as demos, SUM(CASE WHEN call_outcome='converted' THEN 1 ELSE 0 END) as converted FROM cc_call_logs WHERE campaign_id=?`
@@ -938,52 +938,6 @@ async function ccTwilioAPI(accountSid: string, authToken: string, method: string
   return resp.json() as Promise<any>
 }
 
-// Unified Twilio helper for call-center (supports OAuth + Basic)
-let _ccTwilioOAuthToken: { token: string; expires: number } | null = null
-
-async function ccGetTwilioOAuthToken(clientId: string, clientSecret: string): Promise<string | null> {
-  if (_ccTwilioOAuthToken && Date.now() < _ccTwilioOAuthToken.expires - 60000) return _ccTwilioOAuthToken.token
-  try {
-    const resp = await fetch('https://oauth.twilio.com/v2/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: `client_id=${encodeURIComponent(clientId)}&client_secret=${encodeURIComponent(clientSecret)}&grant_type=client_credentials`,
-    })
-    const data = await resp.json() as any
-    if (data.access_token) {
-      _ccTwilioOAuthToken = { token: data.access_token, expires: Date.now() + (data.expires_in || 3600) * 1000 }
-      return data.access_token
-    }
-    return null
-  } catch { return null }
-}
-
-async function ccTwilioSend(env: any, method: string, path: string, body?: Record<string, string>) {
-  const sid = env.TWILIO_ACCOUNT_SID
-  const auth = env.TWILIO_AUTH_TOKEN
-  const oauthId = env.TWILIO_OAUTH_CLIENT_ID
-  const oauthSecret = env.TWILIO_OAUTH_CLIENT_SECRET
-  if (sid && oauthId && oauthSecret) {
-    try {
-      const token = await ccGetTwilioOAuthToken(oauthId, oauthSecret)
-      if (token) {
-        const url = `https://api.twilio.com/2010-04-01/Accounts/${sid}${path}.json`
-        let formBody = ''
-        if (body) formBody = Object.entries(body).map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('&')
-        const resp = await fetch(url, { method, headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/x-www-form-urlencoded' }, body: formBody || undefined })
-        return resp.json() as Promise<any>
-      }
-    } catch (err: any) { console.error('[CC TwilioOAuth] failed:', err.message) }
-  }
-  if (sid && auth) return ccTwilioAPI(sid, auth, method, path, body)
-  throw new Error('No Twilio credentials configured')
-}
-
-function ccHasTwilioCredentials(env: any): boolean {
-  const sid = env.TWILIO_ACCOUNT_SID
-  return !!(sid && (env.TWILIO_AUTH_TOKEN || (env.TWILIO_OAUTH_CLIENT_ID && env.TWILIO_OAUTH_CLIENT_SECRET)))
-}
-
 // Helper: base64url encode
 function ccBase64urlEncode(data: any): string {
   const bytes = typeof data === 'string' ? new TextEncoder().encode(data) : new Uint8Array(data)
@@ -1028,6 +982,7 @@ callCenterRoutes.get('/quick-connect/status', async (c) => {
     const config = results?.[0]
     if (!config) return c.json({ status: 'not_started' })
 
+    const aiDigits = (config.assigned_phone_number || '').replace(/^\+1/, '').replace(/\D/g, '')
     return c.json({
       status: config.connection_status || 'not_started',
       business_phone: config.business_phone || '',
@@ -1038,6 +993,8 @@ callCenterRoutes.get('/quick-connect/status', async (c) => {
       is_active: !!config.is_active,
       has_trunk: !!config.livekit_inbound_trunk_id,
       has_dispatch: !!config.livekit_dispatch_rule_id,
+      forwarding_code: aiDigits ? `*72${aiDigits}` : '',
+      disable_forwarding_code: '*73',
       label: config.label || 'Primary Outbound Line',
     })
   } catch (e: any) {
@@ -1045,7 +1002,7 @@ callCenterRoutes.get('/quick-connect/status', async (c) => {
   }
 })
 
-// POST /quick-connect/send-code — Generate verification code (LiveKit-only, no Twilio)
+// POST /quick-connect/send-code — Send SMS verification to admin phone
 callCenterRoutes.post('/quick-connect/send-code', async (c) => {
   try {
     const { phone_number } = await c.req.json()
@@ -1068,7 +1025,32 @@ callCenterRoutes.post('/quick-connect/send-code', async (c) => {
       ).bind(normalized).run()
     }
 
-    // Generate a 6-digit verification code
+    // Try Twilio Verify
+    const twilioSid = (c.env as any).TWILIO_ACCOUNT_SID
+    const twilioAuth = (c.env as any).TWILIO_AUTH_TOKEN
+    const twilioVerifySid = (c.env as any).TWILIO_VERIFY_SERVICE_SID
+
+    if (twilioSid && twilioAuth && twilioVerifySid) {
+      try {
+        const url = `https://verify.twilio.com/v2/Services/${twilioVerifySid}/Verifications`
+        const resp = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Basic ' + btoa(`${twilioSid}:${twilioAuth}`),
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: `To=${encodeURIComponent(normalized)}&Channel=sms`,
+        })
+        const data = await resp.json() as any
+        if (data.status === 'pending') {
+          return c.json({ success: true, phone_number: normalized, message: `Verification code sent to ${normalized}`, method: 'twilio_verify' })
+        }
+      } catch (err: any) {
+        console.error('[CC QuickConnect] Twilio Verify failed:', err.message)
+      }
+    }
+
+    // Fallback: generate and store a code
     const code = String(Math.floor(100000 + Math.random() * 900000))
     const configRow = await c.env.DB.prepare(`SELECT id FROM cc_phone_config ORDER BY id DESC LIMIT 1`).first<any>()
     if (configRow) {
@@ -1077,16 +1059,30 @@ callCenterRoutes.post('/quick-connect/send-code', async (c) => {
       ).bind(code, configRow.id).run()
     }
 
-    console.log(`[CC QuickConnect] send-code for ${normalized}, code generated`)
+    // Try Twilio SMS
+    if (twilioSid && twilioAuth) {
+      const twilioFrom = (c.env as any).TWILIO_PHONE_NUMBER
+      if (twilioFrom) {
+        try {
+          await ccTwilioAPI(twilioSid, twilioAuth, 'POST', '/Messages', {
+            To: normalized, From: twilioFrom,
+            Body: `Your RoofReporterAI Call Center verification code is: ${code}. Expires in 10 min.`,
+          })
+          return c.json({ success: true, phone_number: normalized, message: `Verification code sent to ${normalized}`, method: 'twilio_sms' })
+        } catch (err: any) {
+          console.error('[CC QuickConnect] Twilio SMS failed:', err.message)
+        }
+      }
+    }
 
-    // LiveKit-only: Always show code on screen
-    return c.json({ success: true, phone_number: normalized, message: 'Your verification code is shown below. Enter it to connect your phone.', method: 'on_screen', verification_code: code, dev_code: code })
+    // Dev mode fallback
+    return c.json({ success: true, phone_number: normalized, message: `Dev mode — verification code is: ${code}`, method: 'dev_mode', dev_code: code })
   } catch (e: any) {
     return c.json({ error: e.message }, 500)
   }
 })
 
-// POST /quick-connect/verify — Verify code and auto-setup phone number (LiveKit-only)
+// POST /quick-connect/verify — Verify code and auto-setup phone number
 callCenterRoutes.post('/quick-connect/verify', async (c) => {
   try {
     const { phone_number, code } = await c.req.json()
@@ -1094,13 +1090,35 @@ callCenterRoutes.post('/quick-connect/verify', async (c) => {
 
     const normalized = normalizePhone(phone_number || '')
 
-    // Verify code against stored code in DB
+    // Verify code via Twilio Verify
+    const twilioSid = (c.env as any).TWILIO_ACCOUNT_SID
+    const twilioAuth = (c.env as any).TWILIO_AUTH_TOKEN
+    const twilioVerifySid = (c.env as any).TWILIO_VERIFY_SERVICE_SID
     let verified = false
-    const config = await c.env.DB.prepare(
-      `SELECT verification_code, verification_expires FROM cc_phone_config ORDER BY id DESC LIMIT 1`
-    ).first<any>()
-    if (config?.verification_code === code && config?.verification_expires > new Date().toISOString()) {
-      verified = true
+
+    if (twilioSid && twilioAuth && twilioVerifySid) {
+      try {
+        const url = `https://verify.twilio.com/v2/Services/${twilioVerifySid}/VerificationCheck`
+        const resp = await fetch(url, {
+          method: 'POST',
+          headers: { 'Authorization': 'Basic ' + btoa(`${twilioSid}:${twilioAuth}`), 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: `To=${encodeURIComponent(normalized)}&Code=${encodeURIComponent(code)}`,
+        })
+        const data = await resp.json() as any
+        verified = data.status === 'approved'
+      } catch (err: any) {
+        console.error('[CC QuickConnect] Verify check failed:', err.message)
+      }
+    }
+
+    // Fallback: check stored code
+    if (!verified) {
+      const config = await c.env.DB.prepare(
+        `SELECT verification_code, verification_expires FROM cc_phone_config ORDER BY id DESC LIMIT 1`
+      ).first<any>()
+      if (config?.verification_code === code && config?.verification_expires > new Date().toISOString()) {
+        verified = true
+      }
     }
 
     // Dev bypass: "000000"
@@ -1108,7 +1126,7 @@ callCenterRoutes.post('/quick-connect/verify', async (c) => {
 
     if (!verified) return c.json({ error: 'Invalid or expired verification code' }, 400)
 
-    // --- AUTO PURCHASE PHONE NUMBER VIA LIVEKIT ---
+    // --- AUTO PURCHASE PHONE NUMBER ---
     const apiKey = (c.env as any).LIVEKIT_API_KEY
     const apiSecret = (c.env as any).LIVEKIT_API_SECRET
     const livekitUrl = (c.env as any).LIVEKIT_URL
@@ -1117,6 +1135,7 @@ callCenterRoutes.post('/quick-connect/verify', async (c) => {
     let trunkId = ''
     let dispatchId = ''
     let connectionMethod = 'livekit_number'
+    let forwardingCode = ''
 
     // Check if already have a number
     const existingConfig = await c.env.DB.prepare(
@@ -1127,68 +1146,94 @@ callCenterRoutes.post('/quick-connect/verify', async (c) => {
       aiPhoneNumber = existingConfig.assigned_phone_number
       trunkId = existingConfig.livekit_inbound_trunk_id
       dispatchId = existingConfig.livekit_dispatch_rule_id || ''
-      console.log(`[CC QuickConnect] Reusing existing number ${aiPhoneNumber}`)
-    } else if (apiKey && apiSecret && livekitUrl) {
-      // Purchase a LiveKit phone number
-      console.log(`[CC QuickConnect] Purchasing LiveKit phone number`)
-      try {
-        const searchResult = await ccLivekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST',
-          '/twirp/livekit.PhoneNumberService/SearchPhoneNumbers', { country_code: 'US', limit: 5 })
-        
-        if (searchResult?.items?.length > 0) {
-          // Create dispatch rule first
-          const dispatchResult = await ccLivekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST',
-            '/twirp/livekit.SIP/CreateSIPDispatchRule', {
-              rule: { dispatchRuleIndividual: { roomPrefix: `cc-outbound-` } },
-              name: `cc-outbound-dispatch`,
-              metadata: JSON.stringify({ service: 'call_center_outbound' }),
-            })
-          dispatchId = dispatchResult?.sip_dispatch_rule_id || ''
-
-          // Purchase number and assign to dispatch rule
-          const purchaseResult = await ccLivekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST',
-            '/twirp/livekit.PhoneNumberService/PurchasePhoneNumber', { 
-              phone_numbers: [searchResult.items[0].e164_format],
-              sip_dispatch_rule_id: dispatchId || undefined
-            })
-          if (purchaseResult?.phone_numbers?.length > 0) {
-            aiPhoneNumber = purchaseResult.phone_numbers[0].e164_format
-            connectionMethod = 'livekit_direct'
-            console.log(`[CC QuickConnect] Purchased number: ${aiPhoneNumber}, dispatch: ${dispatchId}`)
-
-            // Update number with dispatch rule if not already set
-            if (dispatchId && !purchaseResult.phone_numbers[0].sip_dispatch_rule_id) {
-              try {
+    } else {
+      // Option A: LiveKit Phone Numbers
+      if (apiKey && apiSecret && livekitUrl) {
+        try {
+          const searchResult = await ccLivekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST',
+            '/twirp/livekit.PhoneNumberService/SearchPhoneNumbers', { country_code: 'US', limit: 5 })
+          if (searchResult?.items?.length > 0) {
+            const purchaseResult = await ccLivekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST',
+              '/twirp/livekit.PhoneNumberService/PurchasePhoneNumber', { phone_numbers: [searchResult.items[0].e164_format] })
+            if (purchaseResult?.phone_numbers?.length > 0) {
+              aiPhoneNumber = purchaseResult.phone_numbers[0].e164_format
+              connectionMethod = 'livekit_direct'
+              const dispatchResult = await ccLivekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST',
+                '/twirp/livekit.SIP/CreateSIPDispatchRule', {
+                  rule: { dispatchRuleIndividual: { roomPrefix: `cc-outbound-` } },
+                  name: `cc-outbound-dispatch`,
+                  metadata: JSON.stringify({ service: 'call_center_outbound' }),
+                })
+              dispatchId = dispatchResult?.sip_dispatch_rule_id || ''
+              if (dispatchId) {
                 await ccLivekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST',
                   '/twirp/livekit.PhoneNumberService/UpdatePhoneNumber',
                   { phone_number: aiPhoneNumber, sip_dispatch_rule_id: dispatchId })
-              } catch (e: any) {
-                console.error(`[CC QuickConnect] Failed to update number with dispatch rule:`, e.message)
               }
             }
           }
+        } catch (err: any) {
+          console.error('[CC QuickConnect] LiveKit Phone Numbers failed:', err.message)
         }
-      } catch (err: any) {
-        console.error('[CC QuickConnect] LiveKit Phone Numbers failed:', err.message)
+      }
+
+      // Option B: Twilio + LiveKit SIP
+      if (!aiPhoneNumber && twilioSid && twilioAuth) {
+        try {
+          let search = await ccTwilioAPI(twilioSid, twilioAuth, 'GET', '/AvailablePhoneNumbers/CA/Local?AreaCode=780&VoiceEnabled=true&PageSize=1', undefined)
+          if (!search?.available_phone_numbers?.length) search = await ccTwilioAPI(twilioSid, twilioAuth, 'GET', '/AvailablePhoneNumbers/CA/Local?VoiceEnabled=true&PageSize=1', undefined)
+          if (!search?.available_phone_numbers?.length) search = await ccTwilioAPI(twilioSid, twilioAuth, 'GET', '/AvailablePhoneNumbers/US/Local?VoiceEnabled=true&PageSize=1', undefined)
+
+          if (search?.available_phone_numbers?.length > 0) {
+            const purchased = await ccTwilioAPI(twilioSid, twilioAuth, 'POST', '/IncomingPhoneNumbers', {
+              PhoneNumber: search.available_phone_numbers[0].phone_number,
+              FriendlyName: `RoofReporterAI Call Center Outbound`,
+            })
+            if (purchased?.sid) {
+              aiPhoneNumber = purchased.phone_number
+              connectionMethod = 'twilio_sip'
+              if (apiKey && apiSecret && livekitUrl) {
+                const trunkResult = await ccLivekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST',
+                  '/twirp/livekit.SIP/CreateSIPInboundTrunk', {
+                    trunk: { name: `cc-outbound`, numbers: [aiPhoneNumber], krisp_enabled: true, metadata: JSON.stringify({ service: 'call_center' }) }
+                  })
+                trunkId = trunkResult?.sip_trunk_id || trunkResult?.trunk?.sip_trunk_id || ''
+                const dispatchResult = await ccLivekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST',
+                  '/twirp/livekit.SIP/CreateSIPDispatchRule', {
+                    trunk_ids: trunkId ? [trunkId] : [],
+                    rule: { dispatchRuleIndividual: { roomPrefix: `cc-outbound-` } },
+                    name: `cc-outbound-dispatch`,
+                    metadata: JSON.stringify({ service: 'call_center' }),
+                  })
+                dispatchId = dispatchResult?.sip_dispatch_rule_id || ''
+              }
+            }
+          }
+        } catch (err: any) {
+          console.error('[CC QuickConnect] Twilio purchase failed:', err.message)
+        }
+      }
+
+      // Option C: Dev placeholder
+      if (!aiPhoneNumber) {
+        aiPhoneNumber = '+17800000002'
+        connectionMethod = 'dev_placeholder'
       }
     }
 
-    // Dev placeholder fallback
     if (!aiPhoneNumber) {
-      aiPhoneNumber = '+17800000002'
-      connectionMethod = 'dev_placeholder'
+      return c.json({ error: 'Unable to auto-purchase phone number. Configure Twilio/LiveKit API keys.', verified: true }, 503)
     }
 
-    if (!aiPhoneNumber) {
-      return c.json({ error: 'Unable to auto-purchase phone number. Ensure LiveKit API keys are configured.', verified: true }, 503)
-    }
+    const aiDigits = aiPhoneNumber.replace(/^\+1/, '').replace(/\D/g, '')
+    forwardingCode = `*72${aiDigits}`
 
-    // Update config — mark as CONNECTED immediately
+    // Update config
     await c.env.DB.prepare(`
       UPDATE cc_phone_config SET
         business_phone = ?,
         assigned_phone_number = ?,
-        connection_status = 'connected',
+        connection_status = 'verified',
         forwarding_method = ?,
         livekit_inbound_trunk_id = ?,
         livekit_dispatch_rule_id = ?,
@@ -1196,24 +1241,29 @@ callCenterRoutes.post('/quick-connect/verify', async (c) => {
         verification_expires = NULL,
         phone_verified = 1,
         phone_verified_at = datetime('now'),
-        is_active = 1,
         updated_at = datetime('now')
       WHERE id = (SELECT id FROM cc_phone_config ORDER BY id DESC LIMIT 1)
     `).bind(normalized, aiPhoneNumber, connectionMethod, trunkId || '', dispatchId || '').run()
 
-    const aiPhoneDisplay = formatPhoneDisplay(aiPhoneNumber)
-    const bizPhoneDisplay = formatPhoneDisplay(normalized)
-
-    console.log(`[CC QuickConnect] SUCCESS — business=${normalized}, ai=${aiPhoneNumber}, method=${connectionMethod}`)
-
     return c.json({
-      success: true, verified: true, connected: true,
+      success: true, verified: true,
       business_phone: normalized,
-      business_phone_display: bizPhoneDisplay,
+      business_phone_display: formatPhoneDisplay(normalized),
       ai_phone_number: aiPhoneNumber,
-      ai_phone_display: aiPhoneDisplay,
+      ai_phone_display: formatPhoneDisplay(aiPhoneNumber),
       connection_method: connectionMethod,
-      message: `Phone verified and AI call center is LIVE! Your AI line is ${aiPhoneDisplay}.`,
+      trunk_id: trunkId,
+      dispatch_rule_id: dispatchId,
+      forwarding_code: forwardingCode,
+      disable_forwarding_code: '*73',
+      instructions: {
+        step1: `Pick up your business phone (${formatPhoneDisplay(normalized)})`,
+        step2: `Dial: ${forwardingCode}`,
+        step3: 'Wait for the confirmation tone (2 beeps)',
+        step4: 'Done! Calls forward to the AI sales agent.',
+        disable: 'To disable: Dial *73',
+      },
+      message: 'Phone verified and AI call center number assigned!',
     })
   } catch (e: any) {
     console.error('[CC QuickConnect] Setup error:', e)
@@ -1239,229 +1289,8 @@ callCenterRoutes.post('/quick-connect/disconnect', async (c) => {
     await c.env.DB.prepare(
       `UPDATE cc_phone_config SET connection_status = 'disconnected', is_active = 0, updated_at = datetime('now') WHERE id = (SELECT id FROM cc_phone_config ORDER BY id DESC LIMIT 1)`
     ).run()
-    return c.json({ success: true, message: 'Call center phone disconnected.' })
+    return c.json({ success: true, message: 'Call center phone disconnected. Dial *73 to deactivate forwarding.' })
   } catch (e: any) {
     return c.json({ error: e.message }, 500)
   }
-})
-
-// POST /quick-connect/resend-sms — Resend setup details via SMS
-callCenterRoutes.post('/quick-connect/resend-sms', async (c) => {
-  try {
-    const config = await c.env.DB.prepare(
-      `SELECT business_phone, assigned_phone_number FROM cc_phone_config ORDER BY id DESC LIMIT 1`
-    ).first<any>()
-
-    if (!config?.business_phone || !config?.assigned_phone_number) {
-      return c.json({ error: 'Phone not configured yet.' }, 400)
-    }
-
-    const bizPhoneDisplay = formatPhoneDisplay(config.business_phone)
-    const aiPhoneDisplay = formatPhoneDisplay(config.assigned_phone_number)
-    const aiDigits = config.assigned_phone_number.replace(/^\+1/, '').replace(/\D/g, '')
-
-    const twilioSid = (c.env as any).TWILIO_ACCOUNT_SID
-    const twilioAuth = (c.env as any).TWILIO_AUTH_TOKEN
-    const twilioFromNumber = (c.env as any).TWILIO_PHONE_NUMBER
-
-    if (!twilioSid || !twilioAuth || !twilioFromNumber) {
-      return c.json({ error: 'SMS service not configured' }, 503)
-    }
-
-    await ccTwilioAPI(twilioSid, twilioAuth, 'POST', '/Messages', {
-      To: config.business_phone,
-      From: twilioFromNumber,
-      Body: `RoofReporterAI Call Center is LIVE!\n\nYour AI call center number: ${aiPhoneDisplay}\n\nHow it works:\n- Calls to ${bizPhoneDisplay} ring your phone first\n- If you don't answer, AI sales agent picks up\n- You get an SMS summary after every AI-handled call\n\nYour AI call center is automatically connected and ready to go!\n\nManage at your Super Admin Dashboard`,
-    })
-
-    return c.json({ success: true, message: `Setup details sent to ${bizPhoneDisplay}. Check your texts!` })
-  } catch (e: any) {
-    console.error('[CC QuickConnect] Resend SMS failed:', e.message)
-    return c.json({ error: 'Failed to send SMS.' }, 500)
-  }
-})
-
-// ============================================================
-// PHONE LINES — Multi-line management with dispatch rules
-// ============================================================
-// Dispatch Types:
-//   outbound_prompt_leadlist: Outbound only — triggered by admin prompt or outreach lead list campaign
-//   inbound_forwarding: Inbound only — answers calls when toggled on + user has call forwarding active on mobile
-
-// GET /phone-lines — List all configured phone lines
-callCenterRoutes.get('/phone-lines', async (c) => {
-  try {
-    const { results } = await c.env.DB.prepare(
-      `SELECT * FROM cc_phone_config ORDER BY id ASC`
-    ).all<any>()
-    return c.json({
-      lines: (results || []).map((l: any) => ({
-        ...l,
-        business_phone_display: formatPhoneDisplay(l.business_phone || ''),
-        assigned_phone_display: formatPhoneDisplay(l.assigned_phone_number || ''),
-      })),
-    })
-  } catch (e: any) { return c.json({ error: e.message }, 500) }
-})
-
-// POST /phone-lines — Add a new phone line
-callCenterRoutes.post('/phone-lines', async (c) => {
-  try {
-    const body = await c.req.json()
-    const { label, business_phone, dispatch_type, dispatch_description, assigned_email, owner_name, ai_greeting, ai_persona } = body
-    if (!business_phone) return c.json({ error: 'Phone number required' }, 400)
-
-    const normalized = normalizePhone(business_phone)
-    const dispType = dispatch_type === 'inbound_forwarding' ? 'inbound_forwarding' : 'outbound_prompt_leadlist'
-
-    const res = await c.env.DB.prepare(`
-      INSERT INTO cc_phone_config (
-        label, business_phone, assigned_phone_number, connection_status,
-        dispatch_type, dispatch_description, assigned_email, owner_name,
-        inbound_enabled, outbound_enabled, phone_verified, is_active,
-        ai_greeting, ai_persona
-      ) VALUES (?,?,?,?,?,?,?,?,?,?,1,?)
-    `).bind(
-      label || (dispType === 'inbound_forwarding' ? 'Inbound Line' : 'Outbound Line'),
-      normalized, normalized, 'connected',
-      dispType,
-      dispatch_description || (dispType === 'inbound_forwarding'
-        ? 'Inbound call answering only — dispatches when toggled on and user sets call forwarding on their mobile device'
-        : 'Outbound dialer — triggered upon prompt and from outreach lead lists in the admin call center dashboard'),
-      assigned_email || '', owner_name || '',
-      dispType === 'inbound_forwarding' ? 1 : 0,
-      dispType === 'outbound_prompt_leadlist' ? 1 : 0,
-      dispType === 'outbound_prompt_leadlist' ? 1 : 0, // outbound lines start active, inbound starts inactive
-      ai_greeting || '', ai_persona || '',
-    ).run()
-
-    return c.json({ success: true, id: res.meta.last_row_id })
-  } catch (e: any) { return c.json({ error: e.message }, 500) }
-})
-
-// PUT /phone-lines/:id — Update a phone line config
-callCenterRoutes.put('/phone-lines/:id', async (c) => {
-  try {
-    const id = parseInt(c.req.param('id'))
-    const body = await c.req.json()
-    const allowed = ['label', 'dispatch_type', 'dispatch_description', 'assigned_email', 'owner_name',
-      'inbound_enabled', 'outbound_enabled', 'call_forwarding_active', 'call_forwarding_number',
-      'ai_greeting', 'ai_persona', 'max_ring_seconds', 'voicemail_enabled', 'is_active', 'connection_status']
-    const fields: string[] = []
-    const values: any[] = []
-
-    for (const [key, val] of Object.entries(body)) {
-      if (allowed.includes(key)) { fields.push(`${key}=?`); values.push(val) }
-    }
-    if (body.business_phone) {
-      fields.push('business_phone=?', 'assigned_phone_number=?')
-      const n = normalizePhone(body.business_phone)
-      values.push(n, n)
-    }
-    if (fields.length === 0) return c.json({ error: 'No valid fields' }, 400)
-    fields.push("updated_at=datetime('now')")
-    values.push(id)
-
-    await c.env.DB.prepare(`UPDATE cc_phone_config SET ${fields.join(',')} WHERE id=?`).bind(...values).run()
-    return c.json({ success: true })
-  } catch (e: any) { return c.json({ error: e.message }, 500) }
-})
-
-// POST /phone-lines/:id/toggle — Toggle a phone line on/off
-callCenterRoutes.post('/phone-lines/:id/toggle', async (c) => {
-  try {
-    const id = parseInt(c.req.param('id'))
-    const line = await c.env.DB.prepare('SELECT * FROM cc_phone_config WHERE id=?').bind(id).first<any>()
-    if (!line) return c.json({ error: 'Phone line not found' }, 404)
-
-    const newActive = line.is_active ? 0 : 1
-    const newStatus = newActive ? 'connected' : 'disconnected'
-
-    await c.env.DB.prepare(
-      `UPDATE cc_phone_config SET is_active=?, connection_status=?, updated_at=datetime('now') WHERE id=?`
-    ).bind(newActive, newStatus, id).run()
-
-    // For inbound_forwarding lines, also toggle the dispatch rule in LiveKit if credentials exist
-    if (line.dispatch_type === 'inbound_forwarding') {
-      const apiKey = (c.env as any).LIVEKIT_API_KEY
-      const apiSecret = (c.env as any).LIVEKIT_API_SECRET
-      const livekitUrl = (c.env as any).LIVEKIT_URL
-
-      if (apiKey && apiSecret && livekitUrl && line.livekit_dispatch_rule_id) {
-        try {
-          // For inbound lines, we create/delete dispatch rules to control call routing
-          if (newActive) {
-            console.log(`[CC PhoneLines] Enabling inbound dispatch for line ${id}`)
-          } else {
-            console.log(`[CC PhoneLines] Disabling inbound dispatch for line ${id}`)
-          }
-        } catch (err: any) {
-          console.error(`[CC PhoneLines] LiveKit dispatch toggle failed:`, err.message)
-        }
-      }
-    }
-
-    return c.json({
-      success: true,
-      is_active: newActive,
-      connection_status: newStatus,
-      message: newActive
-        ? `Phone line "${line.label}" is now ACTIVE`
-        : `Phone line "${line.label}" is now OFFLINE`,
-    })
-  } catch (e: any) { return c.json({ error: e.message }, 500) }
-})
-
-// POST /phone-lines/:id/set-forwarding — Set call forwarding for inbound lines
-callCenterRoutes.post('/phone-lines/:id/set-forwarding', async (c) => {
-  try {
-    const id = parseInt(c.req.param('id'))
-    const { forwarding_number, active } = await c.req.json()
-
-    const line = await c.env.DB.prepare('SELECT * FROM cc_phone_config WHERE id=?').bind(id).first<any>()
-    if (!line) return c.json({ error: 'Phone line not found' }, 404)
-    if (line.dispatch_type !== 'inbound_forwarding') return c.json({ error: 'Call forwarding only applies to inbound lines' }, 400)
-
-    const fwdNum = forwarding_number ? normalizePhone(forwarding_number) : line.call_forwarding_number || ''
-    const fwdActive = active !== undefined ? (active ? 1 : 0) : (line.call_forwarding_active ? 0 : 1)
-
-    await c.env.DB.prepare(
-      `UPDATE cc_phone_config SET call_forwarding_number=?, call_forwarding_active=?, updated_at=datetime('now') WHERE id=?`
-    ).bind(fwdNum, fwdActive, id).run()
-
-    return c.json({
-      success: true,
-      call_forwarding_number: fwdNum,
-      call_forwarding_number_display: formatPhoneDisplay(fwdNum),
-      call_forwarding_active: !!fwdActive,
-      message: fwdActive
-        ? `Call forwarding active — inbound calls to ${formatPhoneDisplay(line.business_phone)} will be answered by AI`
-        : `Call forwarding paused — inbound calls will not be answered by AI`,
-    })
-  } catch (e: any) { return c.json({ error: e.message }, 500) }
-})
-
-// DELETE /phone-lines/:id — Remove a phone line
-callCenterRoutes.delete('/phone-lines/:id', async (c) => {
-  try {
-    const id = parseInt(c.req.param('id'))
-    await c.env.DB.prepare('DELETE FROM cc_phone_config WHERE id=?').bind(id).run()
-    return c.json({ success: true })
-  } catch (e: any) { return c.json({ error: e.message }, 500) }
-})
-
-// GET /phone-lines/outbound-number — Get the active outbound number for dialing
-callCenterRoutes.get('/phone-lines/outbound-number', async (c) => {
-  try {
-    const line = await c.env.DB.prepare(
-      `SELECT * FROM cc_phone_config WHERE dispatch_type='outbound_prompt_leadlist' AND is_active=1 ORDER BY id ASC LIMIT 1`
-    ).first<any>()
-    if (!line) return c.json({ number: null, message: 'No active outbound line configured' })
-    return c.json({
-      number: line.business_phone,
-      display: formatPhoneDisplay(line.business_phone),
-      line_id: line.id,
-      label: line.label,
-    })
-  } catch (e: any) { return c.json({ error: e.message }, 500) }
 })

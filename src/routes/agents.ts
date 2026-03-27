@@ -2,7 +2,6 @@ import { Hono } from 'hono'
 import type { Bindings } from '../types'
 import { resolveTeamOwner } from './team'
 import { trackLeadCapture } from '../services/ga4-events'
-import { sendGmailOAuth2 } from '../services/email'
 
 export const agentsRoutes = new Hono<{ Bindings: Bindings }>()
 
@@ -24,28 +23,15 @@ async function getCustomer(c: any): Promise<{ id: number; email: string; ownerId
 // ============================================================
 agentsRoutes.post('/leads', async (c) => {
   try {
-    const body = await c.req.json()
-    const { first_name, last_name, company_name, phone, email, source_page, message } = body
-    // Support both old (name) and new (first_name + last_name) format
-    const fullName = body.name || [first_name, last_name].filter(Boolean).join(' ')
-    if (!email || !fullName) return c.json({ error: 'Name and email are required' }, 400)
+    const { name, company_name, phone, email, source_page, message } = await c.req.json()
+    if (!email || !name) return c.json({ error: 'Name and email are required' }, 400)
     const emailClean = String(email).trim().toLowerCase()
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailClean)) return c.json({ error: 'Invalid email' }, 400)
 
-    // Add first_name/last_name columns dynamically (safe idempotent)
-    try {
-      await c.env.DB.prepare("ALTER TABLE leads ADD COLUMN first_name TEXT DEFAULT ''").run()
-    } catch {}
-    try {
-      await c.env.DB.prepare("ALTER TABLE leads ADD COLUMN last_name TEXT DEFAULT ''").run()
-    } catch {}
-
     await c.env.DB.prepare(
-      `INSERT INTO leads (name, first_name, last_name, company_name, phone, email, source_page, message) VALUES (?,?,?,?,?,?,?,?)`
+      `INSERT INTO leads (name, company_name, phone, email, source_page, message) VALUES (?,?,?,?,?,?)`
     ).bind(
-      String(fullName).trim().slice(0, 200),
-      first_name ? String(first_name).trim().slice(0, 100) : '',
-      last_name ? String(last_name).trim().slice(0, 100) : '',
+      String(name).trim().slice(0, 200),
       company_name ? String(company_name).trim().slice(0, 200) : '',
       phone ? String(phone).trim().slice(0, 30) : '',
       emailClean,
@@ -55,56 +41,10 @@ agentsRoutes.post('/leads', async (c) => {
 
     // Track lead capture in GA4
     trackLeadCapture(c.env, source_page || 'unknown', {
-      lead_name: String(fullName).trim().substring(0, 50),
+      lead_name: String(name).trim().substring(0, 50),
       lead_company: company_name ? String(company_name).trim().substring(0, 50) : '',
       lead_email_domain: emailClean.split('@')[1] || 'unknown'
     }).catch(() => {})
-
-    // Send email notification to HARDCODED admin (ethangourley17@gmail.com)
-    // PLUS any ADMIN_NOTIFICATION_EMAIL from env — never expose the address publicly
-    const SUPER_ADMIN_EMAIL = 'ethangourley17@gmail.com'
-    try {
-      const ci = (c.env as any).GOOGLE_CLIENT_ID
-      const cs = (c.env as any).GOOGLE_CLIENT_SECRET
-      const rt = (c.env as any).GMAIL_REFRESH_TOKEN
-      const adminEmail = (c.env as any).ADMIN_NOTIFICATION_EMAIL || SUPER_ADMIN_EMAIL
-
-      if (ci && cs && rt) {
-        const firstNameDisplay = first_name ? String(first_name).trim() : String(fullName).trim().split(' ')[0]
-        const lastNameDisplay = last_name ? String(last_name).trim() : (String(fullName).trim().split(' ').slice(1).join(' ') || '')
-        const subject = `New Contact Form: ${firstNameDisplay} ${lastNameDisplay} — ${source_page || 'website'}`
-        const emailHtml = `
-          <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;background:#f8fafc;border-radius:12px;">
-            <div style="background:linear-gradient(135deg,#0891b2,#0ea5e9);padding:20px;border-radius:12px 12px 0 0;text-align:center;">
-              <h2 style="color:#fff;margin:0;font-size:22px;">New Contact Form Submission</h2>
-              <p style="color:#e0f2fe;margin:5px 0 0;font-size:13px;">RoofReporterAI — ${source_page || 'website'}</p>
-            </div>
-            <div style="background:#fff;padding:24px;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 12px 12px;">
-              <table style="width:100%;border-collapse:collapse;">
-                <tr><td style="padding:8px 0;color:#64748b;font-size:13px;width:120px;">First Name</td><td style="padding:8px 0;font-weight:600;color:#1e293b;">${firstNameDisplay}</td></tr>
-                <tr><td style="padding:8px 0;color:#64748b;font-size:13px;">Last Name</td><td style="padding:8px 0;font-weight:600;color:#1e293b;">${lastNameDisplay || '<em style="color:#94a3b8">Not provided</em>'}</td></tr>
-                <tr><td style="padding:8px 0;color:#64748b;font-size:13px;">Company</td><td style="padding:8px 0;color:#1e293b;">${company_name ? String(company_name).trim() : '<em style="color:#94a3b8">Not provided</em>'}</td></tr>
-                <tr><td style="padding:8px 0;color:#64748b;font-size:13px;">Phone</td><td style="padding:8px 0;color:#1e293b;">${phone ? String(phone).trim() : '<em style="color:#94a3b8">Not provided</em>'}</td></tr>
-                <tr><td style="padding:8px 0;color:#64748b;font-size:13px;">Email</td><td style="padding:8px 0;color:#1e293b;"><a href="mailto:${emailClean}" style="color:#0891b2;">${emailClean}</a></td></tr>
-              </table>
-              ${message ? `<div style="margin-top:16px;padding:16px;background:#f1f5f9;border-radius:8px;border-left:4px solid #0891b2;"><p style="margin:0 0 4px;font-size:12px;color:#64748b;font-weight:600;">MESSAGE</p><p style="margin:0;color:#334155;font-size:14px;line-height:1.5;">${String(message).trim().replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p></div>` : ''}
-              <p style="margin-top:20px;font-size:12px;color:#94a3b8;text-align:center;">View all leads in your <a href="https://roofreporterai.com/super-admin" style="color:#0891b2;">Super Admin Dashboard</a></p>
-            </div>
-          </div>
-        `
-        // Always send to the super admin email
-        await sendGmailOAuth2(ci, cs, rt, SUPER_ADMIN_EMAIL, subject, emailHtml, (c.env as any).GMAIL_SENDER_EMAIL || adminEmail)
-        console.log(`[Leads] Email notification sent to super admin for lead: ${emailClean}`)
-
-        // Also send to ADMIN_NOTIFICATION_EMAIL if it's different
-        if (adminEmail && adminEmail.toLowerCase() !== SUPER_ADMIN_EMAIL.toLowerCase()) {
-          await sendGmailOAuth2(ci, cs, rt, adminEmail, subject, emailHtml, (c.env as any).GMAIL_SENDER_EMAIL || adminEmail).catch(() => {})
-        }
-      }
-    } catch (emailErr: any) {
-      console.error('[Leads] Failed to send admin email notification:', emailErr.message)
-      // Don't fail the lead submission if email fails
-    }
 
     return c.json({ success: true, message: 'Thank you! We will be in touch shortly.' })
   } catch (e: any) {
@@ -124,43 +64,6 @@ agentsRoutes.get('/leads', async (c) => {
   ).bind(limit, offset).all<any>()
   const countRow = await c.env.DB.prepare('SELECT COUNT(*) as cnt FROM leads').first<any>()
   return c.json({ leads: results, total: countRow?.cnt || 0, page, limit })
-})
-
-// POST /track — Public analytics event tracker (no auth required)
-agentsRoutes.post('/track', async (c) => {
-  try {
-    const body = await c.req.json()
-    const { event, ...data } = body
-    if (!event) return c.json({ ok: true }) // silently ignore
-    
-    // Ensure analytics_events table exists
-    try {
-      await c.env.DB.prepare(`
-        CREATE TABLE IF NOT EXISTS analytics_events (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          event TEXT NOT NULL,
-          data TEXT,
-          url TEXT,
-          user_agent TEXT,
-          ip TEXT,
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-      `).run()
-    } catch(e) {}
-    
-    await c.env.DB.prepare(
-      'INSERT INTO analytics_events (event, data, url, user_agent) VALUES (?,?,?,?)'
-    ).bind(
-      event,
-      JSON.stringify(data),
-      data.url || '',
-      c.req.header('user-agent') || ''
-    ).run()
-    
-    return c.json({ ok: true })
-  } catch(e) {
-    return c.json({ ok: true }) // silently fail
-  }
 })
 
 // ============================================================
