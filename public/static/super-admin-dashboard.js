@@ -388,7 +388,7 @@ function renderContent() {
     case 'service-panel': root.innerHTML = (typeof renderServicePanelView === 'function') ? renderServicePanelView() : '<div class="p-8 text-gray-500">Module loading...</div>'; paLoadServicePanel(); break;
     case 'membership-config': root.innerHTML = (typeof renderMembershipConfigView === 'function') ? renderMembershipConfigView() : '<div class="p-8 text-gray-500">Module loading...</div>'; paLoadMembershipConfig(); break;
     case 'agent-personas': root.innerHTML = (typeof renderAgentPersonasView === 'function') ? renderAgentPersonasView() : '<div class="p-8 text-gray-500">Module loading...</div>'; paLoadPersonas(); break;
-    case 'cold-call-centre': root.innerHTML = (typeof renderColdCallCentreView === 'function') ? renderColdCallCentreView() : '<div class="p-8 text-gray-500">Module loading...</div>'; paShowCCTab('sip'); break;
+    case 'cold-call-centre': root.innerHTML = (typeof renderColdCallCentreView === 'function') ? renderColdCallCentreView() : '<div class="p-8 text-gray-500">Module loading...</div>'; paShowCCTab('agents'); break;
     case 'live-dashboard': root.innerHTML = (typeof renderLiveDashboardView === 'function') ? renderLiveDashboardView() : '<div class="p-8 text-gray-500">Module loading...</div>'; paLoadLiveDashboard(); break;
     case 'transcript-flagging': root.innerHTML = (typeof renderTranscriptFlaggingView === 'function') ? renderTranscriptFlaggingView() : '<div class="p-8 text-gray-500">Module loading...</div>'; paLoadFlags(); break;
     default: root.innerHTML = renderUsersView();

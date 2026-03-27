@@ -526,30 +526,44 @@ async function paDeletePersona(id) {
 }
 
 // ════════════════════════════════════════════════════════════════
-// MODULE 5: COLD-CALL CENTRE (SIP mapping, campaigns)
+// MODULE 5: COLD-CALL CENTRE — Full Outbound AI Dialer Management
+// Agents, SIP, Campaigns, Lead Lists (CSV upload), Call Logs, Live Transcripts
 // ════════════════════════════════════════════════════════════════
 function renderColdCallCentreView() {
   return '<div class="space-y-6">' +
     '<div class="flex items-center justify-between">' +
       '<div><h2 class="text-2xl font-bold text-gray-800"><i class="fas fa-headset mr-2 text-red-600"></i>Cold-Call Centre</h2>' +
-      '<p class="text-sm text-gray-500 mt-1">SIP trunk mapping, campaign management, CSV upload, DNC lists</p></div>' +
+      '<p class="text-sm text-gray-500 mt-1">AI outbound dialer — agents, campaigns, lead lists, live transcripts</p></div>' +
+      '<button onclick="paRefreshCCTab()" class="px-3 py-2 bg-gray-100 text-gray-600 rounded-lg text-xs font-semibold hover:bg-gray-200"><i class="fas fa-sync-alt mr-1"></i>Refresh</button>' +
     '</div>' +
-    '<div class="flex gap-2 border-b border-gray-200 pb-2">' +
-      '<button onclick="paShowCCTab(\'sip\')" id="pa-cc-tab-sip" class="px-4 py-2 rounded-lg text-sm font-semibold bg-red-600 text-white">SIP Mapping</button>' +
-      '<button onclick="paShowCCTab(\'campaigns\')" id="pa-cc-tab-campaigns" class="px-4 py-2 rounded-lg text-sm font-semibold bg-gray-100 text-gray-600">Campaigns</button>' +
-      '<button onclick="paShowCCTab(\'analytics\')" id="pa-cc-tab-analytics" class="px-4 py-2 rounded-lg text-sm font-semibold bg-gray-100 text-gray-600">Analytics</button>' +
+    '<div class="flex gap-2 border-b border-gray-200 pb-2 overflow-x-auto">' +
+      '<button onclick="paShowCCTab(\'agents\')" id="pa-cc-tab-agents" class="px-4 py-2 rounded-lg text-sm font-semibold bg-red-600 text-white whitespace-nowrap">Agents</button>' +
+      '<button onclick="paShowCCTab(\'sip\')" id="pa-cc-tab-sip" class="px-4 py-2 rounded-lg text-sm font-semibold bg-gray-100 text-gray-600 whitespace-nowrap">SIP Mapping</button>' +
+      '<button onclick="paShowCCTab(\'campaigns\')" id="pa-cc-tab-campaigns" class="px-4 py-2 rounded-lg text-sm font-semibold bg-gray-100 text-gray-600 whitespace-nowrap">Campaigns</button>' +
+      '<button onclick="paShowCCTab(\'leads\')" id="pa-cc-tab-leads" class="px-4 py-2 rounded-lg text-sm font-semibold bg-gray-100 text-gray-600 whitespace-nowrap">Lead Lists</button>' +
+      '<button onclick="paShowCCTab(\'logs\')" id="pa-cc-tab-logs" class="px-4 py-2 rounded-lg text-sm font-semibold bg-gray-100 text-gray-600 whitespace-nowrap">Call Logs</button>' +
+      '<button onclick="paShowCCTab(\'transcripts\')" id="pa-cc-tab-transcripts" class="px-4 py-2 rounded-lg text-sm font-semibold bg-gray-100 text-gray-600 whitespace-nowrap">Live Transcripts</button>' +
+      '<button onclick="paShowCCTab(\'analytics\')" id="pa-cc-tab-analytics" class="px-4 py-2 rounded-lg text-sm font-semibold bg-gray-100 text-gray-600 whitespace-nowrap">Analytics</button>' +
     '</div>' +
     '<div id="pa-cc-content" class="space-y-4"><div class="animate-pulse bg-gray-100 rounded-xl h-48"></div></div>' +
   '</div>';
 }
 
+var _ccCurrentTab = 'agents';
+function paRefreshCCTab() { paShowCCTab(_ccCurrentTab); }
+
 function paShowCCTab(tab) {
-  ['sip','campaigns','analytics'].forEach(function(t) {
+  _ccCurrentTab = tab;
+  ['agents','sip','campaigns','leads','logs','transcripts','analytics'].forEach(function(t) {
     var el = document.getElementById('pa-cc-tab-' + t);
-    if (el) { el.className = t === tab ? 'px-4 py-2 rounded-lg text-sm font-semibold bg-red-600 text-white' : 'px-4 py-2 rounded-lg text-sm font-semibold bg-gray-100 text-gray-600 hover:bg-gray-200'; }
+    if (el) { el.className = t === tab ? 'px-4 py-2 rounded-lg text-sm font-semibold bg-red-600 text-white whitespace-nowrap' : 'px-4 py-2 rounded-lg text-sm font-semibold bg-gray-100 text-gray-600 hover:bg-gray-200 whitespace-nowrap'; }
   });
-  if (tab === 'sip') paLoadSipMapping();
+  if (tab === 'agents') paLoadCCAgents();
+  else if (tab === 'sip') paLoadSipMapping();
   else if (tab === 'campaigns') paLoadCampaigns();
+  else if (tab === 'leads') paLoadLeadLists();
+  else if (tab === 'logs') paLoadCCCallLogs();
+  else if (tab === 'transcripts') paLoadLiveTranscripts();
   else if (tab === 'analytics') paLoadCCAnalytics();
 }
 
@@ -748,6 +762,474 @@ async function paLoadCCAnalytics() {
           }).join('') + '</div>' : '<p class="text-gray-400 text-sm">No cost data yet</p>') +
         '</div>' +
       '</div>';
+  } catch(e) { el.innerHTML = '<p class="text-red-500">' + e.message + '</p>'; }
+}
+
+// ════════════════════════════════════════════════════════════════
+// CC TAB: AGENTS — Create/manage AI dialer agents
+// ════════════════════════════════════════════════════════════════
+PA.ccAgents = [];
+PA.ccCampaigns = [];
+
+async function paLoadCCAgents() {
+  var el = document.getElementById('pa-cc-content');
+  if (!el) return;
+  try {
+    var res = await saFetch('/api/admin/superadmin/cc/agents');
+    var data = await res.json();
+    PA.ccAgents = data.agents || [];
+    el.innerHTML =
+      '<div class="flex justify-end mb-4"><button onclick="paShowAgentEditor()" class="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-bold"><i class="fas fa-plus mr-1"></i>Add Agent</button></div>' +
+      (PA.ccAgents.length === 0 ?
+        '<div class="text-center py-16 bg-white rounded-2xl border border-gray-100">' +
+          '<i class="fas fa-robot text-5xl text-gray-300 mb-4"></i>' +
+          '<h3 class="text-gray-600 font-bold text-lg">No AI Agents Yet</h3>' +
+          '<p class="text-sm text-gray-400 mt-1">Create your first outbound AI agent to start dialing.</p>' +
+          '<button onclick="paShowAgentEditor()" class="mt-4 px-6 py-2 bg-red-600 text-white rounded-lg text-sm font-bold"><i class="fas fa-plus mr-1"></i>Create First Agent</button>' +
+        '</div>' :
+        '<div class="space-y-3">' + PA.ccAgents.map(function(a) {
+          var statusColor = a.status === 'calling' ? 'bg-green-50 text-green-600' : a.status === 'idle' ? 'bg-blue-50 text-blue-600' : 'bg-gray-50 text-gray-500';
+          var activeColor = a.is_active ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-400';
+          return '<div class="bg-white rounded-xl border border-gray-100 p-4">' +
+            '<div class="flex items-center justify-between">' +
+              '<div class="flex items-center gap-4">' +
+                '<div class="w-12 h-12 rounded-xl bg-gradient-to-br from-red-500 to-orange-500 flex items-center justify-center"><i class="fas fa-robot text-white text-lg"></i></div>' +
+                '<div>' +
+                  '<div class="font-bold text-gray-800">' + (a.name || 'Unnamed') + '</div>' +
+                  '<div class="text-xs text-gray-500">' + (a.phone_number || 'No phone') + ' &bull; ' + (a.direction || 'outbound') + ' &bull; ' + (a.persona_name || 'No persona') + '</div>' +
+                  '<div class="text-xs text-gray-400 mt-0.5">' + (a.operating_hours_start || '09:00') + '–' + (a.operating_hours_end || '17:00') + ' ' + (a.operating_timezone || 'MST') + ' &bull; Max ' + (a.max_calls_per_day || 100) + '/day</div>' +
+                '</div>' +
+              '</div>' +
+              '<div class="flex items-center gap-3">' +
+                '<span class="px-2 py-1 rounded text-xs font-semibold ' + statusColor + '">' + (a.status || 'idle') + '</span>' +
+                '<span class="px-2 py-1 rounded text-xs font-semibold ' + activeColor + '">' + (a.is_active ? 'Active' : 'Inactive') + '</span>' +
+                '<div class="text-right text-xs text-gray-500">' + (a.calls_today || 0) + ' today / ' + (a.calls_total || 0) + ' total</div>' +
+                '<button onclick="paShowAgentEditor(' + a.id + ')" class="px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-xs font-semibold hover:bg-blue-100"><i class="fas fa-edit mr-1"></i>Edit</button>' +
+                '<button onclick="paDeleteAgent(' + a.id + ')" class="px-3 py-1.5 bg-red-50 text-red-600 rounded-lg text-xs font-semibold hover:bg-red-100"><i class="fas fa-trash mr-1"></i></button>' +
+              '</div>' +
+            '</div>' +
+          '</div>';
+        }).join('') + '</div>');
+  } catch(e) { el.innerHTML = '<p class="text-red-500">' + e.message + '</p>'; }
+}
+
+function paShowAgentEditor(agentId) {
+  var a = agentId ? PA.ccAgents.find(function(x) { return x.id === agentId; }) : {
+    name: '', phone_number: '+12402122251', direction: 'outbound', persona_id: null,
+    sip_trunk_id: '', campaign_id: null, max_calls_per_day: 100,
+    operating_hours_start: '09:00', operating_hours_end: '17:00',
+    operating_timezone: 'America/Edmonton', is_active: 1
+  };
+  if (!a) return;
+
+  // Load personas for dropdown
+  var personaOpts = '<option value="">None</option>' + PA.personas.map(function(p) {
+    return '<option value="' + p.id + '" ' + (a.persona_id == p.id ? 'selected' : '') + '>' + p.name + '</option>';
+  }).join('');
+
+  var el = document.getElementById('pa-cc-content');
+  el.innerHTML = '<div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4">' +
+    '<h3 class="font-bold text-gray-700"><i class="fas fa-robot mr-2 text-red-500"></i>' + (agentId ? 'Edit Agent' : 'Create New Agent') + '</h3>' +
+    '<div class="grid grid-cols-3 gap-4">' +
+      paInputV('pa-agent-name', 'Agent Name *', a.name || 'Cold Caller 1') +
+      paInputV('pa-agent-phone', 'Phone Number *', a.phone_number || '+12402122251') +
+      paSelectV('pa-agent-direction', 'Direction', ['outbound','inbound','both'], a.direction || 'outbound') +
+    '</div>' +
+    '<div class="grid grid-cols-3 gap-4">' +
+      '<div><label class="block text-xs font-semibold text-gray-500 mb-1">Agent Persona</label><select id="pa-agent-persona" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm">' + personaOpts + '</select></div>' +
+      paInputV('pa-agent-trunk', 'SIP Trunk ID (auto-resolved if blank)', a.sip_trunk_id || '') +
+      paInputV('pa-agent-max', 'Max Calls/Day', a.max_calls_per_day || 100, 'number') +
+    '</div>' +
+    '<div class="grid grid-cols-3 gap-4">' +
+      paInputV('pa-agent-start', 'Start Time (HH:MM)', a.operating_hours_start || '09:00') +
+      paInputV('pa-agent-end', 'End Time (HH:MM)', a.operating_hours_end || '17:00') +
+      paSelectV('pa-agent-tz', 'Timezone', ['America/Edmonton','America/Toronto','America/Vancouver','America/New_York','America/Chicago','America/Los_Angeles'], a.operating_timezone || 'America/Edmonton') +
+    '</div>' +
+    '<label class="flex items-center gap-2"><input type="checkbox" id="pa-agent-active" ' + (a.is_active ? 'checked' : '') + ' class="rounded"> Active</label>' +
+    '<div class="bg-blue-50 rounded-xl p-4 border border-blue-100">' +
+      '<div class="flex items-center gap-2 text-sm font-semibold text-blue-700"><i class="fas fa-info-circle"></i> Outbound Configuration</div>' +
+      '<p class="text-xs text-blue-600 mt-1">Phone +1 (240) 212-2251 will be used for outbound cold calls via LiveKit SIP. ' +
+      'Every call captures a live transcript via Deepgram STT. Transcripts are stored in cc_call_logs.</p>' +
+    '</div>' +
+    '<div class="flex justify-end gap-3">' +
+      '<button onclick="paLoadCCAgents()" class="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm font-semibold">Cancel</button>' +
+      '<button onclick="paSaveAgent(' + (agentId || 0) + ')" class="px-6 py-2 bg-red-600 text-white rounded-lg text-sm font-bold"><i class="fas fa-save mr-1"></i>Save Agent</button>' +
+    '</div>' +
+  '</div>';
+}
+
+async function paSaveAgent(agentId) {
+  var payload = {
+    name: gv('pa-agent-name'), phone_number: gv('pa-agent-phone'),
+    direction: gv('pa-agent-direction'), persona_id: gv('pa-agent-persona') || null,
+    sip_trunk_id: gv('pa-agent-trunk'), max_calls_per_day: parseInt(gv('pa-agent-max')) || 100,
+    operating_hours_start: gv('pa-agent-start'), operating_hours_end: gv('pa-agent-end'),
+    operating_timezone: gv('pa-agent-tz'),
+    is_active: document.getElementById('pa-agent-active')?.checked ? 1 : 0
+  };
+  if (!payload.name) { alert('Agent name is required'); return; }
+  if (!payload.phone_number) { alert('Phone number is required'); return; }
+  try {
+    var url = '/api/admin/superadmin/cc/agents' + (agentId ? '/' + agentId : '');
+    var res = await saFetch(url, { method: agentId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    var data = await res.json();
+    if (data.success || data.id) { paLoadCCAgents(); }
+    else alert('Error: ' + (data.error || 'Unknown'));
+  } catch(e) { alert(e.message); }
+}
+
+async function paDeleteAgent(agentId) {
+  if (!confirm('Delete this agent? This cannot be undone.')) return;
+  try {
+    await saFetch('/api/admin/superadmin/cc/agents/' + agentId, { method: 'DELETE' });
+    paLoadCCAgents();
+  } catch(e) { alert(e.message); }
+}
+
+// ════════════════════════════════════════════════════════════════
+// CC TAB: LEAD LISTS — CSV upload + paste for cold-call prospects
+// ════════════════════════════════════════════════════════════════
+async function paLoadLeadLists() {
+  var el = document.getElementById('pa-cc-content');
+  if (!el) return;
+  // First load campaigns to know where to upload
+  try {
+    var campRes = await paFetch('/campaigns');
+    var campData = await campRes.json();
+    PA.ccCampaigns = campData.campaigns || [];
+  } catch(e) { PA.ccCampaigns = []; }
+
+  if (PA.ccCampaigns.length === 0) {
+    el.innerHTML = '<div class="text-center py-16 bg-white rounded-2xl border border-gray-100">' +
+      '<i class="fas fa-bullhorn text-5xl text-gray-300 mb-4"></i>' +
+      '<h3 class="text-gray-600 font-bold text-lg">No Campaigns Yet</h3>' +
+      '<p class="text-sm text-gray-400 mt-1">Create a campaign first in the Campaigns tab, then upload leads here.</p>' +
+      '<button onclick="paShowCCTab(\'campaigns\')" class="mt-4 px-6 py-2 bg-red-600 text-white rounded-lg text-sm font-bold"><i class="fas fa-arrow-right mr-1"></i>Go to Campaigns</button>' +
+    '</div>';
+    return;
+  }
+
+  // Show upload interface
+  var campOpts = PA.ccCampaigns.map(function(c) {
+    return '<option value="' + c.id + '">' + c.name + ' (' + (c.prospect_count || 0) + ' prospects)</option>';
+  }).join('');
+
+  el.innerHTML =
+    '<div class="grid grid-cols-2 gap-6">' +
+      // Left: Upload form
+      '<div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4">' +
+        '<h3 class="font-bold text-gray-700"><i class="fas fa-upload mr-2 text-green-500"></i>Upload Lead List</h3>' +
+        '<div><label class="block text-xs font-semibold text-gray-500 mb-1">Target Campaign</label>' +
+          '<select id="pa-lead-campaign" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm">' + campOpts + '</select></div>' +
+        '<div class="border-2 border-dashed border-gray-200 rounded-xl p-6 text-center" id="pa-csv-drop-zone">' +
+          '<i class="fas fa-file-csv text-4xl text-green-400 mb-3"></i>' +
+          '<p class="text-sm text-gray-600 font-semibold">Drop CSV file here or click to browse</p>' +
+          '<p class="text-xs text-gray-400 mt-1">Or paste CSV data in the box below</p>' +
+          '<input type="file" id="pa-csv-file" accept=".csv,.txt" class="hidden" onchange="paHandleCSVFile(this)">' +
+          '<button onclick="document.getElementById(\'pa-csv-file\').click()" class="mt-3 px-4 py-2 bg-green-50 text-green-700 rounded-lg text-xs font-semibold border border-green-200 hover:bg-green-100"><i class="fas fa-folder-open mr-1"></i>Browse Files</button>' +
+        '</div>' +
+        '<div><label class="block text-xs font-semibold text-gray-500 mb-1">Paste CSV Data</label>' +
+          '<textarea id="pa-csv-data" rows="8" class="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm font-mono" placeholder="company_name,contact_name,phone,email,city,state,job_title,notes&#10;Acme Roofing,John Doe,+14035551234,john@acme.com,Calgary,AB,Owner,Hot lead"></textarea></div>' +
+        '<div class="bg-amber-50 rounded-lg p-3 border border-amber-100">' +
+          '<p class="text-xs text-amber-700"><i class="fas fa-info-circle mr-1"></i><strong>Required:</strong> phone column. <strong>Optional:</strong> company_name, contact_name, email, city, state, job_title, notes, tags, website</p>' +
+        '</div>' +
+        '<div class="flex justify-end gap-3">' +
+          '<button onclick="paClearCSV()" class="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm font-semibold">Clear</button>' +
+          '<button onclick="paUploadLeads()" class="px-6 py-2 bg-green-600 text-white rounded-lg text-sm font-bold"><i class="fas fa-upload mr-1"></i>Import Leads</button>' +
+        '</div>' +
+      '</div>' +
+      // Right: Recent imports + prospect stats
+      '<div class="space-y-4">' +
+        '<div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">' +
+          '<h3 class="font-bold text-gray-700 mb-4"><i class="fas fa-chart-bar mr-2 text-blue-500"></i>Prospect Summary</h3>' +
+          '<div id="pa-lead-stats"><div class="animate-pulse bg-gray-100 rounded h-20"></div></div>' +
+        '</div>' +
+        '<div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">' +
+          '<h3 class="font-bold text-gray-700 mb-4"><i class="fas fa-list mr-2 text-violet-500"></i>Recent Prospects</h3>' +
+          '<div id="pa-lead-recent"><div class="animate-pulse bg-gray-100 rounded h-32"></div></div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+
+  // Load stats
+  paLoadLeadStats();
+}
+
+function paHandleCSVFile(input) {
+  var file = input.files[0];
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var area = document.getElementById('pa-csv-data');
+    if (area) area.value = e.target.result;
+  };
+  reader.readAsText(file);
+}
+
+function paClearCSV() {
+  var area = document.getElementById('pa-csv-data');
+  if (area) area.value = '';
+  var file = document.getElementById('pa-csv-file');
+  if (file) file.value = '';
+}
+
+async function paUploadLeads() {
+  var campId = gv('pa-lead-campaign');
+  var raw = gv('pa-csv-data');
+  if (!raw) { alert('Paste CSV data or upload a file first'); return; }
+  if (!campId) { alert('Select a campaign'); return; }
+
+  var lines = raw.trim().split('\n');
+  if (lines.length < 2) { alert('CSV must have a header row and at least one data row'); return; }
+  var headers = lines[0].split(',').map(function(h) { return h.trim().toLowerCase().replace(/[^a-z0-9_]/g, ''); });
+  var prospects = [];
+  for (var i = 1; i < lines.length; i++) {
+    // Handle quoted CSV fields
+    var vals = lines[i].match(/(".*?"|[^,]+)(?=\s*,|\s*$)/g) || lines[i].split(',');
+    var obj = {};
+    headers.forEach(function(h, idx) {
+      var v = (vals[idx] || '').trim().replace(/^"(.*)"$/, '$1');
+      obj[h] = v;
+    });
+    if (obj.phone || obj.phone_number) {
+      if (!obj.phone) obj.phone = obj.phone_number;
+      prospects.push(obj);
+    }
+  }
+  if (prospects.length === 0) { alert('No valid prospects found (need a phone column)'); return; }
+
+  try {
+    var res = await saFetch('/api/admin/superadmin/cc/lead-lists/upload', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ campaign_id: parseInt(campId), prospects: prospects })
+    });
+    var data = await res.json();
+    if (data.success) {
+      alert('Imported: ' + data.imported + ', Skipped: ' + data.skipped + ' (of ' + data.total + ' rows)');
+      paClearCSV();
+      paLoadLeadStats();
+    } else {
+      alert('Error: ' + (data.error || 'Unknown'));
+    }
+  } catch(e) { alert('Upload failed: ' + e.message); }
+}
+
+async function paLoadLeadStats() {
+  var statsEl = document.getElementById('pa-lead-stats');
+  var recentEl = document.getElementById('pa-lead-recent');
+  try {
+    // Load prospects for the selected campaign or all
+    var campId = gv('pa-lead-campaign') || '';
+    var url = '/api/admin/superadmin/cc/prospects?limit=20' + (campId ? '&campaign_id=' + campId : '');
+    var res = await saFetch(url);
+    var data = await res.json();
+    var prospects = data.prospects || [];
+    var total = data.total || 0;
+
+    if (statsEl) {
+      statsEl.innerHTML =
+        '<div class="grid grid-cols-3 gap-3">' +
+          '<div class="text-center p-3 bg-blue-50 rounded-xl"><div class="text-2xl font-bold text-blue-700">' + total + '</div><div class="text-xs text-blue-500">Total</div></div>' +
+          '<div class="text-center p-3 bg-green-50 rounded-xl"><div class="text-2xl font-bold text-green-700">' + prospects.filter(function(p) { return p.status === 'new'; }).length + '</div><div class="text-xs text-green-500">New</div></div>' +
+          '<div class="text-center p-3 bg-amber-50 rounded-xl"><div class="text-2xl font-bold text-amber-700">' + prospects.filter(function(p) { return p.status === 'interested' || p.status === 'called'; }).length + '</div><div class="text-xs text-amber-500">Called</div></div>' +
+        '</div>';
+    }
+
+    if (recentEl) {
+      if (prospects.length === 0) {
+        recentEl.innerHTML = '<p class="text-gray-400 text-sm text-center py-4">No prospects yet. Upload a CSV above.</p>';
+      } else {
+        recentEl.innerHTML = '<div class="space-y-2 max-h-80 overflow-y-auto">' + prospects.slice(0, 15).map(function(p) {
+          var statusBadge = p.status === 'new' ? 'bg-blue-50 text-blue-600' : p.status === 'interested' ? 'bg-green-50 text-green-600' : p.status === 'called' ? 'bg-gray-50 text-gray-600' : 'bg-amber-50 text-amber-600';
+          return '<div class="flex items-center justify-between py-2 border-b border-gray-50">' +
+            '<div><div class="text-sm font-medium text-gray-800">' + (p.contact_name || p.company_name || p.phone) + '</div>' +
+            '<div class="text-xs text-gray-400">' + (p.company_name || '') + (p.location_city ? ' — ' + p.location_city + ', ' + (p.location_state || '') : '') + '</div></div>' +
+            '<div class="flex items-center gap-2"><span class="text-xs text-gray-500 font-mono">' + p.phone + '</span><span class="px-2 py-0.5 rounded text-xs font-semibold ' + statusBadge + '">' + p.status + '</span></div>' +
+          '</div>';
+        }).join('') + '</div>';
+      }
+    }
+  } catch(e) {
+    if (statsEl) statsEl.innerHTML = '<p class="text-red-500 text-xs">' + e.message + '</p>';
+  }
+}
+
+// ════════════════════════════════════════════════════════════════
+// CC TAB: CALL LOGS — View all outbound call history with transcripts
+// ════════════════════════════════════════════════════════════════
+async function paLoadCCCallLogs() {
+  var el = document.getElementById('pa-cc-content');
+  if (!el) return;
+  try {
+    var res = await saFetch('/api/admin/superadmin/cc/call-logs?limit=50');
+    var data = await res.json();
+    var logs = data.call_logs || [];
+
+    if (logs.length === 0) {
+      el.innerHTML = '<div class="text-center py-16 bg-white rounded-2xl border border-gray-100">' +
+        '<i class="fas fa-phone-slash text-5xl text-gray-300 mb-4"></i>' +
+        '<h3 class="text-gray-600 font-bold text-lg">No Call Logs Yet</h3>' +
+        '<p class="text-sm text-gray-400 mt-1">Outbound call logs will appear here once agents start dialing.</p></div>';
+      return;
+    }
+
+    el.innerHTML =
+      '<div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">' +
+        '<div class="flex items-center justify-between mb-4">' +
+          '<h3 class="font-bold text-gray-700"><i class="fas fa-history mr-2 text-blue-500"></i>Call History (' + (data.total || logs.length) + ' total)</h3>' +
+          '<div class="flex gap-2">' +
+            '<button onclick="paLoadCCCallLogs()" class="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-lg text-xs font-semibold hover:bg-gray-200"><i class="fas fa-sync-alt mr-1"></i>Refresh</button>' +
+          '</div>' +
+        '</div>' +
+        '<div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="text-xs text-gray-500 border-b">' +
+          '<th class="py-2 text-left">Time</th><th class="text-left">Company</th><th class="text-left">Contact</th><th class="text-left">Phone</th><th class="text-left">Status</th><th class="text-left">Outcome</th><th class="text-left">Duration</th><th class="text-left">Transcript</th>' +
+        '</tr></thead><tbody>' +
+        logs.map(function(cl) {
+          var statusColor = cl.call_status === 'completed' || cl.call_status === 'connected' ? 'bg-green-50 text-green-600' :
+            cl.call_status === 'ringing' || cl.call_status === 'in_progress' ? 'bg-blue-50 text-blue-600' :
+            cl.call_status === 'failed' || cl.call_status === 'no_answer' ? 'bg-red-50 text-red-600' : 'bg-gray-50 text-gray-500';
+          var outcomeColor = cl.call_outcome === 'interested' || cl.call_outcome === 'demo_scheduled' ? 'bg-green-50 text-green-700' :
+            cl.call_outcome === 'not_interested' ? 'bg-red-50 text-red-600' :
+            cl.call_outcome === 'callback' ? 'bg-amber-50 text-amber-700' : 'bg-gray-50 text-gray-500';
+          var hasTranscript = cl.transcript && cl.transcript.length > 0;
+          return '<tr class="border-b border-gray-50 hover:bg-gray-50 cursor-pointer" onclick="paShowCallDetail(' + cl.id + ')">' +
+            '<td class="py-2 text-xs text-gray-500">' + (cl.started_at ? new Date(cl.started_at).toLocaleString() : '-') + '</td>' +
+            '<td class="font-medium text-xs">' + (cl.company_name || '-') + '</td>' +
+            '<td class="text-xs">' + (cl.contact_name || '-') + '</td>' +
+            '<td class="text-xs font-mono">' + (cl.phone_number || '-') + '</td>' +
+            '<td><span class="px-2 py-0.5 rounded text-xs font-semibold ' + statusColor + '">' + (cl.call_status || '-') + '</span></td>' +
+            '<td><span class="px-2 py-0.5 rounded text-xs font-semibold ' + outcomeColor + '">' + (cl.call_outcome || '-') + '</span></td>' +
+            '<td class="text-xs">' + (cl.call_duration_seconds || 0) + 's</td>' +
+            '<td>' + (hasTranscript ? '<span class="px-2 py-0.5 bg-violet-50 text-violet-600 rounded text-xs font-semibold"><i class="fas fa-file-alt mr-1"></i>View</span>' : '<span class="text-xs text-gray-400">—</span>') + '</td>' +
+          '</tr>';
+        }).join('') +
+        '</tbody></table></div>' +
+      '</div>';
+  } catch(e) { el.innerHTML = '<p class="text-red-500">' + e.message + '</p>'; }
+}
+
+async function paShowCallDetail(callId) {
+  var el = document.getElementById('pa-cc-content');
+  if (!el) return;
+  try {
+    var res = await saFetch('/api/admin/superadmin/cc/call-logs/' + callId);
+    var data = await res.json();
+    var cl = data.call_log;
+    if (!cl) { alert('Call log not found'); return; }
+
+    var statusColor = cl.call_status === 'completed' ? 'bg-green-100 text-green-700' : cl.call_status === 'failed' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700';
+    el.innerHTML =
+      '<div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4">' +
+        '<div class="flex items-center justify-between">' +
+          '<h3 class="font-bold text-gray-700"><i class="fas fa-phone-alt mr-2 text-red-500"></i>Call #' + cl.id + ' Detail</h3>' +
+          '<button onclick="paLoadCCCallLogs()" class="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm font-semibold"><i class="fas fa-arrow-left mr-1"></i>Back</button>' +
+        '</div>' +
+        '<div class="grid grid-cols-4 gap-4">' +
+          '<div class="p-3 bg-gray-50 rounded-xl"><div class="text-xs text-gray-500">Company</div><div class="text-sm font-bold">' + (cl.company_name || '-') + '</div></div>' +
+          '<div class="p-3 bg-gray-50 rounded-xl"><div class="text-xs text-gray-500">Contact</div><div class="text-sm font-bold">' + (cl.contact_name || '-') + '</div></div>' +
+          '<div class="p-3 bg-gray-50 rounded-xl"><div class="text-xs text-gray-500">Phone</div><div class="text-sm font-bold font-mono">' + (cl.phone_number || '-') + '</div></div>' +
+          '<div class="p-3 bg-gray-50 rounded-xl"><div class="text-xs text-gray-500">Duration</div><div class="text-sm font-bold">' + (cl.call_duration_seconds || 0) + 's</div></div>' +
+        '</div>' +
+        '<div class="grid grid-cols-3 gap-4">' +
+          '<div class="p-3 rounded-xl ' + statusColor + '"><div class="text-xs font-semibold">Status</div><div class="text-sm font-bold">' + (cl.call_status || '-') + '</div></div>' +
+          '<div class="p-3 bg-gray-50 rounded-xl"><div class="text-xs text-gray-500">Outcome</div><div class="text-sm font-bold">' + (cl.call_outcome || '-') + '</div></div>' +
+          '<div class="p-3 bg-gray-50 rounded-xl"><div class="text-xs text-gray-500">Sentiment</div><div class="text-sm font-bold">' + (cl.sentiment || '-') + '</div></div>' +
+        '</div>' +
+        '<div class="flex gap-4">' +
+          (cl.is_lead ? '<span class="px-3 py-1 bg-amber-100 text-amber-700 rounded-lg text-xs font-bold"><i class="fas fa-star mr-1"></i>LEAD</span>' : '') +
+          (cl.appointment_booked ? '<span class="px-3 py-1 bg-green-100 text-green-700 rounded-lg text-xs font-bold"><i class="fas fa-calendar-check mr-1"></i>APPOINTMENT</span>' : '') +
+          (cl.follow_up_required ? '<span class="px-3 py-1 bg-violet-100 text-violet-700 rounded-lg text-xs font-bold"><i class="fas fa-redo mr-1"></i>FOLLOW-UP</span>' : '') +
+        '</div>' +
+        (cl.call_summary ? '<div class="bg-blue-50 rounded-xl p-4 border border-blue-100"><h4 class="text-xs font-bold text-blue-700 mb-2"><i class="fas fa-clipboard mr-1"></i>Call Summary</h4><p class="text-sm text-blue-900">' + cl.call_summary.replace(/\n/g, '<br>') + '</p></div>' : '') +
+        (cl.transcript ?
+          '<div class="bg-gray-50 rounded-xl p-4 border border-gray-200">' +
+            '<h4 class="text-xs font-bold text-gray-700 mb-2"><i class="fas fa-file-alt mr-1"></i>Full Transcript</h4>' +
+            '<pre class="text-sm text-gray-800 whitespace-pre-wrap font-sans leading-relaxed max-h-96 overflow-y-auto">' + cl.transcript.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</pre>' +
+          '</div>' : '<p class="text-gray-400 text-sm italic">No transcript captured for this call.</p>') +
+        (cl.follow_up_notes ? '<div class="bg-amber-50 rounded-xl p-4 border border-amber-100"><h4 class="text-xs font-bold text-amber-700 mb-2">Follow-up Notes</h4><p class="text-sm text-amber-900">' + cl.follow_up_notes + '</p></div>' : '') +
+      '</div>';
+  } catch(e) { el.innerHTML = '<p class="text-red-500">' + e.message + '</p>'; }
+}
+
+// ════════════════════════════════════════════════════════════════
+// CC TAB: LIVE TRANSCRIPTS — Real-time call monitoring
+// ════════════════════════════════════════════════════════════════
+var _ccTranscriptPoll = null;
+async function paLoadLiveTranscripts() {
+  var el = document.getElementById('pa-cc-content');
+  if (!el) return;
+  // Stop any existing poll
+  if (_ccTranscriptPoll) { clearInterval(_ccTranscriptPoll); _ccTranscriptPoll = null; }
+
+  try {
+    var res = await saFetch('/api/admin/superadmin/cc/live-transcripts');
+    var data = await res.json();
+    var active = data.active || [];
+    var recent = data.recent_transcripts || [];
+
+    el.innerHTML =
+      '<div class="space-y-6">' +
+        // Active calls banner
+        '<div class="bg-gradient-to-r from-red-600 to-orange-500 rounded-2xl p-6 text-white">' +
+          '<div class="flex items-center justify-between">' +
+            '<div><h3 class="font-bold text-lg"><i class="fas fa-broadcast-tower mr-2 animate-pulse"></i>Live Call Monitor</h3>' +
+              '<p class="text-red-100 text-sm mt-1">' + (active.length > 0 ? active.length + ' call' + (active.length > 1 ? 's' : '') + ' in progress' : 'No active calls right now') + '</p></div>' +
+            '<button onclick="paLoadLiveTranscripts()" class="px-4 py-2 bg-white/20 rounded-lg text-sm font-semibold backdrop-blur-sm"><i class="fas fa-sync-alt mr-1"></i>Refresh</button>' +
+          '</div>' +
+          (active.length > 0 ? '<div class="mt-4 space-y-3">' + active.map(function(cl) {
+            return '<div class="bg-white/10 rounded-xl p-4 backdrop-blur-sm">' +
+              '<div class="flex items-center justify-between">' +
+                '<div class="flex items-center gap-3">' +
+                  '<div class="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center"><i class="fas fa-phone-volume text-sm"></i></div>' +
+                  '<div><div class="font-semibold text-sm">' + (cl.contact_name || cl.company_name || cl.phone_number) + '</div>' +
+                  '<div class="text-xs text-red-100">' + (cl.agent_name || 'AI Agent') + ' → ' + (cl.phone_number || '?') + '</div></div>' +
+                '</div>' +
+                '<span class="px-2 py-1 bg-green-400/30 rounded text-xs font-bold animate-pulse">' + (cl.call_status || 'active') + '</span>' +
+              '</div>' +
+              (cl.transcript ? '<div class="mt-3 bg-black/20 rounded-lg p-3 max-h-40 overflow-y-auto text-xs font-mono leading-relaxed">' + cl.transcript.replace(/</g, '&lt;') + '</div>' : '') +
+            '</div>';
+          }).join('') + '</div>' : '') +
+        '</div>' +
+
+        // Recent transcripts
+        '<div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">' +
+          '<h3 class="font-bold text-gray-700 mb-4"><i class="fas fa-file-alt mr-2 text-violet-500"></i>Recent Call Transcripts (' + recent.length + ')</h3>' +
+          (recent.length === 0 ?
+            '<p class="text-gray-400 text-sm text-center py-8">No transcripts yet. Transcripts are captured automatically when AI agents make outbound calls.</p>' :
+            '<div class="space-y-3">' + recent.map(function(cl) {
+              var duration = cl.call_duration_seconds || 0;
+              var mins = Math.floor(duration / 60);
+              var secs = duration % 60;
+              var outcomeColor = cl.call_outcome === 'interested' ? 'bg-green-50 text-green-700' : cl.call_outcome === 'not_interested' ? 'bg-red-50 text-red-600' : 'bg-gray-50 text-gray-600';
+              return '<div class="border border-gray-100 rounded-xl overflow-hidden">' +
+                '<div class="px-4 py-3 flex items-center justify-between bg-gray-50 cursor-pointer" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display===\'none\'?\'block\':\'none\'">' +
+                  '<div class="flex items-center gap-3">' +
+                    '<div class="w-8 h-8 bg-violet-100 rounded-lg flex items-center justify-center"><i class="fas fa-file-alt text-violet-500 text-xs"></i></div>' +
+                    '<div><div class="text-sm font-semibold text-gray-800">' + (cl.contact_name || cl.company_name || cl.phone_number) + '</div>' +
+                    '<div class="text-xs text-gray-400">' + (cl.started_at ? new Date(cl.started_at).toLocaleString() : '') + ' &bull; ' + mins + 'm ' + secs + 's</div></div>' +
+                  '</div>' +
+                  '<div class="flex items-center gap-2">' +
+                    '<span class="px-2 py-0.5 rounded text-xs font-semibold ' + outcomeColor + '">' + (cl.call_outcome || '-') + '</span>' +
+                    (cl.is_lead ? '<span class="px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-xs font-bold">LEAD</span>' : '') +
+                    '<i class="fas fa-chevron-down text-gray-400 text-xs"></i>' +
+                  '</div>' +
+                '</div>' +
+                '<div class="px-4 py-3 border-t border-gray-100" style="display:none">' +
+                  (cl.call_summary ? '<div class="bg-blue-50 rounded-lg p-3 mb-3 border border-blue-100"><div class="text-xs font-bold text-blue-700 mb-1">Summary</div><p class="text-xs text-blue-900">' + cl.call_summary + '</p></div>' : '') +
+                  '<pre class="text-xs text-gray-700 whitespace-pre-wrap font-sans leading-relaxed max-h-60 overflow-y-auto bg-gray-50 rounded-lg p-3">' + (cl.transcript || '').replace(/</g, '&lt;') + '</pre>' +
+                '</div>' +
+              '</div>';
+            }).join('') + '</div>') +
+        '</div>' +
+      '</div>';
+
+    // Auto-refresh active calls every 5s
+    if (active.length > 0) {
+      _ccTranscriptPoll = setInterval(function() {
+        if (_ccCurrentTab !== 'transcripts') { clearInterval(_ccTranscriptPoll); _ccTranscriptPoll = null; return; }
+        paLoadLiveTranscripts();
+      }, 5000);
+    }
   } catch(e) { el.innerHTML = '<p class="text-red-500">' + e.message + '</p>'; }
 }
 

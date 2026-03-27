@@ -769,6 +769,242 @@ adminRoutes.post('/init-db', async (c) => {
       `).run()
     } catch(e) {}
 
+    // ═══ COLD CALL CENTRE — Outbound AI Dialer tables ═══
+    // cc_agent_personas: AI agent personality + voice + script configuration
+    try { await c.env.DB.prepare(`
+      CREATE TABLE IF NOT EXISTS cc_agent_personas (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        description TEXT,
+        llm_provider TEXT DEFAULT 'openai',
+        llm_model TEXT DEFAULT 'gpt-4o-mini',
+        llm_temperature REAL DEFAULT 0.7,
+        system_prompt TEXT,
+        tts_provider TEXT DEFAULT 'openai',
+        tts_voice_id TEXT DEFAULT 'alloy',
+        tts_speed REAL DEFAULT 1.0,
+        stt_provider TEXT DEFAULT 'deepgram',
+        endpointing_ms INTEGER DEFAULT 300,
+        interruption_sensitivity REAL DEFAULT 0.5,
+        pause_before_reply_ms INTEGER DEFAULT 400,
+        script_opening TEXT,
+        script_value_prop TEXT,
+        script_objections TEXT,
+        script_closing TEXT,
+        script_voicemail TEXT,
+        knowledge_docs TEXT,
+        dynamic_variables TEXT,
+        is_active INTEGER DEFAULT 1,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now'))
+      )
+    `).run() } catch(e) {}
+
+    // cc_phone_config: maps phone numbers to agents, personas, voice settings
+    try { await c.env.DB.prepare(`
+      CREATE TABLE IF NOT EXISTS cc_phone_config (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        label TEXT,
+        assigned_phone_number TEXT,
+        agent_persona_id INTEGER,
+        agent_type TEXT DEFAULT 'cold_call',
+        agent_voice_id TEXT DEFAULT 'alloy',
+        agent_speed REAL DEFAULT 1.0,
+        agent_pause_ms INTEGER DEFAULT 500,
+        agent_system_prompt TEXT,
+        is_active INTEGER DEFAULT 1,
+        sip_trunk_id TEXT,
+        direction TEXT DEFAULT 'outbound',
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now')),
+        FOREIGN KEY (agent_persona_id) REFERENCES cc_agent_personas(id)
+      )
+    `).run() } catch(e) {}
+
+    // cc_agents: AI agent instances that dial from campaigns
+    try { await c.env.DB.prepare(`
+      CREATE TABLE IF NOT EXISTS cc_agents (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        phone_number TEXT,
+        persona_id INTEGER,
+        sip_trunk_id TEXT,
+        dispatch_rule_id TEXT,
+        campaign_id INTEGER,
+        status TEXT DEFAULT 'idle',
+        calls_today INTEGER DEFAULT 0,
+        calls_total INTEGER DEFAULT 0,
+        max_calls_per_day INTEGER DEFAULT 100,
+        operating_hours_start TEXT DEFAULT '09:00',
+        operating_hours_end TEXT DEFAULT '17:00',
+        operating_timezone TEXT DEFAULT 'America/Edmonton',
+        direction TEXT DEFAULT 'outbound',
+        is_active INTEGER DEFAULT 1,
+        last_call_at TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now')),
+        FOREIGN KEY (persona_id) REFERENCES cc_agent_personas(id),
+        FOREIGN KEY (campaign_id) REFERENCES cc_campaigns(id)
+      )
+    `).run() } catch(e) {}
+
+    // cc_campaigns: groups of prospects to call + scheduling + DNC
+    try { await c.env.DB.prepare(`
+      CREATE TABLE IF NOT EXISTS cc_campaigns (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        status TEXT DEFAULT 'draft',
+        agent_persona_id INTEGER,
+        operating_days TEXT DEFAULT 'mon,tue,wed,thu,fri',
+        operating_hours_start TEXT DEFAULT '09:00',
+        operating_hours_end TEXT DEFAULT '17:00',
+        operating_timezone TEXT DEFAULT 'America/Edmonton',
+        max_concurrent_calls INTEGER DEFAULT 1,
+        auto_dial INTEGER DEFAULT 0,
+        retry_max INTEGER DEFAULT 2,
+        retry_interval_hours INTEGER DEFAULT 24,
+        dnc_list TEXT,
+        notes TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now')),
+        FOREIGN KEY (agent_persona_id) REFERENCES cc_agent_personas(id)
+      )
+    `).run() } catch(e) {}
+
+    // cc_prospects: individual leads/contacts to call in a campaign
+    try { await c.env.DB.prepare(`
+      CREATE TABLE IF NOT EXISTS cc_prospects (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        campaign_id INTEGER NOT NULL,
+        company_name TEXT,
+        contact_name TEXT,
+        phone TEXT NOT NULL,
+        email TEXT,
+        website TEXT,
+        location_city TEXT,
+        location_state TEXT,
+        job_title TEXT,
+        notes TEXT,
+        tags TEXT,
+        status TEXT DEFAULT 'new',
+        priority INTEGER DEFAULT 5,
+        call_count INTEGER DEFAULT 0,
+        last_call_at TEXT,
+        last_outcome TEXT,
+        do_not_call INTEGER DEFAULT 0,
+        linkedin_url TEXT,
+        source TEXT DEFAULT 'csv_import',
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now')),
+        FOREIGN KEY (campaign_id) REFERENCES cc_campaigns(id) ON DELETE CASCADE
+      )
+    `).run() } catch(e) {}
+    try { await c.env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_cc_prospects_campaign ON cc_prospects(campaign_id, status)').run() } catch(e) {}
+    try { await c.env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_cc_prospects_phone ON cc_prospects(phone)').run() } catch(e) {}
+
+    // cc_call_logs: every outbound call made by AI agents, with full transcripts
+    try { await c.env.DB.prepare(`
+      CREATE TABLE IF NOT EXISTS cc_call_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        campaign_id INTEGER,
+        agent_id INTEGER,
+        prospect_id INTEGER,
+        phone_number TEXT,
+        company_name TEXT,
+        contact_name TEXT,
+        call_status TEXT DEFAULT 'initiated',
+        call_outcome TEXT,
+        call_duration_seconds INTEGER DEFAULT 0,
+        transcript TEXT,
+        call_summary TEXT,
+        sentiment TEXT,
+        is_lead INTEGER DEFAULT 0,
+        appointment_booked INTEGER DEFAULT 0,
+        follow_up_required INTEGER DEFAULT 0,
+        follow_up_notes TEXT,
+        livekit_room_name TEXT,
+        recording_url TEXT,
+        cost_cents INTEGER DEFAULT 0,
+        outcome TEXT,
+        started_at TEXT DEFAULT (datetime('now')),
+        ended_at TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
+        FOREIGN KEY (campaign_id) REFERENCES cc_campaigns(id),
+        FOREIGN KEY (agent_id) REFERENCES cc_agents(id),
+        FOREIGN KEY (prospect_id) REFERENCES cc_prospects(id)
+      )
+    `).run() } catch(e) {}
+    try { await c.env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_cc_call_logs_campaign ON cc_call_logs(campaign_id, started_at)').run() } catch(e) {}
+    try { await c.env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_cc_call_logs_prospect ON cc_call_logs(prospect_id)').run() } catch(e) {}
+
+    // sip_trunks: tracks LiveKit SIP trunk IDs for inbound/outbound telephony
+    try { await c.env.DB.prepare(`
+      CREATE TABLE IF NOT EXISTS sip_trunks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        trunk_id TEXT UNIQUE,
+        trunk_type TEXT DEFAULT 'outbound',
+        name TEXT,
+        phone_number TEXT,
+        address TEXT,
+        country_code TEXT DEFAULT 'CA',
+        auth_username TEXT,
+        status TEXT DEFAULT 'active',
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now'))
+      )
+    `).run() } catch(e) {}
+
+    // sales_scripts: reusable call scripts for cold calling, follow-up, demo, closing
+    try { await c.env.DB.prepare(`
+      CREATE TABLE IF NOT EXISTS sales_scripts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        category TEXT DEFAULT 'cold_call',
+        script_body TEXT NOT NULL,
+        notes TEXT,
+        is_active INTEGER DEFAULT 1,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now'))
+      )
+    `).run() } catch(e) {}
+
+    // membership_tiers: subscription tiers for platform customers
+    try { await c.env.DB.prepare(`
+      CREATE TABLE IF NOT EXISTS membership_tiers (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        description TEXT,
+        monthly_price_cents INTEGER DEFAULT 0,
+        included_reports INTEGER DEFAULT 0,
+        included_minutes INTEGER DEFAULT 0,
+        secretary_included INTEGER DEFAULT 0,
+        cold_call_included INTEGER DEFAULT 0,
+        features TEXT DEFAULT '[]',
+        welcome_credits INTEGER DEFAULT 0,
+        welcome_discount_pct INTEGER DEFAULT 0,
+        sort_order INTEGER DEFAULT 0,
+        is_active INTEGER DEFAULT 1,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now'))
+      )
+    `).run() } catch(e) {}
+
+    // cc_transcript_flags: flagged transcript segments for agent fine-tuning
+    try { await c.env.DB.prepare(`
+      CREATE TABLE IF NOT EXISTS cc_transcript_flags (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        call_id INTEGER,
+        call_type TEXT DEFAULT 'cold_call',
+        flagged_text TEXT NOT NULL,
+        flag_reason TEXT,
+        suggested_fix TEXT,
+        flagged_by TEXT DEFAULT 'admin',
+        status TEXT DEFAULT 'open',
+        created_at TEXT DEFAULT (datetime('now')),
+        FOREIGN KEY (call_id) REFERENCES cc_call_logs(id)
+      )
+    `).run() } catch(e) {}
+
     return c.json({ success: true, message: 'Database initialized successfully' })
   } catch (err: any) {
     return c.json({ error: 'Failed to initialize database', details: err.message }, 500)
@@ -2827,6 +3063,170 @@ adminRoutes.put('/superadmin/sales-scripts/:id', async (c) => {
 adminRoutes.delete('/superadmin/sales-scripts/:id', async (c) => {
   await c.env.DB.prepare('DELETE FROM sales_scripts WHERE id = ?').bind(c.req.param('id')).run()
   return c.json({ success: true })
+})
+
+// ============================================================
+// COLD CALL CENTRE — Agent Management (Super Admin)
+// CRUD for AI dialer agents with phone config, outbound trunk setup
+// ============================================================
+
+// GET /superadmin/cc/agents — List all CC agents
+adminRoutes.get('/superadmin/cc/agents', async (c) => {
+  try {
+    const { results } = await c.env.DB.prepare(`
+      SELECT a.*, p.name as persona_name, cam.name as campaign_name
+      FROM cc_agents a
+      LEFT JOIN cc_agent_personas p ON a.persona_id = p.id
+      LEFT JOIN cc_campaigns cam ON a.campaign_id = cam.id
+      ORDER BY a.created_at DESC
+    `).all<any>()
+    return c.json({ agents: results || [] })
+  } catch { return c.json({ agents: [] }) }
+})
+
+// POST /superadmin/cc/agents — Create CC agent
+adminRoutes.post('/superadmin/cc/agents', async (c) => {
+  const b = await c.req.json()
+  if (!b.name) return c.json({ error: 'Agent name required' }, 400)
+  const r = await c.env.DB.prepare(`
+    INSERT INTO cc_agents (name, phone_number, persona_id, sip_trunk_id, campaign_id, direction,
+      max_calls_per_day, operating_hours_start, operating_hours_end, operating_timezone, is_active)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?)
+  `).bind(
+    b.name, b.phone_number || '', b.persona_id || null, b.sip_trunk_id || '',
+    b.campaign_id || null, b.direction || 'outbound', b.max_calls_per_day || 100,
+    b.operating_hours_start || '09:00', b.operating_hours_end || '17:00',
+    b.operating_timezone || 'America/Edmonton', b.is_active !== undefined ? (b.is_active ? 1 : 0) : 1
+  ).run()
+  return c.json({ success: true, id: r.meta.last_row_id })
+})
+
+// PUT /superadmin/cc/agents/:id — Update CC agent
+adminRoutes.put('/superadmin/cc/agents/:id', async (c) => {
+  const id = c.req.param('id')
+  const b = await c.req.json()
+  await c.env.DB.prepare(`
+    UPDATE cc_agents SET name=?, phone_number=?, persona_id=?, sip_trunk_id=?, campaign_id=?,
+    direction=?, max_calls_per_day=?, operating_hours_start=?, operating_hours_end=?,
+    operating_timezone=?, is_active=?, updated_at=datetime('now') WHERE id=?
+  `).bind(
+    b.name || '', b.phone_number || '', b.persona_id || null, b.sip_trunk_id || '',
+    b.campaign_id || null, b.direction || 'outbound', b.max_calls_per_day || 100,
+    b.operating_hours_start || '09:00', b.operating_hours_end || '17:00',
+    b.operating_timezone || 'America/Edmonton', b.is_active !== undefined ? (b.is_active ? 1 : 0) : 1, id
+  ).run()
+  return c.json({ success: true })
+})
+
+// DELETE /superadmin/cc/agents/:id
+adminRoutes.delete('/superadmin/cc/agents/:id', async (c) => {
+  await c.env.DB.prepare('DELETE FROM cc_agents WHERE id = ?').bind(c.req.param('id')).run()
+  return c.json({ success: true })
+})
+
+// GET /superadmin/cc/call-logs — Cold call logs with transcripts
+adminRoutes.get('/superadmin/cc/call-logs', async (c) => {
+  const limit = parseInt(c.req.query('limit') || '50')
+  const offset = parseInt(c.req.query('offset') || '0')
+  const campaign_id = c.req.query('campaign_id')
+  const has_transcript = c.req.query('has_transcript')
+  try {
+    let where = '1=1'
+    const params: any[] = []
+    if (campaign_id) { where += ' AND cl.campaign_id = ?'; params.push(campaign_id) }
+    if (has_transcript === '1') { where += " AND cl.transcript IS NOT NULL AND cl.transcript != ''" }
+    params.push(limit, offset)
+    const { results } = await c.env.DB.prepare(`
+      SELECT cl.*, p.company_name, p.contact_name, a.name as agent_name
+      FROM cc_call_logs cl
+      LEFT JOIN cc_prospects p ON p.id = cl.prospect_id
+      LEFT JOIN cc_agents a ON a.id = cl.agent_id
+      WHERE ${where}
+      ORDER BY cl.started_at DESC LIMIT ? OFFSET ?
+    `).bind(...params).all<any>()
+    const total = await c.env.DB.prepare(`SELECT COUNT(*) as cnt FROM cc_call_logs cl WHERE ${where.replace(/ LIMIT.*/, '')}`).bind(...params.slice(0, -2)).first<any>()
+    return c.json({ call_logs: results || [], total: total?.cnt || 0 })
+  } catch (e: any) { return c.json({ call_logs: [], total: 0, error: e.message }) }
+})
+
+// GET /superadmin/cc/call-logs/:id — Single call log with full transcript
+adminRoutes.get('/superadmin/cc/call-logs/:id', async (c) => {
+  const id = c.req.param('id')
+  try {
+    const log = await c.env.DB.prepare(`
+      SELECT cl.*, p.company_name, p.contact_name, p.email as prospect_email, p.website, p.location_city, p.location_state, a.name as agent_name
+      FROM cc_call_logs cl LEFT JOIN cc_prospects p ON p.id=cl.prospect_id LEFT JOIN cc_agents a ON a.id=cl.agent_id
+      WHERE cl.id=?
+    `).bind(id).first<any>()
+    return c.json({ call_log: log || null })
+  } catch { return c.json({ call_log: null }) }
+})
+
+// POST /superadmin/cc/lead-lists/upload — Bulk CSV upload into a campaign
+adminRoutes.post('/superadmin/cc/lead-lists/upload', async (c) => {
+  const { campaign_id, prospects } = await c.req.json()
+  if (!campaign_id || !prospects || !Array.isArray(prospects)) {
+    return c.json({ error: 'campaign_id and prospects array required' }, 400)
+  }
+  let imported = 0, skipped = 0
+  for (const p of prospects) {
+    if (!p.phone) { skipped++; continue }
+    try {
+      await c.env.DB.prepare(`
+        INSERT INTO cc_prospects (campaign_id, company_name, contact_name, phone, email, website, location_city, location_state, job_title, notes, tags, source)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+      `).bind(
+        campaign_id, p.company_name || '', p.contact_name || '', p.phone,
+        p.email || '', p.website || '', p.location_city || p.city || '',
+        p.location_state || p.state || '', p.job_title || '', p.notes || '',
+        p.tags || '', 'csv_upload'
+      ).run()
+      imported++
+    } catch { skipped++ }
+  }
+  return c.json({ success: true, imported, skipped, total: prospects.length })
+})
+
+// GET /superadmin/cc/prospects — List prospects for a campaign
+adminRoutes.get('/superadmin/cc/prospects', async (c) => {
+  const campaign_id = c.req.query('campaign_id')
+  const limit = parseInt(c.req.query('limit') || '100')
+  const offset = parseInt(c.req.query('offset') || '0')
+  try {
+    let where = '1=1'
+    const params: any[] = []
+    if (campaign_id) { where += ' AND campaign_id = ?'; params.push(campaign_id) }
+    params.push(limit, offset)
+    const { results } = await c.env.DB.prepare(
+      `SELECT * FROM cc_prospects WHERE ${where} ORDER BY priority ASC, created_at DESC LIMIT ? OFFSET ?`
+    ).bind(...params).all<any>()
+    const total = await c.env.DB.prepare(`SELECT COUNT(*) as cnt FROM cc_prospects WHERE ${where.replace(/ LIMIT.*/, '')}`).bind(...params.slice(0, -2)).first<any>()
+    return c.json({ prospects: results || [], total: total?.cnt || 0 })
+  } catch { return c.json({ prospects: [], total: 0 }) }
+})
+
+// GET /superadmin/cc/live-transcripts — Active calls with real-time data
+adminRoutes.get('/superadmin/cc/live-transcripts', async (c) => {
+  try {
+    const { results } = await c.env.DB.prepare(`
+      SELECT cl.*, p.company_name, p.contact_name, a.name as agent_name
+      FROM cc_call_logs cl
+      LEFT JOIN cc_prospects p ON p.id = cl.prospect_id
+      LEFT JOIN cc_agents a ON a.id = cl.agent_id
+      WHERE cl.call_status IN ('ringing','connected','in_progress')
+      ORDER BY cl.started_at DESC
+    `).all<any>()
+    // Also recent completed for transcript view
+    const { results: recent } = await c.env.DB.prepare(`
+      SELECT cl.*, p.company_name, p.contact_name, a.name as agent_name
+      FROM cc_call_logs cl
+      LEFT JOIN cc_prospects p ON p.id = cl.prospect_id
+      LEFT JOIN cc_agents a ON a.id = cl.agent_id
+      WHERE cl.transcript IS NOT NULL AND cl.transcript != ''
+      ORDER BY cl.started_at DESC LIMIT 20
+    `).all<any>()
+    return c.json({ active: results || [], recent_transcripts: recent || [] })
+  } catch { return c.json({ active: [], recent_transcripts: [] }) }
 })
 
 // ============================================================
