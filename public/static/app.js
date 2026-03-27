@@ -786,7 +786,7 @@ function updatePinUI() {
 // ============================================================
 function renderStep2TracePhase() {
   const modeInfo = {
-    eaves:  { color: '#22c55e', icon: 'fa-draw-polygon', label: 'Eaves Outline', desc: 'Trace each eave layer separately. Close a section by clicking its first point, then start the next layer.' },
+    eaves:  { color: '#22c55e', icon: 'fa-draw-polygon', label: 'Eaves Outline', desc: 'Click to add points around the eave outline. When done, click "Close Eave Section" to save it.' },
     ridge:  { color: '#3b82f6', icon: 'fa-grip-lines', label: 'Ridges', desc: 'Click start and end of each ridge line. Double-click to finish each line.' },
     hip:    { color: '#f59e0b', icon: 'fa-slash', label: 'Hips', desc: 'Click start and end of each hip line. Double-click to finish each line.' },
     valley: { color: '#ef4444', icon: 'fa-angle-down', label: 'Valleys', desc: 'Click start and end of each valley line. Double-click to finish each line.' }
@@ -884,6 +884,11 @@ function renderStep2TracePhase() {
 
           <!-- Actions -->
           <div class="space-y-2">
+            ${state.traceMode === 'eaves' && eavesCount >= 3 ? `
+              <button onclick="closeEavesPolygon()" class="w-full px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-semibold transition-all shadow-md">
+                <i class="fas fa-check mr-1"></i>Close Eave Section
+              </button>
+            ` : ''}
             ${eavesClosed && state.traceMode === 'eaves' ? `
               <button onclick="addAnotherEaveLayer()" class="w-full px-3 py-2 bg-green-50 hover:bg-green-100 text-green-700 rounded-lg text-sm font-medium transition-all border border-green-200">
                 <i class="fas fa-plus mr-1"></i>Add Another Eave Layer
@@ -926,7 +931,7 @@ function renderStep2TracePhase() {
         <div class="flex items-center gap-4 text-xs text-gray-500">
           <span><i class="fas fa-mouse-pointer mr-1"></i>Click = Add point</span>
           <span><i class="fas fa-mouse mr-1"></i>Double-click = Finish line</span>
-          <span><i class="fas fa-draw-polygon mr-1" style="color:#22c55e"></i>Eaves: click first point to close a layer. Multi-story or complex roofs can have multiple eave layers — trace each separately.</span>
+          <span><i class="fas fa-draw-polygon mr-1" style="color:#22c55e"></i>Eaves: click points around the outline, then press <strong>Close Eave Section</strong>. Multi-story roofs can have multiple layers — add each one separately.</span>
         </div>
         <div class="flex items-center gap-3">
           <button onclick="skipTracing()" class="px-4 py-2 text-gray-500 hover:text-gray-700 text-sm font-medium transition-all">
