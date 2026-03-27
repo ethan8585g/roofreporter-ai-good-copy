@@ -461,11 +461,11 @@ callCenterRoutes.post('/call-complete', async (c) => {
     // Update call log
     if (room_name) {
       await c.env.DB.prepare(
-        `UPDATE cc_call_logs SET call_status=?, call_outcome=?, call_duration_seconds=?, talk_time_seconds=?, call_summary=?, call_transcript=?, caller_sentiment=?, objections_raised=?, follow_up_action=?, follow_up_date=?, ended_at=datetime('now') WHERE livekit_room_id=?`
+        `UPDATE cc_call_logs SET call_status=?, call_outcome=?, call_duration_seconds=?, talk_time_seconds=?, call_summary=?, transcript=?, call_transcript=?, caller_sentiment=?, sentiment=?, objections_raised=?, follow_up_action=?, follow_up_date=?, ended_at=datetime('now') WHERE livekit_room_id=? OR livekit_room_name=?`
       ).bind(
         call_status || 'completed', call_outcome || '', call_duration_seconds || 0, talk_time_seconds || 0,
-        call_summary || '', call_transcript || '', caller_sentiment || '', objections_raised || '',
-        follow_up_action || '', follow_up_date || null, room_name
+        call_summary || '', call_transcript || '', call_transcript || '', caller_sentiment || '', caller_sentiment || '', objections_raised || '',
+        follow_up_action || '', follow_up_date || null, room_name, room_name
       ).run()
     }
 
@@ -509,7 +509,7 @@ callCenterRoutes.post('/call-complete', async (c) => {
     }
 
     // Update campaign stats
-    const log = room_name ? await c.env.DB.prepare('SELECT campaign_id FROM cc_call_logs WHERE livekit_room_id=?').bind(room_name).first<any>() : null
+    const log = room_name ? await c.env.DB.prepare('SELECT campaign_id FROM cc_call_logs WHERE livekit_room_id=? OR livekit_room_name=?').bind(room_name, room_name).first<any>() : null
     if (log?.campaign_id) {
       const cStats = await c.env.DB.prepare(
         `SELECT COUNT(*) as total, SUM(CASE WHEN call_status='connected' OR call_status='completed' THEN 1 ELSE 0 END) as connects, SUM(CASE WHEN call_outcome='interested' THEN 1 ELSE 0 END) as interested, SUM(CASE WHEN call_outcome='demo_scheduled' THEN 1 ELSE 0 END) as demos, SUM(CASE WHEN call_outcome='converted' THEN 1 ELSE 0 END) as converted FROM cc_call_logs WHERE campaign_id=?`

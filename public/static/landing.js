@@ -10,7 +10,6 @@ document.addEventListener('DOMContentLoaded', () => {
   if (!root) return;
 
   root.innerHTML = `
-    ${renderAnnouncementBar()}
     ${renderHero()}
     ${renderTrustBadges()}
     ${renderStatsBar()}
@@ -113,20 +112,7 @@ function animateCounter(el) {
 // ============================================================
 // ANNOUNCEMENT BAR — Urgency + social proof
 // ============================================================
-function renderAnnouncementBar() {
-  return `
-    <div class="bg-gradient-to-r from-teal-600 via-teal-500 to-cyan-500 text-white text-center py-2.5 px-4 text-sm font-semibold relative overflow-hidden">
-      <div class="absolute inset-0 opacity-20" style="background: repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(255,255,255,0.1) 10px, rgba(255,255,255,0.1) 20px);"></div>
-      <div class="relative flex items-center justify-center gap-3 flex-wrap">
-        <span class="animate-pulse">&#x1F525;</span>
-        <span><strong>Limited Time:</strong> Start 3 Free Estimates Today — Join 10,000+ Canadian Roofers</span>
-        <a href="/signup" onclick="rrTrack('cta_click',{location:'announcement_bar'})" class="inline-flex items-center gap-1 bg-white text-red-600 font-bold px-4 py-1 rounded-full text-xs hover:bg-gray-100 transition-all hover:scale-105 shadow-lg">
-          Claim Free Reports <i class="fas fa-arrow-right text-[10px]"></i>
-        </a>
-      </div>
-    </div>
-  `;
-}
+// Announcement bar removed — it was blocking the nav menu on scroll
 
 // ============================================================
 // HERO — Redesigned with urgency, trust badges, A/B CTA

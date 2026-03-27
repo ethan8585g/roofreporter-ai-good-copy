@@ -1091,12 +1091,12 @@ async function paLoadCCCallLogs() {
           var outcomeColor = cl.call_outcome === 'interested' || cl.call_outcome === 'demo_scheduled' ? 'bg-green-50 text-green-700' :
             cl.call_outcome === 'not_interested' ? 'bg-red-50 text-red-600' :
             cl.call_outcome === 'callback' ? 'bg-amber-50 text-amber-700' : 'bg-gray-50 text-gray-500';
-          var hasTranscript = cl.transcript && cl.transcript.length > 0;
+          var hasTranscript = (cl.transcript && cl.transcript.length > 0) || (cl.call_transcript && cl.call_transcript.length > 0);
           return '<tr class="border-b border-gray-50 hover:bg-gray-50 cursor-pointer" onclick="paShowCallDetail(' + cl.id + ')">' +
             '<td class="py-2 text-xs text-gray-500">' + (cl.started_at ? new Date(cl.started_at).toLocaleString() : '-') + '</td>' +
             '<td class="font-medium text-xs">' + (cl.company_name || '-') + '</td>' +
             '<td class="text-xs">' + (cl.contact_name || '-') + '</td>' +
-            '<td class="text-xs font-mono">' + (cl.phone_number || '-') + '</td>' +
+            '<td class="text-xs font-mono">' + (cl.phone_number || cl.phone_dialed || '-') + '</td>' +
             '<td><span class="px-2 py-0.5 rounded text-xs font-semibold ' + statusColor + '">' + (cl.call_status || '-') + '</span></td>' +
             '<td><span class="px-2 py-0.5 rounded text-xs font-semibold ' + outcomeColor + '">' + (cl.call_outcome || '-') + '</span></td>' +
             '<td class="text-xs">' + (cl.call_duration_seconds || 0) + 's</td>' +
@@ -1127,7 +1127,7 @@ async function paShowCallDetail(callId) {
         '<div class="grid grid-cols-4 gap-4">' +
           '<div class="p-3 bg-gray-50 rounded-xl"><div class="text-xs text-gray-500">Company</div><div class="text-sm font-bold">' + (cl.company_name || '-') + '</div></div>' +
           '<div class="p-3 bg-gray-50 rounded-xl"><div class="text-xs text-gray-500">Contact</div><div class="text-sm font-bold">' + (cl.contact_name || '-') + '</div></div>' +
-          '<div class="p-3 bg-gray-50 rounded-xl"><div class="text-xs text-gray-500">Phone</div><div class="text-sm font-bold font-mono">' + (cl.phone_number || '-') + '</div></div>' +
+          '<div class="p-3 bg-gray-50 rounded-xl"><div class="text-xs text-gray-500">Phone</div><div class="text-sm font-bold font-mono">' + (cl.phone_number || cl.phone_dialed || '-') + '</div></div>' +
           '<div class="p-3 bg-gray-50 rounded-xl"><div class="text-xs text-gray-500">Duration</div><div class="text-sm font-bold">' + (cl.call_duration_seconds || 0) + 's</div></div>' +
         '</div>' +
         '<div class="grid grid-cols-3 gap-4">' +
@@ -1141,10 +1141,10 @@ async function paShowCallDetail(callId) {
           (cl.follow_up_required ? '<span class="px-3 py-1 bg-violet-100 text-violet-700 rounded-lg text-xs font-bold"><i class="fas fa-redo mr-1"></i>FOLLOW-UP</span>' : '') +
         '</div>' +
         (cl.call_summary ? '<div class="bg-blue-50 rounded-xl p-4 border border-blue-100"><h4 class="text-xs font-bold text-blue-700 mb-2"><i class="fas fa-clipboard mr-1"></i>Call Summary</h4><p class="text-sm text-blue-900">' + cl.call_summary.replace(/\n/g, '<br>') + '</p></div>' : '') +
-        (cl.transcript ?
+        ((cl.transcript || cl.call_transcript) ?
           '<div class="bg-gray-50 rounded-xl p-4 border border-gray-200">' +
             '<h4 class="text-xs font-bold text-gray-700 mb-2"><i class="fas fa-file-alt mr-1"></i>Full Transcript</h4>' +
-            '<pre class="text-sm text-gray-800 whitespace-pre-wrap font-sans leading-relaxed max-h-96 overflow-y-auto">' + cl.transcript.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</pre>' +
+            '<pre class="text-sm text-gray-800 whitespace-pre-wrap font-sans leading-relaxed max-h-96 overflow-y-auto">' + (cl.transcript || cl.call_transcript || '').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</pre>' +
           '</div>' : '<p class="text-gray-400 text-sm italic">No transcript captured for this call.</p>') +
         (cl.follow_up_notes ? '<div class="bg-amber-50 rounded-xl p-4 border border-amber-100"><h4 class="text-xs font-bold text-amber-700 mb-2">Follow-up Notes</h4><p class="text-sm text-amber-900">' + cl.follow_up_notes + '</p></div>' : '') +
       '</div>';
@@ -1182,11 +1182,11 @@ async function paLoadLiveTranscripts() {
                 '<div class="flex items-center gap-3">' +
                   '<div class="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center"><i class="fas fa-phone-volume text-sm"></i></div>' +
                   '<div><div class="font-semibold text-sm">' + (cl.contact_name || cl.company_name || cl.phone_number) + '</div>' +
-                  '<div class="text-xs text-red-100">' + (cl.agent_name || 'AI Agent') + ' → ' + (cl.phone_number || '?') + '</div></div>' +
+                  '<div class="text-xs text-red-100">' + (cl.agent_name || 'AI Agent') + ' → ' + (cl.phone_number || cl.phone_dialed || '?') + '</div></div>' +
                 '</div>' +
                 '<span class="px-2 py-1 bg-green-400/30 rounded text-xs font-bold animate-pulse">' + (cl.call_status || 'active') + '</span>' +
               '</div>' +
-              (cl.transcript ? '<div class="mt-3 bg-black/20 rounded-lg p-3 max-h-40 overflow-y-auto text-xs font-mono leading-relaxed">' + cl.transcript.replace(/</g, '&lt;') + '</div>' : '') +
+              ((cl.transcript || cl.call_transcript) ? '<div class="mt-3 bg-black/20 rounded-lg p-3 max-h-40 overflow-y-auto text-xs font-mono leading-relaxed">' + (cl.transcript || cl.call_transcript || '').replace(/</g, '&lt;') + '</div>' : '') +
             '</div>';
           }).join('') + '</div>' : '') +
         '</div>' +
@@ -1205,7 +1205,7 @@ async function paLoadLiveTranscripts() {
                 '<div class="px-4 py-3 flex items-center justify-between bg-gray-50 cursor-pointer" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display===\'none\'?\'block\':\'none\'">' +
                   '<div class="flex items-center gap-3">' +
                     '<div class="w-8 h-8 bg-violet-100 rounded-lg flex items-center justify-center"><i class="fas fa-file-alt text-violet-500 text-xs"></i></div>' +
-                    '<div><div class="text-sm font-semibold text-gray-800">' + (cl.contact_name || cl.company_name || cl.phone_number) + '</div>' +
+                    '<div><div class="text-sm font-semibold text-gray-800">' + (cl.contact_name || cl.company_name || cl.phone_number || cl.phone_dialed) + '</div>' +
                     '<div class="text-xs text-gray-400">' + (cl.started_at ? new Date(cl.started_at).toLocaleString() : '') + ' &bull; ' + mins + 'm ' + secs + 's</div></div>' +
                   '</div>' +
                   '<div class="flex items-center gap-2">' +
@@ -1216,7 +1216,7 @@ async function paLoadLiveTranscripts() {
                 '</div>' +
                 '<div class="px-4 py-3 border-t border-gray-100" style="display:none">' +
                   (cl.call_summary ? '<div class="bg-blue-50 rounded-lg p-3 mb-3 border border-blue-100"><div class="text-xs font-bold text-blue-700 mb-1">Summary</div><p class="text-xs text-blue-900">' + cl.call_summary + '</p></div>' : '') +
-                  '<pre class="text-xs text-gray-700 whitespace-pre-wrap font-sans leading-relaxed max-h-60 overflow-y-auto bg-gray-50 rounded-lg p-3">' + (cl.transcript || '').replace(/</g, '&lt;') + '</pre>' +
+                  '<pre class="text-xs text-gray-700 whitespace-pre-wrap font-sans leading-relaxed max-h-60 overflow-y-auto bg-gray-50 rounded-lg p-3">' + (cl.transcript || cl.call_transcript || '').replace(/</g, '&lt;') + '</pre>' +
                 '</div>' +
               '</div>';
             }).join('') + '</div>') +

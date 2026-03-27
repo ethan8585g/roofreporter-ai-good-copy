@@ -834,13 +834,24 @@ adminRoutes.post('/init-db', async (c) => {
         status TEXT DEFAULT 'idle',
         calls_today INTEGER DEFAULT 0,
         calls_total INTEGER DEFAULT 0,
+        total_calls INTEGER DEFAULT 0,
+        total_connects INTEGER DEFAULT 0,
+        total_interested INTEGER DEFAULT 0,
+        avg_call_duration_sec REAL DEFAULT 0,
+        success_rate REAL DEFAULT 0,
         max_calls_per_day INTEGER DEFAULT 100,
         operating_hours_start TEXT DEFAULT '09:00',
         operating_hours_end TEXT DEFAULT '17:00',
         operating_timezone TEXT DEFAULT 'America/Edmonton',
         direction TEXT DEFAULT 'outbound',
         is_active INTEGER DEFAULT 1,
+        voice_id TEXT DEFAULT 'alloy',
+        persona TEXT,
+        livekit_room_prefix TEXT DEFAULT 'sales-',
+        current_prospect_id INTEGER,
+        current_room_name TEXT,
         last_call_at TEXT,
+        last_active_at TEXT,
         created_at TEXT DEFAULT (datetime('now')),
         updated_at TEXT DEFAULT (datetime('now')),
         FOREIGN KEY (persona_id) REFERENCES cc_agent_personas(id),
@@ -853,6 +864,7 @@ adminRoutes.post('/init-db', async (c) => {
       CREATE TABLE IF NOT EXISTS cc_campaigns (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
+        description TEXT,
         status TEXT DEFAULT 'draft',
         agent_persona_id INTEGER,
         operating_days TEXT DEFAULT 'mon,tue,wed,thu,fri',
@@ -865,6 +877,24 @@ adminRoutes.post('/init-db', async (c) => {
         retry_interval_hours INTEGER DEFAULT 24,
         dnc_list TEXT,
         notes TEXT,
+        script_intro TEXT,
+        script_value_prop TEXT,
+        script_objections TEXT,
+        script_closing TEXT,
+        target_region TEXT,
+        target_company_size TEXT,
+        call_hours_start TEXT DEFAULT '09:00',
+        call_hours_end TEXT DEFAULT '17:00',
+        timezone TEXT DEFAULT 'America/Edmonton',
+        max_attempts INTEGER DEFAULT 3,
+        cooldown_hours INTEGER DEFAULT 24,
+        total_prospects INTEGER DEFAULT 0,
+        total_calls INTEGER DEFAULT 0,
+        total_connects INTEGER DEFAULT 0,
+        total_interested INTEGER DEFAULT 0,
+        total_demos INTEGER DEFAULT 0,
+        total_converted INTEGER DEFAULT 0,
+        prospect_count INTEGER DEFAULT 0,
         created_at TEXT DEFAULT (datetime('now')),
         updated_at TEXT DEFAULT (datetime('now')),
         FOREIGN KEY (agent_persona_id) REFERENCES cc_agent_personas(id)
@@ -875,7 +905,7 @@ adminRoutes.post('/init-db', async (c) => {
     try { await c.env.DB.prepare(`
       CREATE TABLE IF NOT EXISTS cc_prospects (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        campaign_id INTEGER NOT NULL,
+        campaign_id INTEGER,
         company_name TEXT,
         contact_name TEXT,
         phone TEXT NOT NULL,
@@ -883,17 +913,26 @@ adminRoutes.post('/init-db', async (c) => {
         website TEXT,
         location_city TEXT,
         location_state TEXT,
+        city TEXT,
+        province_state TEXT,
+        country TEXT DEFAULT 'CA',
+        company_size TEXT,
         job_title TEXT,
         notes TEXT,
         tags TEXT,
         status TEXT DEFAULT 'new',
         priority INTEGER DEFAULT 5,
         call_count INTEGER DEFAULT 0,
+        total_calls INTEGER DEFAULT 0,
         last_call_at TEXT,
+        last_called_at TEXT,
         last_outcome TEXT,
         do_not_call INTEGER DEFAULT 0,
         linkedin_url TEXT,
         source TEXT DEFAULT 'csv_import',
+        lead_source TEXT DEFAULT 'csv_import',
+        assigned_agent_id INTEGER,
+        next_call_at TEXT,
         created_at TEXT DEFAULT (datetime('now')),
         updated_at TEXT DEFAULT (datetime('now')),
         FOREIGN KEY (campaign_id) REFERENCES cc_campaigns(id) ON DELETE CASCADE
@@ -910,19 +949,28 @@ adminRoutes.post('/init-db', async (c) => {
         agent_id INTEGER,
         prospect_id INTEGER,
         phone_number TEXT,
+        phone_dialed TEXT,
+        agent_name TEXT,
         company_name TEXT,
         contact_name TEXT,
         call_status TEXT DEFAULT 'initiated',
         call_outcome TEXT,
         call_duration_seconds INTEGER DEFAULT 0,
+        talk_time_seconds INTEGER DEFAULT 0,
         transcript TEXT,
+        call_transcript TEXT,
         call_summary TEXT,
         sentiment TEXT,
+        caller_sentiment TEXT,
+        objections_raised TEXT,
+        follow_up_action TEXT,
+        follow_up_date TEXT,
         is_lead INTEGER DEFAULT 0,
         appointment_booked INTEGER DEFAULT 0,
         follow_up_required INTEGER DEFAULT 0,
         follow_up_notes TEXT,
         livekit_room_name TEXT,
+        livekit_room_id TEXT,
         recording_url TEXT,
         cost_cents INTEGER DEFAULT 0,
         outcome TEXT,
@@ -951,6 +999,36 @@ adminRoutes.post('/init-db', async (c) => {
         status TEXT DEFAULT 'active',
         created_at TEXT DEFAULT (datetime('now')),
         updated_at TEXT DEFAULT (datetime('now'))
+      )
+    `).run() } catch(e) {}
+
+    // cc_contact_lists: reusable named prospect lists by area/region
+    try { await c.env.DB.prepare(`
+      CREATE TABLE IF NOT EXISTS cc_contact_lists (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        description TEXT,
+        area TEXT,
+        province_state TEXT,
+        country TEXT DEFAULT 'CA',
+        tags TEXT,
+        status TEXT DEFAULT 'active',
+        total_contacts INTEGER DEFAULT 0,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now'))
+      )
+    `).run() } catch(e) {}
+
+    // cc_contact_list_members: many-to-many link between lists and prospects
+    try { await c.env.DB.prepare(`
+      CREATE TABLE IF NOT EXISTS cc_contact_list_members (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        list_id INTEGER NOT NULL,
+        prospect_id INTEGER NOT NULL,
+        added_at TEXT DEFAULT (datetime('now')),
+        FOREIGN KEY (list_id) REFERENCES cc_contact_lists(id) ON DELETE CASCADE,
+        FOREIGN KEY (prospect_id) REFERENCES cc_prospects(id) ON DELETE CASCADE,
+        UNIQUE(list_id, prospect_id)
       )
     `).run() } catch(e) {}
 
@@ -3144,7 +3222,8 @@ adminRoutes.get('/superadmin/cc/call-logs', async (c) => {
       WHERE ${where}
       ORDER BY cl.started_at DESC LIMIT ? OFFSET ?
     `).bind(...params).all<any>()
-    const total = await c.env.DB.prepare(`SELECT COUNT(*) as cnt FROM cc_call_logs cl WHERE ${where.replace(/ LIMIT.*/, '')}`).bind(...params.slice(0, -2)).first<any>()
+    const countParams = params.slice(0, -2)
+    const total = await c.env.DB.prepare(`SELECT COUNT(*) as cnt FROM cc_call_logs cl WHERE ${where}`).bind(...countParams).first<any>()
     return c.json({ call_logs: results || [], total: total?.cnt || 0 })
   } catch (e: any) { return c.json({ call_logs: [], total: 0, error: e.message }) }
 })
@@ -3222,7 +3301,7 @@ adminRoutes.get('/superadmin/cc/live-transcripts', async (c) => {
       FROM cc_call_logs cl
       LEFT JOIN cc_prospects p ON p.id = cl.prospect_id
       LEFT JOIN cc_agents a ON a.id = cl.agent_id
-      WHERE cl.transcript IS NOT NULL AND cl.transcript != ''
+      WHERE (cl.transcript IS NOT NULL AND cl.transcript != '') OR (cl.call_transcript IS NOT NULL AND cl.call_transcript != '')
       ORDER BY cl.started_at DESC LIMIT 20
     `).all<any>()
     return c.json({ active: results || [], recent_transcripts: recent || [] })

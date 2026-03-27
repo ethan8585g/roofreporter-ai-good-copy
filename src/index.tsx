@@ -2304,6 +2304,14 @@ export default app
 
 function getTailwindConfig() {
   return `<script>
+    // Suppress Tailwind CDN production warning banner
+    if (typeof window !== 'undefined') {
+      var _origWarn = console.warn;
+      console.warn = function() {
+        if (arguments[0] && typeof arguments[0] === 'string' && arguments[0].indexOf('cdn.tailwindcss.com') > -1) return;
+        _origWarn.apply(console, arguments);
+      };
+    }
     tailwind.config = {
       theme: {
         extend: {
@@ -2328,7 +2336,14 @@ function getTailwindConfig() {
         }
       }
     }
-  </script>`
+  </script>
+  <style>
+    /* Hide Tailwind CDN production warning banner */
+    [data-tailwind-warning], .tailwind-warning,
+    body > div:first-child[style*="position: fixed"][style*="background"][style*="z-index"]:not(#landing-root):not(#app):not(#customer-root):not([class]) {
+      display: none !important;
+    }
+  </style>`
 }
 
 // Build-time version stamp for cache busting all static assets
