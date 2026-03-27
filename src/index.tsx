@@ -2689,7 +2689,7 @@ function getVirtualTryOnPageHTML() {
 <html lang="en">
 <head>
   ${getHeadTags()}
-  <title>Virtual Try-On - RoofReporterAI</title>
+  <title>Roof Visualizer - RoofReporterAI</title>
 </head>
 <body class="bg-gray-50 min-h-screen">
   <header class="bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg">
@@ -2698,8 +2698,8 @@ function getVirtualTryOnPageHTML() {
         <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
           <img src="/static/logo.png" alt="RoofReporterAI" class="w-10 h-10 rounded-lg object-cover">
           <div>
-            <h1 class="text-lg font-bold">Virtual Roof Try-On</h1>
-            <p class="text-brand-200 text-xs">AI-Powered Roof Visualization</p>
+            <h1 class="text-lg font-bold">Roof Visualizer</h1>
+            <p class="text-brand-200 text-xs">AI-Powered Material &amp; Color Preview</p>
           </div>
         </a>
       </div>

@@ -392,4 +392,105 @@ virtualTryonRoutes.get('/styles', async (c) => {
   })
 })
 
+// ============================================================
+// POST /analyze-house — Gemini Vision house geometry analysis
+//
+// Accepts up to 6 house photos, calls Gemini 2.0 Flash vision,
+// returns roof geometry JSON used to render the SVG visualizer.
+// Always returns success — falls back to a default gable shape
+// if the API key is missing or Gemini returns an error.
+// ============================================================
+
+virtualTryonRoutes.post('/analyze-house', async (c) => {
+  try {
+    const body = await c.req.json() as { images: Array<{ label: string; base64: string; mimeType?: string }> }
+    const { images } = body
+
+    if (!images || images.length === 0) {
+      return c.json({ success: true, geometry: defaultHouseGeometry(), source: 'fallback' })
+    }
+
+    const apiKey = c.env.GOOGLE_VERTEX_API_KEY
+    if (!apiKey) {
+      console.warn('[Visualizer] GOOGLE_VERTEX_API_KEY not set — returning fallback geometry')
+      return c.json({ success: true, geometry: defaultHouseGeometry(), source: 'fallback' })
+    }
+
+    // Build Gemini Vision request — include all uploaded photos (max 6)
+    const imageParts = images.slice(0, 6).map(img => ({
+      inlineData: {
+        mimeType: (img.mimeType || 'image/jpeg') as string,
+        data: img.base64,
+      }
+    }))
+
+    const prompt = `Analyze these house exterior photos and return ONLY a valid JSON object with no markdown and no extra text:
+{
+  "roof_type": "gable",
+  "pitch_estimate": "medium",
+  "stories": 1,
+  "width_depth_ratio": 1.6,
+  "num_facets": 2,
+  "house_style": "ranch",
+  "confidence": "high"
+}
+
+Definitions:
+- roof_type: "gable" (two slopes at central ridge), "hip" (four slopes, no vertical gable end), "flat" (nearly flat, <2:12), "complex" (multiple ridges/valleys), "shed" (single slope), "gambrel" (barn-style double-pitch)
+- pitch_estimate: "low" (<4:12 slope), "medium" (4–8:12), "steep" (>8:12)
+- stories: integer 1, 2, or 3
+- width_depth_ratio: house width (left-to-right) divided by depth (front-to-back), e.g. 1.6 = wider than deep
+- num_facets: count of distinct sloped roof planes
+- house_style: "ranch", "colonial", "craftsman", "victorian", "modern", "cape_cod", "split_level"
+- confidence: "high", "medium", or "low" based on photo quality and angles`
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [...imageParts, { text: prompt }] }],
+          generationConfig: { temperature: 0.1, maxOutputTokens: 300 },
+        }),
+      }
+    )
+
+    if (!response.ok) {
+      const errText = await response.text()
+      console.error(`[Visualizer] Gemini error: ${response.status} — ${errText.slice(0, 200)}`)
+      return c.json({ success: true, geometry: defaultHouseGeometry(), source: 'fallback' })
+    }
+
+    const data = await response.json() as any
+    const text: string = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+
+    const jsonMatch = text.match(/\{[\s\S]*?\}/)
+    if (!jsonMatch) {
+      console.warn('[Visualizer] No JSON in Gemini response:', text.slice(0, 200))
+      return c.json({ success: true, geometry: defaultHouseGeometry(), source: 'fallback' })
+    }
+
+    const geometry = JSON.parse(jsonMatch[0])
+    console.log(`[Visualizer] Analysis: type=${geometry.roof_type}, pitch=${geometry.pitch_estimate}, confidence=${geometry.confidence}`)
+    return c.json({ success: true, geometry, source: 'gemini' })
+
+  } catch (err: any) {
+    console.error('[Visualizer] analyze-house error:', err.message)
+    return c.json({ success: true, geometry: defaultHouseGeometry(), source: 'fallback' })
+  }
+})
+
+function defaultHouseGeometry() {
+  return {
+    roof_type: 'gable',
+    pitch_estimate: 'medium',
+    stories: 1,
+    width_depth_ratio: 1.6,
+    num_facets: 2,
+    house_style: 'ranch',
+    confidence: 'low',
+  }
+}
+
 export { virtualTryonRoutes }
