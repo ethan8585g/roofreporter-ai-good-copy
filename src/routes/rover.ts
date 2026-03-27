@@ -916,7 +916,7 @@ async function validateCustomerSession(db: D1Database, authHeader?: string | nul
     const session = await db.prepare(`
       SELECT cs.customer_id, c.email, c.name, c.company_name, c.phone,
              c.free_trial_total, c.free_trial_used, c.report_credits, c.credits_used,
-             c.status, c.is_active
+             c.is_active
       FROM customer_sessions cs
       JOIN customers c ON c.id = cs.customer_id
       WHERE cs.session_token = ? AND cs.expires_at > datetime('now')
