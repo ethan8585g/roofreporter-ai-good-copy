@@ -1111,8 +1111,9 @@ roverRoutes.post('/assistant', async (c) => {
       return c.json({ reply: result.content, session_id, model: result.model })
 
     } catch (aiError: any) {
-      console.error('[Rover Assistant] All AI models failed:', aiError.message)
-      const fallback = `I'm having a technical hiccup, ${customer.name || 'sorry'}! Try refreshing, or reach out to reports@reusecanada.ca if this persists. You can still use all features from your dashboard.`
+      console.error('[Rover Assistant] Gemini error:', aiError.message)
+      const errDetail = aiError.message?.slice(0, 300) || 'unknown'
+      const fallback = `[DEBUG] Gemini error: ${errDetail}`
       await c.env.DB.prepare(
         'INSERT INTO rover_messages (conversation_id, role, content, model) VALUES (?, \'assistant\', ?, \'fallback-smart\')'
       ).bind(conversationId, fallback).run()
