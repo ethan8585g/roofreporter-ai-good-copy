@@ -912,24 +912,31 @@ async function extractLeadInfo(db: D1Database, conversationId: number, message: 
 // ============================================================
 
 // Validate customer session token → returns customer row or null
+// Uses the same two-query pattern as customer-auth.ts to avoid JOIN column issues
 async function validateCustomerSession(db: D1Database, authHeader?: string | null): Promise<any | null> {
   if (!authHeader?.startsWith('Bearer ')) return null
-  const token = authHeader.slice(7)
+  const token = authHeader.replace('Bearer ', '').trim()
+  if (!token) return null
   try {
-    const session = await db.prepare(`
-      SELECT cs.customer_id, c.email, c.name, c.company_name, c.phone,
-             c.free_trial_total, c.free_trial_used, c.report_credits, c.credits_used,
-             c.is_active
-      FROM customer_sessions cs
-      JOIN customers c ON c.id = cs.customer_id
-      WHERE cs.session_token = ? AND cs.expires_at > datetime('now')
-    `).bind(token).first()
+    // Step 1: validate session token
+    const session = await db.prepare(
+      "SELECT customer_id FROM customer_sessions WHERE session_token = ? AND expires_at > datetime('now')"
+    ).bind(token).first<any>()
     if (!session) return null
-    // Compute derived credit fields
-    const s = session as any
-    s.free_trial_remaining = Math.max(0, (s.free_trial_total || 3) - (s.free_trial_used || 0))
-    s.paid_credits_remaining = Math.max(0, (s.report_credits || 0) - (s.credits_used || 0))
-    return s
+
+    // Step 2: get customer details
+    const customer = await db.prepare(
+      `SELECT id, email, name, company_name, phone,
+              report_credits, credits_used, free_trial_total, free_trial_used, is_active
+       FROM customers WHERE id = ?`
+    ).bind(session.customer_id).first<any>()
+    if (!customer) return null
+
+    // Attach customer_id and computed credit fields
+    customer.customer_id = customer.id
+    customer.free_trial_remaining = Math.max(0, (customer.free_trial_total || 3) - (customer.free_trial_used || 0))
+    customer.paid_credits_remaining = Math.max(0, (customer.report_credits || 0) - (customer.credits_used || 0))
+    return customer
   } catch (e) {
     console.error('[Rover] validateCustomerSession error:', e)
     return null
