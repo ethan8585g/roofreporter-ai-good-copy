@@ -2172,8 +2172,8 @@ function getCustomerLoginHTML() {
         <div id="custLoginForm">
           <div class="space-y-4">
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
-              <input type="email" id="custLoginEmail" placeholder="you@company.com" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-sm">
+              <label class="block text-sm font-medium text-gray-700 mb-1">Email or Username</label>
+              <input type="text" id="custLoginEmail" placeholder="you@company.com" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-sm">
             </div>
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">Password</label>
