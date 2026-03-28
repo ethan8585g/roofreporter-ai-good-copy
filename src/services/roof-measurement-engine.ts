@@ -712,7 +712,7 @@ export class RoofMeasurementEngine {
     this.address    = payload.address || 'Unknown Address'
     this.homeowner  = payload.homeowner || 'Unknown'
     this.orderId    = payload.order_id || ''
-    this.defPitch   = payload.default_pitch ?? 5.0
+    this.defPitch   = payload.default_pitch || 5.0
     this.complexity = payload.complexity || 'medium'
     this.incWaste   = payload.include_waste !== false
     this.timestamp  = new Date().toISOString().replace('T', ' ').slice(0, 19) + ' UTC'
