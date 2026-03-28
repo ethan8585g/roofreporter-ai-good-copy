@@ -630,7 +630,7 @@ RULES:
     const aiRes = await fetch(`${baseUrl}/chat/completions`, {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: 'gpt-5-mini', messages, max_tokens: 300, temperature: 0.7 })
+      body: JSON.stringify({ model: 'gpt-5-mini', messages, max_tokens: 2000, temperature: 0.7 })
     })
 
     if (!aiRes.ok) {
@@ -640,7 +640,8 @@ RULES:
     }
 
     const aiData: any = await aiRes.json()
-    return c.json({ response: aiData.choices?.[0]?.message?.content || 'Could you say that again?' })
+    const content = aiData.choices?.[0]?.message?.content || aiData.choices?.[0]?.text || ''
+    return c.json({ response: content || 'Could you say that again?' })
   } catch (err: any) {
     console.error('[CCTest] Chat error:', err)
     return c.json({ response: 'I apologize, I had a technical issue. Could you try again?' })
