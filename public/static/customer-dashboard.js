@@ -83,6 +83,14 @@ function renderDashboard() {
   }
 
   var c = custState.customer || {};
+
+  // Redirect to company type selection if not yet chosen
+  if (custState.customer && !c.company_type) {
+    window.location.href = '/customer/select-type';
+    return;
+  }
+
+  var isSolar = c.company_type === 'solar';
   var b = custState.billing || {};
   var s = custState.crmStats || {};
   var freeTrialRemaining = c.free_trial_remaining || 0;
@@ -133,7 +141,7 @@ function renderDashboard() {
         // Reports
         '<div>' +
           '<p class="px-3 mb-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Reports</p>' +
-          navLink('/customer/order', 'fa-plus-circle', 'Order New Report', creditBadge || null, creditBadgeColor) +
+          navLink('/customer/order', 'fa-plus-circle', isSolar ? 'Order New Solar Proposal' : 'Order New Report', creditBadge || null, creditBadgeColor) +
           navLink('/customer/reports', 'fa-file-alt', 'Report History', completedReports > 0 ? completedReports + '' : null, 'bg-indigo-500') +
         '</div>' +
         // CRM
@@ -154,7 +162,7 @@ function renderDashboard() {
         // Services
         '<div>' +
           '<p class="px-3 mb-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Services</p>' +
-          navLink('/customer/secretary', 'fa-headset', 'Roofer Secretary', secBadge || null, secBadgeColor) +
+          navLink('/customer/secretary', 'fa-headset', isSolar ? 'Solar Sales Secretary' : 'Roofer Secretary', secBadge || null, secBadgeColor) +
         '</div>' +
         (c.is_dev ? '<div><p class="px-3 mb-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Dev</p>' + navLink('/customer/property-imagery', 'fa-satellite', 'Property Imagery', 'Dev', 'bg-amber-500') + '</div>' : '') +
       '</nav>' +

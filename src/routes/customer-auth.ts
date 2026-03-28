@@ -788,9 +788,45 @@ customerAuthRoutes.get('/me', async (c) => {
       team_owner_id: teamInfo.isTeamMember ? teamInfo.ownerId : undefined,
       team_role: teamInfo.teamMemberRole || undefined,
       team_owner_name: teamInfo.isTeamMember ? ownerName : undefined,
-      team_owner_company: teamInfo.isTeamMember ? ownerCompany : undefined
+      team_owner_company: teamInfo.isTeamMember ? ownerCompany : undefined,
+      // Company type: 'roofing' | 'solar' | null (null = not yet selected)
+      company_type: session.company_type || null,
+      solar_panel_wattage_w: session.solar_panel_wattage_w || 400
     }
   })
+})
+
+// ============================================================
+// PATCH /solar-settings — Save company_type and/or panel wattage
+// ============================================================
+customerAuthRoutes.patch('/solar-settings', async (c) => {
+  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  if (!token) return c.json({ error: 'Not authenticated' }, 401)
+
+  const session = await c.env.DB.prepare(`
+    SELECT cs.customer_id FROM customer_sessions cs
+    WHERE cs.session_token = ? AND cs.expires_at > datetime('now')
+  `).bind(token).first<any>()
+  if (!session) return c.json({ error: 'Session expired or invalid' }, 401)
+
+  const body = await c.req.json()
+  const { company_type, solar_panel_wattage_w } = body
+
+  if (company_type !== undefined && company_type !== 'roofing' && company_type !== 'solar') {
+    return c.json({ error: 'company_type must be "roofing" or "solar"' }, 400)
+  }
+
+  const updates: string[] = []
+  const bindings: any[] = []
+  if (company_type !== undefined) { updates.push('company_type = ?'); bindings.push(company_type) }
+  if (solar_panel_wattage_w !== undefined) { updates.push('solar_panel_wattage_w = ?'); bindings.push(Number(solar_panel_wattage_w) || 400) }
+  if (updates.length === 0) return c.json({ error: 'Nothing to update' }, 400)
+
+  updates.push("updated_at = datetime('now')")
+  bindings.push(session.customer_id)
+  await c.env.DB.prepare(`UPDATE customers SET ${updates.join(', ')} WHERE id = ?`).bind(...bindings).run()
+
+  return c.json({ success: true })
 })
 
 // ============================================================
@@ -882,7 +918,7 @@ customerAuthRoutes.get('/orders', async (c) => {
     SELECT o.*, r.status as report_status, r.roof_area_sqft, r.total_material_cost_cad,
            r.complexity_class, r.confidence_score,
            r.enhancement_status, r.enhancement_version, r.enhancement_sent_at,
-           r.ai_imagery_status
+           r.ai_imagery_status, r.satellite_image_url
     FROM orders o
     LEFT JOIN reports r ON r.order_id = o.id
     WHERE o.customer_id = ?
