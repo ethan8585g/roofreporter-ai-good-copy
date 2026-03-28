@@ -257,7 +257,13 @@ async function callAI(
   maxTokens: number = 1000,
   temperature: number = 0.7
 ): Promise<{ content: string; model: string; tokensUsed: number; responseTimeMs: number }> {
-  const apiKey = (env as any).openai_ || env.OPENAI_API_KEY
+  // Try keys that could be real OpenAI keys (sk-...). genspark_gtp_key is likely the real one.
+  const candidates = [
+    (env as any).genspark_gtp_key,
+    env.OPENAI_API_KEY,
+  ].filter((k: any) => k && String(k).startsWith('sk-'))
+
+  const apiKey = candidates[0] || env.OPENAI_API_KEY || (env as any).genspark_gtp_key
   if (!apiKey) throw new Error('No OpenAI API key configured')
 
   const startTime = Date.now()
@@ -1069,8 +1075,8 @@ roverRoutes.post('/assistant', async (c) => {
       return c.json({ reply: result.content, session_id, model: result.model })
 
     } catch (aiError: any) {
-      console.error('[Rover Assistant] AI error:', aiError.message)
-      const fallback = `[DEBUG] AI error: ${aiError.message}`
+      console.error('[Rover Assistant] Gemini error:', aiError.message)
+      const fallback = `I'm having a technical hiccup, ${customer.name || 'sorry'}! Try refreshing, or reach out to reports@reusecanada.ca if this persists. You can still use all features from your dashboard.`
       await c.env.DB.prepare(
         'INSERT INTO rover_messages (conversation_id, role, content, model) VALUES (?, \'assistant\', ?, \'fallback-smart\')'
       ).bind(conversationId, fallback).run()
