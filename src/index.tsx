@@ -541,6 +541,12 @@ app.get('/customer/proposals', (c) => c.html(getCrmSubPageHTML('proposals', 'Pro
 app.get('/customer/jobs', (c) => c.html(getCrmSubPageHTML('jobs', 'Job Management', 'fa-hard-hat')))
 app.get('/customer/pipeline', (c) => c.html(getCrmSubPageHTML('pipeline', 'Sales Pipeline', 'fa-funnel-dollar')))
 
+// Company Type Selection — shown once post-login if company_type is null
+app.get('/customer/select-type', (c) => c.html(getSelectTypePageHTML()))
+
+// Solar Panel Design Tool — canvas-based panel placement on satellite image
+app.get('/customer/solar-design', (c) => c.html(getSolarDesignPageHTML()))
+
 // Virtual Try-On — AI Roof Visualization
 app.get('/customer/virtual-tryon', (c) => c.html(getVirtualTryOnPageHTML()))
 
@@ -3368,6 +3374,149 @@ function getJoinTeamPageHTML() {
 }
 
 // ============================================================
+// COMPANY TYPE SELECTION PAGE — Shown once after login if company_type is null
+// ============================================================
+function getSelectTypePageHTML() {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags()}
+  <title>Select Company Type - RoofReporterAI</title>
+</head>
+<body class="bg-gray-50 min-h-screen flex flex-col">
+  <header class="bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg">
+    <div class="max-w-7xl mx-auto px-4 py-4 flex items-center">
+      <img src="/static/logo.png" alt="RoofReporterAI" class="w-10 h-10 rounded-lg object-cover mr-3">
+      <div>
+        <h1 class="text-xl font-bold">RoofReporterAI</h1>
+        <p class="text-brand-200 text-xs">Measurement &amp; Proposal Platform</p>
+      </div>
+    </div>
+  </header>
+  <main class="flex-1 flex items-center justify-center px-4 py-12">
+    <div class="max-w-2xl w-full">
+      <div class="text-center mb-10">
+        <h2 class="text-3xl font-bold text-gray-800 mb-3">What type of company are you?</h2>
+        <p class="text-gray-500 text-lg">This helps us tailor your dashboard and tools.</p>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <!-- Roofing Company Card -->
+        <button onclick="selectType('roofing')" class="group bg-white rounded-2xl border-2 border-gray-200 hover:border-sky-500 p-8 text-left shadow-sm hover:shadow-lg transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-sky-200">
+          <div class="w-16 h-16 bg-sky-100 group-hover:bg-sky-500 rounded-2xl flex items-center justify-center mb-5 transition-colors duration-200">
+            <i class="fas fa-home text-3xl text-sky-500 group-hover:text-white transition-colors duration-200"></i>
+          </div>
+          <h3 class="text-xl font-bold text-gray-800 mb-2">Roofing Company</h3>
+          <p class="text-gray-500 text-sm leading-relaxed">Order detailed roof measurement reports, track jobs and customers, and generate roofing proposals.</p>
+          <div class="mt-5 flex items-center text-sky-600 font-semibold text-sm group-hover:text-sky-700">
+            Select Roofing <i class="fas fa-arrow-right ml-2 group-hover:translate-x-1 transition-transform duration-200"></i>
+          </div>
+        </button>
+        <!-- Solar Sales Company Card -->
+        <button onclick="selectType('solar')" class="group bg-white rounded-2xl border-2 border-gray-200 hover:border-amber-500 p-8 text-left shadow-sm hover:shadow-lg transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-amber-200">
+          <div class="w-16 h-16 bg-amber-100 group-hover:bg-amber-500 rounded-2xl flex items-center justify-center mb-5 transition-colors duration-200">
+            <i class="fas fa-solar-panel text-3xl text-amber-500 group-hover:text-white transition-colors duration-200"></i>
+          </div>
+          <h3 class="text-xl font-bold text-gray-800 mb-2">Solar Sales Company</h3>
+          <p class="text-gray-500 text-sm leading-relaxed">Size solar systems, design panel layouts, and generate solar proposals using satellite roof data.</p>
+          <div class="mt-5 flex items-center text-amber-600 font-semibold text-sm group-hover:text-amber-700">
+            Select Solar <i class="fas fa-arrow-right ml-2 group-hover:translate-x-1 transition-transform duration-200"></i>
+          </div>
+        </button>
+      </div>
+      <div id="selectMsg" class="mt-6 text-center"></div>
+    </div>
+  </main>
+  <script>
+    (function() {
+      var c = localStorage.getItem('rc_customer');
+      if (!c) { window.location.href = '/customer/login'; return; }
+    })();
+    async function selectType(type) {
+      var msg = document.getElementById('selectMsg');
+      msg.innerHTML = '<div class="text-gray-500 text-sm"><i class="fas fa-spinner fa-spin mr-2"></i>Saving...</div>';
+      try {
+        var token = localStorage.getItem('rc_customer_token') || '';
+        var res = await fetch('/api/customer/solar-settings', {
+          method: 'PATCH',
+          headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ company_type: type })
+        });
+        var data = await res.json();
+        if (res.ok && data.success) {
+          var cust = JSON.parse(localStorage.getItem('rc_customer') || '{}');
+          cust.company_type = type;
+          localStorage.setItem('rc_customer', JSON.stringify(cust));
+          window.location.href = '/customer/dashboard';
+        } else {
+          msg.innerHTML = '<div class="text-red-600 text-sm">' + (data.error || 'Failed to save. Please try again.') + '</div>';
+        }
+      } catch(err) {
+        msg.innerHTML = '<div class="text-red-600 text-sm">Network error. Please try again.</div>';
+      }
+    }
+  </script>
+</body>
+</html>`
+}
+
+// ============================================================
+// SOLAR DESIGN PAGE — Canvas-based panel placement on satellite image
+// ============================================================
+function getSolarDesignPageHTML() {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags()}
+  <title>Solar Panel Design - RoofReporterAI</title>
+</head>
+<body class="bg-gray-900 min-h-screen">
+  <header class="bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-lg">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
+          <img src="/static/logo.png" alt="RoofReporterAI" class="w-10 h-10 rounded-lg object-cover">
+          <div>
+            <h1 class="text-lg font-bold">Solar Panel Design</h1>
+            <p class="text-amber-100 text-xs">Click to place panels on the roof</p>
+          </div>
+        </a>
+      </div>
+      <nav class="flex items-center space-x-3">
+        <span id="custGreeting" class="text-amber-100 text-sm hidden"><i class="fas fa-user-circle mr-1"></i><span id="custName"></span></span>
+        <a href="/customer/dashboard" class="text-amber-100 hover:text-white text-sm"><i class="fas fa-th-large mr-1"></i>Dashboard</a>
+        <button onclick="custLogout()" class="text-amber-100 hover:text-white text-sm"><i class="fas fa-sign-out-alt mr-1"></i>Logout</button>
+      </nav>
+    </div>
+  </header>
+  <main class="max-w-7xl mx-auto px-4 py-6">
+    <div id="solar-design-root"></div>
+  </main>
+  <script>
+    (function() {
+      var c = localStorage.getItem('rc_customer');
+      if (!c) { window.location.href = '/customer/login'; return; }
+      try {
+        var u = JSON.parse(c);
+        var g = document.getElementById('custGreeting');
+        var n = document.getElementById('custName');
+        if (g && n) { n.textContent = u.name || u.email; g.classList.remove('hidden'); }
+      } catch(e) {}
+    })();
+    function custLogout() {
+      var token = localStorage.getItem('rc_customer_token');
+      if (token) fetch('/api/customer/logout', { method: 'POST', headers: { 'Authorization': 'Bearer ' + token } })['catch'](function(){});
+      localStorage.removeItem('rc_customer');
+      localStorage.removeItem('rc_customer_token');
+      window.location.href = '/customer/login';
+    }
+  </script>
+  <script src="/static/solar-design.js"></script>
+  ${getRoverAssistant()}
+</body>
+</html>`
+}
+
+// ============================================================
 // D2D MANAGER PAGE — Dedicated page with Google Maps
 // ============================================================
 function getD2DPageHTML(mapsApiKey: string) {
@@ -3556,6 +3705,7 @@ function getCrmSubPageHTML(module: string, title: string, icon: string) {
     }
   </script>
   <script src="/static/crm-module.js?v=${Date.now()}"></script>
+  <script src="/static/solar-calculator.js?v=${Date.now()}"></script>
   ${getRoverAssistant()}
 </body>
 </html>`

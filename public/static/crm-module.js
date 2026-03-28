@@ -177,6 +177,10 @@
   }
 
   function renderReports(orders) {
+    var custObj = {};
+    try { custObj = JSON.parse(localStorage.getItem('rc_customer') || '{}'); } catch(e) {}
+    var isSolar = custObj.company_type === 'solar';
+
     if (orders.length === 0) {
       root.innerHTML = '<div class="bg-white rounded-xl border p-12 text-center"><div class="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4"><i class="fas fa-file-alt text-gray-400 text-2xl"></i></div><h3 class="text-lg font-semibold text-gray-700 mb-2">No Reports Yet</h3><p class="text-gray-500 mb-6">Order your first roof measurement to see reports here.</p><a href="/customer/order" class="inline-block bg-brand-600 hover:bg-brand-700 text-white font-bold py-3 px-8 rounded-xl"><i class="fas fa-plus mr-2"></i>Order a Report</a></div>';
       return;
@@ -188,7 +192,10 @@
       var isProcessing = (o.status === 'processing' || o.report_status === 'running');
       var buttons = '';
       if (isCompleted) {
-        buttons = '<a href="/api/reports/' + o.id + '/html" target="_blank" class="px-4 py-2 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700"><i class="fas fa-file-alt mr-1"></i>View Report</a><a href="/api/reports/' + o.id + '/pdf" target="_blank" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-xs font-medium hover:bg-gray-200"><i class="fas fa-download mr-1"></i>PDF</a><a href="/visualizer/' + o.id + '" target="_blank" class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-medium hover:bg-indigo-700"><i class="fas fa-cube mr-1"></i>3D View</a><a href="/customer/virtual-tryon?report_id=' + o.id + '" class="px-4 py-2 bg-violet-600 text-white rounded-lg text-xs font-medium hover:bg-violet-700"><i class="fas fa-house-user mr-1"></i>AI Visualizer</a>';
+        buttons = '<a href="/api/reports/' + o.id + '/html" target="_blank" class="px-4 py-2 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700"><i class="fas fa-file-alt mr-1"></i>View Report</a><a href="/api/reports/' + o.id + '/pdf" target="_blank" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-xs font-medium hover:bg-gray-200"><i class="fas fa-download mr-1"></i>PDF</a><a href="/customer/virtual-tryon?report_id=' + o.id + '" class="px-4 py-2 bg-violet-600 text-white rounded-lg text-xs font-medium hover:bg-violet-700"><i class="fas fa-house-user mr-1"></i>Roof Visualizer</a>';
+        if (isSolar) {
+          buttons += '<button onclick="window._openSolarCalculator(' + o.id + ')" class="px-4 py-2 bg-amber-500 text-white rounded-lg text-xs font-medium hover:bg-amber-600"><i class="fas fa-sun mr-1"></i>Solar Calculator</button><a href="/customer/solar-design?report_id=' + o.id + '" class="px-4 py-2 bg-orange-500 text-white rounded-lg text-xs font-medium hover:bg-orange-600"><i class="fas fa-solar-panel mr-1"></i>Solar Design</a>';
+        }
       } else if (isProcessing) {
         buttons = '<span class="px-4 py-2 bg-blue-50 text-blue-600 rounded-lg text-sm font-medium"><i class="fas fa-spinner fa-spin mr-1"></i>Generating...</span>';
       } else {
