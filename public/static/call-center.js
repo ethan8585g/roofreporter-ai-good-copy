@@ -119,7 +119,7 @@
         break;
       case 'contact-lists':
         CC.data.contactLists = await ccFetch('/api/call-center/contact-lists');
-        CC.data.emailOutreachLists = await ccFetch('/api/admin/superadmin/email-outreach-lists');
+        CC.data.emailOutreachLists = await ccFetch('/api/call-center/email-outreach-lists');
         break;
       case 'phone-setup':
         CC.data.phoneSetup = await ccFetch('/api/call-center/quick-connect/status');
@@ -150,7 +150,18 @@
       case 'prospects': content.innerHTML = renderProspects(); break;
       case 'call-logs': content.innerHTML = renderCallLogs(); break;
       case 'contact-lists': content.innerHTML = renderContactLists(); break;
-      case 'phone-setup': content.innerHTML = renderPhoneSetup(); break;
+      case 'phone-setup':
+        if (ccPhoneState.step === 2) {
+          content.innerHTML = renderPhoneStep2();
+        } else {
+          var ps = CC.data.phoneSetup || {};
+          if (ps.status === 'connected' && ps.is_active) {
+            content.innerHTML = renderPhoneSetup();
+          } else {
+            content.innerHTML = renderPhoneSetup();
+          }
+        }
+        break;
       case 'deploy': content.innerHTML = renderDeploy(); break;
     }
   }
@@ -540,8 +551,8 @@
           <div class="px-6 py-3 border-t border-gray-100 flex items-center justify-between">
             <span class="text-xs text-gray-400">Page ${data.page||1} of ${Math.ceil(total/50)||1}</span>
             <div class="flex gap-2">
-              ${data.page > 1 ? `<button onclick="CC.prospectPage--;window.ccSetTab('prospects')" class="px-3 py-1 bg-gray-100 rounded text-xs"><i class="fas fa-chevron-left"></i></button>` : ''}
-              ${total > data.page*50 ? `<button onclick="CC.prospectPage++;window.ccSetTab('prospects')" class="px-3 py-1 bg-gray-100 rounded text-xs"><i class="fas fa-chevron-right"></i></button>` : ''}
+              ${data.page > 1 ? `<button onclick="window.ccPrevPage()" class="px-3 py-1 bg-gray-100 rounded text-xs hover:bg-gray-200"><i class="fas fa-chevron-left mr-1"></i>Prev</button>` : ''}
+              ${total > data.page*50 ? `<button onclick="window.ccNextPage()" class="px-3 py-1 bg-gray-100 rounded text-xs hover:bg-gray-200">Next<i class="fas fa-chevron-right ml-1"></i></button>` : ''}
             </div>
           </div>
         `}
@@ -997,7 +1008,43 @@
     const data = await ccFetch('/api/call-center/agents/' + id + '/stop', { method: 'POST', body: '{}' });
     if (data?.success) ccLoadTab('agents');
   };
-  window.ccEditAgent = function(id) { alert('Edit agent ' + id + ' — coming soon'); };
+  window.ccEditAgent = async function(id) {
+    const agents = ((CC.data.agents || {}).agents || []);
+    const agent = agents.find(a => a.id === id);
+    if (!agent) return alert('Agent not found');
+
+    // Populate the create modal with existing values for editing
+    const existing = document.getElementById('cc-agent-modal');
+    if (!existing) { await ccLoadTab('agents'); return; }
+    document.getElementById('cc-agent-name').value = agent.name || '';
+    document.getElementById('cc-agent-voice').value = agent.voice_id || 'alloy';
+    document.getElementById('cc-agent-persona').value = agent.persona || '';
+    document.getElementById('cc-agent-prefix').value = agent.livekit_room_prefix || 'sales-';
+
+    // Update header and button for edit mode
+    existing.querySelector('h3').innerHTML = '<i class="fas fa-robot mr-2 text-teal-500"></i>Edit AI Sales Agent';
+    const btn = existing.querySelector('button[onclick="window.ccCreateAgent()"]');
+    if (btn) {
+      btn.setAttribute('onclick', 'window.ccSaveEditAgent(' + id + ')');
+      btn.innerHTML = '<i class="fas fa-save mr-1"></i>Save Changes';
+    }
+    existing.classList.remove('hidden');
+  };
+
+  window.ccSaveEditAgent = async function(id) {
+    const name = document.getElementById('cc-agent-name').value.trim();
+    if (!name) return alert('Agent name required');
+    const data = await ccFetch('/api/call-center/agents/' + id, { method: 'PUT', body: JSON.stringify({
+      name, voice_id: document.getElementById('cc-agent-voice').value,
+      persona: document.getElementById('cc-agent-persona').value,
+      livekit_room_prefix: document.getElementById('cc-agent-prefix').value,
+    }) });
+    if (data?.success) {
+      document.getElementById('cc-agent-modal').classList.add('hidden');
+      // Reset button back to create mode
+      await ccLoadTab('agents');
+    } else alert(data?.error || 'Failed to save');
+  };
   window.ccDeleteAgent = async function(id) {
     if (!confirm('Delete this AI agent?')) return;
     await ccFetch('/api/call-center/agents/' + id, { method: 'DELETE' });
@@ -1072,6 +1119,9 @@
     CC.data.prospects = await ccFetch('/api/call-center/prospects?page=1&limit=50' + (q ? '&search=' + encodeURIComponent(q) : ''));
     renderTab('prospects');
   };
+  window.ccNextPage = function() { CC.prospectPage++; ccLoadTab('prospects'); };
+  window.ccPrevPage = function() { if (CC.prospectPage > 1) CC.prospectPage--; ccLoadTab('prospects'); };
+
   window.ccDeleteProspect = async function(id) {
     if (!confirm('Delete this prospect?')) return;
     await ccFetch('/api/call-center/prospects/' + id, { method: 'DELETE' });
@@ -1299,7 +1349,7 @@
       // Transcribe via secretary test endpoint (shared)
       const formData = new FormData();
       formData.append('audio', audioBlob, 'recording.webm');
-      const transcribeRes = await fetch('/api/secretary/test/transcribe', { method: 'POST', headers: { 'Authorization': 'Bearer ' + CC.adminKey }, body: formData });
+      const transcribeRes = await fetch('/api/secretary/test/transcribe', { method: 'POST', headers: { 'Authorization': 'Bearer ' + localStorage.getItem('rc_token') }, body: formData });
       const transcribeData = await transcribeRes.json();
 
       if (!transcribeData.text || transcribeData.text.trim() === '') {

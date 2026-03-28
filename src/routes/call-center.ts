@@ -587,8 +587,7 @@ async function generateLiveKitJWT(apiKey: string, apiSecret: string, identity: s
 // ============================================================
 callCenterRoutes.post('/test/chat', async (c) => {
   const { env } = c
-  const adminKey = c.req.header('x-admin-key')
-  if (adminKey !== env.SUPER_ADMIN_KEY) return c.json({ error: 'Unauthorized' }, 401)
+  // Auth already enforced by callCenterRoutes middleware (superadmin only)
 
   try {
     const body = await c.req.json<{
@@ -631,10 +630,12 @@ RULES:
     const aiRes = await fetch(`${baseUrl}/chat/completions`, {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: 'gemini-2.5-flash', messages, max_tokens: 300, temperature: 0.7 })
+      body: JSON.stringify({ model: 'gpt-5-mini', messages, max_tokens: 300, temperature: 0.7 })
     })
 
     if (!aiRes.ok) {
+      const errText = await aiRes.text()
+      console.error('[CCTest] AI error:', aiRes.status, errText)
       return c.json({ response: 'Sorry, I had trouble processing that. Could you try again?' })
     }
 
@@ -1292,5 +1293,140 @@ callCenterRoutes.post('/quick-connect/disconnect', async (c) => {
     return c.json({ success: true, message: 'Call center phone disconnected. Dial *73 to deactivate forwarding.' })
   } catch (e: any) {
     return c.json({ error: e.message }, 500)
+  }
+})
+
+// ============================================================
+// PHONE LINES — Multi-line CRUD management
+// ============================================================
+
+// GET /phone-lines — List all phone lines
+callCenterRoutes.get('/phone-lines', async (c) => {
+  try {
+    const { results } = await c.env.DB.prepare(
+      `SELECT * FROM cc_phone_config ORDER BY id ASC`
+    ).all<any>()
+    // Add display-formatted phone numbers
+    const lines = (results || []).map((l: any) => ({
+      ...l,
+      business_phone_display: formatPhoneDisplay(l.business_phone || ''),
+      assigned_phone_display: formatPhoneDisplay(l.assigned_phone_number || ''),
+    }))
+    return c.json({ lines })
+  } catch (e: any) {
+    return c.json({ lines: [], error: e.message })
+  }
+})
+
+// POST /phone-lines — Add a new phone line
+callCenterRoutes.post('/phone-lines', async (c) => {
+  try {
+    const { business_phone, label, dispatch_type, owner_name, assigned_email, dispatch_description } = await c.req.json()
+    if (!business_phone) return c.json({ error: 'Phone number is required' }, 400)
+
+    const normalized = normalizePhone(business_phone)
+    const dispatchDesc = dispatch_description || (dispatch_type === 'inbound_forwarding'
+      ? 'Inbound call answering only — dispatches when toggled on and user sets call forwarding on their mobile device'
+      : 'Outbound dialer — triggered upon prompt and from outreach lead lists in the admin call center dashboard')
+
+    const res = await c.env.DB.prepare(
+      `INSERT INTO cc_phone_config (business_phone, assigned_phone_number, label, dispatch_type, dispatch_description, owner_name, assigned_email, connection_status, phone_verified, is_active, inbound_enabled, outbound_enabled) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`
+    ).bind(
+      normalized, normalized, label || 'Phone Line',
+      dispatch_type || 'outbound_prompt_leadlist', dispatchDesc,
+      owner_name || '', assigned_email || '',
+      'connected', 1, 1,
+      dispatch_type === 'inbound_forwarding' ? 1 : 0,
+      dispatch_type === 'outbound_prompt_leadlist' ? 1 : 0
+    ).run()
+
+    return c.json({ success: true, id: res.meta.last_row_id })
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500)
+  }
+})
+
+// PUT /phone-lines/:id — Update phone line
+callCenterRoutes.put('/phone-lines/:id', async (c) => {
+  const id = parseInt(c.req.param('id'))
+  try {
+    const body = await c.req.json()
+    const allowed = ['label', 'business_phone', 'dispatch_type', 'dispatch_description', 'owner_name', 'assigned_email', 'ai_greeting', 'ai_persona', 'max_ring_seconds', 'voicemail_enabled', 'agent_voice_id', 'agent_speed', 'agent_pause_ms']
+    const fields: string[] = []
+    const values: any[] = []
+
+    for (const [key, val] of Object.entries(body)) {
+      if (allowed.includes(key)) { fields.push(`${key}=?`); values.push(val) }
+    }
+    if (fields.length === 0) return c.json({ error: 'No valid fields' }, 400)
+    fields.push("updated_at=datetime('now')")
+    values.push(id)
+
+    await c.env.DB.prepare(`UPDATE cc_phone_config SET ${fields.join(',')} WHERE id=?`).bind(...values).run()
+    return c.json({ success: true })
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500)
+  }
+})
+
+// DELETE /phone-lines/:id — Remove phone line
+callCenterRoutes.delete('/phone-lines/:id', async (c) => {
+  const id = parseInt(c.req.param('id'))
+  try {
+    await c.env.DB.prepare('DELETE FROM cc_phone_config WHERE id=?').bind(id).run()
+    return c.json({ success: true })
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500)
+  }
+})
+
+// POST /phone-lines/:id/toggle — Toggle phone line active/inactive
+callCenterRoutes.post('/phone-lines/:id/toggle', async (c) => {
+  const id = parseInt(c.req.param('id'))
+  try {
+    const line = await c.env.DB.prepare('SELECT is_active FROM cc_phone_config WHERE id=?').bind(id).first<any>()
+    if (!line) return c.json({ error: 'Phone line not found' }, 404)
+    const newActive = line.is_active ? 0 : 1
+    await c.env.DB.prepare(
+      `UPDATE cc_phone_config SET is_active=?, updated_at=datetime('now') WHERE id=?`
+    ).bind(newActive, id).run()
+    return c.json({ success: true, is_active: newActive })
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500)
+  }
+})
+
+// POST /phone-lines/:id/set-forwarding — Toggle call forwarding
+callCenterRoutes.post('/phone-lines/:id/set-forwarding', async (c) => {
+  const id = parseInt(c.req.param('id'))
+  try {
+    const line = await c.env.DB.prepare('SELECT call_forwarding_active FROM cc_phone_config WHERE id=?').bind(id).first<any>()
+    if (!line) return c.json({ error: 'Phone line not found' }, 404)
+    const newFwd = line.call_forwarding_active ? 0 : 1
+    await c.env.DB.prepare(
+      `UPDATE cc_phone_config SET call_forwarding_active=?, updated_at=datetime('now') WHERE id=?`
+    ).bind(newFwd, id).run()
+    return c.json({ success: true, call_forwarding_active: newFwd })
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500)
+  }
+})
+
+// ============================================================
+// EMAIL OUTREACH LISTS — Proxy endpoint for call center
+// ============================================================
+callCenterRoutes.get('/email-outreach-lists', async (c) => {
+  try {
+    const { results } = await c.env.DB.prepare(`
+      SELECT el.*,
+        (SELECT COUNT(*) FROM email_contacts ec WHERE ec.list_id = el.id) as total_contacts,
+        (SELECT COUNT(*) FROM email_contacts ec WHERE ec.list_id = el.id AND ec.status = 'active') as active_contacts
+      FROM email_lists el
+      ORDER BY el.created_at DESC
+    `).all<any>()
+    return c.json({ lists: results || [] })
+  } catch (e: any) {
+    // Table may not exist yet
+    return c.json({ lists: [] })
   }
 })
