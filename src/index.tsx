@@ -1319,6 +1319,10 @@ function getSuperAdminDashboardHTML() {
           <i class="fab fa-meta w-5 text-center"></i>
           <span class="label text-sm font-medium">Meta Connect</span>
         </div>
+        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('customer-onboarding', this)">
+          <i class="fas fa-user-cog w-5 text-center"></i>
+          <span class="label text-sm font-medium">Customer Onboarding</span>
+        </div>
         <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('secretary-admin', this)">
           <i class="fas fa-phone-volume w-5 text-center"></i>
           <span class="label text-sm font-medium">Roofer Secretary AI</span>
