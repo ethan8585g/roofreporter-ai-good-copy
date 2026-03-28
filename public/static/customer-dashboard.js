@@ -265,6 +265,10 @@ function renderDashboard() {
               '<div class="w-9 h-9 bg-amber-500 rounded-lg flex items-center justify-center flex-shrink-0"><i class="fas fa-file-invoice-dollar text-white text-sm"></i></div>' +
               '<div><p class="font-semibold text-gray-800 text-sm">Create Invoice</p><p class="text-xs text-gray-500">' + (s.invoices_owing > 0 ? '$' + Number(s.invoices_owing).toFixed(2) + ' outstanding' : 'Bill your customers') + '</p></div>' +
             '</a>' +
+            '<a href="/customer/proposal-builder" class="flex items-center gap-3 p-3 bg-violet-50 hover:bg-violet-100 rounded-xl transition-colors">' +
+              '<div class="w-9 h-9 bg-violet-500 rounded-lg flex items-center justify-center flex-shrink-0"><i class="fas fa-file-signature text-white text-sm"></i></div>' +
+              '<div><p class="font-semibold text-gray-800 text-sm">New Proposal</p><p class="text-xs text-gray-500">Professional roofing proposals</p></div>' +
+            '</a>' +
             '<a href="/pricing" class="flex items-center gap-3 p-3 bg-purple-50 hover:bg-purple-100 rounded-xl transition-colors">' +
               '<div class="w-9 h-9 bg-purple-500 rounded-lg flex items-center justify-center flex-shrink-0"><i class="fas fa-coins text-white text-sm"></i></div>' +
               '<div><p class="font-semibold text-gray-800 text-sm">Buy Credits</p><p class="text-xs text-gray-500">Packs from $4.75/report</p></div>' +

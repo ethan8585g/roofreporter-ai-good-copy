@@ -53,6 +53,13 @@
     }
   };
 
+  // Expose internals for photo-texture feature
+  window.__getVisState = function() {
+    return { roofMeshes: roofMeshes, scene: scene, camera: camera, renderer: renderer, controls: controls };
+  };
+  window.__changeRoofColor = function(colorDef) { changeRoofColor(colorDef); };
+  window.__currentColor = currentColor;
+
   // ============================================================
   // 3D SCENE — Procedural house with swappable roof materials
   // ============================================================
@@ -255,6 +262,7 @@
     roofFront.receiveShadow = true;
     scene.add(roofFront);
     roofMeshes.push(roofFront);
+    window.__roofMeshes = roofMeshes; // expose for photo texture
 
     // ── GARAGE ROOF (Shed/Lean-to) ──
     const garRoofGeo = new THREE.BoxGeometry(garW + 0.8, 0.15, garD + 1);
@@ -264,6 +272,7 @@
     garRoof.castShadow = true;
     scene.add(garRoof);
     roofMeshes.push(garRoof);
+    window.__roofMeshes = roofMeshes; // keep in sync
 
     // ── Chimney ──
     const chimGeo = new THREE.BoxGeometry(0.8, 2, 0.8);
@@ -316,6 +325,8 @@
   // ── Change roof color ──
   function changeRoofColor(colorDef) {
     currentColor = colorDef;
+    // Expose for external access (photo texture revert)
+    window.__currentColor = colorDef;
     if (currentMode === '3d' && window.THREE) {
       const THREE = window.THREE;
       const newMat = createRoofMaterial(THREE, colorDef);

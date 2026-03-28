@@ -643,6 +643,75 @@ adminRoutes.post('/init-db', async (c) => {
       try { await c.env.DB.prepare(idx).run() } catch(e) {}
     }
 
+    // Migration 0014: Enhanced invoice/proposal columns + Square payment links + Webhook logs
+    const invoiceExtraCols = [
+      'document_type TEXT DEFAULT \'invoice\'',
+      'scope_of_work TEXT DEFAULT \'\'',
+      'warranty_terms TEXT DEFAULT \'\'',
+      'payment_terms_text TEXT DEFAULT \'\'',
+      'valid_until TEXT DEFAULT \'\'',
+      'attached_report_id INTEGER',
+      'share_token TEXT',
+      'viewed_at TEXT',
+      'viewed_count INTEGER DEFAULT 0',
+      'proposal_tier TEXT DEFAULT \'\'',
+      'proposal_group_id TEXT DEFAULT \'\'',
+      'discount_type TEXT DEFAULT \'fixed\''
+    ]
+    for (const col of invoiceExtraCols) {
+      try { await c.env.DB.prepare(`ALTER TABLE invoices ADD COLUMN ${col}`).run() } catch(e) {}
+    }
+    try { await c.env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_invoices_share_token ON invoices(share_token)').run() } catch(e) {}
+    try { await c.env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_invoices_doc_type ON invoices(document_type)').run() } catch(e) {}
+
+    // Add extra columns to invoice_items (unit, is_taxable, category)
+    const invoiceItemExtraCols = [
+      'unit TEXT DEFAULT \'each\'',
+      'is_taxable INTEGER DEFAULT 1',
+      'category TEXT DEFAULT \'\''
+    ]
+    for (const col of invoiceItemExtraCols) {
+      try { await c.env.DB.prepare(`ALTER TABLE invoice_items ADD COLUMN ${col}`).run() } catch(e) {}
+    }
+
+    // Square Payment Links table (for Invoice Manager → Square checkout)
+    await c.env.DB.prepare(`
+      CREATE TABLE IF NOT EXISTS square_payment_links (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        invoice_id INTEGER NOT NULL,
+        payment_link_id TEXT,
+        payment_link_url TEXT,
+        order_id TEXT,
+        amount_cents INTEGER,
+        currency TEXT DEFAULT 'CAD',
+        status TEXT DEFAULT 'created',
+        transaction_id TEXT,
+        receipt_url TEXT,
+        paid_at TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now')),
+        FOREIGN KEY (invoice_id) REFERENCES invoices(id)
+      )
+    `).run()
+    try { await c.env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_sq_pay_links_invoice ON square_payment_links(invoice_id)').run() } catch(e) {}
+    try { await c.env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_sq_pay_links_order ON square_payment_links(order_id)').run() } catch(e) {}
+
+    // Webhook logs table (for Square payment confirmations)
+    await c.env.DB.prepare(`
+      CREATE TABLE IF NOT EXISTS webhook_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        source TEXT DEFAULT 'square',
+        event_type TEXT,
+        event_id TEXT,
+        payload TEXT,
+        processed INTEGER DEFAULT 0,
+        invoice_id INTEGER,
+        created_at TEXT DEFAULT (datetime('now'))
+      )
+    `).run()
+    try { await c.env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_webhook_logs_event ON webhook_logs(event_id)').run() } catch(e) {}
+    try { await c.env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_webhook_logs_invoice ON webhook_logs(invoice_id)').run() } catch(e) {}
+
     return c.json({ success: true, message: 'Database initialized successfully' })
   } catch (err: any) {
     return c.json({ error: 'Failed to initialize database', details: err.message }, 500)

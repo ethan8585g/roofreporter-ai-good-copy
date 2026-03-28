@@ -544,6 +544,42 @@ app.get('/customer/pipeline', (c) => c.html(getCrmSubPageHTML('pipeline', 'Sales
 // Virtual Try-On — AI Roof Visualization
 app.get('/customer/virtual-tryon', (c) => c.html(getVirtualTryOnPageHTML()))
 
+// 3D Roof Visualizer — Interactive color swapping tool accessible from report history
+app.get('/visualizer/:orderId', async (c) => {
+  const orderId = c.req.param('orderId')
+  const mapsKey = c.env.GOOGLE_MAPS_API_KEY || ''
+  
+  // Fetch order + report data for the visualizer
+  let address = 'Property'
+  let reportJson: any = null
+  try {
+    const order = await c.env.DB.prepare(
+      'SELECT property_address, lat, lng FROM orders WHERE id = ?'
+    ).bind(orderId).first<any>()
+    if (order) address = order.property_address || address
+    
+    const report = await c.env.DB.prepare(
+      'SELECT report_json FROM reports WHERE order_id = ? AND status IN (\'completed\',\'enhancing\') LIMIT 1'
+    ).bind(orderId).first<any>()
+    if (report?.report_json) {
+      reportJson = typeof report.report_json === 'string' ? JSON.parse(report.report_json) : report.report_json
+    }
+  } catch (e) { /* graceful */ }
+
+  return c.html(getVisualizerPageHTML(address, reportJson, mapsKey))
+})
+
+// Customer Proposal Builder (full-featured)
+app.get('/customer/proposal-builder', (c) => {
+  const mapsKey = c.env.GOOGLE_MAPS_API_KEY || ''
+  return c.html(getProposalBuilderPageHTML(mapsKey))
+})
+
+// Customer Invoice Manager
+app.get('/customer/invoice-manager', (c) => {
+  return c.html(getInvoiceManagerPageHTML())
+})
+
 // Team Management — Add/manage sales team members ($50/user/month)
 app.get('/customer/team', (c) => c.html(getTeamManagementPageHTML()))
 
@@ -563,6 +599,74 @@ app.get('/proposal/view/:token', async (c) => {
     `).bind(token).first<any>()
 
     if (!proposal) {
+      // Fallback: check invoices table (proposal builder creates proposals there)
+      const invProposal = await c.env.DB.prepare(`
+        SELECT i.*, c.name as customer_name, c.email as customer_email, c.phone as customer_phone,
+               c.company_name, c.address as customer_address, c.city as customer_city,
+               c.province as customer_province, c.postal_code as customer_postal
+        FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id
+        WHERE i.share_token = ?
+      `).bind(token).first<any>()
+
+      if (invProposal) {
+        // Update view tracking
+        await c.env.DB.prepare(`UPDATE invoices SET viewed_count = COALESCE(viewed_count, 0) + 1, viewed_at = datetime('now'), status = CASE WHEN status = 'sent' THEN 'viewed' ELSE status END, updated_at = datetime('now') WHERE id = ?`).bind(invProposal.id).run()
+        
+        const items = await c.env.DB.prepare('SELECT * FROM invoice_items WHERE invoice_id = ? ORDER BY sort_order').bind(invProposal.id).all()
+        const lineItems = items.results || []
+        const docType = invProposal.document_type || 'invoice'
+        const docLabel = docType.charAt(0).toUpperCase() + docType.slice(1)
+        
+        let itemsHtml = ''
+        if (lineItems.length > 0) {
+          itemsHtml = '<table class="w-full text-sm"><thead><tr class="border-b-2 border-gray-200"><th class="text-left py-3 px-2 font-semibold text-gray-600">Description</th><th class="text-center py-3 px-2 font-semibold text-gray-600">Qty</th><th class="text-center py-3 px-2 font-semibold text-gray-600">Unit</th><th class="text-right py-3 px-2 font-semibold text-gray-600">Price</th><th class="text-right py-3 px-2 font-semibold text-gray-600">Amount</th></tr></thead><tbody>'
+          for (const it of lineItems as any[]) {
+            itemsHtml += `<tr class="border-b border-gray-100"><td class="py-3 px-2">${it.description}</td><td class="py-3 px-2 text-center">${it.quantity}</td><td class="py-3 px-2 text-center">${it.unit || 'each'}</td><td class="py-3 px-2 text-right">$${Number(it.unit_price).toFixed(2)}</td><td class="py-3 px-2 text-right font-medium">$${Number(it.amount).toFixed(2)}</td></tr>`
+          }
+          itemsHtml += '</tbody></table>'
+        }
+
+        // Get attached report link
+        let reportLink = ''
+        if (invProposal.attached_report_id) {
+          reportLink = `<a href="/api/reports/${invProposal.attached_report_id}/html" target="_blank" class="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-100"><i class="fas fa-file-alt"></i>View Roof Report</a>`
+        }
+
+        return c.html(`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>${docLabel} ${invProposal.invoice_number} — RoofReporterAI</title><script src="https://cdn.tailwindcss.com"></script><link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet"></head>
+<body class="bg-gray-100 min-h-screen py-8 px-4">
+<div class="max-w-3xl mx-auto">
+  <div class="bg-white rounded-2xl shadow-xl overflow-hidden print:shadow-none">
+    <div class="bg-gradient-to-r from-sky-500 to-blue-600 text-white p-8">
+      <div class="flex justify-between items-start">
+        <div><div class="flex items-center gap-3 mb-3"><div class="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center"><i class="fas fa-home text-white text-lg"></i></div><div><h1 class="text-xl font-bold">RoofReporterAI</h1><p class="text-blue-200 text-xs">Professional Roof Measurement Reports</p></div></div><p class="text-blue-200 text-sm">Alberta, Canada</p></div>
+        <div class="text-right"><p class="text-2xl font-bold">${docLabel}</p><p class="text-blue-200 text-sm">${invProposal.invoice_number}</p><p class="text-blue-200 text-xs mt-1">${invProposal.issue_date ? new Date(invProposal.issue_date).toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' }) : ''}</p></div>
+      </div>
+    </div>
+    <div class="p-8">
+      <div class="grid grid-cols-2 gap-6 mb-8">
+        <div><h3 class="text-xs font-bold text-gray-400 uppercase mb-2">Bill To</h3><p class="font-semibold text-gray-800">${invProposal.customer_name || ''}</p><p class="text-sm text-gray-500">${invProposal.company_name || ''}</p><p class="text-sm text-gray-500">${invProposal.customer_email || ''}</p></div>
+        <div class="text-right"><h3 class="text-xs font-bold text-gray-400 uppercase mb-2">${docLabel} Details</h3><p class="text-sm text-gray-600"><strong>Status:</strong> <span class="px-2 py-0.5 rounded-full text-xs font-bold ${invProposal.status === 'paid' ? 'bg-green-100 text-green-700' : invProposal.status === 'sent' || invProposal.status === 'viewed' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}">${(invProposal.status || 'draft').toUpperCase()}</span></p>${invProposal.due_date ? `<p class="text-sm text-gray-600 mt-1"><strong>Due:</strong> ${new Date(invProposal.due_date).toLocaleDateString('en-CA')}</p>` : ''}${invProposal.valid_until ? `<p class="text-sm text-gray-600 mt-1"><strong>Valid Until:</strong> ${invProposal.valid_until}</p>` : ''}</div>
+      </div>
+      ${invProposal.scope_of_work ? `<div class="mb-8 bg-gray-50 rounded-xl p-6"><h3 class="text-sm font-bold text-gray-700 mb-2"><i class="fas fa-clipboard-list mr-1 text-blue-500"></i>Scope of Work</h3><div class="text-sm text-gray-600 whitespace-pre-wrap">${invProposal.scope_of_work}</div></div>` : ''}
+      ${reportLink ? `<div class="mb-6">${reportLink}</div>` : ''}
+      <div class="mb-8">${itemsHtml}</div>
+      <div class="flex justify-end"><div class="w-72 space-y-2">
+        <div class="flex justify-between text-sm"><span class="text-gray-500">Subtotal</span><span class="font-medium">$${Number(invProposal.subtotal).toFixed(2)} CAD</span></div>
+        ${invProposal.discount_amount > 0 ? `<div class="flex justify-between text-sm"><span class="text-gray-500">Discount</span><span class="text-green-600">-$${Number(invProposal.discount_amount).toFixed(2)}</span></div>` : ''}
+        <div class="flex justify-between text-sm"><span class="text-gray-500">Tax (${invProposal.tax_rate || 5}%)</span><span>$${Number(invProposal.tax_amount).toFixed(2)}</span></div>
+        <div class="flex justify-between text-lg font-bold border-t-2 border-gray-200 pt-2 mt-2"><span>Total</span><span class="text-blue-600">$${Number(invProposal.total).toFixed(2)} CAD</span></div>
+      </div></div>
+      ${invProposal.warranty_terms ? `<div class="mt-8 bg-amber-50 rounded-xl p-6 border border-amber-100"><h3 class="text-sm font-bold text-amber-800 mb-2"><i class="fas fa-shield-alt mr-1"></i>Warranty</h3><p class="text-sm text-amber-700 whitespace-pre-wrap">${invProposal.warranty_terms}</p></div>` : ''}
+      ${invProposal.terms ? `<div class="mt-4 bg-gray-50 rounded-xl p-6"><h3 class="text-sm font-bold text-gray-700 mb-2"><i class="fas fa-file-contract mr-1"></i>Terms & Conditions</h3><p class="text-sm text-gray-600 whitespace-pre-wrap">${invProposal.terms}</p></div>` : ''}
+      ${invProposal.payment_terms_text ? `<div class="mt-4 bg-green-50 rounded-xl p-6 border border-green-100"><h3 class="text-sm font-bold text-green-800 mb-2"><i class="fas fa-credit-card mr-1"></i>Payment Terms</h3><p class="text-sm text-green-700 whitespace-pre-wrap">${invProposal.payment_terms_text}</p></div>` : ''}
+    </div>
+    <div class="bg-gray-50 px-8 py-4 text-center text-xs text-gray-400 border-t">Powered by <a href="https://roofreporterai.com" class="text-blue-500 hover:underline">RoofReporterAI</a> — Canada's AI Roof Measurement Platform</div>
+  </div>
+  <div class="text-center mt-4 print:hidden"><button onclick="window.print()" class="px-6 py-2.5 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm"><i class="fas fa-print mr-1"></i>Print / Save PDF</button></div>
+</div>
+</body></html>`)
+      }
+
       return c.html(`<!DOCTYPE html><html><head><title>Proposal Not Found</title><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-gray-50 min-h-screen flex items-center justify-center"><div class="text-center"><div class="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4"><svg class="w-10 h-10 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg></div><h1 class="text-2xl font-bold text-gray-800 mb-2">Proposal Not Found</h1><p class="text-gray-500">This proposal link is invalid or has expired.</p></div></body></html>`)
     }
 
@@ -3958,6 +4062,299 @@ print(decoded)
     sections.forEach(function(s) { observer.observe(s); });
   </script>
 
+</body>
+</html>`
+}
+
+// ============================================================
+// 3D ROOF VISUALIZER PAGE
+// ============================================================
+function getVisualizerPageHTML(address: string, reportJson: any, mapsKey: string) {
+  const reportDataStr = reportJson ? JSON.stringify(reportJson).replace(/</g, '\\u003c').replace(/>/g, '\\u003e') : 'null'
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags()}
+  <title>3D Roof Visualizer — ${address}</title>
+  <link rel="stylesheet" href="/static/css/visualizer.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.min.js"></script>
+  <style>
+    body { margin: 0; background: #0f172a; color: #e2e8f0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    .vis-header { background: linear-gradient(135deg, #1e293b, #0f172a); border-bottom: 1px solid #334155; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; }
+    .vis-main { display: flex; height: calc(100vh - 64px); }
+    .vis-canvas-wrap { flex: 1; position: relative; }
+    #canvas-3d { width: 100%; height: 100%; }
+    .vis-sidebar { width: 320px; background: #1e293b; border-left: 1px solid #334155; overflow-y: auto; padding: 16px; }
+    .vis-section { margin-bottom: 20px; }
+    .vis-section h3 { font-size: 13px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px; }
+    .vis-btn { padding: 8px 16px; border-radius: 8px; border: none; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+    .vis-btn-primary { background: #3b82f6; color: white; }
+    .vis-btn-primary:hover { background: #2563eb; }
+    .vis-loader { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; }
+    .vis-spinner { width: 40px; height: 40px; border: 3px solid #334155; border-top-color: #3b82f6; border-radius: 50%; animation: vis-spin 0.8s linear infinite; }
+    @keyframes vis-spin { to { transform: rotate(360deg); } }
+    .vis-upload-zone { border: 2px dashed #475569; border-radius: 12px; padding: 24px; text-align: center; cursor: pointer; transition: all 0.3s; }
+    .vis-upload-zone:hover, .vis-upload-zone.active { border-color: #3b82f6; background: rgba(59,130,246,0.05); }
+    .vis-upload-zone img { max-width: 100%; max-height: 200px; border-radius: 8px; margin-top: 8px; }
+    .vis-stat { background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 10px; margin-bottom: 6px; }
+    .vis-stat-label { font-size: 11px; color: #64748b; }
+    .vis-stat-value { font-size: 16px; font-weight: 700; color: #e2e8f0; }
+    .swatch-btn { display:flex; flex-direction:column; align-items:center; padding:6px; border-radius:8px; border:2px solid transparent; background:#0f172a; cursor:pointer; transition:all 0.2s; }
+    .swatch-btn:hover { border-color:#475569; }
+    .swatch-btn.active { border-color:#3b82f6; box-shadow:0 0 0 2px rgba(59,130,246,0.3); }
+    .swatch-color { width:32px; height:32px; border-radius:6px; margin-bottom:4px; border:1px solid #334155; }
+    .swatch-label { font-size:9px; color:#94a3b8; text-align:center; line-height:1.2; }
+    .screenshot-flash { position:absolute; inset:0; background:white; opacity:0.8; animation:flash-fade 0.4s ease-out forwards; pointer-events:none; }
+    @keyframes flash-fade { to { opacity:0; } }
+    @media (max-width: 768px) { .vis-main { flex-direction: column; } .vis-sidebar { width: 100%; height: 300px; } }
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <div class="vis-header">
+    <div style="display:flex; align-items:center; gap:12px;">
+      <a href="/customer/dashboard" style="color:#94a3b8;text-decoration:none;font-size:13px;"><i class="fas fa-arrow-left"></i></a>
+      <div>
+        <h1 style="font-size:16px; font-weight:700; margin:0;">3D Roof Visualizer</h1>
+        <p style="font-size:12px; color:#64748b; margin:0;">${address}</p>
+      </div>
+    </div>
+    <div style="display:flex; gap:8px;">
+      <button class="vis-btn" onclick="toggleRotate()" style="background:#334155; color:#e2e8f0;"><i class="fas fa-sync-alt mr-1"></i>Rotate</button>
+      <button class="vis-btn" onclick="switchMode()" id="modeBtn" style="background:#334155; color:#e2e8f0;"><i class="fas fa-cube mr-1"></i>2D View</button>
+      <button class="vis-btn vis-btn-primary" onclick="captureScreenshot()"><i class="fas fa-camera mr-1"></i>Screenshot</button>
+    </div>
+  </div>
+
+  <!-- Main -->
+  <div class="vis-main">
+    <div class="vis-canvas-wrap">
+      <div id="canvas-3d"></div>
+      <div id="canvas-2d" style="display:none; width:100%; height:100%;"></div>
+    </div>
+    <div class="vis-sidebar">
+      <!-- Upload Image Section -->
+      <div class="vis-section">
+        <h3><i class="fas fa-image mr-1"></i>Property Photo</h3>
+        <div class="vis-upload-zone" id="uploadZone" onclick="document.getElementById('photoUpload').click()">
+          <div id="uploadContent">
+            <i class="fas fa-cloud-upload-alt" style="font-size:28px; color:#64748b; display:block; margin-bottom:8px;"></i>
+            <p style="font-size:13px; color:#94a3b8; margin:0;">Click or drag to upload property photo</p>
+            <p style="font-size:11px; color:#475569; margin-top:4px;">JPG, PNG up to 10MB</p>
+          </div>
+        </div>
+        <input type="file" id="photoUpload" accept="image/*" style="display:none" onchange="handlePhotoUpload(event)">
+      </div>
+
+      <!-- Color Swatches -->
+      <div class="vis-section" id="swatchPanel">
+        <h3><i class="fas fa-palette mr-1"></i>Shingle Colors</h3>
+        <div id="shingle-swatches" style="display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-bottom:16px;"></div>
+        <h3><i class="fas fa-shield-alt mr-1"></i>Metal Roofing</h3>
+        <div id="metal-swatches" style="display:grid; grid-template-columns:repeat(3,1fr); gap:6px;"></div>
+        <p id="vis-current-color" style="font-size:11px; color:#94a3b8; margin-top:8px; text-align:center;">Onyx Black (shingle)</p>
+      </div>
+
+      <!-- Report Stats -->
+      <div class="vis-section">
+        <h3><i class="fas fa-ruler-combined mr-1"></i>Report Data</h3>
+        <div id="reportStats">
+          <p style="font-size:12px; color:#64748b;">Loading report data...</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/js/3d_visualizer.js?v=${Date.now()}"></script>
+  <script>
+    var reportData = ${reportDataStr};
+    var uploadedImage = null;
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', function() {
+      if (reportData) {
+        window.initVisualizer(reportData);
+        renderReportStats(reportData);
+      } else {
+        document.getElementById('canvas-3d').innerHTML = '<div class="vis-loader"><i class="fas fa-cube" style="font-size:48px; color:#334155; margin-bottom:16px;"></i><p style="color:#94a3b8; font-size:14px;">No report data available</p><p style="color:#475569; font-size:12px; margin-top:4px;">Order a roof report first to enable 3D visualization</p></div>';
+      }
+    });
+
+    function handlePhotoUpload(e) {
+      var file = e.target.files[0];
+      if (!file) return;
+      if (file.size > 10 * 1024 * 1024) { alert('File too large. Max 10MB.'); return; }
+      var reader = new FileReader();
+      reader.onload = function(ev) {
+        uploadedImage = ev.target.result;
+        var zone = document.getElementById('uploadContent');
+        zone.innerHTML = '<img src="' + ev.target.result + '" alt="Property photo" style="max-width:100%; max-height:200px; border-radius:8px; object-fit:cover;">' +
+          '<div style="display:flex; gap:6px; margin-top:8px;">' +
+          '<button onclick="applyPhotoAsTexture()" style="flex:1; padding:6px 8px; background:#3b82f6; color:white; border:none; border-radius:6px; font-size:11px; font-weight:600; cursor:pointer;"><i class="fas fa-cube mr-1"></i>Apply to 3D Roof</button>' +
+          '<button onclick="clearUploadedPhoto()" style="padding:6px 8px; background:#ef4444; color:white; border:none; border-radius:6px; font-size:11px; cursor:pointer;"><i class="fas fa-trash"></i></button>' +
+          '</div>';
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function applyPhotoAsTexture() {
+      if (!uploadedImage || !window.THREE) {
+        alert('Please upload a photo first and ensure 3D mode is active.');
+        return;
+      }
+      var meshes = window.__roofMeshes;
+      if (!meshes || meshes.length === 0) {
+        alert('3D model not ready yet. Please wait for the scene to load.');
+        return;
+      }
+      var loader = new THREE.TextureLoader();
+      loader.load(uploadedImage, function(texture) {
+        texture.wrapS = THREE.RepeatWrapping;
+        texture.wrapT = THREE.RepeatWrapping;
+        texture.repeat.set(2, 2);
+        meshes.forEach(function(mesh) {
+          if (mesh.material) mesh.material.dispose();
+          mesh.material = new THREE.MeshStandardMaterial({
+            map: texture,
+            roughness: 0.7,
+            metalness: 0.05,
+          });
+        });
+        // Show success toast
+        showVisToast('Photo applied to 3D roof!');
+      }, undefined, function(err) {
+        alert('Failed to load image as texture.');
+      });
+    }
+
+    function showVisToast(msg) {
+      var t = document.createElement('div');
+      t.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#10b981;color:white;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:600;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.3);';
+      t.textContent = msg;
+      document.body.appendChild(t);
+      setTimeout(function(){ t.remove(); }, 2500);
+    }
+
+    function clearUploadedPhoto() {
+      uploadedImage = null;
+      document.getElementById('photoUpload').value = '';
+      var zone = document.getElementById('uploadContent');
+      zone.innerHTML = '<i class="fas fa-cloud-upload-alt" style="font-size:28px; color:#64748b; display:block; margin-bottom:8px;"></i><p style="font-size:13px; color:#94a3b8; margin:0;">Click or drag to upload property photo</p><p style="font-size:11px; color:#475569; margin-top:4px;">JPG, PNG up to 10MB</p>';
+      // Revert roof to current swatch color
+      if (window.__changeRoofColor && window.__currentColor) {
+        window.__changeRoofColor(window.__currentColor);
+      }
+      showVisToast('Photo removed');
+    }
+
+    // Drag and drop
+    var dropZone = document.getElementById('uploadZone');
+    dropZone.addEventListener('dragover', function(e) { e.preventDefault(); dropZone.classList.add('active'); });
+    dropZone.addEventListener('dragleave', function() { dropZone.classList.remove('active'); });
+    dropZone.addEventListener('drop', function(e) {
+      e.preventDefault(); dropZone.classList.remove('active');
+      if (e.dataTransfer.files[0]) { document.getElementById('photoUpload').files = e.dataTransfer.files; handlePhotoUpload({ target: { files: e.dataTransfer.files } }); }
+    });
+
+    function toggleRotate() {
+      if (window.toggleAutoRotate) window.toggleAutoRotate();
+    }
+    function switchMode() {
+      if (window.switchVisMode) {
+        var btn = document.getElementById('modeBtn');
+        if (btn) {
+          var is3d = btn.textContent.indexOf('2D') >= 0;
+          if (is3d) {
+            window.switchVisMode('2d');
+            btn.innerHTML = '<i class="fas fa-cube mr-1"></i>3D View';
+          } else {
+            window.switchVisMode('3d');
+            btn.innerHTML = '<i class="fas fa-cube mr-1"></i>2D View';
+          }
+        }
+      }
+    }
+    function captureScreenshot() {
+      if (window.takeScreenshot) window.takeScreenshot();
+    }
+
+    function renderReportStats(data) {
+      var km = data.key_measurements || data;
+      var el = document.getElementById('reportStats');
+      if (!km) { el.innerHTML = '<p style="color:#64748b;font-size:12px;">No measurement data</p>'; return; }
+      var html = '';
+      if (km.total_roof_area_sqft) html += '<div class="vis-stat"><div class="vis-stat-label">Roof Area</div><div class="vis-stat-value">' + Math.round(km.total_roof_area_sqft).toLocaleString() + ' sq ft</div></div>';
+      if (km.dominant_pitch_label) html += '<div class="vis-stat"><div class="vis-stat-label">Pitch</div><div class="vis-stat-value">' + km.dominant_pitch_label + '</div></div>';
+      if (km.net_squares) html += '<div class="vis-stat"><div class="vis-stat-label">Net Squares</div><div class="vis-stat-value">' + km.net_squares + '</div></div>';
+      if (km.roof_style) html += '<div class="vis-stat"><div class="vis-stat-label">Roof Style</div><div class="vis-stat-value" style="text-transform:capitalize;">' + km.roof_style + '</div></div>';
+      if (km.total_face_count) html += '<div class="vis-stat"><div class="vis-stat-label">Roof Faces</div><div class="vis-stat-value">' + km.total_face_count + '</div></div>';
+      el.innerHTML = html || '<p style="color:#64748b;font-size:12px;">No detailed measurements</p>';
+    }
+  </script>
+</body>
+</html>`
+}
+
+// ============================================================
+// ENHANCED PROPOSAL BUILDER PAGE
+// ============================================================
+function getProposalBuilderPageHTML(mapsApiKey: string) {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags()}
+  <title>Proposal Builder - RoofReporterAI</title>
+  ${mapsApiKey ? `<script src="https://maps.googleapis.com/maps/api/js?key=${mapsApiKey}&libraries=places"></script>` : ''}
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <header class="bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg">
+    <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
+      <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
+        <img src="/static/logo.png" alt="RoofReporterAI" class="w-10 h-10 rounded-lg object-cover">
+        <div><h1 class="text-xl font-bold">Proposal Builder</h1><p class="text-brand-200 text-xs">Create professional roofing proposals</p></div>
+      </a>
+      <a href="/customer/proposals" class="text-brand-200 hover:text-white text-sm"><i class="fas fa-arrow-left mr-1"></i>Back to Proposals</a>
+    </div>
+  </header>
+  <main class="max-w-5xl mx-auto px-4 py-8">
+    <div id="proposal-root">
+      <div class="flex items-center justify-center py-12"><div class="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-brand-500"></div></div>
+    </div>
+  </main>
+  <script src="/static/proposal-builder.js?v=${Date.now()}"></script>
+  ${getRoverAssistant()}
+</body>
+</html>`
+}
+
+// ============================================================
+// INVOICE MANAGER PAGE
+// ============================================================
+function getInvoiceManagerPageHTML() {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags()}
+  <title>Invoice Manager - RoofReporterAI</title>
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <header class="bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg">
+    <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
+      <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
+        <img src="/static/logo.png" alt="RoofReporterAI" class="w-10 h-10 rounded-lg object-cover">
+        <div><h1 class="text-xl font-bold">Invoice Manager</h1><p class="text-brand-200 text-xs">Create & manage invoices with Square payment</p></div>
+      </a>
+      <a href="/customer/invoices" class="text-brand-200 hover:text-white text-sm"><i class="fas fa-arrow-left mr-1"></i>Back to Invoices</a>
+    </div>
+  </header>
+  <main class="max-w-5xl mx-auto px-4 py-8">
+    <div id="invoice-root">
+      <div class="flex items-center justify-center py-12"><div class="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-brand-500"></div></div>
+    </div>
+  </main>
+  <script src="/static/invoice-manager.js?v=${Date.now()}"></script>
+  ${getRoverAssistant()}
 </body>
 </html>`
 }

@@ -63,6 +63,8 @@ const state = {
   traceEavesPolygon: null,
   traceMarkers: [],
   traceEavesSaved: false,   // true when user has saved eaves and cleared overlays
+  traceSavedModes: {},      // { eaves: true, ridge: true } — tracks which modes have been "saved"
+  traceShowGhostOverlay: false, // if true, show faint ghost of other modes
   dbInitialized: false,
   submitting: false
 };
@@ -799,6 +801,7 @@ function renderStep2TracePhase() {
   const valleyCount = state.traceValleyLines.length;
   // Eaves is "complete" if at least one section is closed
   const eavesClosed = eavesSections > 0;
+  const eavesAreSaved = !!state.traceSavedModes.eaves;
 
   return `
     <div class="max-w-5xl mx-auto">
@@ -889,17 +892,24 @@ function renderStep2TracePhase() {
                 <i class="fas fa-check mr-1"></i>Close Eave Section
               </button>
             ` : ''}
-            ${eavesClosed && state.traceMode === 'eaves' ? `
+            ${eavesClosed && state.traceMode === 'eaves' && !eavesAreSaved ? `
               <button onclick="addAnotherEaveLayer()" class="w-full px-3 py-2 bg-green-50 hover:bg-green-100 text-green-700 rounded-lg text-sm font-medium transition-all border border-green-200">
-                <i class="fas fa-plus mr-1"></i>Add Another Eave Layer
+                <i class="fas fa-layer-group mr-1"></i>New Eave Layer
+                <span class="block text-[10px] text-green-500 mt-0.5">Balcony, dormer, upper floor</span>
               </button>
               <button onclick="finishEavesAndNext()" class="w-full px-3 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-sm font-semibold transition-all shadow-md">
-                Next — Trace Ridges &amp; Hips <i class="fas fa-arrow-right ml-1"></i>
+                <i class="fas fa-save mr-1"></i>Save Eaves &amp; Clear
+                <span class="block text-[10px] text-white/70 mt-0.5">Map will clear for ridge tracing</span>
               </button>
             ` : ''}
-            ${state.traceEavesSaved ? `
-              <button onclick="showEavesOverlays()" class="w-full px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg text-sm font-medium transition-all">
-                <i class="fas fa-eye mr-1"></i>Show Eaves
+            ${eavesAreSaved && state.traceMode === 'eaves' ? `
+              <button onclick="addAnotherEaveLayer()" class="w-full px-3 py-2 bg-green-50 hover:bg-green-100 text-green-700 rounded-lg text-sm font-medium transition-all border border-green-200">
+                <i class="fas fa-layer-group mr-1"></i>Add Another Layer
+              </button>
+            ` : ''}
+            ${state.traceMode !== 'eaves' ? `
+              <button onclick="toggleGhostOverlay()" class="w-full px-3 py-2 ${state.traceShowGhostOverlay ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'} rounded-lg text-sm font-medium transition-all">
+                <i class="fas fa-${state.traceShowGhostOverlay ? 'eye-slash' : 'eye'} mr-1"></i>${state.traceShowGhostOverlay ? 'Hide' : 'Show'} Previous Traces
               </button>
             ` : ''}
             <button onclick="undoLastTrace()" class="w-full px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg text-sm font-medium transition-all">
@@ -931,7 +941,7 @@ function renderStep2TracePhase() {
         <div class="flex items-center gap-4 text-xs text-gray-500">
           <span><i class="fas fa-mouse-pointer mr-1"></i>Click = Add point</span>
           <span><i class="fas fa-mouse mr-1"></i>Double-click = Finish line</span>
-          <span><i class="fas fa-draw-polygon mr-1" style="color:#22c55e"></i>Eaves: click points around the outline, then press <strong>Close Eave Section</strong>. Multi-story roofs can have multiple layers — add each one separately.</span>
+          <span><i class="fas fa-draw-polygon mr-1" style="color:#22c55e"></i>Eaves: trace outline, press <strong>Close Eave Section</strong>. For multi-layer roofs, click <strong>New Eave Layer</strong> for each separate section (balcony, dormer, 2nd story).</span>
         </div>
         <div class="flex items-center gap-3">
           <button onclick="skipTracing()" class="px-4 py-2 text-gray-500 hover:text-gray-700 text-sm font-medium transition-all">
@@ -1141,8 +1151,15 @@ function restoreTraceOverlays() {
 function redrawActiveModeOverlays() {
   clearTraceOverlays();
   const mode = state.traceMode;
+
+  // If "show ghost" is on, draw faint overlays of ALL saved modes (not just active)
+  if (state.traceShowGhostOverlay) {
+    drawGhostOverlays(mode);
+  }
+
+  // Then draw the ACTIVE mode's overlays in full color
   if (mode === 'eaves') {
-    state.traceEavesSaved = false; // Switching back to eaves always shows them
+    state.traceEavesSaved = false;
     redrawEavesOverlays();
   } else if (mode === 'ridge') {
     state.traceRidgeLines.forEach(line => {
@@ -1158,6 +1175,55 @@ function redrawActiveModeOverlays() {
     state.traceValleyLines.forEach(line => {
       line.forEach(p => addTraceMarker(p, '#ef4444', null));
       drawTracePolyline(line, '#ef4444', 2.5, false);
+    });
+  }
+}
+
+function drawGhostOverlays(excludeMode) {
+  // Draw faint semi-transparent versions of saved modes so user can reference
+  const ghostOpacity = 0.25;
+  const ghostWeight = 1.2;
+  
+  // Ghost eaves
+  if (excludeMode !== 'eaves' && state.traceEavesSections.length > 0) {
+    state.traceEavesSections.forEach(section => {
+      const ghostPoly = new google.maps.Polygon({
+        paths: section.points.map(p => new google.maps.LatLng(p.lat, p.lng)),
+        map: state.traceMap,
+        strokeColor: '#22c55e',
+        strokeWeight: ghostWeight,
+        strokeOpacity: ghostOpacity,
+        fillColor: '#22c55e',
+        fillOpacity: 0.04,
+        editable: false,
+        clickable: false
+      });
+      state.tracePolylines.push(ghostPoly);
+    });
+  }
+  // Ghost ridges
+  if (excludeMode !== 'ridge' && state.traceRidgeLines.length > 0) {
+    state.traceRidgeLines.forEach(line => {
+      drawTracePolyline(line, '#3b82f6', ghostWeight, false);
+      // Override last polyline opacity
+      const pl = state.tracePolylines[state.tracePolylines.length - 1];
+      if (pl && pl.setOptions) pl.setOptions({ strokeOpacity: ghostOpacity });
+    });
+  }
+  // Ghost hips
+  if (excludeMode !== 'hip' && state.traceHipLines.length > 0) {
+    state.traceHipLines.forEach(line => {
+      drawTracePolyline(line, '#f59e0b', ghostWeight, false);
+      const pl = state.tracePolylines[state.tracePolylines.length - 1];
+      if (pl && pl.setOptions) pl.setOptions({ strokeOpacity: ghostOpacity });
+    });
+  }
+  // Ghost valleys
+  if (excludeMode !== 'valley' && state.traceValleyLines.length > 0) {
+    state.traceValleyLines.forEach(line => {
+      drawTracePolyline(line, '#ef4444', ghostWeight, true);
+      const pl = state.tracePolylines[state.tracePolylines.length - 1];
+      if (pl && pl.setOptions) pl.setOptions({ strokeOpacity: ghostOpacity });
     });
   }
 }
@@ -1206,8 +1272,25 @@ function redrawEavesOverlays() {
 function setTraceMode(mode) {
   // Finish any pending line
   if (state.traceCurrentLine.length > 0) finishCurrentLine();
+  
+  // Mark current mode as "saved" when leaving it (data is kept, overlays cleared)
+  const prevMode = state.traceMode;
+  if (prevMode === 'eaves' && state.traceEavesSections.length > 0) {
+    state.traceSavedModes.eaves = true;
+    state.traceEavesSaved = true;
+  } else if (prevMode === 'ridge' && state.traceRidgeLines.length > 0) {
+    state.traceSavedModes.ridge = true;
+  } else if (prevMode === 'hip' && state.traceHipLines.length > 0) {
+    state.traceSavedModes.hip = true;
+  } else if (prevMode === 'valley' && state.traceValleyLines.length > 0) {
+    state.traceSavedModes.valley = true;
+  }
+
   state.traceMode = mode;
-  // Show only the active mode's overlays
+  state.traceShowGhostOverlay = false;
+  
+  // Clean canvas: show ONLY the active mode's overlays
+  // Data for all modes remains in state — only visuals are cleared
   redrawActiveModeOverlays();
   updateTraceSummaryUI();
 }
@@ -1262,17 +1345,29 @@ function clearCurrentMode() {
 }
 
 function addAnotherEaveLayer() {
-  // Already in eaves mode — user just needs to start clicking again
-  showToast('Start clicking to trace the next eave layer', 'info');
+  // Reset "saved" state so the user can add more layers
+  state.traceSavedModes.eaves = false;
+  state.traceEavesSaved = false;
+  state.traceMode = 'eaves';
+  // Show existing eave sections so user can see what's already drawn
+  redrawActiveModeOverlays();
+  showToast('Start clicking to trace the next eave layer (balcony, dormer, upper floor)', 'info');
+  updateTraceSummaryUI();
+}
+
+function toggleGhostOverlay() {
+  state.traceShowGhostOverlay = !state.traceShowGhostOverlay;
+  redrawActiveModeOverlays();
   updateTraceSummaryUI();
 }
 
 function finishEavesAndNext() {
-  // Save eaves, clear all overlays, switch to ridge mode
+  // Save eaves data, mark mode as saved, clear ALL overlays, switch to ridge
+  state.traceSavedModes.eaves = true;
   state.traceEavesSaved = true;
   clearTraceOverlays();
   state.traceMode = 'ridge';
-  showToast('Eaves saved! Map cleared — now trace ridges and hips.', 'success');
+  showToast('Eaves saved! Canvas cleared — now trace ridges on a clean satellite view.', 'success');
   updateTraceSummaryUI();
 }
 

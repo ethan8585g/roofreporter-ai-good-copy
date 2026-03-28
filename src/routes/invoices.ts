@@ -4,30 +4,60 @@ import { validateAdminSession } from './auth'
 
 export const invoiceRoutes = new Hono<{ Bindings: Bindings }>()
 
-// Admin auth middleware
+// Admin auth middleware (skip share-token routes for public access)
 invoiceRoutes.use('/*', async (c, next) => {
+  const path = c.req.path
+  // Allow public access to shared proposals/invoices and Square webhooks
+  if (path.includes('/view/') || path.includes('/webhook')) return next()
+  
   const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
   if (!admin) return c.json({ error: 'Admin authentication required' }, 401)
   c.set('admin' as any, admin)
   return next()
 })
 
-// Generate invoice number
-function generateInvoiceNumber(): string {
-  const date = new Date()
-  const d = date.toISOString().slice(0, 10).replace(/-/g, '')
+// ── Helpers ──────────────────────────────────────────────────
+function generateNumber(prefix: string): string {
+  const d = new Date().toISOString().slice(0, 10).replace(/-/g, '')
   const rand = Math.floor(Math.random() * 9999).toString().padStart(4, '0')
-  return `INV-${d}-${rand}`
+  return `${prefix}-${d}-${rand}`
+}
+
+function generateShareToken(): string {
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789'
+  let token = ''
+  for (let i = 0; i < 32; i++) token += chars[Math.floor(Math.random() * chars.length)]
+  return token
+}
+
+function calculateTotals(items: any[], taxRate: number, discountAmount: number, discountType: string = 'fixed') {
+  let subtotal = 0
+  let taxableSubtotal = 0
+  for (const item of items) {
+    const amount = (item.quantity || 1) * (item.unit_price || 0)
+    subtotal += amount
+    if (item.is_taxable !== false && item.is_taxable !== 0) taxableSubtotal += amount
+  }
+  const actualDiscount = discountType === 'percentage'
+    ? Math.round(subtotal * (discountAmount / 100) * 100) / 100
+    : (discountAmount || 0)
+  const taxAmount = Math.round(taxableSubtotal * (taxRate / 100) * 100) / 100
+  const total = Math.round((subtotal - actualDiscount + taxAmount) * 100) / 100
+  return {
+    subtotal: Math.round(subtotal * 100) / 100,
+    taxAmount: Math.round(taxAmount * 100) / 100,
+    discount: Math.round(actualDiscount * 100) / 100,
+    total: Math.max(0, total)
+  }
 }
 
 // ============================================================
-// LIST ALL INVOICES (admin)
+// LIST ALL INVOICES/PROPOSALS/ESTIMATES
 // ============================================================
 invoiceRoutes.get('/', async (c) => {
   try {
     const status = c.req.query('status')
     const customerId = c.req.query('customer_id')
-    
     const docType = c.req.query('document_type')
 
     let query = `
@@ -35,7 +65,8 @@ invoiceRoutes.get('/', async (c) => {
              o.order_number, o.property_address,
              CASE WHEN o.id IS NOT NULL THEN (
                SELECT COUNT(*) FROM reports r WHERE r.order_id = o.id AND r.status IN ('completed','enhancing')
-             ) ELSE 0 END as has_report
+             ) ELSE 0 END as has_report,
+             (SELECT payment_link_url FROM square_payment_links WHERE invoice_id = i.id AND status != 'cancelled' ORDER BY created_at DESC LIMIT 1) as payment_link_url
       FROM invoices i
       LEFT JOIN customers c ON c.id = i.customer_id
       LEFT JOIN orders o ON o.id = i.order_id
@@ -49,10 +80,8 @@ invoiceRoutes.get('/', async (c) => {
     else { query += " AND (i.document_type IS NULL OR i.document_type = 'invoice')" }
 
     query += ' ORDER BY i.created_at DESC'
-
     const invoices = await c.env.DB.prepare(query).bind(...params).all()
 
-    // Get summary stats
     const stats = await c.env.DB.prepare(`
       SELECT
         COUNT(*) as total_invoices,
@@ -70,11 +99,13 @@ invoiceRoutes.get('/', async (c) => {
 })
 
 // ============================================================
-// GET SINGLE INVOICE with items
+// GET SINGLE INVOICE with items + payment links
 // ============================================================
 invoiceRoutes.get('/:id', async (c) => {
   try {
     const id = c.req.param('id')
+    if (id === 'stats' || id === 'customers') return c.json({ error: 'Use specific endpoint' }, 400)
+
     const invoice = await c.env.DB.prepare(`
       SELECT i.*, c.name as customer_name, c.email as customer_email, c.phone as customer_phone,
              c.company_name as customer_company, c.address as customer_address,
@@ -92,7 +123,28 @@ invoiceRoutes.get('/:id', async (c) => {
       'SELECT * FROM invoice_items WHERE invoice_id = ? ORDER BY sort_order'
     ).bind(id).all()
 
-    return c.json({ invoice, items: items.results })
+    // Get Square payment links
+    let paymentLinks: any[] = []
+    try {
+      const links = await c.env.DB.prepare(
+        'SELECT * FROM square_payment_links WHERE invoice_id = ? ORDER BY created_at DESC'
+      ).bind(id).all()
+      paymentLinks = links.results || []
+    } catch { /* table may not exist yet */ }
+
+    // Get attached report if any
+    let attachedReport = null
+    if ((invoice as any).attached_report_id) {
+      try {
+        attachedReport = await c.env.DB.prepare(`
+          SELECT r.id, r.status, o.order_number, o.property_address
+          FROM reports r JOIN orders o ON o.id = r.order_id
+          WHERE r.id = ? AND r.status IN ('completed','enhancing')
+        `).bind((invoice as any).attached_report_id).first()
+      } catch {}
+    }
+
+    return c.json({ invoice, items: items.results, payment_links: paymentLinks, attached_report: attachedReport })
   } catch (err: any) {
     return c.json({ error: 'Failed to fetch invoice', details: err.message }, 500)
   }
@@ -103,33 +155,28 @@ invoiceRoutes.get('/:id', async (c) => {
 // ============================================================
 invoiceRoutes.post('/', async (c) => {
   try {
+    const body = await c.req.json()
     const {
       customer_id, order_id, items, notes, terms, due_days, tax_rate, discount_amount,
-      document_type
-    } = await c.req.json()
+      discount_type, document_type, scope_of_work, warranty_terms, payment_terms_text,
+      valid_until, attached_report_id, proposal_tier, proposal_group_id
+    } = body
 
     if (!customer_id) return c.json({ error: 'customer_id is required' }, 400)
     if (!items || !items.length) return c.json({ error: 'At least one line item is required' }, 400)
 
     const docType = ['invoice', 'proposal', 'estimate'].includes(document_type) ? document_type : 'invoice'
+    const prefix = docType === 'proposal' ? 'PROP' : docType === 'estimate' ? 'EST' : 'INV'
+    const number = generateNumber(prefix)
+    const shareToken = generateShareToken()
 
-    // Verify customer exists
     const customer = await c.env.DB.prepare('SELECT id, name FROM customers WHERE id = ?').bind(customer_id).first()
     if (!customer) return c.json({ error: 'Customer not found' }, 404)
 
-    const invoiceNumber = generateInvoiceNumber()
-    const taxRateVal = tax_rate != null ? tax_rate : 5.0 // GST
+    const taxRateVal = tax_rate != null ? tax_rate : 5.0
     const discountVal = discount_amount || 0
+    const { subtotal, taxAmount, discount, total } = calculateTotals(items, taxRateVal, discountVal, discount_type || 'fixed')
 
-    // Calculate totals
-    let subtotal = 0
-    for (const item of items) {
-      subtotal += (item.quantity || 1) * (item.unit_price || 0)
-    }
-    const taxAmount = Math.round(subtotal * (taxRateVal / 100) * 100) / 100
-    const total = Math.round((subtotal + taxAmount - discountVal) * 100) / 100
-
-    // Due date
     const dueDate = new Date()
     dueDate.setDate(dueDate.getDate() + (due_days || 30))
 
@@ -141,37 +188,46 @@ invoiceRoutes.post('/', async (c) => {
 
     const result = await c.env.DB.prepare(`
       INSERT INTO invoices (invoice_number, customer_id, order_id, subtotal, tax_rate, tax_amount,
-                            discount_amount, total, status, due_date, notes, terms, created_by, document_type)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?)
+                            discount_amount, total, status, due_date, notes, terms, created_by, document_type,
+                            share_token, scope_of_work, warranty_terms, payment_terms_text, valid_until,
+                            attached_report_id, proposal_tier, proposal_group_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
-      invoiceNumber, customer_id, order_id || null,
-      Math.round(subtotal * 100) / 100, taxRateVal, Math.round(taxAmount * 100) / 100,
-      discountVal, total, dueDate.toISOString().slice(0, 10),
-      notes || null, terms || defaultTerms, 'admin', docType
+      number, customer_id, order_id || null,
+      subtotal, taxRateVal, taxAmount, discount, total,
+      dueDate.toISOString().slice(0, 10),
+      notes || null, terms || defaultTerms, 'admin', docType,
+      shareToken, scope_of_work || '', warranty_terms || '', payment_terms_text || '',
+      valid_until || '', attached_report_id || null, proposal_tier || '', proposal_group_id || ''
     ).run()
 
     const invoiceId = result.meta.last_row_id
 
-    // Insert line items
+    // Insert line items with unit and taxable flag
     for (let i = 0; i < items.length; i++) {
       const item = items[i]
       const qty = item.quantity || 1
       const price = item.unit_price || 0
       const amount = Math.round(qty * price * 100) / 100
       await c.env.DB.prepare(`
-        INSERT INTO invoice_items (invoice_id, description, quantity, unit_price, amount, sort_order)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `).bind(invoiceId, item.description, qty, price, amount, i).run()
+        INSERT INTO invoice_items (invoice_id, description, quantity, unit_price, amount, sort_order, unit, is_taxable, category)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).bind(invoiceId, item.description, qty, price, amount, i, item.unit || 'each', item.is_taxable !== false ? 1 : 0, item.category || '').run()
     }
 
     await c.env.DB.prepare(`
       INSERT INTO user_activity_log (company_id, action, details)
       VALUES (1, 'document_created', ?)
-    `).bind(`${docType.charAt(0).toUpperCase() + docType.slice(1)} ${invoiceNumber} for $${total} CAD`).run()
+    `).bind(`${docType.charAt(0).toUpperCase() + docType.slice(1)} ${number} for $${total} CAD`).run().catch(() => {})
+
+    const shareUrl = `/proposal/view/${shareToken}`
 
     return c.json({
       success: true,
-      invoice: { id: invoiceId, invoice_number: invoiceNumber, total, status: 'draft', document_type: docType }
+      invoice: {
+        id: invoiceId, invoice_number: number, total, status: 'draft',
+        document_type: docType, share_token: shareToken, share_url: shareUrl
+      }
     }, 201)
   } catch (err: any) {
     return c.json({ error: 'Failed to create document', details: err.message }, 500)
@@ -179,38 +235,93 @@ invoiceRoutes.post('/', async (c) => {
 })
 
 // ============================================================
-// UPDATE INVOICE STATUS
+// UPDATE INVOICE (draft only — full edit)
+// ============================================================
+invoiceRoutes.put('/:id', async (c) => {
+  try {
+    const id = c.req.param('id')
+    const invoice = await c.env.DB.prepare("SELECT id, status FROM invoices WHERE id = ?").bind(id).first<any>()
+    if (!invoice) return c.json({ error: 'Invoice not found' }, 404)
+    if (invoice.status !== 'draft') return c.json({ error: 'Only draft documents can be edited' }, 400)
+
+    const body = await c.req.json()
+    const {
+      customer_id, order_id, items, notes, terms, due_days, tax_rate, discount_amount,
+      discount_type, document_type, scope_of_work, warranty_terms, payment_terms_text,
+      valid_until, attached_report_id
+    } = body
+
+    const docType = ['invoice', 'proposal', 'estimate'].includes(document_type) ? document_type : 'invoice'
+    const taxRateVal = tax_rate != null ? tax_rate : 5.0
+    const discountVal = discount_amount || 0
+
+    let subtotal = 0, taxAmount = 0, total = 0, discount = 0
+    if (items && items.length) {
+      const calc = calculateTotals(items, taxRateVal, discountVal, discount_type || 'fixed')
+      subtotal = calc.subtotal; taxAmount = calc.taxAmount; discount = calc.discount; total = calc.total
+    }
+
+    const dueDate = new Date()
+    dueDate.setDate(dueDate.getDate() + (due_days || 30))
+
+    await c.env.DB.prepare(`
+      UPDATE invoices SET customer_id = ?, order_id = ?, subtotal = ?, tax_rate = ?,
+        tax_amount = ?, discount_amount = ?, total = ?, due_date = ?, notes = ?, terms = ?,
+        document_type = ?, scope_of_work = ?, warranty_terms = ?, payment_terms_text = ?,
+        valid_until = ?, attached_report_id = ?, updated_at = datetime('now')
+      WHERE id = ?
+    `).bind(
+      customer_id || null, order_id || null, subtotal, taxRateVal, taxAmount, discount, total,
+      dueDate.toISOString().slice(0, 10), notes || null, terms || null, docType,
+      scope_of_work || '', warranty_terms || '', payment_terms_text || '',
+      valid_until || '', attached_report_id || null, id
+    ).run()
+
+    if (items && items.length > 0) {
+      await c.env.DB.prepare('DELETE FROM invoice_items WHERE invoice_id = ?').bind(id).run()
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i]
+        const qty = item.quantity || 1
+        const price = item.unit_price || 0
+        const amount = Math.round(qty * price * 100) / 100
+        await c.env.DB.prepare(`
+          INSERT INTO invoice_items (invoice_id, description, quantity, unit_price, amount, sort_order, unit, is_taxable, category)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).bind(id, item.description, qty, price, amount, i, item.unit || 'each', item.is_taxable !== false ? 1 : 0, item.category || '').run()
+      }
+    }
+
+    return c.json({ success: true, invoice: { id, total, status: 'draft', document_type: docType } })
+  } catch (err: any) {
+    return c.json({ error: 'Failed to update document', details: err.message }, 500)
+  }
+})
+
+// ============================================================
+// UPDATE STATUS
 // ============================================================
 invoiceRoutes.patch('/:id/status', async (c) => {
   try {
     const id = c.req.param('id')
     const { status } = await c.req.json()
-
-    const validStatuses = ['draft', 'sent', 'viewed', 'paid', 'overdue', 'cancelled', 'refunded']
-    if (!validStatuses.includes(status)) {
-      return c.json({ error: 'Invalid status' }, 400)
-    }
+    const validStatuses = ['draft', 'sent', 'viewed', 'paid', 'overdue', 'cancelled', 'refunded', 'accepted', 'declined']
+    if (!validStatuses.includes(status)) return c.json({ error: 'Invalid status' }, 400)
 
     const updates: string[] = [`status = '${status}'`, "updated_at = datetime('now')"]
-    
     if (status === 'sent') updates.push("sent_date = date('now')")
     if (status === 'paid') updates.push("paid_date = date('now')")
 
     await c.env.DB.prepare(`UPDATE invoices SET ${updates.join(', ')} WHERE id = ?`).bind(id).run()
-
-    await c.env.DB.prepare(`
-      INSERT INTO user_activity_log (company_id, action, details)
-      VALUES (1, 'invoice_status_updated', ?)
-    `).bind(`Invoice #${id} marked as ${status}`).run()
+    await c.env.DB.prepare(`INSERT INTO user_activity_log (company_id, action, details) VALUES (1, 'status_updated', ?)`).bind(`Document #${id} → ${status}`).run().catch(() => {})
 
     return c.json({ success: true, status })
   } catch (err: any) {
-    return c.json({ error: 'Failed to update invoice', details: err.message }, 500)
+    return c.json({ error: 'Failed to update status', details: err.message }, 500)
   }
 })
 
 // ============================================================
-// SEND INVOICE / PROPOSAL / ESTIMATE (mark as sent + build email payload)
+// SEND (mark as sent + generate share link)
 // ============================================================
 invoiceRoutes.post('/:id/send', async (c) => {
   try {
@@ -224,42 +335,34 @@ invoiceRoutes.post('/:id/send', async (c) => {
       LEFT JOIN orders o ON o.id = i.order_id
       WHERE i.id = ?
     `).bind(id).first<any>()
-
     if (!invoice) return c.json({ error: 'Document not found' }, 404)
 
-    const items = await c.env.DB.prepare(
-      'SELECT * FROM invoice_items WHERE invoice_id = ? ORDER BY sort_order'
-    ).bind(id).all()
+    const items = await c.env.DB.prepare('SELECT * FROM invoice_items WHERE invoice_id = ? ORDER BY sort_order').bind(id).all()
 
-    // Check if a completed report exists for the linked order
-    let reportUrl: string | null = null
-    let reportData: any = null
-    if (invoice.linked_order_id) {
-      reportData = await c.env.DB.prepare(`
-        SELECT r.id, r.status, o.order_number, o.property_address
-        FROM reports r
-        JOIN orders o ON o.id = r.order_id
-        WHERE r.order_id = ? AND r.status IN ('completed','enhancing')
-        LIMIT 1
-      `).bind(invoice.linked_order_id).first<any>()
-      if (reportData) {
-        reportUrl = `/customer/reports/${reportData.id}`
-      }
+    // Generate share token if missing
+    let shareToken = invoice.share_token
+    if (!shareToken) {
+      shareToken = generateShareToken()
+      await c.env.DB.prepare('UPDATE invoices SET share_token = ? WHERE id = ?').bind(shareToken, id).run()
     }
 
-    // Mark as sent
-    await c.env.DB.prepare(`
-      UPDATE invoices SET status = 'sent', sent_date = date('now'), updated_at = datetime('now')
-      WHERE id = ?
-    `).bind(id).run()
+    // Check attached report
+    let attachedReport = null
+    if (invoice.linked_order_id || invoice.attached_report_id) {
+      const reportId = invoice.attached_report_id || invoice.linked_order_id
+      const report = await c.env.DB.prepare(`
+        SELECT r.id, r.status, o.order_number, o.property_address
+        FROM reports r JOIN orders o ON o.id = r.order_id
+        WHERE (r.id = ? OR r.order_id = ?) AND r.status IN ('completed','enhancing') LIMIT 1
+      `).bind(reportId, reportId).first<any>()
+      if (report) attachedReport = { report_id: report.id, order_number: report.order_number, property_address: report.property_address, report_url: `/api/reports/${report.id}/html` }
+    }
+
+    await c.env.DB.prepare(`UPDATE invoices SET status = 'sent', sent_date = date('now'), updated_at = datetime('now') WHERE id = ?`).bind(id).run()
 
     const docType = invoice.document_type || 'invoice'
     const docLabel = docType.charAt(0).toUpperCase() + docType.slice(1)
-
-    await c.env.DB.prepare(`
-      INSERT INTO user_activity_log (company_id, action, details)
-      VALUES (1, 'document_sent', ?)
-    `).bind(`${docLabel} ${invoice.invoice_number} sent to ${invoice.customer_email}`).run()
+    await c.env.DB.prepare(`INSERT INTO user_activity_log (company_id, action, details) VALUES (1, 'document_sent', ?)`).bind(`${docLabel} ${invoice.invoice_number} sent to ${invoice.customer_email}`).run().catch(() => {})
 
     return c.json({
       success: true,
@@ -270,13 +373,9 @@ invoiceRoutes.post('/:id/send', async (c) => {
       invoice_number: invoice.invoice_number,
       total: invoice.total,
       items: items.results,
-      // Report attachment info (null when no report is linked)
-      attached_report: reportData ? {
-        report_id: reportData.id,
-        order_number: reportData.order_number,
-        property_address: reportData.property_address,
-        report_url: reportUrl
-      } : null
+      share_url: `/proposal/view/${shareToken}`,
+      share_token: shareToken,
+      attached_report: attachedReport
     })
   } catch (err: any) {
     return c.json({ error: 'Failed to send document', details: err.message }, 500)
@@ -284,27 +383,202 @@ invoiceRoutes.post('/:id/send', async (c) => {
 })
 
 // ============================================================
-// DELETE INVOICE (only drafts)
+// CREATE INVOICE FROM PROPOSAL (auto-populate)
+// ============================================================
+invoiceRoutes.post('/:id/convert-to-invoice', async (c) => {
+  try {
+    const id = c.req.param('id')
+    const proposal = await c.env.DB.prepare('SELECT * FROM invoices WHERE id = ? AND document_type = ?').bind(id, 'proposal').first<any>()
+    if (!proposal) return c.json({ error: 'Proposal not found' }, 404)
+
+    const items = await c.env.DB.prepare('SELECT * FROM invoice_items WHERE invoice_id = ? ORDER BY sort_order').bind(id).all()
+
+    const invNumber = generateNumber('INV')
+    const shareToken = generateShareToken()
+    const dueDate = new Date(); dueDate.setDate(dueDate.getDate() + 30)
+
+    const result = await c.env.DB.prepare(`
+      INSERT INTO invoices (invoice_number, customer_id, order_id, subtotal, tax_rate, tax_amount,
+                            discount_amount, total, status, due_date, notes, terms, created_by, document_type,
+                            share_token, scope_of_work, warranty_terms, attached_report_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, 'admin', 'invoice', ?, ?, ?, ?)
+    `).bind(
+      invNumber, proposal.customer_id, proposal.order_id,
+      proposal.subtotal, proposal.tax_rate, proposal.tax_amount,
+      proposal.discount_amount, proposal.total,
+      dueDate.toISOString().slice(0, 10),
+      `Converted from proposal ${proposal.invoice_number}`,
+      proposal.terms || 'Payment due within 30 days.',
+      shareToken, proposal.scope_of_work || '', proposal.warranty_terms || '',
+      proposal.attached_report_id
+    ).run()
+
+    const invoiceId = result.meta.last_row_id
+
+    for (const item of (items.results || []) as any[]) {
+      await c.env.DB.prepare(`
+        INSERT INTO invoice_items (invoice_id, description, quantity, unit_price, amount, sort_order, unit, is_taxable, category)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).bind(invoiceId, item.description, item.quantity, item.unit_price, item.amount, item.sort_order, item.unit || 'each', item.is_taxable ?? 1, item.category || '').run()
+    }
+
+    return c.json({
+      success: true,
+      invoice: { id: invoiceId, invoice_number: invNumber, total: proposal.total, status: 'draft', document_type: 'invoice' },
+      message: `Invoice ${invNumber} created from proposal ${proposal.invoice_number}`
+    }, 201)
+  } catch (err: any) {
+    return c.json({ error: 'Failed to convert proposal', details: err.message }, 500)
+  }
+})
+
+// ============================================================
+// CREATE SQUARE PAYMENT LINK
+// ============================================================
+invoiceRoutes.post('/:id/payment-link', async (c) => {
+  try {
+    const id = c.req.param('id')
+    const invoice = await c.env.DB.prepare('SELECT * FROM invoices WHERE id = ?').bind(id).first<any>()
+    if (!invoice) return c.json({ error: 'Invoice not found' }, 404)
+    if (invoice.status === 'paid') return c.json({ error: 'Invoice already paid' }, 400)
+
+    const squareAccessToken = c.env.SQUARE_ACCESS_TOKEN
+    const squareEnv = c.env.SQUARE_ENVIRONMENT || 'sandbox'
+    if (!squareAccessToken) return c.json({ error: 'Square not configured. Set SQUARE_ACCESS_TOKEN in Cloudflare secrets.' }, 400)
+
+    const baseUrl = squareEnv === 'production'
+      ? 'https://connect.squareup.com'
+      : 'https://connect.squareupsandbox.com'
+
+    const amountCents = Math.round(invoice.total * 100)
+    const idempotencyKey = `inv-${id}-${Date.now()}`
+
+    const docLabel = (invoice.document_type || 'invoice').charAt(0).toUpperCase() + (invoice.document_type || 'invoice').slice(1)
+
+    const sqResponse = await fetch(`${baseUrl}/v2/online-checkout/payment-links`, {
+      method: 'POST',
+      headers: {
+        'Square-Version': '2024-01-18',
+        'Authorization': `Bearer ${squareAccessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        idempotency_key: idempotencyKey,
+        quick_pay: {
+          name: `${docLabel} ${invoice.invoice_number}`,
+          price_money: { amount: amountCents, currency: invoice.currency || 'CAD' },
+          location_id: c.env.SQUARE_LOCATION_ID || 'main'
+        },
+        checkout_options: {
+          allow_tipping: false,
+          redirect_url: c.env.SQUARE_REDIRECT_URL || undefined
+        }
+      })
+    })
+
+    if (!sqResponse.ok) {
+      const errBody: any = await sqResponse.json().catch(() => ({}))
+      return c.json({ error: 'Square API error', details: errBody?.errors?.[0]?.detail || `HTTP ${sqResponse.status}` }, 502)
+    }
+
+    const sqData: any = await sqResponse.json()
+    const link = sqData.payment_link
+    const linkUrl = link?.url || link?.long_url || ''
+    const linkId = link?.id || ''
+    const orderId = sqData.related_resources?.orders?.[0]?.id || link?.order_id || ''
+
+    await c.env.DB.prepare(`
+      INSERT INTO square_payment_links (invoice_id, payment_link_id, payment_link_url, order_id, amount_cents, currency, status)
+      VALUES (?, ?, ?, ?, ?, ?, 'created')
+    `).bind(id, linkId, linkUrl, orderId, amountCents, invoice.currency || 'CAD').run()
+
+    return c.json({
+      success: true,
+      payment_link: { id: linkId, url: linkUrl, amount: invoice.total, currency: invoice.currency || 'CAD' }
+    })
+  } catch (err: any) {
+    return c.json({ error: 'Failed to create payment link', details: err.message }, 500)
+  }
+})
+
+// ============================================================
+// SQUARE WEBHOOK — Payment completed callback
+// ============================================================
+invoiceRoutes.post('/webhook/square', async (c) => {
+  try {
+    const body = await c.req.text()
+    const payload = JSON.parse(body)
+    const eventType = payload.type || ''
+
+    // Log webhook
+    await c.env.DB.prepare(`
+      INSERT INTO webhook_logs (source, event_type, event_id, payload, processed)
+      VALUES ('square', ?, ?, ?, 0)
+    `).bind(eventType, payload.event_id || '', body).run().catch(() => {})
+
+    if (eventType === 'payment.completed' || eventType === 'payment.updated') {
+      const payment = payload.data?.object?.payment
+      if (!payment) return c.json({ ok: true })
+
+      const orderId = payment.order_id || ''
+      const transactionId = payment.id || ''
+      const receiptUrl = payment.receipt_url || ''
+
+      // Find the payment link by order_id
+      const link = await c.env.DB.prepare(
+        'SELECT * FROM square_payment_links WHERE order_id = ?'
+      ).bind(orderId).first<any>()
+
+      if (link) {
+        await c.env.DB.prepare(`
+          UPDATE square_payment_links SET status = 'paid', transaction_id = ?, receipt_url = ?, paid_at = datetime('now'), updated_at = datetime('now')
+          WHERE id = ?
+        `).bind(transactionId, receiptUrl, link.id).run()
+
+        // Mark invoice as paid
+        await c.env.DB.prepare(`
+          UPDATE invoices SET status = 'paid', paid_date = date('now'), payment_method = 'square', payment_reference = ?, updated_at = datetime('now')
+          WHERE id = ?
+        `).bind(transactionId, link.invoice_id).run()
+
+        // Log webhook processed
+        await c.env.DB.prepare(`
+          UPDATE webhook_logs SET processed = 1, invoice_id = ? WHERE event_id = ?
+        `).bind(link.invoice_id, payload.event_id || '').run().catch(() => {})
+
+        await c.env.DB.prepare(`INSERT INTO user_activity_log (company_id, action, details) VALUES (1, 'payment_received', ?)`).bind(`Square payment $${(payment.amount_money?.amount || 0) / 100} for invoice #${link.invoice_id}`).run().catch(() => {})
+      }
+    }
+
+    return c.json({ ok: true })
+  } catch (err: any) {
+    console.error('[Square Webhook]', err.message)
+    return c.json({ ok: true }) // Always return 200 to Square
+  }
+})
+
+// ============================================================
+// DELETE (drafts only)
 // ============================================================
 invoiceRoutes.delete('/:id', async (c) => {
   try {
     const id = c.req.param('id')
     const invoice = await c.env.DB.prepare("SELECT id, status FROM invoices WHERE id = ?").bind(id).first<any>()
-    
     if (!invoice) return c.json({ error: 'Invoice not found' }, 404)
-    if (invoice.status !== 'draft') return c.json({ error: 'Only draft invoices can be deleted' }, 400)
+    if (invoice.status !== 'draft') return c.json({ error: 'Only draft documents can be deleted' }, 400)
 
     await c.env.DB.prepare('DELETE FROM invoice_items WHERE invoice_id = ?').bind(id).run()
+    await c.env.DB.prepare('DELETE FROM square_payment_links WHERE invoice_id = ?').bind(id).run().catch(() => {})
     await c.env.DB.prepare('DELETE FROM invoices WHERE id = ?').bind(id).run()
 
     return c.json({ success: true })
   } catch (err: any) {
-    return c.json({ error: 'Failed to delete invoice', details: err.message }, 500)
+    return c.json({ error: 'Failed to delete document', details: err.message }, 500)
   }
 })
 
 // ============================================================
-// INVOICE STATS (for admin dashboard)
+// STATS
 // ============================================================
 invoiceRoutes.get('/stats/summary', async (c) => {
   try {
@@ -320,15 +594,14 @@ invoiceRoutes.get('/stats/summary', async (c) => {
         SUM(total) as grand_total
       FROM invoices
     `).first()
-
     return c.json({ stats })
   } catch (err: any) {
-    return c.json({ error: 'Failed to fetch invoice stats', details: err.message }, 500)
+    return c.json({ error: 'Failed to fetch stats', details: err.message }, 500)
   }
 })
 
 // ============================================================
-// LIST ALL CUSTOMERS (admin)
+// LIST CUSTOMERS (admin — for proposal/invoice customer selector)
 // ============================================================
 invoiceRoutes.get('/customers/list', async (c) => {
   try {
@@ -338,11 +611,8 @@ invoiceRoutes.get('/customers/list', async (c) => {
         (SELECT SUM(price) FROM orders WHERE customer_id = c.id AND payment_status = 'paid') as total_spent,
         (SELECT COUNT(*) FROM invoices WHERE customer_id = c.id) as invoice_count,
         (SELECT SUM(total) FROM invoices WHERE customer_id = c.id AND status = 'paid') as invoices_paid
-      FROM customers c
-      WHERE c.is_active = 1
-      ORDER BY c.created_at DESC
+      FROM customers c WHERE c.is_active = 1 ORDER BY c.created_at DESC
     `).all()
-
     return c.json({ customers: customers.results })
   } catch (err: any) {
     return c.json({ error: 'Failed to fetch customers', details: err.message }, 500)
@@ -350,24 +620,19 @@ invoiceRoutes.get('/customers/list', async (c) => {
 })
 
 // ============================================================
-// GET SINGLE CUSTOMER DETAIL (admin)
+// GET SINGLE CUSTOMER
 // ============================================================
 invoiceRoutes.get('/customers/:id', async (c) => {
   try {
     const id = c.req.param('id')
     const customer = await c.env.DB.prepare('SELECT * FROM customers WHERE id = ?').bind(id).first()
     if (!customer) return c.json({ error: 'Customer not found' }, 404)
-
     const orders = await c.env.DB.prepare(`
       SELECT o.*, r.status as report_status, r.total_material_cost_cad
       FROM orders o LEFT JOIN reports r ON r.order_id = o.id
       WHERE o.customer_id = ? ORDER BY o.created_at DESC
     `).bind(id).all()
-
-    const invoices = await c.env.DB.prepare(
-      'SELECT * FROM invoices WHERE customer_id = ? ORDER BY created_at DESC'
-    ).bind(id).all()
-
+    const invoices = await c.env.DB.prepare('SELECT * FROM invoices WHERE customer_id = ? ORDER BY created_at DESC').bind(id).all()
     return c.json({ customer, orders: orders.results, invoices: invoices.results })
   } catch (err: any) {
     return c.json({ error: 'Failed to fetch customer', details: err.message }, 500)

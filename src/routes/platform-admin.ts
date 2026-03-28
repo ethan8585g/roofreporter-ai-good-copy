@@ -469,8 +469,8 @@ platformAdmin.get('/live-dashboard', async (c) => {
 platformAdmin.get('/analytics/dispositions', async (c) => {
   const days = parseInt(c.req.query('days') || '30')
   try {
-    const dispositions = await c.env.DB.prepare(`SELECT outcome, COUNT(*) as count FROM cc_call_logs WHERE created_at > datetime('now', '-' || ? || ' days') GROUP BY outcome ORDER BY count DESC`).bind(days).all()
-    const daily = await c.env.DB.prepare(`SELECT date(created_at) as day, COUNT(*) as calls, SUM(CASE WHEN outcome = 'interested' THEN 1 ELSE 0 END) as leads FROM cc_call_logs WHERE created_at > datetime('now', '-' || ? || ' days') GROUP BY date(created_at) ORDER BY day`).bind(days).all()
+    const dispositions = await c.env.DB.prepare(`SELECT call_outcome as outcome, COUNT(*) as count FROM cc_call_logs WHERE created_at > datetime('now', '-' || ? || ' days') GROUP BY call_outcome ORDER BY count DESC`).bind(days).all()
+    const daily = await c.env.DB.prepare(`SELECT date(created_at) as day, COUNT(*) as calls, SUM(CASE WHEN call_outcome = 'interested' THEN 1 ELSE 0 END) as leads FROM cc_call_logs WHERE created_at > datetime('now', '-' || ? || ' days') GROUP BY date(created_at) ORDER BY day`).bind(days).all()
     return c.json({ dispositions: dispositions.results, daily_trend: daily.results })
   } catch (e: any) { return c.json({ error: e.message }, 500) }
 })

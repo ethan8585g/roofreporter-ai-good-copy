@@ -2340,6 +2340,7 @@ export function generateRoofDiagramSVG(segments: RoofSegment[], colors: string[]
 export function generateTraceBasedDiagramSVG(
   roofTrace: {
     eaves?: { lat: number; lng: number }[]
+    eaves_sections?: { lat: number; lng: number }[][]
     ridges?: { lat: number; lng: number }[][]
     hips?: { lat: number; lng: number }[][]
     valleys?: { lat: number; lng: number }[][]
@@ -2357,7 +2358,20 @@ export function generateTraceBasedDiagramSVG(
   const LABEL_MARGIN = 45
   const FONT = `font-family="Inter,system-ui,-apple-system,sans-serif"`
 
-  const eaves = roofTrace.eaves || []
+  // ── RESOLVE MULTI-SECTION EAVES ──
+  // Prefer eaves_sections (multi-layer) → fall back to single eaves array
+  let allEaveSections: { lat: number; lng: number }[][] = []
+  if (roofTrace.eaves_sections && roofTrace.eaves_sections.length > 0) {
+    allEaveSections = roofTrace.eaves_sections.filter(s => s.length >= 3)
+  } else if (roofTrace.eaves && roofTrace.eaves.length >= 3) {
+    allEaveSections = [roofTrace.eaves]
+  }
+  // Primary = largest section; extras are secondary layers (dormers, balconies)
+  const eaves = allEaveSections.length > 0
+    ? allEaveSections.reduce((best, s) => s.length > best.length ? s : best, allEaveSections[0])
+    : (roofTrace.eaves || [])
+  const extraSections = allEaveSections.filter(s => s !== eaves)
+
   if (eaves.length < 3) {
     return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block;background:#fff">
       <rect width="${W}" height="${H}" fill="#fff"/>
@@ -2482,6 +2496,34 @@ export function generateTraceBasedDiagramSVG(
     const valPts = roofTrace.valleys![i]
     const ftLen = haversineFt(valPts[0], valPts[valPts.length - 1])
     internalLines.push({ start: line[0], end: line[line.length - 1], type: 'VALLEY', ftLen })
+  })
+
+  // ── SNAP INTERNAL LINE ENDPOINTS to nearest eave vertex (clean connections) ──
+  // Threshold: if an endpoint is within 15% of geo width to an eave corner, snap it
+  const SNAP_THRESHOLD = geoW * 0.12
+  internalLines.forEach(l => {
+    // Snap start
+    let bestDist = Infinity, bestPt = l.start
+    eavesXY.forEach(e => {
+      const d = distXY(e, l.start)
+      if (d < bestDist) { bestDist = d; bestPt = e }
+    })
+    if (bestDist < SNAP_THRESHOLD) l.start = { ...bestPt }
+    // Snap end
+    bestDist = Infinity; bestPt = l.end
+    eavesXY.forEach(e => {
+      const d = distXY(e, l.end)
+      if (d < bestDist) { bestDist = d; bestPt = e }
+    })
+    if (bestDist < SNAP_THRESHOLD) l.end = { ...bestPt }
+    // Also snap internal endpoints to each other (ridge-to-hip connections)
+    internalLines.forEach(l2 => {
+      if (l2 === l) return
+      if (distXY(l.end, l2.start) < SNAP_THRESHOLD * 0.5) l.end = { ...l2.start }
+      if (distXY(l.end, l2.end) < SNAP_THRESHOLD * 0.5) l.end = { ...l2.end }
+      if (distXY(l.start, l2.start) < SNAP_THRESHOLD * 0.5) l.start = { ...l2.start }
+      if (distXY(l.start, l2.end) < SNAP_THRESHOLD * 0.5) l.start = { ...l2.end }
+    })
   })
 
   // Build facets by polygon decomposition:
@@ -2681,9 +2723,20 @@ export function generateTraceBasedDiagramSVG(
     svg += `<polygon points="${pts}" fill="url(#${hatchIds[fi % hatchIds.length]})" stroke="none"/>`
   })
 
-  // ── EAVE PERIMETER (clean black outline) ──
+  // ── EAVE PERIMETER (clean black outline — primary section) ──
   const eavePts = eavesXY.map(p => `${tx(p.x).toFixed(1)},${ty(p.y).toFixed(1)}`).join(' ')
-  svg += `<polygon points="${eavePts}" fill="none" stroke="#1a1a1a" stroke-width="2.2" stroke-linejoin="miter"/>`
+  svg += `<polygon points="${eavePts}" fill="none" stroke="#1a1a1a" stroke-width="2.2" stroke-linejoin="round"/>`
+
+  // ── EXTRA EAVE SECTIONS (dormers, balconies, upper floors — dashed outline) ──
+  extraSections.forEach((sec, si) => {
+    const secXY = sec.map(toXY)
+    const secPts = secXY.map(p => `${tx(p.x).toFixed(1)},${ty(p.y).toFixed(1)}`).join(' ')
+    svg += `<polygon points="${secPts}" fill="rgba(22,163,74,0.05)" stroke="#0d9668" stroke-width="1.8" stroke-linejoin="round" stroke-dasharray="6,3"/>`
+    // Label
+    const cx = secXY.reduce((s, p) => s + p.x, 0) / secXY.length
+    const cy = secXY.reduce((s, p) => s + p.y, 0) / secXY.length
+    svg += `<text x="${tx(cx).toFixed(1)}" y="${ty(cy).toFixed(1)}" text-anchor="middle" font-size="8" font-weight="700" fill="#0d9668" ${FONT}>Layer ${String.fromCharCode(65 + facets.length + si)}</text>`
+  })
 
   // ── RIDGE LINES (red, solid, prominent) ──
   internalLines.filter(l => l.type === 'RIDGE').forEach(l => {
@@ -2700,7 +2753,17 @@ export function generateTraceBasedDiagramSVG(
     svg += `<line x1="${tx(l.start.x).toFixed(1)}" y1="${ty(l.start.y).toFixed(1)}" x2="${tx(l.end.x).toFixed(1)}" y2="${ty(l.end.y).toFixed(1)}" stroke="${EDGE_COLOR['VALLEY']}" stroke-width="1.6" stroke-dasharray="6,3" stroke-linecap="round"/>`
   })
 
-  // ── EAVE EDGE DIMENSION LABELS (professional architectural style) ──
+  // ── EAVE EDGE DIMENSION LABELS (collision-aware architectural style) ──
+  // Collect all label bounding boxes to prevent overlaps
+  const placedLabels: { cx: number; cy: number; w: number; h: number }[] = []
+  const labelCollides = (cx: number, cy: number, w: number, h: number): boolean => {
+    for (const lb of placedLabels) {
+      if (Math.abs(cx - lb.cx) < (w + lb.w) / 2 + 3 &&
+          Math.abs(cy - lb.cy) < (h + lb.h) / 2 + 3) return true
+    }
+    return false
+  }
+
   for (let i = 0; i < n; i++) {
     const a = eaves[i], b = eaves[(i + 1) % n]
     const p1 = eavesXY[i], p2 = eavesXY[(i + 1) % n]
@@ -2717,8 +2780,8 @@ export function generateTraceBasedDiagramSVG(
     const len = Math.sqrt(dx * dx + dy * dy)
     const nx = -dy / len, ny = dx / len
 
-    // Dimension line offset from edge
-    const dimOffset = 22
+    // Dimension line offset from edge — increase if label collides
+    let dimOffset = 22
     const extEnd = dimOffset + 8
 
     // Extension lines
@@ -2730,25 +2793,39 @@ export function generateTraceBasedDiagramSVG(
     const dex = ex + nx * dimOffset, dey = ey + ny * dimOffset
     svg += `<line x1="${dsx.toFixed(1)}" y1="${dsy.toFixed(1)}" x2="${dex.toFixed(1)}" y2="${dey.toFixed(1)}" stroke="#1a1a1a" stroke-width="0.6"/>`
 
-    // Arrow heads at each end
-    const arrowLen = 4.5
-    const ux = dx / len, uy = dy / len
-    svg += `<polygon points="${dsx.toFixed(1)},${dsy.toFixed(1)} ${(dsx + ux * arrowLen + nx * 1.8).toFixed(1)},${(dsy + uy * arrowLen + ny * 1.8).toFixed(1)} ${(dsx + ux * arrowLen - nx * 1.8).toFixed(1)},${(dsy + uy * arrowLen - ny * 1.8).toFixed(1)}" fill="#1a1a1a"/>`
-    svg += `<polygon points="${dex.toFixed(1)},${dey.toFixed(1)} ${(dex - ux * arrowLen + nx * 1.8).toFixed(1)},${(dey - uy * arrowLen + ny * 1.8).toFixed(1)} ${(dex - ux * arrowLen - nx * 1.8).toFixed(1)},${(dey - uy * arrowLen - ny * 1.8).toFixed(1)}" fill="#1a1a1a"/>`
+    // Arrow heads at each end (skip for very short segments)
+    if (segPx > 35) {
+      const arrowLen = 4.5
+      const ux = dx / len, uy = dy / len
+      svg += `<polygon points="${dsx.toFixed(1)},${dsy.toFixed(1)} ${(dsx + ux * arrowLen + nx * 1.8).toFixed(1)},${(dsy + uy * arrowLen + ny * 1.8).toFixed(1)} ${(dsx + ux * arrowLen - nx * 1.8).toFixed(1)},${(dsy + uy * arrowLen - ny * 1.8).toFixed(1)}" fill="#1a1a1a"/>`
+      svg += `<polygon points="${dex.toFixed(1)},${dey.toFixed(1)} ${(dex - ux * arrowLen + nx * 1.8).toFixed(1)},${(dey - uy * arrowLen + ny * 1.8).toFixed(1)} ${(dex - ux * arrowLen - nx * 1.8).toFixed(1)},${(dey - uy * arrowLen - ny * 1.8).toFixed(1)}" fill="#1a1a1a"/>`
+    }
 
-    // Measurement label with "ft" suffix
-    const mx = (dsx + dex) / 2, my = (dsy + dey) / 2
+    // Measurement label with "ft" suffix — with collision avoidance
+    let mx = (dsx + dex) / 2, my = (dsy + dey) / 2
     let angle = Math.atan2(dey - dsy, dex - dsx) * 180 / Math.PI
     if (angle > 90) angle -= 180
     if (angle < -90) angle += 180
     const bgW = Math.max(label.length * 5.5 + 10, 36)
+    const bgH = 14
+
+    // Check for collision and nudge outward if needed
+    if (labelCollides(mx, my, bgW, bgH)) {
+      mx += nx * 14; my += ny * 14
+    }
+    // Still collides? Try opposite side
+    if (labelCollides(mx, my, bgW, bgH)) {
+      mx -= nx * 28; my -= ny * 28
+    }
+
+    placedLabels.push({ cx: mx, cy: my, w: bgW, h: bgH })
     svg += `<g transform="translate(${mx.toFixed(1)},${my.toFixed(1)}) rotate(${angle.toFixed(1)})">`
-    svg += `<rect x="${(-bgW / 2).toFixed(1)}" y="-8" width="${bgW.toFixed(1)}" height="14" rx="2" fill="#fff" stroke="#ddd" stroke-width="0.3" opacity="0.97"/>`
+    svg += `<rect x="${(-bgW / 2).toFixed(1)}" y="-8" width="${bgW.toFixed(1)}" height="${bgH}" rx="2" fill="#fff" stroke="#ddd" stroke-width="0.3" opacity="0.97"/>`
     svg += `<text x="0" y="3" text-anchor="middle" font-size="8" font-weight="700" fill="#1a1a1a" ${FONT}>${label}</text>`
     svg += `</g>`
   }
 
-  // ── INTERNAL LINE DIMENSION LABELS (Ridge/Hip/Valley with ft and color) ──
+  // ── INTERNAL LINE DIMENSION LABELS (Ridge/Hip/Valley — collision-aware) ──
   internalLines.forEach(l => {
     if (l.ftLen < 1) return
     const sx = tx(l.start.x), sy = ty(l.start.y), ex = tx(l.end.x), ey = ty(l.end.y)
@@ -2758,20 +2835,31 @@ export function generateTraceBasedDiagramSVG(
     const ftLabel = fmtFtUnit(l.ftLen)
     if (!ftLabel) return
 
-    const mx = (sx + ex) / 2, my = (sy + ey) / 2
+    let mx = (sx + ex) / 2, my = (sy + ey) / 2
     const dx = ex - sx, dy = ey - sy
     const len = Math.sqrt(dx * dx + dy * dy) || 1
     const perpDx = -dy / len, perpDy = dx / len
 
     // Offset label from the line
-    const lx = mx + perpDx * 12, ly = my + perpDy * 12
+    let lx = mx + perpDx * 12, ly = my + perpDy * 12
     let ang = Math.atan2(dy, dx) * 180 / Math.PI
     if (ang > 90) ang -= 180; if (ang < -90) ang += 180
 
     const clr = EDGE_COLOR[l.type] || '#333'
     const bgW = Math.max(ftLabel.length * 5.5 + 10, 36)
+    const bgH = 14
+
+    // Collision avoidance
+    if (labelCollides(lx, ly, bgW, bgH)) {
+      lx = mx - perpDx * 12; ly = my - perpDy * 12 // try other side
+    }
+    if (labelCollides(lx, ly, bgW, bgH)) {
+      lx = mx + perpDx * 24; ly = my + perpDy * 24 // push further out
+    }
+
+    placedLabels.push({ cx: lx, cy: ly, w: bgW, h: bgH })
     svg += `<g transform="translate(${lx.toFixed(1)},${ly.toFixed(1)}) rotate(${ang.toFixed(1)})">`
-    svg += `<rect x="${(-bgW / 2).toFixed(1)}" y="-8" width="${bgW.toFixed(1)}" height="14" rx="2" fill="#fff" stroke="${clr}" stroke-width="0.4" opacity="0.97"/>`
+    svg += `<rect x="${(-bgW / 2).toFixed(1)}" y="-8" width="${bgW.toFixed(1)}" height="${bgH}" rx="2" fill="#fff" stroke="${clr}" stroke-width="0.4" opacity="0.97"/>`
     svg += `<text x="0" y="3" text-anchor="middle" font-size="8" font-weight="700" fill="${clr}" ${FONT}>${ftLabel}</text>`
     svg += `</g>`
   })
@@ -2785,14 +2873,22 @@ export function generateTraceBasedDiagramSVG(
     svg += `<text x="${cx.toFixed(1)}" y="${(cy + 12).toFixed(1)}" text-anchor="middle" font-size="8" font-weight="600" fill="#555" fill-opacity="0.7" ${FONT}>${facet.areaSqft.toLocaleString()} SF</text>`
   })
 
-  // ── VERTEX DOTS (clean small circles at intersections) ──
+  // ── VERTEX DOTS (clean small circles at intersections — slightly smaller for cleanliness) ──
   eavesXY.forEach(p => {
-    svg += `<circle cx="${tx(p.x).toFixed(1)}" cy="${ty(p.y).toFixed(1)}" r="2.5" fill="#1a1a1a"/>`
+    svg += `<circle cx="${tx(p.x).toFixed(1)}" cy="${ty(p.y).toFixed(1)}" r="2" fill="#1a1a1a"/>`
   })
-  // Interior vertices (ridge/hip endpoints)
+  // Interior vertices (ridge/hip endpoints — only draw if not already snapped to eave)
+  const drawnVertices: { x: number; y: number }[] = [...eavesXY]
   internalLines.forEach(l => {
-    svg += `<circle cx="${tx(l.start.x).toFixed(1)}" cy="${ty(l.start.y).toFixed(1)}" r="2" fill="#C62828"/>`
-    svg += `<circle cx="${tx(l.end.x).toFixed(1)}" cy="${ty(l.end.y).toFixed(1)}" r="2" fill="#C62828"/>`
+    const drawIfNew = (pt: { x: number; y: number }) => {
+      const tooClose = drawnVertices.some(v => distXY(v, pt) < geoW * 0.03)
+      if (!tooClose) {
+        svg += `<circle cx="${tx(pt.x).toFixed(1)}" cy="${ty(pt.y).toFixed(1)}" r="2" fill="#C62828"/>`
+        drawnVertices.push(pt)
+      }
+    }
+    drawIfNew(l.start)
+    drawIfNew(l.end)
   })
 
   // ── LEGEND (top-left, professional box with edge totals) ──
@@ -2877,6 +2973,7 @@ export function generateTraceBasedDiagramSVG(
 export function generateSquaresGridDiagramSVG(
   roofTrace: {
     eaves?: { lat: number; lng: number }[]
+    eaves_sections?: { lat: number; lng: number }[][]
     ridges?: { lat: number; lng: number }[][]
     hips?: { lat: number; lng: number }[][]
     valleys?: { lat: number; lng: number }[][]

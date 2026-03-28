@@ -67,6 +67,20 @@ export interface TraceFace {
   label?: string
 }
 
+export interface EaveDepthLayer {
+  section_index: number      // which eave section (0 = primary)
+  depth_ft: number           // overhang/depth in feet
+  label?: string             // e.g. 'gutter line', 'soffit edge'
+}
+
+export interface Obstruction {
+  type: 'chimney' | 'skylight' | 'vent' | 'other'
+  poly: TracePt[]            // closed polygon (3+ pts)
+  width_ft?: number          // optional width (for simple rect)
+  length_ft?: number         // optional length (for simple rect)
+  label?: string
+}
+
 export interface TracePayload {
   address?: string
   homeowner?: string
@@ -80,6 +94,12 @@ export interface TracePayload {
   // Total footprint = sum of all section areas. Engine uses the largest section
   // for linear/face geometry; remaining sections contribute area only.
   eaves_sections?: TracePt[][]
+  // Multi-layer eave depth: per-section overhang depth values.
+  // If provided, ice & water shield and starter strip are computed per-layer.
+  eave_depths?: EaveDepthLayer[]
+  // Obstructions to exclude: chimneys, skylights, vents, etc.
+  // Each obstruction polygon area is subtracted from total roof area.
+  obstructions?: Obstruction[]
   ridges?: TraceLine[]
   hips?: TraceLine[]
   valleys?: TraceLine[]
@@ -87,6 +107,8 @@ export interface TracePayload {
   faces?: TraceFace[]
   // New v4: slope_map and segment-based input
   slope_map?: Record<string, string>
+  // Small eave corner threshold: edges shorter than this (ft) are flagged as corners
+  small_corner_threshold_ft?: number
 }
 
 export interface EaveEdge {
@@ -142,6 +164,21 @@ export interface TraceMaterialEstimate {
   caulk_tubes: number
 }
 
+export interface ObstructionDetail {
+  type: string
+  label: string
+  projected_area_ft2: number
+  sloped_area_ft2: number
+}
+
+export interface EaveCornerDetail {
+  edge_num: number
+  length_ft: number
+  bearing_deg: number
+  is_small_corner: boolean  // flagged if under threshold
+  angle_change_deg: number  // interior angle change from previous edge
+}
+
 export interface TraceReport {
   report_meta: {
     address: string
@@ -165,6 +202,8 @@ export interface TraceReport {
     num_rakes: number
     dominant_pitch_label: string
     dominant_pitch_angle_deg: number
+    obstruction_deduction_ft2: number
+    num_obstructions: number
   }
   linear_measurements: {
     eaves_total_ft: number
@@ -176,6 +215,9 @@ export interface TraceReport {
     hip_plus_ridge_ft: number
   }
   eave_edge_breakdown: EaveEdge[]
+  eave_corner_analysis: EaveCornerDetail[]
+  eave_depth_layers: EaveDepthLayer[]
+  obstruction_details: ObstructionDetail[]
   ridge_details: LineDetail[]
   hip_details: LineDetail[]
   valley_details: LineDetail[]
@@ -640,6 +682,13 @@ export class RoofMeasurementEngine {
   // Slope map: plane_name → theta (radians)
   private slopeMap: Map<string, number> = new Map()
 
+  // Eave depth layers (per-section overhang)
+  private eaveDepths: EaveDepthLayer[]
+  // Obstructions (chimneys, skylights, etc.)
+  private obstructions: Obstruction[]
+  // Small corner threshold (ft)
+  private smallCornerThresholdFt: number
+
   // Raw WGS84 inputs
   private rawEaves: TracePt[]
   private rawEavesSections: TracePt[][] // extra sections for multi-section roofs
@@ -667,6 +716,13 @@ export class RoofMeasurementEngine {
     this.complexity = payload.complexity || 'medium'
     this.incWaste   = payload.include_waste !== false
     this.timestamp  = new Date().toISOString().replace('T', ' ').slice(0, 19) + ' UTC'
+
+    // Multi-layer eave depths
+    this.eaveDepths = payload.eave_depths || []
+    // Obstructions (chimneys, skylights, vents)
+    this.obstructions = payload.obstructions || []
+    // Small eave corner threshold (default 2 ft — edges shorter than this get flagged)
+    this.smallCornerThresholdFt = payload.small_corner_threshold_ft ?? 2.0
 
     // Normalise default slope (rise:12 → radians)
     this.defThetaRad = pitchAngleRad(this.defPitch)
@@ -1213,6 +1269,72 @@ export class RoofMeasurementEngine {
     }
   }
 
+  // ── OBSTRUCTION AREA CALCULATION ─────────────────────
+  // Computes projected area for each chimney, skylight, vent polygon
+  // and converts to sloped area using dominant pitch
+
+  computeObstructions(domPitch: number): ObstructionDetail[] {
+    if (this.obstructions.length === 0) return []
+    const results: ObstructionDetail[] = []
+    for (const obs of this.obstructions) {
+      let projFt2 = 0
+      if (obs.poly && obs.poly.length >= 3) {
+        // Project obstruction polygon to Cartesian and compute area
+        const { projected: obsCart } = projectToCartesian(obs.poly)
+        projFt2 = shoelaceAreaM2(obsCart) * M2_TO_FT2
+      } else if (obs.width_ft && obs.length_ft) {
+        // Simple rectangle (e.g. chimney 3ft x 4ft)
+        projFt2 = obs.width_ft * obs.length_ft
+      }
+      if (projFt2 > 0) {
+        const slopedFt2 = slopedFromProjected(projFt2, domPitch)
+        results.push({
+          type: obs.type || 'other',
+          label: obs.label || obs.type || 'obstruction',
+          projected_area_ft2: round(projFt2, 1),
+          sloped_area_ft2: round(slopedFt2, 1),
+        })
+      }
+    }
+    return results
+  }
+
+  // ── EAVE CORNER ANALYSIS ─────────────────────────────
+  // Identifies small corners (short edges at sharp angles) that may
+  // need special flashing treatment or indicate dormers/returns
+
+  analyzeEaveCorners(): EaveCornerDetail[] {
+    const edges = this.eaveEdges()
+    if (edges.length < 2) return edges.map(e => ({
+      edge_num: e.edge_num,
+      length_ft: e.length_2d_ft,
+      bearing_deg: e.bearing_deg,
+      is_small_corner: e.length_2d_ft < this.smallCornerThresholdFt,
+      angle_change_deg: 0,
+    }))
+
+    const result: EaveCornerDetail[] = []
+    for (let i = 0; i < edges.length; i++) {
+      const edge = edges[i]
+      const prev = edges[(i - 1 + edges.length) % edges.length]
+      // Compute interior angle change (bearing difference)
+      let angleDelta = edge.bearing_deg - prev.bearing_deg
+      // Normalize to -180..180
+      while (angleDelta > 180) angleDelta -= 360
+      while (angleDelta < -180) angleDelta += 360
+
+      const isSmall = edge.length_2d_ft < this.smallCornerThresholdFt
+      result.push({
+        edge_num: edge.edge_num,
+        length_ft: edge.length_2d_ft,
+        bearing_deg: edge.bearing_deg,
+        is_small_corner: isSmall,
+        angle_change_deg: round(Math.abs(angleDelta), 1),
+      })
+    }
+    return result
+  }
+
   // ═══════════════════════════════════════════════════════════════
   // FULL CALCULATION RUN
   // ═══════════════════════════════════════════════════════════════
@@ -1248,9 +1370,7 @@ export class RoofMeasurementEngine {
       }
     }
 
-    const netSquares  = totalSloped / SQFT_PER_SQUARE
-
-    // Dominant pitch
+    // Dominant pitch (computed before obstruction deduction)
     const allPitches = facesData.map(f => f.pitch_rise)
     let domPitch = this.defPitch
     if (allPitches.length > 0) {
@@ -1262,15 +1382,64 @@ export class RoofMeasurementEngine {
       })
     }
 
+    // ── OBSTRUCTION DEDUCTION (chimneys, skylights, vents) ──
+    const obstructionDetails = this.computeObstructions(domPitch)
+    let obstructionDeductProjFt2 = 0
+    let obstructionDeductSlopedFt2 = 0
+    for (const obs of obstructionDetails) {
+      obstructionDeductProjFt2 += obs.projected_area_ft2
+      obstructionDeductSlopedFt2 += obs.sloped_area_ft2
+    }
+    // Subtract obstruction areas from totals
+    totalProj   = Math.max(0, totalProj - obstructionDeductProjFt2)
+    totalSloped = Math.max(0, totalSloped - obstructionDeductSlopedFt2)
+
+    const netSquares  = totalSloped / SQFT_PER_SQUARE
+
     const wFrac = this.incWaste ? wastePct(domPitch, this.complexity) : 0
     const grossSquares = netSquares * (1 + wFrac)
+
+    // ── EAVE DEPTH LAYER ICE & WATER SHIELD ──
+    // If multi-layer eave depths are provided, compute ice shield per layer
+    let iceShieldSqft = totalEaveFt * ICE_SHIELD_WIDTH_FT  // default
+    if (this.eaveDepths.length > 0) {
+      // Override ice shield: use actual depth per layer
+      let layerIce = 0
+      for (const layer of this.eaveDepths) {
+        const depthFt = Math.max(layer.depth_ft, ICE_SHIELD_WIDTH_FT)
+        // Find the eave length for this section
+        if (layer.section_index === 0) {
+          layerIce += totalEaveFt * depthFt
+        } else {
+          // Extra sections — compute their perimeter
+          const secIdx = layer.section_index - 1
+          if (secIdx < this.rawEavesSections.length) {
+            const secPts = this.rawEavesSections[secIdx]
+            const { projected: secCart } = projectToCartesian(secPts)
+            let secPerim = 0
+            for (let i = 0; i < secCart.length - 1; i++) {
+              secPerim += dist2D(secCart[i], secCart[i + 1]) * M_TO_FT
+            }
+            layerIce += secPerim * depthFt
+          }
+        }
+      }
+      if (layerIce > 0) iceShieldSqft = layerIce
+    }
 
     const mat = materialsEstimate(
       netSquares, wFrac,
       totalEaveFt, totalRidgeFt, totalHipFt, totalValleyFt, totalRakeFt
     )
+    // Override ice & water shield with depth-aware calculation
+    mat.ice_water_shield_sqft = round(iceShieldSqft, 1)
+    mat.ice_water_shield_rolls_2sq = Math.ceil(iceShieldSqft / 200)
 
     const perimeterFt = totalEaveFt + totalRakeFt
+
+    // ── CORNER ANALYSIS ──
+    const cornerAnalysis = this.analyzeEaveCorners()
+    const smallCorners = cornerAnalysis.filter(c => c.is_small_corner)
 
     // Advisory notes
     const notes: string[] = []
@@ -1286,6 +1455,35 @@ export class RoofMeasurementEngine {
       notes.push('Complex perimeter (>10 eave points) — Allow extra cut waste.')
     if (this.rawEavesSections.length > 0)
       notes.push(`Multi-section roof: ${this.rawEavesSections.length + 1} separate eaves polygon(s) detected (e.g. garage, porch, dormer). Areas summed using dominant pitch ${round(this.defPitch, 1)}:12.`)
+
+    // Obstruction notes
+    if (obstructionDetails.length > 0) {
+      const chimneys = obstructionDetails.filter(o => o.type === 'chimney')
+      const skylights = obstructionDetails.filter(o => o.type === 'skylight')
+      const vents = obstructionDetails.filter(o => o.type === 'vent')
+      if (chimneys.length > 0)
+        notes.push(`${chimneys.length} chimney(s) excluded — ${round(chimneys.reduce((s, c) => s + c.sloped_area_ft2, 0), 1)} sq ft deducted from roof area.`)
+      if (skylights.length > 0)
+        notes.push(`${skylights.length} skylight(s) excluded — ${round(skylights.reduce((s, c) => s + c.sloped_area_ft2, 0), 1)} sq ft deducted from roof area.`)
+      if (vents.length > 0)
+        notes.push(`${vents.length} vent(s) excluded — ${round(vents.reduce((s, c) => s + c.sloped_area_ft2, 0), 1)} sq ft deducted.`)
+      notes.push(`Total obstruction deduction: ${round(obstructionDeductSlopedFt2, 1)} sq ft sloped area. Flashing required around all penetrations.`)
+    }
+
+    // Multi-layer eave depth notes
+    if (this.eaveDepths.length > 0) {
+      const depthSummary = this.eaveDepths.map(d =>
+        `Section ${d.section_index}: ${d.depth_ft} ft${d.label ? ` (${d.label})` : ''}`
+      ).join('; ')
+      notes.push(`Multi-layer eave depth applied: ${depthSummary}. Ice & water shield calculated per-layer depth.`)
+    }
+
+    // Small corner notes
+    if (smallCorners.length > 0) {
+      notes.push(`${smallCorners.length} small eave corner(s) detected (< ${this.smallCornerThresholdFt} ft). ` +
+        `Edges: ${smallCorners.map(c => `#${c.edge_num} (${c.length_ft} ft, ${c.angle_change_deg}° turn)`).join(', ')}. ` +
+        `May indicate dormers, bump-outs, or returns — verify and allow extra flashing/cut waste.`)
+    }
 
     // Check for bi-slope junctions
     const biSlopeSegs = [...hipSegs, ...valleySegs].filter(s => s.is_bi_slope)
@@ -1307,7 +1505,7 @@ export class RoofMeasurementEngine {
         homeowner:      this.homeowner,
         order_id:       this.orderId,
         generated:      this.timestamp,
-        engine_version: 'RoofMeasurementEngine v5.0 (UTM + Shoelace + Common Run + Industry Pitch Multipliers)',
+        engine_version: 'RoofMeasurementEngine v6.0 (UTM + Shoelace + Common Run + Obstruction Deduction + Corner Analysis)',
         powered_by:     'Reuse Canada / RoofReporterAI',
       },
       key_measurements: {
@@ -1324,6 +1522,8 @@ export class RoofMeasurementEngine {
         num_rakes:                     this.rakesCart.length,
         dominant_pitch_label:          `${round(domPitch, 1)}:12`,
         dominant_pitch_angle_deg:      round(pitchAngleDeg(domPitch), 1),
+        obstruction_deduction_ft2:     round(obstructionDeductSlopedFt2, 1),
+        num_obstructions:              obstructionDetails.length,
       },
       linear_measurements: {
         eaves_total_ft:         round(totalEaveFt, 1),
@@ -1335,6 +1535,9 @@ export class RoofMeasurementEngine {
         hip_plus_ridge_ft:      round(totalHipFt + totalRidgeFt, 1),
       },
       eave_edge_breakdown: edges,
+      eave_corner_analysis: cornerAnalysis,
+      eave_depth_layers: this.eaveDepths,
+      obstruction_details: obstructionDetails,
       ridge_details:       ridgeSegs,
       hip_details:         hipSegs,
       valley_details:      valleySegs,
