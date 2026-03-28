@@ -8,7 +8,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const root = document.getElementById('invoice-root');
   if (!root) return;
 
-  const token = localStorage.getItem('rc_customer_token') || '';
+  const token = localStorage.getItem('rc_token') || localStorage.getItem('rc_customer_token') || '';
   const headers = () => ({ 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' });
 
   let state = {
@@ -20,6 +20,8 @@ document.addEventListener('DOMContentLoaded', () => {
     stats: {},
     loading: true,
     editId: null,
+    filter: 'all',
+    searchTerm: '',
     form: resetForm()
   };
 
@@ -81,50 +83,84 @@ document.addEventListener('DOMContentLoaded', () => {
   // LIST VIEW
   // ============================================================
   function renderList() {
-    const invoices = state.invoices;
+    const allInvoices = state.invoices;
     const s = state.stats;
     const totalPaid = Number(s.total_paid || 0);
     const totalOut = Number(s.total_outstanding || 0);
     const totalOverdue = Number(s.total_overdue || 0);
+    const totalDraft = Number(s.total_draft || 0);
+
+    // Filter invoices based on active filter
+    const filter = state.filter || 'all';
+    const searchTerm = (state.searchTerm || '').toLowerCase();
+    let invoices = allInvoices;
+    if (filter !== 'all') invoices = invoices.filter(inv => inv.status === filter || (filter === 'outstanding' && ['sent','viewed'].includes(inv.status)));
+    if (searchTerm) invoices = invoices.filter(inv => 
+      (inv.invoice_number || '').toLowerCase().includes(searchTerm) || 
+      (inv.customer_name || '').toLowerCase().includes(searchTerm) ||
+      (inv.customer_company || '').toLowerCase().includes(searchTerm)
+    );
+
+    const filterBtn = (label, value, icon, count, color) => {
+      const active = filter === value;
+      return `<button onclick="window._im.setFilter('${value}')" class="px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${active ? 'bg-' + color + '-100 text-' + color + '-700 ring-1 ring-' + color + '-300' : 'text-gray-500 hover:bg-gray-100'}">${icon ? '<i class="fas fa-' + icon + ' mr-1"></i>' : ''}${label}${count != null ? ' <span class="ml-1 px-1.5 py-0.5 bg-' + color + '-50 rounded text-' + color + '-600 text-[10px] font-bold">' + count + '</span>' : ''}</button>`;
+    };
 
     return `
-    <div class="mb-6 flex items-center justify-between">
+    <div class="mb-6 flex items-center justify-between flex-wrap gap-3">
       <div>
         <h2 class="text-2xl font-bold text-gray-900"><i class="fas fa-file-invoice-dollar text-brand-500 mr-2"></i>Invoice Manager</h2>
         <p class="text-gray-500 text-sm mt-1">Create invoices, track payments, and send Square payment links</p>
       </div>
       <div class="flex gap-2">
-        <button onclick="window._im.fromProposal()" class="px-4 py-2 bg-purple-50 text-purple-700 rounded-xl text-sm font-medium hover:bg-purple-100 border border-purple-200">
+        <button onclick="window._im.fromProposal()" class="px-4 py-2 bg-purple-50 text-purple-700 rounded-xl text-sm font-medium hover:bg-purple-100 border border-purple-200 transition-all">
           <i class="fas fa-file-import mr-1"></i>From Proposal
         </button>
-        <button onclick="window._im.create()" class="px-5 py-2.5 bg-gradient-to-r from-sky-500 to-blue-600 text-white rounded-xl font-semibold text-sm hover:shadow-lg">
+        <button onclick="window._im.create()" class="px-5 py-2.5 bg-gradient-to-r from-sky-500 to-blue-600 text-white rounded-xl font-semibold text-sm hover:shadow-lg transition-all">
           <i class="fas fa-plus mr-1.5"></i>New Invoice
         </button>
       </div>
     </div>
 
-    <!-- Stats -->
+    <!-- Stats Cards -->
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-      <div class="bg-white rounded-xl p-4 border border-gray-200">
-        <p class="text-xs text-gray-500">Total Collected</p>
-        <p class="text-2xl font-bold text-green-600">$${totalPaid.toFixed(2)}</p>
+      <div class="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-4 border border-green-200 cursor-pointer hover:shadow-md transition-all" onclick="window._im.setFilter('paid')">
+        <div class="flex items-center gap-2 mb-1"><div class="w-7 h-7 bg-green-100 rounded-lg flex items-center justify-center"><i class="fas fa-check-circle text-green-600 text-xs"></i></div><p class="text-xs text-green-700 font-medium">Collected</p></div>
+        <p class="text-2xl font-bold text-green-700">$${totalPaid.toFixed(2)}</p>
       </div>
-      <div class="bg-white rounded-xl p-4 border border-gray-200">
-        <p class="text-xs text-gray-500">Outstanding</p>
-        <p class="text-2xl font-bold text-blue-600">$${totalOut.toFixed(2)}</p>
+      <div class="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-200 cursor-pointer hover:shadow-md transition-all" onclick="window._im.setFilter('outstanding')">
+        <div class="flex items-center gap-2 mb-1"><div class="w-7 h-7 bg-blue-100 rounded-lg flex items-center justify-center"><i class="fas fa-clock text-blue-600 text-xs"></i></div><p class="text-xs text-blue-700 font-medium">Outstanding</p></div>
+        <p class="text-2xl font-bold text-blue-700">$${totalOut.toFixed(2)}</p>
       </div>
-      <div class="bg-white rounded-xl p-4 border border-gray-200">
-        <p class="text-xs text-gray-500">Overdue</p>
-        <p class="text-2xl font-bold text-red-600">$${totalOverdue.toFixed(2)}</p>
+      <div class="bg-gradient-to-br from-red-50 to-rose-50 rounded-xl p-4 border border-red-200 cursor-pointer hover:shadow-md transition-all" onclick="window._im.setFilter('overdue')">
+        <div class="flex items-center gap-2 mb-1"><div class="w-7 h-7 bg-red-100 rounded-lg flex items-center justify-center"><i class="fas fa-exclamation-triangle text-red-600 text-xs"></i></div><p class="text-xs text-red-700 font-medium">Overdue</p></div>
+        <p class="text-2xl font-bold text-red-700">$${totalOverdue.toFixed(2)}</p>
       </div>
-      <div class="bg-white rounded-xl p-4 border border-gray-200">
-        <p class="text-xs text-gray-500">Total Invoices</p>
-        <p class="text-2xl font-bold text-gray-900">${s.total_invoices || invoices.length}</p>
+      <div class="bg-gradient-to-br from-gray-50 to-slate-50 rounded-xl p-4 border border-gray-200 cursor-pointer hover:shadow-md transition-all" onclick="window._im.setFilter('all')">
+        <div class="flex items-center gap-2 mb-1"><div class="w-7 h-7 bg-gray-100 rounded-lg flex items-center justify-center"><i class="fas fa-file-invoice text-gray-600 text-xs"></i></div><p class="text-xs text-gray-600 font-medium">Total Invoices</p></div>
+        <p class="text-2xl font-bold text-gray-900">${s.total_invoices || allInvoices.length}</p>
+      </div>
+    </div>
+
+    <!-- Search & Filter Bar -->
+    <div class="bg-white rounded-xl border border-gray-200 p-3 mb-4 flex items-center gap-3 flex-wrap">
+      <div class="relative flex-1 min-w-[200px]">
+        <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
+        <input type="text" id="im-search" placeholder="Search invoices..." value="${searchTerm}" 
+          oninput="window._im.setSearch(this.value)" 
+          class="w-full pl-8 pr-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-brand-200 focus:border-brand-400 outline-none">
+      </div>
+      <div class="flex gap-1 flex-wrap">
+        ${filterBtn('All', 'all', '', allInvoices.length, 'gray')}
+        ${filterBtn('Draft', 'draft', 'edit', allInvoices.filter(i => i.status === 'draft').length, 'amber')}
+        ${filterBtn('Sent', 'sent', 'paper-plane', allInvoices.filter(i => i.status === 'sent').length, 'blue')}
+        ${filterBtn('Paid', 'paid', 'check-circle', allInvoices.filter(i => i.status === 'paid').length, 'green')}
+        ${filterBtn('Overdue', 'overdue', 'exclamation-circle', allInvoices.filter(i => i.status === 'overdue').length, 'red')}
       </div>
     </div>
 
     <!-- Invoice Table -->
-    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
       ${invoices.length === 0 ? `
         <div class="py-16 text-center">
           <i class="fas fa-file-invoice text-gray-300 text-5xl mb-4"></i>
@@ -497,6 +533,8 @@ document.addEventListener('DOMContentLoaded', () => {
   window._im = {
     create() { state.mode = 'create'; state.editId = null; state.form = resetForm(); render(); },
     backToList() { state.mode = 'list'; state.editId = null; state.form = resetForm(); render(); },
+    setFilter(f) { state.filter = f; render(); },
+    setSearch(term) { state.searchTerm = term; render(); },
     addItem() { state.form.items.push({ description: '', quantity: 1, unit: 'each', unit_price: 0, is_taxable: true }); render(); },
     removeItem(i) { if (state.form.items.length > 1) { state.form.items.splice(i, 1); render(); } },
     updateItem(i, field, value) {
@@ -564,14 +602,19 @@ document.addEventListener('DOMContentLoaded', () => {
     async markPaid(id) {
       if (!confirm('Mark this invoice as paid?')) return;
       try {
-        await fetch('/api/invoices/' + id + '/status', {
+        const res = await fetch('/api/invoices/' + id + '/status', {
           method: 'PATCH',
           headers: headers(),
           body: JSON.stringify({ status: 'paid' })
         });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          alert('Failed to mark as paid: ' + (err.error || 'Unknown error'));
+          return;
+        }
         alert('Invoice marked as paid!');
         load();
-      } catch (e) { alert('Failed'); }
+      } catch (e) { alert('Failed: ' + e.message); }
     },
     async del(id) {
       if (!confirm('Delete this draft invoice?')) return;

@@ -4,16 +4,30 @@ import { validateAdminSession } from './auth'
 
 export const invoiceRoutes = new Hono<{ Bindings: Bindings }>()
 
-// Admin auth middleware (skip share-token routes for public access)
+// Auth middleware — accepts Admin OR Customer tokens
+// (Invoice Manager is used by both Super Admin and Customer dashboards)
 invoiceRoutes.use('/*', async (c, next) => {
   const path = c.req.path
   // Allow public access to shared proposals/invoices and Square webhooks
   if (path.includes('/view/') || path.includes('/webhook')) return next()
   
+  // Try admin auth first
   const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
-  if (!admin) return c.json({ error: 'Admin authentication required' }, 401)
-  c.set('admin' as any, admin)
-  return next()
+  if (admin) { c.set('admin' as any, admin); return next() }
+
+  // Fallback: try customer auth
+  const authHeader = c.req.header('Authorization')
+  const token = authHeader?.replace('Bearer ', '')
+  if (token) {
+    const session = await c.env.DB.prepare(`
+      SELECT cs.customer_id, c.email, c.name FROM customer_sessions cs
+      JOIN customers c ON c.id = cs.customer_id
+      WHERE cs.session_token = ? AND cs.expires_at > datetime('now')
+    `).bind(token).first<any>()
+    if (session) { c.set('admin' as any, { id: session.customer_id, email: session.email, name: session.name, role: 'customer' }); return next() }
+  }
+
+  return c.json({ error: 'Authentication required' }, 401)
 })
 
 // ── Helpers ──────────────────────────────────────────────────

@@ -8,7 +8,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const root = document.getElementById('proposal-root');
   if (!root) return;
 
-  const token = localStorage.getItem('rc_customer_token') || '';
+  const token = localStorage.getItem('rc_token') || localStorage.getItem('rc_customer_token') || '';
   const headers = () => ({ 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' });
 
   // State
@@ -20,6 +20,8 @@ document.addEventListener('DOMContentLoaded', () => {
     reports: [],
     loading: true,
     editId: null,
+    filter: 'all',
+    searchTerm: '',
     // Form state
     form: resetForm()
   };
@@ -85,13 +87,22 @@ document.addEventListener('DOMContentLoaded', () => {
   // LIST VIEW
   // ============================================================
   function renderList() {
-    const proposals = state.proposals;
+    const allProposals = state.proposals;
+    const filter = state.filter || 'all';
+    const searchTerm = (state.searchTerm || '').toLowerCase();
+    let proposals = allProposals;
+    if (filter !== 'all') proposals = proposals.filter(p => p.status === filter || (filter === 'active' && ['sent','viewed'].includes(p.status)));
+    if (searchTerm) proposals = proposals.filter(p =>
+      (p.invoice_number || '').toLowerCase().includes(searchTerm) ||
+      (p.customer_name || '').toLowerCase().includes(searchTerm) ||
+      (p.customer_company || '').toLowerCase().includes(searchTerm)
+    );
     const stats = {
-      total: proposals.length,
-      draft: proposals.filter(p => p.status === 'draft').length,
-      sent: proposals.filter(p => p.status === 'sent' || p.status === 'viewed').length,
-      paid: proposals.filter(p => p.status === 'paid').length,
-      totalValue: proposals.reduce((s, p) => s + (p.total || 0), 0)
+      total: allProposals.length,
+      draft: allProposals.filter(p => p.status === 'draft').length,
+      sent: allProposals.filter(p => p.status === 'sent' || p.status === 'viewed').length,
+      paid: allProposals.filter(p => p.status === 'paid').length,
+      totalValue: allProposals.reduce((s, p) => s + (p.total || 0), 0)
     };
 
     return `
@@ -114,7 +125,21 @@ document.addEventListener('DOMContentLoaded', () => {
     </div>
 
     <!-- Proposals Table -->
-    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+    <div class="bg-white rounded-xl border border-gray-200 p-3 mb-4 flex items-center gap-3 flex-wrap">
+      <div class="relative flex-1 min-w-[200px]">
+        <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
+        <input type="text" placeholder="Search proposals..." value="${searchTerm}"
+          oninput="window._pb.setSearch(this.value)"
+          class="w-full pl-8 pr-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-brand-200 focus:border-brand-400 outline-none">
+      </div>
+      <div class="flex gap-1 flex-wrap">
+        <button onclick="window._pb.setFilter('all')" class="px-3 py-1.5 rounded-lg text-xs font-medium ${filter === 'all' ? 'bg-gray-100 text-gray-700 ring-1 ring-gray-300' : 'text-gray-500 hover:bg-gray-100'}">All ${stats.total}</button>
+        <button onclick="window._pb.setFilter('draft')" class="px-3 py-1.5 rounded-lg text-xs font-medium ${filter === 'draft' ? 'bg-amber-100 text-amber-700 ring-1 ring-amber-300' : 'text-gray-500 hover:bg-gray-100'}">Draft ${stats.draft}</button>
+        <button onclick="window._pb.setFilter('active')" class="px-3 py-1.5 rounded-lg text-xs font-medium ${filter === 'active' ? 'bg-blue-100 text-blue-700 ring-1 ring-blue-300' : 'text-gray-500 hover:bg-gray-100'}">Active ${stats.sent}</button>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
       ${proposals.length === 0 ? `
         <div class="py-16 text-center">
           <i class="fas fa-file-signature text-gray-300 text-5xl mb-4"></i>
@@ -616,6 +641,8 @@ document.addEventListener('DOMContentLoaded', () => {
     create() { state.mode = 'create'; state.editId = null; state.form = resetForm(); render(); },
     backToList() { state.mode = 'list'; state.editId = null; state.form = resetForm(); render(); },
     backToEditor() { state.mode = state.editId ? 'edit' : 'create'; render(); },
+    setFilter(f) { state.filter = f; render(); },
+    setSearch(term) { state.searchTerm = term; render(); },
     toggleCustMode(isNew) { state.form.isNewCustomer = isNew; render(); },
     selectCustomer(id) { state.form.customer_id = id; },
     addItem() {
