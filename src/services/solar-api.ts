@@ -183,22 +183,31 @@ export async function fetchSolarPitchAndImagery(
   const preciseLng = parseFloat(lng.toFixed(7))
 
   // Call buildingInsights — we ONLY extract pitch + imagery metadata
-  // Strict 10-second timeout to stay within Cloudflare Workers budget
-  const url = `https://solar.googleapis.com/v1/buildingInsights:findClosest?location.latitude=${preciseLat}&location.longitude=${preciseLng}&requiredQuality=HIGH&key=${solarApiKey}`
-  const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), 10_000)
-  let response: Response
-  try {
-    response = await fetch(url, { signal: controller.signal })
-  } catch (e: any) {
-    clearTimeout(timeoutId)
-    if (e.name === 'AbortError') throw new Error('Google Solar API timed out after 10s')
-    throw e
+  // Try HIGH quality first, fall back to LOW so Canadian addresses with lower
+  // coverage still return pitch data instead of failing entirely.
+  const baseUrl = `https://solar.googleapis.com/v1/buildingInsights:findClosest?location.latitude=${preciseLat}&location.longitude=${preciseLng}&key=${solarApiKey}`
+  let response: Response | null = null
+  for (const quality of ['HIGH', 'LOW'] as const) {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 10_000)
+    try {
+      response = await fetch(`${baseUrl}&requiredQuality=${quality}`, { signal: controller.signal })
+      clearTimeout(timeoutId)
+      if (response.ok) break
+      if (response.status !== 404) {
+        const errText = await response.text()
+        throw new Error(`Google Solar API error ${response.status}: ${errText}`)
+      }
+      // 404 = quality not available for this location, try next tier
+    } catch (e: any) {
+      clearTimeout(timeoutId)
+      if (e.name === 'AbortError') throw new Error('Google Solar API timed out after 10s')
+      throw e
+    }
   }
-  clearTimeout(timeoutId)
-  if (!response.ok) {
-    const errText = await response.text()
-    throw new Error(`Google Solar API error ${response.status}: ${errText}`)
+  if (!response || !response.ok) {
+    const errText = response ? await response.text() : 'No response'
+    throw new Error(`Google Solar API error: no data available at HIGH or LOW quality. ${errText}`)
   }
 
   const data: any = await response.json()
@@ -215,15 +224,19 @@ export async function fetchSolarPitchAndImagery(
   let weightedPitchSum = 0
 
   for (const seg of rawSegments) {
-    const pitchDeg = seg.pitchDegrees || 0
+    const pitchDeg = typeof seg.pitchDegrees === 'number' ? seg.pitchDegrees : null
     const azimuthDeg = seg.azimuthDegrees || 0
     const areaM2 = seg.stats?.areaMeters2 || 0
-    segmentPitches.push({ pitch_degrees: pitchDeg, azimuth_degrees: azimuthDeg, area_weight: areaM2 })
-    weightedPitchSum += pitchDeg * areaM2
-    totalWeight += areaM2
+    segmentPitches.push({ pitch_degrees: pitchDeg ?? 0, azimuth_degrees: azimuthDeg, area_weight: areaM2 })
+    // Only include segments with a valid non-zero pitch in the weighted average.
+    // Flat/0° segments from API parsing errors would silently pull the average down.
+    if (pitchDeg !== null && pitchDeg > 0 && areaM2 > 0) {
+      weightedPitchSum += pitchDeg * areaM2
+      totalWeight += areaM2
+    }
   }
 
-  const avgPitch = totalWeight > 0 ? weightedPitchSum / totalWeight : 20 // default 20° if no data
+  const avgPitch = totalWeight > 0 ? weightedPitchSum / totalWeight : 20 // default 20° if no valid pitch data
   const pitchRise = Math.round(12 * Math.tan(avgPitch * Math.PI / 180) * 10) / 10
   const pitchRatio = `${pitchRise}:12`
 
