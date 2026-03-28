@@ -66,6 +66,7 @@
   }
 
   function closeModal() { var m = document.getElementById('crmModal'); if (m) m.remove(); }
+  window.closeModal = closeModal;
 
   // ============================================================
   // TOAST HELPER
