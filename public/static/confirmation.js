@@ -140,6 +140,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       <!-- Actions -->
       <div class="flex flex-wrap gap-3 justify-center mt-8">
+        <button onclick="generateProposalFromReport('${orderId}', '${order.property_address || ''}', '${order.homeowner_name || ''}', '${order.homeowner_email || ''}', '${order.homeowner_phone || ''}')" class="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium" id="genProposalBtn">
+          <i class="fas fa-file-signature mr-2"></i>Generate Proposal
+        </button>
+        <button onclick="generateDamageReport('${orderId}')" class="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium" id="genDamageBtn">
+          <i class="fas fa-exclamation-triangle mr-2"></i>Damage Report
+        </button>
+        <a href="/visualizer/${orderId}" target="_blank" class="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium">
+          <i class="fas fa-cube mr-2"></i>3D Visualizer
+        </a>
         <a href="/" class="px-6 py-3 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors font-medium">
           <i class="fas fa-plus mr-2"></i>New Order
         </a>
@@ -280,6 +289,23 @@ function renderFullReport(r, orderId) {
           <h4 class="text-sm font-bold text-gray-700 mb-3 uppercase tracking-wider">
             <i class="fas fa-draw-polygon mr-1 text-brand-500"></i>Edge Breakdown
           </h4>
+          <!-- EagleView-style Report Summary -->
+          <div class="bg-gradient-to-r from-slate-50 to-blue-50 border border-slate-200 rounded-xl p-4 mb-4">
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
+              <div><p class="text-[10px] text-gray-500 uppercase font-semibold">Ridges + Hips</p><p class="text-lg font-black text-gray-800">${edgeSummary.total_ridges_hips_ft || ((edgeSummary.total_ridge_ft || 0) + (edgeSummary.total_hip_ft || 0))} ft</p></div>
+              <div><p class="text-[10px] text-gray-500 uppercase font-semibold">Valleys</p><p class="text-lg font-black text-gray-800">${edgeSummary.total_valley_ft || 0} ft</p></div>
+              <div><p class="text-[10px] text-gray-500 uppercase font-semibold">Drip Edge</p><p class="text-lg font-black text-sky-700">${edgeSummary.total_drip_edge_ft || ((edgeSummary.total_eave_ft || 0) + (edgeSummary.total_rake_ft || 0))} ft</p></div>
+              <div><p class="text-[10px] text-gray-500 uppercase font-semibold">Flashing</p><p class="text-lg font-black text-gray-800">${edgeSummary.total_flashing_ft || ((edgeSummary.total_step_flashing_ft || 0) + (edgeSummary.total_wall_flashing_ft || 0))} ft</p></div>
+            </div>
+            <div class="grid grid-cols-3 md:grid-cols-6 gap-2 mt-3 text-center">
+              <div class="bg-white/70 rounded-lg px-2 py-1.5"><p class="text-[9px] text-gray-400 uppercase">Eaves/Starter</p><p class="text-sm font-bold text-gray-700">${edgeSummary.total_eave_ft || 0} ft</p></div>
+              <div class="bg-white/70 rounded-lg px-2 py-1.5"><p class="text-[9px] text-gray-400 uppercase">Rakes</p><p class="text-sm font-bold text-gray-700">${edgeSummary.total_rake_ft || 0} ft</p></div>
+              <div class="bg-white/70 rounded-lg px-2 py-1.5"><p class="text-[9px] text-gray-400 uppercase">Step Flash</p><p class="text-sm font-bold text-gray-700">${edgeSummary.total_step_flashing_ft || 0} ft</p></div>
+              <div class="bg-white/70 rounded-lg px-2 py-1.5"><p class="text-[9px] text-gray-400 uppercase">Wall Flash</p><p class="text-sm font-bold text-gray-700">${edgeSummary.total_wall_flashing_ft || 0} ft</p></div>
+              <div class="bg-white/70 rounded-lg px-2 py-1.5"><p class="text-[9px] text-gray-400 uppercase">Total Facets</p><p class="text-sm font-bold text-gray-700">${segments.length}</p></div>
+              <div class="bg-white/70 rounded-lg px-2 py-1.5"><p class="text-[9px] text-gray-400 uppercase">Total Linear</p><p class="text-sm font-bold text-brand-700">${edgeSummary.total_linear_ft || 0} ft</p></div>
+            </div>
+          </div>
           <!-- Edge summary cards -->
           <div class="grid grid-cols-5 gap-2 mb-3">
             ${renderEdgeSummaryCard('Ridge', edgeSummary.total_ridge_ft, 'text-green-600', 'bg-green-50')}
@@ -385,6 +411,32 @@ function renderFullReport(r, orderId) {
               <p class="text-xs text-gray-500 uppercase">Est. Cost</p>
               <p class="text-xl font-bold text-green-700">$${(materials.total_material_cost_cad || 0).toLocaleString()}</p>
               <p class="text-xs text-gray-400">CAD</p>
+            </div>
+          </div>
+
+          <!-- EagleView-style Waste Factor Calculator Table -->
+          ${(() => {
+            const netSq = materials.net_squares || materials.gross_squares || Math.ceil(r.total_true_area_sqft / 100) || 0;
+            if (!netSq) return '';
+            const wasteSteps = [0, 5, 8, 10, 12, 13, 15, 18, 20, 25, 28];
+            return '<div class="bg-slate-50 border border-slate-200 rounded-xl p-4 mb-4">' +
+              '<div class="flex items-center gap-2 mb-3"><i class="fas fa-calculator text-slate-500"></i><span class="font-bold text-slate-700 text-sm">Waste Factor Calculator</span>' +
+              '<span class="text-xs text-slate-400 ml-auto">Net area: ' + netSq + ' squares (' + (netSq * 100) + ' sq ft)</span></div>' +
+              '<div class="grid grid-cols-4 md:grid-cols-6 gap-1.5">' +
+              wasteSteps.map(function(w) {
+                const sq = Math.ceil((netSq * (1 + w/100)) * 100) / 100;
+                const isRecommended = Math.abs(w - (materials.waste_pct || 13)) < 2;
+                return '<div class="text-center px-2 py-2 rounded-lg ' + (isRecommended ? 'bg-brand-100 border-2 border-brand-400 ring-2 ring-brand-200' : 'bg-white border border-slate-200') + '">' +
+                  '<p class="text-[10px] font-bold ' + (isRecommended ? 'text-brand-700' : 'text-slate-500') + '">' + w + '% waste</p>' +
+                  '<p class="text-sm font-black ' + (isRecommended ? 'text-brand-800' : 'text-slate-700') + '">' + sq.toFixed(1) + '</p>' +
+                  '<p class="text-[9px] text-slate-400">squares</p>' +
+                  (isRecommended ? '<p class="text-[8px] font-bold text-brand-600 mt-0.5">RECOMMENDED</p>' : '') +
+                '</div>';
+              }).join('') +
+              '</div>' +
+              '<p class="text-xs text-slate-400 mt-2"><i class="fas fa-info-circle mr-1"></i>Recommended waste factor is based on roof complexity. Squares are rounded up to nearest 1/3 for ordering. Complex roofs with many hips/valleys typically need 15-20% waste.</p>' +
+            '</div>';
+          })()}
             </div>
           </div>
 
@@ -1116,4 +1168,198 @@ function parsePitch(pitchStr) {
   // Handle "X deg" or raw number
   const deg = parseFloat(pitchStr);
   return isNaN(deg) ? 0 : deg;
+}
+
+// ============================================================
+// GENERATE PROPOSAL FROM REPORT — Report → Proposal Pipeline
+// ============================================================
+async function generateProposalFromReport(reportId, address, customerName, customerEmail, customerPhone) {
+  const btn = document.getElementById('genProposalBtn');
+  if (!btn) return;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Generating Proposals...';
+
+  try {
+    // Step 1: Generate tiered pricing from the report
+    const token = localStorage.getItem('auth_token') || '';
+    const pipelineRes = await fetch('/api/crm/proposals/from-report', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({
+        report_id: reportId,
+        property_address: address,
+        customer_name: customerName
+      })
+    });
+
+    const pipelineData = await pipelineRes.json();
+    if (!pipelineData.success) {
+      throw new Error(pipelineData.error || 'Failed to generate pricing');
+    }
+
+    // Step 2: Create or find CRM customer
+    let customerId = null;
+    if (customerEmail || customerName) {
+      const custRes = await fetch('/api/crm/customers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({ name: customerName || 'Customer', email: customerEmail || '', phone: customerPhone || '', address: address })
+      });
+      const custData = await custRes.json();
+      customerId = custData.id || custData.customer?.id;
+    }
+
+    if (!customerId) {
+      const listRes = await fetch('/api/crm/customers?search=' + encodeURIComponent(customerEmail || customerName || ''), {
+        headers: { 'Authorization': 'Bearer ' + token }
+      });
+      const listData = await listRes.json();
+      if (listData.customers && listData.customers.length > 0) {
+        customerId = listData.customers[0].id;
+      }
+    }
+
+    // Step 3: Create tiered proposals
+    const tiers = pipelineData.tiers || [];
+    if (tiers.length === 0 && pipelineData.single_proposal) {
+      tiers.push({ label: 'Standard', ...pipelineData.single_proposal });
+    }
+
+    const createRes = await fetch('/api/crm/proposals/create-tiered', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({
+        customer_id: customerId,
+        customer_name: customerName,
+        property_address: address,
+        scope_of_work: 'Complete roof replacement based on RoofReporterAI measurement report #' + reportId,
+        report_id: reportId,
+        measurements: pipelineData.measurements,
+        tiers: tiers
+      })
+    });
+
+    const createData = await createRes.json();
+    if (!createData.success) {
+      throw new Error(createData.error || 'Failed to create proposals');
+    }
+
+    // Step 4: Show success modal
+    const groupLink = createData.public_link;
+    const modal = document.createElement('div');
+    modal.className = 'fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4';
+    modal.innerHTML = '<div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8">' +
+      '<div class="text-center">' +
+      '<div class="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">' +
+      '<i class="fas fa-check-circle text-green-500 text-3xl"></i></div>' +
+      '<h3 class="text-xl font-bold text-gray-800 mb-2">' + (tiers.length > 1 ? 'Good/Better/Best Proposals Created!' : 'Proposal Created!') + '</h3>' +
+      '<p class="text-gray-500 text-sm mb-6">' + (tiers.length > 1 ? 'Three tiered options ready for your customer' : 'Proposal ready for your customer') + '</p>' +
+      '<div class="space-y-3">' +
+      '<a href="' + groupLink + '" target="_blank" class="block w-full bg-sky-600 hover:bg-sky-700 text-white py-3 rounded-xl font-bold text-sm text-center">' +
+      '<i class="fas fa-external-link-alt mr-2"></i>Preview Proposal</a>' +
+      '<button onclick="copyProposalLink(\'' + window.location.origin + groupLink + '\')" class="block w-full bg-gray-100 hover:bg-gray-200 text-gray-700 py-3 rounded-xl font-bold text-sm">' +
+      '<i class="fas fa-link mr-2"></i>Copy Share Link</button>' +
+      '<button onclick="this.closest(\'.fixed\').remove()" class="block w-full text-gray-400 hover:text-gray-600 py-2 text-sm">Close</button>' +
+      '</div></div></div>';
+    document.body.appendChild(modal);
+
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-check-circle mr-2"></i>Proposals Created';
+    btn.classList.remove('bg-green-600', 'hover:bg-green-700');
+    btn.classList.add('bg-green-500');
+
+  } catch (err) {
+    alert('Error generating proposal: ' + (err.message || 'Unknown error'));
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-file-signature mr-2"></i>Generate Proposal';
+  }
+}
+
+function copyProposalLink(link) {
+  navigator.clipboard.writeText(link).then(function() {
+    var btns = document.querySelectorAll('button');
+    btns.forEach(function(b) {
+      if (b.textContent.includes('Copy Share Link')) {
+        b.innerHTML = '<i class="fas fa-check mr-2"></i>Copied!';
+        setTimeout(function() { b.innerHTML = '<i class="fas fa-link mr-2"></i>Copy Share Link'; }, 2000);
+      }
+    });
+  });
+}
+
+// ============================================================
+// DAMAGE REPORT — Gemini AI satellite imagery analysis
+// ============================================================
+async function generateDamageReport(orderId) {
+  var btn = document.getElementById('genDamageBtn');
+  if (!btn) return;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Analyzing Satellite Image...';
+
+  try {
+    var token = localStorage.getItem('rc_token');
+    var headers = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = 'Bearer ' + token;
+
+    var res = await fetch('/api/reports/' + orderId + '/damage-report', {
+      method: 'POST',
+      headers: headers
+    });
+    var data = await res.json();
+
+    if (!data.success) {
+      alert(data.error || 'Damage analysis failed');
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-exclamation-triangle mr-2"></i>Damage Report';
+      return;
+    }
+
+    var analysis = data.analysis || {};
+    var findings = analysis.findings || [];
+
+    // Show result modal
+    var condColors = { poor: 'text-red-600', fair: 'text-amber-600', good: 'text-green-600', excellent: 'text-emerald-600' };
+    var urgColors = { emergency: 'bg-red-600', urgent: 'bg-orange-600', soon: 'bg-amber-500', routine: 'bg-green-500' };
+
+    var findingsHtml = findings.map(function(f) {
+      var sevC = { critical: 'bg-red-100 text-red-700', high: 'bg-orange-100 text-orange-700', moderate: 'bg-amber-100 text-amber-700', low: 'bg-green-100 text-green-700' };
+      return '<div class="flex items-start gap-3 p-3 rounded-lg ' + (f.severity === 'critical' || f.severity === 'high' ? 'bg-red-50' : 'bg-gray-50') + '">' +
+        '<span class="shrink-0 px-2 py-0.5 rounded text-xs font-bold ' + (sevC[f.severity] || 'bg-gray-100 text-gray-600') + '">' + (f.severity || '').toUpperCase() + '</span>' +
+        '<div><p class="text-sm font-medium text-gray-800 capitalize">' + (f.type || '').replace(/_/g, ' ') + '</p>' +
+        '<p class="text-xs text-gray-600 mt-1">' + (f.description || '') + '</p>' +
+        '<p class="text-xs text-gray-400 mt-1"><b>Location:</b> ' + (f.location || 'General') + '</p></div></div>';
+    }).join('');
+
+    var modal = document.createElement('div');
+    modal.className = 'fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4';
+    modal.innerHTML =
+      '<div class="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6">' +
+      '<div class="text-center mb-4">' +
+      '<div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-3">' +
+      '<i class="fas fa-search text-red-500 text-2xl"></i></div>' +
+      '<h3 class="text-xl font-bold text-gray-800">AI Damage Assessment Complete</h3>' +
+      '<p class="text-sm text-gray-500">Satellite imagery analyzed by Gemini AI</p></div>' +
+      '<div class="grid grid-cols-3 gap-3 mb-4">' +
+      '<div class="bg-gray-50 rounded-xl p-3 text-center"><p class="text-[10px] text-gray-400 uppercase">Condition</p><p class="text-lg font-black ' + (condColors[analysis.overall_condition] || 'text-gray-600') + ' capitalize">' + (analysis.overall_condition || 'N/A') + '</p><p class="text-xs text-gray-500">Score: ' + (analysis.overall_score || '?') + '/10</p></div>' +
+      '<div class="bg-gray-50 rounded-xl p-3 text-center"><p class="text-[10px] text-gray-400 uppercase">Urgency</p><p class="text-xs font-bold text-white mt-1 inline-block px-3 py-1 rounded-full ' + (urgColors[analysis.urgency_level] || 'bg-gray-500') + ' capitalize">' + (analysis.urgency_level || 'N/A') + '</p></div>' +
+      '<div class="bg-gray-50 rounded-xl p-3 text-center"><p class="text-[10px] text-gray-400 uppercase">Est. Remaining Life</p><p class="text-sm font-bold text-gray-800 mt-1">' + (analysis.estimated_remaining_life || 'Unknown') + '</p></div></div>' +
+      '<div class="space-y-2 mb-4">' + findingsHtml + '</div>' +
+      '<div class="bg-blue-50 rounded-xl p-4 mb-4 border border-blue-100"><h4 class="text-sm font-bold text-blue-800 mb-2">Damage Summary</h4><p class="text-xs text-gray-700 whitespace-pre-line leading-relaxed">' + (analysis.damage_summary || '') + '</p></div>' +
+      (analysis.insurance_note ? '<div class="bg-amber-50 rounded-xl p-3 mb-4 border border-amber-200"><p class="text-xs text-amber-800"><b>Insurance Note:</b> ' + analysis.insurance_note + '</p></div>' : '') +
+      (analysis.recommended_action ? '<div class="bg-green-50 rounded-xl p-3 mb-4 border border-green-200"><p class="text-xs text-green-800"><b>Recommended Action:</b> ' + analysis.recommended_action + '</p></div>' : '') +
+      '<div class="flex gap-3">' +
+      '<a href="/api/reports/' + orderId + '/html" target="_blank" class="flex-1 text-center bg-red-600 hover:bg-red-700 text-white py-3 rounded-xl font-bold text-sm"><i class="fas fa-file-pdf mr-2"></i>View in Full Report</a>' +
+      '<button onclick="this.closest(\'.fixed\').remove()" class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-3 rounded-xl font-bold text-sm">Close</button></div></div>';
+    document.body.appendChild(modal);
+
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-check-circle mr-2"></i>Damage Report Ready';
+    btn.classList.remove('bg-red-600', 'hover:bg-red-700');
+    btn.classList.add('bg-red-500');
+
+  } catch (err) {
+    alert('Error: ' + (err.message || 'Unknown error'));
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-exclamation-triangle mr-2"></i>Damage Report';
+  }
 }

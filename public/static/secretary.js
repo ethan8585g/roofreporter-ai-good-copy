@@ -39,10 +39,18 @@
     phoneSetup: null,
     carriers: [],
     selectedCarrier: '',
-    forwardingInstructions: null,
     connectStep: 1,
     // Quick Connect state
     quickConnect: {},
+    // Leads
+    leads: [],
+    leadsCount: 0,
+    leadStages: [],
+    // Call detail modal
+    callDetail: null,
+    // Agent persona selection
+    selectedAgentName: '',
+    selectedAgentVoice: '',
   };
 
   // ── On load: check for Square redirect, then fetch status ──
@@ -76,6 +84,12 @@
         state.isConfigured = data.is_configured;
         state.isActive = data.is_active;
         state.secretaryMode = data.secretary_mode || (data.config && data.config.secretary_mode) || 'directory';
+        state.isDev = !!data.is_dev;
+        // Load agent persona from config
+        if (data.config) {
+          state.selectedAgentName = data.config.agent_name || 'Sarah';
+          state.selectedAgentVoice = data.config.agent_voice || 'alloy';
+        }
       }
     } catch(e) { console.error('Failed to load status', e); }
 
@@ -87,7 +101,6 @@
         state.phoneSetup = data2.setup;
         if (data2.setup) {
           state.selectedCarrier = data2.setup.carrier_name || '';
-          state.forwardingInstructions = data2.setup.forwarding_instructions || null;
         }
       }
     } catch(e) {}
@@ -103,14 +116,24 @@
           state.quickConnect.ai_phone_display = qcData.ai_phone_display;
           state.quickConnect.business_phone = qcData.business_phone;
           state.quickConnect.business_phone_display = qcData.business_phone_display;
-          state.quickConnect.forwarding_code = qcData.forwarding_code;
-          state.quickConnect.verified = qcData.phone_verified;
-          if (state.phoneSetup) {
-            state.phoneSetup.forwarding_code = qcData.forwarding_code;
-          }
+          state.quickConnect.connected = qcData.status === 'connected';
         }
       }
     } catch(e) {}
+
+    // Load leads count
+    try {
+      var res4 = await fetch('/api/secretary/leads?limit=1', { headers: authOnly() });
+      if (res4.ok) {
+        var leadsData = await res4.json();
+        state.leadsCount = leadsData.total || 0;
+        state.leadStages = leadsData.stages || [];
+      }
+    } catch(e) {}
+
+    // Check URL params for tab deep-linking
+    var urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('tab')) state.activeTab = urlParams.get('tab');
 
     state.loading = false;
     render();
@@ -138,10 +161,11 @@
       '<div class="flex flex-wrap gap-2 mb-6">' +
         tabBtn('setup', 'fa-cog', 'Setup & Config') +
         tabBtn('connect', 'fa-phone-alt', 'Connect Phone') +
+        tabBtn('calls', 'fa-history', 'Call Log' + (state.totalCalls > 0 ? ' (' + state.totalCalls + ')' : '')) +
+        tabBtn('leads', 'fa-fire', 'Leads' + (state.leadsCount > 0 ? ' (' + state.leadsCount + ')' : '')) +
         (state.secretaryMode === 'answering' ? tabBtn('messages', 'fa-envelope', 'Messages' + (state.unreadCount > 0 ? ' (' + state.unreadCount + ')' : '')) : '') +
         (state.secretaryMode === 'full' ? tabBtn('appointments', 'fa-calendar-check', 'Appointments' + (state.pendingAppts > 0 ? ' (' + state.pendingAppts + ')' : '')) : '') +
         (state.secretaryMode === 'full' ? tabBtn('callbacks', 'fa-phone-volume', 'Callbacks' + (state.pendingCallbacks > 0 ? ' (' + state.pendingCallbacks + ')' : '')) : '') +
-        tabBtn('calls', 'fa-history', 'Call Log' + (state.totalCalls > 0 ? ' (' + state.totalCalls + ')' : '')) +
       '</div>' +
       '<div id="secContent"></div>';
 
@@ -151,6 +175,7 @@
     else if (state.activeTab === 'appointments') loadAndRenderAppointments();
     else if (state.activeTab === 'callbacks') loadAndRenderCallbacks();
     else if (state.activeTab === 'calls') renderCallsTab();
+    else if (state.activeTab === 'leads') renderLeadsTab();
   }
 
   function tabBtn(id, icon, label) {
@@ -165,24 +190,28 @@
       (needsAttention ? ' <span class="w-2 h-2 bg-amber-500 rounded-full"></span>' : '') +
       '</button>';
   }
-  window.secSetTab = function(t) { state.activeTab = t; render(); if (t === 'calls') loadCalls(); if (t === 'messages') loadAndRenderMessages(); if (t === 'appointments') loadAndRenderAppointments(); if (t === 'callbacks') loadAndRenderCallbacks(); };
+  window.secSetTab = function(t) { state.activeTab = t; render(); if (t === 'calls') loadCalls(); if (t === 'leads') loadLeads(); if (t === 'messages') loadAndRenderMessages(); if (t === 'appointments') loadAndRenderAppointments(); if (t === 'callbacks') loadAndRenderCallbacks(); };
 
   // ============================================================
-  // SUBSCRIPTION PAGE
+  // SUBSCRIPTION PAGE — Contact Us for Enrolment
   // ============================================================
   function renderSubscriptionPage() {
+    // Pre-fill from customer data if available
+    var custData = {};
+    try { custData = JSON.parse(localStorage.getItem('rc_customer') || '{}'); } catch(e) {}
+
     root.innerHTML =
-      '<div class="max-w-2xl mx-auto">' +
-        '<div class="bg-gradient-to-br from-sky-500 to-blue-700 rounded-2xl p-8 text-white text-center mb-8 shadow-xl">' +
+      '<div class="max-w-2xl mx-auto px-4">' +
+        '<div class="bg-gradient-to-br from-sky-500 to-blue-700 rounded-2xl p-6 sm:p-8 text-white text-center mb-8 shadow-xl">' +
           '<div class="w-20 h-20 bg-white/20 rounded-2xl flex items-center justify-center mx-auto mb-4"><i class="fas fa-headset text-4xl"></i></div>' +
-          '<h2 class="text-3xl font-extrabold mb-2">Roofer Secretary</h2>' +
-          '<p class="text-sky-100 text-lg">AI-Powered Phone Answering Service</p>' +
+          '<h2 class="text-2xl sm:text-3xl font-extrabold mb-2">Roofer Secretary</h2>' +
+          '<p class="text-sky-100 text-base sm:text-lg">AI-Powered Phone Answering Service</p>' +
           '<p class="text-sky-200 text-sm mt-2">Never miss a customer call again. AI answers <strong>only when you can\'t</strong> — your phone rings first. Works with your existing business number.</p>' +
         '</div>' +
 
-        '<div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 mb-6">' +
+        '<div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 sm:p-6 mb-6">' +
           '<h3 class="font-bold text-gray-800 text-lg mb-4"><i class="fas fa-check-circle text-green-500 mr-2"></i>What You Get</h3>' +
-          '<div class="grid grid-cols-1 md:grid-cols-2 gap-3">' +
+          '<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">' +
             feature('fa-phone-alt', 'Keep Your Number', 'Connects to your existing business phone — no new number needed') +
             feature('fa-user-clock', 'Answers Only If You Can\'t', 'Your phone rings first. AI only picks up when you miss or are busy — like a real secretary') +
             feature('fa-sms', 'SMS Call Summary', 'Get a text with a full transcript and summary after every AI-handled call') +
@@ -192,28 +221,44 @@
           '</div>' +
         '</div>' +
 
-        '<div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 mb-6">' +
+        '<div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 sm:p-6 mb-6">' +
           '<h3 class="font-bold text-gray-800 text-lg mb-4"><i class="fas fa-plug text-sky-500 mr-2"></i>How It Works</h3>' +
           '<div class="space-y-4">' +
-            howStep(1, 'Subscribe & Configure', 'Set up your AI secretary with your greeting script, FAQ answers, and call routing departments.') +
-            howStep(2, 'Connect Your Phone', 'We assign an AI answering line. Set up no-answer call forwarding from your existing number — 30 seconds.') +
-            howStep(3, 'AI Answers When You Can\'t', 'Your phone rings first. If you don\'t answer or you\'re on another call, it forwards to the AI. The AI greets the caller, answers questions, routes to departments, and takes messages.') +
-            howStep(4, 'Get SMS Summary + Call Log', 'After every AI-handled call, you receive a text message with the caller info, transcript summary, and which department was selected. Full logs always in your dashboard.') +
+            howStep(1, 'Request Enrolment', 'Fill out the form below and our team will contact you to get started.') +
+            howStep(2, 'Personalized Setup', 'We\'ll configure your AI secretary with your greeting script, FAQ answers, and call routing departments.') +
+            howStep(3, 'Connect Your Phone', 'Enter your business phone number and verify. Your AI secretary goes live instantly.') +
+            howStep(4, 'AI Answers When You Can\'t', 'Your phone rings first. If you don\'t answer, the AI picks up, greets the caller, answers questions, routes to departments, and takes messages.') +
           '</div>' +
         '</div>' +
 
-        '<div class="bg-white rounded-2xl border-2 border-sky-500 shadow-lg p-6 mb-6">' +
-          '<div class="flex items-center justify-between mb-4">' +
-            '<div><h3 class="font-bold text-gray-800 text-xl">Monthly Subscription</h3><p class="text-gray-500 text-sm">Cancel anytime. No contracts.</p></div>' +
-            '<div class="text-right"><div class="text-4xl font-extrabold text-gray-900">$249<span class="text-lg font-normal text-gray-500">/mo</span></div><p class="text-xs text-gray-400">CAD or USD + applicable taxes</p></div>' +
+        // ── Contact Us for Enrolment Form ──
+        '<div class="bg-white rounded-2xl border-2 border-sky-500 shadow-lg p-4 sm:p-6 mb-6">' +
+          '<div class="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 gap-2">' +
+            '<div><h3 class="font-bold text-gray-800 text-xl"><i class="fas fa-paper-plane text-sky-500 mr-2"></i>Contact Us for Enrolment</h3><p class="text-gray-500 text-sm mt-1">Our team will personally set up your AI Secretary</p></div>' +
+            '<div class="text-right"><div class="text-2xl sm:text-3xl font-extrabold text-sky-600">$249<span class="text-sm font-normal text-gray-500">/mo CAD</span></div></div>' +
           '</div>' +
-          '<div class="bg-sky-50 border border-sky-100 rounded-xl p-4 mb-4">' +
-            '<p class="text-sm text-sky-700"><i class="fas fa-info-circle mr-1"></i>Includes unlimited AI-answered calls, SMS transcript summaries after every call, smart routing, and no-answer coverage. Works with any Canadian carrier.</p>' +
+          '<div id="enrollFormContainer">' +
+            '<div class="space-y-4">' +
+              '<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">' +
+                '<div><label class="block text-sm font-medium text-gray-700 mb-1">Full Name *</label>' +
+                  '<input type="text" id="enrollName" value="' + (custData.name || '') + '" class="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none" placeholder="John Smith"></div>' +
+                '<div><label class="block text-sm font-medium text-gray-700 mb-1">Email *</label>' +
+                  '<input type="email" id="enrollEmail" value="' + (custData.email || '') + '" class="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none" placeholder="john@roofingco.com"></div>' +
+              '</div>' +
+              '<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">' +
+                '<div><label class="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>' +
+                  '<input type="tel" id="enrollPhone" value="' + (custData.phone || '') + '" class="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none" placeholder="(780) 555-0123"></div>' +
+                '<div><label class="block text-sm font-medium text-gray-700 mb-1">Company Name</label>' +
+                  '<input type="text" id="enrollCompany" value="' + (custData.company_name || custData.brand_business_name || '') + '" class="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none" placeholder="ABC Roofing Ltd."></div>' +
+              '</div>' +
+              '<div><label class="block text-sm font-medium text-gray-700 mb-1">Message (optional)</label>' +
+                '<textarea id="enrollMessage" rows="3" class="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none resize-none" placeholder="Tell us about your business and how many calls you typically receive..."></textarea></div>' +
+            '</div>' +
+            '<button onclick="secSubmitEnrollment()" id="enrollBtn" class="w-full mt-4 py-4 bg-gradient-to-r from-sky-500 to-blue-600 text-white rounded-xl font-bold text-lg hover:from-sky-600 hover:to-blue-700 transition-all shadow-lg hover:shadow-xl">' +
+              '<i class="fas fa-paper-plane mr-2"></i>Request Enrolment</button>' +
           '</div>' +
-          '<button onclick="secSubscribe()" id="subscribeBtn" class="w-full py-4 bg-gradient-to-r from-sky-500 to-blue-600 text-white rounded-xl font-bold text-lg hover:from-sky-600 hover:to-blue-700 transition-all shadow-lg hover:shadow-xl">' +
-            '<i class="fas fa-lock mr-2"></i>Subscribe & Setup — $249/month</button>' +
         '</div>' +
-        '<p class="text-center text-xs text-gray-400 mb-8"><i class="fas fa-shield-alt mr-1"></i>Secure payment via Square &bull; Powered by LiveKit AI</p>' +
+        '<p class="text-center text-xs text-gray-400 mb-8"><i class="fas fa-shield-alt mr-1"></i>Our team will contact you within 24 hours &bull; Powered by LiveKit AI</p>' +
       '</div>';
   }
 
@@ -229,15 +274,34 @@
       '<div><p class="font-semibold text-gray-800">' + title + '</p><p class="text-gray-500 text-sm">' + desc + '</p></div></div>';
   }
 
-  window.secSubscribe = async function() {
-    var btn = document.getElementById('subscribeBtn');
-    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Redirecting to Square...'; }
+  window.secSubmitEnrollment = async function() {
+    var btn = document.getElementById('enrollBtn');
+    var name = document.getElementById('enrollName').value.trim();
+    var email = document.getElementById('enrollEmail').value.trim();
+    var phone = document.getElementById('enrollPhone').value.trim();
+    var company = document.getElementById('enrollCompany').value.trim();
+    var message = document.getElementById('enrollMessage').value.trim();
+    if (!name || !email) { alert('Please enter your name and email.'); return; }
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Submitting...'; }
     try {
-      var res = await fetch('/api/secretary/subscribe', { method: 'POST', headers: authHeaders() });
+      var res = await fetch('/api/secretary/enroll-inquiry', {
+        method: 'POST', headers: authHeaders(),
+        body: JSON.stringify({ name: name, email: email, phone: phone, company_name: company, message: message })
+      });
       var data = await res.json();
-      if (data.checkout_url) { window.location.href = data.checkout_url; }
-      else { alert(data.error || 'Failed to create subscription'); if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-lock mr-2"></i>Subscribe & Setup — $249/month'; } }
-    } catch(e) { alert('Network error. Please try again.'); if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-lock mr-2"></i>Subscribe & Setup — $249/month'; } }
+      if (data.success) {
+        document.getElementById('enrollFormContainer').innerHTML =
+          '<div class="text-center py-8">' +
+            '<div class="w-16 h-16 bg-green-100 rounded-2xl flex items-center justify-center mx-auto mb-4"><i class="fas fa-check-circle text-green-500 text-3xl"></i></div>' +
+            '<h3 class="text-xl font-bold text-gray-800 mb-2">Enrolment Request Received!</h3>' +
+            '<p class="text-gray-500">Thank you, ' + name + '. Our team will contact you within 24 hours to set up your AI Secretary service.</p>' +
+            '<p class="text-gray-400 text-sm mt-4"><i class="fas fa-phone mr-1"></i>Questions? Call us anytime.</p>' +
+          '</div>';
+      } else {
+        alert(data.error || 'Failed to submit. Please try again.');
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-paper-plane mr-2"></i>Request Enrolment'; }
+      }
+    } catch(e) { alert('Network error. Please try again.'); if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-paper-plane mr-2"></i>Request Enrolment'; } }
   };
 
   // ============================================================
@@ -263,7 +327,7 @@
           '<div><p class="font-bold text-gray-800">' + (state.isActive ? 'Service ACTIVE' : 'Service PAUSED') + '</p>' +
             '<p class="text-xs text-gray-500">' +
               (state.phoneSetup?.connection_status === 'connected' ? '<span class="text-green-600"><i class="fas fa-link mr-1"></i>Phone Connected</span>' :
-               state.phoneSetup?.assigned_phone_number ? '<span class="text-amber-600"><i class="fas fa-exclamation-triangle mr-1"></i>Phone Not Yet Forwarded</span>' :
+               state.phoneSetup?.assigned_phone_number ? '<span class="text-amber-600"><i class="fas fa-exclamation-triangle mr-1"></i>Phone Setup Incomplete</span>' :
                '<span class="text-gray-400"><i class="fas fa-phone-slash mr-1"></i>No Phone Connected</span>') +
               ' &bull; ' + (state.subscription?.status || 'unknown') + '</p></div></div>' +
         '<div class="flex gap-2">' +
@@ -291,6 +355,9 @@
             '#059669', '#ecfdf5') +
         '</div>' +
       '</div>' +
+
+      // AGENT PERSONA — Choose voice & name
+      renderAgentPersonaSelector(c) +
 
       // STEP 1: Phone & Greeting
       '<div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 mb-6">' +
@@ -331,6 +398,69 @@
       // MODE-SPECIFIC CONFIG
       renderModeSpecificConfig(c);
   }
+
+  // ── Agent Persona Selector — Choose your AI answering agent ──
+  function renderAgentPersonaSelector(c) {
+    var currentVoice = c.agent_voice || (state.phoneSetup && state.phoneSetup.agent_voice) || 'alloy';
+    var currentName = c.agent_name || (state.phoneSetup && state.phoneSetup.agent_name) || 'Sarah';
+
+    // Agent profiles with voice IDs and descriptions
+    var agents = [
+      { id: 'sarah', name: 'Sarah', voice: 'alloy', gender: 'Female', desc: 'Professional, warm, and confident. Ideal for a friendly front desk feel.', icon: 'fa-user-tie', color: 'from-pink-500 to-rose-600', badge: 'Most Popular' },
+      { id: 'emily', name: 'Emily', voice: 'shimmer', gender: 'Female', desc: 'Bright, energetic, and approachable. Great for high-energy sales teams.', icon: 'fa-smile-beam', color: 'from-purple-500 to-violet-600', badge: '' },
+      { id: 'jessica', name: 'Jessica', voice: 'nova', gender: 'Female', desc: 'Calm, authoritative, and trustworthy. Perfect for insurance and professional services.', icon: 'fa-user-shield', color: 'from-indigo-500 to-blue-600', badge: '' },
+      { id: 'james', name: 'James', voice: 'echo', gender: 'Male', desc: 'Deep, professional, and reassuring. Ideal for contractor and trade businesses.', icon: 'fa-hard-hat', color: 'from-sky-500 to-cyan-600', badge: '' },
+      { id: 'mike', name: 'Mike', voice: 'onyx', gender: 'Male', desc: 'Strong, confident, and direct. Great for sales-focused operations.', icon: 'fa-user-check', color: 'from-emerald-500 to-teal-600', badge: '' },
+      { id: 'alex', name: 'Alex', voice: 'fable', gender: 'Male', desc: 'Friendly, conversational, and relaxed. Perfect for a casual, personable vibe.', icon: 'fa-comments', color: 'from-amber-500 to-orange-600', badge: '' },
+    ];
+
+    var agentCards = agents.map(function(agent) {
+      var selected = (currentVoice === agent.voice && currentName === agent.name) || 
+                     (!agents.some(function(a) { return a.voice === currentVoice && a.name === currentName; }) && agent.id === 'sarah');
+      return '<div onclick="secSelectAgent(\'' + agent.name + '\', \'' + agent.voice + '\')" ' +
+        'class="cursor-pointer border-2 rounded-xl p-4 transition-all hover:shadow-lg ' +
+        (selected ? 'border-sky-500 shadow-lg ring-2 ring-sky-400/30 bg-sky-50' : 'border-gray-200 hover:border-gray-300 bg-white') + '">' +
+        '<div class="flex items-center gap-3 mb-2">' +
+          '<div class="w-11 h-11 bg-gradient-to-br ' + agent.color + ' rounded-full flex items-center justify-center shadow-lg flex-shrink-0">' +
+            '<i class="fas ' + agent.icon + ' text-white text-sm"></i>' +
+          '</div>' +
+          '<div class="flex-1 min-w-0">' +
+            '<div class="flex items-center gap-2">' +
+              '<p class="font-bold text-gray-800 text-sm">' + agent.name + '</p>' +
+              '<span class="px-1.5 py-0.5 rounded text-[9px] font-bold ' + (agent.gender === 'Female' ? 'bg-pink-100 text-pink-700' : 'bg-blue-100 text-blue-700') + '">' + agent.gender + '</span>' +
+              (agent.badge ? '<span class="px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded text-[9px] font-bold">' + agent.badge + '</span>' : '') +
+            '</div>' +
+            '<p class="text-xs text-gray-500 line-clamp-1">' + agent.desc + '</p>' +
+          '</div>' +
+          (selected ? '<span class="w-6 h-6 bg-sky-500 rounded-full flex items-center justify-center flex-shrink-0"><i class="fas fa-check text-white text-[10px]"></i></span>' : '<span class="w-6 h-6 border-2 border-gray-300 rounded-full flex-shrink-0"></span>') +
+        '</div>' +
+      '</div>';
+    }).join('');
+
+    return '<div class="bg-white rounded-2xl border-2 border-sky-200 shadow-sm p-6 mb-6">' +
+      '<div class="flex items-center gap-3 mb-1">' +
+        '<div class="w-10 h-10 bg-gradient-to-br from-sky-500 to-blue-600 rounded-xl flex items-center justify-center shadow"><i class="fas fa-user-astronaut text-white"></i></div>' +
+        '<div><h3 class="font-bold text-gray-800 text-lg">Choose Your AI Secretary Agent</h3>' +
+        '<p class="text-gray-500 text-sm">Select the voice and personality that represents your business</p></div>' +
+      '</div>' +
+      '<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mt-4">' + agentCards + '</div>' +
+      '<div class="mt-3 flex items-center gap-2">' +
+        '<div class="flex-1">' +
+          '<label class="block text-xs font-semibold text-gray-600 mb-1">Custom Agent Name</label>' +
+          '<input type="text" id="agentNameInput" value="' + esc(currentName) + '" placeholder="Sarah" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-400 focus:border-sky-400">' +
+        '</div>' +
+        '<div class="text-xs text-gray-400 self-end pb-2"><i class="fas fa-info-circle mr-1"></i>Your agent will introduce themselves with this name</div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  window.secSelectAgent = function(name, voice) {
+    state.selectedAgentName = name;
+    state.selectedAgentVoice = voice;
+    var input = document.getElementById('agentNameInput');
+    if (input) input.value = name;
+    render();
+  };
 
   // ── Mode-specific config sections ──
   function renderModeSpecificConfig(c) {
@@ -484,37 +614,42 @@
   };
 
   // ============================================================
-  // CONNECT PHONE TAB — Quick Connect (SMS Verification)
-  // Like Genspark "Call for Me" — enter number, verify, connected!
+  // CONNECT PHONE TAB — Real Phone Setup Flow
+  // Step 1: Enter your business phone + your purchased AI phone number
+  // Step 2: Save → get carrier forwarding instructions → set up forwarding
+  // Step 3: Press Confirm → deploy agent to LiveKit → LIVE
   // ============================================================
   function renderConnectTab() {
     var content = document.getElementById('secContent');
     if (!content) return;
     var ps = state.phoneSetup || {};
     var qc = state.quickConnect || {};
-    var isConnected = ps.connection_status === 'connected';
-    var isVerified = ps.connection_status === 'verified' || !!qc.ai_phone_number;
+    var isConnected = ps.connection_status === 'connected' || qc.connected;
+    var hasAiNumber = !!(qc.ai_phone_number || ps.assigned_phone_number);
+    // Filter out placeholder numbers
+    if (hasAiNumber) {
+      var aiNum = qc.ai_phone_number || ps.assigned_phone_number || '';
+      if (aiNum.includes('0000')) hasAiNumber = false; // Placeholder
+    }
 
     // Determine current step
-    var step = 1; // Enter phone
-    if (isConnected) step = 4; // Done!
-    else if (isVerified || qc.ai_phone_number) step = 3; // Forward
-    else if (qc.codeSent) step = 2; // Enter code
+    var step = 1;
+    if (isConnected && hasAiNumber) step = 3;
+    else if (hasAiNumber) step = 2;
 
-    // Progress bar — 3 simple steps
     var steps = [
-      { num: 1, label: 'Your Number', icon: 'fa-phone', done: step > 1 },
-      { num: 2, label: 'Verify', icon: 'fa-shield-alt', done: step > 2 },
-      { num: 3, label: 'Activate', icon: 'fa-bolt', done: step > 3 },
+      { num: 1, label: 'Enter Phone Numbers', icon: 'fa-phone-alt', done: step > 1 },
+      { num: 2, label: 'Set Up Call Forwarding', icon: 'fa-random', done: step > 2 },
+      { num: 3, label: 'Live!', icon: 'fa-bolt', done: step >= 3 },
     ];
 
     var html = '<div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 mb-6">' +
       '<div class="flex items-center justify-between mb-2">' +
         '<h3 class="font-bold text-gray-800 text-lg"><i class="fas fa-phone-alt text-sky-500 mr-2"></i>Connect Your Phone</h3>' +
         (isConnected ? '<span class="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-semibold"><i class="fas fa-check-circle mr-1"></i>Connected</span>' :
-         '<span class="px-3 py-1 bg-sky-50 text-sky-600 rounded-full text-sm font-medium">~60 seconds</span>') +
+         '<span class="px-3 py-1 bg-sky-50 text-sky-600 rounded-full text-sm font-medium">3 easy steps</span>') +
       '</div>' +
-      '<p class="text-gray-500 text-sm mb-4">Enter your business phone, verify via text, and your AI secretary is live. No carrier setup, no complicated steps.</p>' +
+      '<p class="text-gray-500 text-sm mb-4">Enter your business phone number and the AI phone number you purchased from Twilio, Vonage, or Telnyx. Set up call forwarding, confirm, and your AI secretary goes live.</p>' +
       '<div class="flex items-center gap-1">';
     for (var si = 0; si < steps.length; si++) {
       var s = steps[si];
@@ -533,278 +668,410 @@
     html += '</div></div><div id="qcStepContent"></div>';
     content.innerHTML = html;
 
-    // Render the current step
-    if (step === 4) renderQCComplete();
-    else if (step === 3) renderQCForward();
-    else if (step === 2) renderQCVerify();
-    else renderQCEnterPhone();
+    if (step === 3) renderQCComplete();
+    else if (step === 2) renderQCForwarding();
+    else renderQCGetNumber();
   }
 
-  // ── Step 1: Enter your phone number ──
-  function renderQCEnterPhone() {
+  // ── Step 1: Enter BOTH phone numbers — business + AI purchased number ──
+  function renderQCGetNumber() {
     var el = document.getElementById('qcStepContent');
     if (!el) return;
-    var existingPhone = (state.phoneSetup || {}).business_phone || '';
+    var existingBizPhone = state._editBizPhone || (state.phoneSetup || {}).business_phone || (state.config || {}).business_phone || '';
+    var existingAiPhone = state._editAiPhone || (state.quickConnect || {}).ai_phone_number || (state.phoneSetup || {}).assigned_phone_number || '';
+    // Clear temp edit state
+    state._editBizPhone = '';
+    state._editAiPhone = '';
+    // Clear placeholder numbers
+    if (existingAiPhone && existingAiPhone.includes('0000')) existingAiPhone = '';
 
     el.innerHTML =
       '<div class="bg-white rounded-2xl border-2 border-sky-100 shadow-sm p-8">' +
-        '<div class="max-w-md mx-auto text-center">' +
-          '<div class="w-16 h-16 bg-sky-100 rounded-full flex items-center justify-center mx-auto mb-4">' +
-            '<i class="fas fa-mobile-alt text-sky-500 text-2xl"></i></div>' +
-          '<h4 class="text-xl font-extrabold text-gray-800 mb-2">What\'s your business phone number?</h4>' +
-          '<p class="text-gray-500 text-sm mb-6">We\'ll send a quick verification text to confirm it\'s yours. Then your AI secretary will be live in under a minute.</p>' +
-
-          '<div class="relative mb-4">' +
-            '<div class="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none">' +
-              '<span class="text-gray-400 font-mono text-lg">+1</span></div>' +
-            '<input type="tel" id="qcPhoneInput" value="' + esc(existingPhone.replace(/^\+1/, '')) + '" placeholder="(780) 983-3335" ' +
-              'class="w-full pl-14 pr-4 py-4 text-lg font-mono border-2 border-gray-300 rounded-2xl focus:ring-4 focus:ring-sky-200 focus:border-sky-500 transition-all text-center" ' +
-              'maxlength="14" autocomplete="tel">' +
+        '<div class="max-w-lg mx-auto">' +
+          '<div class="text-center mb-6">' +
+            '<div class="w-16 h-16 bg-sky-100 rounded-full flex items-center justify-center mx-auto mb-4">' +
+              '<i class="fas fa-mobile-alt text-sky-500 text-2xl"></i></div>' +
+            '<h4 class="text-xl font-extrabold text-gray-800 mb-2">Set Up Your Phone Numbers</h4>' +
+            '<p class="text-gray-500 text-sm">Enter your regular business cell number and the AI phone number you purchased from Twilio, Vonage, or Telnyx.</p>' +
           '</div>' +
 
-          '<button onclick="qcSendCode()" id="qcSendBtn" class="w-full py-4 bg-sky-500 text-white rounded-2xl font-bold text-base hover:bg-sky-600 transition-all shadow-lg hover:shadow-xl">' +
-            '<i class="fas fa-paper-plane mr-2"></i>Send Verification Code</button>' +
+          // Business Phone Number
+          '<div class="mb-5">' +
+            '<label class="block text-sm font-semibold text-gray-700 mb-2"><i class="fas fa-phone text-sky-500 mr-1"></i>Your Business Phone Number</label>' +
+            '<p class="text-xs text-gray-400 mb-2">This is your regular cell phone number — the one your customers call. You\'ll forward unanswered calls from this number to the AI.</p>' +
+            '<div class="relative">' +
+              '<div class="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none">' +
+                '<span class="text-gray-400 font-mono text-lg">+1</span></div>' +
+              '<input type="tel" id="qcBizPhoneInput" value="' + esc(existingBizPhone.replace(/^\+1/, '')) + '" placeholder="(780) 983-3335" ' +
+                'class="w-full pl-14 pr-4 py-4 text-lg font-mono border-2 border-gray-300 rounded-2xl focus:ring-4 focus:ring-sky-200 focus:border-sky-500 transition-all text-center" ' +
+                'maxlength="14" autocomplete="tel">' +
+            '</div>' +
+          '</div>' +
 
-          '<p class="text-xs text-gray-400 mt-4"><i class="fas fa-lock mr-1"></i>We\'ll send a 6-digit code via SMS. Standard messaging rates may apply.</p>' +
+          // AI Phone Number (purchased from Twilio/Vonage/Telnyx)
+          '<div class="mb-5">' +
+            '<label class="block text-sm font-semibold text-gray-700 mb-2"><i class="fas fa-robot text-emerald-500 mr-1"></i>AI Phone Number (Purchased for the AI)</label>' +
+            '<p class="text-xs text-gray-400 mb-2">This is the phone number you purchased from <strong>Twilio</strong>, <strong>Vonage</strong>, or <strong>Telnyx</strong> for the AI to answer calls on. You\'ll forward your cell to this number.</p>' +
+            '<div class="relative">' +
+              '<div class="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none">' +
+                '<span class="text-gray-400 font-mono text-lg">+1</span></div>' +
+              '<input type="tel" id="qcAiPhoneInput" value="' + esc(existingAiPhone.replace(/^\+1/, '')) + '" placeholder="(484) 964-9758" ' +
+                'class="w-full pl-14 pr-4 py-4 text-lg font-mono border-2 border-emerald-300 rounded-2xl focus:ring-4 focus:ring-emerald-200 focus:border-emerald-500 transition-all text-center bg-emerald-50/50" ' +
+                'maxlength="14" autocomplete="tel">' +
+            '</div>' +
+          '</div>' +
+
+          // Purchase help
+          '<div class="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6">' +
+            '<p class="text-sm font-semibold text-amber-800 mb-2"><i class="fas fa-lightbulb text-amber-500 mr-1"></i>Don\'t have an AI phone number yet?</p>' +
+            '<p class="text-xs text-amber-700 mb-2">You need to purchase a phone number from one of these VoIP/SIP providers to use with LiveKit:</p>' +
+            '<div class="flex flex-wrap gap-2">' +
+              '<a href="https://www.twilio.com/phone-numbers" target="_blank" class="text-xs bg-white border border-amber-200 rounded-lg px-3 py-1.5 text-amber-700 hover:bg-amber-100 font-medium"><i class="fas fa-external-link-alt mr-1"></i>Twilio</a>' +
+              '<a href="https://www.vonage.com/communications-apis/numbers/" target="_blank" class="text-xs bg-white border border-amber-200 rounded-lg px-3 py-1.5 text-amber-700 hover:bg-amber-100 font-medium"><i class="fas fa-external-link-alt mr-1"></i>Vonage</a>' +
+              '<a href="https://telnyx.com/products/phone-numbers" target="_blank" class="text-xs bg-white border border-amber-200 rounded-lg px-3 py-1.5 text-amber-700 hover:bg-amber-100 font-medium"><i class="fas fa-external-link-alt mr-1"></i>Telnyx</a>' +
+              '<a href="https://docs.livekit.io/agents/quickstarts/sip/" target="_blank" class="text-xs bg-white border border-amber-200 rounded-lg px-3 py-1.5 text-amber-700 hover:bg-amber-100 font-medium"><i class="fas fa-external-link-alt mr-1"></i>LiveKit SIP</a>' +
+            '</div>' +
+            '<p class="text-xs text-amber-600 mt-2">Pre-configured dev number: <strong class="font-mono">+1 (484) 964-9758</strong> (LiveKit-provided)</p>' +
+          '</div>' +
+
+          '<button onclick="qcSavePhones()" id="qcSaveBtn" class="w-full py-4 bg-sky-500 text-white rounded-2xl font-bold text-base hover:bg-sky-600 transition-all shadow-lg hover:shadow-xl">' +
+            '<i class="fas fa-save mr-2"></i>Save Phone Numbers & Continue</button>' +
+
+          '<p class="text-xs text-gray-400 mt-4 text-center"><i class="fas fa-lock mr-1"></i>Your phone numbers are stored securely and used only for call forwarding setup.</p>' +
         '</div>' +
       '</div>';
 
-    // Auto-format phone number as they type
-    var phoneInput = document.getElementById('qcPhoneInput');
-    if (phoneInput) {
-      phoneInput.addEventListener('input', function() {
-        var v = this.value.replace(/\D/g, '').slice(0, 10);
-        if (v.length >= 7) this.value = '(' + v.slice(0,3) + ') ' + v.slice(3,6) + '-' + v.slice(6);
-        else if (v.length >= 4) this.value = '(' + v.slice(0,3) + ') ' + v.slice(3);
-        else if (v.length > 0) this.value = '(' + v;
-      });
-      phoneInput.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') { e.preventDefault(); qcSendCode(); }
-      });
-    }
+    // Add phone formatting to both inputs
+    ['qcBizPhoneInput', 'qcAiPhoneInput'].forEach(function(inputId) {
+      var phoneInput = document.getElementById(inputId);
+      if (phoneInput) {
+        phoneInput.addEventListener('input', function() {
+          var v = this.value.replace(/\D/g, '').slice(0, 10);
+          if (v.length >= 7) this.value = '(' + v.slice(0,3) + ') ' + v.slice(3,6) + '-' + v.slice(6);
+          else if (v.length >= 4) this.value = '(' + v.slice(0,3) + ') ' + v.slice(3);
+          else if (v.length > 0) this.value = '(' + v;
+        });
+      }
+    });
   }
 
-  // Send verification code
-  window.qcSendCode = async function() {
-    var input = document.getElementById('qcPhoneInput');
+  // Save both phone numbers (manual entry flow)
+  window.qcSavePhones = async function() {
+    var bizInput = document.getElementById('qcBizPhoneInput');
+    var aiInput = document.getElementById('qcAiPhoneInput');
+    var bizRaw = bizInput ? bizInput.value.replace(/\D/g, '') : '';
+    var aiRaw = aiInput ? aiInput.value.replace(/\D/g, '') : '';
+
+    if (bizRaw.length < 10) { showToast('Please enter a valid 10-digit business phone number', 'error'); return; }
+    if (aiRaw.length < 10) { showToast('Please enter a valid 10-digit AI phone number', 'error'); return; }
+    if (bizRaw === aiRaw) { showToast('Business phone and AI phone cannot be the same number', 'error'); return; }
+
+    var btn = document.getElementById('qcSaveBtn');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving phone numbers...'; }
+
+    try {
+      var res = await fetch('/api/secretary/quick-connect/save-phones', {
+        method: 'POST', headers: authHeaders(),
+        body: JSON.stringify({ business_phone: bizRaw, ai_phone_number: aiRaw })
+      });
+      var data = await res.json();
+      if (data.success) {
+        state.quickConnect = state.quickConnect || {};
+        state.quickConnect.ai_phone_number = data.ai_phone_number;
+        state.quickConnect.ai_phone_display = data.ai_phone_display;
+        state.quickConnect.business_phone = data.business_phone;
+        state.quickConnect.business_phone_display = data.business_phone_display;
+        if (state.phoneSetup) {
+          state.phoneSetup.assigned_phone_number = data.ai_phone_number;
+          state.phoneSetup.business_phone = data.business_phone;
+          state.phoneSetup.connection_status = 'pending_forwarding';
+        } else {
+          state.phoneSetup = { assigned_phone_number: data.ai_phone_number, business_phone: data.business_phone, connection_status: 'pending_forwarding' };
+        }
+        showToast('Phone numbers saved! Now set up call forwarding.', 'success');
+        renderConnectTab();
+      } else {
+        showToast(data.error || 'Failed to save phone numbers', 'error');
+      }
+    } catch(e) { showToast('Network error — check your connection', 'error'); }
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save mr-2"></i>Save Phone Numbers & Continue'; }
+  };
+
+  // Legacy: purchase-number still works if LiveKit keys are configured
+  window.qcPurchaseNumber = async function() {
+    var input = document.getElementById('qcBizPhoneInput');
     var rawPhone = input ? input.value.replace(/\D/g, '') : '';
     if (rawPhone.length < 10) { showToast('Please enter a valid 10-digit phone number', 'error'); return; }
 
-    var btn = document.getElementById('qcSendBtn');
-    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Sending code...'; }
-
     try {
-      var res = await fetch('/api/secretary/quick-connect/send-code', {
+      var res = await fetch('/api/secretary/quick-connect/purchase-number', {
         method: 'POST', headers: authHeaders(),
         body: JSON.stringify({ phone_number: rawPhone })
       });
       var data = await res.json();
       if (data.success) {
         state.quickConnect = state.quickConnect || {};
-        state.quickConnect.codeSent = true;
-        state.quickConnect.phone = data.phone_number;
-        if (data.dev_code) state.quickConnect.devCode = data.dev_code;
-        showToast(data.message, 'success');
-        renderConnectTab();
-      } else {
-        showToast(data.error || 'Failed to send code', 'error');
-      }
-    } catch(e) { showToast('Network error — check your connection', 'error'); }
-    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-paper-plane mr-2"></i>Send Verification Code'; }
-  };
-
-  // ── Step 2: Enter verification code ──
-  function renderQCVerify() {
-    var el = document.getElementById('qcStepContent');
-    if (!el) return;
-    var qc = state.quickConnect || {};
-    var devHint = qc.devCode ? '<p class="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg p-2 mt-2"><i class="fas fa-code mr-1"></i>Dev mode code: <strong class="font-mono">' + qc.devCode + '</strong></p>' : '';
-
-    el.innerHTML =
-      '<div class="bg-white rounded-2xl border-2 border-sky-100 shadow-sm p-8">' +
-        '<div class="max-w-md mx-auto text-center">' +
-          '<div class="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">' +
-            '<i class="fas fa-sms text-green-500 text-2xl"></i></div>' +
-          '<h4 class="text-xl font-extrabold text-gray-800 mb-2">Check your phone!</h4>' +
-          '<p class="text-gray-500 text-sm mb-2">We sent a 6-digit code to <strong class="text-gray-700">' + formatPhone(qc.phone || '') + '</strong></p>' +
-          devHint +
-
-          '<div class="flex justify-center gap-2 my-6" id="qcCodeInputs">' +
-            '<input type="text" maxlength="1" class="w-12 h-14 text-center text-2xl font-bold border-2 border-gray-300 rounded-xl focus:border-sky-500 focus:ring-4 focus:ring-sky-100 transition-all" data-idx="0">' +
-            '<input type="text" maxlength="1" class="w-12 h-14 text-center text-2xl font-bold border-2 border-gray-300 rounded-xl focus:border-sky-500 focus:ring-4 focus:ring-sky-100 transition-all" data-idx="1">' +
-            '<input type="text" maxlength="1" class="w-12 h-14 text-center text-2xl font-bold border-2 border-gray-300 rounded-xl focus:border-sky-500 focus:ring-4 focus:ring-sky-100 transition-all" data-idx="2">' +
-            '<input type="text" maxlength="1" class="w-12 h-14 text-center text-2xl font-bold border-2 border-gray-300 rounded-xl focus:border-sky-500 focus:ring-4 focus:ring-sky-100 transition-all" data-idx="3">' +
-            '<input type="text" maxlength="1" class="w-12 h-14 text-center text-2xl font-bold border-2 border-gray-300 rounded-xl focus:border-sky-500 focus:ring-4 focus:ring-sky-100 transition-all" data-idx="4">' +
-            '<input type="text" maxlength="1" class="w-12 h-14 text-center text-2xl font-bold border-2 border-gray-300 rounded-xl focus:border-sky-500 focus:ring-4 focus:ring-sky-100 transition-all" data-idx="5">' +
-          '</div>' +
-
-          '<button onclick="qcVerifyCode()" id="qcVerifyBtn" class="w-full py-4 bg-green-500 text-white rounded-2xl font-bold text-base hover:bg-green-600 transition-all shadow-lg hover:shadow-xl">' +
-            '<i class="fas fa-check-circle mr-2"></i>Verify & Connect My Phone</button>' +
-
-          '<div class="flex justify-center gap-4 mt-4">' +
-            '<button onclick="qcSendCode()" class="text-sm text-sky-600 hover:text-sky-700 font-semibold"><i class="fas fa-redo mr-1"></i>Resend Code</button>' +
-            '<button onclick="state.quickConnect={};renderConnectTab()" class="text-sm text-gray-500 hover:text-gray-600 font-semibold"><i class="fas fa-arrow-left mr-1"></i>Change Number</button>' +
-          '</div>' +
-        '</div>' +
-      '</div>';
-
-    // Auto-advance code inputs
-    var inputs = document.querySelectorAll('#qcCodeInputs input');
-    inputs.forEach(function(inp, i) {
-      inp.addEventListener('input', function() {
-        this.value = this.value.replace(/\D/g, '').slice(0, 1);
-        if (this.value && i < 5) inputs[i + 1].focus();
-        // Auto-verify when all 6 digits entered
-        var full = '';
-        inputs.forEach(function(x) { full += x.value; });
-        if (full.length === 6) setTimeout(function() { qcVerifyCode(); }, 300);
-      });
-      inp.addEventListener('keydown', function(e) {
-        if (e.key === 'Backspace' && !this.value && i > 0) { inputs[i - 1].focus(); inputs[i - 1].value = ''; }
-      });
-      inp.addEventListener('paste', function(e) {
-        e.preventDefault();
-        var paste = (e.clipboardData || window.clipboardData).getData('text').replace(/\D/g, '').slice(0, 6);
-        for (var j = 0; j < paste.length && j < 6; j++) inputs[j].value = paste[j];
-        if (paste.length >= 6) setTimeout(function() { qcVerifyCode(); }, 300);
-      });
-    });
-    if (inputs[0]) inputs[0].focus();
-  }
-
-  // Verify the code and auto-setup
-  window.qcVerifyCode = async function() {
-    var inputs = document.querySelectorAll('#qcCodeInputs input');
-    var code = '';
-    inputs.forEach(function(inp) { code += inp.value; });
-    if (code.length < 6) { showToast('Enter all 6 digits', 'error'); return; }
-
-    var btn = document.getElementById('qcVerifyBtn');
-    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Verifying & setting up...'; }
-
-    try {
-      var qc = state.quickConnect || {};
-      var res = await fetch('/api/secretary/quick-connect/verify', {
-        method: 'POST', headers: authHeaders(),
-        body: JSON.stringify({ phone_number: qc.phone, code: code })
-      });
-      var data = await res.json();
-      if (data.success) {
-        state.quickConnect = Object.assign(state.quickConnect || {}, data);
-        state.quickConnect.verified = true;
+        state.quickConnect.ai_phone_number = data.ai_phone_number;
+        state.quickConnect.ai_phone_display = data.ai_phone_display;
+        state.quickConnect.business_phone = data.business_phone;
+        state.quickConnect.business_phone_display = data.business_phone_display;
+        state.quickConnect.dispatch_rule_id = data.dispatch_rule_id;
         if (state.phoneSetup) {
-          state.phoneSetup.connection_status = 'verified';
           state.phoneSetup.assigned_phone_number = data.ai_phone_number;
           state.phoneSetup.business_phone = data.business_phone;
+        } else {
+          state.phoneSetup = { assigned_phone_number: data.ai_phone_number, business_phone: data.business_phone };
         }
-        showToast('Phone verified! AI secretary number assigned.', 'success');
+        showToast('AI phone number purchased! Now set up call forwarding.', 'success');
         renderConnectTab();
+      } else if (data.needs_manual) {
+        // Auto-purchase failed — manual entry is already shown
+        showToast('Auto-purchase not available. Please enter your AI phone number manually.', 'info');
       } else {
-        showToast(data.error || 'Invalid code', 'error');
-        inputs.forEach(function(inp) { inp.value = ''; inp.style.borderColor = '#ef4444'; });
-        if (inputs[0]) inputs[0].focus();
+        showToast(data.error || 'Failed to purchase number', 'error');
       }
-    } catch(e) { showToast('Network error', 'error'); }
-    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-check-circle mr-2"></i>Verify & Connect My Phone'; }
+    } catch(e) { showToast('Network error — check your connection', 'error'); }
   };
 
-  // ── Step 3: Forward your phone (simple one-line instruction) ──
-  function renderQCForward() {
+  // ── Step 2: Call Forwarding Instructions ──
+  // Shows both phone numbers, forwarding instructions per carrier, and Edit/Confirm buttons
+  function renderQCForwarding() {
     var el = document.getElementById('qcStepContent');
     if (!el) return;
     var qc = state.quickConnect || {};
     var ps = state.phoneSetup || {};
-    var bizPhone = qc.business_phone_display || formatPhone(qc.business_phone || ps.business_phone || '');
     var aiPhone = qc.ai_phone_display || formatPhone(qc.ai_phone_number || ps.assigned_phone_number || '');
-    var fwdCode = qc.forwarding_code || ps.forwarding_code || '';
-    var inst = qc.instructions || {};
+    var aiPhoneRaw = qc.ai_phone_number || ps.assigned_phone_number || '';
+    var bizPhone = qc.business_phone_display || formatPhone(qc.business_phone || ps.business_phone || '');
+    var bizPhoneRaw = qc.business_phone || ps.business_phone || '';
+    var mode = state.secretaryMode || 'directory';
+
+    // Always show carrier forwarding form
+    var carrierFormHtml = renderCarrierForwardingForm(aiPhoneRaw, false);
 
     el.innerHTML =
-      '<div class="bg-white rounded-2xl border-2 border-sky-100 shadow-sm p-8">' +
+      '<div class="bg-white rounded-2xl border-2 border-amber-100 shadow-sm p-8">' +
         '<div class="max-w-lg mx-auto">' +
-
-          // Success badge
           '<div class="text-center mb-6">' +
-            '<div class="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">' +
-              '<i class="fas fa-check text-green-500 text-3xl"></i></div>' +
-            '<h4 class="text-xl font-extrabold text-gray-800 mb-1">Almost there! One last step.</h4>' +
-            '<p class="text-gray-500 text-sm">Pick up your business phone and dial this code to activate forwarding.</p>' +
+            '<div class="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">' +
+              '<i class="fas fa-random text-amber-500 text-2xl"></i></div>' +
+            '<h4 class="text-xl font-extrabold text-gray-800 mb-2">Set Up Call Forwarding</h4>' +
+            '<p class="text-gray-500 text-sm">Forward unanswered calls from your business phone to your AI number so the AI secretary can pick up when you can\'t.</p>' +
           '</div>' +
 
-          // The simple forwarding code
-          '<div class="bg-gradient-to-r from-sky-500 to-blue-600 rounded-2xl p-6 text-center text-white mb-6 shadow-lg">' +
-            '<p class="text-xs uppercase tracking-widest opacity-80 mb-1">Dial this from your business phone</p>' +
-            '<p class="text-4xl font-mono font-black tracking-wider mb-2" id="qcFwdCode">' + esc(fwdCode) + '</p>' +
-            '<button onclick="qcCopyCode()" class="text-xs opacity-80 hover:opacity-100 transition-all"><i class="fas fa-copy mr-1"></i>Copy to clipboard</button>' +
+          // Both phone numbers display
+          '<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">' +
+            '<div class="bg-gray-50 border border-gray-200 rounded-xl p-4 text-center">' +
+              '<p class="text-xs text-gray-500 uppercase tracking-wide font-semibold mb-1">Your Business Phone</p>' +
+              '<p class="font-mono font-bold text-gray-800 text-lg">' + bizPhone + '</p>' +
+              '<p class="text-xs text-gray-400 mt-1">Forwards unanswered calls →</p>' +
+            '</div>' +
+            '<div class="bg-sky-50 border-2 border-sky-200 rounded-xl p-4 text-center">' +
+              '<p class="text-xs text-sky-600 uppercase tracking-wide font-semibold mb-1">AI Secretary Number</p>' +
+              '<p class="font-mono font-black text-sky-800 text-lg">' + aiPhone + '</p>' +
+              '<button onclick="copyToClipboard(\'' + esc(aiPhoneRaw) + '\')" class="text-xs text-sky-500 hover:text-sky-700 font-medium mt-1"><i class="fas fa-copy mr-1"></i>Copy</button>' +
+            '</div>' +
           '</div>' +
 
-          // Visual step-by-step
-          '<div class="space-y-3 mb-6">' +
-            '<div class="flex items-start gap-3 bg-gray-50 rounded-xl p-3">' +
-              '<span class="flex-shrink-0 w-7 h-7 rounded-full bg-sky-500 text-white flex items-center justify-center text-xs font-bold">1</span>' +
-              '<p class="text-sm text-gray-700">' + (inst.step1 || 'Pick up your business phone <strong>' + bizPhone + '</strong>') + '</p></div>' +
-            '<div class="flex items-start gap-3 bg-sky-50 rounded-xl p-3 border-2 border-sky-200">' +
-              '<span class="flex-shrink-0 w-7 h-7 rounded-full bg-sky-500 text-white flex items-center justify-center text-xs font-bold">2</span>' +
-              '<p class="text-sm text-gray-700 font-semibold">' + (inst.step2 || 'Dial: <span class="font-mono bg-white px-2 py-0.5 rounded">' + esc(fwdCode) + '</span>') + '</p></div>' +
-            '<div class="flex items-start gap-3 bg-gray-50 rounded-xl p-3">' +
-              '<span class="flex-shrink-0 w-7 h-7 rounded-full bg-sky-500 text-white flex items-center justify-center text-xs font-bold">3</span>' +
-              '<p class="text-sm text-gray-700">' + (inst.step3 || 'Wait for the confirmation tone (2 beeps)') + '</p></div>' +
+          // Edit phone numbers button
+          '<div class="text-center mb-4">' +
+            '<button onclick="qcEditPhones()" class="text-sm text-sky-600 hover:text-sky-800 font-semibold"><i class="fas fa-edit mr-1"></i>Edit Phone Numbers</button>' +
           '</div>' +
 
-          // Phone number cards
-          '<div class="grid grid-cols-2 gap-3 mb-6">' +
-            '<div class="bg-gray-50 rounded-xl p-3 text-center">' +
-              '<p class="text-xs text-gray-500 uppercase tracking-wide">Your Number</p>' +
-              '<p class="font-mono font-bold text-gray-800">' + bizPhone + '</p></div>' +
-            '<div class="bg-sky-50 rounded-xl p-3 text-center">' +
-              '<p class="text-xs text-sky-600 uppercase tracking-wide">AI Secretary Number</p>' +
-              '<p class="font-mono font-bold text-sky-800">' + aiPhone + '</p></div>' +
+          // Forwarding instructions — always show generic with carrier selector
+          renderGenericForwarding(aiPhoneRaw) +
+
+          carrierFormHtml +
+
+          // Confirm + Activate button
+          '<div class="mt-6 text-center">' +
+            '<button onclick="qcActivate()" id="qcActivateBtn" class="w-full py-4 bg-green-500 text-white rounded-2xl font-bold text-base hover:bg-green-600 transition-all shadow-lg hover:shadow-xl">' +
+              '<i class="fas fa-check-circle mr-2"></i>I\'ve Set Up Call Forwarding — Confirm & Activate</button>' +
+            '<p class="text-xs text-gray-400 mt-3">This will save your configuration and deploy the AI agent to your LiveKit account.</p>' +
           '</div>' +
 
-          // How it works
-          '<div class="bg-emerald-50 border border-emerald-200 rounded-xl p-4 mb-6">' +
-            '<p class="text-sm font-semibold text-emerald-800 mb-1"><i class="fas fa-info-circle mr-1"></i>How it works after forwarding:</p>' +
-            '<ul class="text-sm text-emerald-700 space-y-1 ml-5 list-disc">' +
-              '<li>Calls to ' + bizPhone + ' ring YOUR phone first</li>' +
-              '<li>If you don\'t answer, the AI secretary picks up automatically</li>' +
-              '<li>You get an SMS summary of every AI-handled call</li>' +
-              '<li>To disable anytime: dial <strong class="font-mono">*73</strong> from your phone</li>' +
-            '</ul>' +
+          '<div class="mt-4 text-center">' +
+            '<button onclick="qcGoBack()" class="text-sm text-gray-500 hover:text-gray-600 font-semibold"><i class="fas fa-arrow-left mr-1"></i>Go Back & Edit Phone Numbers</button>' +
           '</div>' +
-
-          // Action buttons
-          '<div class="flex gap-3">' +
-            '<button onclick="qcComplete()" id="qcCompleteBtn" class="flex-1 py-4 bg-green-500 text-white rounded-2xl font-bold text-base hover:bg-green-600 transition-all shadow-lg hover:shadow-xl">' +
-              '<i class="fas fa-check-double mr-2"></i>I\'ve Dialed It — Go Live!</button>' +
-          '</div>' +
-
-          '<p class="text-center text-xs text-gray-400 mt-3">Having trouble? <button onclick="state.quickConnect={};renderConnectTab()" class="text-sky-500 hover:underline">Start over</button></p>' +
         '</div>' +
       '</div>';
   }
 
-  window.qcCopyCode = function() {
-    var code = document.getElementById('qcFwdCode');
-    if (code) {
-      navigator.clipboard.writeText(code.textContent.trim()).then(function() {
-        showToast('Forwarding code copied!', 'success');
-      });
-    }
+  // Edit phone numbers — go back to step 1 with existing data
+  window.qcEditPhones = function() {
+    // Reset connection status so we go back to step 1 but keep data
+    if (state.phoneSetup) state.phoneSetup.connection_status = 'pending_forwarding';
+    // Clear the assigned number temporarily to show step 1
+    var savedAi = state.quickConnect?.ai_phone_number || state.phoneSetup?.assigned_phone_number || '';
+    var savedBiz = state.quickConnect?.business_phone || state.phoneSetup?.business_phone || '';
+    state.quickConnect = { ai_phone_number: '', business_phone: savedBiz };
+    if (state.phoneSetup) state.phoneSetup.assigned_phone_number = '';
+    // Store originals so step 1 can pre-fill
+    state._editBizPhone = savedBiz;
+    state._editAiPhone = savedAi;
+    renderConnectTab();
   };
 
-  window.qcComplete = async function() {
-    var btn = document.getElementById('qcCompleteBtn');
-    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Activating...'; }
+  // Go back from step 2 to step 1
+  window.qcGoBack = function() {
+    window.qcEditPhones();
+  };
+
+  // Telus-specific forwarding instructions (for dev/test account)
+  function renderTelusForwarding(aiNumber) {
+    var digits = aiNumber.replace(/^\+1/, '').replace(/\D/g, '');
+    return '<div class="bg-gradient-to-r from-emerald-50 to-green-50 border-2 border-emerald-300 rounded-xl p-5 mb-4">' +
+      '<div class="flex items-center gap-2 mb-3"><i class="fas fa-mobile-alt text-emerald-600"></i><span class="font-bold text-emerald-800">Telus Call Forwarding Instructions</span></div>' +
+      '<div class="space-y-3">' +
+        '<div class="flex items-start gap-3">' +
+          '<span class="flex-shrink-0 w-6 h-6 rounded-full bg-emerald-500 text-white flex items-center justify-center text-xs font-bold">1</span>' +
+          '<div><p class="text-sm text-emerald-800 font-semibold">Forward when busy or no answer</p>' +
+            '<p class="text-xs text-emerald-600 mt-1">From your Telus phone, dial:</p>' +
+            '<div class="bg-white border border-emerald-300 rounded-lg p-3 mt-2 font-mono text-lg text-center">' +
+              '<span class="text-emerald-700 font-black">*92 ' + digits + '</span>' +
+              '<button onclick="copyToClipboard(\'*92' + digits + '\')" class="ml-2 text-xs text-emerald-500 hover:text-emerald-700"><i class="fas fa-copy"></i></button>' +
+            '</div>' +
+            '<p class="text-xs text-emerald-500 mt-1">This forwards calls to your AI when you don\'t answer or are on another call.</p>' +
+          '</div></div>' +
+        '<div class="flex items-start gap-3">' +
+          '<span class="flex-shrink-0 w-6 h-6 rounded-full bg-emerald-500 text-white flex items-center justify-center text-xs font-bold">2</span>' +
+          '<div><p class="text-sm text-emerald-800 font-semibold">Wait for confirmation tone</p>' +
+            '<p class="text-xs text-emerald-600 mt-1">You\'ll hear a confirmation tone or see a notification that call forwarding is active.</p></div></div>' +
+        '<div class="flex items-start gap-3">' +
+          '<span class="flex-shrink-0 w-6 h-6 rounded-full bg-gray-300 text-gray-600 flex items-center justify-center text-xs font-bold"><i class="fas fa-undo text-xs"></i></span>' +
+          '<div><p class="text-sm text-gray-700 font-semibold">To deactivate later</p>' +
+            '<p class="text-xs text-gray-500 mt-1">Dial <span class="font-mono font-bold">*93</span> from your Telus phone to cancel forwarding.</p></div></div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  // Generic forwarding instructions (for all other carriers)
+  function renderGenericForwarding(aiNumber) {
+    var formattedNum = formatPhone(aiNumber);
+    return '<div class="bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-300 rounded-xl p-5 mb-4">' +
+      '<div class="flex items-center gap-2 mb-3"><i class="fas fa-info-circle text-blue-600"></i><span class="font-bold text-blue-800">How to Set Up Call Forwarding</span></div>' +
+      '<p class="text-sm text-blue-700 mb-3">You need to set up <strong>conditional call forwarding</strong> (forward when no answer / busy) with your mobile carrier so unanswered calls go to your AI secretary.</p>' +
+      '<div class="space-y-3">' +
+        '<div class="flex items-start gap-3">' +
+          '<span class="flex-shrink-0 w-6 h-6 rounded-full bg-blue-500 text-white flex items-center justify-center text-xs font-bold">1</span>' +
+          '<div><p class="text-sm text-blue-800 font-semibold">Find your carrier\'s forwarding instructions</p>' +
+            '<p class="text-xs text-blue-600 mt-1">Search: <em>"[Your Carrier] set up conditional call forwarding"</em> or call your carrier\'s customer service line.</p>' +
+            '<div class="flex flex-wrap gap-2 mt-2">' +
+              '<a href="https://www.google.com/search?q=Telus+conditional+call+forwarding" target="_blank" class="text-xs bg-white border border-blue-200 rounded-lg px-3 py-1 text-blue-600 hover:bg-blue-50">Telus</a>' +
+              '<a href="https://www.google.com/search?q=Rogers+conditional+call+forwarding" target="_blank" class="text-xs bg-white border border-blue-200 rounded-lg px-3 py-1 text-blue-600 hover:bg-blue-50">Rogers</a>' +
+              '<a href="https://www.google.com/search?q=Bell+conditional+call+forwarding" target="_blank" class="text-xs bg-white border border-blue-200 rounded-lg px-3 py-1 text-blue-600 hover:bg-blue-50">Bell</a>' +
+              '<a href="https://www.google.com/search?q=Koodo+conditional+call+forwarding" target="_blank" class="text-xs bg-white border border-blue-200 rounded-lg px-3 py-1 text-blue-600 hover:bg-blue-50">Koodo</a>' +
+              '<a href="https://www.google.com/search?q=Fido+conditional+call+forwarding" target="_blank" class="text-xs bg-white border border-blue-200 rounded-lg px-3 py-1 text-blue-600 hover:bg-blue-50">Fido</a>' +
+              '<a href="https://www.google.com/search?q=Freedom+Mobile+conditional+call+forwarding" target="_blank" class="text-xs bg-white border border-blue-200 rounded-lg px-3 py-1 text-blue-600 hover:bg-blue-50">Freedom</a>' +
+              '<a href="https://www.google.com/search?q=AT%26T+conditional+call+forwarding" target="_blank" class="text-xs bg-white border border-blue-200 rounded-lg px-3 py-1 text-blue-600 hover:bg-blue-50">AT&T</a>' +
+              '<a href="https://www.google.com/search?q=T-Mobile+conditional+call+forwarding" target="_blank" class="text-xs bg-white border border-blue-200 rounded-lg px-3 py-1 text-blue-600 hover:bg-blue-50">T-Mobile</a>' +
+              '<a href="https://www.google.com/search?q=Verizon+conditional+call+forwarding" target="_blank" class="text-xs bg-white border border-blue-200 rounded-lg px-3 py-1 text-blue-600 hover:bg-blue-50">Verizon</a>' +
+            '</div></div></div>' +
+        '<div class="flex items-start gap-3">' +
+          '<span class="flex-shrink-0 w-6 h-6 rounded-full bg-blue-500 text-white flex items-center justify-center text-xs font-bold">2</span>' +
+          '<div><p class="text-sm text-blue-800 font-semibold">Set the forwarding number to:</p>' +
+            '<div class="bg-white border border-blue-300 rounded-lg p-3 mt-2 font-mono text-lg text-center">' +
+              '<span class="text-blue-700 font-black">' + formattedNum + '</span>' +
+              '<button onclick="copyToClipboard(\'' + esc(aiNumber) + '\')" class="ml-2 text-xs text-blue-500 hover:text-blue-700"><i class="fas fa-copy"></i></button>' +
+            '</div></div></div>' +
+        '<div class="flex items-start gap-3">' +
+          '<span class="flex-shrink-0 w-6 h-6 rounded-full bg-blue-500 text-white flex items-center justify-center text-xs font-bold">3</span>' +
+          '<div><p class="text-sm text-blue-800 font-semibold">Choose "Forward when no answer" or "Forward when busy"</p>' +
+            '<p class="text-xs text-blue-600 mt-1">This way your phone rings first. If you don\'t answer, the AI picks up. You stay in control.</p></div></div>' +
+      '</div>' +
+      '<div class="mt-4 bg-amber-50 border border-amber-200 rounded-lg p-3">' +
+        '<p class="text-xs text-amber-700"><i class="fas fa-lightbulb text-amber-500 mr-1"></i><strong>Tip:</strong> Most carriers let you do this from your phone by dialing a short code (like *92 or **62*). Check with your carrier for the exact code.</p>' +
+      '</div>' +
+    '</div>';
+  }
+
+  // Carrier-specific forwarding form (only for Directory mode)
+  function renderCarrierForwardingForm(aiNumber, isDev) {
+    if (isDev) return ''; // Dev account already has Telus instructions
+    return '<div class="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-4">' +
+      '<p class="text-sm font-semibold text-gray-700 mb-2"><i class="fas fa-question-circle text-sky-500 mr-1"></i>Need help finding your carrier\'s forwarding code?</p>' +
+      '<p class="text-xs text-gray-500 mb-3">Select your carrier below for specific dial codes:</p>' +
+      '<select id="qcCarrierSelect" onchange="qcShowCarrierCode()" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-400 mb-2">' +
+        '<option value="">Select your carrier...</option>' +
+        '<option value="telus">Telus / Koodo / Public Mobile</option>' +
+        '<option value="rogers">Rogers / Fido / Chatr</option>' +
+        '<option value="bell">Bell / Virgin Plus / Lucky Mobile</option>' +
+        '<option value="freedom">Freedom Mobile</option>' +
+        '<option value="att">AT&T / Cricket</option>' +
+        '<option value="tmobile">T-Mobile / Metro</option>' +
+        '<option value="verizon">Verizon</option>' +
+      '</select>' +
+      '<div id="qcCarrierCodeResult"></div>' +
+    '</div>';
+  }
+
+  // Show carrier-specific forwarding codes
+  window.qcShowCarrierCode = function() {
+    var sel = document.getElementById('qcCarrierSelect');
+    var result = document.getElementById('qcCarrierCodeResult');
+    if (!sel || !result) return;
+    var qc = state.quickConnect || {};
+    var ps = state.phoneSetup || {};
+    var aiNum = (qc.ai_phone_number || ps.assigned_phone_number || '').replace(/^\+1/, '').replace(/\D/g, '');
+    if (!aiNum) { result.innerHTML = '<p class="text-xs text-red-500">No AI number assigned yet.</p>'; return; }
+
+    var codes = {
+      telus:   { activate: '*92' + aiNum, deactivate: '*93', note: 'Telus/Koodo/Public Mobile' },
+      rogers:  { activate: '*92' + aiNum, deactivate: '*93', note: 'Rogers/Fido/Chatr — may also use **004*+1' + aiNum + '#' },
+      bell:    { activate: '*92' + aiNum, deactivate: '*93', note: 'Bell/Virgin Plus/Lucky Mobile' },
+      freedom: { activate: '**62*+1' + aiNum + '#', deactivate: '##62#', note: 'Freedom Mobile' },
+      att:     { activate: '*92' + aiNum, deactivate: '*93', note: 'AT&T / Cricket — may also use **004*1' + aiNum + '#' },
+      tmobile: { activate: '**004*1' + aiNum + '#', deactivate: '##004#', note: 'T-Mobile / Metro by T-Mobile' },
+      verizon: { activate: '*71' + aiNum, deactivate: '*73', note: 'Verizon' },
+    };
+    var c = codes[sel.value];
+    if (!c) { result.innerHTML = ''; return; }
+    result.innerHTML =
+      '<div class="bg-white border border-sky-200 rounded-lg p-3 mt-2">' +
+        '<p class="text-xs text-gray-500 mb-1">' + c.note + '</p>' +
+        '<div class="flex items-center gap-2">' +
+          '<span class="text-sm font-semibold text-gray-700">Dial:</span>' +
+          '<span class="font-mono font-bold text-sky-700 text-lg">' + c.activate + '</span>' +
+          '<button onclick="copyToClipboard(\'' + c.activate + '\')" class="text-xs text-sky-500 hover:text-sky-700"><i class="fas fa-copy"></i></button>' +
+        '</div>' +
+        '<p class="text-xs text-gray-400 mt-1">To deactivate: <span class="font-mono">' + c.deactivate + '</span></p>' +
+      '</div>';
+  };
+
+  // Activate the AI secretary (Step 2 → Step 3) — deploys agent to LiveKit
+  window.qcActivate = async function() {
+    var btn = document.getElementById('qcActivateBtn');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Deploying AI agent to LiveKit & activating...'; }
+
     try {
-      await fetch('/api/secretary/quick-connect/complete', { method: 'POST', headers: authHeaders() });
-      if (state.phoneSetup) state.phoneSetup.connection_status = 'connected';
-      showToast('Your AI secretary is now LIVE!', 'success');
-      await loadStatus();
-    } catch(e) { showToast('Failed to activate', 'error'); }
-    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-check-double mr-2"></i>I\'ve Dialed It — Go Live!'; }
+      var res = await fetch('/api/secretary/quick-connect/activate', {
+        method: 'POST', headers: authHeaders()
+      });
+      var data = await res.json();
+      if (data.success) {
+        state.quickConnect = state.quickConnect || {};
+        state.quickConnect.connected = true;
+        state.quickConnect.business_phone = data.business_phone || state.quickConnect.business_phone;
+        state.quickConnect.ai_phone_number = data.ai_phone_number || state.quickConnect.ai_phone_number;
+        if (state.phoneSetup) {
+          state.phoneSetup.connection_status = 'connected';
+        } else {
+          state.phoneSetup = { connection_status: 'connected', assigned_phone_number: data.ai_phone_number, business_phone: data.business_phone };
+        }
+        state.isActive = true;
+        var msg = data.livekit_deployed
+          ? 'Your AI secretary is now LIVE and deployed to LiveKit!'
+          : 'Configuration saved and activated! LiveKit deployment will complete when API keys are configured.';
+        showToast(msg, 'success');
+        renderConnectTab();
+      } else {
+        showToast(data.error || 'Activation failed', 'error');
+      }
+    } catch(e) { showToast('Network error', 'error'); }
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-check-circle mr-2"></i>I\'ve Set Up Call Forwarding — Confirm & Activate'; }
   };
 
-  // ── Connected! (Step 4 — final state) ──
+  // ── Step 3: CONNECTED — AI Secretary is Live ──
   function renderQCComplete() {
     var el = document.getElementById('qcStepContent');
     if (!el) return;
@@ -812,37 +1079,160 @@
     var qc = state.quickConnect || {};
     var bizPhone = qc.business_phone_display || formatPhone(qc.business_phone || ps.business_phone || '');
     var aiPhone = qc.ai_phone_display || formatPhone(qc.ai_phone_number || ps.assigned_phone_number || '');
-    var aiDigits = (qc.ai_phone_number || ps.assigned_phone_number || '').replace(/^\+1/, '').replace(/\D/g, '');
+    var bizPhoneRaw = qc.business_phone || ps.business_phone || '';
+    var aiPhoneRaw = qc.ai_phone_number || ps.assigned_phone_number || '';
 
     el.innerHTML =
       '<div class="bg-white rounded-2xl border-2 border-green-200 shadow-sm p-8 text-center">' +
         '<div class="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">' +
           '<i class="fas fa-check-circle text-green-500 text-4xl"></i></div>' +
         '<h3 class="text-2xl font-extrabold text-gray-800 mb-2">Your AI Secretary is LIVE!</h3>' +
-        '<p class="text-gray-500 mb-6">Every call to your business number is now backed by AI. Never miss a lead again.</p>' +
+        '<p class="text-gray-500 mb-6">Every call to your business number is now backed by AI. Powered by LiveKit — never miss a lead again.</p>' +
+
+        '<div class="bg-sky-50 border border-sky-200 rounded-xl p-4 mb-6 text-left max-w-lg mx-auto">' +
+          '<p class="text-sm text-sky-800 font-semibold"><i class="fas fa-phone-volume text-sky-500 mr-2"></i>AI Secretary Connected via LiveKit</p>' +
+          '<p class="text-xs text-sky-600 mt-1">When customers call and you don\'t answer, calls forward to your AI number and LiveKit\'s voice AI handles the conversation.</p>' +
+        '</div>' +
 
         '<div class="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-lg mx-auto mb-6">' +
           '<div class="bg-gray-50 rounded-xl p-4">' +
             '<p class="text-xs text-gray-500 uppercase tracking-wide">Your Business Number</p>' +
-            '<div class="flex items-center gap-2 mt-1">' +
-              '<input type="tel" id="connectedBizPhone" value="' + esc(ps.business_phone || '') + '" class="flex-1 font-mono font-bold text-gray-800 text-lg bg-white border border-gray-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-sky-400 focus:border-sky-400">' +
-              '<button onclick="qcUpdateBizPhone()" class="px-3 py-2 bg-sky-100 text-sky-600 rounded-lg text-sm font-semibold hover:bg-sky-200 transition-all" title="Save"><i class="fas fa-save"></i></button>' +
-            '</div>' +
-            '<p class="text-xs text-gray-400 mt-1">Edit to update your number</p></div>' +
+            '<p class="font-mono font-bold text-gray-800 text-lg mt-1">' + bizPhone + '</p></div>' +
           '<div class="bg-sky-50 rounded-xl p-4">' +
             '<p class="text-xs text-sky-600 uppercase tracking-wide">AI Secretary Number</p>' +
-            '<p class="font-mono font-bold text-sky-800 text-lg mt-1">' + aiPhone + '</p></div>' +
+            '<p class="font-mono font-bold text-sky-800 text-lg mt-1">' + aiPhone + '</p>' +
+            '<button onclick="copyToClipboard(\'' + esc(aiPhoneRaw) + '\')" class="text-xs text-sky-500 hover:text-sky-700 mt-1"><i class="fas fa-copy mr-1"></i>Copy</button></div>' +
         '</div>' +
 
-        '<div class="flex justify-center gap-3 mb-6">' +
-          '<button onclick="secSetTab(\'setup\')" class="px-6 py-3 bg-sky-500 text-white rounded-xl font-semibold text-sm hover:bg-sky-600 transition-all shadow"><i class="fas fa-cog mr-2"></i>Edit Configuration</button>' +
+        '<div class="bg-emerald-50 border border-emerald-200 rounded-xl p-5 mb-6 text-left max-w-lg mx-auto">' +
+          '<p class="text-sm font-bold text-emerald-800 mb-3"><i class="fas fa-route mr-1"></i>How calls are handled:</p>' +
+          '<div class="space-y-2">' +
+            '<div class="flex items-start gap-3">' +
+              '<span class="flex-shrink-0 w-6 h-6 rounded-full bg-emerald-500 text-white flex items-center justify-center text-xs font-bold">1</span>' +
+              '<p class="text-sm text-emerald-700">Customer calls <strong>' + bizPhone + '</strong></p></div>' +
+            '<div class="flex items-start gap-3">' +
+              '<span class="flex-shrink-0 w-6 h-6 rounded-full bg-emerald-500 text-white flex items-center justify-center text-xs font-bold">2</span>' +
+              '<p class="text-sm text-emerald-700"><strong>Your phone rings first</strong> — you get first priority</p></div>' +
+            '<div class="flex items-start gap-3">' +
+              '<span class="flex-shrink-0 w-6 h-6 rounded-full bg-emerald-500 text-white flex items-center justify-center text-xs font-bold">3</span>' +
+              '<p class="text-sm text-emerald-700">If you don\'t answer → call forwards to AI at <strong>' + aiPhone + '</strong></p></div>' +
+            '<div class="flex items-start gap-3">' +
+              '<span class="flex-shrink-0 w-6 h-6 rounded-full bg-emerald-500 text-white flex items-center justify-center text-xs font-bold">4</span>' +
+              '<p class="text-sm text-emerald-700">AI secretary answers professionally, handles the call, logs it to your dashboard</p></div>' +
+          '</div>' +
+        '</div>' +
+
+        '<div class="flex justify-center gap-3 mb-6 flex-wrap">' +
+          '<button onclick="qcOpenPhoneConfig()" class="px-6 py-3 bg-sky-500 text-white rounded-xl font-semibold text-sm hover:bg-sky-600 transition-all shadow"><i class="fas fa-edit mr-2"></i>Edit Phone Configuration</button>' +
+          '<button onclick="secSetTab(\'setup\')" class="px-6 py-3 bg-gray-100 text-gray-700 rounded-xl font-semibold text-sm hover:bg-gray-200 transition-all"><i class="fas fa-cog mr-2"></i>Edit AI Settings</button>' +
           '<button onclick="secSetTab(\'calls\')" class="px-6 py-3 bg-gray-100 text-gray-700 rounded-xl font-semibold text-sm hover:bg-gray-200 transition-all"><i class="fas fa-phone-volume mr-2"></i>View Call Log</button>' +
         '</div>' +
 
-        '<div class="bg-amber-50 border border-amber-200 rounded-xl p-4 text-left max-w-lg mx-auto">' +
-          '<p class="text-sm text-amber-700"><i class="fas fa-info-circle mr-1"></i><strong>To disable forwarding:</strong> Dial <span class="font-mono bg-white px-2 py-0.5 rounded">*73</span> from your business phone. To re-enable: Dial <span class="font-mono bg-white px-2 py-0.5 rounded">*72' + aiDigits + '</span></p></div>' +
+        '<div class="text-center mb-4">' +
+          '<button onclick="qcDisconnect()" class="text-sm text-red-400 hover:text-red-600 font-medium"><i class="fas fa-unlink mr-1"></i>Disconnect AI Secretary</button>' +
+        '</div>' +
+
+        '<p class="text-xs text-gray-400 text-center">Need help? Contact support. Your AI secretary is powered by LiveKit voice AI.</p>' +
       '</div>';
   }
+
+  // ── Phone Config Modal — Edit phone numbers while connected ──
+  window.qcOpenPhoneConfig = function() {
+    var existing = document.getElementById('phoneConfigModal');
+    if (existing) existing.remove();
+
+    var qc = state.quickConnect || {};
+    var ps = state.phoneSetup || {};
+    var bizPhone = qc.business_phone || ps.business_phone || '';
+    var aiPhone = qc.ai_phone_number || ps.assigned_phone_number || '';
+
+    var modal = document.createElement('div');
+    modal.id = 'phoneConfigModal';
+    modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm';
+    modal.innerHTML =
+      '<div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">' +
+        '<div class="bg-gradient-to-r from-sky-500 to-blue-600 p-5 text-white">' +
+          '<div class="flex items-center justify-between">' +
+            '<div><h2 class="text-lg font-bold"><i class="fas fa-phone-alt mr-2"></i>Edit Phone Configuration</h2>' +
+            '<p class="text-sky-100 text-xs mt-1">Update your business phone and AI phone numbers</p></div>' +
+            '<button onclick="document.getElementById(\'phoneConfigModal\').remove()" class="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center hover:bg-white/30 transition-all"><i class="fas fa-times text-sm"></i></button>' +
+          '</div>' +
+        '</div>' +
+        '<div class="p-6">' +
+          '<div class="mb-5">' +
+            '<label class="block text-sm font-semibold text-gray-700 mb-2"><i class="fas fa-phone text-sky-500 mr-1"></i>Your Business Phone Number</label>' +
+            '<p class="text-xs text-gray-400 mb-2">Your regular cell number that customers call</p>' +
+            '<div class="relative">' +
+              '<div class="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none"><span class="text-gray-400 font-mono">+1</span></div>' +
+              '<input type="tel" id="pcBizPhone" value="' + esc(bizPhone.replace(/^\+1/, '')) + '" placeholder="(780) 983-3335" ' +
+                'class="w-full pl-12 pr-4 py-3 font-mono border-2 border-gray-300 rounded-xl focus:ring-4 focus:ring-sky-200 focus:border-sky-500 text-center" maxlength="14">' +
+            '</div>' +
+          '</div>' +
+          '<div class="mb-5">' +
+            '<label class="block text-sm font-semibold text-gray-700 mb-2"><i class="fas fa-robot text-emerald-500 mr-1"></i>AI Phone Number (Purchased)</label>' +
+            '<p class="text-xs text-gray-400 mb-2">Phone number purchased from Twilio/Vonage/Telnyx for the AI</p>' +
+            '<div class="relative">' +
+              '<div class="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none"><span class="text-gray-400 font-mono">+1</span></div>' +
+              '<input type="tel" id="pcAiPhone" value="' + esc(aiPhone.replace(/^\+1/, '')) + '" placeholder="(484) 964-9758" ' +
+                'class="w-full pl-12 pr-4 py-3 font-mono border-2 border-emerald-300 rounded-xl focus:ring-4 focus:ring-emerald-200 focus:border-emerald-500 text-center bg-emerald-50/50" maxlength="14">' +
+            '</div>' +
+          '</div>' +
+          '<div class="flex gap-3">' +
+            '<button onclick="qcSavePhoneConfig()" id="pcSaveBtn" class="flex-1 py-3 bg-sky-500 text-white rounded-xl font-bold hover:bg-sky-600 transition-all shadow"><i class="fas fa-save mr-2"></i>Save Changes</button>' +
+            '<button onclick="document.getElementById(\'phoneConfigModal\').remove()" class="px-6 py-3 bg-gray-100 text-gray-700 rounded-xl font-semibold hover:bg-gray-200 transition-all">Cancel</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(modal);
+    modal.addEventListener('click', function(e) { if (e.target === modal) modal.remove(); });
+
+    // Add phone formatting
+    ['pcBizPhone', 'pcAiPhone'].forEach(function(id) {
+      var inp = document.getElementById(id);
+      if (inp) inp.addEventListener('input', function() {
+        var v = this.value.replace(/\D/g, '').slice(0, 10);
+        if (v.length >= 7) this.value = '(' + v.slice(0,3) + ') ' + v.slice(3,6) + '-' + v.slice(6);
+        else if (v.length >= 4) this.value = '(' + v.slice(0,3) + ') ' + v.slice(3);
+        else if (v.length > 0) this.value = '(' + v;
+      });
+    });
+  };
+
+  // Save phone config from modal
+  window.qcSavePhoneConfig = async function() {
+    var bizRaw = (document.getElementById('pcBizPhone')?.value || '').replace(/\D/g, '');
+    var aiRaw = (document.getElementById('pcAiPhone')?.value || '').replace(/\D/g, '');
+    if (bizRaw.length < 10 || aiRaw.length < 10) { showToast('Both phone numbers must be at least 10 digits', 'error'); return; }
+    if (bizRaw === aiRaw) { showToast('Business phone and AI phone cannot be the same', 'error'); return; }
+
+    var btn = document.getElementById('pcSaveBtn');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving...'; }
+
+    try {
+      var res = await fetch('/api/secretary/quick-connect/save-phones', {
+        method: 'POST', headers: authHeaders(),
+        body: JSON.stringify({ business_phone: bizRaw, ai_phone_number: aiRaw })
+      });
+      var data = await res.json();
+      if (data.success) {
+        state.quickConnect = state.quickConnect || {};
+        state.quickConnect.ai_phone_number = data.ai_phone_number;
+        state.quickConnect.ai_phone_display = data.ai_phone_display;
+        state.quickConnect.business_phone = data.business_phone;
+        state.quickConnect.business_phone_display = data.business_phone_display;
+        if (state.phoneSetup) {
+          state.phoneSetup.assigned_phone_number = data.ai_phone_number;
+          state.phoneSetup.business_phone = data.business_phone;
+        }
+        showToast('Phone numbers updated!', 'success');
+        document.getElementById('phoneConfigModal')?.remove();
+        renderConnectTab();
+      } else {
+        showToast(data.error || 'Failed to save', 'error');
+      }
+    } catch(e) { showToast('Network error', 'error'); }
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save mr-2"></i>Save Changes'; }
+  };
 
   window.qcUpdateBizPhone = async function() {
     var input = document.getElementById('connectedBizPhone');
@@ -860,18 +1250,52 @@
     } catch(e) { showToast('Network error', 'error'); }
   };
 
-  // LEGACY PLACEHOLDERS (kept for backward compat)
-  window.secTestConnection = function() { showToast('Use the Quick Connect flow instead', 'info'); };
+  // LEGACY PLACEHOLDERS
+  window.secTestConnection = function() { showToast('Your phone is connected via LiveKit', 'info'); };
   window.secUpdateBizPhone = window.qcUpdateBizPhone;
-  window.secConfirmConnection = function() { showToast('Use the Quick Connect flow instead', 'info'); };
+  window.secConfirmConnection = function() { showToast('Your phone is connected via LiveKit', 'info'); };
+
+  // Disconnect AI secretary
+  window.qcDisconnect = async function() {
+    if (!confirm('Are you sure you want to disconnect your AI secretary? Remember to disable call forwarding on your carrier too.')) return;
+    try {
+      var res = await fetch('/api/secretary/quick-connect/disconnect', {
+        method: 'POST', headers: authHeaders()
+      });
+      var data = await res.json();
+      if (data.success) {
+        state.quickConnect = {};
+        if (state.phoneSetup) state.phoneSetup.connection_status = 'disconnected';
+        state.isActive = false;
+        showToast('AI secretary disconnected. Don\'t forget to disable call forwarding on your phone.', 'info');
+        renderConnectTab();
+      } else {
+        showToast(data.error || 'Failed to disconnect', 'error');
+      }
+    } catch(e) { showToast('Network error', 'error'); }
+  };
 
   // ============================================================
   // CALLS TAB
   // ============================================================
-  async function loadCalls() {
+  async function loadCalls(filter) {
+    var f = filter || state.callFilter || 'all';
+    state.callFilter = f;
+    var search = state.callSearch || '';
     try {
-      var res = await fetch('/api/secretary/calls?limit=50', { headers: authOnly() });
-      if (res.ok) { var data = await res.json(); state.calls = data.calls || []; renderCallsTab(); }
+      var url = '/api/secretary/calls?limit=50&filter=' + f;
+      if (search) url += '&search=' + encodeURIComponent(search);
+      var res = await fetch(url, { headers: authOnly() });
+      if (res.ok) { var data = await res.json(); state.calls = data.calls || []; state.totalCalls = data.total || 0; renderCallsTab(); }
+    } catch(e) {}
+  }
+
+  async function loadLeads(status) {
+    var url = '/api/secretary/leads?limit=50';
+    if (status) url += '&status=' + status;
+    try {
+      var res = await fetch(url, { headers: authOnly() });
+      if (res.ok) { var data = await res.json(); state.leads = data.leads || []; state.leadsCount = data.total || 0; state.leadStages = data.stages || []; renderLeadsTab(); }
     } catch(e) {}
   }
 
@@ -879,40 +1303,332 @@
     var content = document.getElementById('secContent');
     if (!content) return;
 
-    if (state.calls.length === 0) {
+    if (state.calls.length === 0 && !state.callSearch) {
       content.innerHTML =
         '<div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-12 text-center">' +
           '<div class="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4"><i class="fas fa-phone-slash text-gray-400 text-2xl"></i></div>' +
           '<h3 class="font-bold text-gray-800 text-lg mb-1">No Calls Yet</h3>' +
-          '<p class="text-gray-500 text-sm">When your AI secretary handles calls, they\'ll appear here with full transcripts and summaries.</p>' +
-          (state.phoneSetup?.connection_status !== 'connected' ? '<button onclick="secSetTab(\'connect\')" class="mt-4 px-6 py-3 bg-sky-500 text-white rounded-xl font-semibold text-sm hover:bg-sky-600 transition-all"><i class="fas fa-phone-alt mr-2"></i>Connect Your Phone First</button>' : '') +
+          '<p class="text-gray-500 text-sm">When your AI secretary handles calls, they\'ll appear here with full transcripts, lead info, and conversation summaries.</p>' +
+          '<div class="flex flex-wrap gap-3 justify-center mt-4">' +
+            (state.phoneSetup?.connection_status !== 'connected' ? '<button onclick="secSetTab(\'connect\')" class="px-6 py-3 bg-sky-500 text-white rounded-xl font-semibold text-sm hover:bg-sky-600 transition-all"><i class="fas fa-phone-alt mr-2"></i>Connect Your Phone First</button>' : '') +
+            (state.isDev ? '<button onclick="secSimulateCall()" class="px-6 py-3 bg-violet-500 text-white rounded-xl font-semibold text-sm hover:bg-violet-600 transition-all"><i class="fas fa-vial mr-2"></i>Simulate Test Call</button>' : '') +
+          '</div>' +
+          (state.isDev ? '<p class="text-xs text-gray-400 mt-3"><i class="fas fa-flask mr-1"></i>Dev mode: Use "Simulate Test Call" to generate sample call data and verify the UI.</p>' : '') +
         '</div>';
       return;
     }
 
+    var filterBtns = ['all', 'leads', 'follow_up'].map(function(f) {
+      var active = (state.callFilter || 'all') === f;
+      var labels = { all: 'All Calls', leads: 'Leads Only', follow_up: 'Needs Follow-Up' };
+      var icons = { all: 'fa-list', leads: 'fa-fire', follow_up: 'fa-exclamation-circle' };
+      return '<button onclick="secFilterCalls(\'' + f + '\')" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ' +
+        (active ? 'bg-violet-600 text-white shadow' : 'bg-gray-100 text-gray-600 hover:bg-gray-200') + '">' +
+        '<i class="fas ' + icons[f] + ' mr-1"></i>' + labels[f] + '</button>';
+    }).join('');
+
     content.innerHTML =
       '<div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">' +
-        '<div class="px-6 py-4 border-b border-gray-100"><h3 class="font-bold text-gray-800">Recent Calls <span class="text-gray-400 font-normal text-sm">(' + state.calls.length + ')</span></h3></div>' +
+        '<div class="px-6 py-4 border-b border-gray-100">' +
+          '<div class="flex flex-col md:flex-row md:items-center justify-between gap-3">' +
+            '<h3 class="font-bold text-gray-800 text-lg"><i class="fas fa-history text-violet-500 mr-2"></i>Call Log <span class="text-gray-400 font-normal text-sm">(' + state.totalCalls + ')</span></h3>' +
+            '<div class="flex items-center gap-2">' +
+              '<div class="relative">' +
+                '<input type="text" id="callSearchInput" placeholder="Search calls..." value="' + esc(state.callSearch || '') + '" class="pl-8 pr-3 py-1.5 border border-gray-200 rounded-lg text-xs focus:ring-2 focus:ring-violet-300 focus:border-violet-400 w-44" onkeyup="if(event.key===\'Enter\')secSearchCalls()">' +
+                '<i class="fas fa-search absolute left-2.5 top-2 text-gray-400 text-xs"></i>' +
+              '</div>' +
+              filterBtns +
+            '</div>' +
+          '</div>' +
+        '</div>' +
         '<div class="divide-y divide-gray-100">' +
+          (state.calls.length === 0 ? '<div class="p-8 text-center text-gray-400 text-sm"><i class="fas fa-search mr-2"></i>No calls match your filter</div>' :
           state.calls.map(function(call) {
             var oc = call.call_outcome === 'answered' ? 'text-green-600 bg-green-50' :
               call.call_outcome === 'transferred' ? 'text-blue-600 bg-blue-50' :
               call.call_outcome === 'voicemail' ? 'text-amber-600 bg-amber-50' : 'text-gray-600 bg-gray-50';
-            return '<div class="px-6 py-4 hover:bg-gray-50 transition-colors">' +
+            var sentimentIcon = call.sentiment === 'positive' ? 'fa-smile text-green-500' : (call.sentiment === 'negative' ? 'fa-frown text-red-500' : 'fa-meh text-gray-400');
+            var isLead = call.is_lead;
+            return '<div class="px-6 py-4 hover:bg-gray-50 transition-colors cursor-pointer" onclick="secViewCall(' + call.id + ')">' +
               '<div class="flex items-center justify-between mb-2">' +
                 '<div class="flex items-center gap-3">' +
-                  '<div class="w-10 h-10 bg-sky-100 rounded-full flex items-center justify-center"><i class="fas fa-phone text-sky-600"></i></div>' +
-                  '<div><p class="font-semibold text-gray-800 text-sm">' + esc(call.caller_name || 'Unknown Caller') + '</p>' +
-                    '<p class="text-xs text-gray-500">' + esc(call.caller_phone || '') + '</p></div></div>' +
-                '<div class="text-right">' +
-                  '<span class="px-2 py-0.5 rounded-full text-xs font-semibold ' + oc + '">' + (call.call_outcome || 'unknown') + '</span>' +
-                  '<p class="text-xs text-gray-400 mt-1">' + formatDuration(call.call_duration_seconds) + '</p></div></div>' +
-              (call.call_summary ? '<p class="text-sm text-gray-600 ml-13 bg-gray-50 rounded-lg p-3"><i class="fas fa-robot text-gray-400 mr-1"></i>' + esc(call.call_summary) + '</p>' : '') +
-              (call.directory_routed ? '<p class="text-xs text-gray-400 ml-13 mt-1"><i class="fas fa-arrow-right mr-1"></i>Routed to: <strong>' + esc(call.directory_routed) + '</strong></p>' : '') +
-              '<p class="text-xs text-gray-400 ml-13 mt-1">' + new Date(call.created_at).toLocaleString() + '</p>' +
+                  '<div class="w-10 h-10 rounded-full flex items-center justify-center ' + (isLead ? 'bg-amber-100' : 'bg-sky-100') + '">' +
+                    '<i class="fas ' + (isLead ? 'fa-fire text-amber-600' : 'fa-phone text-sky-600') + '"></i>' +
+                  '</div>' +
+                  '<div>' +
+                    '<div class="flex items-center gap-2">' +
+                      '<p class="font-semibold text-gray-800 text-sm">' + esc(call.caller_name || 'Unknown Caller') + '</p>' +
+                      (isLead ? '<span class="px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded text-[9px] font-bold">LEAD</span>' : '') +
+                      (call.follow_up_required && !call.follow_up_completed ? '<span class="px-1.5 py-0.5 bg-red-100 text-red-700 rounded text-[9px] font-bold">FOLLOW UP</span>' : '') +
+                    '</div>' +
+                    '<p class="text-xs text-gray-500">' + esc(call.caller_phone || '') +
+                      (call.service_type ? ' — <span class="text-violet-600 font-medium">' + esc(call.service_type) + '</span>' : '') +
+                      (call.property_address ? ' — <i class="fas fa-map-marker-alt text-red-400 ml-1 mr-0.5"></i>' + esc(call.property_address) : '') +
+                    '</p>' +
+                  '</div>' +
+                '</div>' +
+                '<div class="text-right flex-shrink-0">' +
+                  '<div class="flex items-center gap-2 justify-end">' +
+                    '<i class="fas ' + sentimentIcon + ' text-xs"></i>' +
+                    '<span class="px-2 py-0.5 rounded-full text-xs font-semibold ' + oc + '">' + (call.call_outcome || 'unknown') + '</span>' +
+                  '</div>' +
+                  '<p class="text-xs text-gray-400 mt-1">' + formatDuration(call.call_duration_seconds) + ' — ' + formatTimeAgo(call.created_at) + '</p>' +
+                '</div>' +
+              '</div>' +
+              (call.call_summary ? '<p class="text-sm text-gray-600 ml-13 bg-gray-50 rounded-lg p-3 line-clamp-2"><i class="fas fa-robot text-gray-400 mr-1"></i>' + esc(call.call_summary) + '</p>' : '') +
+              (call.conversation_highlights ? '<p class="text-xs text-violet-600 ml-13 mt-1"><i class="fas fa-star text-violet-400 mr-1"></i>' + esc(call.conversation_highlights).substring(0, 120) + '</p>' : '') +
+              '<div class="flex items-center gap-2 ml-13 mt-2">' +
+                '<button onclick="event.stopPropagation(); secViewCall(' + call.id + ')" class="text-xs text-violet-600 hover:text-violet-800 font-medium"><i class="fas fa-file-alt mr-1"></i>Full Transcript</button>' +
+                (isLead && call.lead_status === 'new' ? '<button onclick="event.stopPropagation(); secUpdateLeadStatus(' + call.id + ', \'contacted\')" class="text-xs text-green-600 hover:text-green-800 font-medium"><i class="fas fa-check mr-1"></i>Mark Contacted</button>' : '') +
+                (call.follow_up_required && !call.follow_up_completed ? '<button onclick="event.stopPropagation(); secCompleteFollowUp(' + call.id + ')" class="text-xs text-blue-600 hover:text-blue-800 font-medium"><i class="fas fa-check-double mr-1"></i>Follow-Up Done</button>' : '') +
+              '</div>' +
+            '</div>';
+          }).join('')) +
+        '</div>' +
+      '</div>';
+  }
+
+  // ── Leads Tab ──
+  function renderLeadsTab() {
+    var content = document.getElementById('secContent');
+    if (!content) return;
+
+    if (state.leads.length === 0 && state.leadsCount === 0) {
+      content.innerHTML =
+        '<div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-12 text-center">' +
+          '<div class="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4"><i class="fas fa-fire text-amber-500 text-2xl"></i></div>' +
+          '<h3 class="font-bold text-gray-800 text-lg mb-1">No Leads Yet</h3>' +
+          '<p class="text-gray-500 text-sm">When callers provide their name, phone, and address, they\'re automatically captured as leads. The AI marks callers as leads when they request an estimate, repair, or service.</p>' +
+        '</div>';
+      return;
+    }
+
+    // Stage filters
+    var stages = [
+      { id: '', label: 'All', icon: 'fa-list', color: 'violet' },
+      { id: 'new', label: 'New', icon: 'fa-fire', color: 'amber' },
+      { id: 'contacted', label: 'Contacted', icon: 'fa-phone-alt', color: 'blue' },
+      { id: 'qualified', label: 'Qualified', icon: 'fa-star', color: 'green' },
+      { id: 'converted', label: 'Converted', icon: 'fa-check-circle', color: 'emerald' },
+      { id: 'lost', label: 'Lost', icon: 'fa-times-circle', color: 'red' },
+    ];
+    var stageCountMap = {};
+    (state.leadStages || []).forEach(function(s) { stageCountMap[s.lead_status] = s.cnt; });
+
+    var stageFilter = stages.map(function(s) {
+      var cnt = s.id ? (stageCountMap[s.id] || 0) : state.leadsCount;
+      var active = (state.leadStatusFilter || '') === s.id;
+      return '<button onclick="secFilterLeads(\'' + s.id + '\')" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ' +
+        (active ? 'bg-' + s.color + '-600 text-white shadow' : 'bg-gray-100 text-gray-600 hover:bg-gray-200') + '">' +
+        '<i class="fas ' + s.icon + ' mr-1"></i>' + s.label + (cnt > 0 ? ' (' + cnt + ')' : '') + '</button>';
+    }).join('');
+
+    content.innerHTML =
+      '<div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">' +
+        '<div class="px-6 py-4 border-b border-gray-100">' +
+          '<div class="flex flex-col md:flex-row md:items-center justify-between gap-3">' +
+            '<h3 class="font-bold text-gray-800 text-lg"><i class="fas fa-fire text-amber-500 mr-2"></i>Leads <span class="text-gray-400 font-normal text-sm">(' + state.leadsCount + ')</span></h3>' +
+            '<div class="flex flex-wrap items-center gap-2">' + stageFilter + '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="divide-y divide-gray-100">' +
+          state.leads.map(function(lead) {
+            var statusColors = { new: 'bg-amber-100 text-amber-700', contacted: 'bg-blue-100 text-blue-700', qualified: 'bg-green-100 text-green-700', converted: 'bg-emerald-100 text-emerald-800', lost: 'bg-red-100 text-red-700' };
+            var sc = statusColors[lead.lead_status] || 'bg-gray-100 text-gray-600';
+            var qualityStars = lead.lead_quality === 'hot' ? 3 : (lead.lead_quality === 'warm' ? 2 : 1);
+            return '<div class="px-6 py-4 hover:bg-gray-50 transition-colors cursor-pointer" onclick="secViewCall(' + lead.id + ')">' +
+              '<div class="flex items-center justify-between">' +
+                '<div class="flex items-center gap-3">' +
+                  '<div class="w-11 h-11 bg-gradient-to-br from-amber-400 to-orange-500 rounded-full flex items-center justify-center shadow">' +
+                    '<i class="fas fa-user text-white text-sm"></i>' +
+                  '</div>' +
+                  '<div>' +
+                    '<div class="flex items-center gap-2">' +
+                      '<p class="font-bold text-gray-800">' + esc(lead.caller_name || 'Unknown') + '</p>' +
+                      '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold ' + sc + '">' + (lead.lead_status || 'new').toUpperCase() + '</span>' +
+                      '<span class="text-amber-400 text-xs">' + '★'.repeat(qualityStars) + '<span class="text-gray-300">' + '★'.repeat(3 - qualityStars) + '</span></span>' +
+                    '</div>' +
+                    '<p class="text-xs text-gray-500 mt-0.5">' +
+                      '<i class="fas fa-phone text-gray-400 mr-1"></i>' + esc(lead.caller_phone || '') +
+                      (lead.caller_email ? ' &middot; <i class="fas fa-envelope text-gray-400 mr-1"></i>' + esc(lead.caller_email) : '') +
+                    '</p>' +
+                    (lead.property_address ? '<p class="text-xs text-gray-500"><i class="fas fa-map-marker-alt text-red-400 mr-1"></i>' + esc(lead.property_address) + '</p>' : '') +
+                    (lead.service_type ? '<p class="text-xs text-violet-600 font-medium mt-0.5"><i class="fas fa-tools mr-1"></i>' + esc(lead.service_type) + '</p>' : '') +
+                  '</div>' +
+                '</div>' +
+                '<div class="text-right flex-shrink-0">' +
+                  '<p class="text-xs text-gray-400">' + formatTimeAgo(lead.created_at) + '</p>' +
+                  '<p class="text-xs text-gray-400 mt-0.5">' + formatDuration(lead.call_duration_seconds) + '</p>' +
+                  '<div class="flex items-center gap-1 mt-1 justify-end">' +
+                    '<select onclick="event.stopPropagation()" onchange="secUpdateLeadStatus(' + lead.id + ', this.value)" class="text-[10px] border border-gray-200 rounded px-1 py-0.5">' +
+                      '<option value="new"' + (lead.lead_status === 'new' ? ' selected' : '') + '>New</option>' +
+                      '<option value="contacted"' + (lead.lead_status === 'contacted' ? ' selected' : '') + '>Contacted</option>' +
+                      '<option value="qualified"' + (lead.lead_status === 'qualified' ? ' selected' : '') + '>Qualified</option>' +
+                      '<option value="converted"' + (lead.lead_status === 'converted' ? ' selected' : '') + '>Converted</option>' +
+                      '<option value="lost"' + (lead.lead_status === 'lost' ? ' selected' : '') + '>Lost</option>' +
+                    '</select>' +
+                  '</div>' +
+                '</div>' +
+              '</div>' +
+              (lead.call_summary ? '<p class="text-sm text-gray-600 mt-2 bg-gray-50 rounded-lg p-3 line-clamp-2"><i class="fas fa-robot text-gray-400 mr-1"></i>' + esc(lead.call_summary) + '</p>' : '') +
             '</div>';
           }).join('') +
-        '</div></div>';
+        '</div>' +
+      '</div>';
+  }
+
+  // ── Call Detail / Full Transcript Modal ──
+  window.secViewCall = async function(callId) {
+    try {
+      var res = await fetch('/api/secretary/calls/' + callId, { headers: authOnly() });
+      if (!res.ok) return;
+      var data = await res.json();
+      var call = data.call;
+      if (!call) return;
+      showCallDetailModal(call, data.messages || [], data.appointments || [], data.callbacks || []);
+    } catch(e) { console.error('Failed to load call detail', e); }
+  };
+
+  function showCallDetailModal(call, messages, appointments, callbacks) {
+    // Remove any existing modal
+    var existing = document.getElementById('callDetailModal');
+    if (existing) existing.remove();
+
+    var isLead = call.is_lead;
+    var sentimentLabel = call.sentiment === 'positive' ? 'Positive' : (call.sentiment === 'negative' ? 'Negative' : 'Neutral');
+    var sentimentColor = call.sentiment === 'positive' ? 'text-green-600 bg-green-50' : (call.sentiment === 'negative' ? 'text-red-600 bg-red-50' : 'text-gray-600 bg-gray-50');
+
+    var transcript = call.call_transcript || 'No transcript available for this call.';
+    // Format transcript lines
+    var transcriptHtml = esc(transcript).replace(/\n/g, '<br>').replace(/(Sarah|Agent|AI):/gi, '<span class="font-bold text-violet-600">$1:</span>').replace(/(Caller|Customer|User):/gi, '<span class="font-bold text-blue-600">$1:</span>');
+
+    var modal = document.createElement('div');
+    modal.id = 'callDetailModal';
+    modal.className = 'fixed inset-0 z-50 flex items-center justify-center p-4';
+    modal.innerHTML =
+      '<div class="absolute inset-0 bg-black/50 backdrop-blur-sm" onclick="document.getElementById(\'callDetailModal\').remove()"></div>' +
+      '<div class="relative bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">' +
+        // Header
+        '<div class="bg-gradient-to-r from-violet-600 to-purple-700 px-6 py-4 flex items-center justify-between">' +
+          '<div class="flex items-center gap-3">' +
+            '<div class="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">' +
+              '<i class="fas ' + (isLead ? 'fa-fire text-amber-300' : 'fa-phone text-white') + '"></i>' +
+            '</div>' +
+            '<div>' +
+              '<h3 class="text-white font-bold">' + esc(call.caller_name || 'Unknown Caller') + '</h3>' +
+              '<p class="text-purple-200 text-xs">' + esc(call.caller_phone || '') + ' — ' + new Date(call.created_at).toLocaleString() + '</p>' +
+            '</div>' +
+          '</div>' +
+          '<button onclick="document.getElementById(\'callDetailModal\').remove()" class="text-white/70 hover:text-white text-lg"><i class="fas fa-times"></i></button>' +
+        '</div>' +
+        // Info bar
+        '<div class="px-6 py-3 bg-gray-50 border-b border-gray-200 flex flex-wrap gap-3">' +
+          '<span class="px-2.5 py-1 rounded-full text-xs font-bold ' + (call.call_outcome === 'answered' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600') + '"><i class="fas fa-phone-alt mr-1"></i>' + (call.call_outcome || 'unknown') + '</span>' +
+          '<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-violet-100 text-violet-700"><i class="fas fa-clock mr-1"></i>' + formatDuration(call.call_duration_seconds) + '</span>' +
+          '<span class="px-2.5 py-1 rounded-full text-xs font-bold ' + sentimentColor + '"><i class="fas fa-' + (call.sentiment === 'positive' ? 'smile' : call.sentiment === 'negative' ? 'frown' : 'meh') + ' mr-1"></i>' + sentimentLabel + '</span>' +
+          (isLead ? '<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-700"><i class="fas fa-fire mr-1"></i>Lead — ' + (call.lead_status || 'new') + '</span>' : '') +
+          (call.service_type ? '<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-700"><i class="fas fa-tools mr-1"></i>' + esc(call.service_type) + '</span>' : '') +
+        '</div>' +
+        // Scrollable body
+        '<div class="flex-1 overflow-y-auto px-6 py-4 space-y-4">' +
+          // Contact info
+          (call.property_address ? '<div class="flex items-center gap-2 text-sm text-gray-600"><i class="fas fa-map-marker-alt text-red-400 w-5"></i><strong>Address:</strong> ' + esc(call.property_address) + '</div>' : '') +
+          (call.caller_email ? '<div class="flex items-center gap-2 text-sm text-gray-600"><i class="fas fa-envelope text-gray-400 w-5"></i><strong>Email:</strong> ' + esc(call.caller_email) + '</div>' : '') +
+          (call.directory_routed ? '<div class="flex items-center gap-2 text-sm text-gray-600"><i class="fas fa-arrow-right text-gray-400 w-5"></i><strong>Routed to:</strong> ' + esc(call.directory_routed) + '</div>' : '') +
+
+          // AI Summary
+          (call.call_summary ? '<div class="bg-violet-50 border border-violet-200 rounded-xl p-4"><h4 class="font-bold text-violet-800 text-sm mb-1"><i class="fas fa-robot mr-1"></i>AI Call Summary</h4><p class="text-sm text-violet-700">' + esc(call.call_summary) + '</p></div>' : '') +
+
+          // Highlights
+          (call.conversation_highlights ? '<div class="bg-amber-50 border border-amber-200 rounded-xl p-4"><h4 class="font-bold text-amber-800 text-sm mb-1"><i class="fas fa-star mr-1"></i>Key Highlights</h4><p class="text-sm text-amber-700">' + esc(call.conversation_highlights) + '</p></div>' : '') +
+
+          // Follow-up notes
+          (call.follow_up_notes ? '<div class="bg-red-50 border border-red-200 rounded-xl p-4"><h4 class="font-bold text-red-800 text-sm mb-1"><i class="fas fa-exclamation-circle mr-1"></i>Follow-Up Notes</h4><p class="text-sm text-red-700">' + esc(call.follow_up_notes) + '</p></div>' : '') +
+
+          // Messages taken
+          (messages.length > 0 ? '<div class="bg-blue-50 border border-blue-200 rounded-xl p-4"><h4 class="font-bold text-blue-800 text-sm mb-2"><i class="fas fa-envelope mr-1"></i>Messages Taken (' + messages.length + ')</h4>' +
+            messages.map(function(m) { return '<div class="text-sm text-blue-700 mb-1">• ' + esc(m.message_text) + (m.urgency !== 'normal' ? ' <span class="text-red-600 font-bold">(' + m.urgency + ')</span>' : '') + '</div>'; }).join('') +
+          '</div>' : '') +
+
+          // Appointments booked
+          (appointments.length > 0 ? '<div class="bg-green-50 border border-green-200 rounded-xl p-4"><h4 class="font-bold text-green-800 text-sm mb-2"><i class="fas fa-calendar-check mr-1"></i>Appointments Booked (' + appointments.length + ')</h4>' +
+            appointments.map(function(a) { return '<div class="text-sm text-green-700 mb-1">• ' + esc(a.appointment_type || 'Estimate') + (a.property_address ? ' at ' + esc(a.property_address) : '') + (a.notes ? ' — ' + esc(a.notes) : '') + '</div>'; }).join('') +
+          '</div>' : '') +
+
+          // Full Transcript
+          '<div class="bg-gray-50 border border-gray-200 rounded-xl p-4">' +
+            '<h4 class="font-bold text-gray-800 text-sm mb-3"><i class="fas fa-file-alt mr-1"></i>Full Call Transcript</h4>' +
+            '<div class="text-sm text-gray-700 leading-relaxed font-mono bg-white rounded-lg p-4 border border-gray-100 max-h-64 overflow-y-auto">' +
+              transcriptHtml +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+        // Footer actions
+        '<div class="px-6 py-3 border-t border-gray-200 bg-gray-50 flex items-center justify-between">' +
+          '<div class="flex gap-2">' +
+            (isLead ? '<select id="modalLeadStatus" onchange="secUpdateLeadStatus(' + call.id + ', this.value)" class="text-xs border border-gray-200 rounded-lg px-2 py-1.5">' +
+              '<option value="new"' + (call.lead_status === 'new' ? ' selected' : '') + '>New</option>' +
+              '<option value="contacted"' + (call.lead_status === 'contacted' ? ' selected' : '') + '>Contacted</option>' +
+              '<option value="qualified"' + (call.lead_status === 'qualified' ? ' selected' : '') + '>Qualified</option>' +
+              '<option value="converted"' + (call.lead_status === 'converted' ? ' selected' : '') + '>Converted</option>' +
+              '<option value="lost"' + (call.lead_status === 'lost' ? ' selected' : '') + '>Lost</option>' +
+            '</select>' : '') +
+          '</div>' +
+          '<button onclick="document.getElementById(\'callDetailModal\').remove()" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg text-sm font-medium transition-all">Close</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(modal);
+  }
+
+  // ── Call action handlers ──
+  window.secFilterCalls = function(filter) { state.callFilter = filter; loadCalls(filter); };
+  window.secSearchCalls = function() { state.callSearch = (document.getElementById('callSearchInput') || {}).value || ''; loadCalls(); };
+  window.secFilterLeads = function(status) { state.leadStatusFilter = status; loadLeads(status); };
+
+  window.secSimulateCall = async function() {
+    try {
+      var res = await fetch('/api/secretary/simulate-call', { method: 'POST', headers: authHeaders() });
+      if (res.ok) {
+        var data = await res.json();
+        alert('✅ ' + data.message);
+        loadCalls();
+      } else {
+        var err = await res.json().catch(function() { return {}; });
+        alert('❌ ' + (err.error || 'Failed to simulate call'));
+      }
+    } catch(e) { alert('❌ Network error: ' + e.message); }
+  };
+
+  window.secUpdateLeadStatus = async function(callId, status) {
+    try {
+      await fetch('/api/secretary/calls/' + callId, {
+        method: 'PUT', headers: authHeaders(),
+        body: JSON.stringify({ lead_status: status })
+      });
+      // Refresh data
+      if (state.activeTab === 'leads') loadLeads(state.leadStatusFilter);
+      else loadCalls();
+    } catch(e) {}
+  };
+
+  window.secCompleteFollowUp = async function(callId) {
+    try {
+      await fetch('/api/secretary/calls/' + callId, {
+        method: 'PUT', headers: authHeaders(),
+        body: JSON.stringify({ follow_up_completed: true })
+      });
+      loadCalls();
+    } catch(e) {}
+  };
+
+  function formatTimeAgo(dateStr) {
+    if (!dateStr) return '';
+    var diff = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+    if (diff < 60) return 'just now';
+    if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+    if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+    if (diff < 604800) return Math.floor(diff / 86400) + 'd ago';
+    return new Date(dateStr).toLocaleDateString();
   }
 
   // ── Shared functions ──
@@ -956,6 +1672,9 @@
           common_qa: document.getElementById('secQA')?.value || '',
           general_notes: document.getElementById('secNotes')?.value || '',
           secretary_mode: state.secretaryMode,
+          // Agent persona
+          agent_name: document.getElementById('agentNameInput')?.value || state.selectedAgentName || 'Sarah',
+          agent_voice: state.selectedAgentVoice || (state.phoneSetup && state.phoneSetup.agent_voice) || 'alloy',
           // Answering mode
           answering_fallback_action: fallbackRadio ? fallbackRadio.value : 'take_message',
           answering_forward_number: document.getElementById('answeringFwdNum')?.value || '',

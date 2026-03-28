@@ -1211,3 +1211,81 @@ customerAuthRoutes.post('/reset-password', async (c) => {
     return c.json({ error: 'Failed to reset password', details: err.message }, 500)
   }
 })
+
+// ============================================================
+// GET /reports-list — List completed reports for attachment
+// ============================================================
+customerAuthRoutes.get('/reports-list', async (c) => {
+  try {
+    const token = c.req.header('Authorization')?.replace('Bearer ', '')
+    if (!token) return c.json({ error: 'Unauthorized' }, 401)
+    const session = await c.env.DB.prepare(
+      "SELECT customer_id FROM customer_sessions WHERE session_token = ? AND expires_at > datetime('now')"
+    ).bind(token).first<any>()
+    if (!session) return c.json({ error: 'Session expired' }, 401)
+    const { ownerId } = await resolveTeamOwner(c.env.DB, session.customer_id)
+
+    const reports = await c.env.DB.prepare(`
+      SELECT r.id, r.status, o.property_address, o.created_at, r.report_json IS NOT NULL as has_data
+      FROM reports r
+      JOIN orders o ON o.id = r.order_id
+      WHERE o.customer_id = ? AND r.status IN ('completed','enhancing')
+      ORDER BY o.created_at DESC
+      LIMIT 50
+    `).bind(ownerId).all()
+
+    return c.json({ reports: reports.results })
+  } catch (err: any) {
+    return c.json({ error: 'Failed to fetch reports', details: err.message }, 500)
+  }
+})
+
+// ============================================================
+// Item Library CRUD — Reusable line items for proposals/invoices
+// ============================================================
+customerAuthRoutes.get('/item-library', async (c) => {
+  try {
+    const token = c.req.header('Authorization')?.replace('Bearer ', '')
+    if (!token) return c.json({ error: 'Unauthorized' }, 401)
+    const session = await c.env.DB.prepare(
+      "SELECT customer_id FROM customer_sessions WHERE session_token = ? AND expires_at > datetime('now')"
+    ).bind(token).first<any>()
+    if (!session) return c.json({ error: 'Session expired' }, 401)
+    const { ownerId } = await resolveTeamOwner(c.env.DB, session.customer_id)
+
+    const items = await c.env.DB.prepare(
+      'SELECT * FROM item_library WHERE owner_customer_id = ? ORDER BY sort_order, name'
+    ).bind(ownerId).all().catch(() => ({ results: [] }))
+
+    return c.json({ items: items.results })
+  } catch (err: any) {
+    return c.json({ error: 'Failed to fetch item library', details: err.message }, 500)
+  }
+})
+
+customerAuthRoutes.post('/item-library', async (c) => {
+  try {
+    const token = c.req.header('Authorization')?.replace('Bearer ', '')
+    if (!token) return c.json({ error: 'Unauthorized' }, 401)
+    const session = await c.env.DB.prepare(
+      "SELECT customer_id FROM customer_sessions WHERE session_token = ? AND expires_at > datetime('now')"
+    ).bind(token).first<any>()
+    if (!session) return c.json({ error: 'Session expired' }, 401)
+    const { ownerId } = await resolveTeamOwner(c.env.DB, session.customer_id)
+
+    const { name, description, category, default_unit, default_unit_price, default_quantity, is_taxable } = await c.req.json()
+    if (!name) return c.json({ error: 'Name is required' }, 400)
+
+    const result = await c.env.DB.prepare(`
+      INSERT INTO item_library (owner_customer_id, name, description, category, default_unit, default_unit_price, default_quantity, is_taxable)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      ownerId, name, description || '', category || 'roofing',
+      default_unit || 'each', default_unit_price || 0, default_quantity || 1, is_taxable ? 1 : 0
+    ).run()
+
+    return c.json({ success: true, id: result.meta.last_row_id }, 201)
+  } catch (err: any) {
+    return c.json({ error: 'Failed to add item', details: err.message }, 500)
+  }
+})

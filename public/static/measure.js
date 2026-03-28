@@ -292,25 +292,47 @@ document.addEventListener('DOMContentLoaded', () => {
     const imgUrl = state.satelliteUrl ||
       `https://maps.googleapis.com/maps/api/staticmap?center=${state.lat},${state.lng}&zoom=20&size=640x640&maptype=satellite`;
 
+    // Professional facet colors — distinct, semi-transparent with clean borders
+    const facetColors = [
+      { fill: 'rgba(59,130,246,0.18)', stroke: 'rgba(59,130,246,0.85)' },   // Blue
+      { fill: 'rgba(16,185,129,0.18)', stroke: 'rgba(16,185,129,0.85)' },   // Green
+      { fill: 'rgba(245,158,11,0.18)', stroke: 'rgba(245,158,11,0.85)' },   // Amber
+      { fill: 'rgba(239,68,68,0.18)',  stroke: 'rgba(239,68,68,0.85)' },    // Red
+      { fill: 'rgba(139,92,246,0.18)', stroke: 'rgba(139,92,246,0.85)' },   // Purple
+      { fill: 'rgba(6,182,212,0.18)',  stroke: 'rgba(6,182,212,0.85)' },    // Cyan
+      { fill: 'rgba(236,72,153,0.18)', stroke: 'rgba(236,72,153,0.85)' },   // Pink
+      { fill: 'rgba(234,179,8,0.18)',  stroke: 'rgba(234,179,8,0.85)' },    // Yellow
+    ];
+
     const facetsSvg = (a.facets || []).map((f, idx) => {
       const pts = (f.points || []).map(p => p.x + ',' + p.y).join(' ');
       const cx = f.points?.length ? Math.round(f.points.reduce((acc, p) => acc + p.x, 0) / f.points.length) : 0;
       const cy = f.points?.length ? Math.round(f.points.reduce((acc, p) => acc + p.y, 0) / f.points.length) : 0;
+      const color = facetColors[idx % facetColors.length];
+      const label = String.fromCharCode(65 + idx); // A, B, C...
       return `<g>
-        <polygon points="${pts}" fill="rgba(59,130,246,0.2)" stroke="rgba(59,130,246,0.8)" stroke-width="2"/>
-        <text x="${cx}" y="${cy}" fill="white" font-size="22" text-anchor="middle" font-weight="bold" style="text-shadow:0 1px 3px rgba(0,0,0,0.8)">${f.pitch || ''}</text>
+        <polygon points="${pts}" fill="${color.fill}" stroke="${color.stroke}" stroke-width="2.5"/>
+        <circle cx="${cx}" cy="${cy}" r="18" fill="rgba(0,0,0,0.55)" stroke="white" stroke-width="1.5"/>
+        <text x="${cx}" y="${cy + 1}" fill="white" font-size="16" text-anchor="middle" dominant-baseline="central" font-weight="bold" style="font-family:Inter,system-ui,sans-serif">${label}</text>
+        ${f.pitch ? `<text x="${cx}" y="${cy + 28}" fill="white" font-size="14" text-anchor="middle" font-weight="600" style="text-shadow:0 1px 4px rgba(0,0,0,0.9);font-family:Inter,system-ui,sans-serif">${f.pitch}</text>` : ''}
       </g>`;
     }).join('');
 
+    // Edge line colors — professional, distinct by type
+    const lineColors = { RIDGE: '#FBBF24', HIP: '#F97316', VALLEY: '#60A5FA', EAVE: '#34D399', RAKE: '#F87171' };
+    const lineWidths = { RIDGE: 4, HIP: 3, VALLEY: 3, EAVE: 3, RAKE: 2.5 };
+    const lineDash = { VALLEY: '8,4' };
+
     const linesSvg = (a.lines || []).map(line => {
-      const colors = { RIDGE: '#F59E0B', HIP: '#F97316', VALLEY: '#3B82F6', EAVE: '#10B981', RAKE: '#EF4444' };
-      const c = colors[line.type] || '#EF4444';
-      return `<line x1="${line.start.x}" y1="${line.start.y}" x2="${line.end.x}" y2="${line.end.y}" stroke="${c}" stroke-width="3" stroke-linecap="round"/>`;
+      const c = lineColors[line.type] || '#EF4444';
+      const w = lineWidths[line.type] || 3;
+      const dash = lineDash[line.type] ? ` stroke-dasharray="${lineDash[line.type]}"` : '';
+      return `<line x1="${line.start.x}" y1="${line.start.y}" x2="${line.end.x}" y2="${line.end.y}" stroke="${c}" stroke-width="${w}" stroke-linecap="round"${dash}/>`;
     }).join('');
 
     const obsSvg = (a.obstructions || []).map(obs => {
       const b = obs.boundingBox;
-      return `<rect x="${b.min.x}" y="${b.min.y}" width="${b.max.x - b.min.x}" height="${b.max.y - b.min.y}" fill="rgba(239,68,68,0.25)" stroke="#EF4444" stroke-width="2" stroke-dasharray="5,3"/>`;
+      return `<rect x="${b.min.x}" y="${b.min.y}" width="${b.max.x - b.min.x}" height="${b.max.y - b.min.y}" fill="rgba(239,68,68,0.2)" stroke="#EF4444" stroke-width="2" stroke-dasharray="5,3" rx="2"/>`;
     }).join('');
 
     return `
@@ -325,12 +347,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
       <!-- Legend -->
       <div class="absolute bottom-16 right-4 bg-gray-900/90 backdrop-blur border border-gray-700 p-3 rounded-lg z-20 text-xs space-y-2 shadow-xl">
-        <div class="font-semibold text-gray-300 mb-1 border-b border-gray-700 pb-1">Legend</div>
-        <div class="flex items-center gap-2"><div class="w-4 h-0.5 bg-amber-500 rounded"></div><span class="text-gray-400">Ridge</span></div>
-        <div class="flex items-center gap-2"><div class="w-4 h-0.5 bg-blue-500 rounded"></div><span class="text-gray-400">Valley</span></div>
-        <div class="flex items-center gap-2"><div class="w-4 h-0.5 bg-green-500 rounded"></div><span class="text-gray-400">Eave</span></div>
-        <div class="flex items-center gap-2"><div class="w-4 h-0.5 bg-orange-500 rounded"></div><span class="text-gray-400">Hip</span></div>
-        <div class="flex items-center gap-2"><div class="w-4 h-0.5 bg-red-500 rounded"></div><span class="text-gray-400">Rake</span></div>
+        <div class="font-semibold text-gray-300 mb-1 border-b border-gray-700 pb-1 tracking-wider uppercase" style="font-size:9px">Edge Legend</div>
+        <div class="flex items-center gap-2"><div class="w-5 h-0.5 bg-amber-400 rounded"></div><span class="text-gray-400">Ridge</span></div>
+        <div class="flex items-center gap-2"><div class="w-5 h-0.5 bg-blue-400 rounded" style="border-bottom:1px dashed rgba(96,165,250,0.6)"></div><span class="text-gray-400">Valley</span></div>
+        <div class="flex items-center gap-2"><div class="w-5 h-0.5 bg-green-400 rounded"></div><span class="text-gray-400">Eave</span></div>
+        <div class="flex items-center gap-2"><div class="w-5 h-0.5 bg-orange-400 rounded"></div><span class="text-gray-400">Hip</span></div>
+        <div class="flex items-center gap-2"><div class="w-5 h-0.5 bg-red-400 rounded"></div><span class="text-gray-400">Rake</span></div>
         <div class="flex items-center gap-2"><div class="w-3 h-3 border border-red-500 bg-red-500/20 rounded-sm" style="border-style:dashed"></div><span class="text-gray-400">Obstruction</span></div>
       </div>
 

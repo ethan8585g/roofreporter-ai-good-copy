@@ -1,0 +1,23 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "Vite Dev Server",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 5173
+    },
+    {
+      "name": "Wrangler Preview (built dist)",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "preview"],
+      "port": 8788
+    },
+    {
+      "name": "Wrangler Sandbox (D1 local, port 3000)",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev:sandbox"],
+      "port": 3000
+    }
+  ]
+}

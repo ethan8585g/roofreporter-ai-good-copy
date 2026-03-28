@@ -107,6 +107,27 @@ function resolveHtml(stored: string | null, raw: string | null): string | null {
 }
 
 // ============================================================
+// GET /list — List all reports (for invoice/proposal attachment picker)
+// ============================================================
+reportsRoutes.get('/list', async (c) => {
+  try {
+    const reports = await c.env.DB.prepare(`
+      SELECT r.id, r.order_id, r.status, r.roof_area_sqft, r.roof_pitch_ratio,
+             r.total_material_cost_cad, r.gross_squares, r.created_at, r.updated_at,
+             o.property_address, o.homeowner_name, o.order_number
+      FROM reports r
+      JOIN orders o ON o.id = r.order_id
+      WHERE r.status IN ('completed', 'enhancing')
+      ORDER BY r.created_at DESC
+      LIMIT 100
+    `).all()
+    return c.json({ reports: reports.results })
+  } catch (err: any) {
+    return c.json({ reports: [], error: err.message })
+  }
+})
+
+// ============================================================
 // GET /pitch-multipliers — PUBLIC reference table
 // Returns the industry-standard pitch multiplier lookup table
 // used by the measurement engine (1/12 through 24/12).

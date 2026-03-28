@@ -187,7 +187,7 @@
       var isProcessing = (o.status === 'processing' || o.report_status === 'running');
       var buttons = '';
       if (isCompleted) {
-        buttons = '<a href="/api/reports/' + o.id + '/html" target="_blank" class="px-4 py-2 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700"><i class="fas fa-file-alt mr-1"></i>View Report</a><a href="/api/reports/' + o.id + '/pdf" target="_blank" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-xs font-medium hover:bg-gray-200"><i class="fas fa-download mr-1"></i>PDF</a><a href="/customer/virtual-tryon?report_id=' + o.id + '" class="px-4 py-2 bg-violet-600 text-white rounded-lg text-xs font-medium hover:bg-violet-700"><i class="fas fa-house-user mr-1"></i>Roof Visualizer</a>';
+        buttons = '<a href="/api/reports/' + o.id + '/html" target="_blank" class="px-4 py-2 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700"><i class="fas fa-file-alt mr-1"></i>View Report</a><a href="/api/reports/' + o.id + '/pdf" target="_blank" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-xs font-medium hover:bg-gray-200"><i class="fas fa-download mr-1"></i>PDF</a><a href="/visualizer/' + o.id + '" target="_blank" class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-medium hover:bg-indigo-700"><i class="fas fa-cube mr-1"></i>3D View</a><a href="/customer/virtual-tryon?report_id=' + o.id + '" class="px-4 py-2 bg-violet-600 text-white rounded-lg text-xs font-medium hover:bg-violet-700"><i class="fas fa-house-user mr-1"></i>AI Visualizer</a>';
       } else if (isProcessing) {
         buttons = '<span class="px-4 py-2 bg-blue-50 text-blue-600 rounded-lg text-sm font-medium"><i class="fas fa-spinner fa-spin mr-1"></i>Generating...</span>';
       } else {
@@ -476,8 +476,11 @@
   window._crmMarkInvoice = function(id, status) {
     fetch('/api/crm/invoices/' + id, { method: 'PUT', headers: authHeaders(), body: JSON.stringify({ status: status }) })
       .then(function(r) { return r.json(); })
-      .then(function(res) { if (res.success) { toast('Invoice marked as ' + status); loadInvoices(window._invFilter); } })
-      .catch(function(e) { toast('Failed: ' + (e.message || 'Network error'), 'error'); });
+      .then(function(res) {
+        if (res.success) { toast('Invoice marked as ' + status); loadInvoices(window._invFilter); }
+        else { toast(res.error || 'Failed to update invoice', 'error'); }
+      })
+      .catch(function(e) { toast('Network error: ' + (e.message || 'Unknown'), 'error'); });
   };
 
   window._crmDeleteInvoice = function(id) {
@@ -1002,7 +1005,10 @@
   window._crmMarkProposal = function(id, status) {
     fetch('/api/crm/proposals/' + id, { method: 'PUT', headers: authHeaders(), body: JSON.stringify({ status: status }) })
       .then(function(r) { return r.json(); })
-      .then(function(res) { if (res.success) { toast('Proposal updated'); loadProposals(window._propFilter); } })
+      .then(function(res) {
+        if (res.success) { toast('Proposal updated'); loadProposals(window._propFilter); }
+        else { toast(res.error || 'Failed to update proposal', 'error'); }
+      })
       .catch(function(e) { toast('Network error: ' + (e.message || 'Unknown'), 'error'); });
   };
 

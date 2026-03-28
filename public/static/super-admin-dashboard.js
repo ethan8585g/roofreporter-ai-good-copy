@@ -15,7 +15,8 @@ const SA = {
   ga4Period: '7d',
   ga4Tab: 'overview',
   secRevPeriod: 'monthly',
-  secCallsCustomerId: ''
+  secCallsCustomerId: '',
+  lkTab: 'overview'
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -24,6 +25,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
 window.saDashboardSetView = function(v) {
   SA.view = v;
+  // Reset secretary manager sub-views when navigating from sidebar
+  if (v === 'secretary-manager') { SA.smView = 'list'; SA.smDetail = null; SA.smCustomerId = null; }
   loadView(v);
 };
 
@@ -34,14 +37,26 @@ function saHeaders() {
 }
 
 async function saFetch(url, opts) {
-  const res = await fetch(url, { headers: saHeaders(), ...(opts || {}) });
+  // CRITICAL: Merge headers properly — don't let opts.headers overwrite auth token
+  var mergedOpts = Object.assign({}, opts || {});
+  mergedOpts.headers = Object.assign({}, saHeaders(), mergedOpts.headers || {});
+  const res = await fetch(url, mergedOpts);
   if (res.status === 401 || res.status === 403) {
     // Check if this is a service-level auth error (not session expiry)
     // Don't logout for API endpoints that may return 403 for missing config
     try {
       const clone = res.clone();
       const body = await clone.json();
-      if (body.error && (body.error.includes('not configured') || body.error.includes('Admin access') || body.error.includes('Super admin'))) {
+      if (body.error && (
+        body.error.includes('not configured') || 
+        body.error.includes('Admin access') || 
+        body.error.includes('Super admin') || 
+        body.error.includes('Admin authentication') || 
+        body.error.includes('Forbidden') || 
+        body.error.includes('Superadmin required') ||
+        body.error.includes('Unauthorized') ||
+        body.error.includes('required')
+      )) {
         // Service-level issue, not session expiry — return error response without logout
         return res;
       }
@@ -140,6 +155,21 @@ async function loadView(view) {
           console.warn('Secretary admin load error:', secErr);
         }
         break;
+      case 'secretary-manager':
+        // Reset sub-view to list when navigating from sidebar (not from internal navigation)
+        if (!SA.smView || SA.smView === 'list') SA.smView = 'list';
+        // Only load data for list view; detail view loads its own data
+        if (SA.smView === 'list') {
+          try {
+            const [smConfigsRes, smPoolRes] = await Promise.all([
+              saFetch('/api/admin/superadmin/livekit/secretary-configs'),
+              saFetch('/api/admin/superadmin/livekit/phone-pool'),
+            ]);
+            if (smConfigsRes) SA.data.sm_configs = await smConfigsRes.json();
+            if (smPoolRes) SA.data.sm_pool = await smPoolRes.json();
+          } catch(smErr) { console.warn('Secretary Manager load error:', smErr); }
+        }
+        break;
       case 'secretary-revenue':
         try {
           const secRevRes = await saFetch(`/api/admin/superadmin/secretary/revenue?period=${SA.secRevPeriod || 'monthly'}`);
@@ -148,13 +178,98 @@ async function loadView(view) {
           console.warn('Secretary revenue load error:', e);
         }
         break;
-      case 'heygen':
-        // Handled by heygen.js module
-        if (typeof window.loadHeyGen === 'function') {
-          SA.loading = false;
-          window.loadHeyGen();
-          return;
+      case 'ai-chat':
+        // Redirected to Gemini Command Center
+        SA.currentView = 'gemini-command';
+        break;
+      case 'invoices':
+        try {
+          const [invListRes, invStatsRes, invCustRes] = await Promise.all([
+            saFetch('/api/invoices'),
+            saFetch('/api/invoices/stats/summary'),
+            saFetch('/api/invoices/customers/list')
+          ]);
+          if (invListRes) SA.data.invoices = await invListRes.json();
+          if (invStatsRes) SA.data.invoice_stats = await invStatsRes.json();
+          if (invCustRes) SA.data.invoice_customers = await invCustRes.json();
+        } catch(e) { console.warn('Invoice load error:', e); }
+        break;
+      case 'telephony':
+        // Load telephony/LiveKit status
+        try {
+          const telRes = await saFetch('/api/admin/superadmin/telephony-status');
+          if (telRes) SA.data.telephony = await telRes.json();
+        } catch(e) { SA.data.telephony = {}; }
+        break;
+      case 'livekit-agents':
+        try {
+          const [lkRes, lkConfigsRes, lkPoolRes] = await Promise.all([
+            saFetch('/api/admin/superadmin/livekit/overview'),
+            saFetch('/api/admin/superadmin/livekit/secretary-configs'),
+            saFetch('/api/admin/superadmin/livekit/phone-pool'),
+          ]);
+          if (lkRes) SA.data.livekit = await lkRes.json();
+          if (lkConfigsRes) SA.data.livekitConfigs = await lkConfigsRes.json();
+          if (lkPoolRes) SA.data.livekitPool = await lkPoolRes.json();
+        } catch(e) { SA.data.livekit = { configured: false, error: e.message }; }
+        break;
+      case 'customer-onboarding':
+        try {
+          const obRes = await saFetch('/api/admin/superadmin/onboarding/list');
+          if (obRes) SA.data.onboarding = await obRes.json();
+        } catch(e) { SA.data.onboarding = { customers: [] }; }
+        break;
+      case 'service-invoices':
+        try {
+          const siRes = await saFetch('/api/admin/superadmin/service-invoices');
+          if (siRes) SA.data.service_invoices = await siRes.json();
+        } catch(e) { SA.data.service_invoices = { invoices: [] }; }
+        break;
+      case 'call-center-manage':
+        try {
+          const [ccStatsRes, ccScriptsRes] = await Promise.all([
+            saFetch('/api/admin/superadmin/call-center/stats'),
+            saFetch('/api/admin/superadmin/sales-scripts')
+          ]);
+          if (ccStatsRes) SA.data.cc_stats = await ccStatsRes.json();
+          if (ccScriptsRes) SA.data.cc_scripts = await ccScriptsRes.json();
+        } catch(e) { SA.data.cc_stats = {}; SA.data.cc_scripts = { scripts: [] }; }
+        break;
+      case 'onboarding-config':
+        try {
+          const obcRes = await saFetch('/api/admin/superadmin/onboarding/config');
+          if (obcRes) SA.data.onboarding_config = await obcRes.json();
+        } catch(e) { SA.data.onboarding_config = { config: {} }; }
+        break;
+      case 'phone-marketplace':
+        try {
+          const pnRes = await saFetch('/api/admin/superadmin/phone-numbers/owned');
+          if (pnRes) SA.data.phone_numbers = await pnRes.json();
+        } catch(e) { SA.data.phone_numbers = { numbers: [] }; }
+        break;
+      case 'secretary-monitor':
+        try {
+          const smRes = await saFetch('/api/admin/superadmin/secretary/monitor');
+          if (smRes) SA.data.secretary_monitor = await smRes.json();
+        } catch(e) { SA.data.secretary_monitor = { agents: [], global: {}, recent_calls: [], summary: {} }; }
+        break;
+      case 'gemini-command':
+        // Check Gemini API status on first load
+        if (!SA.data.gemini_status) {
+          try {
+            const gRes = await saFetch('/api/gemini/status');
+            if (gRes) SA.data.gemini_status = await gRes.json();
+          } catch(e) { SA.data.gemini_status = { configured: false, error: e.message }; }
         }
+        break;
+      // Platform Admin views — handled by platform-admin.js
+      case 'enhanced-onboarding':
+      case 'service-panel':
+      case 'membership-config':
+      case 'agent-personas':
+      case 'cold-call-centre':
+      case 'live-dashboard':
+      case 'transcript-flagging':
         break;
     }
   } catch (e) {
@@ -168,14 +283,14 @@ async function loadView(view) {
 // HELPERS
 // ============================================================
 function samc(label, value, icon, color, sub) {
-  return `<div class="metric-card bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
+  return `<div class="metric-card bg-white rounded-2xl p-5">
     <div class="flex items-start justify-between">
       <div>
-        <p class="text-xs font-medium text-gray-400 uppercase tracking-wider">${label}</p>
-        <p class="text-2xl font-black text-gray-900 mt-1">${value}</p>
-        ${sub ? `<p class="text-xs text-gray-400 mt-1">${sub}</p>` : ''}
+        <p class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">${label}</p>
+        <p class="text-[26px] font-extrabold text-slate-800 mt-1 leading-tight">${value}</p>
+        ${sub ? `<p class="text-[11px] text-slate-400 mt-1.5">${sub}</p>` : ''}
       </div>
-      <div class="w-10 h-10 bg-${color}-100 rounded-xl flex items-center justify-center"><i class="fas ${icon} text-${color}-500"></i></div>
+      <div class="w-11 h-11 bg-${color}-50 rounded-xl flex items-center justify-center"><i class="fas ${icon} text-${color}-500 text-sm"></i></div>
     </div>
   </div>`;
 }
@@ -202,20 +317,17 @@ function payBadge(s) {
 }
 
 function saSection(title, icon, content, actions) {
-  return `<div class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden mb-6">
-    <div class="px-6 py-4 border-b border-gray-50 flex items-center justify-between">
-      <div class="flex items-center gap-2">
-        <i class="fas ${icon} text-red-500"></i>
-        <h3 class="font-bold text-gray-800 text-sm">${title}</h3>
-      </div>
+  return `<div class="sa-section">
+    <div class="sa-section-header">
+      <h3><i class="fas ${icon}"></i>${title}</h3>
       ${actions || ''}
     </div>
-    <div class="p-6">${content}</div>
+    <div class="sa-section-body">${content}</div>
   </div>`;
 }
 
 function periodDropdown(current, onchangeFn) {
-  return `<select onchange="${onchangeFn}(this.value)" class="text-xs border border-gray-200 rounded-lg px-3 py-1.5 bg-white focus:ring-2 focus:ring-red-500 focus:border-red-500">
+  return `<select onchange="${onchangeFn}(this.value)" class="text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500 font-medium text-slate-600 appearance-none cursor-pointer">
     <option value="daily" ${current === 'daily' ? 'selected' : ''}>Daily (Last 30 Days)</option>
     <option value="weekly" ${current === 'weekly' ? 'selected' : ''}>Weekly (Last 12 Weeks)</option>
     <option value="monthly" ${current === 'monthly' ? 'selected' : ''}>Monthly (Last 12 Months)</option>
@@ -230,9 +342,9 @@ function renderContent() {
   if (!root) return;
 
   if (SA.loading) {
-    root.innerHTML = `<div class="flex items-center justify-center py-20">
-      <div class="w-8 h-8 border-4 border-red-200 border-t-red-600 rounded-full animate-spin"></div>
-      <span class="ml-3 text-gray-500">Loading dashboard...</span>
+    root.innerHTML = `<div class="flex flex-col items-center justify-center py-24">
+      <div class="w-10 h-10 border-[3px] border-teal-100 border-t-teal-500 rounded-full animate-spin"></div>
+      <span class="mt-4 text-slate-400 text-sm font-medium">Loading dashboard...</span>
     </div>`;
     return;
   }
@@ -251,8 +363,34 @@ function renderContent() {
     case 'call-center': break; // Handled by call-center.js
     case 'meta-connect': break; // Handled by meta-connect.js
     case 'secretary-admin': root.innerHTML = renderSecretaryAdminView(); break;
+    case 'secretary-manager': root.innerHTML = renderSecretaryManagerView(); break;
+    case 'secretary-monitor': root.innerHTML = renderSecretaryMonitorView(); break;
     case 'secretary-revenue': root.innerHTML = renderSecretaryRevenueView(); break;
-    case 'heygen': break; // Handled by heygen.js
+    case 'ai-chat': root.innerHTML = renderGeminiCommandView(); break; // Redirect to Gemini
+    case 'contact-forms': root.innerHTML = renderContactFormsView(); loadContactForms(); break;
+    case 'seo-manager': root.innerHTML = renderSEOManagerView(); break;
+    case 'onboarding-config': root.innerHTML = renderOnboardingConfigView(); loadOnboardingConfig(); break;
+    case 'phone-marketplace': root.innerHTML = renderPhoneMarketplaceView(); loadPhoneNumbers(); break;
+    case 'pricing-engine': root.innerHTML = renderPricingEngineView(); loadPricingPresets(); break;
+    case 'invoices': root.innerHTML = renderInvoicesView(); break;
+    case 'telephony': root.innerHTML = renderTelephonyView(); break;
+    case 'livekit-agents': root.innerHTML = renderLiveKitAgentsView(); break;
+    case 'revenue-pipeline': root.innerHTML = renderRevenuePipelineView(); loadRevenuePipeline(); break;
+    case 'notifications-admin': root.innerHTML = renderNotificationsAdminView(); loadNotifications(); break;
+    case 'webhooks': root.innerHTML = renderWebhooksView(); loadWebhooks(); break;
+    case 'paywall': root.innerHTML = renderPaywallView(); loadPaywallStatus(); break;
+    case 'customer-onboarding': root.innerHTML = renderCustomerOnboardingView(); break;
+    case 'service-invoices': root.innerHTML = renderServiceInvoicesView(); break;
+    case 'call-center-manage': root.innerHTML = renderCallCenterManageView(); break;
+    case 'gemini-command': root.innerHTML = renderGeminiCommandView(); break;
+    // Platform Admin modules
+    case 'enhanced-onboarding': root.innerHTML = (typeof renderEnhancedOnboardingView === 'function') ? renderEnhancedOnboardingView() : '<div class="p-8 text-gray-500">Module loading...</div>'; paLoadTiers(); break;
+    case 'service-panel': root.innerHTML = (typeof renderServicePanelView === 'function') ? renderServicePanelView() : '<div class="p-8 text-gray-500">Module loading...</div>'; paLoadServicePanel(); break;
+    case 'membership-config': root.innerHTML = (typeof renderMembershipConfigView === 'function') ? renderMembershipConfigView() : '<div class="p-8 text-gray-500">Module loading...</div>'; paLoadMembershipConfig(); break;
+    case 'agent-personas': root.innerHTML = (typeof renderAgentPersonasView === 'function') ? renderAgentPersonasView() : '<div class="p-8 text-gray-500">Module loading...</div>'; paLoadPersonas(); break;
+    case 'cold-call-centre': root.innerHTML = (typeof renderColdCallCentreView === 'function') ? renderColdCallCentreView() : '<div class="p-8 text-gray-500">Module loading...</div>'; paShowCCTab('agents'); break;
+    case 'live-dashboard': root.innerHTML = (typeof renderLiveDashboardView === 'function') ? renderLiveDashboardView() : '<div class="p-8 text-gray-500">Module loading...</div>'; paLoadLiveDashboard(); break;
+    case 'transcript-flagging': root.innerHTML = (typeof renderTranscriptFlaggingView === 'function') ? renderTranscriptFlaggingView() : '<div class="p-8 text-gray-500">Module loading...</div>'; paLoadFlags(); break;
     default: root.innerHTML = renderUsersView();
   }
 }
@@ -267,7 +405,7 @@ function renderUsersView() {
 
   return `
     <div class="mb-6">
-      <h2 class="text-2xl font-black text-gray-900"><i class="fas fa-users mr-2 text-red-500"></i>All Active Users</h2>
+      <h2 class="text-2xl font-black text-gray-900"><i class="fas fa-users mr-2 text-teal-500"></i>All Users</h2>
       <p class="text-sm text-gray-500 mt-1">Complete user registry with account details, credits, and order history</p>
     </div>
 
@@ -300,10 +438,10 @@ function renderUsersView() {
           <tbody class="divide-y divide-gray-50">
             ${users.length === 0 ? '<tr><td colspan="11" class="px-4 py-8 text-center text-gray-400">No registered users yet</td></tr>' : ''}
             ${users.map(u => `
-              <tr class="hover:bg-red-50/30 transition-colors">
+              <tr class="hover:bg-teal-50/30 transition-colors">
                 <td class="px-4 py-3">
                   <div class="flex items-center gap-2">
-                    ${u.google_avatar ? `<img src="${u.google_avatar}" class="w-8 h-8 rounded-full border-2 border-white shadow-sm">` : `<div class="w-8 h-8 bg-gradient-to-br from-red-500 to-rose-600 rounded-full flex items-center justify-center text-white text-xs font-bold">${(u.name||'?')[0].toUpperCase()}</div>`}
+                    ${u.google_avatar ? `<img src="${u.google_avatar}" class="w-8 h-8 rounded-full border-2 border-white shadow-sm">` : `<div class="w-8 h-8 bg-gradient-to-br from-teal-500 to-teal-600 rounded-full flex items-center justify-center text-white text-xs font-bold">${(u.name||'?')[0].toUpperCase()}</div>`}
                     <div>
                       <p class="font-semibold text-gray-800 text-sm">${u.name || '-'}</p>
                       <p class="text-[10px] text-gray-400">${u.email}</p>
@@ -356,7 +494,7 @@ function renderSalesView() {
   return `
     <div class="mb-6 flex items-center justify-between">
       <div>
-        <h2 class="text-2xl font-black text-gray-900"><i class="fas fa-credit-card mr-2 text-red-500"></i>Credit Pack & Report Sales</h2>
+        <h2 class="text-2xl font-black text-gray-900"><i class="fas fa-credit-card mr-2 text-teal-500"></i>Credit Pack & Report Sales</h2>
         <p class="text-sm text-gray-500 mt-1">Revenue tracking from individual reports and credit pack purchases</p>
       </div>
       ${periodDropdown(SA.salesPeriod, 'saChangeSalesPeriod')}
@@ -374,7 +512,7 @@ function renderSalesView() {
     ${saSection('Credit Packages Available', 'fa-box-open', `
       <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
         ${packages.map(p => `
-          <div class="border border-gray-200 rounded-xl p-4 text-center hover:border-red-300 hover:shadow-md transition-all">
+          <div class="border border-gray-200 rounded-xl p-4 text-center hover:border-teal-300 hover:shadow-md transition-all">
             <p class="text-2xl font-black text-gray-900">${p.credits}</p>
             <p class="text-xs font-semibold text-gray-500 uppercase">${p.name}</p>
             <p class="text-lg font-bold text-red-600 mt-1">$${(p.price_cents / 100).toFixed(2)}</p>
@@ -488,10 +626,10 @@ function renderOrdersView() {
   return `
     <div class="mb-6 flex items-center justify-between">
       <div>
-        <h2 class="text-2xl font-black text-gray-900"><i class="fas fa-clipboard-list mr-2 text-red-500"></i>Order History & Logistics</h2>
+        <h2 class="text-2xl font-black text-gray-900"><i class="fas fa-clipboard-list mr-2 text-teal-500"></i>Order History & Logistics</h2>
         <p class="text-sm text-gray-500 mt-1">Report address, order date, pricing, and software completion time</p>
       </div>
-      <select onchange="saFilterOrders(this.value)" class="text-xs border border-gray-200 rounded-lg px-3 py-1.5 bg-white focus:ring-2 focus:ring-red-500">
+      <select onchange="saFilterOrders(this.value)" class="text-xs border border-gray-200 rounded-lg px-3 py-1.5 bg-white focus:ring-2 focus:ring-teal-500">
         <option value="" ${SA.ordersFilter === '' ? 'selected' : ''}>All Statuses</option>
         <option value="pending" ${SA.ordersFilter === 'pending' ? 'selected' : ''}>Pending</option>
         <option value="processing" ${SA.ordersFilter === 'processing' ? 'selected' : ''}>Processing</option>
@@ -533,7 +671,7 @@ function renderOrdersView() {
             ${orders.map(o => {
               const procTime = o.processing_seconds;
               return `
-              <tr class="hover:bg-red-50/30 transition-colors">
+              <tr class="hover:bg-teal-50/30 transition-colors">
                 <td class="px-3 py-2">
                   <span class="font-mono text-xs font-bold text-gray-700">${o.order_number || '-'}</span>
                   ${o.is_trial ? '<span class="ml-1 text-[9px] bg-blue-100 text-blue-700 px-1 rounded">TRIAL</span>' : ''}
@@ -583,7 +721,7 @@ function renderSignupsView() {
   return `
     <div class="mb-6 flex items-center justify-between">
       <div>
-        <h2 class="text-2xl font-black text-gray-900"><i class="fas fa-user-plus mr-2 text-red-500"></i>New User Sign-ups</h2>
+        <h2 class="text-2xl font-black text-gray-900"><i class="fas fa-user-plus mr-2 text-teal-500"></i>New User Sign-ups</h2>
         <p class="text-sm text-gray-500 mt-1">Registration trends, sign-up method breakdown, and conversion tracking</p>
       </div>
       ${periodDropdown(SA.signupsPeriod, 'saChangeSignupsPeriod')}
@@ -609,7 +747,7 @@ function renderSignupsView() {
             return `<div class="flex items-center gap-3">
               <span class="text-xs font-mono text-gray-600 w-24 flex-shrink-0">${p.period}</span>
               <div class="flex-1 bg-gray-100 rounded-full h-6 overflow-hidden relative">
-                <div class="absolute inset-y-0 left-0 bg-gradient-to-r from-red-500 to-rose-400 rounded-full transition-all" style="width:${pct}%"></div>
+                <div class="absolute inset-y-0 left-0 bg-gradient-to-r from-teal-500 to-teal-400 rounded-full transition-all" style="width:${pct}%"></div>
                 <div class="absolute inset-0 flex items-center px-3">
                   <span class="text-xs font-bold text-white drop-shadow-sm">${p.signups}</span>
                   <span class="text-[10px] text-white/80 ml-2">(${p.google_signups || 0} Google, ${p.email_signups || 0} Email)</span>
@@ -627,7 +765,7 @@ function renderSignupsView() {
           ${recent.map(u => `
             <div class="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-gray-50 transition-colors">
               <div class="flex items-center gap-3">
-                ${u.google_avatar ? `<img src="${u.google_avatar}" class="w-8 h-8 rounded-full">` : `<div class="w-8 h-8 bg-gradient-to-br from-red-500 to-rose-600 rounded-full flex items-center justify-center text-white text-xs font-bold">${(u.name||'?')[0].toUpperCase()}</div>`}
+                ${u.google_avatar ? `<img src="${u.google_avatar}" class="w-8 h-8 rounded-full">` : `<div class="w-8 h-8 bg-gradient-to-br from-teal-500 to-teal-600 rounded-full flex items-center justify-center text-white text-xs font-bold">${(u.name||'?')[0].toUpperCase()}</div>`}
                 <div>
                   <p class="text-sm font-medium text-gray-800">${u.name}</p>
                   <p class="text-[10px] text-gray-400">${u.email} ${u.company_name ? '· ' + u.company_name : ''}</p>
@@ -662,13 +800,13 @@ function renderMarketingView() {
 
   return `
     <div class="mb-6">
-      <h2 class="text-2xl font-black text-gray-900"><i class="fas fa-bullhorn mr-2 text-red-500"></i>Internal Sales & Marketing</h2>
+      <h2 class="text-2xl font-black text-gray-900"><i class="fas fa-bullhorn mr-2 text-teal-500"></i>Internal Sales & Marketing</h2>
       <p class="text-sm text-gray-500 mt-1">CRM overview, proposals, invoices, leads, and conversion funnel</p>
     </div>
 
     <!-- Conversion Funnel -->
     <div class="bg-gradient-to-r from-gray-900 to-gray-800 rounded-2xl p-6 mb-6 text-white">
-      <h3 class="font-bold text-lg mb-4"><i class="fas fa-funnel-dollar mr-2 text-red-400"></i>Conversion Funnel</h3>
+      <h3 class="font-bold text-lg mb-4"><i class="fas fa-funnel-dollar mr-2 text-teal-400"></i>Conversion Funnel</h3>
       <div class="grid grid-cols-5 gap-4">
         <div class="text-center">
           <div class="w-16 h-16 mx-auto bg-blue-500/20 rounded-2xl flex items-center justify-center mb-2">
@@ -875,7 +1013,7 @@ function renderEmailSetupView() {
           <p class="text-sm text-gray-500 mt-1">${hasRefreshToken ? 'Gmail is authorized to send emails from <strong>' + senderEmail + '</strong>.' : 'Click the button below to sign in with Google and grant email sending permission.'}</p>
         </div>
       </div>
-      ${hasClientSecret ? '<a href="/api/auth/gmail" class="inline-flex items-center gap-2 px-6 py-3 ' + (hasRefreshToken ? 'bg-gray-100 hover:bg-gray-200 text-gray-700' : 'bg-red-600 hover:bg-red-700 text-white') + ' rounded-xl font-semibold text-sm transition-colors"><svg class="w-5 h-5" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>' + (hasRefreshToken ? 'Re-authorize Gmail' : 'Sign in with Google') + '</a>' : '<p class="text-sm text-gray-400"><i class="fas fa-arrow-up mr-1"></i> Complete Step 1 first.</p>'}
+      ${hasClientSecret ? '<a href="/api/auth/gmail" class="inline-flex items-center gap-2 px-6 py-3 ' + (hasRefreshToken ? 'bg-gray-100 hover:bg-gray-200 text-gray-700' : 'bg-teal-600 hover:bg-teal-700 text-white') + ' rounded-xl font-semibold text-sm transition-colors"><svg class="w-5 h-5" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>' + (hasRefreshToken ? 'Re-authorize Gmail' : 'Sign in with Google') + '</a>' : '<p class="text-sm text-gray-400"><i class="fas fa-arrow-up mr-1"></i> Complete Step 1 first.</p>'}
     </div>
 
     <!-- Step 3: Test -->
@@ -951,12 +1089,12 @@ async function testEmailDelivery() {
       result.className = 'mt-3 p-3 rounded-xl text-sm bg-amber-50 text-amber-800 border border-amber-200';
       result.innerHTML = '<i class="fas fa-exclamation-triangle mr-1"></i> Email delivery failed. Fallback code: <strong class="font-mono text-lg">' + data.fallback_code + '</strong><br><span class="text-xs">Complete Gmail OAuth setup above to fix.</span>';
     } else {
-      result.className = 'mt-3 p-3 rounded-xl text-sm bg-red-50 text-red-800 border border-red-200';
+      result.className = 'mt-3 p-3 rounded-xl text-sm bg-red-50 text-red-800 border border-teal-200';
       result.innerHTML = '<i class="fas fa-times-circle mr-1"></i> ' + (data.error || 'Failed.');
     }
   } catch (e) {
     result.classList.remove('hidden');
-    result.className = 'mt-3 p-3 rounded-xl text-sm bg-red-50 text-red-800 border border-red-200';
+    result.className = 'mt-3 p-3 rounded-xl text-sm bg-red-50 text-red-800 border border-teal-200';
     result.innerHTML = '<i class="fas fa-times-circle mr-1"></i> Network error.';
   }
   btn.disabled = false; btn.innerHTML = '<i class="fas fa-paper-plane mr-1"></i> Send Test';
@@ -1013,8 +1151,8 @@ function renderAnalyticsView() {
     const pct = Math.round(((h.pageviews || 0) / maxHourly) * 100);
     const hour = (h.hour || '').split(' ')[1] || '';
     return '<div class="flex flex-col items-center gap-1" title="' + h.hour + ': ' + h.pageviews + ' views, ' + h.visitors + ' visitors">' +
-      '<div class="w-3 bg-red-200 rounded-t relative" style="height:40px">' +
-        '<div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-red-600 to-red-400 rounded-t" style="height:' + pct + '%"></div>' +
+      '<div class="w-3 bg-teal-200 rounded-t relative" style="height:40px">' +
+        '<div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-teal-600 to-teal-400 rounded-t" style="height:' + pct + '%"></div>' +
       '</div>' +
       '<span class="text-[8px] text-gray-400">' + hour.replace(':00','') + '</span>' +
     '</div>';
@@ -1028,12 +1166,12 @@ function renderAnalyticsView() {
   return `
     <div class="mb-6 flex items-center justify-between">
       <div>
-        <h2 class="text-2xl font-black text-gray-900"><i class="fas fa-chart-line mr-2 text-red-500"></i>Site Analytics</h2>
+        <h2 class="text-2xl font-black text-gray-900"><i class="fas fa-chart-line mr-2 text-teal-500"></i>Site Analytics</h2>
         <p class="text-sm text-gray-500 mt-1">Every click, pageview, and visitor tracked in real time</p>
       </div>
       <div class="flex items-center gap-3">
         <span class="text-xs text-gray-400">${periodLabels[d.period] || d.period}</span>
-        <select onchange="saChangeAnalyticsPeriod(this.value)" class="text-xs border border-gray-200 rounded-lg px-3 py-1.5 bg-white focus:ring-2 focus:ring-red-500 focus:border-red-500">
+        <select onchange="saChangeAnalyticsPeriod(this.value)" class="text-xs border border-gray-200 rounded-lg px-3 py-1.5 bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-500">
           <option value="24h" ${SA.analyticsPeriod === '24h' ? 'selected' : ''}>Last 24 Hours</option>
           <option value="7d" ${SA.analyticsPeriod === '7d' ? 'selected' : ''}>Last 7 Days</option>
           <option value="30d" ${SA.analyticsPeriod === '30d' ? 'selected' : ''}>Last 30 Days</option>
@@ -1068,7 +1206,7 @@ function renderAnalyticsView() {
                 '<div class="flex items-center gap-2">' +
                   '<span class="text-xs font-mono text-gray-700 truncate max-w-[200px]" title="' + p.page_url + '">' + p.page_url + '</span>' +
                 '</div>' +
-                '<div class="w-full bg-gray-100 rounded-full h-1.5 mt-1"><div class="bg-red-500 h-1.5 rounded-full" style="width:' + pct + '%"></div></div>' +
+                '<div class="w-full bg-gray-100 rounded-full h-1.5 mt-1"><div class="bg-teal-500 h-1.5 rounded-full" style="width:' + pct + '%"></div></div>' +
               '</div>' +
               '<div class="text-right flex-shrink-0">' +
                 '<span class="text-sm font-bold text-gray-800">' + p.views + '</span>' +
@@ -1127,7 +1265,7 @@ function renderAnalyticsView() {
                   '<span class="text-sm font-medium text-gray-700 capitalize">' + (d.device_type || 'unknown') + '</span>' +
                   '<span class="text-xs text-gray-500">' + d.count + ' (' + pct + '%)</span>' +
                 '</div>' +
-                '<div class="w-full bg-gray-100 rounded-full h-2"><div class="bg-gradient-to-r from-red-500 to-rose-400 h-2 rounded-full" style="width:' + pct + '%"></div></div>' +
+                '<div class="w-full bg-gray-100 rounded-full h-2"><div class="bg-gradient-to-r from-teal-500 to-teal-400 h-2 rounded-full" style="width:' + pct + '%"></div></div>' +
               '</div>' +
             '</div>';
           }).join('') + '</div>'
@@ -1152,7 +1290,7 @@ function renderAnalyticsView() {
             : v.event_type === 'page_exit' 
               ? '<span class="text-[10px] text-gray-500">' + (v.time_on_page || 0) + 's / ' + (v.scroll_depth || 0) + '% scroll</span>'
               : '<span class="text-[10px] text-gray-400">' + (v.referrer ? 'from ' + v.referrer.substring(0,30) : '-') + '</span>';
-          return '<tr class="hover:bg-red-50/30 transition-colors">' +
+          return '<tr class="hover:bg-teal-50/30 transition-colors">' +
             '<td class="px-3 py-1.5 text-[10px] text-gray-500 whitespace-nowrap">' + fmtDateTime(v.created_at) + '</td>' +
             '<td class="px-3 py-1.5">' + eventBadge(v.event_type) + '</td>' +
             '<td class="px-3 py-1.5 text-xs font-mono text-gray-700 max-w-[150px] truncate" title="' + v.page_url + '">' + (v.page_url || '/') + '</td>' +
@@ -1165,7 +1303,7 @@ function renderAnalyticsView() {
           '</tr>';
         }).join('') +
         '</tbody></table></div>',
-      '<button onclick="saRefreshAnalytics()" class="text-xs text-red-600 hover:text-red-800 font-medium"><i class="fas fa-sync-alt mr-1"></i>Refresh</button>'
+      '<button onclick="saRefreshAnalytics()" class="text-xs text-teal-600 hover:text-teal-800 font-medium"><i class="fas fa-sync-alt mr-1"></i>Refresh</button>'
     )}
   `;
 }
@@ -1245,18 +1383,18 @@ function renderGA4View() {
 
   const tabNav = '<div class="flex gap-1 overflow-x-auto pb-2 mb-4">' +
     tabItems.map(t => '<button onclick="saSetGA4Tab(\'' + t.id + '\')" class="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ' +
-      (tab === t.id ? 'bg-red-600 text-white shadow-md' : 'bg-white text-gray-500 hover:bg-gray-100 border border-gray-200') +
+      (tab === t.id ? 'bg-teal-600 text-white shadow-md' : 'bg-white text-gray-500 hover:bg-gray-100 border border-gray-200') +
       '"><i class="fas ' + t.icon + '"></i> ' + t.label + '</button>'
     ).join('') + '</div>';
 
   // ── Header ──
   const header = '<div class="mb-4 flex items-center justify-between">' +
     '<div>' +
-      '<h2 class="text-2xl font-black text-gray-900"><i class="fab fa-google mr-2 text-red-500"></i>Google Analytics 4</h2>' +
+      '<h2 class="text-2xl font-black text-gray-900"><i class="fab fa-google mr-2 text-teal-500"></i>Google Analytics 4</h2>' +
       '<p class="text-sm text-gray-500 mt-1">GA4 Data API, Real-Time Reporting & Measurement Protocol</p>' +
     '</div>' +
     '<div class="flex items-center gap-3">' +
-      '<select onchange="saChangeGA4Period(this.value)" class="text-xs border border-gray-200 rounded-lg px-3 py-1.5 bg-white focus:ring-2 focus:ring-red-500">' +
+      '<select onchange="saChangeGA4Period(this.value)" class="text-xs border border-gray-200 rounded-lg px-3 py-1.5 bg-white focus:ring-2 focus:ring-teal-500">' +
         ['24h','7d','30d','90d','365d'].map(p => '<option value="' + p + '"' + (SA.ga4Period === p ? ' selected' : '') + '>' + periodLabels[p] + '</option>').join('') +
       '</select>' +
       '<button onclick="saRefreshGA4()" class="px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs font-medium hover:bg-gray-50"><i class="fas fa-sync-alt mr-1"></i>Refresh</button>' +
@@ -1298,7 +1436,7 @@ function renderGA4View() {
           '<th class="px-3 py-2 text-right text-[10px] font-semibold text-gray-500 uppercase">Engaged</th>' +
           '<th class="px-3 py-2 text-right text-[10px] font-semibold text-gray-500 uppercase">Conversions</th>' +
         '</tr></thead><tbody class="divide-y divide-gray-50">' +
-        acqRows.slice(0, 15).map(r => '<tr class="hover:bg-red-50/30">' +
+        acqRows.slice(0, 15).map(r => '<tr class="hover:bg-teal-50/30">' +
           '<td class="px-3 py-2 text-xs font-medium text-gray-700">' + (r[0] || '(direct)') + '</td>' +
           '<td class="px-3 py-2 text-xs text-gray-500">' + (r[1] || '(none)') + '</td>' +
           '<td class="px-3 py-2 text-xs text-right font-mono">' + (r[2] || 0) + '</td>' +
@@ -1322,7 +1460,7 @@ function renderGA4View() {
             '<div class="w-8 text-center"><i class="fas ' + (icons[cat] || 'fa-question') + ' text-gray-700"></i></div>' +
             '<div class="flex-1">' +
               '<div class="flex justify-between mb-0.5"><span class="text-sm font-medium text-gray-700 capitalize">' + cat + '</span><span class="text-xs text-gray-500">' + users + ' users (' + pct + '%)</span></div>' +
-              '<div class="w-full bg-gray-100 rounded-full h-2"><div class="bg-gradient-to-r from-red-500 to-rose-400 h-2 rounded-full" style="width:' + pct + '%"></div></div>' +
+              '<div class="w-full bg-gray-100 rounded-full h-2"><div class="bg-gradient-to-r from-teal-500 to-teal-400 h-2 rounded-full" style="width:' + pct + '%"></div></div>' +
             '</div></div>';
         }).join('') + '</div>';
 
@@ -1352,7 +1490,7 @@ function renderGA4View() {
               '<div class="flex items-center gap-2">' +
                 '<span class="text-xs font-mono text-gray-700 truncate max-w-[300px]" title="' + path + '">' + path + '</span>' +
               '</div>' +
-              '<div class="w-full bg-gray-100 rounded-full h-1.5 mt-1"><div class="bg-red-500 h-1.5 rounded-full" style="width:' + pct + '%"></div></div>' +
+              '<div class="w-full bg-gray-100 rounded-full h-1.5 mt-1"><div class="bg-teal-500 h-1.5 rounded-full" style="width:' + pct + '%"></div></div>' +
             '</div>' +
             '<div class="text-right flex-shrink-0 flex gap-4">' +
               '<div><span class="text-sm font-bold text-gray-800">' + views + '</span><span class="text-[10px] text-gray-400 block">views</span></div>' +
@@ -1386,7 +1524,7 @@ function renderGA4View() {
             'Paid Social': 'fa-bullhorn text-indigo-500', 'Display': 'fa-image text-teal-500'
           };
           const icon = channelIcons[r[0]] || 'fa-globe text-gray-400';
-          return '<tr class="hover:bg-red-50/30">' +
+          return '<tr class="hover:bg-teal-50/30">' +
             '<td class="px-3 py-2 text-xs font-medium text-gray-700"><i class="fas ' + icon + ' mr-2"></i>' + (r[0] || 'Unknown') + '</td>' +
             '<td class="px-3 py-2 text-xs text-right font-mono font-bold">' + (r[1] || 0) + '</td>' +
             '<td class="px-3 py-2 text-xs text-right font-mono">' + (r[2] || 0) + '</td>' +
@@ -1407,7 +1545,7 @@ function renderGA4View() {
           '<th class="px-3 py-2 text-right text-[10px] font-semibold text-gray-500 uppercase">Engaged</th>' +
           '<th class="px-3 py-2 text-right text-[10px] font-semibold text-gray-500 uppercase">Conversions</th>' +
           '</tr></thead><tbody class="divide-y divide-gray-50">' +
-          acqRows2.map(r => '<tr class="hover:bg-red-50/30">' +
+          acqRows2.map(r => '<tr class="hover:bg-teal-50/30">' +
             '<td class="px-3 py-2 text-xs font-medium text-gray-700">' + (r[0] || '(direct)') + '</td>' +
             '<td class="px-3 py-2 text-xs text-gray-500">' + (r[1] || '(none)') + '</td>' +
             '<td class="px-3 py-2 text-xs text-right font-mono">' + (r[2] || 0) + '</td>' +
@@ -1446,7 +1584,7 @@ function renderGA4View() {
                 '<i class="fas fa-map-marker-alt text-red-400 text-xs"></i>' +
                 '<span class="text-sm font-medium text-gray-700">' + country + (city ? ' <span class="text-gray-400">/ ' + city + '</span>' : '') + '</span>' +
               '</div>' +
-              '<div class="w-full bg-gray-100 rounded-full h-1.5 mt-1"><div class="bg-gradient-to-r from-red-500 to-rose-400 h-1.5 rounded-full" style="width:' + pct + '%"></div></div>' +
+              '<div class="w-full bg-gray-100 rounded-full h-1.5 mt-1"><div class="bg-gradient-to-r from-teal-500 to-teal-400 h-1.5 rounded-full" style="width:' + pct + '%"></div></div>' +
             '</div>' +
             '<div class="text-right flex-shrink-0 flex gap-4">' +
               '<div><span class="text-sm font-bold text-gray-800">' + users + '</span><span class="text-[10px] text-gray-400 block">users</span></div>' +
@@ -1571,7 +1709,7 @@ function renderGA4View() {
     '</div>';
 
     const testSection = status.server_side_events
-      ? '<div class="mt-4"><button onclick="saTestGA4Event()" class="px-4 py-2 bg-red-600 text-white rounded-xl text-sm font-semibold hover:bg-red-700"><i class="fas fa-paper-plane mr-1"></i>Send Test Event to GA4</button><span class="text-xs text-gray-400 ml-2">Sends an admin_test_ping event via Measurement Protocol</span></div>'
+      ? '<div class="mt-4"><button onclick="saTestGA4Event()" class="px-4 py-2 bg-teal-600 text-white rounded-xl text-sm font-semibold hover:bg-red-700"><i class="fas fa-paper-plane mr-1"></i>Send Test Event to GA4</button><span class="text-xs text-gray-400 ml-2">Sends an admin_test_ping event via Measurement Protocol</span></div>'
       : '';
 
     return header + tabNav +
@@ -1616,12 +1754,12 @@ function renderPricingView() {
 
   return `
     <div class="mb-6">
-      <h2 class="text-2xl font-black text-gray-900"><i class="fas fa-dollar-sign mr-2 text-red-500"></i>Pricing & Billing</h2>
+      <h2 class="text-2xl font-black text-gray-900"><i class="fas fa-dollar-sign mr-2 text-teal-500"></i>Pricing & Billing</h2>
       <p class="text-sm text-gray-500 mt-1">Manage report pricing, credit packages, subscriptions, and Square payment terminal</p>
     </div>
 
     <!-- Square Status Banner -->
-    <div class="mb-6 rounded-2xl p-5 ${sq.connected ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}">
+    <div class="mb-6 rounded-2xl p-5 ${sq.connected ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-teal-200'}">
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-3">
           <div class="w-12 h-12 rounded-xl flex items-center justify-center ${sq.connected ? 'bg-green-100' : 'bg-red-100'}">
@@ -1662,7 +1800,7 @@ function renderPricingView() {
               <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold">$</span>
               <input type="number" step="0.01" min="0" id="pricePerReport"
                 value="${(p.price_per_report_cents / 100).toFixed(2)}"
-                class="w-full pl-8 pr-4 py-3 border border-gray-200 rounded-xl text-sm font-mono focus:ring-2 focus:ring-red-500 focus:border-red-500">
+                class="w-full pl-8 pr-4 py-3 border border-gray-200 rounded-xl text-sm font-mono focus:ring-2 focus:ring-teal-500 focus:border-teal-500">
             </div>
             <p class="text-[10px] text-gray-400">Default charge for a single roof measurement report</p>
           </div>
@@ -1672,7 +1810,7 @@ function renderPricingView() {
             <label class="block text-sm font-semibold text-gray-700"><i class="fas fa-gift mr-1 text-purple-500"></i> Free Trial Reports</label>
             <input type="number" min="0" max="50" id="freeTrialReports"
               value="${p.free_trial_reports || 3}"
-              class="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm font-mono focus:ring-2 focus:ring-red-500 focus:border-red-500">
+              class="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm font-mono focus:ring-2 focus:ring-teal-500 focus:border-teal-500">
             <p class="text-[10px] text-gray-400">Number of free reports for new users</p>
           </div>
 
@@ -1683,7 +1821,7 @@ function renderPricingView() {
               <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold">$</span>
               <input type="number" step="0.01" min="0" id="subscriptionMonthly"
                 value="${(p.subscription_monthly_price_cents / 100).toFixed(2)}"
-                class="w-full pl-8 pr-4 py-3 border border-gray-200 rounded-xl text-sm font-mono focus:ring-2 focus:ring-red-500 focus:border-red-500">
+                class="w-full pl-8 pr-4 py-3 border border-gray-200 rounded-xl text-sm font-mono focus:ring-2 focus:ring-teal-500 focus:border-teal-500">
             </div>
             <p class="text-[10px] text-gray-400">Monthly fee for full CRM + unlimited reports (after free trial)</p>
           </div>
@@ -1695,7 +1833,7 @@ function renderPricingView() {
               <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold">$</span>
               <input type="number" step="0.01" min="0" id="subscriptionAnnual"
                 value="${(p.subscription_annual_price_cents / 100).toFixed(2)}"
-                class="w-full pl-8 pr-4 py-3 border border-gray-200 rounded-xl text-sm font-mono focus:ring-2 focus:ring-red-500 focus:border-red-500">
+                class="w-full pl-8 pr-4 py-3 border border-gray-200 rounded-xl text-sm font-mono focus:ring-2 focus:ring-teal-500 focus:border-teal-500">
             </div>
             <p class="text-[10px] text-gray-400">Annual fee (discounted) for full CRM + unlimited reports</p>
           </div>
@@ -1707,7 +1845,7 @@ function renderPricingView() {
               <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold">$</span>
               <input type="number" step="0.01" min="0" id="secretaryMonthly"
                 value="${(p.secretary_monthly_price_cents / 100).toFixed(2)}"
-                class="w-full pl-8 pr-4 py-3 border border-gray-200 rounded-xl text-sm font-mono focus:ring-2 focus:ring-red-500 focus:border-red-500">
+                class="w-full pl-8 pr-4 py-3 border border-gray-200 rounded-xl text-sm font-mono focus:ring-2 focus:ring-teal-500 focus:border-teal-500">
             </div>
             <p class="text-[10px] text-gray-400">Monthly subscription for AI receptionist / call answering</p>
           </div>
@@ -1719,7 +1857,7 @@ function renderPricingView() {
               <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold">$</span>
               <input type="number" step="0.01" min="0" id="secretaryPerCall"
                 value="${(p.secretary_per_call_price_cents / 100).toFixed(2)}"
-                class="w-full pl-8 pr-4 py-3 border border-gray-200 rounded-xl text-sm font-mono focus:ring-2 focus:ring-red-500 focus:border-red-500">
+                class="w-full pl-8 pr-4 py-3 border border-gray-200 rounded-xl text-sm font-mono focus:ring-2 focus:ring-teal-500 focus:border-teal-500">
             </div>
             <p class="text-[10px] text-gray-400">Per-call fee if using pay-as-you-go model</p>
           </div>
@@ -1729,14 +1867,14 @@ function renderPricingView() {
         <div class="mt-6 space-y-2">
           <label class="block text-sm font-semibold text-gray-700"><i class="fas fa-list-check mr-1 text-sky-500"></i> Subscription Features (comma-separated)</label>
           <textarea id="subscriptionFeatures" rows="3"
-            class="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
+            class="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
             placeholder="Unlimited reports, Full CRM access, AI Secretary, Custom branding, Priority support">${p.subscription_features || ''}</textarea>
           <p class="text-[10px] text-gray-400">Features shown on public pricing page for the subscription plan</p>
         </div>
 
         <div class="mt-6 flex items-center justify-between">
           <p class="text-xs text-gray-400"><i class="fas fa-info-circle mr-1"></i> Changes take effect immediately for new transactions</p>
-          <button type="submit" id="savePricingBtn" class="px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-semibold text-sm transition-colors">
+          <button type="submit" id="savePricingBtn" class="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-semibold text-sm transition-colors">
             <i class="fas fa-save mr-1"></i> Save Pricing
           </button>
         </div>
@@ -1752,11 +1890,11 @@ function renderPricingView() {
         ${activePackages.map(pkg => renderPackageCard(pkg, true)).join('')}
 
         <!-- Add New Package Card -->
-        <div onclick="showAddPackageModal()" class="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center cursor-pointer hover:border-red-400 hover:bg-red-50/30 transition-all group">
-          <div class="w-12 h-12 bg-gray-100 group-hover:bg-red-100 rounded-xl flex items-center justify-center mx-auto mb-3 transition-colors">
-            <i class="fas fa-plus text-gray-400 group-hover:text-red-500 text-lg transition-colors"></i>
+        <div onclick="showAddPackageModal()" class="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center cursor-pointer hover:border-teal-400 hover:bg-teal-50/30 transition-all group">
+          <div class="w-12 h-12 bg-gray-100 group-hover:bg-teal-100 rounded-xl flex items-center justify-center mx-auto mb-3 transition-colors">
+            <i class="fas fa-plus text-gray-400 group-hover:text-teal-500 text-lg transition-colors"></i>
           </div>
-          <p class="text-sm font-semibold text-gray-500 group-hover:text-red-600 transition-colors">Add Package</p>
+          <p class="text-sm font-semibold text-gray-500 group-hover:text-teal-600 transition-colors">Add Package</p>
           <p class="text-[10px] text-gray-400">Create a new credit pack</p>
         </div>
       </div>
@@ -1784,25 +1922,25 @@ function renderPricingView() {
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">Package Name</label>
               <input type="text" id="pkgName" placeholder="e.g. 10 Pack" required
-                class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500">
+                class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500">
             </div>
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
               <input type="text" id="pkgDesc" placeholder="e.g. 10 reports, $9 each"
-                class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500">
+                class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500">
             </div>
             <div class="grid grid-cols-2 gap-4">
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Credits (Reports)</label>
                 <input type="number" id="pkgCredits" min="1" required
-                  class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-mono focus:ring-2 focus:ring-red-500 focus:border-red-500">
+                  class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-mono focus:ring-2 focus:ring-teal-500 focus:border-teal-500">
               </div>
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Total Price (CAD)</label>
                 <div class="relative">
                   <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold">$</span>
                   <input type="number" step="0.01" min="0.01" id="pkgPrice" required
-                    class="w-full pl-8 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm font-mono focus:ring-2 focus:ring-red-500 focus:border-red-500">
+                    class="w-full pl-8 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm font-mono focus:ring-2 focus:ring-teal-500 focus:border-teal-500">
                 </div>
               </div>
             </div>
@@ -1810,11 +1948,11 @@ function renderPricingView() {
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Sort Order</label>
                 <input type="number" id="pkgSort" min="0" value="0"
-                  class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-mono focus:ring-2 focus:ring-red-500 focus:border-red-500">
+                  class="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-mono focus:ring-2 focus:ring-teal-500 focus:border-teal-500">
               </div>
               <div class="flex items-end">
                 <label class="flex items-center gap-2 cursor-pointer py-2.5">
-                  <input type="checkbox" id="pkgActive" checked class="w-4 h-4 text-red-600 rounded focus:ring-red-500">
+                  <input type="checkbox" id="pkgActive" checked class="w-4 h-4 text-red-600 rounded focus:ring-teal-500">
                   <span class="text-sm font-medium text-gray-700">Active (visible)</span>
                 </label>
               </div>
@@ -1825,7 +1963,7 @@ function renderPricingView() {
           </div>
           <div class="flex gap-3 mt-6">
             <button type="button" onclick="closePkgModal()" class="flex-1 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 rounded-xl text-sm font-medium transition-colors">Cancel</button>
-            <button type="submit" id="pkgSaveBtn" class="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-semibold transition-colors">
+            <button type="submit" id="pkgSaveBtn" class="flex-1 px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-sm font-semibold transition-colors">
               <i class="fas fa-save mr-1"></i> Save
             </button>
           </div>
@@ -1855,7 +1993,7 @@ function renderPackageCard(pkg, isActive) {
           <i class="fas fa-edit mr-1"></i> Edit
         </button>
         ${isActive
-          ? `<button onclick="deactivatePackage(${pkg.id})" class="px-3 py-2 bg-red-50 hover:bg-red-100 rounded-lg text-xs font-medium text-red-600 transition-colors" title="Deactivate"><i class="fas fa-eye-slash"></i></button>`
+          ? `<button onclick="deactivatePackage(${pkg.id})" class="px-3 py-2 bg-teal-50 hover:bg-teal-100 rounded-lg text-xs font-medium text-teal-600 transition-colors" title="Deactivate"><i class="fas fa-eye-slash"></i></button>`
           : `<button onclick="activatePackage(${pkg.id})" class="px-3 py-2 bg-green-50 hover:bg-green-100 rounded-lg text-xs font-medium text-green-600 transition-colors" title="Reactivate"><i class="fas fa-eye"></i></button>`
         }
       </div>
@@ -1896,7 +2034,7 @@ async function savePricingSettings(e) {
     }
 
     btn.innerHTML = '<i class="fas fa-check mr-1"></i> Saved!';
-    btn.classList.replace('bg-red-600', 'bg-green-600');
+    btn.classList.replace('bg-teal-600', 'bg-green-600');
     // Reload pricing data from DB to show updated values
     setTimeout(() => { loadView('pricing'); }, 1500);
   } catch (err) {
@@ -2313,4 +2451,4289 @@ function renderSecretaryRevenueView() {
     <!-- First Subscription Date -->
     ${lifetime.first_subscription ? '<div class="text-center text-xs text-gray-400 mt-4"><i class="fas fa-calendar mr-1"></i>Secretary AI service since ' + fmtDate(lifetime.first_subscription) + '</div>' : ''}
   </div>`;
+}
+
+// ============================================================
+// CONTACT FORMS — View all website contact form submissions
+// ============================================================
+function renderContactFormsView() {
+  return `<div class="mb-6">
+    <h2 class="text-2xl font-bold text-gray-900 flex items-center gap-3"><i class="fas fa-inbox text-cyan-500"></i>Contact Form Submissions</h2>
+    <p class="text-sm text-gray-500 mt-1">All inquiries from roofreporterai.com contact forms — also forwarded to admin email</p>
+  </div>
+  <div id="contactFormsContent"><div class="text-center py-12 text-gray-400"><i class="fas fa-spinner fa-spin text-2xl mb-3"></i><p>Loading submissions...</p></div></div>`;
+}
+
+async function loadContactForms() {
+  try {
+    const res = await saFetch('/api/agents/leads?limit=100');
+    if (!res) return;
+    const data = await res.json();
+    const leads = data.leads || [];
+    const el = document.getElementById('contactFormsContent');
+    if (!el) return;
+
+    if (leads.length === 0) {
+      el.innerHTML = '<div class="bg-white rounded-2xl border border-gray-200 p-12 text-center"><i class="fas fa-inbox text-gray-300 text-4xl mb-4"></i><h3 class="font-bold text-gray-600 text-lg">No submissions yet</h3><p class="text-gray-400 text-sm mt-1">Contact form submissions from roofreporterai.com will appear here.</p></div>';
+      return;
+    }
+
+    el.innerHTML = `
+      <div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+        <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+          <span class="font-bold text-gray-800"><i class="fas fa-envelope text-cyan-500 mr-2"></i>${leads.length} Submissions</span>
+          <span class="text-xs text-gray-400">Notifications also sent to admin Gmail</span>
+        </div>
+        <div class="divide-y divide-gray-100">
+          ${leads.map(function(l) {
+            const date = l.created_at ? new Date(l.created_at + 'Z').toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit' }) : '—';
+            return '<div class="px-5 py-4 hover:bg-gray-50 transition-colors">' +
+              '<div class="flex items-start justify-between gap-4">' +
+                '<div class="flex-1 min-w-0">' +
+                  '<div class="flex items-center gap-2 mb-1">' +
+                    '<span class="font-semibold text-gray-900">' + (l.name || 'Unknown') + '</span>' +
+                    (l.company_name ? '<span class="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">' + l.company_name + '</span>' : '') +
+                    '<span class="text-xs bg-cyan-50 text-cyan-600 px-2 py-0.5 rounded-full">' + (l.source_page || 'website') + '</span>' +
+                  '</div>' +
+                  '<div class="flex items-center gap-4 text-xs text-gray-500 mb-2">' +
+                    (l.email ? '<span><i class="fas fa-envelope mr-1"></i><a href="mailto:' + l.email + '" class="text-cyan-600 hover:underline">' + l.email + '</a></span>' : '') +
+                    (l.phone ? '<span><i class="fas fa-phone mr-1"></i>' + l.phone + '</span>' : '') +
+                  '</div>' +
+                  (l.message ? '<p class="text-sm text-gray-600 bg-gray-50 rounded-lg px-3 py-2 border-l-3 border-cyan-400">' + l.message.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</p>' : '<p class="text-xs text-gray-400 italic">No message</p>') +
+                '</div>' +
+                '<div class="text-xs text-gray-400 whitespace-nowrap">' + date + '</div>' +
+              '</div>' +
+            '</div>';
+          }).join('')}
+        </div>
+      </div>`;
+  } catch (e) {
+    const el = document.getElementById('contactFormsContent');
+    if (el) el.innerHTML = '<div class="bg-red-50 rounded-xl p-6 text-center text-red-600"><i class="fas fa-exclamation-circle mr-2"></i>Failed to load contact forms</div>';
+  }
+}
+
+// ============================================================
+// SEO MANAGER — Manage backlinks and meta tags for pages/blogs
+// ============================================================
+function renderSEOManagerView() {
+  return `<div class="mb-6">
+    <h2 class="text-2xl font-bold text-gray-900 flex items-center gap-3"><i class="fas fa-search-plus text-purple-500"></i>SEO Manager</h2>
+    <p class="text-sm text-gray-500 mt-1">Manage meta tags, backlinks, and SEO settings for all webpages and blog posts</p>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+    <!-- Page Meta Tags -->
+    <div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
+      <h3 class="font-bold text-gray-800 mb-4"><i class="fas fa-file-code text-purple-400 mr-2"></i>Page Meta Tags</h3>
+      <div class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1">Select Page</label>
+          <select id="seo-page-select" onchange="seoLoadPageMeta()" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-400">
+            <option value="homepage">Homepage (/)</option>
+            <option value="pricing">Pricing (/pricing)</option>
+            <option value="blog">Blog Index (/blog)</option>
+            <option value="lander">Landing Page (/lander)</option>
+            <option value="customer-login">Customer Login (/customer/login)</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1">Meta Title</label>
+          <input type="text" id="seo-meta-title" placeholder="RoofReporterAI — AI Roof Measurement Reports" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-400" maxlength="70">
+          <p class="text-xs text-gray-400 mt-1"><span id="seo-title-count">0</span>/70 chars</p>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1">Meta Description</label>
+          <textarea id="seo-meta-desc" rows="3" placeholder="AI-powered roof measurement reports in under 60 seconds..." class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-400 resize-none" maxlength="160"></textarea>
+          <p class="text-xs text-gray-400 mt-1"><span id="seo-desc-count">0</span>/160 chars</p>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1">Canonical URL</label>
+          <input type="url" id="seo-canonical" placeholder="https://roofreporterai.com/" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-400">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1">Keywords (comma-separated)</label>
+          <input type="text" id="seo-keywords" placeholder="roof measurement, AI roofing, roof report" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-400">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1">OG Image URL</label>
+          <input type="url" id="seo-og-image" placeholder="https://roofreporterai.com/og-image.jpg" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-400">
+        </div>
+        <button onclick="seoSavePageMeta()" class="px-5 py-2.5 bg-purple-500 text-white rounded-lg font-semibold text-sm hover:bg-purple-600 transition-all"><i class="fas fa-save mr-2"></i>Save Meta Tags</button>
+      </div>
+    </div>
+
+    <!-- Backlink Manager -->
+    <div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
+      <h3 class="font-bold text-gray-800 mb-4"><i class="fas fa-link text-blue-400 mr-2"></i>Backlink Manager</h3>
+      <p class="text-sm text-gray-500 mb-4">Add external backlinks to inject into page footers, headers, or structured data for SEO juice.</p>
+      <div class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1">Target Page</label>
+          <select id="seo-backlink-page" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400">
+            <option value="all">All Pages (sitewide)</option>
+            <option value="homepage">Homepage</option>
+            <option value="blog">Blog Posts</option>
+            <option value="pricing">Pricing Page</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1">Backlink URL</label>
+          <input type="url" id="seo-backlink-url" placeholder="https://example.com/partner-page" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1">Anchor Text</label>
+          <input type="text" id="seo-backlink-anchor" placeholder="Professional Roofing Solutions" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400">
+        </div>
+        <div class="flex items-center gap-4">
+          <label class="flex items-center gap-2 text-sm"><input type="checkbox" id="seo-backlink-nofollow" class="rounded text-blue-500"> nofollow</label>
+          <label class="flex items-center gap-2 text-sm"><input type="checkbox" id="seo-backlink-newwindow" checked class="rounded text-blue-500"> Open in new window</label>
+        </div>
+        <button onclick="seoAddBacklink()" class="px-5 py-2.5 bg-blue-500 text-white rounded-lg font-semibold text-sm hover:bg-blue-600 transition-all"><i class="fas fa-plus mr-2"></i>Add Backlink</button>
+      </div>
+
+      <div class="mt-6 border-t border-gray-100 pt-4">
+        <h4 class="font-semibold text-gray-700 text-sm mb-3">Active Backlinks</h4>
+        <div id="seo-backlinks-list" class="text-xs text-gray-400">Loading...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Blog Post SEO -->
+  <div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
+    <h3 class="font-bold text-gray-800 mb-2"><i class="fas fa-blog text-green-400 mr-2"></i>Blog Post SEO</h3>
+    <p class="text-sm text-gray-500 mb-4">SEO settings are managed per-post in the Blog Editor. Edit any blog post to set custom title, description, and schema markup.</p>
+    <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+      <p class="text-sm text-green-700"><i class="fas fa-check-circle mr-1"></i><strong>Auto-SEO Active:</strong> All blog posts automatically get structured data (Article schema), Open Graph tags, Twitter cards, and canonical URLs. Customize per-post in the blog editor.</p>
+    </div>
+    <button onclick="saSetView('marketing')" class="mt-4 px-5 py-2.5 bg-green-500 text-white rounded-lg font-semibold text-sm hover:bg-green-600 transition-all"><i class="fas fa-edit mr-2"></i>Go to Blog Editor</button>
+  </div>`;
+}
+
+// SEO Manager helper functions
+window.seoSavePageMeta = async function() {
+  const page = document.getElementById('seo-page-select').value;
+  const data = {
+    page: page,
+    meta_title: document.getElementById('seo-meta-title').value.trim(),
+    meta_description: document.getElementById('seo-meta-desc').value.trim(),
+    canonical_url: document.getElementById('seo-canonical').value.trim(),
+    keywords: document.getElementById('seo-keywords').value.trim(),
+    og_image: document.getElementById('seo-og-image').value.trim()
+  };
+  try {
+    const res = await saFetch('/api/admin/superadmin/seo/page-meta', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    if (res && res.ok) alert('SEO settings saved for ' + page);
+    else alert('Failed to save — API endpoint may need configuration');
+  } catch(e) { alert('Error saving SEO settings'); }
+};
+
+window.seoAddBacklink = async function() {
+  const data = {
+    target_page: document.getElementById('seo-backlink-page').value,
+    url: document.getElementById('seo-backlink-url').value.trim(),
+    anchor_text: document.getElementById('seo-backlink-anchor').value.trim(),
+    nofollow: document.getElementById('seo-backlink-nofollow').checked,
+    new_window: document.getElementById('seo-backlink-newwindow').checked
+  };
+  if (!data.url) { alert('Backlink URL is required'); return; }
+  try {
+    const res = await saFetch('/api/admin/superadmin/seo/backlinks', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    if (res && res.ok) { alert('Backlink added!'); seoLoadBacklinks(); }
+    else alert('Failed to add backlink');
+  } catch(e) { alert('Error adding backlink'); }
+};
+
+window.seoLoadBacklinks = async function() {
+  try {
+    const res = await saFetch('/api/admin/superadmin/seo/backlinks');
+    if (!res) return;
+    const data = await res.json();
+    const el = document.getElementById('seo-backlinks-list');
+    if (!el) return;
+    const links = data.backlinks || [];
+    if (links.length === 0) { el.innerHTML = '<p class="text-gray-400 text-xs">No backlinks added yet.</p>'; return; }
+    el.innerHTML = links.map(function(l) {
+      return '<div class="flex items-center justify-between py-2 border-b border-gray-50">' +
+        '<div><a href="' + l.url + '" target="_blank" class="text-blue-600 hover:underline text-xs">' + (l.anchor_text || l.url) + '</a>' +
+        '<span class="text-gray-400 ml-2">→ ' + l.target_page + '</span>' +
+        (l.nofollow ? ' <span class="bg-gray-100 text-gray-500 px-1 rounded text-[10px]">nofollow</span>' : '') +
+        '</div><button onclick="seoDeleteBacklink(' + l.id + ')" class="text-red-400 hover:text-red-600 text-xs"><i class="fas fa-trash"></i></button></div>';
+    }).join('');
+  } catch(e) {}
+};
+
+window.seoDeleteBacklink = async function(id) {
+  if (!confirm('Delete this backlink?')) return;
+  await saFetch('/api/admin/superadmin/seo/backlinks/' + id, { method: 'DELETE' });
+  seoLoadBacklinks();
+};
+
+window.seoLoadPageMeta = function() {
+  // Placeholder — will load saved meta from DB when API is ready
+  document.getElementById('seo-meta-title').value = '';
+  document.getElementById('seo-meta-desc').value = '';
+  document.getElementById('seo-canonical').value = '';
+  document.getElementById('seo-keywords').value = '';
+  document.getElementById('seo-og-image').value = '';
+};
+
+// ============================================================
+// VIEW: ONBOARDING CONFIGURATION — Fees, Packs, Discounts
+// ============================================================
+var onboardCfg = {};
+
+function renderOnboardingConfigView() {
+  return `
+  <div class="space-y-6">
+    <div class="flex items-center justify-between">
+      <div>
+        <h2 class="text-2xl font-black text-gray-900"><i class="fas fa-sliders-h mr-2 text-blue-500"></i>Customer Onboarding Configuration</h2>
+        <p class="text-sm text-gray-500 mt-1">Control setup fees, trial length, report packs, feature gating, and ad-supported free tier</p>
+      </div>
+      <button onclick="loadView('onboarding-config')" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-xl text-sm font-medium"><i class="fas fa-sync-alt mr-1"></i>Refresh</button>
+    </div>
+    <div id="obc-form"></div>
+  </div>`;
+}
+
+async function loadOnboardingConfig() {
+  var el = document.getElementById('obc-form');
+  if (!el) return;
+  var d = SA.data.onboarding_config || {};
+  var c = d.config || {};
+  onboardCfg = JSON.parse(JSON.stringify(c));
+
+  el.innerHTML = `
+    <!-- Pricing & Fees -->
+    <div class="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm mb-6">
+      <h3 class="font-bold text-gray-800 mb-4"><i class="fas fa-dollar-sign mr-2 text-green-500"></i>Pricing & Fees</h3>
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div>
+          <label class="block text-xs font-medium text-gray-500 mb-1">Setup Fee ($)</label>
+          <input type="number" step="0.01" id="obc-setup-fee" value="${((c.setup_fee_cents||0)/100).toFixed(2)}" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-500 mb-1">Setup Fee Label</label>
+          <input type="text" id="obc-setup-label" value="${c.setup_fee_label||'One-Time Setup Fee'}" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-500 mb-1">Monthly Sub ($)</label>
+          <input type="number" step="0.01" id="obc-monthly" value="${((c.monthly_price_cents||4999)/100).toFixed(2)}" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-500 mb-1">Annual Sub ($)</label>
+          <input type="number" step="0.01" id="obc-annual" value="${((c.annual_price_cents||49999)/100).toFixed(2)}" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+        </div>
+      </div>
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
+        <div>
+          <label class="block text-xs font-medium text-gray-500 mb-1">Free Trial Reports</label>
+          <input type="number" id="obc-trial-reports" value="${c.free_trial_reports||3}" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-500 mb-1">Free Trial Days</label>
+          <input type="number" id="obc-trial-days" value="${c.free_trial_days||14}" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+        </div>
+        <div class="flex items-end">
+          <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="obc-ad-free" ${c.ad_supported_free_tier?'checked':''} class="w-4 h-4 text-blue-600 rounded"><span class="text-sm text-gray-700">Ad-Supported Free Tier</span></label>
+        </div>
+        <div class="flex items-end">
+          <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="obc-req-pay" ${c.require_payment_after_trial?'checked':''} class="w-4 h-4 text-blue-600 rounded"><span class="text-sm text-gray-700">Require Payment After Trial</span></label>
+        </div>
+      </div>
+    </div>
+
+    <!-- Ad Network IDs -->
+    <div class="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm mb-6">
+      <h3 class="font-bold text-gray-800 mb-4"><i class="fas fa-ad mr-2 text-amber-500"></i>Ad Network (AdMob for iOS)</h3>
+      <p class="text-xs text-gray-500 mb-3">After the free trial, users can either pay $49.99/mo or continue with small non-intrusive ads. These IDs enable Google AdMob on iOS.</p>
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-medium text-gray-500 mb-1">AdMob Banner Unit ID</label>
+          <input type="text" id="obc-admob-banner" value="${c.admob_banner_id||''}" placeholder="ca-app-pub-xxxxxxxxxx/yyyyyyyyyy" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono">
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-500 mb-1">AdMob Interstitial Unit ID</label>
+          <input type="text" id="obc-admob-interstitial" value="${c.admob_interstitial_id||''}" placeholder="ca-app-pub-xxxxxxxxxx/zzzzzzzzzz" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono">
+        </div>
+      </div>
+    </div>
+
+    <!-- Report Packs -->
+    <div class="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm mb-6">
+      <h3 class="font-bold text-gray-800 mb-4"><i class="fas fa-box-open mr-2 text-indigo-500"></i>Report Packs (Discounted Bundles on Signup)</h3>
+      <div id="obc-packs-list"></div>
+      <button onclick="obcAddPack()" class="mt-3 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700"><i class="fas fa-plus mr-1"></i>Add Pack</button>
+    </div>
+
+    <!-- Features Toggle -->
+    <div class="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm mb-6">
+      <h3 class="font-bold text-gray-800 mb-4"><i class="fas fa-toggle-on mr-2 text-teal-500"></i>Feature Gating</h3>
+      <p class="text-xs text-gray-500 mb-3">Toggle which features are enabled and which are available on the free/ad-supported tier.</p>
+      <div id="obc-features-list"></div>
+    </div>
+
+    <button onclick="obcSave()" id="obc-save-btn" class="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-semibold text-sm"><i class="fas fa-save mr-1"></i>Save Onboarding Configuration</button>
+  `;
+
+  renderObcPacks();
+  renderObcFeatures();
+}
+
+function renderObcPacks() {
+  var el = document.getElementById('obc-packs-list');
+  if (!el) return;
+  var packs = onboardCfg.report_packs || [];
+  if (packs.length === 0) { el.innerHTML = '<p class="text-gray-400 text-sm">No packs configured. Add one below.</p>'; return; }
+  el.innerHTML = '<div class="grid grid-cols-1 md:grid-cols-3 gap-3">' + packs.map(function(p, i) {
+    return '<div class="border border-gray-200 rounded-xl p-4">' +
+      '<div class="flex items-center justify-between mb-2"><input type="text" value="' + (p.name||'') + '" onchange="obcUpdatePack(' + i + ',\'name\',this.value)" class="text-sm font-bold text-gray-800 border-0 bg-transparent w-full" placeholder="Pack Name">' +
+      '<button onclick="obcRemovePack(' + i + ')" class="text-red-400 hover:text-red-600 text-xs"><i class="fas fa-trash"></i></button></div>' +
+      '<div class="grid grid-cols-3 gap-2">' +
+      '<div><label class="text-[10px] text-gray-400">Reports</label><input type="number" value="' + (p.reports||0) + '" onchange="obcUpdatePack(' + i + ',\'reports\',parseInt(this.value))" class="w-full text-sm border border-gray-200 rounded px-2 py-1"></div>' +
+      '<div><label class="text-[10px] text-gray-400">Price ($)</label><input type="number" step="0.01" value="' + ((p.price_cents||0)/100).toFixed(2) + '" onchange="obcUpdatePack(' + i + ',\'price_cents\',Math.round(parseFloat(this.value)*100))" class="w-full text-sm border border-gray-200 rounded px-2 py-1"></div>' +
+      '<div><label class="text-[10px] text-gray-400">Discount %</label><input type="number" value="' + (p.discount_pct||0) + '" onchange="obcUpdatePack(' + i + ',\'discount_pct\',parseInt(this.value))" class="w-full text-sm border border-gray-200 rounded px-2 py-1"></div>' +
+      '</div></div>';
+  }).join('') + '</div>';
+}
+window.obcUpdatePack = function(i, key, val) { if(onboardCfg.report_packs && onboardCfg.report_packs[i]) onboardCfg.report_packs[i][key] = val; };
+window.obcRemovePack = function(i) { onboardCfg.report_packs.splice(i, 1); renderObcPacks(); };
+window.obcAddPack = function() {
+  if (!onboardCfg.report_packs) onboardCfg.report_packs = [];
+  onboardCfg.report_packs.push({ name: 'New Pack', reports: 10, price_cents: 7500, discount_pct: 25 });
+  renderObcPacks();
+};
+
+function renderObcFeatures() {
+  var el = document.getElementById('obc-features-list');
+  if (!el) return;
+  var features = onboardCfg.features || [];
+  el.innerHTML = '<div class="space-y-2">' + features.map(function(f, i) {
+    return '<div class="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-gray-50 border border-gray-100">' +
+      '<div class="flex items-center gap-3">' +
+        '<label class="flex items-center gap-2"><input type="checkbox" ' + (f.enabled?'checked':'') + ' onchange="obcToggleFeature(' + i + ',\'enabled\',this.checked)" class="w-4 h-4 text-teal-600 rounded"><span class="text-sm font-medium text-gray-800">' + f.label + '</span></label>' +
+      '</div>' +
+      '<label class="flex items-center gap-2 text-xs text-gray-500"><input type="checkbox" ' + (f.free_tier?'checked':'') + ' onchange="obcToggleFeature(' + i + ',\'free_tier\',this.checked)" class="w-3 h-3 text-amber-500 rounded"> Free/Ad Tier</label>' +
+    '</div>';
+  }).join('') + '</div>';
+}
+window.obcToggleFeature = function(i, key, val) { if(onboardCfg.features && onboardCfg.features[i]) onboardCfg.features[i][key] = val; };
+
+window.obcSave = async function() {
+  var btn = document.getElementById('obc-save-btn');
+  btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Saving...';
+  try {
+    onboardCfg.setup_fee_cents = Math.round(parseFloat(document.getElementById('obc-setup-fee').value) * 100);
+    onboardCfg.setup_fee_label = document.getElementById('obc-setup-label').value;
+    onboardCfg.monthly_price_cents = Math.round(parseFloat(document.getElementById('obc-monthly').value) * 100);
+    onboardCfg.annual_price_cents = Math.round(parseFloat(document.getElementById('obc-annual').value) * 100);
+    onboardCfg.free_trial_reports = parseInt(document.getElementById('obc-trial-reports').value);
+    onboardCfg.free_trial_days = parseInt(document.getElementById('obc-trial-days').value);
+    onboardCfg.ad_supported_free_tier = document.getElementById('obc-ad-free').checked;
+    onboardCfg.require_payment_after_trial = document.getElementById('obc-req-pay').checked;
+    onboardCfg.admob_banner_id = document.getElementById('obc-admob-banner').value;
+    onboardCfg.admob_interstitial_id = document.getElementById('obc-admob-interstitial').value;
+
+    var res = await saFetch('/api/admin/superadmin/onboarding/config', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(onboardCfg)
+    });
+    if (res && res.ok) {
+      btn.innerHTML = '<i class="fas fa-check mr-1"></i>Saved!'; btn.classList.replace('bg-teal-600','bg-green-600');
+      setTimeout(function(){ loadView('onboarding-config'); }, 1500);
+    } else { alert('Save failed'); btn.disabled = false; btn.innerHTML = '<i class="fas fa-save mr-1"></i>Save'; }
+  } catch(e) { alert('Error: ' + e.message); btn.disabled = false; btn.innerHTML = '<i class="fas fa-save mr-1"></i>Save'; }
+};
+
+// ============================================================
+// VIEW: PHONE NUMBER MARKETPLACE — Twilio DID Purchase
+// ============================================================
+function renderPhoneMarketplaceView() {
+  return `
+  <div class="space-y-6">
+    <div class="flex items-center justify-between">
+      <div>
+        <h2 class="text-2xl font-black text-gray-900"><i class="fas fa-phone-volume mr-2 text-green-500"></i>Phone Number Marketplace</h2>
+        <p class="text-sm text-gray-500 mt-1">Purchase and manage DID phone numbers for Roofer Secretary AI via Twilio</p>
+      </div>
+      <button onclick="loadView('phone-marketplace')" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-xl text-sm font-medium"><i class="fas fa-sync-alt mr-1"></i>Refresh</button>
+    </div>
+
+    <!-- Search for Numbers -->
+    <div class="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
+      <h3 class="font-bold text-gray-800 mb-4"><i class="fas fa-search mr-2 text-blue-500"></i>Search Available Numbers</h3>
+      <div class="flex gap-3 mb-4">
+        <select id="pn-country" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+          <option value="CA">Canada</option>
+          <option value="US">United States</option>
+        </select>
+        <input type="text" id="pn-area-code" placeholder="Area code (e.g. 780, 403)" class="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm">
+        <button onclick="pnSearch()" id="pn-search-btn" class="px-6 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700"><i class="fas fa-search mr-1"></i>Search</button>
+      </div>
+      <div id="pn-results" class="text-gray-400 text-sm">Enter an area code and search to find available numbers.</div>
+    </div>
+
+    <!-- Owned Numbers -->
+    <div class="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
+      <h3 class="font-bold text-gray-800 mb-4"><i class="fas fa-phone mr-2 text-green-500"></i>Owned Numbers</h3>
+      <div id="pn-owned"></div>
+    </div>
+  </div>`;
+}
+
+async function loadPhoneNumbers() {
+  var el = document.getElementById('pn-owned');
+  if (!el) return;
+  var d = SA.data.phone_numbers || {};
+  var numbers = d.numbers || [];
+  if (numbers.length === 0) { el.innerHTML = '<p class="text-gray-400 text-sm">No numbers purchased yet. Search and buy one above.</p>'; return; }
+  el.innerHTML = '<div class="space-y-2">' + numbers.map(function(n) {
+    return '<div class="flex items-center justify-between py-3 px-4 rounded-xl border border-gray-100 hover:bg-gray-50">' +
+      '<div class="flex items-center gap-3"><div class="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center"><i class="fas fa-phone text-green-600"></i></div>' +
+        '<div><p class="font-mono font-bold text-gray-800">' + n.phone_number + '</p><p class="text-xs text-gray-400">' + (n.friendly_name||'') + ' · ' + (n.purpose||'secretary') + '</p></div></div>' +
+      '<div class="text-right"><span class="px-2 py-1 text-xs rounded-full font-medium ' + (n.status==='active'?'bg-green-100 text-green-700':'bg-gray-100 text-gray-500') + '">' + (n.status||'active') + '</span>' +
+        (n.customer_name ? '<p class="text-xs text-gray-400 mt-1">Assigned: ' + n.customer_name + '</p>' : '') + '</div></div>';
+  }).join('') + '</div>';
+}
+
+window.pnSearch = async function() {
+  var btn = document.getElementById('pn-search-btn');
+  var el = document.getElementById('pn-results');
+  btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Searching...';
+  try {
+    var country = document.getElementById('pn-country').value;
+    var areaCode = document.getElementById('pn-area-code').value.trim();
+    var res = await saFetch('/api/admin/superadmin/phone-numbers/available?country=' + country + (areaCode ? '&area_code=' + areaCode : ''));
+    if (!res) { el.innerHTML = '<p class="text-red-500 text-sm">Auth error</p>'; return; }
+    var data = await res.json();
+    var numbers = data.numbers || [];
+    if (data.error) { el.innerHTML = '<p class="text-red-500 text-sm">' + data.error + '</p>'; return; }
+    if (numbers.length === 0) { el.innerHTML = '<p class="text-gray-400 text-sm">No numbers available for that area code. Try a different one.</p>'; return; }
+    el.innerHTML = '<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">' + numbers.map(function(n) {
+      return '<div class="border border-gray-200 rounded-xl p-4 hover:border-green-300 hover:shadow-md transition-all cursor-pointer" onclick="pnPurchase(\'' + n.phone_number + '\')">' +
+        '<p class="font-mono font-bold text-gray-900 text-lg">' + n.phone_number + '</p>' +
+        '<p class="text-xs text-gray-500">' + (n.locality||'') + (n.region ? ', ' + n.region : '') + '</p>' +
+        '<div class="mt-2 flex items-center justify-between"><span class="text-xs text-gray-400"><i class="fas fa-phone mr-1"></i>Voice + SMS</span>' +
+        '<span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">~$1.50/mo</span></div>' +
+        '<button class="mt-2 w-full text-center bg-green-600 text-white rounded-lg py-1.5 text-sm font-semibold hover:bg-green-700"><i class="fas fa-cart-plus mr-1"></i>Purchase</button></div>';
+    }).join('') + '</div>';
+  } catch(e) { el.innerHTML = '<p class="text-red-500 text-sm">Error: ' + e.message + '</p>'; }
+  btn.disabled = false; btn.innerHTML = '<i class="fas fa-search mr-1"></i>Search';
+};
+
+window.pnPurchase = async function(phoneNumber) {
+  if (!confirm('Purchase ' + phoneNumber + '? This will charge your Twilio account ~$1.50/mo.')) return;
+  try {
+    var res = await saFetch('/api/admin/superadmin/phone-numbers/purchase', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone_number: phoneNumber, purpose: 'secretary' })
+    });
+    if (!res) return;
+    var data = await res.json();
+    if (data.success) { alert('Number purchased: ' + data.phone_number); loadView('phone-marketplace'); }
+    else alert('Purchase failed: ' + (data.error || 'Unknown error'));
+  } catch(e) { alert('Error: ' + e.message); }
+};
+
+// ============================================================
+// VIEW: PRICING ENGINE PRESETS
+// ============================================================
+function renderPricingEngineView() {
+  return `
+  <div class="space-y-6">
+    <div class="flex items-center justify-between">
+      <h2 class="text-xl font-bold text-gray-800"><i class="fas fa-calculator mr-2 text-green-500"></i>Roofing Pricing Engine</h2>
+      <span class="text-xs px-3 py-1 rounded-full bg-green-100 text-green-700">From EagleView Analysis</span>
+    </div>
+
+    <div class="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-xl p-6">
+      <p class="text-sm text-gray-600">Configure your material & labor costs. These presets are used to auto-generate proposals from roof measurement reports. You can also test the calculator with sample measurements and download PDF proposals.</p>
+    </div>
+
+    <div class="bg-white border border-gray-200 rounded-xl p-6">
+      <h3 class="font-bold text-gray-800 mb-4">Material Costs (per square = 100 sq ft)</h3>
+      <div class="grid md:grid-cols-3 gap-4">
+        <div><label class="block text-xs font-medium text-gray-500 mb-1">Shingles ($/sq)</label><input id="pe-shingles" type="number" step="0.01" value="145.00" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>
+        <div><label class="block text-xs font-medium text-gray-500 mb-1">Underlayment ($/sq)</label><input id="pe-underlay" type="number" step="0.01" value="25.00" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>
+        <div><label class="block text-xs font-medium text-gray-500 mb-1">Ice Shield ($/roll)</label><input id="pe-iceshield" type="number" step="0.01" value="85.00" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>
+      </div>
+    </div>
+
+    <div class="bg-white border border-gray-200 rounded-xl p-6">
+      <h3 class="font-bold text-gray-800 mb-4">Edge & Flashing Costs (per linear ft)</h3>
+      <div class="grid md:grid-cols-4 gap-4">
+        <div><label class="block text-xs font-medium text-gray-500 mb-1">Drip Edge ($/ft)</label><input id="pe-drip" type="number" step="0.01" value="1.50" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>
+        <div><label class="block text-xs font-medium text-gray-500 mb-1">Ridge Cap ($/ft)</label><input id="pe-ridge" type="number" step="0.01" value="3.25" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>
+        <div><label class="block text-xs font-medium text-gray-500 mb-1">Valley Flash ($/ft)</label><input id="pe-valley" type="number" step="0.01" value="2.75" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>
+        <div><label class="block text-xs font-medium text-gray-500 mb-1">Step Flash ($/ft)</label><input id="pe-step" type="number" step="0.01" value="3.50" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>
+      </div>
+    </div>
+
+    <div class="bg-white border border-gray-200 rounded-xl p-6">
+      <h3 class="font-bold text-gray-800 mb-4">Labor & Overhead</h3>
+      <div class="grid md:grid-cols-4 gap-4">
+        <div><label class="block text-xs font-medium text-gray-500 mb-1">Labor ($/sq)</label><input id="pe-labor" type="number" step="0.01" value="180.00" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>
+        <div><label class="block text-xs font-medium text-gray-500 mb-1">Tear-off ($/sq)</label><input id="pe-tearoff" type="number" step="0.01" value="45.00" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>
+        <div><label class="block text-xs font-medium text-gray-500 mb-1">Disposal ($/sq)</label><input id="pe-disposal" type="number" step="0.01" value="25.00" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>
+        <div><label class="block text-xs font-medium text-gray-500 mb-1">Waste Factor (%)</label><input id="pe-waste" type="number" step="1" value="15" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>
+      </div>
+    </div>
+
+    <div class="bg-white border border-gray-200 rounded-xl p-6">
+      <h3 class="font-bold text-gray-800 mb-4">Tax Rate</h3>
+      <div class="grid md:grid-cols-2 gap-4">
+        <div><label class="block text-xs font-medium text-gray-500 mb-1">Tax Rate (%)</label><input id="pe-tax" type="number" step="0.01" value="5.00" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>
+      </div>
+    </div>
+
+    <div class="flex gap-3">
+      <button onclick="savePricingPresets()" class="bg-green-600 text-white px-6 py-2.5 rounded-lg font-medium hover:bg-green-700"><i class="fas fa-save mr-2"></i>Save Presets</button>
+      <button onclick="resetPricingPresets()" class="bg-gray-200 text-gray-700 px-4 py-2.5 rounded-lg text-sm hover:bg-gray-300">Reset to Defaults</button>
+    </div>
+
+    <div id="pe-save-msg" class="hidden text-sm px-4 py-3 rounded-lg"></div>
+
+    <!-- TEST CALCULATOR -->
+    <div class="border-t border-gray-200 pt-6">
+      <h3 class="text-lg font-bold text-gray-800 mb-4"><i class="fas fa-flask mr-2 text-blue-500"></i>Test Calculator — Good / Better / Best</h3>
+      <p class="text-sm text-gray-500 mb-4">Enter sample roof measurements to preview pricing across all three tiers.</p>
+      <div class="bg-white border border-gray-200 rounded-xl p-6">
+        <div class="grid md:grid-cols-4 gap-4 mb-4">
+          <div><label class="block text-xs font-medium text-gray-500 mb-1">Total Roof Area (sq ft) *</label><input id="pe-test-area" type="number" value="3200" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>
+          <div><label class="block text-xs font-medium text-gray-500 mb-1">Ridge (ft)</label><input id="pe-test-ridge" type="number" value="60" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>
+          <div><label class="block text-xs font-medium text-gray-500 mb-1">Hip (ft)</label><input id="pe-test-hip" type="number" value="40" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>
+          <div><label class="block text-xs font-medium text-gray-500 mb-1">Valley (ft)</label><input id="pe-test-valley" type="number" value="30" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>
+        </div>
+        <div class="grid md:grid-cols-4 gap-4 mb-4">
+          <div><label class="block text-xs font-medium text-gray-500 mb-1">Eave (ft)</label><input id="pe-test-eave" type="number" value="120" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>
+          <div><label class="block text-xs font-medium text-gray-500 mb-1">Rake (ft)</label><input id="pe-test-rake" type="number" value="80" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>
+          <div><label class="block text-xs font-medium text-gray-500 mb-1">Step Flash (ft)</label><input id="pe-test-step" type="number" value="0" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>
+          <div><label class="block text-xs font-medium text-gray-500 mb-1">Dominant Pitch</label><input id="pe-test-pitch" type="text" value="7/12" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>
+        </div>
+        <div class="flex gap-3">
+          <button onclick="runTestCalculation()" class="bg-blue-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-blue-700"><i class="fas fa-calculator mr-2"></i>Calculate Good / Better / Best</button>
+          <button onclick="runTestCalculation(true)" class="bg-gray-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-gray-700"><i class="fas fa-calculator mr-2"></i>Custom Preset Only</button>
+        </div>
+      </div>
+      <div id="pe-test-results" class="mt-4"></div>
+    </div>
+  </div>`;
+}
+
+async function loadPricingPresets() {
+  try {
+    var resp = await saFetch('/api/invoices/pricing/presets');
+    var data = await resp.json();
+    var p = data.presets || {};
+    if (p.shingles_per_square) document.getElementById('pe-shingles').value = p.shingles_per_square;
+    if (p.underlayment_per_square) document.getElementById('pe-underlay').value = p.underlayment_per_square;
+    if (p.ice_shield_per_roll) document.getElementById('pe-iceshield').value = p.ice_shield_per_roll;
+    if (p.drip_edge_per_ft) document.getElementById('pe-drip').value = p.drip_edge_per_ft;
+    if (p.ridge_cap_per_ft) document.getElementById('pe-ridge').value = p.ridge_cap_per_ft;
+    if (p.valley_flashing_per_ft) document.getElementById('pe-valley').value = p.valley_flashing_per_ft;
+    if (p.step_flashing_per_ft) document.getElementById('pe-step').value = p.step_flashing_per_ft;
+    if (p.labor_per_square) document.getElementById('pe-labor').value = p.labor_per_square;
+    if (p.tearoff_per_square) document.getElementById('pe-tearoff').value = p.tearoff_per_square;
+    if (p.disposal_per_square) document.getElementById('pe-disposal').value = p.disposal_per_square;
+    if (p.waste_factor != null) document.getElementById('pe-waste').value = Math.round(p.waste_factor * 100);
+    if (p.tax_rate != null) document.getElementById('pe-tax').value = (p.tax_rate * 100).toFixed(2);
+  } catch (e) {}
+}
+
+window.savePricingPresets = async function() {
+  var presets = {
+    shingles_per_square: parseFloat(document.getElementById('pe-shingles').value) || 145,
+    underlayment_per_square: parseFloat(document.getElementById('pe-underlay').value) || 25,
+    ice_shield_per_roll: parseFloat(document.getElementById('pe-iceshield').value) || 85,
+    drip_edge_per_ft: parseFloat(document.getElementById('pe-drip').value) || 1.50,
+    ridge_cap_per_ft: parseFloat(document.getElementById('pe-ridge').value) || 3.25,
+    valley_flashing_per_ft: parseFloat(document.getElementById('pe-valley').value) || 2.75,
+    step_flashing_per_ft: parseFloat(document.getElementById('pe-step').value) || 3.50,
+    labor_per_square: parseFloat(document.getElementById('pe-labor').value) || 180,
+    tearoff_per_square: parseFloat(document.getElementById('pe-tearoff').value) || 45,
+    disposal_per_square: parseFloat(document.getElementById('pe-disposal').value) || 25,
+    waste_factor: (parseFloat(document.getElementById('pe-waste').value) || 15) / 100,
+    tax_rate: (parseFloat(document.getElementById('pe-tax').value) || 5) / 100
+  };
+  var resp = await saFetch('/api/invoices/pricing/presets', {
+    method: 'PUT', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ presets: presets })
+  });
+  var data = await resp.json();
+  var msg = document.getElementById('pe-save-msg');
+  if (data.success) {
+    msg.className = 'text-sm px-4 py-3 rounded-lg bg-green-50 text-green-700 border border-green-200';
+    msg.innerHTML = '<i class="fas fa-check-circle mr-2"></i>Presets saved! These will be used when generating proposals from roof reports.';
+  } else {
+    msg.className = 'text-sm px-4 py-3 rounded-lg bg-red-50 text-red-700 border border-teal-200';
+    msg.innerHTML = '<i class="fas fa-times-circle mr-2"></i>' + (data.error || 'Save failed');
+  }
+};
+
+window.resetPricingPresets = function() {
+  document.getElementById('pe-shingles').value = '145.00';
+  document.getElementById('pe-underlay').value = '25.00';
+  document.getElementById('pe-iceshield').value = '85.00';
+  document.getElementById('pe-drip').value = '1.50';
+  document.getElementById('pe-ridge').value = '3.25';
+  document.getElementById('pe-valley').value = '2.75';
+  document.getElementById('pe-step').value = '3.50';
+  document.getElementById('pe-labor').value = '180.00';
+  document.getElementById('pe-tearoff').value = '45.00';
+  document.getElementById('pe-disposal').value = '25.00';
+  document.getElementById('pe-waste').value = '15';
+  document.getElementById('pe-tax').value = '5.00';
+};
+
+// ---- Test Calculator ----
+window.runTestCalculation = async function(customOnly) {
+  var resultsEl = document.getElementById('pe-test-results');
+  if (!resultsEl) return;
+  resultsEl.innerHTML = '<div class="text-center py-4 text-gray-400"><i class="fas fa-spinner fa-spin mr-2"></i>Calculating...</div>';
+
+  var measurements = {
+    total_area_sqft: parseFloat(document.getElementById('pe-test-area').value) || 3200,
+    ridge_ft: parseFloat(document.getElementById('pe-test-ridge').value) || 0,
+    hip_ft: parseFloat(document.getElementById('pe-test-hip').value) || 0,
+    valley_ft: parseFloat(document.getElementById('pe-test-valley').value) || 0,
+    eave_ft: parseFloat(document.getElementById('pe-test-eave').value) || 0,
+    rake_ft: parseFloat(document.getElementById('pe-test-rake').value) || 0,
+    step_flashing_ft: parseFloat(document.getElementById('pe-test-step').value) || 0,
+    dominant_pitch: document.getElementById('pe-test-pitch').value || '7/12'
+  };
+
+  try {
+    var resp = await saFetch('/api/invoices/pricing/calculate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ measurements: measurements, tiered: !customOnly })
+    });
+    var data = await resp.json();
+    if (!data.success) { resultsEl.innerHTML = '<div class="text-red-500">' + (data.error || 'Calculation failed') + '</div>'; return; }
+
+    if (data.tiered) {
+      var tiers = data.tiered;
+      resultsEl.innerHTML = '<div class="grid md:grid-cols-3 gap-4">' +
+        renderTierCard('Good', tiers.good, 'gray', 'fa-thumbs-up') +
+        renderTierCard('Better', tiers.better, 'blue', 'fa-star') +
+        renderTierCard('Best', tiers.best, 'green', 'fa-crown') +
+      '</div>';
+    } else {
+      var p = data.proposal;
+      resultsEl.innerHTML = renderTierCard('Custom Estimate', p, 'indigo', 'fa-calculator');
+    }
+
+    // Store for PDF generation
+    SA.data._lastTestCalc = data;
+    SA.data._lastTestMeasurements = measurements;
+  } catch(e) { resultsEl.innerHTML = '<div class="text-red-500">Error: ' + e.message + '</div>'; }
+};
+
+function renderTierCard(title, proposal, color, icon) {
+  if (!proposal) return '';
+  var items = proposal.line_items || [];
+  return '<div class="bg-white border-2 border-' + color + '-200 rounded-xl overflow-hidden">' +
+    '<div class="bg-' + color + '-50 px-4 py-3 border-b border-' + color + '-200">' +
+      '<div class="flex items-center justify-between">' +
+        '<h4 class="font-bold text-' + color + '-800"><i class="fas ' + icon + ' mr-2"></i>' + title + '</h4>' +
+        '<span class="text-xl font-black text-' + color + '-700">$' + proposal.total_price.toFixed(2) + '</span>' +
+      '</div>' +
+      '<p class="text-xs text-' + color + '-600 mt-1">' + (proposal.metadata.preset_name || 'Custom') + '</p>' +
+    '</div>' +
+    '<div class="p-4">' +
+      '<table class="w-full text-xs">' +
+        '<tbody class="divide-y divide-gray-50">' +
+        items.map(function(li) {
+          return '<tr><td class="py-1 text-gray-600">' + li.item + '</td><td class="py-1 text-right font-medium text-gray-800">$' + li.price.toFixed(2) + '</td></tr>';
+        }).join('') +
+        '</tbody>' +
+      '</table>' +
+      '<div class="border-t border-gray-200 mt-3 pt-3 space-y-1">' +
+        '<div class="flex justify-between text-xs"><span class="text-gray-500">Subtotal</span><span>$' + proposal.subtotal.toFixed(2) + '</span></div>' +
+        '<div class="flex justify-between text-xs"><span class="text-gray-500">Tax (' + (proposal.tax_rate * 100).toFixed(1) + '%)</span><span>$' + proposal.tax_amount.toFixed(2) + '</span></div>' +
+        '<div class="flex justify-between text-sm font-bold border-t pt-1 mt-1"><span>Total</span><span class="text-' + color + '-700">$' + proposal.total_price.toFixed(2) + ' CAD</span></div>' +
+      '</div>' +
+      '<div class="mt-3 flex gap-2">' +
+        '<button onclick="downloadTierPdf(\'' + title + '\')" class="text-xs bg-' + color + '-100 text-' + color + '-700 px-3 py-1.5 rounded-lg hover:bg-' + color + '-200 font-medium"><i class="fas fa-file-pdf mr-1"></i>Download PDF</button>' +
+        '<button onclick="createInvoiceFromTier(\'' + title + '\')" class="text-xs bg-green-100 text-green-700 px-3 py-1.5 rounded-lg hover:bg-green-200 font-medium"><i class="fas fa-file-invoice mr-1"></i>Create Invoice</button>' +
+      '</div>' +
+    '</div>' +
+  '</div>';
+}
+
+window.downloadTierPdf = function(tierName) {
+  var data = SA.data._lastTestCalc;
+  var measurements = SA.data._lastTestMeasurements;
+  if (!data) { alert('Run a calculation first'); return; }
+  var proposal;
+  if (data.tiered) {
+    var key = tierName.toLowerCase();
+    proposal = data.tiered[key];
+  } else {
+    proposal = data.proposal;
+  }
+  if (!proposal) { alert('Proposal data not found'); return; }
+  if (typeof window.generateProposalPdf === 'function') {
+    window.generateProposalPdf(proposal, measurements, 'Homeowner', 'Property Address');
+  } else {
+    alert('PDF library not loaded');
+  }
+};
+
+window.createInvoiceFromTier = function(tierName) {
+  var data = SA.data._lastTestCalc;
+  if (!data) { alert('Run a calculation first'); return; }
+  var proposal;
+  if (data.tiered) {
+    var key = tierName.toLowerCase();
+    proposal = data.tiered[key];
+  } else {
+    proposal = data.proposal;
+  }
+  if (!proposal) return;
+  // Switch to invoices view and pre-populate
+  SA.data._pendingInvoiceItems = proposal.line_items;
+  loadView('invoices');
+  setTimeout(function() { showCreateInvoiceModal(); populateInvoiceFromProposal(); }, 500);
+};
+
+window.populateInvoiceFromProposal = function() {
+  var items = SA.data._pendingInvoiceItems;
+  if (!items || !items.length) return;
+  var container = document.getElementById('inv-line-items');
+  if (!container) return;
+  container.innerHTML = '';
+  items.forEach(function(li) {
+    var row = document.createElement('div');
+    row.className = 'inv-line-item grid grid-cols-12 gap-2 mb-2';
+    row.innerHTML = '<input type="text" value="' + li.item + ' — ' + li.description + '" class="col-span-6 border border-gray-300 rounded-lg px-3 py-2 text-sm inv-desc">' +
+      '<input type="number" value="' + li.qty + '" class="col-span-2 border border-gray-300 rounded-lg px-3 py-2 text-sm inv-qty">' +
+      '<input type="number" step="0.01" value="' + li.unit_price + '" class="col-span-3 border border-gray-300 rounded-lg px-3 py-2 text-sm inv-price">' +
+      '<button onclick="this.closest(\'.inv-line-item\').remove()" class="col-span-1 text-red-400 hover:text-red-600"><i class="fas fa-times"></i></button>';
+    container.appendChild(row);
+  });
+  SA.data._pendingInvoiceItems = null;
+};
+
+// ============================================================
+// VIEW: INVOICES DASHBOARD — Full CRUD + PDF + Gmail Send
+// ============================================================
+function invStatusBadge(s) {
+  var m = {
+    draft: 'bg-gray-100 text-gray-600', sent: 'bg-blue-100 text-blue-700',
+    viewed: 'bg-indigo-100 text-indigo-700', paid: 'bg-green-100 text-green-800',
+    overdue: 'bg-red-100 text-red-700', cancelled: 'bg-gray-200 text-gray-500',
+    refunded: 'bg-purple-100 text-purple-700'
+  };
+  return '<span class="px-2 py-0.5 ' + (m[s] || 'bg-gray-100 text-gray-600') + ' rounded-full text-xs font-semibold capitalize">' + (s || 'draft') + '</span>';
+}
+
+function renderInvoicesView() {
+  var d = SA.data.invoices || {};
+  var stats = (SA.data.invoice_stats || {}).stats || {};
+  var invoices = d.invoices || [];
+  var customers = (SA.data.invoice_customers || {}).customers || [];
+
+  return '<div class="space-y-6">' +
+    '<div class="flex items-center justify-between">' +
+      '<div><h2 class="text-2xl font-black text-gray-900"><i class="fas fa-file-invoice-dollar mr-2 text-green-500"></i>Invoice Manager</h2>' +
+      '<p class="text-sm text-gray-500 mt-1">Create, send, and track invoices for roofing jobs</p></div>' +
+      '<button onclick="showCreateInvoiceModal()" class="bg-green-600 text-white px-5 py-2.5 rounded-xl font-medium hover:bg-green-700 shadow-sm"><i class="fas fa-plus mr-2"></i>New Invoice</button>' +
+    '</div>' +
+
+    // Stats row
+    '<div class="grid grid-cols-2 lg:grid-cols-5 gap-4">' +
+      samc('Total Invoices', stats.total_invoices || 0, 'fa-file-invoice', 'blue') +
+      samc('Paid', stats.paid_count || 0, 'fa-check-circle', 'green', '$' + ((stats.total_collected || 0)).toFixed(2) + ' collected') +
+      samc('Outstanding', stats.outstanding_count || 0, 'fa-clock', 'amber', '$' + ((stats.total_outstanding || 0)).toFixed(2)) +
+      samc('Overdue', stats.overdue_count || 0, 'fa-exclamation-triangle', 'red', '$' + ((stats.total_overdue || 0)).toFixed(2)) +
+      samc('Grand Total', '$' + ((stats.grand_total || 0)).toFixed(2), 'fa-dollar-sign', 'indigo') +
+    '</div>' +
+
+    // Invoice Table
+    saSection('Invoices (' + invoices.length + ')', 'fa-table', 
+      '<div class="overflow-x-auto"><table class="w-full text-sm">' +
+      '<thead class="bg-gray-50"><tr>' +
+        '<th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Invoice #</th>' +
+        '<th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Customer</th>' +
+        '<th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Property</th>' +
+        '<th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Total</th>' +
+        '<th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Status</th>' +
+        '<th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Due Date</th>' +
+        '<th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Actions</th>' +
+      '</tr></thead><tbody class="divide-y divide-gray-50">' +
+      (invoices.length === 0 ? '<tr><td colspan="7" class="px-4 py-12 text-center text-gray-400"><i class="fas fa-file-invoice text-4xl mb-3 block"></i>No invoices yet. Create your first one!</td></tr>' : '') +
+      invoices.map(function(inv) {
+        return '<tr class="hover:bg-green-50/30 transition-colors">' +
+          '<td class="px-4 py-3 font-mono font-bold text-gray-800 text-sm">' + (inv.invoice_number || '-') + '</td>' +
+          '<td class="px-4 py-3"><div class="font-medium text-gray-800">' + (inv.customer_name || '-') + '</div><div class="text-xs text-gray-400">' + (inv.customer_email || '') + '</div></td>' +
+          '<td class="px-4 py-3 text-gray-600 text-xs">' + (inv.property_address || '-') + '</td>' +
+          '<td class="px-4 py-3 text-right font-bold text-gray-900">$' + parseFloat(inv.total || 0).toFixed(2) + '</td>' +
+          '<td class="px-4 py-3 text-center">' + invStatusBadge(inv.status) + '</td>' +
+          '<td class="px-4 py-3 text-gray-600 text-xs">' + fmtDate(inv.due_date) + '</td>' +
+          '<td class="px-4 py-3 text-center">' +
+            '<div class="flex items-center justify-center gap-1">' +
+              '<button onclick="viewInvoiceDetail(' + inv.id + ')" class="text-blue-500 hover:text-blue-700 p-1" title="View"><i class="fas fa-eye"></i></button>' +
+              '<button onclick="downloadInvoicePdf(' + inv.id + ')" class="text-green-500 hover:text-green-700 p-1" title="Download PDF"><i class="fas fa-file-pdf"></i></button>' +
+              (inv.status === 'draft' ? '<button onclick="sendInvoiceGmail(' + inv.id + ')" class="text-indigo-500 hover:text-indigo-700 p-1" title="Send via Gmail"><i class="fas fa-paper-plane"></i></button>' : '') +
+              (inv.status === 'sent' || inv.status === 'viewed' ? '<button onclick="markInvoicePaid(' + inv.id + ')" class="text-green-600 hover:text-green-800 p-1" title="Mark Paid"><i class="fas fa-check-double"></i></button>' : '') +
+              (inv.status === 'draft' ? '<button onclick="deleteInvoice(' + inv.id + ')" class="text-red-400 hover:text-red-600 p-1" title="Delete"><i class="fas fa-trash"></i></button>' : '') +
+            '</div>' +
+          '</td>' +
+        '</tr>';
+      }).join('') +
+      '</tbody></table></div>'
+    ) +
+
+    // Hidden modals container
+    '<div id="inv-modal-container"></div>' +
+    '<div id="inv-detail-container"></div>' +
+  '</div>';
+}
+
+// ---- Create Invoice Modal ----
+window.showCreateInvoiceModal = function() {
+  var customers = ((SA.data.invoice_customers || {}).customers || []);
+  var modal = document.getElementById('inv-modal-container');
+  if (!modal) return;
+  modal.innerHTML = '<div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onclick="if(event.target===this)closeInvModal()">' +
+    '<div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">' +
+      '<div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">' +
+        '<h3 class="font-bold text-gray-800 text-lg"><i class="fas fa-plus-circle mr-2 text-green-500"></i>Create New Invoice</h3>' +
+        '<button onclick="closeInvModal()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>' +
+      '</div>' +
+      '<div class="p-6 space-y-4">' +
+        '<div class="grid md:grid-cols-2 gap-4">' +
+          '<div><label class="block text-xs font-medium text-gray-500 mb-1">Customer *</label>' +
+            '<select id="inv-customer" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">' +
+              '<option value="">Select customer...</option>' +
+              customers.map(function(c) { return '<option value="' + c.id + '">' + (c.name || c.email) + (c.company_name ? ' (' + c.company_name + ')' : '') + '</option>'; }).join('') +
+            '</select></div>' +
+          '<div><label class="block text-xs font-medium text-gray-500 mb-1">Due (days)</label>' +
+            '<input id="inv-due-days" type="number" value="30" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>' +
+        '</div>' +
+        '<div><label class="block text-xs font-medium text-gray-500 mb-1">Tax Rate (%)</label>' +
+          '<input id="inv-tax-rate" type="number" step="0.01" value="5.00" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm max-w-[200px]"></div>' +
+
+        // Line items
+        '<div class="border border-gray-200 rounded-xl p-4">' +
+          '<div class="flex items-center justify-between mb-3">' +
+            '<h4 class="font-semibold text-gray-700 text-sm">Line Items</h4>' +
+            '<button onclick="addInvLineItem()" class="text-xs text-green-600 hover:text-green-800 font-medium"><i class="fas fa-plus mr-1"></i>Add Item</button>' +
+          '</div>' +
+          '<div id="inv-line-items">' +
+            '<div class="inv-line-item grid grid-cols-12 gap-2 mb-2">' +
+              '<input type="text" placeholder="Description" class="col-span-6 border border-gray-300 rounded-lg px-3 py-2 text-sm inv-desc">' +
+              '<input type="number" placeholder="Qty" value="1" class="col-span-2 border border-gray-300 rounded-lg px-3 py-2 text-sm inv-qty">' +
+              '<input type="number" step="0.01" placeholder="Unit Price" class="col-span-3 border border-gray-300 rounded-lg px-3 py-2 text-sm inv-price">' +
+              '<button onclick="this.closest(\'.inv-line-item\').remove()" class="col-span-1 text-red-400 hover:text-red-600"><i class="fas fa-times"></i></button>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+
+        '<div><label class="block text-xs font-medium text-gray-500 mb-1">Notes</label>' +
+          '<textarea id="inv-notes" rows="2" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="Thank you for your business..."></textarea></div>' +
+
+        '<div class="bg-amber-50 border border-amber-200 rounded-lg p-3">' +
+          '<p class="text-xs text-amber-700"><i class="fas fa-lightbulb mr-1"></i><strong>Tip:</strong> Use the Pricing Engine to auto-calculate line items from a roof report, then create an invoice from those results.</p>' +
+        '</div>' +
+
+        '<div id="inv-create-msg" class="hidden"></div>' +
+        '<div class="flex justify-end gap-3 pt-2">' +
+          '<button onclick="closeInvModal()" class="px-4 py-2 text-gray-600 hover:text-gray-800 text-sm">Cancel</button>' +
+          '<button onclick="createInvoice()" class="bg-green-600 text-white px-6 py-2.5 rounded-lg font-medium hover:bg-green-700"><i class="fas fa-save mr-2"></i>Create Invoice</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>' +
+  '</div>';
+};
+
+window.addInvLineItem = function() {
+  var container = document.getElementById('inv-line-items');
+  if (!container) return;
+  var row = document.createElement('div');
+  row.className = 'inv-line-item grid grid-cols-12 gap-2 mb-2';
+  row.innerHTML = '<input type="text" placeholder="Description" class="col-span-6 border border-gray-300 rounded-lg px-3 py-2 text-sm inv-desc">' +
+    '<input type="number" placeholder="Qty" value="1" class="col-span-2 border border-gray-300 rounded-lg px-3 py-2 text-sm inv-qty">' +
+    '<input type="number" step="0.01" placeholder="Unit Price" class="col-span-3 border border-gray-300 rounded-lg px-3 py-2 text-sm inv-price">' +
+    '<button onclick="this.closest(\'.inv-line-item\').remove()" class="col-span-1 text-red-400 hover:text-red-600"><i class="fas fa-times"></i></button>';
+  container.appendChild(row);
+};
+
+window.closeInvModal = function() {
+  var modal = document.getElementById('inv-modal-container');
+  if (modal) modal.innerHTML = '';
+  var detail = document.getElementById('inv-detail-container');
+  if (detail) detail.innerHTML = '';
+};
+
+window.createInvoice = async function() {
+  var customerId = document.getElementById('inv-customer').value;
+  if (!customerId) { alert('Please select a customer'); return; }
+  var rows = document.querySelectorAll('.inv-line-item');
+  var items = [];
+  rows.forEach(function(r) {
+    var desc = r.querySelector('.inv-desc').value.trim();
+    var qty = parseFloat(r.querySelector('.inv-qty').value) || 1;
+    var price = parseFloat(r.querySelector('.inv-price').value) || 0;
+    if (desc && price > 0) items.push({ description: desc, quantity: qty, unit_price: price });
+  });
+  if (items.length === 0) { alert('Add at least one line item'); return; }
+  var taxRate = parseFloat(document.getElementById('inv-tax-rate').value) || 5;
+  var dueDays = parseInt(document.getElementById('inv-due-days').value) || 30;
+  var notes = document.getElementById('inv-notes').value;
+
+  try {
+    var resp = await saFetch('/api/invoices', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ customer_id: parseInt(customerId), items: items, tax_rate: taxRate, due_days: dueDays, notes: notes })
+    });
+    var data = await resp.json();
+    if (data.success) {
+      closeInvModal();
+      loadView('invoices');
+    } else {
+      alert(data.error || 'Failed to create invoice');
+    }
+  } catch(e) { alert('Error: ' + e.message); }
+};
+
+window.viewInvoiceDetail = async function(id) {
+  try {
+    var resp = await saFetch('/api/invoices/' + id);
+    var data = await resp.json();
+    var inv = data.invoice;
+    var items = data.items || [];
+    if (!inv) { alert('Invoice not found'); return; }
+
+    var container = document.getElementById('inv-detail-container');
+    if (!container) return;
+    container.innerHTML = '<div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onclick="if(event.target===this)closeInvModal()">' +
+      '<div class="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">' +
+        '<div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">' +
+          '<h3 class="font-bold text-gray-800 text-lg"><i class="fas fa-file-invoice mr-2 text-green-500"></i>Invoice ' + inv.invoice_number + '</h3>' +
+          '<div class="flex items-center gap-2">' +
+            '<button onclick="downloadInvoicePdf(' + id + ')" class="text-green-600 hover:text-green-800 text-sm font-medium"><i class="fas fa-file-pdf mr-1"></i>PDF</button>' +
+            '<button onclick="closeInvModal()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times text-lg"></i></button>' +
+          '</div>' +
+        '</div>' +
+        '<div class="p-6 space-y-6">' +
+          // Header info
+          '<div class="grid md:grid-cols-3 gap-4">' +
+            '<div><p class="text-xs text-gray-400 uppercase">Customer</p><p class="font-semibold text-gray-800">' + (inv.customer_name || '-') + '</p><p class="text-xs text-gray-500">' + (inv.customer_email || '') + '</p></div>' +
+            '<div><p class="text-xs text-gray-400 uppercase">Status</p><div class="mt-1">' + invStatusBadge(inv.status) + '</div></div>' +
+            '<div><p class="text-xs text-gray-400 uppercase">Due Date</p><p class="font-semibold text-gray-800">' + fmtDate(inv.due_date) + '</p></div>' +
+          '</div>' +
+          // Line items table
+          '<div class="border border-gray-200 rounded-xl overflow-hidden">' +
+            '<table class="w-full text-sm">' +
+              '<thead class="bg-gray-50"><tr>' +
+                '<th class="px-4 py-3 text-left text-xs font-semibold text-gray-500">Description</th>' +
+                '<th class="px-4 py-3 text-center text-xs font-semibold text-gray-500">Qty</th>' +
+                '<th class="px-4 py-3 text-right text-xs font-semibold text-gray-500">Unit Price</th>' +
+                '<th class="px-4 py-3 text-right text-xs font-semibold text-gray-500">Amount</th>' +
+              '</tr></thead><tbody class="divide-y divide-gray-50">' +
+              items.map(function(it) {
+                return '<tr><td class="px-4 py-3 text-gray-700">' + (it.description || '-') + '</td>' +
+                  '<td class="px-4 py-3 text-center text-gray-600">' + (it.quantity || 1) + '</td>' +
+                  '<td class="px-4 py-3 text-right text-gray-600">$' + parseFloat(it.unit_price || 0).toFixed(2) + '</td>' +
+                  '<td class="px-4 py-3 text-right font-medium text-gray-800">$' + parseFloat(it.amount || 0).toFixed(2) + '</td></tr>';
+              }).join('') +
+              '</tbody>' +
+            '</table>' +
+            '<div class="bg-gray-50 px-4 py-3 space-y-1">' +
+              '<div class="flex justify-between text-sm"><span class="text-gray-500">Subtotal</span><span class="text-gray-800">$' + parseFloat(inv.subtotal || 0).toFixed(2) + '</span></div>' +
+              '<div class="flex justify-between text-sm"><span class="text-gray-500">Tax (' + (inv.tax_rate || 5) + '%)</span><span class="text-gray-800">$' + parseFloat(inv.tax_amount || 0).toFixed(2) + '</span></div>' +
+              (inv.discount_amount ? '<div class="flex justify-between text-sm"><span class="text-gray-500">Discount</span><span class="text-green-600">-$' + parseFloat(inv.discount_amount).toFixed(2) + '</span></div>' : '') +
+              '<div class="flex justify-between text-lg font-bold border-t border-gray-200 pt-2 mt-2"><span class="text-gray-900">Total</span><span class="text-green-700">$' + parseFloat(inv.total || 0).toFixed(2) + ' CAD</span></div>' +
+            '</div>' +
+          '</div>' +
+          (inv.notes ? '<div class="bg-gray-50 rounded-lg p-4"><p class="text-xs text-gray-400 uppercase mb-1">Notes</p><p class="text-sm text-gray-600">' + inv.notes + '</p></div>' : '') +
+          // Action buttons
+          '<div class="flex gap-3 justify-end">' +
+            (inv.status === 'draft' ? '<button onclick="sendInvoiceGmail(' + id + ')" class="bg-indigo-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700"><i class="fas fa-paper-plane mr-2"></i>Send via Gmail</button>' : '') +
+            (inv.status === 'sent' || inv.status === 'viewed' ? '<button onclick="markInvoicePaid(' + id + ')" class="bg-green-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-green-700"><i class="fas fa-check-double mr-2"></i>Mark as Paid</button>' : '') +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+    // Store items for PDF generation
+    SA.data._currentInvoice = inv;
+    SA.data._currentInvoiceItems = items;
+  } catch(e) { alert('Failed to load invoice: ' + e.message); }
+};
+
+window.sendInvoiceGmail = async function(id) {
+  if (!confirm('Send this invoice to the customer via Gmail?')) return;
+  try {
+    var resp = await saFetch('/api/invoices/' + id + '/send-gmail', { method: 'POST' });
+    var data = await resp.json();
+    if (data.success) {
+      alert('Invoice sent successfully to ' + (data.message || 'customer'));
+      closeInvModal();
+      loadView('invoices');
+    } else {
+      alert(data.error || 'Failed to send invoice');
+    }
+  } catch(e) { alert('Error: ' + e.message); }
+};
+
+window.markInvoicePaid = async function(id) {
+  if (!confirm('Mark this invoice as paid?')) return;
+  try {
+    var resp = await saFetch('/api/invoices/' + id + '/status', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'paid' })
+    });
+    var data = await resp.json();
+    if (data.success) {
+      closeInvModal();
+      loadView('invoices');
+    } else {
+      alert(data.error || 'Failed to update status');
+    }
+  } catch(e) { alert('Error: ' + e.message); }
+};
+
+window.deleteInvoice = async function(id) {
+  if (!confirm('Delete this draft invoice?')) return;
+  try {
+    var resp = await saFetch('/api/invoices/' + id, { method: 'DELETE' });
+    var data = await resp.json();
+    if (data.success) {
+      loadView('invoices');
+    } else {
+      alert(data.error || 'Failed to delete');
+    }
+  } catch(e) { alert('Error: ' + e.message); }
+};
+
+// ============================================================
+// CLIENT-SIDE PDF GENERATION — jsPDF + autoTable
+// ============================================================
+window.downloadInvoicePdf = async function(id) {
+  try {
+    // Fetch invoice data if not cached
+    var resp = await saFetch('/api/invoices/' + id);
+    var data = await resp.json();
+    var inv = data.invoice;
+    var items = data.items || [];
+    if (!inv) { alert('Invoice not found'); return; }
+
+    // Check jsPDF is loaded
+    if (typeof window.jspdf === 'undefined') { alert('PDF library not loaded. Please refresh the page.'); return; }
+    var jsPDF = window.jspdf.jsPDF;
+    var doc = new jsPDF();
+
+    // Colors
+    var primary = [3, 105, 161]; // sky-700
+    var dark = [30, 41, 59]; // slate-800
+    var gray = [100, 116, 139]; // slate-500
+    var lightBg = [248, 250, 252]; // slate-50
+
+    // Header bar
+    doc.setFillColor(primary[0], primary[1], primary[2]);
+    doc.rect(0, 0, 210, 38, 'F');
+
+    // Company name
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(22);
+    doc.setFont('helvetica', 'bold');
+    doc.text('INVOICE', 15, 18);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text('#' + (inv.invoice_number || 'N/A'), 15, 26);
+    doc.text('Generated by RoofReporterAI', 15, 32);
+
+    // Status badge on right
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    var statusText = (inv.status || 'draft').toUpperCase();
+    doc.text(statusText, 195, 20, { align: 'right' });
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Due: ' + (inv.due_date || 'N/A'), 195, 28, { align: 'right' });
+
+    // Bill To / From section
+    var y = 50;
+    doc.setTextColor(gray[0], gray[1], gray[2]);
+    doc.setFontSize(8);
+    doc.text('BILL TO', 15, y);
+    doc.text('INVOICE DETAILS', 120, y);
+    y += 6;
+    doc.setTextColor(dark[0], dark[1], dark[2]);
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.text(inv.customer_name || 'Customer', 15, y);
+    y += 5;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    if (inv.customer_email) { doc.text(inv.customer_email, 15, y); y += 4; }
+    if (inv.customer_phone) { doc.text(inv.customer_phone, 15, y); y += 4; }
+    if (inv.customer_address) { doc.text(inv.customer_address, 15, y); y += 4; }
+    if (inv.customer_city) { doc.text(inv.customer_city + ', ' + (inv.customer_province || '') + ' ' + (inv.customer_postal || ''), 15, y); }
+
+    // Invoice details on right
+    var dy = 56;
+    doc.setFontSize(9);
+    doc.setTextColor(gray[0], gray[1], gray[2]);
+    doc.text('Invoice Date:', 120, dy); doc.setTextColor(dark[0], dark[1], dark[2]); doc.text(fmtDate(inv.created_at), 155, dy); dy += 5;
+    doc.setTextColor(gray[0], gray[1], gray[2]);
+    doc.text('Due Date:', 120, dy); doc.setTextColor(dark[0], dark[1], dark[2]); doc.text(fmtDate(inv.due_date), 155, dy); dy += 5;
+    doc.setTextColor(gray[0], gray[1], gray[2]);
+    doc.text('Tax Rate:', 120, dy); doc.setTextColor(dark[0], dark[1], dark[2]); doc.text((inv.tax_rate || 5) + '%', 155, dy); dy += 5;
+    if (inv.property_address) {
+      doc.setTextColor(gray[0], gray[1], gray[2]);
+      doc.text('Property:', 120, dy); doc.setTextColor(dark[0], dark[1], dark[2]); doc.text(inv.property_address, 155, dy);
+    }
+
+    // Line items table using autoTable
+    var tableBody = items.map(function(it) {
+      return [
+        it.description || '-',
+        (it.quantity || 1).toString(),
+        '$' + parseFloat(it.unit_price || 0).toFixed(2),
+        '$' + parseFloat(it.amount || 0).toFixed(2)
+      ];
+    });
+
+    doc.autoTable({
+      startY: 90,
+      head: [['Description', 'Qty', 'Unit Price', 'Amount']],
+      body: tableBody,
+      theme: 'striped',
+      headStyles: { fillColor: primary, textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9 },
+      bodyStyles: { fontSize: 9, textColor: dark },
+      alternateRowStyles: { fillColor: lightBg },
+      columnStyles: {
+        0: { cellWidth: 90 },
+        1: { halign: 'center', cellWidth: 25 },
+        2: { halign: 'right', cellWidth: 35 },
+        3: { halign: 'right', cellWidth: 35 }
+      },
+      margin: { left: 15, right: 15 }
+    });
+
+    // Totals section below table
+    var finalY = doc.lastAutoTable.finalY + 10;
+    var totalsX = 130;
+    doc.setFontSize(10);
+    doc.setTextColor(gray[0], gray[1], gray[2]);
+    doc.text('Subtotal:', totalsX, finalY);
+    doc.setTextColor(dark[0], dark[1], dark[2]);
+    doc.text('$' + parseFloat(inv.subtotal || 0).toFixed(2), 195, finalY, { align: 'right' });
+    finalY += 6;
+
+    doc.setTextColor(gray[0], gray[1], gray[2]);
+    doc.text('Tax (' + (inv.tax_rate || 5) + '% GST):', totalsX, finalY);
+    doc.setTextColor(dark[0], dark[1], dark[2]);
+    doc.text('$' + parseFloat(inv.tax_amount || 0).toFixed(2), 195, finalY, { align: 'right' });
+    finalY += 6;
+
+    if (inv.discount_amount) {
+      doc.setTextColor(22, 163, 74);
+      doc.text('Discount:', totalsX, finalY);
+      doc.text('-$' + parseFloat(inv.discount_amount).toFixed(2), 195, finalY, { align: 'right' });
+      finalY += 6;
+    }
+
+    // Total line
+    doc.setDrawColor(primary[0], primary[1], primary[2]);
+    doc.setLineWidth(0.5);
+    doc.line(totalsX, finalY - 2, 195, finalY - 2);
+    finalY += 3;
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(primary[0], primary[1], primary[2]);
+    doc.text('Total Due:', totalsX, finalY);
+    doc.text('$' + parseFloat(inv.total || 0).toFixed(2) + ' CAD', 195, finalY, { align: 'right' });
+
+    // Notes
+    if (inv.notes) {
+      finalY += 15;
+      doc.setFontSize(8);
+      doc.setTextColor(gray[0], gray[1], gray[2]);
+      doc.text('NOTES', 15, finalY);
+      finalY += 5;
+      doc.setFontSize(9);
+      doc.setTextColor(dark[0], dark[1], dark[2]);
+      var noteLines = doc.splitTextToSize(inv.notes, 180);
+      doc.text(noteLines, 15, finalY);
+    }
+
+    // Terms
+    finalY += 15;
+    doc.setFillColor(lightBg[0], lightBg[1], lightBg[2]);
+    doc.rect(15, finalY - 3, 180, 18, 'F');
+    doc.setFontSize(8);
+    doc.setTextColor(gray[0], gray[1], gray[2]);
+    doc.text('TERMS & CONDITIONS', 20, finalY + 2);
+    doc.setFontSize(8);
+    doc.setTextColor(dark[0], dark[1], dark[2]);
+    doc.text(inv.terms || 'Payment due within 30 days of invoice date. All amounts in Canadian Dollars (CAD).', 20, finalY + 8);
+
+    // Footer
+    doc.setFontSize(7);
+    doc.setTextColor(gray[0], gray[1], gray[2]);
+    doc.text('Powered by RoofReporterAI — www.roofreporterai.com', 105, 285, { align: 'center' });
+
+    // Save
+    doc.save('Invoice_' + (inv.invoice_number || id) + '.pdf');
+  } catch(e) {
+    alert('PDF generation failed: ' + e.message);
+    console.error('PDF Error:', e);
+  }
+};
+
+// ============================================================
+// PROPOSAL PDF — Generate from pricing engine results
+// ============================================================
+window.generateProposalPdf = function(proposal, measurements, customerName, propertyAddress) {
+  if (typeof window.jspdf === 'undefined') { alert('PDF library not loaded'); return; }
+  var jsPDF = window.jspdf.jsPDF;
+  var doc = new jsPDF();
+
+  var primary = [3, 105, 161];
+  var dark = [30, 41, 59];
+  var gray = [100, 116, 139];
+
+  // Header
+  doc.setFillColor(primary[0], primary[1], primary[2]);
+  doc.rect(0, 0, 210, 38, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(22);
+  doc.setFont('helvetica', 'bold');
+  doc.text('ROOFING PROPOSAL', 15, 18);
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.text(proposal.metadata.preset_name || 'Custom Estimate', 15, 26);
+  doc.text(new Date().toLocaleDateString('en-CA'), 15, 32);
+
+  // Customer info
+  var y = 50;
+  doc.setTextColor(gray[0], gray[1], gray[2]);
+  doc.setFontSize(8);
+  doc.text('PREPARED FOR', 15, y);
+  y += 6;
+  doc.setTextColor(dark[0], dark[1], dark[2]);
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'bold');
+  doc.text(customerName || 'Homeowner', 15, y);
+  y += 6;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+  if (propertyAddress) doc.text(propertyAddress, 15, y);
+
+  // Measurements summary
+  y = 50;
+  doc.setTextColor(gray[0], gray[1], gray[2]);
+  doc.setFontSize(8);
+  doc.text('ROOF MEASUREMENTS', 120, y);
+  y += 6;
+  doc.setFontSize(9);
+  doc.setTextColor(dark[0], dark[1], dark[2]);
+  doc.text('Total Area: ' + (measurements.total_area_sqft || 0).toLocaleString() + ' sq ft', 120, y); y += 5;
+  doc.text('Waste Factor: ' + (proposal.waste_factor_pct || 15) + '%', 120, y); y += 5;
+  doc.text('Gross Squares: ' + (proposal.gross_squares || 0).toFixed(1), 120, y); y += 5;
+  if (measurements.dominant_pitch) doc.text('Dominant Pitch: ' + measurements.dominant_pitch, 120, y);
+
+  // Line items
+  var tableBody = proposal.line_items.map(function(li) {
+    return [li.item, li.description, li.qty.toString() + ' ' + li.unit, '$' + li.unit_price.toFixed(2), '$' + li.price.toFixed(2)];
+  });
+
+  doc.autoTable({
+    startY: 85,
+    head: [['Item', 'Description', 'Qty', 'Unit Price', 'Total']],
+    body: tableBody,
+    theme: 'striped',
+    headStyles: { fillColor: primary, textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8 },
+    bodyStyles: { fontSize: 8, textColor: dark },
+    columnStyles: { 0: { cellWidth: 35, fontStyle: 'bold' }, 1: { cellWidth: 55 }, 3: { halign: 'right' }, 4: { halign: 'right' } },
+    margin: { left: 15, right: 15 }
+  });
+
+  // Totals
+  var finalY = doc.lastAutoTable.finalY + 8;
+  doc.setFontSize(10);
+  doc.setTextColor(gray[0], gray[1], gray[2]);
+  doc.text('Subtotal:', 135, finalY); doc.setTextColor(dark[0], dark[1], dark[2]); doc.text('$' + proposal.subtotal.toFixed(2), 195, finalY, { align: 'right' }); finalY += 6;
+  doc.setTextColor(gray[0], gray[1], gray[2]);
+  doc.text('Tax (' + (proposal.tax_rate * 100).toFixed(1) + '%):', 135, finalY); doc.setTextColor(dark[0], dark[1], dark[2]); doc.text('$' + proposal.tax_amount.toFixed(2), 195, finalY, { align: 'right' }); finalY += 8;
+
+  doc.setDrawColor(primary[0], primary[1], primary[2]);
+  doc.line(135, finalY - 3, 195, finalY - 3);
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(primary[0], primary[1], primary[2]);
+  doc.text('Total Estimate:', 135, finalY + 2);
+  doc.text('$' + proposal.total_price.toFixed(2) + ' CAD', 195, finalY + 2, { align: 'right' });
+
+  // Footer
+  doc.setFontSize(7);
+  doc.setTextColor(gray[0], gray[1], gray[2]);
+  doc.text('This is an estimate only. Final costs may vary. Valid for 30 days.', 105, 275, { align: 'center' });
+  doc.text('Powered by RoofReporterAI — ' + proposal.metadata.engine_version, 105, 280, { align: 'center' });
+
+  doc.save('Proposal_' + (proposal.metadata.preset_name || 'Custom').replace(/[^a-zA-Z0-9]/g, '_') + '.pdf');
+};
+
+// ============================================================
+// VIEW: TELEPHONY / LIVEKIT — Call Forwarding + Number Purchase
+// ============================================================
+function renderTelephonyView() {
+  var d = SA.data.telephony || {};
+
+  return '<div class="space-y-6">' +
+    '<div class="flex items-center justify-between">' +
+      '<div><h2 class="text-2xl font-black text-gray-900"><i class="fas fa-phone-alt mr-2 text-indigo-500"></i>Telephony & LiveKit</h2>' +
+      '<p class="text-sm text-gray-500 mt-1">Number management, call forwarding, and LiveKit SIP integration</p></div>' +
+    '</div>' +
+
+    // Status cards
+    '<div class="grid grid-cols-2 lg:grid-cols-4 gap-4">' +
+      samc('LiveKit Status', d.livekit_configured ? 'Connected' : 'Not Set', 'fa-plug', d.livekit_configured ? 'green' : 'red') +
+      samc('SIP Trunks', d.sip_trunk_count || 0, 'fa-phone-volume', 'blue') +
+      samc('Phone Numbers', d.phone_numbers_count || 0, 'fa-hashtag', 'indigo') +
+      samc('Active Forwards', d.active_forwards || 0, 'fa-exchange-alt', 'amber') +
+    '</div>' +
+
+    // LiveKit Configuration
+    saSection('LiveKit Configuration', 'fa-cog',
+      '<div class="space-y-4">' +
+        '<div class="grid md:grid-cols-2 gap-4">' +
+          '<div><label class="block text-xs font-medium text-gray-500 mb-1">LiveKit Server URL</label>' +
+            '<input id="tel-lk-url" type="text" value="' + (d.livekit_url || '') + '" placeholder="wss://your-livekit.livekit.cloud" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono"></div>' +
+          '<div><label class="block text-xs font-medium text-gray-500 mb-1">LiveKit API Key</label>' +
+            '<input id="tel-lk-key" type="text" value="' + (d.livekit_api_key ? '••••••••' : '') + '" placeholder="APIxxxxxxxxxx" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono"></div>' +
+        '</div>' +
+        '<div class="grid md:grid-cols-2 gap-4">' +
+          '<div><label class="block text-xs font-medium text-gray-500 mb-1">LiveKit API Secret</label>' +
+            '<input id="tel-lk-secret" type="password" value="' + (d.livekit_api_secret ? '••••••••' : '') + '" placeholder="Secret key" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono"></div>' +
+          '<div><label class="block text-xs font-medium text-gray-500 mb-1">SIP Trunk Provider</label>' +
+            '<select id="tel-sip-provider" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">' +
+              '<option value="twilio"' + (d.sip_provider === 'twilio' ? ' selected' : '') + '>Twilio</option>' +
+              '<option value="telnyx"' + (d.sip_provider === 'telnyx' ? ' selected' : '') + '>Telnyx</option>' +
+              '<option value="vonage"' + (d.sip_provider === 'vonage' ? ' selected' : '') + '>Vonage</option>' +
+              '<option value="telus"' + (d.sip_provider === 'telus' ? ' selected' : '') + '>TELUS Mobility</option>' +
+            '</select></div>' +
+        '</div>' +
+        '<div id="tel-lk-msg" class="hidden"></div>' +
+        '<button onclick="saveLivekitConfig()" class="bg-indigo-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700"><i class="fas fa-save mr-2"></i>Save LiveKit Config</button>' +
+      '</div>'
+    ) +
+
+    // Phone Number Management
+    saSection('Phone Number Management', 'fa-phone',
+      '<div class="space-y-4">' +
+        '<div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">' +
+          '<p class="text-sm text-blue-800"><i class="fas fa-info-circle mr-2"></i><strong>How it works:</strong> Purchase a phone number through your SIP provider (Twilio/Telnyx), then configure call forwarding to route calls through LiveKit AI agents.</p>' +
+        '</div>' +
+        '<div class="grid md:grid-cols-3 gap-4">' +
+          '<div><label class="block text-xs font-medium text-gray-500 mb-1">Area Code / Region</label>' +
+            '<input id="tel-area-code" type="text" placeholder="403, 587, 780..." class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>' +
+          '<div><label class="block text-xs font-medium text-gray-500 mb-1">Number Type</label>' +
+            '<select id="tel-num-type" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">' +
+              '<option value="local">Local</option>' +
+              '<option value="toll-free">Toll-Free</option>' +
+            '</select></div>' +
+          '<div class="flex items-end"><button onclick="searchAvailableNumbers()" class="w-full bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700"><i class="fas fa-search mr-2"></i>Search Numbers</button></div>' +
+        '</div>' +
+        '<div id="tel-search-results" class="hidden"></div>' +
+        // Existing numbers
+        '<div id="tel-existing-numbers" class="border-t border-gray-200 pt-4 mt-4">' +
+          '<h4 class="font-semibold text-gray-700 text-sm mb-3">Your Phone Numbers</h4>' +
+          (d.phone_numbers && d.phone_numbers.length > 0 ?
+            '<div class="space-y-2">' +
+              d.phone_numbers.map(function(pn) {
+                return '<div class="flex items-center justify-between bg-white border border-gray-200 rounded-lg px-4 py-3">' +
+                  '<div class="flex items-center gap-3">' +
+                    '<i class="fas fa-phone text-indigo-500"></i>' +
+                    '<div><p class="font-mono font-bold text-gray-800">' + pn.number + '</p><p class="text-xs text-gray-400">' + (pn.label || pn.type || 'Local') + '</p></div>' +
+                  '</div>' +
+                  '<div class="flex items-center gap-2">' +
+                    '<span class="px-2 py-0.5 rounded-full text-xs font-medium ' + (pn.forwarding_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500') + '">' + (pn.forwarding_active ? 'Forwarding Active' : 'No Forward') + '</span>' +
+                    '<button onclick="configureForwarding(\'' + pn.number + '\')" class="text-indigo-500 hover:text-indigo-700 text-sm"><i class="fas fa-cog"></i></button>' +
+                  '</div>' +
+                '</div>';
+              }).join('') +
+            '</div>'
+          : '<p class="text-gray-400 text-sm">No phone numbers configured yet. Search and purchase one above, or enter your existing number below.</p>') +
+        '</div>' +
+      '</div>'
+    ) +
+
+    // Call Forwarding Setup
+    saSection('Call Forwarding Configuration', 'fa-exchange-alt',
+      '<div class="space-y-4">' +
+        '<p class="text-sm text-gray-600">Route incoming calls from your business number to the LiveKit AI agent. The AI will answer, qualify leads, and book appointments.</p>' +
+        '<div class="grid md:grid-cols-2 gap-4">' +
+          '<div><label class="block text-xs font-medium text-gray-500 mb-1">Your Business Number</label>' +
+            '<input id="tel-biz-number" type="tel" value="' + (d.business_number || '') + '" placeholder="+1 (403) 555-1234" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>' +
+          '<div><label class="block text-xs font-medium text-gray-500 mb-1">Forward To (LiveKit SIP)</label>' +
+            '<input id="tel-fwd-number" type="tel" value="' + (d.forward_to_number || '') + '" placeholder="SIP number from LiveKit" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono"></div>' +
+        '</div>' +
+        '<div class="grid md:grid-cols-2 gap-4">' +
+          '<div><label class="block text-xs font-medium text-gray-500 mb-1">Forwarding Mode</label>' +
+            '<select id="tel-fwd-mode" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">' +
+              '<option value="always"' + (d.forwarding_mode === 'always' ? ' selected' : '') + '>Always Forward</option>' +
+              '<option value="no-answer"' + (d.forwarding_mode === 'no-answer' ? ' selected' : '') + '>Forward on No Answer (after 15s)</option>' +
+              '<option value="busy"' + (d.forwarding_mode === 'busy' ? ' selected' : '') + '>Forward When Busy</option>' +
+              '<option value="after-hours"' + (d.forwarding_mode === 'after-hours' ? ' selected' : '') + '>After Hours Only</option>' +
+            '</select></div>' +
+          '<div><label class="block text-xs font-medium text-gray-500 mb-1">After-Hours Window</label>' +
+            '<div class="flex gap-2">' +
+              '<input id="tel-hrs-start" type="time" value="' + (d.business_hours_start || '08:00') + '" class="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm">' +
+              '<span class="self-center text-gray-400 text-sm">to</span>' +
+              '<input id="tel-hrs-end" type="time" value="' + (d.business_hours_end || '17:00') + '" class="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm">' +
+            '</div></div>' +
+        '</div>' +
+
+        // Provider-specific instructions
+        '<div class="bg-amber-50 border border-amber-200 rounded-xl p-4">' +
+          '<h4 class="font-semibold text-amber-800 text-sm mb-2"><i class="fas fa-lightbulb mr-2"></i>Setup Instructions by Provider</h4>' +
+          '<div class="grid md:grid-cols-2 gap-4 text-xs text-amber-900">' +
+            '<div><p class="font-bold mb-1">TELUS Mobility:</p>' +
+              '<p>1. Dial *73 to enable call forwarding</p>' +
+              '<p>2. Enter the SIP number shown above</p>' +
+              '<p>3. Hang up — forwarding is now active</p>' +
+              '<p>4. To cancel: Dial *73 again</p></div>' +
+            '<div><p class="font-bold mb-1">Twilio / Telnyx (API-based):</p>' +
+              '<p>1. Click "Save Forwarding Config" below</p>' +
+              '<p>2. We\'ll auto-configure via API</p>' +
+              '<p>3. Test with a call to your number</p>' +
+              '<p>4. Calls route to LiveKit → AI answers</p></div>' +
+          '</div>' +
+        '</div>' +
+
+        '<div id="tel-fwd-msg" class="hidden"></div>' +
+        '<div class="flex gap-3">' +
+          '<button onclick="saveForwardingConfig()" class="bg-indigo-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700"><i class="fas fa-save mr-2"></i>Save Forwarding Config</button>' +
+          '<button onclick="testForwarding()" class="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-300"><i class="fas fa-phone mr-2"></i>Test Call</button>' +
+        '</div>' +
+      '</div>'
+    ) +
+
+    // LiveKit SIP Trunk Setup
+    saSection('LiveKit SIP Trunk Configuration', 'fa-server',
+      '<div class="space-y-4">' +
+        '<p class="text-sm text-gray-600">Configure the SIP trunk that connects your phone numbers to LiveKit rooms for AI-powered call handling.</p>' +
+        '<div class="grid md:grid-cols-2 gap-4">' +
+          '<div><label class="block text-xs font-medium text-gray-500 mb-1">SIP Trunk Name</label>' +
+            '<input id="tel-trunk-name" type="text" value="' + (d.sip_trunk_name || 'RoofReporter-Inbound') + '" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>' +
+          '<div><label class="block text-xs font-medium text-gray-500 mb-1">Inbound Number (E.164)</label>' +
+            '<input id="tel-trunk-number" type="text" value="' + (d.sip_trunk_number || '') + '" placeholder="+14035551234" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono"></div>' +
+        '</div>' +
+        '<div class="grid md:grid-cols-2 gap-4">' +
+          '<div><label class="block text-xs font-medium text-gray-500 mb-1">SIP Server Host (from provider)</label>' +
+            '<input id="tel-sip-host" type="text" value="' + (d.sip_server_host || '') + '" placeholder="sip.twilio.com" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono"></div>' +
+          '<div><label class="block text-xs font-medium text-gray-500 mb-1">SIP Username (optional)</label>' +
+            '<input id="tel-sip-user" type="text" value="' + (d.sip_username || '') + '" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono"></div>' +
+        '</div>' +
+        '<div><label class="block text-xs font-medium text-gray-500 mb-1">SIP Password (optional)</label>' +
+          '<input id="tel-sip-pass" type="password" value="' + (d.sip_password ? '••••••••' : '') + '" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono max-w-md"></div>' +
+        '<div id="tel-trunk-msg" class="hidden"></div>' +
+        '<div class="flex gap-3">' +
+          '<button onclick="saveSipTrunkConfig()" class="bg-indigo-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700"><i class="fas fa-save mr-2"></i>Save SIP Trunk</button>' +
+          '<button onclick="testSipConnection()" class="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-300"><i class="fas fa-plug mr-2"></i>Test Connection</button>' +
+        '</div>' +
+      '</div>'
+    ) +
+
+  '</div>';
+}
+
+// ---- Telephony Functions ----
+window.saveLivekitConfig = async function() {
+  var msg = document.getElementById('tel-lk-msg');
+  var url = document.getElementById('tel-lk-url').value.trim();
+  var key = document.getElementById('tel-lk-key').value.trim();
+  var secret = document.getElementById('tel-lk-secret').value.trim();
+  var provider = document.getElementById('tel-sip-provider').value;
+
+  if (!url) { showTelMsg(msg, 'error', 'LiveKit URL is required'); return; }
+
+  try {
+    var resp = await saFetch('/api/admin/superadmin/telephony-config', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        livekit_url: url,
+        livekit_api_key: key.includes('•') ? undefined : key,
+        livekit_api_secret: secret.includes('•') ? undefined : secret,
+        sip_provider: provider
+      })
+    });
+    var data = await resp.json();
+    showTelMsg(msg, data.success ? 'success' : 'error', data.success ? 'LiveKit config saved!' : (data.error || 'Save failed'));
+  } catch(e) { showTelMsg(msg, 'error', 'Error: ' + e.message); }
+};
+
+window.saveForwardingConfig = async function() {
+  var msg = document.getElementById('tel-fwd-msg');
+  try {
+    var resp = await saFetch('/api/admin/superadmin/telephony-forwarding', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        business_number: document.getElementById('tel-biz-number').value.trim(),
+        forward_to_number: document.getElementById('tel-fwd-number').value.trim(),
+        forwarding_mode: document.getElementById('tel-fwd-mode').value,
+        business_hours_start: document.getElementById('tel-hrs-start').value,
+        business_hours_end: document.getElementById('tel-hrs-end').value
+      })
+    });
+    var data = await resp.json();
+    showTelMsg(msg, data.success ? 'success' : 'error', data.success ? 'Forwarding config saved! ' + (data.api_configured ? 'API-based forwarding is now active.' : 'Manual setup required — see provider instructions above.') : (data.error || 'Save failed'));
+  } catch(e) { showTelMsg(msg, 'error', 'Error: ' + e.message); }
+};
+
+window.saveSipTrunkConfig = async function() {
+  var msg = document.getElementById('tel-trunk-msg');
+  try {
+    var resp = await saFetch('/api/admin/superadmin/telephony-sip-trunk', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sip_trunk_name: document.getElementById('tel-trunk-name').value.trim(),
+        sip_trunk_number: document.getElementById('tel-trunk-number').value.trim(),
+        sip_server_host: document.getElementById('tel-sip-host').value.trim(),
+        sip_username: document.getElementById('tel-sip-user').value.trim(),
+        sip_password: document.getElementById('tel-sip-pass').value.includes('•') ? undefined : document.getElementById('tel-sip-pass').value.trim()
+      })
+    });
+    var data = await resp.json();
+    showTelMsg(msg, data.success ? 'success' : 'error', data.success ? 'SIP trunk config saved!' : (data.error || 'Save failed'));
+  } catch(e) { showTelMsg(msg, 'error', 'Error: ' + e.message); }
+};
+
+window.searchAvailableNumbers = async function() {
+  var container = document.getElementById('tel-search-results');
+  if (!container) return;
+  container.className = '';
+  container.innerHTML = '<div class="py-4 text-center text-gray-400"><i class="fas fa-spinner fa-spin mr-2"></i>Searching available numbers...</div>';
+  var areaCode = document.getElementById('tel-area-code').value.trim();
+  var numType = document.getElementById('tel-num-type').value;
+  try {
+    var resp = await saFetch('/api/admin/superadmin/telephony-search-numbers?area_code=' + encodeURIComponent(areaCode) + '&type=' + numType);
+    var data = await resp.json();
+    var numbers = data.numbers || [];
+    if (numbers.length === 0) {
+      container.innerHTML = '<div class="py-4 text-center text-gray-400">No numbers found for area code ' + areaCode + '. Try a different code.</div>';
+      return;
+    }
+    container.innerHTML = '<div class="space-y-2 mt-3">' +
+      numbers.map(function(n) {
+        return '<div class="flex items-center justify-between bg-white border border-gray-200 rounded-lg px-4 py-2">' +
+          '<span class="font-mono font-bold text-gray-800">' + n.number + '</span>' +
+          '<div class="flex items-center gap-2">' +
+            '<span class="text-xs text-gray-500">' + (n.monthly_cost ? '$' + n.monthly_cost + '/mo' : '') + '</span>' +
+            '<button onclick="purchaseNumber(\'' + n.number + '\')" class="bg-green-600 text-white px-3 py-1 rounded-lg text-xs font-medium hover:bg-green-700"><i class="fas fa-cart-plus mr-1"></i>Purchase</button>' +
+          '</div>' +
+        '</div>';
+      }).join('') +
+    '</div>';
+  } catch(e) { container.innerHTML = '<div class="text-red-500 text-sm">Search failed: ' + e.message + '</div>'; }
+};
+
+window.purchaseNumber = async function(number) {
+  if (!confirm('Purchase ' + number + '? Monthly charges will apply from your SIP provider.')) return;
+  try {
+    var resp = await saFetch('/api/admin/superadmin/telephony-purchase-number', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ number: number })
+    });
+    var data = await resp.json();
+    if (data.success) {
+      alert('Number ' + number + ' purchased! It will appear in your phone numbers list.');
+      loadView('telephony');
+    } else {
+      alert(data.error || 'Purchase failed');
+    }
+  } catch(e) { alert('Error: ' + e.message); }
+};
+
+window.configureForwarding = function(number) {
+  document.getElementById('tel-biz-number').value = number;
+  document.getElementById('tel-biz-number').scrollIntoView({ behavior: 'smooth', block: 'center' });
+};
+
+window.testForwarding = async function() {
+  alert('Test call initiated. Your LiveKit AI agent should answer within 5 seconds. Check the Call Center logs for results.');
+};
+
+window.testSipConnection = async function() {
+  try {
+    var resp = await saFetch('/api/admin/superadmin/telephony-sip-test', { method: 'POST' });
+    var data = await resp.json();
+    var msg = document.getElementById('tel-trunk-msg');
+    showTelMsg(msg, data.success ? 'success' : 'error', data.success ? 'SIP connection test passed!' : (data.error || 'Connection test failed'));
+  } catch(e) { alert('Test failed: ' + e.message); }
+};
+
+function showTelMsg(el, type, text) {
+  if (!el) return;
+  el.className = 'text-sm px-4 py-3 rounded-lg ' + (type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-teal-200');
+  el.innerHTML = '<i class="fas ' + (type === 'success' ? 'fa-check-circle' : 'fa-times-circle') + ' mr-2"></i>' + text;
+}
+
+// ============================================================
+// VIEW: PAYWALL / APP STORE READINESS
+// ============================================================
+function renderPaywallView() {
+  return `
+  <div class="space-y-6">
+    <h2 class="text-xl font-bold text-gray-800"><i class="fas fa-shield-alt mr-2 text-indigo-500"></i>Paywall & App Store Readiness</h2>
+    <div id="paywall-content" class="text-center py-12 text-gray-400"><i class="fas fa-spinner fa-spin text-2xl"></i><p class="mt-2">Checking readiness...</p></div>
+  </div>`;
+}
+
+async function loadPaywallStatus() {
+  try {
+    var resp = await saFetch('/api/admin/superadmin/paywall-status');
+    var d = await resp.json();
+    var el = document.getElementById('paywall-content');
+    if (!el) return;
+
+    var checkIcon = function(ok) { return ok ? '<i class="fas fa-check-circle text-green-500"></i>' : '<i class="fas fa-times-circle text-teal-400"></i>'; };
+
+    el.innerHTML = `
+    <div class="grid md:grid-cols-3 gap-6 mb-6">
+      <div class="bg-white border border-gray-200 rounded-xl p-6">
+        <h3 class="font-bold text-gray-800 mb-3"><i class="fas fa-credit-card mr-2 text-blue-500"></i>Payment Gateway</h3>
+        <ul class="space-y-2 text-sm">
+          <li class="flex items-center gap-2">${checkIcon(d.payment_gateway.square_configured)} Square</li>
+          <li class="flex items-center gap-2">${checkIcon(d.payment_gateway.stripe_configured)} Stripe</li>
+        </ul>
+      </div>
+      <div class="bg-white border border-gray-200 rounded-xl p-6">
+        <h3 class="font-bold text-gray-800 mb-3"><i class="fas fa-tags mr-2 text-green-500"></i>Subscription Model</h3>
+        <ul class="space-y-2 text-sm">
+          <li class="flex items-center gap-2">${checkIcon(d.subscription_model.has_pricing)} Pricing Set${d.subscription_model.monthly_price_cents ? ' ($' + (d.subscription_model.monthly_price_cents / 100).toFixed(2) + '/mo)' : ''}</li>
+          <li class="flex items-center gap-2">${checkIcon(d.subscription_model.has_credit_packages)} Credit Packages</li>
+        </ul>
+      </div>
+      <div class="bg-white border border-gray-200 rounded-xl p-6">
+        <h3 class="font-bold text-gray-800 mb-3"><i class="fas fa-mobile-alt mr-2 text-indigo-500"></i>App Store</h3>
+        <ul class="space-y-2 text-sm">
+          <li class="flex items-center gap-2">${checkIcon(d.app_store_requirements.user_auth_system)} User Auth</li>
+          <li class="flex items-center gap-2">${checkIcon(d.app_store_requirements.free_trial_enabled)} Free Trial</li>
+          <li class="flex items-center gap-2">${checkIcon(d.app_store_requirements.terms_of_service)} Terms of Service</li>
+          <li class="flex items-center gap-2">${checkIcon(d.app_store_requirements.privacy_policy)} Privacy Policy</li>
+          <li class="flex items-center gap-2">${checkIcon(d.app_store_requirements.app_store_listing)} App Store Listing</li>
+        </ul>
+      </div>
+    </div>
+    <div class="bg-${d.overall_ready ? 'green' : 'amber'}-50 border border-${d.overall_ready ? 'green' : 'amber'}-200 rounded-xl p-6">
+      <h3 class="font-bold text-gray-800 mb-2">${d.overall_ready ? '<i class="fas fa-rocket mr-2 text-green-600"></i>Ready for Launch!' : '<i class="fas fa-exclamation-triangle mr-2 text-amber-600"></i>Missing Requirements'}</h3>
+      ${d.missing_for_launch.length > 0 ? '<ul class="text-sm text-gray-600 space-y-1 list-disc list-inside">' + d.missing_for_launch.map(function(m) { return '<li>' + m + '</li>'; }).join('') + '</ul>' : '<p class="text-sm text-green-700">All checks passed. You are ready to submit to the App Store.</p>'}
+    </div>`;
+  } catch (e) {
+    var el = document.getElementById('paywall-content');
+    if (el) el.innerHTML = '<div class="text-red-500">Failed to load paywall status</div>';
+  }
+}
+
+// ============================================================
+// REVENUE PIPELINE — Conversion funnel & deal analytics
+// ============================================================
+function renderRevenuePipelineView() {
+  return `
+    <div class="mb-6">
+      <h2 class="text-2xl font-black text-gray-900"><i class="fas fa-funnel-dollar mr-2 text-green-500"></i>Revenue Pipeline</h2>
+      <p class="text-sm text-gray-500 mt-1">Track proposals through acceptance, invoicing, and payment</p>
+    </div>
+    <div id="pipeline-content">
+      <div class="flex items-center justify-center py-12">
+        <div class="w-8 h-8 border-4 border-green-200 border-t-green-600 rounded-full animate-spin"></div>
+        <span class="ml-3 text-gray-500">Loading pipeline data...</span>
+      </div>
+    </div>`;
+}
+
+async function loadRevenuePipeline() {
+  try {
+    const res = await saFetch('/api/crm/analytics/pipeline');
+    if (!res) return;
+    const d = await res.json();
+    const el = document.getElementById('pipeline-content');
+    if (!el) return;
+
+    const stages = d.stages || [];
+    const p = d.proposals || {};
+    const inv = d.invoices || {};
+    const convRate = d.conversion_rate || 0;
+    const avgDeal = d.avg_deal_size || 0;
+
+    // Funnel visualization
+    const stageNames = { lead: 'Leads', proposal_sent: 'Sent', proposal_viewed: 'Viewed', proposal_accepted: 'Accepted', invoice_sent: 'Invoiced', invoice_paid: 'Paid' };
+    const stageColors = { lead: 'blue', proposal_sent: 'sky', proposal_viewed: 'yellow', proposal_accepted: 'green', invoice_sent: 'purple', invoice_paid: 'emerald' };
+    const stageIcons = { lead: 'fa-user-plus', proposal_sent: 'fa-paper-plane', proposal_viewed: 'fa-eye', proposal_accepted: 'fa-check-circle', invoice_sent: 'fa-file-invoice', invoice_paid: 'fa-money-bill-wave' };
+
+    let funnelHtml = '<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">';
+    const allStages = ['lead', 'proposal_sent', 'proposal_viewed', 'proposal_accepted', 'invoice_sent', 'invoice_paid'];
+    for (const stg of allStages) {
+      const data = stages.find(function(s) { return s.stage === stg; }) || { count: 0, total_amount: 0 };
+      const col = stageColors[stg] || 'gray';
+      funnelHtml += '<div class="bg-white border border-gray-200 rounded-xl p-4 text-center hover:shadow-md transition-shadow">' +
+        '<i class="fas ' + (stageIcons[stg] || 'fa-circle') + ' text-2xl text-' + col + '-500 mb-2"></i>' +
+        '<p class="text-2xl font-black text-gray-800">' + (data.count || 0) + '</p>' +
+        '<p class="text-xs text-gray-500">' + (stageNames[stg] || stg) + '</p>' +
+        '<p class="text-xs font-bold text-' + col + '-600 mt-1">$' + parseFloat(data.total_amount || 0).toLocaleString('en-CA', {minimumFractionDigits: 0, maximumFractionDigits: 0}) + '</p>' +
+        '</div>';
+    }
+    funnelHtml += '</div>';
+
+    // KPI cards
+    let kpiHtml = '<div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">' +
+      samc('Conversion Rate', convRate + '%', 'fa-percentage', 'green') +
+      samc('Avg Deal Size', '$' + avgDeal.toLocaleString('en-CA', {minimumFractionDigits: 0}), 'fa-dollar-sign', 'blue') +
+      samc('Revenue (30d)', '$' + parseFloat(inv.paid_amount || 0).toLocaleString('en-CA', {minimumFractionDigits: 0}), 'fa-money-bill-wave', 'emerald') +
+      samc('Outstanding', '$' + parseFloat(inv.outstanding_amount || 0).toLocaleString('en-CA', {minimumFractionDigits: 0}), 'fa-clock', 'amber') +
+      '</div>';
+
+    // Proposal stats
+    let proposalHtml = saSection('Proposal Performance (Last 30 Days)', 'fa-chart-pie', '<div class="grid grid-cols-2 md:grid-cols-4 gap-4">' +
+      '<div class="text-center p-4 bg-blue-50 rounded-xl"><p class="text-2xl font-bold text-blue-700">' + (p.total || 0) + '</p><p class="text-xs text-gray-500">Total Sent</p></div>' +
+      '<div class="text-center p-4 bg-green-50 rounded-xl"><p class="text-2xl font-bold text-green-700">' + (p.accepted || 0) + '</p><p class="text-xs text-gray-500">Accepted</p></div>' +
+      '<div class="text-center p-4 bg-red-50 rounded-xl"><p class="text-2xl font-bold text-red-700">' + (p.declined || 0) + '</p><p class="text-xs text-gray-500">Declined</p></div>' +
+      '<div class="text-center p-4 bg-yellow-50 rounded-xl"><p class="text-2xl font-bold text-yellow-700">' + (p.pending || 0) + '</p><p class="text-xs text-gray-500">Pending</p></div>' +
+      '</div>' +
+      '<div class="mt-4 bg-green-50 border border-green-200 rounded-lg p-4 text-center">' +
+      '<p class="text-sm text-gray-600">Accepted Revenue</p>' +
+      '<p class="text-3xl font-black text-green-700">$' + parseFloat(p.accepted_amount || 0).toLocaleString('en-CA', {minimumFractionDigits: 2}) + ' CAD</p>' +
+      '</div>');
+
+    el.innerHTML = funnelHtml + kpiHtml + proposalHtml;
+  } catch (e) {
+    var el = document.getElementById('pipeline-content');
+    if (el) el.innerHTML = '<div class="text-center py-8 text-gray-500"><i class="fas fa-info-circle mr-1"></i>No pipeline data yet. Send your first proposal to start tracking.</div>';
+  }
+}
+
+// ============================================================
+// NOTIFICATIONS ADMIN — View & manage notifications
+// ============================================================
+function renderNotificationsAdminView() {
+  return `
+    <div class="mb-6 flex items-center justify-between">
+      <div>
+        <h2 class="text-2xl font-black text-gray-900"><i class="fas fa-bell mr-2 text-amber-500"></i>Notifications</h2>
+        <p class="text-sm text-gray-500 mt-1">System alerts, proposal activity, and payment notifications</p>
+      </div>
+      <button onclick="markAllNotificationsRead()" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium text-gray-700">
+        <i class="fas fa-check-double mr-1"></i>Mark All Read
+      </button>
+    </div>
+    <div id="notifications-content">
+      <div class="flex items-center justify-center py-12">
+        <div class="w-8 h-8 border-4 border-amber-200 border-t-amber-600 rounded-full animate-spin"></div>
+        <span class="ml-3 text-gray-500">Loading notifications...</span>
+      </div>
+    </div>`;
+}
+
+async function loadNotifications() {
+  try {
+    const res = await saFetch('/api/crm/notifications');
+    if (!res) return;
+    const d = await res.json();
+    const el = document.getElementById('notifications-content');
+    if (!el) return;
+
+    const notifs = d.notifications || [];
+    const unread = d.unread_count || 0;
+
+    if (notifs.length === 0) {
+      el.innerHTML = '<div class="text-center py-12 bg-white rounded-xl border border-gray-200"><i class="fas fa-bell-slash text-gray-300 text-4xl mb-3"></i><p class="text-gray-500">No notifications yet</p></div>';
+      return;
+    }
+
+    const typeIcons = {
+      proposal_accepted: 'fa-check-circle text-green-500',
+      proposal_declined: 'fa-times-circle text-red-500',
+      invoice_paid: 'fa-money-bill-wave text-emerald-500',
+      lead_captured: 'fa-user-plus text-blue-500',
+      call_answered: 'fa-phone text-teal-500',
+      followup_due: 'fa-clock text-amber-500'
+    };
+
+    let html = '<div class="mb-4">' + samc('Unread', unread, 'fa-bell', 'amber') + '</div>';
+    html += '<div class="space-y-2">';
+    for (const n of notifs) {
+      const icon = typeIcons[n.type] || 'fa-info-circle text-gray-400';
+      const timeAgo = getTimeAgo(n.created_at);
+      html += '<div class="bg-white border border-gray-200 rounded-xl p-4 flex items-start gap-4 ' + (n.is_read ? 'opacity-60' : '') + ' hover:shadow-sm transition-shadow">' +
+        '<div class="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center flex-shrink-0"><i class="fas ' + icon + '"></i></div>' +
+        '<div class="flex-1 min-w-0">' +
+        '<p class="font-semibold text-gray-800 text-sm">' + (n.title || '') + '</p>' +
+        '<p class="text-gray-500 text-xs mt-0.5">' + (n.message || '') + '</p>' +
+        '<p class="text-gray-400 text-[10px] mt-1">' + timeAgo + '</p>' +
+        '</div>' +
+        (!n.is_read ? '<button onclick="markNotificationRead(' + n.id + ')" class="text-xs text-gray-400 hover:text-gray-600 flex-shrink-0"><i class="fas fa-check"></i></button>' : '') +
+        '</div>';
+    }
+    html += '</div>';
+    el.innerHTML = html;
+  } catch (e) {
+    var el = document.getElementById('notifications-content');
+    if (el) el.innerHTML = '<div class="text-red-500">Failed to load notifications</div>';
+  }
+}
+
+async function markNotificationRead(id) {
+  await saFetch('/api/crm/notifications/' + id + '/read', { method: 'POST' });
+  loadNotifications();
+}
+
+async function markAllNotificationsRead() {
+  await saFetch('/api/crm/notifications/all/read', { method: 'POST' });
+  loadNotifications();
+}
+
+function getTimeAgo(dateStr) {
+  if (!dateStr) return '';
+  var diff = Date.now() - new Date(dateStr).getTime();
+  var mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'Just now';
+  if (mins < 60) return mins + 'm ago';
+  var hrs = Math.floor(mins / 60);
+  if (hrs < 24) return hrs + 'h ago';
+  var days = Math.floor(hrs / 24);
+  if (days < 7) return days + 'd ago';
+  return new Date(dateStr).toLocaleDateString('en-CA');
+}
+
+// ============================================================
+// WEBHOOKS MANAGEMENT — Configure webhook endpoints
+// ============================================================
+function renderWebhooksView() {
+  return `
+    <div class="mb-6 flex items-center justify-between">
+      <div>
+        <h2 class="text-2xl font-black text-gray-900"><i class="fas fa-plug mr-2 text-purple-500"></i>Webhooks</h2>
+        <p class="text-sm text-gray-500 mt-1">Send real-time event notifications to external services (Slack, Zapier, etc.)</p>
+      </div>
+      <button onclick="showAddWebhookForm()" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium">
+        <i class="fas fa-plus mr-1"></i>Add Webhook
+      </button>
+    </div>
+    <div id="webhook-form" class="hidden mb-6 bg-white border border-gray-200 rounded-xl p-6">
+      <h3 class="font-bold text-gray-800 mb-4">New Webhook</h3>
+      <div class="grid md:grid-cols-2 gap-4 mb-4">
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 mb-1">Event Type</label>
+          <select id="webhook-event" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
+            <option value="proposal_accepted">Proposal Accepted</option>
+            <option value="proposal_declined">Proposal Declined</option>
+            <option value="invoice_paid">Invoice Paid</option>
+            <option value="lead_captured">Lead Captured</option>
+            <option value="call_answered">Call Answered</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 mb-1">URL</label>
+          <input type="url" id="webhook-url" placeholder="https://hooks.slack.com/services/..." class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
+        </div>
+      </div>
+      <div class="mb-4">
+        <label class="block text-xs font-semibold text-gray-500 mb-1">Secret (optional)</label>
+        <input type="text" id="webhook-secret" placeholder="Signing secret for verification" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
+      </div>
+      <div class="flex gap-2">
+        <button onclick="saveWebhook()" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium">Save Webhook</button>
+        <button onclick="document.getElementById('webhook-form').classList.add('hidden')" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium">Cancel</button>
+      </div>
+    </div>
+    <div id="webhooks-content">
+      <div class="flex items-center justify-center py-12">
+        <div class="w-8 h-8 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin"></div>
+        <span class="ml-3 text-gray-500">Loading webhooks...</span>
+      </div>
+    </div>`;
+}
+
+function showAddWebhookForm() {
+  document.getElementById('webhook-form').classList.remove('hidden');
+}
+
+async function loadWebhooks() {
+  try {
+    const res = await saFetch('/api/crm/webhooks');
+    if (!res) return;
+    const d = await res.json();
+    const el = document.getElementById('webhooks-content');
+    if (!el) return;
+
+    const hooks = d.webhooks || [];
+    if (hooks.length === 0) {
+      el.innerHTML = '<div class="text-center py-12 bg-white rounded-xl border border-gray-200"><i class="fas fa-plug text-gray-300 text-4xl mb-3"></i><p class="text-gray-500">No webhooks configured</p><p class="text-gray-400 text-xs mt-1">Add a webhook to receive real-time notifications</p></div>';
+      return;
+    }
+
+    var html = '<div class="space-y-3">';
+    for (var h of hooks) {
+      var eventLabel = { proposal_accepted: 'Proposal Accepted', proposal_declined: 'Proposal Declined', invoice_paid: 'Invoice Paid', lead_captured: 'Lead Captured', call_answered: 'Call Answered' }[h.event_type] || h.event_type;
+      html += '<div class="bg-white border border-gray-200 rounded-xl p-4 flex items-center justify-between">' +
+        '<div class="flex items-center gap-3">' +
+        '<div class="w-10 h-10 rounded-full bg-purple-50 flex items-center justify-center"><i class="fas fa-plug text-purple-500"></i></div>' +
+        '<div><p class="font-semibold text-gray-800 text-sm">' + eventLabel + '</p><p class="text-gray-400 text-xs truncate max-w-xs">' + h.url + '</p></div>' +
+        '</div>' +
+        '<div class="flex items-center gap-2">' +
+        '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold ' + (h.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500') + '">' + (h.is_active ? 'ACTIVE' : 'INACTIVE') + '</span>' +
+        '<button onclick="deleteWebhook(' + h.id + ')" class="text-red-400 hover:text-red-600 text-xs"><i class="fas fa-trash"></i></button>' +
+        '</div></div>';
+    }
+    html += '</div>';
+    el.innerHTML = html;
+  } catch (e) {
+    var el = document.getElementById('webhooks-content');
+    if (el) el.innerHTML = '<div class="text-red-500">Failed to load webhooks</div>';
+  }
+}
+
+async function saveWebhook() {
+  var event_type = document.getElementById('webhook-event').value;
+  var url = document.getElementById('webhook-url').value;
+  var secret = document.getElementById('webhook-secret').value;
+  if (!url) { alert('URL is required'); return; }
+
+  try {
+    var res = await saFetch('/api/crm/webhooks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ event_type: event_type, url: url, secret: secret })
+    });
+    var data = await res.json();
+    if (data.success) {
+      document.getElementById('webhook-form').classList.add('hidden');
+      document.getElementById('webhook-url').value = '';
+      document.getElementById('webhook-secret').value = '';
+      loadWebhooks();
+    } else {
+      alert(data.error || 'Failed to save');
+    }
+  } catch (e) { alert('Error saving webhook'); }
+}
+
+async function deleteWebhook(id) {
+  if (!confirm('Delete this webhook?')) return;
+  await saFetch('/api/crm/webhooks/' + id, { method: 'DELETE' });
+  loadWebhooks();
+}
+
+// ============================================================
+// CUSTOMER ONBOARDING — Provision accounts + Secretary AI
+// ============================================================
+function renderCustomerOnboardingView() {
+  var d = SA.data.onboarding || {};
+  var customers = d.customers || [];
+  var rows = customers.map(function(c) {
+    var secBadge = c.secretary_enabled ? '<span class="px-2 py-0.5 bg-green-100 text-green-800 rounded-full text-xs font-medium"><i class="fas fa-check-circle mr-1"></i>Active</span>' : '<span class="px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full text-xs font-medium">Off</span>';
+    var modeBadge = c.secretary_mode === 'always_on' ? '<span class="text-xs text-blue-600 font-medium">Always On</span>' : c.secretary_mode === 'answering_service' ? '<span class="text-xs text-purple-600 font-medium">Answering</span>' : '<span class="text-xs text-sky-600 font-medium">Receptionist</span>';
+    var provBadge = c.phone_provider === 'livekit' ? '<span class="px-1.5 py-0.5 bg-violet-100 text-violet-700 rounded text-[10px] font-bold">LiveKit</span>' : c.phone_provider === 'twilio' ? '<span class="px-1.5 py-0.5 bg-red-100 text-red-700 rounded text-[10px] font-bold">Twilio</span>' : '<span class="px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded text-[10px]">N/A</span>';
+    return '<tr class="border-b border-gray-100 hover:bg-gray-50">' +
+      '<td class="px-4 py-3"><div class="font-bold text-gray-800 text-sm">' + (c.business_name || c.contact_name || 'N/A') + '</div><div class="text-xs text-gray-500">' + (c.email || '') + '</div></td>' +
+      '<td class="px-4 py-3 text-sm text-gray-600"><div>' + (c.personal_phone || c.phone || '-') + '</div><div class="text-[10px] text-gray-400">Personal Cell</div></td>' +
+      '<td class="px-4 py-3 text-sm text-gray-600"><div class="font-mono">' + (c.agent_phone_number || c.secretary_phone_number || '-') + '</div><div class="text-[10px] text-gray-400">AI Agent #</div></td>' +
+      '<td class="px-4 py-3 text-center">' + provBadge + '</td>' +
+      '<td class="px-4 py-3 text-center">' + secBadge + '</td>' +
+      '<td class="px-4 py-3 text-center">' + modeBadge + '</td>' +
+      '<td class="px-4 py-3 text-xs text-gray-400">' + fmtDate(c.created_at) + '</td>' +
+      '<td class="px-4 py-3"><button onclick="toggleSecretaryMode(' + c.id + ', ' + (c.secretary_enabled ? 0 : 1) + ')" class="text-xs ' + (c.secretary_enabled ? 'text-teal-600 hover:text-teal-800' : 'text-green-600 hover:text-green-800') + ' font-medium">' + (c.secretary_enabled ? '<i class="fas fa-power-off mr-1"></i>Disable' : '<i class="fas fa-play mr-1"></i>Enable') + '</button></td>' +
+      '</tr>';
+  }).join('');
+
+  return '<div class="mb-6"><h2 class="text-2xl font-black text-gray-900"><i class="fas fa-user-cog mr-2 text-indigo-500"></i>Customer Onboarding — Roofer Secretary AI</h2><p class="text-sm text-gray-500 mt-1">Provision new customer accounts, assign phone numbers, and set up Secretary AI call forwarding</p></div>' +
+
+    // --- Twilio/Phone Provider Guide ---
+    '<div class="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-2xl p-5 mb-6">' +
+    '<div class="flex items-start gap-3">' +
+    '<div class="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center shrink-0"><i class="fas fa-phone-volume text-amber-600"></i></div>' +
+    '<div>' +
+    '<h3 class="font-bold text-amber-900 mb-1">Phone Number Setup Guide</h3>' +
+    '<p class="text-xs text-amber-800 leading-relaxed mb-3">Each Roofer Secretary AI customer needs <b>two phone numbers</b>:</p>' +
+    '<div class="grid md:grid-cols-2 gap-4">' +
+    '<div class="bg-white rounded-xl p-4 border border-amber-200">' +
+    '<div class="flex items-center gap-2 mb-2"><span class="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center text-xs font-bold text-blue-700">1</span><span class="font-bold text-gray-800 text-sm">Personal Phone Number</span></div>' +
+    '<p class="text-xs text-gray-600 leading-relaxed">The customer\'s <b>personal cell phone</b> they currently use for business. This is the number they will <b>forward calls FROM</b> when they can\'t answer (busy, after hours, etc.). The customer sets up call forwarding through their cell provider (Telus, Bell, Rogers, etc.).</p>' +
+    '</div>' +
+    '<div class="bg-white rounded-xl p-4 border border-amber-200">' +
+    '<div class="flex items-center gap-2 mb-2"><span class="w-6 h-6 bg-purple-100 rounded-full flex items-center justify-center text-xs font-bold text-purple-700">2</span><span class="font-bold text-gray-800 text-sm">Agent Phone Number (SIP/VoIP)</span></div>' +
+    '<p class="text-xs text-gray-600 leading-relaxed">A purchased SIP phone number the AI agent uses for <b>inbound and outbound</b> calls. Customers must purchase this from a provider like <b>Twilio</b>, <b>Vonage</b>, or <b>Telnyx</b>.</p>' +
+    '<div class="mt-2 p-2 bg-violet-50 rounded-lg border border-violet-200">' +
+    '<p class="text-[10px] text-violet-700 font-medium"><i class="fas fa-star mr-1"></i><b>dev@reusecanada.ca</b> uses pre-owned LiveKit number: <span class="font-mono">+1 (484) 964-9758</span></p>' +
+    '</div>' +
+    '</div>' +
+    '</div>' +
+    '<div class="mt-3 bg-white rounded-xl p-3 border border-amber-200">' +
+    '<p class="text-xs font-bold text-gray-700 mb-1"><i class="fas fa-external-link-alt mr-1 text-amber-600"></i>Recommended SIP Phone Providers:</p>' +
+    '<div class="flex flex-wrap gap-2">' +
+    '<a href="https://www.twilio.com/en-us/phone-numbers" target="_blank" class="px-3 py-1.5 bg-red-50 border border-teal-200 rounded-lg text-xs font-bold text-red-700 hover:bg-red-100 transition-colors"><i class="fas fa-phone mr-1"></i>Twilio — Buy Phone Number</a>' +
+    '<a href="https://www.vonage.com/communications-apis/phone-numbers/" target="_blank" class="px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-lg text-xs font-bold text-blue-700 hover:bg-blue-100 transition-colors"><i class="fas fa-phone mr-1"></i>Vonage Numbers</a>' +
+    '<a href="https://telnyx.com/products/phone-numbers" target="_blank" class="px-3 py-1.5 bg-green-50 border border-green-200 rounded-lg text-xs font-bold text-green-700 hover:bg-green-100 transition-colors"><i class="fas fa-phone mr-1"></i>Telnyx Numbers</a>' +
+    '</div>' +
+    '<p class="text-[10px] text-gray-400 mt-2">After purchasing, enter the number in the "Agent Phone Number" field below. Configure SIP trunk credentials in the Secretary AI telephony settings.</p>' +
+    '</div>' +
+    '</div></div></div>' +
+
+    // --- Create New Customer Form ---
+    '<div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6">' +
+    '<div class="flex items-center justify-between mb-4"><h3 class="font-bold text-gray-800 text-lg"><i class="fas fa-user-plus mr-2 text-indigo-500"></i>Create New Customer</h3></div>' +
+    '<div id="onboard-form" class="space-y-4">' +
+
+    // Row 1: Basic info
+    '<div class="grid grid-cols-1 md:grid-cols-3 gap-4">' +
+    '<div><label class="text-xs text-gray-500 font-medium block mb-1">Business Name</label><input id="ob-business" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="ABC Roofing Ltd"></div>' +
+    '<div><label class="text-xs text-gray-500 font-medium block mb-1">Contact Name *</label><input id="ob-name" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="John Smith"></div>' +
+    '<div><label class="text-xs text-gray-500 font-medium block mb-1">Email *</label><input id="ob-email" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="john@abcroofing.ca" type="email"></div>' +
+    '</div>' +
+
+    // Row 2: Password + Secretary Mode
+    '<div class="grid grid-cols-1 md:grid-cols-3 gap-4">' +
+    '<div><label class="text-xs text-gray-500 font-medium block mb-1">Password *</label><input id="ob-password" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Secure password" type="text"></div>' +
+    '<div><label class="text-xs text-gray-500 font-medium block mb-1">Secretary AI Mode</label><select id="ob-sec-mode" class="w-full border rounded-lg px-3 py-2 text-sm"><option value="receptionist">Receptionist</option><option value="answering_service">Answering Service</option><option value="always_on">Always On</option></select></div>' +
+    '<div><label class="text-xs text-gray-500 font-medium block mb-1">Phone Provider</label><select id="ob-provider" class="w-full border rounded-lg px-3 py-2 text-sm"><option value="twilio">Twilio</option><option value="livekit">LiveKit (Pre-owned)</option><option value="vonage">Vonage</option><option value="telnyx">Telnyx</option></select></div>' +
+    '</div>' +
+
+    // Row 3: Phone Numbers — THE KEY FIELDS
+    '<div class="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-200">' +
+    '<h4 class="text-sm font-bold text-blue-800 mb-3"><i class="fas fa-phone-alt mr-1"></i>Phone Number Configuration</h4>' +
+    '<div class="grid grid-cols-1 md:grid-cols-2 gap-4">' +
+
+    '<div>' +
+    '<label class="text-xs text-gray-600 font-bold block mb-1"><span class="inline-flex items-center gap-1"><span class="w-5 h-5 bg-blue-100 rounded-full flex items-center justify-center text-[10px] font-bold text-blue-700">1</span> Personal Phone Number</span></label>' +
+    '<input id="ob-personal-phone" class="w-full border-2 border-blue-200 rounded-lg px-3 py-2.5 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200" placeholder="+1 403 555 1234">' +
+    '<p class="text-[10px] text-gray-500 mt-1"><i class="fas fa-info-circle mr-1"></i>Customer\'s personal cell — they forward calls <b>FROM</b> this number when unavailable</p>' +
+    '</div>' +
+
+    '<div>' +
+    '<label class="text-xs text-gray-600 font-bold block mb-1"><span class="inline-flex items-center gap-1"><span class="w-5 h-5 bg-purple-100 rounded-full flex items-center justify-center text-[10px] font-bold text-purple-700">2</span> Agent Phone Number (SIP)</span></label>' +
+    '<input id="ob-agent-phone" class="w-full border-2 border-purple-200 rounded-lg px-3 py-2.5 text-sm focus:border-purple-500 focus:ring-2 focus:ring-purple-200" placeholder="+1 484 964 9758">' +
+    '<p class="text-[10px] text-gray-500 mt-1"><i class="fas fa-robot mr-1"></i>Purchased Twilio/LiveKit number the AI agent uses for inbound/outbound calls</p>' +
+    '</div>' +
+
+    '</div>' +
+    '<div class="mt-3 p-2 bg-white rounded-lg border border-blue-100 flex items-center gap-2">' +
+    '<i class="fas fa-lightbulb text-amber-500 text-sm"></i>' +
+    '<p class="text-[10px] text-gray-600"><b>How it works:</b> Customer forwards their personal phone to the Agent Phone # when they can\'t answer. The AI Secretary picks up, handles the call, and routes/notifies as configured. Customer sets up forwarding via their cell provider (Telus: *21*[number]#, Rogers: **21*[number]#, Bell: *72[number]).</p>' +
+    '</div>' +
+    '</div>' +
+
+    // Row 4: Notes + Enable toggle
+    '<div class="grid grid-cols-1 md:grid-cols-2 gap-4">' +
+    '<div><label class="text-xs text-gray-500 font-medium block mb-1">Notes</label><input id="ob-notes" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Optional notes about this customer"></div>' +
+    '<div class="flex items-end pb-1"><label class="flex items-center gap-2 text-sm"><input type="checkbox" id="ob-enable-sec" checked class="rounded"> Enable Secretary AI on creation</label></div>' +
+    '</div>' +
+
+    '</div>' +
+    '<button onclick="createOnboardingCustomer()" class="mt-5 bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3 rounded-xl font-bold text-sm transition-all shadow-md hover:shadow-lg"><i class="fas fa-user-plus mr-2"></i>Create Account & Setup Secretary AI</button>' +
+    '</div>' +
+
+    // --- Onboarded Customers Table ---
+    '<div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">' +
+    '<div class="p-4 border-b bg-gray-50 flex items-center justify-between"><h3 class="font-bold text-gray-800">Onboarded Customers (' + customers.length + ')</h3><button onclick="loadView(\'customer-onboarding\')" class="text-xs text-blue-600 hover:text-blue-800 font-medium"><i class="fas fa-sync mr-1"></i>Refresh</button></div>' +
+    (customers.length === 0 ? '<div class="p-8 text-center text-gray-400"><i class="fas fa-users text-3xl mb-3 opacity-30"></i><p>No customers onboarded yet</p></div>' :
+    '<div class="overflow-x-auto"><table class="w-full"><thead><tr class="bg-gray-50 text-xs text-gray-500 uppercase"><th class="px-4 py-3 text-left">Customer</th><th class="px-4 py-3 text-left">Personal Phone</th><th class="px-4 py-3 text-left">Agent Phone #</th><th class="px-4 py-3 text-center">Provider</th><th class="px-4 py-3 text-center">Secretary</th><th class="px-4 py-3 text-center">Mode</th><th class="px-4 py-3 text-left">Onboarded</th><th class="px-4 py-3 text-left">Action</th></tr></thead><tbody>' + rows + '</tbody></table></div>') +
+    '</div>';
+}
+
+async function createOnboardingCustomer() {
+  var email = document.getElementById('ob-email').value;
+  var password = document.getElementById('ob-password').value;
+  var contactName = document.getElementById('ob-name').value;
+  if (!email || !password) { alert('Email and Password are required'); return; }
+  if (!contactName) { alert('Contact Name is required'); return; }
+
+  var personalPhone = document.getElementById('ob-personal-phone').value;
+  var agentPhone = document.getElementById('ob-agent-phone').value;
+
+  if (!personalPhone) { alert('Personal Phone Number is required — this is the customer\'s cell they forward calls FROM'); return; }
+  if (!agentPhone) {
+    if (!confirm('No Agent Phone Number entered. The customer will need to purchase a phone number from Twilio or similar provider before Secretary AI can make/receive calls. Continue anyway?')) return;
+  }
+
+  var body = {
+    business_name: document.getElementById('ob-business').value,
+    contact_name: contactName,
+    email: email,
+    phone: personalPhone,
+    password: password,
+    secretary_mode: document.getElementById('ob-sec-mode').value,
+    personal_phone: personalPhone,
+    agent_phone_number: agentPhone,
+    phone_provider: document.getElementById('ob-provider').value,
+    // Map to legacy fields for backwards compatibility
+    secretary_phone_number: agentPhone,
+    call_forwarding_number: personalPhone,
+    notes: document.getElementById('ob-notes').value,
+    enable_secretary: document.getElementById('ob-enable-sec').checked
+  };
+
+  try {
+    var res = await saFetch('/api/admin/superadmin/onboarding/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    var data = await res.json();
+    if (data.success) {
+      var msg = 'Customer account created for ' + contactName + '!\n\n';
+      if (data.secretary_setup) {
+        msg += 'Secretary AI: ACTIVE\n';
+        msg += 'Agent Phone: ' + (data.agent_phone_number || agentPhone) + '\n';
+        msg += 'Personal Phone: ' + (data.personal_phone || personalPhone) + '\n\n';
+        msg += 'NEXT STEP: Customer must configure call forwarding on their cell provider:\n';
+        msg += '  Telus: *21*' + (data.agent_phone_number || agentPhone).replace(/[^0-9+]/g, '') + '#\n';
+        msg += '  Rogers: **21*' + (data.agent_phone_number || agentPhone).replace(/[^0-9+]/g, '') + '#\n';
+        msg += '  Bell: *72' + (data.agent_phone_number || agentPhone).replace(/[^0-9+]/g, '') + '\n';
+      } else {
+        msg += 'Secretary AI: NOT ACTIVE (no agent phone number provided)\n';
+        msg += 'Customer must purchase a SIP phone number from Twilio/Vonage/Telnyx first.';
+      }
+      alert(msg);
+      loadView('customer-onboarding');
+    } else {
+      alert(data.error || 'Failed to create customer');
+    }
+  } catch(e) { alert('Error creating customer: ' + e.message); }
+}
+
+async function toggleSecretaryMode(id, enable) {
+  try {
+    await saFetch('/api/admin/superadmin/onboarding/' + id + '/toggle-secretary', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled: enable })
+    });
+    loadView('customer-onboarding');
+  } catch(e) { alert('Error toggling secretary'); }
+}
+
+// ============================================================
+// SERVICE INVOICES — Cold-call customer invoicing
+// ============================================================
+function renderServiceInvoicesView() {
+  var d = SA.data.service_invoices || {};
+  var invoices = d.invoices || [];
+  var rows = invoices.map(function(inv) {
+    var sBadge = { draft: 'bg-gray-100 text-gray-600', sent: 'bg-blue-100 text-blue-700', viewed: 'bg-purple-100 text-purple-700', paid: 'bg-green-100 text-green-800', overdue: 'bg-red-100 text-red-700', cancelled: 'bg-gray-100 text-gray-400' };
+    return '<tr class="border-b border-gray-100 hover:bg-gray-50">' +
+      '<td class="px-4 py-3 text-sm font-mono font-bold text-gray-800">' + (inv.invoice_number || '-') + '</td>' +
+      '<td class="px-4 py-3"><div class="font-medium text-gray-800 text-sm">' + (inv.customer_name || 'N/A') + '</div><div class="text-xs text-gray-500">' + (inv.customer_email || '') + '</div></td>' +
+      '<td class="px-4 py-3 text-sm font-bold text-gray-800">$' + parseFloat(inv.total || 0).toFixed(2) + '</td>' +
+      '<td class="px-4 py-3 text-center"><span class="px-2 py-0.5 ' + (sBadge[inv.status] || 'bg-gray-100 text-gray-600') + ' rounded-full text-xs font-medium capitalize">' + (inv.status || 'draft') + '</span></td>' +
+      '<td class="px-4 py-3 text-xs text-gray-400">' + fmtDate(inv.created_at) + '</td>' +
+      '<td class="px-4 py-3">' +
+        (inv.status === 'draft' ? '<button onclick="sendServiceInvoice(' + inv.id + ')" class="text-xs text-blue-600 hover:text-blue-800 font-medium mr-2"><i class="fas fa-paper-plane mr-1"></i>Send</button>' : '') +
+        (inv.payment_link ? '<a href="' + inv.payment_link + '" target="_blank" class="text-xs text-green-600 hover:text-green-800 font-medium"><i class="fas fa-external-link-alt mr-1"></i>Payment Link</a>' : '') +
+      '</td></tr>';
+  }).join('');
+
+  return '<div class="mb-6"><h2 class="text-2xl font-black text-gray-900"><i class="fas fa-file-invoice mr-2 text-amber-500"></i>Cold Call Invoices</h2><p class="text-sm text-gray-500 mt-1">Send invoices for Roofer Secretary AI subscriptions and setup fees to cold-call customers</p></div>' +
+    '<div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6">' +
+    '<h3 class="font-bold text-gray-800 text-lg mb-4">Create Service Invoice</h3>' +
+    '<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">' +
+    '<div><label class="text-xs text-gray-500 font-medium block mb-1">Customer Name</label><input id="si-name" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="John Smith"></div>' +
+    '<div><label class="text-xs text-gray-500 font-medium block mb-1">Customer Email *</label><input id="si-email" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="john@company.ca" type="email"></div>' +
+    '<div><label class="text-xs text-gray-500 font-medium block mb-1">Customer Phone</label><input id="si-phone" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="+1 403 555 1234"></div>' +
+    '</div>' +
+    '<div class="mb-4"><label class="text-xs text-gray-500 font-medium block mb-1">Line Items</label>' +
+    '<div id="si-items">' +
+    '<div class="flex gap-2 mb-2 si-item"><input class="flex-1 border rounded-lg px-3 py-2 text-sm si-desc" placeholder="Description" value="Roofer Secretary AI — Monthly Subscription"><input class="w-24 border rounded-lg px-3 py-2 text-sm text-right si-price" placeholder="Price" value="149.00" type="number" step="0.01"><button onclick="this.parentElement.remove()" class="text-red-400 hover:text-red-600 text-sm px-2"><i class="fas fa-trash"></i></button></div>' +
+    '<div class="flex gap-2 mb-2 si-item"><input class="flex-1 border rounded-lg px-3 py-2 text-sm si-desc" placeholder="Description" value="Secretary AI Setup Fee (One-Time)"><input class="w-24 border rounded-lg px-3 py-2 text-sm text-right si-price" placeholder="Price" value="299.00" type="number" step="0.01"><button onclick="this.parentElement.remove()" class="text-red-400 hover:text-red-600 text-sm px-2"><i class="fas fa-trash"></i></button></div>' +
+    '</div>' +
+    '<button onclick="addServiceInvoiceItem()" class="text-xs text-blue-600 hover:text-blue-800 font-medium mt-1"><i class="fas fa-plus mr-1"></i>Add Line Item</button></div>' +
+    '<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">' +
+    '<div><label class="text-xs text-gray-500 font-medium block mb-1">Due Date</label><input id="si-due" class="w-full border rounded-lg px-3 py-2 text-sm" type="date"></div>' +
+    '<div><label class="text-xs text-gray-500 font-medium block mb-1">Notes</label><input id="si-notes" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Optional invoice notes"></div>' +
+    '</div>' +
+    '<button onclick="createServiceInvoice()" class="bg-amber-600 hover:bg-amber-700 text-white px-6 py-2.5 rounded-xl font-bold text-sm transition-all shadow-md"><i class="fas fa-file-invoice mr-2"></i>Create Invoice</button>' +
+    '</div>' +
+    '<div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">' +
+    '<div class="p-4 border-b bg-gray-50"><h3 class="font-bold text-gray-800">Service Invoices (' + invoices.length + ')</h3></div>' +
+    (invoices.length === 0 ? '<div class="p-8 text-center text-gray-400"><i class="fas fa-file-invoice text-3xl mb-3 opacity-30"></i><p>No service invoices yet</p></div>' :
+    '<div class="overflow-x-auto"><table class="w-full"><thead><tr class="bg-gray-50 text-xs text-gray-500 uppercase"><th class="px-4 py-3 text-left">Invoice #</th><th class="px-4 py-3 text-left">Customer</th><th class="px-4 py-3 text-left">Total</th><th class="px-4 py-3 text-center">Status</th><th class="px-4 py-3 text-left">Created</th><th class="px-4 py-3 text-left">Actions</th></tr></thead><tbody>' + rows + '</tbody></table></div>') +
+    '</div>';
+}
+
+function addServiceInvoiceItem() {
+  var container = document.getElementById('si-items');
+  var row = document.createElement('div');
+  row.className = 'flex gap-2 mb-2 si-item';
+  row.innerHTML = '<input class="flex-1 border rounded-lg px-3 py-2 text-sm si-desc" placeholder="Description"><input class="w-24 border rounded-lg px-3 py-2 text-sm text-right si-price" placeholder="Price" type="number" step="0.01"><button onclick="this.parentElement.remove()" class="text-red-400 hover:text-red-600 text-sm px-2"><i class="fas fa-trash"></i></button>';
+  container.appendChild(row);
+}
+
+async function createServiceInvoice() {
+  var email = document.getElementById('si-email').value;
+  if (!email) { alert('Customer email is required'); return; }
+
+  var items = [];
+  document.querySelectorAll('.si-item').forEach(function(row) {
+    var desc = row.querySelector('.si-desc').value;
+    var price = parseFloat(row.querySelector('.si-price').value) || 0;
+    if (desc && price > 0) items.push({ description: desc, price: price });
+  });
+  if (items.length === 0) { alert('At least one line item is required'); return; }
+
+  var body = {
+    customer_name: document.getElementById('si-name').value,
+    customer_email: email,
+    customer_phone: document.getElementById('si-phone').value,
+    items: items,
+    due_date: document.getElementById('si-due').value,
+    notes: document.getElementById('si-notes').value
+  };
+
+  try {
+    var res = await saFetch('/api/admin/superadmin/service-invoices/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    var data = await res.json();
+    if (data.success) {
+      alert('Invoice ' + data.invoice_number + ' created! Total: $' + parseFloat(data.total).toFixed(2));
+      loadView('service-invoices');
+    } else {
+      alert(data.error || 'Failed to create invoice');
+    }
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+async function sendServiceInvoice(id) {
+  if (!confirm('Send this invoice to the customer via email with Square payment link?')) return;
+  try {
+    var res = await saFetch('/api/admin/superadmin/service-invoices/' + id + '/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    var data = await res.json();
+    if (data.success) {
+      alert('Invoice sent with payment link!');
+      loadView('service-invoices');
+    } else {
+      alert(data.error || 'Failed to send invoice');
+    }
+  } catch(e) { alert('Error sending: ' + e.message); }
+}
+
+// ============================================================
+// CALL CENTER MANAGEMENT — Track calls, manage sales scripts
+// ============================================================
+function renderCallCenterManageView() {
+  var stats = SA.data.cc_stats || {};
+  var scripts = (SA.data.cc_scripts || {}).scripts || [];
+  var today = stats.today || {};
+  var week = stats.week || {};
+  var recentCalls = stats.recent_calls || [];
+  var agents = stats.agent_performance || [];
+
+  var callRows = recentCalls.slice(0, 30).map(function(c) {
+    var outcome = c.call_outcome || 'unknown';
+    var oColor = { interested: 'text-green-600', demo_scheduled: 'text-blue-600', converted: 'text-emerald-700', not_interested: 'text-red-500', voicemail: 'text-gray-500', no_answer: 'text-gray-400', callback: 'text-purple-600' };
+    return '<tr class="border-b border-gray-100 hover:bg-gray-50 text-sm">' +
+      '<td class="px-3 py-2 text-gray-800 font-medium">' + (c.company_name || c.contact_name || 'Unknown') + '</td>' +
+      '<td class="px-3 py-2 text-gray-500">' + (c.agent_name || '-') + '</td>' +
+      '<td class="px-3 py-2 text-center"><span class="' + (oColor[outcome] || 'text-gray-500') + ' font-medium text-xs capitalize">' + outcome.replace('_', ' ') + '</span></td>' +
+      '<td class="px-3 py-2 text-gray-500 text-center">' + fmtSeconds(c.call_duration_seconds || 0) + '</td>' +
+      '<td class="px-3 py-2 text-gray-400 text-xs">' + fmtDateTime(c.started_at) + '</td>' +
+      '</tr>';
+  }).join('');
+
+  var agentRows = agents.map(function(a) {
+    return '<tr class="border-b border-gray-100">' +
+      '<td class="px-4 py-3 font-bold text-gray-800 text-sm">' + (a.agent_name || 'Unknown') + '</td>' +
+      '<td class="px-4 py-3 text-center text-sm">' + (a.total_calls || 0) + '</td>' +
+      '<td class="px-4 py-3 text-center text-sm text-green-600 font-medium">' + (a.connects || 0) + '</td>' +
+      '<td class="px-4 py-3 text-center text-sm text-blue-600 font-medium">' + (a.demos || 0) + '</td>' +
+      '<td class="px-4 py-3 text-center text-sm text-gray-500">' + fmtSeconds(a.avg_duration || 0) + '</td>' +
+      '</tr>';
+  }).join('');
+
+  var scriptsList = scripts.map(function(s) {
+    return '<div class="bg-gray-50 rounded-xl p-4 mb-3 border border-gray-100">' +
+      '<div class="flex items-center justify-between mb-2">' +
+      '<div><span class="font-bold text-gray-800 text-sm">' + s.name + '</span>' +
+      '<span class="ml-2 px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs capitalize">' + (s.category || 'cold_call').replace('_', ' ') + '</span>' +
+      (s.is_active ? '' : '<span class="ml-2 px-2 py-0.5 bg-red-100 text-red-600 rounded-full text-xs">Inactive</span>') +
+      '</div>' +
+      '<div class="flex gap-2">' +
+      '<button onclick="toggleScript(' + s.id + ', ' + (s.is_active ? 0 : 1) + ')" class="text-xs ' + (s.is_active ? 'text-red-500' : 'text-green-500') + '">' + (s.is_active ? '<i class="fas fa-pause"></i>' : '<i class="fas fa-play"></i>') + '</button>' +
+      '<button onclick="deleteScript(' + s.id + ')" class="text-xs text-gray-400 hover:text-red-500"><i class="fas fa-trash"></i></button>' +
+      '</div></div>' +
+      '<pre class="text-xs text-gray-600 whitespace-pre-wrap bg-white rounded-lg p-3 border max-h-40 overflow-y-auto">' + (s.script_body || '') + '</pre>' +
+      (s.notes ? '<p class="text-xs text-gray-400 mt-2"><i class="fas fa-sticky-note mr-1"></i>' + s.notes + '</p>' : '') +
+      '</div>';
+  }).join('');
+
+  return '<div class="mb-6"><h2 class="text-2xl font-black text-gray-900"><i class="fas fa-headset mr-2 text-cyan-500"></i>Call Center Management</h2><p class="text-sm text-gray-500 mt-1">Track all calls, agent performance, and manage sales scripts</p></div>' +
+    '<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">' +
+    samc('Today Calls', today.total_calls || 0, 'fa-phone', 'cyan', 'Connected: ' + (today.connected || 0)) +
+    samc('Hot Leads', today.hot_leads || 0, 'fa-fire', 'orange', 'Today') +
+    samc('Week Calls', week.total_calls || 0, 'fa-chart-bar', 'blue', 'Connected: ' + (week.connected || 0)) +
+    samc('Week Demos', week.demos || 0, 'fa-calendar-check', 'green', 'Converted: ' + (week.converted || 0)) +
+    '</div>' +
+    '<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">' +
+    '<div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">' +
+    '<div class="p-4 border-b bg-gray-50 flex items-center justify-between"><h3 class="font-bold text-gray-800">Recent Calls</h3><button onclick="loadView(\'call-center-manage\')" class="text-xs text-blue-600"><i class="fas fa-sync mr-1"></i>Refresh</button></div>' +
+    (recentCalls.length === 0 ? '<div class="p-6 text-center text-gray-400">No call logs yet</div>' :
+    '<div class="overflow-x-auto max-h-96 overflow-y-auto"><table class="w-full"><thead class="sticky top-0 bg-gray-50"><tr class="text-xs text-gray-500 uppercase"><th class="px-3 py-2 text-left">Prospect</th><th class="px-3 py-2 text-left">Agent</th><th class="px-3 py-2 text-center">Outcome</th><th class="px-3 py-2 text-center">Duration</th><th class="px-3 py-2 text-left">Time</th></tr></thead><tbody>' + callRows + '</tbody></table></div>') +
+    '</div>' +
+    '<div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">' +
+    '<div class="p-4 border-b bg-gray-50"><h3 class="font-bold text-gray-800">Agent Performance (7 Days)</h3></div>' +
+    (agents.length === 0 ? '<div class="p-6 text-center text-gray-400">No agent data</div>' :
+    '<div class="overflow-x-auto"><table class="w-full"><thead><tr class="bg-gray-50 text-xs text-gray-500 uppercase"><th class="px-4 py-3 text-left">Agent</th><th class="px-4 py-3 text-center">Calls</th><th class="px-4 py-3 text-center">Connects</th><th class="px-4 py-3 text-center">Demos</th><th class="px-4 py-3 text-center">Avg Duration</th></tr></thead><tbody>' + agentRows + '</tbody></table></div>') +
+    '</div></div>' +
+    '<div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">' +
+    '<div class="flex items-center justify-between mb-4"><h3 class="font-bold text-gray-800 text-lg"><i class="fas fa-scroll mr-2 text-blue-500"></i>Sales Scripts</h3>' +
+    '<button onclick="document.getElementById(\'new-script-form\').classList.toggle(\'hidden\')" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-sm font-medium"><i class="fas fa-plus mr-1"></i>New Script</button></div>' +
+    '<div id="new-script-form" class="hidden bg-blue-50 rounded-xl p-4 mb-4 border border-blue-100">' +
+    '<div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">' +
+    '<div><label class="text-xs text-gray-500 font-medium block mb-1">Script Name *</label><input id="ns-name" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Cold Call - Intro Pitch"></div>' +
+    '<div><label class="text-xs text-gray-500 font-medium block mb-1">Category</label><select id="ns-category" class="w-full border rounded-lg px-3 py-2 text-sm"><option value="cold_call">Cold Call</option><option value="follow_up">Follow Up</option><option value="demo">Demo</option><option value="close">Close</option><option value="objection_handler">Objection Handler</option></select></div>' +
+    '</div>' +
+    '<div class="mb-3"><label class="text-xs text-gray-500 font-medium block mb-1">Script Body *</label><textarea id="ns-body" class="w-full border rounded-lg px-3 py-2 text-sm h-32" placeholder="Hi [Name], this is [Agent] from RoofReporterAI..."></textarea></div>' +
+    '<div class="mb-3"><label class="text-xs text-gray-500 font-medium block mb-1">Notes</label><input id="ns-notes" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Optional notes about when to use"></div>' +
+    '<button onclick="createScript()" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-xl text-sm font-bold"><i class="fas fa-save mr-1"></i>Save Script</button>' +
+    '</div>' +
+    (scripts.length === 0 ? '<div class="text-center text-gray-400 py-6"><i class="fas fa-scroll text-3xl mb-3 opacity-30"></i><p>No sales scripts yet. Create one above.</p></div>' : scriptsList) +
+    '</div>';
+}
+
+async function createScript() {
+  var name = document.getElementById('ns-name').value;
+  var body = document.getElementById('ns-body').value;
+  if (!name || !body) { alert('Name and script body are required'); return; }
+
+  try {
+    var res = await saFetch('/api/admin/superadmin/sales-scripts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: name,
+        category: document.getElementById('ns-category').value,
+        script_body: body,
+        notes: document.getElementById('ns-notes').value
+      })
+    });
+    var data = await res.json();
+    if (data.success) {
+      loadView('call-center-manage');
+    } else {
+      alert(data.error || 'Failed to create script');
+    }
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+async function toggleScript(id, active) {
+  try {
+    await saFetch('/api/admin/superadmin/sales-scripts/' + id, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ is_active: active })
+    });
+    loadView('call-center-manage');
+  } catch(e) { alert('Error toggling script'); }
+}
+
+async function deleteScript(id) {
+  if (!confirm('Delete this sales script?')) return;
+  try {
+    await saFetch('/api/admin/superadmin/sales-scripts/' + id, { method: 'DELETE' });
+    loadView('call-center-manage');
+  } catch(e) { alert('Error deleting script'); }
+}
+
+// ============================================================
+// LIVEKIT AGENTS — Full Management Dashboard with Tabs
+// ============================================================
+function renderLiveKitAgentsView() {
+  var d = SA.data.livekit || {};
+  if (!d.configured) {
+    return saSection('LiveKit Agent Management', 'fa-robot',
+      '<div class="text-center py-12">' +
+        '<div class="w-16 h-16 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-4"><i class="fas fa-exclamation-triangle text-2xl text-red-500"></i></div>' +
+        '<h3 class="text-lg font-bold text-gray-800 mb-2">LiveKit Not Configured</h3>' +
+        '<p class="text-gray-500 mb-6 max-w-md mx-auto">' + (d.error || 'Set LIVEKIT_API_KEY, LIVEKIT_API_SECRET, and LIVEKIT_URL as Cloudflare Pages secrets.') + '</p>' +
+        '<div class="bg-gray-50 rounded-xl p-4 text-left max-w-lg mx-auto font-mono text-xs text-gray-600">' +
+          '<p class="mb-1">npx wrangler pages secret put LIVEKIT_API_KEY --project-name roofing-measurement-tool</p>' +
+          '<p class="mb-1">npx wrangler pages secret put LIVEKIT_API_SECRET --project-name roofing-measurement-tool</p>' +
+          '<p>npx wrangler pages secret put LIVEKIT_URL --project-name roofing-measurement-tool</p>' +
+        '</div>' +
+      '</div>');
+  }
+
+  var tab = SA.lkTab || 'overview';
+  var tabs = [
+    { id: 'overview', label: 'System Overview', icon: 'fa-tachometer-alt' },
+    { id: 'configs', label: 'Secretary Configs', icon: 'fa-users-cog' },
+    { id: 'phone-pool', label: 'Phone Pool', icon: 'fa-phone-square-alt' },
+    { id: 'deploy', label: 'Deploy Agent', icon: 'fa-rocket' },
+  ];
+  var tabsHtml = '<div class="flex flex-wrap gap-2 mb-6 border-b border-gray-200 pb-3">';
+  tabs.forEach(function(t) {
+    var active = t.id === tab;
+    tabsHtml += '<button onclick="SA.lkTab=\'' + t.id + '\';renderContent()" class="px-4 py-2 rounded-lg text-sm font-semibold transition ' +
+      (active ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 text-gray-600 hover:bg-gray-200') + '">' +
+      '<i class="fas ' + t.icon + ' mr-1.5"></i>' + t.label + '</button>';
+  });
+  tabsHtml += '<button onclick="loadView(\'livekit-agents\')" class="ml-auto px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-xs font-semibold text-gray-600 transition"><i class="fas fa-sync-alt mr-1"></i>Refresh All</button></div>';
+
+  var content = '';
+  if (tab === 'overview') content = renderLKOverviewTab(d);
+  else if (tab === 'configs') content = renderLKConfigsTab();
+  else if (tab === 'phone-pool') content = renderLKPhonePoolTab();
+  else if (tab === 'deploy') content = renderLKDeployTab();
+
+  return tabsHtml + content + '<div id="lk-modal"></div>';
+}
+
+function renderLKOverviewTab(d) {
+  var st = d.stats || {};
+  var err = d.error ? '<div class="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-800"><i class="fas fa-exclamation-triangle mr-2"></i>' + d.error + '</div>' : '';
+
+  var header =
+    '<div class="flex flex-wrap items-center gap-3 mb-6">' +
+      '<div class="flex items-center gap-2 bg-teal-50 text-teal-700 px-3 py-1.5 rounded-full text-xs font-semibold"><i class="fas fa-plug"></i> ' + (d.livekit_url || 'N/A') + '</div>' +
+      '<div class="flex items-center gap-2 bg-blue-50 text-blue-700 px-3 py-1.5 rounded-full text-xs font-semibold"><i class="fas fa-key"></i> ' + (d.api_key_preview || 'N/A') + '</div>' +
+      (d.livekit_sip_uri ? '<div class="flex items-center gap-2 bg-purple-50 text-purple-700 px-3 py-1.5 rounded-full text-xs font-semibold"><i class="fas fa-phone-volume"></i> ' + d.livekit_sip_uri + '</div>' : '') +
+    '</div>';
+
+  var stats =
+    '<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">' +
+      lkStatCard('Active Rooms', d.active_rooms || 0, 'fa-door-open', d.active_rooms > 0 ? 'bg-green-50 text-green-700' : 'bg-gray-50 text-gray-600') +
+      lkStatCard('Inbound Trunks', st.inbound_trunk_count || 0, 'fa-phone-alt', 'bg-blue-50 text-blue-700') +
+      lkStatCard('Dispatch Rules', st.dispatch_rule_count || 0, 'fa-route', 'bg-purple-50 text-purple-700') +
+      lkStatCard('Active Secretaries', st.active_secretaries || 0, 'fa-headset', 'bg-teal-50 text-teal-700') +
+      lkStatCard('Total Calls', st.total_calls_handled || 0, 'fa-chart-line', 'bg-indigo-50 text-indigo-700') +
+      lkStatCard('Phone Numbers', st.phone_number_count || 0, 'fa-mobile-alt', 'bg-orange-50 text-orange-700') +
+    '</div>';
+
+  // Active Rooms
+  var roomsHtml = '';
+  var rooms = d.rooms || [];
+  if (rooms.length === 0) {
+    roomsHtml = '<p class="text-gray-400 text-sm py-4 text-center">No active rooms</p>';
+  } else {
+    roomsHtml = '<div class="space-y-2">';
+    rooms.forEach(function(r) {
+      roomsHtml += '<div class="flex items-center justify-between p-3 bg-green-50 rounded-lg">' +
+        '<div><span class="font-semibold text-sm text-gray-800">' + r.name + '</span>' +
+        '<span class="ml-2 text-xs text-gray-500">SID: ' + (r.sid || '').slice(0,12) + '...</span></div>' +
+        '<div class="flex items-center gap-2">' +
+          '<span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">' + (r.num_participants || 0) + ' participants</span>' +
+          '<button onclick="lkDeleteRoom(\'' + r.name + '\')" class="text-xs text-red-500 hover:text-red-700"><i class="fas fa-trash"></i></button>' +
+        '</div></div>';
+    });
+    roomsHtml += '</div>';
+  }
+
+  // Cloud Agents
+  var agentsHtml = '';
+  var agents = d.cloud_agents || [];
+  if (agents.length === 0) {
+    agentsHtml = '<div class="text-center py-6">' +
+      '<p class="text-gray-400 text-sm mb-3">No Cloud agents detected</p>' +
+      '<button onclick="SA.lkTab=\'deploy\';renderContent()" class="px-4 py-2 bg-blue-500 text-white rounded-lg text-sm font-semibold hover:bg-blue-600"><i class="fas fa-rocket mr-1"></i>Go to Deploy Guide</button>' +
+      '</div>';
+  } else {
+    agentsHtml = '<div class="space-y-2">';
+    agents.forEach(function(a) {
+      var id = a.agent_id || a.id || a.cloud_agent_id || 'unknown';
+      var name = a.name || a.agent_name || id;
+      var status = a.status || a.state || 'unknown';
+      var statusColor = status === 'Running' || status === 'running' ? 'bg-green-100 text-green-700' :
+                        status === 'Stopped' || status === 'stopped' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700';
+      agentsHtml += '<div class="flex items-center justify-between p-3 bg-white border border-gray-100 rounded-lg">' +
+        '<div>' +
+          '<span class="font-semibold text-sm text-gray-800">' + name + '</span>' +
+          '<span class="ml-2 text-xs text-gray-400">' + id + '</span>' +
+        '</div>' +
+        '<div class="flex items-center gap-2">' +
+          '<span class="text-xs ' + statusColor + ' px-2 py-0.5 rounded-full">' + status + '</span>' +
+          (a.version ? '<span class="text-xs text-gray-400">' + a.version + '</span>' : '') +
+          (a.region ? '<span class="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">' + a.region + '</span>' : '') +
+          '<button onclick="lkDeleteAgent(\'' + id + '\')" class="text-xs text-red-500 hover:text-red-700"><i class="fas fa-trash"></i></button>' +
+        '</div></div>';
+    });
+    agentsHtml += '</div>';
+  }
+
+  // Inbound Trunks
+  var trunksHtml = '';
+  var trunks = d.inbound_trunks || [];
+  if (trunks.length === 0) {
+    trunksHtml = '<p class="text-gray-400 text-sm py-4 text-center">No inbound trunks</p>';
+  } else {
+    trunksHtml = '<div class="overflow-x-auto"><table class="w-full text-sm">' +
+      '<thead><tr class="text-left text-xs text-gray-500 border-b"><th class="pb-2 pr-4">Name</th><th class="pb-2 pr-4">Numbers</th><th class="pb-2 pr-4">Trunk ID</th><th class="pb-2 pr-4">Krisp</th><th class="pb-2">Actions</th></tr></thead><tbody>';
+    trunks.forEach(function(t) {
+      var nums = (t.numbers || []).join(', ') || '-';
+      trunksHtml += '<tr class="border-b border-gray-50">' +
+        '<td class="py-2 pr-4 font-medium">' + (t.name || '-') + '</td>' +
+        '<td class="py-2 pr-4 font-mono text-xs">' + nums + '</td>' +
+        '<td class="py-2 pr-4 text-xs text-gray-400">' + (t.id || '-').slice(0, 16) + '</td>' +
+        '<td class="py-2 pr-4">' + (t.krisp ? '<span class="text-green-500">OK</span>' : '<span class="text-gray-300">Off</span>') + '</td>' +
+        '<td class="py-2"><button onclick="lkDeleteTrunk(\'' + t.id + '\')" class="text-xs text-red-500 hover:text-red-700"><i class="fas fa-trash"></i></button></td>' +
+        '</tr>';
+    });
+    trunksHtml += '</tbody></table></div>';
+  }
+
+  // Dispatch Rules
+  var rulesHtml = '';
+  var rules = d.dispatch_rules || [];
+  if (rules.length === 0) {
+    rulesHtml = '<p class="text-gray-400 text-sm py-4 text-center">No dispatch rules</p>';
+  } else {
+    rulesHtml = '<div class="overflow-x-auto"><table class="w-full text-sm">' +
+      '<thead><tr class="text-left text-xs text-gray-500 border-b"><th class="pb-2 pr-4">Name</th><th class="pb-2 pr-4">Type</th><th class="pb-2 pr-4">Room Pattern</th><th class="pb-2 pr-4">Trunks</th><th class="pb-2">Actions</th></tr></thead><tbody>';
+    rules.forEach(function(r) {
+      var pattern = r.room_prefix ? r.room_prefix + '*' : (r.room_name || '-');
+      rulesHtml += '<tr class="border-b border-gray-50">' +
+        '<td class="py-2 pr-4 font-medium">' + (r.name || '-') + '</td>' +
+        '<td class="py-2 pr-4"><span class="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">' + (r.rule_type || '-') + '</span></td>' +
+        '<td class="py-2 pr-4 font-mono text-xs">' + pattern + '</td>' +
+        '<td class="py-2 pr-4 text-xs text-gray-400">' + (r.trunk_ids || []).length + ' trunk(s)</td>' +
+        '<td class="py-2"><button onclick="lkDeleteDispatch(\'' + r.id + '\')" class="text-xs text-red-500 hover:text-red-700"><i class="fas fa-trash"></i></button></td>' +
+        '</tr>';
+    });
+    rulesHtml += '</tbody></table></div>';
+  }
+
+  // Phone Numbers
+  var phonesHtml = '';
+  var phoneNums = d.phone_numbers || [];
+  if (phoneNums.length === 0) {
+    phonesHtml = '<p class="text-gray-400 text-sm py-4 text-center">No LiveKit phone numbers</p>';
+  } else {
+    phonesHtml = '<div class="space-y-2">';
+    phoneNums.forEach(function(p) {
+      phonesHtml += '<div class="flex items-center justify-between p-2 bg-gray-50 rounded-lg">' +
+        '<span class="font-mono text-sm font-semibold">' + (p.number || '-') + '</span>' +
+        '<span class="text-xs text-gray-500">' + (p.name || '') + '</span>' +
+        '</div>';
+    });
+    phonesHtml += '</div>';
+  }
+
+  return err + header + stats +
+    '<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">' +
+      saSection('Active Rooms (' + rooms.length + ')', 'fa-door-open', roomsHtml) +
+      saSection('Cloud Agents (' + agents.length + ')', 'fa-robot', agentsHtml) +
+    '</div>' +
+    '<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">' +
+      saSection('Inbound SIP Trunks (' + trunks.length + ')', 'fa-phone-alt', trunksHtml,
+        '<button onclick="lkShowCreateTrunk()" class="px-3 py-1.5 bg-teal-500 text-white rounded-lg text-xs font-semibold hover:bg-teal-600 transition"><i class="fas fa-plus mr-1"></i>Create Trunk</button>') +
+      saSection('Dispatch Rules (' + rules.length + ')', 'fa-route', rulesHtml,
+        '<button onclick="lkShowCreateDispatch()" class="px-3 py-1.5 bg-blue-500 text-white rounded-lg text-xs font-semibold hover:bg-blue-600 transition"><i class="fas fa-plus mr-1"></i>Create Rule</button>') +
+    '</div>' +
+    '<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">' +
+      saSection('LiveKit Phone Numbers (' + phoneNums.length + ')', 'fa-mobile-alt', phonesHtml) +
+      saSection('Agent Test', 'fa-vial',
+        '<p class="text-sm text-gray-600 mb-3">Create a test room to verify your LiveKit agent is responding to dispatch events.</p>' +
+        '<div class="flex gap-2">' +
+          '<input id="lk-test-prefix" type="text" value="secretary-2-" placeholder="Room prefix" class="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono">' +
+          '<button onclick="lkTestCall()" class="px-4 py-2 bg-green-500 text-white rounded-lg text-sm font-semibold hover:bg-green-600 transition"><i class="fas fa-phone mr-1"></i>Test Agent</button>' +
+        '</div>' +
+        '<div id="lk-test-result" class="mt-3"></div>') +
+    '</div>';
+}
+
+// ── Secretary Configs Tab ──
+function renderLKConfigsTab() {
+  var configs = (SA.data.livekitConfigs || {}).configs || [];
+  var activeCount = configs.filter(function(c) { return c.is_active === 1; }).length;
+
+  var bulkHtml =
+    '<div class="flex items-center gap-3 mb-4">' +
+      '<span class="text-sm text-gray-600"><strong>' + activeCount + '</strong> of ' + configs.length + ' active</span>' +
+      '<button onclick="lkBulkToggle(true)" class="px-3 py-1.5 bg-green-500 text-white rounded-lg text-xs font-semibold hover:bg-green-600"><i class="fas fa-power-off mr-1"></i>Activate All</button>' +
+      '<button onclick="lkBulkToggle(false)" class="px-3 py-1.5 bg-red-500 text-white rounded-lg text-xs font-semibold hover:bg-red-600"><i class="fas fa-stop mr-1"></i>Deactivate All</button>' +
+    '</div>';
+
+  if (configs.length === 0) {
+    return saSection('All Secretary Configurations', 'fa-users-cog',
+      bulkHtml + '<p class="text-gray-400 text-sm py-6 text-center">No secretary configs found. Onboard customers first.</p>');
+  }
+
+  var tableHtml = '<div class="overflow-x-auto"><table class="w-full text-sm">' +
+    '<thead><tr class="text-left text-xs text-gray-500 border-b">' +
+      '<th class="pb-2 pr-3">Customer</th>' +
+      '<th class="pb-2 pr-3">Mode</th>' +
+      '<th class="pb-2 pr-3">Agent</th>' +
+      '<th class="pb-2 pr-3">Business Phone</th>' +
+      '<th class="pb-2 pr-3">AI Number</th>' +
+      '<th class="pb-2 pr-3">Connection</th>' +
+      '<th class="pb-2 pr-3">Calls (7d)</th>' +
+      '<th class="pb-2 pr-3">Status</th>' +
+      '<th class="pb-2">Actions</th>' +
+    '</tr></thead><tbody>';
+
+  configs.forEach(function(cfg) {
+    var isActive = cfg.is_active === 1;
+    var statusBg = isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500';
+    var connColor = cfg.connection_status === 'connected' ? 'text-green-600' : cfg.connection_status === 'pending_forwarding' ? 'text-yellow-600' : 'text-red-500';
+    tableHtml += '<tr class="border-b border-gray-50 hover:bg-gray-50">' +
+      '<td class="py-2.5 pr-3"><div class="font-medium text-gray-800">' + (cfg.customer_name || 'Customer #' + cfg.customer_id) + '</div><div class="text-xs text-gray-400">' + (cfg.email || '') + '</div></td>' +
+      '<td class="py-2.5 pr-3"><span class="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">' + (cfg.secretary_mode || 'directory') + '</span></td>' +
+      '<td class="py-2.5 pr-3"><span class="text-sm">' + (cfg.agent_name || 'Sarah') + '</span><span class="text-xs text-gray-400 ml-1">(' + (cfg.agent_voice || 'alloy') + ')</span></td>' +
+      '<td class="py-2.5 pr-3 font-mono text-xs">' + (cfg.business_phone || '-') + '</td>' +
+      '<td class="py-2.5 pr-3 font-mono text-xs">' + (cfg.assigned_phone_number || '<span class="text-red-400">None</span>') + '</td>' +
+      '<td class="py-2.5 pr-3"><span class="text-xs font-semibold ' + connColor + '">' + (cfg.connection_status || 'not_connected').replace(/_/g, ' ') + '</span></td>' +
+      '<td class="py-2.5 pr-3 text-center"><span class="font-semibold">' + (cfg.calls_7d || 0) + '</span><span class="text-xs text-gray-400"> / ' + (cfg.total_calls || 0) + '</span></td>' +
+      '<td class="py-2.5 pr-3"><span class="text-xs px-2 py-0.5 rounded-full font-semibold ' + statusBg + '">' + (isActive ? 'ACTIVE' : 'PAUSED') + '</span></td>' +
+      '<td class="py-2.5">' +
+        '<div class="flex items-center gap-1">' +
+          '<button onclick="lkToggleConfig(' + cfg.customer_id + ')" class="px-2 py-1 ' + (isActive ? 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200' : 'bg-green-100 text-green-700 hover:bg-green-200') + ' rounded text-xs font-semibold"><i class="fas ' + (isActive ? 'fa-pause' : 'fa-play') + '"></i></button>' +
+          '<button onclick="lkEditConfig(' + cfg.customer_id + ',' + JSON.stringify(JSON.stringify(cfg)).replace(/'/g, "\\'") + ')" class="px-2 py-1 bg-blue-100 text-blue-700 hover:bg-blue-200 rounded text-xs font-semibold"><i class="fas fa-edit"></i></button>' +
+        '</div>' +
+      '</td></tr>';
+  });
+  tableHtml += '</tbody></table></div>';
+
+  return saSection('All Secretary Configurations (' + configs.length + ')', 'fa-users-cog', bulkHtml + tableHtml);
+}
+
+// ── Phone Pool Tab ──
+function renderLKPhonePoolTab() {
+  var poolData = SA.data.livekitPool || {};
+  var numbers = poolData.numbers || [];
+  var poolStats = poolData.stats || [];
+
+  var statCards = '<div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">';
+  var available = 0, assigned = 0, total = numbers.length;
+  poolStats.forEach(function(s) {
+    if (s.status === 'available') available = s.count;
+    if (s.status === 'assigned') assigned = s.count;
+  });
+  statCards += lkStatCard('Total Numbers', total, 'fa-phone-square', 'bg-gray-50 text-gray-700');
+  statCards += lkStatCard('Available', available, 'fa-check-circle', 'bg-green-50 text-green-700');
+  statCards += lkStatCard('Assigned', assigned, 'fa-user-check', 'bg-blue-50 text-blue-700');
+  statCards += lkStatCard('Other', total - available - assigned, 'fa-exclamation-circle', 'bg-yellow-50 text-yellow-700');
+  statCards += '</div>';
+
+  var addHtml =
+    '<div class="flex gap-2 mb-4">' +
+      '<input id="lk-pool-number" type="text" placeholder="+14031234567" class="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono">' +
+      '<input id="lk-pool-region" type="text" placeholder="AB" value="AB" class="w-20 border border-gray-300 rounded-lg px-3 py-2 text-sm">' +
+      '<button onclick="lkAddToPool()" class="px-4 py-2 bg-teal-500 text-white rounded-lg text-sm font-semibold hover:bg-teal-600"><i class="fas fa-plus mr-1"></i>Add Number</button>' +
+    '</div>';
+
+  if (numbers.length === 0) {
+    return statCards + saSection('Phone Number Pool', 'fa-phone-square-alt',
+      addHtml + '<p class="text-gray-400 text-sm py-6 text-center">No numbers in pool. Add Twilio numbers above or use the Phone Marketplace to purchase.</p>');
+  }
+
+  var tableHtml = '<div class="overflow-x-auto"><table class="w-full text-sm">' +
+    '<thead><tr class="text-left text-xs text-gray-500 border-b">' +
+      '<th class="pb-2 pr-3">Phone Number</th>' +
+      '<th class="pb-2 pr-3">Status</th>' +
+      '<th class="pb-2 pr-3">Assigned To</th>' +
+      '<th class="pb-2 pr-3">Region</th>' +
+      '<th class="pb-2 pr-3">SIP Trunk</th>' +
+      '<th class="pb-2">Actions</th>' +
+    '</tr></thead><tbody>';
+
+  numbers.forEach(function(n) {
+    var statusColor = n.status === 'available' ? 'bg-green-100 text-green-700' : n.status === 'assigned' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500';
+    tableHtml += '<tr class="border-b border-gray-50 hover:bg-gray-50">' +
+      '<td class="py-2.5 pr-3 font-mono font-semibold">' + n.phone_number + '</td>' +
+      '<td class="py-2.5 pr-3"><span class="text-xs px-2 py-0.5 rounded-full font-semibold ' + statusColor + '">' + (n.status || 'unknown') + '</span></td>' +
+      '<td class="py-2.5 pr-3">' + (n.assigned_name ? '<span class="text-sm">' + n.assigned_name + '</span><span class="text-xs text-gray-400 ml-1">(' + (n.assigned_email || '') + ')</span>' : '<span class="text-gray-400">-</span>') + '</td>' +
+      '<td class="py-2.5 pr-3 text-xs">' + (n.region || '-') + '</td>' +
+      '<td class="py-2.5 pr-3 text-xs text-gray-400 font-mono">' + (n.sip_trunk_id ? n.sip_trunk_id.slice(0,12) + '...' : '-') + '</td>' +
+      '<td class="py-2.5">' +
+        '<div class="flex items-center gap-1">' +
+          (n.status === 'assigned' ? '<button onclick="lkReleaseNumber(\'' + n.phone_number + '\')" class="px-2 py-1 bg-yellow-100 text-yellow-700 hover:bg-yellow-200 rounded text-xs font-semibold" title="Release back to pool"><i class="fas fa-undo"></i></button>' : '') +
+          '<button onclick="lkDeleteNumber(\'' + encodeURIComponent(n.phone_number) + '\')" class="px-2 py-1 bg-red-100 text-red-700 hover:bg-red-200 rounded text-xs font-semibold" title="Remove from pool"><i class="fas fa-trash"></i></button>' +
+        '</div>' +
+      '</td></tr>';
+  });
+  tableHtml += '</tbody></table></div>';
+
+  return statCards + saSection('Phone Number Pool (' + numbers.length + ')', 'fa-phone-square-alt', addHtml + tableHtml);
+}
+
+// ── Deploy Agent Tab ──
+function renderLKDeployTab() {
+  return saSection('Deploy Sarah (Roofer Secretary Agent)', 'fa-rocket',
+    '<div class="space-y-6">' +
+      // Step 1: Prerequisites
+      '<div class="bg-blue-50 rounded-xl p-5">' +
+        '<h4 class="font-bold text-blue-800 mb-3"><i class="fas fa-clipboard-check mr-2"></i>Step 1: Prerequisites</h4>' +
+        '<ul class="space-y-2 text-sm text-blue-700">' +
+          '<li class="flex items-start gap-2"><i class="fas fa-check-circle mt-0.5 text-blue-400"></i>LiveKit Cloud project: <strong>roofreporterai</strong> (subdomain: roofreporterai-btkwkiwh)</li>' +
+          '<li class="flex items-start gap-2"><i class="fas fa-check-circle mt-0.5 text-blue-400"></i>GitHub repo: <a href="https://github.com/ethan8585g/roofreporter-ai-good-copy" target="_blank" class="underline">roofreporter-ai-good-copy</a></li>' +
+          '<li class="flex items-start gap-2"><i class="fas fa-check-circle mt-0.5 text-blue-400"></i>Agent code: <code class="font-mono bg-blue-100 px-1 rounded">livekit-agent/</code> directory</li>' +
+          '<li class="flex items-start gap-2"><i class="fas fa-check-circle mt-0.5 text-blue-400"></i>Phone number: +1 (484) 964-9758 (LiveKit PSTN)</li>' +
+        '</ul>' +
+      '</div>' +
+      // Step 2: Delete template agents
+      '<div class="bg-yellow-50 rounded-xl p-5">' +
+        '<h4 class="font-bold text-yellow-800 mb-3"><i class="fas fa-trash-alt mr-2"></i>Step 2: Delete Template Agents</h4>' +
+        '<p class="text-sm text-yellow-700 mb-3">Before deploying Sarah, remove any default/template agents from your LiveKit Cloud project.</p>' +
+        '<div class="bg-white rounded-lg p-3 font-mono text-xs text-gray-700 space-y-1">' +
+          '<p>1. Go to <a href="https://cloud.livekit.io" target="_blank" class="text-blue-600 underline font-semibold">cloud.livekit.io</a></p>' +
+          '<p>2. Select project <strong>roofreporterai</strong></p>' +
+          '<p>3. Click <strong>Agents</strong> tab</p>' +
+          '<p>4. Delete all existing agents (template/builder agents)</p>' +
+        '</div>' +
+        '<p class="text-xs text-yellow-600 mt-2"><i class="fas fa-info-circle mr-1"></i>Builder agents cannot be deleted via CLI. You must use the LiveKit Cloud dashboard.</p>' +
+      '</div>' +
+      // Step 3: Install CLI & Deploy
+      '<div class="bg-green-50 rounded-xl p-5">' +
+        '<h4 class="font-bold text-green-800 mb-3"><i class="fas fa-terminal mr-2"></i>Step 3: Deploy via LiveKit CLI</h4>' +
+        '<p class="text-sm text-green-700 mb-3">Run these commands from your local machine (not the sandbox — DNS resolution for livekit.cloud is blocked in sandbox):</p>' +
+        '<div class="bg-white rounded-lg p-4 font-mono text-xs text-gray-800 space-y-2 overflow-x-auto">' +
+          '<p class="text-gray-400"># Install LiveKit CLI (if not already installed)</p>' +
+          '<p>brew install livekit-cli</p>' +
+          '<p class="text-gray-400 mt-3"># Authenticate with LiveKit Cloud</p>' +
+          '<p>lk cloud auth</p>' +
+          '<p class="text-gray-400 mt-3"># Set default project</p>' +
+          '<p>lk project set-default "roofreporterai-btkwkiwh"</p>' +
+          '<p class="text-gray-400 mt-3"># Navigate to the agent directory</p>' +
+          '<p>cd roofreporter-ai-good-copy/livekit-agent</p>' +
+          '<p class="text-gray-400 mt-3"># Deploy the agent (first time)</p>' +
+          '<p>lk agent create --yes --region us-east .</p>' +
+          '<p class="text-gray-400 mt-3"># Or update an existing deployment</p>' +
+          '<p>lk agent deploy --yes .</p>' +
+        '</div>' +
+      '</div>' +
+      // Step 4: Verify
+      '<div class="bg-purple-50 rounded-xl p-5">' +
+        '<h4 class="font-bold text-purple-800 mb-3"><i class="fas fa-check-double mr-2"></i>Step 4: Verify Agent is Running</h4>' +
+        '<p class="text-sm text-purple-700 mb-3">After deployment, verify the agent is live:</p>' +
+        '<div class="bg-white rounded-lg p-3 font-mono text-xs text-gray-800 space-y-1">' +
+          '<p>lk agent list --project roofreporterai</p>' +
+        '</div>' +
+        '<p class="text-sm text-purple-700 mt-3">Then use the <strong>Agent Test</strong> panel on the System Overview tab to create a test room and verify the agent responds.</p>' +
+        '<div class="mt-3"><button onclick="SA.lkTab=\'overview\';renderContent()" class="px-4 py-2 bg-purple-500 text-white rounded-lg text-sm font-semibold hover:bg-purple-600"><i class="fas fa-vial mr-1"></i>Go to Agent Test</button></div>' +
+      '</div>' +
+      // Step 5: Environment variables
+      '<div class="bg-gray-50 rounded-xl p-5">' +
+        '<h4 class="font-bold text-gray-800 mb-3"><i class="fas fa-cog mr-2"></i>Step 5: Environment Variables (Agent)</h4>' +
+        '<p class="text-sm text-gray-600 mb-3">The agent uses these environment variables. LiveKit Cloud injects LIVEKIT_URL/KEY/SECRET automatically. The custom ones are set in livekit.toml:</p>' +
+        '<div class="bg-white rounded-lg p-3 font-mono text-xs text-gray-700 space-y-1 overflow-x-auto">' +
+          '<p>LIVEKIT_URL=wss://roofreporterai-btkwkiwh.livekit.cloud <span class="text-green-500"># auto-injected</span></p>' +
+          '<p>LIVEKIT_API_KEY=APIsvVZsCCaboLY <span class="text-green-500"># auto-injected</span></p>' +
+          '<p>LIVEKIT_API_SECRET=UwHeCz... <span class="text-green-500"># auto-injected</span></p>' +
+          '<p>ROOFPORTER_API_URL=https://www.roofreporterai.com <span class="text-blue-500"># set in livekit.toml</span></p>' +
+          '<p>DEFAULT_GREETING="Thank you for calling..." <span class="text-blue-500"># set in livekit.toml</span></p>' +
+        '</div>' +
+      '</div>' +
+      // Quick Actions
+      '<div class="bg-white border border-gray-200 rounded-xl p-5">' +
+        '<h4 class="font-bold text-gray-800 mb-3"><i class="fas fa-bolt mr-2"></i>Quick Actions</h4>' +
+        '<div class="flex flex-wrap gap-3">' +
+          '<a href="https://cloud.livekit.io" target="_blank" class="px-4 py-2 bg-gray-800 text-white rounded-lg text-sm font-semibold hover:bg-gray-900"><i class="fas fa-external-link-alt mr-1"></i>LiveKit Dashboard</a>' +
+          '<a href="https://github.com/ethan8585g/roofreporter-ai-good-copy" target="_blank" class="px-4 py-2 bg-gray-700 text-white rounded-lg text-sm font-semibold hover:bg-gray-800"><i class="fab fa-github mr-1"></i>GitHub Repo</a>' +
+          '<button onclick="SA.lkTab=\'overview\';renderContent()" class="px-4 py-2 bg-blue-500 text-white rounded-lg text-sm font-semibold hover:bg-blue-600"><i class="fas fa-tachometer-alt mr-1"></i>System Overview</button>' +
+          '<button onclick="SA.lkTab=\'configs\';renderContent()" class="px-4 py-2 bg-teal-500 text-white rounded-lg text-sm font-semibold hover:bg-teal-600"><i class="fas fa-users-cog mr-1"></i>Secretary Configs</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>');
+}
+
+function lkStatCard(label, value, icon, color) {
+  return '<div class="' + color + ' rounded-xl p-3 text-center">' +
+    '<i class="fas ' + icon + ' text-lg mb-1 opacity-60"></i>' +
+    '<div class="text-xl font-bold">' + value + '</div>' +
+    '<div class="text-xs opacity-80">' + label + '</div>' +
+  '</div>';
+}
+
+// LiveKit Action Functions
+async function lkDeleteRoom(name) {
+  if (!confirm('Delete room "' + name + '"?')) return;
+  try {
+    await saFetch('/api/admin/superadmin/livekit/room/delete', { method: 'POST', body: JSON.stringify({ room_name: name }) });
+    loadView('livekit-agents');
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+async function lkDeleteAgent(id) {
+  if (!confirm('Delete agent ' + id + '?\n\nNote: Builder/template agents can only be deleted from cloud.livekit.io dashboard.')) return;
+  try {
+    var res = await saFetch('/api/admin/superadmin/livekit/agent/delete', { method: 'POST', body: JSON.stringify({ agent_id: id }) });
+    var data = await res.json();
+    alert(data.message || 'Deletion requested');
+    loadView('livekit-agents');
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+async function lkDeleteTrunk(id) {
+  if (!confirm('Delete SIP trunk ' + id + '?')) return;
+  try {
+    await saFetch('/api/admin/superadmin/livekit/trunk/delete', { method: 'POST', body: JSON.stringify({ trunk_id: id }) });
+    loadView('livekit-agents');
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+async function lkDeleteDispatch(id) {
+  if (!confirm('Delete dispatch rule ' + id + '?')) return;
+  try {
+    await saFetch('/api/admin/superadmin/livekit/dispatch/delete', { method: 'POST', body: JSON.stringify({ dispatch_rule_id: id }) });
+    loadView('livekit-agents');
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+function lkShowCreateTrunk() {
+  document.getElementById('lk-modal').innerHTML =
+    '<div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center" onclick="if(event.target===this)this.remove()">' +
+      '<div class="bg-white rounded-2xl p-6 max-w-lg w-full mx-4 shadow-2xl">' +
+        '<h3 class="text-lg font-bold mb-4"><i class="fas fa-phone-alt mr-2 text-teal-500"></i>Create Inbound SIP Trunk</h3>' +
+        '<div class="space-y-3">' +
+          '<div><label class="text-xs font-semibold text-gray-600 block mb-1">Trunk Name</label><input id="lk-trunk-name" type="text" value="secretary-inbound" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>' +
+          '<div><label class="text-xs font-semibold text-gray-600 block mb-1">Phone Number (E.164)</label><input id="lk-trunk-phone" type="text" placeholder="+14849649758" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono"></div>' +
+          '<div class="flex items-center gap-2"><input id="lk-trunk-krisp" type="checkbox" checked><label class="text-sm">Enable Krisp noise cancellation</label></div>' +
+        '</div>' +
+        '<div class="flex justify-end gap-2 mt-6">' +
+          '<button onclick="document.getElementById(\'lk-modal\').innerHTML=\'\'" class="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm font-semibold">Cancel</button>' +
+          '<button onclick="lkCreateTrunk()" class="px-4 py-2 bg-teal-500 text-white rounded-lg text-sm font-semibold hover:bg-teal-600">Create Trunk</button>' +
+        '</div>' +
+      '</div></div>';
+}
+
+async function lkCreateTrunk() {
+  var name = document.getElementById('lk-trunk-name').value;
+  var phone = document.getElementById('lk-trunk-phone').value;
+  var krisp = document.getElementById('lk-trunk-krisp').checked;
+  if (!phone) { alert('Phone number required'); return; }
+  try {
+    var res = await saFetch('/api/admin/superadmin/livekit/trunk/create', {
+      method: 'POST', body: JSON.stringify({ type: 'inbound', name: name, phone_number: phone, krisp_enabled: krisp })
+    });
+    var data = await res.json();
+    if (data.success) { alert('Trunk created: ' + data.trunk_id); document.getElementById('lk-modal').innerHTML = ''; loadView('livekit-agents'); }
+    else alert('Error: ' + (data.error || 'Unknown'));
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+function lkShowCreateDispatch() {
+  document.getElementById('lk-modal').innerHTML =
+    '<div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center" onclick="if(event.target===this)this.remove()">' +
+      '<div class="bg-white rounded-2xl p-6 max-w-lg w-full mx-4 shadow-2xl">' +
+        '<h3 class="text-lg font-bold mb-4"><i class="fas fa-route mr-2 text-blue-500"></i>Create Dispatch Rule</h3>' +
+        '<div class="space-y-3">' +
+          '<div><label class="text-xs font-semibold text-gray-600 block mb-1">Rule Name</label><input id="lk-disp-name" type="text" value="secretary-dispatch" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>' +
+          '<div><label class="text-xs font-semibold text-gray-600 block mb-1">Room Prefix</label><input id="lk-disp-prefix" type="text" value="secretary-2-" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono"></div>' +
+          '<div><label class="text-xs font-semibold text-gray-600 block mb-1">Trunk IDs (comma-separated)</label><input id="lk-disp-trunks" type="text" placeholder="ST_abc123, ST_def456" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono"></div>' +
+          '<div><label class="text-xs font-semibold text-gray-600 block mb-1">Metadata (JSON)</label><input id="lk-disp-meta" type="text" value=\'{"customer_id":2}\' class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono"></div>' +
+        '</div>' +
+        '<div class="flex justify-end gap-2 mt-6">' +
+          '<button onclick="document.getElementById(\'lk-modal\').innerHTML=\'\'" class="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm font-semibold">Cancel</button>' +
+          '<button onclick="lkCreateDispatch()" class="px-4 py-2 bg-blue-500 text-white rounded-lg text-sm font-semibold hover:bg-blue-600">Create Rule</button>' +
+        '</div>' +
+      '</div></div>';
+}
+
+async function lkCreateDispatch() {
+  var name = document.getElementById('lk-disp-name').value;
+  var prefix = document.getElementById('lk-disp-prefix').value;
+  var trunkStr = document.getElementById('lk-disp-trunks').value;
+  var meta = document.getElementById('lk-disp-meta').value;
+  var trunks = trunkStr ? trunkStr.split(',').map(function(s) { return s.trim(); }).filter(Boolean) : [];
+  try {
+    var res = await saFetch('/api/admin/superadmin/livekit/dispatch/create', {
+      method: 'POST', body: JSON.stringify({ name: name, trunk_ids: trunks, room_prefix: prefix, metadata: meta })
+    });
+    var data = await res.json();
+    if (data.success) { alert('Dispatch rule created: ' + data.dispatch_rule_id); document.getElementById('lk-modal').innerHTML = ''; loadView('livekit-agents'); }
+    else alert('Error: ' + (data.error || 'Unknown'));
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+async function lkTestCall() {
+  var prefix = document.getElementById('lk-test-prefix').value || 'secretary-2-';
+  var resultDiv = document.getElementById('lk-test-result');
+  resultDiv.innerHTML = '<div class="flex items-center gap-2 text-sm text-blue-600"><div class="w-4 h-4 border-2 border-blue-300 border-t-blue-600 rounded-full animate-spin"></div>Creating test room...</div>';
+  try {
+    var res = await saFetch('/api/admin/superadmin/livekit/test-call', {
+      method: 'POST', body: JSON.stringify({ room_prefix: prefix, customer_id: 2 })
+    });
+    var data = await res.json();
+    if (data.success) {
+      resultDiv.innerHTML =
+        '<div class="p-3 bg-green-50 border border-green-200 rounded-lg text-sm">' +
+          '<p class="font-semibold text-green-800 mb-1"><i class="fas fa-check-circle mr-1"></i>Test room created</p>' +
+          '<p class="text-green-700">Room: <code class="font-mono">' + data.room_name + '</code></p>' +
+          '<p class="text-green-700 text-xs mt-1">Dispatch ID: ' + (data.dispatch_id || 'N/A') + '</p>' +
+          '<p class="text-green-600 text-xs mt-2">Waiting 10s for agent to join...</p>' +
+        '</div>';
+      // Check after delay
+      setTimeout(async function() {
+        try {
+          var rr = await saFetch('/api/admin/superadmin/livekit/rooms');
+          var rd = await rr.json();
+          var found = (rd.rooms || []).find(function(r) { return r.name === data.room_name; });
+          if (found && found.participants && found.participants.length > 0) {
+            var agentParts = found.participants.filter(function(p) { return (p.identity || '').includes('agent'); });
+            resultDiv.innerHTML =
+              '<div class="p-3 bg-green-50 border border-green-200 rounded-lg text-sm">' +
+                '<p class="font-bold text-green-800"><i class="fas fa-check-circle mr-1"></i>AGENT IS LIVE! (' + agentParts.length + ' agent(s) joined)</p>' +
+                '<p class="text-green-700 text-xs mt-1">Room: ' + data.room_name + ' — ' + found.participants.length + ' total participants</p>' +
+              '</div>';
+          } else {
+            resultDiv.innerHTML =
+              '<div class="p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm">' +
+                '<p class="font-semibold text-yellow-800"><i class="fas fa-exclamation-triangle mr-1"></i>No agent joined within 10s</p>' +
+                '<p class="text-yellow-700 text-xs mt-1">The roofer-secretary agent may not be deployed to LiveKit Cloud. Deploy it using the CLI or ensure it\'s running.</p>' +
+              '</div>';
+          }
+          // Cleanup test room
+          saFetch('/api/admin/superadmin/livekit/cleanup-test', { method: 'POST', body: JSON.stringify({ room_name: data.room_name }) }).catch(function(){});
+        } catch(e) { resultDiv.innerHTML += '<p class="text-red-500 text-xs mt-1">Check error: ' + e.message + '</p>'; }
+      }, 10000);
+    } else {
+      resultDiv.innerHTML = '<div class="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">' + (data.error || 'Failed') + '</div>';
+    }
+  } catch(e) {
+    resultDiv.innerHTML = '<div class="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">' + e.message + '</div>';
+  }
+}
+
+// ============================================================
+// LIVEKIT CONFIG & POOL ACTION FUNCTIONS
+// ============================================================
+
+// Toggle individual secretary config on/off
+async function lkToggleConfig(customerId) {
+  try {
+    var res = await saFetch('/api/admin/superadmin/livekit/secretary-config/toggle', {
+      method: 'POST', body: JSON.stringify({ customer_id: customerId })
+    });
+    var data = await res.json();
+    if (data.success) {
+      loadView('livekit-agents');
+    } else { alert('Error: ' + (data.error || 'Unknown')); }
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+// Bulk toggle all secretaries
+async function lkBulkToggle(activate) {
+  var action = activate ? 'ACTIVATE' : 'DEACTIVATE';
+  if (!confirm(action + ' all secretary configurations? This affects all customers.')) return;
+  try {
+    var res = await saFetch('/api/admin/superadmin/livekit/secretary-config/bulk-toggle', {
+      method: 'POST', body: JSON.stringify({ activate: activate })
+    });
+    var data = await res.json();
+    if (data.success) {
+      alert(data.message + ' (' + (data.rows_changed || 0) + ' rows changed)');
+      loadView('livekit-agents');
+    } else { alert('Error: ' + (data.error || 'Unknown')); }
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+// Edit a customer secretary config (opens modal)
+function lkEditConfig(customerId, cfgJson) {
+  var cfg;
+  try { cfg = JSON.parse(cfgJson); } catch { cfg = {}; }
+  document.getElementById('lk-modal').innerHTML =
+    '<div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center overflow-y-auto py-8" onclick="if(event.target===this)this.remove()">' +
+      '<div class="bg-white rounded-2xl p-6 max-w-lg w-full mx-4 shadow-2xl">' +
+        '<h3 class="text-lg font-bold mb-4"><i class="fas fa-edit mr-2 text-blue-500"></i>Edit Secretary Config — Customer #' + customerId + '</h3>' +
+        '<div class="space-y-3 max-h-96 overflow-y-auto">' +
+          '<div><label class="text-xs font-semibold text-gray-600 block mb-1">Agent Name</label><input id="lk-cfg-agent-name" type="text" value="' + (cfg.agent_name || 'Sarah') + '" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>' +
+          '<div><label class="text-xs font-semibold text-gray-600 block mb-1">Agent Voice</label><select id="lk-cfg-agent-voice" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">' +
+            '<option value="alloy"' + (cfg.agent_voice === 'alloy' ? ' selected' : '') + '>Alloy (female)</option>' +
+            '<option value="shimmer"' + (cfg.agent_voice === 'shimmer' ? ' selected' : '') + '>Shimmer (female)</option>' +
+            '<option value="nova"' + (cfg.agent_voice === 'nova' ? ' selected' : '') + '>Nova (female)</option>' +
+            '<option value="echo"' + (cfg.agent_voice === 'echo' ? ' selected' : '') + '>Echo (male)</option>' +
+            '<option value="onyx"' + (cfg.agent_voice === 'onyx' ? ' selected' : '') + '>Onyx (male)</option>' +
+            '<option value="fable"' + (cfg.agent_voice === 'fable' ? ' selected' : '') + '>Fable (British)</option>' +
+          '</select></div>' +
+          '<div><label class="text-xs font-semibold text-gray-600 block mb-1">Secretary Mode</label><select id="lk-cfg-mode" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">' +
+            '<option value="directory"' + (cfg.secretary_mode === 'directory' ? ' selected' : '') + '>Directory</option>' +
+            '<option value="answering"' + (cfg.secretary_mode === 'answering' ? ' selected' : '') + '>Answering</option>' +
+            '<option value="full"' + (cfg.secretary_mode === 'full' ? ' selected' : '') + '>Full Secretary</option>' +
+          '</select></div>' +
+          '<div><label class="text-xs font-semibold text-gray-600 block mb-1">Business Phone</label><input id="lk-cfg-biz-phone" type="text" value="' + (cfg.business_phone || '') + '" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono"></div>' +
+          '<div><label class="text-xs font-semibold text-gray-600 block mb-1">AI Number (assigned)</label><input id="lk-cfg-ai-number" type="text" value="' + (cfg.assigned_phone_number || '') + '" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono"></div>' +
+          '<div><label class="text-xs font-semibold text-gray-600 block mb-1">Connection Status</label><select id="lk-cfg-conn" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">' +
+            '<option value="not_connected"' + (cfg.connection_status === 'not_connected' ? ' selected' : '') + '>Not Connected</option>' +
+            '<option value="pending_forwarding"' + (cfg.connection_status === 'pending_forwarding' ? ' selected' : '') + '>Pending Forwarding</option>' +
+            '<option value="connected"' + (cfg.connection_status === 'connected' ? ' selected' : '') + '>Connected</option>' +
+            '<option value="failed"' + (cfg.connection_status === 'failed' ? ' selected' : '') + '>Failed</option>' +
+          '</select></div>' +
+          '<div><label class="text-xs font-semibold text-gray-600 block mb-1">Greeting Script</label><textarea id="lk-cfg-greeting" rows="3" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">' + (cfg.greeting_script || '') + '</textarea></div>' +
+        '</div>' +
+        '<div class="flex justify-end gap-2 mt-6">' +
+          '<button onclick="document.getElementById(\'lk-modal\').innerHTML=\'\'" class="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm font-semibold">Cancel</button>' +
+          '<button onclick="lkSaveConfig(' + customerId + ')" class="px-4 py-2 bg-blue-500 text-white rounded-lg text-sm font-semibold hover:bg-blue-600">Save Changes</button>' +
+        '</div>' +
+      '</div></div>';
+}
+
+async function lkSaveConfig(customerId) {
+  var payload = {
+    agent_name: document.getElementById('lk-cfg-agent-name').value,
+    agent_voice: document.getElementById('lk-cfg-agent-voice').value,
+    secretary_mode: document.getElementById('lk-cfg-mode').value,
+    business_phone: document.getElementById('lk-cfg-biz-phone').value,
+    assigned_phone_number: document.getElementById('lk-cfg-ai-number').value,
+    connection_status: document.getElementById('lk-cfg-conn').value,
+    greeting_script: document.getElementById('lk-cfg-greeting').value,
+  };
+  try {
+    var res = await saFetch('/api/admin/superadmin/livekit/secretary-config/' + customerId, {
+      method: 'PUT', body: JSON.stringify(payload)
+    });
+    var data = await res.json();
+    if (data.success) {
+      document.getElementById('lk-modal').innerHTML = '';
+      loadView('livekit-agents');
+    } else { alert('Error: ' + (data.error || 'Unknown')); }
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+// Phone pool actions
+async function lkAddToPool() {
+  var number = document.getElementById('lk-pool-number').value.trim();
+  var region = document.getElementById('lk-pool-region').value.trim();
+  if (!number) { alert('Phone number is required'); return; }
+  try {
+    var res = await saFetch('/api/admin/superadmin/livekit/phone-pool/add', {
+      method: 'POST', body: JSON.stringify({ phone_number: number, region: region || 'AB' })
+    });
+    var data = await res.json();
+    if (data.success) {
+      document.getElementById('lk-pool-number').value = '';
+      loadView('livekit-agents');
+    } else { alert('Error: ' + (data.error || 'Unknown')); }
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+async function lkReleaseNumber(number) {
+  if (!confirm('Release ' + number + ' back to the available pool? This will disconnect it from the assigned customer.')) return;
+  try {
+    var res = await saFetch('/api/admin/superadmin/livekit/phone-pool/release', {
+      method: 'POST', body: JSON.stringify({ phone_number: number })
+    });
+    var data = await res.json();
+    if (data.success) { loadView('livekit-agents'); }
+    else { alert('Error: ' + (data.error || 'Unknown')); }
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+async function lkDeleteNumber(encodedNumber) {
+  var number = decodeURIComponent(encodedNumber);
+  if (!confirm('Permanently remove ' + number + ' from the phone pool? This cannot be undone.')) return;
+  try {
+    var res = await saFetch('/api/admin/superadmin/livekit/phone-pool/' + encodedNumber, { method: 'DELETE' });
+    var data = await res.json();
+    if (data.success) { loadView('livekit-agents'); }
+    else { alert('Error: ' + (data.error || 'Unknown')); }
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+// ============================================================
+// SECRETARY MANAGER — Full Customer Secretary AI Management Hub
+// ============================================================
+
+// State for secretary manager sub-views
+SA.smView = 'list'; // list | detail | onboard
+SA.smCustomerId = null;
+SA.smDetail = null;
+
+function renderSecretaryManagerView() {
+  if (SA.smView === 'detail' && SA.smDetail) return renderSMDetailView();
+  if (SA.smView === 'onboard') return renderSMOnboardView();
+  return renderSMListView();
+}
+
+// ─── LIST VIEW — All customers with secretary configs ───
+function renderSMListView() {
+  var d = SA.data.sm_configs || {};
+  var configs = d.configs || [];
+  var poolData = SA.data.sm_pool || {};
+  var pool = poolData.numbers || [];
+  var poolStats = poolData.stats || [];
+  var availableCount = 0;
+  var assignedCount = 0;
+  poolStats.forEach(function(s) { if (s.status === 'available') availableCount = s.count; if (s.status === 'assigned') assignedCount = s.count; });
+
+  var activeCount = configs.filter(function(c) { return c.is_active === 1; }).length;
+  var connectedCount = configs.filter(function(c) { return c.connection_status === 'connected'; }).length;
+  var totalCalls = configs.reduce(function(sum, c) { return sum + (c.total_calls || 0); }, 0);
+
+  var rows = configs.map(function(c) {
+    var activeBadge = c.is_active === 1
+      ? '<span class="inline-flex items-center gap-1 px-2 py-0.5 bg-green-100 text-green-800 rounded-full text-[11px] font-semibold"><span class="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span>Active</span>'
+      : '<span class="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full text-[11px] font-semibold">Inactive</span>';
+    var connBadge = c.connection_status === 'connected'
+      ? '<span class="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full text-[10px] font-bold">Connected</span>'
+      : c.connection_status === 'pending_forwarding'
+        ? '<span class="px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded-full text-[10px] font-bold">Pending</span>'
+        : '<span class="px-2 py-0.5 bg-red-100 text-red-600 rounded-full text-[10px] font-bold">Disconnected</span>';
+    var modeBadge = c.secretary_mode === 'full'
+      ? '<span class="px-2 py-0.5 bg-purple-100 text-purple-700 rounded text-[10px] font-bold">Full</span>'
+      : c.secretary_mode === 'answering'
+        ? '<span class="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-[10px] font-bold">Answering</span>'
+        : c.secretary_mode === 'directory'
+          ? '<span class="px-2 py-0.5 bg-sky-100 text-sky-700 rounded text-[10px] font-bold">Directory</span>'
+          : '<span class="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded text-[10px] font-bold">' + (c.secretary_mode || 'N/A') + '</span>';
+
+    return '<tr class="border-b border-gray-100 hover:bg-blue-50/50 cursor-pointer transition-colors" onclick="smOpenDetail(' + c.customer_id + ')">' +
+      '<td class="px-4 py-3.5"><div class="font-bold text-gray-800 text-sm">' + (c.customer_name || c.email || 'ID:' + c.customer_id) + '</div><div class="text-[11px] text-gray-400 mt-0.5">' + (c.email || '') + '</div></td>' +
+      '<td class="px-4 py-3.5 text-center">' + activeBadge + '</td>' +
+      '<td class="px-4 py-3.5 text-center">' + connBadge + '</td>' +
+      '<td class="px-4 py-3.5 text-center">' + modeBadge + '</td>' +
+      '<td class="px-4 py-3.5"><div class="font-mono text-xs text-gray-600">' + (c.assigned_phone_number || '<span class="text-gray-300">—</span>') + '</div></td>' +
+      '<td class="px-4 py-3.5 text-sm text-gray-600">' + (c.agent_name || 'Sarah') + '</td>' +
+      '<td class="px-4 py-3.5 text-center"><span class="text-sm font-bold text-gray-700">' + (c.total_calls || 0) + '</span><span class="text-[10px] text-gray-400 block">' + (c.calls_7d || 0) + ' this wk</span></td>' +
+      '<td class="px-4 py-3.5">' +
+        '<div class="flex items-center gap-1">' +
+          '<button onclick="event.stopPropagation();smOpenDetail(' + c.customer_id + ')" class="p-1.5 rounded-lg hover:bg-blue-100 text-blue-500" title="Open Full Editor"><i class="fas fa-edit text-xs"></i></button>' +
+          '<button onclick="event.stopPropagation();smQuickToggle(' + c.customer_id + ')" class="p-1.5 rounded-lg hover:bg-' + (c.is_active === 1 ? 'red' : 'green') + '-100 text-' + (c.is_active === 1 ? 'red' : 'green') + '-500" title="' + (c.is_active === 1 ? 'Deactivate' : 'Activate') + '"><i class="fas fa-power-off text-xs"></i></button>' +
+        '</div>' +
+      '</td>' +
+    '</tr>';
+  }).join('');
+
+  return '<div class="space-y-6">' +
+    // Header
+    '<div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">' +
+      '<div>' +
+        '<h2 class="text-2xl font-black text-gray-900"><i class="fas fa-user-headset mr-2 text-teal-500"></i>Roofer Secretary Manager</h2>' +
+        '<p class="text-sm text-gray-500 mt-1">Onboard customers, configure their AI secretary agents, manage phone numbers & LiveKit connections</p>' +
+      '</div>' +
+      '<div class="flex gap-2">' +
+        '<button onclick="smShowOnboard()" class="px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-sm font-bold shadow-md hover:shadow-lg transition-all"><i class="fas fa-user-plus mr-2"></i>Onboard New Customer</button>' +
+        '<button onclick="loadView(\'secretary-manager\')" class="px-4 py-2.5 bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 rounded-xl text-sm font-semibold"><i class="fas fa-sync mr-1"></i>Refresh</button>' +
+      '</div>' +
+    '</div>' +
+
+    // KPI Cards
+    '<div class="grid grid-cols-2 md:grid-cols-5 gap-3">' +
+      samc('Total Customers', configs.length, 'fa-users', 'teal', '') +
+      samc('Active Agents', activeCount, 'fa-robot', 'green', activeCount + '/' + configs.length + ' enabled') +
+      samc('Connected', connectedCount, 'fa-link', 'blue', 'LiveKit telephony') +
+      samc('Total Calls', totalCalls, 'fa-phone-alt', 'purple', 'all time') +
+      samc('Phone Pool', availableCount + ' avail', 'fa-sim-card', 'amber', assignedCount + ' assigned') +
+    '</div>' +
+
+    // Customer Table
+    '<div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">' +
+      '<div class="p-4 border-b bg-gray-50 flex items-center justify-between">' +
+        '<h3 class="font-bold text-gray-800"><i class="fas fa-list mr-2 text-gray-400"></i>All Secretary Customers</h3>' +
+        '<div class="flex gap-2">' +
+          '<button onclick="smBulkToggle(true)" class="text-[11px] px-3 py-1.5 bg-green-50 text-green-700 rounded-lg font-semibold hover:bg-green-100"><i class="fas fa-play mr-1"></i>Activate All</button>' +
+          '<button onclick="smBulkToggle(false)" class="text-[11px] px-3 py-1.5 bg-red-50 text-red-600 rounded-lg font-semibold hover:bg-red-100"><i class="fas fa-stop mr-1"></i>Deactivate All</button>' +
+        '</div>' +
+      '</div>' +
+      (configs.length === 0
+        ? '<div class="p-12 text-center"><i class="fas fa-user-headset text-4xl text-gray-200 mb-4"></i><p class="text-gray-400 mb-4">No customers with Secretary AI configured yet</p><button onclick="smShowOnboard()" class="px-6 py-2.5 bg-teal-600 text-white rounded-xl text-sm font-bold"><i class="fas fa-user-plus mr-2"></i>Onboard First Customer</button></div>'
+        : '<div class="overflow-x-auto"><table class="w-full"><thead><tr class="bg-gray-50/80 text-[11px] text-gray-500 uppercase tracking-wider"><th class="px-4 py-3 text-left">Customer</th><th class="px-4 py-3 text-center">Status</th><th class="px-4 py-3 text-center">Connection</th><th class="px-4 py-3 text-center">Mode</th><th class="px-4 py-3 text-left">AI Phone #</th><th class="px-4 py-3 text-left">Agent Name</th><th class="px-4 py-3 text-center">Calls</th><th class="px-4 py-3 text-left">Actions</th></tr></thead><tbody>' + rows + '</tbody></table></div>') +
+    '</div>' +
+
+    // Quick Actions
+    '<div class="bg-gradient-to-r from-teal-50 to-cyan-50 border border-teal-200 rounded-2xl p-5">' +
+      '<div class="flex items-center gap-3">' +
+        '<div class="w-10 h-10 bg-teal-100 rounded-xl flex items-center justify-center"><i class="fas fa-rocket text-teal-600"></i></div>' +
+        '<div>' +
+          '<h4 class="font-bold text-teal-900">Quick Actions</h4>' +
+          '<p class="text-xs text-teal-700">Manage your Roofer Secretary AI fleet from here</p>' +
+        '</div>' +
+      '</div>' +
+      '<div class="flex flex-wrap gap-2 mt-4">' +
+        '<button onclick="smShowOnboard()" class="px-4 py-2 bg-teal-600 text-white rounded-lg text-xs font-bold hover:bg-teal-700"><i class="fas fa-user-plus mr-1"></i>Onboard Customer</button>' +
+        '<button onclick="saDashboardSetView(\'customer-onboarding\')" class="px-4 py-2 bg-white text-gray-700 border border-teal-200 rounded-lg text-xs font-semibold hover:bg-teal-50"><i class="fas fa-list-check mr-1"></i>Onboarding History</button>' +
+        '<button onclick="saDashboardSetView(\'livekit-agents\')" class="px-4 py-2 bg-white text-gray-700 border border-teal-200 rounded-lg text-xs font-semibold hover:bg-teal-50"><i class="fas fa-server mr-1"></i>LiveKit Agents</button>' +
+        '<button onclick="saDashboardSetView(\'phone-marketplace\')" class="px-4 py-2 bg-white text-gray-700 border border-teal-200 rounded-lg text-xs font-semibold hover:bg-teal-50"><i class="fas fa-sim-card mr-1"></i>Phone Numbers</button>' +
+        '<button onclick="saDashboardSetView(\'secretary-admin\')" class="px-4 py-2 bg-white text-gray-700 border border-teal-200 rounded-lg text-xs font-semibold hover:bg-teal-50"><i class="fas fa-chart-bar mr-1"></i>Secretary Analytics</button>' +
+      '</div>' +
+    '</div>' +
+
+  '</div>' + '<div id="sm-modal"></div>';
+}
+
+// ─── DETAIL VIEW — Full customer agent editor ───
+function renderSMDetailView() {
+  var d = SA.smDetail;
+  if (!d) return '<div class="p-8 text-gray-400">Loading customer details...</div>';
+  var cust = d.customer || {};
+  var cfg = d.config || {};
+  var dirs = d.directories || [];
+  var sub = d.subscription || {};
+  var stats = d.call_stats || {};
+
+  // Build directory editor rows (up to 4)
+  var dirRows = '';
+  for (var i = 0; i < 4; i++) {
+    var dir = dirs[i] || {};
+    dirRows += '<div class="grid grid-cols-3 gap-2 items-center">' +
+      '<input id="sm-dir-name-' + i + '" class="border border-gray-200 rounded-lg px-3 py-2 text-sm" value="' + (dir.name || '').replace(/"/g, '&quot;') + '" placeholder="e.g., Sales">' +
+      '<input id="sm-dir-phone-' + i + '" class="border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono" value="' + (dir.phone_or_action || '').replace(/"/g, '&quot;') + '" placeholder="+1 403 555 1234">' +
+      '<input id="sm-dir-notes-' + i + '" class="border border-gray-200 rounded-lg px-3 py-2 text-sm" value="' + (dir.special_notes || '').replace(/"/g, '&quot;') + '" placeholder="Special notes...">' +
+    '</div>';
+  }
+
+  var voiceOptions = ['alloy', 'shimmer', 'nova', 'echo', 'onyx', 'fable', 'ash', 'coral', 'sage', 'ballad', 'verse'];
+  var voiceSelect = voiceOptions.map(function(v) {
+    return '<option value="' + v + '"' + (cfg.agent_voice === v ? ' selected' : '') + '>' + v.charAt(0).toUpperCase() + v.slice(1) + '</option>';
+  }).join('');
+
+  var modeOptions = [
+    { val: 'full', label: 'Full Secretary — handles everything (booking, FAQ, email, callbacks)' },
+    { val: 'answering', label: 'Answering Service — take messages, forward urgent calls' },
+    { val: 'directory', label: 'Directory — route callers to departments' },
+    { val: 'receptionist', label: 'Receptionist — general reception and routing' },
+    { val: 'always_on', label: 'Always On — never sends to voicemail' }
+  ];
+  var modeSelect = modeOptions.map(function(m) {
+    return '<option value="' + m.val + '"' + (cfg.secretary_mode === m.val ? ' selected' : '') + '>' + m.label + '</option>';
+  }).join('');
+
+  return '<div class="space-y-6">' +
+    // Back button + header
+    '<div class="flex items-center gap-3">' +
+      '<button onclick="SA.smView=\'list\';SA.smDetail=null;loadView(\'secretary-manager\')" class="w-10 h-10 bg-gray-100 hover:bg-gray-200 rounded-xl flex items-center justify-center transition-colors"><i class="fas fa-arrow-left text-gray-500"></i></button>' +
+      '<div class="flex-1">' +
+        '<h2 class="text-2xl font-black text-gray-900"><i class="fas fa-user-edit mr-2 text-blue-500"></i>' + (cust.brand_business_name || cust.name || cust.email || 'Customer #' + cust.id) + '</h2>' +
+        '<p class="text-sm text-gray-500">' + (cust.email || '') + ' · Customer ID: ' + cust.id + ' · Created: ' + fmtDate(cust.created_at) + '</p>' +
+      '</div>' +
+      '<div class="flex gap-2">' +
+        '<button onclick="smSaveConfig(' + cust.id + ')" class="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold shadow-md"><i class="fas fa-save mr-2"></i>Save All Changes</button>' +
+        '<button onclick="smSetupLiveKit(' + cust.id + ')" class="px-4 py-2.5 bg-violet-600 hover:bg-violet-700 text-white rounded-xl text-sm font-bold shadow-md" title="Create SIP trunk & dispatch rule"><i class="fas fa-phone-volume mr-2"></i>Setup LiveKit</button>' +
+      '</div>' +
+    '</div>' +
+
+    // KPI row
+    '<div class="grid grid-cols-2 md:grid-cols-4 gap-3">' +
+      samc('Status', cfg.is_active === 1 ? 'Active' : 'Inactive', 'fa-power-off', cfg.is_active === 1 ? 'green' : 'red', '') +
+      samc('Total Calls', stats.total || 0, 'fa-phone', 'blue', fmtSeconds(stats.total_seconds || 0) + ' total') +
+      samc('Leads Captured', stats.leads || 0, 'fa-user-check', 'purple', '') +
+      samc('Subscription', sub.status || 'none', 'fa-credit-card', sub.status === 'active' ? 'green' : 'yellow', sub.current_period_end ? 'Ends ' + fmtDate(sub.current_period_end) : '') +
+    '</div>' +
+
+    // ─── SECTION 1: Core Identity ───
+    '<div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">' +
+      '<h3 class="text-lg font-bold text-gray-800 mb-4"><i class="fas fa-id-card mr-2 text-blue-400"></i>Agent Identity & Voice</h3>' +
+      '<div class="grid grid-cols-1 md:grid-cols-3 gap-4">' +
+        '<div><label class="text-xs font-semibold text-gray-500 block mb-1.5">Agent Name</label><input id="sm-agent-name" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm font-semibold focus:border-blue-400 focus:ring-2 focus:ring-blue-100" value="' + (cfg.agent_name || 'Sarah').replace(/"/g, '&quot;') + '"></div>' +
+        '<div><label class="text-xs font-semibold text-gray-500 block mb-1.5">Voice</label><select id="sm-agent-voice" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:border-blue-400">' + voiceSelect + '</select></div>' +
+        '<div><label class="text-xs font-semibold text-gray-500 block mb-1.5">Secretary Mode</label><select id="sm-sec-mode" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:border-blue-400">' + modeSelect + '</select></div>' +
+      '</div>' +
+      '<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">' +
+        '<div class="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">' +
+          '<label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="sm-is-active" class="w-5 h-5 rounded" ' + (cfg.is_active === 1 ? 'checked' : '') + '><span class="text-sm font-semibold text-gray-700">Agent Active (accepting calls)</span></label>' +
+        '</div>' +
+        '<div class="p-3 bg-gray-50 rounded-xl">' +
+          '<div class="text-xs font-semibold text-gray-500 mb-1">Connection Status</div>' +
+          '<select id="sm-conn-status" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">' +
+            '<option value="not_connected"' + (cfg.connection_status === 'not_connected' ? ' selected' : '') + '>Not Connected</option>' +
+            '<option value="pending_forwarding"' + (cfg.connection_status === 'pending_forwarding' ? ' selected' : '') + '>Pending Forwarding</option>' +
+            '<option value="connected"' + (cfg.connection_status === 'connected' ? ' selected' : '') + '>Connected</option>' +
+            '<option value="failed"' + (cfg.connection_status === 'failed' ? ' selected' : '') + '>Failed</option>' +
+          '</select>' +
+        '</div>' +
+      '</div>' +
+    '</div>' +
+
+    // ─── SECTION 2: Phone Configuration ───
+    '<div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">' +
+      '<h3 class="text-lg font-bold text-gray-800 mb-4"><i class="fas fa-phone-alt mr-2 text-green-400"></i>Phone Configuration</h3>' +
+      '<div class="grid grid-cols-1 md:grid-cols-3 gap-4">' +
+        '<div><label class="text-xs font-semibold text-gray-500 block mb-1.5">Business Phone (customer\'s cell)</label><input id="sm-biz-phone" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm font-mono focus:border-green-400" value="' + (cfg.business_phone || '').replace(/"/g, '&quot;') + '" placeholder="+1 403 555 1234"></div>' +
+        '<div><label class="text-xs font-semibold text-gray-500 block mb-1.5">Assigned AI Number (SIP/LiveKit)</label><input id="sm-ai-number" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm font-mono focus:border-green-400" value="' + (cfg.assigned_phone_number || '').replace(/"/g, '&quot;') + '" placeholder="+1 484 964 9758"></div>' +
+        '<div><label class="text-xs font-semibold text-gray-500 block mb-1.5">Carrier Name</label><input id="sm-carrier" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:border-green-400" value="' + (cfg.carrier_name || '').replace(/"/g, '&quot;') + '" placeholder="Telus, Rogers, Bell..."></div>' +
+      '</div>' +
+      '<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">' +
+        '<div><label class="text-xs font-semibold text-gray-500 block mb-1.5">Forwarding Method</label><select id="sm-fwd-method" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm">' +
+          '<option value="call_forwarding"' + (cfg.forwarding_method === 'call_forwarding' ? ' selected' : '') + '>Call Forwarding (*21*)</option>' +
+          '<option value="busy_forwarding"' + (cfg.forwarding_method === 'busy_forwarding' ? ' selected' : '') + '>Busy Forwarding (*67*)</option>' +
+          '<option value="no_answer_forwarding"' + (cfg.forwarding_method === 'no_answer_forwarding' ? ' selected' : '') + '>No-Answer Forwarding (*61*)</option>' +
+          '<option value="manual"' + (cfg.forwarding_method === 'manual' ? ' selected' : '') + '>Manual Configuration</option>' +
+        '</select></div>' +
+        '<div><label class="text-xs font-semibold text-gray-500 block mb-1.5">Forward-To Number (answering mode)</label><input id="sm-fwd-number" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm font-mono" value="' + (cfg.answering_forward_number || '').replace(/"/g, '&quot;') + '" placeholder="+1 403 555 5678"></div>' +
+      '</div>' +
+      (cfg.livekit_inbound_trunk_id ? '<div class="mt-4 p-3 bg-violet-50 rounded-xl border border-violet-200"><p class="text-xs text-violet-700"><i class="fas fa-check-circle mr-1 text-violet-500"></i><strong>LiveKit configured:</strong> Trunk: <code class="font-mono">' + cfg.livekit_inbound_trunk_id + '</code> | Dispatch: <code class="font-mono">' + (cfg.livekit_dispatch_rule_id || 'N/A') + '</code></p></div>' : '<div class="mt-4 p-3 bg-amber-50 rounded-xl border border-amber-200"><p class="text-xs text-amber-700"><i class="fas fa-exclamation-triangle mr-1"></i>LiveKit SIP trunk not configured. Click <strong>Setup LiveKit</strong> above after assigning a phone number.</p></div>') +
+    '</div>' +
+
+    // ─── SECTION 3: Greeting & Conversation ───
+    '<div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">' +
+      '<h3 class="text-lg font-bold text-gray-800 mb-4"><i class="fas fa-comment-dots mr-2 text-purple-400"></i>Greeting & Conversation Script</h3>' +
+      '<div><label class="text-xs font-semibold text-gray-500 block mb-1.5">Opening Greeting</label><textarea id="sm-greeting" rows="3" class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-sm focus:border-purple-400 focus:ring-2 focus:ring-purple-100">' + (cfg.greeting_script || '').replace(/</g, '&lt;') + '</textarea></div>' +
+      '<div class="mt-4"><label class="text-xs font-semibold text-gray-500 block mb-1.5">Common Q&A <span class="text-gray-400 font-normal">(one per line: Q: question | A: answer)</span></label><textarea id="sm-qa" rows="5" class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-sm font-mono focus:border-purple-400">' + (cfg.common_qa || '').replace(/</g, '&lt;') + '</textarea></div>' +
+      '<div class="mt-4"><label class="text-xs font-semibold text-gray-500 block mb-1.5">General Notes for Agent <span class="text-gray-400 font-normal">(business context, special instructions)</span></label><textarea id="sm-notes" rows="4" class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-sm focus:border-purple-400">' + (cfg.general_notes || '').replace(/</g, '&lt;') + '</textarea></div>' +
+    '</div>' +
+
+    // ─── SECTION 4: Directories ───
+    '<div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">' +
+      '<h3 class="text-lg font-bold text-gray-800 mb-4"><i class="fas fa-sitemap mr-2 text-sky-400"></i>Call Routing Directories <span class="text-sm font-normal text-gray-400">(2-4 departments)</span></h3>' +
+      '<div class="grid grid-cols-3 gap-2 mb-2 text-[11px] text-gray-500 font-semibold uppercase tracking-wider"><span>Department Name</span><span>Phone / Action</span><span>Special Notes</span></div>' +
+      '<div class="space-y-2">' + dirRows + '</div>' +
+    '</div>' +
+
+    // ─── SECTION 5: Full Secretary Capabilities ───
+    '<div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">' +
+      '<h3 class="text-lg font-bold text-gray-800 mb-4"><i class="fas fa-cogs mr-2 text-amber-400"></i>Full Secretary Settings</h3>' +
+      '<div class="grid grid-cols-1 md:grid-cols-2 gap-6">' +
+        // Left column — toggles
+        '<div class="space-y-3">' +
+          '<label class="flex items-center gap-3 p-3 bg-gray-50 rounded-xl cursor-pointer hover:bg-gray-100"><input type="checkbox" id="sm-can-book" class="w-5 h-5 rounded" ' + (cfg.full_can_book_appointments ? 'checked' : '') + '><span class="text-sm font-medium text-gray-700">Can book appointments</span></label>' +
+          '<label class="flex items-center gap-3 p-3 bg-gray-50 rounded-xl cursor-pointer hover:bg-gray-100"><input type="checkbox" id="sm-can-email" class="w-5 h-5 rounded" ' + (cfg.full_can_send_email ? 'checked' : '') + '><span class="text-sm font-medium text-gray-700">Can send email summaries</span></label>' +
+          '<label class="flex items-center gap-3 p-3 bg-gray-50 rounded-xl cursor-pointer hover:bg-gray-100"><input type="checkbox" id="sm-can-callback" class="w-5 h-5 rounded" ' + (cfg.full_can_schedule_callback ? 'checked' : '') + '><span class="text-sm font-medium text-gray-700">Can schedule callbacks</span></label>' +
+          '<label class="flex items-center gap-3 p-3 bg-gray-50 rounded-xl cursor-pointer hover:bg-gray-100"><input type="checkbox" id="sm-can-faq" class="w-5 h-5 rounded" ' + (cfg.full_can_answer_faq ? 'checked' : '') + '><span class="text-sm font-medium text-gray-700">Can answer FAQs</span></label>' +
+          '<label class="flex items-center gap-3 p-3 bg-gray-50 rounded-xl cursor-pointer hover:bg-gray-100"><input type="checkbox" id="sm-can-payment" class="w-5 h-5 rounded" ' + (cfg.full_can_take_payment_info ? 'checked' : '') + '><span class="text-sm font-medium text-gray-700">Can take payment info</span></label>' +
+        '</div>' +
+        // Right column — text fields
+        '<div class="space-y-4">' +
+          '<div><label class="text-xs font-semibold text-gray-500 block mb-1">Booking Link</label><input id="sm-booking-link" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" value="' + (cfg.full_booking_link || '').replace(/"/g, '&quot;') + '" placeholder="https://calendly.com/..."></div>' +
+          '<div><label class="text-xs font-semibold text-gray-500 block mb-1">Services Offered</label><textarea id="sm-services" rows="2" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">' + (cfg.full_services_offered || '').replace(/</g, '&lt;') + '</textarea></div>' +
+          '<div><label class="text-xs font-semibold text-gray-500 block mb-1">Pricing Info</label><textarea id="sm-pricing" rows="2" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">' + (cfg.full_pricing_info || '').replace(/</g, '&lt;') + '</textarea></div>' +
+          '<div><label class="text-xs font-semibold text-gray-500 block mb-1">Service Area</label><input id="sm-area" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" value="' + (cfg.full_service_area || '').replace(/"/g, '&quot;') + '" placeholder="Calgary, AB and surrounding areas"></div>' +
+          '<div><label class="text-xs font-semibold text-gray-500 block mb-1">Business Hours</label><input id="sm-hours" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" value="' + (cfg.full_business_hours || '').replace(/"/g, '&quot;') + '" placeholder="Mon-Fri 8am-6pm, Sat 9am-3pm"></div>' +
+        '</div>' +
+      '</div>' +
+    '</div>' +
+
+    // ─── SECTION 6: Answering Service Config ───
+    '<div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">' +
+      '<h3 class="text-lg font-bold text-gray-800 mb-4"><i class="fas fa-phone-square mr-2 text-rose-400"></i>Answering Service Settings</h3>' +
+      '<div class="grid grid-cols-1 md:grid-cols-3 gap-4">' +
+        '<div><label class="text-xs font-semibold text-gray-500 block mb-1.5">Fallback Action</label><select id="sm-fallback" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">' +
+          '<option value="voicemail"' + (cfg.answering_fallback_action === 'voicemail' ? ' selected' : '') + '>Voicemail</option>' +
+          '<option value="forward"' + (cfg.answering_fallback_action === 'forward' ? ' selected' : '') + '>Forward to Number</option>' +
+          '<option value="sms"' + (cfg.answering_fallback_action === 'sms' ? ' selected' : '') + '>Send SMS</option>' +
+        '</select></div>' +
+        '<div><label class="text-xs font-semibold text-gray-500 block mb-1.5">SMS Notifications</label><select id="sm-sms-notify" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">' +
+          '<option value="1"' + (cfg.answering_sms_notify ? ' selected' : '') + '>Enabled</option><option value="0"' + (!cfg.answering_sms_notify ? ' selected' : '') + '>Disabled</option></select></div>' +
+        '<div><label class="text-xs font-semibold text-gray-500 block mb-1.5">Email Notifications</label><select id="sm-email-notify" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">' +
+          '<option value="1"' + (cfg.answering_email_notify ? ' selected' : '') + '>Enabled</option><option value="0"' + (!cfg.answering_email_notify ? ' selected' : '') + '>Disabled</option></select></div>' +
+      '</div>' +
+      '<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">' +
+        '<div><label class="text-xs font-semibold text-gray-500 block mb-1.5">Notification Email Address</label><input id="sm-notify-email" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" value="' + (cfg.answering_notify_email || '').replace(/"/g, '&quot;') + '" placeholder="notifications@company.ca"></div>' +
+        '<div><label class="text-xs font-semibold text-gray-500 block mb-1.5">Email From Name</label><input id="sm-email-from" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" value="' + (cfg.full_email_from_name || '').replace(/"/g, '&quot;') + '" placeholder="ABC Roofing"></div>' +
+      '</div>' +
+    '</div>' +
+
+    // Save bar
+    '<div class="flex justify-between items-center bg-white rounded-2xl shadow-sm border border-gray-100 p-4">' +
+      '<button onclick="SA.smView=\'list\';SA.smDetail=null;loadView(\'secretary-manager\')" class="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-xl text-sm font-semibold"><i class="fas fa-arrow-left mr-2"></i>Back to List</button>' +
+      '<div class="flex gap-2">' +
+        '<button onclick="smSetupLiveKit(' + cust.id + ')" class="px-4 py-2.5 bg-violet-500 hover:bg-violet-600 text-white rounded-xl text-sm font-bold"><i class="fas fa-phone-volume mr-2"></i>Setup LiveKit Telephony</button>' +
+        '<button onclick="smSaveConfig(' + cust.id + ')" class="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold shadow-lg"><i class="fas fa-save mr-2"></i>Save All Changes</button>' +
+      '</div>' +
+    '</div>' +
+  '</div>';
+}
+
+// ─── ONBOARD VIEW — Create new customer with secretary ───
+function renderSMOnboardView() {
+  return '<div class="space-y-6">' +
+    '<div class="flex items-center gap-3">' +
+      '<button onclick="SA.smView=\'list\';loadView(\'secretary-manager\')" class="w-10 h-10 bg-gray-100 hover:bg-gray-200 rounded-xl flex items-center justify-center transition-colors"><i class="fas fa-arrow-left text-gray-500"></i></button>' +
+      '<div><h2 class="text-2xl font-black text-gray-900"><i class="fas fa-user-plus mr-2 text-teal-500"></i>Onboard New Roofer Customer</h2><p class="text-sm text-gray-500">Create account, configure Secretary AI, assign phone number — all in one step</p></div>' +
+    '</div>' +
+
+    // Account Info
+    '<div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">' +
+      '<h3 class="font-bold text-gray-800 mb-4"><i class="fas fa-building mr-2 text-blue-400"></i>Business & Account Details</h3>' +
+      '<div class="grid grid-cols-1 md:grid-cols-3 gap-4">' +
+        '<div><label class="text-xs font-semibold text-gray-500 block mb-1.5">Business Name *</label><input id="smo-business" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:border-teal-400" placeholder="ABC Roofing Ltd"></div>' +
+        '<div><label class="text-xs font-semibold text-gray-500 block mb-1.5">Contact Name *</label><input id="smo-name" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:border-teal-400" placeholder="John Smith"></div>' +
+        '<div><label class="text-xs font-semibold text-gray-500 block mb-1.5">Email (becomes username) *</label><input id="smo-email" type="email" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:border-teal-400" placeholder="john@abcroofing.ca"></div>' +
+      '</div>' +
+      '<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">' +
+        '<div><label class="text-xs font-semibold text-gray-500 block mb-1.5">Password *</label><input id="smo-password" type="text" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:border-teal-400" placeholder="Secure password"></div>' +
+        '<div><label class="text-xs font-semibold text-gray-500 block mb-1.5">Phone Number (business line)</label><input id="smo-phone" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm font-mono focus:border-teal-400" placeholder="+1 403 555 1234"></div>' +
+        '<div><label class="text-xs font-semibold text-gray-500 block mb-1.5">Carrier</label><input id="smo-carrier" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:border-teal-400" placeholder="Telus, Rogers, Bell..."></div>' +
+      '</div>' +
+    '</div>' +
+
+    // Secretary Config
+    '<div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">' +
+      '<div class="flex items-center justify-between mb-4">' +
+        '<h3 class="font-bold text-gray-800"><i class="fas fa-robot mr-2 text-purple-400"></i>Secretary AI Configuration</h3>' +
+        '<button onclick="geminiAutoGenerateConfig()" class="px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white rounded-xl text-xs font-bold shadow-md hover:shadow-lg transition-all"><i class="fas fa-magic mr-1.5"></i>AI Auto-Generate Config</button>' +
+      '</div>' +
+      '<div class="grid grid-cols-1 md:grid-cols-3 gap-4">' +
+        '<div><label class="text-xs font-semibold text-gray-500 block mb-1.5">Agent Name</label><input id="smo-agent-name" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm" value="Sarah"></div>' +
+        '<div><label class="text-xs font-semibold text-gray-500 block mb-1.5">Voice</label><select id="smo-voice" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm"><option value="alloy" selected>Alloy</option><option value="shimmer">Shimmer</option><option value="nova">Nova</option><option value="echo">Echo</option><option value="onyx">Onyx</option><option value="fable">Fable</option><option value="ash">Ash</option><option value="coral">Coral</option><option value="sage">Sage</option></select></div>' +
+        '<div><label class="text-xs font-semibold text-gray-500 block mb-1.5">Mode</label><select id="smo-mode" class="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm"><option value="full">Full Secretary</option><option value="answering">Answering Service</option><option value="directory">Directory</option><option value="receptionist">Receptionist</option><option value="always_on">Always On</option></select></div>' +
+      '</div>' +
+      '<div class="mt-4"><div class="flex items-center justify-between mb-1.5"><label class="text-xs font-semibold text-gray-500">Greeting Script</label><button onclick="geminiGenerateGreeting()" class="text-xs text-purple-500 hover:text-purple-700 font-medium"><i class="fas fa-magic mr-1"></i>AI Generate</button></div><textarea id="smo-greeting" rows="3" class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-sm" placeholder="Thank you for calling [Business Name]. Our AI receptionist is here to help. How may I direct your call?"></textarea></div>' +
+      '<div class="mt-4"><div class="flex items-center justify-between mb-1.5"><label class="text-xs font-semibold text-gray-500">Common Q&A</label><button onclick="geminiGenerateQA()" class="text-xs text-purple-500 hover:text-purple-700 font-medium"><i class="fas fa-magic mr-1"></i>AI Generate</button></div><textarea id="smo-qa" rows="3" class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-sm font-mono" placeholder="Q: What are your hours? | A: Monday to Friday, 8am to 6pm"></textarea></div>' +
+      '<div class="mt-4"><label class="text-xs font-semibold text-gray-500 block mb-1.5">General Notes / Business Context</label><textarea id="smo-notes" rows="3" class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-sm" placeholder="We specialize in residential re-roofing in the Calgary area..."></textarea></div>' +
+    '</div>' +
+
+    // Phone Numbers
+    '<div class="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl border border-blue-200 p-6">' +
+      '<h3 class="font-bold text-blue-800 mb-4"><i class="fas fa-phone-alt mr-2"></i>Phone Number Assignment</h3>' +
+      '<div class="grid grid-cols-1 md:grid-cols-2 gap-4">' +
+        '<div><label class="text-xs font-bold text-blue-700 block mb-1.5"><span class="w-5 h-5 bg-blue-200 rounded-full inline-flex items-center justify-center text-[10px] mr-1">1</span>Customer\'s Personal Cell</label><input id="smo-personal-phone" class="w-full border-2 border-blue-200 rounded-xl px-4 py-2.5 text-sm font-mono focus:border-blue-500" placeholder="+1 403 555 1234"><p class="text-[10px] text-blue-600 mt-1">They forward FROM this # when unavailable</p></div>' +
+        '<div><label class="text-xs font-bold text-purple-700 block mb-1.5"><span class="w-5 h-5 bg-purple-200 rounded-full inline-flex items-center justify-center text-[10px] mr-1">2</span>AI Agent Phone (SIP)</label><input id="smo-agent-phone" class="w-full border-2 border-purple-200 rounded-xl px-4 py-2.5 text-sm font-mono focus:border-purple-500" placeholder="+1 484 964 9758"><p class="text-[10px] text-purple-600 mt-1">Twilio/LiveKit # the AI uses for calls</p></div>' +
+      '</div>' +
+    '</div>' +
+
+    // Directories
+    '<div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">' +
+      '<h3 class="font-bold text-gray-800 mb-4"><i class="fas fa-sitemap mr-2 text-sky-400"></i>Call Directories (optional, 2-4)</h3>' +
+      '<div class="grid grid-cols-3 gap-2 mb-2 text-[11px] text-gray-500 font-semibold uppercase tracking-wider"><span>Department</span><span>Phone / Action</span><span>Notes</span></div>' +
+      '<div class="space-y-2">' +
+        '<div class="grid grid-cols-3 gap-2"><input id="smo-dir0-name" class="border border-gray-200 rounded-lg px-3 py-2 text-sm" placeholder="Sales"><input id="smo-dir0-phone" class="border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono" placeholder="+1 403 555 1111"><input id="smo-dir0-notes" class="border border-gray-200 rounded-lg px-3 py-2 text-sm" placeholder="Main sales line"></div>' +
+        '<div class="grid grid-cols-3 gap-2"><input id="smo-dir1-name" class="border border-gray-200 rounded-lg px-3 py-2 text-sm" placeholder="Service"><input id="smo-dir1-phone" class="border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono" placeholder="+1 403 555 2222"><input id="smo-dir1-notes" class="border border-gray-200 rounded-lg px-3 py-2 text-sm" placeholder="Existing customer repairs"></div>' +
+        '<div class="grid grid-cols-3 gap-2"><input id="smo-dir2-name" class="border border-gray-200 rounded-lg px-3 py-2 text-sm" placeholder="Emergency"><input id="smo-dir2-phone" class="border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono" placeholder="+1 403 555 3333"><input id="smo-dir2-notes" class="border border-gray-200 rounded-lg px-3 py-2 text-sm" placeholder="After hours urgent"></div>' +
+        '<div class="grid grid-cols-3 gap-2"><input id="smo-dir3-name" class="border border-gray-200 rounded-lg px-3 py-2 text-sm" placeholder="Billing"><input id="smo-dir3-phone" class="border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono" placeholder="+1 403 555 4444"><input id="smo-dir3-notes" class="border border-gray-200 rounded-lg px-3 py-2 text-sm" placeholder="Payment inquiries"></div>' +
+      '</div>' +
+    '</div>' +
+
+    // Submit
+    '<div class="flex justify-between items-center">' +
+      '<button onclick="SA.smView=\'list\';loadView(\'secretary-manager\')" class="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-xl text-sm font-semibold"><i class="fas fa-arrow-left mr-2"></i>Cancel</button>' +
+      '<button onclick="smOnboardCustomer()" class="px-8 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-sm font-bold shadow-lg hover:shadow-xl transition-all"><i class="fas fa-rocket mr-2"></i>Create Account & Configure Secretary AI</button>' +
+    '</div>' +
+  '</div>';
+}
+
+// ─── SECRETARY MANAGER ACTION FUNCTIONS ───
+
+function smShowOnboard() {
+  SA.smView = 'onboard';
+  SA.loading = false;
+  renderContent();
+}
+
+async function smOpenDetail(customerId) {
+  SA.smView = 'detail';
+  SA.smCustomerId = customerId;
+  SA.loading = true;
+  renderContent();
+  try {
+    var res = await saFetch('/api/admin/superadmin/secretary-manager/customer/' + customerId);
+    if (res) {
+      SA.smDetail = await res.json();
+    }
+  } catch(e) {
+    SA.smDetail = { customer: { id: customerId }, config: {}, directories: [], subscription: {}, call_stats: {} };
+    console.error('Error loading customer detail:', e);
+  }
+  SA.loading = false;
+  renderContent();
+}
+
+async function smSaveConfig(customerId) {
+  // Gather directories
+  var directories = [];
+  for (var i = 0; i < 4; i++) {
+    var nameEl = document.getElementById('sm-dir-name-' + i);
+    var phoneEl = document.getElementById('sm-dir-phone-' + i);
+    var notesEl = document.getElementById('sm-dir-notes-' + i);
+    if (nameEl && nameEl.value.trim()) {
+      directories.push({ name: nameEl.value.trim(), phone_or_action: phoneEl ? phoneEl.value : '', special_notes: notesEl ? notesEl.value : '' });
+    }
+  }
+
+  var payload = {
+    agent_name: document.getElementById('sm-agent-name').value,
+    agent_voice: document.getElementById('sm-agent-voice').value,
+    secretary_mode: document.getElementById('sm-sec-mode').value,
+    is_active: document.getElementById('sm-is-active').checked ? 1 : 0,
+    connection_status: document.getElementById('sm-conn-status').value,
+    business_phone: document.getElementById('sm-biz-phone').value,
+    assigned_phone_number: document.getElementById('sm-ai-number').value,
+    carrier_name: document.getElementById('sm-carrier').value,
+    forwarding_method: document.getElementById('sm-fwd-method').value,
+    answering_forward_number: document.getElementById('sm-fwd-number').value,
+    greeting_script: document.getElementById('sm-greeting').value,
+    common_qa: document.getElementById('sm-qa').value,
+    general_notes: document.getElementById('sm-notes').value,
+    // Full secretary settings
+    full_can_book_appointments: document.getElementById('sm-can-book').checked ? 1 : 0,
+    full_can_send_email: document.getElementById('sm-can-email').checked ? 1 : 0,
+    full_can_schedule_callback: document.getElementById('sm-can-callback').checked ? 1 : 0,
+    full_can_answer_faq: document.getElementById('sm-can-faq').checked ? 1 : 0,
+    full_can_take_payment_info: document.getElementById('sm-can-payment').checked ? 1 : 0,
+    full_booking_link: document.getElementById('sm-booking-link').value,
+    full_services_offered: document.getElementById('sm-services').value,
+    full_pricing_info: document.getElementById('sm-pricing').value,
+    full_service_area: document.getElementById('sm-area').value,
+    full_business_hours: document.getElementById('sm-hours').value,
+    // Answering settings
+    answering_fallback_action: document.getElementById('sm-fallback').value,
+    answering_sms_notify: document.getElementById('sm-sms-notify').value === '1' ? 1 : 0,
+    answering_email_notify: document.getElementById('sm-email-notify').value === '1' ? 1 : 0,
+    answering_notify_email: document.getElementById('sm-notify-email').value,
+    full_email_from_name: document.getElementById('sm-email-from').value,
+    directories: directories
+  };
+
+  try {
+    var res = await saFetch('/api/admin/superadmin/secretary-manager/customer/' + customerId + '/config', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    var data = await res.json();
+    if (data.success) {
+      alert('Secretary AI configuration saved for customer #' + customerId);
+      smOpenDetail(customerId);
+    } else {
+      alert('Error: ' + (data.error || 'Failed to save'));
+    }
+  } catch(e) {
+    alert('Error saving config: ' + e.message);
+  }
+}
+
+async function smQuickToggle(customerId) {
+  try {
+    var res = await saFetch('/api/admin/superadmin/livekit/secretary-config/toggle', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ customer_id: customerId })
+    });
+    var data = await res.json();
+    if (data.success) {
+      loadView('secretary-manager');
+    } else { alert('Error: ' + (data.error || 'Unknown')); }
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+async function smBulkToggle(activate) {
+  var action = activate ? 'ACTIVATE' : 'DEACTIVATE';
+  if (!confirm(action + ' all secretary agents? This affects every customer.')) return;
+  try {
+    var res = await saFetch('/api/admin/superadmin/livekit/secretary-config/bulk-toggle', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ activate: activate })
+    });
+    var data = await res.json();
+    if (data.success) {
+      alert(data.message + ' (' + (data.rows_changed || 0) + ' customers affected)');
+      loadView('secretary-manager');
+    } else { alert('Error: ' + (data.error || 'Unknown')); }
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+async function smSetupLiveKit(customerId) {
+  if (!confirm('Set up LiveKit SIP trunk and dispatch rule for customer #' + customerId + '?\n\nThis will create the telephony infrastructure for their AI secretary to receive calls.')) return;
+  try {
+    var res = await saFetch('/api/admin/superadmin/secretary-manager/setup-livekit/' + customerId, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    var data = await res.json();
+    if (data.success) {
+      alert('LiveKit telephony configured!\n\nTrunk ID: ' + data.trunk_id + '\nDispatch Rule: ' + data.dispatch_rule_id + '\n\nThe customer\'s AI secretary will now receive calls on their assigned number.');
+      smOpenDetail(customerId);
+    } else if (data.already_configured) {
+      alert('Already configured!\n\nTrunk: ' + data.trunk_id + '\nDispatch: ' + data.dispatch_rule_id);
+    } else {
+      alert('Error: ' + (data.error || 'Failed'));
+    }
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+async function smOnboardCustomer() {
+  var email = (document.getElementById('smo-email') || {}).value || '';
+  var password = (document.getElementById('smo-password') || {}).value || '';
+  var contactName = (document.getElementById('smo-name') || {}).value || '';
+  var businessName = (document.getElementById('smo-business') || {}).value || '';
+
+  if (!email || !password || !contactName) {
+    alert('Email, Password, and Contact Name are required.');
+    return;
+  }
+
+  // Gather directories
+  var directories = [];
+  for (var i = 0; i < 4; i++) {
+    var dn = (document.getElementById('smo-dir' + i + '-name') || {}).value || '';
+    var dp = (document.getElementById('smo-dir' + i + '-phone') || {}).value || '';
+    var dno = (document.getElementById('smo-dir' + i + '-notes') || {}).value || '';
+    if (dn.trim()) directories.push({ name: dn.trim(), phone_or_action: dp, special_notes: dno });
+  }
+
+  var payload = {
+    business_name: businessName,
+    contact_name: contactName,
+    email: email,
+    phone: (document.getElementById('smo-phone') || {}).value || '',
+    password: password,
+    agent_name: (document.getElementById('smo-agent-name') || {}).value || 'Sarah',
+    agent_voice: (document.getElementById('smo-voice') || {}).value || 'alloy',
+    greeting_script: (document.getElementById('smo-greeting') || {}).value || '',
+    common_qa: (document.getElementById('smo-qa') || {}).value || '',
+    general_notes: (document.getElementById('smo-notes') || {}).value || '',
+    secretary_mode: (document.getElementById('smo-mode') || {}).value || 'full',
+    assigned_phone_number: (document.getElementById('smo-agent-phone') || {}).value || '',
+    carrier_name: (document.getElementById('smo-carrier') || {}).value || '',
+    directories: directories
+  };
+
+  try {
+    var res = await saFetch('/api/admin/superadmin/secretary-manager/onboard', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    var data = await res.json();
+    if (data.success) {
+      var msg = 'Customer onboarded successfully!\n\n';
+      msg += 'Customer ID: ' + data.customer_id + '\n';
+      msg += 'Email/Login: ' + data.email + '\n\n';
+      msg += 'NEXT STEPS:\n';
+      msg += '1. Open their profile (click OK, then their row in the list)\n';
+      msg += '2. Click "Setup LiveKit" to create their SIP trunk\n';
+      msg += '3. Customer forwards their cell to the AI number\n';
+      alert(msg);
+      SA.smView = 'list';
+      loadView('secretary-manager');
+    } else {
+      alert('Error: ' + (data.error || 'Failed to create customer'));
+    }
+  } catch(e) {
+    alert('Error creating customer: ' + e.message);
+  }
+}
+
+// ============================================================
+// GEMINI AI COMMAND TERMINAL
+// Full-featured AI command center for platform management
+// ============================================================
+
+// Gemini conversation state
+if (!SA.geminiMessages) SA.geminiMessages = [];
+if (!SA.geminiLoading) SA.geminiLoading = false;
+
+function renderGeminiCommandView() {
+  const status = SA.data.gemini_status || {};
+  const isConfigured = status.configured && status.status === 'ok';
+  const aiBackend = status.backend || (status.model === 'openai-fallback' ? 'openai' : 'gemini');
+  const aiModel = status.model || 'gemini-2.5-flash';
+
+  return `
+  <div class="slide-in">
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <h1 class="text-2xl font-bold text-slate-800 flex items-center gap-3">
+          <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
+            <i class="fas fa-terminal text-white text-sm"></i>
+          </div>
+          Gemini AI Command Center
+        </h1>
+        <p class="text-slate-500 text-sm mt-1">Powered by Google Gemini 2.5 Flash — your AI co-pilot for platform management</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="px-3 py-1.5 rounded-full text-xs font-bold ${isConfigured ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">
+          <i class="fas ${isConfigured ? 'fa-check-circle' : 'fa-exclamation-triangle'} mr-1"></i>
+          ${isConfigured ? 'Gemini Connected' : 'Not Configured'}
+        </span>
+        <button onclick="geminiClearHistory()" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-xs font-medium text-slate-600 transition-all">
+          <i class="fas fa-trash mr-1"></i>Clear History
+        </button>
+      </div>
+    </div>
+
+    ${!isConfigured ? `
+    <div class="sa-section mb-6">
+      <div class="sa-section-body bg-amber-50 border border-amber-200 rounded-xl">
+        <div class="flex items-start gap-3">
+          <i class="fas fa-exclamation-triangle text-amber-500 text-xl mt-0.5"></i>
+          <div>
+            <h3 class="font-bold text-amber-800 text-sm">AI API Configuration</h3>
+            <p class="text-amber-700 text-xs mt-1">${status.error || 'AI backend not responding.'}${aiBackend === 'openai' ? ' Using OpenAI as fallback.' : ''}</p>
+            <p class="text-amber-600 text-[11px] mt-1">For best results, set <code class="bg-amber-100 px-1.5 py-0.5 rounded text-[11px]">GEMINI_API_KEY</code> in Cloudflare secrets. Get a free key at <a href="https://aistudio.google.com/apikey" target="_blank" class="underline">aistudio.google.com</a></p>
+          </div>
+        </div>
+      </div>
+    </div>` : ''}
+
+    <!-- Quick Actions Grid -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+      <button onclick="geminiQuickAction('summarize')" class="group bg-white border border-slate-200 hover:border-blue-300 hover:shadow-md rounded-xl p-4 text-left transition-all">
+        <div class="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center mb-2 group-hover:bg-blue-200 transition-all"><i class="fas fa-chart-pie text-blue-600 text-sm"></i></div>
+        <p class="text-xs font-bold text-slate-700">Platform Summary</p>
+        <p class="text-[10px] text-slate-400 mt-0.5">Stats, health & KPIs</p>
+      </button>
+      <button onclick="geminiQuickAction('secretary-strategy')" class="group bg-white border border-slate-200 hover:border-purple-300 hover:shadow-md rounded-xl p-4 text-left transition-all">
+        <div class="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center mb-2 group-hover:bg-purple-200 transition-all"><i class="fas fa-phone-volume text-purple-600 text-sm"></i></div>
+        <p class="text-xs font-bold text-slate-700">Secretary Strategy</p>
+        <p class="text-[10px] text-slate-400 mt-0.5">Growth & optimization</p>
+      </button>
+      <button onclick="geminiQuickAction('marketing-ideas')" class="group bg-white border border-slate-200 hover:border-green-300 hover:shadow-md rounded-xl p-4 text-left transition-all">
+        <div class="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center mb-2 group-hover:bg-green-200 transition-all"><i class="fas fa-bullhorn text-green-600 text-sm"></i></div>
+        <p class="text-xs font-bold text-slate-700">Marketing Ideas</p>
+        <p class="text-[10px] text-slate-400 mt-0.5">Campaigns & copy</p>
+      </button>
+      <button onclick="geminiQuickAction('pricing-advice')" class="group bg-white border border-slate-200 hover:border-amber-300 hover:shadow-md rounded-xl p-4 text-left transition-all">
+        <div class="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center mb-2 group-hover:bg-amber-200 transition-all"><i class="fas fa-dollar-sign text-amber-600 text-sm"></i></div>
+        <p class="text-xs font-bold text-slate-700">Pricing Advice</p>
+        <p class="text-[10px] text-slate-400 mt-0.5">Plans & packages</p>
+      </button>
+    </div>
+
+    <!-- Quick Action Row 2 -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+      <button onclick="geminiQuickAction('generate-config')" class="group bg-white border border-slate-200 hover:border-teal-300 hover:shadow-md rounded-xl p-4 text-left transition-all">
+        <div class="w-8 h-8 bg-teal-100 rounded-lg flex items-center justify-center mb-2 group-hover:bg-teal-200 transition-all"><i class="fas fa-magic text-teal-600 text-sm"></i></div>
+        <p class="text-xs font-bold text-slate-700">Generate Agent Config</p>
+        <p class="text-[10px] text-slate-400 mt-0.5">AI secretary setup</p>
+      </button>
+      <button onclick="geminiQuickAction('blog-post')" class="group bg-white border border-slate-200 hover:border-indigo-300 hover:shadow-md rounded-xl p-4 text-left transition-all">
+        <div class="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center mb-2 group-hover:bg-indigo-200 transition-all"><i class="fas fa-pen-nib text-indigo-600 text-sm"></i></div>
+        <p class="text-xs font-bold text-slate-700">Write Blog Post</p>
+        <p class="text-[10px] text-slate-400 mt-0.5">SEO content</p>
+      </button>
+      <button onclick="geminiQuickAction('analyze-calls')" class="group bg-white border border-slate-200 hover:border-rose-300 hover:shadow-md rounded-xl p-4 text-left transition-all">
+        <div class="w-8 h-8 bg-rose-100 rounded-lg flex items-center justify-center mb-2 group-hover:bg-rose-200 transition-all"><i class="fas fa-chart-bar text-rose-600 text-sm"></i></div>
+        <p class="text-xs font-bold text-slate-700">Call Analytics</p>
+        <p class="text-[10px] text-slate-400 mt-0.5">Performance review</p>
+      </button>
+      <button onclick="geminiQuickAction('competitive')" class="group bg-white border border-slate-200 hover:border-cyan-300 hover:shadow-md rounded-xl p-4 text-left transition-all">
+        <div class="w-8 h-8 bg-cyan-100 rounded-lg flex items-center justify-center mb-2 group-hover:bg-cyan-200 transition-all"><i class="fas fa-chess text-cyan-600 text-sm"></i></div>
+        <p class="text-xs font-bold text-slate-700">Competitive Intel</p>
+        <p class="text-[10px] text-slate-400 mt-0.5">Market positioning</p>
+      </button>
+    </div>
+
+    <!-- Chat Terminal -->
+    <div class="sa-section" style="border: 2px solid #e2e8f0;">
+      <div class="sa-section-header bg-gradient-to-r from-slate-800 to-slate-900">
+        <h3 class="text-white" style="color:white"><i class="fas fa-terminal mr-2" style="color:#60a5fa"></i>AI Terminal</h3>
+        <div class="flex items-center gap-2">
+          <span class="text-[10px] text-slate-400 font-mono">${aiModel}${aiBackend === 'openai' ? ' (OpenAI)' : ''}</span>
+          <div class="w-2 h-2 rounded-full ${isConfigured ? 'bg-green-400 animate-pulse' : 'bg-red-400'}"></div>
+        </div>
+      </div>
+
+      <!-- Message Area -->
+      <div id="gemini-chat-area" class="bg-slate-900 overflow-y-auto" style="height:450px; padding:20px;">
+        ${SA.geminiMessages.length === 0 ? `
+        <div class="text-center py-12">
+          <div class="w-16 h-16 bg-gradient-to-br from-blue-500/20 to-purple-500/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <i class="fas fa-robot text-blue-400 text-2xl"></i>
+          </div>
+          <h3 class="text-slate-300 font-bold text-lg mb-2">Gemini AI Command Center</h3>
+          <p class="text-slate-500 text-sm max-w-md mx-auto mb-4">Ask anything about your platform, customers, agents, marketing strategy, or generate content. Use the quick actions above or type below.</p>
+          <div class="flex flex-wrap justify-center gap-2">
+            <button onclick="geminiSendFromSuggestion('How many active customers do I have and what is the revenue trend?')" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-lg text-xs transition-all border border-slate-700">Revenue trend</button>
+            <button onclick="geminiSendFromSuggestion('Generate a cold email for roofing companies about our AI Secretary service')" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-lg text-xs transition-all border border-slate-700">Cold email</button>
+            <button onclick="geminiSendFromSuggestion('What are the top 5 things I should do this week to grow RoofReporterAI?')" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-lg text-xs transition-all border border-slate-700">Weekly priorities</button>
+            <button onclick="geminiSendFromSuggestion('Write a Google Ads headline and description for AI Roofer Secretary')" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-lg text-xs transition-all border border-slate-700">Google Ads copy</button>
+          </div>
+        </div>` : SA.geminiMessages.map(function(m, i) {
+          return geminiRenderMessage(m);
+        }).join('')}
+        ${SA.geminiLoading ? `
+        <div class="flex items-start gap-3 mt-4">
+          <div class="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center flex-shrink-0">
+            <i class="fas fa-robot text-white text-xs"></i>
+          </div>
+          <div class="bg-slate-800 rounded-xl px-4 py-3 max-w-[85%]">
+            <div class="flex items-center gap-2">
+              <div class="flex gap-1">
+                <div class="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style="animation-delay:0ms"></div>
+                <div class="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style="animation-delay:150ms"></div>
+                <div class="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style="animation-delay:300ms"></div>
+              </div>
+              <span class="text-slate-500 text-xs">Gemini is thinking...</span>
+            </div>
+          </div>
+        </div>` : ''}
+      </div>
+
+      <!-- Input Area -->
+      <div class="bg-slate-800 border-t border-slate-700 p-4">
+        <div class="flex gap-3">
+          <div class="flex-1 relative">
+            <textarea id="gemini-input" rows="2" class="w-full bg-slate-900 border border-slate-600 rounded-xl px-4 py-3 text-white text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-slate-500" placeholder="Ask Gemini anything about your platform..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();geminiSend()}"></textarea>
+          </div>
+          <button onclick="geminiSend()" id="gemini-send-btn" class="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white px-5 rounded-xl font-bold text-sm transition-all hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed self-end" style="height:50px">
+            <i class="fas fa-paper-plane"></i>
+          </button>
+        </div>
+        <div class="flex items-center justify-between mt-2">
+          <p class="text-[10px] text-slate-500"><i class="fas fa-bolt mr-1 text-amber-400"></i>Shift+Enter for new line. Enter to send.</p>
+          <p class="text-[10px] text-slate-500 font-mono">${SA.geminiMessages.length} messages</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Capabilities Grid -->
+    <div class="grid md:grid-cols-3 gap-4 mt-6">
+      <div class="bg-white rounded-xl border border-slate-200 p-5">
+        <h4 class="text-sm font-bold text-slate-700 mb-3"><i class="fas fa-database mr-2 text-blue-500"></i>Platform Intelligence</h4>
+        <ul class="text-xs text-slate-500 space-y-1.5">
+          <li><i class="fas fa-check text-green-500 mr-1.5"></i>Live customer, order & call data</li>
+          <li><i class="fas fa-check text-green-500 mr-1.5"></i>Secretary agent performance review</li>
+          <li><i class="fas fa-check text-green-500 mr-1.5"></i>Lead pipeline & conversion analysis</li>
+          <li><i class="fas fa-check text-green-500 mr-1.5"></i>Strategic recommendations</li>
+        </ul>
+      </div>
+      <div class="bg-white rounded-xl border border-slate-200 p-5">
+        <h4 class="text-sm font-bold text-slate-700 mb-3"><i class="fas fa-pen-nib mr-2 text-purple-500"></i>Content Generation</h4>
+        <ul class="text-xs text-slate-500 space-y-1.5">
+          <li><i class="fas fa-check text-green-500 mr-1.5"></i>Blog posts & SEO content</li>
+          <li><i class="fas fa-check text-green-500 mr-1.5"></i>Email campaigns & outreach</li>
+          <li><i class="fas fa-check text-green-500 mr-1.5"></i>Google Ads / Meta ad copy</li>
+          <li><i class="fas fa-check text-green-500 mr-1.5"></i>Secretary greetings & Q&A</li>
+        </ul>
+      </div>
+      <div class="bg-white rounded-xl border border-slate-200 p-5">
+        <h4 class="text-sm font-bold text-slate-700 mb-3"><i class="fas fa-info-circle mr-2 text-amber-500"></i>Limitations</h4>
+        <ul class="text-xs text-slate-500 space-y-1.5">
+          <li><i class="fas fa-eye text-blue-500 mr-1.5"></i>Read-only — sees live DB data</li>
+          <li><i class="fas fa-times text-red-400 mr-1.5"></i>Cannot edit configs or toggle agents</li>
+          <li><i class="fas fa-times text-red-400 mr-1.5"></i>Cannot create accounts or send email</li>
+          <li><i class="fas fa-arrow-right text-slate-400 mr-1.5"></i>Will guide you to the right panel</li>
+        </ul>
+      </div>
+    </div>
+  </div>`;
+}
+
+function geminiRenderMessage(m) {
+  if (m.role === 'user') {
+    return '<div class="flex items-start gap-3 mb-4 justify-end">' +
+      '<div class="bg-blue-600 rounded-xl px-4 py-3 max-w-[85%]">' +
+        '<p class="text-white text-sm whitespace-pre-wrap">' + escapeHtml(m.content) + '</p>' +
+      '</div>' +
+      '<div class="w-8 h-8 bg-teal-600 rounded-lg flex items-center justify-center flex-shrink-0">' +
+        '<i class="fas fa-user text-white text-xs"></i>' +
+      '</div>' +
+    '</div>';
+  }
+  // assistant
+  return '<div class="flex items-start gap-3 mb-4">' +
+    '<div class="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center flex-shrink-0">' +
+      '<i class="fas fa-robot text-white text-xs"></i>' +
+    '</div>' +
+    '<div class="bg-slate-800 rounded-xl px-4 py-3 max-w-[85%] border border-slate-700">' +
+      '<div class="text-slate-200 text-sm gemini-response">' + geminiFormatResponse(m.content) + '</div>' +
+      (m.usage ? '<p class="text-[10px] text-slate-600 mt-2 font-mono">tokens: ' + (m.usage.totalTokenCount || '?') + '</p>' : '') +
+    '</div>' +
+    '<button onclick="geminiCopyMessage(this)" class="self-start mt-1 text-slate-600 hover:text-white text-xs transition-all" title="Copy"><i class="fas fa-copy"></i></button>' +
+  '</div>';
+}
+
+function escapeHtml(str) {
+  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function geminiFormatResponse(text) {
+  if (!text) return '';
+  // Convert markdown-like formatting to HTML
+  var html = escapeHtml(text);
+  // Bold
+  html = html.replace(/\*\*(.+?)\*\*/g, '<strong class="text-white">$1</strong>');
+  // Code blocks
+  html = html.replace(/```([\s\S]*?)```/g, '<pre class="bg-slate-900 rounded-lg p-3 mt-2 mb-2 text-xs text-green-400 overflow-x-auto border border-slate-700"><code>$1</code></pre>');
+  // Inline code
+  html = html.replace(/`([^`]+)`/g, '<code class="bg-slate-900 px-1.5 py-0.5 rounded text-[11px] text-blue-300">$1</code>');
+  // Bullet points
+  html = html.replace(/^[\-\*] (.+)$/gm, '<div class="flex gap-2 my-0.5"><span class="text-blue-400 mt-0.5">&#8226;</span><span>$1</span></div>');
+  // Numbered lists
+  html = html.replace(/^(\d+)\. (.+)$/gm, '<div class="flex gap-2 my-0.5"><span class="text-blue-400 font-bold min-w-[20px]">$1.</span><span>$2</span></div>');
+  // Headers
+  html = html.replace(/^### (.+)$/gm, '<h4 class="text-white font-bold text-sm mt-3 mb-1">$1</h4>');
+  html = html.replace(/^## (.+)$/gm, '<h3 class="text-white font-bold mt-3 mb-1">$1</h3>');
+  // Line breaks
+  html = html.replace(/\n/g, '<br>');
+  return html;
+}
+
+function geminiCopyMessage(btn) {
+  var msgDiv = btn.previousElementSibling.querySelector('.gemini-response');
+  if (msgDiv) {
+    navigator.clipboard.writeText(msgDiv.innerText).then(function() {
+      btn.innerHTML = '<i class="fas fa-check text-green-400"></i>';
+      setTimeout(function() { btn.innerHTML = '<i class="fas fa-copy"></i>'; }, 1500);
+    });
+  }
+}
+
+function geminiClearHistory() {
+  if (!confirm('Clear all Gemini conversation history?')) return;
+  SA.geminiMessages = [];
+  renderContent();
+}
+
+function geminiQuickAction(action) {
+  var prompts = {
+    'summarize': 'Give me a comprehensive platform status summary: active customers, total orders, revenue trends, active secretary agents, recent signups, and top 3 priorities for this week.',
+    'secretary-strategy': 'Analyze our Roofer Secretary AI product. What is the growth strategy? How do we get more roofing companies to subscribe at $249/month? Give me 5 specific, actionable ideas with expected ROI.',
+    'marketing-ideas': 'Generate 5 marketing campaign ideas for RoofReporterAI targeting roofing contractors in Alberta and Ontario. Include Google Ads headlines, Facebook ad concepts, and email subject lines.',
+    'pricing-advice': 'Review our pricing structure: Express reports (1 credit), Standard reports (2 credits), Pro reports (3 credits). Secretary AI is $249/month. Credit packs range from $29 (5 credits) to $499 (100 credits). What adjustments would maximize revenue?',
+    'generate-config': 'I need to onboard a new customer. Their business is "Maple Leaf Roofing" in Calgary, Alberta. They do residential re-roofing, siding, and gutter installation. Generate a complete AI secretary configuration including greeting, Q&A, directories, and agent settings.',
+    'blog-post': 'Write a 600-word SEO blog post titled "Why Every Roofing Company Needs an AI Phone Secretary in 2026". Target keywords: AI roofing secretary, automated phone answering for roofers, roofing business automation. Include a compelling intro, 4 key benefits, and a call-to-action.',
+    'analyze-calls': 'Analyze the overall performance of our AI secretary agents across all customers. What are the common call patterns? What improvements should we make to the greeting scripts, Q&A banks, and call routing? Provide specific optimization suggestions.',
+    'competitive': 'Analyze the competitive landscape for AI phone answering services targeting roofing companies in Canada. Who are the main competitors? What is our unique advantage with the LiveKit + AI Secretary approach? How should we position against Smith.ai, Ruby Receptionist, and similar services?'
+  };
+  var prompt = prompts[action] || action;
+  document.getElementById('gemini-input').value = prompt;
+  geminiSend();
+}
+
+function geminiSendFromSuggestion(text) {
+  document.getElementById('gemini-input').value = text;
+  geminiSend();
+}
+
+async function geminiSend() {
+  var input = document.getElementById('gemini-input');
+  var prompt = (input.value || '').trim();
+  if (!prompt) return;
+  input.value = '';
+
+  // Add user message
+  SA.geminiMessages.push({ role: 'user', content: prompt });
+  SA.geminiLoading = true;
+  renderContent();
+  scrollGeminiToBottom();
+
+  try {
+    // Always use /command for first message (DB-aware), /chat for follow-ups (multi-turn context)
+    var useCommand = SA.geminiMessages.filter(function(m) { return m.role === 'user'; }).length <= 1;
+    var body, url;
+
+    if (useCommand) {
+      url = '/api/gemini/command';
+      body = JSON.stringify({ prompt: prompt });
+    } else {
+      url = '/api/gemini/chat';
+      // Send last 20 messages for context
+      var msgs = SA.geminiMessages.slice(-20).map(function(m) {
+        return { role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content };
+      });
+      body = JSON.stringify({ messages: msgs });
+    }
+
+    var res = await fetch(url, {
+      method: 'POST',
+      headers: { ...saHeaders(), 'Content-Type': 'application/json' },
+      body: body
+    });
+    var data = await res.json();
+    var reply = data.reply || data.text || 'No response received.';
+
+    SA.geminiMessages.push({
+      role: 'assistant',
+      content: reply,
+      usage: data.usage || null
+    });
+  } catch(err) {
+    SA.geminiMessages.push({
+      role: 'assistant',
+      content: 'Error: ' + err.message
+    });
+  }
+
+  SA.geminiLoading = false;
+  renderContent();
+  scrollGeminiToBottom();
+}
+
+function scrollGeminiToBottom() {
+  setTimeout(function() {
+    var area = document.getElementById('gemini-chat-area');
+    if (area) area.scrollTop = area.scrollHeight;
+  }, 100);
+}
+
+// ============================================================
+// GEMINI AI-ASSIST FOR SECRETARY MANAGER — Auto-generate config
+// Called from the Onboard New Customer form
+// ============================================================
+
+async function geminiAutoGenerateConfig() {
+  var biz = document.getElementById('smo-business')?.value || '';
+  var contact = document.getElementById('smo-name')?.value || '';
+  if (!biz) { alert('Enter a business name first'); return; }
+
+  var btn = event.target.closest('button');
+  var origHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>AI Generating...';
+
+  try {
+    var res = await fetch('/api/gemini/generate-config', {
+      method: 'POST',
+      headers: { ...saHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        business_name: biz,
+        contact_name: contact,
+        business_description: document.getElementById('smo-notes')?.value || '',
+        service_area: 'Alberta, Canada'
+      })
+    });
+    var data = await res.json();
+    if (!data.success || !data.config) {
+      alert('AI generation failed: ' + (data.error || 'No config returned'));
+      btn.disabled = false; btn.innerHTML = origHtml;
+      return;
+    }
+
+    var cfg = data.config;
+
+    // Fill in the form fields from AI-generated config
+    var nameField = document.getElementById('smo-agent-name');
+    if (nameField && cfg.agent_name) nameField.value = cfg.agent_name;
+
+    var voiceField = document.getElementById('smo-voice');
+    if (voiceField && cfg.agent_voice) voiceField.value = cfg.agent_voice;
+
+    var greetField = document.getElementById('smo-greeting');
+    if (greetField && cfg.greeting_script) greetField.value = cfg.greeting_script;
+
+    var qaField = document.getElementById('smo-qa');
+    if (qaField && cfg.common_qa) qaField.value = cfg.common_qa;
+
+    var notesField = document.getElementById('smo-notes');
+    if (notesField && cfg.general_notes) notesField.value = cfg.general_notes;
+
+    // Fill directories if generated
+    if (cfg.directories && Array.isArray(cfg.directories)) {
+      cfg.directories.forEach(function(dir, idx) {
+        if (idx < 4) {
+          var nameEl = document.getElementById('smo-dir' + idx + '-name');
+          var phoneEl = document.getElementById('smo-dir' + idx + '-phone');
+          var notesEl = document.getElementById('smo-dir' + idx + '-notes');
+          if (nameEl) nameEl.value = dir.name || '';
+          if (phoneEl) phoneEl.value = dir.phone_or_action || '';
+          if (notesEl) notesEl.value = dir.special_notes || '';
+        }
+      });
+    }
+
+    btn.innerHTML = '<i class="fas fa-check text-green-400 mr-1"></i>Config Generated!';
+    setTimeout(function() { btn.disabled = false; btn.innerHTML = origHtml; }, 2000);
+
+  } catch(e) {
+    alert('AI generation error: ' + e.message);
+    btn.disabled = false; btn.innerHTML = origHtml;
+  }
+}
+
+async function geminiGenerateGreeting() {
+  var biz = document.getElementById('smo-business')?.value || 'Roofing Company';
+  var agentName = document.getElementById('smo-agent-name')?.value || 'Sarah';
+
+  var btn = event.target.closest('button');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
+
+  try {
+    var res = await fetch('/api/gemini/generate-greeting', {
+      method: 'POST',
+      headers: { ...saHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ business_name: biz, agent_name: agentName })
+    });
+    var data = await res.json();
+    if (data.greetings) {
+      var greetField = document.getElementById('smo-greeting');
+      if (greetField) {
+        // Extract the first option
+        var lines = data.greetings.split('\n').filter(function(l) { return l.trim(); });
+        var first = '';
+        for (var i = 0; i < lines.length; i++) {
+          if (lines[i].match(/\[Option 1\]/i)) {
+            first = lines[i].replace(/\[Option 1\]/i, '').trim();
+            if (!first && lines[i+1]) first = lines[i+1].trim();
+            break;
+          }
+        }
+        greetField.value = first || lines[0] || data.greetings.substring(0, 300);
+      }
+    }
+  } catch(e) { console.warn('Greeting generation failed:', e); }
+
+  btn.disabled = false;
+  btn.innerHTML = '<i class="fas fa-magic mr-1"></i>AI Generate';
+}
+
+async function geminiGenerateQA() {
+  var biz = document.getElementById('smo-business')?.value || 'Roofing Company';
+  var services = document.getElementById('smo-notes')?.value || '';
+
+  var btn = event.target.closest('button');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
+
+  try {
+    var res = await fetch('/api/gemini/generate-qa', {
+      method: 'POST',
+      headers: { ...saHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ business_name: biz, services: services })
+    });
+    var data = await res.json();
+    if (data.qa) {
+      var qaField = document.getElementById('smo-qa');
+      if (qaField) qaField.value = data.qa;
+    }
+  } catch(e) { console.warn('Q&A generation failed:', e); }
+
+  btn.disabled = false;
+  btn.innerHTML = '<i class="fas fa-magic mr-1"></i>AI Generate';
+}
+
+// ============================================================
+// SECRETARY AI MONITOR — Real-Time Agent Monitoring Dashboard
+// Minutes tracking, per-customer analytics, IT help tools
+// ============================================================
+
+function renderSecretaryMonitorView() {
+  var d = SA.data.secretary_monitor || {};
+  var agents = d.agents || [];
+  var global = d.global || {};
+  var summary = d.summary || {};
+  var recent = d.recent_calls || [];
+
+  var agentRows = agents.map(function(a) {
+    var s = a.stats || {};
+    var isActive = a.is_active === 1;
+    var isConnected = a.connection_status === 'connected';
+    var mins30d = Math.round((s.seconds_30d || 0) / 60);
+    var minsTotal = Math.round((s.total_seconds || 0) / 60);
+    var statusDot = isActive && isConnected ? '<span class="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse inline-block"></span>' :
+                    isActive ? '<span class="w-2.5 h-2.5 bg-yellow-500 rounded-full inline-block"></span>' :
+                    '<span class="w-2.5 h-2.5 bg-gray-300 rounded-full inline-block"></span>';
+    var lastCallAgo = s.last_call_at ? smTimeAgo(s.last_call_at) : 'Never';
+
+    return '<tr class="border-b border-gray-100 hover:bg-blue-50/40 transition-colors">' +
+      '<td class="px-4 py-3"><div class="flex items-center gap-2.5">' + statusDot + '<div><div class="font-bold text-gray-800 text-sm">' + (a.brand_business_name || a.customer_name || a.customer_email) + '</div><div class="text-[10px] text-gray-400">' + (a.customer_email || '') + ' · ID: ' + a.customer_id + '</div></div></div></td>' +
+      '<td class="px-3 py-3 text-center"><span class="text-sm font-semibold">' + (a.agent_name || 'Sarah') + '</span><br><span class="text-[10px] text-gray-400">' + (a.agent_voice || 'alloy') + '</span></td>' +
+      '<td class="px-3 py-3 text-center"><div class="text-lg font-black text-blue-700">' + mins30d + '</div><div class="text-[10px] text-gray-400">' + minsTotal + ' total</div></td>' +
+      '<td class="px-3 py-3 text-center"><span class="font-bold text-gray-700">' + (s.calls_30d || 0) + '</span><br><span class="text-[10px] text-gray-400">' + (s.calls_today || 0) + ' today</span></td>' +
+      '<td class="px-3 py-3 text-center"><span class="font-bold text-purple-700">' + (s.total_leads || 0) + '</span></td>' +
+      '<td class="px-3 py-3 text-center"><span class="text-xs text-gray-500">' + fmtSeconds(s.avg_duration || 0) + '</span></td>' +
+      '<td class="px-3 py-3"><span class="text-xs text-gray-400">' + lastCallAgo + '</span></td>' +
+      '<td class="px-3 py-3"><div class="flex items-center gap-1">' +
+        '<button onclick="smMonitorCustomer(' + a.customer_id + ')" class="p-1.5 rounded-lg hover:bg-blue-100 text-blue-500" title="View Details"><i class="fas fa-chart-line text-xs"></i></button>' +
+        '<button onclick="smITHelp(' + a.customer_id + ')" class="p-1.5 rounded-lg hover:bg-amber-100 text-amber-500" title="IT Help"><i class="fas fa-wrench text-xs"></i></button>' +
+        '<button onclick="smOpenDetail(' + a.customer_id + ')" class="p-1.5 rounded-lg hover:bg-green-100 text-green-500" title="Edit Config"><i class="fas fa-edit text-xs"></i></button>' +
+      '</div></td></tr>';
+  }).join('');
+
+  var activityFeed = recent.slice(0, 10).map(function(call) {
+    var outcomeColor = call.call_outcome === 'answered' ? 'text-green-600 bg-green-50' : 'text-gray-600 bg-gray-50';
+    return '<div class="flex items-center gap-3 py-2.5 border-b border-gray-100 last:border-0">' +
+      '<div class="w-8 h-8 rounded-full flex items-center justify-center ' + (call.is_lead ? 'bg-amber-100' : 'bg-sky-100') + '"><i class="fas ' + (call.is_lead ? 'fa-fire text-amber-600' : 'fa-phone text-sky-600') + ' text-xs"></i></div>' +
+      '<div class="flex-1 min-w-0"><div class="flex items-center gap-2"><span class="font-semibold text-gray-800 text-sm truncate">' + (call.caller_name || call.caller_phone || 'Unknown') + '</span><span class="text-[10px] text-gray-400">→</span><span class="text-[10px] text-blue-600 font-medium">' + (call.customer_name || '') + '</span></div><p class="text-[11px] text-gray-500 truncate">' + (call.call_summary || 'No summary') + '</p></div>' +
+      '<div class="text-right flex-shrink-0"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold ' + outcomeColor + '">' + (call.call_outcome || '') + '</span><div class="text-[10px] text-gray-400 mt-0.5">' + smTimeAgo(call.created_at) + '</div></div></div>';
+  }).join('');
+
+  return '<div class="space-y-6">' +
+    '<div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">' +
+      '<div><h2 class="text-2xl font-black text-gray-900"><i class="fas fa-satellite-dish mr-2 text-teal-500"></i>Secretary AI — Live Monitor</h2><p class="text-sm text-gray-500 mt-1">Real-time agent status, minutes tracking, call analytics, and IT support tools</p></div>' +
+      '<div class="flex gap-2"><button onclick="loadView(\'secretary-monitor\')" class="px-4 py-2.5 bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 rounded-xl text-sm font-semibold"><i class="fas fa-sync mr-1"></i>Refresh</button><button onclick="saDashboardSetView(\'secretary-manager\')" class="px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-sm font-bold shadow"><i class="fas fa-cog mr-2"></i>Manage Agents</button></div>' +
+    '</div>' +
+    '<div class="grid grid-cols-2 md:grid-cols-6 gap-3">' +
+      samc('Active Agents', (summary.active_agents || 0) + '/' + (summary.total_agents || 0), 'fa-robot', 'green', (summary.connected_agents || 0) + ' connected') +
+      samc('Min Today', summary.total_minutes_today || 0, 'fa-clock', 'blue', (global.today_calls || 0) + ' calls') +
+      samc('Min (7d)', summary.total_minutes_7d || 0, 'fa-calendar-week', 'indigo', (global.week_calls || 0) + ' calls') +
+      samc('Min (30d)', summary.total_minutes_30d || 0, 'fa-calendar', 'purple', (global.month_calls || 0) + ' calls') +
+      samc('All-Time Min', summary.total_minutes_alltime || 0, 'fa-history', 'teal', (global.total_calls || 0) + ' calls') +
+      samc('Leads', global.total_leads || 0, 'fa-fire', 'amber', 'Avg ' + fmtSeconds(global.avg_duration || 0)) +
+    '</div>' +
+    '<div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">' +
+      '<div class="p-4 border-b bg-gray-50 flex items-center justify-between"><h3 class="font-bold text-gray-800"><i class="fas fa-users mr-2 text-gray-400"></i>Per-Customer Agent Status & Minutes</h3></div>' +
+      (agents.length === 0 ? '<div class="p-12 text-center"><i class="fas fa-satellite-dish text-4xl text-gray-200 mb-4"></i><p class="text-gray-400 mb-4">No secretary agents configured.</p></div>'
+        : '<div class="overflow-x-auto"><table class="w-full"><thead><tr class="bg-gray-50/80 text-[11px] text-gray-500 uppercase tracking-wider"><th class="px-4 py-3 text-left">Customer</th><th class="px-3 py-3 text-center">Agent</th><th class="px-3 py-3 text-center">Min (30d)</th><th class="px-3 py-3 text-center">Calls (30d)</th><th class="px-3 py-3 text-center">Leads</th><th class="px-3 py-3 text-center">Avg Dur</th><th class="px-3 py-3 text-left">Last Call</th><th class="px-3 py-3 text-left">Actions</th></tr></thead><tbody>' + agentRows + '</tbody></table></div>') +
+    '</div>' +
+    '<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">' +
+      '<div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5"><h3 class="font-bold text-gray-800 mb-4"><i class="fas fa-stream mr-2 text-blue-400"></i>Recent Call Activity</h3>' +
+        (recent.length === 0 ? '<div class="text-center py-8 text-gray-400"><i class="fas fa-phone-slash text-3xl block mb-2"></i>No calls yet</div>' : '<div>' + activityFeed + '</div>') + '</div>' +
+      '<div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5"><h3 class="font-bold text-gray-800 mb-4"><i class="fas fa-headset mr-2 text-amber-400"></i>IT Help & Troubleshooting</h3>' +
+        '<div class="space-y-3">' +
+          '<div class="p-4 bg-amber-50 border border-amber-200 rounded-xl"><p class="font-semibold text-amber-800 text-sm mb-2"><i class="fas fa-user-cog mr-1"></i>Select customer</p>' +
+            '<select id="itHelpCustomerSelect" class="w-full border border-amber-200 rounded-lg px-3 py-2 text-sm bg-white"><option value="">Choose...</option>' +
+              agents.map(function(a) { return '<option value="' + a.customer_id + '">' + (a.brand_business_name || a.customer_name || a.customer_email) + '</option>'; }).join('') + '</select></div>' +
+          '<div class="grid grid-cols-2 gap-2">' +
+            '<button onclick="smITAction(\'check_status\')" class="px-3 py-2.5 bg-blue-50 text-blue-700 rounded-xl text-xs font-bold hover:bg-blue-100"><i class="fas fa-stethoscope mr-1"></i>Diagnostic</button>' +
+            '<button onclick="smITAction(\'force_reconnect\')" class="px-3 py-2.5 bg-green-50 text-green-700 rounded-xl text-xs font-bold hover:bg-green-100"><i class="fas fa-plug mr-1"></i>Force Reconnect</button>' +
+            '<button onclick="smITAction(\'force_disconnect\')" class="px-3 py-2.5 bg-red-50 text-red-600 rounded-xl text-xs font-bold hover:bg-red-100"><i class="fas fa-unlink mr-1"></i>Disconnect</button>' +
+            '<button onclick="smITAction(\'reset_config\')" class="px-3 py-2.5 bg-amber-50 text-amber-700 rounded-xl text-xs font-bold hover:bg-amber-100"><i class="fas fa-redo mr-1"></i>Reset LiveKit</button>' +
+            '<button onclick="smITAction(\'recent_logs\')" class="px-3 py-2.5 bg-purple-50 text-purple-700 rounded-xl text-xs font-bold hover:bg-purple-100 col-span-2"><i class="fas fa-file-alt mr-1"></i>Recent Logs</button></div>' +
+          '<div id="itHelpResult" class="hidden mt-3"></div></div></div>' +
+    '</div></div>';
+}
+
+window.smITAction = async function(action) {
+  var sel = document.getElementById('itHelpCustomerSelect');
+  var cid = sel ? sel.value : '';
+  if (!cid) { alert('Select a customer first'); return; }
+  var el = document.getElementById('itHelpResult');
+  if (el) { el.classList.remove('hidden'); el.innerHTML = '<div class="text-center py-3"><i class="fas fa-spinner fa-spin text-blue-500"></i></div>'; }
+  try {
+    var res = await saFetch('/api/admin/superadmin/secretary/it-help', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ customer_id: parseInt(cid), action: action }) });
+    var data = await res.json();
+    if (data.success) {
+      if (action === 'check_status' && data.diagnostic) {
+        var d = data.diagnostic; var issues = [];
+        if (!d.agent_active) issues.push('Agent INACTIVE');
+        if (d.connection_status !== 'connected') issues.push('Status: ' + d.connection_status);
+        if (!d.has_trunk) issues.push('No SIP trunk'); if (!d.has_dispatch) issues.push('No dispatch rule');
+        if (!d.has_phone) issues.push('No AI phone #'); if (!d.has_greeting) issues.push('Greeting missing');
+        if (d.subscription !== 'active') issues.push('Sub: ' + d.subscription);
+        el.innerHTML = '<div class="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm"><h4 class="font-bold text-blue-800 mb-2"><i class="fas fa-clipboard-check mr-1"></i>Diagnostic</h4><div class="grid grid-cols-2 gap-1 text-xs">' +
+          '<span class="text-gray-600">Active:</span><span class="font-bold ' + (d.agent_active ? 'text-green-600' : 'text-red-600') + '">' + (d.agent_active ? 'YES' : 'NO') + '</span>' +
+          '<span class="text-gray-600">Connection:</span><span class="font-bold">' + d.connection_status + '</span>' +
+          '<span class="text-gray-600">Trunk:</span><span class="font-bold ' + (d.has_trunk ? 'text-green-600' : 'text-red-600') + '">' + (d.has_trunk ? 'OK' : 'MISSING') + '</span>' +
+          '<span class="text-gray-600">Dispatch:</span><span class="font-bold ' + (d.has_dispatch ? 'text-green-600' : 'text-red-600') + '">' + (d.has_dispatch ? 'OK' : 'MISSING') + '</span>' +
+          '<span class="text-gray-600">AI Phone:</span><span class="font-mono">' + (d.ai_phone || 'NONE') + '</span>' +
+          '<span class="text-gray-600">Biz Phone:</span><span class="font-mono">' + (d.business_phone || 'NONE') + '</span>' +
+          '<span class="text-gray-600">Carrier:</span><span>' + d.carrier + '</span>' +
+          '<span class="text-gray-600">Sub:</span><span class="font-bold">' + d.subscription + '</span>' +
+          '<span class="text-gray-600">Last Call:</span><span>' + (d.last_call ? smTimeAgo(d.last_call) : 'Never') + '</span>' +
+          '<span class="text-gray-600">24h Calls:</span><span class="font-bold">' + d.calls_24h + '</span></div>' +
+          (issues.length > 0 ? '<div class="mt-3 p-2 bg-red-50 border border-red-200 rounded-lg"><p class="text-xs font-bold text-red-700 mb-1"><i class="fas fa-exclamation-triangle mr-1"></i>Issues:</p>' + issues.map(function(i) { return '<p class="text-xs text-red-600">• ' + i + '</p>'; }).join('') + '</div>' : '<div class="mt-3 p-2 bg-green-50 border border-green-200 rounded-lg"><p class="text-xs font-bold text-green-700"><i class="fas fa-check-circle mr-1"></i>All checks passed</p></div>') + '</div>';
+      } else if (action === 'recent_logs' && data.logs) {
+        el.innerHTML = '<div class="bg-purple-50 border border-purple-200 rounded-xl p-4"><h4 class="font-bold text-purple-800 text-sm mb-2">Recent Logs (' + data.logs.length + ')</h4>' +
+          (data.logs.length === 0 ? '<p class="text-xs text-gray-500">No calls</p>' :
+            '<div class="space-y-1 max-h-48 overflow-y-auto">' + data.logs.map(function(l) { return '<div class="flex items-center justify-between text-xs py-1 border-b border-purple-100"><span class="font-semibold">' + (l.caller_name || l.caller_phone || '?') + '</span><span>' + fmtSeconds(l.call_duration_seconds) + '</span><span class="text-' + (l.call_outcome === 'answered' ? 'green' : 'gray') + '-600">' + l.call_outcome + '</span><span class="text-gray-400">' + smTimeAgo(l.created_at) + '</span></div>'; }).join('') + '</div>') + '</div>';
+      } else {
+        el.innerHTML = '<div class="bg-green-50 border border-green-200 rounded-xl p-3 text-sm text-green-700"><i class="fas fa-check-circle mr-1"></i>' + (data.message || 'Done') + '</div>';
+        setTimeout(function() { loadView('secretary-monitor'); }, 1500);
+      }
+    } else { el.innerHTML = '<div class="bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-700"><i class="fas fa-times-circle mr-1"></i>' + (data.error || 'Failed') + '</div>'; }
+  } catch(e) { if (el) el.innerHTML = '<div class="bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-700">Error: ' + e.message + '</div>'; }
+};
+
+window.smMonitorCustomer = async function(cid) {
+  try {
+    var res = await saFetch('/api/admin/superadmin/secretary/customer/' + cid + '/minutes');
+    if (!res) return; var data = await res.json();
+    var ov = data.overall || {}; var daily = data.daily || [];
+    var totalMins = Math.round((ov.total_seconds || 0) / 60);
+    var modal = document.createElement('div'); modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm'; modal.id = 'monitorModal';
+    modal.innerHTML = '<div class="bg-white rounded-2xl shadow-2xl max-w-2xl w-full mx-4 max-h-[85vh] overflow-hidden flex flex-col">' +
+      '<div class="bg-gradient-to-r from-blue-600 to-indigo-700 px-6 py-4 flex items-center justify-between"><div><h3 class="text-white font-bold text-lg"><i class="fas fa-chart-line mr-2"></i>Minutes & Analytics</h3><p class="text-blue-200 text-xs">Customer #' + cid + '</p></div><button onclick="document.getElementById(\'monitorModal\').remove()" class="text-white/70 hover:text-white"><i class="fas fa-times text-lg"></i></button></div>' +
+      '<div class="p-6 overflow-y-auto flex-1">' +
+        '<div class="grid grid-cols-4 gap-3 mb-5">' + samc('Total Min', totalMins, 'fa-clock', 'blue', ov.total_calls + ' calls') + samc('Calls', ov.total_calls || 0, 'fa-phone', 'green', '') + samc('Leads', ov.total_leads || 0, 'fa-fire', 'amber', '') + samc('Avg', fmtSeconds(ov.avg_seconds || 0), 'fa-stopwatch', 'purple', '') + '</div>' +
+        '<h4 class="font-bold text-gray-800 mb-3"><i class="fas fa-calendar mr-1 text-blue-400"></i>Daily (30d)</h4>' +
+        (daily.length === 0 ? '<p class="text-gray-400 text-sm text-center py-4">No calls in 30 days</p>' :
+          '<div class="overflow-x-auto max-h-64"><table class="w-full text-sm"><thead class="bg-gray-50 sticky top-0"><tr><th class="px-3 py-2 text-left text-xs text-gray-500">Date</th><th class="px-3 py-2 text-center text-xs text-gray-500">Calls</th><th class="px-3 py-2 text-center text-xs text-gray-500">Min</th><th class="px-3 py-2 text-center text-xs text-gray-500">Avg</th><th class="px-3 py-2 text-center text-xs text-gray-500">Leads</th></tr></thead><tbody>' +
+          daily.map(function(dd) { return '<tr class="border-b border-gray-100"><td class="px-3 py-2">' + dd.call_date + '</td><td class="px-3 py-2 text-center font-bold">' + dd.call_count + '</td><td class="px-3 py-2 text-center font-bold text-blue-700">' + Math.round((dd.total_seconds || 0) / 60) + '</td><td class="px-3 py-2 text-center text-gray-500">' + fmtSeconds(dd.avg_seconds || 0) + '</td><td class="px-3 py-2 text-center text-amber-600 font-bold">' + (dd.leads || 0) + '</td></tr>'; }).join('') + '</tbody></table></div>') +
+      '</div><div class="px-6 py-3 border-t bg-gray-50 flex justify-end"><button onclick="document.getElementById(\'monitorModal\').remove()" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg text-sm font-medium">Close</button></div></div>';
+    document.body.appendChild(modal); modal.addEventListener('click', function(e) { if (e.target === modal) modal.remove(); });
+  } catch(e) { alert('Error: ' + e.message); }
+};
+
+window.smITHelp = function(cid) { var sel = document.getElementById('itHelpCustomerSelect'); if (sel) sel.value = String(cid); smITAction('check_status'); };
+
+function smTimeAgo(dateStr) {
+  if (!dateStr) return 'Never';
+  var diff = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+  if (diff < 60) return 'just now'; if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+  if (diff < 86400) return Math.floor(diff / 3600) + 'h ago'; if (diff < 604800) return Math.floor(diff / 86400) + 'd ago';
+  return fmtDate(dateStr);
 }
