@@ -40,6 +40,7 @@ export type Bindings = {
   // Square Payment Processing — stored as Cloudflare secrets, accessed server-side only
   SQUARE_ACCESS_TOKEN: string        // Production access token (server-side only)
   SQUARE_APPLICATION_ID: string      // Application ID (safe for frontend — equivalent of Stripe publishable key)
+  SQUARE_CLIENT_SECRET: string       // OAuth 2.0 application secret for per-user Square Connect
   SQUARE_LOCATION_ID: string         // Square location ID for payment processing
 
   // Email delivery

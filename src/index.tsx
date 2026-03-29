@@ -561,6 +561,9 @@ app.get('/customer/virtual-tryon', (c) => c.html(getVirtualTryOnPageHTML()))
 // Team Management — Add/manage sales team members ($50/user/month)
 app.get('/customer/team', (c) => c.html(getTeamManagementPageHTML()))
 
+// Payment Settings — Connect user's own Square account for invoice/proposal payment links
+app.get('/customer/settings', (c) => c.html(getCustomerSettingsHTML()))
+
 // Join Team — Accept invitation (public landing with auth redirect)
 app.get('/customer/join-team', (c) => c.html(getJoinTeamPageHTML()))
 
@@ -3316,6 +3319,171 @@ function getTeamManagementPageHTML() {
     }
   </script>
   <script src="/static/team-management.js"></script>
+  ${getRoverAssistant()}
+</body>
+</html>`
+}
+
+// ============================================================
+// CUSTOMER SETTINGS PAGE — Connect Square account for payments
+// ============================================================
+function getCustomerSettingsHTML() {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags()}
+  <title>Payment Settings - RoofReporterAI</title>
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <header class="bg-gradient-to-r from-emerald-600 to-teal-700 text-white shadow-lg">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
+          <img src="/static/logo.png" alt="RoofReporterAI" class="w-10 h-10 rounded-lg object-cover">
+          <div>
+            <h1 class="text-lg font-bold">Payment Settings</h1>
+            <p class="text-emerald-200 text-xs">Connect your Square account to collect payments</p>
+          </div>
+        </a>
+      </div>
+      <nav class="flex items-center space-x-3">
+        <a href="/customer/dashboard" class="text-emerald-200 hover:text-white text-sm"><i class="fas fa-th-large mr-1"></i>Dashboard</a>
+        <button onclick="custLogout()" class="text-emerald-200 hover:text-white text-sm"><i class="fas fa-sign-out-alt mr-1"></i>Logout</button>
+      </nav>
+    </div>
+  </header>
+  <main class="max-w-3xl mx-auto px-4 py-8">
+    <div id="settings-root">
+      <div class="flex items-center justify-center py-16">
+        <div class="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-emerald-500"></div>
+        <span class="ml-3 text-gray-500">Loading settings…</span>
+      </div>
+    </div>
+  </main>
+  <script>
+    (function() {
+      var c = localStorage.getItem('rc_customer');
+      if (!c) { window.location.href = '/customer/login'; return; }
+    })();
+    function custLogout() {
+      var token = localStorage.getItem('rc_customer_token');
+      if (token) fetch('/api/customer/logout', { method: 'POST', headers: { 'Authorization': 'Bearer ' + token } })['catch'](function(){});
+      localStorage.removeItem('rc_customer');
+      localStorage.removeItem('rc_customer_token');
+      window.location.href = '/customer/login';
+    }
+    function getToken() { return localStorage.getItem('rc_customer_token') || ''; }
+    function authHeaders() { return { 'Authorization': 'Bearer ' + getToken(), 'Content-Type': 'application/json' }; }
+
+    // Check URL params for OAuth result
+    var params = new URLSearchParams(window.location.search);
+    var squareResult = params.get('square');
+    if (squareResult === 'connected') {
+      history.replaceState({}, '', '/customer/settings');
+      setTimeout(function() { showToast('Square account connected successfully!', 'success'); }, 300);
+    } else if (squareResult === 'error') {
+      var reason = params.get('reason') || 'unknown';
+      history.replaceState({}, '', '/customer/settings');
+      setTimeout(function() { showToast('Square connection failed: ' + reason, 'error'); }, 300);
+    }
+
+    function showToast(msg, type) {
+      var t = document.createElement('div');
+      t.className = 'fixed top-4 right-4 z-50 px-4 py-3 rounded-xl text-white text-sm font-semibold shadow-xl ' + (type === 'error' ? 'bg-red-500' : 'bg-green-500');
+      t.textContent = msg;
+      document.body.appendChild(t);
+      setTimeout(function() { t.remove(); }, 4000);
+    }
+
+    async function loadSettings() {
+      var root = document.getElementById('settings-root');
+      try {
+        var res = await fetch('/api/square/account-status', { headers: authHeaders() });
+        var data = await res.json();
+        renderSettings(root, data);
+      } catch(e) {
+        root.innerHTML = '<p class="text-red-500 text-center py-8">Failed to load settings.</p>';
+      }
+    }
+
+    function renderSettings(root, squareStatus) {
+      var connected = squareStatus && squareStatus.connected;
+      root.innerHTML =
+        '<h2 class="text-xl font-bold text-gray-900 mb-6"><i class="fas fa-credit-card mr-2 text-emerald-600"></i>Payment Settings</h2>' +
+
+        '<div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 mb-6">' +
+          '<div class="flex items-start gap-4">' +
+            '<div class="w-12 h-12 bg-black rounded-xl flex items-center justify-center flex-shrink-0">' +
+              '<i class="fas fa-square text-white text-xl"></i>' +
+            '</div>' +
+            '<div class="flex-1">' +
+              '<h3 class="text-lg font-bold text-gray-900 mb-1">Square Account</h3>' +
+              (connected
+                ? '<div class="flex items-center gap-2 mb-3"><span class="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-bold"><i class="fas fa-check-circle mr-1"></i>Connected</span></div>' +
+                  '<p class="text-sm text-gray-600 mb-1"><i class="fas fa-store mr-1 text-gray-400"></i><strong>' + (squareStatus.merchant_name || 'Square Merchant') + '</strong></p>' +
+                  '<p class="text-sm text-gray-500 mb-1"><i class="fas fa-map-marker-alt mr-1 text-gray-400"></i>' + (squareStatus.location_name || 'Default Location') + '</p>' +
+                  '<p class="text-sm text-gray-500 mb-4"><i class="fas fa-dollar-sign mr-1 text-gray-400"></i>Currency: ' + (squareStatus.currency || 'USD') + '</p>' +
+                  '<p class="text-xs text-gray-400 mb-4">Payment links on your invoices and proposals will go directly to this Square account.</p>' +
+                  '<button onclick="disconnectSquare()" class="px-4 py-2 bg-red-50 text-red-600 border border-red-200 rounded-xl text-sm font-semibold hover:bg-red-100 transition-colors">' +
+                    '<i class="fas fa-unlink mr-1"></i>Disconnect Square' +
+                  '</button>'
+                : '<p class="text-sm text-gray-500 mb-4">Connect your Square merchant account so that payment links on your invoices and proposals go directly to your account — not the platform.</p>' +
+                  '<div class="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-4">' +
+                    '<p class="text-xs text-amber-800"><i class="fas fa-exclamation-triangle mr-1 text-amber-500"></i>' +
+                    'Without connecting your Square account, payment links cannot be generated for your invoices and proposals.</p>' +
+                  '</div>' +
+                  '<button id="squareConnectBtn" onclick="connectSquare()" ' +
+                     'class="inline-flex items-center gap-2 px-5 py-2.5 bg-black hover:bg-gray-800 text-white font-bold rounded-xl text-sm transition-all shadow-lg">' +
+                    '<i class="fas fa-plug mr-1"></i>Connect Square Account' +
+                  '</button>'
+              ) +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+
+        '<div class="bg-blue-50 border border-blue-200 rounded-xl p-4">' +
+          '<h4 class="text-sm font-bold text-blue-800 mb-2"><i class="fas fa-info-circle mr-1"></i>How it works</h4>' +
+          '<ol class="text-xs text-blue-700 space-y-1 list-decimal list-inside">' +
+            '<li>Click "Connect Square Account" and log in to your Square account</li>' +
+            '<li>Authorize RoofReporterAI to create payment links on your behalf</li>' +
+            '<li>Open any invoice or proposal and click "Generate Link"</li>' +
+            '<li>Your client receives a payment link — money goes directly to your Square account</li>' +
+          '</ol>' +
+        '</div>';
+
+    }
+
+    async function connectSquare() {
+      var btn = document.getElementById('squareConnectBtn');
+      if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Connecting…'; }
+      try {
+        var res = await fetch('/api/square/connect', { method: 'POST', headers: authHeaders() });
+        var data = await res.json();
+        if (data.auth_url) {
+          window.location.href = data.auth_url;
+        } else {
+          showToast(data.error || 'Failed to start Square connection.', 'error');
+          if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-plug mr-1"></i>Connect Square Account'; }
+        }
+      } catch(e) {
+        showToast('Network error. Please try again.', 'error');
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-plug mr-1"></i>Connect Square Account'; }
+      }
+    }
+
+    function disconnectSquare() {
+      if (!confirm('Disconnect your Square account? Existing payment links will still work, but you won\'t be able to generate new ones.')) return;
+      fetch('/api/square/disconnect', { method: 'POST', headers: authHeaders() })
+        .then(function(r) { return r.json(); })
+        .then(function(res) {
+          if (res.success) { showToast('Square account disconnected.', 'success'); loadSettings(); }
+          else { showToast(res.error || 'Failed to disconnect.', 'error'); }
+        })
+        .catch(function() { showToast('Network error.', 'error'); });
+    }
+
+    loadSettings();
+  </script>
   ${getRoverAssistant()}
 </body>
 </html>`

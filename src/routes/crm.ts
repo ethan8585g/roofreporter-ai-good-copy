@@ -522,8 +522,65 @@ crmRoutes.post('/invoices/:id/remind', async (c) => {
 })
 
 // ============================================================
+// SQUARE PAYMENT LINK HELPER — Used by invoices and proposals
+// Fetches the owner's connected Square account (OAuth) and
+// creates a payment link on their account, not the platform's.
+// ============================================================
+async function createSquarePaymentLink(
+  db: D1Database,
+  ownerId: number,
+  amountCents: number,
+  currency: string,
+  name: string,
+  note: string
+): Promise<{ url: string; linkId: string }> {
+  const oauth = await db.prepare(
+    'SELECT square_access_token, square_location_id, square_currency FROM customer_square_oauth WHERE customer_id = ?'
+  ).bind(ownerId).first<any>()
+
+  if (!oauth?.square_access_token) {
+    throw Object.assign(new Error('Connect your Square account in Settings to generate payment links.'), { code: 'square_not_connected' })
+  }
+
+  const currency_ = currency || oauth.square_currency || 'USD'
+  const SQUARE_API_BASE = 'https://connect.squareup.com/v2'
+  const SQUARE_API_VERSION = '2025-01-23'
+
+  const body = {
+    idempotency_key: `pay-${ownerId}-${Date.now()}`,
+    quick_pay: {
+      name,
+      price_money: { amount: amountCents, currency: currency_ },
+      location_id: oauth.square_location_id,
+    },
+    checkout_options: { ask_for_shipping_address: false },
+    payment_note: note,
+  }
+
+  const resp = await fetch(`${SQUARE_API_BASE}/online-checkout/payment-links`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${oauth.square_access_token}`,
+      'Content-Type': 'application/json',
+      'Square-Version': SQUARE_API_VERSION,
+    },
+    body: JSON.stringify(body),
+  })
+
+  const data: any = await resp.json()
+  if (!resp.ok) {
+    const errMsg = data.errors?.[0]?.detail || data.errors?.[0]?.code || `Square API error: ${resp.status}`
+    throw new Error(errMsg)
+  }
+
+  const link = data.payment_link
+  return { url: link?.url || link?.long_url || '', linkId: link?.id || '' }
+}
+
+// ============================================================
 // INVOICE PAYMENT LINK — Generate Square checkout URL
 // POST /api/crm/invoices/:id/payment-link
+// Uses owner's connected Square account (not platform account).
 // ============================================================
 crmRoutes.post('/invoices/:id/payment-link', async (c) => {
   const ownerId = await getOwnerId(c)
@@ -534,42 +591,56 @@ crmRoutes.post('/invoices/:id/payment-link', async (c) => {
   ).bind(c.req.param('id'), ownerId).first<any>()
   if (!inv) return c.json({ error: 'Invoice not found' }, 404)
 
-  const accessToken = (c.env as any).SQUARE_ACCESS_TOKEN
-  const locationId = (c.env as any).SQUARE_LOCATION_ID
-  if (!accessToken || !locationId) return c.json({ error: 'Square payment is not configured.' }, 503)
-
   try {
     const totalCents = Math.round(parseFloat(inv.total || 0) * 100)
-    const SQUARE_API_BASE = 'https://connect.squareup.com/v2'
-    const SQUARE_API_VERSION = '2025-01-23'
-    const body = {
-      idempotency_key: `inv-${inv.id}-${Date.now()}`,
-      quick_pay: {
-        name: `Invoice ${inv.invoice_number}`,
-        price_money: { amount: totalCents, currency: 'CAD' },
-        location_id: locationId
-      },
-      checkout_options: { ask_for_shipping_address: false },
-      payment_note: `Invoice ${inv.invoice_number} — owner ${ownerId}`
-    }
-    const resp = await fetch(`${SQUARE_API_BASE}/online-checkout/payment-links`, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json', 'Square-Version': SQUARE_API_VERSION },
-      body: JSON.stringify(body)
-    })
-    const data: any = await resp.json()
-    if (!resp.ok) {
-      const errMsg = data.errors?.[0]?.detail || data.errors?.[0]?.code || `Square API error: ${resp.status}`
-      return c.json({ error: errMsg }, 500)
-    }
-    const link = data.payment_link
-    const checkoutUrl = link?.url || link?.long_url || ''
-    const linkId = link?.id || ''
+    const { url, linkId } = await createSquarePaymentLink(
+      c.env.DB, ownerId, totalCents,
+      inv.currency || 'USD',
+      `Invoice ${inv.invoice_number}`,
+      `Invoice ${inv.invoice_number} — owner ${ownerId}`
+    )
     await c.env.DB.prepare(
       "UPDATE crm_invoices SET payment_link_url = ?, payment_link_id = ?, updated_at = datetime('now') WHERE id = ?"
-    ).bind(checkoutUrl, linkId, inv.id).run()
-    return c.json({ success: true, payment_link_url: checkoutUrl })
+    ).bind(url, linkId, inv.id).run()
+    return c.json({ success: true, payment_link_url: url })
   } catch (err: any) {
+    if (err.code === 'square_not_connected') {
+      return c.json({ error: err.message, action: 'connect-square' }, 403)
+    }
+    return c.json({ error: err.message || 'Failed to create payment link' }, 500)
+  }
+})
+
+// ============================================================
+// PROPOSAL PAYMENT LINK — Generate Square checkout URL
+// POST /api/crm/proposals/:id/payment-link
+// Uses owner's connected Square account (not platform account).
+// ============================================================
+crmRoutes.post('/proposals/:id/payment-link', async (c) => {
+  const ownerId = await getOwnerId(c)
+  if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
+
+  const prop = await c.env.DB.prepare(
+    'SELECT * FROM crm_proposals WHERE id = ? AND owner_id = ?'
+  ).bind(c.req.param('id'), ownerId).first<any>()
+  if (!prop) return c.json({ error: 'Proposal not found' }, 404)
+
+  try {
+    const totalCents = Math.round(parseFloat(prop.total_amount || 0) * 100)
+    const { url, linkId } = await createSquarePaymentLink(
+      c.env.DB, ownerId, totalCents,
+      'USD',
+      `Proposal ${prop.proposal_number}`,
+      `Proposal ${prop.proposal_number} — owner ${ownerId}`
+    )
+    await c.env.DB.prepare(
+      "UPDATE crm_proposals SET payment_link_url = ?, payment_link_id = ?, updated_at = datetime('now') WHERE id = ?"
+    ).bind(url, linkId, prop.id).run()
+    return c.json({ success: true, payment_link_url: url })
+  } catch (err: any) {
+    if (err.code === 'square_not_connected') {
+      return c.json({ error: err.message, action: 'connect-square' }, 403)
+    }
     return c.json({ error: err.message || 'Failed to create payment link' }, 500)
   }
 })

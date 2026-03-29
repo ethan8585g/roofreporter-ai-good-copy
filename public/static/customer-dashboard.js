@@ -164,6 +164,11 @@ function renderDashboard() {
           '<p class="px-3 mb-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Services</p>' +
           navLink('/customer/secretary', 'fa-headset', isSolar ? 'Solar Sales Secretary' : 'Roofer Secretary', secBadge || null, secBadgeColor) +
         '</div>' +
+        // Settings
+        '<div>' +
+          '<p class="px-3 mb-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Settings</p>' +
+          navLink('/customer/settings', 'fa-plug', 'Payment Settings', null, '') +
+        '</div>' +
         (c.is_dev ? '<div><p class="px-3 mb-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Dev</p>' + navLink('/customer/property-imagery', 'fa-satellite', 'Property Imagery', 'Dev', 'bg-amber-500') + '</div>' : '') +
       '</nav>' +
       // Credits footer

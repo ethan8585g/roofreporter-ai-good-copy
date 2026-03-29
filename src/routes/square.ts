@@ -152,6 +152,214 @@ async function getCustomerFromToken(db: D1Database, token: string | undefined): 
 }
 
 // ============================================================
+// SQUARE OAUTH — Per-user Square account connection
+// Allows each contractor to connect their own Square merchant
+// account so invoice/proposal payment links go to their account.
+// ============================================================
+
+// POST /api/square/connect — Initiate OAuth, return auth URL for JS redirect
+squareRoutes.post('/connect', async (c) => {
+  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  const customer = await getCustomerFromToken(c.env.DB, token)
+  if (!customer) return c.json({ error: 'Not authenticated' }, 401)
+
+  const appId = c.env.SQUARE_APPLICATION_ID
+  if (!appId) return c.json({ error: 'Square OAuth is not configured. Contact support.' }, 503)
+
+  // Generate a random state token and store it temporarily
+  const state = crypto.randomUUID()
+  await c.env.DB.prepare(`
+    INSERT INTO customer_square_oauth (customer_id, square_merchant_id, square_access_token, square_location_id, oauth_state)
+    VALUES (?, '', '', '', ?)
+    ON CONFLICT(customer_id) DO UPDATE SET oauth_state = excluded.oauth_state, updated_at = datetime('now')
+  `).bind(customer.customer_id, state).run()
+
+  const origin = new URL(c.req.url).origin
+  const redirectUri = `${origin}/api/square/oauth-callback`
+  const authUrl = new URL('https://connect.squareup.com/oauth2/authorize')
+  authUrl.searchParams.set('client_id', appId)
+  authUrl.searchParams.set('scope', 'MERCHANT_PROFILE_READ PAYMENTS_WRITE ORDERS_WRITE')
+  authUrl.searchParams.set('session', 'false')
+  authUrl.searchParams.set('state', state)
+  authUrl.searchParams.set('redirect_uri', redirectUri)
+
+  return c.json({ auth_url: authUrl.toString() })
+})
+
+// GET /api/square/oauth-callback — Exchange code for tokens, store
+squareRoutes.get('/oauth-callback', async (c) => {
+  const code = c.req.query('code')
+  const state = c.req.query('state')
+  const error = c.req.query('error')
+
+  if (error) {
+    return c.redirect('/customer/settings?square=error&reason=' + encodeURIComponent(error))
+  }
+  if (!code || !state) {
+    return c.redirect('/customer/settings?square=error&reason=missing_params')
+  }
+
+  // Find the customer by oauth_state
+  const pending = await c.env.DB.prepare(
+    'SELECT customer_id FROM customer_square_oauth WHERE oauth_state = ?'
+  ).bind(state).first<any>()
+
+  if (!pending) {
+    return c.redirect('/customer/settings?square=error&reason=invalid_state')
+  }
+
+  const appId = c.env.SQUARE_APPLICATION_ID
+  const appSecret = (c.env as any).SQUARE_CLIENT_SECRET
+  if (!appId || !appSecret) {
+    return c.redirect('/customer/settings?square=error&reason=not_configured')
+  }
+
+  const origin = new URL(c.req.url).origin
+  const redirectUri = `${origin}/api/square/oauth-callback`
+
+  // Exchange code for access token
+  const tokenResp = await fetch('https://connect.squareup.com/oauth2/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Square-Version': SQUARE_API_VERSION },
+    body: JSON.stringify({
+      client_id: appId,
+      client_secret: appSecret,
+      code,
+      grant_type: 'authorization_code',
+      redirect_uri: redirectUri,
+    }),
+  })
+
+  if (!tokenResp.ok) {
+    console.error('[Square OAuth] Token exchange failed:', await tokenResp.text())
+    return c.redirect('/customer/settings?square=error&reason=token_exchange')
+  }
+
+  const tokenData: any = await tokenResp.json()
+  const accessToken = tokenData.access_token
+  const refreshToken = tokenData.refresh_token || null
+  const merchantId = tokenData.merchant_id
+  const expiresAt = tokenData.expires_at || null
+
+  if (!accessToken || !merchantId) {
+    return c.redirect('/customer/settings?square=error&reason=no_token')
+  }
+
+  // Fetch merchant profile + locations
+  let merchantName = ''
+  let locationId = ''
+  let locationName = ''
+  let currency = 'USD'
+
+  try {
+    const merchantData = await squareRequest(accessToken, 'GET', `/merchants/${merchantId}`)
+    merchantName = merchantData.merchant?.business_name || merchantData.merchant?.display_name || ''
+    currency = merchantData.merchant?.currency || 'USD'
+  } catch (e: any) {
+    console.warn('[Square OAuth] Merchant fetch failed (non-fatal):', e.message)
+  }
+
+  try {
+    const locData = await squareRequest(accessToken, 'GET', '/locations')
+    const locations = locData.locations || []
+    const activeLocation = locations.find((l: any) => l.status === 'ACTIVE') || locations[0]
+    if (activeLocation) {
+      locationId = activeLocation.id
+      locationName = activeLocation.name || ''
+      if (activeLocation.currency) currency = activeLocation.currency
+    }
+  } catch (e: any) {
+    console.warn('[Square OAuth] Locations fetch failed (non-fatal):', e.message)
+  }
+
+  if (!locationId) {
+    return c.redirect('/customer/settings?square=error&reason=no_location')
+  }
+
+  // Store tokens
+  await c.env.DB.prepare(`
+    INSERT INTO customer_square_oauth
+      (customer_id, square_merchant_id, square_access_token, square_refresh_token,
+       square_location_id, square_location_name, square_merchant_name, square_currency,
+       oauth_state, token_expires_at, connected_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, datetime('now'), datetime('now'))
+    ON CONFLICT(customer_id) DO UPDATE SET
+      square_merchant_id = excluded.square_merchant_id,
+      square_access_token = excluded.square_access_token,
+      square_refresh_token = excluded.square_refresh_token,
+      square_location_id = excluded.square_location_id,
+      square_location_name = excluded.square_location_name,
+      square_merchant_name = excluded.square_merchant_name,
+      square_currency = excluded.square_currency,
+      oauth_state = NULL,
+      token_expires_at = excluded.token_expires_at,
+      updated_at = datetime('now')
+  `).bind(
+    pending.customer_id, merchantId, accessToken, refreshToken,
+    locationId, locationName, merchantName, currency, expiresAt
+  ).run()
+
+  return c.redirect('/customer/settings?square=connected')
+})
+
+// POST /api/square/disconnect — Revoke and remove user's Square connection
+squareRoutes.post('/disconnect', async (c) => {
+  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  const customer = await getCustomerFromToken(c.env.DB, token)
+  if (!customer) return c.json({ error: 'Not authenticated' }, 401)
+
+  const row = await c.env.DB.prepare(
+    'SELECT square_access_token FROM customer_square_oauth WHERE customer_id = ?'
+  ).bind(customer.customer_id).first<any>()
+
+  if (row?.square_access_token) {
+    // Attempt to revoke the token with Square (best-effort, non-fatal)
+    try {
+      await fetch('https://connect.squareup.com/oauth2/revoke', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Square-Version': SQUARE_API_VERSION },
+        body: JSON.stringify({
+          client_id: c.env.SQUARE_APPLICATION_ID,
+          access_token: row.square_access_token,
+        }),
+      })
+    } catch (e: any) {
+      console.warn('[Square OAuth] Revoke failed (non-fatal):', e.message)
+    }
+  }
+
+  await c.env.DB.prepare(
+    'DELETE FROM customer_square_oauth WHERE customer_id = ?'
+  ).bind(customer.customer_id).run()
+
+  return c.json({ success: true })
+})
+
+// GET /api/square/account-status — Return connected account info for UI
+squareRoutes.get('/account-status', async (c) => {
+  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  const customer = await getCustomerFromToken(c.env.DB, token)
+  if (!customer) return c.json({ error: 'Not authenticated' }, 401)
+
+  const row = await c.env.DB.prepare(`
+    SELECT square_merchant_name, square_location_name, square_currency, connected_at
+    FROM customer_square_oauth WHERE customer_id = ?
+  `).bind(customer.customer_id).first<any>()
+
+  if (!row) {
+    return c.json({ connected: false })
+  }
+
+  return c.json({
+    connected: true,
+    merchant_name: row.square_merchant_name || 'Square Account',
+    location_name: row.square_location_name || 'Default Location',
+    currency: row.square_currency || 'USD',
+    connected_at: row.connected_at,
+  })
+})
+
+// ============================================================
 // GET CREDIT PACKAGES — Public pricing info
 // ============================================================
 squareRoutes.get('/packages', async (c) => {

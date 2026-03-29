@@ -787,7 +787,24 @@
       .then(function(r) { return r.json(); })
       .then(function(res) {
         if (res.success) { toast('Payment link created!'); closeModal(); window._crmViewInvoice(id); }
-        else { toast(res.error || 'Failed to create payment link', 'error'); }
+        else if (res.action === 'connect-square') {
+          toast('Connect your Square account in Settings first.', 'error');
+          setTimeout(function() { window.location.href = '/customer/settings'; }, 1500);
+        } else { toast(res.error || 'Failed to create payment link', 'error'); }
+      })
+      .catch(function(e) { toast('Network error: ' + (e.message || 'Unknown'), 'error'); });
+  };
+
+  window._crmGenerateProposalPaymentLink = function(id) {
+    toast('Generating payment link…');
+    fetch('/api/crm/proposals/' + id + '/payment-link', { method: 'POST', headers: authHeaders() })
+      .then(function(r) { return r.json(); })
+      .then(function(res) {
+        if (res.success) { toast('Payment link created!'); closeModal(); window._crmViewProposal(id); }
+        else if (res.action === 'connect-square') {
+          toast('Connect your Square account in Settings first.', 'error');
+          setTimeout(function() { window.location.href = '/customer/settings'; }, 1500);
+        } else { toast(res.error || 'Failed to create payment link', 'error'); }
       })
       .catch(function(e) { toast('Network error: ' + (e.message || 'Unknown'), 'error'); });
   };
@@ -1414,6 +1431,19 @@
         if (p.warranty_terms) body += '<div class="bg-purple-50 rounded-xl p-3"><h4 class="text-xs font-semibold text-purple-600 uppercase mb-1"><i class="fas fa-shield-alt mr-1"></i>Warranty</h4><p class="text-sm text-purple-800">' + p.warranty_terms + '</p></div>';
         if (p.payment_terms) body += '<div class="bg-emerald-50 rounded-xl p-3"><h4 class="text-xs font-semibold text-emerald-600 uppercase mb-1"><i class="fas fa-credit-card mr-1"></i>Payment Terms</h4><p class="text-sm text-emerald-800">' + p.payment_terms + '</p></div>';
         if (p.notes) body += '<div class="bg-gray-100 rounded-xl p-3"><h4 class="text-xs font-semibold text-gray-500 uppercase mb-1"><i class="fas fa-sticky-note mr-1"></i>Notes</h4><p class="text-sm text-gray-700">' + p.notes + '</p></div>';
+
+        // Payment link section
+        body += '<div class="bg-emerald-50 border border-emerald-200 rounded-xl p-3">';
+        if (p.payment_link_url) {
+          body += '<div class="flex items-center gap-2 flex-wrap"><i class="fas fa-link text-emerald-500 text-sm"></i><span class="text-xs font-semibold text-emerald-700">Payment Link:</span>';
+          body += '<a href="' + p.payment_link_url + '" target="_blank" class="text-xs text-emerald-600 hover:underline truncate max-w-[180px]">' + p.payment_link_url + '</a>';
+          body += '<button onclick="navigator.clipboard.writeText(\'' + p.payment_link_url + '\').then(function(){toast(\'Copied!\');})" class="text-xs text-emerald-600 border border-emerald-300 px-2 py-0.5 rounded hover:bg-emerald-100"><i class="fas fa-copy mr-0.5"></i>Copy</button>';
+          body += '</div>';
+        } else if (p.status !== 'declined' && p.status !== 'expired') {
+          body += '<div class="flex items-center justify-between"><span class="text-xs text-emerald-700 font-medium"><i class="fas fa-credit-card mr-1"></i>Online Payment Link</span>';
+          body += '<button onclick="window._crmGenerateProposalPaymentLink(' + id + ')" class="px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-semibold hover:bg-emerald-700"><i class="fas fa-magic mr-1"></i>Generate Link</button></div>';
+        }
+        body += '</div>';
 
         // Share link (if exists)
         if (p.share_token) {
