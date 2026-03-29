@@ -1983,6 +1983,8 @@ function getLandingPageHTML() {
       <div class="border-t border-gray-800 mt-12 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
         <p class="text-sm text-gray-500">&copy; 2026 RoofReporterAI. All rights reserved.</p>
         <div class="flex items-center gap-6 text-sm text-gray-500">
+          <a href="/privacy" class="hover:text-cyan-400 transition-colors">Privacy Policy</a>
+          <a href="/terms" class="hover:text-cyan-400 transition-colors">Terms of Service</a>
           <span class="flex items-center gap-1.5"><i class="fas fa-map-marker-alt text-cyan-500"></i> Alberta, Canada</span>
           <a href="mailto:reports@reusecanada.ca" class="flex items-center gap-1.5 hover:text-cyan-400 transition-colors"><i class="fas fa-envelope text-cyan-500"></i> reports@reusecanada.ca</a>
         </div>
