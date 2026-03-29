@@ -722,14 +722,27 @@
     }
     anim();
 
-    // Dispatch to Replicate
     api('POST', '/generate', {
       original_image: photo.dataUrl,
       mask_image: state.maskBase64,
       roof_style: state.style,
       roof_color: state.colorLabel.toLowerCase(),
     }).then(function (res) {
-      if (res.success && res.job_id) {
+      if (!res.success) {
+        state.errorMsg = res.error || 'AI generation failed.';
+        state.step = 6; render();
+        return;
+      }
+      // Gemini path: result ready immediately
+      if (res.status === 'succeeded' && res.final_image_url) {
+        var bar = document.getElementById('aiBar');
+        if (bar) bar.style.width = '100%';
+        state.resultUrl = res.final_image_url;
+        setTimeout(function () { state.step = 6; render(); }, 400);
+        return;
+      }
+      // Replicate async path: poll for status
+      if (res.job_id) {
         state.jobId = res.job_id;
         state.pollTimer = setInterval(function () {
           api('GET', '/status/' + state.jobId).then(function (r) {
@@ -750,7 +763,7 @@
           }).catch(function(){});
         }, 2000);
       } else {
-        state.errorMsg = res.error || 'AI generation failed.';
+        state.errorMsg = 'AI generation failed — no job ID returned.';
         state.step = 6; render();
       }
     }).catch(function (e) {

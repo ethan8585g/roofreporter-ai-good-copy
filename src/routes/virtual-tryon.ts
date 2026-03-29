@@ -84,25 +84,34 @@ virtualTryonRoutes.post('/generate', async (c) => {
       return c.json({ success: false, error: 'mask_image is required (draw over the roof area)' }, 400)
     }
 
-    // Check for API key
-    const apiKey = c.env.REPLICATE_API_KEY
-    if (!apiKey) {
-      return c.json({
-        success: false,
-        error: 'Virtual Try-On not configured. REPLICATE_API_KEY required.',
-        setup_hint: 'Add REPLICATE_API_KEY via: npx wrangler pages secret put REPLICATE_API_KEY'
-      }, 503)
-    }
-
     // Build prompt
     const promptFn = ROOF_PROMPTS[roof_style] || ROOF_PROMPTS.metal
     const prompt = custom_prompt || promptFn(roof_color)
 
+    const replicateKey = c.env.REPLICATE_API_KEY
+    const geminiKey = (c.env as any).GEMINI_API_KEY || (c.env as any).GEMINI_ENHANCE_API_KEY || (c.env as any).default_gemini_googleaistudio_key
+
+    if (!replicateKey && !geminiKey) {
+      return c.json({
+        success: false,
+        error: 'Virtual Try-On not configured. REPLICATE_API_KEY or GEMINI_API_KEY required.',
+        setup_hint: 'Add REPLICATE_API_KEY via: npx wrangler pages secret put REPLICATE_API_KEY'
+      }, 503)
+    }
+
+    // ── Gemini image-editing path (synchronous) ──────────────
+    if (!replicateKey && geminiKey) {
+      return await generateWithGemini(c, {
+        geminiKey, original_image, mask_image, roof_style, roof_color,
+        prompt, customerId, order_id, startTime,
+      })
+    }
+
+    // ── Replicate async path ─────────────────────────────────
     // Build webhook URL — use the request's own host
     const requestUrl = new URL(c.req.url)
     const webhookUrl = `${requestUrl.protocol}//${requestUrl.host}/api/virtual-tryon/webhook`
 
-    // ── Fire prediction to Replicate ──
     const replicatePayload = {
       version: DEFAULT_MODEL_VERSION.split(':')[1],
       input: {
@@ -123,7 +132,7 @@ virtualTryonRoutes.post('/generate', async (c) => {
     const replicateResponse = await fetch(REPLICATE_API_BASE, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${apiKey}`,
+        'Authorization': `Bearer ${replicateKey}`,
         'Content-Type': 'application/json',
         'Prefer': 'respond-async',
       },
@@ -159,7 +168,6 @@ virtualTryonRoutes.post('/generate', async (c) => {
       prompt,
       roof_style,
       roof_color,
-      // Store a truncated reference (not the full base64 for DB size)
       original_image.length > 500 ? '[base64_uploaded]' : original_image,
       mask_image.length > 500 ? '[base64_uploaded]' : mask_image,
       DEFAULT_MODEL_VERSION,
@@ -168,7 +176,6 @@ virtualTryonRoutes.post('/generate', async (c) => {
     const elapsed = Date.now() - startTime
     console.log(`[VirtualTryOn] Job ${jobId} dispatched in ${elapsed}ms — customer=${customerId || 'anon'}`)
 
-    // ── Return immediately — don't wait for generation ──
     return c.json({
       success: true,
       status: 'processing',
@@ -411,8 +418,11 @@ virtualTryonRoutes.post('/analyze-house', async (c) => {
     }
 
     const apiKey = c.env.GOOGLE_VERTEX_API_KEY
+      || (c.env as any).GEMINI_API_KEY
+      || (c.env as any).GEMINI_ENHANCE_API_KEY
+      || (c.env as any).default_gemini_googleaistudio_key
     if (!apiKey) {
-      console.warn('[Visualizer] GOOGLE_VERTEX_API_KEY not set — returning fallback geometry')
+      console.warn('[Visualizer] No Gemini API key set — returning fallback geometry')
       return c.json({ success: true, geometry: defaultHouseGeometry(), source: 'fallback' })
     }
 
@@ -490,6 +500,120 @@ function defaultHouseGeometry() {
     num_facets: 2,
     house_style: 'ranch',
     confidence: 'low',
+  }
+}
+
+// ============================================================
+// GEMINI IMAGE GENERATION — Fallback when Replicate key absent
+//
+// Uses Gemini 2.0 Flash image-generation model to edit the
+// house photo and replace the roof with the selected material.
+// Returns a job response compatible with the polling contract.
+// ============================================================
+
+async function generateWithGemini(c: any, opts: {
+  geminiKey: string
+  original_image: string
+  mask_image: string
+  roof_style: string
+  roof_color: string
+  prompt: string
+  customerId: number | null
+  order_id: string | null
+  startTime: number
+}) {
+  const { geminiKey, original_image, roof_style, roof_color, prompt, customerId, order_id, startTime } = opts
+
+  const jobId = crypto.randomUUID()
+
+  try {
+    // Extract base64 and mime type from data URL
+    const match = original_image.match(/^data:([^;]+);base64,(.+)$/)
+    if (!match) {
+      return c.json({ success: false, error: 'Invalid image format — expected base64 data URL' }, 400)
+    }
+    const [, mimeType, base64Data] = match
+
+    const editInstruction = `Edit this house photo to change the roof material. Replace ONLY the roof with ${roof_style} roofing material in ${roof_color} color. Keep the house walls, windows, doors, landscaping, and background exactly the same. The new roof should look photorealistic with proper shadows and texture. ${prompt}`
+
+    const geminiPayload = {
+      contents: [{
+        parts: [
+          { inline_data: { mime_type: mimeType, data: base64Data } },
+          { text: editInstruction },
+        ]
+      }],
+      generationConfig: {
+        responseModalities: ['IMAGE', 'TEXT'],
+        temperature: 0.4,
+      }
+    }
+
+    console.log(`[VirtualTryOn/Gemini] Generating roof edit — style=${roof_style}, color=${roof_color}`)
+
+    const geminiResponse = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-preview-image-generation:generateContent?key=${geminiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(geminiPayload),
+      }
+    )
+
+    if (!geminiResponse.ok) {
+      const errText = await geminiResponse.text()
+      console.error(`[VirtualTryOn/Gemini] API error: ${geminiResponse.status} — ${errText.slice(0, 300)}`)
+      await c.env.DB.prepare(`
+        INSERT INTO roof_jobs (job_id, customer_id, order_id, status, prompt, roof_style, roof_color,
+                                original_image_url, mask_image_url, replicate_model, error_message, created_at, updated_at)
+        VALUES (?, ?, ?, 'failed', ?, ?, ?, '[base64_uploaded]', '[base64_uploaded]', 'gemini-2.0-flash', ?, datetime('now'), datetime('now'))
+      `).bind(jobId, customerId, order_id, prompt, roof_style, roof_color, `Gemini API error: ${geminiResponse.status}`).run()
+      return c.json({ success: false, error: `Image generation failed (${geminiResponse.status})` }, 502)
+    }
+
+    const data = await geminiResponse.json() as any
+    const parts = data.candidates?.[0]?.content?.parts || []
+    const imagePart = parts.find((p: any) => p.inlineData?.mimeType?.startsWith('image/'))
+
+    if (!imagePart) {
+      console.error('[VirtualTryOn/Gemini] No image in response:', JSON.stringify(data).slice(0, 300))
+      await c.env.DB.prepare(`
+        INSERT INTO roof_jobs (job_id, customer_id, order_id, status, prompt, roof_style, roof_color,
+                                original_image_url, mask_image_url, replicate_model, error_message, created_at, updated_at)
+        VALUES (?, ?, ?, 'failed', ?, ?, ?, '[base64_uploaded]', '[base64_uploaded]', 'gemini-2.0-flash', ?, datetime('now'), datetime('now'))
+      `).bind(jobId, customerId, order_id, prompt, roof_style, roof_color, 'Gemini returned no image output').run()
+      return c.json({ success: false, error: 'AI generation returned no image. Please try again.' }, 502)
+    }
+
+    const finalImageUrl = `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`
+    const elapsed = Date.now() - startTime
+
+    await c.env.DB.prepare(`
+      INSERT INTO roof_jobs (job_id, customer_id, order_id, status, prompt, roof_style, roof_color,
+                              original_image_url, mask_image_url, replicate_model, final_image_url,
+                              processing_time_ms, created_at, updated_at)
+      VALUES (?, ?, ?, 'succeeded', ?, ?, ?, '[base64_uploaded]', '[base64_uploaded]', 'gemini-2.0-flash', ?, ?, datetime('now'), datetime('now'))
+    `).bind(jobId, customerId, order_id, prompt, roof_style, roof_color, finalImageUrl, elapsed).run()
+
+    console.log(`[VirtualTryOn/Gemini] Job ${jobId} succeeded in ${elapsed}ms`)
+
+    return c.json({
+      success: true,
+      status: 'succeeded',
+      job_id: jobId,
+      final_image_url: finalImageUrl,
+      poll_url: `/api/virtual-tryon/status/${jobId}`,
+      dispatched_ms: elapsed,
+    })
+
+  } catch (err: any) {
+    console.error('[VirtualTryOn/Gemini] Error:', err.message)
+    await c.env.DB.prepare(`
+      INSERT INTO roof_jobs (job_id, customer_id, order_id, status, prompt, roof_style, roof_color,
+                              original_image_url, mask_image_url, replicate_model, error_message, created_at, updated_at)
+      VALUES (?, ?, ?, 'failed', ?, ?, ?, '[base64_uploaded]', '[base64_uploaded]', 'gemini-2.0-flash', ?, datetime('now'), datetime('now'))
+    `).bind(jobId, customerId, order_id, prompt, roof_style, roof_color, err.message).run().catch(() => {})
+    return c.json({ success: false, error: err.message }, 500)
   }
 }
 

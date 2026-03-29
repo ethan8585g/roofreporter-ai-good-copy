@@ -556,21 +556,30 @@ app.get('/customer/virtual-tryon', (c) => c.html(getVirtualTryOnPageHTML()))
 app.get('/visualizer/:orderId', async (c) => {
   const orderId = c.req.param('orderId')
   const mapsKey = c.env.GOOGLE_MAPS_API_KEY || ''
-  
-  // Fetch order + report data for the visualizer
+
   let address = 'Property'
   let reportJson: any = null
   try {
     const order = await c.env.DB.prepare(
-      'SELECT property_address, lat, lng FROM orders WHERE id = ?'
+      'SELECT property_address, latitude, longitude FROM orders WHERE id = ?'
     ).bind(orderId).first<any>()
-    if (order) address = order.property_address || address
-    
+    if (order) {
+      address = order.property_address || address
+      // Inject coordinates so the 3D visualizer's 2D Street View mode works
+      if (!reportJson) reportJson = {}
+      if (order.latitude) reportJson.latitude = order.latitude
+      if (order.longitude) reportJson.longitude = order.longitude
+    }
+
     const report = await c.env.DB.prepare(
-      'SELECT report_json FROM reports WHERE order_id = ? AND status IN (\'completed\',\'enhancing\') LIMIT 1'
+      "SELECT report_json FROM reports WHERE order_id = ? AND status IN ('completed','enhancing') LIMIT 1"
     ).bind(orderId).first<any>()
     if (report?.report_json) {
-      reportJson = typeof report.report_json === 'string' ? JSON.parse(report.report_json) : report.report_json
+      const parsed = typeof report.report_json === 'string' ? JSON.parse(report.report_json) : report.report_json
+      // Merge coordinates into the report data so visualizer JS can access them
+      reportJson = { ...parsed, latitude: reportJson?.latitude, longitude: reportJson?.longitude, google_maps_key: mapsKey }
+    } else if (reportJson) {
+      reportJson.google_maps_key = mapsKey
     }
   } catch (e) { /* graceful */ }
 
@@ -3199,7 +3208,7 @@ function getVirtualTryOnPageHTML() {
       window.location.href = '/customer/login';
     }
   </script>
-  <script src="/static/virtual-tryon.js"></script>
+  <script src="/static/virtual-tryon.js?v=${Date.now()}"></script>
   ${getRoverAssistant()}
 </body>
 </html>`
