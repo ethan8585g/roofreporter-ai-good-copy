@@ -856,7 +856,26 @@ customerAuthRoutes.get('/profile', async (c) => {
 
   if (!customer) return c.json({ error: 'Customer not found' }, 404)
 
-  return c.json({ customer })
+  // Compute plan display fields
+  const plan = (customer as any).subscription_plan || 'free'
+  const planConfig: Record<string, { display: string; teamLimit: number | null; adsEnabled: boolean }> = {
+    free:         { display: 'Free',       teamLimit: 0,    adsEnabled: true  },
+    credits:      { display: 'Free',       teamLimit: 0,    adsEnabled: true  },
+    starter:      { display: 'Free',       teamLimit: 0,    adsEnabled: true  },
+    pro:          { display: 'Pro',        teamLimit: 5,    adsEnabled: false },
+    pro_plus:     { display: 'Pro Plus',   teamLimit: 25,   adsEnabled: false },
+    enterprise:   { display: 'Enterprise', teamLimit: null, adsEnabled: false },
+    dev_unlimited:{ display: 'Dev',        teamLimit: null, adsEnabled: false },
+  }
+  const cfg = planConfig[plan] || planConfig['free']
+  const customerWithPlan = {
+    ...(customer as any),
+    plan_display_name: cfg.display,
+    team_member_limit: cfg.teamLimit,
+    ads_enabled: cfg.adsEnabled,
+  }
+
+  return c.json({ customer: customerWithPlan })
 })
 
 // ============================================================

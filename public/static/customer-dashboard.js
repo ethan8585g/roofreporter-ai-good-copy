@@ -213,6 +213,21 @@ function renderDashboard() {
         '</div>' +
       '</div>' +
 
+      // Upgrade CTA banner — shown to free-plan users who still have credits (not yet exhausted)
+      (c.ads_enabled && !trialsExhausted ?
+        '<div class="bg-gradient-to-r from-indigo-600 to-brand-700 rounded-2xl p-4 mb-5 shadow-lg border border-indigo-500/30">' +
+          '<div class="flex flex-col sm:flex-row items-center gap-4">' +
+            '<div class="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0"><i class="fas fa-crown text-yellow-300"></i></div>' +
+            '<div class="flex-1 min-w-0 text-center sm:text-left">' +
+              '<h3 class="text-white font-bold text-sm">Unlock Your Full Platform</h3>' +
+              '<p class="text-indigo-200 text-xs mt-0.5">Upgrade to <strong class="text-white">Pro</strong> for $49.99/mo — add up to 5 team members &amp; go ad-free.</p>' +
+            '</div>' +
+            '<a href="/pricing" class="flex-shrink-0 px-4 py-2 bg-yellow-400 hover:bg-yellow-300 text-gray-900 font-black rounded-xl text-xs shadow transition-all hover:scale-105">' +
+              '<i class="fas fa-arrow-up mr-1"></i>Upgrade to Pro' +
+            '</a>' +
+          '</div>' +
+        '</div>' : '') +
+
       // Trial exhausted banner
       (trialsExhausted ?
         '<div class="bg-gradient-to-r from-brand-800 to-brand-900 rounded-2xl p-5 mb-5 shadow-xl border border-brand-700">' +

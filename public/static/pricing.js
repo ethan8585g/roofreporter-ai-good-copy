@@ -1,7 +1,7 @@
 // ============================================================
-// Pricing Page — Public, fetches packages and renders cards
-// Updated pricing: 3 free → $10/ea individual → packs (10/$90, 25/$200, 50/$350, 100/$600)
-// Subscription: $49.99/mo for CRM & business tools
+// Pricing Page — Membership plans + report credit packs
+// Plans: Free / Pro ($49.99/mo) / Pro Plus ($199/mo) / Enterprise (contact)
+// Report packs: 1=$5, 25=$106.25, 100=$350 (USD)
 // ============================================================
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -35,136 +35,199 @@ function renderPricing(root, packages) {
 
     <div class="text-center mb-12">
       <h1 class="text-4xl font-bold text-gray-900 mb-4">Simple, Transparent Pricing</h1>
-      <p class="text-lg text-gray-600 max-w-2xl mx-auto">Start with 3 free reports. After that, buy individual reports or save with credit packs.</p>
+      <p class="text-lg text-gray-600 max-w-2xl mx-auto">Start with 3 free reports. Choose a membership plan, then buy report credits as you need them.</p>
     </div>
 
-    <!-- How it works -->
-    <div class="bg-white rounded-2xl border border-gray-200 p-8 mb-12">
-      <h2 class="text-xl font-bold text-gray-800 mb-6 text-center"><i class="fas fa-route text-brand-500 mr-2"></i>How It Works</h2>
-      <div class="grid md:grid-cols-4 gap-6">
-        <div class="text-center">
-          <div class="w-14 h-14 bg-brand-100 rounded-xl flex items-center justify-center mx-auto mb-3">
-            <span class="text-brand-700 font-bold text-lg">1</span>
-          </div>
-          <h3 class="font-semibold text-gray-800 mb-1">Create Account</h3>
-          <p class="text-sm text-gray-500">Sign up free — get 3 reports instantly</p>
-        </div>
-        <div class="text-center">
-          <div class="w-14 h-14 bg-green-100 rounded-xl flex items-center justify-center mx-auto mb-3">
-            <span class="text-green-700 font-bold text-lg">2</span>
-          </div>
-          <h3 class="font-semibold text-gray-800 mb-1">Use Free Reports</h3>
-          <p class="text-sm text-gray-500">3 free reports included with every account</p>
-        </div>
-        <div class="text-center">
-          <div class="w-14 h-14 bg-brand-100 rounded-xl flex items-center justify-center mx-auto mb-3">
-            <span class="text-brand-700 font-bold text-lg">3</span>
-          </div>
-          <h3 class="font-semibold text-gray-800 mb-1">Enter Address</h3>
-          <p class="text-sm text-gray-500">Type the property address and submit</p>
-        </div>
-        <div class="text-center">
-          <div class="w-14 h-14 bg-green-100 rounded-xl flex items-center justify-center mx-auto mb-3">
-            <span class="text-green-700 font-bold text-lg">4</span>
-          </div>
-          <h3 class="font-semibold text-gray-800 mb-1">Get Your Report</h3>
-          <p class="text-sm text-gray-500">AI-powered analysis with full measurements in seconds</p>
-        </div>
-      </div>
-    </div>
+    <!-- Membership Plans -->
+    <h2 class="text-2xl font-bold text-gray-800 mb-2 text-center">Membership Plans</h2>
+    <p class="text-center text-gray-500 mb-8">Report credits are purchased separately and work with any plan.</p>
+    <div class="grid md:grid-cols-4 gap-5 mb-16 max-w-6xl mx-auto">
 
-    <!-- Per-Report Pricing -->
-    <h2 class="text-2xl font-bold text-gray-800 mb-6 text-center">Individual Report</h2>
-    <div class="max-w-lg mx-auto mb-16">
-      <div class="bg-white rounded-2xl border border-gray-200 p-6 hover:shadow-lg transition-shadow ring-2 ring-brand-500 relative">
-        <div class="absolute -top-3 left-1/2 -translate-x-1/2 bg-brand-500 text-white px-4 py-1 rounded-full text-xs font-bold">PAY PER REPORT</div>
-        <div class="text-center mb-6">
-          <div class="w-14 h-14 bg-brand-100 rounded-xl flex items-center justify-center mx-auto mb-3">
-            <i class="fas fa-bolt text-brand-500 text-xl"></i>
-          </div>
-          <h3 class="text-xl font-bold text-gray-800">Roof Measurement Report</h3>
-          <p class="text-sm text-gray-500 mt-1">Delivered instantly — no subscription required</p>
+      <!-- Free -->
+      <div class="bg-white rounded-2xl border border-gray-200 p-6 flex flex-col">
+        <div class="mb-4">
+          <span class="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-bold">FREE</span>
         </div>
-        <div class="text-center mb-6">
-          <span class="text-5xl font-black text-gray-900">$10</span>
-          <span class="text-gray-500 text-sm ml-1">CAD / report</span>
+        <h3 class="text-xl font-black text-gray-900 mb-1">Free</h3>
+        <div class="mb-4">
+          <span class="text-4xl font-black text-gray-900">$0</span>
+          <span class="text-gray-400 text-sm ml-1">/month</span>
         </div>
-        <ul class="space-y-3 mb-6 text-sm">
-          <li class="flex items-center gap-2 text-gray-600"><i class="fas fa-check text-green-500"></i>Satellite-based roof area & perimeter</li>
-          <li class="flex items-center gap-2 text-gray-600"><i class="fas fa-check text-green-500"></i>Pitch & azimuth analysis per facet</li>
-          <li class="flex items-center gap-2 text-gray-600"><i class="fas fa-check text-green-500"></i>Complete material takeoff with CAD pricing</li>
-          <li class="flex items-center gap-2 text-gray-600"><i class="fas fa-check text-green-500"></i>Edge breakdown (ridge, hip, valley, eave, rake)</li>
-          <li class="flex items-center gap-2 text-gray-600"><i class="fas fa-check text-green-500"></i>AI roof geometry overlay with SVG diagram</li>
-          <li class="flex items-center gap-2 text-gray-600"><i class="fas fa-check text-green-500"></i>14-image gallery (overhead, aerial, street-view)</li>
-          <li class="flex items-center gap-2 text-gray-600"><i class="fas fa-check text-green-500"></i>Perimeter side-by-side measurements in ft & in</li>
+        <ul class="space-y-2 text-sm text-gray-600 mb-6 flex-1">
+          <li class="flex items-start gap-2"><i class="fas fa-check text-green-500 mt-0.5"></i>3 free trial reports</li>
+          <li class="flex items-start gap-2"><i class="fas fa-check text-green-500 mt-0.5"></i>Buy reports individually ($5 USD each)</li>
+          <li class="flex items-start gap-2"><i class="fas fa-check text-green-500 mt-0.5"></i>Full CRM suite</li>
+          <li class="flex items-start gap-2"><i class="fas fa-times text-red-400 mt-0.5"></i>No team members</li>
+          <li class="flex items-start gap-2"><i class="fas fa-times text-red-400 mt-0.5"></i>Includes platform ads</li>
         </ul>
-        <a href="/customer/login" class="block w-full py-3 text-center font-bold rounded-xl transition-all hover:scale-[1.02] bg-brand-600 hover:bg-brand-700 text-white shadow-lg">
-          Get Started
+        <a href="/customer/login" class="block w-full py-2.5 text-center font-bold rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm transition-all">
+          Get Started Free
+        </a>
+      </div>
+
+      <!-- Pro -->
+      <div class="bg-gradient-to-br from-brand-800 to-brand-900 rounded-2xl p-6 flex flex-col relative ring-2 ring-brand-500 shadow-xl">
+        <div class="absolute -top-3 left-1/2 -translate-x-1/2 bg-brand-500 text-white px-4 py-1 rounded-full text-xs font-bold">MOST POPULAR</div>
+        <div class="mb-4">
+          <span class="px-3 py-1 bg-yellow-500/20 text-yellow-300 rounded-full text-xs font-bold"><i class="fas fa-crown mr-1"></i>PRO</span>
+        </div>
+        <h3 class="text-xl font-black text-white mb-1">Pro</h3>
+        <div class="mb-4">
+          <span class="text-4xl font-black text-white">$49.99</span>
+          <span class="text-brand-300 text-sm ml-1">/month USD</span>
+        </div>
+        <ul class="space-y-2 text-sm text-brand-100 mb-6 flex-1">
+          <li class="flex items-start gap-2"><i class="fas fa-check text-green-400 mt-0.5"></i>Up to 5 team members</li>
+          <li class="flex items-start gap-2"><i class="fas fa-check text-green-400 mt-0.5"></i>No ads</li>
+          <li class="flex items-start gap-2"><i class="fas fa-check text-green-400 mt-0.5"></i>Full CRM suite</li>
+          <li class="flex items-start gap-2"><i class="fas fa-check text-green-400 mt-0.5"></i>Custom branding on reports</li>
+          <li class="flex items-start gap-2"><i class="fas fa-check text-green-400 mt-0.5"></i>Priority support</li>
+        </ul>
+        <a href="/customer/login" class="block w-full py-2.5 text-center font-bold rounded-xl bg-accent-500 hover:bg-accent-600 text-white text-sm transition-all hover:scale-[1.02] shadow-lg">
+          <i class="fas fa-rocket mr-1"></i>Get Pro
+        </a>
+      </div>
+
+      <!-- Pro Plus -->
+      <div class="bg-white rounded-2xl border border-purple-200 ring-2 ring-purple-200 p-6 flex flex-col relative">
+        <div class="mb-4">
+          <span class="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-bold"><i class="fas fa-star mr-1"></i>PRO PLUS</span>
+        </div>
+        <h3 class="text-xl font-black text-gray-900 mb-1">Pro Plus</h3>
+        <div class="mb-4">
+          <span class="text-4xl font-black text-gray-900">$199</span>
+          <span class="text-gray-400 text-sm ml-1">/month USD</span>
+        </div>
+        <ul class="space-y-2 text-sm text-gray-600 mb-6 flex-1">
+          <li class="flex items-start gap-2"><i class="fas fa-check text-green-500 mt-0.5"></i>Up to 25 team members</li>
+          <li class="flex items-start gap-2"><i class="fas fa-check text-green-500 mt-0.5"></i>No ads</li>
+          <li class="flex items-start gap-2"><i class="fas fa-check text-green-500 mt-0.5"></i>Full CRM suite</li>
+          <li class="flex items-start gap-2"><i class="fas fa-check text-green-500 mt-0.5"></i>Custom branding on reports</li>
+          <li class="flex items-start gap-2"><i class="fas fa-check text-green-500 mt-0.5"></i>Priority support</li>
+        </ul>
+        <a href="/customer/login" class="block w-full py-2.5 text-center font-bold rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-sm transition-all hover:scale-[1.02]">
+          <i class="fas fa-star mr-1"></i>Get Pro Plus
+        </a>
+      </div>
+
+      <!-- Enterprise -->
+      <div class="bg-gray-900 rounded-2xl border border-gray-700 p-6 flex flex-col">
+        <div class="mb-4">
+          <span class="px-3 py-1 bg-gray-700 text-gray-200 rounded-full text-xs font-bold"><i class="fas fa-building mr-1"></i>ENTERPRISE</span>
+        </div>
+        <h3 class="text-xl font-black text-white mb-1">Enterprise</h3>
+        <div class="mb-4">
+          <span class="text-2xl font-black text-white">Contact Us</span>
+        </div>
+        <ul class="space-y-2 text-sm text-gray-300 mb-6 flex-1">
+          <li class="flex items-start gap-2"><i class="fas fa-check text-green-400 mt-0.5"></i>Unlimited team members</li>
+          <li class="flex items-start gap-2"><i class="fas fa-check text-green-400 mt-0.5"></i>No ads</li>
+          <li class="flex items-start gap-2"><i class="fas fa-check text-green-400 mt-0.5"></i>Dedicated onboarding</li>
+          <li class="flex items-start gap-2"><i class="fas fa-check text-green-400 mt-0.5"></i>Custom pricing on reports</li>
+          <li class="flex items-start gap-2"><i class="fas fa-check text-green-400 mt-0.5"></i>SLA & priority support</li>
+        </ul>
+        <a href="mailto:support@roofreporterai.com" class="block w-full py-2.5 text-center font-bold rounded-xl bg-gray-700 hover:bg-gray-600 text-white text-sm transition-all">
+          <i class="fas fa-envelope mr-1"></i>Contact for Pricing
         </a>
       </div>
     </div>
 
-    <!-- Credit Packs -->
-    <h2 class="text-2xl font-bold text-gray-800 mb-2 text-center">Credit Packs — Save More</h2>
-    <p class="text-center text-gray-500 mb-8">Buy credits in bulk and use them anytime. Credits never expire.</p>
-    <div class="grid md:grid-cols-4 gap-5 mb-16 max-w-5xl mx-auto">
+    <!-- Report Credit Packs -->
+    <h2 class="text-2xl font-bold text-gray-800 mb-2 text-center">Report Credit Packs</h2>
+    <p class="text-center text-gray-500 mb-8">Credits work with any plan. Buy in bulk and save — credits never expire.</p>
+    <div class="grid md:grid-cols-3 gap-5 mb-16 max-w-4xl mx-auto">
       ${packages.map((pkg, i) => {
-        const priceEach = (pkg.price_cents / 100 / pkg.credits).toFixed(0);
-        const savings = Math.round((1 - (pkg.price_cents / 100) / (pkg.credits * 10)) * 100);
-        const isBest = i === packages.length - 1;
-        const isPopular = i === 1; // 25-pack
+        const priceUsd = (pkg.price_cents / 100).toFixed(2);
+        const priceEach = (pkg.price_cents / 100 / pkg.credits).toFixed(2);
+        const isBest = pkg.credits >= 100;
+        const isPopular = pkg.credits === 25;
         return `
-          <div class="bg-white rounded-xl border ${isBest ? 'border-brand-500 ring-2 ring-brand-200' : isPopular ? 'border-accent-400 ring-2 ring-accent-200' : 'border-gray-200'} p-5 text-center hover:shadow-md transition-shadow relative">
+          <div class="bg-white rounded-xl border ${isBest ? 'border-brand-500 ring-2 ring-brand-200' : isPopular ? 'border-accent-400 ring-2 ring-accent-200' : 'border-gray-200'} p-6 text-center hover:shadow-md transition-shadow relative flex flex-col">
             ${isBest ? '<div class="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-brand-500 text-white px-3 py-0.5 rounded-full text-[10px] font-bold">BEST VALUE</div>' : ''}
             ${isPopular ? '<div class="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-accent-500 text-white px-3 py-0.5 rounded-full text-[10px] font-bold">POPULAR</div>' : ''}
-            <h3 class="font-bold text-gray-800 text-lg mb-1">${pkg.name}</h3>
-            <div class="text-xs text-gray-500 mb-3">${pkg.credits} reports</div>
-            <div class="mb-2">
-              <span class="text-3xl font-black text-gray-900">$${(pkg.price_cents / 100).toFixed(0)}</span>
-              <span class="text-gray-400 text-xs ml-1">CAD</span>
+            <h3 class="font-black text-gray-800 text-lg mb-1">${pkg.name}</h3>
+            <div class="text-xs text-gray-400 mb-3">${pkg.credits} ${pkg.credits === 1 ? 'report' : 'reports'}</div>
+            <div class="mb-1">
+              <span class="text-4xl font-black text-gray-900">$${priceUsd}</span>
+              <span class="text-gray-400 text-xs ml-1">USD</span>
             </div>
-            <p class="text-sm font-semibold text-brand-600 mb-1">$${priceEach}/report</p>
-            ${savings > 0 ? `<span class="inline-block bg-green-100 text-green-700 px-2 py-0.5 rounded-full text-xs font-bold mb-3">Save ${savings}%</span>` : '<div class="mb-3"></div>'}
-            <a href="/customer/login" class="block w-full py-2.5 ${isBest || isPopular ? 'bg-brand-600 hover:bg-brand-700' : 'bg-sky-600 hover:bg-sky-700'} text-white font-bold rounded-lg text-sm transition-all hover:scale-[1.02]">
-              Buy ${pkg.credits} Credits
+            <p class="text-sm font-semibold text-brand-600 mb-4">$${priceEach}/report</p>
+            <a href="/customer/login" class="block w-full py-2.5 mt-auto ${isBest ? 'bg-brand-600 hover:bg-brand-700' : isPopular ? 'bg-accent-500 hover:bg-accent-600' : 'bg-sky-600 hover:bg-sky-700'} text-white font-bold rounded-lg text-sm transition-all hover:scale-[1.02]">
+              Buy ${pkg.credits === 1 ? '1 Credit' : pkg.credits + ' Credits'}
             </a>
           </div>
         `;
       }).join('')}
     </div>
 
-    <!-- Subscription Plan -->
-    <div class="max-w-4xl mx-auto mb-16">
-      <h2 class="text-2xl font-bold text-gray-800 mb-2 text-center">Pro Subscription</h2>
-      <p class="text-center text-gray-500 mb-8">Get access to CRM, invoicing, proposals, job scheduling, and business tools.</p>
-      <div class="bg-gradient-to-br from-brand-800 to-brand-900 rounded-2xl p-8 text-white shadow-xl">
-        <div class="grid md:grid-cols-2 gap-8 items-center">
-          <div>
-            <div class="flex items-center gap-2 mb-4">
-              <span class="px-3 py-1 bg-yellow-500/20 text-yellow-300 rounded-full text-xs font-bold"><i class="fas fa-crown mr-1"></i>PRO</span>
-            </div>
-            <h3 class="text-3xl font-black mb-2">$49.99 <span class="text-lg font-normal text-brand-200">/month</span></h3>
-            <p class="text-brand-200 mb-6">Everything you need to run your roofing business — CRM, invoicing, proposals, scheduling, and more.</p>
-            <a href="/customer/login" class="inline-flex items-center gap-2 bg-accent-500 hover:bg-accent-600 text-white font-bold py-3 px-8 rounded-xl transition-all hover:scale-105 shadow-lg">
-              <i class="fas fa-rocket"></i>
-              Start Pro Trial
-            </a>
-          </div>
-          <div>
-            <ul class="space-y-3 text-sm">
-              <li class="flex items-center gap-2"><i class="fas fa-check-circle text-green-400"></i>Customer Relationship Manager (CRM)</li>
-              <li class="flex items-center gap-2"><i class="fas fa-check-circle text-green-400"></i>Professional Invoicing</li>
-              <li class="flex items-center gap-2"><i class="fas fa-check-circle text-green-400"></i>Proposals & Estimates</li>
-              <li class="flex items-center gap-2"><i class="fas fa-check-circle text-green-400"></i>Job Scheduling & Crew Management</li>
-              <li class="flex items-center gap-2"><i class="fas fa-check-circle text-green-400"></i>Sales Pipeline Tracking</li>
-              <li class="flex items-center gap-2"><i class="fas fa-check-circle text-green-400"></i>Door-to-Door Manager</li>
-              <li class="flex items-center gap-2"><i class="fas fa-check-circle text-green-400"></i>Custom Branding on Reports</li>
-              <li class="flex items-center gap-2"><i class="fas fa-check-circle text-green-400"></i>Priority Support</li>
-            </ul>
-            <p class="text-brand-300 text-xs mt-4"><i class="fas fa-info-circle mr-1"></i>Roof measurement reports are billed separately ($10/each or credit packs).</p>
-          </div>
-        </div>
+    <!-- Plan comparison table -->
+    <div class="max-w-5xl mx-auto mb-12">
+      <h2 class="text-xl font-bold text-gray-800 mb-6 text-center">Plan Comparison</h2>
+      <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <table class="w-full text-sm">
+          <thead class="bg-gray-50 border-b border-gray-200">
+            <tr>
+              <th class="text-left px-6 py-3 font-semibold text-gray-700">Feature</th>
+              <th class="text-center px-4 py-3 font-semibold text-gray-700">Free</th>
+              <th class="text-center px-4 py-3 font-semibold text-brand-700 bg-brand-50">Pro</th>
+              <th class="text-center px-4 py-3 font-semibold text-purple-700">Pro Plus</th>
+              <th class="text-center px-4 py-3 font-semibold text-gray-700">Enterprise</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100">
+            <tr>
+              <td class="px-6 py-3 font-medium text-gray-800">Monthly Price</td>
+              <td class="text-center px-4 py-3 text-gray-500">$0</td>
+              <td class="text-center px-4 py-3 font-bold text-brand-700 bg-brand-50/50">$49.99 USD</td>
+              <td class="text-center px-4 py-3 font-bold text-purple-700">$199 USD</td>
+              <td class="text-center px-4 py-3 text-gray-500">Contact</td>
+            </tr>
+            <tr class="bg-gray-50/50">
+              <td class="px-6 py-3 font-medium text-gray-800">Free Trial Reports</td>
+              <td class="text-center px-4 py-3">3</td>
+              <td class="text-center px-4 py-3 bg-brand-50/50">3</td>
+              <td class="text-center px-4 py-3">3</td>
+              <td class="text-center px-4 py-3">Custom</td>
+            </tr>
+            <tr>
+              <td class="px-6 py-3 font-medium text-gray-800">Team Members</td>
+              <td class="text-center px-4 py-3 text-red-400"><i class="fas fa-times"></i></td>
+              <td class="text-center px-4 py-3 font-semibold text-brand-700 bg-brand-50/50">Up to 5</td>
+              <td class="text-center px-4 py-3 font-semibold text-purple-700">Up to 25</td>
+              <td class="text-center px-4 py-3 font-semibold text-gray-700">Unlimited</td>
+            </tr>
+            <tr class="bg-gray-50/50">
+              <td class="px-6 py-3 font-medium text-gray-800">Platform Ads</td>
+              <td class="text-center px-4 py-3 text-amber-500">Yes</td>
+              <td class="text-center px-4 py-3 text-green-600 bg-brand-50/50"><i class="fas fa-check"></i> Ad-free</td>
+              <td class="text-center px-4 py-3 text-green-600"><i class="fas fa-check"></i> Ad-free</td>
+              <td class="text-center px-4 py-3 text-green-600"><i class="fas fa-check"></i> Ad-free</td>
+            </tr>
+            <tr>
+              <td class="px-6 py-3 font-medium text-gray-800">Individual Report</td>
+              <td class="text-center px-4 py-3">$5 USD</td>
+              <td class="text-center px-4 py-3 bg-brand-50/50">$5 USD</td>
+              <td class="text-center px-4 py-3">$5 USD</td>
+              <td class="text-center px-4 py-3 text-gray-500">Custom</td>
+            </tr>
+            <tr class="bg-gray-50/50">
+              <td class="px-6 py-3 font-medium text-gray-800">25-Pack</td>
+              <td class="text-center px-4 py-3">$106.25 USD</td>
+              <td class="text-center px-4 py-3 bg-brand-50/50">$106.25 USD</td>
+              <td class="text-center px-4 py-3">$106.25 USD</td>
+              <td class="text-center px-4 py-3 text-gray-500">Custom</td>
+            </tr>
+            <tr>
+              <td class="px-6 py-3 font-medium text-gray-800">100-Pack</td>
+              <td class="text-center px-4 py-3">$350 USD</td>
+              <td class="text-center px-4 py-3 bg-brand-50/50">$350 USD</td>
+              <td class="text-center px-4 py-3">$350 USD</td>
+              <td class="text-center px-4 py-3 text-gray-500">Custom</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
+      <p class="text-center text-gray-400 text-xs mt-4">All prices in USD. Report credits never expire. Enterprise requires manual onboarding — contact us to get started.</p>
     </div>
 
     <!-- Every Report Includes -->
@@ -184,68 +247,12 @@ function renderPricing(root, packages) {
         <div>
           <i class="fas fa-file-invoice-dollar text-accent-400 text-3xl mb-3"></i>
           <h3 class="font-semibold mb-1">Material Takeoff</h3>
-          <p class="text-gray-300 text-sm">Full bill of materials with Canadian pricing</p>
+          <p class="text-gray-300 text-sm">Full bill of materials with pricing</p>
         </div>
       </div>
       <a href="/customer/login" class="inline-block mt-8 bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-8 rounded-xl text-lg transition-all hover:scale-105 shadow-lg">
         <i class="fas fa-gift mr-2"></i>Sign Up — 3 Free Reports
       </a>
-    </div>
-
-    <!-- Pricing Comparison Table -->
-    <div class="max-w-4xl mx-auto mb-12">
-      <h2 class="text-xl font-bold text-gray-800 mb-6 text-center">Pricing Comparison</h2>
-      <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <table class="w-full text-sm">
-          <thead class="bg-gray-50 border-b border-gray-200">
-            <tr>
-              <th class="text-left px-6 py-3 font-semibold text-gray-700">Package</th>
-              <th class="text-center px-4 py-3 font-semibold text-gray-700">Reports</th>
-              <th class="text-center px-4 py-3 font-semibold text-gray-700">Price/Report</th>
-              <th class="text-center px-4 py-3 font-semibold text-gray-700">Total</th>
-              <th class="text-center px-4 py-3 font-semibold text-gray-700">Savings</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-gray-100">
-            <tr>
-              <td class="px-6 py-3 font-medium text-gray-800">Individual</td>
-              <td class="text-center px-4 py-3">1</td>
-              <td class="text-center px-4 py-3">$10</td>
-              <td class="text-center px-4 py-3 font-semibold">$10</td>
-              <td class="text-center px-4 py-3 text-gray-400">—</td>
-            </tr>
-            <tr class="bg-gray-50/50">
-              <td class="px-6 py-3 font-medium text-gray-800">10 Pack</td>
-              <td class="text-center px-4 py-3">10</td>
-              <td class="text-center px-4 py-3">$9</td>
-              <td class="text-center px-4 py-3 font-semibold">$90</td>
-              <td class="text-center px-4 py-3"><span class="text-green-600 font-semibold">Save 10%</span></td>
-            </tr>
-            <tr>
-              <td class="px-6 py-3 font-medium text-gray-800">25 Pack <span class="text-xs bg-accent-100 text-accent-700 px-1.5 py-0.5 rounded font-bold ml-1">POPULAR</span></td>
-              <td class="text-center px-4 py-3">25</td>
-              <td class="text-center px-4 py-3">$8</td>
-              <td class="text-center px-4 py-3 font-semibold">$200</td>
-              <td class="text-center px-4 py-3"><span class="text-green-600 font-semibold">Save 20%</span></td>
-            </tr>
-            <tr class="bg-gray-50/50">
-              <td class="px-6 py-3 font-medium text-gray-800">50 Pack</td>
-              <td class="text-center px-4 py-3">50</td>
-              <td class="text-center px-4 py-3">$7</td>
-              <td class="text-center px-4 py-3 font-semibold">$350</td>
-              <td class="text-center px-4 py-3"><span class="text-green-600 font-semibold">Save 30%</span></td>
-            </tr>
-            <tr>
-              <td class="px-6 py-3 font-medium text-gray-800">100 Pack <span class="text-xs bg-brand-100 text-brand-700 px-1.5 py-0.5 rounded font-bold ml-1">BEST VALUE</span></td>
-              <td class="text-center px-4 py-3">100</td>
-              <td class="text-center px-4 py-3">$6</td>
-              <td class="text-center px-4 py-3 font-semibold">$600</td>
-              <td class="text-center px-4 py-3"><span class="text-green-600 font-semibold">Save 40%</span></td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      <p class="text-center text-gray-400 text-xs mt-4">All prices in Canadian Dollars (CAD). Credits never expire. GST/HST may apply.</p>
     </div>
   `;
 }

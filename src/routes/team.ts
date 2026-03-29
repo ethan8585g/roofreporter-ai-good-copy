@@ -138,6 +138,33 @@ teamRoutes.post('/invite', async (c) => {
     return c.json({ error: 'Email and name are required' }, 400)
   }
 
+  // Enforce plan-based team member limits
+  const ownerRow = await c.env.DB.prepare(
+    'SELECT subscription_plan FROM customers WHERE id = ?'
+  ).bind(ownerId).first<any>()
+  const ownerPlan = ownerRow?.subscription_plan || 'free'
+  const planLimits: Record<string, number | null> = {
+    free: 0, credits: 0, starter: 0,
+    pro: 5, pro_plus: 25, enterprise: null, dev_unlimited: null,
+  }
+  const maxMembers = Object.prototype.hasOwnProperty.call(planLimits, ownerPlan)
+    ? planLimits[ownerPlan]
+    : 0
+
+  if (maxMembers === 0) {
+    return c.json({ error: 'Team members require a Pro plan or higher. Upgrade at /pricing.' }, 403)
+  }
+
+  if (maxMembers !== null) {
+    const activeCount = await c.env.DB.prepare(
+      "SELECT COUNT(*) as count FROM team_members WHERE owner_id = ? AND status = 'active'"
+    ).bind(ownerId).first<any>()
+    if ((activeCount?.count || 0) >= maxMembers) {
+      const planLabel = ownerPlan === 'pro' ? 'Pro' : 'Pro Plus'
+      return c.json({ error: `Your ${planLabel} plan allows up to ${maxMembers} team members. Upgrade your plan at /pricing to add more.` }, 403)
+    }
+  }
+
   // Check if already a team member
   const existing = await c.env.DB.prepare(`
     SELECT id, status FROM team_members WHERE owner_id = ? AND email = ?

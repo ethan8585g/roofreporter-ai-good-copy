@@ -166,6 +166,63 @@ squareRoutes.get('/packages', async (c) => {
 })
 
 // ============================================================
+// SUBSCRIBE — Create Square checkout for Pro or Pro Plus plan
+// ============================================================
+squareRoutes.post('/subscribe', async (c) => {
+  try {
+    const accessToken = c.env.SQUARE_ACCESS_TOKEN
+    const locationId = c.env.SQUARE_LOCATION_ID
+    if (!accessToken || !locationId) return c.json({ error: 'Square is not configured. Contact admin.' }, 503)
+
+    const token = c.req.header('Authorization')?.replace('Bearer ', '')
+    const customer = await getCustomerFromToken(c.env.DB, token)
+    if (!customer) return c.json({ error: 'Not authenticated' }, 401)
+
+    const { plan } = await c.req.json()
+    const plans: Record<string, { name: string; priceCents: number; label: string }> = {
+      pro:      { name: 'RoofReporterAI Pro',      priceCents: 4999,  label: 'Pro — $49.99/month' },
+      pro_plus: { name: 'RoofReporterAI Pro Plus', priceCents: 19900, label: 'Pro Plus — $199.00/month' },
+    }
+    const selectedPlan = plans[plan]
+    if (!selectedPlan) return c.json({ error: 'Invalid plan. Choose "pro" or "pro_plus".' }, 400)
+
+    const origin = new URL(c.req.url).origin
+    const successUrl = `${origin}/customer/dashboard?payment=success&plan=${plan}`
+    const cancelUrl = `${origin}/pricing`
+
+    const idempotencyKey = `subscribe-${customer.customer_id}-${plan}-${Date.now()}`
+    const paymentLink = await squareRequest(accessToken, 'POST', '/online-checkout/payment-links', {
+      idempotency_key: idempotencyKey,
+      quick_pay: {
+        name: selectedPlan.name,
+        price_money: { amount: selectedPlan.priceCents, currency: 'USD' },
+        location_id: locationId,
+      },
+      checkout_options: {
+        redirect_url: successUrl,
+        ask_for_shipping_address: false,
+      },
+      payment_note: `${selectedPlan.label} subscription for ${customer.email}`,
+    })
+
+    const link = paymentLink.payment_link
+    const squareOrderId = link?.order_id || ''
+
+    await c.env.DB.prepare(`
+      INSERT INTO square_payments (customer_id, square_order_id, square_payment_link_id, amount, currency, status, payment_type, description)
+      VALUES (?, ?, ?, ?, 'usd', 'pending', 'subscription', ?)
+    `).bind(
+      customer.customer_id, squareOrderId, link?.id || '', selectedPlan.priceCents,
+      selectedPlan.label
+    ).run()
+
+    return c.json({ checkout_url: link?.url || link?.long_url, payment_link_id: link?.id })
+  } catch (err: any) {
+    return c.json({ error: 'Subscription checkout failed', details: err.message }, 500)
+  }
+})
+
+// ============================================================
 // GET CUSTOMER BILLING STATUS
 // ============================================================
 squareRoutes.get('/billing', async (c) => {
@@ -244,7 +301,7 @@ squareRoutes.post('/checkout', async (c) => {
         name: `${pkg.name} — Roof Report Credits`,
         price_money: {
           amount: pkg.price_cents, // Square uses cents (same as our DB)
-          currency: 'CAD',
+          currency: 'USD',
         },
         location_id: locationId,
       },
@@ -261,7 +318,7 @@ squareRoutes.post('/checkout', async (c) => {
     // Record the pending payment
     await c.env.DB.prepare(`
       INSERT INTO square_payments (customer_id, square_order_id, square_payment_link_id, amount, currency, status, payment_type, description, order_id)
-      VALUES (?, ?, ?, ?, 'cad', 'pending', 'credit_pack', ?, ?)
+      VALUES (?, ?, ?, ?, 'usd', 'pending', 'credit_pack', ?, ?)
     `).bind(
       customer.customer_id, squareOrderId, link?.id || '', pkg.price_cents,
       `${pkg.name} (${pkg.credits} credits)`,
@@ -708,6 +765,24 @@ squareRoutes.post('/webhook', async (c) => {
             INSERT INTO user_activity_log (company_id, action, details)
             VALUES (1, 'square_report_purchased', ?)
           `).bind(`${custData?.email || 'Customer'} purchased report for ${address} via Square ($${price})`).run()
+
+        } else if (pendingPayment.payment_type === 'subscription') {
+          // Subscription purchase — activate plan
+          const planKey = pendingPayment.description?.includes('Pro Plus') ? 'pro_plus' : 'pro'
+          const now = new Date().toISOString()
+          const monthLater = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+          await c.env.DB.prepare(`
+            UPDATE customers SET
+              subscription_plan = ?, subscription_status = 'active',
+              subscription_start = ?, subscription_end = ?,
+              updated_at = datetime('now')
+            WHERE id = ?
+          `).bind(planKey, now, monthLater, customerId).run()
+
+          await c.env.DB.prepare(`
+            INSERT INTO user_activity_log (company_id, action, details)
+            VALUES (1, 'subscription_activated', ?)
+          `).bind(`Customer #${customerId} activated ${planKey} plan via Square`).run()
 
         } else {
           // Credit pack purchase — add credits
