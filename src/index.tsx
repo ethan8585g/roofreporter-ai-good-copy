@@ -497,7 +497,7 @@ app.get('/customer/reset-password', (c) => {
 
 // Customer Dashboard
 app.get('/customer/dashboard', (c) => {
-  return c.html(getCustomerDashboardHTML())
+  return c.html(getCustomerDashboardHTML(c.env.ADSENSE_PUBLISHER_ID || ''))
 })
 
 // Customer Invoice View
@@ -2514,7 +2514,7 @@ function getCustomerLoginHTML() {
 </html>`
 }
 
-function getCustomerDashboardHTML() {
+function getCustomerDashboardHTML(adsensePublisherId: string = '') {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -2563,6 +2563,11 @@ function getCustomerDashboardHTML() {
       window.location.href = '/customer/login';
     }
   </script>
+  <script>
+    // Ad config — publisher ID injected server-side, consumed by ads.js
+    window.__rraPublisherId = '${adsensePublisherId}';
+  </script>
+  <script src="/static/js/ads.js?v=${Date.now()}"></script>
   <script src="/static/customer-dashboard.js?v=${Date.now()}"></script>
   ${getRoverAssistant()}
 </body>

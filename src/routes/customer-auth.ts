@@ -760,7 +760,12 @@ customerAuthRoutes.get('/me', async (c) => {
   const freeTrialRemainingCalc = ownerIsDev ? 999999 : ((creditSource.free_trial_total || 0) - (creditSource.free_trial_used || 0))
   const totalRemainingCalc = ownerIsDev ? 999999 : (Math.max(0, freeTrialRemainingCalc) + Math.max(0, paidCreditsRemainingCalc))
 
+  // Show ads to non-subscribers: anyone without an active subscription
+  // Dev accounts, active subscribers, and team owners with credits are ad-free
+  const showAds = !ownerIsDev && session.subscription_status !== 'active'
+
   return c.json({
+    show_ads: showAds,
     customer: {
       id: session.customer_id,
       email: session.email,

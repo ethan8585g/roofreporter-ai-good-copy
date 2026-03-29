@@ -126,6 +126,11 @@ export type Bindings = {
   // ── HeyGen AI Video Generation ─────────────────────────
   // Get your API key at: https://app.heygen.com/settings?nav=API
   HEYGEN_API_KEY: string           // e.g. "your-heygen-api-key" — for AI avatar video generation
+
+  // ── Google AdSense — Web display ads for non-subscribers ─
+  // Sign up at: https://adsense.google.com
+  // Format: "ca-pub-XXXXXXXXXXXXXXXXX"
+  ADSENSE_PUBLISHER_ID: string     // Publisher ID from AdSense dashboard
 }
 
 // ============================================================

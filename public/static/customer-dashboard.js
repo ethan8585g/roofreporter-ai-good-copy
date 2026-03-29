@@ -3,7 +3,7 @@
 // Central hub after login: quick access to all BMS modules
 // ============================================================
 
-var custState = { loading: true, orders: [], billing: null, customer: null, crmStats: null };
+var custState = { loading: true, orders: [], billing: null, customer: null, crmStats: null, showAds: false };
 
 function getToken() { return localStorage.getItem('rc_customer_token') || ''; }
 function authHeaders() { return { 'Authorization': 'Bearer ' + getToken(), 'Content-Type': 'application/json' }; }
@@ -17,6 +17,8 @@ document.addEventListener('DOMContentLoaded', async function() {
   }
   await loadDashData();
   renderDashboard();
+  // Initialize ads for non-subscribers after data is loaded
+  if (window.RRAds) window.RRAds.init(custState.showAds, window.__rraPublisherId);
   // Auto-refresh when reports are generating
   startEnhancementPolling();
 });
@@ -38,6 +40,7 @@ async function loadDashData() {
     if (profileRes.ok) {
       var pd = await profileRes.json();
       custState.customer = pd.customer;
+      custState.showAds = pd.show_ads === true;
       localStorage.setItem('rc_customer', JSON.stringify(pd.customer));
     } else {
       localStorage.removeItem('rc_customer'); localStorage.removeItem('rc_customer_token');
@@ -176,6 +179,8 @@ function renderDashboard() {
           : '') +
         '<a href="/pricing" class="block w-full text-center py-2 bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold rounded-lg transition-colors">Buy Credits</a>' +
         '<a href="/customer/profile" class="block w-full text-center py-1.5 mt-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors">Account Settings</a>' +
+        // Sidebar ad unit — shown only to non-subscribers
+        '<div class="rra-ad-container" data-ad-slot="" data-ad-format="auto" style="display:none; margin-top:12px; min-height:120px; background:#f1f5f9; border:1px solid #e2e8f0; border-radius:8px; overflow:hidden; padding:4px;"></div>' +
       '</div>' +
     '</aside>';
 
@@ -284,6 +289,9 @@ function renderDashboard() {
           '</div>' +
         '</div>' +
       '</div>' +
+
+      // Ad unit — shown only to non-subscribers via RRAds.init()
+      '<div class="rra-ad-container" data-ad-slot="" data-ad-format="horizontal" style="display:none; margin-bottom:20px; text-align:center; min-height:90px; background:#f1f5f9; border:1px solid #e2e8f0; border-radius:12px; overflow:hidden; padding:4px;"></div>' +
 
       // Auto-Email Settings
       '<div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-5">' +
