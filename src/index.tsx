@@ -983,6 +983,7 @@ function getTailwindConfig() {
 function getHeadTags() {
   return `<meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="google-site-verification" content="BheA3K8LZB_3sElfmIMQU00Y1hEUXj4-o_1XaNS58S8" />
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
   ${getTailwindConfig()}
