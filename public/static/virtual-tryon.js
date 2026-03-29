@@ -19,7 +19,7 @@
   var state = {
     step: 1,         // 1=upload, 2=analyzing, 3=visualizer, 4=mask, 5=processing, 6=result
     photos: [],      // [{label, dataUrl, base64, mimeType}]
-    geometry: null,  // from Gemini
+    geometry: null,  // from Gemini or report pre-load
     style: 'asphalt',
     colorHex: '#4a4a4a',
     colorLabel: 'Charcoal Grey',
@@ -32,10 +32,20 @@
     pollTimer: null,
     brushSize: 30,
     isErasing: false,
+    // Report pre-load
+    reportId: null,
+    reportAddress: null,
+    historyJobs: [],
+    historyLoaded: false,
   };
 
   // Canvas refs for mask step
   var imgCanvas, imgCtx, maskCanvas, maskCtx, overlayCanvas, overlayCtx;
+
+  // ── Poll timer cleanup ──────────────────────────────────
+  function clearPoll() {
+    if (state.pollTimer) { clearInterval(state.pollTimer); state.pollTimer = null; }
+  }
 
   // ── API helper ─────────────────────────────────────────────
   function api(method, path, body) {
@@ -103,6 +113,7 @@
   // ════════════════════════════════════════════════════════
 
   function renderUpload() {
+    clearPoll();
     var uploaded = state.photos.length;
     var canGo = uploaded >= 2;
 
@@ -150,7 +161,14 @@
               '</div>';
             }).join('') +
           '</div>' +
-          (!canGo ? '<p class="text-center text-xs text-amber-600 mt-4"><i class="fas fa-info-circle mr-1"></i>Upload at least 2 photos to continue</p>' : '') +
+          (!canGo ? '<p class="text-center text-xs text-amber-600 mt-4"><i class="fas fa-info-circle mr-1"></i>Upload at least 2 photos to enable AI analysis</p>' : '') +
+        '</div>' +
+
+        // Skip to SVG button (always visible)
+        '<div class="text-center mt-2">' +
+          '<button onclick="window._vizSkipToSVG()" class="text-sm text-violet-600 hover:text-violet-800 underline underline-offset-2">' +
+            '<i class="fas fa-palette mr-1"></i>Skip — Just Show SVG Visualizer' +
+          '</button>' +
         '</div>' +
 
         // Analyze button
@@ -260,10 +278,36 @@
   // ════════════════════════════════════════════════════════
 
   function renderVisualizer() {
+    clearPoll();
     var geo = state.geometry || defaultGeo();
+
+    // Fetch history once when entering visualizer
+    if (!state.historyLoaded) {
+      state.historyLoaded = true;
+      api('GET', '/history').then(function(res) {
+        if (res.success && res.jobs) {
+          state.historyJobs = res.jobs.filter(function(j) { return j.status === 'succeeded' && j.final_image_url; });
+          if (state.historyJobs.length > 0) renderVisualizer();
+        }
+      }).catch(function(){});
+    }
+
+    // Build pitch label — use actual ratio from report if available
+    var pitchLabel = geo.pitch_ratio ? geo.pitch_ratio + ' pitch' : cap(geo.pitch_estimate) + ' pitch';
+    var facetLabel = geo.num_facets ? geo.num_facets + (geo.num_facets === 1 ? ' plane' : ' planes') : '';
 
     root.innerHTML =
       '<div class="max-w-5xl mx-auto space-y-4">' +
+
+        // Report source badge (shown when pre-loaded from report)
+        (state.reportId && state.reportAddress
+          ? '<div class="flex items-center gap-2 px-4 py-2.5 bg-violet-50 border border-violet-200 rounded-xl text-sm">' +
+              '<i class="fas fa-file-alt text-violet-500 flex-shrink-0"></i>' +
+              '<span class="text-violet-700 font-medium truncate"><span class="font-semibold">Loaded from report:</span> ' + state.reportAddress + '</span>' +
+              '<span class="ml-auto flex-shrink-0 text-xs text-violet-500 font-semibold">' + pitchLabel + (facetLabel ? ' · ' + facetLabel : '') + '</span>' +
+            '</div>'
+          : ''
+        ) +
 
         // Main visualizer card
         '<div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">' +
@@ -273,11 +317,12 @@
             '<div>' +
               '<h3 class="font-bold text-gray-900 text-sm"><i class="fas fa-house-user text-violet-500 mr-2"></i>Roof Visualizer</h3>' +
               '<p class="text-xs text-gray-400 mt-0.5">' +
-                cap(geo.roof_type) + ' roof · ' + cap(geo.pitch_estimate) + ' pitch' +
+                cap(geo.roof_type) + ' roof · ' + pitchLabel +
                 (geo.stories ? ' · ' + geo.stories + (geo.stories === 1 ? ' story' : ' stories') : '') +
+                (facetLabel ? ' · ' + facetLabel : '') +
               '</p>' +
             '</div>' +
-            '<button onclick="window._vizGoUpload()" class="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1"><i class="fas fa-arrow-left"></i>New Photos</button>' +
+            '<button onclick="window._vizGoUpload()" class="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1"><i class="fas fa-arrow-left"></i>' + (state.reportId ? 'Add Photos' : 'New Photos') + '</button>' +
           '</div>' +
 
           // Two-column layout
@@ -368,9 +413,30 @@
           : ''
         ) +
 
+        // Past Generations history (shown when available)
+        (state.historyJobs.length > 0
+          ? '<div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-5">' +
+              '<h3 class="font-semibold text-gray-800 text-sm mb-3"><i class="fas fa-history text-violet-500 mr-2"></i>Previous AI Previews</h3>' +
+              '<div class="grid grid-cols-2 md:grid-cols-4 gap-3">' +
+                state.historyJobs.slice(0, 8).map(function(j) {
+                  var d = j.created_at ? new Date(j.created_at + 'Z').toLocaleDateString() : '';
+                  return '<div class="rounded-xl overflow-hidden border border-gray-200 group cursor-pointer hover:shadow-md transition-shadow" onclick="window.open(\'' + j.final_image_url + '\',\'_blank\')">' +
+                    '<img src="' + j.final_image_url + '" class="w-full h-28 object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy">' +
+                    '<div class="p-2">' +
+                      '<p class="text-xs font-semibold text-gray-700 truncate">' + cap(j.roof_style || '') + '</p>' +
+                      '<p class="text-[10px] text-gray-400">' + (j.roof_color || '') + (d ? ' · ' + d : '') + '</p>' +
+                    '</div>' +
+                  '</div>';
+                }).join('') +
+              '</div>' +
+            '</div>'
+          : ''
+        ) +
+
       '</div>';
   }
 
+  window._vizSkipToSVG = function() { state.geometry = state.geometry || defaultGeo(); state.step = 3; render(); };
   window._vizStyle = function (s) { state.style = s; renderVisualizer(); };
   window._vizColor = function (hex, label) { state.colorHex = hex; state.colorLabel = label; renderVisualizer(); };
   window._vizGoUpload = function () { state.step = 1; render(); };
@@ -731,16 +797,23 @@
     }).then(function (res) {
       if (res.success && res.job_id) {
         state.jobId = res.job_id;
+        var _pollStart = Date.now();
         state.pollTimer = setInterval(function () {
+          // 90-second timeout guard
+          if (Date.now() - _pollStart > 90000) {
+            clearPoll();
+            state.errorMsg = 'Generation timed out (90s). The AI service may be busy — please try again.';
+            state.step = 6; render(); return;
+          }
           api('GET', '/status/' + state.jobId).then(function (r) {
             if (r.status === 'succeeded') {
-              clearInterval(state.pollTimer);
+              clearPoll();
               var bar = document.getElementById('aiBar');
               if (bar) bar.style.width = '100%';
               state.resultUrl = r.final_image_url;
               setTimeout(function () { state.step = 6; render(); }, 400);
             } else if (r.status === 'failed') {
-              clearInterval(state.pollTimer);
+              clearPoll();
               state.errorMsg = r.error_message || 'Generation failed. Please try again.';
               state.step = 6; render();
             } else {
@@ -760,7 +833,7 @@
   }
 
   window._vizCancelAI = function () {
-    if (state.pollTimer) clearInterval(state.pollTimer);
+    clearPoll();
     if (state.jobId) api('POST', '/cancel/' + state.jobId).catch(function(){});
     state.step = 3; render();
   };
@@ -770,6 +843,7 @@
   // ════════════════════════════════════════════════════════
 
   function renderResult() {
+    clearPoll();
     var photo = state.photos[state.aiPhotoIdx];
     var selMat = matLabel(state.style);
     root.innerHTML =
@@ -781,7 +855,7 @@
               '<h3 class="text-xl font-bold text-gray-900 mb-2">Generation Failed</h3>' +
               '<p class="text-gray-500 text-sm mb-5">' + state.errorMsg + '</p>' +
               '<div class="flex justify-center flex-wrap gap-3">' +
-                '<button onclick="window._vizDoAI()" class="px-5 py-2 bg-violet-600 text-white rounded-xl text-sm font-medium hover:bg-violet-700"><i class="fas fa-redo mr-1"></i>Try Again</button>' +
+                '<button onclick="window._vizRetryMask()" class="px-5 py-2 bg-violet-600 text-white rounded-xl text-sm font-medium hover:bg-violet-700"><i class="fas fa-redo mr-1"></i>Try Again</button>' +
                 '<button onclick="window._vizBackTo3()" class="px-5 py-2 bg-gray-200 text-gray-700 rounded-xl text-sm font-medium"><i class="fas fa-paint-brush mr-1"></i>Edit Mask</button>' +
                 '<button onclick="window._vizReturnVis()" class="px-5 py-2 bg-gray-100 text-gray-600 rounded-xl text-sm font-medium"><i class="fas fa-palette mr-1"></i>Visualizer</button>' +
               '</div>' +
@@ -816,18 +890,49 @@
 
   window._vizReturnVis = function () {
     state.resultUrl = null; state.errorMsg = null; state.maskBase64 = null; state.jobId = null;
+    state.historyLoaded = false; // reload history on re-enter so new generation appears
     state.step = 3; render();
+  };
+  window._vizRetryMask = function () {
+    state.errorMsg = null;
+    state.step = 4; render();
   };
   window._vizDL = function () {
     if (!state.resultUrl) return;
-    var a = document.createElement('a');
-    a.href = state.resultUrl;
-    a.download = 'roof-preview-' + state.style + '-' + state.colorLabel.replace(/\s/g,'-') + '.png';
-    a.target = '_blank';
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    fetch(state.resultUrl)
+      .then(function(r) { return r.blob(); })
+      .then(function(blob) {
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = 'roof-preview-' + state.style + '-' + state.colorLabel.replace(/\s/g,'-') + '.png';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
+      })
+      .catch(function() { window.open(state.resultUrl, '_blank'); });
   };
 
   // ── Boot ───────────────────────────────────────────────
-  render();
+  // Read ?report_id from URL — if present, pre-load geometry from report and skip upload step
+  var _reportId = new URLSearchParams(window.location.search).get('report_id');
+  if (_reportId) {
+    state.step = 2;
+    render(); // show loading spinner
+    api('GET', '/report-data/' + _reportId)
+      .then(function(res) {
+        if (res.success && res.geometry) {
+          state.geometry = res.geometry;
+          state.reportId = _reportId;
+          state.reportAddress = [res.property_address, res.property_city].filter(Boolean).join(', ');
+          state.step = 3;
+        } else {
+          state.step = 1;
+        }
+        render();
+      })
+      .catch(function() { state.step = 1; render(); });
+  } else {
+    render();
+  }
 
 })();

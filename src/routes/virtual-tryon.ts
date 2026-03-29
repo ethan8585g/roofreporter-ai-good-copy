@@ -493,4 +493,68 @@ function defaultHouseGeometry() {
   }
 }
 
+// ============================================================
+// GET /report-data/:orderId — Pre-load report geometry for the visualizer
+//
+// Called on page load when ?report_id= is in the URL.
+// Returns pitch, facet count, and roof type derived from the
+// stored report so the visualizer can skip the photo upload step.
+// ============================================================
+
+virtualTryonRoutes.get('/report-data/:orderId', async (c) => {
+  const orderId = c.req.param('orderId')
+  const customerId = await getCustomerId(c)
+  if (!customerId) return c.json({ error: 'Not authenticated' }, 401)
+
+  const row = await c.env.DB.prepare(`
+    SELECT o.id, o.property_address, o.property_city,
+           r.roof_pitch_degrees, r.roof_pitch_ratio, r.ai_measurement_json,
+           r.satellite_image_url, r.status as report_status, r.roof_segments
+    FROM orders o
+    LEFT JOIN reports r ON r.order_id = o.id
+    WHERE o.id = ? AND o.customer_id = ?
+  `).bind(parseInt(orderId), customerId).first<any>()
+
+  if (!row) return c.json({ error: 'Report not found' }, 404)
+  if (row.report_status !== 'completed') return c.json({ error: 'Report not yet completed' }, 400)
+
+  // Derive facet count from stored AI geometry or roof segments
+  let facetCount = 2
+  if (row.ai_measurement_json) {
+    try { facetCount = JSON.parse(row.ai_measurement_json)?.facets?.length || 2 } catch (_) {}
+  } else if (row.roof_segments) {
+    try {
+      const s = JSON.parse(row.roof_segments)
+      facetCount = Array.isArray(s) ? s.length : 2
+    } catch (_) {}
+  }
+
+  // Infer roof type from facet count
+  const roofType = facetCount >= 4 ? 'hip' : facetCount === 1 ? 'shed' : 'gable'
+
+  // Convert pitch degrees to low/medium/steep label
+  const pitchDeg = row.roof_pitch_degrees || 20
+  const pitchEstimate = pitchDeg < 14 ? 'low' : pitchDeg > 33 ? 'steep' : 'medium'
+
+  return c.json({
+    success: true,
+    geometry: {
+      roof_type: roofType,
+      pitch_estimate: pitchEstimate,
+      pitch_degrees: pitchDeg,
+      pitch_ratio: row.roof_pitch_ratio || null,
+      stories: 1,
+      width_depth_ratio: 1.6,
+      num_facets: facetCount,
+      house_style: 'ranch',
+      confidence: 'high',
+      source: 'report',
+    },
+    order_id: row.id,
+    property_address: row.property_address || '',
+    property_city: row.property_city || '',
+    satellite_image_url: row.satellite_image_url || null,
+  })
+})
+
 export { virtualTryonRoutes }
