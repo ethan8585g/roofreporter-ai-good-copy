@@ -516,6 +516,14 @@ app.get('/blog/:slug', (c) => {
   return c.html(getBlogPostHTML())
 })
 
+// Legal pages (required for Google OAuth verification)
+app.get('/privacy', (c) => {
+  return c.html(getPrivacyPolicyHTML())
+})
+app.get('/terms', (c) => {
+  return c.html(getTermsOfServiceHTML())
+})
+
 // Landing Funnel — Social media & blog traffic funnels here
 app.get('/lander', (c) => {
   return c.html(getLanderFunnelHTML())
@@ -2528,6 +2536,155 @@ function getPricingPageHTML() {
   ${getContactFormHTML('pricing')}
   <script src="/static/pricing.js"></script>
   ${getRoverWidget()}
+</body>
+</html>`
+}
+
+// ============================================================
+// PRIVACY POLICY PAGE
+// ============================================================
+function getPrivacyPolicyHTML() {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags()}
+  <title>Privacy Policy - RoofReporterAI</title>
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <nav class="bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg">
+    <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+      <a href="/" class="flex items-center gap-3">
+        <img src="/static/logo.png" alt="RoofReporterAI" class="w-9 h-9 rounded-lg object-cover">
+        <span class="text-white font-bold text-lg">RoofReporterAI</span>
+      </a>
+      <a href="/" class="text-sky-200 hover:text-white text-sm">Home</a>
+    </div>
+  </nav>
+  <main class="max-w-3xl mx-auto px-4 py-16">
+    <h1 class="text-3xl font-bold text-gray-900 mb-2">Privacy Policy</h1>
+    <p class="text-sm text-gray-500 mb-8">Last updated: March 2025</p>
+
+    <div class="prose prose-gray max-w-none space-y-6 text-gray-700 leading-relaxed">
+      <p>RoofReporterAI ("we," "us," or "our") operates the website https://www.roofreporterai.com and provides AI-powered roof measurement and reporting services (the "Service"). This Privacy Policy explains how we collect, use, and protect your information.</p>
+
+      <h2 class="text-xl font-semibold text-gray-900 mt-8">1. Information We Collect</h2>
+      <p><strong>Account Information:</strong> When you register, we collect your name, email address, business name, and password (hashed).</p>
+      <p><strong>Property Data:</strong> Addresses, GPS coordinates, and roof measurement data you submit to generate reports.</p>
+      <p><strong>Usage Data:</strong> Log data, IP addresses, browser type, and pages visited to improve our Service.</p>
+      <p><strong>Payment Information:</strong> Payments are processed by Stripe or Square. We do not store full card numbers.</p>
+      <p><strong>Google Account Data:</strong> If you connect a Google account (e.g. for Gmail integration), we access only the permissions you explicitly grant. We use Google OAuth solely to send emails on your behalf and do not share your Google data with third parties.</p>
+
+      <h2 class="text-xl font-semibold text-gray-900 mt-8">2. How We Use Your Information</h2>
+      <ul class="list-disc pl-6 space-y-1">
+        <li>To generate and deliver roof measurement reports</li>
+        <li>To process payments and manage your account</li>
+        <li>To send invoices, proposals, and communications on your behalf (when authorized)</li>
+        <li>To improve and maintain our Service</li>
+        <li>To comply with legal obligations</li>
+      </ul>
+
+      <h2 class="text-xl font-semibold text-gray-900 mt-8">3. Data Sharing</h2>
+      <p>We do not sell your personal information. We share data only with service providers necessary to operate our platform (e.g. Google Cloud, Cloudflare, Stripe, Square, Resend) and only to the extent required to provide the Service.</p>
+
+      <h2 class="text-xl font-semibold text-gray-900 mt-8">4. Data Retention</h2>
+      <p>We retain your data for as long as your account is active. You may request deletion of your account and associated data by contacting us at support@roofreporterai.com.</p>
+
+      <h2 class="text-xl font-semibold text-gray-900 mt-8">5. Security</h2>
+      <p>We use industry-standard encryption and security practices. Passwords are stored as salted hashes. All data is transmitted over HTTPS.</p>
+
+      <h2 class="text-xl font-semibold text-gray-900 mt-8">6. Your Rights</h2>
+      <p>You may access, correct, or request deletion of your personal data at any time by contacting support@roofreporterai.com. If you are in the EU/EEA, you have additional rights under GDPR.</p>
+
+      <h2 class="text-xl font-semibold text-gray-900 mt-8">7. Cookies</h2>
+      <p>We use cookies for session management and analytics (Google Analytics). You can disable cookies in your browser settings.</p>
+
+      <h2 class="text-xl font-semibold text-gray-900 mt-8">8. Changes to This Policy</h2>
+      <p>We may update this policy periodically. Continued use of the Service after changes constitutes acceptance of the updated policy.</p>
+
+      <h2 class="text-xl font-semibold text-gray-900 mt-8">9. Contact</h2>
+      <p>Questions? Contact us at <a href="mailto:support@roofreporterai.com" class="text-sky-600 hover:underline">support@roofreporterai.com</a>.</p>
+    </div>
+  </main>
+  <footer class="bg-gray-800 text-gray-400 text-center text-xs py-6 mt-16">
+    &copy; ${new Date().getFullYear()} RoofReporterAI. All rights reserved. &nbsp;|&nbsp;
+    <a href="/privacy" class="hover:text-white">Privacy Policy</a> &nbsp;|&nbsp;
+    <a href="/terms" class="hover:text-white">Terms of Service</a>
+  </footer>
+</body>
+</html>`
+}
+
+// ============================================================
+// TERMS OF SERVICE PAGE
+// ============================================================
+function getTermsOfServiceHTML() {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags()}
+  <title>Terms of Service - RoofReporterAI</title>
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <nav class="bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg">
+    <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+      <a href="/" class="flex items-center gap-3">
+        <img src="/static/logo.png" alt="RoofReporterAI" class="w-9 h-9 rounded-lg object-cover">
+        <span class="text-white font-bold text-lg">RoofReporterAI</span>
+      </a>
+      <a href="/" class="text-sky-200 hover:text-white text-sm">Home</a>
+    </div>
+  </nav>
+  <main class="max-w-3xl mx-auto px-4 py-16">
+    <h1 class="text-3xl font-bold text-gray-900 mb-2">Terms of Service</h1>
+    <p class="text-sm text-gray-500 mb-8">Last updated: March 2025</p>
+
+    <div class="prose prose-gray max-w-none space-y-6 text-gray-700 leading-relaxed">
+      <p>By accessing or using RoofReporterAI ("Service"), you agree to be bound by these Terms of Service. If you do not agree, do not use the Service.</p>
+
+      <h2 class="text-xl font-semibold text-gray-900 mt-8">1. Use of Service</h2>
+      <p>RoofReporterAI provides AI-powered roof measurement reports and contractor CRM tools. You may use the Service only for lawful purposes and in accordance with these Terms. You are responsible for all activity under your account.</p>
+
+      <h2 class="text-xl font-semibold text-gray-900 mt-8">2. Accounts</h2>
+      <p>You must provide accurate information when creating an account. You are responsible for maintaining the confidentiality of your credentials. Notify us immediately of any unauthorized access at support@roofreporterai.com.</p>
+
+      <h2 class="text-xl font-semibold text-gray-900 mt-8">3. Payments & Credits</h2>
+      <p>Report credits are purchased in advance and are non-refundable once used. Free trial credits expire per the terms presented at signup. Payments are processed securely via Stripe or Square.</p>
+
+      <h2 class="text-xl font-semibold text-gray-900 mt-8">4. Report Accuracy</h2>
+      <p>AI-generated roof measurements are estimates based on satellite imagery and AI analysis. RoofReporterAI does not guarantee the accuracy of measurements. Always verify measurements on-site before material ordering or construction.</p>
+
+      <h2 class="text-xl font-semibold text-gray-900 mt-8">5. Intellectual Property</h2>
+      <p>All content, software, and AI models on the platform are owned by RoofReporterAI. Reports generated using your data are yours. You grant us a license to process your submitted data to deliver the Service.</p>
+
+      <h2 class="text-xl font-semibold text-gray-900 mt-8">6. Prohibited Use</h2>
+      <ul class="list-disc pl-6 space-y-1">
+        <li>Reverse engineering or scraping the platform</li>
+        <li>Submitting false or misleading data</li>
+        <li>Reselling access without written permission</li>
+        <li>Using the Service for any unlawful purpose</li>
+      </ul>
+
+      <h2 class="text-xl font-semibold text-gray-900 mt-8">7. Termination</h2>
+      <p>We reserve the right to suspend or terminate accounts that violate these Terms. You may cancel your account at any time by contacting support@roofreporterai.com.</p>
+
+      <h2 class="text-xl font-semibold text-gray-900 mt-8">8. Limitation of Liability</h2>
+      <p>To the maximum extent permitted by law, RoofReporterAI shall not be liable for indirect, incidental, or consequential damages arising from use of the Service. Our total liability shall not exceed the amount you paid in the 3 months prior to the claim.</p>
+
+      <h2 class="text-xl font-semibold text-gray-900 mt-8">9. Governing Law</h2>
+      <p>These Terms are governed by the laws of the Province of Alberta, Canada, without regard to conflict of law principles.</p>
+
+      <h2 class="text-xl font-semibold text-gray-900 mt-8">10. Changes</h2>
+      <p>We may update these Terms. Continued use after changes constitutes acceptance. We will notify users of material changes via email.</p>
+
+      <h2 class="text-xl font-semibold text-gray-900 mt-8">11. Contact</h2>
+      <p>Questions? Contact us at <a href="mailto:support@roofreporterai.com" class="text-sky-600 hover:underline">support@roofreporterai.com</a>.</p>
+    </div>
+  </main>
+  <footer class="bg-gray-800 text-gray-400 text-center text-xs py-6 mt-16">
+    &copy; ${new Date().getFullYear()} RoofReporterAI. All rights reserved. &nbsp;|&nbsp;
+    <a href="/privacy" class="hover:text-white">Privacy Policy</a> &nbsp;|&nbsp;
+    <a href="/terms" class="hover:text-white">Terms of Service</a>
+  </footer>
 </body>
 </html>`
 }
