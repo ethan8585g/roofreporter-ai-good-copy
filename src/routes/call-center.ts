@@ -20,6 +20,8 @@
 // POST /api/call-center/agents/:id/stop        — Stop agent
 // POST /api/call-center/dial                   — Initiate outbound call
 // GET  /api/call-center/call-logs              — Call history
+// GET  /api/call-center/call-logs/:id          — Single call log detail
+// GET  /api/call-center/prospects/:id/calls    — Call history for a prospect
 // POST /api/call-center/call-complete          — Webhook: call ended
 // GET  /api/call-center/dashboard              — Stats overview
 // POST /api/call-center/livekit-token          — Generate LK token for outbound
@@ -551,6 +553,34 @@ callCenterRoutes.get('/call-logs', async (c) => {
   ).bind(...params, limit, offset).all<any>()
 
   return c.json({ call_logs: results, total: countRow?.cnt || 0, page, limit })
+})
+
+// GET /call-logs/:id — Full detail for a single call log
+callCenterRoutes.get('/call-logs/:id', async (c) => {
+  const id = parseInt(c.req.param('id'))
+  const row = await c.env.DB.prepare(
+    `SELECT cl.*, p.company_name, p.contact_name, p.phone, p.email, p.city, p.province_state, p.notes as prospect_notes,
+            a.name as agent_display_name, a.voice_id
+     FROM cc_call_logs cl
+     LEFT JOIN cc_prospects p ON p.id = cl.prospect_id
+     LEFT JOIN cc_agents a ON a.id = cl.agent_id
+     WHERE cl.id = ?`
+  ).bind(id).first<any>()
+  if (!row) return c.json({ error: 'Not found' }, 404)
+  return c.json({ call_log: row })
+})
+
+// GET /prospects/:id/calls — Call history for a specific prospect
+callCenterRoutes.get('/prospects/:id/calls', async (c) => {
+  const id = parseInt(c.req.param('id'))
+  const prospect = await c.env.DB.prepare('SELECT * FROM cc_prospects WHERE id=?').bind(id).first<any>()
+  if (!prospect) return c.json({ error: 'Not found' }, 404)
+  const { results } = await c.env.DB.prepare(
+    `SELECT cl.*, a.name as agent_display_name FROM cc_call_logs cl
+     LEFT JOIN cc_agents a ON a.id = cl.agent_id
+     WHERE cl.prospect_id = ? ORDER BY cl.started_at DESC`
+  ).bind(id).all<any>()
+  return c.json({ prospect, calls: results })
 })
 
 // ============================================================

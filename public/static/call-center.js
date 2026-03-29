@@ -78,7 +78,9 @@
     </div>`;
   }
 
+  var _ccRefreshTimer = null;
   window.ccSetTab = function(tab) {
+    if (_ccRefreshTimer) { clearInterval(_ccRefreshTimer); _ccRefreshTimer = null; }
     CC.tab = tab;
     document.querySelectorAll('.cc-tab').forEach(el => {
       el.classList.remove('bg-white', 'text-gray-900', 'shadow-sm');
@@ -96,7 +98,18 @@
 
     switch (tab) {
       case 'overview':
-        CC.data.dashboard = await ccFetch('/api/call-center/dashboard');
+        [CC.data.dashboard, CC.data.agents] = await Promise.all([
+          ccFetch('/api/call-center/dashboard'),
+          ccFetch('/api/call-center/agents'),
+        ]);
+        if (!_ccRefreshTimer) _ccRefreshTimer = setInterval(async function() {
+          if (CC.tab !== 'overview') { clearInterval(_ccRefreshTimer); _ccRefreshTimer = null; return; }
+          [CC.data.dashboard, CC.data.agents] = await Promise.all([
+            ccFetch('/api/call-center/dashboard'),
+            ccFetch('/api/call-center/agents'),
+          ]);
+          renderTab('overview');
+        }, 30000);
         break;
       case 'agents':
         CC.data.agents = await ccFetch('/api/call-center/agents');
@@ -156,8 +169,49 @@
     const ag = d.agents || {};
     const camp = d.campaigns || {};
     const recent = d.recent_calls || [];
+    const hourly = d.hourly || [];
+    const agentList = ((CC.data.agents || {}).agents || []);
+
+    // Hourly bar chart (SVG)
+    const chartHours = Array.from({length: 13}, (_, i) => i + 8); // 8am–8pm
+    const maxCalls = Math.max(1, ...hourly.map(h => Number(h.calls) || 0));
+    const hourlyMap = {};
+    hourly.forEach(h => { hourlyMap[parseInt(h.hour)] = h; });
+    const bW = 14, bGap = 16, svgH = 70;
+    const svgW = chartHours.length * (bW * 2 + bGap);
+    const hourlyChartSvg = `<svg width="100%" viewBox="0 0 ${svgW} ${svgH + 24}" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
+      ${chartHours.map((hr, i) => {
+        const hd = hourlyMap[hr] || {calls: 0, connects: 0};
+        const callH = Math.round((Number(hd.calls)||0) / maxCalls * svgH);
+        const connH = Math.round((Number(hd.connects)||0) / maxCalls * svgH);
+        const x = i * (bW * 2 + bGap);
+        const label = hr <= 12 ? hr + (hr===12?'p':'a') : (hr-12) + 'p';
+        return `<rect x="${x}" y="${svgH-callH}" width="${bW}" height="${callH}" fill="#60a5fa" rx="2"/>
+          <rect x="${x+bW+1}" y="${svgH-connH}" width="${bW}" height="${connH}" fill="#34d399" rx="2"/>
+          <text x="${x+bW}" y="${svgH+14}" text-anchor="middle" font-size="7" fill="#9ca3af">${label}</text>`;
+      }).join('')}
+    </svg>`;
+
+    // Conversion funnel steps with drop-off
+    const funnelTotal = p.total || 0;
+    const contacted = funnelTotal - (p.available || 0);
+    const funnelSteps = [
+      {label:'Total', val:funnelTotal, color:'blue', icon:'fa-database'},
+      {label:'Contacted', val:contacted, color:'yellow', icon:'fa-phone'},
+      {label:'Interested', val:p.interested||0, color:'orange', icon:'fa-fire'},
+      {label:'Demo Booked', val:p.demos||0, color:'purple', icon:'fa-calendar-check'},
+      {label:'Converted', val:p.converted||0, color:'green', icon:'fa-trophy'},
+    ];
 
     return `<div class="space-y-6">
+      <!-- Header with refresh indicator -->
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2 text-xs text-gray-400">
+          <i class="fas fa-sync-alt"></i> Auto-refreshes every 30s
+        </div>
+        <button onclick="window.ccSetTab('overview')" class="px-3 py-1.5 bg-gray-100 text-gray-500 rounded-lg text-xs hover:bg-gray-200 flex items-center gap-1"><i class="fas fa-sync-alt"></i> Refresh Now</button>
+      </div>
+
       <!-- KPI Cards -->
       <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div class="bg-gradient-to-br from-orange-500 to-red-600 rounded-xl p-5 text-white shadow-lg">
@@ -182,27 +236,52 @@
         </div>
       </div>
 
-      <!-- Pipeline Funnel -->
-      <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-        <h3 class="font-bold text-gray-900 mb-4"><i class="fas fa-filter mr-2 text-orange-500"></i>Sales Pipeline</h3>
-        <div class="grid grid-cols-6 gap-2">
-          ${[
-            {label:'Available', val:p.available||0, color:'blue'},
-            {label:'Contacted', val:(p.total||0)-(p.available||0)-(p.interested||0)-(p.demos||0)-(p.converted||0)-(p.exhausted||0), color:'yellow'},
-            {label:'Interested', val:p.interested||0, color:'orange'},
-            {label:'Demo Scheduled', val:p.demos||0, color:'purple'},
-            {label:'Converted', val:p.converted||0, color:'green'},
-            {label:'Exhausted', val:p.exhausted||0, color:'gray'},
-          ].map(s => `
-            <div class="text-center">
-              <div class="text-2xl font-black text-${s.color}-600">${s.val}</div>
-              <div class="text-[10px] text-gray-500 uppercase font-semibold mt-1">${s.label}</div>
-              <div class="mt-2 h-2 bg-${s.color}-100 rounded-full overflow-hidden">
-                <div class="h-full bg-${s.color}-500 rounded-full" style="width:${p.total ? Math.max(2, s.val/p.total*100) : 2}%"></div>
-              </div>
-            </div>
-          `).join('')}
+      <!-- Live Agent Status -->
+      ${agentList.length > 0 ? `
+      <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+        <h3 class="font-bold text-gray-900 text-sm mb-3"><i class="fas fa-circle text-xs text-green-500 mr-2 animate-pulse"></i>Live Agent Status</h3>
+        <div class="flex flex-wrap gap-2">
+          ${agentList.map(a => {
+            const sc = a.status==='calling' ? 'bg-green-50 border-green-200' : a.status==='paused' ? 'bg-yellow-50 border-yellow-200' : 'bg-gray-50 border-gray-200';
+            const dc = a.status==='calling' ? 'bg-green-500 animate-pulse' : a.status==='paused' ? 'bg-yellow-500' : 'bg-gray-400';
+            return `<div class="flex items-center gap-2 px-3 py-2 rounded-full border ${sc}">
+              <div class="w-2 h-2 rounded-full ${dc}"></div>
+              <span class="text-xs font-semibold text-gray-700">${a.name}</span>
+              <span class="text-[10px] text-gray-400 capitalize">${a.status||'idle'}</span>
+            </div>`;
+          }).join('')}
         </div>
+      </div>
+      ` : ''}
+
+      <!-- Conversion Funnel -->
+      <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+        <h3 class="font-bold text-gray-900 mb-4"><i class="fas fa-filter mr-2 text-orange-500"></i>Conversion Funnel</h3>
+        <div class="flex items-end gap-2">
+          ${funnelSteps.map((s, i) => {
+            const pct = funnelTotal ? Math.round(s.val / funnelTotal * 100) : 0;
+            const dropPct = i > 0 && funnelSteps[i-1].val ? Math.round((1 - s.val / funnelSteps[i-1].val) * 100) : null;
+            const colors = {blue:'from-blue-400 to-blue-600',yellow:'from-yellow-400 to-yellow-600',orange:'from-orange-400 to-orange-600',purple:'from-purple-400 to-purple-600',green:'from-green-400 to-green-600'};
+            return `<div class="flex-1 text-center">
+              ${dropPct !== null ? `<div class="text-[9px] text-red-400 font-semibold mb-1">-${dropPct}%</div>` : '<div class="h-4"></div>'}
+              <div class="bg-gradient-to-b ${colors[s.color]||colors.blue} rounded-lg mx-1 flex items-center justify-center text-white font-black text-lg shadow-sm" style="height:${Math.max(32, pct * 0.8 + 20)}px">${s.val}</div>
+              <div class="text-[10px] text-gray-500 font-semibold mt-2 uppercase">${s.label}</div>
+              <div class="text-[10px] text-gray-400">${pct}%</div>
+            </div>`;
+          }).join('<div class="text-gray-300 text-sm self-center pb-6">›</div>')}
+        </div>
+      </div>
+
+      <!-- Hourly Call Volume Chart -->
+      <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="font-bold text-gray-900"><i class="fas fa-chart-bar mr-2 text-orange-500"></i>Hourly Call Volume <span class="font-normal text-gray-400 text-sm">(Today)</span></h3>
+          <div class="flex items-center gap-3 text-xs text-gray-500">
+            <span class="flex items-center gap-1"><span class="w-3 h-2 bg-blue-400 rounded-sm inline-block"></span>Calls</span>
+            <span class="flex items-center gap-1"><span class="w-3 h-2 bg-emerald-400 rounded-sm inline-block"></span>Connects</span>
+          </div>
+        </div>
+        ${hourly.length === 0 ? '<div class="text-center text-gray-400 py-6 text-sm"><i class="fas fa-chart-bar text-3xl mb-2 opacity-30 block"></i>No calls today yet</div>' : `<div class="overflow-x-auto">${hourlyChartSvg}</div>`}
       </div>
 
       <!-- Recent Calls -->
@@ -310,6 +389,54 @@
       </div>
     </div>
 
+    <!-- Agent Leaderboard -->
+    ${agents.length > 1 ? `
+    <div class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+      <div class="px-6 py-4 border-b border-gray-100">
+        <h3 class="font-bold text-gray-900"><i class="fas fa-trophy mr-2 text-yellow-500"></i>Agent Leaderboard</h3>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead><tr class="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+            <th class="px-4 py-3">Rank</th>
+            <th class="px-4 py-3">Agent</th>
+            <th class="px-4 py-3 text-center">Calls</th>
+            <th class="px-4 py-3 text-center">Connects</th>
+            <th class="px-4 py-3 text-center">Interested</th>
+            <th class="px-4 py-3 text-center">Connect Rate</th>
+            <th class="px-4 py-3 text-center">Success Rate</th>
+          </tr></thead>
+          <tbody class="divide-y divide-gray-50">
+            ${[...agents].sort((a,b) => (b.total_calls||0)-(a.total_calls||0)).map((a,i) => {
+              const connectRate = a.total_calls ? ((a.total_connects||0)/a.total_calls*100).toFixed(1) : '0.0';
+              const successRate = a.total_connects ? ((a.total_interested||0)/a.total_connects*100).toFixed(1) : '0.0';
+              const isTop = i === 0;
+              return `<tr class="hover:bg-gray-50 transition-colors ${isTop ? 'bg-yellow-50' : ''}">
+                <td class="px-4 py-3 text-center">
+                  ${i===0?'<span class="text-yellow-500 text-lg">🥇</span>':i===1?'<span class="text-gray-400 text-lg">🥈</span>':i===2?'<span class="text-amber-600 text-lg">🥉</span>':`<span class="text-gray-400 font-bold">#${i+1}</span>`}
+                </td>
+                <td class="px-4 py-3">
+                  <div class="flex items-center gap-2">
+                    <div class="w-8 h-8 rounded-lg bg-gradient-to-br ${isTop?'from-yellow-400 to-orange-500':'from-gray-300 to-gray-400'} flex items-center justify-center"><i class="fas fa-robot text-white text-xs"></i></div>
+                    <div>
+                      <p class="font-semibold text-gray-900 ${isTop?'text-yellow-700':''}">${a.name}</p>
+                      <p class="text-[10px] text-gray-400">${a.voice_id||'alloy'}</p>
+                    </div>
+                  </div>
+                </td>
+                <td class="px-4 py-3 text-center font-bold text-gray-700">${a.total_calls||0}</td>
+                <td class="px-4 py-3 text-center font-bold text-green-600">${a.total_connects||0}</td>
+                <td class="px-4 py-3 text-center font-bold text-orange-600">${a.total_interested||0}</td>
+                <td class="px-4 py-3 text-center"><span class="px-2 py-0.5 rounded-full text-xs font-semibold ${parseFloat(connectRate)>=30?'bg-green-100 text-green-700':parseFloat(connectRate)>=15?'bg-yellow-100 text-yellow-700':'bg-gray-100 text-gray-500'}">${connectRate}%</span></td>
+                <td class="px-4 py-3 text-center"><span class="px-2 py-0.5 rounded-full text-xs font-semibold ${parseFloat(successRate)>=20?'bg-orange-100 text-orange-700':parseFloat(successRate)>=10?'bg-yellow-100 text-yellow-700':'bg-gray-100 text-gray-500'}">${successRate}%</span></td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    ` : ''}
+
     <!-- Create Agent Modal -->
     <div id="cc-agent-modal" class="hidden fixed inset-0 z-50 bg-black/50 flex items-center justify-center">
       <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
@@ -345,6 +472,46 @@
           <div id="cc-agent-status-msg" class="hidden text-sm"></div>
           <button onclick="window.ccCreateAgent()" class="w-full bg-orange-600 text-white py-2.5 rounded-lg font-semibold hover:bg-orange-700 transition-colors">
             <i class="fas fa-plus mr-1"></i>Create Agent
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Edit Agent Modal -->
+    <div id="cc-edit-agent-modal" class="hidden fixed inset-0 z-50 bg-black/50 flex items-center justify-center">
+      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
+        <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+          <h3 class="font-bold text-gray-900"><i class="fas fa-edit mr-2 text-blue-500"></i>Edit AI Agent</h3>
+          <button onclick="document.getElementById('cc-edit-agent-modal').classList.add('hidden')" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="p-6 space-y-4">
+          <input type="hidden" id="cc-edit-agent-id" />
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1">Agent Name *</label>
+            <input id="cc-edit-agent-name" type="text" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1">Voice</label>
+            <select id="cc-edit-agent-voice" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500">
+              <option value="alloy">Alloy — neutral, professional</option>
+              <option value="echo">Echo — male, authoritative</option>
+              <option value="nova">Nova — female, warm</option>
+              <option value="onyx">Onyx — deep, confident</option>
+              <option value="fable">Fable — expressive, engaging</option>
+              <option value="shimmer">Shimmer — warm, friendly</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1">Persona / System Prompt</label>
+            <textarea id="cc-edit-agent-persona" rows="5" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"></textarea>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1">Room Prefix</label>
+            <input id="cc-edit-agent-prefix" type="text" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500" />
+          </div>
+          <div id="cc-edit-agent-status-msg" class="hidden text-sm"></div>
+          <button onclick="window.ccEditAgentSave()" class="w-full bg-blue-600 text-white py-2.5 rounded-lg font-semibold hover:bg-blue-700 transition-colors">
+            <i class="fas fa-save mr-1"></i>Save Changes
           </button>
         </div>
       </div>
@@ -397,6 +564,18 @@
               `).join('')}
             </div>
             ${c.script_intro ? `<div class="mt-3 p-3 bg-orange-50 rounded-lg"><p class="text-xs text-orange-700"><strong>Intro:</strong> ${c.script_intro.substring(0,150)}${c.script_intro.length>150?'...':''}</p></div>` : ''}
+            ${c.total_prospects > 0 ? `
+            <div class="mt-4">
+              <div class="flex items-center justify-between text-xs mb-1.5">
+                <span class="text-gray-500 font-medium">${c.total_calls||0} calls made of ${c.total_prospects} prospects</span>
+                <span class="font-bold text-gray-700">${Math.round(Math.min(100,(c.total_calls||0)/c.total_prospects*100))}%</span>
+              </div>
+              <div class="h-2.5 bg-gray-100 rounded-full overflow-hidden">
+                <div class="h-full bg-gradient-to-r from-orange-400 to-red-500 rounded-full transition-all" style="width:${Math.min(100,(c.total_calls||0)/c.total_prospects*100)}%"></div>
+              </div>
+              <p class="text-[10px] text-gray-400 mt-1">${Math.max(0,(c.total_prospects)-(c.total_calls||0))} prospects remaining in queue${c.total_calls >= c.total_prospects ? ' <span class=\'text-green-600 font-semibold\'>— All called!</span>' : ''}</p>
+            </div>
+            ` : ''}
           </div>
           <div class="px-5 py-3 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
             <div class="flex gap-2">
@@ -512,7 +691,7 @@
                 <th class="px-4 py-3 text-right">Actions</th>
               </tr></thead>
               <tbody class="divide-y divide-gray-50">${prospects.map(p => `
-                <tr class="hover:bg-gray-50 transition-colors">
+                <tr class="hover:bg-gray-50 transition-colors cursor-pointer" onclick="window.ccShowProspect(${p.id})">
                   <td class="px-4 py-3 font-medium text-gray-900">${p.company_name}<br><span class="text-[10px] text-gray-400">${p.lead_source||''} ${p.tags ? '&middot; '+p.tags : ''}</span></td>
                   <td class="px-4 py-3 text-xs">${p.contact_name||'—'}<br><span class="text-gray-400">${p.email||''}</span></td>
                   <td class="px-4 py-3 text-xs font-mono">${p.phone}</td>
@@ -520,7 +699,7 @@
                   <td class="px-4 py-3">${prospectStatusPill(p.status)}</td>
                   <td class="px-4 py-3 text-center text-xs">${p.total_calls||0}</td>
                   <td class="px-4 py-3 text-xs text-gray-400">${p.last_called_at ? new Date(p.last_called_at).toLocaleDateString('en-CA') : '—'}</td>
-                  <td class="px-4 py-3 text-right">
+                  <td class="px-4 py-3 text-right" onclick="event.stopPropagation()">
                     <button onclick="window.ccDialProspect(${p.id})" class="text-green-600 hover:text-green-800 text-xs mr-2" title="Dial"><i class="fas fa-phone"></i></button>
                     <button onclick="window.ccDeleteProspect(${p.id})" class="text-red-400 hover:text-red-600 text-xs" title="Delete"><i class="fas fa-trash"></i></button>
                   </td>
@@ -616,7 +795,7 @@
                 <th class="px-4 py-3">Summary</th>
               </tr></thead>
               <tbody class="divide-y divide-gray-50">${logs.map(cl => `
-                <tr class="hover:bg-gray-50 transition-colors">
+                <tr class="hover:bg-gray-50 transition-colors cursor-pointer" onclick="window.ccShowCallLog(${cl.id})" title="Click for details">
                   <td class="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">${cl.started_at ? new Date(cl.started_at).toLocaleString('en-CA', {dateStyle:'short',timeStyle:'short'}) : '-'}</td>
                   <td class="px-4 py-3 font-medium text-gray-900">${cl.company_name||'—'}<br><span class="text-xs text-gray-400">${cl.contact_name||''}</span></td>
                   <td class="px-4 py-3 text-xs font-mono">${cl.phone_dialed||'—'}</td>
@@ -898,7 +1077,37 @@
     const data = await ccFetch('/api/call-center/agents/' + id + '/stop', { method: 'POST', body: '{}' });
     if (data?.success) ccLoadTab('agents');
   };
-  window.ccEditAgent = function(id) { alert('Edit agent ' + id + ' — coming soon'); };
+  window.ccEditAgent = function(id) {
+    const agents = ((CC.data.agents || {}).agents || []);
+    const agent = agents.find(a => a.id === id);
+    if (!agent) return alert('Agent not found');
+    document.getElementById('cc-edit-agent-id').value = id;
+    document.getElementById('cc-edit-agent-name').value = agent.name || '';
+    document.getElementById('cc-edit-agent-voice').value = agent.voice_id || 'alloy';
+    document.getElementById('cc-edit-agent-persona').value = agent.persona || '';
+    document.getElementById('cc-edit-agent-prefix').value = agent.livekit_room_prefix || 'sales-';
+    const statusMsg = document.getElementById('cc-edit-agent-status-msg');
+    if (statusMsg) statusMsg.classList.add('hidden');
+    document.getElementById('cc-edit-agent-modal').classList.remove('hidden');
+  };
+  window.ccEditAgentSave = async function() {
+    const id = parseInt(document.getElementById('cc-edit-agent-id').value);
+    const name = document.getElementById('cc-edit-agent-name').value.trim();
+    if (!name) return alert('Agent name required');
+    const statusMsg = document.getElementById('cc-edit-agent-status-msg');
+    if (statusMsg) { statusMsg.className = 'text-sm text-blue-600'; statusMsg.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Saving...'; statusMsg.classList.remove('hidden'); }
+    const data = await ccFetch('/api/call-center/agents/' + id, { method: 'PUT', body: JSON.stringify({
+      name, voice_id: document.getElementById('cc-edit-agent-voice').value,
+      persona: document.getElementById('cc-edit-agent-persona').value,
+      livekit_room_prefix: document.getElementById('cc-edit-agent-prefix').value,
+    }) });
+    if (data?.success) {
+      document.getElementById('cc-edit-agent-modal').classList.add('hidden');
+      ccLoadTab('agents');
+    } else {
+      if (statusMsg) { statusMsg.className = 'text-sm text-red-600 bg-red-50 p-2 rounded-lg'; statusMsg.innerHTML = '<i class="fas fa-exclamation-circle mr-1"></i>' + (data?.error || 'Failed to save'); }
+    }
+  };
   window.ccDeleteAgent = async function(id) {
     if (!confirm('Delete this AI agent?')) return;
     await ccFetch('/api/call-center/agents/' + id, { method: 'DELETE' });
@@ -967,6 +1176,130 @@
       resultEl.innerHTML = '<i class="fas fa-exclamation-circle mr-1"></i>' + (data?.error || 'Import failed');
     }
   };
+  window.ccShowCallLog = async function(id) {
+    var existing = document.getElementById('cc-call-log-detail');
+    if (existing) existing.remove();
+    var modal = document.createElement('div');
+    modal.id = 'cc-call-log-detail';
+    modal.className = 'fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4';
+    modal.innerHTML = '<div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"><div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between sticky top-0 bg-white z-10"><h3 class="font-bold text-gray-900"><i class="fas fa-phone-alt mr-2 text-orange-500"></i>Call Log Detail</h3><button onclick="document.getElementById(\'cc-call-log-detail\').remove()" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button></div><div id="cc-call-log-body" class="p-6"><div class="flex justify-center py-8"><div class="w-8 h-8 border-4 border-orange-200 border-t-orange-600 rounded-full animate-spin"></div></div></div></div>';
+    document.body.appendChild(modal);
+    modal.addEventListener('click', function(e) { if (e.target === modal) modal.remove(); });
+
+    const data = await ccFetch('/api/call-center/call-logs/' + id);
+    const body = document.getElementById('cc-call-log-body');
+    if (!body) return;
+    if (!data || !data.call_log) { body.innerHTML = '<p class="text-red-500 text-center py-6">Failed to load call log</p>'; return; }
+    const cl = data.call_log;
+
+    var objections = [];
+    try { objections = JSON.parse(cl.objections_raised || '[]'); } catch(e) { if (cl.objections_raised) objections = [cl.objections_raised]; }
+    var transcript = [];
+    var transcriptRaw = '';
+    try { transcript = JSON.parse(cl.transcript || '[]'); } catch(e) { transcriptRaw = cl.transcript || ''; }
+
+    body.innerHTML = '<div class="space-y-4">' +
+      '<div class="grid grid-cols-2 gap-4">' +
+        '<div class="bg-gray-50 rounded-xl p-4">' +
+          '<p class="text-xs text-gray-400 uppercase font-semibold mb-2">Company</p>' +
+          '<p class="font-bold text-gray-900">' + (cl.company_name||'—') + '</p>' +
+          '<p class="text-xs text-gray-500">' + (cl.contact_name||'') + '</p>' +
+          '<p class="text-xs font-mono text-gray-600 mt-1">' + (cl.phone_dialed||cl.phone||'—') + '</p>' +
+          '<p class="text-xs text-gray-400">' + ([cl.city,cl.province_state].filter(Boolean).join(', ')||'') + '</p>' +
+        '</div>' +
+        '<div class="bg-gray-50 rounded-xl p-4">' +
+          '<p class="text-xs text-gray-400 uppercase font-semibold mb-2">Call Info</p>' +
+          '<p class="text-xs text-gray-600"><i class="fas fa-robot mr-1 text-orange-400"></i>' + (cl.agent_display_name||cl.agent_name||'—') + '</p>' +
+          '<p class="text-xs text-gray-500 mt-1">' + (cl.started_at ? new Date(cl.started_at).toLocaleString('en-CA') : '—') + '</p>' +
+          '<p class="text-xs text-gray-500">' + fmtDuration(cl.call_duration_seconds) + '</p>' +
+          '<div class="flex flex-wrap gap-1 mt-2">' + statusPill(cl.call_status) + ' ' + outcomePill(cl.call_outcome) + ' ' + sentimentPill(cl.caller_sentiment) + '</div>' +
+        '</div>' +
+      '</div>' +
+      (cl.call_summary ? '<div class="bg-orange-50 rounded-xl p-4"><p class="text-xs font-bold text-orange-700 uppercase mb-1"><i class="fas fa-robot mr-1"></i>AI Summary</p><p class="text-sm text-orange-800">' + cl.call_summary + '</p></div>' : '') +
+      (objections.length > 0 ? '<div><p class="text-xs font-bold text-gray-600 uppercase mb-2">Objections Raised</p><div class="flex flex-wrap gap-2">' + objections.map(function(o) { return '<span class="px-2 py-1 bg-red-50 text-red-700 rounded-lg text-xs font-medium">' + o + '</span>'; }).join('') + '</div></div>' : '') +
+      (cl.follow_up_action ? '<div class="bg-blue-50 rounded-xl p-4"><p class="text-xs font-bold text-blue-700 uppercase mb-1"><i class="fas fa-calendar-check mr-1"></i>Follow-up</p><p class="text-sm text-blue-800">' + cl.follow_up_action + '</p>' + (cl.follow_up_date ? '<p class="text-xs text-blue-600 mt-1">' + new Date(cl.follow_up_date).toLocaleDateString('en-CA') + '</p>' : '') + '</div>' : '') +
+      (transcript.length > 0 ? '<div class="bg-white border border-gray-100 rounded-xl p-4 max-h-64 overflow-y-auto"><p class="text-xs font-bold text-gray-600 uppercase mb-3"><i class="fas fa-comments mr-1"></i>Transcript</p>' + transcript.map(function(turn) { var isUser = turn.role==='user'||turn.role==='caller'; return '<div class="mb-2 ' + (isUser?'text-right':'') + '"><span class="inline-block px-3 py-1.5 rounded-xl text-xs max-w-xs ' + (isUser?'bg-blue-100 text-blue-800':'bg-orange-50 text-orange-800') + '"><strong>' + (isUser?'Caller':'Agent') + ':</strong> ' + (turn.content||turn.text||'') + '</span></div>'; }).join('') + '</div>' : (transcriptRaw ? '<div class="bg-gray-50 rounded-xl p-4 max-h-48 overflow-y-auto"><p class="text-xs font-bold text-gray-600 uppercase mb-1">Transcript</p><p class="text-xs text-gray-700 whitespace-pre-wrap">' + transcriptRaw + '</p></div>' : '')) +
+      '<div>' +
+        '<p class="text-xs font-bold text-gray-600 uppercase mb-2">Prospect Notes</p>' +
+        '<textarea id="cc-log-notes-' + (cl.prospect_id||0) + '" rows="2" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-500" placeholder="Add notes...">' + (cl.prospect_notes||'') + '</textarea>' +
+        '<button onclick="window.ccSaveProspectNotes(' + (cl.prospect_id||0) + ', document.getElementById(\'cc-log-notes-' + (cl.prospect_id||0) + '\').value)" class="mt-2 px-4 py-1.5 bg-orange-600 text-white rounded-lg text-xs font-semibold hover:bg-orange-700">Save Notes</button>' +
+      '</div>' +
+    '</div>';
+  };
+
+  window.ccShowProspect = async function(id) {
+    var existing = document.getElementById('cc-prospect-detail');
+    if (existing) existing.remove();
+    var modal = document.createElement('div');
+    modal.id = 'cc-prospect-detail';
+    modal.className = 'fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4';
+    modal.innerHTML = '<div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"><div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between sticky top-0 bg-white z-10"><h3 class="font-bold text-gray-900"><i class="fas fa-building mr-2 text-orange-500"></i>Prospect Detail</h3><button onclick="document.getElementById(\'cc-prospect-detail\').remove()" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button></div><div id="cc-prospect-body" class="p-6"><div class="flex justify-center py-8"><div class="w-8 h-8 border-4 border-orange-200 border-t-orange-600 rounded-full animate-spin"></div></div></div></div>';
+    document.body.appendChild(modal);
+    modal.addEventListener('click', function(e) { if (e.target === modal) modal.remove(); });
+
+    const data = await ccFetch('/api/call-center/prospects/' + id + '/calls');
+    const body = document.getElementById('cc-prospect-body');
+    if (!body) return;
+    if (!data || !data.prospect) { body.innerHTML = '<p class="text-red-500 text-center py-6">Failed to load prospect</p>'; return; }
+    const pr = data.prospect;
+    const calls = data.calls || [];
+
+    var nextCall = 'Eligible now';
+    if (pr.last_called_at) {
+      var cooldown = (pr.cooldown_hours || 24) * 3600000;
+      var next = new Date(new Date(pr.last_called_at).getTime() + cooldown);
+      nextCall = next > new Date() ? next.toLocaleString('en-CA', {dateStyle:'short',timeStyle:'short'}) : 'Eligible now';
+    }
+
+    body.innerHTML = '<div class="space-y-5">' +
+      '<div class="grid grid-cols-2 gap-4">' +
+        '<div class="bg-gray-50 rounded-xl p-4">' +
+          '<p class="font-bold text-gray-900 text-lg">' + (pr.company_name||'—') + '</p>' +
+          '<p class="text-sm text-gray-600">' + (pr.contact_name||'—') + '</p>' +
+          '<p class="text-xs font-mono text-gray-600 mt-1">' + (pr.phone||'—') + '</p>' +
+          '<p class="text-xs text-gray-400">' + (pr.email||'') + '</p>' +
+          '<p class="text-xs text-gray-400">' + ([pr.city,pr.province_state,pr.country].filter(Boolean).join(', ')) + '</p>' +
+        '</div>' +
+        '<div class="bg-gray-50 rounded-xl p-4">' +
+          '<p class="text-xs text-gray-400 uppercase font-semibold mb-1">Status</p>' +
+          '<div class="mb-2">' + prospectStatusPill(pr.status) + '</div>' +
+          '<p class="text-xs text-gray-500"><i class="fas fa-phone mr-1"></i>' + (pr.total_calls||0) + ' total calls</p>' +
+          '<p class="text-xs text-gray-500 mt-1"><i class="fas fa-clock mr-1"></i>Next eligible: ' + nextCall + '</p>' +
+          (pr.priority ? '<p class="text-xs text-gray-500 mt-1"><i class="fas fa-star mr-1 text-yellow-400"></i>Priority: ' + pr.priority + '/10</p>' : '') +
+          (pr.tags ? '<div class="flex flex-wrap gap-1 mt-2">' + pr.tags.split(',').map(function(t) { return '<span class="px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded text-[10px]">' + t.trim() + '</span>'; }).join('') + '</div>' : '') +
+        '</div>' +
+      '</div>' +
+      '<div>' +
+        '<p class="text-xs font-bold text-gray-600 uppercase mb-2">Notes</p>' +
+        '<textarea id="cc-prospect-notes-' + pr.id + '" rows="2" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-500">' + (pr.notes||'') + '</textarea>' +
+        '<button onclick="window.ccSaveProspectNotes(' + pr.id + ', document.getElementById(\'cc-prospect-notes-' + pr.id + '\').value)" class="mt-2 px-4 py-1.5 bg-orange-600 text-white rounded-lg text-xs font-semibold hover:bg-orange-700">Save Notes</button>' +
+      '</div>' +
+      '<div>' +
+        '<p class="text-xs font-bold text-gray-600 uppercase mb-3"><i class="fas fa-history mr-1"></i>Call History (' + calls.length + ')</p>' +
+        (calls.length === 0 ? '<p class="text-xs text-gray-400 py-4 text-center bg-gray-50 rounded-xl">No calls yet</p>' :
+          '<div class="space-y-2">' + calls.map(function(cl) {
+            return '<div class="bg-gray-50 rounded-lg px-4 py-3 flex items-center justify-between cursor-pointer hover:bg-gray-100" onclick="document.getElementById(\'cc-prospect-detail\').remove();window.ccShowCallLog(' + cl.id + ')">' +
+              '<div>' +
+                '<p class="text-xs font-medium text-gray-700">' + (cl.started_at ? new Date(cl.started_at).toLocaleString('en-CA', {dateStyle:'short',timeStyle:'short'}) : '—') + '</p>' +
+                '<p class="text-[10px] text-gray-400">' + (cl.agent_display_name||'—') + ' &middot; ' + fmtDuration(cl.call_duration_seconds) + '</p>' +
+              '</div>' +
+              '<div class="flex gap-1">' + statusPill(cl.call_status) + ' ' + outcomePill(cl.call_outcome) + '</div>' +
+            '</div>';
+          }).join('') + '</div>'
+        ) +
+      '</div>' +
+    '</div>';
+  };
+
+  window.ccSaveProspectNotes = async function(prospectId, notes) {
+    if (!prospectId) return;
+    const data = await ccFetch('/api/call-center/prospects/' + prospectId, { method: 'PUT', body: JSON.stringify({ notes }) });
+    if (data && data.success) {
+      var el = document.getElementById('cc-prospect-notes-' + prospectId) || document.getElementById('cc-log-notes-' + prospectId);
+      if (el) { el.style.borderColor = '#22c55e'; setTimeout(function() { el.style.borderColor = ''; }, 1500); }
+    }
+  };
+
   window.ccSearchProspects = async function() {
     const q = document.getElementById('cc-prospect-search').value.trim();
     CC.prospectPage = 1;
