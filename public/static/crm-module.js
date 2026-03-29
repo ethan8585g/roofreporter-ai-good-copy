@@ -615,7 +615,7 @@
   // ---- Collect form data ----
   function collectInvoiceFormData(selectorId, containerId) {
     var custData = getCustomerFromSelector(selectorId);
-    if (!custData) return null;
+    if (!custData) { toast('Please select or add a customer', 'error'); return null; }
     var rows = document.querySelectorAll('#' + containerId + ' .invItemRow');
     var items = [];
     rows.forEach(function(r) {
