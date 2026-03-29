@@ -604,8 +604,9 @@ function materialsEstimate(
     shingles_squares_gross:     round(gross, 2),
     shingles_bundles:           Math.ceil(gross * BUNDLES_PER_SQ),
     underlayment_rolls:         Math.ceil(gross / SQ_PER_UNDERLAY),
-    ice_water_shield_sqft:      round(eaveFt * ICE_SHIELD_WIDTH_FT, 1),
-    ice_water_shield_rolls_2sq: Math.ceil((eaveFt * ICE_SHIELD_WIDTH_FT) / 200),
+    // IWB covers 3ft from all eave edges + valley channels per building code
+    ice_water_shield_sqft:      round((eaveFt + valleyFt) * ICE_SHIELD_WIDTH_FT, 1),
+    ice_water_shield_rolls_2sq: Math.ceil(((eaveFt + valleyFt) * ICE_SHIELD_WIDTH_FT) / 200),
     ridge_cap_lf:               round(ridgeFt + hipFt, 1),
     ridge_cap_bundles:          Math.ceil((ridgeFt + hipFt) / LF_PER_RIDGE_BUNDLE),
     starter_strip_lf:           round(eaveFt + rakeFt, 1),
@@ -902,6 +903,21 @@ export class RoofMeasurementEngine {
     return areaM2 * M2_TO_FT2
   }
 
+  // ── EAVE / RAKE PERIMETER CLASSIFICATION ─────────────
+
+  /**
+   * Classify a perimeter edge as 'eave' or 'rake' based on bearing.
+   * Eaves run roughly parallel to the ridge (horizontal in plan).
+   * Rakes run perpendicular to the ridge (gable ends).
+   * Threshold: if |dx| > |dy| × 0.7 the edge is more horizontal → eave.
+   * Mirrors solar-geometry.ts classifyEdge() heuristic.
+   */
+  private classifyPerimeterEdge(a: CartesianPt, b: CartesianPt): 'eave' | 'rake' {
+    const dx = Math.abs(b.x - a.x)
+    const dy = Math.abs(b.y - a.y)
+    return dx > dy * 0.7 ? 'eave' : 'rake'
+  }
+
   // ── EAVE EDGE BREAKDOWN ──────────────────────────────
 
   eaveEdges(): EaveEdge[] {
@@ -912,6 +928,8 @@ export class RoofMeasurementEngine {
     const n = pts.length - 1
     for (let i = 0; i < n; i++) {
       const a = pts[i], b = pts[i + 1]
+      // Only include edges classified as eave (roughly horizontal / parallel to ridge)
+      if (this.classifyPerimeterEdge(a, b) !== 'eave') continue
       const len2D = dist2D(a, b) * M_TO_FT
       const len3D = len2D
       const bearing = ((Math.atan2(b.x - a.x, b.y - a.y) * 180 / Math.PI) % 360 + 360) % 360
@@ -926,6 +944,25 @@ export class RoofMeasurementEngine {
       })
     }
     return edges
+  }
+
+  /**
+   * Auto-classify rake edges from the perimeter when no explicit rakes were traced.
+   * Returns segments that are classified as rake (roughly vertical / gable ends).
+   */
+  private perimeterRakeEdges(): { edge_num: number; length_ft: number; bearing_deg: number }[] {
+    const rakes: { edge_num: number; length_ft: number; bearing_deg: number }[] = []
+    const pts = this.eavesCart
+    if (pts.length < 2) return rakes
+    const n = pts.length - 1
+    for (let i = 0; i < n; i++) {
+      const a = pts[i], b = pts[i + 1]
+      if (this.classifyPerimeterEdge(a, b) !== 'rake') continue
+      const len2D = dist2D(a, b) * M_TO_FT
+      const bearing = ((Math.atan2(b.x - a.x, b.y - a.y) * 180 / Math.PI) % 360 + 360) % 360
+      rakes.push({ edge_num: i + 1, length_ft: round(len2D, 2), bearing_deg: round(bearing, 1) })
+    }
+    return rakes
   }
 
   // ── LINE DETAIL COMPUTATION ──────────────────────────
@@ -1034,9 +1071,34 @@ export class RoofMeasurementEngine {
           this.proportionalFaceSplit(results, totalProjFt2)
         }
       } else if (this.ridgesCart.length > 0) {
-        // Has ridges but no hips — use proportional splitting based on
-        // ridge position relative to eave bounding box
-        this.proportionalFaceSplit(results, totalProjFt2)
+        // Has ridges but no hips (gable roof) — attempt geometric split first
+        const ridgeFaces = this.splitByRidgeLines()
+        if (ridgeFaces.length >= 2) {
+          for (let i = 0; i < ridgeFaces.length; i++) {
+            const polyArea = shoelaceAreaM2(ridgeFaces[i].pts) * M2_TO_FT2
+            if (polyArea < 1) continue // degenerate polygon
+            const { theta } = ridgeFaces[i].ridge
+              ? this.resolveTheta(ridgeFaces[i].ridge)
+              : { theta: this.defThetaRad }
+            const rise = 12 * Math.tan(theta)
+            const sloped = slopedFromProjected(polyArea, rise)
+            results.push({
+              face_id:            ridgeFaces[i].id || `face_${String.fromCharCode(65 + i)}`,
+              pitch_rise:         round(rise, 1),
+              pitch_label:        `${round(rise, 1)}:12`,
+              pitch_angle_deg:    round(theta * 180 / Math.PI, 1),
+              slope_factor:       round(slopeFactor(rise), 4),
+              projected_area_ft2: round(polyArea, 1),
+              sloped_area_ft2:    round(sloped, 1),
+              squares:            round(sloped / SQFT_PER_SQUARE, 3),
+            })
+          }
+        }
+        // Fall back to proportional split if geometric split produced < 2 valid faces
+        if (results.length < 2) {
+          results.length = 0
+          this.proportionalFaceSplit(results, totalProjFt2)
+        }
       } else {
         const rise = this.defPitch
         const sloped = slopedFromProjected(totalProjFt2, rise)
@@ -1140,6 +1202,122 @@ export class RoofMeasurementEngine {
     return []
   }
 
+  // ── GABLE ROOF GEOMETRIC SPLIT BY RIDGE LINES ────────
+  // For roofs with ridges but no hips: split the eave footprint polygon
+  // along the ridge line to produce two half-footprint polygons.
+  // For multi-ridge T/L shapes: use ridge centroid quadrant approach.
+
+  private splitByRidgeLines(): { id: string; pts: { x: number; y: number }[]; ridge: any }[] {
+    const faces: { id: string; pts: { x: number; y: number }[]; ridge: any }[] = []
+    const eaveVerts = this.eavesCart.slice(0, -1).map(p => ({ x: p.x, y: p.y }))
+    if (eaveVerts.length < 4 || this.ridgesCart.length === 0) return []
+
+    if (this.ridgesCart.length === 1) {
+      // Single ridge: split footprint into front/back halves along the ridge axis
+      const ridge = this.ridgesCart[0]
+      const rStart = ridge.pts[0]
+      const rEnd   = ridge.pts[ridge.pts.length - 1]
+      const rdx = rEnd.x - rStart.x
+      const rdy = rEnd.y - rStart.y
+
+      const leftPts:  { x: number; y: number }[] = []
+      const rightPts: { x: number; y: number }[] = []
+      for (const p of eaveVerts) {
+        const cross = (p.x - rStart.x) * rdy - (p.y - rStart.y) * rdx
+        if (cross >= 0) leftPts.push(p)
+        else rightPts.push(p)
+      }
+
+      if (leftPts.length >= 2) {
+        faces.push({
+          id: 'face_A',
+          pts: [...leftPts, { x: rEnd.x, y: rEnd.y }, { x: rStart.x, y: rStart.y }],
+          ridge,
+        })
+      }
+      if (rightPts.length >= 2) {
+        faces.push({
+          id: 'face_B',
+          pts: [...rightPts, { x: rEnd.x, y: rEnd.y }, { x: rStart.x, y: rStart.y }],
+          ridge,
+        })
+      }
+      return faces
+    }
+
+    // Multiple ridges (T-shape / cross-gable / L-shape):
+    // Compute centroid of all ridge endpoints, then split eave polygon into
+    // quadrants relative to that centroid.  Each quadrant is one face.
+    const allRidgePts: { x: number; y: number }[] = []
+    for (const r of this.ridgesCart) {
+      for (const p of r.pts) allRidgePts.push({ x: p.x, y: p.y })
+    }
+    const cx = allRidgePts.reduce((s, p) => s + p.x, 0) / allRidgePts.length
+    const cy = allRidgePts.reduce((s, p) => s + p.y, 0) / allRidgePts.length
+
+    const quadPts: { x: number; y: number }[][] = [[], [], [], []]
+    for (const p of eaveVerts) {
+      const qi = (p.x >= cx ? 1 : 0) + (p.y >= cy ? 2 : 0)
+      quadPts[qi].push(p)
+    }
+
+    const labels = ['face_A', 'face_B', 'face_C', 'face_D']
+    const ridge0 = this.ridgesCart[0]
+    for (let qi = 0; qi < 4; qi++) {
+      if (quadPts[qi].length >= 2) {
+        faces.push({
+          id:    labels[qi],
+          pts:   [...quadPts[qi], { x: cx, y: cy }],
+          ridge: ridge0,
+        })
+      }
+    }
+    return faces.length >= 2 ? faces : []
+  }
+
+  // ── RIDGE INFERENCE FROM VALLEY GEOMETRY ─────────────
+  // When valleys are traced but ridge is incomplete, infer additional
+  // ridge length from the distance between valley upper endpoints.
+  // Only fires when traced ridge < 50% of total valley length.
+
+  private inferMissingRidgeLengthFt(): number {
+    if (this.valleysCart.length < 2) return 0
+    const tracedRidgeFt = this.ridgesCart.reduce(
+      (s, r) => s + polyline2DLengthM(r.pts) * M_TO_FT, 0
+    )
+    const valleyFt = this.valleysCart.reduce(
+      (s, v) => s + polyline2DLengthM(v.pts) * M_TO_FT, 0
+    )
+    // If ridges are already well-covered, don't infer
+    if (tracedRidgeFt > valleyFt * 0.5) return 0
+
+    // Find the "upper" endpoint of each valley (farthest from eave perimeter)
+    const upperPts: { x: number; y: number }[] = []
+    for (const v of this.valleysCart) {
+      if (v.pts.length < 2) continue
+      let maxDist = -1
+      let upper = v.pts[0]
+      for (const pt of v.pts) {
+        const d = this.computeCommonRunFt(pt.x, pt.y)
+        if (d > maxDist) { maxDist = d; upper = pt }
+      }
+      upperPts.push({ x: upper.x, y: upper.y })
+    }
+
+    // Distance between valley upper endpoints (skipping pairs that meet at same apex)
+    const SAME_APEX_M = 5.0
+    let inferred = 0
+    for (let i = 0; i < upperPts.length; i++) {
+      for (let j = i + 1; j < upperPts.length; j++) {
+        const d = dist2D(upperPts[i], upperPts[j])
+        if (d > SAME_APEX_M) {
+          inferred += d * M_TO_FT
+        }
+      }
+    }
+    return inferred
+  }
+
   // ── PROPORTIONAL FACE SPLIT ──────────────────────────
   // When geometric splitting isn't possible, use eave perimeter ratios
   // and bounding box analysis to estimate per-face areas proportionally.
@@ -1226,10 +1404,38 @@ export class RoofMeasurementEngine {
     const valleySegs = this.lineDetails(this.valleysCart, 'valley')
     const rakeSegs   = this.lineDetails(this.rakesCart, 'rake')
 
-    const totalRidgeFt  = ridgeSegs.reduce((s, seg) => s + seg.sloped_length_ft, 0)
+    const tracedRidgeFt = ridgeSegs.reduce((s, seg) => s + seg.sloped_length_ft, 0)
     const totalHipFt    = hipSegs.reduce((s, seg) => s + seg.sloped_length_ft, 0)
     const totalValleyFt = valleySegs.reduce((s, seg) => s + seg.sloped_length_ft, 0)
-    const totalRakeFt   = rakeSegs.reduce((s, seg) => s + seg.sloped_length_ft, 0)
+
+    // Infer missing ridge length from valley geometry when trace is incomplete
+    const inferredRidgeFt = this.inferMissingRidgeLengthFt()
+    const totalRidgeFt = tracedRidgeFt + inferredRidgeFt
+
+    // Auto-derive rake edges from perimeter bearing if no explicit rakes were traced.
+    // Rake edges are gable-end segments (roughly perpendicular to the ridge direction).
+    // This fixes the common case where users trace eaves+ridges but omit explicit rakes.
+    let effectiveRakeSegs = rakeSegs
+    if (this.rakesCart.length === 0) {
+      const perimRakes = this.perimeterRakeEdges()
+      if (perimRakes.length > 0) {
+        const cosTheta = Math.cos(this.defThetaRad)
+        effectiveRakeSegs = perimRakes.map(r => ({
+          id:              `perimeter_rake_${r.edge_num}`,
+          type:            'rake' as const,
+          category:        'sloped' as const,
+          horiz_length_ft: r.length_ft,
+          sloped_length_ft: cosTheta > 0 ? round(r.length_ft / cosTheta, 2) : r.length_ft,
+          num_pts:         2,
+          common_run_ft:   0,
+          delta_z_ft:      0,
+          slope_factor:    cosTheta > 0 ? round(1 / cosTheta, 4) : 1,
+          is_bi_slope:     false,
+          auto_classified: true,
+        }))
+      }
+    }
+    const totalRakeFt = effectiveRakeSegs.reduce((s, seg) => s + seg.sloped_length_ft, 0)
 
     const facesData   = this.faceAreas()
     let totalSloped = facesData.reduce((s, f) => s + f.sloped_area_ft2, 0)
@@ -1280,6 +1486,8 @@ export class RoofMeasurementEngine {
       notes.push('LOW SLOPE < 4:12 — Verify manufacturer min-pitch. Extra underlayment layers recommended.')
     if (totalValleyFt > 0)
       notes.push(`Valleys present (${round(totalValleyFt, 1)} ft) — Recommend closed-cut or self-adhered valley install.`)
+    if (inferredRidgeFt > 0)
+      notes.push(`Ridge inference: ${round(inferredRidgeFt, 1)} ft additional ridge length estimated from valley endpoint geometry. Re-trace all ridge lines for exact measurement.`)
     if (totalHipFt > 0)
       notes.push(`Hip roof confirmed (${round(totalHipFt, 1)} ft total hip length).`)
     if (this.eavesCart.length > 10)
@@ -1321,7 +1529,7 @@ export class RoofMeasurementEngine {
         num_ridges:                    this.ridgesCart.length,
         num_hips:                      this.hipsCart.length,
         num_valleys:                   this.valleysCart.length,
-        num_rakes:                     this.rakesCart.length,
+        num_rakes:                     effectiveRakeSegs.length,
         dominant_pitch_label:          `${round(domPitch, 1)}:12`,
         dominant_pitch_angle_deg:      round(pitchAngleDeg(domPitch), 1),
       },
@@ -1338,7 +1546,7 @@ export class RoofMeasurementEngine {
       ridge_details:       ridgeSegs,
       hip_details:         hipSegs,
       valley_details:      valleySegs,
-      rake_details:        rakeSegs,
+      rake_details:        effectiveRakeSegs,
       face_details:        facesData,
       materials_estimate:  mat,
       advisory_notes:      notes,

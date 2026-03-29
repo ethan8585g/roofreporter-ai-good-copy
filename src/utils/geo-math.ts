@@ -220,6 +220,18 @@ export function pitchToRatio(degrees: number): string {
   return `${Math.round(rise * 10) / 10}:12`
 }
 
+/**
+ * Convert pitch degrees to nearest integer rise for X:12 pitch ratio.
+ * Industry-standard presentation uses whole-number rise (e.g. 4:12, 5:12).
+ * 19° → rise=4.13 → rounds to 4 → "4:12"
+ * This ensures the engine hits exact ROOF_PITCH_MULTIPLIERS lookup table keys.
+ */
+export function degreesToIntegerRise(degrees: number): number {
+  if (degrees <= 0) return 0
+  if (degrees >= 90) return 24
+  return Math.min(24, Math.round(12 * Math.tan(degrees * Math.PI / 180)))
+}
+
 /** TRUE 3D surface area from flat footprint + pitch. Formula: true_area = footprint / cos(pitch) */
 export function trueAreaFromFootprint(footprintSqft: number, pitchDegrees: number): number {
   if (pitchDegrees <= 0 || pitchDegrees >= 90) return footprintSqft

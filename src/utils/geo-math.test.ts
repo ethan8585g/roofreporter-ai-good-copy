@@ -14,6 +14,7 @@ import {
   smartEdgeFootage,
   latLngToPixels,
   computePixelToSqftScale,
+  degreesToIntegerRise,
 } from './geo-math'
 
 describe('feetToFeetInches', () => {
@@ -135,6 +136,28 @@ describe('latLngToPixels', () => {
     const { x, y } = latLngToPixels(53.5, -113.5, 53.5, -113.5, 20)
     expect(x).toBeCloseTo(320, 0)
     expect(y).toBeCloseTo(320, 0)
+  })
+})
+
+describe('degreesToIntegerRise', () => {
+  it('converts 19° → 4 (Solar API for 7411 137 Ave NW Edmonton)', () => {
+    expect(degreesToIntegerRise(19)).toBe(4)
+  })
+  it('converts 22.6° → 5 (standard 5:12)', () => {
+    expect(degreesToIntegerRise(22.6)).toBe(5)
+  })
+  it('converts 26.6° → 6 (standard 6:12)', () => {
+    expect(degreesToIntegerRise(26.6)).toBe(6)
+  })
+  it('handles 0° (flat roof)', () => {
+    expect(degreesToIntegerRise(0)).toBe(0)
+  })
+  it('caps at 24 for extreme pitches', () => {
+    expect(degreesToIntegerRise(89)).toBe(24)
+  })
+  it('rounds 4.1:12 down to 4 not up to 5', () => {
+    // 19.3° → rise = 12*tan(19.3°) = 4.21 → rounds to 4
+    expect(degreesToIntegerRise(19.3)).toBe(4)
   })
 })
 

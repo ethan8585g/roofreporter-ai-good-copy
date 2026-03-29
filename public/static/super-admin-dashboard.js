@@ -15,7 +15,9 @@ const SA = {
   ga4Period: '7d',
   ga4Tab: 'overview',
   secRevPeriod: 'monthly',
-  secCallsCustomerId: ''
+  secCallsCustomerId: '',
+  geminiHistory: [],
+  geminiLoading: false
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -156,6 +158,10 @@ async function loadView(view) {
           return;
         }
         break;
+      case 'gemini-chat':
+        SA.loading = false;
+        renderContent();
+        return;
     }
   } catch (e) {
     console.error('Load error:', e);
@@ -253,6 +259,7 @@ function renderContent() {
     case 'secretary-admin': root.innerHTML = renderSecretaryAdminView(); break;
     case 'secretary-revenue': root.innerHTML = renderSecretaryRevenueView(); break;
     case 'heygen': break; // Handled by heygen.js
+    case 'gemini-chat': root.innerHTML = renderGeminiChatView(); break;
     default: root.innerHTML = renderUsersView();
   }
 }
@@ -2313,4 +2320,96 @@ function renderSecretaryRevenueView() {
     <!-- First Subscription Date -->
     ${lifetime.first_subscription ? '<div class="text-center text-xs text-gray-400 mt-4"><i class="fas fa-calendar mr-1"></i>Secretary AI service since ' + fmtDate(lifetime.first_subscription) + '</div>' : ''}
   </div>`;
+}
+
+// ============================================================
+// VIEW: GEMINI AI COMMAND CENTER CHAT
+// ============================================================
+function renderGeminiChatView() {
+  const msgs = SA.geminiHistory;
+  const messagesHtml = msgs.length === 0
+    ? '<div class="flex items-center justify-center h-40 text-gray-500 text-sm"><i class="fas fa-comment-dots mr-2 opacity-50"></i>Ask me anything about the platform...</div>'
+    : msgs.map(m => {
+        const isUser = m.role === 'user';
+        return `<div class="flex ${isUser ? 'justify-end' : 'justify-start'} mb-3">
+          <div class="max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${isUser ? 'bg-blue-600 text-white' : 'bg-slate-700 text-gray-100 border border-slate-600'}">
+            ${isUser ? '' : '<div class="flex items-center gap-1.5 mb-1.5 text-xs text-emerald-400 font-semibold"><i class="fas fa-brain"></i> Gemini</div>'}
+            <div class="whitespace-pre-wrap">${m.text.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
+          </div>
+        </div>`;
+      }).join('') +
+      (SA.geminiLoading ? '<div class="flex justify-start mb-3"><div class="bg-slate-700 border border-slate-600 rounded-2xl px-4 py-3"><div class="flex items-center gap-2 text-emerald-400 text-sm"><i class="fas fa-brain animate-pulse"></i><span class="text-gray-400">Thinking...</span></div></div></div>' : '');
+
+  return `
+  <div class="flex flex-col h-[calc(100vh-120px)]">
+    <div class="flex items-center justify-between mb-4">
+      <div>
+        <h2 class="text-2xl font-black text-gray-900"><i class="fas fa-brain mr-2 text-purple-500"></i>Gemini AI Command Center</h2>
+        <p class="text-sm text-gray-500 mt-1">AI assistant for platform management, analytics, and business insights</p>
+      </div>
+      <div class="flex items-center gap-3">
+        <span class="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-bold"><i class="fas fa-microchip mr-1"></i>gemini-2.0-flash</span>
+        <button onclick="saClearGeminiChat()" class="px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-xl text-xs font-medium transition-colors text-gray-600"><i class="fas fa-trash mr-1"></i>Clear</button>
+      </div>
+    </div>
+
+    <!-- Chat window -->
+    <div id="gemini-chat-messages" class="flex-1 bg-slate-900 rounded-2xl border border-slate-700 overflow-y-auto p-4 font-mono text-sm" style="min-height:0">
+      ${messagesHtml}
+    </div>
+
+    <!-- Input area -->
+    <div class="mt-3 flex gap-2">
+      <input id="gemini-chat-input" type="text" placeholder="Ask about users, metrics, issues, content..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();saGeminiSend();}"
+        class="flex-1 px-4 py-3 bg-slate-800 border border-slate-600 rounded-xl text-white placeholder-gray-500 text-sm focus:outline-none focus:border-purple-500 font-mono" />
+      <button onclick="saGeminiSend()" ${SA.geminiLoading ? 'disabled' : ''}
+        class="px-5 py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-900 disabled:cursor-not-allowed text-white rounded-xl text-sm font-semibold transition-colors flex items-center gap-2">
+        ${SA.geminiLoading ? '<i class="fas fa-spinner fa-spin"></i>' : '<i class="fas fa-paper-plane"></i>'}
+        Send
+      </button>
+    </div>
+  </div>`;
+}
+
+window.saGeminiSend = async function() {
+  const input = document.getElementById('gemini-chat-input');
+  const msg = input ? input.value.trim() : '';
+  if (!msg || SA.geminiLoading) return;
+
+  SA.geminiHistory.push({ role: 'user', text: msg });
+  SA.geminiLoading = true;
+  if (input) input.value = '';
+  renderContent();
+  scrollGeminiToBottom();
+
+  try {
+    const res = await saFetch('/api/admin/superadmin/gemini-chat', {
+      method: 'POST',
+      body: JSON.stringify({ message: msg, history: SA.geminiHistory.slice(0, -1).map(h => ({ role: h.role === 'user' ? 'user' : 'model', text: h.text })) })
+    });
+    if (res) {
+      const data = await res.json();
+      SA.geminiHistory.push({ role: 'model', text: data.reply || 'No response.' });
+    } else {
+      SA.geminiHistory.push({ role: 'model', text: 'Request failed. Check console.' });
+    }
+  } catch (e) {
+    SA.geminiHistory.push({ role: 'model', text: 'Error: ' + e.message });
+  }
+
+  SA.geminiLoading = false;
+  renderContent();
+  scrollGeminiToBottom();
+};
+
+window.saClearGeminiChat = function() {
+  SA.geminiHistory = [];
+  renderContent();
+};
+
+function scrollGeminiToBottom() {
+  setTimeout(function() {
+    const el = document.getElementById('gemini-chat-messages');
+    if (el) el.scrollTop = el.scrollHeight;
+  }, 50);
 }

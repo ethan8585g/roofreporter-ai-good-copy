@@ -233,6 +233,12 @@ function renderDashboard() {
           '</div>' +
         '</div>' : '') +
 
+      // Ad slot — shown only for free-plan users (ads_enabled = true), below upgrade CTA
+      (c.ads_enabled ?
+        '<div class="ad-slot mb-5" id="dash-ad-banner">' +
+          '<ins class="adsbygoogle" style="display:block" data-ad-client="' + (window._adsensePublisherId || '') + '" data-ad-slot="' + (window._adsenseDashboardSlot || '') + '" data-ad-format="auto" data-full-width-responsive="true"></ins>' +
+        '</div>' : '') +
+
       // Trial exhausted banner
       (trialsExhausted ?
         '<div class="bg-gradient-to-r from-brand-800 to-brand-900 rounded-2xl p-5 mb-5 shadow-xl border border-brand-700">' +
@@ -324,6 +330,12 @@ function renderDashboard() {
       sidebar +
       mainContent +
     '</div>';
+
+  // Activate AdSense slots after DOM update
+  var c2 = custState.customer || {};
+  if (c2.ads_enabled && window.adsbygoogle) {
+    try { (window.adsbygoogle = window.adsbygoogle || []).push({}); } catch(e) {}
+  }
 }
 
 function renderRecentOrders() {

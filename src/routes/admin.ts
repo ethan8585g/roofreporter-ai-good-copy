@@ -1246,3 +1246,43 @@ adminRoutes.get('/superadmin/secretary/calls', async (c) => {
     return c.json({ error: 'Failed to load call logs', details: err.message }, 500)
   }
 })
+
+// ============================================================
+// SUPERADMIN: GEMINI AI COMMAND CENTER CHAT
+// ============================================================
+
+adminRoutes.post('/superadmin/gemini-chat', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
+
+  const { message, history = [] } = await c.req.json()
+  if (!message?.trim()) return c.json({ error: 'Message required' }, 400)
+
+  const apiKey = c.env.GEMINI_API_KEY || (c.env as any).GEMINI_ENHANCE_API_KEY
+  if (!apiKey) return c.json({ error: 'Gemini not configured' }, 503)
+
+  const systemContext = `You are an AI assistant for the RoofReporterAI platform super admin dashboard.
+You help the super admin understand platform metrics, troubleshoot issues, draft content, and manage the business.
+Keep responses concise and actionable. Current date: ${new Date().toISOString().split('T')[0]}.`
+
+  const contents = [
+    ...(history as any[]).map((h: any) => ({ role: h.role, parts: [{ text: h.text }] })),
+    { role: 'user', parts: [{ text: message }] }
+  ]
+
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ system_instruction: { parts: [{ text: systemContext }] }, contents })
+      }
+    )
+    const data = await res.json() as any
+    const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || 'No response from Gemini.'
+    return c.json({ reply, model: 'gemini-2.0-flash' })
+  } catch (err: any) {
+    return c.json({ error: 'Gemini request failed', details: err.message }, 500)
+  }
+})

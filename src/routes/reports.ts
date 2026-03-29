@@ -5,7 +5,7 @@
 
 import { Hono } from 'hono'
 import type { Bindings, RoofReport } from '../types'
-import { computeMaterialEstimate } from '../utils/geo-math'
+import { computeMaterialEstimate, degreesToIntegerRise } from '../utils/geo-math'
 import { validateAdminSession } from '../routes/auth'
 import { resolveTeamOwner } from './team'
 
@@ -1874,7 +1874,7 @@ async function _generateReportForOrderInner(
     // ═══════════════════════════════════════════════════════════
     let solarPitch: SolarPitchAndImagery | null = null
     let solarPitchDeg = 20 // sensible default if Solar unavailable
-    let solarPitchRise = 4.4 // ~20°
+    let solarPitchRise = 4 // ~20° rounded to nearest integer rise for lookup table
 
     if (solarApiKey && order.latitude && order.longitude) {
       try {
@@ -1883,7 +1883,8 @@ async function _generateReportForOrderInner(
           order.latitude, order.longitude, solarApiKey, mapsApiKey || solarApiKey, footprintHint
         )
         solarPitchDeg = solarPitch.pitch_degrees
-        solarPitchRise = Math.round(12 * Math.tan(solarPitchDeg * Math.PI / 180) * 10) / 10
+        // Use integer rise (e.g. 4 not 4.1) so engine hits exact ROOF_PITCH_MULTIPLIERS table entry
+        solarPitchRise = degreesToIntegerRise(solarPitchDeg)
         await repo.logApiRequest(env.DB, orderId, 'google_solar_api', 'buildingInsights:findClosest (pitch+imagery only)', 200, solarPitch.api_duration_ms)
         console.log(`[Generate] Order ${orderId}: Solar pitch=${solarPitchDeg}° (${solarPitchRise}:12), quality=${solarPitch.imagery_quality}, ${solarPitch.api_duration_ms}ms`)
       } catch (e: any) {

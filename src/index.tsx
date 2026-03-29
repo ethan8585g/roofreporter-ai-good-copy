@@ -147,7 +147,17 @@ gtag('get','${ga4Id}','client_id',function(cid){
 })();
 </script>` : ''
       
-      const injected = body.replace('</body>', `${ga4Script}\n<script src="/static/tracker.js" defer></script>\n</body>`)
+      // AdSense script injection — inject for all customer-facing pages (ad slots rendered client-side only for free users)
+      const adsensePublisherId = (c.env as any).ADSENSE_PUBLISHER_ID || ''
+      const adsenseScript = (adsensePublisherId && url.pathname.startsWith('/customer/') && !body.includes('pagead2.googlesyndication.com'))
+        ? `<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${adsensePublisherId}" crossorigin="anonymous"></script>`
+        : ''
+
+      let injected = body
+      if (adsenseScript && body.includes('</head>')) {
+        injected = injected.replace('</head>', `${adsenseScript}\n</head>`)
+      }
+      injected = injected.replace('</body>', `${ga4Script}\n<script src="/static/tracker.js" defer></script>\n</body>`)
       c.res = new Response(injected, {
         status: c.res.status,
         headers: c.res.headers
@@ -1253,6 +1263,10 @@ function getSuperAdminDashboardHTML() {
         <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('pricing', this)">
           <i class="fas fa-dollar-sign w-5 text-center"></i>
           <span class="label text-sm font-medium">Pricing & Billing</span>
+        </div>
+        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('gemini-chat', this)">
+          <i class="fas fa-brain w-5 text-center"></i>
+          <span class="label text-sm font-medium">Gemini AI Chat</span>
         </div>
         <div class="border-t border-gray-800 my-3"></div>
         <a href="/admin" class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400 no-underline">
