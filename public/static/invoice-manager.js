@@ -22,7 +22,8 @@ document.addEventListener('DOMContentLoaded', () => {
     editId: null,
     filter: 'all',
     searchTerm: '',
-    form: resetForm()
+    form: resetForm(),
+    squareStatus: null
   };
 
   function resetForm() {
@@ -52,16 +53,18 @@ document.addEventListener('DOMContentLoaded', () => {
     state.loading = true;
     render();
     try {
-      const [invRes, custRes, propRes, rptRes] = await Promise.all([
+      const [invRes, custRes, propRes, rptRes, sqRes] = await Promise.all([
         fetch('/api/invoices', { headers: headers() }),
         fetch('/api/invoices/customers/list', { headers: headers() }),
         fetch('/api/invoices?document_type=proposal', { headers: headers() }).catch(() => ({ ok: false })),
-        fetch('/api/reports/list', { headers: headers() }).catch(() => ({ ok: false }))
+        fetch('/api/reports/list', { headers: headers() }).catch(() => ({ ok: false })),
+        fetch('/api/square/oauth/status', { headers: headers() }).catch(() => ({ ok: false }))
       ]);
       if (invRes.ok) { const d = await invRes.json(); state.invoices = d.invoices || []; state.stats = d.stats || {}; }
       if (custRes.ok) { const d = await custRes.json(); state.customers = d.customers || []; }
       if (propRes.ok) { const d = await propRes.json(); state.proposals = (d.invoices || []).filter(p => p.status !== 'cancelled'); }
       if (rptRes.ok) { const d = await rptRes.json(); state.reports = (d.reports || []).filter(r => r.status === 'completed' || r.status === 'enhancing'); }
+      if (sqRes.ok) { state.squareStatus = await sqRes.json(); }
     } catch (e) { console.warn('Load error', e); }
     state.loading = false;
     render();
@@ -82,6 +85,38 @@ document.addEventListener('DOMContentLoaded', () => {
   // ============================================================
   // LIST VIEW
   // ============================================================
+  function renderSquareConnectBanner() {
+    const sq = state.squareStatus;
+    if (!sq) return '';
+    if (!sq.app_configured) return '';
+    if (sq.connected) {
+      return `<div class="bg-green-50 border border-green-200 rounded-xl px-4 py-3 mb-4 flex items-center justify-between gap-3">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center"><i class="fas fa-check-circle text-green-600 text-sm"></i></div>
+          <div>
+            <p class="text-sm font-bold text-green-800">Square Account Connected — ${sq.merchant_name || sq.merchant_id}</p>
+            <p class="text-xs text-green-600">Payment links will be charged to your Square merchant account</p>
+          </div>
+        </div>
+        <button onclick="window._im.disconnectSquare()" class="text-xs text-red-500 hover:text-red-700 font-medium px-3 py-1.5 hover:bg-red-50 rounded-lg transition-colors">
+          <i class="fas fa-unlink mr-1"></i>Disconnect
+        </button>
+      </div>`;
+    }
+    return `<div class="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 mb-4 flex items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center"><i class="fas fa-credit-card text-blue-600 text-sm"></i></div>
+        <div>
+          <p class="text-sm font-bold text-blue-800">Connect Your Square Account</p>
+          <p class="text-xs text-blue-600">Accept payments directly into your own Square merchant account. Payment links on invoices will route to your account.</p>
+        </div>
+      </div>
+      <button onclick="window._im.connectSquare()" class="flex-shrink-0 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold transition-colors">
+        <i class="fas fa-plug mr-1"></i>Connect Square
+      </button>
+    </div>`;
+  }
+
   function renderList() {
     const allInvoices = state.invoices;
     const s = state.stats;
@@ -121,6 +156,9 @@ document.addEventListener('DOMContentLoaded', () => {
         </button>
       </div>
     </div>
+
+    <!-- Square Merchant Connect Banner -->
+    ${renderSquareConnectBanner()}
 
     <!-- Stats Cards -->
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
@@ -531,6 +569,29 @@ document.addEventListener('DOMContentLoaded', () => {
   // PUBLIC API
   // ============================================================
   window._im = {
+    connectSquare() {
+      // Open Square OAuth in popup
+      const popup = window.open('/api/square/oauth/start?token=' + token, 'square_oauth', 'width=700,height=600,scrollbars=yes');
+      const handler = (e) => {
+        if (e.data?.type === 'square_oauth_success') {
+          window.removeEventListener('message', handler);
+          if (popup) popup.close();
+          // Refresh Square status
+          fetch('/api/square/oauth/status', { headers: headers() })
+            .then(r => r.json()).then(d => { state.squareStatus = d; render(); });
+        } else if (e.data?.type === 'square_oauth_error') {
+          window.removeEventListener('message', handler);
+          alert('Square connection failed: ' + (e.data.error || 'Unknown error'));
+        }
+      };
+      window.addEventListener('message', handler);
+    },
+    async disconnectSquare() {
+      if (!confirm('Disconnect your Square merchant account? Payment links will use the platform default account.')) return;
+      await fetch('/api/square/oauth/disconnect', { method: 'POST', headers: headers() });
+      state.squareStatus = { ...state.squareStatus, connected: false };
+      render();
+    },
     create() { state.mode = 'create'; state.editId = null; state.form = resetForm(); render(); },
     backToList() { state.mode = 'list'; state.editId = null; state.form = resetForm(); render(); },
     setFilter(f) { state.filter = f; render(); },

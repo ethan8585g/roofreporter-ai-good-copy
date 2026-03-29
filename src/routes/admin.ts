@@ -1315,3 +1315,203 @@ adminRoutes.get('/superadmin/secretary/calls', async (c) => {
     return c.json({ error: 'Failed to load call logs', details: err.message }, 500)
   }
 })
+
+// ============================================================
+// SUPERADMIN: CUSTOMER ONBOARDING — Create accounts + Secretary AI
+// ============================================================
+
+// GET /superadmin/onboarding/list — List all onboarded customers with secretary status
+adminRoutes.get('/superadmin/onboarding/list', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
+  try {
+    const rows = await c.env.DB.prepare(`
+      SELECT
+        c.id, c.name as contact_name, c.email, c.phone as personal_phone,
+        c.company_name as business_name, c.company_type, c.subscription_plan,
+        c.is_active, c.created_at,
+        sc.is_active as secretary_enabled, sc.secretary_mode,
+        sc.assigned_phone_number as agent_phone_number,
+        sc.secretary_mode as phone_provider,
+        sc.connection_status, sc.livekit_inbound_trunk_id
+      FROM customers c
+      LEFT JOIN secretary_config sc ON sc.customer_id = c.id
+      WHERE c.is_active = 1
+      ORDER BY c.created_at DESC
+      LIMIT 200
+    `).all<any>()
+    return c.json({ customers: rows.results || [] })
+  } catch (err: any) {
+    return c.json({ error: 'Failed to load customers', details: err.message }, 500)
+  }
+})
+
+// POST /superadmin/onboarding/create — Create customer + optionally set up Secretary AI
+adminRoutes.post('/superadmin/onboarding/create', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
+
+  const body = await c.req.json()
+  const { email, password, contact_name, business_name, phone, personal_phone,
+          agent_phone_number, secretary_mode, phone_provider, notes, enable_secretary,
+          call_forwarding_number, secretary_phone_number } = body
+
+  if (!email || !password || !contact_name) {
+    return c.json({ error: 'email, password, and contact_name are required' }, 400)
+  }
+
+  const existing = await c.env.DB.prepare(`SELECT id FROM customers WHERE email = ?`)
+    .bind(email.toLowerCase()).first<any>()
+  if (existing) return c.json({ error: 'A customer with that email already exists' }, 409)
+
+  // Hash password using same pattern as customer-auth.ts
+  const saltBytes = crypto.getRandomValues(new Uint8Array(16))
+  const salt = Array.from(saltBytes).map((b: number) => b.toString(16).padStart(2, '0')).join('')
+  const hashBuf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${salt}:${password}`))
+  const hash = Array.from(new Uint8Array(hashBuf)).map((b: number) => b.toString(16).padStart(2, '0')).join('')
+  const password_hash = `${salt}:${hash}`
+
+  try {
+    const result = await c.env.DB.prepare(`
+      INSERT INTO customers (email, password_hash, name, company_name, phone,
+        is_active, email_verified, free_trial_total, free_trial_used, report_credits,
+        subscription_plan, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, 1, 1, 3, 0, 0, 'pro', datetime('now'), datetime('now'))
+    `).bind(
+      email.toLowerCase(), password_hash, contact_name,
+      business_name || contact_name,
+      phone || personal_phone || ''
+    ).run()
+
+    const customerId = (result as any).meta?.last_row_id
+    if (!customerId) return c.json({ error: 'Failed to create customer account' }, 500)
+
+    let secretarySetup = false
+    const agentPhone = agent_phone_number || secretary_phone_number || ''
+
+    if (enable_secretary !== false) {
+      // Create secretary subscription (active, bypassing payment)
+      await c.env.DB.prepare(`
+        INSERT OR IGNORE INTO secretary_subscriptions (customer_id, status, monthly_price_cents, created_at, updated_at)
+        VALUES (?, 'active', 14900, datetime('now'), datetime('now'))
+      `).bind(customerId).run()
+
+      // Create secretary config
+      await c.env.DB.prepare(`
+        INSERT INTO secretary_config (
+          customer_id, business_phone, greeting_script, common_qa, general_notes,
+          secretary_mode, is_active, connection_status, assigned_phone_number,
+          forwarding_method, created_at, updated_at
+        ) VALUES (?, ?, '', '', ?, ?, ?, ?, ?, 'forward', datetime('now'), datetime('now'))
+      `).bind(
+        customerId,
+        personal_phone || phone || '',
+        notes || '',
+        secretary_mode || 'full',
+        agentPhone ? 1 : 0,
+        agentPhone ? 'pending_forwarding' : 'not_connected',
+        agentPhone || ''
+      ).run()
+
+      // If agent phone provided, mark in pool or insert
+      if (agentPhone) {
+        const poolEntry = await c.env.DB.prepare(
+          `SELECT id FROM secretary_phone_pool WHERE phone_number = ?`
+        ).bind(agentPhone).first<any>()
+        if (poolEntry) {
+          await c.env.DB.prepare(
+            `UPDATE secretary_phone_pool SET status = 'assigned', assigned_to_customer_id = ?, updated_at = datetime('now') WHERE id = ?`
+          ).bind(customerId, poolEntry.id).run()
+        } else {
+          await c.env.DB.prepare(
+            `INSERT OR IGNORE INTO secretary_phone_pool (phone_number, region, status, assigned_to_customer_id, assigned_at) VALUES (?, 'CA', 'assigned', ?, datetime('now'))`
+          ).bind(agentPhone, customerId).run()
+        }
+        secretarySetup = true
+      }
+    }
+
+    return c.json({
+      success: true,
+      customer_id: customerId,
+      email: email.toLowerCase(),
+      secretary_setup: secretarySetup,
+      agent_phone_number: agentPhone || null,
+      personal_phone: personal_phone || phone || null
+    })
+  } catch (err: any) {
+    return c.json({ error: 'Failed to create customer', details: err.message }, 500)
+  }
+})
+
+// POST /superadmin/onboarding/:id/toggle-secretary — Enable/disable secretary AI
+adminRoutes.post('/superadmin/onboarding/:id/toggle-secretary', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
+
+  const customerId = parseInt(c.req.param('id'))
+  const { enabled } = await c.req.json()
+
+  try {
+    const config = await c.env.DB.prepare(`SELECT id FROM secretary_config WHERE customer_id = ?`)
+      .bind(customerId).first<any>()
+
+    if (config) {
+      await c.env.DB.prepare(
+        `UPDATE secretary_config SET is_active = ?, updated_at = datetime('now') WHERE customer_id = ?`
+      ).bind(enabled ? 1 : 0, customerId).run()
+    } else if (enabled) {
+      // Create default config if enabling for the first time
+      await c.env.DB.prepare(`
+        INSERT INTO secretary_config (customer_id, business_phone, greeting_script, is_active, connection_status, created_at, updated_at)
+        VALUES (?, '', '', 1, 'not_connected', datetime('now'), datetime('now'))
+      `).bind(customerId).run()
+    }
+
+    return c.json({ success: true, enabled: !!enabled })
+  } catch (err: any) {
+    return c.json({ error: 'Failed to toggle secretary', details: err.message }, 500)
+  }
+})
+
+// ============================================================
+// SUPERADMIN: GEMINI AI COMMAND CENTER CHAT
+// ============================================================
+
+// NOTE: Full Gemini chat is handled by /api/gemini (geminiRoutes) which is mounted in index.tsx
+// This stub ensures the superadmin dashboard's saFetch calls to /api/admin/superadmin/gemini-chat still work
+adminRoutes.post('/superadmin/gemini-chat', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
+
+  const { message, history = [] } = await c.req.json()
+  if (!message?.trim()) return c.json({ error: 'Message required' }, 400)
+
+  const apiKey = (c.env as any).GEMINI_API_KEY || (c.env as any).GEMINI_ENHANCE_API_KEY
+  if (!apiKey) return c.json({ error: 'Gemini not configured — set GEMINI_API_KEY in Cloudflare secrets' }, 503)
+
+  const systemContext = `You are an AI assistant for the RoofReporterAI platform super admin dashboard.
+You help the super admin understand platform metrics, troubleshoot issues, draft content, and manage the business.
+Keep responses concise and actionable. Current date: ${new Date().toISOString().split('T')[0]}.`
+
+  const contents = [
+    ...(history as any[]).map((h: any) => ({ role: h.role === 'user' ? 'user' : 'model', parts: [{ text: h.text }] })),
+    { role: 'user', parts: [{ text: message }] }
+  ]
+
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ system_instruction: { parts: [{ text: systemContext }] }, contents })
+      }
+    )
+    const data = await res.json() as any
+    const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || 'No response from Gemini.'
+    return c.json({ reply, model: 'gemini-2.0-flash' })
+  } catch (err: any) {
+    return c.json({ error: 'Gemini request failed', details: err.message }, 500)
+  }
+})

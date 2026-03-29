@@ -28,6 +28,7 @@ import { reportImagesRoutes } from './routes/report-images'
 import { callCenterRoutes } from './routes/call-center'
 import { metaConnectRoutes } from './routes/meta-connect'
 import { heygenRoutes } from './routes/heygen'
+import { geminiRoutes } from './routes/gemini'
 import type { Bindings } from './types'
 
 const app = new Hono<{ Bindings: Bindings }>()
@@ -185,6 +186,7 @@ app.route('/api/report-images', reportImagesRoutes)
 app.route('/api/call-center', callCenterRoutes)
 app.route('/api/meta', metaConnectRoutes)
 app.route('/api/heygen', heygenRoutes)
+app.route('/api/gemini', geminiRoutes)
 
 // Health check
 app.get('/api/health', (c) => {

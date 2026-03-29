@@ -41,6 +41,7 @@ export type Bindings = {
   SQUARE_ACCESS_TOKEN: string        // Production access token (server-side only)
   SQUARE_APPLICATION_ID: string      // Application ID (safe for frontend — equivalent of Stripe publishable key)
   SQUARE_LOCATION_ID: string         // Square location ID for payment processing
+  SQUARE_CLIENT_SECRET: string       // OAuth app secret — for per-user merchant connect flow
 
   // Email delivery
   GMAIL_SENDER_EMAIL: string // The Google Workspace user email to impersonate when sending via Gmail API
