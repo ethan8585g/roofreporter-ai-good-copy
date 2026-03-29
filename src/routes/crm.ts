@@ -223,7 +223,7 @@ crmRoutes.post('/invoices', async (c) => {
   if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
   try {
     const body = await c.req.json()
-    const { items, due_date, notes, terms, tax_rate } = body
+    const { items, due_date, notes, terms, tax_rate, discount_amount, discount_type, linked_report_id } = body
 
     // Resolve customer — either existing or auto-create new
     const custResult = await resolveCustomerId(c, ownerId, body)
@@ -231,17 +231,20 @@ crmRoutes.post('/invoices', async (c) => {
     const customerId = custResult.id
 
     const taxR = tax_rate || 5.0
+    const discAmt = parseFloat(discount_amount) || 0
+    const discType = discount_type || 'flat'
     let subtotal = 0
     if (items && items.length > 0) { for (const it of items) subtotal += (it.quantity || 1) * (it.unit_price || 0) }
-    // taxR is a percentage (e.g. 5.0 = 5% GST) — proper rounding to cents
-    const taxAmt = Math.round(subtotal * (taxR / 100) * 100) / 100
-    const total = Math.round((subtotal + taxAmt) * 100) / 100
+    const discValue = discType === 'percent' ? Math.round(subtotal * (discAmt / 100) * 100) / 100 : discAmt
+    const taxBase = Math.max(0, subtotal - discValue)
+    const taxAmt = Math.round(taxBase * (taxR / 100) * 100) / 100
+    const total = Math.round((taxBase + taxAmt) * 100) / 100
     const invNum = genInvoiceNum()
 
     const result = await c.env.DB.prepare(`
-      INSERT INTO crm_invoices (owner_id, crm_customer_id, invoice_number, subtotal, tax_rate, tax_amount, total, due_date, notes, terms, status)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft')
-    `).bind(ownerId, customerId, invNum, subtotal, taxR, taxAmt, total, due_date || null, notes || null, terms || 'Payment due within 30 days.').run()
+      INSERT INTO crm_invoices (owner_id, crm_customer_id, invoice_number, subtotal, tax_rate, tax_amount, total, discount_amount, discount_type, linked_report_id, due_date, notes, terms, status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft')
+    `).bind(ownerId, customerId, invNum, subtotal, taxR, taxAmt, total, discValue, discType, linked_report_id || null, due_date || null, notes || null, terms || 'Payment due within 30 days.').run()
 
     const invoiceId = result.meta.last_row_id
     if (!invoiceId) {
@@ -281,16 +284,19 @@ crmRoutes.put('/invoices/:id', async (c) => {
 
   // Full update with items
   const taxR = body.tax_rate || 5.0
+  const discAmt = parseFloat(body.discount_amount) || 0
+  const discType = body.discount_type || 'flat'
   let subtotal = 0
   if (body.items) { for (const it of body.items) subtotal += (it.quantity || 1) * (it.unit_price || 0) }
-  // taxR is a percentage (e.g. 5.0 = 5% GST) — proper rounding to cents
-  const taxAmt = Math.round(subtotal * (taxR / 100) * 100) / 100
-  const total = Math.round((subtotal + taxAmt) * 100) / 100
+  const discValue = discType === 'percent' ? Math.round(subtotal * (discAmt / 100) * 100) / 100 : discAmt
+  const taxBase = Math.max(0, subtotal - discValue)
+  const taxAmt = Math.round(taxBase * (taxR / 100) * 100) / 100
+  const total = Math.round((taxBase + taxAmt) * 100) / 100
 
   await c.env.DB.prepare(`
-    UPDATE crm_invoices SET crm_customer_id=?, subtotal=?, tax_rate=?, tax_amount=?, total=?, due_date=?, notes=?, terms=?, updated_at=datetime('now')
+    UPDATE crm_invoices SET crm_customer_id=?, subtotal=?, tax_rate=?, tax_amount=?, total=?, discount_amount=?, discount_type=?, linked_report_id=?, due_date=?, notes=?, terms=?, updated_at=datetime('now')
     WHERE id=? AND owner_id=?
-  `).bind(body.crm_customer_id, subtotal, taxR, taxAmt, total, body.due_date || null, body.notes || null, body.terms || null, id, ownerId).run()
+  `).bind(body.crm_customer_id, subtotal, taxR, taxAmt, total, discValue, discType, body.linked_report_id || null, body.due_date || null, body.notes || null, body.terms || null, id, ownerId).run()
 
   // Replace items
   await c.env.DB.prepare('DELETE FROM crm_invoice_items WHERE invoice_id = ?').bind(id).run()
@@ -310,6 +316,301 @@ crmRoutes.delete('/invoices/:id', async (c) => {
   if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
   await c.env.DB.prepare('DELETE FROM crm_invoice_items WHERE invoice_id = ?').bind(c.req.param('id')).run()
   await c.env.DB.prepare('DELETE FROM crm_invoices WHERE id = ? AND owner_id = ?').bind(c.req.param('id'), ownerId).run()
+  return c.json({ success: true })
+})
+
+// ============================================================
+// INVOICE EMAIL — Send or remind via Gmail OAuth2
+// POST /api/crm/invoices/:id/send-email  — sends invoice, sets status=sent
+// POST /api/crm/invoices/:id/remind      — sends reminder, updates last_reminder_sent_at
+// ============================================================
+async function buildInvoiceEmailHtml(inv: any, items: any[], owner: any, isReminder: boolean): Promise<string> {
+  const brand = {
+    name: owner.brand_business_name || owner.name || 'Your Contractor',
+    logo: owner.brand_logo_url || '',
+    color: owner.brand_primary_color || '#0369a1',
+    phone: owner.brand_phone || owner.phone || '',
+    email: owner.brand_email || owner.email || '',
+    address: owner.brand_address || '',
+    website: owner.brand_website || '',
+  }
+  const dueDate = inv.due_date ? new Date(inv.due_date).toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' }) : 'Upon receipt'
+  const issueDate = inv.issue_date ? new Date(inv.issue_date).toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' }) : new Date().toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' })
+
+  const itemRows = items.map((it: any) => `
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid #f3f4f6;font-size:14px;color:#374151;">${it.description || ''}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #f3f4f6;font-size:14px;color:#374151;text-align:center;">${it.quantity || 1}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #f3f4f6;font-size:14px;color:#374151;text-align:right;">$${parseFloat(it.unit_price || 0).toFixed(2)}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #f3f4f6;font-size:14px;color:#374151;text-align:right;">$${parseFloat(it.amount || 0).toFixed(2)}</td>
+    </tr>`).join('')
+
+  const discountRow = (inv.discount_amount && parseFloat(inv.discount_amount) > 0)
+    ? `<tr><td colspan="3" style="padding:6px 12px;text-align:right;font-size:13px;color:#6b7280;">Discount${inv.discount_type === 'percent' ? '' : ''}:</td><td style="padding:6px 12px;text-align:right;font-size:13px;color:#dc2626;">-$${parseFloat(inv.discount_amount).toFixed(2)}</td></tr>`
+    : ''
+
+  const reminderBanner = isReminder ? `<div style="background:#fef3c7;border:1px solid #fbbf24;border-radius:8px;padding:12px 16px;margin-bottom:20px;font-size:14px;color:#92400e;"><strong>Friendly Reminder:</strong> This invoice is still outstanding. Please let us know if you have any questions.</div>` : ''
+
+  return `<!DOCTYPE html>
+<html><head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#f9fafb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+<div style="max-width:600px;margin:0 auto;background:#ffffff;">
+  <!-- Header -->
+  <div style="background:${brand.color};padding:28px 32px;">
+    <table width="100%"><tr>
+      <td>${brand.logo ? `<img src="${brand.logo}" alt="${brand.name}" style="height:48px;object-fit:contain;">` : `<span style="color:#ffffff;font-size:22px;font-weight:700;">${brand.name}</span>`}</td>
+      <td style="text-align:right;color:rgba(255,255,255,0.85);font-size:13px;">
+        ${brand.phone ? `<div>${brand.phone}</div>` : ''}
+        ${brand.email ? `<div>${brand.email}</div>` : ''}
+        ${brand.address ? `<div>${brand.address}</div>` : ''}
+      </td>
+    </tr></table>
+  </div>
+  <!-- Invoice title -->
+  <div style="padding:24px 32px;border-bottom:1px solid #e5e7eb;">
+    ${reminderBanner}
+    <table width="100%"><tr>
+      <td>
+        <div style="font-size:24px;font-weight:700;color:#111827;">Invoice</div>
+        <div style="font-size:14px;color:#6b7280;margin-top:4px;">${inv.invoice_number}</div>
+      </td>
+      <td style="text-align:right;">
+        <div style="font-size:13px;color:#6b7280;">Issue Date: <strong style="color:#374151;">${issueDate}</strong></div>
+        <div style="font-size:13px;color:#6b7280;margin-top:2px;">Due Date: <strong style="color:#374151;">${dueDate}</strong></div>
+      </td>
+    </tr></table>
+  </div>
+  <!-- Bill To -->
+  <div style="padding:20px 32px;border-bottom:1px solid #e5e7eb;">
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#9ca3af;letter-spacing:0.05em;margin-bottom:6px;">Bill To</div>
+    <div style="font-size:15px;font-weight:600;color:#111827;">${inv.customer_name || ''}</div>
+    ${inv.customer_email ? `<div style="font-size:13px;color:#6b7280;">${inv.customer_email}</div>` : ''}
+    ${inv.customer_phone ? `<div style="font-size:13px;color:#6b7280;">${inv.customer_phone}</div>` : ''}
+    ${inv.customer_address ? `<div style="font-size:13px;color:#6b7280;">${inv.customer_address}${inv.customer_city ? ', ' + inv.customer_city : ''}${inv.customer_province ? ', ' + inv.customer_province : ''}</div>` : ''}
+  </div>
+  <!-- Line Items -->
+  <div style="padding:20px 32px;">
+    <table width="100%" style="border-collapse:collapse;">
+      <thead>
+        <tr style="background:#f9fafb;">
+          <th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;letter-spacing:0.05em;">Description</th>
+          <th style="padding:8px 12px;text-align:center;font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;letter-spacing:0.05em;">Qty</th>
+          <th style="padding:8px 12px;text-align:right;font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;letter-spacing:0.05em;">Unit Price</th>
+          <th style="padding:8px 12px;text-align:right;font-size:11px;font-weight:700;text-transform:uppercase;color:#6b7280;letter-spacing:0.05em;">Amount</th>
+        </tr>
+      </thead>
+      <tbody>${itemRows}</tbody>
+      <tfoot>
+        <tr><td colspan="3" style="padding:8px 12px;text-align:right;font-size:13px;color:#6b7280;">Subtotal:</td><td style="padding:8px 12px;text-align:right;font-size:13px;color:#374151;">$${parseFloat(inv.subtotal || 0).toFixed(2)}</td></tr>
+        ${discountRow}
+        <tr><td colspan="3" style="padding:6px 12px;text-align:right;font-size:13px;color:#6b7280;">Tax (${parseFloat(inv.tax_rate || 5).toFixed(1)}%):</td><td style="padding:6px 12px;text-align:right;font-size:13px;color:#374151;">$${parseFloat(inv.tax_amount || 0).toFixed(2)}</td></tr>
+        <tr style="border-top:2px solid #e5e7eb;"><td colspan="3" style="padding:10px 12px;text-align:right;font-size:15px;font-weight:700;color:#111827;">Total:</td><td style="padding:10px 12px;text-align:right;font-size:15px;font-weight:700;color:${brand.color};">$${parseFloat(inv.total || 0).toFixed(2)} CAD</td></tr>
+      </tfoot>
+    </table>
+  </div>
+  ${inv.payment_link_url ? `<div style="padding:0 32px 20px;text-align:center;"><a href="${inv.payment_link_url}" style="display:inline-block;background:${brand.color};color:#ffffff;font-weight:700;font-size:15px;padding:12px 32px;border-radius:8px;text-decoration:none;">Pay Now Online</a></div>` : ''}
+  ${inv.notes ? `<div style="padding:0 32px 16px;"><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#9ca3af;letter-spacing:0.05em;margin-bottom:4px;">Notes</div><div style="font-size:13px;color:#374151;">${inv.notes}</div></div>` : ''}
+  ${inv.terms ? `<div style="padding:0 32px 24px;"><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#9ca3af;letter-spacing:0.05em;margin-bottom:4px;">Terms</div><div style="font-size:13px;color:#6b7280;">${inv.terms}</div></div>` : ''}
+  <div style="padding:20px 32px;border-top:1px solid #e5e7eb;text-align:center;font-size:12px;color:#9ca3af;">
+    Thank you for your business! &middot; Sent via RoofReporterAI
+  </div>
+</div>
+</body></html>`
+}
+
+async function sendInvoiceEmail(c: any, invoiceId: string, ownerId: number, isReminder: boolean) {
+  const inv = await c.env.DB.prepare(
+    `SELECT ci.*, cc.name as customer_name, cc.email as customer_email, cc.phone as customer_phone,
+            cc.address as customer_address, cc.city as customer_city, cc.province as customer_province, cc.postal_code as customer_postal
+     FROM crm_invoices ci LEFT JOIN crm_customers cc ON cc.id = ci.crm_customer_id
+     WHERE ci.id = ? AND ci.owner_id = ?`
+  ).bind(invoiceId, ownerId).first<any>()
+  if (!inv) return { error: 'Invoice not found', status: 404 }
+  if (!inv.customer_email) return { error: 'Customer has no email address on file.', status: 400 }
+
+  const items = await c.env.DB.prepare('SELECT * FROM crm_invoice_items WHERE invoice_id = ? ORDER BY sort_order').bind(invoiceId).all()
+  const owner = await c.env.DB.prepare(
+    'SELECT name, email, phone, brand_business_name, brand_logo_url, brand_primary_color, brand_phone, brand_email, brand_address, gmail_refresh_token, gmail_connected_email FROM customers WHERE id = ?'
+  ).bind(ownerId).first<any>()
+  if (!owner) return { error: 'Owner not found', status: 404 }
+
+  const emailHtml = await buildInvoiceEmailHtml(inv, items.results || [], owner, isReminder)
+  const businessName = owner.brand_business_name || owner.name || 'RoofReporterAI'
+  const prefix = isReminder ? 'Reminder: ' : ''
+  const subject = `${prefix}Invoice ${inv.invoice_number} from ${businessName} — $${parseFloat(inv.total || 0).toFixed(2)} CAD`
+
+  let emailSent = false
+  let emailError = ''
+
+  if (owner.gmail_refresh_token && owner.gmail_connected_email) {
+    try {
+      const clientId = (c.env as any).GMAIL_CLIENT_ID
+      let clientSecret = (c.env as any).GMAIL_CLIENT_SECRET || ''
+      if (!clientSecret) {
+        const csRow = await c.env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key = 'gmail_client_secret' AND master_company_id = 1").first<any>()
+        if (csRow?.setting_value) clientSecret = csRow.setting_value
+      }
+      if (clientId && clientSecret) {
+        const tokenResp = await fetch('https://oauth2.googleapis.com/token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: owner.gmail_refresh_token, client_id: clientId, client_secret: clientSecret }).toString()
+        })
+        const tokenData: any = await tokenResp.json()
+        if (tokenData.access_token) {
+          const fromEmail = owner.gmail_connected_email
+          const boundary = 'boundary_' + crypto.randomUUID().replace(/-/g, '').substring(0, 16)
+          const rawMessage = [
+            `From: ${businessName} <${fromEmail}>`,
+            `To: ${inv.customer_email}`,
+            `Subject: ${subject}`,
+            'MIME-Version: 1.0',
+            `Content-Type: multipart/alternative; boundary="${boundary}"`,
+            '',
+            `--${boundary}`,
+            'Content-Type: text/plain; charset=UTF-8',
+            '',
+            `${isReminder ? 'Friendly Reminder: This invoice is still outstanding.\n\n' : ''}Hi ${inv.customer_name || 'there'},\n\nPlease find your invoice ${inv.invoice_number} for $${parseFloat(inv.total || 0).toFixed(2)} CAD due ${inv.due_date ? 'by ' + inv.due_date : 'upon receipt'}.\n\nBest regards,\n${businessName}`,
+            '',
+            `--${boundary}`,
+            'Content-Type: text/html; charset=UTF-8',
+            '',
+            emailHtml,
+            '',
+            `--${boundary}--`
+          ].join('\r\n')
+          const encoded = btoa(unescape(encodeURIComponent(rawMessage))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+          const sendResp = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${tokenData.access_token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ raw: encoded })
+          })
+          if (sendResp.ok) { emailSent = true }
+          else { const errData: any = await sendResp.json().catch(() => ({})); emailError = errData?.error?.message || `Gmail API error (${sendResp.status})` }
+        } else { emailError = 'Could not refresh Gmail token. Please reconnect Gmail.' }
+      } else { emailError = 'Gmail credentials not configured.' }
+    } catch(e: any) { emailError = e.message || 'Gmail send failed' }
+  } else {
+    emailError = 'Gmail not connected. Connect Gmail in Account Settings to send invoices by email.'
+  }
+
+  if (!emailSent) return { error: emailError || 'Email send failed', status: 500 }
+
+  // Update invoice status / reminder timestamp
+  if (isReminder) {
+    await c.env.DB.prepare("UPDATE crm_invoices SET last_reminder_sent_at = datetime('now'), updated_at = datetime('now') WHERE id = ?").bind(invoiceId).run()
+  } else {
+    await c.env.DB.prepare("UPDATE crm_invoices SET status = 'sent', sent_date = date('now'), updated_at = datetime('now') WHERE id = ? AND status = 'draft'").bind(invoiceId).run()
+  }
+  return { success: true }
+}
+
+crmRoutes.post('/invoices/:id/send-email', async (c) => {
+  const ownerId = await getOwnerId(c)
+  if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
+  const result = await sendInvoiceEmail(c, c.req.param('id'), ownerId, false)
+  if (result.error) return c.json({ error: result.error }, result.status || 500)
+  return c.json({ success: true })
+})
+
+crmRoutes.post('/invoices/:id/remind', async (c) => {
+  const ownerId = await getOwnerId(c)
+  if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
+  const result = await sendInvoiceEmail(c, c.req.param('id'), ownerId, true)
+  if (result.error) return c.json({ error: result.error }, result.status || 500)
+  return c.json({ success: true })
+})
+
+// ============================================================
+// INVOICE PAYMENT LINK — Generate Square checkout URL
+// POST /api/crm/invoices/:id/payment-link
+// ============================================================
+crmRoutes.post('/invoices/:id/payment-link', async (c) => {
+  const ownerId = await getOwnerId(c)
+  if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
+
+  const inv = await c.env.DB.prepare(
+    'SELECT * FROM crm_invoices WHERE id = ? AND owner_id = ?'
+  ).bind(c.req.param('id'), ownerId).first<any>()
+  if (!inv) return c.json({ error: 'Invoice not found' }, 404)
+
+  const accessToken = (c.env as any).SQUARE_ACCESS_TOKEN
+  const locationId = (c.env as any).SQUARE_LOCATION_ID
+  if (!accessToken || !locationId) return c.json({ error: 'Square payment is not configured.' }, 503)
+
+  try {
+    const totalCents = Math.round(parseFloat(inv.total || 0) * 100)
+    const SQUARE_API_BASE = 'https://connect.squareup.com/v2'
+    const SQUARE_API_VERSION = '2025-01-23'
+    const body = {
+      idempotency_key: `inv-${inv.id}-${Date.now()}`,
+      quick_pay: {
+        name: `Invoice ${inv.invoice_number}`,
+        price_money: { amount: totalCents, currency: 'CAD' },
+        location_id: locationId
+      },
+      checkout_options: { ask_for_shipping_address: false },
+      payment_note: `Invoice ${inv.invoice_number} — owner ${ownerId}`
+    }
+    const resp = await fetch(`${SQUARE_API_BASE}/online-checkout/payment-links`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json', 'Square-Version': SQUARE_API_VERSION },
+      body: JSON.stringify(body)
+    })
+    const data: any = await resp.json()
+    if (!resp.ok) {
+      const errMsg = data.errors?.[0]?.detail || data.errors?.[0]?.code || `Square API error: ${resp.status}`
+      return c.json({ error: errMsg }, 500)
+    }
+    const link = data.payment_link
+    const checkoutUrl = link?.url || link?.long_url || ''
+    const linkId = link?.id || ''
+    await c.env.DB.prepare(
+      "UPDATE crm_invoices SET payment_link_url = ?, payment_link_id = ?, updated_at = datetime('now') WHERE id = ?"
+    ).bind(checkoutUrl, linkId, inv.id).run()
+    return c.json({ success: true, payment_link_url: checkoutUrl })
+  } catch (err: any) {
+    return c.json({ error: err.message || 'Failed to create payment link' }, 500)
+  }
+})
+
+// ============================================================
+// LINE ITEM TEMPLATES — Saved reusable service line items
+// ============================================================
+crmRoutes.get('/line-item-templates', async (c) => {
+  const ownerId = await getOwnerId(c)
+  if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
+  const templates = await c.env.DB.prepare(
+    'SELECT * FROM crm_line_item_templates WHERE owner_id = ? ORDER BY sort_order, name'
+  ).bind(ownerId).all()
+  return c.json({ templates: templates.results || [] })
+})
+
+crmRoutes.post('/line-item-templates', async (c) => {
+  const ownerId = await getOwnerId(c)
+  if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
+  const { name, description, unit_price } = await c.req.json()
+  if (!name) return c.json({ error: 'Name is required' }, 400)
+  const result = await c.env.DB.prepare(
+    'INSERT INTO crm_line_item_templates (owner_id, name, description, unit_price) VALUES (?, ?, ?, ?)'
+  ).bind(ownerId, name.trim(), description || null, parseFloat(unit_price) || 0).run()
+  return c.json({ success: true, id: result.meta.last_row_id })
+})
+
+crmRoutes.put('/line-item-templates/:id', async (c) => {
+  const ownerId = await getOwnerId(c)
+  if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
+  const { name, description, unit_price } = await c.req.json()
+  await c.env.DB.prepare(
+    "UPDATE crm_line_item_templates SET name=?, description=?, unit_price=?, updated_at=datetime('now') WHERE id=? AND owner_id=?"
+  ).bind(name || '', description || null, parseFloat(unit_price) || 0, c.req.param('id'), ownerId).run()
+  return c.json({ success: true })
+})
+
+crmRoutes.delete('/line-item-templates/:id', async (c) => {
+  const ownerId = await getOwnerId(c)
+  if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
+  await c.env.DB.prepare('DELETE FROM crm_line_item_templates WHERE id = ? AND owner_id = ?').bind(c.req.param('id'), ownerId).run()
   return c.json({ success: true })
 })
 

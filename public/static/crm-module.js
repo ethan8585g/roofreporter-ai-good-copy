@@ -50,11 +50,12 @@
   // ============================================================
   // MODAL HELPER
   // ============================================================
-  function showModal(title, bodyHtml, onSave, saveLabel) {
+  function showModal(title, bodyHtml, onSave, saveLabel, maxWidthClass) {
+    var widthCls = maxWidthClass || 'max-w-2xl';
     var overlay = document.createElement('div');
     overlay.className = 'fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4';
     overlay.id = 'crmModal';
-    overlay.innerHTML = '<div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">' +
+    overlay.innerHTML = '<div class="bg-white rounded-2xl shadow-2xl w-full ' + widthCls + ' max-h-[90vh] overflow-y-auto">' +
       '<div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between"><h3 class="font-bold text-gray-800">' + title + '</h3><button onclick="document.getElementById(\'crmModal\').remove()" class="text-gray-400 hover:text-gray-600 text-lg">&times;</button></div>' +
       '<div class="p-6" id="modalBody">' + bodyHtml + '</div>' +
       (onSave ? '<div class="px-6 py-4 border-t border-gray-100 flex justify-end gap-2"><button onclick="document.getElementById(\'crmModal\').remove()" class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg text-sm">Cancel</button><button id="modalSaveBtn" class="px-6 py-2 bg-brand-600 text-white rounded-lg text-sm font-semibold hover:bg-brand-700">' + (saveLabel || 'Save') + '</button></div>' : '') +
@@ -377,6 +378,8 @@
   // MODULE: INVOICES
   // ============================================================
   var invoicesData = [];
+  var _invTemplates = null; // cached line item templates
+
   function initInvoices() {
     root.innerHTML = '<div class="text-center py-8"><div class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-brand-500 mx-auto mb-3"></div></div>';
     loadInvoices();
@@ -433,52 +436,224 @@
   window._invFilter = '';
   window._crmFilterInvoices = function(status) { window._invFilter = status; loadInvoices(status); };
 
-  window._crmNewInvoice = function() {
-    // First load customers for the dropdown
-    fetch('/api/crm/customers', { headers: authHeadersOnly() })
-      .then(function(r) { return r.json(); })
-      .then(function(data) {
-        var custs = data.customers || [];
-        var body = '<div class="space-y-3">' +
-          '<div><label class="block text-xs font-medium text-gray-600 mb-1">Customer *</label>' + customerSelectHTML(custs, '', 'invCustomer') + '</div>' +
-          '<div id="invItems"><div class="invItemRow grid grid-cols-12 gap-2 items-end"><div class="col-span-6"><label class="block text-xs font-medium text-gray-600 mb-1">Description</label><input type="text" class="invDesc w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" placeholder="Roof installation"></div><div class="col-span-2"><label class="block text-xs font-medium text-gray-600 mb-1">Qty</label><input type="number" class="invQty w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" value="1"></div><div class="col-span-3"><label class="block text-xs font-medium text-gray-600 mb-1">Unit Price</label><input type="number" class="invPrice w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" step="0.01" placeholder="0.00"></div><div class="col-span-1"><button onclick="this.closest(\'.invItemRow\').remove()" class="text-red-400 hover:text-red-600 py-2"><i class="fas fa-times"></i></button></div></div></div>' +
-          '<button onclick="window._crmAddInvItem()" class="text-brand-600 text-xs font-medium hover:underline"><i class="fas fa-plus mr-1"></i>Add Line Item</button>' +
-          '<div class="grid grid-cols-2 gap-3"><div><label class="block text-xs font-medium text-gray-600 mb-1">Due Date</label><input type="date" id="invDue" class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm"></div><div><label class="block text-xs font-medium text-gray-600 mb-1">Tax Rate (%)</label><input type="number" id="invTax" value="5" class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" step="0.1"></div></div>' +
-          '<div><label class="block text-xs font-medium text-gray-600 mb-1">Notes</label><textarea id="invNotes" rows="2" class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" placeholder="Optional notes..."></textarea></div></div>';
+  // ---- Live totals recalculation ----
+  function recalcInvTotals(itemsContainerId) {
+    var rows = document.querySelectorAll('#' + itemsContainerId + ' .invItemRow');
+    var subtotal = 0;
+    rows.forEach(function(r) {
+      var qty = parseFloat(r.querySelector('.invQty').value) || 0;
+      var price = parseFloat(r.querySelector('.invPrice').value) || 0;
+      var amt = qty * price;
+      var amtEl = r.querySelector('.invLineTotal');
+      if (amtEl) amtEl.textContent = '$' + amt.toFixed(2);
+      subtotal += amt;
+    });
+    var taxR = parseFloat(document.getElementById('invTaxField') ? document.getElementById('invTaxField').value : (document.getElementById('editInvTax') ? document.getElementById('editInvTax').value : 5)) || 5;
+    var discAmt = parseFloat(document.getElementById('invDiscAmt') ? document.getElementById('invDiscAmt').value : 0) || 0;
+    var discType = (document.getElementById('invDiscType') ? document.getElementById('invDiscType').value : 'flat') || 'flat';
+    var discValue = discType === 'percent' ? subtotal * (discAmt / 100) : discAmt;
+    var taxBase = Math.max(0, subtotal - discValue);
+    var taxAmt = taxBase * (taxR / 100);
+    var total = taxBase + taxAmt;
+    var st = document.getElementById('invSummarySubtotal'); if (st) st.textContent = '$' + subtotal.toFixed(2);
+    var disc = document.getElementById('invSummaryDiscount'); if (disc) disc.textContent = discValue > 0 ? '-$' + discValue.toFixed(2) : '$0.00';
+    var tax = document.getElementById('invSummaryTax'); if (tax) tax.textContent = '$' + taxAmt.toFixed(2);
+    var tot = document.getElementById('invSummaryTotal'); if (tot) tot.textContent = '$' + total.toFixed(2) + ' CAD';
+  }
 
-        showModal('Create Invoice', body, function() {
-          var custData = getCustomerFromSelector('invCustomer');
-          if (!custData) { toast('Select or add a customer', 'error'); return; }
-          var rows = document.querySelectorAll('.invItemRow');
-          var items = [];
-          rows.forEach(function(r) {
-            var desc = r.querySelector('.invDesc').value.trim();
-            var qty = parseFloat(r.querySelector('.invQty').value) || 1;
-            var price = parseFloat(r.querySelector('.invPrice').value) || 0;
-            if (desc && price > 0) items.push({ description: desc, quantity: qty, unit_price: price });
-          });
-          if (items.length === 0) { toast('Add at least one line item', 'error'); return; }
-          var payload = Object.assign({}, custData, {
-            items: items,
-            due_date: document.getElementById('invDue').value || null,
-            tax_rate: parseFloat(document.getElementById('invTax').value) || 5,
-            notes: document.getElementById('invNotes').value.trim()
-          });
-          fetch('/api/crm/invoices', { method: 'POST', headers: authHeaders(), body: JSON.stringify(payload) })
-            .then(function(r) { return r.json(); })
-            .then(function(res) { if (res.success) { closeModal(); toast('Invoice created!'); loadInvoices(); } else { toast(res.error || 'Failed', 'error'); } })
-            .catch(function(e) { toast('Failed to create invoice: ' + (e.message || 'Network error'), 'error'); });
-        }, 'Create Invoice');
-      });
+  window.recalcInvTotals = recalcInvTotals;
+
+  // ---- Build a line item row HTML ----
+  function buildInvItemRow(containerId, desc, qty, price, isFirst) {
+    var d = (desc || '').replace(/"/g, '&quot;');
+    var q = qty || 1;
+    var p = price || 0;
+    return '<div class="invItemRow grid grid-cols-12 gap-1.5 items-center mt-2">' +
+      '<div class="col-span-5"><input type="text" class="invDesc w-full px-2 py-1.5 border border-gray-300 rounded-lg text-sm" placeholder="Description" value="' + d + '" oninput="recalcInvTotals(\'' + containerId + '\')"></div>' +
+      '<div class="col-span-2"><input type="number" class="invQty w-full px-2 py-1.5 border border-gray-300 rounded-lg text-sm text-center" value="' + q + '" min="0.01" step="0.01" oninput="recalcInvTotals(\'' + containerId + '\')"></div>' +
+      '<div class="col-span-2"><input type="number" class="invPrice w-full px-2 py-1.5 border border-gray-300 rounded-lg text-sm" step="0.01" placeholder="0.00" value="' + p + '" oninput="recalcInvTotals(\'' + containerId + '\')"></div>' +
+      '<div class="col-span-2 text-right text-sm font-medium text-gray-700 pr-1 invLineTotal">$' + ((q * p).toFixed(2)) + '</div>' +
+      '<div class="col-span-1 text-center"><button type="button" onclick="this.closest(\'.invItemRow\').remove();recalcInvTotals(\'' + containerId + '\')" class="text-red-400 hover:text-red-600 text-xs"><i class="fas fa-times"></i></button></div>' +
+      '</div>';
+  }
+
+  window.buildInvItemRow = buildInvItemRow;
+
+  // ---- Template picker panel ----
+  function loadAndShowTemplates(containerId) {
+    var panel = document.getElementById('invTemplatePicker');
+    if (!panel) return;
+    if (_invTemplates !== null) { renderTemplatePicker(panel, containerId, _invTemplates); return; }
+    panel.innerHTML = '<div class="text-xs text-gray-400 py-2 text-center"><i class="fas fa-spinner fa-spin mr-1"></i>Loading templates...</div>';
+    fetch('/api/crm/line-item-templates', { headers: authHeadersOnly() })
+      .then(function(r) { return r.json(); })
+      .then(function(data) { _invTemplates = data.templates || []; renderTemplatePicker(panel, containerId, _invTemplates); })
+      .catch(function() { panel.innerHTML = '<div class="text-xs text-red-500 py-2">Failed to load templates</div>'; });
+  }
+
+  window.loadAndShowTemplates = loadAndShowTemplates;
+
+  function renderTemplatePicker(panel, containerId, templates) {
+    if (templates.length === 0) {
+      panel.innerHTML = '<div class="text-xs text-gray-400 py-2 text-center">No saved templates yet. <button onclick="window._crmManageTemplates()" class="text-brand-600 hover:underline">Add templates</button></div>';
+      return;
+    }
+    var html = '<div class="flex flex-wrap gap-1.5">';
+    for (var i = 0; i < templates.length; i++) {
+      var t = templates[i];
+      html += '<button type="button" onclick="window._crmInsertTemplate(' + t.id + ',\'' + containerId + '\')" class="px-2.5 py-1 bg-brand-50 border border-brand-200 text-brand-700 rounded-lg text-xs hover:bg-brand-100 transition-colors">' +
+        '<i class="fas fa-plus mr-1 text-[10px]"></i>' + (t.name || '') + ' (' + money(t.unit_price) + ')' +
+        '</button>';
+    }
+    html += '<button type="button" onclick="window._crmManageTemplates()" class="px-2.5 py-1 bg-gray-50 border border-gray-200 text-gray-500 rounded-lg text-xs hover:bg-gray-100"><i class="fas fa-cog mr-1 text-[10px]"></i>Manage</button>';
+    html += '</div>';
+    panel.innerHTML = html;
+  }
+
+  window._crmInsertTemplate = function(templateId, containerId) {
+    if (!_invTemplates) return;
+    var t = null;
+    for (var i = 0; i < _invTemplates.length; i++) { if (_invTemplates[i].id === templateId) { t = _invTemplates[i]; break; } }
+    if (!t) return;
+    var container = document.getElementById(containerId);
+    if (!container) return;
+    var div = document.createElement('div');
+    div.innerHTML = buildInvItemRow(containerId, t.description || t.name, 1, t.unit_price, false);
+    container.appendChild(div.firstChild);
+    recalcInvTotals(containerId);
   };
 
-  window._crmAddInvItem = function() {
-    var container = document.getElementById('invItems');
-    if (!container) return;
-    var row = document.createElement('div');
-    row.className = 'invItemRow grid grid-cols-12 gap-2 items-end mt-2';
-    row.innerHTML = '<div class="col-span-6"><input type="text" class="invDesc w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" placeholder="Description"></div><div class="col-span-2"><input type="number" class="invQty w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" value="1"></div><div class="col-span-3"><input type="number" class="invPrice w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" step="0.01" placeholder="0.00"></div><div class="col-span-1"><button onclick="this.closest(\'.invItemRow\').remove()" class="text-red-400 hover:text-red-600 py-2"><i class="fas fa-times"></i></button></div>';
-    container.appendChild(row);
+  // ---- Invoice form body builder (shared by New and Edit) ----
+  function buildInvoiceFormBody(custs, inv, items, orders, containerId) {
+    inv = inv || {};
+    items = items || [];
+    orders = orders || [];
+    var existingCustomerId = inv.crm_customer_id || '';
+    var selectorId = (containerId === 'invItems') ? 'invCustomer' : 'editInvCustomer';
+    var html = '<div class="space-y-4">';
+
+    // Row 1: Customer + Report link
+    html += '<div class="grid grid-cols-2 gap-3">';
+    html += '<div><label class="block text-xs font-medium text-gray-600 mb-1">Customer *</label>' + customerSelectHTML(custs, existingCustomerId, selectorId) + '</div>';
+    html += '<div><label class="block text-xs font-medium text-gray-600 mb-1">Link Roof Report <span class="text-gray-400 font-normal">(optional)</span></label>';
+    html += '<select id="invLinkedReport" class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm"><option value="">— None —</option>';
+    for (var r = 0; r < orders.length; r++) {
+      var o = orders[r];
+      var sel = (inv.linked_report_id && String(inv.linked_report_id) === String(o.id)) ? ' selected' : '';
+      html += '<option value="' + o.id + '"' + sel + '>' + (o.order_number || '#' + o.id) + ' — ' + (o.property_address || '') + '</option>';
+    }
+    html += '</select></div>';
+    html += '</div>';
+
+    // Template picker
+    html += '<div>';
+    html += '<div class="flex items-center justify-between mb-1"><label class="block text-xs font-medium text-gray-600">Line Items *</label>';
+    html += '<button type="button" onclick="var p=document.getElementById(\'invTemplatePicker\');p.classList.toggle(\'hidden\');loadAndShowTemplates(\'' + containerId + '\')" class="text-xs text-brand-600 hover:underline"><i class="fas fa-bookmark mr-1"></i>Use Template</button>';
+    html += '</div>';
+    html += '<div id="invTemplatePicker" class="hidden mb-2 bg-brand-50 border border-brand-100 rounded-xl p-2.5"></div>';
+
+    // Column headers
+    html += '<div class="grid grid-cols-12 gap-1.5 mb-1 px-0.5">';
+    html += '<div class="col-span-5 text-[10px] font-semibold text-gray-400 uppercase">Description</div>';
+    html += '<div class="col-span-2 text-[10px] font-semibold text-gray-400 uppercase text-center">Qty</div>';
+    html += '<div class="col-span-2 text-[10px] font-semibold text-gray-400 uppercase">Unit Price</div>';
+    html += '<div class="col-span-2 text-[10px] font-semibold text-gray-400 uppercase text-right">Total</div>';
+    html += '<div class="col-span-1"></div>';
+    html += '</div>';
+
+    // Items container
+    html += '<div id="' + containerId + '">';
+    if (items.length > 0) {
+      for (var ii = 0; ii < items.length; ii++) {
+        html += buildInvItemRow(containerId, items[ii].description, items[ii].quantity, items[ii].unit_price, ii === 0);
+      }
+    } else {
+      html += buildInvItemRow(containerId, '', 1, '', true);
+    }
+    html += '</div>';
+    html += '<button type="button" onclick="var c=document.getElementById(\'' + containerId + '\');var d=document.createElement(\'div\');d.innerHTML=buildInvItemRow(\'' + containerId + '\',\'\',1,\'\',false);c.appendChild(d.firstChild);" class="mt-2 text-brand-600 text-xs font-medium hover:underline"><i class="fas fa-plus mr-1"></i>Add Line Item</button>';
+    html += '</div>';
+
+    // Row 2: Due Date + Tax Rate
+    html += '<div class="grid grid-cols-2 gap-3">';
+    html += '<div><label class="block text-xs font-medium text-gray-600 mb-1">Due Date</label><input type="date" id="invDueDate" class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" value="' + (inv.due_date || '') + '"></div>';
+    html += '<div><label class="block text-xs font-medium text-gray-600 mb-1">Tax Rate (%)</label><input type="number" id="invTaxField" value="' + (inv.tax_rate || 5) + '" class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" step="0.1" min="0" oninput="recalcInvTotals(\'' + containerId + '\')"></div>';
+    html += '</div>';
+
+    // Discount row
+    html += '<div class="flex items-end gap-2">';
+    html += '<div class="flex-1"><label class="block text-xs font-medium text-gray-600 mb-1">Discount</label>';
+    html += '<div class="flex gap-1"><input type="number" id="invDiscAmt" value="' + (parseFloat(inv.discount_amount) || 0) + '" class="flex-1 px-2 py-2 border border-gray-300 rounded-lg text-sm" step="0.01" min="0" placeholder="0" oninput="recalcInvTotals(\'' + containerId + '\')">';
+    html += '<select id="invDiscType" class="px-2 py-2 border border-gray-300 rounded-lg text-sm bg-gray-50" onchange="recalcInvTotals(\'' + containerId + '\')">';
+    html += '<option value="flat"' + (inv.discount_type !== 'percent' ? ' selected' : '') + '>$ Flat</option>';
+    html += '<option value="percent"' + (inv.discount_type === 'percent' ? ' selected' : '') + '>% Percent</option>';
+    html += '</select></div></div>';
+
+    // Live totals summary
+    html += '<div class="flex-1 bg-gray-50 rounded-xl p-2.5 text-xs space-y-1">';
+    var initSubtotal = 0; for (var it2 = 0; it2 < items.length; it2++) initSubtotal += (items[it2].quantity || 1) * (items[it2].unit_price || 0);
+    var initDiscV = (inv.discount_type === 'percent') ? initSubtotal * ((parseFloat(inv.discount_amount) || 0) / 100) : (parseFloat(inv.discount_amount) || 0);
+    var initTaxBase = Math.max(0, initSubtotal - initDiscV);
+    var initTax = initTaxBase * ((inv.tax_rate || 5) / 100);
+    var initTotal = initTaxBase + initTax;
+    html += '<div class="flex justify-between text-gray-500"><span>Subtotal</span><span id="invSummarySubtotal">$' + initSubtotal.toFixed(2) + '</span></div>';
+    html += '<div class="flex justify-between text-gray-500"><span>Discount</span><span id="invSummaryDiscount">' + (initDiscV > 0 ? '-$' + initDiscV.toFixed(2) : '$0.00') + '</span></div>';
+    html += '<div class="flex justify-between text-gray-500"><span>Tax</span><span id="invSummaryTax">$' + initTax.toFixed(2) + '</span></div>';
+    html += '<div class="flex justify-between font-bold text-gray-800 border-t border-gray-200 pt-1 mt-1"><span>Total</span><span id="invSummaryTotal">$' + initTotal.toFixed(2) + ' CAD</span></div>';
+    html += '</div>';
+    html += '</div>';
+
+    // Notes + Terms
+    html += '<div class="grid grid-cols-2 gap-3">';
+    html += '<div><label class="block text-xs font-medium text-gray-600 mb-1">Notes</label><textarea id="invNotes" rows="2" class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" placeholder="Optional notes...">' + (inv.notes || '') + '</textarea></div>';
+    html += '<div><label class="block text-xs font-medium text-gray-600 mb-1">Terms</label><textarea id="invTerms" rows="2" class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm">' + (inv.terms || 'Payment due within 30 days.') + '</textarea></div>';
+    html += '</div>';
+    html += '</div>';
+    return html;
+  }
+
+  // ---- Collect form data ----
+  function collectInvoiceFormData(selectorId, containerId) {
+    var custData = getCustomerFromSelector(selectorId);
+    if (!custData) return null;
+    var rows = document.querySelectorAll('#' + containerId + ' .invItemRow');
+    var items = [];
+    rows.forEach(function(r) {
+      var desc = r.querySelector('.invDesc').value.trim();
+      var qty = parseFloat(r.querySelector('.invQty').value) || 1;
+      var price = parseFloat(r.querySelector('.invPrice').value) || 0;
+      if (desc) items.push({ description: desc, quantity: qty, unit_price: price });
+    });
+    if (items.length === 0) { toast('Add at least one line item', 'error'); return null; }
+    return Object.assign({}, custData, {
+      items: items,
+      due_date: document.getElementById('invDueDate').value || null,
+      tax_rate: parseFloat(document.getElementById('invTaxField').value) || 5,
+      discount_amount: parseFloat(document.getElementById('invDiscAmt').value) || 0,
+      discount_type: document.getElementById('invDiscType').value || 'flat',
+      linked_report_id: document.getElementById('invLinkedReport').value || null,
+      notes: document.getElementById('invNotes').value.trim(),
+      terms: document.getElementById('invTerms').value.trim()
+    });
+  }
+
+  window._crmNewInvoice = function() {
+    Promise.all([
+      fetch('/api/crm/customers', { headers: authHeadersOnly() }).then(function(r) { return r.json(); }),
+      fetch('/api/customer/orders', { headers: authHeadersOnly() }).then(function(r) { return r.json(); }).catch(function() { return { orders: [] }; })
+    ]).then(function(results) {
+      var custs = results[0].customers || [];
+      var orders = (results[1].orders || []).filter(function(o) { return o.report_status === 'completed' || o.status === 'completed'; });
+      var body = buildInvoiceFormBody(custs, {}, [], orders, 'invItems');
+      showModal('Create Invoice', body, function() {
+        var payload = collectInvoiceFormData('invCustomer', 'invItems');
+        if (!payload) return;
+        fetch('/api/crm/invoices', { method: 'POST', headers: authHeaders(), body: JSON.stringify(payload) })
+          .then(function(r) { return r.json(); })
+          .then(function(res) { if (res.success) { closeModal(); toast('Invoice created!'); loadInvoices(); } else { toast(res.error || 'Failed', 'error'); } })
+          .catch(function(e) { toast('Failed to create invoice: ' + (e.message || 'Network error'), 'error'); });
+      }, 'Create Invoice', 'max-w-3xl');
+    });
   };
 
   window._crmMarkInvoice = function(id, status) {
@@ -508,11 +683,21 @@
         if (!inv) { toast('Invoice not found', 'error'); return; }
 
         var body = '<div class="space-y-4">';
-        // Header with invoice number and status
-        body += '<div class="flex items-center justify-between">';
-        body += '<div><span class="font-mono text-lg font-bold text-brand-600">' + inv.invoice_number + '</span></div>';
-        body += '<div class="flex items-center gap-2">' + badge(inv.status);
-        if (inv.status === 'draft') body += '<button onclick="closeModal();window._crmEditInvoice(' + id + ')" class="text-xs bg-gray-100 text-gray-700 px-3 py-1 rounded-lg hover:bg-gray-200"><i class="fas fa-edit mr-1"></i>Edit</button>';
+        // Header
+        body += '<div class="flex items-start justify-between flex-wrap gap-2">';
+        body += '<div><span class="font-mono text-lg font-bold text-brand-600">' + inv.invoice_number + '</span><div class="mt-1">' + badge(inv.status) + '</div></div>';
+        body += '<div class="flex flex-wrap gap-1.5">';
+        if (inv.status === 'draft') {
+          body += '<button onclick="closeModal();window._crmEditInvoice(' + id + ')" class="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-xs font-semibold hover:bg-gray-200"><i class="fas fa-edit mr-1"></i>Edit</button>';
+          body += '<button onclick="window._crmSendInvoiceEmail(' + id + ')" class="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-semibold hover:bg-blue-700"><i class="fas fa-envelope mr-1"></i>Send Email</button>';
+        }
+        if (inv.status === 'sent' || inv.status === 'viewed' || inv.status === 'overdue') {
+          body += '<button onclick="window._crmSendInvoiceEmail(' + id + ')" class="px-3 py-1.5 bg-blue-500 text-white rounded-lg text-xs font-semibold hover:bg-blue-600"><i class="fas fa-envelope mr-1"></i>Resend</button>';
+          body += '<button onclick="window._crmSendReminder(' + id + ')" class="px-3 py-1.5 bg-amber-500 text-white rounded-lg text-xs font-semibold hover:bg-amber-600"><i class="fas fa-bell mr-1"></i>Remind</button>';
+        }
+        if (inv.status !== 'paid' && inv.status !== 'cancelled') {
+          body += '<button onclick="window._crmMarkInvoice(' + id + ',\'paid\');closeModal();" class="px-3 py-1.5 bg-green-600 text-white rounded-lg text-xs font-semibold hover:bg-green-700"><i class="fas fa-check mr-1"></i>Mark Paid</button>';
+        }
         body += '</div></div>';
 
         // Customer info
@@ -545,94 +730,142 @@
         // Totals
         body += '<div class="bg-gray-50 rounded-xl p-4">';
         body += '<div class="flex justify-between text-sm text-gray-600 mb-1"><span>Subtotal</span><span>' + money(inv.subtotal) + '</span></div>';
-        if (inv.tax_amount) body += '<div class="flex justify-between text-sm text-gray-600 mb-1"><span>Tax (' + (inv.tax_rate || 5) + '%)</span><span>' + money(inv.tax_amount) + '</span></div>';
-        if (inv.discount_amount) body += '<div class="flex justify-between text-sm text-gray-600 mb-1"><span>Discount</span><span class="text-green-600">-' + money(inv.discount_amount) + '</span></div>';
-        body += '<div class="flex justify-between text-lg font-bold text-gray-800 border-t border-gray-200 pt-2 mt-2"><span>Total</span><span>' + money(inv.total) + ' CAD</span></div>';
+        if (inv.discount_amount && parseFloat(inv.discount_amount) > 0) body += '<div class="flex justify-between text-sm mb-1"><span class="text-gray-600">Discount</span><span class="text-green-600">-' + money(inv.discount_amount) + '</span></div>';
+        body += '<div class="flex justify-between text-sm text-gray-600 mb-1"><span>Tax (' + (inv.tax_rate || 5) + '%)</span><span>' + money(inv.tax_amount) + '</span></div>';
+        body += '<div class="flex justify-between text-base font-bold text-gray-800 border-t border-gray-200 pt-2 mt-2"><span>Total</span><span>' + money(inv.total) + ' CAD</span></div>';
+        body += '</div>';
+
+        // Payment link section
+        body += '<div class="bg-emerald-50 border border-emerald-200 rounded-xl p-3">';
+        if (inv.payment_link_url) {
+          body += '<div class="flex items-center gap-2 flex-wrap"><i class="fas fa-link text-emerald-500 text-sm"></i><span class="text-xs font-semibold text-emerald-700">Payment Link:</span>';
+          body += '<a href="' + inv.payment_link_url + '" target="_blank" class="text-xs text-emerald-600 hover:underline truncate max-w-[180px]">' + inv.payment_link_url + '</a>';
+          body += '<button onclick="navigator.clipboard.writeText(\'' + inv.payment_link_url + '\').then(function(){toast(\'Copied!\');})" class="text-xs text-emerald-600 border border-emerald-300 px-2 py-0.5 rounded hover:bg-emerald-100"><i class="fas fa-copy mr-0.5"></i>Copy</button>';
+          body += '</div>';
+        } else if (inv.status !== 'paid' && inv.status !== 'cancelled') {
+          body += '<div class="flex items-center justify-between"><span class="text-xs text-emerald-700 font-medium"><i class="fas fa-credit-card mr-1"></i>Online Payment Link</span>';
+          body += '<button onclick="window._crmGeneratePaymentLink(' + id + ')" class="px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-semibold hover:bg-emerald-700"><i class="fas fa-magic mr-1"></i>Generate Link</button></div>';
+        }
         body += '</div>';
 
         // Notes & Terms
         if (inv.notes) body += '<div class="bg-blue-50 rounded-xl p-3"><h4 class="text-xs font-semibold text-blue-600 uppercase mb-1"><i class="fas fa-sticky-note mr-1"></i>Notes</h4><p class="text-sm text-blue-800">' + inv.notes + '</p></div>';
         if (inv.terms) body += '<div class="bg-gray-50 rounded-xl p-3"><h4 class="text-xs font-semibold text-gray-500 uppercase mb-1"><i class="fas fa-file-contract mr-1"></i>Terms</h4><p class="text-sm text-gray-700">' + inv.terms + '</p></div>';
+        if (inv.last_reminder_sent_at) body += '<p class="text-xs text-gray-400 text-center">Last reminder sent ' + fmtDate(inv.last_reminder_sent_at) + '</p>';
 
-        // Action buttons
-        body += '<div class="flex gap-2 pt-2">';
-        if (inv.status === 'draft') {
-          body += '<button onclick="closeModal();window._crmEditInvoice(' + id + ')" class="flex-1 py-2.5 bg-gray-100 text-gray-700 rounded-xl text-sm font-semibold hover:bg-gray-200"><i class="fas fa-edit mr-1"></i>Edit</button>';
-          body += '<button onclick="closeModal();window._crmMarkInvoice(' + id + ',\'sent\')" class="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700"><i class="fas fa-paper-plane mr-1"></i>Mark Sent</button>';
-        }
-        if (inv.status !== 'paid' && inv.status !== 'cancelled') body += '<button onclick="closeModal();window._crmMarkInvoice(' + id + ',\'paid\')" class="flex-1 py-2.5 bg-green-600 text-white rounded-xl text-sm font-semibold hover:bg-green-700"><i class="fas fa-check mr-1"></i>Mark Paid</button>';
         body += '</div>';
-        body += '</div>';
-
-        showModal('Invoice Details', body);
+        showModal('Invoice Details', body, null, null, 'max-w-2xl');
       })
       .catch(function(e) { toast('Failed to load invoice: ' + (e.message || 'Network error'), 'error'); });
+  };
+
+  window._crmSendInvoiceEmail = function(id) {
+    toast('Sending invoice by email…');
+    fetch('/api/crm/invoices/' + id + '/send-email', { method: 'POST', headers: authHeaders() })
+      .then(function(r) { return r.json(); })
+      .then(function(res) {
+        if (res.success) { toast('Invoice sent by email!'); closeModal(); loadInvoices(window._invFilter); }
+        else { toast(res.error || 'Failed to send email', 'error'); }
+      })
+      .catch(function(e) { toast('Network error: ' + (e.message || 'Unknown'), 'error'); });
+  };
+
+  window._crmSendReminder = function(id) {
+    toast('Sending reminder…');
+    fetch('/api/crm/invoices/' + id + '/remind', { method: 'POST', headers: authHeaders() })
+      .then(function(r) { return r.json(); })
+      .then(function(res) {
+        if (res.success) { toast('Reminder sent!'); closeModal(); loadInvoices(window._invFilter); }
+        else { toast(res.error || 'Failed to send reminder', 'error'); }
+      })
+      .catch(function(e) { toast('Network error: ' + (e.message || 'Unknown'), 'error'); });
+  };
+
+  window._crmGeneratePaymentLink = function(id) {
+    toast('Generating payment link…');
+    fetch('/api/crm/invoices/' + id + '/payment-link', { method: 'POST', headers: authHeaders() })
+      .then(function(r) { return r.json(); })
+      .then(function(res) {
+        if (res.success) { toast('Payment link created!'); closeModal(); window._crmViewInvoice(id); }
+        else { toast(res.error || 'Failed to create payment link', 'error'); }
+      })
+      .catch(function(e) { toast('Network error: ' + (e.message || 'Unknown'), 'error'); });
   };
 
   // ---- Edit Invoice ----
   window._crmEditInvoice = function(id) {
     Promise.all([
       fetch('/api/crm/invoices/' + id, { headers: authHeadersOnly() }).then(function(r) { return r.json(); }),
-      fetch('/api/crm/customers', { headers: authHeadersOnly() }).then(function(r) { return r.json(); })
+      fetch('/api/crm/customers', { headers: authHeadersOnly() }).then(function(r) { return r.json(); }),
+      fetch('/api/customer/orders', { headers: authHeadersOnly() }).then(function(r) { return r.json(); }).catch(function() { return { orders: [] }; })
     ]).then(function(results) {
       var invData = results[0];
-      var custData = results[1];
+      var custs = results[1].customers || [];
+      var orders = (results[2].orders || []).filter(function(o) { return o.report_status === 'completed' || o.status === 'completed'; });
       var inv = invData.invoice;
       var items = invData.items || [];
-      var custs = custData.customers || [];
       if (!inv) { toast('Invoice not found', 'error'); return; }
 
-      var body = '<div class="space-y-3">' +
-        '<div><label class="block text-xs font-medium text-gray-600 mb-1">Customer *</label>' + customerSelectHTML(custs, inv.crm_customer_id, 'editInvCustomer') + '</div>' +
-        '<div id="editInvItems">';
-      // Populate existing items
-      if (items.length > 0) {
-        for (var i = 0; i < items.length; i++) {
-          body += '<div class="invItemRow grid grid-cols-12 gap-2 items-end' + (i > 0 ? ' mt-2' : '') + '"><div class="col-span-6">' + (i === 0 ? '<label class="block text-xs font-medium text-gray-600 mb-1">Description</label>' : '') + '<input type="text" class="invDesc w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" value="' + (items[i].description || '').replace(/"/g, '&quot;') + '"></div><div class="col-span-2">' + (i === 0 ? '<label class="block text-xs font-medium text-gray-600 mb-1">Qty</label>' : '') + '<input type="number" class="invQty w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" value="' + (items[i].quantity || 1) + '"></div><div class="col-span-3">' + (i === 0 ? '<label class="block text-xs font-medium text-gray-600 mb-1">Unit Price</label>' : '') + '<input type="number" class="invPrice w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" step="0.01" value="' + (items[i].unit_price || 0) + '"></div><div class="col-span-1"><button onclick="this.closest(\'.invItemRow\').remove()" class="text-red-400 hover:text-red-600 py-2"><i class="fas fa-times"></i></button></div></div>';
-        }
-      } else {
-        body += '<div class="invItemRow grid grid-cols-12 gap-2 items-end"><div class="col-span-6"><label class="block text-xs font-medium text-gray-600 mb-1">Description</label><input type="text" class="invDesc w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" placeholder="Roof installation"></div><div class="col-span-2"><label class="block text-xs font-medium text-gray-600 mb-1">Qty</label><input type="number" class="invQty w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" value="1"></div><div class="col-span-3"><label class="block text-xs font-medium text-gray-600 mb-1">Unit Price</label><input type="number" class="invPrice w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" step="0.01" placeholder="0.00"></div><div class="col-span-1"><button onclick="this.closest(\'.invItemRow\').remove()" class="text-red-400 hover:text-red-600 py-2"><i class="fas fa-times"></i></button></div></div>';
-      }
-      body += '</div>' +
-        '<button onclick="window._crmAddEditInvItem()" class="text-brand-600 text-xs font-medium hover:underline"><i class="fas fa-plus mr-1"></i>Add Line Item</button>' +
-        '<div class="grid grid-cols-2 gap-3"><div><label class="block text-xs font-medium text-gray-600 mb-1">Due Date</label><input type="date" id="editInvDue" class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" value="' + (inv.due_date || '') + '"></div><div><label class="block text-xs font-medium text-gray-600 mb-1">Tax Rate (%)</label><input type="number" id="editInvTax" value="' + (inv.tax_rate || 5) + '" class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" step="0.1"></div></div>' +
-        '<div><label class="block text-xs font-medium text-gray-600 mb-1">Notes</label><textarea id="editInvNotes" rows="2" class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm">' + (inv.notes || '') + '</textarea></div>' +
-        '<div><label class="block text-xs font-medium text-gray-600 mb-1">Terms</label><textarea id="editInvTerms" rows="2" class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm">' + (inv.terms || '') + '</textarea></div></div>';
-
+      var body = buildInvoiceFormBody(custs, inv, items, orders, 'editInvItems');
       showModal('Edit Invoice — ' + inv.invoice_number, body, function() {
-        var custInfo = getCustomerFromSelector('editInvCustomer');
-        if (!custInfo) { toast('Select or add a customer', 'error'); return; }
-        var rows = document.querySelectorAll('#editInvItems .invItemRow');
-        var updItems = [];
-        rows.forEach(function(r) {
-          var desc = r.querySelector('.invDesc').value.trim();
-          var qty = parseFloat(r.querySelector('.invQty').value) || 1;
-          var price = parseFloat(r.querySelector('.invPrice').value) || 0;
-          if (desc && price > 0) updItems.push({ description: desc, quantity: qty, unit_price: price });
-        });
-        if (updItems.length === 0) { toast('Add at least one line item', 'error'); return; }
-        var payload = Object.assign({}, custInfo, {
-          items: updItems,
-          due_date: document.getElementById('editInvDue').value || null,
-          tax_rate: parseFloat(document.getElementById('editInvTax').value) || 5,
-          notes: document.getElementById('editInvNotes').value.trim(),
-          terms: document.getElementById('editInvTerms').value.trim()
-        });
+        var payload = collectInvoiceFormData('editInvCustomer', 'editInvItems');
+        if (!payload) return;
         fetch('/api/crm/invoices/' + id, { method: 'PUT', headers: authHeaders(), body: JSON.stringify(payload) })
           .then(function(r) { return r.json(); })
           .then(function(res) { if (res.success) { closeModal(); toast('Invoice updated!'); loadInvoices(window._invFilter); } else { toast(res.error || 'Failed', 'error'); } })
           .catch(function(e) { toast('Failed to update: ' + (e.message || 'Network error'), 'error'); });
-      }, 'Save Changes');
+      }, 'Save Changes', 'max-w-3xl');
     }).catch(function(e) { toast('Failed to load invoice: ' + (e.message || 'Network error'), 'error'); });
   };
 
-  window._crmAddEditInvItem = function() {
-    var container = document.getElementById('editInvItems');
-    if (!container) return;
-    var row = document.createElement('div');
-    row.className = 'invItemRow grid grid-cols-12 gap-2 items-end mt-2';
-    row.innerHTML = '<div class="col-span-6"><input type="text" class="invDesc w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" placeholder="Description"></div><div class="col-span-2"><input type="number" class="invQty w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" value="1"></div><div class="col-span-3"><input type="number" class="invPrice w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" step="0.01" placeholder="0.00"></div><div class="col-span-1"><button onclick="this.closest(\'.invItemRow\').remove()" class="text-red-400 hover:text-red-600 py-2"><i class="fas fa-times"></i></button></div>';
-    container.appendChild(row);
+  // ---- Template Management ----
+  window._crmManageTemplates = function() {
+    fetch('/api/crm/line-item-templates', { headers: authHeadersOnly() })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        _invTemplates = data.templates || [];
+        var templates = _invTemplates;
+        function renderTplList() {
+          var html = '<div id="tplList" class="space-y-2 mb-4">';
+          if (templates.length === 0) { html += '<p class="text-sm text-gray-400 text-center py-4">No templates yet.</p>'; }
+          for (var i = 0; i < templates.length; i++) {
+            var t = templates[i];
+            html += '<div class="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2">';
+            html += '<div class="flex-1"><p class="text-sm font-medium text-gray-700">' + (t.name || '') + '</p>';
+            if (t.description) html += '<p class="text-xs text-gray-400">' + t.description + '</p>';
+            html += '</div><span class="text-sm font-semibold text-gray-700">' + money(t.unit_price) + '</span>';
+            html += '<button onclick="window._crmDeleteTemplate(' + t.id + ')" class="text-red-400 hover:text-red-600 text-xs ml-1"><i class="fas fa-trash"></i></button>';
+            html += '</div>';
+          }
+          html += '</div>';
+          // Add new template form
+          html += '<div class="border-t pt-4">';
+          html += '<p class="text-xs font-bold text-gray-500 uppercase mb-2">Add New Template</p>';
+          html += '<div class="space-y-2">';
+          html += '<input type="text" id="tplName" placeholder="Service name *" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">';
+          html += '<input type="text" id="tplDesc" placeholder="Description (optional)" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">';
+          html += '<input type="number" id="tplPrice" placeholder="Unit price" step="0.01" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">';
+          html += '</div></div>';
+          return html;
+        }
+        showModal('Service Templates', renderTplList(), function() {
+          var name = document.getElementById('tplName').value.trim();
+          if (!name) { toast('Template name is required', 'error'); return; }
+          var payload = { name: name, description: document.getElementById('tplDesc').value.trim(), unit_price: parseFloat(document.getElementById('tplPrice').value) || 0 };
+          fetch('/api/crm/line-item-templates', { method: 'POST', headers: authHeaders(), body: JSON.stringify(payload) })
+            .then(function(r) { return r.json(); })
+            .then(function(res) { if (res.success) { _invTemplates = null; closeModal(); toast('Template saved!'); } else { toast(res.error || 'Failed', 'error'); } })
+            .catch(function(e) { toast('Failed: ' + (e.message || 'Network error'), 'error'); });
+        }, 'Save Template');
+      })
+      .catch(function() { toast('Failed to load templates', 'error'); });
+  };
+
+  window._crmDeleteTemplate = function(id) {
+    if (!confirm('Delete this template?')) return;
+    fetch('/api/crm/line-item-templates/' + id, { method: 'DELETE', headers: authHeadersOnly() })
+      .then(function() { _invTemplates = null; toast('Template deleted'); closeModal(); })
+      .catch(function(e) { toast('Failed: ' + (e.message || 'Network error'), 'error'); });
   };
 
   // ============================================================
