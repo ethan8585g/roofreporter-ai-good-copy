@@ -1129,6 +1129,11 @@ function getMainPageHTML(mapsApiKey: string) {
   <footer class="bg-gray-800 text-gray-400 text-center py-6 mt-12">
     <p class="text-sm">&copy; 2026 RoofReporterAI. All rights reserved.</p>
     <p class="text-xs mt-1">Professional Roof Measurement Reports & Business Management CRM</p>
+    <p class="text-xs mt-2">
+      <a href="/privacy" class="hover:text-white underline">Privacy Policy</a>
+      &nbsp;|&nbsp;
+      <a href="/terms" class="hover:text-white underline">Terms of Service</a>
+    </p>
   </footer>
   <script src="/static/app.js?v=${Date.now()}"></script>
 </body>
