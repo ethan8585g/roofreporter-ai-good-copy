@@ -407,7 +407,7 @@ squareRoutes.post('/use-credit', async (c) => {
 
     // Ensure master company exists
     await c.env.DB.prepare(
-      "INSERT OR IGNORE INTO master_companies (id, company_name, contact_name, email) VALUES (1, 'RoofReporterAI', 'Admin', 'reports@reusecanada.ca')"
+      "INSERT OR IGNORE INTO master_companies (id, company_name, contact_name, email) VALUES (1, 'RoofReporterAI', 'Admin', 'sales@roofreporterai.com')"
     ).run()
 
     // Generate order number
@@ -641,7 +641,7 @@ squareRoutes.post('/webhook', async (c) => {
           const estimatedDelivery = new Date(Date.now() + 30000).toISOString()
 
           await c.env.DB.prepare(
-            "INSERT OR IGNORE INTO master_companies (id, company_name, contact_name, email) VALUES (1, 'RoofReporterAI', 'Admin', 'reports@reusecanada.ca')"
+            "INSERT OR IGNORE INTO master_companies (id, company_name, contact_name, email) VALUES (1, 'RoofReporterAI', 'Admin', 'sales@roofreporterai.com')"
           ).run()
 
           const custData = await c.env.DB.prepare('SELECT * FROM customers WHERE id = ?').bind(customerId).first<any>()

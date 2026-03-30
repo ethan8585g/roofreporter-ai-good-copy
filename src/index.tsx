@@ -2078,7 +2078,7 @@ function getLandingPageHTML() {
             <li><a href="#how-it-works" class="hover:text-cyan-400 transition-colors">How It Works</a></li>
             <li><a href="#faq" class="hover:text-cyan-400 transition-colors">FAQ</a></li>
             <li><a href="/lander" class="hover:text-cyan-400 transition-colors">Get Started Guide</a></li>
-            <li><a href="mailto:reports@reusecanada.ca" class="hover:text-cyan-400 transition-colors">Contact</a></li>
+            <li><a href="mailto:sales@roofreporterai.com" class="hover:text-cyan-400 transition-colors">Contact</a></li>
           </ul>
         </div>
         <div>
@@ -2093,7 +2093,7 @@ function getLandingPageHTML() {
         <p class="text-sm text-gray-500">&copy; 2026 RoofReporterAI. All rights reserved.</p>
         <div class="flex items-center gap-6 text-sm text-gray-500">
           <span class="flex items-center gap-1.5"><i class="fas fa-map-marker-alt text-cyan-500"></i> Alberta, Canada</span>
-          <a href="mailto:reports@reusecanada.ca" class="flex items-center gap-1.5 hover:text-cyan-400 transition-colors"><i class="fas fa-envelope text-cyan-500"></i> reports@reusecanada.ca</a>
+          <a href="mailto:sales@roofreporterai.com" class="flex items-center gap-1.5 hover:text-cyan-400 transition-colors"><i class="fas fa-envelope text-cyan-500"></i> sales@roofreporterai.com</a>
         </div>
       </div>
     </div>
@@ -3095,7 +3095,7 @@ function getLanderFunnelHTML() {
         <a href="/" class="hover:text-cyan-400 transition-colors">Home</a>
         <a href="/blog" class="hover:text-cyan-400 transition-colors">Blog</a>
         <a href="/customer/login" class="hover:text-cyan-400 transition-colors">Login</a>
-        <a href="mailto:reports@reusecanada.ca" class="hover:text-cyan-400 transition-colors">Contact</a>
+        <a href="mailto:sales@roofreporterai.com" class="hover:text-cyan-400 transition-colors">Contact</a>
       </div>
       <p class="text-xs">&copy; 2026 RoofReporterAI</p>
     </div>

@@ -467,7 +467,7 @@ emailOutreachRoutes.post('/campaigns/:id/send', async (c) => {
       dbRefreshToken = row?.setting_value || ''
     } catch {}
 
-    const senderEmail = campaign.from_email || (c.env as any).GMAIL_SENDER_EMAIL || 'reports@reusecanada.ca'
+    const senderEmail = campaign.from_email || (c.env as any).GMAIL_SENDER_EMAIL || 'sales@roofreporterai.com'
     const senderName = campaign.from_name || 'RoofReporterAI'
 
     let sentCount = 0
@@ -651,7 +651,7 @@ emailOutreachRoutes.post('/campaigns/:id/test', async (c) => {
     if (!campaign) return c.json({ error: 'Campaign not found' }, 404)
 
     const resendKey = (c.env as any).RESEND_API_KEY
-    const senderEmail = campaign.from_email || (c.env as any).GMAIL_SENDER_EMAIL || 'reports@reusecanada.ca'
+    const senderEmail = campaign.from_email || (c.env as any).GMAIL_SENDER_EMAIL || 'sales@roofreporterai.com'
     const senderName = campaign.from_name || 'RoofReporterAI'
 
     // Replace merge tags with test data
@@ -921,7 +921,7 @@ h1{color:#111;font-size:24px;margin-bottom:8px}p{color:#6b7280;font-size:14px;li
 </head><body><div class="card"><div class="check">✓</div><h1>You've been unsubscribed</h1>
 <p><strong>${email}</strong> has been removed from our mailing list.</p>
 <p>You will no longer receive marketing emails from RoofReporterAI.</p>
-<p style="color:#9ca3af;font-size:12px;margin-top:24px">If this was a mistake, contact reports@reusecanada.ca</p>
+<p style="color:#9ca3af;font-size:12px;margin-top:24px">If this was a mistake, contact sales@roofreporterai.com</p>
 </div></body></html>`)
 })
 
