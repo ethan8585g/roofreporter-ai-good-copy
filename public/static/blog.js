@@ -284,9 +284,22 @@
       });
   }
 
+  function injectPostSchema(content) {
+    // innerHTML doesn't execute <script> tags — extract and inject manually
+    var re = /<script\s+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+    var match;
+    while ((match = re.exec(content)) !== null) {
+      var s = document.createElement('script');
+      s.type = 'application/ld+json';
+      s.textContent = match[1];
+      document.head.appendChild(s);
+    }
+  }
+
   function renderArticle(post) {
     var contentEl = document.getElementById('blog-post-content');
     if (!contentEl) return;
+    injectPostSchema(post.content || '');
 
     var coverHtml = '';
     if (post.cover_image_url) {
