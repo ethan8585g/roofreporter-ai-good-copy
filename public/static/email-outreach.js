@@ -94,8 +94,6 @@ function renderEO() {
   if (!root) return;
   const views = {
     'dashboard': renderEODashboard,
-    'lists': renderEOLists,
-    'list-detail': renderEOListDetail,
     'campaigns': renderEOCampaigns,
     'campaign-detail': renderEOCampaignDetail,
     'campaign-editor': renderEOCampaignEditor,
@@ -187,7 +185,6 @@ function renderEODashboard() {
         <p class="text-sm text-gray-500 mt-1">Cold email marketing & campaign management for roofing companies</p>
       </div>
       <div class="flex gap-2 flex-wrap">
-        ${eoBtn('Lists', "eoNav('lists')", 'blue', 'fa-list', 'xs')}
         ${eoBtn('Campaigns', "eoNav('campaigns')", 'green', 'fa-paper-plane', 'xs')}
         ${eoBtn('Templates', "eoNav('templates')", 'purple', 'fa-file-alt', 'xs')}
         ${eoBtn('Analytics', "eoNav('analytics')", 'indigo', 'fa-chart-bar', 'xs')}
@@ -196,8 +193,7 @@ function renderEODashboard() {
     </div>
 
     <!-- Stats Cards -->
-    <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
-      ${eoCard('Email Lists', s.total_lists || 0, 'fa-list', 'blue', `${totalContacts} contacts`)}
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
       ${eoCard('Active Contacts', activeContacts, 'fa-user-check', 'green', `${s.unique_active_emails || 0} unique`)}
       ${eoCard('Campaigns', s.total_campaigns || 0, 'fa-paper-plane', 'purple', `${s.draft_campaigns || 0} drafts`)}
       ${eoCard('Emails Sent', s.total_emails_sent || 0, 'fa-envelope', 'yellow', `${s.total_opens || 0} opens`)}
@@ -205,34 +201,7 @@ function renderEODashboard() {
     </div>
 
     <!-- Quick Actions -->
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-      <!-- Lists Panel -->
-      <div class="bg-white rounded-xl border border-gray-100 shadow-sm">
-        <div class="p-4 border-b border-gray-100 flex items-center justify-between">
-          <h3 class="font-bold text-gray-900 text-sm"><i class="fas fa-list mr-2 text-blue-500"></i>Email Lists</h3>
-          <div class="flex gap-2">
-            ${eoBtn('New List', 'eoCreateList()', 'blue', 'fa-plus', 'xs')}
-          </div>
-        </div>
-        <div class="divide-y divide-gray-50 max-h-64 overflow-auto">
-          ${recentLists.length === 0 ? '<div class="p-6 text-center text-gray-400 text-sm">No lists yet. Create one to start.</div>' :
-            recentLists.map(l => `
-              <div class="px-4 py-3 flex items-center justify-between hover:bg-gray-50 cursor-pointer transition-colors" onclick="eoViewList(${l.id})">
-                <div>
-                  <span class="font-semibold text-gray-900 text-sm">${escHtml(l.name)}</span>
-                  ${l.tags ? `<span class="ml-2 text-[10px] text-gray-400">${escHtml(l.tags)}</span>` : ''}
-                </div>
-                <div class="flex items-center gap-3">
-                  <span class="text-sm font-bold text-blue-600">${l.total_contacts || l.contact_count || 0}</span>
-                  <span class="text-xs text-gray-400">contacts</span>
-                  <i class="fas fa-chevron-right text-gray-300 text-xs"></i>
-                </div>
-              </div>
-            `).join('')}
-        </div>
-        ${EO.lists.length > 5 ? `<div class="p-2 text-center border-t border-gray-50"><button onclick="eoNav('lists')" class="text-blue-600 text-xs font-semibold hover:underline">View all ${EO.lists.length} lists &rarr;</button></div>` : ''}
-      </div>
-
+    <div class="grid grid-cols-1 gap-4 mb-6">
       <!-- Campaigns Panel -->
       <div class="bg-white rounded-xl border border-gray-100 shadow-sm">
         <div class="p-4 border-b border-gray-100 flex items-center justify-between">

@@ -1351,6 +1351,10 @@ function getSuperAdminDashboardHTML() {
           <i class="fas fa-video w-5 text-center"></i>
           <span class="label text-sm font-medium">HeyGen Videos</span>
         </div>
+        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('gemini-command', this)">
+          <i class="fas fa-robot w-5 text-center"></i>
+          <span class="label text-sm font-medium">Gemini AI Command</span>
+        </div>
         <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('pricing', this)">
           <i class="fas fa-dollar-sign w-5 text-center"></i>
           <span class="label text-sm font-medium">Pricing & Billing</span>
