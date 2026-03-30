@@ -892,6 +892,93 @@ customerAuthRoutes.put('/profile', async (c) => {
 })
 
 // ============================================================
+// UPDATE BRANDING / REPORT CUSTOMIZATION
+// ============================================================
+customerAuthRoutes.put('/branding', async (c) => {
+  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  if (!token) return c.json({ error: 'Not authenticated' }, 401)
+
+  const session = await c.env.DB.prepare(`
+    SELECT customer_id FROM customer_sessions
+    WHERE session_token = ? AND expires_at > datetime('now')
+  `).bind(token).first<any>()
+  if (!session) return c.json({ error: 'Session expired' }, 401)
+
+  const body = await c.req.json()
+  const {
+    brand_business_name, brand_logo_url, brand_tagline,
+    brand_phone, brand_email, brand_website, brand_address,
+    brand_license_number, brand_insurance_info,
+    brand_primary_color, brand_secondary_color,
+  } = body
+
+  await c.env.DB.prepare(`
+    UPDATE customers SET
+      brand_business_name = ?, brand_logo_url = ?, brand_tagline = ?,
+      brand_phone = ?, brand_email = ?, brand_website = ?, brand_address = ?,
+      brand_license_number = ?, brand_insurance_info = ?,
+      brand_primary_color = ?, brand_secondary_color = ?,
+      updated_at = datetime('now')
+    WHERE id = ?
+  `).bind(
+    brand_business_name || null, brand_logo_url || null, brand_tagline || null,
+    brand_phone || null, brand_email || null, brand_website || null, brand_address || null,
+    brand_license_number || null, brand_insurance_info || null,
+    brand_primary_color || null, brand_secondary_color || null,
+    session.customer_id
+  ).run()
+
+  return c.json({ success: true })
+})
+
+// ============================================================
+// CHANGE PASSWORD
+// ============================================================
+customerAuthRoutes.post('/change-password', async (c) => {
+  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  if (!token) return c.json({ error: 'Not authenticated' }, 401)
+
+  const session = await c.env.DB.prepare(`
+    SELECT cs.customer_id, cu.password_hash, cu.password_salt
+    FROM customer_sessions cs
+    JOIN customers cu ON cu.id = cs.customer_id
+    WHERE cs.session_token = ? AND cs.expires_at > datetime('now')
+  `).bind(token).first<any>()
+  if (!session) return c.json({ error: 'Session expired' }, 401)
+
+  const body = await c.req.json()
+  const { current_password, new_password } = body
+
+  if (!current_password || !new_password) {
+    return c.json({ error: 'current_password and new_password are required' }, 400)
+  }
+  if (new_password.length < 8) {
+    return c.json({ error: 'New password must be at least 8 characters' }, 400)
+  }
+
+  // Verify current password using SHA-256 + salt (same as login flow)
+  const encoder = new TextEncoder()
+  const currentHashBuf = await crypto.subtle.digest('SHA-256', encoder.encode(current_password + (session.password_salt || '')))
+  const currentHash = Array.from(new Uint8Array(currentHashBuf)).map(b => b.toString(16).padStart(2, '0')).join('')
+
+  if (currentHash !== session.password_hash) {
+    return c.json({ error: 'Current password is incorrect' }, 400)
+  }
+
+  // Hash new password
+  const newSalt = crypto.randomUUID()
+  const newHashBuf = await crypto.subtle.digest('SHA-256', encoder.encode(new_password + newSalt))
+  const newHash = Array.from(new Uint8Array(newHashBuf)).map(b => b.toString(16).padStart(2, '0')).join('')
+
+  await c.env.DB.prepare(`
+    UPDATE customers SET password_hash = ?, password_salt = ?, updated_at = datetime('now')
+    WHERE id = ?
+  `).bind(newHash, newSalt, session.customer_id).run()
+
+  return c.json({ success: true })
+})
+
+// ============================================================
 // CUSTOMER LOGOUT
 // ============================================================
 customerAuthRoutes.post('/logout', async (c) => {

@@ -549,6 +549,9 @@ app.get('/customer/select-type', (c) => c.html(getSelectTypePageHTML()))
 // Solar Panel Design Tool — canvas-based panel placement on satellite image
 app.get('/customer/solar-design', (c) => c.html(getSolarDesignPageHTML()))
 
+// Customer Profile / Account Settings
+app.get('/customer/profile', (c) => c.html(getCustomerProfilePageHTML()))
+
 // Virtual Try-On — AI Roof Visualization
 app.get('/customer/virtual-tryon', (c) => c.html(getVirtualTryOnPageHTML()))
 
@@ -3157,6 +3160,56 @@ function getCustomerOrderPageHTML(mapsApiKey: string) {
     })();
   </script>
   <script src="/static/customer-order.js?v=${Date.now()}"></script>
+  ${getRoverAssistant()}
+</body>
+</html>`
+}
+
+// ============================================================
+// CUSTOMER PROFILE / ACCOUNT SETTINGS PAGE
+// ============================================================
+function getCustomerProfilePageHTML() {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags()}
+  <title>Account Settings - RoofReporterAI</title>
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <header class="bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg">
+    <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
+          <img src="/static/logo.png" alt="RoofReporterAI" class="w-10 h-10 rounded-lg object-cover">
+          <div>
+            <h1 class="text-xl font-bold">Account Settings</h1>
+            <p class="text-blue-200 text-xs">Manage your profile, branding &amp; preferences</p>
+          </div>
+        </a>
+      </div>
+      <nav class="flex items-center space-x-4">
+        <a href="/customer/dashboard" class="text-blue-200 hover:text-white text-sm"><i class="fas fa-arrow-left mr-1"></i>Dashboard</a>
+        <button onclick="custLogout()" class="text-blue-200 hover:text-white text-sm"><i class="fas fa-sign-out-alt mr-1"></i>Logout</button>
+      </nav>
+    </div>
+  </header>
+  <main class="max-w-4xl mx-auto px-4 py-8">
+    <div id="profile-root"></div>
+  </main>
+  <script>
+    (function() {
+      var c = localStorage.getItem('rc_customer');
+      if (!c) { window.location.href = '/customer/login'; return; }
+    })();
+    function custLogout() {
+      var token = localStorage.getItem('rc_customer_token');
+      if (token) fetch('/api/customer/logout', { method: 'POST', headers: { 'Authorization': 'Bearer ' + token } })['catch'](function(){});
+      localStorage.removeItem('rc_customer');
+      localStorage.removeItem('rc_customer_token');
+      window.location.href = '/customer/login';
+    }
+  </script>
+  <script src="/static/customer-profile.js?v=${Date.now()}"></script>
   ${getRoverAssistant()}
 </body>
 </html>`

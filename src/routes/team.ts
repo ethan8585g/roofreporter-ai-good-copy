@@ -134,6 +134,16 @@ teamRoutes.post('/invite', async (c) => {
   const name = (body.name || '').trim()
   const role = body.role === 'admin' ? 'admin' : 'member'
 
+  // Validate and sanitize permissions — only known keys allowed
+  const ALLOWED_PERM_KEYS = ['orders', 'reports', 'crm', 'secretary', 'virtual_tryon']
+  const defaultPerms = { orders: true, reports: true, crm: true, secretary: true, virtual_tryon: true }
+  let permissions = defaultPerms
+  if (body.permissions && typeof body.permissions === 'object') {
+    permissions = Object.fromEntries(
+      ALLOWED_PERM_KEYS.map(k => [k, body.permissions[k] !== false])
+    ) as typeof defaultPerms
+  }
+
   if (!email || !name) {
     return c.json({ error: 'Email and name are required' }, 400)
   }
@@ -161,9 +171,9 @@ teamRoutes.post('/invite', async (c) => {
   const expiresAt = new Date(Date.now() + INVITE_EXPIRY_DAYS * 24 * 60 * 60 * 1000).toISOString()
 
   await c.env.DB.prepare(`
-    INSERT INTO team_invitations (owner_id, email, name, role, invite_token, expires_at)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).bind(ownerId, email, name, role, inviteToken, expiresAt).run()
+    INSERT INTO team_invitations (owner_id, email, name, role, invite_token, expires_at, permissions)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).bind(ownerId, email, name, role, inviteToken, expiresAt, JSON.stringify(permissions)).run()
 
   // Send invitation email
   const ownerName = customer.name || customer.company_name || 'Your colleague'
@@ -248,12 +258,17 @@ teamRoutes.post('/accept', async (c) => {
     return c.json({ error: 'You are already a member of this team' }, 409)
   }
 
+  // Carry permissions from the invitation (if stored), else full access default
+  const invitePermissions = (() => {
+    try { return JSON.parse(invite.permissions || '{}') } catch { return {} }
+  })()
+
   // Create team member record
   const now = new Date().toISOString()
   const memberResult = await c.env.DB.prepare(`
-    INSERT INTO team_members (owner_id, member_customer_id, email, name, role, status, billing_started_at, joined_at)
-    VALUES (?, ?, ?, ?, ?, 'active', ?, ?)
-  `).bind(invite.owner_id, customerId, invite.email, invite.name, invite.role, now, now).run()
+    INSERT INTO team_members (owner_id, member_customer_id, email, name, role, status, permissions, billing_started_at, joined_at)
+    VALUES (?, ?, ?, ?, ?, 'active', ?, ?, ?)
+  `).bind(invite.owner_id, customerId, invite.email, invite.name, invite.role, JSON.stringify(invitePermissions), now, now).run()
 
   const teamMemberId = memberResult.meta.last_row_id
 

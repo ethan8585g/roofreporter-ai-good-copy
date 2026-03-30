@@ -117,6 +117,7 @@ function renderTeam() {
       html += '    <button onclick="toggleRole(' + m.id + ',\'' + (m.role === 'admin' ? 'member' : 'admin') + '\')" class="text-gray-400 hover:text-blue-600 p-1.5 rounded transition-colors" title="' + (m.role === 'admin' ? 'Demote to Member' : 'Promote to Admin') + '">';
       html += '      <i class="fas fa-' + (m.role === 'admin' ? 'user' : 'shield-alt') + '"></i>';
       html += '    </button>';
+      html += '    <button onclick="showPermModal(' + m.id + ',\'' + escHtml(m.name) + '\')" class="text-gray-400 hover:text-teal-600 p-1.5 rounded transition-colors" title="Edit Permissions"><i class="fas fa-sliders-h"></i></button>';
       html += '    <button onclick="suspendMember(' + m.id + ')" class="text-gray-400 hover:text-amber-600 p-1.5 rounded transition-colors" title="Suspend"><i class="fas fa-pause"></i></button>';
       html += '    <button onclick="removeMember(' + m.id + ',\'' + escHtml(m.name) + '\')" class="text-gray-400 hover:text-red-600 p-1.5 rounded transition-colors" title="Remove"><i class="fas fa-user-minus"></i></button>';
       html += '  </div>';
@@ -225,13 +226,115 @@ function renderTeamMemberView(members) {
   return html;
 }
 
+// ── Permissions Modal ──
+var permModalMemberId = null;
+
+function showPermModal(memberId, memberName) {
+  permModalMemberId = memberId;
+  // Find current permissions for this member
+  var member = teamState.members.find(function(m) { return m.id === memberId; });
+  var currentPerms = {};
+  try { currentPerms = JSON.parse(member && member.permissions ? member.permissions : '{}'); } catch(e) {}
+
+  var modalHtml =
+    '<div id="permModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">' +
+      '<div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden">' +
+        '<div class="bg-gradient-to-r from-teal-500 to-emerald-600 px-6 py-4 text-white">' +
+          '<h3 class="text-base font-bold"><i class="fas fa-sliders-h mr-2"></i>Permissions: ' + escHtml(memberName) + '</h3>' +
+          '<p class="text-teal-100 text-xs mt-0.5">Control what this member can access</p>' +
+        '</div>' +
+        '<div class="p-6">' +
+          renderPermCheckboxes('perm', currentPerms) +
+          '<div id="permMsg" class="mt-3"></div>' +
+          '<div class="flex gap-3 mt-4">' +
+            '<button onclick="hidePermModal()" class="flex-1 border border-gray-300 rounded-lg py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50">Cancel</button>' +
+            '<button onclick="savePermissions()" id="permSaveBtn" class="flex-1 bg-teal-600 hover:bg-teal-700 text-white rounded-lg py-2.5 text-sm font-semibold"><i class="fas fa-save mr-1"></i>Save Permissions</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+
+  var existing = document.getElementById('permModal');
+  if (existing) existing.remove();
+  document.body.insertAdjacentHTML('beforeend', modalHtml);
+}
+
+function hidePermModal() {
+  var el = document.getElementById('permModal');
+  if (el) el.remove();
+  permModalMemberId = null;
+}
+
+async function savePermissions() {
+  if (!permModalMemberId) return;
+  var btn = document.getElementById('permSaveBtn');
+  var msg = document.getElementById('permMsg');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Saving...';
+
+  var perms = collectPerms('perm');
+
+  try {
+    var res = await fetch('/api/team/members/' + permModalMemberId, {
+      method: 'PUT', headers: authHeaders(),
+      body: JSON.stringify({ permissions: perms })
+    });
+    var data = await res.json();
+    if (res.ok && data.success) {
+      msg.innerHTML = '<div class="text-green-600 text-sm"><i class="fas fa-check-circle mr-1"></i>Permissions saved</div>';
+      setTimeout(async function() { hidePermModal(); await loadTeamData(); renderTeam(); }, 900);
+    } else {
+      msg.innerHTML = '<div class="text-red-500 text-sm">' + (data.error || 'Save failed') + '</div>';
+      btn.disabled = false; btn.innerHTML = '<i class="fas fa-save mr-1"></i>Save Permissions';
+    }
+  } catch(e) {
+    msg.innerHTML = '<div class="text-red-500 text-sm">Network error</div>';
+    btn.disabled = false; btn.innerHTML = '<i class="fas fa-save mr-1"></i>Save Permissions';
+  }
+}
+
+// ── Permission labels ──
+var PERM_LABELS = [
+  { key: 'orders',       label: 'Order Reports',       icon: 'fa-plus-circle' },
+  { key: 'reports',      label: 'View Reports',         icon: 'fa-file-alt' },
+  { key: 'crm',          label: 'CRM (Customers, Invoices, Proposals, Jobs)', icon: 'fa-users' },
+  { key: 'secretary',    label: 'AI Secretary',         icon: 'fa-headset' },
+  { key: 'virtual_tryon',label: 'Roof Visualizer',      icon: 'fa-magic' },
+];
+
+function renderPermCheckboxes(idPrefix, perms) {
+  var defaultPerms = { orders: true, reports: true, crm: true, secretary: true, virtual_tryon: true };
+  var effective = Object.assign({}, defaultPerms, perms || {});
+  var html = '<div class="border border-gray-200 rounded-lg p-3 bg-gray-50">';
+  html += '<p class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Access Permissions</p>';
+  PERM_LABELS.forEach(function (p) {
+    var checked = effective[p.key] !== false;
+    html += '<label class="flex items-center gap-2 py-1 cursor-pointer">' +
+      '<input type="checkbox" id="' + idPrefix + '_' + p.key + '"' + (checked ? ' checked' : '') + ' class="rounded border-gray-300 text-teal-600 focus:ring-teal-500">' +
+      '<i class="fas ' + p.icon + ' text-gray-400 text-xs w-4 text-center"></i>' +
+      '<span class="text-sm text-gray-700">' + p.label + '</span>' +
+    '</label>';
+  });
+  html += '</div>';
+  return html;
+}
+
+function collectPerms(idPrefix) {
+  var perms = {};
+  PERM_LABELS.forEach(function (p) {
+    var el = document.getElementById(idPrefix + '_' + p.key);
+    perms[p.key] = el ? el.checked : true;
+  });
+  return perms;
+}
+
 // ── Invite Modal HTML ──
 function renderInviteModal() {
   return '<div id="inviteModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 hidden">' +
-    '<div class="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">' +
+    '<div class="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden max-h-screen overflow-y-auto">' +
       '<div class="bg-gradient-to-r from-teal-500 to-emerald-600 px-6 py-4 text-white">' +
         '<h3 class="text-lg font-bold"><i class="fas fa-user-plus mr-2"></i>Invite Team Member</h3>' +
-        '<p class="text-teal-100 text-sm">$50/month per user — full platform access</p>' +
+        '<p class="text-teal-100 text-sm">$50/month per user</p>' +
       '</div>' +
       '<form onsubmit="sendInvite(event)" class="p-6 space-y-4">' +
         '<div>' +
@@ -245,10 +348,11 @@ function renderInviteModal() {
         '<div>' +
           '<label class="block text-sm font-semibold text-gray-700 mb-1">Role</label>' +
           '<select id="invRole" class="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-teal-500">' +
-            '<option value="member">Team Member — Full access (no team management)</option>' +
-            '<option value="admin">Team Admin — Full access + can manage team</option>' +
+            '<option value="member">Team Member — no team management</option>' +
+            '<option value="admin">Team Admin — full access + manage team</option>' +
           '</select>' +
         '</div>' +
+        '<div>' + renderPermCheckboxes('inv', null) + '</div>' +
         '<div id="invMsg"></div>' +
         '<div class="flex gap-3 pt-2">' +
           '<button type="button" onclick="hideInviteModal()" class="flex-1 border border-gray-300 rounded-lg py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors">Cancel</button>' +
@@ -282,10 +386,12 @@ async function sendInvite(e) {
   btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Sending...';
   msg.innerHTML = '';
 
+  var permissions = collectPerms('inv');
+
   try {
     var res = await fetch('/api/team/invite', {
       method: 'POST', headers: authHeaders(),
-      body: JSON.stringify({ name: name, email: email, role: role })
+      body: JSON.stringify({ name: name, email: email, role: role, permissions: permissions })
     });
     var data = await res.json();
     if (res.ok && data.success) {
