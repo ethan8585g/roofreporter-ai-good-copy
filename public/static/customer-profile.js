@@ -87,19 +87,17 @@
         'branding'
       ) +
 
-      // ── 4. Report Preferences ─────────────────────────────
+      // ── 4. Company Type ───────────────────────────────────
+      companyTypeSection() +
+
+      // ── 5. Report Preferences ─────────────────────────────
       section('Report Preferences', 'fa-sliders-h', 'amber',
-        '<div class="mb-4">' +
-          '<label class="block text-xs font-semibold text-gray-500 mb-1">Company Type</label>' +
-          '<select id="company_type" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-400" onchange="markDirty(\'prefs\')">' +
-            '<option value="roofing"' + (profile.company_type === 'roofing' ? ' selected' : '') + '>Roofing Company</option>' +
-            '<option value="solar"'  + (profile.company_type === 'solar'   ? ' selected' : '') + '>Solar Sales Company</option>' +
-          '</select>' +
-        '</div>' +
         '<div id="solarWattRow" class="mb-4"' + (profile.company_type !== 'solar' ? ' style="display:none"' : '') + '>' +
           '<label class="block text-xs font-semibold text-gray-500 mb-1">Default Solar Panel Wattage (W)</label>' +
           '<input type="number" id="solar_panel_wattage_w" value="' + (profile.solar_panel_wattage_w || 400) + '" min="100" max="700" class="w-40 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-400" oninput="markDirty(\'prefs\')">' +
-        '</div>',
+          '<p class="text-xs text-gray-400 mt-1">Used for solar system sizing calculations.</p>' +
+        '</div>' +
+        '<p id="prefsNoOptions" class="text-sm text-gray-400"' + (profile.company_type === 'solar' ? ' style="display:none"' : '') + '>Switch to Solar Sales Company above to see solar-specific preferences.</p>',
         'prefs'
       ) +
 
@@ -133,11 +131,6 @@
         '<button onclick="requestAccountDeletion()" class="px-4 py-2 border border-red-400 text-red-600 rounded-lg text-sm font-semibold hover:bg-red-100 transition-colors"><i class="fas fa-trash mr-1"></i>Request Account Deletion</button>' +
       '</div>';
 
-    // Wire company-type toggle
-    document.getElementById('company_type').addEventListener('change', function () {
-      document.getElementById('solarWattRow').style.display = this.value === 'solar' ? '' : 'none';
-    });
-
     // Wire all inputs to markDirty
     ['name','phone','company_name','address','city','province','postal_code'].forEach(function (id) {
       var el = document.getElementById(id);
@@ -149,6 +142,85 @@
       if (el) el.addEventListener('input', function () { markDirty('branding'); });
     });
   }
+
+  // ── Company Type Section ──────────────────────────────────
+  function companyTypeSection() {
+    var cur = profile.company_type || 'roofing';
+    var roofActive = cur === 'roofing';
+    var solActive  = cur === 'solar';
+    return '<div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 mb-6">' +
+      '<div class="flex items-center justify-between mb-2">' +
+        '<h2 class="text-base font-bold text-gray-800"><i class="fas fa-building text-sky-500 mr-2"></i>Company Type</h2>' +
+        '<span id="ctype-saved" class="hidden text-xs text-green-600 font-semibold"><i class="fas fa-check-circle mr-1"></i>Saved</span>' +
+      '</div>' +
+      '<p class="text-sm text-gray-500 mb-4">Choose your business type. This changes dashboard labels, available tools, and default workflows.</p>' +
+      '<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">' +
+
+        // Roofing card
+        '<button id="ctype-roofing" onclick="switchCompanyType(\'roofing\')" class="group relative border-2 rounded-2xl p-5 text-left transition-all duration-150 focus:outline-none ' +
+          (roofActive ? 'border-sky-500 bg-sky-50 shadow-md' : 'border-gray-200 hover:border-sky-400 hover:shadow-md bg-white') + '">' +
+          (roofActive ? '<span class="absolute top-3 right-3 bg-sky-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">ACTIVE</span>' : '') +
+          '<div class="flex items-center gap-3 mb-2">' +
+            '<div class="w-10 h-10 rounded-xl flex items-center justify-center ' + (roofActive ? 'bg-sky-500' : 'bg-sky-100 group-hover:bg-sky-200') + '">' +
+              '<i class="fas fa-hard-hat text-lg ' + (roofActive ? 'text-white' : 'text-sky-500') + '"></i>' +
+            '</div>' +
+            '<span class="font-bold text-gray-800">Roofing Company</span>' +
+          '</div>' +
+          '<ul class="text-xs text-gray-500 space-y-1 mt-2">' +
+            '<li><i class="fas fa-check text-sky-500 mr-1.5"></i>Order Roof Measurement Reports</li>' +
+            '<li><i class="fas fa-check text-sky-500 mr-1.5"></i>Roofer Secretary AI</li>' +
+            '<li><i class="fas fa-check text-sky-500 mr-1.5"></i>Job Management &amp; CRM</li>' +
+          '</ul>' +
+        '</button>' +
+
+        // Solar card
+        '<button id="ctype-solar" onclick="switchCompanyType(\'solar\')" class="group relative border-2 rounded-2xl p-5 text-left transition-all duration-150 focus:outline-none ' +
+          (solActive ? 'border-amber-500 bg-amber-50 shadow-md' : 'border-gray-200 hover:border-amber-400 hover:shadow-md bg-white') + '">' +
+          (solActive ? '<span class="absolute top-3 right-3 bg-amber-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">ACTIVE</span>' : '') +
+          '<div class="flex items-center gap-3 mb-2">' +
+            '<div class="w-10 h-10 rounded-xl flex items-center justify-center ' + (solActive ? 'bg-amber-500' : 'bg-amber-100 group-hover:bg-amber-200') + '">' +
+              '<i class="fas fa-solar-panel text-lg ' + (solActive ? 'text-white' : 'text-amber-500') + '"></i>' +
+            '</div>' +
+            '<span class="font-bold text-gray-800">Solar Sales Company</span>' +
+          '</div>' +
+          '<ul class="text-xs text-gray-500 space-y-1 mt-2">' +
+            '<li><i class="fas fa-check text-amber-500 mr-1.5"></i>Order Solar Proposals</li>' +
+            '<li><i class="fas fa-check text-amber-500 mr-1.5"></i>Solar Sales Secretary AI</li>' +
+            '<li><i class="fas fa-check text-amber-500 mr-1.5"></i>Solar Calculator &amp; Panel Designer</li>' +
+          '</ul>' +
+        '</button>' +
+      '</div>' +
+    '</div>';
+  }
+
+  window.switchCompanyType = async function (type) {
+    if (profile.company_type === type) return; // already set
+    var savedEl = document.getElementById('ctype-saved');
+    try {
+      var res = await fetch('/api/customer/solar-settings', {
+        method: 'PATCH', headers: hdrs(),
+        body: JSON.stringify({ company_type: type, solar_panel_wattage_w: profile.solar_panel_wattage_w || 400 })
+      });
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed to switch type');
+      profile.company_type = type;
+      // Refresh localStorage so dashboard picks it up immediately
+      var me = await fetch('/api/customer/me', { headers: hdrs() });
+      if (me.ok) { var d = await me.json(); localStorage.setItem('rc_customer', JSON.stringify(d.customer)); }
+      // Show solarWatt row if needed
+      var wattRow = document.getElementById('solarWattRow');
+      var noOpts  = document.getElementById('prefsNoOptions');
+      if (wattRow) wattRow.style.display = type === 'solar' ? '' : 'none';
+      if (noOpts)  noOpts.style.display  = type === 'solar' ? 'none' : '';
+      // Re-render the company type section in-place
+      var ctypeSection = document.querySelector('#ctype-roofing')?.closest('.bg-white.rounded-2xl');
+      if (ctypeSection) ctypeSection.outerHTML = companyTypeSection();
+      // Show saved badge
+      if (savedEl) { savedEl.classList.remove('hidden'); setTimeout(function () { savedEl.classList.add('hidden'); }, 2500); }
+      showToast('Switched to ' + (type === 'solar' ? 'Solar Sales Company' : 'Roofing Company') + '!', 'success');
+    } catch (e) {
+      showToast(e.message || 'Switch failed', 'error');
+    }
+  };
 
   // ── Section builder ───────────────────────────────────────
   function section(title, icon, color, body, sectionId) {
@@ -293,14 +365,12 @@
   }
 
   async function savePrefs() {
-    var companyType = val('company_type');
-    var wattage     = parseInt(val('solar_panel_wattage_w') || '400', 10);
+    var wattage = parseInt(val('solar_panel_wattage_w') || '400', 10);
     var res = await fetch('/api/customer/solar-settings', {
       method: 'PATCH', headers: hdrs(),
-      body: JSON.stringify({ company_type: companyType, solar_panel_wattage_w: wattage })
+      body: JSON.stringify({ company_type: profile.company_type || 'roofing', solar_panel_wattage_w: wattage })
     });
     if (!res.ok) throw new Error((await res.json()).error || 'Preferences save failed');
-    // Update cached company type
     var me = await fetch('/api/customer/me', { headers: hdrs() });
     if (me.ok) { var d = await me.json(); localStorage.setItem('rc_customer', JSON.stringify(d.customer)); }
   }
