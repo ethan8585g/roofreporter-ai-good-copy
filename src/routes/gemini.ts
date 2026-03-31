@@ -43,11 +43,11 @@ async function callGemini(env: any, prompt: string, opts?: {
   jsonMode?: boolean
 }): Promise<{ text: string; usage?: any; error?: string }> {
   const model = opts?.model || 'gemini-2.5-flash'
-  const apiKey = env.GEMINI_API_KEY || env.GOOGLE_VERTEX_API_KEY || env.GEMINI_ENHANCE_API_KEY
-  
+  const apiKey = env.GEMINI_API_KEY || env.GOOGLE_AI_STUDIO_KEY || env.GOOGLE_VERTEX_API_KEY || env.GEMINI_ENHANCE_API_KEY
+
   if (!apiKey) {
     // Fallback to OpenAI-compatible endpoint if available
-    if (env.OPENAI_API_KEY && env.OPENAI_BASE_URL) {
+    if (env.OPENAI_API_KEY) {
       return callOpenAIFallback(env, prompt, opts)
     }
     return { text: '', error: 'Gemini API key not configured. Set GEMINI_API_KEY via: npx wrangler pages secret put GEMINI_API_KEY --project-name roofing-measurement-tool. Get a free key at https://aistudio.google.com/apikey' }
@@ -83,7 +83,7 @@ async function callGemini(env: any, prompt: string, opts?: {
       const errMsg = errData?.error?.message || `HTTP ${response.status}`
       console.warn(`[Gemini] API error: ${errMsg}, attempting OpenAI fallback...`)
       // Auto-fallback to OpenAI when Gemini is blocked/errored
-      if (env.OPENAI_API_KEY && env.OPENAI_BASE_URL) {
+      if (env.OPENAI_API_KEY) {
         return callOpenAIFallback(env, prompt, opts)
       }
       return { text: '', error: `Gemini API error: ${errMsg}` }
@@ -96,7 +96,7 @@ async function callGemini(env: any, prompt: string, opts?: {
   } catch (err: any) {
     console.warn(`[Gemini] Request failed: ${err.message}, attempting OpenAI fallback...`)
     // Auto-fallback to OpenAI on network/parse errors
-    if (env.OPENAI_API_KEY && env.OPENAI_BASE_URL) {
+    if (env.OPENAI_API_KEY) {
       return callOpenAIFallback(env, prompt, opts)
     }
     return { text: '', error: `Gemini request failed: ${err.message}` }
@@ -107,11 +107,12 @@ async function callGemini(env: any, prompt: string, opts?: {
 // OpenAI-compatible fallback when Gemini key is unavailable
 async function callOpenAIFallback(env: any, prompt: string, opts?: any): Promise<{ text: string; usage?: any; error?: string }> {
   try {
-    const resp = await fetch(`${env.OPENAI_BASE_URL}/chat/completions`, {
+    const openaiBase = env.OPENAI_BASE_URL || 'https://api.openai.com/v1'
+    const resp = await fetch(`${openaiBase}/chat/completions`, {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'gpt-5-mini',
+        model: 'gpt-4o-mini',
         messages: [
           ...(opts?.systemInstruction ? [{ role: 'system', content: opts.systemInstruction }] : []),
           { role: 'user', content: prompt }
@@ -133,10 +134,11 @@ async function callOpenAIMultiTurnFallback(env: any, messages: Array<{ role: str
   try {
     const apiMessages = messages.map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content }))
     if (opts?.systemInstruction) apiMessages.unshift({ role: 'system', content: opts.systemInstruction })
-    const resp = await fetch(`${env.OPENAI_BASE_URL}/chat/completions`, {
+    const openaiBase = env.OPENAI_BASE_URL || 'https://api.openai.com/v1'
+    const resp = await fetch(`${openaiBase}/chat/completions`, {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: 'gpt-5-mini', messages: apiMessages, temperature: opts?.temperature ?? 0.7, max_tokens: opts?.maxOutputTokens ?? 4096 })
+      body: JSON.stringify({ model: 'gpt-4o-mini', messages: apiMessages, temperature: opts?.temperature ?? 0.7, max_tokens: opts?.maxOutputTokens ?? 4096 })
     })
     if (!resp.ok) {
       const errData: any = await resp.json().catch(() => ({}))
@@ -154,10 +156,10 @@ async function callGeminiMultiTurn(env: any, messages: Array<{ role: string; con
   maxOutputTokens?: number
 }): Promise<{ text: string; usage?: any; error?: string }> {
   const model = opts?.model || 'gemini-2.5-flash'
-  const apiKey = env.GEMINI_API_KEY || env.GOOGLE_VERTEX_API_KEY || env.GEMINI_ENHANCE_API_KEY
-  
+  const apiKey = env.GEMINI_API_KEY || env.GOOGLE_AI_STUDIO_KEY || env.GOOGLE_VERTEX_API_KEY || env.GEMINI_ENHANCE_API_KEY
+
   if (!apiKey) {
-    if (env.OPENAI_API_KEY && env.OPENAI_BASE_URL) {
+    if (env.OPENAI_API_KEY) {
       return callOpenAIMultiTurnFallback(env, messages, opts)
     }
     return { text: '', error: 'Gemini API key not configured.' }
@@ -194,7 +196,7 @@ async function callGeminiMultiTurn(env: any, messages: Array<{ role: string; con
       const errData: any = await response.json().catch(() => ({}))
       const errMsg = errData?.error?.message || `${response.status}`
       console.warn(`[Gemini MultiTurn] API error: ${errMsg}, attempting OpenAI fallback...`)
-      if (env.OPENAI_API_KEY && env.OPENAI_BASE_URL) {
+      if (env.OPENAI_API_KEY) {
         return callOpenAIMultiTurnFallback(env, messages, opts)
       }
       return { text: '', error: `Gemini API error: ${errMsg}` }
@@ -205,7 +207,7 @@ async function callGeminiMultiTurn(env: any, messages: Array<{ role: string; con
     return { text, usage: data?.usageMetadata }
   } catch (err: any) {
     console.warn(`[Gemini MultiTurn] Request failed: ${err.message}, attempting OpenAI fallback...`)
-    if (env.OPENAI_API_KEY && env.OPENAI_BASE_URL) {
+    if (env.OPENAI_API_KEY) {
       return callOpenAIMultiTurnFallback(env, messages, opts)
     }
     return { text: '', error: `Gemini request failed: ${err.message}` }
@@ -218,8 +220,8 @@ async function callGeminiMultiTurn(env: any, messages: Array<{ role: string; con
 
 // ── GET /status — Check Gemini API connectivity ──────────────────
 geminiRoutes.get('/status', async (c) => {
-  const geminiKey = c.env.GEMINI_API_KEY || c.env.GOOGLE_VERTEX_API_KEY || c.env.GEMINI_ENHANCE_API_KEY
-  const hasOpenAI = !!(c.env.OPENAI_API_KEY && c.env.OPENAI_BASE_URL)
+  const geminiKey = c.env.GEMINI_API_KEY || c.env.GOOGLE_AI_STUDIO_KEY || c.env.GOOGLE_VERTEX_API_KEY || c.env.GEMINI_ENHANCE_API_KEY
+  const hasOpenAI = !!c.env.OPENAI_API_KEY
   
   if (!geminiKey && !hasOpenAI) {
     return c.json({ configured: false, error: 'No AI API key configured. Set GEMINI_API_KEY or use OpenAI fallback.' })
@@ -235,7 +237,7 @@ geminiRoutes.get('/status', async (c) => {
     ? false // Gemini succeeded
     : !!(result.text && !result.error) // Got a response via fallback
   const actualBackend = geminiKey && !usedOpenAIFallback ? 'gemini' : (hasOpenAI ? 'openai' : 'none')
-  const actualModel = actualBackend === 'gemini' ? 'gemini-2.5-flash' : 'gpt-5-mini'
+  const actualModel = actualBackend === 'gemini' ? 'gemini-2.5-flash' : 'gpt-4o-mini'
   
   return c.json({
     configured: true,
