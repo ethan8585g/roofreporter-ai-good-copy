@@ -223,7 +223,7 @@ crmRoutes.post('/invoices', async (c) => {
   if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
   try {
     const body = await c.req.json()
-    const { items, due_date, notes, terms, tax_rate } = body
+    const { items, due_date, notes, terms, tax_rate, title, property_address } = body
 
     // Resolve customer — either existing or auto-create new
     const custResult = await resolveCustomerId(c, ownerId, body)
@@ -239,9 +239,9 @@ crmRoutes.post('/invoices', async (c) => {
     const invNum = genInvoiceNum()
 
     const result = await c.env.DB.prepare(`
-      INSERT INTO crm_invoices (owner_id, crm_customer_id, invoice_number, subtotal, tax_rate, tax_amount, total, due_date, notes, terms, status)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft')
-    `).bind(ownerId, customerId, invNum, subtotal, taxR, taxAmt, total, due_date || null, notes || null, terms || 'Payment due within 30 days.').run()
+      INSERT INTO crm_invoices (owner_id, crm_customer_id, invoice_number, title, property_address, subtotal, tax_rate, tax_amount, total, due_date, notes, terms, status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft')
+    `).bind(ownerId, customerId, invNum, title || null, property_address || null, subtotal, taxR, taxAmt, total, due_date || null, notes || null, terms || 'Payment due within 30 days.').run()
 
     const invoiceId = result.meta.last_row_id
     if (!invoiceId) {
@@ -288,9 +288,9 @@ crmRoutes.put('/invoices/:id', async (c) => {
   const total = Math.round((subtotal + taxAmt) * 100) / 100
 
   await c.env.DB.prepare(`
-    UPDATE crm_invoices SET crm_customer_id=?, subtotal=?, tax_rate=?, tax_amount=?, total=?, due_date=?, notes=?, terms=?, updated_at=datetime('now')
+    UPDATE crm_invoices SET crm_customer_id=?, title=?, property_address=?, subtotal=?, tax_rate=?, tax_amount=?, total=?, due_date=?, notes=?, terms=?, updated_at=datetime('now')
     WHERE id=? AND owner_id=?
-  `).bind(body.crm_customer_id, subtotal, taxR, taxAmt, total, body.due_date || null, body.notes || null, body.terms || null, id, ownerId).run()
+  `).bind(body.crm_customer_id, body.title || null, body.property_address || null, subtotal, taxR, taxAmt, total, body.due_date || null, body.notes || null, body.terms || null, id, ownerId).run()
 
   // Replace items
   await c.env.DB.prepare('DELETE FROM crm_invoice_items WHERE invoice_id = ?').bind(id).run()
@@ -311,6 +311,260 @@ crmRoutes.delete('/invoices/:id', async (c) => {
   await c.env.DB.prepare('DELETE FROM crm_invoice_items WHERE invoice_id = ?').bind(c.req.param('id')).run()
   await c.env.DB.prepare('DELETE FROM crm_invoices WHERE id = ? AND owner_id = ?').bind(c.req.param('id'), ownerId).run()
   return c.json({ success: true })
+})
+
+// ============================================================
+// INVOICE: Generate Square payment link
+// ============================================================
+crmRoutes.post('/invoices/:id/payment-link', async (c) => {
+  const ownerId = await getOwnerId(c)
+  if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
+  const id = c.req.param('id')
+
+  const invoice = await c.env.DB.prepare(
+    `SELECT ci.*, cc.name as customer_name FROM crm_invoices ci
+     LEFT JOIN crm_customers cc ON cc.id = ci.crm_customer_id
+     WHERE ci.id = ? AND ci.owner_id = ?`
+  ).bind(id, ownerId).first<any>()
+  if (!invoice) return c.json({ error: 'Invoice not found' }, 404)
+
+  // Get owner's Square access token (per-user OAuth first, then master)
+  const owner = await c.env.DB.prepare(
+    'SELECT square_access_token, square_location_id FROM customers WHERE id = ?'
+  ).bind(ownerId).first<any>()
+
+  const accessToken = owner?.square_access_token || (c.env as any).SQUARE_ACCESS_TOKEN
+  const locationId = owner?.square_location_id || (c.env as any).SQUARE_LOCATION_ID
+
+  if (!accessToken || !locationId) {
+    return c.json({ error: 'Square is not connected. Go to Settings → Connect Square to enable payment links.' }, 503)
+  }
+
+  const amountCents = Math.round((invoice.total || 0) * 100)
+  if (amountCents <= 0) return c.json({ error: 'Invoice total must be greater than $0' }, 400)
+
+  const title = invoice.title || `Invoice ${invoice.invoice_number}`
+  const desc = invoice.customer_name ? `Invoice for ${invoice.customer_name}` : invoice.invoice_number
+
+  try {
+    const resp = await fetch('https://connect.squareup.com/v2/online-checkout/payment-links', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+        'Square-Version': '2024-01-18'
+      },
+      body: JSON.stringify({
+        idempotency_key: `invoice-${id}-${Date.now()}`,
+        quick_pay: {
+          name: title,
+          price_money: { amount: amountCents, currency: 'CAD' },
+          location_id: locationId
+        },
+        description: desc
+      })
+    })
+    const data: any = await resp.json()
+    if (!resp.ok) {
+      const msg = data.errors?.[0]?.detail || `Square error (${resp.status})`
+      return c.json({ error: msg }, 502)
+    }
+    const link = data.payment_link
+    const checkoutUrl = link?.url || link?.long_url
+    if (!checkoutUrl) return c.json({ error: 'Square did not return a checkout URL' }, 502)
+
+    await c.env.DB.prepare(
+      "UPDATE crm_invoices SET square_payment_link_url = ?, square_payment_link_id = ?, updated_at = datetime('now') WHERE id = ? AND owner_id = ?"
+    ).bind(checkoutUrl, link.id, id, ownerId).run()
+
+    return c.json({ success: true, checkout_url: checkoutUrl, payment_link_id: link.id })
+  } catch (err: any) {
+    return c.json({ error: 'Square request failed: ' + err.message }, 502)
+  }
+})
+
+// ============================================================
+// INVOICE: Send via Gmail (+ optional Square payment link)
+// ============================================================
+crmRoutes.post('/invoices/:id/send', async (c) => {
+  const ownerId = await getOwnerId(c)
+  if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
+  const id = c.req.param('id')
+
+  const invoice = await c.env.DB.prepare(`
+    SELECT ci.*, cc.name as customer_name, cc.email as customer_email,
+           cc.phone as customer_phone, cc.address as customer_address,
+           cc.city as customer_city, cc.province as customer_province
+    FROM crm_invoices ci LEFT JOIN crm_customers cc ON cc.id = ci.crm_customer_id
+    WHERE ci.id = ? AND ci.owner_id = ?
+  `).bind(id, ownerId).first<any>()
+  if (!invoice) return c.json({ error: 'Invoice not found' }, 404)
+
+  const itemsResult = await c.env.DB.prepare(
+    'SELECT * FROM crm_invoice_items WHERE invoice_id = ? ORDER BY sort_order'
+  ).bind(id).all()
+  const lineItems = itemsResult.results || []
+
+  // Generate share token
+  let shareToken = invoice.share_token
+  if (!shareToken) shareToken = crypto.randomUUID().replace(/-/g, '').substring(0, 16)
+
+  await c.env.DB.prepare(
+    "UPDATE crm_invoices SET status = 'sent', share_token = ?, sent_at = datetime('now'), updated_at = datetime('now') WHERE id = ? AND owner_id = ?"
+  ).bind(shareToken, id, ownerId).run()
+
+  const baseUrl = new URL(c.req.url).origin
+  const publicLink = `${baseUrl}/invoice/view/${shareToken}`
+
+  // Get owner branding + Gmail tokens
+  const owner = await c.env.DB.prepare(
+    'SELECT gmail_refresh_token, gmail_connected_email, name, email, brand_business_name, brand_logo_url, brand_primary_color FROM customers WHERE id = ?'
+  ).bind(ownerId).first<any>()
+
+  let emailSent = false
+  let emailError = ''
+
+  if (owner?.gmail_refresh_token && invoice.customer_email) {
+    const clientId = (c.env as any).GMAIL_CLIENT_ID
+    let clientSecret = (c.env as any).GMAIL_CLIENT_SECRET || ''
+    if (!clientSecret) {
+      try {
+        const csRow = await c.env.DB.prepare(
+          "SELECT setting_value FROM settings WHERE setting_key = 'gmail_client_secret' AND master_company_id = 1"
+        ).first<any>()
+        if (csRow?.setting_value) clientSecret = csRow.setting_value
+      } catch {}
+    }
+
+    if (clientId && clientSecret) {
+      try {
+        const tokenResp = await fetch('https://oauth2.googleapis.com/token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            grant_type: 'refresh_token',
+            refresh_token: owner.gmail_refresh_token,
+            client_id: clientId,
+            client_secret: clientSecret
+          }).toString()
+        })
+        const tokenData: any = await tokenResp.json()
+
+        if (tokenData.access_token) {
+          const businessName = owner.brand_business_name || owner.name || 'Your Roofer'
+          const fromEmail = owner.gmail_connected_email || owner.email
+          const primaryColor = owner.brand_primary_color || '#0369a1'
+          const payUrl = invoice.square_payment_link_url || null
+          const dueLabel = invoice.due_date ? new Date(invoice.due_date).toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' }) : null
+
+          let itemsHtml = ''
+          if (lineItems.length > 0) {
+            itemsHtml = '<table style="width:100%;border-collapse:collapse;margin:0 0 12px;">'
+            itemsHtml += '<tr style="background:#f1f5f9;"><td style="color:#475569;font-size:11px;font-weight:600;padding:6px 8px;">Description</td><td style="color:#475569;font-size:11px;font-weight:600;padding:6px 8px;text-align:center;">Qty</td><td style="color:#475569;font-size:11px;font-weight:600;padding:6px 8px;text-align:right;">Price</td><td style="color:#475569;font-size:11px;font-weight:600;padding:6px 8px;text-align:right;">Amount</td></tr>'
+            for (const item of lineItems) {
+              itemsHtml += `<tr><td style="color:#374151;font-size:12px;padding:6px 8px;border-bottom:1px solid #f1f5f9;">${(item as any).description}</td><td style="color:#374151;font-size:12px;padding:6px 8px;text-align:center;border-bottom:1px solid #f1f5f9;">${(item as any).quantity}</td><td style="color:#374151;font-size:12px;padding:6px 8px;text-align:right;border-bottom:1px solid #f1f5f9;">$${parseFloat((item as any).unit_price).toFixed(2)}</td><td style="color:#374151;font-size:12px;padding:6px 8px;text-align:right;border-bottom:1px solid #f1f5f9;">$${parseFloat((item as any).amount).toFixed(2)}</td></tr>`
+            }
+            itemsHtml += '</table>'
+          }
+
+          const emailHtml = `
+<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#ffffff;">
+  <div style="background:${primaryColor};padding:32px;border-radius:12px 12px 0 0;">
+    ${owner.brand_logo_url ? `<img src="${owner.brand_logo_url}" alt="${businessName}" style="max-height:48px;margin-bottom:8px;">` : ''}
+    <h1 style="color:#ffffff;margin:0;font-size:22px;">${businessName}</h1>
+    <p style="color:rgba(255,255,255,0.7);margin:8px 0 0;font-size:14px;">Invoice &middot; ${invoice.invoice_number}</p>
+  </div>
+  <div style="padding:32px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px;">
+    <p style="color:#374151;font-size:16px;margin:0 0 8px;">Hi ${invoice.customer_name || 'there'},</p>
+    <p style="color:#6b7280;font-size:14px;line-height:1.6;margin:0 0 24px;">Please find your invoice below. ${dueLabel ? `Payment is due by <strong>${dueLabel}</strong>.` : ''}</p>
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:20px;margin:0 0 24px;">
+      ${invoice.title ? `<p style="font-weight:600;color:#1e293b;margin:0 0 12px;">${invoice.title}</p>` : ''}
+      ${invoice.property_address ? `<p style="color:#64748b;font-size:13px;margin:0 0 12px;"><strong>Property:</strong> ${invoice.property_address}</p>` : ''}
+      ${itemsHtml}
+      <table style="width:100%;border-collapse:collapse;">
+        ${invoice.subtotal ? `<tr><td style="color:#6b7280;font-size:13px;padding:4px 0;">Subtotal</td><td style="color:#1e293b;font-size:13px;text-align:right;">$${parseFloat(invoice.subtotal).toFixed(2)}</td></tr>` : ''}
+        ${invoice.tax_amount ? `<tr><td style="color:#6b7280;font-size:13px;padding:4px 0;">Tax (${invoice.tax_rate || 5}%)</td><td style="color:#1e293b;font-size:13px;text-align:right;">$${parseFloat(invoice.tax_amount).toFixed(2)}</td></tr>` : ''}
+        <tr><td colspan="2" style="border-top:1px solid #e2e8f0;padding-top:8px;"></td></tr>
+        <tr><td style="color:${primaryColor};font-size:18px;font-weight:700;padding:4px 0;">Total Due</td><td style="color:${primaryColor};font-size:18px;font-weight:700;text-align:right;">$${parseFloat(invoice.total).toFixed(2)} CAD</td></tr>
+      </table>
+    </div>
+    ${payUrl ? `
+    <div style="text-align:center;margin:0 0 16px;">
+      <a href="${payUrl}" style="display:inline-block;background:#16a34a;color:#ffffff;text-decoration:none;padding:14px 40px;border-radius:8px;font-weight:600;font-size:15px;">
+        <span style="margin-right:8px;">💳</span>Pay Now Online
+      </a>
+    </div>` : ''}
+    <div style="text-align:center;margin:0 0 24px;">
+      <a href="${publicLink}" style="display:inline-block;background:${primaryColor};color:#ffffff;text-decoration:none;padding:12px 32px;border-radius:8px;font-weight:600;font-size:14px;">
+        View Invoice Online
+      </a>
+    </div>
+    ${invoice.notes ? `<p style="color:#374151;font-size:13px;margin:0 0 8px;"><strong>Notes:</strong> ${invoice.notes}</p>` : ''}
+    ${invoice.terms ? `<p style="color:#9ca3af;font-size:12px;margin:0;">${invoice.terms}</p>` : ''}
+  </div>
+  <p style="color:#9ca3af;font-size:11px;text-align:center;margin:16px 0 0;padding:0;">
+    Sent via RoofReporterAI &middot; ${fromEmail} &middot; <a href="mailto:sales@roofreporterai.com" style="color:#9ca3af;">sales@roofreporterai.com</a>
+  </p>
+</div>`
+
+          const subject = `Invoice ${invoice.invoice_number}${invoice.title ? ` — ${invoice.title}` : ''}`
+          const boundary = 'boundary_' + crypto.randomUUID().replace(/-/g, '').substring(0, 16)
+          const rawMessage = [
+            `From: ${businessName} <${fromEmail}>`,
+            `To: ${invoice.customer_email}`,
+            `Subject: ${subject}`,
+            'MIME-Version: 1.0',
+            `Content-Type: multipart/alternative; boundary="${boundary}"`,
+            '',
+            `--${boundary}`,
+            'Content-Type: text/plain; charset=UTF-8',
+            '',
+            `Hi ${invoice.customer_name || 'there'},\n\nPlease find your invoice ${invoice.invoice_number}.\n\nTotal Due: $${parseFloat(invoice.total).toFixed(2)} CAD${dueLabel ? `\nDue: ${dueLabel}` : ''}\n\nView invoice: ${publicLink}${payUrl ? `\nPay now: ${payUrl}` : ''}\n\nBest regards,\n${businessName}`,
+            '',
+            `--${boundary}`,
+            'Content-Type: text/html; charset=UTF-8',
+            '',
+            emailHtml,
+            '',
+            `--${boundary}--`
+          ].join('\r\n')
+
+          const encoded = btoa(unescape(encodeURIComponent(rawMessage)))
+            .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+
+          const sendResp = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${tokenData.access_token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ raw: encoded })
+          })
+
+          if (sendResp.ok) {
+            emailSent = true
+          } else {
+            const errData: any = await sendResp.json().catch(() => ({}))
+            emailError = errData?.error?.message || `Gmail error (${sendResp.status})`
+          }
+        } else {
+          emailError = 'Could not refresh Gmail token. Please reconnect Gmail.'
+        }
+      } catch (e: any) {
+        emailError = e.message || 'Gmail send failed'
+      }
+    }
+  } else if (!owner?.gmail_refresh_token) {
+    emailError = 'Gmail not connected. Connect Gmail in Settings to send invoices by email.'
+  } else {
+    emailError = 'Customer has no email address on file.'
+  }
+
+  return c.json({
+    success: true,
+    share_token: shareToken,
+    public_link: publicLink,
+    email_sent: emailSent,
+    email_error: emailError || null,
+    sent_to: emailSent ? invoice.customer_email : null
+  })
 })
 
 // ============================================================

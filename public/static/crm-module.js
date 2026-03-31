@@ -379,6 +379,7 @@
   var invoicesData = [];
   function initInvoices() {
     root.innerHTML = '<div class="text-center py-8"><div class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-brand-500 mx-auto mb-3"></div></div>';
+    checkGmailStatus();
     loadInvoices();
   }
 
@@ -395,6 +396,14 @@
     var invoices = data.invoices || [];
     var stats = data.stats || {};
     var html = '<div class="flex items-center justify-between mb-5 flex-wrap gap-3"><div><h2 class="text-lg font-bold text-gray-800"><i class="fas fa-file-invoice-dollar text-emerald-500 mr-2"></i>Invoices</h2></div><button onclick="window._crmNewInvoice()" class="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-emerald-700"><i class="fas fa-plus mr-1"></i>New Invoice</button></div>';
+
+    // Gmail connect banner
+    if (!_gmailConnected) {
+      html += '<div class="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-4 flex items-center justify-between gap-3">' +
+        '<div class="flex items-center gap-2"><i class="fas fa-envelope text-amber-500"></i><span class="text-sm text-amber-800 font-medium">Connect Gmail to send invoices directly to customers.</span></div>' +
+        '<button onclick="window._crmConnectGmail()" class="bg-amber-500 text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-amber-600 shrink-0"><i class="fas fa-plug mr-1"></i>Connect Gmail</button>' +
+        '</div>';
+    }
 
     // Stats cards
     html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">' +
@@ -420,7 +429,7 @@
         html += '<tr class="hover:bg-gray-50 cursor-pointer" onclick="window._crmViewInvoice(' + inv.id + ')"><td class="px-4 py-3 font-mono text-xs font-bold text-brand-600">' + inv.invoice_number + '</td><td class="px-4 py-3 text-gray-700">' + (inv.customer_name || 'N/A') + '</td><td class="px-4 py-3 text-gray-500 text-xs hidden md:table-cell">' + fmtDate(inv.created_at) + '</td><td class="px-4 py-3 text-gray-500 text-xs hidden md:table-cell">' + fmtDate(inv.due_date) + '</td><td class="px-4 py-3 text-center">' + badge(inv.status) + '</td><td class="px-4 py-3 text-right font-semibold">' + money(inv.total) + '</td><td class="px-4 py-3 text-right" onclick="event.stopPropagation()"><div class="flex items-center gap-1 justify-end">';
         html += '<button onclick="window._crmViewInvoice(' + inv.id + ')" class="text-xs text-brand-600 hover:underline font-medium"><i class="fas fa-eye mr-0.5"></i>View</button>';
         if (inv.status === 'draft') html += '<button onclick="window._crmEditInvoice(' + inv.id + ')" class="text-xs text-gray-600 hover:underline ml-2"><i class="fas fa-edit mr-0.5"></i>Edit</button>';
-        if (inv.status === 'draft') html += '<button onclick="window._crmMarkInvoice(' + inv.id + ',\'sent\')" class="text-xs text-blue-600 hover:underline ml-2">Send</button>';
+        if (inv.status === 'draft' || inv.status === 'sent') html += '<button onclick="window._crmSendInvoice(' + inv.id + ')" class="text-xs text-blue-600 hover:underline ml-2"><i class="fas fa-paper-plane mr-0.5"></i>Send</button>';
         if (inv.status !== 'paid' && inv.status !== 'cancelled') html += '<button onclick="window._crmMarkInvoice(' + inv.id + ',\'paid\')" class="text-xs text-green-600 hover:underline ml-2">Mark Paid</button>';
         html += '<button onclick="window._crmDeleteInvoice(' + inv.id + ')" class="text-gray-400 hover:text-red-500 ml-2"><i class="fas fa-trash text-xs"></i></button>';
         html += '</div></td></tr>';
@@ -441,6 +450,7 @@
         var custs = data.customers || [];
         var body = '<div class="space-y-3">' +
           '<div><label class="block text-xs font-medium text-gray-600 mb-1">Customer *</label>' + customerSelectHTML(custs, '', 'invCustomer') + '</div>' +
+          '<div class="grid grid-cols-2 gap-3"><div><label class="block text-xs font-medium text-gray-600 mb-1">Project Title</label><input type="text" id="invTitle" class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" placeholder="Roof Installation — 123 Main St"></div><div><label class="block text-xs font-medium text-gray-600 mb-1">Property Address</label><input type="text" id="invAddress" class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" placeholder="123 Main St, Calgary AB"></div></div>' +
           '<div id="invItems"><div class="invItemRow grid grid-cols-12 gap-2 items-end"><div class="col-span-6"><label class="block text-xs font-medium text-gray-600 mb-1">Description</label><input type="text" class="invDesc w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" placeholder="Roof installation"></div><div class="col-span-2"><label class="block text-xs font-medium text-gray-600 mb-1">Qty</label><input type="number" class="invQty w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" value="1"></div><div class="col-span-3"><label class="block text-xs font-medium text-gray-600 mb-1">Unit Price</label><input type="number" class="invPrice w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" step="0.01" placeholder="0.00"></div><div class="col-span-1"><button onclick="this.closest(\'.invItemRow\').remove()" class="text-red-400 hover:text-red-600 py-2"><i class="fas fa-times"></i></button></div></div></div>' +
           '<button onclick="window._crmAddInvItem()" class="text-brand-600 text-xs font-medium hover:underline"><i class="fas fa-plus mr-1"></i>Add Line Item</button>' +
           '<div class="grid grid-cols-2 gap-3"><div><label class="block text-xs font-medium text-gray-600 mb-1">Due Date</label><input type="date" id="invDue" class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm"></div><div><label class="block text-xs font-medium text-gray-600 mb-1">Tax Rate (%)</label><input type="number" id="invTax" value="5" class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" step="0.1"></div></div>' +
@@ -459,6 +469,8 @@
           });
           if (items.length === 0) { toast('Add at least one line item', 'error'); return; }
           var payload = Object.assign({}, custData, {
+            title: document.getElementById('invTitle').value.trim() || null,
+            property_address: document.getElementById('invAddress').value.trim() || null,
             items: items,
             due_date: document.getElementById('invDue').value || null,
             tax_rate: parseFloat(document.getElementById('invTax').value) || 5,
@@ -554,13 +566,21 @@
         if (inv.notes) body += '<div class="bg-blue-50 rounded-xl p-3"><h4 class="text-xs font-semibold text-blue-600 uppercase mb-1"><i class="fas fa-sticky-note mr-1"></i>Notes</h4><p class="text-sm text-blue-800">' + inv.notes + '</p></div>';
         if (inv.terms) body += '<div class="bg-gray-50 rounded-xl p-3"><h4 class="text-xs font-semibold text-gray-500 uppercase mb-1"><i class="fas fa-file-contract mr-1"></i>Terms</h4><p class="text-sm text-gray-700">' + inv.terms + '</p></div>';
 
+        // Title + address (if present)
+        if (inv.title) body += '<div class="bg-sky-50 rounded-xl p-3"><p class="text-xs font-semibold text-sky-600 uppercase mb-1"><i class="fas fa-tag mr-1"></i>Project</p><p class="text-sm font-semibold text-sky-800">' + inv.title + '</p>' + (inv.property_address ? '<p class="text-xs text-sky-600 mt-0.5"><i class="fas fa-map-marker-alt mr-1"></i>' + inv.property_address + '</p>' : '') + '</div>';
+
+        // Share link
+        if (inv.share_token) body += '<div class="bg-gray-50 rounded-xl p-3 flex items-center justify-between gap-2"><div class="min-w-0"><p class="text-xs font-semibold text-gray-500 mb-0.5">Customer Link</p><p class="text-xs text-brand-600 truncate font-mono">/invoice/view/' + inv.share_token + '</p></div><button onclick="navigator.clipboard.writeText(window.location.origin+\'/invoice/view/' + inv.share_token + '\').then(function(){toast(\'Link copied!\');})" class="shrink-0 text-xs bg-white border border-gray-200 px-2 py-1 rounded-lg hover:bg-gray-50"><i class="fas fa-copy mr-1"></i>Copy</button></div>';
+
+        // Square payment link
+        if (inv.square_payment_link_url) body += '<div class="bg-green-50 rounded-xl p-3 flex items-center justify-between gap-2"><div><p class="text-xs font-semibold text-green-600 mb-0.5"><i class="fas fa-credit-card mr-1"></i>Square Payment Link</p><p class="text-xs text-green-700 truncate">Ready to pay</p></div><div class="flex gap-2 shrink-0"><a href="' + inv.square_payment_link_url + '" target="_blank" class="text-xs bg-green-600 text-white px-2 py-1 rounded-lg hover:bg-green-700">Open</a><button onclick="navigator.clipboard.writeText(\'' + inv.square_payment_link_url + '\').then(function(){toast(\'Link copied!\');})" class="text-xs bg-white border border-green-200 px-2 py-1 rounded-lg hover:bg-green-50">Copy</button></div></div>';
+
         // Action buttons
-        body += '<div class="flex gap-2 pt-2">';
-        if (inv.status === 'draft') {
-          body += '<button onclick="closeModal();window._crmEditInvoice(' + id + ')" class="flex-1 py-2.5 bg-gray-100 text-gray-700 rounded-xl text-sm font-semibold hover:bg-gray-200"><i class="fas fa-edit mr-1"></i>Edit</button>';
-          body += '<button onclick="closeModal();window._crmMarkInvoice(' + id + ',\'sent\')" class="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700"><i class="fas fa-paper-plane mr-1"></i>Mark Sent</button>';
-        }
-        if (inv.status !== 'paid' && inv.status !== 'cancelled') body += '<button onclick="closeModal();window._crmMarkInvoice(' + id + ',\'paid\')" class="flex-1 py-2.5 bg-green-600 text-white rounded-xl text-sm font-semibold hover:bg-green-700"><i class="fas fa-check mr-1"></i>Mark Paid</button>';
+        body += '<div class="flex gap-2 pt-2 flex-wrap">';
+        if (inv.status === 'draft') body += '<button onclick="closeModal();window._crmEditInvoice(' + id + ')" class="flex-1 py-2.5 bg-gray-100 text-gray-700 rounded-xl text-sm font-semibold hover:bg-gray-200 min-w-0"><i class="fas fa-edit mr-1"></i>Edit</button>';
+        if (inv.status !== 'cancelled') body += '<button onclick="closeModal();window._crmSendInvoice(' + id + ')" class="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 min-w-0"><i class="fas fa-paper-plane mr-1"></i>Send via Gmail</button>';
+        if (inv.status !== 'paid' && inv.status !== 'cancelled') body += '<button onclick="closeModal();window._crmGenPayLink(' + id + ')" class="flex-1 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-semibold hover:bg-emerald-700 min-w-0"><i class="fas fa-credit-card mr-1"></i>Square Pay Link</button>';
+        if (inv.status !== 'paid' && inv.status !== 'cancelled') body += '<button onclick="closeModal();window._crmMarkInvoice(' + id + ',\'paid\')" class="flex-1 py-2.5 bg-green-600 text-white rounded-xl text-sm font-semibold hover:bg-green-700 min-w-0"><i class="fas fa-check mr-1"></i>Mark Paid</button>';
         body += '</div>';
         body += '</div>';
 
@@ -584,6 +604,7 @@
 
       var body = '<div class="space-y-3">' +
         '<div><label class="block text-xs font-medium text-gray-600 mb-1">Customer *</label>' + customerSelectHTML(custs, inv.crm_customer_id, 'editInvCustomer') + '</div>' +
+        '<div class="grid grid-cols-2 gap-3"><div><label class="block text-xs font-medium text-gray-600 mb-1">Project Title</label><input type="text" id="editInvTitle" class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" value="' + (inv.title || '') + '" placeholder="Roof Installation"></div><div><label class="block text-xs font-medium text-gray-600 mb-1">Property Address</label><input type="text" id="editInvAddress" class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" value="' + (inv.property_address || '') + '" placeholder="123 Main St"></div></div>' +
         '<div id="editInvItems">';
       // Populate existing items
       if (items.length > 0) {
@@ -612,6 +633,8 @@
         });
         if (updItems.length === 0) { toast('Add at least one line item', 'error'); return; }
         var payload = Object.assign({}, custInfo, {
+          title: document.getElementById('editInvTitle').value.trim() || null,
+          property_address: document.getElementById('editInvAddress').value.trim() || null,
           items: updItems,
           due_date: document.getElementById('editInvDue').value || null,
           tax_rate: parseFloat(document.getElementById('editInvTax').value) || 5,
@@ -633,6 +656,58 @@
     row.className = 'invItemRow grid grid-cols-12 gap-2 items-end mt-2';
     row.innerHTML = '<div class="col-span-6"><input type="text" class="invDesc w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" placeholder="Description"></div><div class="col-span-2"><input type="number" class="invQty w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" value="1"></div><div class="col-span-3"><input type="number" class="invPrice w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" step="0.01" placeholder="0.00"></div><div class="col-span-1"><button onclick="this.closest(\'.invItemRow\').remove()" class="text-red-400 hover:text-red-600 py-2"><i class="fas fa-times"></i></button></div>';
     container.appendChild(row);
+  };
+
+  // Send invoice via Gmail
+  window._crmSendInvoice = function(id) {
+    var btn = event && event.target;
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Sending...'; }
+    fetch('/api/crm/invoices/' + id + '/send', { method: 'POST', headers: authHeaders() })
+      .then(function(r) { return r.json(); })
+      .then(function(res) {
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-paper-plane mr-0.5"></i>Send'; }
+        if (res.email_sent) {
+          toast('Invoice sent to ' + res.sent_to + '!', 'success');
+        } else if (res.success && res.email_error) {
+          toast('Marked sent, but email failed: ' + res.email_error, 'warning');
+        } else {
+          toast(res.error || 'Send failed', 'error');
+        }
+        loadInvoices(window._invFilter);
+      })
+      .catch(function(e) {
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-paper-plane mr-0.5"></i>Send'; }
+        toast('Network error: ' + (e.message || 'Unknown'), 'error');
+      });
+  };
+
+  // Generate Square payment link for invoice
+  window._crmGenPayLink = function(id) {
+    if (!confirm('Generate a Square payment link for this invoice? The link will be included in future emails.')) return;
+    fetch('/api/crm/invoices/' + id + '/payment-link', { method: 'POST', headers: authHeaders() })
+      .then(function(r) { return r.json(); })
+      .then(function(res) {
+        if (res.success && res.checkout_url) {
+          toast('Square payment link created!', 'success');
+          navigator.clipboard.writeText(res.checkout_url).catch(function(){});
+          loadInvoices(window._invFilter);
+        } else {
+          toast(res.error || 'Failed to generate payment link', 'error');
+        }
+      })
+      .catch(function(e) { toast('Network error: ' + (e.message || 'Unknown'), 'error'); });
+  };
+
+  // Connect Gmail
+  window._crmConnectGmail = function() {
+    var w = window.open('/api/crm/gmail/connect', 'gmailOAuth', 'width=550,height=650');
+    var timer = setInterval(function() {
+      if (w && w.closed) {
+        clearInterval(timer);
+        checkGmailStatus();
+        setTimeout(function() { loadInvoices(window._invFilter); }, 800);
+      }
+    }, 800);
   };
 
   // ============================================================
