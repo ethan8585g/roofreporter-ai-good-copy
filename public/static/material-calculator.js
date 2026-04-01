@@ -369,14 +369,12 @@ function mcBuildInvoiceItems() {
   items.forEach(function(item) {
     if (item.category === 'ice_shield' && !mcState.iceShieldEnabled) return;
     if (item.category === 'ventilation' && !mcState.ventilationEnabled) return;
+    if (!item.unit_price_cad) return; // skip items with no pricing
     var qty = (item.category === 'shingles' && wasteRow && wasteRow.bundles) ? wasteRow.bundles : item.order_quantity;
     result.push({
       description: item.description || item.category,
       quantity: qty,
-      unit_price: item.unit_price_cad || 0,
-      unit: item.order_unit || 'units',
-      category: 'materials',
-      is_taxable: true
+      unit_price: item.unit_price_cad
     });
   });
   return result;
@@ -387,7 +385,7 @@ function mcShowInvoiceModal(customers, items) {
 
   var custOptions = '<option value="">Select a customer...</option>';
   customers.forEach(function(c) {
-    custOptions += '<option value="' + c.id + '">' + (c.name || c.contact_name || '') + (c.email ? ' — ' + c.email : '') + '</option>';
+    custOptions += '<option value="' + c.id + '">' + (c.name || '') + (c.email ? ' — ' + c.email : '') + '</option>';
   });
 
   var totalAmt = 0;
@@ -470,8 +468,9 @@ function mcSubmitInvoice() {
 
 // ---- Copy List ----
 function mcCopyList() {
+  if (!mcState.report) return;
   var r = mcState.report;
-  var items = (r && r.materials.line_items) || [];
+  var items = (r.materials && r.materials.line_items) || [];
   var wasteRow = mcGetWasteRow();
   var addr = (r.property && r.property.address) || '';
 
