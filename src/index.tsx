@@ -529,6 +529,10 @@ app.get('/sitemap.xml', async (c) => {
     { loc: '/privacy', priority: '0.3', changefreq: 'yearly' },
     { loc: '/terms', priority: '0.3', changefreq: 'yearly' },
   ]
+  // City geo pages
+  for (const slug of Object.keys(seoCities)) {
+    staticPages.push({ loc: `/roof-measurement/${slug}`, priority: '0.7', changefreq: 'monthly' })
+  }
   let urls = staticPages.map(p => `<url><loc>${base}${p.loc}</loc><changefreq>${p.changefreq}</changefreq><priority>${p.priority}</priority></url>`).join('\n')
   try {
     const posts = await c.env.DB.prepare("SELECT slug, updated_at FROM blog_posts WHERE status = 'published' ORDER BY published_at DESC LIMIT 100").all()
@@ -558,6 +562,125 @@ app.get('/terms', (c) => {
   return c.html(getTermsPageHTML())
 })
 
+// Programmatic city/geo SEO landing pages
+const seoCities: Record<string, { name: string; province: string; lat: string; lng: string }> = {
+  'calgary': { name: 'Calgary', province: 'Alberta', lat: '51.0447', lng: '-114.0719' },
+  'edmonton': { name: 'Edmonton', province: 'Alberta', lat: '53.5461', lng: '-113.4937' },
+  'vancouver': { name: 'Vancouver', province: 'British Columbia', lat: '49.2827', lng: '-123.1207' },
+  'toronto': { name: 'Toronto', province: 'Ontario', lat: '43.6532', lng: '-79.3832' },
+  'ottawa': { name: 'Ottawa', province: 'Ontario', lat: '45.4215', lng: '-75.6972' },
+  'winnipeg': { name: 'Winnipeg', province: 'Manitoba', lat: '49.8951', lng: '-97.1384' },
+  'saskatoon': { name: 'Saskatoon', province: 'Saskatchewan', lat: '52.1332', lng: '-106.6700' },
+  'regina': { name: 'Regina', province: 'Saskatchewan', lat: '50.4452', lng: '-104.6189' },
+  'red-deer': { name: 'Red Deer', province: 'Alberta', lat: '52.2681', lng: '-113.8112' },
+  'lethbridge': { name: 'Lethbridge', province: 'Alberta', lat: '49.6942', lng: '-112.8328' },
+  'kelowna': { name: 'Kelowna', province: 'British Columbia', lat: '49.8880', lng: '-119.4960' },
+  'sherwood-park': { name: 'Sherwood Park', province: 'Alberta', lat: '53.5412', lng: '-113.3180' },
+  'st-albert': { name: 'St. Albert', province: 'Alberta', lat: '53.6301', lng: '-113.6258' },
+  'medicine-hat': { name: 'Medicine Hat', province: 'Alberta', lat: '50.0405', lng: '-110.6764' },
+  'grande-prairie': { name: 'Grande Prairie', province: 'Alberta', lat: '55.1707', lng: '-118.7946' },
+}
+app.get('/roof-measurement/:city', (c) => {
+  const citySlug = c.req.param('city').toLowerCase()
+  const city = seoCities[citySlug]
+  if (!city) return c.redirect('/')
+  return c.html(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags()}
+  <title>Roof Measurement Reports in ${city.name}, ${city.province} | RoofReporterAI</title>
+  <meta name="description" content="Get accurate AI-powered roof measurement reports in ${city.name}, ${city.province}. Satellite imagery analysis with area, pitch, edges, and material estimates in under 60 seconds. 3 free reports.">
+  <link rel="canonical" href="https://www.roofreporterai.com/roof-measurement/${citySlug}">
+  <meta property="og:title" content="Roof Measurement Reports in ${city.name} | RoofReporterAI">
+  <meta property="og:description" content="AI-powered satellite roof measurements for ${city.name} roofing contractors. Full CRM, proposals, invoicing included.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://www.roofreporterai.com/roof-measurement/${citySlug}">
+  <meta property="og:image" content="https://roofreporterai.com/static/logo.png">
+  <meta property="og:site_name" content="RoofReporterAI">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Roof Measurements in ${city.name} — RoofReporterAI">
+  <meta name="twitter:image" content="https://roofreporterai.com/static/logo.png">
+  <meta name="geo.region" content="CA">
+  <meta name="geo.placename" content="${city.name}, ${city.province}, Canada">
+  <meta name="geo.position" content="${city.lat};${city.lng}">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "LocalBusiness",
+    "name": "RoofReporterAI — ${city.name}",
+    "description": "AI-powered roof measurement reports and CRM for roofing companies in ${city.name}, ${city.province}.",
+    "url": "https://www.roofreporterai.com/roof-measurement/${citySlug}",
+    "image": "https://roofreporterai.com/static/logo.png",
+    "address": {"@type": "PostalAddress", "addressLocality": "${city.name}", "addressRegion": "${city.province}", "addressCountry": "CA"},
+    "geo": {"@type": "GeoCoordinates", "latitude": "${city.lat}", "longitude": "${city.lng}"},
+    "areaServed": {"@type": "City", "name": "${city.name}"},
+    "priceRange": "$5-$299 USD"
+  }
+  </script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <nav class="bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg">
+    <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+      <a href="/" class="flex items-center gap-3"><img src="/static/logo.png" alt="RoofReporterAI" class="w-9 h-9 rounded-lg object-cover"><span class="text-white font-bold text-lg">RoofReporterAI</span></a>
+      <div class="flex items-center gap-4">
+        <a href="/pricing" class="text-blue-200 hover:text-white text-sm">Pricing</a>
+        <a href="/customer/login" class="bg-white text-blue-700 font-semibold py-2 px-5 rounded-lg text-sm hover:bg-blue-50">Get Started Free</a>
+      </div>
+    </div>
+  </nav>
+
+  <section class="bg-gradient-to-br from-slate-900 via-blue-900 to-sky-800 text-white py-20">
+    <div class="max-w-5xl mx-auto px-4 text-center">
+      <span class="inline-block px-4 py-1.5 bg-sky-500/20 border border-sky-400/30 rounded-full text-sm text-sky-300 mb-6"><i class="fas fa-map-marker-alt mr-2"></i>${city.name}, ${city.province}</span>
+      <h1 class="text-4xl md:text-5xl font-black mb-6 leading-tight">Roof Measurement Reports<br>in <span class="text-sky-400">${city.name}</span></h1>
+      <p class="text-lg text-blue-200 max-w-2xl mx-auto mb-8">Get accurate satellite-powered roof measurements for any property in ${city.name}. Area, pitch, edges, material estimates — all in under 60 seconds.</p>
+      <div class="flex flex-col sm:flex-row gap-4 justify-center">
+        <a href="/customer/login" class="px-8 py-3.5 bg-sky-500 hover:bg-sky-400 text-white font-bold rounded-xl text-lg shadow-xl">Get 3 Free Reports <i class="fas fa-arrow-right ml-2"></i></a>
+        <a href="/pricing" class="px-8 py-3.5 bg-white/10 hover:bg-white/20 text-white font-semibold rounded-xl text-lg border border-white/20">View Pricing</a>
+      </div>
+      <p class="text-sm text-blue-300 mt-4">No credit card required. Instant setup.</p>
+    </div>
+  </section>
+
+  <section class="py-16 bg-white">
+    <div class="max-w-5xl mx-auto px-4">
+      <h2 class="text-2xl font-black text-gray-900 text-center mb-10">What ${city.name} Roofers Get With Every Report</h2>
+      <div class="grid md:grid-cols-3 gap-8">
+        <div class="text-center"><div class="w-14 h-14 bg-blue-100 rounded-xl flex items-center justify-center mx-auto mb-4"><i class="fas fa-ruler-combined text-blue-600 text-xl"></i></div><h3 class="font-bold text-gray-800 mb-2">Precise Measurements</h3><p class="text-sm text-gray-500">Total roof area (footprint + sloped), pitch analysis, and area multiplier from satellite imagery.</p></div>
+        <div class="text-center"><div class="w-14 h-14 bg-blue-100 rounded-xl flex items-center justify-center mx-auto mb-4"><i class="fas fa-draw-polygon text-blue-600 text-xl"></i></div><h3 class="font-bold text-gray-800 mb-2">Edge Breakdowns</h3><p class="text-sm text-gray-500">Ridge, hip, valley, eave, and rake lengths — everything you need for accurate material takeoff.</p></div>
+        <div class="text-center"><div class="w-14 h-14 bg-blue-100 rounded-xl flex items-center justify-center mx-auto mb-4"><i class="fas fa-boxes text-blue-600 text-xl"></i></div><h3 class="font-bold text-gray-800 mb-2">Material Calculator</h3><p class="text-sm text-gray-500">Shingles, underlayment, ice shield, ridge cap, drip edge — full BOM with waste factor and pricing.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="py-16 bg-gray-50">
+    <div class="max-w-5xl mx-auto px-4">
+      <h2 class="text-2xl font-black text-gray-900 text-center mb-10">Full CRM for ${city.name} Roofing Companies</h2>
+      <div class="grid md:grid-cols-2 gap-6">
+        <div class="bg-white rounded-xl p-6 border"><h3 class="font-bold text-gray-800 mb-2"><i class="fas fa-users text-blue-600 mr-2"></i>Customer Management</h3><p class="text-sm text-gray-500">Track all your ${city.name} customers, properties, and communication history in one place.</p></div>
+        <div class="bg-white rounded-xl p-6 border"><h3 class="font-bold text-gray-800 mb-2"><i class="fas fa-file-signature text-blue-600 mr-2"></i>Proposals & Invoicing</h3><p class="text-sm text-gray-500">Create professional proposals with material details, send invoices, and collect payments online.</p></div>
+        <div class="bg-white rounded-xl p-6 border"><h3 class="font-bold text-gray-800 mb-2"><i class="fas fa-calendar text-blue-600 mr-2"></i>Job Scheduling</h3><p class="text-sm text-gray-500">Calendar-based job management with Google Calendar sync, checklists, and crew tracking.</p></div>
+        <div class="bg-white rounded-xl p-6 border"><h3 class="font-bold text-gray-800 mb-2"><i class="fas fa-headset text-blue-600 mr-2"></i>AI Phone Secretary</h3><p class="text-sm text-gray-500">Never miss a call. AI answers your business phone, takes messages, and books appointments 24/7.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="py-16 bg-gradient-to-r from-blue-600 to-sky-500 text-white text-center">
+    <div class="max-w-3xl mx-auto px-4">
+      <h2 class="text-3xl font-black mb-4">Ready to Grow Your ${city.name} Roofing Business?</h2>
+      <p class="text-lg text-blue-100 mb-8">Join roofing contractors across ${city.province} who use RoofReporterAI to measure faster, quote smarter, and win more jobs.</p>
+      <a href="/customer/login" class="inline-block px-10 py-4 bg-white text-blue-700 font-black rounded-xl text-lg shadow-xl hover:bg-blue-50">Start Free — 3 Reports on Us <i class="fas fa-arrow-right ml-2"></i></a>
+    </div>
+  </section>
+
+  <footer class="bg-slate-900 text-gray-400 py-8 text-center text-sm">
+    <p>&copy; ${new Date().getFullYear()} RoofReporterAI. Serving roofing contractors in ${city.name}, ${city.province} and across Canada.</p>
+    <div class="mt-2"><a href="/privacy" class="hover:text-white">Privacy</a> · <a href="/terms" class="hover:text-white">Terms</a> · <a href="/blog" class="hover:text-white">Blog</a> · <a href="/pricing" class="hover:text-white">Pricing</a></div>
+  </footer>
+</body>
+</html>`)
+})
+
 // Material Calculator — BOM tool from completed report data
 app.get('/customer/material-calculator', (c) => {
   return c.html(getMaterialCalculatorPageHTML())
@@ -567,8 +690,13 @@ app.get('/customer/material-calculator', (c) => {
 app.get('/blog', (c) => {
   return c.html(getBlogListingHTML())
 })
-app.get('/blog/:slug', (c) => {
-  return c.html(getBlogPostHTML())
+app.get('/blog/:slug', async (c) => {
+  const slug = c.req.param('slug')
+  let post: any = null
+  try {
+    post = await c.env.DB.prepare("SELECT title, excerpt, meta_title, meta_description, cover_image_url, author_name, published_at, updated_at FROM blog_posts WHERE slug = ? AND status = 'published'").bind(slug).first()
+  } catch {}
+  return c.html(getBlogPostHTML(post, slug))
 })
 
 // Landing Funnel — Social media & blog traffic funnels here
@@ -1229,6 +1357,12 @@ function getHeadTags() {
   return `<meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="google-site-verification" content="CvzH14V1vTrop4cCx2z90ZUFnt4GJJNr1KkgiywoO2g" />
+  <meta name="theme-color" content="#0369a1">
+  <meta name="geo.region" content="CA-AB">
+  <meta name="geo.placename" content="Alberta, Canada">
+  <link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="apple-touch-icon" href="/static/logo.png">
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
   ${getTailwindConfig()}
@@ -2077,6 +2211,16 @@ function getLandingPageHTML() {
   <meta property="og:description" content="Professional satellite-powered roof measurement reports in under 60 seconds. Full CRM, AI phone secretary, and team management for roofing businesses.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://roofreporterai.com">
+  <meta property="og:image" content="https://roofreporterai.com/static/logo.png">
+  <meta property="og:image:width" content="512">
+  <meta property="og:image:height" content="512">
+  <meta property="og:site_name" content="RoofReporterAI">
+  <meta property="og:locale" content="en_CA">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="RoofReporterAI — Satellite Roof Measurements in 60 Seconds">
+  <meta name="twitter:description" content="AI-powered roof measurement reports, full CRM & team management for roofing companies. 3 free reports.">
+  <meta name="twitter:image" content="https://roofreporterai.com/static/logo.png">
+  <meta name="keywords" content="roof measurement software, roofing CRM, satellite roof reports, roof area calculator, roofing estimate tool, roof pitch analysis, material takeoff, roofing contractor software, AI roof measurement, Canadian roofing software">
   <link rel="canonical" href="https://roofreporterai.com/">
   <!-- JSON-LD Structured Data for SEO -->
   <script type="application/ld+json">
@@ -2084,13 +2228,15 @@ function getLandingPageHTML() {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
     "name": "RoofReporterAI",
+    "url": "https://roofreporterai.com",
+    "image": "https://roofreporterai.com/static/logo.png",
     "applicationCategory": "BusinessApplication",
     "operatingSystem": "Web",
     "description": "AI-powered roof measurement reports from satellite imagery. Full CRM, invoicing, proposals, and team management for roofing companies.",
     "offers": {
       "@type": "Offer",
-      "price": "8.00",
-      "priceCurrency": "CAD",
+      "price": "5.00",
+      "priceCurrency": "USD",
       "description": "Per report after 3 free reports"
     },
     "aggregateRating": {
@@ -2108,6 +2254,20 @@ function getLandingPageHTML() {
         "addressCountry": "CA"
       }
     }
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {"@type": "Question", "name": "How accurate are RoofReporterAI measurements?", "acceptedAnswer": {"@type": "Answer", "text": "Our measurements use satellite imagery combined with GPS coordinate tracing and Google Solar API data. Accuracy is typically within 2-5% of manual measurements, verified against pitch-corrected sloped area calculations."}},
+      {"@type": "Question", "name": "How much does a roof measurement report cost?", "acceptedAnswer": {"@type": "Answer", "text": "Reports start at $5 USD each. New users get 3 free reports to try the platform. Credit packs offer volume discounts — 25 reports for $99 or 100 reports for $299."}},
+      {"@type": "Question", "name": "What is included in a roof report?", "acceptedAnswer": {"@type": "Answer", "text": "Each report includes total roof area (footprint and sloped), pitch analysis, edge breakdowns (ridge, hip, valley, eave, rake), material estimates with waste calculations, satellite imagery, and a professional PDF."}},
+      {"@type": "Question", "name": "Does RoofReporterAI work in Canada and the US?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. RoofReporterAI works across Canada and the United States wherever Google satellite imagery is available. Coverage is best in urban and suburban areas."}},
+      {"@type": "Question", "name": "Can I use RoofReporterAI for my roofing company?", "acceptedAnswer": {"@type": "Answer", "text": "Absolutely. RoofReporterAI includes a full CRM with customer management, invoicing, proposals, job scheduling with Google Calendar sync, material calculator, and an AI phone secretary for your business."}},
+      {"@type": "Question", "name": "How fast are reports generated?", "acceptedAnswer": {"@type": "Answer", "text": "Reports are generated in under 60 seconds. Simply enter a property address, trace the roof edges on the satellite image, and the system calculates everything automatically."}}
+    ]
   }
   </script>
   <style>
@@ -2772,7 +2932,34 @@ function getPricingPageHTML() {
 <html lang="en">
 <head>
   ${getHeadTags()}
-  <title>Pricing - RoofReporterAI</title>
+  <title>Roof Report Pricing — AI Measurements from $5/Report | RoofReporterAI</title>
+  <meta name="description" content="Compare RoofReporterAI pricing plans. Pay per report from $5 USD or save with credit packs. Includes CRM, proposals, invoicing, and AI secretary. 3 free reports to start.">
+  <link rel="canonical" href="https://roofreporterai.com/pricing">
+  <meta property="og:title" content="Roof Report Pricing — From $5/Report">
+  <meta property="og:description" content="AI-powered roof measurement reports with full CRM. 3 free reports, then pay per report or buy credit packs.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://roofreporterai.com/pricing">
+  <meta property="og:image" content="https://roofreporterai.com/static/logo.png">
+  <meta property="og:site_name" content="RoofReporterAI">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="RoofReporterAI Pricing — From $5/Report">
+  <meta name="twitter:description" content="AI roof measurements with full CRM. 3 free reports included.">
+  <meta name="twitter:image" content="https://roofreporterai.com/static/logo.png">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    "name": "RoofReporterAI Roof Measurement Reports",
+    "description": "AI-powered satellite roof measurement reports with CRM, invoicing, proposals, and team management.",
+    "image": "https://roofreporterai.com/static/logo.png",
+    "brand": {"@type": "Brand", "name": "RoofReporterAI"},
+    "offers": [
+      {"@type": "Offer", "name": "Individual Report", "price": "5.00", "priceCurrency": "USD", "description": "Single roof measurement report"},
+      {"@type": "Offer", "name": "25-Pack", "price": "99.00", "priceCurrency": "USD", "description": "25 roof measurement reports — $3.96/each"},
+      {"@type": "Offer", "name": "100-Pack", "price": "299.00", "priceCurrency": "USD", "description": "100 roof measurement reports — $2.99/each"}
+    ]
+  }
+  </script>
 </head>
 <body class="bg-gray-50 min-h-screen">
   <nav class="bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg">
@@ -2816,7 +3003,13 @@ function getBlogListingHTML() {
   <meta property="og:title" content="RoofReporterAI Blog - Roofing Industry Insights">
   <meta property="og:description" content="Expert roofing industry insights, measurement technology tips, contractor business guides, and more.">
   <meta property="og:type" content="website">
-  <link rel="canonical" href="/blog">
+  <meta property="og:image" content="https://roofreporterai.com/static/logo.png">
+  <meta property="og:site_name" content="RoofReporterAI">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="RoofReporterAI Blog — Roofing Industry Insights">
+  <meta name="twitter:description" content="Expert roofing industry insights, measurement tips, and contractor business guides.">
+  <meta name="twitter:image" content="https://roofreporterai.com/static/logo.png">
+  <link rel="canonical" href="https://www.roofreporterai.com/blog">
 </head>
 <body class="bg-gray-50 min-h-screen">
   <!-- Navigation — Matches new homepage style -->
@@ -2942,14 +3135,34 @@ function getBlogListingHTML() {
 // ============================================================
 // BLOG POST PAGE — Individual article view with SEO
 // ============================================================
-function getBlogPostHTML() {
+function getBlogPostHTML(post?: any, slug?: string) {
+  const title = post ? (post.meta_title || post.title) + ' — RoofReporterAI Blog' : 'Blog Post - RoofReporterAI'
+  const desc = post ? (post.meta_description || post.excerpt || '') : ''
+  const image = post?.cover_image_url || 'https://roofreporterai.com/static/logo.png'
+  const canonical = slug ? `https://www.roofreporterai.com/blog/${slug}` : ''
+  const published = post?.published_at || ''
+  const updated = post?.updated_at || ''
+  const author = post?.author_name || 'RoofReporterAI Team'
+  const blogSchema = post ? `<script type="application/ld+json">
+  {"@context":"https://schema.org","@type":"BlogPosting","headline":"${(post.title || '').replace(/"/g, '\\"')}","description":"${(desc).replace(/"/g, '\\"')}","image":"${image}","datePublished":"${published}","dateModified":"${updated || published}","author":{"@type":"Organization","name":"${author}"},"publisher":{"@type":"Organization","name":"RoofReporterAI","logo":{"@type":"ImageObject","url":"https://roofreporterai.com/static/logo.png"}}}
+  </script>` : ''
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   ${getHeadTags()}
-  <title id="page-title">Blog Post - RoofReporterAI</title>
-  <meta name="description" id="meta-desc" content="">
+  <title id="page-title">${title}</title>
+  <meta name="description" id="meta-desc" content="${desc.replace(/"/g, '&quot;')}">
   <meta property="og:type" content="article">
+  <meta property="og:title" content="${title.replace(/"/g, '&quot;')}">
+  <meta property="og:description" content="${desc.replace(/"/g, '&quot;')}">
+  <meta property="og:image" content="${image}">
+  <meta property="og:site_name" content="RoofReporterAI">
+  ${canonical ? `<link rel="canonical" href="${canonical}">` : ''}
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="${title.replace(/"/g, '&quot;')}">
+  <meta name="twitter:description" content="${desc.replace(/"/g, '&quot;')}">
+  <meta name="twitter:image" content="${image}">
+  ${blogSchema}
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tailwindcss/typography@0.5.0/dist/typography.min.css">
 </head>
 <body class="bg-gray-50 min-h-screen">
@@ -3055,6 +3268,13 @@ function getLanderFunnelHTML() {
   <meta property="og:description" content="Get accurate roof area, pitch, material BOM, and more in 60 seconds. 3 free reports. No credit card.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://roofreporterai.com/lander">
+  <meta property="og:image" content="https://roofreporterai.com/static/logo.png">
+  <meta property="og:site_name" content="RoofReporterAI">
+  <link rel="canonical" href="https://www.roofreporterai.com/lander">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Free Roof Measurement Reports — RoofReporterAI">
+  <meta name="twitter:description" content="Get accurate roof area, pitch, material BOM in 60 seconds. 3 free reports, no credit card.">
+  <meta name="twitter:image" content="https://roofreporterai.com/static/logo.png">
   <style>
     html { scroll-behavior: smooth; }
     .scroll-animate { opacity: 0; transform: translateY(20px); transition: all 0.7s cubic-bezier(0.4, 0, 0.2, 1); }
