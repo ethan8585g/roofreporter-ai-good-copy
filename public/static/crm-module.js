@@ -1291,62 +1291,460 @@
   };
 
   // ============================================================
-  // MODULE: JOBS
+  // MODULE: JOBS — Calendar Dashboard + Google Calendar Integration
   // ============================================================
+  var _calConnected = false;
+  var _calEmail = '';
+  var _calView = 'month'; // 'month' or 'week'
+  var _calYear = new Date().getFullYear();
+  var _calMonth = new Date().getMonth();
+  var _calWeekStart = null;
+  var _allJobs = [];
+  var _allJobStats = {};
+  var _googleCalEvents = [];
+
   function initJobs() {
-    root.innerHTML = '<div class="text-center py-8"><div class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-brand-500 mx-auto mb-3"></div></div>';
-    loadJobs();
+    root.innerHTML = '<div class="text-center py-12"><div class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-brand-500 mx-auto mb-3"></div></div>';
+    checkCalendarStatus();
+    loadJobsForMonth(_calYear, _calMonth);
   }
 
-  function loadJobs(statusFilter) {
-    var url = '/api/crm/jobs';
-    if (statusFilter) url += '?status=' + statusFilter;
-    fetch(url, { headers: authHeadersOnly() })
+  function checkCalendarStatus() {
+    fetch('/api/calendar/status', { headers: authHeadersOnly() })
       .then(function(r) { return r.json(); })
-      .then(function(data) { renderJobs(data); })
-      .catch(function() { root.innerHTML = '<p class="text-red-500">Failed to load jobs.</p>'; });
+      .then(function(data) {
+        _calConnected = !!data.connected;
+        _calEmail = data.email || '';
+        // If connected, load Google Calendar events
+        if (_calConnected) loadGoogleCalEvents();
+      }).catch(function() { _calConnected = false; });
   }
 
-  function renderJobs(data) {
-    var jobs = data.jobs || [];
-    var stats = data.stats || {};
-    var html = '<div class="flex items-center justify-between mb-5 flex-wrap gap-3"><div><h2 class="text-lg font-bold text-gray-800"><i class="fas fa-hard-hat text-orange-500 mr-2"></i>Job Management</h2></div><button onclick="window._crmNewJob()" class="bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-orange-700"><i class="fas fa-plus mr-1"></i>New Job</button></div>';
+  function loadGoogleCalEvents() {
+    fetch('/api/calendar/events?days=60', { headers: authHeadersOnly() })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        _googleCalEvents = data.events || [];
+        renderJobsDashboard();
+      }).catch(function() { _googleCalEvents = []; });
+  }
 
+  function loadJobsForMonth(year, month) {
+    var mm = String(month + 1).padStart(2, '0');
+    var monthStr = year + '-' + mm;
+    var url = '/api/crm/jobs?month=' + monthStr;
+    if (window._jobFilter) url += '&status=' + window._jobFilter;
+    // Also fetch all jobs for stats (no month filter)
+    Promise.all([
+      fetch(url, { headers: authHeadersOnly() }).then(function(r) { return r.json(); }),
+      fetch('/api/crm/jobs', { headers: authHeadersOnly() }).then(function(r) { return r.json(); })
+    ]).then(function(results) {
+      _allJobs = results[0].jobs || [];
+      _allJobStats = results[1].stats || {};
+      renderJobsDashboard();
+    }).catch(function() { root.innerHTML = '<p class="text-red-500 p-4">Failed to load jobs.</p>'; });
+  }
+
+  function jobTypeColor(type) {
+    if (type === 'install') return 'bg-blue-100 text-blue-800 border-blue-200';
+    if (type === 'repair') return 'bg-amber-100 text-amber-800 border-amber-200';
+    if (type === 'inspection') return 'bg-purple-100 text-purple-800 border-purple-200';
+    if (type === 'maintenance') return 'bg-green-100 text-green-800 border-green-200';
+    return 'bg-gray-100 text-gray-700 border-gray-200';
+  }
+  function jobTypeIcon(type) {
+    if (type === 'install') return 'fa-home';
+    if (type === 'repair') return 'fa-wrench';
+    if (type === 'inspection') return 'fa-search';
+    if (type === 'maintenance') return 'fa-tools';
+    return 'fa-hard-hat';
+  }
+
+  var monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  var dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+  function renderJobsDashboard() {
+    var stats = _allJobStats;
+    var html = '';
+
+    // A. Header bar
+    html += '<div class="flex items-center justify-between mb-5 flex-wrap gap-3">';
+    html += '<div><h2 class="text-lg font-bold text-gray-800"><i class="fas fa-hard-hat text-orange-500 mr-2"></i>Job Management</h2></div>';
+    html += '<div class="flex items-center gap-2 flex-wrap">';
+    // Google Calendar button
+    if (_calConnected) {
+      html += '<button onclick="window._crmCalendarSettings()" class="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-green-300 bg-green-50 text-green-700 hover:bg-green-100"><i class="fab fa-google text-green-600"></i>Calendar Connected</button>';
+      html += '<button onclick="window._crmSyncAllJobs()" class="px-3 py-2 rounded-lg text-xs font-medium border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"><i class="fas fa-sync-alt mr-1"></i>Sync All</button>';
+    } else {
+      html += '<button onclick="window._crmCalendarSettings()" class="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-gray-300 bg-white text-gray-600 hover:bg-gray-50"><i class="fab fa-google text-gray-400"></i>Connect Calendar</button>';
+    }
+    html += '<button onclick="window._crmNewJob()" class="bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-orange-700"><i class="fas fa-plus mr-1"></i>New Job</button>';
+    html += '</div></div>';
+
+    // B. Stats bar
     html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">' +
       '<div class="bg-white rounded-xl border p-4 text-center"><p class="text-2xl font-black text-gray-800">' + (stats.total || 0) + '</p><p class="text-[10px] text-gray-500">Total Jobs</p></div>' +
       '<div class="bg-white rounded-xl border p-4 text-center"><p class="text-2xl font-black text-blue-600">' + (stats.scheduled || 0) + '</p><p class="text-[10px] text-gray-500">Scheduled</p></div>' +
       '<div class="bg-white rounded-xl border p-4 text-center"><p class="text-2xl font-black text-amber-600">' + (stats.in_progress || 0) + '</p><p class="text-[10px] text-gray-500">In Progress</p></div>' +
       '<div class="bg-white rounded-xl border p-4 text-center"><p class="text-2xl font-black text-green-600">' + (stats.completed || 0) + '</p><p class="text-[10px] text-gray-500">Completed</p></div></div>';
 
-    // Filter tabs
-    html += '<div class="flex gap-1 mb-4 bg-white rounded-lg border p-1 overflow-x-auto">';
+    // C. Calendar toolbar
+    html += '<div class="flex items-center justify-between mb-4 flex-wrap gap-2">';
+    // Left: filter tabs
+    html += '<div class="flex gap-1 bg-white rounded-lg border p-1 overflow-x-auto">';
     var filters = [['','All'],['scheduled','Scheduled'],['in_progress','In Progress'],['completed','Completed']];
     for (var f = 0; f < filters.length; f++) {
-      html += '<button onclick="window._crmFilterJobs(\'' + filters[f][0] + '\')" class="px-4 py-1.5 rounded-lg text-xs font-medium transition-colors hover:bg-gray-100 ' + (((!window._jobFilter && !filters[f][0]) || window._jobFilter === filters[f][0]) ? 'bg-brand-600 text-white' : 'text-gray-600') + '">' + filters[f][1] + '</button>';
+      html += '<button onclick="window._crmFilterJobs(\'' + filters[f][0] + '\')" class="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors hover:bg-gray-100 ' + (((!window._jobFilter && !filters[f][0]) || window._jobFilter === filters[f][0]) ? 'bg-brand-600 text-white' : 'text-gray-600') + '">' + filters[f][1] + '</button>';
     }
     html += '</div>';
+    // Right: view toggle + nav
+    html += '<div class="flex items-center gap-2">';
+    html += '<div class="flex bg-white rounded-lg border p-0.5">';
+    html += '<button onclick="window._crmSetView(\'month\')" class="px-3 py-1.5 rounded-md text-xs font-medium ' + (_calView === 'month' ? 'bg-brand-600 text-white' : 'text-gray-600 hover:bg-gray-100') + '">Month</button>';
+    html += '<button onclick="window._crmSetView(\'week\')" class="px-3 py-1.5 rounded-md text-xs font-medium ' + (_calView === 'week' ? 'bg-brand-600 text-white' : 'text-gray-600 hover:bg-gray-100') + '">Week</button>';
+    html += '</div>';
+    html += '<button onclick="window._crmPrevPeriod()" class="w-8 h-8 flex items-center justify-center rounded-lg border bg-white text-gray-600 hover:bg-gray-50"><i class="fas fa-chevron-left text-xs"></i></button>';
+    html += '<span class="text-sm font-semibold text-gray-800 min-w-[140px] text-center">' + monthNames[_calMonth] + ' ' + _calYear + '</span>';
+    html += '<button onclick="window._crmNextPeriod()" class="w-8 h-8 flex items-center justify-center rounded-lg border bg-white text-gray-600 hover:bg-gray-50"><i class="fas fa-chevron-right text-xs"></i></button>';
+    html += '<button onclick="window._crmCalToday()" class="px-3 py-1.5 rounded-lg border bg-white text-xs font-medium text-gray-600 hover:bg-gray-50">Today</button>';
+    html += '</div></div>';
 
-    if (jobs.length === 0) {
-      html += '<div class="bg-white rounded-xl border p-12 text-center"><div class="w-16 h-16 bg-orange-50 rounded-full flex items-center justify-center mx-auto mb-4"><i class="fas fa-hard-hat text-orange-400 text-2xl"></i></div><h3 class="text-lg font-semibold text-gray-700 mb-2">No Jobs Scheduled</h3><p class="text-gray-500 mb-4">Schedule your first roofing job.</p><button onclick="window._crmNewJob()" class="bg-orange-600 text-white px-6 py-2.5 rounded-xl font-semibold hover:bg-orange-700"><i class="fas fa-plus mr-2"></i>Schedule Job</button></div>';
+    // D/E. Calendar grid
+    if (_calView === 'month') {
+      html += renderMonthView(_calYear, _calMonth, _allJobs);
     } else {
-      html += '<div class="space-y-3">';
-      for (var i = 0; i < jobs.length; i++) {
-        var j = jobs[i];
-        var jobIcon = j.status === 'completed' ? 'fa-check-circle text-green-500' : j.status === 'in_progress' ? 'fa-spinner fa-spin text-amber-500' : 'fa-calendar-day text-blue-500';
-        html += '<div class="bg-white rounded-xl border p-4 hover:shadow-md transition-shadow"><div class="flex items-start justify-between"><div class="flex items-start gap-3 min-w-0"><div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 bg-gray-50"><i class="fas ' + jobIcon + '"></i></div><div class="min-w-0"><div class="flex items-center gap-2 mb-1"><span class="font-mono text-xs font-bold text-orange-600">' + j.job_number + '</span>' + badge(j.status) + '</div><p class="text-gray-800 font-medium text-sm">' + j.title + '</p><div class="flex flex-wrap items-center gap-3 mt-1.5 text-xs text-gray-500"><span><i class="fas fa-calendar mr-1"></i>' + fmtDate(j.scheduled_date) + (j.scheduled_time ? ' ' + j.scheduled_time : '') + '</span>' + (j.customer_name ? '<span><i class="fas fa-user mr-1"></i>' + j.customer_name + '</span>' : '') + (j.property_address ? '<span><i class="fas fa-map-marker-alt mr-1"></i>' + j.property_address + '</span>' : '') + (j.crew_size ? '<span><i class="fas fa-users mr-1"></i>' + j.crew_size + ' crew</span>' : '') + '</div></div></div><div class="flex flex-col items-end gap-1 flex-shrink-0 ml-4">';
-        if (j.status === 'scheduled') html += '<button onclick="window._crmMarkJob(' + j.id + ',\'in_progress\')" class="text-xs bg-amber-100 text-amber-700 px-3 py-1 rounded-lg hover:bg-amber-200">Start</button>';
-        if (j.status === 'in_progress') html += '<button onclick="window._crmMarkJob(' + j.id + ',\'completed\')" class="text-xs bg-green-100 text-green-700 px-3 py-1 rounded-lg hover:bg-green-200">Complete</button>';
-        html += '<button onclick="window._crmViewJob(' + j.id + ')" class="text-xs text-brand-600 hover:underline">Details</button>';
-        html += '<button onclick="window._crmDeleteJob(' + j.id + ')" class="text-gray-400 hover:text-red-500"><i class="fas fa-trash text-xs"></i></button>';
-        html += '</div></div></div>';
-      }
-      html += '</div>';
+      html += renderWeekView();
     }
+
     root.innerHTML = html;
   }
 
+  function renderMonthView(year, month, jobs) {
+    var today = new Date();
+    var todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+    var firstDay = new Date(year, month, 1).getDay(); // 0=Sun
+    var daysInMonth = new Date(year, month + 1, 0).getDate();
+    var totalCells = Math.ceil((firstDay + daysInMonth) / 7) * 7;
+
+    var html = '<div class="bg-white rounded-xl border overflow-hidden">';
+    // Day headers
+    html += '<div class="grid grid-cols-7 border-b bg-gray-50">';
+    for (var d = 0; d < 7; d++) {
+      html += '<div class="text-center text-[10px] font-semibold text-gray-500 uppercase py-2 px-1">' + dayNames[d] + '</div>';
+    }
+    html += '</div>';
+    // Day cells
+    html += '<div class="grid grid-cols-7">';
+    for (var c = 0; c < totalCells; c++) {
+      var dayNum = c - firstDay + 1;
+      var isCurrentMonth = dayNum >= 1 && dayNum <= daysInMonth;
+      var dateStr = '';
+      if (isCurrentMonth) {
+        dateStr = year + '-' + String(month + 1).padStart(2, '0') + '-' + String(dayNum).padStart(2, '0');
+      }
+      var isToday = dateStr === todayStr;
+      var borderClass = isToday ? 'border border-brand-500 bg-brand-50/30' : 'border-r border-b border-gray-100';
+
+      html += '<div class="min-h-[110px] p-1.5 ' + borderClass + ' ' + (isCurrentMonth ? 'cursor-pointer hover:bg-blue-50/40' : 'bg-gray-50/50') + '" onclick="' + (isCurrentMonth ? 'window._crmCalendarDayClick(\'' + dateStr + '\')' : '') + '">';
+
+      if (isCurrentMonth) {
+        html += '<div class="flex items-center justify-between mb-1"><span class="text-xs font-semibold ' + (isToday ? 'bg-brand-600 text-white w-6 h-6 flex items-center justify-center rounded-full' : 'text-gray-500') + '">' + dayNum + '</span></div>';
+
+        // Jobs for this day
+        var dayJobs = [];
+        for (var ji = 0; ji < jobs.length; ji++) {
+          if (jobs[ji].scheduled_date === dateStr) dayJobs.push(jobs[ji]);
+        }
+        // Google Calendar events for this day
+        var dayGCal = [];
+        if (_calConnected && _googleCalEvents.length) {
+          for (var gi = 0; gi < _googleCalEvents.length; gi++) {
+            var evt = _googleCalEvents[gi];
+            var evtDate = (evt.start_time || '').substring(0, 10);
+            if (evtDate === dateStr && !evt.linked_entity_id) dayGCal.push(evt);
+          }
+        }
+
+        var maxShow = 3;
+        var shown = 0;
+        html += '<div class="space-y-0.5">';
+        for (var k = 0; k < dayJobs.length && shown < maxShow; k++) {
+          var jb = dayJobs[k];
+          var statusExtra = jb.status === 'completed' ? ' opacity-60 line-through' : jb.status === 'in_progress' ? ' border-l-2 border-amber-500' : '';
+          html += '<div class="text-[10px] leading-tight px-1.5 py-0.5 rounded border ' + jobTypeColor(jb.job_type) + statusExtra + ' truncate cursor-pointer" onclick="event.stopPropagation(); window._crmViewJob(' + jb.id + ')" title="' + (jb.title || '').replace(/"/g, '&quot;') + '">';
+          html += '<i class="fas ' + jobTypeIcon(jb.job_type) + ' mr-0.5"></i>';
+          if (jb.scheduled_time) html += '<span class="font-semibold">' + jb.scheduled_time.substring(0, 5) + '</span> ';
+          html += (jb.title || 'Untitled').substring(0, 20);
+          html += '</div>';
+          shown++;
+        }
+        // Google Calendar events
+        for (var ge = 0; ge < dayGCal.length && shown < maxShow; ge++) {
+          var gEvt = dayGCal[ge];
+          var gTime = (gEvt.start_time || '').substring(11, 16);
+          html += '<div class="text-[10px] leading-tight px-1.5 py-0.5 rounded bg-red-50 text-red-700 border border-red-200 truncate" title="' + (gEvt.title || '').replace(/"/g, '&quot;') + '">';
+          html += '<i class="fab fa-google mr-0.5 text-[8px]"></i>';
+          if (gTime && gTime !== '00:00') html += '<span class="font-semibold">' + gTime + '</span> ';
+          html += (gEvt.title || 'Event').substring(0, 20);
+          html += '</div>';
+          shown++;
+        }
+        var remaining = (dayJobs.length + dayGCal.length) - maxShow;
+        if (remaining > 0) {
+          html += '<div class="text-[9px] text-brand-600 font-medium px-1 cursor-pointer hover:underline" onclick="event.stopPropagation(); window._crmExpandDay(\'' + dateStr + '\')">+' + remaining + ' more</div>';
+        }
+        html += '</div>';
+      } else {
+        // Out-of-month cell
+        var adjMonth = dayNum < 1 ? month - 1 : month + 1;
+        var adjYear = year;
+        if (adjMonth < 0) { adjMonth = 11; adjYear--; }
+        if (adjMonth > 11) { adjMonth = 0; adjYear++; }
+        var adjDay = dayNum < 1 ? new Date(adjYear, adjMonth + 1, 0).getDate() + dayNum : dayNum - daysInMonth;
+        html += '<span class="text-xs text-gray-300">' + adjDay + '</span>';
+      }
+      html += '</div>';
+    }
+    html += '</div></div>';
+    return html;
+  }
+
+  function renderWeekView() {
+    var today = new Date();
+    var todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+    // Calculate week start (Sunday) for the current month view's first visible week, or use current week
+    if (!_calWeekStart) {
+      var d = new Date();
+      d.setDate(d.getDate() - d.getDay());
+      _calWeekStart = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    }
+
+    var html = '<div class="bg-white rounded-xl border overflow-hidden">';
+    // Day headers with full date
+    html += '<div class="grid grid-cols-7 border-b bg-gray-50">';
+    for (var d = 0; d < 7; d++) {
+      var colDate = new Date(_calWeekStart);
+      colDate.setDate(colDate.getDate() + d);
+      var colStr = colDate.getFullYear() + '-' + String(colDate.getMonth() + 1).padStart(2, '0') + '-' + String(colDate.getDate()).padStart(2, '0');
+      var isToday = colStr === todayStr;
+      html += '<div class="text-center py-2 px-1 ' + (isToday ? 'bg-brand-50' : '') + '">';
+      html += '<div class="text-[10px] font-semibold text-gray-500 uppercase">' + dayNames[d] + '</div>';
+      html += '<div class="text-sm font-bold ' + (isToday ? 'text-brand-600' : 'text-gray-700') + '">' + colDate.getDate() + '</div>';
+      html += '</div>';
+    }
+    html += '</div>';
+    // Day columns
+    html += '<div class="grid grid-cols-7">';
+    for (var d = 0; d < 7; d++) {
+      var colDate = new Date(_calWeekStart);
+      colDate.setDate(colDate.getDate() + d);
+      var colStr = colDate.getFullYear() + '-' + String(colDate.getMonth() + 1).padStart(2, '0') + '-' + String(colDate.getDate()).padStart(2, '0');
+      var isToday = colStr === todayStr;
+
+      html += '<div class="min-h-[250px] p-2 ' + (isToday ? 'bg-brand-50/20 border border-brand-200' : 'border-r border-b border-gray-100') + ' cursor-pointer hover:bg-blue-50/30" onclick="window._crmCalendarDayClick(\'' + colStr + '\')">';
+
+      // Jobs for this day
+      var dayJobs = [];
+      for (var ji = 0; ji < _allJobs.length; ji++) {
+        if (_allJobs[ji].scheduled_date === colStr) dayJobs.push(_allJobs[ji]);
+      }
+      // Sort by time
+      dayJobs.sort(function(a, b) { return (a.scheduled_time || '99:99').localeCompare(b.scheduled_time || '99:99'); });
+
+      html += '<div class="space-y-1.5">';
+      for (var k = 0; k < dayJobs.length; k++) {
+        var jb = dayJobs[k];
+        var statusExtra = jb.status === 'completed' ? ' opacity-60' : jb.status === 'in_progress' ? ' border-l-2 border-amber-500' : '';
+        html += '<div class="text-xs p-2 rounded-lg border ' + jobTypeColor(jb.job_type) + statusExtra + ' cursor-pointer hover:shadow-sm" onclick="event.stopPropagation(); window._crmViewJob(' + jb.id + ')">';
+        html += '<div class="font-semibold text-[11px] truncate"><i class="fas ' + jobTypeIcon(jb.job_type) + ' mr-1"></i>' + (jb.title || 'Untitled') + '</div>';
+        if (jb.scheduled_time) html += '<div class="text-[10px] mt-0.5 opacity-75"><i class="fas fa-clock mr-0.5"></i>' + jb.scheduled_time.substring(0, 5) + '</div>';
+        if (jb.customer_name) html += '<div class="text-[10px] mt-0.5 opacity-75 truncate"><i class="fas fa-user mr-0.5"></i>' + jb.customer_name + '</div>';
+        if (jb.property_address) html += '<div class="text-[10px] mt-0.5 opacity-75 truncate"><i class="fas fa-map-marker-alt mr-0.5"></i>' + jb.property_address + '</div>';
+        if (jb.crew_size) html += '<div class="text-[10px] mt-0.5 opacity-75"><i class="fas fa-users mr-0.5"></i>' + jb.crew_size + ' crew</div>';
+        html += '</div>';
+      }
+      // Google Cal events
+      if (_calConnected && _googleCalEvents.length) {
+        for (var gi = 0; gi < _googleCalEvents.length; gi++) {
+          var evt = _googleCalEvents[gi];
+          if ((evt.start_time || '').substring(0, 10) === colStr && !evt.linked_entity_id) {
+            var gTime = (evt.start_time || '').substring(11, 16);
+            html += '<div class="text-xs p-2 rounded-lg bg-red-50 text-red-700 border border-red-200">';
+            html += '<div class="font-semibold text-[11px] truncate"><i class="fab fa-google mr-1 text-[9px]"></i>' + (evt.title || 'Event') + '</div>';
+            if (gTime && gTime !== '00:00') html += '<div class="text-[10px] mt-0.5 opacity-75"><i class="fas fa-clock mr-0.5"></i>' + gTime + '</div>';
+            if (evt.location) html += '<div class="text-[10px] mt-0.5 opacity-75 truncate"><i class="fas fa-map-marker-alt mr-0.5"></i>' + evt.location + '</div>';
+            html += '</div>';
+          }
+        }
+      }
+      html += '</div></div>';
+    }
+    html += '</div></div>';
+    return html;
+  }
+
+  // Calendar navigation
+  window._crmPrevPeriod = function() {
+    if (_calView === 'month') {
+      _calMonth--;
+      if (_calMonth < 0) { _calMonth = 11; _calYear--; }
+      loadJobsForMonth(_calYear, _calMonth);
+    } else {
+      if (!_calWeekStart) { _calWeekStart = new Date(); _calWeekStart.setDate(_calWeekStart.getDate() - _calWeekStart.getDay()); }
+      _calWeekStart.setDate(_calWeekStart.getDate() - 7);
+      _calYear = _calWeekStart.getFullYear();
+      _calMonth = _calWeekStart.getMonth();
+      loadJobsForMonth(_calYear, _calMonth);
+    }
+  };
+  window._crmNextPeriod = function() {
+    if (_calView === 'month') {
+      _calMonth++;
+      if (_calMonth > 11) { _calMonth = 0; _calYear++; }
+      loadJobsForMonth(_calYear, _calMonth);
+    } else {
+      if (!_calWeekStart) { _calWeekStart = new Date(); _calWeekStart.setDate(_calWeekStart.getDate() - _calWeekStart.getDay()); }
+      _calWeekStart.setDate(_calWeekStart.getDate() + 7);
+      _calYear = _calWeekStart.getFullYear();
+      _calMonth = _calWeekStart.getMonth();
+      loadJobsForMonth(_calYear, _calMonth);
+    }
+  };
+  window._crmCalToday = function() {
+    _calYear = new Date().getFullYear();
+    _calMonth = new Date().getMonth();
+    var d = new Date(); d.setDate(d.getDate() - d.getDay());
+    _calWeekStart = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    loadJobsForMonth(_calYear, _calMonth);
+  };
+  window._crmSetView = function(mode) {
+    _calView = mode;
+    if (mode === 'week' && !_calWeekStart) {
+      var d = new Date(); d.setDate(d.getDate() - d.getDay());
+      _calWeekStart = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    }
+    renderJobsDashboard();
+  };
+
+  // Quick-add from calendar day click
+  window._crmCalendarDayClick = function(dateStr) {
+    window._prefillJobDate = dateStr;
+    window._crmNewJob();
+  };
+
+  // Expand day — show all jobs for a day in a modal
+  window._crmExpandDay = function(dateStr) {
+    var dayJobs = [];
+    for (var i = 0; i < _allJobs.length; i++) {
+      if (_allJobs[i].scheduled_date === dateStr) dayJobs.push(_allJobs[i]);
+    }
+    var body = '<div class="space-y-2">';
+    if (dayJobs.length === 0) {
+      body += '<p class="text-gray-500 text-sm">No jobs for this day.</p>';
+    }
+    for (var k = 0; k < dayJobs.length; k++) {
+      var jb = dayJobs[k];
+      body += '<div class="flex items-center gap-3 p-3 rounded-lg border ' + jobTypeColor(jb.job_type) + ' cursor-pointer hover:shadow-sm" onclick="closeModal(); window._crmViewJob(' + jb.id + ')">';
+      body += '<i class="fas ' + jobTypeIcon(jb.job_type) + '"></i>';
+      body += '<div class="min-w-0 flex-1"><div class="font-semibold text-sm truncate">' + (jb.title || 'Untitled') + '</div>';
+      body += '<div class="text-xs opacity-75">' + (jb.scheduled_time ? jb.scheduled_time.substring(0, 5) + ' ' : '') + (jb.customer_name || '') + '</div>';
+      body += '</div>' + badge(jb.status) + '</div>';
+    }
+    body += '</div>';
+    showModal('Jobs on ' + dateStr, body);
+  };
+
+  // Google Calendar settings modal
+  window._crmCalendarSettings = function() {
+    var body = '';
+    if (_calConnected) {
+      body += '<div class="bg-green-50 border border-green-200 rounded-xl p-4 mb-4 flex items-center gap-3">';
+      body += '<i class="fab fa-google text-green-600 text-xl"></i>';
+      body += '<div><p class="font-semibold text-green-800">Google Calendar Connected</p>';
+      body += '<p class="text-xs text-green-600">' + _calEmail + '</p></div></div>';
+      body += '<div class="space-y-3">';
+      body += '<button onclick="window._crmSyncAllJobs(); closeModal();" class="w-full px-4 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700"><i class="fas fa-sync-alt mr-2"></i>Sync All Jobs to Google Calendar</button>';
+      body += '<p class="text-xs text-gray-500 text-center">This will create/update Google Calendar events for all scheduled and in-progress jobs.</p>';
+      body += '<hr class="my-3">';
+      body += '<button onclick="window._crmDisconnectCalendar()" class="w-full px-4 py-2 bg-white border border-red-300 text-red-600 rounded-lg text-sm font-medium hover:bg-red-50"><i class="fas fa-unlink mr-2"></i>Disconnect Calendar</button>';
+      body += '<p class="text-[10px] text-gray-400 text-center">Note: This will also disconnect Gmail email sending.</p>';
+      body += '</div>';
+    } else {
+      body += '<div class="text-center py-4">';
+      body += '<div class="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4"><i class="fab fa-google text-gray-400 text-2xl"></i></div>';
+      body += '<h3 class="text-lg font-semibold text-gray-700 mb-2">Connect Google Calendar</h3>';
+      body += '<p class="text-sm text-gray-500 mb-4">Sync your CRM jobs with Google Calendar to see them alongside your other appointments.</p>';
+      body += '<ul class="text-left text-xs text-gray-500 space-y-1.5 mb-5 max-w-xs mx-auto">';
+      body += '<li><i class="fas fa-check text-green-500 mr-2"></i>See jobs on your Google Calendar</li>';
+      body += '<li><i class="fas fa-check text-green-500 mr-2"></i>Get reminders before scheduled jobs</li>';
+      body += '<li><i class="fas fa-check text-green-500 mr-2"></i>View Google Calendar events here</li>';
+      body += '<li><i class="fas fa-check text-green-500 mr-2"></i>Automatic attendee invitations</li>';
+      body += '</ul>';
+      body += '<button onclick="window._crmConnectCalendar()" class="px-6 py-2.5 bg-brand-600 text-white rounded-xl font-semibold hover:bg-brand-700"><i class="fab fa-google mr-2"></i>Connect with Google</button>';
+      body += '</div>';
+    }
+    showModal('Google Calendar', body);
+  };
+
+  window._crmConnectCalendar = function() {
+    closeModal();
+    fetch('/api/crm/gmail/connect', { headers: authHeadersOnly() })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.auth_url) {
+          var popup = window.open(data.auth_url, 'calOAuth', 'width=550,height=650');
+          var poll = setInterval(function() {
+            try {
+              if (!popup || popup.closed) {
+                clearInterval(poll);
+                // Re-check status after popup closes
+                setTimeout(function() {
+                  checkCalendarStatus();
+                  loadJobsForMonth(_calYear, _calMonth);
+                }, 1000);
+              }
+            } catch(e) {}
+          }, 500);
+        }
+      }).catch(function() { toast('Failed to start OAuth flow', 'error'); });
+  };
+
+  window._crmDisconnectCalendar = function() {
+    if (!confirm('Disconnect Google Calendar? This will also disconnect Gmail email sending.')) return;
+    closeModal();
+    fetch('/api/crm/gmail/disconnect', { method: 'POST', headers: authHeaders() })
+      .then(function() {
+        _calConnected = false;
+        _calEmail = '';
+        _googleCalEvents = [];
+        toast('Google Calendar disconnected');
+        renderJobsDashboard();
+      }).catch(function() { toast('Failed to disconnect', 'error'); });
+  };
+
+  // Sync functions
+  window._crmSyncJobToCalendar = function(jobId) {
+    toast('Syncing to Google Calendar...');
+    fetch('/api/calendar/sync-job/' + jobId, { method: 'POST', headers: authHeaders() })
+      .then(function(r) { return r.json(); })
+      .then(function(res) {
+        if (res.success) toast('Job synced to Google Calendar!');
+        else toast(res.error || 'Sync failed', 'error');
+      }).catch(function() { toast('Sync failed', 'error'); });
+  };
+
+  window._crmSyncAllJobs = function() {
+    toast('Syncing all jobs to Google Calendar...');
+    fetch('/api/calendar/sync-all-jobs', { method: 'POST', headers: authHeaders() })
+      .then(function(r) { return r.json(); })
+      .then(function(res) {
+        if (res.success) toast((res.synced || 0) + ' jobs synced to Google Calendar!');
+        else toast(res.error || 'Sync failed', 'error');
+      }).catch(function() { toast('Sync failed', 'error'); });
+  };
+
   window._jobFilter = '';
-  window._crmFilterJobs = function(s) { window._jobFilter = s; loadJobs(s); };
+  window._crmFilterJobs = function(s) { window._jobFilter = s; loadJobsForMonth(_calYear, _calMonth); };
 
   window._crmNewJob = function() {
     fetch('/api/crm/customers', { headers: authHeadersOnly() })
@@ -1376,16 +1774,25 @@
           });
           fetch('/api/crm/jobs', { method: 'POST', headers: authHeaders(), body: JSON.stringify(payload) })
             .then(function(r) { return r.json(); })
-            .then(function(res) { if (res.success) { closeModal(); toast('Job scheduled!'); loadJobs(); } else { toast(res.error || 'Failed', 'error'); } })
+            .then(function(res) { if (res.success) { closeModal(); toast('Job scheduled!'); loadJobsForMonth(_calYear, _calMonth); } else { toast(res.error || 'Failed', 'error'); } })
             .catch(function(e) { toast('Failed to create job: ' + (e.message || 'Network error'), 'error'); });
         }, 'Schedule Job');
+
+        // Pre-fill date if clicked from calendar
+        if (window._prefillJobDate) {
+          setTimeout(function() {
+            var dateInput = document.getElementById('jobDate');
+            if (dateInput) dateInput.value = window._prefillJobDate;
+            window._prefillJobDate = null;
+          }, 50);
+        }
       });
   };
 
   window._crmMarkJob = function(id, status) {
     fetch('/api/crm/jobs/' + id, { method: 'PUT', headers: authHeaders(), body: JSON.stringify({ status: status }) })
       .then(function(r) { return r.json(); })
-      .then(function(res) { if (res.success) { toast('Job updated'); loadJobs(window._jobFilter); } })
+      .then(function(res) { if (res.success) { toast('Job updated'); loadJobsForMonth(_calYear, _calMonth); } })
       .catch(function(e) { toast('Failed to update job: ' + (e.message || 'Network error'), 'error'); });
   };
 
@@ -1403,9 +1810,19 @@
           (j.customer_name ? '<div><i class="fas fa-user mr-2 text-gray-400"></i>' + j.customer_name + '</div>' : '') +
           (j.property_address ? '<div><i class="fas fa-map-marker-alt mr-2 text-gray-400"></i>' + j.property_address + '</div>' : '') +
           (j.crew_size ? '<div><i class="fas fa-users mr-2 text-gray-400"></i>' + j.crew_size + ' crew</div>' : '') +
+          (j.job_type ? '<div><i class="fas ' + jobTypeIcon(j.job_type) + ' mr-2 text-gray-400"></i>' + (j.job_type || '').charAt(0).toUpperCase() + (j.job_type || '').slice(1) + '</div>' : '') +
+          (j.estimated_duration ? '<div><i class="fas fa-hourglass-half mr-2 text-gray-400"></i>' + j.estimated_duration + '</div>' : '') +
           '</div>';
 
-        // Checklist section — always show (even if empty, so user can add items)
+        // Action buttons
+        body += '<div class="flex flex-wrap gap-2 pt-2">';
+        if (j.status === 'scheduled') body += '<button onclick="window._crmMarkJob(' + j.id + ',\'in_progress\'); closeModal();" class="px-3 py-1.5 bg-amber-100 text-amber-700 rounded-lg text-xs font-medium hover:bg-amber-200"><i class="fas fa-play mr-1"></i>Start Job</button>';
+        if (j.status === 'in_progress') body += '<button onclick="window._crmMarkJob(' + j.id + ',\'completed\'); closeModal();" class="px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-xs font-medium hover:bg-green-200"><i class="fas fa-check mr-1"></i>Complete</button>';
+        if (_calConnected) body += '<button onclick="window._crmSyncJobToCalendar(' + j.id + ')" class="px-3 py-1.5 bg-white border border-gray-300 text-gray-700 rounded-lg text-xs font-medium hover:bg-gray-50"><i class="fab fa-google mr-1 text-blue-500"></i>Sync to Calendar</button>';
+        body += '<button onclick="window._crmDeleteJob(' + j.id + '); closeModal();" class="px-3 py-1.5 bg-white border border-red-200 text-red-600 rounded-lg text-xs font-medium hover:bg-red-50"><i class="fas fa-trash mr-1"></i>Delete</button>';
+        body += '</div>';
+
+        // Checklist section
         body += '<div class="pt-3 border-t"><h4 class="text-xs font-bold text-gray-500 uppercase mb-2">Checklist</h4><div id="checklistItems" class="space-y-2">';
         if (checklist.length > 0) {
           for (var k = 0; k < checklist.length; k++) {
@@ -1416,7 +1833,6 @@
           body += '<p class="text-xs text-gray-400 italic" id="noChecklistMsg">No checklist items yet.</p>';
         }
         body += '</div>';
-        // Add new checklist item form
         body += '<div class="mt-3 flex items-center gap-2"><input type="text" id="newChecklistLabel" placeholder="Add checklist item..." class="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500" onkeydown="if(event.key===\'Enter\')window._crmAddChecklistItem(' + j.id + ')"><button onclick="window._crmAddChecklistItem(' + j.id + ')" class="px-3 py-2 bg-orange-600 text-white rounded-lg text-sm font-semibold hover:bg-orange-700 flex-shrink-0"><i class="fas fa-plus mr-1"></i>Add</button></div>';
         body += '</div>';
 
@@ -1441,10 +1857,8 @@
       .then(function(r) { return r.json(); })
       .then(function(res) {
         if (res.success) {
-          // Remove "no items" message if present
           var noMsg = document.getElementById('noChecklistMsg');
           if (noMsg) noMsg.remove();
-          // Add the new item to the checklist container
           var container = document.getElementById('checklistItems');
           if (container) {
             var div = document.createElement('div');
@@ -1479,7 +1893,7 @@
   window._crmDeleteJob = function(id) {
     if (!confirm('Delete this job?')) return;
     fetch('/api/crm/jobs/' + id, { method: 'DELETE', headers: authHeadersOnly() })
-      .then(function() { toast('Job deleted'); loadJobs(window._jobFilter); })
+      .then(function() { toast('Job deleted'); loadJobsForMonth(_calYear, _calMonth); })
       .catch(function(e) { toast('Failed to delete: ' + (e.message || 'Network error'), 'error'); });
   };
 
