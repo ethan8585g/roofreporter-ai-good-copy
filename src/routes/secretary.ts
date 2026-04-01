@@ -279,6 +279,8 @@ secretaryRoutes.post('/config', async (c) => {
   const body = await c.req.json()
   const {
     business_phone, greeting_script, common_qa, general_notes,
+    // Agent persona
+    agent_name, agent_voice,
     // Mode
     secretary_mode = 'directory',
     // Answering-mode fields
@@ -306,6 +308,7 @@ secretaryRoutes.post('/config', async (c) => {
       await c.env.DB.prepare(
         `UPDATE secretary_config SET
           business_phone = ?, greeting_script = ?, common_qa = ?, general_notes = ?,
+          agent_name = ?, agent_voice = ?,
           secretary_mode = ?,
           answering_fallback_action = ?, answering_forward_number = ?,
           answering_sms_notify = ?, answering_email_notify = ?, answering_notify_email = ?,
@@ -317,6 +320,7 @@ secretaryRoutes.post('/config', async (c) => {
         WHERE customer_id = ?`
       ).bind(
         business_phone, greeting_script, common_qa || '', general_notes || '',
+        agent_name || 'Sarah', agent_voice || 'alloy',
         secretary_mode,
         answering_fallback_action || 'take_message', answering_forward_number || '',
         answering_sms_notify ?? 1, answering_email_notify ?? 1, answering_notify_email || '',
@@ -482,6 +486,21 @@ secretaryRoutes.get('/calls', async (c) => {
     limit,
     offset,
   })
+})
+
+// ============================================================
+// GET /calls/:id — Get single call detail with full transcript
+// ============================================================
+secretaryRoutes.get('/calls/:id', async (c) => {
+  const customerId = c.get('customerId' as any) as number
+  const callId = parseInt(c.req.param('id'))
+
+  const call = await c.env.DB.prepare(
+    `SELECT * FROM secretary_call_logs WHERE id = ? AND customer_id = ?`
+  ).bind(callId, customerId).first<any>()
+
+  if (!call) return c.json({ error: 'Call not found' }, 404)
+  return c.json({ call })
 })
 
 // ============================================================

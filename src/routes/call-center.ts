@@ -554,6 +554,18 @@ callCenterRoutes.get('/call-logs', async (c) => {
 })
 
 // ============================================================
+// GET /call-logs/:id — Single call log with full transcript
+// ============================================================
+callCenterRoutes.get('/call-logs/:id', async (c) => {
+  const id = parseInt(c.req.param('id'))
+  const row = await c.env.DB.prepare(
+    `SELECT cl.*, p.company_name, p.contact_name, p.city, p.province_state FROM cc_call_logs cl LEFT JOIN cc_prospects p ON p.id = cl.prospect_id WHERE cl.id = ?`
+  ).bind(id).first<any>()
+  if (!row) return c.json({ error: 'Call log not found' }, 404)
+  return c.json({ call_log: row })
+})
+
+// ============================================================
 // LiveKit JWT Helper (Web Crypto API — no Node.js)
 // ============================================================
 async function generateLiveKitJWT(apiKey: string, apiSecret: string, identity: string, roomName: string, metadata?: string): Promise<string> {

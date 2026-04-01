@@ -538,9 +538,8 @@ function renderColdCallCentreView() {
     '</div>' +
     '<div class="flex gap-2 border-b border-gray-200 pb-2 overflow-x-auto">' +
       '<button onclick="paShowCCTab(\'agents\')" id="pa-cc-tab-agents" class="px-4 py-2 rounded-lg text-sm font-semibold bg-red-600 text-white whitespace-nowrap">Agents</button>' +
-      '<button onclick="paShowCCTab(\'sip\')" id="pa-cc-tab-sip" class="px-4 py-2 rounded-lg text-sm font-semibold bg-gray-100 text-gray-600 whitespace-nowrap">SIP Mapping</button>' +
       '<button onclick="paShowCCTab(\'campaigns\')" id="pa-cc-tab-campaigns" class="px-4 py-2 rounded-lg text-sm font-semibold bg-gray-100 text-gray-600 whitespace-nowrap">Campaigns</button>' +
-      '<button onclick="paShowCCTab(\'leads\')" id="pa-cc-tab-leads" class="px-4 py-2 rounded-lg text-sm font-semibold bg-gray-100 text-gray-600 whitespace-nowrap">Lead Lists</button>' +
+      '<button onclick="paShowCCTab(\'leads\')" id="pa-cc-tab-leads" class="px-4 py-2 rounded-lg text-sm font-semibold bg-gray-100 text-gray-600 whitespace-nowrap">Contacts</button>' +
       '<button onclick="paShowCCTab(\'logs\')" id="pa-cc-tab-logs" class="px-4 py-2 rounded-lg text-sm font-semibold bg-gray-100 text-gray-600 whitespace-nowrap">Call Logs</button>' +
       '<button onclick="paShowCCTab(\'transcripts\')" id="pa-cc-tab-transcripts" class="px-4 py-2 rounded-lg text-sm font-semibold bg-gray-100 text-gray-600 whitespace-nowrap">Live Transcripts</button>' +
       '<button onclick="paShowCCTab(\'analytics\')" id="pa-cc-tab-analytics" class="px-4 py-2 rounded-lg text-sm font-semibold bg-gray-100 text-gray-600 whitespace-nowrap">Analytics</button>' +
@@ -554,12 +553,11 @@ function paRefreshCCTab() { paShowCCTab(_ccCurrentTab); }
 
 function paShowCCTab(tab) {
   _ccCurrentTab = tab;
-  ['agents','sip','campaigns','leads','logs','transcripts','analytics'].forEach(function(t) {
+  ['agents','campaigns','leads','logs','transcripts','analytics'].forEach(function(t) {
     var el = document.getElementById('pa-cc-tab-' + t);
     if (el) { el.className = t === tab ? 'px-4 py-2 rounded-lg text-sm font-semibold bg-red-600 text-white whitespace-nowrap' : 'px-4 py-2 rounded-lg text-sm font-semibold bg-gray-100 text-gray-600 hover:bg-gray-200 whitespace-nowrap'; }
   });
   if (tab === 'agents') paLoadCCAgents();
-  else if (tab === 'sip') paLoadSipMapping();
   else if (tab === 'campaigns') paLoadCampaigns();
   else if (tab === 'leads') paLoadLeadLists();
   else if (tab === 'logs') paLoadCCCallLogs();
@@ -775,7 +773,7 @@ async function paLoadCCAgents() {
   var el = document.getElementById('pa-cc-content');
   if (!el) return;
   try {
-    var res = await saFetch('/api/admin/superadmin/cc/agents');
+    var res = await saFetch('/api/call-center/agents');
     var data = await res.json();
     PA.ccAgents = data.agents || [];
     el.innerHTML =
@@ -788,22 +786,23 @@ async function paLoadCCAgents() {
           '<button onclick="paShowAgentEditor()" class="mt-4 px-6 py-2 bg-red-600 text-white rounded-lg text-sm font-bold"><i class="fas fa-plus mr-1"></i>Create First Agent</button>' +
         '</div>' :
         '<div class="space-y-3">' + PA.ccAgents.map(function(a) {
-          var statusColor = a.status === 'calling' ? 'bg-green-50 text-green-600' : a.status === 'idle' ? 'bg-blue-50 text-blue-600' : 'bg-gray-50 text-gray-500';
-          var activeColor = a.is_active ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-400';
+          var isCalling = a.status === 'calling';
+          var statusColor = isCalling ? 'bg-green-50 text-green-600' : a.status === 'idle' ? 'bg-blue-50 text-blue-600' : 'bg-gray-50 text-gray-500';
           return '<div class="bg-white rounded-xl border border-gray-100 p-4">' +
             '<div class="flex items-center justify-between">' +
               '<div class="flex items-center gap-4">' +
                 '<div class="w-12 h-12 rounded-xl bg-gradient-to-br from-red-500 to-orange-500 flex items-center justify-center"><i class="fas fa-robot text-white text-lg"></i></div>' +
                 '<div>' +
                   '<div class="font-bold text-gray-800">' + (a.name || 'Unnamed') + '</div>' +
-                  '<div class="text-xs text-gray-500">' + (a.phone_number || 'No phone') + ' &bull; ' + (a.direction || 'outbound') + ' &bull; ' + (a.persona_name || 'No persona') + '</div>' +
-                  '<div class="text-xs text-gray-400 mt-0.5">' + (a.operating_hours_start || '09:00') + '–' + (a.operating_hours_end || '17:00') + ' ' + (a.operating_timezone || 'MST') + ' &bull; Max ' + (a.max_calls_per_day || 100) + '/day</div>' +
+                  '<div class="text-xs text-gray-500">Voice: ' + (a.voice_id || 'alloy') + ' &bull; ' + (a.total_calls || 0) + ' total calls &bull; ' + Math.round((a.success_rate || 0) * 100) + '% success</div>' +
+                  (a.persona ? '<div class="text-xs text-gray-400 mt-0.5 truncate max-w-xs">' + a.persona.substring(0, 80) + (a.persona.length > 80 ? '...' : '') + '</div>' : '') +
                 '</div>' +
               '</div>' +
-              '<div class="flex items-center gap-3">' +
+              '<div class="flex items-center gap-2">' +
                 '<span class="px-2 py-1 rounded text-xs font-semibold ' + statusColor + '">' + (a.status || 'idle') + '</span>' +
-                '<span class="px-2 py-1 rounded text-xs font-semibold ' + activeColor + '">' + (a.is_active ? 'Active' : 'Inactive') + '</span>' +
-                '<div class="text-right text-xs text-gray-500">' + (a.calls_today || 0) + ' today / ' + (a.calls_total || 0) + ' total</div>' +
+                (isCalling ?
+                  '<button onclick="paCCStopAgent(' + a.id + ')" class="px-3 py-1.5 bg-red-600 text-white rounded-lg text-xs font-bold hover:bg-red-700"><i class="fas fa-stop mr-1"></i>Stop</button>' :
+                  '<button onclick="paCCStartAgent(' + a.id + ')" class="px-3 py-1.5 bg-green-600 text-white rounded-lg text-xs font-bold hover:bg-green-700"><i class="fas fa-play mr-1"></i>Start</button>') +
                 '<button onclick="paShowAgentEditor(' + a.id + ')" class="px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-xs font-semibold hover:bg-blue-100"><i class="fas fa-edit mr-1"></i>Edit</button>' +
                 '<button onclick="paDeleteAgent(' + a.id + ')" class="px-3 py-1.5 bg-red-50 text-red-600 rounded-lg text-xs font-semibold hover:bg-red-100"><i class="fas fa-trash mr-1"></i></button>' +
               '</div>' +
@@ -815,42 +814,24 @@ async function paLoadCCAgents() {
 
 function paShowAgentEditor(agentId) {
   var a = agentId ? PA.ccAgents.find(function(x) { return x.id === agentId; }) : {
-    name: '', phone_number: '+12402122251', direction: 'outbound', persona_id: null,
-    sip_trunk_id: '', campaign_id: null, max_calls_per_day: 100,
-    operating_hours_start: '09:00', operating_hours_end: '17:00',
-    operating_timezone: 'America/Edmonton', is_active: 1
+    name: '', voice_id: 'alloy', persona: '', livekit_room_prefix: 'sales-'
   };
   if (!a) return;
-
-  // Load personas for dropdown
-  var personaOpts = '<option value="">None</option>' + PA.personas.map(function(p) {
-    return '<option value="' + p.id + '" ' + (a.persona_id == p.id ? 'selected' : '') + '>' + p.name + '</option>';
-  }).join('');
 
   var el = document.getElementById('pa-cc-content');
   el.innerHTML = '<div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4">' +
     '<h3 class="font-bold text-gray-700"><i class="fas fa-robot mr-2 text-red-500"></i>' + (agentId ? 'Edit Agent' : 'Create New Agent') + '</h3>' +
-    '<div class="grid grid-cols-3 gap-4">' +
-      paInputV('pa-agent-name', 'Agent Name *', a.name || 'Cold Caller 1') +
-      paInputV('pa-agent-phone', 'Phone Number *', a.phone_number || '+12402122251') +
-      paSelectV('pa-agent-direction', 'Direction', ['outbound','inbound','both'], a.direction || 'outbound') +
+    '<div class="grid grid-cols-2 gap-4">' +
+      paInputV('pa-agent-name', 'Agent Name *', a.name || '') +
+      '<div><label class="block text-xs font-semibold text-gray-500 mb-1">Voice</label><select id="pa-agent-voice" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm">' +
+        ['alloy','shimmer','nova','echo','onyx','fable','ash','coral','sage'].map(function(v) {
+          return '<option value="' + v + '"' + (a.voice_id === v ? ' selected' : '') + '>' + v + '</option>';
+        }).join('') +
+      '</select></div>' +
     '</div>' +
-    '<div class="grid grid-cols-3 gap-4">' +
-      '<div><label class="block text-xs font-semibold text-gray-500 mb-1">Agent Persona</label><select id="pa-agent-persona" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm">' + personaOpts + '</select></div>' +
-      paInputV('pa-agent-trunk', 'SIP Trunk ID (auto-resolved if blank)', a.sip_trunk_id || '') +
-      paInputV('pa-agent-max', 'Max Calls/Day', a.max_calls_per_day || 100, 'number') +
-    '</div>' +
-    '<div class="grid grid-cols-3 gap-4">' +
-      paInputV('pa-agent-start', 'Start Time (HH:MM)', a.operating_hours_start || '09:00') +
-      paInputV('pa-agent-end', 'End Time (HH:MM)', a.operating_hours_end || '17:00') +
-      paSelectV('pa-agent-tz', 'Timezone', ['America/Edmonton','America/Toronto','America/Vancouver','America/New_York','America/Chicago','America/Los_Angeles'], a.operating_timezone || 'America/Edmonton') +
-    '</div>' +
-    '<label class="flex items-center gap-2"><input type="checkbox" id="pa-agent-active" ' + (a.is_active ? 'checked' : '') + ' class="rounded"> Active</label>' +
-    '<div class="bg-blue-50 rounded-xl p-4 border border-blue-100">' +
-      '<div class="flex items-center gap-2 text-sm font-semibold text-blue-700"><i class="fas fa-info-circle"></i> Outbound Configuration</div>' +
-      '<p class="text-xs text-blue-600 mt-1">Phone +1 (240) 212-2251 will be used for outbound cold calls via LiveKit SIP. ' +
-      'Every call captures a live transcript via Deepgram STT. Transcripts are stored in cc_call_logs.</p>' +
-    '</div>' +
+    '<div><label class="block text-xs font-semibold text-gray-500 mb-1">Agent Personality / Script</label>' +
+      '<textarea id="pa-agent-persona" rows="5" class="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm" placeholder="You are a professional sales agent calling roofing companies on behalf of RoofReporterAI. Your goal is to introduce our AI secretary product ($249/mo) and book a demo. Be friendly, concise, and handle objections confidently...">' + (a.persona || '') + '</textarea></div>' +
+    paInputV('pa-agent-prefix', 'Room Prefix', a.livekit_room_prefix || 'sales-') +
     '<div class="flex justify-end gap-3">' +
       '<button onclick="paLoadCCAgents()" class="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm font-semibold">Cancel</button>' +
       '<button onclick="paSaveAgent(' + (agentId || 0) + ')" class="px-6 py-2 bg-red-600 text-white rounded-lg text-sm font-bold"><i class="fas fa-save mr-1"></i>Save Agent</button>' +
@@ -860,21 +841,36 @@ function paShowAgentEditor(agentId) {
 
 async function paSaveAgent(agentId) {
   var payload = {
-    name: gv('pa-agent-name'), phone_number: gv('pa-agent-phone'),
-    direction: gv('pa-agent-direction'), persona_id: gv('pa-agent-persona') || null,
-    sip_trunk_id: gv('pa-agent-trunk'), max_calls_per_day: parseInt(gv('pa-agent-max')) || 100,
-    operating_hours_start: gv('pa-agent-start'), operating_hours_end: gv('pa-agent-end'),
-    operating_timezone: gv('pa-agent-tz'),
-    is_active: document.getElementById('pa-agent-active')?.checked ? 1 : 0
+    name: gv('pa-agent-name'),
+    voice_id: gv('pa-agent-voice') || 'alloy',
+    persona: gv('pa-agent-persona') || '',
+    livekit_room_prefix: gv('pa-agent-prefix') || 'sales-',
   };
   if (!payload.name) { alert('Agent name is required'); return; }
-  if (!payload.phone_number) { alert('Phone number is required'); return; }
   try {
-    var url = '/api/admin/superadmin/cc/agents' + (agentId ? '/' + agentId : '');
+    var url = '/api/call-center/agents' + (agentId ? '/' + agentId : '');
     var res = await saFetch(url, { method: agentId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     var data = await res.json();
     if (data.success || data.id) { paLoadCCAgents(); }
     else alert('Error: ' + (data.error || 'Unknown'));
+  } catch(e) { alert(e.message); }
+}
+
+async function paCCStartAgent(agentId) {
+  try {
+    var res = await saFetch('/api/call-center/agents/' + agentId + '/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+    var data = await res.json();
+    if (data.success) paLoadCCAgents();
+    else alert('Error: ' + (data.error || 'Could not start agent'));
+  } catch(e) { alert(e.message); }
+}
+
+async function paCCStopAgent(agentId) {
+  try {
+    var res = await saFetch('/api/call-center/agents/' + agentId + '/stop', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+    var data = await res.json();
+    if (data.success) paLoadCCAgents();
+    else alert('Error: ' + (data.error || 'Could not stop agent'));
   } catch(e) { alert(e.message); }
 }
 
