@@ -719,6 +719,12 @@
     root.innerHTML = '<div class="text-center py-8"><div class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-brand-500 mx-auto mb-3"></div></div>';
     checkGmailStatus();
     loadProposals();
+    // Check for material calculator data passed via localStorage
+    var mcData = localStorage.getItem('mc_proposal_materials');
+    if (mcData) {
+      localStorage.removeItem('mc_proposal_materials');
+      try { window._mcProposalData = JSON.parse(mcData); } catch(e) { window._mcProposalData = null; }
+    }
   }
 
   var _gmailConnected = false;
@@ -822,6 +828,10 @@
       html += '</div>';
     }
     root.innerHTML = html;
+    // Auto-open New Proposal modal if material calculator data is pending
+    if (window._mcProposalData) {
+      setTimeout(function() { window._crmNewProposal(); }, 300);
+    }
   }
 
   window._propFilter = '';
@@ -969,6 +979,57 @@
 
         // Auto-recalc on input
         setTimeout(function() { window._propRecalc(); }, 100);
+
+        // Pre-fill from material calculator data if available
+        if (window._mcProposalData) {
+          setTimeout(function() {
+            var mc = window._mcProposalData;
+            window._mcProposalData = null;
+            // Pre-fill title
+            var titleEl = document.getElementById('propTitle');
+            if (titleEl && mc.address) titleEl.value = 'Material Estimate — ' + mc.address;
+            // Pre-fill address
+            var addrEl = document.getElementById('propAddress');
+            if (addrEl && mc.address) addrEl.value = mc.address;
+            // Pre-fill scope of work
+            var scopeEl = document.getElementById('propScope');
+            if (scopeEl) {
+              var scopeParts = ['Material estimate based on roof measurement report.'];
+              if (mc.total_area_sqft) scopeParts.push(mc.total_area_sqft + ' sq ft total area.');
+              if (mc.pitch) scopeParts.push('Pitch: ' + mc.pitch + '.');
+              if (mc.waste_pct) scopeParts.push(mc.waste_pct + '% waste factor included.');
+              scopeEl.value = scopeParts.join(' ');
+            }
+            // Pre-fill linked report
+            if (mc.source_report_id) {
+              var repSel = document.getElementById('propLinkedReport');
+              if (repSel) {
+                // Try to select, may need a small delay for options to populate
+                repSel.value = mc.source_report_id;
+                if (!repSel.value) {
+                  setTimeout(function() { repSel.value = mc.source_report_id; }, 500);
+                }
+              }
+            }
+            // Pre-fill line items
+            if (mc.items && mc.items.length > 0) {
+              var tbody = document.getElementById('propItemsBody');
+              if (tbody) {
+                tbody.innerHTML = '';
+                for (var i = 0; i < mc.items.length; i++) {
+                  var it = mc.items[i];
+                  tbody.insertAdjacentHTML('beforeend', propItemRowHTML(i, {
+                    description: it.description || '',
+                    quantity: it.quantity || 1,
+                    unit: 'ea',
+                    unit_price: it.unit_price || 0
+                  }));
+                }
+              }
+              setTimeout(function() { window._propRecalc(); }, 150);
+            }
+          }, 200);
+        }
       }).catch(function(e) { toast('Failed to load customers: ' + (e.message || 'Network error'), 'error'); });
   };
 
