@@ -248,31 +248,36 @@ function renderMaterialTableInner() {
     ventilation: 'Ventilation'
   };
 
-  var rows = items
-    .filter(function(item) {
-      if (item.category === 'ice_shield' && !mcState.iceShieldEnabled) return false;
-      if (item.category === 'ventilation' && !mcState.ventilationEnabled) return false;
-      return true;
-    })
-    .map(function(item) {
-      var qty = item.order_quantity;
-      // Only shingles scale with waste — all other items are edge-based
-      if (item.category === 'shingles' && wasteRow && wasteRow.bundles) {
-        qty = wasteRow.bundles;
-      }
-      var unitPrice = item.unit_price_cad ? '$' + item.unit_price_cad.toFixed(2) : '—';
-      var lineTotal = item.unit_price_cad ? '$' + (qty * item.unit_price_cad).toFixed(2) : '—';
-      var catLabel = categoryLabels[item.category] || item.category.replace(/_/g, ' ');
+  // Build filtered items with their original index for price editing
+  var filteredItems = [];
+  for (var fi = 0; fi < items.length; fi++) {
+    var item = items[fi];
+    if (item.category === 'ice_shield' && !mcState.iceShieldEnabled) continue;
+    if (item.category === 'ventilation' && !mcState.ventilationEnabled) continue;
+    filteredItems.push({ item: item, idx: fi });
+  }
 
-      return '<tr class="border-b border-gray-50 hover:bg-gray-50 transition-colors">' +
-        '<td class="px-4 py-3 text-sm font-medium text-gray-800">' + catLabel + '</td>' +
-        '<td class="px-4 py-3 text-sm text-gray-500 hidden sm:table-cell">' + (item.description || '') + '</td>' +
-        '<td class="px-4 py-3 text-center font-bold text-gray-900 text-sm">' + qty + '</td>' +
-        '<td class="px-4 py-3 text-center text-gray-400 text-xs">' + (item.order_unit || '') + '</td>' +
-        '<td class="px-4 py-3 text-right text-gray-500 text-sm hidden sm:table-cell">' + unitPrice + '</td>' +
-        '<td class="px-4 py-3 text-right font-semibold text-gray-800 text-sm">' + lineTotal + '</td>' +
-      '</tr>';
-    });
+  var rows = filteredItems.map(function(entry) {
+    var item = entry.item;
+    var idx = entry.idx;
+    var qty = item.order_quantity;
+    // Only shingles scale with waste — all other items are edge-based
+    if (item.category === 'shingles' && wasteRow && wasteRow.bundles) {
+      qty = wasteRow.bundles;
+    }
+    var price = item.unit_price_cad || 0;
+    var lineTotal = '$' + (qty * price).toFixed(2);
+    var catLabel = categoryLabels[item.category] || item.category.replace(/_/g, ' ');
+
+    return '<tr class="border-b border-gray-50 hover:bg-gray-50 transition-colors">' +
+      '<td class="px-4 py-3 text-sm font-medium text-gray-800">' + catLabel + '</td>' +
+      '<td class="px-4 py-3 text-sm text-gray-500 hidden sm:table-cell">' + (item.description || '') + '</td>' +
+      '<td class="px-4 py-3 text-center font-bold text-gray-900 text-sm">' + qty + '</td>' +
+      '<td class="px-4 py-3 text-center text-gray-400 text-xs">' + (item.order_unit || '') + '</td>' +
+      '<td class="px-4 py-3 text-right hidden sm:table-cell"><input type="number" step="0.01" min="0" value="' + price.toFixed(2) + '" onchange="mcUpdatePrice(' + idx + ',this.value)" class="w-20 px-2 py-1 border border-gray-300 rounded-lg text-sm text-right focus:ring-2 focus:ring-sky-400 focus:border-sky-400"></td>' +
+      '<td class="px-4 py-3 text-right font-semibold text-gray-800 text-sm" id="mc-line-total-' + idx + '">' + lineTotal + '</td>' +
+    '</tr>';
+  });
 
   var toggleRow =
     '<div class="flex items-center gap-4">' +
@@ -324,6 +329,23 @@ function mcRefreshDynamic() {
   if (cf) cf.innerHTML = renderCostFooterInner();
 }
 
+function mcUpdatePrice(itemIdx, newVal) {
+  var items = (mcState.report && mcState.report.materials.line_items) || [];
+  if (!items[itemIdx]) return;
+  var price = parseFloat(newVal) || 0;
+  items[itemIdx].unit_price_cad = price;
+  // Update line total inline
+  var wasteRow = mcGetWasteRow();
+  var item = items[itemIdx];
+  var qty = item.order_quantity;
+  if (item.category === 'shingles' && wasteRow && wasteRow.bundles) qty = wasteRow.bundles;
+  var cell = document.getElementById('mc-line-total-' + itemIdx);
+  if (cell) cell.textContent = '$' + (qty * price).toFixed(2);
+  // Update cost footer
+  var cf = document.getElementById('mc-cost-footer');
+  if (cf) cf.innerHTML = renderCostFooterInner();
+}
+
 // ---- Cost Footer ----
 function renderCostFooterInner() {
   var items = (mcState.report && mcState.report.materials.line_items) || [];
@@ -342,7 +364,7 @@ function renderCostFooterInner() {
     '<div class="flex flex-wrap items-center justify-between gap-3">' +
       '<div>' +
         '<p class="text-sm font-semibold text-gray-700">Estimated Material Cost</p>' +
-        '<p class="text-xs text-gray-400 mt-0.5">' + mcState.currentWastePct + '% waste factor · Canadian pricing · excludes labour</p>' +
+        '<p class="text-xs text-gray-400 mt-0.5">' + mcState.currentWastePct + '% waste factor · editable pricing · excludes labour</p>' +
       '</div>' +
       '<p class="text-3xl font-black text-sky-700">$' + total.toFixed(2) + ' <span class="text-lg font-normal text-gray-400">CAD</span></p>' +
     '</div>' +
