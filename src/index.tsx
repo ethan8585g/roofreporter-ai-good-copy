@@ -29,12 +29,19 @@ import { callCenterRoutes } from './routes/call-center'
 import { metaConnectRoutes } from './routes/meta-connect'
 import { heygenRoutes } from './routes/heygen'
 import { geminiRoutes } from './routes/gemini'
+import { calendarRoutes } from './routes/calendar'
 import type { Bindings } from './types'
 
 const app = new Hono<{ Bindings: Bindings }>()
 
 // CORS for API routes
-app.use('/api/*', cors())
+app.use('/api/*', cors({
+  origin: ['https://www.roofreporterai.com', 'https://roofreporterai.com', 'http://localhost:3000', 'http://0.0.0.0:3000'],
+  allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
+  maxAge: 3600,
+}))
 
 // Analytics tracker injection middleware — auto-injects tracker.js + GA4 gtag.js into HTML pages
 // Skips API routes, static files, and the tracker itself
@@ -187,6 +194,7 @@ app.route('/api/call-center', callCenterRoutes)
 app.route('/api/meta', metaConnectRoutes)
 app.route('/api/heygen', heygenRoutes)
 app.route('/api/gemini', geminiRoutes)
+app.route('/api/calendar', calendarRoutes)
 
 // Health check
 app.get('/api/health', (c) => {

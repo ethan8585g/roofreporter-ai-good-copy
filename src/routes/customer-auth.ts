@@ -6,8 +6,7 @@ import { resolveTeamOwner } from './team'
 export const customerAuthRoutes = new Hono<{ Bindings: Bindings }>()
 
 // ============================================================
-// DEV / TEST ACCOUNT — Unlimited free reports, no payment required
-// Login via /customer/login with these credentials
+// DEV / TEST ACCOUNT — Only active when DEV_MODE env var is set
 // ============================================================
 const DEV_ACCOUNT = {
   email: 'dev@reusecanada.ca',
@@ -17,7 +16,11 @@ const DEV_ACCOUNT = {
   phone: '780-000-0000'
 }
 
-export function isDevAccount(email: string): boolean {
+// When env is passed and DEV_MODE is not set, dev account is disabled.
+// When env is not passed (legacy callers), dev account is also disabled for safety.
+export function isDevAccount(email: string, env?: any): boolean {
+  const devEnabled = env ? !!(env as any).DEV_MODE : false
+  if (!devEnabled) return false
   return email.toLowerCase().trim() === DEV_ACCOUNT.email
 }
 
@@ -600,9 +603,9 @@ customerAuthRoutes.post('/login', async (c) => {
     const cleanEmail = email.toLowerCase().trim()
 
     // ============================================================
-    // DEV ACCOUNT — auto-create on first login, unlimited free reports
+    // DEV ACCOUNT — only active when DEV_MODE env var is set
     // ============================================================
-    if (cleanEmail === DEV_ACCOUNT.email && password === DEV_ACCOUNT.password) {
+    if ((c.env as any).DEV_MODE && cleanEmail === DEV_ACCOUNT.email && password === DEV_ACCOUNT.password) {
       let devCustomer = await c.env.DB.prepare(
         'SELECT * FROM customers WHERE email = ?'
       ).bind(DEV_ACCOUNT.email).first<any>()
@@ -732,7 +735,7 @@ customerAuthRoutes.get('/me', async (c) => {
   }
 
   // DEV ACCOUNT: always unlimited
-  const isDev = isDevAccount(session.email || '')
+  const isDev = isDevAccount(session.email || '', c.env)
   const paidCreditsRemaining = isDev ? 999999 : ((session.report_credits || 0) - (session.credits_used || 0))
   const freeTrialRemaining = isDev ? 999999 : ((session.free_trial_total || 0) - (session.free_trial_used || 0))
   const totalRemaining = isDev ? 999999 : (Math.max(0, freeTrialRemaining) + Math.max(0, paidCreditsRemaining))
