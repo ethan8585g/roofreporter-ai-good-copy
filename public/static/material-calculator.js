@@ -517,7 +517,7 @@ function mcCreateProposal() {
     pitch: mcState.report.roof_pitch_ratio || ''
   }));
   mcToast('Redirecting to Proposals...');
-  window.location.href = '/customer/crm#proposals';
+  window.location.href = '/customer/proposals';
 }
 
 // ---- Copy List ----
