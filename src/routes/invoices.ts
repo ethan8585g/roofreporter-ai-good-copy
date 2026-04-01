@@ -457,12 +457,9 @@ invoiceRoutes.post('/:id/payment-link', async (c) => {
     if (invoice.status === 'paid') return c.json({ error: 'Invoice already paid' }, 400)
 
     const squareAccessToken = c.env.SQUARE_ACCESS_TOKEN
-    const squareEnv = c.env.SQUARE_ENVIRONMENT || 'sandbox'
     if (!squareAccessToken) return c.json({ error: 'Square not configured. Set SQUARE_ACCESS_TOKEN in Cloudflare secrets.' }, 400)
 
-    const baseUrl = squareEnv === 'production'
-      ? 'https://connect.squareup.com'
-      : 'https://connect.squareupsandbox.com'
+    const baseUrl = 'https://connect.squareup.com'
 
     const amountCents = Math.round(invoice.total * 100)
     const idempotencyKey = `inv-${id}-${Date.now()}`

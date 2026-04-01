@@ -258,14 +258,15 @@ squareRoutes.post('/checkout', async (c) => {
     const link = paymentLink.payment_link
     const squareOrderId = link?.order_id || ''
 
-    // Record the pending payment
+    // Record the pending payment with credits in metadata for reliable lookup
     await c.env.DB.prepare(`
-      INSERT INTO square_payments (customer_id, square_order_id, square_payment_link_id, amount, currency, status, payment_type, description, order_id)
-      VALUES (?, ?, ?, ?, 'usd', 'pending', 'credit_pack', ?, ?)
+      INSERT INTO square_payments (customer_id, square_order_id, square_payment_link_id, amount, currency, status, payment_type, description, order_id, metadata_json)
+      VALUES (?, ?, ?, ?, 'usd', 'pending', 'credit_pack', ?, ?, ?)
     `).bind(
       customer.customer_id, squareOrderId, link?.id || '', pkg.price_cents,
       `${pkg.name} (${pkg.credits} credits)`,
-      order_id || null
+      order_id || null,
+      JSON.stringify({ credits: pkg.credits, package_id: pkg.id, package_name: pkg.name })
     ).run()
 
     return c.json({
@@ -442,16 +443,22 @@ squareRoutes.post('/use-credit', async (c) => {
       trace_measurement_json ? (typeof trace_measurement_json === 'string' ? trace_measurement_json : JSON.stringify(trace_measurement_json)) : null
     ).run()
 
-    // Deduct from the correct bucket (DEV ACCOUNT: skip deduction)
+    // Atomic deduct: WHERE clause prevents overselling even with concurrent requests
     if (!isDev) {
       if (isTrial) {
-        await c.env.DB.prepare(
-          'UPDATE customers SET free_trial_used = free_trial_used + 1, updated_at = datetime("now") WHERE id = ?'
+        const deductResult = await c.env.DB.prepare(
+          'UPDATE customers SET free_trial_used = free_trial_used + 1, updated_at = datetime("now") WHERE id = ? AND free_trial_used < free_trial_total'
         ).bind(customer.customer_id).run()
+        if (!deductResult.meta.changes) {
+          return c.json({ error: 'No free trials remaining', credits_remaining: 0 }, 402)
+        }
       } else {
-        await c.env.DB.prepare(
-          'UPDATE customers SET credits_used = credits_used + 1, updated_at = datetime("now") WHERE id = ?'
+        const deductResult = await c.env.DB.prepare(
+          'UPDATE customers SET credits_used = credits_used + 1, updated_at = datetime("now") WHERE id = ? AND credits_used < report_credits'
         ).bind(customer.customer_id).run()
+        if (!deductResult.meta.changes) {
+          return c.json({ error: 'No credits remaining', credits_remaining: 0 }, 402)
+        }
       }
     }
 
@@ -557,19 +564,20 @@ squareRoutes.post('/webhook', async (c) => {
     const signatureKey = (c.env as any).SQUARE_WEBHOOK_SIGNATURE_KEY
     const webhookUrl = (c.env as any).SQUARE_WEBHOOK_URL
 
-    // Verify Square webhook signature if key is configured
-    if (signatureKey && webhookUrl) {
-      const sigHeader = c.req.header('x-square-hmacsha256-signature')
-      if (!sigHeader) {
-        console.warn('[Square Webhook] Missing x-square-hmacsha256-signature header')
-        return c.json({ error: 'Missing signature header' }, 400)
-      }
-
-      const isValid = await verifySquareSignature(rawBody, sigHeader, signatureKey, webhookUrl)
-      if (!isValid) {
-        console.warn('[Square Webhook] Invalid signature')
-        return c.json({ error: 'Invalid signature' }, 400)
-      }
+    // Verify Square webhook signature — MANDATORY for security
+    if (!signatureKey || !webhookUrl) {
+      console.error('[Square Webhook] SQUARE_WEBHOOK_SIGNATURE_KEY or SQUARE_WEBHOOK_URL not configured — rejecting webhook')
+      return c.json({ error: 'Webhook verification not configured' }, 500)
+    }
+    const sigHeader = c.req.header('x-square-hmacsha256-signature')
+    if (!sigHeader) {
+      console.warn('[Square Webhook] Missing x-square-hmacsha256-signature header')
+      return c.json({ error: 'Missing signature header' }, 400)
+    }
+    const isValid = await verifySquareSignature(rawBody, sigHeader, signatureKey, webhookUrl)
+    if (!isValid) {
+      console.warn('[Square Webhook] Invalid signature')
+      return c.json({ error: 'Invalid signature' }, 400)
     }
 
     // Parse the event
@@ -617,12 +625,18 @@ squareRoutes.post('/webhook', async (c) => {
           break
         }
 
-        // Update payment record
-        await c.env.DB.prepare(`
-          UPDATE square_payments SET 
+        // Atomic: only update if still pending (prevents double-processing with verify-payment)
+        const webhookUpdate = await c.env.DB.prepare(`
+          UPDATE square_payments SET
             square_payment_id = ?, status = 'succeeded', updated_at = datetime('now')
           WHERE square_order_id = ? AND status = 'pending'
         `).bind(payment.id, squareOrderId).run()
+
+        // If 0 rows changed, verify-payment already processed this — skip
+        if (!webhookUpdate.meta.changes) {
+          console.log(`[Square Webhook] Order ${squareOrderId} already processed — skipping`)
+          break
+        }
 
         const customerId = pendingPayment.customer_id
 
@@ -711,9 +725,16 @@ squareRoutes.post('/webhook', async (c) => {
 
         } else {
           // Credit pack purchase — add credits
-          // Parse credits from description (format: "Pack Name (X credits)")
-          const descMatch = pendingPayment.description?.match(/\((\d+) credits?\)/)
-          const credits = descMatch ? parseInt(descMatch[1]) : 0
+          // Try metadata first, fallback to description parsing
+          let credits = 0
+          try {
+            const meta = pendingPayment.metadata_json ? JSON.parse(pendingPayment.metadata_json) : {}
+            if (meta.credits) credits = parseInt(meta.credits)
+          } catch {}
+          if (!credits) {
+            const descMatch = pendingPayment.description?.match(/\((\d+) credits?\)/)
+            credits = descMatch ? parseInt(descMatch[1]) : 0
+          }
 
           if (credits > 0) {
             await c.env.DB.prepare(
@@ -800,28 +821,32 @@ squareRoutes.get('/verify-payment', async (c) => {
     const order = await squareRequest(accessToken, 'GET', `/orders/${pendingPayment.square_order_id}`)
     const orderState = order.order?.state
 
-    if (orderState === 'COMPLETED' || orderState === 'OPEN') {
+    if (orderState === 'COMPLETED') {
       // Payment succeeded — process inline if webhook hasn't fired yet
-      const alreadyProcessed = await c.env.DB.prepare(
-        'SELECT id FROM square_payments WHERE square_order_id = ? AND status = ?'
-      ).bind(pendingPayment.square_order_id, 'succeeded').first()
+      // Atomic: only update if still pending (prevents double-credit with webhook)
+      const updateResult = await c.env.DB.prepare(`
+        UPDATE square_payments SET status = 'succeeded', updated_at = datetime('now')
+        WHERE square_order_id = ? AND status = 'pending'
+      `).bind(pendingPayment.square_order_id).run()
 
-      if (!alreadyProcessed) {
-        // Mark as succeeded
-        await c.env.DB.prepare(`
-          UPDATE square_payments SET status = 'succeeded', updated_at = datetime('now')
-          WHERE square_order_id = ? AND status = 'pending'
-        `).bind(pendingPayment.square_order_id).run()
-
+      // Only add credits if WE were the one to flip pending → succeeded
+      if (updateResult.meta.changes > 0) {
         // If it's a credit pack, add credits
         if (pendingPayment.payment_type === 'credit_pack') {
-          const descMatch = pendingPayment.description?.match(/\((\d+) credits?\)/)
-          const credits = descMatch ? parseInt(descMatch[1]) : 0
+          // Look up credits from metadata or package, fallback to description parsing
+          let credits = 0
+          try {
+            const meta = pendingPayment.metadata_json ? JSON.parse(pendingPayment.metadata_json) : {}
+            if (meta.credits) { credits = parseInt(meta.credits) }
+          } catch {}
+          if (!credits) {
+            const descMatch = pendingPayment.description?.match(/\((\d+) credits?\)/)
+            credits = descMatch ? parseInt(descMatch[1]) : 0
+          }
           if (credits > 0) {
             await c.env.DB.prepare(
               'UPDATE customers SET report_credits = report_credits + ?, subscription_plan = CASE WHEN subscription_plan = "free" THEN "credits" ELSE subscription_plan END, updated_at = datetime("now") WHERE id = ?'
             ).bind(credits, customer.customer_id).run()
-            // Track credit purchase in GA4
             trackCreditPurchase(c.env as any, String(customer.customer_id), credits, pendingPayment.amount || 0).catch(() => {})
           }
         }
