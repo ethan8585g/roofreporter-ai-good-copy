@@ -767,7 +767,7 @@ function renderReviewStep(root, progressBar) {
               </button>
             ` : `
               <button onclick="payWithSquare()" id="squareBtn" class="flex-1 py-3 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl transition-all shadow-lg text-base">
-                <i class="fas fa-credit-card mr-2"></i>Pay $10 with Square
+                <i class="fas fa-credit-card mr-2"></i>Pay $5 with Square
               </button>
             `}
           </div>

@@ -244,7 +244,7 @@ squareRoutes.post('/checkout', async (c) => {
         name: `${pkg.name} — Roof Report Credits`,
         price_money: {
           amount: pkg.price_cents, // Square uses cents (same as our DB)
-          currency: 'CAD',
+          currency: 'USD',
         },
         location_id: locationId,
       },
@@ -261,7 +261,7 @@ squareRoutes.post('/checkout', async (c) => {
     // Record the pending payment
     await c.env.DB.prepare(`
       INSERT INTO square_payments (customer_id, square_order_id, square_payment_link_id, amount, currency, status, payment_type, description, order_id)
-      VALUES (?, ?, ?, ?, 'cad', 'pending', 'credit_pack', ?, ?)
+      VALUES (?, ?, ?, ?, 'usd', 'pending', 'credit_pack', ?, ?)
     `).bind(
       customer.customer_id, squareOrderId, link?.id || '', pkg.price_cents,
       `${pkg.name} (${pkg.credits} credits)`,
@@ -298,8 +298,8 @@ squareRoutes.post('/checkout/report', async (c) => {
     if (!property_address) return c.json({ error: 'Property address is required' }, 400)
 
     const tier = service_tier || 'standard'
-    // Single report = $10 CAD flat (1000 cents)
-    const priceCents = 1000
+    // Single report = $5 USD flat (500 cents)
+    const priceCents = 500
     const tierLabels: Record<string, string> = { express: 'Express', standard: 'Standard' }
 
     const origin = new URL(c.req.url).origin
@@ -314,7 +314,7 @@ squareRoutes.post('/checkout/report', async (c) => {
         name: `Roof Measurement Report — ${tierLabels[tier] || tier}`,
         price_money: {
           amount: priceCents,
-          currency: 'CAD',
+          currency: 'USD',
         },
         location_id: locationId,
       },
@@ -335,7 +335,7 @@ squareRoutes.post('/checkout/report', async (c) => {
     // Store metadata in our DB for webhook processing
     await c.env.DB.prepare(`
       INSERT INTO square_payments (customer_id, square_order_id, square_payment_link_id, amount, currency, status, payment_type, description, metadata_json)
-      VALUES (?, ?, ?, ?, 'cad', 'pending', 'one_time_report', ?, ?)
+      VALUES (?, ?, ?, ?, 'usd', 'pending', 'one_time_report', ?, ?)
     `).bind(
       customer.customer_id, squareOrderId, link?.id || '', priceCents,
       `Roof report: ${property_address}`,

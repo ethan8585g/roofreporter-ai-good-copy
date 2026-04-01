@@ -284,7 +284,7 @@ function renderDashboard() {
             '</a>' +
             '<a href="/pricing" class="flex items-center gap-3 p-3 bg-purple-50 hover:bg-purple-100 rounded-xl transition-colors">' +
               '<div class="w-9 h-9 bg-purple-500 rounded-lg flex items-center justify-center flex-shrink-0"><i class="fas fa-coins text-white text-sm"></i></div>' +
-              '<div><p class="font-semibold text-gray-800 text-sm">Buy Credits</p><p class="text-xs text-gray-500">Packs from $4.75/report</p></div>' +
+              '<div><p class="font-semibold text-gray-800 text-sm">Buy Credits</p><p class="text-xs text-gray-500">From $2.99/report USD</p></div>' +
             '</a>' +
           '</div>' +
         '</div>' +
