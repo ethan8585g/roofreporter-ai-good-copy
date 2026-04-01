@@ -261,9 +261,10 @@ function renderMaterialTableInner() {
     var item = entry.item;
     var idx = entry.idx;
     var qty = item.order_quantity;
-    // Only shingles scale with waste — all other items are edge-based
+    // Shingles scale with waste — sync order_quantity when waste changes
     if (item.category === 'shingles' && wasteRow && wasteRow.bundles) {
       qty = wasteRow.bundles;
+      item.order_quantity = qty;
     }
     var price = item.unit_price_cad || 0;
     var lineTotal = '$' + (qty * price).toFixed(2);
@@ -272,7 +273,7 @@ function renderMaterialTableInner() {
     return '<tr class="border-b border-gray-50 hover:bg-gray-50 transition-colors">' +
       '<td class="px-4 py-3 text-sm font-medium text-gray-800">' + catLabel + '</td>' +
       '<td class="px-4 py-3 text-sm text-gray-500 hidden sm:table-cell">' + (item.description || '') + '</td>' +
-      '<td class="px-4 py-3 text-center font-bold text-gray-900 text-sm">' + qty + '</td>' +
+      '<td class="px-4 py-3 text-center"><input type="number" step="1" min="0" value="' + qty + '" onchange="mcUpdateQty(' + idx + ',this.value)" class="w-16 px-2 py-1 border border-gray-300 rounded-lg text-sm text-center font-bold focus:ring-2 focus:ring-sky-400 focus:border-sky-400"></td>' +
       '<td class="px-4 py-3 text-center text-gray-400 text-xs">' + (item.order_unit || '') + '</td>' +
       '<td class="px-4 py-3 text-right hidden sm:table-cell"><input type="number" step="0.01" min="0" value="' + price.toFixed(2) + '" onchange="mcUpdatePrice(' + idx + ',this.value)" class="w-20 px-2 py-1 border border-gray-300 rounded-lg text-sm text-right focus:ring-2 focus:ring-sky-400 focus:border-sky-400"></td>' +
       '<td class="px-4 py-3 text-right font-semibold text-gray-800 text-sm" id="mc-line-total-' + idx + '">' + lineTotal + '</td>' +
@@ -329,16 +330,28 @@ function mcRefreshDynamic() {
   if (cf) cf.innerHTML = renderCostFooterInner();
 }
 
+function mcUpdateQty(itemIdx, newVal) {
+  var items = (mcState.report && mcState.report.materials.line_items) || [];
+  if (!items[itemIdx]) return;
+  var qty = parseInt(newVal) || 0;
+  items[itemIdx].order_quantity = qty;
+  // Update line total inline
+  var price = items[itemIdx].unit_price_cad || 0;
+  var cell = document.getElementById('mc-line-total-' + itemIdx);
+  if (cell) cell.textContent = '$' + (qty * price).toFixed(2);
+  // Update cost footer
+  var cf = document.getElementById('mc-cost-footer');
+  if (cf) cf.innerHTML = renderCostFooterInner();
+}
+
 function mcUpdatePrice(itemIdx, newVal) {
   var items = (mcState.report && mcState.report.materials.line_items) || [];
   if (!items[itemIdx]) return;
   var price = parseFloat(newVal) || 0;
   items[itemIdx].unit_price_cad = price;
   // Update line total inline
-  var wasteRow = mcGetWasteRow();
   var item = items[itemIdx];
   var qty = item.order_quantity;
-  if (item.category === 'shingles' && wasteRow && wasteRow.bundles) qty = wasteRow.bundles;
   var cell = document.getElementById('mc-line-total-' + itemIdx);
   if (cell) cell.textContent = '$' + (qty * price).toFixed(2);
   // Update cost footer
@@ -349,15 +362,13 @@ function mcUpdatePrice(itemIdx, newVal) {
 // ---- Cost Footer ----
 function renderCostFooterInner() {
   var items = (mcState.report && mcState.report.materials.line_items) || [];
-  var wasteRow = mcGetWasteRow();
   var total = 0;
 
   items.forEach(function(item) {
     if (item.category === 'ice_shield' && !mcState.iceShieldEnabled) return;
     if (item.category === 'ventilation' && !mcState.ventilationEnabled) return;
     if (!item.unit_price_cad) return;
-    var qty = (item.category === 'shingles' && wasteRow && wasteRow.bundles) ? wasteRow.bundles : item.order_quantity;
-    total += qty * item.unit_price_cad;
+    total += item.order_quantity * item.unit_price_cad;
   });
 
   return '<div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 mb-4">' +
@@ -408,7 +419,7 @@ function mcBuildInvoiceItems() {
     if (item.category === 'ice_shield' && !mcState.iceShieldEnabled) return;
     if (item.category === 'ventilation' && !mcState.ventilationEnabled) return;
     if (!item.unit_price_cad) return; // skip items with no pricing
-    var qty = (item.category === 'shingles' && wasteRow && wasteRow.bundles) ? wasteRow.bundles : item.order_quantity;
+    var qty = item.order_quantity;
     result.push({
       description: item.description || item.category,
       quantity: qty,
@@ -539,7 +550,7 @@ function mcCopyList() {
   items.forEach(function(item) {
     if (item.category === 'ice_shield' && !mcState.iceShieldEnabled) return;
     if (item.category === 'ventilation' && !mcState.ventilationEnabled) return;
-    var qty = (item.category === 'shingles' && wasteRow && wasteRow.bundles) ? wasteRow.bundles : item.order_quantity;
+    var qty = item.order_quantity;
     var name = (item.description || item.category).substring(0, 29).padEnd(30);
     lines.push(name + String(qty).padStart(4) + '   ' + (item.order_unit || ''));
   });
@@ -551,7 +562,7 @@ function mcCopyList() {
     if (item.category === 'ice_shield' && !mcState.iceShieldEnabled) return;
     if (item.category === 'ventilation' && !mcState.ventilationEnabled) return;
     if (!item.unit_price_cad) return;
-    var qty = (item.category === 'shingles' && wasteRow && wasteRow.bundles) ? wasteRow.bundles : item.order_quantity;
+    var qty = item.order_quantity;
     total += qty * item.unit_price_cad;
   });
   lines.push('Est. Material Total: $' + total.toFixed(2) + ' CAD');
