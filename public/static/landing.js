@@ -1309,6 +1309,7 @@ function renderFinalCTA() {
         <p class="text-sm text-gray-400">
           No credit card required. 3 free reports. Then $5 USD per report.
           <br/>Questions? <a href="mailto:reports@reusecanada.ca" class="text-cyan-400 hover:underline">reports@reusecanada.ca</a>
+          &nbsp;·&nbsp; <a href="/privacy" class="text-cyan-400 hover:underline">Privacy Policy</a> &nbsp;·&nbsp; <a href="/terms" class="text-cyan-400 hover:underline">Terms</a>
         </p>
       </div>
     </section>
