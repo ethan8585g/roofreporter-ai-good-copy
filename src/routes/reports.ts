@@ -2211,6 +2211,13 @@ async function _generateReportForOrderInner(
         },
       } as RoofReport
 
+      // Enrich trace materials with line_items + waste_table for Material Calculator
+      reportData.materials = computeMaterialEstimate(
+        reportData.total_true_area_sqft,
+        reportData.edges,
+        reportData.segments
+      )
+
       // Store trace measurement for reference
       ;(reportData as any).trace_measurement = traceResult
 
