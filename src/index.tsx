@@ -689,6 +689,7 @@ app.get('/proposal/view/:token', async (c) => {
         <div class="flex justify-between text-sm"><span class="text-gray-500">Tax (${invProposal.tax_rate || 5}%)</span><span>$${Number(invProposal.tax_amount).toFixed(2)}</span></div>
         <div class="flex justify-between text-lg font-bold border-t-2 border-gray-200 pt-2 mt-2"><span>Total</span><span class="text-blue-600">$${Number(invProposal.total).toFixed(2)} CAD</span></div>
       </div></div>
+      ${invProposal.square_payment_link_url ? `<div class="mt-6 text-center"><a href="${invProposal.square_payment_link_url}" target="_blank" rel="noopener" class="inline-flex items-center gap-2 px-8 py-4 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl text-lg shadow-lg transition-all hover:scale-105"><i class="fas fa-credit-card"></i>Pay Now</a><p class="text-xs text-gray-400 mt-2">Secure online payment powered by Square</p></div>` : ''}
       ${invProposal.warranty_terms ? `<div class="mt-8 bg-amber-50 rounded-xl p-6 border border-amber-100"><h3 class="text-sm font-bold text-amber-800 mb-2"><i class="fas fa-shield-alt mr-1"></i>Warranty</h3><p class="text-sm text-amber-700 whitespace-pre-wrap">${invProposal.warranty_terms}</p></div>` : ''}
       ${invProposal.terms ? `<div class="mt-4 bg-gray-50 rounded-xl p-6"><h3 class="text-sm font-bold text-gray-700 mb-2"><i class="fas fa-file-contract mr-1"></i>Terms & Conditions</h3><p class="text-sm text-gray-600 whitespace-pre-wrap">${invProposal.terms}</p></div>` : ''}
       ${invProposal.payment_terms_text ? `<div class="mt-4 bg-green-50 rounded-xl p-6 border border-green-100"><h3 class="text-sm font-bold text-green-800 mb-2"><i class="fas fa-credit-card mr-1"></i>Payment Terms</h3><p class="text-sm text-green-700 whitespace-pre-wrap">${invProposal.payment_terms_text}</p></div>` : ''}
@@ -908,6 +909,15 @@ app.get('/proposal/view/:token', async (c) => {
       <div class="px-8 py-5 border-b border-gray-100">
         <h3 class="text-sm font-bold uppercase tracking-widest text-gray-400 mb-3"><i class="fas fa-sticky-note mr-1.5"></i>Additional Notes</h3>
         <p class="text-gray-600 text-sm leading-relaxed whitespace-pre-line">${proposal.notes}</p>
+      </div>` : ''}
+
+      <!-- Pay Now -->
+      ${proposal.payment_link ? `
+      <div class="px-8 py-6 border-b border-gray-100 text-center no-print">
+        <a href="${proposal.payment_link}" target="_blank" rel="noopener" class="inline-flex items-center gap-2 px-8 py-4 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl text-lg shadow-lg transition-all hover:scale-105">
+          <i class="fas fa-credit-card"></i>Pay Now
+        </a>
+        <p class="text-xs text-gray-400 mt-2">Secure online payment powered by Square</p>
       </div>` : ''}
 
       <!-- Valid Until Banner -->

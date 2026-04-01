@@ -643,14 +643,15 @@ crmRoutes.post('/proposals', async (c) => {
     const result = await c.env.DB.prepare(`
       INSERT INTO crm_proposals (owner_id, crm_customer_id, proposal_number, title, property_address, scope_of_work,
         materials_detail, labor_cost, material_cost, other_cost, subtotal, tax_rate, tax_amount, total_amount,
-        valid_until, notes, warranty_terms, payment_terms, status)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft')
+        valid_until, notes, warranty_terms, payment_terms, source_report_id, status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft')
     `).bind(ownerId, customerId, propNum, body.title, body.property_address || null,
       body.scope_of_work || null, body.materials_detail || null,
       body.labor_cost || 0, body.material_cost || 0, body.other_cost || 0,
       subtotal, taxRate, taxAmount, total,
       body.valid_until || null, body.notes || null,
-      body.warranty_terms || null, body.payment_terms || null).run()
+      body.warranty_terms || null, body.payment_terms || null,
+      body.source_report_id || null).run()
 
     const proposalId = result.meta.last_row_id
     if (!proposalId) return c.json({ error: 'Failed to create proposal' }, 500)

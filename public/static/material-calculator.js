@@ -342,6 +342,9 @@ function renderActionBar() {
     '<button onclick="mcAddToInvoice()" class="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl text-sm transition-colors shadow-sm">' +
       '<i class="fas fa-file-invoice-dollar"></i>Add to Invoice' +
     '</button>' +
+    '<button onclick="mcCreateProposal()" class="flex items-center gap-2 px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-xl text-sm transition-colors shadow-sm">' +
+      '<i class="fas fa-file-invoice"></i>Create Proposal' +
+    '</button>' +
     '<button onclick="window.print()" class="flex items-center gap-2 px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-xl text-sm transition-colors">' +
       '<i class="fas fa-print"></i>Print' +
     '</button>' +
@@ -464,6 +467,98 @@ function mcSubmitInvoice() {
     }
   })
   .catch(function(e) { mcToast('Network error — please try again', 'error'); });
+}
+
+// ---- Create Proposal ----
+function mcCreateProposal() {
+  var items = mcBuildInvoiceItems();
+  if (!items.length) { mcToast('No items to add', 'error'); return; }
+
+  fetch('/api/crm/customers', { headers: mcAuthOnly() })
+    .then(function(r) { return r.json(); })
+    .then(function(data) { mcShowProposalModal(data.customers || [], items); })
+    .catch(function() { mcToast('Failed to load customers', 'error'); });
+}
+
+function mcShowProposalModal(customers, items) {
+  var addr = (mcState.report && mcState.report.property && mcState.report.property.address) || '';
+  var totalAmt = 0;
+  items.forEach(function(i) { totalAmt += (i.quantity || 0) * (i.unit_price || 0); });
+
+  var custOptions = '<option value="">Select a customer...</option>';
+  customers.forEach(function(c) {
+    custOptions += '<option value="' + c.id + '">' + (c.name || '') + (c.email ? ' \u2014 ' + c.email : '') + '</option>';
+  });
+
+  var modal =
+    '<div id="mc-proposal-modal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">' +
+    '<div class="bg-white rounded-2xl shadow-2xl w-full max-w-md">' +
+      '<div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">' +
+        '<h3 class="font-bold text-gray-800">Create Proposal from Materials</h3>' +
+        '<button onclick="document.getElementById(\'mc-proposal-modal\').remove()" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>' +
+      '</div>' +
+      '<div class="p-6 space-y-4">' +
+        '<div>' +
+          '<label class="block text-xs font-semibold text-gray-600 mb-1.5">Customer <span class="text-red-500">*</span></label>' +
+          '<select id="mc-prop-customer" class="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm">' + custOptions + '</select>' +
+        '</div>' +
+        '<div>' +
+          '<label class="block text-xs font-semibold text-gray-600 mb-1.5">Property Address</label>' +
+          '<input type="text" id="mc-prop-address" value="' + addr.replace(/"/g, '&quot;') + '" placeholder="123 Main St..." class="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm">' +
+        '</div>' +
+        '<div>' +
+          '<label class="block text-xs font-semibold text-gray-600 mb-1.5">Tax Rate (%)</label>' +
+          '<input type="number" id="mc-prop-tax" value="5" step="0.1" min="0" max="30" class="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm">' +
+        '</div>' +
+        '<div class="bg-gray-50 rounded-xl p-3 text-sm text-gray-600">' +
+          '<span class="font-semibold">' + items.length + '</span> line items &nbsp;&middot;&nbsp; ' +
+          'Est. subtotal <span class="font-semibold">$' + totalAmt.toFixed(2) + ' CAD</span> &nbsp;&middot;&nbsp; ' +
+          mcState.currentWastePct + '% waste' +
+        '</div>' +
+      '</div>' +
+      '<div class="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">' +
+        '<button onclick="document.getElementById(\'mc-proposal-modal\').remove()" class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg text-sm">Cancel</button>' +
+        '<button onclick="mcSubmitProposal()" class="px-6 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-sm font-semibold transition-colors">Create Proposal</button>' +
+      '</div>' +
+    '</div></div>';
+
+  document.body.insertAdjacentHTML('beforeend', modal);
+  window._mcPendingProposalItems = items;
+}
+
+function mcSubmitProposal() {
+  var custId = document.getElementById('mc-prop-customer').value;
+  if (!custId) { mcToast('Please select a customer', 'error'); return; }
+
+  var addr = (mcState.report && mcState.report.property && mcState.report.property.address) || '';
+  var propAddr = document.getElementById('mc-prop-address').value.trim() || addr || null;
+  var payload = {
+    crm_customer_id: parseInt(custId),
+    title: 'Material Estimate' + (propAddr ? ' \u2014 ' + propAddr : ''),
+    property_address: propAddr,
+    scope_of_work: 'Material estimate based on roof measurement report.',
+    tax_rate: parseFloat(document.getElementById('mc-prop-tax').value) || 5,
+    source_report_id: mcState.selectedOrderId,
+    items: window._mcPendingProposalItems || []
+  };
+
+  fetch('/api/crm/proposals', {
+    method: 'POST',
+    headers: mcAuthHeaders(),
+    body: JSON.stringify(payload)
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(res) {
+    var modal = document.getElementById('mc-proposal-modal');
+    if (modal) modal.remove();
+    if (res.success) {
+      mcToast('Proposal created! Redirecting...');
+      setTimeout(function() { window.location.href = '/customer/proposals'; }, 1500);
+    } else {
+      mcToast(res.error || 'Failed to create proposal', 'error');
+    }
+  })
+  .catch(function() { mcToast('Network error — please try again', 'error'); });
 }
 
 // ---- Copy List ----

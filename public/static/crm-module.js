@@ -192,7 +192,7 @@
       var isProcessing = (o.status === 'processing' || o.report_status === 'running');
       var buttons = '';
       if (isCompleted) {
-        buttons = '<a href="/api/reports/' + o.id + '/html" target="_blank" class="px-4 py-2 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700"><i class="fas fa-file-alt mr-1"></i>View Report</a><a href="/api/reports/' + o.id + '/pdf" target="_blank" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-xs font-medium hover:bg-gray-200"><i class="fas fa-download mr-1"></i>PDF</a><a href="/customer/virtual-tryon?report_id=' + o.id + '" class="px-4 py-2 bg-violet-600 text-white rounded-lg text-xs font-medium hover:bg-violet-700"><i class="fas fa-house-user mr-1"></i>Roof Visualizer</a>';
+        buttons = '<a href="/api/reports/' + o.id + '/html" target="_blank" class="px-4 py-2 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700"><i class="fas fa-file-alt mr-1"></i>View Report</a><a href="/api/reports/' + o.id + '/pdf" target="_blank" title="Opens print dialog in new tab" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-xs font-medium hover:bg-gray-200"><i class="fas fa-print mr-1"></i>Print PDF</a><button onclick="window._crmCreateProposalFromReport(' + o.id + ')" class="px-4 py-2 bg-purple-600 text-white rounded-lg text-xs font-medium hover:bg-purple-700"><i class="fas fa-file-invoice mr-1"></i>Create Proposal</button><a href="/customer/virtual-tryon?report_id=' + o.id + '" class="px-4 py-2 bg-violet-600 text-white rounded-lg text-xs font-medium hover:bg-violet-700"><i class="fas fa-house-user mr-1"></i>Roof Visualizer</a>';
         if (isSolar) {
           buttons += '<button onclick="window._openSolarCalculator(' + o.id + ')" class="px-4 py-2 bg-amber-500 text-white rounded-lg text-xs font-medium hover:bg-amber-600"><i class="fas fa-sun mr-1"></i>Solar Calculator</button><a href="/customer/solar-design?report_id=' + o.id + '" class="px-4 py-2 bg-orange-500 text-white rounded-lg text-xs font-medium hover:bg-orange-600"><i class="fas fa-solar-panel mr-1"></i>Solar Design</a>';
         }
@@ -1486,19 +1486,211 @@
   // ============================================================
   // MODULE: PIPELINE
   // ============================================================
-  function initPipeline() {
-    root.innerHTML = '<div class="bg-white rounded-2xl border p-12 text-center">' +
-      '<div class="w-20 h-20 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center mx-auto mb-6"><i class="fas fa-funnel-dollar text-gray-400 text-3xl"></i></div>' +
-      '<h2 class="text-2xl font-bold text-gray-800 mb-3">Sales Pipeline</h2>' +
-      '<p class="text-gray-500 mb-2 max-w-md mx-auto">Track your leads through every stage of the sales process — from first contact to signed contract.</p>' +
-      '<div class="inline-flex items-center gap-2 bg-blue-50 text-blue-700 px-4 py-2 rounded-full text-sm font-medium mt-4"><i class="fas fa-code-branch mr-1"></i>Coming Soon</div>' +
-      '<div class="mt-8 grid grid-cols-2 md:grid-cols-4 gap-3 max-w-2xl mx-auto">' +
-      '<div class="bg-gray-50 rounded-xl p-4 text-center"><div class="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mx-auto mb-2"><i class="fas fa-bullseye text-blue-500"></i></div><p class="text-xs font-semibold text-gray-700">Lead Capture</p></div>' +
-      '<div class="bg-gray-50 rounded-xl p-4 text-center"><div class="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center mx-auto mb-2"><i class="fas fa-phone-alt text-amber-500"></i></div><p class="text-xs font-semibold text-gray-700">Contact Made</p></div>' +
-      '<div class="bg-gray-50 rounded-xl p-4 text-center"><div class="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center mx-auto mb-2"><i class="fas fa-file-signature text-purple-500"></i></div><p class="text-xs font-semibold text-gray-700">Proposal Sent</p></div>' +
-      '<div class="bg-gray-50 rounded-xl p-4 text-center"><div class="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center mx-auto mb-2"><i class="fas fa-handshake text-green-500"></i></div><p class="text-xs font-semibold text-gray-700">Won / Closed</p></div>' +
-      '</div></div>';
+  function renderPipeCard(item, type) {
+    var html = '<div class="pipe-card bg-white rounded-xl border border-gray-200 p-3 shadow-sm hover:shadow-md transition-shadow cursor-grab active:cursor-grabbing"';
+    html += ' data-id="' + item.id + '" data-type="' + type + '">';
+    if (type === 'customer') {
+      html += '<p class="font-semibold text-sm text-gray-800 truncate">' + (item.name || 'Unknown') + '</p>';
+      if (item.company) html += '<p class="text-xs text-gray-500 truncate"><i class="fas fa-building mr-1"></i>' + item.company + '</p>';
+      if (item.phone) html += '<p class="text-xs text-gray-500"><i class="fas fa-phone mr-1"></i>' + item.phone + '</p>';
+      if (item.address) html += '<p class="text-xs text-gray-400 truncate"><i class="fas fa-map-marker-alt mr-1"></i>' + item.address + '</p>';
+      if (item.lifetime_value > 0) html += '<p class="text-xs font-semibold text-green-700 mt-1">' + money(item.lifetime_value) + ' lifetime</p>';
+    } else {
+      html += '<p class="font-semibold text-sm text-gray-800 truncate">' + (item.title || item.proposal_number || 'Proposal') + '</p>';
+      if (item.customer_name) html += '<p class="text-xs text-gray-500 truncate"><i class="fas fa-user mr-1"></i>' + item.customer_name + '</p>';
+      if (item.property_address) html += '<p class="text-xs text-gray-400 truncate"><i class="fas fa-map-marker-alt mr-1"></i>' + item.property_address + '</p>';
+      if (item.total_amount) html += '<p class="text-xs font-semibold text-brand-700 mt-1">' + money(item.total_amount) + '</p>';
+    }
+    html += '<div class="mt-1.5 flex items-center gap-2">' + badge(item.status) + '<span class="text-[10px] text-gray-400">' + fmtDate(item.updated_at || item.created_at) + '</span></div>';
+    html += '</div>';
+    return html;
   }
+
+  function renderPipeline(customers, proposals) {
+    window._pipelineCustomers = customers;
+    window._pipelineProposals = proposals;
+
+    var cols = [
+      { id: 'leads', title: 'Lead Capture', icon: 'fa-bullseye', bgClass: 'bg-blue-500', lightClass: 'bg-blue-50', borderClass: 'border-blue-200', ringClass: 'ring-blue-300', textClass: 'text-blue-700', items: customers.filter(function(c) { return c.status === 'lead'; }), type: 'customer', dropStatus: 'lead' },
+      { id: 'contacted', title: 'Contact Made', icon: 'fa-phone-alt', bgClass: 'bg-amber-500', lightClass: 'bg-amber-50', borderClass: 'border-amber-200', ringClass: 'ring-amber-300', textClass: 'text-amber-700', items: customers.filter(function(c) { return c.status === 'active'; }), type: 'customer', dropStatus: 'active' },
+      { id: 'proposals', title: 'Proposal Sent', icon: 'fa-file-signature', bgClass: 'bg-purple-500', lightClass: 'bg-purple-50', borderClass: 'border-purple-200', ringClass: 'ring-purple-300', textClass: 'text-purple-700', items: proposals.filter(function(p) { return p.status === 'draft' || p.status === 'sent' || p.status === 'viewed'; }), type: 'proposal', dropStatus: 'sent' },
+      { id: 'won', title: 'Won / Closed', icon: 'fa-handshake', bgClass: 'bg-green-500', lightClass: 'bg-green-50', borderClass: 'border-green-200', ringClass: 'ring-green-300', textClass: 'text-green-700', items: proposals.filter(function(p) { return p.status === 'accepted'; }), type: 'proposal', dropStatus: 'accepted' }
+    ];
+
+    var openValue = cols[2].items.reduce(function(s, p) { return s + (parseFloat(p.total_amount) || 0); }, 0);
+    var wonValue = cols[3].items.reduce(function(s, p) { return s + (parseFloat(p.total_amount) || 0); }, 0);
+
+    var html = '<div class="mb-5 flex items-center justify-between flex-wrap gap-3">' +
+      '<div><h2 class="text-lg font-bold text-gray-800"><i class="fas fa-funnel-dollar text-brand-500 mr-2"></i>Sales Pipeline</h2>' +
+      '<p class="text-xs text-gray-500 mt-0.5">Drag cards between stages to update status</p></div>' +
+      '<button onclick="window._crmAddLead()" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-700"><i class="fas fa-user-plus mr-1"></i>Add Lead</button></div>';
+
+    html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">' +
+      '<div class="bg-white rounded-xl border p-4 text-center"><p class="text-2xl font-black text-blue-600">' + (cols[0].items.length + cols[1].items.length) + '</p><p class="text-[10px] text-gray-500">Active Leads</p></div>' +
+      '<div class="bg-white rounded-xl border p-4 text-center"><p class="text-2xl font-black text-purple-600">' + cols[2].items.length + '</p><p class="text-[10px] text-gray-500">Open Proposals</p></div>' +
+      '<div class="bg-white rounded-xl border p-4 text-center"><p class="text-2xl font-black text-gray-700">' + money(openValue) + '</p><p class="text-[10px] text-gray-500">Pipeline Value</p></div>' +
+      '<div class="bg-white rounded-xl border p-4 text-center"><p class="text-2xl font-black text-green-600">' + money(wonValue) + '</p><p class="text-[10px] text-gray-500">Won Value</p></div></div>';
+
+    html += '<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">';
+    cols.forEach(function(col) {
+      var colValue = col.type === 'proposal' ? col.items.reduce(function(s, p) { return s + (parseFloat(p.total_amount) || 0); }, 0) : 0;
+      html += '<div class="flex flex-col">';
+      html += '<div class="' + col.bgClass + ' text-white rounded-t-xl px-4 py-3 flex items-center justify-between">' +
+        '<div class="flex items-center gap-2"><i class="fas ' + col.icon + '"></i><span class="font-semibold text-sm">' + col.title + '</span></div>' +
+        '<span class="bg-white/20 text-white text-xs font-bold px-2 py-0.5 rounded-full">' + col.items.length + '</span></div>';
+      if (colValue > 0) {
+        html += '<div class="' + col.lightClass + ' border-x ' + col.borderClass + ' px-4 py-1 text-xs font-semibold ' + col.textClass + '">' + money(colValue) + ' value</div>';
+      }
+      html += '<div id="pipe-col-' + col.id + '" data-col-type="' + col.type + '" data-col-status="' + col.dropStatus + '"';
+      html += ' class="flex-1 ' + col.lightClass + ' border border-t-0 ' + col.borderClass + ' rounded-b-xl p-3 space-y-2 min-h-[200px]"';
+      html += ' ondragover="event.preventDefault(); this.classList.add(\'ring-2\', \'' + col.ringClass + '\')"';
+      html += ' ondragleave="this.classList.remove(\'ring-2\', \'' + col.ringClass + '\')"';
+      html += ' ondrop="window._pipeDrop(event, \'' + col.id + '\', \'' + col.type + '\', \'' + col.dropStatus + '\')">';
+      if (col.items.length === 0) {
+        html += '<div class="text-center py-8 text-gray-300"><i class="fas ' + col.icon + ' text-2xl mb-2 block"></i><p class="text-xs">No items yet</p></div>';
+      } else {
+        col.items.forEach(function(item) { html += renderPipeCard(item, col.type); });
+      }
+      html += '</div></div>';
+    });
+    html += '</div>';
+
+    root.innerHTML = html;
+
+    document.querySelectorAll('.pipe-card').forEach(function(card) {
+      card.setAttribute('draggable', 'true');
+      card.addEventListener('dragstart', function(e) {
+        e.dataTransfer.setData('text/plain', card.getAttribute('data-id') + '|' + card.getAttribute('data-type'));
+        card.classList.add('opacity-50');
+      });
+      card.addEventListener('dragend', function() { card.classList.remove('opacity-50'); });
+    });
+  }
+
+  function initPipeline() {
+    root.innerHTML = '<div class="text-center py-8"><div class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-brand-500 mx-auto mb-3"></div><p class="text-sm text-gray-500">Loading pipeline...</p></div>';
+    Promise.all([
+      fetch('/api/crm/customers', { headers: authHeadersOnly() }).then(function(r) { return r.json(); }),
+      fetch('/api/crm/proposals', { headers: authHeadersOnly() }).then(function(r) { return r.json(); })
+    ]).then(function(results) {
+      renderPipeline(results[0].customers || [], results[1].proposals || []);
+    }).catch(function() {
+      root.innerHTML = '<p class="text-red-500 text-center py-8">Failed to load pipeline data.</p>';
+    });
+  }
+
+  window._pipeDrop = function(event, colId, colType, newStatus) {
+    event.preventDefault();
+    var col = document.getElementById('pipe-col-' + colId);
+    if (col) col.classList.remove('ring-2');
+    var dragData = event.dataTransfer.getData('text/plain');
+    if (!dragData) return;
+    var parts = dragData.split('|');
+    var itemId = parts[0];
+    var itemType = parts[1];
+    if (itemType !== colType) { toast('Cannot drop here — wrong card type', 'error'); return; }
+    if (itemType === 'customer') {
+      var cust = (window._pipelineCustomers || []).find(function(c) { return String(c.id) === String(itemId); });
+      if (!cust) return;
+      var payload = { name: cust.name, email: cust.email || null, phone: cust.phone || null, company: cust.company || null, address: cust.address || null, city: cust.city || null, province: cust.province || null, postal_code: cust.postal_code || null, notes: cust.notes || null, tags: cust.tags || null, status: newStatus };
+      fetch('/api/crm/customers/' + itemId, { method: 'PUT', headers: authHeaders(), body: JSON.stringify(payload) })
+        .then(function(r) { return r.json(); })
+        .then(function(res) { if (res.success) { toast('Moved to ' + newStatus); initPipeline(); } else toast(res.error || 'Update failed', 'error'); })
+        .catch(function() { toast('Network error', 'error'); });
+    } else {
+      fetch('/api/crm/proposals/' + itemId, { method: 'PUT', headers: authHeaders(), body: JSON.stringify({ status: newStatus }) })
+        .then(function(r) { return r.json(); })
+        .then(function(res) { if (res.success) { toast('Status updated'); initPipeline(); } else toast(res.error || 'Update failed', 'error'); })
+        .catch(function() { toast('Network error', 'error'); });
+    }
+  };
+
+  window._crmAddLead = function() {
+    var body = '<div class="space-y-3">' +
+      '<div><label class="block text-xs font-medium text-gray-600 mb-1">Full Name *</label><input type="text" id="leadName" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="Jane Smith"></div>' +
+      '<div class="grid grid-cols-2 gap-3"><div><label class="block text-xs font-medium text-gray-600 mb-1">Phone</label><input type="tel" id="leadPhone" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"></div>' +
+      '<div><label class="block text-xs font-medium text-gray-600 mb-1">Email</label><input type="email" id="leadEmail" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"></div></div>' +
+      '<div><label class="block text-xs font-medium text-gray-600 mb-1">Property Address</label><input type="text" id="leadAddress" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"></div>' +
+      '<div><label class="block text-xs font-medium text-gray-600 mb-1">Notes</label><textarea id="leadNotes" rows="2" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="How did they find you? What are they looking for?"></textarea></div>' +
+    '</div>';
+    showModal('Add New Lead', body, function() {
+      var name = document.getElementById('leadName').value.trim();
+      if (!name) { toast('Name is required', 'error'); return; }
+      var payload = { name: name, phone: document.getElementById('leadPhone').value.trim() || null, email: document.getElementById('leadEmail').value.trim() || null, address: document.getElementById('leadAddress').value.trim() || null, notes: document.getElementById('leadNotes').value.trim() || null, status: 'lead' };
+      fetch('/api/crm/customers', { method: 'POST', headers: authHeaders(), body: JSON.stringify(payload) })
+        .then(function(r) { return r.json(); })
+        .then(function(res) { if (res.success) { closeModal(); toast('Lead added!'); initPipeline(); } else toast(res.error || 'Failed to add lead', 'error'); })
+        .catch(function() { toast('Network error', 'error'); });
+    }, 'Add Lead');
+  };
+
+  // ---- Create Proposal from Report ----
+  window._crmCreateProposalFromReport = function(orderId) {
+    Promise.all([
+      fetch('/api/reports/' + orderId, { headers: authHeadersOnly() }).then(function(r) { return r.json(); }),
+      fetch('/api/crm/customers', { headers: authHeadersOnly() }).then(function(r) { return r.json(); })
+    ]).then(function(results) {
+      var reportRow = results[0];
+      var custs = results[1].customers || [];
+      var report = null;
+      try { report = JSON.parse(reportRow.api_response_raw || 'null'); } catch(e) {}
+
+      var address = reportRow.property_address || (report && report.property && report.property.address) || '';
+      var area = Math.round(reportRow.roof_area_sqft || (report && report.total_true_area_sqft) || 0);
+      var pitch = (report && report.roof_pitch_ratio) || '';
+      var complexity = (report && report.materials && report.materials.complexity_class) || '';
+
+      var bomLines = [];
+      if (report && report.materials && report.materials.line_items) {
+        report.materials.line_items.forEach(function(item) {
+          if (item.order_quantity && item.description) {
+            bomLines.push(item.order_quantity + ' ' + (item.order_unit || 'ea') + '  ' + (item.description || item.category));
+          }
+        });
+      }
+
+      var scopeOfWork = 'Complete roof replacement at ' + (address || 'the property') + '.\n' +
+        'Roof area: ' + area + ' sq ft' + (pitch ? ' | Pitch: ' + pitch : '') + (complexity ? ' | Complexity: ' + complexity : '') + '.\n' +
+        'Remove existing roofing materials, inspect and repair decking as needed, install new underlayment and roofing materials per specifications.';
+
+      var body = '<div class="space-y-3">' +
+        '<div class="bg-blue-50 border border-blue-200 rounded-xl p-3 text-sm text-blue-700"><i class="fas fa-file-alt mr-1"></i>Pre-filled from report: <strong>' + (address || 'Order #' + orderId) + '</strong></div>' +
+        '<div><label class="block text-xs font-medium text-gray-600 mb-1">Customer *</label>' + customerSelectHTML(custs, '', 'propFromReportCustomer') + '</div>' +
+        '<div><label class="block text-xs font-medium text-gray-600 mb-1">Proposal Title *</label><input type="text" id="propFromReportTitle" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" value="Roofing Proposal \u2014 ' + address.replace(/"/g, '&quot;') + '"></div>' +
+        '<div><label class="block text-xs font-medium text-gray-600 mb-1">Property Address</label><input type="text" id="propFromReportAddress" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" value="' + address.replace(/"/g, '&quot;') + '"></div>' +
+        '<div><label class="block text-xs font-medium text-gray-600 mb-1">Scope of Work</label><textarea id="propFromReportScope" rows="4" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">' + scopeOfWork + '</textarea></div>' +
+        (bomLines.length ? '<div><label class="block text-xs font-medium text-gray-600 mb-1">Materials Summary</label><textarea id="propFromReportMaterials" rows="5" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono text-xs">' + bomLines.join('\n') + '</textarea></div>' : '') +
+        '<div class="grid grid-cols-2 gap-3">' +
+          '<div><label class="block text-xs font-medium text-gray-600 mb-1">Tax Rate (%)</label><input type="number" id="propFromReportTax" class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" value="5" min="0" step="0.5"></div>' +
+          '<div><label class="block text-xs font-medium text-gray-600 mb-1">Valid Until</label><input type="date" id="propFromReportValid" class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm"></div>' +
+        '</div>' +
+      '</div>';
+
+      showModal('Create Proposal from Report', body, function() {
+        var custData = getCustomerFromSelector('propFromReportCustomer');
+        var title = document.getElementById('propFromReportTitle').value.trim();
+        if (!custData) { toast('Please select a customer', 'error'); return; }
+        if (!title) { toast('Title is required', 'error'); return; }
+        var matEl = document.getElementById('propFromReportMaterials');
+        var payload = Object.assign({}, custData, {
+          title: title,
+          property_address: document.getElementById('propFromReportAddress').value.trim() || null,
+          scope_of_work: document.getElementById('propFromReportScope').value.trim() || null,
+          materials_detail: matEl ? matEl.value.trim() || null : null,
+          source_report_id: orderId,
+          tax_rate: parseFloat(document.getElementById('propFromReportTax').value) || 5,
+          valid_until: document.getElementById('propFromReportValid').value || null
+        });
+        fetch('/api/crm/proposals', { method: 'POST', headers: authHeaders(), body: JSON.stringify(payload) })
+          .then(function(r) { return r.json(); })
+          .then(function(res) {
+            if (res.success) { closeModal(); toast('Proposal created!'); setTimeout(function() { window.location.href = '/customer/proposals'; }, 1200); }
+            else toast(res.error || 'Failed to create proposal', 'error');
+          })
+          .catch(function(e) { toast('Network error: ' + (e.message || 'Unknown'), 'error'); });
+      }, 'Create Proposal');
+    }).catch(function() { toast('Failed to load report data', 'error'); });
+  };
 
   // ============================================================
   // MODULE: D2D (Door-to-Door)
