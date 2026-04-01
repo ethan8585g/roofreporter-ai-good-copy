@@ -119,13 +119,13 @@ function renderDashboard() {
 
   // Sidebar nav sections
   var creditBadge = freeTrialRemaining > 0 ? freeTrialRemaining + ' free' : (paidCredits > 0 ? paidCredits : '');
-  var creditBadgeColor = freeTrialRemaining > 0 ? 'bg-green-500' : 'bg-blue-500';
+  var creditBadgeColor = 'bg-blue-600';
   var invBadge = s.invoices_owing > 0 ? '$' + Number(s.invoices_owing).toFixed(0) : '';
   var propBadge = s.proposals_open > 0 ? s.proposals_open + '' : '';
   var jobBadge = s.jobs_in_progress > 0 ? s.jobs_in_progress + ' active' : (s.jobs_total > 0 ? s.jobs_total + '' : '');
   var teamBadge = custState.teamMembers > 0 ? custState.teamMembers + '' : '';
   var secBadge = custState.secretaryActive ? (custState.secretaryCalls > 0 ? custState.secretaryCalls + '' : 'Active') : '';
-  var secBadgeColor = custState.secretaryActive ? 'bg-green-500' : '';
+  var secBadgeColor = custState.secretaryActive ? 'bg-blue-600' : '';
 
   var sidebar =
     '<aside class="hidden md:flex flex-col w-56 flex-shrink-0 bg-white border-r border-gray-200 min-h-full">' +
@@ -147,21 +147,21 @@ function renderDashboard() {
         '<div>' +
           '<p class="px-3 mb-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Reports</p>' +
           navLink('/customer/order', 'fa-plus-circle', isSolar ? 'Order New Solar Proposal' : 'Order New Report', creditBadge || null, creditBadgeColor) +
-          navLink('/customer/reports', 'fa-file-alt', 'Report History', completedReports > 0 ? completedReports + '' : null, 'bg-indigo-500') +
+          navLink('/customer/reports', 'fa-file-alt', 'Report History', completedReports > 0 ? completedReports + '' : null, 'bg-gray-800') +
         '</div>' +
         // CRM
         '<div>' +
           '<p class="px-3 mb-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider">CRM</p>' +
-          navLink('/customer/customers', 'fa-users', 'Customers', s.customers > 0 ? s.customers + '' : null, 'bg-emerald-500') +
-          navLink('/customer/invoices', 'fa-file-invoice-dollar', 'Invoices', invBadge || null, 'bg-amber-500') +
-          navLink('/customer/proposals', 'fa-file-signature', 'Proposals', propBadge || null, 'bg-purple-500') +
-          navLink('/customer/jobs', 'fa-hard-hat', 'Jobs', jobBadge || null, 'bg-rose-500') +
+          navLink('/customer/customers', 'fa-users', 'Customers', s.customers > 0 ? s.customers + '' : null, 'bg-gray-800') +
+          navLink('/customer/invoices', 'fa-file-invoice-dollar', 'Invoices', invBadge || null, 'bg-blue-600') +
+          navLink('/customer/proposals', 'fa-file-signature', 'Proposals', propBadge || null, 'bg-blue-600') +
+          navLink('/customer/jobs', 'fa-hard-hat', 'Jobs', jobBadge || null, 'bg-gray-800') +
           navLink('/customer/pipeline', 'fa-funnel-dollar', 'Pipeline', 'Soon', 'bg-gray-300') +
         '</div>' +
         // Team
         '<div>' +
           '<p class="px-3 mb-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Team</p>' +
-          navLink('/customer/team', 'fa-users-cog', 'Sales Team', teamBadge || null, 'bg-teal-500') +
+          navLink('/customer/team', 'fa-users-cog', 'Sales Team', teamBadge || null, 'bg-gray-800') +
           navLink('/customer/d2d', 'fa-door-open', 'D2D Manager', null, '') +
         '</div>' +
         // Services
@@ -174,7 +174,7 @@ function renderDashboard() {
           '<p class="px-3 mb-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Tools</p>' +
           navLink('/customer/material-calculator', 'fa-calculator', 'Material Calculator', null, '') +
         '</div>' +
-        (c.is_dev ? '<div><p class="px-3 mb-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Dev</p>' + navLink('/customer/property-imagery', 'fa-satellite', 'Property Imagery', 'Dev', 'bg-amber-500') + '</div>' : '') +
+        (c.is_dev ? '<div><p class="px-3 mb-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Dev</p>' + navLink('/customer/property-imagery', 'fa-satellite', 'Property Imagery', 'Dev', 'bg-gray-800') + '</div>' : '') +
       '</nav>' +
       // Credits footer
       '<div class="px-4 py-4 border-t border-gray-100">' +
@@ -215,14 +215,14 @@ function renderDashboard() {
       // Welcome header
       '<div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-5">' +
         '<div>' +
-          '<h2 class="text-xl font-bold text-gray-900">Welcome back, ' + (c.name || 'User') + '</h2>' +
+          '<h2 class="text-xl font-bold text-gray-900">' + (function() { var h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'; })() + ', ' + (c.name || 'User') + '</h2>' +
           '<p class="text-sm text-gray-500 mt-0.5">' + (c.company_name ? c.company_name + ' &middot; ' : '') + (c.email || '') + '</p>' +
         '</div>' +
         '<div class="flex items-center gap-2 flex-wrap">' +
-          (freeTrialRemaining > 0 ? '<div class="px-3 py-1.5 bg-green-50 border border-green-200 rounded-full text-xs font-bold text-green-700"><i class="fas fa-gift mr-1"></i>' + freeTrialRemaining + ' Free Trial</div>' : '') +
+          (freeTrialRemaining > 0 ? '<div class="px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-full text-xs font-bold text-blue-700"><i class="fas fa-gift mr-1"></i>' + freeTrialRemaining + ' Free Trial</div>' : '') +
           (paidCredits > 0 ? '<div class="px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-full text-xs font-bold text-blue-700"><i class="fas fa-coins mr-1"></i>' + paidCredits + ' Credits</div>' : '') +
-          '<div class="px-3 py-1.5 bg-indigo-50 border border-indigo-200 rounded-full text-xs font-bold text-indigo-700"><i class="fas fa-file-alt mr-1"></i>' + completedReports + ' Reports</div>' +
-          (processingReports > 0 ? '<div class="px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-full text-xs font-bold text-amber-700 animate-pulse"><i class="fas fa-spinner fa-spin mr-1"></i>' + processingReports + ' Generating</div>' : '') +
+          '<div class="px-3 py-1.5 bg-gray-100 border border-gray-200 rounded-full text-xs font-bold text-gray-700"><i class="fas fa-file-alt mr-1"></i>' + completedReports + ' Reports</div>' +
+          (processingReports > 0 ? '<div class="px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-full text-xs font-bold text-blue-700 animate-pulse"><i class="fas fa-spinner fa-spin mr-1"></i>' + processingReports + ' Generating</div>' : '') +
         '</div>' +
       '</div>' +
 
@@ -258,40 +258,58 @@ function renderDashboard() {
           '</div>' +
         '</div>' : '') +
 
-      // Recent Reports + Quick Actions
+      // Rover AI Assistant + Quick Actions
       '<div class="grid grid-cols-1 lg:grid-cols-5 gap-5 mb-5">' +
-        // Recent Reports (wider)
-        '<div class="lg:col-span-3 bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">' +
-          '<div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">' +
-            '<h3 class="font-bold text-gray-800 text-sm"><i class="fas fa-clock text-brand-500 mr-2"></i>Recent Reports</h3>' +
-            '<a href="/customer/reports" class="text-xs text-brand-600 hover:text-brand-700 font-medium">View All <i class="fas fa-arrow-right ml-1"></i></a>' +
+        // Rover AI Chat (wider)
+        '<div class="lg:col-span-3 bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden flex flex-col" style="min-height:420px">' +
+          '<div class="px-5 py-3 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-gray-900 to-gray-800">' +
+            '<div class="flex items-center gap-2">' +
+              '<span class="text-lg">&#128054;</span>' +
+              '<h3 class="font-bold text-white text-sm">Rover AI Assistant</h3>' +
+              '<span class="px-2 py-0.5 bg-blue-600 text-white rounded-full text-[9px] font-bold">AI</span>' +
+            '</div>' +
+            '<p class="text-xs text-gray-400">Ask me anything about your account</p>' +
           '</div>' +
-          '<div class="p-4">' + renderRecentOrders() + '</div>' +
+          '<div id="rover-dash-messages" class="flex-1 overflow-y-auto p-4 space-y-3" style="max-height:320px">' +
+            '<div class="flex gap-2"><div class="w-7 h-7 bg-gray-900 rounded-full flex items-center justify-center flex-shrink-0 text-xs">&#128054;</div><div class="bg-gray-100 rounded-xl rounded-tl-sm px-3 py-2 text-sm text-gray-700 max-w-[85%]">Hey ' + (c.name || 'there').split(' ')[0] + '! I\'m Rover, your AI assistant. Ask me anything — I can help with reports, proposals, invoices, material calculations, and more.</div></div>' +
+          '</div>' +
+          '<div class="px-4 py-3 border-t border-gray-100 bg-gray-50">' +
+            '<div class="flex gap-2 mb-2 overflow-x-auto pb-1">' +
+              '<button onclick="window._roverDashSend(\'What can you help me with?\')" class="px-2.5 py-1 bg-white border border-gray-200 rounded-lg text-[11px] text-gray-600 hover:bg-blue-50 hover:border-blue-200 whitespace-nowrap flex-shrink-0">What can you do?</button>' +
+              '<button onclick="window._roverDashSend(\'Give me a summary of my account\')" class="px-2.5 py-1 bg-white border border-gray-200 rounded-lg text-[11px] text-gray-600 hover:bg-blue-50 hover:border-blue-200 whitespace-nowrap flex-shrink-0">Account Summary</button>' +
+              '<button onclick="window._roverDashSend(\'How do I order a roof report?\')" class="px-2.5 py-1 bg-white border border-gray-200 rounded-lg text-[11px] text-gray-600 hover:bg-blue-50 hover:border-blue-200 whitespace-nowrap flex-shrink-0">How to Order</button>' +
+              '<button onclick="window._roverDashSend(\'Help me create a proposal\')" class="px-2.5 py-1 bg-white border border-gray-200 rounded-lg text-[11px] text-gray-600 hover:bg-blue-50 hover:border-blue-200 whitespace-nowrap flex-shrink-0">Draft Proposal</button>' +
+            '</div>' +
+            '<div class="flex gap-2">' +
+              '<input type="text" id="rover-dash-input" placeholder="Ask Rover anything..." class="flex-1 px-3 py-2 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-400 focus:border-blue-400" onkeydown="if(event.key===\'Enter\')window._roverDashSend()">' +
+              '<button onclick="window._roverDashSend()" class="px-4 py-2 bg-gray-900 hover:bg-gray-800 text-white rounded-xl text-sm font-semibold flex-shrink-0"><i class="fas fa-paper-plane"></i></button>' +
+            '</div>' +
+          '</div>' +
         '</div>' +
         // Quick Actions (narrower)
         '<div class="lg:col-span-2 bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">' +
           '<div class="px-5 py-4 border-b border-gray-100">' +
-            '<h3 class="font-bold text-gray-800 text-sm"><i class="fas fa-bolt text-amber-500 mr-2"></i>Quick Actions</h3>' +
+            '<h3 class="font-bold text-gray-800 text-sm"><i class="fas fa-bolt text-blue-600 mr-2"></i>Quick Actions</h3>' +
           '</div>' +
           '<div class="p-4 space-y-2.5">' +
             '<a href="/customer/order" class="flex items-center gap-3 p-3 bg-blue-50 hover:bg-blue-100 rounded-xl transition-colors">' +
-              '<div class="w-9 h-9 bg-blue-500 rounded-lg flex items-center justify-center flex-shrink-0"><i class="fas fa-plus text-white text-sm"></i></div>' +
+              '<div class="w-9 h-9 bg-blue-600 rounded-lg flex items-center justify-center flex-shrink-0"><i class="fas fa-plus text-white text-sm"></i></div>' +
               '<div><p class="font-semibold text-gray-800 text-sm">Order Roof Report</p><p class="text-xs text-gray-500">' + (freeTrialRemaining > 0 ? freeTrialRemaining + ' free remaining' : (paidCredits > 0 ? paidCredits + ' credits' : 'Pay per report')) + '</p></div>' +
             '</a>' +
-            '<a href="/customer/customers" class="flex items-center gap-3 p-3 bg-emerald-50 hover:bg-emerald-100 rounded-xl transition-colors">' +
-              '<div class="w-9 h-9 bg-emerald-500 rounded-lg flex items-center justify-center flex-shrink-0"><i class="fas fa-user-plus text-white text-sm"></i></div>' +
+            '<a href="/customer/customers" class="flex items-center gap-3 p-3 bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors">' +
+              '<div class="w-9 h-9 bg-gray-800 rounded-lg flex items-center justify-center flex-shrink-0"><i class="fas fa-user-plus text-white text-sm"></i></div>' +
               '<div><p class="font-semibold text-gray-800 text-sm">Add Customer</p><p class="text-xs text-gray-500">Build your CRM database</p></div>' +
             '</a>' +
-            '<a href="/customer/invoices" class="flex items-center gap-3 p-3 bg-amber-50 hover:bg-amber-100 rounded-xl transition-colors">' +
-              '<div class="w-9 h-9 bg-amber-500 rounded-lg flex items-center justify-center flex-shrink-0"><i class="fas fa-file-invoice-dollar text-white text-sm"></i></div>' +
+            '<a href="/customer/invoices" class="flex items-center gap-3 p-3 bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors">' +
+              '<div class="w-9 h-9 bg-gray-800 rounded-lg flex items-center justify-center flex-shrink-0"><i class="fas fa-file-invoice-dollar text-white text-sm"></i></div>' +
               '<div><p class="font-semibold text-gray-800 text-sm">Create Invoice</p><p class="text-xs text-gray-500">' + (s.invoices_owing > 0 ? '$' + Number(s.invoices_owing).toFixed(2) + ' outstanding' : 'Bill your customers') + '</p></div>' +
             '</a>' +
-            '<a href="/customer/proposal-builder" class="flex items-center gap-3 p-3 bg-violet-50 hover:bg-violet-100 rounded-xl transition-colors">' +
-              '<div class="w-9 h-9 bg-violet-500 rounded-lg flex items-center justify-center flex-shrink-0"><i class="fas fa-file-signature text-white text-sm"></i></div>' +
+            '<a href="/customer/proposals" class="flex items-center gap-3 p-3 bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors">' +
+              '<div class="w-9 h-9 bg-blue-600 rounded-lg flex items-center justify-center flex-shrink-0"><i class="fas fa-file-signature text-white text-sm"></i></div>' +
               '<div><p class="font-semibold text-gray-800 text-sm">New Proposal</p><p class="text-xs text-gray-500">Professional roofing proposals</p></div>' +
             '</a>' +
-            '<a href="/pricing" class="flex items-center gap-3 p-3 bg-purple-50 hover:bg-purple-100 rounded-xl transition-colors">' +
-              '<div class="w-9 h-9 bg-purple-500 rounded-lg flex items-center justify-center flex-shrink-0"><i class="fas fa-coins text-white text-sm"></i></div>' +
+            '<a href="/pricing" class="flex items-center gap-3 p-3 bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors">' +
+              '<div class="w-9 h-9 bg-gray-800 rounded-lg flex items-center justify-center flex-shrink-0"><i class="fas fa-coins text-white text-sm"></i></div>' +
               '<div><p class="font-semibold text-gray-800 text-sm">Buy Credits</p><p class="text-xs text-gray-500">From $2.99/report USD</p></div>' +
             '</a>' +
           '</div>' +
@@ -633,3 +651,52 @@ function dismissOnboarding() {
   cust.onboarding_completed = 1;
   localStorage.setItem('rc_customer', JSON.stringify(cust));
 }
+
+// ---- Rover Dashboard Chat ----
+var _roverDashSessionId = sessionStorage.getItem('rover_dash_sid') || ('rd_' + Math.random().toString(36).substring(2, 10));
+sessionStorage.setItem('rover_dash_sid', _roverDashSessionId);
+
+window._roverDashSend = function(text) {
+  var input = document.getElementById('rover-dash-input');
+  var msg = text || (input ? input.value.trim() : '');
+  if (!msg) return;
+  if (input) input.value = '';
+
+  var container = document.getElementById('rover-dash-messages');
+  if (!container) return;
+
+  // Add user message
+  container.insertAdjacentHTML('beforeend',
+    '<div class="flex gap-2 justify-end"><div class="bg-blue-600 text-white rounded-xl rounded-tr-sm px-3 py-2 text-sm max-w-[85%]">' + msg.replace(/</g, '&lt;') + '</div></div>'
+  );
+  // Add typing indicator
+  container.insertAdjacentHTML('beforeend',
+    '<div id="rover-dash-typing" class="flex gap-2"><div class="w-7 h-7 bg-gray-900 rounded-full flex items-center justify-center flex-shrink-0 text-xs">&#128054;</div><div class="bg-gray-100 rounded-xl rounded-tl-sm px-3 py-2 text-sm text-gray-400"><i class="fas fa-circle text-[6px] animate-pulse mr-1"></i><i class="fas fa-circle text-[6px] animate-pulse mr-1" style="animation-delay:0.2s"></i><i class="fas fa-circle text-[6px] animate-pulse" style="animation-delay:0.4s"></i></div></div>'
+  );
+  container.scrollTop = container.scrollHeight;
+
+  var token = localStorage.getItem('rc_customer_token') || '';
+  fetch('/api/rover/assistant', {
+    method: 'POST',
+    headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message: msg, session_id: _roverDashSessionId })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    var typing = document.getElementById('rover-dash-typing');
+    if (typing) typing.remove();
+    var reply = (data.reply || data.message || 'Sorry, I had trouble responding.').replace(/</g, '&lt;').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
+    container.insertAdjacentHTML('beforeend',
+      '<div class="flex gap-2"><div class="w-7 h-7 bg-gray-900 rounded-full flex items-center justify-center flex-shrink-0 text-xs">&#128054;</div><div class="bg-gray-100 rounded-xl rounded-tl-sm px-3 py-2 text-sm text-gray-700 max-w-[85%]">' + reply + '</div></div>'
+    );
+    container.scrollTop = container.scrollHeight;
+  })
+  .catch(function() {
+    var typing = document.getElementById('rover-dash-typing');
+    if (typing) typing.remove();
+    container.insertAdjacentHTML('beforeend',
+      '<div class="flex gap-2"><div class="w-7 h-7 bg-gray-900 rounded-full flex items-center justify-center flex-shrink-0 text-xs">&#128054;</div><div class="bg-red-50 rounded-xl rounded-tl-sm px-3 py-2 text-sm text-red-600 max-w-[85%]">Sorry, I had trouble connecting. Please try again.</div></div>'
+    );
+    container.scrollTop = container.scrollHeight;
+  });
+};
