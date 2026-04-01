@@ -796,7 +796,9 @@ customerAuthRoutes.get('/me', async (c) => {
       team_owner_company: teamInfo.isTeamMember ? ownerCompany : undefined,
       // Company type: 'roofing' | 'solar' | null (null = not yet selected)
       company_type: session.company_type || null,
-      solar_panel_wattage_w: session.solar_panel_wattage_w || 400
+      solar_panel_wattage_w: session.solar_panel_wattage_w || 400,
+      onboarding_completed: session.onboarding_completed || 0,
+      onboarding_step: session.onboarding_step || 0
     }
   })
 })
@@ -855,6 +857,7 @@ customerAuthRoutes.get('/profile', async (c) => {
            brand_business_name, brand_logo_url, brand_primary_color, brand_secondary_color,
            brand_tagline, brand_phone, brand_email, brand_website, brand_address,
            brand_license_number, brand_insurance_info,
+           onboarding_completed, onboarding_step,
            created_at, last_login
     FROM customers WHERE id = ?
   `).bind(session.customer_id).first()
@@ -862,6 +865,22 @@ customerAuthRoutes.get('/profile', async (c) => {
   if (!customer) return c.json({ error: 'Customer not found' }, 404)
 
   return c.json({ customer })
+})
+
+// ============================================================
+// POST /onboarding/complete — Mark onboarding as finished
+// ============================================================
+customerAuthRoutes.post('/onboarding/complete', async (c) => {
+  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  if (!token) return c.json({ error: 'Not authenticated' }, 401)
+  const session = await c.env.DB.prepare(
+    `SELECT customer_id FROM customer_sessions WHERE session_token = ? AND expires_at > datetime('now')`
+  ).bind(token).first<any>()
+  if (!session) return c.json({ error: 'Session expired' }, 401)
+  await c.env.DB.prepare(
+    `UPDATE customers SET onboarding_completed = 1, onboarding_step = 3, updated_at = datetime('now') WHERE id = ?`
+  ).bind(session.customer_id).run()
+  return c.json({ success: true })
 })
 
 // ============================================================

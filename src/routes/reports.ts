@@ -1179,10 +1179,12 @@ reportsRoutes.post('/:orderId/generate-enhanced', async (c) => {
   // Auto-email: check if customer has auto_email_reports enabled
   let autoEmailEnabled = false
   let autoEmailRecipient = ''
+  let contractorEmail = ''
   try {
     const custRow = await c.env.DB.prepare(
       'SELECT c.auto_email_reports, c.email FROM customers c JOIN orders o ON o.customer_id=c.id WHERE o.id=?'
     ).bind(orderId).first<any>()
+    if (custRow?.email) contractorEmail = custRow.email
     if (custRow?.auto_email_reports === 1 && custRow?.email) {
       autoEmailEnabled = true
       autoEmailRecipient = custRow.email
@@ -1272,6 +1274,37 @@ reportsRoutes.post('/:orderId/generate-enhanced', async (c) => {
         if (autoEmailEnabled) console.log(`[AutoEmail] Report ${orderId} auto-sent to ${recipient}`)
       } catch {}
     }
+  }
+
+  // Send "report ready" notification to contractor if full auto-email didn't already fire
+  if (!autoEmailEnabled && !email_report && contractorEmail) {
+    const baseUrl = new URL(c.req.url).origin
+    const viewUrl = `${baseUrl}/api/reports/${orderId}/html`
+    const matCalcUrl = `${baseUrl}/customer/material-calculator?order_id=${orderId}`
+    const addr = order.property_address || 'your property'
+    const notifHtml = `<!DOCTYPE html><html><body style="font-family:Inter,system-ui,sans-serif;background:#f8fafc;margin:0;padding:32px">
+<div style="max-width:520px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08)">
+  <div style="background:linear-gradient(135deg,#0369a1,#0ea5e9);padding:32px;text-align:center">
+    <h1 style="color:#fff;margin:0;font-size:22px;font-weight:700">&#x2705; Roof Report Ready</h1>
+    <p style="color:#bae6fd;margin:8px 0 0;font-size:14px">${addr}</p>
+  </div>
+  <div style="padding:32px">
+    <p style="color:#374151;font-size:15px;margin:0 0 20px">Your roof measurement report for <strong>${addr}</strong> has been generated and is ready to view.</p>
+    <div style="text-align:center;margin:28px 0">
+      <a href="${viewUrl}" style="display:inline-block;background:#0369a1;color:#fff;font-weight:700;font-size:15px;padding:14px 32px;border-radius:12px;text-decoration:none">View Report</a>
+    </div>
+    <p style="color:#6b7280;font-size:13px;text-align:center"><a href="${matCalcUrl}" style="color:#0369a1">Open Material Calculator</a> to build your BOM from this report.</p>
+  </div>
+  <div style="background:#f8fafc;padding:16px;text-align:center;border-top:1px solid #e5e7eb">
+    <p style="color:#9ca3af;font-size:12px;margin:0">Powered by <a href="https://roofreporterai.com" style="color:#0369a1">RoofReporterAI</a></p>
+  </div>
+</div></body></html>`
+    try {
+      const ci = (c.env as any).GMAIL_CLIENT_ID
+      const cs = (c.env as any).GMAIL_CLIENT_SECRET
+      const rt = (c.env as any).GMAIL_REFRESH_TOKEN
+      if (ci && cs && rt) await sendGmailOAuth2(ci, cs, rt, contractorEmail, `\u2705 Roof Report Ready \u2014 ${addr}`, notifHtml, c.env.GMAIL_SENDER_EMAIL)
+    } catch (e: any) { console.warn('[NotifEmail] Failed:', e.message) }
   }
 
   return c.json({ success: true, message: `Report generated (v${baseVer})`, status: 'completed', report: reportData })
@@ -1465,6 +1498,73 @@ reportsRoutes.post('/:orderId/email', async (c) => {
   // Track email event in GA4 (non-blocking)
   trackEmailSent(c.env as any, 'report_email', recipient, { order_id: orderId, method }).catch(() => {})
   return c.json({ success: true, to: recipient, method, from: senderEmail })
+})
+
+// ============================================================
+// POST /:orderId/share — Generate a public shareable link for a report
+// ============================================================
+reportsRoutes.post('/:orderId/share', async (c) => {
+  const user = c.get('user' as any) as any
+  const orderId = c.req.param('orderId')
+  const body = await c.req.json().catch(() => ({} as any))
+
+  // Verify the report belongs to this customer
+  const report = await c.env.DB.prepare(`
+    SELECT r.id, r.share_token, r.status, o.property_address, c.name as contractor_name, c.email as contractor_email
+    FROM reports r JOIN orders o ON o.id = r.order_id
+    JOIN customers c ON c.id = o.customer_id
+    WHERE r.order_id = ? AND o.customer_id = ?
+  `).bind(orderId, user.id).first<any>()
+
+  if (!report) return c.json({ error: 'Report not found' }, 404)
+  if (report.status !== 'completed' && report.status !== 'enhanced') {
+    return c.json({ error: 'Report is not yet ready to share' }, 400)
+  }
+
+  // Generate share token if not exists
+  let shareToken = report.share_token
+  if (!shareToken) {
+    shareToken = crypto.randomUUID().replace(/-/g, '').substring(0, 20)
+    await c.env.DB.prepare(
+      "UPDATE reports SET share_token = ?, share_sent_at = datetime('now'), updated_at = datetime('now') WHERE order_id = ?"
+    ).bind(shareToken, orderId).run()
+  }
+
+  const baseUrl = new URL(c.req.url).origin
+  const shareUrl = `${baseUrl}/report/share/${shareToken}`
+
+  // Optionally send email to homeowner
+  if (body.email) {
+    const address = report.property_address || 'your property'
+    const contractor = report.contractor_name || 'Your roofing contractor'
+    const notifHtml = `<!DOCTYPE html><html><body style="font-family:Inter,system-ui,sans-serif;background:#f8fafc;margin:0;padding:32px">
+<div style="max-width:520px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08)">
+  <div style="background:linear-gradient(135deg,#0369a1,#0ea5e9);padding:32px;text-align:center">
+    <h1 style="color:#fff;margin:0;font-size:22px;font-weight:700">Roof Measurement Report</h1>
+    <p style="color:#bae6fd;margin:8px 0 0;font-size:14px">${address}</p>
+  </div>
+  <div style="padding:32px">
+    <p style="color:#374151;font-size:15px;margin:0 0 20px">${contractor} has shared your roof measurement report with you.</p>
+    <div style="text-align:center;margin:28px 0">
+      <a href="${shareUrl}" style="display:inline-block;background:#0369a1;color:#fff;font-weight:700;font-size:15px;padding:14px 32px;border-radius:12px;text-decoration:none">View My Roof Report</a>
+    </div>
+    <p style="color:#6b7280;font-size:13px;margin:0">This link is shareable — bookmark it to view your report anytime.</p>
+  </div>
+  <div style="background:#f8fafc;padding:16px;text-align:center;border-top:1px solid #e5e7eb">
+    <p style="color:#9ca3af;font-size:12px;margin:0">Powered by <a href="https://roofreporterai.com" style="color:#0369a1">RoofReporterAI</a></p>
+  </div>
+</div></body></html>`
+    try {
+      const ci = (c.env as any).GMAIL_CLIENT_ID
+      const cs = (c.env as any).GMAIL_CLIENT_SECRET
+      const rt = (c.env as any).GMAIL_REFRESH_TOKEN
+      if (ci && cs && rt) {
+        await sendGmailOAuth2(ci, cs, rt, body.email, `Your Roof Report is Ready — ${address}`, notifHtml, c.env.GMAIL_SENDER_EMAIL)
+      }
+    } catch (e: any) { console.warn('[Share] Email failed:', e.message) }
+  }
+
+  return c.json({ success: true, share_url: shareUrl, share_token: shareToken })
 })
 
 // ============================================================

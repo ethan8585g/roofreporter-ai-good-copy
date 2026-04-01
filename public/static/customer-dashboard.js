@@ -17,6 +17,8 @@ document.addEventListener('DOMContentLoaded', async function() {
   }
   await loadDashData();
   renderDashboard();
+  // Show onboarding wizard for new customers
+  if (custState.customer && !custState.customer.onboarding_completed) showOnboardingModal();
   // Initialize ads for non-subscribers after data is loaded
   if (window.RRAds) window.RRAds.init(custState.showAds, window.__rraPublisherId);
   // Auto-refresh when reports are generating
@@ -519,3 +521,115 @@ async function triggerAsyncImagery(orderId) {
 document.addEventListener('DOMContentLoaded', function() {
   setTimeout(loadAutoEmailPref, 500);
 });
+
+// ============================================================
+// ONBOARDING WIZARD — shown once to new customers
+// ============================================================
+function showOnboardingModal() {
+  var name = (custState.customer && custState.customer.name) ? custState.customer.name.split(' ')[0] : 'there';
+  var freeCredits = (custState.customer && custState.customer.free_trial_remaining) || 3;
+
+  var overlay = document.createElement('div');
+  overlay.id = 'onboarding-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+
+  var steps = [
+    {
+      icon: 'fa-hand-wave',
+      color: 'from-brand-500 to-sky-500',
+      title: 'Welcome to RoofReporterAI, ' + name + '!',
+      content: '<div class="space-y-3">' +
+        '<div class="bg-green-50 border border-green-200 rounded-xl p-4 text-center">' +
+          '<p class="text-3xl font-black text-green-700 mb-1">' + freeCredits + ' Free Reports</p>' +
+          '<p class="text-sm text-green-600">No credit card needed — start measuring roofs right now</p>' +
+        '</div>' +
+        '<div class="grid grid-cols-3 gap-3 text-center text-xs">' +
+          '<div class="bg-gray-50 rounded-xl p-3"><i class="fas fa-satellite text-brand-500 text-xl mb-1 block"></i><p class="font-semibold text-gray-700">Satellite Measurement</p></div>' +
+          '<div class="bg-gray-50 rounded-xl p-3"><i class="fas fa-boxes-stacked text-emerald-500 text-xl mb-1 block"></i><p class="font-semibold text-gray-700">Full Material BOM</p></div>' +
+          '<div class="bg-gray-50 rounded-xl p-3"><i class="fas fa-file-invoice text-purple-500 text-xl mb-1 block"></i><p class="font-semibold text-gray-700">Instant Proposals</p></div>' +
+        '</div>' +
+      '</div>'
+    },
+    {
+      icon: 'fa-rocket',
+      color: 'from-emerald-500 to-teal-500',
+      title: 'Order Your First Report',
+      content: '<div class="space-y-4">' +
+        '<div class="bg-sky-50 border border-sky-200 rounded-xl p-4">' +
+          '<p class="text-sm text-sky-800 font-medium mb-3">Here\'s how it works:</p>' +
+          '<div class="space-y-2 text-sm text-sky-700">' +
+            '<div class="flex items-center gap-2"><span class="w-6 h-6 bg-sky-500 text-white rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">1</span><span>Enter the property address</span></div>' +
+            '<div class="flex items-center gap-2"><span class="w-6 h-6 bg-sky-500 text-white rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">2</span><span>AI analyzes satellite imagery</span></div>' +
+            '<div class="flex items-center gap-2"><span class="w-6 h-6 bg-sky-500 text-white rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">3</span><span>Full report ready in ~60 seconds</span></div>' +
+          '</div>' +
+        '</div>' +
+        '<a href="/customer/order" onclick="dismissOnboarding()" class="block w-full py-3 text-center bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl transition-colors">' +
+          '<i class="fas fa-plus mr-2"></i>Order My First Report (Free)' +
+        '</a>' +
+      '</div>'
+    },
+    {
+      icon: 'fa-toolbox',
+      color: 'from-purple-500 to-violet-500',
+      title: 'Explore Your Tools',
+      content: '<div class="space-y-3">' +
+        '<p class="text-sm text-gray-600">Your dashboard has everything you need to run your roofing business:</p>' +
+        '<div class="grid grid-cols-2 gap-2">' +
+          '<a href="/customer/crm/reports" onclick="dismissOnboarding()" class="bg-brand-50 border border-brand-200 rounded-xl p-3 text-center hover:bg-brand-100 transition-colors"><i class="fas fa-file-alt text-brand-500 text-lg mb-1 block"></i><p class="text-xs font-semibold text-brand-700">Reports</p></a>' +
+          '<a href="/customer/proposals" onclick="dismissOnboarding()" class="bg-amber-50 border border-amber-200 rounded-xl p-3 text-center hover:bg-amber-100 transition-colors"><i class="fas fa-file-invoice text-amber-500 text-lg mb-1 block"></i><p class="text-xs font-semibold text-amber-700">Proposals</p></a>' +
+          '<a href="/customer/customers" onclick="dismissOnboarding()" class="bg-violet-50 border border-violet-200 rounded-xl p-3 text-center hover:bg-violet-100 transition-colors"><i class="fas fa-users text-violet-500 text-lg mb-1 block"></i><p class="text-xs font-semibold text-violet-700">Customers</p></a>' +
+          '<a href="/customer/material-calculator" onclick="dismissOnboarding()" class="bg-sky-50 border border-sky-200 rounded-xl p-3 text-center hover:bg-sky-100 transition-colors"><i class="fas fa-calculator text-sky-500 text-lg mb-1 block"></i><p class="text-xs font-semibold text-sky-700">Material Calc</p></a>' +
+        '</div>' +
+      '</div>'
+    }
+  ];
+
+  var currentStep = 0;
+
+  function renderStep() {
+    var s = steps[currentStep];
+    var isLast = currentStep === steps.length - 1;
+    overlay.innerHTML = '<div style="background:#fff;border-radius:20px;width:100%;max-width:460px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.3)">' +
+      '<div style="background:linear-gradient(135deg,#0369a1,#0ea5e9);padding:24px;text-align:center;color:#fff">' +
+        '<i class="fas ' + s.icon + '" style="font-size:28px;margin-bottom:8px;display:block"></i>' +
+        '<h2 style="font-size:18px;font-weight:700;margin:0">' + s.title + '</h2>' +
+        '<div style="display:flex;justify-content:center;gap:6px;margin-top:12px">' +
+          steps.map(function(_, i) {
+            return '<div style="width:8px;height:8px;border-radius:50%;background:' + (i === currentStep ? '#fff' : 'rgba(255,255,255,0.4)') + '"></div>';
+          }).join('') +
+        '</div>' +
+      '</div>' +
+      '<div style="padding:20px">' + s.content + '</div>' +
+      '<div style="padding:16px;border-top:1px solid #e5e7eb;display:flex;gap:10px;justify-content:' + (currentStep === 0 ? 'flex-end' : 'space-between') + '">' +
+        (currentStep > 0 ? '<button onclick="window._onboardingPrev()" style="padding:10px 20px;background:#f3f4f6;color:#374151;border:none;border-radius:10px;font-weight:600;cursor:pointer;font-size:13px">Back</button>' : '') +
+        '<div style="display:flex;gap:8px">' +
+          '<button onclick="dismissOnboarding()" style="padding:10px 16px;background:transparent;color:#9ca3af;border:none;cursor:pointer;font-size:13px">Skip</button>' +
+          (isLast
+            ? '<button onclick="dismissOnboarding()" style="padding:10px 20px;background:#0369a1;color:#fff;border:none;border-radius:10px;font-weight:700;cursor:pointer;font-size:13px"><i class="fas fa-check mr-1"></i>Get Started!</button>'
+            : '<button onclick="window._onboardingNext()" style="padding:10px 20px;background:#0369a1;color:#fff;border:none;border-radius:10px;font-weight:700;cursor:pointer;font-size:13px">Next <i class="fas fa-arrow-right ml-1"></i></button>') +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  window._onboardingNext = function() {
+    if (currentStep < steps.length - 1) { currentStep++; renderStep(); }
+  };
+  window._onboardingPrev = function() {
+    if (currentStep > 0) { currentStep--; renderStep(); }
+  };
+
+  renderStep();
+  document.body.appendChild(overlay);
+}
+
+function dismissOnboarding() {
+  var overlay = document.getElementById('onboarding-overlay');
+  if (overlay) overlay.remove();
+  // Mark complete in DB
+  fetch('/api/customer/onboarding/complete', { method: 'POST', headers: authHeaders() }).catch(function() {});
+  // Update localStorage
+  var cust = JSON.parse(localStorage.getItem('rc_customer') || '{}');
+  cust.onboarding_completed = 1;
+  localStorage.setItem('rc_customer', JSON.stringify(cust));
+}

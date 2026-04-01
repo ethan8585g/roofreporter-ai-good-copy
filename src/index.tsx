@@ -619,6 +619,63 @@ app.get('/customer/team', (c) => c.html(getTeamManagementPageHTML()))
 // Join Team — Accept invitation (public landing with auth redirect)
 app.get('/customer/join-team', (c) => c.html(getJoinTeamPageHTML()))
 
+// Public report share page — allows homeowners to view a contractor-shared report
+app.get('/report/share/:token', async (c) => {
+  try {
+    const token = c.req.param('token')
+    const row = await c.env.DB.prepare(`
+      SELECT r.professional_report_html, r.api_response_raw, r.share_view_count,
+             o.property_address, o.property_city, o.property_province
+      FROM reports r JOIN orders o ON o.id = r.order_id
+      WHERE r.share_token = ?
+    `).bind(token).first<any>()
+
+    if (!row) {
+      return c.html(`<!DOCTYPE html><html><head><title>Report Not Found</title><script src="https://cdn.tailwindcss.com"></script></head>
+<body class="bg-gray-50 min-h-screen flex items-center justify-center">
+<div class="text-center max-w-md mx-auto px-4">
+  <div class="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+    <i class="fas fa-file-times text-red-500 text-2xl"></i>
+  </div>
+  <h1 class="text-2xl font-bold text-gray-800 mb-2">Report Not Found</h1>
+  <p class="text-gray-500">This report link is invalid or has expired.</p>
+</div>
+<link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+</body></html>`, 404)
+    }
+
+    // Increment view count (non-blocking)
+    c.env.DB.prepare("UPDATE reports SET share_view_count = COALESCE(share_view_count, 0) + 1 WHERE share_token = ?").bind(token).run().catch(() => {})
+
+    const addr = [row.property_address, row.property_city, row.property_province].filter(Boolean).join(', ')
+
+    // Resolve report HTML (use stored HTML only — avoids bundling template at edge)
+    const h = row.professional_report_html || ''
+    const reportHtml = (h.trimStart().startsWith('<!DOCTYPE') || h.trimStart().startsWith('<html')) ? h : ''
+
+    if (!reportHtml) {
+      return c.html(`<!DOCTYPE html><html><head><title>Report Unavailable</title><script src="https://cdn.tailwindcss.com"></script></head>
+<body class="bg-gray-50 min-h-screen flex items-center justify-center">
+<div class="text-center"><h1 class="text-xl font-bold text-gray-700 mb-2">Report Not Available</h1><p class="text-gray-500">This report has not been generated yet.</p></div>
+</body></html>`, 404)
+    }
+
+    // Wrap with a public header bar
+    const wrappedHtml = reportHtml.replace(
+      /<body[^>]*>/i,
+      `$&<div style="position:fixed;top:0;left:0;right:0;z-index:9999;background:#0f172a;color:#fff;padding:10px 20px;display:flex;align-items:center;justify-between;font-family:Inter,system-ui,sans-serif;font-size:13px">
+  <div style="display:flex;align-items:center;gap:10px"><span style="font-weight:700;color:#38bdf8">RoofReporterAI</span><span style="color:#94a3b8">|</span><span style="color:#cbd5e1">${addr || 'Roof Report'}</span></div>
+  <div style="display:flex;gap:8px"><button onclick="window.print()" style="background:#1e40af;color:#fff;border:none;padding:6px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600">Print / Save PDF</button><a href="https://roofreporterai.com" target="_blank" style="background:#065f46;color:#fff;padding:6px 14px;border-radius:8px;text-decoration:none;font-size:12px;font-weight:600">Get Your Own Report</a></div>
+</div><div style="height:48px"></div>`
+    )
+
+    return c.html(wrappedHtml)
+  } catch (err: any) {
+    console.error('[ShareReport]', err.message)
+    return c.html(`<!DOCTYPE html><html><body><p>Error loading report.</p></body></html>`, 500)
+  }
+})
+
 // Public proposal view page — tracks views when customer opens shared link
 app.get('/proposal/view/:token', async (c) => {
   try {

@@ -192,7 +192,7 @@
       var isProcessing = (o.status === 'processing' || o.report_status === 'running');
       var buttons = '';
       if (isCompleted) {
-        buttons = '<a href="/api/reports/' + o.id + '/html" target="_blank" class="px-4 py-2 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700"><i class="fas fa-file-alt mr-1"></i>View Report</a><a href="/api/reports/' + o.id + '/pdf" target="_blank" title="Opens print dialog in new tab" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-xs font-medium hover:bg-gray-200"><i class="fas fa-print mr-1"></i>Print PDF</a><button onclick="window._crmCreateProposalFromReport(' + o.id + ')" class="px-4 py-2 bg-purple-600 text-white rounded-lg text-xs font-medium hover:bg-purple-700"><i class="fas fa-file-invoice mr-1"></i>Create Proposal</button><a href="/customer/virtual-tryon?report_id=' + o.id + '" class="px-4 py-2 bg-violet-600 text-white rounded-lg text-xs font-medium hover:bg-violet-700"><i class="fas fa-house-user mr-1"></i>Roof Visualizer</a>';
+        buttons = '<a href="/api/reports/' + o.id + '/html" target="_blank" class="px-4 py-2 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700"><i class="fas fa-file-alt mr-1"></i>View Report</a><a href="/api/reports/' + o.id + '/pdf" target="_blank" title="Opens print dialog in new tab" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-xs font-medium hover:bg-gray-200"><i class="fas fa-print mr-1"></i>Print PDF</a><button onclick="window._crmShareReport(' + o.id + ')" class="px-4 py-2 bg-sky-600 text-white rounded-lg text-xs font-medium hover:bg-sky-700"><i class="fas fa-share-alt mr-1"></i>Share</button><button onclick="window._crmCreateProposalFromReport(' + o.id + ')" class="px-4 py-2 bg-purple-600 text-white rounded-lg text-xs font-medium hover:bg-purple-700"><i class="fas fa-file-invoice mr-1"></i>Create Proposal</button><a href="/customer/virtual-tryon?report_id=' + o.id + '" class="px-4 py-2 bg-violet-600 text-white rounded-lg text-xs font-medium hover:bg-violet-700"><i class="fas fa-house-user mr-1"></i>Roof Visualizer</a>';
         if (isSolar) {
           buttons += '<button onclick="window._openSolarCalculator(' + o.id + ')" class="px-4 py-2 bg-amber-500 text-white rounded-lg text-xs font-medium hover:bg-amber-600"><i class="fas fa-sun mr-1"></i>Solar Calculator</button><a href="/customer/solar-design?report_id=' + o.id + '" class="px-4 py-2 bg-orange-500 text-white rounded-lg text-xs font-medium hover:bg-orange-600"><i class="fas fa-solar-panel mr-1"></i>Solar Design</a>';
         }
@@ -1622,6 +1622,42 @@
         .then(function(res) { if (res.success) { closeModal(); toast('Lead added!'); initPipeline(); } else toast(res.error || 'Failed to add lead', 'error'); })
         .catch(function() { toast('Network error', 'error'); });
     }, 'Add Lead');
+  };
+
+  // ---- Share Report (public link for homeowners) ----
+  window._crmShareReport = function(orderId) {
+    fetch('/api/reports/' + orderId + '/share', { method: 'POST', headers: authHeaders(), body: JSON.stringify({}) })
+      .then(function(r) { return r.json(); })
+      .then(function(res) {
+        if (!res.share_url) { toast(res.error || 'Failed to generate share link', 'error'); return; }
+        var shareUrl = res.share_url;
+        var body = '<div class="space-y-4">' +
+          '<div class="bg-sky-50 border border-sky-200 rounded-xl p-4"><p class="text-xs font-semibold text-sky-700 mb-2"><i class="fas fa-link mr-1"></i>Shareable Report Link</p>' +
+          '<div class="flex gap-2"><input type="text" id="shareUrlInput" value="' + shareUrl + '" readonly class="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-gray-700 select-all">' +
+          '<button onclick="navigator.clipboard.writeText(\'' + shareUrl + '\').then(function(){window._shareToastCopy()})" class="px-4 py-2 bg-sky-600 text-white rounded-lg text-sm font-semibold hover:bg-sky-700 whitespace-nowrap"><i class="fas fa-copy mr-1"></i>Copy</button></div>' +
+          '<p class="text-xs text-sky-600 mt-1">Anyone with this link can view the full report — no login required.</p></div>' +
+          '<div>' +
+          '<p class="text-xs font-semibold text-gray-600 mb-2"><i class="fas fa-envelope mr-1 text-gray-400"></i>Email to Homeowner <span class="font-normal text-gray-400">(optional)</span></p>' +
+          '<div class="flex gap-2"><input type="email" id="shareEmailInput" placeholder="homeowner@email.com" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm">' +
+          '<button onclick="window._crmSendShareEmail(' + orderId + ', \'' + shareUrl + '\')" class="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-semibold hover:bg-green-700 whitespace-nowrap"><i class="fas fa-paper-plane mr-1"></i>Send</button></div>' +
+          '</div>' +
+        '</div>';
+        showModal('Share Report', body);
+        window._shareToastCopy = function() { toast('Link copied to clipboard!'); };
+      })
+      .catch(function() { toast('Failed to generate share link', 'error'); });
+  };
+
+  window._crmSendShareEmail = function(orderId, shareUrl) {
+    var email = document.getElementById('shareEmailInput').value.trim();
+    if (!email) { toast('Please enter an email address', 'error'); return; }
+    fetch('/api/reports/' + orderId + '/share', { method: 'POST', headers: authHeaders(), body: JSON.stringify({ email: email }) })
+      .then(function(r) { return r.json(); })
+      .then(function(res) {
+        if (res.success) { toast('Report link sent to ' + email + '!'); closeModal(); }
+        else toast(res.error || 'Failed to send email', 'error');
+      })
+      .catch(function() { toast('Network error', 'error'); });
   };
 
   // ---- Create Proposal from Report ----
