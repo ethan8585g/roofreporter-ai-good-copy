@@ -1,7 +1,7 @@
 // ============================================================
 // Pricing Page — Public, fetches packages and renders cards
-// Updated pricing: 3 free → $10/ea individual → packs (10/$90, 25/$200, 50/$350, 100/$600)
-// Subscription: $49.99/mo for CRM & business tools
+// Pricing: 3 free → $5 USD individual → 25-pack ($99) → 100-pack ($299)
+// Membership: $49.99/mo — 5 team members + ad-free
 // ============================================================
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -86,8 +86,8 @@ function renderPricing(root, packages) {
           <p class="text-sm text-gray-500 mt-1">Delivered instantly — no subscription required</p>
         </div>
         <div class="text-center mb-6">
-          <span class="text-5xl font-black text-gray-900">$10</span>
-          <span class="text-gray-500 text-sm ml-1">CAD / report</span>
+          <span class="text-5xl font-black text-gray-900">$5</span>
+          <span class="text-gray-500 text-sm ml-1">USD / report</span>
         </div>
         <ul class="space-y-3 mb-6 text-sm">
           <li class="flex items-center gap-2 text-gray-600"><i class="fas fa-check text-green-500"></i>Satellite-based roof area & perimeter</li>
@@ -107,12 +107,12 @@ function renderPricing(root, packages) {
     <!-- Credit Packs -->
     <h2 class="text-2xl font-bold text-gray-800 mb-2 text-center">Credit Packs — Save More</h2>
     <p class="text-center text-gray-500 mb-8">Buy credits in bulk and use them anytime. Credits never expire.</p>
-    <div class="grid md:grid-cols-4 gap-5 mb-16 max-w-5xl mx-auto">
-      ${packages.map((pkg, i) => {
-        const priceEach = (pkg.price_cents / 100 / pkg.credits).toFixed(0);
-        const savings = Math.round((1 - (pkg.price_cents / 100) / (pkg.credits * 10)) * 100);
-        const isBest = i === packages.length - 1;
-        const isPopular = i === 1; // 25-pack
+    <div class="grid md:grid-cols-2 gap-5 mb-16 max-w-2xl mx-auto">
+      ${packages.filter(pkg => pkg.credits > 1).map((pkg, i) => {
+        const priceEach = (pkg.price_cents / 100 / pkg.credits).toFixed(2);
+        const savings = Math.round((1 - (pkg.price_cents / 100) / (pkg.credits * 5)) * 100);
+        const isBest = i === packages.filter(p => p.credits > 1).length - 1;
+        const isPopular = i === 0; // 25-pack
         return `
           <div class="bg-white rounded-xl border ${isBest ? 'border-brand-500 ring-2 ring-brand-200' : isPopular ? 'border-accent-400 ring-2 ring-accent-200' : 'border-gray-200'} p-5 text-center hover:shadow-md transition-shadow relative">
             ${isBest ? '<div class="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-brand-500 text-white px-3 py-0.5 rounded-full text-[10px] font-bold">BEST VALUE</div>' : ''}
@@ -121,7 +121,7 @@ function renderPricing(root, packages) {
             <div class="text-xs text-gray-500 mb-3">${pkg.credits} reports</div>
             <div class="mb-2">
               <span class="text-3xl font-black text-gray-900">$${(pkg.price_cents / 100).toFixed(0)}</span>
-              <span class="text-gray-400 text-xs ml-1">CAD</span>
+              <span class="text-gray-400 text-xs ml-1">USD</span>
             </div>
             <p class="text-sm font-semibold text-brand-600 mb-1">$${priceEach}/report</p>
             ${savings > 0 ? `<span class="inline-block bg-green-100 text-green-700 px-2 py-0.5 rounded-full text-xs font-bold mb-3">Save ${savings}%</span>` : '<div class="mb-3"></div>'}
@@ -133,37 +133,25 @@ function renderPricing(root, packages) {
       }).join('')}
     </div>
 
-    <!-- Subscription Plan -->
-    <div class="max-w-4xl mx-auto mb-16">
-      <h2 class="text-2xl font-bold text-gray-800 mb-2 text-center">Pro Subscription</h2>
-      <p class="text-center text-gray-500 mb-8">Get access to CRM, invoicing, proposals, job scheduling, and business tools.</p>
-      <div class="bg-gradient-to-br from-brand-800 to-brand-900 rounded-2xl p-8 text-white shadow-xl">
-        <div class="grid md:grid-cols-2 gap-8 items-center">
-          <div>
-            <div class="flex items-center gap-2 mb-4">
-              <span class="px-3 py-1 bg-yellow-500/20 text-yellow-300 rounded-full text-xs font-bold"><i class="fas fa-crown mr-1"></i>PRO</span>
-            </div>
-            <h3 class="text-3xl font-black mb-2">$49.99 <span class="text-lg font-normal text-brand-200">/month</span></h3>
-            <p class="text-brand-200 mb-6">Everything you need to run your roofing business — CRM, invoicing, proposals, scheduling, and more.</p>
-            <a href="/customer/login" class="inline-flex items-center gap-2 bg-accent-500 hover:bg-accent-600 text-white font-bold py-3 px-8 rounded-xl transition-all hover:scale-105 shadow-lg">
-              <i class="fas fa-rocket"></i>
-              Start Pro Trial
-            </a>
-          </div>
-          <div>
-            <ul class="space-y-3 text-sm">
-              <li class="flex items-center gap-2"><i class="fas fa-check-circle text-green-400"></i>Customer Relationship Manager (CRM)</li>
-              <li class="flex items-center gap-2"><i class="fas fa-check-circle text-green-400"></i>Professional Invoicing</li>
-              <li class="flex items-center gap-2"><i class="fas fa-check-circle text-green-400"></i>Proposals & Estimates</li>
-              <li class="flex items-center gap-2"><i class="fas fa-check-circle text-green-400"></i>Job Scheduling & Crew Management</li>
-              <li class="flex items-center gap-2"><i class="fas fa-check-circle text-green-400"></i>Sales Pipeline Tracking</li>
-              <li class="flex items-center gap-2"><i class="fas fa-check-circle text-green-400"></i>Door-to-Door Manager</li>
-              <li class="flex items-center gap-2"><i class="fas fa-check-circle text-green-400"></i>Custom Branding on Reports</li>
-              <li class="flex items-center gap-2"><i class="fas fa-check-circle text-green-400"></i>Priority Support</li>
-            </ul>
-            <p class="text-brand-300 text-xs mt-4"><i class="fas fa-info-circle mr-1"></i>Roof measurement reports are billed separately ($10/each or credit packs).</p>
-          </div>
-        </div>
+    <!-- Membership Add-on -->
+    <div class="max-w-2xl mx-auto mb-16">
+      <h2 class="text-2xl font-bold text-gray-800 mb-2 text-center">Team Membership</h2>
+      <p class="text-center text-gray-500 mb-8">Add team members and go ad-free for one flat monthly price.</p>
+      <div class="bg-gradient-to-br from-brand-800 to-brand-900 rounded-2xl p-8 text-white shadow-xl text-center">
+        <span class="px-3 py-1 bg-yellow-500/20 text-yellow-300 rounded-full text-xs font-bold"><i class="fas fa-users mr-1"></i>TEAM</span>
+        <h3 class="text-4xl font-black mt-4 mb-1">$49.99 <span class="text-lg font-normal text-brand-200">/month</span></h3>
+        <p class="text-brand-200 mb-6 text-sm">Add up to 5 team members to your account and remove all ads.</p>
+        <ul class="space-y-3 text-sm text-left max-w-xs mx-auto mb-8">
+          <li class="flex items-center gap-2"><i class="fas fa-check-circle text-green-400"></i>Up to 5 team member accounts</li>
+          <li class="flex items-center gap-2"><i class="fas fa-check-circle text-green-400"></i>Ad-free experience for your whole team</li>
+          <li class="flex items-center gap-2"><i class="fas fa-check-circle text-green-400"></i>Shared credit pool — one billing account</li>
+          <li class="flex items-center gap-2"><i class="fas fa-check-circle text-green-400"></i>Cancel anytime</li>
+        </ul>
+        <a href="/customer/login" class="inline-flex items-center gap-2 bg-accent-500 hover:bg-accent-600 text-white font-bold py-3 px-8 rounded-xl transition-all hover:scale-105 shadow-lg">
+          <i class="fas fa-users"></i>
+          Add Team Membership
+        </a>
+        <p class="text-brand-300 text-xs mt-4"><i class="fas fa-info-circle mr-1"></i>Reports are billed separately — $5 USD each or via credit packs.</p>
       </div>
     </div>
 
@@ -210,42 +198,28 @@ function renderPricing(root, packages) {
             <tr>
               <td class="px-6 py-3 font-medium text-gray-800">Individual</td>
               <td class="text-center px-4 py-3">1</td>
-              <td class="text-center px-4 py-3">$10</td>
-              <td class="text-center px-4 py-3 font-semibold">$10</td>
+              <td class="text-center px-4 py-3">$5.00</td>
+              <td class="text-center px-4 py-3 font-semibold">$5</td>
               <td class="text-center px-4 py-3 text-gray-400">—</td>
             </tr>
             <tr class="bg-gray-50/50">
-              <td class="px-6 py-3 font-medium text-gray-800">10 Pack</td>
-              <td class="text-center px-4 py-3">10</td>
-              <td class="text-center px-4 py-3">$9</td>
-              <td class="text-center px-4 py-3 font-semibold">$90</td>
-              <td class="text-center px-4 py-3"><span class="text-green-600 font-semibold">Save 10%</span></td>
-            </tr>
-            <tr>
-              <td class="px-6 py-3 font-medium text-gray-800">25 Pack <span class="text-xs bg-accent-100 text-accent-700 px-1.5 py-0.5 rounded font-bold ml-1">POPULAR</span></td>
+              <td class="px-6 py-3 font-medium text-gray-800">25-Pack <span class="text-xs bg-accent-100 text-accent-700 px-1.5 py-0.5 rounded font-bold ml-1">POPULAR</span></td>
               <td class="text-center px-4 py-3">25</td>
-              <td class="text-center px-4 py-3">$8</td>
-              <td class="text-center px-4 py-3 font-semibold">$200</td>
-              <td class="text-center px-4 py-3"><span class="text-green-600 font-semibold">Save 20%</span></td>
-            </tr>
-            <tr class="bg-gray-50/50">
-              <td class="px-6 py-3 font-medium text-gray-800">50 Pack</td>
-              <td class="text-center px-4 py-3">50</td>
-              <td class="text-center px-4 py-3">$7</td>
-              <td class="text-center px-4 py-3 font-semibold">$350</td>
-              <td class="text-center px-4 py-3"><span class="text-green-600 font-semibold">Save 30%</span></td>
+              <td class="text-center px-4 py-3">$3.96</td>
+              <td class="text-center px-4 py-3 font-semibold">$99</td>
+              <td class="text-center px-4 py-3"><span class="text-green-600 font-semibold">Save 21%</span></td>
             </tr>
             <tr>
-              <td class="px-6 py-3 font-medium text-gray-800">100 Pack <span class="text-xs bg-brand-100 text-brand-700 px-1.5 py-0.5 rounded font-bold ml-1">BEST VALUE</span></td>
+              <td class="px-6 py-3 font-medium text-gray-800">100-Pack <span class="text-xs bg-brand-100 text-brand-700 px-1.5 py-0.5 rounded font-bold ml-1">BEST VALUE</span></td>
               <td class="text-center px-4 py-3">100</td>
-              <td class="text-center px-4 py-3">$6</td>
-              <td class="text-center px-4 py-3 font-semibold">$600</td>
+              <td class="text-center px-4 py-3">$2.99</td>
+              <td class="text-center px-4 py-3 font-semibold">$299</td>
               <td class="text-center px-4 py-3"><span class="text-green-600 font-semibold">Save 40%</span></td>
             </tr>
           </tbody>
         </table>
       </div>
-      <p class="text-center text-gray-400 text-xs mt-4">All prices in Canadian Dollars (CAD). Credits never expire. GST/HST may apply.</p>
+      <p class="text-center text-gray-400 text-xs mt-4">All prices in USD. Credits never expire.</p>
     </div>
   `;
 }

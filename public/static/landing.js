@@ -428,7 +428,7 @@ function renderHowItWorks() {
   const steps = [
     { num: 1, icon: 'fas fa-search-location', color: 'from-red-500 to-rose-500', title: 'Enter the Address', desc: 'Search any Canadian address. Google Maps pinpoints the exact roof instantly.' },
     { num: 2, icon: 'fas fa-sliders-h', color: 'from-blue-500 to-indigo-500', title: 'Configure Details', desc: "Add homeowner info, company details, and delivery options. Takes 30 seconds." },
-    { num: 3, icon: 'fas fa-credit-card', color: 'from-teal-500 to-emerald-500', title: 'Order Instantly', desc: 'First 3 reports are FREE. Then just $8 CAD per report. Instant Square checkout.' },
+    { num: 3, icon: 'fas fa-credit-card', color: 'from-teal-500 to-emerald-500', title: 'Order Instantly', desc: 'First 3 reports are FREE. Then just $5 USD per report. Instant checkout.' },
     { num: 4, icon: 'fas fa-file-pdf', color: 'from-cyan-500 to-blue-500', title: 'Get Your PDF', desc: 'Professional report with area, pitch, edges, BOM, solar data. Under 60 seconds.' },
   ];
 
@@ -1002,7 +1002,7 @@ window.calcROI = function() {
   const monthlyEst = est * 4.33;
   const timeSaved = monthlyEst * (hrs - 0.02); // 60s vs hours
   const costSaved = timeSaved * labor;
-  const rrCost = monthlyEst * 8; // $8 per report
+  const rrCost = monthlyEst * 5; // $5 per report
   const net = costSaved - rrCost;
   const roi = rrCost > 0 ? Math.round((net / rrCost) * 100) : 0;
 
@@ -1035,7 +1035,7 @@ function renderTestimonials() {
       metricIcon: 'fas fa-bullseye'
     },
     {
-      quote: "We run 15-20 estimates a week. At $8 per report we save thousands vs drone surveys. Plus we get the solar data free. Our close rate jumped 23% because professional reports build instant trust.",
+      quote: "We run 15-20 estimates a week. At $5 per report we save thousands vs drone surveys. Plus we get the solar data free. Our close rate jumped 23% because professional reports build instant trust.",
       name: "James R.",
       title: "Owner, Prairie Roofing Co.",
       avatar: "JR",
@@ -1307,7 +1307,7 @@ function renderFinalCTA() {
         </div>
 
         <p class="text-sm text-gray-400">
-          No credit card required. 3 free reports. Then $8 CAD per report.
+          No credit card required. 3 free reports. Then $5 USD per report.
           <br/>Questions? <a href="mailto:reports@reusecanada.ca" class="text-cyan-400 hover:underline">reports@reusecanada.ca</a>
         </p>
       </div>
