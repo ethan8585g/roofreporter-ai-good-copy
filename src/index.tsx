@@ -518,6 +518,11 @@ app.get('/terms', (c) => {
   return c.html(getTermsPageHTML())
 })
 
+// Material Calculator — BOM tool from completed report data
+app.get('/customer/material-calculator', (c) => {
+  return c.html(getMaterialCalculatorPageHTML())
+})
+
 // Blog Pages (public — SEO lead funnels)
 app.get('/blog', (c) => {
   return c.html(getBlogListingHTML())
@@ -4868,6 +4873,65 @@ function getTermsPageHTML() {
       <p class="text-xs">&copy; 2026 RoofReporterAI</p>
     </div>
   </footer>
+</body>
+</html>`
+}
+
+function getMaterialCalculatorPageHTML() {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags()}
+  <title>Material Calculator - RoofReporterAI</title>
+  <style>
+    @media print {
+      header, #mc-waste-controls, #mc-action-bar, nav { display: none !important; }
+      body { background: white; }
+      .shadow-sm, .rounded-2xl { box-shadow: none !important; }
+    }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <header class="bg-gradient-to-r from-sky-600 to-blue-700 text-white shadow-lg">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+      <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
+        <img src="/static/logo.png" alt="RoofReporterAI" class="w-10 h-10 rounded-lg object-cover">
+        <div>
+          <h1 class="text-lg font-bold leading-tight">Material Calculator</h1>
+          <p class="text-sky-200 text-xs">RoofReporterAI</p>
+        </div>
+      </a>
+      <nav class="flex items-center space-x-4">
+        <span id="custGreeting" class="text-sky-200 text-sm hidden"><i class="fas fa-user-circle mr-1"></i><span id="custName"></span></span>
+        <a href="/customer/dashboard" class="text-sky-200 hover:text-white text-sm"><i class="fas fa-th-large mr-1"></i>Dashboard</a>
+        <button onclick="custLogout()" class="text-sky-200 hover:text-white text-sm"><i class="fas fa-sign-out-alt mr-1"></i>Logout</button>
+      </nav>
+    </div>
+  </header>
+  <main class="max-w-5xl mx-auto px-4 py-6">
+    <div id="mat-calc-root"></div>
+  </main>
+  <script>
+    (function() {
+      var c = localStorage.getItem('rc_customer');
+      if (!c) { window.location.href = '/customer/login'; return; }
+      try {
+        var u = JSON.parse(c);
+        var g = document.getElementById('custGreeting');
+        var n = document.getElementById('custName');
+        if (g && n) { n.textContent = u.name || u.email; g.classList.remove('hidden'); }
+      } catch(e) {}
+    })();
+    function custLogout() {
+      var token = localStorage.getItem('rc_customer_token');
+      if (token) fetch('/api/customer/logout', { method: 'POST', headers: { 'Authorization': 'Bearer ' + token } })['catch'](function(){});
+      localStorage.removeItem('rc_customer');
+      localStorage.removeItem('rc_customer_token');
+      window.location.href = '/customer/login';
+    }
+  </script>
+  <script src="/static/material-calculator.js?v=${Date.now()}"></script>
+  ${getRoverAssistant()}
 </body>
 </html>`
 }

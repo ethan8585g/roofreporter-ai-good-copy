@@ -167,6 +167,11 @@ function renderDashboard() {
           '<p class="px-3 mb-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Services</p>' +
           navLink('/customer/secretary', 'fa-headset', isSolar ? 'Solar Sales Secretary' : 'Roofer Secretary', secBadge || null, secBadgeColor) +
         '</div>' +
+        // Tools
+        '<div>' +
+          '<p class="px-3 mb-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Tools</p>' +
+          navLink('/customer/material-calculator', 'fa-calculator', 'Material Calculator', null, '') +
+        '</div>' +
         (c.is_dev ? '<div><p class="px-3 mb-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Dev</p>' + navLink('/customer/property-imagery', 'fa-satellite', 'Property Imagery', 'Dev', 'bg-amber-500') + '</div>' : '') +
       '</nav>' +
       // Credits footer
@@ -197,6 +202,7 @@ function renderDashboard() {
         '<a href="/customer/team" class="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-xs font-medium flex-shrink-0"><i class="fas fa-users-cog"></i>Team</a>' +
         '<a href="/customer/d2d" class="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-xs font-medium flex-shrink-0"><i class="fas fa-door-open"></i>D2D</a>' +
         '<a href="/customer/secretary" class="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-xs font-medium flex-shrink-0"><i class="fas fa-headset"></i>Secretary</a>' +
+        '<a href="/customer/material-calculator" class="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-xs font-medium flex-shrink-0"><i class="fas fa-calculator"></i>Materials</a>' +
         '<a href="/customer/virtual-tryon" class="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-xs font-medium flex-shrink-0"><i class="fas fa-magic"></i>Visualizer</a>' +
       '</div>' +
     '</div>';
@@ -341,6 +347,7 @@ function renderRecentOrders() {
       '<div class="flex items-center gap-2 ml-3">' +
         '<span class="px-2 py-0.5 ' + statusClass + ' rounded-full text-[10px] font-bold capitalize">' + (isProcessing ? '<i class="fas fa-spinner fa-spin mr-1"></i>' : '') + (isProcessing ? 'generating' : o.status) + '</span>' +
         (reportReady ? '<a href="/api/reports/' + o.id + '/html" target="_blank" class="px-2.5 py-1 bg-brand-600 text-white rounded-lg text-xs font-medium hover:bg-brand-700"><i class="fas fa-eye mr-1"></i>View</a>' : '') +
+        (reportReady ? '<a href="/customer/material-calculator?order_id=' + o.id + '" class="px-2.5 py-1 bg-sky-100 text-sky-700 rounded-lg text-xs font-medium hover:bg-sky-200"><i class="fas fa-calculator mr-1"></i>Materials</a>' : '') +
       '</div>' +
     '</div>';
   }
