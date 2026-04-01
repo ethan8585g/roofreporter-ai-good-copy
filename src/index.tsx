@@ -505,6 +505,11 @@ app.get('/customer/invoice/:id', (c) => {
   return c.html(getCustomerInvoiceHTML())
 })
 
+// Google Search Console verification
+app.get('/google46a10be18f6bfc61.html', (c) => {
+  return c.text('google-site-verification: google46a10be18f6bfc61.html')
+})
+
 // Pricing Page (public)
 app.get('/pricing', (c) => {
   return c.html(getPricingPageHTML())

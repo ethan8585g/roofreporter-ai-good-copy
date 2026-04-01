@@ -55,7 +55,7 @@ function getStaticPaths(dir, prefix = '') {
   return paths
 }
 
-const staticPaths = getStaticPaths(PUBLIC)
+const staticPaths = getStaticPaths(PUBLIC).filter(p => !p.includes('google') || !p.endsWith('.html'))
 const routesJson = {
   version: 1,
   include: ['/*'],
