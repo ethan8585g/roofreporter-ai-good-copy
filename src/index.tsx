@@ -518,6 +518,33 @@ app.get('/google46a10be18f6bfc61.html', (c) => {
   return c.text('google-site-verification: google46a10be18f6bfc61.html')
 })
 
+// SEO: sitemap.xml
+app.get('/sitemap.xml', async (c) => {
+  const base = 'https://www.roofreporterai.com'
+  const staticPages = [
+    { loc: '/', priority: '1.0', changefreq: 'weekly' },
+    { loc: '/pricing', priority: '0.9', changefreq: 'monthly' },
+    { loc: '/blog', priority: '0.8', changefreq: 'weekly' },
+    { loc: '/lander', priority: '0.7', changefreq: 'monthly' },
+    { loc: '/privacy', priority: '0.3', changefreq: 'yearly' },
+    { loc: '/terms', priority: '0.3', changefreq: 'yearly' },
+  ]
+  let urls = staticPages.map(p => `<url><loc>${base}${p.loc}</loc><changefreq>${p.changefreq}</changefreq><priority>${p.priority}</priority></url>`).join('\n')
+  try {
+    const posts = await c.env.DB.prepare("SELECT slug, updated_at FROM blog_posts WHERE status = 'published' ORDER BY published_at DESC LIMIT 100").all()
+    for (const p of (posts.results || []) as any[]) {
+      urls += `\n<url><loc>${base}/blog/${p.slug}</loc><changefreq>monthly</changefreq><priority>0.6</priority>${p.updated_at ? `<lastmod>${p.updated_at.substring(0, 10)}</lastmod>` : ''}</url>`
+    }
+  } catch {}
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>`
+  return c.text(xml, 200, { 'Content-Type': 'application/xml' })
+})
+
+// SEO: robots.txt
+app.get('/robots.txt', (c) => {
+  return c.text(`User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /customer/\nDisallow: /admin/\nDisallow: /superadmin/\nSitemap: https://www.roofreporterai.com/sitemap.xml`)
+})
+
 // Pricing Page (public)
 app.get('/pricing', (c) => {
   return c.html(getPricingPageHTML())
@@ -673,8 +700,18 @@ app.get('/report/share/:token', async (c) => {
 </body></html>`, 404)
     }
 
+    // Inject OG meta tags for social sharing
+    const ogTags = `<meta property="og:title" content="Roof Measurement Report — ${addr || 'Professional Analysis'}">
+<meta property="og:description" content="Professional satellite roof measurement report with area, pitch, edges, and material estimate. Powered by RoofReporterAI.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://www.roofreporterai.com/report/share/${token}">
+<meta property="og:site_name" content="RoofReporterAI">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Roof Report — ${addr || 'Professional Analysis'}">`
+    const htmlWithOg = reportHtml.replace(/<head[^>]*>/i, `$&\n${ogTags}`)
+
     // Wrap with a public header bar
-    const wrappedHtml = reportHtml.replace(
+    const wrappedHtml = htmlWithOg.replace(
       /<body[^>]*>/i,
       `$&<div style="position:fixed;top:0;left:0;right:0;z-index:9999;background:#0f172a;color:#fff;padding:10px 20px;display:flex;align-items:center;justify-between;font-family:Inter,system-ui,sans-serif;font-size:13px">
   <div style="display:flex;align-items:center;gap:10px"><span style="font-weight:700;color:#38bdf8">RoofReporterAI</span><span style="color:#94a3b8">|</span><span style="color:#cbd5e1">${addr || 'Roof Report'}</span></div>
@@ -735,7 +772,7 @@ app.get('/proposal/view/:token', async (c) => {
           reportLink = `<a href="/api/reports/${invProposal.attached_report_id}/html" target="_blank" class="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-100"><i class="fas fa-file-alt"></i>View Roof Report</a>`
         }
 
-        return c.html(`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>${docLabel} ${invProposal.invoice_number} — RoofReporterAI</title><script src="https://cdn.tailwindcss.com"></script><link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet"></head>
+        return c.html(`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>${docLabel} ${invProposal.invoice_number} — RoofReporterAI</title><meta property="og:title" content="${docLabel} ${invProposal.invoice_number} — $${Number(invProposal.total_amount || 0).toFixed(2)}"><meta property="og:description" content="Professional roofing ${docLabel.toLowerCase()} for ${invProposal.customer_name || 'valued customer'}. ${invProposal.property_address ? 'Property: ' + invProposal.property_address : ''}"><meta property="og:type" content="article"><meta property="og:site_name" content="RoofReporterAI"><meta name="twitter:card" content="summary"><script src="https://cdn.tailwindcss.com"></script><link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet"></head>
 <body class="bg-gray-100 min-h-screen py-8 px-4">
 <div class="max-w-3xl mx-auto">
   <div class="bg-white rounded-2xl shadow-xl overflow-hidden print:shadow-none">
@@ -859,6 +896,11 @@ app.get('/proposal/view/:token', async (c) => {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${proposal.title} — ${businessName}</title>
+  <meta property="og:title" content="${proposal.title} — $${Number(proposal.total_amount || 0).toFixed(2)}">
+  <meta property="og:description" content="Professional roofing proposal from ${businessName}. ${fullAddress ? 'Property: ' + fullAddress : ''}">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="${businessName}">
+  <meta name="twitter:card" content="summary">
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
   <style>
