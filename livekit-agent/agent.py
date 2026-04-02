@@ -132,15 +132,15 @@ async def get_agent_config(ctx: JobContext) -> dict:
                 url = f"{api_url}/api/secretary/agent-config/{customer_id}"
                 async with session.get(url, timeout=aiohttp.ClientTimeout(total=5)) as resp:
                     if resp.status == 200:
-                        api_config = await resp.json()
-                        if api_config.get("success"):
-                            data = api_config.get("config", {})
-                            for key in ["greeting_script", "common_qa", "general_notes", 
-                                       "directories", "agent_name", "agent_voice", 
-                                       "business_phone", "customer_id"]:
+                        data = await resp.json()
+                        # The endpoint returns data directly (not wrapped in success/config)
+                        if data and not data.get("error"):
+                            for key in ["greeting_script", "common_qa", "general_notes",
+                                       "directories", "agent_name", "agent_voice",
+                                       "business_phone", "customer_id", "company_name"]:
                                 if key in data and data[key]:
                                     config[key] = data[key]
-                            logger.info(f"Loaded config from API for customer {customer_id}")
+                            logger.info(f"Loaded config from API for customer {customer_id}: greeting={len(config.get('greeting_script',''))} chars, company={config.get('company_name','')}")
                     else:
                         logger.warning(f"API config fetch failed: status={resp.status}")
         except Exception as e:
@@ -176,7 +176,8 @@ def build_system_prompt(config: dict) -> str:
             dir_lines.append(line)
         dir_text = "\n".join(dir_lines)
 
-    prompt = f"""You are {agent_name}, a professional AI phone receptionist for Rick's Roofing. 
+    company_name = config.get("company_name", "the company")
+    prompt = f"""You are {agent_name}, a professional AI phone receptionist for {company_name}.
 You are answering an inbound phone call. Be warm, friendly, professional, and helpful.
 Speak naturally like a real receptionist — use conversational language, not robotic responses.
 Keep responses concise since this is a phone call. Avoid long monologues.
@@ -190,7 +191,7 @@ CRITICAL RULES:
 - ALWAYS collect: 1) Full name, 2) Phone number, 3) Full property address, 4) Service type needed.
 - If you can answer from the Q&A below, do so confidently and briefly.
 - If the caller wants to reach a specific department, offer to take a message for that department.
-- NEVER reveal you are an AI unless directly asked. If asked, say "I'm an AI assistant helping answer calls for Rick's Roofing."
+- NEVER reveal you are an AI unless directly asked. If asked, say "I'm an AI assistant helping answer calls for {company_name}."
 - NEVER give exact pricing — say the estimator will provide that.
 - Be empathetic with emergencies (leaks, storm damage).
 - AVOID long monologues. Keep it punchy — a real receptionist doesn't lecture.
