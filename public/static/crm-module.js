@@ -30,7 +30,8 @@
     proposals: { init: initProposals, title: 'Proposals & Estimates' },
     jobs: { init: initJobs, title: 'Job Management' },
     pipeline: { init: initPipeline, title: 'Sales Pipeline' },
-    d2d: { init: initD2D, title: 'D2D Manager' }
+    d2d: { init: initD2D, title: 'D2D Manager' },
+    'email-outreach': { init: initEmailOutreach, title: 'Email Outreach' }
   };
 
   const mod = modules[MODULE];
@@ -1956,6 +1957,124 @@
     fetch('/api/crm/jobs/' + id, { method: 'DELETE', headers: authHeadersOnly() })
       .then(function() { toast('Job deleted'); loadJobsForMonth(_calYear, _calMonth); })
       .catch(function(e) { toast('Failed to delete: ' + (e.message || 'Network error'), 'error'); });
+  };
+
+  // ============================================================
+  // MODULE: EMAIL OUTREACH
+  // ============================================================
+  function initEmailOutreach() {
+    root.innerHTML = '<div class="text-center py-8"><div class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-brand-500 mx-auto mb-3"></div></div>';
+    Promise.all([
+      fetch('/api/email-outreach/lists', { headers: authHeadersOnly() }).then(function(r) { return r.json(); }),
+      fetch('/api/email-outreach/contacts?limit=50', { headers: authHeadersOnly() }).then(function(r) { return r.json(); })
+    ]).then(function(results) {
+      var lists = results[0].lists || [];
+      var contacts = results[1].contacts || [];
+      var totalContacts = results[1].total || contacts.length;
+      renderEmailOutreach(lists, contacts, totalContacts);
+    }).catch(function() { root.innerHTML = '<p class="text-red-500 p-4">Failed to load email outreach data.</p>'; });
+  }
+
+  function renderEmailOutreach(lists, contacts, totalContacts) {
+    var html = '<div class="flex items-center justify-between mb-5 flex-wrap gap-3">';
+    html += '<div><h2 class="text-lg font-bold text-gray-800"><i class="fas fa-envelope-open-text text-blue-500 mr-2"></i>Email Outreach</h2><p class="text-xs text-gray-500 mt-0.5">' + totalContacts + ' contacts across ' + lists.length + ' lists</p></div>';
+    html += '<div class="flex gap-2">';
+    html += '<button onclick="window._eoNewList()" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-700"><i class="fas fa-plus mr-1"></i>New List</button>';
+    html += '<button onclick="window._eoImportContacts()" class="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-200"><i class="fas fa-file-csv mr-1"></i>Import CSV</button>';
+    html += '</div></div>';
+
+    // Stats
+    html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">';
+    html += '<div class="bg-white rounded-xl border p-4 text-center"><p class="text-2xl font-black text-gray-800">' + lists.length + '</p><p class="text-[10px] text-gray-500">Lists</p></div>';
+    html += '<div class="bg-white rounded-xl border p-4 text-center"><p class="text-2xl font-black text-blue-600">' + totalContacts + '</p><p class="text-[10px] text-gray-500">Total Contacts</p></div>';
+    html += '<div class="bg-white rounded-xl border p-4 text-center"><p class="text-2xl font-black text-green-600">0</p><p class="text-[10px] text-gray-500">Campaigns Sent</p></div>';
+    html += '<div class="bg-white rounded-xl border p-4 text-center"><p class="text-2xl font-black text-amber-600">0%</p><p class="text-[10px] text-gray-500">Open Rate</p></div>';
+    html += '</div>';
+
+    // Lists
+    html += '<div class="bg-white rounded-xl border shadow-sm mb-5 overflow-hidden">';
+    html += '<div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between"><h3 class="font-bold text-gray-800 text-sm"><i class="fas fa-list text-blue-500 mr-2"></i>Email Lists</h3></div>';
+    if (lists.length === 0) {
+      html += '<div class="p-8 text-center text-gray-400"><p>No email lists yet. Create one to start building your outreach.</p></div>';
+    } else {
+      html += '<div class="divide-y divide-gray-100">';
+      for (var i = 0; i < lists.length; i++) {
+        var l = lists[i];
+        html += '<div class="px-5 py-3 flex items-center justify-between hover:bg-gray-50">';
+        html += '<div><p class="font-medium text-sm text-gray-800">' + (l.name || 'Untitled List') + '</p><p class="text-xs text-gray-500">' + (l.contact_count || 0) + ' contacts · ' + (l.source || 'manual') + '</p></div>';
+        html += '<div class="flex gap-2"><button onclick="window._eoViewList(' + l.id + ')" class="text-xs text-blue-600 hover:underline">View</button><button onclick="window._eoDeleteList(' + l.id + ')" class="text-xs text-red-500 hover:underline">Delete</button></div>';
+        html += '</div>';
+      }
+      html += '</div>';
+    }
+    html += '</div>';
+
+    // Recent Contacts
+    html += '<div class="bg-white rounded-xl border shadow-sm overflow-hidden">';
+    html += '<div class="px-5 py-4 border-b border-gray-100"><h3 class="font-bold text-gray-800 text-sm"><i class="fas fa-users text-blue-500 mr-2"></i>Recent Contacts</h3></div>';
+    if (contacts.length === 0) {
+      html += '<div class="p-8 text-center text-gray-400"><p>No contacts yet. Import a CSV or add contacts manually.</p></div>';
+    } else {
+      html += '<div class="overflow-x-auto"><table class="w-full"><thead><tr class="bg-gray-50 text-xs text-gray-500 uppercase"><th class="px-4 py-3 text-left">Name</th><th class="px-4 py-3 text-left">Email</th><th class="px-4 py-3 text-left">Company</th><th class="px-4 py-3 text-center">Status</th></tr></thead><tbody>';
+      for (var j = 0; j < contacts.length; j++) {
+        var ct = contacts[j];
+        html += '<tr class="border-b border-gray-100 hover:bg-gray-50"><td class="px-4 py-3 text-sm font-medium text-gray-800">' + (ct.name || '-') + '</td><td class="px-4 py-3 text-sm text-gray-600">' + (ct.email || '-') + '</td><td class="px-4 py-3 text-sm text-gray-500">' + (ct.company || '-') + '</td><td class="px-4 py-3 text-center">' + badge(ct.status || 'active') + '</td></tr>';
+      }
+      html += '</tbody></table></div>';
+    }
+    html += '</div>';
+    root.innerHTML = html;
+  }
+
+  window._eoNewList = function() {
+    var body = '<div class="space-y-3"><div><label class="block text-xs font-medium text-gray-600 mb-1">List Name *</label><input type="text" id="eoListName" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="e.g. Homeowners - Edmonton"></div><div><label class="block text-xs font-medium text-gray-600 mb-1">Description</label><input type="text" id="eoListDesc" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="Optional description"></div></div>';
+    showModal('Create Email List', body, function() {
+      var name = document.getElementById('eoListName').value.trim();
+      if (!name) { toast('List name required', 'error'); return; }
+      fetch('/api/email-outreach/lists', { method: 'POST', headers: authHeaders(), body: JSON.stringify({ name: name, description: document.getElementById('eoListDesc').value.trim() }) })
+        .then(function(r) { return r.json(); })
+        .then(function(res) { if (res.success || res.list) { closeModal(); toast('List created!'); initEmailOutreach(); } else { toast(res.error || 'Failed', 'error'); } })
+        .catch(function() { toast('Network error', 'error'); });
+    }, 'Create List');
+  };
+
+  window._eoImportContacts = function() {
+    var body = '<div class="space-y-3"><div><label class="block text-xs font-medium text-gray-600 mb-1">Select List</label><select id="eoImportList" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"><option value="">Loading...</option></select></div><div><label class="block text-xs font-medium text-gray-600 mb-1">CSV File</label><input type="file" id="eoImportFile" accept=".csv" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"></div><p class="text-xs text-gray-400">CSV should have columns: name, email, phone, company</p></div>';
+    showModal('Import Contacts', body, function() {
+      var listId = document.getElementById('eoImportList').value;
+      var file = document.getElementById('eoImportFile').files[0];
+      if (!listId || !file) { toast('Select a list and file', 'error'); return; }
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        var lines = e.target.result.split('\n').filter(function(l) { return l.trim(); });
+        var headers = lines[0].split(',').map(function(h) { return h.trim().toLowerCase(); });
+        var contacts = [];
+        for (var i = 1; i < lines.length; i++) {
+          var cols = lines[i].split(',');
+          var c = {};
+          headers.forEach(function(h, idx) { c[h] = (cols[idx] || '').trim().replace(/^"|"$/g, ''); });
+          if (c.email) contacts.push(c);
+        }
+        fetch('/api/email-outreach/contacts/import', { method: 'POST', headers: authHeaders(), body: JSON.stringify({ list_id: parseInt(listId), contacts: contacts }) })
+          .then(function(r) { return r.json(); })
+          .then(function(res) { closeModal(); toast((res.imported || 0) + ' contacts imported!'); initEmailOutreach(); })
+          .catch(function() { toast('Import failed', 'error'); });
+      };
+      reader.readAsText(file);
+    }, 'Import');
+    // Load lists for dropdown
+    fetch('/api/email-outreach/lists', { headers: authHeadersOnly() }).then(function(r) { return r.json(); }).then(function(data) {
+      var sel = document.getElementById('eoImportList');
+      if (sel) { sel.innerHTML = '<option value="">Select list...</option>'; (data.lists || []).forEach(function(l) { sel.innerHTML += '<option value="' + l.id + '">' + l.name + '</option>'; }); }
+    });
+  };
+
+  window._eoViewList = function(id) { toast('List details coming soon'); };
+  window._eoDeleteList = function(id) {
+    if (!confirm('Delete this list and all its contacts?')) return;
+    fetch('/api/email-outreach/lists/' + id, { method: 'DELETE', headers: authHeadersOnly() })
+      .then(function() { toast('List deleted'); initEmailOutreach(); })
+      .catch(function() { toast('Failed to delete', 'error'); });
   };
 
   // ============================================================

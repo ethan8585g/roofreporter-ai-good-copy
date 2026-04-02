@@ -397,6 +397,12 @@ function renderActionBar() {
     '<button onclick="mcCopyList()" class="flex items-center gap-2 px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-xl text-sm transition-colors">' +
       '<i class="fas fa-copy"></i>Copy List' +
     '</button>' +
+    '<button onclick="mcExportCSV()" class="flex items-center gap-2 px-5 py-2.5 bg-sky-600 hover:bg-sky-700 text-white font-semibold rounded-xl text-sm transition-colors shadow-sm">' +
+      '<i class="fas fa-file-csv"></i>Export CSV' +
+    '</button>' +
+    '<button onclick="mcExportXactimate()" class="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl text-sm transition-colors shadow-sm">' +
+      '<i class="fas fa-file-code"></i>Xactimate XML' +
+    '</button>' +
   '</div>';
 }
 
@@ -529,6 +535,60 @@ function mcCreateProposal() {
   }));
   mcToast('Redirecting to Proposals...');
   window.location.href = '/customer/proposals';
+}
+
+// ---- Export CSV ----
+function mcExportCSV() {
+  if (!mcState.report) return;
+  var r = mcState.report;
+  var items = (r.materials && r.materials.line_items) || [];
+  var addr = (r.property && r.property.address) || '';
+  var rows = ['Category,Description,Quantity,Unit,Unit Price (CAD),Total (CAD)'];
+  items.forEach(function(item) {
+    if (item.category === 'ice_shield' && !mcState.iceShieldEnabled) return;
+    if (item.category === 'ventilation' && !mcState.ventilationEnabled) return;
+    var qty = item.order_quantity;
+    var price = item.unit_price_cad || 0;
+    var desc = (item.description || '').replace(/"/g, '""');
+    rows.push('"' + item.category + '","' + desc + '",' + qty + ',"' + (item.order_unit || '') + '",' + price.toFixed(2) + ',' + (qty * price).toFixed(2));
+  });
+  var csv = rows.join('\n');
+  var blob = new Blob([csv], { type: 'text/csv' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = 'material-estimate' + (addr ? '-' + addr.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 30) : '') + '.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+  mcToast('CSV exported!');
+}
+
+// ---- Export Xactimate XML ----
+function mcExportXactimate() {
+  if (!mcState.report) return;
+  var r = mcState.report;
+  var items = (r.materials && r.materials.line_items) || [];
+  var addr = (r.property && r.property.address) || '';
+  var es = r.edge_summary || {};
+  var xml = '<?xml version="1.0" encoding="UTF-8"?>\n<RoofEstimate>\n';
+  xml += '  <ProjectInfo>\n    <Address>' + addr + '</Address>\n    <Date>' + new Date().toISOString().substring(0, 10) + '</Date>\n    <WasteFactor>' + mcState.currentWastePct + '</WasteFactor>\n    <TotalArea>' + Math.round(r.total_true_area_sqft || 0) + '</TotalArea>\n    <Pitch>' + (r.roof_pitch_ratio || '') + '</Pitch>\n  </ProjectInfo>\n';
+  xml += '  <Measurements>\n    <RidgeLF>' + Math.round(es.total_ridge_ft || 0) + '</RidgeLF>\n    <HipLF>' + Math.round(es.total_hip_ft || 0) + '</HipLF>\n    <ValleyLF>' + Math.round(es.total_valley_ft || 0) + '</ValleyLF>\n    <EaveLF>' + Math.round(es.total_eave_ft || 0) + '</EaveLF>\n    <RakeLF>' + Math.round(es.total_rake_ft || 0) + '</RakeLF>\n  </Measurements>\n';
+  xml += '  <Materials>\n';
+  items.forEach(function(item) {
+    if (item.category === 'ice_shield' && !mcState.iceShieldEnabled) return;
+    if (item.category === 'ventilation' && !mcState.ventilationEnabled) return;
+    var qty = item.order_quantity;
+    xml += '    <Item category="' + item.category + '">\n      <Description>' + (item.description || '') + '</Description>\n      <Quantity>' + qty + '</Quantity>\n      <Unit>' + (item.order_unit || '') + '</Unit>\n      <UnitPrice>' + (item.unit_price_cad || 0).toFixed(2) + '</UnitPrice>\n      <Total>' + (qty * (item.unit_price_cad || 0)).toFixed(2) + '</Total>\n    </Item>\n';
+  });
+  xml += '  </Materials>\n</RoofEstimate>';
+  var blob = new Blob([xml], { type: 'application/xml' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = 'xactimate-estimate' + (addr ? '-' + addr.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 30) : '') + '.xml';
+  a.click();
+  URL.revokeObjectURL(url);
+  mcToast('Xactimate XML exported!');
 }
 
 // ---- Copy List ----
