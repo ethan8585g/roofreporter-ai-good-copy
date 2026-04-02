@@ -128,6 +128,33 @@ async function mcSelectOrder(orderId) {
 
   mcState.report = fullReport;
 
+  // Fetch user's catalog to overlay custom prices
+  try {
+    var catRes = await fetch('/api/crm/catalog', { headers: mcAuthOnly() });
+    if (catRes.ok) {
+      var catData = await catRes.json();
+      var catalogProducts = catData.products || [];
+      if (catalogProducts.length > 0 && fullReport.materials && fullReport.materials.line_items) {
+        // Build lookup: category → first matching catalog product
+        var catPrices = {};
+        catalogProducts.forEach(function(cp) {
+          if (cp.is_default && cp.unit_price > 0 && !catPrices[cp.category]) {
+            catPrices[cp.category] = cp;
+          }
+        });
+        // Overlay catalog prices onto report line items
+        fullReport.materials.line_items.forEach(function(item) {
+          var match = catPrices[item.category];
+          if (match) {
+            item.unit_price_cad = match.unit_price;
+            item._catalog_price = true;
+            item._catalog_name = match.name;
+          }
+        });
+      }
+    }
+  } catch(e) {}
+
   // Set default waste % to suggested
   var wt = fullReport.materials.waste_table || [];
   var suggested = wt.find(function(r) { return r.is_suggested; });
@@ -271,8 +298,8 @@ function renderMaterialTableInner() {
     var catLabel = categoryLabels[item.category] || item.category.replace(/_/g, ' ');
 
     return '<tr class="border-b border-gray-50 hover:bg-gray-50 transition-colors">' +
-      '<td class="px-4 py-3 text-sm font-medium text-gray-800">' + catLabel + '</td>' +
-      '<td class="px-4 py-3 text-sm text-gray-500 hidden sm:table-cell">' + (item.description || '') + '</td>' +
+      '<td class="px-4 py-3 text-sm font-medium text-gray-800">' + catLabel + (item._catalog_price ? ' <span class="px-1 py-0.5 bg-blue-100 text-blue-700 rounded text-[9px] font-bold ml-1">CATALOG</span>' : '') + '</td>' +
+      '<td class="px-4 py-3 text-sm text-gray-500 hidden sm:table-cell">' + (item._catalog_name || item.description || '') + '</td>' +
       '<td class="px-4 py-3 text-center"><input type="number" step="1" min="0" value="' + qty + '" onchange="mcUpdateQty(' + idx + ',this.value)" class="w-16 px-2 py-1 border border-gray-300 rounded-lg text-sm text-center font-bold focus:ring-2 focus:ring-sky-400 focus:border-sky-400"></td>' +
       '<td class="px-4 py-3 text-center text-gray-400 text-xs">' + (item.order_unit || '') + '</td>' +
       '<td class="px-4 py-3 text-right hidden sm:table-cell"><input type="number" step="0.01" min="0" value="' + price.toFixed(2) + '" onchange="mcUpdatePrice(' + idx + ',this.value)" class="w-20 px-2 py-1 border border-gray-300 rounded-lg text-sm text-right focus:ring-2 focus:ring-sky-400 focus:border-sky-400"></td>' +

@@ -1441,3 +1441,87 @@ crmRoutes.get('/stats', async (c) => {
     return c.json({ customers: 0, invoices_owing: 0, proposals_open: 0, jobs_upcoming: 0 })
   }
 })
+
+// ============================================================
+// MATERIAL CATALOG — Custom product & pricing list
+// ============================================================
+
+// List catalog items
+crmRoutes.get('/catalog', async (c) => {
+  const ownerId = await getOwnerId(c)
+  if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
+  const rows = await c.env.DB.prepare(
+    'SELECT * FROM material_catalog WHERE owner_id = ? AND is_active = 1 ORDER BY category, sort_order, name'
+  ).bind(ownerId).all<any>()
+  return c.json({ products: rows.results || [] })
+})
+
+// Add catalog item
+crmRoutes.post('/catalog', async (c) => {
+  const ownerId = await getOwnerId(c)
+  if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
+  const { category, name, description, sku, unit, unit_price, coverage_per_unit, supplier, is_default } = await c.req.json()
+  if (!category || !name || !unit || unit_price === undefined) return c.json({ error: 'category, name, unit, unit_price required' }, 400)
+  const result = await c.env.DB.prepare(
+    `INSERT INTO material_catalog (owner_id, category, name, description, sku, unit, unit_price, coverage_per_unit, supplier, is_default)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(ownerId, category, name, description || '', sku || '', unit, unit_price, coverage_per_unit || '', supplier || '', is_default ? 1 : 0).run()
+  return c.json({ success: true, id: result.meta.last_row_id })
+})
+
+// Update catalog item
+crmRoutes.put('/catalog/:id', async (c) => {
+  const ownerId = await getOwnerId(c)
+  if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
+  const id = parseInt(c.req.param('id'))
+  const body = await c.req.json()
+  const updates: string[] = []
+  const vals: any[] = []
+  for (const key of ['category', 'name', 'description', 'sku', 'unit', 'unit_price', 'coverage_per_unit', 'supplier', 'is_default', 'sort_order']) {
+    if (body[key] !== undefined) { updates.push(`${key}=?`); vals.push(body[key]) }
+  }
+  if (updates.length === 0) return c.json({ error: 'No fields to update' }, 400)
+  updates.push("updated_at=datetime('now')")
+  vals.push(id, ownerId)
+  await c.env.DB.prepare(`UPDATE material_catalog SET ${updates.join(', ')} WHERE id=? AND owner_id=?`).bind(...vals).run()
+  return c.json({ success: true })
+})
+
+// Delete catalog item
+crmRoutes.delete('/catalog/:id', async (c) => {
+  const ownerId = await getOwnerId(c)
+  if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
+  const id = parseInt(c.req.param('id'))
+  await c.env.DB.prepare("UPDATE material_catalog SET is_active=0, updated_at=datetime('now') WHERE id=? AND owner_id=?").bind(id, ownerId).run()
+  return c.json({ success: true })
+})
+
+// Seed default products with current market pricing
+crmRoutes.post('/catalog/seed-defaults', async (c) => {
+  const ownerId = await getOwnerId(c)
+  if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
+  const existing = await c.env.DB.prepare('SELECT COUNT(*) as cnt FROM material_catalog WHERE owner_id=? AND is_active=1').bind(ownerId).first<any>()
+  if (existing && existing.cnt > 0) return c.json({ error: 'Catalog already has items. Delete existing items first or add products manually.', count: existing.cnt }, 400)
+
+  const defaults = [
+    { category: 'shingles', name: 'Architectural Shingles (Laminate)', unit: 'bundles', unit_price: 42.00, coverage_per_unit: '33 sq ft per bundle (3 bundles/square)', supplier: '', is_default: 1, sort_order: 1 },
+    { category: 'shingles', name: '3-Tab Standard Shingles', unit: 'bundles', unit_price: 32.00, coverage_per_unit: '33 sq ft per bundle (3 bundles/square)', supplier: '', is_default: 0, sort_order: 2 },
+    { category: 'underlayment', name: 'Synthetic Underlayment', unit: 'rolls', unit_price: 95.00, coverage_per_unit: '400 sq ft per roll', supplier: '', is_default: 1, sort_order: 3 },
+    { category: 'ice_shield', name: 'Ice & Water Shield Membrane', unit: 'rolls', unit_price: 165.00, coverage_per_unit: '200 sq ft per roll', supplier: '', is_default: 1, sort_order: 4 },
+    { category: 'starter_strip', name: 'Starter Strip Shingles', unit: 'boxes', unit_price: 45.00, coverage_per_unit: '100 lin ft per box', supplier: '', is_default: 1, sort_order: 5 },
+    { category: 'ridge_cap', name: 'Ridge/Hip Cap Shingles', unit: 'bundles', unit_price: 65.00, coverage_per_unit: '35 lin ft per bundle', supplier: '', is_default: 1, sort_order: 6 },
+    { category: 'drip_edge', name: 'Aluminum Drip Edge (Type C/D)', unit: 'pieces', unit_price: 8.50, coverage_per_unit: '10 ft per piece', supplier: '', is_default: 1, sort_order: 7 },
+    { category: 'valley_metal', name: 'W-Valley Flashing (Aluminum)', unit: 'pieces', unit_price: 22.00, coverage_per_unit: '10 ft per piece', supplier: '', is_default: 1, sort_order: 8 },
+    { category: 'nails', name: 'Roofing Nails 1-1/4" Galvanized', unit: 'boxes', unit_price: 28.00, coverage_per_unit: '5 lb box (~2 squares)', supplier: '', is_default: 1, sort_order: 9 },
+    { category: 'ventilation', name: 'Ridge Vent', unit: 'pieces', unit_price: 22.00, coverage_per_unit: '4 ft per piece', supplier: '', is_default: 1, sort_order: 10 },
+    { category: 'custom', name: 'Roofing Cement / Caulk', unit: 'tubes', unit_price: 8.50, coverage_per_unit: '~1 tube per 5 squares', supplier: '', is_default: 1, sort_order: 11 },
+    { category: 'custom', name: 'Pipe Boot / Collar', unit: 'pieces', unit_price: 18.00, coverage_per_unit: '~2 per 1000 sq ft', supplier: '', is_default: 0, sort_order: 12 },
+  ]
+
+  for (const d of defaults) {
+    await c.env.DB.prepare(
+      `INSERT INTO material_catalog (owner_id, category, name, unit, unit_price, coverage_per_unit, supplier, is_default, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(ownerId, d.category, d.name, d.unit, d.unit_price, d.coverage_per_unit, d.supplier, d.is_default, d.sort_order).run()
+  }
+  return c.json({ success: true, seeded: defaults.length })
+})

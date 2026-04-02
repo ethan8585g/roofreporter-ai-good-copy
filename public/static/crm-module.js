@@ -31,7 +31,8 @@
     jobs: { init: initJobs, title: 'Job Management' },
     pipeline: { init: initPipeline, title: 'Sales Pipeline' },
     d2d: { init: initD2D, title: 'D2D Manager' },
-    'email-outreach': { init: initEmailOutreach, title: 'Email Outreach' }
+    'email-outreach': { init: initEmailOutreach, title: 'Email Outreach' },
+    'catalog': { init: initCatalog, title: 'Material Catalog' }
   };
 
   const mod = modules[MODULE];
@@ -1991,6 +1992,174 @@
     fetch('/api/crm/jobs/' + id, { method: 'DELETE', headers: authHeadersOnly() })
       .then(function() { toast('Job deleted'); loadJobsForMonth(_calYear, _calMonth); })
       .catch(function(e) { toast('Failed to delete: ' + (e.message || 'Network error'), 'error'); });
+  };
+
+  // ============================================================
+  // MODULE: MATERIAL CATALOG
+  // ============================================================
+  var _catalogProducts = [];
+  var _catalogCategories = {
+    shingles: { label: 'Shingles', icon: 'fa-home', color: 'blue' },
+    underlayment: { label: 'Underlayment', icon: 'fa-layer-group', color: 'sky' },
+    ice_shield: { label: 'Ice & Water Shield', icon: 'fa-snowflake', color: 'cyan' },
+    starter_strip: { label: 'Starter Strip', icon: 'fa-grip-lines', color: 'indigo' },
+    ridge_cap: { label: 'Ridge/Hip Cap', icon: 'fa-mountain', color: 'violet' },
+    drip_edge: { label: 'Drip Edge', icon: 'fa-ruler', color: 'amber' },
+    valley_metal: { label: 'Valley Flashing', icon: 'fa-arrows-alt-v', color: 'orange' },
+    nails: { label: 'Nails / Fasteners', icon: 'fa-thumbtack', color: 'gray' },
+    ventilation: { label: 'Ventilation', icon: 'fa-wind', color: 'green' },
+    custom: { label: 'Other / Custom', icon: 'fa-box', color: 'rose' }
+  };
+
+  function initCatalog() {
+    root.innerHTML = '<div class="text-center py-8"><div class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-brand-500 mx-auto mb-3"></div></div>';
+    fetch('/api/crm/catalog', { headers: authHeadersOnly() })
+      .then(function(r) { return r.json(); })
+      .then(function(data) { _catalogProducts = data.products || []; renderCatalog(); })
+      .catch(function() { root.innerHTML = '<p class="text-red-500 p-4">Failed to load catalog.</p>'; });
+  }
+
+  function renderCatalog() {
+    var html = '<div class="flex items-center justify-between mb-5 flex-wrap gap-3">';
+    html += '<div><h2 class="text-lg font-bold text-gray-800"><i class="fas fa-box-open text-blue-500 mr-2"></i>Material Catalog</h2><p class="text-xs text-gray-500 mt-0.5">' + _catalogProducts.length + ' products · Prices used in Material Calculator</p></div>';
+    html += '<div class="flex gap-2">';
+    html += '<button onclick="window._catAddProduct()" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-700"><i class="fas fa-plus mr-1"></i>Add Product</button>';
+    if (_catalogProducts.length === 0) {
+      html += '<button onclick="window._catSeedDefaults()" class="bg-gray-800 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-gray-900"><i class="fas fa-magic mr-1"></i>Load Defaults</button>';
+    }
+    html += '</div></div>';
+
+    // Stats
+    var totalValue = 0; _catalogProducts.forEach(function(p) { totalValue += p.unit_price || 0; });
+    var cats = {}; _catalogProducts.forEach(function(p) { cats[p.category] = (cats[p.category] || 0) + 1; });
+    html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">';
+    html += '<div class="bg-white rounded-xl border p-4 text-center"><p class="text-2xl font-black text-gray-800">' + _catalogProducts.length + '</p><p class="text-[10px] text-gray-500">Total Products</p></div>';
+    html += '<div class="bg-white rounded-xl border p-4 text-center"><p class="text-2xl font-black text-blue-600">' + Object.keys(cats).length + '</p><p class="text-[10px] text-gray-500">Categories</p></div>';
+    html += '<div class="bg-white rounded-xl border p-4 text-center"><p class="text-2xl font-black text-green-600">' + _catalogProducts.filter(function(p) { return p.is_default; }).length + '</p><p class="text-[10px] text-gray-500">Default Items</p></div>';
+    html += '<div class="bg-white rounded-xl border p-4 text-center"><p class="text-2xl font-black text-amber-600">$' + totalValue.toFixed(0) + '</p><p class="text-[10px] text-gray-500">Avg Unit Value</p></div>';
+    html += '</div>';
+
+    if (_catalogProducts.length === 0) {
+      html += '<div class="bg-white rounded-xl border p-12 text-center"><div class="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4"><i class="fas fa-box-open text-blue-400 text-2xl"></i></div><h3 class="text-lg font-semibold text-gray-700 mb-2">No Products Yet</h3><p class="text-gray-500 mb-4">Add your materials and pricing so the Material Calculator uses your custom prices.</p><button onclick="window._catSeedDefaults()" class="bg-gray-800 text-white px-6 py-2.5 rounded-xl font-semibold hover:bg-gray-900 mr-2"><i class="fas fa-magic mr-2"></i>Load Standard Roofing Products</button><button onclick="window._catAddProduct()" class="bg-blue-600 text-white px-6 py-2.5 rounded-xl font-semibold hover:bg-blue-700"><i class="fas fa-plus mr-2"></i>Add Custom Product</button></div>';
+    } else {
+      // Group by category
+      var grouped = {};
+      _catalogProducts.forEach(function(p) {
+        if (!grouped[p.category]) grouped[p.category] = [];
+        grouped[p.category].push(p);
+      });
+      var catOrder = ['shingles', 'underlayment', 'ice_shield', 'starter_strip', 'ridge_cap', 'drip_edge', 'valley_metal', 'nails', 'ventilation', 'custom'];
+      for (var ci = 0; ci < catOrder.length; ci++) {
+        var catKey = catOrder[ci];
+        var catItems = grouped[catKey];
+        if (!catItems || catItems.length === 0) continue;
+        var catInfo = _catalogCategories[catKey] || { label: catKey, icon: 'fa-box', color: 'gray' };
+        html += '<div class="bg-white rounded-xl border shadow-sm mb-4 overflow-hidden">';
+        html += '<div class="px-5 py-3 border-b border-gray-100 flex items-center justify-between bg-' + catInfo.color + '-50">';
+        html += '<h3 class="font-bold text-gray-800 text-sm"><i class="fas ' + catInfo.icon + ' text-' + catInfo.color + '-500 mr-2"></i>' + catInfo.label + ' <span class="text-xs font-normal text-gray-400">(' + catItems.length + ')</span></h3>';
+        html += '</div>';
+        html += '<div class="divide-y divide-gray-100">';
+        for (var pi = 0; pi < catItems.length; pi++) {
+          var p = catItems[pi];
+          html += '<div class="px-5 py-3 flex items-center justify-between hover:bg-gray-50">';
+          html += '<div class="min-w-0 flex-1">';
+          html += '<div class="flex items-center gap-2"><p class="font-medium text-sm text-gray-800">' + p.name + '</p>';
+          if (p.is_default) html += '<span class="px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded text-[9px] font-bold">DEFAULT</span>';
+          if (p.sku) html += '<span class="text-[10px] text-gray-400 font-mono">' + p.sku + '</span>';
+          html += '</div>';
+          html += '<div class="flex items-center gap-3 mt-0.5 text-xs text-gray-500">';
+          if (p.coverage_per_unit) html += '<span><i class="fas fa-ruler-combined mr-0.5"></i>' + p.coverage_per_unit + '</span>';
+          if (p.supplier) html += '<span><i class="fas fa-truck mr-0.5"></i>' + p.supplier + '</span>';
+          html += '</div></div>';
+          html += '<div class="flex items-center gap-3 flex-shrink-0 ml-4">';
+          html += '<div class="text-right"><p class="text-lg font-black text-gray-800">$' + p.unit_price.toFixed(2) + '</p><p class="text-[10px] text-gray-400">per ' + p.unit + '</p></div>';
+          html += '<div class="flex gap-1">';
+          html += '<button onclick="window._catEditProduct(' + p.id + ')" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 hover:text-blue-600"><i class="fas fa-edit text-xs"></i></button>';
+          html += '<button onclick="window._catDeleteProduct(' + p.id + ')" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 hover:text-red-600"><i class="fas fa-trash text-xs"></i></button>';
+          html += '</div></div></div>';
+        }
+        html += '</div></div>';
+      }
+    }
+    root.innerHTML = html;
+  }
+
+  window._catSeedDefaults = function() {
+    if (!confirm('Load standard roofing products with current Canadian market pricing?')) return;
+    fetch('/api/crm/catalog/seed-defaults', { method: 'POST', headers: authHeaders() })
+      .then(function(r) { return r.json(); })
+      .then(function(res) { if (res.success) { toast(res.seeded + ' products added!'); initCatalog(); } else { toast(res.error || 'Failed', 'error'); } })
+      .catch(function() { toast('Network error', 'error'); });
+  };
+
+  window._catAddProduct = function() {
+    var catOpts = Object.keys(_catalogCategories).map(function(k) { return '<option value="' + k + '">' + _catalogCategories[k].label + '</option>'; }).join('');
+    var body = '<div class="space-y-3">' +
+      '<div class="grid grid-cols-2 gap-3"><div><label class="block text-xs font-medium text-gray-600 mb-1">Category *</label><select id="catNewCategory" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">' + catOpts + '</select></div><div><label class="block text-xs font-medium text-gray-600 mb-1">Unit *</label><select id="catNewUnit" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"><option value="bundles">Bundles</option><option value="rolls">Rolls</option><option value="pieces">Pieces</option><option value="boxes">Boxes</option><option value="tubes">Tubes</option><option value="sq ft">Sq Ft</option><option value="lin ft">Lin Ft</option></select></div></div>' +
+      '<div><label class="block text-xs font-medium text-gray-600 mb-1">Product Name *</label><input type="text" id="catNewName" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="e.g. GAF Timberline HDZ Charcoal"></div>' +
+      '<div class="grid grid-cols-2 gap-3"><div><label class="block text-xs font-medium text-gray-600 mb-1">Unit Price (CAD) *</label><input type="number" id="catNewPrice" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" step="0.01" min="0" placeholder="42.00"></div><div><label class="block text-xs font-medium text-gray-600 mb-1">SKU</label><input type="text" id="catNewSku" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="Optional"></div></div>' +
+      '<div class="grid grid-cols-2 gap-3"><div><label class="block text-xs font-medium text-gray-600 mb-1">Coverage per Unit</label><input type="text" id="catNewCoverage" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="e.g. 33 sq ft per bundle"></div><div><label class="block text-xs font-medium text-gray-600 mb-1">Supplier</label><input type="text" id="catNewSupplier" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="e.g. ABC Supply"></div></div>' +
+      '<div><label class="block text-xs font-medium text-gray-600 mb-1">Description</label><input type="text" id="catNewDesc" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="Optional notes, color, warranty..."></div>' +
+      '<label class="flex items-center gap-2 text-sm"><input type="checkbox" id="catNewDefault" class="rounded"> Include by default in Material Calculator</label>' +
+      '</div>';
+    showModal('Add Product to Catalog', body, function() {
+      var name = document.getElementById('catNewName').value.trim();
+      var price = parseFloat(document.getElementById('catNewPrice').value);
+      if (!name || isNaN(price)) { toast('Name and price required', 'error'); return; }
+      fetch('/api/crm/catalog', { method: 'POST', headers: authHeaders(), body: JSON.stringify({
+        category: document.getElementById('catNewCategory').value,
+        name: name,
+        description: document.getElementById('catNewDesc').value.trim(),
+        sku: document.getElementById('catNewSku').value.trim(),
+        unit: document.getElementById('catNewUnit').value,
+        unit_price: price,
+        coverage_per_unit: document.getElementById('catNewCoverage').value.trim(),
+        supplier: document.getElementById('catNewSupplier').value.trim(),
+        is_default: document.getElementById('catNewDefault').checked ? 1 : 0
+      })})
+        .then(function(r) { return r.json(); })
+        .then(function(res) { if (res.success) { closeModal(); toast('Product added!'); initCatalog(); } else { toast(res.error || 'Failed', 'error'); } })
+        .catch(function() { toast('Network error', 'error'); });
+    }, 'Add Product');
+  };
+
+  window._catEditProduct = function(id) {
+    var p = _catalogProducts.find(function(x) { return x.id === id; });
+    if (!p) return;
+    var catOpts = Object.keys(_catalogCategories).map(function(k) { return '<option value="' + k + '"' + (k === p.category ? ' selected' : '') + '>' + _catalogCategories[k].label + '</option>'; }).join('');
+    var unitOpts = ['bundles','rolls','pieces','boxes','tubes','sq ft','lin ft'].map(function(u) { return '<option value="' + u + '"' + (u === p.unit ? ' selected' : '') + '>' + u + '</option>'; }).join('');
+    var body = '<div class="space-y-3">' +
+      '<div class="grid grid-cols-2 gap-3"><div><label class="block text-xs font-medium text-gray-600 mb-1">Category</label><select id="catEditCategory" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">' + catOpts + '</select></div><div><label class="block text-xs font-medium text-gray-600 mb-1">Unit</label><select id="catEditUnit" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">' + unitOpts + '</select></div></div>' +
+      '<div><label class="block text-xs font-medium text-gray-600 mb-1">Product Name</label><input type="text" id="catEditName" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" value="' + (p.name || '').replace(/"/g, '&quot;') + '"></div>' +
+      '<div class="grid grid-cols-2 gap-3"><div><label class="block text-xs font-medium text-gray-600 mb-1">Unit Price (CAD)</label><input type="number" id="catEditPrice" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" step="0.01" value="' + p.unit_price + '"></div><div><label class="block text-xs font-medium text-gray-600 mb-1">SKU</label><input type="text" id="catEditSku" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" value="' + (p.sku || '') + '"></div></div>' +
+      '<div class="grid grid-cols-2 gap-3"><div><label class="block text-xs font-medium text-gray-600 mb-1">Coverage</label><input type="text" id="catEditCoverage" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" value="' + (p.coverage_per_unit || '') + '"></div><div><label class="block text-xs font-medium text-gray-600 mb-1">Supplier</label><input type="text" id="catEditSupplier" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" value="' + (p.supplier || '') + '"></div></div>' +
+      '<div><label class="block text-xs font-medium text-gray-600 mb-1">Description</label><input type="text" id="catEditDesc" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" value="' + (p.description || '').replace(/"/g, '&quot;') + '"></div>' +
+      '<label class="flex items-center gap-2 text-sm"><input type="checkbox" id="catEditDefault" class="rounded"' + (p.is_default ? ' checked' : '') + '> Include by default in Material Calculator</label>' +
+      '</div>';
+    showModal('Edit Product', body, function() {
+      fetch('/api/crm/catalog/' + id, { method: 'PUT', headers: authHeaders(), body: JSON.stringify({
+        category: document.getElementById('catEditCategory').value,
+        name: document.getElementById('catEditName').value.trim(),
+        description: document.getElementById('catEditDesc').value.trim(),
+        sku: document.getElementById('catEditSku').value.trim(),
+        unit: document.getElementById('catEditUnit').value,
+        unit_price: parseFloat(document.getElementById('catEditPrice').value) || 0,
+        coverage_per_unit: document.getElementById('catEditCoverage').value.trim(),
+        supplier: document.getElementById('catEditSupplier').value.trim(),
+        is_default: document.getElementById('catEditDefault').checked ? 1 : 0
+      })})
+        .then(function(r) { return r.json(); })
+        .then(function(res) { if (res.success) { closeModal(); toast('Product updated!'); initCatalog(); } else { toast(res.error || 'Failed', 'error'); } })
+        .catch(function() { toast('Network error', 'error'); });
+    }, 'Save Changes');
+  };
+
+  window._catDeleteProduct = function(id) {
+    if (!confirm('Remove this product from your catalog?')) return;
+    fetch('/api/crm/catalog/' + id, { method: 'DELETE', headers: authHeadersOnly() })
+      .then(function(r) { return r.json(); })
+      .then(function(res) { if (res.success) { toast('Product removed'); initCatalog(); } else { toast(res.error || 'Failed', 'error'); } })
+      .catch(function() { toast('Network error', 'error'); });
   };
 
   // ============================================================
