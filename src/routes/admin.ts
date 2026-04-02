@@ -1624,3 +1624,426 @@ Keep responses concise and actionable. Current date: ${new Date().toISOString().
     return c.json({ error: 'Gemini request failed', details: err.message }, 500)
   }
 })
+
+// ============================================================
+// AREA 1: CUSTOMER OPERATIONS
+// ============================================================
+
+// Search customers
+adminRoutes.get('/superadmin/users/search', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
+  const q = c.req.query('q') || ''
+  if (!q || q.length < 2) return c.json({ customers: [] })
+  const like = `%${q}%`
+  const rows = await c.env.DB.prepare(
+    `SELECT id, name, email, company_name, phone, is_active, report_credits, credits_used, free_trial_total, free_trial_used, subscription_plan, created_at
+     FROM customers WHERE (email LIKE ? OR name LIKE ? OR company_name LIKE ?) AND is_active = 1 ORDER BY created_at DESC LIMIT 50`
+  ).bind(like, like, like).all<any>()
+  return c.json({ customers: rows.results || [] })
+})
+
+// Edit customer
+adminRoutes.put('/superadmin/users/:id', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
+  const id = parseInt(c.req.param('id'))
+  const { name, email, company_name, phone, subscription_plan, report_credits } = await c.req.json()
+  const updates: string[] = []
+  const vals: any[] = []
+  if (name !== undefined) { updates.push('name=?'); vals.push(name) }
+  if (email !== undefined) { updates.push('email=?'); vals.push(email) }
+  if (company_name !== undefined) { updates.push('company_name=?'); vals.push(company_name) }
+  if (phone !== undefined) { updates.push('phone=?'); vals.push(phone) }
+  if (subscription_plan !== undefined) { updates.push('subscription_plan=?'); vals.push(subscription_plan) }
+  if (report_credits !== undefined) { updates.push('report_credits=?'); vals.push(report_credits) }
+  if (updates.length === 0) return c.json({ error: 'No fields to update' }, 400)
+  updates.push('updated_at=datetime("now")')
+  vals.push(id)
+  await c.env.DB.prepare(`UPDATE customers SET ${updates.join(', ')} WHERE id=?`).bind(...vals).run()
+  return c.json({ success: true })
+})
+
+// Adjust credits
+adminRoutes.post('/superadmin/users/:id/adjust-credits', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
+  const id = parseInt(c.req.param('id'))
+  const { amount, reason } = await c.req.json()
+  if (!amount || typeof amount !== 'number') return c.json({ error: 'amount required (positive to add, negative to remove)' }, 400)
+  if (amount > 0) {
+    await c.env.DB.prepare('UPDATE customers SET report_credits = report_credits + ?, updated_at = datetime("now") WHERE id = ?').bind(amount, id).run()
+  } else {
+    await c.env.DB.prepare('UPDATE customers SET credits_used = credits_used + ?, updated_at = datetime("now") WHERE id = ?').bind(Math.abs(amount), id).run()
+  }
+  await c.env.DB.prepare('INSERT INTO user_activity_log (company_id, action, details) VALUES (1, ?, ?)').bind('admin_credit_adjustment', `Admin adjusted ${amount} credits for customer #${id}: ${reason || 'No reason'}`).run()
+  const updated = await c.env.DB.prepare('SELECT report_credits, credits_used FROM customers WHERE id=?').bind(id).first<any>()
+  return c.json({ success: true, report_credits: updated?.report_credits || 0, credits_used: updated?.credits_used || 0, remaining: (updated?.report_credits || 0) - (updated?.credits_used || 0) })
+})
+
+// Suspend customer
+adminRoutes.post('/superadmin/users/:id/suspend', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
+  const id = parseInt(c.req.param('id'))
+  await c.env.DB.prepare('UPDATE customers SET is_active = 0, updated_at = datetime("now") WHERE id = ?').bind(id).run()
+  return c.json({ success: true, message: 'Customer suspended' })
+})
+
+// Reactivate customer
+adminRoutes.post('/superadmin/users/:id/reactivate', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
+  const id = parseInt(c.req.param('id'))
+  await c.env.DB.prepare('UPDATE customers SET is_active = 1, updated_at = datetime("now") WHERE id = ?').bind(id).run()
+  return c.json({ success: true, message: 'Customer reactivated' })
+})
+
+// Delete customer (soft)
+adminRoutes.delete('/superadmin/users/:id', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
+  const id = parseInt(c.req.param('id'))
+  await c.env.DB.prepare('UPDATE customers SET is_active = 0, email = "deleted_" || id || "_" || email, updated_at = datetime("now") WHERE id = ?').bind(id).run()
+  return c.json({ success: true, message: 'Customer soft-deleted' })
+})
+
+// Refund
+adminRoutes.post('/superadmin/users/:id/refund', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
+  const id = parseInt(c.req.param('id'))
+  const { payment_id, credits_to_remove, reason } = await c.req.json()
+  if (payment_id) {
+    await c.env.DB.prepare("UPDATE square_payments SET status = 'refunded', updated_at = datetime('now') WHERE id = ? AND customer_id = ?").bind(payment_id, id).run()
+  }
+  if (credits_to_remove && credits_to_remove > 0) {
+    await c.env.DB.prepare('UPDATE customers SET report_credits = MAX(0, report_credits - ?), updated_at = datetime("now") WHERE id = ?').bind(credits_to_remove, id).run()
+  }
+  await c.env.DB.prepare('INSERT INTO user_activity_log (company_id, action, details) VALUES (1, ?, ?)').bind('admin_refund', `Admin refunded customer #${id}: ${reason || ''}, credits removed: ${credits_to_remove || 0}`).run()
+  return c.json({ success: true })
+})
+
+// CSV Export — customers
+adminRoutes.get('/superadmin/users/export', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
+  const rows = await c.env.DB.prepare('SELECT id, name, email, company_name, phone, subscription_plan, report_credits, credits_used, free_trial_total, free_trial_used, is_active, created_at FROM customers ORDER BY created_at DESC').all<any>()
+  let csv = 'ID,Name,Email,Company,Phone,Plan,Credits,Used,Free Trial,Free Used,Active,Created\n'
+  for (const r of (rows.results || []) as any[]) {
+    csv += `${r.id},"${(r.name||'').replace(/"/g,'""')}","${r.email||''}","${(r.company_name||'').replace(/"/g,'""')}","${r.phone||''}","${r.subscription_plan||''}",${r.report_credits||0},${r.credits_used||0},${r.free_trial_total||0},${r.free_trial_used||0},${r.is_active},${r.created_at||''}\n`
+  }
+  return c.text(csv, 200, { 'Content-Type': 'text/csv', 'Content-Disposition': 'attachment; filename="customers-export.csv"' })
+})
+
+// CSV Export — orders
+adminRoutes.get('/superadmin/orders/export', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
+  const rows = await c.env.DB.prepare('SELECT o.id, o.order_number, o.property_address, o.status, o.payment_status, o.price, o.service_tier, o.is_trial, o.created_at, c.name as customer_name, c.email as customer_email FROM orders o LEFT JOIN customers c ON c.id = o.customer_id ORDER BY o.created_at DESC LIMIT 5000').all<any>()
+  let csv = 'ID,Order Number,Address,Status,Payment,Price,Tier,Trial,Created,Customer,Email\n'
+  for (const r of (rows.results || []) as any[]) {
+    csv += `${r.id},"${r.order_number||''}","${(r.property_address||'').replace(/"/g,'""')}","${r.status||''}","${r.payment_status||''}",${r.price||0},"${r.service_tier||''}",${r.is_trial||0},${r.created_at||''},"${(r.customer_name||'').replace(/"/g,'""')}","${r.customer_email||''}"\n`
+  }
+  return c.text(csv, 200, { 'Content-Type': 'text/csv', 'Content-Disposition': 'attachment; filename="orders-export.csv"' })
+})
+
+// ============================================================
+// AREA 2: LIVEKIT / TELEPHONY MANAGEMENT
+// ============================================================
+
+// Telephony status
+adminRoutes.get('/superadmin/telephony-status', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
+  const lkConfigured = !!(c.env as any).LIVEKIT_API_KEY && !!(c.env as any).LIVEKIT_URL
+  const trunks = await c.env.DB.prepare("SELECT COUNT(*) as cnt FROM secretary_config WHERE livekit_inbound_trunk_id IS NOT NULL AND livekit_inbound_trunk_id != ''").first<any>()
+  const dispatches = await c.env.DB.prepare("SELECT COUNT(*) as cnt FROM secretary_config WHERE livekit_dispatch_rule_id IS NOT NULL AND livekit_dispatch_rule_id != ''").first<any>()
+  const phones = await c.env.DB.prepare("SELECT COUNT(*) as total, SUM(CASE WHEN status='assigned' THEN 1 ELSE 0 END) as assigned, SUM(CASE WHEN status='available' THEN 1 ELSE 0 END) as available FROM secretary_phone_pool").first<any>()
+  const activeAgents = await c.env.DB.prepare("SELECT COUNT(*) as cnt FROM secretary_config WHERE is_active = 1").first<any>()
+  return c.json({ livekit_configured: lkConfigured, livekit_url: (c.env as any).LIVEKIT_URL || '', sip_uri: (c.env as any).LIVEKIT_SIP_URI || '', total_trunks: trunks?.cnt || 0, total_dispatch_rules: dispatches?.cnt || 0, phone_numbers: { total: phones?.total || 0, assigned: phones?.assigned || 0, available: phones?.available || 0 }, active_agents: activeAgents?.cnt || 0 })
+})
+
+// LiveKit overview
+adminRoutes.get('/superadmin/livekit/overview', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
+  const configs = await c.env.DB.prepare("SELECT COUNT(*) as total, SUM(CASE WHEN is_active=1 THEN 1 ELSE 0 END) as active FROM secretary_config").first<any>()
+  const calls30d = await c.env.DB.prepare("SELECT COUNT(*) as cnt FROM secretary_call_logs WHERE created_at > datetime('now', '-30 days')").first<any>()
+  const phones = await c.env.DB.prepare("SELECT COUNT(*) as cnt FROM secretary_phone_pool").first<any>()
+  return c.json({ livekit_url: (c.env as any).LIVEKIT_URL || '', sip_uri: (c.env as any).LIVEKIT_SIP_URI || '', configured: !!(c.env as any).LIVEKIT_API_KEY, total_configs: configs?.total || 0, active_configs: configs?.active || 0, calls_30d: calls30d?.cnt || 0, phone_pool_size: phones?.cnt || 0 })
+})
+
+// Secretary configs list
+adminRoutes.get('/superadmin/livekit/secretary-configs', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
+  const rows = await c.env.DB.prepare(
+    `SELECT sc.*, c.name as customer_name, c.email as customer_email, c.company_name
+     FROM secretary_config sc LEFT JOIN customers c ON c.id = sc.customer_id ORDER BY sc.updated_at DESC`
+  ).all<any>()
+  return c.json({ configs: rows.results || [] })
+})
+
+// Phone pool
+adminRoutes.get('/superadmin/livekit/phone-pool', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
+  const rows = await c.env.DB.prepare(
+    `SELECT p.*, c.name as customer_name, c.email as customer_email
+     FROM secretary_phone_pool p LEFT JOIN customers c ON c.id = p.assigned_to_customer_id ORDER BY p.created_at DESC`
+  ).all<any>()
+  return c.json({ phones: rows.results || [] })
+})
+
+// Add phone to pool
+adminRoutes.post('/superadmin/livekit/phone-pool/add', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
+  const { phone_number, region } = await c.req.json()
+  if (!phone_number) return c.json({ error: 'phone_number required' }, 400)
+  await c.env.DB.prepare("INSERT OR IGNORE INTO secretary_phone_pool (phone_number, region, status, assigned_at) VALUES (?, ?, 'available', datetime('now'))").bind(phone_number, region || 'CA').run()
+  return c.json({ success: true })
+})
+
+// Release phone from customer
+adminRoutes.post('/superadmin/livekit/phone-pool/release', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
+  const { phone_number } = await c.req.json()
+  await c.env.DB.prepare("UPDATE secretary_phone_pool SET status = 'available', assigned_to_customer_id = NULL, updated_at = datetime('now') WHERE phone_number = ?").bind(phone_number).run()
+  return c.json({ success: true })
+})
+
+// Toggle secretary config
+adminRoutes.post('/superadmin/livekit/secretary-config/toggle', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
+  const { customer_id, enabled } = await c.req.json()
+  await c.env.DB.prepare('UPDATE secretary_config SET is_active = ?, updated_at = datetime("now") WHERE customer_id = ?').bind(enabled ? 1 : 0, customer_id).run()
+  return c.json({ success: true })
+})
+
+// Get customer secretary config
+adminRoutes.get('/superadmin/livekit/secretary-config/:customerId', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
+  const config = await c.env.DB.prepare('SELECT sc.*, c.name, c.email, c.company_name FROM secretary_config sc LEFT JOIN customers c ON c.id = sc.customer_id WHERE sc.customer_id = ?').bind(parseInt(c.req.param('customerId'))).first<any>()
+  if (!config) return c.json({ error: 'Config not found' }, 404)
+  const dirs = await c.env.DB.prepare('SELECT * FROM secretary_directories WHERE config_id = ? ORDER BY sort_order').bind(config.id).all<any>()
+  return c.json({ config, directories: dirs.results || [] })
+})
+
+// Create SIP trunk via LiveKit
+adminRoutes.post('/superadmin/livekit/trunk/create', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
+  const { customer_id, phone_number } = await c.req.json()
+  if (!customer_id || !phone_number) return c.json({ error: 'customer_id and phone_number required' }, 400)
+  try {
+    const result = await deployLiveKitForCustomer(c.env, customer_id, phone_number)
+    return c.json(result)
+  } catch (e: any) { return c.json({ error: e.message }, 500) }
+})
+
+// Delete SIP trunk
+adminRoutes.post('/superadmin/livekit/trunk/delete', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
+  const { trunk_id, customer_id } = await c.req.json()
+  const apiKey = (c.env as any).LIVEKIT_API_KEY; const apiSecret = (c.env as any).LIVEKIT_API_SECRET; const livekitUrl = (c.env as any).LIVEKIT_URL
+  if (!apiKey || !apiSecret || !livekitUrl) return c.json({ error: 'LiveKit not configured' }, 500)
+  try {
+    const result = await adminLivekitAPI(apiKey, apiSecret, livekitUrl, '/twirp/livekit.SIP/DeleteSIPTrunk', { sip_trunk_id: trunk_id })
+    if (customer_id) await c.env.DB.prepare("UPDATE secretary_config SET livekit_inbound_trunk_id = '', connection_status = 'not_connected', updated_at = datetime('now') WHERE customer_id = ?").bind(customer_id).run()
+    return c.json({ success: true, result })
+  } catch (e: any) { return c.json({ error: e.message }, 500) }
+})
+
+// Delete dispatch rule
+adminRoutes.post('/superadmin/livekit/dispatch/delete', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
+  const { dispatch_rule_id, customer_id } = await c.req.json()
+  const apiKey = (c.env as any).LIVEKIT_API_KEY; const apiSecret = (c.env as any).LIVEKIT_API_SECRET; const livekitUrl = (c.env as any).LIVEKIT_URL
+  if (!apiKey || !apiSecret || !livekitUrl) return c.json({ error: 'LiveKit not configured' }, 500)
+  try {
+    const result = await adminLivekitAPI(apiKey, apiSecret, livekitUrl, '/twirp/livekit.SIP/DeleteSIPDispatchRule', { sip_dispatch_rule_id: dispatch_rule_id })
+    if (customer_id) await c.env.DB.prepare("UPDATE secretary_config SET livekit_dispatch_rule_id = '', updated_at = datetime('now') WHERE customer_id = ?").bind(customer_id).run()
+    return c.json({ success: true, result })
+  } catch (e: any) { return c.json({ error: e.message }, 500) }
+})
+
+// Phone numbers — owned
+adminRoutes.get('/superadmin/phone-numbers/owned', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
+  const rows = await c.env.DB.prepare('SELECT p.*, c.name as customer_name FROM secretary_phone_pool p LEFT JOIN customers c ON c.id = p.assigned_to_customer_id ORDER BY p.created_at DESC').all<any>()
+  return c.json({ phones: rows.results || [] })
+})
+
+// ============================================================
+// AREA 3: SYSTEM HEALTH & MONITORING
+// ============================================================
+
+// System health
+adminRoutes.get('/superadmin/system-health', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
+  const checks: Record<string, any> = {}
+  // DB check
+  try { const r = await c.env.DB.prepare('SELECT COUNT(*) as cnt FROM customers').first<any>(); checks.database = { status: 'ok', customers: r?.cnt || 0 } } catch (e: any) { checks.database = { status: 'error', error: e.message } }
+  // Env vars
+  checks.env = {
+    SQUARE_ACCESS_TOKEN: !!(c.env as any).SQUARE_ACCESS_TOKEN,
+    LIVEKIT_API_KEY: !!(c.env as any).LIVEKIT_API_KEY,
+    LIVEKIT_URL: !!(c.env as any).LIVEKIT_URL,
+    GEMINI_API_KEY: !!(c.env as any).GEMINI_API_KEY,
+    GOOGLE_SOLAR_API_KEY: !!(c.env as any).GOOGLE_SOLAR_API_KEY,
+    GOOGLE_MAPS_API_KEY: !!(c.env as any).GOOGLE_MAPS_API_KEY,
+    GA4_MEASUREMENT_ID: !!(c.env as any).GA4_MEASUREMENT_ID,
+    JWT_SECRET: !!(c.env as any).JWT_SECRET,
+    SIP_OUTBOUND_TRUNK_ID: !!(c.env as any).SIP_OUTBOUND_TRUNK_ID,
+  }
+  // Recent errors
+  try { const errs = await c.env.DB.prepare("SELECT COUNT(*) as cnt FROM orders WHERE status = 'failed' AND created_at > datetime('now', '-7 days')").first<any>(); checks.recent_errors = { failed_orders_7d: errs?.cnt || 0 } } catch { checks.recent_errors = { failed_orders_7d: 0 } }
+  // Orders today
+  try { const today = await c.env.DB.prepare("SELECT COUNT(*) as cnt FROM orders WHERE created_at > datetime('now', '-1 day')").first<any>(); checks.activity = { orders_24h: today?.cnt || 0 } } catch { checks.activity = { orders_24h: 0 } }
+  return c.json(checks)
+})
+
+// Paywall status
+adminRoutes.get('/superadmin/paywall-status', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
+  const tiers = await c.env.DB.prepare("SELECT subscription_plan, COUNT(*) as cnt FROM customers WHERE is_active = 1 GROUP BY subscription_plan").all<any>()
+  const packages = await c.env.DB.prepare("SELECT * FROM credit_packages WHERE is_active = 1 ORDER BY sort_order").all<any>()
+  return c.json({ tiers: tiers.results || [], packages: packages.results || [], square_configured: !!(c.env as any).SQUARE_ACCESS_TOKEN })
+})
+
+// Service invoices
+adminRoutes.get('/superadmin/service-invoices', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
+  const rows = await c.env.DB.prepare("SELECT i.*, c.name as customer_name, c.email as customer_email FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id WHERE i.master_company_id = 1 ORDER BY i.created_at DESC LIMIT 200").all<any>()
+  return c.json({ invoices: rows.results || [] })
+})
+
+// Sales scripts
+adminRoutes.get('/superadmin/sales-scripts', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
+  try {
+    const rows = await c.env.DB.prepare('SELECT * FROM cc_campaigns ORDER BY created_at DESC').all<any>()
+    return c.json({ scripts: rows.results || [] })
+  } catch { return c.json({ scripts: [] }) }
+})
+
+// Call center stats
+adminRoutes.get('/superadmin/call-center/stats', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
+  try {
+    const total = await c.env.DB.prepare('SELECT COUNT(*) as cnt FROM cc_call_logs').first<any>()
+    const today = await c.env.DB.prepare("SELECT COUNT(*) as cnt FROM cc_call_logs WHERE created_at > datetime('now', '-1 day')").first<any>()
+    const agents = await c.env.DB.prepare('SELECT COUNT(*) as cnt FROM cc_agents').first<any>()
+    const prospects = await c.env.DB.prepare('SELECT COUNT(*) as cnt FROM cc_prospects').first<any>()
+    return c.json({ total_calls: total?.cnt || 0, calls_today: today?.cnt || 0, total_agents: agents?.cnt || 0, total_prospects: prospects?.cnt || 0 })
+  } catch { return c.json({ total_calls: 0, calls_today: 0, total_agents: 0, total_prospects: 0 }) }
+})
+
+// Secretary monitor
+adminRoutes.get('/superadmin/secretary/monitor', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
+  const active = await c.env.DB.prepare(
+    `SELECT sc.customer_id, sc.is_active, sc.secretary_mode, sc.connection_status, sc.assigned_phone_number, sc.agent_name,
+            c.name as customer_name, c.company_name,
+            (SELECT COUNT(*) FROM secretary_call_logs cl WHERE cl.customer_id = sc.customer_id AND cl.created_at > datetime('now', '-1 day')) as calls_today,
+            (SELECT COUNT(*) FROM secretary_call_logs cl WHERE cl.customer_id = sc.customer_id) as total_calls
+     FROM secretary_config sc LEFT JOIN customers c ON c.id = sc.customer_id WHERE sc.is_active = 1 ORDER BY sc.updated_at DESC`
+  ).all<any>()
+  return c.json({ agents: active.results || [] })
+})
+
+// SEO page meta
+adminRoutes.get('/superadmin/seo/page-meta', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
+  try {
+    const rows = await c.env.DB.prepare("SELECT * FROM settings WHERE setting_key LIKE 'seo_%' AND master_company_id = 1").all<any>()
+    return c.json({ pages: rows.results || [] })
+  } catch { return c.json({ pages: [] }) }
+})
+
+// Save SEO page meta
+adminRoutes.put('/superadmin/seo/page-meta', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
+  const { page_url, meta_title, meta_description, og_image } = await c.req.json()
+  if (!page_url) return c.json({ error: 'page_url required' }, 400)
+  const key = 'seo_' + page_url.replace(/\//g, '_')
+  const value = JSON.stringify({ meta_title, meta_description, og_image })
+  await c.env.DB.prepare("INSERT OR REPLACE INTO settings (master_company_id, setting_key, setting_value) VALUES (1, ?, ?)").bind(key, value).run()
+  return c.json({ success: true })
+})
+
+// Backlinks
+adminRoutes.get('/superadmin/seo/backlinks', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
+  try {
+    const rows = await c.env.DB.prepare("SELECT * FROM settings WHERE setting_key = 'seo_backlinks' AND master_company_id = 1").first<any>()
+    return c.json({ backlinks: rows?.setting_value ? JSON.parse(rows.setting_value) : [] })
+  } catch { return c.json({ backlinks: [] }) }
+})
+
+adminRoutes.post('/superadmin/seo/backlinks', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
+  const { url, anchor_text, domain_authority } = await c.req.json()
+  let existing: any[] = []
+  try { const row = await c.env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key = 'seo_backlinks' AND master_company_id = 1").first<any>(); existing = row?.setting_value ? JSON.parse(row.setting_value) : [] } catch {}
+  existing.push({ id: Date.now(), url, anchor_text, domain_authority, created_at: new Date().toISOString() })
+  await c.env.DB.prepare("INSERT OR REPLACE INTO settings (master_company_id, setting_key, setting_value) VALUES (1, 'seo_backlinks', ?)").bind(JSON.stringify(existing)).run()
+  return c.json({ success: true })
+})
+
+adminRoutes.delete('/superadmin/seo/backlinks/:id', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
+  const id = parseInt(c.req.param('id'))
+  let existing: any[] = []
+  try { const row = await c.env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key = 'seo_backlinks' AND master_company_id = 1").first<any>(); existing = row?.setting_value ? JSON.parse(row.setting_value) : [] } catch {}
+  existing = existing.filter((b: any) => b.id !== id)
+  await c.env.DB.prepare("INSERT OR REPLACE INTO settings (master_company_id, setting_key, setting_value) VALUES (1, 'seo_backlinks', ?)").bind(JSON.stringify(existing)).run()
+  return c.json({ success: true })
+})
+
+// Onboarding config
+adminRoutes.get('/superadmin/onboarding/config', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
+  try {
+    const row = await c.env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key = 'onboarding_config' AND master_company_id = 1").first<any>()
+    return c.json({ config: row?.setting_value ? JSON.parse(row.setting_value) : { free_trial_reports: 3, require_phone: false, enable_secretary: true, default_plan: 'free' } })
+  } catch { return c.json({ config: { free_trial_reports: 3, require_phone: false, enable_secretary: true, default_plan: 'free' } }) }
+})
+
+// LiveKit SIP API helper for admin
+async function adminLivekitAPI(apiKey: string, apiSecret: string, livekitUrl: string, path: string, body: any) {
+  function b64url(data: Uint8Array | string): string {
+    let str: string
+    if (typeof data === 'string') { str = btoa(data) } else { let b = ''; for (let i = 0; i < data.length; i++) b += String.fromCharCode(data[i]); str = btoa(b) }
+    return str.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+  }
+  const now = Math.floor(Date.now() / 1000)
+  const header = b64url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))
+  const payload = b64url(JSON.stringify({ iss: apiKey, sub: 'server', iat: now, exp: now + 300, nbf: now, video: { roomCreate: true, roomList: true, roomAdmin: true }, sip: { admin: true, call: true } }))
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(apiSecret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
+  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(`${header}.${payload}`))
+  const jwt = `${header}.${payload}.${b64url(new Uint8Array(sig))}`
+  const httpUrl = livekitUrl.replace('wss://', 'https://').replace(/\/$/, '')
+  const resp = await fetch(`${httpUrl}${path}`, { method: 'POST', headers: { 'Authorization': `Bearer ${jwt}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+  return resp.json()
+}
