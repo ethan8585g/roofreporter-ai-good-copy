@@ -578,6 +578,10 @@
 
         // Action buttons
         body += '<div class="flex gap-2 pt-2 flex-wrap">';
+        // PDF download
+        if (inv.share_token) {
+          body += '<a href="/proposal/view/' + inv.share_token + '?print=1" target="_blank" class="flex-1 py-2.5 bg-gray-800 text-white rounded-xl text-sm font-semibold hover:bg-gray-900 text-center min-w-0"><i class="fas fa-file-pdf mr-1"></i>Download PDF</a>';
+        }
         if (inv.status === 'draft') body += '<button onclick="closeModal();window._crmEditInvoice(' + id + ')" class="flex-1 py-2.5 bg-gray-100 text-gray-700 rounded-xl text-sm font-semibold hover:bg-gray-200 min-w-0"><i class="fas fa-edit mr-1"></i>Edit</button>';
         if (inv.status !== 'cancelled') body += '<button onclick="closeModal();window._crmSendInvoice(' + id + ')" class="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 min-w-0"><i class="fas fa-paper-plane mr-1"></i>Send via Gmail</button>';
         if (inv.status !== 'paid' && inv.status !== 'cancelled') body += '<button onclick="closeModal();window._crmGenPayLink(' + id + ')" class="flex-1 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-semibold hover:bg-emerald-700 min-w-0"><i class="fas fa-credit-card mr-1"></i>Square Pay Link</button>';
@@ -692,6 +696,23 @@
           toast('Square payment link created!', 'success');
           navigator.clipboard.writeText(res.checkout_url).catch(function(){});
           loadInvoices(window._invFilter);
+        } else {
+          toast(res.error || 'Failed to generate payment link', 'error');
+        }
+      })
+      .catch(function(e) { toast('Network error: ' + (e.message || 'Unknown'), 'error'); });
+  };
+
+  // Generate Square payment link for proposal
+  window._crmGenProposalPayLink = function(id) {
+    if (!confirm('Generate a Square payment link for this proposal? The customer will be able to pay online.')) return;
+    fetch('/api/crm/proposals/' + id + '/payment-link', { method: 'POST', headers: authHeaders() })
+      .then(function(r) { return r.json(); })
+      .then(function(res) {
+        if (res.success && res.checkout_url) {
+          toast('Square payment link created!', 'success');
+          navigator.clipboard.writeText(res.checkout_url).catch(function(){});
+          loadProposals(window._propFilter);
         } else {
           toast(res.error || 'Failed to generate payment link', 'error');
         }
@@ -1327,14 +1348,27 @@
           body += '<button onclick="navigator.clipboard.writeText(document.getElementById(\'propViewLink\').value);toast(\'Link copied!\')" class="px-3 py-1.5 bg-brand-600 text-white rounded-lg text-xs font-semibold hover:bg-brand-700"><i class="fas fa-copy"></i></button></div></div>';
         }
 
+        // Payment link
+        if (p.payment_link) {
+          body += '<div class="bg-green-50 rounded-xl p-3 flex items-center justify-between gap-2"><div><p class="text-xs font-semibold text-green-600 mb-0.5"><i class="fas fa-credit-card mr-1"></i>Square Payment Link</p><p class="text-xs text-green-700">Ready for customer payment</p></div><div class="flex gap-2 shrink-0"><a href="' + p.payment_link + '" target="_blank" class="text-xs bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700 font-semibold">Pay Now</a><button onclick="navigator.clipboard.writeText(\'' + p.payment_link + '\').then(function(){toast(\'Link copied!\');})" class="text-xs bg-white border border-green-200 px-2 py-1.5 rounded-lg hover:bg-green-50">Copy</button></div></div>';
+        }
+
         // Action buttons
         body += '<div class="flex gap-2 pt-2 flex-wrap">';
+        // PDF download — open printable view in new tab
+        if (p.share_token) {
+          body += '<a href="/proposal/view/' + p.share_token + '?print=1" target="_blank" class="flex-1 py-2.5 bg-gray-800 text-white rounded-xl text-sm font-semibold hover:bg-gray-900 text-center"><i class="fas fa-file-pdf mr-1"></i>Download PDF</a>';
+        }
         if (p.status === 'draft') {
           body += '<button onclick="closeModal();window._crmEditProposal(' + id + ')" class="flex-1 py-2.5 bg-gray-100 text-gray-700 rounded-xl text-sm font-semibold hover:bg-gray-200"><i class="fas fa-edit mr-1"></i>Edit</button>';
           body += '<button onclick="closeModal();window._crmSendProposal(' + id + ')" class="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700"><i class="fas fa-paper-plane mr-1"></i>Send</button>';
         }
         if (p.status === 'sent' || p.status === 'viewed') {
           body += '<button onclick="closeModal();window._crmSendProposal(' + id + ')" class="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700"><i class="fas fa-redo mr-1"></i>Resend</button>';
+        }
+        // Payment link generation
+        if (!p.payment_link && p.status !== 'accepted' && p.status !== 'declined') {
+          body += '<button onclick="window._crmGenProposalPayLink(' + id + ')" class="flex-1 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-semibold hover:bg-emerald-700"><i class="fas fa-credit-card mr-1"></i>Payment Link</button>';
         }
         if (p.status !== 'accepted' && p.status !== 'declined') body += '<button onclick="closeModal();window._crmMarkProposal(' + id + ',\'accepted\')" class="flex-1 py-2.5 bg-green-600 text-white rounded-xl text-sm font-semibold hover:bg-green-700"><i class="fas fa-check mr-1"></i>Mark Won</button>';
         body += '</div>';

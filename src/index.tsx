@@ -934,6 +934,7 @@ app.get('/proposal/view/:token', async (c) => {
   </div>
   <div class="text-center mt-4 print:hidden"><button onclick="window.print()" class="px-6 py-2.5 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm"><i class="fas fa-print mr-1"></i>Print / Save PDF</button></div>
 </div>
+<script>if(new URLSearchParams(location.search).get('print')==='1')setTimeout(function(){window.print()},600)</script>
 </body></html>`)
       }
 

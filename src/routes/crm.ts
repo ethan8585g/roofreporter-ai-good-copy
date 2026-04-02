@@ -384,6 +384,75 @@ crmRoutes.post('/invoices/:id/payment-link', async (c) => {
 })
 
 // ============================================================
+// PROPOSAL: Generate Square payment link
+// ============================================================
+crmRoutes.post('/proposals/:id/payment-link', async (c) => {
+  const ownerId = await getOwnerId(c)
+  if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
+  const id = c.req.param('id')
+
+  const proposal = await c.env.DB.prepare(
+    `SELECT cp.*, cc.name as customer_name FROM crm_proposals cp
+     LEFT JOIN crm_customers cc ON cc.id = cp.crm_customer_id
+     WHERE cp.id = ? AND cp.owner_id = ?`
+  ).bind(id, ownerId).first<any>()
+  if (!proposal) return c.json({ error: 'Proposal not found' }, 404)
+
+  const owner = await c.env.DB.prepare(
+    'SELECT square_access_token, square_location_id FROM customers WHERE id = ?'
+  ).bind(ownerId).first<any>()
+
+  const accessToken = owner?.square_access_token || (c.env as any).SQUARE_ACCESS_TOKEN
+  const locationId = owner?.square_location_id || (c.env as any).SQUARE_LOCATION_ID
+
+  if (!accessToken || !locationId) {
+    return c.json({ error: 'Square is not connected. Go to Settings → Connect Square to enable payment links.' }, 503)
+  }
+
+  const amountCents = Math.round((proposal.total_amount || 0) * 100)
+  if (amountCents <= 0) return c.json({ error: 'Proposal total must be greater than $0' }, 400)
+
+  const title = proposal.title || `Proposal ${proposal.proposal_number}`
+  const desc = proposal.customer_name ? `Proposal for ${proposal.customer_name}` : proposal.proposal_number
+
+  try {
+    const resp = await fetch('https://connect.squareup.com/v2/online-checkout/payment-links', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+        'Square-Version': '2025-01-23'
+      },
+      body: JSON.stringify({
+        idempotency_key: `proposal-${id}-${Date.now()}`,
+        quick_pay: {
+          name: title,
+          price_money: { amount: amountCents, currency: 'CAD' },
+          location_id: locationId
+        },
+        description: desc
+      })
+    })
+    const data: any = await resp.json()
+    if (!resp.ok) {
+      const msg = data.errors?.[0]?.detail || `Square error (${resp.status})`
+      return c.json({ error: msg }, 502)
+    }
+    const link = data.payment_link
+    const checkoutUrl = link?.url || link?.long_url
+    if (!checkoutUrl) return c.json({ error: 'Square did not return a checkout URL' }, 502)
+
+    await c.env.DB.prepare(
+      "UPDATE crm_proposals SET payment_link = ?, updated_at = datetime('now') WHERE id = ? AND owner_id = ?"
+    ).bind(checkoutUrl, id, ownerId).run()
+
+    return c.json({ success: true, checkout_url: checkoutUrl, payment_link_id: link.id })
+  } catch (err: any) {
+    return c.json({ error: 'Square request failed: ' + err.message }, 502)
+  }
+})
+
+// ============================================================
 // INVOICE: Send via Gmail (+ optional Square payment link)
 // ============================================================
 crmRoutes.post('/invoices/:id/send', async (c) => {
