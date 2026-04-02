@@ -43,7 +43,7 @@ secretaryRoutes.use('/*', async (c, next) => {
   c.set('customerId' as any, info.effectiveOwnerId)
   c.set('realCustomerId' as any, info.id)
   c.set('customerEmail' as any, info.email)
-  c.set('isDev' as any, isDevAccount(info.email))
+  c.set('isDev' as any, isDevAccount(info.email, c.env))
   c.set('isTeamMember' as any, info.isTeamMember)
   return next()
 })

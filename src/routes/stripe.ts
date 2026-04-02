@@ -193,7 +193,7 @@ stripeRoutes.get('/billing', async (c) => {
   const paidRemaining = Math.max(0, (customer.report_credits || 0) - (customer.credits_used || 0))
 
   // DEV ACCOUNT: always show unlimited credits
-  const isDev = isDevAccount(customer.email || '')
+  const isDev = isDevAccount(customer.email || '', c.env)
 
   return c.json({
     billing: {
@@ -410,7 +410,7 @@ stripeRoutes.post('/use-credit', async (c) => {
     if (!customer) return c.json({ error: 'Not authenticated' }, 401)
 
     // DEV ACCOUNT: unlimited free reports, never charge
-    const isDev = isDevAccount(customer.email || '')
+    const isDev = isDevAccount(customer.email || '', c.env)
 
     // Check free trial first, then paid credits
     const freeTrialRemaining = isDev ? 999999 : Math.max(0, (customer.free_trial_total || 0) - (customer.free_trial_used || 0))

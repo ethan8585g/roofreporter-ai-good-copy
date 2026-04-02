@@ -7,7 +7,7 @@ export const propertyImageryRoutes = new Hono<{ Bindings: Bindings }>()
 // ============================================================
 // AUTH MIDDLEWARE — Dev account only
 // ============================================================
-async function getDevCustomer(db: D1Database, token: string | undefined): Promise<any | null> {
+async function getDevCustomer(db: D1Database, token: string | undefined, env?: any): Promise<any | null> {
   if (!token) return null
   const session = await db.prepare(`
     SELECT cs.customer_id, c.* FROM customer_sessions cs
@@ -15,7 +15,7 @@ async function getDevCustomer(db: D1Database, token: string | undefined): Promis
     WHERE cs.session_token = ? AND cs.expires_at > datetime('now') AND c.is_active = 1
   `).bind(token).first<any>()
   if (!session) return null
-  if (!isDevAccount(session.email || '')) return null
+  if (!isDevAccount(session.email || '', env)) return null
   return session
 }
 
@@ -24,7 +24,7 @@ async function getDevCustomer(db: D1Database, token: string | undefined): Promis
 // ============================================================
 propertyImageryRoutes.post('/generate', async (c) => {
   const token = c.req.header('Authorization')?.replace('Bearer ', '')
-  const customer = await getDevCustomer(c.env.DB, token)
+  const customer = await getDevCustomer(c.env.DB, token, c.env)
   if (!customer) {
     return c.json({ error: 'Unauthorized. This feature is only available for dev/test accounts.' }, 403)
   }
@@ -105,7 +105,7 @@ propertyImageryRoutes.post('/generate', async (c) => {
 // ============================================================
 propertyImageryRoutes.get('/check', async (c) => {
   const token = c.req.header('Authorization')?.replace('Bearer ', '')
-  const customer = await getDevCustomer(c.env.DB, token)
+  const customer = await getDevCustomer(c.env.DB, token, c.env)
   if (!customer) {
     return c.json({ access: false })
   }
