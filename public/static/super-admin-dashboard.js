@@ -4442,6 +4442,10 @@ function renderCustomerOnboardingView() {
     var secBadge = c.secretary_enabled ? '<span class="px-2 py-0.5 bg-green-100 text-green-800 rounded-full text-xs font-medium"><i class="fas fa-check-circle mr-1"></i>Active</span>' : '<span class="px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full text-xs font-medium">Off</span>';
     var modeBadge = c.secretary_mode === 'always_on' ? '<span class="text-xs text-blue-600 font-medium">Always On</span>' : c.secretary_mode === 'answering_service' ? '<span class="text-xs text-purple-600 font-medium">Answering</span>' : '<span class="text-xs text-sky-600 font-medium">Receptionist</span>';
     var provBadge = c.phone_provider === 'livekit' ? '<span class="px-1.5 py-0.5 bg-violet-100 text-violet-700 rounded text-[10px] font-bold">LiveKit</span>' : c.phone_provider === 'twilio' ? '<span class="px-1.5 py-0.5 bg-red-100 text-red-700 rounded text-[10px] font-bold">Twilio</span>' : '<span class="px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded text-[10px]">N/A</span>';
+    var lkDeployed = (c.livekit_trunk_id || c.livekit_inbound_trunk_id) && (c.livekit_trunk_id || c.livekit_inbound_trunk_id) !== '';
+    var lkBadge = lkDeployed ? '<span class="px-2 py-0.5 bg-green-100 text-green-800 rounded-full text-[10px] font-bold"><i class="fas fa-check mr-0.5"></i>Deployed</span>' : '<span class="px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full text-[10px] font-medium">Not Deployed</span>';
+    var hasAgentPhone = c.agent_phone_number || c.secretary_phone_number;
+    var deployBtn = lkDeployed ? '' : (hasAgentPhone ? '<button onclick="deployLiveKitAgent(' + c.id + ')" class="text-xs bg-violet-600 hover:bg-violet-700 text-white px-2.5 py-1 rounded-lg font-medium ml-1"><i class="fas fa-rocket mr-1"></i>Deploy</button>' : '');
     return '<tr class="border-b border-gray-100 hover:bg-gray-50">' +
       '<td class="px-4 py-3"><div class="font-bold text-gray-800 text-sm">' + (c.business_name || c.contact_name || 'N/A') + '</div><div class="text-xs text-gray-500">' + (c.email || '') + '</div></td>' +
       '<td class="px-4 py-3 text-sm text-gray-600"><div>' + (c.personal_phone || c.phone || '-') + '</div><div class="text-[10px] text-gray-400">Personal Cell</div></td>' +
@@ -4449,8 +4453,9 @@ function renderCustomerOnboardingView() {
       '<td class="px-4 py-3 text-center">' + provBadge + '</td>' +
       '<td class="px-4 py-3 text-center">' + secBadge + '</td>' +
       '<td class="px-4 py-3 text-center">' + modeBadge + '</td>' +
+      '<td class="px-4 py-3 text-center">' + lkBadge + '</td>' +
       '<td class="px-4 py-3 text-xs text-gray-400">' + fmtDate(c.created_at) + '</td>' +
-      '<td class="px-4 py-3"><button onclick="toggleSecretaryMode(' + c.id + ', ' + (c.secretary_enabled ? 0 : 1) + ')" class="text-xs ' + (c.secretary_enabled ? 'text-teal-600 hover:text-teal-800' : 'text-green-600 hover:text-green-800') + ' font-medium">' + (c.secretary_enabled ? '<i class="fas fa-power-off mr-1"></i>Disable' : '<i class="fas fa-play mr-1"></i>Enable') + '</button></td>' +
+      '<td class="px-4 py-3 whitespace-nowrap"><button onclick="toggleSecretaryMode(' + c.id + ', ' + (c.secretary_enabled ? 0 : 1) + ')" class="text-xs ' + (c.secretary_enabled ? 'text-red-600 hover:text-red-800' : 'text-green-600 hover:text-green-800') + ' font-medium">' + (c.secretary_enabled ? '<i class="fas fa-power-off mr-1"></i>Disable' : '<i class="fas fa-play mr-1"></i>Enable') + '</button>' + deployBtn + '</td>' +
       '</tr>';
   }).join('');
 
@@ -4544,7 +4549,7 @@ function renderCustomerOnboardingView() {
     '<div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">' +
     '<div class="p-4 border-b bg-gray-50 flex items-center justify-between"><h3 class="font-bold text-gray-800">Onboarded Customers (' + customers.length + ')</h3><button onclick="loadView(\'customer-onboarding\')" class="text-xs text-blue-600 hover:text-blue-800 font-medium"><i class="fas fa-sync mr-1"></i>Refresh</button></div>' +
     (customers.length === 0 ? '<div class="p-8 text-center text-gray-400"><i class="fas fa-users text-3xl mb-3 opacity-30"></i><p>No customers onboarded yet</p></div>' :
-    '<div class="overflow-x-auto"><table class="w-full"><thead><tr class="bg-gray-50 text-xs text-gray-500 uppercase"><th class="px-4 py-3 text-left">Customer</th><th class="px-4 py-3 text-left">Personal Phone</th><th class="px-4 py-3 text-left">Agent Phone #</th><th class="px-4 py-3 text-center">Provider</th><th class="px-4 py-3 text-center">Secretary</th><th class="px-4 py-3 text-center">Mode</th><th class="px-4 py-3 text-left">Onboarded</th><th class="px-4 py-3 text-left">Action</th></tr></thead><tbody>' + rows + '</tbody></table></div>') +
+    '<div class="overflow-x-auto"><table class="w-full"><thead><tr class="bg-gray-50 text-xs text-gray-500 uppercase"><th class="px-4 py-3 text-left">Customer</th><th class="px-4 py-3 text-left">Personal Phone</th><th class="px-4 py-3 text-left">Agent Phone #</th><th class="px-4 py-3 text-center">Provider</th><th class="px-4 py-3 text-center">Secretary</th><th class="px-4 py-3 text-center">Mode</th><th class="px-4 py-3 text-center">LiveKit</th><th class="px-4 py-3 text-left">Onboarded</th><th class="px-4 py-3 text-left">Actions</th></tr></thead><tbody>' + rows + '</tbody></table></div>') +
     '</div>';
 }
 
@@ -4592,8 +4597,14 @@ async function createOnboardingCustomer() {
       if (data.secretary_setup) {
         msg += 'Secretary AI: ACTIVE\n';
         msg += 'Agent Phone: ' + (data.agent_phone_number || agentPhone) + '\n';
-        msg += 'Personal Phone: ' + (data.personal_phone || personalPhone) + '\n\n';
-        msg += 'NEXT STEP: Customer must configure call forwarding on their cell provider:\n';
+        msg += 'Personal Phone: ' + (data.personal_phone || personalPhone) + '\n';
+        if (data.livekit_deployed) {
+          msg += '\nLiveKit Agent: DEPLOYED (trunk: ' + data.livekit_trunk_id + ')\n';
+          msg += 'Calls to the agent phone number will now be handled by AI.\n';
+        } else {
+          msg += '\nLiveKit Agent: NOT DEPLOYED — click "Deploy" in the table below, or check LiveKit env vars.\n';
+        }
+        msg += '\nNEXT STEP: Customer must configure call forwarding on their cell provider:\n';
         msg += '  Telus: *21*' + (data.agent_phone_number || agentPhone).replace(/[^0-9+]/g, '') + '#\n';
         msg += '  Rogers: **21*' + (data.agent_phone_number || agentPhone).replace(/[^0-9+]/g, '') + '#\n';
         msg += '  Bell: *72' + (data.agent_phone_number || agentPhone).replace(/[^0-9+]/g, '') + '\n';
@@ -4618,6 +4629,23 @@ async function toggleSecretaryMode(id, enable) {
     });
     loadView('customer-onboarding');
   } catch(e) { alert('Error toggling secretary'); }
+}
+
+async function deployLiveKitAgent(customerId) {
+  if (!confirm('Deploy LiveKit AI agent for customer #' + customerId + '?\n\nThis will create a SIP trunk and dispatch rule in LiveKit Cloud so the AI agent can receive calls.')) return;
+  try {
+    var res = await saFetch('/api/admin/superadmin/deploy-secretary/' + customerId, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    var data = await res.json();
+    if (data.success) {
+      alert('LiveKit Agent Deployed!\n\nTrunk ID: ' + data.trunk_id + '\nDispatch Rule: ' + data.dispatch_rule_id + '\n\n' + data.message);
+      loadView('customer-onboarding');
+    } else {
+      alert('Deploy failed: ' + (data.error || 'Unknown error') + (data.details ? '\n\nDetails: ' + data.details : ''));
+    }
+  } catch(e) { alert('Error deploying LiveKit agent: ' + e.message); }
 }
 
 // ============================================================

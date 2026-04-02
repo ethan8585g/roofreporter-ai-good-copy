@@ -1431,16 +1431,125 @@ adminRoutes.post('/superadmin/onboarding/create', async (c) => {
       }
     }
 
+    // Auto-deploy LiveKit trunk + dispatch rule if agent phone and LiveKit configured
+    let livekitDeployed = false
+    let livekitTrunkId = ''
+    let livekitDispatchId = ''
+    if (agentPhone && secretarySetup) {
+      try {
+        const result = await deployLiveKitForCustomer(c.env, customerId, agentPhone)
+        if (result.success) {
+          livekitDeployed = true
+          livekitTrunkId = result.trunk_id
+          livekitDispatchId = result.dispatch_rule_id
+        }
+      } catch (e: any) {
+        console.warn(`[Onboarding] LiveKit auto-deploy failed for ${customerId}: ${e.message}`)
+      }
+    }
+
     return c.json({
       success: true,
       customer_id: customerId,
       email: email.toLowerCase(),
       secretary_setup: secretarySetup,
       agent_phone_number: agentPhone || null,
-      personal_phone: personal_phone || phone || null
+      personal_phone: personal_phone || phone || null,
+      livekit_deployed: livekitDeployed,
+      livekit_trunk_id: livekitTrunkId,
     })
   } catch (err: any) {
     return c.json({ error: 'Failed to create customer', details: err.message }, 500)
+  }
+})
+
+// ── LiveKit deployment helper — creates SIP trunk + dispatch rule ──
+async function deployLiveKitForCustomer(env: any, customerId: number, phoneNumber: string): Promise<{ success: boolean; trunk_id: string; dispatch_rule_id: string }> {
+  const apiKey = env.LIVEKIT_API_KEY
+  const apiSecret = env.LIVEKIT_API_SECRET
+  const livekitUrl = env.LIVEKIT_URL
+  const livekitSipUri = env.LIVEKIT_SIP_URI || ''
+
+  if (!apiKey || !apiSecret || !livekitUrl) {
+    return { success: false, trunk_id: '', dispatch_rule_id: '' }
+  }
+
+  // Check if already deployed
+  const existing = await env.DB.prepare(
+    'SELECT livekit_inbound_trunk_id, livekit_dispatch_rule_id FROM secretary_config WHERE customer_id = ?'
+  ).bind(customerId).first<any>()
+  if (existing?.livekit_inbound_trunk_id && existing?.livekit_dispatch_rule_id) {
+    return { success: true, trunk_id: existing.livekit_inbound_trunk_id, dispatch_rule_id: existing.livekit_dispatch_rule_id }
+  }
+
+  // Create JWT for LiveKit SIP API
+  function b64url(data: Uint8Array | string): string {
+    let str: string
+    if (typeof data === 'string') { str = btoa(data) } else { let b = ''; for (let i = 0; i < data.length; i++) b += String.fromCharCode(data[i]); str = btoa(b) }
+    return str.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+  }
+  const now = Math.floor(Date.now() / 1000)
+  const header = b64url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))
+  const payload = b64url(JSON.stringify({ iss: apiKey, sub: 'server', iat: now, exp: now + 300, nbf: now, video: { roomCreate: true, roomList: true, roomAdmin: true }, sip: { admin: true, call: true } }))
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(apiSecret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
+  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(`${header}.${payload}`))
+  const jwt = `${header}.${payload}.${b64url(new Uint8Array(sig))}`
+  const httpUrl = livekitUrl.replace('wss://', 'https://').replace(/\/$/, '')
+
+  async function lkApi(path: string, body: any) {
+    const resp = await fetch(`${httpUrl}${path}`, { method: 'POST', headers: { 'Authorization': `Bearer ${jwt}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    return resp.json() as Promise<any>
+  }
+
+  // Step 1: Create inbound trunk
+  const trunkResult = await lkApi('/twirp/livekit.SIP/CreateSIPInboundTrunk', {
+    trunk: { name: `secretary-${customerId}`, numbers: [phoneNumber], krisp_enabled: true, metadata: JSON.stringify({ customer_id: customerId, service: 'roofer_secretary' }) }
+  })
+  const trunkId = trunkResult?.sip_trunk_id || trunkResult?.trunk?.sip_trunk_id || ''
+
+  // Step 2: Create dispatch rule
+  const dispatchResult = await lkApi('/twirp/livekit.SIP/CreateSIPDispatchRule', {
+    trunk_ids: trunkId ? [trunkId] : [],
+    rule: { dispatchRuleIndividual: { roomPrefix: `secretary-${customerId}-`, pin: '' } },
+    name: `secretary-dispatch-${customerId}`,
+    metadata: JSON.stringify({ customer_id: customerId }),
+  })
+  const dispatchId = dispatchResult?.sip_dispatch_rule_id || ''
+
+  // Save to secretary_config
+  await env.DB.prepare(
+    'UPDATE secretary_config SET livekit_inbound_trunk_id = ?, livekit_dispatch_rule_id = ?, livekit_sip_uri = ?, connection_status = ?, is_active = 1, updated_at = datetime("now") WHERE customer_id = ?'
+  ).bind(trunkId, dispatchId, livekitSipUri, trunkId ? 'connected' : 'pending_forwarding', customerId).run()
+
+  // Update phone pool
+  if (trunkId) {
+    await env.DB.prepare(
+      'UPDATE secretary_phone_pool SET sip_trunk_id = ?, dispatch_rule_id = ?, updated_at = datetime("now") WHERE assigned_to_customer_id = ?'
+    ).bind(trunkId, dispatchId, customerId).run()
+  }
+
+  console.log(`[LiveKit Deploy] Customer ${customerId}: trunk=${trunkId}, dispatch=${dispatchId}`)
+  return { success: !!trunkId, trunk_id: trunkId, dispatch_rule_id: dispatchId }
+}
+
+// POST /superadmin/deploy-secretary/:customerId — Deploy LiveKit agent for existing customer
+adminRoutes.post('/superadmin/deploy-secretary/:customerId', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || admin.role !== 'superadmin') return c.json({ error: 'Unauthorized' }, 403)
+
+  const customerId = parseInt(c.req.param('customerId'))
+  const config = await c.env.DB.prepare('SELECT assigned_phone_number FROM secretary_config WHERE customer_id = ?').bind(customerId).first<any>()
+  if (!config) return c.json({ error: 'No secretary config found for this customer' }, 404)
+  if (!config.assigned_phone_number) return c.json({ error: 'No agent phone number assigned. Set one first.' }, 400)
+
+  try {
+    const result = await deployLiveKitForCustomer(c.env, customerId, config.assigned_phone_number)
+    if (result.success) {
+      return c.json({ success: true, trunk_id: result.trunk_id, dispatch_rule_id: result.dispatch_rule_id, message: 'LiveKit agent deployed! Calls will now route to AI secretary.' })
+    }
+    return c.json({ error: 'LiveKit deployment failed — check LIVEKIT_API_KEY, LIVEKIT_API_SECRET, LIVEKIT_URL env vars' }, 500)
+  } catch (err: any) {
+    return c.json({ error: 'Deploy failed', details: err.message }, 500)
   }
 })
 
