@@ -223,6 +223,9 @@ class RooferSecretaryAgent(Agent):
         self._call_summary = ""
         self._directory_routed = ""
         self._messages_taken = []
+        self._transcript_lines = []
+        self._call_start = None
+        self._call_outcome = "answered"
 
         super().__init__(
             instructions=build_system_prompt(config)
@@ -230,10 +233,24 @@ class RooferSecretaryAgent(Agent):
 
     async def on_enter(self):
         """Called when the agent enters the session — greet the caller."""
+        import time
+        self._call_start = time.time()
         greeting = self._config.get("greeting_script", "Thank you for calling Rick's Roofing! How can I help you today?")
         self.session.generate_reply(
             instructions=f"You just answered the phone. Greet the caller naturally with this greeting: \"{greeting}\""
         )
+
+    def on_user_message(self, message):
+        """Capture every caller utterance for transcript."""
+        if message and message.text:
+            self._transcript_lines.append(f"Caller: {message.text}")
+        return super().on_user_message(message)
+
+    def on_agent_message(self, message):
+        """Capture every agent response for transcript."""
+        if message and message.text:
+            self._transcript_lines.append(f"{self._config.get('agent_name', 'Sarah')}: {message.text}")
+        return super().on_agent_message(message)
 
     @function_tool
     async def take_message(self, caller_name: str, caller_phone: str, message: str, urgency: str = "normal"):
@@ -434,11 +451,44 @@ async def entrypoint(ctx: JobContext):
 
     logger.info(f"Agent connected to room {ctx.room.name}")
 
+    # Extract caller phone from SIP participant metadata when they join
+    @ctx.room.on("participant_connected")
+    def on_participant_joined(participant):
+        if participant.identity.startswith("sip-"):
+            try:
+                import json
+                meta = json.loads(participant.metadata) if participant.metadata else {}
+                sip_phone = meta.get("sip.trunkPhoneNumber", "") or meta.get("sip.callerId", "")
+                if sip_phone and not agent._caller_phone:
+                    agent._caller_phone = sip_phone
+                    logger.info(f"Caller phone from SIP metadata: {sip_phone}")
+            except:
+                pass
+
     # Log call completion when the session ends
     @ctx.room.on("participant_disconnected")
     def on_participant_left(participant):
         if participant.identity.startswith("sip-"):
             logger.info(f"Call ended: participant {participant.identity} left room {ctx.room.name}")
+            # Calculate call duration
+            import time
+            duration = int(time.time() - agent._call_start) if agent._call_start else 0
+            # Build full transcript
+            transcript = "\n".join(agent._transcript_lines) if agent._transcript_lines else ""
+            # Build summary from transcript
+            summary = f"Call with {agent._caller_name or 'unknown caller'}"
+            if agent._messages_taken:
+                summary += f" — {len(agent._messages_taken)} message(s) taken"
+            if agent._directory_routed:
+                summary += f" — routed to {agent._directory_routed}"
+            summary += f" — {duration}s duration"
+            # Determine outcome
+            outcome = agent._call_outcome
+            if agent._messages_taken:
+                outcome = "message_taken"
+            elif agent._directory_routed:
+                outcome = "transferred"
+
             # Post call completion to the API
             api_url = os.environ.get("ROOFPORTER_API_URL", "https://www.roofreporterai.com")
             customer_id = config.get("customer_id")
@@ -450,13 +500,20 @@ async def entrypoint(ctx: JobContext):
                         json={
                             "customer_id": customer_id,
                             "room_name": ctx.room.name,
+                            "room_id": ctx.room.name,
                             "caller_identity": participant.identity,
-                            "messages_taken": agent._messages_taken,
                             "caller_name": agent._caller_name,
                             "caller_phone": agent._caller_phone,
+                            "messages_taken": agent._messages_taken,
+                            "transcript": transcript,
+                            "summary": summary,
+                            "duration_seconds": duration,
+                            "directory_routed": agent._directory_routed,
+                            "outcome": outcome,
                         },
-                        timeout=5
+                        timeout=10
                     )
+                    logger.info(f"Call complete webhook sent: {duration}s, outcome={outcome}, transcript_lines={len(agent._transcript_lines)}")
                 except Exception as e:
                     logger.warning(f"Failed to post call completion: {e}")
 
