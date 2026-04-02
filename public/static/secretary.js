@@ -48,6 +48,8 @@
     leadStages: [],
     // Call detail modal
     callDetail: null,
+    // Customer info
+    customerCompany: '',
     // Agent persona selection
     selectedAgentName: '',
     selectedAgentVoice: '',
@@ -55,6 +57,7 @@
 
   // ── On load: check for Square redirect, then fetch status ──
   async function init() {
+    try { var cd = JSON.parse(localStorage.getItem('rc_customer') || '{}'); state.customerCompany = cd.company_name || cd.brand_business_name || ''; } catch(e) {}
     var params = new URLSearchParams(window.location.search);
     if (params.get('setup') === 'true' && params.get('session_id')) {
       try {
@@ -337,7 +340,28 @@
             '<i class="fas ' + (state.isActive ? 'fa-pause' : 'fa-play') + ' mr-1"></i>' + (state.isActive ? 'Pause' : 'Activate') + '</button>' +
         '</div></div></div>';
 
-    content.innerHTML = statusHtml +
+    // Getting Started checklist
+    var hasGreeting = !!(state.config && state.config.greeting_script);
+    var hasDirs = !!(state.directories && state.directories.length >= 2);
+    var hasPhone = !!(state.phoneSetup && state.phoneSetup.connection_status === 'connected');
+    var checkDone = function(done) { return done ? '<i class="fas fa-check-circle text-green-500 mr-2"></i>' : '<i class="far fa-circle text-gray-300 mr-2"></i>'; };
+    var stepsComplete = 2 + (hasGreeting ? 1 : 0) + (hasDirs ? 1 : 0) + (hasPhone ? 1 : 0);
+    var checklistHtml = '';
+    if (stepsComplete < 5) {
+      checklistHtml = '<div class="bg-gradient-to-r from-sky-50 to-blue-50 border border-sky-200 rounded-2xl p-5 mb-6">' +
+        '<div class="flex items-center justify-between mb-3"><h3 class="font-bold text-sky-800 text-sm"><i class="fas fa-tasks mr-2"></i>Getting Started</h3><span class="text-xs font-bold text-sky-600 bg-sky-100 px-2 py-0.5 rounded-full">' + stepsComplete + ' of 5 complete</span></div>' +
+        '<div class="space-y-2 text-sm">' +
+          '<div class="flex items-center text-gray-700">' + checkDone(true) + '<span class="' + (true ? 'text-gray-400 line-through' : '') + '">Account created</span></div>' +
+          '<div class="flex items-center text-gray-700">' + checkDone(true) + '<span class="' + (true ? 'text-gray-400 line-through' : '') + '">Secretary subscription active</span></div>' +
+          '<div class="flex items-center text-gray-700">' + checkDone(hasGreeting) + '<span class="' + (hasGreeting ? 'text-gray-400 line-through' : 'font-medium') + '">Customize greeting script</span>' + (!hasGreeting ? ' <button onclick="document.getElementById(\'secGreeting\')?.focus()" class="ml-2 text-xs text-sky-600 hover:underline">Set up</button>' : '') + '</div>' +
+          '<div class="flex items-center text-gray-700">' + checkDone(hasDirs) + '<span class="' + (hasDirs ? 'text-gray-400 line-through' : 'font-medium') + '">Set up call directories (2-4 depts)</span>' + (!hasDirs ? ' <button onclick="document.getElementById(\'secDirs\')?.scrollIntoView({behavior:\'smooth\'})" class="ml-2 text-xs text-sky-600 hover:underline">Set up</button>' : '') + '</div>' +
+          '<div class="flex items-center text-gray-700">' + checkDone(hasPhone) + '<span class="' + (hasPhone ? 'text-gray-400 line-through' : 'font-medium') + '">Connect phone (call forwarding)</span>' + (!hasPhone ? ' <button onclick="secSetTab(\'connect\')" class="ml-2 text-xs text-sky-600 hover:underline">Connect</button>' : '') + '</div>' +
+        '</div>' +
+        '<div class="mt-3 bg-sky-100 rounded-lg h-2"><div class="bg-sky-500 rounded-lg h-2 transition-all" style="width:' + (stepsComplete / 5 * 100) + '%"></div></div>' +
+      '</div>';
+    }
+
+    content.innerHTML = statusHtml + checklistHtml +
 
       // MODE SELECTOR — 3 Secretary Modes
       '<div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 mb-6">' +
@@ -370,7 +394,7 @@
             '<p class="text-xs text-gray-400 mt-1">Your existing business line — the AI only answers when you don\'t pick up. SMS summaries sent to this number after each call.</p></div>' +
           '<div>' +
             '<label class="block text-sm font-semibold text-gray-700 mb-1"><i class="fas fa-comment-dots mr-1 text-sky-500"></i>How Should We Answer?</label>' +
-            '<textarea id="secGreeting" rows="4" maxlength="3000" placeholder="Thank you for calling Reuse Canada Roofing! My name is Sarah. Sorry we missed your call — I\'m the AI assistant and I can help you right away. We offer free roof estimates, emergency leak repairs, shingle replacements, and full roof installations across Edmonton, Sherwood Park, St. Albert, and all surrounding areas. How can I help you today?" class="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-sky-400 focus:border-sky-400 resize-none">' + esc(c.greeting_script || '') + '</textarea></div>' +
+            '<textarea id="secGreeting" rows="4" maxlength="3000" placeholder="Thank you for calling ' + esc(state.customerCompany || 'Your Company') + '! My name is ' + esc(c.agent_name || 'Sarah') + '. Sorry we missed your call — I\'m the AI assistant and I can help you right away. How can I help you today?" class="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-sky-400 focus:border-sky-400 resize-none">' + esc(c.greeting_script || '') + '</textarea></div>' +
           '<div>' +
             '<label class="block text-sm font-semibold text-gray-700 mb-1"><i class="fas fa-question-circle mr-1 text-sky-500"></i>Common Q&A\'s</label>' +
             '<textarea id="secQA" rows="5" maxlength="3000" placeholder="Q: What areas do you serve?\nA: We serve Edmonton, Sherwood Park, St. Albert, Spruce Grove, Leduc, Fort Saskatchewan, Beaumont, and all surrounding areas within 100km of Edmonton.\n\nQ: Do you offer free estimates?\nA: Absolutely! We provide free no-obligation on-site estimates. We can usually get someone out within 1-2 business days.\n\nQ: Do you handle insurance claims?\nA: Yes, we work directly with all major insurance companies on storm damage and hail claims. We\'ll help you through the entire claims process.\n\nQ: What types of roofing do you do?\nA: We do asphalt shingles, metal roofing, flat roofs (TPO/EPDM), cedar shakes, and rubber roofing. Residential and commercial.\n\nQ: Are you licensed and insured?\nA: Yes, fully licensed, insured, and WCB covered. We\'re also a certified CertainTeed and GAF installer." class="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-sky-400 focus:border-sky-400 resize-none font-mono text-xs">' + esc(c.common_qa || '') + '</textarea></div>' +
@@ -1965,39 +1989,48 @@
       '<div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">' +
         '<div class="bg-gradient-to-r from-emerald-500 to-teal-600 p-5 text-white">' +
           '<div class="flex items-center justify-between">' +
-            '<div><h2 class="text-lg font-bold"><i class="fas fa-microphone-alt mr-2"></i>Test Your AI Secretary</h2>' +
-            '<p class="text-emerald-100 text-xs mt-1">Speak into your microphone to test how the AI will answer calls</p></div>' +
+            '<div><h2 class="text-lg font-bold"><i class="fas fa-comment-dots mr-2"></i>Test Your AI Secretary</h2>' +
+            '<p class="text-emerald-100 text-xs mt-1">Preview how your AI responds to questions. Type a message below to test.</p></div>' +
             '<button onclick="secCloseTestModal()" class="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center hover:bg-white/30 transition-all"><i class="fas fa-times text-sm"></i></button>' +
           '</div>' +
         '</div>' +
         '<div class="p-5">' +
-          '<div id="vtConversation" class="h-64 overflow-y-auto mb-4 space-y-3 p-3 bg-gray-50 rounded-xl border border-gray-200">' +
-            '<div class="text-center text-gray-400 text-sm py-8"><i class="fas fa-robot text-3xl block mb-2 text-emerald-300"></i>' +
-            (hasSpeechAPI
-              ? 'Press the microphone button and speak to test your AI secretary.<br><span class="text-xs">The AI will respond based on your saved configuration.</span>'
-              : '<span class="text-amber-600 font-semibold">Speech recognition not supported in this browser.</span><br><span class="text-xs">Use the text input below to type your message, or try Chrome/Edge.</span>') +
+          '<div class="bg-blue-50 border border-blue-200 rounded-xl p-3 mb-3 flex items-start gap-2.5">' +
+            '<i class="fas fa-info-circle text-blue-500 mt-0.5 flex-shrink-0"></i>' +
+            '<div class="text-xs text-blue-700"><strong>Text Preview Only</strong> — This tests your AI\'s responses as text. The real phone experience uses professional <strong>Cartesia</strong> voice synthesis and sounds much more natural.' +
+            (state.config && state.config.assigned_phone_number ? '<div class="mt-1.5 flex items-center gap-2"><i class="fas fa-phone-alt text-emerald-600"></i><strong class="text-emerald-700">Call ' + state.config.assigned_phone_number + ' to hear the real voice.</strong></div>' : '') +
             '</div>' +
           '</div>' +
-          '<div id="vtStatus" class="text-center text-xs text-gray-400 mb-3 h-4"></div>' +
-          // Text input fallback (always available)
+          '<div id="vtConversation" class="h-56 overflow-y-auto mb-3 space-y-3 p-3 bg-gray-50 rounded-xl border border-gray-200">' +
+            '<div class="text-center text-gray-400 text-sm py-6"><i class="fas fa-robot text-3xl block mb-2 text-emerald-300"></i>' +
+            'Type a message below to test your AI secretary.<br><span class="text-xs">The AI responds based on your saved greeting, Q&A, and notes.</span>' +
+            '</div>' +
+          '</div>' +
+          '<div id="vtStatus" class="text-center text-xs text-gray-400 mb-2 h-4"></div>' +
           '<div class="flex items-center gap-2 mb-3">' +
-            '<input type="text" id="vtTextInput" placeholder="Or type a message here..." class="flex-1 border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400" onkeydown="if(event.key===\'Enter\')secSendText()">' +
+            '<input type="text" id="vtTextInput" placeholder="Type a caller question... e.g. \'Do you do free estimates?\'" class="flex-1 border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400" onkeydown="if(event.key===\'Enter\')secSendText()">' +
             '<button onclick="secSendText()" class="px-4 py-2.5 bg-emerald-500 text-white rounded-xl text-sm font-semibold hover:bg-emerald-600 transition-all"><i class="fas fa-paper-plane"></i></button>' +
           '</div>' +
-          '<div class="flex items-center justify-center gap-4">' +
+          '<div class="flex items-center justify-center gap-3">' +
             (hasSpeechAPI ?
-              '<button onclick="secStartRecording()" id="vtRecordBtn" class="w-16 h-16 rounded-full bg-emerald-500 text-white flex items-center justify-center hover:bg-emerald-600 transition-all shadow-lg hover:shadow-xl active:scale-95">' +
-                '<i class="fas fa-microphone text-2xl"></i>' +
+              '<button onclick="secStartRecording()" id="vtRecordBtn" class="w-10 h-10 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center hover:bg-gray-300 transition-all" title="Use microphone">' +
+                '<i class="fas fa-microphone text-sm"></i>' +
               '</button>' +
-              '<button onclick="secStopRecording()" id="vtStopBtn" class="w-16 h-16 rounded-full bg-red-500 text-white flex items-center justify-center hover:bg-red-600 transition-all shadow-lg hidden animate-pulse">' +
-                '<i class="fas fa-stop text-2xl"></i>' +
+              '<button onclick="secStopRecording()" id="vtStopBtn" class="w-10 h-10 rounded-full bg-red-500 text-white flex items-center justify-center hover:bg-red-600 transition-all hidden animate-pulse" title="Stop recording">' +
+                '<i class="fas fa-stop text-sm"></i>' +
               '</button>'
               : '') +
             '<button onclick="secResetTest()" class="w-10 h-10 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center hover:bg-gray-300 transition-all" title="Reset conversation">' +
               '<i class="fas fa-redo text-sm"></i>' +
             '</button>' +
           '</div>' +
-          '<p class="text-center text-xs text-gray-400 mt-3">Speak or type to test your AI secretary. No audio is stored.</p>' +
+          (state.config && state.config.assigned_phone_number ?
+            '<div class="mt-4 bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-center">' +
+              '<p class="text-xs text-emerald-800 font-semibold"><i class="fas fa-phone-alt mr-1"></i>Want to hear ' + (state.config.agent_name || 'Sarah') + '\'s real voice?</p>' +
+              '<p class="text-lg font-black text-emerald-700 mt-1">' + state.config.assigned_phone_number + '</p>' +
+              '<p class="text-[10px] text-emerald-600 mt-0.5">Call this number from your phone — the AI will answer exactly as it would for your customers.</p>' +
+            '</div>'
+            : '<p class="text-center text-xs text-gray-400 mt-3">Connect a phone number to test the real voice experience.</p>') +
         '</div>' +
       '</div>';
     document.body.appendChild(modal);
@@ -2169,21 +2202,11 @@
       testState.conversationHistory.push({ role: 'assistant', content: aiText });
       conv.scrollTop = conv.scrollHeight;
 
-      // TTS playback if available
+      // TTS playback only if server provides audio URL (Cartesia voice)
+      // Browser SpeechSynthesis removed — it sounds robotic and doesn't represent the real experience
       if (aiData.audio_url) {
         var audio = new Audio(aiData.audio_url);
         audio.play().catch(function() {});
-      } else if (window.speechSynthesis) {
-        // Use browser TTS as fallback
-        var utterance = new SpeechSynthesisUtterance(aiText);
-        utterance.rate = 1.0;
-        utterance.pitch = 1.0;
-        utterance.volume = 0.8;
-        // Try to use a female voice
-        var voices = window.speechSynthesis.getVoices();
-        var femaleVoice = voices.find(function(v) { return v.name.includes('female') || v.name.includes('Samantha') || v.name.includes('Google US English'); });
-        if (femaleVoice) utterance.voice = femaleVoice;
-        window.speechSynthesis.speak(utterance);
       }
 
       if (statusEl) { statusEl.textContent = 'Press mic or type to continue'; statusEl.className = 'text-center text-xs text-emerald-500 mb-3 h-4'; }
