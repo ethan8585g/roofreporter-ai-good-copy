@@ -1687,7 +1687,7 @@ function getSuperAdminDashboardHTML() {
       if (typeof window.saDashboardSetView === 'function') window.saDashboardSetView(v);
     }
   </script>
-  <script src="/static/super-admin-dashboard.js"></script>
+  <script src="/static/super-admin-dashboard.js?v=${Date.now()}"></script>
   <script src="/static/call-center.js"></script>
   <script src="/static/meta-connect.js"></script>
   <script src="/static/heygen.js"></script>
