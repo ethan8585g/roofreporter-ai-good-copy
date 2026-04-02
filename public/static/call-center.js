@@ -1135,12 +1135,72 @@
     const agentList = ((CC.data.agents || {}).agents || []);
     if (agentList.length === 0) return alert('Create an AI agent first before dialing');
     const agentId = agentList[0].id;
-    if (!confirm('Dial this prospect using agent "' + agentList[0].name + '"?')) return;
+    if (!confirm('Dial this prospect using agent "' + agentList[0].name + '"?\n\nThis will dispatch the AI agent and dial the prospect\'s phone via SIP.')) return;
     const data = await ccFetch('/api/call-center/dial', { method: 'POST', body: JSON.stringify({ prospect_id: id, agent_id: agentId }) });
     if (data?.success) {
-      alert('Call initiated! Room: ' + data.room_name);
-      ccLoadTab('prospects');
+      // Show live call status panel
+      ccShowCallStatus(data);
     } else alert(data?.error || 'Dial failed');
+  };
+
+  // Live call status panel — polls for updates
+  window.ccShowCallStatus = function(dialData) {
+    var panel = document.getElementById('cc-call-status');
+    if (panel) panel.remove();
+    var html = '<div id="cc-call-status" class="fixed bottom-6 right-6 w-80 bg-gray-900 text-white rounded-2xl shadow-2xl z-50 overflow-hidden">' +
+      '<div class="px-4 py-3 bg-gradient-to-r from-green-600 to-emerald-600 flex items-center justify-between">' +
+        '<div class="flex items-center gap-2"><i class="fas fa-phone-alt animate-pulse"></i><span class="font-bold text-sm">Live Call</span></div>' +
+        '<button onclick="document.getElementById(\'cc-call-status\').remove();clearInterval(window._ccCallPoll)" class="text-white/70 hover:text-white"><i class="fas fa-times"></i></button>' +
+      '</div>' +
+      '<div class="p-4 space-y-2">' +
+        '<div class="flex items-center justify-between"><span class="text-xs text-gray-400">Company</span><span class="text-sm font-medium">' + (dialData.prospect?.company_name || '-') + '</span></div>' +
+        '<div class="flex items-center justify-between"><span class="text-xs text-gray-400">Contact</span><span class="text-sm font-medium">' + (dialData.prospect?.contact_name || '-') + '</span></div>' +
+        '<div class="flex items-center justify-between"><span class="text-xs text-gray-400">Phone</span><span class="text-sm font-mono">' + (dialData.prospect?.phone || '-') + '</span></div>' +
+        '<div class="flex items-center justify-between"><span class="text-xs text-gray-400">Agent</span><span class="text-sm font-medium">' + (dialData.agent?.name || '-') + '</span></div>' +
+        '<div class="flex items-center justify-between"><span class="text-xs text-gray-400">SIP</span><span class="text-sm font-medium">' + (dialData.sip_dial || '-') + '</span></div>' +
+        '<div class="flex items-center justify-between"><span class="text-xs text-gray-400">Status</span><span id="cc-call-live-status" class="text-sm font-bold text-green-400"><i class="fas fa-circle text-[6px] animate-pulse mr-1"></i>Ringing...</span></div>' +
+        '<div class="flex items-center justify-between"><span class="text-xs text-gray-400">Duration</span><span id="cc-call-duration" class="text-sm font-mono text-gray-300">0:00</span></div>' +
+      '</div>' +
+      '<div class="px-4 pb-3"><span class="text-[10px] text-gray-500">Room: ' + (dialData.room_name || '') + '</span></div>' +
+    '</div>';
+    document.body.insertAdjacentHTML('beforeend', html);
+
+    // Start duration counter
+    var startTime = Date.now();
+    var durationEl = document.getElementById('cc-call-duration');
+    var statusEl = document.getElementById('cc-call-live-status');
+    var durationInterval = setInterval(function() {
+      if (!document.getElementById('cc-call-status')) { clearInterval(durationInterval); return; }
+      var elapsed = Math.floor((Date.now() - startTime) / 1000);
+      var mins = Math.floor(elapsed / 60);
+      var secs = elapsed % 60;
+      if (durationEl) durationEl.textContent = mins + ':' + (secs < 10 ? '0' : '') + secs;
+    }, 1000);
+
+    // Poll call status every 3s
+    var roomName = dialData.room_name;
+    window._ccCallPoll = setInterval(async function() {
+      if (!document.getElementById('cc-call-status')) { clearInterval(window._ccCallPoll); clearInterval(durationInterval); return; }
+      try {
+        var logs = await ccFetch('/api/call-center/call-logs?limit=1&room=' + encodeURIComponent(roomName));
+        var log = (logs?.call_logs || [])[0];
+        if (log && statusEl) {
+          if (log.call_status === 'completed' || log.call_status === 'failed') {
+            statusEl.innerHTML = '<i class="fas fa-check-circle mr-1"></i>' + (log.call_outcome || log.call_status);
+            statusEl.className = 'text-sm font-bold ' + (log.call_outcome === 'interested' || log.call_outcome === 'demo_scheduled' ? 'text-green-400' : 'text-gray-400');
+            clearInterval(window._ccCallPoll);
+            clearInterval(durationInterval);
+            // Auto-close after 5s and refresh
+            setTimeout(function() { var p = document.getElementById('cc-call-status'); if (p) p.remove(); ccLoadTab('call-logs'); }, 5000);
+          } else if (log.call_status === 'ringing') {
+            statusEl.innerHTML = '<i class="fas fa-phone-alt animate-pulse mr-1"></i>Ringing...';
+          } else if (log.call_status === 'connected' || log.call_status === 'initiated') {
+            statusEl.innerHTML = '<i class="fas fa-circle text-[6px] animate-pulse mr-1"></i>In Progress';
+            statusEl.className = 'text-sm font-bold text-green-400';
+          }
+        }
+      } catch {}
+    }, 3000);
   };
 
   // Contact Lists

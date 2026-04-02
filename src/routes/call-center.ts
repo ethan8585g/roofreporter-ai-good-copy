@@ -387,11 +387,43 @@ callCenterRoutes.post('/dial', async (c) => {
 
   const prospect = await c.env.DB.prepare('SELECT * FROM cc_prospects WHERE id=?').bind(prospect_id).first<any>()
   if (!prospect) return c.json({ error: 'Prospect not found' }, 404)
+  if (prospect.do_not_call) return c.json({ error: 'Prospect is on the Do-Not-Call list' }, 400)
 
   const agent = await c.env.DB.prepare('SELECT * FROM cc_agents WHERE id=?').bind(agent_id).first<any>()
   if (!agent) return c.json({ error: 'Agent not found' }, 404)
 
+  // Check scheduled calling hours (if campaign has call_hours)
+  if (prospect.campaign_id) {
+    const campaign = await c.env.DB.prepare('SELECT call_hours FROM cc_campaigns WHERE id=?').bind(prospect.campaign_id).first<any>()
+    if (campaign?.call_hours) {
+      try {
+        const hours = typeof campaign.call_hours === 'string' ? JSON.parse(campaign.call_hours) : campaign.call_hours
+        const now = new Date()
+        const currentHour = now.getHours()
+        const dayNames = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
+        const todayKey = dayNames[now.getDay()]
+        const todayHours = hours[todayKey] || hours.default
+        if (todayHours) {
+          const [startStr, endStr] = todayHours.split('-')
+          const startHour = parseInt(startStr)
+          const endHour = parseInt(endStr)
+          if (currentHour < startHour || currentHour >= endHour) {
+            return c.json({ error: `Outside calling hours (${todayHours}). Try again during business hours.` }, 400)
+          }
+        }
+      } catch {}
+    }
+  }
+
   const roomName = `${agent.livekit_room_prefix || 'sales-'}${Date.now()}-${prospect_id}`
+
+  // Get campaign script for agent metadata
+  let campaignScript: any = null
+  if (campaign_id || prospect.campaign_id) {
+    campaignScript = await c.env.DB.prepare(
+      'SELECT script_intro, script_value_prop, script_objections, script_closing, script_voicemail FROM cc_campaigns WHERE id=?'
+    ).bind(campaign_id || prospect.campaign_id).first<any>()
+  }
 
   // Create call log entry
   const logRes = await c.env.DB.prepare(
@@ -408,21 +440,59 @@ callCenterRoutes.post('/dial', async (c) => {
     `UPDATE cc_agents SET current_prospect_id=?, current_room_name=?, total_calls=total_calls+1, last_active_at=datetime('now'), updated_at=datetime('now') WHERE id=?`
   ).bind(prospect_id, roomName, agent_id).run()
 
-  // Generate LiveKit token for the outbound call
   const apiKey = (c.env as any).LIVEKIT_API_KEY
   const apiSecret = (c.env as any).LIVEKIT_API_SECRET
   const livekitUrl = (c.env as any).LIVEKIT_URL
+  const outboundTrunkId = (c.env as any).SIP_OUTBOUND_TRUNK_ID
 
   let token = null
-  if (apiKey && apiSecret) {
-    token = await generateLiveKitJWT(apiKey, apiSecret, `sales-agent-${agent_id}`, roomName, JSON.stringify({
+  let sipDialResult: any = null
+  let agentDispatchResult: any = null
+
+  if (apiKey && apiSecret && livekitUrl) {
+    // Generate LiveKit token for admin monitoring
+    token = await generateLiveKitJWT(apiKey, apiSecret, `admin-monitor-${agent_id}`, roomName, JSON.stringify({
       type: 'sales_outbound',
-      agent_id: agent_id,
-      agent_name: agent.name,
-      prospect_id: prospect_id,
-      company: prospect.company_name,
-      phone: prospect.phone,
+      agent_id, agent_name: agent.name,
+      prospect_id, company: prospect.company_name, phone: prospect.phone,
     }))
+
+    // Dispatch AI agent into the room
+    try {
+      agentDispatchResult = await ccLivekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST', '/twirp/livekit.AgentDispatch/CreateDispatch', {
+        room: roomName,
+        agent_name: 'outbound-caller',
+        metadata: JSON.stringify({
+          prospect_id, agent_id, agent_name: agent.name,
+          phone: prospect.phone, company: prospect.company_name, contact: prospect.contact_name,
+          script: campaignScript,
+          webhook_url: new URL(c.req.url).origin + '/api/call-center/call-complete',
+        })
+      })
+    } catch (e: any) {
+      console.warn('[Dial] Agent dispatch failed:', e.message)
+    }
+
+    // Dial the prospect's phone via SIP
+    if (outboundTrunkId && prospect.phone) {
+      try {
+        sipDialResult = await ccLivekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST', '/twirp/livekit.SIP/CreateSIPParticipant', {
+          sip_trunk_id: outboundTrunkId,
+          sip_call_to: prospect.phone.startsWith('+') ? prospect.phone : '+1' + prospect.phone.replace(/\D/g, ''),
+          room_name: roomName,
+          participant_identity: 'callee-' + prospect_id,
+          participant_name: prospect.contact_name || prospect.company_name || 'Prospect',
+          play_dialtone: true,
+          krisp_enabled: true,
+        })
+
+        // Update call status to ringing
+        await c.env.DB.prepare('UPDATE cc_call_logs SET call_status=? WHERE livekit_room_id=?').bind('ringing', roomName).run()
+      } catch (e: any) {
+        console.warn('[Dial] SIP dial failed:', e.message)
+        await c.env.DB.prepare('UPDATE cc_call_logs SET call_status=?, call_outcome=? WHERE livekit_room_id=?').bind('failed', 'dial_error: ' + e.message, roomName).run()
+      }
+    }
   }
 
   return c.json({
@@ -432,6 +502,8 @@ callCenterRoutes.post('/dial', async (c) => {
     prospect: { id: prospect.id, company_name: prospect.company_name, contact_name: prospect.contact_name, phone: prospect.phone },
     agent: { id: agent.id, name: agent.name },
     livekit: token ? { token, url: livekitUrl, room: roomName } : null,
+    sip_dial: sipDialResult ? 'initiated' : (outboundTrunkId ? 'failed' : 'no_trunk_configured'),
+    agent_dispatch: agentDispatchResult ? 'dispatched' : 'failed',
   })
 })
 
@@ -486,10 +558,31 @@ callCenterRoutes.post('/call-complete', async (c) => {
       await c.env.DB.prepare(`UPDATE cc_prospects SET ${updates.join(',')} WHERE id=?`).bind(...vals).run()
     }
 
-    // Update agent back to idle
+    // Cost tracking — estimate call costs
+    if (room_name && (call_duration_seconds || talk_time_seconds)) {
+      try {
+        const duration = call_duration_seconds || 0
+        const talkTime = talk_time_seconds || 0
+        const transcriptLen = (call_transcript || '').length
+        const llmTokensEst = Math.ceil(transcriptLen / 4) // ~4 chars per token
+        const ttsCost = (talkTime / 60) * 0.015 // ~$0.015/min TTS
+        const sttCost = (duration / 60) * 0.007 // ~$0.007/min STT
+        const llmCost = (llmTokensEst / 1000) * 0.002 // ~$0.002/1K tokens
+        const telephonyCost = (duration / 60) * 0.01 // ~$0.01/min telephony
+        const totalCost = ttsCost + sttCost + llmCost + telephonyCost
+        await c.env.DB.prepare(
+          `INSERT OR IGNORE INTO cc_cost_tracking (call_log_id, llm_input_tokens, llm_output_tokens, tts_characters, stt_seconds, telephony_seconds, total_cost_usd, created_at) VALUES ((SELECT id FROM cc_call_logs WHERE livekit_room_id=?), ?, ?, ?, ?, ?, ?, datetime('now'))`
+        ).bind(room_name, llmTokensEst, llmTokensEst, transcriptLen, duration, duration, totalCost).run()
+      } catch {}
+    }
+
+    // Update agent — check if auto-dial is active (status was 'calling' before this call)
     if (agent_id) {
+      const agentBefore = await c.env.DB.prepare('SELECT status FROM cc_agents WHERE id=?').bind(agent_id).first<any>()
+      const wasAutoDial = agentBefore?.status === 'calling'
+
       await c.env.DB.prepare(
-        `UPDATE cc_agents SET status='idle', current_prospect_id=NULL, current_room_name='', updated_at=datetime('now') WHERE id=?`
+        `UPDATE cc_agents SET ${wasAutoDial ? '' : "status='idle', "}current_prospect_id=NULL, current_room_name='', updated_at=datetime('now') WHERE id=?`
       ).bind(agent_id).run()
 
       // Recalculate agent stats
@@ -505,6 +598,21 @@ callCenterRoutes.post('/call-complete', async (c) => {
           stats.avg_duration || 0, stats.total ? ((stats.connects || 0) / stats.total * 100) : 0,
           agent_id
         ).run()
+      }
+
+      // Auto-dial: if agent was actively calling, queue next prospect
+      if (wasAutoDial) {
+        const campId = prospect_id ? (await c.env.DB.prepare('SELECT campaign_id FROM cc_prospects WHERE id=?').bind(prospect_id).first<any>())?.campaign_id : null
+        const nextProspect = await c.env.DB.prepare(
+          `SELECT id FROM cc_prospects WHERE (status='new' OR status='queued') AND (do_not_call IS NULL OR do_not_call != 1) AND (next_call_at IS NULL OR next_call_at <= datetime('now')) ${campId ? 'AND campaign_id=?' : ''} ORDER BY priority ASC, created_at ASC LIMIT 1`
+        ).bind(...(campId ? [campId] : [])).first<any>()
+        if (nextProspect) {
+          await c.env.DB.prepare('UPDATE cc_agents SET current_prospect_id=? WHERE id=?').bind(nextProspect.id, agent_id).run()
+          console.log(`[AutoDial] Agent ${agent_id}: next prospect ${nextProspect.id} queued`)
+        } else {
+          await c.env.DB.prepare("UPDATE cc_agents SET status='idle' WHERE id=?").bind(agent_id).run()
+          console.log(`[AutoDial] Agent ${agent_id}: no more prospects, going idle`)
+        }
       }
     }
 
