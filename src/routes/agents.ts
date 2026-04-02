@@ -100,7 +100,7 @@ agentsRoutes.get('/agent-config/:customerId', async (c) => {
     const dirs = await c.env.DB.prepare(
       'SELECT name, phone_or_action, special_notes FROM secretary_directories WHERE config_id=? ORDER BY sort_order'
     ).bind(config.id).all<any>()
-    const customer = await c.env.DB.prepare('SELECT name, email, company FROM customers WHERE id=?').bind(customerId).first<any>()
+    const customer = await c.env.DB.prepare('SELECT name, email, company_name FROM customers WHERE id=?').bind(customerId).first<any>()
     return c.json({
       customer_id: customerId,
       business_phone: config.business_phone || '',
@@ -109,9 +109,9 @@ agentsRoutes.get('/agent-config/:customerId', async (c) => {
       general_notes: config.general_notes || '',
       agent_name: config.agent_name || 'Sarah',
       directories: dirs.results || [],
-      company_name: customer?.company || customer?.name || '',
+      company_name: customer?.company_name || customer?.name || '',
     })
-  } catch { return c.json({ error: 'Config not available' }, 500) }
+  } catch (e: any) { console.error('[AgentConfig]', e.message); return c.json({ error: 'Config not available' }, 500) }
 })
 
 // ============================================================
