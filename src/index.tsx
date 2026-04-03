@@ -1392,7 +1392,11 @@ function getHeadTags() {
   <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
   ${getTailwindConfig()}
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
-  <link rel="stylesheet" href="/static/style.css">`
+  <link rel="stylesheet" href="/static/style.css">
+  <style>#google_translate_element{position:fixed;bottom:20px;left:20px;z-index:9998;background:white;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,0.15);padding:8px 12px;border:1px solid #e2e8f0;font-size:13px}.goog-te-gadget{font-family:inherit!important}.goog-te-gadget-simple{background:transparent!important;border:none!important;padding:0!important;font-size:13px!important}.goog-te-menu-value span{color:#374151!important}.goog-te-banner-frame{display:none!important}body{top:0!important}</style>
+  <div id="google_translate_element"></div>
+  <script>function googleTranslateElementInit(){new google.translate.TranslateElement({pageLanguage:'en',includedLanguages:'en,fr,es,de,pt,it,zh-CN,zh-TW,ja,ko,ar,hi,bn,ur,tr,vi,th,id,pl,uk,ru,nl,sv,da,no,fi,el,he,ro,cs,hu,ms,tl',layout:google.translate.TranslateElement.InlineLayout.SIMPLE,autoDisplay:false},'google_translate_element')}</script>
+  <script src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit" defer></script>`
 }
 
 // Rover chatbot widget script tag — inject on public pages only
