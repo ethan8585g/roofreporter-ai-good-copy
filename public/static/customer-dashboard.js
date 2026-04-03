@@ -162,6 +162,7 @@ function renderDashboard() {
         '<div>' +
           '<p class="px-3 mb-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Team</p>' +
           navLink('/customer/team', 'fa-users-cog', 'Sales Team', teamBadge || null, 'bg-gray-800') +
+          navLink('/customer/crew', 'fa-hard-hat', 'Crew Manager', null, '') +
           navLink('/customer/d2d', 'fa-door-open', 'D2D Manager', null, '') +
         '</div>' +
         // Services

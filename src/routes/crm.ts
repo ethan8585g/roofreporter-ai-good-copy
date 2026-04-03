@@ -1000,6 +1000,104 @@ crmRoutes.delete('/jobs/:id', async (c) => {
 })
 
 // ============================================================
+// CREW MANAGER — Assignment + Progress Tracking
+// ============================================================
+
+// List available crew members (team members)
+crmRoutes.get('/crew', async (c) => {
+  const ownerId = await getOwnerId(c)
+  if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
+  const members = await c.env.DB.prepare(
+    `SELECT tm.id as team_member_id, tm.member_customer_id, tm.name, tm.email, tm.phone, tm.role, tm.status,
+            (SELECT COUNT(*) FROM job_crew_assignments jca WHERE jca.crew_member_id = tm.member_customer_id) as total_assignments,
+            (SELECT COUNT(*) FROM job_crew_assignments jca JOIN crm_jobs j ON j.id = jca.job_id WHERE jca.crew_member_id = tm.member_customer_id AND j.status = 'in_progress') as active_jobs
+     FROM team_members tm WHERE tm.owner_id = ? AND tm.status = 'active' ORDER BY tm.name`
+  ).bind(ownerId).all<any>()
+  // Also include the owner as a potential crew lead
+  const owner = await c.env.DB.prepare('SELECT id, name, email, phone FROM customers WHERE id = ?').bind(ownerId).first<any>()
+  return c.json({ crew: members.results || [], owner: owner || null })
+})
+
+// Get crew assigned to a job
+crmRoutes.get('/jobs/:id/crew', async (c) => {
+  const ownerId = await getOwnerId(c)
+  if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
+  const jobId = parseInt(c.req.param('id'))
+  const crew = await c.env.DB.prepare(
+    `SELECT jca.*, c.name, c.email, c.phone FROM job_crew_assignments jca
+     LEFT JOIN customers c ON c.id = jca.crew_member_id
+     WHERE jca.job_id = ? ORDER BY jca.role DESC, jca.assigned_at`
+  ).bind(jobId).all<any>()
+  return c.json({ crew: crew.results || [] })
+})
+
+// Assign crew to a job
+crmRoutes.post('/jobs/:id/crew', async (c) => {
+  const ownerId = await getOwnerId(c)
+  if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
+  const jobId = parseInt(c.req.param('id'))
+  const { crew_member_id, role } = await c.req.json()
+  if (!crew_member_id) return c.json({ error: 'crew_member_id required' }, 400)
+  // Prevent duplicates
+  const existing = await c.env.DB.prepare('SELECT id FROM job_crew_assignments WHERE job_id = ? AND crew_member_id = ?').bind(jobId, crew_member_id).first()
+  if (existing) return c.json({ error: 'Already assigned' }, 400)
+  await c.env.DB.prepare('INSERT INTO job_crew_assignments (job_id, crew_member_id, role) VALUES (?, ?, ?)').bind(jobId, crew_member_id, role || 'crew').run()
+  return c.json({ success: true })
+})
+
+// Remove crew from a job
+crmRoutes.delete('/jobs/:id/crew/:memberId', async (c) => {
+  const ownerId = await getOwnerId(c)
+  if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
+  const jobId = parseInt(c.req.param('id'))
+  const memberId = parseInt(c.req.param('memberId'))
+  await c.env.DB.prepare('DELETE FROM job_crew_assignments WHERE job_id = ? AND crew_member_id = ?').bind(jobId, memberId).run()
+  return c.json({ success: true })
+})
+
+// Get progress updates for a job
+crmRoutes.get('/jobs/:id/progress', async (c) => {
+  const ownerId = await getOwnerId(c)
+  if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
+  const jobId = parseInt(c.req.param('id'))
+  const updates = await c.env.DB.prepare(
+    'SELECT * FROM job_progress WHERE job_id = ? ORDER BY created_at DESC'
+  ).bind(jobId).all<any>()
+  return c.json({ updates: updates.results || [] })
+})
+
+// Add progress update (note or photo)
+crmRoutes.post('/jobs/:id/progress', async (c) => {
+  const ownerId = await getOwnerId(c)
+  if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
+  const jobId = parseInt(c.req.param('id'))
+  const { update_type, content, photo_data, photo_caption, author_name } = await c.req.json()
+  if (!content && !photo_data) return c.json({ error: 'Content or photo required' }, 400)
+  // Get author info
+  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  const session = await c.env.DB.prepare("SELECT customer_id FROM customer_sessions WHERE session_token = ?").bind(token).first<any>()
+  const authorId = session?.customer_id || ownerId
+  let name = author_name || ''
+  if (!name) {
+    const cust = await c.env.DB.prepare('SELECT name FROM customers WHERE id = ?').bind(authorId).first<any>()
+    name = cust?.name || 'Unknown'
+  }
+  const result = await c.env.DB.prepare(
+    'INSERT INTO job_progress (job_id, author_id, author_name, update_type, content, photo_data, photo_caption) VALUES (?, ?, ?, ?, ?, ?, ?)'
+  ).bind(jobId, authorId, name, update_type || 'note', content || '', photo_data || null, photo_caption || '').run()
+  return c.json({ success: true, id: result.meta.last_row_id })
+})
+
+// Delete progress update
+crmRoutes.delete('/jobs/:id/progress/:updateId', async (c) => {
+  const ownerId = await getOwnerId(c)
+  if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
+  const updateId = parseInt(c.req.param('updateId'))
+  await c.env.DB.prepare('DELETE FROM job_progress WHERE id = ?').bind(updateId).run()
+  return c.json({ success: true })
+})
+
+// ============================================================
 // GMAIL OAUTH — Per-customer Gmail connection for sending proposals
 // ============================================================
 

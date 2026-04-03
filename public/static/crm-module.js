@@ -33,7 +33,8 @@
     d2d: { init: initD2D, title: 'D2D Manager' },
     'email-outreach': { init: initEmailOutreach, title: 'Email Outreach' },
     'catalog': { init: initCatalog, title: 'Material Catalog' },
-    'referrals': { init: initReferrals, title: 'Referral Program' }
+    'referrals': { init: initReferrals, title: 'Referral Program' },
+    'crew': { init: initCrewManager, title: 'Crew Manager' }
   };
 
   const mod = modules[MODULE];
@@ -1959,8 +1960,47 @@
         body += '</div>';
 
         if (j.notes) body += '<div class="pt-3 border-t"><p class="text-sm text-gray-500 italic">' + j.notes + '</p></div>';
+
+        // Crew & Progress sections
+        body += '<div class="pt-3 border-t flex gap-2">';
+        body += '<button onclick="window._crewAssignJob(' + j.id + ')" class="flex-1 py-2 bg-orange-100 text-orange-700 rounded-lg text-xs font-semibold hover:bg-orange-200"><i class="fas fa-hard-hat mr-1"></i>Manage Crew</button>';
+        body += '<button onclick="window._crewAddProgress(' + j.id + ')" class="flex-1 py-2 bg-blue-100 text-blue-700 rounded-lg text-xs font-semibold hover:bg-blue-200"><i class="fas fa-camera mr-1"></i>Add Progress</button>';
+        body += '</div>';
+
         body += '</div>';
         showModal(j.title, body);
+
+        // Load crew + progress asynchronously and inject
+        Promise.all([
+          fetch('/api/crm/jobs/' + j.id + '/crew', { headers: authHeadersOnly() }).then(function(r) { return r.json(); }),
+          fetch('/api/crm/jobs/' + j.id + '/progress', { headers: authHeadersOnly() }).then(function(r) { return r.json(); })
+        ]).then(function(results) {
+          var crewList = results[0].crew || [];
+          var progress = results[1].updates || [];
+          var extra = '';
+          if (crewList.length > 0) {
+            extra += '<div class="pt-3 border-t mt-3"><h4 class="text-xs font-bold text-gray-500 uppercase mb-2"><i class="fas fa-hard-hat mr-1"></i>Assigned Crew</h4><div class="flex flex-wrap gap-2">';
+            crewList.forEach(function(c) {
+              extra += '<span class="px-2.5 py-1 bg-orange-50 border border-orange-200 rounded-lg text-xs font-medium text-orange-800"><i class="fas fa-user mr-1"></i>' + (c.name || 'Crew') + '<span class="ml-1 text-[9px] text-orange-500 capitalize">' + (c.role || '') + '</span></span>';
+            });
+            extra += '</div></div>';
+          }
+          if (progress.length > 0) {
+            extra += '<div class="pt-3 border-t mt-3"><h4 class="text-xs font-bold text-gray-500 uppercase mb-2"><i class="fas fa-stream mr-1"></i>Progress (' + progress.length + ')</h4><div class="space-y-2 max-h-48 overflow-y-auto">';
+            progress.forEach(function(p) {
+              extra += '<div class="bg-gray-50 rounded-lg p-2.5"><div class="flex items-center justify-between mb-1"><span class="text-xs font-semibold text-gray-700">' + (p.author_name || 'Unknown') + '</span><span class="text-[10px] text-gray-400">' + fmtDate(p.created_at) + '</span></div>';
+              if (p.content) extra += '<p class="text-xs text-gray-600">' + p.content + '</p>';
+              if (p.photo_data) extra += '<img src="' + p.photo_data + '" class="mt-1.5 rounded-lg max-h-32 object-cover border" alt="' + (p.photo_caption || 'Progress photo') + '">';
+              if (p.photo_caption) extra += '<p class="text-[10px] text-gray-400 mt-0.5">' + p.photo_caption + '</p>';
+              extra += '</div>';
+            });
+            extra += '</div></div>';
+          }
+          if (extra) {
+            var modalBody = document.getElementById('modalBody');
+            if (modalBody) modalBody.insertAdjacentHTML('beforeend', extra);
+          }
+        }).catch(function() {});
       })
       .catch(function(e) { toast('Failed to load job details', 'error'); });
   };
@@ -2017,6 +2057,182 @@
     fetch('/api/crm/jobs/' + id, { method: 'DELETE', headers: authHeadersOnly() })
       .then(function() { toast('Job deleted'); loadJobsForMonth(_calYear, _calMonth); })
       .catch(function(e) { toast('Failed to delete: ' + (e.message || 'Network error'), 'error'); });
+  };
+
+  // ============================================================
+  // MODULE: CREW MANAGER
+  // ============================================================
+  function initCrewManager() {
+    root.innerHTML = '<div class="text-center py-8"><div class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-brand-500 mx-auto mb-3"></div></div>';
+    Promise.all([
+      fetch('/api/crm/crew', { headers: authHeadersOnly() }).then(function(r) { return r.json(); }),
+      fetch('/api/crm/jobs?status=in_progress', { headers: authHeadersOnly() }).then(function(r) { return r.json(); }),
+      fetch('/api/crm/jobs?status=scheduled', { headers: authHeadersOnly() }).then(function(r) { return r.json(); })
+    ]).then(function(results) {
+      var crewData = results[0];
+      var activeJobs = results[1].jobs || [];
+      var scheduledJobs = results[2].jobs || [];
+      renderCrewManager(crewData, activeJobs, scheduledJobs);
+    }).catch(function() { root.innerHTML = '<p class="text-red-500 p-4">Failed to load crew data.</p>'; });
+  }
+
+  function renderCrewManager(crewData, activeJobs, scheduledJobs) {
+    var crew = crewData.crew || [];
+    var owner = crewData.owner || {};
+    var allJobs = activeJobs.concat(scheduledJobs);
+
+    var html = '<div class="flex items-center justify-between mb-5 flex-wrap gap-3">';
+    html += '<div><h2 class="text-lg font-bold text-gray-800"><i class="fas fa-hard-hat text-orange-500 mr-2"></i>Crew Manager</h2><p class="text-xs text-gray-500 mt-0.5">Assign crew to jobs and track progress</p></div>';
+    html += '<a href="/customer/team" class="bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-orange-700"><i class="fas fa-user-plus mr-1"></i>Invite Crew Member</a>';
+    html += '</div>';
+
+    // Stats
+    html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">';
+    html += '<div class="bg-white rounded-xl border p-4 text-center"><p class="text-2xl font-black text-gray-800">' + crew.length + '</p><p class="text-[10px] text-gray-500">Crew Members</p></div>';
+    html += '<div class="bg-white rounded-xl border p-4 text-center"><p class="text-2xl font-black text-blue-600">' + activeJobs.length + '</p><p class="text-[10px] text-gray-500">Active Jobs</p></div>';
+    html += '<div class="bg-white rounded-xl border p-4 text-center"><p class="text-2xl font-black text-amber-600">' + scheduledJobs.length + '</p><p class="text-[10px] text-gray-500">Scheduled</p></div>';
+    html += '<div class="bg-white rounded-xl border p-4 text-center"><p class="text-2xl font-black text-green-600">' + crew.reduce(function(sum, m) { return sum + (m.active_jobs || 0); }, 0) + '</p><p class="text-[10px] text-gray-500">Crew on Jobs</p></div>';
+    html += '</div>';
+
+    // Crew roster
+    html += '<div class="bg-white rounded-2xl border shadow-sm mb-5 overflow-hidden">';
+    html += '<div class="px-5 py-4 border-b border-gray-100"><h3 class="font-bold text-gray-800 text-sm"><i class="fas fa-users text-orange-500 mr-2"></i>Crew Roster</h3></div>';
+    if (crew.length === 0) {
+      html += '<div class="p-8 text-center text-gray-400"><i class="fas fa-hard-hat text-3xl mb-3 opacity-30 block"></i><p class="text-sm">No crew members yet. Invite team members to start assigning them to jobs.</p><a href="/customer/team" class="inline-block mt-3 text-sm text-orange-600 hover:underline font-semibold"><i class="fas fa-user-plus mr-1"></i>Invite Team Member</a></div>';
+    } else {
+      html += '<div class="grid md:grid-cols-2 lg:grid-cols-3 gap-4 p-4">';
+      for (var i = 0; i < crew.length; i++) {
+        var m = crew[i];
+        var initials = (m.name || 'U').split(' ').map(function(w) { return w[0]; }).join('').substring(0, 2).toUpperCase();
+        html += '<div class="bg-gray-50 rounded-xl p-4 border hover:shadow-sm transition-shadow">';
+        html += '<div class="flex items-center gap-3 mb-3"><div class="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center text-orange-600 font-bold text-sm">' + initials + '</div>';
+        html += '<div class="min-w-0"><p class="font-semibold text-sm text-gray-800 truncate">' + (m.name || 'Unknown') + '</p>';
+        html += '<p class="text-xs text-gray-500">' + (m.role === 'admin' ? 'Admin' : 'Crew Member') + '</p></div></div>';
+        if (m.phone) html += '<p class="text-xs text-gray-500 mb-1"><i class="fas fa-phone mr-1.5 text-gray-400"></i>' + m.phone + '</p>';
+        if (m.email) html += '<p class="text-xs text-gray-500 mb-2"><i class="fas fa-envelope mr-1.5 text-gray-400"></i>' + m.email + '</p>';
+        html += '<div class="flex items-center gap-2 mt-2"><span class="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-[10px] font-bold">' + (m.total_assignments || 0) + ' jobs assigned</span>';
+        if (m.active_jobs > 0) html += '<span class="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-[10px] font-bold">' + m.active_jobs + ' active</span>';
+        html += '</div></div>';
+      }
+      html += '</div>';
+    }
+    html += '</div>';
+
+    // Active jobs with crew
+    html += '<div class="bg-white rounded-2xl border shadow-sm overflow-hidden">';
+    html += '<div class="px-5 py-4 border-b border-gray-100"><h3 class="font-bold text-gray-800 text-sm"><i class="fas fa-briefcase text-blue-500 mr-2"></i>Active & Scheduled Jobs (' + allJobs.length + ')</h3></div>';
+    if (allJobs.length === 0) {
+      html += '<div class="p-8 text-center text-gray-400"><p class="text-sm">No active or scheduled jobs. Create a job from the Jobs tab.</p></div>';
+    } else {
+      html += '<div class="divide-y divide-gray-100">';
+      for (var j = 0; j < allJobs.length; j++) {
+        var job = allJobs[j];
+        var statusColor = job.status === 'in_progress' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700';
+        html += '<div class="px-5 py-3 flex items-center justify-between hover:bg-gray-50 cursor-pointer" onclick="window._crmViewJob(' + job.id + ')">';
+        html += '<div class="min-w-0 flex-1"><div class="flex items-center gap-2 mb-0.5"><span class="font-mono text-xs font-bold text-orange-600">' + job.job_number + '</span><span class="px-2 py-0.5 rounded-full text-[10px] font-bold ' + statusColor + ' capitalize">' + (job.status || '').replace(/_/g, ' ') + '</span></div>';
+        html += '<p class="text-sm font-medium text-gray-800 truncate">' + (job.title || '') + '</p>';
+        html += '<p class="text-xs text-gray-500"><i class="fas fa-calendar mr-1"></i>' + fmtDate(job.scheduled_date) + (job.property_address ? ' · <i class="fas fa-map-marker-alt mr-0.5"></i>' + job.property_address : '') + '</p></div>';
+        html += '<div class="flex items-center gap-2 ml-4"><span class="text-xs text-gray-400"><i class="fas fa-users mr-0.5"></i>' + (job.crew_size || 0) + '</span>';
+        html += '<button onclick="event.stopPropagation();window._crewAssignJob(' + job.id + ')" class="px-3 py-1 bg-orange-100 text-orange-700 rounded-lg text-xs font-semibold hover:bg-orange-200"><i class="fas fa-user-plus mr-0.5"></i>Assign</button></div>';
+        html += '</div>';
+      }
+      html += '</div>';
+    }
+    html += '</div>';
+
+    root.innerHTML = html;
+  }
+
+  // Assign crew to job modal
+  window._crewAssignJob = function(jobId) {
+    Promise.all([
+      fetch('/api/crm/crew', { headers: authHeadersOnly() }).then(function(r) { return r.json(); }),
+      fetch('/api/crm/jobs/' + jobId + '/crew', { headers: authHeadersOnly() }).then(function(r) { return r.json(); })
+    ]).then(function(results) {
+      var available = results[0].crew || [];
+      var assigned = results[1].crew || [];
+      var assignedIds = assigned.map(function(a) { return a.crew_member_id; });
+
+      var body = '<div class="space-y-3">';
+      // Currently assigned
+      if (assigned.length > 0) {
+        body += '<div><h4 class="text-xs font-bold text-gray-500 uppercase mb-2">Currently Assigned</h4><div class="space-y-1.5">';
+        for (var i = 0; i < assigned.length; i++) {
+          var a = assigned[i];
+          body += '<div class="flex items-center justify-between bg-green-50 rounded-lg px-3 py-2"><div class="flex items-center gap-2"><i class="fas fa-user-check text-green-500"></i><span class="text-sm font-medium text-gray-800">' + (a.name || 'Unknown') + '</span><span class="px-1.5 py-0.5 bg-green-100 text-green-700 rounded text-[9px] font-bold capitalize">' + (a.role || 'crew') + '</span></div><button onclick="window._crewRemoveFromJob(' + jobId + ',' + a.crew_member_id + ')" class="text-red-400 hover:text-red-600"><i class="fas fa-times"></i></button></div>';
+        }
+        body += '</div></div>';
+      }
+      // Available to assign
+      var unassigned = available.filter(function(m) { return assignedIds.indexOf(m.member_customer_id) === -1; });
+      if (unassigned.length > 0) {
+        body += '<div><h4 class="text-xs font-bold text-gray-500 uppercase mb-2">Available Crew</h4><div class="space-y-1.5">';
+        for (var j = 0; j < unassigned.length; j++) {
+          var u = unassigned[j];
+          body += '<div class="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2"><div class="flex items-center gap-2"><i class="fas fa-user text-gray-400"></i><span class="text-sm font-medium text-gray-800">' + (u.name || 'Unknown') + '</span>' + (u.phone ? '<span class="text-xs text-gray-400">' + u.phone + '</span>' : '') + '</div>';
+          body += '<button onclick="window._crewAddToJob(' + jobId + ',' + u.member_customer_id + ')" class="px-3 py-1 bg-orange-600 text-white rounded-lg text-xs font-semibold hover:bg-orange-700"><i class="fas fa-plus mr-0.5"></i>Assign</button></div>';
+        }
+        body += '</div></div>';
+      } else if (assigned.length === 0) {
+        body += '<p class="text-sm text-gray-400 text-center py-4">No crew members available. <a href="/customer/team" class="text-orange-600 hover:underline">Invite team members</a> first.</p>';
+      }
+      body += '</div>';
+      showModal('Assign Crew to Job', body);
+    });
+  };
+
+  window._crewAddToJob = function(jobId, memberId) {
+    fetch('/api/crm/jobs/' + jobId + '/crew', { method: 'POST', headers: authHeaders(), body: JSON.stringify({ crew_member_id: memberId }) })
+      .then(function(r) { return r.json(); })
+      .then(function(res) { if (res.success) { toast('Crew assigned!'); closeModal(); window._crewAssignJob(jobId); } else { toast(res.error || 'Failed', 'error'); } })
+      .catch(function() { toast('Network error', 'error'); });
+  };
+
+  window._crewRemoveFromJob = function(jobId, memberId) {
+    fetch('/api/crm/jobs/' + jobId + '/crew/' + memberId, { method: 'DELETE', headers: authHeadersOnly() })
+      .then(function(r) { return r.json(); })
+      .then(function(res) { if (res.success) { toast('Crew removed'); closeModal(); window._crewAssignJob(jobId); } })
+      .catch(function() { toast('Network error', 'error'); });
+  };
+
+  // Job progress — add note or photo
+  window._crewAddProgress = function(jobId) {
+    var body = '<div class="space-y-3">' +
+      '<div><label class="block text-xs font-medium text-gray-600 mb-1">Update Type</label><select id="progType" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"><option value="note">Note</option><option value="photo">Photo</option><option value="status_change">Status Update</option></select></div>' +
+      '<div><label class="block text-xs font-medium text-gray-600 mb-1">Note / Details</label><textarea id="progContent" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="What\'s the update?"></textarea></div>' +
+      '<div id="progPhotoSection" class="hidden"><label class="block text-xs font-medium text-gray-600 mb-1">Photo</label><input type="file" id="progPhoto" accept="image/*" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"><input type="text" id="progCaption" placeholder="Photo caption (optional)" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm mt-2"></div>' +
+      '</div>';
+    showModal('Add Progress Update', body, function() {
+      var type = document.getElementById('progType').value;
+      var content = document.getElementById('progContent').value.trim();
+      var fileInput = document.getElementById('progPhoto');
+      var caption = document.getElementById('progCaption')?.value?.trim() || '';
+
+      function sendProgress(photoData) {
+        fetch('/api/crm/jobs/' + jobId + '/progress', { method: 'POST', headers: authHeaders(), body: JSON.stringify({ update_type: type, content: content, photo_data: photoData || null, photo_caption: caption }) })
+          .then(function(r) { return r.json(); })
+          .then(function(res) { if (res.success) { closeModal(); toast('Progress added!'); window._crmViewJob(jobId); } else { toast(res.error || 'Failed', 'error'); } })
+          .catch(function() { toast('Network error', 'error'); });
+      }
+
+      if (type === 'photo' && fileInput && fileInput.files[0]) {
+        var reader = new FileReader();
+        reader.onload = function(e) { sendProgress(e.target.result); };
+        reader.readAsDataURL(fileInput.files[0]);
+      } else {
+        if (!content) { toast('Enter a note or select a photo', 'error'); return; }
+        sendProgress(null);
+      }
+    }, 'Post Update');
+
+    // Toggle photo section based on type
+    setTimeout(function() {
+      var sel = document.getElementById('progType');
+      if (sel) sel.addEventListener('change', function() {
+        var ps = document.getElementById('progPhotoSection');
+        if (ps) ps.className = sel.value === 'photo' ? '' : 'hidden';
+      });
+    }, 100);
   };
 
   // ============================================================

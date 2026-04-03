@@ -726,6 +726,7 @@ app.get('/customer/pipeline', (c) => c.html(getCrmSubPageHTML('pipeline', 'Sales
 app.get('/customer/email-outreach', (c) => c.html(getCrmSubPageHTML('email-outreach', 'Email Outreach', 'fa-envelope-open-text')))
 app.get('/customer/catalog', (c) => c.html(getCrmSubPageHTML('catalog', 'Material Catalog', 'fa-box-open')))
 app.get('/customer/referrals', (c) => c.html(getCrmSubPageHTML('referrals', 'Referral Program', 'fa-gift')))
+app.get('/customer/crew', (c) => c.html(getCrmSubPageHTML('crew', 'Crew Manager', 'fa-hard-hat')))
 
 // Company Type Selection — shown once post-login if company_type is null
 app.get('/customer/select-type', (c) => c.html(getSelectTypePageHTML()))
