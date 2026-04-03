@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import type { Bindings } from '../types'
 import { validateAdminSession } from './auth'
+import { sendGmailOAuth2 } from '../services/email'
 
 export const invoiceRoutes = new Hono<{ Bindings: Bindings }>()
 
@@ -647,5 +648,103 @@ invoiceRoutes.get('/customers/:id', async (c) => {
     return c.json({ customer, orders: orders.results, invoices: invoices.results })
   } catch (err: any) {
     return c.json({ error: 'Failed to fetch customer', details: err.message }, 500)
+  }
+})
+
+// ============================================================
+// SEND INVOICE VIA EMAIL — with Square payment link
+// ============================================================
+invoiceRoutes.post('/:id/send-gmail', async (c) => {
+  try {
+    const id = parseInt(c.req.param('id'))
+    const invoice = await c.env.DB.prepare('SELECT i.*, c.name as customer_name, c.email as customer_email FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id WHERE i.id = ?').bind(id).first<any>()
+    if (!invoice) return c.json({ error: 'Invoice not found' }, 404)
+    if (!invoice.customer_email) return c.json({ error: 'Customer has no email address' }, 400)
+
+    const items = await c.env.DB.prepare('SELECT * FROM invoice_items WHERE invoice_id = ? ORDER BY sort_order').bind(id).all<any>()
+    const lineItems = items.results || []
+
+    // Ensure share token
+    let shareToken = invoice.share_token
+    if (!shareToken) {
+      shareToken = crypto.randomUUID().replace(/-/g, '').substring(0, 24)
+      await c.env.DB.prepare("UPDATE invoices SET share_token = ?, updated_at = datetime('now') WHERE id = ?").bind(shareToken, id).run()
+    }
+    const origin = new URL(c.req.url).origin
+    const viewUrl = `${origin}/proposal/view/${shareToken}`
+
+    // Get or create Square payment link
+    let paymentUrl = invoice.square_payment_link_url || ''
+    if (!paymentUrl) {
+      const accessToken = (c.env as any).SQUARE_ACCESS_TOKEN
+      const locationId = (c.env as any).SQUARE_LOCATION_ID
+      if (accessToken && locationId && invoice.total > 0) {
+        try {
+          const sqResp = await fetch('https://connect.squareup.com/v2/online-checkout/payment-links', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json', 'Square-Version': '2025-01-23' },
+            body: JSON.stringify({ idempotency_key: `inv-email-${id}-${Date.now()}`, quick_pay: { name: `Invoice ${invoice.invoice_number}`, price_money: { amount: Math.round(invoice.total * 100), currency: 'USD' }, location_id: locationId } })
+          })
+          const sqData: any = await sqResp.json()
+          if (sqData.payment_link?.url) {
+            paymentUrl = sqData.payment_link.url
+            await c.env.DB.prepare("UPDATE invoices SET square_payment_link_url = ?, square_payment_link_id = ?, updated_at = datetime('now') WHERE id = ?").bind(paymentUrl, sqData.payment_link.id, id).run()
+          }
+        } catch {}
+      }
+    }
+
+    // Build email HTML
+    const docLabel = (invoice.document_type || 'invoice').charAt(0).toUpperCase() + (invoice.document_type || 'invoice').slice(1)
+    let itemsHtml = ''
+    if (lineItems.length > 0) {
+      itemsHtml = '<table style="width:100%;border-collapse:collapse;margin:16px 0"><thead><tr style="background:#f8fafc"><th style="text-align:left;padding:8px;border-bottom:2px solid #e2e8f0;font-size:13px;color:#64748b">Item</th><th style="text-align:center;padding:8px;border-bottom:2px solid #e2e8f0;font-size:13px;color:#64748b">Qty</th><th style="text-align:right;padding:8px;border-bottom:2px solid #e2e8f0;font-size:13px;color:#64748b">Amount</th></tr></thead><tbody>'
+      for (const it of lineItems as any[]) {
+        itemsHtml += `<tr><td style="padding:8px;border-bottom:1px solid #f1f5f9;font-size:13px">${it.description}</td><td style="text-align:center;padding:8px;border-bottom:1px solid #f1f5f9;font-size:13px">${it.quantity}</td><td style="text-align:right;padding:8px;border-bottom:1px solid #f1f5f9;font-size:13px;font-weight:600">$${Number(it.amount).toFixed(2)}</td></tr>`
+      }
+      itemsHtml += '</tbody></table>'
+    }
+
+    const emailHtml = `
+<div style="max-width:600px;margin:0 auto;font-family:Inter,system-ui,sans-serif">
+  <div style="background:linear-gradient(135deg,#0ea5e9,#2563eb);padding:32px;border-radius:16px 16px 0 0;text-align:center">
+    <h1 style="color:white;font-size:22px;margin:0">RoofReporterAI</h1>
+    <p style="color:#bfdbfe;font-size:13px;margin:4px 0 0">Professional Roof Measurement Reports</p>
+  </div>
+  <div style="background:white;padding:32px;border:1px solid #e2e8f0;border-top:none">
+    <h2 style="color:#1e293b;font-size:18px;margin:0 0 8px">${docLabel} ${invoice.invoice_number}</h2>
+    <p style="color:#64748b;font-size:14px;margin:0 0 24px">Hi ${invoice.customer_name || 'there'},</p>
+    <p style="color:#475569;font-size:14px;line-height:1.6;margin:0 0 16px">Please find your ${docLabel.toLowerCase()} below. ${paymentUrl ? 'Click the button to pay securely online via Square.' : ''}</p>
+    ${itemsHtml}
+    <div style="background:#f8fafc;border-radius:12px;padding:16px;margin:16px 0">
+      <div style="display:flex;justify-content:space-between;font-size:13px;color:#64748b;margin-bottom:4px"><span>Subtotal</span><span>$${Number(invoice.subtotal || 0).toFixed(2)}</span></div>
+      ${invoice.tax_amount ? `<div style="display:flex;justify-content:space-between;font-size:13px;color:#64748b;margin-bottom:4px"><span>Tax</span><span>$${Number(invoice.tax_amount).toFixed(2)}</span></div>` : ''}
+      <div style="display:flex;justify-content:space-between;font-size:18px;font-weight:800;color:#0f172a;border-top:2px solid #e2e8f0;padding-top:8px;margin-top:8px"><span>Total</span><span>$${Number(invoice.total || 0).toFixed(2)} USD</span></div>
+    </div>
+    ${paymentUrl ? `<div style="text-align:center;margin:24px 0"><a href="${paymentUrl}" style="display:inline-block;background:#16a34a;color:white;padding:14px 32px;border-radius:12px;text-decoration:none;font-size:16px;font-weight:700">Pay Now — $${Number(invoice.total || 0).toFixed(2)}</a><p style="color:#94a3b8;font-size:11px;margin:8px 0 0">Secure payment powered by Square</p></div>` : ''}
+    <div style="text-align:center;margin:16px 0"><a href="${viewUrl}" style="color:#0ea5e9;font-size:13px;text-decoration:underline">View ${docLabel} Online</a></div>
+    ${invoice.due_date ? `<p style="color:#64748b;font-size:12px;text-align:center">Due: ${new Date(invoice.due_date).toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' })}</p>` : ''}
+  </div>
+  <div style="background:#f8fafc;padding:16px;border-radius:0 0 16px 16px;text-align:center;border:1px solid #e2e8f0;border-top:none">
+    <p style="color:#94a3b8;font-size:11px;margin:0">Powered by RoofReporterAI — Canada's AI Roof Measurement Platform</p>
+  </div>
+</div>`
+
+    // Send email
+    const clientId = (c.env as any).GMAIL_CLIENT_ID
+    const clientSecret = (c.env as any).GMAIL_CLIENT_SECRET
+    const refreshToken = (c.env as any).GMAIL_REFRESH_TOKEN
+    if (clientId && clientSecret && refreshToken) {
+      await sendGmailOAuth2(clientId, clientSecret, refreshToken, invoice.customer_email, `${docLabel} ${invoice.invoice_number} — $${Number(invoice.total || 0).toFixed(2)}`, emailHtml)
+    } else {
+      return c.json({ error: 'Gmail not configured. Set GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_REFRESH_TOKEN.' }, 503)
+    }
+
+    // Update status to sent
+    await c.env.DB.prepare("UPDATE invoices SET status = CASE WHEN status = 'draft' THEN 'sent' ELSE status END, sent_date = datetime('now'), updated_at = datetime('now') WHERE id = ?").bind(id).run()
+
+    return c.json({ success: true, message: 'Invoice emailed to ' + invoice.customer_email, share_url: viewUrl, payment_url: paymentUrl || null })
+  } catch (err: any) {
+    return c.json({ error: 'Failed to send invoice: ' + err.message }, 500)
   }
 })

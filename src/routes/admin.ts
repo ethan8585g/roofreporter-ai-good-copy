@@ -1929,6 +1929,67 @@ adminRoutes.get('/superadmin/service-invoices', async (c) => {
   return c.json({ invoices: rows.results || [] })
 })
 
+// Service invoice — create by customer email
+adminRoutes.post('/superadmin/service-invoices/create', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
+  const { customer_email, items, due_date, notes } = await c.req.json()
+  if (!customer_email || !items || !items.length) return c.json({ error: 'customer_email and items required' }, 400)
+
+  // Find or create customer
+  let customer = await c.env.DB.prepare('SELECT id, name, email FROM customers WHERE email = ?').bind(customer_email.toLowerCase()).first<any>()
+  if (!customer) {
+    const result = await c.env.DB.prepare("INSERT INTO customers (email, name, is_active, email_verified, free_trial_total) VALUES (?, ?, 1, 0, 0)").bind(customer_email.toLowerCase(), customer_email.split('@')[0]).run()
+    customer = { id: result.meta.last_row_id, name: customer_email.split('@')[0], email: customer_email.toLowerCase() }
+  }
+
+  // Calculate totals
+  let subtotal = 0
+  for (const it of items) { subtotal += (it.quantity || 1) * (it.unit_price || 0) }
+  const taxRate = 0
+  const total = subtotal
+
+  // Generate invoice number
+  const d = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+  const rand = Math.floor(Math.random() * 9999).toString().padStart(4, '0')
+  const invoiceNumber = `SVC-${d}-${rand}`
+  const shareToken = crypto.randomUUID().replace(/-/g, '').substring(0, 24)
+
+  const invResult = await c.env.DB.prepare(
+    `INSERT INTO invoices (invoice_number, master_company_id, customer_id, subtotal, tax_rate, tax_amount, total, currency, status, document_type, notes, share_token, issue_date, due_date, created_at, updated_at)
+     VALUES (?, 1, ?, ?, ?, 0, ?, 'USD', 'draft', 'invoice', ?, ?, datetime('now'), ?, datetime('now'), datetime('now'))`
+  ).bind(invoiceNumber, customer.id, subtotal, taxRate, total, notes || '', shareToken, due_date || null).run()
+  const invoiceId = invResult.meta.last_row_id as number
+
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i]
+    await c.env.DB.prepare('INSERT INTO invoice_items (invoice_id, description, quantity, unit_price, amount, sort_order) VALUES (?, ?, ?, ?, ?, ?)').bind(invoiceId, it.description || 'Service', it.quantity || 1, it.unit_price || 0, (it.quantity || 1) * (it.unit_price || 0), i).run()
+  }
+
+  return c.json({ success: true, invoice_id: invoiceId, invoice_number: invoiceNumber, share_token: shareToken, customer_id: customer.id })
+})
+
+// Service invoice — send via email
+adminRoutes.post('/superadmin/service-invoices/:id/send', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
+  const id = parseInt(c.req.param('id'))
+
+  // Use the invoices send-gmail logic via internal fetch
+  const origin = new URL(c.req.url).origin
+  const token = c.req.header('Authorization') || ''
+  try {
+    const resp = await fetch(`${origin}/api/invoices/${id}/send-gmail`, {
+      method: 'POST',
+      headers: { 'Authorization': token, 'Content-Type': 'application/json' }
+    })
+    const data: any = await resp.json()
+    return c.json(data, resp.ok ? 200 : 500)
+  } catch (err: any) {
+    return c.json({ error: 'Failed to send: ' + err.message }, 500)
+  }
+})
+
 // Sales scripts
 adminRoutes.get('/superadmin/sales-scripts', async (c) => {
   const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
