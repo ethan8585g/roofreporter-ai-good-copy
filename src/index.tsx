@@ -1450,7 +1450,11 @@ function getContactFormHTML(sourcePage: string = 'unknown') {
         <button type="submit" id="lead-submit-btn" class="w-full bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-white font-bold py-4 px-8 rounded-xl shadow-lg transition-all hover:scale-[1.01] text-lg">
           <i class="fas fa-paper-plane mr-2"></i>Get Started — It's Free
         </button>
-        <p class="text-center text-gray-400 text-xs">No credit card required. 3 free reports included.</p>
+        <div class="text-center my-3"><span class="text-gray-500 text-xs">— or —</span></div>
+        <a href="https://calendar.app.google/CE5iBMV1Fu4K2ve38" target="_blank" class="block w-full bg-white/10 hover:bg-white/20 text-white font-bold py-4 px-8 rounded-xl text-center text-lg transition-all border border-white/20">
+          <i class="fas fa-calendar-check mr-2"></i>Book a 30-Min Demo Meeting
+        </a>
+        <p class="text-center text-gray-400 text-xs mt-3">No credit card required. 3 free reports included.</p>
       </form>
     </div>
   </section>
@@ -3348,11 +3352,17 @@ function getLanderFunnelHTML() {
             Get a <strong class="text-white">professional roof measurement report</strong> from satellite imagery in under 60 seconds. Accurate area, pitch, edge breakdowns, and a full material BOM — everything you need to quote a job.
           </p>
 
-          <a href="/customer/login" class="group inline-flex items-center gap-3 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-400 hover:to-emerald-400 text-white font-bold py-4 px-10 rounded-xl text-lg shadow-2xl shadow-green-500/25 transition-all hover:scale-[1.02] mb-6">
-            <i class="fas fa-rocket"></i>
-            Claim Your 3 Free Reports
-            <i class="fas fa-arrow-right text-sm group-hover:translate-x-1 transition-transform"></i>
-          </a>
+          <div class="flex flex-col sm:flex-row gap-4 mb-6">
+            <a href="/customer/login" class="group inline-flex items-center gap-3 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-400 hover:to-emerald-400 text-white font-bold py-4 px-10 rounded-xl text-lg shadow-2xl shadow-green-500/25 transition-all hover:scale-[1.02]">
+              <i class="fas fa-rocket"></i>
+              Claim Your 3 Free Reports
+              <i class="fas fa-arrow-right text-sm group-hover:translate-x-1 transition-transform"></i>
+            </a>
+            <a href="https://calendar.app.google/CE5iBMV1Fu4K2ve38" target="_blank" class="group inline-flex items-center gap-3 bg-white/10 hover:bg-white/20 text-white font-bold py-4 px-10 rounded-xl text-lg border border-white/20 hover:border-white/30 transition-all">
+              <i class="fas fa-calendar-check"></i>
+              Book a Demo
+            </a>
+          </div>
 
           <div class="flex items-center gap-6 text-sm text-gray-400">
             <span class="flex items-center gap-1.5"><i class="fas fa-check text-green-400"></i> No credit card</span>
@@ -3470,12 +3480,18 @@ function getLanderFunnelHTML() {
       <p class="text-lg text-gray-300 mb-10 max-w-xl mx-auto">
         Sign up in 30 seconds, get 3 free professional roof measurement reports, and access the full CRM — no credit card required.
       </p>
-      <a href="/customer/login" class="group inline-flex items-center gap-3 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-400 hover:to-emerald-400 text-white font-bold py-4 px-12 rounded-xl text-lg shadow-2xl shadow-green-500/25 transition-all hover:scale-[1.02]">
-        <i class="fas fa-rocket"></i>
-        Start Free Now
-        <i class="fas fa-arrow-right text-sm group-hover:translate-x-1 transition-transform"></i>
-      </a>
-      <p class="text-sm text-gray-400 mt-6">Then $5 USD per report. No subscriptions. Cancel anytime. <a href="/privacy" class="underline hover:text-gray-200">Privacy Policy</a> · <a href="/terms" class="underline hover:text-gray-200">Terms</a></p>
+      <div class="flex flex-col sm:flex-row gap-4 justify-center">
+        <a href="/customer/login" class="group inline-flex items-center gap-3 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-400 hover:to-emerald-400 text-white font-bold py-4 px-12 rounded-xl text-lg shadow-2xl shadow-green-500/25 transition-all hover:scale-[1.02]">
+          <i class="fas fa-rocket"></i>
+          Start Free Now
+          <i class="fas fa-arrow-right text-sm group-hover:translate-x-1 transition-transform"></i>
+        </a>
+        <a href="https://calendar.app.google/CE5iBMV1Fu4K2ve38" target="_blank" class="group inline-flex items-center gap-3 bg-white/10 hover:bg-white/20 text-white font-bold py-4 px-10 rounded-xl text-lg border border-white/20 hover:border-white/30 transition-all">
+          <i class="fas fa-calendar-check"></i>
+          Book a Demo
+        </a>
+      </div>
+      <p class="text-sm text-gray-400 mt-6">Then $7 USD per report. No subscriptions. Cancel anytime. <a href="/privacy" class="underline hover:text-gray-200">Privacy Policy</a> · <a href="/terms" class="underline hover:text-gray-200">Terms</a></p>
     </div>
   </section>
 

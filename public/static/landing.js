@@ -185,9 +185,9 @@ function renderHero() {
                 Start 3 Free Estimates
                 <i class="fas fa-arrow-right text-sm group-hover:translate-x-1 transition-transform"></i>
               </a>
-              <a href="#how-it-works" class="inline-flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 backdrop-blur-md text-white font-semibold py-4 px-8 rounded-xl text-lg border border-white/10 hover:border-white/25 transition-all duration-300 min-h-[56px]">
-                <i class="fas fa-play-circle text-cyan-400"></i>
-                See How It Works
+              <a href="https://calendar.app.google/CE5iBMV1Fu4K2ve38" target="_blank" onclick="rrTrack('cta_click',{location:'hero_demo'})" class="inline-flex items-center justify-center gap-2 bg-white/10 hover:bg-white/20 backdrop-blur-md text-white font-bold py-4 px-8 rounded-xl text-lg border border-white/20 hover:border-white/30 transition-all duration-300 min-h-[56px]">
+                <i class="fas fa-calendar-check text-cyan-400"></i>
+                Book a Demo
               </a>
             </div>
 
@@ -1289,6 +1289,10 @@ function renderFinalCTA() {
             <i class="fas fa-rocket"></i>
             Start Free &mdash; 3 Reports On Us
             <i class="fas fa-arrow-right text-sm group-hover:translate-x-1 transition-transform"></i>
+          </a>
+          <a href="https://calendar.app.google/CE5iBMV1Fu4K2ve38" target="_blank" onclick="rrTrack('cta_click',{location:'final_cta_demo'})" class="group inline-flex items-center justify-center gap-3 bg-white/10 hover:bg-white/20 text-white font-bold py-4 px-10 rounded-xl text-lg border border-white/20 hover:border-white/30 transition-all duration-300 min-h-[56px]">
+            <i class="fas fa-calendar-check"></i>
+            Book a Demo Meeting
           </a>
         </div>
 
