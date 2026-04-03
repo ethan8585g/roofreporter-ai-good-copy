@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import type { Bindings } from '../types'
 import { resolveTeamOwner } from './team'
 import { trackLeadCapture } from '../services/ga4-events'
+import { sendGmailOAuth2 } from '../services/email'
 
 export const agentsRoutes = new Hono<{ Bindings: Bindings }>()
 
@@ -45,6 +46,33 @@ agentsRoutes.post('/leads', async (c) => {
       lead_company: company_name ? String(company_name).trim().substring(0, 50) : '',
       lead_email_domain: emailClean.split('@')[1] || 'unknown'
     }).catch(() => {})
+
+    // Email notification to sales@roofreporterai.com
+    const clientId = (c.env as any).GMAIL_CLIENT_ID
+    const clientSecret = (c.env as any).GMAIL_CLIENT_SECRET
+    const refreshToken = (c.env as any).GMAIL_REFRESH_TOKEN
+    if (clientId && clientSecret && refreshToken) {
+      const leadHtml = `
+<div style="max-width:600px;margin:0 auto;font-family:Inter,system-ui,sans-serif">
+  <div style="background:#0f172a;padding:24px;border-radius:12px 12px 0 0">
+    <h1 style="color:#38bdf8;font-size:18px;margin:0">🔔 New Lead from RoofReporterAI</h1>
+    <p style="color:#94a3b8;font-size:13px;margin:4px 0 0">Source: ${source_page || 'website'}</p>
+  </div>
+  <div style="background:white;padding:24px;border:1px solid #e2e8f0;border-top:none">
+    <table style="width:100%;border-collapse:collapse">
+      <tr><td style="padding:8px 0;color:#64748b;font-size:13px;width:100px"><strong>Name</strong></td><td style="padding:8px 0;font-size:14px;color:#1e293b">${String(name).trim()}</td></tr>
+      <tr><td style="padding:8px 0;color:#64748b;font-size:13px"><strong>Email</strong></td><td style="padding:8px 0;font-size:14px"><a href="mailto:${emailClean}" style="color:#0ea5e9">${emailClean}</a></td></tr>
+      ${phone ? `<tr><td style="padding:8px 0;color:#64748b;font-size:13px"><strong>Phone</strong></td><td style="padding:8px 0;font-size:14px"><a href="tel:${String(phone).trim()}" style="color:#0ea5e9">${String(phone).trim()}</a></td></tr>` : ''}
+      ${company_name ? `<tr><td style="padding:8px 0;color:#64748b;font-size:13px"><strong>Company</strong></td><td style="padding:8px 0;font-size:14px;color:#1e293b">${String(company_name).trim()}</td></tr>` : ''}
+      ${message ? `<tr><td style="padding:8px 0;color:#64748b;font-size:13px;vertical-align:top"><strong>Message</strong></td><td style="padding:8px 0;font-size:14px;color:#1e293b">${String(message).trim()}</td></tr>` : ''}
+    </table>
+  </div>
+  <div style="background:#f8fafc;padding:16px;border-radius:0 0 12px 12px;border:1px solid #e2e8f0;border-top:none;text-align:center">
+    <a href="https://www.roofreporterai.com/super-admin" style="color:#0ea5e9;font-size:12px;font-weight:600">View in Super Admin Dashboard</a>
+  </div>
+</div>`
+      sendGmailOAuth2(clientId, clientSecret, refreshToken, 'sales@roofreporterai.com', `🔔 New Lead: ${String(name).trim()} — ${source_page || 'website'}`, leadHtml).catch((e: any) => console.warn('[Lead Email] Failed:', e.message))
+    }
 
     return c.json({ success: true, message: 'Thank you! We will be in touch shortly.' })
   } catch (e: any) {
