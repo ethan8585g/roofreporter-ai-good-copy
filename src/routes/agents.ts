@@ -89,28 +89,6 @@ agentsRoutes.post('/leads', async (c) => {
   }
 })
 
-// GET /test-email — Debug: test email delivery
-agentsRoutes.get('/test-email', async (c) => {
-  const clientId = (c.env as any).GMAIL_CLIENT_ID
-  let clientSecret = (c.env as any).GMAIL_CLIENT_SECRET || ''
-  let refreshToken = (c.env as any).GMAIL_REFRESH_TOKEN || ''
-  if (!refreshToken) {
-    try { const r = await c.env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key = 'gmail_refresh_token' AND master_company_id = 1").first<any>(); if (r?.setting_value) refreshToken = r.setting_value } catch {}
-  }
-  if (!clientSecret) {
-    try { const r = await c.env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key = 'gmail_client_secret' AND master_company_id = 1").first<any>(); if (r?.setting_value) clientSecret = r.setting_value } catch {}
-  }
-  if (!clientId || !clientSecret || !refreshToken) {
-    return c.json({ error: 'Missing credentials', has_clientId: !!clientId, has_clientSecret: !!clientSecret, has_refreshToken: !!refreshToken })
-  }
-  try {
-    await sendGmailOAuth2(clientId, clientSecret, refreshToken, 'sales@roofreporterai.com', 'Test Email from RoofReporterAI', '<h1>This is a test email</h1><p>If you see this, lead notifications are working!</p>', 'sales@roofreporterai.com')
-    return c.json({ success: true, message: 'Email sent successfully to sales@roofreporterai.com' })
-  } catch (e: any) {
-    return c.json({ error: 'Email send failed', details: e.message })
-  }
-})
-
 // GET /leads — Admin only
 agentsRoutes.get('/leads', async (c) => {
   const cust = await getCustomer(c)

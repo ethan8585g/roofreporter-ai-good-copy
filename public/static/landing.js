@@ -428,7 +428,7 @@ function renderHowItWorks() {
   const steps = [
     { num: 1, icon: 'fas fa-search-location', color: 'from-red-500 to-rose-500', title: 'Enter the Address', desc: 'Search any Canadian address. Google Maps pinpoints the exact roof instantly.' },
     { num: 2, icon: 'fas fa-sliders-h', color: 'from-blue-500 to-indigo-500', title: 'Configure Details', desc: "Add homeowner info, company details, and delivery options. Takes 30 seconds." },
-    { num: 3, icon: 'fas fa-credit-card', color: 'from-teal-500 to-emerald-500', title: 'Order Instantly', desc: 'First 3 reports are FREE. Then just $5 USD per report. Instant checkout.' },
+    { num: 3, icon: 'fas fa-credit-card', color: 'from-teal-500 to-emerald-500', title: 'Order Instantly', desc: 'First 3 reports are FREE. Then just $7 USD per report. Instant checkout.' },
     { num: 4, icon: 'fas fa-file-pdf', color: 'from-cyan-500 to-blue-500', title: 'Get Your PDF', desc: 'Professional report with area, pitch, edges, BOM, solar data. Under 60 seconds.' },
   ];
 
@@ -836,7 +836,7 @@ function renderPricing() {
             <div class="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl border-2 border-indigo-200 p-8">
               <div class="text-sm font-bold text-indigo-600 uppercase tracking-wider mb-2">B2B Volume</div>
               <div class="flex items-baseline gap-1 mb-2">
-                <span class="text-5xl font-black text-gray-900">$5</span>
+                <span class="text-5xl font-black text-gray-900">$7</span>
                 <span class="text-xl text-gray-400">CAD</span>
                 <span class="text-sm text-gray-400 ml-1">/ report</span>
               </div>
@@ -898,7 +898,7 @@ function renderPricing() {
               <tbody>
                 ${[
                   ['Report Delivery', 'Under 60 seconds', '24-48 hours', '2-4 hours on-site'],
-                  ['Price Per Report', 'From $5 CAD', '$50-100+ USD', '$200+ labor cost'],
+                  ['Price Per Report', 'From $7 USD', '$50-100+ USD', '$200+ labor cost'],
                   ['Free CRM Included', '<i class="fas fa-check-circle text-green-500"></i>', '<i class="fas fa-times-circle text-red-400"></i>', '<i class="fas fa-times-circle text-red-400"></i>'],
                   ['AI Phone Secretary', '<i class="fas fa-check-circle text-green-500"></i>', '<i class="fas fa-times-circle text-red-400"></i>', '<i class="fas fa-times-circle text-red-400"></i>'],
                   ['Virtual Roof Try-On', '<i class="fas fa-check-circle text-green-500"></i>', '<i class="fas fa-times-circle text-red-400"></i>', '<i class="fas fa-times-circle text-red-400"></i>'],
@@ -1002,7 +1002,7 @@ window.calcROI = function() {
   const monthlyEst = est * 4.33;
   const timeSaved = monthlyEst * (hrs - 0.02); // 60s vs hours
   const costSaved = timeSaved * labor;
-  const rrCost = monthlyEst * 5; // $5 per report
+  const rrCost = monthlyEst * 7; // $7 per report
   const net = costSaved - rrCost;
   const roi = rrCost > 0 ? Math.round((net / rrCost) * 100) : 0;
 
@@ -1035,7 +1035,7 @@ function renderTestimonials() {
       metricIcon: 'fas fa-bullseye'
     },
     {
-      quote: "We run 15-20 estimates a week. At $5 per report we save thousands vs drone surveys. Plus we get the solar data free. Our close rate jumped 23% because professional reports build instant trust.",
+      quote: "We run 15-20 estimates a week. At $7 per report we save thousands vs drone surveys. Plus we get the solar data free. Our close rate jumped 23% because professional reports build instant trust.",
       name: "James R.",
       title: "Owner, Prairie Roofing Co.",
       avatar: "JR",
@@ -1209,7 +1209,7 @@ function renderFAQ() {
     { q: 'What is the AI Roofer Secretary?', a: 'A 24/7 AI phone answering service for your roofing business. It answers calls in a natural human voice, books appointments, qualifies leads, and sends you summaries. $249/month.' },
     { q: 'Can I add team members?', a: 'Yes! For $50/user/month, you can invite salespeople and other team members. They get full access to reports, CRM, AI Secretary, and all features.' },
     { q: 'What payment methods do you accept?', a: 'All major credit cards, debit, Apple Pay, Google Pay, and Cash App through Square. All transactions are encrypted and PCI-compliant.' },
-    { q: 'Do you offer volume discounts?', a: 'Yes! B2B customers get priority processing and volume pricing starting at $5/report for 50+ reports/month. Contact us for custom rates and monthly invoicing.' },
+    { q: 'Do you offer volume discounts?', a: 'Yes! B2B customers get priority processing and volume pricing starting at $5/report for 100+ packs for 50+ reports/month. Contact us for custom rates and monthly invoicing.' },
     { q: 'Is my data secure?', a: 'Absolutely. Built on Cloudflare\'s edge network with 256-bit encryption, PCI DSS compliant payments, and Canadian PIPEDA privacy compliance. Your data never leaves secure infrastructure.' },
     { q: 'Can I cancel anytime?', a: 'Of course. Pay-per-report has zero commitments. Add-on services like AI Secretary are month-to-month with no contracts.' },
   ];
@@ -1311,7 +1311,7 @@ function renderFinalCTA() {
         </div>
 
         <p class="text-sm text-gray-400">
-          No credit card required. 3 free reports. Then $5 USD per report.
+          No credit card required. 3 free reports. Then $7 USD per report.
           <br/>Questions? <a href="mailto:reports@reusecanada.ca" class="text-cyan-400 hover:underline">reports@reusecanada.ca</a>
           &nbsp;·&nbsp; <a href="/privacy" class="text-cyan-400 hover:underline">Privacy Policy</a> &nbsp;·&nbsp; <a href="/terms" class="text-cyan-400 hover:underline">Terms</a>
         </p>

@@ -237,7 +237,7 @@ function renderDashboard() {
             '<div class="w-12 h-12 bg-amber-500 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0"><i class="fas fa-crown text-white text-xl"></i></div>' +
             '<div class="flex-1 text-center sm:text-left">' +
               '<h3 class="text-white font-black text-base">Your 3 Free Trial Reports Are Used Up!</h3>' +
-              '<p class="text-brand-200 text-xs mt-1">Upgrade to a credit pack — packs from <strong class="text-amber-400">$5.00/report</strong>, save up to 38%.</p>' +
+              '<p class="text-brand-200 text-xs mt-1">Upgrade to a credit pack — packs from <strong class="text-amber-400">$5.00/report (100-pack)</strong>, save up to 38%.</p>' +
             '</div>' +
             '<div class="flex gap-2 flex-shrink-0">' +
               '<a href="/pricing" class="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-gray-900 font-black rounded-xl shadow text-xs"><i class="fas fa-tags mr-1"></i>View Packs</a>' +

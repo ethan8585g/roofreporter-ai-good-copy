@@ -416,7 +416,7 @@ function renderPinStep(root, progressBar) {
               <div class="w-12 h-12 bg-amber-500 rounded-xl flex items-center justify-center shadow"><i class="fas fa-crown text-white text-xl"></i></div>
               <div>
                 <p class="font-bold text-white text-base">Your 3 Free Trials Are Used Up!</p>
-                <p class="text-sm text-brand-200 mt-0.5">Credit packs start at <strong class="text-amber-400">$5.00/report</strong></p>
+                <p class="text-sm text-brand-200 mt-0.5">Credit packs start at <strong class="text-amber-400">$5.00/report (100-pack)</strong></p>
               </div>
             </div>
             <a href="/pricing" class="bg-amber-500 hover:bg-amber-400 text-gray-900 px-5 py-2.5 rounded-xl text-sm font-black transition-all shadow-lg"><i class="fas fa-tags mr-1.5"></i>Buy Credits</a>

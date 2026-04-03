@@ -1,6 +1,6 @@
 // ============================================================
 // Pricing Page — Public, fetches packages and renders cards
-// Pricing: 3 free → $5 USD individual → 25-pack ($99) → 100-pack ($299)
+// Pricing: 3 free → $7 USD individual → 25-pack ($150) → 100-pack ($500)
 // Membership: $49.99/mo — 5 team members + ad-free
 // ============================================================
 
@@ -86,7 +86,7 @@ function renderPricing(root, packages) {
           <p class="text-sm text-gray-500 mt-1">Delivered instantly — no subscription required</p>
         </div>
         <div class="text-center mb-6">
-          <span class="text-5xl font-black text-gray-900">$5</span>
+          <span class="text-5xl font-black text-gray-900">$7</span>
           <span class="text-gray-500 text-sm ml-1">USD / report</span>
         </div>
         <ul class="space-y-3 mb-6 text-sm">
@@ -151,7 +151,7 @@ function renderPricing(root, packages) {
           <i class="fas fa-users"></i>
           Add Team Membership
         </a>
-        <p class="text-brand-300 text-xs mt-4"><i class="fas fa-info-circle mr-1"></i>Reports are billed separately — $5 USD each or via credit packs.</p>
+        <p class="text-brand-300 text-xs mt-4"><i class="fas fa-info-circle mr-1"></i>Reports are billed separately — $7 USD each or via credit packs.</p>
       </div>
     </div>
 
@@ -198,22 +198,22 @@ function renderPricing(root, packages) {
             <tr>
               <td class="px-6 py-3 font-medium text-gray-800">Individual</td>
               <td class="text-center px-4 py-3">1</td>
-              <td class="text-center px-4 py-3">$5.00</td>
-              <td class="text-center px-4 py-3 font-semibold">$5</td>
+              <td class="text-center px-4 py-3">$7.00</td>
+              <td class="text-center px-4 py-3 font-semibold">$7</td>
               <td class="text-center px-4 py-3 text-gray-400">—</td>
             </tr>
             <tr class="bg-gray-50/50">
               <td class="px-6 py-3 font-medium text-gray-800">25-Pack <span class="text-xs bg-accent-100 text-accent-700 px-1.5 py-0.5 rounded font-bold ml-1">POPULAR</span></td>
               <td class="text-center px-4 py-3">25</td>
-              <td class="text-center px-4 py-3">$3.96</td>
-              <td class="text-center px-4 py-3 font-semibold">$99</td>
+              <td class="text-center px-4 py-3">$6.00</td>
+              <td class="text-center px-4 py-3 font-semibold">$150</td>
               <td class="text-center px-4 py-3"><span class="text-green-600 font-semibold">Save 21%</span></td>
             </tr>
             <tr>
               <td class="px-6 py-3 font-medium text-gray-800">100-Pack <span class="text-xs bg-brand-100 text-brand-700 px-1.5 py-0.5 rounded font-bold ml-1">BEST VALUE</span></td>
               <td class="text-center px-4 py-3">100</td>
-              <td class="text-center px-4 py-3">$2.99</td>
-              <td class="text-center px-4 py-3 font-semibold">$299</td>
+              <td class="text-center px-4 py-3">$5.00</td>
+              <td class="text-center px-4 py-3 font-semibold">$500</td>
               <td class="text-center px-4 py-3"><span class="text-green-600 font-semibold">Save 40%</span></td>
             </tr>
           </tbody>
