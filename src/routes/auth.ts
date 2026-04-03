@@ -29,7 +29,7 @@ async function verifyPassword(password: string, storedHash: string): Promise<boo
 // ============================================================
 async function createAdminSession(db: D1Database, adminId: number): Promise<string> {
   const token = crypto.randomUUID() + '-' + crypto.randomUUID()
-  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // 24 hours
+  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() // 30 days
   
   await db.prepare(`
     INSERT INTO admin_sessions (admin_id, session_token, expires_at)
@@ -50,7 +50,13 @@ export async function validateAdminSession(db: D1Database, authHeader: string | 
     JOIN admin_users a ON a.id = s.admin_id
     WHERE s.session_token = ? AND s.expires_at > datetime('now') AND a.is_active = 1
   `).bind(token).first<any>()
-  
+
+  // Auto-renew session on each use (extend by 30 days)
+  if (session) {
+    const newExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+    db.prepare("UPDATE admin_sessions SET expires_at = ? WHERE session_token = ?").bind(newExpiry, token).run().catch(() => {})
+  }
+
   return session
 }
 
