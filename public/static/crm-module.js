@@ -2064,16 +2064,93 @@
   // ============================================================
   function initCrewManager() {
     root.innerHTML = '<div class="text-center py-8"><div class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-brand-500 mx-auto mb-3"></div></div>';
-    Promise.all([
-      fetch('/api/crm/crew', { headers: authHeadersOnly() }).then(function(r) { return r.json(); }),
-      fetch('/api/crm/jobs?status=in_progress', { headers: authHeadersOnly() }).then(function(r) { return r.json(); }),
-      fetch('/api/crm/jobs?status=scheduled', { headers: authHeadersOnly() }).then(function(r) { return r.json(); })
-    ]).then(function(results) {
-      var crewData = results[0];
-      var activeJobs = results[1].jobs || [];
-      var scheduledJobs = results[2].jobs || [];
-      renderCrewManager(crewData, activeJobs, scheduledJobs);
-    }).catch(function() { root.innerHTML = '<p class="text-red-500 p-4">Failed to load crew data.</p>'; });
+    // Check if user is a crew member (team member) — show My Jobs instead
+    fetch('/api/crm/my-jobs', { headers: authHeadersOnly() })
+      .then(function(r) { return r.json(); })
+      .then(function(myData) {
+        if (myData.is_crew_member && myData.jobs) {
+          renderMyJobs(myData.jobs);
+        } else {
+          // Admin view — full crew manager
+          Promise.all([
+            fetch('/api/crm/crew', { headers: authHeadersOnly() }).then(function(r) { return r.json(); }),
+            fetch('/api/crm/jobs?status=in_progress', { headers: authHeadersOnly() }).then(function(r) { return r.json(); }),
+            fetch('/api/crm/jobs?status=scheduled', { headers: authHeadersOnly() }).then(function(r) { return r.json(); })
+          ]).then(function(results) {
+            renderCrewManager(results[0], results[1].jobs || [], results[2].jobs || []);
+          }).catch(function() { root.innerHTML = '<p class="text-red-500 p-4">Failed to load crew data.</p>'; });
+        }
+      }).catch(function() {
+        // Fallback to admin view
+        Promise.all([
+          fetch('/api/crm/crew', { headers: authHeadersOnly() }).then(function(r) { return r.json(); }),
+          fetch('/api/crm/jobs?status=in_progress', { headers: authHeadersOnly() }).then(function(r) { return r.json(); }),
+          fetch('/api/crm/jobs?status=scheduled', { headers: authHeadersOnly() }).then(function(r) { return r.json(); })
+        ]).then(function(results) {
+          renderCrewManager(results[0], results[1].jobs || [], results[2].jobs || []);
+        }).catch(function() { root.innerHTML = '<p class="text-red-500 p-4">Failed to load crew data.</p>'; });
+      });
+  }
+
+  // Crew Member Portal — "My Assigned Jobs"
+  function renderMyJobs(jobs) {
+    var today = new Date().toISOString().substring(0, 10);
+    var todayJobs = jobs.filter(function(j) { return j.scheduled_date === today; });
+    var upcomingJobs = jobs.filter(function(j) { return j.scheduled_date > today && (j.status === 'scheduled' || j.status === 'in_progress'); });
+    var pastJobs = jobs.filter(function(j) { return j.scheduled_date < today || j.status === 'completed'; });
+
+    var html = '<div class="mb-5"><h2 class="text-lg font-bold text-gray-800"><i class="fas fa-hard-hat text-orange-500 mr-2"></i>My Assigned Jobs</h2><p class="text-xs text-gray-500 mt-0.5">Jobs assigned to you by the crew manager</p></div>';
+
+    // Today's jobs
+    html += '<div class="bg-orange-50 border border-orange-200 rounded-2xl p-5 mb-5">';
+    html += '<h3 class="font-bold text-orange-800 text-sm mb-3"><i class="fas fa-calendar-day mr-2"></i>Today (' + todayJobs.length + ' job' + (todayJobs.length !== 1 ? 's' : '') + ')</h3>';
+    if (todayJobs.length === 0) {
+      html += '<p class="text-sm text-orange-600">No jobs scheduled for today.</p>';
+    } else {
+      html += '<div class="space-y-2">';
+      for (var i = 0; i < todayJobs.length; i++) {
+        var j = todayJobs[i];
+        html += '<div class="bg-white rounded-xl p-4 border border-orange-100 cursor-pointer hover:shadow-sm" onclick="window._crmViewJob(' + j.id + ')">';
+        html += '<div class="flex items-center justify-between mb-1"><span class="font-mono text-xs font-bold text-orange-600">' + j.job_number + '</span>' + badge(j.status) + '</div>';
+        html += '<p class="font-semibold text-sm text-gray-800">' + (j.title || '') + '</p>';
+        if (j.property_address) html += '<p class="text-xs text-gray-500 mt-1"><i class="fas fa-map-marker-alt mr-1"></i>' + j.property_address + '</p>';
+        if (j.scheduled_time) html += '<p class="text-xs text-gray-500"><i class="fas fa-clock mr-1"></i>' + j.scheduled_time + '</p>';
+        if (j.customer_name) html += '<p class="text-xs text-gray-500"><i class="fas fa-user mr-1"></i>' + j.customer_name + (j.customer_phone ? ' · ' + j.customer_phone : '') + '</p>';
+        if (j.crew_names) html += '<p class="text-xs text-gray-400 mt-1"><i class="fas fa-users mr-1"></i>Crew: ' + j.crew_names + '</p>';
+        html += '<div class="flex gap-2 mt-2"><button onclick="event.stopPropagation();window._crewAddProgress(' + j.id + ')" class="px-3 py-1 bg-blue-100 text-blue-700 rounded-lg text-xs font-semibold hover:bg-blue-200"><i class="fas fa-camera mr-1"></i>Add Update</button></div>';
+        html += '</div>';
+      }
+      html += '</div>';
+    }
+    html += '</div>';
+
+    // Upcoming jobs
+    if (upcomingJobs.length > 0) {
+      html += '<div class="bg-white rounded-2xl border shadow-sm mb-5 overflow-hidden">';
+      html += '<div class="px-5 py-4 border-b border-gray-100"><h3 class="font-bold text-gray-800 text-sm"><i class="fas fa-calendar text-blue-500 mr-2"></i>Upcoming (' + upcomingJobs.length + ')</h3></div>';
+      html += '<div class="divide-y divide-gray-100">';
+      for (var u = 0; u < upcomingJobs.length; u++) {
+        var uj = upcomingJobs[u];
+        html += '<div class="px-5 py-3 hover:bg-gray-50 cursor-pointer" onclick="window._crmViewJob(' + uj.id + ')">';
+        html += '<div class="flex items-center justify-between"><div><p class="font-medium text-sm text-gray-800">' + (uj.title || '') + '</p><p class="text-xs text-gray-500"><i class="fas fa-calendar mr-1"></i>' + fmtDate(uj.scheduled_date) + (uj.scheduled_time ? ' ' + uj.scheduled_time : '') + (uj.property_address ? ' · <i class="fas fa-map-marker-alt mr-0.5"></i>' + uj.property_address : '') + '</p></div>' + badge(uj.status) + '</div>';
+        html += '</div>';
+      }
+      html += '</div></div>';
+    }
+
+    // Past/completed
+    if (pastJobs.length > 0) {
+      html += '<div class="bg-white rounded-2xl border shadow-sm overflow-hidden">';
+      html += '<div class="px-5 py-4 border-b border-gray-100"><h3 class="font-bold text-gray-800 text-sm"><i class="fas fa-check-circle text-green-500 mr-2"></i>Completed (' + pastJobs.length + ')</h3></div>';
+      html += '<div class="divide-y divide-gray-100">';
+      for (var p = 0; p < Math.min(pastJobs.length, 10); p++) {
+        var pj = pastJobs[p];
+        html += '<div class="px-5 py-3 opacity-60"><p class="text-sm text-gray-700">' + (pj.title || '') + '</p><p class="text-xs text-gray-400">' + fmtDate(pj.scheduled_date) + '</p></div>';
+      }
+      html += '</div></div>';
+    }
+
+    root.innerHTML = html;
   }
 
   function renderCrewManager(crewData, activeJobs, scheduledJobs) {
@@ -2093,6 +2170,28 @@
     html += '<div class="bg-white rounded-xl border p-4 text-center"><p class="text-2xl font-black text-amber-600">' + scheduledJobs.length + '</p><p class="text-[10px] text-gray-500">Scheduled</p></div>';
     html += '<div class="bg-white rounded-xl border p-4 text-center"><p class="text-2xl font-black text-green-600">' + crew.reduce(function(sum, m) { return sum + (m.active_jobs || 0); }, 0) + '</p><p class="text-[10px] text-gray-500">Crew on Jobs</p></div>';
     html += '</div>';
+
+    // Daily Dispatch Board — Today's schedule
+    var today = new Date().toISOString().substring(0, 10);
+    var todayJobs = allJobs.filter(function(j) { return j.scheduled_date === today; });
+    if (todayJobs.length > 0) {
+      html += '<div class="bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200 rounded-2xl p-5 mb-5">';
+      html += '<h3 class="font-bold text-orange-800 text-sm mb-3"><i class="fas fa-clipboard-list mr-2"></i>Today\'s Dispatch Board — ' + new Date().toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric' }) + '</h3>';
+      html += '<div class="grid md:grid-cols-2 lg:grid-cols-3 gap-3">';
+      for (var ti = 0; ti < todayJobs.length; ti++) {
+        var tj = todayJobs[ti];
+        var tjStatus = tj.status === 'in_progress' ? 'border-amber-400 bg-amber-50' : 'border-blue-200 bg-white';
+        html += '<div class="rounded-xl p-3 border-2 ' + tjStatus + '">';
+        html += '<div class="flex items-center justify-between mb-1"><span class="font-mono text-[10px] font-bold text-orange-600">' + tj.job_number + '</span>' + badge(tj.status) + '</div>';
+        html += '<p class="font-semibold text-sm text-gray-800 truncate">' + (tj.title || '') + '</p>';
+        if (tj.scheduled_time) html += '<p class="text-xs text-gray-600"><i class="fas fa-clock mr-1 text-orange-400"></i>' + tj.scheduled_time + '</p>';
+        if (tj.property_address) html += '<p class="text-xs text-gray-500 truncate"><i class="fas fa-map-marker-alt mr-1 text-orange-400"></i>' + tj.property_address + '</p>';
+        html += '<div class="flex items-center justify-between mt-2"><span class="text-xs text-gray-400"><i class="fas fa-users mr-0.5"></i>' + (tj.crew_size || 0) + ' crew</span>';
+        html += '<button onclick="window._crewAssignJob(' + tj.id + ')" class="text-[10px] bg-orange-100 text-orange-700 px-2 py-0.5 rounded-lg font-semibold hover:bg-orange-200">Assign</button></div>';
+        html += '</div>';
+      }
+      html += '</div></div>';
+    }
 
     // Crew roster
     html += '<div class="bg-white rounded-2xl border shadow-sm mb-5 overflow-hidden">';

@@ -1003,6 +1003,28 @@ crmRoutes.delete('/jobs/:id', async (c) => {
 // CREW MANAGER — Assignment + Progress Tracking
 // ============================================================
 
+// My assigned jobs — for crew members (team members viewing their own work)
+crmRoutes.get('/my-jobs', async (c) => {
+  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  if (!token) return c.json({ error: 'Not authenticated' }, 401)
+  const session = await c.env.DB.prepare("SELECT customer_id FROM customer_sessions WHERE session_token = ? AND expires_at > datetime('now')").bind(token).first<any>()
+  if (!session) return c.json({ error: 'Session expired' }, 401)
+  const myId = session.customer_id
+
+  const jobs = await c.env.DB.prepare(
+    `SELECT j.*, jca.role as crew_role, cc.name as customer_name, cc.phone as customer_phone,
+       (SELECT COUNT(*) FROM job_crew_assignments WHERE job_id = j.id) as total_crew,
+       (SELECT GROUP_CONCAT(c2.name, ', ') FROM job_crew_assignments jca2 JOIN customers c2 ON c2.id = jca2.crew_member_id WHERE jca2.job_id = j.id) as crew_names
+     FROM job_crew_assignments jca
+     JOIN crm_jobs j ON j.id = jca.job_id
+     LEFT JOIN crm_customers cc ON cc.id = j.crm_customer_id
+     WHERE jca.crew_member_id = ?
+     ORDER BY j.scheduled_date DESC`
+  ).bind(myId).all<any>()
+
+  return c.json({ jobs: jobs.results || [], is_crew_member: true })
+})
+
 // List available crew members (team members)
 crmRoutes.get('/crew', async (c) => {
   const ownerId = await getOwnerId(c)

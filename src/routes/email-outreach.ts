@@ -91,6 +91,22 @@ async function ensureTables(db: D1Database) {
 // ============================================================
 
 // GET /lists — All lists with stats
+// Global contacts endpoint — all contacts across all lists
+emailOutreachRoutes.get('/contacts', async (c) => {
+  await ensureTables(c.env.DB)
+  try {
+    const limit = Math.min(parseInt(c.req.query('limit') || '50'), 200)
+    const offset = parseInt(c.req.query('offset') || '0')
+    const contacts = await c.env.DB.prepare(
+      `SELECT ec.*, el.name as list_name FROM email_contacts ec
+       LEFT JOIN email_lists el ON el.id = ec.list_id
+       ORDER BY ec.created_at DESC LIMIT ? OFFSET ?`
+    ).bind(limit, offset).all<any>()
+    const total = await c.env.DB.prepare('SELECT COUNT(*) as cnt FROM email_contacts').first<any>()
+    return c.json({ contacts: contacts.results || [], total: total?.cnt || 0 })
+  } catch (e: any) { return c.json({ contacts: [], total: 0 }) }
+})
+
 emailOutreachRoutes.get('/lists', async (c) => {
   await ensureTables(c.env.DB)
   try {
