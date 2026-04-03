@@ -627,8 +627,17 @@ roverRoutes.post('/lead', async (c) => {
 // Helper to send lead notification email
 async function sendLeadNotification(env: any, lead: { name?: string; email?: string; phone?: string; company?: string; message?: string }) {
   const clientId = env.GMAIL_CLIENT_ID
-  const clientSecret = env.GMAIL_CLIENT_SECRET
-  const refreshToken = env.GMAIL_REFRESH_TOKEN
+  let clientSecret = env.GMAIL_CLIENT_SECRET || ''
+  let refreshToken = env.GMAIL_REFRESH_TOKEN || ''
+  // Fallback: check DB for tokens
+  if (!refreshToken || !clientSecret) {
+    try {
+      const dbRefresh = await env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key = 'gmail_refresh_token' AND master_company_id = 1").first()
+      if (dbRefresh?.setting_value) refreshToken = dbRefresh.setting_value
+      const dbSecret = await env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key = 'gmail_client_secret' AND master_company_id = 1").first()
+      if (dbSecret?.setting_value) clientSecret = dbSecret.setting_value
+    } catch {}
+  }
   if (clientId && clientSecret && refreshToken) {
     const html = `
 <div style="max-width:600px;margin:0 auto;font-family:Inter,system-ui,sans-serif">

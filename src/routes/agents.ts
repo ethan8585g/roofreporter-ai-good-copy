@@ -49,8 +49,17 @@ agentsRoutes.post('/leads', async (c) => {
 
     // Email notification to sales@roofreporterai.com
     const clientId = (c.env as any).GMAIL_CLIENT_ID
-    const clientSecret = (c.env as any).GMAIL_CLIENT_SECRET
-    const refreshToken = (c.env as any).GMAIL_REFRESH_TOKEN
+    let clientSecret = (c.env as any).GMAIL_CLIENT_SECRET || ''
+    let refreshToken = (c.env as any).GMAIL_REFRESH_TOKEN || ''
+    // Fallback: check DB for tokens (superadmin email setup stores here)
+    if (!refreshToken || !clientSecret) {
+      try {
+        const dbRefresh = await c.env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key = 'gmail_refresh_token' AND master_company_id = 1").first<any>()
+        if (dbRefresh?.setting_value) refreshToken = dbRefresh.setting_value
+        const dbSecret = await c.env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key = 'gmail_client_secret' AND master_company_id = 1").first<any>()
+        if (dbSecret?.setting_value) clientSecret = dbSecret.setting_value
+      } catch {}
+    }
     if (clientId && clientSecret && refreshToken) {
       const leadHtml = `
 <div style="max-width:600px;margin:0 auto;font-family:Inter,system-ui,sans-serif">
