@@ -869,8 +869,28 @@ app.get('/proposal/view/:token', async (c) => {
     `).bind(token).first<any>()
 
     if (!proposal) {
-      // Fallback: check invoices table (proposal builder creates proposals there)
-      const invProposal = await c.env.DB.prepare(`
+      // Fallback 1: check crm_invoices table
+      const crmInvoice = await c.env.DB.prepare(`
+        SELECT ci.*, ci.total as total_amount, ci.subtotal, ci.tax_rate, ci.tax_amount,
+               cc.name as customer_name, cc.email as customer_email, cc.phone as customer_phone,
+               cc.address as customer_address, cc.city as customer_city, cc.province as customer_province, cc.postal_code as customer_postal
+        FROM crm_invoices ci LEFT JOIN crm_customers cc ON cc.id = ci.crm_customer_id
+        WHERE ci.share_token = ?
+      `).bind(token).first<any>()
+      if (crmInvoice) {
+        // Treat CRM invoice like a proposal for rendering
+        crmInvoice.proposal_number = crmInvoice.invoice_number
+        crmInvoice.title = crmInvoice.title || ('Invoice ' + crmInvoice.invoice_number)
+        crmInvoice.total_amount = crmInvoice.total || crmInvoice.total_amount
+        // Re-assign to proposal so the rest of the handler renders it
+        const items = await c.env.DB.prepare('SELECT * FROM crm_invoice_items WHERE invoice_id = ? ORDER BY sort_order').bind(crmInvoice.id).all()
+        // Use the CRM proposal rendering path by assigning back
+        Object.assign(crmInvoice, { _is_crm_invoice: true })
+        // Fall through to invoice rendering below with invProposal
+      }
+
+      // Fallback 2: check invoices table (proposal builder creates proposals there)
+      const invProposal = crmInvoice || await c.env.DB.prepare(`
         SELECT i.*, c.name as customer_name, c.email as customer_email, c.phone as customer_phone,
                c.company_name, c.address as customer_address, c.city as customer_city,
                c.province as customer_province, c.postal_code as customer_postal

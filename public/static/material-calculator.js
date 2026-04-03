@@ -288,8 +288,8 @@ function renderMaterialTableInner() {
     var item = entry.item;
     var idx = entry.idx;
     var qty = item.order_quantity;
-    // Shingles scale with waste — sync order_quantity when waste changes
-    if (item.category === 'shingles' && wasteRow && wasteRow.bundles) {
+    // Shingles scale with waste — only override if user hasn't manually edited
+    if (item.category === 'shingles' && wasteRow && wasteRow.bundles && !item._manualQtyEdit) {
       qty = wasteRow.bundles;
       item.order_quantity = qty;
     }
@@ -362,6 +362,7 @@ function mcUpdateQty(itemIdx, newVal) {
   if (!items[itemIdx]) return;
   var qty = parseInt(newVal) || 0;
   items[itemIdx].order_quantity = qty;
+  items[itemIdx]._manualQtyEdit = true; // Prevent waste factor from overriding
   // Update line total inline
   var price = items[itemIdx].unit_price_cad || 0;
   var cell = document.getElementById('mc-line-total-' + itemIdx);

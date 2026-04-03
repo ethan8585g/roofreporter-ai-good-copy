@@ -29,9 +29,9 @@ async function loadDashData() {
   custState.loading = true;
   try {
     var [profileRes, ordersRes, billingRes, crmCustRes, crmInvRes, crmPropRes, crmJobRes, secRes, teamRes] = await Promise.all([
-      fetch('/api/customer/me', { headers: authHeaders() }),
-      fetch('/api/customer/orders', { headers: authHeaders() }),
-      fetch('/api/square/billing', { headers: authHeaders() }),
+      fetch('/api/customer/me', { headers: authHeaders() }).catch(function() { return { ok: false }; }),
+      fetch('/api/customer/orders', { headers: authHeaders() }).catch(function() { return { ok: false }; }),
+      fetch('/api/square/billing', { headers: authHeaders() }).catch(function() { return { ok: false }; }),
       fetch('/api/crm/customers', { headers: authHeaders() }).catch(function() { return { ok: false }; }),
       fetch('/api/crm/invoices', { headers: authHeaders() }).catch(function() { return { ok: false }; }),
       fetch('/api/crm/proposals', { headers: authHeaders() }).catch(function() { return { ok: false }; }),
