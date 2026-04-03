@@ -128,6 +128,14 @@ async function loadView(view) {
           return;
         }
         break;
+      case 'heygen':
+        // Handled by heygen.js module
+        if (typeof window.loadHeyGen === 'function') {
+          SA.loading = false;
+          window.loadHeyGen();
+          return;
+        }
+        break;
       case 'secretary-admin':
         try {
           const [secOverviewRes, secSubsRes] = await Promise.all([
