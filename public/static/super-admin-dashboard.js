@@ -41,31 +41,16 @@ async function saFetch(url, opts) {
   var mergedOpts = Object.assign({}, opts || {});
   mergedOpts.headers = Object.assign({}, saHeaders(), mergedOpts.headers || {});
   const res = await fetch(url, mergedOpts);
-  if (res.status === 401 || res.status === 403) {
-    // Check if this is a service-level auth error (not session expiry)
-    // Don't logout for API endpoints that may return 403 for missing config
-    try {
-      const clone = res.clone();
-      const body = await clone.json();
-      if (body.error && (
-        body.error.includes('not configured') || 
-        body.error.includes('Admin access') || 
-        body.error.includes('Super admin') || 
-        body.error.includes('Admin authentication') || 
-        body.error.includes('Forbidden') || 
-        body.error.includes('Superadmin required') ||
-        body.error.includes('Unauthorized') ||
-        body.error.includes('required')
-      )) {
-        // Service-level issue, not session expiry — return error response without logout
-        return res;
-      }
-    } catch(e) { /* not JSON, treat as session error */ }
-    // True session expiry — redirect to login
+  if (res.status === 401) {
+    // Session expired or invalid — always redirect to login
     localStorage.removeItem('rc_user');
     localStorage.removeItem('rc_token');
     window.location.href = '/login';
     return null;
+  }
+  if (res.status === 403) {
+    // Permission issue (e.g. not superadmin) — return error without logout
+    return res;
   }
   return res;
 }
