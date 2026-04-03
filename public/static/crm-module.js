@@ -1807,20 +1807,17 @@
         else if (data.auth_url) { popup = window.open(data.auth_url, 'calOAuth', 'width=600,height=700'); }
         else { if (popup) popup.close(); toast(data.error || 'Not configured', 'error'); }
       }).catch(function() { if (popup) popup.close(); toast('Failed to connect', 'error'); });
-    {
-      var poll = setInterval(function() {
-            try {
-              if (!popup || popup.closed) {
-                clearInterval(poll);
-                setTimeout(function() {
-                  checkCalendarStatus();
-                  loadJobsForMonth(_calYear, _calMonth);
-                }, 1000);
-              }
-            } catch(e) {}
-          }, 500);
+    var poll = setInterval(function() {
+      try {
+        if (!popup || popup.closed) {
+          clearInterval(poll);
+          setTimeout(function() {
+            checkCalendarStatus();
+            loadJobsForMonth(_calYear, _calMonth);
+          }, 1000);
         }
-      }).catch(function() { toast('Failed to start OAuth flow', 'error'); });
+      } catch(e) {}
+    }, 500);
   };
 
   window._crmDisconnectCalendar = function() {
