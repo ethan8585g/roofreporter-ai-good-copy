@@ -1501,14 +1501,16 @@ crmRoutes.post('/proposals/:id/send', async (c) => {
 // ============================================================
 crmRoutes.post('/proposals/respond/:token', async (c) => {
   const token = c.req.param('token')
-  const { action, signature } = await c.req.json()
+  const { action, signature, printed_name, signed_date } = await c.req.json()
 
   if (!['accept', 'decline'].includes(action)) {
     return c.json({ error: 'Invalid action' }, 400)
   }
 
   const proposal = await c.env.DB.prepare(
-    'SELECT id, status FROM crm_proposals WHERE share_token = ?'
+    `SELECT cp.*, cc.name as customer_name, cc.email as customer_email
+     FROM crm_proposals cp LEFT JOIN crm_customers cc ON cc.id = cp.crm_customer_id
+     WHERE cp.share_token = ?`
   ).bind(token).first<any>()
 
   if (!proposal) return c.json({ error: 'Proposal not found' }, 404)
@@ -1522,6 +1524,55 @@ crmRoutes.post('/proposals/respond/:token', async (c) => {
   await c.env.DB.prepare(`
     UPDATE crm_proposals SET status = ?, ${dateCol} = datetime('now'), customer_signature = ?, updated_at = datetime('now') WHERE id = ?
   `).bind(newStatus, signature || null, proposal.id).run()
+
+  // Email notification to business owner
+  try {
+    const owner = await c.env.DB.prepare('SELECT email, name, gmail_refresh_token FROM customers WHERE id = ?').bind(proposal.owner_id).first<any>()
+    if (owner?.email) {
+      const clientId = (c.env as any).GMAIL_CLIENT_ID
+      const clientSecret = (c.env as any).GMAIL_CLIENT_SECRET
+      const refreshToken = (c.env as any).GMAIL_REFRESH_TOKEN || owner?.gmail_refresh_token || ''
+      if (clientId && clientSecret && refreshToken) {
+        const emoji = action === 'accept' ? '✅' : '❌'
+        const statusText = action === 'accept' ? 'ACCEPTED' : 'DECLINED'
+        const notifHtml = `
+<div style="max-width:600px;margin:0 auto;font-family:Inter,system-ui,sans-serif">
+  <div style="background:${action === 'accept' ? '#16a34a' : '#dc2626'};padding:24px;border-radius:12px 12px 0 0;text-align:center">
+    <h1 style="color:white;font-size:20px;margin:0">${emoji} Proposal ${statusText}</h1>
+    <p style="color:rgba(255,255,255,0.8);font-size:13px;margin:4px 0 0">${proposal.proposal_number} — ${proposal.title || ''}</p>
+  </div>
+  <div style="background:white;padding:24px;border:1px solid #e2e8f0;border-top:none">
+    <table style="width:100%;border-collapse:collapse">
+      <tr><td style="padding:8px 0;color:#64748b;font-size:13px;width:120px"><strong>Customer</strong></td><td style="padding:8px 0;font-size:14px;color:#1e293b">${proposal.customer_name || 'Unknown'}</td></tr>
+      <tr><td style="padding:8px 0;color:#64748b;font-size:13px"><strong>Total Amount</strong></td><td style="padding:8px 0;font-size:14px;color:#1e293b;font-weight:700">$${Number(proposal.total_amount || 0).toFixed(2)}</td></tr>
+      ${printed_name ? `<tr><td style="padding:8px 0;color:#64748b;font-size:13px"><strong>Signed By</strong></td><td style="padding:8px 0;font-size:14px;color:#1e293b">${printed_name}</td></tr>` : ''}
+      ${signed_date ? `<tr><td style="padding:8px 0;color:#64748b;font-size:13px"><strong>Date</strong></td><td style="padding:8px 0;font-size:14px;color:#1e293b">${signed_date}</td></tr>` : ''}
+      ${proposal.property_address ? `<tr><td style="padding:8px 0;color:#64748b;font-size:13px"><strong>Property</strong></td><td style="padding:8px 0;font-size:14px;color:#1e293b">${proposal.property_address}</td></tr>` : ''}
+    </table>
+    ${signature ? `<div style="margin-top:16px;padding:12px;background:#f8fafc;border-radius:8px;text-align:center"><p style="font-size:11px;color:#94a3b8;margin:0 0 8px">Customer Signature</p><img src="${signature}" alt="Signature" style="max-height:60px"></div>` : ''}
+  </div>
+  <div style="background:#f8fafc;padding:16px;border-radius:0 0 12px 12px;border:1px solid #e2e8f0;border-top:none;text-align:center">
+    <a href="https://www.roofreporterai.com/customer/proposals" style="color:#0ea5e9;font-size:12px;font-weight:600">View in Dashboard</a>
+  </div>
+</div>`
+        const { sendGmailOAuth2 } = await import('../services/email')
+        sendGmailOAuth2(clientId, clientSecret, refreshToken, owner.email, `${emoji} Proposal ${statusText}: ${proposal.title || proposal.proposal_number} — $${Number(proposal.total_amount || 0).toFixed(2)}`, notifHtml, owner.email).catch(() => {})
+      }
+    }
+  } catch {}
+
+  // Auto-create job from accepted proposal
+  if (action === 'accept' && proposal.property_address) {
+    try {
+      const d = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+      const rand = Math.floor(Math.random() * 9999).toString().padStart(4, '0')
+      const jobNumber = `JOB-${d}-${rand}`
+      await c.env.DB.prepare(
+        `INSERT INTO crm_jobs (owner_id, crm_customer_id, proposal_id, job_number, title, property_address, job_type, scheduled_date, notes, status)
+         VALUES (?, ?, ?, ?, ?, ?, 'install', date('now', '+7 days'), ?, 'scheduled')`
+      ).bind(proposal.owner_id, proposal.crm_customer_id, proposal.id, jobNumber, proposal.title || 'Accepted Proposal Job', proposal.property_address, 'Auto-created from accepted proposal ' + proposal.proposal_number).run()
+    } catch {}
+  }
 
   return c.json({ success: true, status: newStatus })
 })

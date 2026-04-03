@@ -1200,17 +1200,30 @@ app.get('/proposal/view/:token', async (c) => {
           <p class="text-center text-sm text-gray-500 mb-6">Accept this proposal to get your roofing project started</p>
           
           <!-- Signature Pad -->
-          <div class="mb-5">
-            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Your Signature (optional)</label>
+          <div class="mb-4">
+            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Your Signature <span class="text-red-400">*</span></label>
             <canvas id="signaturePad" class="signature-pad w-full bg-white" width="600" height="100"></canvas>
-            <div class="flex justify-end mt-1">
-              <button onclick="clearSignature()" class="text-xs text-gray-400 hover:text-gray-600"><i class="fas fa-eraser mr-1"></i>Clear</button>
+            <div class="flex justify-between mt-1">
+              <span id="sigError" class="text-xs text-red-500 hidden">Please sign above before accepting</span>
+              <button onclick="clearSignature()" class="text-xs text-gray-400 hover:text-gray-600 ml-auto"><i class="fas fa-eraser mr-1"></i>Clear</button>
+            </div>
+          </div>
+
+          <!-- Printed Name + Date -->
+          <div class="grid grid-cols-2 gap-3 mb-5">
+            <div>
+              <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Print Your Full Name <span class="text-red-400">*</span></label>
+              <input type="text" id="sigPrintedName" placeholder="e.g. John Smith" class="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-400 focus:border-blue-400">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Date</label>
+              <input type="text" id="sigDate" value="${new Date().toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' })}" readonly class="w-full px-3 py-2.5 bg-gray-100 border border-gray-200 rounded-xl text-sm text-gray-600">
             </div>
           </div>
 
           <div class="flex gap-3">
             <button onclick="respondProposal('accept')" class="flex-1 brand-bg brand-bg-hover text-white py-3.5 rounded-xl font-bold text-sm transition-all hover:shadow-lg">
-              <i class="fas fa-check-circle mr-2"></i>Accept Proposal
+              <i class="fas fa-check-circle mr-2"></i>Accept &amp; Sign Proposal
             </button>
             <button onclick="respondProposal('decline')" class="px-6 py-3.5 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-xl font-semibold text-sm transition-all">
               Decline
@@ -1280,8 +1293,24 @@ app.get('/proposal/view/:token', async (c) => {
     }
 
     function respondProposal(action) {
+      // Validate signature + name for acceptance
+      if (action === 'accept') {
+        if (!hasSignature) {
+          var sigErr = document.getElementById('sigError');
+          if (sigErr) sigErr.classList.remove('hidden');
+          alert('Please sign above before accepting the proposal.');
+          return;
+        }
+        var printedName = document.getElementById('sigPrintedName');
+        if (!printedName || !printedName.value.trim()) {
+          alert('Please print your full name before accepting.');
+          if (printedName) printedName.focus();
+          return;
+        }
+      }
+
       var confirmMsg = action === 'accept'
-        ? 'Are you sure you want to accept this proposal?'
+        ? 'Are you sure you want to accept and sign this proposal?'
         : 'Are you sure you want to decline this proposal?';
       if (!confirm(confirmMsg)) return;
 
@@ -1289,6 +1318,8 @@ app.get('/proposal/view/:token', async (c) => {
       if (hasSignature && canvas) {
         try { signature = canvas.toDataURL('image/png'); } catch(e) {}
       }
+      var sigName = document.getElementById('sigPrintedName')?.value?.trim() || '';
+      var sigDate = document.getElementById('sigDate')?.value || '';
 
       var btn = event.target;
       btn.disabled = true;
@@ -1297,7 +1328,7 @@ app.get('/proposal/view/:token', async (c) => {
       fetch('/api/crm/proposals/respond/${token}', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: action, signature: signature })
+        body: JSON.stringify({ action: action, signature: signature, printed_name: sigName, signed_date: sigDate })
       })
       .then(function(r) { return r.json(); })
       .then(function(data) {
