@@ -342,7 +342,54 @@
       tagsHtml +
       '<div class="prose prose-lg prose-sky max-w-none blog-content">' +
         post.content +
+      '</div>' +
+      // Contact Us form at bottom of every blog post
+      '<div class="mt-12 bg-gradient-to-br from-slate-900 to-blue-900 rounded-2xl p-8 text-white">' +
+        '<div class="text-center mb-6">' +
+          '<h2 class="text-2xl font-black mb-2">Contact Us Now</h2>' +
+          '<p class="text-blue-200 text-sm">Have questions about roof measurement reports? Get in touch — we respond within hours.</p>' +
+        '</div>' +
+        '<form onsubmit="submitBlogContact(event)" class="max-w-lg mx-auto space-y-4">' +
+          '<div class="grid grid-cols-2 gap-4">' +
+            '<input type="text" id="bc-name" placeholder="Your Name *" required class="px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-sm text-white placeholder-blue-300 focus:ring-2 focus:ring-sky-400 focus:border-sky-400">' +
+            '<input type="text" id="bc-company" placeholder="Company Name" class="px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-sm text-white placeholder-blue-300 focus:ring-2 focus:ring-sky-400 focus:border-sky-400">' +
+          '</div>' +
+          '<div class="grid grid-cols-2 gap-4">' +
+            '<input type="email" id="bc-email" placeholder="Email Address *" required class="px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-sm text-white placeholder-blue-300 focus:ring-2 focus:ring-sky-400 focus:border-sky-400">' +
+            '<input type="tel" id="bc-phone" placeholder="Phone Number" class="px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-sm text-white placeholder-blue-300 focus:ring-2 focus:ring-sky-400 focus:border-sky-400">' +
+          '</div>' +
+          '<textarea id="bc-message" rows="4" placeholder="How can we help? Tell us about your roofing business..." class="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-sm text-white placeholder-blue-300 focus:ring-2 focus:ring-sky-400 focus:border-sky-400 resize-none"></textarea>' +
+          '<button type="submit" id="bc-submit" class="w-full py-3.5 bg-sky-500 hover:bg-sky-400 text-white font-bold rounded-xl text-sm transition-all shadow-lg"><i class="fas fa-paper-plane mr-2"></i>Send Message</button>' +
+          '<p class="text-center text-xs text-blue-300">We\'ll get back to you within 24 hours. No spam, ever.</p>' +
+        '</form>' +
+        '<div id="bc-success" class="hidden text-center py-6"><i class="fas fa-check-circle text-green-400 text-3xl mb-3 block"></i><p class="text-lg font-bold">Message Sent!</p><p class="text-blue-200 text-sm mt-1">We\'ll be in touch shortly.</p></div>' +
       '</div>';
+  }
+
+  window.submitBlogContact = function(e) {
+    e.preventDefault();
+    var name = document.getElementById('bc-name').value.trim();
+    var email = document.getElementById('bc-email').value.trim();
+    if (!name || !email) return;
+    var data = {
+      name: name,
+      email: email,
+      company: document.getElementById('bc-company').value.trim(),
+      phone: document.getElementById('bc-phone').value.trim(),
+      message: document.getElementById('bc-message').value.trim(),
+      source: 'blog_contact_form',
+      page: window.location.pathname
+    };
+    var btn = document.getElementById('bc-submit');
+    if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
+    fetch('/api/agents/leads', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) })
+      .then(function() {
+        var form = document.querySelector('#bc-success')?.closest('div')?.querySelector('form');
+        if (form) form.classList.add('hidden');
+        var success = document.getElementById('bc-success');
+        if (success) success.classList.remove('hidden');
+      })
+      .catch(function() { if (btn) { btn.disabled = false; btn.textContent = 'Send Message'; } alert('Failed to send. Please try again.'); });
   }
 
   window.shareBlog = function () {
