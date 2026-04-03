@@ -762,6 +762,22 @@ squareRoutes.post('/webhook', async (c) => {
           }
         }
 
+        // Referral commission — if paying customer was referred, credit 10% to referrer
+        try {
+          const referredCustomer = await c.env.DB.prepare('SELECT referred_by FROM customers WHERE id = ?').bind(customerId).first<any>()
+          if (referredCustomer?.referred_by) {
+            const paymentAmount = (pendingPayment.amount || 0) / 100 // cents to dollars
+            if (paymentAmount > 0) {
+              const commissionRate = 0.10
+              const commission = Math.round(paymentAmount * commissionRate * 100) / 100
+              await c.env.DB.prepare(
+                `INSERT INTO referral_earnings (referrer_id, referred_id, payment_id, amount_paid, commission_rate, commission_earned, status) VALUES (?, ?, ?, ?, ?, ?, 'pending')`
+              ).bind(referredCustomer.referred_by, customerId, pendingPayment.id, paymentAmount, commissionRate, commission).run()
+              console.log(`[Referral] Customer ${customerId} payment $${paymentAmount} → $${commission} commission to referrer ${referredCustomer.referred_by}`)
+            }
+          }
+        } catch (e: any) { console.warn('[Referral] Commission tracking error:', e.message) }
+
         // Mark webhook as processed
         await c.env.DB.prepare(
           'UPDATE square_webhook_events SET processed = 1 WHERE square_event_id = ?'

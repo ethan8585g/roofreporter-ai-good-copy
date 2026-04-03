@@ -32,7 +32,8 @@
     pipeline: { init: initPipeline, title: 'Sales Pipeline' },
     d2d: { init: initD2D, title: 'D2D Manager' },
     'email-outreach': { init: initEmailOutreach, title: 'Email Outreach' },
-    'catalog': { init: initCatalog, title: 'Material Catalog' }
+    'catalog': { init: initCatalog, title: 'Material Catalog' },
+    'referrals': { init: initReferrals, title: 'Referral Program' }
   };
 
   const mod = modules[MODULE];
@@ -2016,6 +2017,101 @@
     fetch('/api/crm/jobs/' + id, { method: 'DELETE', headers: authHeadersOnly() })
       .then(function() { toast('Job deleted'); loadJobsForMonth(_calYear, _calMonth); })
       .catch(function(e) { toast('Failed to delete: ' + (e.message || 'Network error'), 'error'); });
+  };
+
+  // ============================================================
+  // MODULE: REFERRAL PROGRAM
+  // ============================================================
+  function initReferrals() {
+    root.innerHTML = '<div class="text-center py-8"><div class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-brand-500 mx-auto mb-3"></div></div>';
+    fetch('/api/customer/referrals', { headers: authHeadersOnly() })
+      .then(function(r) { return r.json(); })
+      .then(function(data) { renderReferrals(data); })
+      .catch(function() { root.innerHTML = '<p class="text-red-500 p-4">Failed to load referral data.</p>'; });
+  }
+
+  function renderReferrals(data) {
+    var refCode = data.referral_code || '';
+    var shareUrl = data.share_url || '';
+    var referred = data.referred_users || [];
+    var earnings = data.earnings || [];
+    var totalEarned = data.total_earned || 0;
+    var totalPending = data.total_pending || 0;
+    var totalReferred = data.total_referred || 0;
+
+    var html = '<div class="flex items-center justify-between mb-5 flex-wrap gap-3">';
+    html += '<div><h2 class="text-lg font-bold text-gray-800"><i class="fas fa-gift text-purple-500 mr-2"></i>Referral Program</h2><p class="text-xs text-gray-500 mt-0.5">Earn 10% commission on every report your referrals purchase</p></div>';
+    html += '</div>';
+
+    // Stats
+    html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">';
+    html += '<div class="bg-white rounded-xl border p-4 text-center"><p class="text-2xl font-black text-gray-800">' + totalReferred + '</p><p class="text-[10px] text-gray-500">Referred Users</p></div>';
+    html += '<div class="bg-white rounded-xl border p-4 text-center"><p class="text-2xl font-black text-green-600">$' + totalEarned.toFixed(2) + '</p><p class="text-[10px] text-gray-500">Total Earned</p></div>';
+    html += '<div class="bg-white rounded-xl border p-4 text-center"><p class="text-2xl font-black text-amber-600">$' + totalPending.toFixed(2) + '</p><p class="text-[10px] text-gray-500">Pending</p></div>';
+    html += '<div class="bg-white rounded-xl border p-4 text-center"><p class="text-2xl font-black text-purple-600">10%</p><p class="text-[10px] text-gray-500">Commission Rate</p></div>';
+    html += '</div>';
+
+    // Share link card
+    html += '<div class="bg-gradient-to-r from-purple-600 to-indigo-700 rounded-2xl p-6 mb-5 text-white">';
+    html += '<h3 class="font-bold text-lg mb-1"><i class="fas fa-share-alt mr-2"></i>Your Referral Link</h3>';
+    html += '<p class="text-purple-200 text-sm mb-4">Share this link with other roofing contractors. When they sign up and buy reports, you earn 10% of every purchase.</p>';
+    html += '<div class="flex gap-2 mb-3">';
+    html += '<input type="text" id="refLinkInput" value="' + shareUrl + '" readonly class="flex-1 bg-white/20 border border-white/30 rounded-xl px-4 py-3 text-sm font-mono text-white placeholder-white/50">';
+    html += '<button onclick="navigator.clipboard.writeText(document.getElementById(\'refLinkInput\').value);toast(\'Link copied!\')" class="px-5 py-3 bg-white text-purple-700 rounded-xl font-bold text-sm hover:bg-purple-50 flex-shrink-0"><i class="fas fa-copy mr-1"></i>Copy</button>';
+    html += '</div>';
+    html += '<div class="flex gap-2">';
+    html += '<div class="bg-white/10 rounded-lg px-3 py-2"><p class="text-[10px] text-purple-200">Your Code</p><p class="font-mono font-bold text-sm">' + refCode + '</p></div>';
+    html += '<button onclick="window._refShareEmail()" class="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-sm font-medium border border-white/20"><i class="fas fa-envelope mr-1"></i>Email to a Friend</button>';
+    html += '</div>';
+    html += '</div>';
+
+    // How it works
+    html += '<div class="bg-white rounded-2xl border shadow-sm p-6 mb-5">';
+    html += '<h3 class="font-bold text-gray-800 text-sm mb-4"><i class="fas fa-question-circle text-blue-500 mr-2"></i>How It Works</h3>';
+    html += '<div class="grid md:grid-cols-3 gap-4">';
+    html += '<div class="text-center"><div class="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-2"><span class="font-bold text-purple-600">1</span></div><p class="text-sm font-semibold text-gray-800">Share Your Link</p><p class="text-xs text-gray-500 mt-1">Send your unique referral link to other roofing contractors</p></div>';
+    html += '<div class="text-center"><div class="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-2"><span class="font-bold text-purple-600">2</span></div><p class="text-sm font-semibold text-gray-800">They Sign Up</p><p class="text-xs text-gray-500 mt-1">When they create an account through your link, they\'re linked to you</p></div>';
+    html += '<div class="text-center"><div class="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-2"><span class="font-bold text-purple-600">3</span></div><p class="text-sm font-semibold text-gray-800">You Earn 10%</p><p class="text-xs text-gray-500 mt-1">Every time they buy reports or credit packs, you earn 10% commission</p></div>';
+    html += '</div></div>';
+
+    // Referred users
+    html += '<div class="bg-white rounded-2xl border shadow-sm overflow-hidden mb-5">';
+    html += '<div class="px-5 py-4 border-b border-gray-100"><h3 class="font-bold text-gray-800 text-sm"><i class="fas fa-users text-purple-500 mr-2"></i>Your Referrals (' + totalReferred + ')</h3></div>';
+    if (referred.length === 0) {
+      html += '<div class="p-8 text-center text-gray-400"><i class="fas fa-user-friends text-3xl mb-3 opacity-30 block"></i><p class="text-sm">No referrals yet. Share your link to start earning!</p></div>';
+    } else {
+      html += '<div class="overflow-x-auto"><table class="w-full"><thead><tr class="bg-gray-50 text-xs text-gray-500 uppercase"><th class="px-4 py-3 text-left">User</th><th class="px-4 py-3 text-left">Company</th><th class="px-4 py-3 text-center">Reports</th><th class="px-4 py-3 text-left">Joined</th></tr></thead><tbody>';
+      for (var i = 0; i < referred.length; i++) {
+        var u = referred[i];
+        html += '<tr class="border-b border-gray-100 hover:bg-gray-50"><td class="px-4 py-3 text-sm font-medium text-gray-800">' + (u.name || 'User') + '</td><td class="px-4 py-3 text-sm text-gray-500">' + (u.company_name || '-') + '</td><td class="px-4 py-3 text-center text-sm font-bold text-gray-800">' + (u.reports_ordered || 0) + '</td><td class="px-4 py-3 text-xs text-gray-400">' + fmtDate(u.created_at) + '</td></tr>';
+      }
+      html += '</tbody></table></div>';
+    }
+    html += '</div>';
+
+    // Earnings history
+    if (earnings.length > 0) {
+      html += '<div class="bg-white rounded-2xl border shadow-sm overflow-hidden">';
+      html += '<div class="px-5 py-4 border-b border-gray-100"><h3 class="font-bold text-gray-800 text-sm"><i class="fas fa-dollar-sign text-green-500 mr-2"></i>Commission History</h3></div>';
+      html += '<div class="overflow-x-auto"><table class="w-full"><thead><tr class="bg-gray-50 text-xs text-gray-500 uppercase"><th class="px-4 py-3 text-left">From</th><th class="px-4 py-3 text-right">Payment</th><th class="px-4 py-3 text-right">Commission</th><th class="px-4 py-3 text-center">Status</th><th class="px-4 py-3 text-left">Date</th></tr></thead><tbody>';
+      for (var j = 0; j < earnings.length; j++) {
+        var e = earnings[j];
+        var statusBg = e.status === 'pending' ? 'bg-amber-100 text-amber-700' : e.status === 'credited' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700';
+        html += '<tr class="border-b border-gray-100"><td class="px-4 py-3 text-sm text-gray-800">' + (e.referred_name || e.referred_company || 'User') + '</td><td class="px-4 py-3 text-right text-sm text-gray-600">$' + (e.amount_paid || 0).toFixed(2) + '</td><td class="px-4 py-3 text-right text-sm font-bold text-green-600">$' + (e.commission_earned || 0).toFixed(2) + '</td><td class="px-4 py-3 text-center"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold ' + statusBg + ' capitalize">' + (e.status || 'pending') + '</span></td><td class="px-4 py-3 text-xs text-gray-400">' + fmtDate(e.created_at) + '</td></tr>';
+      }
+      html += '</tbody></table></div></div>';
+    }
+
+    root.innerHTML = html;
+  }
+
+  window._refShareEmail = function() {
+    var refData = null;
+    fetch('/api/customer/referrals', { headers: authHeadersOnly() }).then(function(r) { return r.json(); }).then(function(d) {
+      var subject = encodeURIComponent('Try RoofReporterAI — Get 3 Free Roof Reports');
+      var body = encodeURIComponent('Hey! I\'ve been using RoofReporterAI for satellite roof measurements and it\'s been a game changer. You get 3 free reports to try it out.\n\nSign up here: ' + (d.share_url || '') + '\n\nIt does roof area, pitch, edges, material takeoff — all in 60 seconds from satellite. Plus full CRM, invoicing, and proposals.');
+      window.open('mailto:?subject=' + subject + '&body=' + body);
+    });
   };
 
   // ============================================================

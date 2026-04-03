@@ -725,6 +725,7 @@ app.get('/customer/jobs', (c) => c.html(getCrmSubPageHTML('jobs', 'Job Managemen
 app.get('/customer/pipeline', (c) => c.html(getCrmSubPageHTML('pipeline', 'Sales Pipeline', 'fa-funnel-dollar')))
 app.get('/customer/email-outreach', (c) => c.html(getCrmSubPageHTML('email-outreach', 'Email Outreach', 'fa-envelope-open-text')))
 app.get('/customer/catalog', (c) => c.html(getCrmSubPageHTML('catalog', 'Material Catalog', 'fa-box-open')))
+app.get('/customer/referrals', (c) => c.html(getCrmSubPageHTML('referrals', 'Referral Program', 'fa-gift')))
 
 // Company Type Selection — shown once post-login if company_type is null
 app.get('/customer/select-type', (c) => c.html(getSelectTypePageHTML()))
@@ -2489,6 +2490,7 @@ function getCustomerLoginHTML() {
   <title>Customer Login - RoofReporterAI</title>
 </head>
 <body class="bg-gradient-to-br from-sky-100 via-blue-50 to-white min-h-screen flex items-center justify-center">
+  <script>var _rp=new URLSearchParams(location.search).get('ref');if(_rp)localStorage.setItem('_ref_code',_rp);</script>
   <div class="w-full max-w-md mx-auto px-4">
     <!-- Logo -->
     <div class="text-center mb-8">
@@ -2829,7 +2831,7 @@ function getCustomerLoginHTML() {
         const res = await fetch('/api/customer/register', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password, name, phone, company_name: company, verification_token: _regVerificationToken })
+          body: JSON.stringify({ email, password, name, phone, company_name: company, verification_token: _regVerificationToken, referred_by_code: new URLSearchParams(window.location.search).get('ref') || localStorage.getItem('_ref_code') || '' })
         });
         const data = await res.json();
         if (res.ok && data.success) {

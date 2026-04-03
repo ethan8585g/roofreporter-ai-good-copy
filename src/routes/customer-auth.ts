@@ -540,11 +540,22 @@ customerAuthRoutes.post('/register', async (c) => {
     const { hash, salt } = await hashPassword(password)
     const storedHash = `${salt}:${hash}`
 
+    // Generate referral code
+    const refCode = 'REF-' + crypto.randomUUID().replace(/-/g, '').substring(0, 6).toUpperCase()
+
+    // Check for referral — referred_by from request body or query param
+    const { referred_by_code } = body as any
+    let referredBy: number | null = null
+    if (referred_by_code) {
+      const referrer = await c.env.DB.prepare('SELECT id FROM customers WHERE referral_code = ? AND is_active = 1').bind(referred_by_code).first<any>()
+      if (referrer) referredBy = referrer.id
+    }
+
     // Insert with 3 free trial reports (NOT paid credits) — email_verified = 1 since we verified
     const result = await c.env.DB.prepare(`
-      INSERT INTO customers (email, name, phone, company_name, password_hash, email_verified, report_credits, credits_used, free_trial_total, free_trial_used)
-      VALUES (?, ?, ?, ?, ?, 1, 0, 0, 3, 0)
-    `).bind(cleanEmail, name, phone || null, company_name || null, storedHash).run()
+      INSERT INTO customers (email, name, phone, company_name, password_hash, email_verified, report_credits, credits_used, free_trial_total, free_trial_used, referral_code, referred_by)
+      VALUES (?, ?, ?, ?, ?, 1, 0, 0, 3, 0, ?, ?)
+    `).bind(cleanEmail, name, phone || null, company_name || null, storedHash, refCode, referredBy).run()
 
     if (!result.meta.last_row_id) {
       return c.json({ error: 'Failed to create account. Please try again.' }, 500)
@@ -1438,4 +1449,58 @@ customerAuthRoutes.post('/item-library', async (c) => {
   } catch (err: any) {
     return c.json({ error: 'Failed to add item', details: err.message }, 500)
   }
+})
+
+// ============================================================
+// REFERRAL PROGRAM — View referral code, referred users, earnings
+// ============================================================
+customerAuthRoutes.get('/referrals', async (c) => {
+  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  if (!token) return c.json({ error: 'Auth required' }, 401)
+  const session = await c.env.DB.prepare(
+    "SELECT customer_id FROM customer_sessions WHERE session_token = ? AND expires_at > datetime('now')"
+  ).bind(token).first<any>()
+  if (!session) return c.json({ error: 'Session expired' }, 401)
+  const customerId = session.customer_id
+
+  // Get or generate referral code
+  const customer = await c.env.DB.prepare('SELECT referral_code, name, email FROM customers WHERE id = ?').bind(customerId).first<any>()
+  let refCode = customer?.referral_code || ''
+  if (!refCode) {
+    refCode = 'REF-' + crypto.randomUUID().replace(/-/g, '').substring(0, 6).toUpperCase()
+    await c.env.DB.prepare('UPDATE customers SET referral_code = ? WHERE id = ?').bind(refCode, customerId).run()
+  }
+
+  // Get referred users
+  const referred = await c.env.DB.prepare(
+    `SELECT id, name, email, company_name, created_at,
+       (SELECT COUNT(*) FROM orders WHERE customer_id = c.id AND status = 'completed') as reports_ordered
+     FROM customers c WHERE referred_by = ? AND is_active = 1 ORDER BY created_at DESC`
+  ).bind(customerId).all<any>()
+
+  // Get earnings
+  const earnings = await c.env.DB.prepare(
+    `SELECT re.*, c.name as referred_name, c.company_name as referred_company
+     FROM referral_earnings re LEFT JOIN customers c ON c.id = re.referred_id
+     WHERE re.referrer_id = ? ORDER BY re.created_at DESC`
+  ).bind(customerId).all<any>()
+
+  const totalEarned = await c.env.DB.prepare(
+    'SELECT COALESCE(SUM(commission_earned), 0) as total FROM referral_earnings WHERE referrer_id = ?'
+  ).bind(customerId).first<any>()
+
+  const totalPending = await c.env.DB.prepare(
+    "SELECT COALESCE(SUM(commission_earned), 0) as total FROM referral_earnings WHERE referrer_id = ? AND status = 'pending'"
+  ).bind(customerId).first<any>()
+
+  return c.json({
+    referral_code: refCode,
+    share_url: 'https://www.roofreporterai.com/lander?ref=' + refCode,
+    referred_users: referred.results || [],
+    earnings: earnings.results || [],
+    total_earned: totalEarned?.total || 0,
+    total_pending: totalPending?.total || 0,
+    total_referred: (referred.results || []).length,
+    commission_rate: 10,
+  })
 })

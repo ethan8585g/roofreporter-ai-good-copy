@@ -174,6 +174,7 @@ function renderDashboard() {
           '<p class="px-3 mb-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Tools</p>' +
           navLink('/customer/material-calculator', 'fa-calculator', 'Material Calculator', null, '') +
           navLink('/customer/catalog', 'fa-box-open', 'Catalog', null, '') +
+          navLink('/customer/referrals', 'fa-gift', 'Referrals', null, '') +
           navLink('/customer/email-outreach', 'fa-envelope-open-text', 'Email Outreach', null, '') +
         '</div>' +
         (c.is_dev ? '<div><p class="px-3 mb-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Dev</p>' + navLink('/customer/property-imagery', 'fa-satellite', 'Property Imagery', 'Dev', 'bg-gray-800') + '</div>' : '') +
