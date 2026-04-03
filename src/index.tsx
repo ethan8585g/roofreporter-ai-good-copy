@@ -614,7 +614,7 @@ app.get('/roof-measurement/:city', (c) => {
     "address": {"@type": "PostalAddress", "addressLocality": "${city.name}", "addressRegion": "${city.province}", "addressCountry": "CA"},
     "geo": {"@type": "GeoCoordinates", "latitude": "${city.lat}", "longitude": "${city.lng}"},
     "areaServed": {"@type": "City", "name": "${city.name}"},
-    "priceRange": "$5-$299 USD"
+    "priceRange": "$5-$500 USD"
   }
   </script>
 </head>
@@ -2260,7 +2260,7 @@ function getLandingPageHTML() {
     "description": "AI-powered roof measurement reports from satellite imagery. Full CRM, invoicing, proposals, and team management for roofing companies.",
     "offers": {
       "@type": "Offer",
-      "price": "5.00",
+      "price": "7.00",
       "priceCurrency": "USD",
       "description": "Per report after 3 free reports"
     },
@@ -2287,7 +2287,7 @@ function getLandingPageHTML() {
     "@type": "FAQPage",
     "mainEntity": [
       {"@type": "Question", "name": "How accurate are RoofReporterAI measurements?", "acceptedAnswer": {"@type": "Answer", "text": "Our measurements use satellite imagery combined with GPS coordinate tracing and Google Solar API data. Accuracy is typically within 2-5% of manual measurements, verified against pitch-corrected sloped area calculations."}},
-      {"@type": "Question", "name": "How much does a roof measurement report cost?", "acceptedAnswer": {"@type": "Answer", "text": "Reports start at $5 USD each. New users get 3 free reports to try the platform. Credit packs offer volume discounts — 25 reports for $99 or 100 reports for $299."}},
+      {"@type": "Question", "name": "How much does a roof measurement report cost?", "acceptedAnswer": {"@type": "Answer", "text": "Reports are $7 USD each. New users get 3 free reports to try the platform. Credit packs offer volume discounts — 25 reports for $150 ($6/each) or 100 reports for $500 ($5/each)."}},
       {"@type": "Question", "name": "What is included in a roof report?", "acceptedAnswer": {"@type": "Answer", "text": "Each report includes total roof area (footprint and sloped), pitch analysis, edge breakdowns (ridge, hip, valley, eave, rake), material estimates with waste calculations, satellite imagery, and a professional PDF."}},
       {"@type": "Question", "name": "Does RoofReporterAI work in Canada and the US?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. RoofReporterAI works across Canada and the United States wherever Google satellite imagery is available. Coverage is best in urban and suburban areas."}},
       {"@type": "Question", "name": "Can I use RoofReporterAI for my roofing company?", "acceptedAnswer": {"@type": "Answer", "text": "Absolutely. RoofReporterAI includes a full CRM with customer management, invoicing, proposals, job scheduling with Google Calendar sync, material calculator, and an AI phone secretary for your business."}},
@@ -2959,9 +2959,9 @@ function getPricingPageHTML() {
 <head>
   ${getHeadTags()}
   <title>Roof Report Pricing — AI Measurements from $5/Report | RoofReporterAI</title>
-  <meta name="description" content="Compare RoofReporterAI pricing plans. Pay per report from $5 USD or save with credit packs. Includes CRM, proposals, invoicing, and AI secretary. 3 free reports to start.">
+  <meta name="description" content="Compare RoofReporterAI pricing plans. Pay per report from $7 USD or save with credit packs (25 for $150, 100 for $500). Includes CRM, proposals, invoicing, and AI secretary. 3 free reports to start.">
   <link rel="canonical" href="https://roofreporterai.com/pricing">
-  <meta property="og:title" content="Roof Report Pricing — From $5/Report">
+  <meta property="og:title" content="Roof Report Pricing — From $5/Report (100-Pack)">
   <meta property="og:description" content="AI-powered roof measurement reports with full CRM. 3 free reports, then pay per report or buy credit packs.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://roofreporterai.com/pricing">
@@ -2980,9 +2980,9 @@ function getPricingPageHTML() {
     "image": "https://roofreporterai.com/static/logo.png",
     "brand": {"@type": "Brand", "name": "RoofReporterAI"},
     "offers": [
-      {"@type": "Offer", "name": "Individual Report", "price": "5.00", "priceCurrency": "USD", "description": "Single roof measurement report"},
-      {"@type": "Offer", "name": "25-Pack", "price": "99.00", "priceCurrency": "USD", "description": "25 roof measurement reports — $3.96/each"},
-      {"@type": "Offer", "name": "100-Pack", "price": "299.00", "priceCurrency": "USD", "description": "100 roof measurement reports — $2.99/each"}
+      {"@type": "Offer", "name": "Individual Report", "price": "7.00", "priceCurrency": "USD", "description": "Single roof measurement report"},
+      {"@type": "Offer", "name": "25-Pack", "price": "150.00", "priceCurrency": "USD", "description": "25 roof measurement reports — $6/each (save 14%)"},
+      {"@type": "Offer", "name": "100-Pack", "price": "500.00", "priceCurrency": "USD", "description": "100 roof measurement reports — $5/each (save 29%)"}
     ]
   }
   </script>

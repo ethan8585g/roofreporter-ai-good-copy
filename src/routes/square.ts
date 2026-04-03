@@ -299,8 +299,8 @@ squareRoutes.post('/checkout/report', async (c) => {
     if (!property_address) return c.json({ error: 'Property address is required' }, 400)
 
     const tier = service_tier || 'standard'
-    // Single report = $5 USD flat (500 cents)
-    const priceCents = 500
+    // Single report = $7 USD flat (700 cents)
+    const priceCents = 700
     const tierLabels: Record<string, string> = { express: 'Express', standard: 'Standard' }
 
     const origin = new URL(c.req.url).origin
