@@ -611,6 +611,23 @@ customerAuthRoutes.post('/login', async (c) => {
       return c.json({ error: 'Email and password are required' }, 400)
     }
 
+    // Rate limiting — max 10 login attempts per IP per 15 minutes
+    const clientIp = c.req.header('cf-connecting-ip') || c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
+    try {
+      await c.env.DB.prepare("CREATE TABLE IF NOT EXISTS login_attempts (id INTEGER PRIMARY KEY AUTOINCREMENT, ip TEXT, email TEXT, created_at TEXT DEFAULT (datetime('now')))").run()
+      const attempts = await c.env.DB.prepare("SELECT COUNT(*) as cnt FROM login_attempts WHERE ip = ? AND created_at > datetime('now', '-15 minutes')").bind(clientIp).first<any>()
+      if (attempts && attempts.cnt >= 10) {
+        return c.json({ error: 'Too many login attempts. Please wait 15 minutes and try again.' }, 429)
+      }
+      await c.env.DB.prepare("INSERT INTO login_attempts (ip, email) VALUES (?, ?)").bind(clientIp, email.toLowerCase().trim()).run()
+      // Cleanup old attempts (non-blocking)
+      c.env.DB.prepare("DELETE FROM login_attempts WHERE created_at < datetime('now', '-1 hour')").run().catch(() => {})
+    } catch {}
+
+    // Session + verification code cleanup (piggyback, non-blocking)
+    c.env.DB.prepare("DELETE FROM customer_sessions WHERE expires_at < datetime('now')").run().catch(() => {})
+    c.env.DB.prepare("DELETE FROM email_verification_codes WHERE expires_at < datetime('now') AND used = 1").run().catch(() => {})
+
     const cleanEmail = email.toLowerCase().trim()
 
     // ============================================================

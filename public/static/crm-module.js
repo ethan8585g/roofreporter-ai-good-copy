@@ -697,6 +697,7 @@
   // Generate Square payment link for invoice
   window._crmGenPayLink = function(id) {
     if (!confirm('Generate a Square payment link for this invoice? The link will be included in future emails.')) return;
+    toast('Generating payment link...', 'info');
     fetch('/api/crm/invoices/' + id + '/payment-link', { method: 'POST', headers: authHeaders() })
       .then(function(r) { return r.json(); })
       .then(function(res) {
@@ -714,6 +715,7 @@
   // Generate Square payment link for proposal
   window._crmGenProposalPayLink = function(id) {
     if (!confirm('Generate a Square payment link for this proposal? The customer will be able to pay online.')) return;
+    toast('Generating payment link...', 'info');
     fetch('/api/crm/proposals/' + id + '/payment-link', { method: 'POST', headers: authHeaders() })
       .then(function(r) { return r.json(); })
       .then(function(res) {

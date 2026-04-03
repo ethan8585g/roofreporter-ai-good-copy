@@ -372,12 +372,30 @@ function renderRecentOrders() {
         '<span class="px-2 py-0.5 ' + statusClass + ' rounded-full text-[10px] font-bold capitalize">' + (isProcessing ? '<i class="fas fa-spinner fa-spin mr-1"></i>' : '') + (isProcessing ? 'generating' : o.status) + '</span>' +
         (reportReady ? '<a href="/api/reports/' + o.id + '/html" target="_blank" class="px-2.5 py-1 bg-brand-600 text-white rounded-lg text-xs font-medium hover:bg-brand-700"><i class="fas fa-eye mr-1"></i>View</a>' : '') +
         (reportReady ? '<a href="/customer/material-calculator?order_id=' + o.id + '" class="px-2.5 py-1 bg-sky-100 text-sky-700 rounded-lg text-xs font-medium hover:bg-sky-200"><i class="fas fa-calculator mr-1"></i>Materials</a>' : '') +
+        (o.status === 'failed' ? '<button onclick="retryReport(' + o.id + ', this)" class="px-2.5 py-1 bg-red-100 text-red-700 rounded-lg text-xs font-medium hover:bg-red-200"><i class="fas fa-redo mr-1"></i>Retry</button>' : '') +
       '</div>' +
     '</div>';
   }
   html += '</div>';
   return html;
 }
+
+// Retry failed report generation
+window.retryReport = function(orderId, btn) {
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Retrying...'; }
+  fetch('/api/reports/' + orderId + '/retry', { method: 'POST', headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('rc_customer_token') || ''), 'Content-Type': 'application/json' } })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.success) {
+        if (btn) { btn.innerHTML = '<i class="fas fa-check mr-1"></i>Regenerating!'; btn.className = 'px-2.5 py-1 bg-green-100 text-green-700 rounded-lg text-xs font-medium'; }
+        setTimeout(function() { loadDashData().then(function() { renderDashboard(); startEnhancementPolling(); }); }, 2000);
+      } else {
+        alert(data.error || data.message || 'Retry failed. Please try again.');
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-redo mr-1"></i>Retry'; }
+      }
+    })
+    .catch(function() { alert('Network error. Please try again.'); if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-redo mr-1"></i>Retry'; } });
+};
 
 // ============================================================
 // AUTO-POLLING: Refresh dashboard when reports are generating
