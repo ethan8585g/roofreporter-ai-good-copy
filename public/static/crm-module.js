@@ -721,9 +721,22 @@
       .catch(function(e) { toast('Network error: ' + (e.message || 'Unknown'), 'error'); });
   };
 
-  // Connect Gmail
+  // Connect Gmail — open blank popup immediately (user click context), then redirect to auth URL
   window._crmConnectGmail = function() {
-    var w = window.open('/api/crm/gmail/connect', 'gmailOAuth', 'width=550,height=650');
+    var w = window.open('about:blank', 'gmailOAuth', 'width=600,height=700');
+    fetch('/api/crm/gmail/connect', { headers: authHeadersOnly() })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.auth_url && w) {
+          w.location.href = data.auth_url;
+        } else if (data.auth_url) {
+          window.open(data.auth_url, 'gmailOAuth', 'width=600,height=700');
+        } else {
+          if (w) w.close();
+          toast(data.error || 'Gmail not configured', 'error');
+        }
+      })
+      .catch(function() { if (w) w.close(); toast('Failed to start Gmail connection', 'error'); });
     var timer = setInterval(function() {
       if (w && w.closed) {
         clearInterval(timer);
@@ -882,17 +895,18 @@
     showModal('Gmail Integration', body);
   };
 
+  // (Gmail connect defined above in invoices section — this override uses same popup-first pattern)
   window._crmConnectGmail = function() {
     closeModal();
+    var w = window.open('about:blank', 'gmailOAuth', 'width=600,height=700');
     fetch('/api/crm/gmail/connect', { headers: authHeadersOnly() })
       .then(function(r) { return r.json(); })
       .then(function(data) {
-        if (data.auth_url) {
-          window.open(data.auth_url, 'gmailOAuth', 'width=600,height=700');
-        } else {
-          toast(data.error || 'Gmail not configured', 'error');
-        }
-      }).catch(function(e) { toast('Failed to start Gmail connection: ' + (e.message || 'Network error'), 'error'); });
+        if (data.auth_url && w) { w.location.href = data.auth_url; }
+        else if (data.auth_url) { window.open(data.auth_url, 'gmailOAuth', 'width=600,height=700'); }
+        else { if (w) w.close(); toast(data.error || 'Gmail not configured', 'error'); }
+      }).catch(function(e) { if (w) w.close(); toast('Failed: ' + (e.message || 'Network error'), 'error'); });
+    var timer = setInterval(function() { if (w && w.closed) { clearInterval(timer); checkGmailStatus(); loadProposals(window._propFilter); } }, 800);
   };
 
   window._crmDisconnectGmail = function() {
@@ -1785,16 +1799,19 @@
 
   window._crmConnectCalendar = function() {
     closeModal();
+    var popup = window.open('about:blank', 'calOAuth', 'width=600,height=700');
     fetch('/api/crm/gmail/connect', { headers: authHeadersOnly() })
       .then(function(r) { return r.json(); })
       .then(function(data) {
-        if (data.auth_url) {
-          var popup = window.open(data.auth_url, 'calOAuth', 'width=550,height=650');
-          var poll = setInterval(function() {
+        if (data.auth_url && popup) { popup.location.href = data.auth_url; }
+        else if (data.auth_url) { popup = window.open(data.auth_url, 'calOAuth', 'width=600,height=700'); }
+        else { if (popup) popup.close(); toast(data.error || 'Not configured', 'error'); }
+      }).catch(function() { if (popup) popup.close(); toast('Failed to connect', 'error'); });
+    {
+      var poll = setInterval(function() {
             try {
               if (!popup || popup.closed) {
                 clearInterval(poll);
-                // Re-check status after popup closes
                 setTimeout(function() {
                   checkCalendarStatus();
                   loadJobsForMonth(_calYear, _calMonth);
