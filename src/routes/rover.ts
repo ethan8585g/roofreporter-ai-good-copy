@@ -658,7 +658,7 @@ async function sendLeadNotification(env: any, lead: { name?: string; email?: str
     <a href="https://www.roofreporterai.com/super-admin" style="color:#0ea5e9;font-size:12px;font-weight:600">View in Super Admin Dashboard</a>
   </div>
 </div>`
-    await sendGmailOAuth2(clientId, clientSecret, refreshToken, 'sales@roofreporterai.com', `🐕 Rover Chat Lead: ${lead.name || lead.email || 'Unknown'}`, html).catch((e: any) => console.warn('[Rover Lead Email] Failed:', e.message))
+    await sendGmailOAuth2(clientId, clientSecret, refreshToken, 'sales@roofreporterai.com', `🐕 Rover Chat Lead: ${lead.name || lead.email || 'Unknown'}`, html, 'sales@roofreporterai.com').catch((e: any) => console.warn('[Rover Lead Email] Failed:', e.message))
   } else {
     console.log('[Rover Lead] Gmail not configured, lead:', JSON.stringify(lead))
   }

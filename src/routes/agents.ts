@@ -80,7 +80,7 @@ agentsRoutes.post('/leads', async (c) => {
     <a href="https://www.roofreporterai.com/super-admin" style="color:#0ea5e9;font-size:12px;font-weight:600">View in Super Admin Dashboard</a>
   </div>
 </div>`
-      sendGmailOAuth2(clientId, clientSecret, refreshToken, 'sales@roofreporterai.com', `🔔 New Lead: ${String(name).trim()} — ${source_page || 'website'}`, leadHtml).catch((e: any) => console.warn('[Lead Email] Failed:', e.message))
+      sendGmailOAuth2(clientId, clientSecret, refreshToken, 'sales@roofreporterai.com', `🔔 New Lead: ${String(name).trim()} — ${source_page || 'website'}`, leadHtml, 'sales@roofreporterai.com').catch((e: any) => console.warn('[Lead Email] Failed:', e.message))
     }
 
     return c.json({ success: true, message: 'Thank you! We will be in touch shortly.' })
