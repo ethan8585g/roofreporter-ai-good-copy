@@ -432,6 +432,11 @@
         html += '<button onclick="window._crmViewInvoice(' + inv.id + ')" class="text-xs text-brand-600 hover:underline font-medium"><i class="fas fa-eye mr-0.5"></i>View</button>';
         if (inv.status === 'draft') html += '<button onclick="window._crmEditInvoice(' + inv.id + ')" class="text-xs text-gray-600 hover:underline ml-2"><i class="fas fa-edit mr-0.5"></i>Edit</button>';
         if (inv.status === 'draft' || inv.status === 'sent') html += '<button onclick="window._crmSendInvoice(' + inv.id + ')" class="text-xs text-blue-600 hover:underline ml-2"><i class="fas fa-paper-plane mr-0.5"></i>Send</button>';
+        if (inv.square_payment_link_url) {
+          html += '<a href="' + inv.square_payment_link_url + '" target="_blank" class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-semibold ml-2 hover:bg-green-200"><i class="fas fa-credit-card mr-0.5"></i>Pay Link</a>';
+        } else if (inv.status !== 'paid' && inv.status !== 'cancelled') {
+          html += '<button onclick="event.stopPropagation();window._crmGenPayLink(' + inv.id + ')" class="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-semibold ml-2 hover:bg-emerald-200"><i class="fas fa-credit-card mr-0.5"></i>+ Pay Link</button>';
+        }
         if (inv.status !== 'paid' && inv.status !== 'cancelled') html += '<button onclick="window._crmMarkInvoice(' + inv.id + ',\'paid\')" class="text-xs text-green-600 hover:underline ml-2">Mark Paid</button>';
         html += '<button onclick="window._crmDeleteInvoice(' + inv.id + ')" class="text-gray-400 hover:text-red-500 ml-2"><i class="fas fa-trash text-xs"></i></button>';
         html += '</div></td></tr>';
@@ -856,6 +861,11 @@
         if (p.status === 'sent' || p.status === 'viewed') {
           html += '<button onclick="window._crmCopyProposalLink(' + p.id + ')" class="text-xs text-blue-600 hover:underline"><i class="fas fa-link mr-0.5"></i>Link</button>';
           html += '<button onclick="window._crmSendProposal(' + p.id + ')" class="text-xs text-blue-600 hover:underline"><i class="fas fa-redo mr-0.5"></i>Resend</button>';
+        }
+        if (p.payment_link) {
+          html += '<a href="' + p.payment_link + '" target="_blank" class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-semibold hover:bg-green-200"><i class="fas fa-credit-card mr-0.5"></i>Pay Link</a>';
+        } else if (p.status !== 'accepted' && p.status !== 'declined') {
+          html += '<button onclick="event.stopPropagation();window._crmGenProposalPayLink(' + p.id + ')" class="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-semibold hover:bg-emerald-200"><i class="fas fa-credit-card mr-0.5"></i>+ Pay Link</button>';
         }
         if (p.status !== 'accepted' && p.status !== 'declined') html += '<button onclick="window._crmMarkProposal(' + p.id + ',\'accepted\')" class="text-xs text-green-600 hover:underline">Won</button>';
         html += '<button onclick="window._crmDeleteProposal(' + p.id + ')" class="text-gray-400 hover:text-red-500"><i class="fas fa-trash text-xs"></i></button>';
