@@ -424,38 +424,60 @@ callCenterRoutes.post('/quick-dial', async (c) => {
   const outboundTrunkId = (c.env as any).SIP_OUTBOUND_TRUNK_ID
 
   let token = null
+  let sipStatus = 'no_livekit'
+  let sipError = ''
+
   if (apiKey && apiSecret && livekitUrl) {
     token = await generateLiveKitJWT(apiKey, apiSecret, `admin-monitor-${agentId}`, roomName, JSON.stringify({ type: 'quick_dial', phone: cleanPhone }))
 
-    // Dispatch AI agent
+    // Step 1: Dispatch AI agent (non-blocking — call proceeds even if agent isn't available)
+    let agentDispatched = false
     try {
       await ccLivekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST', '/twirp/livekit.AgentDispatch/CreateDispatch', {
         room: roomName, agent_name: 'outbound-caller',
         metadata: JSON.stringify({ prospect_id: prospect.id, agent_id: agentId, agent_name: agent.name, phone: cleanPhone, company: prospect.company_name, contact: prospect.contact_name, webhook_url: new URL(c.req.url).origin + '/api/call-center/call-complete' })
       })
-    } catch (e: any) { console.warn('[QuickDial] Agent dispatch:', e.message) }
+      agentDispatched = true
+    } catch (e: any) { console.warn('[QuickDial] Agent dispatch (non-fatal):', e.message) }
 
-    // Dial via SIP
+    // Step 2: Wait for agent to join room before dialing
+    if (agentDispatched) {
+      await new Promise(r => setTimeout(r, 2000))
+    }
+
+    // Step 3: Dial via SIP — this is what makes the phone ring
     if (outboundTrunkId) {
       try {
-        await ccLivekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST', '/twirp/livekit.SIP/CreateSIPParticipant', {
+        const sipResult = await ccLivekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST', '/twirp/livekit.SIP/CreateSIPParticipant', {
           sip_trunk_id: outboundTrunkId, sip_call_to: cleanPhone, room_name: roomName,
           participant_identity: 'callee-' + prospect.id, participant_name: prospect.contact_name || prospect.company_name || 'Prospect',
-          play_dialtone: true, krisp_enabled: true
+          play_dialtone: false, krisp_enabled: true
         })
-        await c.env.DB.prepare("UPDATE cc_call_logs SET call_status='ringing' WHERE livekit_room_id=?").bind(roomName).run()
+        if (sipResult?.code || sipResult?.error) {
+          sipStatus = 'sip_error'
+          sipError = sipResult.msg || sipResult.error || JSON.stringify(sipResult)
+          await c.env.DB.prepare("UPDATE cc_call_logs SET call_status='failed', call_outcome=? WHERE livekit_room_id=?").bind('sip_error: ' + sipError, roomName).run()
+        } else {
+          sipStatus = 'ringing'
+          await c.env.DB.prepare("UPDATE cc_call_logs SET call_status='ringing' WHERE livekit_room_id=?").bind(roomName).run()
+        }
       } catch (e: any) {
+        sipStatus = 'dial_error'
+        sipError = e.message
         await c.env.DB.prepare("UPDATE cc_call_logs SET call_status='failed', call_outcome=? WHERE livekit_room_id=?").bind('dial_error: ' + e.message, roomName).run()
       }
+    } else {
+      sipStatus = 'no_trunk_configured'
     }
   }
 
   return c.json({
-    success: true, call_log_id: logRes.meta.last_row_id, room_name: roomName,
+    success: sipStatus === 'ringing', call_log_id: logRes.meta.last_row_id, room_name: roomName,
     prospect: { id: prospect.id, company_name: prospect.company_name, contact_name: prospect.contact_name, phone: cleanPhone },
     agent: { id: agent.id, name: agent.name },
     livekit: token ? { token, url: livekitUrl, room: roomName } : null,
-    sip_dial: outboundTrunkId ? 'initiated' : 'no_trunk_configured'
+    sip_dial: sipStatus,
+    sip_error: sipError || undefined
   })
 })
 
@@ -535,7 +557,7 @@ callCenterRoutes.post('/dial', async (c) => {
       prospect_id, company: prospect.company_name, phone: prospect.phone,
     }))
 
-    // Dispatch AI agent into the room
+    // Step 1: Dispatch AI agent into the room
     try {
       agentDispatchResult = await ccLivekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST', '/twirp/livekit.AgentDispatch/CreateDispatch', {
         room: roomName,
@@ -548,10 +570,15 @@ callCenterRoutes.post('/dial', async (c) => {
         })
       })
     } catch (e: any) {
-      console.warn('[Dial] Agent dispatch failed:', e.message)
+      console.warn('[Dial] Agent dispatch (non-fatal):', e.message)
     }
 
-    // Dial the prospect's phone via SIP
+    // Step 2: Wait for agent to join before dialing
+    if (agentDispatchResult) {
+      await new Promise(r => setTimeout(r, 2000))
+    }
+
+    // Step 3: Dial the prospect's phone via SIP
     if (outboundTrunkId && prospect.phone) {
       try {
         sipDialResult = await ccLivekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST', '/twirp/livekit.SIP/CreateSIPParticipant', {
@@ -560,12 +587,17 @@ callCenterRoutes.post('/dial', async (c) => {
           room_name: roomName,
           participant_identity: 'callee-' + prospect_id,
           participant_name: prospect.contact_name || prospect.company_name || 'Prospect',
-          play_dialtone: true,
+          play_dialtone: false,
           krisp_enabled: true,
         })
 
-        // Update call status to ringing
-        await c.env.DB.prepare('UPDATE cc_call_logs SET call_status=? WHERE livekit_room_id=?').bind('ringing', roomName).run()
+        if (sipDialResult?.code || sipDialResult?.error) {
+          console.warn('[Dial] SIP error:', sipDialResult.msg || sipDialResult.error)
+          await c.env.DB.prepare('UPDATE cc_call_logs SET call_status=?, call_outcome=? WHERE livekit_room_id=?').bind('failed', 'sip_error: ' + (sipDialResult.msg || sipDialResult.error), roomName).run()
+          sipDialResult = null
+        } else {
+          await c.env.DB.prepare('UPDATE cc_call_logs SET call_status=? WHERE livekit_room_id=?').bind('ringing', roomName).run()
+        }
       } catch (e: any) {
         console.warn('[Dial] SIP dial failed:', e.message)
         await c.env.DB.prepare('UPDATE cc_call_logs SET call_status=?, call_outcome=? WHERE livekit_room_id=?').bind('failed', 'dial_error: ' + e.message, roomName).run()
@@ -574,13 +606,13 @@ callCenterRoutes.post('/dial', async (c) => {
   }
 
   return c.json({
-    success: true,
+    success: !!sipDialResult,
     call_log_id: logRes.meta.last_row_id,
     room_name: roomName,
     prospect: { id: prospect.id, company_name: prospect.company_name, contact_name: prospect.contact_name, phone: prospect.phone },
     agent: { id: agent.id, name: agent.name },
     livekit: token ? { token, url: livekitUrl, room: roomName } : null,
-    sip_dial: sipDialResult ? 'initiated' : (outboundTrunkId ? 'failed' : 'no_trunk_configured'),
+    sip_dial: sipDialResult ? 'ringing' : (outboundTrunkId ? 'failed' : 'no_trunk_configured'),
     agent_dispatch: agentDispatchResult ? 'dispatched' : 'failed',
   })
 })

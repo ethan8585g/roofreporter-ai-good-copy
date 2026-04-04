@@ -1174,7 +1174,16 @@
       ccShowCallStatus(data);
       document.getElementById('qd-phone').value = '';
       document.getElementById('qd-company').value = '';
-    } else alert(data?.error || 'Quick dial failed');
+    } else {
+      // Show specific SIP errors
+      if (data?.sip_dial === 'no_trunk_configured') {
+        alert('SIP outbound trunk not configured. Set SIP_OUTBOUND_TRUNK_ID in environment.');
+      } else if (data?.sip_dial === 'sip_error' || data?.sip_dial === 'dial_error') {
+        alert('Call failed: ' + (data.sip_error || 'SIP dial error. Check LiveKit trunk configuration.'));
+      } else {
+        alert(data?.error || 'Quick dial failed');
+      }
+    }
   };
 
   window.ccDialProspect = async function(id) {
