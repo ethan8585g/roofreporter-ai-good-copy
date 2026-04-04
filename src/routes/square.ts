@@ -859,11 +859,10 @@ squareRoutes.get('/verify-payment', async (c) => {
         WHERE square_order_id = ? AND status = 'pending'
       `).bind(pendingPayment.square_order_id).run()
 
-      // Only add credits if WE were the one to flip pending → succeeded
+      // Only process if WE were the one to flip pending → succeeded
       if (updateResult.meta.changes > 0) {
-        // If it's a credit pack, add credits
         if (pendingPayment.payment_type === 'credit_pack') {
-          // Look up credits from metadata or package, fallback to description parsing
+          // Credit pack — add credits to account
           let credits = 0
           try {
             const meta = pendingPayment.metadata_json ? JSON.parse(pendingPayment.metadata_json) : {}
@@ -878,6 +877,81 @@ squareRoutes.get('/verify-payment', async (c) => {
               'UPDATE customers SET report_credits = report_credits + ?, subscription_plan = CASE WHEN subscription_plan = "free" THEN "credits" ELSE subscription_plan END, updated_at = datetime("now") WHERE id = ?'
             ).bind(credits, customer.customer_id).run()
             trackCreditPurchase(c.env as any, String(customer.customer_id), credits, pendingPayment.amount || 0).catch(() => {})
+          }
+        } else if (pendingPayment.payment_type === 'one_time_report') {
+          // Single report purchase — create order + trigger generation
+          let meta: any = {}
+          try { meta = JSON.parse(pendingPayment.metadata_json || '{}') } catch {}
+
+          const tier = meta.service_tier || 'standard'
+          const address = meta.property_address || 'Unknown address'
+          const price = 10
+
+          const d = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+          const rand = Math.floor(Math.random() * 9999).toString().padStart(4, '0')
+          const orderNumber = `RM-${d}-${rand}`
+          const estimatedDelivery = new Date(Date.now() + 30000).toISOString()
+
+          await c.env.DB.prepare(
+            "INSERT OR IGNORE INTO master_companies (id, company_name, contact_name, email) VALUES (1, 'RoofReporterAI', 'Admin', 'sales@roofreporterai.com')"
+          ).run()
+
+          const custData = await c.env.DB.prepare('SELECT * FROM customers WHERE id = ?').bind(customer.customer_id).first<any>()
+
+          const orderResult = await c.env.DB.prepare(`
+            INSERT INTO orders (
+              order_number, master_company_id, customer_id,
+              property_address, property_city, property_province, property_postal_code,
+              latitude, longitude,
+              homeowner_name, homeowner_email,
+              requester_name, requester_email,
+              service_tier, price, status, payment_status, estimated_delivery,
+              notes
+            ) VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'processing', 'paid', ?, ?)
+          `).bind(
+            orderNumber, customer.customer_id,
+            address, meta.property_city || null, meta.property_province || null, meta.property_postal_code || null,
+            meta.latitude ? parseFloat(meta.latitude) : null, meta.longitude ? parseFloat(meta.longitude) : null,
+            custData?.name || '', custData?.email || '',
+            custData?.name || '', custData?.email || '',
+            tier, price, estimatedDelivery,
+            `Paid via Square (verify-payment)`
+          ).run()
+
+          const newOrderId = orderResult.meta.last_row_id as number
+
+          await c.env.DB.prepare(
+            'UPDATE square_payments SET order_id = ? WHERE square_order_id = ?'
+          ).bind(newOrderId, pendingPayment.square_order_id).run()
+
+          // Geocode if needed
+          const mapsKey = c.env.GOOGLE_MAPS_API_KEY || c.env.GOOGLE_SOLAR_API_KEY
+          if (mapsKey && !meta.latitude) {
+            const fullAddr = [address, meta.property_city, meta.property_province, meta.property_postal_code]
+              .filter(Boolean).join(', ')
+            const geo = await geocodeAddress(fullAddr, mapsKey)
+            if (geo) {
+              await c.env.DB.prepare(
+                'UPDATE orders SET latitude = ?, longitude = ?, updated_at = datetime("now") WHERE id = ?'
+              ).bind(geo.lat, geo.lng, newOrderId).run()
+            }
+          }
+
+          // Create placeholder report
+          await c.env.DB.prepare(
+            "INSERT OR IGNORE INTO reports (order_id, status) VALUES (?, 'pending')"
+          ).bind(newOrderId).run()
+
+          // Trigger report generation in background
+          try {
+            const generatePromise = triggerReportGeneration(newOrderId, c.env)
+            if ((c as any).executionCtx?.waitUntil) {
+              ;(c as any).executionCtx.waitUntil(generatePromise)
+            } else {
+              await generatePromise
+            }
+          } catch (e: any) {
+            console.warn(`[verify-payment] Auto-generate error (non-fatal): ${e.message}`)
           }
         }
 
