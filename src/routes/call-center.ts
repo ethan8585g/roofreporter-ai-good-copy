@@ -618,6 +618,43 @@ callCenterRoutes.post('/dial', async (c) => {
 })
 
 // ============================================================
+// SIP STATUS — Diagnostic endpoint for outbound trunk config
+// ============================================================
+callCenterRoutes.get('/sip-status', async (c) => {
+  const apiKey = (c.env as any).LIVEKIT_API_KEY
+  const apiSecret = (c.env as any).LIVEKIT_API_SECRET
+  const livekitUrl = (c.env as any).LIVEKIT_URL
+  const outboundTrunkId = (c.env as any).SIP_OUTBOUND_TRUNK_ID
+
+  if (!apiKey || !apiSecret || !livekitUrl) {
+    return c.json({ error: 'LiveKit not configured', has_api_key: !!apiKey, has_secret: !!apiSecret, has_url: !!livekitUrl })
+  }
+
+  try {
+    const outboundTrunks = await ccLivekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST', '/twirp/livekit.SIP/ListSIPOutboundTrunk', {})
+    const dispatchRules = await ccLivekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST', '/twirp/livekit.SIP/ListSIPDispatchRule', {})
+    const rooms = await ccLivekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST', '/twirp/livekit.RoomService/ListRooms', {})
+
+    return c.json({
+      configured_trunk_id: outboundTrunkId || 'NOT SET',
+      outbound_trunks: (outboundTrunks?.items || []).map((t: any) => ({
+        id: t.sip_trunk_id, name: t.name, address: t.address, numbers: t.numbers,
+      })),
+      dispatch_rules: (dispatchRules?.items || []).map((d: any) => ({
+        id: d.sip_dispatch_rule_id, name: d.name,
+        room_prefix: d.rule?.dispatch_rule_individual?.room_prefix || '',
+        trunk_ids: d.trunk_ids,
+      })),
+      active_rooms: (rooms?.rooms || []).map((r: any) => ({
+        name: r.name, participants: r.num_participants,
+      })),
+    })
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500)
+  }
+})
+
+// ============================================================
 // LIVEKIT TOKEN — For admin to monitor calls in browser
 // ============================================================
 callCenterRoutes.post('/livekit-token', async (c) => {
