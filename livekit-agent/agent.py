@@ -31,36 +31,35 @@ logger = logging.getLogger("roofer-secretary")
 logger.setLevel(logging.INFO)
 
 # ============================================================
-# Rick's Roofing — Default configuration (customer_id=2)
-# This is the primary deployment for dev@reusecanada.ca
+# Default configuration — used as fallback if API config unavailable
+# Customers set their own greeting/Q&A via the Secretary dashboard
 # ============================================================
-RICKS_ROOFING_CONFIG = {
-    "customer_id": 2,
-    "business_phone": "+17809833335",
+DEFAULT_AGENT_CONFIG = {
+    "customer_id": None,
+    "business_phone": "",
     "agent_name": "Sarah",
     "agent_voice": "alloy",
     "greeting_script": (
-        "Thank you for calling Rick's Roofing. This is Sarah. "
-        "Are you calling for a new roof estimate or a repair today?"
+        "Thank you for calling! This is Sarah. "
+        "How can I help you today?"
     ),
     "common_qa": (
         "Q: How much is a new roof going to cost me?\n"
         "A: Every roof is a bit different, so I can't give you an exact price over the phone. "
         "However, once I get your address, our team will use satellite imagery to get a preliminary "
-        "3D measurement. An estimator will then call you back with a solid baseline for the cost.\n\n"
+        "measurement. An estimator will then call you back with a solid estimate.\n\n"
         "Q: Do you just do replacements, or can you fix a small leak?\n"
-        "A: We absolutely handle repairs as well as full replacements. To help our team prepare, "
+        "A: We handle repairs as well as full replacements. To help our team prepare, "
         "is the leak currently causing interior damage, or is it a slower issue you've noticed over time?\n\n"
         "Q: How fast can you get someone out here? I have water coming in.\n"
         "A: For active leaks, we offer emergency dispatch and tarping services. We can usually get "
-        "a crew out within a few hours. There is an upfront dispatch fee for emergency response, "
-        "which I can send to your phone via a secure payment link right now. Would you like to proceed?\n\n"
+        "a crew out within a few hours.\n\n"
         "Q: Do you offer financing or payment plans?\n"
         "A: Yes, we do have financing options available for full roof replacements. Our estimator can "
         "walk you through the different terms and monthly payment breakdowns during your consultation.\n\n"
         "Q: Are you guys fully licensed and insured?\n"
-        "A: Yes, Rick's Roofing is fully licensed, bonded, and insured. Our estimators can provide "
-        "our exact credentials and policy details when they speak with you."
+        "A: Yes, we are fully licensed, bonded, and insured. Our estimators can provide "
+        "credentials and policy details when they speak with you."
     ),
     "general_notes": (
         "Handling Interruptions: If the caller goes on a tangent, validate their frustration briefly "
@@ -85,11 +84,11 @@ RICKS_ROOFING_CONFIG = {
 
 # ============================================================
 # Configuration loader — pulls config from room metadata,
-# API, or falls back to Rick's Roofing defaults
+# API, or falls back to generic defaults
 # ============================================================
 async def get_agent_config(ctx: JobContext) -> dict:
     """Extract customer config from room metadata, API, or defaults."""
-    config = dict(RICKS_ROOFING_CONFIG)  # Start with defaults
+    config = dict(DEFAULT_AGENT_CONFIG)  # Start with defaults, overridden by API config
 
     # Try to get customer_id from room name (format: secretary-{customer_id}-...)
     room_name = ctx.room.name or ""
@@ -236,7 +235,7 @@ class RooferSecretaryAgent(Agent):
         """Called when the agent enters the session — greet the caller."""
         import time
         self._call_start = time.time()
-        greeting = self._config.get("greeting_script", "Thank you for calling Rick's Roofing! How can I help you today?")
+        greeting = self._config.get("greeting_script", "Thank you for calling! How can I help you today?")
         self.session.generate_reply(
             instructions=f"You just answered the phone. Greet the caller naturally with this greeting: \"{greeting}\""
         )
