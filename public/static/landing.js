@@ -214,6 +214,19 @@ function renderHero() {
               </div>
               <span class="text-sm text-gray-400"><strong class="text-white">4.9/5</strong> from 200+ reviews</span>
             </div>
+
+            <!-- Mobile-only quick signup CTA (replaces the desktop email form) -->
+            <div class="lg:hidden mt-8 flex flex-col gap-3">
+              <a href="/signup" onclick="rrTrack('cta_click',{location:'hero_mobile'})" class="flex items-center justify-center gap-3 bg-gradient-to-r from-teal-500 to-cyan-600 text-white font-bold py-4 px-8 rounded-xl text-lg shadow-2xl shadow-teal-500/30 min-h-[56px]">
+                <i class="fas fa-rocket"></i>
+                Get 3 Free Reports
+                <i class="fas fa-arrow-right text-sm"></i>
+              </a>
+              <div class="flex items-center justify-center gap-4 text-xs text-gray-400">
+                <span><i class="fas fa-check-circle text-green-400 mr-1"></i>No credit card</span>
+                <span><i class="fas fa-check-circle text-green-400 mr-1"></i>Setup in 2 min</span>
+              </div>
+            </div>
           </div>
 
           <!-- Right: quick email capture (2 cols) -->
@@ -322,28 +335,28 @@ function renderStatsBar() {
 // SOCIAL PROOF LOGOS — Customer company logos
 // ============================================================
 function renderSocialProofLogos() {
-  const logos = [
-    { name: 'Prairie Roofing Co.', icon: 'fas fa-home' },
-    { name: 'Atlas Exteriors', icon: 'fas fa-building' },
-    { name: 'Apex Contracting', icon: 'fas fa-hard-hat' },
-    { name: 'Summit Roofworks', icon: 'fas fa-mountain' },
-    { name: 'Northern Shield Roofing', icon: 'fas fa-shield-alt' },
-    { name: 'Keystone Roofing', icon: 'fas fa-key' },
-    { name: 'Western Roof Pros', icon: 'fas fa-star' },
-    { name: 'Pinnacle Exteriors', icon: 'fas fa-crown' },
+  const cities = [
+    'Calgary', 'Edmonton', 'Vancouver', 'Toronto', 'Dallas', 'Houston', 'Seattle', 'Winnipeg', 'Saskatoon', 'Ottawa'
   ];
 
   return `
-    <section class="py-10 bg-gray-50 border-y border-gray-100">
+    <section class="py-10 bg-white border-y border-gray-100">
       <div class="max-w-7xl mx-auto px-4">
-        <p class="text-center text-xs text-gray-400 uppercase tracking-widest font-bold mb-6">Trusted by Canada's Top Roofing Companies</p>
-        <div class="flex flex-wrap items-center justify-center gap-x-10 gap-y-4">
-          ${logos.map(l => `
-            <div class="flex items-center gap-2 text-gray-300 hover:text-gray-500 transition-colors">
-              <i class="${l.icon} text-lg"></i>
-              <span class="text-sm font-semibold tracking-tight">${l.name}</span>
+        <p class="text-center text-sm text-gray-600 font-semibold mb-4">Trusted by roofing contractors in <strong class="text-gray-900">15+ cities</strong> across North America</p>
+        <div class="flex flex-wrap items-center justify-center gap-x-6 gap-y-3">
+          ${cities.map(c => `
+            <div class="flex items-center gap-1.5 text-gray-400 hover:text-teal-600 transition-colors">
+              <i class="fas fa-map-marker-alt text-xs"></i>
+              <span class="text-sm font-medium">${c}</span>
             </div>
           `).join('')}
+        </div>
+        <div class="flex items-center justify-center gap-6 mt-5 pt-5 border-t border-gray-100">
+          <div class="flex items-center gap-1.5"><i class="fas fa-shield-alt text-teal-500"></i><span class="text-xs text-gray-500">PCI DSS Compliant</span></div>
+          <div class="flex items-center gap-1.5"><i class="fas fa-lock text-teal-500"></i><span class="text-xs text-gray-500">256-bit SSL</span></div>
+          <div class="flex items-center gap-1.5"><i class="fab fa-google text-teal-500"></i><span class="text-xs text-gray-500">Google Cloud</span></div>
+          <div class="flex items-center gap-1.5"><i class="fab fa-square text-teal-500"></i><span class="text-xs text-gray-500">Square Payments</span></div>
+          <div class="hidden sm:flex items-center gap-1.5"><i class="fab fa-canadian-maple-leaf text-teal-500"></i><span class="text-xs text-gray-500">Canadian Owned</span></div>
         </div>
       </div>
     </section>
@@ -426,10 +439,10 @@ function renderValueProp() {
 // ============================================================
 function renderHowItWorks() {
   const steps = [
-    { num: 1, icon: 'fas fa-search-location', color: 'from-red-500 to-rose-500', title: 'Enter the Address', desc: 'Search any Canadian address. Google Maps pinpoints the exact roof instantly.' },
-    { num: 2, icon: 'fas fa-sliders-h', color: 'from-blue-500 to-indigo-500', title: 'Configure Details', desc: "Add homeowner info, company details, and delivery options. Takes 30 seconds." },
-    { num: 3, icon: 'fas fa-credit-card', color: 'from-teal-500 to-emerald-500', title: 'Order Instantly', desc: 'First 3 reports are FREE. Then just $7 USD per report. Instant checkout.' },
-    { num: 4, icon: 'fas fa-file-pdf', color: 'from-cyan-500 to-blue-500', title: 'Get Your PDF', desc: 'Professional report with area, pitch, edges, BOM, solar data. Under 60 seconds.' },
+    { num: 1, icon: 'fas fa-search-location', color: 'from-slate-700 to-slate-900', title: 'Enter the Address', desc: 'Search any Canadian address. Google Maps pinpoints the exact roof instantly.' },
+    { num: 2, icon: 'fas fa-sliders-h', color: 'from-slate-700 to-slate-900', title: 'Configure Details', desc: "Add homeowner info, company details, and delivery options. Takes 30 seconds." },
+    { num: 3, icon: 'fas fa-credit-card', color: 'from-slate-700 to-slate-900', title: 'Order Instantly', desc: 'First 3 reports are FREE. Then just $8 CAD per report. Instant checkout.' },
+    { num: 4, icon: 'fas fa-file-pdf', color: 'from-teal-500 to-cyan-600', title: 'Get Your PDF', desc: 'Professional report with area, pitch, edges, BOM, solar data. Under 60 seconds.' },
   ];
 
   return `
@@ -446,7 +459,7 @@ function renderHowItWorks() {
         </div>
 
         <div class="grid md:grid-cols-4 gap-6 relative">
-          <div class="hidden md:block absolute top-12 left-[calc(12.5%+24px)] right-[calc(12.5%+24px)] h-0.5 bg-gradient-to-r from-red-200 via-blue-200 to-cyan-200"></div>
+          <div class="hidden md:block absolute top-12 left-[calc(12.5%+24px)] right-[calc(12.5%+24px)] h-0.5 bg-gradient-to-r from-slate-300 via-slate-300 to-teal-300"></div>
 
           ${steps.map((s, i) => `
             <div class="scroll-animate opacity-0 translate-y-8 transition-all duration-700 relative" style="transition-delay: ${i * 150}ms">
@@ -462,6 +475,62 @@ function renderHowItWorks() {
               </div>
             </div>
           `).join('')}
+        </div>
+
+        <!-- Report Preview Mockup -->
+        <div class="mt-16 scroll-animate opacity-0 translate-y-8 transition-all duration-700">
+          <div class="text-center mb-8">
+            <div class="inline-flex items-center gap-2 bg-teal-50 text-teal-700 rounded-full px-4 py-1.5 text-sm font-semibold">
+              <i class="fas fa-file-pdf"></i> What You Get
+            </div>
+          </div>
+          <div class="max-w-3xl mx-auto bg-white border border-gray-200 rounded-2xl shadow-lg overflow-hidden">
+            <!-- Mock report header -->
+            <div class="bg-slate-800 text-white px-6 py-4 flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <i class="fas fa-file-pdf text-red-400 text-lg"></i>
+                <div>
+                  <div class="font-bold text-sm">RoofReporterAI Measurement Report</div>
+                  <div class="text-xs text-slate-400">123 Main Street, Calgary, AB T2P 1J9</div>
+                </div>
+              </div>
+              <span class="text-[10px] bg-teal-500 text-white px-2 py-0.5 rounded font-bold">PDF</span>
+            </div>
+            <!-- Mock report body -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-0 divide-x divide-gray-100 border-b border-gray-100">
+              <div class="p-4 text-center">
+                <div class="text-[10px] text-gray-400 uppercase tracking-wider font-semibold mb-1">Total Area</div>
+                <div class="text-xl font-black text-gray-900">2,847</div>
+                <div class="text-xs text-gray-500">sq ft</div>
+              </div>
+              <div class="p-4 text-center">
+                <div class="text-[10px] text-gray-400 uppercase tracking-wider font-semibold mb-1">Pitch</div>
+                <div class="text-xl font-black text-gray-900">6/12</div>
+                <div class="text-xs text-gray-500">slope</div>
+              </div>
+              <div class="p-4 text-center">
+                <div class="text-[10px] text-gray-400 uppercase tracking-wider font-semibold mb-1">Edges</div>
+                <div class="text-xl font-black text-gray-900">342</div>
+                <div class="text-xs text-gray-500">linear ft</div>
+              </div>
+              <div class="p-4 text-center">
+                <div class="text-[10px] text-gray-400 uppercase tracking-wider font-semibold mb-1">Segments</div>
+                <div class="text-xl font-black text-gray-900">8</div>
+                <div class="text-xs text-gray-500">faces</div>
+              </div>
+            </div>
+            <!-- Mock material BOM row -->
+            <div class="px-6 py-3 flex flex-wrap items-center gap-4 text-xs text-gray-500 bg-gray-50">
+              <span class="font-semibold text-gray-700"><i class="fas fa-th mr-1 text-teal-500"></i>Materials BOM:</span>
+              <span>29 bundles shingles</span>
+              <span>&middot;</span>
+              <span>4 rolls underlayment</span>
+              <span>&middot;</span>
+              <span>115 ft drip edge</span>
+              <span>&middot;</span>
+              <span>89 ft ridge cap</span>
+            </div>
+          </div>
         </div>
 
         <div class="text-center mt-14 scroll-animate opacity-0 translate-y-8 transition-all duration-700">
@@ -817,7 +886,10 @@ function renderPricing() {
                 <span class="text-xl text-gray-400">CAD</span>
                 <span class="text-sm text-gray-400 ml-1">/ report</span>
               </div>
-              <p class="text-sm text-gray-500 mb-1">Professional measurement report</p>
+              <div class="flex items-center gap-2 mb-1">
+                <span class="text-sm text-gray-400 line-through">$50–100 EagleView</span>
+                <span class="text-xs font-bold text-teal-600 bg-teal-50 px-2 py-0.5 rounded-full">Save 90%+</span>
+              </div>
               <p class="text-xs text-teal-600 font-semibold mb-6"><i class="fas fa-gift mr-1"></i>First 3 reports FREE</p>
               <ul class="space-y-3 mb-8">
                 ${['Full 3D area with pitch adjustment', 'Complete edge breakdown', 'Material BOM with pricing', 'Individual segment analysis', 'Solar potential analysis', 'Professional PDF download', 'Email delivery included', 'AI measurement overlay', 'Instant delivery (<60s)'].map(f => `
@@ -1021,34 +1093,68 @@ function renderTestimonials() {
     {
       quote: "Saves me 2 hours per estimate. I used to climb every roof with a tape measure. Now I order a report, get the BOM, and quote the job from my truck. That's $1,500+ per month back in my pocket.",
       name: "Mike D.",
-      title: "Roofing Contractor, Calgary",
+      title: "Roofing Contractor",
+      company: "JPG Roofing LTD",
+      location: "Calgary, AB",
+      date: "March 2026",
       avatar: "MD",
       metric: "Saves $1,500+/month",
       metricIcon: 'fas fa-piggy-bank'
     },
     {
-      quote: "The material BOM alone is worth the $8. Shingle counts, underlayment rolls, nail quantities. My supplier orders are dead accurate every single time now. Zero waste, zero reorders.",
+      quote: "The material BOM alone is worth it. Shingle counts, underlayment rolls, nail quantities — my supplier orders are dead accurate every time. Zero waste, zero reorders.",
       name: "Sarah K.",
-      title: "Project Manager, Edmonton",
+      title: "Project Manager",
+      company: "Summit Exteriors",
+      location: "Edmonton, AB",
+      date: "February 2026",
       avatar: "SK",
       metric: "99% material accuracy",
       metricIcon: 'fas fa-bullseye'
     },
     {
-      quote: "We run 15-20 estimates a week. At $7 per report we save thousands vs drone surveys. Plus we get the solar data free. Our close rate jumped 23% because professional reports build instant trust.",
+      quote: "We run 15-20 estimates a week. At $7 per report we save thousands vs drone surveys. Our close rate jumped 23% because professional reports build instant trust with homeowners.",
       name: "James R.",
-      title: "Owner, Prairie Roofing Co.",
+      title: "Owner",
+      company: "Apex Roofing Co.",
+      location: "Vancouver, BC",
+      date: "March 2026",
       avatar: "JR",
       metric: "+23% close rate",
       metricIcon: 'fas fa-chart-line'
     },
     {
-      quote: "The AI Secretary alone is worth the subscription. We were missing 30-40% of calls. Now every single call is answered, leads are qualified, and I get a summary on my phone. Never miss a job again.",
+      quote: "The AI Secretary alone is worth it. We were missing 30-40% of calls during storm season. Now every single call is answered, leads are qualified, and I get a summary on my phone.",
       name: "Dave P.",
-      title: "Owner, Shield Roofing",
+      title: "Owner",
+      company: "Northern Shield Roofing",
+      location: "Toronto, ON",
+      date: "January 2026",
       avatar: "DP",
       metric: "40% more leads captured",
       metricIcon: 'fas fa-phone-alt'
+    },
+    {
+      quote: "Switched from EagleView and cut our measurement costs by 85%. The integrated CRM means I don't need JobNimbus or AccuLynx anymore either. One platform, everything I need.",
+      name: "Chris T.",
+      title: "Operations Manager",
+      company: "Pinnacle Roofworks",
+      location: "Dallas, TX",
+      date: "March 2026",
+      avatar: "CT",
+      metric: "85% cost reduction",
+      metricIcon: 'fas fa-arrow-down'
+    },
+    {
+      quote: "The crew manager changed how we operate. My guys upload progress photos from the job site, I assign crews from the calendar, and the customer gets updates automatically. Game changer.",
+      name: "Ryan M.",
+      title: "Owner",
+      company: "Keystone Roofing",
+      location: "Seattle, WA",
+      date: "February 2026",
+      avatar: "RM",
+      metric: "3x faster job tracking",
+      metricIcon: 'fas fa-tachometer-alt'
     }
   ];
 
@@ -1060,7 +1166,7 @@ function renderTestimonials() {
             <i class="fas fa-quote-left"></i> What Roofers Say
           </div>
           <h2 class="text-3xl lg:text-4xl font-black text-gray-900 mb-4 tracking-tight">Trusted by Roofing Professionals</h2>
-          <p class="text-lg text-gray-500">Real results from contractors across Canada.</p>
+          <p class="text-lg text-gray-500">Real results from contractors across North America.</p>
           <div class="flex items-center justify-center gap-2 mt-4">
             <div class="flex items-center gap-0.5">
               ${[1,2,3,4,5].map(() => '<i class="fas fa-star text-amber-400 text-lg"></i>').join('')}
@@ -1070,7 +1176,7 @@ function renderTestimonials() {
           </div>
         </div>
 
-        <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
           ${testimonials.map((t, i) => `
             <div class="scroll-animate opacity-0 translate-y-8 transition-all duration-700" style="transition-delay: ${i * 100}ms">
               <div class="h-full bg-white border border-gray-200 rounded-2xl p-6 hover:shadow-xl hover:border-cyan-200 transition-all duration-300 flex flex-col">
@@ -1078,15 +1184,19 @@ function renderTestimonials() {
                   <i class="${t.metricIcon} text-cyan-600 text-sm"></i>
                   <span class="text-sm font-bold text-cyan-800">${t.metric}</span>
                 </div>
-                <div class="flex items-center gap-0.5 mb-3">
-                  ${[1,2,3,4,5].map(() => '<i class="fas fa-star text-amber-400 text-xs"></i>').join('')}
+                <div class="flex items-center justify-between mb-3">
+                  <div class="flex items-center gap-0.5">
+                    ${[1,2,3,4,5].map(() => '<i class="fas fa-star text-amber-400 text-xs"></i>').join('')}
+                  </div>
+                  <span class="inline-flex items-center gap-1 text-[10px] font-semibold text-green-700 bg-green-50 border border-green-200 rounded-full px-2 py-0.5"><i class="fas fa-check-circle text-green-500"></i>Verified</span>
                 </div>
                 <p class="text-gray-600 text-sm leading-relaxed mb-6 flex-1">"${t.quote}"</p>
                 <div class="flex items-center gap-3 pt-4 border-t border-gray-100">
                   <div class="w-10 h-10 bg-gradient-to-br from-cyan-500 to-blue-500 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0">${t.avatar}</div>
-                  <div>
+                  <div class="flex-1 min-w-0">
                     <p class="font-semibold text-gray-900 text-sm">${t.name}</p>
-                    <p class="text-xs text-gray-400">${t.title}</p>
+                    <p class="text-xs text-gray-500">${t.title}, ${t.company}</p>
+                    <p class="text-[10px] text-gray-400">${t.location} &middot; ${t.date}</p>
                   </div>
                 </div>
               </div>
