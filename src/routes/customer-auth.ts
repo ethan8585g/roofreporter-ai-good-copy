@@ -60,7 +60,7 @@ function generateVerificationCode(): string {
 // Send email using best available provider
 // Priority: 1) Resend API  2) Gmail OAuth2 (env or DB token)  3) GCP service account
 async function sendVerificationEmail(env: any, toEmail: string, code: string, db?: any): Promise<boolean> {
-  const senderEmail = (env as any).GMAIL_SENDER_EMAIL || 'noreply@reusecanada.ca'
+  const senderEmail = (env as any).GMAIL_SENDER_EMAIL || 'sales@roofreporterai.com'
   const emailSubject = `Your RoofReporterAI Verification Code: ${code}`
   const emailHtml = getVerificationEmailHTML(code)
 
@@ -1245,7 +1245,7 @@ customerAuthRoutes.get('/invoices/:id', async (c) => {
 // FORGOT PASSWORD — Send reset link to customer email
 // ============================================================
 async function sendPasswordResetEmail(env: any, toEmail: string, name: string, resetUrl: string, db?: any): Promise<boolean> {
-  const senderEmail = (env as any).GMAIL_SENDER_EMAIL || 'noreply@reusecanada.ca'
+  const senderEmail = (env as any).GMAIL_SENDER_EMAIL || 'sales@roofreporterai.com'
   const subject = 'Reset your RoofReporterAI password'
   const html = `
   <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
@@ -1346,9 +1346,13 @@ customerAuthRoutes.post('/forgot-password', async (c) => {
 
         const baseUrl = (c.env as any).APP_BASE_URL || 'https://www.roofreporterai.com'
         const resetUrl = `${baseUrl}/customer/reset-password?token=${token}`
-        await sendPasswordResetEmail(c.env, cleanEmail, customer.name || 'Customer', resetUrl, c.env.DB)
+        const emailSent = await sendPasswordResetEmail(c.env, cleanEmail, customer.name || 'Customer', resetUrl, c.env.DB)
+        if (!emailSent) console.warn('[ForgotPassword] Email failed for:', cleanEmail)
       }
     }
+
+    // Cleanup expired/used tokens (non-blocking)
+    c.env.DB.prepare("DELETE FROM password_reset_tokens WHERE (expires_at < datetime('now') OR used = 1) AND created_at < datetime('now', '-1 day')").run().catch(() => {})
 
     return c.json({ success: true, message: 'If an account with that email exists, a password reset link has been sent.' })
   } catch (err: any) {
