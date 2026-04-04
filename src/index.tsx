@@ -1210,7 +1210,7 @@ app.get('/proposal/view/:token', async (c) => {
           </div>
 
           <!-- Printed Name + Date -->
-          <div class="grid grid-cols-2 gap-3 mb-5">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
             <div>
               <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Print Your Full Name <span class="text-red-400">*</span></label>
               <input type="text" id="sigPrintedName" placeholder="e.g. John Smith" class="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-400 focus:border-blue-400">
@@ -1424,7 +1424,7 @@ function getHeadTags() {
   ${getTailwindConfig()}
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
   <link rel="stylesheet" href="/static/style.css">
-  <style>#google_translate_element{position:fixed;bottom:20px;left:20px;z-index:9998;background:white;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,0.15);padding:8px 12px;border:1px solid #e2e8f0;font-size:13px}.goog-te-gadget{font-family:inherit!important}.goog-te-gadget-simple{background:transparent!important;border:none!important;padding:0!important;font-size:13px!important}.goog-te-menu-value span{color:#374151!important}.goog-te-banner-frame{display:none!important}body{top:0!important}</style>
+  <style>#google_translate_element{position:fixed;bottom:20px;left:20px;z-index:9998;background:white;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,0.15);padding:8px 12px;border:1px solid #e2e8f0;font-size:13px}.goog-te-gadget{font-family:inherit!important}.goog-te-gadget-simple{background:transparent!important;border:none!important;padding:0!important;font-size:13px!important}.goog-te-menu-value span{color:#374151!important}.goog-te-banner-frame{display:none!important}body{top:0!important}@media(max-width:480px){#google_translate_element{bottom:70px;left:10px;transform:scale(0.85);transform-origin:bottom left}}</style>
   <div id="google_translate_element"></div>
   <script>function googleTranslateElementInit(){new google.translate.TranslateElement({pageLanguage:'en',includedLanguages:'en,fr,es,de,pt,it,zh-CN,zh-TW,ja,ko,ar,hi,bn,ur,tr,vi,th,id,pl,uk,ru,nl,sv,da,no,fi,el,he,ro,cs,hu,ms,tl',layout:google.translate.TranslateElement.InlineLayout.SIMPLE,autoDisplay:false},'google_translate_element')}</script>
   <script src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit" defer></script>`
@@ -2607,7 +2607,7 @@ function getCustomerLoginHTML() {
               <p class="text-sm text-blue-800"><i class="fas fa-shield-alt mr-1"></i> <strong>Email verification required.</strong> We'll send a 6-digit code to confirm your email.</p>
             </div>
             <div class="space-y-3">
-              <div class="grid grid-cols-2 gap-3">
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label class="block text-sm font-medium text-gray-700 mb-1">Full Name *</label>
                   <input type="text" id="custRegName" placeholder="John Smith" class="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-brand-500">

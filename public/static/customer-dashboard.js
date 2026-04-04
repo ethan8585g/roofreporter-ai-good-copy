@@ -265,7 +265,7 @@ function renderDashboard() {
       // Rover AI Assistant + Quick Actions
       '<div class="grid grid-cols-1 lg:grid-cols-5 gap-5 mb-5">' +
         // Rover AI Chat (wider)
-        '<div class="lg:col-span-3 bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden flex flex-col" style="min-height:420px">' +
+        '<div class="lg:col-span-3 bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden flex flex-col" style="min-height:280px">' +
           '<div class="px-5 py-3 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-gray-900 to-gray-800">' +
             '<div class="flex items-center gap-2">' +
               '<span class="text-lg">&#128054;</span>' +
