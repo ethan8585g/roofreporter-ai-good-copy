@@ -381,6 +381,84 @@ callCenterRoutes.get('/next-prospect/:agentId', async (c) => {
 // ============================================================
 // DIAL — Initiate an outbound call via LiveKit SIP
 // ============================================================
+// Quick Dial — enter phone number and call immediately (auto-creates prospect)
+callCenterRoutes.post('/quick-dial', async (c) => {
+  const { phone, agent_id, company_name, contact_name } = await c.req.json()
+  if (!phone) return c.json({ error: 'Phone number is required' }, 400)
+
+  // Get or default agent
+  let agentId = agent_id
+  if (!agentId) {
+    const firstAgent = await c.env.DB.prepare('SELECT id FROM cc_agents LIMIT 1').first<any>()
+    if (!firstAgent) return c.json({ error: 'No AI agents exist. Create one first in the Agents tab.' }, 400)
+    agentId = firstAgent.id
+  }
+
+  const agent = await c.env.DB.prepare('SELECT * FROM cc_agents WHERE id=?').bind(agentId).first<any>()
+  if (!agent) return c.json({ error: 'Agent not found' }, 404)
+
+  // Format phone
+  const cleanPhone = phone.startsWith('+') ? phone : '+1' + phone.replace(/\D/g, '')
+
+  // Find or create prospect
+  let prospect = await c.env.DB.prepare('SELECT * FROM cc_prospects WHERE phone=?').bind(cleanPhone).first<any>()
+  if (!prospect) {
+    const result = await c.env.DB.prepare(
+      "INSERT INTO cc_prospects (company_name, contact_name, phone, status, created_at) VALUES (?, ?, ?, 'new', datetime('now'))"
+    ).bind(company_name || 'Quick Dial', contact_name || '', cleanPhone).run()
+    prospect = { id: result.meta.last_row_id, company_name: company_name || 'Quick Dial', contact_name: contact_name || '', phone: cleanPhone }
+  }
+
+  // Now dial using the existing /dial logic (internally)
+  const roomName = `${agent.livekit_room_prefix || 'sales-'}${Date.now()}-${prospect.id}`
+  const logRes = await c.env.DB.prepare(
+    "INSERT INTO cc_call_logs (prospect_id, agent_id, agent_name, phone_dialed, livekit_room_id, call_status) VALUES (?,?,?,?,?,?)"
+  ).bind(prospect.id, agentId, agent.name, cleanPhone, roomName, 'initiated').run()
+
+  await c.env.DB.prepare("UPDATE cc_prospects SET status='calling', total_calls=COALESCE(total_calls,0)+1, last_called_at=datetime('now'), assigned_agent_id=?, updated_at=datetime('now') WHERE id=?").bind(agentId, prospect.id).run()
+  await c.env.DB.prepare("UPDATE cc_agents SET current_prospect_id=?, current_room_name=?, total_calls=COALESCE(total_calls,0)+1, last_active_at=datetime('now'), updated_at=datetime('now') WHERE id=?").bind(prospect.id, roomName, agentId).run()
+
+  const apiKey = (c.env as any).LIVEKIT_API_KEY
+  const apiSecret = (c.env as any).LIVEKIT_API_SECRET
+  const livekitUrl = (c.env as any).LIVEKIT_URL
+  const outboundTrunkId = (c.env as any).SIP_OUTBOUND_TRUNK_ID
+
+  let token = null
+  if (apiKey && apiSecret && livekitUrl) {
+    token = await generateLiveKitJWT(apiKey, apiSecret, `admin-monitor-${agentId}`, roomName, JSON.stringify({ type: 'quick_dial', phone: cleanPhone }))
+
+    // Dispatch AI agent
+    try {
+      await ccLivekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST', '/twirp/livekit.AgentDispatch/CreateDispatch', {
+        room: roomName, agent_name: 'outbound-caller',
+        metadata: JSON.stringify({ prospect_id: prospect.id, agent_id: agentId, agent_name: agent.name, phone: cleanPhone, company: prospect.company_name, contact: prospect.contact_name, webhook_url: new URL(c.req.url).origin + '/api/call-center/call-complete' })
+      })
+    } catch (e: any) { console.warn('[QuickDial] Agent dispatch:', e.message) }
+
+    // Dial via SIP
+    if (outboundTrunkId) {
+      try {
+        await ccLivekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST', '/twirp/livekit.SIP/CreateSIPParticipant', {
+          sip_trunk_id: outboundTrunkId, sip_call_to: cleanPhone, room_name: roomName,
+          participant_identity: 'callee-' + prospect.id, participant_name: prospect.contact_name || prospect.company_name || 'Prospect',
+          play_dialtone: true, krisp_enabled: true
+        })
+        await c.env.DB.prepare("UPDATE cc_call_logs SET call_status='ringing' WHERE livekit_room_id=?").bind(roomName).run()
+      } catch (e: any) {
+        await c.env.DB.prepare("UPDATE cc_call_logs SET call_status='failed', call_outcome=? WHERE livekit_room_id=?").bind('dial_error: ' + e.message, roomName).run()
+      }
+    }
+  }
+
+  return c.json({
+    success: true, call_log_id: logRes.meta.last_row_id, room_name: roomName,
+    prospect: { id: prospect.id, company_name: prospect.company_name, contact_name: prospect.contact_name, phone: cleanPhone },
+    agent: { id: agent.id, name: agent.name },
+    livekit: token ? { token, url: livekitUrl, room: roomName } : null,
+    sip_dial: outboundTrunkId ? 'initiated' : 'no_trunk_configured'
+  })
+})
+
 callCenterRoutes.post('/dial', async (c) => {
   const { prospect_id, agent_id, campaign_id } = await c.req.json()
   if (!prospect_id || !agent_id) return c.json({ error: 'prospect_id and agent_id required' }, 400)

@@ -177,7 +177,40 @@
     const camp = d.campaigns || {};
     const recent = d.recent_calls || [];
 
+    // Build agent dropdown options
+    const agents = ((CC.data.agents || {}).agents || []);
+    const agentOpts = agents.map(a => `<option value="${a.id}">${a.name} (${a.voice_id || 'default'})</option>`).join('');
+
     return `<div class="space-y-6">
+      <!-- Quick Dial Bar -->
+      <div class="bg-gradient-to-r from-gray-900 to-slate-800 rounded-2xl p-6 shadow-xl">
+        <div class="flex items-center gap-3 mb-4">
+          <div class="w-10 h-10 bg-green-500 rounded-xl flex items-center justify-center"><i class="fas fa-phone-alt text-white"></i></div>
+          <div><h3 class="text-white font-bold text-lg">Quick Dial</h3><p class="text-gray-400 text-xs">Enter a phone number and dial instantly — no setup needed</p></div>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-12 gap-3">
+          <div class="sm:col-span-4">
+            <label class="text-xs text-gray-400 mb-1 block">Phone Number *</label>
+            <input type="tel" id="qd-phone" placeholder="+1 (780) 555-1234" class="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white text-sm placeholder-gray-500 focus:ring-2 focus:ring-green-400 focus:border-green-400">
+          </div>
+          <div class="sm:col-span-3">
+            <label class="text-xs text-gray-400 mb-1 block">Company / Name</label>
+            <input type="text" id="qd-company" placeholder="ABC Roofing (optional)" class="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white text-sm placeholder-gray-500 focus:ring-2 focus:ring-green-400 focus:border-green-400">
+          </div>
+          <div class="sm:col-span-3">
+            <label class="text-xs text-gray-400 mb-1 block">AI Agent</label>
+            <select id="qd-agent" class="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white text-sm focus:ring-2 focus:ring-green-400 focus:border-green-400">
+              ${agentOpts || '<option value="">No agents — create one first</option>'}
+            </select>
+          </div>
+          <div class="sm:col-span-2 flex items-end">
+            <button onclick="ccQuickDial()" class="w-full py-3 bg-green-500 hover:bg-green-400 text-white font-bold rounded-xl text-sm transition-all shadow-lg hover:shadow-xl active:scale-95">
+              <i class="fas fa-phone-alt mr-2"></i>Dial Now
+            </button>
+          </div>
+        </div>
+      </div>
+
       <!-- KPI Cards -->
       <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div class="bg-gradient-to-br from-teal-500 to-emerald-600 rounded-xl p-5 text-white shadow-lg">
@@ -1127,6 +1160,23 @@
     await ccFetch('/api/call-center/prospects/' + id, { method: 'DELETE' });
     ccLoadTab('prospects');
   };
+  // Quick Dial — enter phone number and call immediately
+  window.ccQuickDial = async function() {
+    const phone = document.getElementById('qd-phone')?.value?.trim();
+    if (!phone) { alert('Enter a phone number to dial'); return; }
+    const agentId = document.getElementById('qd-agent')?.value;
+    const company = document.getElementById('qd-company')?.value?.trim() || '';
+    const btn = event?.target;
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Dialing...'; }
+    const data = await ccFetch('/api/call-center/quick-dial', { method: 'POST', body: JSON.stringify({ phone, agent_id: agentId ? parseInt(agentId) : null, company_name: company }) });
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-phone-alt mr-2"></i>Dial Now'; }
+    if (data?.success) {
+      ccShowCallStatus(data);
+      document.getElementById('qd-phone').value = '';
+      document.getElementById('qd-company').value = '';
+    } else alert(data?.error || 'Quick dial failed');
+  };
+
   window.ccDialProspect = async function(id) {
     const agents = (CC.data.agents || {}).agents || [];
     if (agents.length === 0) {
@@ -1134,11 +1184,19 @@
     }
     const agentList = ((CC.data.agents || {}).agents || []);
     if (agentList.length === 0) return alert('Create an AI agent first before dialing');
-    const agentId = agentList[0].id;
-    if (!confirm('Dial this prospect using agent "' + agentList[0].name + '"?\n\nThis will dispatch the AI agent and dial the prospect\'s phone via SIP.')) return;
+    // Show agent selection if multiple agents
+    let agentId = agentList[0].id;
+    let agentName = agentList[0].name;
+    if (agentList.length > 1) {
+      const options = agentList.map((a, i) => `${i+1}. ${a.name}`).join('\n');
+      const choice = prompt('Select agent to dial with:\n\n' + options + '\n\nEnter number (1-' + agentList.length + '):', '1');
+      if (!choice) return;
+      const idx = parseInt(choice) - 1;
+      if (idx >= 0 && idx < agentList.length) { agentId = agentList[idx].id; agentName = agentList[idx].name; }
+    }
+    if (!confirm('Dial this prospect using agent "' + agentName + '"?')) return;
     const data = await ccFetch('/api/call-center/dial', { method: 'POST', body: JSON.stringify({ prospect_id: id, agent_id: agentId }) });
     if (data?.success) {
-      // Show live call status panel
       ccShowCallStatus(data);
     } else alert(data?.error || 'Dial failed');
   };
