@@ -60,7 +60,7 @@ interface GeminiCallOptions {
   timeoutMs?: number       // Per-call timeout in ms (default: 25000 for CF Workers safety)
 }
 
-async function callGemini(opts: GeminiCallOptions): Promise<any> {
+export async function callGemini(opts: GeminiCallOptions): Promise<any> {
   const model = opts.model || 'gemini-2.0-flash'
   const timeoutMs = opts.timeoutMs || 180000  // 180s default — Pro model needs time for complex roof analysis
 

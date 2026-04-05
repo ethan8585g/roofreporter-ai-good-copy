@@ -717,6 +717,125 @@ export interface VisionFindings {
 }
 
 // ============================================================
+// Website Builder Types
+// ============================================================
+
+export type WBBrandVibe = 'professional' | 'bold' | 'friendly'
+export type WBSiteStatus = 'draft' | 'generating' | 'preview' | 'published' | 'disabled'
+export type WBPageType = 'home' | 'services' | 'about' | 'service_area' | 'contact' | 'city_landing' | 'blog_post'
+export type WBLeadSource = 'contact_form' | 'estimator_widget' | 'city_page' | 'blog'
+export type WBLeadStatus = 'new' | 'contacted' | 'qualified' | 'converted'
+
+export interface WBBrandColors {
+  primary: string
+  secondary: string
+  accent: string
+}
+
+export interface WBIntakeFormData {
+  business_name: string
+  phone: string
+  email: string
+  address?: string
+  city: string
+  province: string
+  zip?: string
+  years_in_business?: number
+  license_number?: string
+  owner_name?: string
+  company_story?: string
+  services_offered: string[]
+  service_areas: string[]
+  certifications: string[]
+  brand_vibe: WBBrandVibe
+  brand_colors: WBBrandColors
+  logo_url?: string
+  photos?: string[]
+  google_reviews?: WBGoogleReview[]
+  theme_id?: string
+}
+
+export interface WBGoogleReview {
+  author: string
+  rating: number
+  text: string
+  date?: string
+}
+
+export interface WBGeneratedSiteContent {
+  home: WBGeneratedPageContent
+  services: WBGeneratedPageContent
+  about: WBGeneratedPageContent
+  service_areas: WBGeneratedPageContent
+  contact: WBGeneratedPageContent
+}
+
+export interface WBGeneratedPageContent {
+  meta_title: string
+  meta_description: string
+  sections: WBPageSection[]
+}
+
+export interface WBPageSection {
+  type: WBSectionType
+  data: Record<string, unknown>
+}
+
+export type WBSectionType =
+  | 'hero'
+  | 'trust_bar'
+  | 'services_grid'
+  | 'about_snippet'
+  | 'reviews'
+  | 'cta_banner'
+  | 'service_list'
+  | 'service_detail'
+  | 'team'
+  | 'story'
+  | 'certifications'
+  | 'city_list'
+  | 'city_detail'
+  | 'contact_form'
+  | 'map_embed'
+  | 'faq'
+  | 'before_after'
+  | 'stats'
+
+export const WB_ROOFING_SERVICES = [
+  'Asphalt Shingle Roofing',
+  'Metal Roofing',
+  'Flat / Low-Slope Roofing',
+  'Tile Roofing',
+  'Cedar / Wood Shake Roofing',
+  'Roof Repairs',
+  'Roof Inspections',
+  'Storm Damage Repair',
+  'Insurance Claims Assistance',
+  'Gutter Installation',
+  'Gutter Cleaning',
+  'Skylight Installation',
+  'Chimney Flashing',
+  'Roof Ventilation',
+  'Commercial Roofing',
+  'New Construction Roofing',
+  'Roof Replacement',
+  'Emergency Roofing',
+] as const
+
+export const WB_CERTIFICATIONS = [
+  'GAF Master Elite Contractor',
+  'Owens Corning Preferred Contractor',
+  'CertainTeed SELECT ShingleMaster',
+  'HAAG Certified Inspector',
+  'OSHA 10 Certified',
+  'OSHA 30 Certified',
+  'Better Business Bureau Accredited',
+  'Angi Super Service Award',
+  'HomeAdvisor Elite Service',
+  'NRCA Member',
+] as const
+
+// ============================================================
 // Runtime utility functions — re-exported from utils/geo-math.ts
 // The actual implementations live in utils/geo-math.ts to avoid
 // bundler tree-shaking issues with mixed type/runtime exports.

@@ -177,6 +177,7 @@ function renderDashboard() {
           navLink('/customer/catalog', 'fa-box-open', 'Catalog', null, '') +
           navLink('/customer/referrals', 'fa-gift', 'Referrals', null, '') +
           navLink('/customer/email-outreach', 'fa-envelope-open-text', 'Email Outreach', null, '') +
+          navLink('/customer/website-builder', 'fa-globe', 'AI Website Builder', 'New', 'bg-orange-500') +
         '</div>' +
         (c.is_dev ? '<div><p class="px-3 mb-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Dev</p>' + navLink('/customer/property-imagery', 'fa-satellite', 'Property Imagery', 'Dev', 'bg-gray-800') + '</div>' : '') +
       '</nav>' +

@@ -30,6 +30,7 @@ import { metaConnectRoutes } from './routes/meta-connect'
 import { heygenRoutes } from './routes/heygen'
 import { geminiRoutes } from './routes/gemini'
 import { calendarRoutes } from './routes/calendar'
+import { websiteBuilderRoutes } from './routes/website-builder'
 import type { Bindings } from './types'
 
 const app = new Hono<{ Bindings: Bindings }>()
@@ -195,6 +196,7 @@ app.route('/api/meta', metaConnectRoutes)
 app.route('/api/heygen', heygenRoutes)
 app.route('/api/gemini', geminiRoutes)
 app.route('/api/calendar', calendarRoutes)
+app.route('/api/website-builder', websiteBuilderRoutes)
 
 // Health check
 app.get('/api/health', (c) => {
@@ -727,6 +729,7 @@ app.get('/customer/email-outreach', (c) => c.html(getCrmSubPageHTML('email-outre
 app.get('/customer/catalog', (c) => c.html(getCrmSubPageHTML('catalog', 'Material Catalog', 'fa-box-open')))
 app.get('/customer/referrals', (c) => c.html(getCrmSubPageHTML('referrals', 'Referral Program', 'fa-gift')))
 app.get('/customer/crew', (c) => c.html(getCrmSubPageHTML('crew', 'Crew Manager', 'fa-hard-hat')))
+app.get('/customer/website-builder', (c) => c.html(getWebsiteBuilderPageHTML()))
 
 // Company Type Selection — shown once post-login if company_type is null
 app.get('/customer/select-type', (c) => c.html(getSelectTypePageHTML()))
@@ -1372,6 +1375,40 @@ app.get('/customer/secretary', (c) => {
 // Model Cards — Public reference pages for AI models
 app.get('/model-card/gemma-3', (c) => {
   return c.html(getGemma3ModelCardHTML())
+})
+
+// ============================================================
+// PUBLIC WEBSITE BUILDER SITES — Serve published contractor sites
+// ============================================================
+app.get('/sites/:subdomain', async (c) => {
+  const subdomain = c.req.param('subdomain')
+  const site = await c.env.DB.prepare(
+    "SELECT id FROM wb_sites WHERE subdomain = ? AND status = 'published'"
+  ).bind(subdomain).first<any>()
+  if (!site) return c.notFound()
+
+  const page = await c.env.DB.prepare(
+    "SELECT html_snapshot FROM wb_pages WHERE site_id = ? AND slug = '/' AND is_published = 1"
+  ).bind(site.id).first<any>()
+  if (!page?.html_snapshot) return c.notFound()
+
+  return c.html(page.html_snapshot)
+})
+
+app.get('/sites/:subdomain/:slug', async (c) => {
+  const subdomain = c.req.param('subdomain')
+  const slug = '/' + c.req.param('slug')
+  const site = await c.env.DB.prepare(
+    "SELECT id FROM wb_sites WHERE subdomain = ? AND status = 'published'"
+  ).bind(subdomain).first<any>()
+  if (!site) return c.notFound()
+
+  const page = await c.env.DB.prepare(
+    'SELECT html_snapshot FROM wb_pages WHERE site_id = ? AND slug = ? AND is_published = 1'
+  ).bind(site.id, slug).first<any>()
+  if (!page?.html_snapshot) return c.notFound()
+
+  return c.html(page.html_snapshot)
 })
 
 export default app
@@ -5351,6 +5388,63 @@ function getMaterialCalculatorPageHTML() {
     }
   </script>
   <script src="/static/material-calculator.js?v=${Date.now()}"></script>
+  ${getRoverAssistant()}
+</body>
+</html>`
+}
+
+// ============================================================
+// Website Builder Page HTML
+// ============================================================
+function getWebsiteBuilderPageHTML() {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags()}
+  <title>AI Website Builder - RoofReporterAI</title>
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <header class="bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
+          <img src="/static/logo.png" alt="RoofReporterAI" class="w-10 h-10 rounded-lg object-cover">
+          <div>
+            <h1 class="text-lg font-bold">AI Website Builder</h1>
+            <p class="text-brand-200 text-xs">RoofReporterAI</p>
+          </div>
+        </a>
+      </div>
+      <nav class="flex items-center space-x-3">
+        <span id="custGreeting" class="text-brand-200 text-sm hidden"><i class="fas fa-user-circle mr-1"></i><span id="custName"></span></span>
+        <a href="/customer/dashboard" class="text-brand-200 hover:text-white text-sm"><i class="fas fa-th-large mr-1"></i>Dashboard</a>
+        <button onclick="custLogout()" class="text-brand-200 hover:text-white text-sm"><i class="fas fa-sign-out-alt mr-1"></i>Logout</button>
+      </nav>
+    </div>
+  </header>
+  <main class="py-6">
+    <div id="wb-root"></div>
+  </main>
+  <script>
+    (function() {
+      var c = localStorage.getItem('rc_customer');
+      if (!c) { window.location.href = '/customer/login'; return; }
+      try {
+        var u = JSON.parse(c);
+        var g = document.getElementById('custGreeting');
+        var n = document.getElementById('custName');
+        if (g && n) { n.textContent = u.name || u.email; g.classList.remove('hidden'); }
+      } catch(e) {}
+    })();
+    function custLogout() {
+      var token = localStorage.getItem('rc_customer_token');
+      if (token) fetch('/api/customer/logout', { method: 'POST', headers: { 'Authorization': 'Bearer ' + token } })['catch'](function(){});
+      localStorage.removeItem('rc_customer');
+      localStorage.removeItem('rc_customer_token');
+      window.location.href = '/customer/login';
+    }
+  </script>
+  <script src="/static/website-builder.js?v=${Date.now()}"></script>
   ${getRoverAssistant()}
 </body>
 </html>`
