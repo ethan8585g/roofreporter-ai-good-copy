@@ -16,6 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
     ${renderSocialProofLogos()}
     ${renderValueProp()}
     ${renderHowItWorks()}
+    ${renderCoverageMap()}
     ${renderPlatformShowcase()}
     ${renderFeatureGrid()}
     ${renderCaseStudies()}
@@ -754,6 +755,136 @@ function renderHowItWorks() {
             <i class="fas fa-arrow-right text-sm group-hover:translate-x-1 transition-transform"></i>
           </a>
           <p class="text-xs text-gray-500 mt-4">No credit card required. Setup in 2 minutes.</p>
+        </div>
+      </div>
+    </section>
+  `;
+}
+
+// ============================================================
+// COVERAGE MAP — 40+ Countries with SEO geo keywords
+// ============================================================
+function renderCoverageMap() {
+  const regions = [
+    {
+      name: 'North America & Caribbean',
+      accent: '#00FF88',
+      icon: 'fas fa-globe-americas',
+      countries: [
+        { name: 'United States', flag: '🇺🇸', note: 'Covers over 95% of all buildings' },
+        { name: 'Canada', flag: '🇨🇦', note: '' },
+        { name: 'Mexico', flag: '🇲🇽', note: '' },
+        { name: 'Puerto Rico', flag: '🇵🇷', note: '' },
+        { name: 'The Bahamas', flag: '🇧🇸', note: '' },
+        { name: 'Antigua and Barbuda', flag: '🇦🇬', note: '' },
+      ]
+    },
+    {
+      name: 'Europe',
+      accent: '#22d3ee',
+      icon: 'fas fa-globe-europe',
+      countries: [
+        { name: 'United Kingdom', flag: '🇬🇧', note: '' },
+        { name: 'France', flag: '🇫🇷', note: '' },
+        { name: 'Germany', flag: '🇩🇪', note: '' },
+        { name: 'Spain', flag: '🇪🇸', note: '' },
+        { name: 'Italy', flag: '🇮🇹', note: '' },
+        { name: 'Portugal', flag: '🇵🇹', note: '' },
+        { name: 'Netherlands', flag: '🇳🇱', note: '' },
+        { name: 'Belgium', flag: '🇧🇪', note: '' },
+        { name: 'Austria', flag: '🇦🇹', note: '' },
+        { name: 'Switzerland', flag: '🇨🇭', note: '' },
+        { name: 'Denmark', flag: '🇩🇰', note: '' },
+        { name: 'Sweden', flag: '🇸🇪', note: '' },
+        { name: 'Norway', flag: '🇳🇴', note: '' },
+        { name: 'Finland', flag: '🇫🇮', note: '' },
+        { name: 'Ireland', flag: '🇮🇪', note: '' },
+        { name: 'Poland', flag: '🇵🇱', note: '' },
+        { name: 'Czechia', flag: '🇨🇿', note: '' },
+        { name: 'Greece', flag: '🇬🇷', note: '' },
+      ]
+    },
+    {
+      name: 'Asia-Pacific',
+      accent: '#a78bfa',
+      icon: 'fas fa-globe-asia',
+      countries: [
+        { name: 'Australia', flag: '🇦🇺', note: '' },
+        { name: 'Japan', flag: '🇯🇵', note: '' },
+        { name: 'New Zealand', flag: '🇳🇿', note: '' },
+        { name: 'Indonesia', flag: '🇮🇩', note: '' },
+        { name: 'Malaysia', flag: '🇲🇾', note: '' },
+        { name: 'Philippines', flag: '🇵🇭', note: '' },
+        { name: 'Taiwan', flag: '🇹🇼', note: '' },
+        { name: 'Thailand', flag: '🇹🇭', note: '' },
+      ]
+    },
+    {
+      name: 'South America',
+      accent: '#f59e0b',
+      icon: 'fas fa-globe-americas',
+      countries: [
+        { name: 'Brazil', flag: '🇧🇷', note: '' },
+        { name: 'Colombia', flag: '🇨🇴', note: '' },
+        { name: 'Peru', flag: '🇵🇪', note: '' },
+      ]
+    }
+  ];
+
+  return `
+    <section id="coverage" class="py-28 relative overflow-hidden" style="background:#0d0d0d" aria-label="Roof Manager global coverage map">
+      <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] opacity-[0.03]" style="background: radial-gradient(circle, #00FF88 0%, transparent 70%);"></div>
+
+      <div class="max-w-7xl mx-auto px-4 relative z-10">
+        <div class="text-center mb-16 scroll-animate">
+          <div class="inline-flex items-center gap-2 bg-[#00FF88]/10 text-[#00FF88] rounded-full px-5 py-2 text-sm font-semibold mb-6">
+            <i class="fas fa-globe"></i> Global Coverage
+          </div>
+          <h2 class="text-4xl lg:text-6xl font-black text-white mb-6 tracking-tight leading-tight">
+            Available in <span class="neon-text">40+ Countries</span><br/>Worldwide
+          </h2>
+          <p class="text-lg text-gray-400 max-w-3xl mx-auto leading-relaxed">Satellite-powered roof measurement reports wherever Google Solar API coverage exists. From North America to Europe, Asia-Pacific, and South America — measure any roof from anywhere.</p>
+        </div>
+
+        <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-16">
+          ${regions.map((r, i) => `
+            <div class="scroll-animate" style="transition-delay: ${i * 100}ms">
+              <div class="card-hover bg-[#111111] border border-white/10 rounded-2xl p-6 h-full hover:border-[${r.accent}]/30 group">
+                <div class="flex items-center gap-3 mb-5">
+                  <div class="w-10 h-10 rounded-xl flex items-center justify-center" style="background: ${r.accent}15;">
+                    <i class="${r.icon}" style="color: ${r.accent}"></i>
+                  </div>
+                  <div>
+                    <h3 class="text-white font-bold text-sm">${r.name}</h3>
+                    <span class="text-[11px] font-semibold" style="color: ${r.accent}">${r.countries.length} ${r.countries.length === 1 ? 'country' : 'countries'}</span>
+                  </div>
+                </div>
+                <ul class="space-y-2">
+                  ${r.countries.map(c => `
+                    <li class="flex items-center gap-2.5 text-sm">
+                      <span class="text-base leading-none">${c.flag}</span>
+                      <span class="text-gray-300 font-medium" data-geo-country="${c.name}">${c.name}</span>
+                      ${c.note ? `<span class="text-[10px] px-1.5 py-0.5 rounded-full font-semibold" style="background: ${r.accent}15; color: ${r.accent}">${c.note}</span>` : ''}
+                    </li>
+                  `).join('')}
+                </ul>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+
+        <!-- SEO text block with geo keywords -->
+        <div class="scroll-animate max-w-4xl mx-auto text-center mb-12">
+          <p class="text-sm text-gray-500 leading-relaxed">Roof Manager provides AI-powered satellite roof measurement reports for roofing contractors, estimators, insurance adjusters, and solar installers across the United States, Canada, United Kingdom, Australia, Germany, France, Japan, Brazil, and 30+ additional countries. Our reports include 3D roof area, pitch analysis, edge breakdowns, material estimates, and solar potential — delivered in under 60 seconds from satellite imagery.</p>
+        </div>
+
+        <div class="text-center scroll-animate">
+          <a href="/signup" onclick="rrTrack('cta_click',{location:'coverage_map'})" class="group inline-flex items-center gap-3 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-10 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/20 transition-all duration-300 hover:scale-[1.02] min-h-[56px]">
+            <i class="fas fa-globe"></i>
+            Start Free — Works in Your Country
+            <i class="fas fa-arrow-right text-sm group-hover:translate-x-1 transition-transform"></i>
+          </a>
+          <p class="text-xs text-gray-500 mt-4">3 free reports. No credit card required. Available worldwide.</p>
         </div>
       </div>
     </section>

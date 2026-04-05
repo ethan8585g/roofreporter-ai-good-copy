@@ -153,9 +153,12 @@ BLOG (/blog):
 COVERAGE & DELIVERY
 ═══════════════════════════════════════════════════
 
-COVERAGE:
-- Worldwide coverage wherever Google Solar API satellite imagery is available (Canada, USA, and many other countries)
-- Best coverage: urban and suburban Alberta, BC, Ontario, Quebec
+COVERAGE — 40+ COUNTRIES:
+- North America & Caribbean: United States (covers 95%+ of all buildings), Canada, Mexico, Puerto Rico, The Bahamas, Antigua and Barbuda
+- Europe: Austria, Belgium, Czechia, Denmark, Finland, France, Germany, Greece, Ireland, Italy, Norway, Poland, Portugal, Spain, Sweden, Switzerland, United Kingdom
+- Asia-Pacific: Australia, Indonesia, Japan, Malaysia, New Zealand, Philippines, Taiwan, Thailand
+- South America: Brazil, Colombia, Peru
+- Best coverage is in urban and suburban areas worldwide
 - Rural areas may have limited satellite imagery availability
 - If imagery isn't available, we'll let you know — no charge
 
@@ -207,7 +210,7 @@ Q: "How accurate is it?"
 A: Typically within 2-5% of manual measurements. We use Google's Solar API satellite data — real imagery, not estimates. For most standard residential roofs, accuracy is excellent. We always include a confidence score and recommend field verification for complex structures.
 
 Q: "What areas do you cover?"
-A: Worldwide — anywhere Google Solar API satellite imagery is available. This includes most addresses in Canada, the United States, and many other countries. Best coverage is in urban and suburban areas. Rural areas may have limited coverage, but you can always try — if imagery isn't available, you won't be charged.
+A: We're available in 40+ countries across 4 regions. North America & Caribbean: USA (95%+ building coverage), Canada, Mexico, Puerto Rico, The Bahamas, Antigua & Barbuda. Europe: UK, France, Germany, Spain, Italy, Portugal, Belgium, Austria, Switzerland, Denmark, Sweden, Norway, Finland, Ireland, Poland, Czechia, Greece. Asia-Pacific: Australia, Japan, New Zealand, Indonesia, Malaysia, Philippines, Taiwan, Thailand. South America: Brazil, Colombia, Peru. Best coverage is in urban/suburban areas. If imagery isn't available for a specific address, you won't be charged.
 
 Q: "How fast are reports?"
 A: Under 60 seconds, guaranteed. As soon as you enter the address and confirm, the report generates immediately. You can download the PDF right away.
@@ -444,7 +447,7 @@ function getFallbackResponse(message: string): string {
   }
 
   if (msg.includes('cover') || msg.includes('area') || msg.includes('where') || msg.includes('location') || msg.includes('canada')) {
-    return "We're available worldwide — anywhere Google Solar API satellite imagery exists! That includes Canada, the United States, and many other countries. Best coverage is in urban and suburban areas. If a particular address doesn't have coverage, you won't be charged. Give it a try at /customer/login — your first 3 reports are free! 🌍"
+    return "We're available in 40+ countries! 🌍 North America (USA, Canada, Mexico, Caribbean), Europe (UK, France, Germany, Spain, Italy + 12 more), Asia-Pacific (Australia, Japan, NZ + 5 more), and South America (Brazil, Colombia, Peru). The US has 95%+ building coverage. See all countries at /coverage. Try it free at /customer/login — 3 reports on us!"
   }
 
   if (msg.includes('fast') || msg.includes('quick') || msg.includes('how long') || msg.includes('delivery') || msg.includes('time')) {
@@ -978,6 +981,13 @@ RESPONSE STYLE:
 - Format navigation as clickable links: /customer/order, /customer/reports, etc.
 - You can help draft professional emails, proposals, and customer communications.
 - If they report a bug or issue, acknowledge it and suggest emailing sales@roofmanager.ca.
+
+COVERAGE — 40+ COUNTRIES (if they ask where reports are available):
+- North America & Caribbean: United States (95%+ building coverage), Canada, Mexico, Puerto Rico, The Bahamas, Antigua and Barbuda
+- Europe: Austria, Belgium, Czechia, Denmark, Finland, France, Germany, Greece, Ireland, Italy, Norway, Poland, Portugal, Spain, Sweden, Switzerland, United Kingdom
+- Asia-Pacific: Australia, Indonesia, Japan, Malaysia, New Zealand, Philippines, Taiwan, Thailand
+- South America: Brazil, Colombia, Peru
+- Coverage page: /coverage
 
 THINGS YOU SHOULD NOT DO:
 - Don't be overly salesy — they already bought in.

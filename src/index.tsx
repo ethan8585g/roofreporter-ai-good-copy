@@ -528,6 +528,7 @@ app.get('/sitemap.xml', async (c) => {
     { loc: '/', priority: '1.0', changefreq: 'weekly', lastmod: today },
     { loc: '/pricing', priority: '0.9', changefreq: 'monthly', lastmod: today },
     { loc: '/blog', priority: '0.8', changefreq: 'daily', lastmod: today },
+    { loc: '/coverage', priority: '0.8', changefreq: 'monthly', lastmod: today },
     { loc: '/lander', priority: '0.7', changefreq: 'monthly', lastmod: today },
     { loc: '/privacy', priority: '0.3', changefreq: 'yearly', lastmod: '2026-01-01' },
     { loc: '/terms', priority: '0.3', changefreq: 'yearly', lastmod: '2026-01-01' },
@@ -555,6 +556,11 @@ app.get('/robots.txt', (c) => {
 // Pricing Page (public)
 app.get('/pricing', (c) => {
   return c.html(getPricingPageHTML())
+})
+
+// Coverage Map Page (public, SEO)
+app.get('/coverage', (c) => {
+  return c.html(getCoveragePageHTML())
 })
 
 // Legal Pages (required for Google OAuth verification)
@@ -3103,6 +3109,253 @@ function getCustomerInvoiceHTML() {
   </script>
   <script src="/static/customer-invoice.js"></script>
   ${getRoverAssistant()}
+</body>
+</html>`
+}
+
+// ============================================================
+// COVERAGE PAGE — 40+ Countries, SEO geo keywords
+// ============================================================
+function getCoveragePageHTML() {
+  const regions = [
+    { name: 'North America & Caribbean', accent: '#00FF88', icon: 'fas fa-globe-americas', countries: [
+      { name: 'United States', flag: '🇺🇸', note: 'Covers over 95% of all buildings', slug: 'united-states' },
+      { name: 'Canada', flag: '🇨🇦', note: 'Full urban & suburban coverage', slug: 'canada' },
+      { name: 'Mexico', flag: '🇲🇽', note: '', slug: 'mexico' },
+      { name: 'Puerto Rico', flag: '🇵🇷', note: '', slug: 'puerto-rico' },
+      { name: 'The Bahamas', flag: '🇧🇸', note: '', slug: 'the-bahamas' },
+      { name: 'Antigua and Barbuda', flag: '🇦🇬', note: '', slug: 'antigua-and-barbuda' },
+    ]},
+    { name: 'Europe', accent: '#22d3ee', icon: 'fas fa-globe-europe', countries: [
+      { name: 'United Kingdom', flag: '🇬🇧', note: '', slug: 'united-kingdom' },
+      { name: 'France', flag: '🇫🇷', note: '', slug: 'france' },
+      { name: 'Germany', flag: '🇩🇪', note: '', slug: 'germany' },
+      { name: 'Spain', flag: '🇪🇸', note: '', slug: 'spain' },
+      { name: 'Italy', flag: '🇮🇹', note: '', slug: 'italy' },
+      { name: 'Portugal', flag: '🇵🇹', note: '', slug: 'portugal' },
+      { name: 'Belgium', flag: '🇧🇪', note: '', slug: 'belgium' },
+      { name: 'Austria', flag: '🇦🇹', note: '', slug: 'austria' },
+      { name: 'Switzerland', flag: '🇨🇭', note: '', slug: 'switzerland' },
+      { name: 'Denmark', flag: '🇩🇰', note: '', slug: 'denmark' },
+      { name: 'Sweden', flag: '🇸🇪', note: '', slug: 'sweden' },
+      { name: 'Norway', flag: '🇳🇴', note: '', slug: 'norway' },
+      { name: 'Finland', flag: '🇫🇮', note: '', slug: 'finland' },
+      { name: 'Ireland', flag: '🇮🇪', note: '', slug: 'ireland' },
+      { name: 'Poland', flag: '🇵🇱', note: '', slug: 'poland' },
+      { name: 'Czechia', flag: '🇨🇿', note: '', slug: 'czechia' },
+      { name: 'Greece', flag: '🇬🇷', note: '', slug: 'greece' },
+    ]},
+    { name: 'Asia-Pacific', accent: '#a78bfa', icon: 'fas fa-globe-asia', countries: [
+      { name: 'Australia', flag: '🇦🇺', note: '', slug: 'australia' },
+      { name: 'Japan', flag: '🇯🇵', note: '', slug: 'japan' },
+      { name: 'New Zealand', flag: '🇳🇿', note: '', slug: 'new-zealand' },
+      { name: 'Indonesia', flag: '🇮🇩', note: '', slug: 'indonesia' },
+      { name: 'Malaysia', flag: '🇲🇾', note: '', slug: 'malaysia' },
+      { name: 'Philippines', flag: '🇵🇭', note: '', slug: 'philippines' },
+      { name: 'Taiwan', flag: '🇹🇼', note: '', slug: 'taiwan' },
+      { name: 'Thailand', flag: '🇹🇭', note: '', slug: 'thailand' },
+    ]},
+    { name: 'South America', accent: '#f59e0b', icon: 'fas fa-globe-americas', countries: [
+      { name: 'Brazil', flag: '🇧🇷', note: '', slug: 'brazil' },
+      { name: 'Colombia', flag: '🇨🇴', note: '', slug: 'colombia' },
+      { name: 'Peru', flag: '🇵🇪', note: '', slug: 'peru' },
+    ]},
+  ]
+  const allCountries = regions.flatMap(r => r.countries.map(c => c.name))
+  const countryKeywords = allCountries.join(', ')
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags()}
+  <title>Roof Measurement Coverage Map — 40+ Countries | Roof Manager</title>
+  <meta name="description" content="Roof Manager provides AI-powered satellite roof measurement reports in 40+ countries including ${allCountries.slice(0,8).join(', ')}, and more. Check coverage in your area.">
+  <meta property="og:title" content="Roof Manager Coverage — Available in 40+ Countries Worldwide">
+  <meta property="og:description" content="Satellite-powered roof measurement reports available in the United States, Canada, UK, Australia, Germany, France, Japan, Brazil and 30+ more countries.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://www.roofmanager.ca/coverage">
+  <meta property="og:image" content="https://roofmanager.ca/static/logo.png">
+  <meta property="og:site_name" content="Roof Manager">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Roof Manager — Available in 40+ Countries">
+  <meta name="twitter:description" content="AI-powered roof measurement reports in North America, Europe, Asia-Pacific, and South America.">
+  <link rel="canonical" href="https://www.roofmanager.ca/coverage">
+  <meta name="keywords" content="roof measurement ${allCountries.slice(0, 15).map(c => c.toLowerCase()).join(', roof measurement ')}, satellite roof reports, international roof measurement, global roofing software">
+  <meta name="geo.region" content="CA-AB">
+  <script type="application/ld+json">
+  {"@context":"https://schema.org","@type":"WebPage","name":"Roof Manager Global Coverage","description":"AI-powered satellite roof measurement reports available in 40+ countries worldwide","url":"https://www.roofmanager.ca/coverage","publisher":{"@type":"Organization","name":"Roof Manager","url":"https://www.roofmanager.ca"},"areaServed":[${allCountries.map(c => `{"@type":"Country","name":"${c}"}`).join(',')}]}
+  </script>
+  <style>
+    .scroll-animate { opacity: 0; transform: translateY(30px); transition: all 0.8s cubic-bezier(0.16, 1, 0.3, 1); }
+    .scroll-animate.animate-in { opacity: 1 !important; transform: translateY(0) !important; }
+    .card-hover { transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1); }
+    .card-hover:hover { transform: translateY(-8px); box-shadow: 0 20px 60px rgba(0,0,0,0.4); }
+    .neon-text { color: #00FF88; }
+  </style>
+</head>
+<body class="min-h-screen" style="background:#0A0A0A">
+  <!-- Navigation -->
+  <nav class="fixed top-0 left-0 right-0 z-50" style="background:rgba(10,10,10,0.95);backdrop-filter:blur(20px)">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between" style="height:72px">
+      <a href="/" class="flex items-center gap-3">
+        <img src="/static/logo.png" alt="Roof Manager" class="w-10 h-10 rounded-xl object-cover shadow-lg ring-1 ring-white/10">
+        <div class="leading-tight">
+          <span class="text-white font-extrabold text-lg tracking-tight">Roof Manager</span>
+          <span class="hidden sm:block text-gray-500 text-[10px] -mt-0.5 font-medium tracking-wide">Measurement Reports & Business CRM</span>
+        </div>
+      </a>
+      <div class="hidden md:flex items-center gap-7">
+        <a href="/" class="text-gray-400 hover:text-white text-sm font-medium">Home</a>
+        <a href="/#how-it-works" class="text-gray-400 hover:text-white text-sm font-medium">How It Works</a>
+        <a href="/coverage" class="text-[#00FF88] font-semibold text-sm border-b-2 border-[#00FF88] pb-0.5">Coverage</a>
+        <a href="/#pricing" class="text-gray-400 hover:text-white text-sm font-medium">Pricing</a>
+        <a href="/blog" class="text-gray-400 hover:text-white text-sm font-medium">Blog</a>
+        <a href="/customer/login" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold py-2.5 px-6 rounded-xl text-sm transition-all duration-200 hover:scale-105 shadow-lg shadow-[#00FF88]/20">
+          <i class="fas fa-sign-in-alt mr-1.5"></i>Login
+        </a>
+      </div>
+      <button class="md:hidden text-white text-xl p-2" onclick="document.getElementById('cov-mobile').classList.toggle('hidden')"><i class="fas fa-bars"></i></button>
+    </div>
+    <div id="cov-mobile" class="hidden md:hidden border-t border-white/5" style="background:rgba(10,10,10,0.98)">
+      <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col gap-1">
+        <a href="/" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5">Home</a>
+        <a href="/coverage" class="text-[#00FF88] font-semibold text-sm py-3 px-4 rounded-xl bg-white/5">Coverage</a>
+        <a href="/#pricing" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5">Pricing</a>
+        <a href="/blog" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5">Blog</a>
+        <a href="/customer/login" class="bg-[#00FF88] text-[#0A0A0A] font-bold py-3 px-6 rounded-xl text-sm text-center mt-3">Login / Sign Up</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="pt-32 pb-16 relative" style="background:#0A0A0A">
+    <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] opacity-[0.03]" style="background:radial-gradient(circle,#00FF88 0%,transparent 70%)"></div>
+    <div class="max-w-5xl mx-auto px-4 text-center relative z-10">
+      <div class="inline-flex items-center gap-2 bg-[#00FF88]/10 text-[#00FF88] rounded-full px-5 py-2 text-sm font-semibold mb-6">
+        <i class="fas fa-globe"></i> Global Coverage
+      </div>
+      <h1 class="text-5xl md:text-6xl font-black text-white mb-6 tracking-tight leading-tight">
+        Roof Measurements in<br/><span class="neon-text">40+ Countries</span>
+      </h1>
+      <p class="text-lg text-gray-400 max-w-3xl mx-auto leading-relaxed mb-8">Satellite-powered roof measurement reports wherever Google Solar API coverage exists. From North America to Europe, Asia-Pacific, and South America — measure any roof from anywhere in the world.</p>
+      <div class="flex flex-wrap justify-center gap-4 text-sm text-gray-500">
+        <span class="bg-white/5 rounded-full px-4 py-2"><i class="fas fa-satellite text-[#00FF88] mr-2"></i>Satellite imagery</span>
+        <span class="bg-white/5 rounded-full px-4 py-2"><i class="fas fa-bolt text-[#22d3ee] mr-2"></i>Under 60 seconds</span>
+        <span class="bg-white/5 rounded-full px-4 py-2"><i class="fas fa-bullseye text-[#a78bfa] mr-2"></i>98% accuracy</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Country Grid -->
+  <section class="py-20" style="background:#0d0d0d">
+    <div class="max-w-7xl mx-auto px-4">
+      <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+        ${regions.map(r => `
+          <div class="scroll-animate">
+            <div class="card-hover bg-[#111111] border border-white/10 rounded-2xl p-6 h-full" style="--accent:${r.accent}">
+              <div class="flex items-center gap-3 mb-6">
+                <div class="w-12 h-12 rounded-xl flex items-center justify-center" style="background:${r.accent}15">
+                  <i class="${r.icon} text-lg" style="color:${r.accent}"></i>
+                </div>
+                <div>
+                  <h2 class="text-white font-bold">${r.name}</h2>
+                  <span class="text-xs font-semibold" style="color:${r.accent}">${r.countries.length} countries</span>
+                </div>
+              </div>
+              <ul class="space-y-3">
+                ${r.countries.map(c => `
+                  <li class="flex items-center gap-3">
+                    <span class="text-xl leading-none">${c.flag}</span>
+                    <div class="flex-1">
+                      <span class="text-gray-200 font-medium text-sm">${c.name}</span>
+                      ${c.note ? `<div class="text-[10px] font-semibold mt-0.5" style="color:${r.accent}">${c.note}</div>` : ''}
+                    </div>
+                  </li>
+                `).join('')}
+              </ul>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  </section>
+
+  <!-- SEO content block -->
+  <section class="py-16" style="background:#0A0A0A">
+    <div class="max-w-4xl mx-auto px-4">
+      <div class="bg-[#111111] border border-white/10 rounded-2xl p-8 md:p-12">
+        <h2 class="text-2xl font-bold text-white mb-4">How Roof Manager Coverage Works</h2>
+        <div class="text-gray-400 text-sm leading-relaxed space-y-4">
+          <p>Roof Manager uses <strong class="text-white">Google's Solar API</strong> to access high-resolution satellite imagery and LiDAR-calibrated 3D building models. Our coverage extends to any location where Google has processed satellite data through their Solar API infrastructure.</p>
+          <p>Coverage is strongest in urban and suburban areas across our supported countries. The <strong class="text-white">United States</strong> has the highest coverage density, with over 95% of all buildings available for instant roof measurement reports. <strong class="text-white">Canada</strong>, <strong class="text-white">Australia</strong>, the <strong class="text-white">United Kingdom</strong>, <strong class="text-white">Germany</strong>, and <strong class="text-white">France</strong> also have excellent coverage.</p>
+          <p>Reports include total roof area (pitch-adjusted), edge breakdowns (ridge, hip, valley, eave, rake), material BOM with quantities, segment-by-segment analysis, solar potential data, and a professional PDF — all delivered in under 60 seconds.</p>
+          <p>If satellite imagery is not available for a specific address, you will not be charged. Your first 3 reports are always free with no credit card required.</p>
+        </div>
+        <div class="mt-8 flex flex-col sm:flex-row gap-4">
+          <a href="/signup" class="inline-flex items-center justify-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold py-3.5 px-8 rounded-xl text-sm shadow-lg shadow-[#00FF88]/20 transition-all hover:scale-[1.02]">
+            <i class="fas fa-rocket"></i> Start Free — 3 Reports On Us
+          </a>
+          <a href="/#pricing" class="inline-flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 text-white font-bold py-3.5 px-8 rounded-xl text-sm border border-white/10 transition-all">
+            <i class="fas fa-tag"></i> View Pricing
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer style="background:#0A0A0A" class="text-gray-500 border-t border-white/5">
+    <div class="max-w-7xl mx-auto px-4 py-16">
+      <div class="grid md:grid-cols-4 gap-8 mb-12">
+        <div>
+          <div class="flex items-center gap-3 mb-4">
+            <img src="/static/logo.png" alt="Roof Manager" class="w-9 h-9 rounded-xl object-cover">
+            <span class="text-white font-bold text-lg">Roof Manager</span>
+          </div>
+          <p class="text-sm text-gray-500">AI-powered roof measurement reports in 40+ countries worldwide.</p>
+        </div>
+        <div>
+          <h4 class="text-white font-semibold mb-4 text-sm uppercase tracking-wider">Platform</h4>
+          <ul class="space-y-2.5 text-sm">
+            <li><a href="/#features" class="hover:text-[#00FF88] transition-colors">Measurement Reports</a></li>
+            <li><a href="/#features" class="hover:text-[#00FF88] transition-colors">AI Secretary</a></li>
+            <li><a href="/#features" class="hover:text-[#00FF88] transition-colors">CRM & Invoicing</a></li>
+            <li><a href="/#pricing" class="hover:text-[#00FF88] transition-colors">Pricing</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4 class="text-white font-semibold mb-4 text-sm uppercase tracking-wider">Resources</h4>
+          <ul class="space-y-2.5 text-sm">
+            <li><a href="/blog" class="hover:text-[#00FF88] transition-colors">Blog</a></li>
+            <li><a href="/coverage" class="text-[#00FF88] font-semibold">Coverage Map</a></li>
+            <li><a href="/#how-it-works" class="hover:text-[#00FF88] transition-colors">How It Works</a></li>
+            <li><a href="/#faq" class="hover:text-[#00FF88] transition-colors">FAQ</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4 class="text-white font-semibold mb-4 text-sm uppercase tracking-wider">Company</h4>
+          <ul class="space-y-2.5 text-sm">
+            <li><a href="/privacy" class="hover:text-[#00FF88] transition-colors">Privacy Policy</a></li>
+            <li><a href="/terms" class="hover:text-[#00FF88] transition-colors">Terms of Service</a></li>
+            <li><a href="mailto:sales@roofmanager.ca" class="hover:text-[#00FF88] transition-colors">Contact</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="border-t border-white/5 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
+        <p class="text-xs text-gray-600">&copy; 2026 Roof Manager. All rights reserved.</p>
+        <span class="text-xs text-gray-600"><i class="fas fa-map-marker-alt text-[#00FF88] mr-1"></i>Alberta, Canada</span>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Scroll animations -->
+  <script>
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => { if (entry.isIntersecting) { entry.target.classList.add('animate-in'); observer.unobserve(entry.target); } });
+    }, { threshold: 0.1 });
+    document.querySelectorAll('.scroll-animate').forEach(el => observer.observe(el));
+  </script>
+  ${getRoverWidget()}
 </body>
 </html>`
 }
