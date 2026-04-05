@@ -16,6 +16,8 @@
   // ============================================================
   var state = {
     view: 'list',       // list | create | preview | leads | edit-page
+    subscriptionActive: false,
+    subscriptionChecked: false,
     sites: [],
     currentSite: null,
     currentPages: [],
@@ -65,6 +67,14 @@
     }
   }
 
+  async function checkSubscription() {
+    var data = await api('/subscription');
+    if (data) {
+      state.subscriptionActive = data.active;
+    }
+    state.subscriptionChecked = true;
+  }
+
   async function loadSites() {
     state.loading = true; render();
     var data = await api('/sites');
@@ -104,6 +114,10 @@
   // RENDER
   // ============================================================
   function render() {
+    if (state.subscriptionChecked && !state.subscriptionActive) {
+      root.innerHTML = renderPaywall();
+      return;
+    }
     if (state.view === 'list') renderSiteList();
     else if (state.view === 'create') renderCreateWizard();
     else if (state.view === 'preview') renderPreview();
@@ -454,6 +468,31 @@
   }
 
   // ============================================================
+  // PAYWALL
+  // ============================================================
+  function renderPaywall() {
+    return '<div style="max-width:600px;margin:40px auto;text-align:center;padding:0 20px">' +
+      '<div style="background:#111;border:1px solid rgba(255,255,255,0.1);border-radius:16px;padding:40px;margin-bottom:20px">' +
+        '<div style="width:64px;height:64px;background:rgba(0,255,136,0.1);border-radius:16px;display:flex;align-items:center;justify-content:center;margin:0 auto 20px"><i class="fas fa-globe" style="color:#00FF88;font-size:28px"></i></div>' +
+        '<h2 style="color:white;font-size:28px;font-weight:800;margin:0 0 8px">AI Website Builder</h2>' +
+        '<div style="display:inline-flex;align-items:baseline;gap:4px;margin-bottom:16px"><span style="color:#00FF88;font-size:42px;font-weight:900">$99</span><span style="color:#888;font-size:16px">/month</span></div>' +
+        '<p style="color:#999;font-size:14px;line-height:1.6;margin:0 0 24px">Get a professional AI-generated website for your roofing business in under 5 minutes. No design skills needed.</p>' +
+        '<div style="text-align:left;margin-bottom:28px">' +
+          '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.05)"><i class="fas fa-check-circle" style="color:#00FF88;font-size:14px"></i><span style="color:#ccc;font-size:13px">5-page professional website (Home, Services, About, Areas, Contact)</span></div>' +
+          '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.05)"><i class="fas fa-check-circle" style="color:#00FF88;font-size:14px"></i><span style="color:#ccc;font-size:13px">AI-written copy tailored to your business &amp; services</span></div>' +
+          '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.05)"><i class="fas fa-check-circle" style="color:#00FF88;font-size:14px"></i><span style="color:#ccc;font-size:13px">Built-in lead capture forms synced to your CRM</span></div>' +
+          '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.05)"><i class="fas fa-check-circle" style="color:#00FF88;font-size:14px"></i><span style="color:#ccc;font-size:13px">Mobile-responsive design with your brand colors</span></div>' +
+          '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.05)"><i class="fas fa-check-circle" style="color:#00FF88;font-size:14px"></i><span style="color:#ccc;font-size:13px">Custom subdomain (yourcompany.roofmanager.ca)</span></div>' +
+          '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.05)"><i class="fas fa-check-circle" style="color:#00FF88;font-size:14px"></i><span style="color:#ccc;font-size:13px">SEO-optimized for local search rankings</span></div>' +
+          '<div style="display:flex;align-items:center;gap:10px;padding:10px 0"><i class="fas fa-check-circle" style="color:#00FF88;font-size:14px"></i><span style="color:#ccc;font-size:13px">Edit content anytime &mdash; regenerate with AI on demand</span></div>' +
+        '</div>' +
+        '<button onclick="wbSubscribe()" id="wb-subscribe-btn" style="width:100%;background:#00FF88;color:#0a0a0a;border:none;padding:16px;border-radius:12px;font-size:16px;font-weight:800;cursor:pointer;margin-bottom:12px">Subscribe &amp; Build Your Site &rarr;</button>' +
+        '<p style="color:#666;font-size:11px;margin:0">Cancel anytime. No contracts. 30-day billing cycle.</p>' +
+      '</div>' +
+    '</div>';
+  }
+
+  // ============================================================
   // ACTIONS
   // ============================================================
   window.wbCreateNew = function() {
@@ -537,6 +576,9 @@
         await loadSiteDetail(data.site_id);
         state.view = 'preview';
         state.previewSlug = 'home';
+        render();
+      } else if (data && data.error === 'subscription_required') {
+        state.subscriptionActive = false;
         render();
       } else {
         alert('Generation failed: ' + (data ? data.error : 'Unknown error'));
@@ -675,6 +717,25 @@
     }
   };
 
+  // Subscription
+  window.wbSubscribe = async function() {
+    var btn = document.getElementById('wb-subscribe-btn');
+    if (btn) { btn.textContent = 'Redirecting to checkout...'; btn.disabled = true; btn.style.opacity = '0.6'; }
+
+    var data = await api('/subscribe', { method: 'POST' });
+    if (data && data.checkout_url) {
+      window.location.href = data.checkout_url;
+    } else if (data && data.active) {
+      // Already subscribed
+      state.subscriptionActive = true;
+      await loadSites();
+      render();
+    } else {
+      alert('Payment setup failed. Please try again or contact support.');
+      if (btn) { btn.textContent = 'Subscribe & Build Your Site \u2192'; btn.disabled = false; btn.style.opacity = '1'; }
+    }
+  };
+
   // ============================================================
   // UTILS
   // ============================================================
@@ -691,5 +752,25 @@
   // ============================================================
   // INIT
   // ============================================================
-  loadSites();
+  // Check for payment redirect
+  var urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.get('wb_payment') === 'success') {
+    // Confirm subscription after Square payment redirect
+    api('/subscribe/confirm', { method: 'POST' }).then(function() {
+      state.subscriptionActive = true;
+      state.subscriptionChecked = true;
+      // Clean up URL
+      window.history.replaceState({}, '', window.location.pathname);
+      loadSites();
+    });
+  } else {
+    // Normal load — check subscription first
+    checkSubscription().then(function() {
+      if (state.subscriptionActive) {
+        loadSites();
+      } else {
+        render();
+      }
+    });
+  }
 })();

@@ -22,12 +22,157 @@ async function getOwnerId(c: any): Promise<number | null> {
   return ownerId
 }
 
+const SQUARE_API_BASE = 'https://connect.squareup.com/v2'
+const SQUARE_API_VERSION = '2025-01-23'
+
+async function squareRequest(accessToken: string, method: string, path: string, body?: any) {
+  const response = await fetch(`${SQUARE_API_BASE}${path}`, {
+    method,
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+      'Square-Version': SQUARE_API_VERSION,
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  })
+  const data: any = await response.json()
+  if (!response.ok) {
+    throw new Error(data.errors?.[0]?.detail || `Square API error: ${response.status}`)
+  }
+  return data
+}
+
+// ============================================================
+// GET /subscription — Check website builder subscription status
+// ============================================================
+websiteBuilderRoutes.get('/subscription', async (c) => {
+  const ownerId = await getOwnerId(c)
+  if (!ownerId) return c.json({ error: 'Unauthorized' }, 401)
+
+  const sub = await c.env.DB.prepare(
+    "SELECT * FROM wb_subscriptions WHERE customer_id = ? AND status = 'active' AND current_period_end > datetime('now') ORDER BY created_at DESC LIMIT 1"
+  ).bind(ownerId).first()
+
+  return c.json({
+    active: !!sub,
+    subscription: sub || null,
+    price: '$99/month',
+    price_cents: 9900,
+  })
+})
+
+// ============================================================
+// POST /subscribe — Create Square checkout for $99/month website builder
+// ============================================================
+websiteBuilderRoutes.post('/subscribe', async (c) => {
+  const ownerId = await getOwnerId(c)
+  if (!ownerId) return c.json({ error: 'Unauthorized' }, 401)
+
+  try {
+    const accessToken = c.env.SQUARE_ACCESS_TOKEN
+    const locationId = c.env.SQUARE_LOCATION_ID
+    if (!accessToken || !locationId) return c.json({ error: 'Payments not configured' }, 503)
+
+    // Check if already has active subscription
+    const existing = await c.env.DB.prepare(
+      "SELECT * FROM wb_subscriptions WHERE customer_id = ? AND status = 'active' AND current_period_end > datetime('now')"
+    ).bind(ownerId).first()
+    if (existing) return c.json({ active: true, message: 'Already subscribed' })
+
+    const origin = new URL(c.req.url).origin
+    const idempotencyKey = `wb-sub-${ownerId}-${Date.now()}`
+
+    const paymentLink = await squareRequest(accessToken, 'POST', '/online-checkout/payment-links', {
+      idempotency_key: idempotencyKey,
+      quick_pay: {
+        name: 'AI Website Builder — Monthly Subscription',
+        price_money: {
+          amount: 9900,
+          currency: 'USD',
+        },
+        location_id: locationId,
+      },
+      checkout_options: {
+        redirect_url: `${origin}/customer/website-builder?wb_payment=success`,
+        ask_for_shipping_address: false,
+      },
+      payment_note: `Website Builder subscription for customer #${ownerId}`,
+    })
+
+    const link = paymentLink.payment_link
+
+    // Create pending subscription
+    await c.env.DB.prepare(`
+      INSERT INTO wb_subscriptions (customer_id, status, square_order_id, square_payment_link_id, monthly_price_cents)
+      VALUES (?, 'pending', ?, ?, 9900)
+    `).bind(ownerId, link?.order_id || '', link?.id || '').run()
+
+    return c.json({
+      checkout_url: link?.url || link?.long_url,
+      payment_link_id: link?.id,
+    })
+  } catch (err: any) {
+    console.error('[WebsiteBuilder] Subscribe error:', err)
+    return c.json({ error: 'Payment setup failed: ' + err.message }, 500)
+  }
+})
+
+// ============================================================
+// POST /subscribe/confirm — Activate subscription after payment
+// ============================================================
+websiteBuilderRoutes.post('/subscribe/confirm', async (c) => {
+  const ownerId = await getOwnerId(c)
+  if (!ownerId) return c.json({ error: 'Unauthorized' }, 401)
+
+  try {
+    // Find the most recent pending subscription for this customer
+    const pending = await c.env.DB.prepare(
+      "SELECT * FROM wb_subscriptions WHERE customer_id = ? AND status = 'pending' ORDER BY created_at DESC LIMIT 1"
+    ).bind(ownerId).first<any>()
+
+    if (!pending) {
+      // Check if already active
+      const active = await c.env.DB.prepare(
+        "SELECT * FROM wb_subscriptions WHERE customer_id = ? AND status = 'active' AND current_period_end > datetime('now')"
+      ).bind(ownerId).first()
+      if (active) return c.json({ success: true, message: 'Already active' })
+      return c.json({ error: 'No pending subscription found' }, 404)
+    }
+
+    // Activate the subscription — 30 days from now
+    const now = new Date()
+    const periodEnd = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
+
+    await c.env.DB.prepare(`
+      UPDATE wb_subscriptions
+      SET status = 'active',
+          current_period_start = datetime('now'),
+          current_period_end = ?,
+          updated_at = datetime('now')
+      WHERE id = ?
+    `).bind(periodEnd.toISOString(), pending.id).run()
+
+    return c.json({ success: true, expires: periodEnd.toISOString() })
+  } catch (err: any) {
+    console.error('[WebsiteBuilder] Confirm error:', err)
+    return c.json({ error: 'Confirmation failed' }, 500)
+  }
+})
+
 // ============================================================
 // POST /intake — Save intake form, generate AI copy, create site + pages
 // ============================================================
 websiteBuilderRoutes.post('/intake', async (c) => {
   const ownerId = await getOwnerId(c)
   if (!ownerId) return c.json({ error: 'Unauthorized' }, 401)
+
+    // Check active subscription
+    const activeSub = await c.env.DB.prepare(
+      "SELECT id FROM wb_subscriptions WHERE customer_id = ? AND status = 'active' AND current_period_end > datetime('now')"
+    ).bind(ownerId).first()
+    if (!activeSub) {
+      return c.json({ error: 'subscription_required', message: 'Website Builder requires a $99/month subscription.' }, 402)
+    }
 
   try {
     const intake: WBIntakeFormData = await c.req.json()
@@ -140,7 +285,13 @@ websiteBuilderRoutes.post('/intake', async (c) => {
     })
   } catch (err: any) {
     console.error('[WebsiteBuilder] Intake error:', err)
-    return c.json({ error: 'Site generation failed: ' + err.message }, 500)
+    // Clean up any half-created site records
+    try {
+      await c.env.DB.prepare(
+        "DELETE FROM wb_sites WHERE owner_id = ? AND status = 'generating'"
+      ).bind(ownerId).run()
+    } catch {}
+    return c.json({ error: 'generation_failed', message: 'AI generation failed — please try again. Error: ' + (err.message || 'Unknown') }, 500)
   }
 })
 
