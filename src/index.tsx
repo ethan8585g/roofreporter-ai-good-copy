@@ -3146,7 +3146,7 @@ function getLandingPageHTML() {
       }
     });
   </script>
-  <script src="/static/landing.js?v=20260405f"></script>
+  <script src="/static/landing.js?v=20260405g"></script>
   ${getRoverWidget()}
 </body>
 </html>`
