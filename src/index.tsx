@@ -1225,14 +1225,21 @@ app.get('/customer/material-calculator', (c) => {
 })
 
 // Blog Pages (public — SEO lead funnels)
-app.get('/blog', (c) => {
-  return c.html(getBlogListingHTML())
+app.get('/blog', async (c) => {
+  let posts: any[] = []
+  try {
+    const result = await c.env.DB.prepare(
+      "SELECT slug, title, excerpt, cover_image_url, category, published_at, read_time_minutes FROM blog_posts WHERE status = 'published' ORDER BY published_at DESC LIMIT 50"
+    ).all()
+    posts = (result.results || []) as any[]
+  } catch {}
+  return c.html(getBlogListingHTML(posts))
 })
 app.get('/blog/:slug', async (c) => {
   const slug = c.req.param('slug')
   let post: any = null
   try {
-    post = await c.env.DB.prepare("SELECT title, excerpt, meta_title, meta_description, cover_image_url, author_name, published_at, updated_at FROM blog_posts WHERE slug = ? AND status = 'published'").bind(slug).first()
+    post = await c.env.DB.prepare("SELECT title, excerpt, content, meta_title, meta_description, cover_image_url, author_name, category, tags, published_at, updated_at, read_time_minutes FROM blog_posts WHERE slug = ? AND status = 'published'").bind(slug).first()
   } catch {}
   return c.html(getBlogPostHTML(post, slug))
 })
@@ -1899,6 +1906,31 @@ app.get('/proposal/view/:token', async (c) => {
     return c.html(`<!DOCTYPE html><html><head><title>Error</title><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-gray-50 min-h-screen flex items-center justify-center"><div class="text-center"><h1 class="text-xl font-bold text-red-600">Error Loading Proposal</h1><p class="text-gray-500 mt-2">Please try refreshing the page.</p></div></body></html>`, 500)
   }
 })
+
+app.get('/invoice/view/:token', async (c) => {
+  const token = c.req.param('token')
+  try {
+    const invoice = await c.env.DB.prepare(
+      "SELECT i.*, c.name as customer_name, c.email as customer_email FROM invoices i LEFT JOIN customers c ON i.customer_id = c.id WHERE i.share_token = ?"
+    ).bind(token).first<any>()
+
+    if (!invoice) return c.html('<html><body style="background:#0A0A0A;color:white;font-family:Inter,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh"><div style="text-align:center"><h1>Invoice Not Found</h1><p style="color:#888">This invoice link is invalid or has expired.</p><a href="/" style="color:#00FF88">Go to Roof Manager</a></div></body></html>')
+
+    // Track view
+    c.executionCtx.waitUntil(
+      c.env.DB.prepare("UPDATE invoices SET viewed_count = COALESCE(viewed_count, 0) + 1, viewed_at = datetime('now') WHERE share_token = ?").bind(token).run().catch(() => {})
+    )
+
+    // Render invoice HTML
+    const items = await c.env.DB.prepare("SELECT * FROM invoice_items WHERE invoice_id = ? ORDER BY sort_order").bind(invoice.id).all().catch(() => ({ results: [] }))
+    const lineItems = (items.results || []) as any[]
+
+    return c.html('<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Invoice ' + (invoice.invoice_number || '') + ' — Roof Manager</title><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet"><style>*{font-family:Inter,sans-serif;margin:0;padding:0;box-sizing:border-box}body{background:#f8f9fa;color:#1a1a2e;padding:20px}@media print{body{padding:0}.no-print{display:none!important}}</style></head><body><div style="max-width:800px;margin:0 auto"><div class="no-print" style="background:#0A0A0A;color:white;padding:12px 20px;border-radius:12px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between"><span style="font-weight:700">Roof Manager Invoice</span><div><button onclick="window.print()" style="background:#00FF88;color:#0A0A0A;border:none;padding:8px 16px;border-radius:8px;font-weight:700;cursor:pointer;margin-right:8px">Print / Save PDF</button></div></div><div style="background:white;border-radius:12px;box-shadow:0 2px 20px rgba(0,0,0,0.08);padding:40px"><div style="display:flex;justify-content:space-between;margin-bottom:30px"><div><h1 style="font-size:28px;font-weight:800;color:#1a1a2e">INVOICE</h1><p style="color:#888;font-size:14px">#' + (invoice.invoice_number || 'N/A') + '</p></div><div style="text-align:right"><p style="font-weight:700;color:#1a1a2e">' + (invoice.currency || 'CAD') + ' ' + Number(invoice.total || 0).toFixed(2) + '</p><p style="font-size:13px;color:#888">Status: <span style="color:' + (invoice.status === 'paid' ? '#00FF88' : '#f59e0b') + ';font-weight:700;text-transform:uppercase">' + (invoice.status || 'draft') + '</span></p></div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:30px"><div><h3 style="font-size:12px;color:#888;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Bill To</h3><p style="font-weight:600">' + (invoice.customer_name || 'Customer') + '</p><p style="color:#666;font-size:14px">' + (invoice.customer_email || '') + '</p></div><div style="text-align:right"><h3 style="font-size:12px;color:#888;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Details</h3><p style="font-size:14px;color:#666">Issued: ' + (invoice.issue_date || invoice.created_at || '').substring(0, 10) + '</p><p style="font-size:14px;color:#666">Due: ' + (invoice.due_date || 'On receipt') + '</p></div></div>' + (lineItems.length > 0 ? '<table style="width:100%;border-collapse:collapse;margin-bottom:20px"><thead><tr style="border-bottom:2px solid #eee"><th style="text-align:left;padding:10px 0;font-size:13px;color:#888;text-transform:uppercase">Description</th><th style="text-align:center;padding:10px 0;font-size:13px;color:#888">Qty</th><th style="text-align:right;padding:10px 0;font-size:13px;color:#888">Price</th><th style="text-align:right;padding:10px 0;font-size:13px;color:#888">Total</th></tr></thead><tbody>' + lineItems.map((item: any) => '<tr style="border-bottom:1px solid #f0f0f0"><td style="padding:12px 0;font-size:14px">' + (item.description || '') + '</td><td style="text-align:center;padding:12px 0;font-size:14px">' + (item.quantity || 1) + '</td><td style="text-align:right;padding:12px 0;font-size:14px">$' + Number(item.unit_price || 0).toFixed(2) + '</td><td style="text-align:right;padding:12px 0;font-size:14px;font-weight:600">$' + Number(item.total || 0).toFixed(2) + '</td></tr>').join('') + '</tbody></table>' : '') + '<div style="border-top:2px solid #eee;padding-top:16px;text-align:right"><p style="font-size:14px;color:#666;margin-bottom:4px">Subtotal: $' + Number(invoice.subtotal || 0).toFixed(2) + '</p>' + (Number(invoice.tax_amount || 0) > 0 ? '<p style="font-size:14px;color:#666;margin-bottom:4px">Tax: $' + Number(invoice.tax_amount).toFixed(2) + '</p>' : '') + (Number(invoice.discount_amount || 0) > 0 ? '<p style="font-size:14px;color:#666;margin-bottom:4px">Discount: -$' + Number(invoice.discount_amount).toFixed(2) + '</p>' : '') + '<p style="font-size:20px;font-weight:800;color:#1a1a2e;margin-top:8px">Total: ' + (invoice.currency || 'CAD') + ' $' + Number(invoice.total || 0).toFixed(2) + '</p></div>' + (invoice.notes ? '<div style="margin-top:24px;padding:16px;background:#f8f9fa;border-radius:8px"><h3 style="font-size:12px;color:#888;text-transform:uppercase;margin-bottom:8px">Notes</h3><p style="font-size:14px;color:#666">' + invoice.notes + '</p></div>' : '') + '</div><div class="no-print" style="text-align:center;margin-top:20px;color:#888;font-size:13px"><p>Powered by <a href="https://www.roofmanager.ca" style="color:#00FF88;text-decoration:none;font-weight:600">Roof Manager</a></p></div></div></body></html>')
+  } catch (err: any) {
+    return c.html('<html><body style="background:#0A0A0A;color:white;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh"><div style="text-align:center"><h1>Error</h1><p style="color:#888">Unable to load invoice.</p></div></body></html>')
+  }
+})
+
 app.get('/customer/d2d', (c) => {
   const mapsKey = c.env.GOOGLE_MAPS_API_KEY || ''
   return c.html(getD2DPageHTML(mapsKey))
@@ -4459,7 +4491,7 @@ function getPricingPageHTML() {
 // ============================================================
 // BLOG LISTING PAGE — Public SEO lead funnel
 // ============================================================
-function getBlogListingHTML() {
+function getBlogListingHTML(posts: any[] = []) {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -4539,9 +4571,25 @@ function getBlogListingHTML() {
 
     <!-- All Posts Grid -->
     <div id="blog-grid" class="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-      <div class="col-span-full text-center py-16">
-        <div class="animate-pulse text-gray-500"><i class="fas fa-spinner fa-spin text-3xl mb-4"></i><p class="text-sm">Loading articles...</p></div>
-      </div>
+  ${posts.length > 0 ? posts.map(p => `
+    <a href="/blog/${p.slug}" class="block group">
+      <article class="bg-[#111111] border border-white/10 rounded-xl overflow-hidden hover:border-[#00FF88]/30 transition-all duration-300 hover:-translate-y-1 h-full flex flex-col">
+        ${p.cover_image_url ? `<div class="h-48 overflow-hidden"><img src="${p.cover_image_url}" alt="${(p.title || '').replace(/"/g, '&quot;')}" class="w-full h-full object-cover" loading="lazy"/></div>` : `<div class="h-48 bg-gradient-to-br from-[#111] to-[#1a1a1a] flex items-center justify-center"><i class="fas fa-newspaper text-white/10 text-4xl"></i></div>`}
+        <div class="p-5 flex flex-col flex-1">
+          <h3 class="font-bold text-white mb-2 group-hover:text-[#00FF88] transition-colors leading-snug">${p.title || ''}</h3>
+          <p class="text-gray-400 text-sm mb-4 leading-relaxed flex-1">${(p.excerpt || '').substring(0, 150)}</p>
+          <div class="flex items-center justify-between pt-4 border-t border-white/5">
+            <span class="text-xs text-gray-500">${p.published_at ? new Date(p.published_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}</span>
+            <span class="text-xs text-gray-500"><i class="far fa-clock mr-1"></i>${p.read_time_minutes || 5} min</span>
+          </div>
+        </div>
+      </article>
+    </a>
+  `).join('') : `
+    <div class="col-span-full text-center py-16">
+      <div class="animate-pulse text-gray-500"><i class="fas fa-spinner fa-spin text-3xl mb-4"></i><p class="text-sm">Loading articles...</p></div>
+    </div>
+  `}
     </div>
 
     <!-- Load More -->
@@ -4739,7 +4787,21 @@ function getBlogPostHTML(post?: any, slug?: string) {
   <!-- Article Content -->
   <main class="max-w-4xl mx-auto px-4 pb-20">
     <article id="blog-post-content">
-      <div class="text-center py-16 animate-pulse text-gray-500"><i class="fas fa-spinner fa-spin text-3xl mb-4"></i><p>Loading article...</p></div>
+  ${post ? `
+    <div class="mb-8">
+      ${post.cover_image_url ? `<img src="${post.cover_image_url}" alt="${(post.title || '').replace(/"/g, '&quot;')}" class="w-full h-auto rounded-2xl mb-8 shadow-lg" />` : ''}
+      <h1 class="text-3xl md:text-4xl font-black text-white mb-4 leading-tight">${post.title || ''}</h1>
+      <div class="flex flex-wrap items-center gap-4 text-sm text-gray-500 mb-6">
+        <span><i class="fas fa-user mr-1"></i>${post.author_name || 'Roof Manager Team'}</span>
+        <span><i class="fas fa-calendar mr-1"></i>${post.published_at ? new Date(post.published_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : ''}</span>
+        <span><i class="fas fa-clock mr-1"></i>${post.read_time_minutes || 5} min read</span>
+        ${post.category ? `<span class="bg-[#00FF88]/10 text-[#00FF88] px-2 py-0.5 rounded text-xs font-bold">${post.category}</span>` : ''}
+      </div>
+    </div>
+    <div class="prose prose-lg prose-invert max-w-none blog-content">${post.content || ''}</div>
+  ` : `
+    <div class="text-center py-16 animate-pulse text-gray-500"><i class="fas fa-spinner fa-spin text-3xl mb-4"></i><p>Loading article...</p></div>
+  `}
     </article>
 
     <!-- Author / CTA Box -->

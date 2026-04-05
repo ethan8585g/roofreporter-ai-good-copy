@@ -683,7 +683,7 @@ invoiceRoutes.post('/:id/send-gmail', async (c) => {
           const sqResp = await fetch('https://connect.squareup.com/v2/online-checkout/payment-links', {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json', 'Square-Version': '2025-01-23' },
-            body: JSON.stringify({ idempotency_key: `inv-email-${id}-${Date.now()}`, quick_pay: { name: `Invoice ${invoice.invoice_number}`, price_money: { amount: Math.round(invoice.total * 100), currency: 'USD' }, location_id: locationId } })
+            body: JSON.stringify({ idempotency_key: `inv-email-${id}-${Date.now()}`, quick_pay: { name: `Invoice ${invoice.invoice_number}`, price_money: { amount: Math.round(invoice.total * 100), currency: invoice.currency || 'CAD' }, location_id: locationId } })
           })
           const sqData: any = await sqResp.json()
           if (sqData.payment_link?.url) {
