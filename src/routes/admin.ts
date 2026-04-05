@@ -374,6 +374,17 @@ adminRoutes.post('/init-db', async (c) => {
       try { await c.env.DB.prepare(`ALTER TABLE customers ADD COLUMN ${col}`).run() } catch(e) {}
     }
 
+    // Migration: Trial + subscription tracking columns
+    const trialSubCols = [
+      'trial_ends_at TEXT',
+      'subscription_price_cents INTEGER DEFAULT 0',
+      'lead_source TEXT',
+      'lead_utm_source TEXT'
+    ]
+    for (const col of trialSubCols) {
+      try { await c.env.DB.prepare(`ALTER TABLE customers ADD COLUMN ${col}`).run() } catch(e) {}
+    }
+
     // Migration 0009: Trial flag on orders (so admin can filter trial vs paid)
     try { await c.env.DB.prepare('ALTER TABLE orders ADD COLUMN is_trial INTEGER DEFAULT 0').run() } catch(e) {}
 
@@ -1040,16 +1051,60 @@ adminRoutes.get('/superadmin/marketing', async (c) => {
         (SELECT COUNT(*) FROM orders WHERE is_trial = 0 OR is_trial IS NULL) as paid_reports
     `).first()
 
+    // Trial expiry alerts — customers expiring within 7 days
+    const trialAlerts = await c.env.DB.prepare(`
+      SELECT id, name, email, company_name, trial_ends_at, subscription_plan, subscription_price_cents
+      FROM customers
+      WHERE subscription_status = 'trialing' AND trial_ends_at IS NOT NULL
+        AND trial_ends_at BETWEEN datetime('now') AND datetime('now', '+7 days')
+      ORDER BY trial_ends_at ASC LIMIT 10
+    `).all()
+
+    // Revenue metrics
+    const revenue = await c.env.DB.prepare(`
+      SELECT
+        (SELECT COALESCE(SUM(subscription_price_cents), 0) FROM customers WHERE subscription_status = 'active') as mrr_cents,
+        (SELECT COUNT(*) FROM customers WHERE subscription_status = 'active') as active_subs,
+        (SELECT COUNT(*) FROM customers WHERE subscription_status = 'trialing') as trialing,
+        (SELECT COALESCE(SUM(total), 0) FROM invoices WHERE status = 'paid' AND created_at > datetime('now', '-30 days')) as invoiced_30d,
+        (SELECT COUNT(*) FROM customers WHERE subscription_status = 'cancelled') as churned,
+        (SELECT COUNT(*) FROM customers WHERE subscription_status = 'trialing' AND trial_ends_at < datetime('now')) as expired_trials
+    `).first()
+
+    // Lead sources
+    const leadSources = await c.env.DB.prepare(`
+      SELECT COALESCE(lead_source, lead_utm_source, 'direct') as source, COUNT(*) as count,
+        SUM(CASE WHEN subscription_status = 'active' THEN 1 ELSE 0 END) as converted
+      FROM customers GROUP BY source ORDER BY count DESC LIMIT 10
+    `).all()
+
     return c.json({
       crm_stats: crmStats,
       platform_invoices: platformInvoices,
       recent_proposals: recentProposals.results,
       recent_invoices: recentInvoices.results,
-      funnel
+      funnel,
+      trial_alerts: trialAlerts.results,
+      revenue,
+      lead_sources: leadSources.results,
     })
   } catch (err: any) {
     return c.json({ error: 'Failed to load marketing data', details: err.message }, 500)
   }
+})
+
+// GET /superadmin/trial-expiry — All trialing customers
+adminRoutes.get('/superadmin/trial-expiry', async (c) => {
+  const admin = c.get('admin' as any)
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
+  try {
+    const customers = await c.env.DB.prepare(`
+      SELECT id, name, email, company_name, subscription_plan, trial_ends_at, subscription_status, subscription_price_cents, report_credits, created_at
+      FROM customers WHERE subscription_status = 'trialing' AND trial_ends_at IS NOT NULL
+      ORDER BY trial_ends_at ASC LIMIT 100
+    `).all()
+    return c.json({ customers: customers.results })
+  } catch (err: any) { return c.json({ error: err.message }, 500) }
 })
 
 // ============================================================
@@ -1339,6 +1394,7 @@ adminRoutes.get('/superadmin/onboarding/list', async (c) => {
       SELECT
         c.id, c.name as contact_name, c.email, c.phone as personal_phone,
         c.company_name as business_name, c.company_type, c.subscription_plan,
+        c.subscription_status, c.trial_ends_at, c.subscription_price_cents,
         c.is_active, c.created_at,
         sc.is_active as secretary_enabled, sc.secretary_mode,
         sc.assigned_phone_number as agent_phone_number,
@@ -1364,7 +1420,8 @@ adminRoutes.post('/superadmin/onboarding/create', async (c) => {
   const body = await c.req.json()
   const { email, password, contact_name, business_name, phone, personal_phone,
           agent_phone_number, secretary_mode, phone_provider, notes, enable_secretary,
-          call_forwarding_number, secretary_phone_number } = body
+          call_forwarding_number, secretary_phone_number,
+          subscription_tier, trial_days, credit_pack, send_invoice } = body
 
   if (!email || !password || !contact_name) {
     return c.json({ error: 'email, password, and contact_name are required' }, 400)
@@ -1381,16 +1438,25 @@ adminRoutes.post('/superadmin/onboarding/create', async (c) => {
   const hash = Array.from(new Uint8Array(hashBuf)).map((b: number) => b.toString(16).padStart(2, '0')).join('')
   const password_hash = `${salt}:${hash}`
 
+  // Trial + subscription setup
+  const trialDaysNum = parseInt(trial_days) || 30
+  const tierPrices: Record<string, number> = { starter: 4999, pro: 14900, enterprise: 49900 }
+  const selectedTier = subscription_tier || 'starter'
+  const priceCents = tierPrices[selectedTier] || 4999
+
   try {
     const result = await c.env.DB.prepare(`
       INSERT INTO customers (email, password_hash, name, company_name, phone,
         is_active, email_verified, free_trial_total, free_trial_used, report_credits,
-        subscription_plan, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, 1, 1, 3, 0, 0, 'pro', datetime('now'), datetime('now'))
+        subscription_plan, subscription_status, trial_ends_at, subscription_price_cents,
+        created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, 1, 1, 3, 0, 0, ?, 'trialing',
+        datetime('now', '+' || ? || ' days'), ?, datetime('now'), datetime('now'))
     `).bind(
       email.toLowerCase(), password_hash, contact_name,
       business_name || contact_name,
-      phone || personal_phone || ''
+      phone || personal_phone || '',
+      selectedTier, String(trialDaysNum), priceCents
     ).run()
 
     const customerId = (result as any).meta?.last_row_id
@@ -1458,6 +1524,71 @@ adminRoutes.post('/superadmin/onboarding/create', async (c) => {
       }
     }
 
+    // Optionally create invoice with Square payment link
+    let invoiceResult: any = null
+    if (send_invoice && credit_pack && credit_pack !== 'none') {
+      const packs: Record<string, { qty: number; price: number; desc: string }> = {
+        '10-pack':  { qty: 10,  price: 55,   desc: '10 Roof Report Credits' },
+        '25-pack':  { qty: 25,  price: 125,  desc: '25 Roof Report Credits' },
+        '100-pack': { qty: 100, price: 475,  desc: '100 Roof Report Credits' },
+      }
+      const pack = packs[credit_pack]
+      if (pack) {
+        try {
+          const d = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+          const rand = Math.floor(Math.random() * 9999).toString().padStart(4, '0')
+          const invoiceNumber = `OB-${d}-${rand}`
+          const shareToken = crypto.randomUUID().replace(/-/g, '').substring(0, 24)
+
+          const invRes = await c.env.DB.prepare(`
+            INSERT INTO invoices (invoice_number, master_company_id, customer_id, subtotal, tax_rate, tax_amount, total, currency, status, document_type, notes, share_token, issue_date, due_date, created_at, updated_at)
+            VALUES (?, 1, ?, ?, 0, 0, ?, 'USD', 'sent', 'invoice', ?, ?, datetime('now'), datetime('now', '+30 days'), datetime('now'), datetime('now'))
+          `).bind(invoiceNumber, customerId, pack.price, pack.price, `Onboarding — ${pack.desc}`, shareToken).run()
+          const invoiceId = (invRes as any).meta?.last_row_id
+
+          if (invoiceId) {
+            await c.env.DB.prepare(
+              'INSERT INTO invoice_items (invoice_id, description, quantity, unit_price, amount, sort_order) VALUES (?, ?, ?, ?, ?, 0)'
+            ).bind(invoiceId, pack.desc, pack.qty, pack.price / pack.qty, pack.price).run()
+
+            // Create Square payment link
+            let checkoutUrl = ''
+            const sqToken = (c.env as any).SQUARE_ACCESS_TOKEN
+            const sqLocation = (c.env as any).SQUARE_LOCATION_ID
+            if (sqToken && sqLocation) {
+              try {
+                const sqResp = await fetch('https://connect.squareup.com/v2/online-checkout/payment-links', {
+                  method: 'POST',
+                  headers: { 'Authorization': `Bearer ${sqToken}`, 'Content-Type': 'application/json', 'Square-Version': '2024-01-18' },
+                  body: JSON.stringify({
+                    idempotency_key: `ob-${invoiceId}-${Date.now()}`,
+                    quick_pay: { name: `Invoice ${invoiceNumber}`, price_money: { amount: Math.round(pack.price * 100), currency: 'USD' }, location_id: sqLocation }
+                  })
+                })
+                const sqData: any = await sqResp.json()
+                if (sqData.payment_link?.url) {
+                  checkoutUrl = sqData.payment_link.url
+                  await c.env.DB.prepare("UPDATE invoices SET square_payment_link_url = ?, square_payment_link_id = ?, updated_at = datetime('now') WHERE id = ?")
+                    .bind(checkoutUrl, sqData.payment_link.id, invoiceId).run()
+                }
+              } catch (sqErr: any) { console.warn('[Onboarding] Square link creation failed:', sqErr.message) }
+            }
+
+            // Send invoice email
+            try {
+              const origin = new URL(c.req.url).origin
+              await fetch(`${origin}/api/invoices/${invoiceId}/send-gmail`, {
+                method: 'POST',
+                headers: { 'Authorization': c.req.header('Authorization') || '', 'Content-Type': 'application/json' }
+              })
+            } catch (emailErr: any) { console.warn('[Onboarding] Invoice email failed:', emailErr.message) }
+
+            invoiceResult = { invoice_id: invoiceId, invoice_number: invoiceNumber, checkout_url: checkoutUrl, share_token: shareToken }
+          }
+        } catch (invErr: any) { console.warn('[Onboarding] Invoice creation failed:', invErr.message) }
+      }
+    }
+
     return c.json({
       success: true,
       customer_id: customerId,
@@ -1467,6 +1598,9 @@ adminRoutes.post('/superadmin/onboarding/create', async (c) => {
       personal_phone: personal_phone || phone || null,
       livekit_deployed: livekitDeployed,
       livekit_trunk_id: livekitTrunkId,
+      subscription_tier: selectedTier,
+      trial_ends_at: new Date(Date.now() + trialDaysNum * 86400000).toISOString(),
+      invoice: invoiceResult,
     })
   } catch (err: any) {
     return c.json({ error: 'Failed to create customer', details: err.message }, 500)

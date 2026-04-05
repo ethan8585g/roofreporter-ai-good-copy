@@ -91,7 +91,7 @@ websiteBuilderRoutes.post('/intake', async (c) => {
     // Generate AI content
     const siteContent = await generateSiteCopy(intake, {
       GEMINI_API_KEY: c.env.GEMINI_API_KEY,
-      GCP_SERVICE_ACCOUNT_JSON: c.env.GCP_SERVICE_ACCOUNT_JSON,
+      GCP_SERVICE_ACCOUNT_KEY: c.env.GCP_SERVICE_ACCOUNT_KEY,
       GOOGLE_VERTEX_API_KEY: c.env.GOOGLE_VERTEX_API_KEY,
     })
 
@@ -371,7 +371,7 @@ websiteBuilderRoutes.post('/sites/:id/regenerate', async (c) => {
 
   const siteContent = await generateSiteCopy(intake, {
     GEMINI_API_KEY: c.env.GEMINI_API_KEY,
-    GCP_SERVICE_ACCOUNT_JSON: c.env.GCP_SERVICE_ACCOUNT_JSON,
+    GCP_SERVICE_ACCOUNT_KEY: c.env.GCP_SERVICE_ACCOUNT_KEY,
     GOOGLE_VERTEX_API_KEY: c.env.GOOGLE_VERTEX_API_KEY,
   })
 

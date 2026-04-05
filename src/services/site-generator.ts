@@ -9,7 +9,7 @@ import { getAccessToken, getProjectId } from './gcp-auth'
 
 interface GeminiEnv {
   GEMINI_API_KEY?: string
-  GCP_SERVICE_ACCOUNT_JSON?: string
+  GCP_SERVICE_ACCOUNT_KEY?: string
   GOOGLE_VERTEX_API_KEY?: string
 }
 
@@ -23,10 +23,10 @@ export async function generateSiteCopy(
   let location = 'us-central1'
   const apiKey = env.GEMINI_API_KEY || env.GOOGLE_VERTEX_API_KEY
 
-  if (env.GCP_SERVICE_ACCOUNT_JSON) {
+  if (env.GCP_SERVICE_ACCOUNT_KEY) {
     try {
-      accessToken = await getAccessToken(env.GCP_SERVICE_ACCOUNT_JSON)
-      project = getProjectId(env.GCP_SERVICE_ACCOUNT_JSON) || undefined
+      accessToken = await getAccessToken(env.GCP_SERVICE_ACCOUNT_KEY)
+      project = getProjectId(env.GCP_SERVICE_ACCOUNT_KEY) || undefined
     } catch (e: any) {
       console.warn('[SiteGenerator] Service account auth failed:', e.message)
     }

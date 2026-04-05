@@ -896,28 +896,74 @@ function renderMarketingView() {
       `)}
     </div>
 
-    <!-- Ad Campaign Management Placeholder -->
-    ${saSection('Ad Campaign Management', 'fa-ad', `
-      <div class="text-center py-8">
-        <div class="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-          <i class="fas fa-ad text-gray-400 text-2xl"></i>
-        </div>
-        <h4 class="font-bold text-gray-700 mb-1">Campaign Manager Coming Soon</h4>
-        <p class="text-sm text-gray-400 max-w-md mx-auto">Track Google Ads, Facebook Ads, and other marketing campaigns. Monitor spend, impressions, clicks, and conversions all from one dashboard.</p>
-        <div class="mt-4 grid grid-cols-3 gap-3 max-w-lg mx-auto">
-          <div class="bg-gray-50 rounded-xl p-3 text-center">
-            <i class="fab fa-google text-red-400 text-lg mb-1"></i>
-            <p class="text-[10px] text-gray-500">Google Ads</p>
-          </div>
-          <div class="bg-gray-50 rounded-xl p-3 text-center">
-            <i class="fab fa-facebook text-blue-500 text-lg mb-1"></i>
-            <p class="text-[10px] text-gray-500">Facebook Ads</p>
-          </div>
-          <div class="bg-gray-50 rounded-xl p-3 text-center">
-            <i class="fas fa-envelope-open-text text-green-500 text-lg mb-1"></i>
-            <p class="text-[10px] text-gray-500">Email Campaigns</p>
-          </div>
-        </div>
+    <!-- Revenue Dashboard -->
+    ${(() => {
+      const rev = d.revenue || {};
+      const mrrDollars = ((rev.mrr_cents || 0) / 100).toFixed(2);
+      return `
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        ${samc('Monthly Recurring', '$' + mrrDollars, 'fa-dollar-sign', 'green', (rev.active_subs || 0) + ' active subscribers')}
+        ${samc('Trialing', rev.trialing || 0, 'fa-hourglass-half', 'blue', (rev.expired_trials || 0) + ' expired')}
+        ${samc('30-Day Revenue', $$(rev.invoiced_30d), 'fa-chart-line', 'indigo', 'from paid invoices')}
+        ${samc('Churned', rev.churned || 0, 'fa-user-minus', 'red')}
+      </div>`;
+    })()}
+
+    <div class="grid lg:grid-cols-2 gap-6 mb-6">
+      <!-- Trial Expiry Alerts -->
+      ${(() => {
+        const alerts = d.trial_alerts || [];
+        return saSection('Trial Expiry Alerts', 'fa-clock', `
+          ${alerts.length === 0 ? '<p class="text-gray-400 text-sm">No trials expiring in the next 7 days</p>' : `
+          <div class="space-y-2">
+            ${alerts.map(a => {
+              const daysLeft = Math.max(0, Math.ceil((new Date(a.trial_ends_at) - Date.now()) / 86400000));
+              const priceFmt = ((a.subscription_price_cents || 4999) / 100).toFixed(2);
+              return `<div class="flex items-center justify-between py-2.5 px-3 rounded-lg border ${daysLeft <= 2 ? 'border-red-200 bg-red-50' : 'border-amber-200 bg-amber-50'}">
+                <div>
+                  <p class="text-sm font-medium text-gray-800">${a.name || a.email}</p>
+                  <p class="text-[10px] text-gray-500">${a.email} · ${(a.subscription_plan || 'starter')} · $${priceFmt}/mo</p>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span class="px-2 py-0.5 text-xs rounded-full font-bold ${daysLeft <= 2 ? 'bg-red-200 text-red-700' : 'bg-amber-200 text-amber-700'}">${daysLeft}d left</span>
+                  <button onclick="sendTrialExpiryInvoice('${a.email}', ${a.subscription_price_cents || 4999}, '${(a.subscription_plan || 'starter')}')" class="text-xs bg-green-600 text-white px-3 py-1.5 rounded-lg font-medium hover:bg-green-700">Send Invoice</button>
+                </div>
+              </div>`;
+            }).join('')}
+          </div>`}
+        `);
+      })()}
+
+      <!-- Lead Source Tracker -->
+      ${(() => {
+        const sources = d.lead_sources || [];
+        return saSection('Lead Sources', 'fa-map-signs', `
+          ${sources.length === 0 ? '<p class="text-gray-400 text-sm">No lead source data yet</p>' : `
+          <div class="space-y-1">
+            ${sources.map(s => `
+              <div class="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-gray-50">
+                <span class="text-sm font-medium text-gray-700">${s.source}</span>
+                <div class="flex items-center gap-3">
+                  <span class="text-sm font-bold text-gray-800">${s.count} signups</span>
+                  <span class="text-xs text-green-600 font-medium">${s.converted || 0} converted</span>
+                </div>
+              </div>
+            `).join('')}
+          </div>`}
+        `);
+      })()}
+    </div>
+
+    <!-- Quick Invoice Sender -->
+    ${saSection('Quick Invoice Sender', 'fa-paper-plane', `
+      <p class="text-xs text-gray-400 mb-3">Send a one-click invoice with Square payment link to any email</p>
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-3">
+        <input id="mkt-inv-email" class="border-2 border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:border-teal-400 outline-none" placeholder="customer@email.com">
+        <input id="mkt-inv-desc" class="border-2 border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:border-teal-400 outline-none" placeholder="Description" value="Roof Report Credits">
+        <input id="mkt-inv-amount" class="border-2 border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:border-teal-400 outline-none" placeholder="Amount (USD)" type="number" value="125">
+        <button onclick="sendQuickInvoice()" class="bg-teal-600 text-white px-4 py-2.5 rounded-lg text-sm font-bold hover:bg-teal-700 transition-colors">
+          <i class="fas fa-paper-plane mr-1"></i>Create & Send
+        </button>
       </div>
     `)}
   `;
@@ -4539,6 +4585,33 @@ function renderCustomerOnboardingView() {
     '<div class="flex items-end pb-1"><label class="flex items-center gap-2 text-sm"><input type="checkbox" id="ob-enable-sec" checked class="rounded"> Enable Secretary AI on creation</label></div>' +
     '</div>' +
 
+    // Subscription & Billing section
+    '<div class="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-4 border border-green-200 mt-4">' +
+    '<h4 class="text-sm font-bold text-green-800 mb-3"><i class="fas fa-credit-card mr-1"></i>Subscription & Billing</h4>' +
+    '<div class="grid grid-cols-1 md:grid-cols-4 gap-4">' +
+    '<div><label class="text-xs text-gray-600 font-bold block mb-1">Subscription Tier</label>' +
+    '<select id="ob-sub-tier" class="w-full border-2 border-green-200 rounded-lg px-3 py-2.5 text-sm">' +
+    '<option value="starter">Starter — $49.99/mo</option>' +
+    '<option value="pro">Pro — $149/mo</option>' +
+    '<option value="enterprise">Enterprise — $499/mo</option>' +
+    '</select></div>' +
+    '<div><label class="text-xs text-gray-600 font-bold block mb-1">Trial Period</label>' +
+    '<select id="ob-trial-days" class="w-full border-2 border-green-200 rounded-lg px-3 py-2.5 text-sm" onchange="updateTrialEndDate()">' +
+    '<option value="30">30 days (default)</option>' +
+    '<option value="14">14 days</option>' +
+    '<option value="60">60 days</option>' +
+    '</select>' +
+    '<p id="ob-trial-end-display" class="text-[10px] text-green-700 mt-1 font-medium"></p></div>' +
+    '<div><label class="text-xs text-gray-600 font-bold block mb-1">Report Credit Pack</label>' +
+    '<select id="ob-credit-pack" class="w-full border-2 border-green-200 rounded-lg px-3 py-2.5 text-sm">' +
+    '<option value="none">No credits (trial only)</option>' +
+    '<option value="10-pack">10-pack — $55</option>' +
+    '<option value="25-pack">25-pack — $125</option>' +
+    '<option value="100-pack">100-pack — $475</option>' +
+    '</select></div>' +
+    '<div class="flex items-end pb-1"><label class="flex items-center gap-2 text-sm"><input type="checkbox" id="ob-send-invoice" class="rounded"> Send Invoice with Payment Link</label></div>' +
+    '</div></div>' +
+
     '</div>' +
     '<button onclick="createOnboardingCustomer()" class="mt-5 bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3 rounded-xl font-bold text-sm transition-all shadow-md hover:shadow-lg"><i class="fas fa-user-plus mr-2"></i>Create Account & Setup Secretary AI</button>' +
     '</div>' +
@@ -4576,11 +4649,15 @@ async function createOnboardingCustomer() {
     personal_phone: personalPhone,
     agent_phone_number: agentPhone,
     phone_provider: document.getElementById('ob-provider').value,
-    // Map to legacy fields for backwards compatibility
     secretary_phone_number: agentPhone,
     call_forwarding_number: personalPhone,
     notes: document.getElementById('ob-notes').value,
-    enable_secretary: document.getElementById('ob-enable-sec').checked
+    enable_secretary: document.getElementById('ob-enable-sec').checked,
+    // Subscription & billing
+    subscription_tier: document.getElementById('ob-sub-tier') ? document.getElementById('ob-sub-tier').value : 'starter',
+    trial_days: document.getElementById('ob-trial-days') ? document.getElementById('ob-trial-days').value : '30',
+    credit_pack: document.getElementById('ob-credit-pack') ? document.getElementById('ob-credit-pack').value : 'none',
+    send_invoice: document.getElementById('ob-send-invoice') ? document.getElementById('ob-send-invoice').checked : false
   };
 
   try {
@@ -4592,23 +4669,22 @@ async function createOnboardingCustomer() {
     var data = await res.json();
     if (data.success) {
       var msg = 'Customer account created for ' + contactName + '!\n\n';
+      if (data.subscription_tier) {
+        msg += 'Subscription: ' + data.subscription_tier.toUpperCase() + '\n';
+        msg += 'Trial Ends: ' + new Date(data.trial_ends_at).toLocaleDateString('en-CA') + '\n\n';
+      }
+      if (data.invoice) {
+        msg += 'Invoice ' + data.invoice.invoice_number + ' created & emailed!\n';
+        if (data.invoice.checkout_url) msg += 'Payment Link: ' + data.invoice.checkout_url + '\n';
+        msg += '\n';
+      }
       if (data.secretary_setup) {
         msg += 'Secretary AI: ACTIVE\n';
         msg += 'Agent Phone: ' + (data.agent_phone_number || agentPhone) + '\n';
         msg += 'Personal Phone: ' + (data.personal_phone || personalPhone) + '\n';
         if (data.livekit_deployed) {
           msg += '\nLiveKit Agent: DEPLOYED (trunk: ' + data.livekit_trunk_id + ')\n';
-          msg += 'Calls to the agent phone number will now be handled by AI.\n';
-        } else {
-          msg += '\nLiveKit Agent: NOT DEPLOYED — click "Deploy" in the table below, or check LiveKit env vars.\n';
         }
-        msg += '\nNEXT STEP: Customer must configure call forwarding on their cell provider:\n';
-        msg += '  Telus: *21*' + (data.agent_phone_number || agentPhone).replace(/[^0-9+]/g, '') + '#\n';
-        msg += '  Rogers: **21*' + (data.agent_phone_number || agentPhone).replace(/[^0-9+]/g, '') + '#\n';
-        msg += '  Bell: *72' + (data.agent_phone_number || agentPhone).replace(/[^0-9+]/g, '') + '\n';
-      } else {
-        msg += 'Secretary AI: NOT ACTIVE (no agent phone number provided)\n';
-        msg += 'Customer must purchase a SIP phone number from Twilio/Vonage/Telnyx first.';
       }
       alert(msg);
       loadView('customer-onboarding');
@@ -4616,6 +4692,55 @@ async function createOnboardingCustomer() {
       alert(data.error || 'Failed to create customer');
     }
   } catch(e) { alert('Error creating customer: ' + e.message); }
+}
+
+function updateTrialEndDate() {
+  var el = document.getElementById('ob-trial-end-display');
+  var sel = document.getElementById('ob-trial-days');
+  if (!el || !sel) return;
+  var days = parseInt(sel.value) || 30;
+  var end = new Date(Date.now() + days * 86400000);
+  el.textContent = 'Trial ends: ' + end.toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' });
+}
+
+async function sendQuickInvoice() {
+  var email = document.getElementById('mkt-inv-email')?.value;
+  var desc = document.getElementById('mkt-inv-desc')?.value || 'Service';
+  var amount = parseFloat(document.getElementById('mkt-inv-amount')?.value);
+  if (!email || !amount) { alert('Email and amount are required'); return; }
+  try {
+    var res = await saFetch('/api/admin/superadmin/service-invoices/create', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ customer_email: email, items: [{ description: desc, quantity: 1, unit_price: amount }] })
+    });
+    var data = await res.json();
+    if (data.success || data.invoice_id) {
+      await saFetch('/api/admin/superadmin/service-invoices/' + (data.invoice_id || data.id) + '/send', { method: 'POST' });
+      alert('Invoice ' + (data.invoice_number || '') + ' created and sent to ' + email);
+      loadView('marketing');
+    } else { alert(data.error || 'Failed to create invoice'); }
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+async function sendTrialExpiryInvoice(email, priceCents, plan) {
+  if (!confirm('Send $' + (priceCents / 100).toFixed(2) + '/mo subscription invoice to ' + email + '?')) return;
+  try {
+    var price = priceCents / 100;
+    var res = await saFetch('/api/admin/superadmin/service-invoices/create', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        customer_email: email,
+        items: [{ description: plan.charAt(0).toUpperCase() + plan.slice(1) + ' Plan - Monthly Subscription', quantity: 1, unit_price: price }],
+        notes: 'Monthly subscription invoice'
+      })
+    });
+    var data = await res.json();
+    if (data.success || data.invoice_id) {
+      await saFetch('/api/admin/superadmin/service-invoices/' + (data.invoice_id || data.id) + '/send', { method: 'POST' });
+      alert('Subscription invoice sent to ' + email);
+      loadView('marketing');
+    } else { alert(data.error || 'Failed'); }
+  } catch(e) { alert('Error: ' + e.message); }
 }
 
 async function toggleSecretaryMode(id, enable) {
