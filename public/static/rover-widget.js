@@ -724,7 +724,10 @@
   // Send message
   window.__roverSend = async function() {
     var msg = inputEl.value.trim();
-    if (!msg || state.loading) return;
+    if (!msg) return;
+
+    // Force reset loading state in case it's stuck
+    state.loading = false;
 
     inputEl.value = '';
     addMessage('user', msg);
@@ -732,6 +735,15 @@
     inputEl.disabled = true;
     document.getElementById('rover-send').disabled = true;
     showTyping();
+
+    // Safety timeout — reset everything after 15s no matter what
+    var safetyTimeout = setTimeout(function() {
+      state.loading = false;
+      inputEl.disabled = false;
+      document.getElementById('rover-send').disabled = false;
+      hideTyping();
+      addMessage('assistant', "Sorry, that took too long! Please try again or email sales@roofmanager.ca");
+    }, 15000);
 
     try {
       var res = await fetch('/api/rover/chat', {
@@ -744,23 +756,22 @@
         })
       });
 
+      clearTimeout(safetyTimeout);
       hideTyping();
 
       if (res.ok) {
         var data = await res.json();
-        
+
         if (data.reply) {
           addMessage('assistant', data.reply);
         } else if (data.error) {
           addMessage('assistant', data.error);
         }
 
-        // Show contact form if API indicates it
         if (data.show_contact_form) {
           showContactForm();
         }
 
-        // Check if the reply mentions filling out a contact form or reaching out
         if (data.reply && (
           data.reply.includes('fill out the contact form') ||
           data.reply.includes('contact form below')
@@ -774,20 +785,20 @@
           badgeEl.classList.add('show');
         }
       } else {
-        // Server error — show fallback + contact form
-        addMessage('assistant', "I'm having a quick technical hiccup! You can reach us at sales@roofmanager.ca or sign up at /customer/login for 3 free reports. Or fill out the contact form below and our team will reach out! 😊");
+        addMessage('assistant', "I'm having a quick technical hiccup! You can reach us at sales@roofmanager.ca or sign up at /customer/login for 3 free reports. 😊");
         showContactForm();
       }
     } catch (e) {
+      clearTimeout(safetyTimeout);
       hideTyping();
-      addMessage('assistant', "Oops, connection issue! You can email us at sales@roofmanager.ca or fill out the contact form below. We'll get back to you right away!");
+      addMessage('assistant', "Oops, connection issue! You can email us at sales@roofmanager.ca or try again in a moment.");
       showContactForm();
+    } finally {
+      state.loading = false;
+      inputEl.disabled = false;
+      document.getElementById('rover-send').disabled = false;
+      inputEl.focus();
     }
-
-    state.loading = false;
-    inputEl.disabled = false;
-    document.getElementById('rover-send').disabled = false;
-    inputEl.focus();
   };
 
   // Enter key to send
@@ -822,6 +833,12 @@
     } catch (e) { /* silent failure on history restore */ }
   }
   restoreHistory();
+
+  // Always ensure clean loading state on page load
+  state.loading = false;
+  if (inputEl) inputEl.disabled = false;
+  var sendBtn = document.getElementById('rover-send');
+  if (sendBtn) sendBtn.disabled = false;
 
   // ============================================================
   // AUTO-SHOW GREETING AFTER DELAY
