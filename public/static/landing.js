@@ -159,8 +159,8 @@ function renderHero() {
                 <i class="fas fa-arrow-right text-sm group-hover:translate-x-1.5 transition-transform"></i>
               </a>
               <a href="https://calendar.app.google/CE5iBMV1Fu4K2ve38" target="_blank" onclick="rrTrack('cta_click',{location:'hero_demo'})" class="inline-flex items-center justify-center gap-2.5 bg-white/5 hover:bg-white/10 backdrop-blur-md text-white font-bold py-4 px-8 rounded-xl text-lg border border-white/10 hover:border-white/20 transition-all duration-300 min-h-[56px]">
-                <i class="fas fa-play-circle text-[#00FF88]"></i>
-                Watch Demo Video
+                <i class="fas fa-calendar-check text-[#00FF88]"></i>
+                Book a Demo
               </a>
             </div>
 
@@ -195,109 +195,70 @@ function renderHero() {
             </div>
           </div>
 
-          <!-- Right: Real Satellite Roof Measurement Report -->
+          <!-- Right: Book a Demo Calendar Card -->
           <div class="hidden lg:block">
             <div class="relative">
               <div class="bg-[#111111] border border-white/10 rounded-2xl overflow-hidden shadow-2xl shadow-black/50 neon-glow">
-                <!-- Window chrome -->
-                <div class="flex items-center justify-between px-5 py-3 border-b border-white/5 bg-[#0d1117]">
-                  <div class="flex items-center gap-2">
-                    <div class="w-3 h-3 rounded-full bg-[#ff5f57]"></div>
-                    <div class="w-3 h-3 rounded-full bg-[#febc2e]"></div>
-                    <div class="w-3 h-3 rounded-full bg-[#28c840]"></div>
+                <!-- Card header -->
+                <div class="bg-[#0d1117] px-6 py-5 border-b border-white/5 text-center">
+                  <div class="inline-flex items-center gap-2 bg-[#00FF88]/15 text-[#00FF88] rounded-full px-4 py-1.5 text-xs font-bold mb-4">
+                    <i class="fas fa-calendar-check"></i> Book a Live Demo
                   </div>
-                  <div class="flex items-center gap-2">
-                    <i class="fas fa-satellite text-[#00FF88] text-xs"></i>
-                    <span class="text-[11px] text-gray-400 font-mono">Roof_Report_123_Main_St.pdf</span>
-                  </div>
-                  <span class="text-[9px] text-[#00FF88] bg-[#00FF88]/10 px-2 py-0.5 rounded-full font-bold flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-[#00FF88] animate-pulse"></span>HIGH QUALITY</span>
+                  <h3 class="text-white font-extrabold text-2xl mb-2">See Roof Manager in Action</h3>
+                  <p class="text-gray-400 text-sm">15-minute walkthrough. We'll measure YOUR roof live on the call.</p>
                 </div>
 
-                <!-- Real satellite image with measurement overlay -->
-                <div class="relative">
-                  <img src="https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&q=90&auto=format&fit=crop" alt="Aerial satellite view of residential roof" class="w-full h-[320px] object-cover" style="filter: saturate(0.7) brightness(0.85) contrast(1.1);" loading="eager" />
-                  <!-- Dark overlay for contrast -->
-                  <div class="absolute inset-0" style="background: linear-gradient(135deg, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.15) 50%, rgba(0,0,0,0.3) 100%);"></div>
-
-                  <!-- SVG floating measurement labels over photo (no polygon trace) -->
-                  <svg class="absolute inset-0 w-full h-full" viewBox="0 0 480 320" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
-                    <!-- Floating measurement labels -->
-                    <rect x="155" y="35" width="170" height="26" rx="8" fill="rgba(0,0,0,0.75)" stroke="#00FF88" stroke-width="1"/>
-                    <text x="240" y="53" fill="#00FF88" font-size="13" text-anchor="middle" font-family="'Inter',monospace" font-weight="700">Total: 2,847 ft&sup2;</text>
-
-                    <rect x="40" y="100" width="110" height="44" rx="8" fill="rgba(0,0,0,0.75)" stroke="#00FF88" stroke-width="0.8"/>
-                    <text x="95" y="117" fill="#00FF88" font-size="9" text-anchor="middle" font-family="'Inter',sans-serif" font-weight="600" letter-spacing="1">FACE A</text>
-                    <text x="95" y="136" fill="white" font-size="16" text-anchor="middle" font-family="'Inter',sans-serif" font-weight="800">1,247 ft&sup2;</text>
-
-                    <rect x="330" y="100" width="110" height="44" rx="8" fill="rgba(0,0,0,0.75)" stroke="#22d3ee" stroke-width="0.8"/>
-                    <text x="385" y="117" fill="#22d3ee" font-size="9" text-anchor="middle" font-family="'Inter',sans-serif" font-weight="600" letter-spacing="1">FACE B</text>
-                    <text x="385" y="136" fill="white" font-size="16" text-anchor="middle" font-family="'Inter',sans-serif" font-weight="800">892 ft&sup2;</text>
-
-                    <rect x="170" y="165" width="140" height="24" rx="6" fill="rgba(0,0,0,0.7)" stroke="#00FF88" stroke-width="0.6"/>
-                    <text x="240" y="181" fill="#00FF88" font-size="11" text-anchor="middle" font-family="'Inter',monospace" font-weight="700">85.2 ft ridge</text>
-
-                    <rect x="380" y="175" width="80" height="28" rx="7" fill="rgba(0,0,0,0.75)" stroke="#a78bfa" stroke-width="0.8"/>
-                    <text x="420" y="187" fill="#a78bfa" font-size="9" text-anchor="middle" font-family="'Inter',sans-serif" font-weight="600">PITCH</text>
-                    <text x="420" y="199" fill="white" font-size="13" text-anchor="middle" font-family="'Inter',monospace" font-weight="800">6/12</text>
-
-                    <rect x="170" y="230" width="140" height="22" rx="6" fill="rgba(0,0,0,0.65)" stroke="#22d3ee" stroke-width="0.5"/>
-                    <text x="240" y="245" fill="#22d3ee" font-size="11" text-anchor="middle" font-family="'Inter',monospace" font-weight="600">148.3 ft eave</text>
-
-                    <rect x="40" y="210" width="80" height="34" rx="7" fill="rgba(0,0,0,0.7)" stroke="#a78bfa" stroke-width="0.6"/>
-                    <text x="80" y="225" fill="#a78bfa" font-size="8" text-anchor="middle" font-family="'Inter',sans-serif" font-weight="600">REAR</text>
-                    <text x="80" y="239" fill="white" font-size="13" text-anchor="middle" font-family="'Inter',sans-serif" font-weight="700">708 ft&sup2;</text>
-
-                    <!-- Animated GPS markers -->
-                    <circle cx="240" cy="80" r="5" fill="#00FF88" opacity="0.9"><animate attributeName="r" values="4;7;4" dur="2s" repeatCount="indefinite"/></circle>
-                    <circle cx="90" cy="160" r="4" fill="#00FF88" opacity="0.8"><animate attributeName="r" values="3;6;3" dur="2s" repeatCount="indefinite" begin="0.4s"/></circle>
-                    <circle cx="390" cy="160" r="4" fill="#22d3ee" opacity="0.8"><animate attributeName="r" values="3;6;3" dur="2s" repeatCount="indefinite" begin="0.8s"/></circle>
-                    <circle cx="160" cy="260" r="3" fill="#a78bfa" opacity="0.6"><animate attributeName="r" values="2;5;2" dur="2.5s" repeatCount="indefinite" begin="1.2s"/></circle>
-                    <circle cx="320" cy="260" r="3" fill="#a78bfa" opacity="0.6"><animate attributeName="r" values="2;5;2" dur="2.5s" repeatCount="indefinite" begin="1.5s"/></circle>
-
-                    <!-- Compass -->
-                    <circle cx="435" cy="280" r="18" fill="rgba(0,0,0,0.7)" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
-                    <text x="435" y="275" fill="#00FF88" font-size="9" text-anchor="middle" font-family="'Inter',sans-serif" font-weight="800">N</text>
-                    <polygon points="435,268 432,274 438,274" fill="#00FF88"/>
-                    <line x1="435" y1="278" x2="435" y2="292" stroke="rgba(255,255,255,0.25)" stroke-width="1"/>
-
-                    <!-- Scale bar -->
-                    <line x1="30" y1="290" x2="110" y2="290" stroke="rgba(255,255,255,0.4)" stroke-width="1.5"/>
-                    <line x1="30" y1="286" x2="30" y2="294" stroke="rgba(255,255,255,0.4)" stroke-width="1"/>
-                    <line x1="110" y1="286" x2="110" y2="294" stroke="rgba(255,255,255,0.4)" stroke-width="1"/>
-                    <text x="70" y="305" fill="rgba(255,255,255,0.4)" font-size="9" text-anchor="middle" font-family="'Inter',monospace" font-weight="600">50 ft</text>
-
-                    <text x="440" y="310" fill="rgba(0,255,136,0.2)" font-size="7" text-anchor="end" font-family="'Inter',sans-serif" font-weight="600">ROOF MANAGER</text>
-                  </svg>
-                </div>
-
-                <!-- Stats summary bar -->
-                <div class="grid grid-cols-4 divide-x divide-white/5 border-t border-white/5 bg-[#0d1117]">
-                  <div class="py-3 text-center">
-                    <div class="text-[9px] text-gray-500 uppercase tracking-wider font-semibold">Total Area</div>
-                    <div class="text-base font-extrabold text-[#00FF88]">2,847 ft&sup2;</div>
+                <!-- What you'll see -->
+                <div class="px-6 py-5 space-y-3">
+                  <div class="flex items-start gap-3">
+                    <div class="w-8 h-8 rounded-lg bg-[#00FF88]/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <i class="fas fa-satellite text-[#00FF88] text-xs"></i>
+                    </div>
+                    <div>
+                      <div class="text-white text-sm font-semibold">Live Roof Measurement</div>
+                      <div class="text-gray-500 text-xs">We'll measure any address you choose — in under 60 seconds</div>
+                    </div>
                   </div>
-                  <div class="py-3 text-center">
-                    <div class="text-[9px] text-gray-500 uppercase tracking-wider font-semibold">Pitch</div>
-                    <div class="text-base font-extrabold text-[#22d3ee]">6/12</div>
+                  <div class="flex items-start gap-3">
+                    <div class="w-8 h-8 rounded-lg bg-[#22d3ee]/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <i class="fas fa-th-large text-[#22d3ee] text-xs"></i>
+                    </div>
+                    <div>
+                      <div class="text-white text-sm font-semibold">Full CRM Walkthrough</div>
+                      <div class="text-gray-500 text-xs">Invoicing, proposals, job tracking, AI secretary</div>
+                    </div>
                   </div>
-                  <div class="py-3 text-center">
-                    <div class="text-[9px] text-gray-500 uppercase tracking-wider font-semibold">Edges</div>
-                    <div class="text-base font-extrabold text-[#a78bfa]">342 ft</div>
-                  </div>
-                  <div class="py-3 text-center">
-                    <div class="text-[9px] text-gray-500 uppercase tracking-wider font-semibold">Segments</div>
-                    <div class="text-base font-extrabold text-white">8 faces</div>
+                  <div class="flex items-start gap-3">
+                    <div class="w-8 h-8 rounded-lg bg-[#a78bfa]/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <i class="fas fa-gift text-[#a78bfa] text-xs"></i>
+                    </div>
+                    <div>
+                      <div class="text-white text-sm font-semibold">3 Free Reports After Demo</div>
+                      <div class="text-gray-500 text-xs">No credit card required — start using immediately</div>
+                    </div>
                   </div>
                 </div>
 
-                <!-- Material BOM -->
-                <div class="px-4 py-2.5 flex flex-wrap items-center gap-2.5 text-[10px] text-gray-500 bg-[#080c10] border-t border-white/5">
-                  <span class="font-bold text-gray-400"><i class="fas fa-th mr-1 text-[#00FF88]"></i>Materials BOM:</span>
-                  <span>29 bundles shingles</span><span class="text-white/15">&middot;</span>
-                  <span>4 rolls underlayment</span><span class="text-white/15">&middot;</span>
-                  <span>115 ft drip edge</span><span class="text-white/15">&middot;</span>
-                  <span>89 ft ridge cap</span><span class="text-white/15">&middot;</span>
-                  <span>12 lbs nails</span>
+                <!-- CTA Button -->
+                <div class="px-6 pb-6">
+                  <a href="https://calendar.app.google/CE5iBMV1Fu4K2ve38" target="_blank" onclick="rrTrack('cta_click',{location:'hero_calendar_card'})" class="flex items-center justify-center gap-3 w-full bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 rounded-xl text-base shadow-xl shadow-[#00FF88]/20 transition-all duration-300 hover:scale-[1.02]">
+                    <i class="fas fa-calendar-check"></i>
+                    Book Your Free Demo
+                    <i class="fas fa-arrow-right text-sm"></i>
+                  </a>
+                  <div class="flex items-center justify-center gap-4 mt-4 text-[11px] text-gray-500">
+                    <span><i class="fas fa-clock mr-1 text-[#00FF88]"></i>15 minutes</span>
+                    <span><i class="fas fa-video mr-1 text-[#22d3ee]"></i>Google Meet</span>
+                    <span><i class="fas fa-globe mr-1 text-[#a78bfa]"></i>Any timezone</span>
+                  </div>
+                </div>
+
+                <!-- Social proof strip -->
+                <div class="px-6 py-3 bg-[#080c10] border-t border-white/5 flex items-center justify-center gap-3">
+                  <div class="flex items-center gap-0.5">
+                    ${[1,2,3,4,5].map(() => '<i class="fas fa-star text-[#00FF88] text-[10px]"></i>').join('')}
+                  </div>
+                  <span class="text-[11px] text-gray-500">Rated <strong class="text-white">4.9/5</strong> by 200+ contractors</span>
                 </div>
               </div>
 
