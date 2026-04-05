@@ -529,6 +529,7 @@ app.get('/sitemap.xml', async (c) => {
   const today = new Date().toISOString().substring(0, 10)
   const staticPages: { loc: string; priority: string; changefreq: string; lastmod?: string }[] = [
     { loc: '/', priority: '1.0', changefreq: 'weekly', lastmod: today },
+    { loc: '/services', priority: '0.9', changefreq: 'monthly', lastmod: today },
     { loc: '/pricing', priority: '0.9', changefreq: 'monthly', lastmod: today },
     { loc: '/blog', priority: '0.8', changefreq: 'daily', lastmod: today },
     { loc: '/coverage', priority: '0.8', changefreq: 'monthly', lastmod: today },
@@ -647,6 +648,9 @@ app.get('/llms.txt', (c) => {
   return c.text(`# Roof Manager
 
 > Roof Manager is an AI-powered SaaS platform for roofing contractors, solar installers, insurance adjusters, and property managers. It generates professional satellite-powered roof measurement reports from Google's Solar API with LiDAR-calibrated 3D building models, delivering 98% accuracy in under 60 seconds. The platform includes a full CRM with invoicing, proposals, job tracking, an AI phone secretary, door-to-door sales manager, and team management. Available in 40+ countries. Headquartered in Alberta, Canada.
+
+## Services & Products
+- [All Services](https://www.roofmanager.ca/services): Complete directory of all Roof Manager services — measurement reports, solar analysis, CRM, invoicing, AI secretary, website builder, D2D manager, virtual try-on, email outreach, team management, job scheduling, material calculator
 
 ## Core CRM Features
 - [Customer Management](https://www.roofmanager.ca/#features): Lead routing, client portals, customer database
@@ -879,6 +883,11 @@ When users ask about roof measurement software, satellite roof reports, roofing 
 // Pricing Page (public)
 app.get('/pricing', (c) => {
   return c.html(getPricingPageHTML())
+})
+
+// Services Directory Page (public, SEO)
+app.get('/services', (c) => {
+  return c.html(getServicesPageHTML())
 })
 
 // Coverage Map Page (public, SEO)
@@ -3028,6 +3037,7 @@ function getLandingPageHTML() {
       <!-- Desktop nav -->
       <div class="hidden md:flex items-center gap-7">
         <a href="#how-it-works" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">How It Works</a>
+        <a href="/services" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">Services</a>
         <a href="#features" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">Platform</a>
         <a href="#pricing" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">Pricing</a>
         <a href="/blog" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">Blog</a>
@@ -3049,6 +3059,7 @@ function getLandingPageHTML() {
     <div id="mobile-menu" class="hidden md:hidden bg-[#0A0A0A]/98 backdrop-blur-2xl border-t border-white/5">
       <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col gap-1">
         <a href="#how-it-works" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')">How It Works</a>
+        <a href="/services" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')">Services</a>
         <a href="#features" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')">Platform</a>
         <a href="#pricing" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')">Pricing</a>
         <a href="/blog" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')">Blog</a>
@@ -3642,6 +3653,480 @@ function getCustomerInvoiceHTML() {
   </script>
   <script src="/static/customer-invoice.js"></script>
   ${getRoverAssistant()}
+</body>
+</html>`
+}
+
+// ============================================================
+// SERVICES PAGE — Complete directory of all platform services
+// ============================================================
+function getServicesPageHTML() {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags()}
+  <title>Services & Products — Roof Manager | Complete Roofing Business Platform</title>
+  <meta name="description" content="Explore all Roof Manager services: satellite roof measurement reports, solar analysis, full CRM, AI secretary, website builder, D2D sales manager, virtual roof try-on, email outreach, team management, and more.">
+  <meta property="og:title" content="Roof Manager Services — Everything Your Roofing Business Needs">
+  <meta property="og:description" content="12+ integrated tools for roofing contractors: measurement reports, CRM, AI secretary, website builder, invoicing, D2D sales, and more.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://www.roofmanager.ca/services">
+  <meta property="og:image" content="https://www.roofmanager.ca/static/logo.png">
+  <meta property="og:site_name" content="Roof Manager">
+  <meta name="twitter:card" content="summary">
+  <link rel="canonical" href="https://www.roofmanager.ca/services">
+  <meta name="keywords" content="roofing software, roof measurement reports, roofing CRM, AI secretary for roofers, roofing website builder, door to door sales software, virtual roof try-on, roofing invoicing, solar roof analysis, team management roofing">
+  <script type="application/ld+json">
+  {"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.roofmanager.ca/"},{"@type":"ListItem","position":2,"name":"Services","item":"https://www.roofmanager.ca/services"}]}
+  </script>
+  <script type="application/ld+json">
+  {"@context":"https://schema.org","@type":"ItemList","name":"Roof Manager Services","itemListElement":[
+    {"@type":"ListItem","position":1,"item":{"@type":"Service","name":"Satellite Roof Measurement Reports","description":"AI-powered 3D roof measurements from satellite imagery delivered in under 60 seconds","provider":{"@type":"Organization","name":"Roof Manager"},"areaServed":"Worldwide","offers":{"@type":"Offer","price":"8.00","priceCurrency":"CAD"}}},
+    {"@type":"ListItem","position":2,"item":{"@type":"Service","name":"Solar Analysis & Reports","description":"Solar potential analysis including panel count, energy estimates, and azimuth data on every report","provider":{"@type":"Organization","name":"Roof Manager"}}},
+    {"@type":"ListItem","position":3,"item":{"@type":"Service","name":"Roofing CRM Platform","description":"Complete customer relationship management with pipeline tracking, lead scoring, and lifetime value analytics","provider":{"@type":"Organization","name":"Roof Manager"},"offers":{"@type":"Offer","price":"0","priceCurrency":"USD","description":"Free with any plan"}}},
+    {"@type":"ListItem","position":4,"item":{"@type":"Service","name":"AI Roofer Secretary","description":"24/7 AI phone answering service with appointment booking, lead qualification, and call transcripts","provider":{"@type":"Organization","name":"Roof Manager"},"offers":{"@type":"Offer","price":"149.00","priceCurrency":"USD","description":"Per month"}}},
+    {"@type":"ListItem","position":5,"item":{"@type":"Service","name":"AI Website Builder","description":"AI generates a complete 5-page professional contractor website in under 5 minutes","provider":{"@type":"Organization","name":"Roof Manager"},"offers":{"@type":"Offer","price":"99.00","priceCurrency":"USD","description":"Per month"}}},
+    {"@type":"ListItem","position":6,"item":{"@type":"Service","name":"Door-to-Door Sales Manager","description":"Territory mapping, rep tracking, canvassing analytics, and D2D pipeline management","provider":{"@type":"Organization","name":"Roof Manager"}}}
+  ]}
+  </script>
+  <style>
+    .scroll-animate { opacity: 0; transform: translateY(30px); transition: all 0.8s cubic-bezier(0.16, 1, 0.3, 1); }
+    .scroll-animate.animate-in { opacity: 1 !important; transform: translateY(0) !important; }
+    .neon-text { color: #00FF88; }
+  </style>
+</head>
+<body class="min-h-screen" style="background:#0A0A0A">
+  <!-- Navigation -->
+  <nav class="fixed top-0 left-0 right-0 z-50" style="background:rgba(10,10,10,0.95);backdrop-filter:blur(20px)">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between" style="height:72px">
+      <a href="/" class="flex items-center gap-3">
+        <img src="/static/logo.png" alt="Roof Manager" class="w-10 h-10 rounded-xl object-cover shadow-lg ring-1 ring-white/10">
+        <div class="leading-tight">
+          <span class="text-white font-extrabold text-lg tracking-tight">Roof Manager</span>
+          <span class="hidden sm:block text-gray-500 text-[10px] -mt-0.5 font-medium">Measurement Reports & Business CRM</span>
+        </div>
+      </a>
+      <div class="hidden md:flex items-center gap-7">
+        <a href="/" class="text-gray-400 hover:text-white text-sm font-medium">Home</a>
+        <a href="/services" class="text-[#00FF88] font-semibold text-sm border-b-2 border-[#00FF88] pb-0.5">Services</a>
+        <a href="/#pricing" class="text-gray-400 hover:text-white text-sm font-medium">Pricing</a>
+        <a href="/blog" class="text-gray-400 hover:text-white text-sm font-medium">Blog</a>
+        <a href="/coverage" class="text-gray-400 hover:text-white text-sm font-medium">Coverage</a>
+        <a href="/customer/login" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold py-2.5 px-6 rounded-xl text-sm transition-all hover:scale-105 shadow-lg shadow-[#00FF88]/20">
+          <i class="fas fa-rocket mr-1.5"></i>Start Free / Login
+        </a>
+      </div>
+      <button class="md:hidden text-white text-xl p-2" onclick="document.getElementById('svc-mobile').classList.toggle('hidden')"><i class="fas fa-bars"></i></button>
+    </div>
+    <div id="svc-mobile" class="hidden md:hidden border-t border-white/5" style="background:rgba(10,10,10,0.98)">
+      <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col gap-1">
+        <a href="/" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5">Home</a>
+        <a href="/services" class="text-[#00FF88] font-semibold text-sm py-3 px-4 rounded-xl bg-white/5">Services</a>
+        <a href="/#pricing" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5">Pricing</a>
+        <a href="/blog" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5">Blog</a>
+        <a href="/coverage" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5">Coverage</a>
+        <a href="/customer/login" class="bg-[#00FF88] text-[#0A0A0A] font-bold py-3 px-6 rounded-xl text-sm text-center mt-3">Start Free / Login</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="pt-32 pb-16" style="background:#0A0A0A">
+    <div class="max-w-5xl mx-auto px-4 text-center relative z-10">
+      <div class="inline-flex items-center gap-2 bg-[#00FF88]/10 text-[#00FF88] rounded-full px-5 py-2 text-sm font-semibold mb-6">
+        <i class="fas fa-th-large"></i> Complete Platform
+      </div>
+      <h1 class="text-5xl md:text-6xl font-black text-white mb-6 tracking-tight leading-tight">
+        Everything Your Roofing<br/><span class="neon-text">Business Needs</span>
+      </h1>
+      <p class="text-lg text-gray-400 max-w-3xl mx-auto leading-relaxed mb-8">12+ integrated tools — from satellite roof measurements to CRM, AI secretary, website builder, and more. One platform, zero climbing.</p>
+      <div class="flex flex-wrap justify-center gap-3 text-xs text-gray-500">
+        <a href="#reports" class="bg-white/5 hover:bg-[#00FF88]/10 hover:text-[#00FF88] rounded-full px-4 py-2 transition-all">Measurement Reports</a>
+        <a href="#solar" class="bg-white/5 hover:bg-[#00FF88]/10 hover:text-[#00FF88] rounded-full px-4 py-2 transition-all">Solar Analysis</a>
+        <a href="#crm" class="bg-white/5 hover:bg-[#00FF88]/10 hover:text-[#00FF88] rounded-full px-4 py-2 transition-all">CRM</a>
+        <a href="#secretary" class="bg-white/5 hover:bg-[#00FF88]/10 hover:text-[#00FF88] rounded-full px-4 py-2 transition-all">AI Secretary</a>
+        <a href="#website" class="bg-white/5 hover:bg-[#00FF88]/10 hover:text-[#00FF88] rounded-full px-4 py-2 transition-all">Website Builder</a>
+        <a href="#d2d" class="bg-white/5 hover:bg-[#00FF88]/10 hover:text-[#00FF88] rounded-full px-4 py-2 transition-all">D2D Manager</a>
+        <a href="#tryon" class="bg-white/5 hover:bg-[#00FF88]/10 hover:text-[#00FF88] rounded-full px-4 py-2 transition-all">Virtual Try-On</a>
+        <a href="#invoicing" class="bg-white/5 hover:bg-[#00FF88]/10 hover:text-[#00FF88] rounded-full px-4 py-2 transition-all">Invoicing</a>
+        <a href="#email" class="bg-white/5 hover:bg-[#00FF88]/10 hover:text-[#00FF88] rounded-full px-4 py-2 transition-all">Email Outreach</a>
+        <a href="#team" class="bg-white/5 hover:bg-[#00FF88]/10 hover:text-[#00FF88] rounded-full px-4 py-2 transition-all">Team</a>
+        <a href="#calendar" class="bg-white/5 hover:bg-[#00FF88]/10 hover:text-[#00FF88] rounded-full px-4 py-2 transition-all">Calendar</a>
+        <a href="#materials" class="bg-white/5 hover:bg-[#00FF88]/10 hover:text-[#00FF88] rounded-full px-4 py-2 transition-all">Materials</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Service Sections -->
+  <section style="background:#0d0d0d" class="py-20">
+    <div class="max-w-6xl mx-auto px-4 space-y-24">
+
+      <!-- 1. Measurement Reports -->
+      <div id="reports" class="scroll-animate grid lg:grid-cols-2 gap-12 items-center">
+        <div>
+          <div class="inline-flex items-center gap-2 bg-[#00FF88]/10 text-[#00FF88] rounded-full px-4 py-1.5 text-xs font-bold mb-4"><i class="fas fa-satellite-dish mr-1"></i>Core Product</div>
+          <h2 class="text-3xl font-black text-white mb-4">Satellite Roof Measurement Reports</h2>
+          <p class="text-gray-400 leading-relaxed mb-6">Professional PDF reports generated from Google's Solar API with LiDAR-calibrated 3D building models. Get total roof area (pitch-adjusted), edge breakdowns, material BOM, segment analysis, and solar potential — all delivered in under 60 seconds. No climbing, no drones, no tape measures.</p>
+          <ul class="space-y-2 mb-6">
+            <li class="flex items-center gap-2 text-sm text-gray-300"><i class="fas fa-check-circle text-[#00FF88] text-xs"></i>True 3D pitch-adjusted surface area</li>
+            <li class="flex items-center gap-2 text-sm text-gray-300"><i class="fas fa-check-circle text-[#00FF88] text-xs"></i>Edge breakdown: ridge, hip, valley, eave, rake</li>
+            <li class="flex items-center gap-2 text-sm text-gray-300"><i class="fas fa-check-circle text-[#00FF88] text-xs"></i>Complete material BOM with quantities</li>
+            <li class="flex items-center gap-2 text-sm text-gray-300"><i class="fas fa-check-circle text-[#00FF88] text-xs"></i>Individual segment analysis with pitch & azimuth</li>
+            <li class="flex items-center gap-2 text-sm text-gray-300"><i class="fas fa-check-circle text-[#00FF88] text-xs"></i>Solar potential (panel count, energy, sunshine hours)</li>
+            <li class="flex items-center gap-2 text-sm text-gray-300"><i class="fas fa-check-circle text-[#00FF88] text-xs"></i>Complexity rating & waste factor calculation</li>
+          </ul>
+          <div class="flex items-center gap-4 mb-6">
+            <span class="bg-[#00FF88]/10 text-[#00FF88] font-bold px-4 py-2 rounded-lg text-sm">$8 CAD/report</span>
+            <span class="bg-white/5 text-gray-400 font-medium px-4 py-2 rounded-lg text-sm">3 free reports to start</span>
+          </div>
+          <a href="/signup" class="inline-flex items-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold py-3 px-6 rounded-xl text-sm transition-all hover:scale-[1.02]"><i class="fas fa-rocket"></i> Try Free — 3 Reports On Us</a>
+        </div>
+        <div class="bg-[#111111] border border-white/10 rounded-2xl p-8 text-center">
+          <i class="fas fa-satellite-dish text-[#00FF88] text-6xl mb-4"></i>
+          <div class="text-white font-black text-4xl mb-1">98%</div>
+          <div class="text-gray-500 text-sm">Measurement Accuracy</div>
+          <div class="text-white font-black text-4xl mt-4 mb-1">&lt;60s</div>
+          <div class="text-gray-500 text-sm">Report Delivery</div>
+          <div class="text-white font-black text-4xl mt-4 mb-1">40+</div>
+          <div class="text-gray-500 text-sm">Countries Covered</div>
+        </div>
+      </div>
+
+      <!-- 2. Solar Analysis -->
+      <div id="solar" class="scroll-animate grid lg:grid-cols-2 gap-12 items-center">
+        <div class="lg:order-2">
+          <div class="inline-flex items-center gap-2 bg-[#22d3ee]/10 text-[#22d3ee] rounded-full px-4 py-1.5 text-xs font-bold mb-4"><i class="fas fa-solar-panel mr-1"></i>Included Free</div>
+          <h2 class="text-3xl font-black text-white mb-4">Solar Analysis & Reports</h2>
+          <p class="text-gray-400 leading-relaxed mb-6">Every roof measurement report includes comprehensive solar potential data at no extra cost. Panel count estimates, yearly energy production in kWh, sunshine hours, roof azimuth classification, and tilt orientation data — everything a solar installer needs to qualify a roof for PV installation.</p>
+          <ul class="space-y-2 mb-6">
+            <li class="flex items-center gap-2 text-sm text-gray-300"><i class="fas fa-check-circle text-[#22d3ee] text-xs"></i>Estimated solar panel count per roof segment</li>
+            <li class="flex items-center gap-2 text-sm text-gray-300"><i class="fas fa-check-circle text-[#22d3ee] text-xs"></i>Yearly energy production (kWh)</li>
+            <li class="flex items-center gap-2 text-sm text-gray-300"><i class="fas fa-check-circle text-[#22d3ee] text-xs"></i>Sunshine hours & solar irradiance data</li>
+            <li class="flex items-center gap-2 text-sm text-gray-300"><i class="fas fa-check-circle text-[#22d3ee] text-xs"></i>Roof azimuth (9-point classification)</li>
+            <li class="flex items-center gap-2 text-sm text-gray-300"><i class="fas fa-check-circle text-[#22d3ee] text-xs"></i>Tilt orientation factor (TOF)</li>
+          </ul>
+          <span class="bg-[#22d3ee]/10 text-[#22d3ee] font-bold px-4 py-2 rounded-lg text-sm">FREE on every report</span>
+        </div>
+        <div class="bg-[#111111] border border-white/10 rounded-2xl p-8 text-center lg:order-1">
+          <i class="fas fa-solar-panel text-[#22d3ee] text-6xl mb-4"></i>
+          <div class="text-gray-400 text-sm mb-6">Included with every measurement report</div>
+          <div class="grid grid-cols-2 gap-4">
+            <div class="bg-white/5 rounded-xl p-4"><div class="text-white font-bold text-lg">Panel Count</div><div class="text-gray-500 text-xs">Per segment</div></div>
+            <div class="bg-white/5 rounded-xl p-4"><div class="text-white font-bold text-lg">kWh/Year</div><div class="text-gray-500 text-xs">Energy estimate</div></div>
+            <div class="bg-white/5 rounded-xl p-4"><div class="text-white font-bold text-lg">Azimuth</div><div class="text-gray-500 text-xs">9-point scale</div></div>
+            <div class="bg-white/5 rounded-xl p-4"><div class="text-white font-bold text-lg">Sunshine</div><div class="text-gray-500 text-xs">Hours/year</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. CRM -->
+      <div id="crm" class="scroll-animate grid lg:grid-cols-2 gap-12 items-center">
+        <div>
+          <div class="inline-flex items-center gap-2 bg-[#00FF88]/10 text-[#00FF88] rounded-full px-4 py-1.5 text-xs font-bold mb-4"><i class="fas fa-users mr-1"></i>Always Free</div>
+          <h2 class="text-3xl font-black text-white mb-4">Full CRM Platform</h2>
+          <p class="text-gray-400 leading-relaxed mb-6">A complete customer relationship management system built specifically for roofing contractors. Track every lead from first contact to final payment. Manage customer profiles, track lifetime value, segment your database, and automate your sales pipeline — all included free with any Roof Manager plan.</p>
+          <ul class="space-y-2 mb-6">
+            <li class="flex items-center gap-2 text-sm text-gray-300"><i class="fas fa-check-circle text-[#00FF88] text-xs"></i>Customer database with full profile management</li>
+            <li class="flex items-center gap-2 text-sm text-gray-300"><i class="fas fa-check-circle text-[#00FF88] text-xs"></i>Sales pipeline with stage tracking</li>
+            <li class="flex items-center gap-2 text-sm text-gray-300"><i class="fas fa-check-circle text-[#00FF88] text-xs"></i>Lead scoring & lifetime value analytics</li>
+            <li class="flex items-center gap-2 text-sm text-gray-300"><i class="fas fa-check-circle text-[#00FF88] text-xs"></i>Contact history & interaction logging</li>
+            <li class="flex items-center gap-2 text-sm text-gray-300"><i class="fas fa-check-circle text-[#00FF88] text-xs"></i>Revenue forecasting & pipeline analytics</li>
+          </ul>
+          <span class="bg-[#00FF88]/10 text-[#00FF88] font-bold px-4 py-2 rounded-lg text-sm">FREE — included with every plan</span>
+        </div>
+        <div class="bg-[#111111] border border-white/10 rounded-2xl p-8 text-center">
+          <i class="fas fa-chart-line text-[#00FF88] text-6xl mb-4"></i>
+          <div class="text-white font-black text-2xl mb-2">Your Entire Business</div>
+          <div class="text-gray-500 text-sm mb-6">In one dashboard</div>
+          <div class="space-y-3 text-left">
+            <div class="flex items-center gap-3 bg-white/5 rounded-lg p-3"><i class="fas fa-user-plus text-[#00FF88]"></i><span class="text-gray-300 text-sm">Leads &rarr; Customers &rarr; Revenue</span></div>
+            <div class="flex items-center gap-3 bg-white/5 rounded-lg p-3"><i class="fas fa-file-invoice-dollar text-[#22d3ee]"></i><span class="text-gray-300 text-sm">Invoices &rarr; Payments &rarr; Reports</span></div>
+            <div class="flex items-center gap-3 bg-white/5 rounded-lg p-3"><i class="fas fa-tasks text-[#a78bfa]"></i><span class="text-gray-300 text-sm">Jobs &rarr; Scheduling &rarr; Completion</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4. Invoicing -->
+      <div id="invoicing" class="scroll-animate grid lg:grid-cols-2 gap-12 items-center">
+        <div class="lg:order-2">
+          <div class="inline-flex items-center gap-2 bg-[#a78bfa]/10 text-[#a78bfa] rounded-full px-4 py-1.5 text-xs font-bold mb-4"><i class="fas fa-file-invoice-dollar mr-1"></i>Included Free</div>
+          <h2 class="text-3xl font-black text-white mb-4">Invoicing & Proposals</h2>
+          <p class="text-gray-400 leading-relaxed mb-6">Create professional invoices and proposals in seconds. Add line items with quantities, taxes, and discounts. Send payment links via Square — customers pay by credit card, debit, Apple Pay, or Google Pay. Track payment status, send reminders, and convert proposals to invoices with one click.</p>
+          <ul class="space-y-2 mb-6">
+            <li class="flex items-center gap-2 text-sm text-gray-300"><i class="fas fa-check-circle text-[#a78bfa] text-xs"></i>Professional branded invoices & proposals</li>
+            <li class="flex items-center gap-2 text-sm text-gray-300"><i class="fas fa-check-circle text-[#a78bfa] text-xs"></i>Square payment links (credit, debit, Apple Pay)</li>
+            <li class="flex items-center gap-2 text-sm text-gray-300"><i class="fas fa-check-circle text-[#a78bfa] text-xs"></i>Tax calculation & discount support</li>
+            <li class="flex items-center gap-2 text-sm text-gray-300"><i class="fas fa-check-circle text-[#a78bfa] text-xs"></i>Status tracking (sent, viewed, paid, overdue)</li>
+            <li class="flex items-center gap-2 text-sm text-gray-300"><i class="fas fa-check-circle text-[#a78bfa] text-xs"></i>Proposal-to-invoice conversion</li>
+          </ul>
+          <span class="bg-[#a78bfa]/10 text-[#a78bfa] font-bold px-4 py-2 rounded-lg text-sm">FREE — included with CRM</span>
+        </div>
+        <div class="bg-[#111111] border border-white/10 rounded-2xl p-8 text-center lg:order-1">
+          <i class="fas fa-file-invoice-dollar text-[#a78bfa] text-6xl mb-4"></i>
+          <div class="text-white font-bold text-lg mb-4">From Quote to Payment</div>
+          <div class="flex items-center justify-center gap-3 text-gray-400 text-sm"><span class="bg-white/10 px-3 py-1 rounded">Proposal</span><i class="fas fa-arrow-right text-[#a78bfa]"></i><span class="bg-white/10 px-3 py-1 rounded">Invoice</span><i class="fas fa-arrow-right text-[#00FF88]"></i><span class="bg-[#00FF88]/10 text-[#00FF88] px-3 py-1 rounded font-bold">Paid</span></div>
+        </div>
+      </div>
+
+      <!-- 5. AI Secretary -->
+      <div id="secretary" class="scroll-animate grid lg:grid-cols-2 gap-12 items-center">
+        <div>
+          <div class="inline-flex items-center gap-2 bg-[#f59e0b]/10 text-[#f59e0b] rounded-full px-4 py-1.5 text-xs font-bold mb-4"><i class="fas fa-phone-alt mr-1"></i>Add-On</div>
+          <h2 class="text-3xl font-black text-white mb-4">AI Roofer Secretary</h2>
+          <p class="text-gray-400 leading-relaxed mb-6">Never miss a lead again. Our AI answers your business phone 24/7 in a natural human voice — books appointments, qualifies leads with your custom screening questions, and sends you detailed call summaries with full transcripts. Handles after-hours calls, storm season overflow, and lunch breaks. Your customers will never know it's AI.</p>
+          <ul class="space-y-2 mb-6">
+            <li class="flex items-center gap-2 text-sm text-gray-300"><i class="fas fa-check-circle text-[#f59e0b] text-xs"></i>24/7 AI phone answering in natural human voice</li>
+            <li class="flex items-center gap-2 text-sm text-gray-300"><i class="fas fa-check-circle text-[#f59e0b] text-xs"></i>Automatic appointment booking to your calendar</li>
+            <li class="flex items-center gap-2 text-sm text-gray-300"><i class="fas fa-check-circle text-[#f59e0b] text-xs"></i>Custom lead qualification questions</li>
+            <li class="flex items-center gap-2 text-sm text-gray-300"><i class="fas fa-check-circle text-[#f59e0b] text-xs"></i>Detailed call summaries & full transcripts</li>
+            <li class="flex items-center gap-2 text-sm text-gray-300"><i class="fas fa-check-circle text-[#f59e0b] text-xs"></i>Multi-department call routing (up to 4)</li>
+          </ul>
+          <div class="flex items-center gap-3 mb-6">
+            <span class="text-gray-500 line-through text-sm">$249/mo</span>
+            <span class="bg-[#f59e0b]/10 text-[#f59e0b] font-bold px-4 py-2 rounded-lg text-sm">$149/month — Limited Time</span>
+          </div>
+          <a href="/customer/login" class="inline-flex items-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold py-3 px-6 rounded-xl text-sm transition-all hover:scale-[1.02]"><i class="fas fa-phone-alt"></i> Activate AI Secretary</a>
+        </div>
+        <div class="bg-[#111111] border border-white/10 rounded-2xl p-8 text-center">
+          <i class="fas fa-headset text-[#f59e0b] text-6xl mb-4"></i>
+          <div class="text-white font-black text-2xl mb-2">Never Miss a Call</div>
+          <div class="text-gray-500 text-sm mb-4">A missed call = a missed $15K roof job</div>
+          <div class="bg-[#00FF88]/10 border border-[#00FF88]/20 rounded-xl p-4"><span class="text-[#00FF88] font-bold text-sm">Capture 40% more leads that would otherwise go to voicemail</span></div>
+        </div>
+      </div>
+
+      <!-- 6. Website Builder -->
+      <div id="website" class="scroll-animate grid lg:grid-cols-2 gap-12 items-center">
+        <div class="lg:order-2">
+          <div class="inline-flex items-center gap-2 bg-[#22d3ee]/10 text-[#22d3ee] rounded-full px-4 py-1.5 text-xs font-bold mb-4"><i class="fas fa-globe mr-1"></i>Add-On</div>
+          <h2 class="text-3xl font-black text-white mb-4">AI Website Builder</h2>
+          <p class="text-gray-400 leading-relaxed mb-6">Our AI builds you a complete 5-page contractor website in under 5 minutes — Home, Services, About, Service Areas, and Contact. Custom copy written for YOUR business, YOUR services, and YOUR city. Built-in lead capture forms sync directly to your CRM. SEO-optimized, mobile-responsive, no design skills needed.</p>
+          <ul class="space-y-2 mb-6">
+            <li class="flex items-center gap-2 text-sm text-gray-300"><i class="fas fa-check-circle text-[#22d3ee] text-xs"></i>5-page AI-generated professional website</li>
+            <li class="flex items-center gap-2 text-sm text-gray-300"><i class="fas fa-check-circle text-[#22d3ee] text-xs"></i>Custom copy for your business & city</li>
+            <li class="flex items-center gap-2 text-sm text-gray-300"><i class="fas fa-check-circle text-[#22d3ee] text-xs"></i>Lead capture forms synced to CRM</li>
+            <li class="flex items-center gap-2 text-sm text-gray-300"><i class="fas fa-check-circle text-[#22d3ee] text-xs"></i>Custom subdomain & brand colors</li>
+            <li class="flex items-center gap-2 text-sm text-gray-300"><i class="fas fa-check-circle text-[#22d3ee] text-xs"></i>Edit content anytime, regenerate with AI</li>
+          </ul>
+          <span class="bg-[#22d3ee]/10 text-[#22d3ee] font-bold px-4 py-2 rounded-lg text-sm">$99/month</span>
+        </div>
+        <div class="bg-[#111111] border border-white/10 rounded-2xl p-8 text-center lg:order-1">
+          <i class="fas fa-laptop-code text-[#22d3ee] text-6xl mb-4"></i>
+          <div class="text-white font-black text-2xl mb-2">5 Pages, 5 Minutes</div>
+          <div class="text-gray-500 text-sm mb-4">AI does the writing, you get the leads</div>
+          <div class="space-y-2 text-left text-sm text-gray-400">
+            <div class="bg-white/5 rounded-lg px-4 py-2">1. Home — Hero, trust, services overview</div>
+            <div class="bg-white/5 rounded-lg px-4 py-2">2. Services — Detailed service descriptions</div>
+            <div class="bg-white/5 rounded-lg px-4 py-2">3. About — Company story & team</div>
+            <div class="bg-white/5 rounded-lg px-4 py-2">4. Service Areas — City-specific pages</div>
+            <div class="bg-white/5 rounded-lg px-4 py-2">5. Contact — Lead capture form</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 7. D2D -->
+      <div id="d2d" class="scroll-animate grid lg:grid-cols-2 gap-12 items-center">
+        <div>
+          <div class="inline-flex items-center gap-2 bg-[#00FF88]/10 text-[#00FF88] rounded-full px-4 py-1.5 text-xs font-bold mb-4"><i class="fas fa-walking mr-1"></i>Included Free</div>
+          <h2 class="text-3xl font-black text-white mb-4">Door-to-Door Sales Manager</h2>
+          <p class="text-gray-400 leading-relaxed mb-6">Manage your D2D sales team from your dashboard. Assign territories, track canvassing activity with GPS, capture leads from the field, and monitor performance analytics per sales rep. Perfect for storm chasers and neighborhood canvassing campaigns.</p>
+          <ul class="space-y-2 mb-6">
+            <li class="flex items-center gap-2 text-sm text-gray-300"><i class="fas fa-check-circle text-[#00FF88] text-xs"></i>Territory mapping & assignment</li>
+            <li class="flex items-center gap-2 text-sm text-gray-300"><i class="fas fa-check-circle text-[#00FF88] text-xs"></i>GPS canvassing activity tracking</li>
+            <li class="flex items-center gap-2 text-sm text-gray-300"><i class="fas fa-check-circle text-[#00FF88] text-xs"></i>Field lead capture & pipeline</li>
+            <li class="flex items-center gap-2 text-sm text-gray-300"><i class="fas fa-check-circle text-[#00FF88] text-xs"></i>Per-rep performance analytics</li>
+          </ul>
+          <span class="bg-[#00FF88]/10 text-[#00FF88] font-bold px-4 py-2 rounded-lg text-sm">FREE — included with CRM</span>
+        </div>
+        <div class="bg-[#111111] border border-white/10 rounded-2xl p-8 text-center">
+          <i class="fas fa-map-marked-alt text-[#00FF88] text-6xl mb-4"></i>
+          <div class="text-white font-bold text-lg">Storm Season Ready</div>
+          <div class="text-gray-500 text-sm">Deploy your team, track every knock</div>
+        </div>
+      </div>
+
+      <!-- 8. Virtual Try-On -->
+      <div id="tryon" class="scroll-animate grid lg:grid-cols-2 gap-12 items-center">
+        <div class="lg:order-2">
+          <div class="inline-flex items-center gap-2 bg-[#a78bfa]/10 text-[#a78bfa] rounded-full px-4 py-1.5 text-xs font-bold mb-4"><i class="fas fa-magic mr-1"></i>AI-Powered</div>
+          <h2 class="text-3xl font-black text-white mb-4">Virtual Roof Try-On</h2>
+          <p class="text-gray-400 leading-relaxed mb-6">AI-powered visualization that lets homeowners see exactly what their roof will look like with different materials and colors before they commit. Upload a property photo, select materials (asphalt, metal, tile, cedar), pick colors, and get a photorealistic before/after rendering. Close more deals and upsell premium materials.</p>
+          <ul class="space-y-2 mb-6">
+            <li class="flex items-center gap-2 text-sm text-gray-300"><i class="fas fa-check-circle text-[#a78bfa] text-xs"></i>AI roof segmentation & recoloring</li>
+            <li class="flex items-center gap-2 text-sm text-gray-300"><i class="fas fa-check-circle text-[#a78bfa] text-xs"></i>12+ asphalt colors, 8+ metal colors</li>
+            <li class="flex items-center gap-2 text-sm text-gray-300"><i class="fas fa-check-circle text-[#a78bfa] text-xs"></i>Before/after comparison renders</li>
+            <li class="flex items-center gap-2 text-sm text-gray-300"><i class="fas fa-check-circle text-[#a78bfa] text-xs"></i>Increase average ticket size by 15%</li>
+          </ul>
+          <span class="bg-[#a78bfa]/10 text-[#a78bfa] font-bold px-4 py-2 rounded-lg text-sm">Included with platform</span>
+        </div>
+        <div class="bg-[#111111] border border-white/10 rounded-2xl p-8 text-center lg:order-1">
+          <i class="fas fa-palette text-[#a78bfa] text-6xl mb-4"></i>
+          <div class="text-white font-bold text-lg">See It Before You Buy It</div>
+          <div class="text-gray-500 text-sm">Remove uncertainty, close more deals</div>
+        </div>
+      </div>
+
+      <!-- 9. Email Outreach -->
+      <div id="email" class="scroll-animate grid lg:grid-cols-2 gap-12 items-center">
+        <div>
+          <div class="inline-flex items-center gap-2 bg-[#22d3ee]/10 text-[#22d3ee] rounded-full px-4 py-1.5 text-xs font-bold mb-4"><i class="fas fa-envelope mr-1"></i>Marketing</div>
+          <h2 class="text-3xl font-black text-white mb-4">Email Outreach & Campaigns</h2>
+          <p class="text-gray-400 leading-relaxed mb-6">Build and manage email marketing campaigns directly from your CRM. Import contacts, create email templates, schedule sends, and track performance (opens, clicks, bounces). Send targeted campaigns to customer segments — past customers, pending quotes, specific neighborhoods.</p>
+          <ul class="space-y-2 mb-6">
+            <li class="flex items-center gap-2 text-sm text-gray-300"><i class="fas fa-check-circle text-[#22d3ee] text-xs"></i>Bulk email campaign management</li>
+            <li class="flex items-center gap-2 text-sm text-gray-300"><i class="fas fa-check-circle text-[#22d3ee] text-xs"></i>Email template library</li>
+            <li class="flex items-center gap-2 text-sm text-gray-300"><i class="fas fa-check-circle text-[#22d3ee] text-xs"></i>Open/click/bounce tracking</li>
+            <li class="flex items-center gap-2 text-sm text-gray-300"><i class="fas fa-check-circle text-[#22d3ee] text-xs"></i>Contact segmentation & import</li>
+            <li class="flex items-center gap-2 text-sm text-gray-300"><i class="fas fa-check-circle text-[#22d3ee] text-xs"></i>Automated unsubscribe compliance</li>
+          </ul>
+          <span class="bg-[#22d3ee]/10 text-[#22d3ee] font-bold px-4 py-2 rounded-lg text-sm">Included with platform</span>
+        </div>
+        <div class="bg-[#111111] border border-white/10 rounded-2xl p-8 text-center">
+          <i class="fas fa-mail-bulk text-[#22d3ee] text-6xl mb-4"></i>
+          <div class="text-white font-bold text-lg">Targeted Campaigns</div>
+          <div class="text-gray-500 text-sm">Reach the right customers at the right time</div>
+        </div>
+      </div>
+
+      <!-- 10. Team Management -->
+      <div id="team" class="scroll-animate grid lg:grid-cols-2 gap-12 items-center">
+        <div class="lg:order-2">
+          <div class="inline-flex items-center gap-2 bg-[#00FF88]/10 text-[#00FF88] rounded-full px-4 py-1.5 text-xs font-bold mb-4"><i class="fas fa-users-cog mr-1"></i>Add-On</div>
+          <h2 class="text-3xl font-black text-white mb-4">Team Management</h2>
+          <p class="text-gray-400 leading-relaxed mb-6">Add sales reps, estimators, and crew members to your account. Each team member gets their own login with role-based permissions. Share customers, reports, and jobs across your team. Track individual performance and manage crew assignments.</p>
+          <ul class="space-y-2 mb-6">
+            <li class="flex items-center gap-2 text-sm text-gray-300"><i class="fas fa-check-circle text-[#00FF88] text-xs"></i>Multi-user team accounts</li>
+            <li class="flex items-center gap-2 text-sm text-gray-300"><i class="fas fa-check-circle text-[#00FF88] text-xs"></i>Role-based permissions</li>
+            <li class="flex items-center gap-2 text-sm text-gray-300"><i class="fas fa-check-circle text-[#00FF88] text-xs"></i>Shared data across team</li>
+            <li class="flex items-center gap-2 text-sm text-gray-300"><i class="fas fa-check-circle text-[#00FF88] text-xs"></i>Individual performance tracking</li>
+          </ul>
+          <span class="bg-[#00FF88]/10 text-[#00FF88] font-bold px-4 py-2 rounded-lg text-sm">$50/user/month</span>
+        </div>
+        <div class="bg-[#111111] border border-white/10 rounded-2xl p-8 text-center lg:order-1">
+          <i class="fas fa-users text-[#00FF88] text-6xl mb-4"></i>
+          <div class="text-white font-bold text-lg">Scale Your Team</div>
+          <div class="text-gray-500 text-sm">Everyone on the same page</div>
+        </div>
+      </div>
+
+      <!-- 11. Calendar -->
+      <div id="calendar" class="scroll-animate grid lg:grid-cols-2 gap-12 items-center">
+        <div>
+          <div class="inline-flex items-center gap-2 bg-[#f59e0b]/10 text-[#f59e0b] rounded-full px-4 py-1.5 text-xs font-bold mb-4"><i class="fas fa-calendar-alt mr-1"></i>Included Free</div>
+          <h2 class="text-3xl font-black text-white mb-4">Job Scheduling & Calendar</h2>
+          <p class="text-gray-400 leading-relaxed mb-6">Sync your CRM jobs directly to Google Calendar. Schedule crews, set deadlines, track job progress, and send automated customer notifications. Free/busy time checking ensures you never double-book a crew.</p>
+          <ul class="space-y-2 mb-6">
+            <li class="flex items-center gap-2 text-sm text-gray-300"><i class="fas fa-check-circle text-[#f59e0b] text-xs"></i>Google Calendar 2-way sync</li>
+            <li class="flex items-center gap-2 text-sm text-gray-300"><i class="fas fa-check-circle text-[#f59e0b] text-xs"></i>Crew scheduling & assignment</li>
+            <li class="flex items-center gap-2 text-sm text-gray-300"><i class="fas fa-check-circle text-[#f59e0b] text-xs"></i>Job deadline tracking</li>
+            <li class="flex items-center gap-2 text-sm text-gray-300"><i class="fas fa-check-circle text-[#f59e0b] text-xs"></i>Automated customer notifications</li>
+          </ul>
+          <span class="bg-[#f59e0b]/10 text-[#f59e0b] font-bold px-4 py-2 rounded-lg text-sm">FREE — included with CRM</span>
+        </div>
+        <div class="bg-[#111111] border border-white/10 rounded-2xl p-8 text-center">
+          <i class="fas fa-calendar-check text-[#f59e0b] text-6xl mb-4"></i>
+          <div class="text-white font-bold text-lg">Stay Organized</div>
+          <div class="text-gray-500 text-sm">Syncs with Google Calendar</div>
+        </div>
+      </div>
+
+      <!-- 12. Materials -->
+      <div id="materials" class="scroll-animate grid lg:grid-cols-2 gap-12 items-center">
+        <div class="lg:order-2">
+          <div class="inline-flex items-center gap-2 bg-[#a78bfa]/10 text-[#a78bfa] rounded-full px-4 py-1.5 text-xs font-bold mb-4"><i class="fas fa-calculator mr-1"></i>Included Free</div>
+          <h2 class="text-3xl font-black text-white mb-4">Material Calculator & Catalog</h2>
+          <p class="text-gray-400 leading-relaxed mb-6">Automatically generate a complete Bill of Materials from your roof measurements. Shingle bundles, underlayment rolls, ice shield, drip edge, ridge cap, nails — all calculated with proper waste factors. Browse our material catalog with supplier pricing to build accurate estimates.</p>
+          <ul class="space-y-2 mb-6">
+            <li class="flex items-center gap-2 text-sm text-gray-300"><i class="fas fa-check-circle text-[#a78bfa] text-xs"></i>Auto-generated BOM from measurements</li>
+            <li class="flex items-center gap-2 text-sm text-gray-300"><i class="fas fa-check-circle text-[#a78bfa] text-xs"></i>Waste factor calculations</li>
+            <li class="flex items-center gap-2 text-sm text-gray-300"><i class="fas fa-check-circle text-[#a78bfa] text-xs"></i>Material catalog with pricing</li>
+            <li class="flex items-center gap-2 text-sm text-gray-300"><i class="fas fa-check-circle text-[#a78bfa] text-xs"></i>Export to supplier orders</li>
+          </ul>
+          <span class="bg-[#a78bfa]/10 text-[#a78bfa] font-bold px-4 py-2 rounded-lg text-sm">FREE — included with reports</span>
+        </div>
+        <div class="bg-[#111111] border border-white/10 rounded-2xl p-8 text-center lg:order-1">
+          <i class="fas fa-boxes text-[#a78bfa] text-6xl mb-4"></i>
+          <div class="text-white font-bold text-lg">Zero Waste Orders</div>
+          <div class="text-gray-500 text-sm">Accurate material lists every time</div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="py-20 text-center" style="background:#0A0A0A">
+    <div class="max-w-3xl mx-auto px-4">
+      <h2 class="text-3xl font-black text-white mb-4">Ready to Run Your Business Smarter?</h2>
+      <p class="text-gray-400 mb-8">Start with 3 free roof measurement reports. Full CRM included. No credit card required.</p>
+      <div class="flex flex-col sm:flex-row gap-4 justify-center">
+        <a href="/signup" class="inline-flex items-center justify-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-10 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/20 transition-all hover:scale-[1.02]"><i class="fas fa-rocket"></i> Start Free — 3 Reports On Us</a>
+        <a href="https://calendar.app.google/CE5iBMV1Fu4K2ve38" target="_blank" class="inline-flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 text-white font-bold py-4 px-8 rounded-xl text-lg border border-white/10 transition-all"><i class="fas fa-calendar-check text-[#00FF88]"></i> Book a Demo</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer style="background:#0A0A0A" class="text-gray-500 border-t border-white/5">
+    <div class="max-w-7xl mx-auto px-4 py-16">
+      <div class="grid md:grid-cols-4 gap-8 mb-12">
+        <div>
+          <div class="flex items-center gap-3 mb-4">
+            <img src="/static/logo.png" alt="Roof Manager" class="w-9 h-9 rounded-xl object-cover">
+            <span class="text-white font-bold text-lg">Roof Manager</span>
+          </div>
+          <p class="text-sm text-gray-500">AI-powered roof measurement reports and complete business management for roofing contractors worldwide.</p>
+        </div>
+        <div>
+          <h4 class="text-white font-semibold mb-4 text-sm uppercase tracking-wider">Platform</h4>
+          <ul class="space-y-2.5 text-sm">
+            <li><a href="/services" class="text-[#00FF88] font-semibold">All Services</a></li>
+            <li><a href="/services#reports" class="hover:text-[#00FF88] transition-colors">Measurement Reports</a></li>
+            <li><a href="/services#secretary" class="hover:text-[#00FF88] transition-colors">AI Secretary</a></li>
+            <li><a href="/services#website" class="hover:text-[#00FF88] transition-colors">Website Builder</a></li>
+            <li><a href="/#pricing" class="hover:text-[#00FF88] transition-colors">Pricing</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4 class="text-white font-semibold mb-4 text-sm uppercase tracking-wider">Resources</h4>
+          <ul class="space-y-2.5 text-sm">
+            <li><a href="/blog" class="hover:text-[#00FF88] transition-colors">Blog</a></li>
+            <li><a href="/coverage" class="hover:text-[#00FF88] transition-colors">Coverage Map</a></li>
+            <li><a href="/#how-it-works" class="hover:text-[#00FF88] transition-colors">How It Works</a></li>
+            <li><a href="/#faq" class="hover:text-[#00FF88] transition-colors">FAQ</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4 class="text-white font-semibold mb-4 text-sm uppercase tracking-wider">Company</h4>
+          <ul class="space-y-2.5 text-sm">
+            <li><a href="/privacy" class="hover:text-[#00FF88] transition-colors">Privacy Policy</a></li>
+            <li><a href="/terms" class="hover:text-[#00FF88] transition-colors">Terms of Service</a></li>
+            <li><a href="mailto:sales@roofmanager.ca" class="hover:text-[#00FF88] transition-colors">Contact</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="border-t border-white/5 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
+        <p class="text-xs text-gray-600">&copy; 2026 Roof Manager. All rights reserved.</p>
+        <span class="text-xs text-gray-600"><i class="fas fa-map-marker-alt text-[#00FF88] mr-1"></i>Alberta, Canada</span>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => { if (entry.isIntersecting) { entry.target.classList.add('animate-in'); observer.unobserve(entry.target); } });
+    }, { threshold: 0.1 });
+    document.querySelectorAll('.scroll-animate').forEach(el => observer.observe(el));
+    // Smooth scroll for anchor links
+    document.querySelectorAll('a[href^="#"]').forEach(a => {
+      a.addEventListener('click', function(e) {
+        e.preventDefault();
+        var target = document.querySelector(this.getAttribute('href'));
+        if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    });
+  </script>
+  ${getRoverWidget()}
 </body>
 </html>`
 }
