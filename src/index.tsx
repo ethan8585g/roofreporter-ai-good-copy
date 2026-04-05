@@ -456,8 +456,15 @@ app.get('/api/config/client', (c) => {
 // ============================================================
 
 // Landing / Marketing page
-app.get('/', (c) => {
-  return c.html(getLandingPageHTML())
+app.get('/', async (c) => {
+  let latestPosts: any[] = []
+  try {
+    const result = await c.env.DB.prepare(
+      "SELECT slug, title, excerpt, cover_image_url, category, published_at, read_time_minutes FROM blog_posts WHERE status = 'published' ORDER BY published_at DESC LIMIT 4"
+    ).all()
+    latestPosts = (result.results || []) as any[]
+  } catch {}
+  return c.html(getLandingPageHTML(latestPosts))
 })
 
 // /order redirect — users may type /order directly
@@ -2897,7 +2904,7 @@ function getCustomerResetPasswordHTML() {
 </html>`
 }
 
-function getLandingPageHTML() {
+function getLandingPageHTML(latestPosts: any[] = []) {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -3114,6 +3121,38 @@ function getLandingPageHTML() {
 
   <!-- Contact Us Lead Capture -->
   ${getContactFormHTML('homepage')}
+
+  <!-- Latest from the Blog — SSR for Google indexing -->
+  ${latestPosts.length > 0 ? `
+  <section style="background:#0d0d0d" class="py-20 border-t border-white/5">
+    <div class="max-w-7xl mx-auto px-4">
+      <div class="flex items-center justify-between mb-10">
+        <div>
+          <h2 class="text-2xl font-black text-white">Latest from the Blog</h2>
+          <p class="text-gray-500 text-sm mt-1">Roofing insights, technology guides, and industry news</p>
+        </div>
+        <a href="/blog" class="text-[#00FF88] text-sm font-semibold hover:underline">View all articles &rarr;</a>
+      </div>
+      <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+        ${latestPosts.map(p => `
+          <a href="/blog/${p.slug}" class="block group">
+            <article class="bg-[#111111] border border-white/10 rounded-xl overflow-hidden hover:border-[#00FF88]/30 transition-all duration-300 hover:-translate-y-1 h-full flex flex-col">
+              ${p.cover_image_url ? `<div class="h-40 overflow-hidden"><img src="${p.cover_image_url}" alt="${(p.title || '').replace(/"/g, '&quot;')}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy"/></div>` : `<div class="h-40 bg-gradient-to-br from-[#111] to-[#1a1a1a] flex items-center justify-center"><i class="fas fa-newspaper text-white/10 text-3xl"></i></div>`}
+              <div class="p-4 flex flex-col flex-1">
+                <h3 class="font-bold text-white text-sm mb-2 group-hover:text-[#00FF88] transition-colors leading-snug line-clamp-2">${p.title || ''}</h3>
+                <p class="text-gray-500 text-xs mb-3 leading-relaxed flex-1 line-clamp-2">${(p.excerpt || '').substring(0, 100)}</p>
+                <div class="flex items-center justify-between pt-3 border-t border-white/5">
+                  <span class="text-[10px] text-gray-600">${p.published_at ? new Date(p.published_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}</span>
+                  <span class="text-[10px] text-gray-600">${p.read_time_minutes || 5} min</span>
+                </div>
+              </div>
+            </article>
+          </a>
+        `).join('')}
+      </div>
+    </div>
+  </section>
+  ` : ''}
 
   <!-- Footer — Dark premium style -->
   <footer class="text-gray-400" style="background:#0A0A0A">
