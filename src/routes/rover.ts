@@ -110,7 +110,7 @@ PLATFORM FEATURES — FULL TOOLKIT
 ═══════════════════════════════════════════════════
 
 CUSTOMER PORTAL (/customer/login):
-- Order reports by entering any Canadian address
+- Order reports by entering any address (worldwide coverage wherever Google satellite imagery exists)
 - View order history and download past reports
 - Track report generation status in real-time
 - Manage your account and billing
@@ -154,7 +154,7 @@ COVERAGE & DELIVERY
 ═══════════════════════════════════════════════════
 
 COVERAGE:
-- Most Canadian addresses with Google Solar API coverage
+- Worldwide coverage wherever Google Solar API satellite imagery is available (Canada, USA, and many other countries)
 - Best coverage: urban and suburban Alberta, BC, Ontario, Quebec
 - Rural areas may have limited satellite imagery availability
 - If imagery isn't available, we'll let you know — no charge
@@ -207,7 +207,7 @@ Q: "How accurate is it?"
 A: Typically within 2-5% of manual measurements. We use Google's Solar API satellite data — real imagery, not estimates. For most standard residential roofs, accuracy is excellent. We always include a confidence score and recommend field verification for complex structures.
 
 Q: "What areas do you cover?"
-A: Most Canadian addresses with Google Solar API coverage. Our best coverage is in urban and suburban areas — Alberta, BC, Ontario, and Quebec have excellent imagery. Rural areas may have limited coverage, but you can always try — if imagery isn't available, you won't be charged.
+A: Worldwide — anywhere Google Solar API satellite imagery is available. This includes most addresses in Canada, the United States, and many other countries. Best coverage is in urban and suburban areas. Rural areas may have limited coverage, but you can always try — if imagery isn't available, you won't be charged.
 
 Q: "How fast are reports?"
 A: Under 60 seconds, guaranteed. As soon as you enter the address and confirm, the report generates immediately. You can download the PDF right away.
@@ -258,44 +258,51 @@ async function callAI(
   maxTokens: number = 1000,
   temperature: number = 0.7
 ): Promise<{ content: string; model: string; tokensUsed: number; responseTimeMs: number }> {
-  // Try keys that could be real OpenAI keys (sk-...). genspark_gtp_key is likely the real one.
-  const candidates = [
-    (env as any).genspark_gtp_key,
-    env.OPENAI_API_KEY,
-  ].filter((k: any) => k && String(k).startsWith('sk-'))
+  const geminiKey = env.GEMINI_API_KEY
+  if (!geminiKey) throw new Error('No GEMINI_API_KEY configured')
 
-  const apiKey = candidates[0] || env.OPENAI_API_KEY || (env as any).genspark_gtp_key
-  if (!apiKey) throw new Error('No OpenAI API key configured')
+  // Convert OpenAI-style messages to Gemini format
+  const systemInstruction = messages.find((m: any) => m.role === 'system')?.content || ''
+  const chatMessages = messages.filter((m: any) => m.role !== 'system')
+
+  const geminiContents = chatMessages.map((m: any) => ({
+    role: m.role === 'assistant' ? 'model' : 'user',
+    parts: [{ text: m.content }]
+  }))
 
   const startTime = Date.now()
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: 'gpt-4o-mini',
-      messages,
-      max_tokens: maxTokens,
-      temperature,
-    }),
-  })
+  const response = await fetch(
+    `${GEMINI_REST_BASE}/${GEMINI_MODEL}:generateContent?key=${geminiKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: systemInstruction }] },
+        contents: geminiContents,
+        generationConfig: {
+          maxOutputTokens: maxTokens,
+          temperature,
+        },
+      }),
+    }
+  )
   const responseTimeMs = Date.now() - startTime
 
   if (!response.ok) {
     const errText = await response.text()
-    throw new Error(`OpenAI ${response.status}: ${errText.slice(0, 300)}`)
+    throw new Error(`Gemini ${response.status}: ${errText.slice(0, 300)}`)
   }
 
   const data: any = await response.json()
-  const content = data.choices?.[0]?.message?.content
-  if (!content || content.trim() === '') throw new Error('OpenAI returned empty response')
+  const content = data.candidates?.[0]?.content?.parts?.[0]?.text
+  if (!content || content.trim() === '') throw new Error('Gemini returned empty response')
+
+  const tokensUsed = (data.usageMetadata?.promptTokenCount || 0) + (data.usageMetadata?.candidatesTokenCount || 0)
 
   return {
     content: content.trim(),
-    model: 'gpt-4o-mini',
-    tokensUsed: data.usage?.total_tokens || 0,
+    model: GEMINI_MODEL,
+    tokensUsed,
     responseTimeMs,
   }
 }
@@ -449,7 +456,7 @@ function getFallbackResponse(message: string): string {
   }
 
   if (msg.includes('cover') || msg.includes('area') || msg.includes('where') || msg.includes('location') || msg.includes('canada')) {
-    return "We cover most Canadian addresses with Google Solar API imagery! Best coverage is in urban and suburban Alberta, BC, Ontario, and Quebec. If a particular address doesn't have coverage, you won't be charged. Give it a try at /customer/login — your first 3 reports are free! 🍁"
+    return "We're available worldwide — anywhere Google Solar API satellite imagery exists! That includes Canada, the United States, and many other countries. Best coverage is in urban and suburban areas. If a particular address doesn't have coverage, you won't be charged. Give it a try at /customer/login — your first 3 reports are free! 🌍"
   }
 
   if (msg.includes('fast') || msg.includes('quick') || msg.includes('how long') || msg.includes('delivery') || msg.includes('time')) {
