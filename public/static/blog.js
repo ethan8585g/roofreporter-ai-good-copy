@@ -309,6 +309,55 @@
     }
   }
 
+  function autoLinkCountries(containerEl) {
+    var countries = [
+      'United States', 'Canada', 'Mexico', 'Puerto Rico', 'The Bahamas', 'Antigua and Barbuda',
+      'United Kingdom', 'France', 'Germany', 'Spain', 'Italy', 'Portugal', 'Belgium', 'Austria',
+      'Switzerland', 'Denmark', 'Sweden', 'Norway', 'Finland', 'Ireland', 'Poland', 'Czechia', 'Greece',
+      'Australia', 'Japan', 'New Zealand', 'Indonesia', 'Malaysia', 'Philippines', 'Taiwan', 'Thailand',
+      'Brazil', 'Colombia', 'Peru'
+    ];
+
+    // Walk text nodes only (don't mess with existing links/tags)
+    var walker = document.createTreeWalker(containerEl, NodeFilter.SHOW_TEXT, null, false);
+    var textNodes = [];
+    while (walker.nextNode()) {
+      textNodes.push(walker.currentNode);
+    }
+
+    textNodes.forEach(function(node) {
+      // Skip if already inside a link
+      if (node.parentElement && node.parentElement.closest('a')) return;
+
+      var text = node.textContent;
+      var replaced = false;
+
+      countries.forEach(function(country) {
+        if (text.indexOf(country) !== -1 && !replaced) {
+          var parts = text.split(country);
+          if (parts.length > 1) {
+            var fragment = document.createDocumentFragment();
+            parts.forEach(function(part, i) {
+              if (i > 0) {
+                var link = document.createElement('a');
+                link.href = '/coverage';
+                link.textContent = country;
+                link.style.color = '#00FF88';
+                link.style.textDecoration = 'underline';
+                link.style.fontWeight = '600';
+                link.title = 'See Roof Manager coverage in ' + country;
+                fragment.appendChild(link);
+              }
+              fragment.appendChild(document.createTextNode(part));
+            });
+            node.parentNode.replaceChild(fragment, node);
+            replaced = true;
+          }
+        }
+      });
+    });
+  }
+
   function renderArticle(post) {
     var contentEl = document.getElementById('blog-post-content');
     if (!contentEl) return;
@@ -379,6 +428,12 @@
         '</form>' +
         '<div id="bc-success" class="hidden text-center py-6"><i class="fas fa-check-circle text-green-400 text-3xl mb-3 block"></i><p class="text-lg font-bold">Message Sent!</p><p class="text-blue-200 text-sm mt-1">We\'ll be in touch shortly.</p></div>' +
       '</div>';
+
+    // Auto-link country names to /coverage page
+    var blogContentDiv = contentEl.querySelector('.blog-content');
+    if (blogContentDiv) {
+      autoLinkCountries(blogContentDiv);
+    }
   }
 
   window.submitBlogContact = function(e) {
