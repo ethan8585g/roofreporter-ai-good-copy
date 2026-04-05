@@ -226,17 +226,17 @@
 
       // System Prompt
       '<div class="bg-gray-50 rounded-xl p-4"><h5 class="text-xs font-bold text-gray-700 mb-3"><i class="fas fa-terminal mr-1"></i>System Prompt</h5>' +
-        '<textarea id="cc-p-system" rows="6" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs font-mono" placeholder="You are a professional sales agent calling on behalf of RoofReporterAI...">' + esc(p.system_prompt || '') + '</textarea>' +
+        '<textarea id="cc-p-system" rows="6" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs font-mono" placeholder="You are a professional sales agent calling on behalf of Roof Manager...">' + esc(p.system_prompt || '') + '</textarea>' +
       '</div>' +
 
       // Script Sections
       '<div class="bg-orange-50 rounded-xl p-4"><h5 class="text-xs font-bold text-orange-700 mb-3"><i class="fas fa-file-alt mr-1"></i>Script Sections</h5>' +
         '<div class="space-y-3">' +
-          '<div><label class="text-[10px] font-bold text-gray-500">Opening Line</label><textarea id="cc-p-opening" rows="2" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs mt-1" placeholder="Hi, this is [Agent] calling from RoofReporterAI...">' + esc(p.script_opening || '') + '</textarea></div>' +
+          '<div><label class="text-[10px] font-bold text-gray-500">Opening Line</label><textarea id="cc-p-opening" rows="2" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs mt-1" placeholder="Hi, this is [Agent] calling from Roof Manager...">' + esc(p.script_opening || '') + '</textarea></div>' +
           '<div><label class="text-[10px] font-bold text-gray-500">Value Proposition</label><textarea id="cc-p-value" rows="2" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs mt-1" placeholder="We help roofing companies automate phone answering...">' + esc(p.script_value_prop || '') + '</textarea></div>' +
           '<div><label class="text-[10px] font-bold text-gray-500">Objection Handling (JSON array)</label><textarea id="cc-p-objections" rows="3" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs font-mono mt-1" placeholder=\'[{"objection":"Too expensive","response":"I completely understand..."}]\'>' + esc(p.script_objections || '') + '</textarea></div>' +
           '<div><label class="text-[10px] font-bold text-gray-500">Closing Script</label><textarea id="cc-p-closing" rows="2" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs mt-1" placeholder="Would you like to schedule a quick demo?">' + esc(p.script_closing || '') + '</textarea></div>' +
-          '<div><label class="text-[10px] font-bold text-gray-500">Voicemail Script</label><textarea id="cc-p-voicemail" rows="2" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs mt-1" placeholder="Hi, this is [Agent] from RoofReporterAI...">' + esc(p.script_voicemail || '') + '</textarea></div>' +
+          '<div><label class="text-[10px] font-bold text-gray-500">Voicemail Script</label><textarea id="cc-p-voicemail" rows="2" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs mt-1" placeholder="Hi, this is [Agent] from Roof Manager...">' + esc(p.script_voicemail || '') + '</textarea></div>' +
         '</div></div>' +
 
       // Knowledge Base

@@ -1,5 +1,5 @@
 // ============================================================
-// RoofReporterAI — Site Analytics Tracker v2
+// Roof Manager — Site Analytics Tracker v2
 // Dual tracking: Internal D1 analytics + GA4 event bridging
 // Tracks: pageviews, clicks, scroll depth, time on page,
 //   engagement milestones, form interactions, CTA clicks,

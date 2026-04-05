@@ -1,5 +1,5 @@
 // ============================================================
-// RoofReporterAI — Home Designer Routes (Hover-Style)
+// Roof Manager — Home Designer Routes (Hover-Style)
 // ============================================================
 //
 // ARCHITECTURE:
@@ -118,7 +118,7 @@ Requirements:
 // 2D diagram generation prompt for Gemini
 const DIAGRAM_SYSTEM_PROMPT = `You are an expert roofing measurement and diagramming AI. Generate a clean, professional 2D bird's-eye-view roof diagram SVG.
 
-The diagram should look like professional roofing software output (similar to Hover, EagleView, or RoofReporterAI):
+The diagram should look like professional roofing software output (similar to Hover, EagleView, or Roof Manager):
 - Clean lines showing each roof facet as a polygon
 - Each facet filled with the selected roofing color
 - Ridge lines shown as thick dark lines
@@ -946,7 +946,7 @@ function buildRoofDiagramSVG(
   svg += `  <text x="${W - 24}" y="${legendY + 18}" text-anchor="end" fill="#1E293B" font-size="10" font-weight="700">Total: ${totalArea.toLocaleString()} SF &bull; ${facets.length} facets</text>\n`
 
   // Footer
-  svg += `  <text x="${W - 24}" y="${legendY + 34}" text-anchor="end" fill="#94A3B8" font-size="8">RoofReporterAI — Hover-Style Diagram &bull; AI-Estimated Measurements</text>\n`
+  svg += `  <text x="${W - 24}" y="${legendY + 34}" text-anchor="end" fill="#94A3B8" font-size="8">Roof Manager — Hover-Style Diagram &bull; AI-Estimated Measurements</text>\n`
 
   svg += `</svg>`
   return svg

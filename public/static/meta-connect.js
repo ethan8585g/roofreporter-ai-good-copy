@@ -1,5 +1,5 @@
 // ============================================================
-// RoofReporterAI — Meta Connect Dashboard
+// Roof Manager — Meta Connect Dashboard
 // Super Admin — Facebook Groups, Pages, Ads, Scheduling
 // ============================================================
 (function() {
@@ -163,7 +163,7 @@
         <i class="fab fa-facebook-f text-white text-3xl"></i>
       </div>
       <h3 class="text-xl font-bold text-gray-900">Connect Your Facebook Account</h3>
-      <p class="text-gray-500 text-sm mt-2 mb-6">Link your Facebook account to manage groups, run ads, and schedule posts directly from the RoofReporterAI admin panel.</p>
+      <p class="text-gray-500 text-sm mt-2 mb-6">Link your Facebook account to manage groups, run ads, and schedule posts directly from the Roof Manager admin panel.</p>
       <button onclick="window.mcShowLogin()" class="px-8 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-colors shadow-lg text-sm">
         <i class="fab fa-facebook mr-2"></i>Login with Facebook
       </button>

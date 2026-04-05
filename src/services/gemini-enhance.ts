@@ -1,5 +1,5 @@
 // ============================================================
-// RoofReporterAI — Gemini 2.5 Pro Report Enhancement Engine
+// Roof Manager — Gemini 2.5 Pro Report Enhancement Engine
 // Uses dedicated airoofreports API key for post-generation
 // quality upgrade. Enhances report data with AI-powered
 // analysis commentary, professional insights, and refined
@@ -51,7 +51,7 @@ export async function enhanceReportViaGemini(
     const mat = report.materials || {} as any
     const quality = report.quality || {} as any
 
-    const systemPrompt = `You are a senior Canadian roofing measurement analyst for RoofReporterAI. You enhance automated roof measurement reports with professional commentary, quality insights, and actionable recommendations.
+    const systemPrompt = `You are a senior Canadian roofing measurement analyst for Roof Manager. You enhance automated roof measurement reports with professional commentary, quality insights, and actionable recommendations.
 
 Your output must be valid JSON — no markdown, no code fences, no explanation outside the JSON object.`
 

@@ -1,5 +1,5 @@
 // ============================================================
-// RoofReporterAI — SAM 3 Satellite Image Analysis Routes
+// Roof Manager — SAM 3 Satellite Image Analysis Routes
 // ============================================================
 //
 // Integrates SAM 3 + Gemini into the existing report pipeline

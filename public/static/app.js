@@ -1,5 +1,5 @@
 // ============================================================
-// RoofReporterAI - Roofing Measurement Tool
+// Roof Manager - Roofing Measurement Tool
 // Main Order Form Application v2.1
 // Two-Phase Address Selection + Satellite Roof Pinning
 // ============================================================

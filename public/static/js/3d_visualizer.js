@@ -532,7 +532,7 @@
     if (navigator.share) {
       navigator.share({
         title: 'Roof Color Visualization',
-        text: 'Check out how ' + currentColor.name + ' roofing looks! Powered by RoofReporterAI',
+        text: 'Check out how ' + currentColor.name + ' roofing looks! Powered by Roof Manager',
         url: window.location.href
       }).catch(function() {});
     } else {

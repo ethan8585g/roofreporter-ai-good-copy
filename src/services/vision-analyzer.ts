@@ -1,5 +1,5 @@
 // ============================================================
-// RoofReporterAI — Vision-Based Inspection Module
+// Roof Manager — Vision-Based Inspection Module
 // The "Eyes" Layer — Multimodal AI Roof Condition Analysis
 // ============================================================
 // Feeds aerial imagery (satellite overhead or RGB GeoTIFF) into

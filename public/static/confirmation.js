@@ -1232,7 +1232,7 @@ async function generateProposalFromReport(reportId, address, customerName, custo
         customer_id: customerId,
         customer_name: customerName,
         property_address: address,
-        scope_of_work: 'Complete roof replacement based on RoofReporterAI measurement report #' + reportId,
+        scope_of_work: 'Complete roof replacement based on Roof Manager measurement report #' + reportId,
         report_id: reportId,
         measurements: pipelineData.measurements,
         tiers: tiers

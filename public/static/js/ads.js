@@ -1,5 +1,5 @@
 // ============================================================
-// RoofReporterAI — Ad Manager
+// Roof Manager — Ad Manager
 //
 // Handles display ads for non-subscribers on both:
 //   - Web (Google AdSense — responsive display units)

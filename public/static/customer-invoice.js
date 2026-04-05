@@ -73,7 +73,7 @@ function renderInvoiceView(inv, items) {
                 <i class="fas fa-home text-white text-lg"></i>
               </div>
               <div>
-                <h1 class="text-xl font-bold">RoofReporterAI</h1>
+                <h1 class="text-xl font-bold">Roof Manager</h1>
                 <p class="text-brand-200 text-xs">Professional Roof Measurement Reports</p>
               </div>
             </div>
@@ -172,7 +172,7 @@ function renderInvoiceView(inv, items) {
 
       <!-- Footer -->
       <div class="text-center py-4 bg-gray-50 border-t border-gray-100">
-        <p class="text-xs text-gray-400">Thank you for your business! &middot; RoofReporterAI &middot; reports@reusecanada.ca</p>
+        <p class="text-xs text-gray-400">Thank you for your business! &middot; Roof Manager &middot; reports@reusecanada.ca</p>
       </div>
     </div>
   `;

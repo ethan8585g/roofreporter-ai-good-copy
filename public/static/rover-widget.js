@@ -492,7 +492,7 @@
         <div class="rover-header-avatar">🐕</div>
         <div class="rover-header-info">
           <h3>Rover</h3>
-          <p>RoofReporterAI Expert Helper</p>
+          <p>Roof Manager Expert Helper</p>
         </div>
         <button class="rover-header-close" onclick="window.__roverToggle()" title="Close chat">
           <i class="fas fa-times"></i>
@@ -506,7 +506,7 @@
         </button>
       </div>
       <div class="rover-powered">
-        Powered by <strong>RoofReporterAI</strong>
+        Powered by <strong>Roof Manager</strong>
       </div>
     </div>
 
@@ -557,7 +557,7 @@
         { text: '💰 How much?', msg: 'How much does a roof report cost?' },
         { text: '🆓 Free trial', msg: 'Can I try it for free?' },
         { text: '📞 Contact us', msg: 'How can I contact your team?' },
-        { text: '🏆 Why RoofReporterAI?', msg: 'Why should I choose RoofReporterAI over competitors?' }
+        { text: '🏆 Why Roof Manager?', msg: 'Why should I choose Roof Manager over competitors?' }
       ];
       buttons.forEach(function(b) {
         var btn = document.createElement('button');
@@ -707,7 +707,7 @@
 
       // If no messages yet, show greeting
       if (state.messages.length === 0) {
-        var greeting = "Hey there! 🐕 I'm Rover, your RoofReporterAI expert helper! Ask me anything about our AI-powered roof measurement reports, pricing, or features. How can I help you today?";
+        var greeting = "Hey there! 🐕 I'm Rover, your Roof Manager expert helper! Ask me anything about our AI-powered roof measurement reports, pricing, or features. How can I help you today?";
         addMessage('assistant', greeting, true);
       }
 

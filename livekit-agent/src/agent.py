@@ -1,10 +1,10 @@
 """
-RoofReporterAI — Roofer Secretary AI Voice Agent
+Roof Manager — Roofer Secretary AI Voice Agent
 Powered by LiveKit Agents v1.4 + LiveKit Inference
 
 This agent answers inbound phone calls for roofing businesses.
 It pulls the customer's configured greeting, Q&A, and directory routing
-from the RoofReporterAI API, then delivers a professional AI receptionist
+from the Roof Manager API, then delivers a professional AI receptionist
 experience over the phone.
 
 Flow:
@@ -12,7 +12,7 @@ Flow:
   2. Dispatch rule routes call to a new room: secretary-{customerId}-{uuid}
   3. This agent auto-joins the room, fetches customer config from the API
   4. Agent greets caller, handles Q&A, routes to departments, takes messages
-  5. After call ends, logs the call details back to the RoofReporterAI API
+  5. After call ends, logs the call details back to the Roof Manager API
 """
 
 import os
@@ -47,7 +47,7 @@ logger = logging.getLogger("roofer-secretary")
 logger.setLevel(logging.INFO)
 
 # ============================================================
-# API client — communicates with the RoofReporterAI Cloudflare app
+# API client — communicates with the Roof Manager Cloudflare app
 # ============================================================
 API_BASE = os.environ.get("ROOFPORTER_API_URL", "https://roofmanager.ca")
 
@@ -85,7 +85,7 @@ async def log_call_complete(
     outcome: str,
     room_id: str,
 ):
-    """POST call details back to RoofReporterAI for logging."""
+    """POST call details back to Roof Manager for logging."""
     url = f"{API_BASE}/api/secretary/webhook/call-complete"
     payload = {
         "customer_id": customer_id,
@@ -154,7 +154,7 @@ async def get_agent_config(ctx: JobContext) -> dict:
             config["customer_id"] = cid
             logger.info(f"Extracted customer_id={cid} from room name: {ctx.room.name}")
 
-    # 3. Fetch full config from the RoofReporterAI API
+    # 3. Fetch full config from the Roof Manager API
     if config["customer_id"]:
         api_config = await fetch_customer_config(config["customer_id"])
         if api_config:
@@ -470,7 +470,7 @@ async def entrypoint(ctx: JobContext):
             caller_phone = phone
             break
 
-    # Handle call completion — log to RoofReporterAI
+    # Handle call completion — log to Roof Manager
     @ctx.room.on("participant_disconnected")
     def on_participant_left(participant):
         if participant.kind == rtc.ParticipantKind.PARTICIPANT_KIND_SIP:

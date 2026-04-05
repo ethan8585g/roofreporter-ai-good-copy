@@ -1,5 +1,5 @@
 """
-RoofReporterAI — Roofer Secretary AI Voice Agent
+Roof Manager — Roofer Secretary AI Voice Agent
 Powered by LiveKit Agents + LiveKit Inference
 
 This agent answers inbound phone calls for roofing businesses.
@@ -11,7 +11,7 @@ Flow:
   2. Dispatch rule routes call to a new room (secretary-2-*)
   3. This agent joins the room and greets the caller
   4. Agent handles Q&A, routes to departments, takes messages
-  5. After call, logs the call details to the RoofReporterAI API
+  5. After call, logs the call details to the Roof Manager API
 """
 
 import os
@@ -122,7 +122,7 @@ async def get_agent_config(ctx: JobContext) -> dict:
         if attrs.get("sip.trunkPhoneNumber"):
             logger.info(f"SIP caller detected: trunk={attrs.get('sip.trunkPhoneNumber')}, from={attrs.get('sip.callID', 'unknown')}")
 
-    # Try to fetch full config from the RoofReporterAI API
+    # Try to fetch full config from the Roof Manager API
     api_url = os.environ.get("ROOFPORTER_API_URL", "https://www.roofmanager.ca")
     if customer_id and api_url:
         try:

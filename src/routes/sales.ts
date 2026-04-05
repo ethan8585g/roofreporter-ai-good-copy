@@ -1,5 +1,5 @@
 // ============================================================
-// RoofReporterAI — Sales Process & Onboarding Engine
+// Roof Manager — Sales Process & Onboarding Engine
 // ============================================================
 //
 // Automated sales pipeline management for roofing businesses:

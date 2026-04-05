@@ -1,5 +1,5 @@
 // ============================================================
-// RoofReporterAI - AI Measurement Engine (Vertex AI + Gemini)
+// Roof Manager - AI Measurement Engine (Vertex AI + Gemini)
 // Server-side integration for roof geometry extraction
 // ============================================================
 // This runs on Cloudflare Workers — uses Web APIs only (no Node.js fs/path)

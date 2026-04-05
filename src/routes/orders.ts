@@ -65,7 +65,7 @@ ordersRoutes.post('/', async (c) => {
     const orderNumber = generateOrderNumber()
     const price = getTierPrice(service_tier)
     const estimatedDelivery = getDeliveryEstimate(service_tier)
-    const masterCompanyId = 1 // RoofReporterAI
+    const masterCompanyId = 1 // Roof Manager
 
     const result = await c.env.DB.prepare(`
       INSERT INTO orders (

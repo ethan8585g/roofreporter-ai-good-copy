@@ -1,5 +1,5 @@
 // ============================================================
-// RoofReporterAI — Roof Visualizer
+// Roof Manager — Roof Visualizer
 //
 // Flow:
 //   1. Upload 4–6 house photos (labeled by corner/side)

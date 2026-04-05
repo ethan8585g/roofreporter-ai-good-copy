@@ -1,5 +1,5 @@
 // ============================================================
-// RoofReporterAI — Customer Cold Call Center
+// Roof Manager — Customer Cold Call Center
 // Per-customer prospect list management + AI outbound calling
 // Separate from Super Admin call center (call-center.ts)
 // ============================================================

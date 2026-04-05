@@ -1,5 +1,5 @@
 // ============================================================
-// RoofReporterAI — Geospatial & Roof Math Utilities
+// Roof Manager — Geospatial & Roof Math Utilities
 // Pure geometric/pixel computation functions + roofing math.
 // No external dependencies — fully testable.
 // ============================================================

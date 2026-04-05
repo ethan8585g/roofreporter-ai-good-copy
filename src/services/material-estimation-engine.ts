@@ -1,5 +1,5 @@
 // ============================================================
-// RoofReporterAI — Material Estimation Engine v1.0
+// Roof Manager — Material Estimation Engine v1.0
 //
 // Comprehensive Bill of Materials (BOM) calculator for roofing
 // projects. Computes detailed material quantities with pricing.

@@ -1,5 +1,5 @@
 // ============================================================
-// RoofReporterAI — Virtual Try-On Routes
+// Roof Manager — Virtual Try-On Routes
 //
 // WELD: Dispatcher + Webhook for Replicate AI inpainting.
 // PAINT: Status polling for frontend.

@@ -203,7 +203,7 @@ app.get('/api/health', (c) => {
   // Report which env vars are configured (true/false only — never expose values)
   return c.json({
     status: 'ok',
-    service: 'RoofReporterAI - Business Management CRM',
+    service: 'Roof Manager - Business Management CRM',
     timestamp: new Date().toISOString(),
     env_configured: {
       GOOGLE_SOLAR_API_KEY: !!c.env.GOOGLE_SOLAR_API_KEY,
@@ -590,17 +590,17 @@ app.get('/roof-measurement/:city', (c) => {
 <html lang="en">
 <head>
   ${getHeadTags()}
-  <title>Roof Measurement Reports in ${city.name}, ${city.province} | RoofReporterAI</title>
+  <title>Roof Measurement Reports in ${city.name}, ${city.province} | Roof Manager</title>
   <meta name="description" content="Get accurate AI-powered roof measurement reports in ${city.name}, ${city.province}. Satellite imagery analysis with area, pitch, edges, and material estimates in under 60 seconds. 3 free reports.">
   <link rel="canonical" href="https://www.roofmanager.ca/roof-measurement/${citySlug}">
-  <meta property="og:title" content="Roof Measurement Reports in ${city.name} | RoofReporterAI">
+  <meta property="og:title" content="Roof Measurement Reports in ${city.name} | Roof Manager">
   <meta property="og:description" content="AI-powered satellite roof measurements for ${city.name} roofing contractors. Full CRM, proposals, invoicing included.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://www.roofmanager.ca/roof-measurement/${citySlug}">
   <meta property="og:image" content="https://roofmanager.ca/static/logo.png">
-  <meta property="og:site_name" content="RoofReporterAI">
+  <meta property="og:site_name" content="Roof Manager">
   <meta name="twitter:card" content="summary">
-  <meta name="twitter:title" content="Roof Measurements in ${city.name} — RoofReporterAI">
+  <meta name="twitter:title" content="Roof Measurements in ${city.name} — Roof Manager">
   <meta name="twitter:image" content="https://roofmanager.ca/static/logo.png">
   <meta name="geo.region" content="CA">
   <meta name="geo.placename" content="${city.name}, ${city.province}, Canada">
@@ -609,7 +609,7 @@ app.get('/roof-measurement/:city', (c) => {
   {
     "@context": "https://schema.org",
     "@type": "LocalBusiness",
-    "name": "RoofReporterAI — ${city.name}",
+    "name": "Roof Manager — ${city.name}",
     "description": "AI-powered roof measurement reports and CRM for roofing companies in ${city.name}, ${city.province}.",
     "url": "https://www.roofmanager.ca/roof-measurement/${citySlug}",
     "image": "https://roofmanager.ca/static/logo.png",
@@ -623,7 +623,7 @@ app.get('/roof-measurement/:city', (c) => {
 <body class="bg-gray-50 min-h-screen">
   <nav class="bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-      <a href="/" class="flex items-center gap-3"><img src="/static/logo.png" alt="RoofReporterAI" class="w-9 h-9 rounded-lg object-cover"><span class="text-white font-bold text-lg">RoofReporterAI</span></a>
+      <a href="/" class="flex items-center gap-3"><img src="/static/logo.png" alt="Roof Manager" class="w-9 h-9 rounded-lg object-cover"><span class="text-white font-bold text-lg">Roof Manager</span></a>
       <div class="flex items-center gap-4">
         <a href="/pricing" class="text-blue-200 hover:text-white text-sm">Pricing</a>
         <a href="/customer/login" class="bg-white text-blue-700 font-semibold py-2 px-5 rounded-lg text-sm hover:bg-blue-50">Get Started Free</a>
@@ -670,13 +670,13 @@ app.get('/roof-measurement/:city', (c) => {
   <section class="py-16 bg-gradient-to-r from-blue-600 to-sky-500 text-white text-center">
     <div class="max-w-3xl mx-auto px-4">
       <h2 class="text-3xl font-black mb-4">Ready to Grow Your ${city.name} Roofing Business?</h2>
-      <p class="text-lg text-blue-100 mb-8">Join roofing contractors across ${city.province} who use RoofReporterAI to measure faster, quote smarter, and win more jobs.</p>
+      <p class="text-lg text-blue-100 mb-8">Join roofing contractors across ${city.province} who use Roof Manager to measure faster, quote smarter, and win more jobs.</p>
       <a href="/customer/login" class="inline-block px-10 py-4 bg-white text-blue-700 font-black rounded-xl text-lg shadow-xl hover:bg-blue-50">Start Free — 3 Reports on Us <i class="fas fa-arrow-right ml-2"></i></a>
     </div>
   </section>
 
   <footer class="bg-slate-900 text-gray-400 py-8 text-center text-sm">
-    <p>&copy; ${new Date().getFullYear()} RoofReporterAI. Serving roofing contractors in ${city.name}, ${city.province} and across Canada.</p>
+    <p>&copy; ${new Date().getFullYear()} Roof Manager. Serving roofing contractors in ${city.name}, ${city.province} and across Canada.</p>
     <div class="mt-2"><a href="/privacy" class="hover:text-white">Privacy</a> · <a href="/terms" class="hover:text-white">Terms</a> · <a href="/blog" class="hover:text-white">Blog</a> · <a href="/pricing" class="hover:text-white">Pricing</a></div>
   </footer>
 </body>
@@ -837,10 +837,10 @@ app.get('/report/share/:token', async (c) => {
 
     // Inject OG meta tags for social sharing
     const ogTags = `<meta property="og:title" content="Roof Measurement Report — ${addr || 'Professional Analysis'}">
-<meta property="og:description" content="Professional satellite roof measurement report with area, pitch, edges, and material estimate. Powered by RoofReporterAI.">
+<meta property="og:description" content="Professional satellite roof measurement report with area, pitch, edges, and material estimate. Powered by Roof Manager.">
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://www.roofmanager.ca/report/share/${token}">
-<meta property="og:site_name" content="RoofReporterAI">
+<meta property="og:site_name" content="Roof Manager">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="Roof Report — ${addr || 'Professional Analysis'}">`
     const htmlWithOg = reportHtml.replace(/<head[^>]*>/i, `$&\n${ogTags}`)
@@ -849,7 +849,7 @@ app.get('/report/share/:token', async (c) => {
     const wrappedHtml = htmlWithOg.replace(
       /<body[^>]*>/i,
       `$&<div style="position:fixed;top:0;left:0;right:0;z-index:9999;background:#0f172a;color:#fff;padding:10px 20px;display:flex;align-items:center;justify-between;font-family:Inter,system-ui,sans-serif;font-size:13px">
-  <div style="display:flex;align-items:center;gap:10px"><span style="font-weight:700;color:#38bdf8">RoofReporterAI</span><span style="color:#94a3b8">|</span><span style="color:#cbd5e1">${addr || 'Roof Report'}</span></div>
+  <div style="display:flex;align-items:center;gap:10px"><span style="font-weight:700;color:#38bdf8">Roof Manager</span><span style="color:#94a3b8">|</span><span style="color:#cbd5e1">${addr || 'Roof Report'}</span></div>
   <div style="display:flex;gap:8px"><button onclick="window.print()" style="background:#1e40af;color:#fff;border:none;padding:6px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600">Print / Save PDF</button><a href="https://roofmanager.ca" target="_blank" style="background:#065f46;color:#fff;padding:6px 14px;border-radius:8px;text-decoration:none;font-size:12px;font-weight:600">Get Your Own Report</a></div>
 </div><div style="height:48px"></div>`
     )
@@ -927,13 +927,13 @@ app.get('/proposal/view/:token', async (c) => {
           reportLink = `<a href="/api/reports/${invProposal.attached_report_id}/html" target="_blank" class="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-100"><i class="fas fa-file-alt"></i>View Roof Report</a>`
         }
 
-        return c.html(`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>${docLabel} ${invProposal.invoice_number} — RoofReporterAI</title><meta property="og:title" content="${docLabel} ${invProposal.invoice_number} — $${Number(invProposal.total_amount || 0).toFixed(2)}"><meta property="og:description" content="Professional roofing ${docLabel.toLowerCase()} for ${invProposal.customer_name || 'valued customer'}. ${invProposal.property_address ? 'Property: ' + invProposal.property_address : ''}"><meta property="og:type" content="article"><meta property="og:site_name" content="RoofReporterAI"><meta name="twitter:card" content="summary"><script src="https://cdn.tailwindcss.com"></script><link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet"></head>
+        return c.html(`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>${docLabel} ${invProposal.invoice_number} — Roof Manager</title><meta property="og:title" content="${docLabel} ${invProposal.invoice_number} — $${Number(invProposal.total_amount || 0).toFixed(2)}"><meta property="og:description" content="Professional roofing ${docLabel.toLowerCase()} for ${invProposal.customer_name || 'valued customer'}. ${invProposal.property_address ? 'Property: ' + invProposal.property_address : ''}"><meta property="og:type" content="article"><meta property="og:site_name" content="Roof Manager"><meta name="twitter:card" content="summary"><script src="https://cdn.tailwindcss.com"></script><link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet"></head>
 <body class="bg-gray-100 min-h-screen py-8 px-4">
 <div class="max-w-3xl mx-auto">
   <div class="bg-white rounded-2xl shadow-xl overflow-hidden print:shadow-none">
     <div class="bg-gradient-to-r from-sky-500 to-blue-600 text-white p-8">
       <div class="flex justify-between items-start">
-        <div><div class="flex items-center gap-3 mb-3"><div class="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center"><i class="fas fa-home text-white text-lg"></i></div><div><h1 class="text-xl font-bold">RoofReporterAI</h1><p class="text-blue-200 text-xs">Professional Roof Measurement Reports</p></div></div><p class="text-blue-200 text-sm">Alberta, Canada</p></div>
+        <div><div class="flex items-center gap-3 mb-3"><div class="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center"><i class="fas fa-home text-white text-lg"></i></div><div><h1 class="text-xl font-bold">Roof Manager</h1><p class="text-blue-200 text-xs">Professional Roof Measurement Reports</p></div></div><p class="text-blue-200 text-sm">Alberta, Canada</p></div>
         <div class="text-right"><p class="text-2xl font-bold">${docLabel}</p><p class="text-blue-200 text-sm">${invProposal.invoice_number}</p><p class="text-blue-200 text-xs mt-1">${invProposal.issue_date ? new Date(invProposal.issue_date).toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' }) : ''}</p></div>
       </div>
     </div>
@@ -956,7 +956,7 @@ app.get('/proposal/view/:token', async (c) => {
       ${invProposal.terms ? `<div class="mt-4 bg-gray-50 rounded-xl p-6"><h3 class="text-sm font-bold text-gray-700 mb-2"><i class="fas fa-file-contract mr-1"></i>Terms & Conditions</h3><p class="text-sm text-gray-600 whitespace-pre-wrap">${invProposal.terms}</p></div>` : ''}
       ${invProposal.payment_terms_text ? `<div class="mt-4 bg-green-50 rounded-xl p-6 border border-green-100"><h3 class="text-sm font-bold text-green-800 mb-2"><i class="fas fa-credit-card mr-1"></i>Payment Terms</h3><p class="text-sm text-green-700 whitespace-pre-wrap">${invProposal.payment_terms_text}</p></div>` : ''}
     </div>
-    <div class="bg-gray-50 px-8 py-4 text-center text-xs text-gray-400 border-t">Powered by <a href="https://roofmanager.ca" class="text-blue-500 hover:underline">RoofReporterAI</a> — Canada's AI Roof Measurement Platform</div>
+    <div class="bg-gray-50 px-8 py-4 text-center text-xs text-gray-400 border-t">Powered by <a href="https://roofmanager.ca" class="text-blue-500 hover:underline">Roof Manager</a> — Canada's AI Roof Measurement Platform</div>
   </div>
   <div class="text-center mt-4 print:hidden"><button onclick="window.print()" class="px-6 py-2.5 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm"><i class="fas fa-print mr-1"></i>Print / Save PDF</button></div>
 </div>
@@ -996,7 +996,7 @@ app.get('/proposal/view/:token', async (c) => {
     const itemsResult = await c.env.DB.prepare('SELECT * FROM crm_proposal_items WHERE proposal_id = ? ORDER BY sort_order').bind(proposal.id).all()
     const lineItems = itemsResult.results || []
 
-    const businessName = owner?.brand_business_name || owner?.name || 'RoofReporterAI'
+    const businessName = owner?.brand_business_name || owner?.name || 'Roof Manager'
     const primaryColor = owner?.brand_primary_color || '#0369a1'
     const secondaryColor = owner?.brand_secondary_color || '#0ea5e9'
     const brandPhone = owner?.brand_phone || owner?.phone || ''
@@ -1255,7 +1255,7 @@ app.get('/proposal/view/:token', async (c) => {
 
     <!-- Footer -->
     <div class="text-center mt-6 text-xs text-gray-400 space-y-1">
-      <p>Powered by <span class="font-semibold">RoofReporterAI</span></p>
+      <p>Powered by <span class="font-semibold">Roof Manager</span></p>
     </div>
   </div>
 
@@ -1583,7 +1583,7 @@ function getMainPageHTML(mapsApiKey: string) {
 <html lang="en">
 <head>
   ${getHeadTags()}
-  <title>Order a Roof Report - RoofReporterAI</title>
+  <title>Order a Roof Report - Roof Manager</title>
   ${mapsScript}
 </head>
 <body class="bg-gray-50 min-h-screen">
@@ -1591,10 +1591,10 @@ function getMainPageHTML(mapsApiKey: string) {
     <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
       <div class="flex items-center space-x-3">
         <a href="/" class="flex items-center space-x-3 hover:opacity-90 transition-opacity">
-          <img src="/static/logo.png" alt="RoofReporterAI" class="w-10 h-10 rounded-lg object-cover">
+          <img src="/static/logo.png" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
           <div>
             <h1 class="text-xl font-bold">Order a Report</h1>
-            <p class="text-brand-200 text-xs">RoofReporterAI</p>
+            <p class="text-brand-200 text-xs">Roof Manager</p>
           </div>
         </a>
       </div>
@@ -1608,7 +1608,7 @@ function getMainPageHTML(mapsApiKey: string) {
     <div id="app-root"></div>
   </main>
   <footer class="bg-gray-800 text-gray-400 text-center py-6 mt-12">
-    <p class="text-sm">&copy; 2026 RoofReporterAI. All rights reserved.</p>
+    <p class="text-sm">&copy; 2026 Roof Manager. All rights reserved.</p>
     <p class="text-xs mt-1">Professional Roof Measurement Reports & Business Management CRM</p>
     <div class="flex items-center justify-center gap-4 mt-2 text-xs">
       <a href="/privacy" class="hover:text-gray-200 transition-colors">Privacy Policy</a>
@@ -1625,7 +1625,7 @@ function getSuperAdminDashboardHTML() {
 <html lang="en">
 <head>
   ${getHeadTags()}
-  <title>Super Admin Dashboard - RoofReporterAI</title>
+  <title>Super Admin Dashboard - Roof Manager</title>
   <style>
     .sa-sidebar { transition: width 0.3s ease; }
     .sa-sidebar .label { transition: opacity 0.2s ease; }
@@ -1802,7 +1802,7 @@ function getAdminPageHTML() {
 <html lang="en">
 <head>
   ${getHeadTags()}
-  <title>Admin Control Panel - RoofReporterAI</title>
+  <title>Admin Control Panel - Roof Manager</title>
   <style>
     .admin-sidebar { transition: width 0.3s ease; }
     .admin-sidebar .label { transition: opacity 0.2s ease; }
@@ -1886,10 +1886,10 @@ function getOrderConfirmationHTML() {
   <header class="bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
       <div class="flex items-center space-x-3">
-        <img src="/static/logo.png" alt="RoofReporterAI" class="w-10 h-10 rounded-lg object-cover">
+        <img src="/static/logo.png" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
         <div>
           <h1 class="text-xl font-bold">Order Confirmation</h1>
-          <p class="text-brand-200 text-xs">Powered by RoofReporterAI</p>
+          <p class="text-brand-200 text-xs">Powered by Roof Manager</p>
         </div>
       </div>
       <a href="/" class="text-brand-200 hover:text-white text-sm"><i class="fas fa-arrow-left mr-1"></i>Home</a>
@@ -1910,16 +1910,16 @@ function getLoginPageHTML() {
 <html lang="en">
 <head>
   ${getHeadTags()}
-  <title>Admin Login - RoofReporterAI</title>
+  <title>Admin Login - Roof Manager</title>
 </head>
 <body class="bg-gradient-to-br from-sky-100 via-blue-50 to-white min-h-screen flex items-center justify-center">
   <div class="w-full max-w-md mx-auto px-4">
     <!-- Logo -->
     <div class="text-center mb-8">
       <a href="/" class="inline-flex items-center gap-3">
-        <img src="/static/logo.png" alt="RoofReporterAI" class="w-12 h-12 rounded-xl object-cover shadow-lg">
+        <img src="/static/logo.png" alt="Roof Manager" class="w-12 h-12 rounded-xl object-cover shadow-lg">
         <div class="text-left">
-          <span class="text-gray-800 font-bold text-2xl block">RoofReporterAI</span>
+          <span class="text-gray-800 font-bold text-2xl block">Roof Manager</span>
           <span class="text-gray-500 text-xs">Admin Access - Authorized Personnel Only</span>
         </div>
       </a>
@@ -2089,15 +2089,15 @@ function getAdminResetPasswordHTML() {
 <html lang="en">
 <head>
   ${getHeadTags()}
-  <title>Reset Admin Password - RoofReporterAI</title>
+  <title>Reset Admin Password - Roof Manager</title>
 </head>
 <body class="bg-gradient-to-br from-sky-100 via-blue-50 to-white min-h-screen flex items-center justify-center">
   <div class="w-full max-w-md mx-auto px-4">
     <div class="text-center mb-8">
       <a href="/" class="inline-flex items-center gap-3">
-        <img src="/static/logo.png" alt="RoofReporterAI" class="w-12 h-12 rounded-xl object-cover shadow-lg">
+        <img src="/static/logo.png" alt="Roof Manager" class="w-12 h-12 rounded-xl object-cover shadow-lg">
         <div class="text-left">
-          <span class="text-gray-800 font-bold text-2xl block">RoofReporterAI</span>
+          <span class="text-gray-800 font-bold text-2xl block">Roof Manager</span>
           <span class="text-gray-500 text-xs">Admin Access</span>
         </div>
       </a>
@@ -2200,15 +2200,15 @@ function getCustomerResetPasswordHTML() {
 <html lang="en">
 <head>
   ${getHeadTags()}
-  <title>Reset Password - RoofReporterAI</title>
+  <title>Reset Password - Roof Manager</title>
 </head>
 <body class="bg-gradient-to-br from-sky-100 via-blue-50 to-white min-h-screen flex items-center justify-center">
   <div class="w-full max-w-md mx-auto px-4">
     <div class="text-center mb-8">
       <a href="/" class="inline-flex items-center gap-3">
-        <img src="/static/logo.png" alt="RoofReporterAI" class="w-12 h-12 rounded-xl object-cover shadow-lg">
+        <img src="/static/logo.png" alt="Roof Manager" class="w-12 h-12 rounded-xl object-cover shadow-lg">
         <div class="text-left">
-          <span class="text-gray-800 font-bold text-2xl block">RoofReporterAI</span>
+          <span class="text-gray-800 font-bold text-2xl block">Roof Manager</span>
           <span class="text-sky-600 text-xs">Customer Portal</span>
         </div>
       </a>
@@ -2306,19 +2306,19 @@ function getLandingPageHTML() {
 <html lang="en">
 <head>
   ${getHeadTags()}
-  <title>RoofReporterAI — Professional Roof Measurement Reports & CRM for Roofing Companies</title>
+  <title>Roof Manager — Professional Roof Measurement Reports & CRM for Roofing Companies</title>
   <meta name="description" content="Get accurate roof area, pitch analysis, edge breakdowns, material estimates, and solar potential from satellite imagery in under 60 seconds. Full CRM, AI Secretary, team management. Start with 3 free reports.">
-  <meta property="og:title" content="RoofReporterAI — Precision Roof Measurement Reports">
+  <meta property="og:title" content="Roof Manager — Precision Roof Measurement Reports">
   <meta property="og:description" content="Professional satellite-powered roof measurement reports in under 60 seconds. Full CRM, AI phone secretary, and team management for roofing businesses.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://roofmanager.ca">
   <meta property="og:image" content="https://roofmanager.ca/static/logo.png">
   <meta property="og:image:width" content="512">
   <meta property="og:image:height" content="512">
-  <meta property="og:site_name" content="RoofReporterAI">
+  <meta property="og:site_name" content="Roof Manager">
   <meta property="og:locale" content="en_CA">
   <meta name="twitter:card" content="summary">
-  <meta name="twitter:title" content="RoofReporterAI — Satellite Roof Measurements in 60 Seconds">
+  <meta name="twitter:title" content="Roof Manager — Satellite Roof Measurements in 60 Seconds">
   <meta name="twitter:description" content="AI-powered roof measurement reports, full CRM & team management for roofing companies. 3 free reports.">
   <meta name="twitter:image" content="https://roofmanager.ca/static/logo.png">
   <meta name="keywords" content="roof measurement software, roofing CRM, satellite roof reports, roof area calculator, roofing estimate tool, roof pitch analysis, material takeoff, roofing contractor software, AI roof measurement, Canadian roofing software">
@@ -2328,7 +2328,7 @@ function getLandingPageHTML() {
   {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
-    "name": "RoofReporterAI",
+    "name": "Roof Manager",
     "url": "https://roofmanager.ca",
     "image": "https://roofmanager.ca/static/logo.png",
     "applicationCategory": "BusinessApplication",
@@ -2347,7 +2347,7 @@ function getLandingPageHTML() {
     },
     "provider": {
       "@type": "Organization",
-      "name": "RoofReporterAI",
+      "name": "Roof Manager",
       "url": "https://roofmanager.ca",
       "address": {
         "@type": "PostalAddress",
@@ -2362,11 +2362,11 @@ function getLandingPageHTML() {
     "@context": "https://schema.org",
     "@type": "FAQPage",
     "mainEntity": [
-      {"@type": "Question", "name": "How accurate are RoofReporterAI measurements?", "acceptedAnswer": {"@type": "Answer", "text": "Our measurements use satellite imagery combined with GPS coordinate tracing and Google Solar API data. Accuracy is typically within 2-5% of manual measurements, verified against pitch-corrected sloped area calculations."}},
+      {"@type": "Question", "name": "How accurate are Roof Manager measurements?", "acceptedAnswer": {"@type": "Answer", "text": "Our measurements use satellite imagery combined with GPS coordinate tracing and Google Solar API data. Accuracy is typically within 2-5% of manual measurements, verified against pitch-corrected sloped area calculations."}},
       {"@type": "Question", "name": "How much does a roof measurement report cost?", "acceptedAnswer": {"@type": "Answer", "text": "Reports are $7 USD each. New users get 3 free reports to try the platform. Credit packs offer volume discounts — 25 reports for $150 ($6/each) or 100 reports for $500 ($5/each)."}},
       {"@type": "Question", "name": "What is included in a roof report?", "acceptedAnswer": {"@type": "Answer", "text": "Each report includes total roof area (footprint and sloped), pitch analysis, edge breakdowns (ridge, hip, valley, eave, rake), material estimates with waste calculations, satellite imagery, and a professional PDF."}},
-      {"@type": "Question", "name": "Does RoofReporterAI work in Canada and the US?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. RoofReporterAI works across Canada and the United States wherever Google satellite imagery is available. Coverage is best in urban and suburban areas."}},
-      {"@type": "Question", "name": "Can I use RoofReporterAI for my roofing company?", "acceptedAnswer": {"@type": "Answer", "text": "Absolutely. RoofReporterAI includes a full CRM with customer management, invoicing, proposals, job scheduling with Google Calendar sync, material calculator, and an AI phone secretary for your business."}},
+      {"@type": "Question", "name": "Does Roof Manager work in Canada and the US?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. Roof Manager works across Canada and the United States wherever Google satellite imagery is available. Coverage is best in urban and suburban areas."}},
+      {"@type": "Question", "name": "Can I use Roof Manager for my roofing company?", "acceptedAnswer": {"@type": "Answer", "text": "Absolutely. Roof Manager includes a full CRM with customer management, invoicing, proposals, job scheduling with Google Calendar sync, material calculator, and an AI phone secretary for your business."}},
       {"@type": "Question", "name": "How fast are reports generated?", "acceptedAnswer": {"@type": "Answer", "text": "Reports are generated in under 60 seconds. Simply enter a property address, trace the roof edges on the satellite image, and the system calculates everything automatically."}}
     ]
   }
@@ -2400,9 +2400,9 @@ function getLandingPageHTML() {
   <nav id="landing-nav" class="landing-nav fixed top-0 left-0 right-0 z-50">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
       <a href="/" class="flex items-center gap-3">
-        <img src="/static/logo.png" alt="RoofReporterAI" class="w-9 h-9 rounded-lg object-cover shadow-lg">
+        <img src="/static/logo.png" alt="Roof Manager" class="w-9 h-9 rounded-lg object-cover shadow-lg">
         <div class="leading-tight">
-          <span class="text-white font-bold text-lg tracking-tight">RoofReporterAI</span>
+          <span class="text-white font-bold text-lg tracking-tight">Roof Manager</span>
           <span class="hidden sm:block text-gray-400 text-[10px] -mt-0.5">Measurement Reports & Business CRM</span>
         </div>
       </a>
@@ -2452,8 +2452,8 @@ function getLandingPageHTML() {
       <div class="grid md:grid-cols-4 gap-8">
         <div>
           <div class="flex items-center gap-3 mb-4">
-            <img src="/static/logo.png" alt="RoofReporterAI" class="w-9 h-9 rounded-lg object-cover">
-            <span class="text-white font-bold text-lg tracking-tight">RoofReporterAI</span>
+            <img src="/static/logo.png" alt="Roof Manager" class="w-9 h-9 rounded-lg object-cover">
+            <span class="text-white font-bold text-lg tracking-tight">Roof Manager</span>
           </div>
           <p class="text-sm leading-relaxed text-gray-500">Professional AI-powered roof measurement reports, CRM, and business management for roofing companies across Canada.</p>
           <div class="flex items-center gap-4 mt-6">
@@ -2493,7 +2493,7 @@ function getLandingPageHTML() {
         </div>
       </div>
       <div class="border-t border-gray-800 mt-12 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
-        <p class="text-sm text-gray-500">&copy; 2026 RoofReporterAI. All rights reserved.</p>
+        <p class="text-sm text-gray-500">&copy; 2026 Roof Manager. All rights reserved.</p>
         <div class="flex items-center gap-6 text-sm text-gray-500">
           <a href="/privacy" class="hover:text-cyan-400 transition-colors">Privacy Policy</a>
           <a href="/terms" class="hover:text-cyan-400 transition-colors">Terms of Service</a>
@@ -2526,13 +2526,13 @@ function getSettingsPageHTML() {
 <html lang="en">
 <head>
   ${getHeadTags()}
-  <title>Settings - RoofReporterAI</title>
+  <title>Settings - Roof Manager</title>
 </head>
 <body class="bg-gray-50 min-h-screen">
   <header class="bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
       <div class="flex items-center space-x-3">
-        <img src="/static/logo.png" alt="RoofReporterAI" class="w-10 h-10 rounded-lg object-cover">
+        <img src="/static/logo.png" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
         <div>
           <h1 class="text-xl font-bold">Settings</h1>
           <p class="text-brand-200 text-xs">Company Profile, API Keys & Pricing</p>
@@ -2564,7 +2564,7 @@ function getCustomerLoginHTML() {
 <html lang="en">
 <head>
   ${getHeadTags()}
-  <title>Customer Login - RoofReporterAI</title>
+  <title>Customer Login - Roof Manager</title>
 </head>
 <body class="bg-gradient-to-br from-sky-100 via-blue-50 to-white min-h-screen flex items-center justify-center">
   <script>var _rp=new URLSearchParams(location.search).get('ref');if(_rp)localStorage.setItem('_ref_code',_rp);</script>
@@ -2572,9 +2572,9 @@ function getCustomerLoginHTML() {
     <!-- Logo -->
     <div class="text-center mb-8">
       <a href="/" class="inline-flex items-center gap-3">
-        <img src="/static/logo.png" alt="RoofReporterAI" class="w-12 h-12 rounded-xl object-cover shadow-lg">
+        <img src="/static/logo.png" alt="Roof Manager" class="w-12 h-12 rounded-xl object-cover shadow-lg">
         <div class="text-left">
-          <span class="text-gray-800 font-bold text-2xl block">RoofReporterAI</span>
+          <span class="text-gray-800 font-bold text-2xl block">Roof Manager</span>
           <span class="text-sky-600 text-xs">Customer Portal - Roof Reports & CRM</span>
         </div>
       </a>
@@ -2932,17 +2932,17 @@ function getCustomerDashboardHTML(adsensePublisherId: string = '') {
 <html lang="en">
 <head>
   ${getHeadTags()}
-  <title>My Dashboard - RoofReporterAI</title>
+  <title>My Dashboard - Roof Manager</title>
 </head>
 <body class="bg-gray-50 min-h-screen">
   <header class="bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
       <div class="flex items-center space-x-3">
         <a href="/" class="flex items-center space-x-3 hover:opacity-90 transition-opacity">
-          <img src="/static/logo.png" alt="RoofReporterAI" class="w-10 h-10 rounded-lg object-cover">
+          <img src="/static/logo.png" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
           <div>
             <h1 class="text-xl font-bold">My Dashboard</h1>
-            <p class="text-brand-200 text-xs">RoofReporterAI - Roof Reports & CRM</p>
+            <p class="text-brand-200 text-xs">Roof Manager - Roof Reports & CRM</p>
           </div>
         </a>
       </div>
@@ -2992,17 +2992,17 @@ function getCustomerInvoiceHTML() {
 <html lang="en">
 <head>
   ${getHeadTags()}
-  <title>Invoice - RoofReporterAI</title>
+  <title>Invoice - Roof Manager</title>
 </head>
 <body class="bg-gray-50 min-h-screen">
   <header class="bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
       <div class="flex items-center space-x-3">
         <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
-          <img src="/static/logo.png" alt="RoofReporterAI" class="w-10 h-10 rounded-lg object-cover">
+          <img src="/static/logo.png" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
           <div>
             <h1 class="text-xl font-bold">Invoice</h1>
-            <p class="text-brand-200 text-xs">RoofReporterAI</p>
+            <p class="text-brand-200 text-xs">Roof Manager</p>
           </div>
         </a>
       </div>
@@ -3034,27 +3034,27 @@ function getPricingPageHTML() {
 <html lang="en">
 <head>
   ${getHeadTags()}
-  <title>Roof Report Pricing — AI Measurements from $5/Report | RoofReporterAI</title>
-  <meta name="description" content="Compare RoofReporterAI pricing plans. Pay per report from $7 USD or save with credit packs (25 for $150, 100 for $500). Includes CRM, proposals, invoicing, and AI secretary. 3 free reports to start.">
+  <title>Roof Report Pricing — AI Measurements from $5/Report | Roof Manager</title>
+  <meta name="description" content="Compare Roof Manager pricing plans. Pay per report from $7 USD or save with credit packs (25 for $150, 100 for $500). Includes CRM, proposals, invoicing, and AI secretary. 3 free reports to start.">
   <link rel="canonical" href="https://roofmanager.ca/pricing">
   <meta property="og:title" content="Roof Report Pricing — From $5/Report (100-Pack)">
   <meta property="og:description" content="AI-powered roof measurement reports with full CRM. 3 free reports, then pay per report or buy credit packs.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://roofmanager.ca/pricing">
   <meta property="og:image" content="https://roofmanager.ca/static/logo.png">
-  <meta property="og:site_name" content="RoofReporterAI">
+  <meta property="og:site_name" content="Roof Manager">
   <meta name="twitter:card" content="summary">
-  <meta name="twitter:title" content="RoofReporterAI Pricing — From $5/Report">
+  <meta name="twitter:title" content="Roof Manager Pricing — From $5/Report">
   <meta name="twitter:description" content="AI roof measurements with full CRM. 3 free reports included.">
   <meta name="twitter:image" content="https://roofmanager.ca/static/logo.png">
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
     "@type": "Product",
-    "name": "RoofReporterAI Roof Measurement Reports",
+    "name": "Roof Manager Roof Measurement Reports",
     "description": "AI-powered satellite roof measurement reports with CRM, invoicing, proposals, and team management.",
     "image": "https://roofmanager.ca/static/logo.png",
-    "brand": {"@type": "Brand", "name": "RoofReporterAI"},
+    "brand": {"@type": "Brand", "name": "Roof Manager"},
     "offers": [
       {"@type": "Offer", "name": "Individual Report", "price": "7.00", "priceCurrency": "USD", "description": "Single roof measurement report"},
       {"@type": "Offer", "name": "25-Pack", "price": "150.00", "priceCurrency": "USD", "description": "25 roof measurement reports — $6/each (save 14%)"},
@@ -3067,8 +3067,8 @@ function getPricingPageHTML() {
   <nav class="bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
       <a href="/" class="flex items-center gap-3">
-        <img src="/static/logo.png" alt="RoofReporterAI" class="w-9 h-9 rounded-lg object-cover">
-        <span class="text-white font-bold text-lg">RoofReporterAI</span>
+        <img src="/static/logo.png" alt="Roof Manager" class="w-9 h-9 rounded-lg object-cover">
+        <span class="text-white font-bold text-lg">Roof Manager</span>
       </a>
       <div class="flex items-center gap-4">
         <a href="/" class="text-brand-200 hover:text-white text-sm">Home</a>
@@ -3100,15 +3100,15 @@ function getBlogListingHTML() {
 <html lang="en">
 <head>
   ${getHeadTags()}
-  <title>Blog - RoofReporterAI | Roofing Industry Insights & Tips</title>
-  <meta name="description" content="Expert roofing industry insights, measurement technology tips, contractor business guides, and more from RoofReporterAI.">
-  <meta property="og:title" content="RoofReporterAI Blog - Roofing Industry Insights">
+  <title>Blog - Roof Manager | Roofing Industry Insights & Tips</title>
+  <meta name="description" content="Expert roofing industry insights, measurement technology tips, contractor business guides, and more from Roof Manager.">
+  <meta property="og:title" content="Roof Manager Blog - Roofing Industry Insights">
   <meta property="og:description" content="Expert roofing industry insights, measurement technology tips, contractor business guides, and more.">
   <meta property="og:type" content="website">
   <meta property="og:image" content="https://roofmanager.ca/static/logo.png">
-  <meta property="og:site_name" content="RoofReporterAI">
+  <meta property="og:site_name" content="Roof Manager">
   <meta name="twitter:card" content="summary">
-  <meta name="twitter:title" content="RoofReporterAI Blog — Roofing Industry Insights">
+  <meta name="twitter:title" content="Roof Manager Blog — Roofing Industry Insights">
   <meta name="twitter:description" content="Expert roofing industry insights, measurement tips, and contractor business guides.">
   <meta name="twitter:image" content="https://roofmanager.ca/static/logo.png">
   <link rel="canonical" href="https://www.roofmanager.ca/blog">
@@ -3118,8 +3118,8 @@ function getBlogListingHTML() {
   <nav class="bg-slate-900 text-white sticky top-0 z-50">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
       <a href="/" class="flex items-center gap-3">
-        <img src="/static/logo.png" alt="RoofReporterAI" class="w-9 h-9 rounded-lg object-cover">
-        <span class="text-white font-bold text-lg tracking-tight">RoofReporterAI</span>
+        <img src="/static/logo.png" alt="Roof Manager" class="w-9 h-9 rounded-lg object-cover">
+        <span class="text-white font-bold text-lg tracking-tight">Roof Manager</span>
       </a>
       <div class="hidden md:flex items-center gap-5">
         <a href="/" class="text-gray-400 hover:text-white text-sm font-medium">Home</a>
@@ -3148,7 +3148,7 @@ function getBlogListingHTML() {
         <i class="fas fa-newspaper text-cyan-400 text-sm"></i>
         <span class="text-sm font-medium text-cyan-200">Industry Insights</span>
       </div>
-      <h1 class="text-4xl md:text-5xl font-black mb-4 tracking-tight">The RoofReporterAI Blog</h1>
+      <h1 class="text-4xl md:text-5xl font-black mb-4 tracking-tight">The Roof Manager Blog</h1>
       <p class="text-lg md:text-xl text-gray-300 max-w-2xl mx-auto leading-relaxed">Roofing industry insights, AI measurement technology, contractor business tips, and everything you need to grow your roofing business.</p>
       <div class="mt-8 flex flex-wrap justify-center gap-3" id="blog-categories-hero"></div>
     </div>
@@ -3211,8 +3211,8 @@ function getBlogListingHTML() {
     <div class="max-w-7xl mx-auto px-4 py-12">
       <div class="flex flex-col md:flex-row items-center justify-between gap-4">
         <div class="flex items-center gap-3">
-          <img src="/static/logo.png" alt="RoofReporterAI" class="w-8 h-8 rounded-lg object-cover">
-          <span class="text-gray-300 font-bold">RoofReporterAI</span>
+          <img src="/static/logo.png" alt="Roof Manager" class="w-8 h-8 rounded-lg object-cover">
+          <span class="text-gray-300 font-bold">Roof Manager</span>
         </div>
         <div class="flex items-center gap-6 text-sm">
           <a href="/" class="hover:text-cyan-400 transition-colors">Home</a>
@@ -3223,7 +3223,7 @@ function getBlogListingHTML() {
           <a href="/privacy" class="hover:text-cyan-400 transition-colors">Privacy</a>
           <a href="/terms" class="hover:text-cyan-400 transition-colors">Terms</a>
         </div>
-        <p class="text-xs text-gray-600">&copy; 2026 RoofReporterAI. All rights reserved.</p>
+        <p class="text-xs text-gray-600">&copy; 2026 Roof Manager. All rights reserved.</p>
       </div>
     </div>
   </footer>
@@ -3238,15 +3238,15 @@ function getBlogListingHTML() {
 // BLOG POST PAGE — Individual article view with SEO
 // ============================================================
 function getBlogPostHTML(post?: any, slug?: string) {
-  const title = post ? (post.meta_title || post.title) + ' — RoofReporterAI Blog' : 'Blog Post - RoofReporterAI'
+  const title = post ? (post.meta_title || post.title) + ' — Roof Manager Blog' : 'Blog Post - Roof Manager'
   const desc = post ? (post.meta_description || post.excerpt || '') : ''
   const image = post?.cover_image_url || 'https://roofmanager.ca/static/logo.png'
   const canonical = slug ? `https://www.roofmanager.ca/blog/${slug}` : ''
   const published = post?.published_at || ''
   const updated = post?.updated_at || ''
-  const author = post?.author_name || 'RoofReporterAI Team'
+  const author = post?.author_name || 'Roof Manager Team'
   const blogSchema = post ? `<script type="application/ld+json">
-  {"@context":"https://schema.org","@type":"BlogPosting","headline":"${(post.title || '').replace(/"/g, '\\"')}","description":"${(desc).replace(/"/g, '\\"')}","image":"${image}","datePublished":"${published}","dateModified":"${updated || published}","author":{"@type":"Organization","name":"${author}"},"publisher":{"@type":"Organization","name":"RoofReporterAI","logo":{"@type":"ImageObject","url":"https://roofmanager.ca/static/logo.png"}}}
+  {"@context":"https://schema.org","@type":"BlogPosting","headline":"${(post.title || '').replace(/"/g, '\\"')}","description":"${(desc).replace(/"/g, '\\"')}","image":"${image}","datePublished":"${published}","dateModified":"${updated || published}","author":{"@type":"Organization","name":"${author}"},"publisher":{"@type":"Organization","name":"Roof Manager","logo":{"@type":"ImageObject","url":"https://roofmanager.ca/static/logo.png"}}}
   </script>` : ''
   return `<!DOCTYPE html>
 <html lang="en">
@@ -3258,7 +3258,7 @@ function getBlogPostHTML(post?: any, slug?: string) {
   <meta property="og:title" content="${title.replace(/"/g, '&quot;')}">
   <meta property="og:description" content="${desc.replace(/"/g, '&quot;')}">
   <meta property="og:image" content="${image}">
-  <meta property="og:site_name" content="RoofReporterAI">
+  <meta property="og:site_name" content="Roof Manager">
   ${canonical ? `<link rel="canonical" href="${canonical}">` : ''}
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="${title.replace(/"/g, '&quot;')}">
@@ -3272,8 +3272,8 @@ function getBlogPostHTML(post?: any, slug?: string) {
   <nav class="bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg sticky top-0 z-50">
     <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
       <a href="/" class="flex items-center gap-3">
-        <img src="/static/logo.png" alt="RoofReporterAI" class="w-9 h-9 rounded-lg object-cover">
-        <span class="text-white font-bold text-lg">RoofReporterAI</span>
+        <img src="/static/logo.png" alt="Roof Manager" class="w-9 h-9 rounded-lg object-cover">
+        <span class="text-white font-bold text-lg">Roof Manager</span>
       </a>
       <div class="hidden md:flex items-center gap-5">
         <a href="/" class="text-brand-200 hover:text-white text-sm">Home</a>
@@ -3334,8 +3334,8 @@ function getBlogPostHTML(post?: any, slug?: string) {
     <div class="max-w-7xl mx-auto px-4 py-12">
       <div class="flex flex-col md:flex-row items-center justify-between gap-4">
         <div class="flex items-center gap-3">
-          <img src="/static/logo.png" alt="RoofReporterAI" class="w-8 h-8 rounded-lg object-cover">
-          <span class="text-gray-800 font-bold">RoofReporterAI</span>
+          <img src="/static/logo.png" alt="Roof Manager" class="w-8 h-8 rounded-lg object-cover">
+          <span class="text-gray-800 font-bold">Roof Manager</span>
         </div>
         <div class="flex items-center gap-6 text-sm">
           <a href="/" class="hover:text-sky-600">Home</a>
@@ -3344,7 +3344,7 @@ function getBlogPostHTML(post?: any, slug?: string) {
           <a href="/privacy" class="hover:text-sky-600">Privacy</a>
           <a href="/terms" class="hover:text-sky-600">Terms</a>
         </div>
-        <p class="text-xs text-gray-400">&copy; 2026 RoofReporterAI. All rights reserved.</p>
+        <p class="text-xs text-gray-400">&copy; 2026 Roof Manager. All rights reserved.</p>
       </div>
     </div>
   </footer>
@@ -3364,17 +3364,17 @@ function getLanderFunnelHTML() {
 <html lang="en">
 <head>
   ${getHeadTags()}
-  <title>Get Your Free Roof Measurement Report - RoofReporterAI</title>
+  <title>Get Your Free Roof Measurement Report - Roof Manager</title>
   <meta name="description" content="Professional satellite-powered roof measurement reports in under 60 seconds. Start with 3 FREE reports. No credit card required. Used by roofing contractors across Canada.">
-  <meta property="og:title" content="Free Roof Measurement Reports - RoofReporterAI">
+  <meta property="og:title" content="Free Roof Measurement Reports - Roof Manager">
   <meta property="og:description" content="Get accurate roof area, pitch, material BOM, and more in 60 seconds. 3 free reports. No credit card.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://roofmanager.ca/lander">
   <meta property="og:image" content="https://roofmanager.ca/static/logo.png">
-  <meta property="og:site_name" content="RoofReporterAI">
+  <meta property="og:site_name" content="Roof Manager">
   <link rel="canonical" href="https://www.roofmanager.ca/lander">
   <meta name="twitter:card" content="summary">
-  <meta name="twitter:title" content="Free Roof Measurement Reports — RoofReporterAI">
+  <meta name="twitter:title" content="Free Roof Measurement Reports — Roof Manager">
   <meta name="twitter:description" content="Get accurate roof area, pitch, material BOM in 60 seconds. 3 free reports, no credit card.">
   <meta name="twitter:image" content="https://roofmanager.ca/static/logo.png">
   <style>
@@ -3390,8 +3390,8 @@ function getLanderFunnelHTML() {
   <nav class="bg-slate-900 text-white">
     <div class="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
       <a href="/" class="flex items-center gap-2">
-        <img src="/static/logo.png" alt="RoofReporterAI" class="w-7 h-7 rounded-md object-cover">
-        <span class="text-white font-bold text-sm">RoofReporterAI</span>
+        <img src="/static/logo.png" alt="Roof Manager" class="w-7 h-7 rounded-md object-cover">
+        <span class="text-white font-bold text-sm">Roof Manager</span>
       </a>
       <a href="/customer/login" class="bg-gradient-to-r from-cyan-500 to-blue-500 text-white text-sm font-semibold py-1.5 px-4 rounded-lg hover:opacity-90 transition-opacity">Sign Up Free</a>
     </div>
@@ -3570,8 +3570,8 @@ function getLanderFunnelHTML() {
   <footer class="bg-slate-900 text-gray-500 py-8 border-t border-gray-800">
     <div class="max-w-4xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4">
       <div class="flex items-center gap-2">
-        <img src="/static/logo.png" alt="RoofReporterAI" class="w-6 h-6 rounded object-cover">
-        <span class="text-sm font-semibold text-gray-400">RoofReporterAI</span>
+        <img src="/static/logo.png" alt="Roof Manager" class="w-6 h-6 rounded object-cover">
+        <span class="text-sm font-semibold text-gray-400">Roof Manager</span>
       </div>
       <div class="flex items-center gap-6 text-sm">
         <a href="/" class="hover:text-cyan-400 transition-colors">Home</a>
@@ -3581,7 +3581,7 @@ function getLanderFunnelHTML() {
         <a href="/privacy" class="hover:text-cyan-400 transition-colors">Privacy</a>
         <a href="/terms" class="hover:text-cyan-400 transition-colors">Terms</a>
       </div>
-      <p class="text-xs">&copy; 2026 RoofReporterAI</p>
+      <p class="text-xs">&copy; 2026 Roof Manager</p>
     </div>
   </footer>
 
@@ -3619,17 +3619,17 @@ function getCustomerOrderPageHTML(mapsApiKey: string) {
 <html lang="en">
 <head>
   ${getHeadTags()}
-  <title>Order a Report - RoofReporterAI</title>
+  <title>Order a Report - Roof Manager</title>
   ${mapsScript}
 </head>
 <body class="bg-gray-50 min-h-screen">
   <header class="bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
       <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
-        <img src="/static/logo.png" alt="RoofReporterAI" class="w-10 h-10 rounded-lg object-cover">
+        <img src="/static/logo.png" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
         <div>
           <h1 class="text-xl font-bold">Order a Report</h1>
-          <p class="text-brand-200 text-xs">RoofReporterAI</p>
+          <p class="text-brand-200 text-xs">Roof Manager</p>
         </div>
       </a>
       <nav class="flex items-center space-x-4">
@@ -3661,14 +3661,14 @@ function getCustomerProfilePageHTML() {
 <html lang="en">
 <head>
   ${getHeadTags()}
-  <title>Account Settings - RoofReporterAI</title>
+  <title>Account Settings - Roof Manager</title>
 </head>
 <body class="bg-gray-50 min-h-screen">
   <header class="bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
       <div class="flex items-center space-x-3">
         <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
-          <img src="/static/logo.png" alt="RoofReporterAI" class="w-10 h-10 rounded-lg object-cover">
+          <img src="/static/logo.png" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
           <div>
             <h1 class="text-xl font-bold">Account Settings</h1>
             <p class="text-blue-200 text-xs">Manage your profile, branding &amp; preferences</p>
@@ -3711,14 +3711,14 @@ function getVirtualTryOnPageHTML() {
 <html lang="en">
 <head>
   ${getHeadTags()}
-  <title>Roof Visualizer - RoofReporterAI</title>
+  <title>Roof Visualizer - Roof Manager</title>
 </head>
 <body class="bg-gray-50 min-h-screen">
   <header class="bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
       <div class="flex items-center space-x-3">
         <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
-          <img src="/static/logo.png" alt="RoofReporterAI" class="w-10 h-10 rounded-lg object-cover">
+          <img src="/static/logo.png" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
           <div>
             <h1 class="text-lg font-bold">Roof Visualizer</h1>
             <p class="text-brand-200 text-xs">AI-Powered Material &amp; Color Preview</p>
@@ -3768,14 +3768,14 @@ function getTeamManagementPageHTML() {
 <html lang="en">
 <head>
   ${getHeadTags()}
-  <title>Team Management - RoofReporterAI</title>
+  <title>Team Management - Roof Manager</title>
 </head>
 <body class="bg-gray-50 min-h-screen">
   <header class="bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
       <div class="flex items-center space-x-3">
         <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
-          <img src="/static/logo.png" alt="RoofReporterAI" class="w-10 h-10 rounded-lg object-cover">
+          <img src="/static/logo.png" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
           <div>
             <h1 class="text-lg font-bold">Team Management</h1>
             <p class="text-brand-200 text-xs">Add sales team members - $50/user/month</p>
@@ -3825,16 +3825,16 @@ function getJoinTeamPageHTML() {
 <html lang="en">
 <head>
   ${getHeadTags()}
-  <title>Join Team - RoofReporterAI</title>
+  <title>Join Team - Roof Manager</title>
 </head>
 <body class="bg-gray-50 min-h-screen">
   <header class="bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
       <a href="/" class="flex items-center space-x-3">
-        <img src="/static/logo.png" alt="RoofReporterAI" class="w-10 h-10 rounded-lg object-cover">
+        <img src="/static/logo.png" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
         <div>
           <h1 class="text-xl font-bold">Team Invitation</h1>
-          <p class="text-brand-200 text-xs">RoofReporterAI</p>
+          <p class="text-brand-200 text-xs">Roof Manager</p>
         </div>
       </a>
     </div>
@@ -3938,14 +3938,14 @@ function getSelectTypePageHTML() {
 <html lang="en">
 <head>
   ${getHeadTags()}
-  <title>Select Company Type - RoofReporterAI</title>
+  <title>Select Company Type - Roof Manager</title>
 </head>
 <body class="bg-gray-50 min-h-screen flex flex-col">
   <header class="bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-4 flex items-center">
-      <img src="/static/logo.png" alt="RoofReporterAI" class="w-10 h-10 rounded-lg object-cover mr-3">
+      <img src="/static/logo.png" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover mr-3">
       <div>
-        <h1 class="text-xl font-bold">RoofReporterAI</h1>
+        <h1 class="text-xl font-bold">Roof Manager</h1>
         <p class="text-brand-200 text-xs">Measurement &amp; Proposal Platform</p>
       </div>
     </div>
@@ -4024,14 +4024,14 @@ function getSolarDesignPageHTML() {
 <html lang="en">
 <head>
   ${getHeadTags()}
-  <title>Solar Panel Design - RoofReporterAI</title>
+  <title>Solar Panel Design - Roof Manager</title>
 </head>
 <body class="bg-gray-900 min-h-screen">
   <header class="bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
       <div class="flex items-center space-x-3">
         <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
-          <img src="/static/logo.png" alt="RoofReporterAI" class="w-10 h-10 rounded-lg object-cover">
+          <img src="/static/logo.png" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
           <div>
             <h1 class="text-lg font-bold">Solar Panel Design</h1>
             <p class="text-amber-100 text-xs">Click to place panels on the roof</p>
@@ -4093,7 +4093,7 @@ function getD2DPageHTML(mapsApiKey: string) {
 <html lang="en">
 <head>
   ${getHeadTags()}
-  <title>D2D Manager - RoofReporterAI</title>
+  <title>D2D Manager - Roof Manager</title>
   ${mapsScript}
   <link rel="stylesheet" href="/static/d2d-module.css?v=${Date.now()}">
 </head>
@@ -4102,10 +4102,10 @@ function getD2DPageHTML(mapsApiKey: string) {
     <div class="max-w-full mx-auto px-4 py-3 flex items-center justify-between">
       <div class="flex items-center space-x-3">
         <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
-          <img src="/static/logo.png" alt="RoofReporterAI" class="w-10 h-10 rounded-lg object-cover">
+          <img src="/static/logo.png" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
           <div>
             <h1 class="text-lg font-bold">D2D Manager</h1>
-            <p class="text-brand-200 text-xs">RoofReporterAI</p>
+            <p class="text-brand-200 text-xs">Roof Manager</p>
           </div>
         </a>
       </div>
@@ -4165,7 +4165,7 @@ function getPropertyImageryPageHTML(mapsApiKey: string) {
 <html lang="en">
 <head>
   ${getHeadTags()}
-  <title>Property Imagery - RoofReporterAI (Dev Tool)</title>
+  <title>Property Imagery - Roof Manager (Dev Tool)</title>
   ${mapsScript}
 </head>
 <body class="bg-gray-50 min-h-screen">
@@ -4173,10 +4173,10 @@ function getPropertyImageryPageHTML(mapsApiKey: string) {
     <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
       <div class="flex items-center space-x-3">
         <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90 transition-opacity">
-          <img src="/static/logo.png" alt="RoofReporterAI" class="w-10 h-10 rounded-lg object-cover shadow-lg">
+          <img src="/static/logo.png" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover shadow-lg">
           <div>
             <h1 class="text-xl font-bold">Property Imagery</h1>
-            <p class="text-emerald-200 text-xs">Dev Tool — RoofReporterAI</p>
+            <p class="text-emerald-200 text-xs">Dev Tool — Roof Manager</p>
           </div>
         </a>
       </div>
@@ -4218,17 +4218,17 @@ function getCrmSubPageHTML(module: string, title: string, icon: string) {
 <html lang="en">
 <head>
   ${getHeadTags()}
-  <title>${title} - RoofReporterAI</title>
+  <title>${title} - Roof Manager</title>
 </head>
 <body class="bg-gray-50 min-h-screen">
   <header class="bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
       <div class="flex items-center space-x-3">
         <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
-          <img src="/static/logo.png" alt="RoofReporterAI" class="w-10 h-10 rounded-lg object-cover">
+          <img src="/static/logo.png" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
           <div>
             <h1 class="text-lg font-bold">${title}</h1>
-            <p class="text-brand-200 text-xs">RoofReporterAI</p>
+            <p class="text-brand-200 text-xs">Roof Manager</p>
           </div>
         </a>
       </div>
@@ -4276,14 +4276,14 @@ function getSecretaryPageHTML() {
 <html lang="en">
 <head>
   ${getHeadTags()}
-  <title>Roofer Secretary - RoofReporterAI</title>
+  <title>Roofer Secretary - Roof Manager</title>
 </head>
 <body class="bg-gray-50 min-h-screen">
   <header class="bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
       <div class="flex items-center space-x-3">
         <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
-          <img src="/static/logo.png" alt="RoofReporterAI" class="w-10 h-10 rounded-lg object-cover">
+          <img src="/static/logo.png" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
           <div>
             <h1 class="text-lg font-bold">Roofer Secretary</h1>
             <p class="text-brand-200 text-xs">AI Phone Answering Service</p>
@@ -4729,7 +4729,7 @@ print(decoded)
       <!-- Footer -->
       <footer class="text-center text-xs text-gray-400 py-8 border-t border-gray-200 mt-8">
         <p>Gemma 3 Model Card &mdash; Data compiled from public Google DeepMind documentation.</p>
-        <p class="mt-1">Served by <a href="/" class="text-google-blue hover:underline">RoofReporterAI</a> on Cloudflare Pages.</p>
+        <p class="mt-1">Served by <a href="/" class="text-google-blue hover:underline">Roof Manager</a> on Cloudflare Pages.</p>
       </footer>
 
     </main>
@@ -5015,14 +5015,14 @@ function getProposalBuilderPageHTML(mapsApiKey: string) {
 <html lang="en">
 <head>
   ${getHeadTags()}
-  <title>Proposal Builder - RoofReporterAI</title>
+  <title>Proposal Builder - Roof Manager</title>
   ${mapsApiKey ? `<script src="https://maps.googleapis.com/maps/api/js?key=${mapsApiKey}&libraries=places"></script>` : ''}
 </head>
 <body class="bg-gray-50 min-h-screen">
   <header class="bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
       <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
-        <img src="/static/logo.png" alt="RoofReporterAI" class="w-10 h-10 rounded-lg object-cover">
+        <img src="/static/logo.png" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
         <div><h1 class="text-xl font-bold">Proposal Builder</h1><p class="text-brand-200 text-xs">Create professional roofing proposals</p></div>
       </a>
       <a href="/customer/proposals" class="text-brand-200 hover:text-white text-sm"><i class="fas fa-arrow-left mr-1"></i>Back to Proposals</a>
@@ -5047,13 +5047,13 @@ function getInvoiceManagerPageHTML() {
 <html lang="en">
 <head>
   ${getHeadTags()}
-  <title>Invoice Manager - RoofReporterAI</title>
+  <title>Invoice Manager - Roof Manager</title>
 </head>
 <body class="bg-gray-50 min-h-screen">
   <header class="bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
       <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
-        <img src="/static/logo.png" alt="RoofReporterAI" class="w-10 h-10 rounded-lg object-cover">
+        <img src="/static/logo.png" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
         <div><h1 class="text-xl font-bold">Invoice Manager</h1><p class="text-brand-200 text-xs">Create & manage invoices with Square payment</p></div>
       </a>
       <a href="/customer/invoices" class="text-brand-200 hover:text-white text-sm"><i class="fas fa-arrow-left mr-1"></i>Back to Invoices</a>
@@ -5075,14 +5075,14 @@ function getPrivacyPageHTML() {
 <html lang="en">
 <head>
   ${getHeadTags()}
-  <title>Privacy Policy — RoofReporterAI</title>
+  <title>Privacy Policy — Roof Manager</title>
 </head>
 <body class="bg-gray-50 text-gray-800">
   <header class="bg-white border-b border-gray-200 sticky top-0 z-50">
     <div class="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
       <a href="/" class="flex items-center gap-3">
-        <img src="/static/logo.png" alt="RoofReporterAI" class="w-9 h-9 rounded-lg object-cover">
-        <span class="font-bold text-lg text-gray-900">RoofReporterAI</span>
+        <img src="/static/logo.png" alt="Roof Manager" class="w-9 h-9 rounded-lg object-cover">
+        <span class="font-bold text-lg text-gray-900">Roof Manager</span>
       </a>
       <a href="/" class="text-sm text-gray-500 hover:text-gray-700"><i class="fas fa-arrow-left mr-1"></i>Back to Home</a>
     </div>
@@ -5095,7 +5095,7 @@ function getPrivacyPageHTML() {
 
       <section>
         <h2 class="text-xl font-semibold text-gray-900 mb-3">1. Who We Are</h2>
-        <p class="text-gray-600 leading-relaxed">RoofReporterAI ("we", "our", "us") is a roofing measurement and business management platform operated from Alberta, Canada. We provide AI-powered roof measurement reports, CRM tools, invoicing, and a voice AI receptionist service to roofing professionals. Our website is <a href="https://www.roofmanager.ca" class="text-brand-600 hover:underline">https://www.roofmanager.ca</a>. For privacy inquiries, contact us at <a href="mailto:privacy@roofmanager.ca" class="text-brand-600 hover:underline">privacy@roofmanager.ca</a>.</p>
+        <p class="text-gray-600 leading-relaxed">Roof Manager ("we", "our", "us") is a roofing measurement and business management platform operated from Alberta, Canada. We provide AI-powered roof measurement reports, CRM tools, invoicing, and a voice AI receptionist service to roofing professionals. Our website is <a href="https://www.roofmanager.ca" class="text-brand-600 hover:underline">https://www.roofmanager.ca</a>. For privacy inquiries, contact us at <a href="mailto:privacy@roofmanager.ca" class="text-brand-600 hover:underline">privacy@roofmanager.ca</a>.</p>
       </section>
 
       <section>
@@ -5111,15 +5111,15 @@ function getPrivacyPageHTML() {
 
       <section>
         <h2 class="text-xl font-semibold text-gray-900 mb-3">3. Google Gmail Integration and the <code class="bg-gray-100 px-1.5 py-0.5 rounded text-sm">gmail.send</code> Permission</h2>
-        <p class="text-gray-600 leading-relaxed mb-3">RoofReporterAI offers an <strong>optional</strong> Gmail integration that allows you to send roof measurement reports, proposals, and invoices from your own Gmail address on your behalf.</p>
+        <p class="text-gray-600 leading-relaxed mb-3">Roof Manager offers an <strong>optional</strong> Gmail integration that allows you to send roof measurement reports, proposals, and invoices from your own Gmail address on your behalf.</p>
         <div class="bg-brand-50 border border-brand-200 rounded-xl p-5 mb-3">
           <p class="text-brand-900 font-medium mb-1">Scope requested: <code class="bg-brand-100 px-1.5 py-0.5 rounded text-sm">gmail.send</code> only</p>
-          <p class="text-brand-800 text-sm leading-relaxed">When you connect your Gmail account, RoofReporterAI requests the <code>gmail.send</code> permission only. This allows us to send roof measurement reports, proposals, and invoices from your Gmail address on your behalf. We store only your Gmail OAuth refresh token, encrypted in our database. We never read, access, index, or store the contents of your emails or inbox.</p>
+          <p class="text-brand-800 text-sm leading-relaxed">When you connect your Gmail account, Roof Manager requests the <code>gmail.send</code> permission only. This allows us to send roof measurement reports, proposals, and invoices from your Gmail address on your behalf. We store only your Gmail OAuth refresh token, encrypted in our database. We never read, access, index, or store the contents of your emails or inbox.</p>
         </div>
         <ul class="list-disc list-inside space-y-2 text-gray-600 text-sm">
           <li>This integration is entirely optional. The platform works fully without it.</li>
           <li>You may revoke access at any time at <a href="https://myaccount.google.com/permissions" class="text-brand-600 hover:underline" target="_blank" rel="noopener">myaccount.google.com/permissions</a>.</li>
-          <li>We do not use your Gmail token for any purpose other than sending emails you explicitly trigger within RoofReporterAI.</li>
+          <li>We do not use your Gmail token for any purpose other than sending emails you explicitly trigger within Roof Manager.</li>
         </ul>
       </section>
 
@@ -5180,7 +5180,7 @@ function getPrivacyPageHTML() {
 
       <section>
         <h2 class="text-xl font-semibold text-gray-900 mb-3">11. Contact</h2>
-        <p class="text-gray-600 leading-relaxed">For any privacy-related questions or requests, contact:<br><strong>RoofReporterAI</strong><br>Alberta, Canada<br><a href="mailto:privacy@roofmanager.ca" class="text-brand-600 hover:underline">privacy@roofmanager.ca</a></p>
+        <p class="text-gray-600 leading-relaxed">For any privacy-related questions or requests, contact:<br><strong>Roof Manager</strong><br>Alberta, Canada<br><a href="mailto:privacy@roofmanager.ca" class="text-brand-600 hover:underline">privacy@roofmanager.ca</a></p>
       </section>
 
     </div>
@@ -5188,8 +5188,8 @@ function getPrivacyPageHTML() {
   <footer class="bg-slate-900 text-gray-500 py-8 border-t border-gray-800 mt-12">
     <div class="max-w-4xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4">
       <div class="flex items-center gap-2">
-        <img src="/static/logo.png" alt="RoofReporterAI" class="w-6 h-6 rounded object-cover">
-        <span class="text-sm font-semibold text-gray-400">RoofReporterAI</span>
+        <img src="/static/logo.png" alt="Roof Manager" class="w-6 h-6 rounded object-cover">
+        <span class="text-sm font-semibold text-gray-400">Roof Manager</span>
       </div>
       <div class="flex items-center gap-6 text-sm">
         <a href="/" class="hover:text-cyan-400 transition-colors">Home</a>
@@ -5197,7 +5197,7 @@ function getPrivacyPageHTML() {
         <a href="/terms" class="hover:text-cyan-400 transition-colors">Terms of Service</a>
         <a href="/customer/login" class="hover:text-cyan-400 transition-colors">Login</a>
       </div>
-      <p class="text-xs">&copy; 2026 RoofReporterAI</p>
+      <p class="text-xs">&copy; 2026 Roof Manager</p>
     </div>
   </footer>
 </body>
@@ -5209,14 +5209,14 @@ function getTermsPageHTML() {
 <html lang="en">
 <head>
   ${getHeadTags()}
-  <title>Terms of Service — RoofReporterAI</title>
+  <title>Terms of Service — Roof Manager</title>
 </head>
 <body class="bg-gray-50 text-gray-800">
   <header class="bg-white border-b border-gray-200 sticky top-0 z-50">
     <div class="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
       <a href="/" class="flex items-center gap-3">
-        <img src="/static/logo.png" alt="RoofReporterAI" class="w-9 h-9 rounded-lg object-cover">
-        <span class="font-bold text-lg text-gray-900">RoofReporterAI</span>
+        <img src="/static/logo.png" alt="Roof Manager" class="w-9 h-9 rounded-lg object-cover">
+        <span class="font-bold text-lg text-gray-900">Roof Manager</span>
       </a>
       <a href="/" class="text-sm text-gray-500 hover:text-gray-700"><i class="fas fa-arrow-left mr-1"></i>Back to Home</a>
     </div>
@@ -5229,12 +5229,12 @@ function getTermsPageHTML() {
 
       <section>
         <h2 class="text-xl font-semibold text-gray-900 mb-3">1. Acceptance of Terms</h2>
-        <p class="text-gray-600 leading-relaxed">By creating an account or using RoofReporterAI ("Service"), you agree to be bound by these Terms of Service. If you do not agree, do not use the Service. These terms are governed by the laws of Alberta, Canada.</p>
+        <p class="text-gray-600 leading-relaxed">By creating an account or using Roof Manager ("Service"), you agree to be bound by these Terms of Service. If you do not agree, do not use the Service. These terms are governed by the laws of Alberta, Canada.</p>
       </section>
 
       <section>
         <h2 class="text-xl font-semibold text-gray-900 mb-3">2. Description of Service</h2>
-        <p class="text-gray-600 leading-relaxed mb-3">RoofReporterAI provides roofing professionals with:</p>
+        <p class="text-gray-600 leading-relaxed mb-3">Roof Manager provides roofing professionals with:</p>
         <ul class="list-disc list-inside space-y-2 text-gray-600">
           <li>AI-powered roof measurement reports generated from satellite imagery and Google Solar API data.</li>
           <li>A customer relationship management (CRM) system for managing leads, jobs, and customers.</li>
@@ -5280,22 +5280,22 @@ function getTermsPageHTML() {
 
       <section>
         <h2 class="text-xl font-semibold text-gray-900 mb-3">7. Accuracy of Reports</h2>
-        <p class="text-gray-600 leading-relaxed">Roof measurement reports are generated using satellite imagery, AI vision analysis, and geospatial modeling. While we strive for accuracy, reports are <strong>estimates</strong> intended as a professional starting point. Always verify measurements on-site before ordering materials or submitting insurance claims. RoofReporterAI is not liable for losses resulting from reliance on report estimates without field verification.</p>
+        <p class="text-gray-600 leading-relaxed">Roof measurement reports are generated using satellite imagery, AI vision analysis, and geospatial modeling. While we strive for accuracy, reports are <strong>estimates</strong> intended as a professional starting point. Always verify measurements on-site before ordering materials or submitting insurance claims. Roof Manager is not liable for losses resulting from reliance on report estimates without field verification.</p>
       </section>
 
       <section>
         <h2 class="text-xl font-semibold text-gray-900 mb-3">8. Gmail Integration</h2>
-        <p class="text-gray-600 leading-relaxed">The optional Gmail integration uses the <code class="bg-gray-100 px-1.5 py-0.5 rounded text-sm">gmail.send</code> scope to send emails on your behalf. By connecting your Gmail account, you authorize RoofReporterAI to send emails from your address when you explicitly trigger a send action within the platform. You may revoke this authorization at any time via your Google account settings.</p>
+        <p class="text-gray-600 leading-relaxed">The optional Gmail integration uses the <code class="bg-gray-100 px-1.5 py-0.5 rounded text-sm">gmail.send</code> scope to send emails on your behalf. By connecting your Gmail account, you authorize Roof Manager to send emails from your address when you explicitly trigger a send action within the platform. You may revoke this authorization at any time via your Google account settings.</p>
       </section>
 
       <section>
         <h2 class="text-xl font-semibold text-gray-900 mb-3">9. Intellectual Property</h2>
-        <p class="text-gray-600 leading-relaxed">You retain ownership of the property addresses and business data you input. RoofReporterAI retains ownership of the platform, AI models, measurement algorithms, and generated report templates. You are granted a non-exclusive, non-transferable license to use the reports for your roofing business activities.</p>
+        <p class="text-gray-600 leading-relaxed">You retain ownership of the property addresses and business data you input. Roof Manager retains ownership of the platform, AI models, measurement algorithms, and generated report templates. You are granted a non-exclusive, non-transferable license to use the reports for your roofing business activities.</p>
       </section>
 
       <section>
         <h2 class="text-xl font-semibold text-gray-900 mb-3">10. Limitation of Liability</h2>
-        <p class="text-gray-600 leading-relaxed">To the maximum extent permitted by applicable law, RoofReporterAI shall not be liable for any indirect, incidental, special, consequential, or punitive damages arising from your use of the Service, including but not limited to lost profits, data loss, or business interruption. Our total cumulative liability shall not exceed the amount you paid to us in the 30 days preceding the claim.</p>
+        <p class="text-gray-600 leading-relaxed">To the maximum extent permitted by applicable law, Roof Manager shall not be liable for any indirect, incidental, special, consequential, or punitive damages arising from your use of the Service, including but not limited to lost profits, data loss, or business interruption. Our total cumulative liability shall not exceed the amount you paid to us in the 30 days preceding the claim.</p>
       </section>
 
       <section>
@@ -5310,7 +5310,7 @@ function getTermsPageHTML() {
 
       <section>
         <h2 class="text-xl font-semibold text-gray-900 mb-3">13. Contact</h2>
-        <p class="text-gray-600 leading-relaxed"><strong>RoofReporterAI</strong><br>Alberta, Canada<br><a href="mailto:support@roofmanager.ca" class="text-brand-600 hover:underline">support@roofmanager.ca</a></p>
+        <p class="text-gray-600 leading-relaxed"><strong>Roof Manager</strong><br>Alberta, Canada<br><a href="mailto:support@roofmanager.ca" class="text-brand-600 hover:underline">support@roofmanager.ca</a></p>
       </section>
 
     </div>
@@ -5318,8 +5318,8 @@ function getTermsPageHTML() {
   <footer class="bg-slate-900 text-gray-500 py-8 border-t border-gray-800 mt-12">
     <div class="max-w-4xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4">
       <div class="flex items-center gap-2">
-        <img src="/static/logo.png" alt="RoofReporterAI" class="w-6 h-6 rounded object-cover">
-        <span class="text-sm font-semibold text-gray-400">RoofReporterAI</span>
+        <img src="/static/logo.png" alt="Roof Manager" class="w-6 h-6 rounded object-cover">
+        <span class="text-sm font-semibold text-gray-400">Roof Manager</span>
       </div>
       <div class="flex items-center gap-6 text-sm">
         <a href="/" class="hover:text-cyan-400 transition-colors">Home</a>
@@ -5327,7 +5327,7 @@ function getTermsPageHTML() {
         <a href="/terms" class="text-cyan-400 font-semibold">Terms of Service</a>
         <a href="/customer/login" class="hover:text-cyan-400 transition-colors">Login</a>
       </div>
-      <p class="text-xs">&copy; 2026 RoofReporterAI</p>
+      <p class="text-xs">&copy; 2026 Roof Manager</p>
     </div>
   </footer>
 </body>
@@ -5339,7 +5339,7 @@ function getMaterialCalculatorPageHTML() {
 <html lang="en">
 <head>
   ${getHeadTags()}
-  <title>Material Calculator - RoofReporterAI</title>
+  <title>Material Calculator - Roof Manager</title>
   <style>
     @media print {
       header, #mc-waste-controls, #mc-action-bar, nav { display: none !important; }
@@ -5352,10 +5352,10 @@ function getMaterialCalculatorPageHTML() {
   <header class="bg-gradient-to-r from-sky-600 to-blue-700 text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
       <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
-        <img src="/static/logo.png" alt="RoofReporterAI" class="w-10 h-10 rounded-lg object-cover">
+        <img src="/static/logo.png" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
         <div>
           <h1 class="text-lg font-bold leading-tight">Material Calculator</h1>
-          <p class="text-sky-200 text-xs">RoofReporterAI</p>
+          <p class="text-sky-200 text-xs">Roof Manager</p>
         </div>
       </a>
       <nav class="flex items-center space-x-4">
@@ -5401,17 +5401,17 @@ function getWebsiteBuilderPageHTML() {
 <html lang="en">
 <head>
   ${getHeadTags()}
-  <title>AI Website Builder - RoofReporterAI</title>
+  <title>AI Website Builder - Roof Manager</title>
 </head>
 <body class="bg-gray-50 min-h-screen">
   <header class="bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
       <div class="flex items-center space-x-3">
         <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
-          <img src="/static/logo.png" alt="RoofReporterAI" class="w-10 h-10 rounded-lg object-cover">
+          <img src="/static/logo.png" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
           <div>
             <h1 class="text-lg font-bold">AI Website Builder</h1>
-            <p class="text-brand-200 text-xs">RoofReporterAI</p>
+            <p class="text-brand-200 text-xs">Roof Manager</p>
           </div>
         </a>
       </div>

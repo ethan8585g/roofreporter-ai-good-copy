@@ -1,10 +1,10 @@
-# Gemini Codebase Guide: RoofReporterAI
+# Gemini Codebase Guide: Roof Manager
 
-This document provides a comprehensive overview of the RoofReporterAI codebase, architecture, and key features to assist Large Language Models in understanding and modifying the code.
+This document provides a comprehensive overview of the Roof Manager codebase, architecture, and key features to assist Large Language Models in understanding and modifying the code.
 
 ## Project Overview
 
-RoofReporterAI is a comprehensive business management CRM for roofing companies. It provides a suite of tools to help roofers manage their business, including generating roof measurement reports, sending invoices, and managing customer relationships. The platform is built as a modern, serverless web application with a strong focus on AI-powered features.
+Roof Manager is a comprehensive business management CRM for roofing companies. It provides a suite of tools to help roofers manage their business, including generating roof measurement reports, sending invoices, and managing customer relationships. The platform is built as a modern, serverless web application with a strong focus on AI-powered features.
 
 The application is available at [www.roofmanager.ca](https://www.roofmanager.ca).
 
@@ -55,7 +55,7 @@ The migration history shows the addition of tables for features like the blog, A
 
 ## AI Integrations
 
-RoofReporterAI has a deep integration with various AI technologies:
+Roof Manager has a deep integration with various AI technologies:
 
 *   **Google Solar API**: Used for getting roof data and imagery. Health checks for this API are available at `/api/health/solar`.
 *   **Google Gemini**: The application uses the Gemini API for various tasks, including report enhancement. The Gemini health check is at `/api/health/gemini`.

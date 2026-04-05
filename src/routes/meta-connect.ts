@@ -1,5 +1,5 @@
 // ============================================================
-// RoofReporterAI — Meta Connect (Facebook/Instagram Integration)
+// Roof Manager — Meta Connect (Facebook/Instagram Integration)
 // Super Admin only — mass group posting, Meta Ads, scheduling
 // ALL operations chunked to avoid Cloudflare Workers timeout
 // ============================================================

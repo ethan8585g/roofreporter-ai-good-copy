@@ -1,7 +1,7 @@
-# RoofReporterAI — Professional Roof Measurement & Sales Platform
+# Roof Manager — Professional Roof Measurement & Sales Platform
 
 ## Project Overview
-- **Name**: RoofReporterAI
+- **Name**: Roof Manager
 - **Version**: 12.1 (CC Schema Fix, Banner Removal, Call Log Hardening)
 - **Domain**: www.roofmanager.ca
 - **Production**: https://roofing-measurement-tool.pages.dev

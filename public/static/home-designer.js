@@ -1,5 +1,5 @@
 // ============================================================
-// RoofReporterAI — Home Designer Frontend v2.0 (Hover-Style)
+// Roof Manager — Home Designer Frontend v2.0 (Hover-Style)
 //
 // Professional home visualization with AI roof recoloring,
 // before/after comparison slider, and 2D bird's-eye diagrams.
@@ -857,7 +857,7 @@
 
         // Disclaimer
         '<div class="text-center pb-4">' +
-          '<p class="text-[10px] text-gray-400 max-w-2xl mx-auto"><i class="fas fa-info-circle mr-1"></i>AI-generated visualization for presentation purposes. Actual installed roofing may vary. Pricing is estimated — contact for a detailed quote. Powered by RoofReporterAI + SAM 3 + Gemini.</p>' +
+          '<p class="text-[10px] text-gray-400 max-w-2xl mx-auto"><i class="fas fa-info-circle mr-1"></i>AI-generated visualization for presentation purposes. Actual installed roofing may vary. Pricing is estimated — contact for a detailed quote. Powered by Roof Manager + SAM 3 + Gemini.</p>' +
         '</div>' +
 
       '</div>';

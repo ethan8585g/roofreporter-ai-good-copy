@@ -64,7 +64,7 @@ agentsRoutes.post('/leads', async (c) => {
       const leadHtml = `
 <div style="max-width:600px;margin:0 auto;font-family:Inter,system-ui,sans-serif">
   <div style="background:#0f172a;padding:24px;border-radius:12px 12px 0 0">
-    <h1 style="color:#38bdf8;font-size:18px;margin:0">🔔 New Lead from RoofReporterAI</h1>
+    <h1 style="color:#38bdf8;font-size:18px;margin:0">🔔 New Lead from Roof Manager</h1>
     <p style="color:#94a3b8;font-size:13px;margin:4px 0 0">Source: ${source_page || 'website'}</p>
   </div>
   <div style="background:white;padding:24px;border:1px solid #e2e8f0;border-top:none">

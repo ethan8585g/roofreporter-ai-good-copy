@@ -44,7 +44,7 @@ async function ensureTables(db: D1Database) {
     )`,
     `CREATE TABLE IF NOT EXISTS email_campaigns (
       id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, subject TEXT NOT NULL,
-      from_name TEXT DEFAULT 'RoofReporterAI', from_email TEXT, reply_to TEXT,
+      from_name TEXT DEFAULT 'Roof Manager', from_email TEXT, reply_to TEXT,
       body_html TEXT NOT NULL, body_text TEXT, list_ids TEXT NOT NULL,
       status TEXT DEFAULT 'draft', scheduled_at DATETIME, started_at DATETIME, completed_at DATETIME,
       total_recipients INTEGER DEFAULT 0, sent_count INTEGER DEFAULT 0, failed_count INTEGER DEFAULT 0,
@@ -384,7 +384,7 @@ emailOutreachRoutes.post('/campaigns', async (c) => {
       INSERT INTO email_campaigns (name, subject, from_name, from_email, reply_to, body_html, body_text, list_ids, send_rate_per_minute, notes)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
-      name, subject, from_name || 'RoofReporterAI', from_email || '', reply_to || '',
+      name, subject, from_name || 'Roof Manager', from_email || '', reply_to || '',
       body_html, body_text || '', listIdsStr, send_rate_per_minute || 10, notes || ''
     ).run()
 
@@ -409,7 +409,7 @@ emailOutreachRoutes.put('/campaigns/:id', async (c) => {
       UPDATE email_campaigns SET name=?, subject=?, from_name=?, from_email=?, reply_to=?,
         body_html=?, body_text=?, list_ids=?, send_rate_per_minute=?, notes=?, updated_at=datetime('now')
       WHERE id = ?
-    `).bind(name, subject, from_name || 'RoofReporterAI', from_email || '', reply_to || '', body_html, body_text || '', listIdsStr, send_rate_per_minute || 10, notes || '', id).run()
+    `).bind(name, subject, from_name || 'Roof Manager', from_email || '', reply_to || '', body_html, body_text || '', listIdsStr, send_rate_per_minute || 10, notes || '', id).run()
 
     return c.json({ success: true })
   } catch (err: any) {
@@ -484,7 +484,7 @@ emailOutreachRoutes.post('/campaigns/:id/send', async (c) => {
     } catch {}
 
     const senderEmail = campaign.from_email || (c.env as any).GMAIL_SENDER_EMAIL || 'sales@roofmanager.ca'
-    const senderName = campaign.from_name || 'RoofReporterAI'
+    const senderName = campaign.from_name || 'Roof Manager'
 
     let sentCount = 0
     let failedCount = 0
@@ -668,7 +668,7 @@ emailOutreachRoutes.post('/campaigns/:id/test', async (c) => {
 
     const resendKey = (c.env as any).RESEND_API_KEY
     const senderEmail = campaign.from_email || (c.env as any).GMAIL_SENDER_EMAIL || 'sales@roofmanager.ca'
-    const senderName = campaign.from_name || 'RoofReporterAI'
+    const senderName = campaign.from_name || 'Roof Manager'
 
     // Replace merge tags with test data
     const html = campaign.body_html
@@ -936,7 +936,7 @@ h1{color:#111;font-size:24px;margin-bottom:8px}p{color:#6b7280;font-size:14px;li
 .check{width:64px;height:64px;background:#dcfce7;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;font-size:28px}</style>
 </head><body><div class="card"><div class="check">✓</div><h1>You've been unsubscribed</h1>
 <p><strong>${email}</strong> has been removed from our mailing list.</p>
-<p>You will no longer receive marketing emails from RoofReporterAI.</p>
+<p>You will no longer receive marketing emails from Roof Manager.</p>
 <p style="color:#9ca3af;font-size:12px;margin-top:24px">If this was a mistake, contact sales@roofmanager.ca</p>
 </div></body></html>`)
 })

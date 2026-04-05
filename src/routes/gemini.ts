@@ -1,5 +1,5 @@
 // ============================================================
-// RoofReporterAI — Gemini AI Integration
+// Roof Manager — Gemini AI Integration
 // Powered by Google Gemini API (REST — Cloudflare Workers compatible)
 // ============================================================
 // POST /api/gemini/chat           — General AI chat (streaming-ready)
@@ -273,7 +273,7 @@ geminiRoutes.post('/chat', async (c) => {
     liveStats = `\nLive Stats: ${custCount?.c || 0} active customers, ${orderCount?.c || 0} orders, ${secCount?.c || 0} active secretary agents, ${callCount?.c || 0} total calls.`
   } catch {}
 
-  const defaultSystem = `You are the Gemini AI Assistant for RoofReporterAI — a Canadian roofing measurement and AI secretary platform. You help the super admin manage the platform, configure Roofer Secretary AI agents, onboard customers, and analyze business data.
+  const defaultSystem = `You are the Gemini AI Assistant for Roof Manager — a Canadian roofing measurement and AI secretary platform. You help the super admin manage the platform, configure Roofer Secretary AI agents, onboard customers, and analyze business data.
 
 Key Platform Features:
 - Roofing measurement reports (Google Solar API + AI analysis)
@@ -571,10 +571,10 @@ ${orderList || '  (none)'}
     platformContext = `\n[DB query error: ${e.message}]`
   }
 
-  const systemPrompt = `You are the Gemini AI Command Center for RoofReporterAI — a Canadian roofing measurement SaaS platform with AI Secretary phone agents.
+  const systemPrompt = `You are the Gemini AI Command Center for Roof Manager — a Canadian roofing measurement SaaS platform with AI Secretary phone agents.
 
-Platform: RoofReporterAI (roofmanager.ca)
-Owner: Reuse Canada / RoofReporterAI
+Platform: Roof Manager (roofmanager.ca)
+Owner: Reuse Canada / Roof Manager
 Tech Stack: Hono + Cloudflare Workers + D1 + LiveKit + Square Payments
 Key Features: Roofing measurement reports (Google Solar API + AI analysis), Roofer Secretary AI phone agents ($249/mo, powered by LiveKit + OpenAI TTS), CRM, invoicing, email outreach, property imagery, virtual try-on
 ${platformContext}

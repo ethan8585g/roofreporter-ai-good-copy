@@ -179,7 +179,7 @@ blogRoutes.post('/admin/posts', async (c) => {
       cover_image_url || '',
       category || 'roofing',
       tags || '',
-      author_name || 'RoofReporterAI Team',
+      author_name || 'Roof Manager Team',
       status || 'draft',
       is_featured ? 1 : 0,
       meta_title || title,
@@ -225,7 +225,7 @@ blogRoutes.put('/admin/posts/:id', async (c) => {
       `UPDATE blog_posts SET title=?, slug=?, excerpt=?, content=?, cover_image_url=?, category=?, tags=?, author_name=?, status=?, is_featured=?, meta_title=?, meta_description=?, read_time_minutes=?, published_at=?, updated_at=datetime('now') WHERE id=?`
     ).bind(
       title, slug, excerpt || '', content, cover_image_url || '',
-      category || 'roofing', tags || '', author_name || 'RoofReporterAI Team',
+      category || 'roofing', tags || '', author_name || 'Roof Manager Team',
       status || 'draft', is_featured ? 1 : 0,
       meta_title || title, meta_description || excerpt || '',
       estimatedReadTime, publishedAt, id
@@ -271,7 +271,7 @@ blogRoutes.post('/admin/init', async (c) => {
         cover_image_url TEXT,
         category TEXT DEFAULT 'roofing',
         tags TEXT,
-        author_name TEXT DEFAULT 'RoofReporterAI Team',
+        author_name TEXT DEFAULT 'Roof Manager Team',
         author_avatar_url TEXT,
         status TEXT DEFAULT 'draft',
         is_featured INTEGER DEFAULT 0,

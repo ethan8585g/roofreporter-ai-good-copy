@@ -19,13 +19,13 @@ const GEMINI_MODEL = 'gemini-2.0-flash'
 const GEMINI_REST_BASE = 'https://generativelanguage.googleapis.com/v1beta/models'
 
 // ============================================================
-// ROVER SYSTEM PROMPT — Comprehensive RoofReporterAI expert
+// ROVER SYSTEM PROMPT — Comprehensive Roof Manager expert
 // ============================================================
-const ROVER_SYSTEM_PROMPT = `You are Rover 🐕, the friendly and knowledgeable AI sales assistant for RoofReporterAI — Canada's #1 AI-powered roof measurement report platform.
+const ROVER_SYSTEM_PROMPT = `You are Rover 🐕, the friendly and knowledgeable AI sales assistant for Roof Manager — Canada's #1 AI-powered roof measurement report platform.
 
 YOUR PERSONALITY:
 - Warm, professional, and enthusiastic about helping roofing professionals succeed
-- You genuinely believe RoofReporterAI saves contractors time and money
+- You genuinely believe Roof Manager saves contractors time and money
 - You use casual but professional language — approachable yet knowledgeable
 - You keep responses concise: 2-4 sentences unless the topic requires more detail
 - You always end with a helpful follow-up question or call-to-action
@@ -42,7 +42,7 @@ ABOUT ROOFREPORTERAI — KNOW THIS INSIDE AND OUT
 ═══════════════════════════════════════════════════
 
 WHAT WE ARE:
-RoofReporterAI is an AI-powered roof measurement platform that generates detailed, professional roof reports from satellite imagery in under 60 seconds. We use Google's Solar API for real satellite data — these are NOT estimates or guesswork. We serve roofing professionals, estimators, home inspectors, insurance adjusters, solar installers, and property managers across Canada.
+Roof Manager is an AI-powered roof measurement platform that generates detailed, professional roof reports from satellite imagery in under 60 seconds. We use Google's Solar API for real satellite data — these are NOT estimates or guesswork. We serve roofing professionals, estimators, home inspectors, insurance adjusters, solar installers, and property managers across Canada.
 
 HEADQUARTERS: Alberta, Canada
 WEBSITE: roofmanager.ca (also at roofing-measurement-tool.pages.dev)
@@ -364,7 +364,7 @@ roverRoutes.post('/chat', async (c) => {
     if (isFirstMessage) {
       messages.push({
         role: 'assistant',
-        content: "Hey there! 🐕 I'm Rover, your RoofReporterAI expert helper! How can I help you today?"
+        content: "Hey there! 🐕 I'm Rover, your Roof Manager expert helper! How can I help you today?"
       })
     }
 
@@ -477,11 +477,11 @@ function getFallbackResponse(message: string): string {
   }
 
   if (msg.includes('eagleview') || msg.includes('hover') || msg.includes('competitor') || msg.includes('compare') || msg.includes('vs') || msg.includes('versus')) {
-    return "Great comparison question! RoofReporterAI is $8/report vs. $15-$50+ with competitors, with instant delivery (< 60 seconds vs. 24-72 hours), and includes built-in CRM, invoicing, and D2D tools that others don't offer. Plus 3 free reports to test it out at /customer/login! 🏆"
+    return "Great comparison question! Roof Manager is $8/report vs. $15-$50+ with competitors, with instant delivery (< 60 seconds vs. 24-72 hours), and includes built-in CRM, invoicing, and D2D tools that others don't offer. Plus 3 free reports to test it out at /customer/login! 🏆"
   }
 
   if (msg.includes('drone')) {
-    return "Unlike drones, RoofReporterAI requires zero equipment ($0 startup vs. $1000+), no pilot license, works in any weather, and delivers results in under 60 seconds. It's the fastest, most affordable way to get accurate roof measurements. Try it free at /customer/login! 🚀"
+    return "Unlike drones, Roof Manager requires zero equipment ($0 startup vs. $1000+), no pilot license, works in any weather, and delivers results in under 60 seconds. It's the fastest, most affordable way to get accurate roof measurements. Try it free at /customer/login! 🚀"
   }
 
   if (msg.includes('api') || msg.includes('integration') || msg.includes('developer')) {
@@ -944,7 +944,7 @@ function buildAssistantSystemPrompt(customer: any, context: any): string {
   const freeRemaining = customer.free_trial_remaining ?? 0
   const paidCredits = customer.paid_credits_remaining ?? 0
 
-  return `You are Rover 🐕, the smart AI business assistant inside RoofReporterAI. You are speaking with an authenticated, logged-in customer — NOT a visitor. Behave as their personal AI assistant, not a sales chatbot.
+  return `You are Rover 🐕, the smart AI business assistant inside Roof Manager. You are speaking with an authenticated, logged-in customer — NOT a visitor. Behave as their personal AI assistant, not a sales chatbot.
 
 THE CUSTOMER:
 - Name: ${name}

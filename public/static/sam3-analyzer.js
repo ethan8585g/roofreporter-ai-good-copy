@@ -1,5 +1,5 @@
 // ============================================================
-// RoofReporterAI — SAM 3 Satellite Image Analyzer Frontend
+// Roof Manager — SAM 3 Satellite Image Analyzer Frontend
 //
 // Interactive satellite image viewer with AI-powered roof
 // segmentation overlay (SAM 3 + Gemini pipeline).
@@ -428,7 +428,7 @@
 
         // Footer
         '<div class="text-center pb-2">' +
-          '<p class="text-[10px] text-gray-400"><i class="fas fa-info-circle mr-1"></i>SAM 3 + Gemini analysis is AI-estimated. GSD-based measurements depend on imagery resolution and zoom level. Powered by RoofReporterAI.</p>' +
+          '<p class="text-[10px] text-gray-400"><i class="fas fa-info-circle mr-1"></i>SAM 3 + Gemini analysis is AI-estimated. GSD-based measurements depend on imagery resolution and zoom level. Powered by Roof Manager.</p>' +
         '</div>' +
 
       '</div>';

@@ -1,6 +1,6 @@
 // ============================================================
-// RoofReporterAI — Pricing Engine Service
-// Port of Python RoofReporterPricingEngine to TypeScript/CF Workers
+// Roof Manager — Pricing Engine Service
+// Port of Python Roof ManagerPricingEngine to TypeScript/CF Workers
 // Roofer preset costs → auto-calculate proposals from measurements
 // ============================================================
 
@@ -335,7 +335,7 @@ export function calculateProposal(
     gross_squares: round2(grossSquares),
     net_area_sqft: measurements.total_area_sqft,
     metadata: {
-      engine_version: 'RoofReporterAI PricingEngine v1.0',
+      engine_version: 'Roof Manager PricingEngine v1.0',
       generated_at: new Date().toISOString(),
       preset_name: presetName,
     }

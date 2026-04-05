@@ -11,8 +11,8 @@ export const customerAuthRoutes = new Hono<{ Bindings: Bindings }>()
 const DEV_ACCOUNT = {
   email: 'dev@reusecanada.ca',
   password: 'DevTest2026!',
-  name: 'RoofReporterAI Dev',
-  company_name: 'RoofReporterAI (Dev Testing)',
+  name: 'Roof Manager Dev',
+  company_name: 'Roof Manager (Dev Testing)',
   phone: '780-000-0000'
 }
 
@@ -61,7 +61,7 @@ function generateVerificationCode(): string {
 // Priority: 1) Resend API  2) Gmail OAuth2 (env or DB token)  3) GCP service account
 async function sendVerificationEmail(env: any, toEmail: string, code: string, db?: any): Promise<boolean> {
   const senderEmail = (env as any).GMAIL_SENDER_EMAIL || 'sales@roofmanager.ca'
-  const emailSubject = `Your RoofReporterAI Verification Code: ${code}`
+  const emailSubject = `Your Roof Manager Verification Code: ${code}`
   const emailHtml = getVerificationEmailHTML(code)
 
   // ---- METHOD 1: Resend API (simplest) ----
@@ -72,7 +72,7 @@ async function sendVerificationEmail(env: any, toEmail: string, code: string, db
         method: 'POST',
         headers: { 'Authorization': `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          from: `RoofReporterAI <onboarding@resend.dev>`,
+          from: `Roof Manager <onboarding@resend.dev>`,
           to: [toEmail],
           subject: emailSubject,
           html: emailHtml
@@ -135,7 +135,7 @@ async function sendVerificationEmail(env: any, toEmail: string, code: string, db
       const tokenData: any = await tokenResp.json()
       if (tokenData.access_token) {
         const rawEmail = [
-          `From: RoofReporterAI <${senderEmail}>`,
+          `From: Roof Manager <${senderEmail}>`,
           `To: ${toEmail}`,
           `Subject: ${emailSubject}`,
           'Content-Type: text/html; charset=UTF-8',
@@ -211,7 +211,7 @@ async function sendVerificationEmail(env: any, toEmail: string, code: string, db
 
       if (tokenData.access_token) {
         const rawEmail = [
-          `From: RoofReporterAI <${impersonateEmail}>`,
+          `From: Roof Manager <${impersonateEmail}>`,
           `To: ${toEmail}`,
           `Subject: ${emailSubject}`,
           'Content-Type: text/html; charset=UTF-8',
@@ -251,7 +251,7 @@ function getVerificationEmailHTML(code: string): string {
       <div style="display: inline-block; width: 48px; height: 48px; background: #0ea5e9; border-radius: 12px; line-height: 48px; text-align: center;">
         <span style="color: white; font-size: 24px;">&#127968;</span>
       </div>
-      <h1 style="color: #1e3a5f; font-size: 24px; margin: 16px 0 4px;">RoofReporterAI</h1>
+      <h1 style="color: #1e3a5f; font-size: 24px; margin: 16px 0 4px;">Roof Manager</h1>
       <p style="color: #6b7280; font-size: 14px; margin: 0;">Email Verification</p>
     </div>
     <div style="background: #f8fafc; border-radius: 16px; padding: 32px; text-align: center;">
@@ -261,7 +261,7 @@ function getVerificationEmailHTML(code: string): string {
       </div>
       <p style="color: #9ca3af; font-size: 13px; margin: 24px 0 0;">This code expires in 10 minutes.<br>If you didn't request this, please ignore this email.</p>
     </div>
-    <p style="color: #d1d5db; font-size: 11px; text-align: center; margin-top: 24px;">&copy; 2026 RoofReporterAI &middot; Alberta, Canada</p>
+    <p style="color: #d1d5db; font-size: 11px; text-align: center; margin-top: 24px;">&copy; 2026 Roof Manager &middot; Alberta, Canada</p>
   </div>`
 }
 
@@ -1246,14 +1246,14 @@ customerAuthRoutes.get('/invoices/:id', async (c) => {
 // ============================================================
 async function sendPasswordResetEmail(env: any, toEmail: string, name: string, resetUrl: string, db?: any): Promise<boolean> {
   const senderEmail = (env as any).GMAIL_SENDER_EMAIL || 'sales@roofmanager.ca'
-  const subject = 'Reset your RoofReporterAI password'
+  const subject = 'Reset your Roof Manager password'
   const html = `
   <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
     <div style="text-align: center; margin-bottom: 32px;">
       <div style="display: inline-block; width: 48px; height: 48px; background: #0ea5e9; border-radius: 12px; line-height: 48px; text-align: center;">
         <span style="color: white; font-size: 24px;">&#127968;</span>
       </div>
-      <h1 style="color: #1e3a5f; font-size: 24px; margin: 16px 0 4px;">RoofReporterAI</h1>
+      <h1 style="color: #1e3a5f; font-size: 24px; margin: 16px 0 4px;">Roof Manager</h1>
       <p style="color: #6b7280; font-size: 14px; margin: 0;">Password Reset</p>
     </div>
     <div style="background: #f8fafc; border-radius: 16px; padding: 32px; text-align: center;">
@@ -1263,7 +1263,7 @@ async function sendPasswordResetEmail(env: any, toEmail: string, name: string, r
       <p style="color: #9ca3af; font-size: 12px; margin: 24px 0 8px;">This link expires in 1 hour.</p>
       <p style="color: #9ca3af; font-size: 12px; margin: 0;">If you didn't request a password reset, you can safely ignore this email — your password won't change.</p>
     </div>
-    <p style="color: #d1d5db; font-size: 11px; text-align: center; margin-top: 24px;">&copy; 2026 RoofReporterAI &middot; Alberta, Canada</p>
+    <p style="color: #d1d5db; font-size: 11px; text-align: center; margin-top: 24px;">&copy; 2026 Roof Manager &middot; Alberta, Canada</p>
   </div>`
 
   // Try Resend first
@@ -1273,7 +1273,7 @@ async function sendPasswordResetEmail(env: any, toEmail: string, name: string, r
       const resp = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ from: `RoofReporterAI <onboarding@resend.dev>`, to: [toEmail], subject, html })
+        body: JSON.stringify({ from: `Roof Manager <onboarding@resend.dev>`, to: [toEmail], subject, html })
       })
       if (resp.ok) return true
     } catch (e: any) { console.error('[PasswordReset] Resend error:', e.message) }
@@ -1298,7 +1298,7 @@ async function sendPasswordResetEmail(env: any, toEmail: string, name: string, r
       })
       const tokenData: any = await tokenResp.json()
       if (tokenData.access_token) {
-        const rawEmail = [`From: RoofReporterAI <${senderEmail}>`, `To: ${toEmail}`, `Subject: ${subject}`, 'Content-Type: text/html; charset=UTF-8', '', html].join('\r\n')
+        const rawEmail = [`From: Roof Manager <${senderEmail}>`, `To: ${toEmail}`, `Subject: ${subject}`, 'Content-Type: text/html; charset=UTF-8', '', html].join('\r\n')
         const encoded = btoa(unescape(encodeURIComponent(rawEmail))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
         const sendResp = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
           method: 'POST',

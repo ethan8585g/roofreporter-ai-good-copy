@@ -1609,7 +1609,7 @@ adminRoutes.post('/superadmin/gemini-chat', async (c) => {
   const apiKey = (c.env as any).GEMINI_API_KEY || (c.env as any).GEMINI_ENHANCE_API_KEY
   if (!apiKey) return c.json({ error: 'Gemini not configured — set GEMINI_API_KEY in Cloudflare secrets' }, 503)
 
-  const systemContext = `You are an AI assistant for the RoofReporterAI platform super admin dashboard.
+  const systemContext = `You are an AI assistant for the Roof Manager platform super admin dashboard.
 You help the super admin understand platform metrics, troubleshoot issues, draft content, and manage the business.
 Keep responses concise and actionable. Current date: ${new Date().toISOString().split('T')[0]}.`
 

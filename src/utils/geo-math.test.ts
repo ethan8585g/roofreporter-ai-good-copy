@@ -1,5 +1,5 @@
 // ============================================================
-// RoofReporterAI — Geo-Math Unit Tests
+// Roof Manager — Geo-Math Unit Tests
 // Run: npx vitest run src/utils/geo-math.test.ts
 // ============================================================
 

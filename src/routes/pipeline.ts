@@ -1,5 +1,5 @@
 // ============================================================
-// RoofReporterAI — Revenue Pipeline, Notifications, Follow-ups, Payments
+// Roof Manager — Revenue Pipeline, Notifications, Follow-ups, Payments
 // ============================================================
 import { Hono } from 'hono'
 import type { Bindings } from '../types'

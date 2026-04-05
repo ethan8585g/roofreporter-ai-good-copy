@@ -1,5 +1,5 @@
 // ============================================================
-// RoofReporterAI — Email Delivery Service
+// Roof Manager — Email Delivery Service
 // Supports: Gmail Service Account, Gmail OAuth2, Resend API
 // ============================================================
 
@@ -49,7 +49,7 @@ export function buildEmailWrapper(reportHtml: string, address: string, reportNum
 
   <!-- Email Footer -->
   <div style="text-align:center;padding:20px;color:#9CA3AF;font-size:11px">
-    <p>&copy; ${new Date().getFullYear()} RoofReporterAI | Professional Roof Measurement Reports</p>
+    <p>&copy; ${new Date().getFullYear()} Roof Manager | Professional Roof Measurement Reports</p>
     <p style="margin-top:4px">This report was sent to ${recipient}. Questions? Contact sales@roofmanager.ca</p>
   </div>
 </div>
@@ -138,7 +138,7 @@ export async function sendGmailEmail(serviceAccountJson: string, to: string, sub
   }
 
   const rawMessage = [
-    `From: RoofReporterAI Reports <${fromEmail}>`,
+    `From: Roof Manager Reports <${fromEmail}>`,
     `To: ${to}`,
     `Subject: =?UTF-8?B?${btoa(unescape(encodeURIComponent(subject)))}?=`,
     `MIME-Version: 1.0`,
@@ -199,8 +199,8 @@ export async function sendViaResend(
   // Resend free tier sends from onboarding@resend.dev
   // With verified domain, send from your own email
   const from = fromEmail
-    ? `RoofReporterAI Reports <${fromEmail}>`
-    : 'RoofReporterAI Reports <onboarding@resend.dev>'
+    ? `Roof Manager Reports <${fromEmail}>`
+    : 'Roof Manager Reports <onboarding@resend.dev>'
 
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',
@@ -267,7 +267,7 @@ export async function sendGmailOAuth2(
   }
 
   const rawMessage = [
-    `From: RoofReporterAI Reports <${fromAddr}>`,
+    `From: Roof Manager Reports <${fromAddr}>`,
     `To: ${to}`,
     `Subject: =?UTF-8?B?${btoa(unescape(encodeURIComponent(subject)))}?=`,
     `MIME-Version: 1.0`,

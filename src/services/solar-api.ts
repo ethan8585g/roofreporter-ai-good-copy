@@ -1,5 +1,5 @@
 // ============================================================
-// RoofReporterAI — Solar API & Report Data Generation
+// Roof Manager — Solar API & Report Data Generation
 // callGoogleSolarAPI, generateMockRoofReport, generateGPTRoofEstimate,
 // generateEnhancedImagery, fetchSolarPitchAndImagery
 // ============================================================
@@ -519,7 +519,7 @@ export function computeEdgeSummary(edges: EdgeMeasurement[]) {
 
 // ============================================================
 // PROFESSIONAL 9-PAGE REPORT HTML GENERATOR
-// Matches RoofReporterAI branded templates:
+// Matches Roof Manager branded templates:
 //   Page 1: Dark theme Roof Measurement Dashboard
 // ============================================================
 // GPT ROOF DIAGRAM GENERATOR — AI-Powered Image Generation
@@ -1046,7 +1046,7 @@ export function generateMockRoofReport(order: any, apiKey?: string, gptEstimate?
 
 // ============================================================
 // PROFESSIONAL 9-PAGE REPORT HTML GENERATOR
-// Matches RoofReporterAI branded templates:
+// Matches Roof Manager branded templates:
 //   Page 1: Dark theme Roof Measurement Dashboard
 // ============================================================
 // GPT ROOF DIAGRAM GENERATOR — AI-Powered Image Generation

@@ -338,7 +338,7 @@ function renderDashboard() {
         '</div>' +
       '</div>' +
 
-      '<div class="text-center py-4 text-xs text-gray-400"><p>Powered by <strong>RoofReporterAI</strong> &middot; Antigravity Gemini Roof Measurement Suite</p></div>' +
+      '<div class="text-center py-4 text-xs text-gray-400"><p>Powered by <strong>Roof Manager</strong> &middot; Antigravity Gemini Roof Measurement Suite</p></div>' +
     '</main>';
 
   root.innerHTML =
@@ -578,7 +578,7 @@ function showOnboardingModal() {
     {
       icon: 'fa-hand-wave',
       color: 'from-brand-500 to-sky-500',
-      title: 'Welcome to RoofReporterAI, ' + name + '!',
+      title: 'Welcome to Roof Manager, ' + name + '!',
       content: '<div class="space-y-3">' +
         '<div class="bg-green-50 border border-green-200 rounded-xl p-4 text-center">' +
           '<p class="text-3xl font-black text-green-700 mb-1">' + freeCredits + ' Free Reports</p>' +

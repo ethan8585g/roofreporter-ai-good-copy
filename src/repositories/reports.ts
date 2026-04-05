@@ -1,5 +1,5 @@
 // ============================================================
-// RoofReporterAI — Reports Repository (D1 Database Layer)
+// Roof Manager — Reports Repository (D1 Database Layer)
 // Typed query functions replacing raw SQL in route handlers.
 // ============================================================
 

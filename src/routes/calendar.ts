@@ -1,5 +1,5 @@
 // ============================================================
-// RoofReporterAI — Google Calendar Integration
+// Roof Manager — Google Calendar Integration
 // ============================================================
 //
 // Syncs CRM jobs, proposals, and events with Google Calendar.
@@ -406,7 +406,7 @@ calendarRoutes.post('/sync-job/:jobId', async (c) => {
     job.crew_size ? `Crew Size: ${job.crew_size}` : '',
     job.notes ? `\nNotes: ${job.notes}` : '',
     `\nStatus: ${job.status}`,
-    `\nManaged by RoofReporterAI`
+    `\nManaged by Roof Manager`
   ].filter(Boolean).join('\n')
 
   const gcalEvent: any = {

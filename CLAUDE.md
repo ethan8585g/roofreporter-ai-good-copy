@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**RoofReporterAI** — A full-stack roofing measurement and CRM platform built on Cloudflare Pages + Workers. Combines Google Solar API data with a custom geodesic measurement engine, AI vision analysis (Gemini), and a voice receptionist (LiveKit). Deployed at https://www.roofmanager.ca.
+**Roof Manager** — A full-stack roofing measurement and CRM platform built on Cloudflare Pages + Workers. Combines Google Solar API data with a custom geodesic measurement engine, AI vision analysis (Gemini), and a voice receptionist (LiveKit). Deployed at https://www.roofmanager.ca.
 
 ## Commands
 

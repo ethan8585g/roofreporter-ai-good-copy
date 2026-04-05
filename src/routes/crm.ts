@@ -572,7 +572,7 @@ crmRoutes.post('/invoices/:id/send', async (c) => {
     ${invoice.terms ? `<p style="color:#9ca3af;font-size:12px;margin:0;">${invoice.terms}</p>` : ''}
   </div>
   <p style="color:#9ca3af;font-size:11px;text-align:center;margin:16px 0 0;padding:0;">
-    Sent via RoofReporterAI &middot; ${fromEmail} &middot; <a href="mailto:sales@roofmanager.ca" style="color:#9ca3af;">sales@roofmanager.ca</a>
+    Sent via Roof Manager &middot; ${fromEmail} &middot; <a href="mailto:sales@roofmanager.ca" style="color:#9ca3af;">sales@roofmanager.ca</a>
   </p>
 </div>`
 
@@ -1427,7 +1427,7 @@ crmRoutes.post('/proposals/:id/send', async (c) => {
     </p>
   </div>
   <p style="color:#9ca3af;font-size:11px;text-align:center;margin:16px 0 0;padding:0;">
-    Sent via RoofReporterAI &middot; ${fromEmail}
+    Sent via Roof Manager &middot; ${fromEmail}
   </p>
 </div>`
 

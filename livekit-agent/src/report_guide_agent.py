@@ -1,5 +1,5 @@
 """
-RoofReporterAI — Interactive Report Homeowner Guide
+Roof Manager — Interactive Report Homeowner Guide
 LiveKit Web Voice Agent
 
 Embeds on the shared report page. When a homeowner clicks "Ask AI about this roof",

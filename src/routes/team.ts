@@ -178,7 +178,7 @@ teamRoutes.post('/invite', async (c) => {
   // Send invitation email
   const ownerName = customer.name || customer.company_name || 'Your colleague'
   const inviteUrl = `${new URL(c.req.url).origin}/customer/join-team?token=${inviteToken}`
-  await sendTeamInviteEmail(c.env, email, name, ownerName, customer.company_name || 'RoofReporterAI', inviteUrl, role)
+  await sendTeamInviteEmail(c.env, email, name, ownerName, customer.company_name || 'Roof Manager', inviteUrl, role)
 
   return c.json({
     success: true,
@@ -543,7 +543,7 @@ async function sendTeamInviteEmail(
     <p style="font-size:16px;color:#1e293b">Hi <strong>${memberName}</strong>,</p>
     <p style="color:#475569;line-height:1.6">
       <strong>${ownerName}</strong> from <strong>${companyName}</strong> has invited you to join their team on
-      <strong>RoofReporterAI</strong> as a <strong style="color:#0ea5e9">${role === 'admin' ? 'Team Admin' : 'Team Member'}</strong>.
+      <strong>Roof Manager</strong> as a <strong style="color:#0ea5e9">${role === 'admin' ? 'Team Admin' : 'Team Member'}</strong>.
     </p>
     <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:16px;margin:16px 0">
       <p style="margin:0;font-size:14px;color:#0369a1;font-weight:700">As a team member, you get full access to:</p>
@@ -558,9 +558,9 @@ async function sendTeamInviteEmail(
     <div style="text-align:center;margin:24px 0">
       <a href="${inviteUrl}" style="display:inline-block;background:#0ea5e9;color:#fff;text-decoration:none;padding:14px 32px;border-radius:8px;font-size:16px;font-weight:700">Accept Invitation</a>
     </div>
-    <p style="color:#94a3b8;font-size:12px;text-align:center">This invitation expires in ${INVITE_EXPIRY_DAYS} days. If you don't have a RoofReporterAI account, you'll be able to create one when you accept.</p>
+    <p style="color:#94a3b8;font-size:12px;text-align:center">This invitation expires in ${INVITE_EXPIRY_DAYS} days. If you don't have a Roof Manager account, you'll be able to create one when you accept.</p>
   </div>
-  <p style="text-align:center;color:#94a3b8;font-size:11px;margin-top:16px">&copy; ${new Date().getFullYear()} RoofReporterAI &bull; Powered by AI</p>
+  <p style="text-align:center;color:#94a3b8;font-size:11px;margin-top:16px">&copy; ${new Date().getFullYear()} Roof Manager &bull; Powered by AI</p>
 </body></html>`
 
   // Try Resend API first
@@ -571,9 +571,9 @@ async function sendTeamInviteEmail(
         method: 'POST',
         headers: { 'Authorization': `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          from: 'RoofReporterAI <onboarding@resend.dev>',
+          from: 'Roof Manager <onboarding@resend.dev>',
           to: [toEmail],
-          subject: `${ownerName} invited you to join their team on RoofReporterAI`,
+          subject: `${ownerName} invited you to join their team on Roof Manager`,
           html: emailHtml
         })
       })

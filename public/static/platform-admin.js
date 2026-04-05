@@ -830,7 +830,7 @@ function paShowAgentEditor(agentId) {
       '</select></div>' +
     '</div>' +
     '<div><label class="block text-xs font-semibold text-gray-500 mb-1">Agent Personality / Script</label>' +
-      '<textarea id="pa-agent-persona" rows="5" class="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm" placeholder="You are a professional sales agent calling roofing companies on behalf of RoofReporterAI. Your goal is to introduce our AI secretary product ($249/mo) and book a demo. Be friendly, concise, and handle objections confidently...">' + (a.persona || '') + '</textarea></div>' +
+      '<textarea id="pa-agent-persona" rows="5" class="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm" placeholder="You are a professional sales agent calling roofing companies on behalf of Roof Manager. Your goal is to introduce our AI secretary product ($249/mo) and book a demo. Be friendly, concise, and handle objections confidently...">' + (a.persona || '') + '</textarea></div>' +
     paInputV('pa-agent-prefix', 'Room Prefix', a.livekit_room_prefix || 'sales-') +
     '<div class="flex justify-end gap-3">' +
       '<button onclick="paLoadCCAgents()" class="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm font-semibold">Cancel</button>' +

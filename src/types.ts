@@ -1,5 +1,5 @@
 // ============================================================
-// RoofReporterAI - Roofing Measurement Tool
+// Roof Manager - Roofing Measurement Tool
 // Core Type Definitions - v2.0
 // ============================================================
 // This is the canonical data contract for the entire system.
@@ -359,7 +359,7 @@ export interface WasteRow {
 
 // ============================================================
 // RAS (Recycled Asphalt Shingle) YIELD ANALYSIS
-// For RoofReporterAI's waste-to-value material recovery operations
+// For Roof Manager's waste-to-value material recovery operations
 // ============================================================
 
 /** Classification of a roof segment for RAS material recovery */
@@ -572,7 +572,7 @@ export interface RoofReport {
     peak_sun_hours_per_day: number
   } | null
 
-  // ---- RAS YIELD ANALYSIS (RoofReporterAI value-add) ----
+  // ---- RAS YIELD ANALYSIS (Roof Manager value-add) ----
   ras_yield?: RASYieldAnalysis
 
   // ---- SEGMENT EXCLUSION (Property Overlap Control) ----

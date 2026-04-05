@@ -780,7 +780,7 @@
         <div class="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6 animate-bounce">
           <i class="fas fa-check text-green-600 text-3xl"></i>
         </div>
-        <h2 class="text-2xl font-bold text-gray-800 mb-2">Welcome to RoofReporterAI!</h2>
+        <h2 class="text-2xl font-bold text-gray-800 mb-2">Welcome to Roof Manager!</h2>
         <p class="text-gray-500 mb-6">Your ${tier.name} account is ready. Let's generate your first roof report.</p>
         
         <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6 text-left">

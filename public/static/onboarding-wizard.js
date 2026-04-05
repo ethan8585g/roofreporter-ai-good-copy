@@ -285,7 +285,7 @@
       '<div class="grid grid-cols-1 md:grid-cols-3 gap-4">' +
         '<div><label class="text-xs font-semibold text-green-700 block mb-1.5">Bonus Roof Reports</label><input id="ob-welcome-reports" type="number" value="3" class="w-full border border-green-200 rounded-lg px-3 py-2 text-sm" min="0" max="50"></div>' +
         '<div><label class="text-xs font-semibold text-green-700 block mb-1.5">Discount %</label><input id="ob-welcome-discount" type="number" value="10" class="w-full border border-green-200 rounded-lg px-3 py-2 text-sm" min="0" max="50"></div>' +
-        '<div><label class="text-xs font-semibold text-green-700 block mb-1.5">Welcome Message</label><input id="ob-welcome-msg" class="w-full border border-green-200 rounded-lg px-3 py-2 text-sm" placeholder="Welcome to RoofReporterAI!"></div>' +
+        '<div><label class="text-xs font-semibold text-green-700 block mb-1.5">Welcome Message</label><input id="ob-welcome-msg" class="w-full border border-green-200 rounded-lg px-3 py-2 text-sm" placeholder="Welcome to Roof Manager!"></div>' +
       '</div>' +
     '</div>';
 

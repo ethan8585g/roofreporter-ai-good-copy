@@ -1,5 +1,5 @@
 // ============================================================
-// RoofReporterAI — SAM 3 + Gemini Roof Segmentation Engine
+// Roof Manager — SAM 3 + Gemini Roof Segmentation Engine
 // ============================================================
 //
 // Multi-tier computer vision pipeline for rooftop segmentation:

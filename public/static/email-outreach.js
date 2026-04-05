@@ -519,7 +519,7 @@ function renderEOCampaignDetail() {
       <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
         <h3 class="font-bold text-sm text-gray-900 mb-3"><i class="fas fa-info-circle mr-2 text-blue-500"></i>Campaign Details</h3>
         <div class="space-y-2 text-xs">
-          <div><span class="text-gray-400 w-24 inline-block">From:</span><span class="text-gray-700">${escHtml(c.from_name || 'RoofReporterAI')} &lt;${escHtml(c.from_email || 'not set')}&gt;</span></div>
+          <div><span class="text-gray-400 w-24 inline-block">From:</span><span class="text-gray-700">${escHtml(c.from_name || 'Roof Manager')} &lt;${escHtml(c.from_email || 'not set')}&gt;</span></div>
           <div><span class="text-gray-400 w-24 inline-block">Reply-To:</span><span class="text-gray-700">${escHtml(c.reply_to || 'not set')}</span></div>
           <div><span class="text-gray-400 w-24 inline-block">Lists:</span><span class="text-gray-700">${escHtml(c.list_ids)}</span></div>
           <div><span class="text-gray-400 w-24 inline-block">Created:</span><span class="text-gray-700">${eoFmtDateTime(c.created_at)}</span></div>
@@ -591,7 +591,7 @@ function renderEOCampaignEditor() {
       <div class="grid grid-cols-3 gap-4 mb-4">
         <div>
           <label class="text-xs font-bold text-gray-500 uppercase block mb-1">From Name</label>
-          <input id="eoC_from_name" value="${escHtml(c.from_name || 'RoofReporterAI')}" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none">
+          <input id="eoC_from_name" value="${escHtml(c.from_name || 'Roof Manager')}" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none">
         </div>
         <div>
           <label class="text-xs font-bold text-gray-500 uppercase block mb-1">From Email</label>
@@ -1351,7 +1351,7 @@ async function eoUseTpl(id) {
   if (lRes) { const d = await lRes.json(); EO.lists = d.lists || []; }
   EO.editCampaign = {
     name: '', subject: tpl.subject, body_html: tpl.body_html,
-    from_name: 'RoofReporterAI', from_email: '', reply_to: '', list_ids: ''
+    from_name: 'Roof Manager', from_email: '', reply_to: '', list_ids: ''
   };
   EO.view = 'campaign-editor';
   renderEO();

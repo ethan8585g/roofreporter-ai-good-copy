@@ -1,5 +1,5 @@
 // ============================================================
-// RoofReporterAI — Phase 1: Advanced Geometric Parsing Engine
+// Roof Manager — Phase 1: Advanced Geometric Parsing Engine
 // The Edge Classifier v1.0
 // ============================================================
 //

@@ -708,7 +708,7 @@ invoiceRoutes.post('/:id/send-gmail', async (c) => {
     const emailHtml = `
 <div style="max-width:600px;margin:0 auto;font-family:Inter,system-ui,sans-serif">
   <div style="background:linear-gradient(135deg,#0ea5e9,#2563eb);padding:32px;border-radius:16px 16px 0 0;text-align:center">
-    <h1 style="color:white;font-size:22px;margin:0">RoofReporterAI</h1>
+    <h1 style="color:white;font-size:22px;margin:0">Roof Manager</h1>
     <p style="color:#bfdbfe;font-size:13px;margin:4px 0 0">Professional Roof Measurement Reports</p>
   </div>
   <div style="background:white;padding:32px;border:1px solid #e2e8f0;border-top:none">
@@ -726,7 +726,7 @@ invoiceRoutes.post('/:id/send-gmail', async (c) => {
     ${invoice.due_date ? `<p style="color:#64748b;font-size:12px;text-align:center">Due: ${new Date(invoice.due_date).toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' })}</p>` : ''}
   </div>
   <div style="background:#f8fafc;padding:16px;border-radius:0 0 16px 16px;text-align:center;border:1px solid #e2e8f0;border-top:none">
-    <p style="color:#94a3b8;font-size:11px;margin:0">Powered by RoofReporterAI — Canada's AI Roof Measurement Platform</p>
+    <p style="color:#94a3b8;font-size:11px;margin:0">Powered by Roof Manager — Canada's AI Roof Measurement Platform</p>
   </div>
 </div>`
 

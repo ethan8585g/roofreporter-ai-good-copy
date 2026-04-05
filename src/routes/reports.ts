@@ -1,5 +1,5 @@
 // ============================================================
-// RoofReporterAI — Reports Routes (Thin Controller Layer)
+// Roof Manager — Reports Routes (Thin Controller Layer)
 // ~400 lines — all logic delegated to services/repositories.
 // ============================================================
 
@@ -1296,7 +1296,7 @@ reportsRoutes.post('/:orderId/generate-enhanced', async (c) => {
     <p style="color:#6b7280;font-size:13px;text-align:center"><a href="${matCalcUrl}" style="color:#0369a1">Open Material Calculator</a> to build your BOM from this report.</p>
   </div>
   <div style="background:#f8fafc;padding:16px;text-align:center;border-top:1px solid #e5e7eb">
-    <p style="color:#9ca3af;font-size:12px;margin:0">Powered by <a href="https://roofmanager.ca" style="color:#0369a1">RoofReporterAI</a></p>
+    <p style="color:#9ca3af;font-size:12px;margin:0">Powered by <a href="https://roofmanager.ca" style="color:#0369a1">Roof Manager</a></p>
   </div>
 </div></body></html>`
     try {
@@ -1324,7 +1324,7 @@ reportsRoutes.get('/:orderId/pdf', async (c) => {
 <style>@media print{body{margin:0;padding:0}.page{page-break-after:always}.page:last-child{page-break-after:auto}.print-controls{display:none!important}}
 .print-controls{position:fixed;top:0;left:0;right:0;z-index:9999;background:#1E3A5F;color:#fff;padding:12px 24px;display:flex;align-items:center;justify-content:space-between;font-family:Inter,system-ui,sans-serif}
 .print-controls button{background:#00E5FF;color:#0B1E2F;border:none;padding:8px 24px;border-radius:6px;font-weight:700;cursor:pointer}body{padding-top:50px}@media print{body{padding-top:0}}</style></head>
-<body><div class="print-controls"><span>RoofReporterAI | ${addr}</span><button onclick="window.print()">Download PDF</button></div>
+<body><div class="print-controls"><span>Roof Manager | ${addr}</span><button onclick="window.print()">Download PDF</button></div>
 ${html}<script>if(new URLSearchParams(location.search).get('print')==='1')setTimeout(()=>window.print(),500)</script></body></html>`
   return new Response(pdfHtml, { headers: { 'Content-Type': 'text/html; charset=utf-8', 'Content-Disposition': `inline; filename="Roof_Report_${safe}.pdf"` } })
 })
@@ -1551,7 +1551,7 @@ reportsRoutes.post('/:orderId/share', async (c) => {
     <p style="color:#6b7280;font-size:13px;margin:0">This link is shareable — bookmark it to view your report anytime.</p>
   </div>
   <div style="background:#f8fafc;padding:16px;text-align:center;border-top:1px solid #e5e7eb">
-    <p style="color:#9ca3af;font-size:12px;margin:0">Powered by <a href="https://roofmanager.ca" style="color:#0369a1">RoofReporterAI</a></p>
+    <p style="color:#9ca3af;font-size:12px;margin:0">Powered by <a href="https://roofmanager.ca" style="color:#0369a1">Roof Manager</a></p>
   </div>
 </div></body></html>`
     try {

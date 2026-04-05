@@ -1,4 +1,4 @@
-# RoofReporterAI — LiveKit Voice Agent
+# Roof Manager — LiveKit Voice Agent
 
 ## AI Secretary for Rick's Roofing
 **Phone:** +1-484-964-9758 (AI) ← forwarded from +1-780-983-3335 (business)
@@ -193,7 +193,7 @@ python agent.py start
 - **Greet callers** with Rick's Roofing script
 - **Answer Q&A** about pricing, repairs, emergencies, financing, licensing
 - **Collect lead data** — name, phone, full address, service type
-- **Schedule estimates** — logs to RoofReporterAI API
+- **Schedule estimates** — logs to Roof Manager API
 - **Handle emergencies** — flags urgent calls, dispatches crew
 - **Take messages** — records caller info for callback
 - **Report business hours** — Mon-Fri 8 AM to 5 PM + emergency dispatch

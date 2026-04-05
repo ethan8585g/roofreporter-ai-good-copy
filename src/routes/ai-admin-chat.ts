@@ -437,7 +437,7 @@ async function executeTool(toolName: string, args: any, db: D1Database): Promise
 }
 
 // ── System prompt ─────────────────────────────────────────────────
-const SYSTEM_PROMPT = `You are the **RoofReporterAI Admin Assistant** — an intelligent AI built into the admin control panel. You help the site administrator manage and modify the RoofReporterAI platform.
+const SYSTEM_PROMPT = `You are the **Roof Manager Admin Assistant** — an intelligent AI built into the admin control panel. You help the site administrator manage and modify the Roof Manager platform.
 
 **Your Capabilities:**
 1. **Database Queries** — Look up any data: orders, customers, reports, blog posts, invoices, settings, CRM data, payments, secretary configs

@@ -368,7 +368,7 @@
         '<i class="fas fa-paper-plane"></i>',
       '</button>',
     '</div>',
-    '<div class="ra-powered">Powered by <strong>RoofReporterAI</strong> AI Assistant</div>'
+    '<div class="ra-powered">Powered by <strong>Roof Manager</strong> AI Assistant</div>'
   ].join('');
   document.body.appendChild(panel);
 

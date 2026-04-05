@@ -1,5 +1,5 @@
 // ============================================================
-// RoofReporterAI — Nearmap Imagery Integration
+// Roof Manager — Nearmap Imagery Integration
 // ============================================================
 // Provides 7.5cm/pixel (GSD) aerial imagery from Nearmap's
 // tile API for roof reports. Significantly higher resolution

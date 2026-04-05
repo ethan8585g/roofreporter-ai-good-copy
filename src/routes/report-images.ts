@@ -1,9 +1,9 @@
 // ============================================================
-// RoofReporterAI — Report Image Generation Worker Route
+// Roof Manager — Report Image Generation Worker Route
 // ============================================================
 // POST /api/report-images/generate
 //
-// Pipeline (per the RoofReporterAI diagram):
+// Pipeline (per the Roof Manager diagram):
 //   1. Measure coordinates (eaves, perimeter, ridges)
 //   2. Text-to-Image Cloudflare Worker — branches into:
 //      → IMAGE 1: Take 2 satellite images & regenerate to enhance quality/visibility
@@ -302,7 +302,7 @@ ANNOTATION OVERLAY (clean, precise lines):
 - Each roof facet tinted with a different semi-transparent pastel overlay (20% opacity)
 - Small area label on each facet showing square footage
 - Clean LEGEND box (bottom-right): edge type colors + total area
-- "RoofReporterAI" small professional watermark (top-left corner)
+- "Roof Manager" small professional watermark (top-left corner)
 
 Property: ${address || 'Residential Property'}
 Total roof area: ${measurements?.total_area_sqft?.toLocaleString() || '?'} sq ft
@@ -391,7 +391,7 @@ ADDITIONAL ELEMENTS:
 - Pitch angle shown with a small pitch triangle indicator
 - Small compass rose in corner showing North direction
 - Clean LEGEND box showing: edge type colors, total area badge, pitch info
-- "RoofReporterAI" branded watermark in corner, small and professional
+- "Roof Manager" branded watermark in corner, small and professional
 - Dark navy border (#002244)
 
 Property: ${address || 'Residential Property'}

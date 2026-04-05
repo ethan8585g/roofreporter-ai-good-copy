@@ -1,5 +1,5 @@
 // ============================================================
-// RoofReporterAI — Customer Cold Call Center Dashboard
+// Roof Manager — Customer Cold Call Center Dashboard
 // Prospect list management, AI outbound calling, call logs,
 // leads tracking, appointments, and real-time notifications
 // ============================================================

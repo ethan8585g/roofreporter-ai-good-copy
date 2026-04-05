@@ -1,6 +1,6 @@
 // ============================================================
 // HeyGen Video Studio — Super Admin Dashboard Module
-// Full-featured AI video creation platform for RoofReporterAI
+// Full-featured AI video creation platform for Roof Manager
 // Mirrors HeyGen's platform UX with Home, AI Studio, Video Agent,
 // Interactive Avatar, Video Translate, Photo Avatar, Brand Kit,
 // Templates, and My Videos tabs
@@ -68,7 +68,7 @@
           </div>
           <div>
             <h2 style="margin:0;font-size:24px;font-weight:900;color:#1a1a2e">HeyGen Video Studio</h2>
-            <p style="margin:0;font-size:13px;color:#64748b">AI-powered video creation for RoofReporterAI</p>
+            <p style="margin:0;font-size:13px;color:#64748b">AI-powered video creation for Roof Manager</p>
           </div>
         </div>
         <div id="hg-api-badge" style="display:flex;gap:8px;align-items:center">
@@ -190,9 +190,9 @@
 
       <!-- Video Ideas -->
       <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px">
-        <h4 style="font-size:14px;font-weight:700;color:#1e293b;margin:0 0 14px 0"><i class="fas fa-lightbulb" style="color:#f59e0b;margin-right:6px"></i>Video Ideas for RoofReporterAI</h4>
+        <h4 style="font-size:14px;font-weight:700;color:#1e293b;margin:0 0 14px 0"><i class="fas fa-lightbulb" style="color:#f59e0b;margin-right:6px"></i>Video Ideas for Roof Manager</h4>
         <div style="display:grid;gap:8px">
-          ${ideaRow('fa-rocket', '#7c3aed', 'Product Demo', 'studio', 'Full walkthrough of RoofReporterAI features')}
+          ${ideaRow('fa-rocket', '#7c3aed', 'Product Demo', 'studio', 'Full walkthrough of Roof Manager features')}
           ${ideaRow('fa-bullhorn', '#ec4899', '30s Social Ad', 'agent', 'Quick TikTok/Instagram reel ad')}
           ${ideaRow('fa-graduation-cap', '#d97706', 'How-To Tutorial', 'studio', 'Step-by-step guide for new users')}
           ${ideaRow('fa-hard-hat', '#059669', 'Contractor Pitch', 'agent', 'Why roofers love our AI reports')}
@@ -238,7 +238,7 @@
         <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px">
           <h4 style="font-size:13px;font-weight:700;color:#1e293b;margin:0 0 12px 0"><i class="fas fa-cog" style="color:#7c3aed;margin-right:4px"></i>Project Settings</h4>
           <label class="hg-label">Title</label>
-          <input id="hg-title" type="text" placeholder="My RoofReporterAI Video" class="hg-input">
+          <input id="hg-title" type="text" placeholder="My Roof Manager Video" class="hg-input">
           <label class="hg-label">Category</label>
           <select id="hg-category" class="hg-input">
             <option value="marketing">Marketing</option>
@@ -338,7 +338,7 @@
 Tips:
   &bull; Keep under 2 minutes for best quality
   &bull; Use conversational language
-  &bull; Mention RoofReporterAI features and benefits
+  &bull; Mention Roof Manager features and benefits
   &bull; Add [pause] for natural pauses" style="width:100%;padding:12px;border:1px solid #d1d5db;border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;box-sizing:border-box;line-height:1.6"></textarea>
 
           <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
@@ -439,7 +439,7 @@ Tips:
         <!-- Prompt Area -->
         <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px">
           <label class="hg-label">Video Title</label>
-          <input id="hg-agent-title" type="text" placeholder="e.g. RoofReporterAI Product Tour" class="hg-input">
+          <input id="hg-agent-title" type="text" placeholder="e.g. Roof Manager Product Tour" class="hg-input">
 
           <label class="hg-label">Describe Your Video</label>
           <textarea id="hg-agent-prompt" rows="12" class="hg-input" style="resize:vertical;font-family:inherit;line-height:1.6" placeholder="Describe the video you want. Be specific about:
@@ -510,7 +510,7 @@ Tips:
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px">
         <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px">
-          <h4 style="font-size:14px;font-weight:700;color:#1e293b;margin:0 0 14px 0">Use Cases for RoofReporterAI</h4>
+          <h4 style="font-size:14px;font-weight:700;color:#1e293b;margin:0 0 14px 0">Use Cases for Roof Manager</h4>
           ${interactiveUseCase('fa-headset','#7c3aed','Customer Support Avatar','Answer questions about roof reports in real-time')}
           ${interactiveUseCase('fa-chalkboard-teacher','#2563eb','Product Demo Avatar','Walk prospects through the platform live')}
           ${interactiveUseCase('fa-graduation-cap','#d97706','Training Assistant','Onboard new users with interactive guidance')}
@@ -602,7 +602,7 @@ Tips:
           <label class="hg-label" style="text-align:left">Photo URL</label>
           <input id="hg-photo-url" type="url" placeholder="https://... headshot image URL" class="hg-input">
           <label class="hg-label" style="text-align:left">Avatar Name</label>
-          <input id="hg-photo-name" type="text" placeholder="e.g. RoofReporterAI Spokesperson" class="hg-input">
+          <input id="hg-photo-name" type="text" placeholder="e.g. Roof Manager Spokesperson" class="hg-input">
           <div style="border:2px dashed #e11d48;border-radius:12px;padding:30px;margin:10px 0;background:#fef2f2">
             <i class="fas fa-user-plus" style="font-size:36px;color:#e11d48;margin-bottom:10px;display:block"></i>
             <p style="font-size:13px;font-weight:600;color:#be123c;margin:0 0 4px 0">Upload via URL above</p>
@@ -665,7 +665,7 @@ Tips:
             <div><label class="hg-label">Text</label><input id="bk-text" type="color" value="${bk.text_color||'#1a1a2e'}" style="width:100%;height:40px;border:1px solid #d1d5db;border-radius:6px;cursor:pointer;box-sizing:border-box"></div>
           </div>
           <label class="hg-label">Logo URL</label><input id="bk-logo" type="url" value="${bk.logo_url||''}" placeholder="https://roofmanager.ca/logo.png" class="hg-input">
-          <label class="hg-label">Company Name</label><input id="bk-company" type="text" value="${bk.company||'RoofReporterAI'}" class="hg-input">
+          <label class="hg-label">Company Name</label><input id="bk-company" type="text" value="${bk.company||'Roof Manager'}" class="hg-input">
           <label class="hg-label">Tagline</label><input id="bk-tagline" type="text" value="${bk.tagline||"Canada's #1 AI Roof Measurement Platform"}" class="hg-input">
           <button onclick="window._hgSaveBrandKit()" style="width:100%;padding:10px;background:#7c3aed;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer"><i class="fas fa-save" style="margin-right:4px"></i>Save Brand Kit</button>
         </div>
@@ -674,7 +674,7 @@ Tips:
             <h4 style="font-size:14px;font-weight:700;color:#1e293b;margin:0 0 14px 0"><i class="fas fa-eye" style="color:#3b82f6;margin-right:6px"></i>Preview</h4>
             <div style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">
               <div style="background:${bk.primary||'#0d9668'};padding:16px;text-align:center">
-                <div style="font-size:18px;font-weight:800;color:#fff">${bk.company||'RoofReporterAI'}</div>
+                <div style="font-size:18px;font-weight:800;color:#fff">${bk.company||'Roof Manager'}</div>
                 <div style="font-size:12px;color:rgba(255,255,255,0.8)">${bk.tagline||"Canada's #1 AI Roof Measurement Platform"}</div>
               </div>
               <div style="background:${bk.bg_color||'#ffffff'};padding:20px;text-align:center">
@@ -709,7 +709,7 @@ Tips:
       { name:'Getting Started Guide', category:'training', description:'New user onboarding walkthrough', script_template: SCRIPT_PRESETS.product_demo?.script||'', preset:true },
       { name:'How to Read Your Report', category:'training', description:'Report sections explained', preset:true },
       { name:'30-Second Social Ad', category:'social', description:'Quick attention-grabber for social', script_template: SCRIPT_PRESETS.social_ad?.script||'', preset:true },
-      { name:'Contractor Value Proposition', category:'marketing', description:'Why roofers choose RoofReporterAI', script_template: SCRIPT_PRESETS.contractor_pitch?.script||'', preset:true },
+      { name:'Contractor Value Proposition', category:'marketing', description:'Why roofers choose Roof Manager', script_template: SCRIPT_PRESETS.contractor_pitch?.script||'', preset:true },
     ];
 
     el.innerHTML = `
@@ -821,21 +821,21 @@ Tips:
      ======================================================================== */
 
   const SCRIPT_PRESETS = {
-    product_demo: { title:'RoofReporterAI Product Demo', category:'marketing', script:"Welcome to RoofReporterAI \u2014 Canada\u2019s leading AI-powered roof measurement platform! In just minutes, our advanced satellite imagery analysis delivers professional-grade roof reports that used to take hours of manual work. Here\u2019s what you get: precise area measurements in square feet, detailed pitch analysis for every roof plane, complete edge measurements \u2014 eave, ridge, hip, and valley \u2014 all with linear foot totals. Plus, a professional architectural diagram and waste factor calculations. Whether you\u2019re a roofing contractor, insurance adjuster, or property manager, RoofReporterAI saves you time and money while delivering accuracy you can trust. Try it today at roofmanager.ca!" },
-    social_ad: { title:'RoofReporterAI \u2014 30 Second Ad', category:'social', script:"Still climbing ladders to measure roofs? There\u2019s a better way. RoofReporterAI uses satellite imagery and artificial intelligence to measure any roof in minutes \u2014 not hours. Get precise area, pitch, edge measurements, and professional diagrams instantly. Trusted by hundreds of Canadian roofing contractors. Your first report is just 15 dollars. Try RoofReporterAI today!" },
-    contractor_pitch: { title:'Why Contractors Choose RoofReporterAI', category:'marketing', script:"Hey there! If you\u2019re a roofing contractor, you know how time-consuming roof measurements can be. Climbing up, measuring by hand, doing the math \u2014 it eats into your profit margin. That\u2019s why leading contractors across Canada are switching to RoofReporterAI. Our AI analyzes satellite imagery to deliver accurate measurements in minutes. You get total area, pitch analysis, edge lengths, waste calculations, and a professional diagram \u2014 all in a beautiful PDF you can share with clients. Your team can order reports from anywhere, anytime. No ladders. No tape measures. No guesswork. Just accurate data that helps you quote faster and win more jobs." },
-    homeowner_explainer: { title:'Homeowners \u2014 Get Your Roof Measured', category:'marketing', script:"Planning a roof repair or replacement? Getting an accurate measurement is the first step to a fair quote. With RoofReporterAI, you can get a professional roof measurement report without anyone climbing on your roof. We use advanced satellite imagery and AI technology to measure your roof precisely \u2014 total area, slope, and all the details a contractor needs. Simply enter your address, and within minutes you\u2019ll have a comprehensive report you can share with multiple contractors for competitive quotes. It\u2019s affordable, fast, and incredibly accurate. Visit roofmanager.ca to get started!" },
-    report_walkthrough: { title:'Roof Report Walkthrough', category:'report_walkthrough', script:"Let me walk you through your RoofReporterAI roof measurement report. Page one shows the property overview with the total roof area, predominant pitch, and waste factor calculation. The diagram section gives you a bird\u2019s eye view of all roof planes with color-coded edges \u2014 green for eaves, red for ridges, amber for hips, and blue for valleys. Each edge is measured in linear feet. The material estimation section calculates everything you need: shingle bundles, underlayment rolls, ridge cap, starter strip, and drip edge quantities. This report gives you professional-grade data for accurate quoting." },
-    pricing_explainer: { title:'RoofReporterAI Pricing', category:'marketing', script:"Let me break down our simple, transparent pricing. At RoofReporterAI, we use a credit-based system. Each roof measurement report costs one credit. You can buy credit packs at volume discounts \u2014 the more you buy, the less each report costs. Compare that to hiring someone at 100 to 200 dollars per roof for manual measurements, and our reports at just 15 to 25 dollars each represent massive savings. Plus, you get instant delivery, professional PDF quality, and no site visit needed. For enterprise users ordering hundreds of reports, we offer custom pricing packages. Visit roofmanager.ca to see current pricing!" },
+    product_demo: { title:'Roof Manager Product Demo', category:'marketing', script:"Welcome to Roof Manager \u2014 Canada\u2019s leading AI-powered roof measurement platform! In just minutes, our advanced satellite imagery analysis delivers professional-grade roof reports that used to take hours of manual work. Here\u2019s what you get: precise area measurements in square feet, detailed pitch analysis for every roof plane, complete edge measurements \u2014 eave, ridge, hip, and valley \u2014 all with linear foot totals. Plus, a professional architectural diagram and waste factor calculations. Whether you\u2019re a roofing contractor, insurance adjuster, or property manager, Roof Manager saves you time and money while delivering accuracy you can trust. Try it today at roofmanager.ca!" },
+    social_ad: { title:'Roof Manager \u2014 30 Second Ad', category:'social', script:"Still climbing ladders to measure roofs? There\u2019s a better way. Roof Manager uses satellite imagery and artificial intelligence to measure any roof in minutes \u2014 not hours. Get precise area, pitch, edge measurements, and professional diagrams instantly. Trusted by hundreds of Canadian roofing contractors. Your first report is just 15 dollars. Try Roof Manager today!" },
+    contractor_pitch: { title:'Why Contractors Choose Roof Manager', category:'marketing', script:"Hey there! If you\u2019re a roofing contractor, you know how time-consuming roof measurements can be. Climbing up, measuring by hand, doing the math \u2014 it eats into your profit margin. That\u2019s why leading contractors across Canada are switching to Roof Manager. Our AI analyzes satellite imagery to deliver accurate measurements in minutes. You get total area, pitch analysis, edge lengths, waste calculations, and a professional diagram \u2014 all in a beautiful PDF you can share with clients. Your team can order reports from anywhere, anytime. No ladders. No tape measures. No guesswork. Just accurate data that helps you quote faster and win more jobs." },
+    homeowner_explainer: { title:'Homeowners \u2014 Get Your Roof Measured', category:'marketing', script:"Planning a roof repair or replacement? Getting an accurate measurement is the first step to a fair quote. With Roof Manager, you can get a professional roof measurement report without anyone climbing on your roof. We use advanced satellite imagery and AI technology to measure your roof precisely \u2014 total area, slope, and all the details a contractor needs. Simply enter your address, and within minutes you\u2019ll have a comprehensive report you can share with multiple contractors for competitive quotes. It\u2019s affordable, fast, and incredibly accurate. Visit roofmanager.ca to get started!" },
+    report_walkthrough: { title:'Roof Report Walkthrough', category:'report_walkthrough', script:"Let me walk you through your Roof Manager roof measurement report. Page one shows the property overview with the total roof area, predominant pitch, and waste factor calculation. The diagram section gives you a bird\u2019s eye view of all roof planes with color-coded edges \u2014 green for eaves, red for ridges, amber for hips, and blue for valleys. Each edge is measured in linear feet. The material estimation section calculates everything you need: shingle bundles, underlayment rolls, ridge cap, starter strip, and drip edge quantities. This report gives you professional-grade data for accurate quoting." },
+    pricing_explainer: { title:'Roof Manager Pricing', category:'marketing', script:"Let me break down our simple, transparent pricing. At Roof Manager, we use a credit-based system. Each roof measurement report costs one credit. You can buy credit packs at volume discounts \u2014 the more you buy, the less each report costs. Compare that to hiring someone at 100 to 200 dollars per roof for manual measurements, and our reports at just 15 to 25 dollars each represent massive savings. Plus, you get instant delivery, professional PDF quality, and no site visit needed. For enterprise users ordering hundreds of reports, we offer custom pricing packages. Visit roofmanager.ca to see current pricing!" },
   };
 
   const AGENT_PRESETS = {
-    product_overview: "Create a professional 60-second marketing video for RoofReporterAI, Canada's #1 AI-powered roof measurement platform. The presenter should be a professional-looking person in business attire. They should explain how the platform uses satellite imagery and AI to generate accurate roof measurement reports in minutes. Highlight key features: precise area measurements, pitch analysis, edge measurements, architectural diagrams, and waste factor calculations. End with a call to action to visit roofmanager.ca.",
-    social_30s: "Create a fast-paced 30-second social media ad for RoofReporterAI. Start with a hook: 'Still measuring roofs by hand?' Show benefits: AI satellite measurements, instant PDF reports, save hours. Use quick text overlays. Format: 9:16 portrait for TikTok/Reels. End with: 'Try RoofReporterAI \u2014 first report just $15!'",
-    contractor_testimonial: "Create a testimonial-style video where a professional roofing contractor explains why they switched to RoofReporterAI. Mention: time savings, accuracy, professional reports, order from anywhere. Authentic, conversational tone. 60 seconds, landscape.",
-    how_it_works: "Create a step-by-step 'How It Works' explainer for RoofReporterAI. Step 1: Enter address. Step 2: AI analyzes satellite imagery. Step 3: Receive report in minutes. Show what's included. Professional, clear. Text overlays for steps. 90 seconds, landscape.",
-    pricing_explainer: "Create a pricing explainer for RoofReporterAI. Credit-based system, volume discounts. Compare to manual costs ($100-200+ per roof vs $15-25 per report). Value proposition: instant delivery, professional quality, no site visit. Transparent, friendly. 60 seconds.",
-    before_after: "Create a before/after comparison for RoofReporterAI. Before: contractor on ladder with tape measure, hours of work, risk of errors. After: same contractor at desk, orders report, gets PDF in minutes. Message: Let AI do the measuring. 45 seconds, landscape.",
+    product_overview: "Create a professional 60-second marketing video for Roof Manager, Canada's #1 AI-powered roof measurement platform. The presenter should be a professional-looking person in business attire. They should explain how the platform uses satellite imagery and AI to generate accurate roof measurement reports in minutes. Highlight key features: precise area measurements, pitch analysis, edge measurements, architectural diagrams, and waste factor calculations. End with a call to action to visit roofmanager.ca.",
+    social_30s: "Create a fast-paced 30-second social media ad for Roof Manager. Start with a hook: 'Still measuring roofs by hand?' Show benefits: AI satellite measurements, instant PDF reports, save hours. Use quick text overlays. Format: 9:16 portrait for TikTok/Reels. End with: 'Try Roof Manager \u2014 first report just $15!'",
+    contractor_testimonial: "Create a testimonial-style video where a professional roofing contractor explains why they switched to Roof Manager. Mention: time savings, accuracy, professional reports, order from anywhere. Authentic, conversational tone. 60 seconds, landscape.",
+    how_it_works: "Create a step-by-step 'How It Works' explainer for Roof Manager. Step 1: Enter address. Step 2: AI analyzes satellite imagery. Step 3: Receive report in minutes. Show what's included. Professional, clear. Text overlays for steps. 90 seconds, landscape.",
+    pricing_explainer: "Create a pricing explainer for Roof Manager. Credit-based system, volume discounts. Compare to manual costs ($100-200+ per roof vs $15-25 per report). Value proposition: instant delivery, professional quality, no site visit. Transparent, friendly. 60 seconds.",
+    before_after: "Create a before/after comparison for Roof Manager. Before: contractor on ladder with tape measure, hours of work, risk of errors. After: same contractor at desk, orders report, gets PDF in minutes. Message: Let AI do the measuring. 45 seconds, landscape.",
   };
 
   /* ── Avatar & Voice selection ── */
@@ -869,7 +869,7 @@ Tips:
 
   window._hgShowPresets = function() { const p = document.getElementById('hg-presets-panel'); if(p) p.style.display = p.style.display === 'none' ? 'block' : 'none'; };
   window._hgFillPreset = function(key) { const p = SCRIPT_PRESETS[key]; if(!p) return; const t=document.getElementById('hg-title'),c=document.getElementById('hg-category'),s=document.getElementById('hg-script'); if(t)t.value=p.title; if(c)c.value=p.category; if(s){s.value=p.script;s.dispatchEvent(new Event('input'));} document.getElementById('hg-presets-panel').style.display='none'; };
-  window._hgFillAgentPreset = function(key) { const p = AGENT_PRESETS[key]; if(!p) return; const t=document.getElementById('hg-agent-title'),pr=document.getElementById('hg-agent-prompt'); if(t) t.value=key.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase())+' \u2014 RoofReporterAI'; if(pr) pr.value=p; };
+  window._hgFillAgentPreset = function(key) { const p = AGENT_PRESETS[key]; if(!p) return; const t=document.getElementById('hg-agent-title'),pr=document.getElementById('hg-agent-prompt'); if(t) t.value=key.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase())+' \u2014 Roof Manager'; if(pr) pr.value=p; };
   window._hgSetupInteractive = function() { notify('Interactive Avatar','Interactive Avatar streaming requires HeyGen Enterprise plan. Contact HeyGen support to enable.','info'); };
 
   /* ── Generate video via Studio ── */

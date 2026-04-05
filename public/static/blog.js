@@ -1,5 +1,5 @@
 // ============================================================
-// RoofReporterAI Blog — Frontend (blog.js)
+// Roof Manager Blog — Frontend (blog.js)
 // Handles both /blog listing and /blog/:slug post view
 // ============================================================
 (function () {
@@ -199,7 +199,7 @@
           '<div class="flex items-center justify-between mt-auto">' +
             '<div class="flex items-center gap-2">' +
               '<div class="w-8 h-8 bg-sky-100 rounded-full flex items-center justify-center"><i class="fas fa-user text-sky-500 text-xs"></i></div>' +
-              '<div><div class="text-sm font-semibold text-gray-800">' + escapeHtml(post.author_name || 'RoofReporterAI Team') + '</div>' +
+              '<div><div class="text-sm font-semibold text-gray-800">' + escapeHtml(post.author_name || 'Roof Manager Team') + '</div>' +
               '<div class="text-xs text-gray-400">' + formatDate(post.published_at) + '</div></div>' +
             '</div>' +
             '<span class="text-sky-500 font-semibold text-sm group-hover:translate-x-1 transition-transform">Read More <i class="fas fa-arrow-right ml-1"></i></span>' +
@@ -254,7 +254,7 @@
         }
 
         // Update page title and meta
-        document.title = (post.meta_title || post.title) + ' - RoofReporterAI Blog';
+        document.title = (post.meta_title || post.title) + ' - Roof Manager Blog';
         var metaDesc = document.getElementById('meta-desc');
         if (metaDesc) metaDesc.setAttribute('content', post.meta_description || post.excerpt || '');
         var breadcrumb = document.getElementById('breadcrumb-title');
@@ -332,7 +332,7 @@
       '<div class="flex items-center gap-4 pb-8 mb-8 border-b border-gray-200">' +
         '<div class="w-12 h-12 bg-sky-100 rounded-full flex items-center justify-center"><i class="fas fa-user text-sky-500"></i></div>' +
         '<div>' +
-          '<div class="font-semibold text-gray-800">' + escapeHtml(post.author_name || 'RoofReporterAI Team') + '</div>' +
+          '<div class="font-semibold text-gray-800">' + escapeHtml(post.author_name || 'Roof Manager Team') + '</div>' +
           '<div class="text-sm text-gray-400">' + formatDate(post.published_at) + (post.updated_at !== post.created_at ? ' · Updated ' + formatDate(post.updated_at) : '') + '</div>' +
         '</div>' +
         '<div class="ml-auto flex items-center gap-3">' +

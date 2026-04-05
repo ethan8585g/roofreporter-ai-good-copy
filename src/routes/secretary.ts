@@ -1,5 +1,5 @@
 // ============================================================
-// RoofReporterAI — Roofer Secretary AI Phone Answering Service
+// Roof Manager — Roofer Secretary AI Phone Answering Service
 // Powered by LiveKit.io
 // ============================================================
 // POST /api/secretary/subscribe        — Create $249/mo Square subscription
@@ -1271,7 +1271,7 @@ secretaryRoutes.post('/assign-number', async (c) => {
         // Purchase the number
         const purchased = await twilioAPI(twilioSid, twilioAuth, 'POST', '/IncomingPhoneNumbers', {
           PhoneNumber: phoneToCreate.phone_number,
-          FriendlyName: `RoofReporterAI Secretary - Customer ${customerId}`,
+          FriendlyName: `Roof Manager Secretary - Customer ${customerId}`,
         })
 
         if (purchased.sid) {
@@ -1464,7 +1464,7 @@ secretaryRoutes.post('/configure-twilio-trunk', async (c) => {
 
     // Step 1: Create SIP Trunk on Twilio
     const trunk = await twilioAPI(twilioSid, twilioAuth, 'POST', '/SIPTrunking/Trunks', {
-      FriendlyName: `RoofReporterAI Secretary - ${customerId}`,
+      FriendlyName: `Roof Manager Secretary - ${customerId}`,
     })
 
     if (!trunk.sid) {
@@ -1799,7 +1799,7 @@ secretaryRoutes.post('/sip/outbound-trunk', async (c) => {
 
   const body = await c.req.json()
   const {
-    name = 'RoofReporterAI Outbound',
+    name = 'Roof Manager Outbound',
     phone_number,           // e.g. "+17805551234"
     address = '',           // SIP trunk host (empty = LiveKit Cloud PSTN)
     auth_username = '',     // SIP auth user (Telus pilot number, etc.)
@@ -1868,7 +1868,7 @@ secretaryRoutes.post('/sip/inbound-trunk', async (c) => {
 
   const body = await c.req.json()
   const {
-    name = 'RoofReporterAI Inbound',
+    name = 'Roof Manager Inbound',
     phone_number,
     auth_username = '',
     auth_password = '',
@@ -2270,7 +2270,7 @@ secretaryRoutes.post('/sip/deploy-agent', async (c) => {
 
   const body = await c.req.json()
   const {
-    name = 'RoofReporterAI Agent',
+    name = 'Roof Manager Agent',
     phone_number,                      // e.g. "+17809833335"
     room_prefix = 'secretary-',
     rule_type = 'individual',
@@ -2613,7 +2613,7 @@ secretaryRoutes.post('/quick-connect/send-code', async (c) => {
         await twilioAPI(twilioSid, twilioAuth, 'POST', '/Messages', {
           To: normalized,
           From: twilioFromNumber,
-          Body: `Your RoofReporterAI Secretary verification code is: ${code}. This code expires in 10 minutes.`,
+          Body: `Your Roof Manager Secretary verification code is: ${code}. This code expires in 10 minutes.`,
         })
         return c.json({
           success: true,
@@ -2788,7 +2788,7 @@ secretaryRoutes.post('/quick-connect/verify', async (c) => {
             const phoneToCreate = search.available_phone_numbers[0]
             const purchased = await twilioAPI(twilioSid, twilioAuth, 'POST', '/IncomingPhoneNumbers', {
               PhoneNumber: phoneToCreate.phone_number,
-              FriendlyName: `RoofReporterAI Secretary - Customer ${customerId}`,
+              FriendlyName: `Roof Manager Secretary - Customer ${customerId}`,
             })
 
             if (purchased?.sid) {

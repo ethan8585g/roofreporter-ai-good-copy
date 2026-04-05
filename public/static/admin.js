@@ -918,7 +918,7 @@ async function submitOrder() {
       latitude: parseFloat(document.getElementById('noLat').value) || null,
       longitude: parseFloat(document.getElementById('noLng').value) || null,
       homeowner_name: home, homeowner_email: document.getElementById('noEmail').value.trim(),
-      requester_name: req, requester_company: 'RoofReporterAI',
+      requester_name: req, requester_company: 'Roof Manager',
       service_tier: document.getElementById('noTier').value
     })});
     const d = await res.json();
@@ -1335,7 +1335,7 @@ function renderBlogEditor() {
       <div class="grid md:grid-cols-3 gap-4">
         <div>
           <label class="block text-sm font-semibold text-gray-700 mb-1">Author Name</label>
-          <input type="text" id="bp-author" value="${(p.author_name||'RoofReporterAI Team').replace(/"/g,'&quot;')}" class="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-sky-400 focus:border-sky-400">
+          <input type="text" id="bp-author" value="${(p.author_name||'Roof Manager Team').replace(/"/g,'&quot;')}" class="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-sky-400 focus:border-sky-400">
         </div>
         <div>
           <label class="block text-sm font-semibold text-gray-700 mb-1">SEO Meta Title</label>
@@ -2189,7 +2189,7 @@ function showDialModal() {
         </div>
         <div>
           <label class="block text-xs font-semibold text-gray-500 mb-1 uppercase">Caller Display Name</label>
-          <input id="dial-name" type="text" value="RoofReporterAI" class="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm">
+          <input id="dial-name" type="text" value="Roof Manager" class="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm">
         </div>
       </div>
       <div id="dial-error" class="hidden mt-4 p-3 bg-red-50 text-red-700 rounded-lg text-sm"></div>
@@ -2230,7 +2230,7 @@ async function dialNumber() {
         phone_number: phone,
         trunk_id: document.getElementById('dial-trunk')?.value || '',
         room_name: document.getElementById('dial-room')?.value?.trim() || '',
-        participant_name: document.getElementById('dial-name')?.value?.trim() || 'RoofReporterAI',
+        participant_name: document.getElementById('dial-name')?.value?.trim() || 'Roof Manager',
       }),
     });
     const data = await res.json();

@@ -1,6 +1,6 @@
 // ============================================================
-// RoofReporterAI — Sales Call Center Dashboard
-// Super Admin only — AI outbound dialer for selling RoofReporterAI
+// Roof Manager — Sales Call Center Dashboard
+// Super Admin only — AI outbound dialer for selling Roof Manager
 // to roofing companies across North America
 // ============================================================
 
@@ -58,7 +58,7 @@
             </div>
             AI Sales Call Center
           </h2>
-          <p class="text-sm text-gray-500 mt-1">Outbound AI dialer — selling RoofReporterAI to roofing companies across North America</p>
+          <p class="text-sm text-gray-500 mt-1">Outbound AI dialer — selling Roof Manager to roofing companies across North America</p>
         </div>
         <div class="flex gap-2">
           <span id="cc-dialer-status" class="px-3 py-1.5 rounded-full text-xs font-bold ${CC.dialerRunning ? 'bg-green-100 text-green-700 animate-pulse' : 'bg-gray-100 text-gray-500'}">
@@ -389,7 +389,7 @@
           <div>
             <label class="block text-xs font-semibold text-gray-600 mb-1">Persona / Full System Prompt</label>
             <p class="text-xs text-gray-400 mb-1">Detailed instructions for how the agent should behave, respond, handle objections, and close</p>
-            <textarea id="cc-agent-persona" rows="5" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500" placeholder="e.g. You are Alex, a friendly and consultative sales representative for RoofReporterAI. Your goal is to connect with roofing company owners and estimators, understand their current estimating workflow, and show how our AI-powered instant roof measurement reports can save them time and money.&#10;&#10;Opening: Ask about their business and current estimating process.&#10;Value prop: Highlight 60-second reports, 95%+ accuracy, no ladders or drones needed.&#10;Objection handling: For price concerns, emphasize ROI — each $15-30 report replaces an hour of manual work.&#10;Close: Offer a free demo report on one of their recent job sites."></textarea>
+            <textarea id="cc-agent-persona" rows="5" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500" placeholder="e.g. You are Alex, a friendly and consultative sales representative for Roof Manager. Your goal is to connect with roofing company owners and estimators, understand their current estimating workflow, and show how our AI-powered instant roof measurement reports can save them time and money.&#10;&#10;Opening: Ask about their business and current estimating process.&#10;Value prop: Highlight 60-second reports, 95%+ accuracy, no ladders or drones needed.&#10;Objection handling: For price concerns, emphasize ROI — each $15-30 report replaces an hour of manual work.&#10;Close: Offer a free demo report on one of their recent job sites."></textarea>
           </div>
           <div>
             <label class="block text-xs font-semibold text-gray-600 mb-1">Room Prefix</label>
@@ -492,7 +492,7 @@
           </div>
           <div>
             <label class="block text-xs font-semibold text-gray-600 mb-1">Opening Intro</label>
-            <textarea id="cc-camp-intro" rows="3" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500" placeholder="Hi, this is {agent_name} calling from RoofReporterAI. I'm reaching out to roofing companies in your area because we've built an AI-powered tool that generates instant roof measurement reports..."></textarea>
+            <textarea id="cc-camp-intro" rows="3" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500" placeholder="Hi, this is {agent_name} calling from Roof Manager. I'm reaching out to roofing companies in your area because we've built an AI-powered tool that generates instant roof measurement reports..."></textarea>
           </div>
           <div>
             <label class="block text-xs font-semibold text-gray-600 mb-1">Value Proposition</label>
@@ -1499,7 +1499,7 @@
       // Get agent info
       const agents = ((CC.data.agents || {}).agents || []);
       const agent = agents.find(a => a.id === ccTestState.agentId);
-      const persona = agent ? (agent.persona || 'Professional sales agent for RoofReporterAI') : 'Professional sales agent';
+      const persona = agent ? (agent.persona || 'Professional sales agent for Roof Manager') : 'Professional sales agent';
 
       // Chat via call-center test endpoint
       const aiRes = await ccFetch('/api/call-center/test/chat', {

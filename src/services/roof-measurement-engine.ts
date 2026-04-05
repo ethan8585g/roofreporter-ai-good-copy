@@ -1,5 +1,5 @@
 // ============================================================
-// RoofReporterAI — Roof Measurement Engine v4.0
+// Roof Manager — Roof Measurement Engine v4.0
 //
 // PORTED from tools/roof_engine.py — Python reference impl.
 //
@@ -1506,7 +1506,7 @@ export class RoofMeasurementEngine {
         order_id:       this.orderId,
         generated:      this.timestamp,
         engine_version: 'RoofMeasurementEngine v6.0 (UTM + Shoelace + Common Run + Obstruction Deduction + Corner Analysis)',
-        powered_by:     'Reuse Canada / RoofReporterAI',
+        powered_by:     'Reuse Canada / Roof Manager',
       },
       key_measurements: {
         total_roof_area_sloped_ft2:    round(totalSloped, 1),

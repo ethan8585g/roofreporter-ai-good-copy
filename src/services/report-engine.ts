@@ -1,5 +1,5 @@
 // ============================================================
-// RoofReporterAI — Report Generation Engine (Pure Functions)
+// Roof Manager — Report Generation Engine (Pure Functions)
 // buildDataLayersReport, generateSegmentsFromDLAnalysis,
 // generateSegmentsFromAIGeometry, computeFacetDisplayData
 // ============================================================

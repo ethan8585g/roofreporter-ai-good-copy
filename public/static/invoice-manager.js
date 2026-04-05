@@ -395,7 +395,7 @@ document.addEventListener('DOMContentLoaded', () => {
           <div>
             <div class="flex items-center gap-3 mb-2">
               <div class="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center"><i class="fas fa-home text-white text-lg"></i></div>
-              <div><h1 class="text-xl font-bold">RoofReporterAI</h1><p class="text-blue-200 text-xs">Professional Roof Measurement Reports</p></div>
+              <div><h1 class="text-xl font-bold">Roof Manager</h1><p class="text-blue-200 text-xs">Professional Roof Measurement Reports</p></div>
             </div>
             <p class="text-blue-200 text-sm">Alberta, Canada</p>
           </div>
@@ -465,7 +465,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       <div class="p-8 text-center text-gray-400 text-xs">
         <p>Thank you for your business!</p>
-        <p class="mt-1">RoofReporterAI | reports@reusecanada.ca</p>
+        <p class="mt-1">Roof Manager | reports@reusecanada.ca</p>
       </div>
     </div>`;
   }

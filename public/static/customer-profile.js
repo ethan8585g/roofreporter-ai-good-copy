@@ -1,5 +1,5 @@
 // ============================================================
-// RoofReporterAI — Account Settings Page
+// Roof Manager — Account Settings Page
 //
 // Sections:
 //   1. Personal Info     — name, phone, email

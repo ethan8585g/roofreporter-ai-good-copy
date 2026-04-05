@@ -1,5 +1,5 @@
 // ============================================================
-// RoofReporterAI — Request Validation Schemas (Zod)
+// Roof Manager — Request Validation Schemas (Zod)
 // Replaces manual type casting with runtime validation.
 // ============================================================
 

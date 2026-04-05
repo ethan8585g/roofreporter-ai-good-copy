@@ -1,5 +1,5 @@
 // ============================================================
-// RoofReporterAI — SVG Diagram Generators (Consolidated)
+// Roof Manager — SVG Diagram Generators (Consolidated)
 // All architectural, overlay, blueprint, pitch, and fallback
 // diagram functions in a single module.
 //

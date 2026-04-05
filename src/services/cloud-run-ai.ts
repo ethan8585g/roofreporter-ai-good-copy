@@ -1,5 +1,5 @@
 // ============================================================
-// RoofReporterAI — Cloud Run Custom AI Integration
+// Roof Manager — Cloud Run Custom AI Integration
 // ============================================================
 // Connects to YOUR custom-trained AI model hosted on Google Cloud Run
 // (collab-581996238660.europe-west1.run.app) for enhanced roof analysis.
@@ -316,7 +316,7 @@ export async function batchAnalyzeViaCloudRun(
 // ============================================================
 // RESPONSE CONVERTERS
 // ============================================================
-// Convert Cloud Run responses to existing RoofReporterAI types
+// Convert Cloud Run responses to existing Roof Manager types
 // so the rest of the system works unchanged.
 // ============================================================
 

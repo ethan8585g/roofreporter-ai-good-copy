@@ -152,7 +152,7 @@ function renderCompanySection() {
         <div class="grid md:grid-cols-2 gap-4">
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">Company Name <span class="text-red-500">*</span></label>
-            <input type="text" id="mcName" value="${c.company_name || ''}" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500" placeholder="RoofReporterAI" />
+            <input type="text" id="mcName" value="${c.company_name || ''}" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500" placeholder="Roof Manager" />
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">Contact Name <span class="text-red-500">*</span></label>
@@ -915,7 +915,7 @@ function renderSipContent() {
 async function createOutboundTrunk() {
   const phone = document.getElementById('sipOutPhone')?.value?.trim();
   if (!phone) { alert('Enter a phone number'); return; }
-  const name = document.getElementById('sipOutName')?.value?.trim() || 'RoofReporterAI Outbound';
+  const name = document.getElementById('sipOutName')?.value?.trim() || 'Roof Manager Outbound';
   const address = document.getElementById('sipOutAddress')?.value?.trim() || '';
   const auth_username = document.getElementById('sipOutUser')?.value?.trim() || '';
   const auth_password = document.getElementById('sipOutPass')?.value?.trim() || '';

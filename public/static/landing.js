@@ -1,5 +1,5 @@
 // ============================================================
-// RoofReporterAI - Premium Landing Page v10
+// Roof Manager - Premium Landing Page v10
 // Full Strategic Redesign: Hero urgency, Lead Funnel, Social Proof,
 // Feature-to-Benefit, ROI Calculator, Sticky CTA, Case Studies,
 // Industry Sections, Security, Mobile-First, Exit Intent, Analytics
@@ -404,7 +404,7 @@ function renderValueProp() {
           <h2 class="text-3xl lg:text-5xl font-black text-gray-900 mb-4 tracking-tight">
             Stop Guessing.<br/>Start Quoting With Certainty.
           </h2>
-          <p class="text-lg text-gray-500 max-w-2xl mx-auto">Every minute on a ladder is a minute you could spend closing deals. RoofReporterAI handles the measurement so you can focus on revenue.</p>
+          <p class="text-lg text-gray-500 max-w-2xl mx-auto">Every minute on a ladder is a minute you could spend closing deals. Roof Manager handles the measurement so you can focus on revenue.</p>
         </div>
 
         <div class="grid lg:grid-cols-3 gap-8">
@@ -490,7 +490,7 @@ function renderHowItWorks() {
               <div class="flex items-center gap-3">
                 <i class="fas fa-file-pdf text-red-400 text-lg"></i>
                 <div>
-                  <div class="font-bold text-sm">RoofReporterAI Measurement Report</div>
+                  <div class="font-bold text-sm">Roof Manager Measurement Report</div>
                   <div class="text-xs text-slate-400">123 Main Street, Calgary, AB T2P 1J9</div>
                 </div>
               </div>
@@ -731,7 +731,7 @@ function renderCaseStudies() {
             <i class="fas fa-trophy"></i> Real Results
           </div>
           <h2 class="text-3xl lg:text-5xl font-black text-gray-900 mb-4 tracking-tight">Case Studies</h2>
-          <p class="text-lg text-gray-500 max-w-2xl mx-auto">See how Canadian roofing companies are saving thousands and growing faster with RoofReporterAI.</p>
+          <p class="text-lg text-gray-500 max-w-2xl mx-auto">See how Canadian roofing companies are saving thousands and growing faster with Roof Manager.</p>
         </div>
 
         <div class="grid lg:grid-cols-2 gap-8">
@@ -962,7 +962,7 @@ function renderPricing() {
               <thead>
                 <tr class="border-b-2 border-gray-200">
                   <th class="text-left py-3 px-4 font-bold text-gray-900">Feature</th>
-                  <th class="text-center py-3 px-4 font-bold text-teal-600 bg-teal-50 rounded-t-lg">RoofReporterAI</th>
+                  <th class="text-center py-3 px-4 font-bold text-teal-600 bg-teal-50 rounded-t-lg">Roof Manager</th>
                   <th class="text-center py-3 px-4 font-bold text-gray-500">EagleView</th>
                   <th class="text-center py-3 px-4 font-bold text-gray-500">Manual / Drone</th>
                 </tr>
@@ -1008,7 +1008,7 @@ function renderROICalculator() {
             <i class="fas fa-calculator"></i> ROI Calculator
           </div>
           <h2 class="text-3xl lg:text-4xl font-black mb-4 tracking-tight">Calculate Your Savings</h2>
-          <p class="text-gray-400 text-lg max-w-2xl mx-auto">See how much time and money RoofReporterAI saves your business each month.</p>
+          <p class="text-gray-400 text-lg max-w-2xl mx-auto">See how much time and money Roof Manager saves your business each month.</p>
         </div>
 
         <div class="scroll-animate opacity-0 translate-y-8 transition-all duration-700 bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8">
@@ -1040,7 +1040,7 @@ function renderROICalculator() {
                 <div id="roi-savings" class="text-3xl font-black text-green-400">$4,480</div>
               </div>
               <div class="bg-white/5 rounded-xl p-5 border border-white/10">
-                <div class="text-xs text-gray-400 uppercase tracking-wider font-bold mb-1">RoofReporterAI Cost</div>
+                <div class="text-xs text-gray-400 uppercase tracking-wider font-bold mb-1">Roof Manager Cost</div>
                 <div id="roi-cost" class="text-3xl font-black text-teal-400">$320/mo</div>
               </div>
               <div class="bg-gradient-to-r from-green-500/10 to-emerald-500/10 rounded-xl p-5 border border-green-500/30">

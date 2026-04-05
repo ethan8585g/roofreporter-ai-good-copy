@@ -1,5 +1,5 @@
 // ============================================================
-// RoofReporterAI — Sales Call Center (Outbound AI Dialer)
+// Roof Manager — Sales Call Center (Outbound AI Dialer)
 // Super Admin only — cold-calling roofing companies across NA
 // Completely separate from Roofer Secretary product
 // ============================================================
@@ -867,12 +867,12 @@ callCenterRoutes.post('/test/chat', async (c) => {
     const { message, history = [], persona = '', agent_name = 'Agent' } = body
     if (!message) return c.json({ error: 'No message' }, 400)
 
-    const systemPrompt = `You are "${agent_name}", an AI sales agent for RoofReporterAI in TEST MODE. You are being tested by the admin through the browser before being deployed on real calls.
+    const systemPrompt = `You are "${agent_name}", an AI sales agent for Roof Manager in TEST MODE. You are being tested by the admin through the browser before being deployed on real calls.
 
 YOUR PERSONA/SELLING STYLE:
 ${persona || 'Professional, consultative sales approach. Focus on showing ROI and time savings.'}
 
-ABOUT THE PRODUCT (RoofReporterAI):
+ABOUT THE PRODUCT (Roof Manager):
 - AI-powered instant roof measurement reports from satellite imagery
 - Reports include: total roof area (sq ft), edge lengths, pitch analysis, material estimates
 - Pricing: $10/report or volume discounts — first 2 reports FREE for new users
@@ -1335,7 +1335,7 @@ callCenterRoutes.post('/quick-connect/send-code', async (c) => {
         try {
           await ccTwilioAPI(twilioSid, twilioAuth, 'POST', '/Messages', {
             To: normalized, From: twilioFrom,
-            Body: `Your RoofReporterAI Call Center verification code is: ${code}. Expires in 10 min.`,
+            Body: `Your Roof Manager Call Center verification code is: ${code}. Expires in 10 min.`,
           })
           return c.json({ success: true, phone_number: normalized, message: `Verification code sent to ${normalized}`, method: 'twilio_sms' })
         } catch (err: any) {
@@ -1456,7 +1456,7 @@ callCenterRoutes.post('/quick-connect/verify', async (c) => {
           if (search?.available_phone_numbers?.length > 0) {
             const purchased = await ccTwilioAPI(twilioSid, twilioAuth, 'POST', '/IncomingPhoneNumbers', {
               PhoneNumber: search.available_phone_numbers[0].phone_number,
-              FriendlyName: `RoofReporterAI Call Center Outbound`,
+              FriendlyName: `Roof Manager Call Center Outbound`,
             })
             if (purchased?.sid) {
               aiPhoneNumber = purchased.phone_number

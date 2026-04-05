@@ -1,5 +1,5 @@
 // ============================================================
-// RoofReporterAI — Cloudflare Workers AI Enhancement Routes
+// Roof Manager — Cloudflare Workers AI Enhancement Routes
 // Edge-side AI for image classification, measurement validation,
 // report quality checks, and imagery cleanup.
 // Uses Cloudflare Workers AI binding (AI) — runs at the edge,

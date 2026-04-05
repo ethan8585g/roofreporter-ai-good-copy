@@ -1,5 +1,5 @@
 // ============================================================
-// RoofReporterAI — Professional Report HTML Templates v6.0
+// Roof Manager — Professional Report HTML Templates v6.0
 // Simple 2-page measurement report (RoofScope / EagleView style)
 // Page 1: Project Totals + Aerial Image + Waste Factor Table
 // Page 2: Roof Area Analysis Diagram + Edge/Area Tables
@@ -126,7 +126,7 @@ export function generateProfessionalReportHTML(report: RoofReport): string {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>RoofReporterAI Roof Report | ${fullAddress}</title>
+<title>Roof Manager Roof Report | ${fullAddress}</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
 *{margin:0;padding:0;box-sizing:border-box}
@@ -273,7 +273,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
   <!-- Disclaimer -->
   <div style="padding:8px 28px 0;font-size:7px;color:#888;line-height:1.5;text-align:center">
     REPORT IS PROVIDED FOR ESTIMATION PURPOSES ONLY. ACTUAL MEASUREMENTS MAY VARY.
-    &copy; ${new Date().getFullYear()} RoofReporterAI. All imagery &copy; Google.
+    &copy; ${new Date().getFullYear()} Roof Manager. All imagery &copy; Google.
   </div>
 
   <!-- Footer bar -->
@@ -757,7 +757,7 @@ export function generatePerimeterSideData(
 // Page 1: Roof Area Analysis — diagram + measurement tables (Portrait)
 // Page 2: Project Totals Summary — slope breakdown, measurements,
 //         satellite image, waste factor table (Landscape)
-// Matches the RoofReporterAI / RoofScope template style
+// Matches the Roof Manager / RoofScope template style
 // ============================================================
 export function generateSimpleTwoPageReport(report: RoofReport): string {
   const prop = report.property || { address: 'Unknown' } as any

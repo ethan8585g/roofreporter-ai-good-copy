@@ -1,12 +1,12 @@
 #!/bin/bash
 # ============================================================
-# RoofReporterAI LiveKit Agent — Quick Deploy Script
+# Roof Manager LiveKit Agent — Quick Deploy Script
 # Deploys the AI secretary agent on any Linux server
 # ============================================================
 
 set -e
 
-echo "🏠 RoofReporterAI — LiveKit Agent Deployment"
+echo "🏠 Roof Manager — LiveKit Agent Deployment"
 echo "============================================"
 
 # Check if .env exists
