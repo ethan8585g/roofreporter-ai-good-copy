@@ -868,7 +868,7 @@ function renderPlatformShowcase() {
       benefit: 'Save 2+ hours and $200+ per estimate vs. manual measurement',
       cta: 'Get Your First Report Free',
       ctaLink: '/signup',
-      img: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=800&q=80&auto=format&fit=crop',
+      img: 'https://images.unsplash.com/photo-1600047509807-ba8f99d2cdde?w=800&q=85&auto=format&fit=crop&t=20260405',
       reverse: false
     },
     {
@@ -878,7 +878,7 @@ function renderPlatformShowcase() {
       benefit: 'Capture 40% more leads that would otherwise go to voicemail',
       cta: 'See AI Secretary Demo',
       ctaLink: '/signup',
-      img: 'https://images.unsplash.com/photo-1556741533-6e6a62bd8b49?w=800&q=80&auto=format&fit=crop',
+      img: 'https://images.unsplash.com/photo-1556741533-6e6a62bd8b49?w=800&q=80&auto=format&fit=crop&t=20260405',
       reverse: true
     },
     {
@@ -888,7 +888,7 @@ function renderPlatformShowcase() {
       benefit: 'Close 23% more deals with accurate, professional quotes',
       cta: 'Explore CRM Features',
       ctaLink: '/signup',
-      img: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=800&q=80&auto=format&fit=crop',
+      img: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=800&q=80&auto=format&fit=crop&t=20260405',
       reverse: false
     },
     {
@@ -898,7 +898,7 @@ function renderPlatformShowcase() {
       benefit: 'Increase average ticket size by 15% with visual selling',
       cta: 'See Virtual Try-On',
       ctaLink: '/signup',
-      img: 'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&q=80&auto=format&fit=crop',
+      img: 'https://images.unsplash.com/photo-1449844908441-8829872d2607?w=800&q=85&auto=format&fit=crop&t=20260405',
       reverse: true
     }
   ];
@@ -1697,7 +1697,7 @@ function renderFinalCTA() {
   return `
     <section class="relative py-28 overflow-hidden">
       <div class="absolute inset-0">
-        <img src="https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=1920&q=80&auto=format&fit=crop"
+        <img src="https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=1920&q=80&auto=format&fit=crop&t=20260405"
              alt="Modern building" class="w-full h-full object-cover" loading="lazy" />
         <div class="absolute inset-0 bg-gradient-to-r from-slate-900/95 via-slate-900/90 to-cyan-900/80"></div>
       </div>
