@@ -62,23 +62,28 @@ async function loadView(view) {
     switch (view) {
       case 'users':
         const usersRes = await saFetch('/api/admin/superadmin/users');
-        if (usersRes) SA.data.users = await usersRes.json();
+        if (usersRes && usersRes.ok) SA.data.users = await usersRes.json();
+        else if (usersRes) console.error('Failed to load users:', usersRes.status);
         break;
       case 'sales':
         const salesRes = await saFetch(`/api/admin/superadmin/sales?period=${SA.salesPeriod}`);
-        if (salesRes) SA.data.sales = await salesRes.json();
+        if (salesRes && salesRes.ok) SA.data.sales = await salesRes.json();
+        else if (salesRes) console.error('Failed to load sales:', salesRes.status);
         break;
       case 'orders':
         const ordersRes = await saFetch(`/api/admin/superadmin/orders?limit=100&status=${SA.ordersFilter}`);
-        if (ordersRes) SA.data.orders = await ordersRes.json();
+        if (ordersRes && ordersRes.ok) SA.data.orders = await ordersRes.json();
+        else if (ordersRes) console.error('Failed to load orders:', ordersRes.status);
         break;
       case 'signups':
         const signupsRes = await saFetch(`/api/admin/superadmin/signups?period=${SA.signupsPeriod}`);
-        if (signupsRes) SA.data.signups = await signupsRes.json();
+        if (signupsRes && signupsRes.ok) SA.data.signups = await signupsRes.json();
+        else if (signupsRes) console.error('Failed to load signups:', signupsRes.status);
         break;
       case 'marketing':
         const mktRes = await saFetch('/api/admin/superadmin/marketing');
-        if (mktRes) SA.data.marketing = await mktRes.json();
+        if (mktRes && mktRes.ok) SA.data.marketing = await mktRes.json();
+        else if (mktRes) console.error('Failed to load marketing:', mktRes.status);
         break;
       case 'email-outreach':
         // Handled by email-outreach.js module

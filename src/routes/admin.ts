@@ -724,6 +724,8 @@ adminRoutes.post('/init-db', async (c) => {
 
 // 1. All Active Users — full user list with account info
 adminRoutes.get('/superadmin/users', async (c) => {
+  const admin = c.get('admin' as any)
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
   try {
     const users = await c.env.DB.prepare(`
       SELECT c.*,
@@ -757,6 +759,8 @@ adminRoutes.get('/superadmin/users', async (c) => {
 
 // 2. Credit Pack Sales — with period filter (daily/weekly/monthly)
 adminRoutes.get('/superadmin/sales', async (c) => {
+  const admin = c.get('admin' as any)
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
   try {
     const period = c.req.query('period') || 'monthly' // daily, weekly, monthly
 
@@ -850,31 +854,33 @@ adminRoutes.get('/superadmin/sales', async (c) => {
 
 // 3. Order History & Logistics — with report completion time
 adminRoutes.get('/superadmin/orders', async (c) => {
+  const admin = c.get('admin' as any)
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
   try {
     const limit = parseInt(c.req.query('limit') || '100')
     const offset = parseInt(c.req.query('offset') || '0')
     const status = c.req.query('status') || ''
+    const validStatuses = ['pending', 'processing', 'completed', 'failed', 'cancelled']
 
-    let whereClause = ''
-    if (status) whereClause = `WHERE o.status = '${status}'`
+    const useStatusFilter = status && validStatuses.includes(status)
 
     const orders = await c.env.DB.prepare(`
       SELECT o.*,
         c.name as customer_name, c.email as customer_email, c.company_name as customer_company,
         r.status as report_status, r.created_at as report_started_at, r.updated_at as report_completed_at,
         r.gross_squares, r.confidence_score, r.complexity_class,
-        CASE 
-          WHEN r.updated_at IS NOT NULL AND r.created_at IS NOT NULL 
+        CASE
+          WHEN r.updated_at IS NOT NULL AND r.created_at IS NOT NULL
           THEN CAST((julianday(r.updated_at) - julianday(r.created_at)) * 86400 AS INTEGER)
-          ELSE NULL 
+          ELSE NULL
         END as processing_seconds
       FROM orders o
       LEFT JOIN customers c ON o.customer_id = c.id
       LEFT JOIN reports r ON r.order_id = o.id
-      ${whereClause}
+      ${useStatusFilter ? 'WHERE o.status = ?' : ''}
       ORDER BY o.created_at DESC
       LIMIT ? OFFSET ?
-    `).bind(limit, offset).all()
+    `).bind(...(useStatusFilter ? [status, limit, offset] : [limit, offset])).all()
 
     const counts = await c.env.DB.prepare(`
       SELECT
@@ -911,6 +917,8 @@ adminRoutes.get('/superadmin/orders', async (c) => {
 
 // 4. New User Sign-ups — with period filter
 adminRoutes.get('/superadmin/signups', async (c) => {
+  const admin = c.get('admin' as any)
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
   try {
     const period = c.req.query('period') || 'monthly'
 
@@ -971,6 +979,8 @@ adminRoutes.get('/superadmin/signups', async (c) => {
 
 // 5. Internal Sales & Marketing — proposals, invoices, leads, campaigns
 adminRoutes.get('/superadmin/marketing', async (c) => {
+  const admin = c.get('admin' as any)
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
   try {
     // CRM aggregate across all users
     const crmStats = await c.env.DB.prepare(`
