@@ -523,23 +523,24 @@ app.get('/google46a10be18f6bfc61.html', (c) => {
 // SEO: sitemap.xml
 app.get('/sitemap.xml', async (c) => {
   const base = 'https://www.roofmanager.ca'
-  const staticPages = [
-    { loc: '/', priority: '1.0', changefreq: 'weekly' },
-    { loc: '/pricing', priority: '0.9', changefreq: 'monthly' },
-    { loc: '/blog', priority: '0.8', changefreq: 'weekly' },
-    { loc: '/lander', priority: '0.7', changefreq: 'monthly' },
-    { loc: '/privacy', priority: '0.3', changefreq: 'yearly' },
-    { loc: '/terms', priority: '0.3', changefreq: 'yearly' },
+  const today = new Date().toISOString().substring(0, 10)
+  const staticPages: { loc: string; priority: string; changefreq: string; lastmod?: string }[] = [
+    { loc: '/', priority: '1.0', changefreq: 'weekly', lastmod: today },
+    { loc: '/pricing', priority: '0.9', changefreq: 'monthly', lastmod: today },
+    { loc: '/blog', priority: '0.8', changefreq: 'daily', lastmod: today },
+    { loc: '/lander', priority: '0.7', changefreq: 'monthly', lastmod: today },
+    { loc: '/privacy', priority: '0.3', changefreq: 'yearly', lastmod: '2026-01-01' },
+    { loc: '/terms', priority: '0.3', changefreq: 'yearly', lastmod: '2026-01-01' },
   ]
   // City geo pages
   for (const slug of Object.keys(seoCities)) {
     staticPages.push({ loc: `/roof-measurement/${slug}`, priority: '0.7', changefreq: 'monthly' })
   }
-  let urls = staticPages.map(p => `<url><loc>${base}${p.loc}</loc><changefreq>${p.changefreq}</changefreq><priority>${p.priority}</priority></url>`).join('\n')
+  let urls = staticPages.map(p => `<url><loc>${base}${p.loc}</loc><changefreq>${p.changefreq}</changefreq><priority>${p.priority}</priority>${p.lastmod ? `<lastmod>${p.lastmod}</lastmod>` : ''}</url>`).join('\n')
   try {
     const posts = await c.env.DB.prepare("SELECT slug, updated_at FROM blog_posts WHERE status = 'published' ORDER BY published_at DESC LIMIT 100").all()
     for (const p of (posts.results || []) as any[]) {
-      urls += `\n<url><loc>${base}/blog/${p.slug}</loc><changefreq>monthly</changefreq><priority>0.6</priority>${p.updated_at ? `<lastmod>${p.updated_at.substring(0, 10)}</lastmod>` : ''}</url>`
+      urls += `\n<url><loc>${base}/blog/${p.slug}</loc><changefreq>weekly</changefreq><priority>0.6</priority>${p.updated_at ? `<lastmod>${p.updated_at.substring(0, 10)}</lastmod>` : ''}</url>`
     }
   } catch {}
   const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>`
@@ -1474,7 +1475,8 @@ function getHeadTags() {
   return `<meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="google-site-verification" content="CvzH14V1vTrop4cCx2z90ZUFnt4GJJNr1KkgiywoO2g" />
-  <meta name="theme-color" content="#0369a1">
+  <meta name="theme-color" content="#00FF88">
+  <link rel="alternate" hreflang="en-CA" href="https://www.roofmanager.ca/">
   <meta name="geo.region" content="CA-AB">
   <meta name="geo.placename" content="Alberta, Canada">
   <link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin>
@@ -3192,9 +3194,9 @@ function getBlogListingHTML() {
   <meta name="twitter:image" content="https://roofmanager.ca/static/logo.png">
   <link rel="canonical" href="https://www.roofmanager.ca/blog">
 </head>
-<body class="bg-gray-50 min-h-screen">
-  <!-- Navigation — Matches new homepage style -->
-  <nav class="bg-slate-900 text-white sticky top-0 z-50">
+<body class="min-h-screen" style="background:#0A0A0A">
+  <!-- Navigation — Dark theme -->
+  <nav style="background:#0A0A0A" class="text-white sticky top-0 z-50 border-b border-white/5">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
       <a href="/" class="flex items-center gap-3">
         <img src="/static/logo.png" alt="Roof Manager" class="w-9 h-9 rounded-lg object-cover">
@@ -3203,29 +3205,29 @@ function getBlogListingHTML() {
       <div class="hidden md:flex items-center gap-5">
         <a href="/" class="text-gray-400 hover:text-white text-sm font-medium">Home</a>
         <a href="/#pricing" class="text-gray-400 hover:text-white text-sm font-medium">Pricing</a>
-        <a href="/blog" class="text-white font-semibold text-sm border-b-2 border-cyan-400 pb-0.5">Blog</a>
+        <a href="/blog" class="text-[#00FF88] font-semibold text-sm border-b-2 border-[#00FF88] pb-0.5">Blog</a>
         <a href="/lander" class="text-gray-400 hover:text-white text-sm font-medium">Get Started</a>
-        <a href="/customer/login" class="bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-white font-semibold py-2 px-5 rounded-lg text-sm"><i class="fas fa-sign-in-alt mr-1"></i>Login</a>
+        <a href="/customer/login" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold py-2 px-5 rounded-lg text-sm"><i class="fas fa-sign-in-alt mr-1"></i>Login</a>
       </div>
       <button class="md:hidden text-white text-xl" onclick="document.getElementById('blog-mobile-menu').classList.toggle('hidden')"><i class="fas fa-bars"></i></button>
     </div>
-    <div id="blog-mobile-menu" class="hidden md:hidden bg-slate-800/98 backdrop-blur-xl border-t border-white/10">
+    <div id="blog-mobile-menu" class="hidden md:hidden bg-[#0A0A0A]/98 backdrop-blur-xl border-t border-white/10">
       <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col gap-1">
-        <a href="/" class="text-gray-300 hover:text-white text-sm py-2.5 px-3 rounded-lg hover:bg-white/5">Home</a>
-        <a href="/#pricing" class="text-gray-300 hover:text-white text-sm py-2.5 px-3 rounded-lg hover:bg-white/5">Pricing</a>
-        <a href="/blog" class="text-white font-semibold text-sm py-2.5 px-3 rounded-lg bg-white/5">Blog</a>
-        <a href="/lander" class="text-gray-300 hover:text-white text-sm py-2.5 px-3 rounded-lg hover:bg-white/5">Get Started</a>
-        <a href="/customer/login" class="bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-semibold py-2.5 px-5 rounded-lg text-sm text-center mt-2"><i class="fas fa-sign-in-alt mr-1"></i>Login</a>
+        <a href="/" class="text-gray-400 hover:text-white text-sm py-2.5 px-3 rounded-lg hover:bg-white/5">Home</a>
+        <a href="/#pricing" class="text-gray-400 hover:text-white text-sm py-2.5 px-3 rounded-lg hover:bg-white/5">Pricing</a>
+        <a href="/blog" class="text-[#00FF88] font-semibold text-sm py-2.5 px-3 rounded-lg bg-white/5">Blog</a>
+        <a href="/lander" class="text-gray-400 hover:text-white text-sm py-2.5 px-3 rounded-lg hover:bg-white/5">Get Started</a>
+        <a href="/customer/login" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold py-2.5 px-5 rounded-lg text-sm text-center mt-2"><i class="fas fa-sign-in-alt mr-1"></i>Login</a>
       </div>
     </div>
   </nav>
 
-  <!-- Hero Section — Dark theme matching new brand -->
-  <div class="bg-gradient-to-br from-slate-900 via-cyan-900 to-slate-900 text-white py-16 md:py-20">
+  <!-- Hero Section — Dark theme -->
+  <div style="background:#0d0d0d" class="text-white py-16 md:py-20">
     <div class="max-w-4xl mx-auto px-4 text-center">
-      <div class="inline-flex items-center gap-2 bg-cyan-500/10 border border-cyan-400/30 rounded-full px-4 py-1.5 mb-6">
-        <i class="fas fa-newspaper text-cyan-400 text-sm"></i>
-        <span class="text-sm font-medium text-cyan-200">Industry Insights</span>
+      <div class="inline-flex items-center gap-2 bg-[#00FF88]/10 border border-[#00FF88]/20 rounded-full px-4 py-1.5 mb-6">
+        <i class="fas fa-newspaper text-[#00FF88] text-sm"></i>
+        <span class="text-sm font-medium text-[#00FF88]">Industry Insights</span>
       </div>
       <h1 class="text-4xl md:text-5xl font-black mb-4 tracking-tight">The Roof Manager Blog</h1>
       <p class="text-lg md:text-xl text-gray-300 max-w-2xl mx-auto leading-relaxed">Roofing industry insights, AI measurement technology, contractor business tips, and everything you need to grow your roofing business.</p>
@@ -3235,10 +3237,10 @@ function getBlogListingHTML() {
 
   <!-- Search + Filter Bar -->
   <div class="max-w-6xl mx-auto px-4 -mt-6 relative z-10 mb-8">
-    <div class="bg-white rounded-xl shadow-lg p-4 flex flex-col md:flex-row items-center gap-4">
+    <div class="bg-[#111111] rounded-xl border border-white/10 p-4 flex flex-col md:flex-row items-center gap-4">
       <div class="flex-1 relative w-full">
-        <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
-        <input type="text" id="blog-search" placeholder="Search articles..." class="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-400 focus:border-cyan-400 outline-none">
+        <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"></i>
+        <input type="text" id="blog-search" placeholder="Search articles..." class="w-full pl-10 pr-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-sm text-white placeholder-gray-500 focus:ring-2 focus:ring-[#00FF88]/40 focus:border-[#00FF88]/40 outline-none">
       </div>
       <div class="flex items-center gap-2 flex-wrap" id="blog-category-filters"></div>
     </div>
@@ -3248,33 +3250,33 @@ function getBlogListingHTML() {
   <main class="max-w-6xl mx-auto px-4 pb-20">
     <!-- Featured Post -->
     <div id="blog-featured" class="mb-12"></div>
-    
+
     <!-- All Posts Grid -->
     <div id="blog-grid" class="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
       <div class="col-span-full text-center py-16">
-        <div class="animate-pulse text-gray-400"><i class="fas fa-spinner fa-spin text-3xl mb-4"></i><p class="text-sm">Loading articles...</p></div>
+        <div class="animate-pulse text-gray-500"><i class="fas fa-spinner fa-spin text-3xl mb-4"></i><p class="text-sm">Loading articles...</p></div>
       </div>
     </div>
-    
+
     <!-- Load More -->
     <div id="blog-load-more" class="text-center mt-12 hidden">
-      <button onclick="loadMorePosts()" class="bg-white border-2 border-cyan-500 text-cyan-600 hover:bg-cyan-50 font-semibold py-3 px-8 rounded-lg text-sm transition-all">
+      <button onclick="loadMorePosts()" class="bg-[#111111] border-2 border-[#00FF88]/30 text-[#00FF88] hover:bg-[#00FF88]/10 font-semibold py-3 px-8 rounded-lg text-sm transition-all">
         Load More Articles
       </button>
     </div>
-    
+
     <!-- Empty State -->
     <div id="blog-empty" class="hidden text-center py-20">
-      <i class="fas fa-newspaper text-6xl text-gray-200 mb-6"></i>
-      <h3 class="text-xl font-bold text-gray-600 mb-2">No articles yet</h3>
-      <p class="text-gray-400 text-sm">Check back soon — we're writing great content for roofing professionals!</p>
+      <i class="fas fa-newspaper text-6xl text-gray-700 mb-6"></i>
+      <h3 class="text-xl font-bold text-gray-400 mb-2">No articles yet</h3>
+      <p class="text-gray-500 text-sm">Check back soon — we're writing great content for roofing professionals!</p>
     </div>
 
     <!-- Funnel CTA — Every blog reader gets pushed to lander -->
-    <div class="mt-16 bg-gradient-to-r from-slate-900 via-cyan-900 to-slate-900 rounded-2xl p-8 md:p-12 text-center text-white">
+    <div class="mt-16 bg-[#111111] border border-white/10 rounded-2xl p-8 md:p-12 text-center text-white">
       <h3 class="text-2xl md:text-3xl font-black mb-3 tracking-tight">Ready to Try It Yourself?</h3>
-      <p class="text-gray-300 mb-6 max-w-xl mx-auto">Get 3 free professional roof measurement reports. No credit card required. Full CRM included.</p>
-      <a href="/lander" class="inline-flex items-center gap-2 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-400 hover:to-emerald-400 text-white font-bold py-3 px-8 rounded-xl shadow-lg transition-all hover:scale-[1.02]">
+      <p class="text-gray-400 mb-6 max-w-xl mx-auto">Get 3 free professional roof measurement reports. No credit card required. Full CRM included.</p>
+      <a href="/lander" class="inline-flex items-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold py-3 px-8 rounded-xl shadow-lg transition-all hover:scale-[1.02]">
         <i class="fas fa-gift"></i>
         Claim Your 3 Free Reports
         <i class="fas fa-arrow-right text-sm ml-1"></i>
@@ -3285,24 +3287,48 @@ function getBlogListingHTML() {
   <!-- Contact Us Lead Capture -->
   ${getContactFormHTML('blog')}
 
-  <!-- Footer — Dark style matching new brand -->
-  <footer class="bg-slate-900 text-gray-500 border-t border-gray-800">
-    <div class="max-w-7xl mx-auto px-4 py-12">
-      <div class="flex flex-col md:flex-row items-center justify-between gap-4">
-        <div class="flex items-center gap-3">
-          <img src="/static/logo.png" alt="Roof Manager" class="w-8 h-8 rounded-lg object-cover">
-          <span class="text-gray-300 font-bold">Roof Manager</span>
+  <!-- Footer — Dark theme -->
+  <footer style="background:#0A0A0A" class="text-gray-500 border-t border-white/5">
+    <div class="max-w-7xl mx-auto px-4 py-16">
+      <div class="grid md:grid-cols-4 gap-8 mb-12">
+        <div>
+          <div class="flex items-center gap-3 mb-4">
+            <img src="/static/logo.png" alt="Roof Manager" class="w-9 h-9 rounded-xl object-cover">
+            <span class="text-white font-bold text-lg">Roof Manager</span>
+          </div>
+          <p class="text-sm text-gray-500 leading-relaxed">AI-powered roof measurement reports, CRM, and business management for roofing companies.</p>
         </div>
-        <div class="flex flex-wrap items-center gap-3 sm:gap-6 text-sm">
-          <a href="/" class="hover:text-[#00FF88] transition-colors">Home</a>
-          <a href="/#pricing" class="hover:text-[#00FF88] transition-colors">Pricing</a>
-          <a href="/blog" class="text-cyan-400 font-semibold">Blog</a>
-          <a href="/lander" class="hover:text-[#00FF88] transition-colors">Get Started</a>
-          <a href="/customer/login" class="hover:text-[#00FF88] transition-colors">Login</a>
-          <a href="/privacy" class="hover:text-[#00FF88] transition-colors">Privacy</a>
-          <a href="/terms" class="hover:text-[#00FF88] transition-colors">Terms</a>
+        <div>
+          <h4 class="text-white font-semibold mb-4 text-sm uppercase tracking-wider">Platform</h4>
+          <ul class="space-y-2.5 text-sm">
+            <li><a href="/#features" class="hover:text-[#00FF88] transition-colors">Measurement Reports</a></li>
+            <li><a href="/#features" class="hover:text-[#00FF88] transition-colors">AI Secretary</a></li>
+            <li><a href="/#features" class="hover:text-[#00FF88] transition-colors">CRM & Invoicing</a></li>
+            <li><a href="/#pricing" class="hover:text-[#00FF88] transition-colors">Pricing</a></li>
+          </ul>
         </div>
+        <div>
+          <h4 class="text-white font-semibold mb-4 text-sm uppercase tracking-wider">Resources</h4>
+          <ul class="space-y-2.5 text-sm">
+            <li><a href="/blog" class="text-[#00FF88] font-semibold">Blog</a></li>
+            <li><a href="/#how-it-works" class="hover:text-[#00FF88] transition-colors">How It Works</a></li>
+            <li><a href="/#faq" class="hover:text-[#00FF88] transition-colors">FAQ</a></li>
+            <li><a href="/lander" class="hover:text-[#00FF88] transition-colors">Get Started</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4 class="text-white font-semibold mb-4 text-sm uppercase tracking-wider">Company</h4>
+          <ul class="space-y-2.5 text-sm">
+            <li><a href="/privacy" class="hover:text-[#00FF88] transition-colors">Privacy Policy</a></li>
+            <li><a href="/terms" class="hover:text-[#00FF88] transition-colors">Terms of Service</a></li>
+            <li><a href="mailto:sales@roofmanager.ca" class="hover:text-[#00FF88] transition-colors">Contact</a></li>
+            <li><a href="/customer/login" class="hover:text-[#00FF88] transition-colors">Login</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="border-t border-white/5 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
         <p class="text-xs text-gray-600">&copy; 2026 Roof Manager. All rights reserved.</p>
+        <div class="flex items-center gap-1.5 text-xs text-gray-600"><i class="fas fa-map-marker-alt text-[#00FF88]"></i> Alberta, Canada</div>
       </div>
     </div>
   </footer>
@@ -3327,6 +3353,9 @@ function getBlogPostHTML(post?: any, slug?: string) {
   const blogSchema = post ? `<script type="application/ld+json">
   {"@context":"https://schema.org","@type":"BlogPosting","headline":"${(post.title || '').replace(/"/g, '\\"')}","description":"${(desc).replace(/"/g, '\\"')}","image":"${image}","datePublished":"${published}","dateModified":"${updated || published}","author":{"@type":"Organization","name":"${author}"},"publisher":{"@type":"Organization","name":"Roof Manager","logo":{"@type":"ImageObject","url":"https://roofmanager.ca/static/logo.png"}}}
   </script>` : ''
+  const breadcrumbSchema = slug ? `<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.roofmanager.ca/"},{"@type":"ListItem","position":2,"name":"Blog","item":"https://www.roofmanager.ca/blog"},{"@type":"ListItem","position":3,"name":"${(post?.title || '').replace(/"/g, '\\"')}","item":"https://www.roofmanager.ca/blog/${slug}"}]}
+</script>` : ''
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -3343,30 +3372,37 @@ function getBlogPostHTML(post?: any, slug?: string) {
   <meta name="twitter:title" content="${title.replace(/"/g, '&quot;')}">
   <meta name="twitter:description" content="${desc.replace(/"/g, '&quot;')}">
   <meta name="twitter:image" content="${image}">
+  ${post?.published_at ? `<meta property="article:published_time" content="${published}">` : ''}
+  ${post?.updated_at ? `<meta property="article:modified_time" content="${updated}">` : ''}
+  ${post?.category ? `<meta property="article:section" content="${post.category}">` : ''}
   ${blogSchema}
+  ${breadcrumbSchema}
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tailwindcss/typography@0.5.0/dist/typography.min.css">
 </head>
-<body class="bg-gray-50 min-h-screen">
-  <!-- Navigation -->
-  <nav class="bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg sticky top-0 z-50">
+<body class="min-h-screen" style="background:#0A0A0A">
+  <!-- Navigation — Dark theme -->
+  <nav style="background:#0A0A0A" class="text-white sticky top-0 z-50 border-b border-white/5">
     <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
       <a href="/" class="flex items-center gap-3">
         <img src="/static/logo.png" alt="Roof Manager" class="w-9 h-9 rounded-lg object-cover">
         <span class="text-white font-bold text-lg">Roof Manager</span>
       </a>
       <div class="hidden md:flex items-center gap-5">
-        <a href="/" class="text-brand-200 hover:text-white text-sm">Home</a>
-        <a href="/pricing" class="text-brand-200 hover:text-white text-sm">Pricing</a>
-        <a href="/blog" class="text-white font-semibold text-sm">Blog</a>
-        <a href="/customer/login" class="bg-accent-500 hover:bg-accent-600 text-white font-semibold py-2 px-5 rounded-lg text-sm"><i class="fas fa-sign-in-alt mr-1"></i>Get Started</a>
+        <a href="/" class="text-gray-400 hover:text-white text-sm">Home</a>
+        <a href="/pricing" class="text-gray-400 hover:text-white text-sm">Pricing</a>
+        <a href="/blog" class="text-[#00FF88] font-semibold text-sm border-b-2 border-[#00FF88] pb-0.5">Blog</a>
+        <a href="/lander" class="text-gray-400 hover:text-white text-sm">Get Started</a>
+        <a href="/customer/login" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold py-2 px-5 rounded-lg text-sm"><i class="fas fa-sign-in-alt mr-1"></i>Login</a>
       </div>
       <button class="md:hidden text-white text-xl" onclick="document.getElementById('bp-mobile').classList.toggle('hidden')"><i class="fas fa-bars"></i></button>
     </div>
-    <div id="bp-mobile" class="hidden md:hidden bg-sky-600/95 backdrop-blur-md border-t border-sky-400">
+    <div id="bp-mobile" class="hidden md:hidden bg-[#0A0A0A]/95 backdrop-blur-md border-t border-white/10">
       <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col gap-3">
-        <a href="/" class="text-brand-200 hover:text-white text-sm py-2">Home</a>
-        <a href="/blog" class="text-white font-semibold text-sm py-2">Blog</a>
-        <a href="/customer/login" class="bg-accent-500 text-white font-semibold py-2.5 px-5 rounded-lg text-sm text-center mt-2"><i class="fas fa-sign-in-alt mr-1"></i>Get Started</a>
+        <a href="/" class="text-gray-400 hover:text-white text-sm py-2">Home</a>
+        <a href="/#pricing" class="text-gray-400 hover:text-white text-sm py-2">Pricing</a>
+        <a href="/blog" class="text-[#00FF88] font-semibold text-sm py-2">Blog</a>
+        <a href="/lander" class="text-gray-400 hover:text-white text-sm py-2">Get Started</a>
+        <a href="/customer/login" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold py-2.5 px-5 rounded-lg text-sm text-center mt-2"><i class="fas fa-sign-in-alt mr-1"></i>Login</a>
       </div>
     </div>
   </nav>
@@ -3374,33 +3410,33 @@ function getBlogPostHTML(post?: any, slug?: string) {
   <!-- Breadcrumb -->
   <div class="max-w-4xl mx-auto px-4 py-4">
     <nav class="text-sm text-gray-500">
-      <a href="/" class="hover:text-sky-600">Home</a>
+      <a href="/" class="hover:text-[#00FF88]">Home</a>
       <span class="mx-2">/</span>
-      <a href="/blog" class="hover:text-sky-600">Blog</a>
+      <a href="/blog" class="hover:text-[#00FF88]">Blog</a>
       <span class="mx-2">/</span>
-      <span id="breadcrumb-title" class="text-gray-700 font-medium">Loading...</span>
+      <span id="breadcrumb-title" class="text-gray-300 font-medium">Loading...</span>
     </nav>
   </div>
 
   <!-- Article Content -->
   <main class="max-w-4xl mx-auto px-4 pb-20">
     <article id="blog-post-content">
-      <div class="text-center py-16 animate-pulse text-gray-400"><i class="fas fa-spinner fa-spin text-3xl mb-4"></i><p>Loading article...</p></div>
+      <div class="text-center py-16 animate-pulse text-gray-500"><i class="fas fa-spinner fa-spin text-3xl mb-4"></i><p>Loading article...</p></div>
     </article>
 
     <!-- Author / CTA Box -->
-    <div id="blog-cta" class="hidden mt-12 bg-gradient-to-br from-sky-50 to-blue-50 border border-sky-200 rounded-2xl p-8 text-center">
-      <h3 class="text-xl font-bold text-gray-900 mb-2">Ready to streamline your roof measurements?</h3>
-      <p class="text-gray-600 mb-6 max-w-lg mx-auto">Join hundreds of roofing professionals who save hours on every estimate with AI-powered measurement reports.</p>
+    <div id="blog-cta" class="hidden mt-12 bg-[#111111] border border-white/10 rounded-2xl p-8 text-center">
+      <h3 class="text-xl font-bold text-white mb-2">Ready to streamline your roof measurements?</h3>
+      <p class="text-gray-400 mb-6 max-w-lg mx-auto">Join hundreds of roofing professionals who save hours on every estimate with AI-powered measurement reports.</p>
       <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
-        <a href="/customer/login" class="bg-accent-500 hover:bg-accent-600 text-white font-semibold py-3 px-8 rounded-lg transition-all hover:scale-105 shadow-lg shadow-accent-500/25"><i class="fas fa-rocket mr-2"></i>Start Free Trial</a>
-        <a href="/pricing" class="text-sky-600 hover:text-sky-700 font-semibold text-sm"><i class="fas fa-tag mr-1"></i>View Pricing</a>
+        <a href="/customer/login" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold py-3 px-8 rounded-lg transition-all hover:scale-105 shadow-lg"><i class="fas fa-rocket mr-2"></i>Start Free Trial</a>
+        <a href="/pricing" class="text-[#00FF88] hover:text-[#00e67a] font-semibold text-sm"><i class="fas fa-tag mr-1"></i>View Pricing</a>
       </div>
     </div>
 
     <!-- Related Posts -->
     <div id="blog-related" class="mt-16 hidden">
-      <h3 class="text-xl font-bold text-gray-900 mb-6">Related Articles</h3>
+      <h3 class="text-xl font-bold text-white mb-6">Related Articles</h3>
       <div id="blog-related-grid" class="grid md:grid-cols-3 gap-6"></div>
     </div>
   </main>
@@ -3408,22 +3444,48 @@ function getBlogPostHTML(post?: any, slug?: string) {
   <!-- Contact Us Lead Capture -->
   ${getContactFormHTML('blog-post')}
 
-  <!-- Footer -->
-  <footer class="bg-slate-100 text-gray-600 border-t border-slate-200">
-    <div class="max-w-7xl mx-auto px-4 py-12">
-      <div class="flex flex-col md:flex-row items-center justify-between gap-4">
-        <div class="flex items-center gap-3">
-          <img src="/static/logo.png" alt="Roof Manager" class="w-8 h-8 rounded-lg object-cover">
-          <span class="text-gray-800 font-bold">Roof Manager</span>
+  <!-- Footer — Dark theme -->
+  <footer style="background:#0A0A0A" class="text-gray-500 border-t border-white/5">
+    <div class="max-w-7xl mx-auto px-4 py-16">
+      <div class="grid md:grid-cols-4 gap-8 mb-12">
+        <div>
+          <div class="flex items-center gap-3 mb-4">
+            <img src="/static/logo.png" alt="Roof Manager" class="w-9 h-9 rounded-xl object-cover">
+            <span class="text-white font-bold text-lg">Roof Manager</span>
+          </div>
+          <p class="text-sm text-gray-500 leading-relaxed">AI-powered roof measurement reports, CRM, and business management for roofing companies.</p>
         </div>
-        <div class="flex flex-wrap items-center gap-3 sm:gap-6 text-sm">
-          <a href="/" class="hover:text-sky-600">Home</a>
-          <a href="/blog" class="hover:text-sky-600 font-semibold text-sky-600">Blog</a>
-          <a href="/customer/login" class="hover:text-sky-600">Login</a>
-          <a href="/privacy" class="hover:text-sky-600">Privacy</a>
-          <a href="/terms" class="hover:text-sky-600">Terms</a>
+        <div>
+          <h4 class="text-white font-semibold mb-4 text-sm uppercase tracking-wider">Platform</h4>
+          <ul class="space-y-2.5 text-sm">
+            <li><a href="/#features" class="hover:text-[#00FF88] transition-colors">Measurement Reports</a></li>
+            <li><a href="/#features" class="hover:text-[#00FF88] transition-colors">AI Secretary</a></li>
+            <li><a href="/#features" class="hover:text-[#00FF88] transition-colors">CRM & Invoicing</a></li>
+            <li><a href="/#pricing" class="hover:text-[#00FF88] transition-colors">Pricing</a></li>
+          </ul>
         </div>
-        <p class="text-xs text-gray-400">&copy; 2026 Roof Manager. All rights reserved.</p>
+        <div>
+          <h4 class="text-white font-semibold mb-4 text-sm uppercase tracking-wider">Resources</h4>
+          <ul class="space-y-2.5 text-sm">
+            <li><a href="/blog" class="text-[#00FF88] font-semibold">Blog</a></li>
+            <li><a href="/#how-it-works" class="hover:text-[#00FF88] transition-colors">How It Works</a></li>
+            <li><a href="/#faq" class="hover:text-[#00FF88] transition-colors">FAQ</a></li>
+            <li><a href="/lander" class="hover:text-[#00FF88] transition-colors">Get Started</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4 class="text-white font-semibold mb-4 text-sm uppercase tracking-wider">Company</h4>
+          <ul class="space-y-2.5 text-sm">
+            <li><a href="/privacy" class="hover:text-[#00FF88] transition-colors">Privacy Policy</a></li>
+            <li><a href="/terms" class="hover:text-[#00FF88] transition-colors">Terms of Service</a></li>
+            <li><a href="mailto:sales@roofmanager.ca" class="hover:text-[#00FF88] transition-colors">Contact</a></li>
+            <li><a href="/customer/login" class="hover:text-[#00FF88] transition-colors">Login</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="border-t border-white/5 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
+        <p class="text-xs text-gray-600">&copy; 2026 Roof Manager. All rights reserved.</p>
+        <div class="flex items-center gap-1.5 text-xs text-gray-600"><i class="fas fa-map-marker-alt text-[#00FF88]"></i> Alberta, Canada</div>
       </div>
     </div>
   </footer>

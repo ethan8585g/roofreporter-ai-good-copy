@@ -38,9 +38,22 @@
     return div.innerHTML;
   }
 
+  var categoryDarkColors = {
+    'sky': 'bg-sky-500/10 text-sky-400',
+    'purple': 'bg-purple-500/10 text-purple-400',
+    'emerald': 'bg-emerald-500/10 text-emerald-400',
+    'amber': 'bg-amber-500/10 text-amber-400',
+    'blue': 'bg-blue-500/10 text-blue-400',
+    'yellow': 'bg-yellow-500/10 text-yellow-400',
+    'rose': 'bg-rose-500/10 text-rose-400',
+    'indigo': 'bg-indigo-500/10 text-indigo-400',
+    'gray': 'bg-white/10 text-gray-400'
+  };
+
   function getCategoryBadge(cat) {
     var cfg = categoryConfig[cat] || { label: cat, icon: 'fa-tag', color: 'gray' };
-    return '<span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-' + cfg.color + '-100 text-' + cfg.color + '-700">' +
+    var darkClass = categoryDarkColors[cfg.color] || 'bg-white/10 text-gray-400';
+    return '<span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ' + darkClass + '">' +
       '<i class="fas ' + cfg.icon + ' text-[10px]"></i>' + cfg.label + '</span>';
   }
 
@@ -81,10 +94,10 @@
         }
 
         if (filterEl) {
-          filterEl.innerHTML = '<button onclick="filterCategory(\'\')" class="blog-filter-btn px-3 py-1.5 rounded-full text-xs font-semibold bg-sky-500 text-white" data-cat="">All</button>' +
+          filterEl.innerHTML = '<button onclick="filterCategory(\'\')" class="blog-filter-btn px-3 py-1.5 rounded-full text-xs font-semibold bg-[#00FF88] text-black" data-cat="">All</button>' +
             cats.map(function (c) {
               var cfg = categoryConfig[c.category] || { label: c.category, icon: 'fa-tag' };
-              return '<button onclick="filterCategory(\'' + c.category + '\')" class="blog-filter-btn px-3 py-1.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-600 hover:bg-sky-100 hover:text-sky-700 transition-all" data-cat="' + c.category + '">' +
+              return '<button onclick="filterCategory(\'' + c.category + '\')" class="blog-filter-btn px-3 py-1.5 rounded-full text-xs font-semibold bg-white/10 text-gray-400 hover:bg-[#00FF88]/10 hover:text-[#00FF88] transition-all" data-cat="' + c.category + '">' +
                 '<i class="fas ' + cfg.icon + ' mr-1"></i>' + cfg.label + '</button>';
             }).join('');
         }
@@ -101,9 +114,9 @@
     var btns = document.querySelectorAll('.blog-filter-btn');
     btns.forEach(function (btn) {
       if (btn.getAttribute('data-cat') === cat) {
-        btn.className = 'blog-filter-btn px-3 py-1.5 rounded-full text-xs font-semibold bg-sky-500 text-white';
+        btn.className = 'blog-filter-btn px-3 py-1.5 rounded-full text-xs font-semibold bg-[#00FF88] text-black';
       } else {
-        btn.className = 'blog-filter-btn px-3 py-1.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-600 hover:bg-sky-100 hover:text-sky-700 transition-all';
+        btn.className = 'blog-filter-btn px-3 py-1.5 rounded-full text-xs font-semibold bg-white/10 text-gray-400 hover:bg-[#00FF88]/10 hover:text-[#00FF88] transition-all';
       }
     });
   };
@@ -178,31 +191,31 @@
   function renderFeaturedPost(post) {
     var coverStyle = post.cover_image_url
       ? 'background-image:url(' + escapeHtml(post.cover_image_url) + ');background-size:cover;background-position:center'
-      : 'background:linear-gradient(135deg,#0ea5e9,#2563eb)';
+      : 'background:linear-gradient(135deg,#111 0%,#1a1a1a 100%)';
 
     return '<a href="/blog/' + escapeHtml(post.slug) + '" class="block group">' +
-      '<div class="bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition-all duration-300 md:flex">' +
+      '<div class="bg-[#111111] border border-white/10 rounded-2xl overflow-hidden hover:border-[#00FF88]/30 transition-all duration-300 md:flex">' +
         '<div class="md:w-1/2 h-64 md:h-auto relative" style="' + coverStyle + ';min-height:280px">' +
           '<div class="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent"></div>' +
           '<div class="absolute top-4 left-4">' +
-            '<span class="bg-accent-500 text-white text-xs font-bold px-3 py-1.5 rounded-full"><i class="fas fa-star mr-1"></i>Featured</span>' +
+            '<span class="bg-[#00FF88] text-black text-xs font-bold px-3 py-1.5 rounded-full"><i class="fas fa-star mr-1"></i>Featured</span>' +
           '</div>' +
           (post.cover_image_url ? '' : '<div class="absolute inset-0 flex items-center justify-center"><i class="fas fa-newspaper text-white/30 text-6xl"></i></div>') +
         '</div>' +
         '<div class="md:w-1/2 p-8 flex flex-col justify-center">' +
           '<div class="flex items-center gap-3 mb-3">' +
             getCategoryBadge(post.category) +
-            '<span class="text-gray-400 text-xs"><i class="far fa-clock mr-1"></i>' + (post.read_time_minutes || 5) + ' min read</span>' +
+            '<span class="text-gray-500 text-xs"><i class="far fa-clock mr-1"></i>' + (post.read_time_minutes || 5) + ' min read</span>' +
           '</div>' +
-          '<h2 class="text-2xl md:text-3xl font-bold text-gray-900 mb-3 group-hover:text-sky-600 transition-colors leading-tight">' + escapeHtml(post.title) + '</h2>' +
-          '<p class="text-gray-600 mb-4 leading-relaxed line-clamp-3">' + escapeHtml(post.excerpt) + '</p>' +
+          '<h2 class="text-2xl md:text-3xl font-bold text-white mb-3 group-hover:text-[#00FF88] transition-colors leading-tight">' + escapeHtml(post.title) + '</h2>' +
+          '<p class="text-gray-400 mb-4 leading-relaxed line-clamp-3">' + escapeHtml(post.excerpt) + '</p>' +
           '<div class="flex items-center justify-between mt-auto">' +
             '<div class="flex items-center gap-2">' +
-              '<div class="w-8 h-8 bg-sky-100 rounded-full flex items-center justify-center"><i class="fas fa-user text-sky-500 text-xs"></i></div>' +
-              '<div><div class="text-sm font-semibold text-gray-800">' + escapeHtml(post.author_name || 'Roof Manager Team') + '</div>' +
-              '<div class="text-xs text-gray-400">' + formatDate(post.published_at) + '</div></div>' +
+              '<div class="w-8 h-8 bg-[#00FF88]/10 rounded-full flex items-center justify-center"><i class="fas fa-user text-[#00FF88] text-xs"></i></div>' +
+              '<div><div class="text-sm font-semibold text-gray-300">' + escapeHtml(post.author_name || 'Roof Manager Team') + '</div>' +
+              '<div class="text-xs text-gray-500">' + formatDate(post.published_at) + '</div></div>' +
             '</div>' +
-            '<span class="text-sky-500 font-semibold text-sm group-hover:translate-x-1 transition-transform">Read More <i class="fas fa-arrow-right ml-1"></i></span>' +
+            '<span class="text-[#00FF88] font-semibold text-sm group-hover:translate-x-1 transition-transform">Read More <i class="fas fa-arrow-right ml-1"></i></span>' +
           '</div>' +
         '</div>' +
       '</div>' +
@@ -212,21 +225,21 @@
   function renderPostCard(post) {
     var coverStyle = post.cover_image_url
       ? 'background-image:url(' + escapeHtml(post.cover_image_url) + ');background-size:cover;background-position:center'
-      : 'background:linear-gradient(135deg,#0ea5e9 0%,#6366f1 100%)';
+      : 'background:linear-gradient(135deg,#111 0%,#1a1a1a 100%)';
 
     return '<a href="/blog/' + escapeHtml(post.slug) + '" class="block group">' +
-      '<article class="bg-white rounded-xl shadow-sm overflow-hidden hover:shadow-lg transition-all duration-300 hover:-translate-y-1 h-full flex flex-col">' +
+      '<article class="bg-[#111111] border border-white/10 rounded-xl overflow-hidden hover:border-[#00FF88]/30 transition-all duration-300 hover:-translate-y-1 h-full flex flex-col">' +
         '<div class="h-48 relative" style="' + coverStyle + '">' +
           '<div class="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent"></div>' +
           (post.cover_image_url ? '' : '<div class="absolute inset-0 flex items-center justify-center"><i class="fas fa-newspaper text-white/30 text-4xl"></i></div>') +
           '<div class="absolute top-3 left-3">' + getCategoryBadge(post.category) + '</div>' +
         '</div>' +
         '<div class="p-5 flex flex-col flex-1">' +
-          '<h3 class="font-bold text-gray-900 mb-2 group-hover:text-sky-600 transition-colors leading-snug line-clamp-2">' + escapeHtml(post.title) + '</h3>' +
-          '<p class="text-gray-500 text-sm mb-4 leading-relaxed line-clamp-3 flex-1">' + escapeHtml(post.excerpt) + '</p>' +
-          '<div class="flex items-center justify-between pt-4 border-t border-gray-100">' +
-            '<span class="text-xs text-gray-400">' + formatDate(post.published_at) + '</span>' +
-            '<span class="text-xs text-gray-400"><i class="far fa-clock mr-1"></i>' + (post.read_time_minutes || 5) + ' min</span>' +
+          '<h3 class="font-bold text-white mb-2 group-hover:text-[#00FF88] transition-colors leading-snug line-clamp-2">' + escapeHtml(post.title) + '</h3>' +
+          '<p class="text-gray-400 text-sm mb-4 leading-relaxed line-clamp-3 flex-1">' + escapeHtml(post.excerpt) + '</p>' +
+          '<div class="flex items-center justify-between pt-4 border-t border-white/5">' +
+            '<span class="text-xs text-gray-500">' + formatDate(post.published_at) + '</span>' +
+            '<span class="text-xs text-gray-500"><i class="far fa-clock mr-1"></i>' + (post.read_time_minutes || 5) + ' min</span>' +
           '</div>' +
         '</div>' +
       '</article>' +
@@ -312,7 +325,7 @@
       if (tagList.length > 0) {
         tagsHtml = '<div class="flex flex-wrap gap-2 mb-8">' +
           tagList.map(function (tag) {
-            return '<span class="px-3 py-1 bg-gray-100 text-gray-600 text-xs font-medium rounded-full">#' + escapeHtml(tag) + '</span>';
+            return '<span class="px-3 py-1 bg-white/10 text-gray-400 text-xs font-medium rounded-full">#' + escapeHtml(tag) + '</span>';
           }).join('') +
           '</div>';
       }
@@ -323,24 +336,24 @@
       '<div class="mb-6">' +
         '<div class="flex items-center gap-3 mb-4">' +
           getCategoryBadge(post.category) +
-          '<span class="text-gray-400 text-sm"><i class="far fa-clock mr-1"></i>' + (post.read_time_minutes || 5) + ' min read</span>' +
-          '<span class="text-gray-400 text-sm"><i class="far fa-eye mr-1"></i>' + (post.view_count || 0) + ' views</span>' +
+          '<span class="text-gray-500 text-sm"><i class="far fa-clock mr-1"></i>' + (post.read_time_minutes || 5) + ' min read</span>' +
+          '<span class="text-gray-500 text-sm"><i class="far fa-eye mr-1"></i>' + (post.view_count || 0) + ' views</span>' +
         '</div>' +
-        '<h1 class="text-3xl md:text-4xl font-extrabold text-gray-900 leading-tight mb-4">' + escapeHtml(post.title) + '</h1>' +
-        (post.excerpt ? '<p class="text-lg text-gray-500 leading-relaxed">' + escapeHtml(post.excerpt) + '</p>' : '') +
+        '<h1 class="text-3xl md:text-4xl font-extrabold text-white leading-tight mb-4">' + escapeHtml(post.title) + '</h1>' +
+        (post.excerpt ? '<p class="text-lg text-gray-400 leading-relaxed">' + escapeHtml(post.excerpt) + '</p>' : '') +
       '</div>' +
-      '<div class="flex items-center gap-4 pb-8 mb-8 border-b border-gray-200">' +
-        '<div class="w-12 h-12 bg-sky-100 rounded-full flex items-center justify-center"><i class="fas fa-user text-sky-500"></i></div>' +
+      '<div class="flex items-center gap-4 pb-8 mb-8 border-b border-white/10">' +
+        '<div class="w-12 h-12 bg-[#00FF88]/10 rounded-full flex items-center justify-center"><i class="fas fa-user text-[#00FF88]"></i></div>' +
         '<div>' +
-          '<div class="font-semibold text-gray-800">' + escapeHtml(post.author_name || 'Roof Manager Team') + '</div>' +
-          '<div class="text-sm text-gray-400">' + formatDate(post.published_at) + (post.updated_at !== post.created_at ? ' · Updated ' + formatDate(post.updated_at) : '') + '</div>' +
+          '<div class="font-semibold text-gray-300">' + escapeHtml(post.author_name || 'Roof Manager Team') + '</div>' +
+          '<div class="text-sm text-gray-500">' + formatDate(post.published_at) + (post.updated_at !== post.created_at ? ' · Updated ' + formatDate(post.updated_at) : '') + '</div>' +
         '</div>' +
         '<div class="ml-auto flex items-center gap-3">' +
-          '<button onclick="shareBlog()" class="text-gray-400 hover:text-sky-500 transition-colors" title="Share"><i class="fas fa-share-alt text-lg"></i></button>' +
+          '<button onclick="shareBlog()" class="text-gray-400 hover:text-[#00FF88] transition-colors" title="Share"><i class="fas fa-share-alt text-lg"></i></button>' +
         '</div>' +
       '</div>' +
       tagsHtml +
-      '<div class="prose prose-lg prose-sky max-w-none blog-content">' +
+      '<div class="prose prose-lg prose-invert max-w-none blog-content">' +
         post.content +
       '</div>' +
       // Contact Us form at bottom of every blog post
@@ -421,24 +434,24 @@
   function injectProseStyles() {
     var style = document.createElement('style');
     style.textContent = '' +
-      '.blog-content { color: #374151; line-height: 1.8; }' +
-      '.blog-content h1 { font-size: 2em; font-weight: 800; margin: 1.5em 0 0.5em; color: #111827; }' +
-      '.blog-content h2 { font-size: 1.5em; font-weight: 700; margin: 1.5em 0 0.5em; color: #111827; border-bottom: 2px solid #e5e7eb; padding-bottom: 0.3em; }' +
-      '.blog-content h3 { font-size: 1.25em; font-weight: 700; margin: 1.3em 0 0.4em; color: #1f2937; }' +
+      '.blog-content { color: #d1d5db; line-height: 1.8; }' +
+      '.blog-content h1 { font-size: 2em; font-weight: 800; margin: 1.5em 0 0.5em; color: #f3f4f6; }' +
+      '.blog-content h2 { font-size: 1.5em; font-weight: 700; margin: 1.5em 0 0.5em; color: #f3f4f6; border-bottom: 2px solid rgba(255,255,255,0.1); padding-bottom: 0.3em; }' +
+      '.blog-content h3 { font-size: 1.25em; font-weight: 700; margin: 1.3em 0 0.4em; color: #e5e7eb; }' +
       '.blog-content p { margin: 1em 0; }' +
       '.blog-content ul, .blog-content ol { margin: 1em 0; padding-left: 1.5em; }' +
       '.blog-content li { margin: 0.3em 0; }' +
-      '.blog-content a { color: #0ea5e9; text-decoration: underline; }' +
-      '.blog-content a:hover { color: #0284c7; }' +
-      '.blog-content blockquote { border-left: 4px solid #0ea5e9; background: #f0f9ff; padding: 1em 1.5em; margin: 1.5em 0; border-radius: 0 8px 8px 0; color: #1e40af; font-style: italic; }' +
-      '.blog-content img { max-width: 100%; border-radius: 12px; margin: 1.5em 0; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }' +
-      '.blog-content code { background: #f3f4f6; padding: 0.2em 0.5em; border-radius: 4px; font-size: 0.9em; color: #e11d48; }' +
-      '.blog-content pre { background: #1f2937; color: #e5e7eb; padding: 1.5em; border-radius: 12px; overflow-x: auto; margin: 1.5em 0; }' +
+      '.blog-content a { color: #00FF88; text-decoration: underline; }' +
+      '.blog-content a:hover { color: #33ffaa; }' +
+      '.blog-content blockquote { border-left: 4px solid #00FF88; background: rgba(0,255,136,0.05); padding: 1em 1.5em; margin: 1.5em 0; border-radius: 0 8px 8px 0; color: #a7f3d0; font-style: italic; }' +
+      '.blog-content img { max-width: 100%; border-radius: 12px; margin: 1.5em 0; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }' +
+      '.blog-content code { background: rgba(255,255,255,0.1); padding: 0.2em 0.5em; border-radius: 4px; font-size: 0.9em; color: #f472b6; }' +
+      '.blog-content pre { background: #0a0a0a; color: #e5e7eb; padding: 1.5em; border-radius: 12px; overflow-x: auto; margin: 1.5em 0; border: 1px solid rgba(255,255,255,0.1); }' +
       '.blog-content pre code { background: none; color: inherit; padding: 0; }' +
       '.blog-content table { width: 100%; border-collapse: collapse; margin: 1.5em 0; }' +
-      '.blog-content th, .blog-content td { border: 1px solid #e5e7eb; padding: 0.75em 1em; text-align: left; }' +
-      '.blog-content th { background: #f9fafb; font-weight: 700; }' +
-      '.blog-content hr { border: none; border-top: 2px solid #e5e7eb; margin: 2em 0; }' +
+      '.blog-content th, .blog-content td { border: 1px solid rgba(255,255,255,0.1); padding: 0.75em 1em; text-align: left; }' +
+      '.blog-content th { background: rgba(255,255,255,0.05); font-weight: 700; color: #f3f4f6; }' +
+      '.blog-content hr { border: none; border-top: 2px solid rgba(255,255,255,0.1); margin: 2em 0; }' +
       '.line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }' +
       '.line-clamp-3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }';
     document.head.appendChild(style);
