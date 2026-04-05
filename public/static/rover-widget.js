@@ -55,19 +55,19 @@
       width: 64px;
       height: 64px;
       border-radius: 50%;
-      background: linear-gradient(135deg, #0ea5e9, #2563eb);
+      background: linear-gradient(135deg, #00FF88, #00cc6a);
       border: none;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 8px 30px rgba(14, 165, 233, 0.4);
+      box-shadow: 0 8px 30px rgba(0, 255, 136, 0.35);
       transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
       position: relative;
     }
     #rover-fab:hover {
       transform: scale(1.08);
-      box-shadow: 0 12px 40px rgba(14, 165, 233, 0.5);
+      box-shadow: 0 12px 40px rgba(0, 255, 136, 0.45);
     }
     #rover-fab .rover-icon {
       font-size: 28px;
@@ -676,7 +676,7 @@
     } catch (e) {
       submitBtn.disabled = false;
       submitBtn.textContent = 'Send to Our Team →';
-      addMessage('assistant', "Sorry, I had trouble sending that. You can also email us directly at reports@reusecanada.ca and we'll get right back to you!");
+      addMessage('assistant', "Sorry, I had trouble sending that. You can also email us directly at sales@roofmanager.ca and we'll get right back to you!");
     }
   };
 
@@ -775,12 +775,12 @@
         }
       } else {
         // Server error — show fallback + contact form
-        addMessage('assistant', "I'm having a quick technical hiccup! You can reach us at reports@reusecanada.ca or sign up at /customer/login for 3 free reports. Or fill out the contact form below and our team will reach out! 😊");
+        addMessage('assistant', "I'm having a quick technical hiccup! You can reach us at sales@roofmanager.ca or sign up at /customer/login for 3 free reports. Or fill out the contact form below and our team will reach out! 😊");
         showContactForm();
       }
     } catch (e) {
       hideTyping();
-      addMessage('assistant', "Oops, connection issue! You can email us at reports@reusecanada.ca or fill out the contact form below. We'll get back to you right away!");
+      addMessage('assistant', "Oops, connection issue! You can email us at sales@roofmanager.ca or fill out the contact form below. We'll get back to you right away!");
       showContactForm();
     }
 
