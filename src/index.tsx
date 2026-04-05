@@ -1399,7 +1399,8 @@ app.use('*', async (c, next) => {
   if (!page?.html_snapshot) return c.notFound()
 
   // Rewrite basePath links for custom domain (root-relative instead of /sites/subdomain)
-  const html = page.html_snapshot.replace(new RegExp(`/sites/${site.subdomain}`, 'g'), '')
+  const escapedSubdomain = site.subdomain.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const html = page.html_snapshot.replace(new RegExp(`/sites/${escapedSubdomain}`, 'g'), '')
   return c.html(html)
 })
 

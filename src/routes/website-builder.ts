@@ -421,10 +421,11 @@ websiteBuilderRoutes.post('/sites/:id/regenerate', async (c) => {
     VALUES (?, ?, ?, 'gemini-2.0-flash')
   `).bind(siteId, nextVersion, JSON.stringify(siteContent)).run()
 
-  // Update status
+  // Keep published status if site was already live, otherwise set to preview
+  const newStatus = site.status === 'published' ? 'published' : 'preview'
   await c.env.DB.prepare(
-    "UPDATE wb_sites SET status = 'preview', updated_at = datetime('now') WHERE id = ?"
-  ).bind(siteId).run()
+    "UPDATE wb_sites SET status = ?, updated_at = datetime('now') WHERE id = ?"
+  ).bind(newStatus, siteId).run()
 
   return c.json({ success: true, version: nextVersion })
 })
@@ -432,6 +433,10 @@ websiteBuilderRoutes.post('/sites/:id/regenerate', async (c) => {
 // ============================================================
 // POST /leads — Public lead capture (no auth required, CORS open for custom domains)
 // ============================================================
+
+// Simple in-memory rate limiter for lead submissions
+const leadRateLimit = new Map<string, { count: number; resetAt: number }>()
+
 websiteBuilderRoutes.options('/leads', (c) => {
   return new Response(null, {
     status: 204,
@@ -447,15 +452,36 @@ websiteBuilderRoutes.post('/leads', async (c) => {
   // Allow cross-origin for custom domain forms
   c.header('Access-Control-Allow-Origin', '*')
   try {
+    // Rate limiting: max 5 submissions per IP per 60 seconds
+    const ip = c.req.header('cf-connecting-ip') || c.req.header('x-forwarded-for') || 'unknown'
+    const now = Date.now()
+    const rl = leadRateLimit.get(ip)
+    if (rl && rl.resetAt > now) {
+      if (rl.count >= 5) {
+        return c.json({ error: 'Too many submissions. Please try again later.' }, 429)
+      }
+      rl.count++
+    } else {
+      leadRateLimit.set(ip, { count: 1, resetAt: now + 60000 })
+    }
+
     const body = await c.req.json()
 
-    // Validate
+    // Validate required fields
     const siteId = parseInt(body.site_id)
-    if (!siteId || !body.name) {
+    if (!siteId || !body.name || String(body.name).trim().length < 2) {
       return c.json({ error: 'site_id and name are required' }, 400)
     }
     if (!body.email && !body.phone) {
       return c.json({ error: 'Email or phone is required' }, 400)
+    }
+    // Validate email format if provided
+    if (body.email && !String(body.email).includes('@')) {
+      return c.json({ error: 'Invalid email format' }, 400)
+    }
+    // Validate phone has at least 7 digits if provided
+    if (body.phone && String(body.phone).replace(/\D/g, '').length < 7) {
+      return c.json({ error: 'Invalid phone number' }, 400)
     }
 
     // Look up site to get owner_id
