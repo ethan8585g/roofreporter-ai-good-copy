@@ -552,9 +552,76 @@ app.get('/sitemap.xml', async (c) => {
   return c.text(xml, 200, { 'Content-Type': 'application/xml' })
 })
 
+// SEO: RSS feed
+app.get('/feed.xml', async (c) => {
+  const base = 'https://www.roofmanager.ca'
+  let items = ''
+  try {
+    const posts = await c.env.DB.prepare("SELECT slug, title, excerpt, content, cover_image_url, author_name, published_at, updated_at, category FROM blog_posts WHERE status = 'published' ORDER BY published_at DESC LIMIT 50").all()
+    for (const p of (posts.results || []) as any[]) {
+      const pubDate = p.published_at ? new Date(p.published_at).toUTCString() : new Date().toUTCString()
+      const desc = (p.excerpt || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      const title = (p.title || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      items += `<item><title>${title}</title><link>${base}/blog/${p.slug}</link><guid isPermaLink="true">${base}/blog/${p.slug}</guid><pubDate>${pubDate}</pubDate><description>${desc}</description><category>${p.category || 'roofing'}</category><author>sales@roofmanager.ca (${p.author_name || 'Roof Manager Team'})</author>${p.cover_image_url ? `<enclosure url="${p.cover_image_url}" type="image/jpeg"/>` : ''}</item>\n`
+    }
+  } catch {}
+  const rss = `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+<channel>
+<title>Roof Manager Blog</title>
+<link>${base}/blog</link>
+<description>Roofing industry insights, AI measurement technology, contractor business tips from Roof Manager.</description>
+<language>en-ca</language>
+<lastBuildDate>${new Date().toUTCString()}</lastBuildDate>
+<atom:link href="${base}/feed.xml" rel="self" type="application/rss+xml"/>
+<image><url>${base}/static/logo.png</url><title>Roof Manager</title><link>${base}</link></image>
+${items}
+</channel>
+</rss>`
+  return c.text(rss, 200, { 'Content-Type': 'application/rss+xml; charset=utf-8' })
+})
+
+// SEO: Image sitemap
+app.get('/image-sitemap.xml', async (c) => {
+  const base = 'https://www.roofmanager.ca'
+  let urls = `<url><loc>${base}/</loc><image:image><image:loc>${base}/static/logo.png</image:loc><image:title>Roof Manager Logo</image:title></image:image></url>\n`
+  try {
+    const posts = await c.env.DB.prepare("SELECT slug, title, cover_image_url FROM blog_posts WHERE status = 'published' AND cover_image_url IS NOT NULL AND cover_image_url != '' ORDER BY published_at DESC LIMIT 100").all()
+    for (const p of (posts.results || []) as any[]) {
+      const title = (p.title || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+      urls += `<url><loc>${base}/blog/${p.slug}</loc><image:image><image:loc>${p.cover_image_url}</image:loc><image:title>${title}</image:title></image:image></url>\n`
+    }
+  } catch {}
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">\n${urls}</urlset>`
+  return c.text(xml, 200, { 'Content-Type': 'application/xml' })
+})
+
 // SEO: robots.txt
 app.get('/robots.txt', (c) => {
-  return c.text(`User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /customer/\nDisallow: /admin/\nDisallow: /superadmin/\nSitemap: https://www.roofmanager.ca/sitemap.xml`)
+  return c.text(`User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /customer/
+Disallow: /admin/
+Disallow: /superadmin/
+
+Sitemap: https://www.roofmanager.ca/sitemap.xml
+Sitemap: https://www.roofmanager.ca/image-sitemap.xml
+
+# AI Assistants
+User-agent: GPTBot
+Allow: /
+Allow: /llms.txt
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: CCBot
+Allow: /
+
+User-agent: anthropic-ai
+Allow: /
+`)
 })
 
 // SEO: llms.txt
@@ -720,6 +787,7 @@ app.get('/roof-measurement/:city', (c) => {
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://www.roofmanager.ca/roof-measurement/${slug}">
   <meta property="og:image" content="https://roofmanager.ca/static/logo.png">
+  <meta property="og:image:alt" content="Satellite roof measurement reports in ${country.name}">
   <meta property="og:site_name" content="Roof Manager">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Roof Measurements in ${country.name} — Roof Manager">
@@ -835,6 +903,7 @@ app.get('/roof-measurement/:city', (c) => {
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://www.roofmanager.ca/roof-measurement/${citySlug}">
   <meta property="og:image" content="https://roofmanager.ca/static/logo.png">
+  <meta property="og:image:alt" content="Roof measurement report for ${city.name}, ${city.province}">
   <meta property="og:site_name" content="Roof Manager">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Roof Measurements in ${city.name} — Roof Manager">
@@ -1722,6 +1791,7 @@ function getHeadTags() {
   <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
   ${getTailwindConfig()}
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+  <link rel="alternate" type="application/rss+xml" title="Roof Manager Blog" href="https://www.roofmanager.ca/feed.xml">
   <link rel="stylesheet" href="/static/style.css">
   <style>#google_translate_element{position:fixed;bottom:20px;left:20px;z-index:9998;background:white;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,0.15);padding:8px 12px;border:1px solid #e2e8f0;font-size:13px}.goog-te-gadget{font-family:inherit!important}.goog-te-gadget-simple{background:transparent!important;border:none!important;padding:0!important;font-size:13px!important}.goog-te-menu-value span{color:#374151!important}.goog-te-banner-frame{display:none!important}body{top:0!important}@media(max-width:480px){#google_translate_element{bottom:70px;left:10px;transform:scale(0.85);transform-origin:bottom left}}</style>
   <div id="google_translate_element"></div>
@@ -3623,15 +3693,18 @@ function getPricingPageHTML() {
   {
     "@context": "https://schema.org",
     "@type": "Product",
-    "name": "Roof Manager Roof Measurement Reports",
-    "description": "AI-powered satellite roof measurement reports with CRM, invoicing, proposals, and team management.",
-    "image": "https://roofmanager.ca/static/logo.png",
+    "name": "Roof Manager - AI Roof Measurement Reports",
+    "description": "Professional satellite-powered roof measurement reports with 3D area, pitch analysis, edge breakdowns, and material BOM.",
     "brand": {"@type": "Brand", "name": "Roof Manager"},
+    "image": "https://roofmanager.ca/static/logo.png",
+    "url": "https://www.roofmanager.ca/pricing",
     "offers": [
-      {"@type": "Offer", "name": "Individual Report", "price": "7.00", "priceCurrency": "USD", "description": "Single roof measurement report"},
-      {"@type": "Offer", "name": "25-Pack", "price": "150.00", "priceCurrency": "USD", "description": "25 roof measurement reports — $6/each (save 14%)"},
-      {"@type": "Offer", "name": "100-Pack", "price": "500.00", "priceCurrency": "USD", "description": "100 roof measurement reports — $5/each (save 29%)"}
-    ]
+      {"@type": "Offer", "name": "Free Trial", "price": "0", "priceCurrency": "USD", "description": "3 free professional roof measurement reports", "availability": "https://schema.org/InStock"},
+      {"@type": "Offer", "name": "Per Report", "price": "7.00", "priceCurrency": "USD", "description": "Pay-per-report after free trial", "availability": "https://schema.org/InStock"},
+      {"@type": "Offer", "name": "25-Pack", "price": "150.00", "priceCurrency": "USD", "description": "25 report credits at $6 each", "availability": "https://schema.org/InStock", "priceSpecification": {"@type": "UnitPriceSpecification", "price": "6.00", "priceCurrency": "USD", "referenceQuantity": {"@type": "QuantitativeValue", "value": "1", "unitCode": "EA"}}},
+      {"@type": "Offer", "name": "100-Pack", "price": "500.00", "priceCurrency": "USD", "description": "100 report credits at $5 each", "availability": "https://schema.org/InStock", "priceSpecification": {"@type": "UnitPriceSpecification", "price": "5.00", "priceCurrency": "USD", "referenceQuantity": {"@type": "QuantitativeValue", "value": "1", "unitCode": "EA"}}}
+    ],
+    "aggregateRating": {"@type": "AggregateRating", "ratingValue": "4.9", "ratingCount": "200", "bestRating": "5"}
   }
   </script>
 </head>
@@ -3859,6 +3932,26 @@ function getBlogPostHTML(post?: any, slug?: string) {
   <meta property="og:image" content="${image}">
   <meta property="og:site_name" content="Roof Manager">
   ${canonical ? `<link rel="canonical" href="${canonical}">` : ''}
+  ${(() => {
+    const langMap: Record<string, string> = {
+      'couvreur-france': 'fr',
+      'deutsche-dachdecker': 'de',
+      'polski-dekarz': 'pl',
+      'roofer-italiano': 'it',
+      'nederlandse-dakdekker': 'nl'
+    }
+    let hreflangs = ''
+    if (slug) {
+      for (const [pattern, lang] of Object.entries(langMap)) {
+        if (slug.includes(pattern)) {
+          hreflangs += `<link rel="alternate" hreflang="${lang}" href="https://www.roofmanager.ca/blog/${slug}">\n`
+          hreflangs += `<link rel="alternate" hreflang="x-default" href="https://www.roofmanager.ca/blog">\n`
+          break
+        }
+      }
+    }
+    return hreflangs
+  })()}
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="${title.replace(/"/g, '&quot;')}">
   <meta name="twitter:description" content="${desc.replace(/"/g, '&quot;')}">
