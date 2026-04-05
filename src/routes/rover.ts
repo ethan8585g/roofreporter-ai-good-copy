@@ -35,7 +35,7 @@ YOUR PRIMARY GOALS (in order):
 2. Qualify the lead — understand their business, volume, and needs
 3. Move them toward signing up at /customer/login (3 FREE reports, no credit card)
 4. Collect their name, email, and company naturally during conversation
-5. If you truly cannot help, guide them to the contact form or email sales@roofreporterai.com
+5. If you truly cannot help, guide them to the contact form or email sales@roofmanager.ca
 
 ═══════════════════════════════════════════════════
 ABOUT ROOFREPORTERAI — KNOW THIS INSIDE AND OUT
@@ -45,8 +45,8 @@ WHAT WE ARE:
 RoofReporterAI is an AI-powered roof measurement platform that generates detailed, professional roof reports from satellite imagery in under 60 seconds. We use Google's Solar API for real satellite data — these are NOT estimates or guesswork. We serve roofing professionals, estimators, home inspectors, insurance adjusters, solar installers, and property managers across Canada.
 
 HEADQUARTERS: Alberta, Canada
-WEBSITE: roofreporterai.com (also at roofing-measurement-tool.pages.dev)
-EMAIL: sales@roofreporterai.com
+WEBSITE: roofmanager.ca (also at roofing-measurement-tool.pages.dev)
+EMAIL: sales@roofmanager.ca
 PARENT COMPANY: Reuse Canada — an innovative recycling and sustainable building products company
 
 ═══════════════════════════════════════════════════
@@ -216,13 +216,13 @@ Q: "Can I try it for free?"
 A: Absolutely! Sign up at /customer/login — you get 3 completely free roof reports, no credit card required. Same full-featured reports that paid customers get.
 
 Q: "What if I need a lot of reports?"
-A: We offer credit packs for volume users at discounted rates. After your 3 free reports, each additional report is $8 CAD. If you're doing 50+ reports a month, reach out to sales@roofreporterai.com and we can discuss volume pricing.
+A: We offer credit packs for volume users at discounted rates. After your 3 free reports, each additional report is $8 CAD. If you're doing 50+ reports a month, reach out to sales@roofmanager.ca and we can discuss volume pricing.
 
 Q: "Can I brand the reports with my company logo?"
 A: Yes! Through your customer portal, you can add your company logo, name, and contact info to every report. Your clients will see YOUR brand, not ours.
 
 Q: "Do you have an API?"
-A: We're working on API access for high-volume users and integration partners. Contact sales@roofreporterai.com if you're interested — you'd be a great candidate for early access.
+A: We're working on API access for high-volume users and integration partners. Contact sales@roofmanager.ca if you're interested — you'd be a great candidate for early access.
 
 Q: "Is my data secure?"
 A: Yes. All payments are processed through Square's secure platform. Your reports and customer data are stored on Cloudflare's global network with enterprise-grade security.
@@ -241,7 +241,7 @@ RESPONSE GUIDELINES
 2. Keep responses 2-4 sentences unless the question needs more detail
 3. Use specific numbers and facts — $8 per report, < 60 seconds, 3 free reports
 4. NEVER make up features, pricing, or capabilities not listed above
-5. If you genuinely don't know something, say: "That's a great question! I'd recommend reaching out to our team at sales@roofreporterai.com or filling out the contact form so we can get you the right answer."
+5. If you genuinely don't know something, say: "That's a great question! I'd recommend reaching out to our team at sales@roofmanager.ca or filling out the contact form so we can get you the right answer."
 6. Always try to understand what brought them to the site and what their business does
 7. If they mention company size, estimate volume, or specific needs, note this — they're a qualified lead
 8. End responses with a question or clear next step when natural
@@ -419,7 +419,7 @@ roverRoutes.post('/chat', async (c) => {
     console.error('Rover chat error:', err)
     return c.json({ 
       error: 'Chat service temporarily unavailable', 
-      reply: "I'm having a quick technical hiccup! You can reach our team at sales@roofreporterai.com or sign up at /customer/login for 3 free reports. We'll be back in just a moment!",
+      reply: "I'm having a quick technical hiccup! You can reach our team at sales@roofmanager.ca or sign up at /customer/login for 3 free reports. We'll be back in just a moment!",
       show_contact_form: true,
       session_id: (await c.req.json().catch(() => ({}))).session_id
     }, 200) // Return 200 so frontend can display the message
@@ -465,7 +465,7 @@ function getFallbackResponse(message: string): string {
   }
 
   if (msg.includes('phone') || msg.includes('secretary') || msg.includes('call') || msg.includes('answer')) {
-    return "Our Roofer Secretary is an AI-powered phone answering service for $249/month! It answers your business calls 24/7, routes them to the right department, and gives you full call transcripts. Never miss a lead again! Email sales@roofreporterai.com to learn more. 📞"
+    return "Our Roofer Secretary is an AI-powered phone answering service for $249/month! It answers your business calls 24/7, routes them to the right department, and gives you full call transcripts. Never miss a lead again! Email sales@roofmanager.ca to learn more. 📞"
   }
 
   if (msg.includes('d2d') || msg.includes('door') || msg.includes('canvass') || msg.includes('territory')) {
@@ -473,7 +473,7 @@ function getFallbackResponse(message: string): string {
   }
 
   if (msg.includes('contact') || msg.includes('email') || msg.includes('talk') || msg.includes('human') || msg.includes('support') || msg.includes('help')) {
-    return "I'd love to connect you with our team! You can email us at sales@roofreporterai.com or fill out the contact form below and someone will get back to you right away. Is there anything specific you'd like to ask them about? 📧"
+    return "I'd love to connect you with our team! You can email us at sales@roofmanager.ca or fill out the contact form below and someone will get back to you right away. Is there anything specific you'd like to ask them about? 📧"
   }
 
   if (msg.includes('eagleview') || msg.includes('hover') || msg.includes('competitor') || msg.includes('compare') || msg.includes('vs') || msg.includes('versus')) {
@@ -485,7 +485,7 @@ function getFallbackResponse(message: string): string {
   }
 
   if (msg.includes('api') || msg.includes('integration') || msg.includes('developer')) {
-    return "We're working on API access for high-volume users and integration partners! If you're interested in API access, please email sales@roofreporterai.com — you'd be a great candidate for early access. In the meantime, our web portal handles everything you need at /customer/login! 🔌"
+    return "We're working on API access for high-volume users and integration partners! If you're interested in API access, please email sales@roofmanager.ca — you'd be a great candidate for early access. In the meantime, our web portal handles everything you need at /customer/login! 🔌"
   }
 
   if (msg.includes('payment') || msg.includes('visa') || msg.includes('credit card') || msg.includes('pay')) {
@@ -501,7 +501,7 @@ function getFallbackResponse(message: string): string {
   }
 
   // Default fallback — prompt contact form
-  return "That's a great question! I want to make sure you get the most accurate answer. You can reach our team directly at sales@roofreporterai.com, or fill out the contact form below and we'll get back to you quickly. In the meantime, you can try 3 free roof reports at /customer/login — no credit card needed! 😊"
+  return "That's a great question! I want to make sure you get the most accurate answer. You can reach our team directly at sales@roofmanager.ca, or fill out the contact form below and we'll get back to you quickly. In the meantime, you can try 3 free roof reports at /customer/login — no credit card needed! 😊"
 }
 
 // POST /api/rover/end — End a conversation
@@ -655,10 +655,10 @@ async function sendLeadNotification(env: any, lead: { name?: string; email?: str
     </table>
   </div>
   <div style="background:#f8fafc;padding:16px;border-radius:0 0 12px 12px;border:1px solid #e2e8f0;border-top:none;text-align:center">
-    <a href="https://www.roofreporterai.com/super-admin" style="color:#0ea5e9;font-size:12px;font-weight:600">View in Super Admin Dashboard</a>
+    <a href="https://www.roofmanager.ca/super-admin" style="color:#0ea5e9;font-size:12px;font-weight:600">View in Super Admin Dashboard</a>
   </div>
 </div>`
-    await sendGmailOAuth2(clientId, clientSecret, refreshToken, 'sales@roofreporterai.com', `🐕 Rover Chat Lead: ${lead.name || lead.email || 'Unknown'}`, html, 'sales@roofreporterai.com').catch((e: any) => console.warn('[Rover Lead Email] Failed:', e.message))
+    await sendGmailOAuth2(clientId, clientSecret, refreshToken, 'sales@roofmanager.ca', `🐕 Rover Chat Lead: ${lead.name || lead.email || 'Unknown'}`, html, 'sales@roofmanager.ca').catch((e: any) => console.warn('[Rover Lead Email] Failed:', e.message))
   } else {
     console.log('[Rover Lead] Gmail not configured, lead:', JSON.stringify(lead))
   }
@@ -982,7 +982,7 @@ RESPONSE STYLE:
 - If they ask about their data (reports, invoices, credits), reference the numbers you know.
 - Format navigation as clickable links: /customer/order, /customer/reports, etc.
 - You can help draft professional emails, proposals, and customer communications.
-- If they report a bug or issue, acknowledge it and suggest emailing sales@roofreporterai.com.
+- If they report a bug or issue, acknowledge it and suggest emailing sales@roofmanager.ca.
 
 THINGS YOU SHOULD NOT DO:
 - Don't be overly salesy — they already bought in.
@@ -1106,7 +1106,7 @@ roverRoutes.post('/assistant', async (c) => {
 
     } catch (aiError: any) {
       console.error('[Rover Assistant] Gemini error:', aiError.message)
-      const fallback = `I'm having a technical hiccup, ${customer.name || 'sorry'}! Try refreshing, or reach out to sales@roofreporterai.com if this persists. You can still use all features from your dashboard.`
+      const fallback = `I'm having a technical hiccup, ${customer.name || 'sorry'}! Try refreshing, or reach out to sales@roofmanager.ca if this persists. You can still use all features from your dashboard.`
       await c.env.DB.prepare(
         'INSERT INTO rover_messages (conversation_id, role, content, model) VALUES (?, \'assistant\', ?, \'fallback-smart\')'
       ).bind(conversationId, fallback).run()
@@ -1117,7 +1117,7 @@ roverRoutes.post('/assistant', async (c) => {
     console.error('Rover assistant error:', err)
     return c.json({
       error: 'Assistant temporarily unavailable',
-      reply: "I'm having a quick hiccup! You can still access everything from your dashboard. If this persists, email sales@roofreporterai.com.",
+      reply: "I'm having a quick hiccup! You can still access everything from your dashboard. If this persists, email sales@roofmanager.ca.",
       session_id: (await c.req.json().catch(() => ({}))).session_id
     }, 200)
   }

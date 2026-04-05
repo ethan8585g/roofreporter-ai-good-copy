@@ -37,7 +37,7 @@ const app = new Hono<{ Bindings: Bindings }>()
 
 // CORS for API routes
 app.use('/api/*', cors({
-  origin: ['https://www.roofreporterai.com', 'https://roofreporterai.com', 'http://localhost:3000', 'http://0.0.0.0:3000'],
+  origin: ['https://www.roofmanager.ca', 'https://roofmanager.ca', 'http://localhost:3000', 'http://0.0.0.0:3000'],
   allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
@@ -522,7 +522,7 @@ app.get('/google46a10be18f6bfc61.html', (c) => {
 
 // SEO: sitemap.xml
 app.get('/sitemap.xml', async (c) => {
-  const base = 'https://www.roofreporterai.com'
+  const base = 'https://www.roofmanager.ca'
   const staticPages = [
     { loc: '/', priority: '1.0', changefreq: 'weekly' },
     { loc: '/pricing', priority: '0.9', changefreq: 'monthly' },
@@ -548,7 +548,7 @@ app.get('/sitemap.xml', async (c) => {
 
 // SEO: robots.txt
 app.get('/robots.txt', (c) => {
-  return c.text(`User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /customer/\nDisallow: /admin/\nDisallow: /superadmin/\nSitemap: https://www.roofreporterai.com/sitemap.xml`)
+  return c.text(`User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /customer/\nDisallow: /admin/\nDisallow: /superadmin/\nSitemap: https://www.roofmanager.ca/sitemap.xml`)
 })
 
 // Pricing Page (public)
@@ -592,16 +592,16 @@ app.get('/roof-measurement/:city', (c) => {
   ${getHeadTags()}
   <title>Roof Measurement Reports in ${city.name}, ${city.province} | RoofReporterAI</title>
   <meta name="description" content="Get accurate AI-powered roof measurement reports in ${city.name}, ${city.province}. Satellite imagery analysis with area, pitch, edges, and material estimates in under 60 seconds. 3 free reports.">
-  <link rel="canonical" href="https://www.roofreporterai.com/roof-measurement/${citySlug}">
+  <link rel="canonical" href="https://www.roofmanager.ca/roof-measurement/${citySlug}">
   <meta property="og:title" content="Roof Measurement Reports in ${city.name} | RoofReporterAI">
   <meta property="og:description" content="AI-powered satellite roof measurements for ${city.name} roofing contractors. Full CRM, proposals, invoicing included.">
   <meta property="og:type" content="website">
-  <meta property="og:url" content="https://www.roofreporterai.com/roof-measurement/${citySlug}">
-  <meta property="og:image" content="https://roofreporterai.com/static/logo.png">
+  <meta property="og:url" content="https://www.roofmanager.ca/roof-measurement/${citySlug}">
+  <meta property="og:image" content="https://roofmanager.ca/static/logo.png">
   <meta property="og:site_name" content="RoofReporterAI">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Roof Measurements in ${city.name} — RoofReporterAI">
-  <meta name="twitter:image" content="https://roofreporterai.com/static/logo.png">
+  <meta name="twitter:image" content="https://roofmanager.ca/static/logo.png">
   <meta name="geo.region" content="CA">
   <meta name="geo.placename" content="${city.name}, ${city.province}, Canada">
   <meta name="geo.position" content="${city.lat};${city.lng}">
@@ -611,8 +611,8 @@ app.get('/roof-measurement/:city', (c) => {
     "@type": "LocalBusiness",
     "name": "RoofReporterAI — ${city.name}",
     "description": "AI-powered roof measurement reports and CRM for roofing companies in ${city.name}, ${city.province}.",
-    "url": "https://www.roofreporterai.com/roof-measurement/${citySlug}",
-    "image": "https://roofreporterai.com/static/logo.png",
+    "url": "https://www.roofmanager.ca/roof-measurement/${citySlug}",
+    "image": "https://roofmanager.ca/static/logo.png",
     "address": {"@type": "PostalAddress", "addressLocality": "${city.name}", "addressRegion": "${city.province}", "addressCountry": "CA"},
     "geo": {"@type": "GeoCoordinates", "latitude": "${city.lat}", "longitude": "${city.lng}"},
     "areaServed": {"@type": "City", "name": "${city.name}"},
@@ -839,7 +839,7 @@ app.get('/report/share/:token', async (c) => {
     const ogTags = `<meta property="og:title" content="Roof Measurement Report — ${addr || 'Professional Analysis'}">
 <meta property="og:description" content="Professional satellite roof measurement report with area, pitch, edges, and material estimate. Powered by RoofReporterAI.">
 <meta property="og:type" content="article">
-<meta property="og:url" content="https://www.roofreporterai.com/report/share/${token}">
+<meta property="og:url" content="https://www.roofmanager.ca/report/share/${token}">
 <meta property="og:site_name" content="RoofReporterAI">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="Roof Report — ${addr || 'Professional Analysis'}">`
@@ -850,7 +850,7 @@ app.get('/report/share/:token', async (c) => {
       /<body[^>]*>/i,
       `$&<div style="position:fixed;top:0;left:0;right:0;z-index:9999;background:#0f172a;color:#fff;padding:10px 20px;display:flex;align-items:center;justify-between;font-family:Inter,system-ui,sans-serif;font-size:13px">
   <div style="display:flex;align-items:center;gap:10px"><span style="font-weight:700;color:#38bdf8">RoofReporterAI</span><span style="color:#94a3b8">|</span><span style="color:#cbd5e1">${addr || 'Roof Report'}</span></div>
-  <div style="display:flex;gap:8px"><button onclick="window.print()" style="background:#1e40af;color:#fff;border:none;padding:6px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600">Print / Save PDF</button><a href="https://roofreporterai.com" target="_blank" style="background:#065f46;color:#fff;padding:6px 14px;border-radius:8px;text-decoration:none;font-size:12px;font-weight:600">Get Your Own Report</a></div>
+  <div style="display:flex;gap:8px"><button onclick="window.print()" style="background:#1e40af;color:#fff;border:none;padding:6px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600">Print / Save PDF</button><a href="https://roofmanager.ca" target="_blank" style="background:#065f46;color:#fff;padding:6px 14px;border-radius:8px;text-decoration:none;font-size:12px;font-weight:600">Get Your Own Report</a></div>
 </div><div style="height:48px"></div>`
     )
 
@@ -956,7 +956,7 @@ app.get('/proposal/view/:token', async (c) => {
       ${invProposal.terms ? `<div class="mt-4 bg-gray-50 rounded-xl p-6"><h3 class="text-sm font-bold text-gray-700 mb-2"><i class="fas fa-file-contract mr-1"></i>Terms & Conditions</h3><p class="text-sm text-gray-600 whitespace-pre-wrap">${invProposal.terms}</p></div>` : ''}
       ${invProposal.payment_terms_text ? `<div class="mt-4 bg-green-50 rounded-xl p-6 border border-green-100"><h3 class="text-sm font-bold text-green-800 mb-2"><i class="fas fa-credit-card mr-1"></i>Payment Terms</h3><p class="text-sm text-green-700 whitespace-pre-wrap">${invProposal.payment_terms_text}</p></div>` : ''}
     </div>
-    <div class="bg-gray-50 px-8 py-4 text-center text-xs text-gray-400 border-t">Powered by <a href="https://roofreporterai.com" class="text-blue-500 hover:underline">RoofReporterAI</a> — Canada's AI Roof Measurement Platform</div>
+    <div class="bg-gray-50 px-8 py-4 text-center text-xs text-gray-400 border-t">Powered by <a href="https://roofmanager.ca" class="text-blue-500 hover:underline">RoofReporterAI</a> — Canada's AI Roof Measurement Platform</div>
   </div>
   <div class="text-center mt-4 print:hidden"><button onclick="window.print()" class="px-6 py-2.5 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm"><i class="fas fa-print mr-1"></i>Print / Save PDF</button></div>
 </div>
@@ -2311,8 +2311,8 @@ function getLandingPageHTML() {
   <meta property="og:title" content="RoofReporterAI — Precision Roof Measurement Reports">
   <meta property="og:description" content="Professional satellite-powered roof measurement reports in under 60 seconds. Full CRM, AI phone secretary, and team management for roofing businesses.">
   <meta property="og:type" content="website">
-  <meta property="og:url" content="https://roofreporterai.com">
-  <meta property="og:image" content="https://roofreporterai.com/static/logo.png">
+  <meta property="og:url" content="https://roofmanager.ca">
+  <meta property="og:image" content="https://roofmanager.ca/static/logo.png">
   <meta property="og:image:width" content="512">
   <meta property="og:image:height" content="512">
   <meta property="og:site_name" content="RoofReporterAI">
@@ -2320,17 +2320,17 @@ function getLandingPageHTML() {
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="RoofReporterAI — Satellite Roof Measurements in 60 Seconds">
   <meta name="twitter:description" content="AI-powered roof measurement reports, full CRM & team management for roofing companies. 3 free reports.">
-  <meta name="twitter:image" content="https://roofreporterai.com/static/logo.png">
+  <meta name="twitter:image" content="https://roofmanager.ca/static/logo.png">
   <meta name="keywords" content="roof measurement software, roofing CRM, satellite roof reports, roof area calculator, roofing estimate tool, roof pitch analysis, material takeoff, roofing contractor software, AI roof measurement, Canadian roofing software">
-  <link rel="canonical" href="https://roofreporterai.com/">
+  <link rel="canonical" href="https://roofmanager.ca/">
   <!-- JSON-LD Structured Data for SEO -->
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
     "name": "RoofReporterAI",
-    "url": "https://roofreporterai.com",
-    "image": "https://roofreporterai.com/static/logo.png",
+    "url": "https://roofmanager.ca",
+    "image": "https://roofmanager.ca/static/logo.png",
     "applicationCategory": "BusinessApplication",
     "operatingSystem": "Web",
     "description": "AI-powered roof measurement reports from satellite imagery. Full CRM, invoicing, proposals, and team management for roofing companies.",
@@ -2348,7 +2348,7 @@ function getLandingPageHTML() {
     "provider": {
       "@type": "Organization",
       "name": "RoofReporterAI",
-      "url": "https://roofreporterai.com",
+      "url": "https://roofmanager.ca",
       "address": {
         "@type": "PostalAddress",
         "addressRegion": "Alberta",
@@ -2479,7 +2479,7 @@ function getLandingPageHTML() {
             <li><a href="#how-it-works" class="hover:text-cyan-400 transition-colors">How It Works</a></li>
             <li><a href="#faq" class="hover:text-cyan-400 transition-colors">FAQ</a></li>
             <li><a href="/lander" class="hover:text-cyan-400 transition-colors">Get Started Guide</a></li>
-            <li><a href="mailto:sales@roofreporterai.com" class="hover:text-cyan-400 transition-colors">Contact</a></li>
+            <li><a href="mailto:sales@roofmanager.ca" class="hover:text-cyan-400 transition-colors">Contact</a></li>
             <li><a href="/privacy" class="hover:text-cyan-400 transition-colors">Privacy Policy</a></li>
             <li><a href="/terms" class="hover:text-cyan-400 transition-colors">Terms of Service</a></li>
           </ul>
@@ -2498,7 +2498,7 @@ function getLandingPageHTML() {
           <a href="/privacy" class="hover:text-cyan-400 transition-colors">Privacy Policy</a>
           <a href="/terms" class="hover:text-cyan-400 transition-colors">Terms of Service</a>
           <span class="flex items-center gap-1.5"><i class="fas fa-map-marker-alt text-cyan-500"></i> Alberta, Canada</span>
-          <a href="mailto:sales@roofreporterai.com" class="flex items-center gap-1.5 hover:text-cyan-400 transition-colors"><i class="fas fa-envelope text-cyan-500"></i> sales@roofreporterai.com</a>
+          <a href="mailto:sales@roofmanager.ca" class="flex items-center gap-1.5 hover:text-cyan-400 transition-colors"><i class="fas fa-envelope text-cyan-500"></i> sales@roofmanager.ca</a>
         </div>
       </div>
     </div>
@@ -3036,24 +3036,24 @@ function getPricingPageHTML() {
   ${getHeadTags()}
   <title>Roof Report Pricing — AI Measurements from $5/Report | RoofReporterAI</title>
   <meta name="description" content="Compare RoofReporterAI pricing plans. Pay per report from $7 USD or save with credit packs (25 for $150, 100 for $500). Includes CRM, proposals, invoicing, and AI secretary. 3 free reports to start.">
-  <link rel="canonical" href="https://roofreporterai.com/pricing">
+  <link rel="canonical" href="https://roofmanager.ca/pricing">
   <meta property="og:title" content="Roof Report Pricing — From $5/Report (100-Pack)">
   <meta property="og:description" content="AI-powered roof measurement reports with full CRM. 3 free reports, then pay per report or buy credit packs.">
   <meta property="og:type" content="website">
-  <meta property="og:url" content="https://roofreporterai.com/pricing">
-  <meta property="og:image" content="https://roofreporterai.com/static/logo.png">
+  <meta property="og:url" content="https://roofmanager.ca/pricing">
+  <meta property="og:image" content="https://roofmanager.ca/static/logo.png">
   <meta property="og:site_name" content="RoofReporterAI">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="RoofReporterAI Pricing — From $5/Report">
   <meta name="twitter:description" content="AI roof measurements with full CRM. 3 free reports included.">
-  <meta name="twitter:image" content="https://roofreporterai.com/static/logo.png">
+  <meta name="twitter:image" content="https://roofmanager.ca/static/logo.png">
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
     "@type": "Product",
     "name": "RoofReporterAI Roof Measurement Reports",
     "description": "AI-powered satellite roof measurement reports with CRM, invoicing, proposals, and team management.",
-    "image": "https://roofreporterai.com/static/logo.png",
+    "image": "https://roofmanager.ca/static/logo.png",
     "brand": {"@type": "Brand", "name": "RoofReporterAI"},
     "offers": [
       {"@type": "Offer", "name": "Individual Report", "price": "7.00", "priceCurrency": "USD", "description": "Single roof measurement report"},
@@ -3105,13 +3105,13 @@ function getBlogListingHTML() {
   <meta property="og:title" content="RoofReporterAI Blog - Roofing Industry Insights">
   <meta property="og:description" content="Expert roofing industry insights, measurement technology tips, contractor business guides, and more.">
   <meta property="og:type" content="website">
-  <meta property="og:image" content="https://roofreporterai.com/static/logo.png">
+  <meta property="og:image" content="https://roofmanager.ca/static/logo.png">
   <meta property="og:site_name" content="RoofReporterAI">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="RoofReporterAI Blog — Roofing Industry Insights">
   <meta name="twitter:description" content="Expert roofing industry insights, measurement tips, and contractor business guides.">
-  <meta name="twitter:image" content="https://roofreporterai.com/static/logo.png">
-  <link rel="canonical" href="https://www.roofreporterai.com/blog">
+  <meta name="twitter:image" content="https://roofmanager.ca/static/logo.png">
+  <link rel="canonical" href="https://www.roofmanager.ca/blog">
 </head>
 <body class="bg-gray-50 min-h-screen">
   <!-- Navigation — Matches new homepage style -->
@@ -3240,13 +3240,13 @@ function getBlogListingHTML() {
 function getBlogPostHTML(post?: any, slug?: string) {
   const title = post ? (post.meta_title || post.title) + ' — RoofReporterAI Blog' : 'Blog Post - RoofReporterAI'
   const desc = post ? (post.meta_description || post.excerpt || '') : ''
-  const image = post?.cover_image_url || 'https://roofreporterai.com/static/logo.png'
-  const canonical = slug ? `https://www.roofreporterai.com/blog/${slug}` : ''
+  const image = post?.cover_image_url || 'https://roofmanager.ca/static/logo.png'
+  const canonical = slug ? `https://www.roofmanager.ca/blog/${slug}` : ''
   const published = post?.published_at || ''
   const updated = post?.updated_at || ''
   const author = post?.author_name || 'RoofReporterAI Team'
   const blogSchema = post ? `<script type="application/ld+json">
-  {"@context":"https://schema.org","@type":"BlogPosting","headline":"${(post.title || '').replace(/"/g, '\\"')}","description":"${(desc).replace(/"/g, '\\"')}","image":"${image}","datePublished":"${published}","dateModified":"${updated || published}","author":{"@type":"Organization","name":"${author}"},"publisher":{"@type":"Organization","name":"RoofReporterAI","logo":{"@type":"ImageObject","url":"https://roofreporterai.com/static/logo.png"}}}
+  {"@context":"https://schema.org","@type":"BlogPosting","headline":"${(post.title || '').replace(/"/g, '\\"')}","description":"${(desc).replace(/"/g, '\\"')}","image":"${image}","datePublished":"${published}","dateModified":"${updated || published}","author":{"@type":"Organization","name":"${author}"},"publisher":{"@type":"Organization","name":"RoofReporterAI","logo":{"@type":"ImageObject","url":"https://roofmanager.ca/static/logo.png"}}}
   </script>` : ''
   return `<!DOCTYPE html>
 <html lang="en">
@@ -3369,14 +3369,14 @@ function getLanderFunnelHTML() {
   <meta property="og:title" content="Free Roof Measurement Reports - RoofReporterAI">
   <meta property="og:description" content="Get accurate roof area, pitch, material BOM, and more in 60 seconds. 3 free reports. No credit card.">
   <meta property="og:type" content="website">
-  <meta property="og:url" content="https://roofreporterai.com/lander">
-  <meta property="og:image" content="https://roofreporterai.com/static/logo.png">
+  <meta property="og:url" content="https://roofmanager.ca/lander">
+  <meta property="og:image" content="https://roofmanager.ca/static/logo.png">
   <meta property="og:site_name" content="RoofReporterAI">
-  <link rel="canonical" href="https://www.roofreporterai.com/lander">
+  <link rel="canonical" href="https://www.roofmanager.ca/lander">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Free Roof Measurement Reports — RoofReporterAI">
   <meta name="twitter:description" content="Get accurate roof area, pitch, material BOM in 60 seconds. 3 free reports, no credit card.">
-  <meta name="twitter:image" content="https://roofreporterai.com/static/logo.png">
+  <meta name="twitter:image" content="https://roofmanager.ca/static/logo.png">
   <style>
     html { scroll-behavior: smooth; }
     .scroll-animate { opacity: 0; transform: translateY(20px); transition: all 0.7s cubic-bezier(0.4, 0, 0.2, 1); }
@@ -3577,7 +3577,7 @@ function getLanderFunnelHTML() {
         <a href="/" class="hover:text-cyan-400 transition-colors">Home</a>
         <a href="/blog" class="hover:text-cyan-400 transition-colors">Blog</a>
         <a href="/customer/login" class="hover:text-cyan-400 transition-colors">Login</a>
-        <a href="mailto:sales@roofreporterai.com" class="hover:text-cyan-400 transition-colors">Contact</a>
+        <a href="mailto:sales@roofmanager.ca" class="hover:text-cyan-400 transition-colors">Contact</a>
         <a href="/privacy" class="hover:text-cyan-400 transition-colors">Privacy</a>
         <a href="/terms" class="hover:text-cyan-400 transition-colors">Terms</a>
       </div>
@@ -5095,7 +5095,7 @@ function getPrivacyPageHTML() {
 
       <section>
         <h2 class="text-xl font-semibold text-gray-900 mb-3">1. Who We Are</h2>
-        <p class="text-gray-600 leading-relaxed">RoofReporterAI ("we", "our", "us") is a roofing measurement and business management platform operated from Alberta, Canada. We provide AI-powered roof measurement reports, CRM tools, invoicing, and a voice AI receptionist service to roofing professionals. Our website is <a href="https://www.roofreporterai.com" class="text-brand-600 hover:underline">https://www.roofreporterai.com</a>. For privacy inquiries, contact us at <a href="mailto:privacy@roofreporterai.com" class="text-brand-600 hover:underline">privacy@roofreporterai.com</a>.</p>
+        <p class="text-gray-600 leading-relaxed">RoofReporterAI ("we", "our", "us") is a roofing measurement and business management platform operated from Alberta, Canada. We provide AI-powered roof measurement reports, CRM tools, invoicing, and a voice AI receptionist service to roofing professionals. Our website is <a href="https://www.roofmanager.ca" class="text-brand-600 hover:underline">https://www.roofmanager.ca</a>. For privacy inquiries, contact us at <a href="mailto:privacy@roofmanager.ca" class="text-brand-600 hover:underline">privacy@roofmanager.ca</a>.</p>
       </section>
 
       <section>
@@ -5160,7 +5160,7 @@ function getPrivacyPageHTML() {
           <li>Request deletion of your account and associated data.</li>
           <li>Withdraw consent for data processing (subject to legal and contractual obligations).</li>
         </ul>
-        <p class="text-gray-600 mt-3">To exercise any of these rights, email us at <a href="mailto:privacy@roofreporterai.com" class="text-brand-600 hover:underline">privacy@roofreporterai.com</a>. We will respond within 30 days.</p>
+        <p class="text-gray-600 mt-3">To exercise any of these rights, email us at <a href="mailto:privacy@roofmanager.ca" class="text-brand-600 hover:underline">privacy@roofmanager.ca</a>. We will respond within 30 days.</p>
       </section>
 
       <section>
@@ -5180,7 +5180,7 @@ function getPrivacyPageHTML() {
 
       <section>
         <h2 class="text-xl font-semibold text-gray-900 mb-3">11. Contact</h2>
-        <p class="text-gray-600 leading-relaxed">For any privacy-related questions or requests, contact:<br><strong>RoofReporterAI</strong><br>Alberta, Canada<br><a href="mailto:privacy@roofreporterai.com" class="text-brand-600 hover:underline">privacy@roofreporterai.com</a></p>
+        <p class="text-gray-600 leading-relaxed">For any privacy-related questions or requests, contact:<br><strong>RoofReporterAI</strong><br>Alberta, Canada<br><a href="mailto:privacy@roofmanager.ca" class="text-brand-600 hover:underline">privacy@roofmanager.ca</a></p>
       </section>
 
     </div>
@@ -5246,7 +5246,7 @@ function getTermsPageHTML() {
 
       <section>
         <h2 class="text-xl font-semibold text-gray-900 mb-3">3. Account Registration</h2>
-        <p class="text-gray-600 leading-relaxed">You must provide accurate information when registering. You are responsible for maintaining the confidentiality of your account credentials and for all activity under your account. Notify us immediately at <a href="mailto:support@roofreporterai.com" class="text-brand-600 hover:underline">support@roofreporterai.com</a> if you suspect unauthorized access.</p>
+        <p class="text-gray-600 leading-relaxed">You must provide accurate information when registering. You are responsible for maintaining the confidentiality of your account credentials and for all activity under your account. Notify us immediately at <a href="mailto:support@roofmanager.ca" class="text-brand-600 hover:underline">support@roofmanager.ca</a> if you suspect unauthorized access.</p>
       </section>
 
       <section>
@@ -5263,7 +5263,7 @@ function getTermsPageHTML() {
 
       <section>
         <h2 class="text-xl font-semibold text-gray-900 mb-3">5. Refund Policy</h2>
-        <p class="text-gray-600 leading-relaxed">Reports are generated automatically upon submission. Because the service is delivered immediately and consumes third-party API resources, <strong>reports are non-refundable once generated</strong>. If you believe a report contains a technical error, contact us at <a href="mailto:support@roofreporterai.com" class="text-brand-600 hover:underline">support@roofreporterai.com</a> and we will investigate and issue a credit if appropriate. Unused credit packs may be refunded within 14 days of purchase.</p>
+        <p class="text-gray-600 leading-relaxed">Reports are generated automatically upon submission. Because the service is delivered immediately and consumes third-party API resources, <strong>reports are non-refundable once generated</strong>. If you believe a report contains a technical error, contact us at <a href="mailto:support@roofmanager.ca" class="text-brand-600 hover:underline">support@roofmanager.ca</a> and we will investigate and issue a credit if appropriate. Unused credit packs may be refunded within 14 days of purchase.</p>
       </section>
 
       <section>
@@ -5310,7 +5310,7 @@ function getTermsPageHTML() {
 
       <section>
         <h2 class="text-xl font-semibold text-gray-900 mb-3">13. Contact</h2>
-        <p class="text-gray-600 leading-relaxed"><strong>RoofReporterAI</strong><br>Alberta, Canada<br><a href="mailto:support@roofreporterai.com" class="text-brand-600 hover:underline">support@roofreporterai.com</a></p>
+        <p class="text-gray-600 leading-relaxed"><strong>RoofReporterAI</strong><br>Alberta, Canada<br><a href="mailto:support@roofmanager.ca" class="text-brand-600 hover:underline">support@roofmanager.ca</a></p>
       </section>
 
     </div>

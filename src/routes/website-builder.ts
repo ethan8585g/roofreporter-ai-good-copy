@@ -228,7 +228,7 @@ websiteBuilderRoutes.post('/sites/:id/publish', async (c) => {
     "UPDATE wb_sites SET status = 'published', published_at = datetime('now'), updated_at = datetime('now') WHERE id = ?"
   ).bind(siteId).run()
 
-  const liveUrl = `https://www.roofreporterai.com/sites/${site.subdomain}`
+  const liveUrl = `https://www.roofmanager.ca/sites/${site.subdomain}`
 
   return c.json({
     success: true,

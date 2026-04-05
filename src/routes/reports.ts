@@ -1296,7 +1296,7 @@ reportsRoutes.post('/:orderId/generate-enhanced', async (c) => {
     <p style="color:#6b7280;font-size:13px;text-align:center"><a href="${matCalcUrl}" style="color:#0369a1">Open Material Calculator</a> to build your BOM from this report.</p>
   </div>
   <div style="background:#f8fafc;padding:16px;text-align:center;border-top:1px solid #e5e7eb">
-    <p style="color:#9ca3af;font-size:12px;margin:0">Powered by <a href="https://roofreporterai.com" style="color:#0369a1">RoofReporterAI</a></p>
+    <p style="color:#9ca3af;font-size:12px;margin:0">Powered by <a href="https://roofmanager.ca" style="color:#0369a1">RoofReporterAI</a></p>
   </div>
 </div></body></html>`
     try {
@@ -1551,7 +1551,7 @@ reportsRoutes.post('/:orderId/share', async (c) => {
     <p style="color:#6b7280;font-size:13px;margin:0">This link is shareable — bookmark it to view your report anytime.</p>
   </div>
   <div style="background:#f8fafc;padding:16px;text-align:center;border-top:1px solid #e5e7eb">
-    <p style="color:#9ca3af;font-size:12px;margin:0">Powered by <a href="https://roofreporterai.com" style="color:#0369a1">RoofReporterAI</a></p>
+    <p style="color:#9ca3af;font-size:12px;margin:0">Powered by <a href="https://roofmanager.ca" style="color:#0369a1">RoofReporterAI</a></p>
   </div>
 </div></body></html>`
     try {

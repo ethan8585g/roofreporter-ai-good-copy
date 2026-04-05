@@ -16,7 +16,7 @@ if [ ! -f .env ]; then
 LIVEKIT_URL=wss://roofreporterai-btkwkiwh.livekit.cloud
 LIVEKIT_API_KEY=APIsvVZsCCaboLY
 LIVEKIT_API_SECRET=UwHeCz8KszKbdgSafJjCfsEdzlYmvJZLfchTBROPJryC
-ROOFPORTER_API_URL=https://www.roofreporterai.com
+ROOFPORTER_API_URL=https://www.roofmanager.ca
 DEFAULT_GREETING=Thank you for calling! This is Sarah. How can I help you today?
 ENVEOF
     echo "✅ .env created"

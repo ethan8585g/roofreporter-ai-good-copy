@@ -10,7 +10,7 @@ module.exports = {
         LIVEKIT_URL: 'wss://roofreporterai-btkwkiwh.livekit.cloud',
         LIVEKIT_API_KEY: 'APIsvVZsCCaboLY',
         LIVEKIT_API_SECRET: 'UwHeCz8KszKbdgSafJjCfsEdzlYmvJZLfchTBROPJryC',
-        ROOFPORTER_API_URL: 'https://www.roofreporterai.com',
+        ROOFPORTER_API_URL: 'https://www.roofmanager.ca',
         DEFAULT_GREETING: "Thank you for calling! This is Sarah. How can I help you today?"
       },
       watch: false,
@@ -31,7 +31,7 @@ module.exports = {
         LIVEKIT_URL: 'wss://roofreporterai-btkwkiwh.livekit.cloud',
         LIVEKIT_API_KEY: 'APIsvVZsCCaboLY',
         LIVEKIT_API_SECRET: 'UwHeCz8KszKbdgSafJjCfsEdzlYmvJZLfchTBROPJryC',
-        ROOFPORTER_API_URL: 'https://www.roofreporterai.com',
+        ROOFPORTER_API_URL: 'https://www.roofmanager.ca',
         OPENAI_API_KEY: process.env.OPENAI_API_KEY || '',
         DEEPGRAM_API_KEY: process.env.DEEPGRAM_API_KEY || '',
         CARTESIA_API_KEY: process.env.CARTESIA_API_KEY || '',

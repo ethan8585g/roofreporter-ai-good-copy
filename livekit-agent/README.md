@@ -115,7 +115,7 @@ LiveKit Cloud performs zero-downtime rolling updates.
 ### Managing Secrets
 If you need to add/change environment variables:
 ```bash
-lk agent update-secrets ROOFPORTER_API_URL=https://www.roofreporterai.com
+lk agent update-secrets ROOFPORTER_API_URL=https://www.roofmanager.ca
 ```
 
 ### Monitoring
@@ -141,7 +141,7 @@ cat > .env << 'EOF'
 LIVEKIT_URL=wss://roofreporterai-btkwkiwh.livekit.cloud
 LIVEKIT_API_KEY=APIsvVZsCCaboLY
 LIVEKIT_API_SECRET=<your-api-secret>
-ROOFPORTER_API_URL=https://www.roofreporterai.com
+ROOFPORTER_API_URL=https://www.roofmanager.ca
 EOF
 
 # Start with Docker Compose

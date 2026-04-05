@@ -290,7 +290,7 @@
           <div><label class="block text-xs font-semibold text-gray-600 mb-1">Post Message</label>
             <textarea id="mc-pb-message" rows="5" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500" placeholder="Write your post here...&#10;&#10;Tip: Make it valuable, not salesy. Share tips, case studies, or offer a free demo."></textarea></div>
           <div><label class="block text-xs font-semibold text-gray-600 mb-1">Link URL (optional)</label>
-            <input id="mc-pb-link" type="url" placeholder="https://www.roofreporterai.com" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500" /></div>
+            <input id="mc-pb-link" type="url" placeholder="https://www.roofmanager.ca" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500" /></div>
           <div>
             <label class="block text-xs font-semibold text-gray-600 mb-2">Target Groups (${enabledGroups.length} enabled)</label>
             <div class="max-h-40 overflow-y-auto border border-gray-200 rounded-lg p-2 space-y-1">

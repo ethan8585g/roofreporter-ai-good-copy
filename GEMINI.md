@@ -6,7 +6,7 @@ This document provides a comprehensive overview of the RoofReporterAI codebase, 
 
 RoofReporterAI is a comprehensive business management CRM for roofing companies. It provides a suite of tools to help roofers manage their business, including generating roof measurement reports, sending invoices, and managing customer relationships. The platform is built as a modern, serverless web application with a strong focus on AI-powered features.
 
-The application is available at [www.roofreporterai.com](https://www.roofreporterai.com).
+The application is available at [www.roofmanager.ca](https://www.roofmanager.ca).
 
 ## Core Technologies
 

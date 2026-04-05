@@ -123,7 +123,7 @@ async def get_agent_config(ctx: JobContext) -> dict:
             logger.info(f"SIP caller detected: trunk={attrs.get('sip.trunkPhoneNumber')}, from={attrs.get('sip.callID', 'unknown')}")
 
     # Try to fetch full config from the RoofReporterAI API
-    api_url = os.environ.get("ROOFPORTER_API_URL", "https://www.roofreporterai.com")
+    api_url = os.environ.get("ROOFPORTER_API_URL", "https://www.roofmanager.ca")
     if customer_id and api_url:
         try:
             async with aiohttp.ClientSession() as session:
@@ -275,7 +275,7 @@ class RooferSecretaryAgent(Agent):
         })
 
         # Try to post the message to the API
-        api_url = os.environ.get("ROOFPORTER_API_URL", "https://www.roofreporterai.com")
+        api_url = os.environ.get("ROOFPORTER_API_URL", "https://www.roofmanager.ca")
         customer_id = self._config.get("customer_id")
         if api_url and customer_id:
             try:
@@ -316,7 +316,7 @@ class RooferSecretaryAgent(Agent):
         self._caller_phone = caller_phone
 
         # Post to API
-        api_url = os.environ.get("ROOFPORTER_API_URL", "https://www.roofreporterai.com")
+        api_url = os.environ.get("ROOFPORTER_API_URL", "https://www.roofmanager.ca")
         customer_id = self._config.get("customer_id")
         if api_url and customer_id:
             try:
@@ -369,7 +369,7 @@ class RooferSecretaryAgent(Agent):
         self._caller_phone = caller_phone
 
         # Post urgent message
-        api_url = os.environ.get("ROOFPORTER_API_URL", "https://www.roofreporterai.com")
+        api_url = os.environ.get("ROOFPORTER_API_URL", "https://www.roofmanager.ca")
         customer_id = self._config.get("customer_id")
         if api_url and customer_id:
             try:
@@ -490,7 +490,7 @@ async def entrypoint(ctx: JobContext):
                 outcome = "transferred"
 
             # Post call completion to the API
-            api_url = os.environ.get("ROOFPORTER_API_URL", "https://www.roofreporterai.com")
+            api_url = os.environ.get("ROOFPORTER_API_URL", "https://www.roofmanager.ca")
             customer_id = config.get("customer_id")
             if api_url and customer_id:
                 try:

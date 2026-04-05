@@ -9,7 +9,7 @@ services:
       - .env
     environment:
       - LIVEKIT_URL=wss://roofreporterai-btkwkiwh.livekit.cloud
-      - ROOFPORTER_API_URL=https://www.roofreporterai.com
+      - ROOFPORTER_API_URL=https://www.roofmanager.ca
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8081/"]
       interval: 30s

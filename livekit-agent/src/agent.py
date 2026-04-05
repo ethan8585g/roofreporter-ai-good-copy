@@ -49,7 +49,7 @@ logger.setLevel(logging.INFO)
 # ============================================================
 # API client — communicates with the RoofReporterAI Cloudflare app
 # ============================================================
-API_BASE = os.environ.get("ROOFPORTER_API_URL", "https://roofreporterai.com")
+API_BASE = os.environ.get("ROOFPORTER_API_URL", "https://roofmanager.ca")
 
 
 async def fetch_customer_config(customer_id: int) -> Optional[dict]:

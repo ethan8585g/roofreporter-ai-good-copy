@@ -31,7 +31,7 @@ from livekit.plugins import deepgram, openai, cartesia, silero, noise_cancellati
 logger = logging.getLogger("outbound-agent")
 logger.setLevel(logging.INFO)
 
-API_BASE = os.environ.get("ROOFPORTER_API_URL", "https://www.roofreporterai.com")
+API_BASE = os.environ.get("ROOFPORTER_API_URL", "https://www.roofmanager.ca")
 
 
 class OutboundSalesAgent(Agent):
@@ -57,7 +57,7 @@ class OutboundSalesAgent(Agent):
         value_prop = script.get("script_value_prop", "We help roofing contractors generate accurate roof measurement reports from satellite imagery in under 60 seconds, with a full CRM built in.")
         objections_json = script.get("script_objections", "")
         closing = script.get("script_closing", "Would you be open to a quick 5-minute demo to see how it works for your business?")
-        voicemail_script = script.get("script_voicemail", f"Hi, this is a quick message for {company}. We're reaching out from RoofReporterAI — we help roofing contractors generate satellite roof measurement reports in 60 seconds. Visit roofreporterai.com for 3 free reports. Thanks!")
+        voicemail_script = script.get("script_voicemail", f"Hi, this is a quick message for {company}. We're reaching out from RoofReporterAI — we help roofing contractors generate satellite roof measurement reports in 60 seconds. Visit roofmanager.ca for 3 free reports. Thanks!")
 
         objection_handling = ""
         if objections_json:
@@ -88,7 +88,7 @@ RULES:
 - Keep responses SHORT (1-2 sentences max unless explaining a feature)
 - If the person is busy, offer to call back at a better time
 - If they're not interested, thank them politely and end the call
-- If they're interested, try to book a demo or get them to sign up at roofreporterai.com
+- If they're interested, try to book a demo or get them to sign up at roofmanager.ca
 - NEVER be aggressive, pushy, or argue
 - If asked "are you a robot?" — say "I'm an AI assistant calling on behalf of RoofReporterAI. Would you prefer to speak with a human? I can arrange that."
 - Track sentiment: positive, neutral, negative

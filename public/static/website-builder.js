@@ -121,7 +121,7 @@
         html += '<span style="background:' + statusColor + '20;color:' + statusColor + ';padding:4px 10px;border-radius:6px;font-size:12px;font-weight:700;">' + statusLabel + '</span>';
         html += '</div>';
         html += '<div style="color:#6b7280;font-size:14px;margin-bottom:4px;">📍 ' + esc(site.city) + ', ' + esc(site.province) + '</div>';
-        html += '<div style="color:#6b7280;font-size:14px;margin-bottom:16px;">🌐 ' + esc(site.subdomain) + '.roofreporterai.com</div>';
+        html += '<div style="color:#6b7280;font-size:14px;margin-bottom:16px;">🌐 ' + esc(site.subdomain) + '.roofmanager.ca</div>';
         html += '<div style="display:flex;gap:12px;margin-bottom:16px;">';
         html += '<div style="flex:1;text-align:center;background:#f9fafb;padding:10px;border-radius:8px;"><div style="font-size:20px;font-weight:800;">' + (site.page_count || 0) + '</div><div style="font-size:11px;color:#6b7280;">Pages</div></div>';
         html += '<div style="flex:1;text-align:center;background:#f9fafb;padding:10px;border-radius:8px;"><div style="font-size:20px;font-weight:800;">' + (site.lead_count || 0) + '</div><div style="font-size:11px;color:#6b7280;">Leads</div></div>';

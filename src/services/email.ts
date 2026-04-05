@@ -50,7 +50,7 @@ export function buildEmailWrapper(reportHtml: string, address: string, reportNum
   <!-- Email Footer -->
   <div style="text-align:center;padding:20px;color:#9CA3AF;font-size:11px">
     <p>&copy; ${new Date().getFullYear()} RoofReporterAI | Professional Roof Measurement Reports</p>
-    <p style="margin-top:4px">This report was sent to ${recipient}. Questions? Contact sales@roofreporterai.com</p>
+    <p style="margin-top:4px">This report was sent to ${recipient}. Questions? Contact sales@roofmanager.ca</p>
   </div>
 </div>
 </body>

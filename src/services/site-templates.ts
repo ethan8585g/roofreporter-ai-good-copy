@@ -531,7 +531,7 @@ function buildFooter(businessName: string, phone: string): string {
         </div>
       </div>
       <div class="footer-bottom">
-        <p>&copy; ${new Date().getFullYear()} ${escapeHtml(businessName)}. All rights reserved. | Powered by <a href="https://roofreporterai.com" style="color: var(--primary);">RoofReporter</a></p>
+        <p>&copy; ${new Date().getFullYear()} ${escapeHtml(businessName)}. All rights reserved. | Powered by <a href="https://roofmanager.ca" style="color: var(--primary);">RoofReporter</a></p>
       </div>
     </div>
   </footer>`

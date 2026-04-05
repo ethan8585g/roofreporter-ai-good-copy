@@ -3,7 +3,7 @@
 ## Project Overview
 - **Name**: RoofReporterAI
 - **Version**: 12.1 (CC Schema Fix, Banner Removal, Call Log Hardening)
-- **Domain**: www.roofreporterai.com
+- **Domain**: www.roofmanager.ca
 - **Production**: https://roofing-measurement-tool.pages.dev
 - **GitHub**: https://github.com/ethan8585g/roofreporter-ai-good-copy
 - **Platform**: Cloudflare Pages + Workers + D1

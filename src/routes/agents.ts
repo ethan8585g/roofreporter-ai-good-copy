@@ -47,7 +47,7 @@ agentsRoutes.post('/leads', async (c) => {
       lead_email_domain: emailClean.split('@')[1] || 'unknown'
     }).catch(() => {})
 
-    // Email notification to sales@roofreporterai.com
+    // Email notification to sales@roofmanager.ca
     const clientId = (c.env as any).GMAIL_CLIENT_ID
     let clientSecret = (c.env as any).GMAIL_CLIENT_SECRET || ''
     let refreshToken = (c.env as any).GMAIL_REFRESH_TOKEN || ''
@@ -77,10 +77,10 @@ agentsRoutes.post('/leads', async (c) => {
     </table>
   </div>
   <div style="background:#f8fafc;padding:16px;border-radius:0 0 12px 12px;border:1px solid #e2e8f0;border-top:none;text-align:center">
-    <a href="https://www.roofreporterai.com/super-admin" style="color:#0ea5e9;font-size:12px;font-weight:600">View in Super Admin Dashboard</a>
+    <a href="https://www.roofmanager.ca/super-admin" style="color:#0ea5e9;font-size:12px;font-weight:600">View in Super Admin Dashboard</a>
   </div>
 </div>`
-      sendGmailOAuth2(clientId, clientSecret, refreshToken, 'sales@roofreporterai.com', `🔔 New Lead: ${String(name).trim()} — ${source_page || 'website'}`, leadHtml, 'sales@roofreporterai.com').catch((e: any) => console.warn('[Lead Email] Failed:', e.message))
+      sendGmailOAuth2(clientId, clientSecret, refreshToken, 'sales@roofmanager.ca', `🔔 New Lead: ${String(name).trim()} — ${source_page || 'website'}`, leadHtml, 'sales@roofmanager.ca').catch((e: any) => console.warn('[Lead Email] Failed:', e.message))
     }
 
     return c.json({ success: true, message: 'Thank you! We will be in touch shortly.' })

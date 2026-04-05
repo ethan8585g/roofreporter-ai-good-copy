@@ -26,7 +26,7 @@ from livekit.plugins.turn_detector.multilingual import MultilingualModel
 load_dotenv(".env.local")
 logger = logging.getLogger("report-guide")
 
-API_BASE = os.environ.get("ROOFPORTER_API_URL", "https://roofreporterai.com")
+API_BASE = os.environ.get("ROOFPORTER_API_URL", "https://roofmanager.ca")
 
 
 async def fetch_report_data(order_id: str) -> dict | None:

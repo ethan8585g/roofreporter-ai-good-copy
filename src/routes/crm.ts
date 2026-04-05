@@ -572,7 +572,7 @@ crmRoutes.post('/invoices/:id/send', async (c) => {
     ${invoice.terms ? `<p style="color:#9ca3af;font-size:12px;margin:0;">${invoice.terms}</p>` : ''}
   </div>
   <p style="color:#9ca3af;font-size:11px;text-align:center;margin:16px 0 0;padding:0;">
-    Sent via RoofReporterAI &middot; ${fromEmail} &middot; <a href="mailto:sales@roofreporterai.com" style="color:#9ca3af;">sales@roofreporterai.com</a>
+    Sent via RoofReporterAI &middot; ${fromEmail} &middot; <a href="mailto:sales@roofmanager.ca" style="color:#9ca3af;">sales@roofmanager.ca</a>
   </p>
 </div>`
 
@@ -1552,7 +1552,7 @@ crmRoutes.post('/proposals/respond/:token', async (c) => {
     ${signature ? `<div style="margin-top:16px;padding:12px;background:#f8fafc;border-radius:8px;text-align:center"><p style="font-size:11px;color:#94a3b8;margin:0 0 8px">Customer Signature</p><img src="${signature}" alt="Signature" style="max-height:60px"></div>` : ''}
   </div>
   <div style="background:#f8fafc;padding:16px;border-radius:0 0 12px 12px;border:1px solid #e2e8f0;border-top:none;text-align:center">
-    <a href="https://www.roofreporterai.com/customer/proposals" style="color:#0ea5e9;font-size:12px;font-weight:600">View in Dashboard</a>
+    <a href="https://www.roofmanager.ca/customer/proposals" style="color:#0ea5e9;font-size:12px;font-weight:600">View in Dashboard</a>
   </div>
 </div>`
         const { sendGmailOAuth2 } = await import('../services/email')

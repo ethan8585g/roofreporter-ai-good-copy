@@ -60,7 +60,7 @@ function generateVerificationCode(): string {
 // Send email using best available provider
 // Priority: 1) Resend API  2) Gmail OAuth2 (env or DB token)  3) GCP service account
 async function sendVerificationEmail(env: any, toEmail: string, code: string, db?: any): Promise<boolean> {
-  const senderEmail = (env as any).GMAIL_SENDER_EMAIL || 'sales@roofreporterai.com'
+  const senderEmail = (env as any).GMAIL_SENDER_EMAIL || 'sales@roofmanager.ca'
   const emailSubject = `Your RoofReporterAI Verification Code: ${code}`
   const emailHtml = getVerificationEmailHTML(code)
 
@@ -1245,7 +1245,7 @@ customerAuthRoutes.get('/invoices/:id', async (c) => {
 // FORGOT PASSWORD — Send reset link to customer email
 // ============================================================
 async function sendPasswordResetEmail(env: any, toEmail: string, name: string, resetUrl: string, db?: any): Promise<boolean> {
-  const senderEmail = (env as any).GMAIL_SENDER_EMAIL || 'sales@roofreporterai.com'
+  const senderEmail = (env as any).GMAIL_SENDER_EMAIL || 'sales@roofmanager.ca'
   const subject = 'Reset your RoofReporterAI password'
   const html = `
   <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
@@ -1344,7 +1344,7 @@ customerAuthRoutes.post('/forgot-password', async (c) => {
           "INSERT INTO password_reset_tokens (email, token, account_type, expires_at) VALUES (?, ?, 'customer', ?)"
         ).bind(cleanEmail, token, expiresAt).run()
 
-        const baseUrl = (c.env as any).APP_BASE_URL || 'https://www.roofreporterai.com'
+        const baseUrl = (c.env as any).APP_BASE_URL || 'https://www.roofmanager.ca'
         const resetUrl = `${baseUrl}/customer/reset-password?token=${token}`
         const emailSent = await sendPasswordResetEmail(c.env, cleanEmail, customer.name || 'Customer', resetUrl, c.env.DB)
         if (!emailSent) console.warn('[ForgotPassword] Email failed for:', cleanEmail)
@@ -1516,7 +1516,7 @@ customerAuthRoutes.get('/referrals', async (c) => {
 
   return c.json({
     referral_code: refCode,
-    share_url: 'https://www.roofreporterai.com/lander?ref=' + refCode,
+    share_url: 'https://www.roofmanager.ca/lander?ref=' + refCode,
     referred_users: referred.results || [],
     earnings: earnings.results || [],
     total_earned: totalEarned?.total || 0,

@@ -1030,7 +1030,7 @@ function renderEmailSetupView() {
     <div class="bg-blue-50 border border-blue-100 rounded-2xl p-5">
       <h4 class="font-bold text-blue-800 mb-2"><i class="fas fa-info-circle mr-1"></i> Important Notes</h4>
       <ul class="text-sm text-blue-700 space-y-1 list-disc list-inside">
-        <li>Make sure <code class="bg-blue-100 px-1 rounded">https://roofreporterai.com/api/auth/gmail/callback</code> is listed as an authorized redirect URI in your GCP OAuth Client.</li>
+        <li>Make sure <code class="bg-blue-100 px-1 rounded">https://roofmanager.ca/api/auth/gmail/callback</code> is listed as an authorized redirect URI in your GCP OAuth Client.</li>
         <li>The Gmail API scope <code class="bg-blue-100 px-1 rounded">gmail.send</code> only allows sending — it cannot read your inbox.</li>
         <li>Credentials are stored in your D1 database, not in environment variables.</li>
         <li>This same Gmail connection is used for verification codes, report delivery, and email outreach.</li>
@@ -2457,7 +2457,7 @@ function renderSecretaryRevenueView() {
 function renderContactFormsView() {
   return `<div class="mb-6">
     <h2 class="text-2xl font-bold text-gray-900 flex items-center gap-3"><i class="fas fa-inbox text-cyan-500"></i>Contact Form Submissions</h2>
-    <p class="text-sm text-gray-500 mt-1">All inquiries from roofreporterai.com contact forms — also forwarded to admin email</p>
+    <p class="text-sm text-gray-500 mt-1">All inquiries from roofmanager.ca contact forms — also forwarded to admin email</p>
   </div>
   <div id="contactFormsContent"><div class="text-center py-12 text-gray-400"><i class="fas fa-spinner fa-spin text-2xl mb-3"></i><p>Loading submissions...</p></div></div>`;
 }
@@ -2472,7 +2472,7 @@ async function loadContactForms() {
     if (!el) return;
 
     if (leads.length === 0) {
-      el.innerHTML = '<div class="bg-white rounded-2xl border border-gray-200 p-12 text-center"><i class="fas fa-inbox text-gray-300 text-4xl mb-4"></i><h3 class="font-bold text-gray-600 text-lg">No submissions yet</h3><p class="text-gray-400 text-sm mt-1">Contact form submissions from roofreporterai.com will appear here.</p></div>';
+      el.innerHTML = '<div class="bg-white rounded-2xl border border-gray-200 p-12 text-center"><i class="fas fa-inbox text-gray-300 text-4xl mb-4"></i><h3 class="font-bold text-gray-600 text-lg">No submissions yet</h3><p class="text-gray-400 text-sm mt-1">Contact form submissions from roofmanager.ca will appear here.</p></div>';
       return;
     }
 
@@ -2547,7 +2547,7 @@ function renderSEOManagerView() {
         </div>
         <div>
           <label class="block text-xs font-semibold text-gray-600 mb-1">Canonical URL</label>
-          <input type="url" id="seo-canonical" placeholder="https://roofreporterai.com/" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-400">
+          <input type="url" id="seo-canonical" placeholder="https://roofmanager.ca/" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-400">
         </div>
         <div>
           <label class="block text-xs font-semibold text-gray-600 mb-1">Keywords (comma-separated)</label>
@@ -2555,7 +2555,7 @@ function renderSEOManagerView() {
         </div>
         <div>
           <label class="block text-xs font-semibold text-gray-600 mb-1">OG Image URL</label>
-          <input type="url" id="seo-og-image" placeholder="https://roofreporterai.com/og-image.jpg" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-400">
+          <input type="url" id="seo-og-image" placeholder="https://roofmanager.ca/og-image.jpg" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-400">
         </div>
         <button onclick="seoSavePageMeta()" class="px-5 py-2.5 bg-purple-500 text-white rounded-lg font-semibold text-sm hover:bg-purple-600 transition-all"><i class="fas fa-save mr-2"></i>Save Meta Tags</button>
       </div>
@@ -3682,7 +3682,7 @@ window.downloadInvoicePdf = async function(id) {
     // Footer
     doc.setFontSize(7);
     doc.setTextColor(gray[0], gray[1], gray[2]);
-    doc.text('Powered by RoofReporterAI — www.roofreporterai.com', 105, 285, { align: 'center' });
+    doc.text('Powered by RoofReporterAI — www.roofmanager.ca', 105, 285, { align: 'center' });
 
     // Save
     doc.save('Invoice_' + (inv.invoice_number || id) + '.pdf');
@@ -5256,7 +5256,7 @@ function renderLKDeployTab() {
           '<p>LIVEKIT_URL=wss://roofreporterai-btkwkiwh.livekit.cloud <span class="text-green-500"># auto-injected</span></p>' +
           '<p>LIVEKIT_API_KEY=APIsvVZsCCaboLY <span class="text-green-500"># auto-injected</span></p>' +
           '<p>LIVEKIT_API_SECRET=UwHeCz... <span class="text-green-500"># auto-injected</span></p>' +
-          '<p>ROOFPORTER_API_URL=https://www.roofreporterai.com <span class="text-blue-500"># set in livekit.toml</span></p>' +
+          '<p>ROOFPORTER_API_URL=https://www.roofmanager.ca <span class="text-blue-500"># set in livekit.toml</span></p>' +
           '<p>DEFAULT_GREETING="Thank you for calling..." <span class="text-blue-500"># set in livekit.toml</span></p>' +
         '</div>' +
       '</div>' +

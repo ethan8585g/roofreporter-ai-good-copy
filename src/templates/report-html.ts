@@ -279,7 +279,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
   <!-- Footer bar -->
   <div style="position:absolute;bottom:0;left:0;right:0;height:28px;background:linear-gradient(90deg,${TEAL},${TEAL_DARK});display:flex;align-items:center;justify-content:space-between;padding:0 28px">
     <span style="color:#fff;font-size:9px;font-weight:700">Roof Reporter AI</span>
-    <span style="color:#E0F2F1;font-size:7.5px">roofreporterai.com &bull; Report: ${reportNum} &bull; ${reportDate} &bull; p.1</span>
+    <span style="color:#E0F2F1;font-size:7.5px">roofmanager.ca &bull; Report: ${reportNum} &bull; ${reportDate} &bull; p.1</span>
   </div>
 </div>
 
@@ -444,7 +444,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
   <!-- Footer bar -->
   <div style="position:absolute;bottom:0;left:0;right:0;height:28px;background:${RED};display:flex;align-items:center;justify-content:space-between;padding:0 28px">
     <span style="color:#fff;font-size:9px;font-weight:700">Roof Reporter AI</span>
-    <span style="color:#ffcdd2;font-size:7.5px">roofreporterai.com &bull; Report: ${reportNum} &bull; ${reportDate} &bull; p.2</span>
+    <span style="color:#ffcdd2;font-size:7.5px">roofmanager.ca &bull; Report: ${reportNum} &bull; ${reportDate} &bull; p.2</span>
   </div>
 </div>
 
@@ -576,7 +576,7 @@ ${report.segments.length >= 2 ? `
   <!-- Footer bar -->
   <div style="position:absolute;bottom:0;left:0;right:0;height:28px;background:linear-gradient(90deg,#4338ca,#6366f1);display:flex;align-items:center;justify-content:space-between;padding:0 28px">
     <span style="color:#fff;font-size:9px;font-weight:700">Roof Reporter AI</span>
-    <span style="color:#c7d2fe;font-size:7.5px">roofreporterai.com &bull; Report: ${reportNum} &bull; ${reportDate} &bull; Pitch Analysis</span>
+    <span style="color:#c7d2fe;font-size:7.5px">roofmanager.ca &bull; Report: ${reportNum} &bull; ${reportDate} &bull; Pitch Analysis</span>
   </div>
 </div>
 ` : ''}
@@ -1277,7 +1277,7 @@ function buildMaterialTakeoffPage(report: RoofReport, reportNum: string, reportD
   <!-- Footer bar -->
   <div style="position:absolute;bottom:0;left:0;right:0;height:28px;background:linear-gradient(90deg,${TEAL},#26a69a);display:flex;align-items:center;justify-content:space-between;padding:0 28px">
     <span style="color:#fff;font-size:9px;font-weight:700">Roof Reporter AI</span>
-    <span style="color:#E0F2F1;font-size:7.5px">roofreporterai.com &bull; Report: ${reportNum} &bull; ${reportDate} &bull; Material Take-Off</span>
+    <span style="color:#E0F2F1;font-size:7.5px">roofmanager.ca &bull; Report: ${reportNum} &bull; ${reportDate} &bull; Material Take-Off</span>
   </div>
 </div>`
 }
@@ -1402,7 +1402,7 @@ function buildEdgeBreakdownPage(report: RoofReport, reportNum: string, reportDat
   <!-- Footer bar -->
   <div style="position:absolute;bottom:0;left:0;right:0;height:28px;background:linear-gradient(90deg,${AMBER},#f59e0b);display:flex;align-items:center;justify-content:space-between;padding:0 28px">
     <span style="color:#fff;font-size:9px;font-weight:700">Roof Reporter AI</span>
-    <span style="color:#fef3c7;font-size:7.5px">roofreporterai.com &bull; Report: ${reportNum} &bull; ${reportDate} &bull; Edge Breakdown</span>
+    <span style="color:#fef3c7;font-size:7.5px">roofmanager.ca &bull; Report: ${reportNum} &bull; ${reportDate} &bull; Edge Breakdown</span>
   </div>
 </div>`
 }
@@ -1519,7 +1519,7 @@ function buildCrossCheckAndAdvisoryPage(report: RoofReport, reportNum: string, r
   <!-- Footer bar -->
   <div style="position:absolute;bottom:0;left:0;right:0;height:28px;background:linear-gradient(90deg,${NAVY},#334155);display:flex;align-items:center;justify-content:space-between;padding:0 28px">
     <span style="color:#fff;font-size:9px;font-weight:700">Roof Reporter AI</span>
-    <span style="color:#94a3b8;font-size:7.5px">roofreporterai.com &bull; Report: ${reportNum} &bull; ${reportDate} &bull; Cross-Check &amp; Advisory</span>
+    <span style="color:#94a3b8;font-size:7.5px">roofmanager.ca &bull; Report: ${reportNum} &bull; ${reportDate} &bull; Cross-Check &amp; Advisory</span>
   </div>
 </div>`
 }
