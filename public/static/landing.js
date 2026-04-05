@@ -115,141 +115,189 @@ function animateCounter(el) {
 // Announcement bar removed — it was blocking the nav menu on scroll
 
 // ============================================================
-// HERO — Redesigned with urgency, trust badges, A/B CTA
+// HERO — Cinematic dark split-screen with 3D roof preview
 // ============================================================
 function renderHero() {
   return `
-    <section class="relative min-h-[92vh] flex items-center overflow-hidden">
-      <!-- Background -->
-      <div class="absolute inset-0">
-        <img src="https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=1920&q=80&auto=format&fit=crop"
-             alt="Aerial view of residential house" class="w-full h-full object-cover" />
-        <div class="absolute inset-0 bg-gradient-to-r from-slate-900/90 via-slate-900/70 to-slate-900/40"></div>
-        <div class="absolute inset-0 opacity-[0.03]" style="background-image: linear-gradient(rgba(255,255,255,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.3) 1px, transparent 1px); background-size: 40px 40px;"></div>
-      </div>
+    <section class="relative min-h-screen flex items-center overflow-hidden" style="background:#0A0A0A">
+      <!-- Subtle grid overlay -->
+      <div class="absolute inset-0 opacity-[0.04]" style="background-image: linear-gradient(rgba(255,255,255,0.2) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.2) 1px, transparent 1px); background-size: 60px 60px;"></div>
+      <!-- Radial glow behind content -->
+      <div class="absolute top-1/3 left-1/4 w-[800px] h-[800px] rounded-full opacity-10" style="background: radial-gradient(circle, #00FF88 0%, transparent 70%);"></div>
+      <div class="absolute bottom-0 right-0 w-[600px] h-[600px] rounded-full opacity-5" style="background: radial-gradient(circle, #22d3ee 0%, transparent 70%);"></div>
 
-      <!-- Animated measurement lines SVG overlay -->
-      <div class="absolute inset-0 pointer-events-none overflow-hidden">
-        <svg class="absolute right-[10%] top-[20%] w-[400px] h-[300px] opacity-30 hidden lg:block" viewBox="0 0 400 300">
-          <line x1="20" y1="40" x2="380" y2="40" stroke="#22d3ee" stroke-width="1.5" stroke-dasharray="8 4">
-            <animate attributeName="stroke-dashoffset" from="0" to="-24" dur="2s" repeatCount="indefinite"/>
-          </line>
-          <line x1="200" y1="40" x2="350" y2="260" stroke="#22d3ee" stroke-width="1.5" stroke-dasharray="8 4">
-            <animate attributeName="stroke-dashoffset" from="0" to="-24" dur="2.5s" repeatCount="indefinite"/>
-          </line>
-          <line x1="200" y1="40" x2="50" y2="260" stroke="#22d3ee" stroke-width="1.5" stroke-dasharray="8 4">
-            <animate attributeName="stroke-dashoffset" from="0" to="-24" dur="2.5s" repeatCount="indefinite"/>
-          </line>
-          <line x1="50" y1="260" x2="350" y2="260" stroke="#22d3ee" stroke-width="1.5" stroke-dasharray="8 4">
-            <animate attributeName="stroke-dashoffset" from="0" to="-24" dur="2s" repeatCount="indefinite"/>
-          </line>
-          <rect x="160" y="20" width="80" height="22" rx="4" fill="rgba(6,182,212,0.15)" stroke="#22d3ee" stroke-width="0.5"/>
-          <text x="200" y="35" fill="#22d3ee" font-size="11" text-anchor="middle" font-family="monospace">85.2 ft</text>
-          <rect x="290" y="140" width="72" height="22" rx="4" fill="rgba(6,182,212,0.15)" stroke="#22d3ee" stroke-width="0.5"/>
-          <text x="326" y="155" fill="#22d3ee" font-size="11" text-anchor="middle" font-family="monospace">148 ft</text>
-          <circle cx="20" cy="40" r="4" fill="#22d3ee" opacity="0.7"><animate attributeName="r" values="3;5;3" dur="2s" repeatCount="indefinite"/></circle>
-          <circle cx="380" cy="40" r="4" fill="#22d3ee" opacity="0.7"><animate attributeName="r" values="3;5;3" dur="2s" repeatCount="indefinite" begin="0.3s"/></circle>
-          <circle cx="200" cy="40" r="4" fill="#22d3ee" opacity="0.7"><animate attributeName="r" values="3;5;3" dur="2s" repeatCount="indefinite" begin="0.6s"/></circle>
-          <circle cx="50" cy="260" r="4" fill="#22d3ee" opacity="0.7"/>
-          <circle cx="350" cy="260" r="4" fill="#22d3ee" opacity="0.7"/>
-        </svg>
-      </div>
-
-      <div class="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 py-32 lg:py-40">
-        <div class="grid lg:grid-cols-5 gap-12 items-center">
-          <!-- Left content: 3 cols -->
-          <div class="lg:col-span-3">
-            <!-- Urgency badge -->
-            <div class="inline-flex items-center gap-2 bg-teal-500/15 border border-teal-400/30 rounded-full px-5 py-2 mb-6 backdrop-blur-sm">
+      <div class="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 pt-32 pb-24 lg:pt-40 lg:pb-32">
+        <div class="grid lg:grid-cols-2 gap-16 lg:gap-20 items-center">
+          <!-- Left: Value Proposition -->
+          <div>
+            <!-- Trust badge -->
+            <div class="inline-flex items-center gap-2.5 bg-[#00FF88]/10 border border-[#00FF88]/20 rounded-full px-5 py-2.5 mb-8 backdrop-blur-sm">
               <span class="relative flex h-2.5 w-2.5">
-                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-75"></span>
-                <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-teal-400"></span>
+                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#00FF88] opacity-75"></span>
+                <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#00FF88]"></span>
               </span>
-              <span class="text-sm font-semibold text-teal-200 tracking-wide">Trusted by 5,000+ Canadian Roofers</span>
+              <span class="text-sm font-semibold text-[#00FF88] tracking-wide">Trusted by 5,000+ Canadian Roofers</span>
             </div>
 
-            <h1 class="text-4xl sm:text-5xl lg:text-6xl font-black leading-[1.08] text-white mb-6 tracking-tight">
-              Never Climb a Roof<br/>
-              Again &mdash; <span class="bg-clip-text text-transparent bg-gradient-to-r from-cyan-300 via-sky-400 to-blue-400">Measure From</span><br/>
-              <span class="bg-clip-text text-transparent bg-gradient-to-r from-cyan-300 via-sky-400 to-blue-400">Your Phone</span>
+            <h1 class="text-5xl sm:text-6xl lg:text-7xl font-black leading-[1.05] text-white mb-8 tracking-tight">
+              Stop Guessing.<br/>
+              <span class="neon-text">Start Quoting</span><br/>
+              <span class="neon-text">With Certainty.</span>
             </h1>
 
-            <p class="text-lg lg:text-xl text-gray-300 mb-8 max-w-2xl leading-relaxed font-light">
-              Satellite-powered roof measurement reports in under 60 seconds. 3D area, pitch, edges, materials, and solar analysis &mdash; plus a full CRM, AI phone secretary, and team management. <strong class="text-white">Start with 3 free estimates today.</strong>
+            <p class="text-lg lg:text-xl text-gray-400 mb-10 max-w-xl leading-relaxed">
+              AI-powered roof measurements from satellite imagery. <span class="text-white font-medium">98% accuracy</span> in under <span class="text-white font-medium">60 seconds.</span>
             </p>
 
-            <!-- A/B CTA — Teal primary (brand color) -->
-            <div class="flex flex-col sm:flex-row gap-4 mb-8">
-              <a href="/signup" onclick="rrTrack('cta_click',{location:'hero_primary',variant:'teal'})" class="group inline-flex items-center justify-center gap-3 bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-400 hover:to-cyan-500 text-white font-bold py-4 px-10 rounded-xl text-lg shadow-2xl shadow-teal-500/30 transition-all duration-300 hover:scale-[1.03] min-h-[56px]">
+            <!-- Dual CTAs -->
+            <div class="flex flex-col sm:flex-row gap-4 mb-10">
+              <a href="/signup" onclick="rrTrack('cta_click',{location:'hero_primary',variant:'neon'})" class="group inline-flex items-center justify-center gap-3 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-10 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/20 transition-all duration-300 hover:scale-[1.03] min-h-[56px]">
                 <i class="fas fa-rocket"></i>
-                Start 3 Free Estimates
-                <i class="fas fa-arrow-right text-sm group-hover:translate-x-1 transition-transform"></i>
+                Start 3 Free Reports
+                <i class="fas fa-arrow-right text-sm group-hover:translate-x-1.5 transition-transform"></i>
               </a>
-              <a href="https://calendar.app.google/CE5iBMV1Fu4K2ve38" target="_blank" onclick="rrTrack('cta_click',{location:'hero_demo'})" class="inline-flex items-center justify-center gap-2 bg-white/10 hover:bg-white/20 backdrop-blur-md text-white font-bold py-4 px-8 rounded-xl text-lg border border-white/20 hover:border-white/30 transition-all duration-300 min-h-[56px]">
-                <i class="fas fa-calendar-check text-cyan-400"></i>
-                Book a Demo
+              <a href="https://calendar.app.google/CE5iBMV1Fu4K2ve38" target="_blank" onclick="rrTrack('cta_click',{location:'hero_demo'})" class="inline-flex items-center justify-center gap-2.5 bg-white/5 hover:bg-white/10 backdrop-blur-md text-white font-bold py-4 px-8 rounded-xl text-lg border border-white/10 hover:border-white/20 transition-all duration-300 min-h-[56px]">
+                <i class="fas fa-play-circle text-[#00FF88]"></i>
+                Watch Demo Video
               </a>
             </div>
 
-            <!-- Quick proof -->
-            <div class="flex flex-wrap items-center gap-x-6 gap-y-3 text-sm">
-              <div class="flex items-center gap-2 text-gray-300">
-                <i class="fas fa-check-circle text-green-400"></i>
-                <span>No credit card required</span>
-              </div>
-              <div class="flex items-center gap-2 text-gray-300">
-                <i class="fas fa-check-circle text-green-400"></i>
-                <span>Reports in <strong class="text-white">under 60s</strong></span>
-              </div>
-              <div class="flex items-center gap-2 text-gray-300">
-                <i class="fas fa-check-circle text-green-400"></i>
-                <span><strong class="text-white">Full CRM</strong> included free</span>
-              </div>
-            </div>
-
-            <!-- Star rating social proof -->
-            <div class="flex items-center gap-3 mt-6">
+            <!-- Social proof row -->
+            <div class="flex items-center gap-4 mb-4">
               <div class="flex items-center gap-0.5">
-                ${[1,2,3,4,5].map(n => `<i class="fas fa-star text-amber-400 text-sm"></i>`).join('')}
+                ${[1,2,3,4,5].map(n => `<i class="fas fa-star text-[#00FF88] text-sm"></i>`).join('')}
               </div>
-              <span class="text-sm text-gray-400"><strong class="text-white">4.9/5</strong> from 200+ reviews</span>
+              <span class="text-sm text-gray-500"><strong class="text-white font-semibold">4.9/5</strong> from 200+ reviews</span>
             </div>
 
-            <!-- Mobile-only quick signup CTA (replaces the desktop email form) -->
-            <div class="lg:hidden mt-8 flex flex-col gap-3">
-              <a href="/signup" onclick="rrTrack('cta_click',{location:'hero_mobile'})" class="flex items-center justify-center gap-3 bg-gradient-to-r from-teal-500 to-cyan-600 text-white font-bold py-4 px-8 rounded-xl text-lg shadow-2xl shadow-teal-500/30 min-h-[56px]">
+            <!-- Quick proof pills -->
+            <div class="flex flex-wrap items-center gap-3 text-sm">
+              <span class="inline-flex items-center gap-1.5 text-gray-400 bg-white/5 rounded-full px-3 py-1.5">
+                <i class="fas fa-check text-[#00FF88] text-[10px]"></i>No credit card required
+              </span>
+              <span class="inline-flex items-center gap-1.5 text-gray-400 bg-white/5 rounded-full px-3 py-1.5">
+                <i class="fas fa-check text-[#00FF88] text-[10px]"></i>Reports in under 60s
+              </span>
+              <span class="inline-flex items-center gap-1.5 text-gray-400 bg-white/5 rounded-full px-3 py-1.5">
+                <i class="fas fa-check text-[#00FF88] text-[10px]"></i>Full CRM included free
+              </span>
+            </div>
+
+            <!-- Mobile-only CTA -->
+            <div class="lg:hidden mt-10 flex flex-col gap-3">
+              <a href="/signup" onclick="rrTrack('cta_click',{location:'hero_mobile'})" class="flex items-center justify-center gap-3 bg-[#00FF88] text-[#0A0A0A] font-extrabold py-4 px-8 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/20 min-h-[56px]">
                 <i class="fas fa-rocket"></i>
                 Get 3 Free Reports
                 <i class="fas fa-arrow-right text-sm"></i>
               </a>
-              <div class="flex items-center justify-center gap-4 text-xs text-gray-400">
-                <span><i class="fas fa-check-circle text-green-400 mr-1"></i>No credit card</span>
-                <span><i class="fas fa-check-circle text-green-400 mr-1"></i>Setup in 2 min</span>
-              </div>
             </div>
           </div>
 
-          <!-- Right: quick email capture (2 cols) -->
-          <div class="lg:col-span-2 hidden lg:block">
-            <div class="bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl p-6 shadow-2xl">
-              <div class="text-center mb-4">
-                <div class="inline-flex items-center gap-2 bg-green-500/20 text-green-300 rounded-full px-3 py-1 text-xs font-bold mb-3">
-                  <i class="fas fa-gift"></i> FREE — No Credit Card
+          <!-- Right: Interactive 3D Roof Measurement Preview -->
+          <div class="hidden lg:block">
+            <div class="relative">
+              <!-- Animated roof measurement card -->
+              <div class="bg-[#111111] border border-white/10 rounded-2xl overflow-hidden shadow-2xl shadow-black/50 neon-glow">
+                <!-- Card header -->
+                <div class="flex items-center justify-between px-5 py-3 border-b border-white/5">
+                  <div class="flex items-center gap-2">
+                    <div class="w-3 h-3 rounded-full bg-red-500/80"></div>
+                    <div class="w-3 h-3 rounded-full bg-amber-500/80"></div>
+                    <div class="w-3 h-3 rounded-full bg-green-500/80"></div>
+                  </div>
+                  <span class="text-[11px] text-gray-500 font-mono">roof-measurement.pdf</span>
+                  <div class="text-[10px] text-[#00FF88] bg-[#00FF88]/10 px-2 py-0.5 rounded font-bold">LIVE</div>
                 </div>
-                <h3 class="text-white font-bold text-xl mb-1">Get Your First 3 Reports Free</h3>
-                <p class="text-gray-400 text-sm">Join 10,000+ roofing pros using AI-powered estimates</p>
+
+                <!-- Animated roof SVG -->
+                <div class="relative bg-gradient-to-br from-[#0d1117] to-[#161b22] p-8">
+                  <svg viewBox="0 0 400 250" class="w-full">
+                    <!-- Roof outline with animated dashes -->
+                    <polygon points="200,30 380,130 380,200 20,200 20,130" fill="none" stroke="#00FF88" stroke-width="2" stroke-dasharray="10 5" opacity="0.6">
+                      <animate attributeName="stroke-dashoffset" from="0" to="-30" dur="3s" repeatCount="indefinite"/>
+                    </polygon>
+                    <!-- Ridge line -->
+                    <line x1="200" y1="30" x2="200" y2="130" stroke="#22d3ee" stroke-width="1.5" stroke-dasharray="6 3" opacity="0.5">
+                      <animate attributeName="stroke-dashoffset" from="0" to="-18" dur="2s" repeatCount="indefinite"/>
+                    </line>
+                    <!-- Left slope -->
+                    <line x1="20" y1="130" x2="200" y2="30" stroke="#00FF88" stroke-width="2" opacity="0.4"/>
+                    <!-- Right slope -->
+                    <line x1="380" y1="130" x2="200" y2="30" stroke="#00FF88" stroke-width="2" opacity="0.4"/>
+
+                    <!-- Measurement labels -->
+                    <rect x="155" y="10" width="90" height="24" rx="6" fill="rgba(0,255,136,0.12)" stroke="#00FF88" stroke-width="0.5"/>
+                    <text x="200" y="26" fill="#00FF88" font-size="11" text-anchor="middle" font-family="monospace" font-weight="bold">85.2 ft</text>
+
+                    <rect x="310" y="70" width="80" height="24" rx="6" fill="rgba(34,211,238,0.12)" stroke="#22d3ee" stroke-width="0.5"/>
+                    <text x="350" y="86" fill="#22d3ee" font-size="11" text-anchor="middle" font-family="monospace" font-weight="bold">6/12 pitch</text>
+
+                    <rect x="10" y="155" width="90" height="24" rx="6" fill="rgba(0,255,136,0.12)" stroke="#00FF88" stroke-width="0.5"/>
+                    <text x="55" y="171" fill="#00FF88" font-size="11" text-anchor="middle" font-family="monospace" font-weight="bold">148.3 ft</text>
+
+                    <!-- Animated measurement points -->
+                    <circle cx="200" cy="30" r="4" fill="#00FF88"><animate attributeName="r" values="3;6;3" dur="2s" repeatCount="indefinite"/></circle>
+                    <circle cx="20" cy="130" r="4" fill="#00FF88"><animate attributeName="r" values="3;6;3" dur="2s" repeatCount="indefinite" begin="0.4s"/></circle>
+                    <circle cx="380" cy="130" r="4" fill="#00FF88"><animate attributeName="r" values="3;6;3" dur="2s" repeatCount="indefinite" begin="0.8s"/></circle>
+                    <circle cx="20" cy="200" r="3" fill="#22d3ee" opacity="0.6"/>
+                    <circle cx="380" cy="200" r="3" fill="#22d3ee" opacity="0.6"/>
+
+                    <!-- Area label -->
+                    <rect x="130" y="120" width="140" height="30" rx="8" fill="rgba(0,255,136,0.08)" stroke="#00FF88" stroke-width="0.5"/>
+                    <text x="200" y="139" fill="#00FF88" font-size="13" text-anchor="middle" font-family="monospace" font-weight="bold">2,847 sq ft</text>
+                  </svg>
+                </div>
+
+                <!-- Live stats bar -->
+                <div class="grid grid-cols-4 divide-x divide-white/5 border-t border-white/5">
+                  <div class="p-3 text-center">
+                    <div class="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Area</div>
+                    <div class="text-sm font-bold text-white mt-0.5">2,847 ft²</div>
+                  </div>
+                  <div class="p-3 text-center">
+                    <div class="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Pitch</div>
+                    <div class="text-sm font-bold text-white mt-0.5">6/12</div>
+                  </div>
+                  <div class="p-3 text-center">
+                    <div class="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Edges</div>
+                    <div class="text-sm font-bold text-white mt-0.5">342 ft</div>
+                  </div>
+                  <div class="p-3 text-center">
+                    <div class="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Segments</div>
+                    <div class="text-sm font-bold text-white mt-0.5">8</div>
+                  </div>
+                </div>
+
+                <!-- Material BOM row -->
+                <div class="px-5 py-3 flex flex-wrap items-center gap-3 text-[11px] text-gray-500 bg-[#0d1117] border-t border-white/5">
+                  <span class="font-bold text-gray-400"><i class="fas fa-th mr-1 text-[#00FF88]"></i>BOM:</span>
+                  <span>29 bundles</span>
+                  <span class="text-white/20">&middot;</span>
+                  <span>4 rolls underlayment</span>
+                  <span class="text-white/20">&middot;</span>
+                  <span>115 ft drip edge</span>
+                  <span class="text-white/20">&middot;</span>
+                  <span>89 ft ridge cap</span>
+                </div>
               </div>
-              <form id="hero-quick-form" onsubmit="return heroQuickSignup(event)" class="space-y-3">
-                <input type="email" id="hero-email" required placeholder="you@roofingcompany.com" class="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3.5 text-white placeholder-gray-400 focus:ring-2 focus:ring-cyan-400 focus:border-transparent outline-none text-sm">
-                <input type="text" id="hero-company" placeholder="Company name (optional)" class="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3.5 text-white placeholder-gray-400 focus:ring-2 focus:ring-cyan-400 focus:border-transparent outline-none text-sm">
-                <button type="submit" class="w-full bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-400 hover:to-cyan-500 text-white font-bold py-3.5 rounded-xl shadow-lg transition-all hover:scale-[1.02] text-sm min-h-[48px]">
-                  <i class="fas fa-rocket mr-2"></i>Start Free &mdash; 3 Reports On Us
-                </button>
-                <div id="hero-form-msg" class="hidden text-sm text-center py-2"></div>
-              </form>
-              <div class="flex items-center justify-center gap-4 mt-4 text-[11px] text-gray-500">
-                <span><i class="fas fa-lock mr-1"></i>256-bit encrypted</span>
-                <span><i class="fas fa-shield-alt mr-1"></i>SOC 2 compliant</span>
+
+              <!-- Live counter floating badge -->
+              <div class="absolute -bottom-4 -left-4 bg-[#111111] border border-white/10 rounded-xl px-4 py-2.5 shadow-xl flex items-center gap-3">
+                <div class="w-8 h-8 rounded-lg bg-[#00FF88]/10 flex items-center justify-center">
+                  <i class="fas fa-chart-line text-[#00FF88] text-sm"></i>
+                </div>
+                <div>
+                  <div class="text-white font-bold text-sm" data-count="9989" data-suffix="+" id="hero-counter">0+</div>
+                  <div class="text-[10px] text-gray-500">reports generated</div>
+                </div>
+              </div>
+
+              <!-- Speed badge -->
+              <div class="absolute -top-3 -right-3 bg-[#111111] border border-white/10 rounded-xl px-3 py-2 shadow-xl flex items-center gap-2">
+                <div class="w-6 h-6 rounded-lg bg-[#22d3ee]/10 flex items-center justify-center">
+                  <i class="fas fa-bolt text-[#22d3ee] text-xs"></i>
+                </div>
+                <span class="text-white font-bold text-xs">&lt;60s delivery</span>
               </div>
             </div>
           </div>
@@ -258,8 +306,8 @@ function renderHero() {
 
       <!-- Scroll indicator -->
       <div class="absolute bottom-8 left-1/2 -translate-x-1/2 z-10">
-        <div class="w-6 h-10 border-2 border-white/20 rounded-full flex justify-center pt-2">
-          <div class="w-1 h-3 bg-white/40 rounded-full animate-bounce"></div>
+        <div class="w-6 h-10 border-2 border-white/10 rounded-full flex justify-center pt-2">
+          <div class="w-1 h-3 bg-[#00FF88]/40 rounded-full animate-bounce"></div>
         </div>
       </div>
     </section>
@@ -282,27 +330,40 @@ window.heroQuickSignup = function(e) {
 };
 
 // ============================================================
-// TRUST BADGES — ISO, Google, Square, Cloudflare
+// TRUST BAR — Scrolling marquee with logos + stats
 // ============================================================
 function renderTrustBadges() {
+  const items = [
+    { icon: 'fas fa-shield-alt', text: 'PCI DSS Compliant', color: '#00FF88' },
+    { icon: 'fas fa-lock', text: '256-bit SSL', color: '#22d3ee' },
+    { icon: 'fab fa-google', text: 'Google Cloud Partner', color: '#00FF88' },
+    { icon: 'fas fa-bullseye', text: '98% Accuracy', color: '#22d3ee' },
+    { icon: 'fas fa-credit-card', text: 'Square Verified', color: '#00FF88' },
+    { icon: 'fas fa-bolt', text: '<60s Delivery', color: '#22d3ee' },
+    { icon: 'fas fa-cloud', text: 'Cloudflare Protected', color: '#00FF88' },
+    { icon: 'fas fa-dollar-sign', text: '$8 CAD/Report', color: '#22d3ee' },
+    { icon: 'fas fa-maple-leaf', text: 'Canadian Owned', color: '#00FF88' },
+    { icon: 'fas fa-shield-alt', text: 'SOC 2 Compliant', color: '#22d3ee' },
+  ];
+  // Duplicate for seamless loop
+  const track = [...items, ...items].map(it => `
+    <div class="flex items-center gap-2.5 px-6 whitespace-nowrap">
+      <i class="${it.icon} text-sm" style="color:${it.color}"></i>
+      <span class="text-sm font-medium text-gray-400">${it.text}</span>
+    </div>
+  `).join('');
+
   return `
-    <section class="bg-white border-b border-gray-100 py-5">
-      <div class="max-w-7xl mx-auto px-4">
-        <div class="flex flex-wrap items-center justify-center gap-x-8 gap-y-4">
-          <div class="flex items-center gap-2 text-gray-400 text-xs font-medium"><i class="fas fa-shield-alt text-green-500 text-base"></i> PCI DSS Compliant</div>
-          <div class="flex items-center gap-2 text-gray-400 text-xs font-medium"><i class="fas fa-lock text-blue-500 text-base"></i> 256-bit SSL Encrypted</div>
-          <div class="flex items-center gap-2 text-gray-400 text-xs font-medium"><i class="fab fa-google text-red-500 text-base"></i> Google Cloud Partner</div>
-          <div class="flex items-center gap-2 text-gray-400 text-xs font-medium"><i class="fas fa-credit-card text-indigo-500 text-base"></i> Square Verified</div>
-          <div class="flex items-center gap-2 text-gray-400 text-xs font-medium"><i class="fas fa-cloud text-orange-500 text-base"></i> Cloudflare Protected</div>
-          <div class="flex items-center gap-2 text-gray-400 text-xs font-medium"><i class="fas fa-maple-leaf text-red-600 text-base"></i> Canadian Owned</div>
-        </div>
+    <section class="border-y border-white/5 py-4 overflow-hidden" style="background:#0A0A0A">
+      <div class="flex marquee-track" style="width: max-content;">
+        ${track}
       </div>
     </section>
   `;
 }
 
 // ============================================================
-// STATS BAR — Animated counters
+// STATS BAR — Dark animated counters with neon glow
 // ============================================================
 function renderStatsBar() {
   const stats = [
@@ -313,16 +374,16 @@ function renderStatsBar() {
   ];
 
   return `
-    <section class="relative z-20 -mt-1">
-      <div class="max-w-7xl mx-auto px-4">
-        <div class="bg-white rounded-2xl shadow-xl border border-gray-100 grid grid-cols-2 lg:grid-cols-4 divide-x divide-gray-100">
+    <section class="relative z-20 py-6" style="background:#0A0A0A">
+      <div class="max-w-6xl mx-auto px-4">
+        <div class="bg-[#111111] rounded-2xl border border-white/10 grid grid-cols-2 lg:grid-cols-4 divide-x divide-white/5">
           ${stats.map((s, i) => `
-            <div class="p-6 lg:p-8 text-center group hover:bg-gradient-to-b hover:from-cyan-50/50 hover:to-transparent transition-colors duration-300 ${i === 0 ? 'rounded-l-2xl' : ''} ${i === 3 ? 'rounded-r-2xl' : ''}">
-              <div class="w-10 h-10 mx-auto mb-3 rounded-xl bg-gradient-to-br from-cyan-50 to-blue-50 flex items-center justify-center group-hover:from-cyan-100 group-hover:to-blue-100 transition-colors">
-                <i class="${s.icon} text-cyan-600 text-sm"></i>
+            <div class="p-6 lg:p-8 text-center group transition-colors duration-300 ${i === 0 ? 'rounded-l-2xl' : ''} ${i === 3 ? 'rounded-r-2xl' : ''}">
+              <div class="w-10 h-10 mx-auto mb-3 rounded-xl bg-[#00FF88]/10 flex items-center justify-center group-hover:bg-[#00FF88]/20 transition-colors">
+                <i class="${s.icon} text-[#00FF88] text-sm"></i>
               </div>
-              <div class="text-3xl lg:text-4xl font-black text-gray-900 mb-1" data-count="${s.value}" data-suffix="${s.suffix || ''}" data-prefix="${s.prefix || ''}">${s.prefix || ''}0${s.suffix || ''}</div>
-              <div class="text-xs text-gray-500 font-medium uppercase tracking-wider">${s.label}</div>
+              <div class="text-3xl lg:text-4xl font-black mb-1 stat-value" data-count="${s.value}" data-suffix="${s.suffix || ''}" data-prefix="${s.prefix || ''}">${s.prefix || ''}0${s.suffix || ''}</div>
+              <div class="text-[11px] text-gray-500 font-semibold uppercase tracking-widest">${s.label}</div>
             </div>
           `).join('')}
         </div>
@@ -332,7 +393,7 @@ function renderStatsBar() {
 }
 
 // ============================================================
-// SOCIAL PROOF LOGOS — Customer company logos
+// SOCIAL PROOF — Animated city badges
 // ============================================================
 function renderSocialProofLogos() {
   const cities = [
@@ -340,23 +401,16 @@ function renderSocialProofLogos() {
   ];
 
   return `
-    <section class="py-10 bg-white border-y border-gray-100">
+    <section class="py-12" style="background:#0A0A0A">
       <div class="max-w-7xl mx-auto px-4">
-        <p class="text-center text-sm text-gray-600 font-semibold mb-4">Trusted by roofing contractors in <strong class="text-gray-900">15+ cities</strong> across North America</p>
-        <div class="flex flex-wrap items-center justify-center gap-x-6 gap-y-3">
+        <p class="text-center text-sm text-gray-500 font-semibold mb-6">Trusted by roofing contractors in <strong class="text-white">15+ cities</strong> across North America</p>
+        <div class="flex flex-wrap items-center justify-center gap-3">
           ${cities.map(c => `
-            <div class="flex items-center gap-1.5 text-gray-400 hover:text-teal-600 transition-colors">
-              <i class="fas fa-map-marker-alt text-xs"></i>
-              <span class="text-sm font-medium">${c}</span>
+            <div class="flex items-center gap-2 bg-white/5 hover:bg-[#00FF88]/10 border border-white/5 hover:border-[#00FF88]/20 rounded-full px-4 py-2 transition-all duration-300 group cursor-default">
+              <i class="fas fa-map-marker-alt text-[10px] text-gray-600 group-hover:text-[#00FF88] transition-colors"></i>
+              <span class="text-sm font-medium text-gray-400 group-hover:text-white transition-colors">${c}</span>
             </div>
           `).join('')}
-        </div>
-        <div class="flex items-center justify-center gap-6 mt-5 pt-5 border-t border-gray-100">
-          <div class="flex items-center gap-1.5"><i class="fas fa-shield-alt text-teal-500"></i><span class="text-xs text-gray-500">PCI DSS Compliant</span></div>
-          <div class="flex items-center gap-1.5"><i class="fas fa-lock text-teal-500"></i><span class="text-xs text-gray-500">256-bit SSL</span></div>
-          <div class="flex items-center gap-1.5"><i class="fab fa-google text-teal-500"></i><span class="text-xs text-gray-500">Google Cloud</span></div>
-          <div class="flex items-center gap-1.5"><i class="fab fa-square text-teal-500"></i><span class="text-xs text-gray-500">Square Payments</span></div>
-          <div class="hidden sm:flex items-center gap-1.5"><i class="fab fa-canadian-maple-leaf text-teal-500"></i><span class="text-xs text-gray-500">Canadian Owned</span></div>
         </div>
       </div>
     </section>
@@ -364,64 +418,79 @@ function renderSocialProofLogos() {
 }
 
 // ============================================================
-// VALUE PROPOSITION — Benefit-first messaging
+// VALUE PILLARS — Three interactive dark cards
 // ============================================================
 function renderValueProp() {
   const pillars = [
     {
       icon: 'fas fa-satellite-dish',
+      accent: '#00FF88',
       title: 'Quote With 98% Confidence',
       desc: "No more guesswork. Google's Solar API with LiDAR-calibrated 3D models delivers precision measurements from satellite imagery. Quote every job knowing your numbers are right.",
+      metric: '98%',
+      metricLabel: 'Accuracy Rate',
       cta: 'See Accuracy Data',
-      ctaLink: '#pricing',
-      img: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=600&q=80&auto=format&fit=crop'
+      ctaLink: '#pricing'
     },
     {
       icon: 'fas fa-brain',
+      accent: '#22d3ee',
       title: 'Save 2+ Hours Per Estimate',
       desc: 'Stop climbing roofs with a tape measure. Our AI calculates pitch-adjusted areas, identifies every edge, and generates a full material BOM instantly. Quote from your truck.',
+      metric: '2h+',
+      metricLabel: 'Saved Per Job',
       cta: 'Try Free Report',
-      ctaLink: '/signup',
-      img: 'https://images.unsplash.com/photo-1518770660439-4636190af475?w=600&q=80&auto=format&fit=crop'
+      ctaLink: '/signup'
     },
     {
       icon: 'fas fa-users-cog',
-      title: 'Your AI Admin That Never Sleeps',
+      accent: '#a78bfa',
+      title: 'AI Admin That Never Sleeps',
       desc: 'AI Secretary answers calls 24/7, books appointments, qualifies leads. Full CRM, invoicing, D2D manager, virtual try-on. Run your whole business from one platform.',
+      metric: '24/7',
+      metricLabel: 'Always Online',
       cta: 'Explore Platform',
-      ctaLink: '#features',
-      img: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=600&q=80&auto=format&fit=crop'
+      ctaLink: '#features'
     }
   ];
 
   return `
-    <section class="py-24 bg-white">
+    <section class="py-28" style="background:#0A0A0A">
       <div class="max-w-7xl mx-auto px-4">
-        <div class="text-center mb-16 scroll-animate opacity-0 translate-y-8 transition-all duration-700">
-          <div class="inline-flex items-center gap-2 bg-cyan-50 text-cyan-700 rounded-full px-4 py-1.5 text-sm font-semibold mb-4">
+        <div class="text-center mb-20 scroll-animate">
+          <div class="inline-flex items-center gap-2 bg-[#00FF88]/10 text-[#00FF88] rounded-full px-5 py-2 text-sm font-semibold mb-6">
             <i class="fas fa-sparkles"></i> Why 5,000+ Roofers Choose Us
           </div>
-          <h2 class="text-3xl lg:text-5xl font-black text-gray-900 mb-4 tracking-tight">
-            Stop Guessing.<br/>Start Quoting With Certainty.
+          <h2 class="text-4xl lg:text-6xl font-black text-white mb-6 tracking-tight leading-tight">
+            Stop Guessing.<br/>
+            <span class="neon-text">Start Quoting With Certainty.</span>
           </h2>
-          <p class="text-lg text-gray-500 max-w-2xl mx-auto">Every minute on a ladder is a minute you could spend closing deals. Roof Manager handles the measurement so you can focus on revenue.</p>
+          <p class="text-lg text-gray-400 max-w-2xl mx-auto leading-relaxed">Every minute on a ladder is a minute you could spend closing deals. Roof Manager handles the measurement so you can focus on revenue.</p>
         </div>
 
-        <div class="grid lg:grid-cols-3 gap-8">
+        <div class="grid lg:grid-cols-3 gap-6">
           ${pillars.map((p, i) => `
-            <div class="scroll-animate opacity-0 translate-y-8 transition-all duration-700 group" style="transition-delay: ${i * 150}ms">
-              <div class="relative overflow-hidden rounded-2xl bg-gray-50 border border-gray-100 hover:border-cyan-200 hover:shadow-2xl hover:shadow-cyan-500/5 transition-all duration-500 h-full flex flex-col">
-                <div class="h-48 overflow-hidden">
-                  <img src="${p.img}" alt="${p.title}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" loading="lazy" />
-                  <div class="absolute inset-0 bg-gradient-to-t from-gray-50 via-transparent to-transparent"></div>
-                </div>
-                <div class="p-6 flex-1 flex flex-col">
-                  <div class="w-12 h-12 -mt-12 relative z-10 bg-white rounded-xl shadow-lg flex items-center justify-center mb-4 border border-gray-100">
-                    <i class="${p.icon} text-cyan-600 text-lg"></i>
+            <div class="scroll-animate" style="transition-delay: ${i * 150}ms">
+              <div class="card-hover relative overflow-hidden rounded-2xl bg-[#111111] border border-white/10 hover:border-[${p.accent}]/30 h-full flex flex-col p-8 group">
+                <!-- Subtle gradient glow on hover -->
+                <div class="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500" style="background: radial-gradient(circle at 50% 0%, ${p.accent}08 0%, transparent 70%);"></div>
+
+                <div class="relative z-10 flex-1 flex flex-col">
+                  <!-- Icon + Metric row -->
+                  <div class="flex items-start justify-between mb-6">
+                    <div class="w-14 h-14 rounded-2xl flex items-center justify-center" style="background: ${p.accent}15;">
+                      <i class="${p.icon} text-xl" style="color: ${p.accent}"></i>
+                    </div>
+                    <div class="text-right">
+                      <div class="text-2xl font-black" style="color: ${p.accent}">${p.metric}</div>
+                      <div class="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">${p.metricLabel}</div>
+                    </div>
                   </div>
-                  <h3 class="text-xl font-bold text-gray-900 mb-2">${p.title}</h3>
-                  <p class="text-gray-500 text-sm leading-relaxed mb-4 flex-1">${p.desc}</p>
-                  <a href="${p.ctaLink}" onclick="rrTrack('cta_click',{location:'value_prop',card:'${p.title}'})" class="inline-flex items-center gap-2 text-cyan-600 hover:text-cyan-700 font-semibold text-sm group/link">
+
+                  <h3 class="text-xl font-bold text-white mb-3">${p.title}</h3>
+                  <p class="text-gray-400 text-sm leading-relaxed mb-6 flex-1">${p.desc}</p>
+
+                  <a href="${p.ctaLink}" onclick="rrTrack('cta_click',{location:'value_prop',card:'${p.title}'})" class="inline-flex items-center gap-2 font-semibold text-sm group/link transition-colors" style="color: ${p.accent}">
                     ${p.cta} <i class="fas fa-arrow-right text-xs group-hover/link:translate-x-1 transition-transform"></i>
                   </a>
                 </div>
@@ -435,111 +504,119 @@ function renderValueProp() {
 }
 
 // ============================================================
-// HOW IT WORKS — 4-step process
+// HOW IT WORKS — Dark horizontal timeline with animations
 // ============================================================
 function renderHowItWorks() {
   const steps = [
-    { num: 1, icon: 'fas fa-search-location', color: 'from-slate-700 to-slate-900', title: 'Enter the Address', desc: 'Search any Canadian address. Google Maps pinpoints the exact roof instantly.' },
-    { num: 2, icon: 'fas fa-sliders-h', color: 'from-slate-700 to-slate-900', title: 'Configure Details', desc: "Add homeowner info, company details, and delivery options. Takes 30 seconds." },
-    { num: 3, icon: 'fas fa-credit-card', color: 'from-slate-700 to-slate-900', title: 'Order Instantly', desc: 'First 3 reports are FREE. Then just $8 CAD per report. Instant checkout.' },
-    { num: 4, icon: 'fas fa-file-pdf', color: 'from-teal-500 to-cyan-600', title: 'Get Your PDF', desc: 'Professional report with area, pitch, edges, BOM, solar data. Under 60 seconds.' },
+    { num: 1, icon: 'fas fa-search-location', title: 'Enter the Address', desc: 'Search any address. Google Maps pinpoints the exact roof instantly.', accent: '#00FF88' },
+    { num: 2, icon: 'fas fa-sliders-h', title: 'Configure Details', desc: 'Add homeowner info, company details, and delivery options. Takes 30 seconds.', accent: '#22d3ee' },
+    { num: 3, icon: 'fas fa-credit-card', title: 'Order Instantly', desc: 'First 3 reports are FREE. Then just $8 CAD per report. Instant checkout.', accent: '#a78bfa' },
+    { num: 4, icon: 'fas fa-file-pdf', title: 'Get Your PDF', desc: 'Professional report with area, pitch, edges, BOM, solar data. Under 60 seconds.', accent: '#00FF88' },
   ];
 
   return `
-    <section id="how-it-works" class="py-24 bg-gradient-to-b from-gray-50 to-white">
-      <div class="max-w-7xl mx-auto px-4">
-        <div class="text-center mb-16 scroll-animate opacity-0 translate-y-8 transition-all duration-700">
-          <div class="inline-flex items-center gap-2 bg-blue-50 text-blue-700 rounded-full px-4 py-1.5 text-sm font-semibold mb-4">
+    <section id="how-it-works" class="py-28 relative overflow-hidden" style="background: linear-gradient(180deg, #0d0d0d 0%, #0A0A0A 100%);">
+      <!-- Subtle radial glow -->
+      <div class="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[400px] opacity-5" style="background: radial-gradient(ellipse, #00FF88 0%, transparent 70%);"></div>
+
+      <div class="max-w-7xl mx-auto px-4 relative z-10">
+        <div class="text-center mb-20 scroll-animate">
+          <div class="inline-flex items-center gap-2 bg-[#22d3ee]/10 text-[#22d3ee] rounded-full px-5 py-2 text-sm font-semibold mb-6">
             <i class="fas fa-route"></i> Simple Process
           </div>
-          <h2 class="text-3xl lg:text-5xl font-black text-gray-900 mb-4 tracking-tight">
-            Address to Report<br/>in 4 Steps
+          <h2 class="text-4xl lg:text-6xl font-black text-white mb-6 tracking-tight leading-tight">
+            Address to Report<br/>
+            <span class="neon-text">in 4 Steps</span>
           </h2>
-          <p class="text-lg text-gray-500 max-w-2xl mx-auto">No ladders. No drones. No tape measures. Just enter an address.</p>
+          <p class="text-lg text-gray-400 max-w-2xl mx-auto">No ladders. No drones. No tape measures. Just enter an address.</p>
         </div>
 
         <div class="grid md:grid-cols-4 gap-6 relative">
-          <div class="hidden md:block absolute top-12 left-[calc(12.5%+24px)] right-[calc(12.5%+24px)] h-0.5 bg-gradient-to-r from-slate-300 via-slate-300 to-teal-300"></div>
+          <!-- Connecting line -->
+          <div class="hidden md:block absolute top-8 left-[calc(12.5%+28px)] right-[calc(12.5%+28px)] h-px">
+            <div class="w-full h-full" style="background: linear-gradient(90deg, #00FF88, #22d3ee, #a78bfa, #00FF88); opacity: 0.3;"></div>
+            <div class="absolute inset-0 h-full" style="background: linear-gradient(90deg, #00FF88, #22d3ee, #a78bfa, #00FF88); opacity: 0.6; background-size: 200% 100%; animation: shimmer 3s linear infinite;"></div>
+          </div>
 
           ${steps.map((s, i) => `
-            <div class="scroll-animate opacity-0 translate-y-8 transition-all duration-700 relative" style="transition-delay: ${i * 150}ms">
-              <div class="relative z-10">
-                <div class="w-14 h-14 mx-auto bg-gradient-to-br ${s.color} rounded-2xl flex items-center justify-center mb-5 shadow-lg shadow-gray-900/10 ring-4 ring-white">
-                  <i class="${s.icon} text-white text-xl"></i>
+            <div class="scroll-animate relative" style="transition-delay: ${i * 150}ms">
+              <div class="relative z-10 flex justify-center">
+                <div class="w-16 h-16 bg-[#111111] rounded-2xl flex items-center justify-center mb-6 border border-white/10 shadow-lg" style="box-shadow: 0 0 20px ${s.accent}15;">
+                  <i class="${s.icon} text-xl" style="color: ${s.accent}"></i>
                 </div>
               </div>
               <div class="text-center">
-                <div class="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">Step ${s.num}</div>
-                <h3 class="text-lg font-bold text-gray-900 mb-2">${s.title}</h3>
+                <div class="text-[11px] font-bold uppercase tracking-widest mb-2" style="color: ${s.accent}">Step ${s.num}</div>
+                <h3 class="text-lg font-bold text-white mb-2">${s.title}</h3>
                 <p class="text-sm text-gray-500 leading-relaxed">${s.desc}</p>
               </div>
             </div>
           `).join('')}
         </div>
 
-        <!-- Report Preview Mockup -->
-        <div class="mt-16 scroll-animate opacity-0 translate-y-8 transition-all duration-700">
+        <!-- Report Preview Mockup — Dark themed -->
+        <div class="mt-20 scroll-animate">
           <div class="text-center mb-8">
-            <div class="inline-flex items-center gap-2 bg-teal-50 text-teal-700 rounded-full px-4 py-1.5 text-sm font-semibold">
+            <div class="inline-flex items-center gap-2 bg-[#00FF88]/10 text-[#00FF88] rounded-full px-4 py-1.5 text-sm font-semibold">
               <i class="fas fa-file-pdf"></i> What You Get
             </div>
           </div>
-          <div class="max-w-3xl mx-auto bg-white border border-gray-200 rounded-2xl shadow-lg overflow-hidden">
+          <div class="max-w-3xl mx-auto bg-[#111111] border border-white/10 rounded-2xl overflow-hidden shadow-2xl shadow-black/30 neon-glow">
             <!-- Mock report header -->
-            <div class="bg-slate-800 text-white px-6 py-4 flex items-center justify-between">
+            <div class="bg-[#0d1117] text-white px-6 py-4 flex items-center justify-between border-b border-white/5">
               <div class="flex items-center gap-3">
                 <i class="fas fa-file-pdf text-red-400 text-lg"></i>
                 <div>
                   <div class="font-bold text-sm">Roof Manager Measurement Report</div>
-                  <div class="text-xs text-slate-400">123 Main Street, Calgary, AB T2P 1J9</div>
+                  <div class="text-xs text-gray-500">123 Main Street, Calgary, AB T2P 1J9</div>
                 </div>
               </div>
-              <span class="text-[10px] bg-teal-500 text-white px-2 py-0.5 rounded font-bold">PDF</span>
+              <span class="text-[10px] bg-[#00FF88] text-[#0A0A0A] px-2.5 py-0.5 rounded font-bold">PDF</span>
             </div>
             <!-- Mock report body -->
-            <div class="grid grid-cols-2 sm:grid-cols-4 gap-0 divide-x divide-gray-100 border-b border-gray-100">
-              <div class="p-4 text-center">
-                <div class="text-[10px] text-gray-400 uppercase tracking-wider font-semibold mb-1">Total Area</div>
-                <div class="text-xl font-black text-gray-900">2,847</div>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-0 divide-x divide-white/5 border-b border-white/5">
+              <div class="p-5 text-center">
+                <div class="text-[10px] text-gray-500 uppercase tracking-wider font-semibold mb-1">Total Area</div>
+                <div class="text-xl font-black text-white">2,847</div>
                 <div class="text-xs text-gray-500">sq ft</div>
               </div>
-              <div class="p-4 text-center">
-                <div class="text-[10px] text-gray-400 uppercase tracking-wider font-semibold mb-1">Pitch</div>
-                <div class="text-xl font-black text-gray-900">6/12</div>
+              <div class="p-5 text-center">
+                <div class="text-[10px] text-gray-500 uppercase tracking-wider font-semibold mb-1">Pitch</div>
+                <div class="text-xl font-black text-white">6/12</div>
                 <div class="text-xs text-gray-500">slope</div>
               </div>
-              <div class="p-4 text-center">
-                <div class="text-[10px] text-gray-400 uppercase tracking-wider font-semibold mb-1">Edges</div>
-                <div class="text-xl font-black text-gray-900">342</div>
+              <div class="p-5 text-center">
+                <div class="text-[10px] text-gray-500 uppercase tracking-wider font-semibold mb-1">Edges</div>
+                <div class="text-xl font-black text-white">342</div>
                 <div class="text-xs text-gray-500">linear ft</div>
               </div>
-              <div class="p-4 text-center">
-                <div class="text-[10px] text-gray-400 uppercase tracking-wider font-semibold mb-1">Segments</div>
-                <div class="text-xl font-black text-gray-900">8</div>
+              <div class="p-5 text-center">
+                <div class="text-[10px] text-gray-500 uppercase tracking-wider font-semibold mb-1">Segments</div>
+                <div class="text-xl font-black text-white">8</div>
                 <div class="text-xs text-gray-500">faces</div>
               </div>
             </div>
             <!-- Mock material BOM row -->
-            <div class="px-6 py-3 flex flex-wrap items-center gap-4 text-xs text-gray-500 bg-gray-50">
-              <span class="font-semibold text-gray-700"><i class="fas fa-th mr-1 text-teal-500"></i>Materials BOM:</span>
+            <div class="px-6 py-3 flex flex-wrap items-center gap-4 text-xs text-gray-500 bg-[#0d1117]">
+              <span class="font-semibold text-gray-400"><i class="fas fa-th mr-1 text-[#00FF88]"></i>Materials BOM:</span>
               <span>29 bundles shingles</span>
-              <span>&middot;</span>
+              <span class="text-white/20">&middot;</span>
               <span>4 rolls underlayment</span>
-              <span>&middot;</span>
+              <span class="text-white/20">&middot;</span>
               <span>115 ft drip edge</span>
-              <span>&middot;</span>
+              <span class="text-white/20">&middot;</span>
               <span>89 ft ridge cap</span>
             </div>
           </div>
         </div>
 
-        <div class="text-center mt-14 scroll-animate opacity-0 translate-y-8 transition-all duration-700">
-          <a href="/signup" onclick="rrTrack('cta_click',{location:'how_it_works'})" class="group inline-flex items-center gap-3 bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-400 hover:to-cyan-500 text-white font-bold py-4 px-10 rounded-xl text-lg shadow-xl shadow-teal-500/20 transition-all duration-300 hover:scale-[1.02] min-h-[56px]">
+        <div class="text-center mt-16 scroll-animate">
+          <a href="/signup" onclick="rrTrack('cta_click',{location:'how_it_works'})" class="group inline-flex items-center gap-3 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-10 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/20 transition-all duration-300 hover:scale-[1.02] min-h-[56px]">
             <i class="fas fa-rocket"></i>
             Start Free &mdash; 3 Reports Included
             <i class="fas fa-arrow-right text-sm group-hover:translate-x-1 transition-transform"></i>
           </a>
-          <p class="text-xs text-gray-400 mt-3">No credit card required. Setup in 2 minutes.</p>
+          <p class="text-xs text-gray-500 mt-4">No credit card required. Setup in 2 minutes.</p>
         </div>
       </div>
     </section>

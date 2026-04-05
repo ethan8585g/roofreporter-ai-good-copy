@@ -2395,12 +2395,16 @@ function getLandingPageHTML() {
     ]
   }
   </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   <style>
+    * { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
     /* Landing page scroll animations */
     .scroll-animate {
       opacity: 0;
-      transform: translateY(20px);
-      transition: all 0.7s cubic-bezier(0.4, 0, 0.2, 1);
+      transform: translateY(30px);
+      transition: all 0.8s cubic-bezier(0.16, 1, 0.3, 1);
     }
     .scroll-animate.animate-in {
       opacity: 1 !important;
@@ -2413,34 +2417,85 @@ function getLandingPageHTML() {
       background: transparent;
     }
     .landing-nav.scrolled {
-      background: rgba(15, 23, 42, 0.97);
-      backdrop-filter: blur(16px);
-      box-shadow: 0 4px 30px rgba(0,0,0,0.3);
+      background: rgba(10, 10, 10, 0.95);
+      backdrop-filter: blur(20px);
+      box-shadow: 0 1px 0 rgba(255,255,255,0.05);
+    }
+    /* Marquee animation */
+    @keyframes marquee {
+      0% { transform: translateX(0); }
+      100% { transform: translateX(-50%); }
+    }
+    .marquee-track {
+      animation: marquee 30s linear infinite;
+    }
+    .marquee-track:hover {
+      animation-play-state: paused;
+    }
+    /* Neon glow */
+    .neon-glow {
+      box-shadow: 0 0 20px rgba(0,255,136,0.15), 0 0 60px rgba(0,255,136,0.05);
+    }
+    .neon-text {
+      color: #00FF88;
+    }
+    .neon-border {
+      border-color: rgba(0,255,136,0.3);
+    }
+    /* Card hover lift */
+    .card-hover {
+      transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .card-hover:hover {
+      transform: translateY(-8px);
+      box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+    }
+    /* Pulse dot */
+    @keyframes pulse-ring {
+      0% { transform: scale(1); opacity: 1; }
+      100% { transform: scale(2.5); opacity: 0; }
+    }
+    /* Counter shimmer */
+    @keyframes shimmer {
+      0% { background-position: -200% center; }
+      100% { background-position: 200% center; }
+    }
+    .stat-value {
+      background: linear-gradient(90deg, #00FF88, #22d3ee, #00FF88);
+      background-size: 200% auto;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    /* Timeline connector pulse */
+    @keyframes timeline-pulse {
+      0%, 100% { opacity: 0.3; }
+      50% { opacity: 1; }
     }
   </style>
 </head>
 <body class="bg-white min-h-screen">
-  <!-- Sticky Navigation — Starts fully transparent over hero image -->
+  <!-- Sticky Navigation — Dark premium, starts transparent -->
   <nav id="landing-nav" class="landing-nav fixed top-0 left-0 right-0 z-50">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 h-18 flex items-center justify-between" style="height:72px">
       <a href="/" class="flex items-center gap-3">
-        <img src="/static/logo.png" alt="Roof Manager" class="w-9 h-9 rounded-lg object-cover shadow-lg">
+        <img src="/static/logo.png" alt="Roof Manager" class="w-10 h-10 rounded-xl object-cover shadow-lg ring-1 ring-white/10">
         <div class="leading-tight">
-          <span class="text-white font-bold text-lg tracking-tight">Roof Manager</span>
-          <span class="hidden sm:block text-gray-400 text-[10px] -mt-0.5">Measurement Reports & Business CRM</span>
+          <span class="text-white font-extrabold text-lg tracking-tight">Roof Manager</span>
+          <span class="hidden sm:block text-gray-500 text-[10px] -mt-0.5 font-medium tracking-wide">Measurement Reports & Business CRM</span>
         </div>
       </a>
 
       <!-- Desktop nav -->
-      <div class="hidden md:flex items-center gap-6">
-        <a href="#how-it-works" class="text-gray-300 hover:text-white text-sm font-medium transition-colors">How It Works</a>
-        <a href="#features" class="text-gray-300 hover:text-white text-sm font-medium transition-colors">Platform</a>
-        <a href="#pricing" class="text-gray-300 hover:text-white text-sm font-medium transition-colors">Pricing</a>
-        <a href="/blog" class="text-gray-300 hover:text-white text-sm font-medium transition-colors">Blog</a>
-        <a href="/lander" class="text-gray-300 hover:text-white text-sm font-medium transition-colors">Get Started</a>
-        <a href="#faq" class="text-gray-300 hover:text-white text-sm font-medium transition-colors">FAQ</a>
-        <a href="/customer/login" class="bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-white font-semibold py-2 px-5 rounded-lg text-sm transition-all hover:scale-105 shadow-lg shadow-cyan-500/25">
-          <i class="fas fa-sign-in-alt mr-1"></i>Login
+      <div class="hidden md:flex items-center gap-7">
+        <a href="#how-it-works" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">How It Works</a>
+        <a href="#features" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">Platform</a>
+        <a href="#pricing" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">Pricing</a>
+        <a href="/blog" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">Blog</a>
+        <a href="/lander" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">Get Started</a>
+        <a href="#faq" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">FAQ</a>
+        <a href="/customer/login" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold py-2.5 px-6 rounded-xl text-sm transition-all duration-200 hover:scale-105 shadow-lg shadow-[#00FF88]/20">
+          <i class="fas fa-sign-in-alt mr-1.5"></i>Login
         </a>
       </div>
 
@@ -2451,15 +2506,15 @@ function getLandingPageHTML() {
     </div>
 
     <!-- Mobile menu -->
-    <div id="mobile-menu" class="hidden md:hidden bg-slate-900/98 backdrop-blur-xl border-t border-white/10">
+    <div id="mobile-menu" class="hidden md:hidden bg-[#0A0A0A]/98 backdrop-blur-2xl border-t border-white/5">
       <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col gap-1">
-        <a href="#how-it-works" class="text-gray-300 hover:text-white text-sm py-2.5 px-3 rounded-lg hover:bg-white/5 transition-all" onclick="document.getElementById('mobile-menu').classList.add('hidden')">How It Works</a>
-        <a href="#features" class="text-gray-300 hover:text-white text-sm py-2.5 px-3 rounded-lg hover:bg-white/5 transition-all" onclick="document.getElementById('mobile-menu').classList.add('hidden')">Platform</a>
-        <a href="#pricing" class="text-gray-300 hover:text-white text-sm py-2.5 px-3 rounded-lg hover:bg-white/5 transition-all" onclick="document.getElementById('mobile-menu').classList.add('hidden')">Pricing</a>
-        <a href="/blog" class="text-gray-300 hover:text-white text-sm py-2.5 px-3 rounded-lg hover:bg-white/5 transition-all" onclick="document.getElementById('mobile-menu').classList.add('hidden')">Blog</a>
-        <a href="/lander" class="text-gray-300 hover:text-white text-sm py-2.5 px-3 rounded-lg hover:bg-white/5 transition-all" onclick="document.getElementById('mobile-menu').classList.add('hidden')">Get Started</a>
-        <a href="#faq" class="text-gray-300 hover:text-white text-sm py-2.5 px-3 rounded-lg hover:bg-white/5 transition-all" onclick="document.getElementById('mobile-menu').classList.add('hidden')">FAQ</a>
-        <a href="/customer/login" class="bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-semibold py-2.5 px-5 rounded-lg text-sm text-center mt-2"><i class="fas fa-sign-in-alt mr-1"></i>Login / Sign Up</a>
+        <a href="#how-it-works" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')">How It Works</a>
+        <a href="#features" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')">Platform</a>
+        <a href="#pricing" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')">Pricing</a>
+        <a href="/blog" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')">Blog</a>
+        <a href="/lander" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')">Get Started</a>
+        <a href="#faq" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')">FAQ</a>
+        <a href="/customer/login" class="bg-[#00FF88] text-[#0A0A0A] font-bold py-3 px-6 rounded-xl text-sm text-center mt-3 shadow-lg"><i class="fas fa-sign-in-alt mr-1.5"></i>Login / Sign Up</a>
       </div>
     </div>
   </nav>
