@@ -193,95 +193,175 @@ function renderHero() {
             </div>
           </div>
 
-          <!-- Right: Interactive 3D Roof Measurement Preview -->
+          <!-- Right: Satellite Roof Measurement Report Preview -->
           <div class="hidden lg:block">
             <div class="relative">
-              <!-- Animated roof measurement card -->
               <div class="bg-[#111111] border border-white/10 rounded-2xl overflow-hidden shadow-2xl shadow-black/50 neon-glow">
-                <!-- Card header -->
-                <div class="flex items-center justify-between px-5 py-3 border-b border-white/5">
+                <!-- Window chrome -->
+                <div class="flex items-center justify-between px-5 py-3 border-b border-white/5 bg-[#0d1117]">
                   <div class="flex items-center gap-2">
-                    <div class="w-3 h-3 rounded-full bg-red-500/80"></div>
-                    <div class="w-3 h-3 rounded-full bg-amber-500/80"></div>
-                    <div class="w-3 h-3 rounded-full bg-green-500/80"></div>
+                    <div class="w-3 h-3 rounded-full bg-[#ff5f57]"></div>
+                    <div class="w-3 h-3 rounded-full bg-[#febc2e]"></div>
+                    <div class="w-3 h-3 rounded-full bg-[#28c840]"></div>
                   </div>
-                  <span class="text-[11px] text-gray-500 font-mono">roof-measurement.pdf</span>
-                  <div class="text-[10px] text-[#00FF88] bg-[#00FF88]/10 px-2 py-0.5 rounded font-bold">LIVE</div>
+                  <div class="flex items-center gap-2">
+                    <i class="fas fa-file-pdf text-red-400 text-xs"></i>
+                    <span class="text-[11px] text-gray-400 font-mono">Roof_Report_123_Main_St.pdf</span>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <span class="text-[9px] text-[#00FF88] bg-[#00FF88]/10 px-2 py-0.5 rounded-full font-bold flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-[#00FF88] animate-pulse"></span>LIVE</span>
+                  </div>
                 </div>
 
-                <!-- Animated roof SVG -->
-                <div class="relative bg-gradient-to-br from-[#0d1117] to-[#161b22] p-8">
-                  <svg viewBox="0 0 400 250" class="w-full">
-                    <!-- Roof outline with animated dashes -->
-                    <polygon points="200,30 380,130 380,200 20,200 20,130" fill="none" stroke="#00FF88" stroke-width="2" stroke-dasharray="10 5" opacity="0.6">
-                      <animate attributeName="stroke-dashoffset" from="0" to="-30" dur="3s" repeatCount="indefinite"/>
-                    </polygon>
-                    <!-- Ridge line -->
-                    <line x1="200" y1="30" x2="200" y2="130" stroke="#22d3ee" stroke-width="1.5" stroke-dasharray="6 3" opacity="0.5">
-                      <animate attributeName="stroke-dashoffset" from="0" to="-18" dur="2s" repeatCount="indefinite"/>
+                <!-- Satellite aerial view with roof segments -->
+                <div class="relative" style="background: linear-gradient(135deg, #0a1a10 0%, #0d1f14 40%, #0a1628 100%);">
+                  <svg viewBox="0 0 480 340" class="w-full" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                      <linearGradient id="hRoofA" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" style="stop-color:#1a4a2e;stop-opacity:0.95"/>
+                        <stop offset="100%" style="stop-color:#0f3320;stop-opacity:0.95"/>
+                      </linearGradient>
+                      <linearGradient id="hRoofB" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" style="stop-color:#1e4433;stop-opacity:0.9"/>
+                        <stop offset="100%" style="stop-color:#153828;stop-opacity:0.9"/>
+                      </linearGradient>
+                      <linearGradient id="hRoofC" x1="100%" y1="0%" x2="0%" y2="100%">
+                        <stop offset="0%" style="stop-color:#204d38;stop-opacity:0.85"/>
+                        <stop offset="100%" style="stop-color:#183d2c;stop-opacity:0.85"/>
+                      </linearGradient>
+                      <linearGradient id="hRoofD" x1="0%" y1="100%" x2="100%" y2="0%">
+                        <stop offset="0%" style="stop-color:#1c3f2e;stop-opacity:0.8"/>
+                        <stop offset="100%" style="stop-color:#14332a;stop-opacity:0.8"/>
+                      </linearGradient>
+                      <filter id="hGlow"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+                      <filter id="hShadow"><feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#000" flood-opacity="0.5"/></filter>
+                    </defs>
+
+                    <!-- Ground / landscape hints -->
+                    <rect x="20" y="260" width="440" height="60" rx="3" fill="#0a1a10" opacity="0.4"/>
+                    <rect x="350" y="100" width="110" height="180" rx="3" fill="#0c1e14" opacity="0.25"/>
+                    <rect x="20" y="40" width="90" height="140" rx="3" fill="#0c1e14" opacity="0.2"/>
+                    <!-- Driveway hint -->
+                    <rect x="200" y="270" width="80" height="55" rx="2" fill="#111a14" opacity="0.3"/>
+
+                    <!-- === ROOF SEGMENTS (filled polygons) === -->
+                    <!-- Main front left face -->
+                    <polygon points="140,90 280,55 280,170 140,195" fill="url(#hRoofA)" stroke="#00FF88" stroke-width="2" filter="url(#hShadow)"/>
+                    <!-- Main front right face -->
+                    <polygon points="280,55 420,90 420,195 280,170" fill="url(#hRoofB)" stroke="#00FF88" stroke-width="2"/>
+                    <!-- Left wing -->
+                    <polygon points="70,140 140,90 140,240 70,240" fill="url(#hRoofC)" stroke="#22d3ee" stroke-width="1.8"/>
+                    <!-- Right wing / garage -->
+                    <polygon points="420,90 480,130 480,260 420,260" fill="url(#hRoofD)" stroke="#a78bfa" stroke-width="1.8"/>
+                    <!-- Rear section left -->
+                    <polygon points="140,195 280,170 280,260 140,260" fill="url(#hRoofC)" stroke="#00FF88" stroke-width="1.5" opacity="0.8"/>
+                    <!-- Rear section right -->
+                    <polygon points="280,170 420,195 420,260 280,260" fill="url(#hRoofA)" stroke="#00FF88" stroke-width="1.5" opacity="0.8"/>
+                    <!-- Dormer -->
+                    <polygon points="220,40 340,40 340,55 280,55 220,55" fill="url(#hRoofB)" stroke="#22d3ee" stroke-width="1.5"/>
+
+                    <!-- Ridge lines (animated) -->
+                    <line x1="140" y1="90" x2="420" y2="90" stroke="#00FF88" stroke-width="2.5" stroke-dasharray="8 4" filter="url(#hGlow)" opacity="0.8">
+                      <animate attributeName="stroke-dashoffset" from="0" to="-24" dur="2s" repeatCount="indefinite"/>
                     </line>
-                    <!-- Left slope -->
-                    <line x1="20" y1="130" x2="200" y2="30" stroke="#00FF88" stroke-width="2" opacity="0.4"/>
-                    <!-- Right slope -->
-                    <line x1="380" y1="130" x2="200" y2="30" stroke="#00FF88" stroke-width="2" opacity="0.4"/>
+                    <line x1="280" y1="55" x2="280" y2="170" stroke="#22d3ee" stroke-width="1.5" stroke-dasharray="6 3" opacity="0.5">
+                      <animate attributeName="stroke-dashoffset" from="0" to="-18" dur="2.5s" repeatCount="indefinite"/>
+                    </line>
+                    <!-- Hip lines -->
+                    <line x1="140" y1="90" x2="70" y2="140" stroke="#a78bfa" stroke-width="1.2" stroke-dasharray="5 3" opacity="0.5"/>
+                    <line x1="420" y1="90" x2="480" y2="130" stroke="#a78bfa" stroke-width="1.2" stroke-dasharray="5 3" opacity="0.5"/>
+                    <line x1="140" y1="90" x2="140" y2="195" stroke="#22d3ee" stroke-width="1" opacity="0.3"/>
+                    <line x1="420" y1="90" x2="420" y2="195" stroke="#22d3ee" stroke-width="1" opacity="0.3"/>
 
-                    <!-- Measurement labels -->
-                    <rect x="155" y="10" width="90" height="24" rx="6" fill="rgba(0,255,136,0.12)" stroke="#00FF88" stroke-width="0.5"/>
-                    <text x="200" y="26" fill="#00FF88" font-size="11" text-anchor="middle" font-family="monospace" font-weight="bold">85.2 ft</text>
+                    <!-- MEASUREMENT ANNOTATIONS -->
+                    <!-- Ridge length -->
+                    <rect x="215" y="68" width="130" height="20" rx="5" fill="rgba(0,255,136,0.15)" stroke="#00FF88" stroke-width="0.6"/>
+                    <text x="280" y="82" fill="#00FF88" font-size="11" text-anchor="middle" font-family="'Inter',monospace" font-weight="700">85.2 ft ridge</text>
 
-                    <rect x="310" y="70" width="80" height="24" rx="6" fill="rgba(34,211,238,0.12)" stroke="#22d3ee" stroke-width="0.5"/>
-                    <text x="350" y="86" fill="#22d3ee" font-size="11" text-anchor="middle" font-family="monospace" font-weight="bold">6/12 pitch</text>
+                    <!-- Front left area -->
+                    <rect x="165" y="125" width="95" height="28" rx="7" fill="rgba(0,255,136,0.1)" stroke="#00FF88" stroke-width="0.5"/>
+                    <text x="212" y="136" fill="#00FF88" font-size="9" text-anchor="middle" font-family="'Inter',monospace" font-weight="600">FACE A</text>
+                    <text x="212" y="149" fill="#00FF88" font-size="12" text-anchor="middle" font-family="'Inter',monospace" font-weight="800">1,247 ft&sup2;</text>
 
-                    <rect x="10" y="155" width="90" height="24" rx="6" fill="rgba(0,255,136,0.12)" stroke="#00FF88" stroke-width="0.5"/>
-                    <text x="55" y="171" fill="#00FF88" font-size="11" text-anchor="middle" font-family="monospace" font-weight="bold">148.3 ft</text>
+                    <!-- Front right area -->
+                    <rect x="310" y="110" width="90" height="28" rx="7" fill="rgba(0,255,136,0.1)" stroke="#00FF88" stroke-width="0.5"/>
+                    <text x="355" y="121" fill="#00FF88" font-size="9" text-anchor="middle" font-family="'Inter',monospace" font-weight="600">FACE B</text>
+                    <text x="355" y="134" fill="#00FF88" font-size="12" text-anchor="middle" font-family="'Inter',monospace" font-weight="800">892 ft&sup2;</text>
 
-                    <!-- Animated measurement points -->
-                    <circle cx="200" cy="30" r="4" fill="#00FF88"><animate attributeName="r" values="3;6;3" dur="2s" repeatCount="indefinite"/></circle>
-                    <circle cx="20" cy="130" r="4" fill="#00FF88"><animate attributeName="r" values="3;6;3" dur="2s" repeatCount="indefinite" begin="0.4s"/></circle>
-                    <circle cx="380" cy="130" r="4" fill="#00FF88"><animate attributeName="r" values="3;6;3" dur="2s" repeatCount="indefinite" begin="0.8s"/></circle>
-                    <circle cx="20" cy="200" r="3" fill="#22d3ee" opacity="0.6"/>
-                    <circle cx="380" cy="200" r="3" fill="#22d3ee" opacity="0.6"/>
+                    <!-- Left wing -->
+                    <rect x="73" y="170" width="60" height="28" rx="7" fill="rgba(34,211,238,0.1)" stroke="#22d3ee" stroke-width="0.5"/>
+                    <text x="103" y="181" fill="#22d3ee" font-size="8" text-anchor="middle" font-family="'Inter',monospace" font-weight="600">WING</text>
+                    <text x="103" y="194" fill="#22d3ee" font-size="11" text-anchor="middle" font-family="'Inter',monospace" font-weight="700">388 ft&sup2;</text>
 
-                    <!-- Area label -->
-                    <rect x="130" y="120" width="140" height="30" rx="8" fill="rgba(0,255,136,0.08)" stroke="#00FF88" stroke-width="0.5"/>
-                    <text x="200" y="139" fill="#00FF88" font-size="13" text-anchor="middle" font-family="monospace" font-weight="bold">2,847 sq ft</text>
+                    <!-- Garage -->
+                    <rect x="425" y="175" width="50" height="28" rx="7" fill="rgba(167,139,250,0.1)" stroke="#a78bfa" stroke-width="0.5"/>
+                    <text x="450" y="186" fill="#a78bfa" font-size="8" text-anchor="middle" font-family="'Inter',monospace" font-weight="600">GAR</text>
+                    <text x="450" y="199" fill="#a78bfa" font-size="11" text-anchor="middle" font-family="'Inter',monospace" font-weight="700">320 ft&sup2;</text>
+
+                    <!-- Pitch callout -->
+                    <line x1="420" y1="90" x2="448" y2="60" stroke="#a78bfa" stroke-width="0.8" opacity="0.5"/>
+                    <rect x="430" y="45" width="45" height="18" rx="4" fill="rgba(167,139,250,0.2)" stroke="#a78bfa" stroke-width="0.5"/>
+                    <text x="452" y="57" fill="#a78bfa" font-size="10" text-anchor="middle" font-family="'Inter',monospace" font-weight="700">6/12</text>
+
+                    <!-- Eave measurement -->
+                    <rect x="155" y="265" width="90" height="18" rx="4" fill="rgba(34,211,238,0.08)" stroke="#22d3ee" stroke-width="0.4"/>
+                    <text x="200" y="278" fill="#22d3ee" font-size="10" text-anchor="middle" font-family="'Inter',monospace" font-weight="600">62.4 ft eave</text>
+
+                    <!-- Animated GPS points -->
+                    <circle cx="280" cy="55" r="5" fill="#00FF88" opacity="0.9"><animate attributeName="r" values="4;7;4" dur="2s" repeatCount="indefinite"/></circle>
+                    <circle cx="140" cy="90" r="4" fill="#00FF88" opacity="0.8"><animate attributeName="r" values="3;6;3" dur="2s" repeatCount="indefinite" begin="0.3s"/></circle>
+                    <circle cx="420" cy="90" r="4" fill="#00FF88" opacity="0.8"><animate attributeName="r" values="3;6;3" dur="2s" repeatCount="indefinite" begin="0.6s"/></circle>
+                    <circle cx="70" cy="140" r="3" fill="#22d3ee" opacity="0.7"><animate attributeName="r" values="2;5;2" dur="2.5s" repeatCount="indefinite" begin="0.9s"/></circle>
+                    <circle cx="480" cy="130" r="3" fill="#a78bfa" opacity="0.7"><animate attributeName="r" values="2;5;2" dur="2.5s" repeatCount="indefinite" begin="1.2s"/></circle>
+                    <circle cx="140" cy="260" r="2.5" fill="#00FF88" opacity="0.4"/>
+                    <circle cx="420" cy="260" r="2.5" fill="#00FF88" opacity="0.4"/>
+                    <circle cx="480" cy="260" r="2.5" fill="#a78bfa" opacity="0.4"/>
+
+                    <!-- Compass -->
+                    <circle cx="445" cy="300" r="16" fill="rgba(0,0,0,0.6)" stroke="rgba(255,255,255,0.1)" stroke-width="0.8"/>
+                    <text x="445" y="294" fill="#00FF88" font-size="8" text-anchor="middle" font-family="'Inter',sans-serif" font-weight="800">N</text>
+                    <polygon points="445,288 443,293 447,293" fill="#00FF88" opacity="0.8"/>
+                    <line x1="445" y1="296" x2="445" y2="308" stroke="rgba(255,255,255,0.2)" stroke-width="0.8"/>
+
+                    <!-- Scale bar -->
+                    <line x1="30" y1="310" x2="100" y2="310" stroke="rgba(255,255,255,0.25)" stroke-width="1"/>
+                    <line x1="30" y1="307" x2="30" y2="313" stroke="rgba(255,255,255,0.25)" stroke-width="0.8"/>
+                    <line x1="100" y1="307" x2="100" y2="313" stroke="rgba(255,255,255,0.25)" stroke-width="0.8"/>
+                    <text x="65" y="322" fill="rgba(255,255,255,0.3)" font-size="8" text-anchor="middle" font-family="'Inter',monospace">50 ft</text>
                   </svg>
                 </div>
 
-                <!-- Live stats bar -->
-                <div class="grid grid-cols-4 divide-x divide-white/5 border-t border-white/5">
-                  <div class="p-3 text-center">
-                    <div class="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Area</div>
-                    <div class="text-sm font-bold text-white mt-0.5">2,847 ft²</div>
+                <!-- Stats bar -->
+                <div class="grid grid-cols-4 divide-x divide-white/5 border-t border-white/5 bg-[#0d1117]">
+                  <div class="py-2.5 text-center">
+                    <div class="text-[9px] text-gray-500 uppercase tracking-wider font-semibold">Area</div>
+                    <div class="text-sm font-extrabold text-[#00FF88]">2,847 ft&sup2;</div>
                   </div>
-                  <div class="p-3 text-center">
-                    <div class="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Pitch</div>
-                    <div class="text-sm font-bold text-white mt-0.5">6/12</div>
+                  <div class="py-2.5 text-center">
+                    <div class="text-[9px] text-gray-500 uppercase tracking-wider font-semibold">Pitch</div>
+                    <div class="text-sm font-extrabold text-[#22d3ee]">6/12</div>
                   </div>
-                  <div class="p-3 text-center">
-                    <div class="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Edges</div>
-                    <div class="text-sm font-bold text-white mt-0.5">342 ft</div>
+                  <div class="py-2.5 text-center">
+                    <div class="text-[9px] text-gray-500 uppercase tracking-wider font-semibold">Edges</div>
+                    <div class="text-sm font-extrabold text-[#a78bfa]">342 ft</div>
                   </div>
-                  <div class="p-3 text-center">
-                    <div class="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Segments</div>
-                    <div class="text-sm font-bold text-white mt-0.5">8</div>
+                  <div class="py-2.5 text-center">
+                    <div class="text-[9px] text-gray-500 uppercase tracking-wider font-semibold">Faces</div>
+                    <div class="text-sm font-extrabold text-white">8</div>
                   </div>
                 </div>
 
-                <!-- Material BOM row -->
-                <div class="px-5 py-3 flex flex-wrap items-center gap-3 text-[11px] text-gray-500 bg-[#0d1117] border-t border-white/5">
+                <!-- BOM strip -->
+                <div class="px-4 py-2 flex flex-wrap items-center gap-2 text-[10px] text-gray-500 bg-[#080c10] border-t border-white/5">
                   <span class="font-bold text-gray-400"><i class="fas fa-th mr-1 text-[#00FF88]"></i>BOM:</span>
-                  <span>29 bundles</span>
-                  <span class="text-white/20">&middot;</span>
-                  <span>4 rolls underlayment</span>
-                  <span class="text-white/20">&middot;</span>
-                  <span>115 ft drip edge</span>
-                  <span class="text-white/20">&middot;</span>
+                  <span>29 bundles</span><span class="text-white/15">&middot;</span>
+                  <span>4 rolls felt</span><span class="text-white/15">&middot;</span>
+                  <span>115 ft drip edge</span><span class="text-white/15">&middot;</span>
                   <span>89 ft ridge cap</span>
                 </div>
               </div>
 
-              <!-- Live counter floating badge -->
+              <!-- Floating badges -->
               <div class="absolute -bottom-4 -left-4 bg-[#111111] border border-white/10 rounded-xl px-4 py-2.5 shadow-xl flex items-center gap-3">
                 <div class="w-8 h-8 rounded-lg bg-[#00FF88]/10 flex items-center justify-center">
                   <i class="fas fa-chart-line text-[#00FF88] text-sm"></i>
@@ -292,7 +372,6 @@ function renderHero() {
                 </div>
               </div>
 
-              <!-- Speed badge -->
               <div class="absolute -top-3 -right-3 bg-[#111111] border border-white/10 rounded-xl px-3 py-2 shadow-xl flex items-center gap-2">
                 <div class="w-6 h-6 rounded-lg bg-[#22d3ee]/10 flex items-center justify-center">
                   <i class="fas fa-bolt text-[#22d3ee] text-xs"></i>
@@ -554,58 +633,178 @@ function renderHowItWorks() {
           `).join('')}
         </div>
 
-        <!-- Report Preview Mockup — Dark themed -->
+        <!-- Report Preview — Satellite Roof Measurement Visualization -->
         <div class="mt-20 scroll-animate">
           <div class="text-center mb-8">
             <div class="inline-flex items-center gap-2 bg-[#00FF88]/10 text-[#00FF88] rounded-full px-4 py-1.5 text-sm font-semibold">
               <i class="fas fa-file-pdf"></i> What You Get
             </div>
           </div>
-          <div class="max-w-3xl mx-auto bg-[#111111] border border-white/10 rounded-2xl overflow-hidden shadow-2xl shadow-black/30 neon-glow">
-            <!-- Mock report header -->
-            <div class="bg-[#0d1117] text-white px-6 py-4 flex items-center justify-between border-b border-white/5">
+          <div class="max-w-4xl mx-auto bg-[#111111] border border-white/10 rounded-2xl overflow-hidden shadow-2xl shadow-black/50 neon-glow">
+            <!-- Report header bar -->
+            <div class="bg-[#0d1117] text-white px-6 py-3.5 flex items-center justify-between border-b border-white/5">
               <div class="flex items-center gap-3">
-                <i class="fas fa-file-pdf text-red-400 text-lg"></i>
-                <div>
-                  <div class="font-bold text-sm">Roof Manager Measurement Report</div>
-                  <div class="text-xs text-gray-500">123 Main Street, Calgary, AB T2P 1J9</div>
+                <div class="flex items-center gap-1.5">
+                  <div class="w-3 h-3 rounded-full bg-red-500/80"></div>
+                  <div class="w-3 h-3 rounded-full bg-amber-500/80"></div>
+                  <div class="w-3 h-3 rounded-full bg-green-500/80"></div>
+                </div>
+                <div class="ml-3">
+                  <div class="font-bold text-sm">Roof Measurement Report</div>
+                  <div class="text-[11px] text-gray-500">123 Main Street, Calgary, AB T2P 1J9</div>
                 </div>
               </div>
-              <span class="text-[10px] bg-[#00FF88] text-[#0A0A0A] px-2.5 py-0.5 rounded font-bold">PDF</span>
-            </div>
-            <!-- Mock report body -->
-            <div class="grid grid-cols-2 sm:grid-cols-4 gap-0 divide-x divide-white/5 border-b border-white/5">
-              <div class="p-5 text-center">
-                <div class="text-[10px] text-gray-500 uppercase tracking-wider font-semibold mb-1">Total Area</div>
-                <div class="text-xl font-black text-white">2,847</div>
-                <div class="text-xs text-gray-500">sq ft</div>
-              </div>
-              <div class="p-5 text-center">
-                <div class="text-[10px] text-gray-500 uppercase tracking-wider font-semibold mb-1">Pitch</div>
-                <div class="text-xl font-black text-white">6/12</div>
-                <div class="text-xs text-gray-500">slope</div>
-              </div>
-              <div class="p-5 text-center">
-                <div class="text-[10px] text-gray-500 uppercase tracking-wider font-semibold mb-1">Edges</div>
-                <div class="text-xl font-black text-white">342</div>
-                <div class="text-xs text-gray-500">linear ft</div>
-              </div>
-              <div class="p-5 text-center">
-                <div class="text-[10px] text-gray-500 uppercase tracking-wider font-semibold mb-1">Segments</div>
-                <div class="text-xl font-black text-white">8</div>
-                <div class="text-xs text-gray-500">faces</div>
+              <div class="flex items-center gap-3">
+                <span class="text-[10px] text-[#00FF88] bg-[#00FF88]/10 px-2.5 py-1 rounded-full font-bold flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-[#00FF88] animate-pulse"></span>HIGH QUALITY</span>
+                <span class="text-[10px] bg-[#00FF88] text-[#0A0A0A] px-2.5 py-1 rounded font-bold">PDF</span>
               </div>
             </div>
-            <!-- Mock material BOM row -->
-            <div class="px-6 py-3 flex flex-wrap items-center gap-4 text-xs text-gray-500 bg-[#0d1117]">
-              <span class="font-semibold text-gray-400"><i class="fas fa-th mr-1 text-[#00FF88]"></i>Materials BOM:</span>
+
+            <!-- Satellite roof visualization SVG -->
+            <div class="relative" style="background: linear-gradient(135deg, #0a1628 0%, #0d1f1a 50%, #0a1628 100%);">
+              <svg viewBox="0 0 800 420" class="w-full" xmlns="http://www.w3.org/2000/svg">
+                <!-- Satellite texture overlay -->
+                <defs>
+                  <linearGradient id="roofGrad1" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" style="stop-color:#1a3a2a;stop-opacity:0.9"/>
+                    <stop offset="100%" style="stop-color:#0f2318;stop-opacity:0.9"/>
+                  </linearGradient>
+                  <linearGradient id="roofGrad2" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" style="stop-color:#1e3d2f;stop-opacity:0.85"/>
+                    <stop offset="100%" style="stop-color:#152e22;stop-opacity:0.85"/>
+                  </linearGradient>
+                  <linearGradient id="roofGrad3" x1="100%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" style="stop-color:#243f32;stop-opacity:0.8"/>
+                    <stop offset="100%" style="stop-color:#1a3325;stop-opacity:0.8"/>
+                  </linearGradient>
+                  <filter id="glow">
+                    <feGaussianBlur stdDeviation="2" result="blur"/>
+                    <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+                  </filter>
+                </defs>
+
+                <!-- "Satellite" ground texture -->
+                <rect width="800" height="420" fill="#0c1a12" opacity="0.5"/>
+                <!-- Faux lawn/ground areas -->
+                <rect x="40" y="320" width="720" height="80" rx="4" fill="#0a1f10" opacity="0.3"/>
+                <rect x="580" y="180" width="180" height="220" rx="4" fill="#0e2214" opacity="0.2"/>
+                <rect x="40" y="60" width="160" height="200" rx="4" fill="#0e2214" opacity="0.2"/>
+
+                <!-- ROOF SEGMENTS — color-coded polygons -->
+                <!-- Main front face -->
+                <polygon points="250,100 530,100 530,240 250,240" fill="url(#roofGrad1)" stroke="#00FF88" stroke-width="2" opacity="0.9"/>
+                <!-- Left wing -->
+                <polygon points="140,160 250,100 250,280 140,280" fill="url(#roofGrad2)" stroke="#00FF88" stroke-width="2" opacity="0.85"/>
+                <!-- Right wing -->
+                <polygon points="530,100 620,160 620,280 530,240" fill="url(#roofGrad3)" stroke="#22d3ee" stroke-width="2" opacity="0.85"/>
+                <!-- Garage section -->
+                <polygon points="530,240 620,280 620,350 530,350" fill="url(#roofGrad2)" stroke="#a78bfa" stroke-width="2" opacity="0.8"/>
+                <!-- Upper dormer -->
+                <polygon points="320,60 460,60 460,100 320,100" fill="url(#roofGrad1)" stroke="#22d3ee" stroke-width="2" opacity="0.9"/>
+                <!-- Back section -->
+                <polygon points="250,240 530,240 530,350 250,350" fill="url(#roofGrad3)" stroke="#00FF88" stroke-width="1.5" opacity="0.75"/>
+
+                <!-- Ridge lines (dashed) -->
+                <line x1="250" y1="100" x2="530" y2="100" stroke="#00FF88" stroke-width="2.5" stroke-dasharray="8 4" filter="url(#glow)">
+                  <animate attributeName="stroke-dashoffset" from="0" to="-24" dur="2s" repeatCount="indefinite"/>
+                </line>
+                <line x1="250" y1="240" x2="530" y2="240" stroke="#22d3ee" stroke-width="1.5" stroke-dasharray="6 3" opacity="0.7">
+                  <animate attributeName="stroke-dashoffset" from="0" to="-18" dur="2.5s" repeatCount="indefinite"/>
+                </line>
+                <!-- Hip lines -->
+                <line x1="250" y1="100" x2="140" y2="160" stroke="#a78bfa" stroke-width="1.5" stroke-dasharray="6 3" opacity="0.6"/>
+                <line x1="530" y1="100" x2="620" y2="160" stroke="#a78bfa" stroke-width="1.5" stroke-dasharray="6 3" opacity="0.6"/>
+
+                <!-- MEASUREMENT LABELS -->
+                <!-- Ridge measurement -->
+                <rect x="330" y="72" width="120" height="24" rx="6" fill="rgba(0,255,136,0.15)" stroke="#00FF88" stroke-width="0.8"/>
+                <text x="390" y="88" fill="#00FF88" font-size="12" text-anchor="middle" font-family="'Inter',monospace" font-weight="700">85.2 ft ridge</text>
+
+                <!-- Front face area -->
+                <rect x="335" y="158" width="110" height="28" rx="8" fill="rgba(0,255,136,0.12)" stroke="#00FF88" stroke-width="0.5"/>
+                <text x="390" y="170" fill="#00FF88" font-size="10" text-anchor="middle" font-family="'Inter',monospace" font-weight="600">Face A</text>
+                <text x="390" y="182" fill="#00FF88" font-size="11" text-anchor="middle" font-family="'Inter',monospace" font-weight="700">1,247 sq ft</text>
+
+                <!-- Left wing label -->
+                <rect x="148" y="205" width="90" height="28" rx="8" fill="rgba(0,255,136,0.1)" stroke="#00FF88" stroke-width="0.5"/>
+                <text x="193" y="217" fill="#00FF88" font-size="10" text-anchor="middle" font-family="'Inter',monospace" font-weight="600">Face B</text>
+                <text x="193" y="229" fill="#00FF88" font-size="11" text-anchor="middle" font-family="'Inter',monospace" font-weight="700">486 sq ft</text>
+
+                <!-- Right wing label -->
+                <rect x="542" y="205" width="68" height="28" rx="8" fill="rgba(34,211,238,0.1)" stroke="#22d3ee" stroke-width="0.5"/>
+                <text x="576" y="217" fill="#22d3ee" font-size="10" text-anchor="middle" font-family="'Inter',monospace" font-weight="600">Face C</text>
+                <text x="576" y="229" fill="#22d3ee" font-size="11" text-anchor="middle" font-family="'Inter',monospace" font-weight="700">412 sq ft</text>
+
+                <!-- Pitch label -->
+                <rect x="640" y="130" width="110" height="24" rx="6" fill="rgba(167,139,250,0.15)" stroke="#a78bfa" stroke-width="0.8"/>
+                <text x="695" y="146" fill="#a78bfa" font-size="12" text-anchor="middle" font-family="'Inter',monospace" font-weight="700">6/12 pitch</text>
+
+                <!-- Eave measurement -->
+                <rect x="160" y="290" width="100" height="22" rx="6" fill="rgba(34,211,238,0.1)" stroke="#22d3ee" stroke-width="0.5"/>
+                <text x="210" y="305" fill="#22d3ee" font-size="11" text-anchor="middle" font-family="'Inter',monospace" font-weight="600">62.4 ft eave</text>
+
+                <!-- Garage label -->
+                <rect x="542" y="305" width="68" height="28" rx="8" fill="rgba(167,139,250,0.1)" stroke="#a78bfa" stroke-width="0.5"/>
+                <text x="576" y="317" fill="#a78bfa" font-size="10" text-anchor="middle" font-family="'Inter',monospace" font-weight="600">Garage</text>
+                <text x="576" y="329" fill="#a78bfa" font-size="11" text-anchor="middle" font-family="'Inter',monospace" font-weight="700">320 sq ft</text>
+
+                <!-- Animated measurement points -->
+                <circle cx="250" cy="100" r="5" fill="#00FF88" opacity="0.9"><animate attributeName="r" values="4;7;4" dur="2s" repeatCount="indefinite"/></circle>
+                <circle cx="530" cy="100" r="5" fill="#00FF88" opacity="0.9"><animate attributeName="r" values="4;7;4" dur="2s" repeatCount="indefinite" begin="0.3s"/></circle>
+                <circle cx="140" cy="160" r="4" fill="#a78bfa" opacity="0.8"><animate attributeName="r" values="3;6;3" dur="2s" repeatCount="indefinite" begin="0.6s"/></circle>
+                <circle cx="620" cy="160" r="4" fill="#22d3ee" opacity="0.8"><animate attributeName="r" values="3;6;3" dur="2s" repeatCount="indefinite" begin="0.9s"/></circle>
+                <circle cx="320" cy="60" r="3" fill="#22d3ee" opacity="0.7"/>
+                <circle cx="460" cy="60" r="3" fill="#22d3ee" opacity="0.7"/>
+                <circle cx="250" cy="350" r="3" fill="#00FF88" opacity="0.5"/>
+                <circle cx="530" cy="350" r="3" fill="#00FF88" opacity="0.5"/>
+                <circle cx="620" cy="350" r="3" fill="#a78bfa" opacity="0.5"/>
+
+                <!-- Compass -->
+                <circle cx="720" cy="60" r="22" fill="rgba(0,0,0,0.5)" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+                <text x="720" y="48" fill="#00FF88" font-size="10" text-anchor="middle" font-family="'Inter',sans-serif" font-weight="700">N</text>
+                <line x1="720" y1="52" x2="720" y2="68" stroke="rgba(255,255,255,0.3)" stroke-width="1"/>
+                <polygon points="720,42 717,50 723,50" fill="#00FF88" opacity="0.8"/>
+
+                <!-- Scale bar -->
+                <line x1="60" y1="390" x2="160" y2="390" stroke="rgba(255,255,255,0.3)" stroke-width="1.5"/>
+                <line x1="60" y1="386" x2="60" y2="394" stroke="rgba(255,255,255,0.3)" stroke-width="1"/>
+                <line x1="160" y1="386" x2="160" y2="394" stroke="rgba(255,255,255,0.3)" stroke-width="1"/>
+                <text x="110" y="405" fill="rgba(255,255,255,0.35)" font-size="10" text-anchor="middle" font-family="'Inter',monospace">50 ft</text>
+              </svg>
+            </div>
+
+            <!-- Data summary bar -->
+            <div class="grid grid-cols-4 divide-x divide-white/5 border-t border-white/5 bg-[#0d1117]">
+              <div class="p-4 text-center">
+                <div class="text-[10px] text-gray-500 uppercase tracking-wider font-semibold mb-0.5">Total Area</div>
+                <div class="text-lg font-black text-[#00FF88]">2,847 ft&sup2;</div>
+              </div>
+              <div class="p-4 text-center">
+                <div class="text-[10px] text-gray-500 uppercase tracking-wider font-semibold mb-0.5">Pitch</div>
+                <div class="text-lg font-black text-[#22d3ee]">6/12</div>
+              </div>
+              <div class="p-4 text-center">
+                <div class="text-[10px] text-gray-500 uppercase tracking-wider font-semibold mb-0.5">Edges</div>
+                <div class="text-lg font-black text-[#a78bfa]">342 ft</div>
+              </div>
+              <div class="p-4 text-center">
+                <div class="text-[10px] text-gray-500 uppercase tracking-wider font-semibold mb-0.5">Segments</div>
+                <div class="text-lg font-black text-white">8 faces</div>
+              </div>
+            </div>
+
+            <!-- BOM strip -->
+            <div class="px-6 py-3 flex flex-wrap items-center gap-4 text-[11px] text-gray-500 bg-[#0a0e13] border-t border-white/5">
+              <span class="font-bold text-gray-400"><i class="fas fa-th mr-1 text-[#00FF88]"></i>Materials:</span>
               <span>29 bundles shingles</span>
-              <span class="text-white/20">&middot;</span>
+              <span class="text-white/15">&middot;</span>
               <span>4 rolls underlayment</span>
-              <span class="text-white/20">&middot;</span>
+              <span class="text-white/15">&middot;</span>
               <span>115 ft drip edge</span>
-              <span class="text-white/20">&middot;</span>
+              <span class="text-white/15">&middot;</span>
               <span>89 ft ridge cap</span>
+              <span class="text-white/15">&middot;</span>
+              <span>12 lbs nails</span>
             </div>
           </div>
         </div>
