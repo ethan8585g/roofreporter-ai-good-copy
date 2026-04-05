@@ -217,83 +217,46 @@ function renderHero() {
                   <!-- Dark overlay for contrast -->
                   <div class="absolute inset-0" style="background: linear-gradient(135deg, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.15) 50%, rgba(0,0,0,0.3) 100%);"></div>
 
-                  <!-- SVG measurement overlay on top of photo -->
+                  <!-- SVG floating measurement labels over photo (no polygon trace) -->
                   <svg class="absolute inset-0 w-full h-full" viewBox="0 0 480 320" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
-                    <defs>
-                      <filter id="hGlow2"><feGaussianBlur stdDeviation="2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-                    </defs>
+                    <!-- Floating measurement labels -->
+                    <rect x="155" y="35" width="170" height="26" rx="8" fill="rgba(0,0,0,0.75)" stroke="#00FF88" stroke-width="1"/>
+                    <text x="240" y="53" fill="#00FF88" font-size="13" text-anchor="middle" font-family="'Inter',monospace" font-weight="700">Total: 2,847 ft&sup2;</text>
 
-                    <!-- Roof outline traced on satellite image -->
-                    <polygon points="100,65 260,40 380,65 380,200 320,230 260,200 160,230 100,200"
-                      fill="rgba(0,255,136,0.08)" stroke="#00FF88" stroke-width="2.5" filter="url(#hGlow2)">
-                      <animate attributeName="stroke-dasharray" values="0,2000;2000,0" dur="2s" fill="freeze"/>
-                    </polygon>
+                    <rect x="40" y="100" width="110" height="44" rx="8" fill="rgba(0,0,0,0.75)" stroke="#00FF88" stroke-width="0.8"/>
+                    <text x="95" y="117" fill="#00FF88" font-size="9" text-anchor="middle" font-family="'Inter',sans-serif" font-weight="600" letter-spacing="1">FACE A</text>
+                    <text x="95" y="136" fill="white" font-size="16" text-anchor="middle" font-family="'Inter',sans-serif" font-weight="800">1,247 ft&sup2;</text>
 
-                    <!-- Ridge line -->
-                    <line x1="100" y1="65" x2="380" y2="65" stroke="#00FF88" stroke-width="2" stroke-dasharray="8 4" opacity="0.9">
-                      <animate attributeName="stroke-dashoffset" from="0" to="-24" dur="2s" repeatCount="indefinite"/>
-                    </line>
+                    <rect x="330" y="100" width="110" height="44" rx="8" fill="rgba(0,0,0,0.75)" stroke="#22d3ee" stroke-width="0.8"/>
+                    <text x="385" y="117" fill="#22d3ee" font-size="9" text-anchor="middle" font-family="'Inter',sans-serif" font-weight="600" letter-spacing="1">FACE B</text>
+                    <text x="385" y="136" fill="white" font-size="16" text-anchor="middle" font-family="'Inter',sans-serif" font-weight="800">892 ft&sup2;</text>
 
-                    <!-- Hip lines -->
-                    <line x1="260" y1="40" x2="260" y2="200" stroke="#22d3ee" stroke-width="1.5" stroke-dasharray="6 3" opacity="0.6">
-                      <animate attributeName="stroke-dashoffset" from="0" to="-18" dur="2.5s" repeatCount="indefinite"/>
-                    </line>
-                    <line x1="100" y1="65" x2="160" y2="230" stroke="#a78bfa" stroke-width="1" stroke-dasharray="5 3" opacity="0.4"/>
-                    <line x1="380" y1="65" x2="320" y2="230" stroke="#a78bfa" stroke-width="1" stroke-dasharray="5 3" opacity="0.4"/>
+                    <rect x="170" y="165" width="140" height="24" rx="6" fill="rgba(0,0,0,0.7)" stroke="#00FF88" stroke-width="0.6"/>
+                    <text x="240" y="181" fill="#00FF88" font-size="11" text-anchor="middle" font-family="'Inter',monospace" font-weight="700">85.2 ft ridge</text>
 
-                    <!-- Eave line -->
-                    <line x1="100" y1="200" x2="380" y2="200" stroke="#22d3ee" stroke-width="1.5" stroke-dasharray="6 3" opacity="0.5">
-                      <animate attributeName="stroke-dashoffset" from="0" to="-18" dur="3s" repeatCount="indefinite"/>
-                    </line>
+                    <rect x="380" y="175" width="80" height="28" rx="7" fill="rgba(0,0,0,0.75)" stroke="#a78bfa" stroke-width="0.8"/>
+                    <text x="420" y="187" fill="#a78bfa" font-size="9" text-anchor="middle" font-family="'Inter',sans-serif" font-weight="600">PITCH</text>
+                    <text x="420" y="199" fill="white" font-size="13" text-anchor="middle" font-family="'Inter',monospace" font-weight="800">6/12</text>
 
-                    <!-- FACE LABELS -->
-                    <!-- Left face -->
-                    <rect x="120" y="105" width="100" height="42" rx="8" fill="rgba(0,0,0,0.65)" stroke="#00FF88" stroke-width="0.8"/>
-                    <text x="170" y="120" fill="#00FF88" font-size="9" text-anchor="middle" font-family="'Inter',sans-serif" font-weight="600" letter-spacing="1">FACE A</text>
-                    <text x="170" y="138" fill="white" font-size="16" text-anchor="middle" font-family="'Inter',sans-serif" font-weight="800">1,247 ft&sup2;</text>
+                    <rect x="170" y="230" width="140" height="22" rx="6" fill="rgba(0,0,0,0.65)" stroke="#22d3ee" stroke-width="0.5"/>
+                    <text x="240" y="245" fill="#22d3ee" font-size="11" text-anchor="middle" font-family="'Inter',monospace" font-weight="600">148.3 ft eave</text>
 
-                    <!-- Right face -->
-                    <rect x="280" y="105" width="90" height="42" rx="8" fill="rgba(0,0,0,0.65)" stroke="#00FF88" stroke-width="0.8"/>
-                    <text x="325" y="120" fill="#22d3ee" font-size="9" text-anchor="middle" font-family="'Inter',sans-serif" font-weight="600" letter-spacing="1">FACE B</text>
-                    <text x="325" y="138" fill="white" font-size="16" text-anchor="middle" font-family="'Inter',sans-serif" font-weight="800">892 ft&sup2;</text>
+                    <rect x="40" y="210" width="80" height="34" rx="7" fill="rgba(0,0,0,0.7)" stroke="#a78bfa" stroke-width="0.6"/>
+                    <text x="80" y="225" fill="#a78bfa" font-size="8" text-anchor="middle" font-family="'Inter',sans-serif" font-weight="600">REAR</text>
+                    <text x="80" y="239" fill="white" font-size="13" text-anchor="middle" font-family="'Inter',sans-serif" font-weight="700">708 ft&sup2;</text>
 
-                    <!-- Ridge measurement -->
-                    <rect x="170" y="48" width="140" height="22" rx="6" fill="rgba(0,0,0,0.7)" stroke="#00FF88" stroke-width="0.6"/>
-                    <text x="240" y="63" fill="#00FF88" font-size="11" text-anchor="middle" font-family="'Inter',monospace" font-weight="700"><tspan class="fas">&#xf545;</tspan> 85.2 ft ridge</text>
-
-                    <!-- Pitch callout -->
-                    <rect x="390" y="90" width="70" height="26" rx="6" fill="rgba(0,0,0,0.7)" stroke="#a78bfa" stroke-width="0.8"/>
-                    <text x="425" y="100" fill="#a78bfa" font-size="9" text-anchor="middle" font-family="'Inter',sans-serif" font-weight="600">PITCH</text>
-                    <text x="425" y="112" fill="white" font-size="12" text-anchor="middle" font-family="'Inter',monospace" font-weight="800">6/12</text>
-
-                    <!-- Eave measurement -->
-                    <rect x="170" y="205" width="140" height="20" rx="5" fill="rgba(0,0,0,0.65)" stroke="#22d3ee" stroke-width="0.5"/>
-                    <text x="240" y="219" fill="#22d3ee" font-size="10" text-anchor="middle" font-family="'Inter',monospace" font-weight="600">148.3 ft eave</text>
-
-                    <!-- Lower section labels -->
-                    <rect x="130" y="240" width="70" height="30" rx="6" fill="rgba(0,0,0,0.6)" stroke="#a78bfa" stroke-width="0.5"/>
-                    <text x="165" y="253" fill="#a78bfa" font-size="8" text-anchor="middle" font-family="'Inter',sans-serif" font-weight="600">REAR L</text>
-                    <text x="165" y="265" fill="white" font-size="11" text-anchor="middle" font-family="'Inter',sans-serif" font-weight="700">388 ft&sup2;</text>
-
-                    <rect x="280" y="240" width="70" height="30" rx="6" fill="rgba(0,0,0,0.6)" stroke="#a78bfa" stroke-width="0.5"/>
-                    <text x="315" y="253" fill="#a78bfa" font-size="8" text-anchor="middle" font-family="'Inter',sans-serif" font-weight="600">REAR R</text>
-                    <text x="315" y="265" fill="white" font-size="11" text-anchor="middle" font-family="'Inter',sans-serif" font-weight="700">320 ft&sup2;</text>
-
-                    <!-- GPS measurement points -->
-                    <circle cx="260" cy="40" r="5" fill="#00FF88"><animate attributeName="r" values="4;7;4" dur="2s" repeatCount="indefinite"/></circle>
-                    <circle cx="100" cy="65" r="4" fill="#00FF88"><animate attributeName="r" values="3;6;3" dur="2s" repeatCount="indefinite" begin="0.3s"/></circle>
-                    <circle cx="380" cy="65" r="4" fill="#00FF88"><animate attributeName="r" values="3;6;3" dur="2s" repeatCount="indefinite" begin="0.6s"/></circle>
-                    <circle cx="160" cy="230" r="3" fill="#a78bfa" opacity="0.8"><animate attributeName="r" values="2;5;2" dur="2.5s" repeatCount="indefinite" begin="0.9s"/></circle>
-                    <circle cx="320" cy="230" r="3" fill="#a78bfa" opacity="0.8"><animate attributeName="r" values="2;5;2" dur="2.5s" repeatCount="indefinite" begin="1.2s"/></circle>
-                    <circle cx="100" cy="200" r="3" fill="#22d3ee" opacity="0.6"/>
-                    <circle cx="380" cy="200" r="3" fill="#22d3ee" opacity="0.6"/>
+                    <!-- Animated GPS markers -->
+                    <circle cx="240" cy="80" r="5" fill="#00FF88" opacity="0.9"><animate attributeName="r" values="4;7;4" dur="2s" repeatCount="indefinite"/></circle>
+                    <circle cx="90" cy="160" r="4" fill="#00FF88" opacity="0.8"><animate attributeName="r" values="3;6;3" dur="2s" repeatCount="indefinite" begin="0.4s"/></circle>
+                    <circle cx="390" cy="160" r="4" fill="#22d3ee" opacity="0.8"><animate attributeName="r" values="3;6;3" dur="2s" repeatCount="indefinite" begin="0.8s"/></circle>
+                    <circle cx="160" cy="260" r="3" fill="#a78bfa" opacity="0.6"><animate attributeName="r" values="2;5;2" dur="2.5s" repeatCount="indefinite" begin="1.2s"/></circle>
+                    <circle cx="320" cy="260" r="3" fill="#a78bfa" opacity="0.6"><animate attributeName="r" values="2;5;2" dur="2.5s" repeatCount="indefinite" begin="1.5s"/></circle>
 
                     <!-- Compass -->
                     <circle cx="435" cy="280" r="18" fill="rgba(0,0,0,0.7)" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
                     <text x="435" y="275" fill="#00FF88" font-size="9" text-anchor="middle" font-family="'Inter',sans-serif" font-weight="800">N</text>
                     <polygon points="435,268 432,274 438,274" fill="#00FF88"/>
                     <line x1="435" y1="278" x2="435" y2="292" stroke="rgba(255,255,255,0.25)" stroke-width="1"/>
-                    <text x="435" y="300" fill="rgba(255,255,255,0.3)" font-size="7" text-anchor="middle">S</text>
 
                     <!-- Scale bar -->
                     <line x1="30" y1="290" x2="110" y2="290" stroke="rgba(255,255,255,0.4)" stroke-width="1.5"/>
@@ -301,8 +264,7 @@ function renderHero() {
                     <line x1="110" y1="286" x2="110" y2="294" stroke="rgba(255,255,255,0.4)" stroke-width="1"/>
                     <text x="70" y="305" fill="rgba(255,255,255,0.4)" font-size="9" text-anchor="middle" font-family="'Inter',monospace" font-weight="600">50 ft</text>
 
-                    <!-- Roof Manager watermark -->
-                    <text x="440" y="310" fill="rgba(0,255,136,0.25)" font-size="7" text-anchor="end" font-family="'Inter',sans-serif" font-weight="600">ROOF MANAGER</text>
+                    <text x="440" y="310" fill="rgba(0,255,136,0.2)" font-size="7" text-anchor="end" font-family="'Inter',sans-serif" font-weight="600">ROOF MANAGER</text>
                   </svg>
                 </div>
 
@@ -846,39 +808,39 @@ function renderPlatformShowcase() {
   ];
 
   return `
-    <section id="features" class="py-24 bg-white">
+    <section id="features" class="py-24" style="background:#0A0A0A">
       <div class="max-w-7xl mx-auto px-4">
         <div class="text-center mb-20 scroll-animate opacity-0 translate-y-8 transition-all duration-700">
-          <div class="inline-flex items-center gap-2 bg-indigo-50 text-indigo-700 rounded-full px-4 py-1.5 text-sm font-semibold mb-4">
+          <div class="inline-flex items-center gap-2 bg-[#00FF88]/10 text-[#00FF88] rounded-full px-4 py-1.5 text-sm font-semibold mb-4">
             <i class="fas fa-th-large"></i> Complete Platform
           </div>
-          <h2 class="text-3xl lg:text-5xl font-black text-gray-900 mb-4 tracking-tight">
+          <h2 class="text-3xl lg:text-5xl font-black text-white mb-4 tracking-tight">
             Everything a Roofing<br/>Business Needs
           </h2>
-          <p class="text-lg text-gray-500 max-w-2xl mx-auto">From measurement to close. One platform for reports, CRM, AI phone answering, sales management, and more.</p>
+          <p class="text-lg text-gray-400 max-w-2xl mx-auto">From measurement to close. One platform for reports, CRM, AI phone answering, sales management, and more.</p>
         </div>
 
         <div class="space-y-24">
           ${modules.map((m, i) => `
             <div class="scroll-animate opacity-0 translate-y-8 transition-all duration-700 grid lg:grid-cols-2 gap-12 lg:gap-20 items-center" style="transition-delay: ${i * 100}ms">
               <div class="${m.reverse ? 'lg:order-2' : ''}">
-                <div class="inline-flex items-center gap-2 bg-cyan-50 text-cyan-700 rounded-full px-3 py-1 text-xs font-bold mb-3">
+                <div class="inline-flex items-center gap-2 bg-[#00FF88]/10 text-[#00FF88] rounded-full px-3 py-1 text-xs font-bold mb-3">
                   ${m.subtitle}
                 </div>
-                <h3 class="text-2xl lg:text-3xl font-bold text-gray-900 mb-4 leading-tight">${m.title}</h3>
-                <p class="text-gray-500 text-base leading-relaxed mb-4">${m.desc}</p>
-                <div class="bg-green-50 border border-green-200 rounded-xl p-3 mb-6 flex items-start gap-2">
-                  <i class="fas fa-chart-line text-green-600 mt-0.5"></i>
-                  <span class="text-sm text-green-800 font-medium">${m.benefit}</span>
+                <h3 class="text-2xl lg:text-3xl font-bold text-white mb-4 leading-tight">${m.title}</h3>
+                <p class="text-gray-400 text-base leading-relaxed mb-4">${m.desc}</p>
+                <div class="bg-[#00FF88]/10 border border-[#00FF88]/20 rounded-xl p-3 mb-6 flex items-start gap-2">
+                  <i class="fas fa-chart-line text-[#00FF88] mt-0.5"></i>
+                  <span class="text-sm text-[#00FF88] font-medium">${m.benefit}</span>
                 </div>
-                <a href="${m.ctaLink}" onclick="rrTrack('cta_click',{location:'feature_card',card:'${m.subtitle}'})" class="inline-flex items-center gap-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold py-3 px-6 rounded-xl text-sm shadow-lg transition-all hover:scale-[1.02] min-h-[48px]">
+                <a href="${m.ctaLink}" onclick="rrTrack('cta_click',{location:'feature_card',card:'${m.subtitle}'})" class="inline-flex items-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-3 px-6 rounded-xl text-sm shadow-lg transition-all hover:scale-[1.02] min-h-[48px]">
                   <i class="fas fa-arrow-right text-xs"></i> ${m.cta}
                 </a>
               </div>
               <div class="${m.reverse ? 'lg:order-1' : ''}">
-                <div class="relative rounded-2xl overflow-hidden shadow-2xl shadow-gray-900/10 ring-1 ring-gray-900/5">
+                <div class="relative rounded-2xl overflow-hidden shadow-2xl shadow-black/30 ring-1 ring-white/10">
                   <img src="${m.img}" alt="${m.title}" class="w-full h-[320px] object-cover" loading="lazy" />
-                  <div class="absolute inset-0 bg-gradient-to-t from-gray-900/20 to-transparent"></div>
+                  <div class="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent"></div>
                 </div>
               </div>
             </div>
@@ -903,27 +865,27 @@ function renderFeatureGrid() {
   ];
 
   return `
-    <section class="py-24 bg-gradient-to-b from-gray-50 to-white">
+    <section class="py-24" style="background:#0d0d0d">
       <div class="max-w-7xl mx-auto px-4">
         <div class="text-center mb-16 scroll-animate opacity-0 translate-y-8 transition-all duration-700">
-          <div class="inline-flex items-center gap-2 bg-emerald-50 text-emerald-700 rounded-full px-4 py-1.5 text-sm font-semibold mb-4">
+          <div class="inline-flex items-center gap-2 bg-[#00FF88]/10 text-[#00FF88] rounded-full px-4 py-1.5 text-sm font-semibold mb-4">
             <i class="fas fa-file-alt"></i> Report Contents
           </div>
-          <h2 class="text-3xl lg:text-5xl font-black text-gray-900 mb-4 tracking-tight">What's In Every Report</h2>
-          <p class="text-lg text-gray-500 max-w-2xl mx-auto">Professional-grade data that roofing contractors actually need to quote jobs accurately.</p>
+          <h2 class="text-3xl lg:text-5xl font-black text-white mb-4 tracking-tight">What's In Every Report</h2>
+          <p class="text-lg text-gray-400 max-w-2xl mx-auto">Professional-grade data that roofing contractors actually need to quote jobs accurately.</p>
         </div>
 
         <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
           ${features.map((f, i) => `
             <div class="scroll-animate opacity-0 translate-y-8 transition-all duration-700 group" style="transition-delay: ${i * 80}ms">
-              <div class="h-full bg-white rounded-2xl p-7 border border-gray-100 hover:border-cyan-200 hover:shadow-xl hover:shadow-cyan-500/5 transition-all duration-300 flex flex-col">
-                <div class="w-12 h-12 bg-gradient-to-br from-cyan-50 to-blue-50 group-hover:from-cyan-500 group-hover:to-blue-500 rounded-xl flex items-center justify-center mb-4 transition-all duration-300">
-                  <i class="${f.icon} text-cyan-600 group-hover:text-white text-lg transition-colors duration-300"></i>
+              <div class="h-full bg-[#111111] rounded-2xl p-7 border border-white/10 hover:border-[#00FF88]/30 hover:shadow-xl hover:shadow-[#00FF88]/5 transition-all duration-300 flex flex-col">
+                <div class="w-12 h-12 bg-[#00FF88]/10 group-hover:bg-[#00FF88] rounded-xl flex items-center justify-center mb-4 transition-all duration-300">
+                  <i class="${f.icon} text-[#00FF88] group-hover:text-[#0A0A0A] text-lg transition-colors duration-300"></i>
                 </div>
-                <h3 class="text-lg font-bold text-gray-900 mb-2">${f.title}</h3>
-                <p class="text-sm text-gray-500 leading-relaxed mb-3">${f.desc}</p>
-                <div class="mt-auto pt-3 border-t border-gray-100">
-                  <span class="text-xs font-semibold text-green-700 flex items-center gap-1.5"><i class="fas fa-check-circle text-green-500"></i>${f.benefit}</span>
+                <h3 class="text-lg font-bold text-white mb-2">${f.title}</h3>
+                <p class="text-sm text-gray-400 leading-relaxed mb-3">${f.desc}</p>
+                <div class="mt-auto pt-3 border-t border-white/10">
+                  <span class="text-xs font-semibold text-[#00FF88] flex items-center gap-1.5"><i class="fas fa-check-circle text-[#00FF88]"></i>${f.benefit}</span>
                 </div>
               </div>
             </div>
@@ -931,7 +893,7 @@ function renderFeatureGrid() {
         </div>
 
         <div class="text-center mt-12 scroll-animate opacity-0 translate-y-8 transition-all duration-700">
-          <a href="/signup" onclick="rrTrack('cta_click',{location:'feature_grid'})" class="inline-flex items-center gap-2 bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-400 hover:to-cyan-500 text-white font-bold py-3.5 px-8 rounded-xl shadow-lg transition-all hover:scale-[1.02] min-h-[48px]">
+          <a href="/signup" onclick="rrTrack('cta_click',{location:'feature_grid'})" class="inline-flex items-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-3.5 px-8 rounded-xl shadow-lg transition-all hover:scale-[1.02] min-h-[48px]">
             <i class="fas fa-gift"></i> Get 3 Free Reports Now
           </a>
         </div>
@@ -976,48 +938,48 @@ function renderCaseStudies() {
   ];
 
   return `
-    <section class="py-24 bg-white">
+    <section class="py-24" style="background:#0A0A0A">
       <div class="max-w-7xl mx-auto px-4">
         <div class="text-center mb-16 scroll-animate opacity-0 translate-y-8 transition-all duration-700">
-          <div class="inline-flex items-center gap-2 bg-purple-50 text-purple-700 rounded-full px-4 py-1.5 text-sm font-semibold mb-4">
+          <div class="inline-flex items-center gap-2 bg-[#00FF88]/10 text-[#00FF88] rounded-full px-4 py-1.5 text-sm font-semibold mb-4">
             <i class="fas fa-trophy"></i> Real Results
           </div>
-          <h2 class="text-3xl lg:text-5xl font-black text-gray-900 mb-4 tracking-tight">Case Studies</h2>
-          <p class="text-lg text-gray-500 max-w-2xl mx-auto">See how Canadian roofing companies are saving thousands and growing faster with Roof Manager.</p>
+          <h2 class="text-3xl lg:text-5xl font-black text-white mb-4 tracking-tight">Case Studies</h2>
+          <p class="text-lg text-gray-400 max-w-2xl mx-auto">See how Canadian roofing companies are saving thousands and growing faster with Roof Manager.</p>
         </div>
 
         <div class="grid lg:grid-cols-2 gap-8">
           ${cases.map((cs, i) => `
-            <div class="scroll-animate opacity-0 translate-y-8 transition-all duration-700 bg-gray-50 rounded-2xl border border-gray-200 overflow-hidden hover:shadow-xl transition-shadow" style="transition-delay: ${i * 150}ms">
+            <div class="scroll-animate opacity-0 translate-y-8 transition-all duration-700 bg-[#111111] rounded-2xl border border-white/10 overflow-hidden hover:shadow-xl hover:border-[#00FF88]/30 transition-shadow" style="transition-delay: ${i * 150}ms">
               <div class="p-8">
                 <div class="flex items-center gap-4 mb-6">
                   <div class="w-14 h-14 bg-gradient-to-br ${cs.color} rounded-2xl flex items-center justify-center text-white font-bold text-lg shadow-lg">${cs.avatar}</div>
                   <div>
-                    <h3 class="text-xl font-bold text-gray-900">${cs.company}</h3>
+                    <h3 class="text-xl font-bold text-white">${cs.company}</h3>
                     <p class="text-sm text-gray-500">${cs.location}</p>
                   </div>
                 </div>
 
                 <div class="grid grid-cols-3 gap-4 mb-6">
                   ${cs.stats.map(s => `
-                    <div class="bg-white rounded-xl p-3 text-center border border-gray-100">
-                      <i class="${s.icon} text-cyan-600 text-sm mb-1"></i>
-                      <div class="text-lg font-black text-gray-900">${s.value}</div>
-                      <div class="text-[10px] text-gray-400 uppercase tracking-wider font-medium">${s.label}</div>
+                    <div class="bg-white/5 rounded-xl p-3 text-center border border-white/10">
+                      <i class="${s.icon} text-[#00FF88] text-sm mb-1"></i>
+                      <div class="text-lg font-black text-white">${s.value}</div>
+                      <div class="text-[10px] text-gray-500 uppercase tracking-wider font-medium">${s.label}</div>
                     </div>
                   `).join('')}
                 </div>
 
-                <blockquote class="text-sm text-gray-600 leading-relaxed italic mb-6 border-l-4 border-cyan-300 pl-4">"${cs.quote}"</blockquote>
+                <blockquote class="text-sm text-gray-400 leading-relaxed italic mb-6 border-l-4 border-[#00FF88]/40 pl-4">"${cs.quote}"</blockquote>
 
                 <div class="grid grid-cols-2 gap-4">
-                  <div class="bg-red-50 border border-red-200 rounded-xl p-3">
-                    <div class="text-[10px] font-bold text-red-600 uppercase tracking-wider mb-1">Before</div>
-                    <p class="text-xs text-red-800">${cs.before}</p>
+                  <div class="bg-red-500/10 border border-red-500/20 rounded-xl p-3">
+                    <div class="text-[10px] font-bold text-red-400 uppercase tracking-wider mb-1">Before</div>
+                    <p class="text-xs text-red-400">${cs.before}</p>
                   </div>
-                  <div class="bg-green-50 border border-green-200 rounded-xl p-3">
-                    <div class="text-[10px] font-bold text-green-600 uppercase tracking-wider mb-1">After</div>
-                    <p class="text-xs text-green-800">${cs.after}</p>
+                  <div class="bg-[#00FF88]/10 border border-[#00FF88]/20 rounded-xl p-3">
+                    <div class="text-[10px] font-bold text-[#00FF88] uppercase tracking-wider mb-1">After</div>
+                    <p class="text-xs text-[#00FF88]">${cs.after}</p>
                   </div>
                 </div>
               </div>
@@ -1058,31 +1020,31 @@ function renderIndustrySections() {
   ];
 
   return `
-    <section class="py-24 bg-gradient-to-b from-gray-50 to-white">
+    <section class="py-24" style="background:#0d0d0d">
       <div class="max-w-7xl mx-auto px-4">
         <div class="text-center mb-16 scroll-animate opacity-0 translate-y-8 transition-all duration-700">
-          <div class="inline-flex items-center gap-2 bg-teal-50 text-teal-700 rounded-full px-4 py-1.5 text-sm font-semibold mb-4">
+          <div class="inline-flex items-center gap-2 bg-[#00FF88]/10 text-[#00FF88] rounded-full px-4 py-1.5 text-sm font-semibold mb-4">
             <i class="fas fa-industry"></i> Built for Your Business
           </div>
-          <h2 class="text-3xl lg:text-5xl font-black text-gray-900 mb-4 tracking-tight">Solutions by Industry</h2>
-          <p class="text-lg text-gray-500 max-w-2xl mx-auto">Whether you're a residential roofer, insurance adjuster, or solar installer &mdash; we have the tools you need.</p>
+          <h2 class="text-3xl lg:text-5xl font-black text-white mb-4 tracking-tight">Solutions by Industry</h2>
+          <p class="text-lg text-gray-400 max-w-2xl mx-auto">Whether you're a residential roofer, insurance adjuster, or solar installer &mdash; we have the tools you need.</p>
         </div>
 
         <div class="grid lg:grid-cols-3 gap-8">
           ${industries.map((ind, i) => `
             <div class="scroll-animate opacity-0 translate-y-8 transition-all duration-700" style="transition-delay: ${i * 150}ms">
-              <div class="h-full bg-white rounded-2xl border border-gray-200 p-8 hover:border-cyan-200 hover:shadow-xl transition-all flex flex-col">
+              <div class="h-full bg-[#111111] rounded-2xl border border-white/10 p-8 hover:border-[#00FF88]/30 hover:shadow-xl transition-all flex flex-col">
                 <div class="w-14 h-14 bg-gradient-to-br ${ind.color} rounded-2xl flex items-center justify-center mb-5 shadow-lg">
                   <i class="${ind.icon} text-white text-xl"></i>
                 </div>
-                <h3 class="text-xl font-bold text-gray-900 mb-3">${ind.title}</h3>
-                <p class="text-sm text-gray-500 leading-relaxed mb-5">${ind.desc}</p>
+                <h3 class="text-xl font-bold text-white mb-3">${ind.title}</h3>
+                <p class="text-sm text-gray-400 leading-relaxed mb-5">${ind.desc}</p>
                 <ul class="space-y-2.5 mb-6 flex-1">
                   ${ind.features.map(f => `
-                    <li class="flex items-center gap-2.5 text-sm text-gray-600"><i class="fas fa-check-circle text-cyan-500 text-xs"></i>${f}</li>
+                    <li class="flex items-center gap-2.5 text-sm text-gray-400"><i class="fas fa-check-circle text-[#00FF88] text-xs"></i>${f}</li>
                   `).join('')}
                 </ul>
-                <a href="/signup" onclick="rrTrack('cta_click',{location:'industry',type:'${ind.title}'})" class="inline-flex items-center justify-center gap-2 bg-gray-900 hover:bg-gray-800 text-white font-bold py-3 rounded-xl text-sm transition-all hover:scale-[1.02] min-h-[48px]">
+                <a href="/signup" onclick="rrTrack('cta_click',{location:'industry',type:'${ind.title}'})" class="inline-flex items-center justify-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-3 rounded-xl text-sm transition-all hover:scale-[1.02] min-h-[48px]">
                   Get Started Free <i class="fas fa-arrow-right text-xs"></i>
                 </a>
               </div>
@@ -1099,56 +1061,56 @@ function renderIndustrySections() {
 // ============================================================
 function renderPricing() {
   return `
-    <section id="pricing" class="py-24 bg-white">
+    <section id="pricing" class="py-24" style="background:#0A0A0A">
       <div class="max-w-6xl mx-auto px-4">
         <div class="text-center mb-16 scroll-animate opacity-0 translate-y-8 transition-all duration-700">
-          <div class="inline-flex items-center gap-2 bg-amber-50 text-amber-700 rounded-full px-4 py-1.5 text-sm font-semibold mb-4">
+          <div class="inline-flex items-center gap-2 bg-[#00FF88]/10 text-[#00FF88] rounded-full px-4 py-1.5 text-sm font-semibold mb-4">
             <i class="fas fa-tag"></i> Simple Pricing
           </div>
-          <h2 class="text-3xl lg:text-5xl font-black text-gray-900 mb-4 tracking-tight">Plans That Scale With You</h2>
-          <p class="text-lg text-gray-500 max-w-2xl mx-auto">Start free, pay per report, or save big with volume packs. CRM always included.</p>
+          <h2 class="text-3xl lg:text-5xl font-black text-white mb-4 tracking-tight">Plans That Scale With You</h2>
+          <p class="text-lg text-gray-400 max-w-2xl mx-auto">Start free, pay per report, or save big with volume packs. CRM always included.</p>
         </div>
 
         <!-- Pricing cards -->
         <div class="grid lg:grid-cols-3 gap-6 items-start mb-16">
           <!-- Free Trial -->
-          <div class="scroll-animate opacity-0 translate-y-8 transition-all duration-700 bg-white rounded-2xl border border-gray-200 p-8 hover:shadow-xl transition-shadow">
-            <div class="text-sm font-bold text-emerald-600 uppercase tracking-wider mb-2">Free Trial</div>
+          <div class="scroll-animate opacity-0 translate-y-8 transition-all duration-700 bg-[#111111] rounded-2xl border border-white/10 p-8 hover:shadow-xl transition-shadow">
+            <div class="text-sm font-bold text-[#00FF88] uppercase tracking-wider mb-2">Free Trial</div>
             <div class="flex items-baseline gap-1 mb-2">
-              <span class="text-5xl font-black text-gray-900">$0</span>
+              <span class="text-5xl font-black text-white">$0</span>
             </div>
-            <p class="text-sm text-gray-500 mb-6">3 free reports + full platform access</p>
+            <p class="text-sm text-gray-400 mb-6">3 free reports + full platform access</p>
             <ul class="space-y-3 mb-8">
               ${['3 professional PDF reports', 'Full CRM & invoicing', 'Customer management', 'Proposals & job tracking', 'Door-to-door manager', 'Virtual roof try-on', 'Team collaboration'].map(f => `
-                <li class="flex items-start gap-2.5 text-sm text-gray-600"><i class="fas fa-check text-emerald-500 mt-0.5 text-xs"></i>${f}</li>
+                <li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>${f}</li>
               `).join('')}
             </ul>
-            <a href="/signup" onclick="rrTrack('cta_click',{location:'pricing',plan:'free'})" class="block text-center py-3.5 rounded-xl font-bold border-2 border-gray-900 text-gray-900 hover:bg-gray-900 hover:text-white transition-all min-h-[48px]">
+            <a href="/signup" onclick="rrTrack('cta_click',{location:'pricing',plan:'free'})" class="block text-center py-3.5 rounded-xl font-bold border-2 border-white/20 text-white hover:bg-white hover:text-[#0A0A0A] transition-all min-h-[48px]">
               Start Free Trial
             </a>
           </div>
 
           <!-- Per Report — MOST POPULAR -->
           <div class="scroll-animate opacity-0 translate-y-8 transition-all duration-700 relative" style="transition-delay:100ms">
-            <div class="absolute -top-4 left-1/2 -translate-x-1/2 bg-gradient-to-r from-teal-500 to-cyan-600 text-white text-xs font-bold px-5 py-1.5 rounded-full shadow-lg z-10">MOST POPULAR</div>
-            <div class="bg-white rounded-2xl border-2 border-teal-300 shadow-xl shadow-teal-500/10 p-8">
-              <div class="text-sm font-bold text-teal-600 uppercase tracking-wider mb-2">Per Report</div>
+            <div class="absolute -top-4 left-1/2 -translate-x-1/2 bg-[#00FF88] text-[#0A0A0A] text-xs font-extrabold px-5 py-1.5 rounded-full shadow-lg z-10">MOST POPULAR</div>
+            <div class="bg-[#111111] rounded-2xl border-2 border-[#00FF88]/50 shadow-xl shadow-[#00FF88]/10 p-8">
+              <div class="text-sm font-bold text-[#00FF88] uppercase tracking-wider mb-2">Per Report</div>
               <div class="flex items-baseline gap-1 mb-2">
-                <span class="text-5xl font-black text-gray-900">$8</span>
-                <span class="text-xl text-gray-400">CAD</span>
-                <span class="text-sm text-gray-400 ml-1">/ report</span>
+                <span class="text-5xl font-black text-white">$8</span>
+                <span class="text-xl text-gray-500">CAD</span>
+                <span class="text-sm text-gray-500 ml-1">/ report</span>
               </div>
               <div class="flex items-center gap-2 mb-1">
-                <span class="text-sm text-gray-400 line-through">$50–100 EagleView</span>
-                <span class="text-xs font-bold text-teal-600 bg-teal-50 px-2 py-0.5 rounded-full">Save 90%+</span>
+                <span class="text-sm text-gray-500 line-through">$50–100 EagleView</span>
+                <span class="text-xs font-bold text-[#00FF88] bg-[#00FF88]/10 px-2 py-0.5 rounded-full">Save 90%+</span>
               </div>
-              <p class="text-xs text-teal-600 font-semibold mb-6"><i class="fas fa-gift mr-1"></i>First 3 reports FREE</p>
+              <p class="text-xs text-[#00FF88] font-semibold mb-6"><i class="fas fa-gift mr-1"></i>First 3 reports FREE</p>
               <ul class="space-y-3 mb-8">
                 ${['Full 3D area with pitch adjustment', 'Complete edge breakdown', 'Material BOM with pricing', 'Individual segment analysis', 'Solar potential analysis', 'Professional PDF download', 'Email delivery included', 'AI measurement overlay', 'Instant delivery (<60s)'].map(f => `
-                  <li class="flex items-start gap-2.5 text-sm text-gray-600"><i class="fas fa-check text-teal-500 mt-0.5 text-xs"></i>${f}</li>
+                  <li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>${f}</li>
                 `).join('')}
               </ul>
-              <a href="/signup" onclick="rrTrack('cta_click',{location:'pricing',plan:'per_report'})" class="block text-center py-3.5 rounded-xl font-bold bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-400 hover:to-cyan-500 text-white shadow-lg transition-all hover:scale-[1.02] min-h-[48px]">
+              <a href="/signup" onclick="rrTrack('cta_click',{location:'pricing',plan:'per_report'})" class="block text-center py-3.5 rounded-xl font-extrabold bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] shadow-lg transition-all hover:scale-[1.02] min-h-[48px]">
                 Get Started Free
               </a>
             </div>
@@ -1156,22 +1118,22 @@ function renderPricing() {
 
           <!-- B2B Volume -->
           <div class="scroll-animate opacity-0 translate-y-8 transition-all duration-700 relative" style="transition-delay:200ms">
-            <div class="absolute -top-4 left-1/2 -translate-x-1/2 bg-gradient-to-r from-indigo-500 to-purple-500 text-white text-xs font-bold px-5 py-1.5 rounded-full shadow-lg z-10">BEST VALUE</div>
-            <div class="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl border-2 border-indigo-200 p-8">
-              <div class="text-sm font-bold text-indigo-600 uppercase tracking-wider mb-2">B2B Volume</div>
+            <div class="absolute -top-4 left-1/2 -translate-x-1/2 bg-gradient-to-r from-[#a78bfa] to-[#8b5cf6] text-white text-xs font-bold px-5 py-1.5 rounded-full shadow-lg z-10">BEST VALUE</div>
+            <div class="bg-[#111111] rounded-2xl border-2 border-[#a78bfa]/50 p-8">
+              <div class="text-sm font-bold text-[#a78bfa] uppercase tracking-wider mb-2">B2B Volume</div>
               <div class="flex items-baseline gap-1 mb-2">
-                <span class="text-5xl font-black text-gray-900">$7</span>
-                <span class="text-xl text-gray-400">CAD</span>
-                <span class="text-sm text-gray-400 ml-1">/ report</span>
+                <span class="text-5xl font-black text-white">$7</span>
+                <span class="text-xl text-gray-500">CAD</span>
+                <span class="text-sm text-gray-500 ml-1">/ report</span>
               </div>
-              <p class="text-sm text-gray-500 mb-1">For teams doing 50+ reports/month</p>
-              <p class="text-xs text-indigo-600 font-semibold mb-6"><i class="fas fa-percentage mr-1"></i>Save up to 40% with volume packs</p>
+              <p class="text-sm text-gray-400 mb-1">For teams doing 50+ reports/month</p>
+              <p class="text-xs text-[#a78bfa] font-semibold mb-6"><i class="fas fa-percentage mr-1"></i>Save up to 40% with volume packs</p>
               <ul class="space-y-3 mb-8">
                 ${['Everything in Per Report', 'Volume discount pricing', 'Priority processing', 'Dedicated account manager', 'Monthly invoicing option', 'API access (coming soon)', 'Custom report branding', 'Phone + email support', 'Team analytics dashboard'].map(f => `
-                  <li class="flex items-start gap-2.5 text-sm text-gray-600"><i class="fas fa-check text-indigo-500 mt-0.5 text-xs"></i>${f}</li>
+                  <li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#a78bfa] mt-0.5 text-xs"></i>${f}</li>
                 `).join('')}
               </ul>
-              <a href="mailto:reports@reusecanada.ca?subject=B2B%20Volume%20Pricing" onclick="rrTrack('cta_click',{location:'pricing',plan:'b2b'})" class="block text-center py-3.5 rounded-xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white shadow-lg transition-all hover:scale-[1.02] min-h-[48px]">
+              <a href="mailto:reports@reusecanada.ca?subject=B2B%20Volume%20Pricing" onclick="rrTrack('cta_click',{location:'pricing',plan:'b2b'})" class="block text-center py-3.5 rounded-xl font-bold bg-gradient-to-r from-[#a78bfa] to-[#8b5cf6] hover:from-[#b39dff] hover:to-[#a78bfa] text-white shadow-lg transition-all hover:scale-[1.02] min-h-[48px]">
                 Contact for Volume Pricing
               </a>
             </div>
@@ -1180,27 +1142,27 @@ function renderPricing() {
 
         <!-- Add-ons -->
         <div class="scroll-animate opacity-0 translate-y-8 transition-all duration-700">
-          <h3 class="text-xl font-bold text-gray-900 text-center mb-6">Add-On Services</h3>
+          <h3 class="text-xl font-bold text-white text-center mb-6">Add-On Services</h3>
           <div class="grid md:grid-cols-3 gap-6">
-            <div class="bg-white rounded-2xl border border-gray-200 p-6 hover:border-indigo-200 hover:shadow-lg transition-all">
+            <div class="bg-[#111111] rounded-2xl border border-white/10 p-6 hover:border-[#00FF88]/30 hover:shadow-lg transition-all">
               <div class="flex items-center gap-3 mb-3">
                 <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center"><i class="fas fa-phone-alt text-white text-sm"></i></div>
-                <div class="flex-1"><h4 class="font-bold text-gray-900 text-sm">AI Roofer Secretary</h4><p class="text-xs text-gray-500">24/7 AI phone answering</p></div>
-                <div class="text-right"><span class="text-xl font-black text-gray-900">$249</span><span class="text-xs text-gray-400">/mo</span></div>
+                <div class="flex-1"><h4 class="font-bold text-white text-sm">AI Roofer Secretary</h4><p class="text-xs text-gray-500">24/7 AI phone answering</p></div>
+                <div class="text-right"><span class="text-xl font-black text-white">$249</span><span class="text-xs text-gray-500">/mo</span></div>
               </div>
             </div>
-            <div class="bg-white rounded-2xl border border-gray-200 p-6 hover:border-emerald-200 hover:shadow-lg transition-all">
+            <div class="bg-[#111111] rounded-2xl border border-white/10 p-6 hover:border-[#00FF88]/30 hover:shadow-lg transition-all">
               <div class="flex items-center gap-3 mb-3">
                 <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center"><i class="fas fa-users text-white text-sm"></i></div>
-                <div class="flex-1"><h4 class="font-bold text-gray-900 text-sm">Team Members</h4><p class="text-xs text-gray-500">Add sales reps & estimators</p></div>
-                <div class="text-right"><span class="text-xl font-black text-gray-900">$50</span><span class="text-xs text-gray-400">/user/mo</span></div>
+                <div class="flex-1"><h4 class="font-bold text-white text-sm">Team Members</h4><p class="text-xs text-gray-500">Add sales reps & estimators</p></div>
+                <div class="text-right"><span class="text-xl font-black text-white">$50</span><span class="text-xs text-gray-500">/user/mo</span></div>
               </div>
             </div>
-            <div class="bg-white rounded-2xl border border-gray-200 p-6 hover:border-gray-300 hover:shadow-lg transition-all">
+            <div class="bg-[#111111] rounded-2xl border border-white/10 p-6 hover:border-[#00FF88]/30 hover:shadow-lg transition-all">
               <div class="flex items-center gap-3 mb-3">
                 <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-gray-700 to-gray-900 flex items-center justify-center"><i class="fas fa-th-large text-white text-sm"></i></div>
-                <div class="flex-1"><h4 class="font-bold text-gray-900 text-sm">CRM & Business Tools</h4><p class="text-xs text-gray-500">Full platform access</p></div>
-                <div class="text-right"><span class="text-xl font-black text-emerald-600">FREE</span></div>
+                <div class="flex-1"><h4 class="font-bold text-white text-sm">CRM & Business Tools</h4><p class="text-xs text-gray-500">Full platform access</p></div>
+                <div class="text-right"><span class="text-xl font-black text-[#00FF88]">FREE</span></div>
               </div>
             </div>
           </div>
@@ -1208,13 +1170,13 @@ function renderPricing() {
 
         <!-- Comparison table -->
         <div class="mt-16 scroll-animate opacity-0 translate-y-8 transition-all duration-700">
-          <h3 class="text-xl font-bold text-gray-900 text-center mb-8">How We Compare</h3>
+          <h3 class="text-xl font-bold text-white text-center mb-8">How We Compare</h3>
           <div class="overflow-x-auto -mx-4 px-4">
             <table class="w-full text-sm border-collapse min-w-[640px]">
               <thead>
-                <tr class="border-b-2 border-gray-200">
-                  <th class="text-left py-3 px-4 font-bold text-gray-900">Feature</th>
-                  <th class="text-center py-3 px-4 font-bold text-teal-600 bg-teal-50 rounded-t-lg">Roof Manager</th>
+                <tr class="border-b-2 border-white/10">
+                  <th class="text-left py-3 px-4 font-bold text-white">Feature</th>
+                  <th class="text-center py-3 px-4 font-bold text-[#00FF88] bg-[#00FF88]/10 rounded-t-lg">Roof Manager</th>
                   <th class="text-center py-3 px-4 font-bold text-gray-500">EagleView</th>
                   <th class="text-center py-3 px-4 font-bold text-gray-500">Manual / Drone</th>
                 </tr>
@@ -1223,17 +1185,17 @@ function renderPricing() {
                 ${[
                   ['Report Delivery', 'Under 60 seconds', '24-48 hours', '2-4 hours on-site'],
                   ['Price Per Report', 'From $7 USD', '$50-100+ USD', '$200+ labor cost'],
-                  ['Free CRM Included', '<i class="fas fa-check-circle text-green-500"></i>', '<i class="fas fa-times-circle text-red-400"></i>', '<i class="fas fa-times-circle text-red-400"></i>'],
-                  ['AI Phone Secretary', '<i class="fas fa-check-circle text-green-500"></i>', '<i class="fas fa-times-circle text-red-400"></i>', '<i class="fas fa-times-circle text-red-400"></i>'],
-                  ['Virtual Roof Try-On', '<i class="fas fa-check-circle text-green-500"></i>', '<i class="fas fa-times-circle text-red-400"></i>', '<i class="fas fa-times-circle text-red-400"></i>'],
-                  ['Team Management', '<i class="fas fa-check-circle text-green-500"></i>', 'Extra cost', '<i class="fas fa-times-circle text-red-400"></i>'],
-                  ['Solar Analysis', '<i class="fas fa-check-circle text-green-500"></i> Free', 'Extra cost', '<i class="fas fa-times-circle text-red-400"></i>'],
-                  ['D2D Sales Manager', '<i class="fas fa-check-circle text-green-500"></i>', '<i class="fas fa-times-circle text-red-400"></i>', '<i class="fas fa-times-circle text-red-400"></i>'],
-                  ['No Climbing Required', '<i class="fas fa-check-circle text-green-500"></i>', '<i class="fas fa-check-circle text-green-500"></i>', '<i class="fas fa-times-circle text-red-400"></i>'],
+                  ['Free CRM Included', '<i class="fas fa-check-circle text-[#00FF88]"></i>', '<i class="fas fa-times-circle text-red-400"></i>', '<i class="fas fa-times-circle text-red-400"></i>'],
+                  ['AI Phone Secretary', '<i class="fas fa-check-circle text-[#00FF88]"></i>', '<i class="fas fa-times-circle text-red-400"></i>', '<i class="fas fa-times-circle text-red-400"></i>'],
+                  ['Virtual Roof Try-On', '<i class="fas fa-check-circle text-[#00FF88]"></i>', '<i class="fas fa-times-circle text-red-400"></i>', '<i class="fas fa-times-circle text-red-400"></i>'],
+                  ['Team Management', '<i class="fas fa-check-circle text-[#00FF88]"></i>', 'Extra cost', '<i class="fas fa-times-circle text-red-400"></i>'],
+                  ['Solar Analysis', '<i class="fas fa-check-circle text-[#00FF88]"></i> Free', 'Extra cost', '<i class="fas fa-times-circle text-red-400"></i>'],
+                  ['D2D Sales Manager', '<i class="fas fa-check-circle text-[#00FF88]"></i>', '<i class="fas fa-times-circle text-red-400"></i>', '<i class="fas fa-times-circle text-red-400"></i>'],
+                  ['No Climbing Required', '<i class="fas fa-check-circle text-[#00FF88]"></i>', '<i class="fas fa-check-circle text-[#00FF88]"></i>', '<i class="fas fa-times-circle text-red-400"></i>'],
                 ].map((row, i) => `
-                  <tr class="border-b border-gray-100 ${i % 2 === 0 ? 'bg-gray-50' : ''}">
-                    <td class="py-3 px-4 font-medium text-gray-700">${row[0]}</td>
-                    <td class="py-3 px-4 text-center font-semibold text-gray-900 bg-teal-50/50">${row[1]}</td>
+                  <tr class="border-b border-white/5 ${i % 2 === 0 ? 'bg-[#111111]' : 'bg-white/5'}">
+                    <td class="py-3 px-4 font-medium text-gray-300">${row[0]}</td>
+                    <td class="py-3 px-4 text-center font-semibold text-white bg-[#00FF88]/5">${row[1]}</td>
                     <td class="py-3 px-4 text-center text-gray-500">${row[2]}</td>
                     <td class="py-3 px-4 text-center text-gray-500">${row[3]}</td>
                   </tr>
@@ -1411,44 +1373,44 @@ function renderTestimonials() {
   ];
 
   return `
-    <section class="py-24 bg-gradient-to-b from-white to-gray-50">
+    <section class="py-24" style="background:#0d0d0d">
       <div class="max-w-7xl mx-auto px-4">
         <div class="text-center mb-16 scroll-animate opacity-0 translate-y-8 transition-all duration-700">
-          <div class="inline-flex items-center gap-2 bg-amber-50 text-amber-700 rounded-full px-4 py-1.5 text-sm font-semibold mb-4">
+          <div class="inline-flex items-center gap-2 bg-[#00FF88]/10 text-[#00FF88] rounded-full px-4 py-1.5 text-sm font-semibold mb-4">
             <i class="fas fa-quote-left"></i> What Roofers Say
           </div>
-          <h2 class="text-3xl lg:text-4xl font-black text-gray-900 mb-4 tracking-tight">Trusted by Roofing Professionals</h2>
-          <p class="text-lg text-gray-500">Real results from contractors across North America.</p>
+          <h2 class="text-3xl lg:text-4xl font-black text-white mb-4 tracking-tight">Trusted by Roofing Professionals</h2>
+          <p class="text-lg text-gray-400">Real results from contractors across North America.</p>
           <div class="flex items-center justify-center gap-2 mt-4">
             <div class="flex items-center gap-0.5">
-              ${[1,2,3,4,5].map(() => '<i class="fas fa-star text-amber-400 text-lg"></i>').join('')}
+              ${[1,2,3,4,5].map(() => '<i class="fas fa-star text-[#00FF88] text-lg"></i>').join('')}
             </div>
-            <span class="text-gray-600 font-bold">4.9/5</span>
-            <span class="text-gray-400">&mdash; 200+ reviews</span>
+            <span class="text-white font-bold">4.9/5</span>
+            <span class="text-gray-500">&mdash; 200+ reviews</span>
           </div>
         </div>
 
         <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
           ${testimonials.map((t, i) => `
             <div class="scroll-animate opacity-0 translate-y-8 transition-all duration-700" style="transition-delay: ${i * 100}ms">
-              <div class="h-full bg-white border border-gray-200 rounded-2xl p-6 hover:shadow-xl hover:border-cyan-200 transition-all duration-300 flex flex-col">
-                <div class="bg-cyan-50 rounded-lg px-3 py-2 mb-4 flex items-center gap-2">
-                  <i class="${t.metricIcon} text-cyan-600 text-sm"></i>
-                  <span class="text-sm font-bold text-cyan-800">${t.metric}</span>
+              <div class="h-full bg-[#111111] border border-white/10 rounded-2xl p-6 hover:shadow-xl hover:border-[#00FF88]/30 transition-all duration-300 flex flex-col">
+                <div class="bg-[#00FF88]/10 rounded-lg px-3 py-2 mb-4 flex items-center gap-2">
+                  <i class="${t.metricIcon} text-[#00FF88] text-sm"></i>
+                  <span class="text-sm font-bold text-[#00FF88]">${t.metric}</span>
                 </div>
                 <div class="flex items-center justify-between mb-3">
                   <div class="flex items-center gap-0.5">
-                    ${[1,2,3,4,5].map(() => '<i class="fas fa-star text-amber-400 text-xs"></i>').join('')}
+                    ${[1,2,3,4,5].map(() => '<i class="fas fa-star text-[#00FF88] text-xs"></i>').join('')}
                   </div>
-                  <span class="inline-flex items-center gap-1 text-[10px] font-semibold text-green-700 bg-green-50 border border-green-200 rounded-full px-2 py-0.5"><i class="fas fa-check-circle text-green-500"></i>Verified</span>
+                  <span class="inline-flex items-center gap-1 text-[10px] font-semibold text-[#00FF88] bg-[#00FF88]/10 border border-[#00FF88]/20 rounded-full px-2 py-0.5"><i class="fas fa-check-circle text-[#00FF88]"></i>Verified</span>
                 </div>
-                <p class="text-gray-600 text-sm leading-relaxed mb-6 flex-1">"${t.quote}"</p>
-                <div class="flex items-center gap-3 pt-4 border-t border-gray-100">
+                <p class="text-gray-400 text-sm leading-relaxed mb-6 flex-1">"${t.quote}"</p>
+                <div class="flex items-center gap-3 pt-4 border-t border-white/10">
                   <div class="w-10 h-10 bg-gradient-to-br from-cyan-500 to-blue-500 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0">${t.avatar}</div>
                   <div class="flex-1 min-w-0">
-                    <p class="font-semibold text-gray-900 text-sm">${t.name}</p>
+                    <p class="font-semibold text-white text-sm">${t.name}</p>
                     <p class="text-xs text-gray-500">${t.title}, ${t.company}</p>
-                    <p class="text-[10px] text-gray-400">${t.location} &middot; ${t.date}</p>
+                    <p class="text-[10px] text-gray-500">${t.location} &middot; ${t.date}</p>
                   </div>
                 </div>
               </div>
@@ -1465,15 +1427,15 @@ function renderTestimonials() {
 // ============================================================
 function renderSecuritySection() {
   return `
-    <section class="py-20 bg-white border-y border-gray-100">
+    <section class="py-20 border-y border-white/5" style="background:#0A0A0A">
       <div class="max-w-6xl mx-auto px-4">
         <div class="grid lg:grid-cols-2 gap-12 items-center scroll-animate opacity-0 translate-y-8 transition-all duration-700">
           <div>
-            <div class="inline-flex items-center gap-2 bg-green-50 text-green-700 rounded-full px-4 py-1.5 text-sm font-semibold mb-4">
+            <div class="inline-flex items-center gap-2 bg-[#00FF88]/10 text-[#00FF88] rounded-full px-4 py-1.5 text-sm font-semibold mb-4">
               <i class="fas fa-shield-alt"></i> Security & Privacy
             </div>
-            <h2 class="text-3xl font-black text-gray-900 mb-4 tracking-tight">Your Data is Safe With Us</h2>
-            <p class="text-gray-500 text-base leading-relaxed mb-6">Built on Cloudflare's global edge network with enterprise-grade security. Your customer data, reports, and business information are encrypted and protected at every level.</p>
+            <h2 class="text-3xl font-black text-white mb-4 tracking-tight">Your Data is Safe With Us</h2>
+            <p class="text-gray-400 text-base leading-relaxed mb-6">Built on Cloudflare's global edge network with enterprise-grade security. Your customer data, reports, and business information are encrypted and protected at every level.</p>
             <ul class="space-y-3">
               ${[
                 { icon: 'fas fa-lock', text: '256-bit SSL/TLS encryption on all data' },
@@ -1483,9 +1445,9 @@ function renderSecuritySection() {
                 { icon: 'fas fa-user-shield', text: 'SOC 2 Type II data handling standards' },
                 { icon: 'fas fa-maple-leaf', text: 'Canadian-owned, PIPEDA compliant' },
               ].map(item => `
-                <li class="flex items-center gap-3 text-sm text-gray-600">
-                  <div class="w-8 h-8 bg-green-50 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <i class="${item.icon} text-green-600 text-xs"></i>
+                <li class="flex items-center gap-3 text-sm text-gray-400">
+                  <div class="w-8 h-8 bg-[#00FF88]/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <i class="${item.icon} text-[#00FF88] text-xs"></i>
                   </div>
                   ${item.text}
                 </li>
@@ -1493,25 +1455,25 @@ function renderSecuritySection() {
             </ul>
           </div>
           <div class="grid grid-cols-2 gap-4">
-            <div class="bg-gray-50 rounded-2xl p-6 text-center border border-gray-100">
-              <i class="fab fa-google text-4xl text-gray-400 mb-3"></i>
-              <p class="text-xs font-bold text-gray-600 uppercase tracking-wider">Google Cloud</p>
-              <p class="text-[10px] text-gray-400">Solar API Partner</p>
+            <div class="bg-white/5 rounded-2xl p-6 text-center border border-white/5">
+              <i class="fab fa-google text-4xl text-gray-500 mb-3"></i>
+              <p class="text-xs font-bold text-gray-400 uppercase tracking-wider">Google Cloud</p>
+              <p class="text-[10px] text-gray-500">Solar API Partner</p>
             </div>
-            <div class="bg-gray-50 rounded-2xl p-6 text-center border border-gray-100">
-              <i class="fas fa-credit-card text-4xl text-gray-400 mb-3"></i>
-              <p class="text-xs font-bold text-gray-600 uppercase tracking-wider">Square</p>
-              <p class="text-[10px] text-gray-400">PCI DSS Level 1</p>
+            <div class="bg-white/5 rounded-2xl p-6 text-center border border-white/5">
+              <i class="fas fa-credit-card text-4xl text-gray-500 mb-3"></i>
+              <p class="text-xs font-bold text-gray-400 uppercase tracking-wider">Square</p>
+              <p class="text-[10px] text-gray-500">PCI DSS Level 1</p>
             </div>
-            <div class="bg-gray-50 rounded-2xl p-6 text-center border border-gray-100">
-              <i class="fas fa-cloud text-4xl text-gray-400 mb-3"></i>
-              <p class="text-xs font-bold text-gray-600 uppercase tracking-wider">Cloudflare</p>
-              <p class="text-[10px] text-gray-400">Edge Network</p>
+            <div class="bg-white/5 rounded-2xl p-6 text-center border border-white/5">
+              <i class="fas fa-cloud text-4xl text-gray-500 mb-3"></i>
+              <p class="text-xs font-bold text-gray-400 uppercase tracking-wider">Cloudflare</p>
+              <p class="text-[10px] text-gray-500">Edge Network</p>
             </div>
-            <div class="bg-gray-50 rounded-2xl p-6 text-center border border-gray-100">
-              <i class="fas fa-robot text-4xl text-gray-400 mb-3"></i>
-              <p class="text-xs font-bold text-gray-600 uppercase tracking-wider">Gemini AI</p>
-              <p class="text-[10px] text-gray-400">Google AI Engine</p>
+            <div class="bg-white/5 rounded-2xl p-6 text-center border border-white/5">
+              <i class="fas fa-robot text-4xl text-gray-500 mb-3"></i>
+              <p class="text-xs font-bold text-gray-400 uppercase tracking-wider">Gemini AI</p>
+              <p class="text-[10px] text-gray-500">Google AI Engine</p>
             </div>
           </div>
         </div>
@@ -1525,31 +1487,31 @@ function renderSecuritySection() {
 // ============================================================
 function renderIntegrations() {
   return `
-    <section class="py-16 bg-white border-b border-gray-100">
+    <section class="py-16 border-b border-white/5" style="background:#0d0d0d">
       <div class="max-w-6xl mx-auto px-4">
-        <p class="text-center text-sm text-gray-400 uppercase tracking-wider font-semibold mb-8">Powered By & Integrated With</p>
-        <div class="flex flex-wrap items-center justify-center gap-x-14 gap-y-6 text-gray-300">
-          <div class="flex items-center gap-2.5 text-gray-500 hover:text-gray-700 transition-colors">
+        <p class="text-center text-sm text-gray-500 uppercase tracking-wider font-semibold mb-8">Powered By & Integrated With</p>
+        <div class="flex flex-wrap items-center justify-center gap-x-14 gap-y-6">
+          <div class="flex items-center gap-2.5 text-gray-500 hover:text-[#00FF88] transition-colors">
             <i class="fab fa-google text-2xl"></i>
             <span class="text-sm font-medium">Google Solar API</span>
           </div>
-          <div class="flex items-center gap-2.5 text-gray-500 hover:text-gray-700 transition-colors">
+          <div class="flex items-center gap-2.5 text-gray-500 hover:text-[#00FF88] transition-colors">
             <i class="fab fa-square-full text-2xl"></i>
             <span class="text-sm font-medium">Square Payments</span>
           </div>
-          <div class="flex items-center gap-2.5 text-gray-500 hover:text-gray-700 transition-colors">
+          <div class="flex items-center gap-2.5 text-gray-500 hover:text-[#00FF88] transition-colors">
             <i class="fas fa-robot text-2xl"></i>
             <span class="text-sm font-medium">Google Gemini AI</span>
           </div>
-          <div class="flex items-center gap-2.5 text-gray-500 hover:text-gray-700 transition-colors">
+          <div class="flex items-center gap-2.5 text-gray-500 hover:text-[#00FF88] transition-colors">
             <i class="fas fa-satellite text-2xl"></i>
             <span class="text-sm font-medium">Satellite Imagery</span>
           </div>
-          <div class="flex items-center gap-2.5 text-gray-500 hover:text-gray-700 transition-colors">
+          <div class="flex items-center gap-2.5 text-gray-500 hover:text-[#00FF88] transition-colors">
             <i class="fab fa-stripe text-2xl"></i>
             <span class="text-sm font-medium">Stripe Payments</span>
           </div>
-          <div class="flex items-center gap-2.5 text-gray-500 hover:text-gray-700 transition-colors">
+          <div class="flex items-center gap-2.5 text-gray-500 hover:text-[#00FF88] transition-colors">
             <i class="fas fa-maple-leaf text-2xl"></i>
             <span class="text-sm font-medium">Canadian Markets</span>
           </div>
@@ -1577,31 +1539,31 @@ function renderFAQ() {
   ];
 
   return `
-    <section id="faq" class="py-24 bg-gray-50">
+    <section id="faq" class="py-24" style="background:#0A0A0A">
       <div class="max-w-3xl mx-auto px-4">
         <div class="text-center mb-12 scroll-animate opacity-0 translate-y-8 transition-all duration-700">
-          <div class="inline-flex items-center gap-2 bg-gray-200 text-gray-700 rounded-full px-4 py-1.5 text-sm font-semibold mb-4">
+          <div class="inline-flex items-center gap-2 bg-white/10 text-gray-300 rounded-full px-4 py-1.5 text-sm font-semibold mb-4">
             <i class="fas fa-question-circle"></i> FAQ
           </div>
-          <h2 class="text-3xl lg:text-4xl font-black text-gray-900 tracking-tight">Frequently Asked Questions</h2>
+          <h2 class="text-3xl lg:text-4xl font-black text-white tracking-tight">Frequently Asked Questions</h2>
         </div>
 
         <div class="space-y-3">
           ${faqs.map((faq, i) => `
-            <div class="scroll-animate opacity-0 translate-y-8 transition-all duration-700 bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm hover:shadow-md transition-shadow" style="transition-delay: ${i * 50}ms">
-              <button onclick="toggleFAQ(this)" class="w-full text-left p-5 flex items-center justify-between hover:bg-gray-50 transition-colors min-h-[56px]">
-                <span class="font-semibold text-gray-800 text-sm pr-4">${faq.q}</span>
-                <i class="fas fa-chevron-down text-gray-400 transition-transform duration-300 faq-icon flex-shrink-0"></i>
+            <div class="scroll-animate opacity-0 translate-y-8 transition-all duration-700 bg-[#111111] rounded-xl border border-white/10 overflow-hidden hover:shadow-md transition-shadow" style="transition-delay: ${i * 50}ms">
+              <button onclick="toggleFAQ(this)" class="w-full text-left p-5 flex items-center justify-between hover:bg-white/5 transition-colors min-h-[56px]">
+                <span class="font-semibold text-gray-300 text-sm pr-4">${faq.q}</span>
+                <i class="fas fa-chevron-down text-gray-500 transition-transform duration-300 faq-icon flex-shrink-0"></i>
               </button>
               <div class="faq-answer hidden px-5 pb-5">
-                <p class="text-sm text-gray-500 leading-relaxed">${faq.a}</p>
+                <p class="text-sm text-gray-400 leading-relaxed">${faq.a}</p>
               </div>
             </div>
           `).join('')}
         </div>
 
         <div class="text-center mt-8">
-          <p class="text-sm text-gray-500">Still have questions? <a href="mailto:reports@reusecanada.ca" class="text-cyan-600 hover:underline font-semibold">Contact us</a></p>
+          <p class="text-sm text-gray-500">Still have questions? <a href="mailto:reports@reusecanada.ca" class="text-[#00FF88] hover:underline font-semibold">Contact us</a></p>
         </div>
       </div>
     </section>
@@ -1636,7 +1598,7 @@ function renderFinalCTA() {
       </div>
 
       <div class="relative max-w-4xl mx-auto px-4 text-center scroll-animate opacity-0 translate-y-8 transition-all duration-700">
-        <div class="inline-flex items-center gap-2 bg-teal-500/20 text-teal-300 rounded-full px-4 py-1.5 text-sm font-bold mb-6">
+        <div class="inline-flex items-center gap-2 bg-[#00FF88]/20 text-[#00FF88] rounded-full px-4 py-1.5 text-sm font-bold mb-6">
           <span class="animate-pulse">&#x1F525;</span> Join 5,000+ Canadian Roofers Already Using AI
         </div>
         <h2 class="text-4xl lg:text-5xl font-black text-white mb-6 tracking-tight leading-tight">
@@ -1647,7 +1609,7 @@ function renderFinalCTA() {
         </p>
 
         <div class="flex flex-col sm:flex-row gap-4 justify-center mb-8">
-          <a href="/signup" onclick="rrTrack('cta_click',{location:'final_cta',variant:'teal'})" class="group inline-flex items-center justify-center gap-3 bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-400 hover:to-cyan-500 text-white font-bold py-4 px-10 rounded-xl text-lg shadow-2xl shadow-teal-500/30 transition-all duration-300 hover:scale-[1.03] min-h-[56px]">
+          <a href="/signup" onclick="rrTrack('cta_click',{location:'final_cta',variant:'teal'})" class="group inline-flex items-center justify-center gap-3 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-10 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/30 transition-all duration-300 hover:scale-[1.03] min-h-[56px]">
             <i class="fas fa-rocket"></i>
             Start Free &mdash; 3 Reports On Us
             <i class="fas fa-arrow-right text-sm group-hover:translate-x-1 transition-transform"></i>
@@ -1666,8 +1628,8 @@ function renderFinalCTA() {
           </div>
           <i class="fas fa-arrow-right text-cyan-400 text-xl hidden sm:block"></i>
           <i class="fas fa-arrow-down text-cyan-400 text-xl sm:hidden"></i>
-          <div class="bg-green-500/10 border border-green-500/20 rounded-xl px-6 py-3">
-            <div class="text-xs text-green-400 font-bold uppercase tracking-wider mb-0.5">After</div>
+          <div class="bg-[#00FF88]/10 border border-[#00FF88]/20 rounded-xl px-6 py-3">
+            <div class="text-xs text-[#00FF88] font-bold uppercase tracking-wider mb-0.5">After</div>
             <div class="text-white font-bold">60 seconds, from your truck</div>
           </div>
         </div>
@@ -1688,18 +1650,18 @@ function renderFinalCTA() {
 function injectStickyCTABar() {
   const bar = document.createElement('div');
   bar.id = 'sticky-cta-bar';
-  bar.className = 'fixed bottom-0 left-0 right-0 z-50 bg-slate-900/97 backdrop-blur-xl border-t border-white/10 shadow-2xl transform translate-y-full transition-transform duration-500';
+  bar.className = 'fixed bottom-0 left-0 right-0 z-50 bg-[#0A0A0A]/97 backdrop-blur-xl border-t border-white/10 shadow-2xl transform translate-y-full transition-transform duration-500';
   bar.innerHTML = `
     <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
       <div class="hidden sm:flex items-center gap-3">
         <div class="flex items-center gap-0.5">
-          ${[1,2,3,4,5].map(() => '<i class="fas fa-star text-amber-400 text-xs"></i>').join('')}
+          ${[1,2,3,4,5].map(() => '<i class="fas fa-star text-[#00FF88] text-xs"></i>').join('')}
         </div>
         <span class="text-white text-sm font-medium">Trusted by 5,000+ Canadian Roofers</span>
       </div>
       <div class="flex items-center gap-3 flex-1 sm:flex-none justify-end">
         <span class="text-gray-400 text-sm hidden md:inline">Get 3 Free Reports &mdash; No CC Required</span>
-        <a href="/signup" onclick="rrTrack('cta_click',{location:'sticky_bar'})" class="bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-400 hover:to-cyan-500 text-white font-bold py-2.5 px-6 rounded-lg text-sm shadow-lg transition-all hover:scale-105 whitespace-nowrap min-h-[44px] flex items-center gap-2">
+        <a href="/signup" onclick="rrTrack('cta_click',{location:'sticky_bar'})" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-2.5 px-6 rounded-lg text-sm shadow-lg transition-all hover:scale-105 whitespace-nowrap min-h-[44px] flex items-center gap-2">
           <i class="fas fa-rocket"></i> Start Free
         </a>
         <button onclick="document.getElementById('sticky-cta-bar').style.transform='translateY(100%)'" class="text-gray-500 hover:text-white p-1 transition-colors"><i class="fas fa-times text-xs"></i></button>
@@ -1726,33 +1688,33 @@ function injectExitIntentPopup() {
   popup.id = 'exit-popup';
   popup.className = 'fixed inset-0 z-[100] hidden items-center justify-center bg-black/60 backdrop-blur-sm';
   popup.innerHTML = `
-    <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden transform scale-95 opacity-0 transition-all duration-300" id="exit-popup-inner">
-      <div class="bg-gradient-to-r from-teal-500 to-cyan-600 p-6 text-white text-center">
+    <div class="bg-[#111111] rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden transform scale-95 opacity-0 transition-all duration-300 border border-white/10" id="exit-popup-inner">
+      <div class="bg-gradient-to-r from-[#00FF88]/20 to-[#00FF88]/10 p-6 text-white text-center border-b border-white/10">
         <h3 class="text-2xl font-black mb-2">Wait! Don't Leave Empty-Handed</h3>
-        <p class="text-teal-100 text-sm">Get 3 free professional roof measurement reports &mdash; no credit card required.</p>
+        <p class="text-gray-400 text-sm">Get 3 free professional roof measurement reports &mdash; no credit card required.</p>
       </div>
       <div class="p-6">
         <div class="space-y-4 mb-6">
           <div class="flex items-center gap-3">
-            <div class="w-8 h-8 bg-cyan-100 rounded-full flex items-center justify-center flex-shrink-0"><i class="fas fa-file-alt text-cyan-600 text-xs"></i></div>
-            <span class="text-sm text-gray-700"><strong>3 Free Reports</strong> &mdash; professional PDF with 3D area, BOM, solar data</span>
+            <div class="w-8 h-8 bg-[#00FF88]/10 rounded-full flex items-center justify-center flex-shrink-0"><i class="fas fa-file-alt text-[#00FF88] text-xs"></i></div>
+            <span class="text-sm text-gray-300"><strong class="text-white">3 Free Reports</strong> &mdash; professional PDF with 3D area, BOM, solar data</span>
           </div>
           <div class="flex items-center gap-3">
-            <div class="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0"><i class="fas fa-th-large text-green-600 text-xs"></i></div>
-            <span class="text-sm text-gray-700"><strong>Full CRM Access</strong> &mdash; customers, invoices, proposals, jobs</span>
+            <div class="w-8 h-8 bg-[#00FF88]/10 rounded-full flex items-center justify-center flex-shrink-0"><i class="fas fa-th-large text-[#00FF88] text-xs"></i></div>
+            <span class="text-sm text-gray-300"><strong class="text-white">Full CRM Access</strong> &mdash; customers, invoices, proposals, jobs</span>
           </div>
           <div class="flex items-center gap-3">
-            <div class="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center flex-shrink-0"><i class="fas fa-phone-alt text-purple-600 text-xs"></i></div>
-            <span class="text-sm text-gray-700"><strong>AI Secretary Trial</strong> &mdash; never miss a lead again</span>
+            <div class="w-8 h-8 bg-[#00FF88]/10 rounded-full flex items-center justify-center flex-shrink-0"><i class="fas fa-phone-alt text-[#00FF88] text-xs"></i></div>
+            <span class="text-sm text-gray-300"><strong class="text-white">AI Secretary Trial</strong> &mdash; never miss a lead again</span>
           </div>
         </div>
         <form onsubmit="return exitPopupSubmit(event)" class="space-y-3">
-          <input type="email" id="exit-email" required placeholder="Enter your email" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-sm">
-          <button type="submit" class="w-full bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-400 hover:to-cyan-500 text-white font-bold py-3 rounded-xl shadow-lg transition-all hover:scale-[1.02] min-h-[48px] text-sm">
+          <input type="email" id="exit-email" required placeholder="Enter your email" class="w-full px-4 py-3 border border-white/10 bg-white/5 rounded-xl focus:ring-2 focus:ring-[#00FF88] focus:border-[#00FF88] text-sm text-white placeholder-gray-500">
+          <button type="submit" class="w-full bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-3 rounded-xl shadow-lg transition-all hover:scale-[1.02] min-h-[48px] text-sm">
             <i class="fas fa-gift mr-2"></i>Claim My 3 Free Reports
           </button>
         </form>
-        <button onclick="closeExitPopup()" class="w-full mt-3 text-gray-400 hover:text-gray-600 text-xs text-center py-2 transition-colors">No thanks, I'll pass on free reports</button>
+        <button onclick="closeExitPopup()" class="w-full mt-3 text-gray-500 hover:text-gray-300 text-xs text-center py-2 transition-colors">No thanks, I'll pass on free reports</button>
       </div>
     </div>
   `;

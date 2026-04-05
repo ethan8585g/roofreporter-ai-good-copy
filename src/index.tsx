@@ -2526,7 +2526,7 @@ function getLandingPageHTML() {
   ${getContactFormHTML('homepage')}
 
   <!-- Footer — Dark premium style -->
-  <footer class="bg-slate-900 text-gray-400">
+  <footer class="text-gray-400" style="background:#0A0A0A">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 py-16">
       <div class="grid md:grid-cols-4 gap-8">
         <div>
@@ -2536,37 +2536,37 @@ function getLandingPageHTML() {
           </div>
           <p class="text-sm leading-relaxed text-gray-500">Professional AI-powered roof measurement reports, CRM, and business management for roofing companies across Canada.</p>
           <div class="flex items-center gap-4 mt-6">
-            <a href="#" class="text-gray-500 hover:text-cyan-400 transition-colors"><i class="fab fa-facebook text-lg"></i></a>
-            <a href="#" class="text-gray-500 hover:text-cyan-400 transition-colors"><i class="fab fa-instagram text-lg"></i></a>
-            <a href="#" class="text-gray-500 hover:text-cyan-400 transition-colors"><i class="fab fa-linkedin text-lg"></i></a>
+            <a href="#" class="text-gray-500 hover:text-[#00FF88] transition-colors"><i class="fab fa-facebook text-lg"></i></a>
+            <a href="#" class="text-gray-500 hover:text-[#00FF88] transition-colors"><i class="fab fa-instagram text-lg"></i></a>
+            <a href="#" class="text-gray-500 hover:text-[#00FF88] transition-colors"><i class="fab fa-linkedin text-lg"></i></a>
           </div>
         </div>
         <div>
           <h4 class="text-white font-semibold mb-4 text-sm uppercase tracking-wider">Product</h4>
           <ul class="space-y-2.5 text-sm">
-            <li><a href="#features" class="hover:text-cyan-400 transition-colors">Measurement Reports</a></li>
-            <li><a href="#features" class="hover:text-cyan-400 transition-colors">AI Roofer Secretary</a></li>
-            <li><a href="#features" class="hover:text-cyan-400 transition-colors">CRM & Invoicing</a></li>
-            <li><a href="#features" class="hover:text-cyan-400 transition-colors">Virtual Roof Try-On</a></li>
-            <li><a href="#pricing" class="hover:text-cyan-400 transition-colors">Pricing</a></li>
+            <li><a href="#features" class="hover:text-[#00FF88] transition-colors">Measurement Reports</a></li>
+            <li><a href="#features" class="hover:text-[#00FF88] transition-colors">AI Roofer Secretary</a></li>
+            <li><a href="#features" class="hover:text-[#00FF88] transition-colors">CRM & Invoicing</a></li>
+            <li><a href="#features" class="hover:text-[#00FF88] transition-colors">Virtual Roof Try-On</a></li>
+            <li><a href="#pricing" class="hover:text-[#00FF88] transition-colors">Pricing</a></li>
           </ul>
         </div>
         <div>
           <h4 class="text-white font-semibold mb-4 text-sm uppercase tracking-wider">Resources</h4>
           <ul class="space-y-2.5 text-sm">
-            <li><a href="/blog" class="hover:text-cyan-400 transition-colors">Blog</a></li>
-            <li><a href="#how-it-works" class="hover:text-cyan-400 transition-colors">How It Works</a></li>
-            <li><a href="#faq" class="hover:text-cyan-400 transition-colors">FAQ</a></li>
-            <li><a href="/lander" class="hover:text-cyan-400 transition-colors">Get Started Guide</a></li>
-            <li><a href="mailto:sales@roofmanager.ca" class="hover:text-cyan-400 transition-colors">Contact</a></li>
-            <li><a href="/privacy" class="hover:text-cyan-400 transition-colors">Privacy Policy</a></li>
-            <li><a href="/terms" class="hover:text-cyan-400 transition-colors">Terms of Service</a></li>
+            <li><a href="/blog" class="hover:text-[#00FF88] transition-colors">Blog</a></li>
+            <li><a href="#how-it-works" class="hover:text-[#00FF88] transition-colors">How It Works</a></li>
+            <li><a href="#faq" class="hover:text-[#00FF88] transition-colors">FAQ</a></li>
+            <li><a href="/lander" class="hover:text-[#00FF88] transition-colors">Get Started Guide</a></li>
+            <li><a href="mailto:sales@roofmanager.ca" class="hover:text-[#00FF88] transition-colors">Contact</a></li>
+            <li><a href="/privacy" class="hover:text-[#00FF88] transition-colors">Privacy Policy</a></li>
+            <li><a href="/terms" class="hover:text-[#00FF88] transition-colors">Terms of Service</a></li>
           </ul>
         </div>
         <div>
           <h4 class="text-white font-semibold mb-4 text-sm uppercase tracking-wider">Get Started</h4>
           <p class="text-sm text-gray-500 mb-4">Start with 3 free reports. No credit card required.</p>
-          <a href="/customer/login" class="inline-block bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-white font-semibold py-2.5 px-6 rounded-lg text-sm transition-all shadow-lg">
+          <a href="/customer/login" class="inline-block bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold py-2.5 px-6 rounded-xl text-sm transition-all shadow-lg shadow-[#00FF88]/10">
             Sign Up Free
           </a>
         </div>
@@ -2574,10 +2574,10 @@ function getLandingPageHTML() {
       <div class="border-t border-gray-800 mt-12 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
         <p class="text-sm text-gray-500">&copy; 2026 Roof Manager. All rights reserved.</p>
         <div class="flex flex-wrap items-center gap-3 sm:gap-6 text-sm text-gray-500">
-          <a href="/privacy" class="hover:text-cyan-400 transition-colors">Privacy Policy</a>
-          <a href="/terms" class="hover:text-cyan-400 transition-colors">Terms of Service</a>
-          <span class="flex items-center gap-1.5"><i class="fas fa-map-marker-alt text-cyan-500"></i> Alberta, Canada</span>
-          <a href="mailto:sales@roofmanager.ca" class="flex items-center gap-1.5 hover:text-cyan-400 transition-colors"><i class="fas fa-envelope text-cyan-500"></i> sales@roofmanager.ca</a>
+          <a href="/privacy" class="hover:text-[#00FF88] transition-colors">Privacy Policy</a>
+          <a href="/terms" class="hover:text-[#00FF88] transition-colors">Terms of Service</a>
+          <span class="flex items-center gap-1.5"><i class="fas fa-map-marker-alt text-[#00FF88]"></i> Alberta, Canada</span>
+          <a href="mailto:sales@roofmanager.ca" class="flex items-center gap-1.5 hover:text-[#00FF88] transition-colors"><i class="fas fa-envelope text-[#00FF88]"></i> sales@roofmanager.ca</a>
         </div>
       </div>
     </div>
@@ -2594,7 +2594,7 @@ function getLandingPageHTML() {
       }
     });
   </script>
-  <script src="/static/landing.js?v=20260405d"></script>
+  <script src="/static/landing.js?v=20260405e"></script>
   ${getRoverWidget()}
 </body>
 </html>`
@@ -3294,13 +3294,13 @@ function getBlogListingHTML() {
           <span class="text-gray-300 font-bold">Roof Manager</span>
         </div>
         <div class="flex flex-wrap items-center gap-3 sm:gap-6 text-sm">
-          <a href="/" class="hover:text-cyan-400 transition-colors">Home</a>
-          <a href="/#pricing" class="hover:text-cyan-400 transition-colors">Pricing</a>
+          <a href="/" class="hover:text-[#00FF88] transition-colors">Home</a>
+          <a href="/#pricing" class="hover:text-[#00FF88] transition-colors">Pricing</a>
           <a href="/blog" class="text-cyan-400 font-semibold">Blog</a>
-          <a href="/lander" class="hover:text-cyan-400 transition-colors">Get Started</a>
-          <a href="/customer/login" class="hover:text-cyan-400 transition-colors">Login</a>
-          <a href="/privacy" class="hover:text-cyan-400 transition-colors">Privacy</a>
-          <a href="/terms" class="hover:text-cyan-400 transition-colors">Terms</a>
+          <a href="/lander" class="hover:text-[#00FF88] transition-colors">Get Started</a>
+          <a href="/customer/login" class="hover:text-[#00FF88] transition-colors">Login</a>
+          <a href="/privacy" class="hover:text-[#00FF88] transition-colors">Privacy</a>
+          <a href="/terms" class="hover:text-[#00FF88] transition-colors">Terms</a>
         </div>
         <p class="text-xs text-gray-600">&copy; 2026 Roof Manager. All rights reserved.</p>
       </div>
@@ -3653,12 +3653,12 @@ function getLanderFunnelHTML() {
         <span class="text-sm font-semibold text-gray-400">Roof Manager</span>
       </div>
       <div class="flex flex-wrap items-center gap-3 sm:gap-6 text-sm">
-        <a href="/" class="hover:text-cyan-400 transition-colors">Home</a>
-        <a href="/blog" class="hover:text-cyan-400 transition-colors">Blog</a>
-        <a href="/customer/login" class="hover:text-cyan-400 transition-colors">Login</a>
-        <a href="mailto:sales@roofmanager.ca" class="hover:text-cyan-400 transition-colors">Contact</a>
-        <a href="/privacy" class="hover:text-cyan-400 transition-colors">Privacy</a>
-        <a href="/terms" class="hover:text-cyan-400 transition-colors">Terms</a>
+        <a href="/" class="hover:text-[#00FF88] transition-colors">Home</a>
+        <a href="/blog" class="hover:text-[#00FF88] transition-colors">Blog</a>
+        <a href="/customer/login" class="hover:text-[#00FF88] transition-colors">Login</a>
+        <a href="mailto:sales@roofmanager.ca" class="hover:text-[#00FF88] transition-colors">Contact</a>
+        <a href="/privacy" class="hover:text-[#00FF88] transition-colors">Privacy</a>
+        <a href="/terms" class="hover:text-[#00FF88] transition-colors">Terms</a>
       </div>
       <p class="text-xs">&copy; 2026 Roof Manager</p>
     </div>
@@ -5271,10 +5271,10 @@ function getPrivacyPageHTML() {
         <span class="text-sm font-semibold text-gray-400">Roof Manager</span>
       </div>
       <div class="flex flex-wrap items-center gap-3 sm:gap-6 text-sm">
-        <a href="/" class="hover:text-cyan-400 transition-colors">Home</a>
+        <a href="/" class="hover:text-[#00FF88] transition-colors">Home</a>
         <a href="/privacy" class="text-cyan-400 font-semibold">Privacy Policy</a>
-        <a href="/terms" class="hover:text-cyan-400 transition-colors">Terms of Service</a>
-        <a href="/customer/login" class="hover:text-cyan-400 transition-colors">Login</a>
+        <a href="/terms" class="hover:text-[#00FF88] transition-colors">Terms of Service</a>
+        <a href="/customer/login" class="hover:text-[#00FF88] transition-colors">Login</a>
       </div>
       <p class="text-xs">&copy; 2026 Roof Manager</p>
     </div>
@@ -5401,10 +5401,10 @@ function getTermsPageHTML() {
         <span class="text-sm font-semibold text-gray-400">Roof Manager</span>
       </div>
       <div class="flex flex-wrap items-center gap-3 sm:gap-6 text-sm">
-        <a href="/" class="hover:text-cyan-400 transition-colors">Home</a>
-        <a href="/privacy" class="hover:text-cyan-400 transition-colors">Privacy Policy</a>
+        <a href="/" class="hover:text-[#00FF88] transition-colors">Home</a>
+        <a href="/privacy" class="hover:text-[#00FF88] transition-colors">Privacy Policy</a>
         <a href="/terms" class="text-cyan-400 font-semibold">Terms of Service</a>
-        <a href="/customer/login" class="hover:text-cyan-400 transition-colors">Login</a>
+        <a href="/customer/login" class="hover:text-[#00FF88] transition-colors">Login</a>
       </div>
       <p class="text-xs">&copy; 2026 Roof Manager</p>
     </div>
