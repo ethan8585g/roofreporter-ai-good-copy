@@ -31,6 +31,8 @@ import { heygenRoutes } from './routes/heygen'
 import { geminiRoutes } from './routes/gemini'
 import { calendarRoutes } from './routes/calendar'
 import { websiteBuilderRoutes } from './routes/website-builder'
+import { googleAdsRoutes } from './routes/google-ads'
+import { googleBusinessRoutes } from './routes/google-business'
 import type { Bindings } from './types'
 
 const app = new Hono<{ Bindings: Bindings }>()
@@ -197,6 +199,8 @@ app.route('/api/heygen', heygenRoutes)
 app.route('/api/gemini', geminiRoutes)
 app.route('/api/calendar', calendarRoutes)
 app.route('/api/website-builder', websiteBuilderRoutes)
+app.route('/api/google-ads', googleAdsRoutes)
+app.route('/api/google-business', googleBusinessRoutes)
 
 // Health check
 app.get('/api/health', (c) => {
@@ -1262,6 +1266,8 @@ app.get('/customer/catalog', (c) => c.html(getCrmSubPageHTML('catalog', 'Materia
 app.get('/customer/referrals', (c) => c.html(getCrmSubPageHTML('referrals', 'Referral Program', 'fa-gift')))
 app.get('/customer/crew', (c) => c.html(getCrmSubPageHTML('crew', 'Crew Manager', 'fa-hard-hat')))
 app.get('/customer/website-builder', (c) => c.html(getWebsiteBuilderPageHTML()))
+app.get('/customer/google-ads', (c) => c.html(getGoogleAdsPageHTML()))
+app.get('/customer/google-business', (c) => c.html(getGoogleBusinessPageHTML()))
 
 // Company Type Selection — shown once post-login if company_type is null
 app.get('/customer/select-type', (c) => c.html(getSelectTypePageHTML()))
@@ -6900,6 +6906,114 @@ function getWebsiteBuilderPageHTML() {
     }
   </script>
   <script src="/static/website-builder.js?v=${Date.now()}"></script>
+  ${getRoverAssistant()}
+</body>
+</html>`
+}
+
+function getGoogleAdsPageHTML() {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags()}
+  <title>Google Ads Dashboard - Roof Manager</title>
+</head>
+<body style="background:#0A0A0A;min-height:100vh">
+  <header class="bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
+          <img src="/static/logo.png" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
+          <div>
+            <h1 class="text-lg font-bold">Google Ads Dashboard</h1>
+            <p class="text-brand-200 text-xs">Roof Manager</p>
+          </div>
+        </a>
+      </div>
+      <nav class="flex items-center space-x-3">
+        <span id="custGreeting" class="text-brand-200 text-sm hidden"><i class="fas fa-user-circle mr-1"></i><span id="custName"></span></span>
+        <a href="/customer/dashboard" class="text-brand-200 hover:text-white text-sm"><i class="fas fa-th-large mr-1"></i>Dashboard</a>
+        <button onclick="custLogout()" class="text-brand-200 hover:text-white text-sm"><i class="fas fa-sign-out-alt mr-1"></i>Logout</button>
+      </nav>
+    </div>
+  </header>
+  <main class="py-6">
+    <div id="ga-root"></div>
+  </main>
+  <script>
+    (function() {
+      var c = localStorage.getItem('rc_customer');
+      if (!c) { window.location.href = '/customer/login'; return; }
+      try {
+        var u = JSON.parse(c);
+        var g = document.getElementById('custGreeting');
+        var n = document.getElementById('custName');
+        if (g && n) { n.textContent = u.name || u.email; g.classList.remove('hidden'); }
+      } catch(e) {}
+    })();
+    function custLogout() {
+      var token = localStorage.getItem('rc_customer_token');
+      if (token) fetch('/api/customer/logout', { method: 'POST', headers: { 'Authorization': 'Bearer ' + token } })['catch'](function(){});
+      localStorage.removeItem('rc_customer');
+      localStorage.removeItem('rc_customer_token');
+      window.location.href = '/customer/login';
+    }
+  </script>
+  <script src="/static/google-ads.js?v=${Date.now()}"></script>
+  ${getRoverAssistant()}
+</body>
+</html>`
+}
+
+function getGoogleBusinessPageHTML() {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags()}
+  <title>Google Business Profile - Roof Manager</title>
+</head>
+<body style="background:#0A0A0A;min-height:100vh">
+  <header class="bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
+          <img src="/static/logo.png" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
+          <div>
+            <h1 class="text-lg font-bold">Google Business Profile</h1>
+            <p class="text-brand-200 text-xs">Roof Manager</p>
+          </div>
+        </a>
+      </div>
+      <nav class="flex items-center space-x-3">
+        <span id="custGreeting" class="text-brand-200 text-sm hidden"><i class="fas fa-user-circle mr-1"></i><span id="custName"></span></span>
+        <a href="/customer/dashboard" class="text-brand-200 hover:text-white text-sm"><i class="fas fa-th-large mr-1"></i>Dashboard</a>
+        <button onclick="custLogout()" class="text-brand-200 hover:text-white text-sm"><i class="fas fa-sign-out-alt mr-1"></i>Logout</button>
+      </nav>
+    </div>
+  </header>
+  <main class="py-6">
+    <div id="gbp-root"></div>
+  </main>
+  <script>
+    (function() {
+      var c = localStorage.getItem('rc_customer');
+      if (!c) { window.location.href = '/customer/login'; return; }
+      try {
+        var u = JSON.parse(c);
+        var g = document.getElementById('custGreeting');
+        var n = document.getElementById('custName');
+        if (g && n) { n.textContent = u.name || u.email; g.classList.remove('hidden'); }
+      } catch(e) {}
+    })();
+    function custLogout() {
+      var token = localStorage.getItem('rc_customer_token');
+      if (token) fetch('/api/customer/logout', { method: 'POST', headers: { 'Authorization': 'Bearer ' + token } })['catch'](function(){});
+      localStorage.removeItem('rc_customer');
+      localStorage.removeItem('rc_customer_token');
+      window.location.href = '/customer/login';
+    }
+  </script>
+  <script src="/static/google-business.js?v=${Date.now()}"></script>
   ${getRoverAssistant()}
 </body>
 </html>`
