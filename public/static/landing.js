@@ -28,6 +28,7 @@ document.addEventListener('DOMContentLoaded', () => {
     ${renderIntegrations()}
     ${renderFAQ()}
     ${renderFinalCTA()}
+    ${renderFooterCrossLinks()}
   `;
 
   // Sticky CTA bar
@@ -1773,6 +1774,71 @@ function renderFinalCTA() {
           <br/>Questions? <a href="mailto:reports@reusecanada.ca" class="text-cyan-400 hover:underline">reports@reusecanada.ca</a>
           &nbsp;·&nbsp; <a href="/privacy" class="text-cyan-400 hover:underline">Privacy Policy</a> &nbsp;·&nbsp; <a href="/terms" class="text-cyan-400 hover:underline">Terms</a>
         </p>
+      </div>
+    </section>
+  `;
+}
+
+// ============================================================
+// FOOTER CROSS-LINKS — Internal linking for SEO
+// ============================================================
+function renderFooterCrossLinks() {
+  const popularCities = [
+    { name: 'New York', slug: 'new-york' },
+    { name: 'Los Angeles', slug: 'los-angeles' },
+    { name: 'Chicago', slug: 'chicago' },
+    { name: 'Houston', slug: 'houston' },
+    { name: 'Dallas', slug: 'dallas' },
+    { name: 'Miami', slug: 'miami' },
+    { name: 'Atlanta', slug: 'atlanta' },
+    { name: 'Denver', slug: 'denver' },
+    { name: 'Phoenix', slug: 'phoenix' },
+    { name: 'Seattle', slug: 'seattle' },
+    { name: 'Nashville', slug: 'nashville' },
+    { name: 'Austin', slug: 'austin' },
+    { name: 'Calgary', slug: 'calgary' },
+    { name: 'Toronto', slug: 'toronto' },
+    { name: 'Vancouver', slug: 'vancouver' },
+    { name: 'Edmonton', slug: 'edmonton' },
+  ];
+
+  const countries = [
+    { name: 'United States', slug: 'united-states' },
+    { name: 'Canada', slug: 'canada' },
+    { name: 'United Kingdom', slug: 'united-kingdom' },
+    { name: 'Australia', slug: 'australia' },
+    { name: 'Germany', slug: 'germany' },
+    { name: 'France', slug: 'france' },
+    { name: 'Spain', slug: 'spain' },
+    { name: 'Italy', slug: 'italy' },
+    { name: 'Japan', slug: 'japan' },
+    { name: 'Brazil', slug: 'brazil' },
+    { name: 'Mexico', slug: 'mexico' },
+    { name: 'New Zealand', slug: 'new-zealand' },
+  ];
+
+  return `
+    <section style="background:#0A0A0A" class="py-16 border-t border-white/5">
+      <div class="max-w-7xl mx-auto px-4">
+        <div class="grid md:grid-cols-2 gap-12">
+          <div>
+            <h4 class="text-white font-bold text-sm uppercase tracking-wider mb-4">
+              <i class="fas fa-map-marker-alt text-[#00FF88] mr-2"></i>Roof Measurements by City
+            </h4>
+            <div class="flex flex-wrap gap-x-4 gap-y-2">
+              ${popularCities.map(c => `<a href="/roof-measurement/${c.slug}" class="text-gray-500 hover:text-[#00FF88] text-xs transition-colors">${c.name}</a>`).join('')}
+            </div>
+          </div>
+          <div>
+            <h4 class="text-white font-bold text-sm uppercase tracking-wider mb-4">
+              <i class="fas fa-globe text-[#22d3ee] mr-2"></i>Coverage by Country
+            </h4>
+            <div class="flex flex-wrap gap-x-4 gap-y-2">
+              ${countries.map(c => `<a href="/roof-measurement/${c.slug}" class="text-gray-500 hover:text-[#22d3ee] text-xs transition-colors">${c.name}</a>`).join('')}
+            </div>
+            <a href="/coverage" class="text-[#00FF88] text-xs font-semibold mt-3 inline-block hover:underline">View all 40+ countries →</a>
+          </div>
+        </div>
       </div>
     </section>
   `;
