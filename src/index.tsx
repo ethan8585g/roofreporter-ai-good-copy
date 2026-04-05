@@ -2474,7 +2474,7 @@ function getLandingPageHTML() {
     }
   </style>
 </head>
-<body class="bg-white min-h-screen">
+<body class="min-h-screen" style="background:#0A0A0A">
   <!-- Sticky Navigation — Dark premium, starts transparent -->
   <nav id="landing-nav" class="landing-nav fixed top-0 left-0 right-0 z-50">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 h-18 flex items-center justify-between" style="height:72px">
@@ -2594,7 +2594,7 @@ function getLandingPageHTML() {
       }
     });
   </script>
-  <script src="/static/landing.js"></script>
+  <script src="/static/landing.js?v=20260405b"></script>
   ${getRoverWidget()}
 </body>
 </html>`
