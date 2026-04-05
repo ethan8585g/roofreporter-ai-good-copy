@@ -356,6 +356,65 @@
         }
       });
     });
+
+    // Second pass: link US states and cities to their pages
+    var cityLinks = {
+      'Texas': '/roof-measurement/united-states',
+      'Florida': '/roof-measurement/united-states',
+      'California': '/roof-measurement/united-states',
+      'Colorado': '/roof-measurement/united-states',
+      'Georgia': '/roof-measurement/united-states',
+      'New York': '/roof-measurement/new-york',
+      'Los Angeles': '/roof-measurement/los-angeles',
+      'Chicago': '/roof-measurement/chicago',
+      'Houston': '/roof-measurement/houston',
+      'Dallas': '/roof-measurement/dallas',
+      'Phoenix': '/roof-measurement/phoenix',
+      'Denver': '/roof-measurement/denver',
+      'Miami': '/roof-measurement/miami',
+      'Atlanta': '/roof-measurement/atlanta',
+      'Seattle': '/roof-measurement/seattle',
+      'Nashville': '/roof-measurement/nashville',
+      'Austin': '/roof-measurement/austin',
+      'Tampa': '/roof-measurement/tampa',
+      'Calgary': '/roof-measurement/calgary',
+      'Toronto': '/roof-measurement/toronto',
+      'Vancouver': '/roof-measurement/vancouver',
+      'Edmonton': '/roof-measurement/edmonton'
+    };
+
+    var walker2 = document.createTreeWalker(containerEl, NodeFilter.SHOW_TEXT, null, false);
+    var textNodes2 = [];
+    while (walker2.nextNode()) textNodes2.push(walker2.currentNode);
+
+    textNodes2.forEach(function(node) {
+      if (node.parentElement && node.parentElement.closest('a')) return;
+      var text = node.textContent;
+      var replaced = false;
+      Object.keys(cityLinks).forEach(function(city) {
+        if (text.indexOf(city) !== -1 && !replaced) {
+          var parts = text.split(city);
+          if (parts.length > 1) {
+            var fragment = document.createDocumentFragment();
+            parts.forEach(function(part, i) {
+              if (i > 0) {
+                var link = document.createElement('a');
+                link.href = cityLinks[city];
+                link.textContent = city;
+                link.style.color = '#22d3ee';
+                link.style.textDecoration = 'underline';
+                link.style.fontWeight = '600';
+                link.title = 'Roof measurement reports in ' + city;
+                fragment.appendChild(link);
+              }
+              fragment.appendChild(document.createTextNode(part));
+            });
+            node.parentNode.replaceChild(fragment, node);
+            replaced = true;
+          }
+        }
+      });
+    });
   }
 
   function renderArticle(post) {

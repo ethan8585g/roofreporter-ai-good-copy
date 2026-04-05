@@ -534,6 +534,9 @@ function renderHowItWorks() {
 
   return `
     <section id="how-it-works" class="py-28 relative overflow-hidden" style="background: linear-gradient(180deg, #0d0d0d 0%, #0A0A0A 100%);">
+      <script type="application/ld+json">
+{"@context":"https://schema.org","@type":"HowTo","name":"How to Get a Roof Measurement Report","description":"Get a professional AI-powered roof measurement report from satellite imagery in 4 simple steps","step":[{"@type":"HowToStep","position":1,"name":"Enter the Address","text":"Search any address worldwide. Google Maps pinpoints the exact roof instantly."},{"@type":"HowToStep","position":2,"name":"Configure Details","text":"Add homeowner info, company details, and delivery options. Takes 30 seconds."},{"@type":"HowToStep","position":3,"name":"Order Instantly","text":"First 3 reports are FREE. Then just $8 CAD per report. Instant checkout."},{"@type":"HowToStep","position":4,"name":"Get Your PDF","text":"Professional report with area, pitch, edges, BOM, solar data. Delivered in under 60 seconds."}],"totalTime":"PT1M","tool":{"@type":"HowToTool","name":"Roof Manager"},"supply":{"@type":"HowToSupply","name":"Property address"}}
+</script>
       <!-- Subtle radial glow -->
       <div class="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[400px] opacity-5" style="background: radial-gradient(ellipse, #00FF88 0%, transparent 70%);"></div>
 
