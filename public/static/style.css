@@ -149,8 +149,8 @@
   }
   
   /* Tables always scroll on mobile */
-  table { font-size: 12px !important; }
-  th, td { padding: 8px 10px !important; }
+  table { font-size: 13px !important; }
+  th, td { padding: 8px 10px !important; white-space: nowrap; }
   
   /* Grid columns — force stack on small phones */
   .grid.md\\:grid-cols-2, .grid.md\\:grid-cols-3, .grid.md\\:grid-cols-4 {

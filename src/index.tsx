@@ -2518,7 +2518,7 @@ function getLandingPageHTML() {
       </div>
       <div class="border-t border-gray-800 mt-12 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
         <p class="text-sm text-gray-500">&copy; 2026 Roof Manager. All rights reserved.</p>
-        <div class="flex items-center gap-6 text-sm text-gray-500">
+        <div class="flex flex-wrap items-center gap-3 sm:gap-6 text-sm text-gray-500">
           <a href="/privacy" class="hover:text-cyan-400 transition-colors">Privacy Policy</a>
           <a href="/terms" class="hover:text-cyan-400 transition-colors">Terms of Service</a>
           <span class="flex items-center gap-1.5"><i class="fas fa-map-marker-alt text-cyan-500"></i> Alberta, Canada</span>
@@ -2701,7 +2701,7 @@ function getCustomerLoginHTML() {
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Verification Code *</label>
                 <div class="flex gap-2 items-center">
-                  <input type="text" id="custRegCode" placeholder="123456" maxlength="6" class="w-40 px-4 py-2.5 border border-gray-300 rounded-xl text-sm text-center font-mono text-lg tracking-widest focus:ring-2 focus:ring-brand-500" oninput="this.value=this.value.replace(/[^0-9]/g,'')">
+                  <input type="text" id="custRegCode" placeholder="123456" maxlength="6" class="w-full sm:w-40 px-4 py-2.5 border border-gray-300 rounded-xl text-sm text-center font-mono text-lg tracking-widest focus:ring-2 focus:ring-brand-500" oninput="this.value=this.value.replace(/[^0-9]/g,'')">
                   <button onclick="verifyCodeStep()" id="verifyCodeBtn" class="px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-xl text-sm transition-all">
                     <i class="fas fa-check mr-1"></i>Verify
                   </button>
@@ -3103,7 +3103,7 @@ function getPricingPageHTML() {
   <main class="max-w-6xl mx-auto px-4 py-16">
     <div id="pricing-root">
       <div class="text-center mb-12">
-        <h1 class="text-4xl font-bold text-gray-900 mb-4">Simple, Transparent Pricing</h1>
+        <h1 class="text-2xl sm:text-4xl font-bold text-gray-900 mb-4">Simple, Transparent Pricing</h1>
         <p class="text-lg text-gray-600 max-w-2xl mx-auto">Professional AI-powered roof measurement reports. Pay per report or save with credit packs.</p>
       </div>
       <div class="text-center animate-pulse text-gray-400 py-8">Loading pricing...</div>
@@ -3238,7 +3238,7 @@ function getBlogListingHTML() {
           <img src="/static/logo.png" alt="Roof Manager" class="w-8 h-8 rounded-lg object-cover">
           <span class="text-gray-300 font-bold">Roof Manager</span>
         </div>
-        <div class="flex items-center gap-6 text-sm">
+        <div class="flex flex-wrap items-center gap-3 sm:gap-6 text-sm">
           <a href="/" class="hover:text-cyan-400 transition-colors">Home</a>
           <a href="/#pricing" class="hover:text-cyan-400 transition-colors">Pricing</a>
           <a href="/blog" class="text-cyan-400 font-semibold">Blog</a>
@@ -3361,7 +3361,7 @@ function getBlogPostHTML(post?: any, slug?: string) {
           <img src="/static/logo.png" alt="Roof Manager" class="w-8 h-8 rounded-lg object-cover">
           <span class="text-gray-800 font-bold">Roof Manager</span>
         </div>
-        <div class="flex items-center gap-6 text-sm">
+        <div class="flex flex-wrap items-center gap-3 sm:gap-6 text-sm">
           <a href="/" class="hover:text-sky-600">Home</a>
           <a href="/blog" class="hover:text-sky-600 font-semibold text-sky-600">Blog</a>
           <a href="/customer/login" class="hover:text-sky-600">Login</a>
@@ -3456,7 +3456,7 @@ function getLanderFunnelHTML() {
             </a>
           </div>
 
-          <div class="flex items-center gap-6 text-sm text-gray-400">
+          <div class="flex flex-wrap items-center gap-3 sm:gap-6 text-sm text-gray-400">
             <span class="flex items-center gap-1.5"><i class="fas fa-check text-green-400"></i> No credit card</span>
             <span class="flex items-center gap-1.5"><i class="fas fa-check text-green-400"></i> 60-second delivery</span>
             <span class="flex items-center gap-1.5"><i class="fas fa-check text-green-400"></i> Full CRM free</span>
@@ -3597,7 +3597,7 @@ function getLanderFunnelHTML() {
         <img src="/static/logo.png" alt="Roof Manager" class="w-6 h-6 rounded object-cover">
         <span class="text-sm font-semibold text-gray-400">Roof Manager</span>
       </div>
-      <div class="flex items-center gap-6 text-sm">
+      <div class="flex flex-wrap items-center gap-3 sm:gap-6 text-sm">
         <a href="/" class="hover:text-cyan-400 transition-colors">Home</a>
         <a href="/blog" class="hover:text-cyan-400 transition-colors">Blog</a>
         <a href="/customer/login" class="hover:text-cyan-400 transition-colors">Login</a>
@@ -5112,7 +5112,7 @@ function getPrivacyPageHTML() {
     </div>
   </header>
   <main class="max-w-4xl mx-auto px-4 py-12">
-    <h1 class="text-4xl font-bold text-gray-900 mb-2">Privacy Policy</h1>
+    <h1 class="text-2xl sm:text-4xl font-bold text-gray-900 mb-2">Privacy Policy</h1>
     <p class="text-gray-500 mb-10">Last updated: March 31, 2026</p>
 
     <div class="prose prose-gray max-w-none space-y-8">
@@ -5215,7 +5215,7 @@ function getPrivacyPageHTML() {
         <img src="/static/logo.png" alt="Roof Manager" class="w-6 h-6 rounded object-cover">
         <span class="text-sm font-semibold text-gray-400">Roof Manager</span>
       </div>
-      <div class="flex items-center gap-6 text-sm">
+      <div class="flex flex-wrap items-center gap-3 sm:gap-6 text-sm">
         <a href="/" class="hover:text-cyan-400 transition-colors">Home</a>
         <a href="/privacy" class="text-cyan-400 font-semibold">Privacy Policy</a>
         <a href="/terms" class="hover:text-cyan-400 transition-colors">Terms of Service</a>
@@ -5246,7 +5246,7 @@ function getTermsPageHTML() {
     </div>
   </header>
   <main class="max-w-4xl mx-auto px-4 py-12">
-    <h1 class="text-4xl font-bold text-gray-900 mb-2">Terms of Service</h1>
+    <h1 class="text-2xl sm:text-4xl font-bold text-gray-900 mb-2">Terms of Service</h1>
     <p class="text-gray-500 mb-10">Last updated: March 31, 2026</p>
 
     <div class="prose prose-gray max-w-none space-y-8">
@@ -5345,7 +5345,7 @@ function getTermsPageHTML() {
         <img src="/static/logo.png" alt="Roof Manager" class="w-6 h-6 rounded object-cover">
         <span class="text-sm font-semibold text-gray-400">Roof Manager</span>
       </div>
-      <div class="flex items-center gap-6 text-sm">
+      <div class="flex flex-wrap items-center gap-3 sm:gap-6 text-sm">
         <a href="/" class="hover:text-cyan-400 transition-colors">Home</a>
         <a href="/privacy" class="hover:text-cyan-400 transition-colors">Privacy Policy</a>
         <a href="/terms" class="text-cyan-400 font-semibold">Terms of Service</a>

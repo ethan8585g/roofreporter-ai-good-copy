@@ -58,7 +58,7 @@
     var overlay = document.createElement('div');
     overlay.className = 'fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4';
     overlay.id = 'crmModal';
-    overlay.innerHTML = '<div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">' +
+    overlay.innerHTML = '<div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto mx-4 sm:mx-auto">' +
       '<div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between"><h3 class="font-bold text-gray-800">' + title + '</h3><button onclick="document.getElementById(\'crmModal\').remove()" class="text-gray-400 hover:text-gray-600 text-lg">&times;</button></div>' +
       '<div class="p-6" id="modalBody">' + bodyHtml + '</div>' +
       (onSave ? '<div class="px-6 py-4 border-t border-gray-100 flex justify-end gap-2"><button onclick="document.getElementById(\'crmModal\').remove()" class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg text-sm">Cancel</button><button id="modalSaveBtn" class="px-6 py-2 bg-brand-600 text-white rounded-lg text-sm font-semibold hover:bg-brand-700">' + (saveLabel || 'Save') + '</button></div>' : '') +

@@ -59,7 +59,7 @@
       section('Company Information', 'fa-building', 'emerald',
         row('Company Name', inp('company_name', profile.company_name || '', 'Your roofing company')) +
         row('Address',      inp('address',      profile.address || '',       '123 Main St')) +
-        '<div class="grid grid-cols-3 gap-3 mb-4">' +
+        '<div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">' +
           '<div><label class="block text-xs font-semibold text-gray-500 mb-1">City</label>' + rawInp('city',     profile.city     || '', 'Calgary') + '</div>' +
           '<div><label class="block text-xs font-semibold text-gray-500 mb-1">Province/State</label>' + rawInp('province', profile.province || '', 'AB') + '</div>' +
           '<div><label class="block text-xs font-semibold text-gray-500 mb-1">Postal/ZIP</label>' + rawInp('postal_code', profile.postal_code || '', 'T2P 1J9') + '</div>' +
@@ -78,7 +78,7 @@
         row('Business Address',inp('brand_address',      profile.brand_address || '',       '123 Main St, Calgary AB')) +
         row('License #',      inp('brand_license_number',profile.brand_license_number || '','ROC-123456')) +
         row('Insurance Info', inp('brand_insurance_info',profile.brand_insurance_info || '','Policy # / Provider')) +
-        '<div class="grid grid-cols-2 gap-4 mb-4">' +
+        '<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">' +
           '<div><label class="block text-xs font-semibold text-gray-500 mb-1">Primary Color</label>' +
             '<input type="color" id="brand_primary_color" value="' + esc(profile.brand_primary_color || '#0ea5e9') + '" class="h-10 w-full rounded border border-gray-300 cursor-pointer" oninput="markDirty(\'branding\')"></div>' +
           '<div><label class="block text-xs font-semibold text-gray-500 mb-1">Secondary Color</label>' +

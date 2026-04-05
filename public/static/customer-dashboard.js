@@ -128,7 +128,7 @@ function renderDashboard() {
   var secBadgeColor = custState.secretaryActive ? 'bg-blue-600' : '';
 
   var sidebar =
-    '<aside class="hidden md:flex flex-col w-56 flex-shrink-0 bg-white border-r border-gray-200 min-h-full">' +
+    '<aside class="hidden lg:flex flex-col w-56 flex-shrink-0 bg-white border-r border-gray-200 min-h-full">' +
       // Brand
       '<div class="px-4 py-5 border-b border-gray-100">' +
         '<div class="flex items-center gap-2">' +
@@ -198,7 +198,7 @@ function renderDashboard() {
 
   // Mobile horizontal nav (shown below md)
   var mobileNav =
-    '<div class="md:hidden bg-white border-b border-gray-200 overflow-x-auto">' +
+    '<div class="lg:hidden bg-white border-b border-gray-200 overflow-x-auto">' +
       '<div class="flex gap-1 px-3 py-2 whitespace-nowrap">' +
         '<a href="/customer/order" class="flex items-center gap-1.5 px-3 py-1.5 bg-brand-600 text-white rounded-lg text-xs font-semibold flex-shrink-0"><i class="fas fa-plus-circle"></i>Order</a>' +
         '<a href="/customer/reports" class="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-xs font-medium flex-shrink-0"><i class="fas fa-file-alt"></i>Reports</a>' +
