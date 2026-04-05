@@ -662,6 +662,9 @@ app.get('/llms.txt', (c) => {
 ## AI Secretary
 - [AI Phone Secretary](https://www.roofmanager.ca/#features): 24/7 AI-powered call answering, appointment booking, lead qualification, call summaries — $249/month
 
+## AI Website Builder
+- [AI Website Builder](https://www.roofmanager.ca/customer/website-builder): AI generates a complete 5-page contractor website in 5 minutes — Home, Services, About, Service Areas, Contact. Custom copy, lead capture forms, CRM sync, SEO-optimized — $99/month
+
 ## Pricing
 - [Pricing Page](https://www.roofmanager.ca/pricing): 3 free reports (no credit card), then $8 CAD/report. Volume packs: 25-pack $150 ($6/ea), 100-pack $500 ($5/ea). CRM always free.
 

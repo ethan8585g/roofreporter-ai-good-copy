@@ -900,6 +900,16 @@ function renderPlatformShowcase() {
       ctaLink: '/signup',
       img: 'https://images.unsplash.com/photo-1449844908441-8829872d2607?w=800&q=85&auto=format&fit=crop&t=20260405',
       reverse: true
+    },
+    {
+      title: 'Your Own Professional Website in 5 Minutes',
+      subtitle: 'AI Website Builder',
+      desc: 'Our AI builds you a complete 5-page contractor website &mdash; Home, Services, About, Service Areas, and Contact &mdash; with custom copy written for YOUR business, YOUR services, and YOUR city. Built-in lead capture forms sync directly to your CRM. No design skills needed.',
+      benefit: 'Get a professional online presence that generates leads 24/7',
+      cta: 'Build My Website',
+      ctaLink: '/customer/website-builder',
+      img: 'https://images.unsplash.com/photo-1467232004584-a241de8bcf5d?w=800&q=85&auto=format&fit=crop&t=20260405',
+      reverse: false
     }
   ];
 
