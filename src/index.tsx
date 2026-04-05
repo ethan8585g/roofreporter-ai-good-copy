@@ -3032,7 +3032,7 @@ function getLandingPageHTML() {
         <a href="/lander" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">Get Started</a>
         <a href="#faq" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">FAQ</a>
         <a href="/customer/login" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold py-2.5 px-6 rounded-xl text-sm transition-all duration-200 hover:scale-105 shadow-lg shadow-[#00FF88]/20">
-          <i class="fas fa-rocket mr-1.5"></i>Start Free
+          <i class="fas fa-rocket mr-1.5"></i>Start Free / Login
         </a>
       </div>
 
