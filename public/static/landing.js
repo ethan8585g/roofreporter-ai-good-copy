@@ -148,7 +148,7 @@ function renderHero() {
             </h1>
 
             <p class="text-lg lg:text-xl text-gray-400 mb-10 max-w-xl leading-relaxed">
-              AI-powered roof measurements from satellite imagery. <span class="text-white font-medium">98% accuracy</span> in under <span class="text-white font-medium">60 seconds.</span>
+              AI-powered roof measurements from satellite imagery. <span class="text-white font-medium">99.9% accuracy</span> in under <span class="text-white font-medium">60 seconds.</span>
             </p>
 
             <!-- Dual CTAs -->
@@ -317,7 +317,7 @@ function renderTrustBadges() {
     { icon: 'fas fa-shield-alt', text: 'PCI DSS Compliant', color: '#00FF88' },
     { icon: 'fas fa-lock', text: '256-bit SSL', color: '#22d3ee' },
     { icon: 'fab fa-google', text: 'Google Cloud Partner', color: '#00FF88' },
-    { icon: 'fas fa-bullseye', text: '98% Accuracy', color: '#22d3ee' },
+    { icon: 'fas fa-bullseye', text: '99.9% Accuracy', color: '#22d3ee' },
     { icon: 'fas fa-credit-card', text: 'Square Verified', color: '#00FF88' },
     { icon: 'fas fa-bolt', text: '<60s Delivery', color: '#22d3ee' },
     { icon: 'fas fa-cloud', text: 'Cloudflare Protected', color: '#00FF88' },
@@ -377,13 +377,17 @@ function renderStatsBar() {
 // ============================================================
 function renderSocialProofLogos() {
   const cities = [
-    'Calgary', 'Edmonton', 'Vancouver', 'Toronto', 'Dallas', 'Houston', 'Seattle', 'Winnipeg', 'Saskatoon', 'Ottawa'
+    'Calgary', 'Toronto', 'Vancouver', 'Dallas', 'Houston', 'Miami', 'New York', 'Chicago', 'Atlanta', 'Denver',
+    'London', 'Paris', 'Berlin', 'Madrid', 'Amsterdam', 'Stockholm', 'Dublin', 'Rome', 'Vienna', 'Zurich',
+    'Sydney', 'Melbourne', 'Tokyo', 'Auckland',
+    'São Paulo', 'Bogotá', 'Lima',
+    'Lagos', 'Nairobi', 'Cape Town'
   ];
 
   return `
     <section class="py-12" style="background:#0A0A0A">
       <div class="max-w-7xl mx-auto px-4">
-        <p class="text-center text-sm text-gray-500 font-semibold mb-6">Trusted by roofing contractors in <strong class="text-white">15+ cities</strong> across North America</p>
+        <p class="text-center text-sm text-gray-500 font-semibold mb-6">Trusted by roofing contractors in <strong class="text-white">40+ cities</strong> worldwide across every continent</p>
         <div class="flex flex-wrap items-center justify-center gap-3">
           ${cities.map(c => `
             <div class="flex items-center gap-2 bg-white/5 hover:bg-[#00FF88]/10 border border-white/5 hover:border-[#00FF88]/20 rounded-full px-4 py-2 transition-all duration-300 group cursor-default">
@@ -405,9 +409,9 @@ function renderValueProp() {
     {
       icon: 'fas fa-satellite-dish',
       accent: '#00FF88',
-      title: 'Quote With 98% Confidence',
+      title: 'Quote With 99.9% Confidence',
       desc: "No more guesswork. Google's Solar API with LiDAR-calibrated 3D models delivers precision measurements from satellite imagery. Quote every job knowing your numbers are right.",
-      metric: '98%',
+      metric: '99.9%',
       metricLabel: 'Accuracy Rate',
       cta: 'See Accuracy Data',
       ctaLink: '#pricing'
@@ -884,7 +888,7 @@ function renderPlatformShowcase() {
     {
       title: '3D Models, Not Guesses',
       subtitle: 'Full CRM & Business Management',
-      desc: 'Manage customers, create invoices, send proposals, track jobs, and manage your D2D sales team. Quote with 98% confidence using satellite 3D models. Everything integrated in one platform built for roofers.',
+      desc: 'Manage customers, create invoices, send proposals, track jobs, and manage your D2D sales team. Quote with 99.9% confidence using satellite 3D models. Everything integrated in one platform built for roofers.',
       benefit: 'Close 23% more deals with accurate, professional quotes',
       cta: 'Explore CRM Features',
       ctaLink: '/signup',
@@ -1495,7 +1499,7 @@ function renderTestimonials() {
             <i class="fas fa-quote-left"></i> What Roofers Say
           </div>
           <h2 class="text-3xl lg:text-4xl font-black text-white mb-4 tracking-tight">Trusted by Roofing Professionals</h2>
-          <p class="text-lg text-gray-400">Real results from contractors across North America.</p>
+          <p class="text-lg text-gray-400">Real results from contractors worldwide.</p>
           <div class="flex items-center justify-center gap-2 mt-4">
             <div class="flex items-center gap-0.5">
               ${[1,2,3,4,5].map(() => '<i class="fas fa-star text-[#00FF88] text-lg"></i>').join('')}

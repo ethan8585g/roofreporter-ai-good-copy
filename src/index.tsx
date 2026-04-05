@@ -647,7 +647,7 @@ Allow: /
 app.get('/llms.txt', (c) => {
   return c.text(`# Roof Manager
 
-> Roof Manager is an AI-powered SaaS platform for roofing contractors, solar installers, insurance adjusters, and property managers. It generates professional satellite-powered roof measurement reports from Google's Solar API with LiDAR-calibrated 3D building models, delivering 98% accuracy in under 60 seconds. The platform includes a full CRM with invoicing, proposals, job tracking, an AI phone secretary, door-to-door sales manager, and team management. Available in 40+ countries. Headquartered in Alberta, Canada.
+> Roof Manager is an AI-powered SaaS platform for roofing contractors, solar installers, insurance adjusters, and property managers. It generates professional satellite-powered roof measurement reports from Google's Solar API with LiDAR-calibrated 3D building models, delivering 99.9% accuracy in under 60 seconds. The platform includes a full CRM with invoicing, proposals, job tracking, an AI phone secretary, door-to-door sales manager, and team management. Available in 40+ countries. Headquartered in Alberta, Canada.
 
 ## Services & Products
 - [All Services](https://www.roofmanager.ca/services): Complete directory of all Roof Manager services — measurement reports, solar analysis, CRM, invoicing, AI secretary, website builder, D2D manager, virtual try-on, email outreach, team management, job scheduling, material calculator
@@ -709,7 +709,7 @@ Roof Manager is a Software-as-a-Service (SaaS) platform that generates professio
 **Key differentiators:**
 - Reports delivered in under 60 seconds (vs 24-48 hours from legacy providers)
 - $8 CAD per report (vs $50-100+ from EagleView)
-- 98% measurement accuracy verified against manual measurements
+- 99.9% measurement accuracy verified against manual measurements
 - Full CRM, invoicing, AI secretary included — not just reports
 - Available in 40+ countries (not limited to North America)
 
@@ -3783,7 +3783,7 @@ function getServicesPageHTML() {
         </div>
         <div class="bg-[#111111] border border-white/10 rounded-2xl p-8 text-center">
           <i class="fas fa-satellite-dish text-[#00FF88] text-6xl mb-4"></i>
-          <div class="text-white font-black text-4xl mb-1">98%</div>
+          <div class="text-white font-black text-4xl mb-1">99.9%</div>
           <div class="text-gray-500 text-sm">Measurement Accuracy</div>
           <div class="text-white font-black text-4xl mt-4 mb-1">&lt;60s</div>
           <div class="text-gray-500 text-sm">Report Delivery</div>
@@ -4259,7 +4259,7 @@ function getCoveragePageHTML() {
       <div class="flex flex-wrap justify-center gap-4 text-sm text-gray-500">
         <span class="bg-white/5 rounded-full px-4 py-2"><i class="fas fa-satellite text-[#00FF88] mr-2"></i>Satellite imagery</span>
         <span class="bg-white/5 rounded-full px-4 py-2"><i class="fas fa-bolt text-[#22d3ee] mr-2"></i>Under 60 seconds</span>
-        <span class="bg-white/5 rounded-full px-4 py-2"><i class="fas fa-bullseye text-[#a78bfa] mr-2"></i>98% accuracy</span>
+        <span class="bg-white/5 rounded-full px-4 py-2"><i class="fas fa-bullseye text-[#a78bfa] mr-2"></i>99.9% accuracy</span>
       </div>
     </div>
   </section>
