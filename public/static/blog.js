@@ -380,7 +380,22 @@
       'Calgary': '/roof-measurement/calgary',
       'Toronto': '/roof-measurement/toronto',
       'Vancouver': '/roof-measurement/vancouver',
-      'Edmonton': '/roof-measurement/edmonton'
+      'Edmonton': '/roof-measurement/edmonton',
+      'London': '/roof-measurement/london',
+      'Paris': '/roof-measurement/paris',
+      'Berlin': '/roof-measurement/berlin',
+      'Madrid': '/roof-measurement/madrid',
+      'Rome': '/roof-measurement/rome',
+      'Amsterdam': '/roof-measurement/amsterdam',
+      'Brussels': '/roof-measurement/brussels',
+      'Vienna': '/roof-measurement/vienna',
+      'Zurich': '/roof-measurement/zurich',
+      'Copenhagen': '/roof-measurement/copenhagen',
+      'Stockholm': '/roof-measurement/stockholm',
+      'Oslo': '/roof-measurement/oslo',
+      'Helsinki': '/roof-measurement/helsinki',
+      'Dublin': '/roof-measurement/dublin',
+      'Prague': '/roof-measurement/prague'
     };
 
     var walker2 = document.createTreeWalker(containerEl, NodeFilter.SHOW_TEXT, null, false);

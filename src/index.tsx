@@ -928,6 +928,21 @@ const seoCities: Record<string, { name: string; province: string; lat: string; l
   'portland': { name: 'Portland', province: 'Oregon', lat: '45.5152', lng: '-122.6784' },
   'las-vegas': { name: 'Las Vegas', province: 'Nevada', lat: '36.1699', lng: '-115.1398' },
   'jacksonville': { name: 'Jacksonville', province: 'Florida', lat: '30.3322', lng: '-81.6557' },
+  'london': { name: 'London', province: 'England', lat: '51.5074', lng: '-0.1278' },
+  'paris': { name: 'Paris', province: 'Île-de-France', lat: '48.8566', lng: '2.3522' },
+  'berlin': { name: 'Berlin', province: 'Berlin', lat: '52.5200', lng: '13.4050' },
+  'madrid': { name: 'Madrid', province: 'Community of Madrid', lat: '40.4168', lng: '-3.7038' },
+  'rome': { name: 'Rome', province: 'Lazio', lat: '41.9028', lng: '12.4964' },
+  'amsterdam': { name: 'Amsterdam', province: 'North Holland', lat: '52.3676', lng: '4.9041' },
+  'brussels': { name: 'Brussels', province: 'Brussels-Capital', lat: '50.8503', lng: '4.3517' },
+  'vienna': { name: 'Vienna', province: 'Vienna', lat: '48.2082', lng: '16.3738' },
+  'zurich': { name: 'Zurich', province: 'Zurich', lat: '47.3769', lng: '8.5417' },
+  'copenhagen': { name: 'Copenhagen', province: 'Capital Region', lat: '55.6761', lng: '12.5683' },
+  'stockholm': { name: 'Stockholm', province: 'Stockholm', lat: '59.3293', lng: '18.0686' },
+  'oslo': { name: 'Oslo', province: 'Oslo', lat: '59.9139', lng: '10.7522' },
+  'helsinki': { name: 'Helsinki', province: 'Uusimaa', lat: '60.1699', lng: '24.9384' },
+  'dublin': { name: 'Dublin', province: 'Leinster', lat: '53.3498', lng: '-6.2603' },
+  'prague': { name: 'Prague', province: 'Prague', lat: '50.0755', lng: '14.4378' },
 }
 
 const seoCountries: Record<string, { name: string; region: string; iso: string }> = {
@@ -3017,7 +3032,7 @@ function getLandingPageHTML() {
         <a href="/lander" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">Get Started</a>
         <a href="#faq" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">FAQ</a>
         <a href="/customer/login" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold py-2.5 px-6 rounded-xl text-sm transition-all duration-200 hover:scale-105 shadow-lg shadow-[#00FF88]/20">
-          <i class="fas fa-sign-in-alt mr-1.5"></i>Login
+          <i class="fas fa-rocket mr-1.5"></i>Start Free
         </a>
       </div>
 
@@ -3037,7 +3052,7 @@ function getLandingPageHTML() {
         <a href="/coverage" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')">Coverage</a>
         <a href="/lander" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')">Get Started</a>
         <a href="#faq" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')">FAQ</a>
-        <a href="/customer/login" class="bg-[#00FF88] text-[#0A0A0A] font-bold py-3 px-6 rounded-xl text-sm text-center mt-3 shadow-lg"><i class="fas fa-sign-in-alt mr-1.5"></i>Login / Sign Up</a>
+        <a href="/customer/login" class="bg-[#00FF88] text-[#0A0A0A] font-bold py-3 px-6 rounded-xl text-sm text-center mt-3 shadow-lg"><i class="fas fa-rocket mr-1.5"></i>Start Free &mdash; No Demo Needed</a>
       </div>
     </div>
   </nav>
@@ -4151,7 +4166,19 @@ function getBlogPostHTML(post?: any, slug?: string) {
       'deutsche-dachdecker': 'de',
       'polski-dekarz': 'pl',
       'roofer-italiano': 'it',
-      'nederlandse-dakdekker': 'nl'
+      'nederlandse-dakdekker': 'nl',
+      'medicion-tejados': 'es',
+      'software-medicion-techos': 'es',
+      'medicao-telhados': 'pt',
+      'takmatning-satellit': 'sv',
+      'takmaling-satelitt': 'no',
+      'tagmaling-satellit': 'da',
+      'kattomittaus': 'fi',
+      'metrisi-stegis': 'el',
+      'satelitni-mereni': 'cs',
+      'mesure-toiture': 'fr',
+      'dachmessung-satellit': 'de',
+      'dachvermessung': 'de'
     }
     let hreflangs = ''
     if (slug) {
