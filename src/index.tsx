@@ -1495,7 +1495,7 @@ function getHeadTags() {
 
 // Rover chatbot widget script tag — inject on public pages only
 function getRoverWidget() {
-  return `<script src="/static/rover-widget.js" defer></script>`
+  return `<script src="/static/rover-widget.js?v=${Date.now()}" defer></script>`
 }
 
 // Rover AI Assistant — inject on authenticated customer pages
