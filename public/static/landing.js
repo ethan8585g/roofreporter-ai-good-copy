@@ -874,7 +874,7 @@ function renderPlatformShowcase() {
     {
       title: 'Your AI Secretary That Never Sleeps',
       subtitle: 'AI Roofer Secretary',
-      desc: 'Never miss a lead again. Our AI answers your business phone 24/7, books appointments, qualifies leads, and sends you detailed call summaries. Sounds like a real human &mdash; your customers will never know.',
+      desc: 'Never miss a lead again. Our AI answers your business phone 24/7 in a natural human voice &mdash; books appointments, qualifies leads by asking your custom screening questions, and sends you detailed call summaries with transcripts. Handles after-hours calls, storm season overflow, and lunch breaks. Your customers will never know it\'s AI.',
       benefit: 'Capture 40% more leads that would otherwise go to voicemail',
       cta: 'See AI Secretary Demo',
       ctaLink: '/signup',
@@ -1240,11 +1240,20 @@ function renderPricing() {
         <div class="scroll-animate opacity-0 translate-y-8 transition-all duration-700">
           <h3 class="text-xl font-bold text-white text-center mb-6">Add-On Services</h3>
           <div class="grid md:grid-cols-3 gap-6">
-            <div class="bg-[#111111] rounded-2xl border border-white/10 p-6 hover:border-[#00FF88]/30 hover:shadow-lg transition-all">
+            <div class="bg-[#111111] rounded-2xl border border-[#a78bfa]/40 p-6 hover:border-[#a78bfa]/60 hover:shadow-lg hover:shadow-[#a78bfa]/5 transition-all relative overflow-hidden">
+              <div class="absolute top-0 right-0 bg-gradient-to-l from-red-500 to-orange-500 text-white text-[10px] font-black px-3 py-1 rounded-bl-lg uppercase tracking-wider">Limited Time</div>
               <div class="flex items-center gap-3 mb-3">
                 <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center"><i class="fas fa-phone-alt text-white text-sm"></i></div>
                 <div class="flex-1"><h4 class="font-bold text-white text-sm">AI Roofer Secretary</h4><p class="text-xs text-gray-500">24/7 AI phone answering</p></div>
-                <div class="text-right"><span class="text-xl font-black text-white">$249</span><span class="text-xs text-gray-500">/mo</span></div>
+                <div class="text-right">
+                  <span class="text-xs text-gray-500 line-through">$249/mo</span>
+                  <div><span class="text-xl font-black text-[#00FF88]">$149</span><span class="text-xs text-gray-500">/mo</span></div>
+                </div>
+              </div>
+              <p class="text-[11px] text-gray-400 mb-2">Answers calls in a human voice, books appointments, qualifies leads, sends summaries. Never miss a $15K roof job again.</p>
+              <div class="flex items-center gap-2 text-[10px]">
+                <span class="bg-red-500/15 text-red-400 px-2 py-0.5 rounded-full font-bold">Save $100/mo</span>
+                <span class="text-gray-500">Lock in this rate &mdash; price increases soon</span>
               </div>
             </div>
             <div class="bg-[#111111] rounded-2xl border border-white/10 p-6 hover:border-[#00FF88]/30 hover:shadow-lg transition-all">
@@ -1626,7 +1635,7 @@ function renderFAQ() {
     { q: 'How accurate are the measurements?', a: 'For buildings with HIGH quality imagery (most urban Canadian addresses), accuracy is typically within 2-5% of manual measurements. We display confidence scores and imagery quality on every report.' },
     { q: 'What areas do you cover?', a: "Most Canadian addresses where Google has Solar API coverage. Urban areas in Alberta, BC, Ontario, and Quebec have the best coverage. If Solar API data isn't available, our AI vision engine provides a fallback analysis." },
     { q: 'How fast do I get my report?', a: 'Most reports are generated in under 60 seconds. You receive an email with a download link and can also access all reports from your dashboard.' },
-    { q: 'What is the AI Roofer Secretary?', a: 'A 24/7 AI phone answering service for your roofing business. It answers calls in a natural human voice, books appointments, qualifies leads, and sends you summaries. $249/month.' },
+    { q: 'What is the AI Roofer Secretary?', a: 'A 24/7 AI phone answering service for your roofing business. It answers calls in a natural human voice, books appointments to your calendar, qualifies leads with your custom screening questions, and sends you detailed call summaries with full transcripts. Handles after-hours, storm season overflow, and lunch breaks. Currently $149/month (limited-time launch price, normally $249/month). No contracts &mdash; cancel anytime.' },
     { q: 'Can I add team members?', a: 'Yes! For $50/user/month, you can invite salespeople and other team members. They get full access to reports, CRM, AI Secretary, and all features.' },
     { q: 'What payment methods do you accept?', a: 'All major credit cards, debit, Apple Pay, Google Pay, and Cash App through Square. All transactions are encrypted and PCI-compliant.' },
     { q: 'Do you offer volume discounts?', a: 'Yes! B2B customers get priority processing and volume pricing starting at $5/report for 100+ packs for 50+ reports/month. Contact us for custom rates and monthly invoicing.' },
