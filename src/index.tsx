@@ -459,6 +459,9 @@ app.get('/', (c) => {
 // /order redirect — users may type /order directly
 app.get('/order', (c) => c.redirect('/customer/order'))
 
+// /signup redirect — SEO: consolidate signup URLs to customer login
+app.get('/signup', (c) => c.redirect('/customer/login', 301))
+
 // Order Form page (new route)
 app.get('/order/new', (c) => {
   const mapsKey = c.env.GOOGLE_MAPS_API_KEY || ''
@@ -982,12 +985,12 @@ app.get('/roof-measurement/:city', (c) => {
   <meta property="og:description" content="AI-powered satellite roof measurements for roofing contractors in ${country.name}. Full CRM, proposals, invoicing included.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://www.roofmanager.ca/roof-measurement/${slug}">
-  <meta property="og:image" content="https://roofmanager.ca/static/logo.png">
+  <meta property="og:image" content="https://www.roofmanager.ca/static/logo.png">
   <meta property="og:image:alt" content="Satellite roof measurement reports in ${country.name}">
   <meta property="og:site_name" content="Roof Manager">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Roof Measurements in ${country.name} — Roof Manager">
-  <meta name="twitter:image" content="https://roofmanager.ca/static/logo.png">
+  <meta name="twitter:image" content="https://www.roofmanager.ca/static/logo.png">
   <meta name="geo.region" content="${country.iso}">
   <script type="application/ld+json">
   {
@@ -996,7 +999,7 @@ app.get('/roof-measurement/:city', (c) => {
     "name": "Roof Manager — ${country.name}",
     "description": "AI-powered roof measurement reports and CRM for roofing companies in ${country.name}.",
     "url": "https://www.roofmanager.ca/roof-measurement/${slug}",
-    "image": "https://roofmanager.ca/static/logo.png",
+    "image": "https://www.roofmanager.ca/static/logo.png",
     "areaServed": "${country.name}",
     "priceRange": "$5-$500 USD"
   }
@@ -1098,12 +1101,12 @@ app.get('/roof-measurement/:city', (c) => {
   <meta property="og:description" content="AI-powered satellite roof measurements for ${city.name} roofing contractors. Full CRM, proposals, invoicing included.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://www.roofmanager.ca/roof-measurement/${citySlug}">
-  <meta property="og:image" content="https://roofmanager.ca/static/logo.png">
+  <meta property="og:image" content="https://www.roofmanager.ca/static/logo.png">
   <meta property="og:image:alt" content="Roof measurement report for ${city.name}, ${city.province}">
   <meta property="og:site_name" content="Roof Manager">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Roof Measurements in ${city.name} — Roof Manager">
-  <meta name="twitter:image" content="https://roofmanager.ca/static/logo.png">
+  <meta name="twitter:image" content="https://www.roofmanager.ca/static/logo.png">
   <meta name="geo.region" content="CA">
   <meta name="geo.placename" content="${city.name}, ${city.province}, Canada">
   <meta name="geo.position" content="${city.lat};${city.lng}">
@@ -1114,7 +1117,7 @@ app.get('/roof-measurement/:city', (c) => {
     "name": "Roof Manager — ${city.name}",
     "description": "AI-powered roof measurement reports and CRM for roofing companies in ${city.name}, ${city.province}.",
     "url": "https://www.roofmanager.ca/roof-measurement/${citySlug}",
-    "image": "https://roofmanager.ca/static/logo.png",
+    "image": "https://www.roofmanager.ca/static/logo.png",
     "address": {"@type": "PostalAddress", "addressLocality": "${city.name}", "addressRegion": "${city.province}", "addressCountry": "CA"},
     "geo": {"@type": "GeoCoordinates", "latitude": "${city.lat}", "longitude": "${city.lng}"},
     "areaServed": {"@type": "City", "name": "${city.name}"},
@@ -1352,7 +1355,7 @@ app.get('/report/share/:token', async (c) => {
       /<body[^>]*>/i,
       `$&<div style="position:fixed;top:0;left:0;right:0;z-index:9999;background:#0f172a;color:#fff;padding:10px 20px;display:flex;align-items:center;justify-between;font-family:Inter,system-ui,sans-serif;font-size:13px">
   <div style="display:flex;align-items:center;gap:10px"><span style="font-weight:700;color:#38bdf8">Roof Manager</span><span style="color:#94a3b8">|</span><span style="color:#cbd5e1">${addr || 'Roof Report'}</span></div>
-  <div style="display:flex;gap:8px"><button onclick="window.print()" style="background:#1e40af;color:#fff;border:none;padding:6px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600">Print / Save PDF</button><a href="https://roofmanager.ca" target="_blank" style="background:#065f46;color:#fff;padding:6px 14px;border-radius:8px;text-decoration:none;font-size:12px;font-weight:600">Get Your Own Report</a></div>
+  <div style="display:flex;gap:8px"><button onclick="window.print()" style="background:#1e40af;color:#fff;border:none;padding:6px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600">Print / Save PDF</button><a href="https://www.roofmanager.ca" target="_blank" style="background:#065f46;color:#fff;padding:6px 14px;border-radius:8px;text-decoration:none;font-size:12px;font-weight:600">Get Your Own Report</a></div>
 </div><div style="height:48px"></div>`
     )
 
@@ -1458,7 +1461,7 @@ app.get('/proposal/view/:token', async (c) => {
       ${invProposal.terms ? `<div class="mt-4 bg-gray-50 rounded-xl p-6"><h3 class="text-sm font-bold text-gray-700 mb-2"><i class="fas fa-file-contract mr-1"></i>Terms & Conditions</h3><p class="text-sm text-gray-600 whitespace-pre-wrap">${invProposal.terms}</p></div>` : ''}
       ${invProposal.payment_terms_text ? `<div class="mt-4 bg-green-50 rounded-xl p-6 border border-green-100"><h3 class="text-sm font-bold text-green-800 mb-2"><i class="fas fa-credit-card mr-1"></i>Payment Terms</h3><p class="text-sm text-green-700 whitespace-pre-wrap">${invProposal.payment_terms_text}</p></div>` : ''}
     </div>
-    <div class="bg-gray-50 px-8 py-4 text-center text-xs text-gray-400 border-t">Powered by <a href="https://roofmanager.ca" class="text-blue-500 hover:underline">Roof Manager</a> — Canada's AI Roof Measurement Platform</div>
+    <div class="bg-gray-50 px-8 py-4 text-center text-xs text-gray-400 border-t">Powered by <a href="https://www.roofmanager.ca" class="text-blue-500 hover:underline">Roof Manager</a> — Canada's AI Roof Measurement Platform</div>
   </div>
   <div class="text-center mt-4 print:hidden"><button onclick="window.print()" class="px-6 py-2.5 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm"><i class="fas fa-print mr-1"></i>Print / Save PDF</button></div>
 </div>
@@ -2839,8 +2842,8 @@ function getLandingPageHTML() {
   <meta property="og:title" content="Roof Manager — Precision Roof Measurement Reports">
   <meta property="og:description" content="Professional satellite-powered roof measurement reports in under 60 seconds. Full CRM, AI phone secretary, and team management for roofing businesses.">
   <meta property="og:type" content="website">
-  <meta property="og:url" content="https://roofmanager.ca">
-  <meta property="og:image" content="https://roofmanager.ca/static/logo.png">
+  <meta property="og:url" content="https://www.roofmanager.ca">
+  <meta property="og:image" content="https://www.roofmanager.ca/static/logo.png">
   <meta property="og:image:width" content="512">
   <meta property="og:image:height" content="512">
   <meta property="og:site_name" content="Roof Manager">
@@ -2848,17 +2851,17 @@ function getLandingPageHTML() {
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Roof Manager — Satellite Roof Measurements in 60 Seconds">
   <meta name="twitter:description" content="AI-powered roof measurement reports, full CRM & team management for roofing companies. 3 free reports.">
-  <meta name="twitter:image" content="https://roofmanager.ca/static/logo.png">
+  <meta name="twitter:image" content="https://www.roofmanager.ca/static/logo.png">
   <meta name="keywords" content="roof measurement software, roofing CRM, satellite roof reports, roof area calculator, roofing estimate tool, roof pitch analysis, material takeoff, roofing contractor software, AI roof measurement, Canadian roofing software">
-  <link rel="canonical" href="https://roofmanager.ca/">
+  <link rel="canonical" href="https://www.roofmanager.ca/">
   <!-- JSON-LD Structured Data for SEO -->
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
     "name": "Roof Manager",
-    "url": "https://roofmanager.ca",
-    "image": "https://roofmanager.ca/static/logo.png",
+    "url": "https://www.roofmanager.ca",
+    "image": "https://www.roofmanager.ca/static/logo.png",
     "applicationCategory": "BusinessApplication",
     "applicationSubCategory": "Roofing CRM, Solar Measurement Tool, Roof Report Generator",
     "operatingSystem": "Web",
@@ -2880,7 +2883,7 @@ function getLandingPageHTML() {
     "provider": {
       "@type": "Organization",
       "name": "Roof Manager",
-      "url": "https://roofmanager.ca",
+      "url": "https://www.roofmanager.ca",
       "address": {
         "@type": "PostalAddress",
         "addressRegion": "Alberta",
@@ -2905,7 +2908,7 @@ function getLandingPageHTML() {
   }
   </script>
   <script type="application/ld+json">
-{"@context":"https://schema.org","@type":"Organization","name":"Roof Manager","url":"https://www.roofmanager.ca","logo":"https://roofmanager.ca/static/logo.png","description":"AI-powered satellite roof measurement reports for roofing professionals worldwide","address":{"@type":"PostalAddress","addressRegion":"Alberta","addressCountry":"CA"},"contactPoint":{"@type":"ContactPoint","email":"sales@roofmanager.ca","contactType":"sales"},"sameAs":[]}
+{"@context":"https://schema.org","@type":"Organization","name":"Roof Manager","url":"https://www.roofmanager.ca","logo":"https://www.roofmanager.ca/static/logo.png","description":"AI-powered satellite roof measurement reports for roofing professionals worldwide","address":{"@type":"PostalAddress","addressRegion":"Alberta","addressCountry":"CA"},"contactPoint":{"@type":"ContactPoint","email":"sales@roofmanager.ca","contactType":"sales"},"sameAs":[]}
   </script>
   <script type="application/ld+json">
 {"@context":"https://schema.org","@type":"WebSite","name":"Roof Manager","url":"https://www.roofmanager.ca","potentialAction":{"@type":"SearchAction","target":"https://www.roofmanager.ca/blog?q={search_term_string}","query-input":"required name=search_term_string"}}
@@ -3686,7 +3689,7 @@ function getCoveragePageHTML() {
   <meta property="og:description" content="Satellite-powered roof measurement reports available in the United States, Canada, UK, Australia, Germany, France, Japan, Brazil and 30+ more countries.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://www.roofmanager.ca/coverage">
-  <meta property="og:image" content="https://roofmanager.ca/static/logo.png">
+  <meta property="og:image" content="https://www.roofmanager.ca/static/logo.png">
   <meta property="og:site_name" content="Roof Manager">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Roof Manager — Available in 40+ Countries">
@@ -3882,17 +3885,17 @@ function getPricingPageHTML() {
   ${getHeadTags()}
   <title>Roof Report Pricing — AI Measurements from $5/Report | Roof Manager</title>
   <meta name="description" content="Compare Roof Manager pricing plans. Pay per report from $7 USD or save with credit packs (25 for $150, 100 for $500). Includes CRM, proposals, invoicing, and AI secretary. 3 free reports to start.">
-  <link rel="canonical" href="https://roofmanager.ca/pricing">
+  <link rel="canonical" href="https://www.roofmanager.ca/pricing">
   <meta property="og:title" content="Roof Report Pricing — From $5/Report (100-Pack)">
   <meta property="og:description" content="AI-powered roof measurement reports with full CRM. 3 free reports, then pay per report or buy credit packs.">
   <meta property="og:type" content="website">
-  <meta property="og:url" content="https://roofmanager.ca/pricing">
-  <meta property="og:image" content="https://roofmanager.ca/static/logo.png">
+  <meta property="og:url" content="https://www.roofmanager.ca/pricing">
+  <meta property="og:image" content="https://www.roofmanager.ca/static/logo.png">
   <meta property="og:site_name" content="Roof Manager">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Roof Manager Pricing — From $5/Report">
   <meta name="twitter:description" content="AI roof measurements with full CRM. 3 free reports included.">
-  <meta name="twitter:image" content="https://roofmanager.ca/static/logo.png">
+  <meta name="twitter:image" content="https://www.roofmanager.ca/static/logo.png">
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
@@ -3900,7 +3903,7 @@ function getPricingPageHTML() {
     "name": "Roof Manager - AI Roof Measurement Reports",
     "description": "Professional satellite-powered roof measurement reports with 3D area, pitch analysis, edge breakdowns, and material BOM.",
     "brand": {"@type": "Brand", "name": "Roof Manager"},
-    "image": "https://roofmanager.ca/static/logo.png",
+    "image": "https://www.roofmanager.ca/static/logo.png",
     "url": "https://www.roofmanager.ca/pricing",
     "offers": [
       {"@type": "Offer", "name": "Free Trial", "price": "0", "priceCurrency": "USD", "description": "3 free professional roof measurement reports", "availability": "https://schema.org/InStock"},
@@ -3911,6 +3914,9 @@ function getPricingPageHTML() {
     "aggregateRating": {"@type": "AggregateRating", "ratingValue": "4.9", "ratingCount": "200", "bestRating": "5"}
   }
   </script>
+  <script type="application/ld+json">
+{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.roofmanager.ca/"},{"@type":"ListItem","position":2,"name":"Pricing","item":"https://www.roofmanager.ca/pricing"}]}
+</script>
 </head>
 <body class="bg-gray-50 min-h-screen">
   <nav class="bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg">
@@ -3954,13 +3960,16 @@ function getBlogListingHTML() {
   <meta property="og:title" content="Roof Manager Blog - Roofing Industry Insights">
   <meta property="og:description" content="Expert roofing industry insights, measurement technology tips, contractor business guides, and more.">
   <meta property="og:type" content="website">
-  <meta property="og:image" content="https://roofmanager.ca/static/logo.png">
+  <meta property="og:image" content="https://www.roofmanager.ca/static/logo.png">
   <meta property="og:site_name" content="Roof Manager">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Roof Manager Blog — Roofing Industry Insights">
   <meta name="twitter:description" content="Expert roofing industry insights, measurement tips, and contractor business guides.">
-  <meta name="twitter:image" content="https://roofmanager.ca/static/logo.png">
+  <meta name="twitter:image" content="https://www.roofmanager.ca/static/logo.png">
   <link rel="canonical" href="https://www.roofmanager.ca/blog">
+  <script type="application/ld+json">
+{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.roofmanager.ca/"},{"@type":"ListItem","position":2,"name":"Blog","item":"https://www.roofmanager.ca/blog"}]}
+</script>
 </head>
 <body class="min-h-screen" style="background:#0A0A0A">
   <!-- Navigation — Dark theme -->
@@ -4113,13 +4122,13 @@ function getBlogListingHTML() {
 function getBlogPostHTML(post?: any, slug?: string) {
   const title = post ? (post.meta_title || post.title) + ' — Roof Manager Blog' : 'Blog Post - Roof Manager'
   const desc = post ? (post.meta_description || post.excerpt || '') : ''
-  const image = post?.cover_image_url || 'https://roofmanager.ca/static/logo.png'
+  const image = post?.cover_image_url || 'https://www.roofmanager.ca/static/logo.png'
   const canonical = slug ? `https://www.roofmanager.ca/blog/${slug}` : ''
   const published = post?.published_at || ''
   const updated = post?.updated_at || ''
   const author = post?.author_name || 'Roof Manager Team'
   const blogSchema = post ? `<script type="application/ld+json">
-  {"@context":"https://schema.org","@type":"BlogPosting","headline":"${(post.title || '').replace(/"/g, '\\"')}","description":"${(desc).replace(/"/g, '\\"')}","image":"${image}","datePublished":"${published}","dateModified":"${updated || published}","author":{"@type":"Organization","name":"${author}"},"publisher":{"@type":"Organization","name":"Roof Manager","logo":{"@type":"ImageObject","url":"https://roofmanager.ca/static/logo.png"}}}
+  {"@context":"https://schema.org","@type":"BlogPosting","headline":"${(post.title || '').replace(/"/g, '\\"')}","description":"${(desc).replace(/"/g, '\\"')}","image":"${image}","datePublished":"${published}","dateModified":"${updated || published}","author":{"@type":"Organization","name":"${author}"},"publisher":{"@type":"Organization","name":"Roof Manager","logo":{"@type":"ImageObject","url":"https://www.roofmanager.ca/static/logo.png"}}}
   </script>` : ''
   const breadcrumbSchema = slug ? `<script type="application/ld+json">
 {"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.roofmanager.ca/"},{"@type":"ListItem","position":2,"name":"Blog","item":"https://www.roofmanager.ca/blog"},{"@type":"ListItem","position":3,"name":"${(post?.title || '').replace(/"/g, '\\"')}","item":"https://www.roofmanager.ca/blog/${slug}"}]}
@@ -4298,14 +4307,14 @@ function getLanderFunnelHTML() {
   <meta property="og:title" content="Free Roof Measurement Reports - Roof Manager">
   <meta property="og:description" content="Get accurate roof area, pitch, material BOM, and more in 60 seconds. 3 free reports. No credit card.">
   <meta property="og:type" content="website">
-  <meta property="og:url" content="https://roofmanager.ca/lander">
-  <meta property="og:image" content="https://roofmanager.ca/static/logo.png">
+  <meta property="og:url" content="https://www.roofmanager.ca/lander">
+  <meta property="og:image" content="https://www.roofmanager.ca/static/logo.png">
   <meta property="og:site_name" content="Roof Manager">
   <link rel="canonical" href="https://www.roofmanager.ca/lander">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Free Roof Measurement Reports — Roof Manager">
   <meta name="twitter:description" content="Get accurate roof area, pitch, material BOM in 60 seconds. 3 free reports, no credit card.">
-  <meta name="twitter:image" content="https://roofmanager.ca/static/logo.png">
+  <meta name="twitter:image" content="https://www.roofmanager.ca/static/logo.png">
   <style>
     html { scroll-behavior: smooth; }
     .scroll-animate { opacity: 0; transform: translateY(20px); transition: all 0.7s cubic-bezier(0.4, 0, 0.2, 1); }
@@ -6005,6 +6014,7 @@ function getPrivacyPageHTML() {
 <head>
   ${getHeadTags()}
   <title>Privacy Policy — Roof Manager</title>
+  <meta name="description" content="Roof Manager privacy policy. Learn how we protect your data with 256-bit encryption, PCI DSS compliance, and PIPEDA-compliant data handling. Canadian-owned SaaS platform.">
 </head>
 <body class="bg-gray-50 text-gray-800">
   <header class="bg-white border-b border-gray-200 sticky top-0 z-50">
@@ -6139,6 +6149,7 @@ function getTermsPageHTML() {
 <head>
   ${getHeadTags()}
   <title>Terms of Service — Roof Manager</title>
+  <meta name="description" content="Roof Manager terms of service. Terms governing the use of our AI-powered roof measurement reports, CRM platform, and business management tools.">
 </head>
 <body class="bg-gray-50 text-gray-800">
   <header class="bg-white border-b border-gray-200 sticky top-0 z-50">
