@@ -1380,6 +1380,29 @@ app.get('/model-card/gemma-3', (c) => {
 // ============================================================
 // PUBLIC WEBSITE BUILDER SITES — Serve published contractor sites
 // ============================================================
+// Custom domain support — serve builder sites on contractor's own domain
+app.use('*', async (c, next) => {
+  const host = (c.req.header('host') || '').replace(/:\d+$/, '')
+  if (!host || host.includes('roofmanager.ca') || host.includes('localhost') || host.includes('0.0.0.0') || host.includes('pages.dev') || host.includes('workers.dev')) {
+    return next()
+  }
+  const site = await c.env.DB.prepare(
+    "SELECT id, subdomain FROM wb_sites WHERE custom_domain = ? AND status = 'published'"
+  ).bind(host).first<any>()
+  if (!site) return next()
+
+  const url = new URL(c.req.url)
+  const slug = url.pathname === '/' ? '/' : url.pathname
+  const page = await c.env.DB.prepare(
+    'SELECT html_snapshot FROM wb_pages WHERE site_id = ? AND slug = ? AND is_published = 1'
+  ).bind(site.id, slug).first<any>()
+  if (!page?.html_snapshot) return c.notFound()
+
+  // Rewrite basePath links for custom domain (root-relative instead of /sites/subdomain)
+  const html = page.html_snapshot.replace(new RegExp(`/sites/${site.subdomain}`, 'g'), '')
+  return c.html(html)
+})
+
 app.get('/sites/:subdomain', async (c) => {
   const subdomain = c.req.param('subdomain')
   const site = await c.env.DB.prepare(

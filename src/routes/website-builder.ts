@@ -96,6 +96,7 @@ websiteBuilderRoutes.post('/intake', async (c) => {
     })
 
     // Build pages
+    const basePath = `/sites/${subdomain}`
     const pageTypes = [
       { key: 'home' as const, slug: '/', page_type: 'home', title: 'Home', sort: 0 },
       { key: 'services' as const, slug: '/services', page_type: 'services', title: 'Services', sort: 1 },
@@ -108,7 +109,7 @@ websiteBuilderRoutes.post('/intake', async (c) => {
       const pageContent = siteContent[pageInfo.key]
       if (!pageContent) continue
 
-      const html = buildPageHTML(pageContent, colors, intake.business_name, intake.phone, siteId)
+      const html = buildPageHTML(pageContent, colors, intake.business_name, intake.phone, siteId, basePath)
 
       await c.env.DB.prepare(`
         INSERT INTO wb_pages (site_id, slug, page_type, title, meta_title, meta_description, sections_json, html_snapshot, sort_order, is_published)
@@ -254,7 +255,7 @@ websiteBuilderRoutes.patch('/sites/:id', async (c) => {
   const allowedFields = [
     'business_name', 'business_phone', 'business_email', 'business_address',
     'city', 'province', 'logo_url', 'primary_color', 'secondary_color', 'accent_color',
-    'tagline', 'theme', 'meta_title', 'meta_description'
+    'tagline', 'theme', 'meta_title', 'meta_description', 'custom_domain'
   ]
 
   const updates: string[] = []
@@ -274,6 +275,75 @@ websiteBuilderRoutes.patch('/sites/:id', async (c) => {
   await c.env.DB.prepare(
     `UPDATE wb_sites SET ${updates.join(', ')} WHERE id = ?`
   ).bind(...values).run()
+
+  return c.json({ success: true })
+})
+
+// ============================================================
+// GET /sites/:id/pages/:pageId — Get page sections for editing
+// ============================================================
+websiteBuilderRoutes.get('/sites/:id/pages/:pageId', async (c) => {
+  const ownerId = await getOwnerId(c)
+  if (!ownerId) return c.json({ error: 'Unauthorized' }, 401)
+  const siteId = parseInt(c.req.param('id'))
+  const pageId = parseInt(c.req.param('pageId'))
+
+  const site = await c.env.DB.prepare(
+    'SELECT id FROM wb_sites WHERE id = ? AND owner_id = ?'
+  ).bind(siteId, ownerId).first()
+  if (!site) return c.json({ error: 'Site not found' }, 404)
+
+  const page = await c.env.DB.prepare(
+    'SELECT id, slug, page_type, title, meta_title, meta_description, sections_json, sort_order, is_published FROM wb_pages WHERE id = ? AND site_id = ?'
+  ).bind(pageId, siteId).first<any>()
+  if (!page) return c.json({ error: 'Page not found' }, 404)
+
+  const sections = JSON.parse(page.sections_json || '[]')
+  return c.json({ success: true, page: { ...page, sections, sections_json: undefined } })
+})
+
+// ============================================================
+// PATCH /sites/:id/pages/:pageId — Edit page content
+// ============================================================
+websiteBuilderRoutes.patch('/sites/:id/pages/:pageId', async (c) => {
+  const ownerId = await getOwnerId(c)
+  if (!ownerId) return c.json({ error: 'Unauthorized' }, 401)
+  const siteId = parseInt(c.req.param('id'))
+  const pageId = parseInt(c.req.param('pageId'))
+
+  const site = await c.env.DB.prepare(
+    'SELECT * FROM wb_sites WHERE id = ? AND owner_id = ?'
+  ).bind(siteId, ownerId).first<any>()
+  if (!site) return c.json({ error: 'Site not found' }, 404)
+
+  const page = await c.env.DB.prepare(
+    'SELECT * FROM wb_pages WHERE id = ? AND site_id = ?'
+  ).bind(pageId, siteId).first<any>()
+  if (!page) return c.json({ error: 'Page not found' }, 404)
+
+  const body = await c.req.json()
+
+  const metaTitle = body.meta_title !== undefined ? body.meta_title : page.meta_title
+  const metaDesc = body.meta_description !== undefined ? body.meta_description : page.meta_description
+  const sections = body.sections !== undefined ? body.sections : JSON.parse(page.sections_json || '[]')
+
+  if (body.sections !== undefined && !Array.isArray(body.sections)) {
+    return c.json({ error: 'sections must be an array' }, 400)
+  }
+
+  // Rebuild HTML snapshot
+  const colors: WBBrandColors = {
+    primary: site.primary_color || '#1E3A5F',
+    secondary: site.secondary_color || '#1a1a2e',
+    accent: site.accent_color || '#e85c2b',
+  }
+  const basePath = `/sites/${site.subdomain}`
+  const pageContent = { meta_title: metaTitle, meta_description: metaDesc, sections }
+  const html = buildPageHTML(pageContent, colors, site.business_name, site.business_phone, siteId, basePath)
+
+  await c.env.DB.prepare(`
+    UPDATE wb_pages SET meta_title = ?, meta_description = ?, sections_json = ?, html_snapshot = ?, updated_at = datetime('now') WHERE id = ?
+  `).bind(metaTitle, metaDesc, JSON.stringify(sections), html, pageId).run()
 
   return c.json({ success: true })
 })
@@ -314,6 +384,7 @@ websiteBuilderRoutes.post('/sites/:id/regenerate', async (c) => {
   // Delete old pages and recreate
   await c.env.DB.prepare('DELETE FROM wb_pages WHERE site_id = ?').bind(siteId).run()
 
+  const basePath = `/sites/${site.subdomain}`
   const pageTypes = [
     { key: 'home' as const, slug: '/', page_type: 'home', title: 'Home', sort: 0 },
     { key: 'services' as const, slug: '/services', page_type: 'services', title: 'Services', sort: 1 },
@@ -326,7 +397,7 @@ websiteBuilderRoutes.post('/sites/:id/regenerate', async (c) => {
     const pageContent = siteContent[pageInfo.key]
     if (!pageContent) continue
 
-    const html = buildPageHTML(pageContent, colors, site.business_name, site.business_phone, siteId)
+    const html = buildPageHTML(pageContent, colors, site.business_name, site.business_phone, siteId, basePath)
 
     await c.env.DB.prepare(`
       INSERT INTO wb_pages (site_id, slug, page_type, title, meta_title, meta_description, sections_json, html_snapshot, sort_order, is_published)
@@ -359,9 +430,22 @@ websiteBuilderRoutes.post('/sites/:id/regenerate', async (c) => {
 })
 
 // ============================================================
-// POST /leads — Public lead capture (no auth required)
+// POST /leads — Public lead capture (no auth required, CORS open for custom domains)
 // ============================================================
+websiteBuilderRoutes.options('/leads', (c) => {
+  return new Response(null, {
+    status: 204,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+    }
+  })
+})
+
 websiteBuilderRoutes.post('/leads', async (c) => {
+  // Allow cross-origin for custom domain forms
+  c.header('Access-Control-Allow-Origin', '*')
   try {
     const body = await c.req.json()
 

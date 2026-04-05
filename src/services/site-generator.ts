@@ -85,9 +85,20 @@ IMPORTANT: Return ONLY valid JSON matching the exact schema requested. No markdo
   // Strip markdown code fences if present
   text = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim()
 
-  const parsed = JSON.parse(text) as WBGeneratedSiteContent
+  if (!text) {
+    throw new Error('AI returned empty response. Please try again.')
+  }
+
+  let parsed: WBGeneratedSiteContent
+  try {
+    parsed = JSON.parse(text) as WBGeneratedSiteContent
+  } catch (parseErr: any) {
+    console.error('[SiteGenerator] Failed to parse AI response:', text.slice(0, 500))
+    throw new Error('AI returned invalid JSON. Please try again.')
+  }
+
   if (!parsed.home || !parsed.services || !parsed.about || !parsed.contact) {
-    throw new Error('AI response missing required pages')
+    throw new Error('AI response missing required pages. Please try again.')
   }
 
   return parsed

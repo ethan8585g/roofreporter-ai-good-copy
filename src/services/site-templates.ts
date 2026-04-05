@@ -1,7 +1,6 @@
 // ============================================================
 // Website Builder — HTML Template Engine
 // Converts AI-generated section data into complete HTML pages
-// Adapted from Genspark's grapesjs-templates.ts for Cloudflare Workers
 // ============================================================
 
 import type { WBGeneratedPageContent, WBSectionType, WBBrandColors } from '../types'
@@ -11,11 +10,12 @@ export function buildPageHTML(
   colors: WBBrandColors,
   businessName: string,
   phone: string,
-  siteId?: number
+  siteId?: number,
+  basePath: string = ''
 ): string {
   const css = buildBaseCSS(colors)
   const sectionsHTML = page.sections.map(section =>
-    buildSection(section.type, section.data, colors, phone)
+    buildSection(section.type, section.data, colors, phone, basePath)
   ).join('\n')
 
   return `<!DOCTYPE html>
@@ -23,19 +23,19 @@ export function buildPageHTML(
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="${escapeHtml(page.meta_description)}">
-  <title>${escapeHtml(page.meta_title)}</title>
+  <meta name="description" content="${e(page.meta_description)}">
+  <title>${e(page.meta_title)}</title>
   ${siteId ? `<meta name="site-id" content="${siteId}">` : ''}
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   <style>${css}</style>
 </head>
 <body>
-  ${buildNavbar(businessName, phone)}
+  ${buildNavbar(businessName, phone, basePath)}
   <main>
     ${sectionsHTML}
   </main>
-  ${buildFooter(businessName, phone)}
+  ${buildFooter(businessName, phone, basePath)}
   <script>${buildBaseJS()}</script>
 </body>
 </html>`
@@ -43,6 +43,11 @@ export function buildPageHTML(
 
 function escapeHtml(str: string): string {
   return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+// Short helper for escaping any value
+function e(val: unknown): string {
+  return escapeHtml(String(val || ''))
 }
 
 function buildBaseCSS(colors: WBBrandColors): string {
@@ -153,22 +158,22 @@ function buildBaseCSS(colors: WBBrandColors): string {
   `
 }
 
-function buildNavbar(businessName: string, phone: string): string {
+function buildNavbar(businessName: string, phone: string, basePath: string): string {
   return `
   <nav class="navbar">
     <div class="container">
       <div class="navbar-inner">
-        <a href="/" class="navbar-brand">${escapeHtml(businessName)}</a>
+        <a href="${basePath}/" class="navbar-brand">${e(businessName)}</a>
         <button class="hamburger" onclick="document.querySelector('.navbar-links').classList.toggle('active')" aria-label="Menu">
           <span></span><span></span><span></span>
         </button>
         <div class="navbar-links">
-          <a href="/">Home</a>
-          <a href="/services">Services</a>
-          <a href="/about">About</a>
-          <a href="/service-areas">Areas</a>
-          <a href="/contact">Contact</a>
-          <a href="tel:${phone.replace(/\D/g, '')}" class="navbar-phone">${escapeHtml(phone)}</a>
+          <a href="${basePath}/">Home</a>
+          <a href="${basePath}/services">Services</a>
+          <a href="${basePath}/about">About</a>
+          <a href="${basePath}/service-areas">Areas</a>
+          <a href="${basePath}/contact">Contact</a>
+          <a href="tel:${phone.replace(/\D/g, '')}" class="navbar-phone">${e(phone)}</a>
         </div>
       </div>
     </div>
@@ -179,16 +184,17 @@ function buildSection(
   type: WBSectionType,
   data: Record<string, unknown>,
   colors: WBBrandColors,
-  phone: string
+  phone: string,
+  basePath: string
 ): string {
   switch (type) {
-    case 'hero': return buildHeroSection(data, phone)
+    case 'hero': return buildHeroSection(data, phone, basePath)
     case 'trust_bar': return buildTrustBar(data)
     case 'services_grid': return buildServicesGrid(data)
-    case 'about_snippet': return buildAboutSnippet(data)
+    case 'about_snippet': return buildAboutSnippet(data, basePath)
     case 'reviews': return buildReviews(data)
     case 'stats': return buildStats(data)
-    case 'cta_banner': return buildCTABanner(data)
+    case 'cta_banner': return buildCTABanner(data, basePath)
     case 'service_list': return buildServiceList(data)
     case 'story': return buildStory(data)
     case 'certifications': return buildCertifications(data)
@@ -201,17 +207,17 @@ function buildSection(
   }
 }
 
-function buildHeroSection(data: Record<string, unknown>, phone: string): string {
+function buildHeroSection(data: Record<string, unknown>, phone: string, basePath: string): string {
   return `
   <section class="hero">
     <div class="container">
-      <h1 class="hero-headline">${data.headline || 'Professional Roofing You Can Trust'}</h1>
-      <p class="hero-sub">${data.subheadline || ''}</p>
+      <h1 class="hero-headline">${e(data.headline) || 'Professional Roofing You Can Trust'}</h1>
+      <p class="hero-sub">${e(data.subheadline)}</p>
       <div class="hero-actions">
-        <a href="tel:${phone.replace(/\D/g, '')}" class="btn btn-primary">${data.cta_primary_text || 'Call For Free Estimate'}</a>
-        ${data.cta_secondary_text ? `<a href="/contact" class="btn btn-secondary">${data.cta_secondary_text}</a>` : ''}
+        <a href="tel:${phone.replace(/\D/g, '')}" class="btn btn-primary">${e(data.cta_primary_text) || 'Call For Free Estimate'}</a>
+        ${data.cta_secondary_text ? `<a href="${basePath}/contact" class="btn btn-secondary">${e(data.cta_secondary_text)}</a>` : ''}
       </div>
-      ${data.trust_line ? `<p class="hero-trust">${data.trust_line}</p>` : ''}
+      ${data.trust_line ? `<p class="hero-trust">${e(data.trust_line)}</p>` : ''}
     </div>
   </section>`
 }
@@ -222,7 +228,7 @@ function buildTrustBar(data: Record<string, unknown>): string {
   <div class="trust-bar">
     <div class="container">
       <div class="trust-bar-items">
-        ${items.map(item => `<div class="trust-bar-item">${item.icon} ${item.text}</div>`).join('')}
+        ${items.map(item => `<div class="trust-bar-item">${e(item.icon)} ${e(item.text)}</div>`).join('')}
       </div>
     </div>
   </div>`
@@ -238,8 +244,8 @@ function buildServicesGrid(data: Record<string, unknown>): string {
   return `
   <section class="section section-light">
     <div class="container text-center">
-      <h2 class="section-title">${data.headline || 'Our Services'}</h2>
-      <p class="section-subtitle" style="margin: 0 auto 48px">${data.subheadline || ''}</p>
+      <h2 class="section-title">${e(data.headline) || 'Our Services'}</h2>
+      <p class="section-subtitle" style="margin: 0 auto 48px">${e(data.subheadline)}</p>
       <div class="grid-3">
         ${services.map(service => {
           const iconKey = service.icon_name?.toLowerCase() || 'default'
@@ -247,8 +253,8 @@ function buildServicesGrid(data: Record<string, unknown>): string {
           return `
           <div class="card service-card">
             <div class="service-icon">${icon}</div>
-            <div class="service-name">${service.name}</div>
-            <div class="service-desc">${service.description}</div>
+            <div class="service-name">${e(service.name)}</div>
+            <div class="service-desc">${e(service.description)}</div>
           </div>`
         }).join('')}
       </div>
@@ -256,15 +262,15 @@ function buildServicesGrid(data: Record<string, unknown>): string {
   </section>`
 }
 
-function buildAboutSnippet(data: Record<string, unknown>): string {
+function buildAboutSnippet(data: Record<string, unknown>, basePath: string): string {
   return `
   <section class="section">
     <div class="container">
       <div class="grid-2" style="align-items: center; gap: 60px;">
         <div>
-          <h2 class="section-title">${data.headline || 'About Us'}</h2>
-          <p style="font-size: 17px; line-height: 1.8; color: #374151; margin-bottom: 32px;">${data.body || ''}</p>
-          <a href="/about" class="btn btn-outline">${data.cta_text || 'Learn More About Us'}</a>
+          <h2 class="section-title">${e(data.headline) || 'About Us'}</h2>
+          <p style="font-size: 17px; line-height: 1.8; color: #374151; margin-bottom: 32px;">${e(data.body)}</p>
+          <a href="${basePath}/about" class="btn btn-outline">${e(data.cta_text) || 'Learn More About Us'}</a>
         </div>
         <div style="background: #f3f4f6; border-radius: 16px; height: 300px; display: flex; align-items: center; justify-content: center; font-size: 60px;">🏠</div>
       </div>
@@ -277,13 +283,13 @@ function buildReviews(data: Record<string, unknown>): string {
   return `
   <section class="section section-light">
     <div class="container text-center">
-      <h2 class="section-title">${data.headline || 'What Our Customers Say'}</h2>
+      <h2 class="section-title">${e(data.headline) || 'What Our Customers Say'}</h2>
       <div class="grid-3" style="margin-top: 48px;">
         ${reviews.map(review => `
         <div class="card review-card">
           <div class="review-stars">${'⭐'.repeat(review.rating || 5)}</div>
-          <p class="review-text">"${review.text}"</p>
-          <div class="review-author">— ${review.author}</div>
+          <p class="review-text">"${e(review.text)}"</p>
+          <div class="review-author">— ${e(review.author)}</div>
         </div>`).join('')}
       </div>
     </div>
@@ -298,21 +304,22 @@ function buildStats(data: Record<string, unknown>): string {
       <div class="stats-grid">
         ${items.map(item => `
         <div>
-          <div class="stat-number">${item.number}</div>
-          <div class="stat-label">${item.label}</div>
+          <div class="stat-number">${e(item.number)}</div>
+          <div class="stat-label">${e(item.label)}</div>
         </div>`).join('')}
       </div>
     </div>
   </section>`
 }
 
-function buildCTABanner(data: Record<string, unknown>): string {
+function buildCTABanner(data: Record<string, unknown>, basePath: string): string {
+  const ctaUrl = basePath + (String(data.cta_url || '/contact'))
   return `
   <section class="cta-banner">
     <div class="container">
-      <h2 class="cta-headline">${data.headline || 'Ready to Get Started?'}</h2>
-      ${data.subheadline ? `<p class="cta-sub">${data.subheadline}</p>` : ''}
-      <a href="${data.cta_url || '/contact'}" class="btn btn-secondary" style="font-size: 18px; padding: 16px 40px;">${data.cta_text || 'Get a Free Estimate'}</a>
+      <h2 class="cta-headline">${e(data.headline) || 'Ready to Get Started?'}</h2>
+      ${data.subheadline ? `<p class="cta-sub">${e(data.subheadline)}</p>` : ''}
+      <a href="${ctaUrl}" class="btn btn-secondary" style="font-size: 18px; padding: 16px 40px;">${e(data.cta_text) || 'Get a Free Estimate'}</a>
     </div>
   </section>`
 }
@@ -326,13 +333,13 @@ function buildServiceList(data: Record<string, unknown>): string {
       <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 48px; align-items: start; margin-bottom: 64px; ${i % 2 === 1 ? 'direction: rtl;' : ''}">
         <div style="direction: ltr; background: #f3f4f6; border-radius: 16px; padding: 40px; text-align: center;">
           <div style="font-size: 48px; margin-bottom: 16px;">🏠</div>
-          <div style="font-size: 20px; font-weight: 800;">${service.name}</div>
+          <div style="font-size: 20px; font-weight: 800;">${e(service.name)}</div>
         </div>
         <div style="direction: ltr;">
-          <h2 style="font-size: 28px; font-weight: 800; margin-bottom: 16px;">${service.headline}</h2>
-          <p style="font-size: 16px; color: #4b5563; margin-bottom: 24px; line-height: 1.8;">${service.description}</p>
+          <h2 style="font-size: 28px; font-weight: 800; margin-bottom: 16px;">${e(service.headline)}</h2>
+          <p style="font-size: 16px; color: #4b5563; margin-bottom: 24px; line-height: 1.8;">${e(service.description)}</p>
           ${service.benefits ? `<ul style="list-style: none;">
-            ${service.benefits.map(b => `<li style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 15px;">✅ ${b}</li>`).join('')}
+            ${service.benefits.map(b => `<li style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 15px;">✅ ${e(b)}</li>`).join('')}
           </ul>` : ''}
         </div>
       </div>`).join('')}
@@ -347,9 +354,9 @@ function buildStory(data: Record<string, unknown>): string {
     <div class="container">
       <div class="grid-2" style="gap: 60px; align-items: center;">
         <div>
-          <h2 class="section-title">${data.headline || 'Our Story'}</h2>
-          ${paragraphs.map(p => `<p style="font-size: 17px; line-height: 1.8; color: #374151; margin-bottom: 20px;">${p}</p>`).join('')}
-          ${data.owner_name ? `<p style="font-weight: 700; font-size: 16px; margin-top: 24px;">— ${data.owner_name}</p>` : ''}
+          <h2 class="section-title">${e(data.headline) || 'Our Story'}</h2>
+          ${paragraphs.map(p => `<p style="font-size: 17px; line-height: 1.8; color: #374151; margin-bottom: 20px;">${e(p)}</p>`).join('')}
+          ${data.owner_name ? `<p style="font-weight: 700; font-size: 16px; margin-top: 24px;">— ${e(data.owner_name)}</p>` : ''}
         </div>
         <div style="background: #f3f4f6; border-radius: 16px; height: 360px; display: flex; align-items: center; justify-content: center; font-size: 80px;">👷</div>
       </div>
@@ -362,13 +369,13 @@ function buildCertifications(data: Record<string, unknown>): string {
   return `
   <section class="section section-light">
     <div class="container text-center">
-      <h2 class="section-title">${data.headline || 'Our Certifications & Credentials'}</h2>
+      <h2 class="section-title">${e(data.headline) || 'Our Certifications & Credentials'}</h2>
       <div class="grid-3" style="margin-top: 48px;">
         ${items.map(item => `
         <div class="card" style="border-top: 4px solid var(--primary);">
           <div style="font-size: 32px; margin-bottom: 12px;">🏆</div>
-          <div style="font-weight: 700; font-size: 16px; margin-bottom: 8px;">${item.name}</div>
-          <div style="color: #6b7280; font-size: 14px;">${item.description}</div>
+          <div style="font-weight: 700; font-size: 16px; margin-bottom: 8px;">${e(item.name)}</div>
+          <div style="color: #6b7280; font-size: 14px;">${e(item.description)}</div>
         </div>`).join('')}
       </div>
     </div>
@@ -380,13 +387,13 @@ function buildCityList(data: Record<string, unknown>): string {
   return `
   <section class="section">
     <div class="container">
-      <h2 class="section-title text-center">${data.headline || 'Areas We Serve'}</h2>
+      <h2 class="section-title text-center">${e(data.headline) || 'Areas We Serve'}</h2>
       <div class="city-grid" style="margin-top: 48px;">
         ${cities.map(city => `
         <div class="city-item">
           <div style="font-size: 24px; margin-bottom: 8px;">📍</div>
-          <div class="city-name">${city.name}</div>
-          ${city.description ? `<div style="font-size: 13px; color: #6b7280; margin-top: 6px;">${city.description}</div>` : ''}
+          <div class="city-name">${e(city.name)}</div>
+          ${city.description ? `<div style="font-size: 13px; color: #6b7280; margin-top: 6px;">${e(city.description)}</div>` : ''}
         </div>`).join('')}
       </div>
     </div>
@@ -400,14 +407,14 @@ function buildCityDetail(data: Record<string, unknown>): string {
     <div class="container">
       <div class="grid-2" style="gap: 60px;">
         <div>
-          <h2 class="section-title">Roofing in ${data.city}, ${data.state}</h2>
-          <p style="font-size: 17px; line-height: 1.8; color: #374151; margin-bottom: 32px;">${data.intro_paragraph || ''}</p>
-          ${data.local_note ? `<div style="background: #fef3c7; border-left: 4px solid #f59e0b; padding: 16px 20px; border-radius: 0 8px 8px 0; margin-bottom: 32px;"><p style="font-size: 15px; color: #92400e;">${data.local_note}</p></div>` : ''}
+          <h2 class="section-title">Roofing in ${e(data.city)}, ${e(data.state)}</h2>
+          <p style="font-size: 17px; line-height: 1.8; color: #374151; margin-bottom: 32px;">${e(data.intro_paragraph)}</p>
+          ${data.local_note ? `<div style="background: #fef3c7; border-left: 4px solid #f59e0b; padding: 16px 20px; border-radius: 0 8px 8px 0; margin-bottom: 32px;"><p style="font-size: 15px; color: #92400e;">${e(data.local_note)}</p></div>` : ''}
         </div>
         <div>
-          <h3 style="font-size: 20px; font-weight: 700; margin-bottom: 20px;">Why ${data.city} Homeowners Choose Us</h3>
+          <h3 style="font-size: 20px; font-weight: 700; margin-bottom: 20px;">Why ${e(data.city)} Homeowners Choose Us</h3>
           <ul style="list-style: none;">
-            ${whyUs.map(item => `<li style="display: flex; gap: 12px; margin-bottom: 16px; font-size: 16px; align-items: flex-start;">✅ <span>${item}</span></li>`).join('')}
+            ${whyUs.map(item => `<li style="display: flex; gap: 12px; margin-bottom: 16px; font-size: 16px; align-items: flex-start;">✅ <span>${e(item)}</span></li>`).join('')}
           </ul>
         </div>
       </div>
@@ -421,12 +428,12 @@ function buildContactForm(data: Record<string, unknown>, phone: string): string 
     <div class="container">
       <div class="grid-2" style="gap: 60px;">
         <div>
-          <h2 class="section-title">${data.headline || 'Contact Us'}</h2>
+          <h2 class="section-title">${e(data.headline) || 'Contact Us'}</h2>
           <div style="margin-bottom: 40px;">
-            <div class="contact-info-item"><span class="contact-icon">📞</span><a href="tel:${phone.replace(/\D/g, '')}" style="font-weight: 600;">${data.phone || phone}</a></div>
-            ${data.email ? `<div class="contact-info-item"><span class="contact-icon">✉️</span><a href="mailto:${data.email}">${data.email}</a></div>` : ''}
-            ${data.address_line ? `<div class="contact-info-item"><span class="contact-icon">📍</span>${data.address_line}</div>` : ''}
-            ${data.hours ? `<div class="contact-info-item"><span class="contact-icon">🕐</span>${data.hours}</div>` : ''}
+            <div class="contact-info-item"><span class="contact-icon">📞</span><a href="tel:${phone.replace(/\D/g, '')}" style="font-weight: 600;">${e(data.phone || phone)}</a></div>
+            ${data.email ? `<div class="contact-info-item"><span class="contact-icon">✉️</span><a href="mailto:${e(data.email)}">${e(data.email)}</a></div>` : ''}
+            ${data.address_line ? `<div class="contact-info-item"><span class="contact-icon">📍</span>${e(data.address_line)}</div>` : ''}
+            ${data.hours ? `<div class="contact-info-item"><span class="contact-icon">🕐</span>${e(data.hours)}</div>` : ''}
           </div>
         </div>
         <div>
@@ -463,15 +470,15 @@ function buildFAQ(data: Record<string, unknown>): string {
   return `
   <section class="section section-light">
     <div class="container" style="max-width: 800px;">
-      <h2 class="section-title text-center">${data.headline || 'Frequently Asked Questions'}</h2>
+      <h2 class="section-title text-center">${e(data.headline) || 'Frequently Asked Questions'}</h2>
       <div style="margin-top: 48px;">
         ${items.map((item, i) => `
         <div class="faq-item">
           <div class="faq-question" onclick="toggleFAQ(${i})">
-            ${item.question}
+            ${e(item.question)}
             <span id="faq-icon-${i}">+</span>
           </div>
-          <div class="faq-answer" id="faq-${i}" style="display: none;">${item.answer}</div>
+          <div class="faq-answer" id="faq-${i}" style="display: none;">${e(item.answer)}</div>
         </div>`).join('')}
       </div>
     </div>
@@ -483,55 +490,55 @@ function buildTeam(data: Record<string, unknown>): string {
   return `
   <section class="section">
     <div class="container text-center">
-      <h2 class="section-title">${data.headline || 'Meet Our Team'}</h2>
+      <h2 class="section-title">${e(data.headline) || 'Meet Our Team'}</h2>
       <div class="grid-3" style="margin-top: 48px;">
         ${members.map(member => `
         <div class="card" style="text-align: center;">
           <div style="width: 80px; height: 80px; background: #f3f4f6; border-radius: 50%; margin: 0 auto 16px; display: flex; align-items: center; justify-content: center; font-size: 36px;">👷</div>
-          <div style="font-weight: 700; font-size: 18px;">${member.name}</div>
-          <div style="color: var(--primary); font-size: 14px; font-weight: 600; margin-bottom: 12px;">${member.role}</div>
-          ${member.bio ? `<div style="color: #6b7280; font-size: 14px;">${member.bio}</div>` : ''}
+          <div style="font-weight: 700; font-size: 18px;">${e(member.name)}</div>
+          <div style="color: var(--primary); font-size: 14px; font-weight: 600; margin-bottom: 12px;">${e(member.role)}</div>
+          ${member.bio ? `<div style="color: #6b7280; font-size: 14px;">${e(member.bio)}</div>` : ''}
         </div>`).join('')}
       </div>
     </div>
   </section>`
 }
 
-function buildFooter(businessName: string, phone: string): string {
+function buildFooter(businessName: string, phone: string, basePath: string): string {
   return `
   <footer class="footer">
     <div class="container">
       <div class="footer-grid">
         <div>
-          <div class="footer-brand">${escapeHtml(businessName)}</div>
+          <div class="footer-brand">${e(businessName)}</div>
           <p class="footer-desc">Professional roofing services you can trust. Licensed, insured, and committed to quality.</p>
         </div>
         <div>
           <div class="footer-heading">Services</div>
           <ul class="footer-links">
-            <li><a href="/services">All Services</a></li>
-            <li><a href="/services">Roof Replacement</a></li>
-            <li><a href="/services">Roof Repairs</a></li>
-            <li><a href="/services">Inspections</a></li>
+            <li><a href="${basePath}/services">All Services</a></li>
+            <li><a href="${basePath}/services">Roof Replacement</a></li>
+            <li><a href="${basePath}/services">Roof Repairs</a></li>
+            <li><a href="${basePath}/services">Inspections</a></li>
           </ul>
         </div>
         <div>
           <div class="footer-heading">Company</div>
           <ul class="footer-links">
-            <li><a href="/about">About Us</a></li>
-            <li><a href="/service-areas">Service Areas</a></li>
-            <li><a href="/contact">Contact</a></li>
+            <li><a href="${basePath}/about">About Us</a></li>
+            <li><a href="${basePath}/service-areas">Service Areas</a></li>
+            <li><a href="${basePath}/contact">Contact</a></li>
           </ul>
         </div>
         <div>
           <div class="footer-heading">Contact</div>
           <ul class="footer-links">
-            <li><a href="tel:${phone.replace(/\D/g, '')}">${escapeHtml(phone)}</a></li>
+            <li><a href="tel:${phone.replace(/\D/g, '')}">${e(phone)}</a></li>
           </ul>
         </div>
       </div>
       <div class="footer-bottom">
-        <p>&copy; ${new Date().getFullYear()} ${escapeHtml(businessName)}. All rights reserved. | Powered by <a href="https://roofmanager.ca" style="color: var(--primary);">Roof Manager</a></p>
+        <p>&copy; ${new Date().getFullYear()} ${e(businessName)}. All rights reserved. | Powered by <a href="https://roofmanager.ca" style="color: var(--primary);">Roof Manager</a></p>
       </div>
     </div>
   </footer>`
