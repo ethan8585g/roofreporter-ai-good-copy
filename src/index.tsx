@@ -2028,47 +2028,47 @@ function getRoverAssistant() {
 // ============================================================
 function getContactFormHTML(sourcePage: string = 'unknown') {
   return `
-  <section id="contact-section" class="py-16 bg-gradient-to-br from-slate-900 via-cyan-900 to-slate-900">
+  <section id="contact-section" class="py-20 border-t border-white/5" style="background:#0A0A0A">
     <div class="max-w-3xl mx-auto px-4">
       <div class="text-center mb-10">
-        <span class="inline-block bg-cyan-500/20 text-cyan-300 text-xs font-bold px-3 py-1 rounded-full mb-4">GET IN TOUCH</span>
+        <span class="inline-block bg-[#00FF88]/10 text-[#00FF88] text-xs font-bold px-4 py-1.5 rounded-full mb-4"><i class="fas fa-envelope mr-1.5"></i>GET IN TOUCH</span>
         <h2 class="text-3xl md:text-4xl font-bold text-white mb-3">Ready to Transform Your Roofing Business?</h2>
-        <p class="text-gray-300 max-w-xl mx-auto">Fill out the form below and our team will reach out within 24 hours to get you set up with AI-powered roof measurement reports.</p>
+        <p class="text-gray-400 max-w-xl mx-auto">Fill out the form below and our team will reach out within 24 hours to get you set up with AI-powered roof measurement reports.</p>
       </div>
-      <form id="lead-capture-form" onsubmit="return submitLeadForm(event, '${sourcePage}')" class="bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl p-8 space-y-5">
+      <form id="lead-capture-form" onsubmit="return submitLeadForm(event, '${sourcePage}')" class="bg-[#111111] border border-white/10 rounded-2xl p-8 space-y-5">
         <div class="grid md:grid-cols-2 gap-5">
           <div>
-            <label class="block text-sm font-medium text-gray-200 mb-1.5">Full Name <span class="text-red-400">*</span></label>
-            <input type="text" id="lead-name" required placeholder="John Smith" class="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:ring-2 focus:ring-cyan-400 focus:border-transparent outline-none">
+            <label class="block text-sm font-medium text-gray-300 mb-1.5">Full Name <span class="text-[#00FF88]">*</span></label>
+            <input type="text" id="lead-name" required placeholder="John Smith" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:ring-2 focus:ring-[#00FF88] focus:border-transparent outline-none">
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-200 mb-1.5">Company Name</label>
-            <input type="text" id="lead-company" placeholder="ABC Roofing Ltd." class="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:ring-2 focus:ring-cyan-400 focus:border-transparent outline-none">
+            <label class="block text-sm font-medium text-gray-300 mb-1.5">Company Name</label>
+            <input type="text" id="lead-company" placeholder="ABC Roofing Ltd." class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:ring-2 focus:ring-[#00FF88] focus:border-transparent outline-none">
           </div>
         </div>
         <div class="grid md:grid-cols-2 gap-5">
           <div>
-            <label class="block text-sm font-medium text-gray-200 mb-1.5">Phone Number</label>
-            <input type="tel" id="lead-phone" placeholder="(780) 555-1234" class="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:ring-2 focus:ring-cyan-400 focus:border-transparent outline-none">
+            <label class="block text-sm font-medium text-gray-300 mb-1.5">Phone Number</label>
+            <input type="tel" id="lead-phone" placeholder="(780) 555-1234" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:ring-2 focus:ring-[#00FF88] focus:border-transparent outline-none">
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-200 mb-1.5">Email Address <span class="text-red-400">*</span></label>
-            <input type="email" id="lead-email" required placeholder="john@abcroofing.com" class="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:ring-2 focus:ring-cyan-400 focus:border-transparent outline-none">
+            <label class="block text-sm font-medium text-gray-300 mb-1.5">Email Address <span class="text-[#00FF88]">*</span></label>
+            <input type="email" id="lead-email" required placeholder="john@abcroofing.com" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:ring-2 focus:ring-[#00FF88] focus:border-transparent outline-none">
           </div>
         </div>
         <div>
-          <label class="block text-sm font-medium text-gray-200 mb-1.5">How can we help?</label>
-          <textarea id="lead-message" rows="3" placeholder="Tell us about your roofing business and what you're looking for..." class="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:ring-2 focus:ring-cyan-400 focus:border-transparent outline-none resize-none"></textarea>
+          <label class="block text-sm font-medium text-gray-300 mb-1.5">How can we help?</label>
+          <textarea id="lead-message" rows="3" placeholder="Tell us about your roofing business and what you're looking for..." class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:ring-2 focus:ring-[#00FF88] focus:border-transparent outline-none resize-none"></textarea>
         </div>
         <div id="lead-form-msg" class="hidden text-sm font-medium px-4 py-3 rounded-lg"></div>
-        <button type="submit" id="lead-submit-btn" class="w-full bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-white font-bold py-4 px-8 rounded-xl shadow-lg transition-all hover:scale-[1.01] text-lg">
-          <i class="fas fa-paper-plane mr-2"></i>Get Started — It's Free
+        <button type="submit" id="lead-submit-btn" class="w-full bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-8 rounded-xl shadow-lg shadow-[#00FF88]/20 transition-all hover:scale-[1.01] text-lg">
+          <i class="fas fa-paper-plane mr-2"></i>Send Message
         </button>
-        <div class="text-center my-3"><span class="text-gray-500 text-xs">— or —</span></div>
-        <a href="https://calendar.app.google/CE5iBMV1Fu4K2ve38" target="_blank" class="block w-full bg-white/10 hover:bg-white/20 text-white font-bold py-4 px-8 rounded-xl text-center text-lg transition-all border border-white/20">
-          <i class="fas fa-calendar-check mr-2"></i>Book a 30-Min Demo Meeting
+        <div class="text-center my-4"><span class="text-gray-600 text-xs">— or skip the form —</span></div>
+        <a href="https://calendar.app.google/CE5iBMV1Fu4K2ve38" target="_blank" class="block w-full bg-white/5 hover:bg-white/10 text-white font-bold py-4 px-8 rounded-xl text-center text-lg transition-all border border-white/10 hover:border-[#00FF88]/30">
+          <i class="fas fa-calendar-check mr-2 text-[#00FF88]"></i>Book a Free 15-Min Demo Instead
         </a>
-        <p class="text-center text-gray-400 text-xs mt-3">No credit card required. 3 free reports included.</p>
+        <p class="text-center text-gray-500 text-xs mt-3">No credit card required. 3 free reports included.</p>
       </form>
     </div>
   </section>
