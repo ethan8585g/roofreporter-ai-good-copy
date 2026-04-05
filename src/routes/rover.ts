@@ -258,53 +258,90 @@ async function callAI(
   maxTokens: number = 1000,
   temperature: number = 0.7
 ): Promise<{ content: string; model: string; tokensUsed: number; responseTimeMs: number }> {
+  // Try Gemini first, then OpenAI as fallback
   const geminiKey = env.GEMINI_API_KEY
-  if (!geminiKey) throw new Error('No GEMINI_API_KEY configured')
+  const openaiKey = env.OPENAI_API_KEY || (env as any).genspark_gtp_key || (env as any).claude_gtp_key
 
-  // Convert OpenAI-style messages to Gemini format
-  const systemInstruction = messages.find((m: any) => m.role === 'system')?.content || ''
-  const chatMessages = messages.filter((m: any) => m.role !== 'system')
+  // --- Gemini attempt ---
+  if (geminiKey) {
+    try {
+      const systemInstruction = messages.find((m: any) => m.role === 'system')?.content || ''
+      const chatMessages = messages.filter((m: any) => m.role !== 'system')
 
-  const geminiContents = chatMessages.map((m: any) => ({
-    role: m.role === 'assistant' ? 'model' : 'user',
-    parts: [{ text: m.content }]
-  }))
+      // Gemini requires first message to be 'user' — merge if needed
+      const geminiContents: any[] = []
+      for (const m of chatMessages) {
+        const role = m.role === 'assistant' ? 'model' : 'user'
+        // Gemini doesn't allow consecutive same-role messages or model-first
+        if (geminiContents.length === 0 && role === 'model') {
+          continue // Skip leading assistant messages
+        }
+        const lastRole = geminiContents.length > 0 ? geminiContents[geminiContents.length - 1].role : null
+        if (role === lastRole) {
+          // Merge with previous
+          geminiContents[geminiContents.length - 1].parts[0].text += '\n' + m.content
+        } else {
+          geminiContents.push({ role, parts: [{ text: m.content }] })
+        }
+      }
 
-  const startTime = Date.now()
-  const response = await fetch(
-    `${GEMINI_REST_BASE}/${GEMINI_MODEL}:generateContent?key=${geminiKey}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: systemInstruction }] },
-        contents: geminiContents,
-        generationConfig: {
-          maxOutputTokens: maxTokens,
-          temperature,
-        },
-      }),
+      if (geminiContents.length === 0) {
+        geminiContents.push({ role: 'user', parts: [{ text: 'Hello' }] })
+      }
+
+      const startTime = Date.now()
+      const response = await fetch(
+        `${GEMINI_REST_BASE}/${GEMINI_MODEL}:generateContent?key=${geminiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: systemInstruction }] },
+            contents: geminiContents,
+            generationConfig: { maxOutputTokens: maxTokens, temperature },
+          }),
+        }
+      )
+      const responseTimeMs = Date.now() - startTime
+
+      if (response.ok) {
+        const data: any = await response.json()
+        const content = data.candidates?.[0]?.content?.parts?.[0]?.text
+        if (content && content.trim()) {
+          const tokensUsed = (data.usageMetadata?.promptTokenCount || 0) + (data.usageMetadata?.candidatesTokenCount || 0)
+          return { content: content.trim(), model: GEMINI_MODEL, tokensUsed, responseTimeMs }
+        }
+      }
+      const errText = await response.text().catch(() => '')
+      console.error('[Rover] Gemini failed:', response.status, errText.slice(0, 200))
+    } catch (e: any) {
+      console.error('[Rover] Gemini error:', e.message)
     }
-  )
-  const responseTimeMs = Date.now() - startTime
-
-  if (!response.ok) {
-    const errText = await response.text()
-    throw new Error(`Gemini ${response.status}: ${errText.slice(0, 300)}`)
   }
 
-  const data: any = await response.json()
-  const content = data.candidates?.[0]?.content?.parts?.[0]?.text
-  if (!content || content.trim() === '') throw new Error('Gemini returned empty response')
+  // --- OpenAI fallback ---
+  if (openaiKey) {
+    const startTime = Date.now()
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${openaiKey}` },
+      body: JSON.stringify({ model: 'gpt-4o-mini', messages, max_tokens: maxTokens, temperature }),
+    })
+    const responseTimeMs = Date.now() - startTime
 
-  const tokensUsed = (data.usageMetadata?.promptTokenCount || 0) + (data.usageMetadata?.candidatesTokenCount || 0)
+    if (!response.ok) {
+      const errText = await response.text()
+      console.error('[Rover] OpenAI failed:', response.status, errText.slice(0, 200))
+      throw new Error(`OpenAI ${response.status}: ${errText.slice(0, 300)}`)
+    }
 
-  return {
-    content: content.trim(),
-    model: GEMINI_MODEL,
-    tokensUsed,
-    responseTimeMs,
+    const data: any = await response.json()
+    const content = data.choices?.[0]?.message?.content
+    if (!content || content.trim() === '') throw new Error('OpenAI returned empty response')
+    return { content: content.trim(), model: 'gpt-4o-mini', tokensUsed: data.usage?.total_tokens || 0, responseTimeMs }
   }
+
+  throw new Error('No AI API keys configured (need GEMINI_API_KEY or OPENAI_API_KEY)')
 }
 
 // ============================================================
