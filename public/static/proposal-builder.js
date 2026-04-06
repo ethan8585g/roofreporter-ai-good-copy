@@ -862,8 +862,11 @@ document.addEventListener('DOMContentLoaded', () => {
               var markupPct = state.markupPercent || 30;
               var custUnitPrice, custAmount;
               if (state.pricingEngineMode === 'per_square_customer') {
-                custUnitPrice = Number(item.unit_price || 0);
-                custAmount = Number(item.quantity || 0) * custUnitPrice;
+                // In per-square mode, the customer price is the per-square rate, not line item cost
+                var squares = state.selectedReport ? Math.ceil((state.selectedReport.roof_area_sqft || 0) / 100) : 1;
+                var perSquareCustomerPrice = state.customerPricePerSquare || 0;
+                custUnitPrice = perSquareCustomerPrice;
+                custAmount = squares * perSquareCustomerPrice;
               } else {
                 custUnitPrice = Number(item.unit_price || 0) * (1 + markupPct / 100);
                 custAmount = Number(item.quantity || 0) * custUnitPrice;
@@ -1139,6 +1142,10 @@ document.addEventListener('DOMContentLoaded', () => {
     var step3Addr = document.getElementById('step3-address');
     if (step3Addr) f.property_address = step3Addr.value || f.property_address || '';
 
+    // Capture per-square price from DOM if exists
+    var ppsInput = document.getElementById('pps-price');
+    if (ppsInput) state.pricePerSquare = Number(ppsInput.value) || state.pricePerSquare;
+
     return f;
   }
 
@@ -1157,10 +1164,12 @@ document.addEventListener('DOMContentLoaded', () => {
       var squares = Math.ceil((state.selectedReport.roof_area_sqft || 0) / 100);
       if (squares > 0) {
         f.items = [{
-          description: 'Roof Replacement — ' + squares + ' squares @ $' + Number(state.pricePerSquare).toFixed(2) + '/sq (' + Math.round(state.selectedReport.roof_area_sqft) + ' sq ft total area)',
+          description: 'Roof Replacement — ' + squares + ' squares',
           quantity: squares,
           unit: 'sq',
-          unit_price: state.pricePerSquare,
+          unit_price: state.pricingEngineMode === 'per_square_customer' ?
+            (state.customerPricePerSquare || state.pricePerSquare) :
+            Math.round(state.pricePerSquare * (1 + (state.markupPercent || 30) / 100) * 100) / 100,
           is_taxable: true
         }];
       }
@@ -1191,14 +1200,23 @@ document.addEventListener('DOMContentLoaded', () => {
         customer_id: customerId,
         order_id: f.order_id || null,
         document_type: 'proposal',
-        items: f.items.filter(i => i.description).map(i => ({
-          description: i.description,
-          quantity: parseFloat(i.quantity) || 1,
-          unit_price: parseFloat(i.unit_price) || 0,
-          unit: i.unit || 'each',
-          is_taxable: i.is_taxable ? 1 : 0,
-          category: i.category || ''
-        })),
+        items: f.items.filter(i => i.description).map(i => {
+          var costPrice = parseFloat(i.unit_price) || 0;
+          var customerPrice;
+          if (state.pricingEngineMode === 'per_square_customer') {
+            customerPrice = costPrice; // Per-square mode: customer total is set separately, line items stay at cost
+          } else {
+            customerPrice = costPrice * (1 + (state.markupPercent || 30) / 100);
+          }
+          return {
+            description: i.description,
+            quantity: parseFloat(i.quantity) || 1,
+            unit_price: Math.round(customerPrice * 100) / 100,
+            unit: i.unit || 'each',
+            is_taxable: i.is_taxable !== false,
+            category: i.category || ''
+          };
+        }),
         tax_rate: f.tax_rate,
         discount_amount: calcDiscountAmount(),
         discount_type: f.discount_type || 'fixed',

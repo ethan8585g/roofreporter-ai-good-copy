@@ -3694,22 +3694,22 @@ function getCustomerDashboardHTML(adsensePublisherId: string = '') {
   ${getHeadTags()}
   <title>My Dashboard - Roof Manager</title>
 </head>
-<body class="bg-gray-50 min-h-screen">
-  <header class="bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg">
+<body style="background:#0A0A0A" class="min-h-screen">
+  <header style="background:#111111;border-bottom:1px solid #222" class="text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
       <div class="flex items-center space-x-3">
         <a href="/" class="flex items-center space-x-3 hover:opacity-90 transition-opacity">
           <img src="/static/logo.png" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
           <div>
-            <h1 class="text-xl font-bold">My Dashboard</h1>
-            <p class="text-brand-200 text-xs">Roof Manager - Roof Reports & CRM</p>
+            <h1 class="text-xl font-bold text-white">My Dashboard</h1>
+            <p class="text-gray-400 text-xs">Roof Manager - Roof Reports & CRM</p>
           </div>
         </a>
       </div>
       <nav class="flex items-center space-x-4">
-        <span id="custGreeting" class="text-brand-200 text-sm hidden"><i class="fas fa-user-circle mr-1"></i><span id="custName"></span></span>
-        <a href="/" class="text-brand-200 hover:text-white text-sm"><i class="fas fa-home mr-1"></i>Home</a>
-        <button onclick="custLogout()" class="text-brand-200 hover:text-white text-sm"><i class="fas fa-sign-out-alt mr-1"></i>Logout</button>
+        <span id="custGreeting" class="text-gray-300 text-sm hidden"><i class="fas fa-user-circle mr-1"></i><span id="custName"></span></span>
+        <a href="/" class="text-gray-300 hover:text-[#00FF88] text-sm transition-colors"><i class="fas fa-home mr-1"></i>Home</a>
+        <button onclick="custLogout()" class="text-gray-300 hover:text-[#00FF88] text-sm transition-colors"><i class="fas fa-sign-out-alt mr-1"></i>Logout</button>
       </nav>
     </div>
   </header>
@@ -3754,20 +3754,20 @@ function getCustomerInvoiceHTML() {
   ${getHeadTags()}
   <title>Invoice - Roof Manager</title>
 </head>
-<body class="bg-gray-50 min-h-screen">
-  <header class="bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg">
+<body style="background:#0A0A0A" class="min-h-screen">
+  <header style="background:#111111;border-bottom:1px solid #222" class="text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
       <div class="flex items-center space-x-3">
         <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
           <img src="/static/logo.png" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
           <div>
-            <h1 class="text-xl font-bold">Invoice</h1>
-            <p class="text-brand-200 text-xs">Roof Manager</p>
+            <h1 class="text-xl font-bold text-white">Invoice</h1>
+            <p class="text-gray-400 text-xs">Roof Manager</p>
           </div>
         </a>
       </div>
       <nav class="flex items-center space-x-4">
-        <a href="/customer/dashboard" class="text-brand-200 hover:text-white text-sm"><i class="fas fa-arrow-left mr-1"></i>Back to Dashboard</a>
+        <a href="/customer/dashboard" class="text-gray-300 hover:text-[#00FF88] text-sm transition-colors"><i class="fas fa-arrow-left mr-1"></i>Back to Dashboard</a>
       </nav>
     </div>
   </header>
@@ -5254,19 +5254,19 @@ function getCustomerOrderPageHTML(mapsApiKey: string) {
   <title>Order a Report - Roof Manager</title>
   ${mapsScript}
 </head>
-<body class="bg-gray-50 min-h-screen">
-  <header class="bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg">
+<body style="background:#0A0A0A" class="min-h-screen">
+  <header style="background:#111111;border-bottom:1px solid #222" class="text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
       <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
         <img src="/static/logo.png" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
         <div>
-          <h1 class="text-xl font-bold">Order a Report</h1>
-          <p class="text-brand-200 text-xs">Roof Manager</p>
+          <h1 class="text-xl font-bold text-white">Order a Report</h1>
+          <p class="text-gray-400 text-xs">Roof Manager</p>
         </div>
       </a>
       <nav class="flex items-center space-x-4">
         <span id="creditsBadge" class="hidden bg-green-500/20 text-green-300 px-3 py-1.5 rounded-full text-sm font-medium"><i class="fas fa-coins mr-1"></i><span id="creditsCount">0</span> credits</span>
-        <a href="/customer/dashboard" class="text-brand-200 hover:text-white text-sm"><i class="fas fa-arrow-left mr-1"></i>Dashboard</a>
+        <a href="/customer/dashboard" class="text-gray-300 hover:text-[#00FF88] text-sm transition-colors"><i class="fas fa-arrow-left mr-1"></i>Dashboard</a>
       </nav>
     </div>
   </header>
@@ -5295,21 +5295,21 @@ function getCustomerProfilePageHTML() {
   ${getHeadTags()}
   <title>Account Settings - Roof Manager</title>
 </head>
-<body class="bg-gray-50 min-h-screen">
-  <header class="bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg">
+<body style="background:#0A0A0A" class="min-h-screen">
+  <header style="background:#111111;border-bottom:1px solid #222" class="text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
       <div class="flex items-center space-x-3">
         <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
           <img src="/static/logo.png" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
           <div>
-            <h1 class="text-xl font-bold">Account Settings</h1>
-            <p class="text-blue-200 text-xs">Manage your profile, branding &amp; preferences</p>
+            <h1 class="text-xl font-bold text-white">Account Settings</h1>
+            <p class="text-gray-400 text-xs">Manage your profile, branding &amp; preferences</p>
           </div>
         </a>
       </div>
       <nav class="flex items-center space-x-4">
-        <a href="/customer/dashboard" class="text-blue-200 hover:text-white text-sm"><i class="fas fa-arrow-left mr-1"></i>Dashboard</a>
-        <button onclick="custLogout()" class="text-blue-200 hover:text-white text-sm"><i class="fas fa-sign-out-alt mr-1"></i>Logout</button>
+        <a href="/customer/dashboard" class="text-gray-300 hover:text-[#00FF88] text-sm transition-colors"><i class="fas fa-arrow-left mr-1"></i>Dashboard</a>
+        <button onclick="custLogout()" class="text-gray-300 hover:text-[#00FF88] text-sm transition-colors"><i class="fas fa-sign-out-alt mr-1"></i>Logout</button>
       </nav>
     </div>
   </header>
