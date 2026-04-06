@@ -831,7 +831,7 @@ function handleTraceClick(pt) {
   if (mode === 'eaves') {
     if (orderState.traceEavesPoints.length >= 3) {
       const first = orderState.traceEavesPoints[0];
-      if (getDistanceM(pt, first) < 3) {
+      if (getDistanceM(pt, first) < 1.5) {
         closeEavesPolygon();
         return;
       }
@@ -985,10 +985,12 @@ function restoreLineOverlays() {
 function setTraceMode(mode) {
   if (orderState.traceCurrentLine.length > 0) finishCurrentLine();
   orderState.traceMode = mode;
-  // Toggle polygon editability: editable only in eaves mode
-  // so the edit handles don't steal clicks when placing ridges/hips/valleys
+  // Toggle polygon editability: ONLY editable in eaves mode AND only AFTER polygon is closed
+  // Edit handles steal clicks and prevent placing new pins near existing vertices
   if (orderState.traceEavesPolygon) {
-    orderState.traceEavesPolygon.setEditable(mode === 'eaves');
+    // Only make editable if the polygon is already closed (user is adjusting, not still placing)
+    var isClosed = orderState.traceEavesPoints.length >= 3;
+    orderState.traceEavesPolygon.setEditable(mode === 'eaves' && isClosed);
   }
   updateTraceUI();
 }
