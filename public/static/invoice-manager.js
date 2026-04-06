@@ -162,7 +162,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <p class="text-gray-500 text-sm mt-1">Create invoices, track payments, and send Square payment links</p>
       </div>
       <div class="flex gap-2">
-        <button onclick="window._im.fromProposal()" class="px-4 py-2 bg-purple-50 text-purple-700 rounded-xl text-sm font-medium hover:bg-purple-100 border border-purple-200 transition-all">
+        <button onclick="window._im.fromProposal()" class="px-4 py-2 bg-blue-500/15 text-blue-400 rounded-xl text-sm font-medium hover:bg-blue-500/15 border border-purple-200 transition-all">
           <i class="fas fa-file-import mr-1"></i>From Proposal
         </button>
         <button onclick="window._im.create()" class="px-5 py-2.5 bg-gradient-to-r from-[#111111] to-[#1a1a1a] text-white rounded-xl font-semibold text-sm hover:shadow-lg transition-all">
@@ -180,7 +180,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="flex items-center gap-2 mb-1"><div class="w-7 h-7 bg-green-100 rounded-lg flex items-center justify-center"><i class="fas fa-check-circle text-emerald-400 text-xs"></i></div><p class="text-xs text-green-700 font-medium">Collected</p></div>
         <p class="text-2xl font-bold text-green-700">$${totalPaid.toFixed(2)}</p>
       </div>
-      <div class="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-200 cursor-pointer hover:shadow-md transition-all" onclick="window._im.setFilter('outstanding')">
+      <div class="bg-gradient-to-br from-blue-50 to-blue-700 rounded-xl p-4 border border-blue-200 cursor-pointer hover:shadow-md transition-all" onclick="window._im.setFilter('outstanding')">
         <div class="flex items-center gap-2 mb-1"><div class="w-7 h-7 bg-blue-100 rounded-lg flex items-center justify-center"><i class="fas fa-clock text-blue-400 text-xs"></i></div><p class="text-xs text-blue-700 font-medium">Outstanding</p></div>
         <p class="text-2xl font-bold text-blue-700">$${totalOut.toFixed(2)}</p>
       </div>
@@ -204,7 +204,7 @@ document.addEventListener('DOMContentLoaded', () => {
       </div>
       <div class="flex gap-1 flex-wrap">
         ${filterBtn('All', 'all', '', allInvoices.length, 'gray')}
-        ${filterBtn('Draft', 'draft', 'edit', allInvoices.filter(i => i.status === 'draft').length, 'amber')}
+        ${filterBtn('Draft', 'draft', 'edit', allInvoices.filter(i => i.status === 'draft').length, 'gray')}
         ${filterBtn('Sent', 'sent', 'paper-plane', allInvoices.filter(i => i.status === 'sent').length, 'blue')}
         ${filterBtn('Paid', 'paid', 'check-circle', allInvoices.filter(i => i.status === 'paid').length, 'green')}
         ${filterBtn('Overdue', 'overdue', 'exclamation-circle', allInvoices.filter(i => i.status === 'overdue').length, 'red')}
@@ -234,7 +234,7 @@ document.addEventListener('DOMContentLoaded', () => {
           </thead>
           <tbody class="divide-y divide-gray-100">
             ${invoices.map(inv => {
-              const sc = { draft: 'bg-white/5 text-gray-300', sent: 'bg-blue-500/100/15 text-blue-400', viewed: 'bg-indigo-500/15 text-indigo-400', paid: 'bg-emerald-500/15 text-emerald-400', overdue: 'bg-red-500/100/15 text-red-400', cancelled: 'bg-white/5 text-gray-500', refunded: 'bg-purple-100 text-purple-700' }[inv.status] || 'bg-white/5 text-gray-400';
+              const sc = { draft: 'bg-white/5 text-gray-300', sent: 'bg-blue-500/100/15 text-blue-400', viewed: 'bg-blue-500/15/15 text-blue-400', paid: 'bg-emerald-500/15 text-emerald-400', overdue: 'bg-red-500/100/15 text-red-400', cancelled: 'bg-white/5 text-gray-500', refunded: 'bg-blue-500/15 text-blue-400' }[inv.status] || 'bg-white/5 text-gray-400';
               return `<tr class="hover:bg-[#111111]/5">
                 <td class="px-4 py-3 font-mono text-xs font-medium">${inv.invoice_number}</td>
                 <td class="px-4 py-3">${inv.customer_name || 'Unknown'}<br><span class="text-xs text-gray-400">${inv.customer_company || ''}</span></td>
@@ -351,7 +351,7 @@ document.addEventListener('DOMContentLoaded', () => {
     <!-- Attach Roof Report -->
     ${state.reports.length > 0 ? `
     <div class="bg-[#111111] rounded-xl border border-white/10 p-6 mb-6">
-      <h3 class="text-lg font-bold text-white mb-3"><i class="fas fa-file-pdf text-orange-500 mr-2"></i>Attach Roof Report</h3>
+      <h3 class="text-lg font-bold text-white mb-3"><i class="fas fa-file-pdf text-emerald-400 mr-2"></i>Attach Roof Report</h3>
       <p class="text-gray-500 text-xs mb-3">Optionally attach a completed roof report to this invoice. The report will be accessible to the customer via the shared link.</p>
       <select id="im-report" class="w-full border border-white/15 rounded-lg px-3 py-2 text-sm">
         <option value="">No report attached</option>
@@ -472,9 +472,9 @@ document.addEventListener('DOMContentLoaded', () => {
       ${f.notes ? `<div class="p-8 border-b border-white/10"><h3 class="text-xs font-semibold text-gray-500 uppercase mb-2">Notes</h3><div class="text-gray-300 text-sm whitespace-pre-wrap">${f.notes}</div></div>` : ''}
 
       ${f.attached_report_id ? `
-      <div class="p-8 border-b border-white/10 bg-orange-50">
-        <h3 class="text-xs font-semibold text-orange-700 uppercase mb-2"><i class="fas fa-file-pdf mr-1"></i>Attached Roof Report</h3>
-        ${(() => { const rpt = state.reports.find(r => r.id == f.attached_report_id); return rpt ? `<p class="text-orange-800 text-sm font-medium">${rpt.property_address || 'Report #' + rpt.id}</p><p class="text-orange-600 text-xs mt-1">${rpt.roof_area_sqft ? Math.round(rpt.roof_area_sqft) + ' sq ft roof area' : ''} ${rpt.order_number ? '| Order: ' + rpt.order_number : ''}</p><a href="/api/reports/${rpt.order_id}/html" target="_blank" class="inline-block mt-2 text-xs font-medium text-orange-700 hover:text-orange-900 underline"><i class="fas fa-external-link-alt mr-1"></i>View Full Report</a>` : `<p class="text-orange-600 text-sm">Report #${f.attached_report_id} attached</p>`; })()}
+      <div class="p-8 border-b border-white/10 bg-emerald-500/15">
+        <h3 class="text-xs font-semibold text-emerald-400 uppercase mb-2"><i class="fas fa-file-pdf mr-1"></i>Attached Roof Report</h3>
+        ${(() => { const rpt = state.reports.find(r => r.id == f.attached_report_id); return rpt ? `<p class="text-emerald-400 text-sm font-medium">${rpt.property_address || 'Report #' + rpt.id}</p><p class="text-emerald-400 text-xs mt-1">${rpt.roof_area_sqft ? Math.round(rpt.roof_area_sqft) + ' sq ft roof area' : ''} ${rpt.order_number ? '| Order: ' + rpt.order_number : ''}</p><a href="/api/reports/${rpt.order_id}/html" target="_blank" class="inline-block mt-2 text-xs font-medium text-emerald-400 hover:text-emerald-400 underline"><i class="fas fa-external-link-alt mr-1"></i>View Full Report</a>` : `<p class="text-emerald-400 text-sm">Report #${f.attached_report_id} attached</p>`; })()}
       </div>` : ''}
 
       <div class="p-8 text-center text-gray-400 text-xs">

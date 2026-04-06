@@ -35,7 +35,7 @@ function renderTeam() {
   if (!root) return;
 
   if (teamState.loading) {
-    root.innerHTML = '<div class="flex items-center justify-center py-20"><div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-teal-500"></div><span class="ml-4 text-gray-500 text-lg">Loading team...</span></div>';
+    root.innerHTML = '<div class="flex items-center justify-center py-20"><div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-emerald-500"></div><span class="ml-4 text-gray-500 text-lg">Loading team...</span></div>';
     return;
   }
 
@@ -54,29 +54,29 @@ function renderTeam() {
   var html = '';
 
   // ── Header + billing summary ──
-  html += '<div class="bg-gradient-to-r from-teal-500 to-emerald-600 rounded-2xl p-6 text-white mb-6">';
+  html += '<div class="bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-2xl p-6 text-white mb-6">';
   html += '  <div class="flex items-center justify-between">';
   html += '    <div>';
   html += '      <h2 class="text-2xl font-bold"><i class="fas fa-users-cog mr-2"></i>Sales Team</h2>';
-  html += '      <p class="text-teal-100 mt-1">Add team members to your account — full CRM, reports, and AI access</p>';
+  html += '      <p class="text-emerald-400 mt-1">Add team members to your account — full CRM, reports, and AI access</p>';
   html += '    </div>';
   html += '    <div class="text-right">';
   html += '      <div class="text-3xl font-black">' + activeMembers.length + '</div>';
-  html += '      <div class="text-teal-200 text-sm">active members</div>';
+  html += '      <div class="text-emerald-400 text-sm">active members</div>';
   html += '    </div>';
   html += '  </div>';
   if (activeMembers.length > 0) {
     html += '  <div class="mt-4 bg-[#111111]/10 rounded-lg px-4 py-2 flex items-center justify-between">';
-    html += '    <span class="text-teal-100"><i class="fas fa-credit-card mr-2"></i>Monthly billing</span>';
-    html += '    <span class="text-xl font-bold">$' + monthlyCost + '.00 <span class="text-sm font-normal text-teal-200">/month</span></span>';
+    html += '    <span class="text-emerald-400"><i class="fas fa-credit-card mr-2"></i>Monthly billing</span>';
+    html += '    <span class="text-xl font-bold">$' + monthlyCost + '.00 <span class="text-sm font-normal text-emerald-400">/month</span></span>';
     html += '  </div>';
   }
   html += '</div>';
 
   // ── Invite button ──
   html += '<div class="flex items-center justify-between mb-6">';
-  html += '  <h3 class="text-lg font-bold text-gray-100"><i class="fas fa-user-friends mr-2 text-teal-600"></i>Team Roster</h3>';
-  html += '  <button onclick="showInviteModal()" class="bg-teal-600 hover:bg-teal-700 text-white font-semibold py-2.5 px-5 rounded-lg text-sm transition-all hover:scale-105 shadow-lg shadow-teal-500/25">';
+  html += '  <h3 class="text-lg font-bold text-gray-100"><i class="fas fa-user-friends mr-2 text-emerald-400"></i>Team Roster</h3>';
+  html += '  <button onclick="showInviteModal()" class="bg-emerald-500/15 hover:bg-emerald-500/15 text-white font-semibold py-2.5 px-5 rounded-lg text-sm transition-all hover:scale-105 shadow-lg shadow-emerald-500/25">';
   html += '    <i class="fas fa-user-plus mr-2"></i>Invite Team Member';
   html += '  </button>';
   html += '</div>';
@@ -96,8 +96,8 @@ function renderTeam() {
       html += '<tr class="border-b hover:bg-[#111111]/5 transition-colors">';
       html += '<td class="px-4 py-3">';
       html += '  <div class="flex items-center gap-3">';
-      html += '    <div class="w-9 h-9 rounded-full bg-teal-100 flex items-center justify-center">';
-      html += '      <span class="text-teal-700 font-bold text-sm">' + (m.name || 'U').charAt(0).toUpperCase() + '</span>';
+      html += '    <div class="w-9 h-9 rounded-full bg-emerald-500/15 flex items-center justify-center">';
+      html += '      <span class="text-emerald-400 font-bold text-sm">' + (m.name || 'U').charAt(0).toUpperCase() + '</span>';
       html += '    </div>';
       html += '    <div>';
       html += '      <div class="font-semibold text-gray-100">' + escHtml(m.name) + '</div>';
@@ -107,7 +107,7 @@ function renderTeam() {
       html += '</td>';
       html += '<td class="px-4 py-3">';
       html += m.role === 'admin'
-        ? '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-100 text-purple-700"><i class="fas fa-shield-alt mr-1"></i>Admin</span>'
+        ? '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-500/15 text-blue-400"><i class="fas fa-shield-alt mr-1"></i>Admin</span>'
         : '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-500/100/15 text-blue-400"><i class="fas fa-user mr-1"></i>Member</span>';
       html += '</td>';
       html += '<td class="px-4 py-3"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-400"><i class="fas fa-circle text-green-500 mr-1" style="font-size:6px"></i>Active</span></td>';
@@ -117,8 +117,8 @@ function renderTeam() {
       html += '    <button onclick="toggleRole(' + m.id + ',\'' + (m.role === 'admin' ? 'member' : 'admin') + '\')" class="text-gray-400 hover:text-blue-400 p-1.5 rounded transition-colors" title="' + (m.role === 'admin' ? 'Demote to Member' : 'Promote to Admin') + '">';
       html += '      <i class="fas fa-' + (m.role === 'admin' ? 'user' : 'shield-alt') + '"></i>';
       html += '    </button>';
-      html += '    <button onclick="showPermModal(' + m.id + ',\'' + escHtml(m.name) + '\')" class="text-gray-400 hover:text-teal-600 p-1.5 rounded transition-colors" title="Edit Permissions"><i class="fas fa-sliders-h"></i></button>';
-      html += '    <button onclick="suspendMember(' + m.id + ')" class="text-gray-400 hover:text-cyan-400 p-1.5 rounded transition-colors" title="Suspend"><i class="fas fa-pause"></i></button>';
+      html += '    <button onclick="showPermModal(' + m.id + ',\'' + escHtml(m.name) + '\')" class="text-gray-400 hover:text-emerald-400 p-1.5 rounded transition-colors" title="Edit Permissions"><i class="fas fa-sliders-h"></i></button>';
+      html += '    <button onclick="suspendMember(' + m.id + ')" class="text-gray-400 hover:text-blue-400 p-1.5 rounded transition-colors" title="Suspend"><i class="fas fa-pause"></i></button>';
       html += '    <button onclick="removeMember(' + m.id + ',\'' + escHtml(m.name) + '\')" class="text-gray-400 hover:text-red-400 p-1.5 rounded transition-colors" title="Remove"><i class="fas fa-user-minus"></i></button>';
       html += '  </div>';
       html += '</td>';
@@ -130,7 +130,7 @@ function renderTeam() {
     html += '  <i class="fas fa-users text-gray-300 text-5xl mb-4"></i>';
     html += '  <h3 class="text-lg font-bold text-gray-300 mb-2">No team members yet</h3>';
     html += '  <p class="text-gray-500 mb-4 max-w-md mx-auto">Invite your sales team to access all platform features including roof reports, CRM, and AI Secretary.</p>';
-    html += '  <button onclick="showInviteModal()" class="bg-teal-600 hover:bg-teal-700 text-white font-semibold py-2.5 px-5 rounded-lg text-sm transition-all"><i class="fas fa-user-plus mr-2"></i>Invite Your First Member</button>';
+    html += '  <button onclick="showInviteModal()" class="bg-emerald-500/15 hover:bg-emerald-500/15 text-white font-semibold py-2.5 px-5 rounded-lg text-sm transition-all"><i class="fas fa-user-plus mr-2"></i>Invite Your First Member</button>';
     html += '</div>';
   }
 
@@ -138,11 +138,11 @@ function renderTeam() {
   if (suspendedMembers.length > 0) {
     html += '<div class="mb-6">';
     html += '<h3 class="text-sm font-bold text-gray-500 uppercase tracking-wide mb-3"><i class="fas fa-pause-circle mr-1"></i>Suspended (' + suspendedMembers.length + ')</h3>';
-    html += '<div class="bg-cyan-500/10 border border-amber-200 rounded-xl overflow-hidden">';
+    html += '<div class="bg-blue-500/15/10 border border-white/15 rounded-xl overflow-hidden">';
     suspendedMembers.forEach(function(m) {
-      html += '<div class="flex items-center justify-between px-4 py-3 border-b border-amber-100 last:border-0">';
+      html += '<div class="flex items-center justify-between px-4 py-3 border-b border-white/15 last:border-0">';
       html += '  <div class="flex items-center gap-3">';
-      html += '    <div class="w-8 h-8 rounded-full bg-amber-200 flex items-center justify-center"><span class="text-amber-800 font-bold text-xs">' + (m.name || 'U').charAt(0) + '</span></div>';
+      html += '    <div class="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center"><span class="text-gray-400 font-bold text-xs">' + (m.name || 'U').charAt(0) + '</span></div>';
       html += '    <div><span class="font-medium text-gray-300">' + escHtml(m.name) + '</span><span class="text-xs text-gray-400 ml-2">' + escHtml(m.email) + '</span></div>';
       html += '  </div>';
       html += '  <div class="flex gap-2">';
@@ -174,20 +174,20 @@ function renderTeam() {
 
   // ── Pricing info ──
   html += '<div class="bg-[#0A0A0A] rounded-xl border p-6">';
-  html += '  <h3 class="font-bold text-gray-300 mb-3"><i class="fas fa-tag mr-2 text-teal-600"></i>Team Pricing</h3>';
+  html += '  <h3 class="font-bold text-gray-300 mb-3"><i class="fas fa-tag mr-2 text-emerald-400"></i>Team Pricing</h3>';
   html += '  <div class="grid grid-cols-1 md:grid-cols-3 gap-4">';
   html += '    <div class="bg-[#111111] rounded-lg p-4 border text-center">';
-  html += '      <div class="text-3xl font-black text-teal-600">$50</div>';
+  html += '      <div class="text-3xl font-black text-emerald-400">$50</div>';
   html += '      <div class="text-gray-500 text-sm">per user / month</div>';
   html += '    </div>';
   html += '    <div class="bg-[#111111] rounded-lg p-4 border">';
   html += '      <div class="font-semibold text-gray-300 mb-2">Each member gets:</div>';
   html += '      <ul class="text-sm text-gray-400 space-y-1">';
-  html += '        <li><i class="fas fa-check text-teal-500 mr-1"></i>Order roof reports</li>';
-  html += '        <li><i class="fas fa-check text-teal-500 mr-1"></i>Full CRM access</li>';
-  html += '        <li><i class="fas fa-check text-teal-500 mr-1"></i>AI Roofer Secretary</li>';
-  html += '        <li><i class="fas fa-check text-teal-500 mr-1"></i>Virtual Try-On</li>';
-  html += '        <li><i class="fas fa-check text-teal-500 mr-1"></i>D2D Manager</li>';
+  html += '        <li><i class="fas fa-check text-emerald-400 mr-1"></i>Order roof reports</li>';
+  html += '        <li><i class="fas fa-check text-emerald-400 mr-1"></i>Full CRM access</li>';
+  html += '        <li><i class="fas fa-check text-emerald-400 mr-1"></i>AI Roofer Secretary</li>';
+  html += '        <li><i class="fas fa-check text-emerald-400 mr-1"></i>Virtual Try-On</li>';
+  html += '        <li><i class="fas fa-check text-emerald-400 mr-1"></i>D2D Manager</li>';
   html += '      </ul>';
   html += '    </div>';
   html += '    <div class="bg-[#111111] rounded-lg p-4 border">';
@@ -210,7 +210,7 @@ function renderTeam() {
 
 // ── Team Member View (read-only for regular team members) ──
 function renderTeamMemberView(members) {
-  var html = '<div class="bg-gradient-to-r from-blue-500 to-indigo-600 rounded-2xl p-6 text-white mb-6">';
+  var html = '<div class="bg-gradient-to-r from-blue-500 to-blue-700 rounded-2xl p-6 text-white mb-6">';
   html += '<h2 class="text-2xl font-bold"><i class="fas fa-users mr-2"></i>Your Team</h2>';
   html += '<p class="text-blue-200 mt-1">You are a member of this team</p>';
   html += '</div>';
@@ -239,16 +239,16 @@ function showPermModal(memberId, memberName) {
   var modalHtml =
     '<div id="permModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">' +
       '<div class="bg-[#111111] rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden">' +
-        '<div class="bg-gradient-to-r from-teal-500 to-emerald-600 px-6 py-4 text-white">' +
+        '<div class="bg-gradient-to-r from-emerald-500 to-emerald-600 px-6 py-4 text-white">' +
           '<h3 class="text-base font-bold"><i class="fas fa-sliders-h mr-2"></i>Permissions: ' + escHtml(memberName) + '</h3>' +
-          '<p class="text-teal-100 text-xs mt-0.5">Control what this member can access</p>' +
+          '<p class="text-emerald-400 text-xs mt-0.5">Control what this member can access</p>' +
         '</div>' +
         '<div class="p-6">' +
           renderPermCheckboxes('perm', currentPerms) +
           '<div id="permMsg" class="mt-3"></div>' +
           '<div class="flex gap-3 mt-4">' +
             '<button onclick="hidePermModal()" class="flex-1 border border-white/15 rounded-lg py-2.5 text-sm font-semibold text-gray-300 hover:bg-[#111111]/5">Cancel</button>' +
-            '<button onclick="savePermissions()" id="permSaveBtn" class="flex-1 bg-teal-600 hover:bg-teal-700 text-white rounded-lg py-2.5 text-sm font-semibold"><i class="fas fa-save mr-1"></i>Save Permissions</button>' +
+            '<button onclick="savePermissions()" id="permSaveBtn" class="flex-1 bg-emerald-500/15 hover:bg-emerald-500/15 text-white rounded-lg py-2.5 text-sm font-semibold"><i class="fas fa-save mr-1"></i>Save Permissions</button>' +
           '</div>' +
         '</div>' +
       '</div>' +
@@ -310,7 +310,7 @@ function renderPermCheckboxes(idPrefix, perms) {
   PERM_LABELS.forEach(function (p) {
     var checked = effective[p.key] !== false;
     html += '<label class="flex items-center gap-2 py-1 cursor-pointer">' +
-      '<input type="checkbox" id="' + idPrefix + '_' + p.key + '"' + (checked ? ' checked' : '') + ' class="rounded border-white/15 text-teal-600 focus:ring-teal-500">' +
+      '<input type="checkbox" id="' + idPrefix + '_' + p.key + '"' + (checked ? ' checked' : '') + ' class="rounded border-white/15 text-emerald-400 focus:ring-emerald-500">' +
       '<i class="fas ' + p.icon + ' text-gray-400 text-xs w-4 text-center"></i>' +
       '<span class="text-sm text-gray-300">' + p.label + '</span>' +
     '</label>';
@@ -332,22 +332,22 @@ function collectPerms(idPrefix) {
 function renderInviteModal() {
   return '<div id="inviteModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 hidden">' +
     '<div class="bg-[#111111] rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden max-h-screen overflow-y-auto">' +
-      '<div class="bg-gradient-to-r from-teal-500 to-emerald-600 px-6 py-4 text-white">' +
+      '<div class="bg-gradient-to-r from-emerald-500 to-emerald-600 px-6 py-4 text-white">' +
         '<h3 class="text-lg font-bold"><i class="fas fa-user-plus mr-2"></i>Invite Team Member</h3>' +
-        '<p class="text-teal-100 text-sm">$50/month per user</p>' +
+        '<p class="text-emerald-400 text-sm">$50/month per user</p>' +
       '</div>' +
       '<form onsubmit="sendInvite(event)" class="p-6 space-y-4">' +
         '<div>' +
           '<label class="block text-sm font-semibold text-gray-300 mb-1">Full Name *</label>' +
-          '<input type="text" id="invName" required placeholder="e.g. John Smith" class="w-full border border-white/15 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500">' +
+          '<input type="text" id="invName" required placeholder="e.g. John Smith" class="w-full border border-white/15 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">' +
         '</div>' +
         '<div>' +
           '<label class="block text-sm font-semibold text-gray-300 mb-1">Email Address *</label>' +
-          '<input type="email" id="invEmail" required placeholder="john@company.com" class="w-full border border-white/15 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500">' +
+          '<input type="email" id="invEmail" required placeholder="john@company.com" class="w-full border border-white/15 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">' +
         '</div>' +
         '<div>' +
           '<label class="block text-sm font-semibold text-gray-300 mb-1">Role</label>' +
-          '<select id="invRole" class="w-full border border-white/15 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-teal-500">' +
+          '<select id="invRole" class="w-full border border-white/15 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-emerald-500">' +
             '<option value="member">Team Member — no team management</option>' +
             '<option value="admin">Team Admin — full access + manage team</option>' +
           '</select>' +
@@ -356,7 +356,7 @@ function renderInviteModal() {
         '<div id="invMsg"></div>' +
         '<div class="flex gap-3 pt-2">' +
           '<button type="button" onclick="hideInviteModal()" class="flex-1 border border-white/15 rounded-lg py-2.5 text-sm font-semibold text-gray-300 hover:bg-[#111111]/5 transition-colors">Cancel</button>' +
-          '<button type="submit" id="invBtn" class="flex-1 bg-teal-600 hover:bg-teal-700 text-white rounded-lg py-2.5 text-sm font-semibold transition-all"><i class="fas fa-paper-plane mr-1"></i>Send Invite</button>' +
+          '<button type="submit" id="invBtn" class="flex-1 bg-emerald-500/15 hover:bg-emerald-500/15 text-white rounded-lg py-2.5 text-sm font-semibold transition-all"><i class="fas fa-paper-plane mr-1"></i>Send Invite</button>' +
         '</div>' +
       '</form>' +
     '</div>' +

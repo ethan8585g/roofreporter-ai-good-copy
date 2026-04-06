@@ -120,7 +120,7 @@ async function mcSelectOrder(orderId) {
   if (!fullReport || !fullReport.materials || !fullReport.materials.line_items) {
     if (area) area.innerHTML =
       '<div class="bg-[#111111] rounded-2xl border border-white/10 p-8 text-center">' +
-        '<i class="fas fa-exclamation-circle text-amber-400 text-3xl mb-3 block"></i>' +
+        '<i class="fas fa-exclamation-circle text-gray-400 text-3xl mb-3 block"></i>' +
         '<p class="text-gray-400">Material data is not available for this report. It may have been generated before material tracking was enabled.</p>' +
       '</div>';
     return;
@@ -192,16 +192,16 @@ function renderRoofSummaryCard() {
         '<p class="text-2xl font-black text-sky-700">' + Math.round(r.total_true_area_sqft || 0) + '</p>' +
         '<p class="text-xs text-gray-500 mt-0.5">True Area (sq ft)</p>' +
       '</div>' +
-      '<div class="text-center p-3 bg-indigo-50 rounded-xl">' +
-        '<p class="text-2xl font-black text-indigo-700">' + (r.roof_pitch_ratio || '—') + '</p>' +
+      '<div class="text-center p-3 bg-blue-500/15 rounded-xl">' +
+        '<p class="text-2xl font-black text-blue-400">' + (r.roof_pitch_ratio || '—') + '</p>' +
         '<p class="text-xs text-gray-500 mt-0.5">Pitch</p>' +
       '</div>' +
       '<div class="text-center p-3 bg-emerald-50 rounded-xl">' +
         '<p class="text-2xl font-black text-emerald-700">' + (m.gross_squares ? m.gross_squares.toFixed(1) : '—') + '</p>' +
         '<p class="text-xs text-gray-500 mt-0.5">Squares</p>' +
       '</div>' +
-      '<div class="text-center p-3 bg-cyan-500/10 rounded-xl">' +
-        '<p class="text-xl font-black text-amber-700 capitalize">' + (m.complexity_class || '—') + '</p>' +
+      '<div class="text-center p-3 bg-blue-500/15/10 rounded-xl">' +
+        '<p class="text-xl font-black text-gray-400 capitalize">' + (m.complexity_class || '—') + '</p>' +
         '<p class="text-xs text-gray-500 mt-0.5">Complexity</p>' +
       '</div>' +
     '</div>' +
@@ -231,7 +231,7 @@ function renderWasteControlsInner() {
   }).join('');
 
   return '<div class="bg-[#111111] rounded-2xl border border-white/10 shadow-sm p-5 mb-4">' +
-    '<h3 class="font-bold text-gray-100 mb-3 text-sm"><i class="fas fa-percent text-amber-500 mr-2"></i>Waste Factor</h3>' +
+    '<h3 class="font-bold text-gray-100 mb-3 text-sm"><i class="fas fa-percent text-gray-400 mr-2"></i>Waste Factor</h3>' +
     '<div class="flex flex-wrap gap-2">' + buttons + '</div>' +
     '<p class="text-xs text-gray-400 mt-2">★ = Suggested for <span class="capitalize">' + (mcState.report.materials.complexity_class || '') + '</span> complexity roof</p>' +
   '</div>';
@@ -321,7 +321,7 @@ function renderMaterialTableInner() {
 
   return '<div class="bg-[#111111] rounded-2xl border border-white/10 shadow-sm overflow-hidden mb-4">' +
     '<div class="px-5 py-4 border-b border-white/5 flex items-center justify-between">' +
-      '<h3 class="font-bold text-gray-100 text-sm"><i class="fas fa-boxes text-indigo-500 mr-2"></i>Material List</h3>' +
+      '<h3 class="font-bold text-gray-100 text-sm"><i class="fas fa-boxes text-blue-400 mr-2"></i>Material List</h3>' +
       toggleRow +
     '</div>' +
     '<div class="overflow-x-auto">' +
@@ -416,7 +416,7 @@ function renderActionBar() {
     '<button onclick="mcAddToInvoice()" class="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl text-sm transition-colors shadow-sm">' +
       '<i class="fas fa-file-invoice-dollar"></i>Add to Invoice' +
     '</button>' +
-    '<button onclick="mcCreateProposal()" class="flex items-center gap-2 px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-xl text-sm transition-colors shadow-sm">' +
+    '<button onclick="mcCreateProposal()" class="flex items-center gap-2 px-5 py-2.5 bg-blue-500/15 hover:bg-blue-500/15 text-white font-semibold rounded-xl text-sm transition-colors shadow-sm">' +
       '<i class="fas fa-file-invoice mr-1"></i>Go to Proposals <i class="fas fa-arrow-right text-xs ml-1"></i>' +
     '</button>' +
     '<button onclick="window.print()" class="flex items-center gap-2 px-5 py-2.5 bg-white/5 hover:bg-gray-200 text-gray-300 font-medium rounded-xl text-sm transition-colors">' +
@@ -428,7 +428,7 @@ function renderActionBar() {
     '<button onclick="mcExportCSV()" class="flex items-center gap-2 px-5 py-2.5 bg-sky-600 hover:bg-sky-700 text-white font-semibold rounded-xl text-sm transition-colors shadow-sm">' +
       '<i class="fas fa-file-csv"></i>Export CSV' +
     '</button>' +
-    '<button onclick="mcExportXactimate()" class="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl text-sm transition-colors shadow-sm">' +
+    '<button onclick="mcExportXactimate()" class="flex items-center gap-2 px-5 py-2.5 bg-blue-500/15 hover:bg-blue-500/15 text-white font-semibold rounded-xl text-sm transition-colors shadow-sm">' +
       '<i class="fas fa-file-code"></i>Xactimate XML' +
     '</button>' +
   '</div>';

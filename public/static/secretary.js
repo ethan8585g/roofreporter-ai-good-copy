@@ -187,10 +187,10 @@
     var needsAttention = isConnect && state.phoneSetup && state.phoneSetup.connection_status !== 'connected';
     return '<button onclick="secSetTab(\'' + id + '\')" class="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium transition-all ' +
       (active ? 'bg-gradient-to-r from-[#111111] to-[#1a1a1a] text-white shadow-lg' :
-       needsAttention ? 'bg-cyan-500/10 text-amber-700 border-2 border-amber-300 animate-pulse' :
+       needsAttention ? 'bg-blue-500/15/10 text-gray-400 border-2 border-white/15 animate-pulse' :
        'bg-[#111111] text-gray-400 hover:bg-[#111111]/5 border border-white/10') +
       '"><i class="fas ' + icon + ' text-xs"></i>' + label +
-      (needsAttention ? ' <span class="w-2 h-2 bg-cyan-500/100 rounded-full"></span>' : '') +
+      (needsAttention ? ' <span class="w-2 h-2 bg-blue-500/15/100 rounded-full"></span>' : '') +
       '</button>';
   }
   window.secSetTab = function(t) { state.activeTab = t; render(); if (t === 'calls') loadCalls(); if (t === 'leads') loadLeads(); if (t === 'messages') loadAndRenderMessages(); if (t === 'appointments') loadAndRenderAppointments(); if (t === 'callbacks') loadAndRenderCallbacks(); };
@@ -330,11 +330,11 @@
           '<div><p class="font-bold text-gray-100">' + (state.isActive ? 'Service ACTIVE' : 'Service PAUSED') + '</p>' +
             '<p class="text-xs text-gray-500">' +
               (state.phoneSetup?.connection_status === 'connected' ? '<span class="text-emerald-400"><i class="fas fa-link mr-1"></i>Phone Connected</span>' :
-               state.phoneSetup?.assigned_phone_number ? '<span class="text-cyan-400"><i class="fas fa-exclamation-triangle mr-1"></i>Phone Setup Incomplete</span>' :
+               state.phoneSetup?.assigned_phone_number ? '<span class="text-blue-400"><i class="fas fa-exclamation-triangle mr-1"></i>Phone Setup Incomplete</span>' :
                '<span class="text-gray-400"><i class="fas fa-phone-slash mr-1"></i>No Phone Connected</span>') +
               ' &bull; ' + (state.subscription?.status || 'unknown') + '</p></div></div>' +
         '<div class="flex gap-2">' +
-          (state.phoneSetup?.connection_status !== 'connected' ? '<button onclick="secSetTab(\'connect\')" class="px-4 py-2 rounded-xl text-sm font-semibold bg-cyan-500/10 text-amber-700 border border-amber-200 hover:bg-amber-100 transition-all"><i class="fas fa-phone-alt mr-1"></i>Connect Phone</button>' : '') +
+          (state.phoneSetup?.connection_status !== 'connected' ? '<button onclick="secSetTab(\'connect\')" class="px-4 py-2 rounded-xl text-sm font-semibold bg-blue-500/15/10 text-gray-400 border border-white/15 hover:bg-white/10 transition-all"><i class="fas fa-phone-alt mr-1"></i>Connect Phone</button>' : '') +
           '<button onclick="secToggle()" class="px-4 py-2 rounded-xl text-sm font-semibold transition-all ' +
             (state.isActive ? 'bg-red-500/10 text-red-400 hover:bg-red-100 border border-red-200' : 'bg-emerald-500/10 text-emerald-400 hover:bg-green-100 border border-green-200') + '">' +
             '<i class="fas ' + (state.isActive ? 'fa-pause' : 'fa-play') + ' mr-1"></i>' + (state.isActive ? 'Pause' : 'Activate') + '</button>' +
@@ -432,12 +432,12 @@
 
     // Agent profiles with voice IDs and descriptions
     var agents = [
-      { id: 'sarah', name: 'Sarah', voice: 'alloy', gender: 'Female', desc: 'Professional, warm, and confident. Ideal for a friendly front desk feel.', icon: 'fa-user-tie', color: 'from-pink-500 to-rose-600', badge: 'Most Popular' },
-      { id: 'emily', name: 'Emily', voice: 'shimmer', gender: 'Female', desc: 'Bright, energetic, and approachable. Great for high-energy sales teams.', icon: 'fa-smile-beam', color: 'from-purple-500 to-violet-600', badge: '' },
-      { id: 'jessica', name: 'Jessica', voice: 'nova', gender: 'Female', desc: 'Calm, authoritative, and trustworthy. Perfect for insurance and professional services.', icon: 'fa-user-shield', color: 'from-indigo-500 to-[#1a1a1a]', badge: '' },
-      { id: 'james', name: 'James', voice: 'echo', gender: 'Male', desc: 'Deep, professional, and reassuring. Ideal for contractor and trade businesses.', icon: 'fa-hard-hat', color: 'from-[#111111] to-cyan-600', badge: '' },
-      { id: 'mike', name: 'Mike', voice: 'onyx', gender: 'Male', desc: 'Strong, confident, and direct. Great for sales-focused operations.', icon: 'fa-user-check', color: 'from-emerald-500 to-teal-600', badge: '' },
-      { id: 'alex', name: 'Alex', voice: 'fable', gender: 'Male', desc: 'Friendly, conversational, and relaxed. Perfect for a casual, personable vibe.', icon: 'fa-comments', color: 'from-amber-500 to-orange-600', badge: '' },
+      { id: 'sarah', name: 'Sarah', voice: 'alloy', gender: 'Female', desc: 'Professional, warm, and confident. Ideal for a friendly front desk feel.', icon: 'fa-user-tie', color: 'from-blue-500 to-blue-600', badge: 'Most Popular' },
+      { id: 'emily', name: 'Emily', voice: 'shimmer', gender: 'Female', desc: 'Bright, energetic, and approachable. Great for high-energy sales teams.', icon: 'fa-smile-beam', color: 'from-blue-600 to-blue-700', badge: '' },
+      { id: 'jessica', name: 'Jessica', voice: 'nova', gender: 'Female', desc: 'Calm, authoritative, and trustworthy. Perfect for insurance and professional services.', icon: 'fa-user-shield', color: 'from-blue-600 to-[#1a1a1a]', badge: '' },
+      { id: 'james', name: 'James', voice: 'echo', gender: 'Male', desc: 'Deep, professional, and reassuring. Ideal for contractor and trade businesses.', icon: 'fa-hard-hat', color: 'from-[#111111] to-blue-600', badge: '' },
+      { id: 'mike', name: 'Mike', voice: 'onyx', gender: 'Male', desc: 'Strong, confident, and direct. Great for sales-focused operations.', icon: 'fa-user-check', color: 'from-emerald-500 to-emerald-600', badge: '' },
+      { id: 'alex', name: 'Alex', voice: 'fable', gender: 'Male', desc: 'Friendly, conversational, and relaxed. Perfect for a casual, personable vibe.', icon: 'fa-comments', color: 'from-gray-500 to-emerald-600', badge: '' },
     ];
 
     var agentCards = agents.map(function(agent) {
@@ -453,8 +453,8 @@
           '<div class="flex-1 min-w-0">' +
             '<div class="flex items-center gap-2">' +
               '<p class="font-bold text-gray-100 text-sm">' + agent.name + '</p>' +
-              '<span class="px-1.5 py-0.5 rounded text-[9px] font-bold ' + (agent.gender === 'Female' ? 'bg-pink-100 text-pink-700' : 'bg-blue-500/100/15 text-blue-400') + '">' + agent.gender + '</span>' +
-              (agent.badge ? '<span class="px-1.5 py-0.5 bg-cyan-500/15 text-cyan-400 rounded text-[9px] font-bold">' + agent.badge + '</span>' : '') +
+              '<span class="px-1.5 py-0.5 rounded text-[9px] font-bold ' + (agent.gender === 'Female' ? 'bg-blue-500/15 text-blue-400' : 'bg-blue-500/100/15 text-blue-400') + '">' + agent.gender + '</span>' +
+              (agent.badge ? '<span class="px-1.5 py-0.5 bg-blue-500/15/15 text-blue-400 rounded text-[9px] font-bold">' + agent.badge + '</span>' : '') +
             '</div>' +
             '<p class="text-xs text-gray-500 line-clamp-1">' + agent.desc + '</p>' +
           '</div>' +
@@ -505,12 +505,12 @@
     var fallback = c.answering_fallback_action || 'take_message';
     var fwdNum = c.answering_forward_number || '';
     var notifyEmail = c.answering_notify_email || '';
-    return '<div class="bg-[#111111] rounded-2xl border-2 border-purple-200 shadow-sm p-6 mb-6">' +
-      '<h3 class="font-bold text-gray-100 text-lg mb-1"><span class="inline-flex items-center justify-center w-7 h-7 bg-purple-500 text-white rounded-full text-sm font-bold mr-2"><i class="fas fa-phone-volume text-xs"></i></span>Never-Voicemail Answering Settings</h3>' +
+    return '<div class="bg-[#111111] rounded-2xl border-2 border-blue-500/20 shadow-sm p-6 mb-6">' +
+      '<h3 class="font-bold text-gray-100 text-lg mb-1"><span class="inline-flex items-center justify-center w-7 h-7 bg-blue-500/15 text-white rounded-full text-sm font-bold mr-2"><i class="fas fa-phone-volume text-xs"></i></span>Never-Voicemail Answering Settings</h3>' +
       '<p class="text-gray-500 text-sm mb-4 ml-9">Configure how the AI handles calls when you can\'t answer</p>' +
       '<div class="space-y-4 ml-9">' +
         '<div>' +
-          '<label class="block text-sm font-semibold text-gray-300 mb-2"><i class="fas fa-route mr-1 text-purple-500"></i>When a caller reaches the AI:</label>' +
+          '<label class="block text-sm font-semibold text-gray-300 mb-2"><i class="fas fa-route mr-1 text-blue-400"></i>When a caller reaches the AI:</label>' +
           '<div class="space-y-2">' +
             radioOpt('answering_fallback', 'take_message', 'Take a detailed message', fallback) +
             radioOpt('answering_fallback', 'forward_urgent', 'Take message — forward URGENT calls to a number', fallback) +
@@ -518,19 +518,19 @@
           '</div>' +
         '</div>' +
         '<div id="answeringFwdWrap" class="' + (fallback === 'take_message' ? 'hidden' : '') + '">' +
-          '<label class="block text-sm font-semibold text-gray-300 mb-1"><i class="fas fa-phone mr-1 text-purple-500"></i>Forward-to Number</label>' +
-          '<input type="tel" id="answeringFwdNum" value="' + esc(fwdNum) + '" placeholder="(780) 555-0199" class="w-full border border-white/15 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-purple-400 focus:border-purple-400">' +
+          '<label class="block text-sm font-semibold text-gray-300 mb-1"><i class="fas fa-phone mr-1 text-blue-400"></i>Forward-to Number</label>' +
+          '<input type="tel" id="answeringFwdNum" value="' + esc(fwdNum) + '" placeholder="(780) 555-0199" class="w-full border border-white/15 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-400 focus:border-blue-400">' +
           '<p class="text-xs text-gray-400 mt-1">For urgent/emergency calls that need to be forwarded immediately</p>' +
         '</div>' +
         '<div class="grid grid-cols-1 md:grid-cols-2 gap-4">' +
-          '<label class="flex items-center gap-3 p-3 bg-purple-50 rounded-xl cursor-pointer"><input type="checkbox" id="answeringSms" ' + (c.answering_sms_notify !== 0 ? 'checked' : '') + ' class="w-4 h-4 text-purple-500 rounded"><span class="text-sm text-gray-300"><i class="fas fa-sms text-purple-400 mr-1"></i>SMS notify after each call</span></label>' +
-          '<label class="flex items-center gap-3 p-3 bg-purple-50 rounded-xl cursor-pointer"><input type="checkbox" id="answeringEmail" ' + (c.answering_email_notify !== 0 ? 'checked' : '') + ' class="w-4 h-4 text-purple-500 rounded"><span class="text-sm text-gray-300"><i class="fas fa-envelope text-purple-400 mr-1"></i>Email notify after each call</span></label>' +
+          '<label class="flex items-center gap-3 p-3 bg-blue-500/15 rounded-xl cursor-pointer"><input type="checkbox" id="answeringSms" ' + (c.answering_sms_notify !== 0 ? 'checked' : '') + ' class="w-4 h-4 text-blue-400 rounded"><span class="text-sm text-gray-300"><i class="fas fa-sms text-blue-400 mr-1"></i>SMS notify after each call</span></label>' +
+          '<label class="flex items-center gap-3 p-3 bg-blue-500/15 rounded-xl cursor-pointer"><input type="checkbox" id="answeringEmail" ' + (c.answering_email_notify !== 0 ? 'checked' : '') + ' class="w-4 h-4 text-blue-400 rounded"><span class="text-sm text-gray-300"><i class="fas fa-envelope text-blue-400 mr-1"></i>Email notify after each call</span></label>' +
         '</div>' +
         '<div>' +
-          '<label class="block text-sm font-semibold text-gray-300 mb-1"><i class="fas fa-at mr-1 text-purple-500"></i>Notification Email</label>' +
-          '<input type="email" id="answeringNotifyEmail" value="' + esc(notifyEmail) + '" placeholder="owner@yourroofing.ca" class="w-full border border-white/15 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-purple-400 focus:border-purple-400">' +
+          '<label class="block text-sm font-semibold text-gray-300 mb-1"><i class="fas fa-at mr-1 text-blue-400"></i>Notification Email</label>' +
+          '<input type="email" id="answeringNotifyEmail" value="' + esc(notifyEmail) + '" placeholder="owner@yourroofing.ca" class="w-full border border-white/15 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-400 focus:border-blue-400">' +
         '</div>' +
-        '<button onclick="secSaveConfig()" class="px-6 py-3 bg-purple-500 text-white rounded-xl font-semibold text-sm hover:bg-purple-600 transition-all shadow"><i class="fas fa-save mr-2"></i>Save Answering Settings</button>' +
+        '<button onclick="secSaveConfig()" class="px-6 py-3 bg-blue-500/15 text-white rounded-xl font-semibold text-sm hover:bg-blue-500/15 transition-all shadow"><i class="fas fa-save mr-2"></i>Save Answering Settings</button>' +
       '</div></div>';
   }
 
@@ -594,7 +594,7 @@
 
   function radioOpt(name, value, label, current) {
     return '<label class="flex items-center gap-3 p-2 rounded-lg hover:bg-[#111111]/5 cursor-pointer">' +
-      '<input type="radio" name="' + name + '" value="' + value + '" ' + (current === value ? 'checked' : '') + ' onchange="document.getElementById(\'answeringFwdWrap\').classList.toggle(\'hidden\', this.value===\'take_message\')" class="w-4 h-4 text-purple-500">' +
+      '<input type="radio" name="' + name + '" value="' + value + '" ' + (current === value ? 'checked' : '') + ' onchange="document.getElementById(\'answeringFwdWrap\').classList.toggle(\'hidden\', this.value===\'take_message\')" class="w-4 h-4 text-blue-400">' +
       '<span class="text-sm text-gray-300">' + label + '</span></label>';
   }
 
@@ -607,7 +607,7 @@
   function dirCard(d, i) {
     return '<div class="border border-white/10 rounded-xl p-4 bg-[#0A0A0A]" data-dir="' + i + '">' +
       '<div class="flex items-center justify-between mb-2">' +
-        '<span class="font-semibold text-gray-300 text-sm"><i class="fas fa-folder text-amber-500 mr-1"></i>Directory ' + (i+1) + '</span>' +
+        '<span class="font-semibold text-gray-300 text-sm"><i class="fas fa-folder text-gray-400 mr-1"></i>Directory ' + (i+1) + '</span>' +
         (i >= 2 ? '<button onclick="secRemoveDir(' + i + ')" class="text-red-400 hover:text-red-400 text-xs"><i class="fas fa-trash mr-1"></i>Remove</button>' : '') +
       '</div>' +
       '<div class="grid grid-cols-1 md:grid-cols-3 gap-3">' +
@@ -748,16 +748,16 @@
           '</div>' +
 
           // Purchase help
-          '<div class="bg-cyan-500/10 border border-amber-200 rounded-xl p-4 mb-6">' +
-            '<p class="text-sm font-semibold text-amber-800 mb-2"><i class="fas fa-lightbulb text-amber-500 mr-1"></i>Don\'t have an AI phone number yet?</p>' +
-            '<p class="text-xs text-amber-700 mb-2">You need to purchase a phone number from one of these VoIP/SIP providers to use with LiveKit:</p>' +
+          '<div class="bg-blue-500/15/10 border border-white/15 rounded-xl p-4 mb-6">' +
+            '<p class="text-sm font-semibold text-gray-400 mb-2"><i class="fas fa-lightbulb text-gray-400 mr-1"></i>Don\'t have an AI phone number yet?</p>' +
+            '<p class="text-xs text-gray-400 mb-2">You need to purchase a phone number from one of these VoIP/SIP providers to use with LiveKit:</p>' +
             '<div class="flex flex-wrap gap-2">' +
-              '<a href="https://www.twilio.com/phone-numbers" target="_blank" class="text-xs bg-[#111111] border border-amber-200 rounded-lg px-3 py-1.5 text-amber-700 hover:bg-amber-100 font-medium"><i class="fas fa-external-link-alt mr-1"></i>Twilio</a>' +
-              '<a href="https://www.vonage.com/communications-apis/numbers/" target="_blank" class="text-xs bg-[#111111] border border-amber-200 rounded-lg px-3 py-1.5 text-amber-700 hover:bg-amber-100 font-medium"><i class="fas fa-external-link-alt mr-1"></i>Vonage</a>' +
-              '<a href="https://telnyx.com/products/phone-numbers" target="_blank" class="text-xs bg-[#111111] border border-amber-200 rounded-lg px-3 py-1.5 text-amber-700 hover:bg-amber-100 font-medium"><i class="fas fa-external-link-alt mr-1"></i>Telnyx</a>' +
-              '<a href="https://docs.livekit.io/agents/quickstarts/sip/" target="_blank" class="text-xs bg-[#111111] border border-amber-200 rounded-lg px-3 py-1.5 text-amber-700 hover:bg-amber-100 font-medium"><i class="fas fa-external-link-alt mr-1"></i>LiveKit SIP</a>' +
+              '<a href="https://www.twilio.com/phone-numbers" target="_blank" class="text-xs bg-[#111111] border border-white/15 rounded-lg px-3 py-1.5 text-gray-400 hover:bg-white/10 font-medium"><i class="fas fa-external-link-alt mr-1"></i>Twilio</a>' +
+              '<a href="https://www.vonage.com/communications-apis/numbers/" target="_blank" class="text-xs bg-[#111111] border border-white/15 rounded-lg px-3 py-1.5 text-gray-400 hover:bg-white/10 font-medium"><i class="fas fa-external-link-alt mr-1"></i>Vonage</a>' +
+              '<a href="https://telnyx.com/products/phone-numbers" target="_blank" class="text-xs bg-[#111111] border border-white/15 rounded-lg px-3 py-1.5 text-gray-400 hover:bg-white/10 font-medium"><i class="fas fa-external-link-alt mr-1"></i>Telnyx</a>' +
+              '<a href="https://docs.livekit.io/agents/quickstarts/sip/" target="_blank" class="text-xs bg-[#111111] border border-white/15 rounded-lg px-3 py-1.5 text-gray-400 hover:bg-white/10 font-medium"><i class="fas fa-external-link-alt mr-1"></i>LiveKit SIP</a>' +
             '</div>' +
-            '<p class="text-xs text-cyan-400 mt-2">Pre-configured dev number: <strong class="font-mono">+1 (484) 964-9758</strong> (LiveKit-provided)</p>' +
+            '<p class="text-xs text-blue-400 mt-2">Pre-configured dev number: <strong class="font-mono">+1 (484) 964-9758</strong> (LiveKit-provided)</p>' +
           '</div>' +
 
           '<button onclick="qcSavePhones()" id="qcSaveBtn" class="w-full py-4 bg-sky-500 text-white rounded-2xl font-bold text-base hover:bg-sky-600 transition-all shadow-lg hover:shadow-xl">' +
@@ -876,11 +876,11 @@
     var carrierFormHtml = renderCarrierForwardingForm(aiPhoneRaw, false);
 
     el.innerHTML =
-      '<div class="bg-[#111111] rounded-2xl border-2 border-amber-100 shadow-sm p-8">' +
+      '<div class="bg-[#111111] rounded-2xl border-2 border-white/15 shadow-sm p-8">' +
         '<div class="max-w-lg mx-auto">' +
           '<div class="text-center mb-6">' +
-            '<div class="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">' +
-              '<i class="fas fa-random text-amber-500 text-2xl"></i></div>' +
+            '<div class="w-16 h-16 bg-white/10 rounded-full flex items-center justify-center mx-auto mb-4">' +
+              '<i class="fas fa-random text-gray-400 text-2xl"></i></div>' +
             '<h4 class="text-xl font-extrabold text-gray-100 mb-2">Set Up Call Forwarding</h4>' +
             '<p class="text-gray-500 text-sm">Forward unanswered calls from your business phone to your AI number so the AI secretary can pick up when you can\'t.</p>' +
           '</div>' +
@@ -974,7 +974,7 @@
   // Generic forwarding instructions (for all other carriers)
   function renderGenericForwarding(aiNumber) {
     var formattedNum = formatPhone(aiNumber);
-    return '<div class="bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-300 rounded-xl p-5 mb-4">' +
+    return '<div class="bg-gradient-to-r from-blue-50 to-blue-700 border-2 border-blue-300 rounded-xl p-5 mb-4">' +
       '<div class="flex items-center gap-2 mb-3"><i class="fas fa-info-circle text-blue-400"></i><span class="font-bold text-blue-800">How to Set Up Call Forwarding</span></div>' +
       '<p class="text-sm text-blue-700 mb-3">You need to set up <strong>conditional call forwarding</strong> (forward when no answer / busy) with your mobile carrier so unanswered calls go to your AI secretary.</p>' +
       '<div class="space-y-3">' +
@@ -1005,8 +1005,8 @@
           '<div><p class="text-sm text-blue-800 font-semibold">Choose "Forward when no answer" or "Forward when busy"</p>' +
             '<p class="text-xs text-blue-400 mt-1">This way your phone rings first. If you don\'t answer, the AI picks up. You stay in control.</p></div></div>' +
       '</div>' +
-      '<div class="mt-4 bg-cyan-500/10 border border-amber-200 rounded-lg p-3">' +
-        '<p class="text-xs text-amber-700"><i class="fas fa-lightbulb text-amber-500 mr-1"></i><strong>Tip:</strong> Most carriers let you do this from your phone by dialing a short code (like *92 or **62*). Check with your carrier for the exact code.</p>' +
+      '<div class="mt-4 bg-blue-500/15/10 border border-white/15 rounded-lg p-3">' +
+        '<p class="text-xs text-gray-400"><i class="fas fa-lightbulb text-gray-400 mr-1"></i><strong>Tip:</strong> Most carriers let you do this from your phone by dialing a short code (like *92 or **62*). Check with your carrier for the exact code.</p>' +
       '</div>' +
     '</div>';
   }
@@ -1337,7 +1337,7 @@
           '<p class="text-gray-500 text-sm">When your AI secretary handles calls, they\'ll appear here with full transcripts, lead info, and conversation summaries.</p>' +
           '<div class="flex flex-wrap gap-3 justify-center mt-4">' +
             (state.phoneSetup?.connection_status !== 'connected' ? '<button onclick="secSetTab(\'connect\')" class="px-6 py-3 bg-sky-500 text-white rounded-xl font-semibold text-sm hover:bg-sky-600 transition-all"><i class="fas fa-phone-alt mr-2"></i>Connect Your Phone First</button>' : '') +
-            (state.isDev ? '<button onclick="secSimulateCall()" class="px-6 py-3 bg-violet-500 text-white rounded-xl font-semibold text-sm hover:bg-violet-600 transition-all"><i class="fas fa-vial mr-2"></i>Simulate Test Call</button>' : '') +
+            (state.isDev ? '<button onclick="secSimulateCall()" class="px-6 py-3 bg-blue-500/15 text-white rounded-xl font-semibold text-sm hover:bg-blue-500/15 transition-all"><i class="fas fa-vial mr-2"></i>Simulate Test Call</button>' : '') +
           '</div>' +
           (state.isDev ? '<p class="text-xs text-gray-400 mt-3"><i class="fas fa-flask mr-1"></i>Dev mode: Use "Simulate Test Call" to generate sample call data and verify the UI.</p>' : '') +
         '</div>';
@@ -1349,7 +1349,7 @@
       var labels = { all: 'All Calls', leads: 'Leads Only', follow_up: 'Needs Follow-Up' };
       var icons = { all: 'fa-list', leads: 'fa-fire', follow_up: 'fa-exclamation-circle' };
       return '<button onclick="secFilterCalls(\'' + f + '\')" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ' +
-        (active ? 'bg-violet-600 text-white shadow' : 'bg-white/5 text-gray-400 hover:bg-gray-200') + '">' +
+        (active ? 'bg-blue-500/15 text-white shadow' : 'bg-white/5 text-gray-400 hover:bg-gray-200') + '">' +
         '<i class="fas ' + icons[f] + ' mr-1"></i>' + labels[f] + '</button>';
     }).join('');
 
@@ -1357,10 +1357,10 @@
       '<div class="bg-[#111111] rounded-2xl border border-white/10 shadow-sm overflow-hidden">' +
         '<div class="px-6 py-4 border-b border-white/5">' +
           '<div class="flex flex-col md:flex-row md:items-center justify-between gap-3">' +
-            '<h3 class="font-bold text-gray-100 text-lg"><i class="fas fa-history text-violet-500 mr-2"></i>Call Log <span class="text-gray-400 font-normal text-sm">(' + state.totalCalls + ')</span></h3>' +
+            '<h3 class="font-bold text-gray-100 text-lg"><i class="fas fa-history text-blue-400 mr-2"></i>Call Log <span class="text-gray-400 font-normal text-sm">(' + state.totalCalls + ')</span></h3>' +
             '<div class="flex items-center gap-2">' +
               '<div class="relative">' +
-                '<input type="text" id="callSearchInput" placeholder="Search calls..." value="' + esc(state.callSearch || '') + '" class="pl-8 pr-3 py-1.5 border border-white/10 rounded-lg text-xs focus:ring-2 focus:ring-violet-300 focus:border-violet-400 w-44" onkeyup="if(event.key===\'Enter\')secSearchCalls()">' +
+                '<input type="text" id="callSearchInput" placeholder="Search calls..." value="' + esc(state.callSearch || '') + '" class="pl-8 pr-3 py-1.5 border border-white/10 rounded-lg text-xs focus:ring-2 focus:ring-blue-400 focus:border-blue-500/20 w-44" onkeyup="if(event.key===\'Enter\')secSearchCalls()">' +
                 '<i class="fas fa-search absolute left-2.5 top-2 text-gray-400 text-xs"></i>' +
               '</div>' +
               filterBtns +
@@ -1372,23 +1372,23 @@
           state.calls.map(function(call) {
             var oc = call.call_outcome === 'answered' ? 'text-emerald-400 bg-emerald-500/10' :
               call.call_outcome === 'transferred' ? 'text-blue-400 bg-blue-500/10' :
-              call.call_outcome === 'voicemail' ? 'text-cyan-400 bg-cyan-500/10' : 'text-gray-400 bg-[#0A0A0A]';
+              call.call_outcome === 'voicemail' ? 'text-blue-400 bg-blue-500/15/10' : 'text-gray-400 bg-[#0A0A0A]';
             var sentimentIcon = call.sentiment === 'positive' ? 'fa-smile text-green-500' : (call.sentiment === 'negative' ? 'fa-frown text-red-500' : 'fa-meh text-gray-400');
             var isLead = call.is_lead;
             return '<div class="px-6 py-4 hover:bg-[#111111]/5 transition-colors cursor-pointer" onclick="secViewCall(' + call.id + ')">' +
               '<div class="flex items-center justify-between mb-2">' +
                 '<div class="flex items-center gap-3">' +
-                  '<div class="w-10 h-10 rounded-full flex items-center justify-center ' + (isLead ? 'bg-amber-100' : 'bg-sky-100') + '">' +
-                    '<i class="fas ' + (isLead ? 'fa-fire text-cyan-400' : 'fa-phone text-sky-600') + '"></i>' +
+                  '<div class="w-10 h-10 rounded-full flex items-center justify-center ' + (isLead ? 'bg-white/10' : 'bg-sky-100') + '">' +
+                    '<i class="fas ' + (isLead ? 'fa-fire text-blue-400' : 'fa-phone text-sky-600') + '"></i>' +
                   '</div>' +
                   '<div>' +
                     '<div class="flex items-center gap-2">' +
                       '<p class="font-semibold text-gray-100 text-sm">' + esc(call.caller_name || 'Unknown Caller') + '</p>' +
-                      (isLead ? '<span class="px-1.5 py-0.5 bg-cyan-500/15 text-cyan-400 rounded text-[9px] font-bold">LEAD</span>' : '') +
+                      (isLead ? '<span class="px-1.5 py-0.5 bg-blue-500/15/15 text-blue-400 rounded text-[9px] font-bold">LEAD</span>' : '') +
                       (call.follow_up_required && !call.follow_up_completed ? '<span class="px-1.5 py-0.5 bg-red-500/100/15 text-red-400 rounded text-[9px] font-bold">FOLLOW UP</span>' : '') +
                     '</div>' +
                     '<p class="text-xs text-gray-500">' + esc(call.caller_phone || '') +
-                      (call.service_type ? ' — <span class="text-violet-600 font-medium">' + esc(call.service_type) + '</span>' : '') +
+                      (call.service_type ? ' — <span class="text-blue-400 font-medium">' + esc(call.service_type) + '</span>' : '') +
                       (call.property_address ? ' — <i class="fas fa-map-marker-alt text-red-400 ml-1 mr-0.5"></i>' + esc(call.property_address) : '') +
                     '</p>' +
                   '</div>' +
@@ -1402,9 +1402,9 @@
                 '</div>' +
               '</div>' +
               (call.call_summary ? '<p class="text-sm text-gray-400 ml-13 bg-[#0A0A0A] rounded-lg p-3 line-clamp-2"><i class="fas fa-robot text-gray-400 mr-1"></i>' + esc(call.call_summary) + '</p>' : '') +
-              (call.conversation_highlights ? '<p class="text-xs text-violet-600 ml-13 mt-1"><i class="fas fa-star text-violet-400 mr-1"></i>' + esc(call.conversation_highlights).substring(0, 120) + '</p>' : '') +
+              (call.conversation_highlights ? '<p class="text-xs text-blue-400 ml-13 mt-1"><i class="fas fa-star text-blue-400 mr-1"></i>' + esc(call.conversation_highlights).substring(0, 120) + '</p>' : '') +
               '<div class="flex items-center gap-2 ml-13 mt-2">' +
-                '<button onclick="event.stopPropagation(); secViewCall(' + call.id + ')" class="text-xs text-violet-600 hover:text-violet-800 font-medium"><i class="fas fa-file-alt mr-1"></i>Full Transcript</button>' +
+                '<button onclick="event.stopPropagation(); secViewCall(' + call.id + ')" class="text-xs text-blue-400 hover:text-blue-400 font-medium"><i class="fas fa-file-alt mr-1"></i>Full Transcript</button>' +
                 (isLead && call.lead_status === 'new' ? '<button onclick="event.stopPropagation(); secUpdateLeadStatus(' + call.id + ', \'contacted\')" class="text-xs text-emerald-400 hover:text-green-800 font-medium"><i class="fas fa-check mr-1"></i>Mark Contacted</button>' : '') +
                 (call.follow_up_required && !call.follow_up_completed ? '<button onclick="event.stopPropagation(); secCompleteFollowUp(' + call.id + ')" class="text-xs text-blue-400 hover:text-blue-800 font-medium"><i class="fas fa-check-double mr-1"></i>Follow-Up Done</button>' : '') +
               '</div>' +
@@ -1422,7 +1422,7 @@
     if (state.leads.length === 0 && state.leadsCount === 0) {
       content.innerHTML =
         '<div class="bg-[#111111] rounded-2xl border border-white/10 shadow-sm p-12 text-center">' +
-          '<div class="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4"><i class="fas fa-fire text-amber-500 text-2xl"></i></div>' +
+          '<div class="w-16 h-16 bg-white/10 rounded-full flex items-center justify-center mx-auto mb-4"><i class="fas fa-fire text-gray-400 text-2xl"></i></div>' +
           '<h3 class="font-bold text-gray-100 text-lg mb-1">No Leads Yet</h3>' +
           '<p class="text-gray-500 text-sm">When callers provide their name, phone, and address, they\'re automatically captured as leads. The AI marks callers as leads when they request an estimate, repair, or service.</p>' +
         '</div>';
@@ -1431,8 +1431,8 @@
 
     // Stage filters
     var stages = [
-      { id: '', label: 'All', icon: 'fa-list', color: 'violet' },
-      { id: 'new', label: 'New', icon: 'fa-fire', color: 'amber' },
+      { id: '', label: 'All', icon: 'fa-list', color: 'blue' },
+      { id: 'new', label: 'New', icon: 'fa-fire', color: 'gray' },
       { id: 'contacted', label: 'Contacted', icon: 'fa-phone-alt', color: 'blue' },
       { id: 'qualified', label: 'Qualified', icon: 'fa-star', color: 'green' },
       { id: 'converted', label: 'Converted', icon: 'fa-check-circle', color: 'emerald' },
@@ -1453,33 +1453,33 @@
       '<div class="bg-[#111111] rounded-2xl border border-white/10 shadow-sm overflow-hidden">' +
         '<div class="px-6 py-4 border-b border-white/5">' +
           '<div class="flex flex-col md:flex-row md:items-center justify-between gap-3">' +
-            '<h3 class="font-bold text-gray-100 text-lg"><i class="fas fa-fire text-amber-500 mr-2"></i>Leads <span class="text-gray-400 font-normal text-sm">(' + state.leadsCount + ')</span></h3>' +
+            '<h3 class="font-bold text-gray-100 text-lg"><i class="fas fa-fire text-gray-400 mr-2"></i>Leads <span class="text-gray-400 font-normal text-sm">(' + state.leadsCount + ')</span></h3>' +
             '<div class="flex flex-wrap items-center gap-2">' + stageFilter + '</div>' +
           '</div>' +
         '</div>' +
         '<div class="divide-y divide-gray-100">' +
           state.leads.map(function(lead) {
-            var statusColors = { new: 'bg-cyan-500/15 text-cyan-400', contacted: 'bg-blue-500/100/15 text-blue-400', qualified: 'bg-emerald-500/15 text-emerald-400', converted: 'bg-emerald-100 text-emerald-800', lost: 'bg-red-500/100/15 text-red-400' };
+            var statusColors = { new: 'bg-blue-500/15/15 text-blue-400', contacted: 'bg-blue-500/100/15 text-blue-400', qualified: 'bg-emerald-500/15 text-emerald-400', converted: 'bg-emerald-100 text-emerald-800', lost: 'bg-red-500/100/15 text-red-400' };
             var sc = statusColors[lead.lead_status] || 'bg-white/5 text-gray-400';
             var qualityStars = lead.lead_quality === 'hot' ? 3 : (lead.lead_quality === 'warm' ? 2 : 1);
             return '<div class="px-6 py-4 hover:bg-[#111111]/5 transition-colors cursor-pointer" onclick="secViewCall(' + lead.id + ')">' +
               '<div class="flex items-center justify-between">' +
                 '<div class="flex items-center gap-3">' +
-                  '<div class="w-11 h-11 bg-gradient-to-br from-amber-400 to-orange-500 rounded-full flex items-center justify-center shadow">' +
+                  '<div class="w-11 h-11 bg-gradient-to-br from-gray-400 to-emerald-500 rounded-full flex items-center justify-center shadow">' +
                     '<i class="fas fa-user text-white text-sm"></i>' +
                   '</div>' +
                   '<div>' +
                     '<div class="flex items-center gap-2">' +
                       '<p class="font-bold text-gray-100">' + esc(lead.caller_name || 'Unknown') + '</p>' +
                       '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold ' + sc + '">' + (lead.lead_status || 'new').toUpperCase() + '</span>' +
-                      '<span class="text-amber-400 text-xs">' + '★'.repeat(qualityStars) + '<span class="text-gray-300">' + '★'.repeat(3 - qualityStars) + '</span></span>' +
+                      '<span class="text-gray-400 text-xs">' + '★'.repeat(qualityStars) + '<span class="text-gray-300">' + '★'.repeat(3 - qualityStars) + '</span></span>' +
                     '</div>' +
                     '<p class="text-xs text-gray-500 mt-0.5">' +
                       '<i class="fas fa-phone text-gray-400 mr-1"></i>' + esc(lead.caller_phone || '') +
                       (lead.caller_email ? ' &middot; <i class="fas fa-envelope text-gray-400 mr-1"></i>' + esc(lead.caller_email) : '') +
                     '</p>' +
                     (lead.property_address ? '<p class="text-xs text-gray-500"><i class="fas fa-map-marker-alt text-red-400 mr-1"></i>' + esc(lead.property_address) + '</p>' : '') +
-                    (lead.service_type ? '<p class="text-xs text-violet-600 font-medium mt-0.5"><i class="fas fa-tools mr-1"></i>' + esc(lead.service_type) + '</p>' : '') +
+                    (lead.service_type ? '<p class="text-xs text-blue-400 font-medium mt-0.5"><i class="fas fa-tools mr-1"></i>' + esc(lead.service_type) + '</p>' : '') +
                   '</div>' +
                 '</div>' +
                 '<div class="text-right flex-shrink-0">' +
@@ -1526,7 +1526,7 @@
 
     var transcript = call.call_transcript || 'No transcript available for this call.';
     // Format transcript lines
-    var transcriptHtml = esc(transcript).replace(/\n/g, '<br>').replace(/(Sarah|Agent|AI):/gi, '<span class="font-bold text-violet-600">$1:</span>').replace(/(Caller|Customer|User):/gi, '<span class="font-bold text-blue-400">$1:</span>');
+    var transcriptHtml = esc(transcript).replace(/\n/g, '<br>').replace(/(Sarah|Agent|AI):/gi, '<span class="font-bold text-blue-400">$1:</span>').replace(/(Caller|Customer|User):/gi, '<span class="font-bold text-blue-400">$1:</span>');
 
     var modal = document.createElement('div');
     modal.id = 'callDetailModal';
@@ -1535,14 +1535,14 @@
       '<div class="absolute inset-0 bg-black/50 backdrop-blur-sm" onclick="document.getElementById(\'callDetailModal\').remove()"></div>' +
       '<div class="relative bg-[#111111] rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">' +
         // Header
-        '<div class="bg-gradient-to-r from-violet-600 to-purple-700 px-6 py-4 flex items-center justify-between">' +
+        '<div class="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4 flex items-center justify-between">' +
           '<div class="flex items-center gap-3">' +
             '<div class="w-10 h-10 bg-[#111111]/20 rounded-full flex items-center justify-center">' +
-              '<i class="fas ' + (isLead ? 'fa-fire text-amber-300' : 'fa-phone text-white') + '"></i>' +
+              '<i class="fas ' + (isLead ? 'fa-fire text-gray-400' : 'fa-phone text-white') + '"></i>' +
             '</div>' +
             '<div>' +
               '<h3 class="text-white font-bold">' + esc(call.caller_name || 'Unknown Caller') + '</h3>' +
-              '<p class="text-purple-200 text-xs">' + esc(call.caller_phone || '') + ' — ' + new Date(call.created_at).toLocaleString() + '</p>' +
+              '<p class="text-blue-400 text-xs">' + esc(call.caller_phone || '') + ' — ' + new Date(call.created_at).toLocaleString() + '</p>' +
             '</div>' +
           '</div>' +
           '<button onclick="document.getElementById(\'callDetailModal\').remove()" class="text-white/70 hover:text-white text-lg"><i class="fas fa-times"></i></button>' +
@@ -1550,9 +1550,9 @@
         // Info bar
         '<div class="px-6 py-3 bg-[#0A0A0A] border-b border-white/10 flex flex-wrap gap-3">' +
           '<span class="px-2.5 py-1 rounded-full text-xs font-bold ' + (call.call_outcome === 'answered' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-white/5 text-gray-400') + '"><i class="fas fa-phone-alt mr-1"></i>' + (call.call_outcome || 'unknown') + '</span>' +
-          '<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-violet-100 text-violet-700"><i class="fas fa-clock mr-1"></i>' + formatDuration(call.call_duration_seconds) + '</span>' +
+          '<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-blue-500/15 text-blue-400"><i class="fas fa-clock mr-1"></i>' + formatDuration(call.call_duration_seconds) + '</span>' +
           '<span class="px-2.5 py-1 rounded-full text-xs font-bold ' + sentimentColor + '"><i class="fas fa-' + (call.sentiment === 'positive' ? 'smile' : call.sentiment === 'negative' ? 'frown' : 'meh') + ' mr-1"></i>' + sentimentLabel + '</span>' +
-          (isLead ? '<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-cyan-500/15 text-cyan-400"><i class="fas fa-fire mr-1"></i>Lead — ' + (call.lead_status || 'new') + '</span>' : '') +
+          (isLead ? '<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-blue-500/15/15 text-blue-400"><i class="fas fa-fire mr-1"></i>Lead — ' + (call.lead_status || 'new') + '</span>' : '') +
           (call.service_type ? '<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-blue-500/100/15 text-blue-400"><i class="fas fa-tools mr-1"></i>' + esc(call.service_type) + '</span>' : '') +
         '</div>' +
         // Scrollable body
@@ -1563,10 +1563,10 @@
           (call.directory_routed ? '<div class="flex items-center gap-2 text-sm text-gray-400"><i class="fas fa-arrow-right text-gray-400 w-5"></i><strong>Routed to:</strong> ' + esc(call.directory_routed) + '</div>' : '') +
 
           // AI Summary
-          (call.call_summary ? '<div class="bg-violet-50 border border-violet-200 rounded-xl p-4"><h4 class="font-bold text-violet-800 text-sm mb-1"><i class="fas fa-robot mr-1"></i>AI Call Summary</h4><p class="text-sm text-violet-700">' + esc(call.call_summary) + '</p></div>' : '') +
+          (call.call_summary ? '<div class="bg-blue-500/15 border border-blue-500/20 rounded-xl p-4"><h4 class="font-bold text-blue-400 text-sm mb-1"><i class="fas fa-robot mr-1"></i>AI Call Summary</h4><p class="text-sm text-blue-400">' + esc(call.call_summary) + '</p></div>' : '') +
 
           // Highlights
-          (call.conversation_highlights ? '<div class="bg-cyan-500/10 border border-amber-200 rounded-xl p-4"><h4 class="font-bold text-amber-800 text-sm mb-1"><i class="fas fa-star mr-1"></i>Key Highlights</h4><p class="text-sm text-amber-700">' + esc(call.conversation_highlights) + '</p></div>' : '') +
+          (call.conversation_highlights ? '<div class="bg-blue-500/15/10 border border-white/15 rounded-xl p-4"><h4 class="font-bold text-gray-400 text-sm mb-1"><i class="fas fa-star mr-1"></i>Key Highlights</h4><p class="text-sm text-gray-400">' + esc(call.conversation_highlights) + '</p></div>' : '') +
 
           // Follow-up notes
           (call.follow_up_notes ? '<div class="bg-red-500/10 border border-red-200 rounded-xl p-4"><h4 class="font-bold text-red-800 text-sm mb-1"><i class="fas fa-exclamation-circle mr-1"></i>Follow-Up Notes</h4><p class="text-sm text-red-700">' + esc(call.follow_up_notes) + '</p></div>' : '') +
@@ -1803,7 +1803,7 @@
   async function loadAndRenderMessages() {
     var content = document.getElementById('secContent');
     if (!content) return;
-    content.innerHTML = '<div class="flex items-center justify-center py-12"><i class="fas fa-spinner fa-spin text-2xl text-purple-500"></i></div>';
+    content.innerHTML = '<div class="flex items-center justify-center py-12"><i class="fas fa-spinner fa-spin text-2xl text-blue-400"></i></div>';
     try {
       var res = await fetch('/api/secretary/messages?limit=50', { headers: authOnly() });
       var data = await res.json();
@@ -1821,9 +1821,9 @@
     content.innerHTML =
       '<div class="bg-[#111111] rounded-2xl border border-white/10 shadow-sm p-6">' +
         '<div class="flex items-center justify-between mb-4">' +
-          '<h3 class="font-bold text-gray-100 text-lg"><i class="fas fa-envelope text-purple-500 mr-2"></i>Messages' +
-            (state.unreadCount > 0 ? ' <span class="px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full text-xs font-bold">' + state.unreadCount + ' unread</span>' : '') + '</h3>' +
-          (state.unreadCount > 0 ? '<button onclick="secMarkAllRead()" class="text-xs text-purple-600 hover:text-purple-800 font-semibold"><i class="fas fa-check-double mr-1"></i>Mark All Read</button>' : '') +
+          '<h3 class="font-bold text-gray-100 text-lg"><i class="fas fa-envelope text-blue-400 mr-2"></i>Messages' +
+            (state.unreadCount > 0 ? ' <span class="px-2 py-0.5 bg-blue-500/15 text-blue-400 rounded-full text-xs font-bold">' + state.unreadCount + ' unread</span>' : '') + '</h3>' +
+          (state.unreadCount > 0 ? '<button onclick="secMarkAllRead()" class="text-xs text-blue-400 hover:text-blue-400 font-semibold"><i class="fas fa-check-double mr-1"></i>Mark All Read</button>' : '') +
         '</div>' +
         (msgs.length === 0 ? '<p class="text-gray-400 text-center py-8"><i class="fas fa-inbox text-3xl block mb-2"></i>No messages yet. When callers leave messages, they\'ll appear here.</p>' :
           '<div class="space-y-3">' +
@@ -1831,10 +1831,10 @@
               var unread = !m.is_read;
               var urgentBadge = m.urgency === 'urgent' ? '<span class="px-2 py-0.5 bg-red-500/100/15 text-red-400 rounded-full text-[10px] font-bold">URGENT</span>' :
                 m.urgency === 'emergency' ? '<span class="px-2 py-0.5 bg-red-600 text-white rounded-full text-[10px] font-bold">EMERGENCY</span>' : '';
-              return '<div class="border ' + (unread ? 'border-purple-200 bg-purple-50' : 'border-white/10 bg-[#0A0A0A]') + ' rounded-xl p-4 ' + (unread ? 'ring-1 ring-purple-300' : '') + '">' +
+              return '<div class="border ' + (unread ? 'border-blue-500/20 bg-blue-500/15' : 'border-white/10 bg-[#0A0A0A]') + ' rounded-xl p-4 ' + (unread ? 'ring-1 ring-blue-400' : '') + '">' +
                 '<div class="flex items-start justify-between mb-2">' +
                   '<div class="flex items-center gap-2">' +
-                    (unread ? '<span class="w-2 h-2 bg-purple-500 rounded-full"></span>' : '') +
+                    (unread ? '<span class="w-2 h-2 bg-blue-500/15 rounded-full"></span>' : '') +
                     '<span class="font-semibold text-gray-100 text-sm">' + esc(m.caller_name || 'Unknown Caller') + '</span>' +
                     '<span class="text-gray-400 text-xs">' + esc(m.caller_phone || '') + '</span>' +
                     urgentBadge +
@@ -1842,7 +1842,7 @@
                   '<span class="text-gray-400 text-xs">' + new Date(m.created_at).toLocaleString() + '</span>' +
                 '</div>' +
                 '<p class="text-sm text-gray-300 leading-relaxed">' + esc(m.message_text) + '</p>' +
-                (unread ? '<button onclick="secMarkRead(' + m.id + ')" class="mt-2 text-xs text-purple-600 hover:text-purple-800 font-semibold"><i class="fas fa-check mr-1"></i>Mark Read</button>' : '') +
+                (unread ? '<button onclick="secMarkRead(' + m.id + ')" class="mt-2 text-xs text-blue-400 hover:text-blue-400 font-semibold"><i class="fas fa-check mr-1"></i>Mark Read</button>' : '') +
               '</div>';
             }).join('') +
           '</div>') +
@@ -1880,7 +1880,7 @@
     var appts = state.appointments;
 
     var statusColors = {
-      pending: 'bg-cyan-500/15 text-cyan-400',
+      pending: 'bg-blue-500/15/15 text-blue-400',
       confirmed: 'bg-emerald-500/15 text-emerald-400',
       cancelled: 'bg-red-500/100/15 text-red-400',
       completed: 'bg-blue-500/100/15 text-blue-400'
@@ -1890,7 +1890,7 @@
       '<div class="bg-[#111111] rounded-2xl border border-white/10 shadow-sm p-6">' +
         '<div class="flex items-center justify-between mb-4">' +
           '<h3 class="font-bold text-gray-100 text-lg"><i class="fas fa-calendar-check text-emerald-500 mr-2"></i>Appointments' +
-            (state.pendingAppts > 0 ? ' <span class="px-2 py-0.5 bg-cyan-500/15 text-cyan-400 rounded-full text-xs font-bold">' + state.pendingAppts + ' pending</span>' : '') + '</h3>' +
+            (state.pendingAppts > 0 ? ' <span class="px-2 py-0.5 bg-blue-500/15/15 text-blue-400 rounded-full text-xs font-bold">' + state.pendingAppts + ' pending</span>' : '') + '</h3>' +
         '</div>' +
         (appts.length === 0 ? '<p class="text-gray-400 text-center py-8"><i class="fas fa-calendar text-3xl block mb-2"></i>No appointments yet. When the AI books appointments, they\'ll appear here.</p>' :
           '<div class="overflow-x-auto"><table class="w-full text-sm">' +
@@ -1941,12 +1941,12 @@
       '<div class="bg-[#111111] rounded-2xl border border-white/10 shadow-sm p-6">' +
         '<div class="flex items-center justify-between mb-4">' +
           '<h3 class="font-bold text-gray-100 text-lg"><i class="fas fa-phone-volume text-sky-500 mr-2"></i>Scheduled Callbacks' +
-            (state.pendingCallbacks > 0 ? ' <span class="px-2 py-0.5 bg-cyan-500/15 text-cyan-400 rounded-full text-xs font-bold">' + state.pendingCallbacks + ' pending</span>' : '') + '</h3>' +
+            (state.pendingCallbacks > 0 ? ' <span class="px-2 py-0.5 bg-blue-500/15/15 text-blue-400 rounded-full text-xs font-bold">' + state.pendingCallbacks + ' pending</span>' : '') + '</h3>' +
         '</div>' +
         (cbs.length === 0 ? '<p class="text-gray-400 text-center py-8"><i class="fas fa-phone text-3xl block mb-2"></i>No callbacks yet. When the AI schedules callbacks, they\'ll appear here.</p>' :
           '<div class="space-y-3">' + cbs.map(function(cb) {
             var isPending = cb.status === 'pending';
-            return '<div class="border ' + (isPending ? 'border-amber-200 bg-cyan-500/10' : 'border-white/10 bg-[#0A0A0A]') + ' rounded-xl p-4">' +
+            return '<div class="border ' + (isPending ? 'border-white/15 bg-blue-500/15/10' : 'border-white/10 bg-[#0A0A0A]') + ' rounded-xl p-4">' +
               '<div class="flex items-start justify-between">' +
                 '<div>' +
                   '<div class="font-semibold text-gray-100 text-sm">' + esc(cb.caller_name || 'Unknown') + ' — <a href="tel:' + esc(cb.caller_phone) + '" class="text-sky-600 hover:underline">' + formatPhone(cb.caller_phone) + '</a></div>' +
@@ -1955,7 +1955,7 @@
                   '<div class="text-xs text-gray-400 mt-1">' + new Date(cb.created_at).toLocaleString() + '</div>' +
                 '</div>' +
                 '<div class="flex items-center gap-2">' +
-                  '<span class="px-2 py-0.5 rounded text-xs font-semibold ' + (isPending ? 'bg-cyan-500/15 text-cyan-400' : cb.status === 'completed' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-gray-200 text-gray-400') + '">' + esc(cb.status) + '</span>' +
+                  '<span class="px-2 py-0.5 rounded text-xs font-semibold ' + (isPending ? 'bg-blue-500/15/15 text-blue-400' : cb.status === 'completed' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-gray-200 text-gray-400') + '">' + esc(cb.status) + '</span>' +
                   (isPending ? '<button onclick="secUpdateCallback(' + cb.id + ',\'completed\')" class="text-xs text-emerald-400 hover:text-green-800 font-semibold px-2 py-1 bg-emerald-500/10 rounded"><i class="fas fa-check mr-1"></i>Done</button>' : '') +
                 '</div>' +
               '</div>' +
@@ -1989,7 +1989,7 @@
     modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm';
     modal.innerHTML =
       '<div class="bg-[#111111] rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">' +
-        '<div class="bg-gradient-to-r from-emerald-500 to-teal-600 p-5 text-white">' +
+        '<div class="bg-gradient-to-r from-emerald-500 to-emerald-600 p-5 text-white">' +
           '<div class="flex items-center justify-between">' +
             '<div><h2 class="text-lg font-bold"><i class="fas fa-comment-dots mr-2"></i>Test Your AI Secretary</h2>' +
             '<p class="text-emerald-100 text-xs mt-1">Preview how your AI responds to questions. Type a message below to test.</p></div>' +
@@ -2111,7 +2111,7 @@
         processAIChat(testState._lastTranscript.trim());
         testState._lastTranscript = '';
       } else {
-        if (statusEl) { statusEl.textContent = 'No speech detected. Try again or type your message.'; statusEl.className = 'text-center text-xs text-amber-500 mb-3 h-4'; }
+        if (statusEl) { statusEl.textContent = 'No speech detected. Try again or type your message.'; statusEl.className = 'text-center text-xs text-gray-400 mb-3 h-4'; }
       }
     };
 
@@ -2175,7 +2175,7 @@
     // Show AI thinking
     conv.innerHTML += '<div class="flex justify-start" id="vtThinking"><div class="bg-emerald-50 text-emerald-800 rounded-xl rounded-tl-sm px-3 py-2 max-w-xs text-sm"><i class="fas fa-robot mr-1"></i><i class="fas fa-spinner fa-spin ml-1 text-xs"></i> Thinking...</div></div>';
     conv.scrollTop = conv.scrollHeight;
-    if (statusEl) { statusEl.textContent = 'AI is responding...'; statusEl.className = 'text-center text-xs text-amber-500 mb-3 h-4 font-semibold'; }
+    if (statusEl) { statusEl.textContent = 'AI is responding...'; statusEl.className = 'text-center text-xs text-gray-400 mb-3 h-4 font-semibold'; }
 
     try {
       // Get AI response

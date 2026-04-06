@@ -172,7 +172,7 @@
       '<div class="d2d-stat"><div class="d2d-stat-val text-sky-600">' + (stats.total_turfs || 0) + '</div><div class="d2d-stat-label">Turfs</div></div>' +
       '<div class="d2d-stat"><div class="d2d-stat-val text-emerald-400">' + (stats.total_yes || 0) + '</div><div class="d2d-stat-label">Yes</div></div>' +
       '<div class="d2d-stat"><div class="d2d-stat-val text-red-400">' + (stats.total_no || 0) + '</div><div class="d2d-stat-label">No</div></div>' +
-      '<div class="d2d-stat"><div class="d2d-stat-val text-amber-500">' + (stats.total_no_answer || 0) + '</div><div class="d2d-stat-label">No Ans</div></div>';
+      '<div class="d2d-stat"><div class="d2d-stat-val text-gray-400">' + (stats.total_no_answer || 0) + '</div><div class="d2d-stat-label">No Ans</div></div>';
   }
 
   // ============================================================
@@ -316,7 +316,7 @@
         try { perms = m.permissions ? JSON.parse(m.permissions) : null; } catch(e) {}
         var permBadges = '';
         if (perms) {
-          if (perms.d2d === 'assigned') permBadges += '<span class="px-1.5 py-0.5 bg-cyan-500/10 text-amber-700 rounded text-[9px] font-semibold">Assigned Turfs Only</span> ';
+          if (perms.d2d === 'assigned') permBadges += '<span class="px-1.5 py-0.5 bg-blue-500/15/10 text-gray-400 rounded text-[9px] font-semibold">Assigned Turfs Only</span> ';
           if (perms.reports === false) permBadges += '<span class="px-1.5 py-0.5 bg-red-500/10 text-red-400 rounded text-[9px] font-semibold">No Reports</span> ';
           if (perms.crm === false) permBadges += '<span class="px-1.5 py-0.5 bg-red-500/10 text-red-400 rounded text-[9px] font-semibold">No CRM</span> ';
         }
@@ -342,7 +342,7 @@
             '<div class="bg-sky-50 text-sky-700 rounded px-1 py-1"><div class="font-bold text-sm">' + (m.turf_count||0) + '</div><div>Turfs</div></div>' +
             '<div class="bg-[#0A0A0A] text-gray-300 rounded px-1 py-1"><div class="font-bold text-sm">' + totalKnocks + '</div><div>Knocks</div></div>' +
             '<div class="bg-emerald-500/10 text-green-700 rounded px-1 py-1"><div class="font-bold text-sm">' + yesCount + '</div><div>Yes</div></div>' +
-            '<div class="bg-purple-50 text-purple-700 rounded px-1 py-1"><div class="font-bold text-sm">' + convRate + '%</div><div>Rate</div></div>' +
+            '<div class="bg-blue-500/15 text-blue-400 rounded px-1 py-1"><div class="font-bold text-sm">' + convRate + '%</div><div>Rate</div></div>' +
           '</div>' +
           // Last activity + permissions badges
           '<div class="mt-2 flex items-center justify-between">' +
@@ -947,7 +947,7 @@
       '<div class="px-6 py-4 border-b border-white/5 flex items-center justify-between"><h3 class="font-bold text-gray-100"><i class="fas fa-map-pin mr-2 text-sky-500"></i>Place Door Pin</h3><button onclick="document.getElementById(\'d2dModal\').remove()" class="text-gray-400 hover:text-gray-400 text-lg">&times;</button></div>' +
       '<div class="p-6 space-y-4">' +
         '<div><label class="text-xs font-semibold text-gray-400 mb-1 block">Address</label><input id="pinAddress" class="d2d-input" value="' + escAttr(address) + '"></div>' +
-        (inTurf ? '<div class="text-xs text-sky-600 bg-sky-50 rounded-lg p-2"><i class="fas fa-map mr-1"></i>Inside turf: <b>' + escH(inTurf.name) + '</b></div>' : '<div class="text-xs text-gray-400 bg-[#0A0A0A] rounded-lg p-2"><i class="fas fa-exclamation-triangle mr-1 text-amber-500"></i>Not inside any turf</div>') +
+        (inTurf ? '<div class="text-xs text-sky-600 bg-sky-50 rounded-lg p-2"><i class="fas fa-map mr-1"></i>Inside turf: <b>' + escH(inTurf.name) + '</b></div>' : '<div class="text-xs text-gray-400 bg-[#0A0A0A] rounded-lg p-2"><i class="fas fa-exclamation-triangle mr-1 text-gray-400"></i>Not inside any turf</div>') +
         '<div><label class="text-xs font-semibold text-gray-400 mb-1 block">Status</label>' +
           '<div class="grid grid-cols-2 gap-2" id="pinStatusGrid">' +
             '<div class="border-2 rounded-lg p-2 cursor-pointer text-center text-xs font-semibold" data-status="not_knocked" style="border-color:#9ca3af;background:#f9fafb"><i class="fas fa-circle mr-1" style="color:#9ca3af"></i>Not Knocked</div>' +

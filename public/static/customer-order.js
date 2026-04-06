@@ -390,7 +390,7 @@ function renderPinStep(root, progressBar) {
             <div class="flex items-center gap-3">
               <div class="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center"><i class="fas fa-gift text-blue-400"></i></div>
               <div>
-                <p class="font-semibold text-blue-800"><i class="fas fa-star text-yellow-500 mr-1"></i>Free Trial: ${freeTrialRemaining} reports remaining!</p>
+                <p class="font-semibold text-blue-800"><i class="fas fa-star text-gray-400 mr-1"></i>Free Trial: ${freeTrialRemaining} reports remaining!</p>
                 <p class="text-sm text-blue-400">No credit card needed</p>
               </div>
             </div>
@@ -413,13 +413,13 @@ function renderPinStep(root, progressBar) {
         <div class="bg-gradient-to-r from-brand-800 to-brand-900 rounded-xl p-5 mb-6 shadow-lg">
           <div class="flex items-center justify-between gap-4">
             <div class="flex items-center gap-4">
-              <div class="w-12 h-12 bg-cyan-500/100 rounded-xl flex items-center justify-center shadow"><i class="fas fa-crown text-white text-xl"></i></div>
+              <div class="w-12 h-12 bg-blue-500/15/100 rounded-xl flex items-center justify-center shadow"><i class="fas fa-crown text-white text-xl"></i></div>
               <div>
                 <p class="font-bold text-white text-base">Your 3 Free Trials Are Used Up!</p>
-                <p class="text-sm text-brand-200 mt-0.5">Credit packs start at <strong class="text-amber-400">$5.00/report (100-pack)</strong></p>
+                <p class="text-sm text-brand-200 mt-0.5">Credit packs start at <strong class="text-gray-400">$5.00/report (100-pack)</strong></p>
               </div>
             </div>
-            <a href="/pricing" class="bg-cyan-500/100 hover:bg-amber-400 text-white px-5 py-2.5 rounded-xl text-sm font-black transition-all shadow-lg"><i class="fas fa-tags mr-1.5"></i>Buy Credits</a>
+            <a href="/pricing" class="bg-blue-500/15/100 hover:bg-white/10 text-white px-5 py-2.5 rounded-xl text-sm font-black transition-all shadow-lg"><i class="fas fa-tags mr-1.5"></i>Buy Credits</a>
           </div>
         </div>
       `}
@@ -466,9 +466,9 @@ function renderPinStep(root, progressBar) {
           </button>
 
           <!-- Known House Size (optional cross-validation) -->
-          <div class="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl border border-indigo-200 p-4">
+          <div class="bg-gradient-to-r from-blue-600 to-blue-700 rounded-xl border border-blue-500/20 p-4">
             <h4 class="font-semibold text-gray-300 mb-1 flex items-center text-sm">
-              <i class="fas fa-home text-indigo-500 mr-2"></i>Known House Size (Optional)
+              <i class="fas fa-home text-blue-400 mr-2"></i>Known House Size (Optional)
             </h4>
             <p class="text-xs text-gray-500 mb-2">Enter your house living area so we can cross-check the roof trace. The roof footprint is typically 10-15% larger than house sq ft (eave overhangs).</p>
             <div class="flex items-center gap-3">
@@ -476,11 +476,11 @@ function renderPinStep(root, progressBar) {
                 <input type="number" step="1" min="0" max="99999" id="houseSqftInput"
                   value="${orderState.houseSqft || ''}"
                   oninput="orderState.houseSqft = parseInt(this.value) || null;"
-                  class="w-full px-4 py-2.5 border border-indigo-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm font-medium"
+                  class="w-full px-4 py-2.5 border border-blue-500/20 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm font-medium"
                   placeholder="e.g. 1750" />
                 <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 font-medium">sq ft</span>
               </div>
-              <div class="text-xs text-indigo-600 font-medium whitespace-nowrap">
+              <div class="text-xs text-blue-400 font-medium whitespace-nowrap">
                 ${orderState.houseSqft ? `Expected roof: ~${Math.round(orderState.houseSqft * 1.12)}–${Math.round(orderState.houseSqft * 1.18)} sq ft` : ''}
               </div>
             </div>
@@ -569,7 +569,7 @@ function renderTraceStep(root, progressBar) {
           </div>
 
           <!-- Live Metrics Panel — real-time area/perimeter from eaves trace -->
-          <div id="liveMetricsPanel" class="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-xl shadow-sm border border-emerald-200 p-4">
+          <div id="liveMetricsPanel" class="bg-gradient-to-br from-emerald-50 to-emerald-600 rounded-xl shadow-sm border border-emerald-200 p-4">
             <h4 class="text-xs font-bold text-emerald-700 uppercase tracking-wide mb-2"><i class="fas fa-ruler-combined mr-1"></i>Live Measurements</h4>
             <p class="text-xs text-gray-400 text-center italic">Place 3+ eave points to see live measurements</p>
           </div>
@@ -598,7 +598,7 @@ function renderTraceStep(root, progressBar) {
         <div class="flex items-center gap-4 text-xs text-gray-500">
           <span><i class="fas fa-mouse-pointer mr-1"></i>Click = Add point</span>
           <span><i class="fas fa-draw-polygon mr-1" style="color:#22c55e"></i>Click 1st point to close eaves</span>
-          <span><i class="fas fa-expand-arrows-alt mr-1 text-indigo-400"></i>Trace the outermost roof edge (drip line), not the walls</span>
+          <span><i class="fas fa-expand-arrows-alt mr-1 text-blue-400"></i>Trace the outermost roof edge (drip line), not the walls</span>
         </div>
         <div class="flex items-center gap-3">
           <button onclick="skipTrace()" class="px-4 py-2 text-gray-500 hover:text-gray-300 text-sm font-medium">
@@ -662,7 +662,7 @@ function renderReviewStep(root, progressBar) {
           ${hasTrace ? `
           <!-- Trace confirmation — no detailed measurements shown here -->
           ${mLoading ? `
-          <div class="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border-2 border-blue-200 p-6">
+          <div class="bg-gradient-to-r from-blue-50 to-blue-700 rounded-xl border-2 border-blue-200 p-6">
             <div class="flex items-center justify-center gap-3">
               <div class="animate-spin rounded-full h-8 w-8 border-t-3 border-b-3 border-blue-600"></div>
               <div>
@@ -700,7 +700,7 @@ function renderReviewStep(root, progressBar) {
             <div class="flex items-center gap-4 text-xs text-gray-500 pt-3 border-t border-green-200">
               <span><i class="fas fa-draw-polygon text-green-500 mr-1"></i>${eaveCount} eave points</span>
               <span><i class="fas fa-grip-lines text-blue-500 mr-1"></i>${ridgeCount} ridges</span>
-              <span><i class="fas fa-slash text-amber-500 mr-1"></i>${hipCount} hips</span>
+              <span><i class="fas fa-slash text-gray-400 mr-1"></i>${hipCount} hips</span>
               <span><i class="fas fa-angle-down text-red-500 mr-1"></i>${valleyCount} valleys</span>
             </div>
           </div>
@@ -712,9 +712,9 @@ function renderReviewStep(root, progressBar) {
           `}
 
           <!-- What's Included in Your Report -->
-          <div class="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl border border-indigo-200 p-5">
-            <h4 class="font-semibold text-indigo-800 mb-3 flex items-center">
-              <i class="fas fa-file-alt text-indigo-500 mr-2"></i>What's Included in Your Report
+          <div class="bg-gradient-to-r from-blue-600 to-blue-700 rounded-xl border border-blue-500/20 p-5">
+            <h4 class="font-semibold text-blue-400 mb-3 flex items-center">
+              <i class="fas fa-file-alt text-blue-400 mr-2"></i>What's Included in Your Report
             </h4>
             <div class="grid grid-cols-2 gap-3 text-sm">
               <div class="flex items-start gap-2"><i class="fas fa-check text-green-500 mt-0.5"></i><span class="text-gray-300">Professional roof diagram with all dimensions</span></div>
@@ -727,9 +727,9 @@ function renderReviewStep(root, progressBar) {
           </div>
 
           <!-- Price per square input (optional) -->
-          <div class="bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl border border-amber-200 p-5">
+          <div class="bg-gradient-to-r from-gray-50 to-emerald-50 rounded-xl border border-white/15 p-5">
             <h4 class="font-semibold text-gray-300 mb-2 flex items-center">
-              <i class="fas fa-dollar-sign text-amber-500 mr-2"></i>Your Price Per Square (Optional)
+              <i class="fas fa-dollar-sign text-gray-400 mr-2"></i>Your Price Per Square (Optional)
             </h4>
             <p class="text-xs text-gray-500 mb-3">Enter your rate per roofing square (100 sq ft) to include a cost estimate in your report.</p>
             <div>
@@ -739,7 +739,7 @@ function renderReviewStep(root, progressBar) {
                 <input type="number" step="0.01" min="0" max="9999" id="pricePerBundleInput"
                   value="${orderState.pricePerBundle || ''}"
                   oninput="orderState.pricePerBundle = parseFloat(this.value) || null;"
-                  class="w-full pl-8 pr-4 py-3 border border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-sm font-medium"
+                  class="w-full pl-8 pr-4 py-3 border border-white/15 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-white/15 text-sm font-medium"
                   placeholder="e.g. 350" />
               </div>
               <p class="text-xs text-gray-400 mt-1">This will appear on your report as an estimated job cost</p>
@@ -1114,7 +1114,7 @@ function updateTraceUI() {
         cv.status === 'ok'
           ? `<div class="mt-2 px-2 py-1.5 bg-green-100 border border-green-300 rounded-lg text-xs text-green-800"><i class="fas fa-check-circle mr-1"></i>${cv.msg}</div>`
           : cv.status === 'large'
-            ? `<div class="mt-2 px-2 py-1.5 bg-amber-100 border border-amber-300 rounded-lg text-xs text-amber-800"><i class="fas fa-exclamation-triangle mr-1"></i>${cv.msg}</div>`
+            ? `<div class="mt-2 px-2 py-1.5 bg-white/10 border border-white/15 rounded-lg text-xs text-gray-400"><i class="fas fa-exclamation-triangle mr-1"></i>${cv.msg}</div>`
             : `<div class="mt-2 px-2 py-1.5 bg-red-100 border border-red-300 rounded-lg text-xs text-red-800"><i class="fas fa-exclamation-triangle mr-1"></i>${cv.msg}</div>`
       ) : '';
 
@@ -1395,7 +1395,7 @@ function updatePriceEstimate() {
   if (pricePerSq && grossSquares) {
     const estimate = grossSquares * pricePerSq;
     valueEl.textContent = '$' + estimate.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    valueEl.className = 'text-2xl font-black mt-1 text-cyan-400';
+    valueEl.className = 'text-2xl font-black mt-1 text-blue-400';
     if (boxEl) {
       const subEl = boxEl.querySelector('p:last-child');
       if (subEl) subEl.textContent = Math.round(grossSquares * 100).toLocaleString() + ' gross SF x $' + pricePerSq + '/sq';

@@ -68,7 +68,7 @@
       ) +
 
       // ── 3. Branding ───────────────────────────────────────
-      section('Brand &amp; Report Customization', 'fa-paint-brush', 'violet',
+      section('Brand &amp; Report Customization', 'fa-paint-brush', 'blue',
         row('Business Name (on reports)', inp('brand_business_name', profile.brand_business_name || '', 'Acme Roofing Ltd.')) +
         row('Logo URL',       inp('brand_logo_url',     profile.brand_logo_url || '',     'https://yoursite.com/logo.png', 'url')) +
         row('Tagline',        inp('brand_tagline',       profile.brand_tagline || '',       'Quality roofing since 1985')) +
@@ -91,10 +91,10 @@
       companyTypeSection() +
 
       // ── 5. Report Preferences ─────────────────────────────
-      section('Report Preferences', 'fa-sliders-h', 'amber',
+      section('Report Preferences', 'fa-sliders-h', 'gray',
         '<div id="solarWattRow" class="mb-4"' + (profile.company_type !== 'solar' ? ' style="display:none"' : '') + '>' +
           '<label class="block text-xs font-semibold text-gray-500 mb-1">Default Solar Panel Wattage (W)</label>' +
-          '<input type="number" id="solar_panel_wattage_w" value="' + (profile.solar_panel_wattage_w || 400) + '" min="100" max="700" class="w-40 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-400" oninput="markDirty(\'prefs\')">' +
+          '<input type="number" id="solar_panel_wattage_w" value="' + (profile.solar_panel_wattage_w || 400) + '" min="100" max="700" class="w-40 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-gray-400" oninput="markDirty(\'prefs\')">' +
           '<p class="text-xs text-gray-400 mt-1">Used for solar system sizing calculations.</p>' +
         '</div>' +
         '<p id="prefsNoOptions" class="text-sm text-gray-400"' + (profile.company_type === 'solar' ? ' style="display:none"' : '') + '>Switch to Solar Sales Company above to see solar-specific preferences.</p>',
@@ -104,14 +104,14 @@
       // ── Display Preferences ─────────────────────────────────
       '<div class="mt-6 bg-[#111111] rounded-2xl border border-white/10 overflow-hidden" style="background:var(--bg-card);border-color:var(--border-color)">' +
         '<div class="px-6 py-4 border-b" style="border-color:var(--border-color)">' +
-          '<h3 class="font-bold" style="color:var(--text-primary)"><i class="fas fa-palette text-purple-400 mr-2"></i>Display Preferences</h3>' +
+          '<h3 class="font-bold" style="color:var(--text-primary)"><i class="fas fa-palette text-blue-400 mr-2"></i>Display Preferences</h3>' +
         '</div>' +
         '<div class="p-6">' +
           '<label class="block text-sm font-medium mb-3" style="color:var(--text-secondary)">Theme Mode</label>' +
           '<div class="flex gap-2" id="theme-mode-buttons">' +
             '<button onclick="window._setThemeMode(\'dark\')" class="flex-1 px-4 py-3 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2 ' + ((!localStorage.getItem('rc_theme_mode') || localStorage.getItem('rc_theme_mode') === 'dark') ? 'bg-emerald-500/15 text-emerald-400 border-2 border-emerald-500/30' : 'bg-white/5 text-gray-400 border-2 border-transparent hover:bg-white/10') + '"><i class="fas fa-moon"></i>Dark</button>' +
             '<button onclick="window._setThemeMode(\'light\')" class="flex-1 px-4 py-3 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2 ' + (localStorage.getItem('rc_theme_mode') === 'light' ? 'bg-blue-500/15 text-blue-400 border-2 border-blue-500/30' : 'bg-white/5 text-gray-400 border-2 border-transparent hover:bg-white/10') + '"><i class="fas fa-sun"></i>Light</button>' +
-            '<button onclick="window._setThemeMode(\'auto\')" class="flex-1 px-4 py-3 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2 ' + (localStorage.getItem('rc_theme_mode') === 'auto' ? 'bg-purple-500/15 text-purple-400 border-2 border-purple-500/30' : 'bg-white/5 text-gray-400 border-2 border-transparent hover:bg-white/10') + '"><i class="fas fa-adjust"></i>Auto</button>' +
+            '<button onclick="window._setThemeMode(\'auto\')" class="flex-1 px-4 py-3 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2 ' + (localStorage.getItem('rc_theme_mode') === 'auto' ? 'bg-blue-500/15/15 text-blue-400 border-2 border-blue-500/30' : 'bg-white/5 text-gray-400 border-2 border-transparent hover:bg-white/10') + '"><i class="fas fa-adjust"></i>Auto</button>' +
           '</div>' +
           '<p class="text-xs mt-2" style="color:var(--text-muted)">Auto mode follows your system preference.</p>' +
         '</div>' +
@@ -191,18 +191,18 @@
 
         // Solar card
         '<button id="ctype-solar" onclick="switchCompanyType(\'solar\')" class="group relative border-2 rounded-2xl p-5 text-left transition-all duration-150 focus:outline-none ' +
-          (solActive ? 'border-amber-500 bg-amber-50 shadow-md' : 'border-gray-200 hover:border-amber-400 hover:shadow-md bg-white') + '">' +
-          (solActive ? '<span class="absolute top-3 right-3 bg-amber-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">ACTIVE</span>' : '') +
+          (solActive ? 'border-white/15 bg-white/10 shadow-md' : 'border-gray-200 hover:border-white/15 hover:shadow-md bg-white') + '">' +
+          (solActive ? '<span class="absolute top-3 right-3 bg-white/10 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">ACTIVE</span>' : '') +
           '<div class="flex items-center gap-3 mb-2">' +
-            '<div class="w-10 h-10 rounded-xl flex items-center justify-center ' + (solActive ? 'bg-amber-500' : 'bg-amber-100 group-hover:bg-amber-200') + '">' +
-              '<i class="fas fa-solar-panel text-lg ' + (solActive ? 'text-white' : 'text-amber-500') + '"></i>' +
+            '<div class="w-10 h-10 rounded-xl flex items-center justify-center ' + (solActive ? 'bg-white/10' : 'bg-white/10 group-hover:bg-white/10') + '">' +
+              '<i class="fas fa-solar-panel text-lg ' + (solActive ? 'text-white' : 'text-gray-400') + '"></i>' +
             '</div>' +
             '<span class="font-bold text-gray-800">Solar Sales Company</span>' +
           '</div>' +
           '<ul class="text-xs text-gray-500 space-y-1 mt-2">' +
-            '<li><i class="fas fa-check text-amber-500 mr-1.5"></i>Order Solar Proposals</li>' +
-            '<li><i class="fas fa-check text-amber-500 mr-1.5"></i>Solar Sales Secretary AI</li>' +
-            '<li><i class="fas fa-check text-amber-500 mr-1.5"></i>Solar Calculator &amp; Panel Designer</li>' +
+            '<li><i class="fas fa-check text-gray-400 mr-1.5"></i>Order Solar Proposals</li>' +
+            '<li><i class="fas fa-check text-gray-400 mr-1.5"></i>Solar Sales Secretary AI</li>' +
+            '<li><i class="fas fa-check text-gray-400 mr-1.5"></i>Solar Calculator &amp; Panel Designer</li>' +
           '</ul>' +
         '</button>' +
       '</div>' +
@@ -243,15 +243,15 @@
     var colorMap = {
       blue:   'text-blue-600',
       emerald:'text-emerald-600',
-      violet: 'text-violet-600',
-      amber:  'text-amber-600',
+      violet: 'text-blue-400',
+      gray:  'text-gray-400',
       red:    'text-red-600',
     };
     var btnColorMap = {
       blue:   'bg-blue-600 hover:bg-blue-700',
       emerald:'bg-emerald-600 hover:bg-emerald-700',
-      violet: 'bg-violet-600 hover:bg-violet-700',
-      amber:  'bg-amber-500 hover:bg-amber-600',
+      violet: 'bg-blue-500/15 hover:bg-blue-500/15',
+      gray:  'bg-white/10 hover:bg-white/10',
       red:    'bg-red-600 hover:bg-red-700',
     };
     return '<div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 mb-6">' +
@@ -284,9 +284,9 @@
 
     return '<div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">' +
       stat('Plan', plan.charAt(0).toUpperCase() + plan.slice(1), isActive ? 'text-green-600' : 'text-gray-600') +
-      stat('Status', status.charAt(0).toUpperCase() + status.slice(1), isActive ? 'text-green-600' : 'text-amber-600') +
+      stat('Status', status.charAt(0).toUpperCase() + status.slice(1), isActive ? 'text-green-600' : 'text-gray-400') +
       stat('Free Trials Left', free + '', 'text-blue-600') +
-      stat('Paid Credits', paid + '', 'text-indigo-600') +
+      stat('Paid Credits', paid + '', 'text-blue-400') +
     '</div>' +
     '<div class="flex gap-3 flex-wrap">' +
       '<a href="/pricing" class="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-lg transition-colors"><i class="fas fa-coins mr-1"></i>Buy Credits</a>' +

@@ -244,13 +244,13 @@ function renderDashboard() {
       (trialsExhausted ?
         '<div class="bg-gradient-to-r from-brand-800 to-brand-900 rounded-2xl p-5 mb-5 shadow-xl border border-brand-700">' +
           '<div class="flex flex-col sm:flex-row items-center gap-4">' +
-            '<div class="w-12 h-12 bg-cyan-500/100 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0"><i class="fas fa-crown text-white text-xl"></i></div>' +
+            '<div class="w-12 h-12 bg-blue-500/15/100 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0"><i class="fas fa-crown text-white text-xl"></i></div>' +
             '<div class="flex-1 text-center sm:text-left">' +
               '<h3 class="text-white font-black text-base">Your 3 Free Trial Reports Are Used Up!</h3>' +
-              '<p class="text-brand-200 text-xs mt-1">Upgrade to a credit pack — packs from <strong class="text-amber-400">$5.00/report (100-pack)</strong>, save up to 38%.</p>' +
+              '<p class="text-brand-200 text-xs mt-1">Upgrade to a credit pack — packs from <strong class="text-gray-400">$5.00/report (100-pack)</strong>, save up to 38%.</p>' +
             '</div>' +
             '<div class="flex gap-2 flex-shrink-0">' +
-              '<a href="/pricing" class="px-4 py-2 bg-cyan-500/100 hover:bg-amber-400 text-white font-black rounded-xl shadow text-xs"><i class="fas fa-tags mr-1"></i>View Packs</a>' +
+              '<a href="/pricing" class="px-4 py-2 bg-blue-500/15/100 hover:bg-white/10 text-white font-black rounded-xl shadow text-xs"><i class="fas fa-tags mr-1"></i>View Packs</a>' +
               '<a href="/customer/order" class="px-4 py-2 bg-[#111111]/10 hover:bg-[#111111]/20 text-white font-semibold rounded-xl text-xs border border-white/20"><i class="fas fa-credit-card mr-1"></i>Pay Per Report</a>' +
             '</div>' +
           '</div>' +
@@ -258,7 +258,7 @@ function renderDashboard() {
 
       // Team context banner
       (custState.isTeamMember ?
-        '<div class="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-2xl p-4 mb-5 shadow-lg border border-blue-500/30">' +
+        '<div class="bg-gradient-to-r from-blue-600 to-blue-700 rounded-2xl p-4 mb-5 shadow-lg border border-blue-500/30">' +
           '<div class="flex items-center gap-3">' +
             '<div class="w-10 h-10 bg-[#111111]/20 rounded-xl flex items-center justify-center flex-shrink-0 backdrop-blur"><i class="fas fa-users text-white"></i></div>' +
             '<div class="flex-1 min-w-0">' +
@@ -337,12 +337,12 @@ function renderDashboard() {
       '<div class="bg-[#111111] rounded-2xl border border-white/10 shadow-sm overflow-hidden mb-5">' +
         '<div class="px-5 py-4 flex items-center justify-between">' +
           '<div>' +
-            '<p class="font-medium text-gray-100 text-sm"><i class="fas fa-envelope text-cyan-500 mr-2"></i>Auto-email reports when ready</p>' +
+            '<p class="font-medium text-gray-100 text-sm"><i class="fas fa-envelope text-blue-400 mr-2"></i>Auto-email reports when ready</p>' +
             '<p class="text-xs text-gray-500 mt-0.5">Send completed reports automatically to ' + (c.email || '') + '</p>' +
           '</div>' +
           '<label class="relative inline-flex items-center cursor-pointer">' +
             '<input type="checkbox" id="auto-email-toggle" class="sr-only peer" onchange="toggleAutoEmail(this.checked)">' +
-            '<div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-cyan-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[&quot;&quot;] after:absolute after:top-[2px] after:left-[2px] after:bg-[#111111] after:border-white/15 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500"></div>' +
+            '<div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-400 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[&quot;&quot;] after:absolute after:top-[2px] after:left-[2px] after:bg-[#111111] after:border-white/15 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-500/15"></div>' +
           '</label>' +
         '</div>' +
       '</div>' +
@@ -596,13 +596,13 @@ function showOnboardingModal() {
         '<div class="grid grid-cols-3 gap-3 text-center text-xs">' +
           '<div class="bg-[#0A0A0A] rounded-xl p-3"><i class="fas fa-satellite text-emerald-400 text-xl mb-1 block"></i><p class="font-semibold text-gray-300">Satellite Measurement</p></div>' +
           '<div class="bg-[#0A0A0A] rounded-xl p-3"><i class="fas fa-boxes-stacked text-emerald-500 text-xl mb-1 block"></i><p class="font-semibold text-gray-300">Full Material BOM</p></div>' +
-          '<div class="bg-[#0A0A0A] rounded-xl p-3"><i class="fas fa-file-invoice text-purple-500 text-xl mb-1 block"></i><p class="font-semibold text-gray-300">Instant Proposals</p></div>' +
+          '<div class="bg-[#0A0A0A] rounded-xl p-3"><i class="fas fa-file-invoice text-blue-400 text-xl mb-1 block"></i><p class="font-semibold text-gray-300">Instant Proposals</p></div>' +
         '</div>' +
       '</div>'
     },
     {
       icon: 'fa-rocket',
-      color: 'from-emerald-500 to-teal-500',
+      color: 'from-emerald-500 to-emerald-600',
       title: 'Order Your First Report',
       content: '<div class="space-y-4">' +
         '<div class="bg-sky-50 border border-sky-200 rounded-xl p-4">' +
@@ -620,14 +620,14 @@ function showOnboardingModal() {
     },
     {
       icon: 'fa-toolbox',
-      color: 'from-purple-500 to-violet-500',
+      color: 'from-blue-600 to-blue-700',
       title: 'Explore Your Tools',
       content: '<div class="space-y-3">' +
         '<p class="text-sm text-gray-400">Your dashboard has everything you need to run your roofing business:</p>' +
         '<div class="grid grid-cols-2 gap-2">' +
           '<a href="/customer/crm/reports" onclick="dismissOnboarding()" class="bg-brand-50 border border-brand-200 rounded-xl p-3 text-center hover:bg-brand-100 transition-colors"><i class="fas fa-file-alt text-emerald-400 text-lg mb-1 block"></i><p class="text-xs font-semibold text-brand-700">Reports</p></a>' +
-          '<a href="/customer/proposals" onclick="dismissOnboarding()" class="bg-cyan-500/10 border border-amber-200 rounded-xl p-3 text-center hover:bg-amber-100 transition-colors"><i class="fas fa-file-invoice text-amber-500 text-lg mb-1 block"></i><p class="text-xs font-semibold text-amber-700">Proposals</p></a>' +
-          '<a href="/customer/customers" onclick="dismissOnboarding()" class="bg-violet-50 border border-violet-200 rounded-xl p-3 text-center hover:bg-violet-100 transition-colors"><i class="fas fa-users text-violet-500 text-lg mb-1 block"></i><p class="text-xs font-semibold text-violet-700">Customers</p></a>' +
+          '<a href="/customer/proposals" onclick="dismissOnboarding()" class="bg-blue-500/15/10 border border-white/15 rounded-xl p-3 text-center hover:bg-white/10 transition-colors"><i class="fas fa-file-invoice text-gray-400 text-lg mb-1 block"></i><p class="text-xs font-semibold text-gray-400">Proposals</p></a>' +
+          '<a href="/customer/customers" onclick="dismissOnboarding()" class="bg-blue-500/15 border border-blue-500/20 rounded-xl p-3 text-center hover:bg-blue-500/15 transition-colors"><i class="fas fa-users text-blue-400 text-lg mb-1 block"></i><p class="text-xs font-semibold text-blue-400">Customers</p></a>' +
           '<a href="/customer/material-calculator" onclick="dismissOnboarding()" class="bg-sky-50 border border-sky-200 rounded-xl p-3 text-center hover:bg-sky-100 transition-colors"><i class="fas fa-calculator text-sky-500 text-lg mb-1 block"></i><p class="text-xs font-semibold text-sky-700">Material Calc</p></a>' +
         '</div>' +
       '</div>'
