@@ -1328,6 +1328,7 @@ app.get('/customer/proposals', (c) => c.html(getCrmSubPageHTML('proposals', 'Pro
 app.get('/customer/jobs', (c) => c.html(getCrmSubPageHTML('jobs', 'Job Management', 'fa-hard-hat')))
 app.get('/customer/pipeline', (c) => c.html(getCrmSubPageHTML('pipeline', 'Sales Pipeline', 'fa-funnel-dollar')))
 app.get('/customer/email-outreach', (c) => c.html(getCrmSubPageHTML('email-outreach', 'Email Outreach', 'fa-envelope-open-text')))
+app.get('/customer/suppliers', (c) => c.html(getCrmSubPageHTML('suppliers', 'Supplier Management', 'fa-store')))
 app.get('/customer/catalog', (c) => c.html(getCrmSubPageHTML('catalog', 'Material Catalog', 'fa-box-open')))
 app.get('/customer/referrals', (c) => c.html(getCrmSubPageHTML('referrals', 'Referral Program', 'fa-gift')))
 app.get('/customer/crew', (c) => c.html(getCrmSubPageHTML('crew', 'Crew Manager', 'fa-hard-hat')))

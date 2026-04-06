@@ -32,6 +32,7 @@
     pipeline: { init: initPipeline, title: 'Sales Pipeline' },
     d2d: { init: initD2D, title: 'D2D Manager' },
     'email-outreach': { init: initEmailOutreach, title: 'Email Outreach' },
+    'suppliers': { init: initSuppliers, title: 'Supplier Management' },
     'catalog': { init: initCatalog, title: 'Material Catalog' },
     'referrals': { init: initReferrals, title: 'Referral Program' },
     'crew': { init: initCrewManager, title: 'Crew Manager' }
@@ -2060,6 +2061,217 @@
       .then(function() { toast('Job deleted'); loadJobsForMonth(_calYear, _calMonth); })
       .catch(function(e) { toast('Failed to delete: ' + (e.message || 'Network error'), 'error'); });
   };
+
+  // ============================================================
+  // MODULE: SUPPLIER MANAGEMENT
+  // ============================================================
+  function initSuppliers() {
+    var suppliers = [];
+    var orders = [];
+
+    async function loadData() {
+      try {
+        var [supRes, ordRes] = await Promise.all([
+          fetch('/api/crm/suppliers', { headers: authHeaders() }),
+          fetch('/api/crm/supplier-orders', { headers: authHeaders() })
+        ]);
+        if (supRes.ok) { var d = await supRes.json(); suppliers = d.suppliers || []; }
+        if (ordRes.ok) { var d2 = await ordRes.json(); orders = d2.orders || []; }
+      } catch(e) {}
+      renderSuppliers();
+    }
+
+    function renderSuppliers() {
+      root.innerHTML =
+        '<div class="mb-6 flex items-center justify-between">' +
+          '<div><h2 class="text-xl font-bold text-white"><i class="fas fa-store text-emerald-400 mr-2"></i>Supplier Management</h2>' +
+          '<p class="text-gray-400 text-sm mt-1">Manage your material suppliers and track orders</p></div>' +
+          '<button onclick="window._supAdd()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-semibold"><i class="fas fa-plus mr-1.5"></i>Add Supplier</button>' +
+        '</div>' +
+
+        // Suppliers list
+        '<div class="mb-8">' +
+          '<h3 class="text-white font-semibold text-sm mb-3">Your Suppliers</h3>' +
+          (suppliers.length === 0 ?
+            '<div class="bg-[#111111] rounded-xl border border-white/10 p-8 text-center">' +
+              '<i class="fas fa-store text-gray-600 text-4xl mb-3"></i>' +
+              '<p class="text-gray-400 font-medium">No suppliers set up yet</p>' +
+              '<p class="text-gray-500 text-sm mt-1">Add a supplier to start creating material orders</p>' +
+              '<button onclick="window._supAdd()" class="mt-4 px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-semibold">Add Your First Supplier</button>' +
+            '</div>'
+          :
+            '<div class="grid gap-4">' +
+              suppliers.map(function(s) {
+                return '<div class="bg-[#111111] rounded-xl border border-white/10 p-5">' +
+                  '<div class="flex items-start justify-between mb-3">' +
+                    '<div class="flex items-center gap-3">' +
+                      '<div class="w-10 h-10 bg-emerald-500/15 rounded-lg flex items-center justify-center"><i class="fas fa-store text-emerald-400"></i></div>' +
+                      '<div>' +
+                        '<div class="text-white font-bold">' + (s.name || 'Unnamed') + '</div>' +
+                        (s.branch_name ? '<div class="text-gray-400 text-xs">' + s.branch_name + '</div>' : '') +
+                      '</div>' +
+                    '</div>' +
+                    '<div class="flex gap-2">' +
+                      '<button onclick="window._supEdit(' + s.id + ')" class="text-blue-400 hover:text-blue-300 text-xs"><i class="fas fa-edit"></i></button>' +
+                    '</div>' +
+                  '</div>' +
+                  '<div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">' +
+                    (s.account_number ? '<div><span class="text-gray-500">Account #:</span> <span class="text-gray-300">' + s.account_number + '</span></div>' : '') +
+                    (s.phone ? '<div><span class="text-gray-500">Phone:</span> <span class="text-gray-300">' + s.phone + '</span></div>' : '') +
+                    (s.email ? '<div><span class="text-gray-500">Email:</span> <span class="text-gray-300">' + s.email + '</span></div>' : '') +
+                    (s.address ? '<div><span class="text-gray-500">Address:</span> <span class="text-gray-300">' + s.address + (s.city ? ', ' + s.city : '') + '</span></div>' : '') +
+                    (s.rep_name ? '<div><span class="text-gray-500">Rep:</span> <span class="text-gray-300">' + s.rep_name + '</span></div>' : '') +
+                    (s.rep_phone ? '<div><span class="text-gray-500">Rep Phone:</span> <span class="text-gray-300">' + s.rep_phone + '</span></div>' : '') +
+                    (s.rep_email ? '<div><span class="text-gray-500">Rep Email:</span> <span class="text-gray-300">' + s.rep_email + '</span></div>' : '') +
+                  '</div>' +
+                '</div>';
+              }).join('') +
+            '</div>'
+          ) +
+        '</div>' +
+
+        // Supplier Orders
+        '<div>' +
+          '<h3 class="text-white font-semibold text-sm mb-3">Material Orders (' + orders.length + ')</h3>' +
+          (orders.length === 0 ?
+            '<div class="bg-[#111111] rounded-xl border border-white/10 p-6 text-center">' +
+              '<p class="text-gray-500 text-sm">No material orders yet. Orders are created from the Proposals module.</p>' +
+            '</div>'
+          :
+            '<div class="bg-[#111111] rounded-xl border border-white/10 overflow-hidden">' +
+              '<table class="w-full text-sm">' +
+                '<thead><tr class="border-b border-white/5">' +
+                  '<th class="text-left px-4 py-3 text-xs text-gray-500 font-semibold">Order #</th>' +
+                  '<th class="text-left px-4 py-3 text-xs text-gray-500 font-semibold">Supplier</th>' +
+                  '<th class="text-left px-4 py-3 text-xs text-gray-500 font-semibold">Job Address</th>' +
+                  '<th class="text-right px-4 py-3 text-xs text-gray-500 font-semibold">Total</th>' +
+                  '<th class="text-left px-4 py-3 text-xs text-gray-500 font-semibold">Date</th>' +
+                  '<th class="text-right px-4 py-3 text-xs text-gray-500 font-semibold">Actions</th>' +
+                '</tr></thead>' +
+                '<tbody>' +
+                  orders.map(function(o) {
+                    return '<tr class="border-b border-white/5 hover:bg-white/5">' +
+                      '<td class="px-4 py-3 text-white font-medium">' + (o.order_number || '—') + '</td>' +
+                      '<td class="px-4 py-3 text-gray-300">' + (o.supplier_name || '—') + '</td>' +
+                      '<td class="px-4 py-3 text-gray-400 text-xs">' + (o.job_address || '—') + '</td>' +
+                      '<td class="px-4 py-3 text-right text-white font-semibold">$' + Number(o.total_amount || 0).toFixed(2) + '</td>' +
+                      '<td class="px-4 py-3 text-gray-500 text-xs">' + (o.created_at || '').slice(0, 10) + '</td>' +
+                      '<td class="px-4 py-3 text-right"><button onclick="window.open(\'/api/crm/supplier-orders/' + o.id + '/print\',\'_blank\')" class="px-3 py-1 bg-blue-500/15 text-blue-400 rounded text-xs font-semibold hover:bg-blue-500/25"><i class="fas fa-print mr-1"></i>Print/PDF</button></td>' +
+                    '</tr>';
+                  }).join('') +
+                '</tbody>' +
+              '</table>' +
+            '</div>'
+          ) +
+        '</div>';
+    }
+
+    window._supAdd = function() {
+      showModal('Add Supplier',
+        '<div class="space-y-3">' +
+          '<div class="grid grid-cols-2 gap-3">' +
+            '<div><label class="block text-xs font-semibold text-gray-400 mb-1">Supplier Name *</label><input id="sup-m-name" class="w-full bg-[#0A0A0A] border border-white/10 rounded-lg px-3 py-2 text-sm text-white" placeholder="e.g. Roof Mart"></div>' +
+            '<div><label class="block text-xs font-semibold text-gray-400 mb-1">Branch Name</label><input id="sup-m-branch" class="w-full bg-[#0A0A0A] border border-white/10 rounded-lg px-3 py-2 text-sm text-white" placeholder="e.g. South Edmonton"></div>' +
+          '</div>' +
+          '<div class="grid grid-cols-2 gap-3">' +
+            '<div><label class="block text-xs font-semibold text-gray-400 mb-1">Account #</label><input id="sup-m-account" class="w-full bg-[#0A0A0A] border border-white/10 rounded-lg px-3 py-2 text-sm text-white" placeholder="Your account number"></div>' +
+            '<div><label class="block text-xs font-semibold text-gray-400 mb-1">Phone</label><input id="sup-m-phone" class="w-full bg-[#0A0A0A] border border-white/10 rounded-lg px-3 py-2 text-sm text-white" placeholder="780-555-1234"></div>' +
+          '</div>' +
+          '<div class="grid grid-cols-2 gap-3">' +
+            '<div><label class="block text-xs font-semibold text-gray-400 mb-1">Email</label><input id="sup-m-email" class="w-full bg-[#0A0A0A] border border-white/10 rounded-lg px-3 py-2 text-sm text-white" placeholder="orders@supplier.ca"></div>' +
+            '<div><label class="block text-xs font-semibold text-gray-400 mb-1">Address</label><input id="sup-m-address" class="w-full bg-[#0A0A0A] border border-white/10 rounded-lg px-3 py-2 text-sm text-white" placeholder="123 Supply Dr"></div>' +
+          '</div>' +
+          '<div class="grid grid-cols-2 gap-3">' +
+            '<div><label class="block text-xs font-semibold text-gray-400 mb-1">City</label><input id="sup-m-city" class="w-full bg-[#0A0A0A] border border-white/10 rounded-lg px-3 py-2 text-sm text-white" placeholder="Edmonton"></div>' +
+            '<div><label class="block text-xs font-semibold text-gray-400 mb-1">Province</label><input id="sup-m-province" class="w-full bg-[#0A0A0A] border border-white/10 rounded-lg px-3 py-2 text-sm text-white" placeholder="Alberta"></div>' +
+          '</div>' +
+          '<h4 class="text-white font-semibold text-sm pt-2">Store Representative</h4>' +
+          '<div class="grid grid-cols-3 gap-3">' +
+            '<div><label class="block text-xs font-semibold text-gray-400 mb-1">Rep Name</label><input id="sup-m-rep-name" class="w-full bg-[#0A0A0A] border border-white/10 rounded-lg px-3 py-2 text-sm text-white" placeholder="John Smith"></div>' +
+            '<div><label class="block text-xs font-semibold text-gray-400 mb-1">Rep Phone</label><input id="sup-m-rep-phone" class="w-full bg-[#0A0A0A] border border-white/10 rounded-lg px-3 py-2 text-sm text-white" placeholder="780-555-0000"></div>' +
+            '<div><label class="block text-xs font-semibold text-gray-400 mb-1">Rep Email</label><input id="sup-m-rep-email" class="w-full bg-[#0A0A0A] border border-white/10 rounded-lg px-3 py-2 text-sm text-white" placeholder="john@supplier.ca"></div>' +
+          '</div>' +
+        '</div>',
+        function() {
+          var body = {
+            name: document.getElementById('sup-m-name')?.value?.trim(),
+            branch_name: document.getElementById('sup-m-branch')?.value?.trim(),
+            account_number: document.getElementById('sup-m-account')?.value?.trim(),
+            phone: document.getElementById('sup-m-phone')?.value?.trim(),
+            email: document.getElementById('sup-m-email')?.value?.trim(),
+            address: document.getElementById('sup-m-address')?.value?.trim(),
+            city: document.getElementById('sup-m-city')?.value?.trim(),
+            province: document.getElementById('sup-m-province')?.value?.trim(),
+            rep_name: document.getElementById('sup-m-rep-name')?.value?.trim(),
+            rep_phone: document.getElementById('sup-m-rep-phone')?.value?.trim(),
+            rep_email: document.getElementById('sup-m-rep-email')?.value?.trim(),
+            preferred: true
+          };
+          if (!body.name) { toast('Supplier name is required', 'error'); return; }
+          fetch('/api/crm/suppliers', { method: 'POST', headers: authHeaders(), body: JSON.stringify(body) })
+            .then(function(r) { return r.json(); })
+            .then(function(res) { if (res.success) { closeModal(); toast('Supplier added!'); loadData(); } else { toast(res.error || 'Failed', 'error'); } })
+            .catch(function() { toast('Network error', 'error'); });
+        },
+        'Add Supplier'
+      );
+    };
+
+    window._supEdit = function(id) {
+      var s = suppliers.find(function(x) { return x.id === id; });
+      if (!s) return;
+      showModal('Edit Supplier',
+        '<div class="space-y-3">' +
+          '<div class="grid grid-cols-2 gap-3">' +
+            '<div><label class="block text-xs font-semibold text-gray-400 mb-1">Supplier Name *</label><input id="sup-e-name" value="' + (s.name||'') + '" class="w-full bg-[#0A0A0A] border border-white/10 rounded-lg px-3 py-2 text-sm text-white"></div>' +
+            '<div><label class="block text-xs font-semibold text-gray-400 mb-1">Branch Name</label><input id="sup-e-branch" value="' + (s.branch_name||'') + '" class="w-full bg-[#0A0A0A] border border-white/10 rounded-lg px-3 py-2 text-sm text-white"></div>' +
+          '</div>' +
+          '<div class="grid grid-cols-2 gap-3">' +
+            '<div><label class="block text-xs font-semibold text-gray-400 mb-1">Account #</label><input id="sup-e-account" value="' + (s.account_number||'') + '" class="w-full bg-[#0A0A0A] border border-white/10 rounded-lg px-3 py-2 text-sm text-white"></div>' +
+            '<div><label class="block text-xs font-semibold text-gray-400 mb-1">Phone</label><input id="sup-e-phone" value="' + (s.phone||'') + '" class="w-full bg-[#0A0A0A] border border-white/10 rounded-lg px-3 py-2 text-sm text-white"></div>' +
+          '</div>' +
+          '<div class="grid grid-cols-2 gap-3">' +
+            '<div><label class="block text-xs font-semibold text-gray-400 mb-1">Email</label><input id="sup-e-email" value="' + (s.email||'') + '" class="w-full bg-[#0A0A0A] border border-white/10 rounded-lg px-3 py-2 text-sm text-white"></div>' +
+            '<div><label class="block text-xs font-semibold text-gray-400 mb-1">Address</label><input id="sup-e-address" value="' + (s.address||'') + '" class="w-full bg-[#0A0A0A] border border-white/10 rounded-lg px-3 py-2 text-sm text-white"></div>' +
+          '</div>' +
+          '<div class="grid grid-cols-2 gap-3">' +
+            '<div><label class="block text-xs font-semibold text-gray-400 mb-1">City</label><input id="sup-e-city" value="' + (s.city||'') + '" class="w-full bg-[#0A0A0A] border border-white/10 rounded-lg px-3 py-2 text-sm text-white"></div>' +
+            '<div><label class="block text-xs font-semibold text-gray-400 mb-1">Province</label><input id="sup-e-province" value="' + (s.province||'') + '" class="w-full bg-[#0A0A0A] border border-white/10 rounded-lg px-3 py-2 text-sm text-white"></div>' +
+          '</div>' +
+          '<h4 class="text-white font-semibold text-sm pt-2">Store Representative</h4>' +
+          '<div class="grid grid-cols-3 gap-3">' +
+            '<div><label class="block text-xs font-semibold text-gray-400 mb-1">Rep Name</label><input id="sup-e-rep-name" value="' + (s.rep_name||'') + '" class="w-full bg-[#0A0A0A] border border-white/10 rounded-lg px-3 py-2 text-sm text-white"></div>' +
+            '<div><label class="block text-xs font-semibold text-gray-400 mb-1">Rep Phone</label><input id="sup-e-rep-phone" value="' + (s.rep_phone||'') + '" class="w-full bg-[#0A0A0A] border border-white/10 rounded-lg px-3 py-2 text-sm text-white"></div>' +
+            '<div><label class="block text-xs font-semibold text-gray-400 mb-1">Rep Email</label><input id="sup-e-rep-email" value="' + (s.rep_email||'') + '" class="w-full bg-[#0A0A0A] border border-white/10 rounded-lg px-3 py-2 text-sm text-white"></div>' +
+          '</div>' +
+        '</div>',
+        function() {
+          var body = {
+            name: document.getElementById('sup-e-name')?.value?.trim(),
+            branch_name: document.getElementById('sup-e-branch')?.value?.trim(),
+            account_number: document.getElementById('sup-e-account')?.value?.trim(),
+            phone: document.getElementById('sup-e-phone')?.value?.trim(),
+            email: document.getElementById('sup-e-email')?.value?.trim(),
+            address: document.getElementById('sup-e-address')?.value?.trim(),
+            city: document.getElementById('sup-e-city')?.value?.trim(),
+            province: document.getElementById('sup-e-province')?.value?.trim(),
+            rep_name: document.getElementById('sup-e-rep-name')?.value?.trim(),
+            rep_phone: document.getElementById('sup-e-rep-phone')?.value?.trim(),
+            rep_email: document.getElementById('sup-e-rep-email')?.value?.trim(),
+            preferred: true
+          };
+          if (!body.name) { toast('Supplier name is required', 'error'); return; }
+          fetch('/api/crm/suppliers/' + id, { method: 'PUT', headers: authHeaders(), body: JSON.stringify(body) })
+            .then(function(r) { return r.json(); })
+            .then(function(res) { if (res.success) { closeModal(); toast('Supplier updated!'); loadData(); } else { toast(res.error || 'Failed', 'error'); } })
+            .catch(function() { toast('Network error', 'error'); });
+        },
+        'Update Supplier'
+      );
+    };
+
+    loadData();
+  }
 
   // ============================================================
   // MODULE: CREW MANAGER
