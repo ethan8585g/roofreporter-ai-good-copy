@@ -1161,9 +1161,9 @@ function updateTraceUI() {
   document.querySelectorAll('[data-trace-mode]').forEach(btn => {
     const key = btn.getAttribute('data-trace-mode');
     if (key === orderState.traceMode) {
-      btn.className = btn.className.replace(/bg-[#0A0A0A] text-gray-400 hover:bg-[#111111]/10/g, '').replace(/bg-gray-800 text-white shadow-md/g, '') + ' bg-gray-800 text-white shadow-md';
+      btn.className = btn.className.split('bg-[#0A0A0A]').join('').split('text-gray-400').join('').split('hover:bg-[#111111]').join('').split('bg-gray-800 text-white shadow-md').join('') + ' bg-gray-800 text-white shadow-md';
     } else {
-      btn.className = btn.className.replace(/bg-gray-800 text-white shadow-md/g, '').replace(/bg-[#0A0A0A] text-gray-400 hover:bg-[#111111]/10/g, '') + ' bg-[#0A0A0A] text-gray-400 hover:bg-[#111111]/10';
+      btn.className = btn.className.split('bg-gray-800 text-white shadow-md').join('').split('bg-[#0A0A0A]').join('').split('text-gray-400').join('') + ' bg-[#0A0A0A] text-gray-400 hover:bg-white/10';
     }
   });
 

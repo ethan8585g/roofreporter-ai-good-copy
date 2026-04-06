@@ -1214,7 +1214,7 @@
     document.querySelectorAll('.' + prefix + '-perm-d2d').forEach(function(btn) {
       btn.addEventListener('click', function() {
         document.querySelectorAll('.' + prefix + '-perm-d2d').forEach(function(b) {
-          b.className = b.className.replace(/border-sky-500 bg-sky-50 text-sky-700/g, '').replace(/border-white/10 text-gray-500/g, '').trim();
+          b.className = b.className.split('border-sky-500').join('').split('bg-sky-50').join('').split('text-sky-700').join('').split('border-white/10').join('').split('text-gray-500').join('').trim();
           b.classList.add('border-white/10', 'text-gray-500');
         });
         btn.classList.remove('border-white/10', 'text-gray-500');
