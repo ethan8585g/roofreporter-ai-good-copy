@@ -362,7 +362,8 @@ document.addEventListener('DOMContentLoaded', () => {
           '<button onclick="window._pb.previewProposal()" style="background:var(--bg-elevated);color:var(--text-secondary);border:1px solid var(--border-color);padding:10px 20px;border-radius:8px;font-weight:600;font-size:13px;cursor:pointer"><i class="fas fa-eye" style="margin-right:6px"></i>Preview</button>' +
         '</div>' +
         '<div style="display:flex;gap:8px">' +
-          '<button onclick="createSupplierOrder(window.__pbState.editId)" style="background:#0ea5e9;color:white;border:none;padding:10px 20px;border-radius:8px;font-weight:600;font-size:13px;cursor:pointer"><i class="fas fa-truck" style="margin-right:6px"></i>Supplier Order PDF</button>' +
+          '<button onclick="window._pb.saveAndCreateSupplierOrder()" style="background:#0ea5e9;color:white;border:none;padding:10px 20px;border-radius:8px;font-weight:600;font-size:13px;cursor:pointer"><i class="fas fa-truck" style="margin-right:6px"></i>Supplier Order PDF</button>' +
+          '<button onclick="window._pb.downloadCustomerPDF()" style="background:var(--bg-elevated);color:var(--text-secondary);border:1px solid var(--border-color);padding:10px 20px;border-radius:8px;font-weight:600;font-size:13px;cursor:pointer"><i class="fas fa-download" style="margin-right:6px"></i>Customer PDF</button>' +
           '<button onclick="window._pb.collectDashboardAndSend()" style="background:var(--accent);color:#0a0a0a;border:none;padding:10px 24px;border-radius:8px;font-weight:800;font-size:13px;cursor:pointer"><i class="fas fa-paper-plane" style="margin-right:6px"></i>Send to Customer</button>' +
         '</div>' +
       '</div>' +
@@ -1525,6 +1526,32 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!state.form.customer_name) { pbToast('Please enter customer name', 'error'); return; }
       if (!state.form.customer_email) { pbToast('Please enter customer email', 'error'); return; }
       saveProposal(true);
+    },
+    async saveAndCreateSupplierOrder() {
+      // Save proposal first to get an ID, then create supplier order
+      window._pb.collectDashboardData();
+      if (!state.form.customer_name) { pbToast('Please enter customer name first', 'error'); return; }
+      pbToast('Saving proposal & generating supplier order...', 'info');
+      try {
+        await saveProposal(false);
+        // After save, editId should be set
+        var proposalId = state.editId;
+        if (proposalId) {
+          await createSupplierOrder(proposalId);
+        } else {
+          // If no editId, create supplier order without proposal link
+          await createSupplierOrder(null);
+        }
+      } catch(e) {
+        pbToast('Error: ' + (e.message || 'Failed to create supplier order'), 'error');
+      }
+    },
+    downloadCustomerPDF() {
+      // Collect data, switch to preview mode, then trigger print
+      window._pb.collectDashboardData();
+      state.mode = 'preview';
+      render();
+      setTimeout(function() { window.print(); }, 500);
     },
     updatePerSquare() {
       // Recalculate per-square total
