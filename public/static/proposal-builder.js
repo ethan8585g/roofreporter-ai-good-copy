@@ -49,6 +49,10 @@ document.addEventListener('DOMContentLoaded', () => {
     validUntil.setDate(validUntil.getDate() + 30);
     return {
       customer_id: '',
+      customer_name: '',
+      customer_email: '',
+      customer_phone: '',
+      property_address: '',
       newCustomer: { name: '', email: '', phone: '', company_name: '', address: '' },
       isNewCustomer: false,
       proposal_number: 'PROP-' + today.toISOString().slice(0, 10).replace(/-/g, '') + '-' + Math.floor(Math.random() * 9999).toString().padStart(4, '0'),
@@ -385,7 +389,7 @@ document.addEventListener('DOMContentLoaded', () => {
     <!-- Attach Roof Report -->
     <div class="bg-white rounded-xl border border-gray-200 p-6 mb-6">
       <h3 class="text-lg font-bold text-gray-900 mb-4"><i class="fas fa-file-pdf text-brand-500 mr-2"></i>Attach Roof Report</h3>
-      <select id="pb-report" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" onchange="state.form.attached_report_id = this.value || null">
+      <select id="pb-report" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" onchange="window._pb.selectReport(this.value)">
         <option value="">No report attached</option>
         ${state.reports.map(r => `<option value="${r.id}" ${f.attached_report_id == r.id ? 'selected' : ''}>${r.property_address || 'Report #' + r.id} — ${(r.created_at || '').slice(0, 10)}</option>`).join('')}
       </select>
@@ -710,6 +714,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!data.name) { alert('Supplier name is required'); return; }
     try {
       var res = await fetch('/api/crm/suppliers', { method: 'POST', headers: headers(), body: JSON.stringify(data) });
+      if (!res.ok) {
+        alert('Failed to save supplier. Server returned error ' + res.status);
+        return;
+      }
       var result = await res.json();
       if (result?.success) {
         state.supplierSetup = true;
@@ -812,6 +820,17 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     const reportSelect = document.getElementById('pb-report');
     if (reportSelect) f.attached_report_id = reportSelect.value || null;
+
+    // Also collect step 3 fields if they exist in DOM
+    var step3Name = document.getElementById('step3-name');
+    if (step3Name) f.customer_name = step3Name.value || f.customer_name || '';
+    var step3Email = document.getElementById('step3-email');
+    if (step3Email) f.customer_email = step3Email.value || f.customer_email || '';
+    var step3Phone = document.getElementById('step3-phone');
+    if (step3Phone) f.customer_phone = step3Phone.value || f.customer_phone || '';
+    var step3Addr = document.getElementById('step3-address');
+    if (step3Addr) f.property_address = step3Addr.value || f.property_address || '';
+
     return f;
   }
 
@@ -825,6 +844,20 @@ document.addEventListener('DOMContentLoaded', () => {
     // Validate
     if (!f.isNewCustomer && !f.customer_id) { alert('Please select a customer'); return; }
     if (f.isNewCustomer && (!f.newCustomer.name || !f.newCustomer.email)) { alert('Name and email are required for new customer'); return; }
+    // Auto-create line item from per-square pricing
+    if (state.pricingMethod === 'per_square' && state.selectedReport && state.pricePerSquare > 0) {
+      var squares = Math.ceil((state.selectedReport.roof_area_sqft || 0) / 100);
+      if (squares > 0) {
+        f.items = [{
+          description: 'Roof Replacement — ' + squares + ' squares @ $' + Number(state.pricePerSquare).toFixed(2) + '/sq (' + Math.round(state.selectedReport.roof_area_sqft) + ' sq ft total area)',
+          quantity: squares,
+          unit: 'sq',
+          unit_price: state.pricePerSquare,
+          is_taxable: true
+        }];
+      }
+    }
+
     if (!f.items.some(i => i.description)) { alert('Add at least one line item'); return; }
 
     try {
@@ -839,7 +872,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         if (custRes.ok) {
           const custData = await custRes.json();
-          customerId = custData.customer?.id || custData.id;
+          customerId = custData.id || custData.customer_id;
         } else {
           alert('Failed to create customer. Please try again.');
           return;
@@ -1070,6 +1103,8 @@ document.addEventListener('DOMContentLoaded', () => {
         state.catalogLoaded = true;
         alert('Default roofing materials added to your catalog!');
         render();
+      } else {
+        alert('Failed to seed catalog. Please try again or add items manually.');
       }
     },
     selectReport(reportId) {
@@ -1088,6 +1123,12 @@ document.addEventListener('DOMContentLoaded', () => {
       state.form.customer_email = (document.getElementById('step3-email') || {}).value || '';
       state.form.customer_phone = (document.getElementById('step3-phone') || {}).value || '';
       state.form.property_address = (document.getElementById('step3-address') || {}).value || '';
+
+      if (!state.form.customer_name) {
+        alert('Please enter the customer name to continue.');
+        return;
+      }
+
       state.createStep = 4;
       render();
     },
