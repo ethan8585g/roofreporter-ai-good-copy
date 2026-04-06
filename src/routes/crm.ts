@@ -1696,3 +1696,148 @@ crmRoutes.post('/catalog/seed-defaults', async (c) => {
   }
   return c.json({ success: true, seeded: defaults.length })
 })
+
+// ============================================================
+// SUPPLIER DIRECTORY & SUPPLIER ORDERS
+// ============================================================
+
+// Helper alias for CRM auth (reuses existing getOwnerId)
+const getOwnerIdFromCRM = getOwnerId
+
+// GET /suppliers — list suppliers
+crmRoutes.get('/suppliers', async (c) => {
+  const ownerId = await getOwnerIdFromCRM(c)
+  if (!ownerId) return c.json({ error: 'Unauthorized' }, 401)
+  const result = await c.env.DB.prepare(
+    'SELECT * FROM supplier_directory WHERE owner_id = ? ORDER BY preferred DESC, name ASC'
+  ).bind(ownerId).all()
+  return c.json({ suppliers: result.results || [] })
+})
+
+// POST /suppliers — create supplier
+crmRoutes.post('/suppliers', async (c) => {
+  const ownerId = await getOwnerIdFromCRM(c)
+  if (!ownerId) return c.json({ error: 'Unauthorized' }, 401)
+  const body = await c.req.json()
+  const { name, phone, email, address, city, province, branch_name, account_number, rep_name, rep_phone, rep_email, preferred, notes } = body
+  if (!name) return c.json({ error: 'Supplier name is required' }, 400)
+
+  const result = await c.env.DB.prepare(`
+    INSERT INTO supplier_directory (owner_id, name, phone, email, address, city, province, branch_name, account_number, rep_name, rep_phone, rep_email, preferred, notes)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    RETURNING id
+  `).bind(ownerId, name, phone || '', email || '', address || '', city || '', province || '', branch_name || '', account_number || '', rep_name || '', rep_phone || '', rep_email || '', preferred ? 1 : 0, notes || '').first()
+
+  return c.json({ success: true, supplier_id: result?.id })
+})
+
+// PUT /suppliers/:id — update supplier
+crmRoutes.put('/suppliers/:id', async (c) => {
+  const ownerId = await getOwnerIdFromCRM(c)
+  if (!ownerId) return c.json({ error: 'Unauthorized' }, 401)
+  const id = parseInt(c.req.param('id'))
+  const body = await c.req.json()
+
+  await c.env.DB.prepare(`
+    UPDATE supplier_directory SET name=?, phone=?, email=?, address=?, city=?, province=?,
+    branch_name=?, account_number=?, rep_name=?, rep_phone=?, rep_email=?, preferred=?, notes=?, updated_at=datetime('now')
+    WHERE id=? AND owner_id=?
+  `).bind(body.name, body.phone||'', body.email||'', body.address||'', body.city||'', body.province||'',
+    body.branch_name||'', body.account_number||'', body.rep_name||'', body.rep_phone||'', body.rep_email||'',
+    body.preferred?1:0, body.notes||'', id, ownerId).run()
+
+  return c.json({ success: true })
+})
+
+// POST /supplier-orders — create supplier material order
+crmRoutes.post('/supplier-orders', async (c) => {
+  const ownerId = await getOwnerIdFromCRM(c)
+  if (!ownerId) return c.json({ error: 'Unauthorized' }, 401)
+  const body = await c.req.json()
+  const { proposal_id, supplier_id, report_id, material_estimate_id, job_address, customer_name, items, notes } = body
+
+  const orderNum = 'SO-' + new Date().toISOString().slice(0,10).replace(/-/g,'') + '-' + Math.random().toString(36).slice(2,6).toUpperCase()
+  const totalAmount = (items || []).reduce((sum: number, item: any) => sum + (Number(item.quantity || 0) * Number(item.unit_price || 0)), 0)
+
+  const result = await c.env.DB.prepare(`
+    INSERT INTO supplier_orders (owner_id, proposal_id, supplier_id, report_id, material_estimate_id, order_number, job_address, customer_name, items_json, notes, total_amount)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id
+  `).bind(ownerId, proposal_id||null, supplier_id||null, report_id||null, material_estimate_id||null, orderNum, job_address||'', customer_name||'', JSON.stringify(items||[]), notes||'', totalAmount).first()
+
+  return c.json({ success: true, order_id: result?.id, order_number: orderNum })
+})
+
+// GET /supplier-orders — list orders
+crmRoutes.get('/supplier-orders', async (c) => {
+  const ownerId = await getOwnerIdFromCRM(c)
+  if (!ownerId) return c.json({ error: 'Unauthorized' }, 401)
+  const result = await c.env.DB.prepare(
+    'SELECT so.*, sd.name as supplier_name FROM supplier_orders so LEFT JOIN supplier_directory sd ON so.supplier_id = sd.id WHERE so.owner_id = ? ORDER BY so.created_at DESC'
+  ).bind(ownerId).all()
+  return c.json({ orders: result.results || [] })
+})
+
+// GET /supplier-orders/:id/print — printable HTML for supplier
+crmRoutes.get('/supplier-orders/:id/print', async (c) => {
+  const ownerId = await getOwnerIdFromCRM(c)
+  if (!ownerId) return c.json({ error: 'Unauthorized' }, 401)
+  const id = parseInt(c.req.param('id'))
+
+  const order = await c.env.DB.prepare(
+    'SELECT so.*, sd.name as supplier_name, sd.branch_name, sd.account_number, sd.address as supplier_address, sd.city as supplier_city, sd.province as supplier_province, sd.phone as supplier_phone, sd.email as supplier_email, sd.rep_name, sd.rep_phone, sd.rep_email FROM supplier_orders so LEFT JOIN supplier_directory sd ON so.supplier_id = sd.id WHERE so.id = ? AND so.owner_id = ?'
+  ).bind(id, ownerId).first<any>()
+
+  if (!order) return c.json({ error: 'Order not found' }, 404)
+
+  // Get contractor info
+  const contractor = await c.env.DB.prepare('SELECT name, company_name, phone, email FROM customers WHERE id = ?').bind(ownerId).first<any>()
+
+  const items = JSON.parse(order.items_json || '[]')
+
+  return c.html(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Material Order ${order.order_number}</title><style>*{font-family:Inter,Arial,sans-serif;margin:0;padding:0;box-sizing:border-box}body{background:white;color:#1a1a2e;padding:30px}@media print{body{padding:15px}.no-print{display:none!important}}table{width:100%;border-collapse:collapse}th,td{padding:10px 12px;text-align:left;border-bottom:1px solid #eee;font-size:13px}th{background:#f8f9fa;font-weight:700;text-transform:uppercase;font-size:11px;color:#666;letter-spacing:0.5px}</style></head><body>
+  <div class="no-print" style="margin-bottom:20px;display:flex;gap:10px">
+    <button onclick="window.print()" style="background:#00FF88;color:#0a0a0a;border:none;padding:10px 24px;border-radius:8px;font-weight:700;cursor:pointer">Print / Save PDF</button>
+    <button onclick="window.close()" style="background:#eee;color:#333;border:none;padding:10px 24px;border-radius:8px;font-weight:700;cursor:pointer">Close</button>
+  </div>
+  <div style="display:flex;justify-content:space-between;margin-bottom:30px">
+    <div>
+      <h1 style="font-size:24px;font-weight:800;margin-bottom:4px">MATERIAL ORDER</h1>
+      <p style="color:#888;font-size:14px">#${order.order_number}</p>
+      <p style="color:#888;font-size:13px">Date: ${new Date(order.created_at).toLocaleDateString()}</p>
+    </div>
+    <div style="text-align:right">
+      <p style="font-weight:700">${contractor?.company_name || contractor?.name || 'Contractor'}</p>
+      <p style="color:#666;font-size:13px">${contractor?.phone || ''}</p>
+      <p style="color:#666;font-size:13px">${contractor?.email || ''}</p>
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px">
+    <div style="background:#f8f9fa;padding:16px;border-radius:8px">
+      <h3 style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Supplier</h3>
+      <p style="font-weight:600">${order.supplier_name || 'N/A'}</p>
+      ${order.branch_name ? `<p style="font-size:13px;color:#666">Branch: ${order.branch_name}</p>` : ''}
+      ${order.account_number ? `<p style="font-size:13px;color:#666">Account #: ${order.account_number}</p>` : ''}
+      ${order.supplier_address ? `<p style="font-size:13px;color:#666">${order.supplier_address}, ${order.supplier_city || ''} ${order.supplier_province || ''}</p>` : ''}
+      ${order.rep_name ? `<p style="font-size:13px;color:#666;margin-top:8px">Rep: ${order.rep_name}</p>` : ''}
+      ${order.rep_phone ? `<p style="font-size:13px;color:#666">${order.rep_phone}</p>` : ''}
+      ${order.rep_email ? `<p style="font-size:13px;color:#666">${order.rep_email}</p>` : ''}
+    </div>
+    <div style="background:#f8f9fa;padding:16px;border-radius:8px">
+      <h3 style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Job Details</h3>
+      <p style="font-weight:600">${order.job_address || 'N/A'}</p>
+      ${order.customer_name ? `<p style="font-size:13px;color:#666">Customer: ${order.customer_name}</p>` : ''}
+    </div>
+  </div>
+  <table>
+    <thead><tr><th>Material</th><th style="text-align:center">Qty</th><th style="text-align:center">Unit</th><th style="text-align:right">Unit Price</th><th style="text-align:right">Amount</th></tr></thead>
+    <tbody>
+      ${items.map((item: any) => `<tr><td>${item.description || ''}</td><td style="text-align:center">${item.quantity || ''}</td><td style="text-align:center">${item.unit || ''}</td><td style="text-align:right">$${Number(item.unit_price || 0).toFixed(2)}</td><td style="text-align:right;font-weight:600">$${(Number(item.quantity || 0) * Number(item.unit_price || 0)).toFixed(2)}</td></tr>`).join('')}
+    </tbody>
+    <tfoot>
+      <tr style="border-top:2px solid #333"><td colspan="4" style="text-align:right;font-weight:700;font-size:15px">Total:</td><td style="text-align:right;font-weight:700;font-size:15px">$${Number(order.total_amount || 0).toFixed(2)}</td></tr>
+    </tfoot>
+  </table>
+  ${order.notes ? `<div style="margin-top:20px;padding:12px;background:#fffde7;border-radius:8px;font-size:13px"><strong>Notes:</strong> ${order.notes}</div>` : ''}
+  <div style="margin-top:40px;font-size:12px;color:#999;text-align:center">Generated by Roof Manager — www.roofmanager.ca</div>
+  </body></html>`)
+})

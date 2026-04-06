@@ -18,6 +18,9 @@ document.addEventListener('DOMContentLoaded', () => {
     customers: [],
     itemLibrary: [],
     reports: [],
+    suppliers: [],
+    supplierSetup: false,
+    materialEstimates: [],
     loading: true,
     editId: null,
     filter: 'all',
@@ -51,6 +54,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   load();
+  checkPrereqs();
 
   async function load() {
     state.loading = true;
@@ -74,6 +78,11 @@ document.addEventListener('DOMContentLoaded', () => {
   function render() {
     if (state.loading) {
       root.innerHTML = '<div class="flex items-center justify-center py-12"><div class="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-brand-500"></div><span class="ml-3 text-gray-500">Loading proposals...</span></div>';
+      return;
+    }
+    // If on creation view and supplier not set up, show setup form
+    if (state.mode === 'create' && !state.supplierSetup && !state.editId) {
+      root.innerHTML = renderSupplierSetup();
       return;
     }
     switch (state.mode) {
@@ -376,6 +385,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <button onclick="window.print()" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-300"><i class="fas fa-print mr-1"></i>Print</button>
         <button onclick="window._pb.saveDraft()" class="px-4 py-2 bg-gray-700 text-white rounded-lg text-sm font-medium"><i class="fas fa-save mr-1"></i>Save</button>
         <button onclick="window._pb.saveAndSend()" class="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700"><i class="fas fa-paper-plane mr-1"></i>Send</button>
+        <button onclick="createSupplierOrder(${state.editId || 'null'})" class="px-4 py-2 bg-cyan-500 text-white rounded-lg text-sm font-medium hover:bg-cyan-600"><i class="fas fa-truck mr-1"></i>Create Supplier Order</button>
       </div>
     </div>
 
@@ -462,6 +472,117 @@ document.addEventListener('DOMContentLoaded', () => {
       </div>
     </div>`;
   }
+
+  // ============================================================
+  // SUPPLIER SETUP & PREREQ CHECK
+  // ============================================================
+  function renderSupplierSetup() {
+    return '<div style="max-width:600px;margin:0 auto;padding:20px">' +
+      '<div style="background:#111;border:1px solid rgba(255,255,255,0.1);border-radius:16px;padding:32px">' +
+      '<h2 style="color:white;font-size:22px;font-weight:800;margin-bottom:8px"><i class="fas fa-store" style="color:#00FF88;margin-right:8px"></i>Set Up Your Supplier First</h2>' +
+      '<p style="color:#999;font-size:14px;margin-bottom:24px">Before creating proposals, set up your preferred material supplier so you can generate supplier orders with your estimates.</p>' +
+      '<div style="display:grid;gap:16px">' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
+          '<div><label style="display:block;color:#ccc;font-size:12px;font-weight:600;margin-bottom:4px">Supplier Name *</label><input id="sup-name" placeholder="e.g. Roof Mart" style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px;color:white;font-size:14px"></div>' +
+          '<div><label style="display:block;color:#ccc;font-size:12px;font-weight:600;margin-bottom:4px">Branch Name</label><input id="sup-branch" placeholder="e.g. South Edmonton" style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px;color:white;font-size:14px"></div>' +
+        '</div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
+          '<div><label style="display:block;color:#ccc;font-size:12px;font-weight:600;margin-bottom:4px">Account Number</label><input id="sup-account" placeholder="Your account #" style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px;color:white;font-size:14px"></div>' +
+          '<div><label style="display:block;color:#ccc;font-size:12px;font-weight:600;margin-bottom:4px">Store Address</label><input id="sup-address" placeholder="123 Supply Dr" style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px;color:white;font-size:14px"></div>' +
+        '</div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
+          '<div><label style="display:block;color:#ccc;font-size:12px;font-weight:600;margin-bottom:4px">City</label><input id="sup-city" placeholder="Edmonton" style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px;color:white;font-size:14px"></div>' +
+          '<div><label style="display:block;color:#ccc;font-size:12px;font-weight:600;margin-bottom:4px">Province</label><input id="sup-province" placeholder="Alberta" style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px;color:white;font-size:14px"></div>' +
+        '</div>' +
+        '<h3 style="color:white;font-size:16px;font-weight:700;margin-top:8px"><i class="fas fa-user-tie" style="color:#22d3ee;margin-right:6px"></i>Store Representative</h3>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">' +
+          '<div><label style="display:block;color:#ccc;font-size:12px;font-weight:600;margin-bottom:4px">Rep Name</label><input id="sup-rep-name" placeholder="John Smith" style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px;color:white;font-size:14px"></div>' +
+          '<div><label style="display:block;color:#ccc;font-size:12px;font-weight:600;margin-bottom:4px">Rep Phone</label><input id="sup-rep-phone" placeholder="780-555-1234" style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px;color:white;font-size:14px"></div>' +
+          '<div><label style="display:block;color:#ccc;font-size:12px;font-weight:600;margin-bottom:4px">Rep Email</label><input id="sup-rep-email" placeholder="john@roofmart.ca" style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px;color:white;font-size:14px"></div>' +
+        '</div>' +
+        '<div style="display:flex;gap:12px;margin-top:16px">' +
+          '<button onclick="saveSupplier()" style="flex:1;background:#00FF88;color:#0a0a0a;border:none;padding:14px;border-radius:10px;font-weight:800;font-size:15px;cursor:pointer">Save Supplier & Continue</button>' +
+          '<button onclick="skipSupplier()" style="background:rgba(255,255,255,0.05);color:#999;border:1px solid rgba(255,255,255,0.1);padding:14px 24px;border-radius:10px;font-weight:600;cursor:pointer">Skip for Now</button>' +
+        '</div>' +
+      '</div>' +
+    '</div></div>';
+  }
+
+  async function checkPrereqs() {
+    try {
+      var supRes = await fetch('/api/crm/suppliers', { headers: headers() });
+      if (supRes.ok) {
+        var supData = await supRes.json();
+        state.suppliers = supData?.suppliers || [];
+        state.supplierSetup = state.suppliers.length > 0;
+      }
+    } catch (e) { console.warn('Supplier prereq check failed', e); }
+    render();
+  }
+
+  window.saveSupplier = async function() {
+    var data = {
+      name: document.getElementById('sup-name')?.value?.trim(),
+      branch_name: document.getElementById('sup-branch')?.value?.trim(),
+      account_number: document.getElementById('sup-account')?.value?.trim(),
+      address: document.getElementById('sup-address')?.value?.trim(),
+      city: document.getElementById('sup-city')?.value?.trim(),
+      province: document.getElementById('sup-province')?.value?.trim(),
+      rep_name: document.getElementById('sup-rep-name')?.value?.trim(),
+      rep_phone: document.getElementById('sup-rep-phone')?.value?.trim(),
+      rep_email: document.getElementById('sup-rep-email')?.value?.trim(),
+      preferred: true
+    };
+    if (!data.name) { alert('Supplier name is required'); return; }
+    try {
+      var res = await fetch('/api/crm/suppliers', { method: 'POST', headers: headers(), body: JSON.stringify(data) });
+      var result = await res.json();
+      if (result?.success) {
+        state.supplierSetup = true;
+        state.suppliers.push(Object.assign({ id: result.supplier_id }, data));
+        render();
+      } else {
+        alert('Failed to save supplier: ' + (result?.error || 'Unknown error'));
+      }
+    } catch (e) { alert('Failed to save supplier'); }
+  };
+
+  window.skipSupplier = function() {
+    state.supplierSetup = true;
+    render();
+  };
+
+  window.createSupplierOrder = async function(proposalId) {
+    var proposal = state.form;
+    if (!proposal) return;
+
+    var items = (state.form.items || []).map(function(item) {
+      return { description: item.description, quantity: item.quantity, unit: item.unit || 'each', unit_price: item.unit_price || 0 };
+    });
+
+    var cust = proposal.isNewCustomer ? proposal.newCustomer : state.customers.find(function(c) { return c.id == proposal.customer_id; }) || {};
+
+    var data = {
+      proposal_id: proposalId || state.editId,
+      supplier_id: state.suppliers.length > 0 ? state.suppliers[0].id : null,
+      report_id: proposal.attached_report_id || null,
+      job_address: cust.address || cust.customer_address || '',
+      customer_name: cust.name || cust.email || '',
+      items: items,
+      notes: 'Material order for ' + (cust.address || cust.customer_address || 'job #' + (proposalId || state.editId))
+    };
+
+    try {
+      var res = await fetch('/api/crm/supplier-orders', { method: 'POST', headers: headers(), body: JSON.stringify(data) });
+      var result = await res.json();
+      if (result?.success) {
+        window.open('/api/crm/supplier-orders/' + result.order_id + '/print', '_blank');
+        alert('Supplier order #' + result.order_number + ' created! Print window opened.');
+      } else {
+        alert('Failed to create supplier order: ' + (result?.error || 'Unknown error'));
+      }
+    } catch (e) { alert('Failed to create supplier order'); }
+  };
 
   // ============================================================
   // CALCULATIONS
