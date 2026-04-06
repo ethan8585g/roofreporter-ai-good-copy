@@ -94,7 +94,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function render() {
-    if (state.loading) { root.innerHTML = '<div style="text-align:center;padding:60px;color:#888"><i class="fas fa-spinner fa-spin" style="font-size:32px;margin-bottom:12px"></i><p>Loading...</p></div>'; return; }
+    if (state.loading) { root.innerHTML = '<div style="text-align:center;padding:60px;color:#6b7280"><i class="fas fa-spinner fa-spin" style="font-size:32px;margin-bottom:12px"></i><p>Loading...</p></div>'; return; }
 
     if (state.mode === 'create' && !state.editId) {
       // Multi-step wizard for new proposals
@@ -130,11 +130,11 @@ document.addEventListener('DOMContentLoaded', () => {
       steps.map(function(s) {
         var isActive = s.num === currentStep;
         var isDone = s.num < currentStep;
-        var color = isDone ? '#00FF88' : isActive ? '#22d3ee' : '#333';
-        var textColor = isDone ? '#00FF88' : isActive ? 'white' : '#666';
+        var color = isDone ? '#2563eb' : isActive ? '#2563eb' : '#d1d5db';
+        var textColor = isDone ? '#2563eb' : isActive ? '#1a1a2e' : '#9ca3af';
         return '<div style="flex:1;text-align:center">' +
-          '<div style="width:36px;height:36px;border-radius:50%;background:' + (isDone ? 'rgba(0,255,136,0.15)' : isActive ? 'rgba(34,211,238,0.15)' : 'rgba(255,255,255,0.05)') + ';border:2px solid ' + color + ';display:inline-flex;align-items:center;justify-content:center;margin-bottom:4px">' +
-            (isDone ? '<i class="fas fa-check" style="color:#00FF88;font-size:14px"></i>' : '<i class="fas ' + s.icon + '" style="color:' + color + ';font-size:13px"></i>') +
+          '<div style="width:36px;height:36px;border-radius:50%;background:' + (isDone ? 'rgba(37,99,235,0.1)' : isActive ? '#eef2ff' : '#f3f4f6') + ';border:2px solid ' + color + ';display:inline-flex;align-items:center;justify-content:center;margin-bottom:4px">' +
+            (isDone ? '<i class="fas fa-check" style="color:#2563eb;font-size:14px"></i>' : '<i class="fas ' + s.icon + '" style="color:' + color + ';font-size:13px"></i>') +
           '</div>' +
           '<div style="font-size:10px;color:' + textColor + ';font-weight:' + (isActive ? '700' : '500') + '">' + s.label + '</div>' +
         '</div>';
@@ -146,71 +146,71 @@ document.addEventListener('DOMContentLoaded', () => {
     var hasCatalog = state.catalog.length > 0;
 
     return '<div style="max-width:700px;margin:0 auto;padding:0 20px">' +
-      '<h2 style="color:white;font-size:24px;font-weight:800;margin-bottom:8px;text-align:center">Select a Pricing Method</h2>' +
-      '<p style="color:#888;text-align:center;margin-bottom:32px;font-size:14px">Choose how you want to price this estimate</p>' +
+      '<h2 style="color:#1a1a2e;font-size:24px;font-weight:800;margin-bottom:8px;text-align:center">Select a Pricing Method</h2>' +
+      '<p style="color:#6b7280;text-align:center;margin-bottom:32px;font-size:14px">Choose how you want to price this estimate</p>' +
 
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:32px">' +
         // Per Square card
-        '<div onclick="window._pb.setPricing(\'per_square\')" style="background:' + (state.pricingMethod === 'per_square' ? '#111' : 'rgba(255,255,255,0.03)') + ';border:2px solid ' + (state.pricingMethod === 'per_square' ? '#00FF88' : 'rgba(255,255,255,0.1)') + ';border-radius:16px;padding:32px;text-align:center;cursor:pointer;transition:all 0.2s">' +
-          '<div style="width:56px;height:56px;border-radius:14px;background:' + (state.pricingMethod === 'per_square' ? 'rgba(0,255,136,0.1)' : 'rgba(255,255,255,0.05)') + ';display:inline-flex;align-items:center;justify-content:center;margin-bottom:16px"><i class="fas fa-th" style="font-size:24px;color:' + (state.pricingMethod === 'per_square' ? '#00FF88' : '#666') + '"></i></div>' +
-          '<h3 style="color:white;font-size:18px;font-weight:700;margin-bottom:8px">Per Square Pricing</h3>' +
-          '<p style="color:#888;font-size:13px">Set a price per roofing square (100 sq ft). Total calculated from report measurements.</p>' +
+        '<div onclick="window._pb.setPricing(\'per_square\')" style="background:' + (state.pricingMethod === 'per_square' ? '#f0f4ff' : 'white') + ';border:2px solid ' + (state.pricingMethod === 'per_square' ? '#2563eb' : '#e5e7eb') + ';border-radius:16px;padding:32px;text-align:center;cursor:pointer;transition:all 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.06)">' +
+          '<div style="width:56px;height:56px;border-radius:14px;background:' + (state.pricingMethod === 'per_square' ? 'rgba(37,99,235,0.1)' : '#f3f4f6') + ';display:inline-flex;align-items:center;justify-content:center;margin-bottom:16px"><i class="fas fa-th" style="font-size:24px;color:' + (state.pricingMethod === 'per_square' ? '#2563eb' : '#9ca3af') + '"></i></div>' +
+          '<h3 style="color:#1a1a2e;font-size:18px;font-weight:700;margin-bottom:8px">Per Square Pricing</h3>' +
+          '<p style="color:#6b7280;font-size:13px">Set a price per roofing square (100 sq ft). Total calculated from report measurements.</p>' +
         '</div>' +
         // Line Item card
-        '<div onclick="window._pb.setPricing(\'line_item\')" style="background:' + (state.pricingMethod === 'line_item' ? '#111' : 'rgba(255,255,255,0.03)') + ';border:2px solid ' + (state.pricingMethod === 'line_item' ? '#22d3ee' : 'rgba(255,255,255,0.1)') + ';border-radius:16px;padding:32px;text-align:center;cursor:pointer;transition:all 0.2s">' +
-          '<div style="width:56px;height:56px;border-radius:14px;background:' + (state.pricingMethod === 'line_item' ? 'rgba(34,211,238,0.1)' : 'rgba(255,255,255,0.05)') + ';display:inline-flex;align-items:center;justify-content:center;margin-bottom:16px"><i class="fas fa-list" style="font-size:24px;color:' + (state.pricingMethod === 'line_item' ? '#22d3ee' : '#666') + '"></i></div>' +
-          '<h3 style="color:white;font-size:18px;font-weight:700;margin-bottom:8px">Line Item Pricing</h3>' +
-          '<p style="color:#888;font-size:13px">Add individual items with quantities and prices. Full control over every line.</p>' +
+        '<div onclick="window._pb.setPricing(\'line_item\')" style="background:' + (state.pricingMethod === 'line_item' ? '#f0f4ff' : 'white') + ';border:2px solid ' + (state.pricingMethod === 'line_item' ? '#2563eb' : '#e5e7eb') + ';border-radius:16px;padding:32px;text-align:center;cursor:pointer;transition:all 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.06)">' +
+          '<div style="width:56px;height:56px;border-radius:14px;background:' + (state.pricingMethod === 'line_item' ? 'rgba(37,99,235,0.1)' : '#f3f4f6') + ';display:inline-flex;align-items:center;justify-content:center;margin-bottom:16px"><i class="fas fa-list" style="font-size:24px;color:' + (state.pricingMethod === 'line_item' ? '#2563eb' : '#9ca3af') + '"></i></div>' +
+          '<h3 style="color:#1a1a2e;font-size:18px;font-weight:700;margin-bottom:8px">Line Item Pricing</h3>' +
+          '<p style="color:#6b7280;font-size:13px">Add individual items with quantities and prices. Full control over every line.</p>' +
         '</div>' +
       '</div>' +
 
       // Catalog check
       (!hasCatalog ?
-        '<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:20px;margin-bottom:24px;text-align:center">' +
-          '<p style="color:#ccc;font-size:14px;margin-bottom:12px"><i class="fas fa-info-circle" style="color:#22d3ee;margin-right:6px"></i>No material catalog set up yet. Seed default roofing materials?</p>' +
-          '<button onclick="window._pb.seedCatalog()" style="background:#22d3ee;color:#0a0a0a;border:none;padding:10px 24px;border-radius:8px;font-weight:700;cursor:pointer">Seed Default Materials</button>' +
-          '<span style="color:#666;margin:0 12px">or</span>' +
-          '<button onclick="state.createStep=3;render()" style="background:rgba(255,255,255,0.05);color:#999;border:1px solid rgba(255,255,255,0.1);padding:10px 24px;border-radius:8px;font-weight:600;cursor:pointer">Skip — I\'ll add items manually</button>' +
+        '<div style="background:#f8f9fa;border:1px solid #e5e7eb;border-radius:12px;padding:20px;margin-bottom:24px;text-align:center">' +
+          '<p style="color:#374151;font-size:14px;margin-bottom:12px"><i class="fas fa-info-circle" style="color:#2563eb;margin-right:6px"></i>No material catalog set up yet. Seed default roofing materials?</p>' +
+          '<button onclick="window._pb.seedCatalog()" style="background:#2563eb;color:white;border:none;padding:10px 24px;border-radius:8px;font-weight:700;cursor:pointer">Seed Default Materials</button>' +
+          '<span style="color:#9ca3af;margin:0 12px">or</span>' +
+          '<button onclick="state.createStep=3;render()" style="background:#f3f4f6;color:#6b7280;border:1px solid #e5e7eb;padding:10px 24px;border-radius:8px;font-weight:600;cursor:pointer">Skip — I\'ll add items manually</button>' +
         '</div>' : '') +
 
       '<div style="display:flex;justify-content:space-between;margin-top:16px">' +
-        '<button onclick="state.createStep=1;state.mode=\'list\';render()" style="background:rgba(255,255,255,0.05);color:#999;border:1px solid rgba(255,255,255,0.1);padding:12px 24px;border-radius:10px;font-weight:600;cursor:pointer">&larr; Back</button>' +
-        '<button onclick="state.createStep=3;render()" style="background:#00FF88;color:#0a0a0a;border:none;padding:12px 32px;border-radius:10px;font-weight:800;cursor:pointer">Continue &rarr;</button>' +
+        '<button onclick="state.createStep=1;state.mode=\'list\';render()" style="background:#f3f4f6;color:#6b7280;border:1px solid #e5e7eb;padding:12px 24px;border-radius:999px;font-weight:600;cursor:pointer">&larr; Back</button>' +
+        '<button onclick="state.createStep=3;render()" style="background:#2563eb;color:white;border:none;padding:12px 32px;border-radius:999px;font-weight:800;cursor:pointer">Continue &rarr;</button>' +
       '</div>' +
     '</div>';
   }
 
   function renderReportCustomer() {
     return '<div style="max-width:700px;margin:0 auto;padding:0 20px">' +
-      '<h2 style="color:white;font-size:24px;font-weight:800;margin-bottom:8px;text-align:center">Select Report & Customer</h2>' +
-      '<p style="color:#888;text-align:center;margin-bottom:32px;font-size:14px">Attach a roof measurement report and enter customer information</p>' +
+      '<h2 style="color:#1a1a2e;font-size:24px;font-weight:800;margin-bottom:8px;text-align:center">Select Report & Customer</h2>' +
+      '<p style="color:#6b7280;text-align:center;margin-bottom:32px;font-size:14px">Attach a roof measurement report and enter customer information</p>' +
 
       // Report selection
-      '<div style="background:#111;border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:24px;margin-bottom:20px">' +
-        '<h3 style="color:white;font-size:16px;font-weight:700;margin-bottom:12px"><i class="fas fa-satellite-dish" style="color:#00FF88;margin-right:8px"></i>Roof Measurement Report</h3>' +
+      '<div style="background:#f8f9fa;border:1px solid #e5e7eb;border-radius:12px;padding:24px;margin-bottom:20px">' +
+        '<h3 style="color:#1a1a2e;font-size:16px;font-weight:700;margin-bottom:12px"><i class="fas fa-satellite-dish" style="color:#2563eb;margin-right:8px"></i>Roof Measurement Report</h3>' +
         (state.reports.length > 0 ?
-          '<select id="step3-report" onchange="window._pb.selectReport(this.value)" style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:12px;color:white;font-size:14px">' +
+          '<select id="step3-report" onchange="window._pb.selectReport(this.value)" style="width:100%;background:white;border:1px solid #d1d5db;border-radius:8px;padding:12px;color:#1a1a2e;font-size:14px">' +
             '<option value="">Select a completed report...</option>' +
             state.reports.map(function(r) { return '<option value="' + r.id + '"' + (state.form.attached_report_id == r.id ? ' selected' : '') + '>' + (r.property_address || 'Report #' + r.id) + ' — ' + (r.created_at || '').slice(0, 10) + '</option>'; }).join('') +
           '</select>' +
-          (state.selectedReport ? '<div style="margin-top:12px;padding:12px;background:rgba(0,255,136,0.05);border:1px solid rgba(0,255,136,0.15);border-radius:8px"><p style="color:#00FF88;font-size:13px;font-weight:600">' + (state.selectedReport.property_address || '') + '</p><p style="color:#888;font-size:12px">Roof area: ' + (state.selectedReport.roof_area_sqft ? Math.round(state.selectedReport.roof_area_sqft) + ' sq ft' : 'N/A') + ' | Pitch: ' + (state.selectedReport.roof_pitch || 'N/A') + '</p></div>' : '')
-        : '<p style="color:#f59e0b;font-size:14px"><i class="fas fa-exclamation-triangle" style="margin-right:6px"></i>No completed reports found. <a href="/customer/order" style="color:#00FF88;text-decoration:underline">Order a report first</a></p>') +
+          (state.selectedReport ? '<div style="margin-top:12px;padding:12px;background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px"><p style="color:#2563eb;font-size:13px;font-weight:600">' + (state.selectedReport.property_address || '') + '</p><p style="color:#6b7280;font-size:12px">Roof area: ' + (state.selectedReport.roof_area_sqft ? Math.round(state.selectedReport.roof_area_sqft) + ' sq ft' : 'N/A') + ' | Pitch: ' + (state.selectedReport.roof_pitch || 'N/A') + '</p></div>' : '')
+        : '<p style="color:#dc2626;font-size:14px"><i class="fas fa-exclamation-triangle" style="margin-right:6px"></i>No completed reports found. <a href="/customer/order" style="color:#2563eb;text-decoration:underline">Order a report first</a></p>') +
       '</div>' +
 
       // Customer info
-      '<div style="background:#111;border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:24px;margin-bottom:20px">' +
-        '<h3 style="color:white;font-size:16px;font-weight:700;margin-bottom:12px"><i class="fas fa-user" style="color:#22d3ee;margin-right:8px"></i>Customer Information</h3>' +
+      '<div style="background:#f8f9fa;border:1px solid #e5e7eb;border-radius:12px;padding:24px;margin-bottom:20px">' +
+        '<h3 style="color:#1a1a2e;font-size:16px;font-weight:700;margin-bottom:12px"><i class="fas fa-user" style="color:#2563eb;margin-right:8px"></i>Customer Information</h3>' +
         '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
-          '<div><label style="display:block;color:#ccc;font-size:12px;font-weight:600;margin-bottom:4px">Customer Name *</label><input id="step3-name" value="' + (state.form.customer_name || '') + '" placeholder="Jane Smith" style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px;color:white;font-size:14px"></div>' +
-          '<div><label style="display:block;color:#ccc;font-size:12px;font-weight:600;margin-bottom:4px">Email</label><input id="step3-email" value="' + (state.form.customer_email || '') + '" placeholder="jane@example.com" style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px;color:white;font-size:14px"></div>' +
-          '<div><label style="display:block;color:#ccc;font-size:12px;font-weight:600;margin-bottom:4px">Phone</label><input id="step3-phone" value="' + (state.form.customer_phone || '') + '" placeholder="780-555-1234" style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px;color:white;font-size:14px"></div>' +
-          '<div><label style="display:block;color:#ccc;font-size:12px;font-weight:600;margin-bottom:4px">Property Address</label><input id="step3-address" value="' + (state.form.property_address || '') + '" placeholder="123 Main St" style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px;color:white;font-size:14px"></div>' +
+          '<div><label style="display:block;color:#374151;font-size:12px;font-weight:600;margin-bottom:4px">Customer Name *</label><input id="step3-name" value="' + (state.form.customer_name || '') + '" placeholder="Jane Smith" style="width:100%;background:white;border:1px solid #d1d5db;border-radius:8px;padding:10px;color:#1a1a2e;font-size:14px"></div>' +
+          '<div><label style="display:block;color:#374151;font-size:12px;font-weight:600;margin-bottom:4px">Email</label><input id="step3-email" value="' + (state.form.customer_email || '') + '" placeholder="jane@example.com" style="width:100%;background:white;border:1px solid #d1d5db;border-radius:8px;padding:10px;color:#1a1a2e;font-size:14px"></div>' +
+          '<div><label style="display:block;color:#374151;font-size:12px;font-weight:600;margin-bottom:4px">Phone</label><input id="step3-phone" value="' + (state.form.customer_phone || '') + '" placeholder="780-555-1234" style="width:100%;background:white;border:1px solid #d1d5db;border-radius:8px;padding:10px;color:#1a1a2e;font-size:14px"></div>' +
+          '<div><label style="display:block;color:#374151;font-size:12px;font-weight:600;margin-bottom:4px">Property Address</label><input id="step3-address" value="' + (state.form.property_address || '') + '" placeholder="123 Main St" style="width:100%;background:white;border:1px solid #d1d5db;border-radius:8px;padding:10px;color:#1a1a2e;font-size:14px"></div>' +
         '</div>' +
       '</div>' +
 
       '<div style="display:flex;justify-content:space-between;margin-top:16px">' +
-        '<button onclick="state.createStep=2;render()" style="background:rgba(255,255,255,0.05);color:#999;border:1px solid rgba(255,255,255,0.1);padding:12px 24px;border-radius:10px;font-weight:600;cursor:pointer">&larr; Back</button>' +
-        '<button onclick="window._pb.goToStep4()" style="background:#00FF88;color:#0a0a0a;border:none;padding:12px 32px;border-radius:10px;font-weight:800;cursor:pointer">Continue to Estimate &rarr;</button>' +
+        '<button onclick="state.createStep=2;render()" style="background:#f3f4f6;color:#6b7280;border:1px solid #e5e7eb;padding:12px 24px;border-radius:999px;font-weight:600;cursor:pointer">&larr; Back</button>' +
+        '<button onclick="window._pb.goToStep4()" style="background:#2563eb;color:white;border:none;padding:12px 32px;border-radius:999px;font-weight:800;cursor:pointer">Continue to Estimate &rarr;</button>' +
       '</div>' +
     '</div>';
   }
@@ -401,9 +401,9 @@ document.addEventListener('DOMContentLoaded', () => {
       '<div class="bg-white rounded-xl border border-gray-200 p-6 mb-6">' +
         '<h3 class="text-lg font-bold text-gray-900 mb-4"><i class="fas fa-th text-brand-500 mr-2"></i>Per Square Pricing</h3>' +
         '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;text-align:center">' +
-          '<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(0,0,0,0.05);border-radius:8px;padding:16px"><div style="color:#888;font-size:11px;text-transform:uppercase;margin-bottom:4px">Roof Squares</div><div style="color:#111;font-size:28px;font-weight:800">' + (state.selectedReport ? Math.ceil((state.selectedReport.roof_area_sqft || 0) / 100) : '—') + '</div></div>' +
-          '<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(0,0,0,0.05);border-radius:8px;padding:16px"><div style="color:#888;font-size:11px;text-transform:uppercase;margin-bottom:4px">Price Per Square</div><div>$<input id="pps-price" type="number" value="' + (state.pricePerSquare || 350) + '" onchange="state.pricePerSquare=Number(this.value);window._pb.updatePerSquare()" style="width:80px;background:transparent;border:none;border-bottom:2px solid #00FF88;color:#111;font-size:28px;font-weight:800;text-align:center"></div></div>' +
-          '<div style="background:rgba(0,255,136,0.05);border:1px solid rgba(0,255,136,0.15);border-radius:8px;padding:16px"><div style="color:#16a34a;font-size:11px;text-transform:uppercase;margin-bottom:4px">Total Estimate</div><div style="color:#16a34a;font-size:28px;font-weight:800">$' + ((state.selectedReport ? Math.ceil((state.selectedReport.roof_area_sqft || 0) / 100) : 0) * (state.pricePerSquare || 350)).toLocaleString() + '</div></div>' +
+          '<div style="background:white;border:1px solid #e5e7eb;border-radius:8px;padding:16px"><div style="color:#6b7280;font-size:11px;text-transform:uppercase;margin-bottom:4px">Roof Squares</div><div style="color:#1a1a2e;font-size:28px;font-weight:800">' + (state.selectedReport ? Math.ceil((state.selectedReport.roof_area_sqft || 0) / 100) : '—') + '</div></div>' +
+          '<div style="background:white;border:1px solid #e5e7eb;border-radius:8px;padding:16px"><div style="color:#6b7280;font-size:11px;text-transform:uppercase;margin-bottom:4px">Price Per Square</div><div>$<input id="pps-price" type="number" value="' + (state.pricePerSquare || 350) + '" onchange="state.pricePerSquare=Number(this.value);window._pb.updatePerSquare()" style="width:80px;background:transparent;border:none;border-bottom:2px solid #2563eb;color:#1a1a2e;font-size:28px;font-weight:800;text-align:center"></div></div>' +
+          '<div style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;padding:16px"><div style="color:#2563eb;font-size:11px;text-transform:uppercase;margin-bottom:4px">Total Estimate</div><div style="color:#2563eb;font-size:28px;font-weight:800">$' + ((state.selectedReport ? Math.ceil((state.selectedReport.roof_area_sqft || 0) / 100) : 0) * (state.pricePerSquare || 350)).toLocaleString() + '</div></div>' +
         '</div>' +
       '</div>'
     : ''}
@@ -477,8 +477,8 @@ document.addEventListener('DOMContentLoaded', () => {
     <div class="bg-white rounded-xl border border-gray-200 p-6 mb-6">
       <h3 class="text-lg font-bold text-gray-900 mb-4"><i class="fas fa-paperclip text-purple-500 mr-2"></i>Proposal Attachments & Certifications</h3>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-        <label style="display:flex;align-items:center;gap:8px;color:#555;font-size:13px;cursor:pointer;padding:10px;background:#f9fafb;border-radius:8px"><input type="checkbox" id="att-report" ${state.attachments.includeRoofReport ? 'checked' : ''} onchange="state.attachments.includeRoofReport=this.checked"> Include Roof Report with Proposal</label>
-        <label style="display:flex;align-items:center;gap:8px;color:#555;font-size:13px;cursor:pointer;padding:10px;background:#f9fafb;border-radius:8px"><input type="checkbox" id="att-bom" ${state.attachments.includeMaterialBOM ? 'checked' : ''} onchange="state.attachments.includeMaterialBOM=this.checked"> Include Material BOM with Proposal</label>
+        <label style="display:flex;align-items:center;gap:8px;color:#374151;font-size:13px;cursor:pointer;padding:10px;background:#f3f4f6;border-radius:8px"><input type="checkbox" id="att-report" ${state.attachments.includeRoofReport ? 'checked' : ''} onchange="state.attachments.includeRoofReport=this.checked"> Include Roof Report with Proposal</label>
+        <label style="display:flex;align-items:center;gap:8px;color:#374151;font-size:13px;cursor:pointer;padding:10px;background:#f3f4f6;border-radius:8px"><input type="checkbox" id="att-bom" ${state.attachments.includeMaterialBOM ? 'checked' : ''} onchange="state.attachments.includeMaterialBOM=this.checked"> Include Material BOM with Proposal</label>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px">
         <div><label class="block text-xs font-semibold text-gray-500 mb-1"><i class="fas fa-shield-alt text-green-500 mr-1"></i>Insurance Certificate #</label><input id="att-insurance" value="${state.attachments.insuranceCert || ''}" onchange="state.attachments.insuranceCert=this.value" placeholder="e.g. INS-2026-12345" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>
@@ -497,8 +497,8 @@ document.addEventListener('DOMContentLoaded', () => {
     <!-- Actions -->
     ${state.createStep === 4 ?
       '<div style="display:flex;justify-content:space-between;margin-top:20px;margin-bottom:32px">' +
-        '<button onclick="state.createStep=3;render()" style="background:rgba(255,255,255,0.05);color:#999;border:1px solid rgba(255,255,255,0.1);padding:12px 24px;border-radius:10px;font-weight:600;cursor:pointer">&larr; Back</button>' +
-        '<button onclick="state.createStep=5;render()" style="background:#00FF88;color:#0a0a0a;border:none;padding:12px 32px;border-radius:10px;font-weight:800;cursor:pointer">Review & Send &rarr;</button>' +
+        '<button onclick="state.createStep=3;render()" style="background:#f3f4f6;color:#6b7280;border:1px solid #e5e7eb;padding:12px 24px;border-radius:999px;font-weight:600;cursor:pointer">&larr; Back</button>' +
+        '<button onclick="state.createStep=5;render()" style="background:#2563eb;color:white;border:none;padding:12px 32px;border-radius:999px;font-weight:800;cursor:pointer">Review & Send &rarr;</button>' +
       '</div>'
     : `<div class="flex justify-end gap-3 mb-8">
       <button onclick="window._pb.backToList()" class="px-5 py-2.5 bg-gray-200 text-gray-700 rounded-xl text-sm font-medium hover:bg-gray-300">Cancel</button>
@@ -622,13 +622,13 @@ document.addEventListener('DOMContentLoaded', () => {
       ${f.notes ? `<div class="p-8 border-b border-gray-200"><h3 class="text-xs font-semibold text-gray-500 uppercase mb-2">Notes</h3><div class="text-gray-700 text-sm whitespace-pre-wrap">${f.notes}</div></div>` : ''}
 
       ${state.attachments.insuranceCert || state.attachments.warrantyDoc || state.attachments.wcbCoverage || state.attachments.customAttachment ?
-        '<div class="p-8 border-b border-gray-200">' +
-          '<h3 class="text-xs font-semibold text-gray-500 uppercase mb-3"><i class="fas fa-paperclip text-purple-400 mr-1"></i>Certifications & Documentation</h3>' +
+        '<div class="p-8" style="border-top:1px solid #e5e7eb">' +
+          '<h3 class="text-xs font-semibold uppercase mb-3" style="color:#1a1a2e"><i class="fas fa-paperclip" style="color:#7c3aed;margin-right:4px"></i>Certifications & Documentation</h3>' +
           '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
-            (state.attachments.insuranceCert ? '<div style="background:#f9fafb;padding:10px;border-radius:6px;font-size:12px"><span style="color:#888">Insurance Certificate:</span> <span style="color:#111;font-weight:600">' + state.attachments.insuranceCert + '</span></div>' : '') +
-            (state.attachments.warrantyDoc ? '<div style="background:#f9fafb;padding:10px;border-radius:6px;font-size:12px"><span style="color:#888">Warranty:</span> <span style="color:#111;font-weight:600">' + state.attachments.warrantyDoc + '</span></div>' : '') +
-            (state.attachments.wcbCoverage ? '<div style="background:#f9fafb;padding:10px;border-radius:6px;font-size:12px"><span style="color:#888">WCB Coverage:</span> <span style="color:#111;font-weight:600">' + state.attachments.wcbCoverage + '</span></div>' : '') +
-            (state.attachments.customAttachment ? '<div style="background:#f9fafb;padding:10px;border-radius:6px;font-size:12px"><span style="color:#888">Additional:</span> <span style="color:#111;font-weight:600">' + state.attachments.customAttachment + '</span></div>' : '') +
+            (state.attachments.insuranceCert ? '<div style="background:#f8f9fa;padding:10px;border-radius:6px;font-size:12px"><span style="color:#6b7280">Insurance Certificate:</span> <span style="color:#1a1a2e;font-weight:600">' + state.attachments.insuranceCert + '</span></div>' : '') +
+            (state.attachments.warrantyDoc ? '<div style="background:#f8f9fa;padding:10px;border-radius:6px;font-size:12px"><span style="color:#6b7280">Warranty:</span> <span style="color:#1a1a2e;font-weight:600">' + state.attachments.warrantyDoc + '</span></div>' : '') +
+            (state.attachments.wcbCoverage ? '<div style="background:#f8f9fa;padding:10px;border-radius:6px;font-size:12px"><span style="color:#6b7280">WCB Coverage:</span> <span style="color:#1a1a2e;font-weight:600">' + state.attachments.wcbCoverage + '</span></div>' : '') +
+            (state.attachments.customAttachment ? '<div style="background:#f8f9fa;padding:10px;border-radius:6px;font-size:12px"><span style="color:#6b7280">Additional:</span> <span style="color:#1a1a2e;font-weight:600">' + state.attachments.customAttachment + '</span></div>' : '') +
           '</div>' +
         '</div>'
       : ''}
@@ -645,31 +645,31 @@ document.addEventListener('DOMContentLoaded', () => {
   // ============================================================
   function renderSupplierSetup() {
     return '<div style="max-width:600px;margin:0 auto;padding:20px">' +
-      '<div style="background:#111;border:1px solid rgba(255,255,255,0.1);border-radius:16px;padding:32px">' +
-      '<h2 style="color:white;font-size:22px;font-weight:800;margin-bottom:8px"><i class="fas fa-store" style="color:#00FF88;margin-right:8px"></i>Set Up Your Supplier First</h2>' +
-      '<p style="color:#999;font-size:14px;margin-bottom:24px">Before creating proposals, set up your preferred material supplier so you can generate supplier orders with your estimates.</p>' +
+      '<div style="background:white;border:1px solid #e5e7eb;border-radius:16px;padding:32px;box-shadow:0 4px 24px rgba(0,0,0,0.08)">' +
+      '<h2 style="color:#1a1a2e;font-size:22px;font-weight:800;margin-bottom:8px"><i class="fas fa-store" style="color:#2563eb;margin-right:8px"></i>Set Up Your Supplier First</h2>' +
+      '<p style="color:#6b7280;font-size:14px;margin-bottom:24px">Before creating proposals, set up your preferred material supplier so you can generate supplier orders with your estimates.</p>' +
       '<div style="display:grid;gap:16px">' +
         '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
-          '<div><label style="display:block;color:#ccc;font-size:12px;font-weight:600;margin-bottom:4px">Supplier Name *</label><input id="sup-name" placeholder="e.g. Roof Mart" style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px;color:white;font-size:14px"></div>' +
-          '<div><label style="display:block;color:#ccc;font-size:12px;font-weight:600;margin-bottom:4px">Branch Name</label><input id="sup-branch" placeholder="e.g. South Edmonton" style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px;color:white;font-size:14px"></div>' +
+          '<div><label style="display:block;color:#374151;font-size:12px;font-weight:600;margin-bottom:4px">Supplier Name *</label><input id="sup-name" placeholder="e.g. Roof Mart" style="width:100%;background:white;border:1px solid #d1d5db;border-radius:8px;padding:10px;color:#1a1a2e;font-size:14px"></div>' +
+          '<div><label style="display:block;color:#374151;font-size:12px;font-weight:600;margin-bottom:4px">Branch Name</label><input id="sup-branch" placeholder="e.g. South Edmonton" style="width:100%;background:white;border:1px solid #d1d5db;border-radius:8px;padding:10px;color:#1a1a2e;font-size:14px"></div>' +
         '</div>' +
         '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
-          '<div><label style="display:block;color:#ccc;font-size:12px;font-weight:600;margin-bottom:4px">Account Number</label><input id="sup-account" placeholder="Your account #" style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px;color:white;font-size:14px"></div>' +
-          '<div><label style="display:block;color:#ccc;font-size:12px;font-weight:600;margin-bottom:4px">Store Address</label><input id="sup-address" placeholder="123 Supply Dr" style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px;color:white;font-size:14px"></div>' +
+          '<div><label style="display:block;color:#374151;font-size:12px;font-weight:600;margin-bottom:4px">Account Number</label><input id="sup-account" placeholder="Your account #" style="width:100%;background:white;border:1px solid #d1d5db;border-radius:8px;padding:10px;color:#1a1a2e;font-size:14px"></div>' +
+          '<div><label style="display:block;color:#374151;font-size:12px;font-weight:600;margin-bottom:4px">Store Address</label><input id="sup-address" placeholder="123 Supply Dr" style="width:100%;background:white;border:1px solid #d1d5db;border-radius:8px;padding:10px;color:#1a1a2e;font-size:14px"></div>' +
         '</div>' +
         '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
-          '<div><label style="display:block;color:#ccc;font-size:12px;font-weight:600;margin-bottom:4px">City</label><input id="sup-city" placeholder="Edmonton" style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px;color:white;font-size:14px"></div>' +
-          '<div><label style="display:block;color:#ccc;font-size:12px;font-weight:600;margin-bottom:4px">Province</label><input id="sup-province" placeholder="Alberta" style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px;color:white;font-size:14px"></div>' +
+          '<div><label style="display:block;color:#374151;font-size:12px;font-weight:600;margin-bottom:4px">City</label><input id="sup-city" placeholder="Edmonton" style="width:100%;background:white;border:1px solid #d1d5db;border-radius:8px;padding:10px;color:#1a1a2e;font-size:14px"></div>' +
+          '<div><label style="display:block;color:#374151;font-size:12px;font-weight:600;margin-bottom:4px">Province</label><input id="sup-province" placeholder="Alberta" style="width:100%;background:white;border:1px solid #d1d5db;border-radius:8px;padding:10px;color:#1a1a2e;font-size:14px"></div>' +
         '</div>' +
-        '<h3 style="color:white;font-size:16px;font-weight:700;margin-top:8px"><i class="fas fa-user-tie" style="color:#22d3ee;margin-right:6px"></i>Store Representative</h3>' +
+        '<h3 style="color:#1a1a2e;font-size:16px;font-weight:700;margin-top:8px"><i class="fas fa-user-tie" style="color:#2563eb;margin-right:6px"></i>Store Representative</h3>' +
         '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">' +
-          '<div><label style="display:block;color:#ccc;font-size:12px;font-weight:600;margin-bottom:4px">Rep Name</label><input id="sup-rep-name" placeholder="John Smith" style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px;color:white;font-size:14px"></div>' +
-          '<div><label style="display:block;color:#ccc;font-size:12px;font-weight:600;margin-bottom:4px">Rep Phone</label><input id="sup-rep-phone" placeholder="780-555-1234" style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px;color:white;font-size:14px"></div>' +
-          '<div><label style="display:block;color:#ccc;font-size:12px;font-weight:600;margin-bottom:4px">Rep Email</label><input id="sup-rep-email" placeholder="john@roofmart.ca" style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px;color:white;font-size:14px"></div>' +
+          '<div><label style="display:block;color:#374151;font-size:12px;font-weight:600;margin-bottom:4px">Rep Name</label><input id="sup-rep-name" placeholder="John Smith" style="width:100%;background:white;border:1px solid #d1d5db;border-radius:8px;padding:10px;color:#1a1a2e;font-size:14px"></div>' +
+          '<div><label style="display:block;color:#374151;font-size:12px;font-weight:600;margin-bottom:4px">Rep Phone</label><input id="sup-rep-phone" placeholder="780-555-1234" style="width:100%;background:white;border:1px solid #d1d5db;border-radius:8px;padding:10px;color:#1a1a2e;font-size:14px"></div>' +
+          '<div><label style="display:block;color:#374151;font-size:12px;font-weight:600;margin-bottom:4px">Rep Email</label><input id="sup-rep-email" placeholder="john@roofmart.ca" style="width:100%;background:white;border:1px solid #d1d5db;border-radius:8px;padding:10px;color:#1a1a2e;font-size:14px"></div>' +
         '</div>' +
         '<div style="display:flex;gap:12px;margin-top:16px">' +
-          '<button onclick="saveSupplier()" style="flex:1;background:#00FF88;color:#0a0a0a;border:none;padding:14px;border-radius:10px;font-weight:800;font-size:15px;cursor:pointer">Save Supplier & Continue</button>' +
-          '<button onclick="skipSupplier()" style="background:rgba(255,255,255,0.05);color:#999;border:1px solid rgba(255,255,255,0.1);padding:14px 24px;border-radius:10px;font-weight:600;cursor:pointer">Skip for Now</button>' +
+          '<button onclick="saveSupplier()" style="flex:1;background:#2563eb;color:white;border:none;padding:14px;border-radius:10px;font-weight:800;font-size:15px;cursor:pointer">Save Supplier & Continue</button>' +
+          '<button onclick="skipSupplier()" style="background:#f3f4f6;color:#6b7280;border:1px solid #e5e7eb;padding:14px 24px;border-radius:10px;font-weight:600;cursor:pointer">Skip for Now</button>' +
         '</div>' +
       '</div>' +
     '</div></div>';
