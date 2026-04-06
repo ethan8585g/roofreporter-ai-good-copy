@@ -33,6 +33,16 @@ document.addEventListener('DOMContentLoaded', () => {
     catalogLoaded: false,
     selectedReport: null,
     selectedReportMaterials: null,
+    markupPercent: 30,
+    pricingEngineMode: 'markup',
+    customerPricePerSquare: 0,
+    showReportToCustomer: 'partial',
+    showMaterialsToCustomer: false,
+    showEdgesToCustomer: false,
+    showSolarToCustomer: false,
+    showPitchToCustomer: true,
+    showAreaToCustomer: true,
+    showLineItemsToCustomer: false,
     attachments: {
       includeRoofReport: true,
       includeMaterialBOM: true,
@@ -108,7 +118,8 @@ document.addEventListener('DOMContentLoaded', () => {
         case 2: root.innerHTML = renderStepBar(2) + renderPricingMethod(); return;
         case 3: root.innerHTML = renderStepBar(3) + renderReportCustomer(); return;
         case 4: root.innerHTML = renderStepBar(4) + renderEditor(); return;
-        case 5: root.innerHTML = renderStepBar(5) + renderPreview(); return;
+        case 5: root.innerHTML = renderStepBar(5) + renderPricingEngine(); return;
+        case 6: root.innerHTML = renderStepBar(6) + renderPreview(); return;
       }
     }
 
@@ -125,8 +136,9 @@ document.addEventListener('DOMContentLoaded', () => {
       { num: 1, label: 'Supplier', icon: 'fa-store' },
       { num: 2, label: 'Pricing', icon: 'fa-dollar-sign' },
       { num: 3, label: 'Report & Customer', icon: 'fa-file-alt' },
-      { num: 4, label: 'Build Estimate', icon: 'fa-calculator' },
-      { num: 5, label: 'Review & Send', icon: 'fa-paper-plane' }
+      { num: 4, label: 'Your Costs', icon: 'fa-calculator' },
+      { num: 5, label: 'Customer Price', icon: 'fa-tags' },
+      { num: 6, label: 'Review & Send', icon: 'fa-paper-plane' }
     ];
     return '<div style="max-width:800px;margin:0 auto 24px;padding:0 20px">' +
       '<div style="display:flex;align-items:center;justify-content:space-between;gap:4px">' +
@@ -519,7 +531,7 @@ document.addEventListener('DOMContentLoaded', () => {
         '<h3 class="text-lg font-bold text-gray-900 mb-4"><i class="fas fa-th text-brand-500 mr-2"></i>Per Square Pricing</h3>' +
         '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;text-align:center">' +
           '<div style="background:white;border:1px solid #e5e7eb;border-radius:8px;padding:16px"><div style="color:#6b7280;font-size:11px;text-transform:uppercase;margin-bottom:4px">Roof Squares</div><div style="color:#1a1a2e;font-size:28px;font-weight:800">' + (state.selectedReport ? Math.ceil((state.selectedReport.roof_area_sqft || 0) / 100) : '—') + '</div></div>' +
-          '<div style="background:white;border:1px solid #e5e7eb;border-radius:8px;padding:16px"><div style="color:#6b7280;font-size:11px;text-transform:uppercase;margin-bottom:4px">Price Per Square</div><div>$<input id="pps-price" type="number" value="' + (state.pricePerSquare || 350) + '" onchange="state.pricePerSquare=Number(this.value);window._pb.updatePerSquare()" style="width:80px;background:transparent;border:none;border-bottom:2px solid #2563eb;color:#1a1a2e;font-size:28px;font-weight:800;text-align:center"></div></div>' +
+          '<div style="background:white;border:1px solid #e5e7eb;border-radius:8px;padding:16px"><div style="color:#6b7280;font-size:11px;text-transform:uppercase;margin-bottom:4px">Your Cost Per Square</div><div>$<input id="pps-price" type="number" value="' + (state.pricePerSquare || 350) + '" onchange="state.pricePerSquare=Number(this.value);window._pb.updatePerSquare()" style="width:80px;background:transparent;border:none;border-bottom:2px solid #2563eb;color:#1a1a2e;font-size:28px;font-weight:800;text-align:center"></div></div>' +
           '<div style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;padding:16px"><div style="color:#2563eb;font-size:11px;text-transform:uppercase;margin-bottom:4px">Total Estimate</div><div style="color:#2563eb;font-size:28px;font-weight:800">$' + ((state.selectedReport ? Math.ceil((state.selectedReport.roof_area_sqft || 0) / 100) : 0) * (state.pricePerSquare || 350)).toLocaleString() + '</div></div>' +
         '</div>' +
       '</div>'
@@ -538,7 +550,7 @@ document.addEventListener('DOMContentLoaded', () => {
               <th class="px-3 py-2 text-left text-xs font-semibold text-gray-500 w-2/5">Description</th>
               <th class="px-3 py-2 text-center text-xs font-semibold text-gray-500 w-16">Qty</th>
               <th class="px-3 py-2 text-center text-xs font-semibold text-gray-500 w-20">Unit</th>
-              <th class="px-3 py-2 text-right text-xs font-semibold text-gray-500 w-24">Unit Price</th>
+              <th class="px-3 py-2 text-right text-xs font-semibold text-gray-500 w-24">Your Cost</th>
               <th class="px-3 py-2 text-right text-xs font-semibold text-gray-500 w-24">Amount</th>
               <th class="px-3 py-2 text-center text-xs font-semibold text-gray-500 w-12">Tax</th>
               <th class="px-3 py-2 w-10"></th>
@@ -615,7 +627,7 @@ document.addEventListener('DOMContentLoaded', () => {
     ${state.createStep === 4 ?
       '<div style="display:flex;justify-content:space-between;margin-top:20px;margin-bottom:32px">' +
         '<button onclick="state.createStep=3;render()" style="background:#f3f4f6;color:#6b7280;border:1px solid #e5e7eb;padding:12px 24px;border-radius:999px;font-weight:600;cursor:pointer">&larr; Back</button>' +
-        '<button onclick="state.createStep=5;render()" style="background:#2563eb;color:white;border:none;padding:12px 32px;border-radius:999px;font-weight:800;cursor:pointer">Review & Send &rarr;</button>' +
+        '<button onclick="state.createStep=5;render()" style="background:#2563eb;color:white;border:none;padding:12px 32px;border-radius:999px;font-weight:800;cursor:pointer">Set Customer Pricing &rarr;</button>' +
       '</div>'
     : `<div class="flex justify-end gap-3 mb-8">
       <button onclick="window._pb.backToList()" class="px-5 py-2.5 bg-gray-200 text-gray-700 rounded-xl text-sm font-medium hover:bg-gray-300">Cancel</button>
@@ -640,6 +652,114 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ============================================================
+  // PRICING ENGINE (Step 5)
+  // ============================================================
+  function renderPricingEngine() {
+    var f = state.form;
+    var items = f.items || [];
+    var totalCost = items.reduce(function(s,i) { return s + (Number(i.quantity||0) * Number(i.unit_price||0)); }, 0);
+    var markup = state.markupPercent || 30;
+    var customerTotal;
+    var profit;
+    var margin;
+
+    if (state.pricingEngineMode === 'per_square_customer' && state.selectedReport) {
+      var squares = Math.ceil((state.selectedReport.roof_area_sqft || 0) / 100);
+      customerTotal = squares * (state.customerPricePerSquare || 0);
+    } else {
+      customerTotal = totalCost * (1 + markup / 100);
+    }
+    profit = customerTotal - totalCost;
+    margin = customerTotal > 0 ? (profit / customerTotal * 100) : 0;
+
+    return '<div style="max-width:900px;margin:0 auto;padding:0 20px">' +
+      '<h2 style="color:#1a1a2e;font-size:24px;font-weight:800;margin-bottom:4px;text-align:center">Customer Pricing Engine</h2>' +
+      '<p style="color:#6b7280;text-align:center;margin-bottom:24px;font-size:14px">Set your markup and control what the customer sees in the proposal</p>' +
+
+      // Section A: Your Cost Summary
+      '<div style="background:#f8f9fa;border:1px solid #e5e7eb;border-radius:12px;padding:20px;margin-bottom:20px">' +
+        '<h3 style="color:#1a1a2e;font-size:16px;font-weight:700;margin-bottom:12px"><i class="fas fa-receipt" style="color:#6b7280;margin-right:8px"></i>Your Cost Summary</h3>' +
+        '<table style="width:100%;font-size:13px;border-collapse:collapse">' +
+          '<thead><tr style="border-bottom:2px solid #e5e7eb"><th style="text-align:left;padding:8px;color:#6b7280">Item</th><th style="text-align:center;padding:8px;color:#6b7280">Qty</th><th style="text-align:right;padding:8px;color:#6b7280">Your Cost</th><th style="text-align:right;padding:8px;color:#6b7280">Amount</th></tr></thead>' +
+          '<tbody>' +
+            items.map(function(item) {
+              var amt = Number(item.quantity||0) * Number(item.unit_price||0);
+              return '<tr style="border-bottom:1px solid #f3f4f6"><td style="padding:8px;color:#374151">' + (item.description||'\u2014') + '</td><td style="text-align:center;padding:8px;color:#374151">' + (item.quantity||0) + ' ' + (item.unit||'') + '</td><td style="text-align:right;padding:8px;color:#374151">$' + Number(item.unit_price||0).toFixed(2) + '</td><td style="text-align:right;padding:8px;font-weight:600;color:#1a1a2e">$' + amt.toFixed(2) + '</td></tr>';
+            }).join('') +
+          '</tbody>' +
+          '<tfoot><tr style="border-top:2px solid #d1d5db"><td colspan="3" style="text-align:right;padding:10px;font-weight:700;color:#1a1a2e">Your Total Cost:</td><td style="text-align:right;padding:10px;font-weight:800;font-size:16px;color:#dc2626">$' + totalCost.toFixed(2) + '</td></tr></tfoot>' +
+        '</table>' +
+      '</div>' +
+
+      // Section B: Customer Pricing
+      '<div style="background:white;border:1px solid #e5e7eb;border-radius:12px;padding:20px;margin-bottom:20px">' +
+        '<h3 style="color:#1a1a2e;font-size:16px;font-weight:700;margin-bottom:16px"><i class="fas fa-tags" style="color:#2563eb;margin-right:8px"></i>Set Customer Price</h3>' +
+
+        // Mode toggle
+        '<div style="display:flex;gap:8px;margin-bottom:20px">' +
+          '<button onclick="state.pricingEngineMode=\'markup\';render()" style="flex:1;padding:10px;border-radius:8px;font-weight:600;font-size:13px;cursor:pointer;border:2px solid ' + (state.pricingEngineMode === 'markup' ? '#2563eb' : '#e5e7eb') + ';background:' + (state.pricingEngineMode === 'markup' ? '#eef2ff' : 'white') + ';color:' + (state.pricingEngineMode === 'markup' ? '#2563eb' : '#6b7280') + '"><i class="fas fa-percent" style="margin-right:6px"></i>Markup % on All Items</button>' +
+          '<button onclick="state.pricingEngineMode=\'per_square_customer\';render()" style="flex:1;padding:10px;border-radius:8px;font-weight:600;font-size:13px;cursor:pointer;border:2px solid ' + (state.pricingEngineMode === 'per_square_customer' ? '#2563eb' : '#e5e7eb') + ';background:' + (state.pricingEngineMode === 'per_square_customer' ? '#eef2ff' : 'white') + ';color:' + (state.pricingEngineMode === 'per_square_customer' ? '#2563eb' : '#6b7280') + '"><i class="fas fa-th" style="margin-right:6px"></i>Price Per Square to Customer</button>' +
+        '</div>' +
+
+        (state.pricingEngineMode === 'markup' ?
+          // Markup mode
+          '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:16px">' +
+            '<div style="background:#f8f9fa;border-radius:8px;padding:16px;text-align:center"><div style="color:#6b7280;font-size:11px;text-transform:uppercase;margin-bottom:4px">Your Total Cost</div><div style="color:#1a1a2e;font-size:24px;font-weight:800">$' + totalCost.toFixed(2) + '</div></div>' +
+            '<div style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;padding:16px;text-align:center"><div style="color:#2563eb;font-size:11px;text-transform:uppercase;margin-bottom:4px">Markup %</div><div><input type="number" value="' + markup + '" onchange="state.markupPercent=Number(this.value);render()" style="width:80px;border:none;background:transparent;font-size:24px;font-weight:800;color:#2563eb;text-align:center">%</div></div>' +
+            '<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px;text-align:center"><div style="color:#16a34a;font-size:11px;text-transform:uppercase;margin-bottom:4px">Customer Price</div><div style="color:#16a34a;font-size:24px;font-weight:800">$' + customerTotal.toFixed(2) + '</div></div>' +
+          '</div>' +
+          // Per-item breakdown
+          '<table style="width:100%;font-size:12px;border-collapse:collapse;margin-bottom:12px">' +
+            '<thead><tr style="border-bottom:1px solid #e5e7eb"><th style="text-align:left;padding:6px;color:#9ca3af">Item</th><th style="text-align:right;padding:6px;color:#9ca3af">Your Cost</th><th style="text-align:center;padding:6px;color:#9ca3af">+' + markup + '%</th><th style="text-align:right;padding:6px;color:#9ca3af">Customer Price</th><th style="text-align:right;padding:6px;color:#9ca3af">Your Profit</th></tr></thead>' +
+            '<tbody>' + items.map(function(item) {
+              var cost = Number(item.quantity||0) * Number(item.unit_price||0);
+              var custPrice = cost * (1 + markup/100);
+              var itemProfit = custPrice - cost;
+              return '<tr style="border-bottom:1px solid #f3f4f6"><td style="padding:6px;color:#374151">' + (item.description||'').substring(0,40) + '</td><td style="text-align:right;padding:6px;color:#6b7280">$' + cost.toFixed(2) + '</td><td style="text-align:center;padding:6px;color:#2563eb">+' + markup + '%</td><td style="text-align:right;padding:6px;font-weight:600;color:#1a1a2e">$' + custPrice.toFixed(2) + '</td><td style="text-align:right;padding:6px;color:#16a34a;font-weight:600">$' + itemProfit.toFixed(2) + '</td></tr>';
+            }).join('') + '</tbody>' +
+          '</table>'
+        :
+          // Per-square customer mode
+          '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin-bottom:16px">' +
+            '<div style="background:#f8f9fa;border-radius:8px;padding:14px;text-align:center"><div style="color:#6b7280;font-size:10px;text-transform:uppercase;margin-bottom:4px">Squares</div><div style="color:#1a1a2e;font-size:20px;font-weight:800">' + (state.selectedReport ? Math.ceil((state.selectedReport.roof_area_sqft||0)/100) : '\u2014') + '</div></div>' +
+            '<div style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;padding:14px;text-align:center"><div style="color:#2563eb;font-size:10px;text-transform:uppercase;margin-bottom:4px">$/Square to Customer</div><div>$<input type="number" value="' + (state.customerPricePerSquare||0) + '" onchange="state.customerPricePerSquare=Number(this.value);render()" style="width:70px;border:none;background:transparent;font-size:20px;font-weight:800;color:#2563eb;text-align:center"></div></div>' +
+            '<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:14px;text-align:center"><div style="color:#16a34a;font-size:10px;text-transform:uppercase;margin-bottom:4px">Customer Total</div><div style="color:#16a34a;font-size:20px;font-weight:800">$' + customerTotal.toFixed(2) + '</div></div>' +
+            '<div style="background:#f8f9fa;border-radius:8px;padding:14px;text-align:center"><div style="color:#6b7280;font-size:10px;text-transform:uppercase;margin-bottom:4px">Your Cost</div><div style="color:#dc2626;font-size:20px;font-weight:800">$' + totalCost.toFixed(2) + '</div></div>' +
+          '</div>'
+        ) +
+
+        // Profit Summary
+        '<div style="background:linear-gradient(135deg,#f0fdf4,#ecfdf5);border:1px solid #bbf7d0;border-radius:10px;padding:16px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;text-align:center">' +
+          '<div><div style="color:#16a34a;font-size:10px;text-transform:uppercase;font-weight:600">Your Profit</div><div style="color:#16a34a;font-size:22px;font-weight:800">$' + profit.toFixed(2) + '</div></div>' +
+          '<div><div style="color:#16a34a;font-size:10px;text-transform:uppercase;font-weight:600">Profit Margin</div><div style="color:#16a34a;font-size:22px;font-weight:800">' + margin.toFixed(1) + '%</div></div>' +
+          '<div><div style="color:#16a34a;font-size:10px;text-transform:uppercase;font-weight:600">Customer Pays</div><div style="color:#1a1a2e;font-size:22px;font-weight:800">$' + customerTotal.toFixed(2) + '</div></div>' +
+        '</div>' +
+      '</div>' +
+
+      // Section C: What to Show Customer
+      '<div style="background:white;border:1px solid #e5e7eb;border-radius:12px;padding:20px;margin-bottom:20px">' +
+        '<h3 style="color:#1a1a2e;font-size:16px;font-weight:700;margin-bottom:16px"><i class="fas fa-eye" style="color:#7c3aed;margin-right:8px"></i>What the Customer Sees</h3>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
+          '<label style="display:flex;align-items:center;gap:8px;padding:10px;background:#f8f9fa;border-radius:8px;cursor:pointer;font-size:13px;color:#374151"><input type="checkbox" ' + (state.showLineItemsToCustomer ? 'checked' : '') + ' onchange="state.showLineItemsToCustomer=this.checked;render()"> Show line item breakdown</label>' +
+          '<label style="display:flex;align-items:center;gap:8px;padding:10px;background:#f8f9fa;border-radius:8px;cursor:pointer;font-size:13px;color:#374151"><input type="checkbox" ' + (state.showAreaToCustomer ? 'checked' : '') + ' onchange="state.showAreaToCustomer=this.checked;render()"> Show roof area</label>' +
+          '<label style="display:flex;align-items:center;gap:8px;padding:10px;background:#f8f9fa;border-radius:8px;cursor:pointer;font-size:13px;color:#374151"><input type="checkbox" ' + (state.showPitchToCustomer ? 'checked' : '') + ' onchange="state.showPitchToCustomer=this.checked;render()"> Show roof pitch</label>' +
+          '<label style="display:flex;align-items:center;gap:8px;padding:10px;background:#f8f9fa;border-radius:8px;cursor:pointer;font-size:13px;color:#374151"><input type="checkbox" ' + (state.showEdgesToCustomer ? 'checked' : '') + ' onchange="state.showEdgesToCustomer=this.checked;render()"> Show edge breakdown</label>' +
+          '<label style="display:flex;align-items:center;gap:8px;padding:10px;background:#f8f9fa;border-radius:8px;cursor:pointer;font-size:13px;color:#374151"><input type="checkbox" ' + (state.showMaterialsToCustomer ? 'checked' : '') + ' onchange="state.showMaterialsToCustomer=this.checked;render()"> Show material BOM</label>' +
+          '<label style="display:flex;align-items:center;gap:8px;padding:10px;background:#f8f9fa;border-radius:8px;cursor:pointer;font-size:13px;color:#374151"><input type="checkbox" ' + (state.showSolarToCustomer ? 'checked' : '') + ' onchange="state.showSolarToCustomer=this.checked;render()"> Show solar data</label>' +
+          '<label style="display:flex;align-items:center;gap:8px;padding:10px;background:#f8f9fa;border-radius:8px;cursor:pointer;font-size:13px;color:#374151"><input type="checkbox" ' + (state.attachments.includeRoofReport ? 'checked' : '') + ' onchange="state.attachments.includeRoofReport=this.checked;render()"> Attach full roof report PDF</label>' +
+          '<label style="display:flex;align-items:center;gap:8px;padding:10px;background:#f8f9fa;border-radius:8px;cursor:pointer;font-size:13px;color:#374151"><input type="checkbox" ' + (state.attachments.includeMaterialBOM ? 'checked' : '') + ' onchange="state.attachments.includeMaterialBOM=this.checked;render()"> Attach material BOM</label>' +
+        '</div>' +
+      '</div>' +
+
+      // Navigation
+      '<div style="display:flex;justify-content:space-between;margin-top:20px">' +
+        '<button onclick="state.createStep=4;render()" style="background:#f3f4f6;color:#6b7280;border:1px solid #e5e7eb;padding:12px 24px;border-radius:999px;font-weight:600;cursor:pointer">&larr; Back to Estimate</button>' +
+        '<button onclick="state.createStep=6;render()" style="background:#2563eb;color:white;border:none;padding:12px 32px;border-radius:999px;font-weight:800;cursor:pointer">Generate Final Proposal &rarr;</button>' +
+      '</div>' +
+    '</div>';
+  }
+
+  // ============================================================
   // PREVIEW VIEW
   // ============================================================
   function renderPreview() {
@@ -658,6 +778,15 @@ document.addEventListener('DOMContentLoaded', () => {
         <button onclick="window._pb.saveDraft()" class="px-4 py-2 bg-gray-700 text-white rounded-lg text-sm font-medium"><i class="fas fa-save mr-1"></i>Save</button>
         <button onclick="window._pb.saveAndSend()" class="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700"><i class="fas fa-paper-plane mr-1"></i>Send</button>
         <button onclick="createSupplierOrder(${state.editId || 'null'})" class="px-4 py-2 bg-cyan-500 text-white rounded-lg text-sm font-medium hover:bg-cyan-600"><i class="fas fa-truck mr-1"></i>Create Supplier Order</button>
+      </div>
+    </div>
+
+    <div style="background:linear-gradient(135deg,#eef2ff,#e0e7ff);border:1px solid #c7d2fe;border-radius:12px;padding:16px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;max-width:56rem;margin-left:auto;margin-right:auto" class="no-print">
+      <div style="display:flex;align-items:center;gap:8px"><i class="fas fa-lock" style="color:#2563eb"></i><span style="color:#2563eb;font-weight:700;font-size:13px">For Your Eyes Only — Not shown to customer</span></div>
+      <div style="display:flex;gap:20px;font-size:13px">
+        <span style="color:#6b7280">Your Cost: <strong style="color:#dc2626">$${(state.form.items||[]).reduce(function(s,i){return s+Number(i.quantity||0)*Number(i.unit_price||0)},0).toFixed(2)}</strong></span>
+        <span style="color:#6b7280">Customer Price: <strong style="color:#1a1a2e">$${(function(){ var tc=(state.form.items||[]).reduce(function(s,i){return s+Number(i.quantity||0)*Number(i.unit_price||0)},0); return state.pricingEngineMode==="per_square_customer"&&state.selectedReport ? (Math.ceil((state.selectedReport.roof_area_sqft||0)/100)*(state.customerPricePerSquare||0)).toFixed(2) : (tc*(1+(state.markupPercent||30)/100)).toFixed(2); })()}</strong></span>
+        <span style="color:#16a34a;font-weight:700">Profit: $${(function(){ var tc=(state.form.items||[]).reduce(function(s,i){return s+Number(i.quantity||0)*Number(i.unit_price||0)},0); var cp=state.pricingEngineMode==="per_square_customer"&&state.selectedReport ? Math.ceil((state.selectedReport.roof_area_sqft||0)/100)*(state.customerPricePerSquare||0) : tc*(1+(state.markupPercent||30)/100); return (cp-tc).toFixed(2); })()}</span>
       </div>
     </div>
 
@@ -1112,6 +1241,15 @@ document.addEventListener('DOMContentLoaded', () => {
       state.pricePerSquare = 350;
       state.selectedReport = null;
       state.selectedReportMaterials = null;
+      state.markupPercent = 30;
+      state.pricingEngineMode = 'markup';
+      state.customerPricePerSquare = 0;
+      state.showLineItemsToCustomer = false;
+      state.showMaterialsToCustomer = false;
+      state.showEdgesToCustomer = false;
+      state.showSolarToCustomer = false;
+      state.showPitchToCustomer = true;
+      state.showAreaToCustomer = true;
       state.attachments = { includeRoofReport: true, includeMaterialBOM: true, insuranceCert: '', warrantyDoc: '', wcbCoverage: '', customAttachment: '' };
       render();
     },
