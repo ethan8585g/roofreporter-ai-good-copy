@@ -2123,8 +2123,42 @@ function getHeadTags() {
   <style id="theme-vars">
 :root{--bg-page:#0A0A0A;--bg-card:#111111;--bg-card-hover:rgba(255,255,255,0.05);--bg-elevated:#1a1a1a;--text-primary:#fff;--text-secondary:#d1d5db;--text-muted:#9ca3af;--border-color:rgba(255,255,255,0.1);--accent:#00FF88;--accent-hover:#00e67a}
 body.light-theme,.light-theme{--bg-page:#f3f4f6;--bg-card:#fff;--bg-card-hover:#f9fafb;--bg-elevated:#fff;--text-primary:#111827;--text-secondary:#374151;--text-muted:#6b7280;--border-color:#e5e7eb;--accent:#2563eb;--accent-hover:#1d4ed8}
+/* Light theme overrides for hardcoded dark Tailwind classes */
+.light-theme [style*="background:#0A0A0A"],.light-theme [style*="background: #0A0A0A"]{background:#f3f4f6 !important}
+.light-theme [style*="background:#111111"],.light-theme [style*="background: #111111"],.light-theme [style*="background:#111"]{background:#ffffff !important}
+.light-theme [style*="background:#1a1a1a"],.light-theme [style*="background:#0d0d0d"]{background:#f9fafb !important}
+.light-theme [style*="background:#0d1117"]{background:#f3f4f6 !important}
+.light-theme .bg-\[\#111111\],.light-theme .bg-\[\#111\]{background-color:#fff !important;border-color:#e5e7eb !important}
+.light-theme .bg-\[\#0A0A0A\]{background-color:#f3f4f6 !important}
+.light-theme .bg-white\/5,.light-theme .bg-white\/10{background-color:#f3f4f6 !important}
+.light-theme .border-white\/10,.light-theme .border-white\/5,.light-theme .border-white\/15{border-color:#e5e7eb !important}
+.light-theme .text-white{color:#111827 !important}
+.light-theme .text-gray-100{color:#1f2937 !important}
+.light-theme .text-gray-200{color:#374151 !important}
+.light-theme .text-gray-300{color:#4b5563 !important}
+.light-theme .text-gray-400{color:#6b7280 !important}
+.light-theme .text-gray-500{color:#9ca3af !important}
+.light-theme .text-\[\#00FF88\]{color:#2563eb !important}
+.light-theme .bg-\[\#00FF88\]{background-color:#2563eb !important}
+.light-theme .shadow-\[\#00FF88\]\/20{box-shadow:0 4px 14px rgba(37,99,235,0.15) !important}
+.light-theme .bg-emerald-500\/15{background-color:rgba(16,185,129,0.1) !important}
+.light-theme .text-emerald-400{color:#059669 !important}
+.light-theme .bg-blue-500\/15{background-color:rgba(59,130,246,0.1) !important}
+.light-theme .text-blue-400{color:#2563eb !important}
+.light-theme .bg-red-500\/15{background-color:rgba(239,68,68,0.1) !important}
+.light-theme .text-red-400{color:#dc2626 !important}
+.light-theme .hover\:bg-white\/10:hover,.light-theme .hover\:bg-white\/5:hover{background-color:#e5e7eb !important}
+.light-theme .bg-gradient-to-r.from-gray-900,.light-theme .from-gray-900{--tw-gradient-from:#f3f4f6 !important}
+.light-theme .to-gray-800{--tw-gradient-to:#e5e7eb !important}
+.light-theme .bg-gradient-to-r.from-blue-600{--tw-gradient-from:#2563eb !important}
+.light-theme input,.light-theme textarea,.light-theme select{background-color:#fff !important;color:#111827 !important;border-color:#d1d5db !important}
+.light-theme input::placeholder,.light-theme textarea::placeholder{color:#9ca3af !important}
+.light-theme table th{background-color:#f9fafb !important;color:#6b7280 !important}
+.light-theme table td{color:#374151 !important}
+.light-theme table tr{border-color:#e5e7eb !important}
+.light-theme .rounded-2xl,.light-theme .rounded-xl{border-color:#e5e7eb !important}
 </style>
-<script>!function(){var t=localStorage.getItem('rc_theme_mode');if(t==='light')document.documentElement.classList.add('light-theme');else if(t==='auto'&&window.matchMedia('(prefers-color-scheme:light)').matches)document.documentElement.classList.add('light-theme')}()</script>`
+<script>!function(){var t=localStorage.getItem('rc_theme_mode');if(t==='light'){document.documentElement.classList.add('light-theme');document.addEventListener('DOMContentLoaded',function(){document.body.classList.add('light-theme')})}else if(t==='auto'&&window.matchMedia('(prefers-color-scheme:light)').matches){document.documentElement.classList.add('light-theme');document.addEventListener('DOMContentLoaded',function(){document.body.classList.add('light-theme')})}}()</script>`
 }
 
 // Rover chatbot widget script tag — inject on public pages only

@@ -740,11 +740,14 @@ window._toggleTheme = function() {
 
   var html = document.documentElement;
   html.classList.remove('light-theme');
+  document.body.classList.remove('light-theme');
 
   if (next === 'light') {
     html.classList.add('light-theme');
+    document.body.classList.add('light-theme');
   } else if (next === 'auto' && window.matchMedia('(prefers-color-scheme: light)').matches) {
     html.classList.add('light-theme');
+    document.body.classList.add('light-theme');
   }
 
   // Update button icon
