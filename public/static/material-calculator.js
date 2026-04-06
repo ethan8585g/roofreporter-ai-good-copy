@@ -200,7 +200,7 @@ function renderRoofSummaryCard() {
         '<p class="text-2xl font-black text-emerald-700">' + (m.gross_squares ? m.gross_squares.toFixed(1) : '—') + '</p>' +
         '<p class="text-xs text-gray-500 mt-0.5">Squares</p>' +
       '</div>' +
-      '<div class="text-center p-3 bg-amber-50 rounded-xl">' +
+      '<div class="text-center p-3 bg-cyan-500/10 rounded-xl">' +
         '<p class="text-xl font-black text-amber-700 capitalize">' + (m.complexity_class || '—') + '</p>' +
         '<p class="text-xs text-gray-500 mt-0.5">Complexity</p>' +
       '</div>' +
@@ -298,7 +298,7 @@ function renderMaterialTableInner() {
     var catLabel = categoryLabels[item.category] || item.category.replace(/_/g, ' ');
 
     return '<tr class="border-b border-gray-50 hover:bg-[#111111]/5 transition-colors">' +
-      '<td class="px-4 py-3 text-sm font-medium text-gray-100">' + catLabel + (item._catalog_price ? ' <span class="px-1 py-0.5 bg-blue-100 text-blue-700 rounded text-[9px] font-bold ml-1">CATALOG</span>' : '') + '</td>' +
+      '<td class="px-4 py-3 text-sm font-medium text-gray-100">' + catLabel + (item._catalog_price ? ' <span class="px-1 py-0.5 bg-blue-500/100/15 text-blue-400 rounded text-[9px] font-bold ml-1">CATALOG</span>' : '') + '</td>' +
       '<td class="px-4 py-3 text-sm text-gray-500 hidden sm:table-cell">' + (item._catalog_name || item.description || '') + '</td>' +
       '<td class="px-4 py-3 text-center"><input type="number" step="1" min="0" value="' + qty + '" onchange="mcUpdateQty(' + idx + ',this.value)" class="w-16 px-2 py-1 border border-white/15 rounded-lg text-sm text-center font-bold focus:ring-2 focus:ring-sky-400 focus:border-sky-400"></td>' +
       '<td class="px-4 py-3 text-center text-gray-400 text-xs">' + (item.order_unit || '') + '</td>' +

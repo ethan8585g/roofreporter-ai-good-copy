@@ -44,8 +44,8 @@
   // HELPER: Status badge
   // ============================================================
   function badge(status, map) {
-    var m = map || { active: 'bg-green-100 text-green-700', inactive: 'bg-white/5 text-gray-400', lead: 'bg-blue-100 text-blue-700', draft: 'bg-white/5 text-gray-400', sent: 'bg-blue-100 text-blue-700', viewed: 'bg-indigo-100 text-indigo-700', paid: 'bg-green-100 text-green-700', overdue: 'bg-red-100 text-red-700', cancelled: 'bg-white/5 text-gray-500', accepted: 'bg-green-100 text-green-700', declined: 'bg-red-100 text-red-700', expired: 'bg-yellow-100 text-yellow-700', scheduled: 'bg-blue-100 text-blue-700', in_progress: 'bg-amber-100 text-amber-700', completed: 'bg-green-100 text-green-700', postponed: 'bg-white/5 text-gray-400' };
-    return '<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize ' + (m[status] || 'bg-white/5 text-gray-400') + '">' + (status || 'unknown').replace(/_/g, ' ') + '</span>';
+    var m = map || { active: 'bg-emerald-500/15 text-emerald-400', inactive: 'bg-white/5 text-gray-500', lead: 'bg-blue-500/15 text-blue-400', draft: 'bg-white/10 text-gray-400', sent: 'bg-blue-500/15 text-blue-400', viewed: 'bg-indigo-500/15 text-indigo-400', paid: 'bg-emerald-500/15 text-emerald-400', overdue: 'bg-red-500/15 text-red-400', cancelled: 'bg-white/5 text-gray-500', accepted: 'bg-emerald-500/15 text-emerald-400', declined: 'bg-red-500/15 text-red-400', expired: 'bg-yellow-500/15 text-yellow-400', scheduled: 'bg-blue-500/15 text-blue-400', in_progress: 'bg-cyan-500/15 text-cyan-400', completed: 'bg-emerald-500/15 text-emerald-400', postponed: 'bg-white/5 text-gray-500' };
+    return '<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize ' + (m[status] || 'bg-white/5 text-gray-500') + '">' + (status || 'unknown').replace(/_/g, ' ') + '</span>';
   }
 
   function money(v) { return '$' + (parseFloat(v) || 0).toFixed(2); }
@@ -412,7 +412,7 @@
     // Stats cards
     html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">' +
       '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-gray-100">' + (stats.total || 0) + '</p><p class="text-[10px] text-gray-500">Total</p></div>' +
-      '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-green-600">' + money(stats.total_paid) + '</p><p class="text-[10px] text-gray-500">Collected</p></div>' +
+      '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-emerald-400">' + money(stats.total_paid) + '</p><p class="text-[10px] text-gray-500">Collected</p></div>' +
       '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-amber-600">' + money(stats.total_owing) + '</p><p class="text-[10px] text-gray-500">Outstanding</p></div>' +
       '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-red-600">' + money(stats.total_overdue) + '</p><p class="text-[10px] text-gray-500">Overdue</p></div></div>';
 
@@ -435,11 +435,11 @@
         if (inv.status === 'draft') html += '<button onclick="window._crmEditInvoice(' + inv.id + ')" class="text-xs text-gray-400 hover:underline ml-2"><i class="fas fa-edit mr-0.5"></i>Edit</button>';
         if (inv.status === 'draft' || inv.status === 'sent') html += '<button onclick="window._crmSendInvoice(' + inv.id + ')" class="text-xs text-blue-600 hover:underline ml-2"><i class="fas fa-paper-plane mr-0.5"></i>Send</button>';
         if (inv.square_payment_link_url) {
-          html += '<a href="' + inv.square_payment_link_url + '" target="_blank" class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-semibold ml-2 hover:bg-green-200"><i class="fas fa-credit-card mr-0.5"></i>Pay Link</a>';
+          html += '<a href="' + inv.square_payment_link_url + '" target="_blank" class="text-xs bg-emerald-500/15 text-emerald-400 px-2 py-0.5 rounded-full font-semibold ml-2 hover:bg-green-200"><i class="fas fa-credit-card mr-0.5"></i>Pay Link</a>';
         } else if (inv.status !== 'paid' && inv.status !== 'cancelled') {
-          html += '<button onclick="event.stopPropagation();window._crmGenPayLink(' + inv.id + ')" class="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-semibold ml-2 hover:bg-emerald-200"><i class="fas fa-credit-card mr-0.5"></i>+ Pay Link</button>';
+          html += '<button onclick="event.stopPropagation();window._crmGenPayLink(' + inv.id + ')" class="text-xs bg-emerald-500/15 text-emerald-400 px-2 py-0.5 rounded-full font-semibold ml-2 hover:bg-emerald-200"><i class="fas fa-credit-card mr-0.5"></i>+ Pay Link</button>';
         }
-        if (inv.status !== 'paid' && inv.status !== 'cancelled') html += '<button onclick="window._crmMarkInvoice(' + inv.id + ',\'paid\')" class="text-xs text-green-600 hover:underline ml-2">Mark Paid</button>';
+        if (inv.status !== 'paid' && inv.status !== 'cancelled') html += '<button onclick="window._crmMarkInvoice(' + inv.id + ',\'paid\')" class="text-xs text-emerald-400 hover:underline ml-2">Mark Paid</button>';
         html += '<button onclick="window._crmDeleteInvoice(' + inv.id + ')" class="text-gray-400 hover:text-red-500 ml-2"><i class="fas fa-trash text-xs"></i></button>';
         html += '</div></td></tr>';
       }
@@ -567,7 +567,7 @@
         body += '<div class="bg-[#0A0A0A] rounded-xl p-4">';
         body += '<div class="flex justify-between text-sm text-gray-400 mb-1"><span>Subtotal</span><span>' + money(inv.subtotal) + '</span></div>';
         if (inv.tax_amount) body += '<div class="flex justify-between text-sm text-gray-400 mb-1"><span>Tax (' + (inv.tax_rate || 5) + '%)</span><span>' + money(inv.tax_amount) + '</span></div>';
-        if (inv.discount_amount) body += '<div class="flex justify-between text-sm text-gray-400 mb-1"><span>Discount</span><span class="text-green-600">-' + money(inv.discount_amount) + '</span></div>';
+        if (inv.discount_amount) body += '<div class="flex justify-between text-sm text-gray-400 mb-1"><span>Discount</span><span class="text-emerald-400">-' + money(inv.discount_amount) + '</span></div>';
         body += '<div class="flex justify-between text-lg font-bold text-gray-100 border-t border-white/10 pt-2 mt-2"><span>Total</span><span>' + money(inv.total) + ' CAD</span></div>';
         body += '</div>';
 
@@ -582,7 +582,7 @@
         if (inv.share_token) body += '<div class="bg-[#0A0A0A] rounded-xl p-3 flex items-center justify-between gap-2"><div class="min-w-0"><p class="text-xs font-semibold text-gray-500 mb-0.5">Customer Link</p><p class="text-xs text-brand-600 truncate font-mono">/invoice/view/' + inv.share_token + '</p></div><button onclick="navigator.clipboard.writeText(window.location.origin+\'/invoice/view/' + inv.share_token + '\').then(function(){toast(\'Link copied!\');})" class="shrink-0 text-xs bg-[#111111] border border-white/10 px-2 py-1 rounded-lg hover:bg-[#111111]/5"><i class="fas fa-copy mr-1"></i>Copy</button></div>';
 
         // Square payment link
-        if (inv.square_payment_link_url) body += '<div class="bg-green-50 rounded-xl p-3 flex items-center justify-between gap-2"><div><p class="text-xs font-semibold text-green-600 mb-0.5"><i class="fas fa-credit-card mr-1"></i>Square Payment Link</p><p class="text-xs text-green-700 truncate">Ready to pay</p></div><div class="flex gap-2 shrink-0"><a href="' + inv.square_payment_link_url + '" target="_blank" class="text-xs bg-green-600 text-white px-2 py-1 rounded-lg hover:bg-green-700">Open</a><button onclick="navigator.clipboard.writeText(\'' + inv.square_payment_link_url + '\').then(function(){toast(\'Link copied!\');})" class="text-xs bg-[#111111] border border-green-200 px-2 py-1 rounded-lg hover:bg-green-50">Copy</button></div></div>';
+        if (inv.square_payment_link_url) body += '<div class="bg-green-50 rounded-xl p-3 flex items-center justify-between gap-2"><div><p class="text-xs font-semibold text-emerald-400 mb-0.5"><i class="fas fa-credit-card mr-1"></i>Square Payment Link</p><p class="text-xs text-green-700 truncate">Ready to pay</p></div><div class="flex gap-2 shrink-0"><a href="' + inv.square_payment_link_url + '" target="_blank" class="text-xs bg-green-600 text-white px-2 py-1 rounded-lg hover:bg-green-700">Open</a><button onclick="navigator.clipboard.writeText(\'' + inv.square_payment_link_url + '\').then(function(){toast(\'Link copied!\');})" class="text-xs bg-[#111111] border border-green-200 px-2 py-1 rounded-lg hover:bg-green-50">Copy</button></div></div>';
 
         // Action buttons
         body += '<div class="flex gap-2 pt-2 flex-wrap">';
@@ -812,7 +812,7 @@
     html += '<div><h2 class="text-lg font-bold text-gray-100"><i class="fas fa-file-signature text-amber-500 mr-2"></i>Proposals & Estimates</h2></div>';
     html += '<div class="flex items-center gap-2">';
     // Gmail status indicator
-    html += '<button onclick="window._crmGmailSettings()" class="px-3 py-2 rounded-lg text-xs font-medium border transition-colors ' + (_gmailConnected ? 'bg-green-50 border-green-200 text-green-700 hover:bg-green-100' : 'bg-[#0A0A0A] border-white/10 text-gray-400 hover:bg-[#111111]/10') + '">';
+    html += '<button onclick="window._crmGmailSettings()" class="px-3 py-2 rounded-lg text-xs font-medium border transition-colors ' + (_gmailConnected ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/15' : 'bg-[#0A0A0A] border-white/10 text-gray-400 hover:bg-[#111111]/10') + '">';
     html += '<i class="' + (_gmailConnected ? 'fas fa-check-circle text-green-500' : 'fab fa-google text-gray-400') + ' mr-1.5"></i>';
     html += _gmailConnected ? 'Gmail Connected' : 'Connect Gmail';
     html += '</button>';
@@ -823,7 +823,7 @@
     html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">' +
       '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-gray-100">' + (stats.total || 0) + '</p><p class="text-[10px] text-gray-500">Total</p></div>' +
       '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-amber-600">' + (stats.open_count || 0) + '</p><p class="text-[10px] text-gray-500">Open</p></div>' +
-      '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-green-600">' + money(stats.sold_value) + '</p><p class="text-[10px] text-gray-500">Sold Value</p></div>' +
+      '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-emerald-400">' + money(stats.sold_value) + '</p><p class="text-[10px] text-gray-500">Sold Value</p></div>' +
       '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-blue-600">' + money(stats.open_value) + '</p><p class="text-[10px] text-gray-500">Open Value</p></div></div>';
 
     // Filter
@@ -847,7 +847,7 @@
         html += '<span class="font-mono text-xs font-bold text-amber-600">' + p.proposal_number + '</span>';
         html += badge(p.status);
         if (p.view_count > 0) {
-          html += '<button onclick="window._crmViewTracking(' + p.id + ')" class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-100 text-indigo-700 hover:bg-indigo-200 cursor-pointer"><i class="fas fa-eye mr-1"></i>' + p.view_count + ' view' + (p.view_count !== 1 ? 's' : '') + '</button>';
+          html += '<button onclick="window._crmViewTracking(' + p.id + ')" class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-500/15 text-indigo-400 hover:bg-indigo-200 cursor-pointer"><i class="fas fa-eye mr-1"></i>' + p.view_count + ' view' + (p.view_count !== 1 ? 's' : '') + '</button>';
         }
         if (p.customer_email) html += '<span class="text-[10px] text-gray-400"><i class="fas fa-envelope mr-0.5"></i>' + p.customer_email + '</span>';
         html += '</div>';
@@ -867,11 +867,11 @@
           html += '<button onclick="window._crmSendProposal(' + p.id + ')" class="text-xs text-blue-600 hover:underline"><i class="fas fa-redo mr-0.5"></i>Resend</button>';
         }
         if (p.payment_link) {
-          html += '<a href="' + p.payment_link + '" target="_blank" class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-semibold hover:bg-green-200"><i class="fas fa-credit-card mr-0.5"></i>Pay Link</a>';
+          html += '<a href="' + p.payment_link + '" target="_blank" class="text-xs bg-emerald-500/15 text-emerald-400 px-2 py-0.5 rounded-full font-semibold hover:bg-green-200"><i class="fas fa-credit-card mr-0.5"></i>Pay Link</a>';
         } else if (p.status !== 'accepted' && p.status !== 'declined') {
-          html += '<button onclick="event.stopPropagation();window._crmGenProposalPayLink(' + p.id + ')" class="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-semibold hover:bg-emerald-200"><i class="fas fa-credit-card mr-0.5"></i>+ Pay Link</button>';
+          html += '<button onclick="event.stopPropagation();window._crmGenProposalPayLink(' + p.id + ')" class="text-xs bg-emerald-500/15 text-emerald-400 px-2 py-0.5 rounded-full font-semibold hover:bg-emerald-200"><i class="fas fa-credit-card mr-0.5"></i>+ Pay Link</button>';
         }
-        if (p.status !== 'accepted' && p.status !== 'declined') html += '<button onclick="window._crmMarkProposal(' + p.id + ',\'accepted\')" class="text-xs text-green-600 hover:underline">Won</button>';
+        if (p.status !== 'accepted' && p.status !== 'declined') html += '<button onclick="window._crmMarkProposal(' + p.id + ',\'accepted\')" class="text-xs text-emerald-400 hover:underline">Won</button>';
         html += '<button onclick="window._crmDeleteProposal(' + p.id + ')" class="text-gray-400 hover:text-red-500"><i class="fas fa-trash text-xs"></i></button>';
         html += '</div></div></div></div>';
       }
@@ -892,9 +892,9 @@
     var body = '<div class="space-y-4">';
     if (_gmailConnected) {
       body += '<div class="bg-green-50 border border-green-200 rounded-xl p-4 text-center">' +
-        '<div class="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-2"><i class="fas fa-check-circle text-green-600 text-xl"></i></div>' +
+        '<div class="w-12 h-12 bg-emerald-500/15 rounded-full flex items-center justify-center mx-auto mb-2"><i class="fas fa-check-circle text-emerald-400 text-xl"></i></div>' +
         '<p class="font-semibold text-green-800">Gmail Connected</p>' +
-        '<p class="text-sm text-green-600">' + _gmailEmail + '</p></div>';
+        '<p class="text-sm text-emerald-400">' + _gmailEmail + '</p></div>';
       body += '<p class="text-sm text-gray-400">Proposals will be emailed from your connected Gmail account when you click "Send".</p>';
       body += '<button onclick="window._crmDisconnectGmail()" class="w-full py-2 border border-red-200 text-red-600 rounded-lg text-sm hover:bg-red-50">Disconnect Gmail</button>';
     } else {
@@ -1226,9 +1226,9 @@
           // Email status
           if (res.email_sent) {
             linkHtml += '<div class="bg-green-50 border border-green-200 rounded-xl p-4 text-center">' +
-              '<i class="fas fa-check-circle text-green-600 text-2xl mb-2"></i>' +
+              '<i class="fas fa-check-circle text-emerald-400 text-2xl mb-2"></i>' +
               '<p class="font-semibold text-green-800">Proposal Emailed!</p>' +
-              '<p class="text-sm text-green-600">Sent to ' + res.sent_to + '</p></div>';
+              '<p class="text-sm text-emerald-400">Sent to ' + res.sent_to + '</p></div>';
           } else if (res.email_error) {
             linkHtml += '<div class="bg-amber-50 border border-amber-200 rounded-xl p-3 text-sm text-amber-700">' +
               '<i class="fas fa-exclamation-triangle mr-1"></i>' + res.email_error + '</div>';
@@ -1316,7 +1316,7 @@
         body += '<div class="flex items-center justify-between flex-wrap gap-2">';
         body += '<div><span class="font-mono text-lg font-bold text-amber-600">' + p.proposal_number + '</span></div>';
         body += '<div class="flex items-center gap-2">' + badge(p.status);
-        if (p.view_count > 0) body += '<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-100 text-indigo-700"><i class="fas fa-eye mr-0.5"></i>' + p.view_count + ' views</span>';
+        if (p.view_count > 0) body += '<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-500/15 text-indigo-400"><i class="fas fa-eye mr-0.5"></i>' + p.view_count + ' views</span>';
         if (p.status === 'draft') body += '<button onclick="closeModal();window._crmEditProposal(' + id + ')" class="text-xs bg-white/5 text-gray-300 px-3 py-1 rounded-lg hover:bg-gray-200"><i class="fas fa-edit mr-1"></i>Edit</button>';
         body += '</div></div>';
 
@@ -1379,7 +1379,7 @@
 
         // Payment link
         if (p.payment_link) {
-          body += '<div class="bg-green-50 rounded-xl p-3 flex items-center justify-between gap-2"><div><p class="text-xs font-semibold text-green-600 mb-0.5"><i class="fas fa-credit-card mr-1"></i>Square Payment Link</p><p class="text-xs text-green-700">Ready for customer payment</p></div><div class="flex gap-2 shrink-0"><a href="' + p.payment_link + '" target="_blank" class="text-xs bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700 font-semibold">Pay Now</a><button onclick="navigator.clipboard.writeText(\'' + p.payment_link + '\').then(function(){toast(\'Link copied!\');})" class="text-xs bg-[#111111] border border-green-200 px-2 py-1.5 rounded-lg hover:bg-green-50">Copy</button></div></div>';
+          body += '<div class="bg-green-50 rounded-xl p-3 flex items-center justify-between gap-2"><div><p class="text-xs font-semibold text-emerald-400 mb-0.5"><i class="fas fa-credit-card mr-1"></i>Square Payment Link</p><p class="text-xs text-green-700">Ready for customer payment</p></div><div class="flex gap-2 shrink-0"><a href="' + p.payment_link + '" target="_blank" class="text-xs bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700 font-semibold">Pay Now</a><button onclick="navigator.clipboard.writeText(\'' + p.payment_link + '\').then(function(){toast(\'Link copied!\');})" class="text-xs bg-[#111111] border border-green-200 px-2 py-1.5 rounded-lg hover:bg-green-50">Copy</button></div></div>';
         }
 
         // Action buttons
@@ -1471,10 +1471,10 @@
   }
 
   function jobTypeColor(type) {
-    if (type === 'install') return 'bg-blue-100 text-blue-800 border-blue-200';
-    if (type === 'repair') return 'bg-amber-100 text-amber-800 border-amber-200';
+    if (type === 'install') return 'bg-blue-500/15 text-blue-400 border-blue-500/20';
+    if (type === 'repair') return 'bg-cyan-500/15 text-cyan-400 border-cyan-500/20';
     if (type === 'inspection') return 'bg-purple-100 text-purple-800 border-purple-200';
-    if (type === 'maintenance') return 'bg-green-100 text-green-800 border-green-200';
+    if (type === 'maintenance') return 'bg-emerald-500/15 text-emerald-400 border-emerald-500/20';
     return 'bg-white/5 text-gray-300 border-white/10';
   }
   function jobTypeIcon(type) {
@@ -1498,8 +1498,8 @@
     html += '<div class="flex items-center gap-2 flex-wrap">';
     // Google Calendar button
     if (_calConnected) {
-      html += '<button onclick="window._crmCalendarSettings()" class="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-green-300 bg-green-50 text-green-700 hover:bg-green-100"><i class="fab fa-google text-green-600"></i>Calendar Connected</button>';
-      html += '<button onclick="window._crmSyncAllJobs()" class="px-3 py-2 rounded-lg text-xs font-medium border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"><i class="fas fa-sync-alt mr-1"></i>Sync All</button>';
+      html += '<button onclick="window._crmCalendarSettings()" class="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-emerald-500/20 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/15"><i class="fab fa-google text-emerald-400"></i>Calendar Connected</button>';
+      html += '<button onclick="window._crmSyncAllJobs()" class="px-3 py-2 rounded-lg text-xs font-medium border border-blue-500/20 bg-blue-500/10 text-blue-400 hover:bg-blue-500/15"><i class="fas fa-sync-alt mr-1"></i>Sync All</button>';
     } else {
       html += '<button onclick="window._crmCalendarSettings()" class="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-white/15 bg-[#111111] text-gray-400 hover:bg-[#111111]/5"><i class="fab fa-google text-gray-400"></i>Connect Calendar</button>';
     }
@@ -1511,7 +1511,7 @@
       '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-gray-100">' + (stats.total || 0) + '</p><p class="text-[10px] text-gray-500">Total Jobs</p></div>' +
       '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-blue-600">' + (stats.scheduled || 0) + '</p><p class="text-[10px] text-gray-500">Scheduled</p></div>' +
       '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-amber-600">' + (stats.in_progress || 0) + '</p><p class="text-[10px] text-gray-500">In Progress</p></div>' +
-      '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-green-600">' + (stats.completed || 0) + '</p><p class="text-[10px] text-gray-500">Completed</p></div></div>';
+      '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-emerald-400">' + (stats.completed || 0) + '</p><p class="text-[10px] text-gray-500">Completed</p></div></div>';
 
     // C. Calendar toolbar
     html += '<div class="flex items-center justify-between mb-4 flex-wrap gap-2">';
@@ -1784,9 +1784,9 @@
     var body = '';
     if (_calConnected) {
       body += '<div class="bg-green-50 border border-green-200 rounded-xl p-4 mb-4 flex items-center gap-3">';
-      body += '<i class="fab fa-google text-green-600 text-xl"></i>';
+      body += '<i class="fab fa-google text-emerald-400 text-xl"></i>';
       body += '<div><p class="font-semibold text-green-800">Google Calendar Connected</p>';
-      body += '<p class="text-xs text-green-600">' + _calEmail + '</p></div></div>';
+      body += '<p class="text-xs text-emerald-400">' + _calEmail + '</p></div></div>';
       body += '<div class="space-y-3">';
       body += '<button onclick="window._crmSyncAllJobs(); closeModal();" class="w-full px-4 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700"><i class="fas fa-sync-alt mr-2"></i>Sync All Jobs to Google Calendar</button>';
       body += '<p class="text-xs text-gray-500 text-center">This will create/update Google Calendar events for all scheduled and in-progress jobs.</p>';
@@ -1941,8 +1941,8 @@
 
         // Action buttons
         body += '<div class="flex flex-wrap gap-2 pt-2">';
-        if (j.status === 'scheduled') body += '<button onclick="window._crmMarkJob(' + j.id + ',\'in_progress\'); closeModal();" class="px-3 py-1.5 bg-amber-100 text-amber-700 rounded-lg text-xs font-medium hover:bg-amber-200"><i class="fas fa-play mr-1"></i>Start Job</button>';
-        if (j.status === 'in_progress') body += '<button onclick="window._crmMarkJob(' + j.id + ',\'completed\'); closeModal();" class="px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-xs font-medium hover:bg-green-200"><i class="fas fa-check mr-1"></i>Complete</button>';
+        if (j.status === 'scheduled') body += '<button onclick="window._crmMarkJob(' + j.id + ',\'in_progress\'); closeModal();" class="px-3 py-1.5 bg-cyan-500/15 text-cyan-400 rounded-lg text-xs font-medium hover:bg-amber-200"><i class="fas fa-play mr-1"></i>Start Job</button>';
+        if (j.status === 'in_progress') body += '<button onclick="window._crmMarkJob(' + j.id + ',\'completed\'); closeModal();" class="px-3 py-1.5 bg-emerald-500/15 text-emerald-400 rounded-lg text-xs font-medium hover:bg-green-200"><i class="fas fa-check mr-1"></i>Complete</button>';
         if (_calConnected) body += '<button onclick="window._crmSyncJobToCalendar(' + j.id + ')" class="px-3 py-1.5 bg-[#111111] border border-white/15 text-gray-300 rounded-lg text-xs font-medium hover:bg-[#111111]/5"><i class="fab fa-google mr-1 text-blue-500"></i>Sync to Calendar</button>';
         body += '<button onclick="window._crmDeleteJob(' + j.id + '); closeModal();" class="px-3 py-1.5 bg-[#111111] border border-red-200 text-red-600 rounded-lg text-xs font-medium hover:bg-red-50"><i class="fas fa-trash mr-1"></i>Delete</button>';
         body += '</div>';
@@ -1966,7 +1966,7 @@
         // Crew & Progress sections
         body += '<div class="pt-3 border-t flex gap-2">';
         body += '<button onclick="window._crewAssignJob(' + j.id + ')" class="flex-1 py-2 bg-orange-100 text-orange-700 rounded-lg text-xs font-semibold hover:bg-orange-200"><i class="fas fa-hard-hat mr-1"></i>Manage Crew</button>';
-        body += '<button onclick="window._crewAddProgress(' + j.id + ')" class="flex-1 py-2 bg-blue-100 text-blue-700 rounded-lg text-xs font-semibold hover:bg-blue-200"><i class="fas fa-camera mr-1"></i>Add Progress</button>';
+        body += '<button onclick="window._crewAddProgress(' + j.id + ')" class="flex-1 py-2 bg-blue-500/15 text-blue-400 rounded-lg text-xs font-semibold hover:bg-blue-200"><i class="fas fa-camera mr-1"></i>Add Progress</button>';
         body += '</div>';
 
         body += '</div>';
@@ -2119,7 +2119,7 @@
         if (j.scheduled_time) html += '<p class="text-xs text-gray-500"><i class="fas fa-clock mr-1"></i>' + j.scheduled_time + '</p>';
         if (j.customer_name) html += '<p class="text-xs text-gray-500"><i class="fas fa-user mr-1"></i>' + j.customer_name + (j.customer_phone ? ' · ' + j.customer_phone : '') + '</p>';
         if (j.crew_names) html += '<p class="text-xs text-gray-400 mt-1"><i class="fas fa-users mr-1"></i>Crew: ' + j.crew_names + '</p>';
-        html += '<div class="flex gap-2 mt-2"><button onclick="event.stopPropagation();window._crewAddProgress(' + j.id + ')" class="px-3 py-1 bg-blue-100 text-blue-700 rounded-lg text-xs font-semibold hover:bg-blue-200"><i class="fas fa-camera mr-1"></i>Add Update</button></div>';
+        html += '<div class="flex gap-2 mt-2"><button onclick="event.stopPropagation();window._crewAddProgress(' + j.id + ')" class="px-3 py-1 bg-blue-500/15 text-blue-400 rounded-lg text-xs font-semibold hover:bg-blue-200"><i class="fas fa-camera mr-1"></i>Add Update</button></div>';
         html += '</div>';
       }
       html += '</div>';
@@ -2170,7 +2170,7 @@
     html += '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-gray-100">' + crew.length + '</p><p class="text-[10px] text-gray-500">Crew Members</p></div>';
     html += '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-blue-600">' + activeJobs.length + '</p><p class="text-[10px] text-gray-500">Active Jobs</p></div>';
     html += '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-amber-600">' + scheduledJobs.length + '</p><p class="text-[10px] text-gray-500">Scheduled</p></div>';
-    html += '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-green-600">' + crew.reduce(function(sum, m) { return sum + (m.active_jobs || 0); }, 0) + '</p><p class="text-[10px] text-gray-500">Crew on Jobs</p></div>';
+    html += '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-emerald-400">' + crew.reduce(function(sum, m) { return sum + (m.active_jobs || 0); }, 0) + '</p><p class="text-[10px] text-gray-500">Crew on Jobs</p></div>';
     html += '</div>';
 
     // Daily Dispatch Board — Today's schedule
@@ -2211,8 +2211,8 @@
         html += '<p class="text-xs text-gray-500">' + (m.role === 'admin' ? 'Admin' : 'Crew Member') + '</p></div></div>';
         if (m.phone) html += '<p class="text-xs text-gray-500 mb-1"><i class="fas fa-phone mr-1.5 text-gray-400"></i>' + m.phone + '</p>';
         if (m.email) html += '<p class="text-xs text-gray-500 mb-2"><i class="fas fa-envelope mr-1.5 text-gray-400"></i>' + m.email + '</p>';
-        html += '<div class="flex items-center gap-2 mt-2"><span class="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-[10px] font-bold">' + (m.total_assignments || 0) + ' jobs assigned</span>';
-        if (m.active_jobs > 0) html += '<span class="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-[10px] font-bold">' + m.active_jobs + ' active</span>';
+        html += '<div class="flex items-center gap-2 mt-2"><span class="px-2 py-0.5 bg-blue-500/15 text-blue-400 rounded-full text-[10px] font-bold">' + (m.total_assignments || 0) + ' jobs assigned</span>';
+        if (m.active_jobs > 0) html += '<span class="px-2 py-0.5 bg-emerald-500/15 text-emerald-400 rounded-full text-[10px] font-bold">' + m.active_jobs + ' active</span>';
         html += '</div></div>';
       }
       html += '</div>';
@@ -2228,7 +2228,7 @@
       html += '<div class="divide-y divide-gray-100">';
       for (var j = 0; j < allJobs.length; j++) {
         var job = allJobs[j];
-        var statusColor = job.status === 'in_progress' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700';
+        var statusColor = job.status === 'in_progress' ? 'bg-cyan-500/15 text-cyan-400' : 'bg-blue-500/15 text-blue-400';
         html += '<div class="px-5 py-3 flex items-center justify-between hover:bg-[#111111]/5 cursor-pointer" onclick="window._crmViewJob(' + job.id + ')">';
         html += '<div class="min-w-0 flex-1"><div class="flex items-center gap-2 mb-0.5"><span class="font-mono text-xs font-bold text-orange-600">' + job.job_number + '</span><span class="px-2 py-0.5 rounded-full text-[10px] font-bold ' + statusColor + ' capitalize">' + (job.status || '').replace(/_/g, ' ') + '</span></div>';
         html += '<p class="text-sm font-medium text-gray-100 truncate">' + (job.title || '') + '</p>';
@@ -2260,7 +2260,7 @@
         body += '<div><h4 class="text-xs font-bold text-gray-500 uppercase mb-2">Currently Assigned</h4><div class="space-y-1.5">';
         for (var i = 0; i < assigned.length; i++) {
           var a = assigned[i];
-          body += '<div class="flex items-center justify-between bg-green-50 rounded-lg px-3 py-2"><div class="flex items-center gap-2"><i class="fas fa-user-check text-green-500"></i><span class="text-sm font-medium text-gray-100">' + (a.name || 'Unknown') + '</span><span class="px-1.5 py-0.5 bg-green-100 text-green-700 rounded text-[9px] font-bold capitalize">' + (a.role || 'crew') + '</span></div><button onclick="window._crewRemoveFromJob(' + jobId + ',' + a.crew_member_id + ')" class="text-red-400 hover:text-red-600"><i class="fas fa-times"></i></button></div>';
+          body += '<div class="flex items-center justify-between bg-green-50 rounded-lg px-3 py-2"><div class="flex items-center gap-2"><i class="fas fa-user-check text-green-500"></i><span class="text-sm font-medium text-gray-100">' + (a.name || 'Unknown') + '</span><span class="px-1.5 py-0.5 bg-emerald-500/15 text-emerald-400 rounded text-[9px] font-bold capitalize">' + (a.role || 'crew') + '</span></div><button onclick="window._crewRemoveFromJob(' + jobId + ',' + a.crew_member_id + ')" class="text-red-400 hover:text-red-600"><i class="fas fa-times"></i></button></div>';
         }
         body += '</div></div>';
       }
@@ -2363,7 +2363,7 @@
     // Stats
     html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">';
     html += '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-gray-100">' + totalReferred + '</p><p class="text-[10px] text-gray-500">Referred Users</p></div>';
-    html += '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-green-600">$' + totalEarned.toFixed(2) + '</p><p class="text-[10px] text-gray-500">Total Earned</p></div>';
+    html += '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-emerald-400">$' + totalEarned.toFixed(2) + '</p><p class="text-[10px] text-gray-500">Total Earned</p></div>';
     html += '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-amber-600">$' + totalPending.toFixed(2) + '</p><p class="text-[10px] text-gray-500">Pending</p></div>';
     html += '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-purple-600">10%</p><p class="text-[10px] text-gray-500">Commission Rate</p></div>';
     html += '</div>';
@@ -2413,8 +2413,8 @@
       html += '<div class="overflow-x-auto"><table class="w-full"><thead><tr class="bg-[#0A0A0A] text-xs text-gray-500 uppercase"><th class="px-4 py-3 text-left">From</th><th class="px-4 py-3 text-right">Payment</th><th class="px-4 py-3 text-right">Commission</th><th class="px-4 py-3 text-center">Status</th><th class="px-4 py-3 text-left">Date</th></tr></thead><tbody>';
       for (var j = 0; j < earnings.length; j++) {
         var e = earnings[j];
-        var statusBg = e.status === 'pending' ? 'bg-amber-100 text-amber-700' : e.status === 'credited' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700';
-        html += '<tr class="border-b border-white/5"><td class="px-4 py-3 text-sm text-gray-100">' + (e.referred_name || e.referred_company || 'User') + '</td><td class="px-4 py-3 text-right text-sm text-gray-400">$' + (e.amount_paid || 0).toFixed(2) + '</td><td class="px-4 py-3 text-right text-sm font-bold text-green-600">$' + (e.commission_earned || 0).toFixed(2) + '</td><td class="px-4 py-3 text-center"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold ' + statusBg + ' capitalize">' + (e.status || 'pending') + '</span></td><td class="px-4 py-3 text-xs text-gray-400">' + fmtDate(e.created_at) + '</td></tr>';
+        var statusBg = e.status === 'pending' ? 'bg-cyan-500/15 text-cyan-400' : e.status === 'credited' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-blue-500/15 text-blue-400';
+        html += '<tr class="border-b border-white/5"><td class="px-4 py-3 text-sm text-gray-100">' + (e.referred_name || e.referred_company || 'User') + '</td><td class="px-4 py-3 text-right text-sm text-gray-400">$' + (e.amount_paid || 0).toFixed(2) + '</td><td class="px-4 py-3 text-right text-sm font-bold text-emerald-400">$' + (e.commission_earned || 0).toFixed(2) + '</td><td class="px-4 py-3 text-center"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold ' + statusBg + ' capitalize">' + (e.status || 'pending') + '</span></td><td class="px-4 py-3 text-xs text-gray-400">' + fmtDate(e.created_at) + '</td></tr>';
       }
       html += '</tbody></table></div></div>';
     }
@@ -2472,7 +2472,7 @@
     html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">';
     html += '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-gray-100">' + _catalogProducts.length + '</p><p class="text-[10px] text-gray-500">Total Products</p></div>';
     html += '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-blue-600">' + Object.keys(cats).length + '</p><p class="text-[10px] text-gray-500">Categories</p></div>';
-    html += '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-green-600">' + _catalogProducts.filter(function(p) { return p.is_default; }).length + '</p><p class="text-[10px] text-gray-500">Default Items</p></div>';
+    html += '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-emerald-400">' + _catalogProducts.filter(function(p) { return p.is_default; }).length + '</p><p class="text-[10px] text-gray-500">Default Items</p></div>';
     html += '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-amber-600">$' + totalValue.toFixed(0) + '</p><p class="text-[10px] text-gray-500">Avg Unit Value</p></div>';
     html += '</div>';
 
@@ -2501,7 +2501,7 @@
           html += '<div class="px-5 py-3 flex items-center justify-between hover:bg-[#111111]/5">';
           html += '<div class="min-w-0 flex-1">';
           html += '<div class="flex items-center gap-2"><p class="font-medium text-sm text-gray-100">' + p.name + '</p>';
-          if (p.is_default) html += '<span class="px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded text-[9px] font-bold">DEFAULT</span>';
+          if (p.is_default) html += '<span class="px-1.5 py-0.5 bg-blue-500/15 text-blue-400 rounded text-[9px] font-bold">DEFAULT</span>';
           if (p.sku) html += '<span class="text-[10px] text-gray-400 font-mono">' + p.sku + '</span>';
           html += '</div>';
           html += '<div class="flex items-center gap-3 mt-0.5 text-xs text-gray-500">';
@@ -2627,7 +2627,7 @@
     html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">';
     html += '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-gray-100">' + lists.length + '</p><p class="text-[10px] text-gray-500">Lists</p></div>';
     html += '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-blue-600">' + totalContacts + '</p><p class="text-[10px] text-gray-500">Total Contacts</p></div>';
-    html += '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-green-600">0</p><p class="text-[10px] text-gray-500">Campaigns Sent</p></div>';
+    html += '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-emerald-400">0</p><p class="text-[10px] text-gray-500">Campaigns Sent</p></div>';
     html += '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-amber-600">0%</p><p class="text-[10px] text-gray-500">Open Rate</p></div>';
     html += '</div>';
 
@@ -2763,7 +2763,7 @@
       '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-blue-600">' + (cols[0].items.length + cols[1].items.length) + '</p><p class="text-[10px] text-gray-500">Active Leads</p></div>' +
       '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-purple-600">' + cols[2].items.length + '</p><p class="text-[10px] text-gray-500">Open Proposals</p></div>' +
       '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-gray-300">' + money(openValue) + '</p><p class="text-[10px] text-gray-500">Pipeline Value</p></div>' +
-      '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-green-600">' + money(wonValue) + '</p><p class="text-[10px] text-gray-500">Won Value</p></div></div>';
+      '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-emerald-400">' + money(wonValue) + '</p><p class="text-[10px] text-gray-500">Won Value</p></div></div>';
 
     html += '<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">';
     cols.forEach(function(col) {

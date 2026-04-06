@@ -170,8 +170,8 @@
     if (!el) return;
     el.innerHTML =
       '<div class="d2d-stat"><div class="d2d-stat-val text-sky-600">' + (stats.total_turfs || 0) + '</div><div class="d2d-stat-label">Turfs</div></div>' +
-      '<div class="d2d-stat"><div class="d2d-stat-val text-green-600">' + (stats.total_yes || 0) + '</div><div class="d2d-stat-label">Yes</div></div>' +
-      '<div class="d2d-stat"><div class="d2d-stat-val text-red-600">' + (stats.total_no || 0) + '</div><div class="d2d-stat-label">No</div></div>' +
+      '<div class="d2d-stat"><div class="d2d-stat-val text-emerald-400">' + (stats.total_yes || 0) + '</div><div class="d2d-stat-label">Yes</div></div>' +
+      '<div class="d2d-stat"><div class="d2d-stat-val text-red-400">' + (stats.total_no || 0) + '</div><div class="d2d-stat-label">No</div></div>' +
       '<div class="d2d-stat"><div class="d2d-stat-val text-amber-500">' + (stats.total_no_answer || 0) + '</div><div class="d2d-stat-label">No Ans</div></div>';
   }
 
@@ -316,9 +316,9 @@
         try { perms = m.permissions ? JSON.parse(m.permissions) : null; } catch(e) {}
         var permBadges = '';
         if (perms) {
-          if (perms.d2d === 'assigned') permBadges += '<span class="px-1.5 py-0.5 bg-amber-50 text-amber-700 rounded text-[9px] font-semibold">Assigned Turfs Only</span> ';
-          if (perms.reports === false) permBadges += '<span class="px-1.5 py-0.5 bg-red-50 text-red-600 rounded text-[9px] font-semibold">No Reports</span> ';
-          if (perms.crm === false) permBadges += '<span class="px-1.5 py-0.5 bg-red-50 text-red-600 rounded text-[9px] font-semibold">No CRM</span> ';
+          if (perms.d2d === 'assigned') permBadges += '<span class="px-1.5 py-0.5 bg-cyan-500/10 text-amber-700 rounded text-[9px] font-semibold">Assigned Turfs Only</span> ';
+          if (perms.reports === false) permBadges += '<span class="px-1.5 py-0.5 bg-red-500/10 text-red-400 rounded text-[9px] font-semibold">No Reports</span> ';
+          if (perms.crm === false) permBadges += '<span class="px-1.5 py-0.5 bg-red-500/10 text-red-400 rounded text-[9px] font-semibold">No CRM</span> ';
         }
 
         html += '<div class="d2d-card">' +
@@ -341,7 +341,7 @@
           '<div class="mt-2 grid grid-cols-4 gap-1 text-center text-[10px]">' +
             '<div class="bg-sky-50 text-sky-700 rounded px-1 py-1"><div class="font-bold text-sm">' + (m.turf_count||0) + '</div><div>Turfs</div></div>' +
             '<div class="bg-[#0A0A0A] text-gray-300 rounded px-1 py-1"><div class="font-bold text-sm">' + totalKnocks + '</div><div>Knocks</div></div>' +
-            '<div class="bg-green-50 text-green-700 rounded px-1 py-1"><div class="font-bold text-sm">' + yesCount + '</div><div>Yes</div></div>' +
+            '<div class="bg-emerald-500/10 text-green-700 rounded px-1 py-1"><div class="font-bold text-sm">' + yesCount + '</div><div>Yes</div></div>' +
             '<div class="bg-purple-50 text-purple-700 rounded px-1 py-1"><div class="font-bold text-sm">' + convRate + '%</div><div>Rate</div></div>' +
           '</div>' +
           // Last activity + permissions badges

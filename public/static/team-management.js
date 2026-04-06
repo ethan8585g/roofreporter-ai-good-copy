@@ -108,18 +108,18 @@ function renderTeam() {
       html += '<td class="px-4 py-3">';
       html += m.role === 'admin'
         ? '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-100 text-purple-700"><i class="fas fa-shield-alt mr-1"></i>Admin</span>'
-        : '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-700"><i class="fas fa-user mr-1"></i>Member</span>';
+        : '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-500/100/15 text-blue-400"><i class="fas fa-user mr-1"></i>Member</span>';
       html += '</td>';
-      html += '<td class="px-4 py-3"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700"><i class="fas fa-circle text-green-500 mr-1" style="font-size:6px"></i>Active</span></td>';
+      html += '<td class="px-4 py-3"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-400"><i class="fas fa-circle text-green-500 mr-1" style="font-size:6px"></i>Active</span></td>';
       html += '<td class="px-4 py-3 text-gray-500 text-xs">' + (m.joined_at ? new Date(m.joined_at).toLocaleDateString() : '-') + '</td>';
       html += '<td class="px-4 py-3 text-right">';
       html += '  <div class="flex items-center justify-end gap-1">';
-      html += '    <button onclick="toggleRole(' + m.id + ',\'' + (m.role === 'admin' ? 'member' : 'admin') + '\')" class="text-gray-400 hover:text-blue-600 p-1.5 rounded transition-colors" title="' + (m.role === 'admin' ? 'Demote to Member' : 'Promote to Admin') + '">';
+      html += '    <button onclick="toggleRole(' + m.id + ',\'' + (m.role === 'admin' ? 'member' : 'admin') + '\')" class="text-gray-400 hover:text-blue-400 p-1.5 rounded transition-colors" title="' + (m.role === 'admin' ? 'Demote to Member' : 'Promote to Admin') + '">';
       html += '      <i class="fas fa-' + (m.role === 'admin' ? 'user' : 'shield-alt') + '"></i>';
       html += '    </button>';
       html += '    <button onclick="showPermModal(' + m.id + ',\'' + escHtml(m.name) + '\')" class="text-gray-400 hover:text-teal-600 p-1.5 rounded transition-colors" title="Edit Permissions"><i class="fas fa-sliders-h"></i></button>';
-      html += '    <button onclick="suspendMember(' + m.id + ')" class="text-gray-400 hover:text-amber-600 p-1.5 rounded transition-colors" title="Suspend"><i class="fas fa-pause"></i></button>';
-      html += '    <button onclick="removeMember(' + m.id + ',\'' + escHtml(m.name) + '\')" class="text-gray-400 hover:text-red-600 p-1.5 rounded transition-colors" title="Remove"><i class="fas fa-user-minus"></i></button>';
+      html += '    <button onclick="suspendMember(' + m.id + ')" class="text-gray-400 hover:text-cyan-400 p-1.5 rounded transition-colors" title="Suspend"><i class="fas fa-pause"></i></button>';
+      html += '    <button onclick="removeMember(' + m.id + ',\'' + escHtml(m.name) + '\')" class="text-gray-400 hover:text-red-400 p-1.5 rounded transition-colors" title="Remove"><i class="fas fa-user-minus"></i></button>';
       html += '  </div>';
       html += '</td>';
       html += '</tr>';
@@ -138,7 +138,7 @@ function renderTeam() {
   if (suspendedMembers.length > 0) {
     html += '<div class="mb-6">';
     html += '<h3 class="text-sm font-bold text-gray-500 uppercase tracking-wide mb-3"><i class="fas fa-pause-circle mr-1"></i>Suspended (' + suspendedMembers.length + ')</h3>';
-    html += '<div class="bg-amber-50 border border-amber-200 rounded-xl overflow-hidden">';
+    html += '<div class="bg-cyan-500/10 border border-amber-200 rounded-xl overflow-hidden">';
     suspendedMembers.forEach(function(m) {
       html += '<div class="flex items-center justify-between px-4 py-3 border-b border-amber-100 last:border-0">';
       html += '  <div class="flex items-center gap-3">';
@@ -146,8 +146,8 @@ function renderTeam() {
       html += '    <div><span class="font-medium text-gray-300">' + escHtml(m.name) + '</span><span class="text-xs text-gray-400 ml-2">' + escHtml(m.email) + '</span></div>';
       html += '  </div>';
       html += '  <div class="flex gap-2">';
-      html += '    <button onclick="reactivateMember(' + m.id + ')" class="text-xs bg-green-500 hover:bg-green-600 text-white py-1 px-3 rounded font-semibold"><i class="fas fa-play mr-1"></i>Reactivate</button>';
-      html += '    <button onclick="removeMember(' + m.id + ',\'' + escHtml(m.name) + '\')" class="text-xs bg-red-500 hover:bg-red-600 text-white py-1 px-3 rounded font-semibold"><i class="fas fa-trash mr-1"></i>Remove</button>';
+      html += '    <button onclick="reactivateMember(' + m.id + ')" class="text-xs bg-emerald-500/100 hover:bg-green-600 text-white py-1 px-3 rounded font-semibold"><i class="fas fa-play mr-1"></i>Reactivate</button>';
+      html += '    <button onclick="removeMember(' + m.id + ',\'' + escHtml(m.name) + '\')" class="text-xs bg-red-500/100 hover:bg-red-600 text-white py-1 px-3 rounded font-semibold"><i class="fas fa-trash mr-1"></i>Remove</button>';
       html += '  </div>';
       html += '</div>';
     });
@@ -158,7 +158,7 @@ function renderTeam() {
   if (pendingInvites.length > 0) {
     html += '<div class="mb-6">';
     html += '<h3 class="text-sm font-bold text-gray-500 uppercase tracking-wide mb-3"><i class="fas fa-envelope-open-text mr-1"></i>Pending Invitations (' + pendingInvites.length + ')</h3>';
-    html += '<div class="bg-blue-50 border border-blue-200 rounded-xl overflow-hidden">';
+    html += '<div class="bg-blue-500/10 border border-blue-200 rounded-xl overflow-hidden">';
     pendingInvites.forEach(function(inv) {
       html += '<div class="flex items-center justify-between px-4 py-3 border-b border-blue-100 last:border-0">';
       html += '  <div>';
@@ -281,7 +281,7 @@ async function savePermissions() {
     });
     var data = await res.json();
     if (res.ok && data.success) {
-      msg.innerHTML = '<div class="text-green-600 text-sm"><i class="fas fa-check-circle mr-1"></i>Permissions saved</div>';
+      msg.innerHTML = '<div class="text-emerald-400 text-sm"><i class="fas fa-check-circle mr-1"></i>Permissions saved</div>';
       setTimeout(async function() { hidePermModal(); await loadTeamData(); renderTeam(); }, 900);
     } else {
       msg.innerHTML = '<div class="text-red-500 text-sm">' + (data.error || 'Save failed') + '</div>';
@@ -395,13 +395,13 @@ async function sendInvite(e) {
     });
     var data = await res.json();
     if (res.ok && data.success) {
-      msg.innerHTML = '<div class="bg-green-50 border border-green-200 rounded-lg p-3 text-green-700 text-sm"><i class="fas fa-check-circle mr-1"></i>' + data.message + '</div>';
+      msg.innerHTML = '<div class="bg-emerald-500/10 border border-green-200 rounded-lg p-3 text-green-700 text-sm"><i class="fas fa-check-circle mr-1"></i>' + data.message + '</div>';
       setTimeout(async function() { hideInviteModal(); await loadTeamData(); renderTeam(); }, 1500);
     } else {
-      msg.innerHTML = '<div class="bg-red-50 border border-red-200 rounded-lg p-3 text-red-700 text-sm">' + (data.error || 'Failed to send invite') + '</div>';
+      msg.innerHTML = '<div class="bg-red-500/10 border border-red-200 rounded-lg p-3 text-red-700 text-sm">' + (data.error || 'Failed to send invite') + '</div>';
     }
   } catch(err) {
-    msg.innerHTML = '<div class="bg-red-50 border border-red-200 rounded-lg p-3 text-red-700 text-sm">Network error</div>';
+    msg.innerHTML = '<div class="bg-red-500/10 border border-red-200 rounded-lg p-3 text-red-700 text-sm">Network error</div>';
   }
   btn.disabled = false; btn.innerHTML = '<i class="fas fa-paper-plane mr-1"></i>Send Invite';
 }

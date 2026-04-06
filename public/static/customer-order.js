@@ -96,7 +96,7 @@ function initMap() {
     } else {
       console.error('[Maps] Google Maps API failed to load after 30s');
       const mapEl = document.getElementById('orderMap');
-      if (mapEl) mapEl.innerHTML = '<div class="flex items-center justify-center h-full bg-red-50 rounded-xl"><p class="text-red-600 text-sm"><i class="fas fa-exclamation-triangle mr-2"></i>Map failed to load. Please refresh the page.</p></div>';
+      if (mapEl) mapEl.innerHTML = '<div class="flex items-center justify-center h-full bg-red-500/10 rounded-xl"><p class="text-red-400 text-sm"><i class="fas fa-exclamation-triangle mr-2"></i>Map failed to load. Please refresh the page.</p></div>';
     }
     return;
   }
@@ -251,7 +251,7 @@ function placeMarker(lat, lng) {
   const nextBtn = document.getElementById('pinNextBtn');
   if (nextBtn) {
     nextBtn.disabled = false;
-    nextBtn.className = 'flex-1 py-3 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl transition-all shadow-lg text-base';
+    nextBtn.className = 'flex-1 py-3 bg-emerald-600 hover:bg-brand-700 text-white font-bold rounded-xl transition-all shadow-lg text-base';
   }
 
   const msgEl = document.getElementById('orderMsg');
@@ -265,7 +265,7 @@ function updateCoordDisplay(lat, lng) {
       <div class="flex items-center gap-2 text-sm">
         <i class="fas fa-map-pin text-red-500"></i>
         <span class="font-mono font-semibold text-gray-100">${lat}, ${lng}</span>
-        <span class="text-green-600 font-medium"><i class="fas fa-check-circle mr-1"></i>Pin placed</span>
+        <span class="text-emerald-400 font-medium"><i class="fas fa-check-circle mr-1"></i>Pin placed</span>
       </div>`;
     display.classList.remove('hidden');
   }
@@ -290,7 +290,7 @@ async function reverseGeocode(lat, lng) {
       parseAddressComponents(result.address_components, result.formatted_address);
       const addrDisplay = document.getElementById('resolvedAddress');
       if (addrDisplay) {
-        addrDisplay.innerHTML = `<i class="fas fa-map-marker-alt text-brand-500 mr-1"></i><span class="text-sm text-gray-300 font-medium">${orderState.address}</span>`;
+        addrDisplay.innerHTML = `<i class="fas fa-map-marker-alt text-emerald-400 mr-1"></i><span class="text-sm text-gray-300 font-medium">${orderState.address}</span>`;
       }
     }
   } catch (e) {
@@ -349,7 +349,7 @@ function renderOrderPage() {
       ${steps.map((s, i) => {
         const done = i < stepIdx;
         const active = i === stepIdx;
-        const cls = done ? 'bg-brand-100 text-brand-700' : active ? 'bg-brand-600 text-white' : 'bg-white/5 text-gray-400';
+        const cls = done ? 'bg-brand-100 text-brand-700' : active ? 'bg-emerald-600 text-white' : 'bg-white/5 text-gray-400';
         return `
           <div class="flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold ${cls}">
             <i class="fas ${done ? 'fa-check-circle' : s.icon}"></i> ${s.label}
@@ -385,23 +385,23 @@ function renderPinStep(root, progressBar) {
 
       <!-- Credits Banner -->
       ${isTrialAvailable ? `
-        <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
+        <div class="bg-blue-500/10 border border-blue-200 rounded-xl p-4 mb-6">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-3">
-              <div class="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center"><i class="fas fa-gift text-blue-600"></i></div>
+              <div class="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center"><i class="fas fa-gift text-blue-400"></i></div>
               <div>
                 <p class="font-semibold text-blue-800"><i class="fas fa-star text-yellow-500 mr-1"></i>Free Trial: ${freeTrialRemaining} reports remaining!</p>
-                <p class="text-sm text-blue-600">No credit card needed</p>
+                <p class="text-sm text-blue-400">No credit card needed</p>
               </div>
             </div>
             <span class="bg-blue-600 text-white px-3 py-1.5 rounded-full text-lg font-bold">${freeTrialRemaining}</span>
           </div>
         </div>
       ` : paidCredits > 0 ? `
-        <div class="bg-green-50 border border-green-200 rounded-xl p-4 mb-6">
+        <div class="bg-emerald-500/10 border border-green-200 rounded-xl p-4 mb-6">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-3">
-              <div class="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center"><i class="fas fa-coins text-green-600"></i></div>
+              <div class="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center"><i class="fas fa-coins text-emerald-400"></i></div>
               <div>
                 <p class="font-semibold text-green-800">You have ${paidCredits} paid credit${paidCredits !== 1 ? 's' : ''} remaining</p>
               </div>
@@ -413,13 +413,13 @@ function renderPinStep(root, progressBar) {
         <div class="bg-gradient-to-r from-brand-800 to-brand-900 rounded-xl p-5 mb-6 shadow-lg">
           <div class="flex items-center justify-between gap-4">
             <div class="flex items-center gap-4">
-              <div class="w-12 h-12 bg-amber-500 rounded-xl flex items-center justify-center shadow"><i class="fas fa-crown text-white text-xl"></i></div>
+              <div class="w-12 h-12 bg-cyan-500/100 rounded-xl flex items-center justify-center shadow"><i class="fas fa-crown text-white text-xl"></i></div>
               <div>
                 <p class="font-bold text-white text-base">Your 3 Free Trials Are Used Up!</p>
                 <p class="text-sm text-brand-200 mt-0.5">Credit packs start at <strong class="text-amber-400">$5.00/report (100-pack)</strong></p>
               </div>
             </div>
-            <a href="/pricing" class="bg-amber-500 hover:bg-amber-400 text-white px-5 py-2.5 rounded-xl text-sm font-black transition-all shadow-lg"><i class="fas fa-tags mr-1.5"></i>Buy Credits</a>
+            <a href="/pricing" class="bg-cyan-500/100 hover:bg-amber-400 text-white px-5 py-2.5 rounded-xl text-sm font-black transition-all shadow-lg"><i class="fas fa-tags mr-1.5"></i>Buy Credits</a>
           </div>
         </div>
       `}
@@ -445,17 +445,17 @@ function renderPinStep(root, progressBar) {
           </div>
 
           <div id="coordDisplay" class="hidden bg-[#0A0A0A] border border-white/10 rounded-xl px-4 py-3"></div>
-          <div id="resolvedAddress" class="hidden bg-blue-50 border border-blue-100 rounded-xl px-4 py-2.5"></div>
+          <div id="resolvedAddress" class="hidden bg-blue-500/10 border border-blue-100 rounded-xl px-4 py-2.5"></div>
 
           <div class="grid grid-cols-2 gap-4">
             <div>
-              <label class="block text-sm font-semibold text-gray-300 mb-1"><i class="fas fa-arrows-alt-v mr-1 text-brand-500"></i>Latitude *</label>
+              <label class="block text-sm font-semibold text-gray-300 mb-1"><i class="fas fa-arrows-alt-v mr-1 text-emerald-400"></i>Latitude *</label>
               <input type="number" step="any" id="orderLat" placeholder="e.g. 53.5461" value="${orderState.lat}"
                 class="w-full px-4 py-3 border border-white/15 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-sm font-mono"
                 oninput="handleManualCoordInput()">
             </div>
             <div>
-              <label class="block text-sm font-semibold text-gray-300 mb-1"><i class="fas fa-arrows-alt-h mr-1 text-brand-500"></i>Longitude *</label>
+              <label class="block text-sm font-semibold text-gray-300 mb-1"><i class="fas fa-arrows-alt-h mr-1 text-emerald-400"></i>Longitude *</label>
               <input type="number" step="any" id="orderLng" placeholder="e.g. -113.4938" value="${orderState.lng}"
                 class="w-full px-4 py-3 border border-white/15 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-sm font-mono"
                 oninput="handleManualCoordInput()">
@@ -489,7 +489,7 @@ function renderPinStep(root, progressBar) {
           <div id="orderMsg" class="hidden p-4 rounded-xl text-sm"></div>
 
           <button onclick="goToTrace()" id="pinNextBtn"
-            class="w-full py-3 ${orderState.pinPlaced ? 'bg-brand-600 hover:bg-brand-700 text-white' : 'bg-gray-200 text-gray-400 cursor-not-allowed'} font-bold rounded-xl transition-all shadow-lg text-base"
+            class="w-full py-3 ${orderState.pinPlaced ? 'bg-emerald-600 hover:bg-brand-700 text-white' : 'bg-gray-200 text-gray-400 cursor-not-allowed'} font-bold rounded-xl transition-all shadow-lg text-base"
             ${!orderState.pinPlaced ? 'disabled' : ''}>
             <i class="fas fa-arrow-right mr-2"></i>Next: Trace Roof Outline
           </button>
@@ -561,7 +561,7 @@ function renderTraceStep(root, progressBar) {
           <div class="bg-[#111111] rounded-xl shadow-sm border border-white/10 p-4">
             <h4 class="text-xs font-bold text-gray-500 uppercase tracking-wide mb-3">Summary</h4>
             <div class="space-y-2 text-sm">
-              <div class="flex justify-between"><span class="text-gray-500">Eaves</span><span id="summary-eaves" class="font-semibold ${eavesClosed ? 'text-green-600' : 'text-gray-400'}">${eavesClosed ? 'Closed' : eavesCount + ' pts'}</span></div>
+              <div class="flex justify-between"><span class="text-gray-500">Eaves</span><span id="summary-eaves" class="font-semibold ${eavesClosed ? 'text-emerald-400' : 'text-gray-400'}">${eavesClosed ? 'Closed' : eavesCount + ' pts'}</span></div>
               <div class="flex justify-between"><span class="text-gray-500">Ridges</span><span id="summary-ridges" class="font-semibold">${ridgeCount}</span></div>
               <div class="flex justify-between"><span class="text-gray-500">Hips</span><span id="summary-hips" class="font-semibold">${hipCount}</span></div>
               <div class="flex justify-between"><span class="text-gray-500">Valleys</span><span id="summary-valleys" class="font-semibold">${valleyCount}</span></div>
@@ -576,7 +576,7 @@ function renderTraceStep(root, progressBar) {
 
           <div class="space-y-2">
             <button onclick="undoLastTrace()" class="w-full px-3 py-2 bg-white/5 hover:bg-gray-200 text-gray-400 rounded-lg text-sm font-medium"><i class="fas fa-undo mr-1"></i>Undo</button>
-            <button onclick="clearAllTraces()" class="w-full px-3 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-sm font-medium"><i class="fas fa-trash mr-1"></i>Clear All</button>
+            <button onclick="clearAllTraces()" class="w-full px-3 py-2 bg-red-500/10 hover:bg-red-100 text-red-400 rounded-lg text-sm font-medium"><i class="fas fa-trash mr-1"></i>Clear All</button>
           </div>
         </div>
 
@@ -606,7 +606,7 @@ function renderTraceStep(root, progressBar) {
           </button>
           <button onclick="confirmTrace()" id="traceNextBtn"
             class="px-6 py-3 rounded-xl font-bold text-sm transition-all shadow-md flex items-center gap-2
-              ${eavesClosed ? 'bg-brand-600 hover:bg-brand-700 text-white' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}"
+              ${eavesClosed ? 'bg-emerald-600 hover:bg-brand-700 text-white' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}"
             ${!eavesClosed ? 'disabled' : ''}>
             <i class="fas fa-check-circle"></i>
             Confirm Trace & Continue
@@ -667,7 +667,7 @@ function renderReviewStep(root, progressBar) {
               <div class="animate-spin rounded-full h-8 w-8 border-t-3 border-b-3 border-blue-600"></div>
               <div>
                 <h4 class="font-bold text-blue-800">Processing Your Roof Trace...</h4>
-                <p class="text-sm text-blue-600 mt-0.5">Preparing your report data. This only takes a moment.</p>
+                <p class="text-sm text-blue-400 mt-0.5">Preparing your report data. This only takes a moment.</p>
               </div>
             </div>
             <div class="mt-4 w-full bg-blue-200 rounded-full h-1.5">
@@ -675,12 +675,12 @@ function renderReviewStep(root, progressBar) {
             </div>
           </div>
           ` : mError ? `
-          <div class="bg-red-50 rounded-xl border border-red-200 p-5">
+          <div class="bg-red-500/10 rounded-xl border border-red-200 p-5">
             <div class="flex items-center gap-2 mb-2">
               <i class="fas fa-exclamation-triangle text-red-500"></i>
               <h4 class="font-bold text-red-700">Processing Error</h4>
             </div>
-            <p class="text-sm text-red-600">${mError}</p>
+            <p class="text-sm text-red-400">${mError}</p>
             <button onclick="retryMeasurement()" class="mt-3 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-semibold">
               <i class="fas fa-redo mr-1"></i>Retry
             </button>
@@ -690,11 +690,11 @@ function renderReviewStep(root, progressBar) {
           <div class="bg-gradient-to-br from-emerald-50 to-green-50 rounded-xl border-2 border-green-300 p-5">
             <div class="flex items-center gap-3 mb-3">
               <div class="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
-                <i class="fas fa-check-circle text-green-600 text-xl"></i>
+                <i class="fas fa-check-circle text-emerald-400 text-xl"></i>
               </div>
               <div>
                 <h4 class="font-bold text-green-800">Roof Trace Captured Successfully</h4>
-                <p class="text-sm text-green-600">Your trace data is ready. All detailed measurements, edge breakdowns, material estimates, and diagrams will be included in your professional report.</p>
+                <p class="text-sm text-emerald-400">Your trace data is ready. All detailed measurements, edge breakdowns, material estimates, and diagrams will be included in your professional report.</p>
               </div>
             </div>
             <div class="flex items-center gap-4 text-xs text-gray-500 pt-3 border-t border-green-200">
@@ -766,7 +766,7 @@ function renderReviewStep(root, progressBar) {
                 <i class="fas fa-coins mr-2"></i>Use Credit (${paidCredits} left)
               </button>
             ` : `
-              <button onclick="payWithSquare()" id="squareBtn" class="flex-1 py-3 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl transition-all shadow-lg text-base">
+              <button onclick="payWithSquare()" id="squareBtn" class="flex-1 py-3 bg-emerald-600 hover:bg-brand-700 text-white font-bold rounded-xl transition-all shadow-lg text-base">
                 <i class="fas fa-credit-card mr-2"></i>Pay $5 with Square
               </button>
             `}
@@ -1101,7 +1101,7 @@ function updateTraceUI() {
     const el = document.getElementById(id);
     if (el) {
       el.textContent = val;
-      if (id === 'summary-eaves') el.className = 'font-semibold ' + (eavesClosed ? 'text-green-600' : 'text-gray-400');
+      if (id === 'summary-eaves') el.className = 'font-semibold ' + (eavesClosed ? 'text-emerald-400' : 'text-gray-400');
     }
   });
 
@@ -1172,9 +1172,9 @@ function updateTraceUI() {
   if (nextBtn) {
     nextBtn.disabled = !eavesClosed;
     if (eavesClosed) {
-      nextBtn.className = nextBtn.className.replace('bg-gray-200 text-gray-400 cursor-not-allowed', 'bg-brand-600 hover:bg-brand-700 text-white');
+      nextBtn.className = nextBtn.className.replace('bg-gray-200 text-gray-400 cursor-not-allowed', 'bg-emerald-600 hover:bg-brand-700 text-white');
     } else {
-      nextBtn.className = nextBtn.className.replace('bg-brand-600 hover:bg-brand-700 text-white', 'bg-gray-200 text-gray-400 cursor-not-allowed');
+      nextBtn.className = nextBtn.className.replace('bg-emerald-600 hover:bg-brand-700 text-white', 'bg-gray-200 text-gray-400 cursor-not-allowed');
     }
   }
 }
@@ -1358,8 +1358,8 @@ function showMsg(type, msg) {
   const el = document.getElementById('orderMsg');
   if (!el) return;
   el.className = type === 'error'
-    ? 'p-4 rounded-xl text-sm bg-red-50 text-red-700 border border-red-200'
-    : 'p-4 rounded-xl text-sm bg-green-50 text-green-700 border border-green-200';
+    ? 'p-4 rounded-xl text-sm bg-red-500/10 text-red-700 border border-red-200'
+    : 'p-4 rounded-xl text-sm bg-emerald-500/10 text-green-700 border border-green-200';
   el.innerHTML = msg;
   el.classList.remove('hidden');
 }
@@ -1395,7 +1395,7 @@ function updatePriceEstimate() {
   if (pricePerSq && grossSquares) {
     const estimate = grossSquares * pricePerSq;
     valueEl.textContent = '$' + estimate.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    valueEl.className = 'text-2xl font-black mt-1 text-amber-600';
+    valueEl.className = 'text-2xl font-black mt-1 text-cyan-400';
     if (boxEl) {
       const subEl = boxEl.querySelector('p:last-child');
       if (subEl) subEl.textContent = Math.round(grossSquares * 100).toLocaleString() + ' gross SF x $' + pricePerSq + '/sq';

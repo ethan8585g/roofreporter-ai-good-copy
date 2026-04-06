@@ -187,10 +187,10 @@
     var needsAttention = isConnect && state.phoneSetup && state.phoneSetup.connection_status !== 'connected';
     return '<button onclick="secSetTab(\'' + id + '\')" class="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium transition-all ' +
       (active ? 'bg-gradient-to-r from-[#111111] to-[#1a1a1a] text-white shadow-lg' :
-       needsAttention ? 'bg-amber-50 text-amber-700 border-2 border-amber-300 animate-pulse' :
+       needsAttention ? 'bg-cyan-500/10 text-amber-700 border-2 border-amber-300 animate-pulse' :
        'bg-[#111111] text-gray-400 hover:bg-[#111111]/5 border border-white/10') +
       '"><i class="fas ' + icon + ' text-xs"></i>' + label +
-      (needsAttention ? ' <span class="w-2 h-2 bg-amber-500 rounded-full"></span>' : '') +
+      (needsAttention ? ' <span class="w-2 h-2 bg-cyan-500/100 rounded-full"></span>' : '') +
       '</button>';
   }
   window.secSetTab = function(t) { state.activeTab = t; render(); if (t === 'calls') loadCalls(); if (t === 'leads') loadLeads(); if (t === 'messages') loadAndRenderMessages(); if (t === 'appointments') loadAndRenderAppointments(); if (t === 'callbacks') loadAndRenderCallbacks(); };
@@ -326,17 +326,17 @@
       '<div class="flex items-center justify-between flex-wrap gap-3">' +
         '<div class="flex items-center gap-3">' +
           '<div class="w-10 h-10 rounded-full flex items-center justify-center ' + (state.isActive ? 'bg-green-100' : 'bg-white/5') + '">' +
-            '<i class="fas ' + (state.isActive ? 'fa-check-circle text-green-600' : 'fa-pause-circle text-gray-400') + ' text-lg"></i></div>' +
+            '<i class="fas ' + (state.isActive ? 'fa-check-circle text-emerald-400' : 'fa-pause-circle text-gray-400') + ' text-lg"></i></div>' +
           '<div><p class="font-bold text-gray-100">' + (state.isActive ? 'Service ACTIVE' : 'Service PAUSED') + '</p>' +
             '<p class="text-xs text-gray-500">' +
-              (state.phoneSetup?.connection_status === 'connected' ? '<span class="text-green-600"><i class="fas fa-link mr-1"></i>Phone Connected</span>' :
-               state.phoneSetup?.assigned_phone_number ? '<span class="text-amber-600"><i class="fas fa-exclamation-triangle mr-1"></i>Phone Setup Incomplete</span>' :
+              (state.phoneSetup?.connection_status === 'connected' ? '<span class="text-emerald-400"><i class="fas fa-link mr-1"></i>Phone Connected</span>' :
+               state.phoneSetup?.assigned_phone_number ? '<span class="text-cyan-400"><i class="fas fa-exclamation-triangle mr-1"></i>Phone Setup Incomplete</span>' :
                '<span class="text-gray-400"><i class="fas fa-phone-slash mr-1"></i>No Phone Connected</span>') +
               ' &bull; ' + (state.subscription?.status || 'unknown') + '</p></div></div>' +
         '<div class="flex gap-2">' +
-          (state.phoneSetup?.connection_status !== 'connected' ? '<button onclick="secSetTab(\'connect\')" class="px-4 py-2 rounded-xl text-sm font-semibold bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition-all"><i class="fas fa-phone-alt mr-1"></i>Connect Phone</button>' : '') +
+          (state.phoneSetup?.connection_status !== 'connected' ? '<button onclick="secSetTab(\'connect\')" class="px-4 py-2 rounded-xl text-sm font-semibold bg-cyan-500/10 text-amber-700 border border-amber-200 hover:bg-amber-100 transition-all"><i class="fas fa-phone-alt mr-1"></i>Connect Phone</button>' : '') +
           '<button onclick="secToggle()" class="px-4 py-2 rounded-xl text-sm font-semibold transition-all ' +
-            (state.isActive ? 'bg-red-50 text-red-600 hover:bg-red-100 border border-red-200' : 'bg-green-50 text-green-600 hover:bg-green-100 border border-green-200') + '">' +
+            (state.isActive ? 'bg-red-500/10 text-red-400 hover:bg-red-100 border border-red-200' : 'bg-emerald-500/10 text-emerald-400 hover:bg-green-100 border border-green-200') + '">' +
             '<i class="fas ' + (state.isActive ? 'fa-pause' : 'fa-play') + ' mr-1"></i>' + (state.isActive ? 'Pause' : 'Activate') + '</button>' +
         '</div></div></div>';
 
@@ -453,8 +453,8 @@
           '<div class="flex-1 min-w-0">' +
             '<div class="flex items-center gap-2">' +
               '<p class="font-bold text-gray-100 text-sm">' + agent.name + '</p>' +
-              '<span class="px-1.5 py-0.5 rounded text-[9px] font-bold ' + (agent.gender === 'Female' ? 'bg-pink-100 text-pink-700' : 'bg-blue-100 text-blue-700') + '">' + agent.gender + '</span>' +
-              (agent.badge ? '<span class="px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded text-[9px] font-bold">' + agent.badge + '</span>' : '') +
+              '<span class="px-1.5 py-0.5 rounded text-[9px] font-bold ' + (agent.gender === 'Female' ? 'bg-pink-100 text-pink-700' : 'bg-blue-500/100/15 text-blue-400') + '">' + agent.gender + '</span>' +
+              (agent.badge ? '<span class="px-1.5 py-0.5 bg-cyan-500/15 text-cyan-400 rounded text-[9px] font-bold">' + agent.badge + '</span>' : '') +
             '</div>' +
             '<p class="text-xs text-gray-500 line-clamp-1">' + agent.desc + '</p>' +
           '</div>' +
@@ -608,7 +608,7 @@
     return '<div class="border border-white/10 rounded-xl p-4 bg-[#0A0A0A]" data-dir="' + i + '">' +
       '<div class="flex items-center justify-between mb-2">' +
         '<span class="font-semibold text-gray-300 text-sm"><i class="fas fa-folder text-amber-500 mr-1"></i>Directory ' + (i+1) + '</span>' +
-        (i >= 2 ? '<button onclick="secRemoveDir(' + i + ')" class="text-red-400 hover:text-red-600 text-xs"><i class="fas fa-trash mr-1"></i>Remove</button>' : '') +
+        (i >= 2 ? '<button onclick="secRemoveDir(' + i + ')" class="text-red-400 hover:text-red-400 text-xs"><i class="fas fa-trash mr-1"></i>Remove</button>' : '') +
       '</div>' +
       '<div class="grid grid-cols-1 md:grid-cols-3 gap-3">' +
         '<div><label class="block text-xs font-medium text-gray-400 mb-1">Department Name</label>' +
@@ -628,7 +628,7 @@
       '<div class="flex items-center gap-3 mb-2">' +
         '<div class="w-10 h-10 rounded-xl flex items-center justify-center" style="background:' + color + '20"><i class="fas ' + icon + '" style="color:' + color + ';font-size:16px"></i></div>' +
         '<div class="flex-1"><p class="font-bold text-gray-100 text-sm">' + title + '</p></div>' +
-        (selected ? '<span class="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center"><i class="fas fa-check text-white text-[10px]"></i></span>' : '<span class="w-5 h-5 border-2 border-white/15 rounded-full"></span>') +
+        (selected ? '<span class="w-5 h-5 bg-emerald-500/100 rounded-full flex items-center justify-center"><i class="fas fa-check text-white text-[10px]"></i></span>' : '<span class="w-5 h-5 border-2 border-white/15 rounded-full"></span>') +
       '</div>' +
       '<p class="text-xs text-gray-500 leading-relaxed">' + desc + '</p>' +
     '</div>';
@@ -672,7 +672,7 @@
     var html = '<div class="bg-[#111111] rounded-2xl border border-white/10 shadow-sm p-5 mb-6">' +
       '<div class="flex items-center justify-between mb-2">' +
         '<h3 class="font-bold text-gray-100 text-lg"><i class="fas fa-phone-alt text-sky-500 mr-2"></i>Connect Your Phone</h3>' +
-        (isConnected ? '<span class="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-semibold"><i class="fas fa-check-circle mr-1"></i>Connected</span>' :
+        (isConnected ? '<span class="px-3 py-1 bg-emerald-500/15 text-emerald-400 rounded-full text-sm font-semibold"><i class="fas fa-check-circle mr-1"></i>Connected</span>' :
          '<span class="px-3 py-1 bg-sky-50 text-sky-600 rounded-full text-sm font-medium">3 easy steps</span>') +
       '</div>' +
       '<p class="text-gray-500 text-sm mb-4">Enter your business phone number and the AI phone number you purchased from Twilio, Vonage, or Telnyx. Set up call forwarding, confirm, and your AI secretary goes live.</p>' +
@@ -683,9 +683,9 @@
       html += '<div class="flex-1">' +
         '<div class="flex items-center gap-2 mb-1">' +
           '<div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ' +
-            (s.done ? 'bg-green-500 text-white' : isCurrent ? 'bg-sky-500 text-white ring-4 ring-sky-100' : 'bg-gray-200 text-gray-400') + '">' +
+            (s.done ? 'bg-emerald-500/100 text-white' : isCurrent ? 'bg-sky-500 text-white ring-4 ring-sky-100' : 'bg-gray-200 text-gray-400') + '">' +
             (s.done ? '<i class="fas fa-check text-xs"></i>' : '<i class="fas ' + s.icon + ' text-xs"></i>') + '</div>' +
-          '<span class="text-xs font-semibold ' + (s.done ? 'text-green-600' : isCurrent ? 'text-sky-600' : 'text-gray-400') + '">' + s.label + '</span>' +
+          '<span class="text-xs font-semibold ' + (s.done ? 'text-emerald-400' : isCurrent ? 'text-sky-600' : 'text-gray-400') + '">' + s.label + '</span>' +
         '</div>' +
         '<div class="h-1.5 rounded-full ' + (s.done ? 'bg-green-400' : isCurrent ? 'bg-sky-400' : 'bg-gray-200') + '"></div>' +
       '</div>';
@@ -748,7 +748,7 @@
           '</div>' +
 
           // Purchase help
-          '<div class="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6">' +
+          '<div class="bg-cyan-500/10 border border-amber-200 rounded-xl p-4 mb-6">' +
             '<p class="text-sm font-semibold text-amber-800 mb-2"><i class="fas fa-lightbulb text-amber-500 mr-1"></i>Don\'t have an AI phone number yet?</p>' +
             '<p class="text-xs text-amber-700 mb-2">You need to purchase a phone number from one of these VoIP/SIP providers to use with LiveKit:</p>' +
             '<div class="flex flex-wrap gap-2">' +
@@ -757,7 +757,7 @@
               '<a href="https://telnyx.com/products/phone-numbers" target="_blank" class="text-xs bg-[#111111] border border-amber-200 rounded-lg px-3 py-1.5 text-amber-700 hover:bg-amber-100 font-medium"><i class="fas fa-external-link-alt mr-1"></i>Telnyx</a>' +
               '<a href="https://docs.livekit.io/agents/quickstarts/sip/" target="_blank" class="text-xs bg-[#111111] border border-amber-200 rounded-lg px-3 py-1.5 text-amber-700 hover:bg-amber-100 font-medium"><i class="fas fa-external-link-alt mr-1"></i>LiveKit SIP</a>' +
             '</div>' +
-            '<p class="text-xs text-amber-600 mt-2">Pre-configured dev number: <strong class="font-mono">+1 (484) 964-9758</strong> (LiveKit-provided)</p>' +
+            '<p class="text-xs text-cyan-400 mt-2">Pre-configured dev number: <strong class="font-mono">+1 (484) 964-9758</strong> (LiveKit-provided)</p>' +
           '</div>' +
 
           '<button onclick="qcSavePhones()" id="qcSaveBtn" class="w-full py-4 bg-sky-500 text-white rounded-2xl font-bold text-base hover:bg-sky-600 transition-all shadow-lg hover:shadow-xl">' +
@@ -911,7 +911,7 @@
 
           // Confirm + Activate button
           '<div class="mt-6 text-center">' +
-            '<button onclick="qcActivate()" id="qcActivateBtn" class="w-full py-4 bg-green-500 text-white rounded-2xl font-bold text-base hover:bg-green-600 transition-all shadow-lg hover:shadow-xl">' +
+            '<button onclick="qcActivate()" id="qcActivateBtn" class="w-full py-4 bg-emerald-500/100 text-white rounded-2xl font-bold text-base hover:bg-green-600 transition-all shadow-lg hover:shadow-xl">' +
               '<i class="fas fa-check-circle mr-2"></i>I\'ve Set Up Call Forwarding — Confirm & Activate</button>' +
             '<p class="text-xs text-gray-400 mt-3">This will save your configuration and deploy the AI agent to your LiveKit account.</p>' +
           '</div>' +
@@ -975,37 +975,37 @@
   function renderGenericForwarding(aiNumber) {
     var formattedNum = formatPhone(aiNumber);
     return '<div class="bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-300 rounded-xl p-5 mb-4">' +
-      '<div class="flex items-center gap-2 mb-3"><i class="fas fa-info-circle text-blue-600"></i><span class="font-bold text-blue-800">How to Set Up Call Forwarding</span></div>' +
+      '<div class="flex items-center gap-2 mb-3"><i class="fas fa-info-circle text-blue-400"></i><span class="font-bold text-blue-800">How to Set Up Call Forwarding</span></div>' +
       '<p class="text-sm text-blue-700 mb-3">You need to set up <strong>conditional call forwarding</strong> (forward when no answer / busy) with your mobile carrier so unanswered calls go to your AI secretary.</p>' +
       '<div class="space-y-3">' +
         '<div class="flex items-start gap-3">' +
-          '<span class="flex-shrink-0 w-6 h-6 rounded-full bg-blue-500 text-white flex items-center justify-center text-xs font-bold">1</span>' +
+          '<span class="flex-shrink-0 w-6 h-6 rounded-full bg-blue-500/100 text-white flex items-center justify-center text-xs font-bold">1</span>' +
           '<div><p class="text-sm text-blue-800 font-semibold">Find your carrier\'s forwarding instructions</p>' +
-            '<p class="text-xs text-blue-600 mt-1">Search: <em>"[Your Carrier] set up conditional call forwarding"</em> or call your carrier\'s customer service line.</p>' +
+            '<p class="text-xs text-blue-400 mt-1">Search: <em>"[Your Carrier] set up conditional call forwarding"</em> or call your carrier\'s customer service line.</p>' +
             '<div class="flex flex-wrap gap-2 mt-2">' +
-              '<a href="https://www.google.com/search?q=Telus+conditional+call+forwarding" target="_blank" class="text-xs bg-[#111111] border border-blue-200 rounded-lg px-3 py-1 text-blue-600 hover:bg-blue-50">Telus</a>' +
-              '<a href="https://www.google.com/search?q=Rogers+conditional+call+forwarding" target="_blank" class="text-xs bg-[#111111] border border-blue-200 rounded-lg px-3 py-1 text-blue-600 hover:bg-blue-50">Rogers</a>' +
-              '<a href="https://www.google.com/search?q=Bell+conditional+call+forwarding" target="_blank" class="text-xs bg-[#111111] border border-blue-200 rounded-lg px-3 py-1 text-blue-600 hover:bg-blue-50">Bell</a>' +
-              '<a href="https://www.google.com/search?q=Koodo+conditional+call+forwarding" target="_blank" class="text-xs bg-[#111111] border border-blue-200 rounded-lg px-3 py-1 text-blue-600 hover:bg-blue-50">Koodo</a>' +
-              '<a href="https://www.google.com/search?q=Fido+conditional+call+forwarding" target="_blank" class="text-xs bg-[#111111] border border-blue-200 rounded-lg px-3 py-1 text-blue-600 hover:bg-blue-50">Fido</a>' +
-              '<a href="https://www.google.com/search?q=Freedom+Mobile+conditional+call+forwarding" target="_blank" class="text-xs bg-[#111111] border border-blue-200 rounded-lg px-3 py-1 text-blue-600 hover:bg-blue-50">Freedom</a>' +
-              '<a href="https://www.google.com/search?q=AT%26T+conditional+call+forwarding" target="_blank" class="text-xs bg-[#111111] border border-blue-200 rounded-lg px-3 py-1 text-blue-600 hover:bg-blue-50">AT&T</a>' +
-              '<a href="https://www.google.com/search?q=T-Mobile+conditional+call+forwarding" target="_blank" class="text-xs bg-[#111111] border border-blue-200 rounded-lg px-3 py-1 text-blue-600 hover:bg-blue-50">T-Mobile</a>' +
-              '<a href="https://www.google.com/search?q=Verizon+conditional+call+forwarding" target="_blank" class="text-xs bg-[#111111] border border-blue-200 rounded-lg px-3 py-1 text-blue-600 hover:bg-blue-50">Verizon</a>' +
+              '<a href="https://www.google.com/search?q=Telus+conditional+call+forwarding" target="_blank" class="text-xs bg-[#111111] border border-blue-200 rounded-lg px-3 py-1 text-blue-400 hover:bg-blue-500/10">Telus</a>' +
+              '<a href="https://www.google.com/search?q=Rogers+conditional+call+forwarding" target="_blank" class="text-xs bg-[#111111] border border-blue-200 rounded-lg px-3 py-1 text-blue-400 hover:bg-blue-500/10">Rogers</a>' +
+              '<a href="https://www.google.com/search?q=Bell+conditional+call+forwarding" target="_blank" class="text-xs bg-[#111111] border border-blue-200 rounded-lg px-3 py-1 text-blue-400 hover:bg-blue-500/10">Bell</a>' +
+              '<a href="https://www.google.com/search?q=Koodo+conditional+call+forwarding" target="_blank" class="text-xs bg-[#111111] border border-blue-200 rounded-lg px-3 py-1 text-blue-400 hover:bg-blue-500/10">Koodo</a>' +
+              '<a href="https://www.google.com/search?q=Fido+conditional+call+forwarding" target="_blank" class="text-xs bg-[#111111] border border-blue-200 rounded-lg px-3 py-1 text-blue-400 hover:bg-blue-500/10">Fido</a>' +
+              '<a href="https://www.google.com/search?q=Freedom+Mobile+conditional+call+forwarding" target="_blank" class="text-xs bg-[#111111] border border-blue-200 rounded-lg px-3 py-1 text-blue-400 hover:bg-blue-500/10">Freedom</a>' +
+              '<a href="https://www.google.com/search?q=AT%26T+conditional+call+forwarding" target="_blank" class="text-xs bg-[#111111] border border-blue-200 rounded-lg px-3 py-1 text-blue-400 hover:bg-blue-500/10">AT&T</a>' +
+              '<a href="https://www.google.com/search?q=T-Mobile+conditional+call+forwarding" target="_blank" class="text-xs bg-[#111111] border border-blue-200 rounded-lg px-3 py-1 text-blue-400 hover:bg-blue-500/10">T-Mobile</a>' +
+              '<a href="https://www.google.com/search?q=Verizon+conditional+call+forwarding" target="_blank" class="text-xs bg-[#111111] border border-blue-200 rounded-lg px-3 py-1 text-blue-400 hover:bg-blue-500/10">Verizon</a>' +
             '</div></div></div>' +
         '<div class="flex items-start gap-3">' +
-          '<span class="flex-shrink-0 w-6 h-6 rounded-full bg-blue-500 text-white flex items-center justify-center text-xs font-bold">2</span>' +
+          '<span class="flex-shrink-0 w-6 h-6 rounded-full bg-blue-500/100 text-white flex items-center justify-center text-xs font-bold">2</span>' +
           '<div><p class="text-sm text-blue-800 font-semibold">Set the forwarding number to:</p>' +
             '<div class="bg-[#111111] border border-blue-300 rounded-lg p-3 mt-2 font-mono text-lg text-center">' +
               '<span class="text-blue-700 font-black">' + formattedNum + '</span>' +
               '<button onclick="copyToClipboard(\'' + esc(aiNumber) + '\')" class="ml-2 text-xs text-blue-500 hover:text-blue-700"><i class="fas fa-copy"></i></button>' +
             '</div></div></div>' +
         '<div class="flex items-start gap-3">' +
-          '<span class="flex-shrink-0 w-6 h-6 rounded-full bg-blue-500 text-white flex items-center justify-center text-xs font-bold">3</span>' +
+          '<span class="flex-shrink-0 w-6 h-6 rounded-full bg-blue-500/100 text-white flex items-center justify-center text-xs font-bold">3</span>' +
           '<div><p class="text-sm text-blue-800 font-semibold">Choose "Forward when no answer" or "Forward when busy"</p>' +
-            '<p class="text-xs text-blue-600 mt-1">This way your phone rings first. If you don\'t answer, the AI picks up. You stay in control.</p></div></div>' +
+            '<p class="text-xs text-blue-400 mt-1">This way your phone rings first. If you don\'t answer, the AI picks up. You stay in control.</p></div></div>' +
       '</div>' +
-      '<div class="mt-4 bg-amber-50 border border-amber-200 rounded-lg p-3">' +
+      '<div class="mt-4 bg-cyan-500/10 border border-amber-200 rounded-lg p-3">' +
         '<p class="text-xs text-amber-700"><i class="fas fa-lightbulb text-amber-500 mr-1"></i><strong>Tip:</strong> Most carriers let you do this from your phone by dialing a short code (like *92 or **62*). Check with your carrier for the exact code.</p>' +
       '</div>' +
     '</div>';
@@ -1155,7 +1155,7 @@
         '</div>' +
 
         '<div class="text-center mb-4">' +
-          '<button onclick="qcDisconnect()" class="text-sm text-red-400 hover:text-red-600 font-medium"><i class="fas fa-unlink mr-1"></i>Disconnect AI Secretary</button>' +
+          '<button onclick="qcDisconnect()" class="text-sm text-red-400 hover:text-red-400 font-medium"><i class="fas fa-unlink mr-1"></i>Disconnect AI Secretary</button>' +
         '</div>' +
 
         '<p class="text-xs text-gray-400 text-center">Need help? Contact support. Your AI secretary is powered by LiveKit voice AI.</p>' +
@@ -1370,22 +1370,22 @@
         '<div class="divide-y divide-gray-100">' +
           (state.calls.length === 0 ? '<div class="p-8 text-center text-gray-400 text-sm"><i class="fas fa-search mr-2"></i>No calls match your filter</div>' :
           state.calls.map(function(call) {
-            var oc = call.call_outcome === 'answered' ? 'text-green-600 bg-green-50' :
-              call.call_outcome === 'transferred' ? 'text-blue-600 bg-blue-50' :
-              call.call_outcome === 'voicemail' ? 'text-amber-600 bg-amber-50' : 'text-gray-400 bg-[#0A0A0A]';
+            var oc = call.call_outcome === 'answered' ? 'text-emerald-400 bg-emerald-500/10' :
+              call.call_outcome === 'transferred' ? 'text-blue-400 bg-blue-500/10' :
+              call.call_outcome === 'voicemail' ? 'text-cyan-400 bg-cyan-500/10' : 'text-gray-400 bg-[#0A0A0A]';
             var sentimentIcon = call.sentiment === 'positive' ? 'fa-smile text-green-500' : (call.sentiment === 'negative' ? 'fa-frown text-red-500' : 'fa-meh text-gray-400');
             var isLead = call.is_lead;
             return '<div class="px-6 py-4 hover:bg-[#111111]/5 transition-colors cursor-pointer" onclick="secViewCall(' + call.id + ')">' +
               '<div class="flex items-center justify-between mb-2">' +
                 '<div class="flex items-center gap-3">' +
                   '<div class="w-10 h-10 rounded-full flex items-center justify-center ' + (isLead ? 'bg-amber-100' : 'bg-sky-100') + '">' +
-                    '<i class="fas ' + (isLead ? 'fa-fire text-amber-600' : 'fa-phone text-sky-600') + '"></i>' +
+                    '<i class="fas ' + (isLead ? 'fa-fire text-cyan-400' : 'fa-phone text-sky-600') + '"></i>' +
                   '</div>' +
                   '<div>' +
                     '<div class="flex items-center gap-2">' +
                       '<p class="font-semibold text-gray-100 text-sm">' + esc(call.caller_name || 'Unknown Caller') + '</p>' +
-                      (isLead ? '<span class="px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded text-[9px] font-bold">LEAD</span>' : '') +
-                      (call.follow_up_required && !call.follow_up_completed ? '<span class="px-1.5 py-0.5 bg-red-100 text-red-700 rounded text-[9px] font-bold">FOLLOW UP</span>' : '') +
+                      (isLead ? '<span class="px-1.5 py-0.5 bg-cyan-500/15 text-cyan-400 rounded text-[9px] font-bold">LEAD</span>' : '') +
+                      (call.follow_up_required && !call.follow_up_completed ? '<span class="px-1.5 py-0.5 bg-red-500/100/15 text-red-400 rounded text-[9px] font-bold">FOLLOW UP</span>' : '') +
                     '</div>' +
                     '<p class="text-xs text-gray-500">' + esc(call.caller_phone || '') +
                       (call.service_type ? ' — <span class="text-violet-600 font-medium">' + esc(call.service_type) + '</span>' : '') +
@@ -1405,8 +1405,8 @@
               (call.conversation_highlights ? '<p class="text-xs text-violet-600 ml-13 mt-1"><i class="fas fa-star text-violet-400 mr-1"></i>' + esc(call.conversation_highlights).substring(0, 120) + '</p>' : '') +
               '<div class="flex items-center gap-2 ml-13 mt-2">' +
                 '<button onclick="event.stopPropagation(); secViewCall(' + call.id + ')" class="text-xs text-violet-600 hover:text-violet-800 font-medium"><i class="fas fa-file-alt mr-1"></i>Full Transcript</button>' +
-                (isLead && call.lead_status === 'new' ? '<button onclick="event.stopPropagation(); secUpdateLeadStatus(' + call.id + ', \'contacted\')" class="text-xs text-green-600 hover:text-green-800 font-medium"><i class="fas fa-check mr-1"></i>Mark Contacted</button>' : '') +
-                (call.follow_up_required && !call.follow_up_completed ? '<button onclick="event.stopPropagation(); secCompleteFollowUp(' + call.id + ')" class="text-xs text-blue-600 hover:text-blue-800 font-medium"><i class="fas fa-check-double mr-1"></i>Follow-Up Done</button>' : '') +
+                (isLead && call.lead_status === 'new' ? '<button onclick="event.stopPropagation(); secUpdateLeadStatus(' + call.id + ', \'contacted\')" class="text-xs text-emerald-400 hover:text-green-800 font-medium"><i class="fas fa-check mr-1"></i>Mark Contacted</button>' : '') +
+                (call.follow_up_required && !call.follow_up_completed ? '<button onclick="event.stopPropagation(); secCompleteFollowUp(' + call.id + ')" class="text-xs text-blue-400 hover:text-blue-800 font-medium"><i class="fas fa-check-double mr-1"></i>Follow-Up Done</button>' : '') +
               '</div>' +
             '</div>';
           }).join('')) +
@@ -1459,7 +1459,7 @@
         '</div>' +
         '<div class="divide-y divide-gray-100">' +
           state.leads.map(function(lead) {
-            var statusColors = { new: 'bg-amber-100 text-amber-700', contacted: 'bg-blue-100 text-blue-700', qualified: 'bg-green-100 text-green-700', converted: 'bg-emerald-100 text-emerald-800', lost: 'bg-red-100 text-red-700' };
+            var statusColors = { new: 'bg-cyan-500/15 text-cyan-400', contacted: 'bg-blue-500/100/15 text-blue-400', qualified: 'bg-emerald-500/15 text-emerald-400', converted: 'bg-emerald-100 text-emerald-800', lost: 'bg-red-500/100/15 text-red-400' };
             var sc = statusColors[lead.lead_status] || 'bg-white/5 text-gray-400';
             var qualityStars = lead.lead_quality === 'hot' ? 3 : (lead.lead_quality === 'warm' ? 2 : 1);
             return '<div class="px-6 py-4 hover:bg-[#111111]/5 transition-colors cursor-pointer" onclick="secViewCall(' + lead.id + ')">' +
@@ -1522,11 +1522,11 @@
 
     var isLead = call.is_lead;
     var sentimentLabel = call.sentiment === 'positive' ? 'Positive' : (call.sentiment === 'negative' ? 'Negative' : 'Neutral');
-    var sentimentColor = call.sentiment === 'positive' ? 'text-green-600 bg-green-50' : (call.sentiment === 'negative' ? 'text-red-600 bg-red-50' : 'text-gray-400 bg-[#0A0A0A]');
+    var sentimentColor = call.sentiment === 'positive' ? 'text-emerald-400 bg-emerald-500/10' : (call.sentiment === 'negative' ? 'text-red-400 bg-red-500/10' : 'text-gray-400 bg-[#0A0A0A]');
 
     var transcript = call.call_transcript || 'No transcript available for this call.';
     // Format transcript lines
-    var transcriptHtml = esc(transcript).replace(/\n/g, '<br>').replace(/(Sarah|Agent|AI):/gi, '<span class="font-bold text-violet-600">$1:</span>').replace(/(Caller|Customer|User):/gi, '<span class="font-bold text-blue-600">$1:</span>');
+    var transcriptHtml = esc(transcript).replace(/\n/g, '<br>').replace(/(Sarah|Agent|AI):/gi, '<span class="font-bold text-violet-600">$1:</span>').replace(/(Caller|Customer|User):/gi, '<span class="font-bold text-blue-400">$1:</span>');
 
     var modal = document.createElement('div');
     modal.id = 'callDetailModal';
@@ -1549,11 +1549,11 @@
         '</div>' +
         // Info bar
         '<div class="px-6 py-3 bg-[#0A0A0A] border-b border-white/10 flex flex-wrap gap-3">' +
-          '<span class="px-2.5 py-1 rounded-full text-xs font-bold ' + (call.call_outcome === 'answered' ? 'bg-green-100 text-green-700' : 'bg-white/5 text-gray-400') + '"><i class="fas fa-phone-alt mr-1"></i>' + (call.call_outcome || 'unknown') + '</span>' +
+          '<span class="px-2.5 py-1 rounded-full text-xs font-bold ' + (call.call_outcome === 'answered' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-white/5 text-gray-400') + '"><i class="fas fa-phone-alt mr-1"></i>' + (call.call_outcome || 'unknown') + '</span>' +
           '<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-violet-100 text-violet-700"><i class="fas fa-clock mr-1"></i>' + formatDuration(call.call_duration_seconds) + '</span>' +
           '<span class="px-2.5 py-1 rounded-full text-xs font-bold ' + sentimentColor + '"><i class="fas fa-' + (call.sentiment === 'positive' ? 'smile' : call.sentiment === 'negative' ? 'frown' : 'meh') + ' mr-1"></i>' + sentimentLabel + '</span>' +
-          (isLead ? '<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-700"><i class="fas fa-fire mr-1"></i>Lead — ' + (call.lead_status || 'new') + '</span>' : '') +
-          (call.service_type ? '<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-700"><i class="fas fa-tools mr-1"></i>' + esc(call.service_type) + '</span>' : '') +
+          (isLead ? '<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-cyan-500/15 text-cyan-400"><i class="fas fa-fire mr-1"></i>Lead — ' + (call.lead_status || 'new') + '</span>' : '') +
+          (call.service_type ? '<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-blue-500/100/15 text-blue-400"><i class="fas fa-tools mr-1"></i>' + esc(call.service_type) + '</span>' : '') +
         '</div>' +
         // Scrollable body
         '<div class="flex-1 overflow-y-auto px-6 py-4 space-y-4">' +
@@ -1566,18 +1566,18 @@
           (call.call_summary ? '<div class="bg-violet-50 border border-violet-200 rounded-xl p-4"><h4 class="font-bold text-violet-800 text-sm mb-1"><i class="fas fa-robot mr-1"></i>AI Call Summary</h4><p class="text-sm text-violet-700">' + esc(call.call_summary) + '</p></div>' : '') +
 
           // Highlights
-          (call.conversation_highlights ? '<div class="bg-amber-50 border border-amber-200 rounded-xl p-4"><h4 class="font-bold text-amber-800 text-sm mb-1"><i class="fas fa-star mr-1"></i>Key Highlights</h4><p class="text-sm text-amber-700">' + esc(call.conversation_highlights) + '</p></div>' : '') +
+          (call.conversation_highlights ? '<div class="bg-cyan-500/10 border border-amber-200 rounded-xl p-4"><h4 class="font-bold text-amber-800 text-sm mb-1"><i class="fas fa-star mr-1"></i>Key Highlights</h4><p class="text-sm text-amber-700">' + esc(call.conversation_highlights) + '</p></div>' : '') +
 
           // Follow-up notes
-          (call.follow_up_notes ? '<div class="bg-red-50 border border-red-200 rounded-xl p-4"><h4 class="font-bold text-red-800 text-sm mb-1"><i class="fas fa-exclamation-circle mr-1"></i>Follow-Up Notes</h4><p class="text-sm text-red-700">' + esc(call.follow_up_notes) + '</p></div>' : '') +
+          (call.follow_up_notes ? '<div class="bg-red-500/10 border border-red-200 rounded-xl p-4"><h4 class="font-bold text-red-800 text-sm mb-1"><i class="fas fa-exclamation-circle mr-1"></i>Follow-Up Notes</h4><p class="text-sm text-red-700">' + esc(call.follow_up_notes) + '</p></div>' : '') +
 
           // Messages taken
-          (messages.length > 0 ? '<div class="bg-blue-50 border border-blue-200 rounded-xl p-4"><h4 class="font-bold text-blue-800 text-sm mb-2"><i class="fas fa-envelope mr-1"></i>Messages Taken (' + messages.length + ')</h4>' +
-            messages.map(function(m) { return '<div class="text-sm text-blue-700 mb-1">• ' + esc(m.message_text) + (m.urgency !== 'normal' ? ' <span class="text-red-600 font-bold">(' + m.urgency + ')</span>' : '') + '</div>'; }).join('') +
+          (messages.length > 0 ? '<div class="bg-blue-500/10 border border-blue-200 rounded-xl p-4"><h4 class="font-bold text-blue-800 text-sm mb-2"><i class="fas fa-envelope mr-1"></i>Messages Taken (' + messages.length + ')</h4>' +
+            messages.map(function(m) { return '<div class="text-sm text-blue-700 mb-1">• ' + esc(m.message_text) + (m.urgency !== 'normal' ? ' <span class="text-red-400 font-bold">(' + m.urgency + ')</span>' : '') + '</div>'; }).join('') +
           '</div>' : '') +
 
           // Appointments booked
-          (appointments.length > 0 ? '<div class="bg-green-50 border border-green-200 rounded-xl p-4"><h4 class="font-bold text-green-800 text-sm mb-2"><i class="fas fa-calendar-check mr-1"></i>Appointments Booked (' + appointments.length + ')</h4>' +
+          (appointments.length > 0 ? '<div class="bg-emerald-500/10 border border-green-200 rounded-xl p-4"><h4 class="font-bold text-green-800 text-sm mb-2"><i class="fas fa-calendar-check mr-1"></i>Appointments Booked (' + appointments.length + ')</h4>' +
             appointments.map(function(a) { return '<div class="text-sm text-green-700 mb-1">• ' + esc(a.appointment_type || 'Estimate') + (a.property_address ? ' at ' + esc(a.property_address) : '') + (a.notes ? ' — ' + esc(a.notes) : '') + '</div>'; }).join('') +
           '</div>' : '') +
 
@@ -1791,7 +1791,7 @@
   function showToast(msg, type) {
     var toast = document.createElement('div');
     toast.className = 'fixed bottom-6 right-6 px-5 py-3 rounded-xl shadow-xl text-sm font-semibold z-50 transition-all ' +
-      (type === 'success' ? 'bg-green-500 text-white' : 'bg-sky-500 text-white');
+      (type === 'success' ? 'bg-emerald-500/100 text-white' : 'bg-sky-500 text-white');
     toast.innerHTML = '<i class="fas ' + (type === 'success' ? 'fa-check-circle' : 'fa-info-circle') + ' mr-2"></i>' + msg;
     document.body.appendChild(toast);
     setTimeout(function() { toast.remove(); }, 3000);
@@ -1829,7 +1829,7 @@
           '<div class="space-y-3">' +
             msgs.map(function(m) {
               var unread = !m.is_read;
-              var urgentBadge = m.urgency === 'urgent' ? '<span class="px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-[10px] font-bold">URGENT</span>' :
+              var urgentBadge = m.urgency === 'urgent' ? '<span class="px-2 py-0.5 bg-red-500/100/15 text-red-400 rounded-full text-[10px] font-bold">URGENT</span>' :
                 m.urgency === 'emergency' ? '<span class="px-2 py-0.5 bg-red-600 text-white rounded-full text-[10px] font-bold">EMERGENCY</span>' : '';
               return '<div class="border ' + (unread ? 'border-purple-200 bg-purple-50' : 'border-white/10 bg-[#0A0A0A]') + ' rounded-xl p-4 ' + (unread ? 'ring-1 ring-purple-300' : '') + '">' +
                 '<div class="flex items-start justify-between mb-2">' +
@@ -1880,17 +1880,17 @@
     var appts = state.appointments;
 
     var statusColors = {
-      pending: 'bg-amber-100 text-amber-700',
-      confirmed: 'bg-green-100 text-green-700',
-      cancelled: 'bg-red-100 text-red-700',
-      completed: 'bg-blue-100 text-blue-700'
+      pending: 'bg-cyan-500/15 text-cyan-400',
+      confirmed: 'bg-emerald-500/15 text-emerald-400',
+      cancelled: 'bg-red-500/100/15 text-red-400',
+      completed: 'bg-blue-500/100/15 text-blue-400'
     };
 
     content.innerHTML =
       '<div class="bg-[#111111] rounded-2xl border border-white/10 shadow-sm p-6">' +
         '<div class="flex items-center justify-between mb-4">' +
           '<h3 class="font-bold text-gray-100 text-lg"><i class="fas fa-calendar-check text-emerald-500 mr-2"></i>Appointments' +
-            (state.pendingAppts > 0 ? ' <span class="px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full text-xs font-bold">' + state.pendingAppts + ' pending</span>' : '') + '</h3>' +
+            (state.pendingAppts > 0 ? ' <span class="px-2 py-0.5 bg-cyan-500/15 text-cyan-400 rounded-full text-xs font-bold">' + state.pendingAppts + ' pending</span>' : '') + '</h3>' +
         '</div>' +
         (appts.length === 0 ? '<p class="text-gray-400 text-center py-8"><i class="fas fa-calendar text-3xl block mb-2"></i>No appointments yet. When the AI books appointments, they\'ll appear here.</p>' :
           '<div class="overflow-x-auto"><table class="w-full text-sm">' +
@@ -1903,9 +1903,9 @@
                 '<td class="py-3 px-3 text-gray-400 text-xs">' + esc(a.property_address || '—') + '</td>' +
                 '<td class="py-3 px-3"><span class="px-2 py-0.5 rounded text-xs font-semibold ' + (statusColors[a.status] || 'bg-white/5 text-gray-400') + '">' + esc(a.status) + '</span></td>' +
                 '<td class="py-3 px-3">' +
-                  (a.status === 'pending' ? '<button onclick="secUpdateAppt(' + a.id + ',\'confirmed\')" class="text-xs text-green-600 hover:text-green-800 font-semibold mr-2"><i class="fas fa-check mr-1"></i>Confirm</button>' +
+                  (a.status === 'pending' ? '<button onclick="secUpdateAppt(' + a.id + ',\'confirmed\')" class="text-xs text-emerald-400 hover:text-green-800 font-semibold mr-2"><i class="fas fa-check mr-1"></i>Confirm</button>' +
                     '<button onclick="secUpdateAppt(' + a.id + ',\'cancelled\')" class="text-xs text-red-500 hover:text-red-700 font-semibold"><i class="fas fa-times mr-1"></i>Cancel</button>' :
-                   a.status === 'confirmed' ? '<button onclick="secUpdateAppt(' + a.id + ',\'completed\')" class="text-xs text-blue-600 hover:text-blue-800 font-semibold"><i class="fas fa-check-double mr-1"></i>Complete</button>' : '—') +
+                   a.status === 'confirmed' ? '<button onclick="secUpdateAppt(' + a.id + ',\'completed\')" class="text-xs text-blue-400 hover:text-blue-800 font-semibold"><i class="fas fa-check-double mr-1"></i>Complete</button>' : '—') +
                 '</td></tr>';
             }).join('') + '</tbody></table></div>') +
       '</div>';
@@ -1941,12 +1941,12 @@
       '<div class="bg-[#111111] rounded-2xl border border-white/10 shadow-sm p-6">' +
         '<div class="flex items-center justify-between mb-4">' +
           '<h3 class="font-bold text-gray-100 text-lg"><i class="fas fa-phone-volume text-sky-500 mr-2"></i>Scheduled Callbacks' +
-            (state.pendingCallbacks > 0 ? ' <span class="px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full text-xs font-bold">' + state.pendingCallbacks + ' pending</span>' : '') + '</h3>' +
+            (state.pendingCallbacks > 0 ? ' <span class="px-2 py-0.5 bg-cyan-500/15 text-cyan-400 rounded-full text-xs font-bold">' + state.pendingCallbacks + ' pending</span>' : '') + '</h3>' +
         '</div>' +
         (cbs.length === 0 ? '<p class="text-gray-400 text-center py-8"><i class="fas fa-phone text-3xl block mb-2"></i>No callbacks yet. When the AI schedules callbacks, they\'ll appear here.</p>' :
           '<div class="space-y-3">' + cbs.map(function(cb) {
             var isPending = cb.status === 'pending';
-            return '<div class="border ' + (isPending ? 'border-amber-200 bg-amber-50' : 'border-white/10 bg-[#0A0A0A]') + ' rounded-xl p-4">' +
+            return '<div class="border ' + (isPending ? 'border-amber-200 bg-cyan-500/10' : 'border-white/10 bg-[#0A0A0A]') + ' rounded-xl p-4">' +
               '<div class="flex items-start justify-between">' +
                 '<div>' +
                   '<div class="font-semibold text-gray-100 text-sm">' + esc(cb.caller_name || 'Unknown') + ' — <a href="tel:' + esc(cb.caller_phone) + '" class="text-sky-600 hover:underline">' + formatPhone(cb.caller_phone) + '</a></div>' +
@@ -1955,8 +1955,8 @@
                   '<div class="text-xs text-gray-400 mt-1">' + new Date(cb.created_at).toLocaleString() + '</div>' +
                 '</div>' +
                 '<div class="flex items-center gap-2">' +
-                  '<span class="px-2 py-0.5 rounded text-xs font-semibold ' + (isPending ? 'bg-amber-100 text-amber-700' : cb.status === 'completed' ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-400') + '">' + esc(cb.status) + '</span>' +
-                  (isPending ? '<button onclick="secUpdateCallback(' + cb.id + ',\'completed\')" class="text-xs text-green-600 hover:text-green-800 font-semibold px-2 py-1 bg-green-50 rounded"><i class="fas fa-check mr-1"></i>Done</button>' : '') +
+                  '<span class="px-2 py-0.5 rounded text-xs font-semibold ' + (isPending ? 'bg-cyan-500/15 text-cyan-400' : cb.status === 'completed' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-gray-200 text-gray-400') + '">' + esc(cb.status) + '</span>' +
+                  (isPending ? '<button onclick="secUpdateCallback(' + cb.id + ',\'completed\')" class="text-xs text-emerald-400 hover:text-green-800 font-semibold px-2 py-1 bg-emerald-500/10 rounded"><i class="fas fa-check mr-1"></i>Done</button>' : '') +
                 '</div>' +
               '</div>' +
             '</div>';
@@ -1997,7 +1997,7 @@
           '</div>' +
         '</div>' +
         '<div class="p-5">' +
-          '<div class="bg-blue-50 border border-blue-200 rounded-xl p-3 mb-3 flex items-start gap-2.5">' +
+          '<div class="bg-blue-500/10 border border-blue-200 rounded-xl p-3 mb-3 flex items-start gap-2.5">' +
             '<i class="fas fa-info-circle text-blue-500 mt-0.5 flex-shrink-0"></i>' +
             '<div class="text-xs text-blue-700"><strong>Text Preview Only</strong> — This tests your AI\'s responses as text. The real phone experience uses professional <strong>Cartesia</strong> voice synthesis and sounds much more natural.' +
             (state.config && state.config.assigned_phone_number ? '<div class="mt-1.5 flex items-center gap-2"><i class="fas fa-phone-alt text-emerald-600"></i><strong class="text-emerald-700">Call ' + state.config.assigned_phone_number + ' to hear the real voice.</strong></div>' : '') +
@@ -2018,7 +2018,7 @@
               '<button onclick="secStartRecording()" id="vtRecordBtn" class="w-10 h-10 rounded-full bg-gray-200 text-gray-400 flex items-center justify-center hover:bg-gray-300 transition-all" title="Use microphone">' +
                 '<i class="fas fa-microphone text-sm"></i>' +
               '</button>' +
-              '<button onclick="secStopRecording()" id="vtStopBtn" class="w-10 h-10 rounded-full bg-red-500 text-white flex items-center justify-center hover:bg-red-600 transition-all hidden animate-pulse" title="Stop recording">' +
+              '<button onclick="secStopRecording()" id="vtStopBtn" class="w-10 h-10 rounded-full bg-red-500/100 text-white flex items-center justify-center hover:bg-red-600 transition-all hidden animate-pulse" title="Stop recording">' +
                 '<i class="fas fa-stop text-sm"></i>' +
               '</button>'
               : '') +
@@ -2215,7 +2215,7 @@
     } catch(e) {
       var thinking2 = document.getElementById('vtThinking');
       if (thinking2) thinking2.remove();
-      conv.innerHTML += '<div class="flex justify-start"><div class="bg-red-50 text-red-600 rounded-xl rounded-tl-sm px-3 py-2 max-w-xs text-sm"><i class="fas fa-exclamation-triangle mr-1"></i>Error: ' + (e.message || 'Network error') + '</div></div>';
+      conv.innerHTML += '<div class="flex justify-start"><div class="bg-red-500/10 text-red-400 rounded-xl rounded-tl-sm px-3 py-2 max-w-xs text-sm"><i class="fas fa-exclamation-triangle mr-1"></i>Error: ' + (e.message || 'Network error') + '</div></div>';
       conv.scrollTop = conv.scrollHeight;
       if (statusEl) { statusEl.textContent = 'Error occurred. Try again.'; statusEl.className = 'text-center text-xs text-red-500 mb-3 h-4'; }
     }

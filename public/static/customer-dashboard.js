@@ -110,7 +110,7 @@ function renderDashboard() {
     var bc = badgeColor || 'bg-gray-400';
     return '<a href="' + href + '" class="flex items-center justify-between px-3 py-2 rounded-lg text-gray-300 hover:bg-[#111111]/10 hover:text-brand-700 transition-colors group">' +
       '<span class="flex items-center gap-2.5">' +
-        '<i class="fas ' + icon + ' text-gray-400 group-hover:text-brand-500 w-4 text-center text-sm transition-colors"></i>' +
+        '<i class="fas ' + icon + ' text-gray-400 group-hover:text-emerald-400 w-4 text-center text-sm transition-colors"></i>' +
         '<span class="text-sm font-medium">' + label + '</span>' +
       '</span>' +
       (badge ? '<span class="px-1.5 py-0.5 ' + bc + ' text-white rounded-full text-[10px] font-bold leading-none">' + badge + '</span>' : '') +
@@ -182,20 +182,20 @@ function renderDashboard() {
         // Marketing
         '<div>' +
           '<p class="px-3 mb-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Marketing</p>' +
-          navLink('/customer/google-ads', 'fa-bullhorn', 'Google Ads', 'New', 'bg-blue-500') +
-          navLink('/customer/google-business', 'fa-store', 'Business Profile', 'New', 'bg-green-500') +
+          navLink('/customer/google-ads', 'fa-bullhorn', 'Google Ads', 'New', 'bg-blue-500/100') +
+          navLink('/customer/google-business', 'fa-store', 'Business Profile', 'New', 'bg-emerald-500/100') +
         '</div>' +
         (c.is_dev ? '<div><p class="px-3 mb-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Dev</p>' + navLink('/customer/property-imagery', 'fa-satellite', 'Property Imagery', 'Dev', 'bg-gray-800') + '</div>' : '') +
       '</nav>' +
       // Credits footer
       '<div class="px-4 py-4 border-t border-white/5">' +
         (freeTrialRemaining > 0
-          ? '<div class="flex items-center justify-between mb-2"><span class="text-xs text-gray-500">Free trials left</span><span class="text-xs font-bold text-green-600">' + freeTrialRemaining + '</span></div>'
+          ? '<div class="flex items-center justify-between mb-2"><span class="text-xs text-gray-500">Free trials left</span><span class="text-xs font-bold text-emerald-400">' + freeTrialRemaining + '</span></div>'
           : '') +
         (paidCredits > 0
-          ? '<div class="flex items-center justify-between mb-2"><span class="text-xs text-gray-500">Report credits</span><span class="text-xs font-bold text-blue-600">' + paidCredits + '</span></div>'
+          ? '<div class="flex items-center justify-between mb-2"><span class="text-xs text-gray-500">Report credits</span><span class="text-xs font-bold text-blue-400">' + paidCredits + '</span></div>'
           : '') +
-        '<a href="/pricing" class="block w-full text-center py-2 bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold rounded-lg transition-colors">Buy Credits</a>' +
+        '<a href="/pricing" class="block w-full text-center py-2 bg-emerald-600 hover:bg-brand-700 text-white text-xs font-semibold rounded-lg transition-colors">Buy Credits</a>' +
         '<a href="/customer/profile" class="block w-full text-center py-1.5 mt-1.5 text-xs text-gray-400 hover:text-gray-400 transition-colors">Account Settings</a>' +
         // Sidebar ad unit — shown only to non-subscribers
         '<div class="rra-ad-container" data-ad-slot="" data-ad-format="auto" style="display:none; margin-top:12px; min-height:120px; background:#f1f5f9; border:1px solid #e2e8f0; border-radius:8px; overflow:hidden; padding:4px;"></div>' +
@@ -206,7 +206,7 @@ function renderDashboard() {
   var mobileNav =
     '<div class="lg:hidden bg-[#111111] border-b border-white/10 overflow-x-auto">' +
       '<div class="flex gap-1 px-3 py-2 whitespace-nowrap">' +
-        '<a href="/customer/order" class="flex items-center gap-1.5 px-3 py-1.5 bg-brand-600 text-white rounded-lg text-xs font-semibold flex-shrink-0"><i class="fas fa-plus-circle"></i>Order</a>' +
+        '<a href="/customer/order" class="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-semibold flex-shrink-0"><i class="fas fa-plus-circle"></i>Order</a>' +
         '<a href="/customer/reports" class="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 text-gray-300 rounded-lg text-xs font-medium flex-shrink-0"><i class="fas fa-file-alt"></i>Reports</a>' +
         '<a href="/customer/customers" class="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 text-gray-300 rounded-lg text-xs font-medium flex-shrink-0"><i class="fas fa-users"></i>Customers</a>' +
         '<a href="/customer/invoices" class="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 text-gray-300 rounded-lg text-xs font-medium flex-shrink-0"><i class="fas fa-file-invoice-dollar"></i>Invoices</a>' +
@@ -230,10 +230,10 @@ function renderDashboard() {
           '<p class="text-sm text-gray-500 mt-0.5">' + (c.company_name ? c.company_name + ' &middot; ' : '') + (c.email || '') + '</p>' +
         '</div>' +
         '<div class="flex items-center gap-2 flex-wrap">' +
-          (freeTrialRemaining > 0 ? '<div class="px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-full text-xs font-bold text-blue-700"><i class="fas fa-gift mr-1"></i>' + freeTrialRemaining + ' Free Trial</div>' : '') +
-          (paidCredits > 0 ? '<div class="px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-full text-xs font-bold text-blue-700"><i class="fas fa-coins mr-1"></i>' + paidCredits + ' Credits</div>' : '') +
+          (freeTrialRemaining > 0 ? '<div class="px-3 py-1.5 bg-blue-500/10 border border-blue-200 rounded-full text-xs font-bold text-blue-700"><i class="fas fa-gift mr-1"></i>' + freeTrialRemaining + ' Free Trial</div>' : '') +
+          (paidCredits > 0 ? '<div class="px-3 py-1.5 bg-blue-500/10 border border-blue-200 rounded-full text-xs font-bold text-blue-700"><i class="fas fa-coins mr-1"></i>' + paidCredits + ' Credits</div>' : '') +
           '<div class="px-3 py-1.5 bg-white/5 border border-white/10 rounded-full text-xs font-bold text-gray-300"><i class="fas fa-file-alt mr-1"></i>' + completedReports + ' Reports</div>' +
-          (processingReports > 0 ? '<div class="px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-full text-xs font-bold text-blue-700 animate-pulse"><i class="fas fa-spinner fa-spin mr-1"></i>' + processingReports + ' Generating</div>' : '') +
+          (processingReports > 0 ? '<div class="px-3 py-1.5 bg-blue-500/10 border border-blue-200 rounded-full text-xs font-bold text-blue-700 animate-pulse"><i class="fas fa-spinner fa-spin mr-1"></i>' + processingReports + ' Generating</div>' : '') +
         '</div>' +
       '</div>' +
 
@@ -241,13 +241,13 @@ function renderDashboard() {
       (trialsExhausted ?
         '<div class="bg-gradient-to-r from-brand-800 to-brand-900 rounded-2xl p-5 mb-5 shadow-xl border border-brand-700">' +
           '<div class="flex flex-col sm:flex-row items-center gap-4">' +
-            '<div class="w-12 h-12 bg-amber-500 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0"><i class="fas fa-crown text-white text-xl"></i></div>' +
+            '<div class="w-12 h-12 bg-cyan-500/100 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0"><i class="fas fa-crown text-white text-xl"></i></div>' +
             '<div class="flex-1 text-center sm:text-left">' +
               '<h3 class="text-white font-black text-base">Your 3 Free Trial Reports Are Used Up!</h3>' +
               '<p class="text-brand-200 text-xs mt-1">Upgrade to a credit pack — packs from <strong class="text-amber-400">$5.00/report (100-pack)</strong>, save up to 38%.</p>' +
             '</div>' +
             '<div class="flex gap-2 flex-shrink-0">' +
-              '<a href="/pricing" class="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-white font-black rounded-xl shadow text-xs"><i class="fas fa-tags mr-1"></i>View Packs</a>' +
+              '<a href="/pricing" class="px-4 py-2 bg-cyan-500/100 hover:bg-amber-400 text-white font-black rounded-xl shadow text-xs"><i class="fas fa-tags mr-1"></i>View Packs</a>' +
               '<a href="/customer/order" class="px-4 py-2 bg-[#111111]/10 hover:bg-[#111111]/20 text-white font-semibold rounded-xl text-xs border border-white/20"><i class="fas fa-credit-card mr-1"></i>Pay Per Report</a>' +
             '</div>' +
           '</div>' +
@@ -286,10 +286,10 @@ function renderDashboard() {
           '</div>' +
           '<div class="px-4 py-3 border-t border-white/5 bg-[#0A0A0A]">' +
             '<div class="flex gap-2 mb-2 overflow-x-auto pb-1">' +
-              '<button onclick="window._roverDashSend(\'What can you help me with?\')" class="px-2.5 py-1 bg-[#111111] border border-white/10 rounded-lg text-[11px] text-gray-400 hover:bg-blue-50 hover:border-blue-200 whitespace-nowrap flex-shrink-0">What can you do?</button>' +
-              '<button onclick="window._roverDashSend(\'Give me a summary of my account\')" class="px-2.5 py-1 bg-[#111111] border border-white/10 rounded-lg text-[11px] text-gray-400 hover:bg-blue-50 hover:border-blue-200 whitespace-nowrap flex-shrink-0">Account Summary</button>' +
-              '<button onclick="window._roverDashSend(\'How do I order a roof report?\')" class="px-2.5 py-1 bg-[#111111] border border-white/10 rounded-lg text-[11px] text-gray-400 hover:bg-blue-50 hover:border-blue-200 whitespace-nowrap flex-shrink-0">How to Order</button>' +
-              '<button onclick="window._roverDashSend(\'Help me create a proposal\')" class="px-2.5 py-1 bg-[#111111] border border-white/10 rounded-lg text-[11px] text-gray-400 hover:bg-blue-50 hover:border-blue-200 whitespace-nowrap flex-shrink-0">Draft Proposal</button>' +
+              '<button onclick="window._roverDashSend(\'What can you help me with?\')" class="px-2.5 py-1 bg-[#111111] border border-white/10 rounded-lg text-[11px] text-gray-400 hover:bg-blue-500/10 hover:border-blue-200 whitespace-nowrap flex-shrink-0">What can you do?</button>' +
+              '<button onclick="window._roverDashSend(\'Give me a summary of my account\')" class="px-2.5 py-1 bg-[#111111] border border-white/10 rounded-lg text-[11px] text-gray-400 hover:bg-blue-500/10 hover:border-blue-200 whitespace-nowrap flex-shrink-0">Account Summary</button>' +
+              '<button onclick="window._roverDashSend(\'How do I order a roof report?\')" class="px-2.5 py-1 bg-[#111111] border border-white/10 rounded-lg text-[11px] text-gray-400 hover:bg-blue-500/10 hover:border-blue-200 whitespace-nowrap flex-shrink-0">How to Order</button>' +
+              '<button onclick="window._roverDashSend(\'Help me create a proposal\')" class="px-2.5 py-1 bg-[#111111] border border-white/10 rounded-lg text-[11px] text-gray-400 hover:bg-blue-500/10 hover:border-blue-200 whitespace-nowrap flex-shrink-0">Draft Proposal</button>' +
             '</div>' +
             '<div class="flex gap-2">' +
               '<input type="text" id="rover-dash-input" placeholder="Ask Rover anything..." class="flex-1 px-3 py-2 border border-white/15 rounded-xl text-sm focus:ring-2 focus:ring-blue-400 focus:border-blue-400" onkeydown="if(event.key===\'Enter\')window._roverDashSend()">' +
@@ -300,10 +300,10 @@ function renderDashboard() {
         // Quick Actions (narrower)
         '<div class="lg:col-span-2 bg-[#111111] rounded-2xl border border-white/10 shadow-sm overflow-hidden">' +
           '<div class="px-5 py-4 border-b border-white/5">' +
-            '<h3 class="font-bold text-gray-100 text-sm"><i class="fas fa-bolt text-blue-600 mr-2"></i>Quick Actions</h3>' +
+            '<h3 class="font-bold text-gray-100 text-sm"><i class="fas fa-bolt text-blue-400 mr-2"></i>Quick Actions</h3>' +
           '</div>' +
           '<div class="p-4 space-y-2.5">' +
-            '<a href="/customer/order" class="flex items-center gap-3 p-3 bg-blue-50 hover:bg-blue-100 rounded-xl transition-colors">' +
+            '<a href="/customer/order" class="flex items-center gap-3 p-3 bg-blue-500/10 hover:bg-blue-100 rounded-xl transition-colors">' +
               '<div class="w-9 h-9 bg-blue-600 rounded-lg flex items-center justify-center flex-shrink-0"><i class="fas fa-plus text-white text-sm"></i></div>' +
               '<div><p class="font-semibold text-gray-100 text-sm">Order Roof Report</p><p class="text-xs text-gray-500">' + (freeTrialRemaining > 0 ? freeTrialRemaining + ' free remaining' : (paidCredits > 0 ? paidCredits + ' credits' : 'Pay per report')) + '</p></div>' +
             '</a>' +
@@ -368,7 +368,7 @@ function renderRecentOrders() {
   for (var i = 0; i < orders.length; i++) {
     var o = orders[i];
     var isProcessing = o.status === 'processing' || o.report_status === 'generating' || o.report_status === 'pending';
-    var statusClass = o.status === 'completed' ? 'bg-green-100 text-green-700' : (isProcessing ? 'bg-blue-100 text-blue-700' : 'bg-white/5 text-gray-400');
+    var statusClass = o.status === 'completed' ? 'bg-emerald-500/15 text-emerald-400' : (isProcessing ? 'bg-blue-500/100/15 text-blue-400' : 'bg-white/5 text-gray-400');
     var reportReady = (o.report_status === 'completed' || o.status === 'completed') && !isProcessing;
     html += '<div class="flex items-center justify-between p-3 bg-[#0A0A0A] rounded-xl hover:bg-[#111111]/10 transition-colors">' +
       '<div class="flex-1 min-w-0">' +
@@ -377,9 +377,9 @@ function renderRecentOrders() {
       '</div>' +
       '<div class="flex items-center gap-2 ml-3">' +
         '<span class="px-2 py-0.5 ' + statusClass + ' rounded-full text-[10px] font-bold capitalize">' + (isProcessing ? '<i class="fas fa-spinner fa-spin mr-1"></i>' : '') + (isProcessing ? 'generating' : o.status) + '</span>' +
-        (reportReady ? '<a href="/api/reports/' + o.id + '/html" target="_blank" class="px-2.5 py-1 bg-brand-600 text-white rounded-lg text-xs font-medium hover:bg-brand-700"><i class="fas fa-eye mr-1"></i>View</a>' : '') +
+        (reportReady ? '<a href="/api/reports/' + o.id + '/html" target="_blank" class="px-2.5 py-1 bg-emerald-600 text-white rounded-lg text-xs font-medium hover:bg-brand-700"><i class="fas fa-eye mr-1"></i>View</a>' : '') +
         (reportReady ? '<a href="/customer/material-calculator?order_id=' + o.id + '" class="px-2.5 py-1 bg-sky-100 text-sky-700 rounded-lg text-xs font-medium hover:bg-sky-200"><i class="fas fa-calculator mr-1"></i>Materials</a>' : '') +
-        (o.status === 'failed' ? '<button onclick="retryReport(' + o.id + ', this)" class="px-2.5 py-1 bg-red-100 text-red-700 rounded-lg text-xs font-medium hover:bg-red-200"><i class="fas fa-redo mr-1"></i>Retry</button>' : '') +
+        (o.status === 'failed' ? '<button onclick="retryReport(' + o.id + ', this)" class="px-2.5 py-1 bg-red-500/100/15 text-red-400 rounded-lg text-xs font-medium hover:bg-red-200"><i class="fas fa-redo mr-1"></i>Retry</button>' : '') +
       '</div>' +
     '</div>';
   }
@@ -394,7 +394,7 @@ window.retryReport = function(orderId, btn) {
     .then(function(r) { return r.json(); })
     .then(function(data) {
       if (data.success) {
-        if (btn) { btn.innerHTML = '<i class="fas fa-check mr-1"></i>Regenerating!'; btn.className = 'px-2.5 py-1 bg-green-100 text-green-700 rounded-lg text-xs font-medium'; }
+        if (btn) { btn.innerHTML = '<i class="fas fa-check mr-1"></i>Regenerating!'; btn.className = 'px-2.5 py-1 bg-emerald-500/15 text-emerald-400 rounded-lg text-xs font-medium'; }
         setTimeout(function() { loadDashData().then(function() { renderDashboard(); startEnhancementPolling(); }); }, 2000);
       } else {
         console.warn('Retry failed:', data.error || data.message || 'Unknown error');
@@ -586,12 +586,12 @@ function showOnboardingModal() {
       color: 'from-brand-500 to-sky-500',
       title: 'Welcome to Roof Manager, ' + name + '!',
       content: '<div class="space-y-3">' +
-        '<div class="bg-green-50 border border-green-200 rounded-xl p-4 text-center">' +
+        '<div class="bg-emerald-500/10 border border-green-200 rounded-xl p-4 text-center">' +
           '<p class="text-3xl font-black text-green-700 mb-1">' + freeCredits + ' Free Reports</p>' +
-          '<p class="text-sm text-green-600">No credit card needed — start measuring roofs right now</p>' +
+          '<p class="text-sm text-emerald-400">No credit card needed — start measuring roofs right now</p>' +
         '</div>' +
         '<div class="grid grid-cols-3 gap-3 text-center text-xs">' +
-          '<div class="bg-[#0A0A0A] rounded-xl p-3"><i class="fas fa-satellite text-brand-500 text-xl mb-1 block"></i><p class="font-semibold text-gray-300">Satellite Measurement</p></div>' +
+          '<div class="bg-[#0A0A0A] rounded-xl p-3"><i class="fas fa-satellite text-emerald-400 text-xl mb-1 block"></i><p class="font-semibold text-gray-300">Satellite Measurement</p></div>' +
           '<div class="bg-[#0A0A0A] rounded-xl p-3"><i class="fas fa-boxes-stacked text-emerald-500 text-xl mb-1 block"></i><p class="font-semibold text-gray-300">Full Material BOM</p></div>' +
           '<div class="bg-[#0A0A0A] rounded-xl p-3"><i class="fas fa-file-invoice text-purple-500 text-xl mb-1 block"></i><p class="font-semibold text-gray-300">Instant Proposals</p></div>' +
         '</div>' +
@@ -610,7 +610,7 @@ function showOnboardingModal() {
             '<div class="flex items-center gap-2"><span class="w-6 h-6 bg-sky-500 text-white rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">3</span><span>Full report ready in ~60 seconds</span></div>' +
           '</div>' +
         '</div>' +
-        '<a href="/customer/order" onclick="dismissOnboarding()" class="block w-full py-3 text-center bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl transition-colors">' +
+        '<a href="/customer/order" onclick="dismissOnboarding()" class="block w-full py-3 text-center bg-emerald-600 hover:bg-brand-700 text-white font-bold rounded-xl transition-colors">' +
           '<i class="fas fa-plus mr-2"></i>Order My First Report (Free)' +
         '</a>' +
       '</div>'
@@ -622,8 +622,8 @@ function showOnboardingModal() {
       content: '<div class="space-y-3">' +
         '<p class="text-sm text-gray-400">Your dashboard has everything you need to run your roofing business:</p>' +
         '<div class="grid grid-cols-2 gap-2">' +
-          '<a href="/customer/crm/reports" onclick="dismissOnboarding()" class="bg-brand-50 border border-brand-200 rounded-xl p-3 text-center hover:bg-brand-100 transition-colors"><i class="fas fa-file-alt text-brand-500 text-lg mb-1 block"></i><p class="text-xs font-semibold text-brand-700">Reports</p></a>' +
-          '<a href="/customer/proposals" onclick="dismissOnboarding()" class="bg-amber-50 border border-amber-200 rounded-xl p-3 text-center hover:bg-amber-100 transition-colors"><i class="fas fa-file-invoice text-amber-500 text-lg mb-1 block"></i><p class="text-xs font-semibold text-amber-700">Proposals</p></a>' +
+          '<a href="/customer/crm/reports" onclick="dismissOnboarding()" class="bg-brand-50 border border-brand-200 rounded-xl p-3 text-center hover:bg-brand-100 transition-colors"><i class="fas fa-file-alt text-emerald-400 text-lg mb-1 block"></i><p class="text-xs font-semibold text-brand-700">Reports</p></a>' +
+          '<a href="/customer/proposals" onclick="dismissOnboarding()" class="bg-cyan-500/10 border border-amber-200 rounded-xl p-3 text-center hover:bg-amber-100 transition-colors"><i class="fas fa-file-invoice text-amber-500 text-lg mb-1 block"></i><p class="text-xs font-semibold text-amber-700">Proposals</p></a>' +
           '<a href="/customer/customers" onclick="dismissOnboarding()" class="bg-violet-50 border border-violet-200 rounded-xl p-3 text-center hover:bg-violet-100 transition-colors"><i class="fas fa-users text-violet-500 text-lg mb-1 block"></i><p class="text-xs font-semibold text-violet-700">Customers</p></a>' +
           '<a href="/customer/material-calculator" onclick="dismissOnboarding()" class="bg-sky-50 border border-sky-200 rounded-xl p-3 text-center hover:bg-sky-100 transition-colors"><i class="fas fa-calculator text-sky-500 text-lg mb-1 block"></i><p class="text-xs font-semibold text-sky-700">Material Calc</p></a>' +
         '</div>' +
@@ -724,7 +724,7 @@ window._roverDashSend = function(text) {
     var typing = document.getElementById('rover-dash-typing');
     if (typing) typing.remove();
     container.insertAdjacentHTML('beforeend',
-      '<div class="flex gap-2"><div class="w-7 h-7 bg-gray-900 rounded-full flex items-center justify-center flex-shrink-0 text-xs">&#128054;</div><div class="bg-red-50 rounded-xl rounded-tl-sm px-3 py-2 text-sm text-red-600 max-w-[85%]">Sorry, I had trouble connecting. Please try again.</div></div>'
+      '<div class="flex gap-2"><div class="w-7 h-7 bg-gray-900 rounded-full flex items-center justify-center flex-shrink-0 text-xs">&#128054;</div><div class="bg-red-500/10 rounded-xl rounded-tl-sm px-3 py-2 text-sm text-red-400 max-w-[85%]">Sorry, I had trouble connecting. Please try again.</div></div>'
     );
     container.scrollTop = container.scrollHeight;
   });
