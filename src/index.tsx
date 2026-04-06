@@ -658,7 +658,7 @@ Allow: /
 app.get('/llms.txt', (c) => {
   return c.text(`# Roof Manager
 
-> Roof Manager is an AI-powered SaaS platform for roofing contractors, solar installers, insurance adjusters, and property managers. It generates professional satellite-powered roof measurement reports from Google's Solar API with LiDAR-calibrated 3D building models, delivering 99.9% accuracy in under 60 seconds. The platform includes a full CRM with invoicing, proposals, job tracking, an AI phone secretary, door-to-door sales manager, and team management. Available in 40+ countries. Headquartered in Alberta, Canada.
+> Roof Manager is an AI-powered SaaS platform for roofing contractors, solar installers, insurance adjusters, and property managers. It generates professional satellite-powered roof measurement reports from Google's Solar API with LiDAR-calibrated 3D building models, delivering 99% accuracy in under 60 seconds. The platform includes a full CRM with invoicing, proposals, job tracking, an AI phone secretary, door-to-door sales manager, and team management. Available in 40+ countries. Headquartered in Alberta, Canada.
 
 ## Services & Products
 - [All Services](https://www.roofmanager.ca/services): Complete directory of all Roof Manager services — measurement reports, solar analysis, CRM, invoicing, AI secretary, website builder, D2D manager, virtual try-on, email outreach, team management, job scheduling, material calculator
@@ -720,7 +720,7 @@ Roof Manager is a Software-as-a-Service (SaaS) platform that generates professio
 **Key differentiators:**
 - Reports delivered in under 60 seconds (vs 24-48 hours from legacy providers)
 - $8 CAD per report (vs $50-100+ from EagleView)
-- 99.9% measurement accuracy verified against manual measurements
+- 99% measurement accuracy verified against manual measurements
 - Full CRM, invoicing, AI secretary included — not just reports
 - Available in 40+ countries (not limited to North America)
 
@@ -1167,7 +1167,7 @@ app.get('/roof-measurement/:city', (c) => {
   {"@type":"Question","name":"What is the best roof measurement software in ${city.name}?","acceptedAnswer":{"@type":"Answer","text":"Roof Manager is the leading AI-powered roof measurement platform used by ${city.name} roofing contractors. It generates professional satellite-powered reports with 3D area, pitch analysis, edge breakdowns, and material BOM in under 60 seconds."}},
   {"@type":"Question","name":"How much does a roof report cost in ${city.name}?","acceptedAnswer":{"@type":"Answer","text":"Roof measurement reports for ${city.name} properties cost $8 CAD per report after your 3 free trial reports. Volume discounts are available."}},
   {"@type":"Question","name":"Does Roof Manager work for ${city.name}, ${city.province} roofing contractors?","acceptedAnswer":{"@type":"Answer","text":"Yes! Roof Manager has excellent satellite coverage across ${city.name} and all of ${city.province}. Most urban and suburban addresses have high-quality imagery available."}},
-  {"@type":"Question","name":"How accurate are satellite roof measurements in ${city.name}?","acceptedAnswer":{"@type":"Answer","text":"Roof Manager delivers 99.9% accuracy for ${city.name} properties using Google's LiDAR-calibrated 3D building models."}},
+  {"@type":"Question","name":"How accurate are satellite roof measurements in ${city.name}?","acceptedAnswer":{"@type":"Answer","text":"Roof Manager delivers 99% accuracy for ${city.name} properties using Google's LiDAR-calibrated 3D building models."}},
   {"@type":"Question","name":"What's included in a roof report for ${city.name} properties?","acceptedAnswer":{"@type":"Answer","text":"Every report includes total 3D area, edge breakdowns, complete material BOM, segment analysis, solar potential data, complexity rating, and a professional PDF."}}
 ]}
 </script>
@@ -1249,7 +1249,7 @@ app.get('/roof-measurement/:city', (c) => {
         </div>
         <div class="bg-[#111111] border border-white/10 rounded-xl p-6">
           <h3 class="text-white font-bold mb-2">How accurate are satellite roof measurements in ${city.name}?</h3>
-          <p class="text-gray-400 text-sm leading-relaxed">Roof Manager delivers 99.9% accuracy for ${city.name} properties using Google's LiDAR-calibrated 3D building models. Measurements include pitch-adjusted surface area, not just footprint — giving you the true sloped area needed for accurate material ordering.</p>
+          <p class="text-gray-400 text-sm leading-relaxed">Roof Manager delivers 99% accuracy for ${city.name} properties using Google's LiDAR-calibrated 3D building models. Measurements include pitch-adjusted surface area, not just footprint — giving you the true sloped area needed for accurate material ordering.</p>
         </div>
         <div class="bg-[#111111] border border-white/10 rounded-xl p-6">
           <h3 class="text-white font-bold mb-2">What's included in a roof report for ${city.name} properties?</h3>
@@ -3275,7 +3275,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
       }
     });
   </script>
-  <script src="/static/landing.js?v=20260405g"></script>
+  <script src="/static/landing.js?v=20260406a"></script>
   ${getRoverWidget()}
 </body>
 </html>`
@@ -3912,7 +3912,7 @@ function getServicesPageHTML() {
         </div>
         <div class="bg-[#111111] border border-white/10 rounded-2xl p-8 text-center">
           <i class="fas fa-satellite-dish text-[#00FF88] text-6xl mb-4"></i>
-          <div class="text-white font-black text-4xl mb-1">99.9%</div>
+          <div class="text-white font-black text-4xl mb-1">99%</div>
           <div class="text-gray-500 text-sm">Measurement Accuracy</div>
           <div class="text-white font-black text-4xl mt-4 mb-1">&lt;60s</div>
           <div class="text-gray-500 text-sm">Report Delivery</div>
@@ -4388,7 +4388,7 @@ function getCoveragePageHTML() {
       <div class="flex flex-wrap justify-center gap-4 text-sm text-gray-500">
         <span class="bg-white/5 rounded-full px-4 py-2"><i class="fas fa-satellite text-[#00FF88] mr-2"></i>Satellite imagery</span>
         <span class="bg-white/5 rounded-full px-4 py-2"><i class="fas fa-bolt text-[#22d3ee] mr-2"></i>Under 60 seconds</span>
-        <span class="bg-white/5 rounded-full px-4 py-2"><i class="fas fa-bullseye text-[#a78bfa] mr-2"></i>99.9% accuracy</span>
+        <span class="bg-white/5 rounded-full px-4 py-2"><i class="fas fa-bullseye text-[#a78bfa] mr-2"></i>99% accuracy</span>
       </div>
     </div>
   </section>

@@ -148,7 +148,7 @@ function renderHero() {
             </h1>
 
             <p class="text-lg lg:text-xl text-gray-400 mb-10 max-w-xl leading-relaxed">
-              AI-powered roof measurements from satellite imagery. <span class="text-white font-medium">99.9% accuracy</span> in under <span class="text-white font-medium">60 seconds.</span>
+              AI-powered roof measurements from satellite imagery. <span class="text-white font-medium">99% accuracy</span> in under <span class="text-white font-medium">60 seconds.</span>
             </p>
 
             <!-- Dual CTAs -->
@@ -317,7 +317,7 @@ function renderTrustBadges() {
     { icon: 'fas fa-shield-alt', text: 'PCI DSS Compliant', color: '#00FF88' },
     { icon: 'fas fa-lock', text: '256-bit SSL', color: '#22d3ee' },
     { icon: 'fab fa-google', text: 'Google Cloud Partner', color: '#00FF88' },
-    { icon: 'fas fa-bullseye', text: '99.9% Accuracy', color: '#22d3ee' },
+    { icon: 'fas fa-bullseye', text: '99% Accuracy', color: '#22d3ee' },
     { icon: 'fas fa-credit-card', text: 'Square Verified', color: '#00FF88' },
     { icon: 'fas fa-bolt', text: '<60s Delivery', color: '#22d3ee' },
     { icon: 'fas fa-cloud', text: 'Cloudflare Protected', color: '#00FF88' },
@@ -409,9 +409,9 @@ function renderValueProp() {
     {
       icon: 'fas fa-satellite-dish',
       accent: '#00FF88',
-      title: 'Quote With 99.9% Confidence',
+      title: 'Quote With 99% Confidence',
       desc: "No more guesswork. Google's Solar API with LiDAR-calibrated 3D models delivers precision measurements from satellite imagery. Quote every job knowing your numbers are right.",
-      metric: '99.9%',
+      metric: '99%',
       metricLabel: 'Accuracy Rate',
       cta: 'See Accuracy Data',
       ctaLink: '#pricing'
@@ -888,7 +888,7 @@ function renderPlatformShowcase() {
     {
       title: '3D Models, Not Guesses',
       subtitle: 'Full CRM & Business Management',
-      desc: 'Manage customers, create invoices, send proposals, track jobs, and manage your D2D sales team. Quote with 99.9% confidence using satellite 3D models. Everything integrated in one platform built for roofers.',
+      desc: 'Manage customers, create invoices, send proposals, track jobs, and manage your D2D sales team. Quote with 99% confidence using satellite 3D models. Everything integrated in one platform built for roofers.',
       benefit: 'Close 23% more deals with accurate, professional quotes',
       cta: 'Explore CRM Features',
       ctaLink: '/signup',
