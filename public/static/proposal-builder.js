@@ -83,6 +83,10 @@ document.addEventListener('DOMContentLoaded', () => {
     };
   }
 
+  // Expose state and render on window so inline onclick/onchange handlers can access them
+  window.__pbState = state;
+  window.__pbRender = function() { render(); };
+
   load();
   checkPrereqs();
 
@@ -185,12 +189,12 @@ document.addEventListener('DOMContentLoaded', () => {
           '<p style="color:#374151;font-size:14px;margin-bottom:12px"><i class="fas fa-info-circle" style="color:#2563eb;margin-right:6px"></i>No material catalog set up yet. Seed default roofing materials?</p>' +
           '<button onclick="window._pb.seedCatalog()" style="background:#2563eb;color:white;border:none;padding:10px 24px;border-radius:8px;font-weight:700;cursor:pointer">Seed Default Materials</button>' +
           '<span style="color:#9ca3af;margin:0 12px">or</span>' +
-          '<button onclick="state.createStep=3;render()" style="background:#f3f4f6;color:#6b7280;border:1px solid #e5e7eb;padding:10px 24px;border-radius:8px;font-weight:600;cursor:pointer">Skip — I\'ll add items manually</button>' +
+          '<button onclick="window.__pbState.createStep=3;window.__pbRender()" style="background:#f3f4f6;color:#6b7280;border:1px solid #e5e7eb;padding:10px 24px;border-radius:8px;font-weight:600;cursor:pointer">Skip — I\'ll add items manually</button>' +
         '</div>' : '') +
 
       '<div style="display:flex;justify-content:space-between;margin-top:16px">' +
-        '<button onclick="state.createStep=1;state.mode=\'list\';render()" style="background:#f3f4f6;color:#6b7280;border:1px solid #e5e7eb;padding:12px 24px;border-radius:999px;font-weight:600;cursor:pointer">&larr; Back</button>' +
-        '<button onclick="state.createStep=3;render()" style="background:#2563eb;color:white;border:none;padding:12px 32px;border-radius:999px;font-weight:800;cursor:pointer">Continue &rarr;</button>' +
+        '<button onclick="window.__pbState.createStep=1;window.__pbState.mode=\'list\';window.__pbRender()" style="background:#f3f4f6;color:#6b7280;border:1px solid #e5e7eb;padding:12px 24px;border-radius:999px;font-weight:600;cursor:pointer">&larr; Back</button>' +
+        '<button onclick="window.__pbState.createStep=3;window.__pbRender()" style="background:#2563eb;color:white;border:none;padding:12px 32px;border-radius:999px;font-weight:800;cursor:pointer">Continue &rarr;</button>' +
       '</div>' +
     '</div>';
   }
@@ -247,7 +251,7 @@ document.addEventListener('DOMContentLoaded', () => {
       '</div>' +
 
       '<div style="display:flex;justify-content:space-between;margin-top:16px">' +
-        '<button onclick="state.createStep=2;render()" style="background:#f3f4f6;color:#6b7280;border:1px solid #e5e7eb;padding:12px 24px;border-radius:999px;font-weight:600;cursor:pointer">&larr; Back</button>' +
+        '<button onclick="window.__pbState.createStep=2;window.__pbRender()" style="background:#f3f4f6;color:#6b7280;border:1px solid #e5e7eb;padding:12px 24px;border-radius:999px;font-weight:600;cursor:pointer">&larr; Back</button>' +
         '<button onclick="window._pb.goToStep4()" style="background:#2563eb;color:white;border:none;padding:12px 32px;border-radius:999px;font-weight:800;cursor:pointer">Continue to Estimate &rarr;</button>' +
       '</div>' +
     '</div>';
@@ -531,7 +535,7 @@ document.addEventListener('DOMContentLoaded', () => {
         '<h3 class="text-lg font-bold text-gray-900 mb-4"><i class="fas fa-th text-brand-500 mr-2"></i>Per Square Pricing</h3>' +
         '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;text-align:center">' +
           '<div style="background:white;border:1px solid #e5e7eb;border-radius:8px;padding:16px"><div style="color:#6b7280;font-size:11px;text-transform:uppercase;margin-bottom:4px">Roof Squares</div><div style="color:#1a1a2e;font-size:28px;font-weight:800">' + (state.selectedReport ? Math.ceil((state.selectedReport.roof_area_sqft || 0) / 100) : '—') + '</div></div>' +
-          '<div style="background:white;border:1px solid #e5e7eb;border-radius:8px;padding:16px"><div style="color:#6b7280;font-size:11px;text-transform:uppercase;margin-bottom:4px">Your Cost Per Square</div><div>$<input id="pps-price" type="number" value="' + (state.pricePerSquare || 350) + '" onchange="state.pricePerSquare=Number(this.value);window._pb.updatePerSquare()" style="width:80px;background:transparent;border:none;border-bottom:2px solid #2563eb;color:#1a1a2e;font-size:28px;font-weight:800;text-align:center"></div></div>' +
+          '<div style="background:white;border:1px solid #e5e7eb;border-radius:8px;padding:16px"><div style="color:#6b7280;font-size:11px;text-transform:uppercase;margin-bottom:4px">Your Cost Per Square</div><div>$<input id="pps-price" type="number" value="' + (state.pricePerSquare || 350) + '" onchange="window.__pbState.pricePerSquare=Number(this.value);window._pb.updatePerSquare()" style="width:80px;background:transparent;border:none;border-bottom:2px solid #2563eb;color:#1a1a2e;font-size:28px;font-weight:800;text-align:center"></div></div>' +
           '<div style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;padding:16px"><div style="color:#2563eb;font-size:11px;text-transform:uppercase;margin-bottom:4px">Total Estimate</div><div style="color:#2563eb;font-size:28px;font-weight:800">$' + ((state.selectedReport ? Math.ceil((state.selectedReport.roof_area_sqft || 0) / 100) : 0) * (state.pricePerSquare || 350)).toLocaleString() + '</div></div>' +
         '</div>' +
       '</div>'
@@ -606,14 +610,14 @@ document.addEventListener('DOMContentLoaded', () => {
     <div class="bg-white rounded-xl border border-gray-200 p-6 mb-6">
       <h3 class="text-lg font-bold text-gray-900 mb-4"><i class="fas fa-paperclip text-purple-500 mr-2"></i>Proposal Attachments & Certifications</h3>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-        <label style="display:flex;align-items:center;gap:8px;color:#374151;font-size:13px;cursor:pointer;padding:10px;background:#f3f4f6;border-radius:8px"><input type="checkbox" id="att-report" ${state.attachments.includeRoofReport ? 'checked' : ''} onchange="state.attachments.includeRoofReport=this.checked"> Include Roof Report with Proposal</label>
-        <label style="display:flex;align-items:center;gap:8px;color:#374151;font-size:13px;cursor:pointer;padding:10px;background:#f3f4f6;border-radius:8px"><input type="checkbox" id="att-bom" ${state.attachments.includeMaterialBOM ? 'checked' : ''} onchange="state.attachments.includeMaterialBOM=this.checked"> Include Material BOM with Proposal</label>
+        <label style="display:flex;align-items:center;gap:8px;color:#374151;font-size:13px;cursor:pointer;padding:10px;background:#f3f4f6;border-radius:8px"><input type="checkbox" id="att-report" ${state.attachments.includeRoofReport ? 'checked' : ''} onchange="window.__pbState.attachments.includeRoofReport=this.checked"> Include Roof Report with Proposal</label>
+        <label style="display:flex;align-items:center;gap:8px;color:#374151;font-size:13px;cursor:pointer;padding:10px;background:#f3f4f6;border-radius:8px"><input type="checkbox" id="att-bom" ${state.attachments.includeMaterialBOM ? 'checked' : ''} onchange="window.__pbState.attachments.includeMaterialBOM=this.checked"> Include Material BOM with Proposal</label>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px">
-        <div><label class="block text-xs font-semibold text-gray-500 mb-1"><i class="fas fa-shield-alt text-green-500 mr-1"></i>Insurance Certificate #</label><input id="att-insurance" value="${state.attachments.insuranceCert || ''}" onchange="state.attachments.insuranceCert=this.value" placeholder="e.g. INS-2026-12345" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>
-        <div><label class="block text-xs font-semibold text-gray-500 mb-1"><i class="fas fa-file-contract text-cyan-500 mr-1"></i>Warranty Document</label><input id="att-warranty" value="${state.attachments.warrantyDoc || ''}" onchange="state.attachments.warrantyDoc=this.value" placeholder="e.g. 10-Year Manufacturer Warranty" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>
-        <div><label class="block text-xs font-semibold text-gray-500 mb-1"><i class="fas fa-hard-hat text-amber-500 mr-1"></i>WCB Coverage #</label><input id="att-wcb" value="${state.attachments.wcbCoverage || ''}" onchange="state.attachments.wcbCoverage=this.value" placeholder="e.g. WCB-AB-987654" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>
-        <div><label class="block text-xs font-semibold text-gray-500 mb-1"><i class="fas fa-plus-circle text-purple-500 mr-1"></i>Custom Attachment</label><input id="att-custom" value="${state.attachments.customAttachment || ''}" onchange="state.attachments.customAttachment=this.value" placeholder="e.g. Business License, BBB Accreditation" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>
+        <div><label class="block text-xs font-semibold text-gray-500 mb-1"><i class="fas fa-shield-alt text-green-500 mr-1"></i>Insurance Certificate #</label><input id="att-insurance" value="${state.attachments.insuranceCert || ''}" onchange="window.__pbState.attachments.insuranceCert=this.value" placeholder="e.g. INS-2026-12345" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>
+        <div><label class="block text-xs font-semibold text-gray-500 mb-1"><i class="fas fa-file-contract text-cyan-500 mr-1"></i>Warranty Document</label><input id="att-warranty" value="${state.attachments.warrantyDoc || ''}" onchange="window.__pbState.attachments.warrantyDoc=this.value" placeholder="e.g. 10-Year Manufacturer Warranty" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>
+        <div><label class="block text-xs font-semibold text-gray-500 mb-1"><i class="fas fa-hard-hat text-amber-500 mr-1"></i>WCB Coverage #</label><input id="att-wcb" value="${state.attachments.wcbCoverage || ''}" onchange="window.__pbState.attachments.wcbCoverage=this.value" placeholder="e.g. WCB-AB-987654" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>
+        <div><label class="block text-xs font-semibold text-gray-500 mb-1"><i class="fas fa-plus-circle text-purple-500 mr-1"></i>Custom Attachment</label><input id="att-custom" value="${state.attachments.customAttachment || ''}" onchange="window.__pbState.attachments.customAttachment=this.value" placeholder="e.g. Business License, BBB Accreditation" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>
       </div>
     </div>
 
@@ -626,8 +630,8 @@ document.addEventListener('DOMContentLoaded', () => {
     <!-- Actions -->
     ${state.createStep === 4 ?
       '<div style="display:flex;justify-content:space-between;margin-top:20px;margin-bottom:32px">' +
-        '<button onclick="state.createStep=3;render()" style="background:#f3f4f6;color:#6b7280;border:1px solid #e5e7eb;padding:12px 24px;border-radius:999px;font-weight:600;cursor:pointer">&larr; Back</button>' +
-        '<button onclick="state.createStep=5;render()" style="background:#2563eb;color:white;border:none;padding:12px 32px;border-radius:999px;font-weight:800;cursor:pointer">Set Customer Pricing &rarr;</button>' +
+        '<button onclick="window.__pbState.createStep=3;window.__pbRender()" style="background:#f3f4f6;color:#6b7280;border:1px solid #e5e7eb;padding:12px 24px;border-radius:999px;font-weight:600;cursor:pointer">&larr; Back</button>' +
+        '<button onclick="window._pb.goToStep5()" style="background:#2563eb;color:white;border:none;padding:12px 32px;border-radius:999px;font-weight:800;cursor:pointer">Set Customer Pricing &rarr;</button>' +
       '</div>'
     : `<div class="flex justify-end gap-3 mb-8">
       <button onclick="window._pb.backToList()" class="px-5 py-2.5 bg-gray-200 text-gray-700 rounded-xl text-sm font-medium hover:bg-gray-300">Cancel</button>
@@ -697,15 +701,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Mode toggle
         '<div style="display:flex;gap:8px;margin-bottom:20px">' +
-          '<button onclick="state.pricingEngineMode=\'markup\';render()" style="flex:1;padding:10px;border-radius:8px;font-weight:600;font-size:13px;cursor:pointer;border:2px solid ' + (state.pricingEngineMode === 'markup' ? '#2563eb' : '#e5e7eb') + ';background:' + (state.pricingEngineMode === 'markup' ? '#eef2ff' : 'white') + ';color:' + (state.pricingEngineMode === 'markup' ? '#2563eb' : '#6b7280') + '"><i class="fas fa-percent" style="margin-right:6px"></i>Markup % on All Items</button>' +
-          '<button onclick="state.pricingEngineMode=\'per_square_customer\';render()" style="flex:1;padding:10px;border-radius:8px;font-weight:600;font-size:13px;cursor:pointer;border:2px solid ' + (state.pricingEngineMode === 'per_square_customer' ? '#2563eb' : '#e5e7eb') + ';background:' + (state.pricingEngineMode === 'per_square_customer' ? '#eef2ff' : 'white') + ';color:' + (state.pricingEngineMode === 'per_square_customer' ? '#2563eb' : '#6b7280') + '"><i class="fas fa-th" style="margin-right:6px"></i>Price Per Square to Customer</button>' +
+          '<button onclick="window.__pbState.pricingEngineMode=\'markup\';window.__pbRender()" style="flex:1;padding:10px;border-radius:8px;font-weight:600;font-size:13px;cursor:pointer;border:2px solid ' + (state.pricingEngineMode === 'markup' ? '#2563eb' : '#e5e7eb') + ';background:' + (state.pricingEngineMode === 'markup' ? '#eef2ff' : 'white') + ';color:' + (state.pricingEngineMode === 'markup' ? '#2563eb' : '#6b7280') + '"><i class="fas fa-percent" style="margin-right:6px"></i>Markup % on All Items</button>' +
+          '<button onclick="window.__pbState.pricingEngineMode=\'per_square_customer\';window.__pbRender()" style="flex:1;padding:10px;border-radius:8px;font-weight:600;font-size:13px;cursor:pointer;border:2px solid ' + (state.pricingEngineMode === 'per_square_customer' ? '#2563eb' : '#e5e7eb') + ';background:' + (state.pricingEngineMode === 'per_square_customer' ? '#eef2ff' : 'white') + ';color:' + (state.pricingEngineMode === 'per_square_customer' ? '#2563eb' : '#6b7280') + '"><i class="fas fa-th" style="margin-right:6px"></i>Price Per Square to Customer</button>' +
         '</div>' +
 
         (state.pricingEngineMode === 'markup' ?
           // Markup mode
           '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:16px">' +
             '<div style="background:#f8f9fa;border-radius:8px;padding:16px;text-align:center"><div style="color:#6b7280;font-size:11px;text-transform:uppercase;margin-bottom:4px">Your Total Cost</div><div style="color:#1a1a2e;font-size:24px;font-weight:800">$' + totalCost.toFixed(2) + '</div></div>' +
-            '<div style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;padding:16px;text-align:center"><div style="color:#2563eb;font-size:11px;text-transform:uppercase;margin-bottom:4px">Markup %</div><div><input type="number" value="' + markup + '" onchange="state.markupPercent=Number(this.value);render()" style="width:80px;border:none;background:transparent;font-size:24px;font-weight:800;color:#2563eb;text-align:center">%</div></div>' +
+            '<div style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;padding:16px;text-align:center"><div style="color:#2563eb;font-size:11px;text-transform:uppercase;margin-bottom:4px">Markup %</div><div><input type="number" value="' + markup + '" onchange="window.__pbState.markupPercent=Number(this.value);window.__pbRender()" style="width:80px;border:none;background:transparent;font-size:24px;font-weight:800;color:#2563eb;text-align:center">%</div></div>' +
             '<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px;text-align:center"><div style="color:#16a34a;font-size:11px;text-transform:uppercase;margin-bottom:4px">Customer Price</div><div style="color:#16a34a;font-size:24px;font-weight:800">$' + customerTotal.toFixed(2) + '</div></div>' +
           '</div>' +
           // Per-item breakdown
@@ -722,7 +726,7 @@ document.addEventListener('DOMContentLoaded', () => {
           // Per-square customer mode
           '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin-bottom:16px">' +
             '<div style="background:#f8f9fa;border-radius:8px;padding:14px;text-align:center"><div style="color:#6b7280;font-size:10px;text-transform:uppercase;margin-bottom:4px">Squares</div><div style="color:#1a1a2e;font-size:20px;font-weight:800">' + (state.selectedReport ? Math.ceil((state.selectedReport.roof_area_sqft||0)/100) : '\u2014') + '</div></div>' +
-            '<div style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;padding:14px;text-align:center"><div style="color:#2563eb;font-size:10px;text-transform:uppercase;margin-bottom:4px">$/Square to Customer</div><div>$<input type="number" value="' + (state.customerPricePerSquare||0) + '" onchange="state.customerPricePerSquare=Number(this.value);render()" style="width:70px;border:none;background:transparent;font-size:20px;font-weight:800;color:#2563eb;text-align:center"></div></div>' +
+            '<div style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;padding:14px;text-align:center"><div style="color:#2563eb;font-size:10px;text-transform:uppercase;margin-bottom:4px">$/Square to Customer</div><div>$<input type="number" value="' + (state.customerPricePerSquare||0) + '" onchange="window.__pbState.customerPricePerSquare=Number(this.value);window.__pbRender()" style="width:70px;border:none;background:transparent;font-size:20px;font-weight:800;color:#2563eb;text-align:center"></div></div>' +
             '<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:14px;text-align:center"><div style="color:#16a34a;font-size:10px;text-transform:uppercase;margin-bottom:4px">Customer Total</div><div style="color:#16a34a;font-size:20px;font-weight:800">$' + customerTotal.toFixed(2) + '</div></div>' +
             '<div style="background:#f8f9fa;border-radius:8px;padding:14px;text-align:center"><div style="color:#6b7280;font-size:10px;text-transform:uppercase;margin-bottom:4px">Your Cost</div><div style="color:#dc2626;font-size:20px;font-weight:800">$' + totalCost.toFixed(2) + '</div></div>' +
           '</div>'
@@ -740,21 +744,21 @@ document.addEventListener('DOMContentLoaded', () => {
       '<div style="background:white;border:1px solid #e5e7eb;border-radius:12px;padding:20px;margin-bottom:20px">' +
         '<h3 style="color:#1a1a2e;font-size:16px;font-weight:700;margin-bottom:16px"><i class="fas fa-eye" style="color:#7c3aed;margin-right:8px"></i>What the Customer Sees</h3>' +
         '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
-          '<label style="display:flex;align-items:center;gap:8px;padding:10px;background:#f8f9fa;border-radius:8px;cursor:pointer;font-size:13px;color:#374151"><input type="checkbox" ' + (state.showLineItemsToCustomer ? 'checked' : '') + ' onchange="state.showLineItemsToCustomer=this.checked;render()"> Show line item breakdown</label>' +
-          '<label style="display:flex;align-items:center;gap:8px;padding:10px;background:#f8f9fa;border-radius:8px;cursor:pointer;font-size:13px;color:#374151"><input type="checkbox" ' + (state.showAreaToCustomer ? 'checked' : '') + ' onchange="state.showAreaToCustomer=this.checked;render()"> Show roof area</label>' +
-          '<label style="display:flex;align-items:center;gap:8px;padding:10px;background:#f8f9fa;border-radius:8px;cursor:pointer;font-size:13px;color:#374151"><input type="checkbox" ' + (state.showPitchToCustomer ? 'checked' : '') + ' onchange="state.showPitchToCustomer=this.checked;render()"> Show roof pitch</label>' +
-          '<label style="display:flex;align-items:center;gap:8px;padding:10px;background:#f8f9fa;border-radius:8px;cursor:pointer;font-size:13px;color:#374151"><input type="checkbox" ' + (state.showEdgesToCustomer ? 'checked' : '') + ' onchange="state.showEdgesToCustomer=this.checked;render()"> Show edge breakdown</label>' +
-          '<label style="display:flex;align-items:center;gap:8px;padding:10px;background:#f8f9fa;border-radius:8px;cursor:pointer;font-size:13px;color:#374151"><input type="checkbox" ' + (state.showMaterialsToCustomer ? 'checked' : '') + ' onchange="state.showMaterialsToCustomer=this.checked;render()"> Show material BOM</label>' +
-          '<label style="display:flex;align-items:center;gap:8px;padding:10px;background:#f8f9fa;border-radius:8px;cursor:pointer;font-size:13px;color:#374151"><input type="checkbox" ' + (state.showSolarToCustomer ? 'checked' : '') + ' onchange="state.showSolarToCustomer=this.checked;render()"> Show solar data</label>' +
-          '<label style="display:flex;align-items:center;gap:8px;padding:10px;background:#f8f9fa;border-radius:8px;cursor:pointer;font-size:13px;color:#374151"><input type="checkbox" ' + (state.attachments.includeRoofReport ? 'checked' : '') + ' onchange="state.attachments.includeRoofReport=this.checked;render()"> Attach full roof report PDF</label>' +
-          '<label style="display:flex;align-items:center;gap:8px;padding:10px;background:#f8f9fa;border-radius:8px;cursor:pointer;font-size:13px;color:#374151"><input type="checkbox" ' + (state.attachments.includeMaterialBOM ? 'checked' : '') + ' onchange="state.attachments.includeMaterialBOM=this.checked;render()"> Attach material BOM</label>' +
+          '<label style="display:flex;align-items:center;gap:8px;padding:10px;background:#f8f9fa;border-radius:8px;cursor:pointer;font-size:13px;color:#374151"><input type="checkbox" ' + (state.showLineItemsToCustomer ? 'checked' : '') + ' onchange="window.__pbState.showLineItemsToCustomer=this.checked;window.__pbRender()"> Show line item breakdown</label>' +
+          '<label style="display:flex;align-items:center;gap:8px;padding:10px;background:#f8f9fa;border-radius:8px;cursor:pointer;font-size:13px;color:#374151"><input type="checkbox" ' + (state.showAreaToCustomer ? 'checked' : '') + ' onchange="window.__pbState.showAreaToCustomer=this.checked;window.__pbRender()"> Show roof area</label>' +
+          '<label style="display:flex;align-items:center;gap:8px;padding:10px;background:#f8f9fa;border-radius:8px;cursor:pointer;font-size:13px;color:#374151"><input type="checkbox" ' + (state.showPitchToCustomer ? 'checked' : '') + ' onchange="window.__pbState.showPitchToCustomer=this.checked;window.__pbRender()"> Show roof pitch</label>' +
+          '<label style="display:flex;align-items:center;gap:8px;padding:10px;background:#f8f9fa;border-radius:8px;cursor:pointer;font-size:13px;color:#374151"><input type="checkbox" ' + (state.showEdgesToCustomer ? 'checked' : '') + ' onchange="window.__pbState.showEdgesToCustomer=this.checked;window.__pbRender()"> Show edge breakdown</label>' +
+          '<label style="display:flex;align-items:center;gap:8px;padding:10px;background:#f8f9fa;border-radius:8px;cursor:pointer;font-size:13px;color:#374151"><input type="checkbox" ' + (state.showMaterialsToCustomer ? 'checked' : '') + ' onchange="window.__pbState.showMaterialsToCustomer=this.checked;window.__pbRender()"> Show material BOM</label>' +
+          '<label style="display:flex;align-items:center;gap:8px;padding:10px;background:#f8f9fa;border-radius:8px;cursor:pointer;font-size:13px;color:#374151"><input type="checkbox" ' + (state.showSolarToCustomer ? 'checked' : '') + ' onchange="window.__pbState.showSolarToCustomer=this.checked;window.__pbRender()"> Show solar data</label>' +
+          '<label style="display:flex;align-items:center;gap:8px;padding:10px;background:#f8f9fa;border-radius:8px;cursor:pointer;font-size:13px;color:#374151"><input type="checkbox" ' + (state.attachments.includeRoofReport ? 'checked' : '') + ' onchange="window.__pbState.attachments.includeRoofReport=this.checked;window.__pbRender()"> Attach full roof report PDF</label>' +
+          '<label style="display:flex;align-items:center;gap:8px;padding:10px;background:#f8f9fa;border-radius:8px;cursor:pointer;font-size:13px;color:#374151"><input type="checkbox" ' + (state.attachments.includeMaterialBOM ? 'checked' : '') + ' onchange="window.__pbState.attachments.includeMaterialBOM=this.checked;window.__pbRender()"> Attach material BOM</label>' +
         '</div>' +
       '</div>' +
 
       // Navigation
       '<div style="display:flex;justify-content:space-between;margin-top:20px">' +
-        '<button onclick="state.createStep=4;render()" style="background:#f3f4f6;color:#6b7280;border:1px solid #e5e7eb;padding:12px 24px;border-radius:999px;font-weight:600;cursor:pointer">&larr; Back to Estimate</button>' +
-        '<button onclick="state.createStep=6;render()" style="background:#2563eb;color:white;border:none;padding:12px 32px;border-radius:999px;font-weight:800;cursor:pointer">Generate Final Proposal &rarr;</button>' +
+        '<button onclick="window.__pbState.createStep=4;window.__pbRender()" style="background:#f3f4f6;color:#6b7280;border:1px solid #e5e7eb;padding:12px 24px;border-radius:999px;font-weight:600;cursor:pointer">&larr; Back to Estimate</button>' +
+        '<button onclick="window.__pbState.createStep=6;window.__pbRender()" style="background:#2563eb;color:white;border:none;padding:12px 32px;border-radius:999px;font-weight:800;cursor:pointer">Generate Final Proposal &rarr;</button>' +
       '</div>' +
     '</div>';
   }
@@ -841,26 +845,48 @@ document.addEventListener('DOMContentLoaded', () => {
           </thead>
           <tbody>
             ${f.items.map(item => {
-              const amt = (item.quantity || 0) * (item.unit_price || 0);
+              var markupPct = state.markupPercent || 30;
+              var custUnitPrice, custAmount;
+              if (state.pricingEngineMode === 'per_square_customer') {
+                custUnitPrice = Number(item.unit_price || 0);
+                custAmount = Number(item.quantity || 0) * custUnitPrice;
+              } else {
+                custUnitPrice = Number(item.unit_price || 0) * (1 + markupPct / 100);
+                custAmount = Number(item.quantity || 0) * custUnitPrice;
+              }
               return `<tr class="border-b border-gray-100">
                 <td class="px-4 py-2">${item.description || ''}</td>
                 <td class="px-4 py-2 text-center">${item.quantity}</td>
                 <td class="px-4 py-2 text-center">${item.unit}</td>
-                <td class="px-4 py-2 text-right">$${(item.unit_price || 0).toFixed(2)}</td>
-                <td class="px-4 py-2 text-right font-medium">$${amt.toFixed(2)}</td>
+                <td class="px-4 py-2 text-right">$${custUnitPrice.toFixed(2)}</td>
+                <td class="px-4 py-2 text-right font-medium">$${custAmount.toFixed(2)}</td>
               </tr>`;
             }).join('')}
           </tbody>
         </table>
 
-        <div class="mt-4 flex justify-end">
+        ${(() => {
+          var markupPct = state.markupPercent || 30;
+          var costTotal = (state.form.items || []).reduce((s, i) => s + Number(i.quantity || 0) * Number(i.unit_price || 0), 0);
+          var custSubtotal;
+          if (state.pricingEngineMode === 'per_square_customer' && state.selectedReport) {
+            custSubtotal = Math.ceil((state.selectedReport.roof_area_sqft || 0) / 100) * (state.customerPricePerSquare || 0);
+          } else {
+            custSubtotal = costTotal * (1 + markupPct / 100);
+          }
+          var custDisc = f.discount_type === 'percentage' ? custSubtotal * (f.discount_amount / 100) : (f.discount_amount || 0);
+          var custTaxable = custSubtotal; // simplified — apply tax on full customer subtotal
+          var custTax = Math.round((custSubtotal - custDisc) * (f.tax_rate / 100) * 100) / 100;
+          var custTotal = Math.round((custSubtotal - custDisc + custTax) * 100) / 100;
+          return `<div class="mt-4 flex justify-end">
           <div class="w-72 space-y-1">
-            <div class="flex justify-between text-sm"><span class="text-gray-500">Subtotal</span><span>$${sub.toFixed(2)}</span></div>
-            ${disc > 0 ? `<div class="flex justify-between text-sm text-red-600"><span>Discount</span><span>-$${disc.toFixed(2)}</span></div>` : ''}
-            <div class="flex justify-between text-sm"><span class="text-gray-500">GST (${f.tax_rate}%)</span><span>$${tax.toFixed(2)}</span></div>
-            <div class="flex justify-between text-lg font-bold border-t-2 border-gray-300 pt-2 mt-1"><span>Total (CAD)</span><span class="text-green-600">$${total.toFixed(2)}</span></div>
+            <div class="flex justify-between text-sm"><span class="text-gray-500">Subtotal</span><span>$${custSubtotal.toFixed(2)}</span></div>
+            ${custDisc > 0 ? `<div class="flex justify-between text-sm text-red-600"><span>Discount</span><span>-$${custDisc.toFixed(2)}</span></div>` : ''}
+            <div class="flex justify-between text-sm"><span class="text-gray-500">GST (${f.tax_rate}%)</span><span>$${custTax.toFixed(2)}</span></div>
+            <div class="flex justify-between text-lg font-bold border-t-2 border-gray-300 pt-2 mt-1"><span>Total (CAD)</span><span class="text-green-600">$${custTotal.toFixed(2)}</span></div>
           </div>
-        </div>
+        </div>`;
+        })()}
       </div>
 
       ${f.warranty_terms ? `<div class="p-8 border-b border-gray-200"><h3 class="text-xs font-semibold text-gray-500 uppercase mb-2">Warranty Terms</h3><div class="text-gray-700 text-sm whitespace-pre-wrap">${f.warranty_terms}</div></div>` : ''}
@@ -1265,7 +1291,7 @@ document.addEventListener('DOMContentLoaded', () => {
       state.mode = 'supplier-orders';
       render();
     },
-    backToEditor() { state.mode = state.editId ? 'edit' : 'create'; render(); },
+    backToEditor() { if (state.createStep === 6) { state.createStep = 4; } state.mode = state.editId ? 'edit' : 'create'; render(); },
     setFilter(f) { state.filter = f; render(); },
     setSearch(term) { state.searchTerm = term; render(); },
     toggleCustMode(isNew) { state.form.isNewCustomer = isNew; render(); },
@@ -1447,6 +1473,12 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       state.createStep = 4;
+      render();
+    },
+    goToStep5() {
+      // Collect form data from Step 4 before advancing
+      if (typeof collectFormData === 'function') collectFormData();
+      state.createStep = 5;
       render();
     },
     updatePerSquare() {
