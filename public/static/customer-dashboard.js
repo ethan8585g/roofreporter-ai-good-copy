@@ -177,7 +177,7 @@ function renderDashboard() {
           navLink('/customer/catalog', 'fa-box-open', 'Catalog', null, '') +
           navLink('/customer/referrals', 'fa-gift', 'Referrals', null, '') +
           navLink('/customer/email-outreach', 'fa-envelope-open-text', 'Email Outreach', null, '') +
-          navLink('/customer/website-builder', 'fa-globe', 'AI Website Builder', 'New', 'bg-orange-500') +
+          navLink('/customer/website-builder', 'fa-globe', 'AI Website Builder', 'New', 'bg-emerald-500') +
         '</div>' +
         // Marketing
         '<div>' +

@@ -312,7 +312,7 @@ document.addEventListener('DOMContentLoaded', () => {
     <!-- Stats -->
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
       <div class="bg-white rounded-xl p-4 border border-gray-200"><p class="text-xs text-gray-500">Total Proposals</p><p class="text-2xl font-bold text-gray-900">${stats.total}</p></div>
-      <div class="bg-white rounded-xl p-4 border border-gray-200"><p class="text-xs text-gray-500">Drafts</p><p class="text-2xl font-bold text-amber-600">${stats.draft}</p></div>
+      <div class="bg-white rounded-xl p-4 border border-gray-200"><p class="text-xs text-gray-500">Drafts</p><p class="text-2xl font-bold text-emerald-500">${stats.draft}</p></div>
       <div class="bg-white rounded-xl p-4 border border-gray-200"><p class="text-xs text-gray-500">Sent / Viewed</p><p class="text-2xl font-bold text-blue-600">${stats.sent}</p></div>
       <div class="bg-white rounded-xl p-4 border border-gray-200"><p class="text-xs text-gray-500">Total Value</p><p class="text-2xl font-bold text-green-600">$${stats.totalValue.toFixed(2)}</p></div>
     </div>
@@ -327,7 +327,7 @@ document.addEventListener('DOMContentLoaded', () => {
       </div>
       <div class="flex gap-1 flex-wrap">
         <button onclick="window._pb.setFilter('all')" class="px-3 py-1.5 rounded-lg text-xs font-medium ${filter === 'all' ? 'bg-gray-100 text-gray-700 ring-1 ring-gray-300' : 'text-gray-500 hover:bg-gray-100'}">All ${stats.total}</button>
-        <button onclick="window._pb.setFilter('draft')" class="px-3 py-1.5 rounded-lg text-xs font-medium ${filter === 'draft' ? 'bg-amber-100 text-amber-700 ring-1 ring-amber-300' : 'text-gray-500 hover:bg-gray-100'}">Draft ${stats.draft}</button>
+        <button onclick="window._pb.setFilter('draft')" class="px-3 py-1.5 rounded-lg text-xs font-medium ${filter === 'draft' ? 'bg-emerald-100 text-emerald-600 ring-1 ring-emerald-300' : 'text-gray-500 hover:bg-gray-100'}">Draft ${stats.draft}</button>
         <button onclick="window._pb.setFilter('active')" class="px-3 py-1.5 rounded-lg text-xs font-medium ${filter === 'active' ? 'bg-blue-100 text-blue-700 ring-1 ring-blue-300' : 'text-gray-500 hover:bg-gray-100'}">Active ${stats.sent}</button>
       </div>
     </div>
@@ -366,7 +366,7 @@ document.addEventListener('DOMContentLoaded', () => {
                   ${p.status === 'draft' ? `<button onclick="window._pb.edit(${p.id})" class="text-gray-500 hover:text-gray-700 text-xs" title="Edit"><i class="fas fa-edit"></i></button>` : ''}
                   <button onclick="window._pb.send(${p.id})" class="text-green-500 hover:text-green-700 text-xs" title="Send"><i class="fas fa-paper-plane"></i></button>
                   <button onclick="window._pb.shareLink(${p.id}, '${p.share_token || ''}')" class="text-purple-500 hover:text-purple-700 text-xs" title="Share Link"><i class="fas fa-link"></i></button>
-                  <button onclick="window._pb.convertToInvoice(${p.id})" class="text-amber-500 hover:text-amber-700 text-xs" title="Convert to Invoice"><i class="fas fa-file-invoice-dollar"></i></button>
+                  <button onclick="window._pb.convertToInvoice(${p.id})" class="text-emerald-500 hover:text-emerald-600 text-xs" title="Convert to Invoice"><i class="fas fa-file-invoice-dollar"></i></button>
                   ${p.status === 'draft' ? `<button onclick="window._pb.del(${p.id})" class="text-red-400 hover:text-red-600 text-xs" title="Delete"><i class="fas fa-trash"></i></button>` : ''}
                 </td>
               </tr>`;
@@ -416,7 +416,7 @@ document.addEventListener('DOMContentLoaded', () => {
           </thead>
           <tbody>
             ${orders.map(function(o) {
-              var statusColor = o.status === 'sent' ? 'text-green-600 bg-green-50' : o.status === 'draft' ? 'text-amber-600 bg-amber-50' : 'text-gray-600 bg-gray-50';
+              var statusColor = o.status === 'sent' ? 'text-green-600 bg-green-50' : o.status === 'draft' ? 'text-emerald-500 bg-emerald-50' : 'text-gray-600 bg-gray-50';
               return '<tr class="border-b border-gray-100 hover:bg-gray-50">' +
                 '<td class="px-4 py-3 font-medium text-gray-900">' + (o.order_number || '—') + '</td>' +
                 '<td class="px-4 py-3 text-gray-700">' + (o.supplier_name || 'N/A') + '</td>' +
@@ -630,7 +630,7 @@ document.addEventListener('DOMContentLoaded', () => {
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px">
         <div><label class="block text-xs font-semibold text-gray-500 mb-1"><i class="fas fa-shield-alt text-green-500 mr-1"></i>Insurance Certificate #</label><input id="att-insurance" value="${state.attachments.insuranceCert || ''}" onchange="window.__pbState.attachments.insuranceCert=this.value" placeholder="e.g. INS-2026-12345" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>
         <div><label class="block text-xs font-semibold text-gray-500 mb-1"><i class="fas fa-file-contract text-cyan-500 mr-1"></i>Warranty Document</label><input id="att-warranty" value="${state.attachments.warrantyDoc || ''}" onchange="window.__pbState.attachments.warrantyDoc=this.value" placeholder="e.g. 10-Year Manufacturer Warranty" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>
-        <div><label class="block text-xs font-semibold text-gray-500 mb-1"><i class="fas fa-hard-hat text-amber-500 mr-1"></i>WCB Coverage #</label><input id="att-wcb" value="${state.attachments.wcbCoverage || ''}" onchange="window.__pbState.attachments.wcbCoverage=this.value" placeholder="e.g. WCB-AB-987654" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>
+        <div><label class="block text-xs font-semibold text-gray-500 mb-1"><i class="fas fa-hard-hat text-emerald-500 mr-1"></i>WCB Coverage #</label><input id="att-wcb" value="${state.attachments.wcbCoverage || ''}" onchange="window.__pbState.attachments.wcbCoverage=this.value" placeholder="e.g. WCB-AB-987654" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>
         <div><label class="block text-xs font-semibold text-gray-500 mb-1"><i class="fas fa-plus-circle text-purple-500 mr-1"></i>Custom Attachment</label><input id="att-custom" value="${state.attachments.customAttachment || ''}" onchange="window.__pbState.attachments.customAttachment=this.value" placeholder="e.g. Business License, BBB Accreditation" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>
       </div>
     </div>
@@ -1292,7 +1292,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // PUBLIC API
   // ============================================================
   window._pb = {
-    create() {
+    async create() {
       state.mode = 'create'; state.editId = null; state.form = resetForm();
       state.createStep = 1;
       state.pricingMethod = 'line_item';
@@ -1309,6 +1309,10 @@ document.addEventListener('DOMContentLoaded', () => {
       state.showPitchToCustomer = true;
       state.showAreaToCustomer = true;
       state.attachments = { includeRoofReport: true, includeMaterialBOM: true, insuranceCert: '', warrantyDoc: '', wcbCoverage: '', customAttachment: '' };
+      // Re-check prereqs fresh when creating new proposal
+      state.loading = true; render();
+      await checkPrereqs();
+      state.loading = false;
       render();
     },
     backToList() { state.mode = 'list'; state.editId = null; state.form = resetForm(); render(); },
