@@ -108,7 +108,7 @@ function renderDashboard() {
   // Helper: nav link
   function navLink(href, icon, label, badge, badgeColor) {
     var bc = badgeColor || 'bg-gray-400';
-    return '<a href="' + href + '" class="flex items-center justify-between px-3 py-2 rounded-lg text-gray-700 hover:bg-gray-100 hover:text-brand-700 transition-colors group">' +
+    return '<a href="' + href + '" class="flex items-center justify-between px-3 py-2 rounded-lg text-gray-300 hover:bg-[#111111]/10 hover:text-brand-700 transition-colors group">' +
       '<span class="flex items-center gap-2.5">' +
         '<i class="fas ' + icon + ' text-gray-400 group-hover:text-brand-500 w-4 text-center text-sm transition-colors"></i>' +
         '<span class="text-sm font-medium">' + label + '</span>' +
@@ -128,15 +128,15 @@ function renderDashboard() {
   var secBadgeColor = custState.secretaryActive ? 'bg-blue-600' : '';
 
   var sidebar =
-    '<aside class="hidden lg:flex flex-col w-56 flex-shrink-0 bg-white border-r border-gray-200 min-h-full">' +
+    '<aside class="hidden lg:flex flex-col w-56 flex-shrink-0 bg-[#111111] border-r border-white/10 min-h-full">' +
       // Brand
-      '<div class="px-4 py-5 border-b border-gray-100">' +
+      '<div class="px-4 py-5 border-b border-white/5">' +
         '<div class="flex items-center gap-2">' +
           (c.google_avatar
-            ? '<img src="' + c.google_avatar + '" class="w-8 h-8 rounded-full border border-gray-200" alt="">'
+            ? '<img src="' + c.google_avatar + '" class="w-8 h-8 rounded-full border border-white/10" alt="">'
             : '<div class="w-8 h-8 bg-gradient-to-br from-brand-500 to-brand-700 rounded-full flex items-center justify-center"><i class="fas fa-user text-white text-xs"></i></div>') +
           '<div class="min-w-0">' +
-            '<p class="text-sm font-bold text-gray-900 truncate">' + (c.name || 'User') + '</p>' +
+            '<p class="text-sm font-bold text-white truncate">' + (c.name || 'User') + '</p>' +
             '<p class="text-xs text-gray-400 truncate">' + (c.company_name || c.email || '') + '</p>' +
           '</div>' +
         '</div>' +
@@ -188,7 +188,7 @@ function renderDashboard() {
         (c.is_dev ? '<div><p class="px-3 mb-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Dev</p>' + navLink('/customer/property-imagery', 'fa-satellite', 'Property Imagery', 'Dev', 'bg-gray-800') + '</div>' : '') +
       '</nav>' +
       // Credits footer
-      '<div class="px-4 py-4 border-t border-gray-100">' +
+      '<div class="px-4 py-4 border-t border-white/5">' +
         (freeTrialRemaining > 0
           ? '<div class="flex items-center justify-between mb-2"><span class="text-xs text-gray-500">Free trials left</span><span class="text-xs font-bold text-green-600">' + freeTrialRemaining + '</span></div>'
           : '') +
@@ -196,7 +196,7 @@ function renderDashboard() {
           ? '<div class="flex items-center justify-between mb-2"><span class="text-xs text-gray-500">Report credits</span><span class="text-xs font-bold text-blue-600">' + paidCredits + '</span></div>'
           : '') +
         '<a href="/pricing" class="block w-full text-center py-2 bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold rounded-lg transition-colors">Buy Credits</a>' +
-        '<a href="/customer/profile" class="block w-full text-center py-1.5 mt-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors">Account Settings</a>' +
+        '<a href="/customer/profile" class="block w-full text-center py-1.5 mt-1.5 text-xs text-gray-400 hover:text-gray-400 transition-colors">Account Settings</a>' +
         // Sidebar ad unit — shown only to non-subscribers
         '<div class="rra-ad-container" data-ad-slot="" data-ad-format="auto" style="display:none; margin-top:12px; min-height:120px; background:#f1f5f9; border:1px solid #e2e8f0; border-radius:8px; overflow:hidden; padding:4px;"></div>' +
       '</div>' +
@@ -204,19 +204,19 @@ function renderDashboard() {
 
   // Mobile horizontal nav (shown below md)
   var mobileNav =
-    '<div class="lg:hidden bg-white border-b border-gray-200 overflow-x-auto">' +
+    '<div class="lg:hidden bg-[#111111] border-b border-white/10 overflow-x-auto">' +
       '<div class="flex gap-1 px-3 py-2 whitespace-nowrap">' +
         '<a href="/customer/order" class="flex items-center gap-1.5 px-3 py-1.5 bg-brand-600 text-white rounded-lg text-xs font-semibold flex-shrink-0"><i class="fas fa-plus-circle"></i>Order</a>' +
-        '<a href="/customer/reports" class="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-xs font-medium flex-shrink-0"><i class="fas fa-file-alt"></i>Reports</a>' +
-        '<a href="/customer/customers" class="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-xs font-medium flex-shrink-0"><i class="fas fa-users"></i>Customers</a>' +
-        '<a href="/customer/invoices" class="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-xs font-medium flex-shrink-0"><i class="fas fa-file-invoice-dollar"></i>Invoices</a>' +
-        '<a href="/customer/proposals" class="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-xs font-medium flex-shrink-0"><i class="fas fa-file-signature"></i>Proposals</a>' +
-        '<a href="/customer/jobs" class="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-xs font-medium flex-shrink-0"><i class="fas fa-hard-hat"></i>Jobs</a>' +
-        '<a href="/customer/team" class="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-xs font-medium flex-shrink-0"><i class="fas fa-users-cog"></i>Team</a>' +
-        '<a href="/customer/d2d" class="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-xs font-medium flex-shrink-0"><i class="fas fa-door-open"></i>D2D</a>' +
-        '<a href="/customer/secretary" class="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-xs font-medium flex-shrink-0"><i class="fas fa-headset"></i>Secretary</a>' +
-        '<a href="/customer/material-calculator" class="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-xs font-medium flex-shrink-0"><i class="fas fa-calculator"></i>Materials</a>' +
-        '<a href="/customer/virtual-tryon" class="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-xs font-medium flex-shrink-0"><i class="fas fa-magic"></i>Visualizer</a>' +
+        '<a href="/customer/reports" class="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 text-gray-300 rounded-lg text-xs font-medium flex-shrink-0"><i class="fas fa-file-alt"></i>Reports</a>' +
+        '<a href="/customer/customers" class="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 text-gray-300 rounded-lg text-xs font-medium flex-shrink-0"><i class="fas fa-users"></i>Customers</a>' +
+        '<a href="/customer/invoices" class="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 text-gray-300 rounded-lg text-xs font-medium flex-shrink-0"><i class="fas fa-file-invoice-dollar"></i>Invoices</a>' +
+        '<a href="/customer/proposals" class="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 text-gray-300 rounded-lg text-xs font-medium flex-shrink-0"><i class="fas fa-file-signature"></i>Proposals</a>' +
+        '<a href="/customer/jobs" class="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 text-gray-300 rounded-lg text-xs font-medium flex-shrink-0"><i class="fas fa-hard-hat"></i>Jobs</a>' +
+        '<a href="/customer/team" class="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 text-gray-300 rounded-lg text-xs font-medium flex-shrink-0"><i class="fas fa-users-cog"></i>Team</a>' +
+        '<a href="/customer/d2d" class="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 text-gray-300 rounded-lg text-xs font-medium flex-shrink-0"><i class="fas fa-door-open"></i>D2D</a>' +
+        '<a href="/customer/secretary" class="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 text-gray-300 rounded-lg text-xs font-medium flex-shrink-0"><i class="fas fa-headset"></i>Secretary</a>' +
+        '<a href="/customer/material-calculator" class="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 text-gray-300 rounded-lg text-xs font-medium flex-shrink-0"><i class="fas fa-calculator"></i>Materials</a>' +
+        '<a href="/customer/virtual-tryon" class="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 text-gray-300 rounded-lg text-xs font-medium flex-shrink-0"><i class="fas fa-magic"></i>Visualizer</a>' +
       '</div>' +
     '</div>';
 
@@ -226,13 +226,13 @@ function renderDashboard() {
       // Welcome header
       '<div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-5">' +
         '<div>' +
-          '<h2 class="text-xl font-bold text-gray-900">' + (function() { var h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'; })() + ', ' + (c.name || 'User') + '</h2>' +
+          '<h2 class="text-xl font-bold text-white">' + (function() { var h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'; })() + ', ' + (c.name || 'User') + '</h2>' +
           '<p class="text-sm text-gray-500 mt-0.5">' + (c.company_name ? c.company_name + ' &middot; ' : '') + (c.email || '') + '</p>' +
         '</div>' +
         '<div class="flex items-center gap-2 flex-wrap">' +
           (freeTrialRemaining > 0 ? '<div class="px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-full text-xs font-bold text-blue-700"><i class="fas fa-gift mr-1"></i>' + freeTrialRemaining + ' Free Trial</div>' : '') +
           (paidCredits > 0 ? '<div class="px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-full text-xs font-bold text-blue-700"><i class="fas fa-coins mr-1"></i>' + paidCredits + ' Credits</div>' : '') +
-          '<div class="px-3 py-1.5 bg-gray-100 border border-gray-200 rounded-full text-xs font-bold text-gray-700"><i class="fas fa-file-alt mr-1"></i>' + completedReports + ' Reports</div>' +
+          '<div class="px-3 py-1.5 bg-white/5 border border-white/10 rounded-full text-xs font-bold text-gray-300"><i class="fas fa-file-alt mr-1"></i>' + completedReports + ' Reports</div>' +
           (processingReports > 0 ? '<div class="px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-full text-xs font-bold text-blue-700 animate-pulse"><i class="fas fa-spinner fa-spin mr-1"></i>' + processingReports + ' Generating</div>' : '') +
         '</div>' +
       '</div>' +
@@ -247,8 +247,8 @@ function renderDashboard() {
               '<p class="text-brand-200 text-xs mt-1">Upgrade to a credit pack — packs from <strong class="text-amber-400">$5.00/report (100-pack)</strong>, save up to 38%.</p>' +
             '</div>' +
             '<div class="flex gap-2 flex-shrink-0">' +
-              '<a href="/pricing" class="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-gray-900 font-black rounded-xl shadow text-xs"><i class="fas fa-tags mr-1"></i>View Packs</a>' +
-              '<a href="/customer/order" class="px-4 py-2 bg-white/10 hover:bg-white/20 text-white font-semibold rounded-xl text-xs border border-white/20"><i class="fas fa-credit-card mr-1"></i>Pay Per Report</a>' +
+              '<a href="/pricing" class="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-white font-black rounded-xl shadow text-xs"><i class="fas fa-tags mr-1"></i>View Packs</a>' +
+              '<a href="/customer/order" class="px-4 py-2 bg-[#111111]/10 hover:bg-[#111111]/20 text-white font-semibold rounded-xl text-xs border border-white/20"><i class="fas fa-credit-card mr-1"></i>Pay Per Report</a>' +
             '</div>' +
           '</div>' +
         '</div>' : '') +
@@ -257,23 +257,23 @@ function renderDashboard() {
       (custState.isTeamMember ?
         '<div class="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-2xl p-4 mb-5 shadow-lg border border-blue-500/30">' +
           '<div class="flex items-center gap-3">' +
-            '<div class="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0 backdrop-blur"><i class="fas fa-users text-white"></i></div>' +
+            '<div class="w-10 h-10 bg-[#111111]/20 rounded-xl flex items-center justify-center flex-shrink-0 backdrop-blur"><i class="fas fa-users text-white"></i></div>' +
             '<div class="flex-1 min-w-0">' +
               '<div class="flex items-center gap-2">' +
                 '<h3 class="text-white font-bold text-sm">Team Account Access</h3>' +
-                '<span class="px-2 py-0.5 bg-white/20 rounded-full text-[10px] font-bold text-blue-100 uppercase">' + (custState.teamRole || 'member') + '</span>' +
+                '<span class="px-2 py-0.5 bg-[#111111]/20 rounded-full text-[10px] font-bold text-blue-100 uppercase">' + (custState.teamRole || 'member') + '</span>' +
               '</div>' +
               '<p class="text-blue-200 text-xs mt-0.5 truncate">Accessing <strong class="text-white">' + (custState.teamOwnerCompany || custState.teamOwnerName || 'Team') + '</strong>\u2019s account.</p>' +
             '</div>' +
-            '<a href="/customer/team" class="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-lg text-xs font-semibold border border-white/20 flex-shrink-0"><i class="fas fa-users-cog mr-1"></i>Team</a>' +
+            '<a href="/customer/team" class="px-3 py-1.5 bg-[#111111]/10 hover:bg-[#111111]/20 text-white rounded-lg text-xs font-semibold border border-white/20 flex-shrink-0"><i class="fas fa-users-cog mr-1"></i>Team</a>' +
           '</div>' +
         '</div>' : '') +
 
       // Rover AI Assistant + Quick Actions
       '<div class="grid grid-cols-1 lg:grid-cols-5 gap-5 mb-5">' +
         // Rover AI Chat (wider)
-        '<div class="lg:col-span-3 bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden flex flex-col" style="min-height:280px">' +
-          '<div class="px-5 py-3 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-gray-900 to-gray-800">' +
+        '<div class="lg:col-span-3 bg-[#111111] rounded-2xl border border-white/10 shadow-sm overflow-hidden flex flex-col" style="min-height:280px">' +
+          '<div class="px-5 py-3 border-b border-white/5 flex items-center justify-between bg-gradient-to-r from-gray-900 to-gray-800">' +
             '<div class="flex items-center gap-2">' +
               '<span class="text-lg">&#128054;</span>' +
               '<h3 class="font-bold text-white text-sm">Rover AI Assistant</h3>' +
@@ -282,46 +282,46 @@ function renderDashboard() {
             '<p class="text-xs text-gray-400">Ask me anything about your account</p>' +
           '</div>' +
           '<div id="rover-dash-messages" class="flex-1 overflow-y-auto p-4 space-y-3" style="max-height:320px">' +
-            '<div class="flex gap-2"><div class="w-7 h-7 bg-gray-900 rounded-full flex items-center justify-center flex-shrink-0 text-xs">&#128054;</div><div class="bg-gray-100 rounded-xl rounded-tl-sm px-3 py-2 text-sm text-gray-700 max-w-[85%]">Hey ' + (c.name || 'there').split(' ')[0] + '! I\'m Rover, your AI assistant. Ask me anything — I can help with reports, proposals, invoices, material calculations, and more.</div></div>' +
+            '<div class="flex gap-2"><div class="w-7 h-7 bg-gray-900 rounded-full flex items-center justify-center flex-shrink-0 text-xs">&#128054;</div><div class="bg-white/5 rounded-xl rounded-tl-sm px-3 py-2 text-sm text-gray-300 max-w-[85%]">Hey ' + (c.name || 'there').split(' ')[0] + '! I\'m Rover, your AI assistant. Ask me anything — I can help with reports, proposals, invoices, material calculations, and more.</div></div>' +
           '</div>' +
-          '<div class="px-4 py-3 border-t border-gray-100 bg-gray-50">' +
+          '<div class="px-4 py-3 border-t border-white/5 bg-[#0A0A0A]">' +
             '<div class="flex gap-2 mb-2 overflow-x-auto pb-1">' +
-              '<button onclick="window._roverDashSend(\'What can you help me with?\')" class="px-2.5 py-1 bg-white border border-gray-200 rounded-lg text-[11px] text-gray-600 hover:bg-blue-50 hover:border-blue-200 whitespace-nowrap flex-shrink-0">What can you do?</button>' +
-              '<button onclick="window._roverDashSend(\'Give me a summary of my account\')" class="px-2.5 py-1 bg-white border border-gray-200 rounded-lg text-[11px] text-gray-600 hover:bg-blue-50 hover:border-blue-200 whitespace-nowrap flex-shrink-0">Account Summary</button>' +
-              '<button onclick="window._roverDashSend(\'How do I order a roof report?\')" class="px-2.5 py-1 bg-white border border-gray-200 rounded-lg text-[11px] text-gray-600 hover:bg-blue-50 hover:border-blue-200 whitespace-nowrap flex-shrink-0">How to Order</button>' +
-              '<button onclick="window._roverDashSend(\'Help me create a proposal\')" class="px-2.5 py-1 bg-white border border-gray-200 rounded-lg text-[11px] text-gray-600 hover:bg-blue-50 hover:border-blue-200 whitespace-nowrap flex-shrink-0">Draft Proposal</button>' +
+              '<button onclick="window._roverDashSend(\'What can you help me with?\')" class="px-2.5 py-1 bg-[#111111] border border-white/10 rounded-lg text-[11px] text-gray-400 hover:bg-blue-50 hover:border-blue-200 whitespace-nowrap flex-shrink-0">What can you do?</button>' +
+              '<button onclick="window._roverDashSend(\'Give me a summary of my account\')" class="px-2.5 py-1 bg-[#111111] border border-white/10 rounded-lg text-[11px] text-gray-400 hover:bg-blue-50 hover:border-blue-200 whitespace-nowrap flex-shrink-0">Account Summary</button>' +
+              '<button onclick="window._roverDashSend(\'How do I order a roof report?\')" class="px-2.5 py-1 bg-[#111111] border border-white/10 rounded-lg text-[11px] text-gray-400 hover:bg-blue-50 hover:border-blue-200 whitespace-nowrap flex-shrink-0">How to Order</button>' +
+              '<button onclick="window._roverDashSend(\'Help me create a proposal\')" class="px-2.5 py-1 bg-[#111111] border border-white/10 rounded-lg text-[11px] text-gray-400 hover:bg-blue-50 hover:border-blue-200 whitespace-nowrap flex-shrink-0">Draft Proposal</button>' +
             '</div>' +
             '<div class="flex gap-2">' +
-              '<input type="text" id="rover-dash-input" placeholder="Ask Rover anything..." class="flex-1 px-3 py-2 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-400 focus:border-blue-400" onkeydown="if(event.key===\'Enter\')window._roverDashSend()">' +
+              '<input type="text" id="rover-dash-input" placeholder="Ask Rover anything..." class="flex-1 px-3 py-2 border border-white/15 rounded-xl text-sm focus:ring-2 focus:ring-blue-400 focus:border-blue-400" onkeydown="if(event.key===\'Enter\')window._roverDashSend()">' +
               '<button onclick="window._roverDashSend()" class="px-4 py-2 bg-gray-900 hover:bg-gray-800 text-white rounded-xl text-sm font-semibold flex-shrink-0"><i class="fas fa-paper-plane"></i></button>' +
             '</div>' +
           '</div>' +
         '</div>' +
         // Quick Actions (narrower)
-        '<div class="lg:col-span-2 bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">' +
-          '<div class="px-5 py-4 border-b border-gray-100">' +
-            '<h3 class="font-bold text-gray-800 text-sm"><i class="fas fa-bolt text-blue-600 mr-2"></i>Quick Actions</h3>' +
+        '<div class="lg:col-span-2 bg-[#111111] rounded-2xl border border-white/10 shadow-sm overflow-hidden">' +
+          '<div class="px-5 py-4 border-b border-white/5">' +
+            '<h3 class="font-bold text-gray-100 text-sm"><i class="fas fa-bolt text-blue-600 mr-2"></i>Quick Actions</h3>' +
           '</div>' +
           '<div class="p-4 space-y-2.5">' +
             '<a href="/customer/order" class="flex items-center gap-3 p-3 bg-blue-50 hover:bg-blue-100 rounded-xl transition-colors">' +
               '<div class="w-9 h-9 bg-blue-600 rounded-lg flex items-center justify-center flex-shrink-0"><i class="fas fa-plus text-white text-sm"></i></div>' +
-              '<div><p class="font-semibold text-gray-800 text-sm">Order Roof Report</p><p class="text-xs text-gray-500">' + (freeTrialRemaining > 0 ? freeTrialRemaining + ' free remaining' : (paidCredits > 0 ? paidCredits + ' credits' : 'Pay per report')) + '</p></div>' +
+              '<div><p class="font-semibold text-gray-100 text-sm">Order Roof Report</p><p class="text-xs text-gray-500">' + (freeTrialRemaining > 0 ? freeTrialRemaining + ' free remaining' : (paidCredits > 0 ? paidCredits + ' credits' : 'Pay per report')) + '</p></div>' +
             '</a>' +
-            '<a href="/customer/customers" class="flex items-center gap-3 p-3 bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors">' +
+            '<a href="/customer/customers" class="flex items-center gap-3 p-3 bg-[#0A0A0A] hover:bg-[#111111]/10 rounded-xl transition-colors">' +
               '<div class="w-9 h-9 bg-gray-800 rounded-lg flex items-center justify-center flex-shrink-0"><i class="fas fa-user-plus text-white text-sm"></i></div>' +
-              '<div><p class="font-semibold text-gray-800 text-sm">Add Customer</p><p class="text-xs text-gray-500">Build your CRM database</p></div>' +
+              '<div><p class="font-semibold text-gray-100 text-sm">Add Customer</p><p class="text-xs text-gray-500">Build your CRM database</p></div>' +
             '</a>' +
-            '<a href="/customer/invoices" class="flex items-center gap-3 p-3 bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors">' +
+            '<a href="/customer/invoices" class="flex items-center gap-3 p-3 bg-[#0A0A0A] hover:bg-[#111111]/10 rounded-xl transition-colors">' +
               '<div class="w-9 h-9 bg-gray-800 rounded-lg flex items-center justify-center flex-shrink-0"><i class="fas fa-file-invoice-dollar text-white text-sm"></i></div>' +
-              '<div><p class="font-semibold text-gray-800 text-sm">Create Invoice</p><p class="text-xs text-gray-500">' + (s.invoices_owing > 0 ? '$' + Number(s.invoices_owing).toFixed(2) + ' outstanding' : 'Bill your customers') + '</p></div>' +
+              '<div><p class="font-semibold text-gray-100 text-sm">Create Invoice</p><p class="text-xs text-gray-500">' + (s.invoices_owing > 0 ? '$' + Number(s.invoices_owing).toFixed(2) + ' outstanding' : 'Bill your customers') + '</p></div>' +
             '</a>' +
-            '<a href="/customer/proposals" class="flex items-center gap-3 p-3 bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors">' +
+            '<a href="/customer/proposals" class="flex items-center gap-3 p-3 bg-[#0A0A0A] hover:bg-[#111111]/10 rounded-xl transition-colors">' +
               '<div class="w-9 h-9 bg-blue-600 rounded-lg flex items-center justify-center flex-shrink-0"><i class="fas fa-file-signature text-white text-sm"></i></div>' +
-              '<div><p class="font-semibold text-gray-800 text-sm">New Proposal</p><p class="text-xs text-gray-500">Professional roofing proposals</p></div>' +
+              '<div><p class="font-semibold text-gray-100 text-sm">New Proposal</p><p class="text-xs text-gray-500">Professional roofing proposals</p></div>' +
             '</a>' +
-            '<a href="/pricing" class="flex items-center gap-3 p-3 bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors">' +
+            '<a href="/pricing" class="flex items-center gap-3 p-3 bg-[#0A0A0A] hover:bg-[#111111]/10 rounded-xl transition-colors">' +
               '<div class="w-9 h-9 bg-gray-800 rounded-lg flex items-center justify-center flex-shrink-0"><i class="fas fa-coins text-white text-sm"></i></div>' +
-              '<div><p class="font-semibold text-gray-800 text-sm">Buy Credits</p><p class="text-xs text-gray-500">From $2.99/report USD</p></div>' +
+              '<div><p class="font-semibold text-gray-100 text-sm">Buy Credits</p><p class="text-xs text-gray-500">From $2.99/report USD</p></div>' +
             '</a>' +
           '</div>' +
         '</div>' +
@@ -331,15 +331,15 @@ function renderDashboard() {
       '<div class="rra-ad-container" data-ad-slot="" data-ad-format="horizontal" style="display:none; margin-bottom:20px; text-align:center; min-height:90px; background:#f1f5f9; border:1px solid #e2e8f0; border-radius:12px; overflow:hidden; padding:4px;"></div>' +
 
       // Auto-Email Settings
-      '<div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-5">' +
+      '<div class="bg-[#111111] rounded-2xl border border-white/10 shadow-sm overflow-hidden mb-5">' +
         '<div class="px-5 py-4 flex items-center justify-between">' +
           '<div>' +
-            '<p class="font-medium text-gray-800 text-sm"><i class="fas fa-envelope text-cyan-500 mr-2"></i>Auto-email reports when ready</p>' +
+            '<p class="font-medium text-gray-100 text-sm"><i class="fas fa-envelope text-cyan-500 mr-2"></i>Auto-email reports when ready</p>' +
             '<p class="text-xs text-gray-500 mt-0.5">Send completed reports automatically to ' + (c.email || '') + '</p>' +
           '</div>' +
           '<label class="relative inline-flex items-center cursor-pointer">' +
             '<input type="checkbox" id="auto-email-toggle" class="sr-only peer" onchange="toggleAutoEmail(this.checked)">' +
-            '<div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-cyan-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[&quot;&quot;] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500"></div>' +
+            '<div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-cyan-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[&quot;&quot;] after:absolute after:top-[2px] after:left-[2px] after:bg-[#111111] after:border-white/15 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500"></div>' +
           '</label>' +
         '</div>' +
       '</div>' +
@@ -359,7 +359,7 @@ function renderRecentOrders() {
   var orders = custState.orders.slice(0, 5);
   if (orders.length === 0) {
     return '<div class="text-center py-8">' +
-      '<div class="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3"><i class="fas fa-clipboard-list text-gray-400 text-lg"></i></div>' +
+      '<div class="w-12 h-12 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-3"><i class="fas fa-clipboard-list text-gray-400 text-lg"></i></div>' +
       '<p class="text-sm text-gray-500 mb-3">No reports yet</p>' +
       '<a href="/customer/order" class="text-sm font-semibold text-brand-600 hover:text-brand-700"><i class="fas fa-plus mr-1"></i>Order your first report</a></div>';
   }
@@ -368,11 +368,11 @@ function renderRecentOrders() {
   for (var i = 0; i < orders.length; i++) {
     var o = orders[i];
     var isProcessing = o.status === 'processing' || o.report_status === 'generating' || o.report_status === 'pending';
-    var statusClass = o.status === 'completed' ? 'bg-green-100 text-green-700' : (isProcessing ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600');
+    var statusClass = o.status === 'completed' ? 'bg-green-100 text-green-700' : (isProcessing ? 'bg-blue-100 text-blue-700' : 'bg-white/5 text-gray-400');
     var reportReady = (o.report_status === 'completed' || o.status === 'completed') && !isProcessing;
-    html += '<div class="flex items-center justify-between p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">' +
+    html += '<div class="flex items-center justify-between p-3 bg-[#0A0A0A] rounded-xl hover:bg-[#111111]/10 transition-colors">' +
       '<div class="flex-1 min-w-0">' +
-        '<p class="text-sm font-medium text-gray-800 truncate"><i class="fas fa-map-marker-alt text-red-400 mr-1.5 text-xs"></i>' + (o.property_address || 'Unknown') + '</p>' +
+        '<p class="text-sm font-medium text-gray-100 truncate"><i class="fas fa-map-marker-alt text-red-400 mr-1.5 text-xs"></i>' + (o.property_address || 'Unknown') + '</p>' +
         '<p class="text-xs text-gray-500 mt-0.5">' + new Date(o.created_at).toLocaleDateString() + (o.roof_area_sqft ? ' &middot; ' + Math.round(o.roof_area_sqft) + ' sq ft' : '') + '</p>' +
       '</div>' +
       '<div class="flex items-center gap-2 ml-3">' +
@@ -481,7 +481,7 @@ function showReportReadyToast(order) {
           '<p style="color:white;font-weight:700;font-size:14px;margin:0">Report Ready!</p>' +
           '<p style="color:rgba(255,255,255,0.8);font-size:12px;margin:2px 0 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + address + '</p>' +
         '</div>' +
-        (orderId ? '<a href="/api/reports/' + orderId + '/html" target="_blank" style="background:white;color:#059669;padding:6px 14px;border-radius:10px;font-size:12px;font-weight:700;text-decoration:none;white-space:nowrap">View <i class="fas fa-arrow-right ml-1"></i></a>' : '') +
+        (orderId ? '<a href="/api/reports/' + orderId + '/html" target="_blank" style="background:#111111;color:#059669;padding:6px 14px;border-radius:10px;font-size:12px;font-weight:700;text-decoration:none;white-space:nowrap">View <i class="fas fa-arrow-right ml-1"></i></a>' : '') +
       '</div>' +
     '</div>';
   
@@ -591,9 +591,9 @@ function showOnboardingModal() {
           '<p class="text-sm text-green-600">No credit card needed — start measuring roofs right now</p>' +
         '</div>' +
         '<div class="grid grid-cols-3 gap-3 text-center text-xs">' +
-          '<div class="bg-gray-50 rounded-xl p-3"><i class="fas fa-satellite text-brand-500 text-xl mb-1 block"></i><p class="font-semibold text-gray-700">Satellite Measurement</p></div>' +
-          '<div class="bg-gray-50 rounded-xl p-3"><i class="fas fa-boxes-stacked text-emerald-500 text-xl mb-1 block"></i><p class="font-semibold text-gray-700">Full Material BOM</p></div>' +
-          '<div class="bg-gray-50 rounded-xl p-3"><i class="fas fa-file-invoice text-purple-500 text-xl mb-1 block"></i><p class="font-semibold text-gray-700">Instant Proposals</p></div>' +
+          '<div class="bg-[#0A0A0A] rounded-xl p-3"><i class="fas fa-satellite text-brand-500 text-xl mb-1 block"></i><p class="font-semibold text-gray-300">Satellite Measurement</p></div>' +
+          '<div class="bg-[#0A0A0A] rounded-xl p-3"><i class="fas fa-boxes-stacked text-emerald-500 text-xl mb-1 block"></i><p class="font-semibold text-gray-300">Full Material BOM</p></div>' +
+          '<div class="bg-[#0A0A0A] rounded-xl p-3"><i class="fas fa-file-invoice text-purple-500 text-xl mb-1 block"></i><p class="font-semibold text-gray-300">Instant Proposals</p></div>' +
         '</div>' +
       '</div>'
     },
@@ -620,7 +620,7 @@ function showOnboardingModal() {
       color: 'from-purple-500 to-violet-500',
       title: 'Explore Your Tools',
       content: '<div class="space-y-3">' +
-        '<p class="text-sm text-gray-600">Your dashboard has everything you need to run your roofing business:</p>' +
+        '<p class="text-sm text-gray-400">Your dashboard has everything you need to run your roofing business:</p>' +
         '<div class="grid grid-cols-2 gap-2">' +
           '<a href="/customer/crm/reports" onclick="dismissOnboarding()" class="bg-brand-50 border border-brand-200 rounded-xl p-3 text-center hover:bg-brand-100 transition-colors"><i class="fas fa-file-alt text-brand-500 text-lg mb-1 block"></i><p class="text-xs font-semibold text-brand-700">Reports</p></a>' +
           '<a href="/customer/proposals" onclick="dismissOnboarding()" class="bg-amber-50 border border-amber-200 rounded-xl p-3 text-center hover:bg-amber-100 transition-colors"><i class="fas fa-file-invoice text-amber-500 text-lg mb-1 block"></i><p class="text-xs font-semibold text-amber-700">Proposals</p></a>' +
@@ -700,7 +700,7 @@ window._roverDashSend = function(text) {
   );
   // Add typing indicator
   container.insertAdjacentHTML('beforeend',
-    '<div id="rover-dash-typing" class="flex gap-2"><div class="w-7 h-7 bg-gray-900 rounded-full flex items-center justify-center flex-shrink-0 text-xs">&#128054;</div><div class="bg-gray-100 rounded-xl rounded-tl-sm px-3 py-2 text-sm text-gray-400"><i class="fas fa-circle text-[6px] animate-pulse mr-1"></i><i class="fas fa-circle text-[6px] animate-pulse mr-1" style="animation-delay:0.2s"></i><i class="fas fa-circle text-[6px] animate-pulse" style="animation-delay:0.4s"></i></div></div>'
+    '<div id="rover-dash-typing" class="flex gap-2"><div class="w-7 h-7 bg-gray-900 rounded-full flex items-center justify-center flex-shrink-0 text-xs">&#128054;</div><div class="bg-white/5 rounded-xl rounded-tl-sm px-3 py-2 text-sm text-gray-400"><i class="fas fa-circle text-[6px] animate-pulse mr-1"></i><i class="fas fa-circle text-[6px] animate-pulse mr-1" style="animation-delay:0.2s"></i><i class="fas fa-circle text-[6px] animate-pulse" style="animation-delay:0.4s"></i></div></div>'
   );
   container.scrollTop = container.scrollHeight;
 
@@ -716,7 +716,7 @@ window._roverDashSend = function(text) {
     if (typing) typing.remove();
     var reply = (data.reply || data.message || 'Sorry, I had trouble responding.').replace(/</g, '&lt;').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
     container.insertAdjacentHTML('beforeend',
-      '<div class="flex gap-2"><div class="w-7 h-7 bg-gray-900 rounded-full flex items-center justify-center flex-shrink-0 text-xs">&#128054;</div><div class="bg-gray-100 rounded-xl rounded-tl-sm px-3 py-2 text-sm text-gray-700 max-w-[85%]">' + reply + '</div></div>'
+      '<div class="flex gap-2"><div class="w-7 h-7 bg-gray-900 rounded-full flex items-center justify-center flex-shrink-0 text-xs">&#128054;</div><div class="bg-white/5 rounded-xl rounded-tl-sm px-3 py-2 text-sm text-gray-300 max-w-[85%]">' + reply + '</div></div>'
     );
     container.scrollTop = container.scrollHeight;
   })

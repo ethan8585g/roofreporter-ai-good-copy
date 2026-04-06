@@ -47,9 +47,9 @@ function renderOrderPicker() {
 
   if (mcState.orders.length === 0) {
     root.innerHTML =
-      '<div class="bg-white rounded-2xl border border-gray-200 p-12 text-center shadow-sm">' +
+      '<div class="bg-[#111111] rounded-2xl border border-white/10 p-12 text-center shadow-sm">' +
         '<i class="fas fa-calculator text-gray-300 text-5xl mb-4 block"></i>' +
-        '<h2 class="text-xl font-bold text-gray-700 mb-2">No Completed Reports</h2>' +
+        '<h2 class="text-xl font-bold text-gray-300 mb-2">No Completed Reports</h2>' +
         '<p class="text-gray-500 mb-6">Complete a roof measurement report to use the Material Calculator.</p>' +
         '<a href="/customer/order" class="inline-block px-6 py-3 bg-sky-600 hover:bg-sky-700 text-white font-semibold rounded-xl text-sm transition-colors">Order a Report</a>' +
       '</div>';
@@ -65,12 +65,12 @@ function renderOrderPicker() {
   });
 
   var pickerHtml =
-    '<div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 mb-4">' +
+    '<div class="bg-[#111111] rounded-2xl border border-white/10 shadow-sm p-5 mb-4">' +
       '<div class="flex items-center gap-3 mb-3">' +
         '<i class="fas fa-calculator text-sky-500 text-xl"></i>' +
-        '<h1 class="text-lg font-bold text-gray-800">Material Calculator</h1>' +
+        '<h1 class="text-lg font-bold text-gray-100">Material Calculator</h1>' +
       '</div>' +
-      '<select id="mc-report-select" onchange="mcSelectOrder(this.value)" class="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm text-gray-700 bg-white focus:ring-2 focus:ring-sky-500 focus:border-sky-500">' +
+      '<select id="mc-report-select" onchange="mcSelectOrder(this.value)" class="w-full px-3 py-2.5 border border-white/15 rounded-xl text-sm text-gray-300 bg-[#111111] focus:ring-2 focus:ring-sky-500 focus:border-sky-500">' +
         options +
       '</select>' +
     '</div>' +
@@ -119,9 +119,9 @@ async function mcSelectOrder(orderId) {
 
   if (!fullReport || !fullReport.materials || !fullReport.materials.line_items) {
     if (area) area.innerHTML =
-      '<div class="bg-white rounded-2xl border border-gray-200 p-8 text-center">' +
+      '<div class="bg-[#111111] rounded-2xl border border-white/10 p-8 text-center">' +
         '<i class="fas fa-exclamation-circle text-amber-400 text-3xl mb-3 block"></i>' +
-        '<p class="text-gray-600">Material data is not available for this report. It may have been generated before material tracking was enabled.</p>' +
+        '<p class="text-gray-400">Material data is not available for this report. It may have been generated before material tracking was enabled.</p>' +
       '</div>';
     return;
   }
@@ -185,8 +185,8 @@ function renderRoofSummaryCard() {
   var es = r.edge_summary || {};
   var addr = (r.property && r.property.address) ? r.property.address : '';
 
-  return '<div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 mb-4">' +
-    (addr ? '<h2 class="font-semibold text-gray-700 mb-3 text-sm"><i class="fas fa-map-marker-alt text-sky-400 mr-1.5"></i>' + addr + '</h2>' : '') +
+  return '<div class="bg-[#111111] rounded-2xl border border-white/10 shadow-sm p-5 mb-4">' +
+    (addr ? '<h2 class="font-semibold text-gray-300 mb-3 text-sm"><i class="fas fa-map-marker-alt text-sky-400 mr-1.5"></i>' + addr + '</h2>' : '') +
     '<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">' +
       '<div class="text-center p-3 bg-sky-50 rounded-xl">' +
         '<p class="text-2xl font-black text-sky-700">' + Math.round(r.total_true_area_sqft || 0) + '</p>' +
@@ -205,12 +205,12 @@ function renderRoofSummaryCard() {
         '<p class="text-xs text-gray-500 mt-0.5">Complexity</p>' +
       '</div>' +
     '</div>' +
-    '<div class="grid grid-cols-5 gap-2 text-center text-xs text-gray-500 bg-gray-50 rounded-xl p-3">' +
-      '<div><span class="font-bold text-gray-700 block text-sm">' + Math.round(es.total_ridge_ft || 0) + ' ft</span>Ridge</div>' +
-      '<div><span class="font-bold text-gray-700 block text-sm">' + Math.round(es.total_hip_ft || 0) + ' ft</span>Hip</div>' +
-      '<div><span class="font-bold text-gray-700 block text-sm">' + Math.round(es.total_valley_ft || 0) + ' ft</span>Valley</div>' +
-      '<div><span class="font-bold text-gray-700 block text-sm">' + Math.round(es.total_eave_ft || 0) + ' ft</span>Eave</div>' +
-      '<div><span class="font-bold text-gray-700 block text-sm">' + Math.round(es.total_rake_ft || 0) + ' ft</span>Rake</div>' +
+    '<div class="grid grid-cols-5 gap-2 text-center text-xs text-gray-500 bg-[#0A0A0A] rounded-xl p-3">' +
+      '<div><span class="font-bold text-gray-300 block text-sm">' + Math.round(es.total_ridge_ft || 0) + ' ft</span>Ridge</div>' +
+      '<div><span class="font-bold text-gray-300 block text-sm">' + Math.round(es.total_hip_ft || 0) + ' ft</span>Hip</div>' +
+      '<div><span class="font-bold text-gray-300 block text-sm">' + Math.round(es.total_valley_ft || 0) + ' ft</span>Valley</div>' +
+      '<div><span class="font-bold text-gray-300 block text-sm">' + Math.round(es.total_eave_ft || 0) + ' ft</span>Eave</div>' +
+      '<div><span class="font-bold text-gray-300 block text-sm">' + Math.round(es.total_rake_ft || 0) + ' ft</span>Rake</div>' +
     '</div>' +
   '</div>';
 }
@@ -226,12 +226,12 @@ function renderWasteControlsInner() {
     if (row.is_suggested) label += ' ★';
     var cls = isSelected
       ? 'px-4 py-2 bg-sky-600 text-white rounded-lg text-sm font-bold shadow-sm'
-      : 'px-4 py-2 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-lg text-sm font-medium transition-colors';
+      : 'px-4 py-2 bg-white/5 text-gray-300 hover:bg-gray-200 rounded-lg text-sm font-medium transition-colors';
     return '<button class="' + cls + '" onclick="mcSetWaste(' + row.waste_pct + ')">' + label + '</button>';
   }).join('');
 
-  return '<div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 mb-4">' +
-    '<h3 class="font-bold text-gray-800 mb-3 text-sm"><i class="fas fa-percent text-amber-500 mr-2"></i>Waste Factor</h3>' +
+  return '<div class="bg-[#111111] rounded-2xl border border-white/10 shadow-sm p-5 mb-4">' +
+    '<h3 class="font-bold text-gray-100 mb-3 text-sm"><i class="fas fa-percent text-amber-500 mr-2"></i>Waste Factor</h3>' +
     '<div class="flex flex-wrap gap-2">' + buttons + '</div>' +
     '<p class="text-xs text-gray-400 mt-2">★ = Suggested for <span class="capitalize">' + (mcState.report.materials.complexity_class || '') + '</span> complexity roof</p>' +
   '</div>';
@@ -297,36 +297,36 @@ function renderMaterialTableInner() {
     var lineTotal = '$' + (qty * price).toFixed(2);
     var catLabel = categoryLabels[item.category] || item.category.replace(/_/g, ' ');
 
-    return '<tr class="border-b border-gray-50 hover:bg-gray-50 transition-colors">' +
-      '<td class="px-4 py-3 text-sm font-medium text-gray-800">' + catLabel + (item._catalog_price ? ' <span class="px-1 py-0.5 bg-blue-100 text-blue-700 rounded text-[9px] font-bold ml-1">CATALOG</span>' : '') + '</td>' +
+    return '<tr class="border-b border-gray-50 hover:bg-[#111111]/5 transition-colors">' +
+      '<td class="px-4 py-3 text-sm font-medium text-gray-100">' + catLabel + (item._catalog_price ? ' <span class="px-1 py-0.5 bg-blue-100 text-blue-700 rounded text-[9px] font-bold ml-1">CATALOG</span>' : '') + '</td>' +
       '<td class="px-4 py-3 text-sm text-gray-500 hidden sm:table-cell">' + (item._catalog_name || item.description || '') + '</td>' +
-      '<td class="px-4 py-3 text-center"><input type="number" step="1" min="0" value="' + qty + '" onchange="mcUpdateQty(' + idx + ',this.value)" class="w-16 px-2 py-1 border border-gray-300 rounded-lg text-sm text-center font-bold focus:ring-2 focus:ring-sky-400 focus:border-sky-400"></td>' +
+      '<td class="px-4 py-3 text-center"><input type="number" step="1" min="0" value="' + qty + '" onchange="mcUpdateQty(' + idx + ',this.value)" class="w-16 px-2 py-1 border border-white/15 rounded-lg text-sm text-center font-bold focus:ring-2 focus:ring-sky-400 focus:border-sky-400"></td>' +
       '<td class="px-4 py-3 text-center text-gray-400 text-xs">' + (item.order_unit || '') + '</td>' +
-      '<td class="px-4 py-3 text-right hidden sm:table-cell"><input type="number" step="0.01" min="0" value="' + price.toFixed(2) + '" onchange="mcUpdatePrice(' + idx + ',this.value)" class="w-20 px-2 py-1 border border-gray-300 rounded-lg text-sm text-right focus:ring-2 focus:ring-sky-400 focus:border-sky-400"></td>' +
-      '<td class="px-4 py-3 text-right font-semibold text-gray-800 text-sm" id="mc-line-total-' + idx + '">' + lineTotal + '</td>' +
+      '<td class="px-4 py-3 text-right hidden sm:table-cell"><input type="number" step="0.01" min="0" value="' + price.toFixed(2) + '" onchange="mcUpdatePrice(' + idx + ',this.value)" class="w-20 px-2 py-1 border border-white/15 rounded-lg text-sm text-right focus:ring-2 focus:ring-sky-400 focus:border-sky-400"></td>' +
+      '<td class="px-4 py-3 text-right font-semibold text-gray-100 text-sm" id="mc-line-total-' + idx + '">' + lineTotal + '</td>' +
     '</tr>';
   });
 
   var toggleRow =
     '<div class="flex items-center gap-4">' +
-      '<label class="flex items-center gap-1.5 text-xs cursor-pointer text-gray-600">' +
+      '<label class="flex items-center gap-1.5 text-xs cursor-pointer text-gray-400">' +
         '<input type="checkbox" ' + (mcState.iceShieldEnabled ? 'checked' : '') + ' onchange="mcToggleIce(this.checked)" class="rounded">' +
         'Ice Shield' +
       '</label>' +
-      '<label class="flex items-center gap-1.5 text-xs cursor-pointer text-gray-600">' +
+      '<label class="flex items-center gap-1.5 text-xs cursor-pointer text-gray-400">' +
         '<input type="checkbox" ' + (mcState.ventilationEnabled ? 'checked' : '') + ' onchange="mcToggleVent(this.checked)" class="rounded">' +
         'Ventilation' +
       '</label>' +
     '</div>';
 
-  return '<div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-4">' +
-    '<div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">' +
-      '<h3 class="font-bold text-gray-800 text-sm"><i class="fas fa-boxes text-indigo-500 mr-2"></i>Material List</h3>' +
+  return '<div class="bg-[#111111] rounded-2xl border border-white/10 shadow-sm overflow-hidden mb-4">' +
+    '<div class="px-5 py-4 border-b border-white/5 flex items-center justify-between">' +
+      '<h3 class="font-bold text-gray-100 text-sm"><i class="fas fa-boxes text-indigo-500 mr-2"></i>Material List</h3>' +
       toggleRow +
     '</div>' +
     '<div class="overflow-x-auto">' +
     '<table class="w-full">' +
-      '<thead class="bg-gray-50">' +
+      '<thead class="bg-[#0A0A0A]">' +
         '<tr>' +
           '<th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Item</th>' +
           '<th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide hidden sm:table-cell">Description</th>' +
@@ -399,10 +399,10 @@ function renderCostFooterInner() {
     total += item.order_quantity * item.unit_price_cad;
   });
 
-  return '<div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 mb-4">' +
+  return '<div class="bg-[#111111] rounded-2xl border border-white/10 shadow-sm p-5 mb-4">' +
     '<div class="flex flex-wrap items-center justify-between gap-3">' +
       '<div>' +
-        '<p class="text-sm font-semibold text-gray-700">Estimated Material Cost</p>' +
+        '<p class="text-sm font-semibold text-gray-300">Estimated Material Cost</p>' +
         '<p class="text-xs text-gray-400 mt-0.5">' + mcState.currentWastePct + '% waste factor · editable pricing · excludes labour</p>' +
       '</div>' +
       '<p class="text-3xl font-black text-sky-700">$' + total.toFixed(2) + ' <span class="text-lg font-normal text-gray-400">CAD</span></p>' +
@@ -419,10 +419,10 @@ function renderActionBar() {
     '<button onclick="mcCreateProposal()" class="flex items-center gap-2 px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-xl text-sm transition-colors shadow-sm">' +
       '<i class="fas fa-file-invoice mr-1"></i>Go to Proposals <i class="fas fa-arrow-right text-xs ml-1"></i>' +
     '</button>' +
-    '<button onclick="window.print()" class="flex items-center gap-2 px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-xl text-sm transition-colors">' +
+    '<button onclick="window.print()" class="flex items-center gap-2 px-5 py-2.5 bg-white/5 hover:bg-gray-200 text-gray-300 font-medium rounded-xl text-sm transition-colors">' +
       '<i class="fas fa-print"></i>Print' +
     '</button>' +
-    '<button onclick="mcCopyList()" class="flex items-center gap-2 px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-xl text-sm transition-colors">' +
+    '<button onclick="mcCopyList()" class="flex items-center gap-2 px-5 py-2.5 bg-white/5 hover:bg-gray-200 text-gray-300 font-medium rounded-xl text-sm transition-colors">' +
       '<i class="fas fa-copy"></i>Copy List' +
     '</button>' +
     '<button onclick="mcExportCSV()" class="flex items-center gap-2 px-5 py-2.5 bg-sky-600 hover:bg-sky-700 text-white font-semibold rounded-xl text-sm transition-colors shadow-sm">' +
@@ -476,38 +476,38 @@ function mcShowInvoiceModal(customers, items) {
 
   var modal =
     '<div id="mc-invoice-modal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">' +
-    '<div class="bg-white rounded-2xl shadow-2xl w-full max-w-md">' +
-      '<div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">' +
-        '<h3 class="font-bold text-gray-800">Create Invoice from Materials</h3>' +
-        '<button onclick="document.getElementById(\'mc-invoice-modal\').remove()" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>' +
+    '<div class="bg-[#111111] rounded-2xl shadow-2xl w-full max-w-md">' +
+      '<div class="px-6 py-4 border-b border-white/5 flex items-center justify-between">' +
+        '<h3 class="font-bold text-gray-100">Create Invoice from Materials</h3>' +
+        '<button onclick="document.getElementById(\'mc-invoice-modal\').remove()" class="text-gray-400 hover:text-gray-400 text-xl leading-none">&times;</button>' +
       '</div>' +
       '<div class="p-6 space-y-4">' +
         '<div>' +
-          '<label class="block text-xs font-semibold text-gray-600 mb-1.5">Customer <span class="text-red-500">*</span></label>' +
-          '<select id="mc-inv-customer" class="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm">' + custOptions + '</select>' +
+          '<label class="block text-xs font-semibold text-gray-400 mb-1.5">Customer <span class="text-red-500">*</span></label>' +
+          '<select id="mc-inv-customer" class="w-full px-3 py-2.5 border border-white/15 rounded-xl text-sm">' + custOptions + '</select>' +
         '</div>' +
         '<div>' +
-          '<label class="block text-xs font-semibold text-gray-600 mb-1.5">Property Address</label>' +
-          '<input type="text" id="mc-inv-address" value="' + addr + '" placeholder="123 Main St..." class="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm">' +
+          '<label class="block text-xs font-semibold text-gray-400 mb-1.5">Property Address</label>' +
+          '<input type="text" id="mc-inv-address" value="' + addr + '" placeholder="123 Main St..." class="w-full px-3 py-2 border border-white/15 rounded-xl text-sm">' +
         '</div>' +
         '<div class="grid grid-cols-2 gap-3">' +
           '<div>' +
-            '<label class="block text-xs font-semibold text-gray-600 mb-1.5">Tax Rate (%)</label>' +
-            '<input type="number" id="mc-inv-tax" value="5" step="0.1" min="0" max="30" class="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm">' +
+            '<label class="block text-xs font-semibold text-gray-400 mb-1.5">Tax Rate (%)</label>' +
+            '<input type="number" id="mc-inv-tax" value="5" step="0.1" min="0" max="30" class="w-full px-3 py-2 border border-white/15 rounded-xl text-sm">' +
           '</div>' +
           '<div>' +
-            '<label class="block text-xs font-semibold text-gray-600 mb-1.5">Notes (optional)</label>' +
-            '<input type="text" id="mc-inv-notes" placeholder="Material estimate..." class="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm">' +
+            '<label class="block text-xs font-semibold text-gray-400 mb-1.5">Notes (optional)</label>' +
+            '<input type="text" id="mc-inv-notes" placeholder="Material estimate..." class="w-full px-3 py-2 border border-white/15 rounded-xl text-sm">' +
           '</div>' +
         '</div>' +
-        '<div class="bg-gray-50 rounded-xl p-3 text-sm text-gray-600">' +
+        '<div class="bg-[#0A0A0A] rounded-xl p-3 text-sm text-gray-400">' +
           '<span class="font-semibold">' + items.length + '</span> line items &nbsp;·&nbsp; ' +
           'Est. subtotal <span class="font-semibold">$' + totalAmt.toFixed(2) + ' CAD</span> &nbsp;·&nbsp; ' +
           mcState.currentWastePct + '% waste' +
         '</div>' +
       '</div>' +
-      '<div class="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">' +
-        '<button onclick="document.getElementById(\'mc-invoice-modal\').remove()" class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg text-sm">Cancel</button>' +
+      '<div class="px-6 py-4 border-t border-white/5 flex justify-end gap-3">' +
+        '<button onclick="document.getElementById(\'mc-invoice-modal\').remove()" class="px-4 py-2 text-gray-400 hover:bg-[#111111]/10 rounded-lg text-sm">Cancel</button>' +
         '<button onclick="mcSubmitInvoice()" class="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-semibold transition-colors">Create Invoice</button>' +
       '</div>' +
     '</div></div>';

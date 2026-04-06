@@ -44,8 +44,8 @@
   // HELPER: Status badge
   // ============================================================
   function badge(status, map) {
-    var m = map || { active: 'bg-green-100 text-green-700', inactive: 'bg-gray-100 text-gray-600', lead: 'bg-blue-100 text-blue-700', draft: 'bg-gray-100 text-gray-600', sent: 'bg-blue-100 text-blue-700', viewed: 'bg-indigo-100 text-indigo-700', paid: 'bg-green-100 text-green-700', overdue: 'bg-red-100 text-red-700', cancelled: 'bg-gray-100 text-gray-500', accepted: 'bg-green-100 text-green-700', declined: 'bg-red-100 text-red-700', expired: 'bg-yellow-100 text-yellow-700', scheduled: 'bg-blue-100 text-blue-700', in_progress: 'bg-amber-100 text-amber-700', completed: 'bg-green-100 text-green-700', postponed: 'bg-gray-100 text-gray-600' };
-    return '<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize ' + (m[status] || 'bg-gray-100 text-gray-600') + '">' + (status || 'unknown').replace(/_/g, ' ') + '</span>';
+    var m = map || { active: 'bg-green-100 text-green-700', inactive: 'bg-white/5 text-gray-400', lead: 'bg-blue-100 text-blue-700', draft: 'bg-white/5 text-gray-400', sent: 'bg-blue-100 text-blue-700', viewed: 'bg-indigo-100 text-indigo-700', paid: 'bg-green-100 text-green-700', overdue: 'bg-red-100 text-red-700', cancelled: 'bg-white/5 text-gray-500', accepted: 'bg-green-100 text-green-700', declined: 'bg-red-100 text-red-700', expired: 'bg-yellow-100 text-yellow-700', scheduled: 'bg-blue-100 text-blue-700', in_progress: 'bg-amber-100 text-amber-700', completed: 'bg-green-100 text-green-700', postponed: 'bg-white/5 text-gray-400' };
+    return '<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize ' + (m[status] || 'bg-white/5 text-gray-400') + '">' + (status || 'unknown').replace(/_/g, ' ') + '</span>';
   }
 
   function money(v) { return '$' + (parseFloat(v) || 0).toFixed(2); }
@@ -58,10 +58,10 @@
     var overlay = document.createElement('div');
     overlay.className = 'fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4';
     overlay.id = 'crmModal';
-    overlay.innerHTML = '<div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto mx-4 sm:mx-auto">' +
-      '<div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between"><h3 class="font-bold text-gray-800">' + title + '</h3><button onclick="document.getElementById(\'crmModal\').remove()" class="text-gray-400 hover:text-gray-600 text-lg">&times;</button></div>' +
+    overlay.innerHTML = '<div class="bg-[#111111] rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto mx-4 sm:mx-auto">' +
+      '<div class="px-6 py-4 border-b border-white/5 flex items-center justify-between"><h3 class="font-bold text-gray-100">' + title + '</h3><button onclick="document.getElementById(\'crmModal\').remove()" class="text-gray-400 hover:text-gray-400 text-lg">&times;</button></div>' +
       '<div class="p-6" id="modalBody">' + bodyHtml + '</div>' +
-      (onSave ? '<div class="px-6 py-4 border-t border-gray-100 flex justify-end gap-2"><button onclick="document.getElementById(\'crmModal\').remove()" class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg text-sm">Cancel</button><button id="modalSaveBtn" class="px-6 py-2 bg-brand-600 text-white rounded-lg text-sm font-semibold hover:bg-brand-700">' + (saveLabel || 'Save') + '</button></div>' : '') +
+      (onSave ? '<div class="px-6 py-4 border-t border-white/5 flex justify-end gap-2"><button onclick="document.getElementById(\'crmModal\').remove()" class="px-4 py-2 text-gray-400 hover:bg-[#111111]/10 rounded-lg text-sm">Cancel</button><button id="modalSaveBtn" class="px-6 py-2 bg-brand-600 text-white rounded-lg text-sm font-semibold hover:bg-brand-700">' + (saveLabel || 'Save') + '</button></div>' : '') +
       '</div>';
     document.body.appendChild(overlay);
     overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
@@ -90,13 +90,13 @@
     var fid = fieldId || 'selCustomer';
     var html = '<div id="' + fid + 'Wrapper">';
     // Toggle tabs: Existing vs New
-    html += '<div class="flex gap-1 mb-2 bg-gray-100 rounded-lg p-0.5">' +
-      '<button type="button" onclick="window._toggleCustMode(\'' + fid + '\', \'existing\')" id="' + fid + 'TabExisting" class="flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors bg-white shadow text-gray-800">Existing Customer</button>' +
-      '<button type="button" onclick="window._toggleCustMode(\'' + fid + '\', \'new\')" id="' + fid + 'TabNew" class="flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors text-gray-500 hover:text-gray-700">+ New Customer</button>' +
+    html += '<div class="flex gap-1 mb-2 bg-white/5 rounded-lg p-0.5">' +
+      '<button type="button" onclick="window._toggleCustMode(\'' + fid + '\', \'existing\')" id="' + fid + 'TabExisting" class="flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors bg-[#111111] shadow text-gray-100">Existing Customer</button>' +
+      '<button type="button" onclick="window._toggleCustMode(\'' + fid + '\', \'new\')" id="' + fid + 'TabNew" class="flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors text-gray-500 hover:text-gray-300">+ New Customer</button>' +
       '</div>';
     // Existing customer dropdown
     html += '<div id="' + fid + 'Existing">';
-    html += '<select id="' + fid + '" class="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-brand-500"><option value="">Select a customer...</option>';
+    html += '<select id="' + fid + '" class="w-full px-3 py-2.5 border border-white/15 rounded-xl text-sm focus:ring-2 focus:ring-brand-500"><option value="">Select a customer...</option>';
     for (var i = 0; i < customers.length; i++) {
       var c = customers[i];
       html += '<option value="' + c.id + '"' + (c.id == selectedId ? ' selected' : '') + '>' + c.name + (c.email ? ' — ' + c.email : '') + (c.company ? ' (' + c.company + ')' : '') + '</option>';
@@ -105,18 +105,18 @@
     // New customer inline form
     html += '<div id="' + fid + 'New" style="display:none" class="space-y-2">' +
       '<div class="grid grid-cols-1 sm:grid-cols-2 gap-2">' +
-        '<input type="text" id="' + fid + 'NewName" class="w-full px-2.5 py-2 border border-gray-300 rounded-lg text-sm" placeholder="Full Name *">' +
-        '<input type="email" id="' + fid + 'NewEmail" class="w-full px-2.5 py-2 border border-gray-300 rounded-lg text-sm" placeholder="Email">' +
+        '<input type="text" id="' + fid + 'NewName" class="w-full px-2.5 py-2 border border-white/15 rounded-lg text-sm" placeholder="Full Name *">' +
+        '<input type="email" id="' + fid + 'NewEmail" class="w-full px-2.5 py-2 border border-white/15 rounded-lg text-sm" placeholder="Email">' +
       '</div>' +
       '<div class="grid grid-cols-1 sm:grid-cols-2 gap-2">' +
-        '<input type="tel" id="' + fid + 'NewPhone" class="w-full px-2.5 py-2 border border-gray-300 rounded-lg text-sm" placeholder="Phone">' +
-        '<input type="text" id="' + fid + 'NewCompany" class="w-full px-2.5 py-2 border border-gray-300 rounded-lg text-sm" placeholder="Company (optional)">' +
+        '<input type="tel" id="' + fid + 'NewPhone" class="w-full px-2.5 py-2 border border-white/15 rounded-lg text-sm" placeholder="Phone">' +
+        '<input type="text" id="' + fid + 'NewCompany" class="w-full px-2.5 py-2 border border-white/15 rounded-lg text-sm" placeholder="Company (optional)">' +
       '</div>' +
-      '<input type="text" id="' + fid + 'NewAddress" class="w-full px-2.5 py-2 border border-gray-300 rounded-lg text-sm" placeholder="Address">' +
+      '<input type="text" id="' + fid + 'NewAddress" class="w-full px-2.5 py-2 border border-white/15 rounded-lg text-sm" placeholder="Address">' +
       '<div class="grid grid-cols-3 gap-2">' +
-        '<input type="text" id="' + fid + 'NewCity" class="w-full px-2.5 py-2 border border-gray-300 rounded-lg text-sm" placeholder="City">' +
-        '<input type="text" id="' + fid + 'NewProvince" class="w-full px-2.5 py-2 border border-gray-300 rounded-lg text-sm" placeholder="Province" value="AB">' +
-        '<input type="text" id="' + fid + 'NewPostal" class="w-full px-2.5 py-2 border border-gray-300 rounded-lg text-sm" placeholder="Postal Code">' +
+        '<input type="text" id="' + fid + 'NewCity" class="w-full px-2.5 py-2 border border-white/15 rounded-lg text-sm" placeholder="City">' +
+        '<input type="text" id="' + fid + 'NewProvince" class="w-full px-2.5 py-2 border border-white/15 rounded-lg text-sm" placeholder="Province" value="AB">' +
+        '<input type="text" id="' + fid + 'NewPostal" class="w-full px-2.5 py-2 border border-white/15 rounded-lg text-sm" placeholder="Postal Code">' +
       '</div>' +
     '</div>';
     html += '<input type="hidden" id="' + fid + 'Mode" value="existing">';
@@ -131,11 +131,11 @@
     var tabEx = document.getElementById(fid + 'TabExisting');
     var tabNew = document.getElementById(fid + 'TabNew');
     if (mode === 'existing') {
-      tabEx.className = 'flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors bg-white shadow text-gray-800';
-      tabNew.className = 'flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors text-gray-500 hover:text-gray-700';
+      tabEx.className = 'flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors bg-[#111111] shadow text-gray-100';
+      tabNew.className = 'flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors text-gray-500 hover:text-gray-300';
     } else {
-      tabNew.className = 'flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors bg-white shadow text-gray-800';
-      tabEx.className = 'flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors text-gray-500 hover:text-gray-700';
+      tabNew.className = 'flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors bg-[#111111] shadow text-gray-100';
+      tabEx.className = 'flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors text-gray-500 hover:text-gray-300';
       // Focus name field
       var nameField = document.getElementById(fid + 'NewName');
       if (nameField) setTimeout(function() { nameField.focus(); }, 50);
@@ -186,26 +186,26 @@
     var isSolar = custObj.company_type === 'solar';
 
     if (orders.length === 0) {
-      root.innerHTML = '<div class="bg-white rounded-xl border p-12 text-center"><div class="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4"><i class="fas fa-file-alt text-gray-400 text-2xl"></i></div><h3 class="text-lg font-semibold text-gray-700 mb-2">No Reports Yet</h3><p class="text-gray-500 mb-6">Order your first roof measurement to see reports here.</p><a href="/customer/order" class="inline-block bg-brand-600 hover:bg-brand-700 text-white font-bold py-3 px-8 rounded-xl"><i class="fas fa-plus mr-2"></i>Order a Report</a></div>';
+      root.innerHTML = '<div class="bg-[#111111] rounded-xl border p-12 text-center"><div class="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4"><i class="fas fa-file-alt text-gray-400 text-2xl"></i></div><h3 class="text-lg font-semibold text-gray-300 mb-2">No Reports Yet</h3><p class="text-gray-500 mb-6">Order your first roof measurement to see reports here.</p><a href="/customer/order" class="inline-block bg-brand-600 hover:bg-brand-700 text-white font-bold py-3 px-8 rounded-xl"><i class="fas fa-plus mr-2"></i>Order a Report</a></div>';
       return;
     }
-    var html = '<div class="flex items-center justify-between mb-4"><h2 class="text-lg font-bold text-gray-800"><i class="fas fa-file-alt text-brand-500 mr-2"></i>Roof Report History (' + orders.length + ')</h2><a href="/customer/order" class="bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-brand-700"><i class="fas fa-plus mr-1"></i>New Report</a></div><div class="space-y-3">';
+    var html = '<div class="flex items-center justify-between mb-4"><h2 class="text-lg font-bold text-gray-100"><i class="fas fa-file-alt text-brand-500 mr-2"></i>Roof Report History (' + orders.length + ')</h2><a href="/customer/order" class="bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-brand-700"><i class="fas fa-plus mr-1"></i>New Report</a></div><div class="space-y-3">';
     for (var i = 0; i < orders.length; i++) {
       var o = orders[i];
       var isCompleted = (o.report_status === 'completed' || o.status === 'completed');
       var isProcessing = (o.status === 'processing' || o.report_status === 'running');
       var buttons = '';
       if (isCompleted) {
-        buttons = '<a href="/api/reports/' + o.id + '/html" target="_blank" class="px-4 py-2 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700"><i class="fas fa-file-alt mr-1"></i>View Report</a><a href="/api/reports/' + o.id + '/pdf" target="_blank" title="Opens print dialog in new tab" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-xs font-medium hover:bg-gray-200"><i class="fas fa-print mr-1"></i>Print PDF</a><button onclick="window._crmShareReport(' + o.id + ')" class="px-4 py-2 bg-sky-600 text-white rounded-lg text-xs font-medium hover:bg-sky-700"><i class="fas fa-share-alt mr-1"></i>Share</button><button onclick="window._crmCreateProposalFromReport(' + o.id + ')" class="px-4 py-2 bg-purple-600 text-white rounded-lg text-xs font-medium hover:bg-purple-700"><i class="fas fa-file-invoice mr-1"></i>Create Proposal</button><a href="/customer/virtual-tryon?report_id=' + o.id + '" class="px-4 py-2 bg-violet-600 text-white rounded-lg text-xs font-medium hover:bg-violet-700"><i class="fas fa-house-user mr-1"></i>Roof Visualizer</a>';
+        buttons = '<a href="/api/reports/' + o.id + '/html" target="_blank" class="px-4 py-2 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700"><i class="fas fa-file-alt mr-1"></i>View Report</a><a href="/api/reports/' + o.id + '/pdf" target="_blank" title="Opens print dialog in new tab" class="px-4 py-2 bg-white/5 text-gray-300 rounded-lg text-xs font-medium hover:bg-gray-200"><i class="fas fa-print mr-1"></i>Print PDF</a><button onclick="window._crmShareReport(' + o.id + ')" class="px-4 py-2 bg-sky-600 text-white rounded-lg text-xs font-medium hover:bg-sky-700"><i class="fas fa-share-alt mr-1"></i>Share</button><button onclick="window._crmCreateProposalFromReport(' + o.id + ')" class="px-4 py-2 bg-purple-600 text-white rounded-lg text-xs font-medium hover:bg-purple-700"><i class="fas fa-file-invoice mr-1"></i>Create Proposal</button><a href="/customer/virtual-tryon?report_id=' + o.id + '" class="px-4 py-2 bg-violet-600 text-white rounded-lg text-xs font-medium hover:bg-violet-700"><i class="fas fa-house-user mr-1"></i>Roof Visualizer</a>';
         if (isSolar) {
           buttons += '<a href="/customer/material-calculator?order_id=' + o.id + '" class="px-4 py-2 bg-amber-500 text-white rounded-lg text-xs font-medium hover:bg-amber-600"><i class="fas fa-calculator mr-1"></i>Material Calculator</a>';
         }
       } else if (isProcessing) {
         buttons = '<span class="px-4 py-2 bg-blue-50 text-blue-600 rounded-lg text-sm font-medium"><i class="fas fa-spinner fa-spin mr-1"></i>Generating...</span>';
       } else {
-        buttons = '<span class="px-4 py-2 bg-gray-50 text-gray-500 rounded-lg text-xs font-medium">' + (o.status || 'pending') + '</span>';
+        buttons = '<span class="px-4 py-2 bg-[#0A0A0A] text-gray-500 rounded-lg text-xs font-medium">' + (o.status || 'pending') + '</span>';
       }
-      html += '<div class="bg-white rounded-xl border p-4 hover:shadow-md transition-shadow"><div class="flex items-start justify-between"><div class="min-w-0"><div class="flex items-center gap-2 mb-1"><span class="font-mono text-xs font-bold text-brand-600">' + o.order_number + '</span>' + badge(o.status) + '</div><p class="text-gray-700 font-medium text-sm"><i class="fas fa-map-marker-alt text-red-400 mr-1"></i>' + o.property_address + '</p><div class="flex items-center gap-3 mt-2 text-xs text-gray-400"><span><i class="fas fa-calendar mr-1"></i>' + fmtDate(o.created_at) + '</span>' + (o.roof_area_sqft ? '<span><i class="fas fa-ruler-combined mr-1"></i>' + Math.round(o.roof_area_sqft) + ' sq ft</span>' : '') + '</div></div><div class="flex flex-col items-end gap-2 flex-shrink-0 ml-4">' + buttons + '</div></div></div>';
+      html += '<div class="bg-[#111111] rounded-xl border p-4 hover:shadow-md transition-shadow"><div class="flex items-start justify-between"><div class="min-w-0"><div class="flex items-center gap-2 mb-1"><span class="font-mono text-xs font-bold text-brand-600">' + o.order_number + '</span>' + badge(o.status) + '</div><p class="text-gray-300 font-medium text-sm"><i class="fas fa-map-marker-alt text-red-400 mr-1"></i>' + o.property_address + '</p><div class="flex items-center gap-3 mt-2 text-xs text-gray-400"><span><i class="fas fa-calendar mr-1"></i>' + fmtDate(o.created_at) + '</span>' + (o.roof_area_sqft ? '<span><i class="fas fa-ruler-combined mr-1"></i>' + Math.round(o.roof_area_sqft) + ' sq ft</span>' : '') + '</div></div><div class="flex flex-col items-end gap-2 flex-shrink-0 ml-4">' + buttons + '</div></div></div>';
     }
     html += '</div>';
     root.innerHTML = html;
@@ -232,15 +232,15 @@
   function renderCustomers(data) {
     var customers = data.customers || [];
     var stats = data.stats || {};
-    var html = '<div class="flex items-center justify-between mb-5 flex-wrap gap-3"><div><h2 class="text-lg font-bold text-gray-800"><i class="fas fa-users text-violet-500 mr-2"></i>My Customers (' + (stats.total || 0) + ')</h2><p class="text-xs text-gray-500 mt-0.5">' + (stats.active_count || 0) + ' active</p></div><div class="flex items-center gap-2"><input type="text" id="custSearch" placeholder="Search customers..." class="px-3 py-2 border border-gray-300 rounded-lg text-sm w-48 focus:ring-2 focus:ring-brand-500" onkeyup="if(event.key===\'Enter\')window._crmSearchCustomers()"><button onclick="window._crmAddCustomer()" class="bg-violet-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-violet-700"><i class="fas fa-plus mr-1"></i>Add Customer</button></div></div>';
+    var html = '<div class="flex items-center justify-between mb-5 flex-wrap gap-3"><div><h2 class="text-lg font-bold text-gray-100"><i class="fas fa-users text-violet-500 mr-2"></i>My Customers (' + (stats.total || 0) + ')</h2><p class="text-xs text-gray-500 mt-0.5">' + (stats.active_count || 0) + ' active</p></div><div class="flex items-center gap-2"><input type="text" id="custSearch" placeholder="Search customers..." class="px-3 py-2 border border-white/15 rounded-lg text-sm w-48 focus:ring-2 focus:ring-brand-500" onkeyup="if(event.key===\'Enter\')window._crmSearchCustomers()"><button onclick="window._crmAddCustomer()" class="bg-violet-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-violet-700"><i class="fas fa-plus mr-1"></i>Add Customer</button></div></div>';
 
     if (customers.length === 0) {
-      html += '<div class="bg-white rounded-xl border p-12 text-center"><div class="w-16 h-16 bg-violet-50 rounded-full flex items-center justify-center mx-auto mb-4"><i class="fas fa-users text-violet-400 text-2xl"></i></div><h3 class="text-lg font-semibold text-gray-700 mb-2">No Customers Yet</h3><p class="text-gray-500 mb-4">Add your first client to start managing leads & invoices.</p><button onclick="window._crmAddCustomer()" class="bg-violet-600 text-white px-6 py-2.5 rounded-xl font-semibold hover:bg-violet-700"><i class="fas fa-plus mr-2"></i>Add First Customer</button></div>';
+      html += '<div class="bg-[#111111] rounded-xl border p-12 text-center"><div class="w-16 h-16 bg-violet-50 rounded-full flex items-center justify-center mx-auto mb-4"><i class="fas fa-users text-violet-400 text-2xl"></i></div><h3 class="text-lg font-semibold text-gray-300 mb-2">No Customers Yet</h3><p class="text-gray-500 mb-4">Add your first client to start managing leads & invoices.</p><button onclick="window._crmAddCustomer()" class="bg-violet-600 text-white px-6 py-2.5 rounded-xl font-semibold hover:bg-violet-700"><i class="fas fa-plus mr-2"></i>Add First Customer</button></div>';
     } else {
-      html += '<div class="bg-white rounded-xl border overflow-hidden overflow-x-auto"><table class="w-full text-sm"><thead class="bg-gray-50"><tr><th class="px-4 py-3 text-left text-xs font-semibold text-gray-500">Name</th><th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 hidden md:table-cell">Company</th><th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 hidden lg:table-cell">Phone</th><th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 hidden lg:table-cell">Email</th><th class="px-4 py-3 text-center text-xs font-semibold text-gray-500">Status</th><th class="px-4 py-3 text-right text-xs font-semibold text-gray-500">Revenue</th><th class="px-4 py-3"></th></tr></thead><tbody class="divide-y divide-gray-50">';
+      html += '<div class="bg-[#111111] rounded-xl border overflow-hidden overflow-x-auto"><table class="w-full text-sm"><thead class="bg-[#0A0A0A]"><tr><th class="px-4 py-3 text-left text-xs font-semibold text-gray-500">Name</th><th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 hidden md:table-cell">Company</th><th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 hidden lg:table-cell">Phone</th><th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 hidden lg:table-cell">Email</th><th class="px-4 py-3 text-center text-xs font-semibold text-gray-500">Status</th><th class="px-4 py-3 text-right text-xs font-semibold text-gray-500">Revenue</th><th class="px-4 py-3"></th></tr></thead><tbody class="divide-y divide-gray-50">';
       for (var i = 0; i < customers.length; i++) {
         var c = customers[i];
-        html += '<tr class="hover:bg-gray-50 cursor-pointer" onclick="window._crmViewCustomer(' + c.id + ')"><td class="px-4 py-3 font-medium text-gray-800">' + c.name + '</td><td class="px-4 py-3 text-gray-500 hidden md:table-cell">' + (c.company || '-') + '</td><td class="px-4 py-3 text-gray-500 hidden lg:table-cell">' + (c.phone || '-') + '</td><td class="px-4 py-3 text-gray-500 hidden lg:table-cell">' + (c.email || '-') + '</td><td class="px-4 py-3 text-center">' + badge(c.status) + '</td><td class="px-4 py-3 text-right font-semibold text-gray-700">' + money(c.lifetime_value) + '</td><td class="px-4 py-3 text-right"><button onclick="event.stopPropagation();window._crmEditCustomer(' + c.id + ')" class="text-gray-400 hover:text-brand-600"><i class="fas fa-pencil-alt"></i></button></td></tr>';
+        html += '<tr class="hover:bg-[#111111]/5 cursor-pointer" onclick="window._crmViewCustomer(' + c.id + ')"><td class="px-4 py-3 font-medium text-gray-100">' + c.name + '</td><td class="px-4 py-3 text-gray-500 hidden md:table-cell">' + (c.company || '-') + '</td><td class="px-4 py-3 text-gray-500 hidden lg:table-cell">' + (c.phone || '-') + '</td><td class="px-4 py-3 text-gray-500 hidden lg:table-cell">' + (c.email || '-') + '</td><td class="px-4 py-3 text-center">' + badge(c.status) + '</td><td class="px-4 py-3 text-right font-semibold text-gray-300">' + money(c.lifetime_value) + '</td><td class="px-4 py-3 text-right"><button onclick="event.stopPropagation();window._crmEditCustomer(' + c.id + ')" class="text-gray-400 hover:text-brand-600"><i class="fas fa-pencil-alt"></i></button></td></tr>';
       }
       html += '</tbody></table></div>';
     }
@@ -251,12 +251,12 @@
   function customerFormHTML(c) {
     c = c || {};
     return '<div class="space-y-3">' +
-      '<div class="grid grid-cols-1 sm:grid-cols-2 gap-3"><div><label class="block text-xs font-medium text-gray-600 mb-1">Name *</label><input type="text" id="cfName" value="' + (c.name || '') + '" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500"></div><div><label class="block text-xs font-medium text-gray-600 mb-1">Company</label><input type="text" id="cfCompany" value="' + (c.company || '') + '" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500"></div></div>' +
-      '<div class="grid grid-cols-1 sm:grid-cols-2 gap-3"><div><label class="block text-xs font-medium text-gray-600 mb-1">Email</label><input type="email" id="cfEmail" value="' + (c.email || '') + '" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500"></div><div><label class="block text-xs font-medium text-gray-600 mb-1">Phone</label><input type="tel" id="cfPhone" value="' + (c.phone || '') + '" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500"></div></div>' +
-      '<div><label class="block text-xs font-medium text-gray-600 mb-1">Address</label><input type="text" id="cfAddress" value="' + (c.address || '') + '" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500"></div>' +
-      '<div class="grid grid-cols-3 gap-3"><div><label class="block text-xs font-medium text-gray-600 mb-1">City</label><input type="text" id="cfCity" value="' + (c.city || '') + '" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"></div><div><label class="block text-xs font-medium text-gray-600 mb-1">Province</label><input type="text" id="cfProvince" value="' + (c.province || '') + '" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"></div><div><label class="block text-xs font-medium text-gray-600 mb-1">Postal Code</label><input type="text" id="cfPostal" value="' + (c.postal_code || '') + '" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"></div></div>' +
-      '<div><label class="block text-xs font-medium text-gray-600 mb-1">Notes</label><textarea id="cfNotes" rows="2" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">' + (c.notes || '') + '</textarea></div>' +
-      '<div><label class="block text-xs font-medium text-gray-600 mb-1">Status</label><select id="cfStatus" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"><option value="active"' + (c.status === 'active' ? ' selected' : '') + '>Active</option><option value="lead"' + (c.status === 'lead' ? ' selected' : '') + '>Lead</option><option value="inactive"' + (c.status === 'inactive' ? ' selected' : '') + '>Inactive</option></select></div>' +
+      '<div class="grid grid-cols-1 sm:grid-cols-2 gap-3"><div><label class="block text-xs font-medium text-gray-400 mb-1">Name *</label><input type="text" id="cfName" value="' + (c.name || '') + '" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm focus:ring-2 focus:ring-brand-500"></div><div><label class="block text-xs font-medium text-gray-400 mb-1">Company</label><input type="text" id="cfCompany" value="' + (c.company || '') + '" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm focus:ring-2 focus:ring-brand-500"></div></div>' +
+      '<div class="grid grid-cols-1 sm:grid-cols-2 gap-3"><div><label class="block text-xs font-medium text-gray-400 mb-1">Email</label><input type="email" id="cfEmail" value="' + (c.email || '') + '" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm focus:ring-2 focus:ring-brand-500"></div><div><label class="block text-xs font-medium text-gray-400 mb-1">Phone</label><input type="tel" id="cfPhone" value="' + (c.phone || '') + '" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm focus:ring-2 focus:ring-brand-500"></div></div>' +
+      '<div><label class="block text-xs font-medium text-gray-400 mb-1">Address</label><input type="text" id="cfAddress" value="' + (c.address || '') + '" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm focus:ring-2 focus:ring-brand-500"></div>' +
+      '<div class="grid grid-cols-3 gap-3"><div><label class="block text-xs font-medium text-gray-400 mb-1">City</label><input type="text" id="cfCity" value="' + (c.city || '') + '" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm"></div><div><label class="block text-xs font-medium text-gray-400 mb-1">Province</label><input type="text" id="cfProvince" value="' + (c.province || '') + '" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm"></div><div><label class="block text-xs font-medium text-gray-400 mb-1">Postal Code</label><input type="text" id="cfPostal" value="' + (c.postal_code || '') + '" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm"></div></div>' +
+      '<div><label class="block text-xs font-medium text-gray-400 mb-1">Notes</label><textarea id="cfNotes" rows="2" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm">' + (c.notes || '') + '</textarea></div>' +
+      '<div><label class="block text-xs font-medium text-gray-400 mb-1">Status</label><select id="cfStatus" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm"><option value="active"' + (c.status === 'active' ? ' selected' : '') + '>Active</option><option value="lead"' + (c.status === 'lead' ? ' selected' : '') + '>Lead</option><option value="inactive"' + (c.status === 'inactive' ? ' selected' : '') + '>Inactive</option></select></div>' +
       '</div>';
   }
 
@@ -346,22 +346,22 @@
         var props = data.proposals || [];
         var jobs = data.jobs || [];
         var body = '<div class="space-y-4">' +
-          '<div class="flex items-center gap-3 mb-2"><div class="w-12 h-12 bg-violet-100 rounded-full flex items-center justify-center"><i class="fas fa-user text-violet-500 text-lg"></i></div><div><h3 class="font-bold text-gray-800">' + c.name + '</h3><p class="text-xs text-gray-500">' + (c.company || '') + (c.email ? ' &middot; ' + c.email : '') + '</p></div></div>' +
-          (c.phone ? '<p class="text-sm text-gray-600"><i class="fas fa-phone mr-2 text-gray-400"></i>' + c.phone + '</p>' : '') +
-          (c.address ? '<p class="text-sm text-gray-600"><i class="fas fa-map-marker-alt mr-2 text-gray-400"></i>' + c.address + (c.city ? ', ' + c.city : '') + (c.province ? ', ' + c.province : '') + (c.postal_code ? ' ' + c.postal_code : '') + '</p>' : '') +
+          '<div class="flex items-center gap-3 mb-2"><div class="w-12 h-12 bg-violet-100 rounded-full flex items-center justify-center"><i class="fas fa-user text-violet-500 text-lg"></i></div><div><h3 class="font-bold text-gray-100">' + c.name + '</h3><p class="text-xs text-gray-500">' + (c.company || '') + (c.email ? ' &middot; ' + c.email : '') + '</p></div></div>' +
+          (c.phone ? '<p class="text-sm text-gray-400"><i class="fas fa-phone mr-2 text-gray-400"></i>' + c.phone + '</p>' : '') +
+          (c.address ? '<p class="text-sm text-gray-400"><i class="fas fa-map-marker-alt mr-2 text-gray-400"></i>' + c.address + (c.city ? ', ' + c.city : '') + (c.province ? ', ' + c.province : '') + (c.postal_code ? ' ' + c.postal_code : '') + '</p>' : '') +
           (c.notes ? '<p class="text-sm text-gray-500 italic">' + c.notes + '</p>' : '');
 
         if (invs.length > 0) {
           body += '<div class="pt-3 border-t"><h4 class="text-xs font-bold text-gray-500 uppercase mb-2">Invoices (' + invs.length + ')</h4><div class="space-y-1">';
           for (var i = 0; i < Math.min(invs.length, 5); i++) {
-            body += '<div class="flex items-center justify-between text-xs bg-gray-50 rounded-lg px-3 py-2"><span class="font-mono font-bold">' + invs[i].invoice_number + '</span><span>' + money(invs[i].total) + '</span>' + badge(invs[i].status) + '</div>';
+            body += '<div class="flex items-center justify-between text-xs bg-[#0A0A0A] rounded-lg px-3 py-2"><span class="font-mono font-bold">' + invs[i].invoice_number + '</span><span>' + money(invs[i].total) + '</span>' + badge(invs[i].status) + '</div>';
           }
           body += '</div></div>';
         }
         if (props.length > 0) {
           body += '<div class="pt-3 border-t"><h4 class="text-xs font-bold text-gray-500 uppercase mb-2">Proposals (' + props.length + ')</h4><div class="space-y-1">';
           for (var j = 0; j < Math.min(props.length, 5); j++) {
-            body += '<div class="flex items-center justify-between text-xs bg-gray-50 rounded-lg px-3 py-2"><span class="font-medium">' + props[j].title + '</span><span>' + money(props[j].total_amount) + '</span>' + badge(props[j].status) + '</div>';
+            body += '<div class="flex items-center justify-between text-xs bg-[#0A0A0A] rounded-lg px-3 py-2"><span class="font-medium">' + props[j].title + '</span><span>' + money(props[j].total_amount) + '</span>' + badge(props[j].status) + '</div>';
           }
           body += '</div></div>';
         }
@@ -399,7 +399,7 @@
   function renderInvoices(data) {
     var invoices = data.invoices || [];
     var stats = data.stats || {};
-    var html = '<div class="flex items-center justify-between mb-5 flex-wrap gap-3"><div><h2 class="text-lg font-bold text-gray-800"><i class="fas fa-file-invoice-dollar text-emerald-500 mr-2"></i>Invoices</h2></div><button onclick="window._crmNewInvoice()" class="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-emerald-700"><i class="fas fa-plus mr-1"></i>New Invoice</button></div>';
+    var html = '<div class="flex items-center justify-between mb-5 flex-wrap gap-3"><div><h2 class="text-lg font-bold text-gray-100"><i class="fas fa-file-invoice-dollar text-emerald-500 mr-2"></i>Invoices</h2></div><button onclick="window._crmNewInvoice()" class="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-emerald-700"><i class="fas fa-plus mr-1"></i>New Invoice</button></div>';
 
     // Gmail connect banner
     if (!_gmailConnected) {
@@ -411,28 +411,28 @@
 
     // Stats cards
     html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">' +
-      '<div class="bg-white rounded-xl border p-4 text-center"><p class="text-2xl font-black text-gray-800">' + (stats.total || 0) + '</p><p class="text-[10px] text-gray-500">Total</p></div>' +
-      '<div class="bg-white rounded-xl border p-4 text-center"><p class="text-2xl font-black text-green-600">' + money(stats.total_paid) + '</p><p class="text-[10px] text-gray-500">Collected</p></div>' +
-      '<div class="bg-white rounded-xl border p-4 text-center"><p class="text-2xl font-black text-amber-600">' + money(stats.total_owing) + '</p><p class="text-[10px] text-gray-500">Outstanding</p></div>' +
-      '<div class="bg-white rounded-xl border p-4 text-center"><p class="text-2xl font-black text-red-600">' + money(stats.total_overdue) + '</p><p class="text-[10px] text-gray-500">Overdue</p></div></div>';
+      '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-gray-100">' + (stats.total || 0) + '</p><p class="text-[10px] text-gray-500">Total</p></div>' +
+      '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-green-600">' + money(stats.total_paid) + '</p><p class="text-[10px] text-gray-500">Collected</p></div>' +
+      '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-amber-600">' + money(stats.total_owing) + '</p><p class="text-[10px] text-gray-500">Outstanding</p></div>' +
+      '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-red-600">' + money(stats.total_overdue) + '</p><p class="text-[10px] text-gray-500">Overdue</p></div></div>';
 
     // Filter tabs
-    html += '<div class="flex gap-1 mb-4 bg-white rounded-lg border p-1 overflow-x-auto">';
+    html += '<div class="flex gap-1 mb-4 bg-[#111111] rounded-lg border p-1 overflow-x-auto">';
     var filters = [['','All'],['owing','Owing'],['paid','Paid']];
     for (var f = 0; f < filters.length; f++) {
-      html += '<button onclick="window._crmFilterInvoices(\'' + filters[f][0] + '\')" class="px-4 py-1.5 rounded-lg text-xs font-medium transition-colors hover:bg-gray-100 ' + (((!window._invFilter && !filters[f][0]) || window._invFilter === filters[f][0]) ? 'bg-brand-600 text-white' : 'text-gray-600') + '">' + filters[f][1] + '</button>';
+      html += '<button onclick="window._crmFilterInvoices(\'' + filters[f][0] + '\')" class="px-4 py-1.5 rounded-lg text-xs font-medium transition-colors hover:bg-[#111111]/10 ' + (((!window._invFilter && !filters[f][0]) || window._invFilter === filters[f][0]) ? 'bg-brand-600 text-white' : 'text-gray-400') + '">' + filters[f][1] + '</button>';
     }
     html += '</div>';
 
     if (invoices.length === 0) {
-      html += '<div class="bg-white rounded-xl border p-12 text-center"><div class="w-16 h-16 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-4"><i class="fas fa-file-invoice-dollar text-emerald-400 text-2xl"></i></div><h3 class="text-lg font-semibold text-gray-700 mb-2">No Invoices Yet</h3><p class="text-gray-500 mb-4">Create your first invoice to start tracking payments.</p><button onclick="window._crmNewInvoice()" class="bg-emerald-600 text-white px-6 py-2.5 rounded-xl font-semibold hover:bg-emerald-700"><i class="fas fa-plus mr-2"></i>Create Invoice</button></div>';
+      html += '<div class="bg-[#111111] rounded-xl border p-12 text-center"><div class="w-16 h-16 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-4"><i class="fas fa-file-invoice-dollar text-emerald-400 text-2xl"></i></div><h3 class="text-lg font-semibold text-gray-300 mb-2">No Invoices Yet</h3><p class="text-gray-500 mb-4">Create your first invoice to start tracking payments.</p><button onclick="window._crmNewInvoice()" class="bg-emerald-600 text-white px-6 py-2.5 rounded-xl font-semibold hover:bg-emerald-700"><i class="fas fa-plus mr-2"></i>Create Invoice</button></div>';
     } else {
-      html += '<div class="bg-white rounded-xl border overflow-hidden overflow-x-auto"><table class="w-full text-sm"><thead class="bg-gray-50"><tr><th class="px-4 py-3 text-left text-xs font-semibold text-gray-500">Invoice #</th><th class="px-4 py-3 text-left text-xs font-semibold text-gray-500">Customer</th><th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 hidden md:table-cell">Date</th><th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 hidden md:table-cell">Due</th><th class="px-4 py-3 text-center text-xs font-semibold text-gray-500">Status</th><th class="px-4 py-3 text-right text-xs font-semibold text-gray-500">Amount</th><th class="px-4 py-3"></th></tr></thead><tbody class="divide-y divide-gray-50">';
+      html += '<div class="bg-[#111111] rounded-xl border overflow-hidden overflow-x-auto"><table class="w-full text-sm"><thead class="bg-[#0A0A0A]"><tr><th class="px-4 py-3 text-left text-xs font-semibold text-gray-500">Invoice #</th><th class="px-4 py-3 text-left text-xs font-semibold text-gray-500">Customer</th><th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 hidden md:table-cell">Date</th><th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 hidden md:table-cell">Due</th><th class="px-4 py-3 text-center text-xs font-semibold text-gray-500">Status</th><th class="px-4 py-3 text-right text-xs font-semibold text-gray-500">Amount</th><th class="px-4 py-3"></th></tr></thead><tbody class="divide-y divide-gray-50">';
       for (var i = 0; i < invoices.length; i++) {
         var inv = invoices[i];
-        html += '<tr class="hover:bg-gray-50 cursor-pointer" onclick="window._crmViewInvoice(' + inv.id + ')"><td class="px-4 py-3 font-mono text-xs font-bold text-brand-600">' + inv.invoice_number + '</td><td class="px-4 py-3 text-gray-700">' + (inv.customer_name || 'N/A') + '</td><td class="px-4 py-3 text-gray-500 text-xs hidden md:table-cell">' + fmtDate(inv.created_at) + '</td><td class="px-4 py-3 text-gray-500 text-xs hidden md:table-cell">' + fmtDate(inv.due_date) + '</td><td class="px-4 py-3 text-center">' + badge(inv.status) + '</td><td class="px-4 py-3 text-right font-semibold">' + money(inv.total) + '</td><td class="px-4 py-3 text-right" onclick="event.stopPropagation()"><div class="flex items-center gap-1 justify-end">';
+        html += '<tr class="hover:bg-[#111111]/5 cursor-pointer" onclick="window._crmViewInvoice(' + inv.id + ')"><td class="px-4 py-3 font-mono text-xs font-bold text-brand-600">' + inv.invoice_number + '</td><td class="px-4 py-3 text-gray-300">' + (inv.customer_name || 'N/A') + '</td><td class="px-4 py-3 text-gray-500 text-xs hidden md:table-cell">' + fmtDate(inv.created_at) + '</td><td class="px-4 py-3 text-gray-500 text-xs hidden md:table-cell">' + fmtDate(inv.due_date) + '</td><td class="px-4 py-3 text-center">' + badge(inv.status) + '</td><td class="px-4 py-3 text-right font-semibold">' + money(inv.total) + '</td><td class="px-4 py-3 text-right" onclick="event.stopPropagation()"><div class="flex items-center gap-1 justify-end">';
         html += '<button onclick="window._crmViewInvoice(' + inv.id + ')" class="text-xs text-brand-600 hover:underline font-medium"><i class="fas fa-eye mr-0.5"></i>View</button>';
-        if (inv.status === 'draft') html += '<button onclick="window._crmEditInvoice(' + inv.id + ')" class="text-xs text-gray-600 hover:underline ml-2"><i class="fas fa-edit mr-0.5"></i>Edit</button>';
+        if (inv.status === 'draft') html += '<button onclick="window._crmEditInvoice(' + inv.id + ')" class="text-xs text-gray-400 hover:underline ml-2"><i class="fas fa-edit mr-0.5"></i>Edit</button>';
         if (inv.status === 'draft' || inv.status === 'sent') html += '<button onclick="window._crmSendInvoice(' + inv.id + ')" class="text-xs text-blue-600 hover:underline ml-2"><i class="fas fa-paper-plane mr-0.5"></i>Send</button>';
         if (inv.square_payment_link_url) {
           html += '<a href="' + inv.square_payment_link_url + '" target="_blank" class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-semibold ml-2 hover:bg-green-200"><i class="fas fa-credit-card mr-0.5"></i>Pay Link</a>';
@@ -458,12 +458,12 @@
       .then(function(data) {
         var custs = data.customers || [];
         var body = '<div class="space-y-3">' +
-          '<div><label class="block text-xs font-medium text-gray-600 mb-1">Customer *</label>' + customerSelectHTML(custs, '', 'invCustomer') + '</div>' +
-          '<div class="grid grid-cols-1 sm:grid-cols-2 gap-3"><div><label class="block text-xs font-medium text-gray-600 mb-1">Project Title</label><input type="text" id="invTitle" class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" placeholder="Roof Installation — 123 Main St"></div><div><label class="block text-xs font-medium text-gray-600 mb-1">Property Address</label><input type="text" id="invAddress" class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" placeholder="123 Main St, Calgary AB"></div></div>' +
-          '<div id="invItems"><div class="invItemRow grid grid-cols-12 gap-2 items-end"><div class="col-span-6"><label class="block text-xs font-medium text-gray-600 mb-1">Description</label><input type="text" class="invDesc w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" placeholder="Roof installation"></div><div class="col-span-2"><label class="block text-xs font-medium text-gray-600 mb-1">Qty</label><input type="number" class="invQty w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" value="1"></div><div class="col-span-3"><label class="block text-xs font-medium text-gray-600 mb-1">Unit Price</label><input type="number" class="invPrice w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" step="0.01" placeholder="0.00"></div><div class="col-span-1"><button onclick="this.closest(\'.invItemRow\').remove()" class="text-red-400 hover:text-red-600 py-2"><i class="fas fa-times"></i></button></div></div></div>' +
+          '<div><label class="block text-xs font-medium text-gray-400 mb-1">Customer *</label>' + customerSelectHTML(custs, '', 'invCustomer') + '</div>' +
+          '<div class="grid grid-cols-1 sm:grid-cols-2 gap-3"><div><label class="block text-xs font-medium text-gray-400 mb-1">Project Title</label><input type="text" id="invTitle" class="w-full px-2 py-2 border border-white/15 rounded-lg text-sm" placeholder="Roof Installation — 123 Main St"></div><div><label class="block text-xs font-medium text-gray-400 mb-1">Property Address</label><input type="text" id="invAddress" class="w-full px-2 py-2 border border-white/15 rounded-lg text-sm" placeholder="123 Main St, Calgary AB"></div></div>' +
+          '<div id="invItems"><div class="invItemRow grid grid-cols-12 gap-2 items-end"><div class="col-span-6"><label class="block text-xs font-medium text-gray-400 mb-1">Description</label><input type="text" class="invDesc w-full px-2 py-2 border border-white/15 rounded-lg text-sm" placeholder="Roof installation"></div><div class="col-span-2"><label class="block text-xs font-medium text-gray-400 mb-1">Qty</label><input type="number" class="invQty w-full px-2 py-2 border border-white/15 rounded-lg text-sm" value="1"></div><div class="col-span-3"><label class="block text-xs font-medium text-gray-400 mb-1">Unit Price</label><input type="number" class="invPrice w-full px-2 py-2 border border-white/15 rounded-lg text-sm" step="0.01" placeholder="0.00"></div><div class="col-span-1"><button onclick="this.closest(\'.invItemRow\').remove()" class="text-red-400 hover:text-red-600 py-2"><i class="fas fa-times"></i></button></div></div></div>' +
           '<button onclick="window._crmAddInvItem()" class="text-brand-600 text-xs font-medium hover:underline"><i class="fas fa-plus mr-1"></i>Add Line Item</button>' +
-          '<div class="grid grid-cols-1 sm:grid-cols-2 gap-3"><div><label class="block text-xs font-medium text-gray-600 mb-1">Due Date</label><input type="date" id="invDue" class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm"></div><div><label class="block text-xs font-medium text-gray-600 mb-1">Tax Rate (%)</label><input type="number" id="invTax" value="5" class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" step="0.1"></div></div>' +
-          '<div><label class="block text-xs font-medium text-gray-600 mb-1">Notes</label><textarea id="invNotes" rows="2" class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" placeholder="Optional notes..."></textarea></div></div>';
+          '<div class="grid grid-cols-1 sm:grid-cols-2 gap-3"><div><label class="block text-xs font-medium text-gray-400 mb-1">Due Date</label><input type="date" id="invDue" class="w-full px-2 py-2 border border-white/15 rounded-lg text-sm"></div><div><label class="block text-xs font-medium text-gray-400 mb-1">Tax Rate (%)</label><input type="number" id="invTax" value="5" class="w-full px-2 py-2 border border-white/15 rounded-lg text-sm" step="0.1"></div></div>' +
+          '<div><label class="block text-xs font-medium text-gray-400 mb-1">Notes</label><textarea id="invNotes" rows="2" class="w-full px-2 py-2 border border-white/15 rounded-lg text-sm" placeholder="Optional notes..."></textarea></div></div>';
 
         showModal('Create Invoice', body, function() {
           var custData = getCustomerFromSelector('invCustomer');
@@ -498,7 +498,7 @@
     if (!container) return;
     var row = document.createElement('div');
     row.className = 'invItemRow grid grid-cols-12 gap-2 items-end mt-2';
-    row.innerHTML = '<div class="col-span-6"><input type="text" class="invDesc w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" placeholder="Description"></div><div class="col-span-2"><input type="number" class="invQty w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" value="1"></div><div class="col-span-3"><input type="number" class="invPrice w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" step="0.01" placeholder="0.00"></div><div class="col-span-1"><button onclick="this.closest(\'.invItemRow\').remove()" class="text-red-400 hover:text-red-600 py-2"><i class="fas fa-times"></i></button></div>';
+    row.innerHTML = '<div class="col-span-6"><input type="text" class="invDesc w-full px-2 py-2 border border-white/15 rounded-lg text-sm" placeholder="Description"></div><div class="col-span-2"><input type="number" class="invQty w-full px-2 py-2 border border-white/15 rounded-lg text-sm" value="1"></div><div class="col-span-3"><input type="number" class="invPrice w-full px-2 py-2 border border-white/15 rounded-lg text-sm" step="0.01" placeholder="0.00"></div><div class="col-span-1"><button onclick="this.closest(\'.invItemRow\').remove()" class="text-red-400 hover:text-red-600 py-2"><i class="fas fa-times"></i></button></div>';
     container.appendChild(row);
   };
 
@@ -533,17 +533,17 @@
         body += '<div class="flex items-center justify-between">';
         body += '<div><span class="font-mono text-lg font-bold text-brand-600">' + inv.invoice_number + '</span></div>';
         body += '<div class="flex items-center gap-2">' + badge(inv.status);
-        if (inv.status === 'draft') body += '<button onclick="closeModal();window._crmEditInvoice(' + id + ')" class="text-xs bg-gray-100 text-gray-700 px-3 py-1 rounded-lg hover:bg-gray-200"><i class="fas fa-edit mr-1"></i>Edit</button>';
+        if (inv.status === 'draft') body += '<button onclick="closeModal();window._crmEditInvoice(' + id + ')" class="text-xs bg-white/5 text-gray-300 px-3 py-1 rounded-lg hover:bg-gray-200"><i class="fas fa-edit mr-1"></i>Edit</button>';
         body += '</div></div>';
 
         // Customer info
-        body += '<div class="bg-gray-50 rounded-xl p-4">';
+        body += '<div class="bg-[#0A0A0A] rounded-xl p-4">';
         body += '<h4 class="text-xs font-semibold text-gray-500 uppercase mb-2"><i class="fas fa-user mr-1"></i>Bill To</h4>';
-        body += '<p class="font-semibold text-gray-800">' + (inv.customer_name || 'N/A') + '</p>';
-        if (inv.customer_email) body += '<p class="text-sm text-gray-600"><i class="fas fa-envelope mr-1 text-gray-400"></i>' + inv.customer_email + '</p>';
-        if (inv.customer_phone) body += '<p class="text-sm text-gray-600"><i class="fas fa-phone mr-1 text-gray-400"></i>' + inv.customer_phone + '</p>';
+        body += '<p class="font-semibold text-gray-100">' + (inv.customer_name || 'N/A') + '</p>';
+        if (inv.customer_email) body += '<p class="text-sm text-gray-400"><i class="fas fa-envelope mr-1 text-gray-400"></i>' + inv.customer_email + '</p>';
+        if (inv.customer_phone) body += '<p class="text-sm text-gray-400"><i class="fas fa-phone mr-1 text-gray-400"></i>' + inv.customer_phone + '</p>';
         var addr = [inv.customer_address, inv.customer_city, inv.customer_province, inv.customer_postal].filter(Boolean).join(', ');
-        if (addr) body += '<p class="text-sm text-gray-600 mt-1"><i class="fas fa-map-marker-alt mr-1 text-gray-400"></i>' + addr + '</p>';
+        if (addr) body += '<p class="text-sm text-gray-400 mt-1"><i class="fas fa-map-marker-alt mr-1 text-gray-400"></i>' + addr + '</p>';
         body += '</div>';
 
         // Dates row
@@ -555,34 +555,34 @@
 
         // Line items table
         if (items.length > 0) {
-          body += '<div class="border border-gray-200 rounded-xl overflow-hidden">';
-          body += '<table class="w-full text-sm"><thead class="bg-gray-50"><tr><th class="px-4 py-2.5 text-left text-xs font-semibold text-gray-500">Description</th><th class="px-4 py-2.5 text-center text-xs font-semibold text-gray-500 w-16">Qty</th><th class="px-4 py-2.5 text-right text-xs font-semibold text-gray-500 w-24">Price</th><th class="px-4 py-2.5 text-right text-xs font-semibold text-gray-500 w-24">Amount</th></tr></thead><tbody class="divide-y divide-gray-100">';
+          body += '<div class="border border-white/10 rounded-xl overflow-hidden">';
+          body += '<table class="w-full text-sm"><thead class="bg-[#0A0A0A]"><tr><th class="px-4 py-2.5 text-left text-xs font-semibold text-gray-500">Description</th><th class="px-4 py-2.5 text-center text-xs font-semibold text-gray-500 w-16">Qty</th><th class="px-4 py-2.5 text-right text-xs font-semibold text-gray-500 w-24">Price</th><th class="px-4 py-2.5 text-right text-xs font-semibold text-gray-500 w-24">Amount</th></tr></thead><tbody class="divide-y divide-gray-100">';
           for (var i = 0; i < items.length; i++) {
-            body += '<tr><td class="px-4 py-2.5 text-gray-700">' + items[i].description + '</td><td class="px-4 py-2.5 text-center text-gray-600">' + items[i].quantity + '</td><td class="px-4 py-2.5 text-right text-gray-600">' + money(items[i].unit_price) + '</td><td class="px-4 py-2.5 text-right font-medium text-gray-800">' + money(items[i].amount) + '</td></tr>';
+            body += '<tr><td class="px-4 py-2.5 text-gray-300">' + items[i].description + '</td><td class="px-4 py-2.5 text-center text-gray-400">' + items[i].quantity + '</td><td class="px-4 py-2.5 text-right text-gray-400">' + money(items[i].unit_price) + '</td><td class="px-4 py-2.5 text-right font-medium text-gray-100">' + money(items[i].amount) + '</td></tr>';
           }
           body += '</tbody></table></div>';
         }
 
         // Totals
-        body += '<div class="bg-gray-50 rounded-xl p-4">';
-        body += '<div class="flex justify-between text-sm text-gray-600 mb-1"><span>Subtotal</span><span>' + money(inv.subtotal) + '</span></div>';
-        if (inv.tax_amount) body += '<div class="flex justify-between text-sm text-gray-600 mb-1"><span>Tax (' + (inv.tax_rate || 5) + '%)</span><span>' + money(inv.tax_amount) + '</span></div>';
-        if (inv.discount_amount) body += '<div class="flex justify-between text-sm text-gray-600 mb-1"><span>Discount</span><span class="text-green-600">-' + money(inv.discount_amount) + '</span></div>';
-        body += '<div class="flex justify-between text-lg font-bold text-gray-800 border-t border-gray-200 pt-2 mt-2"><span>Total</span><span>' + money(inv.total) + ' CAD</span></div>';
+        body += '<div class="bg-[#0A0A0A] rounded-xl p-4">';
+        body += '<div class="flex justify-between text-sm text-gray-400 mb-1"><span>Subtotal</span><span>' + money(inv.subtotal) + '</span></div>';
+        if (inv.tax_amount) body += '<div class="flex justify-between text-sm text-gray-400 mb-1"><span>Tax (' + (inv.tax_rate || 5) + '%)</span><span>' + money(inv.tax_amount) + '</span></div>';
+        if (inv.discount_amount) body += '<div class="flex justify-between text-sm text-gray-400 mb-1"><span>Discount</span><span class="text-green-600">-' + money(inv.discount_amount) + '</span></div>';
+        body += '<div class="flex justify-between text-lg font-bold text-gray-100 border-t border-white/10 pt-2 mt-2"><span>Total</span><span>' + money(inv.total) + ' CAD</span></div>';
         body += '</div>';
 
         // Notes & Terms
         if (inv.notes) body += '<div class="bg-blue-50 rounded-xl p-3"><h4 class="text-xs font-semibold text-blue-600 uppercase mb-1"><i class="fas fa-sticky-note mr-1"></i>Notes</h4><p class="text-sm text-blue-800">' + inv.notes + '</p></div>';
-        if (inv.terms) body += '<div class="bg-gray-50 rounded-xl p-3"><h4 class="text-xs font-semibold text-gray-500 uppercase mb-1"><i class="fas fa-file-contract mr-1"></i>Terms</h4><p class="text-sm text-gray-700">' + inv.terms + '</p></div>';
+        if (inv.terms) body += '<div class="bg-[#0A0A0A] rounded-xl p-3"><h4 class="text-xs font-semibold text-gray-500 uppercase mb-1"><i class="fas fa-file-contract mr-1"></i>Terms</h4><p class="text-sm text-gray-300">' + inv.terms + '</p></div>';
 
         // Title + address (if present)
         if (inv.title) body += '<div class="bg-sky-50 rounded-xl p-3"><p class="text-xs font-semibold text-sky-600 uppercase mb-1"><i class="fas fa-tag mr-1"></i>Project</p><p class="text-sm font-semibold text-sky-800">' + inv.title + '</p>' + (inv.property_address ? '<p class="text-xs text-sky-600 mt-0.5"><i class="fas fa-map-marker-alt mr-1"></i>' + inv.property_address + '</p>' : '') + '</div>';
 
         // Share link
-        if (inv.share_token) body += '<div class="bg-gray-50 rounded-xl p-3 flex items-center justify-between gap-2"><div class="min-w-0"><p class="text-xs font-semibold text-gray-500 mb-0.5">Customer Link</p><p class="text-xs text-brand-600 truncate font-mono">/invoice/view/' + inv.share_token + '</p></div><button onclick="navigator.clipboard.writeText(window.location.origin+\'/invoice/view/' + inv.share_token + '\').then(function(){toast(\'Link copied!\');})" class="shrink-0 text-xs bg-white border border-gray-200 px-2 py-1 rounded-lg hover:bg-gray-50"><i class="fas fa-copy mr-1"></i>Copy</button></div>';
+        if (inv.share_token) body += '<div class="bg-[#0A0A0A] rounded-xl p-3 flex items-center justify-between gap-2"><div class="min-w-0"><p class="text-xs font-semibold text-gray-500 mb-0.5">Customer Link</p><p class="text-xs text-brand-600 truncate font-mono">/invoice/view/' + inv.share_token + '</p></div><button onclick="navigator.clipboard.writeText(window.location.origin+\'/invoice/view/' + inv.share_token + '\').then(function(){toast(\'Link copied!\');})" class="shrink-0 text-xs bg-[#111111] border border-white/10 px-2 py-1 rounded-lg hover:bg-[#111111]/5"><i class="fas fa-copy mr-1"></i>Copy</button></div>';
 
         // Square payment link
-        if (inv.square_payment_link_url) body += '<div class="bg-green-50 rounded-xl p-3 flex items-center justify-between gap-2"><div><p class="text-xs font-semibold text-green-600 mb-0.5"><i class="fas fa-credit-card mr-1"></i>Square Payment Link</p><p class="text-xs text-green-700 truncate">Ready to pay</p></div><div class="flex gap-2 shrink-0"><a href="' + inv.square_payment_link_url + '" target="_blank" class="text-xs bg-green-600 text-white px-2 py-1 rounded-lg hover:bg-green-700">Open</a><button onclick="navigator.clipboard.writeText(\'' + inv.square_payment_link_url + '\').then(function(){toast(\'Link copied!\');})" class="text-xs bg-white border border-green-200 px-2 py-1 rounded-lg hover:bg-green-50">Copy</button></div></div>';
+        if (inv.square_payment_link_url) body += '<div class="bg-green-50 rounded-xl p-3 flex items-center justify-between gap-2"><div><p class="text-xs font-semibold text-green-600 mb-0.5"><i class="fas fa-credit-card mr-1"></i>Square Payment Link</p><p class="text-xs text-green-700 truncate">Ready to pay</p></div><div class="flex gap-2 shrink-0"><a href="' + inv.square_payment_link_url + '" target="_blank" class="text-xs bg-green-600 text-white px-2 py-1 rounded-lg hover:bg-green-700">Open</a><button onclick="navigator.clipboard.writeText(\'' + inv.square_payment_link_url + '\').then(function(){toast(\'Link copied!\');})" class="text-xs bg-[#111111] border border-green-200 px-2 py-1 rounded-lg hover:bg-green-50">Copy</button></div></div>';
 
         // Action buttons
         body += '<div class="flex gap-2 pt-2 flex-wrap">';
@@ -590,7 +590,7 @@
         if (inv.share_token) {
           body += '<a href="/proposal/view/' + inv.share_token + '?print=1" target="_blank" class="flex-1 py-2.5 bg-gray-800 text-white rounded-xl text-sm font-semibold hover:bg-gray-900 text-center min-w-0"><i class="fas fa-file-pdf mr-1"></i>Download PDF</a>';
         }
-        if (inv.status === 'draft') body += '<button onclick="closeModal();window._crmEditInvoice(' + id + ')" class="flex-1 py-2.5 bg-gray-100 text-gray-700 rounded-xl text-sm font-semibold hover:bg-gray-200 min-w-0"><i class="fas fa-edit mr-1"></i>Edit</button>';
+        if (inv.status === 'draft') body += '<button onclick="closeModal();window._crmEditInvoice(' + id + ')" class="flex-1 py-2.5 bg-white/5 text-gray-300 rounded-xl text-sm font-semibold hover:bg-gray-200 min-w-0"><i class="fas fa-edit mr-1"></i>Edit</button>';
         if (inv.status !== 'cancelled') body += '<button onclick="closeModal();window._crmSendInvoice(' + id + ')" class="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 min-w-0"><i class="fas fa-paper-plane mr-1"></i>Send via Gmail</button>';
         if (inv.status !== 'paid' && inv.status !== 'cancelled') body += '<button onclick="closeModal();window._crmGenPayLink(' + id + ')" class="flex-1 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-semibold hover:bg-emerald-700 min-w-0"><i class="fas fa-credit-card mr-1"></i>Square Pay Link</button>';
         if (inv.status !== 'paid' && inv.status !== 'cancelled') body += '<button onclick="closeModal();window._crmMarkInvoice(' + id + ',\'paid\')" class="flex-1 py-2.5 bg-green-600 text-white rounded-xl text-sm font-semibold hover:bg-green-700 min-w-0"><i class="fas fa-check mr-1"></i>Mark Paid</button>';
@@ -616,22 +616,22 @@
       if (!inv) { toast('Invoice not found', 'error'); return; }
 
       var body = '<div class="space-y-3">' +
-        '<div><label class="block text-xs font-medium text-gray-600 mb-1">Customer *</label>' + customerSelectHTML(custs, inv.crm_customer_id, 'editInvCustomer') + '</div>' +
-        '<div class="grid grid-cols-1 sm:grid-cols-2 gap-3"><div><label class="block text-xs font-medium text-gray-600 mb-1">Project Title</label><input type="text" id="editInvTitle" class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" value="' + (inv.title || '') + '" placeholder="Roof Installation"></div><div><label class="block text-xs font-medium text-gray-600 mb-1">Property Address</label><input type="text" id="editInvAddress" class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" value="' + (inv.property_address || '') + '" placeholder="123 Main St"></div></div>' +
+        '<div><label class="block text-xs font-medium text-gray-400 mb-1">Customer *</label>' + customerSelectHTML(custs, inv.crm_customer_id, 'editInvCustomer') + '</div>' +
+        '<div class="grid grid-cols-1 sm:grid-cols-2 gap-3"><div><label class="block text-xs font-medium text-gray-400 mb-1">Project Title</label><input type="text" id="editInvTitle" class="w-full px-2 py-2 border border-white/15 rounded-lg text-sm" value="' + (inv.title || '') + '" placeholder="Roof Installation"></div><div><label class="block text-xs font-medium text-gray-400 mb-1">Property Address</label><input type="text" id="editInvAddress" class="w-full px-2 py-2 border border-white/15 rounded-lg text-sm" value="' + (inv.property_address || '') + '" placeholder="123 Main St"></div></div>' +
         '<div id="editInvItems">';
       // Populate existing items
       if (items.length > 0) {
         for (var i = 0; i < items.length; i++) {
-          body += '<div class="invItemRow grid grid-cols-12 gap-2 items-end' + (i > 0 ? ' mt-2' : '') + '"><div class="col-span-6">' + (i === 0 ? '<label class="block text-xs font-medium text-gray-600 mb-1">Description</label>' : '') + '<input type="text" class="invDesc w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" value="' + (items[i].description || '').replace(/"/g, '&quot;') + '"></div><div class="col-span-2">' + (i === 0 ? '<label class="block text-xs font-medium text-gray-600 mb-1">Qty</label>' : '') + '<input type="number" class="invQty w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" value="' + (items[i].quantity || 1) + '"></div><div class="col-span-3">' + (i === 0 ? '<label class="block text-xs font-medium text-gray-600 mb-1">Unit Price</label>' : '') + '<input type="number" class="invPrice w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" step="0.01" value="' + (items[i].unit_price || 0) + '"></div><div class="col-span-1"><button onclick="this.closest(\'.invItemRow\').remove()" class="text-red-400 hover:text-red-600 py-2"><i class="fas fa-times"></i></button></div></div>';
+          body += '<div class="invItemRow grid grid-cols-12 gap-2 items-end' + (i > 0 ? ' mt-2' : '') + '"><div class="col-span-6">' + (i === 0 ? '<label class="block text-xs font-medium text-gray-400 mb-1">Description</label>' : '') + '<input type="text" class="invDesc w-full px-2 py-2 border border-white/15 rounded-lg text-sm" value="' + (items[i].description || '').replace(/"/g, '&quot;') + '"></div><div class="col-span-2">' + (i === 0 ? '<label class="block text-xs font-medium text-gray-400 mb-1">Qty</label>' : '') + '<input type="number" class="invQty w-full px-2 py-2 border border-white/15 rounded-lg text-sm" value="' + (items[i].quantity || 1) + '"></div><div class="col-span-3">' + (i === 0 ? '<label class="block text-xs font-medium text-gray-400 mb-1">Unit Price</label>' : '') + '<input type="number" class="invPrice w-full px-2 py-2 border border-white/15 rounded-lg text-sm" step="0.01" value="' + (items[i].unit_price || 0) + '"></div><div class="col-span-1"><button onclick="this.closest(\'.invItemRow\').remove()" class="text-red-400 hover:text-red-600 py-2"><i class="fas fa-times"></i></button></div></div>';
         }
       } else {
-        body += '<div class="invItemRow grid grid-cols-12 gap-2 items-end"><div class="col-span-6"><label class="block text-xs font-medium text-gray-600 mb-1">Description</label><input type="text" class="invDesc w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" placeholder="Roof installation"></div><div class="col-span-2"><label class="block text-xs font-medium text-gray-600 mb-1">Qty</label><input type="number" class="invQty w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" value="1"></div><div class="col-span-3"><label class="block text-xs font-medium text-gray-600 mb-1">Unit Price</label><input type="number" class="invPrice w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" step="0.01" placeholder="0.00"></div><div class="col-span-1"><button onclick="this.closest(\'.invItemRow\').remove()" class="text-red-400 hover:text-red-600 py-2"><i class="fas fa-times"></i></button></div></div>';
+        body += '<div class="invItemRow grid grid-cols-12 gap-2 items-end"><div class="col-span-6"><label class="block text-xs font-medium text-gray-400 mb-1">Description</label><input type="text" class="invDesc w-full px-2 py-2 border border-white/15 rounded-lg text-sm" placeholder="Roof installation"></div><div class="col-span-2"><label class="block text-xs font-medium text-gray-400 mb-1">Qty</label><input type="number" class="invQty w-full px-2 py-2 border border-white/15 rounded-lg text-sm" value="1"></div><div class="col-span-3"><label class="block text-xs font-medium text-gray-400 mb-1">Unit Price</label><input type="number" class="invPrice w-full px-2 py-2 border border-white/15 rounded-lg text-sm" step="0.01" placeholder="0.00"></div><div class="col-span-1"><button onclick="this.closest(\'.invItemRow\').remove()" class="text-red-400 hover:text-red-600 py-2"><i class="fas fa-times"></i></button></div></div>';
       }
       body += '</div>' +
         '<button onclick="window._crmAddEditInvItem()" class="text-brand-600 text-xs font-medium hover:underline"><i class="fas fa-plus mr-1"></i>Add Line Item</button>' +
-        '<div class="grid grid-cols-1 sm:grid-cols-2 gap-3"><div><label class="block text-xs font-medium text-gray-600 mb-1">Due Date</label><input type="date" id="editInvDue" class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" value="' + (inv.due_date || '') + '"></div><div><label class="block text-xs font-medium text-gray-600 mb-1">Tax Rate (%)</label><input type="number" id="editInvTax" value="' + (inv.tax_rate || 5) + '" class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" step="0.1"></div></div>' +
-        '<div><label class="block text-xs font-medium text-gray-600 mb-1">Notes</label><textarea id="editInvNotes" rows="2" class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm">' + (inv.notes || '') + '</textarea></div>' +
-        '<div><label class="block text-xs font-medium text-gray-600 mb-1">Terms</label><textarea id="editInvTerms" rows="2" class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm">' + (inv.terms || '') + '</textarea></div></div>';
+        '<div class="grid grid-cols-1 sm:grid-cols-2 gap-3"><div><label class="block text-xs font-medium text-gray-400 mb-1">Due Date</label><input type="date" id="editInvDue" class="w-full px-2 py-2 border border-white/15 rounded-lg text-sm" value="' + (inv.due_date || '') + '"></div><div><label class="block text-xs font-medium text-gray-400 mb-1">Tax Rate (%)</label><input type="number" id="editInvTax" value="' + (inv.tax_rate || 5) + '" class="w-full px-2 py-2 border border-white/15 rounded-lg text-sm" step="0.1"></div></div>' +
+        '<div><label class="block text-xs font-medium text-gray-400 mb-1">Notes</label><textarea id="editInvNotes" rows="2" class="w-full px-2 py-2 border border-white/15 rounded-lg text-sm">' + (inv.notes || '') + '</textarea></div>' +
+        '<div><label class="block text-xs font-medium text-gray-400 mb-1">Terms</label><textarea id="editInvTerms" rows="2" class="w-full px-2 py-2 border border-white/15 rounded-lg text-sm">' + (inv.terms || '') + '</textarea></div></div>';
 
       showModal('Edit Invoice — ' + inv.invoice_number, body, function() {
         var custInfo = getCustomerFromSelector('editInvCustomer');
@@ -667,7 +667,7 @@
     if (!container) return;
     var row = document.createElement('div');
     row.className = 'invItemRow grid grid-cols-12 gap-2 items-end mt-2';
-    row.innerHTML = '<div class="col-span-6"><input type="text" class="invDesc w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" placeholder="Description"></div><div class="col-span-2"><input type="number" class="invQty w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" value="1"></div><div class="col-span-3"><input type="number" class="invPrice w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" step="0.01" placeholder="0.00"></div><div class="col-span-1"><button onclick="this.closest(\'.invItemRow\').remove()" class="text-red-400 hover:text-red-600 py-2"><i class="fas fa-times"></i></button></div>';
+    row.innerHTML = '<div class="col-span-6"><input type="text" class="invDesc w-full px-2 py-2 border border-white/15 rounded-lg text-sm" placeholder="Description"></div><div class="col-span-2"><input type="number" class="invQty w-full px-2 py-2 border border-white/15 rounded-lg text-sm" value="1"></div><div class="col-span-3"><input type="number" class="invPrice w-full px-2 py-2 border border-white/15 rounded-lg text-sm" step="0.01" placeholder="0.00"></div><div class="col-span-1"><button onclick="this.closest(\'.invItemRow\').remove()" class="text-red-400 hover:text-red-600 py-2"><i class="fas fa-times"></i></button></div>';
     container.appendChild(row);
   };
 
@@ -809,10 +809,10 @@
 
     // Header with Gmail indicator
     var html = '<div class="flex items-center justify-between mb-5 flex-wrap gap-3">';
-    html += '<div><h2 class="text-lg font-bold text-gray-800"><i class="fas fa-file-signature text-amber-500 mr-2"></i>Proposals & Estimates</h2></div>';
+    html += '<div><h2 class="text-lg font-bold text-gray-100"><i class="fas fa-file-signature text-amber-500 mr-2"></i>Proposals & Estimates</h2></div>';
     html += '<div class="flex items-center gap-2">';
     // Gmail status indicator
-    html += '<button onclick="window._crmGmailSettings()" class="px-3 py-2 rounded-lg text-xs font-medium border transition-colors ' + (_gmailConnected ? 'bg-green-50 border-green-200 text-green-700 hover:bg-green-100' : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100') + '">';
+    html += '<button onclick="window._crmGmailSettings()" class="px-3 py-2 rounded-lg text-xs font-medium border transition-colors ' + (_gmailConnected ? 'bg-green-50 border-green-200 text-green-700 hover:bg-green-100' : 'bg-[#0A0A0A] border-white/10 text-gray-400 hover:bg-[#111111]/10') + '">';
     html += '<i class="' + (_gmailConnected ? 'fas fa-check-circle text-green-500' : 'fab fa-google text-gray-400') + ' mr-1.5"></i>';
     html += _gmailConnected ? 'Gmail Connected' : 'Connect Gmail';
     html += '</button>';
@@ -821,26 +821,26 @@
 
     // Stats
     html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">' +
-      '<div class="bg-white rounded-xl border p-4 text-center"><p class="text-2xl font-black text-gray-800">' + (stats.total || 0) + '</p><p class="text-[10px] text-gray-500">Total</p></div>' +
-      '<div class="bg-white rounded-xl border p-4 text-center"><p class="text-2xl font-black text-amber-600">' + (stats.open_count || 0) + '</p><p class="text-[10px] text-gray-500">Open</p></div>' +
-      '<div class="bg-white rounded-xl border p-4 text-center"><p class="text-2xl font-black text-green-600">' + money(stats.sold_value) + '</p><p class="text-[10px] text-gray-500">Sold Value</p></div>' +
-      '<div class="bg-white rounded-xl border p-4 text-center"><p class="text-2xl font-black text-blue-600">' + money(stats.open_value) + '</p><p class="text-[10px] text-gray-500">Open Value</p></div></div>';
+      '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-gray-100">' + (stats.total || 0) + '</p><p class="text-[10px] text-gray-500">Total</p></div>' +
+      '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-amber-600">' + (stats.open_count || 0) + '</p><p class="text-[10px] text-gray-500">Open</p></div>' +
+      '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-green-600">' + money(stats.sold_value) + '</p><p class="text-[10px] text-gray-500">Sold Value</p></div>' +
+      '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-blue-600">' + money(stats.open_value) + '</p><p class="text-[10px] text-gray-500">Open Value</p></div></div>';
 
     // Filter
-    html += '<div class="flex gap-1 mb-4 bg-white rounded-lg border p-1 overflow-x-auto">';
+    html += '<div class="flex gap-1 mb-4 bg-[#111111] rounded-lg border p-1 overflow-x-auto">';
     var filters = [['','All'],['open','Open'],['sold','Sold']];
     for (var f = 0; f < filters.length; f++) {
-      html += '<button onclick="window._crmFilterProposals(\'' + filters[f][0] + '\')" class="px-4 py-1.5 rounded-lg text-xs font-medium transition-colors hover:bg-gray-100 ' + (((!window._propFilter && !filters[f][0]) || window._propFilter === filters[f][0]) ? 'bg-brand-600 text-white' : 'text-gray-600') + '">' + filters[f][1] + '</button>';
+      html += '<button onclick="window._crmFilterProposals(\'' + filters[f][0] + '\')" class="px-4 py-1.5 rounded-lg text-xs font-medium transition-colors hover:bg-[#111111]/10 ' + (((!window._propFilter && !filters[f][0]) || window._propFilter === filters[f][0]) ? 'bg-brand-600 text-white' : 'text-gray-400') + '">' + filters[f][1] + '</button>';
     }
     html += '</div>';
 
     if (proposals.length === 0) {
-      html += '<div class="bg-white rounded-xl border p-12 text-center"><div class="w-16 h-16 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-4"><i class="fas fa-file-signature text-amber-400 text-2xl"></i></div><h3 class="text-lg font-semibold text-gray-700 mb-2">No Proposals Yet</h3><p class="text-gray-500 mb-4">Create your first roof estimate or proposal.</p><button onclick="window._crmNewProposal()" class="bg-amber-600 text-white px-6 py-2.5 rounded-xl font-semibold hover:bg-amber-700"><i class="fas fa-plus mr-2"></i>Create Proposal</button></div>';
+      html += '<div class="bg-[#111111] rounded-xl border p-12 text-center"><div class="w-16 h-16 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-4"><i class="fas fa-file-signature text-amber-400 text-2xl"></i></div><h3 class="text-lg font-semibold text-gray-300 mb-2">No Proposals Yet</h3><p class="text-gray-500 mb-4">Create your first roof estimate or proposal.</p><button onclick="window._crmNewProposal()" class="bg-amber-600 text-white px-6 py-2.5 rounded-xl font-semibold hover:bg-amber-700"><i class="fas fa-plus mr-2"></i>Create Proposal</button></div>';
     } else {
       html += '<div class="space-y-3">';
       for (var i = 0; i < proposals.length; i++) {
         var p = proposals[i];
-        html += '<div class="bg-white rounded-xl border p-4 hover:shadow-md transition-shadow">';
+        html += '<div class="bg-[#111111] rounded-xl border p-4 hover:shadow-md transition-shadow">';
         html += '<div class="flex items-start justify-between">';
         html += '<div class="min-w-0">';
         html += '<div class="flex items-center gap-2 mb-1 flex-wrap">';
@@ -851,15 +851,15 @@
         }
         if (p.customer_email) html += '<span class="text-[10px] text-gray-400"><i class="fas fa-envelope mr-0.5"></i>' + p.customer_email + '</span>';
         html += '</div>';
-        html += '<p class="text-gray-800 font-medium text-sm">' + p.title + '</p>';
+        html += '<p class="text-gray-100 font-medium text-sm">' + p.title + '</p>';
         html += '<p class="text-xs text-gray-500 mt-1"><i class="fas fa-user mr-1"></i>' + (p.customer_name || 'N/A') + (p.property_address ? ' &middot; <i class="fas fa-map-marker-alt mr-1"></i>' + p.property_address : '') + '</p>';
         html += '</div>';
         html += '<div class="flex flex-col items-end gap-1 flex-shrink-0 ml-4">';
-        html += '<span class="text-lg font-black text-gray-800">' + money(p.total_amount) + '</span>';
+        html += '<span class="text-lg font-black text-gray-100">' + money(p.total_amount) + '</span>';
         html += '<div class="flex items-center gap-1.5 flex-wrap justify-end">';
         html += '<button onclick="window._crmViewProposal(' + p.id + ')" class="text-xs text-brand-600 hover:underline font-medium"><i class="fas fa-eye mr-0.5"></i>View</button>';
         if (p.status === 'draft') {
-          html += '<button onclick="window._crmEditProposal(' + p.id + ')" class="text-xs text-gray-500 hover:text-gray-700"><i class="fas fa-edit"></i></button>';
+          html += '<button onclick="window._crmEditProposal(' + p.id + ')" class="text-xs text-gray-500 hover:text-gray-300"><i class="fas fa-edit"></i></button>';
           html += '<button onclick="window._crmSendProposal(' + p.id + ')" class="text-xs text-blue-600 hover:underline font-medium"><i class="fas fa-paper-plane mr-0.5"></i>Send</button>';
         }
         if (p.status === 'sent' || p.status === 'viewed') {
@@ -895,12 +895,12 @@
         '<div class="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-2"><i class="fas fa-check-circle text-green-600 text-xl"></i></div>' +
         '<p class="font-semibold text-green-800">Gmail Connected</p>' +
         '<p class="text-sm text-green-600">' + _gmailEmail + '</p></div>';
-      body += '<p class="text-sm text-gray-600">Proposals will be emailed from your connected Gmail account when you click "Send".</p>';
+      body += '<p class="text-sm text-gray-400">Proposals will be emailed from your connected Gmail account when you click "Send".</p>';
       body += '<button onclick="window._crmDisconnectGmail()" class="w-full py-2 border border-red-200 text-red-600 rounded-lg text-sm hover:bg-red-50">Disconnect Gmail</button>';
     } else {
-      body += '<div class="bg-gray-50 border border-gray-200 rounded-xl p-4 text-center">' +
-        '<div class="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-2"><i class="fab fa-google text-gray-400 text-xl"></i></div>' +
-        '<p class="font-semibold text-gray-700">Connect Your Gmail</p>' +
+      body += '<div class="bg-[#0A0A0A] border border-white/10 rounded-xl p-4 text-center">' +
+        '<div class="w-12 h-12 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-2"><i class="fab fa-google text-gray-400 text-xl"></i></div>' +
+        '<p class="font-semibold text-gray-300">Connect Your Gmail</p>' +
         '<p class="text-sm text-gray-500 mt-1">Send proposals directly from your Gmail so customers receive them from your real email address.</p></div>';
       body += '<button onclick="window._crmConnectGmail()" class="w-full py-3 bg-brand-600 text-white rounded-xl text-sm font-semibold hover:bg-brand-700"><i class="fab fa-google mr-2"></i>Connect Gmail Account</button>';
       body += '<p class="text-xs text-gray-400 text-center">Without Gmail, proposals will only generate a shareable link.</p>';
@@ -938,9 +938,9 @@
   function propItemRowHTML(idx, item) {
     item = item || { description: '', quantity: 1, unit: 'ea', unit_price: 0 };
     return '<tr data-idx="' + idx + '">' +
-      '<td class="py-1 pr-1"><input type="text" class="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-sm prop-item-desc" value="' + (item.description || '') + '" placeholder="Description"></td>' +
-      '<td class="py-1 pr-1 w-16"><input type="number" class="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-sm text-center prop-item-qty" value="' + (item.quantity || 1) + '" min="0.01" step="0.01"></td>' +
-      '<td class="py-1 pr-1 w-16"><select class="w-full px-1 py-1.5 border border-gray-300 rounded-lg text-xs prop-item-unit">' +
+      '<td class="py-1 pr-1"><input type="text" class="w-full px-2 py-1.5 border border-white/15 rounded-lg text-sm prop-item-desc" value="' + (item.description || '') + '" placeholder="Description"></td>' +
+      '<td class="py-1 pr-1 w-16"><input type="number" class="w-full px-2 py-1.5 border border-white/15 rounded-lg text-sm text-center prop-item-qty" value="' + (item.quantity || 1) + '" min="0.01" step="0.01"></td>' +
+      '<td class="py-1 pr-1 w-16"><select class="w-full px-1 py-1.5 border border-white/15 rounded-lg text-xs prop-item-unit">' +
         '<option value="ea"' + (item.unit === 'ea' ? ' selected' : '') + '>ea</option>' +
         '<option value="sq ft"' + (item.unit === 'sq ft' ? ' selected' : '') + '>sq ft</option>' +
         '<option value="sq"' + (item.unit === 'sq' ? ' selected' : '') + '>sq</option>' +
@@ -949,7 +949,7 @@
         '<option value="bundle"' + (item.unit === 'bundle' ? ' selected' : '') + '>bundle</option>' +
         '<option value="lot"' + (item.unit === 'lot' ? ' selected' : '') + '>lot</option>' +
       '</select></td>' +
-      '<td class="py-1 pr-1 w-24"><input type="number" class="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-sm text-right prop-item-price" value="' + (item.unit_price || 0) + '" min="0" step="0.01"></td>' +
+      '<td class="py-1 pr-1 w-24"><input type="number" class="w-full px-2 py-1.5 border border-white/15 rounded-lg text-sm text-right prop-item-price" value="' + (item.unit_price || 0) + '" min="0" step="0.01"></td>' +
       '<td class="py-1 w-8 text-center"><button onclick="this.closest(\'tr\').remove();window._propRecalc()" class="text-gray-400 hover:text-red-500"><i class="fas fa-times"></i></button></td>' +
       '</tr>';
   }
@@ -961,11 +961,11 @@
       .then(function(data) {
         var custs = data.customers || [];
         var body = '<div class="space-y-3">' +
-          '<div><label class="block text-xs font-medium text-gray-600 mb-1">Customer *</label>' + customerSelectHTML(custs, '', 'propCustomer') + '</div>' +
-          '<div><label class="block text-xs font-medium text-gray-600 mb-1">Title *</label><input type="text" id="propTitle" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="e.g. Full Roof Replacement – 2,200 sq ft"></div>' +
-          '<div><label class="block text-xs font-medium text-gray-600 mb-1">Property Address</label><input type="text" id="propAddress" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"></div>' +
-          '<div><label class="block text-xs font-medium text-gray-600 mb-1">Scope of Work</label><textarea id="propScope" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="Remove existing shingles, inspect decking, install new underlayment and architectural shingles..."></textarea></div>' +
-          '<div><label class="block text-xs font-medium text-gray-600 mb-1"><i class="fas fa-file-alt mr-1 text-indigo-500"></i>Attach Roof Report <span class="text-gray-400 font-normal">(optional)</span></label><select id="propLinkedReport" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"><option value="">— No report attached —</option></select><p class="text-[10px] text-gray-400 mt-1">Attach a completed roof report to include with this proposal.</p></div>';
+          '<div><label class="block text-xs font-medium text-gray-400 mb-1">Customer *</label>' + customerSelectHTML(custs, '', 'propCustomer') + '</div>' +
+          '<div><label class="block text-xs font-medium text-gray-400 mb-1">Title *</label><input type="text" id="propTitle" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm" placeholder="e.g. Full Roof Replacement – 2,200 sq ft"></div>' +
+          '<div><label class="block text-xs font-medium text-gray-400 mb-1">Property Address</label><input type="text" id="propAddress" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm"></div>' +
+          '<div><label class="block text-xs font-medium text-gray-400 mb-1">Scope of Work</label><textarea id="propScope" rows="3" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm" placeholder="Remove existing shingles, inspect decking, install new underlayment and architectural shingles..."></textarea></div>' +
+          '<div><label class="block text-xs font-medium text-gray-400 mb-1"><i class="fas fa-file-alt mr-1 text-indigo-500"></i>Attach Roof Report <span class="text-gray-400 font-normal">(optional)</span></label><select id="propLinkedReport" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm bg-[#111111]"><option value="">— No report attached —</option></select><p class="text-[10px] text-gray-400 mt-1">Attach a completed roof report to include with this proposal.</p></div>';
 
         // Populate the roof report dropdown
         fetch('/api/customer/orders', { headers: authHeadersOnly() })
@@ -984,8 +984,8 @@
           }).catch(function() {});
 
         // Line items section
-        body += '<div class="border border-gray-200 rounded-xl p-3">' +
-          '<div class="flex items-center justify-between mb-2"><label class="text-xs font-semibold text-gray-700 uppercase tracking-wider"><i class="fas fa-list mr-1"></i>Line Items</label>' +
+        body += '<div class="border border-white/10 rounded-xl p-3">' +
+          '<div class="flex items-center justify-between mb-2"><label class="text-xs font-semibold text-gray-300 uppercase tracking-wider"><i class="fas fa-list mr-1"></i>Line Items</label>' +
           '<button onclick="window._propAddItem()" class="text-xs text-brand-600 hover:text-brand-700 font-medium"><i class="fas fa-plus mr-1"></i>Add Item</button></div>' +
           '<table class="w-full" id="propItemsTable"><thead><tr class="text-[10px] text-gray-500 uppercase">' +
           '<th class="text-left pb-1">Description</th><th class="text-center pb-1 w-16">Qty</th><th class="text-center pb-1 w-16">Unit</th><th class="text-right pb-1 w-24">Price</th><th class="w-8"></th>' +
@@ -996,13 +996,13 @@
 
         // Tax & totals
         body += '<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">' +
-          '<div><label class="block text-xs font-medium text-gray-600 mb-1">Tax Rate (%)</label><input type="number" id="propTaxRate" class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" value="5" min="0" step="0.5"></div>' +
-          '<div class="flex items-end"><div class="w-full bg-gray-50 rounded-lg border p-2 text-right"><p class="text-xs text-gray-500">Estimated Total</p><p class="text-lg font-black text-gray-800" id="propTotalDisplay">$0.00</p></div></div></div>';
+          '<div><label class="block text-xs font-medium text-gray-400 mb-1">Tax Rate (%)</label><input type="number" id="propTaxRate" class="w-full px-2 py-2 border border-white/15 rounded-lg text-sm" value="5" min="0" step="0.5"></div>' +
+          '<div class="flex items-end"><div class="w-full bg-[#0A0A0A] rounded-lg border p-2 text-right"><p class="text-xs text-gray-500">Estimated Total</p><p class="text-lg font-black text-gray-100" id="propTotalDisplay">$0.00</p></div></div></div>';
 
-        body += '<div><label class="block text-xs font-medium text-gray-600 mb-1">Valid Until</label><input type="date" id="propValid" class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm"></div>' +
-          '<div><label class="block text-xs font-medium text-gray-600 mb-1">Warranty Terms</label><textarea id="propWarranty" rows="2" class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" placeholder="e.g. 25-year manufacturer warranty, 5-year workmanship warranty"></textarea></div>' +
-          '<div><label class="block text-xs font-medium text-gray-600 mb-1">Payment Terms</label><textarea id="propPayment" rows="2" class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" placeholder="e.g. 50% deposit upon acceptance, balance due upon completion"></textarea></div>' +
-          '<div><label class="block text-xs font-medium text-gray-600 mb-1">Notes</label><textarea id="propNotes" rows="2" class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm"></textarea></div></div>';
+        body += '<div><label class="block text-xs font-medium text-gray-400 mb-1">Valid Until</label><input type="date" id="propValid" class="w-full px-2 py-2 border border-white/15 rounded-lg text-sm"></div>' +
+          '<div><label class="block text-xs font-medium text-gray-400 mb-1">Warranty Terms</label><textarea id="propWarranty" rows="2" class="w-full px-2 py-2 border border-white/15 rounded-lg text-sm" placeholder="e.g. 25-year manufacturer warranty, 5-year workmanship warranty"></textarea></div>' +
+          '<div><label class="block text-xs font-medium text-gray-400 mb-1">Payment Terms</label><textarea id="propPayment" rows="2" class="w-full px-2 py-2 border border-white/15 rounded-lg text-sm" placeholder="e.g. 50% deposit upon acceptance, balance due upon completion"></textarea></div>' +
+          '<div><label class="block text-xs font-medium text-gray-400 mb-1">Notes</label><textarea id="propNotes" rows="2" class="w-full px-2 py-2 border border-white/15 rounded-lg text-sm"></textarea></div></div>';
 
         showModal('Create Proposal', body, function() {
           var custData = getCustomerFromSelector('propCustomer');
@@ -1141,14 +1141,14 @@
       var custs = custData.customers || [];
 
       var body = '<div class="space-y-3">' +
-        '<div><label class="block text-xs font-medium text-gray-600 mb-1">Customer *</label>' + customerSelectHTML(custs, p.crm_customer_id, 'propCustomer') + '</div>' +
-        '<div><label class="block text-xs font-medium text-gray-600 mb-1">Title *</label><input type="text" id="propTitle" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" value="' + (p.title || '') + '"></div>' +
-        '<div><label class="block text-xs font-medium text-gray-600 mb-1">Property Address</label><input type="text" id="propAddress" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" value="' + (p.property_address || '') + '"></div>' +
-        '<div><label class="block text-xs font-medium text-gray-600 mb-1">Scope of Work</label><textarea id="propScope" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">' + (p.scope_of_work || '') + '</textarea></div>';
+        '<div><label class="block text-xs font-medium text-gray-400 mb-1">Customer *</label>' + customerSelectHTML(custs, p.crm_customer_id, 'propCustomer') + '</div>' +
+        '<div><label class="block text-xs font-medium text-gray-400 mb-1">Title *</label><input type="text" id="propTitle" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm" value="' + (p.title || '') + '"></div>' +
+        '<div><label class="block text-xs font-medium text-gray-400 mb-1">Property Address</label><input type="text" id="propAddress" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm" value="' + (p.property_address || '') + '"></div>' +
+        '<div><label class="block text-xs font-medium text-gray-400 mb-1">Scope of Work</label><textarea id="propScope" rows="3" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm">' + (p.scope_of_work || '') + '</textarea></div>';
 
       // Line items
-      body += '<div class="border border-gray-200 rounded-xl p-3">' +
-        '<div class="flex items-center justify-between mb-2"><label class="text-xs font-semibold text-gray-700 uppercase tracking-wider"><i class="fas fa-list mr-1"></i>Line Items</label>' +
+      body += '<div class="border border-white/10 rounded-xl p-3">' +
+        '<div class="flex items-center justify-between mb-2"><label class="text-xs font-semibold text-gray-300 uppercase tracking-wider"><i class="fas fa-list mr-1"></i>Line Items</label>' +
         '<button onclick="window._propAddItem()" class="text-xs text-brand-600 hover:text-brand-700 font-medium"><i class="fas fa-plus mr-1"></i>Add Item</button></div>' +
         '<table class="w-full" id="propItemsTable"><thead><tr class="text-[10px] text-gray-500 uppercase">' +
         '<th class="text-left pb-1">Description</th><th class="text-center pb-1 w-16">Qty</th><th class="text-center pb-1 w-16">Unit</th><th class="text-right pb-1 w-24">Price</th><th class="w-8"></th>' +
@@ -1161,13 +1161,13 @@
       body += '</tbody></table></div>';
 
       body += '<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">' +
-        '<div><label class="block text-xs font-medium text-gray-600 mb-1">Tax Rate (%)</label><input type="number" id="propTaxRate" class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" value="' + (p.tax_rate || 5) + '" min="0" step="0.5"></div>' +
-        '<div class="flex items-end"><div class="w-full bg-gray-50 rounded-lg border p-2 text-right"><p class="text-xs text-gray-500">Estimated Total</p><p class="text-lg font-black text-gray-800" id="propTotalDisplay">$0.00</p></div></div></div>';
+        '<div><label class="block text-xs font-medium text-gray-400 mb-1">Tax Rate (%)</label><input type="number" id="propTaxRate" class="w-full px-2 py-2 border border-white/15 rounded-lg text-sm" value="' + (p.tax_rate || 5) + '" min="0" step="0.5"></div>' +
+        '<div class="flex items-end"><div class="w-full bg-[#0A0A0A] rounded-lg border p-2 text-right"><p class="text-xs text-gray-500">Estimated Total</p><p class="text-lg font-black text-gray-100" id="propTotalDisplay">$0.00</p></div></div></div>';
 
-      body += '<div><label class="block text-xs font-medium text-gray-600 mb-1">Valid Until</label><input type="date" id="propValid" class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" value="' + (p.valid_until || '') + '"></div>' +
-        '<div><label class="block text-xs font-medium text-gray-600 mb-1">Warranty Terms</label><textarea id="propWarranty" rows="2" class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm">' + (p.warranty_terms || '') + '</textarea></div>' +
-        '<div><label class="block text-xs font-medium text-gray-600 mb-1">Payment Terms</label><textarea id="propPayment" rows="2" class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm">' + (p.payment_terms || '') + '</textarea></div>' +
-        '<div><label class="block text-xs font-medium text-gray-600 mb-1">Notes</label><textarea id="propNotes" rows="2" class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm">' + (p.notes || '') + '</textarea></div></div>';
+      body += '<div><label class="block text-xs font-medium text-gray-400 mb-1">Valid Until</label><input type="date" id="propValid" class="w-full px-2 py-2 border border-white/15 rounded-lg text-sm" value="' + (p.valid_until || '') + '"></div>' +
+        '<div><label class="block text-xs font-medium text-gray-400 mb-1">Warranty Terms</label><textarea id="propWarranty" rows="2" class="w-full px-2 py-2 border border-white/15 rounded-lg text-sm">' + (p.warranty_terms || '') + '</textarea></div>' +
+        '<div><label class="block text-xs font-medium text-gray-400 mb-1">Payment Terms</label><textarea id="propPayment" rows="2" class="w-full px-2 py-2 border border-white/15 rounded-lg text-sm">' + (p.payment_terms || '') + '</textarea></div>' +
+        '<div><label class="block text-xs font-medium text-gray-400 mb-1">Notes</label><textarea id="propNotes" rows="2" class="w-full px-2 py-2 border border-white/15 rounded-lg text-sm">' + (p.notes || '') + '</textarea></div></div>';
 
       showModal('Edit Proposal', body, function() {
         var custData = getCustomerFromSelector('propCustomer');
@@ -1234,9 +1234,9 @@
               '<i class="fas fa-exclamation-triangle mr-1"></i>' + res.email_error + '</div>';
           }
 
-          linkHtml += '<p class="text-sm text-gray-600">Share this trackable link — every time your customer opens it, the view count updates.</p>' +
-            '<div class="bg-gray-50 border rounded-lg p-3 flex items-center gap-2">' +
-              '<input type="text" id="proposalLink" value="' + res.public_link + '" class="flex-1 bg-transparent text-sm text-gray-800 font-mono border-0 outline-none" readonly>' +
+          linkHtml += '<p class="text-sm text-gray-400">Share this trackable link — every time your customer opens it, the view count updates.</p>' +
+            '<div class="bg-[#0A0A0A] border rounded-lg p-3 flex items-center gap-2">' +
+              '<input type="text" id="proposalLink" value="' + res.public_link + '" class="flex-1 bg-transparent text-sm text-gray-100 font-mono border-0 outline-none" readonly>' +
               '<button onclick="navigator.clipboard.writeText(document.getElementById(\'proposalLink\').value);toast(\'Link copied!\')" class="px-3 py-1.5 bg-brand-600 text-white rounded-lg text-xs font-semibold hover:bg-brand-700"><i class="fas fa-copy"></i></button>' +
             '</div></div>';
           showModal(res.email_sent ? 'Proposal Sent!' : 'Proposal Ready', linkHtml);
@@ -1288,9 +1288,9 @@
             var viewDate = v.viewed_at ? new Date(v.viewed_at).toLocaleString() : '';
             var device = (v.user_agent || '').toLowerCase();
             var icon = device.indexOf('mobile') > -1 || device.indexOf('iphone') > -1 || device.indexOf('android') > -1 ? 'fa-mobile-alt' : 'fa-desktop';
-            body += '<div class="flex items-center gap-3 bg-gray-50 rounded-lg p-2 text-xs">' +
+            body += '<div class="flex items-center gap-3 bg-[#0A0A0A] rounded-lg p-2 text-xs">' +
               '<i class="fas ' + icon + ' text-gray-400"></i>' +
-              '<div class="flex-1 min-w-0"><p class="text-gray-700 font-medium">' + viewDate + '</p>' +
+              '<div class="flex-1 min-w-0"><p class="text-gray-300 font-medium">' + viewDate + '</p>' +
               '<p class="text-gray-400 truncate">' + (v.ip_address || '') + '</p></div></div>';
           }
           body += '</div></div>';
@@ -1317,18 +1317,18 @@
         body += '<div><span class="font-mono text-lg font-bold text-amber-600">' + p.proposal_number + '</span></div>';
         body += '<div class="flex items-center gap-2">' + badge(p.status);
         if (p.view_count > 0) body += '<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-100 text-indigo-700"><i class="fas fa-eye mr-0.5"></i>' + p.view_count + ' views</span>';
-        if (p.status === 'draft') body += '<button onclick="closeModal();window._crmEditProposal(' + id + ')" class="text-xs bg-gray-100 text-gray-700 px-3 py-1 rounded-lg hover:bg-gray-200"><i class="fas fa-edit mr-1"></i>Edit</button>';
+        if (p.status === 'draft') body += '<button onclick="closeModal();window._crmEditProposal(' + id + ')" class="text-xs bg-white/5 text-gray-300 px-3 py-1 rounded-lg hover:bg-gray-200"><i class="fas fa-edit mr-1"></i>Edit</button>';
         body += '</div></div>';
 
         // Title & Customer
-        body += '<div><h3 class="text-base font-bold text-gray-800">' + (p.title || '') + '</h3></div>';
-        body += '<div class="bg-gray-50 rounded-xl p-4">';
+        body += '<div><h3 class="text-base font-bold text-gray-100">' + (p.title || '') + '</h3></div>';
+        body += '<div class="bg-[#0A0A0A] rounded-xl p-4">';
         body += '<h4 class="text-xs font-semibold text-gray-500 uppercase mb-2"><i class="fas fa-user mr-1"></i>Customer</h4>';
-        body += '<p class="font-semibold text-gray-800">' + (p.customer_name || 'N/A') + '</p>';
-        if (p.customer_email) body += '<p class="text-sm text-gray-600"><i class="fas fa-envelope mr-1 text-gray-400"></i>' + p.customer_email + '</p>';
-        if (p.customer_phone) body += '<p class="text-sm text-gray-600"><i class="fas fa-phone mr-1 text-gray-400"></i>' + p.customer_phone + '</p>';
+        body += '<p class="font-semibold text-gray-100">' + (p.customer_name || 'N/A') + '</p>';
+        if (p.customer_email) body += '<p class="text-sm text-gray-400"><i class="fas fa-envelope mr-1 text-gray-400"></i>' + p.customer_email + '</p>';
+        if (p.customer_phone) body += '<p class="text-sm text-gray-400"><i class="fas fa-phone mr-1 text-gray-400"></i>' + p.customer_phone + '</p>';
         var propAddr = [p.property_address || p.customer_address, p.customer_city, p.customer_province].filter(Boolean).join(', ');
-        if (propAddr) body += '<p class="text-sm text-gray-600 mt-1"><i class="fas fa-map-marker-alt mr-1 text-gray-400"></i>' + propAddr + '</p>';
+        if (propAddr) body += '<p class="text-sm text-gray-400 mt-1"><i class="fas fa-map-marker-alt mr-1 text-gray-400"></i>' + propAddr + '</p>';
         body += '</div>';
 
         // Scope of Work
@@ -1341,20 +1341,20 @@
 
         // Line Items
         if (items.length > 0) {
-          body += '<div class="border border-gray-200 rounded-xl overflow-hidden">';
-          body += '<table class="w-full text-sm"><thead class="bg-gray-50"><tr><th class="px-4 py-2.5 text-left text-xs font-semibold text-gray-500">Description</th><th class="px-4 py-2.5 text-center text-xs font-semibold text-gray-500 w-14">Qty</th><th class="px-4 py-2.5 text-center text-xs font-semibold text-gray-500 w-14">Unit</th><th class="px-4 py-2.5 text-right text-xs font-semibold text-gray-500 w-24">Price</th><th class="px-4 py-2.5 text-right text-xs font-semibold text-gray-500 w-24">Amount</th></tr></thead><tbody class="divide-y divide-gray-100">';
+          body += '<div class="border border-white/10 rounded-xl overflow-hidden">';
+          body += '<table class="w-full text-sm"><thead class="bg-[#0A0A0A]"><tr><th class="px-4 py-2.5 text-left text-xs font-semibold text-gray-500">Description</th><th class="px-4 py-2.5 text-center text-xs font-semibold text-gray-500 w-14">Qty</th><th class="px-4 py-2.5 text-center text-xs font-semibold text-gray-500 w-14">Unit</th><th class="px-4 py-2.5 text-right text-xs font-semibold text-gray-500 w-24">Price</th><th class="px-4 py-2.5 text-right text-xs font-semibold text-gray-500 w-24">Amount</th></tr></thead><tbody class="divide-y divide-gray-100">';
           for (var i = 0; i < items.length; i++) {
             var it = items[i];
-            body += '<tr><td class="px-4 py-2.5 text-gray-700">' + it.description + '</td><td class="px-4 py-2.5 text-center text-gray-600">' + it.quantity + '</td><td class="px-4 py-2.5 text-center text-gray-500 text-xs">' + (it.unit || 'ea') + '</td><td class="px-4 py-2.5 text-right text-gray-600">' + money(it.unit_price) + '</td><td class="px-4 py-2.5 text-right font-medium text-gray-800">' + money(it.amount) + '</td></tr>';
+            body += '<tr><td class="px-4 py-2.5 text-gray-300">' + it.description + '</td><td class="px-4 py-2.5 text-center text-gray-400">' + it.quantity + '</td><td class="px-4 py-2.5 text-center text-gray-500 text-xs">' + (it.unit || 'ea') + '</td><td class="px-4 py-2.5 text-right text-gray-400">' + money(it.unit_price) + '</td><td class="px-4 py-2.5 text-right font-medium text-gray-100">' + money(it.amount) + '</td></tr>';
           }
           body += '</tbody></table></div>';
         }
 
         // Totals
-        body += '<div class="bg-gray-50 rounded-xl p-4">';
-        body += '<div class="flex justify-between text-sm text-gray-600 mb-1"><span>Subtotal</span><span>' + money(p.subtotal) + '</span></div>';
-        if (p.tax_amount) body += '<div class="flex justify-between text-sm text-gray-600 mb-1"><span>Tax (' + (p.tax_rate || 5) + '%)</span><span>' + money(p.tax_amount) + '</span></div>';
-        body += '<div class="flex justify-between text-lg font-bold text-gray-800 border-t border-gray-200 pt-2 mt-2"><span>Total</span><span>' + money(p.total_amount) + ' CAD</span></div>';
+        body += '<div class="bg-[#0A0A0A] rounded-xl p-4">';
+        body += '<div class="flex justify-between text-sm text-gray-400 mb-1"><span>Subtotal</span><span>' + money(p.subtotal) + '</span></div>';
+        if (p.tax_amount) body += '<div class="flex justify-between text-sm text-gray-400 mb-1"><span>Tax (' + (p.tax_rate || 5) + '%)</span><span>' + money(p.tax_amount) + '</span></div>';
+        body += '<div class="flex justify-between text-lg font-bold text-gray-100 border-t border-white/10 pt-2 mt-2"><span>Total</span><span>' + money(p.total_amount) + ' CAD</span></div>';
         body += '</div>';
 
         // Dates row
@@ -1367,19 +1367,19 @@
         // Warranty, Payment Terms, Notes
         if (p.warranty_terms) body += '<div class="bg-purple-50 rounded-xl p-3"><h4 class="text-xs font-semibold text-purple-600 uppercase mb-1"><i class="fas fa-shield-alt mr-1"></i>Warranty</h4><p class="text-sm text-purple-800">' + p.warranty_terms + '</p></div>';
         if (p.payment_terms) body += '<div class="bg-emerald-50 rounded-xl p-3"><h4 class="text-xs font-semibold text-emerald-600 uppercase mb-1"><i class="fas fa-credit-card mr-1"></i>Payment Terms</h4><p class="text-sm text-emerald-800">' + p.payment_terms + '</p></div>';
-        if (p.notes) body += '<div class="bg-gray-100 rounded-xl p-3"><h4 class="text-xs font-semibold text-gray-500 uppercase mb-1"><i class="fas fa-sticky-note mr-1"></i>Notes</h4><p class="text-sm text-gray-700">' + p.notes + '</p></div>';
+        if (p.notes) body += '<div class="bg-white/5 rounded-xl p-3"><h4 class="text-xs font-semibold text-gray-500 uppercase mb-1"><i class="fas fa-sticky-note mr-1"></i>Notes</h4><p class="text-sm text-gray-300">' + p.notes + '</p></div>';
 
         // Share link (if exists)
         if (p.share_token) {
           var publicLink = window.location.origin + '/proposal/view/' + p.share_token;
           body += '<div class="bg-brand-50 rounded-xl p-3"><h4 class="text-xs font-semibold text-brand-600 uppercase mb-2"><i class="fas fa-link mr-1"></i>Shareable Link</h4>';
-          body += '<div class="flex items-center gap-2"><input type="text" id="propViewLink" value="' + publicLink + '" class="flex-1 bg-white border border-brand-200 rounded-lg px-3 py-1.5 text-xs font-mono text-gray-700" readonly>';
+          body += '<div class="flex items-center gap-2"><input type="text" id="propViewLink" value="' + publicLink + '" class="flex-1 bg-[#111111] border border-brand-200 rounded-lg px-3 py-1.5 text-xs font-mono text-gray-300" readonly>';
           body += '<button onclick="navigator.clipboard.writeText(document.getElementById(\'propViewLink\').value);toast(\'Link copied!\')" class="px-3 py-1.5 bg-brand-600 text-white rounded-lg text-xs font-semibold hover:bg-brand-700"><i class="fas fa-copy"></i></button></div></div>';
         }
 
         // Payment link
         if (p.payment_link) {
-          body += '<div class="bg-green-50 rounded-xl p-3 flex items-center justify-between gap-2"><div><p class="text-xs font-semibold text-green-600 mb-0.5"><i class="fas fa-credit-card mr-1"></i>Square Payment Link</p><p class="text-xs text-green-700">Ready for customer payment</p></div><div class="flex gap-2 shrink-0"><a href="' + p.payment_link + '" target="_blank" class="text-xs bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700 font-semibold">Pay Now</a><button onclick="navigator.clipboard.writeText(\'' + p.payment_link + '\').then(function(){toast(\'Link copied!\');})" class="text-xs bg-white border border-green-200 px-2 py-1.5 rounded-lg hover:bg-green-50">Copy</button></div></div>';
+          body += '<div class="bg-green-50 rounded-xl p-3 flex items-center justify-between gap-2"><div><p class="text-xs font-semibold text-green-600 mb-0.5"><i class="fas fa-credit-card mr-1"></i>Square Payment Link</p><p class="text-xs text-green-700">Ready for customer payment</p></div><div class="flex gap-2 shrink-0"><a href="' + p.payment_link + '" target="_blank" class="text-xs bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700 font-semibold">Pay Now</a><button onclick="navigator.clipboard.writeText(\'' + p.payment_link + '\').then(function(){toast(\'Link copied!\');})" class="text-xs bg-[#111111] border border-green-200 px-2 py-1.5 rounded-lg hover:bg-green-50">Copy</button></div></div>';
         }
 
         // Action buttons
@@ -1389,7 +1389,7 @@
           body += '<a href="/proposal/view/' + p.share_token + '?print=1" target="_blank" class="flex-1 py-2.5 bg-gray-800 text-white rounded-xl text-sm font-semibold hover:bg-gray-900 text-center"><i class="fas fa-file-pdf mr-1"></i>Download PDF</a>';
         }
         if (p.status === 'draft') {
-          body += '<button onclick="closeModal();window._crmEditProposal(' + id + ')" class="flex-1 py-2.5 bg-gray-100 text-gray-700 rounded-xl text-sm font-semibold hover:bg-gray-200"><i class="fas fa-edit mr-1"></i>Edit</button>';
+          body += '<button onclick="closeModal();window._crmEditProposal(' + id + ')" class="flex-1 py-2.5 bg-white/5 text-gray-300 rounded-xl text-sm font-semibold hover:bg-gray-200"><i class="fas fa-edit mr-1"></i>Edit</button>';
           body += '<button onclick="closeModal();window._crmSendProposal(' + id + ')" class="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700"><i class="fas fa-paper-plane mr-1"></i>Send</button>';
         }
         if (p.status === 'sent' || p.status === 'viewed') {
@@ -1475,7 +1475,7 @@
     if (type === 'repair') return 'bg-amber-100 text-amber-800 border-amber-200';
     if (type === 'inspection') return 'bg-purple-100 text-purple-800 border-purple-200';
     if (type === 'maintenance') return 'bg-green-100 text-green-800 border-green-200';
-    return 'bg-gray-100 text-gray-700 border-gray-200';
+    return 'bg-white/5 text-gray-300 border-white/10';
   }
   function jobTypeIcon(type) {
     if (type === 'install') return 'fa-home';
@@ -1494,44 +1494,44 @@
 
     // A. Header bar
     html += '<div class="flex items-center justify-between mb-5 flex-wrap gap-3">';
-    html += '<div><h2 class="text-lg font-bold text-gray-800"><i class="fas fa-hard-hat text-orange-500 mr-2"></i>Job Management</h2></div>';
+    html += '<div><h2 class="text-lg font-bold text-gray-100"><i class="fas fa-hard-hat text-orange-500 mr-2"></i>Job Management</h2></div>';
     html += '<div class="flex items-center gap-2 flex-wrap">';
     // Google Calendar button
     if (_calConnected) {
       html += '<button onclick="window._crmCalendarSettings()" class="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-green-300 bg-green-50 text-green-700 hover:bg-green-100"><i class="fab fa-google text-green-600"></i>Calendar Connected</button>';
       html += '<button onclick="window._crmSyncAllJobs()" class="px-3 py-2 rounded-lg text-xs font-medium border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"><i class="fas fa-sync-alt mr-1"></i>Sync All</button>';
     } else {
-      html += '<button onclick="window._crmCalendarSettings()" class="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-gray-300 bg-white text-gray-600 hover:bg-gray-50"><i class="fab fa-google text-gray-400"></i>Connect Calendar</button>';
+      html += '<button onclick="window._crmCalendarSettings()" class="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-white/15 bg-[#111111] text-gray-400 hover:bg-[#111111]/5"><i class="fab fa-google text-gray-400"></i>Connect Calendar</button>';
     }
     html += '<button onclick="window._crmNewJob()" class="bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-orange-700"><i class="fas fa-plus mr-1"></i>New Job</button>';
     html += '</div></div>';
 
     // B. Stats bar
     html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">' +
-      '<div class="bg-white rounded-xl border p-4 text-center"><p class="text-2xl font-black text-gray-800">' + (stats.total || 0) + '</p><p class="text-[10px] text-gray-500">Total Jobs</p></div>' +
-      '<div class="bg-white rounded-xl border p-4 text-center"><p class="text-2xl font-black text-blue-600">' + (stats.scheduled || 0) + '</p><p class="text-[10px] text-gray-500">Scheduled</p></div>' +
-      '<div class="bg-white rounded-xl border p-4 text-center"><p class="text-2xl font-black text-amber-600">' + (stats.in_progress || 0) + '</p><p class="text-[10px] text-gray-500">In Progress</p></div>' +
-      '<div class="bg-white rounded-xl border p-4 text-center"><p class="text-2xl font-black text-green-600">' + (stats.completed || 0) + '</p><p class="text-[10px] text-gray-500">Completed</p></div></div>';
+      '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-gray-100">' + (stats.total || 0) + '</p><p class="text-[10px] text-gray-500">Total Jobs</p></div>' +
+      '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-blue-600">' + (stats.scheduled || 0) + '</p><p class="text-[10px] text-gray-500">Scheduled</p></div>' +
+      '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-amber-600">' + (stats.in_progress || 0) + '</p><p class="text-[10px] text-gray-500">In Progress</p></div>' +
+      '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-green-600">' + (stats.completed || 0) + '</p><p class="text-[10px] text-gray-500">Completed</p></div></div>';
 
     // C. Calendar toolbar
     html += '<div class="flex items-center justify-between mb-4 flex-wrap gap-2">';
     // Left: filter tabs
-    html += '<div class="flex gap-1 bg-white rounded-lg border p-1 overflow-x-auto">';
+    html += '<div class="flex gap-1 bg-[#111111] rounded-lg border p-1 overflow-x-auto">';
     var filters = [['','All'],['scheduled','Scheduled'],['in_progress','In Progress'],['completed','Completed']];
     for (var f = 0; f < filters.length; f++) {
-      html += '<button onclick="window._crmFilterJobs(\'' + filters[f][0] + '\')" class="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors hover:bg-gray-100 ' + (((!window._jobFilter && !filters[f][0]) || window._jobFilter === filters[f][0]) ? 'bg-brand-600 text-white' : 'text-gray-600') + '">' + filters[f][1] + '</button>';
+      html += '<button onclick="window._crmFilterJobs(\'' + filters[f][0] + '\')" class="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors hover:bg-[#111111]/10 ' + (((!window._jobFilter && !filters[f][0]) || window._jobFilter === filters[f][0]) ? 'bg-brand-600 text-white' : 'text-gray-400') + '">' + filters[f][1] + '</button>';
     }
     html += '</div>';
     // Right: view toggle + nav
     html += '<div class="flex items-center gap-2">';
-    html += '<div class="flex bg-white rounded-lg border p-0.5">';
-    html += '<button onclick="window._crmSetView(\'month\')" class="px-3 py-1.5 rounded-md text-xs font-medium ' + (_calView === 'month' ? 'bg-brand-600 text-white' : 'text-gray-600 hover:bg-gray-100') + '">Month</button>';
-    html += '<button onclick="window._crmSetView(\'week\')" class="px-3 py-1.5 rounded-md text-xs font-medium ' + (_calView === 'week' ? 'bg-brand-600 text-white' : 'text-gray-600 hover:bg-gray-100') + '">Week</button>';
+    html += '<div class="flex bg-[#111111] rounded-lg border p-0.5">';
+    html += '<button onclick="window._crmSetView(\'month\')" class="px-3 py-1.5 rounded-md text-xs font-medium ' + (_calView === 'month' ? 'bg-brand-600 text-white' : 'text-gray-400 hover:bg-[#111111]/10') + '">Month</button>';
+    html += '<button onclick="window._crmSetView(\'week\')" class="px-3 py-1.5 rounded-md text-xs font-medium ' + (_calView === 'week' ? 'bg-brand-600 text-white' : 'text-gray-400 hover:bg-[#111111]/10') + '">Week</button>';
     html += '</div>';
-    html += '<button onclick="window._crmPrevPeriod()" class="w-8 h-8 flex items-center justify-center rounded-lg border bg-white text-gray-600 hover:bg-gray-50"><i class="fas fa-chevron-left text-xs"></i></button>';
-    html += '<span class="text-sm font-semibold text-gray-800 min-w-[140px] text-center">' + monthNames[_calMonth] + ' ' + _calYear + '</span>';
-    html += '<button onclick="window._crmNextPeriod()" class="w-8 h-8 flex items-center justify-center rounded-lg border bg-white text-gray-600 hover:bg-gray-50"><i class="fas fa-chevron-right text-xs"></i></button>';
-    html += '<button onclick="window._crmCalToday()" class="px-3 py-1.5 rounded-lg border bg-white text-xs font-medium text-gray-600 hover:bg-gray-50">Today</button>';
+    html += '<button onclick="window._crmPrevPeriod()" class="w-8 h-8 flex items-center justify-center rounded-lg border bg-[#111111] text-gray-400 hover:bg-[#111111]/5"><i class="fas fa-chevron-left text-xs"></i></button>';
+    html += '<span class="text-sm font-semibold text-gray-100 min-w-[140px] text-center">' + monthNames[_calMonth] + ' ' + _calYear + '</span>';
+    html += '<button onclick="window._crmNextPeriod()" class="w-8 h-8 flex items-center justify-center rounded-lg border bg-[#111111] text-gray-400 hover:bg-[#111111]/5"><i class="fas fa-chevron-right text-xs"></i></button>';
+    html += '<button onclick="window._crmCalToday()" class="px-3 py-1.5 rounded-lg border bg-[#111111] text-xs font-medium text-gray-400 hover:bg-[#111111]/5">Today</button>';
     html += '</div></div>';
 
     // D/E. Calendar grid
@@ -1551,9 +1551,9 @@
     var daysInMonth = new Date(year, month + 1, 0).getDate();
     var totalCells = Math.ceil((firstDay + daysInMonth) / 7) * 7;
 
-    var html = '<div class="bg-white rounded-xl border overflow-hidden">';
+    var html = '<div class="bg-[#111111] rounded-xl border overflow-hidden">';
     // Day headers
-    html += '<div class="grid grid-cols-7 border-b bg-gray-50">';
+    html += '<div class="grid grid-cols-7 border-b bg-[#0A0A0A]">';
     for (var d = 0; d < 7; d++) {
       html += '<div class="text-center text-[10px] font-semibold text-gray-500 uppercase py-2 px-1">' + dayNames[d] + '</div>';
     }
@@ -1568,9 +1568,9 @@
         dateStr = year + '-' + String(month + 1).padStart(2, '0') + '-' + String(dayNum).padStart(2, '0');
       }
       var isToday = dateStr === todayStr;
-      var borderClass = isToday ? 'border border-brand-500 bg-brand-50/30' : 'border-r border-b border-gray-100';
+      var borderClass = isToday ? 'border border-brand-500 bg-brand-50/30' : 'border-r border-b border-white/5';
 
-      html += '<div class="min-h-[110px] p-1.5 ' + borderClass + ' ' + (isCurrentMonth ? 'cursor-pointer hover:bg-blue-50/40' : 'bg-gray-50/50') + '" onclick="' + (isCurrentMonth ? 'window._crmCalendarDayClick(\'' + dateStr + '\')' : '') + '">';
+      html += '<div class="min-h-[110px] p-1.5 ' + borderClass + ' ' + (isCurrentMonth ? 'cursor-pointer hover:bg-blue-50/40' : 'bg-[#0A0A0A]/50') + '" onclick="' + (isCurrentMonth ? 'window._crmCalendarDayClick(\'' + dateStr + '\')' : '') + '">';
 
       if (isCurrentMonth) {
         html += '<div class="flex items-center justify-between mb-1"><span class="text-xs font-semibold ' + (isToday ? 'bg-brand-600 text-white w-6 h-6 flex items-center justify-center rounded-full' : 'text-gray-500') + '">' + dayNum + '</span></div>';
@@ -1644,9 +1644,9 @@
       _calWeekStart = new Date(d.getFullYear(), d.getMonth(), d.getDate());
     }
 
-    var html = '<div class="bg-white rounded-xl border overflow-hidden">';
+    var html = '<div class="bg-[#111111] rounded-xl border overflow-hidden">';
     // Day headers with full date
-    html += '<div class="grid grid-cols-7 border-b bg-gray-50">';
+    html += '<div class="grid grid-cols-7 border-b bg-[#0A0A0A]">';
     for (var d = 0; d < 7; d++) {
       var colDate = new Date(_calWeekStart);
       colDate.setDate(colDate.getDate() + d);
@@ -1654,7 +1654,7 @@
       var isToday = colStr === todayStr;
       html += '<div class="text-center py-2 px-1 ' + (isToday ? 'bg-brand-50' : '') + '">';
       html += '<div class="text-[10px] font-semibold text-gray-500 uppercase">' + dayNames[d] + '</div>';
-      html += '<div class="text-sm font-bold ' + (isToday ? 'text-brand-600' : 'text-gray-700') + '">' + colDate.getDate() + '</div>';
+      html += '<div class="text-sm font-bold ' + (isToday ? 'text-brand-600' : 'text-gray-300') + '">' + colDate.getDate() + '</div>';
       html += '</div>';
     }
     html += '</div>';
@@ -1666,7 +1666,7 @@
       var colStr = colDate.getFullYear() + '-' + String(colDate.getMonth() + 1).padStart(2, '0') + '-' + String(colDate.getDate()).padStart(2, '0');
       var isToday = colStr === todayStr;
 
-      html += '<div class="min-h-[250px] p-2 ' + (isToday ? 'bg-brand-50/20 border border-brand-200' : 'border-r border-b border-gray-100') + ' cursor-pointer hover:bg-blue-50/30" onclick="window._crmCalendarDayClick(\'' + colStr + '\')">';
+      html += '<div class="min-h-[250px] p-2 ' + (isToday ? 'bg-brand-50/20 border border-brand-200' : 'border-r border-b border-white/5') + ' cursor-pointer hover:bg-blue-50/30" onclick="window._crmCalendarDayClick(\'' + colStr + '\')">';
 
       // Jobs for this day
       var dayJobs = [];
@@ -1791,13 +1791,13 @@
       body += '<button onclick="window._crmSyncAllJobs(); closeModal();" class="w-full px-4 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700"><i class="fas fa-sync-alt mr-2"></i>Sync All Jobs to Google Calendar</button>';
       body += '<p class="text-xs text-gray-500 text-center">This will create/update Google Calendar events for all scheduled and in-progress jobs.</p>';
       body += '<hr class="my-3">';
-      body += '<button onclick="window._crmDisconnectCalendar()" class="w-full px-4 py-2 bg-white border border-red-300 text-red-600 rounded-lg text-sm font-medium hover:bg-red-50"><i class="fas fa-unlink mr-2"></i>Disconnect Calendar</button>';
+      body += '<button onclick="window._crmDisconnectCalendar()" class="w-full px-4 py-2 bg-[#111111] border border-red-300 text-red-600 rounded-lg text-sm font-medium hover:bg-red-50"><i class="fas fa-unlink mr-2"></i>Disconnect Calendar</button>';
       body += '<p class="text-[10px] text-gray-400 text-center">Note: This will also disconnect Gmail email sending.</p>';
       body += '</div>';
     } else {
       body += '<div class="text-center py-4">';
-      body += '<div class="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4"><i class="fab fa-google text-gray-400 text-2xl"></i></div>';
-      body += '<h3 class="text-lg font-semibold text-gray-700 mb-2">Connect Google Calendar</h3>';
+      body += '<div class="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4"><i class="fab fa-google text-gray-400 text-2xl"></i></div>';
+      body += '<h3 class="text-lg font-semibold text-gray-300 mb-2">Connect Google Calendar</h3>';
       body += '<p class="text-sm text-gray-500 mb-4">Sync your CRM jobs with Google Calendar to see them alongside your other appointments.</p>';
       body += '<ul class="text-left text-xs text-gray-500 space-y-1.5 mb-5 max-w-xs mx-auto">';
       body += '<li><i class="fas fa-check text-green-500 mr-2"></i>See jobs on your Google Calendar</li>';
@@ -1877,12 +1877,12 @@
       .then(function(data) {
         var custs = data.customers || [];
         var body = '<div class="space-y-3">' +
-          '<div><label class="block text-xs font-medium text-gray-600 mb-1">Customer</label>' + customerSelectHTML(custs, '', 'jobCustomer') + '</div>' +
-          '<div><label class="block text-xs font-medium text-gray-600 mb-1">Job Title *</label><input type="text" id="jobTitle" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="e.g. Roof Replacement - 123 Main St"></div>' +
-          '<div><label class="block text-xs font-medium text-gray-600 mb-1">Property Address</label><input type="text" id="jobAddress" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"></div>' +
-          '<div class="grid grid-cols-1 sm:grid-cols-2 gap-3"><div><label class="block text-xs font-medium text-gray-600 mb-1">Scheduled Date *</label><input type="date" id="jobDate" class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm"></div><div><label class="block text-xs font-medium text-gray-600 mb-1">Time</label><input type="time" id="jobTime" class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm"></div></div>' +
-          '<div class="grid grid-cols-3 gap-3"><div><label class="block text-xs font-medium text-gray-600 mb-1">Job Type</label><select id="jobType" class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm"><option value="install">Install</option><option value="repair">Repair</option><option value="inspection">Inspection</option><option value="maintenance">Maintenance</option></select></div><div><label class="block text-xs font-medium text-gray-600 mb-1">Duration</label><input type="text" id="jobDuration" class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" placeholder="e.g. 2 days"></div><div><label class="block text-xs font-medium text-gray-600 mb-1">Crew Size</label><input type="number" id="jobCrew" class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" value="4"></div></div>' +
-          '<div><label class="block text-xs font-medium text-gray-600 mb-1">Notes</label><textarea id="jobNotes" rows="2" class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm"></textarea></div></div>';
+          '<div><label class="block text-xs font-medium text-gray-400 mb-1">Customer</label>' + customerSelectHTML(custs, '', 'jobCustomer') + '</div>' +
+          '<div><label class="block text-xs font-medium text-gray-400 mb-1">Job Title *</label><input type="text" id="jobTitle" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm" placeholder="e.g. Roof Replacement - 123 Main St"></div>' +
+          '<div><label class="block text-xs font-medium text-gray-400 mb-1">Property Address</label><input type="text" id="jobAddress" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm"></div>' +
+          '<div class="grid grid-cols-1 sm:grid-cols-2 gap-3"><div><label class="block text-xs font-medium text-gray-400 mb-1">Scheduled Date *</label><input type="date" id="jobDate" class="w-full px-2 py-2 border border-white/15 rounded-lg text-sm"></div><div><label class="block text-xs font-medium text-gray-400 mb-1">Time</label><input type="time" id="jobTime" class="w-full px-2 py-2 border border-white/15 rounded-lg text-sm"></div></div>' +
+          '<div class="grid grid-cols-3 gap-3"><div><label class="block text-xs font-medium text-gray-400 mb-1">Job Type</label><select id="jobType" class="w-full px-2 py-2 border border-white/15 rounded-lg text-sm"><option value="install">Install</option><option value="repair">Repair</option><option value="inspection">Inspection</option><option value="maintenance">Maintenance</option></select></div><div><label class="block text-xs font-medium text-gray-400 mb-1">Duration</label><input type="text" id="jobDuration" class="w-full px-2 py-2 border border-white/15 rounded-lg text-sm" placeholder="e.g. 2 days"></div><div><label class="block text-xs font-medium text-gray-400 mb-1">Crew Size</label><input type="number" id="jobCrew" class="w-full px-2 py-2 border border-white/15 rounded-lg text-sm" value="4"></div></div>' +
+          '<div><label class="block text-xs font-medium text-gray-400 mb-1">Notes</label><textarea id="jobNotes" rows="2" class="w-full px-2 py-2 border border-white/15 rounded-lg text-sm"></textarea></div></div>';
 
         showModal('Schedule New Job', body, function() {
           var title = document.getElementById('jobTitle').value.trim();
@@ -1929,8 +1929,8 @@
         var checklist = data.checklist || [];
         var body = '<div class="space-y-4">' +
           '<div class="flex items-center gap-2 mb-2"><span class="font-mono text-xs font-bold text-orange-600">' + j.job_number + '</span>' + badge(j.status) + '</div>' +
-          '<h3 class="text-lg font-bold text-gray-800">' + j.title + '</h3>' +
-          '<div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-gray-600">' +
+          '<h3 class="text-lg font-bold text-gray-100">' + j.title + '</h3>' +
+          '<div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-gray-400">' +
           '<div><i class="fas fa-calendar mr-2 text-gray-400"></i>' + fmtDate(j.scheduled_date) + (j.scheduled_time ? ' ' + j.scheduled_time : '') + '</div>' +
           (j.customer_name ? '<div><i class="fas fa-user mr-2 text-gray-400"></i>' + j.customer_name + '</div>' : '') +
           (j.property_address ? '<div><i class="fas fa-map-marker-alt mr-2 text-gray-400"></i>' + j.property_address + '</div>' : '') +
@@ -1943,8 +1943,8 @@
         body += '<div class="flex flex-wrap gap-2 pt-2">';
         if (j.status === 'scheduled') body += '<button onclick="window._crmMarkJob(' + j.id + ',\'in_progress\'); closeModal();" class="px-3 py-1.5 bg-amber-100 text-amber-700 rounded-lg text-xs font-medium hover:bg-amber-200"><i class="fas fa-play mr-1"></i>Start Job</button>';
         if (j.status === 'in_progress') body += '<button onclick="window._crmMarkJob(' + j.id + ',\'completed\'); closeModal();" class="px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-xs font-medium hover:bg-green-200"><i class="fas fa-check mr-1"></i>Complete</button>';
-        if (_calConnected) body += '<button onclick="window._crmSyncJobToCalendar(' + j.id + ')" class="px-3 py-1.5 bg-white border border-gray-300 text-gray-700 rounded-lg text-xs font-medium hover:bg-gray-50"><i class="fab fa-google mr-1 text-blue-500"></i>Sync to Calendar</button>';
-        body += '<button onclick="window._crmDeleteJob(' + j.id + '); closeModal();" class="px-3 py-1.5 bg-white border border-red-200 text-red-600 rounded-lg text-xs font-medium hover:bg-red-50"><i class="fas fa-trash mr-1"></i>Delete</button>';
+        if (_calConnected) body += '<button onclick="window._crmSyncJobToCalendar(' + j.id + ')" class="px-3 py-1.5 bg-[#111111] border border-white/15 text-gray-300 rounded-lg text-xs font-medium hover:bg-[#111111]/5"><i class="fab fa-google mr-1 text-blue-500"></i>Sync to Calendar</button>';
+        body += '<button onclick="window._crmDeleteJob(' + j.id + '); closeModal();" class="px-3 py-1.5 bg-[#111111] border border-red-200 text-red-600 rounded-lg text-xs font-medium hover:bg-red-50"><i class="fas fa-trash mr-1"></i>Delete</button>';
         body += '</div>';
 
         // Checklist section
@@ -1952,13 +1952,13 @@
         if (checklist.length > 0) {
           for (var k = 0; k < checklist.length; k++) {
             var item = checklist[k];
-            body += '<div class="flex items-center gap-3 bg-gray-50 rounded-lg px-3 py-2" id="clItem' + item.id + '"><input type="checkbox" ' + (item.is_completed ? 'checked' : '') + ' onchange="window._crmToggleChecklist(' + j.id + ',' + item.id + ',this.checked)" class="w-4 h-4 text-brand-600 rounded border-gray-300"><span class="text-sm flex-1 ' + (item.is_completed ? 'line-through text-gray-400' : 'text-gray-700') + '">' + item.label + '</span><button onclick="window._crmDeleteChecklistItem(' + j.id + ',' + item.id + ')" class="text-gray-400 hover:text-red-500 ml-1 flex-shrink-0" title="Remove item"><i class="fas fa-times text-xs"></i></button></div>';
+            body += '<div class="flex items-center gap-3 bg-[#0A0A0A] rounded-lg px-3 py-2" id="clItem' + item.id + '"><input type="checkbox" ' + (item.is_completed ? 'checked' : '') + ' onchange="window._crmToggleChecklist(' + j.id + ',' + item.id + ',this.checked)" class="w-4 h-4 text-brand-600 rounded border-white/15"><span class="text-sm flex-1 ' + (item.is_completed ? 'line-through text-gray-400' : 'text-gray-300') + '">' + item.label + '</span><button onclick="window._crmDeleteChecklistItem(' + j.id + ',' + item.id + ')" class="text-gray-400 hover:text-red-500 ml-1 flex-shrink-0" title="Remove item"><i class="fas fa-times text-xs"></i></button></div>';
           }
         } else {
           body += '<p class="text-xs text-gray-400 italic" id="noChecklistMsg">No checklist items yet.</p>';
         }
         body += '</div>';
-        body += '<div class="mt-3 flex items-center gap-2"><input type="text" id="newChecklistLabel" placeholder="Add checklist item..." class="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500" onkeydown="if(event.key===\'Enter\')window._crmAddChecklistItem(' + j.id + ')"><button onclick="window._crmAddChecklistItem(' + j.id + ')" class="px-3 py-2 bg-orange-600 text-white rounded-lg text-sm font-semibold hover:bg-orange-700 flex-shrink-0"><i class="fas fa-plus mr-1"></i>Add</button></div>';
+        body += '<div class="mt-3 flex items-center gap-2"><input type="text" id="newChecklistLabel" placeholder="Add checklist item..." class="flex-1 px-3 py-2 border border-white/15 rounded-lg text-sm focus:ring-2 focus:ring-brand-500" onkeydown="if(event.key===\'Enter\')window._crmAddChecklistItem(' + j.id + ')"><button onclick="window._crmAddChecklistItem(' + j.id + ')" class="px-3 py-2 bg-orange-600 text-white rounded-lg text-sm font-semibold hover:bg-orange-700 flex-shrink-0"><i class="fas fa-plus mr-1"></i>Add</button></div>';
         body += '</div>';
 
         if (j.notes) body += '<div class="pt-3 border-t"><p class="text-sm text-gray-500 italic">' + j.notes + '</p></div>';
@@ -1990,8 +1990,8 @@
           if (progress.length > 0) {
             extra += '<div class="pt-3 border-t mt-3"><h4 class="text-xs font-bold text-gray-500 uppercase mb-2"><i class="fas fa-stream mr-1"></i>Progress (' + progress.length + ')</h4><div class="space-y-2 max-h-48 overflow-y-auto">';
             progress.forEach(function(p) {
-              extra += '<div class="bg-gray-50 rounded-lg p-2.5"><div class="flex items-center justify-between mb-1"><span class="text-xs font-semibold text-gray-700">' + (p.author_name || 'Unknown') + '</span><span class="text-[10px] text-gray-400">' + fmtDate(p.created_at) + '</span></div>';
-              if (p.content) extra += '<p class="text-xs text-gray-600">' + p.content + '</p>';
+              extra += '<div class="bg-[#0A0A0A] rounded-lg p-2.5"><div class="flex items-center justify-between mb-1"><span class="text-xs font-semibold text-gray-300">' + (p.author_name || 'Unknown') + '</span><span class="text-[10px] text-gray-400">' + fmtDate(p.created_at) + '</span></div>';
+              if (p.content) extra += '<p class="text-xs text-gray-400">' + p.content + '</p>';
               if (p.photo_data) extra += '<img src="' + p.photo_data + '" class="mt-1.5 rounded-lg max-h-32 object-cover border" alt="' + (p.photo_caption || 'Progress photo') + '">';
               if (p.photo_caption) extra += '<p class="text-[10px] text-gray-400 mt-0.5">' + p.photo_caption + '</p>';
               extra += '</div>';
@@ -2026,9 +2026,9 @@
           var container = document.getElementById('checklistItems');
           if (container) {
             var div = document.createElement('div');
-            div.className = 'flex items-center gap-3 bg-gray-50 rounded-lg px-3 py-2';
+            div.className = 'flex items-center gap-3 bg-[#0A0A0A] rounded-lg px-3 py-2';
             div.id = 'clItem' + res.id;
-            div.innerHTML = '<input type="checkbox" onchange="window._crmToggleChecklist(' + jobId + ',' + res.id + ',this.checked)" class="w-4 h-4 text-brand-600 rounded border-gray-300"><span class="text-sm flex-1 text-gray-700">' + label + '</span><button onclick="window._crmDeleteChecklistItem(' + jobId + ',' + res.id + ')" class="text-gray-400 hover:text-red-500 ml-1 flex-shrink-0" title="Remove item"><i class="fas fa-times text-xs"></i></button>';
+            div.innerHTML = '<input type="checkbox" onchange="window._crmToggleChecklist(' + jobId + ',' + res.id + ',this.checked)" class="w-4 h-4 text-brand-600 rounded border-white/15"><span class="text-sm flex-1 text-gray-300">' + label + '</span><button onclick="window._crmDeleteChecklistItem(' + jobId + ',' + res.id + ')" class="text-gray-400 hover:text-red-500 ml-1 flex-shrink-0" title="Remove item"><i class="fas fa-times text-xs"></i></button>';
             container.appendChild(div);
           }
           input.value = '';
@@ -2101,7 +2101,7 @@
     var upcomingJobs = jobs.filter(function(j) { return j.scheduled_date > today && (j.status === 'scheduled' || j.status === 'in_progress'); });
     var pastJobs = jobs.filter(function(j) { return j.scheduled_date < today || j.status === 'completed'; });
 
-    var html = '<div class="mb-5"><h2 class="text-lg font-bold text-gray-800"><i class="fas fa-hard-hat text-orange-500 mr-2"></i>My Assigned Jobs</h2><p class="text-xs text-gray-500 mt-0.5">Jobs assigned to you by the crew manager</p></div>';
+    var html = '<div class="mb-5"><h2 class="text-lg font-bold text-gray-100"><i class="fas fa-hard-hat text-orange-500 mr-2"></i>My Assigned Jobs</h2><p class="text-xs text-gray-500 mt-0.5">Jobs assigned to you by the crew manager</p></div>';
 
     // Today's jobs
     html += '<div class="bg-orange-50 border border-orange-200 rounded-2xl p-5 mb-5">';
@@ -2112,9 +2112,9 @@
       html += '<div class="space-y-2">';
       for (var i = 0; i < todayJobs.length; i++) {
         var j = todayJobs[i];
-        html += '<div class="bg-white rounded-xl p-4 border border-orange-100 cursor-pointer hover:shadow-sm" onclick="window._crmViewJob(' + j.id + ')">';
+        html += '<div class="bg-[#111111] rounded-xl p-4 border border-orange-100 cursor-pointer hover:shadow-sm" onclick="window._crmViewJob(' + j.id + ')">';
         html += '<div class="flex items-center justify-between mb-1"><span class="font-mono text-xs font-bold text-orange-600">' + j.job_number + '</span>' + badge(j.status) + '</div>';
-        html += '<p class="font-semibold text-sm text-gray-800">' + (j.title || '') + '</p>';
+        html += '<p class="font-semibold text-sm text-gray-100">' + (j.title || '') + '</p>';
         if (j.property_address) html += '<p class="text-xs text-gray-500 mt-1"><i class="fas fa-map-marker-alt mr-1"></i>' + j.property_address + '</p>';
         if (j.scheduled_time) html += '<p class="text-xs text-gray-500"><i class="fas fa-clock mr-1"></i>' + j.scheduled_time + '</p>';
         if (j.customer_name) html += '<p class="text-xs text-gray-500"><i class="fas fa-user mr-1"></i>' + j.customer_name + (j.customer_phone ? ' · ' + j.customer_phone : '') + '</p>';
@@ -2128,13 +2128,13 @@
 
     // Upcoming jobs
     if (upcomingJobs.length > 0) {
-      html += '<div class="bg-white rounded-2xl border shadow-sm mb-5 overflow-hidden">';
-      html += '<div class="px-5 py-4 border-b border-gray-100"><h3 class="font-bold text-gray-800 text-sm"><i class="fas fa-calendar text-blue-500 mr-2"></i>Upcoming (' + upcomingJobs.length + ')</h3></div>';
+      html += '<div class="bg-[#111111] rounded-2xl border shadow-sm mb-5 overflow-hidden">';
+      html += '<div class="px-5 py-4 border-b border-white/5"><h3 class="font-bold text-gray-100 text-sm"><i class="fas fa-calendar text-blue-500 mr-2"></i>Upcoming (' + upcomingJobs.length + ')</h3></div>';
       html += '<div class="divide-y divide-gray-100">';
       for (var u = 0; u < upcomingJobs.length; u++) {
         var uj = upcomingJobs[u];
-        html += '<div class="px-5 py-3 hover:bg-gray-50 cursor-pointer" onclick="window._crmViewJob(' + uj.id + ')">';
-        html += '<div class="flex items-center justify-between"><div><p class="font-medium text-sm text-gray-800">' + (uj.title || '') + '</p><p class="text-xs text-gray-500"><i class="fas fa-calendar mr-1"></i>' + fmtDate(uj.scheduled_date) + (uj.scheduled_time ? ' ' + uj.scheduled_time : '') + (uj.property_address ? ' · <i class="fas fa-map-marker-alt mr-0.5"></i>' + uj.property_address : '') + '</p></div>' + badge(uj.status) + '</div>';
+        html += '<div class="px-5 py-3 hover:bg-[#111111]/5 cursor-pointer" onclick="window._crmViewJob(' + uj.id + ')">';
+        html += '<div class="flex items-center justify-between"><div><p class="font-medium text-sm text-gray-100">' + (uj.title || '') + '</p><p class="text-xs text-gray-500"><i class="fas fa-calendar mr-1"></i>' + fmtDate(uj.scheduled_date) + (uj.scheduled_time ? ' ' + uj.scheduled_time : '') + (uj.property_address ? ' · <i class="fas fa-map-marker-alt mr-0.5"></i>' + uj.property_address : '') + '</p></div>' + badge(uj.status) + '</div>';
         html += '</div>';
       }
       html += '</div></div>';
@@ -2142,12 +2142,12 @@
 
     // Past/completed
     if (pastJobs.length > 0) {
-      html += '<div class="bg-white rounded-2xl border shadow-sm overflow-hidden">';
-      html += '<div class="px-5 py-4 border-b border-gray-100"><h3 class="font-bold text-gray-800 text-sm"><i class="fas fa-check-circle text-green-500 mr-2"></i>Completed (' + pastJobs.length + ')</h3></div>';
+      html += '<div class="bg-[#111111] rounded-2xl border shadow-sm overflow-hidden">';
+      html += '<div class="px-5 py-4 border-b border-white/5"><h3 class="font-bold text-gray-100 text-sm"><i class="fas fa-check-circle text-green-500 mr-2"></i>Completed (' + pastJobs.length + ')</h3></div>';
       html += '<div class="divide-y divide-gray-100">';
       for (var p = 0; p < Math.min(pastJobs.length, 10); p++) {
         var pj = pastJobs[p];
-        html += '<div class="px-5 py-3 opacity-60"><p class="text-sm text-gray-700">' + (pj.title || '') + '</p><p class="text-xs text-gray-400">' + fmtDate(pj.scheduled_date) + '</p></div>';
+        html += '<div class="px-5 py-3 opacity-60"><p class="text-sm text-gray-300">' + (pj.title || '') + '</p><p class="text-xs text-gray-400">' + fmtDate(pj.scheduled_date) + '</p></div>';
       }
       html += '</div></div>';
     }
@@ -2161,16 +2161,16 @@
     var allJobs = activeJobs.concat(scheduledJobs);
 
     var html = '<div class="flex items-center justify-between mb-5 flex-wrap gap-3">';
-    html += '<div><h2 class="text-lg font-bold text-gray-800"><i class="fas fa-hard-hat text-orange-500 mr-2"></i>Crew Manager</h2><p class="text-xs text-gray-500 mt-0.5">Assign crew to jobs and track progress</p></div>';
+    html += '<div><h2 class="text-lg font-bold text-gray-100"><i class="fas fa-hard-hat text-orange-500 mr-2"></i>Crew Manager</h2><p class="text-xs text-gray-500 mt-0.5">Assign crew to jobs and track progress</p></div>';
     html += '<a href="/customer/team" class="bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-orange-700"><i class="fas fa-user-plus mr-1"></i>Invite Crew Member</a>';
     html += '</div>';
 
     // Stats
     html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">';
-    html += '<div class="bg-white rounded-xl border p-4 text-center"><p class="text-2xl font-black text-gray-800">' + crew.length + '</p><p class="text-[10px] text-gray-500">Crew Members</p></div>';
-    html += '<div class="bg-white rounded-xl border p-4 text-center"><p class="text-2xl font-black text-blue-600">' + activeJobs.length + '</p><p class="text-[10px] text-gray-500">Active Jobs</p></div>';
-    html += '<div class="bg-white rounded-xl border p-4 text-center"><p class="text-2xl font-black text-amber-600">' + scheduledJobs.length + '</p><p class="text-[10px] text-gray-500">Scheduled</p></div>';
-    html += '<div class="bg-white rounded-xl border p-4 text-center"><p class="text-2xl font-black text-green-600">' + crew.reduce(function(sum, m) { return sum + (m.active_jobs || 0); }, 0) + '</p><p class="text-[10px] text-gray-500">Crew on Jobs</p></div>';
+    html += '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-gray-100">' + crew.length + '</p><p class="text-[10px] text-gray-500">Crew Members</p></div>';
+    html += '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-blue-600">' + activeJobs.length + '</p><p class="text-[10px] text-gray-500">Active Jobs</p></div>';
+    html += '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-amber-600">' + scheduledJobs.length + '</p><p class="text-[10px] text-gray-500">Scheduled</p></div>';
+    html += '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-green-600">' + crew.reduce(function(sum, m) { return sum + (m.active_jobs || 0); }, 0) + '</p><p class="text-[10px] text-gray-500">Crew on Jobs</p></div>';
     html += '</div>';
 
     // Daily Dispatch Board — Today's schedule
@@ -2182,11 +2182,11 @@
       html += '<div class="grid md:grid-cols-2 lg:grid-cols-3 gap-3">';
       for (var ti = 0; ti < todayJobs.length; ti++) {
         var tj = todayJobs[ti];
-        var tjStatus = tj.status === 'in_progress' ? 'border-amber-400 bg-amber-50' : 'border-blue-200 bg-white';
+        var tjStatus = tj.status === 'in_progress' ? 'border-amber-400 bg-amber-50' : 'border-blue-200 bg-[#111111]';
         html += '<div class="rounded-xl p-3 border-2 ' + tjStatus + '">';
         html += '<div class="flex items-center justify-between mb-1"><span class="font-mono text-[10px] font-bold text-orange-600">' + tj.job_number + '</span>' + badge(tj.status) + '</div>';
-        html += '<p class="font-semibold text-sm text-gray-800 truncate">' + (tj.title || '') + '</p>';
-        if (tj.scheduled_time) html += '<p class="text-xs text-gray-600"><i class="fas fa-clock mr-1 text-orange-400"></i>' + tj.scheduled_time + '</p>';
+        html += '<p class="font-semibold text-sm text-gray-100 truncate">' + (tj.title || '') + '</p>';
+        if (tj.scheduled_time) html += '<p class="text-xs text-gray-400"><i class="fas fa-clock mr-1 text-orange-400"></i>' + tj.scheduled_time + '</p>';
         if (tj.property_address) html += '<p class="text-xs text-gray-500 truncate"><i class="fas fa-map-marker-alt mr-1 text-orange-400"></i>' + tj.property_address + '</p>';
         html += '<div class="flex items-center justify-between mt-2"><span class="text-xs text-gray-400"><i class="fas fa-users mr-0.5"></i>' + (tj.crew_size || 0) + ' crew</span>';
         html += '<button onclick="window._crewAssignJob(' + tj.id + ')" class="text-[10px] bg-orange-100 text-orange-700 px-2 py-0.5 rounded-lg font-semibold hover:bg-orange-200">Assign</button></div>';
@@ -2196,8 +2196,8 @@
     }
 
     // Crew roster
-    html += '<div class="bg-white rounded-2xl border shadow-sm mb-5 overflow-hidden">';
-    html += '<div class="px-5 py-4 border-b border-gray-100"><h3 class="font-bold text-gray-800 text-sm"><i class="fas fa-users text-orange-500 mr-2"></i>Crew Roster</h3></div>';
+    html += '<div class="bg-[#111111] rounded-2xl border shadow-sm mb-5 overflow-hidden">';
+    html += '<div class="px-5 py-4 border-b border-white/5"><h3 class="font-bold text-gray-100 text-sm"><i class="fas fa-users text-orange-500 mr-2"></i>Crew Roster</h3></div>';
     if (crew.length === 0) {
       html += '<div class="p-8 text-center text-gray-400"><i class="fas fa-hard-hat text-3xl mb-3 opacity-30 block"></i><p class="text-sm">No crew members yet. Invite team members to start assigning them to jobs.</p><a href="/customer/team" class="inline-block mt-3 text-sm text-orange-600 hover:underline font-semibold"><i class="fas fa-user-plus mr-1"></i>Invite Team Member</a></div>';
     } else {
@@ -2205,9 +2205,9 @@
       for (var i = 0; i < crew.length; i++) {
         var m = crew[i];
         var initials = (m.name || 'U').split(' ').map(function(w) { return w[0]; }).join('').substring(0, 2).toUpperCase();
-        html += '<div class="bg-gray-50 rounded-xl p-4 border hover:shadow-sm transition-shadow">';
+        html += '<div class="bg-[#0A0A0A] rounded-xl p-4 border hover:shadow-sm transition-shadow">';
         html += '<div class="flex items-center gap-3 mb-3"><div class="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center text-orange-600 font-bold text-sm">' + initials + '</div>';
-        html += '<div class="min-w-0"><p class="font-semibold text-sm text-gray-800 truncate">' + (m.name || 'Unknown') + '</p>';
+        html += '<div class="min-w-0"><p class="font-semibold text-sm text-gray-100 truncate">' + (m.name || 'Unknown') + '</p>';
         html += '<p class="text-xs text-gray-500">' + (m.role === 'admin' ? 'Admin' : 'Crew Member') + '</p></div></div>';
         if (m.phone) html += '<p class="text-xs text-gray-500 mb-1"><i class="fas fa-phone mr-1.5 text-gray-400"></i>' + m.phone + '</p>';
         if (m.email) html += '<p class="text-xs text-gray-500 mb-2"><i class="fas fa-envelope mr-1.5 text-gray-400"></i>' + m.email + '</p>';
@@ -2220,8 +2220,8 @@
     html += '</div>';
 
     // Active jobs with crew
-    html += '<div class="bg-white rounded-2xl border shadow-sm overflow-hidden">';
-    html += '<div class="px-5 py-4 border-b border-gray-100"><h3 class="font-bold text-gray-800 text-sm"><i class="fas fa-briefcase text-blue-500 mr-2"></i>Active & Scheduled Jobs (' + allJobs.length + ')</h3></div>';
+    html += '<div class="bg-[#111111] rounded-2xl border shadow-sm overflow-hidden">';
+    html += '<div class="px-5 py-4 border-b border-white/5"><h3 class="font-bold text-gray-100 text-sm"><i class="fas fa-briefcase text-blue-500 mr-2"></i>Active & Scheduled Jobs (' + allJobs.length + ')</h3></div>';
     if (allJobs.length === 0) {
       html += '<div class="p-8 text-center text-gray-400"><p class="text-sm">No active or scheduled jobs. Create a job from the Jobs tab.</p></div>';
     } else {
@@ -2229,9 +2229,9 @@
       for (var j = 0; j < allJobs.length; j++) {
         var job = allJobs[j];
         var statusColor = job.status === 'in_progress' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700';
-        html += '<div class="px-5 py-3 flex items-center justify-between hover:bg-gray-50 cursor-pointer" onclick="window._crmViewJob(' + job.id + ')">';
+        html += '<div class="px-5 py-3 flex items-center justify-between hover:bg-[#111111]/5 cursor-pointer" onclick="window._crmViewJob(' + job.id + ')">';
         html += '<div class="min-w-0 flex-1"><div class="flex items-center gap-2 mb-0.5"><span class="font-mono text-xs font-bold text-orange-600">' + job.job_number + '</span><span class="px-2 py-0.5 rounded-full text-[10px] font-bold ' + statusColor + ' capitalize">' + (job.status || '').replace(/_/g, ' ') + '</span></div>';
-        html += '<p class="text-sm font-medium text-gray-800 truncate">' + (job.title || '') + '</p>';
+        html += '<p class="text-sm font-medium text-gray-100 truncate">' + (job.title || '') + '</p>';
         html += '<p class="text-xs text-gray-500"><i class="fas fa-calendar mr-1"></i>' + fmtDate(job.scheduled_date) + (job.property_address ? ' · <i class="fas fa-map-marker-alt mr-0.5"></i>' + job.property_address : '') + '</p></div>';
         html += '<div class="flex items-center gap-2 ml-4"><span class="text-xs text-gray-400"><i class="fas fa-users mr-0.5"></i>' + (job.crew_size || 0) + '</span>';
         html += '<button onclick="event.stopPropagation();window._crewAssignJob(' + job.id + ')" class="px-3 py-1 bg-orange-100 text-orange-700 rounded-lg text-xs font-semibold hover:bg-orange-200"><i class="fas fa-user-plus mr-0.5"></i>Assign</button></div>';
@@ -2260,7 +2260,7 @@
         body += '<div><h4 class="text-xs font-bold text-gray-500 uppercase mb-2">Currently Assigned</h4><div class="space-y-1.5">';
         for (var i = 0; i < assigned.length; i++) {
           var a = assigned[i];
-          body += '<div class="flex items-center justify-between bg-green-50 rounded-lg px-3 py-2"><div class="flex items-center gap-2"><i class="fas fa-user-check text-green-500"></i><span class="text-sm font-medium text-gray-800">' + (a.name || 'Unknown') + '</span><span class="px-1.5 py-0.5 bg-green-100 text-green-700 rounded text-[9px] font-bold capitalize">' + (a.role || 'crew') + '</span></div><button onclick="window._crewRemoveFromJob(' + jobId + ',' + a.crew_member_id + ')" class="text-red-400 hover:text-red-600"><i class="fas fa-times"></i></button></div>';
+          body += '<div class="flex items-center justify-between bg-green-50 rounded-lg px-3 py-2"><div class="flex items-center gap-2"><i class="fas fa-user-check text-green-500"></i><span class="text-sm font-medium text-gray-100">' + (a.name || 'Unknown') + '</span><span class="px-1.5 py-0.5 bg-green-100 text-green-700 rounded text-[9px] font-bold capitalize">' + (a.role || 'crew') + '</span></div><button onclick="window._crewRemoveFromJob(' + jobId + ',' + a.crew_member_id + ')" class="text-red-400 hover:text-red-600"><i class="fas fa-times"></i></button></div>';
         }
         body += '</div></div>';
       }
@@ -2270,7 +2270,7 @@
         body += '<div><h4 class="text-xs font-bold text-gray-500 uppercase mb-2">Available Crew</h4><div class="space-y-1.5">';
         for (var j = 0; j < unassigned.length; j++) {
           var u = unassigned[j];
-          body += '<div class="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2"><div class="flex items-center gap-2"><i class="fas fa-user text-gray-400"></i><span class="text-sm font-medium text-gray-800">' + (u.name || 'Unknown') + '</span>' + (u.phone ? '<span class="text-xs text-gray-400">' + u.phone + '</span>' : '') + '</div>';
+          body += '<div class="flex items-center justify-between bg-[#0A0A0A] rounded-lg px-3 py-2"><div class="flex items-center gap-2"><i class="fas fa-user text-gray-400"></i><span class="text-sm font-medium text-gray-100">' + (u.name || 'Unknown') + '</span>' + (u.phone ? '<span class="text-xs text-gray-400">' + u.phone + '</span>' : '') + '</div>';
           body += '<button onclick="window._crewAddToJob(' + jobId + ',' + u.member_customer_id + ')" class="px-3 py-1 bg-orange-600 text-white rounded-lg text-xs font-semibold hover:bg-orange-700"><i class="fas fa-plus mr-0.5"></i>Assign</button></div>';
         }
         body += '</div></div>';
@@ -2299,9 +2299,9 @@
   // Job progress — add note or photo
   window._crewAddProgress = function(jobId) {
     var body = '<div class="space-y-3">' +
-      '<div><label class="block text-xs font-medium text-gray-600 mb-1">Update Type</label><select id="progType" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"><option value="note">Note</option><option value="photo">Photo</option><option value="status_change">Status Update</option></select></div>' +
-      '<div><label class="block text-xs font-medium text-gray-600 mb-1">Note / Details</label><textarea id="progContent" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="What\'s the update?"></textarea></div>' +
-      '<div id="progPhotoSection" class="hidden"><label class="block text-xs font-medium text-gray-600 mb-1">Photo</label><input type="file" id="progPhoto" accept="image/*" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"><input type="text" id="progCaption" placeholder="Photo caption (optional)" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm mt-2"></div>' +
+      '<div><label class="block text-xs font-medium text-gray-400 mb-1">Update Type</label><select id="progType" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm"><option value="note">Note</option><option value="photo">Photo</option><option value="status_change">Status Update</option></select></div>' +
+      '<div><label class="block text-xs font-medium text-gray-400 mb-1">Note / Details</label><textarea id="progContent" rows="3" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm" placeholder="What\'s the update?"></textarea></div>' +
+      '<div id="progPhotoSection" class="hidden"><label class="block text-xs font-medium text-gray-400 mb-1">Photo</label><input type="file" id="progPhoto" accept="image/*" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm"><input type="text" id="progCaption" placeholder="Photo caption (optional)" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm mt-2"></div>' +
       '</div>';
     showModal('Add Progress Update', body, function() {
       var type = document.getElementById('progType').value;
@@ -2357,15 +2357,15 @@
     var totalReferred = data.total_referred || 0;
 
     var html = '<div class="flex items-center justify-between mb-5 flex-wrap gap-3">';
-    html += '<div><h2 class="text-lg font-bold text-gray-800"><i class="fas fa-gift text-purple-500 mr-2"></i>Referral Program</h2><p class="text-xs text-gray-500 mt-0.5">Earn 10% commission on every report your referrals purchase</p></div>';
+    html += '<div><h2 class="text-lg font-bold text-gray-100"><i class="fas fa-gift text-purple-500 mr-2"></i>Referral Program</h2><p class="text-xs text-gray-500 mt-0.5">Earn 10% commission on every report your referrals purchase</p></div>';
     html += '</div>';
 
     // Stats
     html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">';
-    html += '<div class="bg-white rounded-xl border p-4 text-center"><p class="text-2xl font-black text-gray-800">' + totalReferred + '</p><p class="text-[10px] text-gray-500">Referred Users</p></div>';
-    html += '<div class="bg-white rounded-xl border p-4 text-center"><p class="text-2xl font-black text-green-600">$' + totalEarned.toFixed(2) + '</p><p class="text-[10px] text-gray-500">Total Earned</p></div>';
-    html += '<div class="bg-white rounded-xl border p-4 text-center"><p class="text-2xl font-black text-amber-600">$' + totalPending.toFixed(2) + '</p><p class="text-[10px] text-gray-500">Pending</p></div>';
-    html += '<div class="bg-white rounded-xl border p-4 text-center"><p class="text-2xl font-black text-purple-600">10%</p><p class="text-[10px] text-gray-500">Commission Rate</p></div>';
+    html += '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-gray-100">' + totalReferred + '</p><p class="text-[10px] text-gray-500">Referred Users</p></div>';
+    html += '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-green-600">$' + totalEarned.toFixed(2) + '</p><p class="text-[10px] text-gray-500">Total Earned</p></div>';
+    html += '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-amber-600">$' + totalPending.toFixed(2) + '</p><p class="text-[10px] text-gray-500">Pending</p></div>';
+    html += '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-purple-600">10%</p><p class="text-[10px] text-gray-500">Commission Rate</p></div>';
     html += '</div>';
 
     // Share link card
@@ -2373,34 +2373,34 @@
     html += '<h3 class="font-bold text-lg mb-1"><i class="fas fa-share-alt mr-2"></i>Your Referral Link</h3>';
     html += '<p class="text-purple-200 text-sm mb-4">Share this link with other roofing contractors. When they sign up and buy reports, you earn 10% of every purchase.</p>';
     html += '<div class="flex gap-2 mb-3">';
-    html += '<input type="text" id="refLinkInput" value="' + shareUrl + '" readonly class="flex-1 bg-white/20 border border-white/30 rounded-xl px-4 py-3 text-sm font-mono text-white placeholder-white/50">';
-    html += '<button onclick="navigator.clipboard.writeText(document.getElementById(\'refLinkInput\').value);toast(\'Link copied!\')" class="px-5 py-3 bg-white text-purple-700 rounded-xl font-bold text-sm hover:bg-purple-50 flex-shrink-0"><i class="fas fa-copy mr-1"></i>Copy</button>';
+    html += '<input type="text" id="refLinkInput" value="' + shareUrl + '" readonly class="flex-1 bg-[#111111]/20 border border-white/30 rounded-xl px-4 py-3 text-sm font-mono text-white placeholder-white/50">';
+    html += '<button onclick="navigator.clipboard.writeText(document.getElementById(\'refLinkInput\').value);toast(\'Link copied!\')" class="px-5 py-3 bg-[#111111] text-purple-700 rounded-xl font-bold text-sm hover:bg-purple-50 flex-shrink-0"><i class="fas fa-copy mr-1"></i>Copy</button>';
     html += '</div>';
     html += '<div class="flex gap-2">';
-    html += '<div class="bg-white/10 rounded-lg px-3 py-2"><p class="text-[10px] text-purple-200">Your Code</p><p class="font-mono font-bold text-sm">' + refCode + '</p></div>';
-    html += '<button onclick="window._refShareEmail()" class="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-sm font-medium border border-white/20"><i class="fas fa-envelope mr-1"></i>Email to a Friend</button>';
+    html += '<div class="bg-[#111111]/10 rounded-lg px-3 py-2"><p class="text-[10px] text-purple-200">Your Code</p><p class="font-mono font-bold text-sm">' + refCode + '</p></div>';
+    html += '<button onclick="window._refShareEmail()" class="px-4 py-2 bg-[#111111]/10 hover:bg-[#111111]/20 rounded-lg text-sm font-medium border border-white/20"><i class="fas fa-envelope mr-1"></i>Email to a Friend</button>';
     html += '</div>';
     html += '</div>';
 
     // How it works
-    html += '<div class="bg-white rounded-2xl border shadow-sm p-6 mb-5">';
-    html += '<h3 class="font-bold text-gray-800 text-sm mb-4"><i class="fas fa-question-circle text-blue-500 mr-2"></i>How It Works</h3>';
+    html += '<div class="bg-[#111111] rounded-2xl border shadow-sm p-6 mb-5">';
+    html += '<h3 class="font-bold text-gray-100 text-sm mb-4"><i class="fas fa-question-circle text-blue-500 mr-2"></i>How It Works</h3>';
     html += '<div class="grid md:grid-cols-3 gap-4">';
-    html += '<div class="text-center"><div class="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-2"><span class="font-bold text-purple-600">1</span></div><p class="text-sm font-semibold text-gray-800">Share Your Link</p><p class="text-xs text-gray-500 mt-1">Send your unique referral link to other roofing contractors</p></div>';
-    html += '<div class="text-center"><div class="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-2"><span class="font-bold text-purple-600">2</span></div><p class="text-sm font-semibold text-gray-800">They Sign Up</p><p class="text-xs text-gray-500 mt-1">When they create an account through your link, they\'re linked to you</p></div>';
-    html += '<div class="text-center"><div class="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-2"><span class="font-bold text-purple-600">3</span></div><p class="text-sm font-semibold text-gray-800">You Earn 10%</p><p class="text-xs text-gray-500 mt-1">Every time they buy reports or credit packs, you earn 10% commission</p></div>';
+    html += '<div class="text-center"><div class="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-2"><span class="font-bold text-purple-600">1</span></div><p class="text-sm font-semibold text-gray-100">Share Your Link</p><p class="text-xs text-gray-500 mt-1">Send your unique referral link to other roofing contractors</p></div>';
+    html += '<div class="text-center"><div class="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-2"><span class="font-bold text-purple-600">2</span></div><p class="text-sm font-semibold text-gray-100">They Sign Up</p><p class="text-xs text-gray-500 mt-1">When they create an account through your link, they\'re linked to you</p></div>';
+    html += '<div class="text-center"><div class="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-2"><span class="font-bold text-purple-600">3</span></div><p class="text-sm font-semibold text-gray-100">You Earn 10%</p><p class="text-xs text-gray-500 mt-1">Every time they buy reports or credit packs, you earn 10% commission</p></div>';
     html += '</div></div>';
 
     // Referred users
-    html += '<div class="bg-white rounded-2xl border shadow-sm overflow-hidden mb-5">';
-    html += '<div class="px-5 py-4 border-b border-gray-100"><h3 class="font-bold text-gray-800 text-sm"><i class="fas fa-users text-purple-500 mr-2"></i>Your Referrals (' + totalReferred + ')</h3></div>';
+    html += '<div class="bg-[#111111] rounded-2xl border shadow-sm overflow-hidden mb-5">';
+    html += '<div class="px-5 py-4 border-b border-white/5"><h3 class="font-bold text-gray-100 text-sm"><i class="fas fa-users text-purple-500 mr-2"></i>Your Referrals (' + totalReferred + ')</h3></div>';
     if (referred.length === 0) {
       html += '<div class="p-8 text-center text-gray-400"><i class="fas fa-user-friends text-3xl mb-3 opacity-30 block"></i><p class="text-sm">No referrals yet. Share your link to start earning!</p></div>';
     } else {
-      html += '<div class="overflow-x-auto"><table class="w-full"><thead><tr class="bg-gray-50 text-xs text-gray-500 uppercase"><th class="px-4 py-3 text-left">User</th><th class="px-4 py-3 text-left">Company</th><th class="px-4 py-3 text-center">Reports</th><th class="px-4 py-3 text-left">Joined</th></tr></thead><tbody>';
+      html += '<div class="overflow-x-auto"><table class="w-full"><thead><tr class="bg-[#0A0A0A] text-xs text-gray-500 uppercase"><th class="px-4 py-3 text-left">User</th><th class="px-4 py-3 text-left">Company</th><th class="px-4 py-3 text-center">Reports</th><th class="px-4 py-3 text-left">Joined</th></tr></thead><tbody>';
       for (var i = 0; i < referred.length; i++) {
         var u = referred[i];
-        html += '<tr class="border-b border-gray-100 hover:bg-gray-50"><td class="px-4 py-3 text-sm font-medium text-gray-800">' + (u.name || 'User') + '</td><td class="px-4 py-3 text-sm text-gray-500">' + (u.company_name || '-') + '</td><td class="px-4 py-3 text-center text-sm font-bold text-gray-800">' + (u.reports_ordered || 0) + '</td><td class="px-4 py-3 text-xs text-gray-400">' + fmtDate(u.created_at) + '</td></tr>';
+        html += '<tr class="border-b border-white/5 hover:bg-[#111111]/5"><td class="px-4 py-3 text-sm font-medium text-gray-100">' + (u.name || 'User') + '</td><td class="px-4 py-3 text-sm text-gray-500">' + (u.company_name || '-') + '</td><td class="px-4 py-3 text-center text-sm font-bold text-gray-100">' + (u.reports_ordered || 0) + '</td><td class="px-4 py-3 text-xs text-gray-400">' + fmtDate(u.created_at) + '</td></tr>';
       }
       html += '</tbody></table></div>';
     }
@@ -2408,13 +2408,13 @@
 
     // Earnings history
     if (earnings.length > 0) {
-      html += '<div class="bg-white rounded-2xl border shadow-sm overflow-hidden">';
-      html += '<div class="px-5 py-4 border-b border-gray-100"><h3 class="font-bold text-gray-800 text-sm"><i class="fas fa-dollar-sign text-green-500 mr-2"></i>Commission History</h3></div>';
-      html += '<div class="overflow-x-auto"><table class="w-full"><thead><tr class="bg-gray-50 text-xs text-gray-500 uppercase"><th class="px-4 py-3 text-left">From</th><th class="px-4 py-3 text-right">Payment</th><th class="px-4 py-3 text-right">Commission</th><th class="px-4 py-3 text-center">Status</th><th class="px-4 py-3 text-left">Date</th></tr></thead><tbody>';
+      html += '<div class="bg-[#111111] rounded-2xl border shadow-sm overflow-hidden">';
+      html += '<div class="px-5 py-4 border-b border-white/5"><h3 class="font-bold text-gray-100 text-sm"><i class="fas fa-dollar-sign text-green-500 mr-2"></i>Commission History</h3></div>';
+      html += '<div class="overflow-x-auto"><table class="w-full"><thead><tr class="bg-[#0A0A0A] text-xs text-gray-500 uppercase"><th class="px-4 py-3 text-left">From</th><th class="px-4 py-3 text-right">Payment</th><th class="px-4 py-3 text-right">Commission</th><th class="px-4 py-3 text-center">Status</th><th class="px-4 py-3 text-left">Date</th></tr></thead><tbody>';
       for (var j = 0; j < earnings.length; j++) {
         var e = earnings[j];
         var statusBg = e.status === 'pending' ? 'bg-amber-100 text-amber-700' : e.status === 'credited' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700';
-        html += '<tr class="border-b border-gray-100"><td class="px-4 py-3 text-sm text-gray-800">' + (e.referred_name || e.referred_company || 'User') + '</td><td class="px-4 py-3 text-right text-sm text-gray-600">$' + (e.amount_paid || 0).toFixed(2) + '</td><td class="px-4 py-3 text-right text-sm font-bold text-green-600">$' + (e.commission_earned || 0).toFixed(2) + '</td><td class="px-4 py-3 text-center"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold ' + statusBg + ' capitalize">' + (e.status || 'pending') + '</span></td><td class="px-4 py-3 text-xs text-gray-400">' + fmtDate(e.created_at) + '</td></tr>';
+        html += '<tr class="border-b border-white/5"><td class="px-4 py-3 text-sm text-gray-100">' + (e.referred_name || e.referred_company || 'User') + '</td><td class="px-4 py-3 text-right text-sm text-gray-400">$' + (e.amount_paid || 0).toFixed(2) + '</td><td class="px-4 py-3 text-right text-sm font-bold text-green-600">$' + (e.commission_earned || 0).toFixed(2) + '</td><td class="px-4 py-3 text-center"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold ' + statusBg + ' capitalize">' + (e.status || 'pending') + '</span></td><td class="px-4 py-3 text-xs text-gray-400">' + fmtDate(e.created_at) + '</td></tr>';
       }
       html += '</tbody></table></div></div>';
     }
@@ -2458,7 +2458,7 @@
 
   function renderCatalog() {
     var html = '<div class="flex items-center justify-between mb-5 flex-wrap gap-3">';
-    html += '<div><h2 class="text-lg font-bold text-gray-800"><i class="fas fa-box-open text-blue-500 mr-2"></i>Material Catalog</h2><p class="text-xs text-gray-500 mt-0.5">' + _catalogProducts.length + ' products · Prices used in Material Calculator</p></div>';
+    html += '<div><h2 class="text-lg font-bold text-gray-100"><i class="fas fa-box-open text-blue-500 mr-2"></i>Material Catalog</h2><p class="text-xs text-gray-500 mt-0.5">' + _catalogProducts.length + ' products · Prices used in Material Calculator</p></div>';
     html += '<div class="flex gap-2">';
     html += '<button onclick="window._catAddProduct()" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-700"><i class="fas fa-plus mr-1"></i>Add Product</button>';
     if (_catalogProducts.length === 0) {
@@ -2470,14 +2470,14 @@
     var totalValue = 0; _catalogProducts.forEach(function(p) { totalValue += p.unit_price || 0; });
     var cats = {}; _catalogProducts.forEach(function(p) { cats[p.category] = (cats[p.category] || 0) + 1; });
     html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">';
-    html += '<div class="bg-white rounded-xl border p-4 text-center"><p class="text-2xl font-black text-gray-800">' + _catalogProducts.length + '</p><p class="text-[10px] text-gray-500">Total Products</p></div>';
-    html += '<div class="bg-white rounded-xl border p-4 text-center"><p class="text-2xl font-black text-blue-600">' + Object.keys(cats).length + '</p><p class="text-[10px] text-gray-500">Categories</p></div>';
-    html += '<div class="bg-white rounded-xl border p-4 text-center"><p class="text-2xl font-black text-green-600">' + _catalogProducts.filter(function(p) { return p.is_default; }).length + '</p><p class="text-[10px] text-gray-500">Default Items</p></div>';
-    html += '<div class="bg-white rounded-xl border p-4 text-center"><p class="text-2xl font-black text-amber-600">$' + totalValue.toFixed(0) + '</p><p class="text-[10px] text-gray-500">Avg Unit Value</p></div>';
+    html += '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-gray-100">' + _catalogProducts.length + '</p><p class="text-[10px] text-gray-500">Total Products</p></div>';
+    html += '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-blue-600">' + Object.keys(cats).length + '</p><p class="text-[10px] text-gray-500">Categories</p></div>';
+    html += '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-green-600">' + _catalogProducts.filter(function(p) { return p.is_default; }).length + '</p><p class="text-[10px] text-gray-500">Default Items</p></div>';
+    html += '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-amber-600">$' + totalValue.toFixed(0) + '</p><p class="text-[10px] text-gray-500">Avg Unit Value</p></div>';
     html += '</div>';
 
     if (_catalogProducts.length === 0) {
-      html += '<div class="bg-white rounded-xl border p-12 text-center"><div class="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4"><i class="fas fa-box-open text-blue-400 text-2xl"></i></div><h3 class="text-lg font-semibold text-gray-700 mb-2">No Products Yet</h3><p class="text-gray-500 mb-4">Add your materials and pricing so the Material Calculator uses your custom prices.</p><button onclick="window._catSeedDefaults()" class="bg-gray-800 text-white px-6 py-2.5 rounded-xl font-semibold hover:bg-gray-900 mr-2"><i class="fas fa-magic mr-2"></i>Load Standard Roofing Products</button><button onclick="window._catAddProduct()" class="bg-blue-600 text-white px-6 py-2.5 rounded-xl font-semibold hover:bg-blue-700"><i class="fas fa-plus mr-2"></i>Add Custom Product</button></div>';
+      html += '<div class="bg-[#111111] rounded-xl border p-12 text-center"><div class="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4"><i class="fas fa-box-open text-blue-400 text-2xl"></i></div><h3 class="text-lg font-semibold text-gray-300 mb-2">No Products Yet</h3><p class="text-gray-500 mb-4">Add your materials and pricing so the Material Calculator uses your custom prices.</p><button onclick="window._catSeedDefaults()" class="bg-gray-800 text-white px-6 py-2.5 rounded-xl font-semibold hover:bg-gray-900 mr-2"><i class="fas fa-magic mr-2"></i>Load Standard Roofing Products</button><button onclick="window._catAddProduct()" class="bg-blue-600 text-white px-6 py-2.5 rounded-xl font-semibold hover:bg-blue-700"><i class="fas fa-plus mr-2"></i>Add Custom Product</button></div>';
     } else {
       // Group by category
       var grouped = {};
@@ -2491,16 +2491,16 @@
         var catItems = grouped[catKey];
         if (!catItems || catItems.length === 0) continue;
         var catInfo = _catalogCategories[catKey] || { label: catKey, icon: 'fa-box', color: 'gray' };
-        html += '<div class="bg-white rounded-xl border shadow-sm mb-4 overflow-hidden">';
-        html += '<div class="px-5 py-3 border-b border-gray-100 flex items-center justify-between bg-' + catInfo.color + '-50">';
-        html += '<h3 class="font-bold text-gray-800 text-sm"><i class="fas ' + catInfo.icon + ' text-' + catInfo.color + '-500 mr-2"></i>' + catInfo.label + ' <span class="text-xs font-normal text-gray-400">(' + catItems.length + ')</span></h3>';
+        html += '<div class="bg-[#111111] rounded-xl border shadow-sm mb-4 overflow-hidden">';
+        html += '<div class="px-5 py-3 border-b border-white/5 flex items-center justify-between bg-' + catInfo.color + '-50">';
+        html += '<h3 class="font-bold text-gray-100 text-sm"><i class="fas ' + catInfo.icon + ' text-' + catInfo.color + '-500 mr-2"></i>' + catInfo.label + ' <span class="text-xs font-normal text-gray-400">(' + catItems.length + ')</span></h3>';
         html += '</div>';
         html += '<div class="divide-y divide-gray-100">';
         for (var pi = 0; pi < catItems.length; pi++) {
           var p = catItems[pi];
-          html += '<div class="px-5 py-3 flex items-center justify-between hover:bg-gray-50">';
+          html += '<div class="px-5 py-3 flex items-center justify-between hover:bg-[#111111]/5">';
           html += '<div class="min-w-0 flex-1">';
-          html += '<div class="flex items-center gap-2"><p class="font-medium text-sm text-gray-800">' + p.name + '</p>';
+          html += '<div class="flex items-center gap-2"><p class="font-medium text-sm text-gray-100">' + p.name + '</p>';
           if (p.is_default) html += '<span class="px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded text-[9px] font-bold">DEFAULT</span>';
           if (p.sku) html += '<span class="text-[10px] text-gray-400 font-mono">' + p.sku + '</span>';
           html += '</div>';
@@ -2509,10 +2509,10 @@
           if (p.supplier) html += '<span><i class="fas fa-truck mr-0.5"></i>' + p.supplier + '</span>';
           html += '</div></div>';
           html += '<div class="flex items-center gap-3 flex-shrink-0 ml-4">';
-          html += '<div class="text-right"><p class="text-lg font-black text-gray-800">$' + p.unit_price.toFixed(2) + '</p><p class="text-[10px] text-gray-400">per ' + p.unit + '</p></div>';
+          html += '<div class="text-right"><p class="text-lg font-black text-gray-100">$' + p.unit_price.toFixed(2) + '</p><p class="text-[10px] text-gray-400">per ' + p.unit + '</p></div>';
           html += '<div class="flex gap-1">';
-          html += '<button onclick="window._catEditProduct(' + p.id + ')" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 hover:text-blue-600"><i class="fas fa-edit text-xs"></i></button>';
-          html += '<button onclick="window._catDeleteProduct(' + p.id + ')" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 hover:text-red-600"><i class="fas fa-trash text-xs"></i></button>';
+          html += '<button onclick="window._catEditProduct(' + p.id + ')" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-[#111111]/10 text-gray-400 hover:text-blue-600"><i class="fas fa-edit text-xs"></i></button>';
+          html += '<button onclick="window._catDeleteProduct(' + p.id + ')" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-[#111111]/10 text-gray-400 hover:text-red-600"><i class="fas fa-trash text-xs"></i></button>';
           html += '</div></div></div>';
         }
         html += '</div></div>';
@@ -2532,11 +2532,11 @@
   window._catAddProduct = function() {
     var catOpts = Object.keys(_catalogCategories).map(function(k) { return '<option value="' + k + '">' + _catalogCategories[k].label + '</option>'; }).join('');
     var body = '<div class="space-y-3">' +
-      '<div class="grid grid-cols-1 sm:grid-cols-2 gap-3"><div><label class="block text-xs font-medium text-gray-600 mb-1">Category *</label><select id="catNewCategory" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">' + catOpts + '</select></div><div><label class="block text-xs font-medium text-gray-600 mb-1">Unit *</label><select id="catNewUnit" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"><option value="bundles">Bundles</option><option value="rolls">Rolls</option><option value="pieces">Pieces</option><option value="boxes">Boxes</option><option value="tubes">Tubes</option><option value="sq ft">Sq Ft</option><option value="lin ft">Lin Ft</option></select></div></div>' +
-      '<div><label class="block text-xs font-medium text-gray-600 mb-1">Product Name *</label><input type="text" id="catNewName" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="e.g. GAF Timberline HDZ Charcoal"></div>' +
-      '<div class="grid grid-cols-1 sm:grid-cols-2 gap-3"><div><label class="block text-xs font-medium text-gray-600 mb-1">Unit Price (CAD) *</label><input type="number" id="catNewPrice" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" step="0.01" min="0" placeholder="42.00"></div><div><label class="block text-xs font-medium text-gray-600 mb-1">SKU</label><input type="text" id="catNewSku" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="Optional"></div></div>' +
-      '<div class="grid grid-cols-1 sm:grid-cols-2 gap-3"><div><label class="block text-xs font-medium text-gray-600 mb-1">Coverage per Unit</label><input type="text" id="catNewCoverage" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="e.g. 33 sq ft per bundle"></div><div><label class="block text-xs font-medium text-gray-600 mb-1">Supplier</label><input type="text" id="catNewSupplier" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="e.g. ABC Supply"></div></div>' +
-      '<div><label class="block text-xs font-medium text-gray-600 mb-1">Description</label><input type="text" id="catNewDesc" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="Optional notes, color, warranty..."></div>' +
+      '<div class="grid grid-cols-1 sm:grid-cols-2 gap-3"><div><label class="block text-xs font-medium text-gray-400 mb-1">Category *</label><select id="catNewCategory" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm">' + catOpts + '</select></div><div><label class="block text-xs font-medium text-gray-400 mb-1">Unit *</label><select id="catNewUnit" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm"><option value="bundles">Bundles</option><option value="rolls">Rolls</option><option value="pieces">Pieces</option><option value="boxes">Boxes</option><option value="tubes">Tubes</option><option value="sq ft">Sq Ft</option><option value="lin ft">Lin Ft</option></select></div></div>' +
+      '<div><label class="block text-xs font-medium text-gray-400 mb-1">Product Name *</label><input type="text" id="catNewName" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm" placeholder="e.g. GAF Timberline HDZ Charcoal"></div>' +
+      '<div class="grid grid-cols-1 sm:grid-cols-2 gap-3"><div><label class="block text-xs font-medium text-gray-400 mb-1">Unit Price (CAD) *</label><input type="number" id="catNewPrice" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm" step="0.01" min="0" placeholder="42.00"></div><div><label class="block text-xs font-medium text-gray-400 mb-1">SKU</label><input type="text" id="catNewSku" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm" placeholder="Optional"></div></div>' +
+      '<div class="grid grid-cols-1 sm:grid-cols-2 gap-3"><div><label class="block text-xs font-medium text-gray-400 mb-1">Coverage per Unit</label><input type="text" id="catNewCoverage" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm" placeholder="e.g. 33 sq ft per bundle"></div><div><label class="block text-xs font-medium text-gray-400 mb-1">Supplier</label><input type="text" id="catNewSupplier" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm" placeholder="e.g. ABC Supply"></div></div>' +
+      '<div><label class="block text-xs font-medium text-gray-400 mb-1">Description</label><input type="text" id="catNewDesc" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm" placeholder="Optional notes, color, warranty..."></div>' +
       '<label class="flex items-center gap-2 text-sm"><input type="checkbox" id="catNewDefault" class="rounded"> Include by default in Material Calculator</label>' +
       '</div>';
     showModal('Add Product to Catalog', body, function() {
@@ -2566,11 +2566,11 @@
     var catOpts = Object.keys(_catalogCategories).map(function(k) { return '<option value="' + k + '"' + (k === p.category ? ' selected' : '') + '>' + _catalogCategories[k].label + '</option>'; }).join('');
     var unitOpts = ['bundles','rolls','pieces','boxes','tubes','sq ft','lin ft'].map(function(u) { return '<option value="' + u + '"' + (u === p.unit ? ' selected' : '') + '>' + u + '</option>'; }).join('');
     var body = '<div class="space-y-3">' +
-      '<div class="grid grid-cols-1 sm:grid-cols-2 gap-3"><div><label class="block text-xs font-medium text-gray-600 mb-1">Category</label><select id="catEditCategory" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">' + catOpts + '</select></div><div><label class="block text-xs font-medium text-gray-600 mb-1">Unit</label><select id="catEditUnit" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">' + unitOpts + '</select></div></div>' +
-      '<div><label class="block text-xs font-medium text-gray-600 mb-1">Product Name</label><input type="text" id="catEditName" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" value="' + (p.name || '').replace(/"/g, '&quot;') + '"></div>' +
-      '<div class="grid grid-cols-1 sm:grid-cols-2 gap-3"><div><label class="block text-xs font-medium text-gray-600 mb-1">Unit Price (CAD)</label><input type="number" id="catEditPrice" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" step="0.01" value="' + p.unit_price + '"></div><div><label class="block text-xs font-medium text-gray-600 mb-1">SKU</label><input type="text" id="catEditSku" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" value="' + (p.sku || '') + '"></div></div>' +
-      '<div class="grid grid-cols-1 sm:grid-cols-2 gap-3"><div><label class="block text-xs font-medium text-gray-600 mb-1">Coverage</label><input type="text" id="catEditCoverage" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" value="' + (p.coverage_per_unit || '') + '"></div><div><label class="block text-xs font-medium text-gray-600 mb-1">Supplier</label><input type="text" id="catEditSupplier" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" value="' + (p.supplier || '') + '"></div></div>' +
-      '<div><label class="block text-xs font-medium text-gray-600 mb-1">Description</label><input type="text" id="catEditDesc" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" value="' + (p.description || '').replace(/"/g, '&quot;') + '"></div>' +
+      '<div class="grid grid-cols-1 sm:grid-cols-2 gap-3"><div><label class="block text-xs font-medium text-gray-400 mb-1">Category</label><select id="catEditCategory" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm">' + catOpts + '</select></div><div><label class="block text-xs font-medium text-gray-400 mb-1">Unit</label><select id="catEditUnit" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm">' + unitOpts + '</select></div></div>' +
+      '<div><label class="block text-xs font-medium text-gray-400 mb-1">Product Name</label><input type="text" id="catEditName" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm" value="' + (p.name || '').replace(/"/g, '&quot;') + '"></div>' +
+      '<div class="grid grid-cols-1 sm:grid-cols-2 gap-3"><div><label class="block text-xs font-medium text-gray-400 mb-1">Unit Price (CAD)</label><input type="number" id="catEditPrice" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm" step="0.01" value="' + p.unit_price + '"></div><div><label class="block text-xs font-medium text-gray-400 mb-1">SKU</label><input type="text" id="catEditSku" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm" value="' + (p.sku || '') + '"></div></div>' +
+      '<div class="grid grid-cols-1 sm:grid-cols-2 gap-3"><div><label class="block text-xs font-medium text-gray-400 mb-1">Coverage</label><input type="text" id="catEditCoverage" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm" value="' + (p.coverage_per_unit || '') + '"></div><div><label class="block text-xs font-medium text-gray-400 mb-1">Supplier</label><input type="text" id="catEditSupplier" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm" value="' + (p.supplier || '') + '"></div></div>' +
+      '<div><label class="block text-xs font-medium text-gray-400 mb-1">Description</label><input type="text" id="catEditDesc" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm" value="' + (p.description || '').replace(/"/g, '&quot;') + '"></div>' +
       '<label class="flex items-center gap-2 text-sm"><input type="checkbox" id="catEditDefault" class="rounded"' + (p.is_default ? ' checked' : '') + '> Include by default in Material Calculator</label>' +
       '</div>';
     showModal('Edit Product', body, function() {
@@ -2617,31 +2617,31 @@
 
   function renderEmailOutreach(lists, contacts, totalContacts) {
     var html = '<div class="flex items-center justify-between mb-5 flex-wrap gap-3">';
-    html += '<div><h2 class="text-lg font-bold text-gray-800"><i class="fas fa-envelope-open-text text-blue-500 mr-2"></i>Email Outreach</h2><p class="text-xs text-gray-500 mt-0.5">' + totalContacts + ' contacts across ' + lists.length + ' lists</p></div>';
+    html += '<div><h2 class="text-lg font-bold text-gray-100"><i class="fas fa-envelope-open-text text-blue-500 mr-2"></i>Email Outreach</h2><p class="text-xs text-gray-500 mt-0.5">' + totalContacts + ' contacts across ' + lists.length + ' lists</p></div>';
     html += '<div class="flex gap-2">';
     html += '<button onclick="window._eoNewList()" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-700"><i class="fas fa-plus mr-1"></i>New List</button>';
-    html += '<button onclick="window._eoImportContacts()" class="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-200"><i class="fas fa-file-csv mr-1"></i>Import CSV</button>';
+    html += '<button onclick="window._eoImportContacts()" class="bg-white/5 text-gray-300 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-200"><i class="fas fa-file-csv mr-1"></i>Import CSV</button>';
     html += '</div></div>';
 
     // Stats
     html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">';
-    html += '<div class="bg-white rounded-xl border p-4 text-center"><p class="text-2xl font-black text-gray-800">' + lists.length + '</p><p class="text-[10px] text-gray-500">Lists</p></div>';
-    html += '<div class="bg-white rounded-xl border p-4 text-center"><p class="text-2xl font-black text-blue-600">' + totalContacts + '</p><p class="text-[10px] text-gray-500">Total Contacts</p></div>';
-    html += '<div class="bg-white rounded-xl border p-4 text-center"><p class="text-2xl font-black text-green-600">0</p><p class="text-[10px] text-gray-500">Campaigns Sent</p></div>';
-    html += '<div class="bg-white rounded-xl border p-4 text-center"><p class="text-2xl font-black text-amber-600">0%</p><p class="text-[10px] text-gray-500">Open Rate</p></div>';
+    html += '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-gray-100">' + lists.length + '</p><p class="text-[10px] text-gray-500">Lists</p></div>';
+    html += '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-blue-600">' + totalContacts + '</p><p class="text-[10px] text-gray-500">Total Contacts</p></div>';
+    html += '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-green-600">0</p><p class="text-[10px] text-gray-500">Campaigns Sent</p></div>';
+    html += '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-amber-600">0%</p><p class="text-[10px] text-gray-500">Open Rate</p></div>';
     html += '</div>';
 
     // Lists
-    html += '<div class="bg-white rounded-xl border shadow-sm mb-5 overflow-hidden">';
-    html += '<div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between"><h3 class="font-bold text-gray-800 text-sm"><i class="fas fa-list text-blue-500 mr-2"></i>Email Lists</h3></div>';
+    html += '<div class="bg-[#111111] rounded-xl border shadow-sm mb-5 overflow-hidden">';
+    html += '<div class="px-5 py-4 border-b border-white/5 flex items-center justify-between"><h3 class="font-bold text-gray-100 text-sm"><i class="fas fa-list text-blue-500 mr-2"></i>Email Lists</h3></div>';
     if (lists.length === 0) {
       html += '<div class="p-8 text-center text-gray-400"><p>No email lists yet. Create one to start building your outreach.</p></div>';
     } else {
       html += '<div class="divide-y divide-gray-100">';
       for (var i = 0; i < lists.length; i++) {
         var l = lists[i];
-        html += '<div class="px-5 py-3 flex items-center justify-between hover:bg-gray-50">';
-        html += '<div><p class="font-medium text-sm text-gray-800">' + (l.name || 'Untitled List') + '</p><p class="text-xs text-gray-500">' + (l.contact_count || 0) + ' contacts · ' + (l.source || 'manual') + '</p></div>';
+        html += '<div class="px-5 py-3 flex items-center justify-between hover:bg-[#111111]/5">';
+        html += '<div><p class="font-medium text-sm text-gray-100">' + (l.name || 'Untitled List') + '</p><p class="text-xs text-gray-500">' + (l.contact_count || 0) + ' contacts · ' + (l.source || 'manual') + '</p></div>';
         html += '<div class="flex gap-2"><button onclick="window._eoViewList(' + l.id + ')" class="text-xs text-blue-600 hover:underline">View</button><button onclick="window._eoDeleteList(' + l.id + ')" class="text-xs text-red-500 hover:underline">Delete</button></div>';
         html += '</div>';
       }
@@ -2650,15 +2650,15 @@
     html += '</div>';
 
     // Recent Contacts
-    html += '<div class="bg-white rounded-xl border shadow-sm overflow-hidden">';
-    html += '<div class="px-5 py-4 border-b border-gray-100"><h3 class="font-bold text-gray-800 text-sm"><i class="fas fa-users text-blue-500 mr-2"></i>Recent Contacts</h3></div>';
+    html += '<div class="bg-[#111111] rounded-xl border shadow-sm overflow-hidden">';
+    html += '<div class="px-5 py-4 border-b border-white/5"><h3 class="font-bold text-gray-100 text-sm"><i class="fas fa-users text-blue-500 mr-2"></i>Recent Contacts</h3></div>';
     if (contacts.length === 0) {
       html += '<div class="p-8 text-center text-gray-400"><p>No contacts yet. Import a CSV or add contacts manually.</p></div>';
     } else {
-      html += '<div class="overflow-x-auto"><table class="w-full"><thead><tr class="bg-gray-50 text-xs text-gray-500 uppercase"><th class="px-4 py-3 text-left">Name</th><th class="px-4 py-3 text-left">Email</th><th class="px-4 py-3 text-left">Company</th><th class="px-4 py-3 text-center">Status</th></tr></thead><tbody>';
+      html += '<div class="overflow-x-auto"><table class="w-full"><thead><tr class="bg-[#0A0A0A] text-xs text-gray-500 uppercase"><th class="px-4 py-3 text-left">Name</th><th class="px-4 py-3 text-left">Email</th><th class="px-4 py-3 text-left">Company</th><th class="px-4 py-3 text-center">Status</th></tr></thead><tbody>';
       for (var j = 0; j < contacts.length; j++) {
         var ct = contacts[j];
-        html += '<tr class="border-b border-gray-100 hover:bg-gray-50"><td class="px-4 py-3 text-sm font-medium text-gray-800">' + (ct.name || '-') + '</td><td class="px-4 py-3 text-sm text-gray-600">' + (ct.email || '-') + '</td><td class="px-4 py-3 text-sm text-gray-500">' + (ct.company || '-') + '</td><td class="px-4 py-3 text-center">' + badge(ct.status || 'active') + '</td></tr>';
+        html += '<tr class="border-b border-white/5 hover:bg-[#111111]/5"><td class="px-4 py-3 text-sm font-medium text-gray-100">' + (ct.name || '-') + '</td><td class="px-4 py-3 text-sm text-gray-400">' + (ct.email || '-') + '</td><td class="px-4 py-3 text-sm text-gray-500">' + (ct.company || '-') + '</td><td class="px-4 py-3 text-center">' + badge(ct.status || 'active') + '</td></tr>';
       }
       html += '</tbody></table></div>';
     }
@@ -2667,7 +2667,7 @@
   }
 
   window._eoNewList = function() {
-    var body = '<div class="space-y-3"><div><label class="block text-xs font-medium text-gray-600 mb-1">List Name *</label><input type="text" id="eoListName" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="e.g. Homeowners - Edmonton"></div><div><label class="block text-xs font-medium text-gray-600 mb-1">Description</label><input type="text" id="eoListDesc" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="Optional description"></div></div>';
+    var body = '<div class="space-y-3"><div><label class="block text-xs font-medium text-gray-400 mb-1">List Name *</label><input type="text" id="eoListName" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm" placeholder="e.g. Homeowners - Edmonton"></div><div><label class="block text-xs font-medium text-gray-400 mb-1">Description</label><input type="text" id="eoListDesc" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm" placeholder="Optional description"></div></div>';
     showModal('Create Email List', body, function() {
       var name = document.getElementById('eoListName').value.trim();
       if (!name) { toast('List name required', 'error'); return; }
@@ -2679,7 +2679,7 @@
   };
 
   window._eoImportContacts = function() {
-    var body = '<div class="space-y-3"><div><label class="block text-xs font-medium text-gray-600 mb-1">Select List</label><select id="eoImportList" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"><option value="">Loading...</option></select></div><div><label class="block text-xs font-medium text-gray-600 mb-1">CSV File</label><input type="file" id="eoImportFile" accept=".csv" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"></div><p class="text-xs text-gray-400">CSV should have columns: name, email, phone, company</p></div>';
+    var body = '<div class="space-y-3"><div><label class="block text-xs font-medium text-gray-400 mb-1">Select List</label><select id="eoImportList" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm"><option value="">Loading...</option></select></div><div><label class="block text-xs font-medium text-gray-400 mb-1">CSV File</label><input type="file" id="eoImportFile" accept=".csv" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm"></div><p class="text-xs text-gray-400">CSV should have columns: name, email, phone, company</p></div>';
     showModal('Import Contacts', body, function() {
       var listId = document.getElementById('eoImportList').value;
       var file = document.getElementById('eoImportFile').files[0];
@@ -2721,16 +2721,16 @@
   // MODULE: PIPELINE
   // ============================================================
   function renderPipeCard(item, type) {
-    var html = '<div class="pipe-card bg-white rounded-xl border border-gray-200 p-3 shadow-sm hover:shadow-md transition-shadow cursor-grab active:cursor-grabbing"';
+    var html = '<div class="pipe-card bg-[#111111] rounded-xl border border-white/10 p-3 shadow-sm hover:shadow-md transition-shadow cursor-grab active:cursor-grabbing"';
     html += ' data-id="' + item.id + '" data-type="' + type + '">';
     if (type === 'customer') {
-      html += '<p class="font-semibold text-sm text-gray-800 truncate">' + (item.name || 'Unknown') + '</p>';
+      html += '<p class="font-semibold text-sm text-gray-100 truncate">' + (item.name || 'Unknown') + '</p>';
       if (item.company) html += '<p class="text-xs text-gray-500 truncate"><i class="fas fa-building mr-1"></i>' + item.company + '</p>';
       if (item.phone) html += '<p class="text-xs text-gray-500"><i class="fas fa-phone mr-1"></i>' + item.phone + '</p>';
       if (item.address) html += '<p class="text-xs text-gray-400 truncate"><i class="fas fa-map-marker-alt mr-1"></i>' + item.address + '</p>';
       if (item.lifetime_value > 0) html += '<p class="text-xs font-semibold text-green-700 mt-1">' + money(item.lifetime_value) + ' lifetime</p>';
     } else {
-      html += '<p class="font-semibold text-sm text-gray-800 truncate">' + (item.title || item.proposal_number || 'Proposal') + '</p>';
+      html += '<p class="font-semibold text-sm text-gray-100 truncate">' + (item.title || item.proposal_number || 'Proposal') + '</p>';
       if (item.customer_name) html += '<p class="text-xs text-gray-500 truncate"><i class="fas fa-user mr-1"></i>' + item.customer_name + '</p>';
       if (item.property_address) html += '<p class="text-xs text-gray-400 truncate"><i class="fas fa-map-marker-alt mr-1"></i>' + item.property_address + '</p>';
       if (item.total_amount) html += '<p class="text-xs font-semibold text-brand-700 mt-1">' + money(item.total_amount) + '</p>';
@@ -2755,15 +2755,15 @@
     var wonValue = cols[3].items.reduce(function(s, p) { return s + (parseFloat(p.total_amount) || 0); }, 0);
 
     var html = '<div class="mb-5 flex items-center justify-between flex-wrap gap-3">' +
-      '<div><h2 class="text-lg font-bold text-gray-800"><i class="fas fa-funnel-dollar text-brand-500 mr-2"></i>Sales Pipeline</h2>' +
+      '<div><h2 class="text-lg font-bold text-gray-100"><i class="fas fa-funnel-dollar text-brand-500 mr-2"></i>Sales Pipeline</h2>' +
       '<p class="text-xs text-gray-500 mt-0.5">Drag cards between stages to update status</p></div>' +
       '<button onclick="window._crmAddLead()" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-700"><i class="fas fa-user-plus mr-1"></i>Add Lead</button></div>';
 
     html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">' +
-      '<div class="bg-white rounded-xl border p-4 text-center"><p class="text-2xl font-black text-blue-600">' + (cols[0].items.length + cols[1].items.length) + '</p><p class="text-[10px] text-gray-500">Active Leads</p></div>' +
-      '<div class="bg-white rounded-xl border p-4 text-center"><p class="text-2xl font-black text-purple-600">' + cols[2].items.length + '</p><p class="text-[10px] text-gray-500">Open Proposals</p></div>' +
-      '<div class="bg-white rounded-xl border p-4 text-center"><p class="text-2xl font-black text-gray-700">' + money(openValue) + '</p><p class="text-[10px] text-gray-500">Pipeline Value</p></div>' +
-      '<div class="bg-white rounded-xl border p-4 text-center"><p class="text-2xl font-black text-green-600">' + money(wonValue) + '</p><p class="text-[10px] text-gray-500">Won Value</p></div></div>';
+      '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-blue-600">' + (cols[0].items.length + cols[1].items.length) + '</p><p class="text-[10px] text-gray-500">Active Leads</p></div>' +
+      '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-purple-600">' + cols[2].items.length + '</p><p class="text-[10px] text-gray-500">Open Proposals</p></div>' +
+      '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-gray-300">' + money(openValue) + '</p><p class="text-[10px] text-gray-500">Pipeline Value</p></div>' +
+      '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-green-600">' + money(wonValue) + '</p><p class="text-[10px] text-gray-500">Won Value</p></div></div>';
 
     html += '<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">';
     cols.forEach(function(col) {
@@ -2771,7 +2771,7 @@
       html += '<div class="flex flex-col">';
       html += '<div class="' + col.bgClass + ' text-white rounded-t-xl px-4 py-3 flex items-center justify-between">' +
         '<div class="flex items-center gap-2"><i class="fas ' + col.icon + '"></i><span class="font-semibold text-sm">' + col.title + '</span></div>' +
-        '<span class="bg-white/20 text-white text-xs font-bold px-2 py-0.5 rounded-full">' + col.items.length + '</span></div>';
+        '<span class="bg-[#111111]/20 text-white text-xs font-bold px-2 py-0.5 rounded-full">' + col.items.length + '</span></div>';
       if (colValue > 0) {
         html += '<div class="' + col.lightClass + ' border-x ' + col.borderClass + ' px-4 py-1 text-xs font-semibold ' + col.textClass + '">' + money(colValue) + ' value</div>';
       }
@@ -2841,11 +2841,11 @@
 
   window._crmAddLead = function() {
     var body = '<div class="space-y-3">' +
-      '<div><label class="block text-xs font-medium text-gray-600 mb-1">Full Name *</label><input type="text" id="leadName" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="Jane Smith"></div>' +
-      '<div class="grid grid-cols-1 sm:grid-cols-2 gap-3"><div><label class="block text-xs font-medium text-gray-600 mb-1">Phone</label><input type="tel" id="leadPhone" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"></div>' +
-      '<div><label class="block text-xs font-medium text-gray-600 mb-1">Email</label><input type="email" id="leadEmail" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"></div></div>' +
-      '<div><label class="block text-xs font-medium text-gray-600 mb-1">Property Address</label><input type="text" id="leadAddress" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"></div>' +
-      '<div><label class="block text-xs font-medium text-gray-600 mb-1">Notes</label><textarea id="leadNotes" rows="2" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="How did they find you? What are they looking for?"></textarea></div>' +
+      '<div><label class="block text-xs font-medium text-gray-400 mb-1">Full Name *</label><input type="text" id="leadName" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm" placeholder="Jane Smith"></div>' +
+      '<div class="grid grid-cols-1 sm:grid-cols-2 gap-3"><div><label class="block text-xs font-medium text-gray-400 mb-1">Phone</label><input type="tel" id="leadPhone" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm"></div>' +
+      '<div><label class="block text-xs font-medium text-gray-400 mb-1">Email</label><input type="email" id="leadEmail" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm"></div></div>' +
+      '<div><label class="block text-xs font-medium text-gray-400 mb-1">Property Address</label><input type="text" id="leadAddress" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm"></div>' +
+      '<div><label class="block text-xs font-medium text-gray-400 mb-1">Notes</label><textarea id="leadNotes" rows="2" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm" placeholder="How did they find you? What are they looking for?"></textarea></div>' +
     '</div>';
     showModal('Add New Lead', body, function() {
       var name = document.getElementById('leadName').value.trim();
@@ -2867,12 +2867,12 @@
         var shareUrl = res.share_url;
         var body = '<div class="space-y-4">' +
           '<div class="bg-sky-50 border border-sky-200 rounded-xl p-4"><p class="text-xs font-semibold text-sky-700 mb-2"><i class="fas fa-link mr-1"></i>Shareable Report Link</p>' +
-          '<div class="flex gap-2"><input type="text" id="shareUrlInput" value="' + shareUrl + '" readonly class="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-gray-700 select-all">' +
+          '<div class="flex gap-2"><input type="text" id="shareUrlInput" value="' + shareUrl + '" readonly class="flex-1 px-3 py-2 border border-white/15 rounded-lg text-sm bg-[#111111] text-gray-300 select-all">' +
           '<button onclick="navigator.clipboard.writeText(\'' + shareUrl + '\').then(function(){window._shareToastCopy()})" class="px-4 py-2 bg-sky-600 text-white rounded-lg text-sm font-semibold hover:bg-sky-700 whitespace-nowrap"><i class="fas fa-copy mr-1"></i>Copy</button></div>' +
           '<p class="text-xs text-sky-600 mt-1">Anyone with this link can view the full report — no login required.</p></div>' +
           '<div>' +
-          '<p class="text-xs font-semibold text-gray-600 mb-2"><i class="fas fa-envelope mr-1 text-gray-400"></i>Email to Homeowner <span class="font-normal text-gray-400">(optional)</span></p>' +
-          '<div class="flex gap-2"><input type="email" id="shareEmailInput" placeholder="homeowner@email.com" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm">' +
+          '<p class="text-xs font-semibold text-gray-400 mb-2"><i class="fas fa-envelope mr-1 text-gray-400"></i>Email to Homeowner <span class="font-normal text-gray-400">(optional)</span></p>' +
+          '<div class="flex gap-2"><input type="email" id="shareEmailInput" placeholder="homeowner@email.com" class="flex-1 px-3 py-2 border border-white/15 rounded-lg text-sm">' +
           '<button onclick="window._crmSendShareEmail(' + orderId + ', \'' + shareUrl + '\')" class="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-semibold hover:bg-green-700 whitespace-nowrap"><i class="fas fa-paper-plane mr-1"></i>Send</button></div>' +
           '</div>' +
         '</div>';
@@ -2925,14 +2925,14 @@
 
       var body = '<div class="space-y-3">' +
         '<div class="bg-blue-50 border border-blue-200 rounded-xl p-3 text-sm text-blue-700"><i class="fas fa-file-alt mr-1"></i>Pre-filled from report: <strong>' + (address || 'Order #' + orderId) + '</strong></div>' +
-        '<div><label class="block text-xs font-medium text-gray-600 mb-1">Customer *</label>' + customerSelectHTML(custs, '', 'propFromReportCustomer') + '</div>' +
-        '<div><label class="block text-xs font-medium text-gray-600 mb-1">Proposal Title *</label><input type="text" id="propFromReportTitle" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" value="Roofing Proposal \u2014 ' + address.replace(/"/g, '&quot;') + '"></div>' +
-        '<div><label class="block text-xs font-medium text-gray-600 mb-1">Property Address</label><input type="text" id="propFromReportAddress" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" value="' + address.replace(/"/g, '&quot;') + '"></div>' +
-        '<div><label class="block text-xs font-medium text-gray-600 mb-1">Scope of Work</label><textarea id="propFromReportScope" rows="4" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">' + scopeOfWork + '</textarea></div>' +
-        (bomLines.length ? '<div><label class="block text-xs font-medium text-gray-600 mb-1">Materials Summary</label><textarea id="propFromReportMaterials" rows="5" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono text-xs">' + bomLines.join('\n') + '</textarea></div>' : '') +
+        '<div><label class="block text-xs font-medium text-gray-400 mb-1">Customer *</label>' + customerSelectHTML(custs, '', 'propFromReportCustomer') + '</div>' +
+        '<div><label class="block text-xs font-medium text-gray-400 mb-1">Proposal Title *</label><input type="text" id="propFromReportTitle" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm" value="Roofing Proposal \u2014 ' + address.replace(/"/g, '&quot;') + '"></div>' +
+        '<div><label class="block text-xs font-medium text-gray-400 mb-1">Property Address</label><input type="text" id="propFromReportAddress" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm" value="' + address.replace(/"/g, '&quot;') + '"></div>' +
+        '<div><label class="block text-xs font-medium text-gray-400 mb-1">Scope of Work</label><textarea id="propFromReportScope" rows="4" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm">' + scopeOfWork + '</textarea></div>' +
+        (bomLines.length ? '<div><label class="block text-xs font-medium text-gray-400 mb-1">Materials Summary</label><textarea id="propFromReportMaterials" rows="5" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm font-mono text-xs">' + bomLines.join('\n') + '</textarea></div>' : '') +
         '<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">' +
-          '<div><label class="block text-xs font-medium text-gray-600 mb-1">Tax Rate (%)</label><input type="number" id="propFromReportTax" class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm" value="5" min="0" step="0.5"></div>' +
-          '<div><label class="block text-xs font-medium text-gray-600 mb-1">Valid Until</label><input type="date" id="propFromReportValid" class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm"></div>' +
+          '<div><label class="block text-xs font-medium text-gray-400 mb-1">Tax Rate (%)</label><input type="number" id="propFromReportTax" class="w-full px-2 py-2 border border-white/15 rounded-lg text-sm" value="5" min="0" step="0.5"></div>' +
+          '<div><label class="block text-xs font-medium text-gray-400 mb-1">Valid Until</label><input type="date" id="propFromReportValid" class="w-full px-2 py-2 border border-white/15 rounded-lg text-sm"></div>' +
         '</div>' +
       '</div>';
 

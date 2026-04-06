@@ -152,20 +152,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const filterBtn = (label, value, icon, count, color) => {
       const active = filter === value;
-      return `<button onclick="window._im.setFilter('${value}')" class="px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${active ? 'bg-' + color + '-100 text-' + color + '-700 ring-1 ring-' + color + '-300' : 'text-gray-500 hover:bg-gray-100'}">${icon ? '<i class="fas fa-' + icon + ' mr-1"></i>' : ''}${label}${count != null ? ' <span class="ml-1 px-1.5 py-0.5 bg-' + color + '-50 rounded text-' + color + '-600 text-[10px] font-bold">' + count + '</span>' : ''}</button>`;
+      return `<button onclick="window._im.setFilter('${value}')" class="px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${active ? 'bg-' + color + '-100 text-' + color + '-700 ring-1 ring-' + color + '-300' : 'text-gray-500 hover:bg-[#111111]/10'}">${icon ? '<i class="fas fa-' + icon + ' mr-1"></i>' : ''}${label}${count != null ? ' <span class="ml-1 px-1.5 py-0.5 bg-' + color + '-50 rounded text-' + color + '-600 text-[10px] font-bold">' + count + '</span>' : ''}</button>`;
     };
 
     return `
     <div class="mb-6 flex items-center justify-between flex-wrap gap-3">
       <div>
-        <h2 class="text-2xl font-bold text-gray-900"><i class="fas fa-file-invoice-dollar text-brand-500 mr-2"></i>Invoice Manager</h2>
+        <h2 class="text-2xl font-bold text-white"><i class="fas fa-file-invoice-dollar text-brand-500 mr-2"></i>Invoice Manager</h2>
         <p class="text-gray-500 text-sm mt-1">Create invoices, track payments, and send Square payment links</p>
       </div>
       <div class="flex gap-2">
         <button onclick="window._im.fromProposal()" class="px-4 py-2 bg-purple-50 text-purple-700 rounded-xl text-sm font-medium hover:bg-purple-100 border border-purple-200 transition-all">
           <i class="fas fa-file-import mr-1"></i>From Proposal
         </button>
-        <button onclick="window._im.create()" class="px-5 py-2.5 bg-gradient-to-r from-sky-500 to-blue-600 text-white rounded-xl font-semibold text-sm hover:shadow-lg transition-all">
+        <button onclick="window._im.create()" class="px-5 py-2.5 bg-gradient-to-r from-[#111111] to-[#1a1a1a] text-white rounded-xl font-semibold text-sm hover:shadow-lg transition-all">
           <i class="fas fa-plus mr-1.5"></i>New Invoice
         </button>
       </div>
@@ -188,19 +188,19 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="flex items-center gap-2 mb-1"><div class="w-7 h-7 bg-red-100 rounded-lg flex items-center justify-center"><i class="fas fa-exclamation-triangle text-red-600 text-xs"></i></div><p class="text-xs text-red-700 font-medium">Overdue</p></div>
         <p class="text-2xl font-bold text-red-700">$${totalOverdue.toFixed(2)}</p>
       </div>
-      <div class="bg-gradient-to-br from-gray-50 to-slate-50 rounded-xl p-4 border border-gray-200 cursor-pointer hover:shadow-md transition-all" onclick="window._im.setFilter('all')">
-        <div class="flex items-center gap-2 mb-1"><div class="w-7 h-7 bg-gray-100 rounded-lg flex items-center justify-center"><i class="fas fa-file-invoice text-gray-600 text-xs"></i></div><p class="text-xs text-gray-600 font-medium">Total Invoices</p></div>
-        <p class="text-2xl font-bold text-gray-900">${s.total_invoices || allInvoices.length}</p>
+      <div class="bg-gradient-to-br from-gray-50 to-slate-50 rounded-xl p-4 border border-white/10 cursor-pointer hover:shadow-md transition-all" onclick="window._im.setFilter('all')">
+        <div class="flex items-center gap-2 mb-1"><div class="w-7 h-7 bg-white/5 rounded-lg flex items-center justify-center"><i class="fas fa-file-invoice text-gray-400 text-xs"></i></div><p class="text-xs text-gray-400 font-medium">Total Invoices</p></div>
+        <p class="text-2xl font-bold text-white">${s.total_invoices || allInvoices.length}</p>
       </div>
     </div>
 
     <!-- Search & Filter Bar -->
-    <div class="bg-white rounded-xl border border-gray-200 p-3 mb-4 flex items-center gap-3 flex-wrap">
+    <div class="bg-[#111111] rounded-xl border border-white/10 p-3 mb-4 flex items-center gap-3 flex-wrap">
       <div class="relative flex-1 min-w-[200px]">
         <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
         <input type="text" id="im-search" placeholder="Search invoices..." value="${searchTerm}" 
           oninput="window._im.setSearch(this.value)" 
-          class="w-full pl-8 pr-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-brand-200 focus:border-brand-400 outline-none">
+          class="w-full pl-8 pr-3 py-1.5 border border-white/10 rounded-lg text-sm focus:ring-2 focus:ring-brand-200 focus:border-brand-400 outline-none">
       </div>
       <div class="flex gap-1 flex-wrap">
         ${filterBtn('All', 'all', '', allInvoices.length, 'gray')}
@@ -212,7 +212,7 @@ document.addEventListener('DOMContentLoaded', () => {
     </div>
 
     <!-- Invoice Table -->
-    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+    <div class="bg-[#111111] rounded-xl border border-white/10 overflow-hidden shadow-sm">
       ${invoices.length === 0 ? `
         <div class="py-16 text-center">
           <i class="fas fa-file-invoice text-gray-300 text-5xl mb-4"></i>
@@ -221,7 +221,7 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
       ` : `
         <table class="w-full text-sm">
-          <thead class="bg-gray-50 border-b border-gray-200">
+          <thead class="bg-[#0A0A0A] border-b border-white/10">
             <tr>
               <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Invoice #</th>
               <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Customer</th>
@@ -234,8 +234,8 @@ document.addEventListener('DOMContentLoaded', () => {
           </thead>
           <tbody class="divide-y divide-gray-100">
             ${invoices.map(inv => {
-              const sc = { draft: 'bg-gray-100 text-gray-700', sent: 'bg-blue-100 text-blue-700', viewed: 'bg-indigo-100 text-indigo-700', paid: 'bg-green-100 text-green-700', overdue: 'bg-red-100 text-red-700', cancelled: 'bg-gray-100 text-gray-500', refunded: 'bg-purple-100 text-purple-700' }[inv.status] || 'bg-gray-100 text-gray-600';
-              return `<tr class="hover:bg-gray-50">
+              const sc = { draft: 'bg-white/5 text-gray-300', sent: 'bg-blue-100 text-blue-700', viewed: 'bg-indigo-100 text-indigo-700', paid: 'bg-green-100 text-green-700', overdue: 'bg-red-100 text-red-700', cancelled: 'bg-white/5 text-gray-500', refunded: 'bg-purple-100 text-purple-700' }[inv.status] || 'bg-white/5 text-gray-400';
+              return `<tr class="hover:bg-[#111111]/5">
                 <td class="px-4 py-3 font-mono text-xs font-medium">${inv.invoice_number}</td>
                 <td class="px-4 py-3">${inv.customer_name || 'Unknown'}<br><span class="text-xs text-gray-400">${inv.customer_company || ''}</span></td>
                 <td class="px-4 py-3 text-gray-500 text-xs">${(inv.created_at || '').slice(0, 10)}</td>
@@ -244,12 +244,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 <td class="px-4 py-3 text-center"><span class="px-2 py-0.5 rounded-full text-xs font-medium ${sc}">${inv.status}</span></td>
                 <td class="px-4 py-3 text-right whitespace-nowrap">
                   <button onclick="window._im.view(${inv.id})" class="text-brand-500 hover:text-brand-700 text-xs mr-1" title="View"><i class="fas fa-eye"></i></button>
-                  ${inv.status === 'draft' ? `<button onclick="window._im.edit(${inv.id})" class="text-gray-500 hover:text-gray-700 text-xs mr-1" title="Edit"><i class="fas fa-edit"></i></button>` : ''}
+                  ${inv.status === 'draft' ? `<button onclick="window._im.edit(${inv.id})" class="text-gray-500 hover:text-gray-300 text-xs mr-1" title="Edit"><i class="fas fa-edit"></i></button>` : ''}
                   ${['sent','viewed','overdue'].includes(inv.status) ? `<button onclick="window._im.createPaymentLink(${inv.id})" class="text-green-500 hover:text-green-700 text-xs mr-1" title="Square Payment Link"><i class="fas fa-credit-card"></i></button>` : ''}
                   ${inv.status === 'draft' ? `<button onclick="window._im.send(${inv.id})" class="text-blue-500 hover:text-blue-700 text-xs mr-1" title="Send"><i class="fas fa-paper-plane"></i></button>` : ''}
                   ${['sent','viewed','overdue'].includes(inv.status) ? `<button onclick="window._im.markPaid(${inv.id})" class="text-green-600 hover:text-green-800 text-xs mr-1" title="Mark Paid"><i class="fas fa-check-circle"></i></button>` : ''}
                   ${inv.status === 'draft' ? `<button onclick="window._im.del(${inv.id})" class="text-red-400 hover:text-red-600 text-xs" title="Delete"><i class="fas fa-trash"></i></button>` : ''}
-                  ${['sent','viewed'].includes(inv.status) ? `<button onclick="window._im.void(${inv.id})" class="text-gray-400 hover:text-gray-600 text-xs" title="Void"><i class="fas fa-ban"></i></button>` : ''}
+                  ${['sent','viewed'].includes(inv.status) ? `<button onclick="window._im.void(${inv.id})" class="text-gray-400 hover:text-gray-400 text-xs" title="Void"><i class="fas fa-ban"></i></button>` : ''}
                 </td>
               </tr>`;
             }).join('')}
@@ -266,41 +266,41 @@ document.addEventListener('DOMContentLoaded', () => {
     const f = state.form;
     return `
     <div class="mb-4 flex items-center justify-between">
-      <button onclick="window._im.backToList()" class="text-gray-500 hover:text-gray-700 text-sm"><i class="fas fa-arrow-left mr-1"></i>Back to Invoices</button>
+      <button onclick="window._im.backToList()" class="text-gray-500 hover:text-gray-300 text-sm"><i class="fas fa-arrow-left mr-1"></i>Back to Invoices</button>
       <div class="flex gap-2">
-        <button onclick="window._im.saveDraft()" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-300"><i class="fas fa-save mr-1"></i>Save Draft</button>
+        <button onclick="window._im.saveDraft()" class="px-4 py-2 bg-gray-200 text-gray-300 rounded-lg text-sm font-medium hover:bg-gray-300"><i class="fas fa-save mr-1"></i>Save Draft</button>
         <button onclick="window._im.saveAndSend()" class="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700"><i class="fas fa-paper-plane mr-1"></i>Save & Send</button>
       </div>
     </div>
 
     <!-- Header -->
-    <div class="bg-white rounded-xl border border-gray-200 p-6 mb-6">
-      <h3 class="text-lg font-bold text-gray-900 mb-4"><i class="fas fa-file-invoice text-brand-500 mr-2"></i>${state.editId ? 'Edit' : 'New'} Invoice</h3>
+    <div class="bg-[#111111] rounded-xl border border-white/10 p-6 mb-6">
+      <h3 class="text-lg font-bold text-white mb-4"><i class="fas fa-file-invoice text-brand-500 mr-2"></i>${state.editId ? 'Edit' : 'New'} Invoice</h3>
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div><label class="block text-xs font-semibold text-gray-500 mb-1">Invoice Number</label><input type="text" id="im-number" value="${f.invoice_number}" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-gray-50" readonly></div>
-        <div><label class="block text-xs font-semibold text-gray-500 mb-1">Created Date</label><input type="date" id="im-date" value="${f.created_date}" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>
-        <div><label class="block text-xs font-semibold text-gray-500 mb-1">Due Date</label><input type="date" id="im-due" value="${f.due_date}" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>
+        <div><label class="block text-xs font-semibold text-gray-500 mb-1">Invoice Number</label><input type="text" id="im-number" value="${f.invoice_number}" class="w-full border border-white/15 rounded-lg px-3 py-2 text-sm bg-[#0A0A0A]" readonly></div>
+        <div><label class="block text-xs font-semibold text-gray-500 mb-1">Created Date</label><input type="date" id="im-date" value="${f.created_date}" class="w-full border border-white/15 rounded-lg px-3 py-2 text-sm"></div>
+        <div><label class="block text-xs font-semibold text-gray-500 mb-1">Due Date</label><input type="date" id="im-due" value="${f.due_date}" class="w-full border border-white/15 rounded-lg px-3 py-2 text-sm"></div>
       </div>
     </div>
 
     <!-- Customer -->
-    <div class="bg-white rounded-xl border border-gray-200 p-6 mb-6">
-      <h3 class="text-lg font-bold text-gray-900 mb-4"><i class="fas fa-user text-brand-500 mr-2"></i>Customer</h3>
-      <select id="im-customer" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+    <div class="bg-[#111111] rounded-xl border border-white/10 p-6 mb-6">
+      <h3 class="text-lg font-bold text-white mb-4"><i class="fas fa-user text-brand-500 mr-2"></i>Customer</h3>
+      <select id="im-customer" class="w-full border border-white/15 rounded-lg px-3 py-2 text-sm">
         <option value="">Select a customer...</option>
         ${state.customers.map(c => `<option value="${c.id}" ${f.customer_id == c.id ? 'selected' : ''}>${c.name || c.email} ${c.company_name ? '(' + c.company_name + ')' : ''}</option>`).join('')}
       </select>
     </div>
 
     <!-- Line Items -->
-    <div class="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+    <div class="bg-[#111111] rounded-xl border border-white/10 p-6 mb-6">
       <div class="flex items-center justify-between mb-4">
-        <h3 class="text-lg font-bold text-gray-900"><i class="fas fa-list text-brand-500 mr-2"></i>Line Items</h3>
+        <h3 class="text-lg font-bold text-white"><i class="fas fa-list text-brand-500 mr-2"></i>Line Items</h3>
         <button onclick="window._im.addItem()" class="px-3 py-1.5 bg-brand-50 text-brand-600 rounded-lg text-xs font-medium hover:bg-brand-100"><i class="fas fa-plus mr-1"></i>Add Row</button>
       </div>
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
-          <thead class="bg-gray-50"><tr>
+          <thead class="bg-[#0A0A0A]"><tr>
             <th class="px-3 py-2 text-left text-xs font-semibold text-gray-500 w-2/5">Description</th>
             <th class="px-3 py-2 text-center text-xs font-semibold text-gray-500 w-16">Qty</th>
             <th class="px-3 py-2 text-center text-xs font-semibold text-gray-500 w-20">Unit</th>
@@ -312,13 +312,13 @@ document.addEventListener('DOMContentLoaded', () => {
           <tbody id="im-items-body">
             ${f.items.map((item, i) => {
               const amt = (item.quantity || 0) * (item.unit_price || 0);
-              return `<tr class="border-b border-gray-100">
-                <td class="px-2 py-1"><input type="text" value="${item.description || ''}" onchange="window._im.updateItem(${i},'description',this.value)" class="w-full border border-gray-200 rounded px-2 py-1.5 text-sm"></td>
-                <td class="px-2 py-1"><input type="number" value="${item.quantity}" onchange="window._im.updateItem(${i},'quantity',this.value)" class="w-full border border-gray-200 rounded px-2 py-1.5 text-sm text-center" min="0" step="0.01"></td>
-                <td class="px-2 py-1"><select onchange="window._im.updateItem(${i},'unit',this.value)" class="w-full border border-gray-200 rounded px-1 py-1.5 text-xs">
+              return `<tr class="border-b border-white/5">
+                <td class="px-2 py-1"><input type="text" value="${item.description || ''}" onchange="window._im.updateItem(${i},'description',this.value)" class="w-full border border-white/10 rounded px-2 py-1.5 text-sm"></td>
+                <td class="px-2 py-1"><input type="number" value="${item.quantity}" onchange="window._im.updateItem(${i},'quantity',this.value)" class="w-full border border-white/10 rounded px-2 py-1.5 text-sm text-center" min="0" step="0.01"></td>
+                <td class="px-2 py-1"><select onchange="window._im.updateItem(${i},'unit',this.value)" class="w-full border border-white/10 rounded px-1 py-1.5 text-xs">
                   ${['each','sq ft','sq','bundle','roll','LF','piece','hour','day','lot'].map(u => `<option value="${u}" ${item.unit === u ? 'selected' : ''}>${u}</option>`).join('')}
                 </select></td>
-                <td class="px-2 py-1"><input type="number" value="${item.unit_price}" onchange="window._im.updateItem(${i},'unit_price',this.value)" class="w-full border border-gray-200 rounded px-2 py-1.5 text-sm text-right" min="0" step="0.01"></td>
+                <td class="px-2 py-1"><input type="number" value="${item.unit_price}" onchange="window._im.updateItem(${i},'unit_price',this.value)" class="w-full border border-white/10 rounded px-2 py-1.5 text-sm text-right" min="0" step="0.01"></td>
                 <td class="px-2 py-1 text-right font-medium text-sm">$${amt.toFixed(2)}</td>
                 <td class="px-2 py-1 text-center"><input type="checkbox" ${item.is_taxable ? 'checked' : ''} onchange="window._im.updateItem(${i},'is_taxable',this.checked)"></td>
                 <td class="px-2 py-1"><button onclick="window._im.removeItem(${i})" class="text-red-400 hover:text-red-600 text-xs ${f.items.length <= 1 ? 'invisible' : ''}"><i class="fas fa-times"></i></button></td>
@@ -329,31 +329,31 @@ document.addEventListener('DOMContentLoaded', () => {
       </div>
 
       <!-- Summary -->
-      <div class="mt-4 border-t border-gray-200 pt-4 flex justify-end">
+      <div class="mt-4 border-t border-white/10 pt-4 flex justify-end">
         <div class="w-72 space-y-2">
           <div class="flex justify-between text-sm"><span class="text-gray-500">Subtotal</span><span class="font-medium" id="im-subtotal">$${calcSub().toFixed(2)}</span></div>
           <div class="flex justify-between text-sm items-center gap-2">
             <span class="text-gray-500">Discount</span>
             <div class="flex items-center gap-1">
-              <select id="im-disc-type" onchange="window._im.updTotals()" class="border border-gray-300 rounded px-1 py-0.5 text-xs">
+              <select id="im-disc-type" onchange="window._im.updTotals()" class="border border-white/15 rounded px-1 py-0.5 text-xs">
                 <option value="fixed" ${f.discount_type === 'fixed' ? 'selected' : ''}>$</option>
                 <option value="percentage" ${f.discount_type === 'percentage' ? 'selected' : ''}>%</option>
               </select>
-              <input type="number" id="im-discount" value="${f.discount_amount}" onchange="window._im.updTotals()" class="border border-gray-300 rounded px-2 py-0.5 text-xs w-20 text-right" step="0.01">
+              <input type="number" id="im-discount" value="${f.discount_amount}" onchange="window._im.updTotals()" class="border border-white/15 rounded px-2 py-0.5 text-xs w-20 text-right" step="0.01">
             </div>
           </div>
           <div class="flex justify-between text-sm"><span class="text-gray-500">Tax (${f.tax_rate}% GST)</span><span id="im-tax">$${calcTax().toFixed(2)}</span></div>
-          <div class="flex justify-between text-lg font-bold border-t border-gray-200 pt-2"><span>Total (CAD)</span><span class="text-green-600" id="im-total">$${calcTotal().toFixed(2)}</span></div>
+          <div class="flex justify-between text-lg font-bold border-t border-white/10 pt-2"><span>Total (CAD)</span><span class="text-green-600" id="im-total">$${calcTotal().toFixed(2)}</span></div>
         </div>
       </div>
     </div>
 
     <!-- Attach Roof Report -->
     ${state.reports.length > 0 ? `
-    <div class="bg-white rounded-xl border border-gray-200 p-6 mb-6">
-      <h3 class="text-lg font-bold text-gray-900 mb-3"><i class="fas fa-file-pdf text-orange-500 mr-2"></i>Attach Roof Report</h3>
+    <div class="bg-[#111111] rounded-xl border border-white/10 p-6 mb-6">
+      <h3 class="text-lg font-bold text-white mb-3"><i class="fas fa-file-pdf text-orange-500 mr-2"></i>Attach Roof Report</h3>
       <p class="text-gray-500 text-xs mb-3">Optionally attach a completed roof report to this invoice. The report will be accessible to the customer via the shared link.</p>
-      <select id="im-report" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+      <select id="im-report" class="w-full border border-white/15 rounded-lg px-3 py-2 text-sm">
         <option value="">No report attached</option>
         ${state.reports.map(r => `<option value="${r.id}" ${f.attached_report_id == r.id ? 'selected' : ''}>${r.property_address || 'Report #' + r.id} — ${(r.created_at || '').slice(0, 10)} — ${r.roof_area_sqft ? Math.round(r.roof_area_sqft) + ' sq ft' : r.status}</option>`).join('')}
       </select>
@@ -361,18 +361,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     <!-- Notes & Terms -->
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-      <div class="bg-white rounded-xl border border-gray-200 p-6">
-        <h3 class="text-lg font-bold text-gray-900 mb-3"><i class="fas fa-sticky-note text-brand-500 mr-2"></i>Notes</h3>
-        <textarea id="im-notes" rows="3" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="Additional notes...">${f.notes}</textarea>
+      <div class="bg-[#111111] rounded-xl border border-white/10 p-6">
+        <h3 class="text-lg font-bold text-white mb-3"><i class="fas fa-sticky-note text-brand-500 mr-2"></i>Notes</h3>
+        <textarea id="im-notes" rows="3" class="w-full border border-white/15 rounded-lg px-3 py-2 text-sm" placeholder="Additional notes...">${f.notes}</textarea>
       </div>
-      <div class="bg-white rounded-xl border border-gray-200 p-6">
-        <h3 class="text-lg font-bold text-gray-900 mb-3"><i class="fas fa-gavel text-brand-500 mr-2"></i>Payment Terms</h3>
-        <textarea id="im-terms" rows="3" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">${f.terms}</textarea>
+      <div class="bg-[#111111] rounded-xl border border-white/10 p-6">
+        <h3 class="text-lg font-bold text-white mb-3"><i class="fas fa-gavel text-brand-500 mr-2"></i>Payment Terms</h3>
+        <textarea id="im-terms" rows="3" class="w-full border border-white/15 rounded-lg px-3 py-2 text-sm">${f.terms}</textarea>
       </div>
     </div>
 
     <div class="flex justify-end gap-3 mb-8">
-      <button onclick="window._im.backToList()" class="px-5 py-2.5 bg-gray-200 text-gray-700 rounded-xl text-sm font-medium">Cancel</button>
+      <button onclick="window._im.backToList()" class="px-5 py-2.5 bg-gray-200 text-gray-300 rounded-xl text-sm font-medium">Cancel</button>
       <button onclick="window._im.saveDraft()" class="px-5 py-2.5 bg-gray-700 text-white rounded-xl text-sm font-medium"><i class="fas fa-save mr-1"></i>Save Draft</button>
       <button onclick="window._im.saveAndSend()" class="px-5 py-2.5 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl text-sm font-medium"><i class="fas fa-paper-plane mr-1"></i>Save & Send</button>
     </div>`;
@@ -393,22 +393,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
     return `
     <div class="mb-4 flex items-center justify-between print:hidden">
-      <button onclick="window._im.backToList()" class="text-gray-500 hover:text-gray-700 text-sm"><i class="fas fa-arrow-left mr-1"></i>Back</button>
+      <button onclick="window._im.backToList()" class="text-gray-500 hover:text-gray-300 text-sm"><i class="fas fa-arrow-left mr-1"></i>Back</button>
       <div class="flex gap-2">
-        <button onclick="window.print()" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm font-medium"><i class="fas fa-print mr-1"></i>Print / PDF</button>
+        <button onclick="window.print()" class="px-4 py-2 bg-gray-200 text-gray-300 rounded-lg text-sm font-medium"><i class="fas fa-print mr-1"></i>Print / PDF</button>
         ${payLink ? `<button onclick="window._im.copyPayLink()" class="px-4 py-2 bg-green-100 text-green-700 rounded-lg text-sm font-medium border border-green-200"><i class="fas fa-link mr-1"></i>Copy Payment Link</button>` : ''}
         ${!isPaid && f._status !== 'draft' && f._status !== 'cancelled' ? `<button onclick="window._im.markPaid(${state.editId})" class="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium"><i class="fas fa-check mr-1"></i>Mark Paid</button>` : ''}
       </div>
     </div>
 
-    <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden max-w-4xl mx-auto print:shadow-none">
+    <div class="bg-[#111111] rounded-xl border border-white/10 shadow-sm overflow-hidden max-w-4xl mx-auto print:shadow-none">
       ${isPaid ? '<div class="bg-green-50 border-b border-green-200 px-8 py-3 text-green-700 text-sm font-medium"><i class="fas fa-check-circle mr-2"></i>PAID</div>' : ''}
 
-      <div class="bg-gradient-to-r from-sky-500 to-blue-600 text-white p-8">
+      <div class="bg-gradient-to-r from-[#111111] to-[#1a1a1a] text-white p-8">
         <div class="flex justify-between items-start">
           <div>
             <div class="flex items-center gap-3 mb-2">
-              <div class="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center"><i class="fas fa-home text-white text-lg"></i></div>
+              <div class="w-10 h-10 bg-[#111111]/20 rounded-lg flex items-center justify-center"><i class="fas fa-home text-white text-lg"></i></div>
               <div><h1 class="text-xl font-bold">Roof Manager</h1><p class="text-blue-200 text-xs">Professional Roof Measurement Reports</p></div>
             </div>
             <p class="text-blue-200 text-sm">Alberta, Canada</p>
@@ -422,26 +422,26 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
       </div>
 
-      <div class="p-8 border-b border-gray-200">
+      <div class="p-8 border-b border-white/10">
         <h3 class="text-xs font-semibold text-gray-500 uppercase mb-2">Bill To</h3>
-        <p class="font-bold text-gray-900">${cust.name || 'Customer'}</p>
-        ${cust.company_name ? `<p class="text-gray-600 text-sm">${cust.company_name}</p>` : ''}
+        <p class="font-bold text-white">${cust.name || 'Customer'}</p>
+        ${cust.company_name ? `<p class="text-gray-400 text-sm">${cust.company_name}</p>` : ''}
         ${cust.email ? `<p class="text-gray-500 text-sm">${cust.email}</p>` : ''}
       </div>
 
-      <div class="p-8 border-b border-gray-200">
+      <div class="p-8 border-b border-white/10">
         <table class="w-full text-sm">
-          <thead class="bg-gray-50 border-b-2 border-gray-200"><tr>
-            <th class="px-4 py-2 text-left font-semibold text-gray-600">Description</th>
-            <th class="px-4 py-2 text-center font-semibold text-gray-600">Qty</th>
-            <th class="px-4 py-2 text-center font-semibold text-gray-600">Unit</th>
-            <th class="px-4 py-2 text-right font-semibold text-gray-600">Price</th>
-            <th class="px-4 py-2 text-right font-semibold text-gray-600">Amount</th>
+          <thead class="bg-[#0A0A0A] border-b-2 border-white/10"><tr>
+            <th class="px-4 py-2 text-left font-semibold text-gray-400">Description</th>
+            <th class="px-4 py-2 text-center font-semibold text-gray-400">Qty</th>
+            <th class="px-4 py-2 text-center font-semibold text-gray-400">Unit</th>
+            <th class="px-4 py-2 text-right font-semibold text-gray-400">Price</th>
+            <th class="px-4 py-2 text-right font-semibold text-gray-400">Amount</th>
           </tr></thead>
           <tbody>
             ${f.items.map(item => {
               const amt = (item.quantity || 0) * (item.unit_price || 0);
-              return `<tr class="border-b border-gray-100">
+              return `<tr class="border-b border-white/5">
                 <td class="px-4 py-2">${item.description}</td>
                 <td class="px-4 py-2 text-center">${item.quantity}</td>
                 <td class="px-4 py-2 text-center">${item.unit}</td>
@@ -456,23 +456,23 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="flex justify-between text-sm"><span class="text-gray-500">Subtotal</span><span>$${sub.toFixed(2)}</span></div>
             ${disc > 0 ? `<div class="flex justify-between text-sm text-red-600"><span>Discount</span><span>-$${disc.toFixed(2)}</span></div>` : ''}
             <div class="flex justify-between text-sm"><span class="text-gray-500">GST (${f.tax_rate}%)</span><span>$${tax.toFixed(2)}</span></div>
-            <div class="flex justify-between text-lg font-bold border-t-2 border-gray-300 pt-2 mt-1"><span>Total (CAD)</span><span class="text-green-600">$${total.toFixed(2)}</span></div>
+            <div class="flex justify-between text-lg font-bold border-t-2 border-white/15 pt-2 mt-1"><span>Total (CAD)</span><span class="text-green-600">$${total.toFixed(2)}</span></div>
           </div>
         </div>
       </div>
 
       ${payLink ? `
-      <div class="p-8 border-b border-gray-200 bg-green-50">
+      <div class="p-8 border-b border-white/10 bg-green-50">
         <h3 class="text-xs font-semibold text-green-700 uppercase mb-2"><i class="fas fa-credit-card mr-1"></i>Pay Online</h3>
         <a href="${payLink}" target="_blank" class="text-green-700 hover:text-green-900 text-sm font-medium underline">${payLink}</a>
         <p class="text-green-600 text-xs mt-1">Visa, Mastercard, Amex, Apple Pay, Google Pay</p>
       </div>` : ''}
 
-      ${f.terms ? `<div class="p-8 border-b border-gray-200"><h3 class="text-xs font-semibold text-gray-500 uppercase mb-2">Payment Terms</h3><div class="text-gray-700 text-sm whitespace-pre-wrap">${f.terms}</div></div>` : ''}
-      ${f.notes ? `<div class="p-8 border-b border-gray-200"><h3 class="text-xs font-semibold text-gray-500 uppercase mb-2">Notes</h3><div class="text-gray-700 text-sm whitespace-pre-wrap">${f.notes}</div></div>` : ''}
+      ${f.terms ? `<div class="p-8 border-b border-white/10"><h3 class="text-xs font-semibold text-gray-500 uppercase mb-2">Payment Terms</h3><div class="text-gray-300 text-sm whitespace-pre-wrap">${f.terms}</div></div>` : ''}
+      ${f.notes ? `<div class="p-8 border-b border-white/10"><h3 class="text-xs font-semibold text-gray-500 uppercase mb-2">Notes</h3><div class="text-gray-300 text-sm whitespace-pre-wrap">${f.notes}</div></div>` : ''}
 
       ${f.attached_report_id ? `
-      <div class="p-8 border-b border-gray-200 bg-orange-50">
+      <div class="p-8 border-b border-white/10 bg-orange-50">
         <h3 class="text-xs font-semibold text-orange-700 uppercase mb-2"><i class="fas fa-file-pdf mr-1"></i>Attached Roof Report</h3>
         ${(() => { const rpt = state.reports.find(r => r.id == f.attached_report_id); return rpt ? `<p class="text-orange-800 text-sm font-medium">${rpt.property_address || 'Report #' + rpt.id}</p><p class="text-orange-600 text-xs mt-1">${rpt.roof_area_sqft ? Math.round(rpt.roof_area_sqft) + ' sq ft roof area' : ''} ${rpt.order_number ? '| Order: ' + rpt.order_number : ''}</p><a href="/api/reports/${rpt.order_id}/html" target="_blank" class="inline-block mt-2 text-xs font-medium text-orange-700 hover:text-orange-900 underline"><i class="fas fa-external-link-alt mr-1"></i>View Full Report</a>` : `<p class="text-orange-600 text-sm">Report #${f.attached_report_id} attached</p>`; })()}
       </div>` : ''}

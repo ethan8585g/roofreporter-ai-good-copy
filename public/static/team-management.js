@@ -66,7 +66,7 @@ function renderTeam() {
   html += '    </div>';
   html += '  </div>';
   if (activeMembers.length > 0) {
-    html += '  <div class="mt-4 bg-white/10 rounded-lg px-4 py-2 flex items-center justify-between">';
+    html += '  <div class="mt-4 bg-[#111111]/10 rounded-lg px-4 py-2 flex items-center justify-between">';
     html += '    <span class="text-teal-100"><i class="fas fa-credit-card mr-2"></i>Monthly billing</span>';
     html += '    <span class="text-xl font-bold">$' + monthlyCost + '.00 <span class="text-sm font-normal text-teal-200">/month</span></span>';
     html += '  </div>';
@@ -75,7 +75,7 @@ function renderTeam() {
 
   // ── Invite button ──
   html += '<div class="flex items-center justify-between mb-6">';
-  html += '  <h3 class="text-lg font-bold text-gray-800"><i class="fas fa-user-friends mr-2 text-teal-600"></i>Team Roster</h3>';
+  html += '  <h3 class="text-lg font-bold text-gray-100"><i class="fas fa-user-friends mr-2 text-teal-600"></i>Team Roster</h3>';
   html += '  <button onclick="showInviteModal()" class="bg-teal-600 hover:bg-teal-700 text-white font-semibold py-2.5 px-5 rounded-lg text-sm transition-all hover:scale-105 shadow-lg shadow-teal-500/25">';
   html += '    <i class="fas fa-user-plus mr-2"></i>Invite Team Member';
   html += '  </button>';
@@ -83,24 +83,24 @@ function renderTeam() {
 
   // ── Active members table ──
   if (activeMembers.length > 0) {
-    html += '<div class="bg-white rounded-xl shadow-sm border overflow-hidden mb-6">';
+    html += '<div class="bg-[#111111] rounded-xl shadow-sm border overflow-hidden mb-6">';
     html += '<table class="w-full text-sm">';
-    html += '<thead class="bg-gray-50 border-b"><tr>';
-    html += '<th class="text-left px-4 py-3 font-semibold text-gray-600">Member</th>';
-    html += '<th class="text-left px-4 py-3 font-semibold text-gray-600">Role</th>';
-    html += '<th class="text-left px-4 py-3 font-semibold text-gray-600">Status</th>';
-    html += '<th class="text-left px-4 py-3 font-semibold text-gray-600">Since</th>';
-    html += '<th class="text-right px-4 py-3 font-semibold text-gray-600">Actions</th>';
+    html += '<thead class="bg-[#0A0A0A] border-b"><tr>';
+    html += '<th class="text-left px-4 py-3 font-semibold text-gray-400">Member</th>';
+    html += '<th class="text-left px-4 py-3 font-semibold text-gray-400">Role</th>';
+    html += '<th class="text-left px-4 py-3 font-semibold text-gray-400">Status</th>';
+    html += '<th class="text-left px-4 py-3 font-semibold text-gray-400">Since</th>';
+    html += '<th class="text-right px-4 py-3 font-semibold text-gray-400">Actions</th>';
     html += '</tr></thead><tbody>';
     activeMembers.forEach(function(m) {
-      html += '<tr class="border-b hover:bg-gray-50 transition-colors">';
+      html += '<tr class="border-b hover:bg-[#111111]/5 transition-colors">';
       html += '<td class="px-4 py-3">';
       html += '  <div class="flex items-center gap-3">';
       html += '    <div class="w-9 h-9 rounded-full bg-teal-100 flex items-center justify-center">';
       html += '      <span class="text-teal-700 font-bold text-sm">' + (m.name || 'U').charAt(0).toUpperCase() + '</span>';
       html += '    </div>';
       html += '    <div>';
-      html += '      <div class="font-semibold text-gray-800">' + escHtml(m.name) + '</div>';
+      html += '      <div class="font-semibold text-gray-100">' + escHtml(m.name) + '</div>';
       html += '      <div class="text-xs text-gray-500">' + escHtml(m.email) + '</div>';
       html += '    </div>';
       html += '  </div>';
@@ -126,9 +126,9 @@ function renderTeam() {
     });
     html += '</tbody></table></div>';
   } else {
-    html += '<div class="bg-white rounded-xl shadow-sm border p-8 text-center mb-6">';
+    html += '<div class="bg-[#111111] rounded-xl shadow-sm border p-8 text-center mb-6">';
     html += '  <i class="fas fa-users text-gray-300 text-5xl mb-4"></i>';
-    html += '  <h3 class="text-lg font-bold text-gray-700 mb-2">No team members yet</h3>';
+    html += '  <h3 class="text-lg font-bold text-gray-300 mb-2">No team members yet</h3>';
     html += '  <p class="text-gray-500 mb-4 max-w-md mx-auto">Invite your sales team to access all platform features including roof reports, CRM, and AI Secretary.</p>';
     html += '  <button onclick="showInviteModal()" class="bg-teal-600 hover:bg-teal-700 text-white font-semibold py-2.5 px-5 rounded-lg text-sm transition-all"><i class="fas fa-user-plus mr-2"></i>Invite Your First Member</button>';
     html += '</div>';
@@ -143,7 +143,7 @@ function renderTeam() {
       html += '<div class="flex items-center justify-between px-4 py-3 border-b border-amber-100 last:border-0">';
       html += '  <div class="flex items-center gap-3">';
       html += '    <div class="w-8 h-8 rounded-full bg-amber-200 flex items-center justify-center"><span class="text-amber-800 font-bold text-xs">' + (m.name || 'U').charAt(0) + '</span></div>';
-      html += '    <div><span class="font-medium text-gray-700">' + escHtml(m.name) + '</span><span class="text-xs text-gray-400 ml-2">' + escHtml(m.email) + '</span></div>';
+      html += '    <div><span class="font-medium text-gray-300">' + escHtml(m.name) + '</span><span class="text-xs text-gray-400 ml-2">' + escHtml(m.email) + '</span></div>';
       html += '  </div>';
       html += '  <div class="flex gap-2">';
       html += '    <button onclick="reactivateMember(' + m.id + ')" class="text-xs bg-green-500 hover:bg-green-600 text-white py-1 px-3 rounded font-semibold"><i class="fas fa-play mr-1"></i>Reactivate</button>';
@@ -162,7 +162,7 @@ function renderTeam() {
     pendingInvites.forEach(function(inv) {
       html += '<div class="flex items-center justify-between px-4 py-3 border-b border-blue-100 last:border-0">';
       html += '  <div>';
-      html += '    <span class="font-medium text-gray-700">' + escHtml(inv.name) + '</span>';
+      html += '    <span class="font-medium text-gray-300">' + escHtml(inv.name) + '</span>';
       html += '    <span class="text-xs text-gray-400 ml-2">' + escHtml(inv.email) + '</span>';
       html += '    <span class="text-xs text-blue-500 ml-2">Expires ' + new Date(inv.expires_at).toLocaleDateString() + '</span>';
       html += '  </div>';
@@ -173,16 +173,16 @@ function renderTeam() {
   }
 
   // ── Pricing info ──
-  html += '<div class="bg-gray-50 rounded-xl border p-6">';
-  html += '  <h3 class="font-bold text-gray-700 mb-3"><i class="fas fa-tag mr-2 text-teal-600"></i>Team Pricing</h3>';
+  html += '<div class="bg-[#0A0A0A] rounded-xl border p-6">';
+  html += '  <h3 class="font-bold text-gray-300 mb-3"><i class="fas fa-tag mr-2 text-teal-600"></i>Team Pricing</h3>';
   html += '  <div class="grid grid-cols-1 md:grid-cols-3 gap-4">';
-  html += '    <div class="bg-white rounded-lg p-4 border text-center">';
+  html += '    <div class="bg-[#111111] rounded-lg p-4 border text-center">';
   html += '      <div class="text-3xl font-black text-teal-600">$50</div>';
   html += '      <div class="text-gray-500 text-sm">per user / month</div>';
   html += '    </div>';
-  html += '    <div class="bg-white rounded-lg p-4 border">';
-  html += '      <div class="font-semibold text-gray-700 mb-2">Each member gets:</div>';
-  html += '      <ul class="text-sm text-gray-600 space-y-1">';
+  html += '    <div class="bg-[#111111] rounded-lg p-4 border">';
+  html += '      <div class="font-semibold text-gray-300 mb-2">Each member gets:</div>';
+  html += '      <ul class="text-sm text-gray-400 space-y-1">';
   html += '        <li><i class="fas fa-check text-teal-500 mr-1"></i>Order roof reports</li>';
   html += '        <li><i class="fas fa-check text-teal-500 mr-1"></i>Full CRM access</li>';
   html += '        <li><i class="fas fa-check text-teal-500 mr-1"></i>AI Roofer Secretary</li>';
@@ -190,9 +190,9 @@ function renderTeam() {
   html += '        <li><i class="fas fa-check text-teal-500 mr-1"></i>D2D Manager</li>';
   html += '      </ul>';
   html += '    </div>';
-  html += '    <div class="bg-white rounded-lg p-4 border">';
-  html += '      <div class="font-semibold text-gray-700 mb-2">Team billing:</div>';
-  html += '      <ul class="text-sm text-gray-600 space-y-1">';
+  html += '    <div class="bg-[#111111] rounded-lg p-4 border">';
+  html += '      <div class="font-semibold text-gray-300 mb-2">Team billing:</div>';
+  html += '      <ul class="text-sm text-gray-400 space-y-1">';
   html += '        <li><i class="fas fa-info-circle text-blue-400 mr-1"></i>Billed to account owner</li>';
   html += '        <li><i class="fas fa-info-circle text-blue-400 mr-1"></i>Suspend anytime to pause billing</li>';
   html += '        <li><i class="fas fa-info-circle text-blue-400 mr-1"></i>No contracts, cancel anytime</li>';
@@ -214,11 +214,11 @@ function renderTeamMemberView(members) {
   html += '<h2 class="text-2xl font-bold"><i class="fas fa-users mr-2"></i>Your Team</h2>';
   html += '<p class="text-blue-200 mt-1">You are a member of this team</p>';
   html += '</div>';
-  html += '<div class="bg-white rounded-xl shadow-sm border overflow-hidden">';
+  html += '<div class="bg-[#111111] rounded-xl shadow-sm border overflow-hidden">';
   members.forEach(function(m) {
     html += '<div class="flex items-center gap-3 px-4 py-3 border-b last:border-0">';
     html += '  <div class="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center"><span class="text-blue-700 font-bold">' + (m.name || 'U').charAt(0) + '</span></div>';
-    html += '  <div><div class="font-semibold text-gray-800">' + escHtml(m.name) + '</div><div class="text-xs text-gray-500">' + escHtml(m.email) + ' · ' + m.role + '</div></div>';
+    html += '  <div><div class="font-semibold text-gray-100">' + escHtml(m.name) + '</div><div class="text-xs text-gray-500">' + escHtml(m.email) + ' · ' + m.role + '</div></div>';
     html += '</div>';
   });
   html += '</div>';
@@ -238,7 +238,7 @@ function showPermModal(memberId, memberName) {
 
   var modalHtml =
     '<div id="permModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">' +
-      '<div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden">' +
+      '<div class="bg-[#111111] rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden">' +
         '<div class="bg-gradient-to-r from-teal-500 to-emerald-600 px-6 py-4 text-white">' +
           '<h3 class="text-base font-bold"><i class="fas fa-sliders-h mr-2"></i>Permissions: ' + escHtml(memberName) + '</h3>' +
           '<p class="text-teal-100 text-xs mt-0.5">Control what this member can access</p>' +
@@ -247,7 +247,7 @@ function showPermModal(memberId, memberName) {
           renderPermCheckboxes('perm', currentPerms) +
           '<div id="permMsg" class="mt-3"></div>' +
           '<div class="flex gap-3 mt-4">' +
-            '<button onclick="hidePermModal()" class="flex-1 border border-gray-300 rounded-lg py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50">Cancel</button>' +
+            '<button onclick="hidePermModal()" class="flex-1 border border-white/15 rounded-lg py-2.5 text-sm font-semibold text-gray-300 hover:bg-[#111111]/5">Cancel</button>' +
             '<button onclick="savePermissions()" id="permSaveBtn" class="flex-1 bg-teal-600 hover:bg-teal-700 text-white rounded-lg py-2.5 text-sm font-semibold"><i class="fas fa-save mr-1"></i>Save Permissions</button>' +
           '</div>' +
         '</div>' +
@@ -305,14 +305,14 @@ var PERM_LABELS = [
 function renderPermCheckboxes(idPrefix, perms) {
   var defaultPerms = { orders: true, reports: true, crm: true, secretary: true, virtual_tryon: true };
   var effective = Object.assign({}, defaultPerms, perms || {});
-  var html = '<div class="border border-gray-200 rounded-lg p-3 bg-gray-50">';
+  var html = '<div class="border border-white/10 rounded-lg p-3 bg-[#0A0A0A]">';
   html += '<p class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Access Permissions</p>';
   PERM_LABELS.forEach(function (p) {
     var checked = effective[p.key] !== false;
     html += '<label class="flex items-center gap-2 py-1 cursor-pointer">' +
-      '<input type="checkbox" id="' + idPrefix + '_' + p.key + '"' + (checked ? ' checked' : '') + ' class="rounded border-gray-300 text-teal-600 focus:ring-teal-500">' +
+      '<input type="checkbox" id="' + idPrefix + '_' + p.key + '"' + (checked ? ' checked' : '') + ' class="rounded border-white/15 text-teal-600 focus:ring-teal-500">' +
       '<i class="fas ' + p.icon + ' text-gray-400 text-xs w-4 text-center"></i>' +
-      '<span class="text-sm text-gray-700">' + p.label + '</span>' +
+      '<span class="text-sm text-gray-300">' + p.label + '</span>' +
     '</label>';
   });
   html += '</div>';
@@ -331,23 +331,23 @@ function collectPerms(idPrefix) {
 // ── Invite Modal HTML ──
 function renderInviteModal() {
   return '<div id="inviteModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 hidden">' +
-    '<div class="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden max-h-screen overflow-y-auto">' +
+    '<div class="bg-[#111111] rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden max-h-screen overflow-y-auto">' +
       '<div class="bg-gradient-to-r from-teal-500 to-emerald-600 px-6 py-4 text-white">' +
         '<h3 class="text-lg font-bold"><i class="fas fa-user-plus mr-2"></i>Invite Team Member</h3>' +
         '<p class="text-teal-100 text-sm">$50/month per user</p>' +
       '</div>' +
       '<form onsubmit="sendInvite(event)" class="p-6 space-y-4">' +
         '<div>' +
-          '<label class="block text-sm font-semibold text-gray-700 mb-1">Full Name *</label>' +
-          '<input type="text" id="invName" required placeholder="e.g. John Smith" class="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500">' +
+          '<label class="block text-sm font-semibold text-gray-300 mb-1">Full Name *</label>' +
+          '<input type="text" id="invName" required placeholder="e.g. John Smith" class="w-full border border-white/15 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500">' +
         '</div>' +
         '<div>' +
-          '<label class="block text-sm font-semibold text-gray-700 mb-1">Email Address *</label>' +
-          '<input type="email" id="invEmail" required placeholder="john@company.com" class="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500">' +
+          '<label class="block text-sm font-semibold text-gray-300 mb-1">Email Address *</label>' +
+          '<input type="email" id="invEmail" required placeholder="john@company.com" class="w-full border border-white/15 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500">' +
         '</div>' +
         '<div>' +
-          '<label class="block text-sm font-semibold text-gray-700 mb-1">Role</label>' +
-          '<select id="invRole" class="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-teal-500">' +
+          '<label class="block text-sm font-semibold text-gray-300 mb-1">Role</label>' +
+          '<select id="invRole" class="w-full border border-white/15 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-teal-500">' +
             '<option value="member">Team Member — no team management</option>' +
             '<option value="admin">Team Admin — full access + manage team</option>' +
           '</select>' +
@@ -355,7 +355,7 @@ function renderInviteModal() {
         '<div>' + renderPermCheckboxes('inv', null) + '</div>' +
         '<div id="invMsg"></div>' +
         '<div class="flex gap-3 pt-2">' +
-          '<button type="button" onclick="hideInviteModal()" class="flex-1 border border-gray-300 rounded-lg py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors">Cancel</button>' +
+          '<button type="button" onclick="hideInviteModal()" class="flex-1 border border-white/15 rounded-lg py-2.5 text-sm font-semibold text-gray-300 hover:bg-[#111111]/5 transition-colors">Cancel</button>' +
           '<button type="submit" id="invBtn" class="flex-1 bg-teal-600 hover:bg-teal-700 text-white rounded-lg py-2.5 text-sm font-semibold transition-all"><i class="fas fa-paper-plane mr-1"></i>Send Invite</button>' +
         '</div>' +
       '</form>' +

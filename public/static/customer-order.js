@@ -264,7 +264,7 @@ function updateCoordDisplay(lat, lng) {
     display.innerHTML = `
       <div class="flex items-center gap-2 text-sm">
         <i class="fas fa-map-pin text-red-500"></i>
-        <span class="font-mono font-semibold text-gray-800">${lat}, ${lng}</span>
+        <span class="font-mono font-semibold text-gray-100">${lat}, ${lng}</span>
         <span class="text-green-600 font-medium"><i class="fas fa-check-circle mr-1"></i>Pin placed</span>
       </div>`;
     display.classList.remove('hidden');
@@ -290,7 +290,7 @@ async function reverseGeocode(lat, lng) {
       parseAddressComponents(result.address_components, result.formatted_address);
       const addrDisplay = document.getElementById('resolvedAddress');
       if (addrDisplay) {
-        addrDisplay.innerHTML = `<i class="fas fa-map-marker-alt text-brand-500 mr-1"></i><span class="text-sm text-gray-700 font-medium">${orderState.address}</span>`;
+        addrDisplay.innerHTML = `<i class="fas fa-map-marker-alt text-brand-500 mr-1"></i><span class="text-sm text-gray-300 font-medium">${orderState.address}</span>`;
       }
     }
   } catch (e) {
@@ -349,7 +349,7 @@ function renderOrderPage() {
       ${steps.map((s, i) => {
         const done = i < stepIdx;
         const active = i === stepIdx;
-        const cls = done ? 'bg-brand-100 text-brand-700' : active ? 'bg-brand-600 text-white' : 'bg-gray-100 text-gray-400';
+        const cls = done ? 'bg-brand-100 text-brand-700' : active ? 'bg-brand-600 text-white' : 'bg-white/5 text-gray-400';
         return `
           <div class="flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold ${cls}">
             <i class="fas ${done ? 'fa-check-circle' : s.icon}"></i> ${s.label}
@@ -419,55 +419,55 @@ function renderPinStep(root, progressBar) {
                 <p class="text-sm text-brand-200 mt-0.5">Credit packs start at <strong class="text-amber-400">$5.00/report (100-pack)</strong></p>
               </div>
             </div>
-            <a href="/pricing" class="bg-amber-500 hover:bg-amber-400 text-gray-900 px-5 py-2.5 rounded-xl text-sm font-black transition-all shadow-lg"><i class="fas fa-tags mr-1.5"></i>Buy Credits</a>
+            <a href="/pricing" class="bg-amber-500 hover:bg-amber-400 text-white px-5 py-2.5 rounded-xl text-sm font-black transition-all shadow-lg"><i class="fas fa-tags mr-1.5"></i>Buy Credits</a>
           </div>
         </div>
       `}
 
       <!-- Order Form -->
-      <div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-        <div class="bg-gradient-to-r from-sky-500 to-blue-600 text-white p-6">
+      <div class="bg-[#111111] rounded-2xl border border-white/10 shadow-sm overflow-hidden">
+        <div class="bg-gradient-to-r from-[#111111] to-[#1a1a1a] text-white p-6">
           <h2 class="text-xl font-bold"><i class="fas fa-crosshairs mr-2"></i>Step 1: Pin the Roof</h2>
           <p class="text-brand-200 text-sm mt-1">Click the map or search an address to place a pin on the exact roof</p>
         </div>
 
         <div class="p-6 space-y-5">
           <div>
-            <label class="block text-sm font-semibold text-gray-700 mb-2"><i class="fas fa-search mr-1"></i>Search Address</label>
+            <label class="block text-sm font-semibold text-gray-300 mb-2"><i class="fas fa-search mr-1"></i>Search Address</label>
             <input type="text" id="mapSearchInput" placeholder="Search an address..."
-              class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-sm">
+              class="w-full px-4 py-3 border border-white/15 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-sm">
           </div>
 
           <div>
-            <label class="block text-sm font-semibold text-gray-700 mb-2"><i class="fas fa-map mr-1"></i>Click Map to Place Roof Pin *</label>
-            <div id="orderMap" class="w-full h-80 rounded-xl border-2 border-gray-300 overflow-hidden" style="min-height: 320px;"></div>
+            <label class="block text-sm font-semibold text-gray-300 mb-2"><i class="fas fa-map mr-1"></i>Click Map to Place Roof Pin *</label>
+            <div id="orderMap" class="w-full h-80 rounded-xl border-2 border-white/15 overflow-hidden" style="min-height: 320px;"></div>
             <p class="text-xs text-gray-400 mt-1"><i class="fas fa-info-circle mr-1"></i>Click directly on the roof. Drag the pin to adjust.</p>
           </div>
 
-          <div id="coordDisplay" class="hidden bg-gray-50 border border-gray-200 rounded-xl px-4 py-3"></div>
+          <div id="coordDisplay" class="hidden bg-[#0A0A0A] border border-white/10 rounded-xl px-4 py-3"></div>
           <div id="resolvedAddress" class="hidden bg-blue-50 border border-blue-100 rounded-xl px-4 py-2.5"></div>
 
           <div class="grid grid-cols-2 gap-4">
             <div>
-              <label class="block text-sm font-semibold text-gray-700 mb-1"><i class="fas fa-arrows-alt-v mr-1 text-brand-500"></i>Latitude *</label>
+              <label class="block text-sm font-semibold text-gray-300 mb-1"><i class="fas fa-arrows-alt-v mr-1 text-brand-500"></i>Latitude *</label>
               <input type="number" step="any" id="orderLat" placeholder="e.g. 53.5461" value="${orderState.lat}"
-                class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-sm font-mono"
+                class="w-full px-4 py-3 border border-white/15 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-sm font-mono"
                 oninput="handleManualCoordInput()">
             </div>
             <div>
-              <label class="block text-sm font-semibold text-gray-700 mb-1"><i class="fas fa-arrows-alt-h mr-1 text-brand-500"></i>Longitude *</label>
+              <label class="block text-sm font-semibold text-gray-300 mb-1"><i class="fas fa-arrows-alt-h mr-1 text-brand-500"></i>Longitude *</label>
               <input type="number" step="any" id="orderLng" placeholder="e.g. -113.4938" value="${orderState.lng}"
-                class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-sm font-mono"
+                class="w-full px-4 py-3 border border-white/15 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-sm font-mono"
                 oninput="handleManualCoordInput()">
             </div>
           </div>
-          <button onclick="goToManualCoords()" class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 px-3 py-1.5 rounded-lg transition-colors -mt-2">
+          <button onclick="goToManualCoords()" class="text-xs bg-white/5 hover:bg-gray-200 text-gray-400 px-3 py-1.5 rounded-lg transition-colors -mt-2">
             <i class="fas fa-location-arrow mr-1"></i>Go to Coords
           </button>
 
           <!-- Known House Size (optional cross-validation) -->
           <div class="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl border border-indigo-200 p-4">
-            <h4 class="font-semibold text-gray-700 mb-1 flex items-center text-sm">
+            <h4 class="font-semibold text-gray-300 mb-1 flex items-center text-sm">
               <i class="fas fa-home text-indigo-500 mr-2"></i>Known House Size (Optional)
             </h4>
             <p class="text-xs text-gray-500 mb-2">Enter your house living area so we can cross-check the roof trace. The roof footprint is typically 10-15% larger than house sq ft (eave overhangs).</p>
@@ -529,10 +529,10 @@ function renderTraceStep(root, progressBar) {
       ${progressBar}
 
       <!-- Address bar -->
-      <div class="bg-white rounded-lg border border-gray-200 px-4 py-2 mb-3 flex items-center justify-between">
+      <div class="bg-[#111111] rounded-lg border border-white/10 px-4 py-2 mb-3 flex items-center justify-between">
         <div class="flex items-center gap-2">
           <i class="fas fa-map-marker-alt text-brand-600 text-sm"></i>
-          <span class="text-sm font-medium text-gray-800">${orderState.address || orderState.lat + ', ' + orderState.lng}</span>
+          <span class="text-sm font-medium text-gray-100">${orderState.address || orderState.lat + ', ' + orderState.lng}</span>
         </div>
         <button onclick="backToPin()" class="text-xs text-brand-600 hover:text-brand-700 font-medium"><i class="fas fa-edit mr-1"></i>Change</button>
       </div>
@@ -540,13 +540,13 @@ function renderTraceStep(root, progressBar) {
       <div class="grid lg:grid-cols-4 gap-4">
         <!-- Left: Mode selector -->
         <div class="lg:col-span-1 space-y-3">
-          <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+          <div class="bg-[#111111] rounded-xl shadow-sm border border-white/10 p-4">
             <h4 class="text-xs font-bold text-gray-500 uppercase tracking-wide mb-3">Drawing Mode</h4>
             <div class="space-y-2">
               ${Object.entries(modeInfo).map(([key, info]) => `
                 <button onclick="setTraceMode('${key}')" data-trace-mode="${key}"
                   class="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all
-                    ${orderState.traceMode === key ? 'bg-gray-800 text-white shadow-md' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'}">
+                    ${orderState.traceMode === key ? 'bg-gray-800 text-white shadow-md' : 'bg-[#0A0A0A] text-gray-400 hover:bg-[#111111]/10'}">
                   <div class="w-3 h-3 rounded-full" style="background:${info.color}"></div>
                   <i class="fas ${info.icon} text-xs"></i>
                   <span>${info.label}</span>
@@ -558,7 +558,7 @@ function renderTraceStep(root, progressBar) {
             </div>
           </div>
 
-          <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+          <div class="bg-[#111111] rounded-xl shadow-sm border border-white/10 p-4">
             <h4 class="text-xs font-bold text-gray-500 uppercase tracking-wide mb-3">Summary</h4>
             <div class="space-y-2 text-sm">
               <div class="flex justify-between"><span class="text-gray-500">Eaves</span><span id="summary-eaves" class="font-semibold ${eavesClosed ? 'text-green-600' : 'text-gray-400'}">${eavesClosed ? 'Closed' : eavesCount + ' pts'}</span></div>
@@ -575,13 +575,13 @@ function renderTraceStep(root, progressBar) {
           </div>
 
           <div class="space-y-2">
-            <button onclick="undoLastTrace()" class="w-full px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg text-sm font-medium"><i class="fas fa-undo mr-1"></i>Undo</button>
+            <button onclick="undoLastTrace()" class="w-full px-3 py-2 bg-white/5 hover:bg-gray-200 text-gray-400 rounded-lg text-sm font-medium"><i class="fas fa-undo mr-1"></i>Undo</button>
             <button onclick="clearAllTraces()" class="w-full px-3 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-sm font-medium"><i class="fas fa-trash mr-1"></i>Clear All</button>
           </div>
         </div>
 
         <!-- Right: Trace Map -->
-        <div class="lg:col-span-3 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div class="lg:col-span-3 bg-[#111111] rounded-xl shadow-sm border border-white/10 overflow-hidden">
           <div class="bg-gray-800 px-4 py-2 flex items-center justify-between">
             <div class="flex items-center gap-2">
               <div id="traceModeDot" class="w-3 h-3 rounded-full" style="background:${m.color}"></div>
@@ -601,7 +601,7 @@ function renderTraceStep(root, progressBar) {
           <span><i class="fas fa-expand-arrows-alt mr-1 text-indigo-400"></i>Trace the outermost roof edge (drip line), not the walls</span>
         </div>
         <div class="flex items-center gap-3">
-          <button onclick="skipTrace()" class="px-4 py-2 text-gray-500 hover:text-gray-700 text-sm font-medium">
+          <button onclick="skipTrace()" class="px-4 py-2 text-gray-500 hover:text-gray-300 text-sm font-medium">
             Skip Tracing <i class="fas fa-forward ml-1"></i>
           </button>
           <button onclick="confirmTrace()" id="traceNextBtn"
@@ -645,17 +645,17 @@ function renderReviewStep(root, progressBar) {
     <div class="max-w-3xl mx-auto">
       ${progressBar}
 
-      <div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-        <div class="bg-gradient-to-r from-sky-500 to-blue-600 text-white p-6">
+      <div class="bg-[#111111] rounded-2xl border border-white/10 shadow-sm overflow-hidden">
+        <div class="bg-gradient-to-r from-[#111111] to-[#1a1a1a] text-white p-6">
           <h2 class="text-xl font-bold"><i class="fas fa-clipboard-check mr-2"></i>Step 3: Review & Order</h2>
           <p class="text-brand-200 text-sm mt-1">Confirm your property details and order your professional roof report</p>
         </div>
 
         <div class="p-6 space-y-5">
           <!-- Location summary -->
-          <div class="bg-gray-50 rounded-xl border border-gray-200 p-4">
-            <h4 class="text-sm font-bold text-gray-700 mb-2"><i class="fas fa-map-marker-alt text-red-500 mr-1"></i>Property</h4>
-            <p class="text-sm text-gray-800 font-medium">${orderState.address || orderState.lat + ', ' + orderState.lng}</p>
+          <div class="bg-[#0A0A0A] rounded-xl border border-white/10 p-4">
+            <h4 class="text-sm font-bold text-gray-300 mb-2"><i class="fas fa-map-marker-alt text-red-500 mr-1"></i>Property</h4>
+            <p class="text-sm text-gray-100 font-medium">${orderState.address || orderState.lat + ', ' + orderState.lng}</p>
             <p class="text-xs text-gray-500 mt-1">Pin: ${orderState.lat}, ${orderState.lng}</p>
           </div>
 
@@ -706,7 +706,7 @@ function renderReviewStep(root, progressBar) {
           </div>
           ` : ''}
           ` : `
-          <div class="bg-gray-50 rounded-xl border border-gray-200 p-3">
+          <div class="bg-[#0A0A0A] rounded-xl border border-white/10 p-3">
             <p class="text-xs text-gray-400"><i class="fas fa-info-circle mr-1"></i>No trace — standard satellite analysis will be used</p>
           </div>
           `}
@@ -717,23 +717,23 @@ function renderReviewStep(root, progressBar) {
               <i class="fas fa-file-alt text-indigo-500 mr-2"></i>What's Included in Your Report
             </h4>
             <div class="grid grid-cols-2 gap-3 text-sm">
-              <div class="flex items-start gap-2"><i class="fas fa-check text-green-500 mt-0.5"></i><span class="text-gray-700">Professional roof diagram with all dimensions</span></div>
-              <div class="flex items-start gap-2"><i class="fas fa-check text-green-500 mt-0.5"></i><span class="text-gray-700">Total roof area (footprint + true sloped)</span></div>
-              <div class="flex items-start gap-2"><i class="fas fa-check text-green-500 mt-0.5"></i><span class="text-gray-700">Edge-by-edge length breakdown</span></div>
-              <div class="flex items-start gap-2"><i class="fas fa-check text-green-500 mt-0.5"></i><span class="text-gray-700">Material estimates (bundles, rolls, etc.)</span></div>
-              <div class="flex items-start gap-2"><i class="fas fa-check text-green-500 mt-0.5"></i><span class="text-gray-700">Pitch & slope analysis per plane</span></div>
-              <div class="flex items-start gap-2"><i class="fas fa-check text-green-500 mt-0.5"></i><span class="text-gray-700">Waste calculations & advisory notes</span></div>
+              <div class="flex items-start gap-2"><i class="fas fa-check text-green-500 mt-0.5"></i><span class="text-gray-300">Professional roof diagram with all dimensions</span></div>
+              <div class="flex items-start gap-2"><i class="fas fa-check text-green-500 mt-0.5"></i><span class="text-gray-300">Total roof area (footprint + true sloped)</span></div>
+              <div class="flex items-start gap-2"><i class="fas fa-check text-green-500 mt-0.5"></i><span class="text-gray-300">Edge-by-edge length breakdown</span></div>
+              <div class="flex items-start gap-2"><i class="fas fa-check text-green-500 mt-0.5"></i><span class="text-gray-300">Material estimates (bundles, rolls, etc.)</span></div>
+              <div class="flex items-start gap-2"><i class="fas fa-check text-green-500 mt-0.5"></i><span class="text-gray-300">Pitch & slope analysis per plane</span></div>
+              <div class="flex items-start gap-2"><i class="fas fa-check text-green-500 mt-0.5"></i><span class="text-gray-300">Waste calculations & advisory notes</span></div>
             </div>
           </div>
 
           <!-- Price per square input (optional) -->
           <div class="bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl border border-amber-200 p-5">
-            <h4 class="font-semibold text-gray-700 mb-2 flex items-center">
+            <h4 class="font-semibold text-gray-300 mb-2 flex items-center">
               <i class="fas fa-dollar-sign text-amber-500 mr-2"></i>Your Price Per Square (Optional)
             </h4>
             <p class="text-xs text-gray-500 mb-3">Enter your rate per roofing square (100 sq ft) to include a cost estimate in your report.</p>
             <div>
-              <label class="block text-xs font-medium text-gray-600 mb-1">Price Per Square (CAD)</label>
+              <label class="block text-xs font-medium text-gray-400 mb-1">Price Per Square (CAD)</label>
               <div class="relative max-w-xs">
                 <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold">$</span>
                 <input type="number" step="0.01" min="0" max="9999" id="pricePerBundleInput"
@@ -750,7 +750,7 @@ function renderReviewStep(root, progressBar) {
 
           <!-- Action Buttons -->
           <div class="flex gap-3">
-            <button onclick="backToTrace()" class="py-3 px-5 bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold rounded-xl transition-all text-sm">
+            <button onclick="backToTrace()" class="py-3 px-5 bg-gray-200 hover:bg-gray-300 text-gray-300 font-semibold rounded-xl transition-all text-sm">
               <i class="fas fa-arrow-left mr-1"></i>Back
             </button>
             ${!canSubmit ? `
@@ -1126,7 +1126,7 @@ function updateTraceUI() {
           </div>
           <div class="flex justify-between items-center">
             <span class="text-gray-500 text-xs"><i class="fas fa-ruler mr-1"></i>Perimeter</span>
-            <span class="font-bold text-sm text-gray-800">${orderState.livePerimeterFt.toLocaleString()} ft</span>
+            <span class="font-bold text-sm text-gray-100">${orderState.livePerimeterFt.toLocaleString()} ft</span>
           </div>
           <div class="flex justify-between items-center">
             <span class="text-gray-500 text-xs"><i class="fas fa-th mr-1"></i>Est. Area</span>
@@ -1161,9 +1161,9 @@ function updateTraceUI() {
   document.querySelectorAll('[data-trace-mode]').forEach(btn => {
     const key = btn.getAttribute('data-trace-mode');
     if (key === orderState.traceMode) {
-      btn.className = btn.className.replace(/bg-gray-50 text-gray-600 hover:bg-gray-100/g, '').replace(/bg-gray-800 text-white shadow-md/g, '') + ' bg-gray-800 text-white shadow-md';
+      btn.className = btn.className.replace(/bg-[#0A0A0A] text-gray-400 hover:bg-[#111111]/10/g, '').replace(/bg-gray-800 text-white shadow-md/g, '') + ' bg-gray-800 text-white shadow-md';
     } else {
-      btn.className = btn.className.replace(/bg-gray-800 text-white shadow-md/g, '').replace(/bg-gray-50 text-gray-600 hover:bg-gray-100/g, '') + ' bg-gray-50 text-gray-600 hover:bg-gray-100';
+      btn.className = btn.className.replace(/bg-gray-800 text-white shadow-md/g, '').replace(/bg-[#0A0A0A] text-gray-400 hover:bg-[#111111]/10/g, '') + ' bg-[#0A0A0A] text-gray-400 hover:bg-[#111111]/10';
     }
   });
 

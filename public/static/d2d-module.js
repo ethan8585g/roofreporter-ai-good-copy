@@ -183,7 +183,7 @@
     if (!panel) return;
 
     var html = '<div class="flex items-center justify-between mb-3">' +
-      '<h3 class="font-bold text-gray-800 text-sm">Turfs <span class="text-gray-400 font-normal">(' + turfs.length + ')</span></h3>' +
+      '<h3 class="font-bold text-gray-100 text-sm">Turfs <span class="text-gray-400 font-normal">(' + turfs.length + ')</span></h3>' +
       (viewerRole === 'owner' ? '<button class="d2d-btn d2d-btn-primary d2d-btn-sm" onclick="window.d2d.startDrawTurf()"><i class="fas fa-plus mr-1"></i>New Turf</button>' : '') +
     '</div>';
 
@@ -199,7 +199,7 @@
           '<div class="flex items-start justify-between">' +
             '<div class="flex items-center gap-2">' +
               '<div style="width:14px;height:14px;border-radius:4px;background:' + (t.color || '#0ea5e9') + '"></div>' +
-              '<div><div class="font-semibold text-gray-800 text-sm">' + escH(t.name) + '</div>' +
+              '<div><div class="font-semibold text-gray-100 text-sm">' + escH(t.name) + '</div>' +
                 (t.assigned_name ? '<div class="text-xs text-gray-500"><i class="fas fa-user mr-1"></i>' + escH(t.assigned_name) + '</div>' : '<div class="text-xs text-gray-400">Unassigned</div>') +
               '</div>' +
             '</div>' +
@@ -233,7 +233,7 @@
     if (!panel) return;
 
     var html = '<div class="flex items-center justify-between mb-3">' +
-      '<h3 class="font-bold text-gray-800 text-sm">Door Pins <span class="text-gray-400 font-normal">(' + pins.length + ')</span></h3>' +
+      '<h3 class="font-bold text-gray-100 text-sm">Door Pins <span class="text-gray-400 font-normal">(' + pins.length + ')</span></h3>' +
       '<select id="pinFilter" class="d2d-select" style="width:auto;font-size:11px;padding:4px 8px" onchange="window.d2d.filterPins(this.value)">' +
         '<option value="">All Statuses</option>' +
         '<option value="yes">Yes</option>' +
@@ -278,7 +278,7 @@
         '<div class="flex items-center gap-2">' +
           '<i class="fas ' + (PIN_ICONS[p.status] || 'fa-circle') + '" style="color:' + (PIN_COLORS[p.status] || '#9ca3af') + '"></i>' +
           '<div>' +
-            '<div class="text-xs font-semibold text-gray-800">' + escH(p.address || 'Pin #' + p.id) + '</div>' +
+            '<div class="text-xs font-semibold text-gray-100">' + escH(p.address || 'Pin #' + p.id) + '</div>' +
             '<div class="text-[10px] text-gray-400">' + (p.knocked_by_name ? 'by ' + escH(p.knocked_by_name) : '') +
               (p.knocked_at ? ' · ' + fmtDate(p.knocked_at) : '') + '</div>' +
           '</div>' +
@@ -299,7 +299,7 @@
     if (!panel) return;
 
     var html = '<div class="flex items-center justify-between mb-3">' +
-      '<h3 class="font-bold text-gray-800 text-sm">Team Members <span class="text-gray-400 font-normal">(' + team.length + ')</span></h3>' +
+      '<h3 class="font-bold text-gray-100 text-sm">Team Members <span class="text-gray-400 font-normal">(' + team.length + ')</span></h3>' +
       (viewerRole === 'owner' ? '<button class="d2d-btn d2d-btn-primary d2d-btn-sm" onclick="window.d2d.addMember()"><i class="fas fa-plus mr-1"></i>Add Member</button>' : '') +
     '</div>';
 
@@ -327,7 +327,7 @@
             '<div class="flex items-center gap-2">' +
               '<div style="width:34px;height:34px;border-radius:50%;background:' + (m.color || '#3B82F6') + ';display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:13px;flex-shrink:0">' + (m.name || '?').charAt(0).toUpperCase() + '</div>' +
               '<div>' +
-                '<div class="font-semibold text-gray-800 text-sm">' + escH(m.name) + '</div>' +
+                '<div class="font-semibold text-gray-100 text-sm">' + escH(m.name) + '</div>' +
                 '<div class="text-[10px] text-gray-400 capitalize"><i class="fas ' + (m.role === 'manager' ? 'fa-user-tie' : 'fa-walking') + ' mr-1"></i>' + (m.role || 'salesperson') +
                   (m.email ? ' · ' + escH(m.email) : '') + '</div>' +
               '</div>' +
@@ -340,7 +340,7 @@
           // Stats grid
           '<div class="mt-2 grid grid-cols-4 gap-1 text-center text-[10px]">' +
             '<div class="bg-sky-50 text-sky-700 rounded px-1 py-1"><div class="font-bold text-sm">' + (m.turf_count||0) + '</div><div>Turfs</div></div>' +
-            '<div class="bg-gray-50 text-gray-700 rounded px-1 py-1"><div class="font-bold text-sm">' + totalKnocks + '</div><div>Knocks</div></div>' +
+            '<div class="bg-[#0A0A0A] text-gray-300 rounded px-1 py-1"><div class="font-bold text-sm">' + totalKnocks + '</div><div>Knocks</div></div>' +
             '<div class="bg-green-50 text-green-700 rounded px-1 py-1"><div class="font-bold text-sm">' + yesCount + '</div><div>Yes</div></div>' +
             '<div class="bg-purple-50 text-purple-700 rounded px-1 py-1"><div class="font-bold text-sm">' + convRate + '%</div><div>Rate</div></div>' +
           '</div>' +
@@ -819,16 +819,16 @@
     var overlay = document.createElement('div');
     overlay.className = 'fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4';
     overlay.id = 'd2dModal';
-    overlay.innerHTML = '<div class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">' +
-      '<div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between"><h3 class="font-bold text-gray-800"><i class="fas fa-draw-polygon mr-2 text-sky-500"></i>Save New Turf</h3><button onclick="document.getElementById(\'d2dModal\').remove();window.d2d.setTool(\'pointer\')" class="text-gray-400 hover:text-gray-600 text-lg">&times;</button></div>' +
+    overlay.innerHTML = '<div class="bg-[#111111] rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">' +
+      '<div class="px-6 py-4 border-b border-white/5 flex items-center justify-between"><h3 class="font-bold text-gray-100"><i class="fas fa-draw-polygon mr-2 text-sky-500"></i>Save New Turf</h3><button onclick="document.getElementById(\'d2dModal\').remove();window.d2d.setTool(\'pointer\')" class="text-gray-400 hover:text-gray-400 text-lg">&times;</button></div>' +
       '<div class="p-6 space-y-4">' +
-        '<div><label class="text-xs font-semibold text-gray-600 mb-1 block">Turf Name *</label><input id="turfName" class="d2d-input" placeholder="e.g., North Hill Crescent" autofocus></div>' +
-        '<div><label class="text-xs font-semibold text-gray-600 mb-1 block">Description</label><input id="turfDesc" class="d2d-input" placeholder="Optional description..."></div>' +
-        '<div><label class="text-xs font-semibold text-gray-600 mb-1 block">Assign To</label><select id="turfAssign" class="d2d-select">' + teamOpts + '</select></div>' +
-        '<div><label class="text-xs font-semibold text-gray-600 mb-1 block">Color</label><div class="d2d-color-grid" id="colorGrid">' + colorGrid + '</div></div>' +
+        '<div><label class="text-xs font-semibold text-gray-400 mb-1 block">Turf Name *</label><input id="turfName" class="d2d-input" placeholder="e.g., North Hill Crescent" autofocus></div>' +
+        '<div><label class="text-xs font-semibold text-gray-400 mb-1 block">Description</label><input id="turfDesc" class="d2d-input" placeholder="Optional description..."></div>' +
+        '<div><label class="text-xs font-semibold text-gray-400 mb-1 block">Assign To</label><select id="turfAssign" class="d2d-select">' + teamOpts + '</select></div>' +
+        '<div><label class="text-xs font-semibold text-gray-400 mb-1 block">Color</label><div class="d2d-color-grid" id="colorGrid">' + colorGrid + '</div></div>' +
         '<div class="text-xs text-gray-400"><i class="fas fa-info-circle mr-1"></i>' + polygon.length + ' boundary points drawn</div>' +
       '</div>' +
-      '<div class="px-6 py-4 border-t border-gray-100 flex justify-end gap-2">' +
+      '<div class="px-6 py-4 border-t border-white/5 flex justify-end gap-2">' +
         '<button onclick="document.getElementById(\'d2dModal\').remove();window.d2d.setTool(\'pointer\')" class="d2d-btn d2d-btn-outline">Cancel</button>' +
         '<button id="saveTurfBtn" class="d2d-btn d2d-btn-primary"><i class="fas fa-save mr-1"></i>Save Turf</button>' +
       '</div>' +
@@ -943,23 +943,23 @@
     var overlay = document.createElement('div');
     overlay.className = 'fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4';
     overlay.id = 'd2dModal';
-    overlay.innerHTML = '<div class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">' +
-      '<div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between"><h3 class="font-bold text-gray-800"><i class="fas fa-map-pin mr-2 text-sky-500"></i>Place Door Pin</h3><button onclick="document.getElementById(\'d2dModal\').remove()" class="text-gray-400 hover:text-gray-600 text-lg">&times;</button></div>' +
+    overlay.innerHTML = '<div class="bg-[#111111] rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">' +
+      '<div class="px-6 py-4 border-b border-white/5 flex items-center justify-between"><h3 class="font-bold text-gray-100"><i class="fas fa-map-pin mr-2 text-sky-500"></i>Place Door Pin</h3><button onclick="document.getElementById(\'d2dModal\').remove()" class="text-gray-400 hover:text-gray-400 text-lg">&times;</button></div>' +
       '<div class="p-6 space-y-4">' +
-        '<div><label class="text-xs font-semibold text-gray-600 mb-1 block">Address</label><input id="pinAddress" class="d2d-input" value="' + escAttr(address) + '"></div>' +
-        (inTurf ? '<div class="text-xs text-sky-600 bg-sky-50 rounded-lg p-2"><i class="fas fa-map mr-1"></i>Inside turf: <b>' + escH(inTurf.name) + '</b></div>' : '<div class="text-xs text-gray-400 bg-gray-50 rounded-lg p-2"><i class="fas fa-exclamation-triangle mr-1 text-amber-500"></i>Not inside any turf</div>') +
-        '<div><label class="text-xs font-semibold text-gray-600 mb-1 block">Status</label>' +
+        '<div><label class="text-xs font-semibold text-gray-400 mb-1 block">Address</label><input id="pinAddress" class="d2d-input" value="' + escAttr(address) + '"></div>' +
+        (inTurf ? '<div class="text-xs text-sky-600 bg-sky-50 rounded-lg p-2"><i class="fas fa-map mr-1"></i>Inside turf: <b>' + escH(inTurf.name) + '</b></div>' : '<div class="text-xs text-gray-400 bg-[#0A0A0A] rounded-lg p-2"><i class="fas fa-exclamation-triangle mr-1 text-amber-500"></i>Not inside any turf</div>') +
+        '<div><label class="text-xs font-semibold text-gray-400 mb-1 block">Status</label>' +
           '<div class="grid grid-cols-2 gap-2" id="pinStatusGrid">' +
             '<div class="border-2 rounded-lg p-2 cursor-pointer text-center text-xs font-semibold" data-status="not_knocked" style="border-color:#9ca3af;background:#f9fafb"><i class="fas fa-circle mr-1" style="color:#9ca3af"></i>Not Knocked</div>' +
-            '<div class="border-2 rounded-lg p-2 cursor-pointer text-center text-xs font-semibold border-gray-200" data-status="yes"><i class="fas fa-check-circle mr-1" style="color:#22c55e"></i>Yes</div>' +
-            '<div class="border-2 rounded-lg p-2 cursor-pointer text-center text-xs font-semibold border-gray-200" data-status="no"><i class="fas fa-times-circle mr-1" style="color:#ef4444"></i>No</div>' +
-            '<div class="border-2 rounded-lg p-2 cursor-pointer text-center text-xs font-semibold border-gray-200" data-status="no_answer"><i class="fas fa-question-circle mr-1" style="color:#f59e0b"></i>No Answer</div>' +
+            '<div class="border-2 rounded-lg p-2 cursor-pointer text-center text-xs font-semibold border-white/10" data-status="yes"><i class="fas fa-check-circle mr-1" style="color:#22c55e"></i>Yes</div>' +
+            '<div class="border-2 rounded-lg p-2 cursor-pointer text-center text-xs font-semibold border-white/10" data-status="no"><i class="fas fa-times-circle mr-1" style="color:#ef4444"></i>No</div>' +
+            '<div class="border-2 rounded-lg p-2 cursor-pointer text-center text-xs font-semibold border-white/10" data-status="no_answer"><i class="fas fa-question-circle mr-1" style="color:#f59e0b"></i>No Answer</div>' +
           '</div>' +
         '</div>' +
-        '<div><label class="text-xs font-semibold text-gray-600 mb-1 block">Knocked By</label><select id="pinKnockedBy" class="d2d-select">' + memberOpts + '</select></div>' +
-        '<div><label class="text-xs font-semibold text-gray-600 mb-1 block">Notes</label><textarea id="pinNotes" class="d2d-input" rows="2" placeholder="Optional notes..."></textarea></div>' +
+        '<div><label class="text-xs font-semibold text-gray-400 mb-1 block">Knocked By</label><select id="pinKnockedBy" class="d2d-select">' + memberOpts + '</select></div>' +
+        '<div><label class="text-xs font-semibold text-gray-400 mb-1 block">Notes</label><textarea id="pinNotes" class="d2d-input" rows="2" placeholder="Optional notes..."></textarea></div>' +
       '</div>' +
-      '<div class="px-6 py-4 border-t border-gray-100 flex justify-end gap-2">' +
+      '<div class="px-6 py-4 border-t border-white/5 flex justify-end gap-2">' +
         '<button onclick="document.getElementById(\'d2dModal\').remove()" class="d2d-btn d2d-btn-outline">Cancel</button>' +
         '<button id="savePinBtn" class="d2d-btn d2d-btn-primary"><i class="fas fa-map-pin mr-1"></i>Save Pin</button>' +
       '</div>' +
@@ -1056,15 +1056,15 @@
     var overlay = document.createElement('div');
     overlay.className = 'fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4';
     overlay.id = 'd2dModal';
-    overlay.innerHTML = '<div class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">' +
-      '<div class="px-6 py-4 border-b border-gray-100"><h3 class="font-bold text-gray-800"><i class="fas fa-pen mr-2 text-sky-500"></i>Edit Turf</h3></div>' +
+    overlay.innerHTML = '<div class="bg-[#111111] rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">' +
+      '<div class="px-6 py-4 border-b border-white/5"><h3 class="font-bold text-gray-100"><i class="fas fa-pen mr-2 text-sky-500"></i>Edit Turf</h3></div>' +
       '<div class="p-6 space-y-4">' +
-        '<div><label class="text-xs font-semibold text-gray-600 mb-1 block">Name</label><input id="editTurfName" class="d2d-input" value="' + escAttr(turf.name) + '"></div>' +
-        '<div><label class="text-xs font-semibold text-gray-600 mb-1 block">Description</label><input id="editTurfDesc" class="d2d-input" value="' + escAttr(turf.description || '') + '"></div>' +
-        '<div><label class="text-xs font-semibold text-gray-600 mb-1 block">Assign To</label><select id="editTurfAssign" class="d2d-select">' + teamOpts + '</select></div>' +
-        '<div><label class="text-xs font-semibold text-gray-600 mb-1 block">Color</label><div class="d2d-color-grid" id="editColorGrid">' + colorGrid + '</div></div>' +
+        '<div><label class="text-xs font-semibold text-gray-400 mb-1 block">Name</label><input id="editTurfName" class="d2d-input" value="' + escAttr(turf.name) + '"></div>' +
+        '<div><label class="text-xs font-semibold text-gray-400 mb-1 block">Description</label><input id="editTurfDesc" class="d2d-input" value="' + escAttr(turf.description || '') + '"></div>' +
+        '<div><label class="text-xs font-semibold text-gray-400 mb-1 block">Assign To</label><select id="editTurfAssign" class="d2d-select">' + teamOpts + '</select></div>' +
+        '<div><label class="text-xs font-semibold text-gray-400 mb-1 block">Color</label><div class="d2d-color-grid" id="editColorGrid">' + colorGrid + '</div></div>' +
       '</div>' +
-      '<div class="px-6 py-4 border-t border-gray-100 flex justify-end gap-2">' +
+      '<div class="px-6 py-4 border-t border-white/5 flex justify-end gap-2">' +
         '<button onclick="document.getElementById(\'d2dModal\').remove()" class="d2d-btn d2d-btn-outline">Cancel</button>' +
         '<button id="updateTurfBtn" class="d2d-btn d2d-btn-primary"><i class="fas fa-save mr-1"></i>Update</button>' +
       '</div>' +
@@ -1166,13 +1166,13 @@
 
   function buildPermissionsHtml(perms, prefix) {
     var d2dAll = !perms || perms.d2d !== 'assigned';
-    return '<div class="mt-1 p-3 bg-gray-50 rounded-xl border border-gray-200 space-y-3">' +
+    return '<div class="mt-1 p-3 bg-[#0A0A0A] rounded-xl border border-white/10 space-y-3">' +
       // D2D turf visibility
       '<div>' +
         '<p class="text-[11px] font-semibold text-gray-500 mb-1.5">D2D Turf Visibility</p>' +
         '<div class="flex gap-2">' +
-          '<button type="button" data-perm="d2d" data-val="all" class="' + prefix + '-perm-d2d flex-1 text-xs py-1.5 rounded-lg border-2 font-semibold transition-all ' + (d2dAll ? 'border-sky-500 bg-sky-50 text-sky-700' : 'border-gray-200 text-gray-500') + '"><i class="fas fa-globe mr-1"></i>All Turfs</button>' +
-          '<button type="button" data-perm="d2d" data-val="assigned" class="' + prefix + '-perm-d2d flex-1 text-xs py-1.5 rounded-lg border-2 font-semibold transition-all ' + (!d2dAll ? 'border-sky-500 bg-sky-50 text-sky-700' : 'border-gray-200 text-gray-500') + '"><i class="fas fa-user-tag mr-1"></i>Assigned Only</button>' +
+          '<button type="button" data-perm="d2d" data-val="all" class="' + prefix + '-perm-d2d flex-1 text-xs py-1.5 rounded-lg border-2 font-semibold transition-all ' + (d2dAll ? 'border-sky-500 bg-sky-50 text-sky-700' : 'border-white/10 text-gray-500') + '"><i class="fas fa-globe mr-1"></i>All Turfs</button>' +
+          '<button type="button" data-perm="d2d" data-val="assigned" class="' + prefix + '-perm-d2d flex-1 text-xs py-1.5 rounded-lg border-2 font-semibold transition-all ' + (!d2dAll ? 'border-sky-500 bg-sky-50 text-sky-700' : 'border-white/10 text-gray-500') + '"><i class="fas fa-user-tag mr-1"></i>Assigned Only</button>' +
         '</div>' +
       '</div>' +
       // Feature toggles
@@ -1186,12 +1186,12 @@
   }
 
   function buildPermToggle(prefix, key, icon, label, checked) {
-    return '<label class="flex items-center gap-2 cursor-pointer p-2 bg-white rounded-lg border border-gray-100">' +
+    return '<label class="flex items-center gap-2 cursor-pointer p-2 bg-[#111111] rounded-lg border border-white/5">' +
       '<div class="relative flex-shrink-0">' +
         '<input type="checkbox" id="' + prefix + '-perm-' + key + '" class="sr-only peer" ' + (checked ? 'checked' : '') + '>' +
-        '<div class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[\'\'] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-sky-500"></div>' +
+        '<div class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[\'\'] after:absolute after:top-[2px] after:left-[2px] after:bg-[#111111] after:border-white/15 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-sky-500"></div>' +
       '</div>' +
-      '<span class="text-xs font-medium text-gray-700"><i class="fas ' + icon + ' mr-1 text-gray-400"></i>' + label + '</span>' +
+      '<span class="text-xs font-medium text-gray-300"><i class="fas ' + icon + ' mr-1 text-gray-400"></i>' + label + '</span>' +
     '</label>';
   }
 
@@ -1214,10 +1214,10 @@
     document.querySelectorAll('.' + prefix + '-perm-d2d').forEach(function(btn) {
       btn.addEventListener('click', function() {
         document.querySelectorAll('.' + prefix + '-perm-d2d').forEach(function(b) {
-          b.className = b.className.replace(/border-sky-500 bg-sky-50 text-sky-700/g, '').replace(/border-gray-200 text-gray-500/g, '').trim();
-          b.classList.add('border-gray-200', 'text-gray-500');
+          b.className = b.className.replace(/border-sky-500 bg-sky-50 text-sky-700/g, '').replace(/border-white/10 text-gray-500/g, '').trim();
+          b.classList.add('border-white/10', 'text-gray-500');
         });
-        btn.classList.remove('border-gray-200', 'text-gray-500');
+        btn.classList.remove('border-white/10', 'text-gray-500');
         btn.classList.add('border-sky-500', 'bg-sky-50', 'text-sky-700');
       });
     });
@@ -1232,36 +1232,36 @@
     var overlay = document.createElement('div');
     overlay.className = 'fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4';
     overlay.id = 'd2dModal';
-    overlay.innerHTML = '<div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden" style="max-height:90vh;display:flex;flex-direction:column">' +
-      '<div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between flex-shrink-0">' +
-        '<h3 class="font-bold text-gray-800"><i class="fas fa-user-plus mr-2 text-sky-500"></i>Add Team Member</h3>' +
-        '<button onclick="document.getElementById(\'d2dModal\').remove()" class="text-gray-400 hover:text-gray-600 text-lg">&times;</button>' +
+    overlay.innerHTML = '<div class="bg-[#111111] rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden" style="max-height:90vh;display:flex;flex-direction:column">' +
+      '<div class="px-6 py-4 border-b border-white/5 flex items-center justify-between flex-shrink-0">' +
+        '<h3 class="font-bold text-gray-100"><i class="fas fa-user-plus mr-2 text-sky-500"></i>Add Team Member</h3>' +
+        '<button onclick="document.getElementById(\'d2dModal\').remove()" class="text-gray-400 hover:text-gray-400 text-lg">&times;</button>' +
       '</div>' +
       '<div class="p-6 space-y-4 overflow-y-auto flex-1">' +
         // Basic info
         '<div class="grid grid-cols-2 gap-3">' +
-          '<div class="col-span-2"><label class="text-xs font-semibold text-gray-600 mb-1 block">Full Name *</label><input id="memberName" class="d2d-input" placeholder="e.g. John Smith" autofocus></div>' +
-          '<div><label class="text-xs font-semibold text-gray-600 mb-1 block">Phone</label><input id="memberPhone" class="d2d-input" type="tel" placeholder="(555) 123-4567"></div>' +
-          '<div><label class="text-xs font-semibold text-gray-600 mb-1 block">Role</label><select id="memberRole" class="d2d-select"><option value="salesperson">Salesperson</option><option value="manager">Manager</option></select></div>' +
+          '<div class="col-span-2"><label class="text-xs font-semibold text-gray-400 mb-1 block">Full Name *</label><input id="memberName" class="d2d-input" placeholder="e.g. John Smith" autofocus></div>' +
+          '<div><label class="text-xs font-semibold text-gray-400 mb-1 block">Phone</label><input id="memberPhone" class="d2d-input" type="tel" placeholder="(555) 123-4567"></div>' +
+          '<div><label class="text-xs font-semibold text-gray-400 mb-1 block">Role</label><select id="memberRole" class="d2d-select"><option value="salesperson">Salesperson</option><option value="manager">Manager</option></select></div>' +
         '</div>' +
         // Login credentials section
         '<div class="border border-dashed border-sky-300 bg-sky-50/50 rounded-xl p-4">' +
           '<p class="text-xs font-bold text-sky-700 mb-3"><i class="fas fa-key mr-1.5"></i>Login Credentials <span class="font-normal text-sky-500">(optional — set so they can log in to the platform)</span></p>' +
           '<div class="space-y-2">' +
-            '<div><label class="text-xs font-semibold text-gray-600 mb-1 block">Email / Username</label><input id="memberEmail" class="d2d-input" type="email" placeholder="their-email@example.com"></div>' +
-            '<div><label class="text-xs font-semibold text-gray-600 mb-1 block">Password</label><input id="memberPassword" class="d2d-input" type="password" placeholder="Min 6 characters"></div>' +
+            '<div><label class="text-xs font-semibold text-gray-400 mb-1 block">Email / Username</label><input id="memberEmail" class="d2d-input" type="email" placeholder="their-email@example.com"></div>' +
+            '<div><label class="text-xs font-semibold text-gray-400 mb-1 block">Password</label><input id="memberPassword" class="d2d-input" type="password" placeholder="Min 6 characters"></div>' +
           '</div>' +
           '<p class="text-[10px] text-sky-600 mt-2"><i class="fas fa-info-circle mr-1"></i>They will log in at /customer/login with this email &amp; password and access your account\'s D2D data.</p>' +
         '</div>' +
         // Permissions
         '<div>' +
-          '<label class="text-xs font-semibold text-gray-600 mb-1 block"><i class="fas fa-shield-alt mr-1 text-gray-400"></i>Access Permissions</label>' +
+          '<label class="text-xs font-semibold text-gray-400 mb-1 block"><i class="fas fa-shield-alt mr-1 text-gray-400"></i>Access Permissions</label>' +
           buildPermissionsHtml(null, 'new') +
         '</div>' +
         // Color
-        '<div><label class="text-xs font-semibold text-gray-600 mb-1 block">Map Color</label><div class="d2d-color-grid" id="memberColorGrid">' + colorGrid + '</div></div>' +
+        '<div><label class="text-xs font-semibold text-gray-400 mb-1 block">Map Color</label><div class="d2d-color-grid" id="memberColorGrid">' + colorGrid + '</div></div>' +
       '</div>' +
-      '<div class="px-6 py-4 border-t border-gray-100 flex justify-end gap-2 flex-shrink-0">' +
+      '<div class="px-6 py-4 border-t border-white/5 flex justify-end gap-2 flex-shrink-0">' +
         '<button onclick="document.getElementById(\'d2dModal\').remove()" class="d2d-btn d2d-btn-outline">Cancel</button>' +
         '<button id="saveMemberBtn" class="d2d-btn d2d-btn-primary"><i class="fas fa-save mr-1"></i>Add Member</button>' +
       '</div>' +
@@ -1321,34 +1321,34 @@
     var overlay = document.createElement('div');
     overlay.className = 'fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4';
     overlay.id = 'd2dModal';
-    overlay.innerHTML = '<div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden" style="max-height:90vh;display:flex;flex-direction:column">' +
-      '<div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between flex-shrink-0">' +
-        '<h3 class="font-bold text-gray-800"><i class="fas fa-user-edit mr-2 text-sky-500"></i>Edit ' + escH(m.name) + '</h3>' +
-        '<button onclick="document.getElementById(\'d2dModal\').remove()" class="text-gray-400 hover:text-gray-600 text-lg">&times;</button>' +
+    overlay.innerHTML = '<div class="bg-[#111111] rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden" style="max-height:90vh;display:flex;flex-direction:column">' +
+      '<div class="px-6 py-4 border-b border-white/5 flex items-center justify-between flex-shrink-0">' +
+        '<h3 class="font-bold text-gray-100"><i class="fas fa-user-edit mr-2 text-sky-500"></i>Edit ' + escH(m.name) + '</h3>' +
+        '<button onclick="document.getElementById(\'d2dModal\').remove()" class="text-gray-400 hover:text-gray-400 text-lg">&times;</button>' +
       '</div>' +
       '<div class="p-6 space-y-4 overflow-y-auto flex-1">' +
         '<div class="grid grid-cols-2 gap-3">' +
-          '<div class="col-span-2"><label class="text-xs font-semibold text-gray-600 mb-1 block">Name</label><input id="editMemberName" class="d2d-input" value="' + escAttr(m.name) + '"></div>' +
-          '<div><label class="text-xs font-semibold text-gray-600 mb-1 block">Phone</label><input id="editMemberPhone" class="d2d-input" type="tel" value="' + escAttr(m.phone || '') + '"></div>' +
-          '<div><label class="text-xs font-semibold text-gray-600 mb-1 block">Role</label><select id="editMemberRole" class="d2d-select"><option value="salesperson"' + (m.role !== 'manager' ? ' selected' : '') + '>Salesperson</option><option value="manager"' + (m.role === 'manager' ? ' selected' : '') + '>Manager</option></select></div>' +
+          '<div class="col-span-2"><label class="text-xs font-semibold text-gray-400 mb-1 block">Name</label><input id="editMemberName" class="d2d-input" value="' + escAttr(m.name) + '"></div>' +
+          '<div><label class="text-xs font-semibold text-gray-400 mb-1 block">Phone</label><input id="editMemberPhone" class="d2d-input" type="tel" value="' + escAttr(m.phone || '') + '"></div>' +
+          '<div><label class="text-xs font-semibold text-gray-400 mb-1 block">Role</label><select id="editMemberRole" class="d2d-select"><option value="salesperson"' + (m.role !== 'manager' ? ' selected' : '') + '>Salesperson</option><option value="manager"' + (m.role === 'manager' ? ' selected' : '') + '>Manager</option></select></div>' +
         '</div>' +
         // Login credentials
         '<div class="border border-dashed border-sky-300 bg-sky-50/50 rounded-xl p-4">' +
           '<p class="text-xs font-bold text-sky-700 mb-3"><i class="fas fa-key mr-1.5"></i>Login Credentials</p>' +
           '<div class="space-y-2">' +
-            '<div><label class="text-xs font-semibold text-gray-600 mb-1 block">Email / Username</label><input id="editMemberEmail" class="d2d-input" type="email" value="' + escAttr(m.email || '') + '"></div>' +
-            '<div><label class="text-xs font-semibold text-gray-600 mb-1 block">New Password <span class="font-normal text-gray-400">(leave blank to keep existing)</span></label><input id="editMemberPassword" class="d2d-input" type="password" placeholder="Min 6 characters"></div>' +
+            '<div><label class="text-xs font-semibold text-gray-400 mb-1 block">Email / Username</label><input id="editMemberEmail" class="d2d-input" type="email" value="' + escAttr(m.email || '') + '"></div>' +
+            '<div><label class="text-xs font-semibold text-gray-400 mb-1 block">New Password <span class="font-normal text-gray-400">(leave blank to keep existing)</span></label><input id="editMemberPassword" class="d2d-input" type="password" placeholder="Min 6 characters"></div>' +
           '</div>' +
         '</div>' +
         // Permissions
         '<div>' +
-          '<label class="text-xs font-semibold text-gray-600 mb-1 block"><i class="fas fa-shield-alt mr-1 text-gray-400"></i>Access Permissions</label>' +
+          '<label class="text-xs font-semibold text-gray-400 mb-1 block"><i class="fas fa-shield-alt mr-1 text-gray-400"></i>Access Permissions</label>' +
           buildPermissionsHtml(perms, 'edit') +
         '</div>' +
         // Color
-        '<div><label class="text-xs font-semibold text-gray-600 mb-1 block">Map Color</label><div class="d2d-color-grid" id="editMemberColorGrid">' + colorGrid + '</div></div>' +
+        '<div><label class="text-xs font-semibold text-gray-400 mb-1 block">Map Color</label><div class="d2d-color-grid" id="editMemberColorGrid">' + colorGrid + '</div></div>' +
       '</div>' +
-      '<div class="px-6 py-4 border-t border-gray-100 flex justify-end gap-2 flex-shrink-0">' +
+      '<div class="px-6 py-4 border-t border-white/5 flex justify-end gap-2 flex-shrink-0">' +
         '<button onclick="document.getElementById(\'d2dModal\').remove()" class="d2d-btn d2d-btn-outline">Cancel</button>' +
         '<button id="updateMemberBtn" class="d2d-btn d2d-btn-primary"><i class="fas fa-save mr-1"></i>Update</button>' +
       '</div>' +
