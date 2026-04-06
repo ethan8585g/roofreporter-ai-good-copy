@@ -43,6 +43,7 @@ document.addEventListener('DOMContentLoaded', () => {
     showPitchToCustomer: true,
     showAreaToCustomer: true,
     showLineItemsToCustomer: false,
+    customerPriceOverride: null,
     attachments: {
       includeRoofReport: true,
       includeMaterialBOM: true,
@@ -93,7 +94,10 @@ document.addEventListener('DOMContentLoaded', () => {
       payment_terms_text: 'A 30% deposit is required to schedule the work. Balance due upon completion. Payment accepted via cheque, e-transfer, or credit card.',
       notes: '',
       attached_report_id: null,
-      order_id: null
+      order_id: null,
+      proposal_title: 'Roof Replacement Proposal',
+      proposal_description: '',
+      company_logo_url: ''
     };
   }
 
@@ -277,6 +281,10 @@ document.addEventListener('DOMContentLoaded', () => {
     var customerTotal = state.pricingEngineMode === 'per_square_customer' && state.selectedReport ?
       Math.ceil((state.selectedReport.roof_area_sqft || 0) / 100) * (state.customerPricePerSquare || 0) :
       totalCost * (1 + markup / 100);
+    // Apply manual override if set
+    if (state.customerPriceOverride !== null && state.customerPriceOverride > 0) {
+      customerTotal = state.customerPriceOverride;
+    }
     var profit = customerTotal - totalCost;
     var margin = customerTotal > 0 ? (profit / customerTotal * 100) : 0;
     var squares = state.selectedReport ? Math.ceil((state.selectedReport.roof_area_sqft || 0) / 100) : 0;
@@ -313,7 +321,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // Profit summary bar
       '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;padding:16px;margin-bottom:20px;display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:16px;text-align:center">' +
         '<div><div style="color:var(--text-muted);font-size:10px;text-transform:uppercase;letter-spacing:1px">Your Cost</div><div style="color:#ef4444;font-size:20px;font-weight:800">$' + totalCost.toFixed(2) + '</div></div>' +
-        '<div><div style="color:var(--text-muted);font-size:10px;text-transform:uppercase;letter-spacing:1px">Customer Price</div><div style="color:var(--text-primary);font-size:20px;font-weight:800">$' + customerTotal.toFixed(2) + '</div></div>' +
+        '<div><div style="color:var(--text-muted);font-size:10px;text-transform:uppercase;letter-spacing:1px">Customer Price <span style="font-size:8px;opacity:0.6">(editable)</span></div><div style="display:flex;align-items:center;justify-content:center;gap:2px"><span style="color:var(--text-primary);font-size:20px;font-weight:800">$</span><input type="number" value="' + (state.customerPriceOverride !== null ? state.customerPriceOverride : customerTotal).toFixed(2) + '" onchange="window.__pbState.customerPriceOverride=Number(this.value)||null;window.__pbRender()" style="width:100px;background:transparent;border:none;border-bottom:2px solid var(--accent);color:var(--text-primary);font-size:20px;font-weight:800;text-align:center;padding:0"></div></div>' +
         '<div><div style="color:var(--text-muted);font-size:10px;text-transform:uppercase;letter-spacing:1px">Your Profit</div><div style="color:#22c55e;font-size:20px;font-weight:800">$' + profit.toFixed(2) + '</div></div>' +
         '<div><div style="color:var(--text-muted);font-size:10px;text-transform:uppercase;letter-spacing:1px">Margin</div><div style="color:#22c55e;font-size:20px;font-weight:800">' + margin.toFixed(1) + '%</div></div>' +
       '</div>' +
@@ -381,6 +389,21 @@ document.addEventListener('DOMContentLoaded', () => {
               '<label style="display:flex;align-items:center;gap:8px;padding:8px;background:var(--bg-elevated);border-radius:8px;cursor:pointer;font-size:13px;color:var(--text-secondary)"><input type="checkbox" ' + (state.showMaterialsToCustomer ? 'checked' : '') + ' onchange="window.__pbState.showMaterialsToCustomer=this.checked;window.__pbRender()"> Page 3: Material Take-Off (BOM)</label>' +
               '<label style="display:flex;align-items:center;gap:8px;padding:8px;background:var(--bg-elevated);border-radius:8px;cursor:pointer;font-size:13px;color:var(--text-secondary)"><input type="checkbox" ' + (state.showEdgesToCustomer ? 'checked' : '') + ' onchange="window.__pbState.showEdgesToCustomer=this.checked;window.__pbRender()"> Page 4: Edge Breakdown Details</label>' +
               '<label style="display:flex;align-items:center;gap:8px;padding:8px;background:var(--bg-elevated);border-radius:8px;cursor:pointer;font-size:13px;color:var(--text-secondary)"><input type="checkbox" ' + (state.showSolarToCustomer ? 'checked' : '') + ' onchange="window.__pbState.showSolarToCustomer=this.checked;window.__pbRender()"> Page 5: Quality & Validation Notes</label>' +
+            '</div>' +
+          '</div>' +
+
+          // Proposal customization
+          '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;padding:16px;margin-bottom:16px">' +
+            '<h4 style="color:var(--text-primary);font-size:14px;font-weight:700;margin-bottom:12px"><i class="fas fa-paint-brush" style="color:var(--accent);margin-right:6px"></i>Customize Proposal</h4>' +
+            '<div style="display:flex;flex-direction:column;gap:10px">' +
+              '<div><label style="color:var(--text-muted);font-size:11px;display:block;margin-bottom:3px">Proposal Title</label><input id="dash-prop-title" value="' + (f.proposal_title || 'Roof Replacement Proposal').replace(/"/g, '&quot;') + '" placeholder="Roof Replacement Proposal" style="width:100%;background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:8px;padding:8px;color:var(--text-primary);font-size:14px;font-weight:600"></div>' +
+              '<div><label style="color:var(--text-muted);font-size:11px;display:block;margin-bottom:3px">Proposal Description / Intro</label><textarea id="dash-prop-desc" placeholder="Thank you for the opportunity to provide this estimate for your roofing project..." style="width:100%;background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:8px;padding:8px;color:var(--text-primary);font-size:13px;height:60px;resize:vertical">' + (f.proposal_description || '') + '</textarea></div>' +
+              '<div><label style="color:var(--text-muted);font-size:11px;display:block;margin-bottom:3px">Company Logo URL <span style="opacity:0.5">(optional)</span></label>' +
+                '<div style="display:flex;gap:8px;align-items:center">' +
+                  '<input id="dash-logo-url" value="' + (f.company_logo_url || '').replace(/"/g, '&quot;') + '" placeholder="https://yoursite.com/logo.png" style="flex:1;background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:8px;padding:8px;color:var(--text-primary);font-size:12px">' +
+                  (f.company_logo_url ? '<img src="' + f.company_logo_url + '" style="width:36px;height:36px;border-radius:6px;object-fit:contain;border:1px solid var(--border-color)" onerror="this.style.display=\'none\'">' : '') +
+                '</div>' +
+              '</div>' +
             '</div>' +
           '</div>' +
 
@@ -851,6 +874,9 @@ document.addEventListener('DOMContentLoaded', () => {
     </div>
 
     <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden max-w-4xl mx-auto print:shadow-none print:border-none">
+      ${state.form.company_logo_url ? '<div style="text-align:center;padding:24px 24px 0"><img src="' + state.form.company_logo_url + '" style="max-height:60px;max-width:200px;object-fit:contain" onerror="this.style.display=\'none\'"></div>' : ''}
+      <h1 style="text-align:center;color:#1a1a2e;font-size:22px;font-weight:800;margin:16px 0 8px">${state.form.proposal_title || 'Roof Replacement Proposal'}</h1>
+      ${state.form.proposal_description ? '<p style="text-align:center;color:#6b7280;font-size:13px;max-width:500px;margin:0 auto 20px;line-height:1.6">' + state.form.proposal_description + '</p>' : ''}
       <!-- Header -->
       <div class="bg-gradient-to-r from-sky-500 to-blue-600 text-white p-8">
         <div class="flex justify-between items-start">
@@ -1355,6 +1381,7 @@ document.addEventListener('DOMContentLoaded', () => {
       state.pricingEngineMode = 'markup';
       state.customerPricePerSquare = 0;
       state.showLineItemsToCustomer = false;
+      state.customerPriceOverride = null;
       state.showMaterialsToCustomer = false;
       state.showEdgesToCustomer = false;
       state.showSolarToCustomer = false;
@@ -1574,6 +1601,9 @@ document.addEventListener('DOMContentLoaded', () => {
       el = document.getElementById('dash-warranty'); if (el) state.attachments.warrantyDoc = el.value;
       el = document.getElementById('dash-wcb'); if (el) state.attachments.wcbCoverage = el.value;
       el = document.getElementById('dash-custom'); if (el) state.attachments.customAttachment = el.value;
+      el = document.getElementById('dash-prop-title'); if (el) state.form.proposal_title = el.value;
+      el = document.getElementById('dash-prop-desc'); if (el) state.form.proposal_description = el.value;
+      el = document.getElementById('dash-logo-url'); if (el) state.form.company_logo_url = el.value;
     },
     collectDashboardAndSend() {
       window._pb.collectDashboardData();
