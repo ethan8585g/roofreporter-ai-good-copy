@@ -104,6 +104,42 @@ document.addEventListener('DOMContentLoaded', () => {
   load();
   checkPrereqs();
 
+  // Check if material calculator sent us data
+  (function checkMaterialData() {
+    try {
+      var saved = localStorage.getItem('mc_proposal_materials');
+      if (saved) {
+        var data = JSON.parse(saved);
+        localStorage.removeItem('mc_proposal_materials'); // consume it
+        state.pendingMaterialData = data;
+        // Auto-start proposal creation with this material data
+        setTimeout(function() {
+          if (state.pendingMaterialData) {
+            var md = state.pendingMaterialData;
+            state.mode = 'create';
+            state.createStep = 1; // start at report selection
+            // Pre-select the report if we have an ID
+            if (md.source_report_id) {
+              state.form.attached_report_id = md.source_report_id;
+              // Find matching report in state.reports
+              var match = state.reports.find(function(r) { return String(r.id) === String(md.source_report_id); });
+              if (match) state.selectedReport = match;
+            }
+            // Pre-fill items from material calc
+            if (md.items && md.items.length > 0) {
+              state.form.items = md.items.map(function(item) {
+                return { description: item.description || '', quantity: item.quantity || 1, unit: item.unit || 'each', unit_price: item.unit_price || 0, is_taxable: true };
+              });
+            }
+            if (md.address) state.form.property_address = md.address;
+            state.pendingMaterialData = null;
+            render();
+          }
+        }, 1500); // wait for load() to finish fetching reports
+      }
+    } catch(e) {}
+  })();
+
   async function load() {
     state.loading = true;
     render();

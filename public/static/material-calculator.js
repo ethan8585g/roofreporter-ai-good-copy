@@ -416,8 +416,11 @@ function renderActionBar() {
     '<button onclick="mcAddToInvoice()" class="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl text-sm transition-colors shadow-sm">' +
       '<i class="fas fa-file-invoice-dollar"></i>Add to Invoice' +
     '</button>' +
-    '<button onclick="mcCreateProposal()" class="flex items-center gap-2 px-5 py-2.5 bg-blue-500/15 hover:bg-blue-500/15 text-white font-semibold rounded-xl text-sm transition-colors shadow-sm">' +
-      '<i class="fas fa-file-invoice mr-1"></i>Go to Proposals <i class="fas fa-arrow-right text-xs ml-1"></i>' +
+    '<button onclick="mcCreateProposal()" class="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl text-sm transition-colors shadow-sm">' +
+      '<i class="fas fa-file-signature mr-1"></i>Create Proposal with Materials <i class="fas fa-arrow-right text-xs ml-1"></i>' +
+    '</button>' +
+    '<button onclick="mcSavePDF()" class="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl text-sm transition-colors shadow-sm">' +
+      '<i class="fas fa-download mr-1"></i>Save Material Order PDF' +
     '</button>' +
     '<button onclick="window.print()" class="flex items-center gap-2 px-5 py-2.5 bg-white/5 hover:bg-gray-200 text-gray-300 font-medium rounded-xl text-sm transition-colors">' +
       '<i class="fas fa-print"></i>Print' +
@@ -561,8 +564,13 @@ function mcCreateProposal() {
     total_area_sqft: Math.round(mcState.report.total_true_area_sqft || 0),
     pitch: mcState.report.roof_pitch_ratio || ''
   }));
-  mcToast('Redirecting to Proposals...');
+  mcToast('Materials saved! Redirecting to Proposals...');
   window.location.href = '/customer/proposals';
+}
+
+function mcSavePDF() {
+  mcToast('Opening print dialog — choose "Save as PDF" to save');
+  window.print();
 }
 
 // ---- Export CSV ----
