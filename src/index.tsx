@@ -2119,7 +2119,12 @@ function getHeadTags() {
   <style>#google_translate_element{position:fixed;bottom:20px;left:20px;z-index:9998;background:white;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,0.15);padding:8px 12px;border:1px solid #e2e8f0;font-size:13px}.goog-te-gadget{font-family:inherit!important}.goog-te-gadget-simple{background:transparent!important;border:none!important;padding:0!important;font-size:13px!important}.goog-te-menu-value span{color:#374151!important}.goog-te-banner-frame{display:none!important}body{top:0!important}@media(max-width:768px){#google_translate_element{bottom:auto;top:74px;left:8px;transform:scale(0.75);transform-origin:top left;padding:4px 8px;border-radius:8px;opacity:0.7}}</style>
   <div id="google_translate_element"></div>
   <script>function googleTranslateElementInit(){new google.translate.TranslateElement({pageLanguage:'en',includedLanguages:'en,fr,es,de,pt,it,zh-CN,zh-TW,ja,ko,ar,hi,bn,ur,tr,vi,th,id,pl,uk,ru,nl,sv,da,no,fi,el,he,ro,cs,hu,ms,tl',layout:google.translate.TranslateElement.InlineLayout.SIMPLE,autoDisplay:false},'google_translate_element')}</script>
-  <script src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit" defer></script>`
+  <script src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit" defer></script>
+  <style id="theme-vars">
+:root{--bg-page:#0A0A0A;--bg-card:#111111;--bg-card-hover:rgba(255,255,255,0.05);--bg-elevated:#1a1a1a;--text-primary:#fff;--text-secondary:#d1d5db;--text-muted:#9ca3af;--border-color:rgba(255,255,255,0.1);--accent:#00FF88;--accent-hover:#00e67a}
+body.light-theme,.light-theme{--bg-page:#f3f4f6;--bg-card:#fff;--bg-card-hover:#f9fafb;--bg-elevated:#fff;--text-primary:#111827;--text-secondary:#374151;--text-muted:#6b7280;--border-color:#e5e7eb;--accent:#2563eb;--accent-hover:#1d4ed8}
+</style>
+<script>!function(){var t=localStorage.getItem('rc_theme_mode');if(t==='light')document.documentElement.classList.add('light-theme');else if(t==='auto'&&window.matchMedia('(prefers-color-scheme:light)').matches)document.documentElement.classList.add('light-theme')}()</script>`
 }
 
 // Rover chatbot widget script tag — inject on public pages only

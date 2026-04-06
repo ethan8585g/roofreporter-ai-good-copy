@@ -230,6 +230,9 @@ function renderDashboard() {
           '<p class="text-sm text-gray-500 mt-0.5">' + (c.company_name ? c.company_name + ' &middot; ' : '') + (c.email || '') + '</p>' +
         '</div>' +
         '<div class="flex items-center gap-2 flex-wrap">' +
+          '<button onclick="window._toggleTheme()" id="theme-toggle-btn" class="px-2 py-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors" title="Toggle theme">' +
+            '<i class="fas ' + (localStorage.getItem('rc_theme_mode') === 'light' ? 'fa-moon' : 'fa-sun') + '"></i>' +
+          '</button>' +
           (freeTrialRemaining > 0 ? '<div class="px-3 py-1.5 bg-blue-500/10 border border-blue-200 rounded-full text-xs font-bold text-blue-700"><i class="fas fa-gift mr-1"></i>' + freeTrialRemaining + ' Free Trial</div>' : '') +
           (paidCredits > 0 ? '<div class="px-3 py-1.5 bg-blue-500/10 border border-blue-200 rounded-full text-xs font-bold text-blue-700"><i class="fas fa-coins mr-1"></i>' + paidCredits + ' Credits</div>' : '') +
           '<div class="px-3 py-1.5 bg-white/5 border border-white/10 rounded-full text-xs font-bold text-gray-300"><i class="fas fa-file-alt mr-1"></i>' + completedReports + ' Reports</div>' +
@@ -728,4 +731,27 @@ window._roverDashSend = function(text) {
     );
     container.scrollTop = container.scrollHeight;
   });
+};
+
+window._toggleTheme = function() {
+  var current = localStorage.getItem('rc_theme_mode') || 'dark';
+  var next = current === 'dark' ? 'light' : current === 'light' ? 'auto' : 'dark';
+  localStorage.setItem('rc_theme_mode', next);
+
+  var html = document.documentElement;
+  html.classList.remove('light-theme');
+
+  if (next === 'light') {
+    html.classList.add('light-theme');
+  } else if (next === 'auto' && window.matchMedia('(prefers-color-scheme: light)').matches) {
+    html.classList.add('light-theme');
+  }
+
+  // Update button icon
+  var btn = document.getElementById('theme-toggle-btn');
+  if (btn) {
+    var icon = next === 'light' ? 'fa-moon' : next === 'auto' ? 'fa-adjust' : 'fa-sun';
+    btn.innerHTML = '<i class="fas ' + icon + '"></i>';
+    btn.title = 'Theme: ' + next.charAt(0).toUpperCase() + next.slice(1);
+  }
 };

@@ -101,6 +101,22 @@
         'prefs'
       ) +
 
+      // ── Display Preferences ─────────────────────────────────
+      '<div class="mt-6 bg-[#111111] rounded-2xl border border-white/10 overflow-hidden" style="background:var(--bg-card);border-color:var(--border-color)">' +
+        '<div class="px-6 py-4 border-b" style="border-color:var(--border-color)">' +
+          '<h3 class="font-bold" style="color:var(--text-primary)"><i class="fas fa-palette text-purple-400 mr-2"></i>Display Preferences</h3>' +
+        '</div>' +
+        '<div class="p-6">' +
+          '<label class="block text-sm font-medium mb-3" style="color:var(--text-secondary)">Theme Mode</label>' +
+          '<div class="flex gap-2" id="theme-mode-buttons">' +
+            '<button onclick="window._setThemeMode(\'dark\')" class="flex-1 px-4 py-3 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2 ' + ((!localStorage.getItem('rc_theme_mode') || localStorage.getItem('rc_theme_mode') === 'dark') ? 'bg-emerald-500/15 text-emerald-400 border-2 border-emerald-500/30' : 'bg-white/5 text-gray-400 border-2 border-transparent hover:bg-white/10') + '"><i class="fas fa-moon"></i>Dark</button>' +
+            '<button onclick="window._setThemeMode(\'light\')" class="flex-1 px-4 py-3 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2 ' + (localStorage.getItem('rc_theme_mode') === 'light' ? 'bg-blue-500/15 text-blue-400 border-2 border-blue-500/30' : 'bg-white/5 text-gray-400 border-2 border-transparent hover:bg-white/10') + '"><i class="fas fa-sun"></i>Light</button>' +
+            '<button onclick="window._setThemeMode(\'auto\')" class="flex-1 px-4 py-3 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2 ' + (localStorage.getItem('rc_theme_mode') === 'auto' ? 'bg-purple-500/15 text-purple-400 border-2 border-purple-500/30' : 'bg-white/5 text-gray-400 border-2 border-transparent hover:bg-white/10') + '"><i class="fas fa-adjust"></i>Auto</button>' +
+          '</div>' +
+          '<p class="text-xs mt-2" style="color:var(--text-muted)">Auto mode follows your system preference.</p>' +
+        '</div>' +
+      '</div>' +
+
       // ── 5. Security ───────────────────────────────────────
       section('Security', 'fa-lock', 'red',
         '<div class="mb-4">' +
@@ -418,5 +434,22 @@
     var el = document.getElementById(id);
     return el ? el.value.trim() : '';
   }
+
+  window._setThemeMode = function(mode) {
+    localStorage.setItem('rc_theme_mode', mode);
+
+    var html = document.documentElement;
+    html.classList.remove('light-theme');
+
+    if (mode === 'light') {
+      html.classList.add('light-theme');
+    } else if (mode === 'auto' && window.matchMedia('(prefers-color-scheme: light)').matches) {
+      html.classList.add('light-theme');
+    }
+
+    // Re-render the settings page to update button states
+    if (typeof render === 'function') render();
+    else location.reload();
+  };
 
 })();
