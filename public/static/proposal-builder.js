@@ -25,6 +25,20 @@ document.addEventListener('DOMContentLoaded', () => {
     editId: null,
     filter: 'all',
     searchTerm: '',
+    createStep: 1,
+    pricingMethod: 'line_item',  // 'line_item' or 'per_square'
+    pricePerSquare: 0,
+    catalog: [],
+    catalogLoaded: false,
+    selectedReport: null,
+    attachments: {
+      includeRoofReport: true,
+      includeMaterialBOM: true,
+      insuranceCert: '',
+      warrantyDoc: '',
+      wcbCoverage: '',
+      customAttachment: ''
+    },
     // Form state
     form: resetForm()
   };
@@ -76,20 +90,125 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function render() {
-    if (state.loading) {
-      root.innerHTML = '<div class="flex items-center justify-center py-12"><div class="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-brand-500"></div><span class="ml-3 text-gray-500">Loading proposals...</span></div>';
-      return;
+    if (state.loading) { root.innerHTML = '<div style="text-align:center;padding:60px;color:#888"><i class="fas fa-spinner fa-spin" style="font-size:32px;margin-bottom:12px"></i><p>Loading...</p></div>'; return; }
+
+    if (state.mode === 'create' && !state.editId) {
+      // Multi-step wizard for new proposals
+      switch (state.createStep) {
+        case 1: // Supplier setup gate
+          if (!state.supplierSetup) { root.innerHTML = renderSupplierSetup(); return; }
+          state.createStep = 2; // Auto-advance if supplier already set up
+          // fall through
+        case 2: root.innerHTML = renderStepBar(2) + renderPricingMethod(); return;
+        case 3: root.innerHTML = renderStepBar(3) + renderReportCustomer(); return;
+        case 4: root.innerHTML = renderStepBar(4) + renderEditor(); return;
+        case 5: root.innerHTML = renderStepBar(5) + renderPreview(); return;
+      }
     }
-    // If on creation view and supplier not set up, show setup form
-    if (state.mode === 'create' && !state.supplierSetup && !state.editId) {
-      root.innerHTML = renderSupplierSetup();
-      return;
-    }
+
     switch (state.mode) {
       case 'list': root.innerHTML = renderList(); break;
-      case 'create': case 'edit': root.innerHTML = renderEditor(); break;
+      case 'edit': root.innerHTML = renderEditor(); break;
       case 'preview': root.innerHTML = renderPreview(); break;
     }
+  }
+
+  function renderStepBar(currentStep) {
+    var steps = [
+      { num: 1, label: 'Supplier', icon: 'fa-store' },
+      { num: 2, label: 'Pricing', icon: 'fa-dollar-sign' },
+      { num: 3, label: 'Report & Customer', icon: 'fa-file-alt' },
+      { num: 4, label: 'Build Estimate', icon: 'fa-calculator' },
+      { num: 5, label: 'Review & Send', icon: 'fa-paper-plane' }
+    ];
+    return '<div style="max-width:800px;margin:0 auto 24px;padding:0 20px">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;gap:4px">' +
+      steps.map(function(s) {
+        var isActive = s.num === currentStep;
+        var isDone = s.num < currentStep;
+        var color = isDone ? '#00FF88' : isActive ? '#22d3ee' : '#333';
+        var textColor = isDone ? '#00FF88' : isActive ? 'white' : '#666';
+        return '<div style="flex:1;text-align:center">' +
+          '<div style="width:36px;height:36px;border-radius:50%;background:' + (isDone ? 'rgba(0,255,136,0.15)' : isActive ? 'rgba(34,211,238,0.15)' : 'rgba(255,255,255,0.05)') + ';border:2px solid ' + color + ';display:inline-flex;align-items:center;justify-content:center;margin-bottom:4px">' +
+            (isDone ? '<i class="fas fa-check" style="color:#00FF88;font-size:14px"></i>' : '<i class="fas ' + s.icon + '" style="color:' + color + ';font-size:13px"></i>') +
+          '</div>' +
+          '<div style="font-size:10px;color:' + textColor + ';font-weight:' + (isActive ? '700' : '500') + '">' + s.label + '</div>' +
+        '</div>';
+      }).join('') +
+      '</div></div>';
+  }
+
+  function renderPricingMethod() {
+    var hasCatalog = state.catalog.length > 0;
+
+    return '<div style="max-width:700px;margin:0 auto;padding:0 20px">' +
+      '<h2 style="color:white;font-size:24px;font-weight:800;margin-bottom:8px;text-align:center">Select a Pricing Method</h2>' +
+      '<p style="color:#888;text-align:center;margin-bottom:32px;font-size:14px">Choose how you want to price this estimate</p>' +
+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:32px">' +
+        // Per Square card
+        '<div onclick="window._pb.setPricing(\'per_square\')" style="background:' + (state.pricingMethod === 'per_square' ? '#111' : 'rgba(255,255,255,0.03)') + ';border:2px solid ' + (state.pricingMethod === 'per_square' ? '#00FF88' : 'rgba(255,255,255,0.1)') + ';border-radius:16px;padding:32px;text-align:center;cursor:pointer;transition:all 0.2s">' +
+          '<div style="width:56px;height:56px;border-radius:14px;background:' + (state.pricingMethod === 'per_square' ? 'rgba(0,255,136,0.1)' : 'rgba(255,255,255,0.05)') + ';display:inline-flex;align-items:center;justify-content:center;margin-bottom:16px"><i class="fas fa-th" style="font-size:24px;color:' + (state.pricingMethod === 'per_square' ? '#00FF88' : '#666') + '"></i></div>' +
+          '<h3 style="color:white;font-size:18px;font-weight:700;margin-bottom:8px">Per Square Pricing</h3>' +
+          '<p style="color:#888;font-size:13px">Set a price per roofing square (100 sq ft). Total calculated from report measurements.</p>' +
+        '</div>' +
+        // Line Item card
+        '<div onclick="window._pb.setPricing(\'line_item\')" style="background:' + (state.pricingMethod === 'line_item' ? '#111' : 'rgba(255,255,255,0.03)') + ';border:2px solid ' + (state.pricingMethod === 'line_item' ? '#22d3ee' : 'rgba(255,255,255,0.1)') + ';border-radius:16px;padding:32px;text-align:center;cursor:pointer;transition:all 0.2s">' +
+          '<div style="width:56px;height:56px;border-radius:14px;background:' + (state.pricingMethod === 'line_item' ? 'rgba(34,211,238,0.1)' : 'rgba(255,255,255,0.05)') + ';display:inline-flex;align-items:center;justify-content:center;margin-bottom:16px"><i class="fas fa-list" style="font-size:24px;color:' + (state.pricingMethod === 'line_item' ? '#22d3ee' : '#666') + '"></i></div>' +
+          '<h3 style="color:white;font-size:18px;font-weight:700;margin-bottom:8px">Line Item Pricing</h3>' +
+          '<p style="color:#888;font-size:13px">Add individual items with quantities and prices. Full control over every line.</p>' +
+        '</div>' +
+      '</div>' +
+
+      // Catalog check
+      (!hasCatalog ?
+        '<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:20px;margin-bottom:24px;text-align:center">' +
+          '<p style="color:#ccc;font-size:14px;margin-bottom:12px"><i class="fas fa-info-circle" style="color:#22d3ee;margin-right:6px"></i>No material catalog set up yet. Seed default roofing materials?</p>' +
+          '<button onclick="window._pb.seedCatalog()" style="background:#22d3ee;color:#0a0a0a;border:none;padding:10px 24px;border-radius:8px;font-weight:700;cursor:pointer">Seed Default Materials</button>' +
+          '<span style="color:#666;margin:0 12px">or</span>' +
+          '<button onclick="state.createStep=3;render()" style="background:rgba(255,255,255,0.05);color:#999;border:1px solid rgba(255,255,255,0.1);padding:10px 24px;border-radius:8px;font-weight:600;cursor:pointer">Skip — I\'ll add items manually</button>' +
+        '</div>' : '') +
+
+      '<div style="display:flex;justify-content:space-between;margin-top:16px">' +
+        '<button onclick="state.createStep=1;state.mode=\'list\';render()" style="background:rgba(255,255,255,0.05);color:#999;border:1px solid rgba(255,255,255,0.1);padding:12px 24px;border-radius:10px;font-weight:600;cursor:pointer">&larr; Back</button>' +
+        '<button onclick="state.createStep=3;render()" style="background:#00FF88;color:#0a0a0a;border:none;padding:12px 32px;border-radius:10px;font-weight:800;cursor:pointer">Continue &rarr;</button>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function renderReportCustomer() {
+    return '<div style="max-width:700px;margin:0 auto;padding:0 20px">' +
+      '<h2 style="color:white;font-size:24px;font-weight:800;margin-bottom:8px;text-align:center">Select Report & Customer</h2>' +
+      '<p style="color:#888;text-align:center;margin-bottom:32px;font-size:14px">Attach a roof measurement report and enter customer information</p>' +
+
+      // Report selection
+      '<div style="background:#111;border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:24px;margin-bottom:20px">' +
+        '<h3 style="color:white;font-size:16px;font-weight:700;margin-bottom:12px"><i class="fas fa-satellite-dish" style="color:#00FF88;margin-right:8px"></i>Roof Measurement Report</h3>' +
+        (state.reports.length > 0 ?
+          '<select id="step3-report" onchange="window._pb.selectReport(this.value)" style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:12px;color:white;font-size:14px">' +
+            '<option value="">Select a completed report...</option>' +
+            state.reports.map(function(r) { return '<option value="' + r.id + '"' + (state.form.attached_report_id == r.id ? ' selected' : '') + '>' + (r.property_address || 'Report #' + r.id) + ' — ' + (r.created_at || '').slice(0, 10) + '</option>'; }).join('') +
+          '</select>' +
+          (state.selectedReport ? '<div style="margin-top:12px;padding:12px;background:rgba(0,255,136,0.05);border:1px solid rgba(0,255,136,0.15);border-radius:8px"><p style="color:#00FF88;font-size:13px;font-weight:600">' + (state.selectedReport.property_address || '') + '</p><p style="color:#888;font-size:12px">Roof area: ' + (state.selectedReport.roof_area_sqft ? Math.round(state.selectedReport.roof_area_sqft) + ' sq ft' : 'N/A') + ' | Pitch: ' + (state.selectedReport.roof_pitch || 'N/A') + '</p></div>' : '')
+        : '<p style="color:#f59e0b;font-size:14px"><i class="fas fa-exclamation-triangle" style="margin-right:6px"></i>No completed reports found. <a href="/customer/order" style="color:#00FF88;text-decoration:underline">Order a report first</a></p>') +
+      '</div>' +
+
+      // Customer info
+      '<div style="background:#111;border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:24px;margin-bottom:20px">' +
+        '<h3 style="color:white;font-size:16px;font-weight:700;margin-bottom:12px"><i class="fas fa-user" style="color:#22d3ee;margin-right:8px"></i>Customer Information</h3>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
+          '<div><label style="display:block;color:#ccc;font-size:12px;font-weight:600;margin-bottom:4px">Customer Name *</label><input id="step3-name" value="' + (state.form.customer_name || '') + '" placeholder="Jane Smith" style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px;color:white;font-size:14px"></div>' +
+          '<div><label style="display:block;color:#ccc;font-size:12px;font-weight:600;margin-bottom:4px">Email</label><input id="step3-email" value="' + (state.form.customer_email || '') + '" placeholder="jane@example.com" style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px;color:white;font-size:14px"></div>' +
+          '<div><label style="display:block;color:#ccc;font-size:12px;font-weight:600;margin-bottom:4px">Phone</label><input id="step3-phone" value="' + (state.form.customer_phone || '') + '" placeholder="780-555-1234" style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px;color:white;font-size:14px"></div>' +
+          '<div><label style="display:block;color:#ccc;font-size:12px;font-weight:600;margin-bottom:4px">Property Address</label><input id="step3-address" value="' + (state.form.property_address || '') + '" placeholder="123 Main St" style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px;color:white;font-size:14px"></div>' +
+        '</div>' +
+      '</div>' +
+
+      '<div style="display:flex;justify-content:space-between;margin-top:16px">' +
+        '<button onclick="state.createStep=2;render()" style="background:rgba(255,255,255,0.05);color:#999;border:1px solid rgba(255,255,255,0.1);padding:12px 24px;border-radius:10px;font-weight:600;cursor:pointer">&larr; Back</button>' +
+        '<button onclick="window._pb.goToStep4()" style="background:#00FF88;color:#0a0a0a;border:none;padding:12px 32px;border-radius:10px;font-weight:800;cursor:pointer">Continue to Estimate &rarr;</button>' +
+      '</div>' +
+    '</div>';
   }
 
   // ============================================================
@@ -273,6 +392,18 @@ document.addEventListener('DOMContentLoaded', () => {
       <p class="text-xs text-gray-400 mt-2"><i class="fas fa-info-circle mr-1"></i>Attach a completed roof measurement report to this proposal. The report will be viewable by the customer.</p>
     </div>
 
+    <!-- Per Square Pricing (if selected) -->
+    ${state.pricingMethod === 'per_square' ?
+      '<div class="bg-white rounded-xl border border-gray-200 p-6 mb-6">' +
+        '<h3 class="text-lg font-bold text-gray-900 mb-4"><i class="fas fa-th text-brand-500 mr-2"></i>Per Square Pricing</h3>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;text-align:center">' +
+          '<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(0,0,0,0.05);border-radius:8px;padding:16px"><div style="color:#888;font-size:11px;text-transform:uppercase;margin-bottom:4px">Roof Squares</div><div style="color:#111;font-size:28px;font-weight:800">' + (state.selectedReport ? Math.ceil((state.selectedReport.roof_area_sqft || 0) / 100) : '—') + '</div></div>' +
+          '<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(0,0,0,0.05);border-radius:8px;padding:16px"><div style="color:#888;font-size:11px;text-transform:uppercase;margin-bottom:4px">Price Per Square</div><div>$<input id="pps-price" type="number" value="' + (state.pricePerSquare || 350) + '" onchange="state.pricePerSquare=Number(this.value);window._pb.updatePerSquare()" style="width:80px;background:transparent;border:none;border-bottom:2px solid #00FF88;color:#111;font-size:28px;font-weight:800;text-align:center"></div></div>' +
+          '<div style="background:rgba(0,255,136,0.05);border:1px solid rgba(0,255,136,0.15);border-radius:8px;padding:16px"><div style="color:#16a34a;font-size:11px;text-transform:uppercase;margin-bottom:4px">Total Estimate</div><div style="color:#16a34a;font-size:28px;font-weight:800">$' + ((state.selectedReport ? Math.ceil((state.selectedReport.roof_area_sqft || 0) / 100) : 0) * (state.pricePerSquare || 350)).toLocaleString() + '</div></div>' +
+        '</div>' +
+      '</div>'
+    : ''}
+
     <!-- Line Items -->
     <div class="bg-white rounded-xl border border-gray-200 p-6 mb-6">
       <div class="flex items-center justify-between mb-4">
@@ -338,6 +469,21 @@ document.addEventListener('DOMContentLoaded', () => {
       </div>
     </div>
 
+    <!-- Attachments & Certifications -->
+    <div class="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+      <h3 class="text-lg font-bold text-gray-900 mb-4"><i class="fas fa-paperclip text-purple-500 mr-2"></i>Proposal Attachments & Certifications</h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <label style="display:flex;align-items:center;gap:8px;color:#555;font-size:13px;cursor:pointer;padding:10px;background:#f9fafb;border-radius:8px"><input type="checkbox" id="att-report" ${state.attachments.includeRoofReport ? 'checked' : ''} onchange="state.attachments.includeRoofReport=this.checked"> Include Roof Report with Proposal</label>
+        <label style="display:flex;align-items:center;gap:8px;color:#555;font-size:13px;cursor:pointer;padding:10px;background:#f9fafb;border-radius:8px"><input type="checkbox" id="att-bom" ${state.attachments.includeMaterialBOM ? 'checked' : ''} onchange="state.attachments.includeMaterialBOM=this.checked"> Include Material BOM with Proposal</label>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px">
+        <div><label class="block text-xs font-semibold text-gray-500 mb-1"><i class="fas fa-shield-alt text-green-500 mr-1"></i>Insurance Certificate #</label><input id="att-insurance" value="${state.attachments.insuranceCert || ''}" onchange="state.attachments.insuranceCert=this.value" placeholder="e.g. INS-2026-12345" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>
+        <div><label class="block text-xs font-semibold text-gray-500 mb-1"><i class="fas fa-file-contract text-cyan-500 mr-1"></i>Warranty Document</label><input id="att-warranty" value="${state.attachments.warrantyDoc || ''}" onchange="state.attachments.warrantyDoc=this.value" placeholder="e.g. 10-Year Manufacturer Warranty" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>
+        <div><label class="block text-xs font-semibold text-gray-500 mb-1"><i class="fas fa-hard-hat text-amber-500 mr-1"></i>WCB Coverage #</label><input id="att-wcb" value="${state.attachments.wcbCoverage || ''}" onchange="state.attachments.wcbCoverage=this.value" placeholder="e.g. WCB-AB-987654" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>
+        <div><label class="block text-xs font-semibold text-gray-500 mb-1"><i class="fas fa-plus-circle text-purple-500 mr-1"></i>Custom Attachment</label><input id="att-custom" value="${state.attachments.customAttachment || ''}" onchange="state.attachments.customAttachment=this.value" placeholder="e.g. Business License, BBB Accreditation" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>
+      </div>
+    </div>
+
     <!-- Notes -->
     <div class="bg-white rounded-xl border border-gray-200 p-6 mb-6">
       <h3 class="text-lg font-bold text-gray-900 mb-3"><i class="fas fa-sticky-note text-brand-500 mr-2"></i>Additional Notes</h3>
@@ -345,11 +491,16 @@ document.addEventListener('DOMContentLoaded', () => {
     </div>
 
     <!-- Actions -->
-    <div class="flex justify-end gap-3 mb-8">
+    ${state.createStep === 4 ?
+      '<div style="display:flex;justify-content:space-between;margin-top:20px;margin-bottom:32px">' +
+        '<button onclick="state.createStep=3;render()" style="background:rgba(255,255,255,0.05);color:#999;border:1px solid rgba(255,255,255,0.1);padding:12px 24px;border-radius:10px;font-weight:600;cursor:pointer">&larr; Back</button>' +
+        '<button onclick="state.createStep=5;render()" style="background:#00FF88;color:#0a0a0a;border:none;padding:12px 32px;border-radius:10px;font-weight:800;cursor:pointer">Review & Send &rarr;</button>' +
+      '</div>'
+    : `<div class="flex justify-end gap-3 mb-8">
       <button onclick="window._pb.backToList()" class="px-5 py-2.5 bg-gray-200 text-gray-700 rounded-xl text-sm font-medium hover:bg-gray-300">Cancel</button>
       <button onclick="window._pb.saveDraft()" class="px-5 py-2.5 bg-gray-700 text-white rounded-xl text-sm font-medium hover:bg-gray-800"><i class="fas fa-save mr-1"></i>Save Draft</button>
       <button onclick="window._pb.saveAndSend()" class="px-5 py-2.5 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl text-sm font-medium hover:shadow-lg"><i class="fas fa-paper-plane mr-1"></i>Save & Send</button>
-    </div>`;
+    </div>`}`;
   }
 
   function renderItemRow(item, i) {
@@ -466,6 +617,18 @@ document.addEventListener('DOMContentLoaded', () => {
       ${f.payment_terms_text ? `<div class="p-8 border-b border-gray-200"><h3 class="text-xs font-semibold text-gray-500 uppercase mb-2">Payment Terms</h3><div class="text-gray-700 text-sm whitespace-pre-wrap">${f.payment_terms_text}</div></div>` : ''}
       ${f.notes ? `<div class="p-8 border-b border-gray-200"><h3 class="text-xs font-semibold text-gray-500 uppercase mb-2">Notes</h3><div class="text-gray-700 text-sm whitespace-pre-wrap">${f.notes}</div></div>` : ''}
 
+      ${state.attachments.insuranceCert || state.attachments.warrantyDoc || state.attachments.wcbCoverage || state.attachments.customAttachment ?
+        '<div class="p-8 border-b border-gray-200">' +
+          '<h3 class="text-xs font-semibold text-gray-500 uppercase mb-3"><i class="fas fa-paperclip text-purple-400 mr-1"></i>Certifications & Documentation</h3>' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
+            (state.attachments.insuranceCert ? '<div style="background:#f9fafb;padding:10px;border-radius:6px;font-size:12px"><span style="color:#888">Insurance Certificate:</span> <span style="color:#111;font-weight:600">' + state.attachments.insuranceCert + '</span></div>' : '') +
+            (state.attachments.warrantyDoc ? '<div style="background:#f9fafb;padding:10px;border-radius:6px;font-size:12px"><span style="color:#888">Warranty:</span> <span style="color:#111;font-weight:600">' + state.attachments.warrantyDoc + '</span></div>' : '') +
+            (state.attachments.wcbCoverage ? '<div style="background:#f9fafb;padding:10px;border-radius:6px;font-size:12px"><span style="color:#888">WCB Coverage:</span> <span style="color:#111;font-weight:600">' + state.attachments.wcbCoverage + '</span></div>' : '') +
+            (state.attachments.customAttachment ? '<div style="background:#f9fafb;padding:10px;border-radius:6px;font-size:12px"><span style="color:#888">Additional:</span> <span style="color:#111;font-weight:600">' + state.attachments.customAttachment + '</span></div>' : '') +
+          '</div>' +
+        '</div>'
+      : ''}
+
       <div class="p-8 text-center text-gray-400 text-xs">
         <p>Thank you for considering our services. We look forward to working with you.</p>
         <p class="mt-1">Roof Manager | Professional Roof Measurement Reports | reports@reusecanada.ca</p>
@@ -517,6 +680,17 @@ document.addEventListener('DOMContentLoaded', () => {
         state.supplierSetup = state.suppliers.length > 0;
       }
     } catch (e) { console.warn('Supplier prereq check failed', e); }
+
+    // Load catalog
+    try {
+      var catRes = await fetch('/api/crm/catalog', { headers: headers() });
+      if (catRes.ok) {
+        var catData = await catRes.json();
+        state.catalog = catData.items || catData.catalog || [];
+        state.catalogLoaded = true;
+      }
+    } catch (e) { console.warn('Catalog load failed', e); }
+
     render();
   }
 
@@ -759,7 +933,15 @@ document.addEventListener('DOMContentLoaded', () => {
   // PUBLIC API
   // ============================================================
   window._pb = {
-    create() { state.mode = 'create'; state.editId = null; state.form = resetForm(); render(); },
+    create() {
+      state.mode = 'create'; state.editId = null; state.form = resetForm();
+      state.createStep = 1;
+      state.pricingMethod = 'line_item';
+      state.pricePerSquare = 350;
+      state.selectedReport = null;
+      state.attachments = { includeRoofReport: true, includeMaterialBOM: true, insuranceCert: '', warrantyDoc: '', wcbCoverage: '', customAttachment: '' };
+      render();
+    },
     backToList() { state.mode = 'list'; state.editId = null; state.form = resetForm(); render(); },
     backToEditor() { state.mode = state.editId ? 'edit' : 'create'; render(); },
     setFilter(f) { state.filter = f; render(); },
@@ -875,6 +1057,43 @@ document.addEventListener('DOMContentLoaded', () => {
         await fetch('/api/invoices/' + id, { method: 'DELETE', headers: headers() });
         load();
       } catch (e) { alert('Failed to delete proposal'); }
+    },
+    setPricing(method) {
+      state.pricingMethod = method;
+      render();
+    },
+    async seedCatalog() {
+      var res = await fetch('/api/crm/catalog/seed-defaults', { method: 'POST', headers: headers() }).then(function(r) { return r.json(); }).catch(function() { return null; });
+      if (res) {
+        var catRes = await fetch('/api/crm/catalog', { headers: headers() }).then(function(r) { return r.json(); }).catch(function() { return { items: [] }; });
+        state.catalog = catRes.items || [];
+        state.catalogLoaded = true;
+        alert('Default roofing materials added to your catalog!');
+        render();
+      }
+    },
+    selectReport(reportId) {
+      state.form.attached_report_id = reportId || null;
+      state.selectedReport = state.reports.find(function(r) { return String(r.id) === String(reportId); }) || null;
+      if (state.selectedReport) {
+        state.form.property_address = state.selectedReport.property_address || '';
+        var addrEl = document.getElementById('step3-address');
+        if (addrEl) addrEl.value = state.form.property_address;
+      }
+      render();
+    },
+    goToStep4() {
+      // Collect step 3 data
+      state.form.customer_name = (document.getElementById('step3-name') || {}).value || '';
+      state.form.customer_email = (document.getElementById('step3-email') || {}).value || '';
+      state.form.customer_phone = (document.getElementById('step3-phone') || {}).value || '';
+      state.form.property_address = (document.getElementById('step3-address') || {}).value || '';
+      state.createStep = 4;
+      render();
+    },
+    updatePerSquare() {
+      // Recalculate per-square total
+      render();
     }
   };
 });
