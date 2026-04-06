@@ -1162,6 +1162,15 @@ app.get('/roof-measurement/:city', (c) => {
     "priceRange": "$5-$500 USD"
   }
   </script>
+  <script type="application/ld+json">
+{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[
+  {"@type":"Question","name":"What is the best roof measurement software in ${city.name}?","acceptedAnswer":{"@type":"Answer","text":"Roof Manager is the leading AI-powered roof measurement platform used by ${city.name} roofing contractors. It generates professional satellite-powered reports with 3D area, pitch analysis, edge breakdowns, and material BOM in under 60 seconds."}},
+  {"@type":"Question","name":"How much does a roof report cost in ${city.name}?","acceptedAnswer":{"@type":"Answer","text":"Roof measurement reports for ${city.name} properties cost $8 CAD per report after your 3 free trial reports. Volume discounts are available."}},
+  {"@type":"Question","name":"Does Roof Manager work for ${city.name}, ${city.province} roofing contractors?","acceptedAnswer":{"@type":"Answer","text":"Yes! Roof Manager has excellent satellite coverage across ${city.name} and all of ${city.province}. Most urban and suburban addresses have high-quality imagery available."}},
+  {"@type":"Question","name":"How accurate are satellite roof measurements in ${city.name}?","acceptedAnswer":{"@type":"Answer","text":"Roof Manager delivers 99.9% accuracy for ${city.name} properties using Google's LiDAR-calibrated 3D building models."}},
+  {"@type":"Question","name":"What's included in a roof report for ${city.name} properties?","acceptedAnswer":{"@type":"Answer","text":"Every report includes total 3D area, edge breakdowns, complete material BOM, segment analysis, solar potential data, complexity rating, and a professional PDF."}}
+]}
+</script>
 </head>
 <body class="bg-gray-50 min-h-screen">
   <nav class="bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg">
@@ -1187,6 +1196,18 @@ app.get('/roof-measurement/:city', (c) => {
     </div>
   </section>
 
+  <div class="max-w-5xl mx-auto px-4 mb-12" style="padding-top:2rem">
+    <div class="rounded-xl overflow-hidden border border-white/10" style="height:280px">
+      <iframe src="https://www.google.com/maps/embed/v1/place?key=${c.env.GOOGLE_MAPS_API_KEY || 'AIzaSyBxxxxxxxx'}&q=roofing+contractors+${encodeURIComponent(city.name + ' ' + city.province)}"
+        width="100%" height="280" style="border:0" loading="lazy" allowfullscreen title="Roofing contractors in ${city.name}"></iframe>
+    </div>
+    <p class="text-center mt-4 mb-0">
+      <span class="inline-flex items-center gap-2 bg-[#00FF88]/10 text-[#00FF88] rounded-full px-5 py-2 text-sm font-semibold">
+        <i class="fas fa-map-marker-alt"></i> Serving ${city.name} contractors and surrounding areas
+      </span>
+    </p>
+  </div>
+
   <section class="py-16 bg-white">
     <div class="max-w-5xl mx-auto px-4">
       <h2 class="text-2xl font-black text-gray-900 text-center mb-10">What ${city.name} Roofers Get With Every Report</h2>
@@ -1206,6 +1227,37 @@ app.get('/roof-measurement/:city', (c) => {
         <div class="bg-white rounded-xl p-6 border"><h3 class="font-bold text-gray-800 mb-2"><i class="fas fa-file-signature text-blue-600 mr-2"></i>Proposals & Invoicing</h3><p class="text-sm text-gray-500">Create professional proposals with material details, send invoices, and collect payments online.</p></div>
         <div class="bg-white rounded-xl p-6 border"><h3 class="font-bold text-gray-800 mb-2"><i class="fas fa-calendar text-blue-600 mr-2"></i>Job Scheduling</h3><p class="text-sm text-gray-500">Calendar-based job management with Google Calendar sync, checklists, and crew tracking.</p></div>
         <div class="bg-white rounded-xl p-6 border"><h3 class="font-bold text-gray-800 mb-2"><i class="fas fa-headset text-blue-600 mr-2"></i>AI Phone Secretary</h3><p class="text-sm text-gray-500">Never miss a call. AI answers your business phone, takes messages, and books appointments 24/7.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section style="background:#0d0d0d" class="py-16">
+    <div class="max-w-4xl mx-auto px-4">
+      <h2 class="text-2xl font-black text-white mb-8 text-center">Frequently Asked Questions — ${city.name} Roofing</h2>
+      <div class="space-y-4">
+        <div class="bg-[#111111] border border-white/10 rounded-xl p-6">
+          <h3 class="text-white font-bold mb-2">What is the best roof measurement software in ${city.name}?</h3>
+          <p class="text-gray-400 text-sm leading-relaxed">Roof Manager is the leading AI-powered roof measurement platform used by ${city.name} roofing contractors. It generates professional satellite-powered reports with 3D area, pitch analysis, edge breakdowns, and material BOM in under 60 seconds — all from your phone or computer, without climbing the roof.</p>
+        </div>
+        <div class="bg-[#111111] border border-white/10 rounded-xl p-6">
+          <h3 class="text-white font-bold mb-2">How much does a roof report cost in ${city.name}?</h3>
+          <p class="text-gray-400 text-sm leading-relaxed">Roof measurement reports for ${city.name} properties cost $8 CAD per report after your 3 free trial reports. Volume discounts are available — 25-packs at $6/report and 100-packs at $5/report. Full CRM, invoicing, and proposal tools are included free.</p>
+        </div>
+        <div class="bg-[#111111] border border-white/10 rounded-xl p-6">
+          <h3 class="text-white font-bold mb-2">Does Roof Manager work for ${city.name}, ${city.province} roofing contractors?</h3>
+          <p class="text-gray-400 text-sm leading-relaxed">Yes! Roof Manager has excellent satellite coverage across ${city.name} and all of ${city.province}. Most urban and suburban addresses in ${city.name} have high-quality Google Solar API imagery available for instant measurement reports.</p>
+        </div>
+        <div class="bg-[#111111] border border-white/10 rounded-xl p-6">
+          <h3 class="text-white font-bold mb-2">How accurate are satellite roof measurements in ${city.name}?</h3>
+          <p class="text-gray-400 text-sm leading-relaxed">Roof Manager delivers 99.9% accuracy for ${city.name} properties using Google's LiDAR-calibrated 3D building models. Measurements include pitch-adjusted surface area, not just footprint — giving you the true sloped area needed for accurate material ordering.</p>
+        </div>
+        <div class="bg-[#111111] border border-white/10 rounded-xl p-6">
+          <h3 class="text-white font-bold mb-2">What's included in a roof report for ${city.name} properties?</h3>
+          <p class="text-gray-400 text-sm leading-relaxed">Every ${city.name} roof report includes: total 3D area (pitch-adjusted), edge breakdowns (ridge, hip, valley, eave, rake), complete material BOM with quantities, segment-by-segment analysis, solar potential data, complexity rating, and a professional PDF ready for homeowners.</p>
+        </div>
+      </div>
+      <div class="text-center mt-8">
+        <a href="/blog" class="text-[#00FF88] text-sm font-semibold hover:underline">Read more roofing guides on our blog →</a>
       </div>
     </div>
   </section>
@@ -4782,6 +4834,26 @@ function getBlogPostHTML(post?: any, slug?: string) {
   ${post?.category ? `<meta property="article:section" content="${post.category}">` : ''}
   ${blogSchema}
   ${breadcrumbSchema}
+  ${(() => {
+    // Auto-detect FAQ sections in blog content and generate FAQPage schema
+    if (!post?.content) return ''
+    const content = post.content
+    const faqMatches = content.match(/<h[23][^>]*>([^<]*(?:FAQ|Frequently Asked|Common Questions)[^<]*)<\/h[23]>/i)
+    if (!faqMatches) return ''
+
+    // Extract Q&A pairs: look for <h3>Question</h3> followed by <p>Answer</p> patterns
+    const qaRegex = /<h3[^>]*>([^<]+)\?<\/h3>\s*<p[^>]*>([^<]+(?:<[^>]+>[^<]+)*)<\/p>/gi
+    const pairs: {q: string, a: string}[] = []
+    let match
+    while ((match = qaRegex.exec(content)) !== null && pairs.length < 10) {
+      pairs.push({ q: match[1].trim() + '?', a: match[2].replace(/<[^>]+>/g, '').trim().substring(0, 300) })
+    }
+    if (pairs.length === 0) return ''
+
+    return '<script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[' +
+      pairs.map(p => '{"@type":"Question","name":"' + p.q.replace(/"/g, '\\"') + '","acceptedAnswer":{"@type":"Answer","text":"' + p.a.replace(/"/g, '\\"') + '"}}').join(',') +
+      ']}</script>'
+  })()}
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tailwindcss/typography@0.5.0/dist/typography.min.css">
 </head>
 <body class="min-h-screen" style="background:#0A0A0A">
