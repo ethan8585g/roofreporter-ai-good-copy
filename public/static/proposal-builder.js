@@ -292,6 +292,24 @@ document.addEventListener('DOMContentLoaded', () => {
         '<button onclick="window._pb.backToList()" style="color:var(--text-muted);background:var(--bg-card);border:1px solid var(--border-color);padding:8px 16px;border-radius:8px;cursor:pointer;font-size:13px">&larr; Back to Proposals</button>' +
       '</div>' +
 
+      // Quick access: Report + Materials
+      (state.selectedReport ?
+        '<div style="display:flex;gap:12px;margin-bottom:16px">' +
+          '<a href="/customer/reports" target="_blank" style="flex:1;display:flex;align-items:center;gap:10px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;padding:12px 16px;text-decoration:none;transition:all 0.2s" onmouseover="this.style.borderColor=\'var(--accent)\'" onmouseout="this.style.borderColor=\'var(--border-color)\'">' +
+            '<div style="width:36px;height:36px;background:rgba(37,99,235,0.15);border-radius:8px;display:flex;align-items:center;justify-content:center"><i class="fas fa-file-alt" style="color:#3b82f6"></i></div>' +
+            '<div><div style="color:var(--text-primary);font-weight:600;font-size:13px">View Roof Report</div><div style="color:var(--text-muted);font-size:11px">' + (state.selectedReport.property_address || 'Attached report').substring(0, 35) + '</div></div>' +
+          '</a>' +
+          '<a href="/customer/material-calculator" target="_blank" style="flex:1;display:flex;align-items:center;gap:10px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;padding:12px 16px;text-decoration:none;transition:all 0.2s" onmouseover="this.style.borderColor=\'var(--accent)\'" onmouseout="this.style.borderColor=\'var(--border-color)\'">' +
+            '<div style="width:36px;height:36px;background:rgba(16,185,129,0.15);border-radius:8px;display:flex;align-items:center;justify-content:center"><i class="fas fa-calculator" style="color:#10b981"></i></div>' +
+            '<div><div style="color:var(--text-primary);font-weight:600;font-size:13px">View Material Calculation</div><div style="color:var(--text-muted);font-size:11px">' + (state.selectedReportMaterials ? 'Materials loaded' : 'Open calculator') + '</div></div>' +
+          '</a>' +
+          '<div style="flex:1;display:flex;align-items:center;gap:10px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;padding:12px 16px">' +
+            '<div style="width:36px;height:36px;background:rgba(139,92,246,0.15);border-radius:8px;display:flex;align-items:center;justify-content:center"><i class="fas fa-store" style="color:#8b5cf6"></i></div>' +
+            '<div><div style="color:var(--text-primary);font-weight:600;font-size:13px">Supplier</div><div style="color:var(--text-muted);font-size:11px">' + (state.suppliers.length > 0 ? state.suppliers[0].name : 'Not set') + '</div></div>' +
+          '</div>' +
+        '</div>'
+      : '') +
+
       // Profit summary bar
       '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;padding:16px;margin-bottom:20px;display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:16px;text-align:center">' +
         '<div><div style="color:var(--text-muted);font-size:10px;text-transform:uppercase;letter-spacing:1px">Your Cost</div><div style="color:#ef4444;font-size:20px;font-weight:800">$' + totalCost.toFixed(2) + '</div></div>' +

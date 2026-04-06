@@ -65,6 +65,26 @@ virtualTryonRoutes.post('/generate', async (c) => {
   const startTime = Date.now()
   const customerId = await getCustomerId(c)
 
+  // Ensure roof_jobs table exists
+  await c.env.DB.prepare(`CREATE TABLE IF NOT EXISTS roof_jobs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_id TEXT UNIQUE NOT NULL,
+    customer_id INTEGER NOT NULL,
+    order_id INTEGER,
+    status TEXT DEFAULT 'processing',
+    prompt TEXT,
+    roof_style TEXT,
+    roof_color TEXT,
+    original_image_url TEXT,
+    mask_image_url TEXT,
+    final_image_url TEXT,
+    replicate_model TEXT,
+    error_message TEXT,
+    processing_time_ms INTEGER,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )`).run().catch(() => {})
+
   try {
     const body = await c.req.json()
     const {
@@ -89,22 +109,71 @@ virtualTryonRoutes.post('/generate', async (c) => {
     const prompt = custom_prompt || promptFn(roof_color)
 
     const replicateKey = c.env.REPLICATE_API_KEY
-    const geminiKey = (c.env as any).GEMINI_API_KEY || (c.env as any).GEMINI_ENHANCE_API_KEY || (c.env as any).default_gemini_googleaistudio_key
-
-    if (!replicateKey && !geminiKey) {
+    const openaiKey = c.env.OPENAI_API_KEY
+    if (!replicateKey && !openaiKey) {
       return c.json({
         success: false,
-        error: 'Virtual Try-On not configured. REPLICATE_API_KEY or GEMINI_API_KEY required.',
-        setup_hint: 'Add REPLICATE_API_KEY via: npx wrangler pages secret put REPLICATE_API_KEY'
+        error: 'Virtual Try-On not configured. REPLICATE_API_KEY or OPENAI_API_KEY required.',
       }, 503)
     }
 
-    // ── Gemini image-editing path (synchronous) ──────────────
-    if (!replicateKey && geminiKey) {
-      return await generateWithGemini(c, {
-        geminiKey, original_image, mask_image, roof_style, roof_color,
-        prompt, customerId, order_id, startTime,
-      })
+    console.log('[VirtualTryOn] Using', replicateKey ? 'Replicate' : 'OpenAI', 'for generation')
+
+    // ── OpenAI path (preferred over Gemini) ──────────────
+    if (!replicateKey && openaiKey) {
+      try {
+        const jobId = 'oai_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8)
+
+        // Use OpenAI's image generation (DALL-E 3)
+        const openaiPrompt = `A photorealistic aerial photograph of a residential house with a ${roof_color} ${roof_style} roof. The roof should look like a professional roofing job with ${roof_style} material in ${roof_color} color. Maintain the house structure but change only the roof material and color. High quality, realistic lighting.`
+
+        const openaiRes = await fetch('https://api.openai.com/v1/images/generations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${openaiKey}` },
+          body: JSON.stringify({
+            model: 'dall-e-3',
+            prompt: openaiPrompt,
+            n: 1,
+            size: '1024x1024',
+            quality: 'hd',
+            style: 'natural'
+          })
+        })
+
+        if (!openaiRes.ok) {
+          const errText = await openaiRes.text()
+          console.error('[VirtualTryOn] OpenAI error:', openaiRes.status, errText.slice(0, 300))
+          return c.json({ success: false, error: 'AI image generation failed. Please try again.' }, 502)
+        }
+
+        const openaiData = await openaiRes.json() as any
+        const imageUrl = openaiData.data?.[0]?.url
+
+        if (!imageUrl) {
+          return c.json({ success: false, error: 'No image generated. Please try a different style or color.' }, 502)
+        }
+
+        const elapsed = Date.now() - startTime
+
+        // Save to DB
+        await c.env.DB.prepare(`
+          INSERT INTO roof_jobs (job_id, customer_id, order_id, status, prompt, roof_style, roof_color,
+            original_image_url, mask_image_url, replicate_model, final_image_url, processing_time_ms, created_at, updated_at)
+          VALUES (?, ?, ?, 'succeeded', ?, ?, ?, '[uploaded]', '[uploaded]', 'dall-e-3', ?, ?, datetime('now'), datetime('now'))
+        `).bind(jobId, customerId, order_id, openaiPrompt, roof_style, roof_color, imageUrl, elapsed).run().catch(e => console.error('[VirtualTryOn] DB error:', e))
+
+        return c.json({
+          success: true,
+          job_id: jobId,
+          status: 'succeeded',
+          final_image_url: imageUrl,
+          processing_time_ms: elapsed,
+          model: 'dall-e-3'
+        })
+      } catch (err: any) {
+        console.error('[VirtualTryOn] OpenAI generation error:', err.message)
+        return c.json({ success: false, error: 'AI generation failed: ' + (err.message || 'Unknown error') }, 500)
+      }
     }
 
     // ── Replicate async path ─────────────────────────────────

@@ -744,7 +744,16 @@
       // Replicate async path: poll for status
       if (res.job_id) {
         state.jobId = res.job_id;
+        state.pollStartTime = Date.now();
+        state.pollFailures = 0;
         state.pollTimer = setInterval(function () {
+          // Timeout after 90 seconds
+          if (Date.now() - state.pollStartTime > 90000) {
+            clearInterval(state.pollTimer);
+            state.errorMsg = 'Generation timed out after 90 seconds. Please try again.';
+            state.step = 6; render();
+            return;
+          }
           api('GET', '/status/' + state.jobId).then(function (r) {
             if (r.status === 'succeeded') {
               clearInterval(state.pollTimer);
@@ -760,7 +769,16 @@
               var el = document.getElementById('aiStatus');
               if (el) el.innerHTML = '<i class="fas fa-cog fa-spin mr-1"></i>Processing… ' + Math.round((r.elapsed_ms||0)/1000) + 's';
             }
-          }).catch(function(){});
+          }).catch(function(err) {
+            console.error('Polling error:', err);
+            // Don't crash, but count failures
+            state.pollFailures = (state.pollFailures || 0) + 1;
+            if (state.pollFailures > 5) {
+              clearInterval(state.pollTimer);
+              state.errorMsg = 'Connection lost while processing. Please check your results and try again.';
+              state.step = 6; render();
+            }
+          });
         }, 2000);
       } else {
         state.errorMsg = 'AI generation failed — no job ID returned.';
