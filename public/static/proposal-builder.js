@@ -32,6 +32,7 @@ document.addEventListener('DOMContentLoaded', () => {
     catalog: [],
     catalogLoaded: false,
     selectedReport: null,
+    selectedReportMaterials: null,
     attachments: {
       includeRoofReport: true,
       includeMaterialBOM: true,
@@ -195,7 +196,30 @@ document.addEventListener('DOMContentLoaded', () => {
             '<option value="">Select a completed report...</option>' +
             state.reports.map(function(r) { return '<option value="' + r.id + '"' + (state.form.attached_report_id == r.id ? ' selected' : '') + '>' + (r.property_address || 'Report #' + r.id) + ' — ' + (r.created_at || '').slice(0, 10) + '</option>'; }).join('') +
           '</select>' +
-          (state.selectedReport ? '<div style="margin-top:12px;padding:12px;background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px"><p style="color:#2563eb;font-size:13px;font-weight:600">' + (state.selectedReport.property_address || '') + '</p><p style="color:#6b7280;font-size:12px">Roof area: ' + (state.selectedReport.roof_area_sqft ? Math.round(state.selectedReport.roof_area_sqft) + ' sq ft' : 'N/A') + ' | Pitch: ' + (state.selectedReport.roof_pitch || 'N/A') + '</p></div>' : '')
+          (state.selectedReport ? '<div style="margin-top:12px;padding:12px;background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px"><p style="color:#2563eb;font-size:13px;font-weight:600">' + (state.selectedReport.property_address || '') + '</p><p style="color:#6b7280;font-size:12px">Roof area: ' + (state.selectedReport.roof_area_sqft ? Math.round(state.selectedReport.roof_area_sqft) + ' sq ft' : 'N/A') + ' | Pitch: ' + (state.selectedReport.roof_pitch || 'N/A') + '</p></div>' : '') +
+          // Material Order Summary — show after report is selected
+          (state.selectedReport ? (state.selectedReportMaterials ?
+            '<div style="margin-top:12px;padding:16px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px">' +
+              '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">' +
+                '<i class="fas fa-check-circle" style="color:#16a34a;font-size:16px"></i>' +
+                '<span style="color:#166534;font-weight:700;font-size:14px">Material Order Ready to Attach</span>' +
+              '</div>' +
+              '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:12px">' +
+                (state.selectedReportMaterials.shingle_bundles ? '<div style="background:white;padding:8px;border-radius:6px;border:1px solid #dcfce7"><span style="color:#6b7280">Shingles:</span> <strong style="color:#1a1a2e">' + state.selectedReportMaterials.shingle_bundles + ' bundles</strong></div>' : '') +
+                (state.selectedReportMaterials.underlayment_rolls ? '<div style="background:white;padding:8px;border-radius:6px;border:1px solid #dcfce7"><span style="color:#6b7280">Underlayment:</span> <strong style="color:#1a1a2e">' + state.selectedReportMaterials.underlayment_rolls + ' rolls</strong></div>' : '') +
+                (state.selectedReportMaterials.ridge_cap_bundles ? '<div style="background:white;padding:8px;border-radius:6px;border:1px solid #dcfce7"><span style="color:#6b7280">Ridge Cap:</span> <strong style="color:#1a1a2e">' + state.selectedReportMaterials.ridge_cap_bundles + ' bundles</strong></div>' : '') +
+                (state.selectedReportMaterials.drip_edge_pcs ? '<div style="background:white;padding:8px;border-radius:6px;border:1px solid #dcfce7"><span style="color:#6b7280">Drip Edge:</span> <strong style="color:#1a1a2e">' + state.selectedReportMaterials.drip_edge_pcs + ' pcs</strong></div>' : '') +
+                (state.selectedReportMaterials.ice_water_rolls ? '<div style="background:white;padding:8px;border-radius:6px;border:1px solid #dcfce7"><span style="color:#6b7280">Ice Shield:</span> <strong style="color:#1a1a2e">' + state.selectedReportMaterials.ice_water_rolls + ' rolls</strong></div>' : '') +
+                (state.selectedReportMaterials.starter_strip_pcs ? '<div style="background:white;padding:8px;border-radius:6px;border:1px solid #dcfce7"><span style="color:#6b7280">Starter Strip:</span> <strong style="color:#1a1a2e">' + state.selectedReportMaterials.starter_strip_pcs + ' pcs</strong></div>' : '') +
+                (state.selectedReportMaterials.nail_boxes ? '<div style="background:white;padding:8px;border-radius:6px;border:1px solid #dcfce7"><span style="color:#6b7280">Nails:</span> <strong style="color:#1a1a2e">' + state.selectedReportMaterials.nail_boxes + ' boxes</strong></div>' : '') +
+                (state.selectedReportMaterials.total_material_cost_cad ? '<div style="background:white;padding:8px;border-radius:6px;border:1px solid #dcfce7"><span style="color:#6b7280">Est. Cost:</span> <strong style="color:#16a34a">$' + Number(state.selectedReportMaterials.total_material_cost_cad).toFixed(2) + '</strong></div>' : '') +
+              '</div>' +
+              '<p style="color:#166534;font-size:11px;margin-top:8px"><i class="fas fa-truck" style="margin-right:4px"></i>This material order will be available in your Supplier Orders after proposal is created</p>' +
+            '</div>'
+          : '<div style="margin-top:12px;padding:12px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px">' +
+              '<p style="color:#92400e;font-size:13px"><i class="fas fa-info-circle" style="margin-right:6px"></i>No material estimate found for this report. You can still create a proposal — material items can be added manually in the estimate builder.</p>' +
+            '</div>'
+          ) : '')
         : '<p style="color:#dc2626;font-size:14px"><i class="fas fa-exclamation-triangle" style="margin-right:6px"></i>No completed reports found. <a href="/customer/order" style="color:#2563eb;text-decoration:underline">Order a report first</a></p>') +
       '</div>' +
 
@@ -833,9 +857,29 @@ document.addEventListener('DOMContentLoaded', () => {
     var proposal = state.form;
     if (!proposal) return;
 
-    var items = (state.form.items || []).map(function(item) {
-      return { description: item.description, quantity: item.quantity, unit: item.unit || 'each', unit_price: item.unit_price || 0 };
-    });
+    var items;
+    if (state.selectedReportMaterials) {
+      var m = state.selectedReportMaterials;
+      items = [];
+      if (m.shingle_bundles) items.push({ description: 'Shingle Bundles (3-tab/Architectural)', quantity: m.shingle_bundles, unit: 'bundle', unit_price: 0 });
+      if (m.underlayment_rolls) items.push({ description: 'Synthetic Underlayment', quantity: m.underlayment_rolls, unit: 'roll', unit_price: 0 });
+      if (m.ridge_cap_bundles) items.push({ description: 'Ridge Cap Shingles', quantity: m.ridge_cap_bundles, unit: 'bundle', unit_price: 0 });
+      if (m.ice_water_rolls) items.push({ description: 'Ice & Water Shield', quantity: m.ice_water_rolls, unit: 'roll', unit_price: 0 });
+      if (m.drip_edge_pcs) items.push({ description: 'Drip Edge', quantity: m.drip_edge_pcs, unit: 'piece', unit_price: 0 });
+      if (m.starter_strip_pcs) items.push({ description: 'Starter Strip', quantity: m.starter_strip_pcs, unit: 'piece', unit_price: 0 });
+      if (m.nail_boxes) items.push({ description: 'Roofing Nails', quantity: m.nail_boxes, unit: 'box', unit_price: 0 });
+      if (m.caulk_tubes) items.push({ description: 'Roofing Caulk/Sealant', quantity: m.caulk_tubes, unit: 'tube', unit_price: 0 });
+      if (m.pipe_boots) items.push({ description: 'Pipe Boot Flashings', quantity: m.pipe_boots, unit: 'piece', unit_price: 0 });
+      if (items.length === 0) {
+        items = (state.form.items || []).map(function(item) {
+          return { description: item.description, quantity: item.quantity, unit: item.unit || 'each', unit_price: item.unit_price || 0 };
+        });
+      }
+    } else {
+      items = (state.form.items || []).map(function(item) {
+        return { description: item.description, quantity: item.quantity, unit: item.unit || 'each', unit_price: item.unit_price || 0 };
+      });
+    }
 
     var cust = proposal.isNewCustomer ? proposal.newCustomer : state.customers.find(function(c) { return c.id == proposal.customer_id; }) || {};
 
@@ -1067,6 +1111,7 @@ document.addEventListener('DOMContentLoaded', () => {
       state.pricingMethod = 'line_item';
       state.pricePerSquare = 350;
       state.selectedReport = null;
+      state.selectedReportMaterials = null;
       state.attachments = { includeRoofReport: true, includeMaterialBOM: true, insuranceCert: '', warrantyDoc: '', wcbCoverage: '', customAttachment: '' };
       render();
     },
@@ -1213,14 +1258,37 @@ document.addEventListener('DOMContentLoaded', () => {
         alert('Failed to seed catalog. Please try again or add items manually.');
       }
     },
-    selectReport(reportId) {
+    async selectReport(reportId) {
       state.form.attached_report_id = reportId || null;
       state.selectedReport = state.reports.find(function(r) { return String(r.id) === String(reportId); }) || null;
+      state.selectedReportMaterials = null;
+
       if (state.selectedReport) {
         state.form.property_address = state.selectedReport.property_address || '';
         var addrEl = document.getElementById('step3-address');
         if (addrEl) addrEl.value = state.form.property_address;
+
+        // Fetch full report with materials
+        try {
+          var res = await fetch('/api/customer/orders/' + reportId, { headers: headers() });
+          if (res.ok) {
+            var data = await res.json();
+            var report = data.report || data.order || data;
+            // Try to get materials from various possible locations
+            if (report.materials) {
+              state.selectedReportMaterials = typeof report.materials === 'string' ? JSON.parse(report.materials) : report.materials;
+            } else if (report.material_estimate) {
+              state.selectedReportMaterials = typeof report.material_estimate === 'string' ? JSON.parse(report.material_estimate) : report.material_estimate;
+            } else if (report.api_response_raw) {
+              try {
+                var raw = typeof report.api_response_raw === 'string' ? JSON.parse(report.api_response_raw) : report.api_response_raw;
+                state.selectedReportMaterials = raw.materials || null;
+              } catch(e) {}
+            }
+          }
+        } catch(e) { console.warn('Could not fetch report materials:', e); }
       }
+
       render();
     },
     goToStep4() {
@@ -1229,6 +1297,11 @@ document.addEventListener('DOMContentLoaded', () => {
       state.form.customer_email = (document.getElementById('step3-email') || {}).value || '';
       state.form.customer_phone = (document.getElementById('step3-phone') || {}).value || '';
       state.form.property_address = (document.getElementById('step3-address') || {}).value || '';
+
+      if (!state.form.attached_report_id) {
+        alert('Please select a roof measurement report to continue. A report is required for all proposals.');
+        return;
+      }
 
       if (!state.form.customer_name) {
         alert('Please enter the customer name to continue.');
