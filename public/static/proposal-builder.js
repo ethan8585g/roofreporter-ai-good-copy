@@ -1120,13 +1120,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if (reportSelect) f.attached_report_id = reportSelect.value || null;
 
     // Also collect step 3 fields if they exist in DOM
-    var step3Name = document.getElementById('step3-name');
+    var step3Name = document.getElementById('step3-name') || document.getElementById('dash-cust-name');
     if (step3Name) f.customer_name = step3Name.value || f.customer_name || '';
-    var step3Email = document.getElementById('step3-email');
+    var step3Email = document.getElementById('step3-email') || document.getElementById('dash-cust-email');
     if (step3Email) f.customer_email = step3Email.value || f.customer_email || '';
-    var step3Phone = document.getElementById('step3-phone');
+    var step3Phone = document.getElementById('step3-phone') || document.getElementById('dash-cust-phone');
     if (step3Phone) f.customer_phone = step3Phone.value || f.customer_phone || '';
-    var step3Addr = document.getElementById('step3-address');
+    var step3Addr = document.getElementById('step3-address') || document.getElementById('dash-cust-address');
     if (step3Addr) f.property_address = step3Addr.value || f.property_address || '';
 
     // Capture per-square price from DOM if exists
@@ -1140,12 +1140,22 @@ document.addEventListener('DOMContentLoaded', () => {
   // API ACTIONS
   // ============================================================
   async function saveProposal(andSend = false) {
+    // Collect from dashboard if we're on step 3, otherwise from editor
+    if (state.createStep === 3 && typeof window._pb.collectDashboardData === 'function') {
+      window._pb.collectDashboardData();
+    }
     collectFormData();
     const f = state.form;
 
+    // If coming from dashboard, use customer_name/email as new customer
+    if (state.createStep === 3 && f.customer_name && !f.customer_id) {
+      f.isNewCustomer = true;
+      f.newCustomer = { name: f.customer_name, email: f.customer_email || '', phone: f.customer_phone || '', address: f.property_address || '' };
+    }
+
     // Validate
-    if (!f.isNewCustomer && !f.customer_id) { pbToast('Please select a customer', 'error'); return; }
-    if (f.isNewCustomer && (!f.newCustomer.name || !f.newCustomer.email)) { pbToast('Name and email are required for new customer', 'error'); return; }
+    if (!f.isNewCustomer && !f.customer_id) { pbToast('Please select or enter a customer', 'error'); return; }
+    if (f.isNewCustomer && (!f.newCustomer.name)) { pbToast('Customer name is required', 'error'); return; }
     // Auto-create line item from per-square pricing
     if (state.pricingMethod === 'per_square' && state.selectedReport && state.pricePerSquare > 0) {
       var squares = Math.ceil((state.selectedReport.roof_area_sqft || 0) / 100);
@@ -1451,7 +1461,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (state.selectedReport) {
         state.form.property_address = state.selectedReport.property_address || '';
-        var addrEl = document.getElementById('step3-address');
+        var addrEl = document.getElementById('step3-address') || document.getElementById('dash-cust-address');
         if (addrEl) addrEl.value = state.form.property_address;
 
         // Use report data already loaded in state.reports instead of fetching
