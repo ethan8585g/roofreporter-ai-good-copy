@@ -1408,7 +1408,9 @@ customerAuthRoutes.get('/reports-list', async (c) => {
     const { ownerId } = await resolveTeamOwner(c.env.DB, session.customer_id)
 
     const reports = await c.env.DB.prepare(`
-      SELECT r.id, r.status, o.property_address, o.created_at, r.report_json IS NOT NULL as has_data
+      SELECT r.id, r.status, o.property_address, o.created_at,
+        r.roof_area_sqft, r.roof_pitch_degrees as roof_pitch,
+        r.api_response_raw IS NOT NULL as has_data
       FROM reports r
       JOIN orders o ON o.id = r.order_id
       WHERE o.customer_id = ? AND r.status IN ('completed','enhancing')
