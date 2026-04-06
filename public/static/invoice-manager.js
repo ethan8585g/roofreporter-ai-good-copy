@@ -162,8 +162,8 @@ document.addEventListener('DOMContentLoaded', () => {
         <p class="text-gray-500 text-sm mt-1">Create invoices, track payments, and send Square payment links</p>
       </div>
       <div class="flex gap-2">
-        <button onclick="window._im.fromProposal()" class="px-4 py-2 bg-blue-500/15 text-blue-400 rounded-xl text-sm font-medium hover:bg-blue-500/15 border border-purple-200 transition-all">
-          <i class="fas fa-file-import mr-1"></i>From Proposal
+        <button onclick="window._im.fromProposal()" class="px-4 py-2.5 bg-[#111111] border border-white/10 text-gray-300 rounded-xl font-semibold text-sm hover:bg-white/5 transition-all">
+          <i class="fas fa-file-signature mr-1.5"></i>From Proposal
         </button>
         <button onclick="window._im.create()" class="px-5 py-2.5 bg-gradient-to-r from-[#111111] to-[#1a1a1a] text-white rounded-xl font-semibold text-sm hover:shadow-lg transition-all">
           <i class="fas fa-plus mr-1.5"></i>New Invoice
@@ -176,21 +176,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
     <!-- Stats Cards -->
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-      <div class="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-4 border border-green-200 cursor-pointer hover:shadow-md transition-all" onclick="window._im.setFilter('paid')">
-        <div class="flex items-center gap-2 mb-1"><div class="w-7 h-7 bg-green-100 rounded-lg flex items-center justify-center"><i class="fas fa-check-circle text-emerald-400 text-xs"></i></div><p class="text-xs text-green-700 font-medium">Collected</p></div>
-        <p class="text-2xl font-bold text-green-700">$${totalPaid.toFixed(2)}</p>
+      <div onclick="window._im.setFilter('paid')" class="cursor-pointer bg-[#111111] rounded-xl border border-white/10 p-5 hover:border-emerald-500/30 transition-all group">
+        <div class="flex items-center justify-between mb-3"><div class="w-10 h-10 bg-emerald-500/15 rounded-lg flex items-center justify-center"><i class="fas fa-check-circle text-emerald-400"></i></div><i class="fas fa-arrow-right text-gray-600 group-hover:text-emerald-400 transition-colors text-xs"></i></div>
+        <div class="text-2xl font-black text-emerald-400">$${totalPaid.toFixed(2)}</div>
+        <div class="text-xs text-gray-500 font-medium mt-1">Collected</div>
       </div>
-      <div class="bg-gradient-to-br from-blue-50 to-blue-700 rounded-xl p-4 border border-blue-200 cursor-pointer hover:shadow-md transition-all" onclick="window._im.setFilter('outstanding')">
-        <div class="flex items-center gap-2 mb-1"><div class="w-7 h-7 bg-blue-100 rounded-lg flex items-center justify-center"><i class="fas fa-clock text-blue-400 text-xs"></i></div><p class="text-xs text-blue-700 font-medium">Outstanding</p></div>
-        <p class="text-2xl font-bold text-blue-700">$${totalOut.toFixed(2)}</p>
+      <div onclick="window._im.setFilter('outstanding')" class="cursor-pointer bg-[#111111] rounded-xl border border-white/10 p-5 hover:border-blue-500/30 transition-all group">
+        <div class="flex items-center justify-between mb-3"><div class="w-10 h-10 bg-blue-500/15 rounded-lg flex items-center justify-center"><i class="fas fa-paper-plane text-blue-400"></i></div><i class="fas fa-arrow-right text-gray-600 group-hover:text-blue-400 transition-colors text-xs"></i></div>
+        <div class="text-2xl font-black text-blue-400">$${totalOut.toFixed(2)}</div>
+        <div class="text-xs text-gray-500 font-medium mt-1">Outstanding</div>
       </div>
-      <div class="bg-gradient-to-br from-red-50 to-rose-50 rounded-xl p-4 border border-red-200 cursor-pointer hover:shadow-md transition-all" onclick="window._im.setFilter('overdue')">
-        <div class="flex items-center gap-2 mb-1"><div class="w-7 h-7 bg-red-100 rounded-lg flex items-center justify-center"><i class="fas fa-exclamation-triangle text-red-400 text-xs"></i></div><p class="text-xs text-red-700 font-medium">Overdue</p></div>
-        <p class="text-2xl font-bold text-red-700">$${totalOverdue.toFixed(2)}</p>
+      <div onclick="window._im.setFilter('overdue')" class="cursor-pointer bg-[#111111] rounded-xl border border-white/10 p-5 hover:border-red-500/30 transition-all group">
+        <div class="flex items-center justify-between mb-3"><div class="w-10 h-10 bg-red-500/15 rounded-lg flex items-center justify-center"><i class="fas fa-exclamation-triangle text-red-400"></i></div><i class="fas fa-arrow-right text-gray-600 group-hover:text-red-400 transition-colors text-xs"></i></div>
+        <div class="text-2xl font-black text-red-400">$${totalOverdue.toFixed(2)}</div>
+        <div class="text-xs text-gray-500 font-medium mt-1">Overdue</div>
       </div>
-      <div class="bg-gradient-to-br from-gray-50 to-slate-50 rounded-xl p-4 border border-white/10 cursor-pointer hover:shadow-md transition-all" onclick="window._im.setFilter('all')">
-        <div class="flex items-center gap-2 mb-1"><div class="w-7 h-7 bg-white/5 rounded-lg flex items-center justify-center"><i class="fas fa-file-invoice text-gray-400 text-xs"></i></div><p class="text-xs text-gray-400 font-medium">Total Invoices</p></div>
-        <p class="text-2xl font-bold text-white">${s.total_invoices || allInvoices.length}</p>
+      <div onclick="window._im.setFilter('all')" class="cursor-pointer bg-[#111111] rounded-xl border border-white/10 p-5 hover:border-white/30 transition-all group">
+        <div class="flex items-center justify-between mb-3"><div class="w-10 h-10 bg-white/5 rounded-lg flex items-center justify-center"><i class="fas fa-file-invoice text-gray-400"></i></div><i class="fas fa-arrow-right text-gray-600 group-hover:text-white transition-colors text-xs"></i></div>
+        <div class="text-2xl font-black text-white">${s.total_invoices || allInvoices.length}</div>
+        <div class="text-xs text-gray-500 font-medium mt-1">Total Invoices</div>
       </div>
     </div>
 
@@ -232,10 +236,11 @@ document.addEventListener('DOMContentLoaded', () => {
               <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Actions</th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-gray-100">
+          <tbody class="divide-y divide-white/5">
             ${invoices.map(inv => {
-              const sc = { draft: 'bg-white/5 text-gray-300', sent: 'bg-blue-500/100/15 text-blue-400', viewed: 'bg-blue-500/15/15 text-blue-400', paid: 'bg-emerald-500/15 text-emerald-400', overdue: 'bg-red-500/100/15 text-red-400', cancelled: 'bg-white/5 text-gray-500', refunded: 'bg-blue-500/15 text-blue-400' }[inv.status] || 'bg-white/5 text-gray-400';
-              return `<tr class="hover:bg-[#111111]/5">
+              const sc = { draft: 'bg-white/5 text-gray-300', sent: 'bg-blue-500/15 text-blue-400', viewed: 'bg-blue-500/15 text-blue-400', paid: 'bg-emerald-500/15 text-emerald-400', overdue: 'bg-red-500/15 text-red-400', cancelled: 'bg-white/5 text-gray-500', refunded: 'bg-blue-500/15 text-blue-400' }[inv.status] || 'bg-white/5 text-gray-400';
+              const statusBorderColor = inv.status === 'paid' ? '#10b981' : inv.status === 'overdue' ? '#ef4444' : inv.status === 'sent' || inv.status === 'viewed' ? '#3b82f6' : 'transparent';
+              return `<tr class="border-b border-white/5 hover:bg-white/5 transition-colors" style="border-left:3px solid ${statusBorderColor}">
                 <td class="px-4 py-3 font-mono text-xs font-medium">${inv.invoice_number}</td>
                 <td class="px-4 py-3">${inv.customer_name || 'Unknown'}<br><span class="text-xs text-gray-400">${inv.customer_company || ''}</span></td>
                 <td class="px-4 py-3 text-gray-500 text-xs">${(inv.created_at || '').slice(0, 10)}</td>
@@ -249,7 +254,9 @@ document.addEventListener('DOMContentLoaded', () => {
                   ${inv.status === 'draft' ? `<button onclick="window._im.send(${inv.id})" class="text-blue-500 hover:text-blue-700 text-xs mr-1" title="Send"><i class="fas fa-paper-plane"></i></button>` : ''}
                   ${['sent','viewed','overdue'].includes(inv.status) ? `<button onclick="window._im.markPaid(${inv.id})" class="text-emerald-400 hover:text-green-800 text-xs mr-1" title="Mark Paid"><i class="fas fa-check-circle"></i></button>` : ''}
                   ${inv.status === 'draft' ? `<button onclick="window._im.del(${inv.id})" class="text-red-400 hover:text-red-400 text-xs" title="Delete"><i class="fas fa-trash"></i></button>` : ''}
-                  ${['sent','viewed'].includes(inv.status) ? `<button onclick="window._im.void(${inv.id})" class="text-gray-400 hover:text-gray-400 text-xs" title="Void"><i class="fas fa-ban"></i></button>` : ''}
+                  ${['sent','viewed'].includes(inv.status) ? `<button onclick="window._im.void(${inv.id})" class="text-gray-400 hover:text-gray-400 text-xs mr-1" title="Void"><i class="fas fa-ban"></i></button>` : ''}
+                  ${['sent','viewed','overdue'].includes(inv.status) ? `<button onclick="window._im.resend(${inv.id})" class="text-blue-400 hover:text-blue-300 text-xs mr-1" title="Resend"><i class="fas fa-redo"></i></button>` : ''}
+                  <button onclick="window._im.clone(${inv.id})" class="text-blue-400 hover:text-blue-300 text-xs" title="Clone"><i class="fas fa-copy"></i></button>
                 </td>
               </tr>`;
             }).join('')}
@@ -363,10 +370,26 @@ document.addEventListener('DOMContentLoaded', () => {
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
       <div class="bg-[#111111] rounded-xl border border-white/10 p-6">
         <h3 class="text-lg font-bold text-white mb-3"><i class="fas fa-sticky-note text-emerald-400 mr-2"></i>Notes</h3>
+        <div class="flex items-center justify-between mb-1">
+          <label class="text-xs font-semibold text-gray-400">Quick Templates</label>
+          <div class="flex gap-1">
+            <button onclick="document.getElementById('im-notes').value='Thank you for choosing us for your roofing project. We appreciate your business!';window._im.updTotals()" class="text-[10px] px-2 py-0.5 bg-white/5 text-gray-400 rounded hover:bg-white/10">Thank You</button>
+            <button onclick="document.getElementById('im-notes').value='Payment is due upon receipt. Please reference invoice number when making payment.';window._im.updTotals()" class="text-[10px] px-2 py-0.5 bg-white/5 text-gray-400 rounded hover:bg-white/10">Payment Due</button>
+            <button onclick="document.getElementById('im-notes').value='This invoice covers materials and labor for the roof replacement at the property address listed above.';window._im.updTotals()" class="text-[10px] px-2 py-0.5 bg-white/5 text-gray-400 rounded hover:bg-white/10">Scope</button>
+          </div>
+        </div>
         <textarea id="im-notes" rows="3" class="w-full border border-white/15 rounded-lg px-3 py-2 text-sm" placeholder="Additional notes...">${f.notes}</textarea>
       </div>
       <div class="bg-[#111111] rounded-xl border border-white/10 p-6">
         <h3 class="text-lg font-bold text-white mb-3"><i class="fas fa-gavel text-emerald-400 mr-2"></i>Payment Terms</h3>
+        <div class="flex items-center justify-between mb-1">
+          <label class="text-xs font-semibold text-gray-400">Quick Templates</label>
+          <div class="flex gap-1">
+            <button onclick="document.getElementById('im-terms').value='Net 30 — Payment due within 30 days of invoice date. Late payments subject to 2% monthly interest.';window._im.updTotals()" class="text-[10px] px-2 py-0.5 bg-white/5 text-gray-400 rounded hover:bg-white/10">Net 30</button>
+            <button onclick="document.getElementById('im-terms').value='Due on receipt. 50% deposit required before work begins. Balance due upon completion.';window._im.updTotals()" class="text-[10px] px-2 py-0.5 bg-white/5 text-gray-400 rounded hover:bg-white/10">50% Deposit</button>
+            <button onclick="document.getElementById('im-terms').value='Net 15 — Payment due within 15 days. We accept credit card, e-transfer, and cheque.';window._im.updTotals()" class="text-[10px] px-2 py-0.5 bg-white/5 text-gray-400 rounded hover:bg-white/10">Net 15</button>
+          </div>
+        </div>
         <textarea id="im-terms" rows="3" class="w-full border border-white/15 rounded-lg px-3 py-2 text-sm">${f.terms}</textarea>
       </div>
     </div>
@@ -479,7 +502,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       <div class="p-8 text-center text-gray-400 text-xs">
         <p>Thank you for your business!</p>
-        <p class="mt-1">Roof Manager | reports@reusecanada.ca</p>
+        <p class="mt-1">Roof Manager | sales@roofmanager.ca</p>
       </div>
     </div>`;
   }
@@ -732,6 +755,49 @@ document.addEventListener('DOMContentLoaded', () => {
     copyPayLink() {
       const url = state.form._squareUrl;
       if (url) { navigator.clipboard.writeText(url); imToast('Payment link copied!', 'success'); }
+    },
+    clone(id) {
+      var inv = state.invoices.find(function(i) { return i.id === id; });
+      if (!inv) return;
+      // Fetch full invoice data for cloning
+      fetch('/api/invoices/' + id, { headers: headers() })
+        .then(r => r.json())
+        .then(data => {
+          const fullInv = data.invoice;
+          const items = data.items || [];
+          state.form = {
+            customer_id: fullInv.customer_id || '',
+            invoice_number: 'INV-' + new Date().toISOString().slice(0,10).replace(/-/g,'') + '-' + Math.random().toString(36).slice(2,6).toUpperCase(),
+            created_date: new Date().toISOString().slice(0,10),
+            due_date: new Date(Date.now() + 30*24*60*60*1000).toISOString().slice(0,10),
+            items: items.length > 0 ? items.map(function(item) { return { description: item.description, quantity: item.quantity, unit: item.unit || 'each', unit_price: item.unit_price, is_taxable: item.is_taxable !== 0 }; }) : [{ description: '', quantity: 1, unit: 'each', unit_price: 0, is_taxable: true }],
+            discount_type: fullInv.discount_type || 'fixed',
+            discount_amount: fullInv.discount_amount || 0,
+            tax_rate: fullInv.tax_rate || 5,
+            notes: fullInv.notes || '',
+            terms: fullInv.terms || '',
+            attached_report_id: fullInv.attached_report_id || null
+          };
+          state.mode = 'create';
+          state.editId = null;
+          render();
+          imToast('Invoice cloned! Edit and save as new.', 'info');
+        })
+        .catch(() => imToast('Failed to clone invoice', 'error'));
+    },
+    async resend(id) {
+      imToast('Resending invoice...', 'info');
+      try {
+        var res = await fetch('/api/invoices/' + id + '/send', { method: 'POST', headers: headers() });
+        var data = await res.json();
+        if (data.success || data.share_url) {
+          imToast('Invoice resent!', 'success');
+        } else {
+          imToast('Failed to resend: ' + (data.error || 'Unknown error'), 'error');
+        }
+      } catch(e) {
+        imToast('Network error resending invoice', 'error');
+      }
     },
     async fromProposal() {
       const proposals = state.proposals.filter(p => p.status !== 'cancelled' && p.status !== 'draft');
