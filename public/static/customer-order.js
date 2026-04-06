@@ -1549,8 +1549,8 @@ async function buyPackage(pkgId) {
     });
     const data = await res.json();
     if (data.checkout_url) window.location.href = data.checkout_url;
-    else alert(data.error || 'Checkout failed');
+    else showMsg('error', data.error || 'Checkout failed. Please try again.');
   } catch (e) {
-    alert('Network error.');
+    showMsg('error', 'Network error. Please check your connection and try again.');
   }
 }

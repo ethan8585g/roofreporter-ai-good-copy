@@ -55,6 +55,20 @@ document.addEventListener('DOMContentLoaded', () => {
     form: resetForm()
   };
 
+  function pbToast(msg, type) {
+    var existing = document.getElementById('pb-toast');
+    if (existing) existing.remove();
+    var toast = document.createElement('div');
+    toast.id = 'pb-toast';
+    toast.style.cssText = 'position:fixed;top:20px;right:20px;z-index:99999;padding:14px 20px;border-radius:10px;font-size:14px;font-weight:600;max-width:400px;box-shadow:0 4px 20px rgba(0,0,0,0.15);animation:slideIn 0.3s ease-out;';
+    toast.style.background = type === 'error' ? '#fef2f2' : type === 'success' ? '#f0fdf4' : '#eff6ff';
+    toast.style.color = type === 'error' ? '#991b1b' : type === 'success' ? '#166534' : '#1e40af';
+    toast.style.border = '1px solid ' + (type === 'error' ? '#fecaca' : type === 'success' ? '#bbf7d0' : '#bfdbfe');
+    toast.innerHTML = (type === 'error' ? '<i class="fas fa-exclamation-circle" style="margin-right:8px"></i>' : type === 'success' ? '<i class="fas fa-check-circle" style="margin-right:8px"></i>' : '<i class="fas fa-info-circle" style="margin-right:8px"></i>') + msg;
+    document.body.appendChild(toast);
+    setTimeout(function() { toast.remove(); }, 4000);
+  }
+
   function resetForm() {
     const today = new Date();
     const validUntil = new Date(today);
@@ -804,7 +818,7 @@ document.addEventListener('DOMContentLoaded', () => {
               <div><h1 class="text-xl font-bold">Roof Manager</h1><p class="text-blue-200 text-xs">Professional Roof Measurement Reports</p></div>
             </div>
             <p class="text-blue-200 text-sm">Alberta, Canada</p>
-            <p class="text-blue-200 text-xs">reports@reusecanada.ca</p>
+            <p class="text-blue-200 text-xs">sales@roofmanager.ca</p>
           </div>
           <div class="text-right">
             <h2 class="text-2xl font-bold">PROPOSAL</h2>
@@ -907,7 +921,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       <div class="p-8 text-center text-gray-400 text-xs">
         <p>Thank you for considering our services. We look forward to working with you.</p>
-        <p class="mt-1">Roof Manager | Professional Roof Measurement Reports | reports@reusecanada.ca</p>
+        <p class="mt-1">Roof Manager | Professional Roof Measurement Reports | sales@roofmanager.ca</p>
       </div>
     </div>`;
   }
@@ -985,11 +999,11 @@ document.addEventListener('DOMContentLoaded', () => {
       rep_email: document.getElementById('sup-rep-email')?.value?.trim(),
       preferred: true
     };
-    if (!data.name) { alert('Supplier name is required'); return; }
+    if (!data.name) { pbToast('Supplier name is required', 'error'); return; }
     try {
       var res = await fetch('/api/crm/suppliers', { method: 'POST', headers: headers(), body: JSON.stringify(data) });
       if (!res.ok) {
-        alert('Failed to save supplier. Server returned error ' + res.status);
+        pbToast('Failed to save supplier. Server returned error ' + res.status, 'error');
         return;
       }
       var result = await res.json();
@@ -998,9 +1012,9 @@ document.addEventListener('DOMContentLoaded', () => {
         state.suppliers.push(Object.assign({ id: result.supplier_id }, data));
         render();
       } else {
-        alert('Failed to save supplier: ' + (result?.error || 'Unknown error'));
+        pbToast('Failed to save supplier: ' + (result?.error || 'Unknown error'), 'error');
       }
-    } catch (e) { alert('Failed to save supplier'); }
+    } catch (e) { pbToast('Failed to save supplier', 'error'); }
   };
 
   window.skipSupplier = function() {
@@ -1053,11 +1067,11 @@ document.addEventListener('DOMContentLoaded', () => {
       var result = await res.json();
       if (result?.success) {
         window.open('/api/crm/supplier-orders/' + result.order_id + '/print', '_blank');
-        alert('Supplier order #' + result.order_number + ' created! Print window opened.');
+        pbToast('Supplier order #' + result.order_number + ' created! Print window opened.', 'success');
       } else {
-        alert('Failed to create supplier order: ' + (result?.error || 'Unknown error'));
+        pbToast('Failed to create supplier order: ' + (result?.error || 'Unknown error'), 'error');
       }
-    } catch (e) { alert('Failed to create supplier order'); }
+    } catch (e) { pbToast('Failed to create supplier order', 'error'); }
   };
 
   // ============================================================
@@ -1136,8 +1150,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const f = state.form;
 
     // Validate
-    if (!f.isNewCustomer && !f.customer_id) { alert('Please select a customer'); return; }
-    if (f.isNewCustomer && (!f.newCustomer.name || !f.newCustomer.email)) { alert('Name and email are required for new customer'); return; }
+    if (!f.isNewCustomer && !f.customer_id) { pbToast('Please select a customer', 'error'); return; }
+    if (f.isNewCustomer && (!f.newCustomer.name || !f.newCustomer.email)) { pbToast('Name and email are required for new customer', 'error'); return; }
     // Auto-create line item from per-square pricing
     if (state.pricingMethod === 'per_square' && state.selectedReport && state.pricePerSquare > 0) {
       var squares = Math.ceil((state.selectedReport.roof_area_sqft || 0) / 100);
@@ -1152,7 +1166,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
 
-    if (!f.items.some(i => i.description)) { alert('Add at least one line item'); return; }
+    if (!f.items.some(i => i.description)) { pbToast('Add at least one line item', 'error'); return; }
 
     try {
       // If new customer, create first
@@ -1168,7 +1182,7 @@ document.addEventListener('DOMContentLoaded', () => {
           const custData = await custRes.json();
           customerId = custData.id || custData.customer_id;
         } else {
-          alert('Failed to create customer. Please try again.');
+          pbToast('Failed to create customer. Please try again.', 'error');
           return;
         }
       }
@@ -1216,7 +1230,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        alert('Failed to save proposal: ' + (err.error || 'Unknown error'));
+        pbToast('Failed to save proposal: ' + (err.error || 'Unknown error'), 'error');
         return;
       }
 
@@ -1236,7 +1250,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const fullUrl = window.location.origin + link;
             prompt('Proposal sent! Share this link with your customer:', fullUrl);
           } else {
-            alert('Proposal saved and marked as sent!');
+            pbToast('Proposal saved and marked as sent!', 'success');
           }
         }
       } else if (shareUrl) {
@@ -1245,14 +1259,14 @@ document.addEventListener('DOMContentLoaded', () => {
           navigator.clipboard.writeText(fullUrl).catch(() => {});
         }
       } else {
-        alert(andSend ? 'Proposal saved and marked as sent!' : 'Proposal saved as draft!');
+        pbToast(andSend ? 'Proposal saved and marked as sent!' : 'Proposal saved as draft!', 'success');
       }
       state.mode = 'list';
       state.editId = null;
       state.form = resetForm();
       load();
     } catch (e) {
-      alert('Error saving proposal: ' + e.message);
+      pbToast('Error saving proposal: ' + e.message, 'error');
     }
   }
 
@@ -1335,9 +1349,9 @@ document.addEventListener('DOMContentLoaded', () => {
     shareLink(id, token) {
       if (token) {
         const url = window.location.origin + '/proposal/view/' + token;
-        navigator.clipboard.writeText(url).then(() => alert('Link copied!\n\n' + url)).catch(() => prompt('Share link:', url));
+        navigator.clipboard.writeText(url).then(() => pbToast('Link copied!', 'success')).catch(() => prompt('Share link:', url));
       } else {
-        alert('No share link available. Save the proposal first.');
+        pbToast('No share link available. Save the proposal first.', 'info');
       }
     },
     async convertToInvoice(id) {
@@ -1346,12 +1360,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const res = await fetch('/api/invoices/' + id + '/convert-to-invoice', { method: 'POST', headers: headers() });
         if (res.ok) {
           const data = await res.json();
-          alert('Invoice ' + (data.invoice?.invoice_number || '') + ' created!\n\nGo to the Invoice Manager to view it.');
+          pbToast('Invoice ' + (data.invoice?.invoice_number || '') + ' created! Go to the Invoice Manager to view it.', 'success');
         } else {
           const err = await res.json().catch(() => ({}));
-          alert('Failed: ' + (err.error || 'Unknown error'));
+          pbToast('Failed: ' + (err.error || 'Unknown error'), 'error');
         }
-      } catch (e) { alert('Error: ' + e.message); }
+      } catch (e) { pbToast('Error: ' + e.message, 'error'); }
     },
     async edit(id) {
       try {
@@ -1384,7 +1398,7 @@ document.addEventListener('DOMContentLoaded', () => {
         };
         state.mode = 'edit';
         render();
-      } catch (e) { alert('Failed to load proposal'); }
+      } catch (e) { pbToast('Failed to load proposal', 'error'); }
     },
     async preview(id) {
       await window._pb.edit(id);
@@ -1395,16 +1409,16 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!confirm('Send this proposal to the customer?')) return;
       try {
         await fetch('/api/invoices/' + id + '/send', { method: 'POST', headers: headers() });
-        alert('Proposal sent!');
+        pbToast('Proposal sent!', 'success');
         load();
-      } catch (e) { alert('Failed to send proposal'); }
+      } catch (e) { pbToast('Failed to send proposal', 'error'); }
     },
     async del(id) {
       if (!confirm('Delete this draft proposal?')) return;
       try {
         await fetch('/api/invoices/' + id, { method: 'DELETE', headers: headers() });
         load();
-      } catch (e) { alert('Failed to delete proposal'); }
+      } catch (e) { pbToast('Failed to delete proposal', 'error'); }
     },
     setPricing(method) {
       state.pricingMethod = method;
@@ -1416,10 +1430,10 @@ document.addEventListener('DOMContentLoaded', () => {
         var catRes = await fetch('/api/crm/catalog', { headers: headers() }).then(function(r) { return r.json(); }).catch(function() { return { items: [] }; });
         state.catalog = catRes.items || [];
         state.catalogLoaded = true;
-        alert('Default roofing materials added to your catalog!');
+        pbToast('Default roofing materials added to your catalog!', 'success');
         render();
       } else {
-        alert('Failed to seed catalog. Please try again or add items manually.');
+        pbToast('Failed to seed catalog. Please try again or add items manually.', 'error');
       }
     },
     async selectReport(reportId) {
@@ -1432,25 +1446,28 @@ document.addEventListener('DOMContentLoaded', () => {
         var addrEl = document.getElementById('step3-address');
         if (addrEl) addrEl.value = state.form.property_address;
 
-        // Fetch full report with materials
-        try {
-          var res = await fetch('/api/customer/orders/' + reportId, { headers: headers() });
-          if (res.ok) {
-            var data = await res.json();
-            var report = data.report || data.order || data;
-            // Try to get materials from various possible locations
-            if (report.materials) {
-              state.selectedReportMaterials = typeof report.materials === 'string' ? JSON.parse(report.materials) : report.materials;
-            } else if (report.material_estimate) {
-              state.selectedReportMaterials = typeof report.material_estimate === 'string' ? JSON.parse(report.material_estimate) : report.material_estimate;
-            } else if (report.api_response_raw) {
-              try {
-                var raw = typeof report.api_response_raw === 'string' ? JSON.parse(report.api_response_raw) : report.api_response_raw;
-                state.selectedReportMaterials = raw.materials || null;
-              } catch(e) {}
-            }
+        // Use report data already loaded in state.reports instead of fetching
+        var reportData = state.reports.find(function(r) { return String(r.id) === String(reportId); });
+        if (reportData) {
+          // Try to extract materials from the report data already in memory
+          if (reportData.materials) {
+            state.selectedReportMaterials = typeof reportData.materials === 'string' ? JSON.parse(reportData.materials) : reportData.materials;
+          } else if (reportData.material_estimate) {
+            state.selectedReportMaterials = typeof reportData.material_estimate === 'string' ? JSON.parse(reportData.material_estimate) : reportData.material_estimate;
+          } else {
+            // Materials not in the list data — try fetching report detail
+            try {
+              var detailRes = await fetch('/api/customer/reports-list', { headers: headers() });
+              if (detailRes.ok) {
+                var detailData = await detailRes.json();
+                var fullReport = (detailData.reports || detailData.orders || []).find(function(r) { return String(r.id) === String(reportId); });
+                if (fullReport && fullReport.materials) {
+                  state.selectedReportMaterials = typeof fullReport.materials === 'string' ? JSON.parse(fullReport.materials) : fullReport.materials;
+                }
+              }
+            } catch(e) { /* silently fail — materials just won't show */ }
           }
-        } catch(e) { console.warn('Could not fetch report materials:', e); }
+        }
       }
 
       render();
@@ -1463,12 +1480,12 @@ document.addEventListener('DOMContentLoaded', () => {
       state.form.property_address = (document.getElementById('step3-address') || {}).value || '';
 
       if (!state.form.attached_report_id) {
-        alert('Please select a roof measurement report to continue. A report is required for all proposals.');
+        pbToast('Please select a roof measurement report to continue. A report is required for all proposals.', 'error');
         return;
       }
 
       if (!state.form.customer_name) {
-        alert('Please enter the customer name to continue.');
+        pbToast('Please enter the customer name to continue.', 'error');
         return;
       }
 

@@ -397,11 +397,11 @@ window.retryReport = function(orderId, btn) {
         if (btn) { btn.innerHTML = '<i class="fas fa-check mr-1"></i>Regenerating!'; btn.className = 'px-2.5 py-1 bg-green-100 text-green-700 rounded-lg text-xs font-medium'; }
         setTimeout(function() { loadDashData().then(function() { renderDashboard(); startEnhancementPolling(); }); }, 2000);
       } else {
-        alert(data.error || data.message || 'Retry failed. Please try again.');
+        console.warn('Retry failed:', data.error || data.message || 'Unknown error');
         if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-redo mr-1"></i>Retry'; }
       }
     })
-    .catch(function() { alert('Network error. Please try again.'); if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-redo mr-1"></i>Retry'; } });
+    .catch(function() { console.warn('Retry failed'); if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-redo mr-1"></i>Retry'; } });
 };
 
 // ============================================================

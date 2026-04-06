@@ -26,6 +26,20 @@ document.addEventListener('DOMContentLoaded', () => {
     squareStatus: null
   };
 
+  function imToast(msg, type) {
+    var existing = document.getElementById('im-toast');
+    if (existing) existing.remove();
+    var toast = document.createElement('div');
+    toast.id = 'im-toast';
+    toast.style.cssText = 'position:fixed;top:20px;right:20px;z-index:99999;padding:14px 20px;border-radius:10px;font-size:14px;font-weight:600;max-width:400px;box-shadow:0 4px 20px rgba(0,0,0,0.15);';
+    toast.style.background = type === 'error' ? '#fef2f2' : type === 'success' ? '#f0fdf4' : '#eff6ff';
+    toast.style.color = type === 'error' ? '#991b1b' : type === 'success' ? '#166534' : '#1e40af';
+    toast.style.border = '1px solid ' + (type === 'error' ? '#fecaca' : type === 'success' ? '#bbf7d0' : '#bfdbfe');
+    toast.innerHTML = (type === 'error' ? '<i class="fas fa-exclamation-circle" style="margin-right:8px"></i>' : type === 'success' ? '<i class="fas fa-check-circle" style="margin-right:8px"></i>' : '<i class="fas fa-info-circle" style="margin-right:8px"></i>') + msg;
+    document.body.appendChild(toast);
+    setTimeout(function() { toast.remove(); }, 4000);
+  }
+
   function resetForm() {
     const today = new Date();
     const due = new Date(today);
@@ -519,8 +533,8 @@ document.addEventListener('DOMContentLoaded', () => {
   async function saveInvoice(andSend = false) {
     collectForm();
     const f = state.form;
-    if (!f.customer_id) { alert('Please select a customer'); return; }
-    if (!f.items.some(i => i.description)) { alert('Add at least one line item'); return; }
+    if (!f.customer_id) { imToast('Please select a customer', 'error'); return; }
+    if (!f.items.some(i => i.description)) { imToast('Add at least one line item', 'error'); return; }
 
     try {
       const payload = {
@@ -549,7 +563,7 @@ document.addEventListener('DOMContentLoaded', () => {
         res = await fetch('/api/invoices', { method: 'POST', headers: headers(), body: JSON.stringify(payload) });
       }
 
-      if (!res.ok) { const e = await res.json().catch(() => ({})); alert('Error: ' + (e.error || 'Unknown')); return; }
+      if (!res.ok) { const e = await res.json().catch(() => ({})); imToast('Error: ' + (e.error || 'Unknown'), 'error'); return; }
       const data = await res.json();
       const invId = state.editId || data.invoice?.id;
 
@@ -557,12 +571,12 @@ document.addEventListener('DOMContentLoaded', () => {
         await fetch('/api/invoices/' + invId + '/send', { method: 'POST', headers: headers() });
       }
 
-      alert(andSend ? 'Invoice saved and sent!' : 'Invoice saved as draft!');
+      imToast(andSend ? 'Invoice saved and sent!' : 'Invoice saved as draft!', 'success');
       state.mode = 'list';
       state.editId = null;
       state.form = resetForm();
       load();
-    } catch (e) { alert('Error: ' + e.message); }
+    } catch (e) { imToast('Error: ' + e.message, 'error'); }
   }
 
   // ============================================================
@@ -581,7 +595,7 @@ document.addEventListener('DOMContentLoaded', () => {
             .then(r => r.json()).then(d => { state.squareStatus = d; render(); });
         } else if (e.data?.type === 'square_oauth_error') {
           window.removeEventListener('message', handler);
-          alert('Square connection failed: ' + (e.data.error || 'Unknown error'));
+          imToast('Square connection failed: ' + (e.data.error || 'Unknown error'), 'error');
         }
       };
       window.addEventListener('message', handler);
@@ -645,7 +659,7 @@ document.addEventListener('DOMContentLoaded', () => {
         };
         state.mode = 'edit';
         render();
-      } catch (e) { alert('Failed to load invoice'); }
+      } catch (e) { imToast('Failed to load invoice', 'error'); }
     },
     async view(id) {
       await window._im.edit(id);
@@ -656,9 +670,9 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!confirm('Send this invoice to the customer?')) return;
       try {
         await fetch('/api/invoices/' + id + '/send', { method: 'POST', headers: headers() });
-        alert('Invoice sent!');
+        imToast('Invoice sent!', 'success');
         load();
-      } catch (e) { alert('Failed to send'); }
+      } catch (e) { imToast('Failed to send', 'error'); }
     },
     async markPaid(id) {
       if (!confirm('Mark this invoice as paid?')) return;
@@ -670,16 +684,16 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
-          alert('Failed to mark as paid: ' + (err.error || 'Unknown error'));
+          imToast('Failed to mark as paid: ' + (err.error || 'Unknown error'), 'error');
           return;
         }
-        alert('Invoice marked as paid!');
+        imToast('Invoice marked as paid!', 'success');
         load();
-      } catch (e) { alert('Failed: ' + e.message); }
+      } catch (e) { imToast('Operation failed. Please try again.', 'error'); }
     },
     async del(id) {
       if (!confirm('Delete this draft invoice?')) return;
-      try { await fetch('/api/invoices/' + id, { method: 'DELETE', headers: headers() }); load(); } catch (e) { alert('Failed'); }
+      try { await fetch('/api/invoices/' + id, { method: 'DELETE', headers: headers() }); load(); } catch (e) { imToast('Operation failed. Please try again.', 'error'); }
     },
     async void(id) {
       if (!confirm('Void/cancel this invoice? This cannot be undone.')) return;
@@ -690,7 +704,7 @@ document.addEventListener('DOMContentLoaded', () => {
           body: JSON.stringify({ status: 'cancelled' })
         });
         load();
-      } catch (e) { alert('Failed'); }
+      } catch (e) { imToast('Operation failed. Please try again.', 'error'); }
     },
     async createPaymentLink(id) {
       if (!confirm('Create a Square payment link for this invoice?')) return;
@@ -703,25 +717,25 @@ document.addEventListener('DOMContentLoaded', () => {
         if (res.ok && data.payment_link?.url) {
           const url = data.payment_link.url;
           navigator.clipboard.writeText(url).then(() => {
-            alert('Payment link created & copied!\n\n' + url + '\n\nAmount: $' + data.payment_link.amount + ' ' + data.payment_link.currency);
+            imToast('Payment link created and copied!', 'success');
           }).catch(() => {
             prompt('Payment link created! Copy it:', url);
           });
           load(); // Refresh to show the link in UI
         } else {
-          alert('Failed to create payment link: ' + (data.error || 'Unknown error') + (data.details ? '\n\n' + data.details : ''));
+          imToast('Failed to create payment link: ' + (data.error || 'Unknown error'), 'error');
         }
       } catch (e) {
-        alert('Error creating payment link: ' + e.message);
+        imToast('Error creating payment link: ' + e.message, 'error');
       }
     },
     copyPayLink() {
       const url = state.form._squareUrl;
-      if (url) { navigator.clipboard.writeText(url); alert('Payment link copied!'); }
+      if (url) { navigator.clipboard.writeText(url); imToast('Payment link copied!', 'success'); }
     },
     async fromProposal() {
       const proposals = state.proposals.filter(p => p.status !== 'cancelled' && p.status !== 'draft');
-      if (proposals.length === 0) { alert('No sent/active proposals found. Create and send a proposal first.'); return; }
+      if (proposals.length === 0) { imToast('No sent proposals found to convert', 'info'); return; }
 
       const opts = proposals.map(p => `${p.invoice_number} — $${(p.total || 0).toFixed(2)} — ${p.customer_name || 'Unknown'}`);
       const choice = prompt('Select proposal to convert to invoice (enter number 1-' + opts.length + '):\n\n' + opts.map((o, i) => (i + 1) + '. ' + o).join('\n'));
@@ -759,7 +773,7 @@ document.addEventListener('DOMContentLoaded', () => {
         };
         state.mode = 'create';
         render();
-      } catch (e) { alert('Failed to load proposal data'); }
+      } catch (e) { imToast('Failed to load proposal data', 'error'); }
     }
   };
 });
