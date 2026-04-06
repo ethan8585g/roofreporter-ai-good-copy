@@ -20,6 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
     reports: [],
     suppliers: [],
     supplierSetup: false,
+    supplierOrdersList: [],
     materialEstimates: [],
     loading: true,
     editId: null,
@@ -114,6 +115,7 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'list': root.innerHTML = renderList(); break;
       case 'edit': root.innerHTML = renderEditor(); break;
       case 'preview': root.innerHTML = renderPreview(); break;
+      case 'supplier-orders': root.innerHTML = renderSupplierOrders(); break;
     }
   }
 
@@ -243,9 +245,14 @@ document.addEventListener('DOMContentLoaded', () => {
         <h2 class="text-2xl font-bold text-gray-900"><i class="fas fa-file-signature text-brand-500 mr-2"></i>Proposals & Estimates</h2>
         <p class="text-gray-500 text-sm mt-1">Create professional roofing proposals with detailed line items</p>
       </div>
-      <button onclick="window._pb.create()" class="px-5 py-2.5 bg-gradient-to-r from-sky-500 to-blue-600 text-white rounded-xl font-semibold text-sm hover:shadow-lg transition-all">
-        <i class="fas fa-plus mr-1.5"></i>New Proposal
-      </button>
+      <div class="flex gap-2">
+        <button onclick="window._pb.showSupplierOrders()" class="px-4 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-xl font-semibold text-sm hover:bg-gray-50 transition-all">
+          <i class="fas fa-truck mr-1.5"></i>Supplier Orders
+        </button>
+        <button onclick="window._pb.create()" class="px-5 py-2.5 bg-gradient-to-r from-sky-500 to-blue-600 text-white rounded-xl font-semibold text-sm hover:shadow-lg transition-all">
+          <i class="fas fa-plus mr-1.5"></i>New Proposal
+        </button>
+      </div>
     </div>
 
     <!-- Stats -->
@@ -314,6 +321,92 @@ document.addEventListener('DOMContentLoaded', () => {
         </table>
       `}
     </div>`;
+  }
+
+  // ============================================================
+  // SUPPLIER ORDERS VIEW
+  // ============================================================
+  function renderSupplierOrders() {
+    var orders = state.supplierOrdersList || [];
+    return `
+    <div class="mb-6 flex items-center justify-between">
+      <div>
+        <h2 class="text-2xl font-bold text-gray-900"><i class="fas fa-truck text-blue-500 mr-2"></i>Supplier Material Orders</h2>
+        <p class="text-gray-500 text-sm mt-1">Material orders generated from your proposals — print or email to your supplier</p>
+      </div>
+      <button onclick="window._pb.backToList()" class="px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl font-semibold text-sm hover:bg-gray-50">
+        <i class="fas fa-arrow-left mr-1.5"></i>Back to Proposals
+      </button>
+    </div>
+
+    ${orders.length === 0 ? `
+      <div class="bg-white rounded-xl border border-gray-200 py-16 text-center">
+        <i class="fas fa-truck text-gray-300 text-5xl mb-4"></i>
+        <p class="text-gray-500 font-medium">No supplier orders yet</p>
+        <p class="text-gray-400 text-sm mt-1">When you create a proposal and generate a supplier order, it will appear here</p>
+      </div>
+    ` : `
+      <div class="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="bg-gray-50 border-b border-gray-200">
+              <th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Order #</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Supplier</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Job Address</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Customer</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Total</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Date</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${orders.map(function(o) {
+              var statusColor = o.status === 'sent' ? 'text-green-600 bg-green-50' : o.status === 'draft' ? 'text-amber-600 bg-amber-50' : 'text-gray-600 bg-gray-50';
+              return '<tr class="border-b border-gray-100 hover:bg-gray-50">' +
+                '<td class="px-4 py-3 font-medium text-gray-900">' + (o.order_number || '—') + '</td>' +
+                '<td class="px-4 py-3 text-gray-700">' + (o.supplier_name || 'N/A') + '</td>' +
+                '<td class="px-4 py-3 text-gray-600 text-xs">' + (o.job_address || '—') + '</td>' +
+                '<td class="px-4 py-3 text-gray-600">' + (o.customer_name || '—') + '</td>' +
+                '<td class="px-4 py-3 text-right font-semibold text-gray-900">$' + Number(o.total_amount || 0).toFixed(2) + '</td>' +
+                '<td class="px-4 py-3"><span class="px-2 py-1 rounded-full text-xs font-semibold ' + statusColor + '">' + (o.status || 'draft') + '</span></td>' +
+                '<td class="px-4 py-3 text-gray-500 text-xs">' + (o.created_at || '').slice(0, 10) + '</td>' +
+                '<td class="px-4 py-3 text-right">' +
+                  '<button onclick="window.open(\'/api/crm/supplier-orders/' + o.id + '/print\',\'_blank\')" class="px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-xs font-semibold hover:bg-blue-100 mr-1"><i class="fas fa-print mr-1"></i>Print</button>' +
+                  '<button onclick="window.open(\'/api/crm/supplier-orders/' + o.id + '/print\',\'_blank\')" class="px-3 py-1.5 bg-gray-50 text-gray-600 rounded-lg text-xs font-semibold hover:bg-gray-100"><i class="fas fa-download mr-1"></i>PDF</button>' +
+                '</td>' +
+              '</tr>';
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    `}
+
+    <!-- Supplier Info Card -->
+    ${state.suppliers.length > 0 ? `
+      <div class="mt-6 bg-white rounded-xl border border-gray-200 p-5">
+        <h3 class="text-sm font-semibold text-gray-900 mb-3"><i class="fas fa-store text-blue-500 mr-2"></i>Your Preferred Supplier</h3>
+        <div class="grid md:grid-cols-3 gap-4 text-sm">
+          <div>
+            <span class="text-gray-500">Name:</span>
+            <span class="text-gray-900 font-medium ml-2">${state.suppliers[0].name || '—'}</span>
+            ${state.suppliers[0].branch_name ? '<br><span class="text-gray-500">Branch:</span><span class="text-gray-700 ml-2">' + state.suppliers[0].branch_name + '</span>' : ''}
+            ${state.suppliers[0].account_number ? '<br><span class="text-gray-500">Account #:</span><span class="text-gray-700 ml-2">' + state.suppliers[0].account_number + '</span>' : ''}
+          </div>
+          <div>
+            ${state.suppliers[0].address ? '<span class="text-gray-500">Address:</span><span class="text-gray-700 ml-2">' + state.suppliers[0].address + '</span><br>' : ''}
+            ${state.suppliers[0].city ? '<span class="text-gray-700">' + state.suppliers[0].city + ', ' + (state.suppliers[0].province || '') + '</span><br>' : ''}
+            ${state.suppliers[0].phone ? '<span class="text-gray-500">Phone:</span><span class="text-gray-700 ml-2">' + state.suppliers[0].phone + '</span>' : ''}
+          </div>
+          <div>
+            ${state.suppliers[0].rep_name ? '<span class="text-gray-500">Rep:</span><span class="text-gray-700 ml-2">' + state.suppliers[0].rep_name + '</span><br>' : ''}
+            ${state.suppliers[0].rep_phone ? '<span class="text-gray-500">Rep Phone:</span><span class="text-gray-700 ml-2">' + state.suppliers[0].rep_phone + '</span><br>' : ''}
+            ${state.suppliers[0].rep_email ? '<span class="text-gray-500">Rep Email:</span><span class="text-gray-700 ml-2">' + state.suppliers[0].rep_email + '</span>' : ''}
+          </div>
+        </div>
+      </div>
+    ` : ''}
+    `;
   }
 
   // ============================================================
@@ -669,7 +762,9 @@ document.addEventListener('DOMContentLoaded', () => {
         '</div>' +
         '<div style="display:flex;gap:12px;margin-top:16px">' +
           '<button onclick="saveSupplier()" style="flex:1;background:#2563eb;color:white;border:none;padding:14px;border-radius:10px;font-weight:800;font-size:15px;cursor:pointer">Save Supplier & Continue</button>' +
-          '<button onclick="skipSupplier()" style="background:#f3f4f6;color:#6b7280;border:1px solid #e5e7eb;padding:14px 24px;border-radius:10px;font-weight:600;cursor:pointer">Skip for Now</button>' +
+          '</div>' + // close button row without skip
+          '<p style="color:#9ca3af;font-size:12px;text-align:center;margin-top:8px">You must set up a supplier before creating proposals</p>' +
+          '<div style="display:none">' + // hidden placeholder
         '</div>' +
       '</div>' +
     '</div></div>';
@@ -976,6 +1071,17 @@ document.addEventListener('DOMContentLoaded', () => {
       render();
     },
     backToList() { state.mode = 'list'; state.editId = null; state.form = resetForm(); render(); },
+    async showSupplierOrders() {
+      state.loading = true; render();
+      try {
+        var res = await fetch('/api/crm/supplier-orders', { headers: headers() });
+        var data = await res.json();
+        state.supplierOrdersList = data.orders || [];
+      } catch(e) { state.supplierOrdersList = []; }
+      state.loading = false;
+      state.mode = 'supplier-orders';
+      render();
+    },
     backToEditor() { state.mode = state.editId ? 'edit' : 'create'; render(); },
     setFilter(f) { state.filter = f; render(); },
     setSearch(term) { state.searchTerm = term; render(); },
