@@ -1351,6 +1351,91 @@ app.get('/customer/profile', (c) => c.html(getCustomerProfilePageHTML()))
 // Virtual Try-On — AI Roof Visualization
 app.get('/customer/virtual-tryon', (c) => c.html(getVirtualTryOnPageHTML()))
 
+// 3D Roof Viewer — Three.js Interactive Roof Model
+app.get('/customer/3d-viewer', async (c) => {
+  const reportId = c.req.query('report_id')
+  let reportData: any = {}
+
+  if (reportId) {
+    try {
+      const report = await c.env.DB.prepare(`
+        SELECT r.*, o.property_address FROM reports r
+        JOIN orders o ON o.id = r.order_id
+        WHERE r.id = ?
+      `).bind(reportId).first<any>()
+
+      if (report) {
+        let segments: any[] = []
+        let edges: any[] = []
+        try {
+          const raw = typeof report.api_response_raw === 'string' ? JSON.parse(report.api_response_raw) : report.api_response_raw
+          segments = raw?.segments || raw?.roof_segments || []
+          edges = raw?.edges || raw?.edge_measurements || []
+        } catch {}
+
+        reportData = {
+          address: report.property_address || '',
+          total_area_sqft: report.roof_area_sqft || 0,
+          pitch: report.roof_pitch_degrees ? Math.round(report.roof_pitch_degrees) + '\u00B0' : '25\u00B0',
+          segments: segments,
+          edges: edges,
+        }
+      }
+    } catch {}
+  }
+
+  const rd = reportData
+  return c.html(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags()}
+  <title>3D Roof Viewer — Roof Manager</title>
+</head>
+<body class="min-h-screen" style="background:#0A0A0A">
+  <header style="background:#111111;border-bottom:1px solid rgba(255,255,255,0.1)" class="text-white">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <img src="/static/logo.png" alt="Roof Manager" class="w-9 h-9 rounded-lg">
+        <div>
+          <h1 class="font-bold text-lg">3D Roof Viewer</h1>
+          <p class="text-gray-400 text-xs">${rd.address || 'Interactive 3D Model'}</p>
+        </div>
+      </div>
+      <div class="flex gap-3">
+        <a href="/customer/reports" class="text-gray-400 hover:text-white text-sm"><i class="fas fa-arrow-left mr-1"></i>Back to Reports</a>
+        <a href="/customer/dashboard" class="text-gray-400 hover:text-white text-sm"><i class="fas fa-th-large mr-1"></i>Dashboard</a>
+      </div>
+    </div>
+  </header>
+  <main class="max-w-6xl mx-auto px-4 py-6">
+    <div id="viewer-root"></div>
+
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
+      <div class="bg-[#111111] border border-white/10 rounded-xl p-4 text-center">
+        <div class="text-gray-400 text-xs uppercase tracking-wider mb-1">Total Area</div>
+        <div class="text-white text-xl font-bold">${Math.round(rd.total_area_sqft || 0).toLocaleString()} ft\u00B2</div>
+      </div>
+      <div class="bg-[#111111] border border-white/10 rounded-xl p-4 text-center">
+        <div class="text-gray-400 text-xs uppercase tracking-wider mb-1">Pitch</div>
+        <div class="text-white text-xl font-bold">${rd.pitch || 'N/A'}</div>
+      </div>
+      <div class="bg-[#111111] border border-white/10 rounded-xl p-4 text-center">
+        <div class="text-gray-400 text-xs uppercase tracking-wider mb-1">Segments</div>
+        <div class="text-white text-xl font-bold">${(rd.segments || []).length || 'N/A'}</div>
+      </div>
+      <div class="bg-[#111111] border border-white/10 rounded-xl p-4 text-center">
+        <div class="text-gray-400 text-xs uppercase tracking-wider mb-1">Address</div>
+        <div class="text-white text-sm font-medium truncate">${(rd.address || 'N/A').substring(0, 30)}</div>
+      </div>
+    </div>
+  </main>
+  <script>window.__reportData = ${JSON.stringify(reportData)};</script>
+  <script src="/static/roof-3d-viewer.js?v=${Date.now()}"></script>
+  ${getRoverWidget()}
+</body>
+</html>`)
+})
+
 // 3D Roof Visualizer — Interactive color swapping tool accessible from report history
 app.get('/visualizer/:orderId', async (c) => {
   const orderId = c.req.param('orderId')
