@@ -1527,3 +1527,200 @@ customerAuthRoutes.get('/referrals', async (c) => {
     commission_rate: 10,
   })
 })
+
+// ============================================================
+// GOOGLE CALENDAR OAUTH — Customer Dashboard
+// ============================================================
+
+// GET /gcal/auth-url — Generate Google OAuth URL for calendar sync
+customerAuthRoutes.get('/gcal/auth-url', async (c) => {
+  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  if (!token) return c.json({ error: 'Not authenticated' }, 401)
+  const session = await c.env.DB.prepare(
+    "SELECT customer_id FROM customer_sessions WHERE session_token = ? AND expires_at > datetime('now')"
+  ).bind(token).first<any>()
+  if (!session) return c.json({ error: 'Session expired' }, 401)
+
+  const customerId = session.customer_id
+  const clientId = (c.env as any).GMAIL_CLIENT_ID
+  if (!clientId) {
+    return c.json({ error: 'Google Calendar integration is not configured.' }, 400)
+  }
+
+  const url = new URL(c.req.url)
+  const redirectUri = `${url.protocol}//${url.host}/api/customer/gcal/callback`
+
+  const state = `${customerId}:${crypto.randomUUID().replace(/-/g, '').substring(0, 16)}`
+
+  // Store state for CSRF validation
+  await c.env.DB.prepare(
+    "UPDATE customers SET gcal_oauth_state = ? WHERE id = ?"
+  ).bind(state, customerId).run().catch(async () => {
+    // Column may not exist yet — add it
+    await c.env.DB.prepare("ALTER TABLE customers ADD COLUMN gcal_oauth_state TEXT").run().catch(() => {})
+    await c.env.DB.prepare("UPDATE customers SET gcal_oauth_state = ? WHERE id = ?").bind(state, customerId).run()
+  })
+
+  const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth')
+  authUrl.searchParams.set('client_id', clientId)
+  authUrl.searchParams.set('redirect_uri', redirectUri)
+  authUrl.searchParams.set('response_type', 'code')
+  authUrl.searchParams.set('scope', 'https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/userinfo.email')
+  authUrl.searchParams.set('access_type', 'offline')
+  authUrl.searchParams.set('prompt', 'consent')
+  authUrl.searchParams.set('state', state)
+
+  return c.json({ url: authUrl.toString() })
+})
+
+// GET /gcal/callback — OAuth callback (browser redirect)
+customerAuthRoutes.get('/gcal/callback', async (c) => {
+  const code = c.req.query('code')
+  const error = c.req.query('error')
+  const state = c.req.query('state') || ''
+
+  if (error || !code) {
+    return c.html(`<!DOCTYPE html><html><head><title>Google Calendar</title><script src="https://cdn.tailwindcss.com"></script></head>
+<body class="bg-[#0a0a0a] min-h-screen flex items-center justify-center"><div class="bg-[#111] border border-white/10 rounded-2xl shadow-xl p-8 max-w-md text-center">
+<div class="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-4"><span class="text-red-400 text-2xl">✕</span></div>
+<h2 class="text-xl font-bold text-white mb-2">Connection Failed</h2>
+<p class="text-gray-400 mb-4">${error || 'No authorization code received'}</p>
+<button onclick="window.close()" class="bg-blue-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-blue-700">Close Window</button>
+</div></body></html>`)
+  }
+
+  const customerId = parseInt(state.split(':')[0])
+  if (!customerId) {
+    return c.html(`<!DOCTYPE html><html><head><title>Google Calendar</title></head><body class="bg-[#0a0a0a] text-white p-8"><p>Invalid state. Please try again.</p></body></html>`)
+  }
+
+  // Validate state matches what we stored
+  const customer = await c.env.DB.prepare(
+    "SELECT gcal_oauth_state FROM customers WHERE id = ?"
+  ).bind(customerId).first<any>()
+  if (!customer || customer.gcal_oauth_state !== state) {
+    return c.html(`<!DOCTYPE html><html><head><title>Google Calendar</title></head><body class="bg-[#0a0a0a] text-white p-8"><p>Invalid state token. Please try again.</p></body></html>`)
+  }
+
+  const clientId = (c.env as any).GMAIL_CLIENT_ID
+  let clientSecret = (c.env as any).GMAIL_CLIENT_SECRET || ''
+  if (!clientSecret) {
+    try {
+      const csRow = await c.env.DB.prepare(
+        "SELECT setting_value FROM settings WHERE setting_key = 'gmail_client_secret' AND master_company_id = 1"
+      ).first<any>()
+      if (csRow?.setting_value) clientSecret = csRow.setting_value
+    } catch {}
+  }
+
+  const url = new URL(c.req.url)
+  const redirectUri = `${url.protocol}//${url.host}/api/customer/gcal/callback`
+
+  if (!clientId || !clientSecret) {
+    return c.html(`<!DOCTYPE html><html><head><title>Google Calendar</title><script src="https://cdn.tailwindcss.com"></script></head>
+<body class="bg-[#0a0a0a] min-h-screen flex items-center justify-center"><div class="bg-[#111] border border-white/10 rounded-2xl shadow-xl p-8 max-w-md text-center">
+<div class="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-4"><span class="text-red-400 text-2xl">⚠</span></div>
+<h2 class="text-xl font-bold text-white mb-2">Configuration Error</h2>
+<p class="text-gray-400 mb-4">Google OAuth credentials are not configured. Contact support.</p>
+<button onclick="window.close()" class="bg-blue-600 text-white px-6 py-2 rounded-lg font-semibold">Close</button>
+</div></body></html>`)
+  }
+
+  // Exchange code for tokens
+  const tokenResp = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'authorization_code',
+      code: code,
+      client_id: clientId,
+      client_secret: clientSecret,
+      redirect_uri: redirectUri
+    }).toString()
+  })
+
+  const tokenData: any = await tokenResp.json()
+  if (!tokenResp.ok || !tokenData.refresh_token) {
+    return c.html(`<!DOCTYPE html><html><head><title>Google Calendar</title><script src="https://cdn.tailwindcss.com"></script></head>
+<body class="bg-[#0a0a0a] min-h-screen flex items-center justify-center"><div class="bg-[#111] border border-white/10 rounded-2xl shadow-xl p-8 max-w-md text-center">
+<div class="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-4"><span class="text-red-400 text-2xl">⚠</span></div>
+<h2 class="text-xl font-bold text-white mb-2">Token Exchange Failed</h2>
+<p class="text-gray-400 mb-4">${tokenData.error_description || 'Could not obtain refresh token'}</p>
+<button onclick="window.close()" class="bg-blue-600 text-white px-6 py-2 rounded-lg font-semibold">Close</button>
+</div></body></html>`)
+  }
+
+  // Get user email
+  let gcalEmail = ''
+  try {
+    const profileResp = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+      headers: { 'Authorization': `Bearer ${tokenData.access_token}` }
+    })
+    const profile: any = await profileResp.json()
+    gcalEmail = profile.email || ''
+  } catch {}
+
+  // Store tokens on the customer record
+  await c.env.DB.prepare(`
+    UPDATE customers SET gmail_refresh_token = ?, gmail_connected_email = ?, gmail_connected_at = datetime('now'), gcal_oauth_state = NULL WHERE id = ?
+  `).bind(tokenData.refresh_token, gcalEmail, customerId).run()
+
+  return c.html(`<!DOCTYPE html>
+<html><head><title>Google Calendar Connected</title>
+<script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-[#0a0a0a] min-h-screen flex items-center justify-center">
+<div class="bg-[#111] border border-white/10 rounded-2xl shadow-xl p-8 max-w-md text-center">
+  <div class="w-16 h-16 bg-green-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
+    <span class="text-green-400 text-2xl">✓</span>
+  </div>
+  <h2 class="text-xl font-bold text-white mb-2">Calendar Connected!</h2>
+  <p class="text-gray-400 mb-1">Successfully connected:</p>
+  <p class="text-blue-400 font-semibold mb-4">${gcalEmail}</p>
+  <p class="text-sm text-gray-500 mb-6">Your Google Calendar events will now appear on your dashboard. This window will close automatically.</p>
+  <button onclick="window.close()" class="bg-blue-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-blue-700">Close Window</button>
+</div>
+<script>
+  if (window.opener) {
+    window.opener.postMessage({ type: 'gcal_connected', email: '${gcalEmail}' }, '*');
+    setTimeout(function() { window.close(); }, 3000);
+  }
+</script>
+</body></html>`)
+})
+
+// GET /gcal/status — Check calendar connection status
+customerAuthRoutes.get('/gcal/status', async (c) => {
+  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  if (!token) return c.json({ error: 'Not authenticated' }, 401)
+  const session = await c.env.DB.prepare(
+    "SELECT customer_id FROM customer_sessions WHERE session_token = ? AND expires_at > datetime('now')"
+  ).bind(token).first<any>()
+  if (!session) return c.json({ error: 'Session expired' }, 401)
+
+  const customer = await c.env.DB.prepare(
+    'SELECT gmail_refresh_token, gmail_connected_email, gmail_connected_at FROM customers WHERE id = ?'
+  ).bind(session.customer_id).first<any>()
+
+  return c.json({
+    connected: !!(customer?.gmail_refresh_token),
+    email: customer?.gmail_connected_email || null,
+    connected_at: customer?.gmail_connected_at || null
+  })
+})
+
+// POST /gcal/disconnect — Disconnect Google Calendar
+customerAuthRoutes.post('/gcal/disconnect', async (c) => {
+  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  if (!token) return c.json({ error: 'Not authenticated' }, 401)
+  const session = await c.env.DB.prepare(
+    "SELECT customer_id FROM customer_sessions WHERE session_token = ? AND expires_at > datetime('now')"
+  ).bind(token).first<any>()
+  if (!session) return c.json({ error: 'Session expired' }, 401)
+
+  await c.env.DB.prepare(
+    "UPDATE customers SET gmail_refresh_token = NULL, gmail_connected_email = NULL, gmail_connected_at = NULL WHERE id = ?"
+  ).bind(session.customer_id).run()
+
+  return c.json({ success: true })
+})

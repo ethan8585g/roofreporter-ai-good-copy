@@ -699,10 +699,8 @@ function _calLoadEvents() {
       _calEvents.push({ date: d, title: 'Report: ' + (o.address || 'Order').substring(0, 25), color: 'blue' });
     }
   });
-  // Load Google Calendar events if synced
-  var gcalOn = localStorage.getItem('rc_gcal_sync') === '1';
-  var toggle = document.getElementById('gcal-sync-toggle');
-  if (toggle) toggle.checked = gcalOn;
+  // Check Google Calendar connection status from server
+  _gcalCheckStatus();
 }
 
 function _calRender() {
@@ -779,10 +777,9 @@ window._calNav = function(dir) {
 };
 
 window._toggleGcalSync = function(enabled) {
-  localStorage.setItem('rc_gcal_sync', enabled ? '1' : '0');
+  var token = localStorage.getItem('rc_customer_token') || '';
   if (enabled) {
     // Open Google Calendar OAuth flow
-    var token = localStorage.getItem('rc_customer_token') || '';
     fetch('/api/customer/gcal/auth-url', {
       method: 'GET',
       headers: { 'Authorization': 'Bearer ' + token }
@@ -790,14 +787,97 @@ window._toggleGcalSync = function(enabled) {
     .then(function(r) { return r.json(); })
     .then(function(data) {
       if (data.url) {
-        window.open(data.url, '_blank', 'width=500,height=600');
+        var popup = window.open(data.url, 'gcal_auth', 'width=500,height=600,scrollbars=yes');
+        // Poll for popup close as fallback
+        var pollTimer = setInterval(function() {
+          if (!popup || popup.closed) {
+            clearInterval(pollTimer);
+            _gcalCheckStatus();
+          }
+        }, 1000);
+      } else {
+        // Failed to get auth URL — uncheck toggle
+        var toggle = document.getElementById('gcal-sync-toggle');
+        if (toggle) toggle.checked = false;
+        alert(data.error || 'Could not start Google Calendar connection.');
       }
     })
     .catch(function() {
-      // Sync saved locally, will connect when API is ready
+      var toggle = document.getElementById('gcal-sync-toggle');
+      if (toggle) toggle.checked = false;
     });
+  } else {
+    // Disconnect Google Calendar
+    if (confirm('Disconnect Google Calendar?')) {
+      fetch('/api/customer/gcal/disconnect', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + token }
+      }).then(function() {
+        localStorage.setItem('rc_gcal_sync', '0');
+        _calLoadEvents();
+        _calRender();
+      });
+    } else {
+      // User cancelled — re-check the toggle
+      var toggle = document.getElementById('gcal-sync-toggle');
+      if (toggle) toggle.checked = true;
+    }
   }
 };
+
+// Listen for OAuth popup callback message
+window.addEventListener('message', function(event) {
+  if (event.data && event.data.type === 'gcal_connected') {
+    localStorage.setItem('rc_gcal_sync', '1');
+    var toggle = document.getElementById('gcal-sync-toggle');
+    if (toggle) toggle.checked = true;
+    _gcalFetchEvents();
+  }
+});
+
+// Check Google Calendar connection status
+function _gcalCheckStatus() {
+  var token = localStorage.getItem('rc_customer_token') || '';
+  fetch('/api/customer/gcal/status', {
+    headers: { 'Authorization': 'Bearer ' + token }
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    if (data.connected) {
+      localStorage.setItem('rc_gcal_sync', '1');
+      var toggle = document.getElementById('gcal-sync-toggle');
+      if (toggle) toggle.checked = true;
+      _gcalFetchEvents();
+    } else {
+      localStorage.setItem('rc_gcal_sync', '0');
+      var toggle = document.getElementById('gcal-sync-toggle');
+      if (toggle) toggle.checked = false;
+    }
+  })
+  .catch(function() {});
+}
+
+// Fetch Google Calendar events and merge into dashboard calendar
+function _gcalFetchEvents() {
+  var token = localStorage.getItem('rc_customer_token') || '';
+  fetch('/api/calendar/events', {
+    headers: { 'Authorization': 'Bearer ' + token }
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    var events = data.events || data || [];
+    if (Array.isArray(events)) {
+      events.forEach(function(ev) {
+        var d = (ev.start_time || ev.start || '').substring(0, 10);
+        if (d) {
+          _calEvents.push({ date: d, title: ev.title || ev.summary || 'Calendar Event', color: 'green' });
+        }
+      });
+      _calRender();
+    }
+  })
+  .catch(function() {});
+}
 
 // Init calendar on dashboard load
 setTimeout(function() {

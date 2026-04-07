@@ -1308,6 +1308,51 @@ app.get('/lander', (c) => {
   return c.html(getLanderFunnelHTML())
 })
 
+// Demo Landing Page — For Facebook group posts & social marketing
+app.get('/demo', (c) => {
+  return c.html(getDemoLandingPageHTML())
+})
+
+// Lead capture API — public, no auth required
+app.post('/api/demo/lead', async (c) => {
+  try {
+    const body = await c.req.json()
+    const { name, email, phone, company, utm_source, utm_medium, utm_campaign, utm_content } = body
+
+    if (!name || !email) {
+      return c.json({ error: 'Name and email are required' }, 400)
+    }
+
+    // Store lead in demo_leads table
+    await c.env.DB.prepare(`
+      CREATE TABLE IF NOT EXISTS demo_leads (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        email TEXT NOT NULL,
+        phone TEXT DEFAULT '',
+        company TEXT DEFAULT '',
+        utm_source TEXT DEFAULT '',
+        utm_medium TEXT DEFAULT '',
+        utm_campaign TEXT DEFAULT '',
+        utm_content TEXT DEFAULT '',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `).run()
+
+    await c.env.DB.prepare(`
+      INSERT INTO demo_leads (name, email, phone, company, utm_source, utm_medium, utm_campaign, utm_content)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      name, email, phone || '', company || '',
+      utm_source || '', utm_medium || '', utm_campaign || '', utm_content || ''
+    ).run()
+
+    return c.json({ success: true })
+  } catch (e: any) {
+    return c.json({ error: 'Failed to save lead' }, 500)
+  }
+})
+
 // Customer Order & Pay page
 app.get('/customer/order', (c) => {
   const mapsKey = c.env.GOOGLE_MAPS_API_KEY || ''
@@ -5355,6 +5400,315 @@ function getLanderFunnelHTML() {
     document.querySelectorAll('.scroll-animate').forEach(el => obs.observe(el));
   </script>
   ${getRoverWidget()}
+</body>
+</html>`
+}
+
+// ============================================================
+// DEMO LANDING PAGE — Facebook group marketing funnel
+// ============================================================
+function getDemoLandingPageHTML() {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags()}
+  <title>Book a Demo - Roof Manager | AI-Powered Roof Measurement Platform</title>
+  <meta name="description" content="See how Roof Manager generates professional roof measurement reports in under 60 seconds using satellite imagery and AI. Book a free demo today.">
+  <meta property="og:title" content="Book a Demo - Roof Manager">
+  <meta property="og:description" content="AI-powered roof measurement reports in 60 seconds. See it in action — book a free demo.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://www.roofmanager.ca/demo">
+  <meta property="og:image" content="https://www.roofmanager.ca/static/logo.png">
+  <meta property="og:site_name" content="Roof Manager">
+  <link rel="canonical" href="https://www.roofmanager.ca/demo">
+  <style>
+    html { scroll-behavior: smooth; }
+    .scroll-animate { opacity: 0; transform: translateY(20px); transition: all 0.7s cubic-bezier(0.4, 0, 0.2, 1); }
+    .scroll-animate.animate-in { opacity: 1 !important; transform: translateY(0) !important; }
+    @keyframes pulse-glow { 0%, 100% { box-shadow: 0 0 20px rgba(34,211,238,0.2); } 50% { box-shadow: 0 0 40px rgba(34,211,238,0.4); } }
+    .pulse-glow { animation: pulse-glow 2s ease-in-out infinite; }
+    @keyframes float { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-8px); } }
+    .float-anim { animation: float 3s ease-in-out infinite; }
+  </style>
+</head>
+<body class="bg-[#0a0a0a] min-h-screen text-white">
+  <!-- Nav -->
+  <nav class="bg-[#0a0a0a] border-b border-white/5">
+    <div class="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
+      <a href="/" class="flex items-center gap-2">
+        <img src="/static/logo.png" alt="Roof Manager" class="w-7 h-7 rounded-md object-cover">
+        <span class="text-white font-bold text-sm">Roof Manager</span>
+      </a>
+      <a href="/customer/login" class="bg-gradient-to-r from-cyan-500 to-blue-500 text-white text-sm font-semibold py-1.5 px-4 rounded-lg hover:opacity-90 transition-opacity">Try Free</a>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <section class="relative overflow-hidden py-20 lg:py-28">
+    <div class="absolute inset-0 opacity-10">
+      <div class="absolute inset-0" style="background-image: radial-gradient(circle, rgba(34,211,238,0.3) 1px, transparent 1px); background-size: 30px 30px;"></div>
+    </div>
+    <div class="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-gradient-to-b from-cyan-500/10 to-transparent rounded-full blur-3xl"></div>
+
+    <div class="relative max-w-4xl mx-auto px-4 text-center">
+      <div class="inline-flex items-center gap-2 bg-cyan-500/10 border border-cyan-400/20 rounded-full px-4 py-1.5 mb-6">
+        <i class="fas fa-play-circle text-cyan-400 text-sm"></i>
+        <span class="text-sm font-medium text-cyan-300">Free Live Demo — No Strings Attached</span>
+      </div>
+
+      <h1 class="text-4xl lg:text-6xl font-black leading-tight mb-6 tracking-tight">
+        Measure Any Roof in<br/>
+        <span class="bg-clip-text text-transparent bg-gradient-to-r from-cyan-300 to-blue-400">Under 60 Seconds</span>
+      </h1>
+
+      <p class="text-lg text-gray-400 mb-10 max-w-2xl mx-auto leading-relaxed">
+        See how contractors are ditching tape measures and drones for <strong class="text-white">satellite-powered AI reports</strong> — accurate area, pitch, edges, and full material BOMs delivered instantly.
+      </p>
+
+      <a href="#book" class="inline-flex items-center gap-3 bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-white font-bold py-4 px-10 rounded-xl text-lg shadow-2xl shadow-cyan-500/20 transition-all hover:scale-[1.02] pulse-glow">
+        <i class="fas fa-calendar-check"></i>
+        Book Your Free Demo
+        <i class="fas fa-arrow-down text-sm"></i>
+      </a>
+    </div>
+  </section>
+
+  <!-- SOCIAL PROOF -->
+  <section class="py-12 border-y border-white/5">
+    <div class="max-w-5xl mx-auto px-4">
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
+        <div>
+          <div class="text-3xl font-black text-cyan-400">500+</div>
+          <div class="text-sm text-gray-500 mt-1">Contractors Using It</div>
+        </div>
+        <div>
+          <div class="text-3xl font-black text-cyan-400">60s</div>
+          <div class="text-sm text-gray-500 mt-1">Average Report Time</div>
+        </div>
+        <div>
+          <div class="text-3xl font-black text-cyan-400">98%</div>
+          <div class="text-sm text-gray-500 mt-1">Measurement Accuracy</div>
+        </div>
+        <div>
+          <div class="text-3xl font-black text-cyan-400">$2.99</div>
+          <div class="text-sm text-gray-500 mt-1">Per Report</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- WHAT YOU GET -->
+  <section class="py-20 scroll-animate">
+    <div class="max-w-5xl mx-auto px-4">
+      <h2 class="text-3xl font-bold text-center mb-4">What You'll See in the Demo</h2>
+      <p class="text-gray-400 text-center mb-12 max-w-xl mx-auto">A quick walkthrough of everything Roof Manager does for your business.</p>
+      <div class="grid md:grid-cols-3 gap-6">
+        <div class="bg-[#111] border border-white/10 rounded-2xl p-6">
+          <div class="w-12 h-12 bg-cyan-500/10 rounded-xl flex items-center justify-center mb-4">
+            <i class="fas fa-satellite text-cyan-400 text-xl"></i>
+          </div>
+          <h3 class="font-bold text-lg mb-2">Satellite Roof Reports</h3>
+          <p class="text-gray-400 text-sm leading-relaxed">Enter an address, get a full roof measurement report — area, pitch, edge lengths, segments, and a material BOM. No climbing required.</p>
+        </div>
+        <div class="bg-[#111] border border-white/10 rounded-2xl p-6">
+          <div class="w-12 h-12 bg-blue-500/10 rounded-xl flex items-center justify-center mb-4">
+            <i class="fas fa-brain text-blue-400 text-xl"></i>
+          </div>
+          <h3 class="font-bold text-lg mb-2">AI Vision Analysis</h3>
+          <p class="text-gray-400 text-sm leading-relaxed">Our Gemini AI examines roof imagery to detect damage, aging, and condition issues — giving you a head start on every inspection.</p>
+        </div>
+        <div class="bg-[#111] border border-white/10 rounded-2xl p-6">
+          <div class="w-12 h-12 bg-green-500/10 rounded-xl flex items-center justify-center mb-4">
+            <i class="fas fa-users-cog text-green-400 text-xl"></i>
+          </div>
+          <h3 class="font-bold text-lg mb-2">Built-in CRM</h3>
+          <p class="text-gray-400 text-sm leading-relaxed">Manage customers, send proposals and invoices, schedule jobs, and track your revenue pipeline — all in one platform, free forever.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- LEAD CAPTURE + BOOKING -->
+  <section id="book" class="py-20 scroll-animate">
+    <div class="max-w-5xl mx-auto px-4">
+      <div class="grid lg:grid-cols-2 gap-10">
+        <!-- Lead Capture Form -->
+        <div class="bg-[#111] border border-white/10 rounded-2xl p-8">
+          <h2 class="text-2xl font-bold mb-2">Get in Touch</h2>
+          <p class="text-gray-400 text-sm mb-6">Drop your info and we'll send you a personalized walkthrough.</p>
+          <form id="demo-lead-form" onsubmit="return submitDemoLead(event)">
+            <div class="space-y-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-300 mb-1">Full Name *</label>
+                <input type="text" name="name" required class="w-full bg-[#0a0a0a] border border-white/10 rounded-lg px-4 py-3 text-white text-sm focus:outline-none focus:border-cyan-500/50 transition-colors" placeholder="John Smith">
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-300 mb-1">Email *</label>
+                <input type="email" name="email" required class="w-full bg-[#0a0a0a] border border-white/10 rounded-lg px-4 py-3 text-white text-sm focus:outline-none focus:border-cyan-500/50 transition-colors" placeholder="john@yourcompany.com">
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-300 mb-1">Phone</label>
+                <input type="tel" name="phone" class="w-full bg-[#0a0a0a] border border-white/10 rounded-lg px-4 py-3 text-white text-sm focus:outline-none focus:border-cyan-500/50 transition-colors" placeholder="(555) 123-4567">
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-300 mb-1">Company Name</label>
+                <input type="text" name="company" class="w-full bg-[#0a0a0a] border border-white/10 rounded-lg px-4 py-3 text-white text-sm focus:outline-none focus:border-cyan-500/50 transition-colors" placeholder="ABC Roofing Inc.">
+              </div>
+              <button type="submit" id="demo-submit-btn" class="w-full bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-white font-bold py-3 px-6 rounded-xl transition-all hover:scale-[1.01]">
+                <i class="fas fa-paper-plane mr-2"></i>Submit & Book Demo
+              </button>
+            </div>
+          </form>
+          <div id="demo-lead-success" class="hidden text-center py-8">
+            <div class="w-16 h-16 bg-green-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
+              <i class="fas fa-check text-green-400 text-2xl"></i>
+            </div>
+            <h3 class="text-xl font-bold mb-2">You're In!</h3>
+            <p class="text-gray-400 text-sm">We've got your info. Now book a time that works for you below.</p>
+          </div>
+        </div>
+
+        <!-- Google Calendar Booking -->
+        <div class="bg-[#111] border border-white/10 rounded-2xl p-8 flex flex-col">
+          <h2 class="text-2xl font-bold mb-2">Book a Time</h2>
+          <p class="text-gray-400 text-sm mb-6">Pick a 15-minute slot — we'll walk you through the entire platform live.</p>
+          <div class="flex-1 flex flex-col items-center justify-center">
+            <div class="w-20 h-20 bg-cyan-500/10 rounded-2xl flex items-center justify-center mb-6 float-anim">
+              <img src="https://www.gstatic.com/images/branding/product/1x/calendar_48dp.png" alt="Google Calendar" class="w-10 h-10">
+            </div>
+            <a href="https://calendar.app.google/CE5iBMV1Fu4K2ve38" target="_blank" rel="noopener" class="inline-flex items-center gap-3 bg-white text-gray-900 font-bold py-4 px-8 rounded-xl text-lg hover:bg-gray-100 transition-all hover:scale-[1.02] shadow-xl">
+              <i class="fas fa-calendar-plus"></i>
+              Open Booking Calendar
+              <i class="fas fa-external-link-alt text-sm text-gray-400"></i>
+            </a>
+            <p class="text-gray-500 text-xs mt-4 text-center">Opens Google Calendar appointment scheduling.<br/>Pick any available 15-min slot.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section class="py-16 border-t border-white/5 scroll-animate">
+    <div class="max-w-3xl mx-auto px-4">
+      <h2 class="text-2xl font-bold text-center mb-10">Common Questions</h2>
+      <div class="space-y-4">
+        <div class="bg-[#111] border border-white/10 rounded-xl p-5">
+          <h3 class="font-semibold mb-1">Is there really a free trial?</h3>
+          <p class="text-gray-400 text-sm">Yes — every new account gets 3 free roof reports plus full CRM access. No credit card required.</p>
+        </div>
+        <div class="bg-[#111] border border-white/10 rounded-xl p-5">
+          <h3 class="font-semibold mb-1">How accurate are the measurements?</h3>
+          <p class="text-gray-400 text-sm">We use Google Solar API satellite data cross-referenced with our geodesic measurement engine. Accuracy is within 2-3% of manual measurements on most structures.</p>
+        </div>
+        <div class="bg-[#111] border border-white/10 rounded-xl p-5">
+          <h3 class="font-semibold mb-1">What does the demo cover?</h3>
+          <p class="text-gray-400 text-sm">We'll run a live report on a property of your choice, walk through the CRM, proposals, invoicing, and answer any questions — all in 15 minutes.</p>
+        </div>
+        <div class="bg-[#111] border border-white/10 rounded-xl p-5">
+          <h3 class="font-semibold mb-1">Do I need to install anything?</h3>
+          <p class="text-gray-400 text-sm">Nope. Roof Manager is fully web-based — works on any device with a browser. Nothing to download or install.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA FOOTER -->
+  <section class="py-16 bg-gradient-to-t from-cyan-900/10 to-transparent">
+    <div class="max-w-3xl mx-auto px-4 text-center">
+      <h2 class="text-3xl font-bold mb-4">Ready to Measure Smarter?</h2>
+      <p class="text-gray-400 mb-8">Start with 3 free reports or book a demo — either way, you'll never climb a roof to measure again.</p>
+      <div class="flex flex-col sm:flex-row gap-4 justify-center">
+        <a href="/customer/login" class="inline-flex items-center gap-2 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-400 hover:to-emerald-400 text-white font-bold py-3 px-8 rounded-xl shadow-lg transition-all hover:scale-[1.02]">
+          <i class="fas fa-rocket"></i>
+          Start Free — 3 Reports
+        </a>
+        <a href="#book" class="inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white font-bold py-3 px-8 rounded-xl border border-white/20 transition-all">
+          <i class="fas fa-calendar-check"></i>
+          Book a Demo
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <footer class="border-t border-white/5 py-8">
+    <div class="max-w-6xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between text-sm text-gray-500">
+      <span>&copy; ${new Date().getFullYear()} Roof Manager. All rights reserved.</span>
+      <div class="flex gap-4 mt-2 sm:mt-0">
+        <a href="/privacy" class="hover:text-white transition-colors">Privacy</a>
+        <a href="/terms" class="hover:text-white transition-colors">Terms</a>
+        <a href="/" class="hover:text-white transition-colors">Home</a>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    // UTM parameter tracking
+    var _utmParams = {};
+    (function() {
+      var params = new URLSearchParams(window.location.search);
+      ['utm_source','utm_medium','utm_campaign','utm_content'].forEach(function(k) {
+        if (params.get(k)) _utmParams[k] = params.get(k);
+      });
+    })();
+
+    // Lead form submission
+    function submitDemoLead(e) {
+      e.preventDefault();
+      var form = document.getElementById('demo-lead-form');
+      var btn = document.getElementById('demo-submit-btn');
+      var fd = new FormData(form);
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Submitting...';
+
+      var payload = {
+        name: fd.get('name'),
+        email: fd.get('email'),
+        phone: fd.get('phone') || '',
+        company: fd.get('company') || '',
+        utm_source: _utmParams.utm_source || '',
+        utm_medium: _utmParams.utm_medium || '',
+        utm_campaign: _utmParams.utm_campaign || '',
+        utm_content: _utmParams.utm_content || ''
+      };
+
+      fetch('/api/demo/lead', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.success) {
+          form.classList.add('hidden');
+          document.getElementById('demo-lead-success').classList.remove('hidden');
+        } else {
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fas fa-paper-plane mr-2"></i>Submit & Book Demo';
+          alert(data.error || 'Something went wrong. Please try again.');
+        }
+      })
+      .catch(function() {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-paper-plane mr-2"></i>Submit & Book Demo';
+        alert('Network error. Please try again.');
+      });
+
+      return false;
+    }
+
+    // Scroll animations
+    var observer = new IntersectionObserver(function(entries) {
+      entries.forEach(function(entry) {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('animate-in');
+        }
+      });
+    }, { threshold: 0.1 });
+    document.querySelectorAll('.scroll-animate').forEach(function(el) {
+      observer.observe(el);
+    });
+  </script>
 </body>
 </html>`
 }
