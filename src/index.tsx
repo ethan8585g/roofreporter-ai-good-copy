@@ -1665,7 +1665,123 @@ app.get('/proposal/view/:token', async (c) => {
           reportLink = `<a href="/api/reports/${invProposal.attached_report_id}/html" target="_blank" class="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-100"><i class="fas fa-file-alt"></i>View Roof Report</a>`
         }
 
-        return c.html(`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>${docLabel} ${invProposal.invoice_number} — Roof Manager</title><meta property="og:title" content="${docLabel} ${invProposal.invoice_number} — $${Number(invProposal.total_amount || 0).toFixed(2)}"><meta property="og:description" content="Professional roofing ${docLabel.toLowerCase()} for ${invProposal.customer_name || 'valued customer'}. ${invProposal.property_address ? 'Property: ' + invProposal.property_address : ''}"><meta property="og:type" content="article"><meta property="og:site_name" content="Roof Manager"><meta name="twitter:card" content="summary"><script src="https://cdn.tailwindcss.com"></script><link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet"></head>
+        const invIsAccepted = invProposal.status === 'accepted'
+        const invIsDeclined = invProposal.status === 'declined'
+        const invIsResponded = invIsAccepted || invIsDeclined
+        const invIsProposalType = docType === 'proposal' || docType === 'estimate'
+        const invStatusBadge = invIsAccepted ? 'bg-green-100 text-green-700' : invIsDeclined ? 'bg-red-100 text-red-700' : invProposal.status === 'paid' ? 'bg-green-100 text-green-700' : invProposal.status === 'sent' || invProposal.status === 'viewed' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
+        const invStatusLabel = invIsAccepted ? 'ACCEPTED' : invIsDeclined ? 'DECLINED' : (invProposal.status || 'draft').toUpperCase()
+
+        // Build accept/sign section for proposals/estimates
+        let signatureSection = ''
+        if (invIsProposalType && !invIsResponded) {
+          signatureSection = `
+      <div class="px-8 py-8 no-print" id="actionSection">
+        <div class="bg-gray-50 rounded-2xl p-6 border border-gray-200">
+          <h3 class="text-center text-lg font-bold text-gray-800 mb-2">Ready to proceed?</h3>
+          <p class="text-center text-sm text-gray-500 mb-6">Accept this ${docLabel.toLowerCase()} to get your roofing project started</p>
+          <div class="mb-4">
+            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Your Signature <span class="text-red-400">*</span></label>
+            <canvas id="signaturePad" class="w-full bg-white" style="border:2px dashed #d1d5db;border-radius:12px;height:100px;cursor:crosshair;touch-action:none" width="600" height="100"></canvas>
+            <div class="flex justify-between mt-1">
+              <span id="sigError" class="text-xs text-red-500 hidden">Please sign above before accepting</span>
+              <button onclick="clearSignature()" class="text-xs text-gray-400 hover:text-gray-600 ml-auto"><i class="fas fa-eraser mr-1"></i>Clear</button>
+            </div>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
+            <div>
+              <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Print Your Full Name <span class="text-red-400">*</span></label>
+              <input type="text" id="sigPrintedName" placeholder="e.g. John Smith" class="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-400 focus:border-blue-400">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Date</label>
+              <input type="text" id="sigDate" value="${new Date().toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' })}" readonly class="w-full px-3 py-2.5 bg-gray-100 border border-gray-200 rounded-xl text-sm text-gray-600">
+            </div>
+          </div>
+          <div class="flex gap-3">
+            <button onclick="respondProposal('accept')" class="flex-1 bg-sky-600 hover:bg-sky-700 text-white py-3.5 rounded-xl font-bold text-sm transition-all hover:shadow-lg">
+              <i class="fas fa-check-circle mr-2"></i>Accept &amp; Sign ${docLabel}
+            </button>
+            <button onclick="respondProposal('decline')" class="px-6 py-3.5 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-xl font-semibold text-sm transition-all">
+              Decline
+            </button>
+          </div>
+        </div>
+      </div>`
+        } else if (invIsProposalType && invIsResponded) {
+          signatureSection = `
+      <div class="px-8 py-8">
+        <div class="rounded-2xl p-6 text-center ${invIsAccepted ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}">
+          <div class="w-16 h-16 mx-auto mb-3 rounded-full flex items-center justify-center ${invIsAccepted ? 'bg-green-100' : 'bg-red-100'}">
+            <i class="fas ${invIsAccepted ? 'fa-check-circle text-green-600' : 'fa-times-circle text-red-600'} text-2xl"></i>
+          </div>
+          <h3 class="text-lg font-bold ${invIsAccepted ? 'text-green-800' : 'text-red-800'}">${docLabel} ${invIsAccepted ? 'Accepted' : 'Declined'}</h3>
+          <p class="text-sm ${invIsAccepted ? 'text-green-600' : 'text-red-600'} mt-1">${invProposal.signed_at ? 'on ' + new Date(invProposal.signed_at).toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' }) : ''}</p>
+          ${invProposal.customer_signature ? `<div class="mt-4"><p class="text-xs text-gray-400 mb-1">Signature</p><img src="${invProposal.customer_signature}" alt="Signature" class="max-h-16 mx-auto"></div>` : ''}
+        </div>
+      </div>`
+        }
+
+        // Build signature pad script
+        const sigScript = invIsProposalType && !invIsResponded ? `
+    var canvas = document.getElementById('signaturePad');
+    var ctx = canvas ? canvas.getContext('2d') : null;
+    var drawing = false;
+    var hasSignature = false;
+    if (canvas && ctx) {
+      canvas.width = canvas.offsetWidth * 2;
+      canvas.height = 200;
+      ctx.scale(2, 2);
+      ctx.strokeStyle = '#1e293b';
+      ctx.lineWidth = 2;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      function getPos(e) {
+        var rect = canvas.getBoundingClientRect();
+        var x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+        var y = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
+        return { x: x, y: y };
+      }
+      canvas.addEventListener('mousedown', function(e) { drawing = true; ctx.beginPath(); var p = getPos(e); ctx.moveTo(p.x, p.y); canvas.style.borderColor = '#0ea5e9'; });
+      canvas.addEventListener('mousemove', function(e) { if (!drawing) return; var p = getPos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); hasSignature = true; });
+      canvas.addEventListener('mouseup', function() { drawing = false; canvas.style.borderColor = '#d1d5db'; });
+      canvas.addEventListener('mouseleave', function() { drawing = false; canvas.style.borderColor = '#d1d5db'; });
+      canvas.addEventListener('touchstart', function(e) { e.preventDefault(); drawing = true; ctx.beginPath(); var p = getPos(e); ctx.moveTo(p.x, p.y); canvas.style.borderColor = '#0ea5e9'; });
+      canvas.addEventListener('touchmove', function(e) { e.preventDefault(); if (!drawing) return; var p = getPos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); hasSignature = true; });
+      canvas.addEventListener('touchend', function() { drawing = false; canvas.style.borderColor = '#d1d5db'; });
+    }
+    function clearSignature() {
+      if (ctx && canvas) { ctx.clearRect(0, 0, canvas.width, canvas.height); hasSignature = false; }
+    }
+    function respondProposal(action) {
+      if (action === 'accept') {
+        if (!hasSignature) { var sigErr = document.getElementById('sigError'); if (sigErr) sigErr.classList.remove('hidden'); alert('Please sign above before accepting.'); return; }
+        var printedName = document.getElementById('sigPrintedName');
+        if (!printedName || !printedName.value.trim()) { alert('Please print your full name before accepting.'); if (printedName) printedName.focus(); return; }
+      }
+      var confirmMsg = action === 'accept' ? 'Are you sure you want to accept and sign this ${docLabel.toLowerCase()}?' : 'Are you sure you want to decline this ${docLabel.toLowerCase()}?';
+      if (!confirm(confirmMsg)) return;
+      var signature = null;
+      if (hasSignature && canvas) { try { signature = canvas.toDataURL('image/png'); } catch(e) {} }
+      var sigName = document.getElementById('sigPrintedName')?.value?.trim() || '';
+      var sigDate = document.getElementById('sigDate')?.value || '';
+      var btn = event.target;
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Processing...';
+      fetch('/api/invoices/respond/${token}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: action, signature: signature, printed_name: sigName, signed_date: sigDate })
+      })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.success) { location.reload(); }
+        else { alert(data.error || 'Something went wrong. Please try again.'); btn.disabled = false; btn.innerHTML = action === 'accept' ? '<i class="fas fa-check-circle mr-2"></i>Accept ${docLabel}' : 'Decline'; }
+      })
+      .catch(function() { alert('Network error. Please check your connection and try again.'); btn.disabled = false; btn.innerHTML = action === 'accept' ? '<i class="fas fa-check-circle mr-2"></i>Accept ${docLabel}' : 'Decline'; });
+    }` : ''
+
+        return c.html(`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>${docLabel} ${invProposal.invoice_number} — Roof Manager</title><meta property="og:title" content="${docLabel} ${invProposal.invoice_number} — $${Number(invProposal.total_amount || 0).toFixed(2)}"><meta property="og:description" content="Professional roofing ${docLabel.toLowerCase()} for ${invProposal.customer_name || 'valued customer'}. ${invProposal.property_address ? 'Property: ' + invProposal.property_address : ''}"><meta property="og:type" content="article"><meta property="og:site_name" content="Roof Manager"><meta name="twitter:card" content="summary"><script src="https://cdn.tailwindcss.com"></script><link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet"><style>@media print { .no-print { display: none !important; } }</style></head>
 <body class="bg-gray-100 min-h-screen py-8 px-4">
 <div class="max-w-3xl mx-auto">
   <div class="bg-white rounded-2xl shadow-xl overflow-hidden print:shadow-none">
@@ -1678,7 +1794,7 @@ app.get('/proposal/view/:token', async (c) => {
     <div class="p-8">
       <div class="grid grid-cols-2 gap-6 mb-8">
         <div><h3 class="text-xs font-bold text-gray-400 uppercase mb-2">Bill To</h3><p class="font-semibold text-gray-800">${invProposal.customer_name || ''}</p><p class="text-sm text-gray-500">${invProposal.company_name || ''}</p><p class="text-sm text-gray-500">${invProposal.customer_email || ''}</p></div>
-        <div class="text-right"><h3 class="text-xs font-bold text-gray-400 uppercase mb-2">${docLabel} Details</h3><p class="text-sm text-gray-600"><strong>Status:</strong> <span class="px-2 py-0.5 rounded-full text-xs font-bold ${invProposal.status === 'paid' ? 'bg-green-100 text-green-700' : invProposal.status === 'sent' || invProposal.status === 'viewed' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}">${(invProposal.status || 'draft').toUpperCase()}</span></p>${invProposal.due_date ? `<p class="text-sm text-gray-600 mt-1"><strong>Due:</strong> ${new Date(invProposal.due_date).toLocaleDateString('en-CA')}</p>` : ''}${invProposal.valid_until ? `<p class="text-sm text-gray-600 mt-1"><strong>Valid Until:</strong> ${invProposal.valid_until}</p>` : ''}</div>
+        <div class="text-right"><h3 class="text-xs font-bold text-gray-400 uppercase mb-2">${docLabel} Details</h3><p class="text-sm text-gray-600"><strong>Status:</strong> <span class="px-2 py-0.5 rounded-full text-xs font-bold ${invStatusBadge}">${invStatusLabel}</span></p>${invProposal.due_date ? `<p class="text-sm text-gray-600 mt-1"><strong>Due:</strong> ${new Date(invProposal.due_date).toLocaleDateString('en-CA')}</p>` : ''}${invProposal.valid_until ? `<p class="text-sm text-gray-600 mt-1"><strong>Valid Until:</strong> ${invProposal.valid_until}</p>` : ''}</div>
       </div>
       ${invProposal.scope_of_work ? `<div class="mb-8 bg-gray-50 rounded-xl p-6"><h3 class="text-sm font-bold text-gray-700 mb-2"><i class="fas fa-clipboard-list mr-1 text-blue-500"></i>Scope of Work</h3><div class="text-sm text-gray-600 whitespace-pre-wrap">${invProposal.scope_of_work}</div></div>` : ''}
       ${reportLink ? `<div class="mb-6">${reportLink}</div>` : ''}
@@ -1694,11 +1810,15 @@ app.get('/proposal/view/:token', async (c) => {
       ${invProposal.terms ? `<div class="mt-4 bg-gray-50 rounded-xl p-6"><h3 class="text-sm font-bold text-gray-700 mb-2"><i class="fas fa-file-contract mr-1"></i>Terms & Conditions</h3><p class="text-sm text-gray-600 whitespace-pre-wrap">${invProposal.terms}</p></div>` : ''}
       ${invProposal.payment_terms_text ? `<div class="mt-4 bg-green-50 rounded-xl p-6 border border-green-100"><h3 class="text-sm font-bold text-green-800 mb-2"><i class="fas fa-credit-card mr-1"></i>Payment Terms</h3><p class="text-sm text-green-700 whitespace-pre-wrap">${invProposal.payment_terms_text}</p></div>` : ''}
     </div>
+    ${signatureSection}
     <div class="bg-gray-50 px-8 py-4 text-center text-xs text-gray-400 border-t">Powered by <a href="https://www.roofmanager.ca" class="text-blue-500 hover:underline">Roof Manager</a> — Canada's AI Roof Measurement Platform</div>
   </div>
   <div class="text-center mt-4 print:hidden"><button onclick="window.print()" class="px-6 py-2.5 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm"><i class="fas fa-print mr-1"></i>Print / Save PDF</button></div>
 </div>
-<script>if(new URLSearchParams(location.search).get('print')==='1')setTimeout(function(){window.print()},600)</script>
+<script>
+${sigScript}
+if(new URLSearchParams(location.search).get('print')==='1')setTimeout(function(){window.print()},600);
+</script>
 </body></html>`)
       }
 

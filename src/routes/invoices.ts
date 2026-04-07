@@ -10,7 +10,7 @@ export const invoiceRoutes = new Hono<{ Bindings: Bindings }>()
 invoiceRoutes.use('/*', async (c, next) => {
   const path = c.req.path
   // Allow public access to shared proposals/invoices and Square webhooks
-  if (path.includes('/view/') || path.includes('/webhook')) return next()
+  if (path.includes('/view/') || path.includes('/webhook') || path.includes('/respond/')) return next()
   
   // Try admin auth first
   const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
@@ -747,4 +747,65 @@ invoiceRoutes.post('/:id/send-gmail', async (c) => {
   } catch (err: any) {
     return c.json({ error: 'Failed to send invoice: ' + err.message }, 500)
   }
+})
+
+// Public: Accept / Decline a proposal (invoices table) via share token
+invoiceRoutes.post('/respond/:token', async (c) => {
+  const token = c.req.param('token')
+  const { action, signature, printed_name, signed_date } = await c.req.json()
+
+  if (!['accept', 'decline'].includes(action)) {
+    return c.json({ error: 'Invalid action' }, 400)
+  }
+
+  const proposal = await c.env.DB.prepare(
+    `SELECT i.*, c.name as customer_name, c.email as customer_email
+     FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id
+     WHERE i.share_token = ?`
+  ).bind(token).first<any>()
+
+  if (!proposal) return c.json({ error: 'Proposal not found' }, 404)
+  if (proposal.status === 'accepted' || proposal.status === 'declined') {
+    return c.json({ error: 'This proposal has already been ' + proposal.status }, 400)
+  }
+
+  const newStatus = action === 'accept' ? 'accepted' : 'declined'
+
+  await c.env.DB.prepare(`
+    UPDATE invoices SET status = ?, customer_signature = ?, signed_at = datetime('now'), updated_at = datetime('now') WHERE id = ?
+  `).bind(newStatus, signature || null, proposal.id).run()
+
+  // Email notification to the business owner (customer_id owner)
+  try {
+    const owner = await c.env.DB.prepare('SELECT email, name, gmail_refresh_token FROM customers WHERE id = ?').bind(proposal.customer_id).first<any>()
+    if (owner?.email) {
+      const clientId = (c.env as any).GMAIL_CLIENT_ID
+      const clientSecret = (c.env as any).GMAIL_CLIENT_SECRET
+      const refreshToken = (c.env as any).GMAIL_REFRESH_TOKEN || owner?.gmail_refresh_token || ''
+      if (clientId && clientSecret && refreshToken) {
+        const emoji = action === 'accept' ? '✅' : '❌'
+        const statusText = action === 'accept' ? 'ACCEPTED' : 'DECLINED'
+        const docLabel = (proposal.document_type || 'proposal').charAt(0).toUpperCase() + (proposal.document_type || 'proposal').slice(1)
+        const notifHtml = `
+<div style="max-width:600px;margin:0 auto;font-family:Inter,system-ui,sans-serif">
+  <div style="background:${action === 'accept' ? '#16a34a' : '#dc2626'};padding:24px;border-radius:12px 12px 0 0;text-align:center">
+    <h1 style="color:white;font-size:20px;margin:0">${emoji} ${docLabel} ${statusText}</h1>
+    <p style="color:rgba(255,255,255,0.8);font-size:13px;margin:4px 0 0">${proposal.invoice_number}</p>
+  </div>
+  <div style="background:white;padding:24px;border:1px solid #e2e8f0;border-top:none">
+    <table style="width:100%;border-collapse:collapse">
+      <tr><td style="padding:8px 0;color:#64748b;font-size:13px;width:120px"><strong>Customer</strong></td><td style="padding:8px 0;font-size:14px;color:#1e293b">${proposal.customer_name || 'Unknown'}</td></tr>
+      <tr><td style="padding:8px 0;color:#64748b;font-size:13px"><strong>Total Amount</strong></td><td style="padding:8px 0;font-size:14px;color:#1e293b;font-weight:700">$${Number(proposal.total || 0).toFixed(2)}</td></tr>
+      ${printed_name ? `<tr><td style="padding:8px 0;color:#64748b;font-size:13px"><strong>Signed By</strong></td><td style="padding:8px 0;font-size:14px;color:#1e293b">${printed_name}</td></tr>` : ''}
+      ${signed_date ? `<tr><td style="padding:8px 0;color:#64748b;font-size:13px"><strong>Date</strong></td><td style="padding:8px 0;font-size:14px;color:#1e293b">${signed_date}</td></tr>` : ''}
+    </table>
+    ${signature ? `<div style="margin-top:16px;padding:12px;background:#f8fafc;border-radius:8px;text-align:center"><p style="font-size:11px;color:#94a3b8;margin:0 0 8px">Customer Signature</p><img src="${signature}" alt="Signature" style="max-height:60px"></div>` : ''}
+  </div>
+</div>`
+        sendGmailOAuth2(clientId, clientSecret, refreshToken, owner.email, `${emoji} ${docLabel} ${statusText}: ${proposal.invoice_number} — $${Number(proposal.total || 0).toFixed(2)}`, notifHtml, owner.email).catch(() => {})
+      }
+    }
+  } catch {}
+
+  return c.json({ success: true, status: newStatus })
 })
