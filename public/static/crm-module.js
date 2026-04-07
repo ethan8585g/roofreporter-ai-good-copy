@@ -2017,9 +2017,16 @@
             extra += '<div class="pt-3 border-t mt-3"><h4 class="text-xs font-bold text-gray-500 uppercase mb-2"><i class="fas fa-stream mr-1"></i>Progress (' + progress.length + ')</h4><div class="space-y-2 max-h-48 overflow-y-auto">';
             progress.forEach(function(p) {
               extra += '<div class="bg-[#0A0A0A] rounded-lg p-2.5"><div class="flex items-center justify-between mb-1"><span class="text-xs font-semibold text-gray-300">' + (p.author_name || 'Unknown') + '</span><span class="text-[10px] text-gray-400">' + fmtDate(p.created_at) + '</span></div>';
-              if (p.content) extra += '<p class="text-xs text-gray-400">' + p.content + '</p>';
-              if (p.photo_data) extra += '<img src="' + p.photo_data + '" class="mt-1.5 rounded-lg max-h-32 object-cover border" alt="' + (p.photo_caption || 'Progress photo') + '">';
-              if (p.photo_caption) extra += '<p class="text-[10px] text-gray-400 mt-0.5">' + p.photo_caption + '</p>';
+              if (p.update_type === 'walkaround') {
+                extra += '<div class="flex items-center gap-1.5 mb-1.5"><i class="fas fa-microphone text-orange-400 text-[10px]"></i><span class="text-[10px] font-bold text-orange-400 uppercase">Voice Walkaround</span></div>';
+                if (p.audio_data) extra += '<audio controls class="w-full h-8 mb-2" style="min-height:32px"><source src="' + p.audio_data + '" type="audio/webm">Audio not supported</audio>';
+                if (p.content) extra += '<div class="text-xs text-gray-300 whitespace-pre-wrap">' + (p.content || '').replace(/\*\*([^*]+)\*\*/g, '<strong class="text-white">$1</strong>') + '</div>';
+                if (p.transcription) extra += '<details class="mt-1.5"><summary class="text-[10px] text-gray-500 cursor-pointer">Raw transcript</summary><p class="text-[10px] text-gray-500 mt-1">' + p.transcription + '</p></details>';
+              } else {
+                if (p.content) extra += '<p class="text-xs text-gray-400">' + p.content + '</p>';
+                if (p.photo_data) extra += '<img src="' + p.photo_data + '" class="mt-1.5 rounded-lg max-h-32 object-cover border" alt="' + (p.photo_caption || 'Progress photo') + '">';
+                if (p.photo_caption) extra += '<p class="text-[10px] text-gray-400 mt-0.5">' + p.photo_caption + '</p>';
+              }
               extra += '</div>';
             });
             extra += '</div></div>';
@@ -2433,7 +2440,8 @@
         } else if (isCheckedIn) {
           html += '<button onclick="event.stopPropagation();window._crewCheckOut(' + j.id + ')" class="w-full py-4 bg-red-600 hover:bg-red-700 text-white rounded-xl text-base font-bold transition-colors"><i class="fas fa-sign-out-alt mr-2"></i>Clock Out</button>';
         }
-        html += '<div class="grid grid-cols-3 gap-2">';
+        html += '<div class="grid grid-cols-4 gap-2">';
+        html += '<button onclick="event.stopPropagation();window._crewStartWalkaround(' + j.id + ')" class="py-3 bg-orange-500/15 hover:bg-orange-500/25 text-orange-400 rounded-xl text-center transition-colors"><i class="fas fa-microphone text-lg block mb-0.5"></i><span class="text-[10px] font-semibold">Walkaround</span></button>';
         html += '<button onclick="event.stopPropagation();window._crewPhotoUpload(' + j.id + ')" class="py-3 bg-blue-500/15 hover:bg-blue-500/25 text-blue-400 rounded-xl text-center transition-colors"><i class="fas fa-camera text-lg block mb-0.5"></i><span class="text-[10px] font-semibold">Photo</span></button>';
         html += '<button onclick="event.stopPropagation();window._crewOpenChat(' + j.id + ')" class="py-3 bg-purple-500/15 hover:bg-purple-500/25 text-purple-400 rounded-xl text-center transition-colors"><i class="fas fa-comment text-lg block mb-0.5"></i><span class="text-[10px] font-semibold">Message</span></button>';
         html += '<button onclick="event.stopPropagation();window._crewDirections(\'' + (j.property_address || '').replace(/'/g, "\\'") + '\')" class="py-3 bg-gray-500/15 hover:bg-gray-500/25 text-gray-400 rounded-xl text-center transition-colors"><i class="fas fa-directions text-lg block mb-0.5"></i><span class="text-[10px] font-semibold">Navigate</span></button>';
@@ -2641,6 +2649,167 @@
       ? 'maps://maps.apple.com/?daddr=' + encoded
       : 'https://www.google.com/maps/dir/?api=1&destination=' + encoded;
     window.open(url, '_blank');
+  };
+
+  // Voice Walkaround — record audio, transcribe, AI-organize notes
+  var _walkaroundRecorder = null;
+  var _walkaroundChunks = [];
+  var _walkaroundTimer = null;
+  var _walkaroundSeconds = 0;
+
+  window._crewStartWalkaround = function(jobId) {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      toast('Audio recording not supported on this device', 'error');
+      return;
+    }
+
+    // Create recording overlay
+    var overlay = document.createElement('div');
+    overlay.id = 'walkaroundOverlay';
+    overlay.className = 'fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#0a0a0a]/95';
+    overlay.innerHTML =
+      '<div class="text-center px-6 max-w-sm w-full">' +
+        '<div id="walkaroundRecording">' +
+          '<div class="w-24 h-24 mx-auto mb-6 rounded-full bg-red-500/20 flex items-center justify-center" style="animation:pulse 1.5s ease-in-out infinite">' +
+            '<div class="w-16 h-16 rounded-full bg-red-500/40 flex items-center justify-center">' +
+              '<i class="fas fa-microphone text-red-400 text-3xl"></i>' +
+            '</div>' +
+          '</div>' +
+          '<h2 class="text-xl font-bold text-white mb-2">Recording Walkaround</h2>' +
+          '<p class="text-gray-400 text-sm mb-1">Walk around the site and describe what you see</p>' +
+          '<p id="walkaroundTime" class="text-3xl font-mono font-bold text-red-400 mb-8">0:00</p>' +
+          '<button onclick="window._crewStopWalkaround(' + jobId + ')" class="w-full py-5 bg-red-600 hover:bg-red-700 text-white rounded-2xl text-lg font-bold transition-colors mb-3">' +
+            '<i class="fas fa-stop mr-2"></i>Stop Recording' +
+          '</button>' +
+          '<button onclick="window._crewCancelWalkaround()" class="w-full py-3 bg-white/5 hover:bg-white/10 text-gray-400 rounded-xl text-sm transition-colors">' +
+            'Cancel' +
+          '</button>' +
+        '</div>' +
+        '<div id="walkaroundProcessing" class="hidden">' +
+          '<div class="w-20 h-20 mx-auto mb-6 rounded-full bg-orange-500/20 flex items-center justify-center">' +
+            '<i class="fas fa-spinner fa-spin text-orange-400 text-3xl"></i>' +
+          '</div>' +
+          '<h2 class="text-xl font-bold text-white mb-2" id="walkaroundStatus">Transcribing audio...</h2>' +
+          '<p class="text-gray-400 text-sm">This may take a few seconds</p>' +
+        '</div>' +
+        '<div id="walkaroundResult" class="hidden text-left">' +
+          '<div class="flex items-center gap-2 mb-4"><div class="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center"><i class="fas fa-check text-emerald-400"></i></div><h2 class="text-lg font-bold text-white">Notes Organized!</h2></div>' +
+          '<div id="walkaroundNotes" class="bg-[#111111] rounded-xl border border-white/10 p-4 mb-4 text-sm text-gray-300 max-h-[300px] overflow-y-auto whitespace-pre-wrap"></div>' +
+          '<details class="mb-4"><summary class="text-xs text-gray-500 cursor-pointer hover:text-gray-300">Raw Transcript</summary><p id="walkaroundTranscript" class="text-xs text-gray-500 mt-2 bg-[#0A0A0A] rounded-lg p-3"></p></details>' +
+          '<button onclick="window._crewCloseWalkaround()" class="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-base font-bold transition-colors">' +
+            '<i class="fas fa-check mr-2"></i>Done' +
+          '</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(overlay);
+
+    // Start recording
+    _walkaroundChunks = [];
+    _walkaroundSeconds = 0;
+    navigator.mediaDevices.getUserMedia({ audio: true })
+      .then(function(stream) {
+        var options = { mimeType: 'audio/webm;codecs=opus' };
+        if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+          options = { mimeType: 'audio/webm' };
+          if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+            options = {};
+          }
+        }
+        _walkaroundRecorder = new MediaRecorder(stream, options);
+        _walkaroundRecorder.ondataavailable = function(e) {
+          if (e.data.size > 0) _walkaroundChunks.push(e.data);
+        };
+        _walkaroundRecorder.start(1000); // collect chunks every second
+
+        // Timer
+        _walkaroundTimer = setInterval(function() {
+          _walkaroundSeconds++;
+          var mins = Math.floor(_walkaroundSeconds / 60);
+          var secs = _walkaroundSeconds % 60;
+          var el = document.getElementById('walkaroundTime');
+          if (el) el.textContent = mins + ':' + String(secs).padStart(2, '0');
+        }, 1000);
+      })
+      .catch(function(err) {
+        toast('Microphone access denied', 'error');
+        var ol = document.getElementById('walkaroundOverlay');
+        if (ol) ol.remove();
+      });
+  };
+
+  window._crewStopWalkaround = function(jobId) {
+    if (!_walkaroundRecorder) return;
+    clearInterval(_walkaroundTimer);
+
+    // Show processing state
+    var recDiv = document.getElementById('walkaroundRecording');
+    var procDiv = document.getElementById('walkaroundProcessing');
+    if (recDiv) recDiv.className = 'hidden';
+    if (procDiv) procDiv.className = '';
+
+    _walkaroundRecorder.onstop = function() {
+      // Stop all tracks
+      _walkaroundRecorder.stream.getTracks().forEach(function(t) { t.stop(); });
+
+      // Convert chunks to base64
+      var blob = new Blob(_walkaroundChunks, { type: _walkaroundRecorder.mimeType || 'audio/webm' });
+      var reader = new FileReader();
+      reader.onload = function() {
+        var base64 = reader.result;
+        var statusEl = document.getElementById('walkaroundStatus');
+        if (statusEl) statusEl.textContent = 'AI is organizing your notes...';
+
+        // Send to backend
+        fetch('/api/crm/jobs/' + jobId + '/walkaround', {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify({ audio_data: base64 })
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(res) {
+          if (res.success) {
+            // Show result
+            if (procDiv) procDiv.className = 'hidden';
+            var resultDiv = document.getElementById('walkaroundResult');
+            if (resultDiv) resultDiv.className = 'text-left';
+            var notesEl = document.getElementById('walkaroundNotes');
+            if (notesEl) notesEl.innerHTML = (res.content || '').replace(/\*\*([^*]+)\*\*/g, '<strong class="text-white">$1</strong>');
+            var transcriptEl = document.getElementById('walkaroundTranscript');
+            if (transcriptEl) transcriptEl.textContent = res.transcription || '';
+          } else {
+            toast(res.error || 'Failed to process walkaround', 'error');
+            var ol = document.getElementById('walkaroundOverlay');
+            if (ol) ol.remove();
+          }
+        })
+        .catch(function() {
+          toast('Network error — try again', 'error');
+          var ol = document.getElementById('walkaroundOverlay');
+          if (ol) ol.remove();
+        });
+      };
+      reader.readAsDataURL(blob);
+    };
+
+    _walkaroundRecorder.stop();
+  };
+
+  window._crewCancelWalkaround = function() {
+    clearInterval(_walkaroundTimer);
+    if (_walkaroundRecorder && _walkaroundRecorder.state !== 'inactive') {
+      _walkaroundRecorder.stream.getTracks().forEach(function(t) { t.stop(); });
+      _walkaroundRecorder.stop();
+    }
+    _walkaroundRecorder = null;
+    _walkaroundChunks = [];
+    var ol = document.getElementById('walkaroundOverlay');
+    if (ol) ol.remove();
+  };
+
+  window._crewCloseWalkaround = function() {
+    var ol = document.getElementById('walkaroundOverlay');
+    if (ol) ol.remove();
+    initCrewManager(); // refresh to show new progress
   };
 
   // Offline queue helpers

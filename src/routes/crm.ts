@@ -1260,6 +1260,126 @@ crmRoutes.get('/jobs/:jobId/messages', async (c) => {
 })
 
 // ============================================================
+// CREW MANAGER — Voice Walkaround with AI Notes
+// ============================================================
+
+// Process a voice walkaround recording: transcribe → organize → store
+crmRoutes.post('/jobs/:jobId/walkaround', async (c) => {
+  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  if (!token) return c.json({ error: 'Not authenticated' }, 401)
+  const session = await c.env.DB.prepare("SELECT customer_id FROM customer_sessions WHERE session_token = ? AND expires_at > datetime('now')").bind(token).first<any>()
+  if (!session) return c.json({ error: 'Session expired' }, 401)
+  const authorId = session.customer_id
+  const jobId = parseInt(c.req.param('jobId'))
+
+  // Resolve author name
+  const cust = await c.env.DB.prepare('SELECT name FROM customers WHERE id = ?').bind(authorId).first<any>()
+  const authorName = cust?.name || 'Unknown'
+
+  const { audio_data } = await c.req.json()
+  if (!audio_data) return c.json({ error: 'No audio data provided' }, 400)
+
+  const apiKey = (c.env as any).OPENAI_API_KEY
+  const baseUrl = (c.env as any).OPENAI_BASE_URL || 'https://www.genspark.ai/api/llm_proxy/v1'
+
+  if (!apiKey) return c.json({ error: 'OpenAI API key not configured' }, 500)
+
+  try {
+    // Step 1: Decode base64 audio → Blob for Whisper
+    const base64Data = audio_data.includes(',') ? audio_data.split(',')[1] : audio_data
+    const binaryString = atob(base64Data)
+    const bytes = new Uint8Array(binaryString.length)
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i)
+    }
+    const audioBlob = new Blob([bytes], { type: 'audio/webm' })
+    const audioFile = new File([audioBlob], 'walkaround.webm', { type: 'audio/webm' })
+
+    // Step 2: Transcribe with Whisper
+    const whisperForm = new FormData()
+    whisperForm.append('file', audioFile, 'walkaround.webm')
+    whisperForm.append('model', 'whisper-1')
+    whisperForm.append('language', 'en')
+
+    const whisperRes = await fetch(`${baseUrl}/audio/transcriptions`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${apiKey}` },
+      body: whisperForm
+    })
+
+    let transcription = ''
+    if (whisperRes.ok) {
+      const whisperData: any = await whisperRes.json()
+      transcription = whisperData.text || ''
+    }
+
+    if (!transcription) {
+      return c.json({ error: 'Could not transcribe audio. Please try again or speak more clearly.' }, 400)
+    }
+
+    // Step 3: Organize with GPT
+    let organizedNotes = transcription // fallback: raw transcript
+    try {
+      const chatRes = await fetch(`${baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: [
+            {
+              role: 'system',
+              content: `You are an AI assistant for a roofing crew. Organize this voice walkaround transcript into clear, structured job site notes. Format using these sections (only include sections that have relevant content):
+
+**Site Conditions:** Current state of the roof/property
+**Work Completed:** What has been done so far
+**Issues Found:** Problems, damage, or concerns discovered
+**Materials Needed:** Supplies or materials mentioned
+**Next Steps:** What needs to happen next
+
+Be concise and professional. Remove filler words, repetition, and off-topic conversation. If the transcript is very short or unclear, do your best to extract the key points.`
+            },
+            {
+              role: 'user',
+              content: `Here is the walkaround voice transcript from a roofing job site:\n\n${transcription}`
+            }
+          ],
+          max_tokens: 1000,
+          temperature: 0.3
+        })
+      })
+
+      if (chatRes.ok) {
+        const chatData: any = await chatRes.json()
+        const aiContent = chatData.choices?.[0]?.message?.content
+        if (aiContent) organizedNotes = aiContent
+      }
+    } catch (e) {
+      // GPT failed — use raw transcript as fallback
+      console.error('[Walkaround] GPT organization failed:', e)
+    }
+
+    // Step 4: Store as job progress
+    const result = await c.env.DB.prepare(
+      `INSERT INTO job_progress (job_id, author_id, author_name, update_type, content, audio_data, transcription, ai_notes)
+       VALUES (?, ?, ?, 'walkaround', ?, ?, ?, ?)`
+    ).bind(jobId, authorId, authorName, organizedNotes, audio_data, transcription, organizedNotes).run()
+
+    return c.json({
+      success: true,
+      id: result.meta.last_row_id,
+      content: organizedNotes,
+      transcription: transcription
+    })
+  } catch (e: any) {
+    console.error('[Walkaround] Error:', e)
+    return c.json({ error: 'Failed to process walkaround: ' + (e.message || 'Unknown error') }, 500)
+  }
+})
+
+// ============================================================
 // GMAIL OAUTH — Per-customer Gmail connection for sending proposals
 // ============================================================
 
