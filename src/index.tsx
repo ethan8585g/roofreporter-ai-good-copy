@@ -4968,17 +4968,21 @@ function getBlogPostHTML(post?: any, slug?: string) {
   ${canonical ? `<link rel="canonical" href="${canonical}">` : ''}
   ${(() => {
     const langMap: Record<string, string> = {
+      'couvreurs-france': 'fr',
       'couvreur-france': 'fr',
       'deutsche-dachdecker': 'de',
       'polski-dekarz': 'pl',
       'roofer-italiano': 'it',
       'nederlandse-dakdekker': 'nl',
+      'medicion-techos': 'es',
       'medicion-tejados': 'es',
       'software-medicion-techos': 'es',
       'medicao-telhados': 'pt',
+      'taktackning': 'sv',
       'takmatning-satellit': 'sv',
       'takmaling-satelitt': 'no',
       'tagmaling-satellit': 'da',
+      'kattoalan-tekoaly': 'fi',
       'kattomittaus': 'fi',
       'metrisi-stegis': 'el',
       'satelitni-mereni': 'cs',
