@@ -104,29 +104,27 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!sq) return '';
     if (!sq.app_configured) return '';
     if (sq.connected) {
-      return `<div class="bg-emerald-500/10 border border-green-200 rounded-xl px-4 py-3 mb-4 flex items-center justify-between gap-3">
-        <div class="flex items-center gap-3">
-          <div class="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center"><i class="fas fa-check-circle text-emerald-400 text-sm"></i></div>
-          <div>
-            <p class="text-sm font-bold text-green-800">Square Account Connected — ${sq.merchant_name || sq.merchant_id}</p>
-            <p class="text-xs text-emerald-400">Payment links will be charged to your Square merchant account</p>
-          </div>
+      return `<div class="bg-[#111111] rounded-xl border border-emerald-500/20 p-3 mb-5 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <i class="fas fa-check-circle text-emerald-400"></i>
+          <span class="text-emerald-400 text-sm font-medium">Square Connected — ${sq.merchant_name || sq.merchant_id}</span>
+          <span class="text-gray-500 text-xs">— Payment links enabled on all invoices</span>
         </div>
-        <button onclick="window._im.disconnectSquare()" class="text-xs text-red-500 hover:text-red-700 font-medium px-3 py-1.5 hover:bg-red-500/10 rounded-lg transition-colors">
-          <i class="fas fa-unlink mr-1"></i>Disconnect
+        <button onclick="window._im.disconnectSquare()" class="text-gray-500 hover:text-red-400 text-xs">
+          <i class="fas fa-times mr-1"></i>Disconnect
         </button>
       </div>`;
     }
-    return `<div class="bg-blue-500/10 border border-blue-200 rounded-xl px-4 py-3 mb-4 flex items-center justify-between gap-3">
+    return `<div class="bg-[#111111] rounded-xl border border-blue-500/20 p-4 mb-5 flex items-center justify-between">
       <div class="flex items-center gap-3">
-        <div class="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center"><i class="fas fa-credit-card text-blue-400 text-sm"></i></div>
+        <div class="w-10 h-10 bg-blue-500/15 rounded-lg flex items-center justify-center"><i class="fab fa-stripe-s text-blue-400 text-lg"></i></div>
         <div>
-          <p class="text-sm font-bold text-blue-800">Connect Your Square Account</p>
-          <p class="text-xs text-blue-400">Accept payments directly into your own Square merchant account. Payment links on invoices will route to your account.</p>
+          <div class="text-white font-semibold text-sm">Connect Square for Online Payments</div>
+          <div class="text-gray-500 text-xs">Accept credit card, debit, Apple Pay & Google Pay on your invoices</div>
         </div>
       </div>
-      <button onclick="window._im.connectSquare()" class="flex-shrink-0 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold transition-colors">
-        <i class="fas fa-plug mr-1"></i>Connect Square
+      <button onclick="window._im.connectSquare()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition-colors">
+        <i class="fas fa-plug mr-1.5"></i>Connect Square
       </button>
     </div>`;
   }
@@ -171,9 +169,6 @@ document.addEventListener('DOMContentLoaded', () => {
       </div>
     </div>
 
-    <!-- Square Merchant Connect Banner -->
-    ${renderSquareConnectBanner()}
-
     <!-- Stats Cards -->
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
       <div onclick="window._im.setFilter('paid')" class="cursor-pointer bg-[#111111] rounded-xl border border-white/10 p-5 hover:border-emerald-500/30 transition-all group">
@@ -197,6 +192,9 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="text-xs text-gray-500 font-medium mt-1">Total Invoices</div>
       </div>
     </div>
+
+    <!-- Square Merchant Connect Banner -->
+    ${renderSquareConnectBanner()}
 
     <!-- Search & Filter Bar -->
     <div class="bg-[#111111] rounded-xl border border-white/10 p-3 mb-4 flex items-center gap-3 flex-wrap">
@@ -246,7 +244,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <td class="px-4 py-3 text-gray-500 text-xs">${(inv.created_at || '').slice(0, 10)}</td>
                 <td class="px-4 py-3 text-gray-500 text-xs">${inv.due_date || 'N/A'}</td>
                 <td class="px-4 py-3 text-right font-semibold">$${(inv.total || 0).toFixed(2)}</td>
-                <td class="px-4 py-3 text-center"><span class="px-2 py-0.5 rounded-full text-xs font-medium ${sc}">${inv.status}</span></td>
+                <td class="px-4 py-3 text-center"><span class="px-2 py-0.5 rounded-full text-xs font-medium ${sc}">${inv.status}</span>${inv.viewed_count > 0 ? ' <span class="ml-1 text-[10px] text-gray-500" title="Viewed ' + inv.viewed_count + ' times"><i class="fas fa-eye text-gray-600"></i> ' + inv.viewed_count + '</span>' : ''}</td>
                 <td class="px-4 py-3 text-right whitespace-nowrap">
                   <button onclick="window._im.view(${inv.id})" class="text-emerald-400 hover:text-brand-700 text-xs mr-1" title="View"><i class="fas fa-eye"></i></button>
                   ${inv.status === 'draft' ? `<button onclick="window._im.edit(${inv.id})" class="text-gray-500 hover:text-gray-300 text-xs mr-1" title="Edit"><i class="fas fa-edit"></i></button>` : ''}
@@ -441,6 +439,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <p class="text-blue-200 text-sm mt-1">${f.invoice_number}</p>
             <p class="text-blue-200 text-xs mt-2">Date: ${f.created_date}</p>
             <p class="text-blue-200 text-xs">Due: ${f.due_date}</p>
+            ${f._viewed_count > 0 ? '<div style="font-size:12px;color:#6b7280;margin-top:4px"><i class="fas fa-eye" style="margin-right:4px"></i>Opened ' + f._viewed_count + ' time' + (f._viewed_count > 1 ? 's' : '') + ' by customer</div>' : ''}
           </div>
         </div>
       </div>
@@ -678,6 +677,7 @@ document.addEventListener('DOMContentLoaded', () => {
           order_id: inv.order_id || null,
           attached_report_id: inv.attached_report_id || null,
           _status: inv.status,
+          _viewed_count: inv.viewed_count || 0,
           _squareUrl: activeLink.payment_link_url || inv.payment_link_url || ''
         };
         state.mode = 'edit';

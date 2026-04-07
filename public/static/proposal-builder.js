@@ -536,7 +536,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <td class="px-4 py-3">${p.customer_name || 'Unknown'}<br><span class="text-xs text-gray-400">${p.customer_company || ''}</span></td>
                 <td class="px-4 py-3 text-gray-500">${(p.created_at || '').slice(0, 10)}</td>
                 <td class="px-4 py-3 font-semibold">$${(p.total || 0).toFixed(2)}</td>
-                <td class="px-4 py-3"><span class="px-2 py-0.5 rounded-full text-xs font-medium ${sc}">${p.status}</span></td>
+                <td class="px-4 py-3"><span class="px-2 py-0.5 rounded-full text-xs font-medium ${sc}">${p.status}</span>${p.viewed_count > 0 ? '<span class="text-[10px] text-gray-500 ml-2" title="Viewed ' + p.viewed_count + ' times"><i class="fas fa-eye text-gray-600"></i> ' + p.viewed_count + '</span>' : ''}</td>
                 <td class="px-4 py-3 text-right space-x-1">
                   <button onclick="window._pb.preview(${p.id})" class="text-brand-500 hover:text-brand-700 text-xs" title="Preview"><i class="fas fa-eye"></i></button>
                   ${p.status === 'draft' ? `<button onclick="window._pb.edit(${p.id})" class="text-gray-500 hover:text-gray-700 text-xs" title="Edit"><i class="fas fa-edit"></i></button>` : ''}
