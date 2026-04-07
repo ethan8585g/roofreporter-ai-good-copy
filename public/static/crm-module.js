@@ -1578,8 +1578,10 @@
 
         // Jobs for this day
         var dayJobs = [];
+        var dayDeliveries = [];
         for (var ji = 0; ji < jobs.length; ji++) {
           if (jobs[ji].scheduled_date === dateStr) dayJobs.push(jobs[ji]);
+          if (jobs[ji].material_delivery_date === dateStr) dayDeliveries.push(jobs[ji]);
         }
         // Google Calendar events for this day
         var dayGCal = [];
@@ -1604,6 +1606,15 @@
           html += '</div>';
           shown++;
         }
+        // Material deliveries for this day
+        for (var dl = 0; dl < dayDeliveries.length && shown < maxShow; dl++) {
+          var dj = dayDeliveries[dl];
+          html += '<div class="text-[10px] leading-tight px-1.5 py-0.5 rounded bg-orange-500/15 text-orange-400 border border-orange-500/20 truncate cursor-pointer" onclick="event.stopPropagation(); window._crmViewJob(' + dj.id + ')" title="Material Delivery: ' + (dj.title || '').replace(/"/g, '&quot;') + '">';
+          html += '<i class="fas fa-truck mr-0.5"></i>';
+          html += 'Delivery: ' + (dj.title || 'Job').substring(0, 16);
+          html += '</div>';
+          shown++;
+        }
         // Google Calendar events
         for (var ge = 0; ge < dayGCal.length && shown < maxShow; ge++) {
           var gEvt = dayGCal[ge];
@@ -1615,7 +1626,7 @@
           html += '</div>';
           shown++;
         }
-        var remaining = (dayJobs.length + dayGCal.length) - maxShow;
+        var remaining = (dayJobs.length + dayDeliveries.length + dayGCal.length) - maxShow;
         if (remaining > 0) {
           html += '<div class="text-[9px] text-brand-600 font-medium px-1 cursor-pointer hover:underline" onclick="event.stopPropagation(); window._crmExpandDay(\'' + dateStr + '\')">+' + remaining + ' more</div>';
         }
@@ -1883,20 +1894,33 @@
           '<div><label class="block text-xs font-medium text-gray-400 mb-1">Property Address</label><input type="text" id="jobAddress" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm"></div>' +
           '<div class="grid grid-cols-1 sm:grid-cols-2 gap-3"><div><label class="block text-xs font-medium text-gray-400 mb-1">Scheduled Date *</label><input type="date" id="jobDate" class="w-full px-2 py-2 border border-white/15 rounded-lg text-sm"></div><div><label class="block text-xs font-medium text-gray-400 mb-1">Time</label><input type="time" id="jobTime" class="w-full px-2 py-2 border border-white/15 rounded-lg text-sm"></div></div>' +
           '<div class="grid grid-cols-3 gap-3"><div><label class="block text-xs font-medium text-gray-400 mb-1">Job Type</label><select id="jobType" class="w-full px-2 py-2 border border-white/15 rounded-lg text-sm"><option value="install">Install</option><option value="repair">Repair</option><option value="inspection">Inspection</option><option value="maintenance">Maintenance</option></select></div><div><label class="block text-xs font-medium text-gray-400 mb-1">Duration</label><input type="text" id="jobDuration" class="w-full px-2 py-2 border border-white/15 rounded-lg text-sm" placeholder="e.g. 2 days"></div><div><label class="block text-xs font-medium text-gray-400 mb-1">Crew Size</label><input type="number" id="jobCrew" class="w-full px-2 py-2 border border-white/15 rounded-lg text-sm" value="4"></div></div>' +
-          '<div><label class="block text-xs font-medium text-gray-400 mb-1">Notes</label><textarea id="jobNotes" rows="2" class="w-full px-2 py-2 border border-white/15 rounded-lg text-sm"></textarea></div></div>';
+          '<div><label class="block text-xs font-medium text-gray-400 mb-1">Notes</label><textarea id="jobNotes" rows="2" class="w-full px-2 py-2 border border-white/15 rounded-lg text-sm"></textarea></div>' +
+          '<div class="bg-[#0A0A0A] rounded-xl p-3 border border-white/10">' +
+            '<div class="flex items-center justify-between">' +
+              '<div class="flex items-center gap-2"><i class="fas fa-truck text-orange-400"></i><span class="text-sm font-medium text-gray-200">Material Delivery Day</span></div>' +
+              '<label class="relative inline-flex items-center cursor-pointer"><input type="checkbox" id="jobMaterialToggle" class="sr-only peer" onchange="var s=document.getElementById(\'jobMaterialSection\');s.className=this.checked?\'mt-3\':\'mt-3 hidden\'"><div class="w-9 h-5 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[\'\'] after:absolute after:top-[2px] after:left-[2px] after:bg-gray-400 after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-orange-500"></div></label>' +
+            '</div>' +
+            '<div id="jobMaterialSection" class="mt-3 hidden">' +
+              '<label class="block text-xs font-medium text-gray-400 mb-1">Delivery Date</label>' +
+              '<input type="date" id="jobMaterialDate" class="w-full px-2 py-2 border border-white/15 rounded-lg text-sm bg-[#111111]">' +
+              '<p class="text-[10px] text-gray-500 mt-1">This will appear on your calendar as a separate delivery event</p>' +
+            '</div>' +
+          '</div></div>';
 
         showModal('Schedule New Job', body, function() {
           var title = document.getElementById('jobTitle').value.trim();
           var date = document.getElementById('jobDate').value;
           if (!title || !date) { toast('Title and date required', 'error'); return; }
           var custData = getCustomerFromSelector('jobCustomer');
+          var materialDate = document.getElementById('jobMaterialToggle').checked ? (document.getElementById('jobMaterialDate').value || null) : null;
           var payload = Object.assign({}, custData || {}, {
             title: title, property_address: document.getElementById('jobAddress').value.trim(),
             scheduled_date: date, scheduled_time: document.getElementById('jobTime').value || null,
             job_type: document.getElementById('jobType').value,
             estimated_duration: document.getElementById('jobDuration').value.trim() || null,
             crew_size: parseInt(document.getElementById('jobCrew').value) || null,
-            notes: document.getElementById('jobNotes').value.trim()
+            notes: document.getElementById('jobNotes').value.trim(),
+            material_delivery_date: materialDate
           });
           fetch('/api/crm/jobs', { method: 'POST', headers: authHeaders(), body: JSON.stringify(payload) })
             .then(function(r) { return r.json(); })
@@ -1938,6 +1962,7 @@
           (j.crew_size ? '<div><i class="fas fa-users mr-2 text-gray-400"></i>' + j.crew_size + ' crew</div>' : '') +
           (j.job_type ? '<div><i class="fas ' + jobTypeIcon(j.job_type) + ' mr-2 text-gray-400"></i>' + (j.job_type || '').charAt(0).toUpperCase() + (j.job_type || '').slice(1) + '</div>' : '') +
           (j.estimated_duration ? '<div><i class="fas fa-hourglass-half mr-2 text-gray-400"></i>' + j.estimated_duration + '</div>' : '') +
+          (j.material_delivery_date ? '<div><i class="fas fa-truck mr-2 text-orange-400"></i>Material Delivery: ' + fmtDate(j.material_delivery_date) + '</div>' : '') +
           '</div>';
 
         // Action buttons
@@ -2758,6 +2783,14 @@
           var bgColor = mj.status === 'in_progress' ? 'bg-blue-500/20 border-blue-500/30' : 'bg-cyan-500/10 border-cyan-500/20';
           html += '<div class="text-[10px] rounded-lg px-1.5 py-1 mb-1 border ' + bgColor + ' truncate cursor-pointer" onclick="window._crmViewJob(' + mj.id + ')" title="' + (mj.title || '').replace(/"/g, '&quot;') + '">';
           html += '<span class="font-bold">' + (mj.job_number || '') + '</span> ' + (mj.title || '').substring(0, 15);
+          html += '</div>';
+        }
+        // Render material deliveries in this cell
+        var cellDeliveries = (allJobs || []).filter(function(dj) { return dj.material_delivery_date === cellDate; });
+        for (var cdi = 0; cdi < cellDeliveries.length; cdi++) {
+          var cd = cellDeliveries[cdi];
+          html += '<div class="text-[10px] rounded-lg px-1.5 py-1 mb-1 border bg-orange-500/15 border-orange-500/20 text-orange-400 truncate cursor-pointer" onclick="window._crmViewJob(' + cd.id + ')" title="Material Delivery: ' + (cd.title || '').replace(/"/g, '&quot;') + '">';
+          html += '<i class="fas fa-truck mr-0.5 text-[8px]"></i>' + (cd.title || '').substring(0, 12);
           html += '</div>';
         }
         html += '</td>';

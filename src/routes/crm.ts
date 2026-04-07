@@ -928,9 +928,9 @@ crmRoutes.post('/jobs', async (c) => {
 
   const jobNum = genJobNum()
   const result = await c.env.DB.prepare(`
-    INSERT INTO crm_jobs (owner_id, crm_customer_id, proposal_id, job_number, title, property_address, job_type, scheduled_date, scheduled_time, estimated_duration, crew_size, notes, status)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'scheduled')
-  `).bind(ownerId, customerId, body.proposal_id || null, jobNum, body.title, body.property_address || null, body.job_type || 'install', body.scheduled_date, body.scheduled_time || null, body.estimated_duration || null, body.crew_size || null, body.notes || null).run()
+    INSERT INTO crm_jobs (owner_id, crm_customer_id, proposal_id, job_number, title, property_address, job_type, scheduled_date, scheduled_time, estimated_duration, crew_size, notes, material_delivery_date, status)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'scheduled')
+  `).bind(ownerId, customerId, body.proposal_id || null, jobNum, body.title, body.property_address || null, body.job_type || 'install', body.scheduled_date, body.scheduled_time || null, body.estimated_duration || null, body.crew_size || null, body.notes || null, body.material_delivery_date || null).run()
 
   const jobId = result.meta.last_row_id
   // Seed default checklist
@@ -956,9 +956,9 @@ crmRoutes.put('/jobs/:id', async (c) => {
   }
 
   await c.env.DB.prepare(`
-    UPDATE crm_jobs SET crm_customer_id=?, title=?, property_address=?, job_type=?, scheduled_date=?, scheduled_time=?, estimated_duration=?, crew_size=?, notes=?, status=?, updated_at=datetime('now')
+    UPDATE crm_jobs SET crm_customer_id=?, title=?, property_address=?, job_type=?, scheduled_date=?, scheduled_time=?, estimated_duration=?, crew_size=?, notes=?, material_delivery_date=?, status=?, updated_at=datetime('now')
     WHERE id=? AND owner_id=?
-  `).bind(body.crm_customer_id || null, body.title, body.property_address || null, body.job_type || 'install', body.scheduled_date, body.scheduled_time || null, body.estimated_duration || null, body.crew_size || null, body.notes || null, body.status || 'scheduled', id, ownerId).run()
+  `).bind(body.crm_customer_id || null, body.title, body.property_address || null, body.job_type || 'install', body.scheduled_date, body.scheduled_time || null, body.estimated_duration || null, body.crew_size || null, body.notes || null, body.material_delivery_date || null, body.status || 'scheduled', id, ownerId).run()
   return c.json({ success: true })
 })
 
