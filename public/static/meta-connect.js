@@ -4,11 +4,29 @@
 // ============================================================
 (function() {
   'use strict';
-  const MC = { tab: 'overview', data: {}, loading: false, postingCampaignId: null };
+  const MC = { tab: 'overview', data: {}, loading: false, postingCampaignId: null, fbSdkLoaded: false };
+
+  // Load Facebook SDK dynamically
+  function loadFBSDK() {
+    if (MC.fbSdkLoaded || typeof FB !== 'undefined') { MC.fbSdkLoaded = true; return; }
+    mcF('/api/meta/config').then(function(cfg) {
+      if (!cfg || !cfg.app_id) return;
+      window.fbAsyncInit = function() {
+        FB.init({ appId: cfg.app_id, cookie: true, xfbml: false, version: 'v21.0' });
+        MC.fbSdkLoaded = true;
+      };
+      var s = document.createElement('script');
+      s.src = 'https://connect.facebook.net/en_US/sdk.js';
+      s.async = true;
+      s.defer = true;
+      document.head.appendChild(s);
+    });
+  }
 
   window.loadMetaConnect = function() {
     const root = document.getElementById('sa-root');
     if (!root) return;
+    loadFBSDK();
     root.innerHTML = renderShell();
     mcLoadTab('overview');
   };
@@ -454,7 +472,29 @@
         }
       }, { scope: 'publish_to_groups,pages_manage_posts,pages_read_engagement,ads_management,groups_access_member_info' });
     } else {
-      alert('FB SDK not loaded. Use the manual token entry field below.');
+      // SDK may still be loading — retry once after a short delay
+      if (!MC.fbSdkLoaded) {
+        loadFBSDK();
+        setTimeout(function() {
+          if (typeof FB !== 'undefined') {
+            window.mcShowLogin();
+          } else {
+            var manualField = document.getElementById('mc-manual-token');
+            if (manualField) {
+              manualField.focus();
+              manualField.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+            alert('Facebook SDK could not load. Please paste your access token in the manual entry field below.');
+          }
+        }, 3000);
+        return;
+      }
+      var manualField = document.getElementById('mc-manual-token');
+      if (manualField) {
+        manualField.focus();
+        manualField.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      alert('META_APP_ID not configured. Please paste your access token in the manual entry field below.');
     }
   };
 

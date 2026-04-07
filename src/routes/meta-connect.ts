@@ -49,6 +49,14 @@ async function graphAPI(accessToken: string, path: string, method = 'GET', body?
 }
 
 // ============================================================
+// CONFIG — Return Meta App ID so frontend can init FB SDK
+// ============================================================
+metaConnectRoutes.get('/config', async (c) => {
+  const appId = (c.env as any).META_APP_ID || ''
+  return c.json({ app_id: appId })
+})
+
+// ============================================================
 // OAUTH — Save Facebook access token (client-side FB Login SDK)
 // The frontend uses FB.login() and sends us the token
 // ============================================================
