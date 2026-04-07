@@ -372,7 +372,7 @@
   };
 
   window._crmDeleteCustomer = function(id) {
-    if (!confirm('Delete this customer?')) return;
+    if (!(await window.rmConfirm('Delete this customer?'))) return
     fetch('/api/crm/customers/' + id, { method: 'DELETE', headers: authHeadersOnly() })
       .then(function() { toast('Customer deleted'); loadCustomers(); })
       .catch(function(e) { toast('Failed to delete: ' + (e.message || 'Network error'), 'error'); });
@@ -514,7 +514,7 @@
   };
 
   window._crmDeleteInvoice = function(id) {
-    if (!confirm('Delete this invoice?')) return;
+    if (!(await window.rmConfirm('Delete this invoice?'))) return
     fetch('/api/crm/invoices/' + id, { method: 'DELETE', headers: authHeadersOnly() })
       .then(function() { toast('Invoice deleted'); loadInvoices(window._invFilter); })
       .catch(function(e) { toast('Failed to delete: ' + (e.message || 'Network error'), 'error'); });
@@ -697,7 +697,7 @@
 
   // Generate Square payment link for invoice
   window._crmGenPayLink = function(id) {
-    if (!confirm('Generate a Square payment link for this invoice? The link will be included in future emails.')) return;
+    if (!(await window.rmConfirm('Generate a Square payment link for this invoice? The link will be included in future emails.'))) return
     toast('Generating payment link...', 'info');
     fetch('/api/crm/invoices/' + id + '/payment-link', { method: 'POST', headers: authHeaders() })
       .then(function(r) { return r.json(); })
@@ -715,7 +715,7 @@
 
   // Generate Square payment link for proposal
   window._crmGenProposalPayLink = function(id) {
-    if (!confirm('Generate a Square payment link for this proposal? The customer will be able to pay online.')) return;
+    if (!(await window.rmConfirm('Generate a Square payment link for this proposal? The customer will be able to pay online.'))) return
     toast('Generating payment link...', 'info');
     fetch('/api/crm/proposals/' + id + '/payment-link', { method: 'POST', headers: authHeaders() })
       .then(function(r) { return r.json(); })
@@ -925,7 +925,7 @@
   };
 
   window._crmDisconnectGmail = function() {
-    if (!confirm('Disconnect Gmail? You won\'t be able to email proposals until you reconnect.')) return;
+    if (!(await window.rmConfirm('Disconnect Gmail? You won\'t be able to email proposals until you reconnect.'))) return
     fetch('/api/crm/gmail/disconnect', { method: 'POST', headers: authHeaders() })
       .then(function(r) { return r.json(); })
       .then(function(data) {
@@ -1410,7 +1410,7 @@
   };
 
   window._crmDeleteProposal = function(id) {
-    if (!confirm('Delete this proposal?')) return;
+    if (!(await window.rmConfirm('Delete this proposal?'))) return
     fetch('/api/crm/proposals/' + id, { method: 'DELETE', headers: authHeadersOnly() })
       .then(function() { toast('Proposal deleted'); loadProposals(window._propFilter); })
       .catch(function(e) { toast('Failed to delete: ' + (e.message || 'Network error'), 'error'); });
@@ -1847,7 +1847,7 @@
   };
 
   window._crmDisconnectCalendar = function() {
-    if (!confirm('Disconnect Google Calendar? This will also disconnect Gmail email sending.')) return;
+    if (!(await window.rmConfirm('Disconnect Google Calendar? This will also disconnect Gmail email sending.'))) return
     closeModal();
     fetch('/api/crm/gmail/disconnect', { method: 'POST', headers: authHeaders() })
       .then(function() {
@@ -2074,7 +2074,7 @@
   };
 
   window._crmDeleteChecklistItem = function(jobId, itemId) {
-    if (!confirm('Remove this checklist item?')) return;
+    if (!(await window.rmConfirm('Remove this checklist item?'))) return
     fetch('/api/crm/jobs/' + jobId + '/checklist/' + itemId, { method: 'DELETE', headers: authHeadersOnly() })
       .then(function(r) { return r.json(); })
       .then(function(res) {
@@ -2088,7 +2088,7 @@
   };
 
   window._crmDeleteJob = function(id) {
-    if (!confirm('Delete this job?')) return;
+    if (!(await window.rmConfirm('Delete this job?'))) return
     fetch('/api/crm/jobs/' + id, { method: 'DELETE', headers: authHeadersOnly() })
       .then(function() { toast('Job deleted'); loadJobsForMonth(_calYear, _calMonth); })
       .catch(function(e) { toast('Failed to delete: ' + (e.message || 'Network error'), 'error'); });
@@ -3315,7 +3315,7 @@
   }
 
   window._catSeedDefaults = function() {
-    if (!confirm('Load standard roofing products with current Canadian market pricing?')) return;
+    if (!(await window.rmConfirm('Load standard roofing products with current Canadian market pricing?'))) return
     fetch('/api/crm/catalog/seed-defaults', { method: 'POST', headers: authHeaders() })
       .then(function(r) { return r.json(); })
       .then(function(res) { if (res.success) { toast(res.seeded + ' products added!'); initCatalog(); } else { toast(res.error || 'Failed', 'error'); } })
@@ -3385,7 +3385,7 @@
   };
 
   window._catDeleteProduct = function(id) {
-    if (!confirm('Remove this product from your catalog?')) return;
+    if (!(await window.rmConfirm('Remove this product from your catalog?'))) return
     fetch('/api/crm/catalog/' + id, { method: 'DELETE', headers: authHeadersOnly() })
       .then(function(r) { return r.json(); })
       .then(function(res) { if (res.success) { toast('Product removed'); initCatalog(); } else { toast(res.error || 'Failed', 'error'); } })
@@ -3504,7 +3504,7 @@
 
   window._eoViewList = function(id) { toast('List details coming soon'); };
   window._eoDeleteList = function(id) {
-    if (!confirm('Delete this list and all its contacts?')) return;
+    if (!(await window.rmConfirm('Delete this list and all its contacts?'))) return
     fetch('/api/email-outreach/lists/' + id, { method: 'DELETE', headers: authHeadersOnly() })
       .then(function() { toast('List deleted'); initEmailOutreach(); })
       .catch(function() { toast('Failed to delete', 'error'); });

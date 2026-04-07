@@ -402,7 +402,7 @@
     // Validate current step
     if (OB.step === 1) {
       if (!OB.business || !OB.email || !OB.password) {
-        alert('Please fill in Business Name, Email, and Password');
+        window.rmToast('Please fill in Business Name, Email, and Password', 'warning');
         return;
       }
     }
@@ -434,20 +434,20 @@
       u.pitch = OB.voiceId === 'echo' || OB.voiceId === 'onyx' ? 0.8 : 1.1;
       speechSynthesis.speak(u);
     } else {
-      alert('Voice preview: "' + text + '"');
+      window.rmToast('Voice preview: "' + text + '"', 'info');
     }
   };
 
   window.obTestCall = function() {
-    alert('Test Call: This will initiate a test call to the configured AI agent. Make sure LiveKit and Twilio are configured in your environment.\n\nAgent: ' + OB.agentName + '\nVoice: ' + OB.voiceId + '\nSpeed: ' + OB.speed + 'x');
+    window.rmToast('Test Call: This will initiate a test call to the configured AI agent. Make sure LiveKit and Twilio are configured in your environment.\n\nAgent: ' + OB.agentName + '\nVoice: ' + OB.voiceId + '\nSpeed: ' + OB.speed + 'x', 'info');
   };
 
   // ── Deploy ─────────────────────────────────────────────────
   window.obDeployCustomer = async function() {
     if (!OB.email || !OB.password) {
-      alert('Email and Password are required'); return;
+      window.rmToast('Email and Password are required', 'warning'); return;
     }
-    if (!confirm('Deploy customer account for ' + OB.business + ' (' + OB.email + ')?')) return;
+    if (!(await window.rmConfirm('Deploy customer account for ' + OB.business + ' (' + OB.email + ')?', 'Deploy', 'Cancel'))) return;
 
     OB.deploying = true;
     renderContent();
@@ -495,9 +495,9 @@
 
       OB.deployed = true;
       OB.deployResult = data;
-      alert('Customer deployed!\nID: ' + data.customer_id + '\nEmail: ' + OB.email + '\n\nNext: Have customer forward their cell to the AI number.');
+      window.rmToast('Customer deployed!\nID: ' + data.customer_id + '\nEmail: ' + OB.email + '\n\nNext: Have customer forward their cell to the AI number.', 'info');
     } catch(e) {
-      alert('Deploy failed: ' + e.message);
+      window.rmToast('Deploy failed: ' + e.message, 'error');
     }
 
     OB.deploying = false;

@@ -484,7 +484,7 @@
               manualField.focus();
               manualField.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }
-            alert('Facebook SDK could not load. Please paste your access token in the manual entry field below.');
+            window.rmToast('Facebook SDK could not load. Please paste your access token in the manual entry field below.', 'warning');
           }
         }, 3000);
         return;
@@ -494,31 +494,31 @@
         manualField.focus();
         manualField.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
-      alert('META_APP_ID not configured. Please paste your access token in the manual entry field below.');
+      window.rmToast('META_APP_ID not configured. Please paste your access token in the manual entry field below.', 'warning');
     }
   };
 
   window.mcSaveManualToken = async function() {
     const token = document.getElementById('mc-manual-token')?.value?.trim();
-    if (!token) return alert('Paste your Facebook access token');
+    if (!token) return window.rmToast('Paste your Facebook access token', 'info');
     const data = await mcF('/api/meta/auth/save-token', { method: 'POST', body: JSON.stringify({ access_token: token }) });
-    if (data?.success) { alert('Connected as ' + data.name); mcLoadTab('overview'); }
-    else alert(data?.error || 'Failed to connect');
+    if (data?.success) { window.rmToast('Connected as ' + data.name, 'info'); mcLoadTab('overview'); }
+    else window.rmToast(data?.error || 'Failed to connect', 'info');
   };
 
   window.mcDisconnect = async function() {
-    if (!confirm('Disconnect Facebook account?')) return;
+    if (!(await window.rmConfirm('Disconnect Facebook account?'))) return
     await mcF('/api/meta/disconnect', { method: 'POST', body: '{}' });
     mcLoadTab('overview');
   };
 
   window.mcSyncAll = async function() {
-    alert('Syncing groups and pages...');
+    window.rmToast('Syncing groups and pages...', 'info');
     const [g, p] = await Promise.all([
       mcF('/api/meta/sync-groups', { method: 'POST', body: '{}' }),
       mcF('/api/meta/sync-pages', { method: 'POST', body: '{}' })
     ]);
-    alert('Synced ' + (g?.synced||0) + ' groups and ' + (p?.synced||0) + ' pages');
+    window.rmToast('Synced ' + (g?.synced||0, 'info') + ' groups and ' + (p?.synced||0) + ' pages');
     mcLoadTab(MC.tab);
   };
 
@@ -531,15 +531,15 @@
   window.mcCreatePostBlast = async function() {
     const name = document.getElementById('mc-pb-name').value.trim();
     const message = document.getElementById('mc-pb-message').value.trim();
-    if (!name || !message) return alert('Name and message required');
+    if (!name || !message) return window.rmToast('Name and message required', 'warning');
     const checked = document.querySelectorAll('.mc-pb-grp:checked');
     const groupIds = Array.from(checked).map(c => c.value);
-    if (groupIds.length === 0) return alert('Select at least one group');
+    if (groupIds.length === 0) return window.rmToast('Select at least one group', 'info');
     const data = await mcF('/api/meta/post-campaigns', { method: 'POST', body: JSON.stringify({
       name, message_template: message, link_url: document.getElementById('mc-pb-link').value, group_ids: groupIds
     }) });
     if (data?.success) { document.getElementById('mc-post-modal').classList.add('hidden'); mcLoadTab('post-blast'); }
-    else alert(data?.error || 'Failed');
+    else window.rmToast(data?.error || 'Failed', 'info');
   };
 
   // CHUNKED POSTING — keeps calling /post-chunk until done
@@ -584,7 +584,7 @@
   };
 
   window.mcDeletePostCampaign = async function(id) {
-    if (!confirm('Delete this post campaign and all logs?')) return;
+    if (!(await window.rmConfirm('Delete this post campaign and all logs?'))) return
     await mcF('/api/meta/post-campaigns/' + id, { method: 'DELETE' });
     mcLoadTab('post-blast');
   };
@@ -593,28 +593,28 @@
   window.mcShowCreateAd = function() { document.getElementById('mc-ad-modal').classList.remove('hidden'); };
   window.mcCreateAd = async function() {
     const name = document.getElementById('mc-ad-name').value.trim();
-    if (!name) return alert('Campaign name required');
+    if (!name) return window.rmToast('Campaign name required', 'warning');
     const data = await mcF('/api/meta/ads', { method: 'POST', body: JSON.stringify({
       name, objective: document.getElementById('mc-ad-objective').value,
       daily_budget: parseFloat(document.getElementById('mc-ad-daily').value) || 25,
       currency: document.getElementById('mc-ad-currency').value
     }) });
     if (data?.success) { document.getElementById('mc-ad-modal').classList.add('hidden'); mcLoadTab('ads'); }
-    else alert(data?.error || 'Failed');
+    else window.rmToast(data?.error || 'Failed', 'info');
   };
   window.mcPublishAd = async function(id) {
-    if (!confirm('Publish this campaign to Meta Ads?')) return;
+    if (!(await window.rmConfirm('Publish this campaign to Meta Ads?'))) return
     const data = await mcF('/api/meta/ads/' + id + '/publish', { method: 'POST', body: '{}' });
-    alert(data?.success ? data.message : (data?.error || 'Failed'));
+    window.rmToast(data?.success ? data.message : (data?.error || 'Failed', 'info'));
     mcLoadTab('ads');
   };
   window.mcSyncAd = async function(id) {
     const data = await mcF('/api/meta/ads/' + id + '/sync', { method: 'POST', body: '{}' });
-    alert(data?.success ? 'Metrics synced!' : (data?.error || 'Sync failed'));
+    window.rmToast(data?.success ? 'Metrics synced!' : (data?.error || 'Sync failed', 'info'));
     mcLoadTab('ads');
   };
   window.mcDeleteAd = async function(id) {
-    if (!confirm('Delete this ad campaign?')) return;
+    if (!(await window.rmConfirm('Delete this ad campaign?'))) return
     await mcF('/api/meta/ads/' + id, { method: 'DELETE' });
     mcLoadTab('ads');
   };
@@ -625,23 +625,23 @@
     const sel = document.getElementById('mc-sch-target');
     const msg = document.getElementById('mc-sch-msg').value.trim();
     const time = document.getElementById('mc-sch-time').value;
-    if (!msg || !time) return alert('Message and schedule time required');
+    if (!msg || !time) return window.rmToast('Message and schedule time required', 'warning');
     const data = await mcF('/api/meta/scheduled', { method: 'POST', body: JSON.stringify({
       target_type: 'group', target_id: sel.value, target_name: sel.options[sel.selectedIndex]?.dataset?.name || '',
       message: msg, link_url: document.getElementById('mc-sch-link').value,
       schedule_at: new Date(time).toISOString(), recurrence: document.getElementById('mc-sch-recur').value
     }) });
     if (data?.success) { document.getElementById('mc-schedule-modal').classList.add('hidden'); mcLoadTab('scheduler'); }
-    else alert(data?.error || 'Failed');
+    else window.rmToast(data?.error || 'Failed', 'info');
   };
   window.mcCancelScheduled = async function(id) {
-    if (!confirm('Cancel this scheduled post?')) return;
+    if (!(await window.rmConfirm('Cancel this scheduled post?'))) return
     await mcF('/api/meta/scheduled/' + id, { method: 'DELETE' });
     mcLoadTab('scheduler');
   };
   window.mcExecuteScheduled = async function() {
     const data = await mcF('/api/meta/scheduled/execute', { method: 'POST', body: '{}' });
-    alert(data?.success ? 'Executed ' + data.posted + ' posts (' + data.failed + ' failed)' : (data?.error || 'Failed'));
+    window.rmToast(data?.success ? 'Executed ' + data.posted + ' posts (' + data.failed + ' failed, 'info')' : (data?.error || 'Failed'));
     mcLoadTab('scheduler');
   };
 })();

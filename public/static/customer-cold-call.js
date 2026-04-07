@@ -757,7 +757,7 @@
   };
 
   window.ccDeleteList = async function(id) {
-    if (!confirm('Delete this list? Prospects will remain but be unlinked.')) return;
+    if (!(await window.rmConfirm('Delete this list? Prospects will remain but be unlinked.'))) return
     var res = await ccFetch('/api/customer-calls/lists/' + id, { method: 'DELETE' });
     if (res && res.success) {
       showToast('List deleted', 'success');
@@ -833,7 +833,7 @@
   };
 
   window.ccDeleteProspect = async function(id) {
-    if (!confirm('Delete this prospect?')) return;
+    if (!(await window.rmConfirm('Delete this prospect?'))) return
     await ccFetch('/api/customer-calls/prospects/' + id, { method: 'DELETE' });
     showToast('Prospect deleted', 'success');
     loadProspects();

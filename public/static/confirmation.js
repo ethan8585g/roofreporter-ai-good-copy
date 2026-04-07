@@ -1269,7 +1269,7 @@ async function generateProposalFromReport(reportId, address, customerName, custo
     btn.classList.add('bg-green-500');
 
   } catch (err) {
-    alert('Error generating proposal: ' + (err.message || 'Unknown error'));
+    window.rmToast('Error generating proposal: ' + (err.message || 'Unknown error', 'error'));
     btn.disabled = false;
     btn.innerHTML = '<i class="fas fa-file-signature mr-2"></i>Generate Proposal';
   }
@@ -1308,7 +1308,7 @@ async function generateDamageReport(orderId) {
     var data = await res.json();
 
     if (!data.success) {
-      alert(data.error || 'Damage analysis failed');
+      window.rmToast(data.error || 'Damage analysis failed', 'info');
       btn.disabled = false;
       btn.innerHTML = '<i class="fas fa-exclamation-triangle mr-2"></i>Damage Report';
       return;
@@ -1358,7 +1358,7 @@ async function generateDamageReport(orderId) {
     btn.classList.add('bg-red-500');
 
   } catch (err) {
-    alert('Error: ' + (err.message || 'Unknown error'));
+    window.rmToast('Error: ' + (err.message || 'Unknown error', 'error'));
     btn.disabled = false;
     btn.innerHTML = '<i class="fas fa-exclamation-triangle mr-2"></i>Damage Report';
   }

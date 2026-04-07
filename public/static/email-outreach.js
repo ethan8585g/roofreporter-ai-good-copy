@@ -990,7 +990,7 @@ async function eoCreateList() {
 }
 
 async function eoDeleteList(id, name) {
-  if (!confirm(`Delete list "${name}" and ALL its contacts? This cannot be undone.`)) return;
+  if (!(await window.rmConfirm(`Delete list "${name}" and ALL its contacts? This cannot be undone.`))) return
   await eoFetch(`/api/email-outreach/lists/${id}`, { method: 'DELETE' });
   eoToast('List deleted');
   eoNav('lists');
@@ -1003,7 +1003,7 @@ async function eoExportList(listId) {
 }
 
 async function eoCleanBounced(listId) {
-  if (!confirm('Delete all bounced contacts from this list?')) return;
+  if (!(await window.rmConfirm('Delete all bounced contacts from this list?'))) return
   const res = await eoFetch(`/api/email-outreach/lists/${listId}/contacts/bulk?status=bounced`, { method: 'DELETE' });
   if (res && res.ok) { const d = await res.json(); eoToast(`Removed ${d.deleted} bounced contacts`); eoViewList(listId); }
 }
@@ -1073,7 +1073,7 @@ async function eoSaveContactModal() {
 }
 
 async function eoDeleteContact(contactId, listId) {
-  if (!confirm('Delete this contact?')) return;
+  if (!(await window.rmConfirm('Delete this contact?'))) return
   await eoFetch(`/api/email-outreach/contacts/${contactId}`, { method: 'DELETE' });
   eoToast('Contact deleted');
   eoViewList(listId);
@@ -1120,7 +1120,7 @@ async function eoImportCSV(listId) {
   }
 
   if (contacts.length === 0) { eoToast('No valid emails found in CSV', 'error'); return; }
-  if (!confirm(`Import ${contacts.length} contacts?`)) return;
+  if (!(await window.rmConfirm(`Import ${contacts.length} contacts?`))) return
 
   const res = await eoFetch(`/api/email-outreach/lists/${listId}/import`, {
     method: 'POST', body: JSON.stringify({ contacts, source: 'csv_paste' })
@@ -1139,7 +1139,7 @@ async function eoImportCSV(listId) {
 async function eoUploadCSVFile(listId, input) {
   const file = input.files?.[0];
   if (!file) return;
-  if (!confirm(`Upload "${file.name}" (${(file.size / 1024).toFixed(1)} KB)?`)) { input.value = ''; return; }
+  window.rmConfirm(`Upload "${file.name}" (${(file.size / 1024).toFixed(1)} KB)?`, "Upload", "Cancel").then(ok => { if (!ok) { input.value = ''; } });
 
   const formData = new FormData();
   formData.append('file', file);
@@ -1240,7 +1240,7 @@ async function eoViewCampaign(id) {
 }
 
 async function eoSendCampaign(id) {
-  if (!confirm('Send this campaign to ALL active contacts in the selected lists? This cannot be undone.')) return;
+  if (!(await window.rmConfirm('Send this campaign to ALL active contacts in the selected lists? This cannot be undone.'))) return
   const root = document.getElementById('sa-root');
   if (root) root.innerHTML = `<div class="flex flex-col items-center justify-center py-20">
     <div class="w-12 h-12 border-4 border-green-200 border-t-green-600 rounded-full animate-spin mb-4"></div>
@@ -1275,7 +1275,7 @@ async function eoScheduleCampaign(id) {
 }
 
 async function eoCancelSchedule(id) {
-  if (!confirm('Cancel scheduling and revert to draft?')) return;
+  if (!(await window.rmConfirm('Cancel scheduling and revert to draft?'))) return
   const res = await eoFetch(`/api/email-outreach/campaigns/${id}/schedule`, {
     method: 'PUT', body: JSON.stringify({ scheduled_at: null })
   });
@@ -1299,7 +1299,7 @@ async function eoDuplicateCampaign(id) {
 }
 
 async function eoDeleteCampaign(id) {
-  if (!confirm('Delete this campaign and all its send logs?')) return;
+  if (!(await window.rmConfirm('Delete this campaign and all its send logs?'))) return
   await eoFetch(`/api/email-outreach/campaigns/${id}`, { method: 'DELETE' });
   eoToast('Campaign deleted');
   eoNav('campaigns');
@@ -1337,7 +1337,7 @@ async function eoSaveTemplate() {
 }
 
 async function eoDeleteTemplate(id) {
-  if (!confirm('Delete this template?')) return;
+  if (!(await window.rmConfirm('Delete this template?'))) return
   await eoFetch(`/api/email-outreach/templates/${id}`, { method: 'DELETE' });
   eoToast('Template deleted');
   eoNav('templates');
@@ -1384,7 +1384,7 @@ async function eoScanDuplicates() {
 }
 
 async function eoCleanDuplicates() {
-  if (!confirm(`Remove ${EO.dedupPreview?.total_duplicate_entries || 0} duplicate entries? Oldest entry for each email will be kept.`)) return;
+  if (!(await window.rmConfirm(`Remove ${EO.dedupPreview?.total_duplicate_entries || 0} duplicate entries? Oldest entry for each email will be kept.`))) return
   const res = await eoFetch('/api/email-outreach/dedup/clean', { method: 'POST' });
   if (res && res.ok) {
     const d = await res.json();

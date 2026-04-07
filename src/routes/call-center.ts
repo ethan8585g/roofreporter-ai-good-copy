@@ -1483,15 +1483,20 @@ callCenterRoutes.post('/quick-connect/verify', async (c) => {
         }
       }
 
-      // Option C: Dev placeholder
-      if (!aiPhoneNumber) {
+      // Option C: Dev placeholder — ONLY when DEV_MODE env var is explicitly set.
+      // Never assign a dummy number to real production users.
+      if (!aiPhoneNumber && (c.env as any).DEV_MODE) {
         aiPhoneNumber = '+17800000002'
         connectionMethod = 'dev_placeholder'
       }
     }
 
     if (!aiPhoneNumber) {
-      return c.json({ error: 'Unable to auto-purchase phone number. Configure Twilio/LiveKit API keys.', verified: true }, 503)
+      return c.json({
+        error: 'Unable to provision a phone number. Please ensure Twilio and LiveKit API keys are configured correctly in your Cloudflare secrets.',
+        verified: true,
+        config_required: true
+      }, 503)
     }
 
     const aiDigits = aiPhoneNumber.replace(/^\+1/, '').replace(/\D/g, '')

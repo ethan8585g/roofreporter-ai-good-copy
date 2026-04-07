@@ -212,7 +212,7 @@ async function saveMasterCompany() {
   };
 
   if (!data.company_name || !data.contact_name || !data.email) {
-    alert('Company name, contact name, and email are required');
+    window.rmToast('Company name, contact name, and email are required', 'warning');
     return;
   }
 
@@ -228,7 +228,7 @@ async function saveMasterCompany() {
       setTimeout(() => { if (el) el.textContent = ''; }, 3000);
     }
   } catch (e) {
-    alert('Failed to save: ' + e.message);
+    window.rmToast('Failed to save: ' + e.message, 'error');
   }
 }
 
@@ -665,7 +665,7 @@ async function saveSettingsPricing(e) {
       }
     }, 1200);
   } catch (err) {
-    alert('Error saving pricing: ' + err.message);
+    window.rmToast('Error saving pricing: ' + err.message, 'error');
     btn.innerHTML = '<i class="fas fa-save mr-1"></i> Save Pricing';
     btn.disabled = false;
   }
@@ -731,7 +731,7 @@ async function saveSettingsPkg(e) {
   };
 
   if (!body.name || !body.credits || !body.price_cents) {
-    alert('Name, credits, and price are required.');
+    window.rmToast('Name, credits, and price are required.', 'warning');
     btn.disabled = false;
     btn.innerHTML = '<i class="fas fa-save mr-1"></i> Save';
     return;
@@ -758,14 +758,14 @@ async function saveSettingsPkg(e) {
     const contentEl = document.querySelector('.md\\:col-span-3');
     if (contentEl) contentEl.innerHTML = renderPricingSection();
   } catch (err) {
-    alert('Error: ' + err.message);
+    window.rmToast('Error: ' + err.message, 'error');
     btn.disabled = false;
     btn.innerHTML = '<i class="fas fa-save mr-1"></i> Save';
   }
 }
 
 async function deactivateSettingsPkg(id) {
-  if (!confirm('Deactivate this package? It will be hidden from customers.')) return;
+  if (!(await window.rmConfirm('Deactivate this package? It will be hidden from customers.'))) return
   try {
     const res = await fetch('/api/settings/packages/' + id, { method: 'DELETE', headers: settingsHeaders() });
     if (!res.ok) throw new Error('Failed');
@@ -774,7 +774,7 @@ async function deactivateSettingsPkg(id) {
     const contentEl = document.querySelector('.md\\:col-span-3');
     if (contentEl) contentEl.innerHTML = renderPricingSection();
   } catch (err) {
-    alert('Error deactivating package: ' + err.message);
+    window.rmToast('Error deactivating package: ' + err.message, 'error');
   }
 }
 
@@ -787,7 +787,7 @@ async function activateSettingsPkg(id) {
     const contentEl = document.querySelector('.md\\:col-span-3');
     if (contentEl) contentEl.innerHTML = renderPricingSection();
   } catch (err) {
-    alert('Error activating package: ' + err.message);
+    window.rmToast('Error activating package: ' + err.message, 'error');
   }
 }
 
@@ -914,7 +914,7 @@ function renderSipContent() {
 
 async function createOutboundTrunk() {
   const phone = document.getElementById('sipOutPhone')?.value?.trim();
-  if (!phone) { alert('Enter a phone number'); return; }
+  if (!phone) { window.rmToast('Enter a phone number', 'info'); return; }
   const name = document.getElementById('sipOutName')?.value?.trim() || 'Roof Manager Outbound';
   const address = document.getElementById('sipOutAddress')?.value?.trim() || '';
   const auth_username = document.getElementById('sipOutUser')?.value?.trim() || '';
@@ -939,7 +939,7 @@ async function createOutboundTrunk() {
 
 async function dialOut() {
   const phone = document.getElementById('sipDialNumber')?.value?.trim();
-  if (!phone) { alert('Enter a phone number to dial'); return; }
+  if (!phone) { window.rmToast('Enter a phone number to dial', 'info'); return; }
   const room = document.getElementById('sipDialRoom')?.value?.trim() || '';
 
   try {
@@ -959,7 +959,7 @@ async function dialOut() {
 }
 
 async function deleteTrunk(trunkId) {
-  if (!confirm('Delete this SIP trunk?')) return;
+  if (!(await window.rmConfirm('Delete this SIP trunk?'))) return
   try {
     const res = await fetch('/api/secretary/sip/trunk/' + trunkId, {
       method: 'DELETE', headers: settingsHeaders()

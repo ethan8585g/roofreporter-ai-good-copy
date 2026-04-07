@@ -1062,7 +1062,7 @@ function undoLastTrace() {
 }
 
 function clearAllTraces() {
-  if (!confirm('Clear all traces?')) return;
+  if (!(await window.rmConfirm('Clear all traces?'))) return
   orderState.traceEavesPoints = [];
   orderState.traceRidgeLines = [];
   orderState.traceHipLines = [];

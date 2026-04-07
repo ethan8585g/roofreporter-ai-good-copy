@@ -167,7 +167,7 @@
   window._vizFile = function (input, slotId) {
     if (!input.files || !input.files[0]) return;
     var file = input.files[0];
-    if (file.size > 20 * 1024 * 1024) { alert('Max 20MB per photo.'); return; }
+    if (file.size > 20 * 1024 * 1024) { window.rmToast('Max 20MB per photo.', 'info'); return; }
     var reader = new FileReader();
     reader.onload = function (e) {
       // Compress to max 1024px before storing (display + Gemini analysis + Replicate)
@@ -678,7 +678,7 @@
   window._vizDoAI = function() {
     var data = maskCtx.getImageData(0,0,maskCanvas.width,maskCanvas.height).data;
     var wp = 0; for(var i=0;i<data.length;i+=4){if(data[i]>128)wp++;}
-    if(wp/(maskCanvas.width*maskCanvas.height) < 0.01){alert('Paint over the roof area first.');return;}
+    if(wp/(maskCanvas.width*maskCanvas.height) < 0.01){window.rmToast('Paint over the roof area first.', 'info');return;}
     state.maskBase64 = maskCanvas.toDataURL('image/png');
     state.step = 5; render();
   };

@@ -1236,7 +1236,7 @@ function undoLastTrace() {
 function clearCurrentMode() {
   const mode = state.traceMode;
   const modeLabel = { eaves: 'eaves sections', ridge: 'ridge lines', hip: 'hip lines', valley: 'valley lines' }[mode] || mode;
-  if (!confirm(`Clear all ${modeLabel}? Other modes will not be affected.`)) return;
+  if (!(await window.rmConfirm(`Clear all ${modeLabel}? Other modes will not be affected.`))) return
   if (mode === 'eaves') {
     state.traceEavesPoints = [];
     state.traceEavesSections = [];

@@ -172,10 +172,10 @@ async function paSubmitOnboarding() {
     });
     var data = await res.json();
     if (data.success) {
-      alert('Customer onboarded!\n\n' + data.message + '\nTeam members created: ' + data.team_members_created);
+      window.rmToast('Customer onboarded!\n\n' + data.message + '\nTeam members created: ' + data.team_members_created, 'success');
       loadView('secretary-manager');
-    } else { alert('Error: ' + (data.error || 'Unknown error')); }
-  } catch(e) { alert('Error: ' + e.message); }
+    } else { window.rmToast('Error: ' + (data.error || 'Unknown error', 'error')); }
+  } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
   if (btn) btn.disabled = false;
 }
 
@@ -344,17 +344,17 @@ async function paSaveVoiceConfig() {
       })
     });
     var data = await res.json();
-    if (data.success) alert('Voice config saved!');
-    else alert('Error: ' + (data.error || 'Unknown'));
-  } catch(e) { alert('Error: ' + e.message); }
+    if (data.success) window.rmToast('Voice config saved!', 'success');
+    else window.rmToast('Error: ' + (data.error || 'Unknown', 'error'));
+  } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
 }
 
 async function paTestAgent() {
   try {
     var res = await paFetch('/customers/' + PA.editCustomerId + '/test-agent', { method: 'POST' });
     var data = await res.json();
-    alert(data.message || 'Test initiated');
-  } catch(e) { alert('Error: ' + e.message); }
+    window.rmToast(data.message || 'Test initiated', 'info');
+  } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -426,7 +426,7 @@ async function paEditPersona(id) {
     PA.currentPersona = data.persona;
     PA.currentPersona._variants = data.variants || [];
     paShowPersonaEditor();
-  } catch(e) { alert('Error: ' + e.message); }
+  } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
 }
 
 function paShowPersonaEditor() {
@@ -515,14 +515,14 @@ async function paSavePersona() {
     var url = p.id ? '/agent-personas/' + p.id : '/agent-personas';
     var res = await paFetch(url, { method: p.id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     var data = await res.json();
-    if (data.success || data.id) { alert('Persona saved!'); paLoadPersonas(); }
-    else alert('Error: ' + (data.error || 'Unknown'));
-  } catch(e) { alert('Error: ' + e.message); }
+    if (data.success || data.id) { window.rmToast('Persona saved!', 'success'); paLoadPersonas(); }
+    else window.rmToast('Error: ' + (data.error || 'Unknown', 'error'));
+  } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
 }
 
 async function paDeletePersona(id) {
-  if (!confirm('Deactivate this persona?')) return;
-  try { await paFetch('/agent-personas/' + id, { method: 'DELETE' }); paLoadPersonas(); } catch(e) { alert(e.message); }
+  if (!(await window.rmConfirm('Deactivate this persona?'))) return
+  try { await paFetch('/agent-personas/' + id, { method: 'DELETE' }); paLoadPersonas(); } catch(e) { window.rmToast(e.message, 'info'); }
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -631,8 +631,8 @@ async function paSaveSipMapping(phoneId) {
     });
     var data = await res.json();
     if (data.success) paLoadSipMapping();
-    else alert('Error: ' + (data.error || 'Unknown'));
-  } catch(e) { alert(e.message); }
+    else window.rmToast('Error: ' + (data.error || 'Unknown', 'error'));
+  } catch(e) { window.rmToast(e.message, 'info'); }
 }
 
 async function paLoadCampaigns() {
@@ -697,8 +697,8 @@ async function paSaveCampaign(campId) {
     var res = await paFetch(url, { method: campId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     var data = await res.json();
     if (data.success || data.id) paLoadCampaigns();
-    else alert('Error: ' + (data.error || 'Unknown'));
-  } catch(e) { alert(e.message); }
+    else window.rmToast('Error: ' + (data.error || 'Unknown', 'error'));
+  } catch(e) { window.rmToast(e.message, 'info'); }
 }
 
 function paShowCSVUpload(campId) {
@@ -716,7 +716,7 @@ function paShowCSVUpload(campId) {
 
 async function paProcessCSV(campId) {
   var raw = gv('pa-csv-data');
-  if (!raw) { alert('Paste CSV data first'); return; }
+  if (!raw) { window.rmToast('Paste CSV data first', 'info'); return; }
   var lines = raw.trim().split('\n');
   var headers = lines[0].split(',').map(function(h) { return h.trim().toLowerCase().replace(/[^a-z_]/g, ''); });
   var prospects = [];
@@ -726,16 +726,16 @@ async function paProcessCSV(campId) {
     headers.forEach(function(h, idx) { obj[h] = (vals[idx] || '').trim(); });
     if (obj.phone) prospects.push(obj);
   }
-  if (prospects.length === 0) { alert('No valid prospects found'); return; }
+  if (prospects.length === 0) { window.rmToast('No valid prospects found', 'info'); return; }
   try {
     var res = await paFetch('/campaigns/' + campId + '/upload-csv', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ prospects: prospects })
     });
     var data = await res.json();
-    alert('Imported: ' + data.imported + ', Skipped: ' + data.skipped);
+    window.rmToast('Imported: ' + data.imported + ', Skipped: ' + data.skipped, 'info');
     paLoadCampaigns();
-  } catch(e) { alert(e.message); }
+  } catch(e) { window.rmToast(e.message, 'info'); }
 }
 
 async function paLoadCCAnalytics() {
@@ -846,14 +846,14 @@ async function paSaveAgent(agentId) {
     persona: gv('pa-agent-persona') || '',
     livekit_room_prefix: gv('pa-agent-prefix') || 'sales-',
   };
-  if (!payload.name) { alert('Agent name is required'); return; }
+  if (!payload.name) { window.rmToast('Agent name is required', 'warning'); return; }
   try {
     var url = '/api/call-center/agents' + (agentId ? '/' + agentId : '');
     var res = await saFetch(url, { method: agentId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     var data = await res.json();
     if (data.success || data.id) { paLoadCCAgents(); }
-    else alert('Error: ' + (data.error || 'Unknown'));
-  } catch(e) { alert(e.message); }
+    else window.rmToast('Error: ' + (data.error || 'Unknown', 'error'));
+  } catch(e) { window.rmToast(e.message, 'info'); }
 }
 
 async function paCCStartAgent(agentId) {
@@ -861,8 +861,8 @@ async function paCCStartAgent(agentId) {
     var res = await saFetch('/api/call-center/agents/' + agentId + '/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
     var data = await res.json();
     if (data.success) paLoadCCAgents();
-    else alert('Error: ' + (data.error || 'Could not start agent'));
-  } catch(e) { alert(e.message); }
+    else window.rmToast('Error: ' + (data.error || 'Could not start agent', 'error'));
+  } catch(e) { window.rmToast(e.message, 'info'); }
 }
 
 async function paCCStopAgent(agentId) {
@@ -870,16 +870,16 @@ async function paCCStopAgent(agentId) {
     var res = await saFetch('/api/call-center/agents/' + agentId + '/stop', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
     var data = await res.json();
     if (data.success) paLoadCCAgents();
-    else alert('Error: ' + (data.error || 'Could not stop agent'));
-  } catch(e) { alert(e.message); }
+    else window.rmToast('Error: ' + (data.error || 'Could not stop agent', 'error'));
+  } catch(e) { window.rmToast(e.message, 'info'); }
 }
 
 async function paDeleteAgent(agentId) {
-  if (!confirm('Delete this agent? This cannot be undone.')) return;
+  if (!(await window.rmConfirm('Delete this agent? This cannot be undone.'))) return
   try {
     await saFetch('/api/admin/superadmin/cc/agents/' + agentId, { method: 'DELETE' });
     paLoadCCAgents();
-  } catch(e) { alert(e.message); }
+  } catch(e) { window.rmToast(e.message, 'info'); }
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -972,11 +972,11 @@ function paClearCSV() {
 async function paUploadLeads() {
   var campId = gv('pa-lead-campaign');
   var raw = gv('pa-csv-data');
-  if (!raw) { alert('Paste CSV data or upload a file first'); return; }
-  if (!campId) { alert('Select a campaign'); return; }
+  if (!raw) { window.rmToast('Paste CSV data or upload a file first', 'info'); return; }
+  if (!campId) { window.rmToast('Select a campaign', 'info'); return; }
 
   var lines = raw.trim().split('\n');
-  if (lines.length < 2) { alert('CSV must have a header row and at least one data row'); return; }
+  if (lines.length < 2) { window.rmToast('CSV must have a header row and at least one data row', 'warning'); return; }
   var headers = lines[0].split(',').map(function(h) { return h.trim().toLowerCase().replace(/[^a-z0-9_]/g, ''); });
   var prospects = [];
   for (var i = 1; i < lines.length; i++) {
@@ -992,7 +992,7 @@ async function paUploadLeads() {
       prospects.push(obj);
     }
   }
-  if (prospects.length === 0) { alert('No valid prospects found (need a phone column)'); return; }
+  if (prospects.length === 0) { window.rmToast('No valid prospects found (need a phone column, 'info')'); return; }
 
   try {
     var res = await saFetch('/api/admin/superadmin/cc/lead-lists/upload', {
@@ -1001,13 +1001,13 @@ async function paUploadLeads() {
     });
     var data = await res.json();
     if (data.success) {
-      alert('Imported: ' + data.imported + ', Skipped: ' + data.skipped + ' (of ' + data.total + ' rows)');
+      window.rmToast('Imported: ' + data.imported + ', Skipped: ' + data.skipped + ' (of ' + data.total + ' rows, 'info')');
       paClearCSV();
       paLoadLeadStats();
     } else {
-      alert('Error: ' + (data.error || 'Unknown'));
+      window.rmToast('Error: ' + (data.error || 'Unknown', 'error'));
     }
-  } catch(e) { alert('Upload failed: ' + e.message); }
+  } catch(e) { window.rmToast('Upload failed: ' + e.message, 'error'); }
 }
 
 async function paLoadLeadStats() {
@@ -1111,7 +1111,7 @@ async function paShowCallDetail(callId) {
     var res = await saFetch('/api/admin/superadmin/cc/call-logs/' + callId);
     var data = await res.json();
     var cl = data.call_log;
-    if (!cl) { alert('Call log not found'); return; }
+    if (!cl) { window.rmToast('Call log not found', 'info'); return; }
 
     var statusColor = cl.call_status === 'completed' ? 'bg-green-100 text-green-700' : cl.call_status === 'failed' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700';
     el.innerHTML =
@@ -1372,13 +1372,13 @@ async function paSubmitFlag() {
     });
     var data = await res.json();
     if (data.success) paLoadFlags();
-    else alert('Error: ' + (data.error || 'Unknown'));
-  } catch(e) { alert(e.message); }
+    else window.rmToast('Error: ' + (data.error || 'Unknown', 'error'));
+  } catch(e) { window.rmToast(e.message, 'info'); }
 }
 
 async function paApplyFlag(flagId) {
-  if (!confirm('Apply this fix to the persona prompt?')) return;
-  try { await paFetch('/transcript-flags/' + flagId + '/apply', { method: 'POST' }); paLoadFlags(); } catch(e) { alert(e.message); }
+  if (!(await window.rmConfirm('Apply this fix to the persona prompt?'))) return
+  try { await paFetch('/transcript-flags/' + flagId + '/apply', { method: 'POST' }); paLoadFlags(); } catch(e) { window.rmToast(e.message, 'info'); }
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -1489,8 +1489,8 @@ async function paSaveQuickEdit(customerId) {
     });
     var data = await res.json();
     if (data.success) paLoadServicePanel();
-    else alert('Error: ' + (data.error || 'Unknown'));
-  } catch(e) { alert(e.message); }
+    else window.rmToast('Error: ' + (data.error || 'Unknown', 'error'));
+  } catch(e) { window.rmToast(e.message, 'info'); }
 }
 
 async function paShowColdCallActivity() {
@@ -1616,13 +1616,13 @@ async function paSaveTier(tierId) {
     var res = await paFetch(url, { method: tierId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     var data = await res.json();
     if (data.success || data.id) paLoadMembershipConfig();
-    else alert('Error: ' + (data.error || 'Unknown'));
-  } catch(e) { alert(e.message); }
+    else window.rmToast('Error: ' + (data.error || 'Unknown', 'error'));
+  } catch(e) { window.rmToast(e.message, 'info'); }
 }
 
 async function paDeleteTier(id) {
-  if (!confirm('Deactivate this tier?')) return;
-  try { await paFetch('/membership-tiers/' + id, { method: 'DELETE' }); paLoadMembershipConfig(); } catch(e) { alert(e.message); }
+  if (!(await window.rmConfirm('Deactivate this tier?'))) return
+  try { await paFetch('/membership-tiers/' + id, { method: 'DELETE' }); paLoadMembershipConfig(); } catch(e) { window.rmToast(e.message, 'info'); }
 }
 
 // ════════════════════════════════════════════════════════════════

@@ -25,23 +25,48 @@ export function isDevAccount(email: string, env?: any): boolean {
 }
 
 // ============================================================
-// PASSWORD HELPERS (same as admin auth)
+// PASSWORD HELPERS — PBKDF2 (100,000 iterations, SHA-256)
+// Cloudflare Workers Web Crypto API compatible.
+// Format: pbkdf2:<salt>:<hash>  |  Legacy: <salt>:<hash> (SHA-256)
 // ============================================================
 async function hashPassword(password: string, salt?: string): Promise<{ hash: string, salt: string }> {
   const s = salt || crypto.randomUUID()
-  const data = new TextEncoder().encode(password + s)
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data)
-  const hashArray = Array.from(new Uint8Array(hashBuffer))
-  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
+  const enc = new TextEncoder()
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw', enc.encode(password), { name: 'PBKDF2' }, false, ['deriveBits']
+  )
+  const hashBuffer = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', salt: enc.encode(s), iterations: 100000, hash: 'SHA-256' },
+    keyMaterial, 256
+  )
+  const hashHex = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('')
   return { hash: hashHex, salt: s }
 }
 
 async function verifyPassword(password: string, storedHash: string): Promise<boolean> {
+  // New PBKDF2 format: pbkdf2:<salt>:<hash>
+  if (storedHash.startsWith('pbkdf2:')) {
+    const inner = storedHash.slice(7)
+    const idx = inner.indexOf(':')
+    if (idx < 0) return false
+    const salt = inner.slice(0, idx)
+    const hash = inner.slice(idx + 1)
+    const result = await hashPassword(password, salt)
+    return result.hash === hash
+  }
+  // Legacy SHA-256 format: <salt>:<hash> — allow login, upgrade on next save
   const parts = storedHash.split(':')
   if (parts.length !== 2) return false
   const [salt, hash] = parts
-  const result = await hashPassword(password, salt)
-  return result.hash === hash
+  const enc = new TextEncoder()
+  const data = enc.encode(password + salt)
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data)
+  const hashHex = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('')
+  return hashHex === hash
+}
+
+function serializeHash(hash: string, salt: string): string {
+  return `pbkdf2:${salt}:${hash}`
 }
 
 function generateSessionToken(): string {
@@ -538,7 +563,7 @@ customerAuthRoutes.post('/register', async (c) => {
     }
 
     const { hash, salt } = await hashPassword(password)
-    const storedHash = `${salt}:${hash}`
+    const storedHash = serializeHash(hash, salt)
 
     // Generate referral code
     const refCode = 'REF-' + crypto.randomUUID().replace(/-/g, '').substring(0, 6).toUpperCase()
@@ -641,7 +666,7 @@ customerAuthRoutes.post('/login', async (c) => {
       if (!devCustomer) {
         // Auto-create dev account with massive trial allocation
         const { hash, salt } = await hashPassword(DEV_ACCOUNT.password)
-        const storedHash = `${salt}:${hash}`
+        const storedHash = serializeHash(hash, salt)
         const result = await c.env.DB.prepare(`
           INSERT INTO customers (email, name, phone, company_name, password_hash, report_credits, credits_used, free_trial_total, free_trial_used, is_active)
           VALUES (?, ?, ?, ?, ?, 999999, 0, 999999, 0, 1)
@@ -1367,7 +1392,7 @@ customerAuthRoutes.post('/reset-password', async (c) => {
   try {
     const { token, new_password } = await c.req.json()
     if (!token || !new_password) return c.json({ error: 'Token and new password are required' }, 400)
-    if (new_password.length < 6) return c.json({ error: 'Password must be at least 6 characters' }, 400)
+    if (new_password.length < 8) return c.json({ error: 'Password must be at least 8 characters' }, 400)
 
     const record = await c.env.DB.prepare(
       "SELECT * FROM password_reset_tokens WHERE token = ? AND account_type = 'customer' AND used = 0 AND expires_at > datetime('now')"
@@ -1378,7 +1403,7 @@ customerAuthRoutes.post('/reset-password', async (c) => {
     }
 
     const { hash, salt } = await hashPassword(new_password)
-    const storedHash = `${salt}:${hash}`
+    const storedHash = serializeHash(hash, salt)
 
     await c.env.DB.prepare(
       "UPDATE customers SET password_hash = ?, updated_at = datetime('now') WHERE email = ?"
@@ -1580,7 +1605,7 @@ customerAuthRoutes.get('/gcal/callback', async (c) => {
   const state = c.req.query('state') || ''
 
   if (error || !code) {
-    return c.html(`<!DOCTYPE html><html><head><title>Google Calendar</title><script src="https://cdn.tailwindcss.com"></script></head>
+    return c.html(`<!DOCTYPE html><html><head><title>Google Calendar</title><link rel="stylesheet" href="/static/tailwind.css"></head>
 <body class="bg-[#0a0a0a] min-h-screen flex items-center justify-center"><div class="bg-[#111] border border-white/10 rounded-2xl shadow-xl p-8 max-w-md text-center">
 <div class="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-4"><span class="text-red-400 text-2xl">✕</span></div>
 <h2 class="text-xl font-bold text-white mb-2">Connection Failed</h2>
@@ -1617,7 +1642,7 @@ customerAuthRoutes.get('/gcal/callback', async (c) => {
   const redirectUri = `${url.protocol}//${url.host}/api/customer/gcal/callback`
 
   if (!clientId || !clientSecret) {
-    return c.html(`<!DOCTYPE html><html><head><title>Google Calendar</title><script src="https://cdn.tailwindcss.com"></script></head>
+    return c.html(`<!DOCTYPE html><html><head><title>Google Calendar</title><link rel="stylesheet" href="/static/tailwind.css"></head>
 <body class="bg-[#0a0a0a] min-h-screen flex items-center justify-center"><div class="bg-[#111] border border-white/10 rounded-2xl shadow-xl p-8 max-w-md text-center">
 <div class="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-4"><span class="text-red-400 text-2xl">⚠</span></div>
 <h2 class="text-xl font-bold text-white mb-2">Configuration Error</h2>
@@ -1641,7 +1666,7 @@ customerAuthRoutes.get('/gcal/callback', async (c) => {
 
   const tokenData: any = await tokenResp.json()
   if (!tokenResp.ok || !tokenData.refresh_token) {
-    return c.html(`<!DOCTYPE html><html><head><title>Google Calendar</title><script src="https://cdn.tailwindcss.com"></script></head>
+    return c.html(`<!DOCTYPE html><html><head><title>Google Calendar</title><link rel="stylesheet" href="/static/tailwind.css"></head>
 <body class="bg-[#0a0a0a] min-h-screen flex items-center justify-center"><div class="bg-[#111] border border-white/10 rounded-2xl shadow-xl p-8 max-w-md text-center">
 <div class="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-4"><span class="text-red-400 text-2xl">⚠</span></div>
 <h2 class="text-xl font-bold text-white mb-2">Token Exchange Failed</h2>
@@ -1667,7 +1692,7 @@ customerAuthRoutes.get('/gcal/callback', async (c) => {
 
   return c.html(`<!DOCTYPE html>
 <html><head><title>Google Calendar Connected</title>
-<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="/static/tailwind.css">
 </head>
 <body class="bg-[#0a0a0a] min-h-screen flex items-center justify-center">
 <div class="bg-[#111] border border-white/10 rounded-2xl shadow-xl p-8 max-w-md text-center">
@@ -1723,4 +1748,148 @@ customerAuthRoutes.post('/gcal/disconnect', async (c) => {
   ).bind(session.customer_id).run()
 
   return c.json({ success: true })
+})
+
+// ============================================================
+// REFERRAL PAYOUT — Request cash-out of pending commissions
+// POST /api/customer/referrals/redeem
+// Body: { payout_method: 'credits' | 'etransfer', etransfer_email?: string }
+// ============================================================
+customerAuthRoutes.post('/referrals/redeem', async (c) => {
+  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  if (!token) return c.json({ error: 'Auth required' }, 401)
+
+  const session = await c.env.DB.prepare(
+    "SELECT customer_id FROM customer_sessions WHERE session_token = ? AND expires_at > datetime('now')"
+  ).bind(token).first<any>()
+  if (!session) return c.json({ error: 'Session expired' }, 401)
+
+  const customerId = session.customer_id
+
+  let body: any = {}
+  try { body = await c.req.json() } catch {}
+  const { payout_method, etransfer_email } = body
+
+  if (!payout_method || !['credits', 'etransfer'].includes(payout_method)) {
+    return c.json({ error: "payout_method must be 'credits' or 'etransfer'" }, 400)
+  }
+  if (payout_method === 'etransfer' && !etransfer_email) {
+    return c.json({ error: 'etransfer_email is required for e-transfer payouts' }, 400)
+  }
+
+  // Sum all pending commissions for this referrer
+  const pending = await c.env.DB.prepare(
+    "SELECT COALESCE(SUM(commission_earned), 0) as total FROM referral_earnings WHERE referrer_id = ? AND status = 'pending'"
+  ).bind(customerId).first<any>()
+
+  const amount = Number(pending?.total || 0)
+
+  if (amount < 1) {
+    return c.json({ error: 'No pending earnings to redeem. Minimum redemption is $1.00 CAD.' }, 400)
+  }
+
+  // Ensure the payout_requests table exists
+  await c.env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS referral_payout_requests (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      customer_id INTEGER NOT NULL,
+      amount REAL NOT NULL,
+      payout_method TEXT NOT NULL,
+      etransfer_email TEXT,
+      status TEXT DEFAULT 'pending',
+      admin_notes TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      processed_at TEXT,
+      FOREIGN KEY (customer_id) REFERENCES customers(id)
+    )
+  `).run()
+
+  // Create the payout request
+  const result = await c.env.DB.prepare(`
+    INSERT INTO referral_payout_requests (customer_id, amount, payout_method, etransfer_email, status)
+    VALUES (?, ?, ?, ?, 'pending')
+  `).bind(customerId, amount, payout_method, etransfer_email || null).run()
+
+  // Mark all pending earnings as 'requested' so they can't be double-redeemed
+  await c.env.DB.prepare(
+    "UPDATE referral_earnings SET status = 'requested' WHERE referrer_id = ? AND status = 'pending'"
+  ).bind(customerId).run()
+
+  // If payout_method is 'credits', convert immediately to report credits
+  if (payout_method === 'credits') {
+    // $1 CAD = 1 report credit (adjust ratio as needed)
+    const creditsToAdd = Math.floor(amount)
+    await c.env.DB.prepare(
+      "UPDATE customers SET report_credits = report_credits + ?, updated_at = datetime('now') WHERE id = ?"
+    ).bind(creditsToAdd, customerId).run()
+
+    // Mark earnings as paid
+    await c.env.DB.prepare(
+      "UPDATE referral_earnings SET status = 'paid' WHERE referrer_id = ? AND status = 'requested'"
+    ).bind(customerId).run()
+
+    // Mark payout request as completed
+    await c.env.DB.prepare(
+      "UPDATE referral_payout_requests SET status = 'completed', processed_at = datetime('now'), admin_notes = ? WHERE id = ?"
+    ).bind(`Auto-converted $${amount.toFixed(2)} to ${creditsToAdd} report credits`, result.meta.last_row_id).run()
+
+    return c.json({
+      success: true,
+      message: `$${amount.toFixed(2)} CAD converted to ${creditsToAdd} report credits and added to your account.`,
+      payout_method: 'credits',
+      amount_redeemed: amount,
+      credits_added: creditsToAdd,
+      payout_request_id: result.meta.last_row_id,
+    })
+  }
+
+  // For e-transfer: create pending request for admin to process manually
+  return c.json({
+    success: true,
+    message: `Payout request of $${amount.toFixed(2)} CAD submitted. You will receive an e-transfer to ${etransfer_email} within 3-5 business days.`,
+    payout_method: 'etransfer',
+    amount_redeemed: amount,
+    etransfer_email,
+    payout_request_id: result.meta.last_row_id,
+    status: 'pending_admin_review',
+  })
+})
+
+// ============================================================
+// REFERRAL PAYOUT HISTORY — List all payout requests
+// GET /api/customer/referrals/payouts
+// ============================================================
+customerAuthRoutes.get('/referrals/payouts', async (c) => {
+  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  if (!token) return c.json({ error: 'Auth required' }, 401)
+
+  const session = await c.env.DB.prepare(
+    "SELECT customer_id FROM customer_sessions WHERE session_token = ? AND expires_at > datetime('now')"
+  ).bind(token).first<any>()
+  if (!session) return c.json({ error: 'Session expired' }, 401)
+
+  try {
+    await c.env.DB.prepare(`
+      CREATE TABLE IF NOT EXISTS referral_payout_requests (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        customer_id INTEGER NOT NULL,
+        amount REAL NOT NULL,
+        payout_method TEXT NOT NULL,
+        etransfer_email TEXT,
+        status TEXT DEFAULT 'pending',
+        admin_notes TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
+        processed_at TEXT,
+        FOREIGN KEY (customer_id) REFERENCES customers(id)
+      )
+    `).run()
+
+    const payouts = await c.env.DB.prepare(
+      'SELECT * FROM referral_payout_requests WHERE customer_id = ? ORDER BY created_at DESC'
+    ).bind(session.customer_id).all<any>()
+
+    return c.json({ payouts: payouts.results || [] })
+  } catch (err: any) {
+    return c.json({ payouts: [], error: err.message })
+  }
 })

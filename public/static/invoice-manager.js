@@ -623,7 +623,7 @@ document.addEventListener('DOMContentLoaded', () => {
       window.addEventListener('message', handler);
     },
     async disconnectSquare() {
-      if (!confirm('Disconnect your Square merchant account? Payment links will use the platform default account.')) return;
+      if (!(await window.rmConfirm('Disconnect your Square merchant account? Payment links will use the platform default account.'))) return
       await fetch('/api/square/oauth/disconnect', { method: 'POST', headers: headers() });
       state.squareStatus = { ...state.squareStatus, connected: false };
       render();
@@ -690,7 +690,7 @@ document.addEventListener('DOMContentLoaded', () => {
       render();
     },
     async send(id) {
-      if (!confirm('Send this invoice to the customer?')) return;
+      if (!(await window.rmConfirm('Send this invoice to the customer?'))) return
       try {
         await fetch('/api/invoices/' + id + '/send', { method: 'POST', headers: headers() });
         imToast('Invoice sent!', 'success');
@@ -698,7 +698,7 @@ document.addEventListener('DOMContentLoaded', () => {
       } catch (e) { imToast('Failed to send', 'error'); }
     },
     async markPaid(id) {
-      if (!confirm('Mark this invoice as paid?')) return;
+      if (!(await window.rmConfirm('Mark this invoice as paid?'))) return
       try {
         const res = await fetch('/api/invoices/' + id + '/status', {
           method: 'PATCH',
@@ -715,11 +715,11 @@ document.addEventListener('DOMContentLoaded', () => {
       } catch (e) { imToast('Operation failed. Please try again.', 'error'); }
     },
     async del(id) {
-      if (!confirm('Delete this draft invoice?')) return;
+      if (!(await window.rmConfirm('Delete this draft invoice?'))) return
       try { await fetch('/api/invoices/' + id, { method: 'DELETE', headers: headers() }); load(); } catch (e) { imToast('Operation failed. Please try again.', 'error'); }
     },
     async void(id) {
-      if (!confirm('Void/cancel this invoice? This cannot be undone.')) return;
+      if (!(await window.rmConfirm('Void/cancel this invoice? This cannot be undone.'))) return
       try {
         await fetch('/api/invoices/' + id + '/status', {
           method: 'PATCH',
@@ -730,7 +730,7 @@ document.addEventListener('DOMContentLoaded', () => {
       } catch (e) { imToast('Operation failed. Please try again.', 'error'); }
     },
     async createPaymentLink(id) {
-      if (!confirm('Create a Square payment link for this invoice?')) return;
+      if (!(await window.rmConfirm('Create a Square payment link for this invoice?'))) return
       try {
         const res = await fetch('/api/invoices/' + id + '/payment-link', {
           method: 'POST',

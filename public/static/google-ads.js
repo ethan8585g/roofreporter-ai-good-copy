@@ -180,13 +180,13 @@
       if (data.auth_url) {
         window.open(data.auth_url, 'google_ads_connect', 'width=600,height=700');
       } else {
-        alert(data.error || 'Failed to start connection');
+        window.rmToast(data.error || 'Failed to start connection', 'info');
       }
     });
   };
 
   window._gaDisconnect = function() {
-    if (!confirm('Disconnect your Google Ads account? Your cached campaign data will remain.')) return;
+    if (!(await window.rmConfirm('Disconnect your Google Ads account? Your cached campaign data will remain.'))) return
     apiPost('/disconnect').then(function() {
       state.connected = false;
       state.customer_id = null;

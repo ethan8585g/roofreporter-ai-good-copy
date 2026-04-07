@@ -1013,11 +1013,11 @@ Tips:
   };
   window._hgSaveTemplate = async function() {
     const name=document.getElementById('hg-tpl-name')?.value?.trim();
-    if (!name) return alert('Template name required');
+    if (!name) return window.rmToast('Template name required', 'warning');
     await fetch(API+'/templates',{method:'POST',headers:hdrs(),body:JSON.stringify({name,category:document.getElementById('hg-tpl-cat')?.value||'marketing',description:document.getElementById('hg-tpl-desc')?.value||'',script_template:document.getElementById('hg-tpl-script')?.value||''})});
     switchTab('templates');
   };
-  window._hgDeleteTemplate = async function(id) { if(!confirm('Delete this template?')) return; await fetch(API+'/templates/'+id,{method:'DELETE',headers:hdrs()}); switchTab('templates'); };
+  window._hgDeleteTemplate = async function(id) { if (!(await window.rmConfirm('Delete this template?'))) return await fetch(API+'/templates/'+id,{method:'DELETE',headers:hdrs()}); switchTab('templates'); };
 
   /* ── Video management ── */
   window._hgPollStatus = async function(videoId) {
@@ -1033,7 +1033,7 @@ Tips:
     } catch(e) { notify('Error',e.message,'error'); }
   };
 
-  window._hgDeleteVideo = async function(id) { if(!confirm('Delete this video?')) return; await fetch(API+'/videos/'+id,{method:'DELETE',headers:hdrs()}); switchTab('videos'); };
+  window._hgDeleteVideo = async function(id) { if (!(await window.rmConfirm('Delete this video?'))) return await fetch(API+'/videos/'+id,{method:'DELETE',headers:hdrs()}); switchTab('videos'); };
 
   window._hgFilterVideos = function(cat) {
     document.querySelectorAll('.hg-video-card').forEach(el => {

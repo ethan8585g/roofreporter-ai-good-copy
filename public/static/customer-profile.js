@@ -410,10 +410,10 @@
   }
 
   window.requestAccountDeletion = function () {
-    if (!confirm('Are you absolutely sure? This will permanently delete your account and all data. This cannot be undone.')) return;
+    if (!(await window.rmConfirm('Are you absolutely sure? This will permanently delete your account and all data. This cannot be undone.'))) return
     var email = prompt('To confirm, type your email address:');
     if (!email || email.toLowerCase() !== (profile.email || '').toLowerCase()) {
-      alert('Email did not match. Account deletion cancelled.');
+      window.rmToast('Email did not match. Account deletion cancelled.', 'info');
       return;
     }
     showToast('Deletion request submitted. Support will contact you within 24 hours.', 'info');

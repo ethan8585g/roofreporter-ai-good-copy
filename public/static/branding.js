@@ -121,11 +121,11 @@ function handleLogoUpload(input) {
   var file = input.files[0];
   if (!file) return;
   if (file.size > 500000) {
-    alert('Logo file too large. Maximum 500KB. Please use a smaller or compressed image.');
+    window.rmToast('Logo file too large. Maximum 500KB. Please use a smaller or compressed image.', 'warning');
     return;
   }
   if (!file.type.startsWith('image/')) {
-    alert('Please upload an image file (PNG, JPG, SVG).');
+    window.rmToast('Please upload an image file (PNG, JPG, SVG, 'warning').');
     return;
   }
   var reader = new FileReader();
@@ -144,7 +144,7 @@ function handleLogoUpload(input) {
         renderBranding(); // Re-render to show preview
       } else {
         var err = await res.json();
-        alert(err.error || 'Upload failed');
+        window.rmToast(err.error || 'Upload failed', 'info');
         updateSaveIndicator('error');
       }
     } catch(ex) {

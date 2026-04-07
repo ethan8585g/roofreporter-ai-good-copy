@@ -408,37 +408,37 @@ async function sendInvite(e) {
 
 // ── Actions ──
 async function toggleRole(memberId, newRole) {
-  if (!confirm('Change role to ' + newRole + '?')) return;
+  if (!(await window.rmConfirm('Change role to ' + newRole + '?'))) return
   await fetch('/api/team/members/' + memberId, { method: 'PUT', headers: authHeaders(), body: JSON.stringify({ role: newRole }) });
   await loadTeamData(); renderTeam();
 }
 
 async function suspendMember(memberId) {
-  if (!confirm('Suspend this team member? Their access and billing will be paused.')) return;
+  if (!(await window.rmConfirm('Suspend this team member? Their access and billing will be paused.'))) return
   await fetch('/api/team/members/' + memberId + '/suspend', { method: 'POST', headers: authHeaders() });
   await loadTeamData(); renderTeam();
 }
 
 async function reactivateMember(memberId) {
-  if (!confirm('Reactivate this member? Billing will resume at $50/month.')) return;
+  if (!(await window.rmConfirm('Reactivate this member? Billing will resume at $50/month.'))) return
   await fetch('/api/team/members/' + memberId + '/reactivate', { method: 'POST', headers: authHeaders() });
   await loadTeamData(); renderTeam();
 }
 
 async function removeMember(memberId, name) {
-  if (!confirm('Remove ' + name + ' from your team? This will revoke their access immediately.')) return;
+  if (!(await window.rmConfirm('Remove ' + name + ' from your team? This will revoke their access immediately.'))) return
   await fetch('/api/team/members/' + memberId, { method: 'DELETE', headers: authHeaders() });
   await loadTeamData(); renderTeam();
 }
 
 async function cancelInvite(inviteId) {
-  if (!confirm('Cancel this invitation?')) return;
+  if (!(await window.rmConfirm('Cancel this invitation?'))) return
   await fetch('/api/team/invite/' + inviteId, { method: 'DELETE', headers: authHeaders() });
   await loadTeamData(); renderTeam();
 }
 
 async function leaveTeam() {
-  if (!confirm('Are you sure you want to leave this team? You will lose access to the team account.')) return;
+  if (!(await window.rmConfirm('Are you sure you want to leave this team? You will lose access to the team account.'))) return
   await fetch('/api/team/leave', { method: 'POST', headers: authHeaders() });
   window.location.href = '/customer/dashboard';
 }

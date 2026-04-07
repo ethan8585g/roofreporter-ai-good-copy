@@ -393,7 +393,7 @@
       knowledge_docs: document.getElementById('cc-p-knowledge')?.value,
       dynamic_variables: document.getElementById('cc-p-vars')?.value,
     };
-    if (!p.name) { alert('Persona name is required'); return; }
+    if (!p.name) { window.rmToast('Persona name is required', 'warning'); return; }
 
     try {
       var method = CC.editPersona.id ? 'PUT' : 'POST';
@@ -401,10 +401,10 @@
       var res = await fetch(url, { method: method, headers: { ...saHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify(p) });
       var data = await res.json();
       if (data.error) throw new Error(data.error);
-      alert('Persona saved!');
+      window.rmToast('Persona saved!', 'success');
       CC.editPersona = null;
       ccLoadData();
-    } catch(e) { alert('Error: ' + e.message); }
+    } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
   };
 
   window.ccUpdateLine = function(id, field, value) {
@@ -422,14 +422,14 @@
       });
       var data = await res.json();
       if (data.error) throw new Error(data.error);
-      alert('Phone line config saved!');
-    } catch(e) { alert('Error: ' + e.message); }
+      window.rmToast('Phone line config saved!', 'success');
+    } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
   };
 
-  window.ccAddPhoneLine = function() { alert('To add a new phone line, purchase a Twilio number first, then add it here.'); };
-  window.ccNewCampaign = function() { alert('Campaign builder — redirecting to existing campaign UI'); CC.tab = 'campaigns'; renderContent(); };
-  window.ccUploadCSV = function() { alert('CSV upload for prospect lists'); };
-  window.ccLoadFlags = function() { alert('Loading flagged transcripts...'); };
-  window.ccLoadVariants = function() { alert('Loading script variants...'); };
+  window.ccAddPhoneLine = function() { window.rmToast('To add a new phone line, purchase a Twilio number first, then add it here.', 'info'); };
+  window.ccNewCampaign = function() { window.rmToast('Campaign builder — redirecting to existing campaign UI', 'info'); CC.tab = 'campaigns'; renderContent(); };
+  window.ccUploadCSV = function() { window.rmToast('CSV upload for prospect lists', 'info'); };
+  window.ccLoadFlags = function() { window.rmToast('Loading flagged transcripts...', 'info'); };
+  window.ccLoadVariants = function() { window.rmToast('Loading script variants...', 'info'); };
 
 })();

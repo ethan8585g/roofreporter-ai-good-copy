@@ -1351,7 +1351,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       } else if (shareUrl) {
         const fullUrl = window.location.origin + shareUrl;
-        if (confirm('Proposal saved as draft!\n\nShareable link: ' + fullUrl + '\n\nCopy link to clipboard?')) {
+        if (await window.rmConfirm('Proposal saved as draft!\n\nShareable link: ' + fullUrl + '\n\nCopy link to clipboard?')) {
           navigator.clipboard.writeText(fullUrl).catch(() => {});
         }
       } else {
@@ -1455,7 +1455,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     },
     async convertToInvoice(id) {
-      if (!confirm('Convert this proposal to an invoice? A new invoice will be created with the same line items.')) return;
+      if (!(await window.rmConfirm('Convert this proposal to an invoice? A new invoice will be created with the same line items.'))) return
       try {
         const res = await fetch('/api/invoices/' + id + '/convert-to-invoice', { method: 'POST', headers: headers() });
         if (res.ok) {
@@ -1506,7 +1506,7 @@ document.addEventListener('DOMContentLoaded', () => {
       render();
     },
     async send(id) {
-      if (!confirm('Send this proposal to the customer?')) return;
+      if (!(await window.rmConfirm('Send this proposal to the customer?'))) return
       try {
         await fetch('/api/invoices/' + id + '/send', { method: 'POST', headers: headers() });
         pbToast('Proposal sent!', 'success');
@@ -1514,7 +1514,7 @@ document.addEventListener('DOMContentLoaded', () => {
       } catch (e) { pbToast('Failed to send proposal', 'error'); }
     },
     async del(id) {
-      if (!confirm('Delete this draft proposal?')) return;
+      if (!(await window.rmConfirm('Delete this draft proposal?'))) return
       try {
         await fetch('/api/invoices/' + id, { method: 'DELETE', headers: headers() });
         load();

@@ -134,7 +134,7 @@ googleBusinessRoutes.get('/callback', async (c) => {
   const state = c.req.query('state') || ''
 
   if (error || !code) {
-    return c.html(`<!DOCTYPE html><html><head><title>Google Business Profile</title><script src="https://cdn.tailwindcss.com"></script></head>
+    return c.html(`<!DOCTYPE html><html><head><title>Google Business Profile</title><link rel="stylesheet" href="/static/tailwind.css"></head>
 <body class="bg-gray-50 min-h-screen flex items-center justify-center"><div class="bg-white rounded-2xl shadow-xl p-8 max-w-md text-center">
 <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4"><i class="fas fa-times text-red-500 text-2xl"></i></div>
 <h2 class="text-xl font-bold text-gray-800 mb-2">Connection Failed</h2>
@@ -163,7 +163,7 @@ googleBusinessRoutes.get('/callback', async (c) => {
   const redirectUri = `${url.protocol}//${url.host}/api/google-business/callback`
 
   if (!clientId || !clientSecret) {
-    return c.html(`<!DOCTYPE html><html><head><title>Google Business Profile</title><script src="https://cdn.tailwindcss.com"></script></head>
+    return c.html(`<!DOCTYPE html><html><head><title>Google Business Profile</title><link rel="stylesheet" href="/static/tailwind.css"></head>
 <body class="bg-gray-50 min-h-screen flex items-center justify-center"><div class="bg-white rounded-2xl shadow-xl p-8 max-w-md text-center">
 <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4"><i class="fas fa-exclamation-triangle text-red-500 text-2xl"></i></div>
 <h2 class="text-xl font-bold text-gray-800 mb-2">Configuration Error</h2>
@@ -187,7 +187,7 @@ googleBusinessRoutes.get('/callback', async (c) => {
 
   const tokenData: any = await tokenResp.json()
   if (!tokenResp.ok || !tokenData.refresh_token) {
-    return c.html(`<!DOCTYPE html><html><head><title>Google Business Profile</title><script src="https://cdn.tailwindcss.com"></script></head>
+    return c.html(`<!DOCTYPE html><html><head><title>Google Business Profile</title><link rel="stylesheet" href="/static/tailwind.css"></head>
 <body class="bg-gray-50 min-h-screen flex items-center justify-center"><div class="bg-white rounded-2xl shadow-xl p-8 max-w-md text-center">
 <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4"><i class="fas fa-exclamation-triangle text-red-500 text-2xl"></i></div>
 <h2 class="text-xl font-bold text-gray-800 mb-2">Token Exchange Failed</h2>
@@ -222,7 +222,7 @@ googleBusinessRoutes.get('/callback', async (c) => {
 
   return c.html(`<!DOCTYPE html>
 <html><head><title>Google Business Profile Connected</title>
-<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="/static/tailwind.css">
 <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
 </head>
 <body class="bg-gray-50 min-h-screen flex items-center justify-center">

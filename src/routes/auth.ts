@@ -4,23 +4,50 @@ import type { Bindings } from '../types'
 export const authRoutes = new Hono<{ Bindings: Bindings }>()
 
 // ============================================================
-// PASSWORD HASHING — SHA-256 with random salt (Web Crypto API)
+// PASSWORD HASHING — PBKDF2 (100,000 iterations, SHA-256)
+// Cloudflare Workers Web Crypto API compatible.
+// Format stored in DB: pbkdf2:<salt>:<hash>
+// Legacy SHA-256 format (<salt>:<hash>) still verified for
+// backwards-compatible login; re-hashed on next password change.
 // ============================================================
 async function hashPassword(password: string, salt?: string): Promise<{ hash: string, salt: string }> {
   const s = salt || crypto.randomUUID()
-  const data = new TextEncoder().encode(password + s)
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data)
-  const hashArray = Array.from(new Uint8Array(hashBuffer))
-  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
+  const enc = new TextEncoder()
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw', enc.encode(password), { name: 'PBKDF2' }, false, ['deriveBits']
+  )
+  const hashBuffer = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', salt: enc.encode(s), iterations: 100000, hash: 'SHA-256' },
+    keyMaterial, 256
+  )
+  const hashHex = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('')
   return { hash: hashHex, salt: s }
 }
 
 async function verifyPassword(password: string, storedHash: string): Promise<boolean> {
+  // New PBKDF2 format: pbkdf2:<salt>:<hash>
+  if (storedHash.startsWith('pbkdf2:')) {
+    const inner = storedHash.slice(7)
+    const idx = inner.indexOf(':')
+    if (idx < 0) return false
+    const salt = inner.slice(0, idx)
+    const hash = inner.slice(idx + 1)
+    const result = await hashPassword(password, salt)
+    return result.hash === hash
+  }
+  // Legacy SHA-256 format: <salt>:<hash> — allow login, will upgrade on next save
   const parts = storedHash.split(':')
   if (parts.length !== 2) return false
   const [salt, hash] = parts
-  const result = await hashPassword(password, salt)
-  return result.hash === hash
+  const enc = new TextEncoder()
+  const data = enc.encode(password + salt)
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data)
+  const hashHex = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('')
+  return hashHex === hash
+}
+
+function serializeHash(hash: string, salt: string): string {
+  return `pbkdf2:${salt}:${hash}`
 }
 
 // ============================================================
@@ -29,7 +56,8 @@ async function verifyPassword(password: string, storedHash: string): Promise<boo
 // ============================================================
 async function createAdminSession(db: D1Database, adminId: number): Promise<string> {
   const token = crypto.randomUUID() + '-' + crypto.randomUUID()
-  const expiresAt = '2099-12-31 23:59:59' // Never expires
+  // 30-day rolling session expiry (renewed on each valid request)
+  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
   
   await db.prepare(`
     INSERT INTO admin_sessions (admin_id, session_token, expires_at)
@@ -51,9 +79,10 @@ export async function validateAdminSession(db: D1Database, authHeader: string | 
     WHERE s.session_token = ? AND s.expires_at > datetime('now') AND a.is_active = 1
   `).bind(token).first<any>()
 
-  // Ensure session never expires
+  // Rolling renewal: extend session by 30 days on each valid use
   if (session) {
-    db.prepare("UPDATE admin_sessions SET expires_at = '2099-12-31 23:59:59' WHERE session_token = ?").bind(token).run().catch(() => {})
+    const newExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+    db.prepare('UPDATE admin_sessions SET expires_at = ? WHERE session_token = ?').bind(newExpiry, token).run().catch(() => {})
   }
 
   return session
@@ -107,7 +136,7 @@ async function ensureBootstrapAdmin(db: D1Database, env: any): Promise<void> {
   }
 
   const { hash, salt } = await hashPassword(bootstrapPassword)
-  const storedHash = `${salt}:${hash}`
+  const storedHash = serializeHash(hash, salt)
   
   await db.prepare(`
     INSERT INTO admin_users (email, password_hash, name, role, company_name, is_active)
@@ -274,7 +303,7 @@ authRoutes.post('/change-password', async (c) => {
 
     // Set new password
     const { hash, salt } = await hashPassword(new_password)
-    const storedHash = `${salt}:${hash}`
+    const storedHash = serializeHash(hash, salt)
     await c.env.DB.prepare(
       "UPDATE admin_users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?"
     ).bind(storedHash, admin.admin_id || admin.id).run()
@@ -381,7 +410,7 @@ authRoutes.post('/reset-password', async (c) => {
     }
 
     const { hash, salt } = await hashPassword(new_password)
-    const storedHash = `${salt}:${hash}`
+    const storedHash = serializeHash(hash, salt)
 
     await c.env.DB.prepare(
       "UPDATE admin_users SET password_hash = ?, updated_at = datetime('now') WHERE email = ?"
@@ -847,7 +876,7 @@ authRoutes.get('/gmail/callback', async (c) => {
 
   return c.html(`<!DOCTYPE html>
 <html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<script src="https://cdn.tailwindcss.com"></script></head>
+<link rel="stylesheet" href="/static/tailwind.css"></head>
 <body class="bg-gray-50 min-h-screen flex items-center justify-center">
 <div class="bg-white rounded-2xl shadow-xl p-8 max-w-lg w-full mx-4">
   <div class="text-center mb-6">

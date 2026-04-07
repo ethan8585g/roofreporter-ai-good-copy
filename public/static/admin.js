@@ -936,9 +936,9 @@ async function submitOrder() {
 async function generateReport(id) {
   try {
     const r = await fetch('/api/reports/' + id + '/generate', { method:'POST' });
-    if (r.ok) { alert('Report generated!'); await loadAll(); render(); }
-    else { const d = await r.json(); alert('Failed: ' + (d.error||'')); }
-  } catch(e) { alert('Error: ' + e.message); }
+    if (r.ok) { window.rmToast('Report generated!', 'info'); await loadAll(); render(); }
+    else { const d = await r.json(); window.rmToast('Failed: ' + (d.error||'', 'error')); }
+  } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
 }
 
 async function emailReport(id) {
@@ -947,9 +947,9 @@ async function emailReport(id) {
   try {
     const r = await fetch('/api/reports/' + id + '/email', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({to_email:to}) });
     const d = await r.json();
-    if (r.ok && d.success) alert('Sent to ' + to + ' via ' + d.email_method);
-    else alert('Failed: ' + (d.error||''));
-  } catch(e) { alert('Error: ' + e.message); }
+    if (r.ok && d.success) window.rmToast('Sent to ' + to + ' via ' + d.email_method, 'success');
+    else window.rmToast('Failed: ' + (d.error||'', 'error'));
+  } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
 }
 
 // ============================================================
@@ -962,7 +962,7 @@ async function emailReport(id) {
 async function openSegmentToggle(orderId) {
   try {
     const r = await fetch('/api/reports/' + orderId + '/segments');
-    if (!r.ok) { const d = await r.json(); alert('Error: ' + (d.error||'')); return; }
+    if (!r.ok) { const d = await r.json(); window.rmToast('Error: ' + (d.error||'', 'error')); return; }
     const data = await r.json();
 
     // Build modal HTML
@@ -1043,7 +1043,7 @@ async function openSegmentToggle(orderId) {
     document.body.insertAdjacentHTML('beforeend', modalHtml);
     window._segToggleOrderId = orderId;
   } catch(e) {
-    alert('Error loading segments: ' + e.message);
+    window.rmToast('Error loading segments: ' + e.message, 'error');
   }
 }
 
@@ -1079,13 +1079,13 @@ async function applySegmentToggle(orderId) {
     const d = await r.json();
     if (r.ok && d.success) {
       closeSegToggle();
-      alert('Report recalculated! ' + d.active_segments + ' of ' + d.total_segments + ' segments active.\nNew footprint: ' + d.updated_metrics.total_footprint_sqft.toLocaleString() + ' sqft\nNew squares: ' + d.updated_metrics.gross_squares);
+      window.rmToast('Report recalculated! ' + d.active_segments + ' of ' + d.total_segments + ' segments active.\nNew footprint: ' + d.updated_metrics.total_footprint_sqft.toLocaleString(, 'success') + ' sqft\nNew squares: ' + d.updated_metrics.gross_squares);
       await loadAll(); render();
     } else {
-      alert('Failed: ' + (d.error||'Unknown error'));
+      window.rmToast('Failed: ' + (d.error||'Unknown error', 'error'));
     }
   } catch(e) {
-    alert('Error: ' + e.message);
+    window.rmToast('Error: ' + e.message, 'error');
   } finally {
     if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-check mr-1"></i>Apply & Recalculate'; }
   }
@@ -1152,27 +1152,27 @@ async function createInvoice() {
 }
 
 async function sendInvoice(id) {
-  if (!confirm('Send invoice to customer?')) return;
+  if (!(await window.rmConfirm('Send invoice to customer?'))) return
   try {
     const r = await fetch('/api/invoices/' + id + '/send', { method:'POST', headers: adminHeaders() });
     const d = await r.json();
-    if (r.ok) { alert('Invoice sent to ' + (d.customer_email||'customer')); await loadAll(); render(); }
-    else alert('Failed: ' + (d.error||'Unknown error'));
-  } catch(e) { alert('Error: ' + e.message); }
+    if (r.ok) { window.rmToast('Invoice sent to ' + (d.customer_email||'customer', 'success')); await loadAll(); render(); }
+    else window.rmToast('Failed: ' + (d.error||'Unknown error', 'error'));
+  } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
 }
 
 async function resendInvoice(id) {
-  if (!confirm('Resend invoice to customer?')) return;
+  if (!(await window.rmConfirm('Resend invoice to customer?'))) return
   try {
     const r = await fetch('/api/invoices/' + id + '/send', { method:'POST', headers: adminHeaders() });
     const d = await r.json();
-    if (r.ok) { alert('Invoice resent to ' + (d.customer_email||'customer')); await loadAll(); render(); }
-    else alert('Resend failed: ' + (d.error||'Unknown error'));
-  } catch(e) { alert('Error: ' + e.message); }
+    if (r.ok) { window.rmToast('Invoice resent to ' + (d.customer_email||'customer', 'success')); await loadAll(); render(); }
+    else window.rmToast('Resend failed: ' + (d.error||'Unknown error', 'error'));
+  } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
 }
 
 async function markPaid(id) {
-  if (!confirm('Mark invoice as paid?')) return;
+  if (!(await window.rmConfirm('Mark invoice as paid?'))) return
   try {
     const r = await fetch('/api/invoices/' + id + '/status', {
       method: 'PATCH',
@@ -1181,17 +1181,17 @@ async function markPaid(id) {
     });
     const d = await r.json();
     if (r.ok) { await loadAll(); render(); }
-    else alert('Failed: ' + (d.error||'Unknown error'));
-  } catch(e) { alert('Error: ' + e.message); }
+    else window.rmToast('Failed: ' + (d.error||'Unknown error', 'error'));
+  } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
 }
 
 async function delInvoice(id) {
-  if (!confirm('Delete this draft invoice?')) return;
+  if (!(await window.rmConfirm('Delete this draft invoice?'))) return
   try {
     const r = await fetch('/api/invoices/' + id, { method:'DELETE', headers: adminHeaders() });
     if (r.ok) { await loadAll(); render(); }
-    else { const d = await r.json(); alert('Failed: ' + (d.error||'')); }
-  } catch(e) { alert('Error: ' + e.message); }
+    else { const d = await r.json(); window.rmToast('Failed: ' + (d.error||'', 'error')); }
+  } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
 }
 
 // ============================================================
@@ -1378,7 +1378,7 @@ async function saveBlogPost(status) {
   };
 
   if (!data.title || !data.content) {
-    alert('Title and content are required.');
+    window.rmToast('Title and content are required.', 'warning');
     return;
   }
 
@@ -1395,23 +1395,23 @@ async function saveBlogPost(status) {
     const d = await r.json();
 
     if (r.ok) {
-      alert(isEdit ? 'Post updated!' : 'Post created!');
+      window.rmToast(isEdit ? 'Post updated!' : 'Post created!', 'info');
       blogView = 'list';
       editingPost = null;
       await loadBlogPosts();
       render();
     } else {
-      alert('Error: ' + (d.error || 'Failed to save'));
+      window.rmToast('Error: ' + (d.error || 'Failed to save', 'error'));
     }
   } catch(e) {
-    alert('Error: ' + e.message);
+    window.rmToast('Error: ' + e.message, 'error');
   }
 }
 
 // adminHeaders already defined at top of file
 
 async function deleteBlogPost(id) {
-  if (!confirm('Delete this blog post permanently?')) return;
+  if (!(await window.rmConfirm('Delete this blog post permanently?'))) return
   try {
     const r = await fetch('/api/blog/admin/posts/' + id, {
       method: 'DELETE',
@@ -1421,9 +1421,9 @@ async function deleteBlogPost(id) {
       await loadBlogPosts();
       render();
     } else {
-      alert('Failed to delete post');
+      window.rmToast('Failed to delete post', 'error');
     }
-  } catch(e) { alert('Error: ' + e.message); }
+  } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
 }
 
 // ============================================================
@@ -1672,7 +1672,7 @@ async function viewRoverConvo(id) {
     roverViewingConvo = data.conversation;
     roverViewingMessages = data.messages || [];
     render();
-  } catch(e) { alert('Error: ' + e.message); }
+  } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
 }
 
 function renderRoverConvoDetail() {
@@ -1788,18 +1788,18 @@ async function saveRoverConvoUpdate(id) {
       })
     });
     if (res.ok) {
-      alert('Saved!');
+      window.rmToast('Saved!', 'success');
       // Refresh
       roverStats = null;
       viewRoverConvo(id);
     } else {
-      alert('Failed to save');
+      window.rmToast('Failed to save', 'error');
     }
-  } catch(e) { alert('Error: ' + e.message); }
+  } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
 }
 
 async function deleteRoverConvo(id) {
-  if (!confirm('Delete this conversation permanently?')) return;
+  if (!(await window.rmConfirm('Delete this conversation permanently?'))) return
   try {
     const res = await fetch('/api/rover/admin/conversations/' + id, {
       method: 'DELETE',
@@ -1811,9 +1811,9 @@ async function deleteRoverConvo(id) {
       await loadRoverData();
       render();
     } else {
-      alert('Failed to delete');
+      window.rmToast('Failed to delete', 'error');
     }
-  } catch(e) { alert('Error: ' + e.message); }
+  } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
 }
 
 // ============================================================
@@ -2249,7 +2249,7 @@ async function dialNumber() {
 }
 
 async function deleteSipTrunk(trunkId, name) {
-  if (!confirm('Delete SIP trunk "' + name + '"?\\n\\nThis will disconnect any phone numbers using this trunk.')) return;
+  if (!(await window.rmConfirm('Delete SIP trunk "' + name + '"?\\n\\nThis will disconnect any phone numbers using this trunk.'))) return
   try {
     const res = await fetch('/api/secretary/sip/trunk/' + trunkId, {
       method: 'DELETE',
@@ -2260,10 +2260,10 @@ async function deleteSipTrunk(trunkId, name) {
       sipData = null;
       loadSipData();
     } else {
-      alert('Failed to delete: ' + (data.error || 'Unknown error'));
+      window.rmToast('Failed to delete: ' + (data.error || 'Unknown error', 'error'));
     }
   } catch(e) {
-    alert('Error: ' + e.message);
+    window.rmToast('Error: ' + e.message, 'error');
   }
 }
 
@@ -2318,14 +2318,14 @@ async function embedAllReports() {
     });
     const data = await res.json();
     if (data.success) {
-      alert('Embedded ' + data.embedded + ' reports (' + data.errors + ' errors)');
+      window.rmToast('Embedded ' + data.embedded + ' reports (' + data.errors + ' errors, 'error')');
       await loadSearchStats();
       render();
     } else {
-      alert('Embed failed: ' + (data.error || 'Unknown error'));
+      window.rmToast('Embed failed: ' + (data.error || 'Unknown error', 'error'));
     }
   } catch(e) {
-    alert('Error: ' + e.message);
+    window.rmToast('Error: ' + e.message, 'error');
   }
   if (btn) { btn.innerHTML = '<i class="fas fa-database mr-2"></i>Embed All'; btn.disabled = false; }
 }

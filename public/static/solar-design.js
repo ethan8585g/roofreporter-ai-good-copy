@@ -290,7 +290,7 @@
 
   window._sdClearAll = function() {
     if (state.panels.length === 0) return;
-    if (confirm('Remove all ' + state.panels.length + ' panels?')) {
+    if (await window.rmConfirm('Remove all ' + state.panels.length + ' panels?')) {
       state.panels = [];
       drawCanvas();
     }

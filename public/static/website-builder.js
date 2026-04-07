@@ -546,14 +546,14 @@
   window.wbNextStep = function() {
     if (state.createStep === 1) {
       if (!state.intake.business_name || !state.intake.phone || !state.intake.email || !state.intake.city || !state.intake.province) {
-        alert('Please fill in all required fields.'); return;
+        window.rmToast('Please fill in all required fields.', 'warning'); return;
       }
     }
     if (state.createStep === 2 && state.intake.services_offered.length === 0) {
-      alert('Please select at least one service.'); return;
+      window.rmToast('Please select at least one service.', 'warning'); return;
     }
     if (state.createStep === 3 && state.intake.service_areas.length === 0) {
-      alert('Please add at least one service area.'); return;
+      window.rmToast('Please add at least one service area.', 'warning'); return;
     }
     state.createStep++;
     render();
@@ -581,11 +581,11 @@
         state.subscriptionActive = false;
         render();
       } else {
-        alert('Generation failed: ' + (data ? data.error : 'Unknown error'));
+        window.rmToast('Generation failed: ' + (data ? data.error : 'Unknown error', 'error'));
         if (btn) { btn.textContent = '🚀 Generate My Website'; btn.disabled = false; btn.style.opacity = '1'; }
       }
     } catch (err) {
-      alert('Error: ' + err.message);
+      window.rmToast('Error: ' + err.message, 'error');
       if (btn) { btn.textContent = '🚀 Generate My Website'; btn.disabled = false; btn.style.opacity = '1'; }
     }
   };
@@ -605,23 +605,23 @@
   };
 
   window.wbPublish = async function(siteId) {
-    if (!confirm('Publish this site live? It will be accessible at a public URL.')) return;
+    if (!(await window.rmConfirm('Publish this site live? It will be accessible at a public URL.'))) return
     var btn = document.getElementById('wb-publish-btn');
     if (btn) { btn.textContent = '⏳ Publishing...'; btn.disabled = true; btn.style.opacity = '0.6'; }
 
     var data = await api('/sites/' + siteId + '/publish', { method: 'POST', body: JSON.stringify({ site_id: siteId }) });
     if (data && data.success) {
-      alert('Site published! Live at: ' + data.url);
+      window.rmToast('Site published! Live at: ' + data.url, 'info');
       state.view = 'list';
       await loadSites();
     } else {
-      alert('Publish failed: ' + (data ? data.error : 'Unknown error'));
+      window.rmToast('Publish failed: ' + (data ? data.error : 'Unknown error', 'error'));
       if (btn) { btn.textContent = '🚀 Publish Live'; btn.disabled = false; btn.style.opacity = '1'; }
     }
   };
 
   window.wbRegenerate = async function(siteId) {
-    if (!confirm('Regenerate all content with AI? Current pages will be replaced.')) return;
+    if (!(await window.rmConfirm('Regenerate all content with AI? Current pages will be replaced.'))) return
     root.innerHTML = '<div style="text-align:center;padding:120px 0;"><div style="font-size:48px;margin-bottom:16px;">🤖</div><h2 style="font-size:22px;font-weight:700;margin-bottom:8px;">Regenerating Content...</h2><p style="color:#6b7280;">This may take 30-60 seconds</p></div>';
     var data = await api('/sites/' + siteId + '/regenerate', { method: 'POST' });
     if (data && data.success) {
@@ -630,7 +630,7 @@
       state.previewSlug = 'home';
       render();
     } else {
-      alert('Regeneration failed: ' + (data ? data.error : 'Unknown error'));
+      window.rmToast('Regeneration failed: ' + (data ? data.error : 'Unknown error', 'error'));
       wbBack();
     }
   };
@@ -654,7 +654,7 @@
       state.view = 'edit-page';
       render();
     } else {
-      alert('Failed to load page for editing.');
+      window.rmToast('Failed to load page for editing.', 'error');
     }
   };
 
@@ -671,12 +671,12 @@
       })
     });
     if (data && data.success) {
-      alert('Page saved!');
+      window.rmToast('Page saved!', 'success');
       state.view = 'preview';
       state.editingPageId = null;
       render();
     } else {
-      alert('Save failed: ' + (data ? data.error : 'Unknown error'));
+      window.rmToast('Save failed: ' + (data ? data.error : 'Unknown error', 'error'));
       if (btn) { btn.textContent = 'Save Changes'; btn.disabled = false; }
     }
   };
@@ -709,11 +709,11 @@
       body: JSON.stringify({ custom_domain: domain })
     });
     if (data && data.success) {
-      alert('Custom domain set to: ' + domain + '\n\nTo complete setup:\n1. Go to your domain registrar\n2. Add a CNAME record pointing to roofmanager.ca\n3. Wait for DNS propagation (up to 24 hours)');
+      window.rmToast('Custom domain set to: ' + domain + '\n\nTo complete setup:\n1. Go to your domain registrar\n2. Add a CNAME record pointing to roofmanager.ca\n3. Wait for DNS propagation (up to 24 hours, 'success')');
       await loadSiteDetail(siteId);
       render();
     } else {
-      alert('Failed to set domain: ' + (data ? data.error : 'Unknown error'));
+      window.rmToast('Failed to set domain: ' + (data ? data.error : 'Unknown error', 'error'));
     }
   };
 
@@ -731,7 +731,7 @@
       await loadSites();
       render();
     } else {
-      alert('Payment setup failed. Please try again or contact support.');
+      window.rmToast('Payment setup failed. Please try again or contact support.', 'error');
       if (btn) { btn.textContent = 'Subscribe & Build Your Site \u2192'; btn.disabled = false; btn.style.opacity = '1'; }
     }
   };

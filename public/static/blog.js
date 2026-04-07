@@ -533,7 +533,7 @@
         var success = document.getElementById('bc-success');
         if (success) success.classList.remove('hidden');
       })
-      .catch(function() { if (btn) { btn.disabled = false; btn.textContent = 'Send Message'; } alert('Failed to send. Please try again.'); });
+      .catch(function() { if (btn) { btn.disabled = false; btn.textContent = 'Send Message'; } window.rmToast('Failed to send. Please try again.', 'error'); });
   }
 
   window.shareBlog = function () {
@@ -541,7 +541,7 @@
       navigator.share({ title: document.title, url: window.location.href });
     } else {
       navigator.clipboard.writeText(window.location.href).then(function () {
-        alert('Link copied to clipboard!');
+        window.rmToast('Link copied to clipboard!', 'info');
       });
     }
   };

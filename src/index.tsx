@@ -33,6 +33,7 @@ import { calendarRoutes } from './routes/calendar'
 import { websiteBuilderRoutes } from './routes/website-builder'
 import { googleAdsRoutes } from './routes/google-ads'
 import { googleBusinessRoutes } from './routes/google-business'
+import { pipelineRoutes } from './routes/pipeline'
 import type { Bindings } from './types'
 
 const app = new Hono<{ Bindings: Bindings }>()
@@ -158,7 +159,10 @@ gtag('get','${ga4Id}','client_id',function(cid){
 })();
 </script>` : ''
       
-      const injected = body.replace('</body>', `${ga4Script}\n<script src="/static/tracker.js" defer></script>\n</body>`)
+      const injected = body.replace('</body>', `${ga4Script}
+<script src="/static/toast.js"></script>
+<script src="/static/tracker.js" defer></script>
+</body>`)
       c.res = new Response(injected, {
         status: c.res.status,
         headers: c.res.headers
@@ -201,6 +205,7 @@ app.route('/api/calendar', calendarRoutes)
 app.route('/api/website-builder', websiteBuilderRoutes)
 app.route('/api/google-ads', googleAdsRoutes)
 app.route('/api/google-business', googleBusinessRoutes)
+app.route('/api/pipeline', pipelineRoutes)
 
 // Health check
 app.get('/api/health', (c) => {
@@ -1544,7 +1549,7 @@ app.get('/report/share/:token', async (c) => {
     `).bind(token).first<any>()
 
     if (!row) {
-      return c.html(`<!DOCTYPE html><html><head><title>Report Not Found</title><script src="https://cdn.tailwindcss.com"></script></head>
+      return c.html(`<!DOCTYPE html><html><head><title>Report Not Found</title><link rel="stylesheet" href="/static/tailwind.css"></head>
 <body class="min-h-screen flex items-center justify-center" style="background:#0A0A0A">
 <div class="text-center max-w-md mx-auto px-4">
   <div class="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -1567,7 +1572,7 @@ app.get('/report/share/:token', async (c) => {
     const reportHtml = (h.trimStart().startsWith('<!DOCTYPE') || h.trimStart().startsWith('<html')) ? h : ''
 
     if (!reportHtml) {
-      return c.html(`<!DOCTYPE html><html><head><title>Report Unavailable</title><script src="https://cdn.tailwindcss.com"></script></head>
+      return c.html(`<!DOCTYPE html><html><head><title>Report Unavailable</title><link rel="stylesheet" href="/static/tailwind.css"></head>
 <body class="min-h-screen flex items-center justify-center" style="background:#0A0A0A">
 <div class="text-center"><h1 class="text-xl font-bold text-gray-700 mb-2">Report Not Available</h1><p class="text-gray-500">This report has not been generated yet.</p></div>
 </body></html>`, 404)
@@ -1781,7 +1786,7 @@ app.get('/proposal/view/:token', async (c) => {
       .catch(function() { alert('Network error. Please check your connection and try again.'); btn.disabled = false; btn.innerHTML = action === 'accept' ? '<i class="fas fa-check-circle mr-2"></i>Accept ${docLabel}' : 'Decline'; });
     }` : ''
 
-        return c.html(`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>${docLabel} ${invProposal.invoice_number} — Roof Manager</title><meta property="og:title" content="${docLabel} ${invProposal.invoice_number} — $${Number(invProposal.total_amount || 0).toFixed(2)}"><meta property="og:description" content="Professional roofing ${docLabel.toLowerCase()} for ${invProposal.customer_name || 'valued customer'}. ${invProposal.property_address ? 'Property: ' + invProposal.property_address : ''}"><meta property="og:type" content="article"><meta property="og:site_name" content="Roof Manager"><meta name="twitter:card" content="summary"><script src="https://cdn.tailwindcss.com"></script><link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet"><style>@media print { .no-print { display: none !important; } }</style></head>
+        return c.html(`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>${docLabel} ${invProposal.invoice_number} — Roof Manager</title><meta property="og:title" content="${docLabel} ${invProposal.invoice_number} — $${Number(invProposal.total_amount || 0).toFixed(2)}"><meta property="og:description" content="Professional roofing ${docLabel.toLowerCase()} for ${invProposal.customer_name || 'valued customer'}. ${invProposal.property_address ? 'Property: ' + invProposal.property_address : ''}"><meta property="og:type" content="article"><meta property="og:site_name" content="Roof Manager"><meta name="twitter:card" content="summary"><link rel="stylesheet" href="/static/tailwind.css"><link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet"><style>@media print { .no-print { display: none !important; } }</style></head>
 <body class="bg-gray-100 min-h-screen py-8 px-4">
 <div class="max-w-3xl mx-auto">
   <div class="bg-white rounded-2xl shadow-xl overflow-hidden print:shadow-none">
@@ -1822,7 +1827,7 @@ if(new URLSearchParams(location.search).get('print')==='1')setTimeout(function()
 </body></html>`)
       }
 
-      return c.html(`<!DOCTYPE html><html><head><title>Proposal Not Found</title><script src="https://cdn.tailwindcss.com"></script></head><body class="min-h-screen flex items-center justify-center" style="background:#0A0A0A"><div class="text-center"><div class="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4"><svg class="w-10 h-10 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg></div><h1 class="text-2xl font-bold text-gray-800 mb-2">Proposal Not Found</h1><p class="text-gray-500">This proposal link is invalid or has expired.</p></div></body></html>`)
+      return c.html(`<!DOCTYPE html><html><head><title>Proposal Not Found</title><link rel="stylesheet" href="/static/tailwind.css"></head><body class="min-h-screen flex items-center justify-center" style="background:#0A0A0A"><div class="text-center"><div class="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4"><svg class="w-10 h-10 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg></div><h1 class="text-2xl font-bold text-gray-800 mb-2">Proposal Not Found</h1><p class="text-gray-500">This proposal link is invalid or has expired.</p></div></body></html>`)
     }
 
     // Increment view count & log the view
@@ -1915,7 +1920,7 @@ if(new URLSearchParams(location.search).get('print')==='1')setTimeout(function()
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="${businessName}">
   <meta name="twitter:card" content="summary">
-  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/static/tailwind.css">
   <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
   <style>
     @media print { .no-print { display: none !important; } body { background: white; } }
@@ -2216,7 +2221,7 @@ if(new URLSearchParams(location.search).get('print')==='1')setTimeout(function()
 </html>`)
   } catch (err: any) {
     console.error('[Proposal View] Error:', err.message)
-    return c.html(`<!DOCTYPE html><html><head><title>Error</title><script src="https://cdn.tailwindcss.com"></script></head><body class="min-h-screen flex items-center justify-center" style="background:#0A0A0A"><div class="text-center"><h1 class="text-xl font-bold text-red-600">Error Loading Proposal</h1><p class="text-gray-500 mt-2">Please try refreshing the page.</p></div></body></html>`, 500)
+    return c.html(`<!DOCTYPE html><html><head><title>Error</title><link rel="stylesheet" href="/static/tailwind.css"></head><body class="min-h-screen flex items-center justify-center" style="background:#0A0A0A"><div class="text-center"><h1 class="text-xl font-bold text-red-600">Error Loading Proposal</h1><p class="text-gray-500 mt-2">Please try refreshing the page.</p></div></body></html>`, 500)
   }
 })
 
@@ -2361,10 +2366,9 @@ function getHeadTags() {
   <link rel="alternate" hreflang="en-CA" href="https://www.roofmanager.ca/">
   <meta name="geo.region" content="CA-AB">
   <meta name="geo.placename" content="Alberta, Canada">
-  <link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin>
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
   <link rel="apple-touch-icon" href="/static/logo.png">
-  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/static/tailwind.css">
   <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
   ${getTailwindConfig()}
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
@@ -6574,7 +6578,7 @@ function getGemma3ModelCardHTML() {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Gemma 3 Model Card - Google DeepMind</title>
   <meta name="description" content="Gemma 3 — lightweight, open, multimodal models by Google DeepMind. Text + image understanding, 128K context, 140+ languages.">
-  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/static/tailwind.css">
   <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>

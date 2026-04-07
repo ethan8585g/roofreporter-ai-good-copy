@@ -284,7 +284,7 @@
     var phone = document.getElementById('enrollPhone').value.trim();
     var company = document.getElementById('enrollCompany').value.trim();
     var message = document.getElementById('enrollMessage').value.trim();
-    if (!name || !email) { alert('Please enter your name and email.'); return; }
+    if (!name || !email) { window.rmToast('Please enter your name and email.', 'warning'); return; }
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Submitting...'; }
     try {
       var res = await fetch('/api/secretary/enroll-inquiry', {
@@ -301,10 +301,10 @@
             '<p class="text-gray-400 text-sm mt-4"><i class="fas fa-phone mr-1"></i>Questions? Call us anytime.</p>' +
           '</div>';
       } else {
-        alert(data.error || 'Failed to submit. Please try again.');
+        window.rmToast(data.error || 'Failed to submit. Please try again.', 'info');
         if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-paper-plane mr-2"></i>Request Enrolment'; }
       }
-    } catch(e) { alert('Network error. Please try again.'); if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-paper-plane mr-2"></i>Request Enrolment'; } }
+    } catch(e) { window.rmToast('Network error. Please try again.', 'error'); if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-paper-plane mr-2"></i>Request Enrolment'; } }
   };
 
   // ============================================================
@@ -1283,7 +1283,7 @@
 
   // Disconnect AI secretary
   window.qcDisconnect = async function() {
-    if (!confirm('Are you sure you want to disconnect your AI secretary? Remember to disable call forwarding on your carrier too.')) return;
+    if (!(await window.rmConfirm('Are you sure you want to disconnect your AI secretary? Remember to disable call forwarding on your carrier too.'))) return
     try {
       var res = await fetch('/api/secretary/quick-connect/disconnect', {
         method: 'POST', headers: authHeaders()
@@ -1616,13 +1616,13 @@
       var res = await fetch('/api/secretary/simulate-call', { method: 'POST', headers: authHeaders() });
       if (res.ok) {
         var data = await res.json();
-        alert('✅ ' + data.message);
+        window.rmToast('✅ ' + data.message, 'info');
         loadCalls();
       } else {
         var err = await res.json().catch(function() { return {}; });
-        alert('❌ ' + (err.error || 'Failed to simulate call'));
+        window.rmToast('❌ ' + (err.error || 'Failed to simulate call', 'error'));
       }
-    } catch(e) { alert('❌ Network error: ' + e.message); }
+    } catch(e) { window.rmToast('❌ Network error: ' + e.message, 'error'); }
   };
 
   window.secUpdateLeadStatus = async function(callId, status) {
@@ -1670,7 +1670,7 @@
 
   window.secRemoveDir = function(idx) {
     var list = document.getElementById('directoriesList');
-    if (!list || list.children.length <= 2) { alert('Minimum 2 directories required'); return; }
+    if (!list || list.children.length <= 2) { window.rmToast('Minimum 2 directories required', 'warning'); return; }
     list.children[idx].remove();
     Array.from(list.children).forEach(function(el, i) { el.setAttribute('data-dir', i); });
   };
@@ -1724,8 +1724,8 @@
       });
       var data = await res.json();
       if (data.success) { showToast('Configuration saved! Mode: ' + state.secretaryMode, 'success'); await loadStatus(); }
-      else alert(data.error || 'Save failed');
-    } catch(e) { alert('Network error'); }
+      else window.rmToast(data.error || 'Save failed', 'info');
+    } catch(e) { window.rmToast('Network error', 'error'); }
     if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save mr-2"></i>Save Configuration'; }
   };
 
@@ -1740,15 +1740,15 @@
         special_notes: document.getElementById('dirNotes' + i)?.value || '',
       });
     }
-    if (dirs.length < 2) { alert('Minimum 2 directories required'); return; }
+    if (dirs.length < 2) { window.rmToast('Minimum 2 directories required', 'warning'); return; }
     var btn = document.getElementById('saveDirsBtn');
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving...'; }
     try {
       var res = await fetch('/api/secretary/directories', { method: 'PUT', headers: authHeaders(), body: JSON.stringify({ directories: dirs }) });
       var data = await res.json();
       if (data.success) { showToast('Directories saved!', 'success'); await loadStatus(); }
-      else alert(data.error || 'Save failed');
-    } catch(e) { alert('Network error'); }
+      else window.rmToast(data.error || 'Save failed', 'info');
+    } catch(e) { window.rmToast('Network error', 'error'); }
     if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save mr-2"></i>Save Directories'; }
   };
 
@@ -1757,8 +1757,8 @@
       var res = await fetch('/api/secretary/toggle', { method: 'POST', headers: authHeaders() });
       var data = await res.json();
       if (data.message) { showToast(data.message, data.is_active ? 'success' : 'info'); await loadStatus(); }
-      else alert(data.error || 'Toggle failed');
-    } catch(e) { alert('Network error'); }
+      else window.rmToast(data.error || 'Toggle failed', 'info');
+    } catch(e) { window.rmToast('Network error', 'error'); }
   };
 
   // ── Helpers ──
@@ -2072,7 +2072,7 @@
     if (testState.processing) return;
     var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      alert('Speech recognition not supported. Please use the text input or try Chrome/Edge.');
+      window.rmToast('Speech recognition not supported. Please use the text input or try Chrome/Edge.', 'warning');
       return;
     }
 
@@ -2120,7 +2120,7 @@
       if (recordBtn) recordBtn.classList.remove('hidden');
       if (stopBtn) stopBtn.classList.add('hidden');
       if (event.error === 'not-allowed') {
-        alert('Microphone access denied. Please allow microphone access in your browser settings.');
+        window.rmToast('Microphone access denied. Please allow microphone access in your browser settings.', 'error');
       } else {
         if (statusEl) { statusEl.textContent = 'Error: ' + event.error + '. Try typing instead.'; statusEl.className = 'text-center text-xs text-red-500 mb-3 h-4'; }
       }
@@ -2147,7 +2147,7 @@
     try {
       testState.recognition.start();
     } catch(e) {
-      alert('Could not start microphone. Please check your browser permissions.');
+      window.rmToast('Could not start microphone. Please check your browser permissions.', 'warning');
     }
   };
 

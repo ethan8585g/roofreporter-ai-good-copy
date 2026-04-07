@@ -1090,7 +1090,7 @@ async function saveGmailClientSecret() {
   const input = document.getElementById('gmailClientSecret');
   const btn = document.getElementById('saveSecretBtn');
   const secret = input.value.trim();
-  if (!secret || secret.length < 10) { alert('Please paste a valid Gmail OAuth client secret.'); return; }
+  if (!secret || secret.length < 10) { window.rmToast('Please paste a valid Gmail OAuth client secret.', 'warning'); return; }
   btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Saving...';
   try {
     const res = await saFetch('/api/auth/gmail/setup', {
@@ -1105,9 +1105,9 @@ async function saveGmailClientSecret() {
       input.value = ''; input.placeholder = 'Secret saved successfully';
       setTimeout(() => loadView('email-setup'), 1200);
     } else {
-      alert(data.error || 'Failed to save.'); btn.disabled = false; btn.innerHTML = '<i class="fas fa-save mr-1"></i> Save Secret';
+      window.rmToast(data.error || 'Failed to save.', 'info'); btn.disabled = false; btn.innerHTML = '<i class="fas fa-save mr-1"></i> Save Secret';
     }
-  } catch (e) { alert('Network error.'); btn.disabled = false; btn.innerHTML = '<i class="fas fa-save mr-1"></i> Save Secret'; }
+  } catch (e) { window.rmToast('Network error.', 'error'); btn.disabled = false; btn.innerHTML = '<i class="fas fa-save mr-1"></i> Save Secret'; }
 }
 
 // Email Setup action: test email delivery
@@ -1116,7 +1116,7 @@ async function testEmailDelivery() {
   const btn = document.getElementById('testEmailBtn');
   const result = document.getElementById('testEmailResult');
   const email = input.value.trim();
-  if (!email || !email.includes('@')) { alert('Please enter a valid email address.'); return; }
+  if (!email || !email.includes('@')) { window.rmToast('Please enter a valid email address.', 'warning'); return; }
   btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Sending...';
   result.classList.add('hidden');
   try {
@@ -1386,7 +1386,7 @@ window.saTestGA4Event = function() {
   }).then(async r => {
     if (!r) return;
     const d = await r.json();
-    alert(d.success ? 'Test event sent successfully to GA4!' : 'Event send failed: ' + JSON.stringify(d));
+    window.rmToast(d.success ? 'Test event sent successfully to GA4!' : 'Event send failed: ' + JSON.stringify(d, 'info'));
   });
 };
 
@@ -1777,9 +1777,9 @@ window.saTestGA4Event = async function() {
       })
     });
     const d = await res.json();
-    alert(d.success ? 'Test event sent successfully to GA4!' : 'Event send failed: ' + JSON.stringify(d));
+    window.rmToast(d.success ? 'Test event sent successfully to GA4!' : 'Event send failed: ' + JSON.stringify(d, 'info'));
   } catch(e) {
-    alert('Error: ' + e.message);
+    window.rmToast('Error: ' + e.message, 'error');
   }
 };
 
@@ -2082,7 +2082,7 @@ async function savePricingSettings(e) {
     // Reload pricing data from DB to show updated values
     setTimeout(() => { loadView('pricing'); }, 1500);
   } catch (err) {
-    alert('Error saving pricing: ' + err.message);
+    window.rmToast('Error saving pricing: ' + err.message, 'error');
     btn.innerHTML = '<i class="fas fa-save mr-1"></i> Save Pricing';
     btn.disabled = false;
   }
@@ -2169,7 +2169,7 @@ async function savePackage(e) {
   };
 
   if (!body.name || !body.credits || !body.price_cents) {
-    alert('Name, credits, and price are required.');
+    window.rmToast('Name, credits, and price are required.', 'warning');
     btn.disabled = false;
     btn.innerHTML = '<i class="fas fa-save mr-1"></i> Save';
     return;
@@ -2192,7 +2192,7 @@ async function savePackage(e) {
     closePkgModal();
     loadView('pricing');
   } catch (err) {
-    alert('Error: ' + err.message);
+    window.rmToast('Error: ' + err.message, 'error');
     btn.disabled = false;
     btn.innerHTML = '<i class="fas fa-save mr-1"></i> Save';
   }
@@ -2201,7 +2201,7 @@ window.savePackage = savePackage;
 
 // Deactivate a package
 async function deactivatePackage(id) {
-  if (!confirm('Deactivate this package? It will be hidden from customers but not deleted.')) return;
+  if (!(await window.rmConfirm('Deactivate this package? It will be hidden from customers but not deleted.'))) return
   try {
     const res = await fetch(`/api/settings/packages/${id}`, {
       method: 'DELETE',
@@ -2210,7 +2210,7 @@ async function deactivatePackage(id) {
     if (!res.ok) throw new Error('Failed');
     loadView('pricing');
   } catch (err) {
-    alert('Error deactivating package: ' + err.message);
+    window.rmToast('Error deactivating package: ' + err.message, 'error');
   }
 }
 window.deactivatePackage = deactivatePackage;
@@ -2225,7 +2225,7 @@ async function activatePackage(id) {
     if (!res.ok) throw new Error('Failed');
     loadView('pricing');
   } catch (err) {
-    alert('Error activating package: ' + err.message);
+    window.rmToast('Error activating package: ' + err.message, 'error');
   }
 }
 window.activatePackage = activatePackage;
@@ -2670,9 +2670,9 @@ window.seoSavePageMeta = async function() {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
     });
-    if (res && res.ok) alert('SEO settings saved for ' + page);
-    else alert('Failed to save — API endpoint may need configuration');
-  } catch(e) { alert('Error saving SEO settings'); }
+    if (res && res.ok) window.rmToast('SEO settings saved for ' + page, 'success');
+    else window.rmToast('Failed to save — API endpoint may need configuration', 'error');
+  } catch(e) { window.rmToast('Error saving SEO settings', 'error'); }
 };
 
 window.seoAddBacklink = async function() {
@@ -2683,15 +2683,15 @@ window.seoAddBacklink = async function() {
     nofollow: document.getElementById('seo-backlink-nofollow').checked,
     new_window: document.getElementById('seo-backlink-newwindow').checked
   };
-  if (!data.url) { alert('Backlink URL is required'); return; }
+  if (!data.url) { window.rmToast('Backlink URL is required', 'warning'); return; }
   try {
     const res = await saFetch('/api/admin/superadmin/seo/backlinks', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
     });
-    if (res && res.ok) { alert('Backlink added!'); seoLoadBacklinks(); }
-    else alert('Failed to add backlink');
-  } catch(e) { alert('Error adding backlink'); }
+    if (res && res.ok) { window.rmToast('Backlink added!', 'success'); seoLoadBacklinks(); }
+    else window.rmToast('Failed to add backlink', 'error');
+  } catch(e) { window.rmToast('Error adding backlink', 'error'); }
 };
 
 window.seoLoadBacklinks = async function() {
@@ -2714,7 +2714,7 @@ window.seoLoadBacklinks = async function() {
 };
 
 window.seoDeleteBacklink = async function(id) {
-  if (!confirm('Delete this backlink?')) return;
+  if (!(await window.rmConfirm('Delete this backlink?'))) return
   await saFetch('/api/admin/superadmin/seo/backlinks/' + id, { method: 'DELETE' });
   seoLoadBacklinks();
 };
@@ -2892,8 +2892,8 @@ window.obcSave = async function() {
     if (res && res.ok) {
       btn.innerHTML = '<i class="fas fa-check mr-1"></i>Saved!'; btn.classList.replace('bg-teal-600','bg-green-600');
       setTimeout(function(){ loadView('onboarding-config'); }, 1500);
-    } else { alert('Save failed'); btn.disabled = false; btn.innerHTML = '<i class="fas fa-save mr-1"></i>Save'; }
-  } catch(e) { alert('Error: ' + e.message); btn.disabled = false; btn.innerHTML = '<i class="fas fa-save mr-1"></i>Save'; }
+    } else { window.rmToast('Save failed', 'error'); btn.disabled = false; btn.innerHTML = '<i class="fas fa-save mr-1"></i>Save'; }
+  } catch(e) { window.rmToast('Error: ' + e.message, 'error'); btn.disabled = false; btn.innerHTML = '<i class="fas fa-save mr-1"></i>Save'; }
 };
 
 // ============================================================
@@ -2973,7 +2973,7 @@ window.pnSearch = async function() {
 };
 
 window.pnPurchase = async function(phoneNumber) {
-  if (!confirm('Purchase ' + phoneNumber + '? This will charge your Twilio account ~$1.50/mo.')) return;
+  if (!(await window.rmConfirm('Purchase ' + phoneNumber + '? This will charge your Twilio account ~$1.50/mo.'))) return
   try {
     var res = await saFetch('/api/admin/superadmin/phone-numbers/purchase', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -2981,9 +2981,9 @@ window.pnPurchase = async function(phoneNumber) {
     });
     if (!res) return;
     var data = await res.json();
-    if (data.success) { alert('Number purchased: ' + data.phone_number); loadView('phone-marketplace'); }
-    else alert('Purchase failed: ' + (data.error || 'Unknown error'));
-  } catch(e) { alert('Error: ' + e.message); }
+    if (data.success) { window.rmToast('Number purchased: ' + data.phone_number, 'info'); loadView('phone-marketplace'); }
+    else window.rmToast('Purchase failed: ' + (data.error || 'Unknown error', 'error'));
+  } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
 };
 
 // ============================================================
@@ -3215,7 +3215,7 @@ function renderTierCard(title, proposal, color, icon) {
 window.downloadTierPdf = function(tierName) {
   var data = SA.data._lastTestCalc;
   var measurements = SA.data._lastTestMeasurements;
-  if (!data) { alert('Run a calculation first'); return; }
+  if (!data) { window.rmToast('Run a calculation first', 'info'); return; }
   var proposal;
   if (data.tiered) {
     var key = tierName.toLowerCase();
@@ -3223,17 +3223,17 @@ window.downloadTierPdf = function(tierName) {
   } else {
     proposal = data.proposal;
   }
-  if (!proposal) { alert('Proposal data not found'); return; }
+  if (!proposal) { window.rmToast('Proposal data not found', 'info'); return; }
   if (typeof window.generateProposalPdf === 'function') {
     window.generateProposalPdf(proposal, measurements, 'Homeowner', 'Property Address');
   } else {
-    alert('PDF library not loaded');
+    window.rmToast('PDF library not loaded', 'info');
   }
 };
 
 window.createInvoiceFromTier = function(tierName) {
   var data = SA.data._lastTestCalc;
-  if (!data) { alert('Run a calculation first'); return; }
+  if (!data) { window.rmToast('Run a calculation first', 'info'); return; }
   var proposal;
   if (data.tiered) {
     var key = tierName.toLowerCase();
@@ -3420,7 +3420,7 @@ window.closeInvModal = function() {
 
 window.createInvoice = async function() {
   var customerId = document.getElementById('inv-customer').value;
-  if (!customerId) { alert('Please select a customer'); return; }
+  if (!customerId) { window.rmToast('Please select a customer', 'warning'); return; }
   var rows = document.querySelectorAll('.inv-line-item');
   var items = [];
   rows.forEach(function(r) {
@@ -3429,7 +3429,7 @@ window.createInvoice = async function() {
     var price = parseFloat(r.querySelector('.inv-price').value) || 0;
     if (desc && price > 0) items.push({ description: desc, quantity: qty, unit_price: price });
   });
-  if (items.length === 0) { alert('Add at least one line item'); return; }
+  if (items.length === 0) { window.rmToast('Add at least one line item', 'info'); return; }
   var taxRate = parseFloat(document.getElementById('inv-tax-rate').value) || 5;
   var dueDays = parseInt(document.getElementById('inv-due-days').value) || 30;
   var notes = document.getElementById('inv-notes').value;
@@ -3445,9 +3445,9 @@ window.createInvoice = async function() {
       closeInvModal();
       loadView('invoices');
     } else {
-      alert(data.error || 'Failed to create invoice');
+      window.rmToast(data.error || 'Failed to create invoice', 'info');
     }
-  } catch(e) { alert('Error: ' + e.message); }
+  } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
 };
 
 window.viewInvoiceDetail = async function(id) {
@@ -3456,7 +3456,7 @@ window.viewInvoiceDetail = async function(id) {
     var data = await resp.json();
     var inv = data.invoice;
     var items = data.items || [];
-    if (!inv) { alert('Invoice not found'); return; }
+    if (!inv) { window.rmToast('Invoice not found', 'info'); return; }
 
     var container = document.getElementById('inv-detail-container');
     if (!container) return;
@@ -3512,26 +3512,26 @@ window.viewInvoiceDetail = async function(id) {
     // Store items for PDF generation
     SA.data._currentInvoice = inv;
     SA.data._currentInvoiceItems = items;
-  } catch(e) { alert('Failed to load invoice: ' + e.message); }
+  } catch(e) { window.rmToast('Failed to load invoice: ' + e.message, 'error'); }
 };
 
 window.sendInvoiceGmail = async function(id) {
-  if (!confirm('Send this invoice to the customer via Gmail?')) return;
+  if (!(await window.rmConfirm('Send this invoice to the customer via Gmail?'))) return
   try {
     var resp = await saFetch('/api/invoices/' + id + '/send-gmail', { method: 'POST' });
     var data = await resp.json();
     if (data.success) {
-      alert('Invoice sent successfully to ' + (data.message || 'customer'));
+      window.rmToast('Invoice sent successfully to ' + (data.message || 'customer', 'success'));
       closeInvModal();
       loadView('invoices');
     } else {
-      alert(data.error || 'Failed to send invoice');
+      window.rmToast(data.error || 'Failed to send invoice', 'info');
     }
-  } catch(e) { alert('Error: ' + e.message); }
+  } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
 };
 
 window.markInvoicePaid = async function(id) {
-  if (!confirm('Mark this invoice as paid?')) return;
+  if (!(await window.rmConfirm('Mark this invoice as paid?'))) return
   try {
     var resp = await saFetch('/api/invoices/' + id + '/status', {
       method: 'PATCH',
@@ -3543,22 +3543,22 @@ window.markInvoicePaid = async function(id) {
       closeInvModal();
       loadView('invoices');
     } else {
-      alert(data.error || 'Failed to update status');
+      window.rmToast(data.error || 'Failed to update status', 'info');
     }
-  } catch(e) { alert('Error: ' + e.message); }
+  } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
 };
 
 window.deleteInvoice = async function(id) {
-  if (!confirm('Delete this draft invoice?')) return;
+  if (!(await window.rmConfirm('Delete this draft invoice?'))) return
   try {
     var resp = await saFetch('/api/invoices/' + id, { method: 'DELETE' });
     var data = await resp.json();
     if (data.success) {
       loadView('invoices');
     } else {
-      alert(data.error || 'Failed to delete');
+      window.rmToast(data.error || 'Failed to delete', 'info');
     }
-  } catch(e) { alert('Error: ' + e.message); }
+  } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
 };
 
 // ============================================================
@@ -3571,10 +3571,10 @@ window.downloadInvoicePdf = async function(id) {
     var data = await resp.json();
     var inv = data.invoice;
     var items = data.items || [];
-    if (!inv) { alert('Invoice not found'); return; }
+    if (!inv) { window.rmToast('Invoice not found', 'info'); return; }
 
     // Check jsPDF is loaded
-    if (typeof window.jspdf === 'undefined') { alert('PDF library not loaded. Please refresh the page.'); return; }
+    if (typeof window.jspdf === 'undefined') { window.rmToast('PDF library not loaded. Please refresh the page.', 'warning'); return; }
     var jsPDF = window.jspdf.jsPDF;
     var doc = new jsPDF();
 
@@ -3733,7 +3733,7 @@ window.downloadInvoicePdf = async function(id) {
     // Save
     doc.save('Invoice_' + (inv.invoice_number || id) + '.pdf');
   } catch(e) {
-    alert('PDF generation failed: ' + e.message);
+    window.rmToast('PDF generation failed: ' + e.message, 'error');
     console.error('PDF Error:', e);
   }
 };
@@ -3742,7 +3742,7 @@ window.downloadInvoicePdf = async function(id) {
 // PROPOSAL PDF — Generate from pricing engine results
 // ============================================================
 window.generateProposalPdf = function(proposal, measurements, customerName, propertyAddress) {
-  if (typeof window.jspdf === 'undefined') { alert('PDF library not loaded'); return; }
+  if (typeof window.jspdf === 'undefined') { window.rmToast('PDF library not loaded', 'info'); return; }
   var jsPDF = window.jspdf.jsPDF;
   var doc = new jsPDF();
 
@@ -4090,7 +4090,7 @@ window.searchAvailableNumbers = async function() {
 };
 
 window.purchaseNumber = async function(number) {
-  if (!confirm('Purchase ' + number + '? Monthly charges will apply from your SIP provider.')) return;
+  if (!(await window.rmConfirm('Purchase ' + number + '? Monthly charges will apply from your SIP provider.'))) return
   try {
     var resp = await saFetch('/api/admin/superadmin/telephony-purchase-number', {
       method: 'POST',
@@ -4099,12 +4099,12 @@ window.purchaseNumber = async function(number) {
     });
     var data = await resp.json();
     if (data.success) {
-      alert('Number ' + number + ' purchased! It will appear in your phone numbers list.');
+      window.rmToast('Number ' + number + ' purchased! It will appear in your phone numbers list.', 'info');
       loadView('telephony');
     } else {
-      alert(data.error || 'Purchase failed');
+      window.rmToast(data.error || 'Purchase failed', 'info');
     }
-  } catch(e) { alert('Error: ' + e.message); }
+  } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
 };
 
 window.configureForwarding = function(number) {
@@ -4113,7 +4113,7 @@ window.configureForwarding = function(number) {
 };
 
 window.testForwarding = async function() {
-  alert('Test call initiated. Your LiveKit AI agent should answer within 5 seconds. Check the Call Center logs for results.');
+  window.rmToast('Test call initiated. Your LiveKit AI agent should answer within 5 seconds. Check the Call Center logs for results.', 'info');
 };
 
 window.testSipConnection = async function() {
@@ -4122,7 +4122,7 @@ window.testSipConnection = async function() {
     var data = await resp.json();
     var msg = document.getElementById('tel-trunk-msg');
     showTelMsg(msg, data.success ? 'success' : 'error', data.success ? 'SIP connection test passed!' : (data.error || 'Connection test failed'));
-  } catch(e) { alert('Test failed: ' + e.message); }
+  } catch(e) { window.rmToast('Test failed: ' + e.message, 'error'); }
 };
 
 function showTelMsg(el, type, text) {
@@ -4450,7 +4450,7 @@ async function saveWebhook() {
   var event_type = document.getElementById('webhook-event').value;
   var url = document.getElementById('webhook-url').value;
   var secret = document.getElementById('webhook-secret').value;
-  if (!url) { alert('URL is required'); return; }
+  if (!url) { window.rmToast('URL is required', 'warning'); return; }
 
   try {
     var res = await saFetch('/api/crm/webhooks', {
@@ -4465,13 +4465,13 @@ async function saveWebhook() {
       document.getElementById('webhook-secret').value = '';
       loadWebhooks();
     } else {
-      alert(data.error || 'Failed to save');
+      window.rmToast(data.error || 'Failed to save', 'info');
     }
-  } catch (e) { alert('Error saving webhook'); }
+  } catch (e) { window.rmToast('Error saving webhook', 'error'); }
 }
 
 async function deleteWebhook(id) {
-  if (!confirm('Delete this webhook?')) return;
+  if (!(await window.rmConfirm('Delete this webhook?'))) return
   await saFetch('/api/crm/webhooks/' + id, { method: 'DELETE' });
   loadWebhooks();
 }
@@ -4628,15 +4628,15 @@ async function createOnboardingCustomer() {
   var email = document.getElementById('ob-email').value;
   var password = document.getElementById('ob-password').value;
   var contactName = document.getElementById('ob-name').value;
-  if (!email || !password) { alert('Email and Password are required'); return; }
-  if (!contactName) { alert('Contact Name is required'); return; }
+  if (!email || !password) { window.rmToast('Email and Password are required', 'warning'); return; }
+  if (!contactName) { window.rmToast('Contact Name is required', 'warning'); return; }
 
   var personalPhone = document.getElementById('ob-personal-phone').value;
   var agentPhone = document.getElementById('ob-agent-phone').value;
 
-  if (!personalPhone) { alert('Personal Phone Number is required — this is the customer\'s cell they forward calls FROM'); return; }
+  if (!personalPhone) { window.rmToast('Personal Phone Number is required — this is the customer\'s cell they forward calls FROM', 'warning'); return; }
   if (!agentPhone) {
-    if (!confirm('No Agent Phone Number entered. The customer will need to purchase a phone number from Twilio or similar provider before Secretary AI can make/receive calls. Continue anyway?')) return;
+    if (!(await window.rmConfirm('No Agent Phone Number entered. The customer will need to purchase a phone number from Twilio or similar provider before Secretary AI can make/receive calls. Continue anyway?'))) return
   }
 
   var body = {
@@ -4686,12 +4686,12 @@ async function createOnboardingCustomer() {
           msg += '\nLiveKit Agent: DEPLOYED (trunk: ' + data.livekit_trunk_id + ')\n';
         }
       }
-      alert(msg);
+      window.rmToast(msg, 'info');
       loadView('customer-onboarding');
     } else {
-      alert(data.error || 'Failed to create customer');
+      window.rmToast(data.error || 'Failed to create customer', 'info');
     }
-  } catch(e) { alert('Error creating customer: ' + e.message); }
+  } catch(e) { window.rmToast('Error creating customer: ' + e.message, 'error'); }
 }
 
 function updateTrialEndDate() {
@@ -4707,7 +4707,7 @@ async function sendQuickInvoice() {
   var email = document.getElementById('mkt-inv-email')?.value;
   var desc = document.getElementById('mkt-inv-desc')?.value || 'Service';
   var amount = parseFloat(document.getElementById('mkt-inv-amount')?.value);
-  if (!email || !amount) { alert('Email and amount are required'); return; }
+  if (!email || !amount) { window.rmToast('Email and amount are required', 'warning'); return; }
   try {
     var res = await saFetch('/api/admin/superadmin/service-invoices/create', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -4716,14 +4716,14 @@ async function sendQuickInvoice() {
     var data = await res.json();
     if (data.success || data.invoice_id) {
       await saFetch('/api/admin/superadmin/service-invoices/' + (data.invoice_id || data.id) + '/send', { method: 'POST' });
-      alert('Invoice ' + (data.invoice_number || '') + ' created and sent to ' + email);
+      window.rmToast('Invoice ' + (data.invoice_number || '', 'info') + ' created and sent to ' + email);
       loadView('marketing');
-    } else { alert(data.error || 'Failed to create invoice'); }
-  } catch(e) { alert('Error: ' + e.message); }
+    } else { window.rmToast(data.error || 'Failed to create invoice', 'info'); }
+  } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
 }
 
 async function sendTrialExpiryInvoice(email, priceCents, plan) {
-  if (!confirm('Send $' + (priceCents / 100).toFixed(2) + '/mo subscription invoice to ' + email + '?')) return;
+  if (!(await window.rmConfirm('Send $' + (priceCents / 100).toFixed(2) + '/mo subscription invoice to ' + email + '?', 'Send Invoice', 'Cancel'))) return;
   try {
     var price = priceCents / 100;
     var res = await saFetch('/api/admin/superadmin/service-invoices/create', {
@@ -4737,10 +4737,10 @@ async function sendTrialExpiryInvoice(email, priceCents, plan) {
     var data = await res.json();
     if (data.success || data.invoice_id) {
       await saFetch('/api/admin/superadmin/service-invoices/' + (data.invoice_id || data.id) + '/send', { method: 'POST' });
-      alert('Subscription invoice sent to ' + email);
+      window.rmToast('Subscription invoice sent to ' + email, 'success');
       loadView('marketing');
-    } else { alert(data.error || 'Failed'); }
-  } catch(e) { alert('Error: ' + e.message); }
+    } else { window.rmToast(data.error || 'Failed', 'info'); }
+  } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
 }
 
 async function toggleSecretaryMode(id, enable) {
@@ -4751,11 +4751,11 @@ async function toggleSecretaryMode(id, enable) {
       body: JSON.stringify({ enabled: enable })
     });
     loadView('customer-onboarding');
-  } catch(e) { alert('Error toggling secretary'); }
+  } catch(e) { window.rmToast('Error toggling secretary', 'error'); }
 }
 
 async function deployLiveKitAgent(customerId) {
-  if (!confirm('Deploy LiveKit AI agent for customer #' + customerId + '?\n\nThis will create a SIP trunk and dispatch rule in LiveKit Cloud so the AI agent can receive calls.')) return;
+  if (!(await window.rmConfirm('Deploy LiveKit AI agent for customer #' + customerId + '?\n\nThis will create a SIP trunk and dispatch rule in LiveKit Cloud so the AI agent can receive calls.'))) return
   try {
     var res = await saFetch('/api/admin/superadmin/deploy-secretary/' + customerId, {
       method: 'POST',
@@ -4763,12 +4763,12 @@ async function deployLiveKitAgent(customerId) {
     });
     var data = await res.json();
     if (data.success) {
-      alert('LiveKit Agent Deployed!\n\nTrunk ID: ' + data.trunk_id + '\nDispatch Rule: ' + data.dispatch_rule_id + '\n\n' + data.message);
+      window.rmToast('LiveKit Agent Deployed!\n\nTrunk ID: ' + data.trunk_id + '\nDispatch Rule: ' + data.dispatch_rule_id + '\n\n' + data.message, 'info');
       loadView('customer-onboarding');
     } else {
-      alert('Deploy failed: ' + (data.error || 'Unknown error') + (data.details ? '\n\nDetails: ' + data.details : ''));
+      window.rmToast('Deploy failed: ' + (data.error || 'Unknown error', 'error') + (data.details ? '\n\nDetails: ' + data.details : ''));
     }
-  } catch(e) { alert('Error deploying LiveKit agent: ' + e.message); }
+  } catch(e) { window.rmToast('Error deploying LiveKit agent: ' + e.message, 'error'); }
 }
 
 // ============================================================
@@ -4828,7 +4828,7 @@ function addServiceInvoiceItem() {
 
 async function createServiceInvoice() {
   var email = document.getElementById('si-email').value;
-  if (!email) { alert('Customer email is required'); return; }
+  if (!email) { window.rmToast('Customer email is required', 'warning'); return; }
 
   var items = [];
   document.querySelectorAll('.si-item').forEach(function(row) {
@@ -4836,7 +4836,7 @@ async function createServiceInvoice() {
     var price = parseFloat(row.querySelector('.si-price').value) || 0;
     if (desc && price > 0) items.push({ description: desc, price: price });
   });
-  if (items.length === 0) { alert('At least one line item is required'); return; }
+  if (items.length === 0) { window.rmToast('At least one line item is required', 'warning'); return; }
 
   var body = {
     customer_name: document.getElementById('si-name').value,
@@ -4855,16 +4855,16 @@ async function createServiceInvoice() {
     });
     var data = await res.json();
     if (data.success) {
-      alert('Invoice ' + data.invoice_number + ' created! Total: $' + parseFloat(data.total).toFixed(2));
+      window.rmToast('Invoice ' + data.invoice_number + ' created! Total: $' + parseFloat(data.total, 'success').toFixed(2));
       loadView('service-invoices');
     } else {
-      alert(data.error || 'Failed to create invoice');
+      window.rmToast(data.error || 'Failed to create invoice', 'info');
     }
-  } catch(e) { alert('Error: ' + e.message); }
+  } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
 }
 
 async function sendServiceInvoice(id) {
-  if (!confirm('Send this invoice to the customer via email with Square payment link?')) return;
+  if (!(await window.rmConfirm('Send this invoice to the customer via email with Square payment link?'))) return
   try {
     var res = await saFetch('/api/admin/superadmin/service-invoices/' + id + '/send', {
       method: 'POST',
@@ -4872,12 +4872,12 @@ async function sendServiceInvoice(id) {
     });
     var data = await res.json();
     if (data.success) {
-      alert('Invoice sent with payment link!');
+      window.rmToast('Invoice sent with payment link!', 'success');
       loadView('service-invoices');
     } else {
-      alert(data.error || 'Failed to send invoice');
+      window.rmToast(data.error || 'Failed to send invoice', 'info');
     }
-  } catch(e) { alert('Error sending: ' + e.message); }
+  } catch(e) { window.rmToast('Error sending: ' + e.message, 'error'); }
 }
 
 // ============================================================
@@ -4966,7 +4966,7 @@ function renderCallCenterManageView() {
 async function createScript() {
   var name = document.getElementById('ns-name').value;
   var body = document.getElementById('ns-body').value;
-  if (!name || !body) { alert('Name and script body are required'); return; }
+  if (!name || !body) { window.rmToast('Name and script body are required', 'warning'); return; }
 
   try {
     var res = await saFetch('/api/admin/superadmin/sales-scripts', {
@@ -4983,9 +4983,9 @@ async function createScript() {
     if (data.success) {
       loadView('call-center-manage');
     } else {
-      alert(data.error || 'Failed to create script');
+      window.rmToast(data.error || 'Failed to create script', 'info');
     }
-  } catch(e) { alert('Error: ' + e.message); }
+  } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
 }
 
 async function toggleScript(id, active) {
@@ -4996,15 +4996,15 @@ async function toggleScript(id, active) {
       body: JSON.stringify({ is_active: active })
     });
     loadView('call-center-manage');
-  } catch(e) { alert('Error toggling script'); }
+  } catch(e) { window.rmToast('Error toggling script', 'error'); }
 }
 
 async function deleteScript(id) {
-  if (!confirm('Delete this sales script?')) return;
+  if (!(await window.rmConfirm('Delete this sales script?'))) return
   try {
     await saFetch('/api/admin/superadmin/sales-scripts/' + id, { method: 'DELETE' });
     loadView('call-center-manage');
-  } catch(e) { alert('Error deleting script'); }
+  } catch(e) { window.rmToast('Error deleting script', 'error'); }
 }
 
 // ============================================================
@@ -5408,37 +5408,37 @@ function lkStatCard(label, value, icon, color) {
 
 // LiveKit Action Functions
 async function lkDeleteRoom(name) {
-  if (!confirm('Delete room "' + name + '"?')) return;
+  if (!(await window.rmConfirm('Delete room "' + name + '"?'))) return
   try {
     await saFetch('/api/admin/superadmin/livekit/room/delete', { method: 'POST', body: JSON.stringify({ room_name: name }) });
     loadView('livekit-agents');
-  } catch(e) { alert('Error: ' + e.message); }
+  } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
 }
 
 async function lkDeleteAgent(id) {
-  if (!confirm('Delete agent ' + id + '?\n\nNote: Builder/template agents can only be deleted from cloud.livekit.io dashboard.')) return;
+  if (!(await window.rmConfirm('Delete agent ' + id + '?\n\nNote: Builder/template agents can only be deleted from cloud.livekit.io dashboard.'))) return
   try {
     var res = await saFetch('/api/admin/superadmin/livekit/agent/delete', { method: 'POST', body: JSON.stringify({ agent_id: id }) });
     var data = await res.json();
-    alert(data.message || 'Deletion requested');
+    window.rmToast(data.message || 'Deletion requested', 'info');
     loadView('livekit-agents');
-  } catch(e) { alert('Error: ' + e.message); }
+  } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
 }
 
 async function lkDeleteTrunk(id) {
-  if (!confirm('Delete SIP trunk ' + id + '?')) return;
+  if (!(await window.rmConfirm('Delete SIP trunk ' + id + '?'))) return
   try {
     await saFetch('/api/admin/superadmin/livekit/trunk/delete', { method: 'POST', body: JSON.stringify({ trunk_id: id }) });
     loadView('livekit-agents');
-  } catch(e) { alert('Error: ' + e.message); }
+  } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
 }
 
 async function lkDeleteDispatch(id) {
-  if (!confirm('Delete dispatch rule ' + id + '?')) return;
+  if (!(await window.rmConfirm('Delete dispatch rule ' + id + '?'))) return
   try {
     await saFetch('/api/admin/superadmin/livekit/dispatch/delete', { method: 'POST', body: JSON.stringify({ dispatch_rule_id: id }) });
     loadView('livekit-agents');
-  } catch(e) { alert('Error: ' + e.message); }
+  } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
 }
 
 function lkShowCreateTrunk() {
@@ -5462,15 +5462,15 @@ async function lkCreateTrunk() {
   var name = document.getElementById('lk-trunk-name').value;
   var phone = document.getElementById('lk-trunk-phone').value;
   var krisp = document.getElementById('lk-trunk-krisp').checked;
-  if (!phone) { alert('Phone number required'); return; }
+  if (!phone) { window.rmToast('Phone number required', 'warning'); return; }
   try {
     var res = await saFetch('/api/admin/superadmin/livekit/trunk/create', {
       method: 'POST', body: JSON.stringify({ type: 'inbound', name: name, phone_number: phone, krisp_enabled: krisp })
     });
     var data = await res.json();
-    if (data.success) { alert('Trunk created: ' + data.trunk_id); document.getElementById('lk-modal').innerHTML = ''; loadView('livekit-agents'); }
-    else alert('Error: ' + (data.error || 'Unknown'));
-  } catch(e) { alert('Error: ' + e.message); }
+    if (data.success) { window.rmToast('Trunk created: ' + data.trunk_id, 'success'); document.getElementById('lk-modal').innerHTML = ''; loadView('livekit-agents'); }
+    else window.rmToast('Error: ' + (data.error || 'Unknown', 'error'));
+  } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
 }
 
 function lkShowCreateDispatch() {
@@ -5502,9 +5502,9 @@ async function lkCreateDispatch() {
       method: 'POST', body: JSON.stringify({ name: name, trunk_ids: trunks, room_prefix: prefix, metadata: meta })
     });
     var data = await res.json();
-    if (data.success) { alert('Dispatch rule created: ' + data.dispatch_rule_id); document.getElementById('lk-modal').innerHTML = ''; loadView('livekit-agents'); }
-    else alert('Error: ' + (data.error || 'Unknown'));
-  } catch(e) { alert('Error: ' + e.message); }
+    if (data.success) { window.rmToast('Dispatch rule created: ' + data.dispatch_rule_id, 'success'); document.getElementById('lk-modal').innerHTML = ''; loadView('livekit-agents'); }
+    else window.rmToast('Error: ' + (data.error || 'Unknown', 'error'));
+  } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
 }
 
 async function lkTestCall() {
@@ -5569,24 +5569,24 @@ async function lkToggleConfig(customerId) {
     var data = await res.json();
     if (data.success) {
       loadView('livekit-agents');
-    } else { alert('Error: ' + (data.error || 'Unknown')); }
-  } catch(e) { alert('Error: ' + e.message); }
+    } else { window.rmToast('Error: ' + (data.error || 'Unknown', 'error')); }
+  } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
 }
 
 // Bulk toggle all secretaries
 async function lkBulkToggle(activate) {
   var action = activate ? 'ACTIVATE' : 'DEACTIVATE';
-  if (!confirm(action + ' all secretary configurations? This affects all customers.')) return;
+  if (!(await window.rmConfirm(action + ' all secretary configurations? This affects all customers.'))) return
   try {
     var res = await saFetch('/api/admin/superadmin/livekit/secretary-config/bulk-toggle', {
       method: 'POST', body: JSON.stringify({ activate: activate })
     });
     var data = await res.json();
     if (data.success) {
-      alert(data.message + ' (' + (data.rows_changed || 0) + ' rows changed)');
+      window.rmToast(data.message + ' (' + (data.rows_changed || 0, 'info') + ' rows changed)');
       loadView('livekit-agents');
-    } else { alert('Error: ' + (data.error || 'Unknown')); }
-  } catch(e) { alert('Error: ' + e.message); }
+    } else { window.rmToast('Error: ' + (data.error || 'Unknown', 'error')); }
+  } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
 }
 
 // Edit a customer secretary config (opens modal)
@@ -5647,15 +5647,15 @@ async function lkSaveConfig(customerId) {
     if (data.success) {
       document.getElementById('lk-modal').innerHTML = '';
       loadView('livekit-agents');
-    } else { alert('Error: ' + (data.error || 'Unknown')); }
-  } catch(e) { alert('Error: ' + e.message); }
+    } else { window.rmToast('Error: ' + (data.error || 'Unknown', 'error')); }
+  } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
 }
 
 // Phone pool actions
 async function lkAddToPool() {
   var number = document.getElementById('lk-pool-number').value.trim();
   var region = document.getElementById('lk-pool-region').value.trim();
-  if (!number) { alert('Phone number is required'); return; }
+  if (!number) { window.rmToast('Phone number is required', 'warning'); return; }
   try {
     var res = await saFetch('/api/admin/superadmin/livekit/phone-pool/add', {
       method: 'POST', body: JSON.stringify({ phone_number: number, region: region || 'AB' })
@@ -5664,31 +5664,31 @@ async function lkAddToPool() {
     if (data.success) {
       document.getElementById('lk-pool-number').value = '';
       loadView('livekit-agents');
-    } else { alert('Error: ' + (data.error || 'Unknown')); }
-  } catch(e) { alert('Error: ' + e.message); }
+    } else { window.rmToast('Error: ' + (data.error || 'Unknown', 'error')); }
+  } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
 }
 
 async function lkReleaseNumber(number) {
-  if (!confirm('Release ' + number + ' back to the available pool? This will disconnect it from the assigned customer.')) return;
+  if (!(await window.rmConfirm('Release ' + number + ' back to the available pool? This will disconnect it from the assigned customer.'))) return
   try {
     var res = await saFetch('/api/admin/superadmin/livekit/phone-pool/release', {
       method: 'POST', body: JSON.stringify({ phone_number: number })
     });
     var data = await res.json();
     if (data.success) { loadView('livekit-agents'); }
-    else { alert('Error: ' + (data.error || 'Unknown')); }
-  } catch(e) { alert('Error: ' + e.message); }
+    else { window.rmToast('Error: ' + (data.error || 'Unknown', 'error')); }
+  } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
 }
 
 async function lkDeleteNumber(encodedNumber) {
   var number = decodeURIComponent(encodedNumber);
-  if (!confirm('Permanently remove ' + number + ' from the phone pool? This cannot be undone.')) return;
+  if (!(await window.rmConfirm('Permanently remove ' + number + ' from the phone pool? This cannot be undone.'))) return
   try {
     var res = await saFetch('/api/admin/superadmin/livekit/phone-pool/' + encodedNumber, { method: 'DELETE' });
     var data = await res.json();
     if (data.success) { loadView('livekit-agents'); }
-    else { alert('Error: ' + (data.error || 'Unknown')); }
-  } catch(e) { alert('Error: ' + e.message); }
+    else { window.rmToast('Error: ' + (data.error || 'Unknown', 'error')); }
+  } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
 }
 
 // ============================================================
@@ -6132,13 +6132,13 @@ async function smSaveConfig(customerId) {
     });
     var data = await res.json();
     if (data.success) {
-      alert('Secretary AI configuration saved for customer #' + customerId);
+      window.rmToast('Secretary AI configuration saved for customer #' + customerId, 'success');
       smOpenDetail(customerId);
     } else {
-      alert('Error: ' + (data.error || 'Failed to save'));
+      window.rmToast('Error: ' + (data.error || 'Failed to save', 'error'));
     }
   } catch(e) {
-    alert('Error saving config: ' + e.message);
+    window.rmToast('Error saving config: ' + e.message, 'error');
   }
 }
 
@@ -6152,13 +6152,13 @@ async function smQuickToggle(customerId) {
     var data = await res.json();
     if (data.success) {
       loadView('secretary-manager');
-    } else { alert('Error: ' + (data.error || 'Unknown')); }
-  } catch(e) { alert('Error: ' + e.message); }
+    } else { window.rmToast('Error: ' + (data.error || 'Unknown', 'error')); }
+  } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
 }
 
 async function smBulkToggle(activate) {
   var action = activate ? 'ACTIVATE' : 'DEACTIVATE';
-  if (!confirm(action + ' all secretary agents? This affects every customer.')) return;
+  if (!(await window.rmConfirm(action + ' all secretary agents? This affects every customer.'))) return
   try {
     var res = await saFetch('/api/admin/superadmin/livekit/secretary-config/bulk-toggle', {
       method: 'POST',
@@ -6167,14 +6167,14 @@ async function smBulkToggle(activate) {
     });
     var data = await res.json();
     if (data.success) {
-      alert(data.message + ' (' + (data.rows_changed || 0) + ' customers affected)');
+      window.rmToast(data.message + ' (' + (data.rows_changed || 0, 'info') + ' customers affected)');
       loadView('secretary-manager');
-    } else { alert('Error: ' + (data.error || 'Unknown')); }
-  } catch(e) { alert('Error: ' + e.message); }
+    } else { window.rmToast('Error: ' + (data.error || 'Unknown', 'error')); }
+  } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
 }
 
 async function smSetupLiveKit(customerId) {
-  if (!confirm('Set up LiveKit SIP trunk and dispatch rule for customer #' + customerId + '?\n\nThis will create the telephony infrastructure for their AI secretary to receive calls.')) return;
+  if (!(await window.rmConfirm('Set up LiveKit SIP trunk and dispatch rule for customer #' + customerId + '?\n\nThis will create the telephony infrastructure for their AI secretary to receive calls.'))) return
   try {
     var res = await saFetch('/api/admin/superadmin/secretary-manager/setup-livekit/' + customerId, {
       method: 'POST',
@@ -6182,14 +6182,14 @@ async function smSetupLiveKit(customerId) {
     });
     var data = await res.json();
     if (data.success) {
-      alert('LiveKit telephony configured!\n\nTrunk ID: ' + data.trunk_id + '\nDispatch Rule: ' + data.dispatch_rule_id + '\n\nThe customer\'s AI secretary will now receive calls on their assigned number.');
+      window.rmToast('LiveKit telephony configured!\n\nTrunk ID: ' + data.trunk_id + '\nDispatch Rule: ' + data.dispatch_rule_id + '\n\nThe customer\'s AI secretary will now receive calls on their assigned number.', 'info');
       smOpenDetail(customerId);
     } else if (data.already_configured) {
-      alert('Already configured!\n\nTrunk: ' + data.trunk_id + '\nDispatch: ' + data.dispatch_rule_id);
+      window.rmToast('Already configured!\n\nTrunk: ' + data.trunk_id + '\nDispatch: ' + data.dispatch_rule_id, 'info');
     } else {
-      alert('Error: ' + (data.error || 'Failed'));
+      window.rmToast('Error: ' + (data.error || 'Failed', 'error'));
     }
-  } catch(e) { alert('Error: ' + e.message); }
+  } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
 }
 
 async function smOnboardCustomer() {
@@ -6199,7 +6199,7 @@ async function smOnboardCustomer() {
   var businessName = (document.getElementById('smo-business') || {}).value || '';
 
   if (!email || !password || !contactName) {
-    alert('Email, Password, and Contact Name are required.');
+    window.rmToast('Email, Password, and Contact Name are required.', 'warning');
     return;
   }
 
@@ -6244,14 +6244,14 @@ async function smOnboardCustomer() {
       msg += '1. Open their profile (click OK, then their row in the list)\n';
       msg += '2. Click "Setup LiveKit" to create their SIP trunk\n';
       msg += '3. Customer forwards their cell to the AI number\n';
-      alert(msg);
+      window.rmToast(msg, 'info');
       SA.smView = 'list';
       loadView('secretary-manager');
     } else {
-      alert('Error: ' + (data.error || 'Failed to create customer'));
+      window.rmToast('Error: ' + (data.error || 'Failed to create customer', 'error'));
     }
   } catch(e) {
-    alert('Error creating customer: ' + e.message);
+    window.rmToast('Error creating customer: ' + e.message, 'error');
   }
 }
 
@@ -6513,7 +6513,7 @@ function geminiCopyMessage(btn) {
 }
 
 function geminiClearHistory() {
-  if (!confirm('Clear all Gemini conversation history?')) return;
+  if (!(await window.rmConfirm('Clear all Gemini conversation history?'))) return
   SA.geminiMessages = [];
   renderContent();
 }
@@ -6608,7 +6608,7 @@ function scrollGeminiToBottom() {
 async function geminiAutoGenerateConfig() {
   var biz = document.getElementById('smo-business')?.value || '';
   var contact = document.getElementById('smo-name')?.value || '';
-  if (!biz) { alert('Enter a business name first'); return; }
+  if (!biz) { window.rmToast('Enter a business name first', 'info'); return; }
 
   var btn = event.target.closest('button');
   var origHtml = btn.innerHTML;
@@ -6628,7 +6628,7 @@ async function geminiAutoGenerateConfig() {
     });
     var data = await res.json();
     if (!data.success || !data.config) {
-      alert('AI generation failed: ' + (data.error || 'No config returned'));
+      window.rmToast('AI generation failed: ' + (data.error || 'No config returned', 'error'));
       btn.disabled = false; btn.innerHTML = origHtml;
       return;
     }
@@ -6669,7 +6669,7 @@ async function geminiAutoGenerateConfig() {
     setTimeout(function() { btn.disabled = false; btn.innerHTML = origHtml; }, 2000);
 
   } catch(e) {
-    alert('AI generation error: ' + e.message);
+    window.rmToast('AI generation error: ' + e.message, 'error');
     btn.disabled = false; btn.innerHTML = origHtml;
   }
 }
@@ -6821,7 +6821,7 @@ function renderSecretaryMonitorView() {
 window.smITAction = async function(action) {
   var sel = document.getElementById('itHelpCustomerSelect');
   var cid = sel ? sel.value : '';
-  if (!cid) { alert('Select a customer first'); return; }
+  if (!cid) { window.rmToast('Select a customer first', 'info'); return; }
   var el = document.getElementById('itHelpResult');
   if (el) { el.classList.remove('hidden'); el.innerHTML = '<div class="text-center py-3"><i class="fas fa-spinner fa-spin text-blue-500"></i></div>'; }
   try {
@@ -6876,7 +6876,7 @@ window.smMonitorCustomer = async function(cid) {
           daily.map(function(dd) { return '<tr class="border-b border-gray-100"><td class="px-3 py-2">' + dd.call_date + '</td><td class="px-3 py-2 text-center font-bold">' + dd.call_count + '</td><td class="px-3 py-2 text-center font-bold text-blue-700">' + Math.round((dd.total_seconds || 0) / 60) + '</td><td class="px-3 py-2 text-center text-gray-500">' + fmtSeconds(dd.avg_seconds || 0) + '</td><td class="px-3 py-2 text-center text-amber-600 font-bold">' + (dd.leads || 0) + '</td></tr>'; }).join('') + '</tbody></table></div>') +
       '</div><div class="px-6 py-3 border-t bg-gray-50 flex justify-end"><button onclick="document.getElementById(\'monitorModal\').remove()" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg text-sm font-medium">Close</button></div></div>';
     document.body.appendChild(modal); modal.addEventListener('click', function(e) { if (e.target === modal) modal.remove(); });
-  } catch(e) { alert('Error: ' + e.message); }
+  } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
 };
 
 window.smITHelp = function(cid) { var sel = document.getElementById('itHelpCustomerSelect'); if (sel) sel.value = String(cid); smITAction('check_status'); };

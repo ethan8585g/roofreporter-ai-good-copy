@@ -243,13 +243,13 @@
       if (data.auth_url) {
         window.open(data.auth_url, 'gbp_connect', 'width=600,height=700');
       } else {
-        alert(data.error || 'Failed to start connection');
+        window.rmToast(data.error || 'Failed to start connection', 'info');
       }
     });
   };
 
   window._gbpDisconnect = function() {
-    if (!confirm('Disconnect your Google Business Profile? Your cached data will remain.')) return;
+    if (!(await window.rmConfirm('Disconnect your Google Business Profile? Your cached data will remain.'))) return
     apiPost('/disconnect').then(function() {
       state.connected = false;
       state.business_name = null;
@@ -294,7 +294,7 @@
   window._gbpSubmitReply = function(reviewId) {
     var el = document.getElementById('reply-text-' + reviewId);
     var text = el ? el.value.trim() : '';
-    if (!text) { alert('Please enter a reply.'); return; }
+    if (!text) { window.rmToast('Please enter a reply.', 'warning'); return; }
 
     apiPost('/reviews/' + reviewId + '/reply', { reply: text }).then(function(data) {
       if (data.success) {
@@ -302,7 +302,7 @@
         state.replyText = '';
         loadReviews();
       } else {
-        alert(data.error || 'Failed to submit reply.');
+        window.rmToast(data.error || 'Failed to submit reply.', 'info');
       }
     });
   };
@@ -312,7 +312,7 @@
     var ctaTypeEl = document.getElementById('post-cta-type');
     var ctaUrlEl = document.getElementById('post-cta-url');
     var content = contentEl ? contentEl.value.trim() : '';
-    if (!content) { alert('Please enter post content.'); return; }
+    if (!content) { window.rmToast('Please enter post content.', 'warning'); return; }
 
     state.creatingPost = true;
     render();

@@ -921,6 +921,10 @@ emailOutreachRoutes.post('/lists/:id/upload-csv', async (c) => {
 // ============================================================
 emailOutreachRoutes.get('/unsubscribe/:email', async (c) => {
   const email = decodeURIComponent(c.req.param('email')).toLowerCase().trim()
+  // HTML-encode email before rendering to prevent reflected XSS
+  const safeEmail = email
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#x27;')
   try {
     await ensureTables(c.env.DB)
     await c.env.DB.prepare(
@@ -935,7 +939,7 @@ emailOutreachRoutes.get('/unsubscribe/:email', async (c) => {
 h1{color:#111;font-size:24px;margin-bottom:8px}p{color:#6b7280;font-size:14px;line-height:1.6}
 .check{width:64px;height:64px;background:#dcfce7;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;font-size:28px}</style>
 </head><body><div class="card"><div class="check">✓</div><h1>You've been unsubscribed</h1>
-<p><strong>${email}</strong> has been removed from our mailing list.</p>
+<p><strong>${safeEmail}</strong> has been removed from our mailing list.</p>
 <p>You will no longer receive marketing emails from Roof Manager.</p>
 <p style="color:#9ca3af;font-size:12px;margin-top:24px">If this was a mistake, contact sales@roofmanager.ca</p>
 </div></body></html>`)

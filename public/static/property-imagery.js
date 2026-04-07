@@ -216,7 +216,7 @@ function renderResults(data) {
 // ============================================================
 async function downloadPDF() {
   if (!piState.images || piState.images.length === 0) {
-    alert('No images to export. Generate imagery first.');
+    window.rmToast('No images to export. Generate imagery first.', 'info');
     return;
   }
 

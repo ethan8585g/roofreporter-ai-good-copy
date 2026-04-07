@@ -984,7 +984,7 @@ window._toggleGcalSync = function(enabled) {
         // Failed to get auth URL — uncheck toggle
         var toggle = document.getElementById('gcal-sync-toggle');
         if (toggle) toggle.checked = false;
-        alert(data.error || 'Could not start Google Calendar connection.');
+        window.rmToast(data.error || 'Could not start Google Calendar connection.', 'info');
       }
     })
     .catch(function() {
@@ -993,7 +993,7 @@ window._toggleGcalSync = function(enabled) {
     });
   } else {
     // Disconnect Google Calendar
-    if (confirm('Disconnect Google Calendar?')) {
+    if (await window.rmConfirm('Disconnect Google Calendar?')) {
       fetch('/api/customer/gcal/disconnect', {
         method: 'POST',
         headers: { 'Authorization': 'Bearer ' + token }

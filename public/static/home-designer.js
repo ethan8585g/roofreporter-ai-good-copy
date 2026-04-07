@@ -369,11 +369,11 @@
 
   function processFile(file, index) {
     if (file.size > MAX_PHOTO_SIZE_MB * 1024 * 1024) {
-      alert('Photo too large. Maximum ' + MAX_PHOTO_SIZE_MB + 'MB.');
+      window.rmToast('Photo too large. Maximum ' + MAX_PHOTO_SIZE_MB + 'MB.', 'info');
       return;
     }
     if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
-      alert('Unsupported format. Use JPEG, PNG, or WebP.');
+      window.rmToast('Unsupported format. Use JPEG, PNG, or WebP.', 'info');
       return;
     }
 

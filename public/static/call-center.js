@@ -738,12 +738,12 @@
   }
 
   window.ccImportFromEOList = async function(listId) {
-    if (!confirm('Import all active contacts from this Email Outreach list as call center prospects?')) return;
+    if (!(await window.rmConfirm('Import all active contacts from this Email Outreach list as call center prospects?'))) return
     try {
       const res = await ccFetch('/api/admin/superadmin/email-outreach-lists/' + listId + '/contacts?limit=500');
       if (!res) return;
       const contacts = res.contacts || [];
-      if (contacts.length === 0) { alert('No active contacts in this list.'); return; }
+      if (contacts.length === 0) { window.rmToast('No active contacts in this list.', 'info'); return; }
       // Bulk import to call center prospects
       const prospects = contacts.filter(c => c.phone || c.email).map(c => ({
         company_name: c.company_name || c.name || '',
@@ -754,18 +754,18 @@
         province_state: c.state || c.province || '',
         source: 'email_outreach_import'
       }));
-      if (prospects.length === 0) { alert('No contacts with phone or email found.'); return; }
+      if (prospects.length === 0) { window.rmToast('No contacts with phone or email found.', 'info'); return; }
       const importRes = await ccFetch('/api/call-center/prospects', {
         method: 'POST',
         body: JSON.stringify({ prospects })
       });
       if (importRes && importRes.success !== false) {
-        alert('Imported ' + prospects.length + ' prospects from Email Outreach list!');
+        window.rmToast('Imported ' + prospects.length + ' prospects from Email Outreach list!', 'info');
         ccLoadTab('prospects');
       } else {
-        alert('Import failed: ' + (importRes?.error || 'Unknown error'));
+        window.rmToast('Import failed: ' + (importRes?.error || 'Unknown error', 'error'));
       }
-    } catch(e) { alert('Error: ' + e.message); }
+    } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
   };
 
   // ============================================================
@@ -1016,7 +1016,7 @@
   window.ccShowCreateAgent = function() { document.getElementById('cc-agent-modal').classList.remove('hidden'); };
   window.ccCreateAgent = async function() {
     const name = document.getElementById('cc-agent-name').value.trim();
-    if (!name) return alert('Agent name required');
+    if (!name) return window.rmToast('Agent name required', 'warning');
     const data = await ccFetch('/api/call-center/agents', { method: 'POST', body: JSON.stringify({
       name, voice_id: document.getElementById('cc-agent-voice').value,
       persona: document.getElementById('cc-agent-persona').value,
@@ -1030,12 +1030,12 @@
         setTimeout(function() { window.ccTestAgent(data.id); }, 500);
       }
     }
-    else alert(data?.error || 'Failed');
+    else window.rmToast(data?.error || 'Failed', 'info');
   };
   window.ccStartAgent = async function(id) {
     const data = await ccFetch('/api/call-center/agents/' + id + '/start', { method: 'POST', body: '{}' });
     if (data?.success) ccLoadTab('agents');
-    else alert(data?.error || 'Failed to start');
+    else window.rmToast(data?.error || 'Failed to start', 'info');
   };
   window.ccStopAgent = async function(id) {
     const data = await ccFetch('/api/call-center/agents/' + id + '/stop', { method: 'POST', body: '{}' });
@@ -1044,7 +1044,7 @@
   window.ccEditAgent = async function(id) {
     const agents = ((CC.data.agents || {}).agents || []);
     const agent = agents.find(a => a.id === id);
-    if (!agent) return alert('Agent not found');
+    if (!agent) return window.rmToast('Agent not found', 'info');
 
     // Populate the create modal with existing values for editing
     const existing = document.getElementById('cc-agent-modal');
@@ -1066,7 +1066,7 @@
 
   window.ccSaveEditAgent = async function(id) {
     const name = document.getElementById('cc-agent-name').value.trim();
-    if (!name) return alert('Agent name required');
+    if (!name) return window.rmToast('Agent name required', 'warning');
     const data = await ccFetch('/api/call-center/agents/' + id, { method: 'PUT', body: JSON.stringify({
       name, voice_id: document.getElementById('cc-agent-voice').value,
       persona: document.getElementById('cc-agent-persona').value,
@@ -1076,10 +1076,10 @@
       document.getElementById('cc-agent-modal').classList.add('hidden');
       // Reset button back to create mode
       await ccLoadTab('agents');
-    } else alert(data?.error || 'Failed to save');
+    } else window.rmToast(data?.error || 'Failed to save', 'info');
   };
   window.ccDeleteAgent = async function(id) {
-    if (!confirm('Delete this AI agent?')) return;
+    if (!(await window.rmConfirm('Delete this AI agent?'))) return
     await ccFetch('/api/call-center/agents/' + id, { method: 'DELETE' });
     ccLoadTab('agents');
   };
@@ -1088,7 +1088,7 @@
   window.ccShowCreateCampaign = function() { document.getElementById('cc-campaign-modal').classList.remove('hidden'); };
   window.ccCreateCampaign = async function() {
     const name = document.getElementById('cc-camp-name').value.trim();
-    if (!name) return alert('Campaign name required');
+    if (!name) return window.rmToast('Campaign name required', 'warning');
     const data = await ccFetch('/api/call-center/campaigns', { method: 'POST', body: JSON.stringify({
       name, description: document.getElementById('cc-camp-desc').value,
       target_region: document.getElementById('cc-camp-region').value,
@@ -1101,14 +1101,14 @@
       max_attempts: parseInt(document.getElementById('cc-camp-attempts').value) || 3,
     }) });
     if (data?.success) { document.getElementById('cc-campaign-modal').classList.add('hidden'); ccLoadTab('campaigns'); }
-    else alert(data?.error || 'Failed');
+    else window.rmToast(data?.error || 'Failed', 'info');
   };
   window.ccUpdateCampaign = async function(id, status) {
     await ccFetch('/api/call-center/campaigns/' + id, { method: 'PUT', body: JSON.stringify({ status }) });
     ccLoadTab('campaigns');
   };
   window.ccDeleteCampaign = async function(id) {
-    if (!confirm('Delete this campaign?')) return;
+    if (!(await window.rmConfirm('Delete this campaign?'))) return
     await ccFetch('/api/call-center/campaigns/' + id, { method: 'DELETE' });
     ccLoadTab('campaigns');
   };
@@ -1118,7 +1118,7 @@
   window.ccAddProspect = async function() {
     const company = document.getElementById('cc-p-company').value.trim();
     const phone = document.getElementById('cc-p-phone').value.trim();
-    if (!company || !phone) return alert('Company name and phone required');
+    if (!company || !phone) return window.rmToast('Company name and phone required', 'warning');
     const data = await ccFetch('/api/call-center/prospects', { method: 'POST', body: JSON.stringify({
       company_name: company, contact_name: document.getElementById('cc-p-contact').value,
       phone, email: document.getElementById('cc-p-email').value,
@@ -1126,12 +1126,12 @@
       country: document.getElementById('cc-p-country').value, notes: document.getElementById('cc-p-notes').value,
     }) });
     if (data?.success) { document.getElementById('cc-prospect-modal').classList.add('hidden'); ccLoadTab('prospects'); }
-    else alert(data?.error || 'Failed');
+    else window.rmToast(data?.error || 'Failed', 'info');
   };
   window.ccShowImportCSV = function() { document.getElementById('cc-csv-modal').classList.remove('hidden'); };
   window.ccImportCSV = async function() {
     const csv = document.getElementById('cc-csv-data').value.trim();
-    if (!csv) return alert('Paste CSV data');
+    if (!csv) return window.rmToast('Paste CSV data', 'info');
     const resultEl = document.getElementById('cc-csv-result');
     resultEl.classList.remove('hidden');
     resultEl.className = 'text-sm text-blue-600';
@@ -1156,14 +1156,14 @@
   window.ccPrevPage = function() { if (CC.prospectPage > 1) CC.prospectPage--; ccLoadTab('prospects'); };
 
   window.ccDeleteProspect = async function(id) {
-    if (!confirm('Delete this prospect?')) return;
+    if (!(await window.rmConfirm('Delete this prospect?'))) return
     await ccFetch('/api/call-center/prospects/' + id, { method: 'DELETE' });
     ccLoadTab('prospects');
   };
   // Quick Dial — enter phone number and call immediately
   window.ccQuickDial = async function() {
     const phone = document.getElementById('qd-phone')?.value?.trim();
-    if (!phone) { alert('Enter a phone number to dial'); return; }
+    if (!phone) { window.rmToast('Enter a phone number to dial', 'info'); return; }
     const agentId = document.getElementById('qd-agent')?.value;
     const company = document.getElementById('qd-company')?.value?.trim() || '';
     const btn = event?.target;
@@ -1177,11 +1177,11 @@
     } else {
       // Show specific SIP errors
       if (data?.sip_dial === 'no_trunk_configured') {
-        alert('SIP outbound trunk not configured. Set SIP_OUTBOUND_TRUNK_ID in environment.');
+        window.rmToast('SIP outbound trunk not configured. Set SIP_OUTBOUND_TRUNK_ID in environment.', 'info');
       } else if (data?.sip_dial === 'sip_error' || data?.sip_dial === 'dial_error') {
-        alert('Call failed: ' + (data.sip_error || 'SIP dial error. Check LiveKit trunk configuration.'));
+        window.rmToast('Call failed: ' + (data.sip_error || 'SIP dial error. Check LiveKit trunk configuration.', 'error'));
       } else {
-        alert(data?.error || 'Quick dial failed');
+        window.rmToast(data?.error || 'Quick dial failed', 'info');
       }
     }
   };
@@ -1192,7 +1192,7 @@
       CC.data.agents = await ccFetch('/api/call-center/agents');
     }
     const agentList = ((CC.data.agents || {}).agents || []);
-    if (agentList.length === 0) return alert('Create an AI agent first before dialing');
+    if (agentList.length === 0) return window.rmToast('Create an AI agent first before dialing', 'info');
     // Show agent selection if multiple agents
     let agentId = agentList[0].id;
     let agentName = agentList[0].name;
@@ -1203,11 +1203,11 @@
       const idx = parseInt(choice) - 1;
       if (idx >= 0 && idx < agentList.length) { agentId = agentList[idx].id; agentName = agentList[idx].name; }
     }
-    if (!confirm('Dial this prospect using agent "' + agentName + '"?')) return;
+    if (!(await window.rmConfirm('Dial this prospect using agent "' + agentName + '"?'))) return
     const data = await ccFetch('/api/call-center/dial', { method: 'POST', body: JSON.stringify({ prospect_id: id, agent_id: agentId }) });
     if (data?.success) {
       ccShowCallStatus(data);
-    } else alert(data?.error || 'Dial failed');
+    } else window.rmToast(data?.error || 'Dial failed', 'info');
   };
 
   // Live call status panel — polls for updates
@@ -1274,7 +1274,7 @@
   window.ccShowCreateList = function() { document.getElementById('cc-list-modal').classList.remove('hidden'); };
   window.ccCreateList = async function() {
     const name = document.getElementById('cc-list-name').value.trim();
-    if (!name) return alert('List name required');
+    if (!name) return window.rmToast('List name required', 'warning');
     const data = await ccFetch('/api/call-center/contact-lists', { method: 'POST', body: JSON.stringify({
       name,
       description: document.getElementById('cc-list-desc').value,
@@ -1284,10 +1284,10 @@
       tags: document.getElementById('cc-list-tags').value,
     }) });
     if (data?.success) { document.getElementById('cc-list-modal').classList.add('hidden'); ccLoadTab('contact-lists'); }
-    else alert(data?.error || 'Failed');
+    else window.rmToast(data?.error || 'Failed', 'info');
   };
   window.ccDeleteList = async function(id) {
-    if (!confirm('Archive this contact list?')) return;
+    if (!(await window.rmConfirm('Archive this contact list?'))) return
     await ccFetch('/api/call-center/contact-lists/' + id, { method: 'DELETE' });
     ccLoadTab('contact-lists');
   };
@@ -1301,7 +1301,7 @@
   window.ccImportToListExec = async function() {
     const listId = document.getElementById('cc-list-import-id').value;
     const csv = document.getElementById('cc-list-csv-data').value.trim();
-    if (!csv) return alert('Paste CSV data');
+    if (!csv) return window.rmToast('Paste CSV data', 'info');
     const resultEl = document.getElementById('cc-list-import-result');
     resultEl.classList.remove('hidden');
     resultEl.className = 'text-sm text-blue-600';
@@ -1340,8 +1340,8 @@
   window.ccDeployCampaign = async function() {
     const agentRadio = document.querySelector('input[name="deploy-agent"]:checked');
     const listRadio = document.querySelector('input[name="deploy-list"]:checked');
-    if (!agentRadio) return alert('Please select an AI agent');
-    if (!listRadio) return alert('Please select a contact list');
+    if (!agentRadio) return window.rmToast('Please select an AI agent', 'warning');
+    if (!listRadio) return window.rmToast('Please select a contact list', 'warning');
     const campaignId = document.getElementById('deploy-campaign')?.value || '';
     const statusEl = document.getElementById('cc-deploy-status');
     statusEl.classList.remove('hidden');
@@ -1450,7 +1450,7 @@
       document.getElementById('ccVtStatus').textContent = 'Listening... speak now';
       document.getElementById('ccVtStatus').className = 'text-center text-xs text-red-500 mb-3 h-4 font-semibold';
     } catch(e) {
-      alert('Microphone access denied. Please allow microphone access.');
+      window.rmToast('Microphone access denied. Please allow microphone access.', 'error');
     }
   };
 
@@ -1769,7 +1769,7 @@
 
   window.ccAddPhoneLine = async function() {
     var phone = (document.getElementById('cc-line-phone').value || '').trim();
-    if (!phone) return alert('Phone number is required');
+    if (!phone) return window.rmToast('Phone number is required', 'warning');
     var data = await ccFetch('/api/call-center/phone-lines', { method: 'POST', body: JSON.stringify({
       business_phone: phone,
       label: document.getElementById('cc-line-label').value.trim() || '',
@@ -1781,7 +1781,7 @@
       document.getElementById('cc-add-line-modal').classList.add('hidden');
       ccLoadTab('phone-setup');
     } else {
-      alert((data && data.error) || 'Failed to add phone line');
+      window.rmToast((data && data.error, 'info') || 'Failed to add phone line');
     }
   };
 
@@ -1790,7 +1790,7 @@
     if (data && data.success) {
       ccLoadTab('phone-setup');
     } else {
-      alert((data && data.error) || 'Failed to toggle');
+      window.rmToast((data && data.error, 'info') || 'Failed to toggle');
     }
   };
 
@@ -1799,7 +1799,7 @@
     if (data && data.success) {
       ccLoadTab('phone-setup');
     } else {
-      alert((data && data.error) || 'Failed to toggle forwarding');
+      window.rmToast((data && data.error, 'info') || 'Failed to toggle forwarding');
     }
   };
 
@@ -1808,14 +1808,14 @@
     if (label === null) return;
     var data = await ccFetch('/api/call-center/phone-lines/' + lineId, { method: 'PUT', body: JSON.stringify({ label: label }) });
     if (data && data.success) ccLoadTab('phone-setup');
-    else alert((data && data.error) || 'Failed to update');
+    else window.rmToast((data && data.error, 'info') || 'Failed to update');
   };
 
   window.ccDeletePhoneLine = async function(lineId) {
-    if (!confirm('Remove this phone line? This cannot be undone.')) return;
+    if (!(await window.rmConfirm('Remove this phone line? This cannot be undone.'))) return
     var data = await ccFetch('/api/call-center/phone-lines/' + lineId, { method: 'DELETE' });
     if (data && data.success) ccLoadTab('phone-setup');
-    else alert((data && data.error) || 'Failed to delete');
+    else window.rmToast((data && data.error, 'info') || 'Failed to delete');
   };
 
   window.ccShowQuickConnect = function() {
@@ -1976,7 +1976,7 @@
   window.ccPhoneSendCode = async function() {
     var input = document.getElementById('ccPhoneInput');
     var phone = (input ? input.value : '').replace(/\D/g, '');
-    if (phone.length < 10) { alert('Please enter a valid 10-digit phone number.'); return; }
+    if (phone.length < 10) { window.rmToast('Please enter a valid 10-digit phone number.', 'warning'); return; }
 
     var btn = document.getElementById('ccSendCodeBtn');
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Sending...'; }
@@ -1989,7 +1989,7 @@
       else if (res.dev_code) ccPhoneState.devCode = res.dev_code;
       renderTab('phone-setup');
     } else {
-      alert((res && res.error) || 'Failed to send code. Please try again.');
+      window.rmToast((res && res.error, 'info') || 'Failed to send code. Please try again.');
       if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-key mr-1"></i> Get Verification Code'; }
     }
   };
@@ -2044,9 +2044,9 @@
         ccPhoneState.devCode = newCode;
         renderTab('phone-setup');
       }
-      alert(res.message || 'New verification code generated!');
+      window.rmToast(res.message || 'New verification code generated!', 'info');
     } else {
-      alert((res && res.error) || 'Failed to resend.');
+      window.rmToast((res && res.error, 'info') || 'Failed to resend.');
     }
   };
 
@@ -2073,10 +2073,10 @@
   };
 
   window.ccPhoneDisconnect = async function() {
-    if (!confirm('Disconnect the AI phone line? You can re-connect anytime.')) return;
+    if (!(await window.rmConfirm('Disconnect the AI phone line? You can re-connect anytime.'))) return
     var res = await ccFetch('/api/call-center/quick-connect/disconnect', { method: 'POST', body: JSON.stringify({}) });
     if (res && res.success) {
-      alert('Phone line disconnected.');
+      window.rmToast('Phone line disconnected.', 'info');
       ccPhoneState = { step: 1, phoneNumber: '', verifiedData: null };
       CC.data.phoneSetup = await ccFetch('/api/call-center/quick-connect/status');
       renderTab('phone-setup');
@@ -2086,9 +2086,9 @@
   window.ccPhoneResendSMS = async function() {
     var res = await ccFetch('/api/call-center/quick-connect/resend-sms', { method: 'POST', body: JSON.stringify({}) });
     if (res && res.success) {
-      alert(res.message || 'Setup details sent to your phone!');
+      window.rmToast(res.message || 'Setup details sent to your phone!', 'info');
     } else {
-      alert((res && res.error) || 'Failed to send SMS.');
+      window.rmToast((res && res.error, 'info') || 'Failed to send SMS.');
     }
   };
 
@@ -2100,7 +2100,7 @@
 
   window.ccCopyText = function(text) {
     if (navigator.clipboard) {
-      navigator.clipboard.writeText(text).then(function() { alert('Copied: ' + text); });
+      navigator.clipboard.writeText(text).then(function() { window.rmToast('Copied: ' + text, 'info'); });
     } else {
       prompt('Copy this:', text);
     }
