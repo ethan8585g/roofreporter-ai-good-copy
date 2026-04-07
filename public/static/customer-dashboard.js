@@ -273,33 +273,32 @@ function renderDashboard() {
           '</div>' +
         '</div>' : '') +
 
-      // Rover AI Assistant + Quick Actions
+      // Calendar + Quick Actions
       '<div class="grid grid-cols-1 lg:grid-cols-5 gap-5 mb-5">' +
-        // Rover AI Chat (wider)
+        // Calendar (wider)
         '<div class="lg:col-span-3 bg-[#111111] rounded-2xl border border-white/10 shadow-sm overflow-hidden flex flex-col" style="min-height:280px">' +
           '<div class="px-5 py-3 border-b border-white/5 flex items-center justify-between bg-gradient-to-r from-gray-900 to-gray-800">' +
             '<div class="flex items-center gap-2">' +
-              '<span class="text-lg">&#128054;</span>' +
-              '<h3 class="font-bold text-white text-sm">Rover AI Assistant</h3>' +
-              '<span class="px-2 py-0.5 bg-blue-600 text-white rounded-full text-[9px] font-bold">AI</span>' +
+              '<i class="fas fa-calendar-alt text-blue-400"></i>' +
+              '<h3 class="font-bold text-white text-sm">Calendar</h3>' +
             '</div>' +
-            '<p class="text-xs text-gray-400">Ask me anything about your account</p>' +
-          '</div>' +
-          '<div id="rover-dash-messages" class="flex-1 overflow-y-auto p-4 space-y-3" style="max-height:320px">' +
-            '<div class="flex gap-2"><div class="w-7 h-7 bg-gray-900 rounded-full flex items-center justify-center flex-shrink-0 text-xs">&#128054;</div><div class="bg-white/5 rounded-xl rounded-tl-sm px-3 py-2 text-sm text-gray-300 max-w-[85%]">Hey ' + (c.name || 'there').split(' ')[0] + '! I\'m Rover, your AI assistant. Ask me anything — I can help with reports, proposals, invoices, material calculations, and more.</div></div>' +
-          '</div>' +
-          '<div class="px-4 py-3 border-t border-white/5 bg-[#0A0A0A]">' +
-            '<div class="flex gap-2 mb-2 overflow-x-auto pb-1">' +
-              '<button onclick="window._roverDashSend(\'What can you help me with?\')" class="px-2.5 py-1 bg-[#111111] border border-white/10 rounded-lg text-[11px] text-gray-400 hover:bg-blue-500/10 hover:border-blue-200 whitespace-nowrap flex-shrink-0">What can you do?</button>' +
-              '<button onclick="window._roverDashSend(\'Give me a summary of my account\')" class="px-2.5 py-1 bg-[#111111] border border-white/10 rounded-lg text-[11px] text-gray-400 hover:bg-blue-500/10 hover:border-blue-200 whitespace-nowrap flex-shrink-0">Account Summary</button>' +
-              '<button onclick="window._roverDashSend(\'How do I order a roof report?\')" class="px-2.5 py-1 bg-[#111111] border border-white/10 rounded-lg text-[11px] text-gray-400 hover:bg-blue-500/10 hover:border-blue-200 whitespace-nowrap flex-shrink-0">How to Order</button>' +
-              '<button onclick="window._roverDashSend(\'Help me create a proposal\')" class="px-2.5 py-1 bg-[#111111] border border-white/10 rounded-lg text-[11px] text-gray-400 hover:bg-blue-500/10 hover:border-blue-200 whitespace-nowrap flex-shrink-0">Draft Proposal</button>' +
-            '</div>' +
-            '<div class="flex gap-2">' +
-              '<input type="text" id="rover-dash-input" placeholder="Ask Rover anything..." class="flex-1 px-3 py-2 border border-white/15 rounded-xl text-sm focus:ring-2 focus:ring-blue-400 focus:border-blue-400" onkeydown="if(event.key===\'Enter\')window._roverDashSend()">' +
-              '<button onclick="window._roverDashSend()" class="px-4 py-2 bg-gray-900 hover:bg-gray-800 text-white rounded-xl text-sm font-semibold flex-shrink-0"><i class="fas fa-paper-plane"></i></button>' +
+            '<div class="flex items-center gap-3">' +
+              '<div class="flex items-center gap-2">' +
+                '<img src="https://www.gstatic.com/images/branding/product/1x/calendar_48dp.png" alt="" class="w-4 h-4">' +
+                '<span class="text-xs text-gray-400">Google Sync</span>' +
+                '<label class="relative inline-flex items-center cursor-pointer">' +
+                  '<input type="checkbox" id="gcal-sync-toggle" class="sr-only peer" onchange="window._toggleGcalSync(this.checked)">' +
+                  '<div class="w-9 h-5 bg-gray-700 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-400 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[&quot;&quot;] after:absolute after:top-[2px] after:left-[2px] after:bg-gray-400 after:border after:border-gray-600 after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>' +
+                '</label>' +
+              '</div>' +
+              '<div class="flex items-center gap-1">' +
+                '<button onclick="window._calNav(-1)" class="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white/10 text-gray-400 hover:text-white text-xs"><i class="fas fa-chevron-left"></i></button>' +
+                '<button onclick="window._calNav(0)" class="px-2 py-1 rounded-lg hover:bg-white/10 text-xs text-gray-300 font-medium">Today</button>' +
+                '<button onclick="window._calNav(1)" class="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white/10 text-gray-400 hover:text-white text-xs"><i class="fas fa-chevron-right"></i></button>' +
+              '</div>' +
             '</div>' +
           '</div>' +
+          '<div id="dashboard-calendar" class="flex-1 p-4 overflow-y-auto"></div>' +
         '</div>' +
         // Quick Actions (narrower)
         '<div class="lg:col-span-2 bg-[#111111] rounded-2xl border border-white/10 shadow-sm overflow-hidden">' +
@@ -685,54 +684,126 @@ function dismissOnboarding() {
   localStorage.setItem('rc_customer', JSON.stringify(cust));
 }
 
-// ---- Rover Dashboard Chat ----
-var _roverDashSessionId = sessionStorage.getItem('rover_dash_sid') || ('rd_' + Math.random().toString(36).substring(2, 10));
-sessionStorage.setItem('rover_dash_sid', _roverDashSessionId);
+// ---- Dashboard Calendar ----
+var _calCurrentDate = new Date();
+var _calViewMonth = new Date(_calCurrentDate.getFullYear(), _calCurrentDate.getMonth(), 1);
+var _calEvents = []; // { date: 'YYYY-MM-DD', title: string, color: string }
 
-window._roverDashSend = function(text) {
-  var input = document.getElementById('rover-dash-input');
-  var msg = text || (input ? input.value.trim() : '');
-  if (!msg) return;
-  if (input) input.value = '';
+// Load events from jobs/orders
+function _calLoadEvents() {
+  _calEvents = [];
+  var orders = (custState && custState.orders) || [];
+  orders.forEach(function(o) {
+    if (o.created_at) {
+      var d = o.created_at.substring(0, 10);
+      _calEvents.push({ date: d, title: 'Report: ' + (o.address || 'Order').substring(0, 25), color: 'blue' });
+    }
+  });
+  // Load Google Calendar events if synced
+  var gcalOn = localStorage.getItem('rc_gcal_sync') === '1';
+  var toggle = document.getElementById('gcal-sync-toggle');
+  if (toggle) toggle.checked = gcalOn;
+}
 
-  var container = document.getElementById('rover-dash-messages');
+function _calRender() {
+  var container = document.getElementById('dashboard-calendar');
   if (!container) return;
 
-  // Add user message
-  container.insertAdjacentHTML('beforeend',
-    '<div class="flex gap-2 justify-end"><div class="bg-blue-600 text-white rounded-xl rounded-tr-sm px-3 py-2 text-sm max-w-[85%]">' + msg.replace(/</g, '&lt;') + '</div></div>'
-  );
-  // Add typing indicator
-  container.insertAdjacentHTML('beforeend',
-    '<div id="rover-dash-typing" class="flex gap-2"><div class="w-7 h-7 bg-gray-900 rounded-full flex items-center justify-center flex-shrink-0 text-xs">&#128054;</div><div class="bg-white/5 rounded-xl rounded-tl-sm px-3 py-2 text-sm text-gray-400"><i class="fas fa-circle text-[6px] animate-pulse mr-1"></i><i class="fas fa-circle text-[6px] animate-pulse mr-1" style="animation-delay:0.2s"></i><i class="fas fa-circle text-[6px] animate-pulse" style="animation-delay:0.4s"></i></div></div>'
-  );
-  container.scrollTop = container.scrollHeight;
+  var year = _calViewMonth.getFullYear();
+  var month = _calViewMonth.getMonth();
+  var months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  var days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  var today = new Date();
+  var todayStr = today.getFullYear() + '-' + String(today.getMonth()+1).padStart(2,'0') + '-' + String(today.getDate()).padStart(2,'0');
 
-  var token = localStorage.getItem('rc_customer_token') || '';
-  fetch('/api/rover/assistant', {
-    method: 'POST',
-    headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message: msg, session_id: _roverDashSessionId })
-  })
-  .then(function(r) { return r.json(); })
-  .then(function(data) {
-    var typing = document.getElementById('rover-dash-typing');
-    if (typing) typing.remove();
-    var reply = (data.reply || data.message || 'Sorry, I had trouble responding.').replace(/</g, '&lt;').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
-    container.insertAdjacentHTML('beforeend',
-      '<div class="flex gap-2"><div class="w-7 h-7 bg-gray-900 rounded-full flex items-center justify-center flex-shrink-0 text-xs">&#128054;</div><div class="bg-white/5 rounded-xl rounded-tl-sm px-3 py-2 text-sm text-gray-300 max-w-[85%]">' + reply + '</div></div>'
-    );
-    container.scrollTop = container.scrollHeight;
-  })
-  .catch(function() {
-    var typing = document.getElementById('rover-dash-typing');
-    if (typing) typing.remove();
-    container.insertAdjacentHTML('beforeend',
-      '<div class="flex gap-2"><div class="w-7 h-7 bg-gray-900 rounded-full flex items-center justify-center flex-shrink-0 text-xs">&#128054;</div><div class="bg-red-500/10 rounded-xl rounded-tl-sm px-3 py-2 text-sm text-red-400 max-w-[85%]">Sorry, I had trouble connecting. Please try again.</div></div>'
-    );
-    container.scrollTop = container.scrollHeight;
-  });
+  var firstDay = new Date(year, month, 1).getDay();
+  var daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  var html = '<div class="flex items-center justify-center mb-3">' +
+    '<h4 class="text-sm font-semibold text-white">' + months[month] + ' ' + year + '</h4>' +
+  '</div>';
+
+  html += '<div class="grid grid-cols-7 gap-px mb-1">';
+  for (var di = 0; di < 7; di++) {
+    html += '<div class="text-center text-[10px] text-gray-500 font-medium py-1">' + days[di] + '</div>';
+  }
+  html += '</div>';
+
+  html += '<div class="grid grid-cols-7 gap-px">';
+  // Empty cells before first day
+  for (var e = 0; e < firstDay; e++) {
+    html += '<div class="h-9"></div>';
+  }
+  for (var d = 1; d <= daysInMonth; d++) {
+    var dateStr = year + '-' + String(month+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+    var isToday = dateStr === todayStr;
+    var dayEvents = _calEvents.filter(function(ev) { return ev.date === dateStr; });
+    var hasEvents = dayEvents.length > 0;
+
+    html += '<div class="h-9 flex flex-col items-center justify-center rounded-lg cursor-default relative ' +
+      (isToday ? 'bg-blue-600 text-white' : 'hover:bg-white/5 text-gray-300') + '"' +
+      (hasEvents ? ' title="' + dayEvents.map(function(ev){ return ev.title; }).join(', ').replace(/"/g, '&quot;') + '"' : '') + '>' +
+      '<span class="text-xs font-medium">' + d + '</span>' +
+      (hasEvents ? '<div class="flex gap-0.5 absolute bottom-0.5">' + dayEvents.slice(0,3).map(function(ev) {
+        return '<div class="w-1 h-1 rounded-full bg-' + (ev.color || 'blue') + '-400"></div>';
+      }).join('') + '</div>' : '') +
+    '</div>';
+  }
+  html += '</div>';
+
+  // Upcoming events list
+  var upcoming = _calEvents.filter(function(ev) { return ev.date >= todayStr; }).sort(function(a,b) { return a.date.localeCompare(b.date); }).slice(0, 4);
+  if (upcoming.length > 0) {
+    html += '<div class="mt-3 pt-3 border-t border-white/5">' +
+      '<p class="text-[10px] text-gray-500 font-medium uppercase tracking-wide mb-2">Upcoming</p>';
+    upcoming.forEach(function(ev) {
+      html += '<div class="flex items-center gap-2 py-1">' +
+        '<div class="w-1.5 h-1.5 rounded-full bg-blue-400 flex-shrink-0"></div>' +
+        '<span class="text-xs text-gray-400">' + ev.date + '</span>' +
+        '<span class="text-xs text-gray-300 truncate">' + ev.title + '</span>' +
+      '</div>';
+    });
+    html += '</div>';
+  }
+
+  container.innerHTML = html;
+}
+
+window._calNav = function(dir) {
+  if (dir === 0) {
+    _calViewMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+  } else {
+    _calViewMonth.setMonth(_calViewMonth.getMonth() + dir);
+  }
+  _calRender();
 };
+
+window._toggleGcalSync = function(enabled) {
+  localStorage.setItem('rc_gcal_sync', enabled ? '1' : '0');
+  if (enabled) {
+    // Open Google Calendar OAuth flow
+    var token = localStorage.getItem('rc_customer_token') || '';
+    fetch('/api/customer/gcal/auth-url', {
+      method: 'GET',
+      headers: { 'Authorization': 'Bearer ' + token }
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.url) {
+        window.open(data.url, '_blank', 'width=500,height=600');
+      }
+    })
+    .catch(function() {
+      // Sync saved locally, will connect when API is ready
+    });
+  }
+};
+
+// Init calendar on dashboard load
+setTimeout(function() {
+  _calLoadEvents();
+  _calRender();
+}, 100);
 
 window._toggleTheme = function() {
   var current = localStorage.getItem('rc_theme_mode') || 'dark';
