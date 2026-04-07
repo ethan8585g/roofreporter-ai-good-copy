@@ -874,6 +874,32 @@ crmRoutes.get('/jobs', async (c) => {
   return c.json({ jobs: jobs.results, stats })
 })
 
+// Schedule/assign a job to a crew member on a date (dispatch board drag-and-drop)
+crmRoutes.post('/jobs/schedule', async (c) => {
+  const ownerId = await getOwnerId(c)
+  if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
+  const { jobId, crewMemberId, scheduledDate, scheduledTime } = await c.req.json()
+  if (!jobId || !scheduledDate) return c.json({ error: 'jobId and scheduledDate required' }, 400)
+
+  // Verify job belongs to owner
+  const job = await c.env.DB.prepare('SELECT id FROM crm_jobs WHERE id = ? AND owner_id = ?').bind(jobId, ownerId).first()
+  if (!job) return c.json({ error: 'Job not found' }, 404)
+
+  // Update job schedule
+  await c.env.DB.prepare(
+    `UPDATE crm_jobs SET scheduled_date = ?, scheduled_time = ?, status = CASE WHEN status IN ('', 'cancelled', 'postponed') THEN 'scheduled' ELSE status END, updated_at = datetime('now') WHERE id = ?`
+  ).bind(scheduledDate, scheduledTime || null, jobId).run()
+
+  // Assign crew member if provided (prevent duplicates)
+  if (crewMemberId) {
+    const existing = await c.env.DB.prepare('SELECT id FROM job_crew_assignments WHERE job_id = ? AND crew_member_id = ?').bind(jobId, crewMemberId).first()
+    if (!existing) {
+      await c.env.DB.prepare('INSERT INTO job_crew_assignments (job_id, crew_member_id, role) VALUES (?, ?, ?)').bind(jobId, crewMemberId, 'crew').run()
+    }
+  }
+  return c.json({ success: true })
+})
+
 crmRoutes.get('/jobs/:id', async (c) => {
   const ownerId = await getOwnerId(c)
   if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
@@ -1022,7 +1048,14 @@ crmRoutes.get('/my-jobs', async (c) => {
      ORDER BY j.scheduled_date DESC`
   ).bind(myId).all<any>()
 
-  return c.json({ jobs: jobs.results || [], is_crew_member: true })
+  // Check for active clock-in (open time log)
+  const activeClockIn = await c.env.DB.prepare(
+    `SELECT ctl.id, ctl.job_id, ctl.clock_in, ctl.clock_in_lat, ctl.clock_in_lng, j.title as job_title, j.property_address
+     FROM crew_time_logs ctl JOIN crm_jobs j ON j.id = ctl.job_id
+     WHERE ctl.crew_member_id = ? AND ctl.clock_out IS NULL LIMIT 1`
+  ).bind(myId).first<any>()
+
+  return c.json({ jobs: jobs.results || [], is_crew_member: true, active_clock_in: activeClockIn || null, my_id: myId })
 })
 
 // List available crew members (team members)
@@ -1117,6 +1150,113 @@ crmRoutes.delete('/jobs/:id/progress/:updateId', async (c) => {
   const updateId = parseInt(c.req.param('updateId'))
   await c.env.DB.prepare('DELETE FROM job_progress WHERE id = ?').bind(updateId).run()
   return c.json({ success: true })
+})
+
+// ============================================================
+// CREW MANAGER — Time Tracking, Status Updates, Messaging
+// ============================================================
+
+// Update job status (owner/manager only)
+crmRoutes.post('/jobs/:jobId/status', async (c) => {
+  const ownerId = await getOwnerId(c)
+  if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
+  const jobId = parseInt(c.req.param('jobId'))
+  const { status } = await c.req.json()
+  const allowed = ['scheduled', 'in_progress', 'completed', 'cancelled', 'postponed']
+  if (!status || !allowed.includes(status)) return c.json({ error: 'Invalid status' }, 400)
+
+  const completedDate = status === 'completed' ? "date('now')" : 'NULL'
+  await c.env.DB.prepare(
+    `UPDATE crm_jobs SET status = ?, completed_date = ${status === 'completed' ? "date('now')" : 'completed_date'}, updated_at = datetime('now') WHERE id = ? AND owner_id = ?`
+  ).bind(status, jobId, ownerId).run()
+  return c.json({ success: true })
+})
+
+// Check in to a job with GPS (crew member)
+crmRoutes.post('/jobs/:jobId/check-in', async (c) => {
+  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  if (!token) return c.json({ error: 'Not authenticated' }, 401)
+  const session = await c.env.DB.prepare("SELECT customer_id FROM customer_sessions WHERE session_token = ? AND expires_at > datetime('now')").bind(token).first<any>()
+  if (!session) return c.json({ error: 'Session expired' }, 401)
+  const myId = session.customer_id
+  const jobId = parseInt(c.req.param('jobId'))
+  const { lat, lng } = await c.req.json()
+
+  // Check no open time log exists
+  const open = await c.env.DB.prepare('SELECT id FROM crew_time_logs WHERE job_id = ? AND crew_member_id = ? AND clock_out IS NULL').bind(jobId, myId).first()
+  if (open) return c.json({ error: 'Already clocked in to this job' }, 400)
+
+  const result = await c.env.DB.prepare(
+    "INSERT INTO crew_time_logs (job_id, crew_member_id, clock_in, clock_in_lat, clock_in_lng) VALUES (?, ?, datetime('now'), ?, ?)"
+  ).bind(jobId, myId, lat || null, lng || null).run()
+
+  // Auto-update job status to in_progress if currently scheduled
+  await c.env.DB.prepare(
+    "UPDATE crm_jobs SET status = 'in_progress', updated_at = datetime('now') WHERE id = ? AND status = 'scheduled'"
+  ).bind(jobId).run()
+
+  return c.json({ success: true, time_log_id: result.meta.last_row_id })
+})
+
+// Check out of a job (crew member)
+crmRoutes.post('/jobs/:jobId/check-out', async (c) => {
+  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  if (!token) return c.json({ error: 'Not authenticated' }, 401)
+  const session = await c.env.DB.prepare("SELECT customer_id FROM customer_sessions WHERE session_token = ? AND expires_at > datetime('now')").bind(token).first<any>()
+  if (!session) return c.json({ error: 'Session expired' }, 401)
+  const myId = session.customer_id
+  const jobId = parseInt(c.req.param('jobId'))
+
+  // Find open time log
+  const openLog = await c.env.DB.prepare(
+    'SELECT id, clock_in FROM crew_time_logs WHERE job_id = ? AND crew_member_id = ? AND clock_out IS NULL'
+  ).bind(jobId, myId).first<any>()
+  if (!openLog) return c.json({ error: 'No active clock-in found' }, 400)
+
+  // Calculate duration in minutes
+  const clockIn = new Date(openLog.clock_in + 'Z').getTime()
+  const now = Date.now()
+  const durationMinutes = Math.round((now - clockIn) / 60000)
+
+  await c.env.DB.prepare(
+    "UPDATE crew_time_logs SET clock_out = datetime('now'), duration_minutes = ? WHERE id = ?"
+  ).bind(durationMinutes, openLog.id).run()
+
+  return c.json({ success: true, duration_minutes: durationMinutes })
+})
+
+// Send a crew message for a job
+crmRoutes.post('/jobs/:jobId/messages', async (c) => {
+  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  if (!token) return c.json({ error: 'Not authenticated' }, 401)
+  const session = await c.env.DB.prepare("SELECT customer_id FROM customer_sessions WHERE session_token = ? AND expires_at > datetime('now')").bind(token).first<any>()
+  if (!session) return c.json({ error: 'Session expired' }, 401)
+  const authorId = session.customer_id
+  const jobId = parseInt(c.req.param('jobId'))
+  const { content } = await c.req.json()
+  if (!content || !content.trim()) return c.json({ error: 'Message content required' }, 400)
+
+  // Resolve author name
+  const cust = await c.env.DB.prepare('SELECT name FROM customers WHERE id = ?').bind(authorId).first<any>()
+  const authorName = cust?.name || 'Unknown'
+
+  const result = await c.env.DB.prepare(
+    'INSERT INTO crew_messages (job_id, author_id, author_name, content) VALUES (?, ?, ?, ?)'
+  ).bind(jobId, authorId, authorName, content.trim()).run()
+  return c.json({ success: true, id: result.meta.last_row_id })
+})
+
+// Get messages for a job
+crmRoutes.get('/jobs/:jobId/messages', async (c) => {
+  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  if (!token) return c.json({ error: 'Not authenticated' }, 401)
+  const session = await c.env.DB.prepare("SELECT customer_id FROM customer_sessions WHERE session_token = ? AND expires_at > datetime('now')").bind(token).first<any>()
+  if (!session) return c.json({ error: 'Session expired' }, 401)
+  const jobId = parseInt(c.req.param('jobId'))
+  const messages = await c.env.DB.prepare(
+    'SELECT * FROM crew_messages WHERE job_id = ? ORDER BY created_at ASC'
+  ).bind(jobId).all<any>()
+  return c.json({ messages: messages.results || [], my_id: session.customer_id })
 })
 
 // ============================================================

@@ -2276,62 +2276,143 @@
   // ============================================================
   // MODULE: CREW MANAGER
   // ============================================================
+  var _dispatchWeekOffset = 0;
+  var _crewMyId = null;
+
+  function getWeekDates(offset) {
+    var now = new Date();
+    var day = now.getDay();
+    var monday = new Date(now);
+    monday.setDate(now.getDate() - (day === 0 ? 6 : day - 1) + (offset * 7));
+    var dates = [];
+    for (var i = 0; i < 7; i++) {
+      var d = new Date(monday);
+      d.setDate(monday.getDate() + i);
+      dates.push(d.toISOString().substring(0, 10));
+    }
+    return dates;
+  }
+
+  function fmtWeekDay(dateStr) {
+    var d = new Date(dateStr + 'T12:00:00');
+    var days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    return days[d.getDay()] + ' ' + (d.getMonth()+1) + '/' + d.getDate();
+  }
+
   function initCrewManager() {
-    root.innerHTML = '<div class="text-center py-8"><div class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-brand-500 mx-auto mb-3"></div></div>';
-    // Check if user is a crew member (team member) — show My Jobs instead
+    root.innerHTML = '<div class="text-center py-8"><div class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-emerald-500 mx-auto mb-3"></div><p class="text-sm text-gray-500">Loading Crew Manager...</p></div>';
+
+    // Check if user is a crew member — show mobile view
     fetch('/api/crm/my-jobs', { headers: authHeadersOnly() })
       .then(function(r) { return r.json(); })
       .then(function(myData) {
         if (myData.is_crew_member && myData.jobs) {
-          renderMyJobs(myData.jobs);
+          _crewMyId = myData.my_id || null;
+          // Cache for offline
+          try { localStorage.setItem('crew_cached_jobs', JSON.stringify({ jobs: myData.jobs, active_clock_in: myData.active_clock_in, my_id: myData.my_id, cached_at: new Date().toISOString() })); } catch(e) {}
+          renderMyJobs(myData.jobs, myData.active_clock_in, myData.my_id);
         } else {
-          // Admin view — full crew manager
-          Promise.all([
-            fetch('/api/crm/crew', { headers: authHeadersOnly() }).then(function(r) { return r.json(); }),
-            fetch('/api/crm/jobs?status=in_progress', { headers: authHeadersOnly() }).then(function(r) { return r.json(); }),
-            fetch('/api/crm/jobs?status=scheduled', { headers: authHeadersOnly() }).then(function(r) { return r.json(); })
-          ]).then(function(results) {
-            renderCrewManager(results[0], results[1].jobs || [], results[2].jobs || []);
-          }).catch(function() { root.innerHTML = '<p class="text-red-500 p-4">Failed to load crew data.</p>'; });
+          // Owner/admin — dispatch dashboard
+          loadDispatchData();
         }
       }).catch(function() {
-        // Fallback to admin view
-        Promise.all([
-          fetch('/api/crm/crew', { headers: authHeadersOnly() }).then(function(r) { return r.json(); }),
-          fetch('/api/crm/jobs?status=in_progress', { headers: authHeadersOnly() }).then(function(r) { return r.json(); }),
-          fetch('/api/crm/jobs?status=scheduled', { headers: authHeadersOnly() }).then(function(r) { return r.json(); })
-        ]).then(function(results) {
-          renderCrewManager(results[0], results[1].jobs || [], results[2].jobs || []);
-        }).catch(function() { root.innerHTML = '<p class="text-red-500 p-4">Failed to load crew data.</p>'; });
+        // Offline fallback for crew
+        try {
+          var cached = JSON.parse(localStorage.getItem('crew_cached_jobs') || 'null');
+          if (cached && cached.jobs) {
+            _crewMyId = cached.my_id || null;
+            renderMyJobs(cached.jobs, cached.active_clock_in, cached.my_id);
+            return;
+          }
+        } catch(e) {}
+        // Fallback to admin
+        loadDispatchData();
       });
   }
 
-  // Crew Member Portal — "My Assigned Jobs"
-  function renderMyJobs(jobs) {
+  function loadDispatchData() {
+    Promise.all([
+      fetch('/api/crm/crew', { headers: authHeadersOnly() }).then(function(r) { return r.json(); }),
+      fetch('/api/crm/jobs?status=in_progress', { headers: authHeadersOnly() }).then(function(r) { return r.json(); }),
+      fetch('/api/crm/jobs?status=scheduled', { headers: authHeadersOnly() }).then(function(r) { return r.json(); }),
+      fetch('/api/crm/jobs', { headers: authHeadersOnly() }).then(function(r) { return r.json(); })
+    ]).then(function(results) {
+      renderCrewManager(results[0], results[1].jobs || [], results[2].jobs || [], results[3].jobs || []);
+    }).catch(function() { root.innerHTML = '<p class="text-red-500 p-4">Failed to load crew data.</p>'; });
+  }
+
+  // ── CREW MEMBER MOBILE VIEW ──────────────────────────────
+
+  function renderMyJobs(jobs, activeClockIn, myId) {
+    _crewMyId = myId || _crewMyId;
     var today = new Date().toISOString().substring(0, 10);
     var todayJobs = jobs.filter(function(j) { return j.scheduled_date === today; });
     var upcomingJobs = jobs.filter(function(j) { return j.scheduled_date > today && (j.status === 'scheduled' || j.status === 'in_progress'); });
     var pastJobs = jobs.filter(function(j) { return j.scheduled_date < today || j.status === 'completed'; });
 
-    var html = '<div class="mb-5"><h2 class="text-lg font-bold text-gray-100"><i class="fas fa-hard-hat text-emerald-400 mr-2"></i>My Assigned Jobs</h2><p class="text-xs text-gray-500 mt-0.5">Jobs assigned to you by the crew manager</p></div>';
+    var html = '';
+
+    // Offline banner
+    if (!navigator.onLine) {
+      html += '<div class="bg-yellow-500/10 border border-yellow-500/30 rounded-xl px-4 py-3 mb-4 flex items-center gap-2">' +
+        '<i class="fas fa-wifi text-yellow-400"></i>' +
+        '<span class="text-sm text-yellow-300 font-medium">Offline Mode — Actions will sync when reconnected</span></div>';
+    }
+
+    // Offline queue count
+    try {
+      var queue = JSON.parse(localStorage.getItem('crew_offline_queue') || '[]');
+      if (queue.length > 0) {
+        html += '<div class="bg-blue-500/10 border border-blue-500/30 rounded-xl px-4 py-2 mb-4 text-center">' +
+          '<span class="text-xs text-blue-300">' + queue.length + ' action(s) queued for sync</span></div>';
+      }
+    } catch(e) {}
+
+    html += '<div class="mb-5"><h2 class="text-xl font-bold text-gray-100"><i class="fas fa-hard-hat text-emerald-400 mr-2"></i>My Jobs</h2>' +
+      '<p class="text-xs text-gray-500 mt-0.5">' + new Date().toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric' }) + '</p></div>';
+
+    // Active clock-in banner
+    if (activeClockIn) {
+      var clockInTime = new Date(activeClockIn.clock_in + 'Z');
+      html += '<div class="bg-emerald-500/15 border border-emerald-500/30 rounded-2xl p-5 mb-5">' +
+        '<div class="flex items-center gap-2 mb-2"><div class="w-3 h-3 bg-emerald-400 rounded-full animate-pulse"></div><span class="text-sm font-bold text-emerald-400">CLOCKED IN</span></div>' +
+        '<p class="text-lg font-bold text-white">' + (activeClockIn.job_title || 'Job') + '</p>' +
+        '<p class="text-xs text-gray-400 mb-1">' + (activeClockIn.property_address || '') + '</p>' +
+        '<p class="text-sm text-emerald-300 mb-3" id="clockElapsed">Since ' + clockInTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + '</p>' +
+        '<button onclick="window._crewCheckOut(' + activeClockIn.job_id + ')" class="w-full py-4 bg-red-600 hover:bg-red-700 text-white rounded-xl text-lg font-bold transition-colors">' +
+        '<i class="fas fa-sign-out-alt mr-2"></i>Clock Out</button></div>';
+    }
 
     // Today's jobs
-    html += '<div class="bg-emerald-500/15 border border-emerald-200 rounded-2xl p-5 mb-5">';
+    html += '<div class="mb-5">';
     html += '<h3 class="font-bold text-emerald-400 text-sm mb-3"><i class="fas fa-calendar-day mr-2"></i>Today (' + todayJobs.length + ' job' + (todayJobs.length !== 1 ? 's' : '') + ')</h3>';
     if (todayJobs.length === 0) {
-      html += '<p class="text-sm text-emerald-400">No jobs scheduled for today.</p>';
+      html += '<div class="bg-[#111111] rounded-2xl border border-white/10 p-8 text-center"><i class="fas fa-coffee text-3xl text-gray-600 mb-3 block"></i><p class="text-sm text-gray-400">No jobs scheduled for today.</p></div>';
     } else {
-      html += '<div class="space-y-2">';
+      html += '<div class="space-y-3">';
       for (var i = 0; i < todayJobs.length; i++) {
         var j = todayJobs[i];
-        html += '<div class="bg-[#111111] rounded-xl p-4 border border-emerald-100 cursor-pointer hover:shadow-sm" onclick="window._crmViewJob(' + j.id + ')">';
-        html += '<div class="flex items-center justify-between mb-1"><span class="font-mono text-xs font-bold text-emerald-400">' + j.job_number + '</span>' + badge(j.status) + '</div>';
-        html += '<p class="font-semibold text-sm text-gray-100">' + (j.title || '') + '</p>';
-        if (j.property_address) html += '<p class="text-xs text-gray-500 mt-1"><i class="fas fa-map-marker-alt mr-1"></i>' + j.property_address + '</p>';
-        if (j.scheduled_time) html += '<p class="text-xs text-gray-500"><i class="fas fa-clock mr-1"></i>' + j.scheduled_time + '</p>';
-        if (j.customer_name) html += '<p class="text-xs text-gray-500"><i class="fas fa-user mr-1"></i>' + j.customer_name + (j.customer_phone ? ' · ' + j.customer_phone : '') + '</p>';
-        if (j.crew_names) html += '<p class="text-xs text-gray-400 mt-1"><i class="fas fa-users mr-1"></i>Crew: ' + j.crew_names + '</p>';
-        html += '<div class="flex gap-2 mt-2"><button onclick="event.stopPropagation();window._crewAddProgress(' + j.id + ')" class="px-3 py-1 bg-blue-500/15 text-blue-400 rounded-lg text-xs font-semibold hover:bg-blue-200"><i class="fas fa-camera mr-1"></i>Add Update</button></div>';
+        var isCheckedIn = activeClockIn && activeClockIn.job_id === j.id;
+        html += '<div class="bg-[#111111] rounded-2xl p-5 border border-white/10">';
+        html += '<div class="flex items-center justify-between mb-2"><span class="font-mono text-xs font-bold text-emerald-400">' + (j.job_number || '') + '</span>' + badge(j.status) + '</div>';
+        html += '<p class="font-bold text-base text-gray-100 mb-1">' + (j.title || '') + '</p>';
+        if (j.property_address) html += '<p class="text-sm text-gray-400 mb-1"><i class="fas fa-map-marker-alt mr-1 text-emerald-400"></i>' + j.property_address + '</p>';
+        if (j.scheduled_time) html += '<p class="text-sm text-gray-400"><i class="fas fa-clock mr-1 text-blue-400"></i>' + j.scheduled_time + (j.estimated_duration ? ' (' + j.estimated_duration + ')' : '') + '</p>';
+        if (j.customer_name) html += '<p class="text-sm text-gray-400"><i class="fas fa-user mr-1 text-gray-500"></i>' + j.customer_name + (j.customer_phone ? ' &middot; ' + j.customer_phone : '') + '</p>';
+        if (j.crew_names) html += '<p class="text-xs text-gray-500 mt-1"><i class="fas fa-users mr-1"></i>' + j.crew_names + '</p>';
+
+        // Action buttons — large touch targets
+        html += '<div class="mt-4 space-y-2">';
+        if (!isCheckedIn && !activeClockIn) {
+          html += '<button onclick="event.stopPropagation();window._crewCheckIn(' + j.id + ')" class="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-base font-bold transition-colors"><i class="fas fa-sign-in-alt mr-2"></i>Check In</button>';
+        } else if (isCheckedIn) {
+          html += '<button onclick="event.stopPropagation();window._crewCheckOut(' + j.id + ')" class="w-full py-4 bg-red-600 hover:bg-red-700 text-white rounded-xl text-base font-bold transition-colors"><i class="fas fa-sign-out-alt mr-2"></i>Clock Out</button>';
+        }
+        html += '<div class="grid grid-cols-3 gap-2">';
+        html += '<button onclick="event.stopPropagation();window._crewPhotoUpload(' + j.id + ')" class="py-3 bg-blue-500/15 hover:bg-blue-500/25 text-blue-400 rounded-xl text-center transition-colors"><i class="fas fa-camera text-lg block mb-0.5"></i><span class="text-[10px] font-semibold">Photo</span></button>';
+        html += '<button onclick="event.stopPropagation();window._crewOpenChat(' + j.id + ')" class="py-3 bg-purple-500/15 hover:bg-purple-500/25 text-purple-400 rounded-xl text-center transition-colors"><i class="fas fa-comment text-lg block mb-0.5"></i><span class="text-[10px] font-semibold">Message</span></button>';
+        html += '<button onclick="event.stopPropagation();window._crewDirections(\'' + (j.property_address || '').replace(/'/g, "\\'") + '\')" class="py-3 bg-gray-500/15 hover:bg-gray-500/25 text-gray-400 rounded-xl text-center transition-colors"><i class="fas fa-directions text-lg block mb-0.5"></i><span class="text-[10px] font-semibold">Navigate</span></button>';
+        html += '</div></div>';
         html += '</div>';
       }
       html += '</div>';
@@ -2340,26 +2421,28 @@
 
     // Upcoming jobs
     if (upcomingJobs.length > 0) {
-      html += '<div class="bg-[#111111] rounded-2xl border shadow-sm mb-5 overflow-hidden">';
-      html += '<div class="px-5 py-4 border-b border-white/5"><h3 class="font-bold text-gray-100 text-sm"><i class="fas fa-calendar text-blue-500 mr-2"></i>Upcoming (' + upcomingJobs.length + ')</h3></div>';
-      html += '<div class="divide-y divide-gray-100">';
+      html += '<div class="bg-[#111111] rounded-2xl border border-white/10 mb-5 overflow-hidden">';
+      html += '<div class="px-5 py-4 border-b border-white/5"><h3 class="font-bold text-gray-100 text-sm"><i class="fas fa-calendar text-blue-400 mr-2"></i>Upcoming (' + upcomingJobs.length + ')</h3></div>';
+      html += '<div class="divide-y divide-white/5">';
       for (var u = 0; u < upcomingJobs.length; u++) {
         var uj = upcomingJobs[u];
-        html += '<div class="px-5 py-3 hover:bg-[#111111]/5 cursor-pointer" onclick="window._crmViewJob(' + uj.id + ')">';
-        html += '<div class="flex items-center justify-between"><div><p class="font-medium text-sm text-gray-100">' + (uj.title || '') + '</p><p class="text-xs text-gray-500"><i class="fas fa-calendar mr-1"></i>' + fmtDate(uj.scheduled_date) + (uj.scheduled_time ? ' ' + uj.scheduled_time : '') + (uj.property_address ? ' · <i class="fas fa-map-marker-alt mr-0.5"></i>' + uj.property_address : '') + '</p></div>' + badge(uj.status) + '</div>';
+        html += '<div class="px-5 py-4">';
+        html += '<div class="flex items-center justify-between mb-1"><p class="font-semibold text-sm text-gray-100">' + (uj.title || '') + '</p>' + badge(uj.status) + '</div>';
+        html += '<p class="text-xs text-gray-400"><i class="fas fa-calendar mr-1"></i>' + fmtDate(uj.scheduled_date) + (uj.scheduled_time ? ' at ' + uj.scheduled_time : '') + '</p>';
+        if (uj.property_address) html += '<p class="text-xs text-gray-500"><i class="fas fa-map-marker-alt mr-1"></i>' + uj.property_address + '</p>';
         html += '</div>';
       }
       html += '</div></div>';
     }
 
-    // Past/completed
+    // Completed jobs
     if (pastJobs.length > 0) {
-      html += '<div class="bg-[#111111] rounded-2xl border shadow-sm overflow-hidden">';
-      html += '<div class="px-5 py-4 border-b border-white/5"><h3 class="font-bold text-gray-100 text-sm"><i class="fas fa-check-circle text-green-500 mr-2"></i>Completed (' + pastJobs.length + ')</h3></div>';
-      html += '<div class="divide-y divide-gray-100">';
+      html += '<div class="bg-[#111111] rounded-2xl border border-white/10 overflow-hidden">';
+      html += '<div class="px-5 py-4 border-b border-white/5"><h3 class="font-bold text-gray-100 text-sm"><i class="fas fa-check-circle text-green-400 mr-2"></i>Completed (' + pastJobs.length + ')</h3></div>';
+      html += '<div class="divide-y divide-white/5">';
       for (var p = 0; p < Math.min(pastJobs.length, 10); p++) {
         var pj = pastJobs[p];
-        html += '<div class="px-5 py-3 opacity-60"><p class="text-sm text-gray-300">' + (pj.title || '') + '</p><p class="text-xs text-gray-400">' + fmtDate(pj.scheduled_date) + '</p></div>';
+        html += '<div class="px-5 py-3 opacity-60"><p class="text-sm text-gray-300">' + (pj.title || '') + '</p><p class="text-xs text-gray-500">' + fmtDate(pj.scheduled_date) + '</p></div>';
       }
       html += '</div></div>';
     }
@@ -2367,96 +2450,395 @@
     root.innerHTML = html;
   }
 
-  function renderCrewManager(crewData, activeJobs, scheduledJobs) {
-    var crew = crewData.crew || [];
-    var owner = crewData.owner || {};
-    var allJobs = activeJobs.concat(scheduledJobs);
+  // Check-in with GPS
+  window._crewCheckIn = function(jobId) {
+    var btn = event.target.closest('button');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Getting location...';
 
-    var html = '<div class="flex items-center justify-between mb-5 flex-wrap gap-3">';
-    html += '<div><h2 class="text-lg font-bold text-gray-100"><i class="fas fa-hard-hat text-emerald-400 mr-2"></i>Crew Manager</h2><p class="text-xs text-gray-500 mt-0.5">Assign crew to jobs and track progress</p></div>';
-    html += '<a href="/customer/team" class="bg-emerald-500/15 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-emerald-500/15"><i class="fas fa-user-plus mr-1"></i>Invite Crew Member</a>';
-    html += '</div>';
-
-    // Stats
-    html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">';
-    html += '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-gray-100">' + crew.length + '</p><p class="text-[10px] text-gray-500">Crew Members</p></div>';
-    html += '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-blue-600">' + activeJobs.length + '</p><p class="text-[10px] text-gray-500">Active Jobs</p></div>';
-    html += '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-gray-400">' + scheduledJobs.length + '</p><p class="text-[10px] text-gray-500">Scheduled</p></div>';
-    html += '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-emerald-400">' + crew.reduce(function(sum, m) { return sum + (m.active_jobs || 0); }, 0) + '</p><p class="text-[10px] text-gray-500">Crew on Jobs</p></div>';
-    html += '</div>';
-
-    // Daily Dispatch Board — Today's schedule
-    var today = new Date().toISOString().substring(0, 10);
-    var todayJobs = allJobs.filter(function(j) { return j.scheduled_date === today; });
-    if (todayJobs.length > 0) {
-      html += '<div class="bg-gradient-to-r from-emerald-50 to-gray-50 border border-emerald-200 rounded-2xl p-5 mb-5">';
-      html += '<h3 class="font-bold text-emerald-400 text-sm mb-3"><i class="fas fa-clipboard-list mr-2"></i>Today\'s Dispatch Board — ' + new Date().toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric' }) + '</h3>';
-      html += '<div class="grid md:grid-cols-2 lg:grid-cols-3 gap-3">';
-      for (var ti = 0; ti < todayJobs.length; ti++) {
-        var tj = todayJobs[ti];
-        var tjStatus = tj.status === 'in_progress' ? 'border-white/15 bg-white/10' : 'border-blue-200 bg-[#111111]';
-        html += '<div class="rounded-xl p-3 border-2 ' + tjStatus + '">';
-        html += '<div class="flex items-center justify-between mb-1"><span class="font-mono text-[10px] font-bold text-emerald-400">' + tj.job_number + '</span>' + badge(tj.status) + '</div>';
-        html += '<p class="font-semibold text-sm text-gray-100 truncate">' + (tj.title || '') + '</p>';
-        if (tj.scheduled_time) html += '<p class="text-xs text-gray-400"><i class="fas fa-clock mr-1 text-emerald-400"></i>' + tj.scheduled_time + '</p>';
-        if (tj.property_address) html += '<p class="text-xs text-gray-500 truncate"><i class="fas fa-map-marker-alt mr-1 text-emerald-400"></i>' + tj.property_address + '</p>';
-        html += '<div class="flex items-center justify-between mt-2"><span class="text-xs text-gray-400"><i class="fas fa-users mr-0.5"></i>' + (tj.crew_size || 0) + ' crew</span>';
-        html += '<button onclick="window._crewAssignJob(' + tj.id + ')" class="text-[10px] bg-emerald-500/15 text-emerald-400 px-2 py-0.5 rounded-lg font-semibold hover:bg-emerald-500/15">Assign</button></div>';
-        html += '</div>';
-      }
-      html += '</div></div>';
+    function doCheckIn(lat, lng) {
+      fetch('/api/crm/jobs/' + jobId + '/check-in', {
+        method: 'POST', headers: authHeaders(),
+        body: JSON.stringify({ lat: lat, lng: lng })
+      }).then(function(r) { return r.json(); })
+      .then(function(res) {
+        if (res.success) { toast('Checked in!'); initCrewManager(); }
+        else { toast(res.error || 'Check-in failed', 'error'); btn.disabled = false; btn.innerHTML = '<i class="fas fa-sign-in-alt mr-2"></i>Check In'; }
+      }).catch(function() {
+        // Queue for offline
+        queueOfflineAction({ type: 'check-in', jobId: jobId, lat: lat, lng: lng });
+        btn.disabled = false; btn.innerHTML = '<i class="fas fa-sign-in-alt mr-2"></i>Check In';
+      });
     }
 
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        function(pos) { doCheckIn(pos.coords.latitude, pos.coords.longitude); },
+        function() {
+          // GPS failed — check in without location
+          doCheckIn(null, null);
+        },
+        { enableHighAccuracy: true, timeout: 10000 }
+      );
+    } else {
+      doCheckIn(null, null);
+    }
+  };
+
+  // Check-out
+  window._crewCheckOut = function(jobId) {
+    var btn = event.target.closest('button');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Clocking out...';
+
+    fetch('/api/crm/jobs/' + jobId + '/check-out', {
+      method: 'POST', headers: authHeaders(), body: '{}'
+    }).then(function(r) { return r.json(); })
+    .then(function(res) {
+      if (res.success) {
+        var hrs = Math.floor(res.duration_minutes / 60);
+        var mins = res.duration_minutes % 60;
+        toast('Clocked out! Duration: ' + (hrs > 0 ? hrs + 'h ' : '') + mins + 'm');
+        initCrewManager();
+      } else { toast(res.error || 'Clock-out failed', 'error'); btn.disabled = false; btn.innerHTML = '<i class="fas fa-sign-out-alt mr-2"></i>Clock Out'; }
+    }).catch(function() {
+      queueOfflineAction({ type: 'check-out', jobId: jobId });
+      btn.disabled = false; btn.innerHTML = '<i class="fas fa-sign-out-alt mr-2"></i>Clock Out';
+    });
+  };
+
+  // Photo upload (mobile camera)
+  window._crewPhotoUpload = function(jobId) {
+    var body = '<div class="space-y-3">' +
+      '<div><label class="block text-xs font-medium text-gray-400 mb-1">Take Photo or Choose from Gallery</label>' +
+      '<input type="file" id="crewPhoto" accept="image/*" capture="environment" class="w-full px-3 py-3 border border-white/15 rounded-xl text-sm bg-[#0A0A0A]"></div>' +
+      '<div><label class="block text-xs font-medium text-gray-400 mb-1">Caption (optional)</label>' +
+      '<input type="text" id="crewPhotoCaption" class="w-full px-3 py-3 border border-white/15 rounded-xl text-sm bg-[#0A0A0A]" placeholder="Describe the photo..."></div>' +
+      '</div>';
+    showModal('Upload Photo', body, function() {
+      var fileInput = document.getElementById('crewPhoto');
+      var caption = (document.getElementById('crewPhotoCaption')?.value || '').trim();
+      if (!fileInput || !fileInput.files[0]) { toast('Select a photo first', 'error'); return; }
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        fetch('/api/crm/jobs/' + jobId + '/progress', {
+          method: 'POST', headers: authHeaders(),
+          body: JSON.stringify({ update_type: 'photo', content: caption || 'Photo upload', photo_data: e.target.result, photo_caption: caption })
+        }).then(function(r) { return r.json(); })
+        .then(function(res) {
+          if (res.success) { closeModal(); toast('Photo uploaded!'); }
+          else toast(res.error || 'Upload failed', 'error');
+        }).catch(function() {
+          queueOfflineAction({ type: 'progress', jobId: jobId, payload: { update_type: 'photo', content: caption || 'Photo upload', photo_data: e.target.result, photo_caption: caption } });
+          closeModal();
+        });
+      };
+      reader.readAsDataURL(fileInput.files[0]);
+    }, 'Upload');
+  };
+
+  // Messaging drawer
+  window._crewOpenChat = function(jobId) {
+    var existing = document.getElementById('chatDrawer');
+    if (existing) existing.remove();
+    if (window._chatPollInterval) clearInterval(window._chatPollInterval);
+
+    var drawer = document.createElement('div');
+    drawer.id = 'chatDrawer';
+    drawer.className = 'fixed inset-0 z-50 flex flex-col';
+    drawer.innerHTML =
+      '<div class="flex-1 bg-black/60" onclick="document.getElementById(\'chatDrawer\').remove();clearInterval(window._chatPollInterval)"></div>' +
+      '<div class="bg-[#111111] border-t border-white/10 rounded-t-2xl flex flex-col" style="max-height:75vh">' +
+        '<div class="px-4 py-3 border-b border-white/10 flex items-center justify-between flex-shrink-0">' +
+          '<h3 class="font-bold text-gray-100 text-sm"><i class="fas fa-comment text-purple-400 mr-2"></i>Job Chat</h3>' +
+          '<button onclick="document.getElementById(\'chatDrawer\').remove();clearInterval(window._chatPollInterval)" class="text-gray-400 hover:text-white text-xl">&times;</button>' +
+        '</div>' +
+        '<div id="chatMessages" class="flex-1 overflow-y-auto p-4 space-y-3" style="min-height:200px"></div>' +
+        '<div class="p-3 border-t border-white/10 flex gap-2 flex-shrink-0">' +
+          '<input id="chatInput" type="text" class="flex-1 px-4 py-3 bg-[#0A0A0A] border border-white/15 rounded-xl text-sm text-white" placeholder="Type a message..." onkeydown="if(event.key===\'Enter\')window._crewSendMsg(' + jobId + ')">' +
+          '<button onclick="window._crewSendMsg(' + jobId + ')" class="px-5 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold transition-colors"><i class="fas fa-paper-plane"></i></button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(drawer);
+
+    window._crewLoadMessages(jobId);
+    window._chatPollInterval = setInterval(function() { window._crewLoadMessages(jobId); }, 15000);
+  };
+
+  window._crewLoadMessages = function(jobId) {
+    fetch('/api/crm/jobs/' + jobId + '/messages', { headers: authHeadersOnly() })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        var container = document.getElementById('chatMessages');
+        if (!container) { clearInterval(window._chatPollInterval); return; }
+        var msgs = data.messages || [];
+        var myId = data.my_id || _crewMyId;
+        if (msgs.length === 0) {
+          container.innerHTML = '<p class="text-center text-gray-500 text-sm py-8">No messages yet. Start the conversation!</p>';
+          return;
+        }
+        var html = '';
+        for (var i = 0; i < msgs.length; i++) {
+          var m = msgs[i];
+          var isMine = m.author_id === myId;
+          html += '<div class="' + (isMine ? 'text-right' : '') + '">' +
+            '<p class="text-[10px] text-gray-500 mb-0.5">' + (m.author_name || 'Unknown') + '</p>' +
+            '<div class="inline-block px-4 py-2 rounded-2xl text-sm max-w-[80%] ' +
+            (isMine ? 'bg-emerald-600 text-white rounded-br-md' : 'bg-white/10 text-gray-200 rounded-bl-md') + '">' +
+            m.content.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</div>' +
+            '<p class="text-[9px] text-gray-600 mt-0.5">' + new Date(m.created_at + 'Z').toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + '</p></div>';
+        }
+        container.innerHTML = html;
+        container.scrollTop = container.scrollHeight;
+      }).catch(function() {});
+  };
+
+  window._crewSendMsg = function(jobId) {
+    var input = document.getElementById('chatInput');
+    if (!input) return;
+    var text = input.value.trim();
+    if (!text) return;
+    input.value = '';
+    fetch('/api/crm/jobs/' + jobId + '/messages', {
+      method: 'POST', headers: authHeaders(),
+      body: JSON.stringify({ content: text })
+    }).then(function() { window._crewLoadMessages(jobId); })
+    .catch(function() {
+      queueOfflineAction({ type: 'message', jobId: jobId, content: text });
+    });
+  };
+
+  // Navigate to property address
+  window._crewDirections = function(address) {
+    if (!address) { toast('No address available', 'error'); return; }
+    var encoded = encodeURIComponent(address);
+    var url = /iPad|iPhone|iPod/.test(navigator.userAgent)
+      ? 'maps://maps.apple.com/?daddr=' + encoded
+      : 'https://www.google.com/maps/dir/?api=1&destination=' + encoded;
+    window.open(url, '_blank');
+  };
+
+  // Offline queue helpers
+  function queueOfflineAction(action) {
+    try {
+      var queue = JSON.parse(localStorage.getItem('crew_offline_queue') || '[]');
+      queue.push(Object.assign({}, action, { queued_at: new Date().toISOString() }));
+      localStorage.setItem('crew_offline_queue', JSON.stringify(queue));
+      toast('Action queued — will sync when online', 'error');
+    } catch(e) {}
+  }
+
+  window.addEventListener('online', function() {
+    try {
+      var queue = JSON.parse(localStorage.getItem('crew_offline_queue') || '[]');
+      if (queue.length === 0) return;
+      toast('Syncing ' + queue.length + ' queued action(s)...');
+      var promises = queue.map(function(action) {
+        if (action.type === 'check-in') {
+          return fetch('/api/crm/jobs/' + action.jobId + '/check-in', { method: 'POST', headers: authHeaders(), body: JSON.stringify({ lat: action.lat, lng: action.lng }) });
+        }
+        if (action.type === 'check-out') {
+          return fetch('/api/crm/jobs/' + action.jobId + '/check-out', { method: 'POST', headers: authHeaders(), body: '{}' });
+        }
+        if (action.type === 'message') {
+          return fetch('/api/crm/jobs/' + action.jobId + '/messages', { method: 'POST', headers: authHeaders(), body: JSON.stringify({ content: action.content }) });
+        }
+        if (action.type === 'progress') {
+          return fetch('/api/crm/jobs/' + action.jobId + '/progress', { method: 'POST', headers: authHeaders(), body: JSON.stringify(action.payload) });
+        }
+        return Promise.resolve();
+      });
+      Promise.all(promises).then(function() {
+        localStorage.removeItem('crew_offline_queue');
+        toast('All actions synced!');
+        if (typeof initCrewManager === 'function') initCrewManager();
+      }).catch(function() { toast('Some actions failed to sync', 'error'); });
+    } catch(e) {}
+  });
+
+  // ── OWNER DISPATCH DASHBOARD ─────────────────────────────
+
+  function renderCrewManager(crewData, activeJobs, scheduledJobs, allJobs) {
+    var crew = crewData.crew || [];
+    var owner = crewData.owner || {};
+    var busyJobs = activeJobs.concat(scheduledJobs);
+
+    // Determine unscheduled: no scheduled_date or no crew assigned
+    var scheduledJobIds = {};
+    busyJobs.forEach(function(j) { scheduledJobIds[j.id] = true; });
+    var unscheduledJobs = (allJobs || []).filter(function(j) {
+      return !j.scheduled_date && j.status !== 'completed' && j.status !== 'cancelled';
+    });
+
+    var html = '<div class="flex items-center justify-between mb-5 flex-wrap gap-3">';
+    html += '<div><h2 class="text-xl font-bold text-gray-100"><i class="fas fa-hard-hat text-emerald-400 mr-2"></i>Crew Manager</h2><p class="text-xs text-gray-500 mt-0.5">Drag jobs onto the schedule to dispatch your crew</p></div>';
+    html += '<div class="flex gap-2"><a href="/customer/team" class="bg-emerald-500/15 text-emerald-400 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-emerald-500/25 transition-colors"><i class="fas fa-user-plus mr-1"></i>Invite Crew</a>' +
+      '<a href="/customer/jobs" class="bg-blue-500/15 text-blue-400 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-500/25 transition-colors"><i class="fas fa-plus mr-1"></i>New Job</a></div>';
+    html += '</div>';
+
+    // Stats row
+    html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">';
+    html += '<div class="bg-[#111111] rounded-xl border border-white/10 p-4 text-center"><p class="text-2xl font-black text-gray-100">' + crew.length + '</p><p class="text-[10px] text-gray-500 uppercase tracking-wide">Crew Members</p></div>';
+    html += '<div class="bg-[#111111] rounded-xl border border-white/10 p-4 text-center"><p class="text-2xl font-black text-blue-400">' + activeJobs.length + '</p><p class="text-[10px] text-gray-500 uppercase tracking-wide">In Progress</p></div>';
+    html += '<div class="bg-[#111111] rounded-xl border border-white/10 p-4 text-center"><p class="text-2xl font-black text-cyan-400">' + scheduledJobs.length + '</p><p class="text-[10px] text-gray-500 uppercase tracking-wide">Scheduled</p></div>';
+    html += '<div class="bg-[#111111] rounded-xl border border-white/10 p-4 text-center"><p class="text-2xl font-black text-yellow-400">' + unscheduledJobs.length + '</p><p class="text-[10px] text-gray-500 uppercase tracking-wide">Unscheduled</p></div>';
+    html += '</div>';
+
+    // ── DISPATCH BOARD: Split screen ──
+    html += '<div class="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-5">';
+
+    // LEFT: Unscheduled jobs (1 col)
+    html += '<div class="lg:col-span-1">';
+    html += '<div class="bg-[#111111] rounded-2xl border border-white/10 overflow-hidden">';
+    html += '<div class="px-4 py-3 border-b border-white/5 bg-yellow-500/5"><h3 class="font-bold text-yellow-400 text-sm"><i class="fas fa-inbox mr-2"></i>Unscheduled (' + unscheduledJobs.length + ')</h3></div>';
+    html += '<div class="p-3 space-y-2 max-h-[500px] overflow-y-auto" id="unscheduledList">';
+    if (unscheduledJobs.length === 0) {
+      html += '<p class="text-xs text-gray-500 text-center py-4">All jobs are scheduled!</p>';
+    }
+    for (var ui = 0; ui < unscheduledJobs.length; ui++) {
+      var uj = unscheduledJobs[ui];
+      html += '<div class="bg-[#0A0A0A] rounded-xl p-3 border border-white/10 cursor-grab hover:border-emerald-500/30 transition-colors" draggable="true" data-job-id="' + uj.id + '" data-job-title="' + (uj.title || '').replace(/"/g, '&quot;') + '">';
+      html += '<div class="flex items-center justify-between mb-1"><span class="font-mono text-[10px] font-bold text-emerald-400">' + (uj.job_number || '') + '</span>' + badge(uj.status) + '</div>';
+      html += '<p class="text-sm font-semibold text-gray-100 truncate">' + (uj.title || 'Untitled') + '</p>';
+      if (uj.property_address) html += '<p class="text-[11px] text-gray-500 truncate"><i class="fas fa-map-marker-alt mr-1"></i>' + uj.property_address + '</p>';
+      if (uj.customer_name) html += '<p class="text-[11px] text-gray-500"><i class="fas fa-user mr-1"></i>' + uj.customer_name + '</p>';
+      html += '</div>';
+    }
+    html += '</div></div></div>';
+
+    // RIGHT: Weekly calendar grid (3 cols)
+    var weekDates = getWeekDates(_dispatchWeekOffset);
+    var weekLabel = fmtWeekDay(weekDates[0]) + ' — ' + fmtWeekDay(weekDates[6]);
+
+    html += '<div class="lg:col-span-3">';
+    html += '<div class="bg-[#111111] rounded-2xl border border-white/10 overflow-hidden">';
+    // Week nav header
+    html += '<div class="px-4 py-3 border-b border-white/5 flex items-center justify-between">';
+    html += '<button onclick="window._crewWeekNav(-1)" class="px-3 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 text-sm"><i class="fas fa-chevron-left"></i></button>';
+    html += '<h3 class="font-bold text-gray-100 text-sm"><i class="fas fa-calendar-week text-cyan-400 mr-2"></i>' + weekLabel + '</h3>';
+    html += '<div class="flex gap-1"><button onclick="window._crewWeekNav(0)" class="px-3 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 text-xs font-medium">Today</button>';
+    html += '<button onclick="window._crewWeekNav(1)" class="px-3 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 text-sm"><i class="fas fa-chevron-right"></i></button></div>';
+    html += '</div>';
+
+    // Calendar grid
+    html += '<div class="overflow-x-auto"><table class="w-full min-w-[700px]">';
+    // Header row: days of week
+    var todayStr = new Date().toISOString().substring(0, 10);
+    html += '<thead><tr><th class="text-left px-3 py-2 text-xs text-gray-500 font-medium w-[120px] border-b border-white/5">Crew</th>';
+    for (var di = 0; di < 7; di++) {
+      var isToday = weekDates[di] === todayStr;
+      html += '<th class="px-2 py-2 text-xs font-medium border-b border-white/5 ' + (isToday ? 'text-emerald-400 bg-emerald-500/5' : 'text-gray-500') + '">' + fmtWeekDay(weekDates[di]) + '</th>';
+    }
+    html += '</tr></thead><tbody>';
+
+    // One row per crew member + owner
+    var allCrew = [{ member_customer_id: owner.id, name: owner.name || 'Owner', isOwner: true }].concat(crew.map(function(m) { return { member_customer_id: m.member_customer_id, name: m.name || 'Unknown' }; }));
+
+    for (var ci = 0; ci < allCrew.length; ci++) {
+      var cm = allCrew[ci];
+      var initials = (cm.name || 'U').split(' ').map(function(w) { return w[0]; }).join('').substring(0, 2).toUpperCase();
+      html += '<tr class="border-b border-white/5">';
+      html += '<td class="px-3 py-2"><div class="flex items-center gap-2"><div class="w-7 h-7 bg-emerald-500/15 rounded-full flex items-center justify-center text-emerald-400 font-bold text-[10px]">' + initials + '</div><span class="text-xs text-gray-300 truncate max-w-[80px]">' + cm.name + '</span></div></td>';
+
+      for (var dj = 0; dj < 7; dj++) {
+        var cellDate = weekDates[dj];
+        var isToday2 = cellDate === todayStr;
+        // Find jobs for this crew member on this date
+        var cellJobs = busyJobs.filter(function(j) {
+          return j.scheduled_date === cellDate;
+        });
+        // We show all scheduled jobs in the cell — proper crew-specific filtering would need assignment data per job
+        // For simplicity, show jobs that have this crew member assigned (we'll match by checking assignments later)
+        html += '<td class="px-1 py-1 align-top min-w-[90px] border-l border-white/5 ' + (isToday2 ? 'bg-emerald-500/5' : '') + '" data-crew-id="' + cm.member_customer_id + '" data-date="' + cellDate + '" ondragover="event.preventDefault();this.classList.add(\'bg-emerald-500/10\')" ondragleave="this.classList.remove(\'bg-emerald-500/10\')" ondrop="window._crewDropJob(event,this)">';
+
+        // Render jobs in this cell
+        var matchingJobs = busyJobs.filter(function(bj) { return bj.scheduled_date === cellDate; });
+        for (var mji = 0; mji < matchingJobs.length; mji++) {
+          var mj = matchingJobs[mji];
+          var bgColor = mj.status === 'in_progress' ? 'bg-blue-500/20 border-blue-500/30' : 'bg-cyan-500/10 border-cyan-500/20';
+          html += '<div class="text-[10px] rounded-lg px-1.5 py-1 mb-1 border ' + bgColor + ' truncate cursor-pointer" onclick="window._crmViewJob(' + mj.id + ')" title="' + (mj.title || '').replace(/"/g, '&quot;') + '">';
+          html += '<span class="font-bold">' + (mj.job_number || '') + '</span> ' + (mj.title || '').substring(0, 15);
+          html += '</div>';
+        }
+        html += '</td>';
+      }
+      html += '</tr>';
+    }
+
+    html += '</tbody></table></div></div></div>';
+    html += '</div>'; // end grid
+
     // Crew roster
-    html += '<div class="bg-[#111111] rounded-2xl border shadow-sm mb-5 overflow-hidden">';
-    html += '<div class="px-5 py-4 border-b border-white/5"><h3 class="font-bold text-gray-100 text-sm"><i class="fas fa-users text-emerald-400 mr-2"></i>Crew Roster</h3></div>';
+    html += '<div class="bg-[#111111] rounded-2xl border border-white/10 overflow-hidden">';
+    html += '<div class="px-5 py-4 border-b border-white/5"><h3 class="font-bold text-gray-100 text-sm"><i class="fas fa-users text-emerald-400 mr-2"></i>Crew Roster (' + crew.length + ')</h3></div>';
     if (crew.length === 0) {
-      html += '<div class="p-8 text-center text-gray-400"><i class="fas fa-hard-hat text-3xl mb-3 opacity-30 block"></i><p class="text-sm">No crew members yet. Invite team members to start assigning them to jobs.</p><a href="/customer/team" class="inline-block mt-3 text-sm text-emerald-400 hover:underline font-semibold"><i class="fas fa-user-plus mr-1"></i>Invite Team Member</a></div>';
+      html += '<div class="p-8 text-center text-gray-400"><i class="fas fa-hard-hat text-3xl mb-3 opacity-30 block"></i><p class="text-sm">No crew members yet.</p><a href="/customer/team" class="inline-block mt-3 text-sm text-emerald-400 hover:underline font-semibold"><i class="fas fa-user-plus mr-1"></i>Invite Team Member</a></div>';
     } else {
       html += '<div class="grid md:grid-cols-2 lg:grid-cols-3 gap-4 p-4">';
-      for (var i = 0; i < crew.length; i++) {
-        var m = crew[i];
-        var initials = (m.name || 'U').split(' ').map(function(w) { return w[0]; }).join('').substring(0, 2).toUpperCase();
-        html += '<div class="bg-[#0A0A0A] rounded-xl p-4 border hover:shadow-sm transition-shadow">';
-        html += '<div class="flex items-center gap-3 mb-3"><div class="w-10 h-10 bg-emerald-500/15 rounded-full flex items-center justify-center text-emerald-400 font-bold text-sm">' + initials + '</div>';
-        html += '<div class="min-w-0"><p class="font-semibold text-sm text-gray-100 truncate">' + (m.name || 'Unknown') + '</p>';
-        html += '<p class="text-xs text-gray-500">' + (m.role === 'admin' ? 'Admin' : 'Crew Member') + '</p></div></div>';
-        if (m.phone) html += '<p class="text-xs text-gray-500 mb-1"><i class="fas fa-phone mr-1.5 text-gray-400"></i>' + m.phone + '</p>';
-        if (m.email) html += '<p class="text-xs text-gray-500 mb-2"><i class="fas fa-envelope mr-1.5 text-gray-400"></i>' + m.email + '</p>';
-        html += '<div class="flex items-center gap-2 mt-2"><span class="px-2 py-0.5 bg-blue-500/15 text-blue-400 rounded-full text-[10px] font-bold">' + (m.total_assignments || 0) + ' jobs assigned</span>';
-        if (m.active_jobs > 0) html += '<span class="px-2 py-0.5 bg-emerald-500/15 text-emerald-400 rounded-full text-[10px] font-bold">' + m.active_jobs + ' active</span>';
+      for (var ri = 0; ri < crew.length; ri++) {
+        var rm = crew[ri];
+        var rInitials = (rm.name || 'U').split(' ').map(function(w) { return w[0]; }).join('').substring(0, 2).toUpperCase();
+        html += '<div class="bg-[#0A0A0A] rounded-xl p-4 border border-white/10 hover:border-emerald-500/20 transition-colors">';
+        html += '<div class="flex items-center gap-3 mb-3"><div class="w-10 h-10 bg-emerald-500/15 rounded-full flex items-center justify-center text-emerald-400 font-bold text-sm">' + rInitials + '</div>';
+        html += '<div class="min-w-0"><p class="font-semibold text-sm text-gray-100 truncate">' + (rm.name || 'Unknown') + '</p>';
+        html += '<p class="text-xs text-gray-500">' + (rm.role === 'admin' ? 'Admin' : 'Crew Member') + '</p></div></div>';
+        if (rm.phone) html += '<p class="text-xs text-gray-500 mb-1"><i class="fas fa-phone mr-1.5 text-gray-400"></i>' + rm.phone + '</p>';
+        if (rm.email) html += '<p class="text-xs text-gray-500 mb-2"><i class="fas fa-envelope mr-1.5 text-gray-400"></i>' + rm.email + '</p>';
+        html += '<div class="flex items-center gap-2 mt-2"><span class="px-2 py-0.5 bg-blue-500/15 text-blue-400 rounded-full text-[10px] font-bold">' + (rm.total_assignments || 0) + ' jobs</span>';
+        if (rm.active_jobs > 0) html += '<span class="px-2 py-0.5 bg-emerald-500/15 text-emerald-400 rounded-full text-[10px] font-bold">' + rm.active_jobs + ' active</span>';
         html += '</div></div>';
       }
       html += '</div>';
     }
     html += '</div>';
 
-    // Active jobs with crew
-    html += '<div class="bg-[#111111] rounded-2xl border shadow-sm overflow-hidden">';
-    html += '<div class="px-5 py-4 border-b border-white/5"><h3 class="font-bold text-gray-100 text-sm"><i class="fas fa-briefcase text-blue-500 mr-2"></i>Active & Scheduled Jobs (' + allJobs.length + ')</h3></div>';
-    if (allJobs.length === 0) {
-      html += '<div class="p-8 text-center text-gray-400"><p class="text-sm">No active or scheduled jobs. Create a job from the Jobs tab.</p></div>';
-    } else {
-      html += '<div class="divide-y divide-gray-100">';
-      for (var j = 0; j < allJobs.length; j++) {
-        var job = allJobs[j];
-        var statusColor = job.status === 'in_progress' ? 'bg-blue-500/15/15 text-blue-400' : 'bg-blue-500/15 text-blue-400';
-        html += '<div class="px-5 py-3 flex items-center justify-between hover:bg-[#111111]/5 cursor-pointer" onclick="window._crmViewJob(' + job.id + ')">';
-        html += '<div class="min-w-0 flex-1"><div class="flex items-center gap-2 mb-0.5"><span class="font-mono text-xs font-bold text-emerald-400">' + job.job_number + '</span><span class="px-2 py-0.5 rounded-full text-[10px] font-bold ' + statusColor + ' capitalize">' + (job.status || '').replace(/_/g, ' ') + '</span></div>';
-        html += '<p class="text-sm font-medium text-gray-100 truncate">' + (job.title || '') + '</p>';
-        html += '<p class="text-xs text-gray-500"><i class="fas fa-calendar mr-1"></i>' + fmtDate(job.scheduled_date) + (job.property_address ? ' · <i class="fas fa-map-marker-alt mr-0.5"></i>' + job.property_address : '') + '</p></div>';
-        html += '<div class="flex items-center gap-2 ml-4"><span class="text-xs text-gray-400"><i class="fas fa-users mr-0.5"></i>' + (job.crew_size || 0) + '</span>';
-        html += '<button onclick="event.stopPropagation();window._crewAssignJob(' + job.id + ')" class="px-3 py-1 bg-emerald-500/15 text-emerald-400 rounded-lg text-xs font-semibold hover:bg-emerald-500/15"><i class="fas fa-user-plus mr-0.5"></i>Assign</button></div>';
-        html += '</div>';
-      }
-      html += '</div>';
-    }
-    html += '</div>';
-
     root.innerHTML = html;
+
+    // Attach drag events to unscheduled job cards
+    setTimeout(function() {
+      var cards = document.querySelectorAll('[draggable="true"][data-job-id]');
+      for (var k = 0; k < cards.length; k++) {
+        cards[k].addEventListener('dragstart', function(e) {
+          e.dataTransfer.setData('text/plain', this.getAttribute('data-job-id'));
+          e.dataTransfer.effectAllowed = 'move';
+          this.style.opacity = '0.5';
+        });
+        cards[k].addEventListener('dragend', function() {
+          this.style.opacity = '1';
+        });
+      }
+    }, 50);
   }
 
-  // Assign crew to job modal
+  // Drop handler — schedule job to crew on date
+  window._crewDropJob = function(event, cell) {
+    event.preventDefault();
+    cell.classList.remove('bg-emerald-500/10');
+    var jobId = parseInt(event.dataTransfer.getData('text/plain'));
+    var crewId = parseInt(cell.getAttribute('data-crew-id'));
+    var date = cell.getAttribute('data-date');
+    if (!jobId || !date) return;
+
+    cell.innerHTML += '<div class="text-[10px] text-emerald-400 py-1"><i class="fas fa-spinner fa-spin mr-1"></i>Scheduling...</div>';
+
+    fetch('/api/crm/jobs/schedule', {
+      method: 'POST', headers: authHeaders(),
+      body: JSON.stringify({ jobId: jobId, crewMemberId: crewId, scheduledDate: date })
+    }).then(function(r) { return r.json(); })
+    .then(function(res) {
+      if (res.success) { toast('Job scheduled!'); initCrewManager(); }
+      else { toast(res.error || 'Scheduling failed', 'error'); initCrewManager(); }
+    }).catch(function() { toast('Network error', 'error'); });
+  };
+
+  // Week navigation
+  window._crewWeekNav = function(dir) {
+    if (dir === 0) { _dispatchWeekOffset = 0; }
+    else { _dispatchWeekOffset += dir; }
+    loadDispatchData();
+  };
+
+  // Assign crew to job modal (kept from existing)
   window._crewAssignJob = function(jobId) {
     Promise.all([
       fetch('/api/crm/crew', { headers: authHeadersOnly() }).then(function(r) { return r.json(); }),
@@ -2467,23 +2849,21 @@
       var assignedIds = assigned.map(function(a) { return a.crew_member_id; });
 
       var body = '<div class="space-y-3">';
-      // Currently assigned
       if (assigned.length > 0) {
         body += '<div><h4 class="text-xs font-bold text-gray-500 uppercase mb-2">Currently Assigned</h4><div class="space-y-1.5">';
         for (var i = 0; i < assigned.length; i++) {
           var a = assigned[i];
-          body += '<div class="flex items-center justify-between bg-green-50 rounded-lg px-3 py-2"><div class="flex items-center gap-2"><i class="fas fa-user-check text-green-500"></i><span class="text-sm font-medium text-gray-100">' + (a.name || 'Unknown') + '</span><span class="px-1.5 py-0.5 bg-emerald-500/15 text-emerald-400 rounded text-[9px] font-bold capitalize">' + (a.role || 'crew') + '</span></div><button onclick="window._crewRemoveFromJob(' + jobId + ',' + a.crew_member_id + ')" class="text-red-400 hover:text-red-600"><i class="fas fa-times"></i></button></div>';
+          body += '<div class="flex items-center justify-between bg-emerald-500/10 rounded-lg px-3 py-2"><div class="flex items-center gap-2"><i class="fas fa-user-check text-emerald-400"></i><span class="text-sm font-medium text-gray-100">' + (a.name || 'Unknown') + '</span><span class="px-1.5 py-0.5 bg-emerald-500/15 text-emerald-400 rounded text-[9px] font-bold capitalize">' + (a.role || 'crew') + '</span></div><button onclick="window._crewRemoveFromJob(' + jobId + ',' + a.crew_member_id + ')" class="text-red-400 hover:text-red-600"><i class="fas fa-times"></i></button></div>';
         }
         body += '</div></div>';
       }
-      // Available to assign
       var unassigned = available.filter(function(m) { return assignedIds.indexOf(m.member_customer_id) === -1; });
       if (unassigned.length > 0) {
         body += '<div><h4 class="text-xs font-bold text-gray-500 uppercase mb-2">Available Crew</h4><div class="space-y-1.5">';
         for (var j = 0; j < unassigned.length; j++) {
           var u = unassigned[j];
           body += '<div class="flex items-center justify-between bg-[#0A0A0A] rounded-lg px-3 py-2"><div class="flex items-center gap-2"><i class="fas fa-user text-gray-400"></i><span class="text-sm font-medium text-gray-100">' + (u.name || 'Unknown') + '</span>' + (u.phone ? '<span class="text-xs text-gray-400">' + u.phone + '</span>' : '') + '</div>';
-          body += '<button onclick="window._crewAddToJob(' + jobId + ',' + u.member_customer_id + ')" class="px-3 py-1 bg-emerald-500/15 text-white rounded-lg text-xs font-semibold hover:bg-emerald-500/15"><i class="fas fa-plus mr-0.5"></i>Assign</button></div>';
+          body += '<button onclick="window._crewAddToJob(' + jobId + ',' + u.member_customer_id + ')" class="px-3 py-1 bg-emerald-600 text-white rounded-lg text-xs font-semibold hover:bg-emerald-700"><i class="fas fa-plus mr-0.5"></i>Assign</button></div>';
         }
         body += '</div></div>';
       } else if (assigned.length === 0) {
@@ -2497,23 +2877,23 @@
   window._crewAddToJob = function(jobId, memberId) {
     fetch('/api/crm/jobs/' + jobId + '/crew', { method: 'POST', headers: authHeaders(), body: JSON.stringify({ crew_member_id: memberId }) })
       .then(function(r) { return r.json(); })
-      .then(function(res) { if (res.success) { toast('Crew assigned!'); closeModal(); window._crewAssignJob(jobId); } else { toast(res.error || 'Failed', 'error'); } })
+      .then(function(res) { if (res.success) { toast('Crew assigned!'); closeModal(); initCrewManager(); } else { toast(res.error || 'Failed', 'error'); } })
       .catch(function() { toast('Network error', 'error'); });
   };
 
   window._crewRemoveFromJob = function(jobId, memberId) {
     fetch('/api/crm/jobs/' + jobId + '/crew/' + memberId, { method: 'DELETE', headers: authHeadersOnly() })
       .then(function(r) { return r.json(); })
-      .then(function(res) { if (res.success) { toast('Crew removed'); closeModal(); window._crewAssignJob(jobId); } })
+      .then(function(res) { if (res.success) { toast('Crew removed'); closeModal(); initCrewManager(); } })
       .catch(function() { toast('Network error', 'error'); });
   };
 
-  // Job progress — add note or photo
+  // Job progress — add note or photo (enhanced with mobile camera support)
   window._crewAddProgress = function(jobId) {
     var body = '<div class="space-y-3">' +
-      '<div><label class="block text-xs font-medium text-gray-400 mb-1">Update Type</label><select id="progType" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm"><option value="note">Note</option><option value="photo">Photo</option><option value="status_change">Status Update</option></select></div>' +
-      '<div><label class="block text-xs font-medium text-gray-400 mb-1">Note / Details</label><textarea id="progContent" rows="3" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm" placeholder="What\'s the update?"></textarea></div>' +
-      '<div id="progPhotoSection" class="hidden"><label class="block text-xs font-medium text-gray-400 mb-1">Photo</label><input type="file" id="progPhoto" accept="image/*" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm"><input type="text" id="progCaption" placeholder="Photo caption (optional)" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm mt-2"></div>' +
+      '<div><label class="block text-xs font-medium text-gray-400 mb-1">Update Type</label><select id="progType" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm bg-[#0A0A0A]"><option value="note">Note</option><option value="photo">Photo</option><option value="status_change">Status Update</option></select></div>' +
+      '<div><label class="block text-xs font-medium text-gray-400 mb-1">Note / Details</label><textarea id="progContent" rows="3" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm bg-[#0A0A0A]" placeholder="What\'s the update?"></textarea></div>' +
+      '<div id="progPhotoSection" class="hidden"><label class="block text-xs font-medium text-gray-400 mb-1">Photo</label><input type="file" id="progPhoto" accept="image/*" capture="environment" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm bg-[#0A0A0A]"><input type="text" id="progCaption" placeholder="Photo caption (optional)" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm bg-[#0A0A0A] mt-2"></div>' +
       '</div>';
     showModal('Add Progress Update', body, function() {
       var type = document.getElementById('progType').value;
@@ -2524,7 +2904,7 @@
       function sendProgress(photoData) {
         fetch('/api/crm/jobs/' + jobId + '/progress', { method: 'POST', headers: authHeaders(), body: JSON.stringify({ update_type: type, content: content, photo_data: photoData || null, photo_caption: caption }) })
           .then(function(r) { return r.json(); })
-          .then(function(res) { if (res.success) { closeModal(); toast('Progress added!'); window._crmViewJob(jobId); } else { toast(res.error || 'Failed', 'error'); } })
+          .then(function(res) { if (res.success) { closeModal(); toast('Progress added!'); } else { toast(res.error || 'Failed', 'error'); } })
           .catch(function() { toast('Network error', 'error'); });
       }
 
@@ -2538,7 +2918,6 @@
       }
     }, 'Post Update');
 
-    // Toggle photo section based on type
     setTimeout(function() {
       var sel = document.getElementById('progType');
       if (sel) sel.addEventListener('change', function() {
