@@ -28,7 +28,7 @@ document.addEventListener('DOMContentLoaded', async function() {
 async function loadDashData() {
   custState.loading = true;
   try {
-    var [profileRes, ordersRes, billingRes, crmCustRes, crmInvRes, crmPropRes, crmJobRes, secRes, teamRes] = await Promise.all([
+    var [profileRes, ordersRes, billingRes, crmCustRes, crmInvRes, crmPropRes, crmJobRes, secRes, teamRes, analyticsRes] = await Promise.all([
       fetch('/api/customer/me', { headers: authHeaders() }).catch(function() { return { ok: false }; }),
       fetch('/api/customer/orders', { headers: authHeaders() }).catch(function() { return { ok: false }; }),
       fetch('/api/square/billing', { headers: authHeaders() }).catch(function() { return { ok: false }; }),
@@ -37,7 +37,8 @@ async function loadDashData() {
       fetch('/api/crm/proposals', { headers: authHeaders() }).catch(function() { return { ok: false }; }),
       fetch('/api/crm/jobs', { headers: authHeaders() }).catch(function() { return { ok: false }; }),
       fetch('/api/secretary/status', { headers: authHeaders() }).catch(function() { return { ok: false }; }),
-      fetch('/api/team/members', { headers: authHeaders() }).catch(function() { return { ok: false }; })
+      fetch('/api/team/members', { headers: authHeaders() }).catch(function() { return { ok: false }; }),
+      fetch('/api/crm/analytics', { headers: authHeaders() }).catch(function() { return { ok: false }; })
     ]);
     if (profileRes.ok) {
       var pd = await profileRes.json();
@@ -57,6 +58,9 @@ async function loadDashData() {
     if (crmPropRes.ok) { var d3 = await crmPropRes.json(); stats.proposals_open = (d3.stats && d3.stats.open_count) || 0; stats.proposals_sold = (d3.stats && d3.stats.sold_count) || 0; }
     if (crmJobRes.ok) { var d4 = await crmJobRes.json(); stats.jobs_total = (d4.stats && d4.stats.total) || 0; stats.jobs_scheduled = (d4.stats && d4.stats.scheduled) || 0; stats.jobs_in_progress = (d4.stats && d4.stats.in_progress) || 0; }
     custState.crmStats = stats;
+    // Analytics data
+    custState.analytics = null;
+    if (analyticsRes.ok) { custState.analytics = await analyticsRes.json(); }
     // Secretary status
     custState.secretaryActive = false;
     custState.secretaryCalls = 0;
@@ -330,6 +334,34 @@ function renderDashboard() {
         '</div>' +
       '</div>' +
 
+      // Analytics Charts
+      '<div class="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-5" id="analytics-section">' +
+        // Jobs Completed Chart
+        '<div class="bg-[#111111] rounded-2xl border border-white/10 shadow-sm overflow-hidden">' +
+          '<div class="px-5 py-3 border-b border-white/5">' +
+            '<h3 class="font-bold text-white text-sm"><i class="fas fa-briefcase text-emerald-400 mr-2"></i>Jobs Completed</h3>' +
+          '</div>' +
+          '<div class="p-4"><canvas id="chartJobs" height="180"></canvas></div>' +
+          '<div id="jobsStats" class="px-4 pb-4 flex gap-2 flex-wrap"></div>' +
+        '</div>' +
+        // Revenue Chart
+        '<div class="bg-[#111111] rounded-2xl border border-white/10 shadow-sm overflow-hidden">' +
+          '<div class="px-5 py-3 border-b border-white/5">' +
+            '<h3 class="font-bold text-white text-sm"><i class="fas fa-dollar-sign text-blue-400 mr-2"></i>Revenue</h3>' +
+          '</div>' +
+          '<div class="p-4"><canvas id="chartRevenue" height="180"></canvas></div>' +
+          '<div id="revenueStats" class="px-4 pb-4 flex gap-2 flex-wrap"></div>' +
+        '</div>' +
+        // Crew Utilization Chart
+        '<div class="bg-[#111111] rounded-2xl border border-white/10 shadow-sm overflow-hidden">' +
+          '<div class="px-5 py-3 border-b border-white/5">' +
+            '<h3 class="font-bold text-white text-sm"><i class="fas fa-users text-orange-400 mr-2"></i>Crew Hours <span class="text-[10px] text-gray-500 font-normal">(30 days)</span></h3>' +
+          '</div>' +
+          '<div class="p-4"><canvas id="chartCrew" height="180"></canvas></div>' +
+          '<div id="crewStats" class="px-4 pb-4 flex gap-2 flex-wrap"></div>' +
+        '</div>' +
+      '</div>' +
+
       // Ad unit — shown only to non-subscribers via RRAds.init()
       '<div class="rra-ad-container" data-ad-slot="" data-ad-format="horizontal" style="display:none; margin-bottom:20px; text-align:center; min-height:90px; background:#f1f5f9; border:1px solid #e2e8f0; border-radius:12px; overflow:hidden; padding:4px;"></div>' +
 
@@ -356,6 +388,159 @@ function renderDashboard() {
       sidebar +
       mainContent +
     '</div>';
+
+  // Initialize analytics charts after DOM render
+  setTimeout(function() { initAnalyticsCharts(); }, 150);
+}
+
+function initAnalyticsCharts() {
+  var a = custState.analytics;
+  if (!a || typeof Chart === 'undefined') return;
+
+  var chartDefaults = {
+    color: '#9ca3af',
+    borderColor: 'rgba(255,255,255,0.05)',
+    font: { family: 'system-ui, sans-serif', size: 11 }
+  };
+
+  // Month label formatter
+  function fmtMonth(m) {
+    if (!m) return '';
+    var parts = m.split('-');
+    var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return months[parseInt(parts[1]) - 1] || m;
+  }
+
+  // ── JOBS COMPLETED CHART ──
+  var jobsCanvas = document.getElementById('chartJobs');
+  if (jobsCanvas && a.jobs) {
+    var jm = a.jobs.by_month || [];
+    new Chart(jobsCanvas, {
+      type: 'bar',
+      data: {
+        labels: jm.map(function(d) { return fmtMonth(d.month); }),
+        datasets: [{
+          label: 'Completed',
+          data: jm.map(function(d) { return d.count; }),
+          backgroundColor: 'rgba(16, 185, 129, 0.6)',
+          borderColor: 'rgba(16, 185, 129, 1)',
+          borderWidth: 1,
+          borderRadius: 6
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: chartDefaults, grid: { display: false } },
+          y: { ticks: Object.assign({}, chartDefaults, { stepSize: 1 }), grid: { color: 'rgba(255,255,255,0.05)' }, beginAtZero: true }
+        }
+      }
+    });
+
+    // Stats pills
+    var jobsStatsEl = document.getElementById('jobsStats');
+    if (jobsStatsEl) {
+      var statusMap = {};
+      (a.jobs.by_status || []).forEach(function(s) { statusMap[s.status] = s.count; });
+      jobsStatsEl.innerHTML =
+        '<span class="px-2.5 py-1 bg-emerald-500/10 text-emerald-400 rounded-lg text-[11px] font-bold">' + (statusMap.completed || 0) + ' Completed</span>' +
+        '<span class="px-2.5 py-1 bg-blue-500/10 text-blue-400 rounded-lg text-[11px] font-bold">' + (statusMap.in_progress || 0) + ' In Progress</span>' +
+        '<span class="px-2.5 py-1 bg-cyan-500/10 text-cyan-400 rounded-lg text-[11px] font-bold">' + (statusMap.scheduled || 0) + ' Scheduled</span>';
+    }
+  }
+
+  // ── REVENUE CHART ──
+  var revCanvas = document.getElementById('chartRevenue');
+  if (revCanvas && a.revenue) {
+    var rm = a.revenue.by_month || [];
+    var ctx = revCanvas.getContext('2d');
+    var gradient = ctx.createLinearGradient(0, 0, 0, 180);
+    gradient.addColorStop(0, 'rgba(59, 130, 246, 0.3)');
+    gradient.addColorStop(1, 'rgba(59, 130, 246, 0.02)');
+
+    new Chart(revCanvas, {
+      type: 'line',
+      data: {
+        labels: rm.map(function(d) { return fmtMonth(d.month); }),
+        datasets: [{
+          label: 'Revenue',
+          data: rm.map(function(d) { return d.revenue || 0; }),
+          borderColor: 'rgba(59, 130, 246, 1)',
+          backgroundColor: gradient,
+          fill: true,
+          tension: 0.4,
+          borderWidth: 2,
+          pointRadius: 4,
+          pointBackgroundColor: 'rgba(59, 130, 246, 1)'
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: chartDefaults, grid: { display: false } },
+          y: { ticks: Object.assign({}, chartDefaults, { callback: function(v) { return '$' + v.toLocaleString(); } }), grid: { color: 'rgba(255,255,255,0.05)' }, beginAtZero: true }
+        }
+      }
+    });
+
+    // Stats pills
+    var revStatsEl = document.getElementById('revenueStats');
+    if (revStatsEl) {
+      revStatsEl.innerHTML =
+        '<span class="px-2.5 py-1 bg-emerald-500/10 text-emerald-400 rounded-lg text-[11px] font-bold">$' + Number(a.revenue.total_paid || 0).toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0}) + ' Paid</span>' +
+        '<span class="px-2.5 py-1 bg-yellow-500/10 text-yellow-400 rounded-lg text-[11px] font-bold">$' + Number(a.revenue.total_owing || 0).toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0}) + ' Owing</span>' +
+        (a.revenue.total_overdue > 0 ? '<span class="px-2.5 py-1 bg-red-500/10 text-red-400 rounded-lg text-[11px] font-bold">$' + Number(a.revenue.total_overdue || 0).toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0}) + ' Overdue</span>' : '');
+    }
+  }
+
+  // ── CREW UTILIZATION CHART ──
+  var crewCanvas = document.getElementById('chartCrew');
+  if (crewCanvas && a.crew) {
+    var ch = a.crew.hours || [];
+    if (ch.length === 0) {
+      crewCanvas.parentElement.innerHTML = '<div class="text-center py-8"><i class="fas fa-users text-2xl text-gray-700 mb-2 block"></i><p class="text-xs text-gray-500">No crew time logged yet</p></div>';
+    } else {
+      new Chart(crewCanvas, {
+        type: 'bar',
+        data: {
+          labels: ch.map(function(c) { return (c.name || 'Crew').split(' ')[0]; }),
+          datasets: [{
+            label: 'Hours',
+            data: ch.map(function(c) { return Math.round((c.total_minutes || 0) / 60 * 10) / 10; }),
+            backgroundColor: 'rgba(251, 146, 60, 0.6)',
+            borderColor: 'rgba(251, 146, 60, 1)',
+            borderWidth: 1,
+            borderRadius: 6
+          }]
+        },
+        options: {
+          indexAxis: 'y',
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { ticks: Object.assign({}, chartDefaults, { callback: function(v) { return v + 'h'; } }), grid: { color: 'rgba(255,255,255,0.05)' }, beginAtZero: true },
+            y: { ticks: chartDefaults, grid: { display: false } }
+          }
+        }
+      });
+
+      // Stats
+      var crewStatsEl = document.getElementById('crewStats');
+      if (crewStatsEl) {
+        var totalMins = ch.reduce(function(s, c) { return s + (c.total_minutes || 0); }, 0);
+        var totalJobs = ch.reduce(function(s, c) { return s + (c.jobs_worked || 0); }, 0);
+        crewStatsEl.innerHTML =
+          '<span class="px-2.5 py-1 bg-orange-500/10 text-orange-400 rounded-lg text-[11px] font-bold">' + Math.round(totalMins / 60) + 'h Total</span>' +
+          '<span class="px-2.5 py-1 bg-orange-500/10 text-orange-400 rounded-lg text-[11px] font-bold">' + ch.length + ' Crew</span>' +
+          '<span class="px-2.5 py-1 bg-orange-500/10 text-orange-400 rounded-lg text-[11px] font-bold">' + totalJobs + ' Jobs</span>';
+      }
+    }
+  }
 }
 
 function renderRecentOrders() {

@@ -1026,6 +1026,79 @@ crmRoutes.delete('/jobs/:id', async (c) => {
 })
 
 // ============================================================
+// DASHBOARD ANALYTICS — Jobs, Revenue, Crew Utilization
+// ============================================================
+
+crmRoutes.get('/analytics', async (c) => {
+  const ownerId = await getOwnerId(c)
+  if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
+
+  // Jobs completed by month (last 6 months)
+  const jobsByMonth = await c.env.DB.prepare(`
+    SELECT strftime('%Y-%m', COALESCE(completed_date, scheduled_date)) as month, COUNT(*) as count
+    FROM crm_jobs WHERE owner_id = ? AND status = 'completed'
+    GROUP BY month ORDER BY month DESC LIMIT 6
+  `).bind(ownerId).all<any>()
+
+  // Jobs by status
+  const jobsByStatus = await c.env.DB.prepare(`
+    SELECT status, COUNT(*) as count FROM crm_jobs WHERE owner_id = ? GROUP BY status
+  `).bind(ownerId).all<any>()
+
+  // Jobs by type
+  const jobsByType = await c.env.DB.prepare(`
+    SELECT job_type, COUNT(*) as count FROM crm_jobs WHERE owner_id = ? GROUP BY job_type
+  `).bind(ownerId).all<any>()
+
+  // Revenue by month (last 6 months — paid invoices)
+  const revenueByMonth = await c.env.DB.prepare(`
+    SELECT strftime('%Y-%m', COALESCE(paid_date, created_at)) as month, SUM(total) as revenue
+    FROM crm_invoices WHERE owner_id = ? AND status = 'paid'
+    GROUP BY month ORDER BY month DESC LIMIT 6
+  `).bind(ownerId).all<any>()
+
+  // Revenue totals
+  const revTotals = await c.env.DB.prepare(`
+    SELECT
+      SUM(CASE WHEN status = 'paid' THEN total ELSE 0 END) as total_paid,
+      SUM(CASE WHEN status IN ('sent','viewed','overdue') THEN total ELSE 0 END) as total_owing,
+      SUM(CASE WHEN status = 'overdue' THEN total ELSE 0 END) as total_overdue,
+      COUNT(CASE WHEN status = 'paid' THEN 1 END) as paid_count,
+      COUNT(*) as total_count
+    FROM crm_invoices WHERE owner_id = ?
+  `).bind(ownerId).first<any>()
+
+  // Crew utilization (last 30 days)
+  const crewHours = await c.env.DB.prepare(`
+    SELECT c.name, ctl.crew_member_id as id, SUM(ctl.duration_minutes) as total_minutes, COUNT(DISTINCT ctl.job_id) as jobs_worked
+    FROM crew_time_logs ctl
+    JOIN customers c ON c.id = ctl.crew_member_id
+    JOIN crm_jobs j ON j.id = ctl.job_id
+    WHERE j.owner_id = ? AND ctl.clock_in >= datetime('now', '-30 days') AND ctl.clock_out IS NOT NULL
+    GROUP BY ctl.crew_member_id ORDER BY total_minutes DESC
+  `).bind(ownerId).all<any>()
+
+  return c.json({
+    jobs: {
+      by_month: (jobsByMonth.results || []).reverse(),
+      by_status: jobsByStatus.results || [],
+      by_type: jobsByType.results || []
+    },
+    revenue: {
+      by_month: (revenueByMonth.results || []).reverse(),
+      total_paid: revTotals?.total_paid || 0,
+      total_owing: revTotals?.total_owing || 0,
+      total_overdue: revTotals?.total_overdue || 0,
+      paid_count: revTotals?.paid_count || 0,
+      total_count: revTotals?.total_count || 0
+    },
+    crew: {
+      hours: crewHours.results || []
+    }
+  })
+})
+
+// ============================================================
 // CREW MANAGER — Assignment + Progress Tracking
 // ============================================================
 
