@@ -255,12 +255,27 @@ document.addEventListener('DOMContentLoaded', () => {
   // ============================================================
   function renderConfirmSupplier() {
     if (state.suppliers.length > 0) {
-      var s = state.suppliers[0];
+      // Build supplier selector if multiple suppliers exist
+      var selectedIdx = state.selectedSupplierIdx || 0;
+      if (selectedIdx >= state.suppliers.length) selectedIdx = 0;
+      var s = state.suppliers[selectedIdx];
+
+      var selectorHtml = '';
+      if (state.suppliers.length > 1) {
+        selectorHtml = '<div style="margin-bottom:16px"><label style="display:block;color:var(--text-muted);font-size:12px;font-weight:600;margin-bottom:6px">Select Supplier</label>' +
+          '<select id="pbSupplierSelect" onchange="window.__pbState.selectedSupplierIdx=parseInt(this.value);window.__pbRender()" style="width:100%;background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:8px;padding:10px;color:var(--text-primary);font-size:14px">';
+        for (var si = 0; si < state.suppliers.length; si++) {
+          selectorHtml += '<option value="' + si + '"' + (si === selectedIdx ? ' selected' : '') + '>' + (state.suppliers[si].name || 'Supplier') + (state.suppliers[si].branch_name ? ' — ' + state.suppliers[si].branch_name : '') + '</option>';
+        }
+        selectorHtml += '</select></div>';
+      }
+
       return '<div style="max-width:600px;margin:40px auto;padding:0 20px">' +
         '<div style="text-align:center;margin-bottom:32px">' +
           '<h2 style="color:var(--text-primary);font-size:24px;font-weight:800;margin-bottom:8px">Confirm Your Supplier</h2>' +
           '<p style="color:var(--text-muted);font-size:14px">Material orders will be sent to this supplier</p>' +
         '</div>' +
+        selectorHtml +
         '<div style="background:var(--bg-card);border:2px solid var(--accent);border-radius:16px;padding:24px;margin-bottom:24px">' +
           '<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">' +
             '<div style="width:48px;height:48px;background:var(--accent);border-radius:12px;display:flex;align-items:center;justify-content:center"><i class="fas fa-store" style="color:#0a0a0a;font-size:20px"></i></div>' +
@@ -276,10 +291,12 @@ document.addEventListener('DOMContentLoaded', () => {
             (s.rep_phone ? '<div style="color:var(--text-secondary)"><span style="color:var(--text-muted)">Rep Phone:</span> ' + s.rep_phone + '</div>' : '') +
           '</div>' +
         '</div>' +
-        '<div style="display:flex;gap:12px;justify-content:center">' +
+        '<div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">' +
           '<button onclick="window.__pbState.createStep=1;window.__pbRender()" style="color:var(--text-muted);background:var(--bg-card);border:1px solid var(--border-color);padding:12px 24px;border-radius:999px;cursor:pointer;font-weight:600">&larr; Back</button>' +
+          '<button onclick="window.__pbState.showNewSupplierForm=true;window.__pbRender()" style="color:var(--text-primary);background:var(--bg-card);border:1px solid var(--border-color);padding:12px 24px;border-radius:999px;cursor:pointer;font-weight:600"><i class="fas fa-plus" style="margin-right:6px"></i>New Supplier</button>' +
           '<button onclick="window.__pbState.createStep=3;window.__pbRender()" style="background:var(--accent);color:#0a0a0a;border:none;padding:12px 40px;border-radius:999px;font-weight:800;font-size:15px;cursor:pointer">Confirm & Build Proposal &rarr;</button>' +
         '</div>' +
+        (state.showNewSupplierForm ? '<div style="margin-top:24px">' + renderSupplierSetup() + '</div>' : '') +
       '</div>';
     } else {
       return renderSupplierSetup();
@@ -1046,8 +1063,9 @@ document.addEventListener('DOMContentLoaded', () => {
         '</div>' +
         '<div style="display:flex;gap:12px;margin-top:16px">' +
           '<button onclick="saveSupplier()" style="flex:1;background:#2563eb;color:white;border:none;padding:14px;border-radius:10px;font-weight:800;font-size:15px;cursor:pointer">Save Supplier & Continue</button>' +
-          '</div>' + // close button row without skip
-          '<p style="color:#9ca3af;font-size:12px;text-align:center;margin-top:8px">You must set up a supplier before creating proposals</p>' +
+          (state.suppliers.length > 0 ? '<button onclick="window.__pbState.showNewSupplierForm=false;window.__pbRender()" style="flex:0.5;background:transparent;color:#9ca3af;border:1px solid #374151;padding:14px;border-radius:10px;font-weight:600;font-size:14px;cursor:pointer">Cancel</button>' : '') +
+          '</div>' +
+          (state.suppliers.length === 0 ? '<p style="color:#9ca3af;font-size:12px;text-align:center;margin-top:8px">Set up a supplier to generate material orders with your proposals</p>' : '') +
           '<div style="display:none">' + // hidden placeholder
         '</div>' +
       '</div>' +
@@ -1101,6 +1119,9 @@ document.addEventListener('DOMContentLoaded', () => {
       if (result?.success) {
         state.supplierSetup = true;
         state.suppliers.push(Object.assign({ id: result.supplier_id }, data));
+        state.selectedSupplierIdx = state.suppliers.length - 1;
+        state.showNewSupplierForm = false;
+        pbToast('Supplier added!', 'success');
         render();
       } else {
         pbToast('Failed to save supplier: ' + (result?.error || 'Unknown error'), 'error');
@@ -1145,7 +1166,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     var data = {
       proposal_id: proposalId || state.editId,
-      supplier_id: state.suppliers.length > 0 ? state.suppliers[0].id : null,
+      supplier_id: state.suppliers.length > 0 ? state.suppliers[state.selectedSupplierIdx || 0].id : null,
       report_id: proposal.attached_report_id || null,
       job_address: cust.address || cust.customer_address || '',
       customer_name: cust.name || cust.email || '',
