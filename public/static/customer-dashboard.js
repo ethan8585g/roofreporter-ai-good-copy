@@ -1101,7 +1101,7 @@ function _gcalFetchEvents() {
   })
   .then(function(r) { return r.json(); })
   .then(function(data) {
-    var events = data.events || data || [];
+    var events = data.events || data.google_events || [];
     if (Array.isArray(events)) {
       events.forEach(function(ev) {
         var d = (ev.start_time || ev.start || '').substring(0, 10);
