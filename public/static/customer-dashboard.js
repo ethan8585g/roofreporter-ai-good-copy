@@ -3,7 +3,30 @@
 // Central hub after login: quick access to all BMS modules
 // ============================================================
 
-var custState = { loading: true, orders: [], billing: null, customer: null, crmStats: null, showAds: false };
+var custState = { loading: true, orders: [], billing: null, customer: null, crmStats: null, showAds: false, autoEmailEnabled: null, gcalEnabled: null };
+
+var _chartInstances = { jobs: null, revenue: null, crew: null };
+
+// Apply visual state to a custom-styled toggle (track color + knob position).
+// Also syncs the hidden checkbox's .checked property.
+function applyToggleVisual(id, checked) {
+  var cb = document.getElementById(id);
+  if (!cb) return;
+  var label = cb.closest('label') || cb.parentElement;
+  var track = label && label.querySelector('[data-toggle-track]');
+  var knob  = label && label.querySelector('[data-toggle-knob]');
+  var onColor = (id === 'gcal-sync-toggle') ? '#3b82f6' : '#10b981';
+  if (track) track.style.background = checked ? onColor : '#374151';
+  if (knob)  knob.style.transform   = checked ? 'translateX(20px)' : 'translateX(0)';
+  cb.checked = checked;
+}
+
+// Set toggle value, persist to custState, and update visuals atomically.
+function setToggle(id, val) {
+  if (id === 'gcal-sync-toggle') custState.gcalEnabled = val;
+  if (id === 'auto-email-toggle') custState.autoEmailEnabled = val;
+  applyToggleVisual(id, val);
+}
 
 function getToken() { return localStorage.getItem('rc_customer_token') || ''; }
 function authHeaders() { return { 'Authorization': 'Bearer ' + getToken(), 'Content-Type': 'application/json' }; }
@@ -290,9 +313,12 @@ function renderDashboard() {
               '<div class="flex items-center gap-2">' +
                 '<img src="https://www.gstatic.com/images/branding/product/1x/calendar_48dp.png" alt="" class="w-4 h-4">' +
                 '<span class="text-xs" style="color:var(--text-muted)">Google Sync</span>' +
-                '<label class="relative inline-flex items-center cursor-pointer">' +
-                  '<input type="checkbox" id="gcal-sync-toggle" class="sr-only peer" onchange="window._toggleGcalSync(this.checked)">' +
-                  '<div class="w-9 h-5 bg-gray-700 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-400 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[&quot;&quot;] after:absolute after:top-[2px] after:left-[2px] after:bg-gray-400 after:border after:border-gray-600 after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>' +
+                '<label style="position:relative;display:inline-flex;align-items:center;cursor:pointer">' +
+                  '<input type="checkbox" id="gcal-sync-toggle" style="opacity:0;position:absolute;width:0;height:0" onchange="setToggle(\'gcal-sync-toggle\',this.checked);window._toggleGcalSync(this.checked)">' +
+                  '<span style="position:relative;display:inline-block;width:44px;height:24px;border-radius:12px;background:transparent">' +
+                    '<span data-toggle-track style="position:absolute;inset:0;background:#374151;border-radius:12px;transition:background 0.22s;box-shadow:inset 0 1px 4px rgba(0,0,0,0.35)"></span>' +
+                    '<span data-toggle-knob style="position:absolute;top:3px;left:3px;width:18px;height:18px;background:#ffffff;border-radius:50%;box-shadow:0 1px 5px rgba(0,0,0,0.35);transition:transform 0.22s cubic-bezier(.4,0,.2,1)"></span>' +
+                  '</span>' +
                 '</label>' +
               '</div>' +
               '<div class="flex items-center gap-1">' +
@@ -372,9 +398,12 @@ function renderDashboard() {
             '<p class="font-medium text-gray-100 text-sm"><i class="fas fa-envelope text-blue-400 mr-2"></i>Auto-email reports when ready</p>' +
             '<p class="text-xs text-gray-500 mt-0.5">Send completed reports automatically to ' + (c.email || '') + '</p>' +
           '</div>' +
-          '<label class="relative inline-flex items-center cursor-pointer">' +
-            '<input type="checkbox" id="auto-email-toggle" class="sr-only peer" onchange="toggleAutoEmail(this.checked)">' +
-            '<div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-400 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[&quot;&quot;] after:absolute after:top-[2px] after:left-[2px] after:bg-[#111111] after:border-white/15 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-500/15"></div>' +
+          '<label style="position:relative;display:inline-flex;align-items:center;cursor:pointer">' +
+            '<input type="checkbox" id="auto-email-toggle" style="opacity:0;position:absolute;width:0;height:0" onchange="setToggle(\'auto-email-toggle\',this.checked);toggleAutoEmail(this.checked)">' +
+            '<span style="position:relative;display:inline-block;width:44px;height:24px;border-radius:12px;background:transparent">' +
+              '<span data-toggle-track style="position:absolute;inset:0;background:#374151;border-radius:12px;transition:background 0.22s;box-shadow:inset 0 1px 4px rgba(0,0,0,0.35)"></span>' +
+              '<span data-toggle-knob style="position:absolute;top:3px;left:3px;width:18px;height:18px;background:#ffffff;border-radius:50%;box-shadow:0 1px 5px rgba(0,0,0,0.35);transition:transform 0.22s cubic-bezier(.4,0,.2,1)"></span>' +
+            '</span>' +
           '</label>' +
         '</div>' +
       '</div>' +
@@ -423,7 +452,8 @@ function initAnalyticsCharts() {
       jobsGradient.addColorStop(0, 'rgba(16, 185, 129, 0.7)');
       jobsGradient.addColorStop(1, 'rgba(16, 185, 129, 0.15)');
 
-      new Chart(jobsCanvas, {
+      if (_chartInstances.jobs) { _chartInstances.jobs.destroy(); _chartInstances.jobs = null; }
+      _chartInstances.jobs = new Chart(jobsCanvas, {
         type: 'bar',
         data: {
           labels: jm.map(function(d) { return fmtMonth(d.month); }),
@@ -476,7 +506,8 @@ function initAnalyticsCharts() {
       gradient.addColorStop(0, 'rgba(59, 130, 246, 0.3)');
       gradient.addColorStop(1, 'rgba(59, 130, 246, 0.02)');
 
-      new Chart(revCanvas, {
+      if (_chartInstances.revenue) { _chartInstances.revenue.destroy(); _chartInstances.revenue = null; }
+      _chartInstances.revenue = new Chart(revCanvas, {
         type: 'line',
         data: {
           labels: rm.map(function(d) { return fmtMonth(d.month); }),
@@ -525,7 +556,8 @@ function initAnalyticsCharts() {
     if (ch.length === 0) {
       crewCanvas.parentElement.innerHTML = '<div class="text-center py-8"><i class="fas fa-users text-2xl text-gray-700 mb-2 block"></i><p class="text-xs" style="color:var(--text-muted)">No crew time logged yet</p></div>';
     } else {
-      new Chart(crewCanvas, {
+      if (_chartInstances.crew) { _chartInstances.crew.destroy(); _chartInstances.crew = null; }
+      _chartInstances.crew = new Chart(crewCanvas, {
         type: 'bar',
         data: {
           labels: ch.map(function(c) { return (c.name || 'Crew').split(' ')[0]; }),
@@ -657,7 +689,11 @@ function startEnhancementPolling() {
         }
         
         renderDashboard();
-        
+
+        // Restore toggle states without a server round-trip
+        if (custState.autoEmailEnabled !== null) applyToggleVisual('auto-email-toggle', custState.autoEmailEnabled);
+        if (custState.gcalEnabled !== null) applyToggleVisual('gcal-sync-toggle', custState.gcalEnabled);
+
         // Stop polling when all reports are done
         var stillActive = custState.orders.some(function(o) {
           return o.status === 'processing' || o.report_status === 'generating' || o.report_status === 'pending' || o.ai_imagery_status === 'generating';
@@ -719,8 +755,9 @@ async function loadAutoEmailPref() {
     var res = await fetch('/api/agents/auto-email', { headers: authHeaders() });
     if (res.ok) {
       var data = await res.json();
-      var toggle = document.getElementById('auto-email-toggle');
-      if (toggle) toggle.checked = !!data.auto_email_reports;
+      var enabled = !!data.auto_email_reports;
+      custState.autoEmailEnabled = enabled;
+      applyToggleVisual('auto-email-toggle', enabled);
     }
   } catch(e) {}
 }
@@ -1031,16 +1068,13 @@ window._toggleGcalSync = async function(enabled) {
         }, 1000);
       } else {
         if (popup) popup.close();
-        // Failed to get auth URL — uncheck toggle
-        var toggle = document.getElementById('gcal-sync-toggle');
-        if (toggle) toggle.checked = false;
+        setToggle('gcal-sync-toggle', false);
         window.rmToast(data.error || 'Could not start Google Calendar connection.', 'info');
       }
     })
     .catch(function() {
       if (popup) popup.close();
-      var toggle = document.getElementById('gcal-sync-toggle');
-      if (toggle) toggle.checked = false;
+      setToggle('gcal-sync-toggle', false);
     });
   } else {
     // Disconnect Google Calendar
@@ -1050,13 +1084,13 @@ window._toggleGcalSync = async function(enabled) {
         headers: { 'Authorization': 'Bearer ' + token }
       }).then(function() {
         localStorage.setItem('rc_gcal_sync', '0');
+        setToggle('gcal-sync-toggle', false);
         _calLoadEvents();
         _calRender();
       });
     } else {
       // User cancelled — re-check the toggle
-      var toggle = document.getElementById('gcal-sync-toggle');
-      if (toggle) toggle.checked = true;
+      setToggle('gcal-sync-toggle', true);
     }
   }
 };
@@ -1065,8 +1099,7 @@ window._toggleGcalSync = async function(enabled) {
 window.addEventListener('message', function(event) {
   if (event.data && event.data.type === 'gcal_connected') {
     localStorage.setItem('rc_gcal_sync', '1');
-    var toggle = document.getElementById('gcal-sync-toggle');
-    if (toggle) toggle.checked = true;
+    setToggle('gcal-sync-toggle', true);
     _gcalFetchEvents();
   }
 });
@@ -1086,13 +1119,11 @@ function _gcalCheckStatus() {
     console.log('[GCAL DEBUG] /gcal/status response data:', JSON.stringify(data));
     if (data.connected) {
       localStorage.setItem('rc_gcal_sync', '1');
-      var toggle = document.getElementById('gcal-sync-toggle');
-      if (toggle) toggle.checked = true;
+      setToggle('gcal-sync-toggle', true);
       _gcalFetchEvents();
     } else {
       localStorage.setItem('rc_gcal_sync', '0');
-      var toggle = document.getElementById('gcal-sync-toggle');
-      if (toggle) toggle.checked = false;
+      setToggle('gcal-sync-toggle', false);
     }
   })
   .catch(function(err) { console.log('[GCAL DEBUG] /gcal/status error:', err); });
