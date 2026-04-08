@@ -274,7 +274,7 @@ function renderDashboard() {
         '</div>' +
         '<div class="flex items-center gap-2 flex-wrap">' +
           '<button onclick="window._toggleTheme()" id="theme-toggle-btn" class="px-2 py-1.5 rounded-lg transition-colors" style="color:var(--text-muted)" title="Toggle theme">' +
-            '<i class="fas ' + (localStorage.getItem('rc_theme_mode') === 'light' ? 'fa-moon' : 'fa-sun') + '"></i>' +
+            '<i class="fas ' + (localStorage.getItem('rc_dashboard_theme') === 'light' ? 'fa-moon' : 'fa-sun') + '"></i>' +
           '</button>' +
           '<span id="dash-order-badges">' + buildOrderBadgesHTML() + '</span>' +
         '</div>' +
@@ -1168,9 +1168,9 @@ setTimeout(function() {
 }, 100);
 
 window._toggleTheme = function() {
-  var current = localStorage.getItem('rc_theme_mode') || 'dark';
+  var current = localStorage.getItem('rc_dashboard_theme') || 'dark';
   var next = current === 'dark' ? 'light' : current === 'light' ? 'auto' : 'dark';
-  localStorage.setItem('rc_theme_mode', next);
+  localStorage.setItem('rc_dashboard_theme', next);
 
   var html = document.documentElement;
   html.classList.remove('light-theme');

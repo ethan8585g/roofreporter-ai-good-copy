@@ -109,9 +109,9 @@
         '<div class="p-6">' +
           '<label class="block text-sm font-medium mb-3" style="color:var(--text-secondary)">Theme Mode</label>' +
           '<div class="flex gap-2" id="theme-mode-buttons">' +
-            '<button onclick="window._setThemeMode(\'dark\')" class="flex-1 px-4 py-3 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2 ' + ((!localStorage.getItem('rc_theme_mode') || localStorage.getItem('rc_theme_mode') === 'dark') ? 'bg-emerald-500/15 text-emerald-400 border-2 border-emerald-500/30' : 'bg-white/5 text-gray-400 border-2 border-transparent hover:bg-white/10') + '"><i class="fas fa-moon"></i>Dark</button>' +
-            '<button onclick="window._setThemeMode(\'light\')" class="flex-1 px-4 py-3 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2 ' + (localStorage.getItem('rc_theme_mode') === 'light' ? 'bg-blue-500/15 text-blue-400 border-2 border-blue-500/30' : 'bg-white/5 text-gray-400 border-2 border-transparent hover:bg-white/10') + '"><i class="fas fa-sun"></i>Light</button>' +
-            '<button onclick="window._setThemeMode(\'auto\')" class="flex-1 px-4 py-3 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2 ' + (localStorage.getItem('rc_theme_mode') === 'auto' ? 'bg-blue-500/15/15 text-blue-400 border-2 border-blue-500/30' : 'bg-white/5 text-gray-400 border-2 border-transparent hover:bg-white/10') + '"><i class="fas fa-adjust"></i>Auto</button>' +
+            '<button onclick="window._setThemeMode(\'dark\')" class="flex-1 px-4 py-3 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2 ' + ((!localStorage.getItem('rc_dashboard_theme') || localStorage.getItem('rc_dashboard_theme') === 'dark') ? 'bg-emerald-500/15 text-emerald-400 border-2 border-emerald-500/30' : 'bg-white/5 text-gray-400 border-2 border-transparent hover:bg-white/10') + '"><i class="fas fa-moon"></i>Dark</button>' +
+            '<button onclick="window._setThemeMode(\'light\')" class="flex-1 px-4 py-3 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2 ' + (localStorage.getItem('rc_dashboard_theme') === 'light' ? 'bg-blue-500/15 text-blue-400 border-2 border-blue-500/30' : 'bg-white/5 text-gray-400 border-2 border-transparent hover:bg-white/10') + '"><i class="fas fa-sun"></i>Light</button>' +
+            '<button onclick="window._setThemeMode(\'auto\')" class="flex-1 px-4 py-3 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2 ' + (localStorage.getItem('rc_dashboard_theme') === 'auto' ? 'bg-blue-500/15/15 text-blue-400 border-2 border-blue-500/30' : 'bg-white/5 text-gray-400 border-2 border-transparent hover:bg-white/10') + '"><i class="fas fa-adjust"></i>Auto</button>' +
           '</div>' +
           '<p class="text-xs mt-2" style="color:var(--text-muted)">Auto mode follows your system preference.</p>' +
         '</div>' +
@@ -436,7 +436,7 @@
   }
 
   window._setThemeMode = function(mode) {
-    localStorage.setItem('rc_theme_mode', mode);
+    localStorage.setItem('rc_dashboard_theme', mode);
 
     var html = document.documentElement;
     html.classList.remove('light-theme');
