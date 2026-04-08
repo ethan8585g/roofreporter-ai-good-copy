@@ -415,39 +415,52 @@ function initAnalyticsCharts() {
   var jobsCanvas = document.getElementById('chartJobs');
   if (jobsCanvas && a.jobs) {
     var jm = a.jobs.by_month || [];
-    new Chart(jobsCanvas, {
-      type: 'bar',
-      data: {
-        labels: jm.map(function(d) { return fmtMonth(d.month); }),
-        datasets: [{
-          label: 'Completed',
-          data: jm.map(function(d) { return d.count; }),
-          backgroundColor: 'rgba(16, 185, 129, 0.6)',
-          borderColor: 'rgba(16, 185, 129, 1)',
-          borderWidth: 1,
-          borderRadius: 6
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: {
-          x: { ticks: chartDefaults, grid: { display: false } },
-          y: { ticks: Object.assign({}, chartDefaults, { stepSize: 1 }), grid: { color: 'rgba(255,255,255,0.05)' }, beginAtZero: true }
+    if (jm.length === 0) {
+      jobsCanvas.parentElement.innerHTML = '<div class="text-center py-8"><i class="fas fa-briefcase text-2xl text-gray-700 mb-2 block"></i><p class="text-xs text-gray-500">No completed jobs yet</p><p class="text-[10px] text-gray-600 mt-1">Jobs will appear here as you complete them</p></div>';
+    } else {
+      var jobsCtx = jobsCanvas.getContext('2d');
+      var jobsGradient = jobsCtx.createLinearGradient(0, 0, 0, 180);
+      jobsGradient.addColorStop(0, 'rgba(16, 185, 129, 0.7)');
+      jobsGradient.addColorStop(1, 'rgba(16, 185, 129, 0.15)');
+
+      new Chart(jobsCanvas, {
+        type: 'bar',
+        data: {
+          labels: jm.map(function(d) { return fmtMonth(d.month); }),
+          datasets: [{
+            label: 'Completed',
+            data: jm.map(function(d) { return d.count; }),
+            backgroundColor: jobsGradient,
+            borderColor: 'rgba(16, 185, 129, 1)',
+            borderWidth: 1,
+            borderRadius: 8,
+            borderSkipped: false,
+            barPercentage: 0.6,
+            categoryPercentage: 0.7
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false }, tooltip: { backgroundColor: '#1f2937', titleColor: '#e5e7eb', bodyColor: '#9ca3af', borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1, cornerRadius: 8, padding: 10 } },
+          scales: {
+            x: { ticks: chartDefaults, grid: { display: false }, border: { display: false } },
+            y: { ticks: Object.assign({}, chartDefaults, { stepSize: 1 }), grid: { color: 'rgba(255,255,255,0.04)' }, beginAtZero: true, border: { display: false } }
+          }
         }
-      }
-    });
+      });
+    }
 
     // Stats pills
     var jobsStatsEl = document.getElementById('jobsStats');
     if (jobsStatsEl) {
       var statusMap = {};
       (a.jobs.by_status || []).forEach(function(s) { statusMap[s.status] = s.count; });
+      var totalJobs = Object.values(statusMap).reduce(function(s, v) { return s + v; }, 0);
       jobsStatsEl.innerHTML =
-        '<span class="px-2.5 py-1 bg-emerald-500/10 text-emerald-400 rounded-lg text-[11px] font-bold">' + (statusMap.completed || 0) + ' Completed</span>' +
-        '<span class="px-2.5 py-1 bg-blue-500/10 text-blue-400 rounded-lg text-[11px] font-bold">' + (statusMap.in_progress || 0) + ' In Progress</span>' +
-        '<span class="px-2.5 py-1 bg-cyan-500/10 text-cyan-400 rounded-lg text-[11px] font-bold">' + (statusMap.scheduled || 0) + ' Scheduled</span>';
+        '<span class="px-2.5 py-1 bg-emerald-500/10 text-emerald-400 rounded-lg text-[11px] font-bold"><i class="fas fa-check-circle mr-1"></i>' + (statusMap.completed || 0) + ' Done</span>' +
+        '<span class="px-2.5 py-1 bg-blue-500/10 text-blue-400 rounded-lg text-[11px] font-bold"><i class="fas fa-spinner mr-1"></i>' + (statusMap.in_progress || 0) + ' Active</span>' +
+        '<span class="px-2.5 py-1 bg-cyan-500/10 text-cyan-400 rounded-lg text-[11px] font-bold"><i class="fas fa-clock mr-1"></i>' + (statusMap.scheduled || 0) + ' Upcoming</span>';
     }
   }
 
@@ -455,37 +468,45 @@ function initAnalyticsCharts() {
   var revCanvas = document.getElementById('chartRevenue');
   if (revCanvas && a.revenue) {
     var rm = a.revenue.by_month || [];
-    var ctx = revCanvas.getContext('2d');
-    var gradient = ctx.createLinearGradient(0, 0, 0, 180);
-    gradient.addColorStop(0, 'rgba(59, 130, 246, 0.3)');
-    gradient.addColorStop(1, 'rgba(59, 130, 246, 0.02)');
+    if (rm.length === 0) {
+      revCanvas.parentElement.innerHTML = '<div class="text-center py-8"><i class="fas fa-dollar-sign text-2xl text-gray-700 mb-2 block"></i><p class="text-xs text-gray-500">No revenue data yet</p><p class="text-[10px] text-gray-600 mt-1">Revenue will appear as invoices are paid</p></div>';
+    } else {
+      var ctx = revCanvas.getContext('2d');
+      var gradient = ctx.createLinearGradient(0, 0, 0, 180);
+      gradient.addColorStop(0, 'rgba(59, 130, 246, 0.3)');
+      gradient.addColorStop(1, 'rgba(59, 130, 246, 0.02)');
 
-    new Chart(revCanvas, {
-      type: 'line',
-      data: {
-        labels: rm.map(function(d) { return fmtMonth(d.month); }),
-        datasets: [{
-          label: 'Revenue',
-          data: rm.map(function(d) { return d.revenue || 0; }),
-          borderColor: 'rgba(59, 130, 246, 1)',
-          backgroundColor: gradient,
-          fill: true,
-          tension: 0.4,
-          borderWidth: 2,
-          pointRadius: 4,
-          pointBackgroundColor: 'rgba(59, 130, 246, 1)'
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: {
-          x: { ticks: chartDefaults, grid: { display: false } },
-          y: { ticks: Object.assign({}, chartDefaults, { callback: function(v) { return '$' + v.toLocaleString(); } }), grid: { color: 'rgba(255,255,255,0.05)' }, beginAtZero: true }
+      new Chart(revCanvas, {
+        type: 'line',
+        data: {
+          labels: rm.map(function(d) { return fmtMonth(d.month); }),
+          datasets: [{
+            label: 'Revenue',
+            data: rm.map(function(d) { return d.revenue || 0; }),
+            borderColor: 'rgba(59, 130, 246, 1)',
+            backgroundColor: gradient,
+            fill: true,
+            tension: 0.4,
+            borderWidth: 2,
+            pointRadius: 4,
+            pointBackgroundColor: 'rgba(59, 130, 246, 1)',
+            pointHoverRadius: 6,
+            pointHoverBackgroundColor: '#fff',
+            pointHoverBorderColor: 'rgba(59, 130, 246, 1)',
+            pointHoverBorderWidth: 2
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false }, tooltip: { backgroundColor: '#1f2937', titleColor: '#e5e7eb', bodyColor: '#9ca3af', borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1, cornerRadius: 8, padding: 10, callbacks: { label: function(ctx) { return '$' + (ctx.parsed.y || 0).toLocaleString(); } } } },
+          scales: {
+            x: { ticks: chartDefaults, grid: { display: false }, border: { display: false } },
+            y: { ticks: Object.assign({}, chartDefaults, { callback: function(v) { return '$' + v.toLocaleString(); } }), grid: { color: 'rgba(255,255,255,0.04)' }, beginAtZero: true, border: { display: false } }
+          }
         }
-      }
-    });
+      });
+    }
 
     // Stats pills
     var revStatsEl = document.getElementById('revenueStats');
@@ -874,7 +895,7 @@ var _calCurrentDate = new Date();
 var _calViewMonth = new Date(_calCurrentDate.getFullYear(), _calCurrentDate.getMonth(), 1);
 var _calEvents = []; // { date: 'YYYY-MM-DD', title: string, color: string }
 
-// Load events from jobs/orders
+// Load events from jobs/orders + CRM jobs
 function _calLoadEvents() {
   _calEvents = [];
   var orders = (custState && custState.orders) || [];
@@ -884,6 +905,25 @@ function _calLoadEvents() {
       _calEvents.push({ date: d, title: 'Report: ' + (o.address || 'Order').substring(0, 25), color: 'blue' });
     }
   });
+  // Load CRM jobs into calendar
+  var token = localStorage.getItem('rc_customer_token') || '';
+  fetch('/api/crm/jobs', { headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' } })
+    .then(function(r) { return r.ok ? r.json() : { jobs: [] }; })
+    .then(function(data) {
+      var jobs = data.jobs || [];
+      jobs.forEach(function(j) {
+        var d = (j.scheduled_date || j.created_at || '').substring(0, 10);
+        if (!d) return;
+        var colorMap = { scheduled: 'cyan', in_progress: 'yellow', completed: 'emerald', cancelled: 'red' };
+        _calEvents.push({
+          date: d,
+          title: (j.title || 'Job ' + (j.job_number || '')).substring(0, 30),
+          color: colorMap[j.status] || 'gray'
+        });
+      });
+      _calRender();
+    })
+    .catch(function() {});
   // Check Google Calendar connection status from server
   _gcalCheckStatus();
 }
@@ -928,7 +968,8 @@ function _calRender() {
       (hasEvents ? ' title="' + dayEvents.map(function(ev){ return ev.title; }).join(', ').replace(/"/g, '&quot;') + '"' : '') + '>' +
       '<span class="text-xs font-medium">' + d + '</span>' +
       (hasEvents ? '<div class="flex gap-0.5 absolute bottom-0.5">' + dayEvents.slice(0,3).map(function(ev) {
-        return '<div class="w-1 h-1 rounded-full bg-' + (ev.color || 'blue') + '-400"></div>';
+        var dotColors = { blue: '#60a5fa', emerald: '#34d399', cyan: '#22d3ee', yellow: '#facc15', red: '#f87171', green: '#4ade80', gray: '#9ca3af' };
+        return '<div class="w-1.5 h-1.5 rounded-full" style="background:' + (dotColors[ev.color] || '#60a5fa') + '"></div>';
       }).join('') + '</div>' : '') +
     '</div>';
   }
@@ -940,8 +981,9 @@ function _calRender() {
     html += '<div class="mt-3 pt-3 border-t border-white/5">' +
       '<p class="text-[10px] text-gray-500 font-medium uppercase tracking-wide mb-2">Upcoming</p>';
     upcoming.forEach(function(ev) {
+      var dotColors = { blue: '#60a5fa', emerald: '#34d399', cyan: '#22d3ee', yellow: '#facc15', red: '#f87171', green: '#4ade80', gray: '#9ca3af' };
       html += '<div class="flex items-center gap-2 py-1">' +
-        '<div class="w-1.5 h-1.5 rounded-full bg-blue-400 flex-shrink-0"></div>' +
+        '<div class="w-1.5 h-1.5 rounded-full flex-shrink-0" style="background:' + (dotColors[ev.color] || '#60a5fa') + '"></div>' +
         '<span class="text-xs text-gray-400">' + ev.date + '</span>' +
         '<span class="text-xs text-gray-300 truncate">' + ev.title + '</span>' +
       '</div>';
