@@ -112,7 +112,7 @@ function renderDashboard() {
   // Helper: nav link
   function navLink(href, icon, label, badge, badgeColor) {
     var bc = badgeColor || 'bg-gray-400';
-    return '<a href="' + href + '" class="flex items-center justify-between px-3 py-2 rounded-lg text-gray-300 hover:bg-[#111111]/10 hover:text-brand-700 transition-colors group">' +
+    return '<a href="' + href + '" class="flex items-center justify-between px-3 py-2 rounded-lg transition-colors group" style="color:var(--text-secondary)">' +
       '<span class="flex items-center gap-2.5">' +
         '<i class="fas ' + icon + ' text-gray-400 group-hover:text-emerald-400 w-4 text-center text-sm transition-colors"></i>' +
         '<span class="text-sm font-medium">' + label + '</span>' +
@@ -132,16 +132,16 @@ function renderDashboard() {
   var secBadgeColor = custState.secretaryActive ? 'bg-blue-600' : '';
 
   var sidebar =
-    '<aside class="hidden lg:flex flex-col w-56 flex-shrink-0 bg-[#111111] border-r border-white/10 min-h-full">' +
+    '<aside class="hidden lg:flex flex-col w-56 flex-shrink-0 min-h-full" style="background:var(--bg-card);border-right:1px solid var(--border-color)">' +
       // Brand
-      '<div class="px-4 py-5 border-b border-white/5">' +
+      '<div class="px-4 py-5" style="border-bottom:1px solid var(--border-color)">' +
         '<div class="flex items-center gap-2">' +
           (c.google_avatar
             ? '<img src="' + c.google_avatar + '" class="w-8 h-8 rounded-full border border-white/10" alt="">'
             : '<div class="w-8 h-8 bg-gradient-to-br from-brand-500 to-brand-700 rounded-full flex items-center justify-center"><i class="fas fa-user text-white text-xs"></i></div>') +
           '<div class="min-w-0">' +
-            '<p class="text-sm font-bold text-white truncate">' + (c.name || 'User') + '</p>' +
-            '<p class="text-xs text-gray-400 truncate">' + (c.company_name || c.email || '') + '</p>' +
+            '<p class="text-sm font-bold truncate" style="color:var(--text-primary)">' + (c.name || 'User') + '</p>' +
+            '<p class="text-xs truncate" style="color:var(--text-muted)">' + (c.company_name || c.email || '') + '</p>' +
           '</div>' +
         '</div>' +
       '</div>' +
@@ -149,13 +149,13 @@ function renderDashboard() {
       '<nav class="flex-1 px-3 py-4 space-y-5 overflow-y-auto">' +
         // Reports
         '<div>' +
-          '<p class="px-3 mb-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Reports</p>' +
+          '<p class="px-3 mb-1 text-[10px] font-bold uppercase tracking-wider" style="color:var(--text-muted)">Reports</p>' +
           navLink('/customer/order', 'fa-plus-circle', isSolar ? 'Order New Solar Proposal' : 'Order New Report', creditBadge || null, creditBadgeColor) +
           navLink('/customer/reports', 'fa-file-alt', 'Report History', completedReports > 0 ? completedReports + '' : null, 'bg-gray-800') +
         '</div>' +
         // CRM
         '<div>' +
-          '<p class="px-3 mb-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider">CRM</p>' +
+          '<p class="px-3 mb-1 text-[10px] font-bold uppercase tracking-wider" style="color:var(--text-muted)">CRM</p>' +
           navLink('/customer/customers', 'fa-users', 'Customers', s.customers > 0 ? s.customers + '' : null, 'bg-gray-800') +
           navLink('/customer/invoices', 'fa-file-invoice-dollar', 'Invoices', invBadge || null, 'bg-blue-600') +
           navLink('/customer/proposals', 'fa-file-signature', 'Proposals', propBadge || null, 'bg-blue-600') +
@@ -164,19 +164,19 @@ function renderDashboard() {
         '</div>' +
         // Team
         '<div>' +
-          '<p class="px-3 mb-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Team</p>' +
+          '<p class="px-3 mb-1 text-[10px] font-bold uppercase tracking-wider" style="color:var(--text-muted)">Team</p>' +
           navLink('/customer/team', 'fa-users-cog', 'Sales Team', teamBadge || null, 'bg-gray-800') +
           navLink('/customer/crew', 'fa-hard-hat', 'Crew Manager', null, '') +
           navLink('/customer/d2d', 'fa-door-open', 'D2D Manager', null, '') +
         '</div>' +
         // Services
         '<div>' +
-          '<p class="px-3 mb-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Services</p>' +
+          '<p class="px-3 mb-1 text-[10px] font-bold uppercase tracking-wider" style="color:var(--text-muted)">Services</p>' +
           navLink('/customer/secretary', 'fa-headset', isSolar ? 'Solar Sales Secretary' : 'Roofer Secretary', secBadge || null, secBadgeColor) +
         '</div>' +
         // Tools
         '<div>' +
-          '<p class="px-3 mb-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Tools</p>' +
+          '<p class="px-3 mb-1 text-[10px] font-bold uppercase tracking-wider" style="color:var(--text-muted)">Tools</p>' +
           navLink('/customer/material-calculator', 'fa-calculator', 'Material Calculator', null, '') +
           navLink('/customer/suppliers', 'fa-store', 'Suppliers', null, '') +
           navLink('/customer/catalog', 'fa-box-open', 'Catalog', null, '') +
@@ -186,22 +186,22 @@ function renderDashboard() {
         '</div>' +
         // Marketing
         '<div>' +
-          '<p class="px-3 mb-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Marketing</p>' +
+          '<p class="px-3 mb-1 text-[10px] font-bold uppercase tracking-wider" style="color:var(--text-muted)">Marketing</p>' +
           navLink('/customer/google-ads', 'fa-bullhorn', 'Google Ads', 'New', 'bg-blue-500/100') +
           navLink('/customer/google-business', 'fa-store', 'Business Profile', 'New', 'bg-emerald-500/100') +
         '</div>' +
-        (c.is_dev ? '<div><p class="px-3 mb-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Dev</p>' + navLink('/customer/property-imagery', 'fa-satellite', 'Property Imagery', 'Dev', 'bg-gray-800') + '</div>' : '') +
+        (c.is_dev ? '<div><p class="px-3 mb-1 text-[10px] font-bold uppercase tracking-wider" style="color:var(--text-muted)">Dev</p>' + navLink('/customer/property-imagery', 'fa-satellite', 'Property Imagery', 'Dev', 'bg-gray-800') + '</div>' : '') +
       '</nav>' +
       // Credits footer
-      '<div class="px-4 py-4 border-t border-white/5">' +
+      '<div class="px-4 py-4" style="border-top:1px solid var(--border-color)">' +
         (freeTrialRemaining > 0
-          ? '<div class="flex items-center justify-between mb-2"><span class="text-xs text-gray-500">Free trials left</span><span class="text-xs font-bold text-emerald-400">' + freeTrialRemaining + '</span></div>'
+          ? '<div class="flex items-center justify-between mb-2"><span class="text-xs" style="color:var(--text-muted)">Free trials left</span><span class="text-xs font-bold text-emerald-400">' + freeTrialRemaining + '</span></div>'
           : '') +
         (paidCredits > 0
-          ? '<div class="flex items-center justify-between mb-2"><span class="text-xs text-gray-500">Report credits</span><span class="text-xs font-bold text-blue-400">' + paidCredits + '</span></div>'
+          ? '<div class="flex items-center justify-between mb-2"><span class="text-xs" style="color:var(--text-muted)">Report credits</span><span class="text-xs font-bold text-blue-400">' + paidCredits + '</span></div>'
           : '') +
         '<a href="/pricing" class="block w-full text-center py-2 bg-emerald-600 hover:bg-brand-700 text-white text-xs font-semibold rounded-lg transition-colors">Buy Credits</a>' +
-        '<a href="/customer/profile" class="block w-full text-center py-1.5 mt-1.5 text-xs text-gray-400 hover:text-gray-400 transition-colors">Account Settings</a>' +
+        '<a href="/customer/profile" class="block w-full text-center py-1.5 mt-1.5 text-xs transition-colors" style="color:var(--text-muted)">Account Settings</a>' +
         // Sidebar ad unit — shown only to non-subscribers
         '<div class="rra-ad-container" data-ad-slot="" data-ad-format="auto" style="display:none; margin-top:12px; min-height:120px; background:#f1f5f9; border:1px solid #e2e8f0; border-radius:8px; overflow:hidden; padding:4px;"></div>' +
       '</div>' +
@@ -209,19 +209,19 @@ function renderDashboard() {
 
   // Mobile horizontal nav (shown below md)
   var mobileNav =
-    '<div class="lg:hidden bg-[#111111] border-b border-white/10 overflow-x-auto">' +
+    '<div class="lg:hidden overflow-x-auto" style="background:var(--bg-card);border-bottom:1px solid var(--border-color)">' +
       '<div class="flex gap-1 px-3 py-2 whitespace-nowrap">' +
         '<a href="/customer/order" class="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-semibold flex-shrink-0"><i class="fas fa-plus-circle"></i>Order</a>' +
-        '<a href="/customer/reports" class="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 text-gray-300 rounded-lg text-xs font-medium flex-shrink-0"><i class="fas fa-file-alt"></i>Reports</a>' +
-        '<a href="/customer/customers" class="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 text-gray-300 rounded-lg text-xs font-medium flex-shrink-0"><i class="fas fa-users"></i>Customers</a>' +
-        '<a href="/customer/invoices" class="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 text-gray-300 rounded-lg text-xs font-medium flex-shrink-0"><i class="fas fa-file-invoice-dollar"></i>Invoices</a>' +
-        '<a href="/customer/proposals" class="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 text-gray-300 rounded-lg text-xs font-medium flex-shrink-0"><i class="fas fa-file-signature"></i>Proposals</a>' +
-        '<a href="/customer/jobs" class="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 text-gray-300 rounded-lg text-xs font-medium flex-shrink-0"><i class="fas fa-hard-hat"></i>Jobs</a>' +
-        '<a href="/customer/team" class="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 text-gray-300 rounded-lg text-xs font-medium flex-shrink-0"><i class="fas fa-users-cog"></i>Team</a>' +
-        '<a href="/customer/d2d" class="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 text-gray-300 rounded-lg text-xs font-medium flex-shrink-0"><i class="fas fa-door-open"></i>D2D</a>' +
-        '<a href="/customer/secretary" class="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 text-gray-300 rounded-lg text-xs font-medium flex-shrink-0"><i class="fas fa-headset"></i>Secretary</a>' +
-        '<a href="/customer/material-calculator" class="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 text-gray-300 rounded-lg text-xs font-medium flex-shrink-0"><i class="fas fa-calculator"></i>Materials</a>' +
-        '<a href="/customer/virtual-tryon" class="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 text-gray-300 rounded-lg text-xs font-medium flex-shrink-0"><i class="fas fa-magic"></i>Visualizer</a>' +
+        '<a href="/customer/reports" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0" style="background:var(--bg-elevated);color:var(--text-secondary)"><i class="fas fa-file-alt"></i>Reports</a>' +
+        '<a href="/customer/customers" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0" style="background:var(--bg-elevated);color:var(--text-secondary)"><i class="fas fa-users"></i>Customers</a>' +
+        '<a href="/customer/invoices" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0" style="background:var(--bg-elevated);color:var(--text-secondary)"><i class="fas fa-file-invoice-dollar"></i>Invoices</a>' +
+        '<a href="/customer/proposals" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0" style="background:var(--bg-elevated);color:var(--text-secondary)"><i class="fas fa-file-signature"></i>Proposals</a>' +
+        '<a href="/customer/jobs" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0" style="background:var(--bg-elevated);color:var(--text-secondary)"><i class="fas fa-hard-hat"></i>Jobs</a>' +
+        '<a href="/customer/team" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0" style="background:var(--bg-elevated);color:var(--text-secondary)"><i class="fas fa-users-cog"></i>Team</a>' +
+        '<a href="/customer/d2d" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0" style="background:var(--bg-elevated);color:var(--text-secondary)"><i class="fas fa-door-open"></i>D2D</a>' +
+        '<a href="/customer/secretary" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0" style="background:var(--bg-elevated);color:var(--text-secondary)"><i class="fas fa-headset"></i>Secretary</a>' +
+        '<a href="/customer/material-calculator" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0" style="background:var(--bg-elevated);color:var(--text-secondary)"><i class="fas fa-calculator"></i>Materials</a>' +
+        '<a href="/customer/virtual-tryon" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0" style="background:var(--bg-elevated);color:var(--text-secondary)"><i class="fas fa-magic"></i>Visualizer</a>' +
       '</div>' +
     '</div>';
 
@@ -231,16 +231,16 @@ function renderDashboard() {
       // Welcome header
       '<div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-5">' +
         '<div>' +
-          '<h2 class="text-xl font-bold text-white">' + (function() { var h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'; })() + ', ' + (c.name || 'User') + '</h2>' +
-          '<p class="text-sm text-gray-500 mt-0.5">' + (c.company_name ? c.company_name + ' &middot; ' : '') + (c.email || '') + '</p>' +
+          '<h2 class="text-xl font-bold" style="color:var(--text-primary)">' + (function() { var h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'; })() + ', ' + (c.name || 'User') + '</h2>' +
+          '<p class="text-sm mt-0.5" style="color:var(--text-muted)">' + (c.company_name ? c.company_name + ' &middot; ' : '') + (c.email || '') + '</p>' +
         '</div>' +
         '<div class="flex items-center gap-2 flex-wrap">' +
-          '<button onclick="window._toggleTheme()" id="theme-toggle-btn" class="px-2 py-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors" title="Toggle theme">' +
+          '<button onclick="window._toggleTheme()" id="theme-toggle-btn" class="px-2 py-1.5 rounded-lg transition-colors" style="color:var(--text-muted)" title="Toggle theme">' +
             '<i class="fas ' + (localStorage.getItem('rc_theme_mode') === 'light' ? 'fa-moon' : 'fa-sun') + '"></i>' +
           '</button>' +
           (freeTrialRemaining > 0 ? '<div class="px-3 py-1.5 bg-blue-500/10 border border-blue-200 rounded-full text-xs font-bold text-blue-700"><i class="fas fa-gift mr-1"></i>' + freeTrialRemaining + ' Free Trial</div>' : '') +
           (paidCredits > 0 ? '<div class="px-3 py-1.5 bg-blue-500/10 border border-blue-200 rounded-full text-xs font-bold text-blue-700"><i class="fas fa-coins mr-1"></i>' + paidCredits + ' Credits</div>' : '') +
-          '<div class="px-3 py-1.5 bg-white/5 border border-white/10 rounded-full text-xs font-bold text-gray-300"><i class="fas fa-file-alt mr-1"></i>' + completedReports + ' Reports</div>' +
+          '<div class="px-3 py-1.5 rounded-full text-xs font-bold" style="background:var(--bg-elevated);border:1px solid var(--border-color);color:var(--text-secondary)"><i class="fas fa-file-alt mr-1"></i>' + completedReports + ' Reports</div>' +
           (processingReports > 0 ? '<div class="px-3 py-1.5 bg-blue-500/10 border border-blue-200 rounded-full text-xs font-bold text-blue-700 animate-pulse"><i class="fas fa-spinner fa-spin mr-1"></i>' + processingReports + ' Generating</div>' : '') +
         '</div>' +
       '</div>' +
@@ -280,55 +280,55 @@ function renderDashboard() {
       // Calendar + Quick Actions
       '<div class="grid grid-cols-1 lg:grid-cols-5 gap-5 mb-5">' +
         // Calendar (wider)
-        '<div class="lg:col-span-3 bg-[#111111] rounded-2xl border border-white/10 shadow-sm overflow-hidden flex flex-col" style="min-height:280px">' +
-          '<div class="px-5 py-3 border-b border-white/5 flex items-center justify-between bg-gradient-to-r from-gray-900 to-gray-800">' +
+        '<div class="lg:col-span-3 rounded-2xl shadow-sm overflow-hidden flex flex-col" style="background:var(--bg-card);border:1px solid var(--border-color)" style="min-height:280px">' +
+          '<div class="px-5 py-3 flex items-center justify-between" style="border-bottom:1px solid var(--border-color);background:var(--bg-elevated)">' +
             '<div class="flex items-center gap-2">' +
               '<i class="fas fa-calendar-alt text-blue-400"></i>' +
-              '<h3 class="font-bold text-white text-sm">Calendar</h3>' +
+              '<h3 class="font-bold text-sm" style="color:var(--text-primary)">Calendar</h3>' +
             '</div>' +
             '<div class="flex items-center gap-3">' +
               '<div class="flex items-center gap-2">' +
                 '<img src="https://www.gstatic.com/images/branding/product/1x/calendar_48dp.png" alt="" class="w-4 h-4">' +
-                '<span class="text-xs text-gray-400">Google Sync</span>' +
+                '<span class="text-xs" style="color:var(--text-muted)">Google Sync</span>' +
                 '<label class="relative inline-flex items-center cursor-pointer">' +
                   '<input type="checkbox" id="gcal-sync-toggle" class="sr-only peer" onchange="window._toggleGcalSync(this.checked)">' +
                   '<div class="w-9 h-5 bg-gray-700 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-400 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[&quot;&quot;] after:absolute after:top-[2px] after:left-[2px] after:bg-gray-400 after:border after:border-gray-600 after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>' +
                 '</label>' +
               '</div>' +
               '<div class="flex items-center gap-1">' +
-                '<button onclick="window._calNav(-1)" class="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white/10 text-gray-400 hover:text-white text-xs"><i class="fas fa-chevron-left"></i></button>' +
-                '<button onclick="window._calNav(0)" class="px-2 py-1 rounded-lg hover:bg-white/10 text-xs text-gray-300 font-medium">Today</button>' +
-                '<button onclick="window._calNav(1)" class="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white/10 text-gray-400 hover:text-white text-xs"><i class="fas fa-chevron-right"></i></button>' +
+                '<button onclick="window._calNav(-1)" class="w-7 h-7 flex items-center justify-center rounded-lg text-xs" style="color:var(--text-muted)"><i class="fas fa-chevron-left"></i></button>' +
+                '<button onclick="window._calNav(0)" class="px-2 py-1 rounded-lg text-xs font-medium" style="color:var(--text-secondary)">Today</button>' +
+                '<button onclick="window._calNav(1)" class="w-7 h-7 flex items-center justify-center rounded-lg text-xs" style="color:var(--text-muted)"><i class="fas fa-chevron-right"></i></button>' +
               '</div>' +
             '</div>' +
           '</div>' +
           '<div id="dashboard-calendar" class="flex-1 p-4 overflow-y-auto"></div>' +
         '</div>' +
         // Quick Actions (narrower)
-        '<div class="lg:col-span-2 bg-[#111111] rounded-2xl border border-white/10 shadow-sm overflow-hidden">' +
-          '<div class="px-5 py-4 border-b border-white/5">' +
-            '<h3 class="font-bold text-gray-100 text-sm"><i class="fas fa-bolt text-blue-400 mr-2"></i>Quick Actions</h3>' +
+        '<div class="lg:col-span-2 rounded-2xl shadow-sm overflow-hidden" style="background:var(--bg-card);border:1px solid var(--border-color)">' +
+          '<div class="px-5 py-4" style="border-bottom:1px solid var(--border-color)">' +
+            '<h3 class="font-bold text-sm" style="color:var(--text-primary)"><i class="fas fa-bolt text-blue-400 mr-2"></i>Quick Actions</h3>' +
           '</div>' +
           '<div class="p-4 space-y-2.5">' +
             '<a href="/customer/order" class="flex items-center gap-3 p-3 bg-blue-500/10 hover:bg-blue-100 rounded-xl transition-colors">' +
               '<div class="w-9 h-9 bg-blue-600 rounded-lg flex items-center justify-center flex-shrink-0"><i class="fas fa-plus text-white text-sm"></i></div>' +
-              '<div><p class="font-semibold text-gray-100 text-sm">Order Roof Report</p><p class="text-xs text-gray-500">' + (freeTrialRemaining > 0 ? freeTrialRemaining + ' free remaining' : (paidCredits > 0 ? paidCredits + ' credits' : 'Pay per report')) + '</p></div>' +
+              '<div><p class="font-semibold text-sm" style="color:var(--text-primary)">Order Roof Report</p><p class="text-xs" style="color:var(--text-muted)">' + (freeTrialRemaining > 0 ? freeTrialRemaining + ' free remaining' : (paidCredits > 0 ? paidCredits + ' credits' : 'Pay per report')) + '</p></div>' +
             '</a>' +
-            '<a href="/customer/customers" class="flex items-center gap-3 p-3 bg-[#0A0A0A] hover:bg-[#111111]/10 rounded-xl transition-colors">' +
-              '<div class="w-9 h-9 bg-gray-800 rounded-lg flex items-center justify-center flex-shrink-0"><i class="fas fa-user-plus text-white text-sm"></i></div>' +
-              '<div><p class="font-semibold text-gray-100 text-sm">Add Customer</p><p class="text-xs text-gray-500">Build your CRM database</p></div>' +
+            '<a href="/customer/customers" class="flex items-center gap-3 p-3 rounded-xl transition-colors" style="background:var(--bg-elevated)">' +
+              '<div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style="background:var(--bg-card);border:1px solid var(--border-color)"><i class="fas fa-user-plus text-white text-sm"></i></div>' +
+              '<div><p class="font-semibold text-sm" style="color:var(--text-primary)">Add Customer</p><p class="text-xs" style="color:var(--text-muted)">Build your CRM database</p></div>' +
             '</a>' +
-            '<a href="/customer/invoices" class="flex items-center gap-3 p-3 bg-[#0A0A0A] hover:bg-[#111111]/10 rounded-xl transition-colors">' +
-              '<div class="w-9 h-9 bg-gray-800 rounded-lg flex items-center justify-center flex-shrink-0"><i class="fas fa-file-invoice-dollar text-white text-sm"></i></div>' +
-              '<div><p class="font-semibold text-gray-100 text-sm">Create Invoice</p><p class="text-xs text-gray-500">' + (s.invoices_owing > 0 ? '$' + Number(s.invoices_owing).toFixed(2) + ' outstanding' : 'Bill your customers') + '</p></div>' +
+            '<a href="/customer/invoices" class="flex items-center gap-3 p-3 rounded-xl transition-colors" style="background:var(--bg-elevated)">' +
+              '<div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style="background:var(--bg-card);border:1px solid var(--border-color)"><i class="fas fa-file-invoice-dollar text-white text-sm"></i></div>' +
+              '<div><p class="font-semibold text-sm" style="color:var(--text-primary)">Create Invoice</p><p class="text-xs" style="color:var(--text-muted)">' + (s.invoices_owing > 0 ? '$' + Number(s.invoices_owing).toFixed(2) + ' outstanding' : 'Bill your customers') + '</p></div>' +
             '</a>' +
-            '<a href="/customer/proposals" class="flex items-center gap-3 p-3 bg-[#0A0A0A] hover:bg-[#111111]/10 rounded-xl transition-colors">' +
+            '<a href="/customer/proposals" class="flex items-center gap-3 p-3 rounded-xl transition-colors" style="background:var(--bg-elevated)">' +
               '<div class="w-9 h-9 bg-blue-600 rounded-lg flex items-center justify-center flex-shrink-0"><i class="fas fa-file-signature text-white text-sm"></i></div>' +
-              '<div><p class="font-semibold text-gray-100 text-sm">New Proposal</p><p class="text-xs text-gray-500">Professional roofing proposals</p></div>' +
+              '<div><p class="font-semibold text-sm" style="color:var(--text-primary)">New Proposal</p><p class="text-xs" style="color:var(--text-muted)">Professional roofing proposals</p></div>' +
             '</a>' +
-            '<a href="/pricing" class="flex items-center gap-3 p-3 bg-[#0A0A0A] hover:bg-[#111111]/10 rounded-xl transition-colors">' +
-              '<div class="w-9 h-9 bg-gray-800 rounded-lg flex items-center justify-center flex-shrink-0"><i class="fas fa-coins text-white text-sm"></i></div>' +
-              '<div><p class="font-semibold text-gray-100 text-sm">Buy Credits</p><p class="text-xs text-gray-500">From $2.99/report USD</p></div>' +
+            '<a href="/pricing" class="flex items-center gap-3 p-3 rounded-xl transition-colors" style="background:var(--bg-elevated)">' +
+              '<div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style="background:var(--bg-card);border:1px solid var(--border-color)"><i class="fas fa-coins text-white text-sm"></i></div>' +
+              '<div><p class="font-semibold text-sm" style="color:var(--text-primary)">Buy Credits</p><p class="text-xs" style="color:var(--text-muted)">From $2.99/report USD</p></div>' +
             '</a>' +
           '</div>' +
         '</div>' +
@@ -337,25 +337,25 @@ function renderDashboard() {
       // Analytics Charts
       '<div class="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-5" id="analytics-section">' +
         // Jobs Completed Chart
-        '<div class="bg-[#111111] rounded-2xl border border-white/10 shadow-sm overflow-hidden">' +
-          '<div class="px-5 py-3 border-b border-white/5">' +
-            '<h3 class="font-bold text-white text-sm"><i class="fas fa-briefcase text-emerald-400 mr-2"></i>Jobs Completed</h3>' +
+        '<div class="rounded-2xl shadow-sm overflow-hidden" style="background:var(--bg-card);border:1px solid var(--border-color)">' +
+          '<div class="px-5 py-3" style="border-bottom:1px solid var(--border-color)">' +
+            '<h3 class="font-bold text-sm" style="color:var(--text-primary)"><i class="fas fa-briefcase text-emerald-400 mr-2"></i>Jobs Completed</h3>' +
           '</div>' +
           '<div class="p-4"><canvas id="chartJobs" height="180"></canvas></div>' +
           '<div id="jobsStats" class="px-4 pb-4 flex gap-2 flex-wrap"></div>' +
         '</div>' +
         // Revenue Chart
-        '<div class="bg-[#111111] rounded-2xl border border-white/10 shadow-sm overflow-hidden">' +
-          '<div class="px-5 py-3 border-b border-white/5">' +
-            '<h3 class="font-bold text-white text-sm"><i class="fas fa-dollar-sign text-blue-400 mr-2"></i>Revenue</h3>' +
+        '<div class="rounded-2xl shadow-sm overflow-hidden" style="background:var(--bg-card);border:1px solid var(--border-color)">' +
+          '<div class="px-5 py-3" style="border-bottom:1px solid var(--border-color)">' +
+            '<h3 class="font-bold text-sm" style="color:var(--text-primary)"><i class="fas fa-dollar-sign text-blue-400 mr-2"></i>Revenue</h3>' +
           '</div>' +
           '<div class="p-4"><canvas id="chartRevenue" height="180"></canvas></div>' +
           '<div id="revenueStats" class="px-4 pb-4 flex gap-2 flex-wrap"></div>' +
         '</div>' +
         // Crew Utilization Chart
-        '<div class="bg-[#111111] rounded-2xl border border-white/10 shadow-sm overflow-hidden">' +
-          '<div class="px-5 py-3 border-b border-white/5">' +
-            '<h3 class="font-bold text-white text-sm"><i class="fas fa-users text-orange-400 mr-2"></i>Crew Hours <span class="text-[10px] text-gray-500 font-normal">(30 days)</span></h3>' +
+        '<div class="rounded-2xl shadow-sm overflow-hidden" style="background:var(--bg-card);border:1px solid var(--border-color)">' +
+          '<div class="px-5 py-3" style="border-bottom:1px solid var(--border-color)">' +
+            '<h3 class="font-bold text-sm" style="color:var(--text-primary)"><i class="fas fa-users text-orange-400 mr-2"></i>Crew Hours <span class="text-[10px] text-gray-500 font-normal">(30 days)</span></h3>' +
           '</div>' +
           '<div class="p-4"><canvas id="chartCrew" height="180"></canvas></div>' +
           '<div id="crewStats" class="px-4 pb-4 flex gap-2 flex-wrap"></div>' +
@@ -366,7 +366,7 @@ function renderDashboard() {
       '<div class="rra-ad-container" data-ad-slot="" data-ad-format="horizontal" style="display:none; margin-bottom:20px; text-align:center; min-height:90px; background:#f1f5f9; border:1px solid #e2e8f0; border-radius:12px; overflow:hidden; padding:4px;"></div>' +
 
       // Auto-Email Settings
-      '<div class="bg-[#111111] rounded-2xl border border-white/10 shadow-sm overflow-hidden mb-5">' +
+      '<div class="rounded-2xl shadow-sm overflow-hidden mb-5" style="background:var(--bg-card);border:1px solid var(--border-color)">' +
         '<div class="px-5 py-4 flex items-center justify-between">' +
           '<div>' +
             '<p class="font-medium text-gray-100 text-sm"><i class="fas fa-envelope text-blue-400 mr-2"></i>Auto-email reports when ready</p>' +
@@ -379,7 +379,7 @@ function renderDashboard() {
         '</div>' +
       '</div>' +
 
-      '<div class="text-center py-4 text-xs text-gray-400"><p>Powered by <strong>Roof Manager</strong> &middot; Antigravity Gemini Roof Measurement Suite</p></div>' +
+      '<div class="text-center py-4 text-xs" style="color:var(--text-muted)"><p>Powered by <strong>Roof Manager</strong> &middot; Antigravity Gemini Roof Measurement Suite</p></div>' +
     '</main>';
 
   root.innerHTML =
@@ -416,7 +416,7 @@ function initAnalyticsCharts() {
   if (jobsCanvas && a.jobs) {
     var jm = a.jobs.by_month || [];
     if (jm.length === 0) {
-      jobsCanvas.parentElement.innerHTML = '<div class="text-center py-8"><i class="fas fa-briefcase text-2xl text-gray-700 mb-2 block"></i><p class="text-xs text-gray-500">No completed jobs yet</p><p class="text-[10px] text-gray-600 mt-1">Jobs will appear here as you complete them</p></div>';
+      jobsCanvas.parentElement.innerHTML = '<div class="text-center py-8"><i class="fas fa-briefcase text-2xl text-gray-700 mb-2 block"></i><p class="text-xs" style="color:var(--text-muted)">No completed jobs yet</p><p class="text-[10px] text-gray-600 mt-1">Jobs will appear here as you complete them</p></div>';
     } else {
       var jobsCtx = jobsCanvas.getContext('2d');
       var jobsGradient = jobsCtx.createLinearGradient(0, 0, 0, 180);
@@ -442,10 +442,10 @@ function initAnalyticsCharts() {
         options: {
           responsive: true,
           maintainAspectRatio: false,
-          plugins: { legend: { display: false }, tooltip: { backgroundColor: '#1f2937', titleColor: '#e5e7eb', bodyColor: '#9ca3af', borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1, cornerRadius: 8, padding: 10 } },
+          plugins: { legend: { display: false }, tooltip: (function(){var l=document.body.classList.contains('light-theme');return{backgroundColor:l?'#ffffff':'#1f2937',titleColor:l?'#0B0F12':'#e5e7eb',bodyColor:l?'#5a6b74':'#9ca3af',borderColor:l?'#dde3e9':'rgba(255,255,255,0.1)',borderWidth:1,cornerRadius:8,padding:10};}()) },
           scales: {
             x: { ticks: chartDefaults, grid: { display: false }, border: { display: false } },
-            y: { ticks: Object.assign({}, chartDefaults, { stepSize: 1 }), grid: { color: 'rgba(255,255,255,0.04)' }, beginAtZero: true, border: { display: false } }
+            y: { ticks: Object.assign({}, chartDefaults, { stepSize: 1 }), grid: { color: document.body.classList.contains('light-theme') ? 'rgba(0,0,0,0.07)' : 'rgba(255,255,255,0.04)' }, beginAtZero: true, border: { display: false } }
           }
         }
       });
@@ -469,7 +469,7 @@ function initAnalyticsCharts() {
   if (revCanvas && a.revenue) {
     var rm = a.revenue.by_month || [];
     if (rm.length === 0) {
-      revCanvas.parentElement.innerHTML = '<div class="text-center py-8"><i class="fas fa-dollar-sign text-2xl text-gray-700 mb-2 block"></i><p class="text-xs text-gray-500">No revenue data yet</p><p class="text-[10px] text-gray-600 mt-1">Revenue will appear as invoices are paid</p></div>';
+      revCanvas.parentElement.innerHTML = '<div class="text-center py-8"><i class="fas fa-dollar-sign text-2xl text-gray-700 mb-2 block"></i><p class="text-xs" style="color:var(--text-muted)">No revenue data yet</p><p class="text-[10px] text-gray-600 mt-1">Revenue will appear as invoices are paid</p></div>';
     } else {
       var ctx = revCanvas.getContext('2d');
       var gradient = ctx.createLinearGradient(0, 0, 0, 180);
@@ -502,7 +502,7 @@ function initAnalyticsCharts() {
           plugins: { legend: { display: false }, tooltip: { backgroundColor: '#1f2937', titleColor: '#e5e7eb', bodyColor: '#9ca3af', borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1, cornerRadius: 8, padding: 10, callbacks: { label: function(ctx) { return '$' + (ctx.parsed.y || 0).toLocaleString(); } } } },
           scales: {
             x: { ticks: chartDefaults, grid: { display: false }, border: { display: false } },
-            y: { ticks: Object.assign({}, chartDefaults, { callback: function(v) { return '$' + v.toLocaleString(); } }), grid: { color: 'rgba(255,255,255,0.04)' }, beginAtZero: true, border: { display: false } }
+            y: { ticks: Object.assign({}, chartDefaults, { callback: function(v) { return '$' + v.toLocaleString(); } }), grid: { color: document.body.classList.contains('light-theme') ? 'rgba(0,0,0,0.07)' : 'rgba(255,255,255,0.04)' }, beginAtZero: true, border: { display: false } }
           }
         }
       });
@@ -523,7 +523,7 @@ function initAnalyticsCharts() {
   if (crewCanvas && a.crew) {
     var ch = a.crew.hours || [];
     if (ch.length === 0) {
-      crewCanvas.parentElement.innerHTML = '<div class="text-center py-8"><i class="fas fa-users text-2xl text-gray-700 mb-2 block"></i><p class="text-xs text-gray-500">No crew time logged yet</p></div>';
+      crewCanvas.parentElement.innerHTML = '<div class="text-center py-8"><i class="fas fa-users text-2xl text-gray-700 mb-2 block"></i><p class="text-xs" style="color:var(--text-muted)">No crew time logged yet</p></div>';
     } else {
       new Chart(crewCanvas, {
         type: 'bar',
@@ -984,7 +984,7 @@ function _calRender() {
       var dotColors = { blue: '#60a5fa', emerald: '#34d399', cyan: '#22d3ee', yellow: '#facc15', red: '#f87171', green: '#4ade80', gray: '#9ca3af' };
       html += '<div class="flex items-center gap-2 py-1">' +
         '<div class="w-1.5 h-1.5 rounded-full flex-shrink-0" style="background:' + (dotColors[ev.color] || '#60a5fa') + '"></div>' +
-        '<span class="text-xs text-gray-400">' + ev.date + '</span>' +
+        '<span class="text-xs" style="color:var(--text-muted)">' + ev.date + '</span>' +
         '<span class="text-xs text-gray-300 truncate">' + ev.title + '</span>' +
       '</div>';
     });

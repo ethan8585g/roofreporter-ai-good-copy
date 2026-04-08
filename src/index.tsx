@@ -1181,7 +1181,7 @@ app.get('/roof-measurement/:city', (c) => {
 ]}
 </script>
 </head>
-<body class="min-h-screen" style="background:#0A0A0A">
+<body class="min-h-screen" style="background:var(--bg-page)">
   <nav style="background:#111111;border-bottom:1px solid rgba(255,255,255,0.1)" class="text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
       <a href="/" class="flex items-center gap-3"><img src="/static/logo.png" alt="Roof Manager" class="w-9 h-9 rounded-lg object-cover"><span class="text-white font-bold text-lg">Roof Manager</span></a>
@@ -1453,7 +1453,7 @@ app.get('/customer/3d-viewer', async (c) => {
   ${getHeadTags()}
   <title>3D Roof Viewer — Roof Manager</title>
 </head>
-<body class="min-h-screen" style="background:#0A0A0A">
+<body class="min-h-screen" style="background:var(--bg-page)">
   <header style="background:#111111;border-bottom:1px solid rgba(255,255,255,0.1)" class="text-white">
     <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
       <div class="flex items-center gap-3">
@@ -2600,7 +2600,7 @@ function getMainPageHTML(mapsApiKey: string) {
   <title>Order a Roof Report - Roof Manager</title>
   ${mapsScript}
 </head>
-<body class="min-h-screen" style="background:#0A0A0A">
+<body class="min-h-screen" style="background:var(--bg-page)">
   <header style="background:#111111;border-bottom:1px solid rgba(255,255,255,0.1)" class="text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
       <div class="flex items-center space-x-3">
@@ -2896,7 +2896,7 @@ function getOrderConfirmationHTML() {
   ${getHeadTags()}
   <title>Order Confirmation - Roof Measurement Tool</title>
 </head>
-<body class="min-h-screen" style="background:#0A0A0A">
+<body class="min-h-screen" style="background:var(--bg-page)">
   <header style="background:#111111;border-bottom:1px solid rgba(255,255,255,0.1)" class="text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
       <div class="flex items-center space-x-3">
@@ -3479,7 +3479,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
   </style>
   <noscript><style>.scroll-animate { opacity: 1 !important; transform: none !important; }</style></noscript>
 </head>
-<body class="min-h-screen" style="background:#0A0A0A">
+<body class="min-h-screen" style="background:var(--bg-page)">
   <!-- Sticky Navigation — Dark premium, starts transparent -->
   <nav id="landing-nav" class="landing-nav fixed top-0 left-0 right-0 z-50">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 h-18 flex items-center justify-between" style="height:72px">
@@ -3740,7 +3740,7 @@ function getSettingsPageHTML() {
   ${getHeadTags()}
   <title>Settings - Roof Manager</title>
 </head>
-<body class="min-h-screen" style="background:#0A0A0A">
+<body class="min-h-screen" style="background:var(--bg-page)">
   <header style="background:#111111;border-bottom:1px solid rgba(255,255,255,0.1)" class="text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
       <div class="flex items-center space-x-3">
@@ -4146,8 +4146,8 @@ function getCustomerDashboardHTML(adsensePublisherId: string = '') {
   ${getHeadTags()}
   <title>My Dashboard - Roof Manager</title>
 </head>
-<body style="background:#0A0A0A" class="min-h-screen">
-  <header style="background:#111111;border-bottom:1px solid #222" class="text-white shadow-lg">
+<body style="background:var(--bg-page)" class="min-h-screen">
+  <header style="background:var(--bg-card);border-bottom:1px solid var(--border-color)" class="text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
       <div class="flex items-center space-x-3">
         <a href="/" class="flex items-center space-x-3 hover:opacity-90 transition-opacity">
@@ -4207,8 +4207,8 @@ function getCustomerInvoiceHTML() {
   ${getHeadTags()}
   <title>Invoice - Roof Manager</title>
 </head>
-<body style="background:#0A0A0A" class="min-h-screen">
-  <header style="background:#111111;border-bottom:1px solid #222" class="text-white shadow-lg">
+<body style="background:var(--bg-page)" class="min-h-screen">
+  <header style="background:var(--bg-card);border-bottom:1px solid var(--border-color)" class="text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
       <div class="flex items-center space-x-3">
         <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
@@ -4277,7 +4277,7 @@ function getServicesPageHTML() {
     .neon-text { color: #00FF88; }
   </style>
 </head>
-<body class="min-h-screen" style="background:#0A0A0A">
+<body class="min-h-screen" style="background:var(--bg-page)">
   <!-- Navigation -->
   <nav class="fixed top-0 left-0 right-0 z-50" style="background:rgba(10,10,10,0.95);backdrop-filter:blur(20px)">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between" style="height:72px">
@@ -4793,7 +4793,7 @@ function getCoveragePageHTML() {
     .neon-text { color: #00FF88; }
   </style>
 </head>
-<body class="min-h-screen" style="background:#0A0A0A">
+<body class="min-h-screen" style="background:var(--bg-page)">
   <!-- Navigation -->
   <nav class="fixed top-0 left-0 right-0 z-50" style="background:rgba(10,10,10,0.95);backdrop-filter:blur(20px)">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between" style="height:72px">
@@ -5003,7 +5003,7 @@ function getPricingPageHTML() {
 {"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.roofmanager.ca/"},{"@type":"ListItem","position":2,"name":"Pricing","item":"https://www.roofmanager.ca/pricing"}]}
 </script>
 </head>
-<body class="min-h-screen" style="background:#0A0A0A">
+<body class="min-h-screen" style="background:var(--bg-page)">
   <nav style="background:#111111;border-bottom:1px solid rgba(255,255,255,0.1)" class="text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
       <a href="/" class="flex items-center gap-3">
@@ -5335,7 +5335,7 @@ function getBlogListingHTML(posts: any[] = []) {
 {"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.roofmanager.ca/"},{"@type":"ListItem","position":2,"name":"Blog","item":"https://www.roofmanager.ca/blog"}]}
 </script>
 </head>
-<body class="min-h-screen" style="background:#0A0A0A">
+<body class="min-h-screen" style="background:var(--bg-page)">
   <!-- Navigation — Dark theme -->
   <nav style="background:#0A0A0A" class="text-white sticky top-0 z-50 border-b border-white/5">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
@@ -5592,7 +5592,7 @@ function getBlogPostHTML(post?: any, slug?: string) {
   })()}
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tailwindcss/typography@0.5.0/dist/typography.min.css">
 </head>
-<body class="min-h-screen" style="background:#0A0A0A">
+<body class="min-h-screen" style="background:var(--bg-page)">
   <!-- Navigation — Dark theme -->
   <nav style="background:#0A0A0A" class="text-white sticky top-0 z-50 border-b border-white/5">
     <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
@@ -6299,8 +6299,8 @@ function getCustomerOrderPageHTML(mapsApiKey: string) {
   <title>Order a Report - Roof Manager</title>
   ${mapsScript}
 </head>
-<body style="background:#0A0A0A" class="min-h-screen">
-  <header style="background:#111111;border-bottom:1px solid #222" class="text-white shadow-lg">
+<body style="background:var(--bg-page)" class="min-h-screen">
+  <header style="background:var(--bg-card);border-bottom:1px solid var(--border-color)" class="text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
       <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
         <img src="/static/logo.png" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
@@ -6340,8 +6340,8 @@ function getCustomerProfilePageHTML() {
   ${getHeadTags()}
   <title>Account Settings - Roof Manager</title>
 </head>
-<body style="background:#0A0A0A" class="min-h-screen">
-  <header style="background:#111111;border-bottom:1px solid #222" class="text-white shadow-lg">
+<body style="background:var(--bg-page)" class="min-h-screen">
+  <header style="background:var(--bg-card);border-bottom:1px solid var(--border-color)" class="text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
       <div class="flex items-center space-x-3">
         <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
@@ -6390,7 +6390,7 @@ function getVirtualTryOnPageHTML() {
   ${getHeadTags()}
   <title>Roof Visualizer - Roof Manager</title>
 </head>
-<body class="min-h-screen" style="background:#0A0A0A">
+<body class="min-h-screen" style="background:var(--bg-page)">
   <header style="background:#111111;border-bottom:1px solid rgba(255,255,255,0.1)" class="text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
       <div class="flex items-center space-x-3">
@@ -6447,7 +6447,7 @@ function getTeamManagementPageHTML() {
   ${getHeadTags()}
   <title>Team Management - Roof Manager</title>
 </head>
-<body class="min-h-screen" style="background:#0A0A0A">
+<body class="min-h-screen" style="background:var(--bg-page)">
   <header style="background:#111111;border-bottom:1px solid rgba(255,255,255,0.1)" class="text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
       <div class="flex items-center space-x-3">
@@ -6504,7 +6504,7 @@ function getJoinTeamPageHTML() {
   ${getHeadTags()}
   <title>Join Team - Roof Manager</title>
 </head>
-<body class="min-h-screen" style="background:#0A0A0A">
+<body class="min-h-screen" style="background:var(--bg-page)">
   <header style="background:#111111;border-bottom:1px solid rgba(255,255,255,0.1)" class="text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
       <a href="/" class="flex items-center space-x-3">
@@ -6774,7 +6774,7 @@ function getD2DPageHTML(mapsApiKey: string) {
   ${mapsScript}
   <link rel="stylesheet" href="/static/d2d-module.css?v=${Date.now()}">
 </head>
-<body class="min-h-screen" style="background:#0A0A0A">
+<body class="min-h-screen" style="background:var(--bg-page)">
   <header style="background:#111111;border-bottom:1px solid rgba(255,255,255,0.1)" class="text-white shadow-lg">
     <div class="max-w-full mx-auto px-4 py-3 flex items-center justify-between">
       <div class="flex items-center space-x-3">
@@ -6845,7 +6845,7 @@ function getPropertyImageryPageHTML(mapsApiKey: string) {
   <title>Property Imagery - Roof Manager (Dev Tool)</title>
   ${mapsScript}
 </head>
-<body class="min-h-screen" style="background:#0A0A0A">
+<body class="min-h-screen" style="background:var(--bg-page)">
   <header style="background:#111111;border-bottom:1px solid rgba(255,255,255,0.1)" class="text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
       <div class="flex items-center space-x-3">
@@ -6897,7 +6897,7 @@ function getCrmSubPageHTML(module: string, title: string, icon: string) {
   ${getHeadTags()}
   <title>${title} - Roof Manager</title>
 </head>
-<body class="min-h-screen" style="background:#0A0A0A">
+<body class="min-h-screen" style="background:var(--bg-page)">
   <header style="background:#111111;border-bottom:1px solid rgba(255,255,255,0.1)" class="text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
       <div class="flex items-center space-x-3">
@@ -6955,7 +6955,7 @@ function getSecretaryPageHTML() {
   ${getHeadTags()}
   <title>Roofer Secretary - Roof Manager</title>
 </head>
-<body class="min-h-screen" style="background:#0A0A0A">
+<body class="min-h-screen" style="background:var(--bg-page)">
   <header style="background:#111111;border-bottom:1px solid rgba(255,255,255,0.1)" class="text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
       <div class="flex items-center space-x-3">
@@ -7049,7 +7049,7 @@ function getGemma3ModelCardHTML() {
     .hljs { border-radius: 0.5rem; padding: 1.25rem !important; }
   </style>
 </head>
-<body class="min-h-screen" style="background:#0A0A0A">
+<body class="min-h-screen" style="background:var(--bg-page)">
 
   <!-- Header -->
   <header class="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
@@ -7695,7 +7695,7 @@ function getProposalBuilderPageHTML(mapsApiKey: string) {
   <title>Proposal Builder - Roof Manager</title>
   ${mapsApiKey ? `<script src="https://maps.googleapis.com/maps/api/js?key=${mapsApiKey}&libraries=places"></script>` : ''}
 </head>
-<body class="min-h-screen" style="background:#0A0A0A">
+<body class="min-h-screen" style="background:var(--bg-page)">
   <header style="background:#111111;border-bottom:1px solid rgba(255,255,255,0.1)" class="text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
       <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
@@ -7726,7 +7726,7 @@ function getInvoiceManagerPageHTML() {
   ${getHeadTags()}
   <title>Invoice Manager - Roof Manager</title>
 </head>
-<body class="min-h-screen" style="background:#0A0A0A">
+<body class="min-h-screen" style="background:var(--bg-page)">
   <header style="background:#111111;border-bottom:1px solid rgba(255,255,255,0.1)" class="text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
       <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
@@ -8027,7 +8027,7 @@ function getMaterialCalculatorPageHTML() {
     }
   </style>
 </head>
-<body class="min-h-screen" style="background:#0A0A0A">
+<body class="min-h-screen" style="background:var(--bg-page)">
   <header class="bg-gradient-to-r from-sky-600 to-blue-700 text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
       <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
@@ -8082,7 +8082,7 @@ function getWebsiteBuilderPageHTML() {
   ${getHeadTags()}
   <title>AI Website Builder - Roof Manager</title>
 </head>
-<body class="min-h-screen" style="background:#0A0A0A">
+<body class="min-h-screen" style="background:var(--bg-page)">
   <header style="background:#111111;border-bottom:1px solid rgba(255,255,255,0.1)" class="text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
       <div class="flex items-center space-x-3">
@@ -8557,7 +8557,7 @@ function getWidgetSettingsPageHTML() {
   ${getHeadTags()}
   <title>Widget Settings - Roof Manager</title>
 </head>
-<body class="min-h-screen" style="background:#0A0A0A">
+<body class="min-h-screen" style="background:var(--bg-page)">
   <header style="background:#111111;border-bottom:1px solid rgba(255,255,255,0.06)" class="text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
       <div class="flex items-center space-x-3">
@@ -9010,7 +9010,7 @@ function getWidgetLeadsPageHTML() {
   ${getHeadTags()}
   <title>Widget Leads - Roof Manager</title>
 </head>
-<body class="min-h-screen" style="background:#0A0A0A">
+<body class="min-h-screen" style="background:var(--bg-page)">
   <header style="background:#111111;border-bottom:1px solid rgba(255,255,255,0.1)" class="text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
       <div class="flex items-center space-x-3">
