@@ -45,7 +45,7 @@
   // HELPER: Status badge
   // ============================================================
   function badge(status, map) {
-    var m = map || { active: 'bg-emerald-500/15 text-emerald-400', inactive: 'bg-white/5 text-gray-500', lead: 'bg-blue-500/15 text-blue-400', draft: 'bg-white/10 text-gray-400', sent: 'bg-blue-500/15 text-blue-400', viewed: 'bg-blue-500/15/15 text-blue-400', paid: 'bg-emerald-500/15 text-emerald-400', overdue: 'bg-red-500/15 text-red-400', cancelled: 'bg-white/5 text-gray-500', accepted: 'bg-emerald-500/15 text-emerald-400', declined: 'bg-red-500/15 text-red-400', expired: 'bg-white/10/15 text-gray-400', scheduled: 'bg-blue-500/15 text-blue-400', in_progress: 'bg-blue-500/15/15 text-blue-400', completed: 'bg-emerald-500/15 text-emerald-400', postponed: 'bg-white/5 text-gray-500' };
+    var m = map || { active: 'bg-emerald-500/15 text-emerald-400', inactive: 'bg-white/5 text-gray-500', lead: 'bg-blue-500/15 text-blue-400', draft: 'bg-white/10 text-gray-400', sent: 'bg-blue-500/15 text-blue-400', viewed: 'bg-blue-500/15 text-blue-400', paid: 'bg-emerald-500/15 text-emerald-400', overdue: 'bg-red-500/15 text-red-400', cancelled: 'bg-white/5 text-gray-500', accepted: 'bg-emerald-500/15 text-emerald-400', declined: 'bg-red-500/15 text-red-400', expired: 'bg-white/10 text-gray-400', scheduled: 'bg-blue-500/15 text-blue-400', in_progress: 'bg-blue-500/15 text-blue-400', completed: 'bg-emerald-500/15 text-emerald-400', postponed: 'bg-white/5 text-gray-500' };
     return '<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize ' + (m[status] || 'bg-white/5 text-gray-500') + '">' + (status || 'unknown').replace(/_/g, ' ') + '</span>';
   }
 

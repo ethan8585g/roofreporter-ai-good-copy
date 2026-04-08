@@ -2474,6 +2474,25 @@ html.light-theme{background:#f5f7fa !important}
 .light-theme ::-webkit-scrollbar-track{background:#eef1f4 !important}
 .light-theme ::-webkit-scrollbar-thumb{background:#c8d0d8 !important}
 .light-theme .sa-sidebar{background-color:#ffffff !important;border-color:#dde3e9 !important}
+/* Sidebar nav items: white sidebar needs dark text in light mode */
+.light-theme .sa-nav-item:not(.active){color:#374151 !important}
+.light-theme .sa-nav-item:not(.active):hover{background:rgba(0,0,0,0.06) !important}
+/* Hover text overrides missing from core list */
+.light-theme .hover\:text-gray-300:hover{color:#374151 !important}
+.light-theme .hover\:text-white:hover{color:#0B0F12 !important}
+/* Brand color light-mode overrides: swap brand blues to Roofr blue */
+.light-theme .bg-brand-600{background-color:#1373e3 !important}
+.light-theme .bg-brand-700{background-color:#0d509f !important}
+.light-theme .hover\:bg-brand-700:hover{background-color:#0d509f !important}
+.light-theme .text-brand-500,.light-theme .text-brand-600{color:#1373e3 !important}
+.light-theme .text-brand-700{color:#0d509f !important}
+.light-theme .border-brand-500{border-color:#1373e3 !important}
+.light-theme .focus\:ring-brand-500:focus{--tw-ring-color:#1373e3}
+/* Inline style color:white overrides for light mode (on non-colored backgrounds) */
+.light-theme [style*="color:white"]:not([style*="background"]):not([style*="linear-gradient"]){color:#0B0F12 !important}
+.light-theme [style*="color: white"]:not([style*="background"]):not([style*="linear-gradient"]){color:#0B0F12 !important}
+.light-theme [style*="color:#fff"]:not([style*="background"]):not([style*="linear-gradient"]){color:#0B0F12 !important}
+.light-theme [style*="color:#ffffff"]:not([style*="background"]):not([style*="linear-gradient"]){color:#0B0F12 !important}
 </style>
 <script>!function(){var p=window.location.pathname;if(!p.startsWith('/customer')&&!p.startsWith('/admin'))return;var t=localStorage.getItem('rc_dashboard_theme');if(t==='light'){document.documentElement.classList.add('light-theme');document.addEventListener('DOMContentLoaded',function(){document.body.classList.add('light-theme')})}else if(t==='auto'&&window.matchMedia('(prefers-color-scheme:light)').matches){document.documentElement.classList.add('light-theme');document.addEventListener('DOMContentLoaded',function(){document.body.classList.add('light-theme')})}}()</script>
   <script>if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js')}</script>

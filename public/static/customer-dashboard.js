@@ -284,13 +284,13 @@ function renderDashboard() {
       (trialsExhausted ?
         '<div class="bg-gradient-to-r from-brand-800 to-brand-900 rounded-2xl p-5 mb-5 shadow-xl border border-brand-700">' +
           '<div class="flex flex-col sm:flex-row items-center gap-4">' +
-            '<div class="w-12 h-12 bg-blue-500/15/100 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0"><i class="fas fa-crown text-white text-xl"></i></div>' +
+            '<div class="w-12 h-12 bg-blue-500/15 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0"><i class="fas fa-crown text-white text-xl"></i></div>' +
             '<div class="flex-1 text-center sm:text-left">' +
               '<h3 class="text-white font-black text-base">Your 3 Free Trial Reports Are Used Up!</h3>' +
               '<p class="text-brand-200 text-xs mt-1">Upgrade to a credit pack — packs from <strong class="text-gray-400">$5.00/report (100-pack)</strong>, save up to 38%.</p>' +
             '</div>' +
             '<div class="flex gap-2 flex-shrink-0">' +
-              '<a href="/pricing" class="px-4 py-2 bg-blue-500/15/100 hover:bg-white/10 text-white font-black rounded-xl shadow text-xs"><i class="fas fa-tags mr-1"></i>View Packs</a>' +
+              '<a href="/pricing" class="px-4 py-2 bg-blue-500/15 hover:bg-white/10 text-white font-black rounded-xl shadow text-xs"><i class="fas fa-tags mr-1"></i>View Packs</a>' +
               '<a href="/customer/order" class="px-4 py-2 bg-[#111111]/10 hover:bg-[#111111]/20 text-white font-semibold rounded-xl text-xs border border-white/20"><i class="fas fa-credit-card mr-1"></i>Pay Per Report</a>' +
             '</div>' +
           '</div>' +
@@ -457,7 +457,7 @@ function initAnalyticsCharts() {
   if (jobsCanvas && a.jobs) {
     var jm = a.jobs.by_month || [];
     if (jm.length === 0) {
-      jobsCanvas.parentElement.innerHTML = '<div class="text-center py-8"><i class="fas fa-briefcase text-2xl text-gray-700 mb-2 block"></i><p class="text-xs" style="color:var(--text-muted)">No completed jobs yet</p><p class="text-[10px] text-gray-600 mt-1">Jobs will appear here as you complete them</p></div>';
+      jobsCanvas.parentElement.innerHTML = '<div class="text-center py-8"><i class="fas fa-briefcase text-2xl text-gray-400 mb-2 block"></i><p class="text-xs" style="color:var(--text-muted)">No completed jobs yet</p><p class="text-[10px] mt-1" style="color:var(--text-muted)">Jobs will appear here as you complete them</p></div>';
     } else {
       var jobsCtx = jobsCanvas.getContext('2d');
       var jobsGradient = jobsCtx.createLinearGradient(0, 0, 0, 180);
@@ -511,7 +511,7 @@ function initAnalyticsCharts() {
   if (revCanvas && a.revenue) {
     var rm = a.revenue.by_month || [];
     if (rm.length === 0) {
-      revCanvas.parentElement.innerHTML = '<div class="text-center py-8"><i class="fas fa-dollar-sign text-2xl text-gray-700 mb-2 block"></i><p class="text-xs" style="color:var(--text-muted)">No revenue data yet</p><p class="text-[10px] text-gray-600 mt-1">Revenue will appear as invoices are paid</p></div>';
+      revCanvas.parentElement.innerHTML = '<div class="text-center py-8"><i class="fas fa-dollar-sign text-2xl text-gray-400 mb-2 block"></i><p class="text-xs" style="color:var(--text-muted)">No revenue data yet</p><p class="text-[10px] mt-1" style="color:var(--text-muted)">Revenue will appear as invoices are paid</p></div>';
     } else {
       var ctx = revCanvas.getContext('2d');
       var gradient = ctx.createLinearGradient(0, 0, 0, 180);
@@ -566,7 +566,7 @@ function initAnalyticsCharts() {
   if (crewCanvas && a.crew) {
     var ch = a.crew.hours || [];
     if (ch.length === 0) {
-      crewCanvas.parentElement.innerHTML = '<div class="text-center py-8"><i class="fas fa-users text-2xl text-gray-700 mb-2 block"></i><p class="text-xs" style="color:var(--text-muted)">No crew time logged yet</p></div>';
+      crewCanvas.parentElement.innerHTML = '<div class="text-center py-8"><i class="fas fa-users text-2xl text-gray-400 mb-2 block"></i><p class="text-xs" style="color:var(--text-muted)">No crew time logged yet</p></div>';
     } else {
       if (_chartInstances.crew) { _chartInstances.crew.destroy(); _chartInstances.crew = null; }
       _chartInstances.crew = new Chart(crewCanvas, {
@@ -621,7 +621,7 @@ function renderRecentOrders() {
   for (var i = 0; i < orders.length; i++) {
     var o = orders[i];
     var isProcessing = o.status === 'processing' || o.report_status === 'generating' || o.report_status === 'pending';
-    var statusClass = o.status === 'completed' ? 'bg-emerald-500/15 text-emerald-400' : (isProcessing ? 'bg-blue-500/100/15 text-blue-400' : 'bg-white/5 text-gray-400');
+    var statusClass = o.status === 'completed' ? 'bg-emerald-500/15 text-emerald-400' : (isProcessing ? 'bg-blue-500/15 text-blue-400' : 'bg-white/5 text-gray-400');
     var reportReady = (o.report_status === 'completed' || o.status === 'completed') && !isProcessing;
     html += '<div class="flex items-center justify-between p-3 bg-[#0A0A0A] rounded-xl hover:bg-[#111111]/10 transition-colors">' +
       '<div class="flex-1 min-w-0">' +
@@ -632,7 +632,7 @@ function renderRecentOrders() {
         '<span class="px-2 py-0.5 ' + statusClass + ' rounded-full text-[10px] font-bold capitalize">' + (isProcessing ? '<i class="fas fa-spinner fa-spin mr-1"></i>' : '') + (isProcessing ? 'generating' : o.status) + '</span>' +
         (reportReady ? '<a href="/api/reports/' + o.id + '/html" target="_blank" class="px-2.5 py-1 bg-emerald-600 text-white rounded-lg text-xs font-medium hover:bg-brand-700"><i class="fas fa-eye mr-1"></i>View</a>' : '') +
         (reportReady ? '<a href="/customer/material-calculator?order_id=' + o.id + '" class="px-2.5 py-1 bg-sky-100 text-sky-700 rounded-lg text-xs font-medium hover:bg-sky-200"><i class="fas fa-calculator mr-1"></i>Materials</a>' : '') +
-        (o.status === 'failed' ? '<button onclick="retryReport(' + o.id + ', this)" class="px-2.5 py-1 bg-red-500/100/15 text-red-400 rounded-lg text-xs font-medium hover:bg-red-200"><i class="fas fa-redo mr-1"></i>Retry</button>' : '') +
+        (o.status === 'failed' ? '<button onclick="retryReport(' + o.id + ', this)" class="px-2.5 py-1 bg-red-500/15 text-red-400 rounded-lg text-xs font-medium hover:bg-red-200"><i class="fas fa-redo mr-1"></i>Retry</button>' : '') +
       '</div>' +
     '</div>';
   }

@@ -196,3 +196,55 @@
   header, footer, nav, .no-print { display: none !important; }
   body { background: white !important; }
 }
+
+/* ── Brand color utilities (sky palette) ──────────────────────────
+   Tailwind v4 pre-compiled CSS doesn't include dynamically-used
+   classes from JS files. These are defined here so all JS-generated
+   HTML gets correct styling in both dark and light themes.
+------------------------------------------------------------------ */
+/* Backgrounds */
+.bg-brand-50  { background-color: #f0f9ff; }
+.bg-brand-100 { background-color: #e0f2fe; }
+.bg-brand-200 { background-color: #bae6fd; }
+.bg-brand-300 { background-color: #7dd3fc; }
+.bg-brand-400 { background-color: #38bdf8; }
+.bg-brand-500 { background-color: #0ea5e9; }
+.bg-brand-600 { background-color: #0284c7; }
+.bg-brand-700 { background-color: #0369a1; }
+.bg-brand-800 { background-color: #075985; }
+.bg-brand-900 { background-color: #0c4a6e; }
+.bg-brand-50\/20 { background-color: rgba(240,249,255,0.20); }
+.bg-brand-50\/30 { background-color: rgba(240,249,255,0.30); }
+/* Text */
+.text-brand-200 { color: #bae6fd; }
+.text-brand-300 { color: #7dd3fc; }
+.text-brand-400 { color: #38bdf8; }
+.text-brand-500 { color: #0ea5e9; }
+.text-brand-600 { color: #0284c7; }
+.text-brand-700 { color: #0369a1; }
+.text-brand-800 { color: #075985; }
+/* Borders */
+.border-brand-200 { border-color: #bae6fd; }
+.border-brand-400 { border-color: #38bdf8; }
+.border-brand-500 { border-color: #0ea5e9; }
+.border-brand-700 { border-color: #0369a1; }
+/* Gradient stops */
+.from-brand-50  { --tw-gradient-from: #f0f9ff; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to, rgba(240,249,255,0)); }
+.from-brand-500 { --tw-gradient-from: #0ea5e9; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to, rgba(14,165,233,0)); }
+.from-brand-700 { --tw-gradient-from: #0369a1; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to, rgba(3,105,161,0)); }
+.from-brand-800 { --tw-gradient-from: #075985; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to, rgba(7,89,133,0)); }
+.to-brand-600   { --tw-gradient-to: #0284c7; }
+.to-brand-700   { --tw-gradient-to: #0369a1; }
+.to-brand-800   { --tw-gradient-to: #075985; }
+.to-brand-900   { --tw-gradient-to: #0c4a6e; }
+/* Hover states */
+.hover\:bg-brand-100:hover { background-color: #e0f2fe; }
+.hover\:bg-brand-700:hover { background-color: #0369a1; }
+.hover\:text-brand-600:hover { color: #0284c7; }
+.hover\:text-brand-700:hover { color: #0369a1; }
+.hover\:border-brand-500:hover { border-color: #0ea5e9; }
+/* Focus / ring */
+.focus\:ring-brand-500:focus { --tw-ring-color: #0ea5e9; box-shadow: 0 0 0 3px var(--tw-ring-color); }
+.focus\:border-brand-500:focus { border-color: #0ea5e9; }
+.ring-brand-200 { --tw-ring-color: #bae6fd; box-shadow: 0 0 0 3px var(--tw-ring-color); }
+.ring-brand-500 { --tw-ring-color: #0ea5e9; box-shadow: 0 0 0 3px var(--tw-ring-color); }
