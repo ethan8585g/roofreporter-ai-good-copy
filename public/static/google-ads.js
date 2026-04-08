@@ -185,7 +185,7 @@
     });
   };
 
-  window._gaDisconnect = function() {
+  window._gaDisconnect = async function() {
     if (!(await window.rmConfirm('Disconnect your Google Ads account? Your cached campaign data will remain.'))) return
     apiPost('/disconnect').then(function() {
       state.connected = false;

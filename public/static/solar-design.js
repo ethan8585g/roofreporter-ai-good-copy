@@ -288,7 +288,7 @@
     drawCanvas();
   };
 
-  window._sdClearAll = function() {
+  window._sdClearAll = async function() {
     if (state.panels.length === 0) return;
     if (await window.rmConfirm('Remove all ' + state.panels.length + ' panels?')) {
       state.panels = [];

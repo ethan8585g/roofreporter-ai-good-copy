@@ -1233,7 +1233,7 @@ function undoLastTrace() {
   showToast('Undo complete', 'info');
 }
 
-function clearCurrentMode() {
+async function clearCurrentMode() {
   const mode = state.traceMode;
   const modeLabel = { eaves: 'eaves sections', ridge: 'ridge lines', hip: 'hip lines', valley: 'valley lines' }[mode] || mode;
   if (!(await window.rmConfirm(`Clear all ${modeLabel}? Other modes will not be affected.`))) return

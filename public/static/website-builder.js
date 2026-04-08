@@ -709,11 +709,11 @@
       body: JSON.stringify({ custom_domain: domain })
     });
     if (data && data.success) {
-      window.rmToast('Custom domain set to: ' + domain + '\n\nTo complete setup:\n1. Go to your domain registrar\n2. Add a CNAME record pointing to roofmanager.ca\n3. Wait for DNS propagation (up to 24 hours, 'success')');
+      window.rmToast('Custom domain set to: ' + domain + '\n\nTo complete setup:\n1. Go to your domain registrar\n2. Add a CNAME record pointing to roofmanager.ca\n3. Wait for DNS propagation (up to 24 hours).', 'success');
       await loadSiteDetail(siteId);
       render();
     } else {
-      window.rmToast('Failed to set domain: ' + (data ? data.error : 'Unknown error', 'error'));
+      window.rmToast('Failed to set domain: ' + (data ? data.error : 'Unknown error'), 'error');
     }
   };
 

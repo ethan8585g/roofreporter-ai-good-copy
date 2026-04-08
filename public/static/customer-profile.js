@@ -409,7 +409,7 @@
     document.getElementById('pw_confirm').value = '';
   }
 
-  window.requestAccountDeletion = function () {
+  window.requestAccountDeletion = async function () {
     if (!(await window.rmConfirm('Are you absolutely sure? This will permanently delete your account and all data. This cannot be undone.'))) return
     var email = prompt('To confirm, type your email address:');
     if (!email || email.toLowerCase() !== (profile.email || '').toLowerCase()) {

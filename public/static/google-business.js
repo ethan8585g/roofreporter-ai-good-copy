@@ -248,7 +248,7 @@
     });
   };
 
-  window._gbpDisconnect = function() {
+  window._gbpDisconnect = async function() {
     if (!(await window.rmConfirm('Disconnect your Google Business Profile? Your cached data will remain.'))) return
     apiPost('/disconnect').then(function() {
       state.connected = false;

@@ -1079,10 +1079,10 @@ async function applySegmentToggle(orderId) {
     const d = await r.json();
     if (r.ok && d.success) {
       closeSegToggle();
-      window.rmToast('Report recalculated! ' + d.active_segments + ' of ' + d.total_segments + ' segments active.\nNew footprint: ' + d.updated_metrics.total_footprint_sqft.toLocaleString(, 'success') + ' sqft\nNew squares: ' + d.updated_metrics.gross_squares);
+      window.rmToast('Report recalculated! ' + d.active_segments + ' of ' + d.total_segments + ' segments active.\nNew footprint: ' + d.updated_metrics.total_footprint_sqft.toLocaleString() + ' sqft\nNew squares: ' + d.updated_metrics.gross_squares, 'success');
       await loadAll(); render();
     } else {
-      window.rmToast('Failed: ' + (d.error||'Unknown error', 'error'));
+      window.rmToast('Failed: ' + (d.error||'Unknown error'), 'error');
     }
   } catch(e) {
     window.rmToast('Error: ' + e.message, 'error');
@@ -2318,11 +2318,11 @@ async function embedAllReports() {
     });
     const data = await res.json();
     if (data.success) {
-      window.rmToast('Embedded ' + data.embedded + ' reports (' + data.errors + ' errors, 'error')');
+      window.rmToast('Embedded ' + data.embedded + ' reports (' + data.errors + ' errors).', 'success');
       await loadSearchStats();
       render();
     } else {
-      window.rmToast('Embed failed: ' + (data.error || 'Unknown error', 'error'));
+      window.rmToast('Embed failed: ' + (data.error || 'Unknown error'), 'error');
     }
   } catch(e) {
     window.rmToast('Error: ' + e.message, 'error');

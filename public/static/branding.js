@@ -125,7 +125,7 @@ function handleLogoUpload(input) {
     return;
   }
   if (!file.type.startsWith('image/')) {
-    window.rmToast('Please upload an image file (PNG, JPG, SVG, 'warning').');
+    window.rmToast('Please upload an image file (PNG, JPG, SVG).', 'warning');
     return;
   }
   var reader = new FileReader();

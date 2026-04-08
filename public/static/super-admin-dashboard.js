@@ -6512,7 +6512,7 @@ function geminiCopyMessage(btn) {
   }
 }
 
-function geminiClearHistory() {
+async function geminiClearHistory() {
   if (!(await window.rmConfirm('Clear all Gemini conversation history?'))) return
   SA.geminiMessages = [];
   renderContent();

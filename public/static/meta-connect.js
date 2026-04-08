@@ -641,7 +641,7 @@
   };
   window.mcExecuteScheduled = async function() {
     const data = await mcF('/api/meta/scheduled/execute', { method: 'POST', body: '{}' });
-    window.rmToast(data?.success ? 'Executed ' + data.posted + ' posts (' + data.failed + ' failed, 'info')' : (data?.error || 'Failed'));
+    window.rmToast(data?.success ? 'Executed ' + data.posted + ' posts (' + data.failed + ' failed)' : (data?.error || 'Failed'), 'info');
     mcLoadTab('scheduler');
   };
 })();

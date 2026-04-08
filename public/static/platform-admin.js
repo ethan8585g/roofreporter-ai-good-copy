@@ -992,7 +992,7 @@ async function paUploadLeads() {
       prospects.push(obj);
     }
   }
-  if (prospects.length === 0) { window.rmToast('No valid prospects found (need a phone column, 'info')'); return; }
+  if (prospects.length === 0) { window.rmToast('No valid prospects found (need a phone column).', 'info'); return; }
 
   try {
     var res = await saFetch('/api/admin/superadmin/cc/lead-lists/upload', {
@@ -1001,11 +1001,11 @@ async function paUploadLeads() {
     });
     var data = await res.json();
     if (data.success) {
-      window.rmToast('Imported: ' + data.imported + ', Skipped: ' + data.skipped + ' (of ' + data.total + ' rows, 'info')');
+      window.rmToast('Imported: ' + data.imported + ', Skipped: ' + data.skipped + ' (of ' + data.total + ' rows).', 'info');
       paClearCSV();
       paLoadLeadStats();
     } else {
-      window.rmToast('Error: ' + (data.error || 'Unknown', 'error'));
+      window.rmToast('Error: ' + (data.error || 'Unknown'), 'error');
     }
   } catch(e) { window.rmToast('Upload failed: ' + e.message, 'error'); }
 }

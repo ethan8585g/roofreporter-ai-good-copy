@@ -1061,7 +1061,7 @@ function undoLastTrace() {
   updateTraceUI();
 }
 
-function clearAllTraces() {
+async function clearAllTraces() {
   if (!(await window.rmConfirm('Clear all traces?'))) return
   orderState.traceEavesPoints = [];
   orderState.traceRidgeLines = [];

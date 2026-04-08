@@ -1097,7 +1097,7 @@
     });
   }
 
-  function deleteTurf(id) {
+  async function deleteTurf(id) {
     if (!(await window.rmConfirm('Delete this turf and all its pins?'))) return
     api('DELETE', '/turfs/' + id).then(function(r) {
       if (r.success) { toast('Turf deleted'); infoWindow.close(); loadAll(); }
@@ -1133,7 +1133,7 @@
     }
   }
 
-  function deletePin(id) {
+  async function deletePin(id) {
     if (!(await window.rmConfirm('Delete this pin?'))) return
     api('DELETE', '/pins/' + id).then(function(r) {
       if (r.success) { toast('Pin deleted'); infoWindow.close(); loadAll(); }
@@ -1391,7 +1391,7 @@
     });
   }
 
-  function deleteMember(id) {
+  async function deleteMember(id) {
     if (!(await window.rmConfirm('Remove this team member?'))) return
     api('DELETE', '/team/' + id).then(function(r) {
       if (r.success) { toast('Team member removed'); loadAll(); }
