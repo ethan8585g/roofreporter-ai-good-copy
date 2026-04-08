@@ -3361,12 +3361,12 @@ function getLandingPageHTML(latestPosts: any[] = []) {
     /* Landing page scroll animations */
     .scroll-animate {
       opacity: 0;
-      transform: translateY(30px);
-      transition: all 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+      transform: translateY(2rem);
+      transition: opacity 0.7s, transform 0.7s;
     }
     .scroll-animate.animate-in {
       opacity: 1 !important;
-      transform: translateY(0) !important;
+      transform: none !important;
     }
     html { scroll-behavior: smooth; }
     /* Navbar: starts transparent, turns dark on scroll */
@@ -3431,6 +3431,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
       50% { opacity: 1; }
     }
   </style>
+  <noscript><style>.scroll-animate { opacity: 1 !important; transform: none !important; }</style></noscript>
 </head>
 <body class="min-h-screen" style="background:#0A0A0A">
   <!-- Sticky Navigation — Dark premium, starts transparent -->
@@ -8247,6 +8248,124 @@ function getWidgetSettingsPageHTML() {
         <input id="cfg-domains" type="text" class="w-full bg-gray-800 text-white px-4 py-2.5 rounded-lg border border-gray-700 text-sm" placeholder="example.com, www.myroofing.com" onchange="saveConfig()">
       </div>
 
+      <!-- Pricing Configuration -->
+      <div class="bg-gray-900 rounded-xl p-6 border border-gray-800 mb-6">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-white font-semibold"><i class="fas fa-dollar-sign mr-2"></i>Pricing Configuration</h3>
+          <button onclick="resetPricingDefaults()" class="text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 px-3 py-1.5 rounded-lg transition">Reset to Defaults</button>
+        </div>
+        <p class="text-gray-400 text-sm mb-4">Set your company's actual costs so estimates match your pricing. Changes auto-save.</p>
+
+        <!-- Per-Tier Costs -->
+        <h4 class="text-gray-300 text-sm font-medium mb-3">Per-Tier Material &amp; Labor Costs</h4>
+        <div class="overflow-x-auto mb-6">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-gray-700">
+                <th class="text-left text-gray-400 py-2 pr-3 font-medium">Cost Item</th>
+                <th class="text-center text-gray-400 py-2 px-2 font-medium">Good<br><span class="text-xs font-normal">3-Tab</span></th>
+                <th class="text-center text-blue-400 py-2 px-2 font-medium">Better<br><span class="text-xs font-normal">Architectural</span></th>
+                <th class="text-center text-gray-400 py-2 px-2 font-medium">Best<br><span class="text-xs font-normal">Luxury</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="border-b border-gray-800">
+                <td class="py-2 pr-3 text-gray-300">Shingles ($/sq)</td>
+                <td class="py-2 px-1"><input id="p-good-shingles" type="number" step="0.01" class="w-full bg-gray-800 text-white text-center px-2 py-1.5 rounded border border-gray-700 text-sm" onchange="savePricing()"></td>
+                <td class="py-2 px-1"><input id="p-better-shingles" type="number" step="0.01" class="w-full bg-gray-800 text-white text-center px-2 py-1.5 rounded border border-blue-700 text-sm" onchange="savePricing()"></td>
+                <td class="py-2 px-1"><input id="p-best-shingles" type="number" step="0.01" class="w-full bg-gray-800 text-white text-center px-2 py-1.5 rounded border border-gray-700 text-sm" onchange="savePricing()"></td>
+              </tr>
+              <tr class="border-b border-gray-800">
+                <td class="py-2 pr-3 text-gray-300">Underlayment ($/sq)</td>
+                <td class="py-2 px-1"><input id="p-good-underlay" type="number" step="0.01" class="w-full bg-gray-800 text-white text-center px-2 py-1.5 rounded border border-gray-700 text-sm" onchange="savePricing()"></td>
+                <td class="py-2 px-1"><input id="p-better-underlay" type="number" step="0.01" class="w-full bg-gray-800 text-white text-center px-2 py-1.5 rounded border border-blue-700 text-sm" onchange="savePricing()"></td>
+                <td class="py-2 px-1"><input id="p-best-underlay" type="number" step="0.01" class="w-full bg-gray-800 text-white text-center px-2 py-1.5 rounded border border-gray-700 text-sm" onchange="savePricing()"></td>
+              </tr>
+              <tr class="border-b border-gray-800">
+                <td class="py-2 pr-3 text-gray-300">Labor ($/sq)</td>
+                <td class="py-2 px-1"><input id="p-good-labor" type="number" step="0.01" class="w-full bg-gray-800 text-white text-center px-2 py-1.5 rounded border border-gray-700 text-sm" onchange="savePricing()"></td>
+                <td class="py-2 px-1"><input id="p-better-labor" type="number" step="0.01" class="w-full bg-gray-800 text-white text-center px-2 py-1.5 rounded border border-blue-700 text-sm" onchange="savePricing()"></td>
+                <td class="py-2 px-1"><input id="p-best-labor" type="number" step="0.01" class="w-full bg-gray-800 text-white text-center px-2 py-1.5 rounded border border-gray-700 text-sm" onchange="savePricing()"></td>
+              </tr>
+              <tr>
+                <td class="py-2 pr-3 text-gray-300">Tearoff ($/sq)</td>
+                <td class="py-2 px-1"><input id="p-good-tearoff" type="number" step="0.01" class="w-full bg-gray-800 text-white text-center px-2 py-1.5 rounded border border-gray-700 text-sm" onchange="savePricing()"></td>
+                <td class="py-2 px-1"><input id="p-better-tearoff" type="number" step="0.01" class="w-full bg-gray-800 text-white text-center px-2 py-1.5 rounded border border-blue-700 text-sm" onchange="savePricing()"></td>
+                <td class="py-2 px-1"><input id="p-best-tearoff" type="number" step="0.01" class="w-full bg-gray-800 text-white text-center px-2 py-1.5 rounded border border-gray-700 text-sm" onchange="savePricing()"></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Shared Costs -->
+        <h4 class="text-gray-300 text-sm font-medium mb-3">Shared Overhead Costs <span class="text-gray-500 font-normal">(apply to all tiers)</span></h4>
+        <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <div>
+            <label class="block text-gray-500 text-xs mb-1">Disposal ($/sq)</label>
+            <input id="p-disposal" type="number" step="0.01" class="w-full bg-gray-800 text-white px-3 py-2 rounded border border-gray-700 text-sm" onchange="savePricing()">
+          </div>
+          <div>
+            <label class="block text-gray-500 text-xs mb-1">Drip Edge ($/ft)</label>
+            <input id="p-drip-edge" type="number" step="0.01" class="w-full bg-gray-800 text-white px-3 py-2 rounded border border-gray-700 text-sm" onchange="savePricing()">
+          </div>
+          <div>
+            <label class="block text-gray-500 text-xs mb-1">Ridge Cap ($/ft)</label>
+            <input id="p-ridge-cap" type="number" step="0.01" class="w-full bg-gray-800 text-white px-3 py-2 rounded border border-gray-700 text-sm" onchange="savePricing()">
+          </div>
+          <div>
+            <label class="block text-gray-500 text-xs mb-1">Valley Flashing ($/ft)</label>
+            <input id="p-valley" type="number" step="0.01" class="w-full bg-gray-800 text-white px-3 py-2 rounded border border-gray-700 text-sm" onchange="savePricing()">
+          </div>
+          <div>
+            <label class="block text-gray-500 text-xs mb-1">Step Flashing ($/ft)</label>
+            <input id="p-step" type="number" step="0.01" class="w-full bg-gray-800 text-white px-3 py-2 rounded border border-gray-700 text-sm" onchange="savePricing()">
+          </div>
+          <div>
+            <label class="block text-gray-500 text-xs mb-1">Recycling ($/sq)</label>
+            <input id="p-recycling" type="number" step="0.01" class="w-full bg-gray-800 text-white px-3 py-2 rounded border border-gray-700 text-sm" onchange="savePricing()">
+          </div>
+          <div>
+            <label class="block text-gray-500 text-xs mb-1">Dumpster Fee ($)</label>
+            <input id="p-dumpster" type="number" step="0.01" class="w-full bg-gray-800 text-white px-3 py-2 rounded border border-gray-700 text-sm" onchange="savePricing()">
+          </div>
+          <div>
+            <label class="block text-gray-500 text-xs mb-1">Ice Shield ($/roll)</label>
+            <input id="p-ice-shield" type="number" step="0.01" class="w-full bg-gray-800 text-white px-3 py-2 rounded border border-gray-700 text-sm" onchange="savePricing()">
+          </div>
+          <div>
+            <label class="block text-gray-500 text-xs mb-1">Steep Premium (%)</label>
+            <input id="p-steep" type="number" step="1" class="w-full bg-gray-800 text-white px-3 py-2 rounded border border-gray-700 text-sm" onchange="savePricing()">
+          </div>
+          <div>
+            <label class="block text-gray-500 text-xs mb-1">Waste Factor (%)</label>
+            <input id="p-waste" type="number" step="1" class="w-full bg-gray-800 text-white px-3 py-2 rounded border border-gray-700 text-sm" onchange="savePricing()">
+          </div>
+          <div>
+            <label class="block text-gray-500 text-xs mb-1">Tax Rate (%)</label>
+            <input id="p-tax" type="number" step="0.1" class="w-full bg-gray-800 text-white px-3 py-2 rounded border border-gray-700 text-sm" onchange="savePricing()">
+          </div>
+        </div>
+
+        <!-- Live Preview -->
+        <div class="mt-5 p-4 bg-gray-800 rounded-lg border border-gray-700">
+          <h4 class="text-gray-300 text-sm font-medium mb-2"><i class="fas fa-calculator mr-1"></i>Sample Estimate Preview <span class="text-gray-500 font-normal">(20-square roof)</span></h4>
+          <div class="grid grid-cols-3 gap-3 text-center">
+            <div class="bg-gray-900 rounded-lg p-3">
+              <p class="text-gray-400 text-xs mb-1">Good</p>
+              <p class="text-white font-bold text-lg" id="preview-good">--</p>
+            </div>
+            <div class="bg-gray-900 rounded-lg p-3 border border-blue-800">
+              <p class="text-blue-400 text-xs mb-1">Better</p>
+              <p class="text-white font-bold text-lg" id="preview-better">--</p>
+            </div>
+            <div class="bg-gray-900 rounded-lg p-3">
+              <p class="text-gray-400 text-xs mb-1">Best</p>
+              <p class="text-white font-bold text-lg" id="preview-best">--</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div id="save-status" class="text-center text-sm text-green-400 hidden">Settings saved!</div>
     </div>
   </main>
@@ -8292,6 +8411,8 @@ function getWidgetSettingsPageHTML() {
           document.getElementById('cfg-domains').value = cfg.allowed_domains || '';
           document.getElementById('embed-code').value = '<script src="https://www.roofmanager.ca/static/widget.js" data-key="' + cfg.public_key + '" async><\\/script>';
           document.getElementById('preview-link').href = '/widget/view?key=' + cfg.public_key;
+          // Load pricing presets
+          loadPricingFields(cfg.pricing_presets_json);
           document.getElementById('loading').classList.add('hidden');
           document.getElementById('settings-root').classList.remove('hidden');
         })
@@ -8335,6 +8456,124 @@ function getWidgetSettingsPageHTML() {
         btn.textContent = 'Copied!';
         setTimeout(function() { btn.textContent = 'Copy'; }, 2000);
       });
+    }
+
+    // Default pricing values (mirrors pricing-engine.ts DEFAULT_PRESETS + TIER_PRESETS)
+    var DEFAULTS = {
+      shared: { disposal_per_square: 25, drip_edge_per_ft: 1.5, ridge_cap_per_ft: 3.25, valley_flashing_per_ft: 2.75, step_flashing_per_ft: 3.5, recycling_fee_per_square: 12, dumpster_flat_fee: 450, ice_shield_per_roll: 85, steep_labor_premium_pct: 0.25, waste_factor: 0.15, tax_rate: 0.05 },
+      good: { shingles_per_square: 110, underlayment_per_square: 18, labor_per_square: 160, tearoff_per_square: 40 },
+      better: { shingles_per_square: 145, underlayment_per_square: 25, labor_per_square: 180, tearoff_per_square: 45 },
+      best: { shingles_per_square: 225, underlayment_per_square: 35, labor_per_square: 210, tearoff_per_square: 50 }
+    };
+
+    function loadPricingFields(json) {
+      var p = json ? (typeof json === 'string' ? JSON.parse(json) : json) : DEFAULTS;
+      var s = p.shared || DEFAULTS.shared;
+      var g = p.good || DEFAULTS.good;
+      var b = p.better || DEFAULTS.better;
+      var x = p.best || DEFAULTS.best;
+      // Per-tier
+      document.getElementById('p-good-shingles').value = g.shingles_per_square;
+      document.getElementById('p-good-underlay').value = g.underlayment_per_square;
+      document.getElementById('p-good-labor').value = g.labor_per_square;
+      document.getElementById('p-good-tearoff').value = g.tearoff_per_square;
+      document.getElementById('p-better-shingles').value = b.shingles_per_square;
+      document.getElementById('p-better-underlay').value = b.underlayment_per_square;
+      document.getElementById('p-better-labor').value = b.labor_per_square;
+      document.getElementById('p-better-tearoff').value = b.tearoff_per_square;
+      document.getElementById('p-best-shingles').value = x.shingles_per_square;
+      document.getElementById('p-best-underlay').value = x.underlayment_per_square;
+      document.getElementById('p-best-labor').value = x.labor_per_square;
+      document.getElementById('p-best-tearoff').value = x.tearoff_per_square;
+      // Shared
+      document.getElementById('p-disposal').value = s.disposal_per_square;
+      document.getElementById('p-drip-edge').value = s.drip_edge_per_ft;
+      document.getElementById('p-ridge-cap').value = s.ridge_cap_per_ft;
+      document.getElementById('p-valley').value = s.valley_flashing_per_ft;
+      document.getElementById('p-step').value = s.step_flashing_per_ft;
+      document.getElementById('p-recycling').value = s.recycling_fee_per_square;
+      document.getElementById('p-dumpster').value = s.dumpster_flat_fee;
+      document.getElementById('p-ice-shield').value = s.ice_shield_per_roll;
+      document.getElementById('p-steep').value = Math.round((s.steep_labor_premium_pct || 0.25) * 100);
+      document.getElementById('p-waste').value = Math.round((s.waste_factor || 0.15) * 100);
+      document.getElementById('p-tax').value = Math.round((s.tax_rate || 0.05) * 100 * 10) / 10;
+      updatePreview();
+    }
+
+    function collectPricingJson() {
+      return {
+        shared: {
+          disposal_per_square: parseFloat(document.getElementById('p-disposal').value) || 25,
+          drip_edge_per_ft: parseFloat(document.getElementById('p-drip-edge').value) || 1.5,
+          ridge_cap_per_ft: parseFloat(document.getElementById('p-ridge-cap').value) || 3.25,
+          valley_flashing_per_ft: parseFloat(document.getElementById('p-valley').value) || 2.75,
+          step_flashing_per_ft: parseFloat(document.getElementById('p-step').value) || 3.5,
+          recycling_fee_per_square: parseFloat(document.getElementById('p-recycling').value) || 12,
+          dumpster_flat_fee: parseFloat(document.getElementById('p-dumpster').value) || 450,
+          ice_shield_per_roll: parseFloat(document.getElementById('p-ice-shield').value) || 85,
+          steep_labor_premium_pct: (parseFloat(document.getElementById('p-steep').value) || 25) / 100,
+          waste_factor: (parseFloat(document.getElementById('p-waste').value) || 15) / 100,
+          tax_rate: (parseFloat(document.getElementById('p-tax').value) || 5) / 100,
+          steep_pitch_threshold: 8, dumpster_sqft_per_unit: 3000
+        },
+        good: {
+          shingles_per_square: parseFloat(document.getElementById('p-good-shingles').value) || 110,
+          underlayment_per_square: parseFloat(document.getElementById('p-good-underlay').value) || 18,
+          labor_per_square: parseFloat(document.getElementById('p-good-labor').value) || 160,
+          tearoff_per_square: parseFloat(document.getElementById('p-good-tearoff').value) || 40
+        },
+        better: {
+          shingles_per_square: parseFloat(document.getElementById('p-better-shingles').value) || 145,
+          underlayment_per_square: parseFloat(document.getElementById('p-better-underlay').value) || 25,
+          labor_per_square: parseFloat(document.getElementById('p-better-labor').value) || 180,
+          tearoff_per_square: parseFloat(document.getElementById('p-better-tearoff').value) || 45
+        },
+        best: {
+          shingles_per_square: parseFloat(document.getElementById('p-best-shingles').value) || 225,
+          underlayment_per_square: parseFloat(document.getElementById('p-best-underlay').value) || 35,
+          labor_per_square: parseFloat(document.getElementById('p-best-labor').value) || 210,
+          tearoff_per_square: parseFloat(document.getElementById('p-best-tearoff').value) || 50
+        }
+      };
+    }
+
+    function updatePreview() {
+      // Quick client-side estimate for a 20-square roof (simplified)
+      var p = collectPricingJson();
+      var squares = 20;
+      ['good', 'better', 'best'].forEach(function(tier) {
+        var t = p[tier];
+        var s = p.shared;
+        var waste = 1 + (s.waste_factor || 0.15);
+        var grossSq = squares * waste;
+        var subtotal = (t.shingles_per_square + t.underlayment_per_square + t.labor_per_square + t.tearoff_per_square + s.disposal_per_square + s.recycling_fee_per_square) * grossSq + s.dumpster_flat_fee;
+        var total = subtotal * (1 + s.tax_rate);
+        document.getElementById('preview-' + tier).textContent = '$' + Math.round(total).toLocaleString();
+      });
+    }
+
+    var pricingTimer = null;
+    function savePricing() {
+      updatePreview();
+      clearTimeout(pricingTimer);
+      pricingTimer = setTimeout(function() {
+        var pricing = collectPricingJson();
+        fetch('/api/widget/config', { method: 'PUT', headers: HEADERS, body: JSON.stringify({ pricing_presets_json: pricing }) })
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            if (data.success) {
+              var el = document.getElementById('save-status');
+              el.classList.remove('hidden');
+              setTimeout(function() { el.classList.add('hidden'); }, 2000);
+            }
+          });
+      }, 500);
+    }
+
+    function resetPricingDefaults() {
+      if (!confirm('Reset all pricing to industry defaults?')) return;
+      loadPricingFields(DEFAULTS);
+      savePricing();
     }
 
     loadConfig();

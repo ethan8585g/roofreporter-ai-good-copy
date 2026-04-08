@@ -2,8 +2,8 @@ import { Hono } from 'hono'
 import type { Bindings } from '../types'
 import { resolveTeamOwner } from './team'
 import { trueAreaFromFootprint, pitchToRatio } from '../utils/geo-math'
-import { calculateTieredProposals } from '../services/pricing-engine'
-import type { RoofMeasurements } from '../services/pricing-engine'
+import { calculateTieredProposals, calculateProposal, DEFAULT_PRESETS, TIER_PRESETS } from '../services/pricing-engine'
+import type { RoofMeasurements, RoofPresetCosts } from '../services/pricing-engine'
 
 export const widgetRoutes = new Hono<{ Bindings: Bindings }>()
 
@@ -183,12 +183,33 @@ widgetRoutes.post('/public/estimate', async (c) => {
       })
     }
 
-    // Calculate tiered proposals
+    // Calculate tiered proposals (with custom pricing if configured)
     const measurements: RoofMeasurements = {
       total_area_sqft: totalAreaSqft,
       dominant_pitch: dominantPitch,
     }
-    const tiers = calculateTieredProposals(measurements)
+
+    let tiers: { good: any; better: any; best: any }
+    const customPresets = config.pricing_presets_json ? JSON.parse(config.pricing_presets_json) : null
+
+    if (customPresets) {
+      // Merge: DEFAULT_PRESETS + shared overrides + per-tier overrides
+      const shared = customPresets.shared || {}
+      const buildPresets = (tierKey: 'good' | 'better' | 'best'): RoofPresetCosts => ({
+        ...DEFAULT_PRESETS,
+        ...shared,
+        ...(TIER_PRESETS[tierKey] || {}),
+        ...(customPresets[tierKey] || {}),
+      })
+      tiers = {
+        good: calculateProposal(measurements, buildPresets('good'), 'Good — Custom'),
+        better: calculateProposal(measurements, buildPresets('better'), 'Better — Custom'),
+        best: calculateProposal(measurements, buildPresets('best'), 'Best — Custom'),
+      }
+    } else {
+      tiers = calculateTieredProposals(measurements)
+    }
+
     const estimateJson = {
       good: { total: tiers.good.total_price, squares: tiers.good.gross_squares },
       better: { total: tiers.better.total_price, squares: tiers.better.gross_squares },
@@ -278,14 +299,20 @@ widgetRoutes.put('/config', async (c) => {
   try {
     const body = await c.req.json()
     const fields = ['is_active', 'allowed_domains', 'headline', 'subheadline',
-      'button_color', 'button_text', 'logo_url', 'show_tiers', 'require_phone', 'require_email']
+      'button_color', 'button_text', 'logo_url', 'show_tiers', 'require_phone', 'require_email',
+      'pricing_presets_json']
 
     const updates: string[] = []
     const values: any[] = []
     for (const field of fields) {
       if (body[field] !== undefined) {
         updates.push(`${field} = ?`)
-        values.push(body[field])
+        // Store pricing_presets_json as string if passed as object
+        if (field === 'pricing_presets_json' && typeof body[field] === 'object') {
+          values.push(JSON.stringify(body[field]))
+        } else {
+          values.push(body[field])
+        }
       }
     }
 
