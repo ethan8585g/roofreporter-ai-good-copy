@@ -1567,7 +1567,7 @@ customerAuthRoutes.get('/gcal/auth-url', async (c) => {
   if (!session) return c.json({ error: 'Session expired' }, 401)
 
   const customerId = session.customer_id
-  const clientId = (c.env as any).GMAIL_CLIENT_ID
+  const clientId = (c.env as any).GMAIL_CLIENT_ID2 || (c.env as any).GMAIL_CLIENT_ID
   if (!clientId) {
     return c.json({ error: 'Google Calendar integration is not configured.' }, 400)
   }
@@ -1627,8 +1627,8 @@ customerAuthRoutes.get('/gcal/callback', async (c) => {
     return c.html(`<!DOCTYPE html><html><head><title>Google Calendar</title></head><body class="bg-[#0a0a0a] text-white p-8"><p>Invalid state token. Please try again.</p></body></html>`)
   }
 
-  const clientId = (c.env as any).GMAIL_CLIENT_ID
-  let clientSecret = (c.env as any).GMAIL_CLIENT_SECRET || ''
+  const clientId = (c.env as any).GMAIL_CLIENT_ID2 || (c.env as any).GMAIL_CLIENT_ID
+  let clientSecret = (c.env as any).GMAIL_CLIENT_SECRET2 || (c.env as any).GMAIL_CLIENT_SECRET || ''
   if (!clientSecret) {
     try {
       const csRow = await c.env.DB.prepare(
