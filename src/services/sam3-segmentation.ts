@@ -341,16 +341,18 @@ export async function segmentWithGemini(
     }
     const imageBase64 = btoa(binary)
 
-    const systemPrompt = `You are an expert roofing measurement AI. Analyze the aerial/satellite image of a residential roof and perform precise segmentation.
+    const systemPrompt = `You are an expert roofing measurement AI with 20 years of experience reading aerial satellite imagery. Analyze this overhead satellite image of a residential or commercial building roof.
 
-Return a JSON object with:
-1. "segments": Array of roof facets/sections with polygon vertices (pixel coordinates), estimated pitch, azimuth, material type, and condition
-2. "roof_outline": Array of {x,y} points forming the overall roof perimeter (pixel coordinates)
-3. "edges": Array of detected edge lines (ridge, hip, valley, eave, rake) with start/end pixel coordinates
-4. "obstructions": Chimneys, skylights, vents, satellite dishes with bounding boxes
-5. "overall_complexity": "simple", "medium", or "complex"
-6. "estimated_stories": 1, 1.5, 2, or 3
-7. "image_quality_score": 0-100 (how well-resolved is the roof)
+CRITICAL INSTRUCTIONS:
+1. The "roof_outline" field is the MOST IMPORTANT output. It must be a precise polygon tracing the OUTER PERIMETER of the entire roof at the eave line (where the roof meets the walls/fascia). Include ALL overhangs. This polygon will be used directly as the eave trace for measurement calculations.
+2. For "segments", identify each distinct roof plane (facet). Each facet has its own pitch and faces a different direction. A simple gable roof has 2 facets. A hip roof has 4. A complex roof may have 8+.
+3. For "edges", identify every structural line: ridges (peak lines where two facets meet at the top), hips (diagonal lines at corners of hip roofs), valleys (diagonal lines where two facets meet at the bottom/inside corner), eaves (bottom edges of each facet), and rakes (sloped edges on gable ends).
+4. Estimate pitch from shadow length and perspective. A 4:12 pitch casts a shadow approximately equal to 1/3 of the roof run. A 8:12 pitch casts a shadow approximately 2/3 of the roof run. Flat roofs cast no shadow.
+5. Do NOT include garage roofs, porches, or detached structures in the main roof_outline unless they are clearly attached and part of the main structure.
+6. "obstructions": Chimneys, skylights, vents, satellite dishes with bounding boxes.
+7. "overall_complexity": "simple", "medium", or "complex".
+8. "estimated_stories": 1, 1.5, 2, or 3.
+9. "image_quality_score": 0-100 (how well-resolved is the roof).
 
 Image dimensions: ${imageWidth}x${imageHeight} pixels.
 All coordinates must be in pixel space (0,0 = top-left).
@@ -1017,4 +1019,166 @@ export function convertToAIMeasurement(
     quality_score: 75,
     source: `CV Pipeline (Tiers: ${result.processing_tiers_used.join(', ')})`,
   }
+}
+
+// ============================================================
+// Auto-Trace Bridge: Gemini segmentation → TracePayload
+// ============================================================
+
+import type { TracePayload } from './roof-measurement-engine'
+
+/**
+ * Convert a Gemini segmentation result to a TracePayload for the
+ * RoofMeasurementEngine. This is the "auto-trace" bridge.
+ *
+ * Strategy:
+ *   - Eaves outline: use geminiResult.roof_outline (the overall perimeter).
+ *     If roof_outline is empty, fall back to convex hull of all segment vertices.
+ *   - Ridges/hips/valleys: from geminiResult.edges by type.
+ *   - Default pitch: weighted average of all segment pitches (by area).
+ */
+export function geminiOutlineToTracePayload(
+  geminiResult: GeminiSegmentationResult,
+  lat: number,
+  lng: number,
+  zoom: number,
+  imageWidth: number,
+  imageHeight: number,
+  order: {
+    property_address?: string
+    homeowner_name?: string
+    order_number?: string
+  }
+): TracePayload {
+  const gsd = calculateGSD(lat, zoom)
+  const centerX = imageWidth / 2
+  const centerY = imageHeight / 2
+
+  function px2ll(px: number, py: number): { lat: number; lng: number } {
+    const dx = (px - centerX) * gsd
+    const dy = (centerY - py) * gsd
+    const dLat = dy / 111_320
+    const dLng = dx / (111_320 * Math.cos(lat * Math.PI / 180))
+    return { lat: lat + dLat, lng: lng + dLng }
+  }
+
+  // 1. Build eaves outline from roof_outline
+  let outlinePixels: { x: number; y: number }[] = geminiResult.roof_outline || []
+  if (outlinePixels.length < 3) {
+    const allPts = geminiResult.segments.flatMap(s => s.polygon_pixels)
+    outlinePixels = convexHull(allPts)
+  }
+
+  const eavesOutline = outlinePixels.map(p => {
+    const ll = px2ll(p.x, p.y)
+    return { lat: ll.lat, lng: ll.lng, elevation: null as number | null }
+  })
+
+  // 2. Build ridge lines
+  const ridges = geminiResult.edges
+    .filter(e => e.type === 'ridge')
+    .map((e, i) => {
+      const startLL = px2ll(e.start.x, e.start.y)
+      const endLL   = px2ll(e.end.x,   e.end.y)
+      return {
+        id: `ridge_${i + 1}`,
+        pitch: null as number | null,
+        pts: [
+          { lat: startLL.lat, lng: startLL.lng, elevation: null as number | null },
+          { lat: endLL.lat,   lng: endLL.lng,   elevation: null as number | null },
+        ]
+      }
+    })
+
+  // 3. Build hip lines
+  const hips = geminiResult.edges
+    .filter(e => e.type === 'hip')
+    .map((e, i) => {
+      const startLL = px2ll(e.start.x, e.start.y)
+      const endLL   = px2ll(e.end.x,   e.end.y)
+      return {
+        id: `hip_${i + 1}`,
+        pitch: null as number | null,
+        pts: [
+          { lat: startLL.lat, lng: startLL.lng, elevation: null as number | null },
+          { lat: endLL.lat,   lng: endLL.lng,   elevation: null as number | null },
+        ]
+      }
+    })
+
+  // 4. Build valley lines
+  const valleys = geminiResult.edges
+    .filter(e => e.type === 'valley')
+    .map((e, i) => {
+      const startLL = px2ll(e.start.x, e.start.y)
+      const endLL   = px2ll(e.end.x,   e.end.y)
+      return {
+        id: `valley_${i + 1}`,
+        pitch: null as number | null,
+        pts: [
+          { lat: startLL.lat, lng: startLL.lng, elevation: null as number | null },
+          { lat: endLL.lat,   lng: endLL.lng,   elevation: null as number | null },
+        ]
+      }
+    })
+
+  // 5. Compute weighted average pitch from Gemini segments
+  const mainFacets = geminiResult.segments.filter(s =>
+    ['main_facet', 'dormer', 'flat_section', 'gable_end'].includes(s.type)
+  )
+  let weightedPitchRise = 4.0
+  if (mainFacets.length > 0) {
+    const totalArea = mainFacets.reduce((s, seg) => s + (seg.area_fraction || 1), 0)
+    const weightedDeg = mainFacets.reduce((s, seg) =>
+      s + (seg.estimated_pitch_deg || 20) * (seg.area_fraction || 1), 0
+    ) / (totalArea || 1)
+    weightedPitchRise = Math.round(12 * Math.tan(weightedDeg * Math.PI / 180) * 10) / 10
+  }
+
+  return {
+    address:        order.property_address || 'Unknown Address',
+    homeowner:      order.homeowner_name || 'Unknown',
+    order_id:       order.order_number || '',
+    default_pitch:  weightedPitchRise,
+    complexity:     geminiResult.overall_complexity === 'complex' ? 'complex'
+                  : geminiResult.overall_complexity === 'medium'  ? 'medium'
+                  : 'simple',
+    include_waste:  true,
+    eaves_outline:  eavesOutline,
+    ridges,
+    hips,
+    valleys,
+    rakes:  [],
+    faces:  [],
+  }
+}
+
+/**
+ * Convex hull — Graham scan algorithm.
+ * Used as fallback when Gemini doesn't return a roof_outline.
+ */
+function convexHull(points: { x: number; y: number }[]): { x: number; y: number }[] {
+  if (points.length < 3) return points
+  const pivot = points.reduce((best, p) =>
+    p.y > best.y || (p.y === best.y && p.x < best.x) ? p : best
+  )
+  const sorted = points
+    .filter(p => p !== pivot)
+    .sort((a, b) => {
+      const angleA = Math.atan2(a.y - pivot.y, a.x - pivot.x)
+      const angleB = Math.atan2(b.y - pivot.y, b.x - pivot.x)
+      return angleA - angleB
+    })
+  const hull: { x: number; y: number }[] = [pivot]
+  for (const p of sorted) {
+    while (hull.length >= 2) {
+      const o = hull[hull.length - 2]
+      const a = hull[hull.length - 1]
+      const cross = (a.x - o.x) * (p.y - o.y) - (a.y - o.y) * (p.x - o.x)
+      if (cross <= 0) hull.pop()
+      else break
+    }
+    hull.push(p)
+  }
+  return hull
 }

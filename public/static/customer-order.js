@@ -537,6 +537,17 @@ function renderTraceStep(root, progressBar) {
         <button onclick="backToPin()" class="text-xs text-brand-600 hover:text-brand-700 font-medium"><i class="fas fa-edit mr-1"></i>Change</button>
       </div>
 
+      <!-- Auto-Detect Button -->
+      <div class="mb-3">
+        <button onclick="autoDetectRoof()" ${orderState.autoTraceLoading ? 'disabled' : ''}
+          class="w-full bg-gradient-to-r from-violet-600 to-blue-600 hover:from-violet-700 hover:to-blue-700 text-white font-semibold py-3 px-6 rounded-xl flex items-center justify-center gap-3 transition-all shadow-lg disabled:opacity-60">
+          ${orderState.autoTraceLoading
+            ? '<div class="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> Detecting roof...'
+            : '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.347.05a3 3 0 01-2.978 2.65H9.25a3 3 0 01-2.978-2.65l-.347-.05z" /></svg> Auto-Detect Roof (AI)'}
+        </button>
+        <p class="text-center text-xs text-slate-400 mt-2">&mdash; or trace manually below &mdash;</p>
+      </div>
+
       <div class="grid lg:grid-cols-4 gap-4">
         <!-- Left: Mode selector -->
         <div class="lg:col-span-1 space-y-3">
@@ -1437,6 +1448,117 @@ async function retryMeasurement() {
 
   orderState.measurementLoading = false;
   renderOrderPage();
+}
+
+// ── Auto-Detect Roof (AI) ──────────────────────────────────
+async function autoDetectRoof() {
+  if (!orderState.lat || !orderState.lng) {
+    window.rmToast('Please pin your address on the map first.', 'warning');
+    return;
+  }
+
+  orderState.autoTraceLoading = true;
+  renderOrderPage();
+
+  try {
+    const res = await fetch('/api/reports/auto-trace', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        lat: orderState.lat,
+        lng: orderState.lng,
+        address: orderState.address,
+        house_sqft: orderState.houseSqft || null
+      })
+    });
+
+    const data = await res.json();
+
+    if (res.ok && data.success) {
+      orderState.roofTraceJson = data.trace;
+      orderState.measurementResult = { success: true, measurements: data.measurements };
+      orderState.measurementError = null;
+      orderState.autoTraceSource = 'gemini';
+      orderState.autoTraceConfidence = data.gemini_confidence;
+
+      if (window.traceMap) {
+        drawAutoTraceOnMap(data.trace);
+      }
+
+      window.rmToast(
+        `Roof auto-detected! ${data.measurements.true_area_sqft.toLocaleString()} sq ft, ${data.pitch_label} pitch. Review and adjust if needed.`,
+        'success',
+        6000
+      );
+
+      orderState.step = 'review';
+      renderOrderPage();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+      const msg = data.error || 'Auto-detection failed. Please trace manually.';
+      window.rmToast(msg, 'warning', 5000);
+    }
+  } catch (e) {
+    window.rmToast('Network error during auto-detection. Please trace manually.', 'error');
+  }
+
+  orderState.autoTraceLoading = false;
+  renderOrderPage();
+}
+
+function drawAutoTraceOnMap(trace) {
+  if (!window.traceMap || !window.google) return;
+
+  if (window.traceOverlays) {
+    window.traceOverlays.forEach(o => o.setMap(null));
+  }
+  window.traceOverlays = [];
+
+  // Draw eaves outline (blue polygon)
+  if (trace.eaves && trace.eaves.length >= 3) {
+    const eavePoly = new google.maps.Polygon({
+      paths: trace.eaves,
+      strokeColor: '#3B82F6',
+      strokeWeight: 2,
+      fillColor: '#3B82F6',
+      fillOpacity: 0.15,
+      map: window.traceMap
+    });
+    window.traceOverlays.push(eavePoly);
+  }
+
+  // Draw ridges (red lines)
+  (trace.ridges || []).forEach(ridge => {
+    const line = new google.maps.Polyline({
+      path: ridge,
+      strokeColor: '#EF4444',
+      strokeWeight: 2,
+      map: window.traceMap
+    });
+    window.traceOverlays.push(line);
+  });
+
+  // Draw hips (orange lines)
+  (trace.hips || []).forEach(hip => {
+    const line = new google.maps.Polyline({
+      path: hip,
+      strokeColor: '#F97316',
+      strokeWeight: 2,
+      map: window.traceMap
+    });
+    window.traceOverlays.push(line);
+  });
+
+  // Draw valleys (purple lines)
+  (trace.valleys || []).forEach(valley => {
+    const line = new google.maps.Polyline({
+      path: valley,
+      strokeColor: '#8B5CF6',
+      strokeWeight: 2,
+      map: window.traceMap
+    });
+    window.traceOverlays.push(line);
+  });
 }
 
 function selectTier(tier) {

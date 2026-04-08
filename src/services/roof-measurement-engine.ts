@@ -1570,7 +1570,7 @@ export function traceUiToEnginePayload(
     longitude?: number
     price_per_bundle?: number
   },
-  defaultPitch: number = 5.0
+  defaultPitch: number = 4.0
 ): TracePayload {
   // Resolve multi-section eaves: prefer eaves_sections, fall back to eaves (which may be
   // a flat array [old single-section] or an array of arrays [new multi-section format])

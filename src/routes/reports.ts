@@ -24,6 +24,7 @@ import { generateProfessionalReportHTML, buildVisionFindingsHTML, generateSimple
 import { generateTraceBasedDiagramSVG } from '../templates/svg-diagrams'
 import { RoofMeasurementEngine, traceUiToEnginePayload, calculateRoofSpecs, ROOF_PITCH_MULTIPLIERS, HIP_VALLEY_MULTIPLIERS, type TraceReport } from '../services/roof-measurement-engine'
 import { enhanceReportViaGemini } from '../services/gemini-enhance'
+import { segmentWithGemini, geminiOutlineToTracePayload } from '../services/sam3-segmentation'
 import { generateReportImagery, buildAIImageryHTML } from '../services/ai-image-generation'
 import { buildEmailWrapper, sendGmailEmail, sendViaResend, sendGmailOAuth2 } from '../services/email'
 
@@ -943,6 +944,152 @@ reportsRoutes.post('/calculate-from-trace', async (c) => {
   } catch (err: any) {
     console.error(`[CalculateFromTrace] Error:`, err.message)
     return c.json({ error: 'Measurement calculation failed', details: err.message }, 500)
+  }
+})
+
+// ============================================================
+// POST /auto-trace — AI-powered automatic roof trace generation
+// Fetches satellite image → Gemini segmentation → GPS conversion →
+// measurement engine. Returns measurements + trace JSON for map display.
+// ============================================================
+reportsRoutes.post('/auto-trace', async (c) => {
+  const startTime = Date.now()
+  try {
+    const body = await c.req.json()
+    const { lat, lng, address, house_sqft } = body
+
+    if (!lat || !lng || isNaN(lat) || isNaN(lng)) {
+      return c.json({ error: 'lat and lng are required' }, 400)
+    }
+
+    const solarApiKey = c.env.GOOGLE_SOLAR_API_KEY
+    const mapsApiKey  = (c.env as any).GOOGLE_MAPS_API_KEY || solarApiKey
+    const geminiKey   = (c.env as any).GEMINI_API_KEY || (c.env as any).GEMINI_ENHANCE_API_KEY
+
+    if (!mapsApiKey) {
+      return c.json({ error: 'GOOGLE_MAPS_API_KEY not configured' }, 500)
+    }
+    if (!geminiKey) {
+      return c.json({ error: 'GEMINI_API_KEY not configured' }, 500)
+    }
+
+    const zoom = 20
+    const imgW = 640
+    const imgH = 640
+
+    // Step 1: Fetch satellite image URL
+    const satelliteUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=${zoom}&size=${imgW}x${imgH}&scale=2&maptype=satellite&key=${mapsApiKey}`
+
+    // Step 2: Run Gemini segmentation
+    const geminiResult = await segmentWithGemini(
+      { GEMINI_API_KEY: geminiKey } as any,
+      satelliteUrl,
+      imgW,
+      imgH
+    )
+
+    if (!geminiResult || geminiResult.segments.length === 0) {
+      return c.json({
+        error: 'Gemini could not detect a roof in the satellite image. Please trace manually.',
+        auto_trace_source: 'none',
+        success: false,
+      }, 422)
+    }
+
+    // Confidence threshold
+    if (geminiResult.image_quality_score < 40) {
+      return c.json({
+        error: `Satellite image quality too low (${geminiResult.image_quality_score}/100) for auto-detection. Please trace manually.`,
+        image_quality_score: geminiResult.image_quality_score,
+        auto_trace_source: 'gemini_low_quality',
+        success: false,
+      }, 422)
+    }
+
+    // Step 3: Convert Gemini output → TracePayload
+    const tracePayload = geminiOutlineToTracePayload(
+      geminiResult,
+      lat, lng, zoom, imgW, imgH,
+      { property_address: address }
+    )
+
+    if (tracePayload.eaves_outline.length < 3) {
+      return c.json({
+        error: 'Could not build a valid roof outline from the satellite image. Please trace manually.',
+        auto_trace_source: 'gemini_insufficient',
+        success: false,
+      }, 422)
+    }
+
+    // Step 4: Fetch Solar API pitch (override Gemini pitch estimate)
+    let finalPitchRise = tracePayload.default_pitch || 4.0
+    if (solarApiKey) {
+      try {
+        const solarPitch = await fetchSolarPitchAndImagery(
+          lat, lng, solarApiKey, mapsApiKey, house_sqft || 1500
+        )
+        finalPitchRise = Math.round(12 * Math.tan(solarPitch.pitch_degrees * Math.PI / 180) * 10) / 10
+        tracePayload.default_pitch = finalPitchRise
+        console.log(`[auto-trace] Solar pitch override: ${solarPitch.pitch_degrees}° → ${finalPitchRise}:12`)
+      } catch (e: any) {
+        console.warn(`[auto-trace] Solar pitch fetch failed, using Gemini estimate (${finalPitchRise}:12): ${e.message}`)
+      }
+    }
+
+    // Step 5: Run measurement engine
+    const engine = new RoofMeasurementEngine(tracePayload)
+    const result = engine.run()
+
+    // Step 6: Build trace JSON for frontend map display
+    const traceJson = {
+      eaves: tracePayload.eaves_outline.map(p => ({ lat: p.lat, lng: p.lng })),
+      ridges: (tracePayload.ridges || []).map(r => r.pts.map(p => ({ lat: p.lat, lng: p.lng }))),
+      hips:   (tracePayload.hips || []).map(h => h.pts.map(p => ({ lat: p.lat, lng: p.lng }))),
+      valleys: (tracePayload.valleys || []).map(v => v.pts.map(p => ({ lat: p.lat, lng: p.lng }))),
+      traced_at: new Date().toISOString(),
+      auto_generated: true,
+      auto_trace_source: 'gemini',
+      gemini_confidence: geminiResult.image_quality_score || 0,
+    }
+
+    const km = result.key_measurements
+    const lm = result.linear_measurements
+    const mat = result.materials_estimate
+
+    return c.json({
+      success: true,
+      auto_trace_source: 'gemini',
+      gemini_confidence: geminiResult.image_quality_score || 0,
+      pitch_rise: finalPitchRise,
+      pitch_label: km.dominant_pitch_label,
+      trace: traceJson,
+      measurements: {
+        footprint_sqft: Math.round(km.total_projected_footprint_ft2),
+        true_area_sqft: Math.round(km.total_roof_area_sloped_ft2),
+        total_squares: km.total_squares_net,
+        gross_squares: km.total_squares_gross_w_waste,
+        dominant_pitch: km.dominant_pitch_label,
+        dominant_pitch_deg: Math.round(km.dominant_pitch_angle_deg * 10) / 10,
+        num_faces: result.face_details.length,
+        num_ridges: km.num_ridges,
+        num_hips: km.num_hips,
+        num_valleys: km.num_valleys,
+        eave_ft: Math.round(lm.eaves_total_ft),
+        ridge_ft: Math.round(lm.ridges_total_ft),
+        hip_ft: Math.round(lm.hips_total_ft),
+        valley_ft: Math.round(lm.valleys_total_ft),
+        rake_ft: Math.round(lm.rakes_total_ft),
+        perimeter_ft: Math.round(lm.perimeter_eave_rake_ft),
+        bundles: mat.shingles_bundles,
+        underlayment_rolls: mat.underlayment_rolls,
+        waste_factor_pct: km.waste_factor_pct,
+      },
+      processing_ms: Date.now() - startTime,
+    })
+
+  } catch (err: any) {
+    console.error(`[auto-trace] Error: ${err.message}`)
+    return c.json({ error: err.message, success: false }, 500)
   }
 })
 
