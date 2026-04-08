@@ -441,10 +441,10 @@
     if (invoices.length === 0) {
       html += '<div class="bg-[#111111] rounded-xl border p-12 text-center"><div class="w-16 h-16 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-4"><i class="fas fa-file-invoice-dollar text-emerald-400 text-2xl"></i></div><h3 class="text-lg font-semibold text-gray-300 mb-2">No Invoices Yet</h3><p class="text-gray-500 mb-4">Create your first invoice to start tracking payments.</p><button onclick="window._crmNewInvoice()" class="bg-emerald-600 text-white px-6 py-2.5 rounded-xl font-semibold hover:bg-emerald-700"><i class="fas fa-plus mr-2"></i>Create Invoice</button></div>';
     } else {
-      html += '<div class="bg-[#111111] rounded-xl border overflow-hidden overflow-x-auto"><table class="w-full text-sm"><thead class="bg-[#0A0A0A]"><tr><th class="px-4 py-3 text-left text-xs font-semibold text-gray-500">Invoice #</th><th class="px-4 py-3 text-left text-xs font-semibold text-gray-500">Customer</th><th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 hidden md:table-cell">Date</th><th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 hidden md:table-cell">Due</th><th class="px-4 py-3 text-center text-xs font-semibold text-gray-500">Status</th><th class="px-4 py-3 text-right text-xs font-semibold text-gray-500">Amount</th><th class="px-4 py-3"></th></tr></thead><tbody class="divide-y divide-gray-50">';
+      html += '<div class="bg-[#111111] rounded-xl border overflow-hidden overflow-x-auto"><table class="w-full text-sm"><thead class="bg-[#0A0A0A]"><tr><th class="px-4 py-3 text-left text-xs font-semibold text-gray-500">Invoice #</th><th class="px-4 py-3 text-left text-xs font-semibold text-gray-500">Customer</th><th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 hidden md:table-cell">Date</th><th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 hidden md:table-cell">Due</th><th class="px-4 py-3 text-center text-xs font-semibold text-gray-500">Status</th><th class="px-4 py-3 text-right text-xs font-semibold text-gray-500">Amount</th><th class="px-4 py-3"></th></tr></thead><tbody class="divide-y divide-white/5">';
       for (var i = 0; i < invoices.length; i++) {
         var inv = invoices[i];
-        html += '<tr class="hover:bg-[#111111]/5 cursor-pointer" onclick="window._crmViewInvoice(' + inv.id + ')"><td class="px-4 py-3 font-mono text-xs font-bold text-brand-600">' + inv.invoice_number + '</td><td class="px-4 py-3 text-gray-300">' + (inv.customer_name || 'N/A') + '</td><td class="px-4 py-3 text-gray-500 text-xs hidden md:table-cell">' + fmtDate(inv.created_at) + '</td><td class="px-4 py-3 text-gray-500 text-xs hidden md:table-cell">' + fmtDate(inv.due_date) + '</td><td class="px-4 py-3 text-center">' + badge(inv.status) + '</td><td class="px-4 py-3 text-right font-semibold">' + money(inv.total) + '</td><td class="px-4 py-3 text-right" onclick="event.stopPropagation()"><div class="flex items-center gap-1 justify-end">';
+        html += '<tr class="hover:bg-white/5 cursor-pointer" onclick="window._crmViewInvoice(' + inv.id + ')"><td class="px-4 py-3 font-mono text-xs font-bold text-brand-400">' + inv.invoice_number + '</td><td class="px-4 py-3 text-white">' + (inv.customer_name || 'N/A') + '</td><td class="px-4 py-3 text-gray-300 text-xs hidden md:table-cell">' + fmtDate(inv.created_at) + '</td><td class="px-4 py-3 text-gray-300 text-xs hidden md:table-cell">' + fmtDate(inv.due_date) + '</td><td class="px-4 py-3 text-center">' + badge(inv.status) + '</td><td class="px-4 py-3 text-right font-semibold text-white">' + money(inv.total) + '</td><td class="px-4 py-3 text-right" onclick="event.stopPropagation()"><div class="flex items-center gap-1 justify-end">';
         html += '<button onclick="window._crmViewInvoice(' + inv.id + ')" class="text-xs text-brand-600 hover:underline font-medium"><i class="fas fa-eye mr-0.5"></i>View</button>';
         if (inv.status === 'draft') html += '<button onclick="window._crmEditInvoice(' + inv.id + ')" class="text-xs text-gray-400 hover:underline ml-2"><i class="fas fa-edit mr-0.5"></i>Edit</button>';
         if (inv.status === 'draft' || inv.status === 'sent') html += '<button onclick="window._crmSendInvoice(' + inv.id + ')" class="text-xs text-blue-600 hover:underline ml-2"><i class="fas fa-paper-plane mr-0.5"></i>Send</button>';
@@ -858,7 +858,7 @@
         html += '<div class="flex items-start justify-between">';
         html += '<div class="min-w-0">';
         html += '<div class="flex items-center gap-2 mb-1 flex-wrap">';
-        html += '<span class="font-mono text-xs font-bold text-gray-400">' + p.proposal_number + '</span>';
+        html += '<span class="font-mono text-xs font-bold text-gray-200">' + p.proposal_number + '</span>';
         html += badge(p.status);
         if (p.view_count > 0) {
           html += '<button onclick="window._crmViewTracking(' + p.id + ')" class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-500/15/15 text-blue-400 hover:bg-blue-500/15 cursor-pointer"><i class="fas fa-eye mr-1"></i>' + p.view_count + ' view' + (p.view_count !== 1 ? 's' : '') + '</button>';
@@ -866,10 +866,10 @@
         if (p.customer_email) html += '<span class="text-[10px] text-gray-400"><i class="fas fa-envelope mr-0.5"></i>' + p.customer_email + '</span>';
         html += '</div>';
         html += '<p class="text-gray-100 font-medium text-sm">' + p.title + '</p>';
-        html += '<p class="text-xs text-gray-500 mt-1"><i class="fas fa-user mr-1"></i>' + (p.customer_name || 'N/A') + (p.property_address ? ' &middot; <i class="fas fa-map-marker-alt mr-1"></i>' + p.property_address : '') + '</p>';
+        html += '<p class="text-xs text-gray-300 mt-1"><i class="fas fa-user mr-1"></i>' + (p.customer_name || 'N/A') + (p.property_address ? ' &middot; <i class="fas fa-map-marker-alt mr-1"></i>' + p.property_address : '') + '</p>';
         html += '</div>';
         html += '<div class="flex flex-col items-end gap-1 flex-shrink-0 ml-4">';
-        html += '<span class="text-lg font-black text-gray-100">' + money(p.total_amount) + '</span>';
+        html += '<span class="text-lg font-black text-white">' + money(p.total_amount) + '</span>';
         html += '<div class="flex items-center gap-1.5 flex-wrap justify-end">';
         html += '<button onclick="window._crmViewProposal(' + p.id + ')" class="text-xs text-brand-600 hover:underline font-medium"><i class="fas fa-eye mr-0.5"></i>View</button>';
         if (p.status === 'draft') {
