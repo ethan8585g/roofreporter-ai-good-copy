@@ -511,12 +511,27 @@ invoiceRoutes.post('/:id/payment-link', async (c) => {
     if (!invoice) return c.json({ error: 'Invoice not found' }, 404)
     if (invoice.status === 'paid') return c.json({ error: 'Invoice already paid' }, 400)
 
-    const squareAccessToken = c.env.SQUARE_ACCESS_TOKEN
-    if (!squareAccessToken) return c.json({ error: 'Square not configured. Set SQUARE_ACCESS_TOKEN in Cloudflare secrets.' }, 400)
+    // Try per-user Square OAuth first (from admin/customer who created the invoice), then env fallback
+    let squareAccessToken = c.env.SQUARE_ACCESS_TOKEN
+    let locationId = (c.env as any).SQUARE_LOCATION_ID
+
+    const admin = (c as any).get('admin')
+    if (admin?.id) {
+      const owner = await c.env.DB.prepare(
+        'SELECT square_access_token, square_location_id FROM customers WHERE id = ?'
+      ).bind(admin.id).first<any>()
+      if (owner?.square_access_token) squareAccessToken = owner.square_access_token
+      if (owner?.square_location_id) locationId = owner.square_location_id
+    }
+
+    if (!squareAccessToken) return c.json({ error: 'Square not configured. Set SQUARE_ACCESS_TOKEN in Cloudflare secrets or connect Square in Settings.' }, 400)
+    if (!locationId) return c.json({ error: 'Square location ID not configured. Set SQUARE_LOCATION_ID in Cloudflare secrets or connect Square in Settings.' }, 400)
 
     const baseUrl = 'https://connect.squareup.com'
 
     const amountCents = Math.round(invoice.total * 100)
+    if (amountCents <= 0) return c.json({ error: 'Invoice total must be greater than $0' }, 400)
+
     const idempotencyKey = `inv-${id}-${Date.now()}`
 
     const docLabel = (invoice.document_type || 'invoice').charAt(0).toUpperCase() + (invoice.document_type || 'invoice').slice(1)
@@ -533,7 +548,7 @@ invoiceRoutes.post('/:id/payment-link', async (c) => {
         quick_pay: {
           name: `${docLabel} ${invoice.invoice_number}`,
           price_money: { amount: amountCents, currency: invoice.currency || 'CAD' },
-          location_id: c.env.SQUARE_LOCATION_ID || 'main'
+          location_id: locationId
         },
         checkout_options: {
           allow_tipping: false,
