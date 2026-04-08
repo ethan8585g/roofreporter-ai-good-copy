@@ -34,6 +34,7 @@ import { websiteBuilderRoutes } from './routes/website-builder'
 import { googleAdsRoutes } from './routes/google-ads'
 import { googleBusinessRoutes } from './routes/google-business'
 import { pipelineRoutes } from './routes/pipeline'
+import { widgetRoutes } from './routes/widget'
 import type { Bindings } from './types'
 
 const app = new Hono<{ Bindings: Bindings }>()
@@ -206,6 +207,7 @@ app.route('/api/website-builder', websiteBuilderRoutes)
 app.route('/api/google-ads', googleAdsRoutes)
 app.route('/api/google-business', googleBusinessRoutes)
 app.route('/api/pipeline', pipelineRoutes)
+app.route('/api/widget', widgetRoutes)
 
 // Health check
 app.get('/api/health', (c) => {
@@ -1388,6 +1390,14 @@ app.get('/customer/crew', (c) => c.html(getCrmSubPageHTML('crew', 'Crew Manager'
 app.get('/customer/website-builder', (c) => c.html(getWebsiteBuilderPageHTML()))
 app.get('/customer/google-ads', (c) => c.html(getGoogleAdsPageHTML()))
 app.get('/customer/google-business', (c) => c.html(getGoogleBusinessPageHTML()))
+app.get('/customer/widget', (c) => c.html(getWidgetSettingsPageHTML()))
+app.get('/customer/widget-leads', (c) => c.html(getWidgetLeadsPageHTML()))
+
+// Widget view page (loaded inside iframe on contractor websites)
+app.get('/widget/view', (c) => {
+  const mapsKey = c.env.GOOGLE_MAPS_API_KEY || ''
+  return c.html(getWidgetViewHTML(mapsKey))
+})
 
 // Company Type Selection — shown once post-login if company_type is null
 app.get('/customer/select-type', (c) => c.html(getSelectTypePageHTML()))
@@ -2367,7 +2377,12 @@ function getHeadTags() {
   <meta name="geo.region" content="CA-AB">
   <meta name="geo.placename" content="Alberta, Canada">
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
-  <link rel="apple-touch-icon" href="/static/logo.png">
+  <link rel="apple-touch-icon" href="/static/icons/icon-192x192.png">
+  <link rel="manifest" href="/manifest.json">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Roof Manager">
+  <meta name="mobile-web-app-capable" content="yes">
   <link rel="stylesheet" href="/static/tailwind.css">
   <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
   ${getTailwindConfig()}
@@ -2416,7 +2431,8 @@ body.light-theme,.light-theme{--bg-page:#f3f4f6;--bg-card:#fff;--bg-card-hover:#
 .light-theme table tr{border-color:#e5e7eb !important}
 .light-theme .rounded-2xl,.light-theme .rounded-xl{border-color:#e5e7eb !important}
 </style>
-<script>!function(){var t=localStorage.getItem('rc_theme_mode');if(t==='light'){document.documentElement.classList.add('light-theme');document.addEventListener('DOMContentLoaded',function(){document.body.classList.add('light-theme')})}else if(t==='auto'&&window.matchMedia('(prefers-color-scheme:light)').matches){document.documentElement.classList.add('light-theme');document.addEventListener('DOMContentLoaded',function(){document.body.classList.add('light-theme')})}}()</script>`
+<script>!function(){var t=localStorage.getItem('rc_theme_mode');if(t==='light'){document.documentElement.classList.add('light-theme');document.addEventListener('DOMContentLoaded',function(){document.body.classList.add('light-theme')})}else if(t==='auto'&&window.matchMedia('(prefers-color-scheme:light)').matches){document.documentElement.classList.add('light-theme');document.addEventListener('DOMContentLoaded',function(){document.body.classList.add('light-theme')})}}()</script>
+  <script>if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js')}</script>`
 }
 
 // Rover chatbot widget script tag — inject on public pages only
@@ -7798,6 +7814,763 @@ function getGoogleBusinessPageHTML() {
     }
   </script>
   <script src="/static/google-business.js?v=${Date.now()}"></script>
+  ${getRoverAssistant()}
+</body>
+</html>`
+}
+
+// ============================================================
+// INSTANT ESTIMATOR WIDGET — View Page (loaded in iframe)
+// ============================================================
+function getWidgetViewHTML(mapsApiKey: string) {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Instant Roof Estimate</title>
+  <script src="https://cdn.tailwindcss.com"><\/script>
+  <script src="https://maps.googleapis.com/maps/api/js?key=${mapsApiKey}&libraries=places"><\/script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, -apple-system, sans-serif; background: #fff; }
+    .step { display: none; }
+    .step.active { display: block; }
+    .fade-in { animation: fadeIn 0.3s ease; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    .pulse-ring { animation: pulse 1.5s ease infinite; }
+    @keyframes pulse { 0%,100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.1); opacity: 0.7; } }
+    .tier-card { transition: transform 0.2s, box-shadow 0.2s; }
+    .tier-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.12); }
+    input:focus { outline: none; box-shadow: 0 0 0 3px rgba(37,99,235,0.2); }
+  </style>
+</head>
+<body>
+  <div id="widget-container" class="p-5 max-w-md mx-auto">
+    <!-- Step 1: Address -->
+    <div id="step-address" class="step active fade-in">
+      <h2 id="w-headline" class="text-xl font-bold text-gray-900 mb-1">Get Your Instant Roof Estimate</h2>
+      <p id="w-subheadline" class="text-sm text-gray-500 mb-4">Enter your address to see pricing in under 60 seconds</p>
+      <div class="mb-4">
+        <label class="block text-sm font-medium text-gray-700 mb-1">Property Address</label>
+        <input id="address-input" type="text" placeholder="Start typing your address..."
+          class="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm" autocomplete="off">
+      </div>
+      <div id="sat-preview" class="mb-4 rounded-lg overflow-hidden bg-gray-100 hidden" style="height:180px;">
+        <img id="sat-img" class="w-full h-full object-cover" alt="Satellite view">
+      </div>
+      <button id="btn-to-contact" disabled
+        class="w-full py-3 rounded-lg text-white font-semibold text-sm transition disabled:opacity-40 disabled:cursor-not-allowed"
+        style="background:#1e3a5f;">
+        Next &rarr;
+      </button>
+    </div>
+
+    <!-- Step 2: Contact Info -->
+    <div id="step-contact" class="step fade-in">
+      <h2 class="text-xl font-bold text-gray-900 mb-1">Almost there!</h2>
+      <p class="text-sm text-gray-500 mb-4">Enter your details to see your estimate</p>
+      <div class="space-y-3 mb-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+          <input id="lead-name" type="text" placeholder="John Smith" class="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm">
+        </div>
+        <div id="email-field">
+          <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+          <input id="lead-email" type="email" placeholder="john@example.com" class="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm">
+        </div>
+        <div id="phone-field">
+          <label class="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+          <input id="lead-phone" type="tel" placeholder="(555) 123-4567" class="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm">
+        </div>
+      </div>
+      <button id="btn-estimate"
+        class="w-full py-3 rounded-lg text-white font-semibold text-sm transition"
+        style="background:#1e3a5f;">
+        <span id="btn-estimate-text">Get My Estimate</span>
+      </button>
+      <button onclick="goToStep('address')" class="w-full mt-2 py-2 text-sm text-gray-500 hover:text-gray-700">&larr; Back</button>
+    </div>
+
+    <!-- Step 3: Processing -->
+    <div id="step-processing" class="step fade-in text-center py-8">
+      <div class="pulse-ring inline-block mb-4">
+        <svg class="w-16 h-16 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25"/>
+        </svg>
+      </div>
+      <h2 class="text-lg font-bold text-gray-900 mb-2">Analyzing Your Roof...</h2>
+      <p class="text-sm text-gray-500">Scanning satellite imagery and calculating measurements</p>
+      <div id="processing-sat" class="mt-4 rounded-lg overflow-hidden bg-gray-100 mx-auto" style="max-width:300px;height:160px;">
+        <img id="processing-sat-img" class="w-full h-full object-cover" alt="Satellite view">
+      </div>
+    </div>
+
+    <!-- Step 4: Results -->
+    <div id="step-results" class="step fade-in">
+      <div class="text-center mb-4">
+        <div class="inline-flex items-center justify-center w-12 h-12 rounded-full bg-green-100 mb-2">
+          <svg class="w-6 h-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+          </svg>
+        </div>
+        <h2 class="text-xl font-bold text-gray-900">Your Roof Estimate</h2>
+        <p id="result-address" class="text-sm text-gray-500 mt-1"></p>
+        <p id="result-area" class="text-xs text-gray-400 mt-1"></p>
+      </div>
+
+      <!-- Tier cards -->
+      <div id="tiers-container" class="space-y-3 mb-4"></div>
+
+      <!-- Single price (when tiers disabled) -->
+      <div id="single-price" class="hidden text-center mb-4">
+        <p class="text-3xl font-bold text-gray-900" id="single-price-value"></p>
+        <p class="text-sm text-gray-500">Estimated cost</p>
+      </div>
+
+      <!-- Manual needed message -->
+      <div id="manual-message" class="hidden text-center mb-4 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+        <p class="text-sm text-gray-700" id="manual-text"></p>
+      </div>
+
+      <div id="cta-section" class="text-center pt-2 border-t border-gray-100">
+        <p class="text-sm text-gray-500 mb-3">Ready for a detailed quote?</p>
+        <a id="cta-phone" href="#" class="inline-block w-full py-3 rounded-lg text-white font-semibold text-sm mb-2" style="background:#1e3a5f;">
+          Call Us Now
+        </a>
+        <a id="cta-email" href="#" class="inline-block text-sm text-blue-600 hover:underline">Or send us an email</a>
+      </div>
+
+      <div id="powered-by" class="text-center mt-4">
+        <span class="text-xs text-gray-400">Powered by <a href="https://www.roofmanager.ca" target="_blank" class="hover:underline">Roof Manager</a></span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function() {
+      var params = new URLSearchParams(window.location.search);
+      var KEY = params.get('key');
+      if (!KEY) return;
+
+      var BASE = window.location.origin;
+      var state = { lat: null, lng: null, address: '', config: null };
+
+      // Notify parent of height changes
+      function notifyResize() {
+        var h = document.getElementById('widget-container').scrollHeight + 20;
+        window.parent.postMessage({ type: 'rm-widget-resize', height: h }, '*');
+      }
+      new MutationObserver(notifyResize).observe(document.getElementById('widget-container'), { childList: true, subtree: true, attributes: true });
+
+      // Step navigation
+      window.goToStep = function(step) {
+        document.querySelectorAll('.step').forEach(function(el) { el.classList.remove('active'); });
+        document.getElementById('step-' + step).classList.add('active');
+        setTimeout(notifyResize, 50);
+      };
+
+      // Load config
+      fetch(BASE + '/api/widget/public/config/' + KEY)
+        .then(function(r) { return r.json(); })
+        .then(function(cfg) {
+          state.config = cfg;
+          if (cfg.headline) document.getElementById('w-headline').textContent = cfg.headline;
+          if (cfg.subheadline) document.getElementById('w-subheadline').textContent = cfg.subheadline;
+          if (cfg.button_color) {
+            document.querySelectorAll('[style*="background:#1e3a5f"]').forEach(function(el) {
+              el.style.background = cfg.button_color;
+            });
+          }
+          if (cfg.button_text) document.getElementById('btn-estimate-text').textContent = cfg.button_text;
+          if (cfg.logo_url) {
+            var logo = document.createElement('img');
+            logo.src = cfg.logo_url;
+            logo.alt = cfg.business_name || 'Logo';
+            logo.style.cssText = 'max-height:40px;margin-bottom:12px;';
+            document.getElementById('step-address').insertBefore(logo, document.getElementById('step-address').firstChild);
+          }
+          if (!cfg.require_email) document.getElementById('email-field').style.display = 'none';
+          if (!cfg.require_phone) document.getElementById('phone-field').style.display = 'none';
+          notifyResize();
+        })
+        .catch(function() {});
+
+      // Google Places Autocomplete
+      function initAutocomplete() {
+        var input = document.getElementById('address-input');
+        if (!input || !window.google) return;
+        var ac = new google.maps.places.Autocomplete(input, {
+          types: ['address'],
+          fields: ['geometry', 'formatted_address'],
+        });
+        ac.addListener('place_changed', function() {
+          var place = ac.getPlace();
+          if (place.geometry && place.geometry.location) {
+            state.lat = place.geometry.location.lat();
+            state.lng = place.geometry.location.lng();
+            state.address = place.formatted_address || input.value;
+            document.getElementById('btn-to-contact').disabled = false;
+            // Show satellite preview
+            var satUrl = 'https://maps.googleapis.com/maps/api/staticmap?center=' +
+              state.lat + ',' + state.lng + '&zoom=20&size=600x300&maptype=satellite&key=${mapsApiKey}';
+            document.getElementById('sat-img').src = satUrl;
+            document.getElementById('sat-preview').classList.remove('hidden');
+            document.getElementById('processing-sat-img').src = satUrl;
+            notifyResize();
+          }
+        });
+      }
+      if (window.google) initAutocomplete();
+      else window.addEventListener('load', initAutocomplete);
+
+      // Step 1 → Step 2
+      document.getElementById('btn-to-contact').onclick = function() { goToStep('contact'); };
+
+      // Step 2 → Estimate
+      document.getElementById('btn-estimate').onclick = function() {
+        var name = document.getElementById('lead-name').value.trim();
+        var email = document.getElementById('lead-email').value.trim();
+        var phone = document.getElementById('lead-phone').value.trim();
+
+        if (!name) { alert('Please enter your name'); return; }
+        if (state.config && state.config.require_email && !email) { alert('Please enter your email'); return; }
+        if (state.config && state.config.require_phone && !phone) { alert('Please enter your phone number'); return; }
+
+        goToStep('processing');
+
+        fetch(BASE + '/api/widget/public/estimate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            public_key: KEY,
+            address: state.address,
+            lat: state.lat,
+            lng: state.lng,
+            name: name,
+            email: email,
+            phone: phone,
+          })
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          showResults(data);
+        })
+        .catch(function() {
+          showResults({ status: 'error', message: 'Something went wrong. Please try again.' });
+        });
+      };
+
+      function showResults(data) {
+        goToStep('results');
+        document.getElementById('result-address').textContent = state.address;
+        var tiersContainer = document.getElementById('tiers-container');
+        var singlePrice = document.getElementById('single-price');
+        var manualMsg = document.getElementById('manual-message');
+
+        tiersContainer.innerHTML = '';
+        singlePrice.classList.add('hidden');
+        manualMsg.classList.add('hidden');
+
+        if (data.status === 'manual_needed' || data.status === 'error') {
+          manualMsg.classList.remove('hidden');
+          document.getElementById('manual-text').textContent = data.message ||
+            "We couldn't automatically analyze this address. A team member will follow up with a manual estimate.";
+          document.getElementById('result-area').textContent = '';
+        } else if (data.status === 'success') {
+          document.getElementById('result-area').textContent = data.area_sqft + ' sq ft roof area | Pitch: ' + data.dominant_pitch;
+
+          if (state.config && state.config.show_tiers && data.tiers) {
+            var tiers = [
+              { key: 'good', label: data.tiers.good.label, price: data.tiers.good.total, desc: '25yr 3-Tab Shingles', badge: '' },
+              { key: 'better', label: data.tiers.better.label, price: data.tiers.better.total, desc: '30yr Architectural Shingles', badge: 'Most Popular' },
+              { key: 'best', label: data.tiers.best.label, price: data.tiers.best.total, desc: '50yr Luxury Shingles', badge: 'Premium' },
+            ];
+            tiers.forEach(function(t) {
+              var card = document.createElement('div');
+              card.className = 'tier-card p-4 rounded-lg border ' + (t.key === 'better' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white');
+              var badge = t.badge ? '<span class="text-xs font-semibold px-2 py-0.5 rounded-full ' +
+                (t.key === 'better' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-600') + '">' + t.badge + '</span>' : '';
+              card.innerHTML = '<div class="flex items-center justify-between mb-1"><span class="font-semibold text-gray-900">' + t.label + '</span>' + badge + '</div>' +
+                '<p class="text-2xl font-bold text-gray-900">$' + t.price.toLocaleString() + '</p>' +
+                '<p class="text-xs text-gray-500 mt-1">' + t.desc + '</p>';
+              tiersContainer.appendChild(card);
+            });
+          } else if (data.tiers) {
+            singlePrice.classList.remove('hidden');
+            document.getElementById('single-price-value').textContent = '$' + (data.tiers.better.total || 0).toLocaleString();
+          }
+        }
+
+        // CTA
+        var bPhone = data.business_phone || (state.config && state.config.business_phone) || '';
+        var bEmail = data.business_email || (state.config && state.config.business_email) || '';
+        var bName = data.business_name || (state.config && state.config.business_name) || '';
+
+        if (bPhone) {
+          document.getElementById('cta-phone').href = 'tel:' + bPhone.replace(/[^+\\d]/g, '');
+          document.getElementById('cta-phone').textContent = 'Call ' + (bName || 'Us') + ' Now';
+        } else {
+          document.getElementById('cta-phone').style.display = 'none';
+        }
+        if (bEmail) {
+          document.getElementById('cta-email').href = 'mailto:' + bEmail + '?subject=Roof Estimate Request - ' + state.address;
+        } else {
+          document.getElementById('cta-email').style.display = 'none';
+        }
+
+        notifyResize();
+      }
+
+      notifyResize();
+    })();
+  <\/script>
+</body>
+</html>`
+}
+
+// ============================================================
+// WIDGET SETTINGS PAGE — Contractor Dashboard
+// ============================================================
+function getWidgetSettingsPageHTML() {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags()}
+  <title>Widget Settings - Roof Manager</title>
+</head>
+<body class="min-h-screen" style="background:#0A0A0A">
+  <header style="background:#111111;border-bottom:1px solid rgba(255,255,255,0.06)" class="text-white shadow-lg">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
+          <img src="/static/logo.png" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
+          <div>
+            <h1 class="text-lg font-bold">Instant Estimator Widget</h1>
+            <p class="text-gray-400 text-xs">Roof Manager</p>
+          </div>
+        </a>
+      </div>
+      <nav class="flex items-center space-x-3">
+        <span id="custGreeting" class="text-gray-400 text-sm hidden"><i class="fas fa-user-circle mr-1"></i><span id="custName"></span></span>
+        <a href="/customer/widget-leads" class="text-gray-400 hover:text-white text-sm"><i class="fas fa-users mr-1"></i>Leads</a>
+        <a href="/customer/dashboard" class="text-gray-400 hover:text-white text-sm"><i class="fas fa-th-large mr-1"></i>Dashboard</a>
+        <button onclick="custLogout()" class="text-gray-400 hover:text-white text-sm"><i class="fas fa-sign-out-alt mr-1"></i>Logout</button>
+      </nav>
+    </div>
+  </header>
+  <main class="max-w-4xl mx-auto px-4 py-6">
+    <div id="loading" class="text-center py-12"><p class="text-gray-400">Loading widget settings...</p></div>
+    <div id="settings-root" class="hidden">
+      <!-- Active toggle -->
+      <div class="bg-gray-900 rounded-xl p-6 border border-gray-800 mb-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <h3 class="text-white font-semibold">Widget Status</h3>
+            <p class="text-gray-400 text-sm mt-1">Enable or disable your estimator widget</p>
+          </div>
+          <label class="relative inline-flex items-center cursor-pointer">
+            <input type="checkbox" id="cfg-active" class="sr-only peer" onchange="saveConfig()">
+            <div class="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:bg-green-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full"></div>
+          </label>
+        </div>
+      </div>
+
+      <!-- Embed Code -->
+      <div class="bg-gray-900 rounded-xl p-6 border border-gray-800 mb-6">
+        <h3 class="text-white font-semibold mb-3"><i class="fas fa-code mr-2"></i>Embed Code</h3>
+        <p class="text-gray-400 text-sm mb-3">Copy this snippet and paste it into your website's HTML.</p>
+        <div class="flex gap-2">
+          <input id="embed-code" type="text" readonly class="flex-1 bg-gray-800 text-green-400 text-xs px-4 py-3 rounded-lg font-mono border border-gray-700">
+          <button onclick="copyEmbed()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition">Copy</button>
+        </div>
+        <p class="text-gray-500 text-xs mt-2">For a floating button instead, add <code class="text-green-400">data-mode="floating"</code> to the script tag.</p>
+        <a id="preview-link" href="#" target="_blank" class="inline-block mt-3 text-blue-400 hover:text-blue-300 text-sm"><i class="fas fa-external-link-alt mr-1"></i>Preview Widget</a>
+      </div>
+
+      <!-- Branding -->
+      <div class="bg-gray-900 rounded-xl p-6 border border-gray-800 mb-6">
+        <h3 class="text-white font-semibold mb-4"><i class="fas fa-palette mr-2"></i>Branding</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-gray-400 text-sm mb-1">Headline</label>
+            <input id="cfg-headline" type="text" class="w-full bg-gray-800 text-white px-4 py-2.5 rounded-lg border border-gray-700 text-sm" onchange="saveConfig()">
+          </div>
+          <div>
+            <label class="block text-gray-400 text-sm mb-1">Subheadline</label>
+            <input id="cfg-subheadline" type="text" class="w-full bg-gray-800 text-white px-4 py-2.5 rounded-lg border border-gray-700 text-sm" onchange="saveConfig()">
+          </div>
+          <div>
+            <label class="block text-gray-400 text-sm mb-1">Button Text</label>
+            <input id="cfg-button-text" type="text" class="w-full bg-gray-800 text-white px-4 py-2.5 rounded-lg border border-gray-700 text-sm" onchange="saveConfig()">
+          </div>
+          <div>
+            <label class="block text-gray-400 text-sm mb-1">Button Color</label>
+            <div class="flex gap-2">
+              <input id="cfg-button-color" type="color" class="h-10 w-14 bg-gray-800 rounded-lg border border-gray-700 cursor-pointer" onchange="saveConfig()">
+              <input id="cfg-button-color-hex" type="text" class="flex-1 bg-gray-800 text-white px-4 py-2.5 rounded-lg border border-gray-700 text-sm font-mono" onchange="document.getElementById('cfg-button-color').value=this.value;saveConfig()">
+            </div>
+          </div>
+          <div>
+            <label class="block text-gray-400 text-sm mb-1">Logo URL</label>
+            <input id="cfg-logo" type="url" class="w-full bg-gray-800 text-white px-4 py-2.5 rounded-lg border border-gray-700 text-sm" placeholder="https://..." onchange="saveConfig()">
+          </div>
+          <div>
+            <label class="block text-gray-400 text-sm mb-1">Show Pricing Tiers</label>
+            <select id="cfg-tiers" class="w-full bg-gray-800 text-white px-4 py-2.5 rounded-lg border border-gray-700 text-sm" onchange="saveConfig()">
+              <option value="1">Yes — Good / Better / Best</option>
+              <option value="0">No — Single Price Only</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Lead Capture -->
+      <div class="bg-gray-900 rounded-xl p-6 border border-gray-800 mb-6">
+        <h3 class="text-white font-semibold mb-4"><i class="fas fa-user-edit mr-2"></i>Lead Capture Fields</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <label class="flex items-center gap-3 cursor-pointer">
+            <input type="checkbox" id="cfg-req-email" class="w-5 h-5 rounded bg-gray-800 border-gray-700 text-blue-600" onchange="saveConfig()">
+            <span class="text-gray-300 text-sm">Require email address</span>
+          </label>
+          <label class="flex items-center gap-3 cursor-pointer">
+            <input type="checkbox" id="cfg-req-phone" class="w-5 h-5 rounded bg-gray-800 border-gray-700 text-blue-600" onchange="saveConfig()">
+            <span class="text-gray-300 text-sm">Require phone number</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Allowed Domains -->
+      <div class="bg-gray-900 rounded-xl p-6 border border-gray-800 mb-6">
+        <h3 class="text-white font-semibold mb-2"><i class="fas fa-shield-alt mr-2"></i>Allowed Domains</h3>
+        <p class="text-gray-400 text-sm mb-3">Restrict which websites can embed your widget. Leave blank to allow all domains.</p>
+        <input id="cfg-domains" type="text" class="w-full bg-gray-800 text-white px-4 py-2.5 rounded-lg border border-gray-700 text-sm" placeholder="example.com, www.myroofing.com" onchange="saveConfig()">
+      </div>
+
+      <div id="save-status" class="text-center text-sm text-green-400 hidden">Settings saved!</div>
+    </div>
+  </main>
+  <script>
+    (function() {
+      var c = localStorage.getItem('rc_customer');
+      if (!c) { window.location.href = '/customer/login'; return; }
+      try {
+        var u = JSON.parse(c);
+        var g = document.getElementById('custGreeting');
+        var n = document.getElementById('custName');
+        if (g && n) { n.textContent = u.name || u.email; g.classList.remove('hidden'); }
+      } catch(e) {}
+    })();
+    function custLogout() {
+      var token = localStorage.getItem('rc_customer_token');
+      if (token) fetch('/api/customer/logout', { method: 'POST', headers: { 'Authorization': 'Bearer ' + token } })['catch'](function(){});
+      localStorage.removeItem('rc_customer');
+      localStorage.removeItem('rc_customer_token');
+      window.location.href = '/customer/login';
+    }
+
+    var TOKEN = localStorage.getItem('rc_customer_token');
+    var HEADERS = { 'Authorization': 'Bearer ' + TOKEN, 'Content-Type': 'application/json' };
+    var saveTimer = null;
+
+    function loadConfig() {
+      fetch('/api/widget/config', { headers: HEADERS })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (!data.success) throw new Error(data.error);
+          var cfg = data.config;
+          document.getElementById('cfg-active').checked = !!cfg.is_active;
+          document.getElementById('cfg-headline').value = cfg.headline || '';
+          document.getElementById('cfg-subheadline').value = cfg.subheadline || '';
+          document.getElementById('cfg-button-text').value = cfg.button_text || '';
+          document.getElementById('cfg-button-color').value = cfg.button_color || '#1e3a5f';
+          document.getElementById('cfg-button-color-hex').value = cfg.button_color || '#1e3a5f';
+          document.getElementById('cfg-logo').value = cfg.logo_url || '';
+          document.getElementById('cfg-tiers').value = cfg.show_tiers ? '1' : '0';
+          document.getElementById('cfg-req-email').checked = !!cfg.require_email;
+          document.getElementById('cfg-req-phone').checked = !!cfg.require_phone;
+          document.getElementById('cfg-domains').value = cfg.allowed_domains || '';
+          document.getElementById('embed-code').value = '<script src="https://www.roofmanager.ca/static/widget.js" data-key="' + cfg.public_key + '" async><\\/script>';
+          document.getElementById('preview-link').href = '/widget/view?key=' + cfg.public_key;
+          document.getElementById('loading').classList.add('hidden');
+          document.getElementById('settings-root').classList.remove('hidden');
+        })
+        .catch(function(e) {
+          document.getElementById('loading').innerHTML = '<p class="text-red-400">Failed to load: ' + e.message + '</p>';
+        });
+    }
+
+    function saveConfig() {
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(function() {
+        var body = {
+          is_active: document.getElementById('cfg-active').checked ? 1 : 0,
+          headline: document.getElementById('cfg-headline').value,
+          subheadline: document.getElementById('cfg-subheadline').value,
+          button_text: document.getElementById('cfg-button-text').value,
+          button_color: document.getElementById('cfg-button-color').value,
+          logo_url: document.getElementById('cfg-logo').value,
+          show_tiers: parseInt(document.getElementById('cfg-tiers').value),
+          require_email: document.getElementById('cfg-req-email').checked ? 1 : 0,
+          require_phone: document.getElementById('cfg-req-phone').checked ? 1 : 0,
+          allowed_domains: document.getElementById('cfg-domains').value,
+        };
+        document.getElementById('cfg-button-color-hex').value = body.button_color;
+        fetch('/api/widget/config', { method: 'PUT', headers: HEADERS, body: JSON.stringify(body) })
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            if (data.success) {
+              var el = document.getElementById('save-status');
+              el.classList.remove('hidden');
+              setTimeout(function() { el.classList.add('hidden'); }, 2000);
+            }
+          });
+      }, 500);
+    }
+
+    function copyEmbed() {
+      var input = document.getElementById('embed-code');
+      navigator.clipboard.writeText(input.value).then(function() {
+        var btn = input.nextElementSibling;
+        btn.textContent = 'Copied!';
+        setTimeout(function() { btn.textContent = 'Copy'; }, 2000);
+      });
+    }
+
+    loadConfig();
+  <\/script>
+  ${getRoverAssistant()}
+</body>
+</html>`
+}
+
+// ============================================================
+// WIDGET LEADS PAGE — Contractor Dashboard
+// ============================================================
+function getWidgetLeadsPageHTML() {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags()}
+  <title>Widget Leads - Roof Manager</title>
+</head>
+<body class="min-h-screen" style="background:#0A0A0A">
+  <header style="background:#111111;border-bottom:1px solid rgba(255,255,255,0.1)" class="text-white shadow-lg">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
+          <img src="/static/logo.png" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
+          <div>
+            <h1 class="text-lg font-bold">Widget Leads</h1>
+            <p class="text-gray-400 text-xs">Roof Manager</p>
+          </div>
+        </a>
+      </div>
+      <nav class="flex items-center space-x-3">
+        <span id="custGreeting" class="text-gray-400 text-sm hidden"><i class="fas fa-user-circle mr-1"></i><span id="custName"></span></span>
+        <a href="/customer/widget" class="text-gray-400 hover:text-white text-sm"><i class="fas fa-cog mr-1"></i>Settings</a>
+        <a href="/customer/dashboard" class="text-gray-400 hover:text-white text-sm"><i class="fas fa-th-large mr-1"></i>Dashboard</a>
+        <button onclick="custLogout()" class="text-gray-400 hover:text-white text-sm"><i class="fas fa-sign-out-alt mr-1"></i>Logout</button>
+      </nav>
+    </div>
+  </header>
+  <main class="max-w-7xl mx-auto px-4 py-6">
+    <!-- Stats -->
+    <div id="stats" class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      <div class="bg-gray-900 rounded-xl p-4 border border-gray-800 text-center">
+        <p class="text-2xl font-bold text-white" id="stat-total">0</p>
+        <p class="text-gray-400 text-xs">Total Leads</p>
+      </div>
+      <div class="bg-gray-900 rounded-xl p-4 border border-gray-800 text-center">
+        <p class="text-2xl font-bold text-blue-400" id="stat-new">0</p>
+        <p class="text-gray-400 text-xs">New</p>
+      </div>
+      <div class="bg-gray-900 rounded-xl p-4 border border-gray-800 text-center">
+        <p class="text-2xl font-bold text-yellow-400" id="stat-contacted">0</p>
+        <p class="text-gray-400 text-xs">Contacted</p>
+      </div>
+      <div class="bg-gray-900 rounded-xl p-4 border border-gray-800 text-center">
+        <p class="text-2xl font-bold text-green-400" id="stat-converted">0</p>
+        <p class="text-gray-400 text-xs">Converted</p>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="flex gap-2 mb-4 flex-wrap">
+      <button class="status-btn px-4 py-2 rounded-lg text-sm font-medium bg-blue-600 text-white" data-status="all" onclick="filterLeads('all')">All</button>
+      <button class="status-btn px-4 py-2 rounded-lg text-sm font-medium bg-gray-800 text-gray-300 hover:bg-gray-700" data-status="new" onclick="filterLeads('new')">New</button>
+      <button class="status-btn px-4 py-2 rounded-lg text-sm font-medium bg-gray-800 text-gray-300 hover:bg-gray-700" data-status="contacted" onclick="filterLeads('contacted')">Contacted</button>
+      <button class="status-btn px-4 py-2 rounded-lg text-sm font-medium bg-gray-800 text-gray-300 hover:bg-gray-700" data-status="converted" onclick="filterLeads('converted')">Converted</button>
+      <button class="status-btn px-4 py-2 rounded-lg text-sm font-medium bg-gray-800 text-gray-300 hover:bg-gray-700" data-status="manual_needed" onclick="filterLeads('manual_needed')">Manual Needed</button>
+    </div>
+
+    <!-- Leads Table -->
+    <div class="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden">
+      <div id="leads-loading" class="text-center py-12"><p class="text-gray-400">Loading leads...</p></div>
+      <div id="leads-empty" class="hidden text-center py-12">
+        <i class="fas fa-inbox text-4xl text-gray-600 mb-3"></i>
+        <p class="text-gray-400">No leads yet. Share your widget to start capturing leads!</p>
+        <a href="/customer/widget" class="inline-block mt-3 text-blue-400 hover:text-blue-300 text-sm">Get your embed code &rarr;</a>
+      </div>
+      <table id="leads-table" class="hidden w-full">
+        <thead>
+          <tr class="border-b border-gray-800 text-left">
+            <th class="px-4 py-3 text-xs font-medium text-gray-400 uppercase">Date</th>
+            <th class="px-4 py-3 text-xs font-medium text-gray-400 uppercase">Name</th>
+            <th class="px-4 py-3 text-xs font-medium text-gray-400 uppercase">Contact</th>
+            <th class="px-4 py-3 text-xs font-medium text-gray-400 uppercase">Address</th>
+            <th class="px-4 py-3 text-xs font-medium text-gray-400 uppercase">Estimate</th>
+            <th class="px-4 py-3 text-xs font-medium text-gray-400 uppercase">Status</th>
+            <th class="px-4 py-3 text-xs font-medium text-gray-400 uppercase">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="leads-body"></tbody>
+      </table>
+    </div>
+
+    <!-- Pagination -->
+    <div id="pagination" class="hidden flex items-center justify-between mt-4">
+      <p class="text-gray-400 text-sm" id="page-info"></p>
+      <div class="flex gap-2">
+        <button id="btn-prev" onclick="changePage(-1)" class="px-3 py-1.5 bg-gray-800 text-gray-300 rounded-lg text-sm hover:bg-gray-700 disabled:opacity-40" disabled>&larr; Prev</button>
+        <button id="btn-next" onclick="changePage(1)" class="px-3 py-1.5 bg-gray-800 text-gray-300 rounded-lg text-sm hover:bg-gray-700 disabled:opacity-40" disabled>Next &rarr;</button>
+      </div>
+    </div>
+  </main>
+  <script>
+    (function() {
+      var c = localStorage.getItem('rc_customer');
+      if (!c) { window.location.href = '/customer/login'; return; }
+      try {
+        var u = JSON.parse(c);
+        var g = document.getElementById('custGreeting');
+        var n = document.getElementById('custName');
+        if (g && n) { n.textContent = u.name || u.email; g.classList.remove('hidden'); }
+      } catch(e) {}
+    })();
+    function custLogout() {
+      var token = localStorage.getItem('rc_customer_token');
+      if (token) fetch('/api/customer/logout', { method: 'POST', headers: { 'Authorization': 'Bearer ' + token } })['catch'](function(){});
+      localStorage.removeItem('rc_customer');
+      localStorage.removeItem('rc_customer_token');
+      window.location.href = '/customer/login';
+    }
+
+    var TOKEN = localStorage.getItem('rc_customer_token');
+    var HEADERS = { 'Authorization': 'Bearer ' + TOKEN, 'Content-Type': 'application/json' };
+    var currentFilter = 'all';
+    var currentPage = 1;
+
+    function filterLeads(status) {
+      currentFilter = status;
+      currentPage = 1;
+      document.querySelectorAll('.status-btn').forEach(function(btn) {
+        btn.className = 'status-btn px-4 py-2 rounded-lg text-sm font-medium ' +
+          (btn.getAttribute('data-status') === status ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700');
+      });
+      loadLeads();
+    }
+
+    function changePage(dir) {
+      currentPage += dir;
+      loadLeads();
+    }
+
+    function loadLeads() {
+      var url = '/api/widget/leads?page=' + currentPage + '&limit=20';
+      if (currentFilter !== 'all') url += '&status=' + currentFilter;
+
+      fetch(url, { headers: HEADERS })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          document.getElementById('leads-loading').classList.add('hidden');
+
+          if (!data.leads || data.leads.length === 0) {
+            document.getElementById('leads-empty').classList.remove('hidden');
+            document.getElementById('leads-table').classList.add('hidden');
+            document.getElementById('pagination').classList.add('hidden');
+            return;
+          }
+
+          document.getElementById('leads-empty').classList.add('hidden');
+          document.getElementById('leads-table').classList.remove('hidden');
+
+          var body = document.getElementById('leads-body');
+          body.innerHTML = '';
+
+          data.leads.forEach(function(lead) {
+            var priceRange = '';
+            if (lead.estimated_price_low && lead.estimated_price_high) {
+              priceRange = '$' + Math.round(lead.estimated_price_low).toLocaleString() + ' - $' + Math.round(lead.estimated_price_high).toLocaleString();
+            } else if (lead.status === 'manual_needed') {
+              priceRange = '<span class="text-yellow-400">Manual needed</span>';
+            } else {
+              priceRange = '-';
+            }
+
+            var statusColors = { 'new': 'bg-blue-900 text-blue-300', 'contacted': 'bg-yellow-900 text-yellow-300', 'converted': 'bg-green-900 text-green-300', 'archived': 'bg-gray-700 text-gray-400', 'manual_needed': 'bg-orange-900 text-orange-300' };
+            var statusClass = statusColors[lead.status] || 'bg-gray-700 text-gray-400';
+
+            var date = new Date(lead.created_at + 'Z');
+            var dateStr = date.toLocaleDateString('en-CA', { month: 'short', day: 'numeric' });
+
+            var tr = document.createElement('tr');
+            tr.className = 'border-b border-gray-800 hover:bg-gray-800/50 transition';
+            tr.innerHTML =
+              '<td class="px-4 py-3 text-gray-400 text-sm">' + dateStr + '</td>' +
+              '<td class="px-4 py-3 text-white text-sm font-medium">' + (lead.lead_name || '-') + '</td>' +
+              '<td class="px-4 py-3 text-sm"><div class="text-gray-300">' + (lead.lead_email || '') + '</div><div class="text-gray-500 text-xs">' + (lead.lead_phone || '') + '</div></td>' +
+              '<td class="px-4 py-3 text-gray-300 text-sm" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + (lead.property_address || '') + '">' + (lead.property_address || '-') + '</td>' +
+              '<td class="px-4 py-3 text-sm text-gray-300">' + priceRange + '</td>' +
+              '<td class="px-4 py-3"><span class="px-2 py-1 rounded-full text-xs font-medium ' + statusClass + '">' + lead.status + '</span></td>' +
+              '<td class="px-4 py-3"><select class="bg-gray-800 text-gray-300 text-xs rounded px-2 py-1 border border-gray-700" onchange="updateStatus(' + lead.id + ', this.value)">' +
+                '<option value="">Change...</option>' +
+                '<option value="new">New</option>' +
+                '<option value="contacted">Contacted</option>' +
+                '<option value="converted">Converted</option>' +
+                '<option value="archived">Archived</option>' +
+              '</select></td>';
+            body.appendChild(tr);
+          });
+
+          // Pagination
+          var p = data.pagination;
+          if (p.pages > 1) {
+            document.getElementById('pagination').classList.remove('hidden');
+            document.getElementById('page-info').textContent = 'Page ' + p.page + ' of ' + p.pages + ' (' + p.total + ' leads)';
+            document.getElementById('btn-prev').disabled = p.page <= 1;
+            document.getElementById('btn-next').disabled = p.page >= p.pages;
+          } else {
+            document.getElementById('pagination').classList.add('hidden');
+          }
+        });
+    }
+
+    window.updateStatus = function(id, status) {
+      if (!status) return;
+      fetch('/api/widget/leads/' + id + '/status', { method: 'PATCH', headers: HEADERS, body: JSON.stringify({ status: status }) })
+        .then(function(r) { return r.json(); })
+        .then(function() { loadLeads(); loadStats(); });
+    };
+
+    function loadStats() {
+      // Load counts for each status
+      Promise.all([
+        fetch('/api/widget/leads?limit=1', { headers: HEADERS }).then(function(r) { return r.json(); }),
+        fetch('/api/widget/leads?status=new&limit=1', { headers: HEADERS }).then(function(r) { return r.json(); }),
+        fetch('/api/widget/leads?status=contacted&limit=1', { headers: HEADERS }).then(function(r) { return r.json(); }),
+        fetch('/api/widget/leads?status=converted&limit=1', { headers: HEADERS }).then(function(r) { return r.json(); }),
+      ]).then(function(results) {
+        document.getElementById('stat-total').textContent = results[0].pagination ? results[0].pagination.total : 0;
+        document.getElementById('stat-new').textContent = results[1].pagination ? results[1].pagination.total : 0;
+        document.getElementById('stat-contacted').textContent = results[2].pagination ? results[2].pagination.total : 0;
+        document.getElementById('stat-converted').textContent = results[3].pagination ? results[3].pagination.total : 0;
+      });
+    }
+
+    loadLeads();
+    loadStats();
+  <\/script>
   ${getRoverAssistant()}
 </body>
 </html>`
