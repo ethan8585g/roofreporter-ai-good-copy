@@ -961,7 +961,7 @@ window._calNav = function(dir) {
   _calRender();
 };
 
-window._toggleGcalSync = function(enabled) {
+window._toggleGcalSync = async function(enabled) {
   var token = localStorage.getItem('rc_customer_token') || '';
   if (enabled) {
     // Open popup immediately (synchronously) to avoid browser popup blockers
