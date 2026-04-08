@@ -65,6 +65,11 @@
       (onSave ? '<div class="px-6 py-4 border-t border-white/5 flex justify-end gap-2"><button onclick="document.getElementById(\'crmModal\').remove()" class="px-4 py-2 text-gray-400 hover:bg-[#111111]/10 rounded-lg text-sm">Cancel</button><button id="modalSaveBtn" class="px-6 py-2 bg-brand-600 text-white rounded-lg text-sm font-semibold hover:bg-brand-700">' + (saveLabel || 'Save') + '</button></div>' : '') +
       '</div>';
     document.body.appendChild(overlay);
+    // Force white text on all inputs/selects/textareas inside the dark modal
+    overlay.querySelectorAll('input, select, textarea').forEach(function(el) {
+      el.style.color = '#fff';
+      el.style.backgroundColor = '#0A0A0A';
+    });
     overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
     if (onSave) { document.getElementById('modalSaveBtn').addEventListener('click', function() { onSave(); }); }
     return overlay;
@@ -512,7 +517,7 @@
     if (!container) return;
     var row = document.createElement('div');
     row.className = 'invItemRow grid grid-cols-12 gap-2 items-end mt-2';
-    row.innerHTML = '<div class="col-span-6"><input type="text" class="invDesc w-full px-2 py-2 border border-white/15 rounded-lg text-sm" placeholder="Description"></div><div class="col-span-2"><input type="number" class="invQty w-full px-2 py-2 border border-white/15 rounded-lg text-sm" value="1"></div><div class="col-span-3"><input type="number" class="invPrice w-full px-2 py-2 border border-white/15 rounded-lg text-sm" step="0.01" placeholder="0.00"></div><div class="col-span-1"><button onclick="this.closest(\'.invItemRow\').remove()" class="text-red-400 hover:text-red-600 py-2"><i class="fas fa-times"></i></button></div>';
+    row.innerHTML = '<div class="col-span-6"><input type="text" class="invDesc w-full px-2 py-2 border border-white/15 rounded-lg text-sm" placeholder="Description" style="color:#fff;background:#0A0A0A"></div><div class="col-span-2"><input type="number" class="invQty w-full px-2 py-2 border border-white/15 rounded-lg text-sm" value="1" style="color:#fff;background:#0A0A0A"></div><div class="col-span-3"><input type="number" class="invPrice w-full px-2 py-2 border border-white/15 rounded-lg text-sm" step="0.01" placeholder="0.00" style="color:#fff;background:#0A0A0A"></div><div class="col-span-1"><button onclick="this.closest(\'.invItemRow\').remove()" class="text-red-400 hover:text-red-600 py-2"><i class="fas fa-times"></i></button></div>';
     container.appendChild(row);
   };
 
@@ -562,15 +567,15 @@
 
         // Dates row
         body += '<div class="grid grid-cols-3 gap-3">';
-        body += '<div class="bg-blue-50 rounded-xl p-3 text-center"><p class="text-xs text-blue-500 mb-1">Created</p><p class="text-sm font-semibold text-blue-700">' + fmtDate(inv.created_at) + '</p></div>';
-        body += '<div class="bg-white/10 rounded-xl p-3 text-center"><p class="text-xs text-gray-400 mb-1">Due Date</p><p class="text-sm font-semibold text-gray-400">' + fmtDate(inv.due_date) + '</p></div>';
-        body += '<div class="bg-green-50 rounded-xl p-3 text-center"><p class="text-xs text-green-500 mb-1">Paid</p><p class="text-sm font-semibold text-green-700">' + (inv.paid_date ? fmtDate(inv.paid_date) : '—') + '</p></div>';
+        body += '<div class="bg-blue-500/10 rounded-xl p-3 text-center"><p class="text-xs text-blue-400 mb-1">Created</p><p class="text-sm font-semibold text-blue-300">' + fmtDate(inv.created_at) + '</p></div>';
+        body += '<div class="bg-white/10 rounded-xl p-3 text-center"><p class="text-xs text-gray-400 mb-1">Due Date</p><p class="text-sm font-semibold text-gray-200">' + fmtDate(inv.due_date) + '</p></div>';
+        body += '<div class="bg-green-500/10 rounded-xl p-3 text-center"><p class="text-xs text-green-400 mb-1">Paid</p><p class="text-sm font-semibold text-green-300">' + (inv.paid_date ? fmtDate(inv.paid_date) : '—') + '</p></div>';
         body += '</div>';
 
         // Line items table
         if (items.length > 0) {
           body += '<div class="border border-white/10 rounded-xl overflow-hidden">';
-          body += '<table class="w-full text-sm"><thead class="bg-[#0A0A0A]"><tr><th class="px-4 py-2.5 text-left text-xs font-semibold text-gray-500">Description</th><th class="px-4 py-2.5 text-center text-xs font-semibold text-gray-500 w-16">Qty</th><th class="px-4 py-2.5 text-right text-xs font-semibold text-gray-500 w-24">Price</th><th class="px-4 py-2.5 text-right text-xs font-semibold text-gray-500 w-24">Amount</th></tr></thead><tbody class="divide-y divide-gray-100">';
+          body += '<table class="w-full text-sm"><thead class="bg-[#0A0A0A]"><tr><th class="px-4 py-2.5 text-left text-xs font-semibold text-gray-500">Description</th><th class="px-4 py-2.5 text-center text-xs font-semibold text-gray-500 w-16">Qty</th><th class="px-4 py-2.5 text-right text-xs font-semibold text-gray-500 w-24">Price</th><th class="px-4 py-2.5 text-right text-xs font-semibold text-gray-500 w-24">Amount</th></tr></thead><tbody class="divide-y divide-white/5">';
           for (var i = 0; i < items.length; i++) {
             body += '<tr><td class="px-4 py-2.5 text-gray-300">' + items[i].description + '</td><td class="px-4 py-2.5 text-center text-gray-400">' + items[i].quantity + '</td><td class="px-4 py-2.5 text-right text-gray-400">' + money(items[i].unit_price) + '</td><td class="px-4 py-2.5 text-right font-medium text-gray-100">' + money(items[i].amount) + '</td></tr>';
           }
@@ -586,17 +591,17 @@
         body += '</div>';
 
         // Notes & Terms
-        if (inv.notes) body += '<div class="bg-blue-50 rounded-xl p-3"><h4 class="text-xs font-semibold text-blue-600 uppercase mb-1"><i class="fas fa-sticky-note mr-1"></i>Notes</h4><p class="text-sm text-blue-800">' + inv.notes + '</p></div>';
+        if (inv.notes) body += '<div class="bg-blue-500/10 rounded-xl p-3"><h4 class="text-xs font-semibold text-blue-400 uppercase mb-1"><i class="fas fa-sticky-note mr-1"></i>Notes</h4><p class="text-sm text-blue-200">' + inv.notes + '</p></div>';
         if (inv.terms) body += '<div class="bg-[#0A0A0A] rounded-xl p-3"><h4 class="text-xs font-semibold text-gray-500 uppercase mb-1"><i class="fas fa-file-contract mr-1"></i>Terms</h4><p class="text-sm text-gray-300">' + inv.terms + '</p></div>';
 
         // Title + address (if present)
-        if (inv.title) body += '<div class="bg-sky-50 rounded-xl p-3"><p class="text-xs font-semibold text-sky-600 uppercase mb-1"><i class="fas fa-tag mr-1"></i>Project</p><p class="text-sm font-semibold text-sky-800">' + inv.title + '</p>' + (inv.property_address ? '<p class="text-xs text-sky-600 mt-0.5"><i class="fas fa-map-marker-alt mr-1"></i>' + inv.property_address + '</p>' : '') + '</div>';
+        if (inv.title) body += '<div class="bg-sky-500/10 rounded-xl p-3"><p class="text-xs font-semibold text-sky-400 uppercase mb-1"><i class="fas fa-tag mr-1"></i>Project</p><p class="text-sm font-semibold text-sky-200">' + inv.title + '</p>' + (inv.property_address ? '<p class="text-xs text-sky-400 mt-0.5"><i class="fas fa-map-marker-alt mr-1"></i>' + inv.property_address + '</p>' : '') + '</div>';
 
         // Share link
         if (inv.share_token) body += '<div class="bg-[#0A0A0A] rounded-xl p-3 flex items-center justify-between gap-2"><div class="min-w-0"><p class="text-xs font-semibold text-gray-500 mb-0.5">Customer Link</p><p class="text-xs text-brand-600 truncate font-mono">/invoice/view/' + inv.share_token + '</p></div><button onclick="navigator.clipboard.writeText(window.location.origin+\'/invoice/view/' + inv.share_token + '\').then(function(){toast(\'Link copied!\');})" class="shrink-0 text-xs bg-[#111111] border border-white/10 px-2 py-1 rounded-lg hover:bg-[#111111]/5"><i class="fas fa-copy mr-1"></i>Copy</button></div>';
 
         // Square payment link
-        if (inv.square_payment_link_url) body += '<div class="bg-green-50 rounded-xl p-3 flex items-center justify-between gap-2"><div><p class="text-xs font-semibold text-emerald-400 mb-0.5"><i class="fas fa-credit-card mr-1"></i>Square Payment Link</p><p class="text-xs text-green-700 truncate">Ready to pay</p></div><div class="flex gap-2 shrink-0"><a href="' + inv.square_payment_link_url + '" target="_blank" class="text-xs bg-green-600 text-white px-2 py-1 rounded-lg hover:bg-green-700">Open</a><button onclick="navigator.clipboard.writeText(\'' + inv.square_payment_link_url + '\').then(function(){toast(\'Link copied!\');})" class="text-xs bg-[#111111] border border-green-200 px-2 py-1 rounded-lg hover:bg-green-50">Copy</button></div></div>';
+        if (inv.square_payment_link_url) body += '<div class="bg-green-500/10 rounded-xl p-3 flex items-center justify-between gap-2"><div><p class="text-xs font-semibold text-emerald-400 mb-0.5"><i class="fas fa-credit-card mr-1"></i>Square Payment Link</p><p class="text-xs text-green-300 truncate">Ready to pay</p></div><div class="flex gap-2 shrink-0"><a href="' + inv.square_payment_link_url + '" target="_blank" class="text-xs bg-green-600 text-white px-2 py-1 rounded-lg hover:bg-green-700">Open</a><button onclick="navigator.clipboard.writeText(\'' + inv.square_payment_link_url + '\').then(function(){toast(\'Link copied!\');})" class="text-xs bg-[#111111] border border-green-500/20 text-white px-2 py-1 rounded-lg hover:bg-white/10">Copy</button></div></div>';
 
         // Action buttons
         body += '<div class="flex gap-2 pt-2 flex-wrap">';
@@ -1356,7 +1361,7 @@
         // Line Items
         if (items.length > 0) {
           body += '<div class="border border-white/10 rounded-xl overflow-hidden">';
-          body += '<table class="w-full text-sm"><thead class="bg-[#0A0A0A]"><tr><th class="px-4 py-2.5 text-left text-xs font-semibold text-gray-500">Description</th><th class="px-4 py-2.5 text-center text-xs font-semibold text-gray-500 w-14">Qty</th><th class="px-4 py-2.5 text-center text-xs font-semibold text-gray-500 w-14">Unit</th><th class="px-4 py-2.5 text-right text-xs font-semibold text-gray-500 w-24">Price</th><th class="px-4 py-2.5 text-right text-xs font-semibold text-gray-500 w-24">Amount</th></tr></thead><tbody class="divide-y divide-gray-100">';
+          body += '<table class="w-full text-sm"><thead class="bg-[#0A0A0A]"><tr><th class="px-4 py-2.5 text-left text-xs font-semibold text-gray-500">Description</th><th class="px-4 py-2.5 text-center text-xs font-semibold text-gray-500 w-14">Qty</th><th class="px-4 py-2.5 text-center text-xs font-semibold text-gray-500 w-14">Unit</th><th class="px-4 py-2.5 text-right text-xs font-semibold text-gray-500 w-24">Price</th><th class="px-4 py-2.5 text-right text-xs font-semibold text-gray-500 w-24">Amount</th></tr></thead><tbody class="divide-y divide-white/5">';
           for (var i = 0; i < items.length; i++) {
             var it = items[i];
             body += '<tr><td class="px-4 py-2.5 text-gray-300">' + it.description + '</td><td class="px-4 py-2.5 text-center text-gray-400">' + it.quantity + '</td><td class="px-4 py-2.5 text-center text-gray-500 text-xs">' + (it.unit || 'ea') + '</td><td class="px-4 py-2.5 text-right text-gray-400">' + money(it.unit_price) + '</td><td class="px-4 py-2.5 text-right font-medium text-gray-100">' + money(it.amount) + '</td></tr>';
