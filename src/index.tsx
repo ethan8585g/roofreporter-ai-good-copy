@@ -2475,7 +2475,7 @@ html.light-theme{background:#f5f7fa !important}
 .light-theme ::-webkit-scrollbar-thumb{background:#c8d0d8 !important}
 .light-theme .sa-sidebar{background-color:#ffffff !important;border-color:#dde3e9 !important}
 </style>
-<script>!function(){var t=localStorage.getItem('rc_theme_mode');if(t==='light'){document.documentElement.classList.add('light-theme');document.addEventListener('DOMContentLoaded',function(){document.body.classList.add('light-theme')})}else if(t==='auto'&&window.matchMedia('(prefers-color-scheme:light)').matches){document.documentElement.classList.add('light-theme');document.addEventListener('DOMContentLoaded',function(){document.body.classList.add('light-theme')})}}()</script>
+<script>!function(){var p=window.location.pathname;if(!p.startsWith('/customer')&&!p.startsWith('/admin'))return;var t=localStorage.getItem('rc_theme_mode');if(t==='light'){document.documentElement.classList.add('light-theme');document.addEventListener('DOMContentLoaded',function(){document.body.classList.add('light-theme')})}else if(t==='auto'&&window.matchMedia('(prefers-color-scheme:light)').matches){document.documentElement.classList.add('light-theme');document.addEventListener('DOMContentLoaded',function(){document.body.classList.add('light-theme')})}}()</script>
   <script>if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js')}</script>
   <script src="/static/push-subscribe.js" defer></script>
   <script src="/static/push-native.js" defer></script>`
