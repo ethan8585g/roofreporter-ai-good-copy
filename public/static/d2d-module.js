@@ -14,6 +14,7 @@
   var viewerRole = 'owner'; // 'owner' | 'member' — populated from /stats response
   var selectedTurfId = null;
   var activeTool = 'pointer'; // pointer | pin | turf
+  var initialLoadDone = false;
   var turfPolygons = {};  // id -> google.maps.Polygon
   var pinMarkers = {};    // id -> google.maps.Marker
   var infoWindow = null;
@@ -489,8 +490,8 @@
     for (var i = 0; i < turfs.length; i++) drawTurfOnMap(turfs[i]);
     for (var j = 0; j < pins.length; j++) drawPinOnMap(pins[j]);
 
-    // Auto-zoom to fit
-    if (turfs.length > 0 || pins.length > 0) {
+    // Auto-zoom to fit only on initial load — not after placing individual pins
+    if (!initialLoadDone && (turfs.length > 0 || pins.length > 0)) {
       var bounds = new google.maps.LatLngBounds();
       for (var ti = 0; ti < turfs.length; ti++) {
         try {
@@ -501,6 +502,7 @@
       for (var pk = 0; pk < pins.length; pk++) bounds.extend(new google.maps.LatLng(pins[pk].lat, pins[pk].lng));
       map.fitBounds(bounds, 60);
     }
+    initialLoadDone = true;
   }
 
   function drawTurfOnMap(turf) {
