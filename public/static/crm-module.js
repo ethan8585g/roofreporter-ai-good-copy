@@ -205,10 +205,10 @@
     var isSolar = custObj.company_type === 'solar';
 
     if (orders.length === 0) {
-      root.innerHTML = '<div class="bg-[#111111] rounded-xl border p-12 text-center"><div class="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4"><i class="fas fa-file-alt text-gray-400 text-2xl"></i></div><h3 class="text-lg font-semibold text-gray-300 mb-2">No Reports Yet</h3><p class="text-gray-500 mb-6">Order your first roof measurement to see reports here.</p><a href="/customer/order" class="inline-block bg-brand-600 hover:bg-brand-700 text-white font-bold py-3 px-8 rounded-xl"><i class="fas fa-plus mr-2"></i>Order a Report</a></div>';
+      root.innerHTML = '<div style="background:var(--bg-card);border:1px solid var(--border-color)" class="rounded-xl p-12 text-center"><div class="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4"><i class="fas fa-file-alt text-gray-400 text-2xl"></i></div><h3 class="text-lg font-semibold mb-2" style="color:var(--text-secondary)">No Reports Yet</h3><p class="mb-6" style="color:var(--text-muted)">Order your first roof measurement to see reports here.</p><a href="/customer/order" class="inline-block bg-brand-600 hover:bg-brand-700 text-white font-bold py-3 px-8 rounded-xl"><i class="fas fa-plus mr-2"></i>Order a Report</a></div>';
       return;
     }
-    var html = '<div class="flex items-center justify-between mb-4"><h2 class="text-lg font-bold text-gray-100"><i class="fas fa-file-alt text-brand-500 mr-2"></i>Roof Report History (' + orders.length + ')</h2><a href="/customer/order" class="bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-brand-700"><i class="fas fa-plus mr-1"></i>New Report</a></div><div class="space-y-3">';
+    var html = '<div class="flex items-center justify-between mb-4"><h2 class="text-lg font-bold" style="color:var(--text-primary)"><i class="fas fa-file-alt text-brand-500 mr-2"></i>Roof Report History (' + orders.length + ')</h2><a href="/customer/order" class="bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-brand-700"><i class="fas fa-plus mr-1"></i>New Report</a></div><div class="space-y-3">';
     for (var i = 0; i < orders.length; i++) {
       var o = orders[i];
       var isCompleted = (o.report_status === 'completed' || o.status === 'completed');
@@ -222,9 +222,9 @@
       } else if (isProcessing) {
         buttons = '<span class="px-4 py-2 bg-blue-50 text-blue-600 rounded-lg text-sm font-medium"><i class="fas fa-spinner fa-spin mr-1"></i>Generating...</span>';
       } else {
-        buttons = '<span class="px-4 py-2 bg-[#0A0A0A] text-gray-500 rounded-lg text-xs font-medium">' + (o.status || 'pending') + '</span>';
+        buttons = '<span class="px-4 py-2 rounded-lg text-xs font-medium" style="background:var(--bg-elevated);color:var(--text-muted)">' + (o.status || 'pending') + '</span>';
       }
-      html += '<div class="bg-[#111111] rounded-xl border p-4 hover:shadow-md transition-shadow"><div class="flex items-start justify-between"><div class="min-w-0"><div class="flex items-center gap-2 mb-1"><span class="font-mono text-xs font-bold text-brand-600">' + o.order_number + '</span>' + badge(o.status) + '</div><p class="text-gray-300 font-medium text-sm"><i class="fas fa-map-marker-alt text-red-400 mr-1"></i>' + o.property_address + '</p><div class="flex items-center gap-3 mt-2 text-xs text-gray-400"><span><i class="fas fa-calendar mr-1"></i>' + fmtDate(o.created_at) + '</span>' + (o.roof_area_sqft ? '<span><i class="fas fa-ruler-combined mr-1"></i>' + Math.round(o.roof_area_sqft) + ' sq ft</span>' : '') + '</div></div><div class="flex flex-col items-end gap-2 flex-shrink-0 ml-4">' + buttons + '</div></div></div>';
+      html += '<div style="background:var(--bg-card);border:1px solid var(--border-color)" class="rounded-xl p-4 hover:shadow-md transition-shadow"><div class="flex items-start justify-between"><div class="min-w-0"><div class="flex items-center gap-2 mb-1"><span class="font-mono text-xs font-bold text-brand-600">' + o.order_number + '</span>' + badge(o.status) + '</div><p class="font-medium text-sm" style="color:var(--text-secondary)"><i class="fas fa-map-marker-alt text-red-400 mr-1"></i>' + o.property_address + '</p><div class="flex items-center gap-3 mt-2 text-xs" style="color:var(--text-muted)"><span><i class="fas fa-calendar mr-1"></i>' + fmtDate(o.created_at) + '</span>' + (o.roof_area_sqft ? '<span><i class="fas fa-ruler-combined mr-1"></i>' + Math.round(o.roof_area_sqft) + ' sq ft</span>' : '') + '</div></div><div class="flex flex-col items-end gap-2 flex-shrink-0 ml-4">' + buttons + '</div></div></div>';
     }
     html += '</div>';
     root.innerHTML = html;
