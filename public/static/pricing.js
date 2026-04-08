@@ -5,17 +5,9 @@
 // ============================================================
 
 document.addEventListener('DOMContentLoaded', async () => {
-  const root = document.getElementById('pricing-root');
-  if (!root) return;
-
-  try {
-    const res = await fetch('/api/square/packages');
-    const data = await res.json();
-    const packages = data.packages || [];
-    renderPricing(root, packages);
-  } catch (e) {
-    root.innerHTML = '<div class="text-center text-red-500 py-8">Failed to load pricing. Please try again.</div>';
-  }
+  // Pricing content is now SSR'd — no need to re-render.
+  // This script is kept for any future dynamic enhancements
+  // (e.g. fetching live Square package IDs for checkout links).
 });
 
 function renderPricing(root, packages) {
