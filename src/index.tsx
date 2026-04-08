@@ -4038,6 +4038,7 @@ function getCustomerDashboardHTML(adsensePublisherId: string = '') {
     window.__rraPublisherId = '${adsensePublisherId}';
   </script>
   <script src="/static/js/ads.js?v=${Date.now()}"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
   <script src="/static/customer-dashboard.js?v=${Date.now()}"></script>
   ${getRoverAssistant()}
 </body>
