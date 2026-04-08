@@ -106,6 +106,21 @@ async function loadDashData() {
   custState.loading = false;
 }
 
+// Builds just the order-status badge pills shown in the dashboard header.
+// Called on initial render and during polling so only this small fragment
+// is ever replaced — charts, calendar, and toggles are never touched.
+function buildOrderBadgesHTML() {
+  var c = custState.customer || {};
+  var freeTrialRemaining = c.free_trial_remaining || 0;
+  var paidCredits = c.paid_credits_remaining || 0;
+  var completedReports = custState.orders.filter(function(o) { return o.status === 'completed'; }).length;
+  var processingReports = custState.orders.filter(function(o) { return o.status === 'processing'; }).length;
+  return (freeTrialRemaining > 0 ? '<div class="px-3 py-1.5 bg-blue-500/10 border border-blue-200 rounded-full text-xs font-bold text-blue-700"><i class="fas fa-gift mr-1"></i>' + freeTrialRemaining + ' Free Trial</div>' : '') +
+    (paidCredits > 0 ? '<div class="px-3 py-1.5 bg-blue-500/10 border border-blue-200 rounded-full text-xs font-bold text-blue-700"><i class="fas fa-coins mr-1"></i>' + paidCredits + ' Credits</div>' : '') +
+    '<div class="px-3 py-1.5 rounded-full text-xs font-bold" style="background:var(--bg-elevated);border:1px solid var(--border-color);color:var(--text-secondary)"><i class="fas fa-file-alt mr-1"></i>' + completedReports + ' Reports</div>' +
+    (processingReports > 0 ? '<div class="px-3 py-1.5 bg-blue-500/10 border border-blue-200 rounded-full text-xs font-bold text-blue-700 animate-pulse"><i class="fas fa-spinner fa-spin mr-1"></i>' + processingReports + ' Generating</div>' : '');
+}
+
 function renderDashboard() {
   var root = document.getElementById('customer-root');
   if (!root) return;
@@ -261,10 +276,7 @@ function renderDashboard() {
           '<button onclick="window._toggleTheme()" id="theme-toggle-btn" class="px-2 py-1.5 rounded-lg transition-colors" style="color:var(--text-muted)" title="Toggle theme">' +
             '<i class="fas ' + (localStorage.getItem('rc_theme_mode') === 'light' ? 'fa-moon' : 'fa-sun') + '"></i>' +
           '</button>' +
-          (freeTrialRemaining > 0 ? '<div class="px-3 py-1.5 bg-blue-500/10 border border-blue-200 rounded-full text-xs font-bold text-blue-700"><i class="fas fa-gift mr-1"></i>' + freeTrialRemaining + ' Free Trial</div>' : '') +
-          (paidCredits > 0 ? '<div class="px-3 py-1.5 bg-blue-500/10 border border-blue-200 rounded-full text-xs font-bold text-blue-700"><i class="fas fa-coins mr-1"></i>' + paidCredits + ' Credits</div>' : '') +
-          '<div class="px-3 py-1.5 rounded-full text-xs font-bold" style="background:var(--bg-elevated);border:1px solid var(--border-color);color:var(--text-secondary)"><i class="fas fa-file-alt mr-1"></i>' + completedReports + ' Reports</div>' +
-          (processingReports > 0 ? '<div class="px-3 py-1.5 bg-blue-500/10 border border-blue-200 rounded-full text-xs font-bold text-blue-700 animate-pulse"><i class="fas fa-spinner fa-spin mr-1"></i>' + processingReports + ' Generating</div>' : '') +
+          '<span id="dash-order-badges">' + buildOrderBadgesHTML() + '</span>' +
         '</div>' +
       '</div>' +
 
@@ -688,11 +700,9 @@ function startEnhancementPolling() {
           });
         }
         
-        renderDashboard();
-
-        // Restore toggle states without a server round-trip
-        if (custState.autoEmailEnabled !== null) applyToggleVisual('auto-email-toggle', custState.autoEmailEnabled);
-        if (custState.gcalEnabled !== null) applyToggleVisual('gcal-sync-toggle', custState.gcalEnabled);
+        // Update only the status badge pills — never re-render charts/calendar/toggles
+        var badgesEl = document.getElementById('dash-order-badges');
+        if (badgesEl) badgesEl.innerHTML = buildOrderBadgesHTML();
 
         // Stop polling when all reports are done
         var stillActive = custState.orders.some(function(o) {
