@@ -964,7 +964,9 @@ window._calNav = function(dir) {
 window._toggleGcalSync = function(enabled) {
   var token = localStorage.getItem('rc_customer_token') || '';
   if (enabled) {
-    // Open Google Calendar OAuth flow
+    // Open popup immediately (synchronously) to avoid browser popup blockers
+    var popup = window.open('about:blank', 'gcal_auth', 'width=500,height=600,scrollbars=yes');
+    // Fetch the auth URL and navigate the popup to it
     fetch('/api/customer/gcal/auth-url', {
       method: 'GET',
       headers: { 'Authorization': 'Bearer ' + token }
@@ -972,7 +974,12 @@ window._toggleGcalSync = function(enabled) {
     .then(function(r) { return r.json(); })
     .then(function(data) {
       if (data.url) {
-        var popup = window.open(data.url, 'gcal_auth', 'width=500,height=600,scrollbars=yes');
+        if (popup && !popup.closed) {
+          popup.location.href = data.url;
+        } else {
+          // Popup was blocked or closed — fall back to redirect
+          window.location.href = data.url;
+        }
         // Poll for popup close as fallback
         var pollTimer = setInterval(function() {
           if (!popup || popup.closed) {
@@ -981,6 +988,7 @@ window._toggleGcalSync = function(enabled) {
           }
         }, 1000);
       } else {
+        if (popup) popup.close();
         // Failed to get auth URL — uncheck toggle
         var toggle = document.getElementById('gcal-sync-toggle');
         if (toggle) toggle.checked = false;
@@ -988,6 +996,7 @@ window._toggleGcalSync = function(enabled) {
       }
     })
     .catch(function() {
+      if (popup) popup.close();
       var toggle = document.getElementById('gcal-sync-toggle');
       if (toggle) toggle.checked = false;
     });

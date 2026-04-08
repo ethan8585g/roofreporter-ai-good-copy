@@ -2,6 +2,10 @@ import { Hono } from 'hono'
 import type { Bindings } from '../types'
 import { resolveTeamOwner } from './team'
 
+function escapeHtml(str: string): string {
+  return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
 export const crmRoutes = new Hono<{ Bindings: Bindings }>()
 
 // ============================================================
@@ -1851,12 +1855,21 @@ crmRoutes.post('/proposals/respond/:token', async (c) => {
     return c.json({ error: 'This proposal has already been ' + proposal.status }, 400)
   }
 
+  // Enforce valid_until expiry — reject acceptance of expired proposals
+  if (action === 'accept' && proposal.valid_until) {
+    const expiryDate = new Date(proposal.valid_until)
+    if (!isNaN(expiryDate.getTime()) && expiryDate < new Date()) {
+      return c.json({ error: 'This proposal has expired. Please contact the business for an updated quote.' }, 400)
+    }
+  }
+
   const newStatus = action === 'accept' ? 'accepted' : 'declined'
   const dateCol = action === 'accept' ? 'accepted_at' : 'declined_at'
+  const safeSignature = signature && typeof signature === 'string' && signature.startsWith('data:image/') ? signature : null
 
   await c.env.DB.prepare(`
-    UPDATE crm_proposals SET status = ?, ${dateCol} = datetime('now'), customer_signature = ?, updated_at = datetime('now') WHERE id = ?
-  `).bind(newStatus, signature || null, proposal.id).run()
+    UPDATE crm_proposals SET status = ?, ${dateCol} = datetime('now'), customer_signature = ?, printed_name = ?, signed_at = datetime('now'), updated_at = datetime('now') WHERE id = ?
+  `).bind(newStatus, safeSignature, printed_name || null, proposal.id).run()
 
   // Email notification to business owner
   try {
@@ -1878,11 +1891,11 @@ crmRoutes.post('/proposals/respond/:token', async (c) => {
     <table style="width:100%;border-collapse:collapse">
       <tr><td style="padding:8px 0;color:#64748b;font-size:13px;width:120px"><strong>Customer</strong></td><td style="padding:8px 0;font-size:14px;color:#1e293b">${proposal.customer_name || 'Unknown'}</td></tr>
       <tr><td style="padding:8px 0;color:#64748b;font-size:13px"><strong>Total Amount</strong></td><td style="padding:8px 0;font-size:14px;color:#1e293b;font-weight:700">$${Number(proposal.total_amount || 0).toFixed(2)}</td></tr>
-      ${printed_name ? `<tr><td style="padding:8px 0;color:#64748b;font-size:13px"><strong>Signed By</strong></td><td style="padding:8px 0;font-size:14px;color:#1e293b">${printed_name}</td></tr>` : ''}
-      ${signed_date ? `<tr><td style="padding:8px 0;color:#64748b;font-size:13px"><strong>Date</strong></td><td style="padding:8px 0;font-size:14px;color:#1e293b">${signed_date}</td></tr>` : ''}
-      ${proposal.property_address ? `<tr><td style="padding:8px 0;color:#64748b;font-size:13px"><strong>Property</strong></td><td style="padding:8px 0;font-size:14px;color:#1e293b">${proposal.property_address}</td></tr>` : ''}
+      ${printed_name ? `<tr><td style="padding:8px 0;color:#64748b;font-size:13px"><strong>Signed By</strong></td><td style="padding:8px 0;font-size:14px;color:#1e293b">${escapeHtml(printed_name)}</td></tr>` : ''}
+      ${signed_date ? `<tr><td style="padding:8px 0;color:#64748b;font-size:13px"><strong>Date</strong></td><td style="padding:8px 0;font-size:14px;color:#1e293b">${escapeHtml(signed_date)}</td></tr>` : ''}
+      ${proposal.property_address ? `<tr><td style="padding:8px 0;color:#64748b;font-size:13px"><strong>Property</strong></td><td style="padding:8px 0;font-size:14px;color:#1e293b">${escapeHtml(proposal.property_address)}</td></tr>` : ''}
     </table>
-    ${signature ? `<div style="margin-top:16px;padding:12px;background:#f8fafc;border-radius:8px;text-align:center"><p style="font-size:11px;color:#94a3b8;margin:0 0 8px">Customer Signature</p><img src="${signature}" alt="Signature" style="max-height:60px"></div>` : ''}
+    ${signature && signature.startsWith('data:image/') ? `<div style="margin-top:16px;padding:12px;background:#f8fafc;border-radius:8px;text-align:center"><p style="font-size:11px;color:#94a3b8;margin:0 0 8px">Customer Signature</p><img src="${signature}" alt="Signature" style="max-height:60px"></div>` : ''}
   </div>
   <div style="background:#f8fafc;padding:16px;border-radius:0 0 12px 12px;border:1px solid #e2e8f0;border-top:none;text-align:center">
     <a href="https://www.roofmanager.ca/customer/proposals" style="color:#0ea5e9;font-size:12px;font-weight:600">View in Dashboard</a>

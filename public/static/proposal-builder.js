@@ -56,6 +56,22 @@ document.addEventListener('DOMContentLoaded', () => {
     form: resetForm()
   };
 
+  function pbShareModal(title, message, url) {
+    var overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;animation:fadeIn 0.2s ease-out';
+    overlay.innerHTML = '<div style="background:white;border-radius:16px;padding:32px;max-width:480px;width:90%;box-shadow:0 25px 50px rgba(0,0,0,0.25)">' +
+      '<div style="text-align:center;margin-bottom:16px"><div style="width:48px;height:48px;border-radius:50%;background:#f0fdf4;display:inline-flex;align-items:center;justify-content:center;margin-bottom:12px"><i class="fas fa-check-circle" style="color:#16a34a;font-size:24px"></i></div>' +
+      '<h3 style="font-size:18px;font-weight:700;color:#111;margin:0">' + title + '</h3>' +
+      '<p style="font-size:13px;color:#6b7280;margin:6px 0 0">' + message + '</p></div>' +
+      '<div style="display:flex;gap:8px;margin-bottom:16px"><input type="text" readonly value="' + url.replace(/"/g, '&quot;') + '" style="flex:1;padding:10px 12px;border:1px solid #e5e7eb;border-radius:8px;font-size:13px;color:#374151;background:#f9fafb;outline:none" id="pb-share-url">' +
+      '<button onclick="navigator.clipboard.writeText(document.getElementById(\'pb-share-url\').value).then(function(){this.innerHTML=\'<i class=\\\'fas fa-check\\\'></i>\';this.style.background=\'#16a34a\'}.bind(this)).catch(function(){})" style="padding:10px 16px;background:#0ea5e9;color:white;border:none;border-radius:8px;font-weight:600;font-size:13px;cursor:pointer;white-space:nowrap"><i class="fas fa-copy" style="margin-right:4px"></i>Copy</button></div>' +
+      '<button onclick="this.closest(\'div\').parentElement.remove()" style="width:100%;padding:10px;background:#f3f4f6;border:none;border-radius:8px;font-weight:600;font-size:13px;color:#374151;cursor:pointer">Close</button></div>';
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
+    var input = overlay.querySelector('#pb-share-url');
+    if (input) { input.focus(); input.select(); }
+  }
+
   function pbToast(msg, type) {
     var existing = document.getElementById('pb-toast');
     if (existing) existing.remove();
@@ -465,6 +481,8 @@ document.addEventListener('DOMContentLoaded', () => {
       total: allProposals.length,
       draft: allProposals.filter(p => p.status === 'draft').length,
       sent: allProposals.filter(p => p.status === 'sent' || p.status === 'viewed').length,
+      accepted: allProposals.filter(p => p.status === 'accepted').length,
+      declined: allProposals.filter(p => p.status === 'declined').length,
       paid: allProposals.filter(p => p.status === 'paid').length,
       totalValue: allProposals.reduce((s, p) => s + (p.total || 0), 0)
     };
@@ -505,6 +523,8 @@ document.addEventListener('DOMContentLoaded', () => {
         <button onclick="window._pb.setFilter('all')" class="px-3 py-1.5 rounded-lg text-xs font-medium ${filter === 'all' ? 'bg-gray-100 text-gray-700 ring-1 ring-gray-300' : 'text-gray-500 hover:bg-gray-100'}">All ${stats.total}</button>
         <button onclick="window._pb.setFilter('draft')" class="px-3 py-1.5 rounded-lg text-xs font-medium ${filter === 'draft' ? 'bg-emerald-100 text-emerald-600 ring-1 ring-emerald-300' : 'text-gray-500 hover:bg-gray-100'}">Draft ${stats.draft}</button>
         <button onclick="window._pb.setFilter('active')" class="px-3 py-1.5 rounded-lg text-xs font-medium ${filter === 'active' ? 'bg-blue-100 text-blue-700 ring-1 ring-blue-300' : 'text-gray-500 hover:bg-gray-100'}">Active ${stats.sent}</button>
+        <button onclick="window._pb.setFilter('accepted')" class="px-3 py-1.5 rounded-lg text-xs font-medium ${filter === 'accepted' ? 'bg-green-100 text-green-700 ring-1 ring-green-300' : 'text-gray-500 hover:bg-gray-100'}">Accepted ${stats.accepted}</button>
+        <button onclick="window._pb.setFilter('declined')" class="px-3 py-1.5 rounded-lg text-xs font-medium ${filter === 'declined' ? 'bg-red-100 text-red-700 ring-1 ring-red-300' : 'text-gray-500 hover:bg-gray-100'}">Declined ${stats.declined}</button>
       </div>
     </div>
 
@@ -530,7 +550,7 @@ document.addEventListener('DOMContentLoaded', () => {
           </thead>
           <tbody class="divide-y divide-gray-100">
             ${proposals.map(p => {
-              const sc = { draft: 'bg-gray-100 text-gray-700', sent: 'bg-blue-100 text-blue-700', viewed: 'bg-indigo-100 text-indigo-700', paid: 'bg-green-100 text-green-700', overdue: 'bg-red-100 text-red-700', cancelled: 'bg-gray-100 text-gray-500' }[p.status] || 'bg-gray-100 text-gray-600';
+              const sc = { draft: 'bg-gray-100 text-gray-700', sent: 'bg-blue-100 text-blue-700', viewed: 'bg-indigo-100 text-indigo-700', accepted: 'bg-green-100 text-green-700', declined: 'bg-red-100 text-red-700', paid: 'bg-green-100 text-green-700', overdue: 'bg-red-100 text-red-700', cancelled: 'bg-gray-100 text-gray-500' }[p.status] || 'bg-gray-100 text-gray-600';
               return `<tr class="hover:bg-gray-50">
                 <td class="px-4 py-3 font-mono text-xs font-medium">${p.invoice_number}</td>
                 <td class="px-4 py-3">${p.customer_name || 'Unknown'}<br><span class="text-xs text-gray-400">${p.customer_company || ''}</span></td>
@@ -1344,7 +1364,7 @@ document.addEventListener('DOMContentLoaded', () => {
           const link = sendData.share_url || shareUrl;
           if (link) {
             const fullUrl = window.location.origin + link;
-            prompt('Proposal sent! Share this link with your customer:', fullUrl);
+            pbShareModal('Proposal Sent!', sendData.email_sent ? 'Email delivered to your customer. You can also share this link:' : 'Share this link with your customer:', fullUrl);
           } else {
             pbToast('Proposal saved and marked as sent!', 'success');
           }
@@ -1449,7 +1469,7 @@ document.addEventListener('DOMContentLoaded', () => {
     shareLink(id, token) {
       if (token) {
         const url = window.location.origin + '/proposal/view/' + token;
-        navigator.clipboard.writeText(url).then(() => pbToast('Link copied!', 'success')).catch(() => prompt('Share link:', url));
+        navigator.clipboard.writeText(url).then(() => pbToast('Link copied!', 'success')).catch(() => pbShareModal('Share Link', 'Copy the link below:', url));
       } else {
         pbToast('No share link available. Save the proposal first.', 'info');
       }

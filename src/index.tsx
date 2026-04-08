@@ -1722,7 +1722,7 @@ app.get('/proposal/view/:token', async (c) => {
           </div>
           <h3 class="text-lg font-bold ${invIsAccepted ? 'text-green-800' : 'text-red-800'}">${docLabel} ${invIsAccepted ? 'Accepted' : 'Declined'}</h3>
           <p class="text-sm ${invIsAccepted ? 'text-green-600' : 'text-red-600'} mt-1">${invProposal.signed_at ? 'on ' + new Date(invProposal.signed_at).toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' }) : ''}</p>
-          ${invProposal.customer_signature ? `<div class="mt-4"><p class="text-xs text-gray-400 mb-1">Signature</p><img src="${invProposal.customer_signature}" alt="Signature" class="max-h-16 mx-auto"></div>` : ''}
+          ${invProposal.customer_signature && invProposal.customer_signature.startsWith('data:image/') ? `<div class="mt-4"><p class="text-xs text-gray-400 mb-1">Signature</p><img src="${invProposal.customer_signature}" alt="Signature" class="max-h-16 mx-auto"></div>` : ''}
         </div>
       </div>`
         }
@@ -2104,7 +2104,7 @@ if(new URLSearchParams(location.search).get('print')==='1')setTimeout(function()
           </div>
           <h3 class="text-lg font-bold ${isAccepted ? 'text-green-800' : 'text-red-800'}">Proposal ${isAccepted ? 'Accepted' : 'Declined'}</h3>
           <p class="text-sm ${isAccepted ? 'text-green-600' : 'text-red-600'} mt-1">${isAccepted ? (proposal.accepted_at ? 'on ' + new Date(proposal.accepted_at).toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' }) : '') : (proposal.declined_at ? 'on ' + new Date(proposal.declined_at).toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' }) : '')}</p>
-          ${proposal.customer_signature ? `<div class="mt-4"><p class="text-xs text-gray-400 mb-1">Signature</p><img src="${proposal.customer_signature}" alt="Signature" class="max-h-16 mx-auto"></div>` : ''}
+          ${proposal.customer_signature && proposal.customer_signature.startsWith('data:image/') ? `<div class="mt-4"><p class="text-xs text-gray-400 mb-1">Signature</p><img src="${proposal.customer_signature}" alt="Signature" class="max-h-16 mx-auto"></div>` : ''}
         </div>
       </div>`}
 

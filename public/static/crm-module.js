@@ -84,6 +84,19 @@
     setTimeout(function() { t.remove(); }, 3000);
   }
 
+  function _crmShareModal(title, message, url) {
+    var overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center';
+    overlay.innerHTML = '<div style="background:white;border-radius:16px;padding:32px;max-width:480px;width:90%;box-shadow:0 25px 50px rgba(0,0,0,0.25)">' +
+      '<h3 style="font-size:18px;font-weight:700;color:#111;margin:0 0 8px">' + title + '</h3>' +
+      '<p style="font-size:13px;color:#6b7280;margin:0 0 16px">' + message + '</p>' +
+      '<div style="display:flex;gap:8px;margin-bottom:16px"><input type="text" readonly value="' + url.replace(/"/g, '&quot;') + '" style="flex:1;padding:10px 12px;border:1px solid #e5e7eb;border-radius:8px;font-size:13px;color:#374151;background:#f9fafb;outline:none" id="crm-share-url">' +
+      '<button onclick="navigator.clipboard.writeText(document.getElementById(\'crm-share-url\').value).then(function(){this.innerHTML=\'<i class=\\\'fas fa-check\\\'></i>\';this.style.background=\'#16a34a\'}.bind(this)).catch(function(){})" style="padding:10px 16px;background:#0ea5e9;color:white;border:none;border-radius:8px;font-weight:600;font-size:13px;cursor:pointer;white-space:nowrap"><i class="fas fa-copy" style="margin-right:4px"></i>Copy</button></div>' +
+      '<button onclick="this.closest(\'div\').parentElement.remove()" style="width:100%;padding:10px;background:#f3f4f6;border:none;border-radius:8px;font-weight:600;font-size:13px;color:#374151;cursor:pointer">Close</button></div>';
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
+  }
+
   // ============================================================
   // SELECT: Customer picker dropdown HTML
   // ============================================================
@@ -1262,7 +1275,7 @@
           navigator.clipboard.writeText(link).then(function() {
             toast('Link copied! Views: ' + (data.view_count || 0));
           }).catch(function() {
-            prompt('Copy this link:', link);
+            _crmShareModal('Share Proposal', 'Copy the link below:', link);
           });
         } else {
           toast('No shareable link — send the proposal first.', 'error');

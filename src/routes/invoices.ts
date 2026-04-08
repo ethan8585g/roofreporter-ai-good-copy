@@ -38,6 +38,10 @@ function generateNumber(prefix: string): string {
   return `${prefix}-${d}-${rand}`
 }
 
+function escapeHtml(str: string): string {
+  return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
 function generateShareToken(): string {
   const chars = 'abcdefghijklmnopqrstuvwxyz0123456789'
   let token = ''
@@ -373,15 +377,65 @@ invoiceRoutes.post('/:id/send', async (c) => {
       if (report) attachedReport = { report_id: report.id, order_number: report.order_number, property_address: report.property_address, report_url: `/api/reports/${report.id}/html` }
     }
 
-    await c.env.DB.prepare(`UPDATE invoices SET status = 'sent', sent_date = date('now'), updated_at = datetime('now') WHERE id = ?`).bind(id).run()
-
     const docType = invoice.document_type || 'invoice'
     const docLabel = docType.charAt(0).toUpperCase() + docType.slice(1)
+
+    // Actually send the email via Gmail OAuth2 if configured
+    let emailSent = false
+    let emailError = ''
+    const clientId = (c.env as any).GMAIL_CLIENT_ID
+    const clientSecret = (c.env as any).GMAIL_CLIENT_SECRET
+    const refreshToken = (c.env as any).GMAIL_REFRESH_TOKEN
+    if (clientId && clientSecret && refreshToken && invoice.customer_email) {
+      try {
+        const origin = new URL(c.req.url).origin
+        const viewUrl = `${origin}/proposal/view/${shareToken}`
+        const lineItems = items.results || []
+        let itemsHtml = ''
+        if (lineItems.length > 0) {
+          itemsHtml = '<table style="width:100%;border-collapse:collapse;margin:16px 0"><thead><tr style="background:#f8fafc"><th style="text-align:left;padding:8px;border-bottom:2px solid #e2e8f0;font-size:13px;color:#64748b">Item</th><th style="text-align:center;padding:8px;border-bottom:2px solid #e2e8f0;font-size:13px;color:#64748b">Qty</th><th style="text-align:right;padding:8px;border-bottom:2px solid #e2e8f0;font-size:13px;color:#64748b">Amount</th></tr></thead><tbody>'
+          for (const it of lineItems as any[]) {
+            itemsHtml += `<tr><td style="padding:8px;border-bottom:1px solid #f1f5f9;font-size:13px">${it.description}</td><td style="text-align:center;padding:8px;border-bottom:1px solid #f1f5f9;font-size:13px">${it.quantity}</td><td style="text-align:right;padding:8px;border-bottom:1px solid #f1f5f9;font-size:13px;font-weight:600">$${Number(it.amount).toFixed(2)}</td></tr>`
+          }
+          itemsHtml += '</tbody></table>'
+        }
+        const emailHtml = `
+<div style="max-width:600px;margin:0 auto;font-family:Inter,system-ui,sans-serif">
+  <div style="background:linear-gradient(135deg,#0ea5e9,#2563eb);padding:32px;border-radius:16px 16px 0 0;text-align:center">
+    <h1 style="color:white;font-size:22px;margin:0">Roof Manager</h1>
+    <p style="color:#bfdbfe;font-size:13px;margin:4px 0 0">Professional Roof Measurement Reports</p>
+  </div>
+  <div style="background:white;padding:32px;border:1px solid #e2e8f0;border-top:none">
+    <h2 style="color:#1e293b;font-size:18px;margin:0 0 8px">${docLabel} ${invoice.invoice_number}</h2>
+    <p style="color:#64748b;font-size:14px;margin:0 0 24px">Hi ${invoice.customer_name || 'there'},</p>
+    <p style="color:#475569;font-size:14px;line-height:1.6;margin:0 0 16px">Please find your ${docLabel.toLowerCase()} below. Click the link to view it online and accept.</p>
+    ${itemsHtml}
+    <div style="background:#f8fafc;border-radius:12px;padding:16px;margin:16px 0">
+      <div style="display:flex;justify-content:space-between;font-size:18px;font-weight:800;color:#0f172a"><span>Total</span><span>$${Number(invoice.total || 0).toFixed(2)} CAD</span></div>
+    </div>
+    <div style="text-align:center;margin:24px 0"><a href="${viewUrl}" style="display:inline-block;background:#0ea5e9;color:white;padding:14px 32px;border-radius:12px;text-decoration:none;font-size:16px;font-weight:700">View ${docLabel}</a></div>
+    ${invoice.valid_until ? `<p style="color:#64748b;font-size:12px;text-align:center">Valid until: ${invoice.valid_until}</p>` : ''}
+  </div>
+  <div style="background:#f8fafc;padding:16px;border-radius:0 0 16px 16px;text-align:center;border:1px solid #e2e8f0;border-top:none">
+    <p style="color:#94a3b8;font-size:11px;margin:0">Powered by Roof Manager — Canada's AI Roof Measurement Platform</p>
+  </div>
+</div>`
+        await sendGmailOAuth2(clientId, clientSecret, refreshToken, invoice.customer_email, `${docLabel} ${invoice.invoice_number} — $${Number(invoice.total || 0).toFixed(2)}`, emailHtml)
+        emailSent = true
+      } catch (e: any) {
+        emailError = e.message || 'Email send failed'
+      }
+    }
+
+    await c.env.DB.prepare(`UPDATE invoices SET status = 'sent', sent_date = date('now'), updated_at = datetime('now') WHERE id = ?`).bind(id).run()
+
     await c.env.DB.prepare(`INSERT INTO user_activity_log (company_id, action, details) VALUES (1, 'document_sent', ?)`).bind(`${docLabel} ${invoice.invoice_number} sent to ${invoice.customer_email}`).run().catch(() => {})
 
     return c.json({
       success: true,
-      message: `${docLabel} ${invoice.invoice_number} marked as sent`,
+      message: emailSent ? `${docLabel} ${invoice.invoice_number} emailed to ${invoice.customer_email}` : `${docLabel} ${invoice.invoice_number} marked as sent`,
+      email_sent: emailSent,
+      email_error: emailError || undefined,
       document_type: docType,
       customer_email: invoice.customer_email,
       customer_name: invoice.customer_name,
@@ -769,11 +823,20 @@ invoiceRoutes.post('/respond/:token', async (c) => {
     return c.json({ error: 'This proposal has already been ' + proposal.status }, 400)
   }
 
+  // Enforce valid_until expiry — reject acceptance of expired proposals
+  if (action === 'accept' && proposal.valid_until) {
+    const expiryDate = new Date(proposal.valid_until)
+    if (!isNaN(expiryDate.getTime()) && expiryDate < new Date()) {
+      return c.json({ error: 'This proposal has expired. Please contact the business for an updated quote.' }, 400)
+    }
+  }
+
   const newStatus = action === 'accept' ? 'accepted' : 'declined'
+  const safeSignature = signature && typeof signature === 'string' && signature.startsWith('data:image/') ? signature : null
 
   await c.env.DB.prepare(`
-    UPDATE invoices SET status = ?, customer_signature = ?, signed_at = datetime('now'), updated_at = datetime('now') WHERE id = ?
-  `).bind(newStatus, signature || null, proposal.id).run()
+    UPDATE invoices SET status = ?, customer_signature = ?, printed_name = ?, signed_at = datetime('now'), updated_at = datetime('now') WHERE id = ?
+  `).bind(newStatus, safeSignature, printed_name || null, proposal.id).run()
 
   // Email notification to the business owner (customer_id owner)
   try {
@@ -796,10 +859,10 @@ invoiceRoutes.post('/respond/:token', async (c) => {
     <table style="width:100%;border-collapse:collapse">
       <tr><td style="padding:8px 0;color:#64748b;font-size:13px;width:120px"><strong>Customer</strong></td><td style="padding:8px 0;font-size:14px;color:#1e293b">${proposal.customer_name || 'Unknown'}</td></tr>
       <tr><td style="padding:8px 0;color:#64748b;font-size:13px"><strong>Total Amount</strong></td><td style="padding:8px 0;font-size:14px;color:#1e293b;font-weight:700">$${Number(proposal.total || 0).toFixed(2)}</td></tr>
-      ${printed_name ? `<tr><td style="padding:8px 0;color:#64748b;font-size:13px"><strong>Signed By</strong></td><td style="padding:8px 0;font-size:14px;color:#1e293b">${printed_name}</td></tr>` : ''}
-      ${signed_date ? `<tr><td style="padding:8px 0;color:#64748b;font-size:13px"><strong>Date</strong></td><td style="padding:8px 0;font-size:14px;color:#1e293b">${signed_date}</td></tr>` : ''}
+      ${printed_name ? `<tr><td style="padding:8px 0;color:#64748b;font-size:13px"><strong>Signed By</strong></td><td style="padding:8px 0;font-size:14px;color:#1e293b">${escapeHtml(printed_name)}</td></tr>` : ''}
+      ${signed_date ? `<tr><td style="padding:8px 0;color:#64748b;font-size:13px"><strong>Date</strong></td><td style="padding:8px 0;font-size:14px;color:#1e293b">${escapeHtml(signed_date)}</td></tr>` : ''}
     </table>
-    ${signature ? `<div style="margin-top:16px;padding:12px;background:#f8fafc;border-radius:8px;text-align:center"><p style="font-size:11px;color:#94a3b8;margin:0 0 8px">Customer Signature</p><img src="${signature}" alt="Signature" style="max-height:60px"></div>` : ''}
+    ${signature && signature.startsWith('data:image/') ? `<div style="margin-top:16px;padding:12px;background:#f8fafc;border-radius:8px;text-align:center"><p style="font-size:11px;color:#94a3b8;margin:0 0 8px">Customer Signature</p><img src="${signature}" alt="Signature" style="max-height:60px"></div>` : ''}
   </div>
 </div>`
         sendGmailOAuth2(clientId, clientSecret, refreshToken, owner.email, `${emoji} ${docLabel} ${statusText}: ${proposal.invoice_number} — $${Number(proposal.total || 0).toFixed(2)}`, notifHtml, owner.email).catch(() => {})
