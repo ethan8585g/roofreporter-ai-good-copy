@@ -1315,7 +1315,6 @@ async function confirmTrace() {
       body: JSON.stringify({
         trace: orderState.roofTraceJson,
         address: orderState.address || `${orderState.lat}, ${orderState.lng}`,
-        default_pitch: 5.0,
         house_sqft: orderState.houseSqft || null
       })
     });
@@ -1422,7 +1421,6 @@ async function retryMeasurement() {
       body: JSON.stringify({
         trace: orderState.roofTraceJson,
         address: orderState.address || `${orderState.lat}, ${orderState.lng}`,
-        default_pitch: 5.0,
         house_sqft: orderState.houseSqft || null
       })
     });

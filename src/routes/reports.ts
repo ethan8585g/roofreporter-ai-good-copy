@@ -827,8 +827,26 @@ reportsRoutes.post('/calculate-from-trace', async (c) => {
       }
     }
 
-    // Use provided pitch or default to 5:12
-    const pitchRise = default_pitch || 5.0
+    // Fetch real pitch from Google Solar API using centroid of traced eave points
+    let pitchRise = default_pitch || 5.0
+    let pitchSource = 'default'
+    const solarApiKey = c.env.GOOGLE_SOLAR_API_KEY || c.env.GOOGLE_MAPS_API_KEY
+    if (solarApiKey && trace.eaves.length >= 3) {
+      try {
+        const centroidLat = trace.eaves.reduce((s: number, p: any) => s + p.lat, 0) / trace.eaves.length
+        const centroidLng = trace.eaves.reduce((s: number, p: any) => s + p.lng, 0) / trace.eaves.length
+        const solarResult = await fetchSolarPitchAndImagery(
+          centroidLat, centroidLng, solarApiKey, solarApiKey, house_sqft || 1500
+        )
+        if (solarResult.pitch_degrees > 0) {
+          pitchRise = Math.round(12 * Math.tan(solarResult.pitch_degrees * Math.PI / 180) * 10) / 10
+          pitchSource = 'solar_api'
+          console.log(`[CalculateFromTrace] Solar API pitch: ${solarResult.pitch_degrees}° → ${pitchRise}:12 (${solarResult.api_duration_ms}ms)`)
+        }
+      } catch (e: any) {
+        console.warn(`[CalculateFromTrace] Solar API pitch fetch failed (using default ${pitchRise}:12): ${e.message}`)
+      }
+    }
 
     // Convert trace UI format to engine payload
     const enginePayload = traceUiToEnginePayload(
@@ -850,11 +868,13 @@ reportsRoutes.post('/calculate-from-trace', async (c) => {
       `footprint=${report.key_measurements.total_projected_footprint_ft2}sqft, ` +
       `sloped=${report.key_measurements.total_roof_area_sloped_ft2}sqft, ` +
       `eave_pts=${report.key_measurements.num_eave_points}, ` +
-      `pitch=${report.key_measurements.dominant_pitch_label}`)
+      `pitch=${report.key_measurements.dominant_pitch_label}, ` +
+      `pitch_source=${pitchSource}`)
 
     // Return structured response for the order form UI
     return c.json({
       success: true,
+      pitch_source: pitchSource,
       calculation_ms: elapsed,
       engine_version: report.report_meta.engine_version,
 
