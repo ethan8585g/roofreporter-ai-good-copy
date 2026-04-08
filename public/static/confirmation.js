@@ -146,10 +146,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         <button onclick="generateDamageReport('${orderId}')" class="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium" id="genDamageBtn">
           <i class="fas fa-exclamation-triangle mr-2"></i>Damage Report
         </button>
-        <a href="/visualizer/${orderId}" target="_blank" class="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium">
-          <i class="fas fa-cube mr-2"></i>3D Visualizer
-        </a>
-        <a href="/" class="px-6 py-3 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors font-medium">
+<a href="/" class="px-6 py-3 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors font-medium">
           <i class="fas fa-plus mr-2"></i>New Order
         </a>
         <a href="/api/reports/${orderId}/html" target="_blank" class="px-6 py-3 bg-accent-500 text-white rounded-lg hover:bg-accent-600 transition-colors font-medium">
