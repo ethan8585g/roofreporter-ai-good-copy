@@ -43,8 +43,8 @@ async function getCalendarAuth(c: any): Promise<{ ownerId: number; accessToken: 
   if (!customer?.gmail_refresh_token) return null
 
   // Refresh access token
-  const clientId = (c.env as any).GMAIL_CLIENT_ID
-  let clientSecret = (c.env as any).GMAIL_CLIENT_SECRET || ''
+  const clientId = (c.env as any).GMAIL_CLIENT_ID2 || (c.env as any).GMAIL_CLIENT_ID
+  let clientSecret = (c.env as any).GMAIL_CLIENT_SECRET2 || (c.env as any).GMAIL_CLIENT_SECRET || ''
   if (!clientSecret) {
     try {
       const csRow = await c.env.DB.prepare(
