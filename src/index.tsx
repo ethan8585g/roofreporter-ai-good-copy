@@ -1559,14 +1559,14 @@ app.get('/report/share/:token', async (c) => {
     `).bind(token).first<any>()
 
     if (!row) {
-      return c.html(`<!DOCTYPE html><html><head><title>Report Not Found</title><link rel="stylesheet" href="/static/tailwind.css"></head>
+      return c.html(`<!DOCTYPE html><html><head><title>Report Not Found</title><link rel="stylesheet" href="/static/tailwind.css"><style>:root{--bg-page:#0A0A0A;--text-primary:#fff;--text-muted:#9ca3af}body.light-theme,.light-theme{--bg-page:#f3f4f6;--text-primary:#111827;--text-muted:#6b7280}.light-theme [style*="background:#0A0A0A"]{background:var(--bg-page) !important}</style><script>!function(){var t=localStorage.getItem('rc_theme_mode');if(t==='light'||(t==='auto'&&window.matchMedia('(prefers-color-scheme:light)').matches)){document.documentElement.classList.add('light-theme');document.addEventListener('DOMContentLoaded',function(){document.body.classList.add('light-theme')})}}()</script></head>
 <body class="min-h-screen flex items-center justify-center" style="background:#0A0A0A">
 <div class="text-center max-w-md mx-auto px-4">
   <div class="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
     <i class="fas fa-file-times text-red-500 text-2xl"></i>
   </div>
-  <h1 class="text-2xl font-bold text-gray-800 mb-2">Report Not Found</h1>
-  <p class="text-gray-500">This report link is invalid or has expired.</p>
+  <h1 class="text-2xl font-bold mb-2" style="color:var(--text-primary)">Report Not Found</h1>
+  <p style="color:var(--text-muted)">This report link is invalid or has expired.</p>
 </div>
 <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
 </body></html>`, 404)
@@ -1582,9 +1582,9 @@ app.get('/report/share/:token', async (c) => {
     const reportHtml = (h.trimStart().startsWith('<!DOCTYPE') || h.trimStart().startsWith('<html')) ? h : ''
 
     if (!reportHtml) {
-      return c.html(`<!DOCTYPE html><html><head><title>Report Unavailable</title><link rel="stylesheet" href="/static/tailwind.css"></head>
+      return c.html(`<!DOCTYPE html><html><head><title>Report Unavailable</title><link rel="stylesheet" href="/static/tailwind.css"><style>:root{--bg-page:#0A0A0A;--text-primary:#fff;--text-muted:#9ca3af}body.light-theme,.light-theme{--bg-page:#f3f4f6;--text-primary:#111827;--text-muted:#6b7280}.light-theme [style*="background:#0A0A0A"]{background:var(--bg-page) !important}</style><script>!function(){var t=localStorage.getItem('rc_theme_mode');if(t==='light'||(t==='auto'&&window.matchMedia('(prefers-color-scheme:light)').matches)){document.documentElement.classList.add('light-theme');document.addEventListener('DOMContentLoaded',function(){document.body.classList.add('light-theme')})}}()</script></head>
 <body class="min-h-screen flex items-center justify-center" style="background:#0A0A0A">
-<div class="text-center"><h1 class="text-xl font-bold text-gray-700 mb-2">Report Not Available</h1><p class="text-gray-500">This report has not been generated yet.</p></div>
+<div class="text-center"><h1 class="text-xl font-bold mb-2" style="color:var(--text-primary)">Report Not Available</h1><p style="color:var(--text-muted)">This report has not been generated yet.</p></div>
 </body></html>`, 404)
     }
 
@@ -2242,7 +2242,7 @@ app.get('/invoice/view/:token', async (c) => {
       "SELECT i.*, c.name as customer_name, c.email as customer_email FROM invoices i LEFT JOIN customers c ON i.customer_id = c.id WHERE i.share_token = ?"
     ).bind(token).first<any>()
 
-    if (!invoice) return c.html('<html><body style="background:#0A0A0A;color:white;font-family:Inter,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh"><div style="text-align:center"><h1>Invoice Not Found</h1><p style="color:#888">This invoice link is invalid or has expired.</p><a href="/" style="color:#00FF88">Go to Roof Manager</a></div></body></html>')
+    if (!invoice) return c.html('<html><head><style>:root{--bg-page:#0A0A0A;--text-primary:#fff;--text-muted:#888;--accent:#00FF88}body.light-theme,.light-theme{--bg-page:#f3f4f6;--text-primary:#111827;--text-muted:#6b7280;--accent:#2563eb}.light-theme [style*="background:#0A0A0A"]{background:var(--bg-page) !important}</style><script>!function(){var t=localStorage.getItem("rc_theme_mode");if(t==="light"||(t==="auto"&&window.matchMedia("(prefers-color-scheme:light)").matches)){document.documentElement.classList.add("light-theme");document.addEventListener("DOMContentLoaded",function(){document.body.classList.add("light-theme")})}}()</script></head><body style="background:#0A0A0A;color:var(--text-primary);font-family:Inter,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh"><div style="text-align:center"><h1>Invoice Not Found</h1><p style="color:var(--text-muted)">This invoice link is invalid or has expired.</p><a href="/" style="color:var(--accent)">Go to Roof Manager</a></div></body></html>')
 
     // Track view
     c.executionCtx.waitUntil(
@@ -2255,7 +2255,7 @@ app.get('/invoice/view/:token', async (c) => {
 
     return c.html('<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Invoice ' + (invoice.invoice_number || '') + ' — Roof Manager</title><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet"><style>*{font-family:Inter,sans-serif;margin:0;padding:0;box-sizing:border-box}body{background:#f8f9fa;color:#1a1a2e;padding:20px}@media print{body{padding:0}.no-print{display:none!important}}</style></head><body><div style="max-width:800px;margin:0 auto"><div class="no-print" style="background:#0A0A0A;color:white;padding:12px 20px;border-radius:12px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between"><span style="font-weight:700">Roof Manager Invoice</span><div><button onclick="window.print()" style="background:#00FF88;color:#0A0A0A;border:none;padding:8px 16px;border-radius:8px;font-weight:700;cursor:pointer;margin-right:8px">Print / Save PDF</button></div></div><div style="background:white;border-radius:12px;box-shadow:0 2px 20px rgba(0,0,0,0.08);padding:40px"><div style="display:flex;justify-content:space-between;margin-bottom:30px"><div><h1 style="font-size:28px;font-weight:800;color:#1a1a2e">INVOICE</h1><p style="color:#888;font-size:14px">#' + (invoice.invoice_number || 'N/A') + '</p></div><div style="text-align:right"><p style="font-weight:700;color:#1a1a2e">' + (invoice.currency || 'CAD') + ' ' + Number(invoice.total || 0).toFixed(2) + '</p><p style="font-size:13px;color:#888">Status: <span style="color:' + (invoice.status === 'paid' ? '#00FF88' : '#f59e0b') + ';font-weight:700;text-transform:uppercase">' + (invoice.status || 'draft') + '</span></p></div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:30px"><div><h3 style="font-size:12px;color:#888;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Bill To</h3><p style="font-weight:600">' + (invoice.customer_name || 'Customer') + '</p><p style="color:#666;font-size:14px">' + (invoice.customer_email || '') + '</p></div><div style="text-align:right"><h3 style="font-size:12px;color:#888;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Details</h3><p style="font-size:14px;color:#666">Issued: ' + (invoice.issue_date || invoice.created_at || '').substring(0, 10) + '</p><p style="font-size:14px;color:#666">Due: ' + (invoice.due_date || 'On receipt') + '</p></div></div>' + (lineItems.length > 0 ? '<table style="width:100%;border-collapse:collapse;margin-bottom:20px"><thead><tr style="border-bottom:2px solid #eee"><th style="text-align:left;padding:10px 0;font-size:13px;color:#888;text-transform:uppercase">Description</th><th style="text-align:center;padding:10px 0;font-size:13px;color:#888">Qty</th><th style="text-align:right;padding:10px 0;font-size:13px;color:#888">Price</th><th style="text-align:right;padding:10px 0;font-size:13px;color:#888">Total</th></tr></thead><tbody>' + lineItems.map((item: any) => '<tr style="border-bottom:1px solid #f0f0f0"><td style="padding:12px 0;font-size:14px">' + (item.description || '') + '</td><td style="text-align:center;padding:12px 0;font-size:14px">' + (item.quantity || 1) + '</td><td style="text-align:right;padding:12px 0;font-size:14px">$' + Number(item.unit_price || 0).toFixed(2) + '</td><td style="text-align:right;padding:12px 0;font-size:14px;font-weight:600">$' + Number(item.total || 0).toFixed(2) + '</td></tr>').join('') + '</tbody></table>' : '') + '<div style="border-top:2px solid #eee;padding-top:16px;text-align:right"><p style="font-size:14px;color:#666;margin-bottom:4px">Subtotal: $' + Number(invoice.subtotal || 0).toFixed(2) + '</p>' + (Number(invoice.tax_amount || 0) > 0 ? '<p style="font-size:14px;color:#666;margin-bottom:4px">Tax: $' + Number(invoice.tax_amount).toFixed(2) + '</p>' : '') + (Number(invoice.discount_amount || 0) > 0 ? '<p style="font-size:14px;color:#666;margin-bottom:4px">Discount: -$' + Number(invoice.discount_amount).toFixed(2) + '</p>' : '') + '<p style="font-size:20px;font-weight:800;color:#1a1a2e;margin-top:8px">Total: ' + (invoice.currency || 'CAD') + ' $' + Number(invoice.total || 0).toFixed(2) + '</p></div>' + (invoice.notes ? '<div style="margin-top:24px;padding:16px;background:#f8f9fa;border-radius:8px"><h3 style="font-size:12px;color:#888;text-transform:uppercase;margin-bottom:8px">Notes</h3><p style="font-size:14px;color:#666">' + invoice.notes + '</p></div>' : '') + '</div><div class="no-print" style="text-align:center;margin-top:20px;color:#888;font-size:13px"><p>Powered by <a href="https://www.roofmanager.ca" style="color:#00FF88;text-decoration:none;font-weight:600">Roof Manager</a></p></div></div></body></html>')
   } catch (err: any) {
-    return c.html('<html><body style="background:#0A0A0A;color:white;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh"><div style="text-align:center"><h1>Error</h1><p style="color:#888">Unable to load invoice.</p></div></body></html>')
+    return c.html('<html><head><style>:root{--bg-page:#0A0A0A;--text-primary:#fff;--text-muted:#888}body.light-theme,.light-theme{--bg-page:#f3f4f6;--text-primary:#111827;--text-muted:#6b7280}.light-theme [style*="background:#0A0A0A"]{background:var(--bg-page) !important}</style><script>!function(){var t=localStorage.getItem("rc_theme_mode");if(t==="light"||(t==="auto"&&window.matchMedia("(prefers-color-scheme:light)").matches)){document.documentElement.classList.add("light-theme");document.addEventListener("DOMContentLoaded",function(){document.body.classList.add("light-theme")})}}()</script></head><body style="background:#0A0A0A;color:var(--text-primary);font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh"><div style="text-align:center"><h1>Error</h1><p style="color:var(--text-muted)">Unable to load invoice.</p></div></body></html>')
   }
 })
 
@@ -2432,6 +2432,35 @@ body.light-theme,.light-theme{--bg-page:#f3f4f6;--bg-card:#fff;--bg-card-hover:#
 .light-theme table td{color:#374151 !important}
 .light-theme table tr{border-color:#e5e7eb !important}
 .light-theme .rounded-2xl,.light-theme .rounded-xl{border-color:#e5e7eb !important}
+.light-theme .bg-gray-700{background-color:#e5e7eb !important}
+.light-theme .bg-gray-800{background-color:#f3f4f6 !important}
+.light-theme .bg-gray-900,.light-theme.bg-gray-900{background-color:#f9fafb !important}
+.light-theme .bg-gray-900\/50{background-color:rgba(249,250,251,0.5) !important}
+.light-theme .bg-slate-700{background-color:#e2e8f0 !important}
+.light-theme .bg-slate-800{background-color:#f1f5f9 !important}
+.light-theme .bg-slate-900{background-color:#f8fafc !important}
+.light-theme .bg-\[\#0f172a\]{background-color:#f8fafc !important}
+.light-theme .bg-\[\#0a0a0a\]{background-color:#f3f4f6 !important}
+.light-theme .bg-\[\#1a1a2e\]{background-color:#f3f4f6 !important}
+.light-theme [style*="background:#0f172a"]{background:#f8fafc !important}
+.light-theme [style*="background:#1a1a2e"]{background:#f3f4f6 !important}
+.light-theme [style*="background: #0f172a"]{background:#f8fafc !important}
+.light-theme .border-gray-700,.light-theme .border-gray-800{border-color:#e5e7eb !important}
+.light-theme .border-slate-700,.light-theme .border-slate-800{border-color:#e2e8f0 !important}
+.light-theme .divide-gray-700>:not([hidden])~:not([hidden]),.light-theme .divide-gray-800>:not([hidden])~:not([hidden]){border-color:#e5e7eb !important}
+.light-theme .hover\:bg-gray-600:hover{background-color:#d1d5db !important}
+.light-theme .hover\:bg-gray-700:hover{background-color:#e5e7eb !important}
+.light-theme .hover\:bg-gray-800:hover{background-color:#f3f4f6 !important}
+.light-theme .hover\:bg-gray-800\/50:hover{background-color:rgba(243,244,246,0.5) !important}
+.light-theme .hover\:bg-slate-700:hover{background-color:#e2e8f0 !important}
+.light-theme .hover\:border-\[\#00FF88\]\/30:hover{border-color:rgba(37,99,235,0.3) !important}
+.light-theme .text-gray-600{color:#4b5563 !important}
+.light-theme .text-slate-300,.light-theme .text-slate-400{color:#64748b !important}
+.light-theme .ring-gray-700,.light-theme .ring-gray-800{--tw-ring-color:#e5e7eb !important}
+.light-theme .focus\:ring-\[\#00FF88\]:focus{--tw-ring-color:#2563eb !important}
+.light-theme ::-webkit-scrollbar-track{background:#f3f4f6 !important}
+.light-theme ::-webkit-scrollbar-thumb{background:#d1d5db !important}
+.light-theme .sa-sidebar{background-color:#ffffff !important;border-color:#e5e7eb !important}
 </style>
 <script>!function(){var t=localStorage.getItem('rc_theme_mode');if(t==='light'){document.documentElement.classList.add('light-theme');document.addEventListener('DOMContentLoaded',function(){document.body.classList.add('light-theme')})}else if(t==='auto'&&window.matchMedia('(prefers-color-scheme:light)').matches){document.documentElement.classList.add('light-theme');document.addEventListener('DOMContentLoaded',function(){document.body.classList.add('light-theme')})}}()</script>
   <script>if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js')}</script>`
