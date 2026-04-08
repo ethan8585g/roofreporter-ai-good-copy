@@ -1595,6 +1595,12 @@ customerAuthRoutes.get('/gcal/auth-url', async (c) => {
   authUrl.searchParams.set('prompt', 'consent')
   authUrl.searchParams.set('state', state)
 
+  // Get the logged-in customer's email to hint Google which account to use
+  const custRow = await c.env.DB.prepare('SELECT email FROM customers WHERE id = ?').bind(customerId).first<any>()
+  if (custRow?.email) {
+    authUrl.searchParams.set('login_hint', custRow.email)
+  }
+
   return c.json({ url: authUrl.toString() })
 })
 
@@ -1686,9 +1692,14 @@ customerAuthRoutes.get('/gcal/callback', async (c) => {
   } catch {}
 
   // Store tokens on the customer record
-  await c.env.DB.prepare(`
+  const dbResult = await c.env.DB.prepare(`
     UPDATE customers SET gmail_refresh_token = ?, gmail_connected_email = ?, gmail_connected_at = datetime('now'), gcal_oauth_state = NULL WHERE id = ?
   `).bind(tokenData.refresh_token, gcalEmail, customerId).run()
+
+  // Verify it was stored
+  const verify = await c.env.DB.prepare(
+    'SELECT gmail_refresh_token, gmail_connected_email FROM customers WHERE id = ?'
+  ).bind(customerId).first<any>()
 
   return c.html(`<!DOCTYPE html>
 <html><head><title>Google Calendar Connected</title>
@@ -1702,6 +1713,7 @@ customerAuthRoutes.get('/gcal/callback', async (c) => {
   <h2 class="text-xl font-bold text-white mb-2">Calendar Connected!</h2>
   <p class="text-gray-400 mb-1">Successfully connected:</p>
   <p class="text-blue-400 font-semibold mb-4">${gcalEmail}</p>
+  <p class="text-xs text-gray-600 mb-2">DEBUG: customerId=${customerId}, dbChanges=${dbResult?.meta?.changes}, verified=${!!verify?.gmail_refresh_token}, verifyEmail=${verify?.gmail_connected_email}</p>
   <p class="text-sm text-gray-500 mb-6">Your Google Calendar events will now appear on your dashboard. This window will close automatically.</p>
   <button onclick="window.close()" class="bg-blue-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-blue-700">Close Window</button>
 </div>
@@ -1730,7 +1742,10 @@ customerAuthRoutes.get('/gcal/status', async (c) => {
   return c.json({
     connected: !!(customer?.gmail_refresh_token),
     email: customer?.gmail_connected_email || null,
-    connected_at: customer?.gmail_connected_at || null
+    connected_at: customer?.gmail_connected_at || null,
+    _debug_customer_id: session.customer_id,
+    _debug_has_token: !!customer?.gmail_refresh_token,
+    _debug_customer_found: !!customer
   })
 })
 

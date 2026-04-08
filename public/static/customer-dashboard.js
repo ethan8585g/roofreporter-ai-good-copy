@@ -1074,11 +1074,16 @@ window.addEventListener('message', function(event) {
 // Check Google Calendar connection status
 function _gcalCheckStatus() {
   var token = localStorage.getItem('rc_customer_token') || '';
+  console.log('[GCAL DEBUG] _gcalCheckStatus called, token present:', !!token, 'token length:', token.length);
   fetch('/api/customer/gcal/status', {
     headers: { 'Authorization': 'Bearer ' + token }
   })
-  .then(function(r) { return r.json(); })
+  .then(function(r) {
+    console.log('[GCAL DEBUG] /gcal/status response status:', r.status);
+    return r.json();
+  })
   .then(function(data) {
+    console.log('[GCAL DEBUG] /gcal/status response data:', JSON.stringify(data));
     if (data.connected) {
       localStorage.setItem('rc_gcal_sync', '1');
       var toggle = document.getElementById('gcal-sync-toggle');
@@ -1090,7 +1095,7 @@ function _gcalCheckStatus() {
       if (toggle) toggle.checked = false;
     }
   })
-  .catch(function() {});
+  .catch(function(err) { console.log('[GCAL DEBUG] /gcal/status error:', err); });
 }
 
 // Fetch Google Calendar events and merge into dashboard calendar

@@ -2374,6 +2374,8 @@ function getHeadTags() {
   <meta name="google-site-verification" content="CvzH14V1vTrop4cCx2z90ZUFnt4GJJNr1KkgiywoO2g" />
   <meta name="theme-color" content="#00FF88">
   <link rel="alternate" hreflang="en-CA" href="https://www.roofmanager.ca/">
+  <link rel="alternate" hreflang="en" href="https://www.roofmanager.ca/">
+  <link rel="alternate" hreflang="x-default" href="https://www.roofmanager.ca/">
   <meta name="geo.region" content="CA-AB">
   <meta name="geo.placename" content="Alberta, Canada">
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
@@ -2616,7 +2618,7 @@ function getSuperAdminDashboardHTML() {
           <i class="fas fa-crown text-white text-sm"></i>
         </div>
         <div class="leading-tight">
-          <span class="text-white font-bold text-sm">ROOFREPORTERAI</span>
+          <span class="text-white font-bold text-sm">Roof Manager</span>
           <span class="text-gray-400 text-[10px] block -mt-0.5">Super Admin Command Center</span>
         </div>
       </div>
@@ -2790,7 +2792,7 @@ function getAdminPageHTML() {
           <i class="fas fa-shield-alt text-white text-sm"></i>
         </div>
         <div class="leading-tight">
-          <span class="text-white font-bold text-sm">ROOFREPORTERAI</span>
+          <span class="text-white font-bold text-sm">Roof Manager</span>
           <span class="text-gray-400 text-[10px] block -mt-0.5">Admin Control Panel</span>
         </div>
       </div>
