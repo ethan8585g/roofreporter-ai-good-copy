@@ -53,31 +53,14 @@ function renderTeam() {
 
   var html = '';
 
-  // ── Header + billing summary ──
-  html += '<div class="bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-2xl p-6 text-white mb-6">';
-  html += '  <div class="flex items-center justify-between">';
-  html += '    <div>';
-  html += '      <h2 class="text-2xl font-bold"><i class="fas fa-users-cog mr-2"></i>Sales Team</h2>';
-  html += '      <p class="text-emerald-400 mt-1">Add team members to your account — full CRM, reports, and AI access</p>';
-  html += '    </div>';
-  html += '    <div class="text-right">';
-  html += '      <div class="text-3xl font-black">' + activeMembers.length + '</div>';
-  html += '      <div class="text-emerald-400 text-sm">active members</div>';
-  html += '    </div>';
-  html += '  </div>';
-  if (activeMembers.length > 0) {
-    html += '  <div class="mt-4 bg-[#111111]/10 rounded-lg px-4 py-2 flex items-center justify-between">';
-    html += '    <span class="text-emerald-400"><i class="fas fa-credit-card mr-2"></i>Monthly billing</span>';
-    html += '    <span class="text-xl font-bold">$' + monthlyCost + '.00 <span class="text-sm font-normal text-emerald-400">/month</span></span>';
-    html += '  </div>';
-  }
-  html += '</div>';
-
-  // ── Invite button ──
+  // ── Header ──
   html += '<div class="flex items-center justify-between mb-6">';
-  html += '  <h3 class="text-lg font-bold text-gray-100"><i class="fas fa-user-friends mr-2 text-emerald-400"></i>Team Roster</h3>';
-  html += '  <button onclick="showInviteModal()" class="bg-emerald-500/15 hover:bg-emerald-500/15 text-white font-semibold py-2.5 px-5 rounded-lg text-sm transition-all hover:scale-105 shadow-lg shadow-emerald-500/25">';
-  html += '    <i class="fas fa-user-plus mr-2"></i>Invite Team Member';
+  html += '  <div>';
+  html += '    <h2 class="text-xl font-bold text-gray-100"><i class="fas fa-users-cog mr-2 text-emerald-400"></i>Sales Team</h2>';
+  html += '    <p class="text-sm text-gray-500 mt-0.5">' + activeMembers.length + ' active member' + (activeMembers.length !== 1 ? 's' : '') + ' &nbsp;&middot;&nbsp; $50/user/month</p>';
+  html += '  </div>';
+  html += '  <button onclick="showInviteModal()" class="bg-emerald-500/15 hover:bg-emerald-500/25 text-white font-semibold py-2.5 px-5 rounded-lg text-sm transition-all hover:scale-105">';
+  html += '    <i class="fas fa-user-plus mr-2"></i>Invite Member';
   html += '  </button>';
   html += '</div>';
 
@@ -88,7 +71,6 @@ function renderTeam() {
     html += '<thead class="bg-[#0A0A0A] border-b"><tr>';
     html += '<th class="text-left px-4 py-3 font-semibold text-gray-400">Member</th>';
     html += '<th class="text-left px-4 py-3 font-semibold text-gray-400">Role</th>';
-    html += '<th class="text-left px-4 py-3 font-semibold text-gray-400">Status</th>';
     html += '<th class="text-left px-4 py-3 font-semibold text-gray-400">Since</th>';
     html += '<th class="text-right px-4 py-3 font-semibold text-gray-400">Actions</th>';
     html += '</tr></thead><tbody>';
@@ -110,16 +92,17 @@ function renderTeam() {
         ? '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-500/15 text-blue-400"><i class="fas fa-shield-alt mr-1"></i>Admin</span>'
         : '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-500/100/15 text-blue-400"><i class="fas fa-user mr-1"></i>Member</span>';
       html += '</td>';
-      html += '<td class="px-4 py-3"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-400"><i class="fas fa-circle text-green-500 mr-1" style="font-size:6px"></i>Active</span></td>';
       html += '<td class="px-4 py-3 text-gray-500 text-xs">' + (m.joined_at ? new Date(m.joined_at).toLocaleDateString() : '-') + '</td>';
       html += '<td class="px-4 py-3 text-right">';
-      html += '  <div class="flex items-center justify-end gap-1">';
-      html += '    <button onclick="toggleRole(' + m.id + ',\'' + (m.role === 'admin' ? 'member' : 'admin') + '\')" class="text-gray-400 hover:text-blue-400 p-1.5 rounded transition-colors" title="' + (m.role === 'admin' ? 'Demote to Member' : 'Promote to Admin') + '">';
-      html += '      <i class="fas fa-' + (m.role === 'admin' ? 'user' : 'shield-alt') + '"></i>';
-      html += '    </button>';
-      html += '    <button onclick="showPermModal(' + m.id + ',\'' + escHtml(m.name) + '\')" class="text-gray-400 hover:text-emerald-400 p-1.5 rounded transition-colors" title="Edit Permissions"><i class="fas fa-sliders-h"></i></button>';
-      html += '    <button onclick="suspendMember(' + m.id + ')" class="text-gray-400 hover:text-blue-400 p-1.5 rounded transition-colors" title="Suspend"><i class="fas fa-pause"></i></button>';
-      html += '    <button onclick="removeMember(' + m.id + ',\'' + escHtml(m.name) + '\')" class="text-gray-400 hover:text-red-400 p-1.5 rounded transition-colors" title="Remove"><i class="fas fa-user-minus"></i></button>';
+      html += '  <div class="relative inline-block">';
+      html += '    <button onclick="toggleActionMenu(' + m.id + ',event)" class="text-gray-400 hover:text-gray-200 p-2 rounded-lg hover:bg-white/5 transition-colors"><i class="fas fa-ellipsis-h"></i></button>';
+      html += '    <div id="action-menu-' + m.id + '" class="hidden absolute right-0 mt-1 w-48 bg-[#1a1a1a] border border-white/10 rounded-lg shadow-xl z-10 py-1">';
+      html += '      <button onclick="toggleRole(' + m.id + ',\'' + (m.role === 'admin' ? 'member' : 'admin') + '\');closeActionMenus()" class="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-white/5 flex items-center gap-2"><i class="fas fa-' + (m.role === 'admin' ? 'user' : 'shield-alt') + ' w-4 text-center text-gray-400 text-xs"></i>' + (m.role === 'admin' ? 'Demote to Member' : 'Promote to Admin') + '</button>';
+      html += '      <button onclick="showPermModal(' + m.id + ',\'' + escHtml(m.name) + '\');closeActionMenus()" class="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-white/5 flex items-center gap-2"><i class="fas fa-sliders-h w-4 text-center text-gray-400 text-xs"></i>Edit Permissions</button>';
+      html += '      <button onclick="suspendMember(' + m.id + ');closeActionMenus()" class="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-white/5 flex items-center gap-2"><i class="fas fa-pause w-4 text-center text-gray-400 text-xs"></i>Suspend</button>';
+      html += '      <div class="border-t border-white/10 my-1"></div>';
+      html += '      <button onclick="removeMember(' + m.id + ',\'' + escHtml(m.name) + '\');closeActionMenus()" class="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-red-500/10 flex items-center gap-2"><i class="fas fa-user-minus w-4 text-center text-xs"></i>Remove</button>';
+      html += '    </div>';
       html += '  </div>';
       html += '</td>';
       html += '</tr>';
@@ -172,35 +155,41 @@ function renderTeam() {
     html += '</div></div>';
   }
 
-  // ── Pricing info ──
-  html += '<div class="bg-[#0A0A0A] rounded-xl border p-6">';
-  html += '  <h3 class="font-bold text-gray-300 mb-3"><i class="fas fa-tag mr-2 text-emerald-400"></i>Team Pricing</h3>';
-  html += '  <div class="grid grid-cols-1 md:grid-cols-3 gap-4">';
-  html += '    <div class="bg-[#111111] rounded-lg p-4 border text-center">';
-  html += '      <div class="text-3xl font-black text-emerald-400">$50</div>';
-  html += '      <div class="text-gray-500 text-sm">per user / month</div>';
-  html += '    </div>';
-  html += '    <div class="bg-[#111111] rounded-lg p-4 border">';
-  html += '      <div class="font-semibold text-gray-300 mb-2">Each member gets:</div>';
-  html += '      <ul class="text-sm text-gray-400 space-y-1">';
-  html += '        <li><i class="fas fa-check text-emerald-400 mr-1"></i>Order roof reports</li>';
-  html += '        <li><i class="fas fa-check text-emerald-400 mr-1"></i>Full CRM access</li>';
-  html += '        <li><i class="fas fa-check text-emerald-400 mr-1"></i>AI Roofer Secretary</li>';
-  html += '        <li><i class="fas fa-check text-emerald-400 mr-1"></i>Virtual Try-On</li>';
-  html += '        <li><i class="fas fa-check text-emerald-400 mr-1"></i>D2D Manager</li>';
-  html += '      </ul>';
-  html += '    </div>';
-  html += '    <div class="bg-[#111111] rounded-lg p-4 border">';
-  html += '      <div class="font-semibold text-gray-300 mb-2">Team billing:</div>';
-  html += '      <ul class="text-sm text-gray-400 space-y-1">';
-  html += '        <li><i class="fas fa-info-circle text-blue-400 mr-1"></i>Billed to account owner</li>';
-  html += '        <li><i class="fas fa-info-circle text-blue-400 mr-1"></i>Suspend anytime to pause billing</li>';
-  html += '        <li><i class="fas fa-info-circle text-blue-400 mr-1"></i>No contracts, cancel anytime</li>';
-  html += '        <li><i class="fas fa-info-circle text-blue-400 mr-1"></i>Report credits shared with team</li>';
-  html += '      </ul>';
+  // ── Pricing info (collapsed by default when team already has members) ──
+  var pricingOpen = activeMembers.length === 0;
+  html += '<details' + (pricingOpen ? ' open' : '') + '>';
+  html += '  <summary class="cursor-pointer list-none flex items-center justify-between px-4 py-3 bg-[#0A0A0A] rounded-xl border text-sm font-semibold text-gray-400 hover:text-gray-200 select-none transition-colors">';
+  html += '    <span><i class="fas fa-tag mr-2 text-emerald-400"></i>Team Pricing &nbsp;&middot;&nbsp; $50/user/month</span>';
+  html += '    <i class="fas fa-chevron-down text-xs"></i>';
+  html += '  </summary>';
+  html += '  <div class="mt-2 bg-[#0A0A0A] rounded-xl border p-6">';
+  html += '    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">';
+  html += '      <div class="bg-[#111111] rounded-lg p-4 border text-center">';
+  html += '        <div class="text-3xl font-black text-emerald-400">$50</div>';
+  html += '        <div class="text-gray-500 text-sm">per user / month</div>';
+  html += '      </div>';
+  html += '      <div class="bg-[#111111] rounded-lg p-4 border">';
+  html += '        <div class="font-semibold text-gray-300 mb-2">Each member gets:</div>';
+  html += '        <ul class="text-sm text-gray-400 space-y-1">';
+  html += '          <li><i class="fas fa-check text-emerald-400 mr-1"></i>Order roof reports</li>';
+  html += '          <li><i class="fas fa-check text-emerald-400 mr-1"></i>Full CRM access</li>';
+  html += '          <li><i class="fas fa-check text-emerald-400 mr-1"></i>AI Roofer Secretary</li>';
+  html += '          <li><i class="fas fa-check text-emerald-400 mr-1"></i>Virtual Try-On</li>';
+  html += '          <li><i class="fas fa-check text-emerald-400 mr-1"></i>D2D Manager</li>';
+  html += '        </ul>';
+  html += '      </div>';
+  html += '      <div class="bg-[#111111] rounded-lg p-4 border">';
+  html += '        <div class="font-semibold text-gray-300 mb-2">Team billing:</div>';
+  html += '        <ul class="text-sm text-gray-400 space-y-1">';
+  html += '          <li><i class="fas fa-info-circle text-blue-400 mr-1"></i>Billed to account owner</li>';
+  html += '          <li><i class="fas fa-info-circle text-blue-400 mr-1"></i>Suspend anytime to pause billing</li>';
+  html += '          <li><i class="fas fa-info-circle text-blue-400 mr-1"></i>No contracts, cancel anytime</li>';
+  html += '          <li><i class="fas fa-info-circle text-blue-400 mr-1"></i>Report credits shared with team</li>';
+  html += '        </ul>';
+  html += '      </div>';
   html += '    </div>';
   html += '  </div>';
-  html += '</div>';
+  html += '</details>';
 
   // ── Invite modal (hidden) ──
   html += renderInviteModal();
@@ -441,6 +430,23 @@ async function leaveTeam() {
   if (!(await window.rmConfirm('Are you sure you want to leave this team? You will lose access to the team account.'))) return
   await fetch('/api/team/leave', { method: 'POST', headers: authHeaders() });
   window.location.href = '/customer/dashboard';
+}
+
+// ── Action menu (••• per-row dropdown) ──
+function toggleActionMenu(memberId, event) {
+  event.stopPropagation();
+  closeActionMenus();
+  var menu = document.getElementById('action-menu-' + memberId);
+  if (menu) {
+    menu.classList.remove('hidden');
+    document.addEventListener('click', closeActionMenus, { once: true });
+  }
+}
+
+function closeActionMenus() {
+  document.querySelectorAll('[id^="action-menu-"]').forEach(function(m) {
+    m.classList.add('hidden');
+  });
 }
 
 // ── Utility ──
