@@ -62,8 +62,7 @@ const state = {
   tracePolylines: [],
   traceEavesPolygon: null,
   traceMarkers: [],
-  traceEavesSaved: false,   // true when user has saved eaves and cleared overlays
-  attractMode: false,        // true = show all layers simultaneously (read-only overlay)
+  traceLayers: { eaves: true, ridge: true, hip: true, valley: true }, // per-layer visibility
   dbInitialized: false,
   submitting: false
 };
@@ -842,19 +841,28 @@ function renderStep2TracePhase() {
           <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
             <h4 class="text-xs font-bold text-gray-500 uppercase tracking-wide mb-3">Drawing Mode</h4>
             <div class="space-y-2">
-              ${Object.entries(modeInfo).map(([key, info]) => `
-                <button onclick="setTraceMode('${key}')"
-                  class="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all
-                    ${state.traceMode === key ? 'bg-gray-800 text-white shadow-md' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'}"
-                  style="${state.traceMode === key ? '' : ''}">
-                  <div class="w-3 h-3 rounded-full" style="background:${info.color}"></div>
-                  <i class="fas ${info.icon} text-xs"></i>
-                  <span>${info.label}</span>
-                  <span class="ml-auto text-xs opacity-70">
-                    ${key === 'eaves' ? (eavesSections > 0 ? eavesSections + (eavesSections === 1 ? ' sect' : ' sects') + (eavesCount > 0 ? '+' + eavesCount : '') : eavesCount + ' pts') : key === 'ridge' ? ridgeCount : key === 'hip' ? hipCount : valleyCount}
-                  </span>
-                </button>
-              `).join('')}
+              ${Object.entries(modeInfo).map(([key, info]) => {
+                const isActive = state.traceMode === key;
+                const isVisible = state.traceLayers[key];
+                const countLabel = key === 'eaves' ? (eavesSections > 0 ? eavesSections + (eavesSections === 1 ? ' sect' : ' sects') + (eavesCount > 0 ? '+' + eavesCount : '') : eavesCount + ' pts') : key === 'ridge' ? ridgeCount : key === 'hip' ? hipCount : valleyCount;
+                return `
+                <div class="flex items-center gap-1">
+                  <button onclick="setTraceMode('${key}')"
+                    class="flex-1 flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all
+                      ${isActive ? 'bg-gray-800 text-white shadow-md' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'}">
+                    <div class="w-3 h-3 rounded-full flex-shrink-0" style="background:${info.color}"></div>
+                    <i class="fas ${info.icon} text-xs"></i>
+                    <span>${info.label}</span>
+                    <span class="ml-auto text-xs opacity-70">${countLabel}</span>
+                  </button>
+                  <button onclick="toggleLayerVisibility('${key}')"
+                    title="${isActive ? 'Active layer — always visible' : (isVisible ? 'Hide layer' : 'Show layer')}"
+                    class="p-2 rounded-lg transition-all ${isActive ? 'opacity-30 cursor-not-allowed bg-gray-100' : isVisible ? 'bg-gray-50 hover:bg-gray-200 text-gray-500' : 'bg-gray-50 hover:bg-gray-200 text-gray-300'}">
+                    <i class="fas ${isVisible ? 'fa-eye' : 'fa-eye-slash'} text-xs"></i>
+                  </button>
+                </div>
+                `;
+              }).join('')}
             </div>
           </div>
 
@@ -893,11 +901,6 @@ function renderStep2TracePhase() {
                 Next — Trace Ridges &amp; Hips <i class="fas fa-arrow-right ml-1"></i>
               </button>
             ` : ''}
-            ${state.traceEavesSaved ? `
-              <button onclick="showEavesOverlays()" class="w-full px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg text-sm font-medium transition-all">
-                <i class="fas fa-eye mr-1"></i>Show Eaves
-              </button>
-            ` : ''}
             <button onclick="undoLastTrace()" class="w-full px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg text-sm font-medium transition-all">
               <i class="fas fa-undo mr-1"></i>Undo Last
             </button>
@@ -916,15 +919,7 @@ function renderStep2TracePhase() {
                 <i class="fas ${m.icon} mr-1"></i>${m.label} Mode
               </span>
             </div>
-            <div class="flex items-center gap-3">
-              <span class="text-xs text-gray-400">${m.desc}</span>
-              <button onclick="toggleAttractMode()" title="Attrack — view all layers at once"
-                class="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-semibold transition-all
-                  ${state.attractMode ? 'bg-yellow-400 text-gray-900' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}">
-                <i class="fas fa-layer-group"></i>
-                <span>Attrack</span>
-              </button>
-            </div>
+            <span class="text-xs text-gray-400">${m.desc}</span>
           </div>
           <div id="trace-map" style="height: 520px; cursor: crosshair; background: #1a1a2e;"></div>
         </div>
@@ -1056,9 +1051,8 @@ function closeEavesPolygon() {
   state.traceEavesPoints = [];
   state.traceEavesPolygon = null;
 
-  // Redraw all eaves overlays (we're in eaves mode)
-  clearTraceOverlays();
-  redrawEavesOverlays();
+  // Redraw all layer overlays
+  redrawActiveModeOverlays();
 
   const n = state.traceEavesSections.length;
   showToast(`Eaves section ${n} closed! Trace another section or switch to Ridges.`, 'success');
@@ -1144,38 +1138,26 @@ function restoreTraceOverlays() {
 
 function redrawActiveModeOverlays() {
   clearTraceOverlays();
-  if (state.attractMode) {
-    // Show all layers simultaneously (read-only overlay)
-    redrawEavesOverlays(true);
-    state.traceRidgeLines.forEach(line => {
-      line.forEach(p => addTraceMarker(p, '#3b82f6', null));
-      drawTracePolyline(line, '#3b82f6', 2.5, false);
-    });
-    state.traceHipLines.forEach(line => {
-      line.forEach(p => addTraceMarker(p, '#f59e0b', null));
-      drawTracePolyline(line, '#f59e0b', 2.5, false);
-    });
-    state.traceValleyLines.forEach(line => {
-      line.forEach(p => addTraceMarker(p, '#ef4444', null));
-      drawTracePolyline(line, '#ef4444', 2.5, false);
-    });
-    return;
-  }
+  const v = state.traceLayers;
   const mode = state.traceMode;
-  if (mode === 'eaves') {
-    state.traceEavesSaved = false; // Switching back to eaves always shows them
-    redrawEavesOverlays();
-  } else if (mode === 'ridge') {
+
+  // Each layer is shown if visible OR if it's the active drawing mode
+  if (v.eaves || mode === 'eaves') {
+    redrawEavesOverlays(mode !== 'eaves');
+  }
+  if (v.ridge || mode === 'ridge') {
     state.traceRidgeLines.forEach(line => {
       line.forEach(p => addTraceMarker(p, '#3b82f6', null));
       drawTracePolyline(line, '#3b82f6', 2.5, false);
     });
-  } else if (mode === 'hip') {
+  }
+  if (v.hip || mode === 'hip') {
     state.traceHipLines.forEach(line => {
       line.forEach(p => addTraceMarker(p, '#f59e0b', null));
       drawTracePolyline(line, '#f59e0b', 2.5, false);
     });
-  } else if (mode === 'valley') {
+  }
+  if (v.valley || mode === 'valley') {
     state.traceValleyLines.forEach(line => {
       line.forEach(p => addTraceMarker(p, '#ef4444', null));
       drawTracePolyline(line, '#ef4444', 2.5, false);
@@ -1183,8 +1165,9 @@ function redrawActiveModeOverlays() {
   }
 }
 
-function toggleAttractMode() {
-  state.attractMode = !state.attractMode;
+function toggleLayerVisibility(layer) {
+  if (layer === state.traceMode) return; // active layer always visible
+  state.traceLayers[layer] = !state.traceLayers[layer];
   redrawActiveModeOverlays();
   updateTraceSummaryUI();
 }
@@ -1234,8 +1217,6 @@ function setTraceMode(mode) {
   // Finish any pending line
   if (state.traceCurrentLine.length > 0) finishCurrentLine();
   state.traceMode = mode;
-  state.attractMode = false; // Switching modes exits attract overlay view
-  // Show only the active mode's overlays
   redrawActiveModeOverlays();
   updateTraceSummaryUI();
 }
@@ -1274,7 +1255,6 @@ async function clearCurrentMode() {
     state.traceEavesPoints = [];
     state.traceEavesSections = [];
     state.traceEavesPolygon = null;
-    state.traceEavesSaved = false;
   } else if (mode === 'ridge') {
     state.traceRidgeLines = [];
   } else if (mode === 'hip') {
@@ -1296,17 +1276,9 @@ function addAnotherEaveLayer() {
 }
 
 function finishEavesAndNext() {
-  // Save eaves, clear all overlays, switch to ridge mode
-  state.traceEavesSaved = true;
-  clearTraceOverlays();
   state.traceMode = 'ridge';
-  showToast('Eaves saved! Map cleared — now trace ridges and hips.', 'success');
-  updateTraceSummaryUI();
-}
-
-function showEavesOverlays() {
-  state.traceEavesSaved = false;
   redrawActiveModeOverlays();
+  showToast('Eaves saved! Now trace ridges and hips.', 'success');
   updateTraceSummaryUI();
 }
 
