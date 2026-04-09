@@ -63,6 +63,7 @@ const state = {
   traceEavesPolygon: null,
   traceMarkers: [],
   traceEavesSaved: false,   // true when user has saved eaves and cleared overlays
+  attractMode: false,        // true = show all layers simultaneously (read-only overlay)
   dbInitialized: false,
   submitting: false
 };
@@ -915,7 +916,15 @@ function renderStep2TracePhase() {
                 <i class="fas ${m.icon} mr-1"></i>${m.label} Mode
               </span>
             </div>
-            <span class="text-xs text-gray-400">${m.desc}</span>
+            <div class="flex items-center gap-3">
+              <span class="text-xs text-gray-400">${m.desc}</span>
+              <button onclick="toggleAttractMode()" title="Attrack — view all layers at once"
+                class="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-semibold transition-all
+                  ${state.attractMode ? 'bg-yellow-400 text-gray-900' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}">
+                <i class="fas fa-layer-group"></i>
+                <span>Attrack</span>
+              </button>
+            </div>
           </div>
           <div id="trace-map" style="height: 520px; cursor: crosshair; background: #1a1a2e;"></div>
         </div>
@@ -1135,6 +1144,23 @@ function restoreTraceOverlays() {
 
 function redrawActiveModeOverlays() {
   clearTraceOverlays();
+  if (state.attractMode) {
+    // Show all layers simultaneously (read-only overlay)
+    redrawEavesOverlays(true);
+    state.traceRidgeLines.forEach(line => {
+      line.forEach(p => addTraceMarker(p, '#3b82f6', null));
+      drawTracePolyline(line, '#3b82f6', 2.5, false);
+    });
+    state.traceHipLines.forEach(line => {
+      line.forEach(p => addTraceMarker(p, '#f59e0b', null));
+      drawTracePolyline(line, '#f59e0b', 2.5, false);
+    });
+    state.traceValleyLines.forEach(line => {
+      line.forEach(p => addTraceMarker(p, '#ef4444', null));
+      drawTracePolyline(line, '#ef4444', 2.5, false);
+    });
+    return;
+  }
   const mode = state.traceMode;
   if (mode === 'eaves') {
     state.traceEavesSaved = false; // Switching back to eaves always shows them
@@ -1157,7 +1183,13 @@ function redrawActiveModeOverlays() {
   }
 }
 
-function redrawEavesOverlays() {
+function toggleAttractMode() {
+  state.attractMode = !state.attractMode;
+  redrawActiveModeOverlays();
+  updateTraceSummaryUI();
+}
+
+function redrawEavesOverlays(readOnly = false) {
   // Draw each completed eaves section as an editable polygon
   state.traceEavesSections.forEach((section, idx) => {
     const polygon = new google.maps.Polygon({
@@ -1168,7 +1200,7 @@ function redrawEavesOverlays() {
       strokeOpacity: 0.9,
       fillColor: '#22c55e',
       fillOpacity: 0.15,
-      editable: true,
+      editable: !readOnly,
       draggable: false
     });
     // Sync vertex edits back to state
@@ -1202,6 +1234,7 @@ function setTraceMode(mode) {
   // Finish any pending line
   if (state.traceCurrentLine.length > 0) finishCurrentLine();
   state.traceMode = mode;
+  state.attractMode = false; // Switching modes exits attract overlay view
   // Show only the active mode's overlays
   redrawActiveModeOverlays();
   updateTraceSummaryUI();
