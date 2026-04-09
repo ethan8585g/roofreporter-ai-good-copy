@@ -198,7 +198,7 @@ invoiceRoutes.post('/', async (c) => {
     const {
       customer_id, crm_customer_id, new_customer, order_id, items, notes, terms, due_days, tax_rate, discount_amount,
       discount_type, document_type, scope_of_work, warranty_terms, payment_terms_text,
-      valid_until, attached_report_id, proposal_tier, proposal_group_id, my_cost
+      valid_until, attached_report_id, proposal_tier, proposal_group_id, my_cost, accent_color
     } = body
 
     if (!customer_id && !crm_customer_id && !new_customer) return c.json({ error: 'customer_id or new_customer is required' }, 400)
@@ -257,8 +257,8 @@ invoiceRoutes.post('/', async (c) => {
                             order_id, subtotal, tax_rate, tax_amount,
                             discount_amount, discount_type, total, status, due_date, notes, terms, created_by, document_type,
                             share_token, scope_of_work, warranty_terms, payment_terms_text, valid_until,
-                            attached_report_id, proposal_tier, proposal_group_id, my_cost)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            attached_report_id, proposal_tier, proposal_group_id, my_cost, accent_color)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       number, resolvedCustomerId, crm_customer_id || null, crmName, crmEmail, crmPhone,
       order_id || null,
@@ -267,7 +267,8 @@ invoiceRoutes.post('/', async (c) => {
       notes || null, terms || defaultTerms, 'admin', docType,
       shareToken, scope_of_work || '', warranty_terms || '', payment_terms_text || '',
       valid_until || '', attached_report_id || null, proposal_tier || '', proposal_group_id || '',
-      my_cost != null ? my_cost : null
+      my_cost != null ? my_cost : null,
+      accent_color || null
     ).run()
 
     const invoiceId = result.meta.last_row_id
@@ -317,7 +318,7 @@ invoiceRoutes.put('/:id', async (c) => {
     const {
       customer_id, crm_customer_id, order_id, items, notes, terms, due_days, tax_rate, discount_amount,
       discount_type, document_type, scope_of_work, warranty_terms, payment_terms_text,
-      valid_until, attached_report_id, my_cost
+      valid_until, attached_report_id, my_cost, accent_color
     } = body
 
     const docType = ['invoice', 'proposal', 'estimate'].includes(document_type) ? document_type : 'invoice'
@@ -354,14 +355,15 @@ invoiceRoutes.put('/:id', async (c) => {
         order_id = ?, subtotal = ?, tax_rate = ?,
         tax_amount = ?, discount_amount = ?, discount_type = ?, total = ?, due_date = ?, notes = ?, terms = ?,
         document_type = ?, scope_of_work = ?, warranty_terms = ?, payment_terms_text = ?,
-        valid_until = ?, attached_report_id = ?, my_cost = ?, updated_at = datetime('now')
+        valid_until = ?, attached_report_id = ?, my_cost = ?, accent_color = ?, updated_at = datetime('now')
       WHERE id = ?
     `).bind(
       resolvedCustomerId || null, crm_customer_id || null, crmName, crmEmail, crmPhone,
       order_id || null, subtotal, taxRateVal, taxAmount, discountVal, discount_type || 'fixed', total,
       dueDate.toISOString().slice(0, 10), notes || null, terms || null, docType,
       scope_of_work || '', warranty_terms || '', payment_terms_text || '',
-      valid_until || '', attached_report_id || null, my_cost != null ? my_cost : null, id
+      valid_until || '', attached_report_id || null, my_cost != null ? my_cost : null,
+      accent_color || null, id
     ).run()
 
     if (items && items.length > 0) {

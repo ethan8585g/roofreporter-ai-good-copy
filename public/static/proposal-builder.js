@@ -47,6 +47,7 @@ document.addEventListener('DOMContentLoaded', () => {
     showLineItemsToCustomer: false,
     customerPriceOverride: null,
     myCost: null,
+    accentColor: '#0ea5e9',
     manualSquares: null,
     attachments: {
       includeRoofReport: true,
@@ -654,6 +655,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 '<div style="display:flex;gap:8px;align-items:center">' +
                   '<input id="dash-logo-url" value="' + (f.company_logo_url || '').replace(/"/g, '&quot;') + '" placeholder="https://yoursite.com/logo.png" style="flex:1;background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:8px;padding:8px;color:var(--text-primary);font-size:12px">' +
                   (f.company_logo_url ? '<img src="' + f.company_logo_url + '" style="width:36px;height:36px;border-radius:6px;object-fit:contain;border:1px solid var(--border-color)" onerror="this.style.display=\'none\'">' : '') +
+                '</div>' +
+              '</div>' +
+              '<div><label style="color:var(--text-muted);font-size:11px;display:block;margin-bottom:6px"><i class="fas fa-palette" style="margin-right:4px"></i>Proposal Header Color</label>' +
+                '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
+                  ['#0ea5e9','#2563eb','#7c3aed','#16a34a','#dc2626','#f97316','#0d9488','#1e293b'].map(function(c) {
+                    var isSelected = (state.accentColor || '#0ea5e9') === c;
+                    return '<button onclick="window.__pbState.accentColor=\'' + c + '\';window.__pbRender()" title="' + c + '" style="width:28px;height:28px;border-radius:50%;background:' + c + ';border:' + (isSelected ? '3px solid white;box-shadow:0 0 0 2px ' + c : '2px solid transparent') + ';cursor:pointer;transition:all 0.15s"></button>';
+                  }).join('') +
+                  '<input type="color" id="dash-accent-color" value="' + (state.accentColor || '#0ea5e9') + '" oninput="window.__pbState.accentColor=this.value;window.__pbRender()" title="Custom color" style="width:28px;height:28px;border:1px solid var(--border-color);border-radius:50%;cursor:pointer;padding:2px;background:none">' +
+                  '<div style="width:48px;height:28px;border-radius:6px;background:' + (state.accentColor || '#0ea5e9') + ';display:flex;align-items:center;justify-content:center"><span style="color:white;font-size:9px;font-weight:700">Preview</span></div>' +
                 '</div>' +
               '</div>' +
             '</div>' +
@@ -1645,7 +1656,8 @@ document.addEventListener('DOMContentLoaded', () => {
         valid_until: f.valid_until || '',
         attached_report_id: f.attached_report_id || null,
         due_days: 30,
-        my_cost: state.myCost !== null ? state.myCost : null
+        my_cost: state.myCost !== null ? state.myCost : null,
+        accent_color: state.accentColor || '#0ea5e9'
       };
 
       let res;
@@ -1780,6 +1792,7 @@ document.addEventListener('DOMContentLoaded', () => {
       state.showLineItemsToCustomer = false;
       state.customerPriceOverride = null;
       state.myCost = null;
+      state.accentColor = '#0ea5e9';
       state.showMaterialsToCustomer = false;
       state.showEdgesToCustomer = false;
       state.showSolarToCustomer = false;
@@ -1974,6 +1987,7 @@ document.addEventListener('DOMContentLoaded', () => {
           attached_report_id: inv.attached_report_id || null,
           order_id: inv.order_id || null
         };
+        state.accentColor = inv.accent_color || '#0ea5e9';
         state.mode = 'edit';
         render();
       } catch (e) { pbToast('Failed to load proposal', 'error'); }

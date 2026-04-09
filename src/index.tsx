@@ -1724,7 +1724,7 @@ app.get('/proposal/view/:token', async (c) => {
             </div>
           </div>
           <div class="flex gap-3">
-            <button onclick="respondProposal('accept')" class="flex-1 bg-sky-600 hover:bg-sky-700 text-white py-3.5 rounded-xl font-bold text-sm transition-all hover:shadow-lg">
+            <button onclick="respondProposal('accept')" class="flex-1 text-white py-3.5 rounded-xl font-bold text-sm transition-all hover:shadow-lg" style="background:${headerColor}">
               <i class="fas fa-check-circle mr-2"></i>Accept &amp; Sign ${docLabel}
             </button>
             <button onclick="respondProposal('decline')" class="px-6 py-3.5 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-xl font-semibold text-sm transition-all">
@@ -1806,14 +1806,15 @@ app.get('/proposal/view/:token', async (c) => {
       .catch(function() { alert('Network error. Please check your connection and try again.'); btn.disabled = false; btn.innerHTML = action === 'accept' ? '<i class="fas fa-check-circle mr-2"></i>Accept ${docLabel}' : 'Decline'; });
     }` : ''
 
+        const headerColor = invProposal.accent_color || '#0ea5e9'
         return c.html(`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>${docLabel} ${invProposal.invoice_number} — Roof Manager</title><meta property="og:title" content="${docLabel} ${invProposal.invoice_number} — $${Number(invProposal.total_amount || 0).toFixed(2)}"><meta property="og:description" content="Professional roofing ${docLabel.toLowerCase()} for ${invProposal.customer_name || 'valued customer'}. ${invProposal.property_address ? 'Property: ' + invProposal.property_address : ''}"><meta property="og:type" content="article"><meta property="og:site_name" content="Roof Manager"><meta name="twitter:card" content="summary"><link rel="stylesheet" href="/static/tailwind.css"><link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet"><style>@media print { .no-print { display: none !important; } }</style></head>
 <body class="bg-gray-100 min-h-screen py-8 px-4">
 <div class="max-w-3xl mx-auto">
   <div class="bg-white rounded-2xl shadow-xl overflow-hidden print:shadow-none">
-    <div class="bg-gradient-to-r from-sky-500 to-blue-600 text-white p-8">
+    <div style="background:${headerColor}" class="text-white p-8">
       <div class="flex justify-between items-start">
-        <div><div class="flex items-center gap-3 mb-3"><div class="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center"><i class="fas fa-home text-white text-lg"></i></div><div><h1 class="text-xl font-bold">Roof Manager</h1><p class="text-blue-200 text-xs">Professional Roof Measurement Reports</p></div></div><p class="text-blue-200 text-sm">Alberta, Canada</p></div>
-        <div class="text-right"><p class="text-2xl font-bold">${docLabel}</p><p class="text-blue-200 text-sm">${invProposal.invoice_number}</p><p class="text-blue-200 text-xs mt-1">${invProposal.issue_date ? new Date(invProposal.issue_date).toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' }) : ''}</p></div>
+        <div><div class="flex items-center gap-3 mb-3"><div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background:rgba(255,255,255,0.2)"><i class="fas fa-home text-white text-lg"></i></div><div><h1 class="text-xl font-bold">Roof Manager</h1><p class="text-xs" style="color:rgba(255,255,255,0.75)">Professional Roof Measurement Reports</p></div></div><p class="text-sm" style="color:rgba(255,255,255,0.75)">Alberta, Canada</p></div>
+        <div class="text-right"><p class="text-2xl font-bold">${docLabel}</p><p class="text-sm" style="color:rgba(255,255,255,0.75)">${invProposal.invoice_number}</p><p class="text-xs mt-1" style="color:rgba(255,255,255,0.75)">${invProposal.issue_date ? new Date(invProposal.issue_date).toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' }) : ''}</p></div>
       </div>
     </div>
     <div class="p-8">
@@ -6934,7 +6935,7 @@ function getCrmSubPageHTML(module: string, title: string, icon: string) {
   ${getHeadTags()}
   <title>${title} - Roof Manager</title>
 </head>
-<body class="min-h-screen" style="background:var(--bg-page)">
+<body class="min-h-screen" style="background:var(--bg-page);color:var(--text-primary)">
   <header style="background:#111111;border-bottom:1px solid rgba(255,255,255,0.1)" class="text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
       <div class="flex items-center space-x-3">
