@@ -437,6 +437,23 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
     </div>
   </div>
 
+  <!-- Roof Annotations (vents, skylights, chimneys) from trace -->
+  ${(() => {
+    const rt = (report as any).roof_trace
+    const ventCt = rt?.annotations?.vents?.length || 0
+    const skylightCt = rt?.annotations?.skylights?.length || 0
+    const chimneyCt = rt?.annotations?.chimneys?.length || 0
+    if (ventCt === 0 && skylightCt === 0 && chimneyCt === 0) return ''
+    return `<div style="padding:4px 28px 0">
+      <div style="display:flex;gap:6px;align-items:center">
+        <span style="font-size:7px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:0.5px">Roof Penetrations:</span>
+        ${ventCt > 0 ? `<span style="padding:2px 7px;background:#f3e8ff;color:#7c3aed;border:1px solid #ddd6fe;border-radius:3px;font-size:7px;font-weight:700">&#9679; Vents: ${ventCt}</span>` : ''}
+        ${skylightCt > 0 ? `<span style="padding:2px 7px;background:#e0f2fe;color:#0369a1;border:1px solid #bae6fd;border-radius:3px;font-size:7px;font-weight:700">&#9830; Skylights: ${skylightCt}</span>` : ''}
+        ${chimneyCt > 0 ? `<span style="padding:2px 7px;background:#fef3c7;color:#92400e;border:1px solid #fde68a;border-radius:3px;font-size:7px;font-weight:700">&#9632; Chimneys: ${chimneyCt}</span>` : ''}
+      </div>
+    </div>`
+  })()}
+
   <!-- Methodology note -->
   <div style="padding:6px 28px 0">
     <div style="padding:4px 8px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:3px;font-size:6.5px;color:#0369a1;line-height:1.4">

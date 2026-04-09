@@ -62,6 +62,10 @@ const state = {
   tracePolylines: [],
   traceEavesPolygon: null,
   traceMarkers: [],
+  traceVents: [],
+  traceSkylights: [],
+  traceChimneys: [],
+  traceAnnotationMarkers: [], // [{marker, type}]
   traceLayers: { eaves: true, ridge: true, hip: true, valley: true }, // per-layer visibility
   dbInitialized: false,
   submitting: false
@@ -786,10 +790,13 @@ function updatePinUI() {
 // ============================================================
 function renderStep2TracePhase() {
   const modeInfo = {
-    eaves:  { color: '#22c55e', icon: 'fa-draw-polygon', label: 'Eaves Outline', desc: 'Trace each eave layer separately. Close a section by clicking its first point, then start the next layer.' },
-    ridge:  { color: '#3b82f6', icon: 'fa-grip-lines', label: 'Ridges', desc: 'Click start and end of each ridge line. Double-click to finish each line.' },
-    hip:    { color: '#f59e0b', icon: 'fa-slash', label: 'Hips', desc: 'Click start and end of each hip line. Double-click to finish each line.' },
-    valley: { color: '#ef4444', icon: 'fa-angle-down', label: 'Valleys', desc: 'Click start and end of each valley line. Double-click to finish each line.' }
+    eaves:    { color: '#22c55e', icon: 'fa-draw-polygon', label: 'Eaves Outline', desc: 'Trace each eave layer separately. Close a section by clicking its first point, then start the next layer.' },
+    ridge:    { color: '#3b82f6', icon: 'fa-grip-lines', label: 'Ridges', desc: 'Click start and end of each ridge line. Double-click to finish each line.' },
+    hip:      { color: '#f59e0b', icon: 'fa-slash', label: 'Hips', desc: 'Click start and end of each hip line. Double-click to finish each line.' },
+    valley:   { color: '#ef4444', icon: 'fa-angle-down', label: 'Valleys', desc: 'Click start and end of each valley line. Double-click to finish each line.' },
+    vent:     { color: '#a855f7', icon: 'fa-wind', label: 'Vents', desc: 'Click to mark each roof vent.' },
+    skylight: { color: '#06b6d4', icon: 'fa-sun', label: 'Skylights', desc: 'Click to mark each skylight.' },
+    chimney:  { color: '#d97706', icon: 'fa-fire', label: 'Chimneys', desc: 'Click to mark each chimney.' }
   };
   const m = modeInfo[state.traceMode] || modeInfo.eaves;
   const eavesCount = state.traceEavesPoints.length;
@@ -797,6 +804,9 @@ function renderStep2TracePhase() {
   const ridgeCount = state.traceRidgeLines.length;
   const hipCount = state.traceHipLines.length;
   const valleyCount = state.traceValleyLines.length;
+  const ventCount = state.traceVents.length;
+  const skylightCount = state.traceSkylights.length;
+  const chimneyCount = state.traceChimneys.length;
   // Eaves is "complete" if at least one section is closed
   const eavesClosed = eavesSections > 0;
 
@@ -841,10 +851,14 @@ function renderStep2TracePhase() {
           <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
             <h4 class="text-xs font-bold text-gray-500 uppercase tracking-wide mb-3">Drawing Mode</h4>
             <div class="space-y-2">
-              ${Object.entries(modeInfo).map(([key, info]) => {
+              ${[
+                { key: 'eaves', info: modeInfo.eaves, countLabel: eavesSections > 0 ? eavesSections + (eavesSections === 1 ? ' sect' : ' sects') + (eavesCount > 0 ? '+' + eavesCount : '') : eavesCount + ' pts' },
+                { key: 'ridge', info: modeInfo.ridge, countLabel: ridgeCount },
+                { key: 'hip',   info: modeInfo.hip,   countLabel: hipCount },
+                { key: 'valley',info: modeInfo.valley,countLabel: valleyCount },
+              ].map(({ key, info, countLabel }) => {
                 const isActive = state.traceMode === key;
                 const isVisible = state.traceLayers[key];
-                const countLabel = key === 'eaves' ? (eavesSections > 0 ? eavesSections + (eavesSections === 1 ? ' sect' : ' sects') + (eavesCount > 0 ? '+' + eavesCount : '') : eavesCount + ' pts') : key === 'ridge' ? ridgeCount : key === 'hip' ? hipCount : valleyCount;
                 return `
                 <div class="flex items-center gap-1">
                   <button onclick="setTraceMode('${key}')"
@@ -860,8 +874,30 @@ function renderStep2TracePhase() {
                     class="p-2 rounded-lg transition-all ${isActive ? 'opacity-30 cursor-not-allowed bg-gray-100' : isVisible ? 'bg-gray-50 hover:bg-gray-200 text-gray-500' : 'bg-gray-50 hover:bg-gray-200 text-gray-300'}">
                     <i class="fas ${isVisible ? 'fa-eye' : 'fa-eye-slash'} text-xs"></i>
                   </button>
-                </div>
-                `;
+                </div>`;
+              }).join('')}
+            </div>
+          </div>
+
+          <!-- Annotations -->
+          <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+            <h4 class="text-xs font-bold text-gray-500 uppercase tracking-wide mb-3">Annotations</h4>
+            <div class="space-y-2">
+              ${[
+                { key: 'vent',     info: modeInfo.vent,     count: ventCount },
+                { key: 'skylight', info: modeInfo.skylight, count: skylightCount },
+                { key: 'chimney',  info: modeInfo.chimney,  count: chimneyCount },
+              ].map(({ key, info, count }) => {
+                const isActive = state.traceMode === key;
+                return `
+                <button onclick="setTraceMode('${key}')"
+                  class="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all
+                    ${isActive ? 'bg-gray-800 text-white shadow-md' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'}">
+                  <div class="w-3 h-3 rounded-full flex-shrink-0" style="background:${info.color}"></div>
+                  <i class="fas ${info.icon} text-xs"></i>
+                  <span>${info.label}</span>
+                  <span class="ml-auto text-xs opacity-70">${count}</span>
+                </button>`;
               }).join('')}
             </div>
           </div>
@@ -888,6 +924,12 @@ function renderStep2TracePhase() {
                 <span class="text-gray-500"><i class="fas fa-angle-down mr-1" style="color:#ef4444"></i>Valleys</span>
                 <span class="font-semibold">${valleyCount} lines</span>
               </div>
+              ${ventCount + skylightCount + chimneyCount > 0 ? `
+              <div class="pt-1 border-t border-gray-100 space-y-1">
+                ${ventCount > 0 ? `<div class="flex justify-between items-center"><span class="text-gray-500"><i class="fas fa-wind mr-1" style="color:#a855f7"></i>Vents</span><span class="font-semibold">${ventCount}</span></div>` : ''}
+                ${skylightCount > 0 ? `<div class="flex justify-between items-center"><span class="text-gray-500"><i class="fas fa-sun mr-1" style="color:#06b6d4"></i>Skylights</span><span class="font-semibold">${skylightCount}</span></div>` : ''}
+                ${chimneyCount > 0 ? `<div class="flex justify-between items-center"><span class="text-gray-500"><i class="fas fa-fire mr-1" style="color:#d97706"></i>Chimneys</span><span class="font-semibold">${chimneyCount}</span></div>` : ''}
+              </div>` : ''}
             </div>
           </div>
 
@@ -1024,6 +1066,12 @@ function handleTraceClick(pt) {
     if (state.traceEavesPoints.length > 1) {
       drawTracePolyline(state.traceEavesPoints, '#22c55e', 3, false);
     }
+  } else if (mode === 'vent' || mode === 'skylight' || mode === 'chimney') {
+    // Single-click annotation placement
+    const arrays = { vent: state.traceVents, skylight: state.traceSkylights, chimney: state.traceChimneys };
+    arrays[mode].push(pt);
+    addAnnotationMarkerAdmin(pt, mode);
+    showToast(`${mode.charAt(0).toUpperCase() + mode.slice(1)} marked`, 'success');
   } else {
     // Ridge, Hip, Valley: collecting points for current line
     state.traceCurrentLine.push(pt);
@@ -1108,6 +1156,26 @@ function addTraceMarker(pt, color, label) {
   state.traceMarkers.push(marker);
 }
 
+function addAnnotationMarkerAdmin(pt, type) {
+  const svgs = {
+    vent:     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16"><circle cx="12" cy="12" r="11" fill="#a855f7" stroke="white" stroke-width="1.5"/><line x1="5" y1="9" x2="19" y2="9" stroke="white" stroke-width="1.5"/><line x1="5" y1="12" x2="19" y2="12" stroke="white" stroke-width="1.5"/><line x1="5" y1="15" x2="19" y2="15" stroke="white" stroke-width="1.5"/></svg>`,
+    skylight: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16"><polygon points="12,1 23,12 12,23 1,12" fill="#06b6d4" stroke="white" stroke-width="1.5"/><line x1="12" y1="5" x2="12" y2="19" stroke="white" stroke-width="1.2"/><line x1="5" y1="12" x2="19" y2="12" stroke="white" stroke-width="1.2"/></svg>`,
+    chimney:  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16"><rect x="3" y="3" width="18" height="18" rx="3" fill="#d97706" stroke="white" stroke-width="1.5"/><line x1="12" y1="3" x2="12" y2="21" stroke="white" stroke-width="1.2"/><line x1="3" y1="12" x2="21" y2="12" stroke="white" stroke-width="1.2"/></svg>`
+  };
+  const marker = new google.maps.Marker({
+    position: { lat: pt.lat, lng: pt.lng },
+    map: state.traceMap,
+    clickable: false,
+    zIndex: 15,
+    icon: {
+      url: 'data:image/svg+xml,' + encodeURIComponent(svgs[type]),
+      scaledSize: new google.maps.Size(16, 16),
+      anchor: new google.maps.Point(8, 8),
+    }
+  });
+  state.traceAnnotationMarkers.push({ marker, type });
+}
+
 function drawTracePolyline(points, color, weight, isDashed) {
   const polyline = new google.maps.Polyline({
     path: points.map(p => new google.maps.LatLng(p.lat, p.lng)),
@@ -1129,6 +1197,7 @@ function clearTraceOverlays() {
     state.traceEavesPolygon.setMap(null);
     state.traceEavesPolygon = null;
   }
+  // Annotation markers are managed separately — do NOT remove them here
 }
 
 function restoreTraceOverlays() {
@@ -1163,6 +1232,16 @@ function redrawActiveModeOverlays() {
       drawTracePolyline(line, '#ef4444', 2.5, false);
     });
   }
+  // Always redraw annotation markers (vents, skylights, chimneys)
+  redrawAnnotationMarkers();
+}
+
+function redrawAnnotationMarkers() {
+  state.traceAnnotationMarkers.forEach(a => a.marker.setMap(null));
+  state.traceAnnotationMarkers = [];
+  state.traceVents.forEach(pt => addAnnotationMarkerAdmin(pt, 'vent'));
+  state.traceSkylights.forEach(pt => addAnnotationMarkerAdmin(pt, 'skylight'));
+  state.traceChimneys.forEach(pt => addAnnotationMarkerAdmin(pt, 'chimney'));
 }
 
 function toggleLayerVisibility(layer) {
@@ -1240,6 +1319,12 @@ function undoLastTrace() {
   } else if (mode === 'valley') {
     if (state.traceCurrentLine.length > 0) state.traceCurrentLine = [];
     else if (state.traceValleyLines.length > 0) state.traceValleyLines.pop();
+  } else if (mode === 'vent') {
+    if (state.traceVents.length > 0) state.traceVents.pop();
+  } else if (mode === 'skylight') {
+    if (state.traceSkylights.length > 0) state.traceSkylights.pop();
+  } else if (mode === 'chimney') {
+    if (state.traceChimneys.length > 0) state.traceChimneys.pop();
   }
 
   redrawActiveModeOverlays();
@@ -1249,7 +1334,7 @@ function undoLastTrace() {
 
 async function clearCurrentMode() {
   const mode = state.traceMode;
-  const modeLabel = { eaves: 'eaves sections', ridge: 'ridge lines', hip: 'hip lines', valley: 'valley lines' }[mode] || mode;
+  const modeLabel = { eaves: 'eaves sections', ridge: 'ridge lines', hip: 'hip lines', valley: 'valley lines', vent: 'vents', skylight: 'skylights', chimney: 'chimneys' }[mode] || mode;
   if (!(await window.rmConfirm(`Clear all ${modeLabel}? Other modes will not be affected.`))) return
   if (mode === 'eaves') {
     state.traceEavesPoints = [];
@@ -1261,6 +1346,12 @@ async function clearCurrentMode() {
     state.traceHipLines = [];
   } else if (mode === 'valley') {
     state.traceValleyLines = [];
+  } else if (mode === 'vent') {
+    state.traceVents = [];
+  } else if (mode === 'skylight') {
+    state.traceSkylights = [];
+  } else if (mode === 'chimney') {
+    state.traceChimneys = [];
   }
   state.traceCurrentLine = [];
   redrawActiveModeOverlays();
@@ -1313,6 +1404,11 @@ function compileTraceData() {
     ridges: state.traceRidgeLines,
     hips: state.traceHipLines,
     valleys: state.traceValleyLines,
+    annotations: {
+      vents: state.traceVents,
+      skylights: state.traceSkylights,
+      chimneys: state.traceChimneys,
+    },
     traced_at: new Date().toISOString()
   };
 }
