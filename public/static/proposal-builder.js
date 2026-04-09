@@ -538,6 +538,28 @@ document.addEventListener('DOMContentLoaded', () => {
         '<button onclick="window._pb.backToList()" style="color:var(--text-muted);background:var(--bg-card);border:1px solid var(--border-color);padding:8px 16px;border-radius:8px;cursor:pointer;font-size:13px">&larr; Back to Proposals</button>' +
       '</div>' +
 
+      // Report link card — always visible at top of dashboard
+      '<div style="background:var(--bg-card);border:2px solid ' + (state.selectedReport ? '#22c55e' : 'var(--accent)') + ';border-radius:12px;padding:14px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px">' +
+        '<div style="width:36px;height:36px;background:' + (state.selectedReport ? 'rgba(34,197,94,0.15)' : 'rgba(0,255,136,0.1)') + ';border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0">' +
+          '<i class="fas fa-satellite" style="color:' + (state.selectedReport ? '#22c55e' : 'var(--accent)') + ';font-size:15px"></i>' +
+        '</div>' +
+        '<div style="flex:1;min-width:0">' +
+          '<div style="color:var(--text-muted);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px">Roof Report</div>' +
+          (state.selectedReport
+            ? '<div style="display:flex;align-items:center;gap:10px">' +
+                '<span style="color:#22c55e;font-weight:700;font-size:13px"><i class="fas fa-check-circle mr-1"></i>' + (state.selectedReport.property_address || 'Report linked') + '</span>' +
+                '<button onclick="window.__pbState.selectedReport=null;window.__pbState.form.attached_report_id=null;window.__pbRender()" style="font-size:11px;color:var(--text-muted);background:none;border:none;cursor:pointer;text-decoration:underline">Change</button>' +
+              '</div>'
+            : '<select onchange="if(this.value)window._pb.pickReport(this.value)" style="width:100%;padding:8px 10px;background:var(--bg-elevated);border:1px solid var(--accent);border-radius:8px;color:var(--text-primary);font-size:13px">' +
+                '<option value="">— Select a completed roof report to link —</option>' +
+                state.reports.map(function(r) {
+                  return '<option value="' + r.id + '">' + (r.property_address || 'Report #' + r.id) + (r.created_at ? ' — ' + r.created_at.slice(0, 10) : '') + '</option>';
+                }).join('') +
+              '</select>'
+          ) +
+        '</div>' +
+      '</div>' +
+
       // Quick access: Report + Materials
       (state.selectedReport ?
         '<div style="display:flex;gap:12px;margin-bottom:16px">' +
