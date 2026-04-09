@@ -498,7 +498,7 @@ app.get('/order/new', (c) => {
 
 // Super Admin Dashboard (post-login landing)
 app.get('/super-admin', (c) => {
-  return c.html(getSuperAdminDashboardHTML())
+  return c.html(getSuperAdminDashboardHTML(c.env.GOOGLE_MAPS_API_KEY || ''))
 })
 
 // Admin Dashboard (legacy + operational)
@@ -2872,11 +2872,15 @@ function getMainPageHTML(mapsApiKey: string) {
 </html>`
 }
 
-function getSuperAdminDashboardHTML() {
+function getSuperAdminDashboardHTML(mapsApiKey: string = '') {
+  const mapsScript = mapsApiKey
+    ? `<script src="https://maps.googleapis.com/maps/api/js?key=${mapsApiKey}&libraries=places" async defer></script>`
+    : ''
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   ${getHeadTags()}
+  ${mapsScript}
   <title>Super Admin Dashboard - Roof Manager</title>
   <style>
     .sa-sidebar { transition: width 0.3s ease; }
