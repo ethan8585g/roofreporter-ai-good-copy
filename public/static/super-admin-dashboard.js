@@ -4866,7 +4866,62 @@ function renderCustomerOnboardingView() {
       '</tr>';
   }).join('');
 
-  return '<div class="mb-6"><h2 class="text-2xl font-black text-gray-900"><i class="fas fa-user-cog mr-2 text-indigo-500"></i>Customer Onboarding — Roofer Secretary AI</h2><p class="text-sm text-gray-500 mt-1">Provision new customer accounts, assign phone numbers, and set up Secretary AI call forwarding</p></div>' +
+  return '<div class="mb-6"><h2 class="text-2xl font-black text-gray-900"><i class="fas fa-user-cog mr-2 text-indigo-500"></i>Customer Onboarding</h2><p class="text-sm text-gray-500 mt-1">Create accounts, set passwords, send invoices, and provision Secretary AI</p></div>' +
+
+    // --- Quick Account Setup ---
+    '<div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6">' +
+    '<div class="flex items-center gap-3 mb-4">' +
+    '<div class="w-9 h-9 bg-blue-100 rounded-xl flex items-center justify-center"><i class="fas fa-user-plus text-blue-600"></i></div>' +
+    '<div><h3 class="font-bold text-gray-800 text-lg">Create New Account</h3><p class="text-xs text-gray-500">Set up login credentials for a new roof reporting customer</p></div>' +
+    '</div>' +
+    '<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">' +
+    '<div><label class="text-xs text-gray-500 font-medium block mb-1">Business Name</label><input id="qa-business" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="ABC Roofing Ltd"></div>' +
+    '<div><label class="text-xs text-gray-500 font-medium block mb-1">Contact Name *</label><input id="qa-name" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="John Smith"></div>' +
+    '<div><label class="text-xs text-gray-500 font-medium block mb-1">Email (username) *</label><input id="qa-email" type="email" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="john@abcroofing.ca"></div>' +
+    '</div>' +
+    '<div class="grid grid-cols-1 md:grid-cols-3 gap-4">' +
+    '<div><label class="text-xs text-gray-500 font-medium block mb-1">Password *</label><div class="relative"><input id="qa-password" type="password" class="w-full border rounded-lg px-3 py-2 text-sm pr-9" placeholder="Set a secure password"><button type="button" onclick="var f=document.getElementById(\'qa-password\');f.type=f.type===\'password\'?\'text\':\'password\'" class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs"><i class="fas fa-eye"></i></button></div></div>' +
+    '<div><label class="text-xs text-gray-500 font-medium block mb-1">Starter Report Credits</label><select id="qa-credits" class="w-full border rounded-lg px-3 py-2 text-sm"><option value="0">0 — trial only</option><option value="3" selected>3 — free trial</option><option value="5">5 credits</option><option value="10">10 credits</option></select></div>' +
+    '<div class="flex items-end"><button onclick="saCreateRoofAccount()" class="w-full bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-bold text-sm transition-all"><i class="fas fa-user-plus mr-2"></i>Create Account</button></div>' +
+    '</div>' +
+    '<div id="qa-result" class="mt-3 hidden"></div>' +
+    '</div>' +
+
+    // --- Send Invoice ---
+    '<div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6">' +
+    '<div class="flex items-center gap-3 mb-4">' +
+    '<div class="w-9 h-9 bg-green-100 rounded-xl flex items-center justify-center"><i class="fas fa-file-invoice-dollar text-green-600"></i></div>' +
+    '<div><h3 class="font-bold text-gray-800 text-lg">Send Invoice</h3><p class="text-xs text-gray-500">Invoice a customer for report packs, annual membership, or custom items</p></div>' +
+    '</div>' +
+    '<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">' +
+    '<div><label class="text-xs text-gray-500 font-medium block mb-1">Customer Email *</label><input id="inv-email" type="email" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="john@abcroofing.ca"></div>' +
+    '<div><label class="text-xs text-gray-500 font-medium block mb-1">Notes (optional)</label><input id="inv-notes" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="e.g. Welcome package, annual renewal..."></div>' +
+    '</div>' +
+    '<p class="text-xs text-gray-500 font-medium mb-2">Select items to include:</p>' +
+    '<div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">' +
+    '<label class="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50 has-[:checked]:border-green-400 has-[:checked]:bg-green-50">' +
+    '<input type="checkbox" id="inv-10pack" class="rounded" value="10-pack"><div><div class="text-sm font-semibold text-gray-800">10 Report Credits</div><div class="text-xs text-gray-500">$55.00 ($5.50 each)</div></div>' +
+    '</label>' +
+    '<label class="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50 has-[:checked]:border-green-400 has-[:checked]:bg-green-50">' +
+    '<input type="checkbox" id="inv-25pack" class="rounded" value="25-pack"><div><div class="text-sm font-semibold text-gray-800">25 Report Credits</div><div class="text-xs text-gray-500">$125.00 ($5.00 each)</div></div>' +
+    '</label>' +
+    '<label class="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50 has-[:checked]:border-green-400 has-[:checked]:bg-green-50">' +
+    '<input type="checkbox" id="inv-100pack" class="rounded" value="100-pack"><div><div class="text-sm font-semibold text-gray-800">100 Report Credits</div><div class="text-xs text-gray-500">$475.00 ($4.75 each)</div></div>' +
+    '</label>' +
+    '<label class="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50 has-[:checked]:border-green-400 has-[:checked]:bg-green-50">' +
+    '<input type="checkbox" id="inv-annual" class="rounded" value="annual"><div><div class="text-sm font-semibold text-gray-800">Annual Membership <span class="ml-1 px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded text-[10px] font-bold">SAVE 2 MONTHS</span></div><div class="text-xs text-gray-500">$499.00/yr (equiv. $41.58/mo)</div></div>' +
+    '</label>' +
+    '</div>' +
+    '<div class="border rounded-xl p-3 mb-4 bg-gray-50">' +
+    '<p class="text-xs text-gray-500 font-medium mb-2"><i class="fas fa-plus mr-1"></i>Custom Line Item</p>' +
+    '<div class="flex gap-3"><input id="inv-custom-desc" class="flex-1 border rounded-lg px-3 py-2 text-sm bg-white" placeholder="Description (e.g. Setup fee)"><input id="inv-custom-price" type="number" min="0" step="0.01" class="w-28 border rounded-lg px-3 py-2 text-sm bg-white" placeholder="$0.00"></div>' +
+    '</div>' +
+    '<div class="flex items-center justify-between">' +
+    '<div id="inv-total-display" class="text-sm font-bold text-gray-700"></div>' +
+    '<button onclick="saSendOnboardingInvoice()" class="bg-green-600 hover:bg-green-700 text-white px-8 py-2.5 rounded-lg font-bold text-sm transition-all"><i class="fas fa-paper-plane mr-2"></i>Create &amp; Send Invoice</button>' +
+    '</div>' +
+    '<div id="inv-result" class="mt-3 hidden"></div>' +
+    '</div>' +
 
     // --- Twilio/Phone Provider Guide ---
     '<div class="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-2xl p-5 mb-6">' +
@@ -4986,6 +5041,147 @@ function renderCustomerOnboardingView() {
     '<div class="overflow-x-auto"><table class="w-full"><thead><tr class="bg-gray-50 text-xs text-gray-500 uppercase"><th class="px-4 py-3 text-left">Customer</th><th class="px-4 py-3 text-left">Personal Phone</th><th class="px-4 py-3 text-left">Agent Phone #</th><th class="px-4 py-3 text-center">Provider</th><th class="px-4 py-3 text-center">Secretary</th><th class="px-4 py-3 text-center">Mode</th><th class="px-4 py-3 text-center">LiveKit</th><th class="px-4 py-3 text-left">Onboarded</th><th class="px-4 py-3 text-left">Actions</th></tr></thead><tbody>' + rows + '</tbody></table></div>') +
     '</div>';
 }
+
+// ── Quick Account Setup ──────────────────────────────────────
+window.saCreateRoofAccount = async function() {
+  var email = (document.getElementById('qa-email').value || '').trim();
+  var password = (document.getElementById('qa-password').value || '').trim();
+  var name = (document.getElementById('qa-name').value || '').trim();
+  var business = (document.getElementById('qa-business').value || '').trim();
+  var credits = parseInt(document.getElementById('qa-credits').value) || 0;
+  var resultEl = document.getElementById('qa-result');
+
+  if (!email || !password || !name) {
+    window.rmToast('Contact Name, Email, and Password are required', 'warning');
+    return;
+  }
+  if (password.length < 6) {
+    window.rmToast('Password must be at least 6 characters', 'warning');
+    return;
+  }
+
+  resultEl.className = 'mt-3 text-xs text-gray-500 italic';
+  resultEl.classList.remove('hidden');
+  resultEl.textContent = 'Creating account...';
+
+  try {
+    var res = await saFetch('/api/admin/superadmin/onboarding/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: email,
+        password: password,
+        contact_name: name,
+        business_name: business || name,
+        enable_secretary: false,
+        subscription_tier: 'starter',
+        trial_days: '30',
+        credit_pack: 'none',
+        send_invoice: false,
+        _override_credits: credits
+      })
+    });
+    var data = await res.json();
+    if (data.success) {
+      // If extra credits requested beyond the default 3, patch them in
+      if (credits !== 3 && data.customer_id) {
+        var diff = credits - 3;
+        if (diff !== 0) {
+          await saFetch('/api/admin/superadmin/users/' + data.customer_id + '/adjust-credits', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ amount: diff, reason: 'Onboarding grant' })
+          });
+        }
+      }
+      resultEl.className = 'mt-3 p-3 rounded-lg bg-green-50 border border-green-200 text-sm text-green-800';
+      resultEl.innerHTML =
+        '<i class="fas fa-check-circle mr-2 text-green-600"></i><b>' + name + '</b> account created! ' +
+        'Login: <span class="font-mono bg-white px-1.5 py-0.5 rounded border border-green-200">' + email + '</span> &nbsp;' +
+        '<button onclick="document.getElementById(\'inv-email\').value=\'' + email.replace(/'/g, '') + '\';document.getElementById(\'qa-result\').classList.add(\'hidden\')" ' +
+        'class="ml-2 text-xs underline text-green-700 hover:text-green-900">Pre-fill invoice &rarr;</button>';
+      document.getElementById('qa-email').value = '';
+      document.getElementById('qa-password').value = '';
+      document.getElementById('qa-name').value = '';
+      document.getElementById('qa-business').value = '';
+    } else {
+      resultEl.className = 'mt-3 p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-800';
+      resultEl.innerHTML = '<i class="fas fa-exclamation-circle mr-2"></i>' + (data.error || 'Failed to create account');
+    }
+  } catch(e) {
+    resultEl.className = 'mt-3 p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-800';
+    resultEl.textContent = 'Error: ' + e.message;
+  }
+};
+
+// ── Send Invoice ─────────────────────────────────────────────
+window.saSendOnboardingInvoice = async function() {
+  var email = (document.getElementById('inv-email').value || '').trim();
+  if (!email) { window.rmToast('Customer email is required', 'warning'); return; }
+
+  var items = [];
+  if (document.getElementById('inv-10pack').checked)  items.push({ description: '10 Roof Report Credits',  quantity: 10,  unit_price: 5.50 });
+  if (document.getElementById('inv-25pack').checked)  items.push({ description: '25 Roof Report Credits',  quantity: 25,  unit_price: 5.00 });
+  if (document.getElementById('inv-100pack').checked) items.push({ description: '100 Roof Report Credits', quantity: 100, unit_price: 4.75 });
+  if (document.getElementById('inv-annual').checked)  items.push({ description: 'Annual Membership — 12 months (2 months free)', quantity: 1, unit_price: 499.00 });
+
+  var customDesc  = (document.getElementById('inv-custom-desc').value || '').trim();
+  var customPrice = parseFloat(document.getElementById('inv-custom-price').value) || 0;
+  if (customDesc && customPrice > 0) items.push({ description: customDesc, quantity: 1, unit_price: customPrice });
+
+  if (!items.length) { window.rmToast('Select at least one item to invoice', 'warning'); return; }
+
+  var notes = document.getElementById('inv-notes').value || '';
+  var resultEl = document.getElementById('inv-result');
+  resultEl.className = 'mt-3 text-xs text-gray-500 italic';
+  resultEl.classList.remove('hidden');
+  resultEl.textContent = 'Creating invoice...';
+
+  try {
+    var res = await saFetch('/api/admin/superadmin/service-invoices/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ customer_email: email, items: items, notes: notes })
+    });
+    var data = await res.json();
+    if (!data.invoice_id && !data.success) throw new Error(data.error || 'Create failed');
+
+    var invoiceId = data.invoice_id || data.id;
+    resultEl.textContent = 'Sending...';
+    await saFetch('/api/admin/superadmin/service-invoices/' + invoiceId + '/send', { method: 'POST' });
+
+    var total = items.reduce(function(s, it) { return s + it.quantity * it.unit_price; }, 0);
+    resultEl.className = 'mt-3 p-3 rounded-lg bg-green-50 border border-green-200 text-sm text-green-800';
+    resultEl.innerHTML =
+      '<i class="fas fa-check-circle mr-2 text-green-600"></i>Invoice <b>' + (data.invoice_number || '#' + invoiceId) + '</b> ' +
+      'for <b>$' + total.toFixed(2) + '</b> sent to <b>' + email + '</b>!';
+    // Clear form
+    ['inv-10pack','inv-25pack','inv-100pack','inv-annual'].forEach(function(id) {
+      document.getElementById(id).checked = false;
+    });
+    document.getElementById('inv-custom-desc').value = '';
+    document.getElementById('inv-custom-price').value = '';
+    document.getElementById('inv-total-display').textContent = '';
+  } catch(e) {
+    resultEl.className = 'mt-3 p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-800';
+    resultEl.innerHTML = '<i class="fas fa-exclamation-circle mr-2"></i>Error: ' + e.message;
+  }
+};
+
+// Live invoice total preview
+document.addEventListener('change', function(e) {
+  var t = e.target;
+  if (!t) return;
+  var ids = ['inv-10pack','inv-25pack','inv-100pack','inv-annual'];
+  if (ids.indexOf(t.id) === -1 && t.id !== 'inv-custom-price') return;
+  var prices = { 'inv-10pack': 55, 'inv-25pack': 125, 'inv-100pack': 475, 'inv-annual': 499 };
+  var total = 0;
+  ids.forEach(function(id) { var el = document.getElementById(id); if (el && el.checked) total += prices[id]; });
+  var cp = parseFloat((document.getElementById('inv-custom-price') || {}).value) || 0;
+  total += cp;
+  var disp = document.getElementById('inv-total-display');
+  if (disp) disp.textContent = total > 0 ? 'Total: $' + total.toFixed(2) : '';
+});
 
 async function createOnboardingCustomer() {
   var email = document.getElementById('ob-email').value;
