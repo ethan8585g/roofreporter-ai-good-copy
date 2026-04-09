@@ -325,7 +325,18 @@ document.addEventListener('DOMContentLoaded', () => {
       if (propRes.ok) { const d = await propRes.json(); state.proposals = d.invoices || []; }
       if (custRes.ok) { const d = await custRes.json(); state.customers = d.customers || []; }
       if (libRes.ok) { const d = await libRes.json(); state.itemLibrary = d.items || []; }
-      if (repRes.ok) { const d = await repRes.json(); state.reports = d.reports || []; }
+      if (repRes.ok) {
+        const d = await repRes.json();
+        state.reports = d.reports || [];
+      }
+      // Fallback: if customer endpoint returned no reports (admin user or session mismatch),
+      // try the admin reports list endpoint which has no customer filtering
+      if (state.reports.length === 0) {
+        try {
+          const adminRepRes = await fetch('/api/reports/list', { headers: headers() });
+          if (adminRepRes.ok) { const d = await adminRepRes.json(); state.reports = d.reports || []; }
+        } catch(e) {}
+      }
     } catch (e) { console.warn('Load error', e); }
     state.loading = false;
     render();
@@ -410,15 +421,19 @@ document.addEventListener('DOMContentLoaded', () => {
       (all.length > 0
         ? searchBar + hint + cards +
 
-          (state.form.attached_report_id ?
-            '<div style="margin-top:24px;text-align:center">' +
-              '<button onclick="window._pb.goToSupplier()" style="background:var(--accent);color:#0a0a0a;border:none;padding:14px 40px;border-radius:999px;font-weight:800;font-size:15px;cursor:pointer">Continue &rarr;</button>' +
-            '</div>' : ''
-          )
+          '<div style="margin-top:20px;display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap">' +
+            (state.form.attached_report_id ?
+              '<button onclick="window._pb.goToSupplier()" style="background:var(--accent);color:#0a0a0a;border:none;padding:14px 40px;border-radius:999px;font-weight:800;font-size:15px;cursor:pointer">Continue &rarr;</button>' : ''
+            ) +
+            '<a href="/customer/order" style="color:var(--text-muted);font-size:13px;text-decoration:none;border:1px solid var(--border-color);padding:10px 20px;border-radius:8px;background:var(--bg-card)" onmouseover="this.style.borderColor=\'var(--accent)\'" onmouseout="this.style.borderColor=\'var(--border-color)\'">' +
+              '<i class="fas fa-plus" style="margin-right:6px"></i>Order a New Report' +
+            '</a>' +
+          '</div>'
+
         : '<div style="text-align:center;padding:40px;color:var(--text-muted)">' +
             '<i class="fas fa-file-alt" style="font-size:48px;margin-bottom:16px;opacity:0.3"></i>' +
             '<p style="font-weight:600;margin-bottom:8px">No completed reports found</p>' +
-            '<a href="/customer/order" style="color:var(--accent);text-decoration:underline">Order a roof report first</a>' +
+            '<a href="/customer/order" style="color:var(--accent);font-weight:600">Order a roof report first &rarr;</a>' +
           '</div>'
       ) +
 
