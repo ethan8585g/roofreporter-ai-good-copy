@@ -3733,7 +3733,34 @@
     return html;
   }
 
-  function renderPipeline(customers, proposals) {
+  function renderPipeSubHeader(label, icon, color, count) {
+    return '<div class="flex items-center gap-1.5 pt-2 pb-1 mt-1 border-t border-white/8">' +
+      '<i class="fas ' + icon + ' text-[9px]" style="color:' + color + '"></i>' +
+      '<span class="text-[10px] font-bold uppercase tracking-wider" style="color:' + color + '">' + label + '</span>' +
+      '<span class="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full" style="background:rgba(255,255,255,0.08);color:var(--text-muted)">' + count + '</span>' +
+      '</div>';
+  }
+
+  function renderPipeLeadRow(item, type) {
+    var name = item.customer_name || item.name || 'Unknown';
+    var phone = item.customer_phone || item.phone || '';
+    var value = type === 'proposal' ? (item.total_amount ? money(item.total_amount) : '') :
+                type === 'invoice'  ? (item.total       ? money(item.total)       : '') : '';
+    var sub   = type === 'proposal' ? (item.proposal_number || item.title || '') :
+                type === 'invoice'  ? (item.invoice_number  || '') : '';
+    var accentColor = type === 'proposal' ? '#60a5fa' : type === 'invoice' ? '#fbbf24' : '#a78bfa';
+    return '<div class="rounded-lg px-2.5 py-2 border border-white/8" style="background:rgba(255,255,255,0.03)">' +
+      '<div class="flex items-center justify-between gap-1">' +
+        '<p class="text-xs font-semibold truncate" style="color:var(--text-primary)">' + name + '</p>' +
+        (value ? '<span class="text-[11px] font-bold shrink-0" style="color:' + accentColor + '">' + value + '</span>' : '') +
+      '</div>' +
+      (phone ? '<p class="text-[10px] mt-0.5" style="color:var(--text-muted)"><i class="fas fa-phone mr-1"></i>' + phone + '</p>' : '') +
+      (sub   ? '<p class="text-[10px] mt-0.5 truncate" style="color:var(--text-muted)">' + sub + '</p>' : '') +
+      '</div>';
+  }
+
+  function renderPipeline(customers, proposals, invoices) {
+    invoices = invoices || [];
     window._pipelineCustomers = customers;
     window._pipelineProposals = proposals;
 
@@ -3750,13 +3777,27 @@
     var lostCustomers = customers.filter(function(c) { return c.status === 'lost'; }).map(function(c) { return Object.assign({}, c, { _lostCust: true }); });
     var lostItems     = lostProposals.concat(lostCustomers);
 
+    // Active Leads sub-sections
+    var invoiceCustomerIds = new Set(invoices.map(function(i) { return String(i.crm_customer_id); }));
+    // Proposal leads: customers linked to any open proposal (shown in Proposal Sent but surfaced here too)
+    var proposalLeadRows = proposalItems.slice(0, 10); // show up to 10 most recent
+    // Invoice leads: open invoices (owing)
+    var invoiceLeadRows = invoices.slice(0, 10);
+    // New CRM leads: active customers with no proposal and no invoice
+    var newCRMLeads = customers.filter(function(c) {
+      return (c.status === 'active' || c.status === 'inactive') &&
+             !customersWithProposals.has(String(c.id)) &&
+             !invoiceCustomerIds.has(String(c.id));
+    });
+    var activeTotalCount = proposalLeadRows.length + invoiceLeadRows.length + newCRMLeads.length;
+
     var pipelineValue = proposalItems.reduce(function(s, p) { return s + (parseFloat(p.total_amount) || 0); }, 0);
     var wonValue      = wonItems.reduce(function(s, p) { return s + (parseFloat(p.total_amount) || 0); }, 0);
     var closeRate     = (wonItems.length + lostItems.length) > 0 ? Math.round(wonItems.length / (wonItems.length + lostItems.length) * 100) : 0;
 
     var cols = [
       { id: 'leads',     title: 'Lead Capture',  icon: 'fa-bullseye',       hdrBg: '#1e3a5f', ringClass: 'ring-blue-500',    items: leadItems,     type: 'customer', dropStatus: 'lead',     acceptType: 'customer' },
-      { id: 'active',    title: 'Active Leads',   icon: 'fa-phone-alt',      hdrBg: '#312e81', ringClass: 'ring-indigo-400',  items: activeItems,   type: 'customer', dropStatus: 'active',   acceptType: 'customer' },
+      { id: 'active',    title: 'Active Leads',   icon: 'fa-phone-alt',      hdrBg: '#312e81', ringClass: 'ring-indigo-400',  items: activeItems,   type: 'customer', dropStatus: 'active',   acceptType: 'customer', _totalCount: activeTotalCount },
       { id: 'proposals', title: 'Proposal Sent',  icon: 'fa-file-signature', hdrBg: '#1e3a8a', ringClass: 'ring-blue-400',   items: proposalItems, type: 'proposal', dropStatus: 'sent',     acceptType: 'proposal' },
       { id: 'won',       title: 'Won / Closed',   icon: 'fa-handshake',      hdrBg: '#14532d', ringClass: 'ring-emerald-400', items: wonItems,      type: 'proposal', dropStatus: 'accepted', acceptType: 'proposal' },
       { id: 'lost',      title: 'Lost',           icon: 'fa-times-circle',   hdrBg: '#450a0a', ringClass: 'ring-red-400',    items: lostItems,     type: 'mixed',    dropStatus: 'declined', acceptType: 'both' }
@@ -3765,7 +3806,7 @@
     // Header
     var html = '<div class="mb-4 flex items-center justify-between flex-wrap gap-3">' +
       '<div><h2 class="text-lg font-bold" style="color:var(--text-primary)"><i class="fas fa-funnel-dollar text-blue-400 mr-2"></i>Sales Pipeline</h2>' +
-      '<p class="text-xs mt-0.5" style="color:var(--text-muted)">Drag cards between stages · ' + (leadItems.length + activeItems.length + proposalItems.length) + ' active deals</p></div>' +
+      '<p class="text-xs mt-0.5" style="color:var(--text-muted)">Drag cards between stages · ' + (leadItems.length + activeTotalCount + proposalItems.length) + ' active deals</p></div>' +
       '<button onclick="window._crmAddLead()" style="background:#2563eb;color:white" class="px-4 py-2 rounded-lg text-sm font-semibold hover:opacity-90 transition-opacity"><i class="fas fa-user-plus mr-1.5"></i>Add Lead</button></div>';
 
     // Summary bar
@@ -3782,10 +3823,11 @@
 
     cols.forEach(function(col) {
       var colValue = col.items.reduce(function(s, p) { return s + (parseFloat(p.total_amount) || 0); }, 0);
+      var displayCount = col._totalCount !== undefined ? col._totalCount : col.items.length;
       html += '<div class="flex flex-col">';
       html += '<div class="rounded-t-xl px-3 py-2.5 flex items-center justify-between" style="background:' + col.hdrBg + '">' +
         '<div class="flex items-center gap-1.5"><i class="fas ' + col.icon + ' text-xs opacity-80" style="color:#fff"></i><span class="font-semibold text-xs text-white">' + col.title + '</span></div>' +
-        '<span class="text-white text-[11px] font-bold px-2 py-0.5 rounded-full" style="background:rgba(0,0,0,0.35)">' + col.items.length + '</span></div>';
+        '<span class="text-white text-[11px] font-bold px-2 py-0.5 rounded-full" style="background:rgba(0,0,0,0.35)">' + displayCount + '</span></div>';
       if (colValue > 0) {
         html += '<div class="px-3 py-1 text-[11px] font-semibold text-emerald-400 border-x border-white/10" style="background:rgba(16,185,129,0.08)">' + money(colValue) + ' total</div>';
       }
@@ -3794,7 +3836,37 @@
       html += ' ondragover="event.preventDefault();this.classList.add(\'ring-2\',\'' + col.ringClass + '\')"';
       html += ' ondragleave="this.classList.remove(\'ring-2\',\'' + col.ringClass + '\')"';
       html += ' ondrop="window._pipeDrop(event,\'' + col.id + '\',\'' + col.type + '\',\'' + col.dropStatus + '\',\'' + col.acceptType + '\')">';
-      if (col.items.length === 0) {
+
+      if (col.id === 'active') {
+        // --- Proposal Leads sub-section ---
+        html += renderPipeSubHeader('Proposal Leads', 'fa-file-signature', '#60a5fa', proposalLeadRows.length);
+        if (proposalLeadRows.length === 0) {
+          html += '<p class="text-[11px] text-center py-1" style="color:var(--text-muted)">None yet</p>';
+        } else {
+          proposalLeadRows.forEach(function(p) { html += renderPipeLeadRow(p, 'proposal'); });
+        }
+
+        // --- Invoice Leads sub-section ---
+        html += renderPipeSubHeader('Invoice Leads', 'fa-receipt', '#fbbf24', invoiceLeadRows.length);
+        if (invoiceLeadRows.length === 0) {
+          html += '<p class="text-[11px] text-center py-1" style="color:var(--text-muted)">None yet</p>';
+        } else {
+          invoiceLeadRows.forEach(function(i) { html += renderPipeLeadRow(i, 'invoice'); });
+        }
+
+        // --- New CRM Leads sub-section (draggable) ---
+        html += renderPipeSubHeader('New Customers', 'fa-user', '#a78bfa', newCRMLeads.length);
+        if (newCRMLeads.length === 0 && activeItems.length === 0) {
+          html += '<div class="text-center py-4"><i class="fas fa-user text-2xl mb-2 block opacity-10" style="color:#fff"></i><p class="text-[11px]" style="color:var(--text-muted)">Drop here</p></div>';
+        } else {
+          // Show draggable cards for existing activeItems + newCRMLeads not already shown
+          var shownIds = new Set(activeItems.map(function(c) { return String(c.id); }));
+          activeItems.forEach(function(item) { html += renderPipeCard(item, 'customer'); });
+          newCRMLeads.forEach(function(item) {
+            if (!shownIds.has(String(item.id))) { html += renderPipeCard(item, 'customer'); }
+          });
+        }
+      } else if (col.items.length === 0) {
         html += '<div class="text-center py-10"><i class="fas ' + col.icon + ' text-2xl mb-2 block opacity-10" style="color:#fff"></i><p class="text-[11px]" style="color:var(--text-muted)">Drop here</p></div>';
       } else {
         col.items.forEach(function(item) {
@@ -3822,9 +3894,10 @@
     root.innerHTML = '<div class="text-center py-8"><div class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500 mx-auto mb-3"></div><p class="text-sm" style="color:var(--text-muted)">Loading pipeline...</p></div>';
     Promise.all([
       fetch('/api/crm/customers', { headers: authHeadersOnly() }).then(function(r) { return r.json(); }),
-      fetch('/api/crm/proposals', { headers: authHeadersOnly() }).then(function(r) { return r.json(); })
+      fetch('/api/crm/proposals', { headers: authHeadersOnly() }).then(function(r) { return r.json(); }),
+      fetch('/api/crm/invoices?status=owing', { headers: authHeadersOnly() }).then(function(r) { return r.json(); }).catch(function() { return { invoices: [] }; })
     ]).then(function(results) {
-      renderPipeline(results[0].customers || [], results[1].proposals || []);
+      renderPipeline(results[0].customers || [], results[1].proposals || [], results[2].invoices || []);
     }).catch(function() {
       root.innerHTML = '<p class="text-red-500 text-center py-8">Failed to load pipeline data.</p>';
     });
