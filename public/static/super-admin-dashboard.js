@@ -3671,26 +3671,69 @@ function renderInvoicesView() {
 // ---- Create Invoice Modal ----
 window.showCreateInvoiceModal = function() {
   var customers = ((SA.data.invoice_customers || {}).customers || []);
+  var invoices = ((SA.data.invoices || {}).invoices || []);
+  var recentCustomers = [];
+  var seenIds = new Set();
+  for (var ri = 0; ri < invoices.length && recentCustomers.length < 4; ri++) {
+    var rinv = invoices[ri];
+    if (rinv.customer_id && !seenIds.has(String(rinv.customer_id))) {
+      seenIds.add(String(rinv.customer_id));
+      var rc = customers.find(function(c) { return c.id == rinv.customer_id; });
+      if (rc) recentCustomers.push(rc);
+    }
+  }
+  var recentChips = recentCustomers.length > 0
+    ? '<div class="flex flex-wrap gap-2 mb-2"><span class="text-xs text-gray-400 self-center">Recent:</span>' +
+        recentCustomers.map(function(c) {
+          return '<button type="button" onclick="invSelectCustomer(\'' + c.id + '\')" data-cid="' + c.id + '" class="inv-cust-chip px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600 hover:bg-green-100 hover:text-green-700 border border-gray-200">' +
+            (c.name || c.email) + (c.company_name ? ' \xb7 ' + c.company_name : '') + '</button>';
+        }).join('') + '</div>'
+    : '';
+
   var modal = document.getElementById('inv-modal-container');
   if (!modal) return;
   modal.innerHTML = '<div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onclick="if(event.target===this)closeInvModal()">' +
     '<div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">' +
       '<div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">' +
         '<h3 class="font-bold text-gray-800 text-lg"><i class="fas fa-plus-circle mr-2 text-green-500"></i>Create New Invoice</h3>' +
-        '<button onclick="closeInvModal()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>' +
+        '<div class="flex items-center gap-3">' +
+          '<div class="text-right"><div class="text-xs text-gray-400">Invoice Total</div><div id="inv-header-total" class="text-xl font-black text-green-600">$0.00</div></div>' +
+          '<button onclick="closeInvModal()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>' +
+        '</div>' +
       '</div>' +
       '<div class="p-6 space-y-4">' +
-        '<div class="grid md:grid-cols-2 gap-4">' +
-          '<div><label class="block text-xs font-medium text-gray-500 mb-1">Customer *</label>' +
-            '<select id="inv-customer" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">' +
-              '<option value="">Select customer...</option>' +
-              customers.map(function(c) { return '<option value="' + c.id + '">' + (c.name || c.email) + (c.company_name ? ' (' + c.company_name + ')' : '') + '</option>'; }).join('') +
-            '</select></div>' +
-          '<div><label class="block text-xs font-medium text-gray-500 mb-1">Due (days)</label>' +
-            '<input id="inv-due-days" type="number" value="30" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>' +
+
+        '<div class="border border-gray-200 rounded-xl p-4">' +
+          '<label class="block text-xs font-semibold text-gray-500 uppercase mb-2">Customer *</label>' +
+          recentChips +
+          '<div class="relative">' +
+            '<div class="flex items-center gap-2 border border-gray-300 rounded-lg px-3 py-2">' +
+              '<i class="fas fa-search text-xs text-gray-400"></i>' +
+              '<input type="text" id="inv-customer-search" placeholder="Search customers..." autocomplete="off"' +
+                ' oninput="invFilterCustomers(this.value)"' +
+                ' onfocus="invFilterCustomers(this.value)"' +
+                ' onblur="setTimeout(function(){var d=document.getElementById(\'inv-cust-drop\');if(d)d.style.display=\'none\';},200)"' +
+                ' class="flex-1 outline-none text-sm text-gray-800 bg-transparent">' +
+              '<span id="inv-cust-clear" style="display:none" onclick="invClearCustomer()" class="cursor-pointer text-gray-400 hover:text-gray-600 text-xs"><i class="fas fa-times"></i></span>' +
+            '</div>' +
+            '<div id="inv-cust-drop" style="display:none;position:absolute;z-index:100;width:100%;margin-top:4px;background:white;border:1px solid #e5e7eb;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.12);max-height:200px;overflow-y:auto"></div>' +
+          '</div>' +
+          '<div id="inv-cust-address" style="display:none" class="mt-2 text-xs text-gray-500"><i class="fas fa-map-marker-alt text-green-500 mr-1"></i><span id="inv-cust-address-text"></span></div>' +
+          '<input type="hidden" id="inv-customer" value="">' +
         '</div>' +
-        '<div><label class="block text-xs font-medium text-gray-500 mb-1">Tax Rate (%)</label>' +
-          '<input id="inv-tax-rate" type="number" step="0.01" value="5.00" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm max-w-[200px]"></div>' +
+
+        '<div><label class="block text-xs font-medium text-gray-500 mb-1">Due (days)</label>' +
+          '<input id="inv-due-days" type="number" value="30" class="w-40 border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>' +
+
+        '<div class="border border-gray-200 rounded-xl p-4">' +
+          '<h4 class="font-semibold text-gray-700 text-sm mb-3"><i class="fas fa-percent mr-1 text-green-500"></i>Tax Rates</h4>' +
+          '<div class="grid grid-cols-2 gap-3">' +
+            '<div><label class="block text-xs font-medium text-gray-500 mb-1">GST (%)</label>' +
+              '<input id="inv-gst-rate" type="number" step="0.1" min="0" max="30" value="5" oninput="invUpdateTotals()" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>' +
+            '<div><label class="block text-xs font-medium text-gray-500 mb-1">PST (%)</label>' +
+              '<input id="inv-pst-rate" type="number" step="0.1" min="0" max="30" value="0" oninput="invUpdateTotals()" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>' +
+          '</div>' +
+        '</div>' +
 
         '<div class="border border-gray-200 rounded-xl p-4">' +
           '<h4 class="font-semibold text-gray-700 text-sm mb-3"><i class="fas fa-tag mr-1 text-green-500"></i>Discount <span class="text-xs text-gray-400 font-normal">(optional)</span></h4>' +
@@ -3702,28 +3745,40 @@ window.showCreateInvoiceModal = function() {
                 '<option value="percentage">Percentage (%)</option>' +
               '</select></div>' +
             '<div id="inv-discount-input-wrap" style="display:none"><label id="inv-discount-label" class="block text-xs font-medium text-gray-500 mb-1">Amount</label>' +
-              '<input id="inv-discount-amount" type="number" step="0.01" min="0" placeholder="0.00" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>' +
+              '<input id="inv-discount-amount" type="number" step="0.01" min="0" placeholder="0.00" oninput="invUpdateTotals()" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>' +
           '</div>' +
         '</div>' +
 
-        // Line items
         '<div class="border border-gray-200 rounded-xl p-4">' +
           '<div class="flex items-center justify-between mb-3">' +
             '<h4 class="font-semibold text-gray-700 text-sm">Line Items</h4>' +
             '<button onclick="addInvLineItem()" class="text-xs text-green-600 hover:text-green-800 font-medium"><i class="fas fa-plus mr-1"></i>Add Item</button>' +
           '</div>' +
+          '<div class="grid grid-cols-12 gap-2 mb-1 text-xs font-semibold text-gray-400 uppercase px-1">' +
+            '<div class="col-span-5">Description</div><div class="col-span-2 text-center">Qty</div>' +
+            '<div class="col-span-2 text-right">Price</div><div class="col-span-2 text-right">Amount</div><div class="col-span-1"></div>' +
+          '</div>' +
           '<div id="inv-line-items">' +
-            '<div class="inv-line-item grid grid-cols-12 gap-2 mb-2">' +
-              '<input type="text" placeholder="Description" class="col-span-6 border border-gray-300 rounded-lg px-3 py-2 text-sm inv-desc">' +
-              '<input type="number" placeholder="Qty" value="1" class="col-span-2 border border-gray-300 rounded-lg px-3 py-2 text-sm inv-qty">' +
-              '<input type="number" step="0.01" placeholder="Unit Price" class="col-span-3 border border-gray-300 rounded-lg px-3 py-2 text-sm inv-price">' +
-              '<button onclick="this.closest(\'.inv-line-item\').remove()" class="col-span-1 text-red-400 hover:text-red-600"><i class="fas fa-times"></i></button>' +
+            '<div class="inv-line-item grid grid-cols-12 gap-2 mb-2 items-center">' +
+              '<input type="text" placeholder="Description" oninput="invUpdateTotals()" class="col-span-5 border border-gray-300 rounded-lg px-3 py-2 text-sm inv-desc">' +
+              '<input type="number" placeholder="1" value="1" oninput="invUpdateTotals()" class="col-span-2 border border-gray-300 rounded-lg px-2 py-2 text-sm text-center inv-qty">' +
+              '<input type="number" step="0.01" placeholder="0.00" oninput="invUpdateTotals()" class="col-span-2 border border-gray-300 rounded-lg px-2 py-2 text-sm text-right inv-price">' +
+              '<div class="col-span-2 text-right text-sm font-medium text-gray-700 inv-amt">$0.00</div>' +
+              '<button onclick="this.closest(\'.inv-line-item\').remove();invUpdateTotals()" class="col-span-1 text-red-400 hover:text-red-600 text-center"><i class="fas fa-times"></i></button>' +
+            '</div>' +
+          '</div>' +
+          '<div class="mt-3 pt-3 border-t border-gray-100 flex justify-end">' +
+            '<div class="w-56 space-y-1 text-sm">' +
+              '<div class="flex justify-between text-gray-500"><span>Subtotal</span><span id="inv-sub">$0.00</span></div>' +
+              '<div class="flex justify-between text-gray-500"><span id="inv-gst-label">GST (5%)</span><span id="inv-gst-amt">$0.00</span></div>' +
+              '<div class="flex justify-between text-gray-500" id="inv-pst-row" style="display:none"><span id="inv-pst-label">PST (0%)</span><span id="inv-pst-amt">$0.00</span></div>' +
+              '<div class="flex justify-between font-bold text-gray-900 pt-1 border-t border-gray-200"><span>Total</span><span id="inv-total-disp" class="text-green-600">$0.00</span></div>' +
             '</div>' +
           '</div>' +
         '</div>' +
 
-        '<div><label class="block text-xs font-medium text-gray-500 mb-1">Notes</label>' +
-          '<textarea id="inv-notes" rows="2" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="Thank you for your business..."></textarea></div>' +
+        '<div><label class="block text-xs font-medium text-gray-500 mb-1">Notes <span class="font-normal text-gray-400">(visible to customer on invoice)</span></label>' +
+          '<textarea id="inv-notes" rows="2" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="e.g. Thank you for your business!"></textarea></div>' +
 
         '<div class="bg-amber-50 border border-amber-200 rounded-lg p-3">' +
           '<p class="text-xs text-amber-700"><i class="fas fa-lightbulb mr-1"></i><strong>Tip:</strong> Use the Pricing Engine to auto-calculate line items from a roof report, then create an invoice from those results.</p>' +
@@ -3737,17 +3792,101 @@ window.showCreateInvoiceModal = function() {
       '</div>' +
     '</div>' +
   '</div>';
+
+  window._invCustomers = customers;
+};
+
+window.invFilterCustomers = function(term) {
+  var drop = document.getElementById('inv-cust-drop');
+  if (!drop) return;
+  var lc = (term || '').toLowerCase();
+  var list = window._invCustomers || [];
+  var filtered = lc ? list.filter(function(c) {
+    return (c.name||'').toLowerCase().includes(lc) || (c.email||'').toLowerCase().includes(lc) || (c.company_name||'').toLowerCase().includes(lc);
+  }).slice(0, 12) : list.slice(0, 12);
+  drop.style.display = 'block';
+  drop.innerHTML = filtered.map(function(c) {
+    return '<div onclick="invSelectCustomer(\'' + c.id + '\')" style="padding:10px 16px;cursor:pointer;border-bottom:1px solid #f3f4f6" onmouseenter="this.style.background=\'#f0fdf4\'" onmouseleave="this.style.background=\'\'">' +
+      '<div style="font-size:13px;font-weight:600;color:#1f2937">' + (c.name || c.email) + '</div>' +
+      (c.company_name ? '<div style="font-size:11px;color:#6b7280">' + c.company_name + '</div>' : '') +
+    '</div>';
+  }).join('') +
+  '<div onclick="window.rmToast(\'To add a new customer, use the Customers section.\',\'info\')" style="padding:10px 16px;cursor:pointer;color:#16a34a;font-size:13px;font-weight:600;border-top:1px solid #f3f4f6" onmouseenter="this.style.background=\'#f0fdf4\'" onmouseleave="this.style.background=\'\'"><i class="fas fa-plus mr-1"></i>New Customer</div>';
+};
+
+window.invSelectCustomer = function(id) {
+  var c = (window._invCustomers || []).find(function(x) { return String(x.id) === String(id); });
+  if (!c) return;
+  var hiddenInput = document.getElementById('inv-customer');
+  if (hiddenInput) hiddenInput.value = id;
+  var search = document.getElementById('inv-customer-search');
+  if (search) search.value = (c.name || c.email) + (c.company_name ? ' \xb7 ' + c.company_name : '');
+  var drop = document.getElementById('inv-cust-drop');
+  if (drop) drop.style.display = 'none';
+  var clearBtn = document.getElementById('inv-cust-clear');
+  if (clearBtn) clearBtn.style.display = '';
+  var addrDiv = document.getElementById('inv-cust-address');
+  var addrText = document.getElementById('inv-cust-address-text');
+  if (addrDiv && addrText) {
+    if (c.address) { addrText.textContent = c.address; addrDiv.style.display = ''; }
+    else addrDiv.style.display = 'none';
+  }
+  document.querySelectorAll('.inv-cust-chip').forEach(function(chip) {
+    if (chip.dataset.cid === String(id)) { chip.style.background='#dcfce7'; chip.style.color='#15803d'; chip.style.borderColor='#86efac'; }
+    else { chip.style.background=''; chip.style.color=''; chip.style.borderColor=''; }
+  });
+};
+
+window.invClearCustomer = function() {
+  var hiddenInput = document.getElementById('inv-customer');
+  if (hiddenInput) hiddenInput.value = '';
+  var search = document.getElementById('inv-customer-search');
+  if (search) search.value = '';
+  var clearBtn = document.getElementById('inv-cust-clear');
+  if (clearBtn) clearBtn.style.display = 'none';
+  var addrDiv = document.getElementById('inv-cust-address');
+  if (addrDiv) addrDiv.style.display = 'none';
+};
+
+window.invUpdateTotals = function() {
+  var sub = 0;
+  document.querySelectorAll('.inv-line-item').forEach(function(row) {
+    var qty = parseFloat((row.querySelector('.inv-qty')||{}).value) || 0;
+    var price = parseFloat((row.querySelector('.inv-price')||{}).value) || 0;
+    var amt = qty * price;
+    var amtEl = row.querySelector('.inv-amt');
+    if (amtEl) amtEl.textContent = '$' + amt.toFixed(2);
+    sub += amt;
+  });
+  var gstRate = parseFloat((document.getElementById('inv-gst-rate')||{}).value) || 0;
+  var pstRate = parseFloat((document.getElementById('inv-pst-rate')||{}).value) || 0;
+  var discType = (document.getElementById('inv-discount-type')||{}).value || 'none';
+  var discAmt = discType !== 'none' ? (parseFloat((document.getElementById('inv-discount-amount')||{}).value) || 0) : 0;
+  var disc = discType === 'percentage' ? sub * discAmt / 100 : discAmt;
+  var taxable = sub - disc;
+  var gst = Math.round(taxable * gstRate / 100 * 100) / 100;
+  var pst = Math.round(taxable * pstRate / 100 * 100) / 100;
+  var total = Math.round((sub - disc + gst + pst) * 100) / 100;
+  var subEl = document.getElementById('inv-sub'); if (subEl) subEl.textContent = '$' + sub.toFixed(2);
+  var gstLbl = document.getElementById('inv-gst-label'); if (gstLbl) gstLbl.textContent = 'GST (' + gstRate + '%)';
+  var gstAmt = document.getElementById('inv-gst-amt'); if (gstAmt) gstAmt.textContent = '$' + gst.toFixed(2);
+  var pstRow = document.getElementById('inv-pst-row'); if (pstRow) pstRow.style.display = pstRate > 0 ? '' : 'none';
+  var pstLbl = document.getElementById('inv-pst-label'); if (pstLbl) pstLbl.textContent = 'PST (' + pstRate + '%)';
+  var pstAmt = document.getElementById('inv-pst-amt'); if (pstAmt) pstAmt.textContent = '$' + pst.toFixed(2);
+  var totDisp = document.getElementById('inv-total-disp'); if (totDisp) totDisp.textContent = '$' + total.toFixed(2);
+  var hdrTot = document.getElementById('inv-header-total'); if (hdrTot) hdrTot.textContent = '$' + total.toFixed(2);
 };
 
 window.addInvLineItem = function() {
   var container = document.getElementById('inv-line-items');
   if (!container) return;
   var row = document.createElement('div');
-  row.className = 'inv-line-item grid grid-cols-12 gap-2 mb-2';
-  row.innerHTML = '<input type="text" placeholder="Description" class="col-span-6 border border-gray-300 rounded-lg px-3 py-2 text-sm inv-desc">' +
-    '<input type="number" placeholder="Qty" value="1" class="col-span-2 border border-gray-300 rounded-lg px-3 py-2 text-sm inv-qty">' +
-    '<input type="number" step="0.01" placeholder="Unit Price" class="col-span-3 border border-gray-300 rounded-lg px-3 py-2 text-sm inv-price">' +
-    '<button onclick="this.closest(\'.inv-line-item\').remove()" class="col-span-1 text-red-400 hover:text-red-600"><i class="fas fa-times"></i></button>';
+  row.className = 'inv-line-item grid grid-cols-12 gap-2 mb-2 items-center';
+  row.innerHTML = '<input type="text" placeholder="Description" oninput="invUpdateTotals()" class="col-span-5 border border-gray-300 rounded-lg px-3 py-2 text-sm inv-desc">' +
+    '<input type="number" placeholder="1" value="1" oninput="invUpdateTotals()" class="col-span-2 border border-gray-300 rounded-lg px-2 py-2 text-sm text-center inv-qty">' +
+    '<input type="number" step="0.01" placeholder="0.00" oninput="invUpdateTotals()" class="col-span-2 border border-gray-300 rounded-lg px-2 py-2 text-sm text-right inv-price">' +
+    '<div class="col-span-2 text-right text-sm font-medium text-gray-700 inv-amt">$0.00</div>' +
+    '<button onclick="this.closest(\'.inv-line-item\').remove();invUpdateTotals()" class="col-span-1 text-red-400 hover:text-red-600 text-center"><i class="fas fa-times"></i></button>';
   container.appendChild(row);
 };
 
@@ -3768,7 +3907,7 @@ window.toggleInvDiscountInput = function() {
 };
 
 window.createInvoice = async function() {
-  var customerId = document.getElementById('inv-customer').value;
+  var customerId = (document.getElementById('inv-customer') || {}).value;
   if (!customerId) { window.rmToast('Please select a customer', 'warning'); return; }
   var rows = document.querySelectorAll('.inv-line-item');
   var items = [];
@@ -3778,12 +3917,14 @@ window.createInvoice = async function() {
     var price = parseFloat(r.querySelector('.inv-price').value) || 0;
     if (desc && price > 0) items.push({ description: desc, quantity: qty, unit_price: price });
   });
-  if (items.length === 0) { window.rmToast('Add at least one line item', 'info'); return; }
-  var taxRate = parseFloat(document.getElementById('inv-tax-rate').value) || 5;
+  if (items.length === 0) { window.rmToast('Add at least one line item with a non-zero amount', 'warning'); return; }
+  var gstRate = parseFloat((document.getElementById('inv-gst-rate') || {}).value) || 0;
+  var pstRate = parseFloat((document.getElementById('inv-pst-rate') || {}).value) || 0;
+  var taxRate = gstRate + pstRate;
   var dueDays = parseInt(document.getElementById('inv-due-days').value) || 30;
   var notes = document.getElementById('inv-notes').value;
-  var discountType = document.getElementById('inv-discount-type')?.value || 'none';
-  var discountAmount = (discountType !== 'none') ? (parseFloat(document.getElementById('inv-discount-amount')?.value) || 0) : 0;
+  var discountType = (document.getElementById('inv-discount-type') || {}).value || 'none';
+  var discountAmount = (discountType !== 'none') ? (parseFloat((document.getElementById('inv-discount-amount') || {}).value) || 0) : 0;
 
   try {
     var resp = await saFetch('/api/invoices', {
@@ -3846,7 +3987,7 @@ window.viewInvoiceDetail = async function(id) {
             '</table>' +
             '<div class="bg-gray-50 px-4 py-3 space-y-1">' +
               '<div class="flex justify-between text-sm"><span class="text-gray-500">Subtotal</span><span class="text-gray-800">$' + parseFloat(inv.subtotal || 0).toFixed(2) + '</span></div>' +
-              '<div class="flex justify-between text-sm"><span class="text-gray-500">Tax (' + (inv.tax_rate || 5) + '%)</span><span class="text-gray-800">$' + parseFloat(inv.tax_amount || 0).toFixed(2) + '</span></div>' +
+              '<div class="flex justify-between text-sm"><span class="text-gray-500">Tax (' + parseFloat(inv.tax_rate || 5).toFixed(1) + '%)</span><span class="text-gray-800">$' + parseFloat(inv.tax_amount || 0).toFixed(2) + '</span></div>' +
               (inv.discount_amount > 0 ? (function(){ var dt=inv.discount_type||'fixed'; var dl=dt==='percentage'?'Discount ('+inv.discount_amount+'%)':'Discount'; var dd=dt==='percentage'?parseFloat(inv.subtotal||0)*parseFloat(inv.discount_amount)/100:parseFloat(inv.discount_amount); return '<div class="flex justify-between text-sm"><span class="text-gray-500">'+dl+'</span><span class="text-green-600">-$'+dd.toFixed(2)+'</span></div>'; })() : '') +
               '<div class="flex justify-between text-lg font-bold border-t border-gray-200 pt-2 mt-2"><span class="text-gray-900">Total</span><span class="text-green-700">$' + parseFloat(inv.total || 0).toFixed(2) + ' CAD</span></div>' +
             '</div>' +
