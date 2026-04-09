@@ -445,9 +445,10 @@ document.addEventListener('DOMContentLoaded', () => {
       : '') +
 
       // Profit summary bar
-      '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;padding:16px;margin-bottom:20px;display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:16px;text-align:center">' +
-        '<div><div style="color:var(--text-muted);font-size:10px;text-transform:uppercase;letter-spacing:1px">Your Cost</div><div style="color:#ef4444;font-size:20px;font-weight:800">$' + totalCost.toFixed(2) + '</div></div>' +
-        '<div><div style="color:var(--text-muted);font-size:10px;text-transform:uppercase;letter-spacing:1px">Customer Price <span style="font-size:8px;opacity:0.6">(editable)</span></div><div style="display:flex;align-items:center;justify-content:center;gap:2px"><span style="color:var(--text-primary);font-size:20px;font-weight:800">$</span><input type="number" value="' + (state.customerPriceOverride !== null ? state.customerPriceOverride : customerTotal).toFixed(2) + '" onchange="window.__pbState.customerPriceOverride=Number(this.value)||null;window.__pbRender()" style="width:100px;background:transparent;border:none;border-bottom:2px solid var(--accent);color:var(--text-primary);font-size:20px;font-weight:800;text-align:center;padding:0"></div></div>' +
+      '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;padding:16px;margin-bottom:20px;display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr;gap:12px;text-align:center">' +
+        '<div><div style="color:var(--text-muted);font-size:10px;text-transform:uppercase;letter-spacing:1px">Line Item Cost</div><div style="color:var(--text-muted);font-size:18px;font-weight:700">$' + totalCost.toFixed(2) + '</div></div>' +
+        '<div><div style="color:var(--text-muted);font-size:10px;text-transform:uppercase;letter-spacing:1px">My Cost <span style="font-size:8px;opacity:0.6">(editable)</span></div><div style="display:flex;align-items:center;justify-content:center;gap:2px"><span style="color:#ef4444;font-size:20px;font-weight:800">$</span><input type="number" value="' + (state.myCost !== null ? state.myCost : totalCost).toFixed(2) + '" onchange="window.__pbState.myCost=parseFloat(this.value)||null;window.__pbRender()" style="width:90px;background:transparent;border:none;border-bottom:2px solid #ef4444;color:#ef4444;font-size:20px;font-weight:800;text-align:center;padding:0"></div></div>' +
+        '<div><div style="color:var(--text-muted);font-size:10px;text-transform:uppercase;letter-spacing:1px">Customer Price <span style="font-size:8px;opacity:0.6">(editable)</span></div><div style="display:flex;align-items:center;justify-content:center;gap:2px"><span style="color:var(--text-primary);font-size:20px;font-weight:800">$</span><input type="number" value="' + (state.customerPriceOverride !== null ? state.customerPriceOverride : customerTotal).toFixed(2) + '" onchange="window.__pbState.customerPriceOverride=parseFloat(this.value)||null;window.__pbRender()" style="width:90px;background:transparent;border:none;border-bottom:2px solid var(--accent);color:var(--text-primary);font-size:20px;font-weight:800;text-align:center;padding:0"></div></div>' +
         '<div><div style="color:var(--text-muted);font-size:10px;text-transform:uppercase;letter-spacing:1px">Your Profit</div><div style="color:#22c55e;font-size:20px;font-weight:800">$' + profit.toFixed(2) + '</div></div>' +
         '<div><div style="color:var(--text-muted);font-size:10px;text-transform:uppercase;letter-spacing:1px">Margin</div><div style="color:#22c55e;font-size:20px;font-weight:800">' + margin.toFixed(1) + '%</div></div>' +
       '</div>' +
@@ -1439,7 +1440,8 @@ document.addEventListener('DOMContentLoaded', () => {
         payment_terms_text: f.payment_terms_text || '',
         valid_until: f.valid_until || '',
         attached_report_id: f.attached_report_id || null,
-        due_days: 30
+        due_days: 30,
+        my_cost: state.myCost !== null ? state.myCost : null
       };
 
       let res;
@@ -1517,6 +1519,7 @@ document.addEventListener('DOMContentLoaded', () => {
       state.customerPricePerSquare = 0;
       state.showLineItemsToCustomer = false;
       state.customerPriceOverride = null;
+      state.myCost = null;
       state.showMaterialsToCustomer = false;
       state.showEdgesToCustomer = false;
       state.showSolarToCustomer = false;

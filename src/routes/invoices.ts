@@ -178,7 +178,7 @@ invoiceRoutes.post('/', async (c) => {
     const {
       customer_id, order_id, items, notes, terms, due_days, tax_rate, discount_amount,
       discount_type, document_type, scope_of_work, warranty_terms, payment_terms_text,
-      valid_until, attached_report_id, proposal_tier, proposal_group_id
+      valid_until, attached_report_id, proposal_tier, proposal_group_id, my_cost
     } = body
 
     if (!customer_id) return c.json({ error: 'customer_id is required' }, 400)
@@ -209,15 +209,16 @@ invoiceRoutes.post('/', async (c) => {
       INSERT INTO invoices (invoice_number, customer_id, order_id, subtotal, tax_rate, tax_amount,
                             discount_amount, total, status, due_date, notes, terms, created_by, document_type,
                             share_token, scope_of_work, warranty_terms, payment_terms_text, valid_until,
-                            attached_report_id, proposal_tier, proposal_group_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            attached_report_id, proposal_tier, proposal_group_id, my_cost)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       number, customer_id, order_id || null,
       subtotal, taxRateVal, taxAmount, discount, total,
       dueDate.toISOString().slice(0, 10),
       notes || null, terms || defaultTerms, 'admin', docType,
       shareToken, scope_of_work || '', warranty_terms || '', payment_terms_text || '',
-      valid_until || '', attached_report_id || null, proposal_tier || '', proposal_group_id || ''
+      valid_until || '', attached_report_id || null, proposal_tier || '', proposal_group_id || '',
+      my_cost != null ? my_cost : null
     ).run()
 
     const invoiceId = result.meta.last_row_id
@@ -267,7 +268,7 @@ invoiceRoutes.put('/:id', async (c) => {
     const {
       customer_id, order_id, items, notes, terms, due_days, tax_rate, discount_amount,
       discount_type, document_type, scope_of_work, warranty_terms, payment_terms_text,
-      valid_until, attached_report_id
+      valid_until, attached_report_id, my_cost
     } = body
 
     const docType = ['invoice', 'proposal', 'estimate'].includes(document_type) ? document_type : 'invoice'
@@ -287,13 +288,13 @@ invoiceRoutes.put('/:id', async (c) => {
       UPDATE invoices SET customer_id = ?, order_id = ?, subtotal = ?, tax_rate = ?,
         tax_amount = ?, discount_amount = ?, total = ?, due_date = ?, notes = ?, terms = ?,
         document_type = ?, scope_of_work = ?, warranty_terms = ?, payment_terms_text = ?,
-        valid_until = ?, attached_report_id = ?, updated_at = datetime('now')
+        valid_until = ?, attached_report_id = ?, my_cost = ?, updated_at = datetime('now')
       WHERE id = ?
     `).bind(
       customer_id || null, order_id || null, subtotal, taxRateVal, taxAmount, discount, total,
       dueDate.toISOString().slice(0, 10), notes || null, terms || null, docType,
       scope_of_work || '', warranty_terms || '', payment_terms_text || '',
-      valid_until || '', attached_report_id || null, id
+      valid_until || '', attached_report_id || null, my_cost != null ? my_cost : null, id
     ).run()
 
     if (items && items.length > 0) {
