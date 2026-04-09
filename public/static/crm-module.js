@@ -3315,6 +3315,7 @@
         if (!grouped[p.category]) grouped[p.category] = [];
         grouped[p.category].push(p);
       });
+      var _catColorMap = { blue: 'rgba(59,130,246,0.12)', sky: 'rgba(14,165,233,0.12)', gray: 'rgba(107,114,128,0.1)', emerald: 'rgba(16,185,129,0.12)', green: 'rgba(34,197,94,0.12)' };
       var catOrder = ['shingles', 'underlayment', 'ice_shield', 'starter_strip', 'ridge_cap', 'drip_edge', 'valley_metal', 'nails', 'ventilation', 'custom'];
       for (var ci = 0; ci < catOrder.length; ci++) {
         var catKey = catOrder[ci];
@@ -3322,10 +3323,10 @@
         if (!catItems || catItems.length === 0) continue;
         var catInfo = _catalogCategories[catKey] || { label: catKey, icon: 'fa-box', color: 'gray' };
         html += '<div class="bg-[#111111] rounded-xl border shadow-sm mb-4 overflow-hidden">';
-        html += '<div class="px-5 py-3 border-b border-white/5 flex items-center justify-between bg-' + catInfo.color + '-50">';
+        html += '<div class="px-5 py-3 border-b border-white/5 flex items-center justify-between" style="background:' + (_catColorMap[catInfo.color] || 'rgba(255,255,255,0.05)') + '">';
         html += '<h3 class="font-bold text-gray-100 text-sm"><i class="fas ' + catInfo.icon + ' text-' + catInfo.color + '-500 mr-2"></i>' + catInfo.label + ' <span class="text-xs font-normal text-gray-400">(' + catItems.length + ')</span></h3>';
         html += '</div>';
-        html += '<div class="divide-y divide-gray-100">';
+        html += '<div class="divide-y divide-white/5">';
         for (var pi = 0; pi < catItems.length; pi++) {
           var p = catItems[pi];
           html += '<div class="px-5 py-3 flex items-center justify-between hover:bg-[#111111]/5">';
