@@ -531,6 +531,31 @@ export function computeEdgeSummary(edges: EdgeMeasurement[]) {
 // ============================================================
 
 // ============================================================
+// fetchBuildingInsightsRaw — Return raw SolarBuildingInsights
+// ============================================================
+// Lightweight call that returns the parsed buildingInsights response
+// so callers can run buildSolarGeometry() on it directly.
+// Tries HIGH quality first, falls back to LOW (same as fetchSolarPitchAndImagery).
+export async function fetchBuildingInsightsRaw(
+  lat: number, lng: number, solarApiKey: string
+): Promise<import('./solar-geometry').SolarBuildingInsights | null> {
+  const preciseLat = parseFloat(lat.toFixed(7))
+  const preciseLng = parseFloat(lng.toFixed(7))
+  const baseUrl = `https://solar.googleapis.com/v1/buildingInsights:findClosest?location.latitude=${preciseLat}&location.longitude=${preciseLng}&key=${solarApiKey}`
+
+  for (const quality of ['HIGH', 'LOW'] as const) {
+    try {
+      const res = await fetch(`${baseUrl}&requiredQuality=${quality}`, { signal: AbortSignal.timeout(10_000) })
+      if (res.ok) return await res.json() as import('./solar-geometry').SolarBuildingInsights
+      if (res.status === 404) break  // No Solar coverage — don't retry
+    } catch {
+      // timeout or network error — fall through to LOW quality retry
+    }
+  }
+  return null
+}
+
+// ============================================================
 // REAL Google Solar API Call — buildingInsights:findClosest
 // ============================================================
 export async function callGoogleSolarAPI(

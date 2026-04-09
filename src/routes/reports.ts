@@ -16,8 +16,9 @@ import type { VisionFindings } from '../types'
 import {
   callGoogleSolarAPI, generateMockRoofReport, generateGPTRoofEstimate,
   generateEnhancedImagery, generateEdgesFromSegments, computeEdgeSummary,
-  fetchSolarPitchAndImagery, type SolarPitchAndImagery
+  fetchSolarPitchAndImagery, fetchBuildingInsightsRaw, type SolarPitchAndImagery
 } from '../services/solar-api'
+import { buildSolarGeometry, solarGeometryToTracePayload, getZoomForFootprint } from '../services/solar-geometry'
 import { buildDataLayersReport, generateSegmentsFromDLAnalysis, generateSegmentsFromAIGeometry } from '../services/report-engine'
 import { executeRoofOrder, type DataLayersAnalysis } from '../services/solar-datalayers'
 import { generateProfessionalReportHTML, buildVisionFindingsHTML, generateSimpleTwoPageReport } from '../templates/report-html'
@@ -2416,28 +2417,132 @@ async function _generateReportForOrderInner(
         `eave=${lm.eaves_total_ft}ft, ridge=${lm.ridges_total_ft}ft, hip=${lm.hips_total_ft}ft`)
 
     } else {
-      // ─── FALLBACK PATH: No trace data — use legacy Solar API ───
-      console.warn(`[Generate] Order ${orderId}: ⚠️ NO TRACE DATA — falling back to Solar API full report`)
+      // ─── FALLBACK PATH: No trace data ───
+      console.warn(`[Generate] Order ${orderId}: ⚠️ NO TRACE DATA — attempting Solar Geometry auto-eaves`)
 
+      // ── ATTEMPT 1: Solar Geometry auto-eaves → engine (Phase 1 auto-trace) ──
+      let autoTraceSucceeded = false
       if (solarApiKey && order.latitude && order.longitude) {
         try {
-          reportData = await callGoogleSolarAPI(order.latitude, order.longitude, solarApiKey, typeof orderId === 'string' ? parseInt(orderId) : orderId as number, order, mapsApiKey)
-          reportData.metadata.api_duration_ms = Date.now() - startTime
-          console.log(`[Generate] Order ${orderId}: Legacy Solar API report — ${reportData.total_footprint_sqft} sqft, pitch ${reportData.roof_pitch_degrees}°`)
+          const rawSolar = await fetchBuildingInsightsRaw(order.latitude, order.longitude, solarApiKey)
+          if (rawSolar) {
+            const solarGeo = buildSolarGeometry(rawSolar)
+            if (solarGeo) {
+              const autoPayload = solarGeometryToTracePayload(rawSolar, solarGeo, {
+                property_address: order.property_address,
+                homeowner_name:   order.homeowner_name,
+                order_number:     order.order_number,
+              })
+              if (autoPayload && autoPayload.eaves_outline.length >= 3) {
+                const engine = new RoofMeasurementEngine(autoPayload)
+                traceResult = engine.run()
+                autoTraceSucceeded = true
+                console.log(`[Generate] Order ${orderId}: ✅ Auto-eaves — ${autoPayload.eaves_outline.length} perimeter pts, pitch ${autoPayload.default_pitch}/12`)
+              }
+            }
+          }
         } catch (e: any) {
-          const is404 = e.message.includes('404') || e.message.includes('NOT_FOUND')
-          let gptEst = null
-          if (is404 && order.latitude && order.longitude) gptEst = await generateGPTRoofEstimate(order.property_address || '', order.latitude, order.longitude, env)
-          reportData = generateMockRoofReport(order, mapsApiKey, gptEst)
-          reportData.metadata.provider = is404 ? (gptEst ? 'gpt-vision-estimate' : 'estimated (no coverage)') : 'estimated (error)'
+          console.warn(`[Generate] Order ${orderId}: Auto-eaves failed: ${e.message}`)
         }
-      } else {
-        reportData = generateMockRoofReport(order, mapsApiKey)
       }
 
-      reportData.quality.notes = reportData.quality.notes || []
-      reportData.quality.notes.unshift('⚠️ NO ROOF TRACE DATA — measurements are Solar API estimates only. For accurate measurements, re-order with roof outline tracing.')
-      reportData.quality.confidence_score = Math.min(reportData.quality.confidence_score, 75)
+      if (autoTraceSucceeded && traceResult) {
+        // ── Auto-trace succeeded: build report from engine results (same as trace path) ──
+        const km  = traceResult.key_measurements
+        const lm  = traceResult.linear_measurements
+        const mat = traceResult.materials_estimate
+
+        const segments = traceResult.face_details.length > 0
+          ? traceResult.face_details.map((face, i) => ({
+              name: face.face_id || `Face ${i + 1}`,
+              footprint_area_sqft: Math.round(face.projected_area_ft2),
+              true_area_sqft:      Math.round(face.sloped_area_ft2),
+              pitch_degrees:       Math.round(Math.atan(face.pitch / 12) * 180 / Math.PI),
+              pitch_ratio:         `${face.pitch}/12`,
+              azimuth_degrees:     0,
+              azimuth_cardinal:    'N/A',
+              area_meters2:        Math.round(face.sloped_area_ft2 / 10.7639 * 10) / 10,
+            }))
+          : [{
+              name:                'Main Roof',
+              footprint_area_sqft: Math.round(km.total_projected_footprint_ft2),
+              true_area_sqft:      Math.round(km.total_true_area_ft2),
+              pitch_degrees:       Math.round(Math.atan((traceResult as any).default_pitch / 12) * 180 / Math.PI),
+              pitch_ratio:         km.dominant_pitch_label,
+              azimuth_degrees:     0,
+              azimuth_cardinal:    'N/A',
+              area_meters2:        Math.round(km.total_true_area_ft2 / 10.7639 * 10) / 10,
+            }]
+
+        reportData = {
+          property: {
+            address: order.property_address || '',
+            city: order.property_city || '', province: order.property_province || '',
+            postal_code: order.property_postal_code || '',
+            homeowner_name: order.homeowner_name || '', homeowner_email: order.homeowner_email || '',
+            latitude: order.latitude || 0, longitude: order.longitude || 0,
+          },
+          total_footprint_sqft:  Math.round(km.total_projected_footprint_ft2),
+          total_true_area_sqft:  Math.round(km.total_true_area_ft2),
+          total_squares:         km.total_squares_gross_w_waste,
+          waste_factor_pct:      Math.round((km.waste_factor - 1) * 100),
+          roof_pitch_degrees:    Math.round(Math.atan(parseFloat(km.dominant_pitch_label) / 12) * 180 / Math.PI),
+          roof_pitch_ratio:      km.dominant_pitch_label,
+          segments,
+          edge_measurements: {
+            eaves_total_ft:   lm.eaves_total_ft,
+            ridges_total_ft:  lm.ridges_total_ft,
+            hips_total_ft:    lm.hips_total_ft,
+            valleys_total_ft: lm.valleys_total_ft,
+            rakes_total_ft:   lm.rakes_total_ft,
+          },
+          materials: mat ? {
+            shingles_squares:      mat.shingles_squares,
+            underlayment_rolls:    mat.underlayment_rolls,
+            ice_shield_rolls:      mat.ice_shield_rolls || 0,
+            ridge_cap_bundles:     mat.ridge_cap_bundles,
+            drip_edge_ft:          mat.drip_edge_ft,
+            starter_strip_ft:      mat.starter_strip_ft || 0,
+            nails_lbs:             mat.nails_lbs,
+          } : undefined,
+          satellite_image_url: solarPitch?.satellite_image_url || '',
+          map_image_url:       solarPitch?.satellite_image_url || '',
+          metadata: {
+            generated_at:   new Date().toISOString(),
+            api_duration_ms: Date.now() - startTime,
+            provider:       'solar_geometry_auto_trace',
+            engine_version: 'trace_engine_v4+auto_eaves_v1',
+            order_id:       String(orderId),
+          },
+          quality: {
+            confidence_score: 82,
+            notes: ['⚠️ Measurements auto-generated from satellite data — no roof trace drawn. Accuracy ~80%. For maximum accuracy, submit a traced order.'],
+            data_sources: ['google_solar_api', 'trace_engine_v4'],
+          },
+        } as RoofReport
+
+      } else {
+        // ── ATTEMPT 2: Legacy Solar API full report (unchanged fallback) ──
+        if (solarApiKey && order.latitude && order.longitude) {
+          try {
+            reportData = await callGoogleSolarAPI(order.latitude, order.longitude, solarApiKey, typeof orderId === 'string' ? parseInt(orderId) : orderId as number, order, mapsApiKey)
+            reportData.metadata.api_duration_ms = Date.now() - startTime
+            console.log(`[Generate] Order ${orderId}: Legacy Solar API report — ${reportData.total_footprint_sqft} sqft, pitch ${reportData.roof_pitch_degrees}°`)
+          } catch (e: any) {
+            const is404 = e.message.includes('404') || e.message.includes('NOT_FOUND')
+            let gptEst = null
+            if (is404 && order.latitude && order.longitude) gptEst = await generateGPTRoofEstimate(order.property_address || '', order.latitude, order.longitude, env)
+            reportData = generateMockRoofReport(order, mapsApiKey, gptEst)
+            reportData.metadata.provider = is404 ? (gptEst ? 'gpt-vision-estimate' : 'estimated (no coverage)') : 'estimated (error)'
+          }
+        } else {
+          reportData = generateMockRoofReport(order, mapsApiKey)
+        }
+
+        reportData.quality.notes = reportData.quality.notes || []
+        reportData.quality.notes.unshift('⚠️ NO ROOF TRACE DATA — measurements are Solar API estimates only. For accurate measurements, re-order with roof outline tracing.')
+        reportData.quality.confidence_score = Math.min(reportData.quality.confidence_score, 75)
+      }
     }
 
     // ── AI ANALYSIS REMOVED FROM BASE REPORT ──

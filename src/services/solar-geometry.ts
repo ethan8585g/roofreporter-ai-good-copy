@@ -18,6 +18,7 @@
 // ============================================================
 
 import type { AIMeasurementAnalysis, AIRoofFacet, AIRoofLine, PerimeterPoint, MeasurementPoint, AIObstruction } from '../types'
+import type { TracePayload } from './roof-measurement-engine'
 
 // ============================================================
 // TYPES — Raw Google Solar API response structures
@@ -696,6 +697,155 @@ export function buildSolarGeometry(
     facets,
     lines,
     obstructions: []  // Not available from Solar API — Gemini /enhance can add these later
+  }
+}
+
+// ============================================================
+// INVERSE WEB MERCATOR — Pixel → Lat/Lng
+// ============================================================
+
+/** Inverse of latLngToWorldXY — converts Web Mercator world coordinates back to lat/lng */
+function worldXYToLatLng(wx: number, wy: number): { lat: number; lng: number } {
+  const lng = (wx - 128) * 360 / 256
+  const A = (128 - wy) * 4 * Math.PI / 256
+  const siny = (Math.exp(A) - 1) / (Math.exp(A) + 1)
+  const lat = Math.asin(Math.max(-1, Math.min(1, siny))) * 180 / Math.PI
+  return { lat, lng }
+}
+
+/** Compute the lat/lng bounding box of the 640×640 satellite tile — exact inverse of latLngToPixel */
+function computeImageBounds(
+  centerLat: number, centerLng: number,
+  zoom: number, tileSize: number = 640
+): { north: number; south: number; east: number; west: number } {
+  const scale = Math.pow(2, zoom)
+  const center = latLngToWorldXY(centerLat, centerLng)
+  const half = (tileSize / 2) / scale
+  const nw = worldXYToLatLng(center.wx - half, center.wy - half)
+  const se = worldXYToLatLng(center.wx + half, center.wy + half)
+  return { north: nw.lat, south: se.lat, east: se.lng, west: nw.lng }
+}
+
+/**
+ * Convert a pixel coordinate on the satellite tile to WGS84 lat/lng.
+ * Uses linear interpolation on the image bounds (Web Mercator approximation).
+ * Out-of-bounds pixels are clamped to the tile edge.
+ */
+export function pixelToLatLng(
+  pixel: { x: number; y: number },
+  imageBounds: { north: number; south: number; east: number; west: number },
+  imageWidth: number,
+  imageHeight: number
+): { lat: number; lng: number } {
+  const x = Math.max(0, Math.min(imageWidth,  pixel.x))
+  const y = Math.max(0, Math.min(imageHeight, pixel.y))
+  return {
+    lng: imageBounds.west  + (x / imageWidth)  * (imageBounds.east  - imageBounds.west),
+    lat: imageBounds.north - (y / imageHeight) * (imageBounds.north - imageBounds.south),
+  }
+}
+
+// ============================================================
+// AUTO-EAVES — Solar Geometry perimeter → lat/lng trace points
+// ============================================================
+
+/**
+ * Convert Solar Geometry's convex hull perimeter (pixel coords) to WGS84 lat/lng points
+ * suitable for use as `eaves_outline` in a TracePayload.
+ * Returns a closed polygon (first point repeated at end).
+ */
+export function autoEavesFromSolarGeometry(
+  geometry: AIMeasurementAnalysis,
+  centerLat: number,
+  centerLng: number,
+  zoom: number,
+  tileSize: number = 640
+): Array<{ lat: number; lng: number; elevation: null }> {
+  if (!geometry.perimeter || geometry.perimeter.length < 3) return []
+  const bounds = computeImageBounds(centerLat, centerLng, zoom, tileSize)
+  const pts = geometry.perimeter.map(pt => ({
+    ...pixelToLatLng({ x: pt.x, y: pt.y }, bounds, tileSize, tileSize),
+    elevation: null as null,
+  }))
+  // Close polygon
+  pts.push({ ...pts[0] })
+
+  // Round-trip validation log (dev aid — negligible cost)
+  const check = latLngToPixel(pts[0].lat, pts[0].lng, centerLat, centerLng, zoom, tileSize)
+  const dx = Math.round(check.x - geometry.perimeter[0].x)
+  const dy = Math.round(check.y - geometry.perimeter[0].y)
+  if (Math.abs(dx) > 1 || Math.abs(dy) > 1) {
+    console.warn(`[SolarGeometry] pixelToLatLng round-trip drift: (${dx}, ${dy}) px — check zoom/tileSize`)
+  }
+
+  return pts
+}
+
+// ============================================================
+// SOLAR GEOMETRY → TRACEPAYLOAD
+// ============================================================
+
+/**
+ * Assemble a full TracePayload from Solar Geometry output.
+ * Mirrors the geminiOutlineToTracePayload() pattern in sam3-segmentation.ts.
+ * Returns null if the perimeter is too small to be useful.
+ */
+export function solarGeometryToTracePayload(
+  solarResponse: SolarBuildingInsights,
+  geometry: AIMeasurementAnalysis,
+  order: { property_address?: string; homeowner_name?: string; order_number?: string },
+  options?: { tileSize?: number; footprintSqft?: number }
+): TracePayload | null {
+  const tileSize = options?.tileSize ?? 640
+  const centerLat = solarResponse.center.latitude
+  const centerLng = solarResponse.center.longitude
+
+  const totalAreaM2 = solarResponse.solarPotential.wholeRoofStats?.areaMeters2
+    || solarResponse.solarPotential.roofSegmentStats.reduce((s, seg) => s + (seg.stats?.areaMeters2 || 0), 0)
+  const footprintSqft = options?.footprintSqft ?? Math.round(totalAreaM2 * 10.7639)
+  const zoom = computeZoom(footprintSqft)
+  const bounds = computeImageBounds(centerLat, centerLng, zoom, tileSize)
+
+  const eaves_outline = autoEavesFromSolarGeometry(geometry, centerLat, centerLng, zoom, tileSize)
+  if (eaves_outline.length < 3) return null
+
+  // Convert AIRoofLine pixel coords → lat/lng TraceLine
+  function lineToTrace(line: AIRoofLine, id: string) {
+    return {
+      id,
+      pitch: null as number | null,
+      pts: [
+        { ...pixelToLatLng(line.start, bounds, tileSize, tileSize), elevation: null as null },
+        { ...pixelToLatLng(line.end,   bounds, tileSize, tileSize), elevation: null as null },
+      ],
+    }
+  }
+
+  const ridges  = geometry.lines.filter(l => l.type === 'RIDGE').map((l, i) => lineToTrace(l, `ridge_${i + 1}`))
+  const hips    = geometry.lines.filter(l => l.type === 'HIP').map((l, i)   => lineToTrace(l, `hip_${i + 1}`))
+  const valleys = geometry.lines.filter(l => l.type === 'VALLEY').map((l, i) => lineToTrace(l, `valley_${i + 1}`))
+
+  // Weighted average pitch from Solar segments (by area m²)
+  const segs = solarResponse.solarPotential.roofSegmentStats
+  const totalArea = segs.reduce((s, seg) => s + (seg.stats?.areaMeters2 || 0), 0) || 1
+  const weightedDeg = segs.reduce((s, seg) =>
+    s + (seg.pitchDegrees || 0) * (seg.stats?.areaMeters2 || 0), 0
+  ) / totalArea
+  const default_pitch = Math.round(12 * Math.tan(weightedDeg * Math.PI / 180) * 10) / 10
+
+  return {
+    address:       order.property_address || 'Unknown Address',
+    homeowner:     order.homeowner_name   || 'Unknown',
+    order_id:      order.order_number     || '',
+    default_pitch,
+    complexity:    segs.length > 4 ? 'complex' : segs.length > 2 ? 'medium' : 'simple',
+    include_waste: true,
+    eaves_outline,
+    ridges,
+    hips,
+    valleys,
+    rakes: [],
+    faces: [],
   }
 }
 
