@@ -1193,11 +1193,10 @@ document.addEventListener('DOMContentLoaded', () => {
     return `
     <div class="mb-4 flex items-center justify-between print:hidden">
       <button onclick="window._pb.backToEditor()" class="text-gray-500 hover:text-gray-700 text-sm"><i class="fas fa-arrow-left mr-1"></i>Back to Editor</button>
-      <div class="flex gap-2">
+      <div class="flex gap-2 flex-wrap">
         <button onclick="window.print()" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-300"><i class="fas fa-print mr-1"></i>Print</button>
-        <button onclick="window._pb.saveDraft()" class="px-4 py-2 bg-gray-700 text-white rounded-lg text-sm font-medium"><i class="fas fa-save mr-1"></i>Save</button>
-        <button onclick="window._pb.saveAndSend()" class="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700"><i class="fas fa-paper-plane mr-1"></i>Send</button>
-        <button onclick="createSupplierOrder(${state.editId || 'null'})" class="px-4 py-2 bg-cyan-500 text-white rounded-lg text-sm font-medium hover:bg-cyan-600"><i class="fas fa-truck mr-1"></i>Create Supplier Order</button>
+        <button onclick="window._pb.saveDraft()" class="px-4 py-2 bg-gray-700 text-white rounded-lg text-sm font-medium hover:bg-gray-800"><i class="fas fa-save mr-1"></i>Save Draft</button>
+        <button onclick="window._pb.saveAndSend()" class="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700"><i class="fas fa-paper-plane mr-1"></i>Save &amp; Send</button>
       </div>
     </div>
 
@@ -1727,7 +1726,15 @@ document.addEventListener('DOMContentLoaded', () => {
         attached_report_id: f.attached_report_id || null,
         due_days: 30,
         my_cost: state.myCost !== null ? state.myCost : null,
-        accent_color: state.accentColor || '#0ea5e9'
+        accent_color: state.accentColor || '#0ea5e9',
+        show_report_sections: {
+          area: !!state.showAreaToCustomer,
+          pitch: !!state.showPitchToCustomer,
+          materials: !!state.showMaterialsToCustomer,
+          edges: !!state.showEdgesToCustomer,
+          solar: !!state.showSolarToCustomer,
+          lineItems: !!state.showLineItemsToCustomer
+        }
       };
 
       let res;
@@ -2058,6 +2065,36 @@ document.addEventListener('DOMContentLoaded', () => {
           order_id: inv.order_id || null
         };
         state.accentColor = inv.accent_color || '#0ea5e9';
+
+        // Restore report section toggles
+        try {
+          const sections = inv.show_report_sections ? JSON.parse(inv.show_report_sections) : null;
+          if (sections) {
+            state.showAreaToCustomer     = !!sections.area;
+            state.showPitchToCustomer    = !!sections.pitch;
+            state.showMaterialsToCustomer = !!sections.materials;
+            state.showEdgesToCustomer    = !!sections.edges;
+            state.showSolarToCustomer    = !!sections.solar;
+            state.showLineItemsToCustomer = !!sections.lineItems;
+          }
+        } catch(e) {}
+
+        // Fetch attached report so preview can render its sections
+        if (inv.attached_report_id) {
+          try {
+            const rRes = await fetch('/api/reports/' + inv.attached_report_id, { headers: headers() });
+            if (rRes.ok) {
+              const rData = await rRes.json();
+              const rRow = rData.report;
+              if (rRow && rRow.api_response_raw) {
+                state.selectedReport = JSON.parse(rRow.api_response_raw);
+              }
+            }
+          } catch(e) {}
+        } else {
+          state.selectedReport = null;
+        }
+
         state.mode = 'edit';
         render();
       } catch (e) { pbToast('Failed to load proposal', 'error'); }
