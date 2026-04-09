@@ -32,6 +32,7 @@ document.addEventListener('DOMContentLoaded', () => {
     catalog: [],
     catalogLoaded: false,
     selectedReport: null,
+    reportSearch: '',
     selectedReportMaterials: null,
     markupPercent: 30,
     pricingEngineMode: 'markup',
@@ -44,6 +45,7 @@ document.addEventListener('DOMContentLoaded', () => {
     showAreaToCustomer: true,
     showLineItemsToCustomer: false,
     customerPriceOverride: null,
+    myCost: null,
     attachments: {
       includeRoofReport: true,
       includeMaterialBOM: true,
@@ -120,6 +122,70 @@ document.addEventListener('DOMContentLoaded', () => {
   // Expose state and render on window so inline onclick/onchange handlers can access them
   window.__pbState = state;
   window.__pbRender = function() { render(); };
+
+  // ============================================================
+  // DRAFT PERSISTENCE — sessionStorage so back-navigation restores form
+  // ============================================================
+  var PB_DRAFT_KEY = 'pb_form_draft';
+
+  function pbSaveDraft() {
+    try {
+      sessionStorage.setItem(PB_DRAFT_KEY, JSON.stringify({
+        form: state.form,
+        createStep: state.createStep,
+        pricingMethod: state.pricingMethod,
+        pricePerSquare: state.pricePerSquare,
+        selectedReport: state.selectedReport,
+        selectedReportMaterials: state.selectedReportMaterials,
+        markupPercent: state.markupPercent,
+        pricingEngineMode: state.pricingEngineMode,
+        customerPricePerSquare: state.customerPricePerSquare,
+        customerPriceOverride: state.customerPriceOverride,
+        showLineItemsToCustomer: state.showLineItemsToCustomer,
+        showMaterialsToCustomer: state.showMaterialsToCustomer,
+        showEdgesToCustomer: state.showEdgesToCustomer,
+        showSolarToCustomer: state.showSolarToCustomer,
+        showPitchToCustomer: state.showPitchToCustomer,
+        showAreaToCustomer: state.showAreaToCustomer,
+        attachments: state.attachments,
+        editId: state.editId
+      }));
+    } catch(e) {}
+  }
+
+  function pbClearDraft() {
+    try { sessionStorage.removeItem(PB_DRAFT_KEY); } catch(e) {}
+  }
+
+  function pbRestoreDraft() {
+    try {
+      var saved = sessionStorage.getItem(PB_DRAFT_KEY);
+      if (!saved) return false;
+      var d = JSON.parse(saved);
+      if (d.form) Object.assign(state.form, d.form);
+      state.createStep = d.createStep || 3;
+      state.pricingMethod = d.pricingMethod || 'line_item';
+      state.pricePerSquare = d.pricePerSquare || 0;
+      state.selectedReport = d.selectedReport || null;
+      state.selectedReportMaterials = d.selectedReportMaterials || null;
+      state.markupPercent = d.markupPercent != null ? d.markupPercent : 30;
+      state.pricingEngineMode = d.pricingEngineMode || 'markup';
+      state.customerPricePerSquare = d.customerPricePerSquare || 0;
+      state.customerPriceOverride = d.customerPriceOverride != null ? d.customerPriceOverride : null;
+      state.showLineItemsToCustomer = !!d.showLineItemsToCustomer;
+      state.showMaterialsToCustomer = !!d.showMaterialsToCustomer;
+      state.showEdgesToCustomer = !!d.showEdgesToCustomer;
+      state.showSolarToCustomer = !!d.showSolarToCustomer;
+      state.showPitchToCustomer = d.showPitchToCustomer != null ? d.showPitchToCustomer : true;
+      state.showAreaToCustomer = d.showAreaToCustomer != null ? d.showAreaToCustomer : true;
+      if (d.attachments) state.attachments = d.attachments;
+      state.editId = d.editId || null;
+      state.mode = 'create';
+      return true;
+    } catch(e) { return false; }
+  }
+
+  pbRestoreDraft();
 
   load();
   checkPrereqs();
@@ -208,15 +274,31 @@ document.addEventListener('DOMContentLoaded', () => {
   // NEW STEP 1: Select Report
   // ============================================================
   function renderSelectReport() {
-    return '<div style="max-width:700px;margin:40px auto;padding:0 20px">' +
-      '<div style="text-align:center;margin-bottom:32px">' +
-        '<h2 style="color:var(--text-primary);font-size:24px;font-weight:800;margin-bottom:8px">Select a Roof Report</h2>' +
-        '<p style="color:var(--text-muted);font-size:14px">Choose the measurement report for this proposal</p>' +
-      '</div>' +
+    var all = state.reports;
+    var term = (state.reportSearch || '').toLowerCase().trim();
+    var filtered = term
+      ? all.filter(function(r) { return (r.property_address || '').toLowerCase().includes(term); })
+      : all;
+    var visible = term ? filtered : filtered.slice(0, 5);
+    var hasMore = !term && all.length > 5;
 
-      (state.reports.length > 0 ?
-        '<div style="display:flex;flex-direction:column;gap:12px">' +
-          state.reports.map(function(r) {
+    var searchBar = all.length > 0
+      ? '<div style="margin-bottom:12px">' +
+          '<input type="text" placeholder="Search address\u2026" value="' + (term || '') + '" ' +
+            'oninput="window._pb.setReportSearch(this.value)" ' +
+            'style="width:100%;padding:10px 14px;border-radius:8px;border:1px solid var(--border-color);background:var(--bg-card);color:var(--text-primary);font-size:14px;box-sizing:border-box">' +
+        '</div>'
+      : '';
+
+    var hint = hasMore
+      ? '<p style="font-size:13px;color:var(--text-muted);margin:0 0 12px">Showing 5 of ' + all.length + ' reports \u2014 type an address to find others</p>'
+      : (term && filtered.length === 0
+          ? '<p style="font-size:14px;color:var(--text-muted);margin:0 0 12px">No reports match \u201c' + term + '\u201d</p>'
+          : '');
+
+    var cards = visible.length > 0
+      ? '<div style="display:flex;flex-direction:column;gap:12px">' +
+          visible.map(function(r) {
             var isSelected = state.form.attached_report_id == r.id;
             return '<div onclick="window._pb.pickReport(\'' + r.id + '\')" style="background:var(--bg-card);border:2px solid ' + (isSelected ? 'var(--accent)' : 'var(--border-color)') + ';border-radius:12px;padding:16px;cursor:pointer;transition:all 0.2s;display:flex;align-items:center;justify-content:space-between">' +
               '<div>' +
@@ -230,18 +312,28 @@ document.addEventListener('DOMContentLoaded', () => {
               (isSelected ? '<i class="fas fa-check-circle" style="color:var(--accent);font-size:20px"></i>' : '<i class="fas fa-circle" style="color:var(--border-color);font-size:20px"></i>') +
             '</div>';
           }).join('') +
-        '</div>' +
-
-        (state.form.attached_report_id ?
-          '<div style="margin-top:24px;text-align:center">' +
-            '<button onclick="window._pb.goToSupplier()" style="background:var(--accent);color:#0a0a0a;border:none;padding:14px 40px;border-radius:999px;font-weight:800;font-size:15px;cursor:pointer">Continue &rarr;</button>' +
-          '</div>' : ''
-        )
-      : '<div style="text-align:center;padding:40px;color:var(--text-muted)">' +
-          '<i class="fas fa-file-alt" style="font-size:48px;margin-bottom:16px;opacity:0.3"></i>' +
-          '<p style="font-weight:600;margin-bottom:8px">No completed reports found</p>' +
-          '<a href="/customer/order" style="color:var(--accent);text-decoration:underline">Order a roof report first</a>' +
         '</div>'
+      : '';
+
+    return '<div style="max-width:700px;margin:40px auto;padding:0 20px">' +
+      '<div style="text-align:center;margin-bottom:32px">' +
+        '<h2 style="color:var(--text-primary);font-size:24px;font-weight:800;margin-bottom:8px">Select a Roof Report</h2>' +
+        '<p style="color:var(--text-muted);font-size:14px">Choose the measurement report for this proposal</p>' +
+      '</div>' +
+
+      (all.length > 0
+        ? searchBar + hint + cards +
+
+          (state.form.attached_report_id ?
+            '<div style="margin-top:24px;text-align:center">' +
+              '<button onclick="window._pb.goToSupplier()" style="background:var(--accent);color:#0a0a0a;border:none;padding:14px 40px;border-radius:999px;font-weight:800;font-size:15px;cursor:pointer">Continue &rarr;</button>' +
+            '</div>' : ''
+          )
+        : '<div style="text-align:center;padding:40px;color:var(--text-muted)">' +
+            '<i class="fas fa-file-alt" style="font-size:48px;margin-bottom:16px;opacity:0.3"></i>' +
+            '<p style="font-weight:600;margin-bottom:8px">No completed reports found</p>' +
+            '<a href="/customer/order" style="color:var(--accent);text-decoration:underline">Order a roof report first</a>' +
+          '</div>'
       ) +
 
       '<div style="margin-top:24px;text-align:center">' +
@@ -318,7 +410,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (state.customerPriceOverride !== null && state.customerPriceOverride > 0) {
       customerTotal = state.customerPriceOverride;
     }
-    var profit = customerTotal - totalCost;
+    var effectiveCost = state.myCost !== null ? state.myCost : totalCost;
+    var profit = customerTotal - effectiveCost;
     var margin = customerTotal > 0 ? (profit / customerTotal * 100) : 0;
     var squares = state.selectedReport ? Math.ceil((state.selectedReport.roof_area_sqft || 0) / 100) : 0;
 
@@ -1398,6 +1491,7 @@ document.addEventListener('DOMContentLoaded', () => {
       } else {
         pbToast(andSend ? 'Proposal saved and marked as sent!' : 'Proposal saved as draft!', 'success');
       }
+      pbClearDraft();
       state.mode = 'list';
       state.editId = null;
       state.form = resetForm();
@@ -1412,7 +1506,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // ============================================================
   window._pb = {
     async create() {
-      state.mode = 'create'; state.editId = null; state.form = resetForm();
+      pbClearDraft(); state.mode = 'create'; state.editId = null; state.form = resetForm();
       state.createStep = 1;  // Start at report selection
       state.pricingMethod = 'line_item';
       state.pricePerSquare = 350;
@@ -1434,7 +1528,7 @@ document.addEventListener('DOMContentLoaded', () => {
       state.loading = false;
       render();
     },
-    backToList() { state.mode = 'list'; state.editId = null; state.form = resetForm(); render(); },
+    backToList() { pbClearDraft(); state.mode = 'list'; state.editId = null; state.form = resetForm(); render(); },
     async showSupplierOrders() {
       state.loading = true; render();
       try {
@@ -1486,7 +1580,7 @@ document.addEventListener('DOMContentLoaded', () => {
     },
     saveDraft() { saveProposal(false); },
     saveAndSend() { saveProposal(true); },
-    previewCurrent() { collectFormData(); state.mode = 'preview'; render(); },
+    previewCurrent() { collectFormData(); pbSaveDraft(); state.mode = 'preview'; render(); },
     shareLink(id, token) {
       if (token) {
         const url = window.location.origin + '/proposal/view/' + token;
@@ -1614,7 +1708,12 @@ document.addEventListener('DOMContentLoaded', () => {
       render();
     },
     async pickReport(reportId) {
+      state.reportSearch = '';
       await window._pb.selectReport(reportId);
+      render();
+    },
+    setReportSearch(term) {
+      state.reportSearch = (term || '').toLowerCase().trim();
       render();
     },
     goToSupplier() {
@@ -1628,6 +1727,7 @@ document.addEventListener('DOMContentLoaded', () => {
     previewProposal() {
       // Collect dashboard form data first
       window._pb.collectDashboardData();
+      pbSaveDraft();
       state.mode = 'preview';
       render();
     },
@@ -1674,6 +1774,7 @@ document.addEventListener('DOMContentLoaded', () => {
     downloadCustomerPDF() {
       // Collect data, switch to preview mode, then trigger print
       window._pb.collectDashboardData();
+      pbSaveDraft();
       state.mode = 'preview';
       render();
       setTimeout(function() { window.print(); }, 500);
