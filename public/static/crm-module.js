@@ -419,48 +419,49 @@
   function renderInvoices(data) {
     var invoices = data.invoices || [];
     var stats = data.stats || {};
-    var html = '<div class="flex items-center justify-between mb-5 flex-wrap gap-3"><div><h2 class="text-lg font-bold text-gray-100"><i class="fas fa-file-invoice-dollar text-emerald-500 mr-2"></i>Invoices</h2></div><button onclick="window._crmNewInvoice()" class="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-emerald-700"><i class="fas fa-plus mr-1"></i>New Invoice</button></div>';
+    var html = '<div class="flex items-center justify-between mb-5 flex-wrap gap-3"><div><h2 class="text-lg font-bold" style="color:var(--text-primary)"><i class="fas fa-file-invoice-dollar text-emerald-500 mr-2"></i>Invoices</h2></div><button onclick="window._crmNewInvoice()" class="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-emerald-700"><i class="fas fa-plus mr-1"></i>New Invoice</button></div>';
 
     // Gmail connect banner
     if (!_gmailConnected) {
-      html += '<div class="bg-white/10 border border-white/15 rounded-xl p-3 mb-4 flex items-center justify-between gap-3">' +
-        '<div class="flex items-center gap-2"><i class="fas fa-envelope text-gray-400"></i><span class="text-sm text-gray-400 font-medium">Connect Gmail to send invoices directly to customers.</span></div>' +
-        '<button onclick="window._crmConnectGmail()" class="bg-white/10 text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-white/10 shrink-0"><i class="fas fa-plug mr-1"></i>Connect Gmail</button>' +
+      html += '<div class="rounded-xl p-3 mb-4 flex items-center justify-between gap-3" style="background:var(--bg-elevated);border:1px solid var(--border-color)">' +
+        '<div class="flex items-center gap-2"><i class="fas fa-envelope" style="color:var(--text-muted)"></i><span class="text-sm font-medium" style="color:var(--text-muted)">Connect Gmail to send invoices directly to customers.</span></div>' +
+        '<button onclick="window._crmConnectGmail()" class="px-3 py-1.5 rounded-lg text-xs font-semibold shrink-0" style="background:var(--bg-card);border:1px solid var(--border-color);color:var(--text-primary)"><i class="fas fa-plug mr-1"></i>Connect Gmail</button>' +
         '</div>';
     }
 
     // Stats cards
     html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">' +
-      '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-gray-100">' + (stats.total || 0) + '</p><p class="text-[10px] text-gray-500">Total</p></div>' +
-      '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-emerald-400">' + money(stats.total_paid) + '</p><p class="text-[10px] text-gray-500">Collected</p></div>' +
-      '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-gray-400">' + money(stats.total_owing) + '</p><p class="text-[10px] text-gray-500">Outstanding</p></div>' +
-      '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-red-600">' + money(stats.total_overdue) + '</p><p class="text-[10px] text-gray-500">Overdue</p></div></div>';
+      '<div class="rounded-xl border p-4 text-center" style="background:var(--bg-card);border-color:var(--border-color)"><p class="text-2xl font-black" style="color:var(--text-primary)">' + (stats.total || 0) + '</p><p class="text-[10px]" style="color:var(--text-muted)">Total</p></div>' +
+      '<div class="rounded-xl border p-4 text-center" style="background:var(--bg-card);border-color:var(--border-color)"><p class="text-2xl font-black text-emerald-500">' + money(stats.total_paid) + '</p><p class="text-[10px]" style="color:var(--text-muted)">Collected</p></div>' +
+      '<div class="rounded-xl border p-4 text-center" style="background:var(--bg-card);border-color:var(--border-color)"><p class="text-2xl font-black" style="color:var(--text-secondary)">' + money(stats.total_owing) + '</p><p class="text-[10px]" style="color:var(--text-muted)">Outstanding</p></div>' +
+      '<div class="rounded-xl border p-4 text-center" style="background:var(--bg-card);border-color:var(--border-color)"><p class="text-2xl font-black text-red-500">' + money(stats.total_overdue) + '</p><p class="text-[10px]" style="color:var(--text-muted)">Overdue</p></div></div>';
 
     // Filter tabs
-    html += '<div class="flex gap-1 mb-4 bg-[#111111] rounded-lg border p-1 overflow-x-auto">';
+    html += '<div class="flex gap-1 mb-4 rounded-lg p-1 overflow-x-auto" style="background:var(--bg-elevated);border:1px solid var(--border-color)">';
     var filters = [['','All'],['owing','Owing'],['paid','Paid']];
     for (var f = 0; f < filters.length; f++) {
-      html += '<button onclick="window._crmFilterInvoices(\'' + filters[f][0] + '\')" class="px-4 py-1.5 rounded-lg text-xs font-medium transition-colors hover:bg-[#111111]/10 ' + (((!window._invFilter && !filters[f][0]) || window._invFilter === filters[f][0]) ? 'bg-brand-600 text-white' : 'text-gray-400') + '">' + filters[f][1] + '</button>';
+      var isActive = (!window._invFilter && !filters[f][0]) || window._invFilter === filters[f][0];
+      html += '<button onclick="window._crmFilterInvoices(\'' + filters[f][0] + '\')" class="px-4 py-1.5 rounded-lg text-xs font-medium transition-colors ' + (isActive ? 'bg-brand-600 text-white' : '') + '" style="' + (isActive ? '' : 'color:var(--text-muted)') + '">' + filters[f][1] + '</button>';
     }
     html += '</div>';
 
     if (invoices.length === 0) {
-      html += '<div class="bg-[#111111] rounded-xl border p-12 text-center"><div class="w-16 h-16 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-4"><i class="fas fa-file-invoice-dollar text-emerald-400 text-2xl"></i></div><h3 class="text-lg font-semibold text-gray-300 mb-2">No Invoices Yet</h3><p class="text-gray-500 mb-4">Create your first invoice to start tracking payments.</p><button onclick="window._crmNewInvoice()" class="bg-emerald-600 text-white px-6 py-2.5 rounded-xl font-semibold hover:bg-emerald-700"><i class="fas fa-plus mr-2"></i>Create Invoice</button></div>';
+      html += '<div class="rounded-xl border p-12 text-center" style="background:var(--bg-card);border-color:var(--border-color)"><div class="w-16 h-16 bg-emerald-500/10 rounded-full flex items-center justify-center mx-auto mb-4"><i class="fas fa-file-invoice-dollar text-emerald-500 text-2xl"></i></div><h3 class="text-lg font-semibold mb-2" style="color:var(--text-primary)">No Invoices Yet</h3><p class="mb-4" style="color:var(--text-muted)">Create your first invoice to start tracking payments.</p><button onclick="window._crmNewInvoice()" class="bg-emerald-600 text-white px-6 py-2.5 rounded-xl font-semibold hover:bg-emerald-700"><i class="fas fa-plus mr-2"></i>Create Invoice</button></div>';
     } else {
-      html += '<div class="bg-[#111111] rounded-xl border overflow-hidden overflow-x-auto"><table class="w-full text-sm"><thead class="bg-[#0A0A0A]"><tr><th class="px-4 py-3 text-left text-xs font-semibold text-gray-500">Invoice #</th><th class="px-4 py-3 text-left text-xs font-semibold text-gray-500">Customer</th><th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 hidden md:table-cell">Date</th><th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 hidden md:table-cell">Due</th><th class="px-4 py-3 text-center text-xs font-semibold text-gray-500">Status</th><th class="px-4 py-3 text-right text-xs font-semibold text-gray-500">Amount</th><th class="px-4 py-3"></th></tr></thead><tbody class="divide-y divide-white/5">';
+      html += '<div class="rounded-xl border overflow-hidden overflow-x-auto" style="background:var(--bg-card);border-color:var(--border-color)"><table class="w-full text-sm"><thead style="background:var(--bg-elevated)"><tr><th class="px-4 py-3 text-left text-xs font-semibold" style="color:var(--text-muted)">Invoice #</th><th class="px-4 py-3 text-left text-xs font-semibold" style="color:var(--text-muted)">Customer</th><th class="px-4 py-3 text-left text-xs font-semibold hidden md:table-cell" style="color:var(--text-muted)">Date</th><th class="px-4 py-3 text-left text-xs font-semibold hidden md:table-cell" style="color:var(--text-muted)">Due</th><th class="px-4 py-3 text-center text-xs font-semibold" style="color:var(--text-muted)">Status</th><th class="px-4 py-3 text-right text-xs font-semibold" style="color:var(--text-muted)">Amount</th><th class="px-4 py-3"></th></tr></thead><tbody>';
       for (var i = 0; i < invoices.length; i++) {
         var inv = invoices[i];
-        html += '<tr class="hover:bg-white/5 cursor-pointer" onclick="window._crmViewInvoice(' + inv.id + ')"><td class="px-4 py-3 font-mono text-xs font-bold" style="color:#fff">' + inv.invoice_number + '</td><td class="px-4 py-3" style="color:#fff">' + (inv.customer_name || 'N/A') + '</td><td class="px-4 py-3 text-xs hidden md:table-cell" style="color:#d1d5db">' + fmtDate(inv.created_at) + '</td><td class="px-4 py-3 text-xs hidden md:table-cell" style="color:#d1d5db">' + fmtDate(inv.due_date) + '</td><td class="px-4 py-3 text-center">' + badge(inv.status) + '</td><td class="px-4 py-3 text-right font-semibold" style="color:#fff">' + money(inv.total) + '</td><td class="px-4 py-3 text-right" onclick="event.stopPropagation()"><div class="flex items-center gap-1 justify-end">';
-        html += '<button onclick="window._crmViewInvoice(' + inv.id + ')" class="text-xs hover:underline font-medium" style="color:#fff"><i class="fas fa-eye mr-0.5"></i>View</button>';
-        if (inv.status === 'draft') html += '<button onclick="window._crmEditInvoice(' + inv.id + ')" class="text-xs hover:underline ml-2" style="color:#e5e7eb"><i class="fas fa-edit mr-0.5"></i>Edit</button>';
-        if (inv.status === 'draft' || inv.status === 'sent') html += '<button onclick="window._crmSendInvoice(' + inv.id + ')" class="text-xs hover:underline ml-2" style="color:#60a5fa"><i class="fas fa-paper-plane mr-0.5"></i>Send</button>';
+        html += '<tr class="cursor-pointer" style="border-top:1px solid var(--border-color)" onmouseover="this.style.background=\'var(--bg-elevated)\'" onmouseout="this.style.background=\'\'" onclick="window._crmViewInvoice(' + inv.id + ')"><td class="px-4 py-3 font-mono text-xs font-bold" style="color:var(--text-primary)">' + inv.invoice_number + '</td><td class="px-4 py-3" style="color:var(--text-primary)">' + (inv.customer_name || 'N/A') + '</td><td class="px-4 py-3 text-xs hidden md:table-cell" style="color:var(--text-secondary)">' + fmtDate(inv.created_at) + '</td><td class="px-4 py-3 text-xs hidden md:table-cell" style="color:var(--text-secondary)">' + fmtDate(inv.due_date) + '</td><td class="px-4 py-3 text-center">' + badge(inv.status) + '</td><td class="px-4 py-3 text-right font-semibold" style="color:var(--text-primary)">' + money(inv.total) + '</td><td class="px-4 py-3 text-right" onclick="event.stopPropagation()"><div class="flex items-center gap-1 justify-end">';
+        html += '<button onclick="window._crmViewInvoice(' + inv.id + ')" class="text-xs hover:underline font-medium" style="color:var(--text-primary)"><i class="fas fa-eye mr-0.5"></i>View</button>';
+        if (inv.status === 'draft') html += '<button onclick="window._crmEditInvoice(' + inv.id + ')" class="text-xs hover:underline ml-2" style="color:var(--text-secondary)"><i class="fas fa-edit mr-0.5"></i>Edit</button>';
+        if (inv.status === 'draft' || inv.status === 'sent') html += '<button onclick="window._crmSendInvoice(' + inv.id + ')" class="text-xs hover:underline ml-2 text-blue-500"><i class="fas fa-paper-plane mr-0.5"></i>Send</button>';
         if (inv.square_payment_link_url) {
-          html += '<a href="' + inv.square_payment_link_url + '" target="_blank" class="text-xs px-2 py-0.5 rounded-full font-semibold ml-2" style="background:rgba(16,185,129,0.15);color:#34d399"><i class="fas fa-credit-card mr-0.5"></i>Pay Link</a>';
+          html += '<a href="' + inv.square_payment_link_url + '" target="_blank" class="text-xs px-2 py-0.5 rounded-full font-semibold ml-2" style="background:rgba(16,185,129,0.15);color:#10b981"><i class="fas fa-credit-card mr-0.5"></i>Pay Link</a>';
         } else if (inv.status !== 'paid' && inv.status !== 'cancelled') {
-          html += '<button onclick="event.stopPropagation();window._crmGenPayLink(' + inv.id + ')" class="text-xs px-2 py-0.5 rounded-full font-semibold ml-2" style="background:rgba(16,185,129,0.15);color:#34d399"><i class="fas fa-credit-card mr-0.5"></i>+ Pay Link</button>';
+          html += '<button onclick="event.stopPropagation();window._crmGenPayLink(' + inv.id + ')" class="text-xs px-2 py-0.5 rounded-full font-semibold ml-2" style="background:rgba(16,185,129,0.15);color:#10b981"><i class="fas fa-credit-card mr-0.5"></i>+ Pay Link</button>';
         }
-        if (inv.status !== 'paid' && inv.status !== 'cancelled') html += '<button onclick="window._crmMarkInvoice(' + inv.id + ',\'paid\')" class="text-xs hover:underline ml-2" style="color:#34d399">Mark Paid</button>';
-        html += '<button onclick="window._crmDeleteInvoice(' + inv.id + ')" class="ml-2" style="color:#9ca3af"><i class="fas fa-trash text-xs"></i></button>';
+        if (inv.status !== 'paid' && inv.status !== 'cancelled') html += '<button onclick="window._crmMarkInvoice(' + inv.id + ',\'paid\')" class="text-xs hover:underline ml-2 text-emerald-500">Mark Paid</button>';
+        html += '<button onclick="window._crmDeleteInvoice(' + inv.id + ')" class="ml-2" style="color:var(--text-muted)"><i class="fas fa-trash text-xs"></i></button>';
         html += '</div></td></tr>';
       }
       html += '</tbody></table></div>';
@@ -553,64 +554,63 @@
         body += '<div class="flex items-center justify-between">';
         body += '<div><span class="font-mono text-lg font-bold text-brand-600">' + inv.invoice_number + '</span></div>';
         body += '<div class="flex items-center gap-2">' + badge(inv.status);
-        if (inv.status === 'draft') body += '<button onclick="closeModal();window._crmEditInvoice(' + id + ')" class="text-xs bg-white/5 text-gray-300 px-3 py-1 rounded-lg hover:bg-gray-200"><i class="fas fa-edit mr-1"></i>Edit</button>';
+        if (inv.status === 'draft') body += '<button onclick="closeModal();window._crmEditInvoice(' + id + ')" class="text-xs px-3 py-1 rounded-lg" style="background:var(--bg-elevated);border:1px solid var(--border-color);color:var(--text-secondary)"><i class="fas fa-edit mr-1"></i>Edit</button>';
         body += '</div></div>';
 
         // Customer info
-        body += '<div class="bg-[#0A0A0A] rounded-xl p-4">';
-        body += '<h4 class="text-xs font-semibold text-gray-500 uppercase mb-2"><i class="fas fa-user mr-1"></i>Bill To</h4>';
-        body += '<p class="font-semibold text-gray-100">' + (inv.customer_name || 'N/A') + '</p>';
-        if (inv.customer_email) body += '<p class="text-sm text-gray-400"><i class="fas fa-envelope mr-1 text-gray-400"></i>' + inv.customer_email + '</p>';
-        if (inv.customer_phone) body += '<p class="text-sm text-gray-400"><i class="fas fa-phone mr-1 text-gray-400"></i>' + inv.customer_phone + '</p>';
+        body += '<div class="rounded-xl p-4" style="background:var(--bg-elevated);border:1px solid var(--border-color)">';
+        body += '<h4 class="text-xs font-semibold uppercase mb-2" style="color:var(--text-muted)"><i class="fas fa-user mr-1"></i>Bill To</h4>';
+        body += '<p class="font-semibold" style="color:var(--text-primary)">' + (inv.customer_name || 'N/A') + '</p>';
+        if (inv.customer_email) body += '<p class="text-sm" style="color:var(--text-secondary)"><i class="fas fa-envelope mr-1"></i>' + inv.customer_email + '</p>';
+        if (inv.customer_phone) body += '<p class="text-sm" style="color:var(--text-secondary)"><i class="fas fa-phone mr-1"></i>' + inv.customer_phone + '</p>';
         var addr = [inv.customer_address, inv.customer_city, inv.customer_province, inv.customer_postal].filter(Boolean).join(', ');
-        if (addr) body += '<p class="text-sm text-gray-400 mt-1"><i class="fas fa-map-marker-alt mr-1 text-gray-400"></i>' + addr + '</p>';
+        if (addr) body += '<p class="text-sm mt-1" style="color:var(--text-secondary)"><i class="fas fa-map-marker-alt mr-1"></i>' + addr + '</p>';
         body += '</div>';
 
         // Dates row
         body += '<div class="grid grid-cols-3 gap-3">';
-        body += '<div class="bg-blue-500/10 rounded-xl p-3 text-center"><p class="text-xs text-blue-400 mb-1">Created</p><p class="text-sm font-semibold text-blue-300">' + fmtDate(inv.created_at) + '</p></div>';
-        body += '<div class="bg-white/10 rounded-xl p-3 text-center"><p class="text-xs text-gray-400 mb-1">Due Date</p><p class="text-sm font-semibold text-gray-200">' + fmtDate(inv.due_date) + '</p></div>';
-        body += '<div class="bg-green-500/10 rounded-xl p-3 text-center"><p class="text-xs text-green-400 mb-1">Paid</p><p class="text-sm font-semibold text-green-300">' + (inv.paid_date ? fmtDate(inv.paid_date) : '—') + '</p></div>';
+        body += '<div class="bg-blue-500/10 rounded-xl p-3 text-center"><p class="text-xs text-blue-500 mb-1">Created</p><p class="text-sm font-semibold text-blue-500">' + fmtDate(inv.created_at) + '</p></div>';
+        body += '<div class="rounded-xl p-3 text-center" style="background:var(--bg-elevated);border:1px solid var(--border-color)"><p class="text-xs mb-1" style="color:var(--text-muted)">Due Date</p><p class="text-sm font-semibold" style="color:var(--text-primary)">' + fmtDate(inv.due_date) + '</p></div>';
+        body += '<div class="bg-green-500/10 rounded-xl p-3 text-center"><p class="text-xs text-emerald-500 mb-1">Paid</p><p class="text-sm font-semibold text-emerald-500">' + (inv.paid_date ? fmtDate(inv.paid_date) : '—') + '</p></div>';
         body += '</div>';
 
         // Line items table
         if (items.length > 0) {
-          body += '<div class="border border-white/10 rounded-xl overflow-hidden">';
-          body += '<table class="w-full text-sm"><thead class="bg-[#0A0A0A]"><tr><th class="px-4 py-2.5 text-left text-xs font-semibold text-gray-500">Description</th><th class="px-4 py-2.5 text-center text-xs font-semibold text-gray-500 w-16">Qty</th><th class="px-4 py-2.5 text-right text-xs font-semibold text-gray-500 w-24">Price</th><th class="px-4 py-2.5 text-right text-xs font-semibold text-gray-500 w-24">Amount</th></tr></thead><tbody class="divide-y divide-white/5">';
+          body += '<div class="rounded-xl overflow-hidden" style="border:1px solid var(--border-color)">';
+          body += '<table class="w-full text-sm"><thead style="background:var(--bg-elevated)"><tr><th class="px-4 py-2.5 text-left text-xs font-semibold" style="color:var(--text-muted)">Description</th><th class="px-4 py-2.5 text-center text-xs font-semibold w-16" style="color:var(--text-muted)">Qty</th><th class="px-4 py-2.5 text-right text-xs font-semibold w-24" style="color:var(--text-muted)">Price</th><th class="px-4 py-2.5 text-right text-xs font-semibold w-24" style="color:var(--text-muted)">Amount</th></tr></thead><tbody>';
           for (var i = 0; i < items.length; i++) {
-            body += '<tr><td class="px-4 py-2.5 text-gray-300">' + items[i].description + '</td><td class="px-4 py-2.5 text-center text-gray-400">' + items[i].quantity + '</td><td class="px-4 py-2.5 text-right text-gray-400">' + money(items[i].unit_price) + '</td><td class="px-4 py-2.5 text-right font-medium text-gray-100">' + money(items[i].amount) + '</td></tr>';
+            body += '<tr style="border-top:1px solid var(--border-color)"><td class="px-4 py-2.5" style="color:var(--text-secondary)">' + items[i].description + '</td><td class="px-4 py-2.5 text-center" style="color:var(--text-muted)">' + items[i].quantity + '</td><td class="px-4 py-2.5 text-right" style="color:var(--text-muted)">' + money(items[i].unit_price) + '</td><td class="px-4 py-2.5 text-right font-medium" style="color:var(--text-primary)">' + money(items[i].amount) + '</td></tr>';
           }
           body += '</tbody></table></div>';
         }
 
         // Totals
-        body += '<div class="bg-[#0A0A0A] rounded-xl p-4">';
-        body += '<div class="flex justify-between text-sm text-gray-400 mb-1"><span>Subtotal</span><span>' + money(inv.subtotal) + '</span></div>';
-        if (inv.tax_amount) body += '<div class="flex justify-between text-sm text-gray-400 mb-1"><span>Tax (' + (inv.tax_rate || 5) + '%)</span><span>' + money(inv.tax_amount) + '</span></div>';
-        if (inv.discount_amount) body += '<div class="flex justify-between text-sm text-gray-400 mb-1"><span>Discount</span><span class="text-emerald-400">-' + money(inv.discount_amount) + '</span></div>';
-        body += '<div class="flex justify-between text-lg font-bold text-gray-100 border-t border-white/10 pt-2 mt-2"><span>Total</span><span>' + money(inv.total) + ' CAD</span></div>';
+        body += '<div class="rounded-xl p-4" style="background:var(--bg-elevated);border:1px solid var(--border-color)">';
+        body += '<div class="flex justify-between text-sm mb-1" style="color:var(--text-muted)"><span>Subtotal</span><span>' + money(inv.subtotal) + '</span></div>';
+        if (inv.tax_amount) body += '<div class="flex justify-between text-sm mb-1" style="color:var(--text-muted)"><span>Tax (' + (inv.tax_rate || 5) + '%)</span><span>' + money(inv.tax_amount) + '</span></div>';
+        if (inv.discount_amount) body += '<div class="flex justify-between text-sm mb-1" style="color:var(--text-muted)"><span>Discount</span><span class="text-emerald-500">-' + money(inv.discount_amount) + '</span></div>';
+        body += '<div class="flex justify-between text-lg font-bold pt-2 mt-2" style="color:var(--text-primary);border-top:1px solid var(--border-color)"><span>Total</span><span>' + money(inv.total) + ' CAD</span></div>';
         body += '</div>';
 
         // Notes & Terms
-        if (inv.notes) body += '<div class="bg-blue-500/10 rounded-xl p-3"><h4 class="text-xs font-semibold text-blue-400 uppercase mb-1"><i class="fas fa-sticky-note mr-1"></i>Notes</h4><p class="text-sm text-blue-200">' + inv.notes + '</p></div>';
-        if (inv.terms) body += '<div class="bg-[#0A0A0A] rounded-xl p-3"><h4 class="text-xs font-semibold text-gray-500 uppercase mb-1"><i class="fas fa-file-contract mr-1"></i>Terms</h4><p class="text-sm text-gray-300">' + inv.terms + '</p></div>';
+        if (inv.notes) body += '<div class="bg-blue-500/10 rounded-xl p-3"><h4 class="text-xs font-semibold text-blue-500 uppercase mb-1"><i class="fas fa-sticky-note mr-1"></i>Notes</h4><p class="text-sm text-blue-600">' + inv.notes + '</p></div>';
+        if (inv.terms) body += '<div class="rounded-xl p-3" style="background:var(--bg-elevated);border:1px solid var(--border-color)"><h4 class="text-xs font-semibold uppercase mb-1" style="color:var(--text-muted)"><i class="fas fa-file-contract mr-1"></i>Terms</h4><p class="text-sm" style="color:var(--text-secondary)">' + inv.terms + '</p></div>';
 
         // Title + address (if present)
-        if (inv.title) body += '<div class="bg-sky-500/10 rounded-xl p-3"><p class="text-xs font-semibold text-sky-400 uppercase mb-1"><i class="fas fa-tag mr-1"></i>Project</p><p class="text-sm font-semibold text-sky-200">' + inv.title + '</p>' + (inv.property_address ? '<p class="text-xs text-sky-400 mt-0.5"><i class="fas fa-map-marker-alt mr-1"></i>' + inv.property_address + '</p>' : '') + '</div>';
+        if (inv.title) body += '<div class="bg-sky-500/10 rounded-xl p-3"><p class="text-xs font-semibold text-sky-500 uppercase mb-1"><i class="fas fa-tag mr-1"></i>Project</p><p class="text-sm font-semibold text-sky-600">' + inv.title + '</p>' + (inv.property_address ? '<p class="text-xs text-sky-500 mt-0.5"><i class="fas fa-map-marker-alt mr-1"></i>' + inv.property_address + '</p>' : '') + '</div>';
 
         // Share link
-        if (inv.share_token) body += '<div class="bg-[#0A0A0A] rounded-xl p-3 flex items-center justify-between gap-2"><div class="min-w-0"><p class="text-xs font-semibold text-gray-500 mb-0.5">Customer Link</p><p class="text-xs text-brand-600 truncate font-mono">/invoice/view/' + inv.share_token + '</p></div><button onclick="navigator.clipboard.writeText(window.location.origin+\'/invoice/view/' + inv.share_token + '\').then(function(){toast(\'Link copied!\');})" class="shrink-0 text-xs bg-[#111111] border border-white/10 px-2 py-1 rounded-lg hover:bg-[#111111]/5"><i class="fas fa-copy mr-1"></i>Copy</button></div>';
+        if (inv.share_token) body += '<div class="rounded-xl p-3 flex items-center justify-between gap-2" style="background:var(--bg-elevated);border:1px solid var(--border-color)"><div class="min-w-0"><p class="text-xs font-semibold mb-0.5" style="color:var(--text-muted)">Customer Link</p><p class="text-xs text-brand-600 truncate font-mono">/invoice/view/' + inv.share_token + '</p></div><button onclick="navigator.clipboard.writeText(window.location.origin+\'/invoice/view/' + inv.share_token + '\').then(function(){toast(\'Link copied!\');})" class="shrink-0 text-xs px-2 py-1 rounded-lg" style="background:var(--bg-card);border:1px solid var(--border-color);color:var(--text-primary)"><i class="fas fa-copy mr-1"></i>Copy</button></div>';
 
         // Square payment link
-        if (inv.square_payment_link_url) body += '<div class="bg-green-500/10 rounded-xl p-3 flex items-center justify-between gap-2"><div><p class="text-xs font-semibold text-emerald-400 mb-0.5"><i class="fas fa-credit-card mr-1"></i>Square Payment Link</p><p class="text-xs text-green-300 truncate">Ready to pay</p></div><div class="flex gap-2 shrink-0"><a href="' + inv.square_payment_link_url + '" target="_blank" class="text-xs bg-green-600 text-white px-2 py-1 rounded-lg hover:bg-green-700">Open</a><button onclick="navigator.clipboard.writeText(\'' + inv.square_payment_link_url + '\').then(function(){toast(\'Link copied!\');})" class="text-xs bg-[#111111] border border-green-500/20 text-white px-2 py-1 rounded-lg hover:bg-white/10">Copy</button></div></div>';
+        if (inv.square_payment_link_url) body += '<div class="bg-green-500/10 rounded-xl p-3 flex items-center justify-between gap-2"><div><p class="text-xs font-semibold text-emerald-500 mb-0.5"><i class="fas fa-credit-card mr-1"></i>Square Payment Link</p><p class="text-xs text-emerald-600 truncate">Ready to pay</p></div><div class="flex gap-2 shrink-0"><a href="' + inv.square_payment_link_url + '" target="_blank" class="text-xs bg-green-600 text-white px-2 py-1 rounded-lg hover:bg-green-700">Open</a><button onclick="navigator.clipboard.writeText(\'' + inv.square_payment_link_url + '\').then(function(){toast(\'Link copied!\');})" class="text-xs px-2 py-1 rounded-lg" style="background:var(--bg-card);border:1px solid var(--border-color);color:var(--text-primary)">Copy</button></div></div>';
 
         // Action buttons
         body += '<div class="flex gap-2 pt-2 flex-wrap">';
-        // PDF download
         if (inv.share_token) {
-          body += '<a href="/proposal/view/' + inv.share_token + '?print=1" target="_blank" class="flex-1 py-2.5 bg-gray-800 text-white rounded-xl text-sm font-semibold hover:bg-gray-900 text-center min-w-0"><i class="fas fa-file-pdf mr-1"></i>Download PDF</a>';
+          body += '<a href="/proposal/view/' + inv.share_token + '?print=1" target="_blank" class="flex-1 py-2.5 rounded-xl text-sm font-semibold text-center min-w-0" style="background:var(--bg-elevated);border:1px solid var(--border-color);color:var(--text-primary)"><i class="fas fa-file-pdf mr-1"></i>Download PDF</a>';
         }
-        if (inv.status === 'draft') body += '<button onclick="closeModal();window._crmEditInvoice(' + id + ')" class="flex-1 py-2.5 bg-white/5 text-gray-300 rounded-xl text-sm font-semibold hover:bg-gray-200 min-w-0"><i class="fas fa-edit mr-1"></i>Edit</button>';
+        if (inv.status === 'draft') body += '<button onclick="closeModal();window._crmEditInvoice(' + id + ')" class="flex-1 py-2.5 rounded-xl text-sm font-semibold min-w-0" style="background:var(--bg-elevated);border:1px solid var(--border-color);color:var(--text-secondary)"><i class="fas fa-edit mr-1"></i>Edit</button>';
         if (inv.status !== 'cancelled') body += '<button onclick="closeModal();window._crmSendInvoice(' + id + ')" class="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 min-w-0"><i class="fas fa-paper-plane mr-1"></i>Send via Gmail</button>';
         if (inv.status !== 'paid' && inv.status !== 'cancelled') body += '<button onclick="closeModal();window._crmGenPayLink(' + id + ')" class="flex-1 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-semibold hover:bg-emerald-700 min-w-0"><i class="fas fa-credit-card mr-1"></i>Square Pay Link</button>';
         if (inv.status !== 'paid' && inv.status !== 'cancelled') body += '<button onclick="closeModal();window._crmMarkInvoice(' + id + ',\'paid\')" class="flex-1 py-2.5 bg-green-600 text-white rounded-xl text-sm font-semibold hover:bg-green-700 min-w-0"><i class="fas fa-check mr-1"></i>Mark Paid</button>';
