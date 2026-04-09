@@ -276,6 +276,9 @@ function selectTier(tier, price) {
 // Phase B: Satellite Roof Pin Confirmation
 // ============================================================
 function renderStep2() {
+  if (state.addressPhase === 'delivery') {
+    return renderStep2DeliveryPhase();
+  }
   if (state.addressPhase === 'trace') {
     return renderStep2TracePhase();
   }
@@ -442,7 +445,7 @@ function renderStep2PinPhase() {
         </div>
         <i class="fas fa-arrow-right text-gray-300 text-xs"></i>
         <div class="flex items-center gap-2 px-3 py-1.5 bg-gray-100 text-gray-400 rounded-full text-xs">
-          <i class="fas fa-draw-polygon"></i> Trace Roof
+          <i class="fas fa-shipping-fast"></i> Delivery
         </div>
       </div>
 
@@ -1469,9 +1472,7 @@ function confirmPinAndProceed() {
     showToast('Please click on the satellite map to pin the exact roof', 'error');
     return;
   }
-
-  // Proceed to trace phase
-  state.addressPhase = 'trace';
+  state.addressPhase = 'delivery';
   render();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -1479,6 +1480,114 @@ function confirmPinAndProceed() {
 function backToPinPhase() {
   state.addressPhase = 'pin';
   render();
+}
+
+// ============================================================
+// PHASE D: Delivery Choice
+// ============================================================
+function renderStep2DeliveryPhase() {
+  return `
+    <div class="max-w-3xl mx-auto">
+      <div class="text-center mb-6">
+        <h2 class="text-2xl font-bold text-gray-800">How would you like your report?</h2>
+        <p class="text-gray-500 mt-2">Choose instant self-tracing or have our team measure it for you</p>
+      </div>
+
+      <!-- Phase indicator -->
+      <div class="flex items-center justify-center gap-3 mb-8">
+        <div class="flex items-center gap-2 px-3 py-1.5 bg-brand-100 text-brand-700 rounded-full text-xs font-medium">
+          <i class="fas fa-check-circle"></i> Address
+        </div>
+        <i class="fas fa-arrow-right text-gray-300 text-xs"></i>
+        <div class="flex items-center gap-2 px-3 py-1.5 bg-brand-100 text-brand-700 rounded-full text-xs font-medium">
+          <i class="fas fa-check-circle"></i> Pin Roof
+        </div>
+        <i class="fas fa-arrow-right text-gray-300 text-xs"></i>
+        <div class="flex items-center gap-2 px-3 py-1.5 bg-amber-100 text-amber-700 rounded-full text-xs font-semibold">
+          <i class="fas fa-shipping-fast"></i> Choose Delivery
+        </div>
+      </div>
+
+      <div class="grid md:grid-cols-2 gap-5">
+
+        <!-- Option 1: Trace yourself -->
+        <button onclick="chooseTraceNow()"
+          class="text-left bg-white border-2 border-gray-200 hover:border-brand-500 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all group">
+          <div class="flex items-start gap-4 mb-4">
+            <div class="w-12 h-12 bg-brand-100 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-brand-200 transition-colors">
+              <i class="fas fa-draw-polygon text-brand-600 text-xl"></i>
+            </div>
+            <div>
+              <div class="font-bold text-gray-900 text-lg">Trace Roof Outline</div>
+              <div class="text-brand-600 font-semibold text-sm mt-0.5">Instant Report</div>
+            </div>
+          </div>
+          <p class="text-gray-500 text-sm mb-4">Draw the roof perimeter yourself on the satellite image. Your report generates immediately after tracing.</p>
+          <div class="flex items-center gap-3">
+            <span class="inline-flex items-center gap-1.5 text-xs font-medium text-green-700 bg-green-100 px-3 py-1 rounded-full">
+              <i class="fas fa-bolt"></i> Instant
+            </span>
+            <span class="inline-flex items-center gap-1.5 text-xs font-medium text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
+              <i class="fas fa-mouse-pointer"></i> You trace it
+            </span>
+          </div>
+          <div class="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between">
+            <span class="text-xs text-gray-400">Included in your order</span>
+            <span class="text-brand-600 font-semibold text-sm group-hover:translate-x-1 transition-transform inline-block">Get Started <i class="fas fa-arrow-right ml-1"></i></span>
+          </div>
+        </button>
+
+        <!-- Option 2: Admin measures -->
+        <button onclick="chooseAdminMeasure()"
+          class="text-left bg-white border-2 border-gray-200 hover:border-amber-500 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all group">
+          <div class="flex items-start gap-4 mb-4">
+            <div class="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-amber-200 transition-colors">
+              <i class="fas fa-hard-hat text-amber-600 text-xl"></i>
+            </div>
+            <div>
+              <div class="font-bold text-gray-900 text-lg">Order Measurement Report</div>
+              <div class="text-amber-600 font-semibold text-sm mt-0.5">1–2 Hour Delivery</div>
+            </div>
+          </div>
+          <p class="text-gray-500 text-sm mb-4">Our team traces and measures the roof for you. Submit now and receive your completed report within 1–2 hours.</p>
+          <div class="flex items-center gap-3">
+            <span class="inline-flex items-center gap-1.5 text-xs font-medium text-amber-700 bg-amber-100 px-3 py-1 rounded-full">
+              <i class="fas fa-clock"></i> 1–2 hours
+            </span>
+            <span class="inline-flex items-center gap-1.5 text-xs font-medium text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
+              <i class="fas fa-user-check"></i> We measure it
+            </span>
+          </div>
+          <div class="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between">
+            <span class="text-xs text-gray-400">Charged on submission</span>
+            <span class="text-amber-600 font-semibold text-sm group-hover:translate-x-1 transition-transform inline-block">Order Now <i class="fas fa-arrow-right ml-1"></i></span>
+          </div>
+        </button>
+
+      </div>
+
+      <div class="mt-5 text-center">
+        <button onclick="backToPinPhase()" class="text-sm text-gray-400 hover:text-gray-600 transition-colors">
+          <i class="fas fa-arrow-left mr-1"></i>Back to Pin Roof
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+function chooseTraceNow() {
+  state.formData.needs_admin_trace = false;
+  state.addressPhase = 'trace';
+  render();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function chooseAdminMeasure() {
+  state.formData.needs_admin_trace = true;
+  state.formData.roof_trace_json = null;
+  state.currentStep = 3;
+  render();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 // Fallback for non-Google Maps environments
@@ -1829,16 +1938,16 @@ function nextStep() {
 }
 
 function prevStep() {
-  if (state.currentStep === 2 && state.addressPhase === 'pin') {
-    backToAddressPhase();
-    return;
+  if (state.currentStep === 2) {
+    if (state.addressPhase === 'pin') { backToAddressPhase(); return; }
+    if (state.addressPhase === 'delivery') { state.addressPhase = 'pin'; render(); return; }
+    if (state.addressPhase === 'trace') { state.addressPhase = 'delivery'; render(); return; }
   }
 
   if (state.currentStep > 1) {
-    // When going back to step 2, return to the trace phase (last phase completed)
     if (state.currentStep === 3) {
       state.currentStep = 2;
-      state.addressPhase = 'trace';
+      state.addressPhase = state.formData.needs_admin_trace ? 'delivery' : 'trace';
     } else {
       state.currentStep--;
     }
@@ -1912,13 +2021,17 @@ async function submitOrder() {
 
     if (!payRes.ok) throw new Error(payData.error || 'Payment failed');
 
-    // 3. Generate report (real Solar API or mock)
-    const reportRes = await fetch(API + `/api/reports/${orderData.order.id}/generate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' }
-    });
-
-    showToast('Order placed successfully! Generating roof report...', 'success');
+    if (state.formData.needs_admin_trace) {
+      // Admin will measure — skip auto-generation, redirect to confirmation
+      showToast('Order submitted! Your report will be ready within 1–2 hours.', 'success');
+    } else {
+      // 3. Generate report immediately
+      await fetch(API + `/api/reports/${orderData.order.id}/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      showToast('Order placed successfully! Generating roof report...', 'success');
+    }
 
     // Redirect to confirmation page
     setTimeout(() => {
