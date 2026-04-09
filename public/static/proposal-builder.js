@@ -2169,7 +2169,8 @@ document.addEventListener('DOMContentLoaded', () => {
       // Fetch full report data so preview can render measurement sections
       if (reportId) {
         try {
-          var fullRes = await fetch('/api/reports/' + reportId, { headers: headers() });
+          var fetchId = (state.selectedReport && state.selectedReport.order_id) ? state.selectedReport.order_id : reportId;
+          var fullRes = await fetch('/api/reports/' + fetchId, { headers: headers() });
           if (fullRes.ok) {
             var fullData = await fullRes.json();
             var fullRow = fullData.report;
