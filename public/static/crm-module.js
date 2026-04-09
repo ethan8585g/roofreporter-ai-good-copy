@@ -1512,8 +1512,10 @@
   function loadJobsForMonth(year, month) {
     var mm = String(month + 1).padStart(2, '0');
     var monthStr = year + '-' + mm;
-    var url = '/api/crm/jobs?month=' + monthStr;
-    if (window._jobFilter) url += '&status=' + window._jobFilter;
+    // When a status filter is active, fetch ALL jobs with that status (no month restriction)
+    var url = window._jobFilter
+      ? '/api/crm/jobs?status=' + window._jobFilter
+      : '/api/crm/jobs?month=' + monthStr;
     // Also fetch all jobs for stats (no month filter)
     Promise.all([
       fetch(url, { headers: authHeadersOnly() }).then(function(r) { return r.json(); }),
@@ -1577,26 +1579,63 @@
       html += '<button onclick="window._crmFilterJobs(\'' + filters[f][0] + '\')" class="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors hover:bg-[#111111]/10 ' + (((!window._jobFilter && !filters[f][0]) || window._jobFilter === filters[f][0]) ? 'bg-brand-600 text-white' : 'text-gray-400') + '">' + filters[f][1] + '</button>';
     }
     html += '</div>';
-    // Right: view toggle + nav
-    html += '<div class="flex items-center gap-2">';
-    html += '<div class="flex bg-[#111111] rounded-lg border p-0.5">';
-    html += '<button onclick="window._crmSetView(\'month\')" class="px-3 py-1.5 rounded-md text-xs font-medium ' + (_calView === 'month' ? 'bg-brand-600 text-white' : 'text-gray-400 hover:bg-[#111111]/10') + '">Month</button>';
-    html += '<button onclick="window._crmSetView(\'week\')" class="px-3 py-1.5 rounded-md text-xs font-medium ' + (_calView === 'week' ? 'bg-brand-600 text-white' : 'text-gray-400 hover:bg-[#111111]/10') + '">Week</button>';
+    // Right: view toggle + nav (hidden when a status filter is active)
+    if (!window._jobFilter) {
+      html += '<div class="flex items-center gap-2">';
+      html += '<div class="flex bg-[#111111] rounded-lg border p-0.5">';
+      html += '<button onclick="window._crmSetView(\'month\')" class="px-3 py-1.5 rounded-md text-xs font-medium ' + (_calView === 'month' ? 'bg-brand-600 text-white' : 'text-gray-400 hover:bg-[#111111]/10') + '">Month</button>';
+      html += '<button onclick="window._crmSetView(\'week\')" class="px-3 py-1.5 rounded-md text-xs font-medium ' + (_calView === 'week' ? 'bg-brand-600 text-white' : 'text-gray-400 hover:bg-[#111111]/10') + '">Week</button>';
+      html += '</div>';
+      html += '<button onclick="window._crmPrevPeriod()" class="w-8 h-8 flex items-center justify-center rounded-lg border bg-[#111111] text-gray-400 hover:bg-[#111111]/5"><i class="fas fa-chevron-left text-xs"></i></button>';
+      html += '<span class="text-sm font-semibold text-gray-100 min-w-[140px] text-center">' + monthNames[_calMonth] + ' ' + _calYear + '</span>';
+      html += '<button onclick="window._crmNextPeriod()" class="w-8 h-8 flex items-center justify-center rounded-lg border bg-[#111111] text-gray-400 hover:bg-[#111111]/5"><i class="fas fa-chevron-right text-xs"></i></button>';
+      html += '<button onclick="window._crmCalToday()" class="px-3 py-1.5 rounded-lg border bg-[#111111] text-xs font-medium text-gray-400 hover:bg-[#111111]/5">Today</button>';
+      html += '</div>';
+    }
     html += '</div>';
-    html += '<button onclick="window._crmPrevPeriod()" class="w-8 h-8 flex items-center justify-center rounded-lg border bg-[#111111] text-gray-400 hover:bg-[#111111]/5"><i class="fas fa-chevron-left text-xs"></i></button>';
-    html += '<span class="text-sm font-semibold text-gray-100 min-w-[140px] text-center">' + monthNames[_calMonth] + ' ' + _calYear + '</span>';
-    html += '<button onclick="window._crmNextPeriod()" class="w-8 h-8 flex items-center justify-center rounded-lg border bg-[#111111] text-gray-400 hover:bg-[#111111]/5"><i class="fas fa-chevron-right text-xs"></i></button>';
-    html += '<button onclick="window._crmCalToday()" class="px-3 py-1.5 rounded-lg border bg-[#111111] text-xs font-medium text-gray-400 hover:bg-[#111111]/5">Today</button>';
-    html += '</div></div>';
 
-    // D/E. Calendar grid
-    if (_calView === 'month') {
+    // D/E. Calendar grid or filtered list
+    if (window._jobFilter) {
+      html += renderFilteredJobsList(_allJobs, window._jobFilter);
+    } else if (_calView === 'month') {
       html += renderMonthView(_calYear, _calMonth, _allJobs);
     } else {
       html += renderWeekView();
     }
 
     root.innerHTML = html;
+  }
+
+  function renderFilteredJobsList(jobs, statusFilter) {
+    var statusLabels = { scheduled: 'Scheduled', in_progress: 'In Progress', completed: 'Completed' };
+    var label = statusLabels[statusFilter] || statusFilter;
+    var html = '<div class="bg-[#111111] rounded-xl border overflow-hidden">';
+    html += '<div class="px-5 py-3 border-b border-white/10 flex items-center justify-between">';
+    html += '<p class="text-sm font-semibold text-gray-100"><i class="fas fa-filter text-brand-400 mr-2"></i>' + label + ' Jobs (' + jobs.length + ')</p>';
+    html += '</div>';
+    if (jobs.length === 0) {
+      html += '<div class="text-center py-12"><i class="fas fa-hard-hat text-3xl text-gray-600 mb-3 block"></i><p class="text-sm text-gray-500">No ' + label.toLowerCase() + ' jobs</p></div>';
+    } else {
+      html += '<div class="divide-y divide-white/5">';
+      for (var i = 0; i < jobs.length; i++) {
+        var j = jobs[i];
+        html += '<div class="flex items-start gap-4 px-5 py-4 hover:bg-white/5 cursor-pointer" onclick="window._crmViewJob(' + j.id + ')">';
+        html += '<div class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ' + jobTypeColor(j.job_type) + '"><i class="fas ' + jobTypeIcon(j.job_type) + ' text-sm"></i></div>';
+        html += '<div class="flex-1 min-w-0">';
+        html += '<p class="text-sm font-semibold text-gray-100 truncate">' + (j.title || 'Untitled') + '</p>';
+        if (j.customer_name) html += '<p class="text-xs text-gray-400 mt-0.5"><i class="fas fa-user mr-1"></i>' + j.customer_name + '</p>';
+        if (j.property_address) html += '<p class="text-xs text-gray-500 mt-0.5 truncate"><i class="fas fa-map-marker-alt mr-1"></i>' + j.property_address + '</p>';
+        html += '</div>';
+        html += '<div class="text-right flex-shrink-0">';
+        if (j.scheduled_date) html += '<p class="text-xs text-gray-400">' + j.scheduled_date + '</p>';
+        if (j.scheduled_time) html += '<p class="text-xs text-gray-500">' + j.scheduled_time.substring(0, 5) + '</p>';
+        html += '</div>';
+        html += '</div>';
+      }
+      html += '</div>';
+    }
+    html += '</div>';
+    return html;
   }
 
   function renderMonthView(year, month, jobs) {
