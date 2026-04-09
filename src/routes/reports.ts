@@ -2452,13 +2452,14 @@ async function _generateReportForOrderInner(
         const lm  = traceResult.linear_measurements
         const mat = traceResult.materials_estimate
 
+        const totalSlopedFt2 = km.total_roof_area_sloped_ft2
         const segments = traceResult.face_details.length > 0
           ? traceResult.face_details.map((face, i) => ({
               name: face.face_id || `Face ${i + 1}`,
               footprint_area_sqft: Math.round(face.projected_area_ft2),
               true_area_sqft:      Math.round(face.sloped_area_ft2),
-              pitch_degrees:       Math.round(Math.atan(face.pitch / 12) * 180 / Math.PI),
-              pitch_ratio:         `${face.pitch}/12`,
+              pitch_degrees:       face.pitch_angle_deg,
+              pitch_ratio:         face.pitch_label,
               azimuth_degrees:     0,
               azimuth_cardinal:    'N/A',
               area_meters2:        Math.round(face.sloped_area_ft2 / 10.7639 * 10) / 10,
@@ -2466,13 +2467,17 @@ async function _generateReportForOrderInner(
           : [{
               name:                'Main Roof',
               footprint_area_sqft: Math.round(km.total_projected_footprint_ft2),
-              true_area_sqft:      Math.round(km.total_true_area_ft2),
-              pitch_degrees:       Math.round(Math.atan((traceResult as any).default_pitch / 12) * 180 / Math.PI),
+              true_area_sqft:      Math.round(totalSlopedFt2),
+              pitch_degrees:       km.dominant_pitch_angle_deg,
               pitch_ratio:         km.dominant_pitch_label,
               azimuth_degrees:     0,
               azimuth_cardinal:    'N/A',
-              area_meters2:        Math.round(km.total_true_area_ft2 / 10.7639 * 10) / 10,
+              area_meters2:        Math.round(totalSlopedFt2 / 10.7639 * 10) / 10,
             }]
+
+        const autoEdges = generateEdgesFromSegments(segments, Math.round(km.total_projected_footprint_ft2))
+        const autoEdgeSummary = computeEdgeSummary(autoEdges)
+        const autoMaterials = computeMaterialEstimate(Math.round(totalSlopedFt2), autoEdges, segments)
 
         reportData = {
           property: {
@@ -2483,28 +2488,15 @@ async function _generateReportForOrderInner(
             latitude: order.latitude || 0, longitude: order.longitude || 0,
           },
           total_footprint_sqft:  Math.round(km.total_projected_footprint_ft2),
-          total_true_area_sqft:  Math.round(km.total_true_area_ft2),
+          total_true_area_sqft:  Math.round(totalSlopedFt2),
           total_squares:         km.total_squares_gross_w_waste,
           waste_factor_pct:      Math.round((km.waste_factor - 1) * 100),
-          roof_pitch_degrees:    Math.round(Math.atan(parseFloat(km.dominant_pitch_label) / 12) * 180 / Math.PI),
+          roof_pitch_degrees:    km.dominant_pitch_angle_deg,
           roof_pitch_ratio:      km.dominant_pitch_label,
           segments,
-          edge_measurements: {
-            eaves_total_ft:   lm.eaves_total_ft,
-            ridges_total_ft:  lm.ridges_total_ft,
-            hips_total_ft:    lm.hips_total_ft,
-            valleys_total_ft: lm.valleys_total_ft,
-            rakes_total_ft:   lm.rakes_total_ft,
-          },
-          materials: mat ? {
-            shingles_squares:      mat.shingles_squares,
-            underlayment_rolls:    mat.underlayment_rolls,
-            ice_shield_rolls:      mat.ice_shield_rolls || 0,
-            ridge_cap_bundles:     mat.ridge_cap_bundles,
-            drip_edge_ft:          mat.drip_edge_ft,
-            starter_strip_ft:      mat.starter_strip_ft || 0,
-            nails_lbs:             mat.nails_lbs,
-          } : undefined,
+          edges: autoEdges,
+          edge_summary: autoEdgeSummary,
+          materials: autoMaterials,
           satellite_image_url: solarPitch?.satellite_image_url || '',
           map_image_url:       solarPitch?.satellite_image_url || '',
           metadata: {

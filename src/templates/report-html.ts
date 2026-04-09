@@ -27,6 +27,8 @@ export function generateProfessionalReportHTML(report: RoofReport): string {
   if (!report.total_footprint_sqft) report.total_footprint_sqft = report.total_true_area_sqft || 1
   if (!report.area_multiplier) report.area_multiplier = report.total_true_area_sqft / (report.total_footprint_sqft || 1)
   if (!report.generated_at) report.generated_at = new Date().toISOString() as any
+  if (!report.segments) report.segments = []
+  if (!report.edges) report.edges = []
 
   // ── Computed values ──
   const reportNum = `${String(report.order_id).padStart(8, '0')}`
@@ -52,9 +54,10 @@ export function generateProfessionalReportHTML(report: RoofReport): string {
   const slopeClasses = { standard: 0, flat: 0, low: 0, steep: 0, high_roof: 0 }
   const segFaceLetters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
   report.segments.forEach(seg => {
-    const rise = 12 * Math.tan(seg.pitch_degrees * Math.PI / 180)
+    const pitchDeg = seg.pitch_degrees || 0
+    const rise = 12 * Math.tan(pitchDeg * Math.PI / 180)
     const sf = Math.round(seg.true_area_sqft)
-    if (rise <= 2) slopeClasses.flat += sf
+    if (isNaN(rise) || rise <= 2) slopeClasses.flat += sf
     else if (rise <= 4) slopeClasses.low += sf
     else if (rise <= 9) slopeClasses.standard += sf
     else slopeClasses.steep += sf
@@ -374,7 +377,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
             return `<tr style="${idx % 2 === 0 ? 'background:#fafafa' : ''}">
               <td style="padding:3px 5px;border-bottom:1px solid #eee;font-weight:600">${segFaceLetters[idx]} <span style="font-weight:400;font-size:6.5px;color:#888">${seg.azimuth_direction || ''}</span></td>
               <td style="padding:3px 5px;border-bottom:1px solid #eee;text-align:right">${Math.round(seg.true_area_sqft).toLocaleString()}</td>
-              <td style="padding:3px 5px;border-bottom:1px solid #eee;text-align:center">${seg.pitch_ratio}</td>
+              <td style="padding:3px 5px;border-bottom:1px solid #eee;text-align:center">${seg.pitch_ratio || (seg.pitch_degrees ? `${Math.round(12 * Math.tan(seg.pitch_degrees * Math.PI / 180) * 10) / 10}:12` : '—')}</td>
               <td style="padding:3px 5px;border-bottom:1px solid #eee;text-align:right;color:#555">${pctOfTotal}%</td>
             </tr>`
           }).join('')}
@@ -546,16 +549,19 @@ ${report.segments.length >= 2 ? `
       </thead>
       <tbody>
         ${report.segments.slice(0, 16).map((seg, idx) => {
-          const rise = 12 * Math.tan(seg.pitch_degrees * Math.PI / 180)
-          const classification = rise <= 2 ? 'Flat' : rise <= 4 ? 'Low' : rise <= 9 ? 'Standard' : 'Steep'
-          const classColor = rise <= 2 ? '#1d4ed8' : rise <= 4 ? '#92400e' : rise <= 9 ? '#166534' : '#991b1b'
-          const classBg = rise <= 2 ? '#dbeafe' : rise <= 4 ? '#fef3c7' : rise <= 9 ? '#dcfce7' : '#fecaca'
+          const pitchDeg = seg.pitch_degrees || 0
+          const rise = 12 * Math.tan(pitchDeg * Math.PI / 180)
+          const validRise = !isNaN(rise) && isFinite(rise) ? rise : 0
+          const classification = validRise <= 2 ? 'Flat' : validRise <= 4 ? 'Low' : validRise <= 9 ? 'Standard' : 'Steep'
+          const classColor = validRise <= 2 ? '#1d4ed8' : validRise <= 4 ? '#92400e' : validRise <= 9 ? '#166534' : '#991b1b'
+          const classBg = validRise <= 2 ? '#dbeafe' : validRise <= 4 ? '#fef3c7' : validRise <= 9 ? '#dcfce7' : '#fecaca'
+          const displayPitch = seg.pitch_ratio || (pitchDeg ? `${Math.round(rise * 10) / 10}:12` : '—')
           return `<tr style="${idx % 2 === 0 ? '' : 'background:#fafafa'};border-bottom:1px solid #eee">
             <td style="padding:3px 6px;font-weight:700;font-size:9px">${segFaceLetters[idx]}</td>
             <td style="padding:3px 6px;font-size:7.5px;color:#555">${seg.name || 'Facet ' + (idx + 1)}</td>
             <td style="padding:3px 6px;text-align:center;font-weight:600">${seg.azimuth_direction || '\u2014'}</td>
-            <td style="padding:3px 6px;text-align:center;font-weight:700">${seg.pitch_ratio}</td>
-            <td style="padding:3px 6px;text-align:center;color:#555">${seg.pitch_degrees.toFixed(1)}\u00B0</td>
+            <td style="padding:3px 6px;text-align:center;font-weight:700">${displayPitch}</td>
+            <td style="padding:3px 6px;text-align:center;color:#555">${pitchDeg.toFixed(1)}\u00B0</td>
             <td style="padding:3px 6px;text-align:right">${Math.round(seg.true_area_sqft).toLocaleString()}</td>
             <td style="padding:3px 6px;text-align:right;font-weight:600">${(Math.round(seg.true_area_sqft)).toLocaleString()}</td>
             <td style="padding:3px 6px;text-align:center"><span style="padding:1px 6px;border-radius:2px;font-size:6.5px;font-weight:700;background:${classBg};color:${classColor}">${classification}</span></td>
@@ -769,6 +775,8 @@ export function generateSimpleTwoPageReport(report: RoofReport): string {
   if (!report.total_footprint_sqft) report.total_footprint_sqft = report.total_true_area_sqft || 1
   if (!report.area_multiplier) report.area_multiplier = report.total_true_area_sqft / (report.total_footprint_sqft || 1)
   if (!report.generated_at) report.generated_at = new Date().toISOString()
+  if (!report.segments) report.segments = []
+  if (!report.edges) report.edges = []
 
   const fullAddress = [prop.address, prop.city, prop.province, prop.postal_code].filter(Boolean).join(', ')
   const reportDate = new Date(report.generated_at).toLocaleDateString('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit' })
