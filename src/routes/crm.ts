@@ -334,11 +334,11 @@ crmRoutes.post('/invoices/:id/payment-link', async (c) => {
 
   // Get owner's Square access token (per-user OAuth first, then master)
   const owner = await c.env.DB.prepare(
-    'SELECT square_access_token, square_location_id FROM customers WHERE id = ?'
+    'SELECT square_merchant_access_token, square_merchant_location_id FROM customers WHERE id = ?'
   ).bind(ownerId).first<any>()
 
-  const accessToken = owner?.square_access_token || (c.env as any).SQUARE_ACCESS_TOKEN
-  const locationId = owner?.square_location_id || (c.env as any).SQUARE_LOCATION_ID
+  const accessToken = owner?.square_merchant_access_token || (c.env as any).SQUARE_ACCESS_TOKEN
+  const locationId = owner?.square_merchant_location_id || (c.env as any).SQUARE_LOCATION_ID
 
   if (!accessToken || !locationId) {
     return c.json({ error: 'Square is not connected. Go to Settings → Connect Square to enable payment links.' }, 503)
@@ -403,11 +403,11 @@ crmRoutes.post('/proposals/:id/payment-link', async (c) => {
   if (!proposal) return c.json({ error: 'Proposal not found' }, 404)
 
   const owner = await c.env.DB.prepare(
-    'SELECT square_access_token, square_location_id FROM customers WHERE id = ?'
+    'SELECT square_merchant_access_token, square_merchant_location_id FROM customers WHERE id = ?'
   ).bind(ownerId).first<any>()
 
-  const accessToken = owner?.square_access_token || (c.env as any).SQUARE_ACCESS_TOKEN
-  const locationId = owner?.square_location_id || (c.env as any).SQUARE_LOCATION_ID
+  const accessToken = owner?.square_merchant_access_token || (c.env as any).SQUARE_ACCESS_TOKEN
+  const locationId = owner?.square_merchant_location_id || (c.env as any).SQUARE_LOCATION_ID
 
   if (!accessToken || !locationId) {
     return c.json({ error: 'Square is not connected. Go to Settings → Connect Square to enable payment links.' }, 503)

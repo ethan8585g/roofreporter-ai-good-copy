@@ -182,12 +182,12 @@ invoiceRoutes.post('/', async (c) => {
   try {
     const body = await c.req.json()
     const {
-      customer_id, crm_customer_id, order_id, items, notes, terms, due_days, tax_rate, discount_amount,
+      customer_id, crm_customer_id, new_customer, order_id, items, notes, terms, due_days, tax_rate, discount_amount,
       discount_type, document_type, scope_of_work, warranty_terms, payment_terms_text,
       valid_until, attached_report_id, proposal_tier, proposal_group_id, my_cost
     } = body
 
-    if (!customer_id && !crm_customer_id) return c.json({ error: 'customer_id is required' }, 400)
+    if (!customer_id && !crm_customer_id && !new_customer) return c.json({ error: 'customer_id or new_customer is required' }, 400)
     if (!items || !items.length) return c.json({ error: 'At least one line item is required' }, 400)
 
     const docType = ['invoice', 'proposal', 'estimate'].includes(document_type) ? document_type : 'invoice'
@@ -195,10 +195,22 @@ invoiceRoutes.post('/', async (c) => {
     const number = generateNumber(prefix)
     const shareToken = generateShareToken()
 
-    // Resolve customer — from main customers table or from crm_customers
+    // Resolve customer — from main customers table, crm_customers, or inline new_customer
     let resolvedCustomerId = customer_id
     let crmName = '', crmEmail = '', crmPhone = ''
-    if (crm_customer_id) {
+    if (new_customer && !customer_id && !crm_customer_id) {
+      if (!new_customer.name || !new_customer.email) return c.json({ error: 'New customer name and email are required' }, 400)
+      const email = new_customer.email.toLowerCase().trim()
+      const existing = await c.env.DB.prepare('SELECT id FROM customers WHERE email = ?').bind(email).first<any>()
+      if (existing) {
+        resolvedCustomerId = existing.id
+      } else {
+        const ins = await c.env.DB.prepare(
+          `INSERT INTO customers (email, name, phone, company_name, is_active) VALUES (?, ?, ?, ?, 1)`
+        ).bind(email, new_customer.name.trim(), new_customer.phone || null, new_customer.company_name || null).run()
+        resolvedCustomerId = ins.meta.last_row_id
+      }
+    } else if (crm_customer_id) {
       const crmCust = await c.env.DB.prepare(
         'SELECT id, owner_id, name, email, phone FROM crm_customers WHERE id = ?'
       ).bind(crm_customer_id).first<any>()
@@ -563,10 +575,10 @@ invoiceRoutes.post('/:id/payment-link', async (c) => {
     const admin = (c as any).get('admin')
     if (admin?.id) {
       const owner = await c.env.DB.prepare(
-        'SELECT square_access_token, square_location_id FROM customers WHERE id = ?'
+        'SELECT square_merchant_access_token, square_merchant_location_id FROM customers WHERE id = ?'
       ).bind(admin.id).first<any>()
-      if (owner?.square_access_token) squareAccessToken = owner.square_access_token
-      if (owner?.square_location_id) locationId = owner.square_location_id
+      if (owner?.square_merchant_access_token) squareAccessToken = owner.square_merchant_access_token
+      if (owner?.square_merchant_location_id) locationId = owner.square_merchant_location_id
     }
 
     if (!squareAccessToken) return c.json({ error: 'Square not configured. Set SQUARE_ACCESS_TOKEN in Cloudflare secrets or connect Square in Settings.' }, 400)
