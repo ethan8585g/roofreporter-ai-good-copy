@@ -878,7 +878,7 @@
         html += '<span class="text-lg font-black text-white">' + money(p.total_amount) + '</span>';
         html += '<div class="flex items-center gap-1.5 flex-wrap justify-end">';
         html += '<button onclick="window._crmViewProposal(' + p.id + ')" class="text-xs text-brand-600 hover:underline font-medium"><i class="fas fa-eye mr-0.5"></i>View</button>';
-        html += '<button onclick="window._crmLinkReport(' + p.id + ')" class="text-xs text-purple-400 hover:underline" title="' + (p.source_report_id ? 'Report linked ✓' : 'Link roof report') + '"><i class="fas fa-' + (p.source_report_id ? 'link text-emerald-400' : 'file-medical') + ' mr-0.5"></i>' + (p.source_report_id ? '' : 'Link Report') + '</button>';
+        html += '<button onclick="window._crmLinkReport(' + p.id + ')" style="font-size:11px;font-weight:600;color:' + (p.source_report_id ? '#22c55e' : '#60a5fa') + ';background:none;border:none;cursor:pointer;padding:0" title="' + (p.source_report_id ? 'Report linked ✓' : 'Link roof report') + '"><i class="fas fa-' + (p.source_report_id ? 'check-circle' : 'link') + '" style="margin-right:3px"></i>' + (p.source_report_id ? 'Linked' : 'Link Report') + '</button>';
         if (p.status === 'draft') {
           html += '<button onclick="window._crmEditProposal(' + p.id + ')" class="text-xs text-gray-500 hover:text-gray-300"><i class="fas fa-edit"></i></button>';
           html += '<button onclick="window._crmSendProposal(' + p.id + ')" class="text-xs text-blue-600 hover:underline font-medium"><i class="fas fa-paper-plane mr-0.5"></i>Send</button>';
