@@ -1086,8 +1086,8 @@
               if (res.success) {
                 closeModal();
                 toast(action === 'draft' ? 'Draft saved!' : 'Proposal created!');
-                if (action === 'send' && res.proposal_id) {
-                  window._crmSendProposal(res.proposal_id);
+                if (action === 'send' && res.id) {
+                  window._crmSendProposal(res.id);
                 } else {
                   loadProposals();
                 }

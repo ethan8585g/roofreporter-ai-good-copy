@@ -1796,6 +1796,7 @@ app.get('/proposal/view/:token', async (c) => {
         const invIsProposalType = docType === 'proposal' || docType === 'estimate'
         const invStatusBadge = invIsAccepted ? 'bg-green-100 text-green-700' : invIsDeclined ? 'bg-red-100 text-red-700' : invProposal.status === 'paid' ? 'bg-green-100 text-green-700' : invProposal.status === 'sent' || invProposal.status === 'viewed' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
         const invStatusLabel = invIsAccepted ? 'ACCEPTED' : invIsDeclined ? 'DECLINED' : (invProposal.status || 'draft').toUpperCase()
+        const headerColor = invProposal.accent_color || '#0ea5e9'
 
         // Build accept/sign section for proposals/estimates
         let signatureSection = ''
@@ -1906,7 +1907,6 @@ app.get('/proposal/view/:token', async (c) => {
       .catch(function() { alert('Network error. Please check your connection and try again.'); btn.disabled = false; btn.innerHTML = action === 'accept' ? '<i class="fas fa-check-circle mr-2"></i>Accept ${docLabel}' : 'Decline'; });
     }` : ''
 
-        const headerColor = invProposal.accent_color || '#0ea5e9'
         return c.html(`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>${docLabel} ${invProposal.invoice_number} — Roof Manager</title><meta property="og:title" content="${docLabel} ${invProposal.invoice_number} — $${Number(invProposal.total_amount || 0).toFixed(2)}"><meta property="og:description" content="Professional roofing ${docLabel.toLowerCase()} for ${invProposal.customer_name || 'valued customer'}. ${invProposal.property_address ? 'Property: ' + invProposal.property_address : ''}"><meta property="og:type" content="article"><meta property="og:site_name" content="Roof Manager"><meta name="twitter:card" content="summary"><link rel="stylesheet" href="/static/tailwind.css"><link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet"><style>@media print { .no-print { display: none !important; } }</style></head>
 <body class="bg-gray-100 min-h-screen py-8 px-4">
 <div class="max-w-3xl mx-auto">
