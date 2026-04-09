@@ -2874,7 +2874,8 @@ function getMainPageHTML(mapsApiKey: string) {
 
 function getSuperAdminDashboardHTML(mapsApiKey: string = '') {
   const mapsScript = mapsApiKey
-    ? `<script src="https://maps.googleapis.com/maps/api/js?key=${mapsApiKey}&libraries=places" async defer></script>`
+    ? `<script>function onSaGoogleMapsReady(){window._saGoogleMapsLoaded=true;}</script>
+    <script src="https://maps.googleapis.com/maps/api/js?key=${mapsApiKey}&libraries=places&callback=onSaGoogleMapsReady" async defer></script>`
     : ''
   return `<!DOCTYPE html>
 <html lang="en">

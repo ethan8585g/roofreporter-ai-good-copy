@@ -758,23 +758,23 @@ window.saOpenTraceModal = function(orderId, lat, lng, address, orderNum) {
   overlay.id = 'sa-trace-modal';
   overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;padding:16px';
   overlay.innerHTML =
-    '<div style="background:#111827;border:1px solid #374151;border-radius:16px;width:100%;max-width:900px;max-height:90vh;display:flex;flex-direction:column;overflow:hidden">' +
-      '<div style="padding:16px 20px;border-bottom:1px solid #374151;display:flex;align-items:center;justify-content:space-between">' +
+    '<div style="background:#111827;border:1px solid #374151;border-radius:16px;width:100%;max-width:900px;height:90vh;display:flex;flex-direction:column">' +
+      '<div style="padding:16px 20px;border-bottom:1px solid #374151;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">' +
         '<div>' +
           '<div style="color:#f9fafb;font-size:15px;font-weight:700"><i class="fas fa-drafting-compass mr-2" style="color:#f59e0b"></i>Trace Roof — ' + orderNum + '</div>' +
           '<div style="color:#6b7280;font-size:12px;margin-top:2px">' + address + '</div>' +
         '</div>' +
         '<button onclick="document.getElementById(\'sa-trace-modal\').remove()" style="color:#6b7280;background:none;border:none;font-size:20px;cursor:pointer;line-height:1">&times;</button>' +
       '</div>' +
-      '<div style="padding:12px 20px;background:#1f2937;border-bottom:1px solid #374151;font-size:12px;color:#9ca3af">' +
+      '<div style="padding:10px 20px;background:#1f2937;border-bottom:1px solid #374151;font-size:12px;color:#9ca3af;flex-shrink:0">' +
         '<span style="margin-right:16px"><span style="display:inline-block;width:12px;height:12px;background:#22c55e;border-radius:2px;margin-right:4px;vertical-align:middle"></span>Eaves (click to draw polygon)</span>' +
         '<span style="margin-right:16px"><span style="display:inline-block;width:12px;height:3px;background:#dc2626;margin-right:4px;vertical-align:middle"></span>Ridge</span>' +
         '<span style="margin-right:16px"><span style="display:inline-block;width:12px;height:3px;background:#ea580c;margin-right:4px;vertical-align:middle"></span>Hip</span>' +
         '<span><span style="display:inline-block;width:12px;height:3px;background:#2563eb;margin-right:4px;vertical-align:middle"></span>Valley</span>' +
         '<span style="float:right;color:#f59e0b">Draw eaves polygon first, then add ridges/hips/valleys as needed</span>' +
       '</div>' +
-      '<div id="sa-trace-map" style="flex:1;min-height:400px"></div>' +
-      '<div style="padding:14px 20px;border-top:1px solid #374151;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">' +
+      '<div id="sa-trace-map" style="flex:1;min-height:0"></div>' +
+      '<div style="padding:14px 20px;border-top:1px solid #374151;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;flex-shrink:0">' +
         '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
           '<button onclick="saTraceSetTool(\'eave\')" id="sa-tool-eave" style="padding:7px 14px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#22c55e;color:#fff;border:none">Eaves</button>' +
           '<button onclick="saTraceSetTool(\'ridge\')" id="sa-tool-ridge" style="padding:7px 14px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">+ Ridge</button>' +
@@ -790,8 +790,8 @@ window.saOpenTraceModal = function(orderId, lat, lng, address, orderNum) {
   document.body.appendChild(overlay);
 
   // Initialize the trace map
-  window._saTraceState = { orderId: orderId, tool: 'eave', eavePoints: [], ridges: [], hips: [], valleys: [], currentLine: null, eavePoly: null };
-  setTimeout(function() { saInitTraceMap(lat, lng); }, 100);
+  window._saTraceState = { orderId: orderId, tool: 'eave', eavePoints: [], eavePoly: null, ridges: [], hips: [], valleys: [], _ridgeData: [], _hipData: [], _valleyData: [] };
+  setTimeout(function() { saInitTraceMap(lat, lng, address); }, 100);
 };
 
 window.saTraceSetTool = function(tool) {
@@ -815,14 +815,13 @@ window.saTraceClear = function() {
   s.ridges.forEach(function(l) { l.setMap(null); }); s.ridges = [];
   s.hips.forEach(function(l) { l.setMap(null); }); s.hips = [];
   s.valleys.forEach(function(l) { l.setMap(null); }); s.valleys = [];
-  if (s.currentLine) { s.currentLine.setMap(null); s.currentLine = null; }
-  s.eavePoints = [];
+  s.eavePoints = []; s._ridgeData = []; s._hipData = []; s._valleyData = [];
 };
 
-function saInitTraceMap(lat, lng) {
+function saInitTraceMap(lat, lng, address) {
   var s = window._saTraceState;
-  if (!s || !window.google || !window.google.maps) {
-    setTimeout(function() { saInitTraceMap(lat, lng); }, 500);
+  if (!s || !window._saGoogleMapsLoaded || !window.google || !window.google.maps) {
+    setTimeout(function() { saInitTraceMap(lat, lng, address); }, 300);
     return;
   }
   var mapEl = document.getElementById('sa-trace-map');
@@ -836,47 +835,39 @@ function saInitTraceMap(lat, lng) {
   });
   s.map = map;
 
-  // Track click position for drawing
-  var drawingPoints = [];
-  var drawingPoly = null;
-  var currentSegStart = null;
+  // Geocode address to ensure map is centered on the right property
+  if (address) {
+    var geocoder = new google.maps.Geocoder();
+    geocoder.geocode({ address: address }, function(results, status) {
+      if (status === 'OK' && results && results[0]) {
+        map.setCenter(results[0].geometry.location);
+        map.setZoom(20);
+      }
+    });
+  }
 
   map.addListener('click', function(e) {
-    var pt = { lat: e.latLng.lat(), lng: e.latLng.lng() };
     var tool = s.tool;
-
     if (tool === 'eave') {
-      drawingPoints.push(e.latLng);
-      if (drawingPoly) drawingPoly.setMap(null);
-      drawingPoly = new google.maps.Polyline({
-        path: drawingPoints.concat([drawingPoints[0]]),
+      var pts = s._eaveLatLngs || (s._eaveLatLngs = []);
+      pts.push(e.latLng);
+      if (s.eavePoly) s.eavePoly.setMap(null);
+      s.eavePoly = new google.maps.Polyline({
+        path: pts.concat([pts[0]]),
         strokeColor: '#22c55e', strokeWeight: 2.5, map: map
       });
-      s.eavePoints = drawingPoints.map(function(p) { return { lat: p.lat(), lng: p.lng() }; });
+      s.eavePoints = pts.map(function(p) { return { lat: p.lat(), lng: p.lng() }; });
     } else {
-      if (!currentSegStart) {
-        currentSegStart = e.latLng;
+      if (!s._segStart) {
+        s._segStart = e.latLng;
       } else {
         var color = tool === 'ridge' ? '#dc2626' : tool === 'hip' ? '#ea580c' : '#2563eb';
-        var line = new google.maps.Polyline({
-          path: [currentSegStart, e.latLng],
-          strokeColor: color, strokeWeight: 2, map: map
-        });
-        var seg = [
-          { lat: currentSegStart.lat(), lng: currentSegStart.lng() },
-          { lat: e.latLng.lat(), lng: e.latLng.lng() }
-        ];
-        if (tool === 'ridge') s.ridges.push(line);
-        else if (tool === 'hip') s.hips.push(line);
-        else s.valleys.push(line);
-        // Store segment data
-        if (!s._ridgeData) s._ridgeData = [];
-        if (!s._hipData) s._hipData = [];
-        if (!s._valleyData) s._valleyData = [];
-        if (tool === 'ridge') s._ridgeData.push(seg);
-        else if (tool === 'hip') s._hipData.push(seg);
-        else s._valleyData.push(seg);
-        currentSegStart = null;
+        var line = new google.maps.Polyline({ path: [s._segStart, e.latLng], strokeColor: color, strokeWeight: 2, map: map });
+        var seg = [{ lat: s._segStart.lat(), lng: s._segStart.lng() }, { lat: e.latLng.lat(), lng: e.latLng.lng() }];
+        if (tool === 'ridge') { s.ridges.push(line); s._ridgeData.push(seg); }
+        else if (tool === 'hip') { s.hips.push(line); s._hipData.push(seg); }
+        else { s.valleys.push(line); s._valleyData.push(seg); }
+        s._segStart = null;
       }
     }
   });
