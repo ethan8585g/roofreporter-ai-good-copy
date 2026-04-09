@@ -223,7 +223,6 @@ function renderDashboard() {
           navLink('/customer/email-outreach', 'fa-envelope-open-text', 'Email Outreach', null, '') +
           navLink('/customer/website-builder', 'fa-globe', 'AI Website Builder', 'New', 'bg-emerald-500') +
         '</div>' +
-        (c.is_dev ? '<div><p class="px-3 mb-1 text-[10px] font-bold uppercase tracking-wider" style="color:var(--text-muted)">Dev</p>' + navLink('/customer/property-imagery', 'fa-satellite', 'Property Imagery', 'Dev', 'bg-gray-800') + '</div>' : '') +
       '</nav>' +
       // Credits footer
       '<div class="px-4 py-4" style="border-top:1px solid var(--border-color)">' +
