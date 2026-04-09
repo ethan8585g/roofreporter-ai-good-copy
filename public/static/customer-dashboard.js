@@ -425,8 +425,8 @@ function renderDashboard() {
       mainContent +
     '</div>';
 
-  // Initialize analytics charts after DOM render
-  setTimeout(function() { initAnalyticsCharts(); }, 150);
+  // Initialize analytics charts and calendar after DOM render
+  setTimeout(function() { initAnalyticsCharts(); _calRender(); _calLoadEvents(); }, 150);
 }
 
 function initAnalyticsCharts() {
@@ -1156,11 +1156,7 @@ function _gcalFetchEvents() {
   .catch(function() {});
 }
 
-// Init calendar on dashboard load
-setTimeout(function() {
-  _calLoadEvents();
-  _calRender();
-}, 100);
+// Calendar is initialized inside renderDashboard() after the DOM is ready
 
 window._toggleTheme = function() {
   var current = localStorage.getItem('rc_dashboard_theme') || 'dark';
