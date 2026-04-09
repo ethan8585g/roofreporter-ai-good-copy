@@ -3477,16 +3477,41 @@
     root.innerHTML = '<div class="text-center py-8"><div class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-brand-500 mx-auto mb-3"></div></div>';
     Promise.all([
       fetch('/api/email-outreach/lists', { headers: authHeadersOnly() }).then(function(r) { return r.json(); }),
-      fetch('/api/email-outreach/contacts?limit=50', { headers: authHeadersOnly() }).then(function(r) { return r.json(); })
+      fetch('/api/email-outreach/contacts?limit=50', { headers: authHeadersOnly() }).then(function(r) { return r.json(); }),
+      fetch('/api/auth/gmail/status', { headers: authHeadersOnly() }).then(function(r) { return r.json(); }).catch(function() { return {}; })
     ]).then(function(results) {
       var lists = results[0].lists || [];
       var contacts = results[1].contacts || [];
       var totalContacts = results[1].total || contacts.length;
-      renderEmailOutreach(lists, contacts, totalContacts);
+      var gmailStatus = (results[2] && results[2].gmail_oauth2) || null;
+      renderEmailOutreach(lists, contacts, totalContacts, gmailStatus);
     }).catch(function() { root.innerHTML = '<p class="text-red-500 p-4">Failed to load email outreach data.</p>'; });
   }
 
-  function renderEmailOutreach(lists, contacts, totalContacts) {
+  function renderEmailOutreach(lists, contacts, totalContacts, gmailStatus) {
+    var g = gmailStatus;
+    var gmailHtml = '';
+    if (g) {
+      if (g.ready) {
+        gmailHtml = '<div class="flex items-center justify-between bg-emerald-950/40 border border-emerald-800/50 rounded-xl px-4 py-3 mb-4">' +
+          '<div class="flex items-center gap-3"><div class="w-8 h-8 bg-emerald-900/60 rounded-lg flex items-center justify-center flex-shrink-0"><i class="fab fa-google text-emerald-400 text-sm"></i></div>' +
+          '<div><p class="text-sm font-medium text-emerald-300">Gmail Connected</p><p class="text-xs text-emerald-600 mt-0.5">Sending from <span class="font-medium">' + (g.sender_email || 'your Gmail account') + '</span></p></div></div>' +
+          '<span class="px-2.5 py-1 bg-emerald-900/60 text-emerald-400 text-xs font-semibold rounded-full">Active</span></div>';
+      } else {
+        var actionBtn = '';
+        if (g.needs_setup === 'authorize' && g.authorize_url) {
+          actionBtn = '<a href="' + g.authorize_url + '" class="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold rounded-lg transition-colors whitespace-nowrap inline-flex items-center gap-1"><i class="fab fa-google"></i>Connect Gmail</a>';
+        } else {
+          actionBtn = '<button onclick="window.rmToast && window.rmToast(\'Contact your account admin to configure Gmail in Email Setup.\', \'info\')" class="px-3 py-1.5 bg-amber-500/80 text-white text-xs font-semibold rounded-lg inline-flex items-center gap-1"><i class="fas fa-cog"></i>Setup Required</button>';
+        }
+        var setupMsg = g.needs_setup === 'client_secret' ? 'Gmail credentials not yet configured.' : 'Gmail authorization needed to send emails.';
+        gmailHtml = '<div class="flex items-center justify-between bg-amber-950/40 border border-amber-800/50 rounded-xl px-4 py-3 mb-4">' +
+          '<div class="flex items-center gap-3"><div class="w-8 h-8 bg-amber-900/60 rounded-lg flex items-center justify-center flex-shrink-0"><i class="fab fa-google text-amber-400 text-sm"></i></div>' +
+          '<div><p class="text-sm font-medium text-amber-300">Gmail Not Connected</p><p class="text-xs text-amber-600 mt-0.5">' + setupMsg + '</p></div></div>' +
+          actionBtn + '</div>';
+      }
+    }
+
     var html = '<div class="flex items-center justify-between mb-5 flex-wrap gap-3">';
     html += '<div><h2 class="text-lg font-bold text-gray-100"><i class="fas fa-envelope-open-text text-blue-500 mr-2"></i>Email Outreach</h2><p class="text-xs text-gray-500 mt-0.5">' + totalContacts + ' contacts across ' + lists.length + ' lists</p></div>';
     html += '<div class="flex gap-2">';
@@ -3494,12 +3519,15 @@
     html += '<button onclick="window._eoImportContacts()" class="bg-white/5 text-gray-300 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-200"><i class="fas fa-file-csv mr-1"></i>Import CSV</button>';
     html += '</div></div>';
 
+    // Gmail integration banner
+    html += gmailHtml;
+
     // Stats
     html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">';
-    html += '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-gray-100">' + lists.length + '</p><p class="text-[10px] text-gray-500">Lists</p></div>';
-    html += '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-blue-600">' + totalContacts + '</p><p class="text-[10px] text-gray-500">Total Contacts</p></div>';
-    html += '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-emerald-400">0</p><p class="text-[10px] text-gray-500">Campaigns Sent</p></div>';
-    html += '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-gray-400">0%</p><p class="text-[10px] text-gray-500">Open Rate</p></div>';
+    html += '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-bold text-gray-100">' + lists.length + '</p><p class="text-[10px] text-gray-500">Lists</p></div>';
+    html += '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-bold text-blue-500">' + totalContacts + '</p><p class="text-[10px] text-gray-500">Total Contacts</p></div>';
+    html += '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-bold text-emerald-400">0</p><p class="text-[10px] text-gray-500">Campaigns Sent</p></div>';
+    html += '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-bold text-gray-400">0%</p><p class="text-[10px] text-gray-500">Open Rate</p></div>';
     html += '</div>';
 
     // Lists
