@@ -4,6 +4,7 @@ import { generateReportForOrder, enhanceReportInline, generateAIImageryForReport
 import { isDevAccount } from './customer-auth'
 import { trackPaymentCompleted, trackCreditPurchase } from '../services/ga4-events'
 import { resolveTeamOwner } from './team'
+import { validateAdminSession } from './auth'
 
 export const squareRoutes = new Hono<{ Bindings: Bindings }>()
 
@@ -126,29 +127,52 @@ async function verifySquareSignature(body: string, signature: string, signatureK
 // ============================================================
 async function getCustomerFromToken(db: D1Database, token: string | undefined): Promise<any | null> {
   if (!token) return null
+
+  // 1. Try customer session (normal path)
   const session = await db.prepare(`
     SELECT cs.customer_id, c.* FROM customer_sessions cs
     JOIN customers c ON c.id = cs.customer_id
     WHERE cs.session_token = ? AND cs.expires_at > datetime('now') AND c.is_active = 1
   `).bind(token).first<any>()
-  if (!session) return null
-
-  // Resolve team membership — team members use the owner's credits & billing
-  const teamInfo = await resolveTeamOwner(db, session.customer_id)
-  if (teamInfo.isTeamMember) {
-    // Fetch the owner's customer record for credits/billing
-    const owner = await db.prepare(`
-      SELECT c.*, ? as real_customer_id FROM customers c WHERE c.id = ? AND c.is_active = 1
-    `).bind(session.customer_id, teamInfo.ownerId).first<any>()
-    if (owner) {
-      owner.customer_id = teamInfo.ownerId
-      owner.is_team_member = true
-      owner.real_customer_id = session.customer_id
-      owner.team_member_role = teamInfo.teamMemberRole
-      return owner
+  if (session) {
+    const teamInfo = await resolveTeamOwner(db, session.customer_id)
+    if (teamInfo.isTeamMember) {
+      const owner = await db.prepare(`
+        SELECT c.*, ? as real_customer_id FROM customers c WHERE c.id = ? AND c.is_active = 1
+      `).bind(session.customer_id, teamInfo.ownerId).first<any>()
+      if (owner) {
+        owner.customer_id = teamInfo.ownerId
+        owner.is_team_member = true
+        owner.real_customer_id = session.customer_id
+        owner.team_member_role = teamInfo.teamMemberRole
+        return owner
+      }
     }
+    return session
   }
-  return session
+
+  // 2. Fall back to admin session — find or auto-create a customer record for the admin
+  const admin = await validateAdminSession(db, `Bearer ${token}`)
+  if (!admin) return null
+
+  // Look up existing customer by admin email
+  let customer = await db.prepare(
+    `SELECT * FROM customers WHERE email = ? AND is_active = 1 LIMIT 1`
+  ).bind(admin.email).first<any>()
+
+  if (!customer) {
+    // Auto-create a linked customer account with ample free trials
+    const result = await db.prepare(`
+      INSERT INTO customers (name, email, is_active, free_trial_total, free_trial_used, report_credits, credits_used)
+      VALUES (?, ?, 1, 999, 0, 0, 0)
+      RETURNING *
+    `).bind(admin.name || admin.email, admin.email).first<any>()
+    customer = result
+  }
+
+  if (!customer) return null
+  customer.customer_id = customer.id
+  return customer
 }
 
 // ============================================================
