@@ -8,7 +8,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const root = document.getElementById('proposal-root');
   if (!root) return;
 
-  const token = localStorage.getItem('rc_token') || localStorage.getItem('rc_customer_token') || '';
+  const token = localStorage.getItem('rc_customer_token') || localStorage.getItem('rc_token') || '';
   const headers = () => ({ 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' });
 
   // State
@@ -56,6 +56,7 @@ document.addEventListener('DOMContentLoaded', () => {
       wcbCoverage: '',
       customAttachment: ''
     },
+    gmailStatus: null,
     // Form state
     form: resetForm()
   };
@@ -316,15 +317,17 @@ document.addEventListener('DOMContentLoaded', () => {
     state.loading = true;
     render();
     try {
-      const [propRes, custRes, libRes, repRes] = await Promise.all([
+      const [propRes, custRes, libRes, repRes, gmailRes] = await Promise.all([
         fetch('/api/invoices?document_type=proposal', { headers: headers() }),
         fetch('/api/invoices/customers/list', { headers: headers() }),
         fetch('/api/customer/item-library', { headers: headers() }).catch(() => ({ ok: false })),
-        fetch('/api/customer/reports-list', { headers: headers() }).catch(() => ({ ok: false }))
+        fetch('/api/customer/reports-list', { headers: headers() }).catch(() => ({ ok: false })),
+        fetch('/api/auth/gmail/status', { headers: headers() }).catch(() => ({ ok: false }))
       ]);
       if (propRes.ok) { const d = await propRes.json(); state.proposals = d.invoices || []; }
       if (custRes.ok) { const d = await custRes.json(); state.customers = d.customers || []; }
       if (libRes.ok) { const d = await libRes.json(); state.itemLibrary = d.items || []; }
+      if (gmailRes.ok) { const d = await gmailRes.json(); state.gmailStatus = d.gmail_oauth2 || null; }
       if (repRes.ok) {
         const d = await repRes.json();
         state.reports = d.reports || [];
@@ -699,6 +702,30 @@ document.addEventListener('DOMContentLoaded', () => {
   // ============================================================
   // LIST VIEW
   // ============================================================
+  function renderGmailConnectBanner() {
+    const gm = state.gmailStatus;
+    if (!gm) return '';
+    if (gm.ready) {
+      return `<div class="rounded-xl border border-emerald-200 p-3 mb-5 flex items-center gap-2 bg-white">
+        <i class="fas fa-check-circle text-emerald-500"></i>
+        <span class="text-emerald-600 text-sm font-medium">Gmail Connected${gm.sender_email ? ' — ' + gm.sender_email : ''}</span>
+        <span class="text-xs text-gray-400">— Proposals will be sent from your Gmail account</span>
+      </div>`;
+    }
+    return `<div class="rounded-xl border border-amber-200 p-4 mb-5 flex items-center justify-between bg-white">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 bg-amber-50 rounded-lg flex items-center justify-center"><i class="fab fa-google text-amber-500 text-lg"></i></div>
+        <div>
+          <div class="font-semibold text-sm text-gray-800">Connect Gmail to Send Proposals</div>
+          <div class="text-xs text-gray-500">Link your Gmail account so proposals are delivered from your address</div>
+        </div>
+      </div>
+      <a href="${gm.authorize_url || '/api/auth/gmail'}" class="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-sm font-semibold transition-colors">
+        <i class="fab fa-google mr-1.5"></i>Connect Gmail
+      </a>
+    </div>`;
+  }
+
   function renderList() {
     const allProposals = state.proposals;
     const filter = state.filter || 'all';
@@ -735,6 +762,9 @@ document.addEventListener('DOMContentLoaded', () => {
         </button>
       </div>
     </div>
+
+    <!-- Gmail Connect Banner -->
+    ${renderGmailConnectBanner()}
 
     <!-- Stats -->
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
