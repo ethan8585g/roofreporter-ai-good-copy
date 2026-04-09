@@ -173,7 +173,223 @@
       '<div class="d2d-stat"><div class="d2d-stat-val text-sky-600">' + (stats.total_turfs || 0) + '</div><div class="d2d-stat-label">Turfs</div></div>' +
       '<div class="d2d-stat"><div class="d2d-stat-val text-emerald-400">' + (stats.total_yes || 0) + '</div><div class="d2d-stat-label">Yes</div></div>' +
       '<div class="d2d-stat"><div class="d2d-stat-val text-red-400">' + (stats.total_no || 0) + '</div><div class="d2d-stat-label">No</div></div>' +
-      '<div class="d2d-stat"><div class="d2d-stat-val text-gray-400">' + (stats.total_no_answer || 0) + '</div><div class="d2d-stat-label">No Ans</div></div>';
+      '<div class="d2d-stat"><div class="d2d-stat-val text-gray-400">' + (stats.total_no_answer || 0) + '</div><div class="d2d-stat-label">No Ans</div></div>' +
+      (viewerRole === 'owner'
+        ? '<button onclick="window.d2d.openDashboard()" style="margin-top:8px;width:100%;padding:8px 0;background:#6366f1;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px"><i class="fas fa-chart-bar"></i>Team Dashboard</button>'
+        : '');
+  }
+
+  // ============================================================
+  // DASHBOARD OVERLAY
+  // ============================================================
+  function openDashboard() {
+    // Create overlay covering the whole root
+    var overlay = document.createElement('div');
+    overlay.id = 'd2d-dashboard-overlay';
+    overlay.style.cssText = 'position:absolute;inset:0;background:var(--bg-elevated,#0f0f0f);z-index:500;overflow-y:auto;padding:20px';
+    overlay.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">' +
+      '<h2 style="color:var(--text-primary,#f1f5f9);font-size:18px;font-weight:800;display:flex;align-items:center;gap:8px"><i class="fas fa-chart-bar" style="color:#6366f1"></i>Team Dashboard</h2>' +
+      '<div style="display:flex;gap:8px">' +
+        '<button onclick="window.d2d.refreshDashboard()" style="padding:7px 14px;background:var(--bg-card,#1a1a1a);color:var(--text-muted,#9ca3af);border:1px solid var(--border-color,#333);border-radius:8px;font-size:12px;font-weight:600;cursor:pointer"><i class="fas fa-sync-alt mr-1"></i>Refresh</button>' +
+        '<button onclick="window.d2d.closeDashboard()" style="padding:7px 14px;background:var(--bg-card,#1a1a1a);color:var(--text-muted,#9ca3af);border:1px solid var(--border-color,#333);border-radius:8px;font-size:12px;font-weight:600;cursor:pointer"><i class="fas fa-arrow-left mr-1"></i>Back to Map</button>' +
+      '</div>' +
+    '</div>' +
+    '<div id="d2d-dash-content" style="display:flex;align-items:center;justify-content:center;padding:40px;color:var(--text-muted,#9ca3af)"><i class="fas fa-spinner fa-spin mr-2"></i>Loading...</div>';
+
+    var container = root.querySelector('.d2d-container') || root;
+    container.style.position = 'relative';
+    container.appendChild(overlay);
+
+    loadDashboardData();
+  }
+
+  function closeDashboard() {
+    var el = document.getElementById('d2d-dashboard-overlay');
+    if (el) el.remove();
+  }
+
+  function refreshDashboard() {
+    var el = document.getElementById('d2d-dash-content');
+    if (el) el.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;padding:40px;color:var(--text-muted,#9ca3af)"><i class="fas fa-spinner fa-spin mr-2"></i>Loading...</div>';
+    loadDashboardData();
+  }
+
+  function loadDashboardData() {
+    Promise.all([
+      api('GET', '/stats'),
+      api('GET', '/team/activity'),
+      api('GET', '/turfs'),
+      api('GET', '/pins?sort=recent&limit=25')
+    ]).then(function(results) {
+      var s = results[0].stats || {};
+      var activity = results[1].activity || [];
+      var turfList = results[2].turfs || [];
+      var recentPins = results[3].pins || [];
+      renderDashboardContent(s, activity, turfList, recentPins);
+    }).catch(function(err) {
+      var el = document.getElementById('d2d-dash-content');
+      if (el) el.innerHTML = '<p style="color:#ef4444;text-align:center">Failed to load dashboard data.</p>';
+    });
+  }
+
+  function renderDashboardContent(s, activity, turfList, recentPins) {
+    var el = document.getElementById('d2d-dash-content');
+    if (!el) return;
+
+    var knocked = (s.total_yes||0) + (s.total_no||0) + (s.total_no_answer||0);
+    var convRate = knocked > 0 ? ((s.total_yes||0) / knocked * 100).toFixed(1) : '0.0';
+
+    // KPI bar
+    var kpi = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:24px">' +
+      kpiCard('Doors Knocked', knocked, '#0ea5e9', 'fa-hand-fist') +
+      kpiCard('Interested', s.total_yes||0, '#22c55e', 'fa-thumbs-up') +
+      kpiCard('Conversion Rate', convRate + '%', '#a78bfa', 'fa-percent') +
+      kpiCard('Team Members', s.total_members||0, '#f59e0b', 'fa-users') +
+    '</div>';
+
+    // Team leaderboard
+    var leaderboard = '<div style="background:var(--bg-card,#1a1a1a);border:1px solid var(--border-color,#333);border-radius:12px;overflow:hidden;margin-bottom:20px">' +
+      '<div style="padding:14px 16px;border-bottom:1px solid var(--border-color,#333)">' +
+        '<h3 style="color:var(--text-primary,#f1f5f9);font-size:14px;font-weight:700;margin:0"><i class="fas fa-trophy" style="color:#f59e0b;margin-right:8px"></i>Team Leaderboard</h3>' +
+      '</div>';
+
+    if (activity.length === 0) {
+      leaderboard += '<div style="padding:24px;text-align:center;color:var(--text-muted,#9ca3af);font-size:13px">No activity yet — team members need to start knocking doors.</div>';
+    } else {
+      leaderboard += '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">' +
+        '<thead><tr style="background:var(--bg-elevated,#111)">' +
+          thD('#') + thD('Name') + thD('Doors') + thD('Yes') + thD('No') + thD('N/A') + thD('Conv%') + thD('Last Active') +
+        '</tr></thead><tbody>';
+      for (var i = 0; i < activity.length; i++) {
+        var m = activity[i];
+        var mKnocked = (m.yes_count||0) + (m.no_count||0) + (m.no_answer_count||0);
+        var mConv = mKnocked > 0 ? ((m.yes_count||0) / mKnocked * 100).toFixed(0) : '0';
+        var convColor = parseInt(mConv) >= 30 ? '#22c55e' : parseInt(mConv) >= 15 ? '#f59e0b' : '#9ca3af';
+        var lastActive = m.last_activity ? timeAgo(m.last_activity) : '—';
+        var rowBg = i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)';
+        leaderboard += '<tr style="border-top:1px solid var(--border-color,#333);background:' + rowBg + '">' +
+          tdD('<span style="color:#f59e0b;font-weight:800">' + (i+1) + '</span>') +
+          tdD('<div style="display:flex;align-items:center;gap:8px"><div style="width:8px;height:8px;border-radius:50%;background:' + (m.color||'#6366f1') + ';flex-shrink:0"></div><span style="color:var(--text-primary,#f1f5f9);font-weight:600">' + escH(m.name||'') + '</span></div>') +
+          tdD('<span style="font-weight:700;color:var(--text-primary,#f1f5f9)">' + (m.total_knocks||0) + '</span>') +
+          tdD('<span style="color:#22c55e;font-weight:600">' + (m.yes_count||0) + '</span>') +
+          tdD('<span style="color:#ef4444">' + (m.no_count||0) + '</span>') +
+          tdD('<span style="color:#9ca3af">' + (m.no_answer_count||0) + '</span>') +
+          tdD('<span style="font-weight:700;color:' + convColor + '">' + mConv + '%</span>') +
+          tdD('<span style="color:var(--text-muted,#9ca3af);font-size:11px">' + lastActive + '</span>') +
+        '</tr>';
+      }
+      leaderboard += '</tbody></table></div>';
+    }
+    leaderboard += '</div>';
+
+    // Territory progress
+    var territories = '<div style="background:var(--bg-card,#1a1a1a);border:1px solid var(--border-color,#333);border-radius:12px;overflow:hidden;margin-bottom:20px">' +
+      '<div style="padding:14px 16px;border-bottom:1px solid var(--border-color,#333)">' +
+        '<h3 style="color:var(--text-primary,#f1f5f9);font-size:14px;font-weight:700;margin:0"><i class="fas fa-map-marked-alt" style="color:#0ea5e9;margin-right:8px"></i>Territory Progress</h3>' +
+      '</div>';
+
+    if (turfList.length === 0) {
+      territories += '<div style="padding:24px;text-align:center;color:var(--text-muted,#9ca3af);font-size:13px">No territories created yet.</div>';
+    } else {
+      territories += '<div style="padding:8px 0">';
+      for (var j = 0; j < turfList.length; j++) {
+        var tf = turfList[j];
+        var total = (tf.yes_count||0) + (tf.no_count||0) + (tf.no_answer_count||0) + (tf.not_knocked_count||0);
+        var knocked2 = (tf.yes_count||0) + (tf.no_count||0) + (tf.no_answer_count||0);
+        var pct = total > 0 ? Math.round((knocked2 / total) * 100) : 0;
+        var barColor = pct >= 75 ? '#22c55e' : pct >= 25 ? '#f59e0b' : '#6366f1';
+        territories += '<div style="padding:12px 16px;border-bottom:1px solid var(--border-color,#333)">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
+            '<div>' +
+              '<span style="color:var(--text-primary,#f1f5f9);font-weight:600;font-size:13px">' + escH(tf.name||'') + '</span>' +
+              (tf.assigned_name ? '<span style="color:var(--text-muted,#9ca3af);font-size:11px;margin-left:8px">→ ' + escH(tf.assigned_name) + '</span>' : '<span style="color:var(--text-muted,#9ca3af);font-size:11px;margin-left:8px">Unassigned</span>') +
+            '</div>' +
+            '<div style="display:flex;align-items:center;gap:12px;font-size:12px">' +
+              '<span style="color:var(--text-muted,#9ca3af)">' + knocked2 + '/' + total + ' knocked</span>' +
+              '<span style="color:#22c55e;font-weight:600">' + (tf.yes_count||0) + ' ✓</span>' +
+              '<span style="font-weight:700;color:' + barColor + '">' + pct + '%</span>' +
+            '</div>' +
+          '</div>' +
+          '<div style="height:6px;background:rgba(255,255,255,0.1);border-radius:999px;overflow:hidden">' +
+            '<div style="height:100%;width:' + pct + '%;background:' + barColor + ';border-radius:999px;transition:width 0.6s ease"></div>' +
+          '</div>' +
+        '</div>';
+      }
+      territories += '</div>';
+    }
+    territories += '</div>';
+
+    // Recent activity
+    var statusConfig = {
+      yes: { label: 'Interested', color: '#22c55e', icon: 'fa-thumbs-up' },
+      no: { label: 'Not Interested', color: '#ef4444', icon: 'fa-thumbs-down' },
+      no_answer: { label: 'No Answer', color: '#f59e0b', icon: 'fa-question-circle' },
+      not_knocked: { label: 'Not Knocked', color: '#6b7280', icon: 'fa-clock' }
+    };
+    var activity2 = '<div style="background:var(--bg-card,#1a1a1a);border:1px solid var(--border-color,#333);border-radius:12px;overflow:hidden">' +
+      '<div style="padding:14px 16px;border-bottom:1px solid var(--border-color,#333)">' +
+        '<h3 style="color:var(--text-primary,#f1f5f9);font-size:14px;font-weight:700;margin:0"><i class="fas fa-bolt" style="color:#f59e0b;margin-right:8px"></i>Recent Activity</h3>' +
+      '</div>';
+
+    var knocked3 = recentPins.filter(function(p) { return p.status && p.status !== 'not_knocked' && p.knocked_at; });
+    if (knocked3.length === 0) {
+      activity2 += '<div style="padding:24px;text-align:center;color:var(--text-muted,#9ca3af);font-size:13px">No door knocks recorded yet.</div>';
+    } else {
+      activity2 += '<div style="max-height:320px;overflow-y:auto">';
+      for (var k = 0; k < knocked3.length; k++) {
+        var p = knocked3[k];
+        var sc = statusConfig[p.status] || statusConfig.not_knocked;
+        activity2 += '<div style="display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid rgba(255,255,255,0.05)">' +
+          '<div style="width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,0.07);display:flex;align-items:center;justify-content:center;flex-shrink:0">' +
+            '<i class="fas ' + sc.icon + '" style="color:' + sc.color + ';font-size:13px"></i>' +
+          '</div>' +
+          '<div style="flex:1;min-width:0">' +
+            '<div style="display:flex;justify-content:space-between;align-items:center">' +
+              '<span style="color:var(--text-primary,#f1f5f9);font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px">' + escH(p.address || ('Pin #' + p.id)) + '</span>' +
+              '<span style="color:var(--text-muted,#9ca3af);font-size:11px;flex-shrink:0;margin-left:8px">' + (p.knocked_at ? timeAgo(p.knocked_at) : '') + '</span>' +
+            '</div>' +
+            '<div style="display:flex;align-items:center;gap:6px;margin-top:2px">' +
+              '<span style="color:' + sc.color + ';font-size:11px;font-weight:600">' + sc.label + '</span>' +
+              (p.knocked_by_name ? '<span style="color:var(--text-muted,#9ca3af);font-size:11px">· ' + escH(p.knocked_by_name) + '</span>' : '') +
+            '</div>' +
+          '</div>' +
+        '</div>';
+      }
+      activity2 += '</div>';
+    }
+    activity2 += '</div>';
+
+    el.innerHTML = kpi + leaderboard + territories + activity2;
+  }
+
+  // Dashboard render helpers
+  function kpiCard(label, value, color, icon) {
+    return '<div style="background:var(--bg-card,#1a1a1a);border:1px solid var(--border-color,#333);border-radius:12px;padding:16px;text-align:center">' +
+      '<div style="width:40px;height:40px;border-radius:10px;background:' + color + '22;display:flex;align-items:center;justify-content:center;margin:0 auto 10px">' +
+        '<i class="fas ' + icon + '" style="color:' + color + ';font-size:16px"></i>' +
+      '</div>' +
+      '<div style="font-size:26px;font-weight:900;color:' + color + '">' + value + '</div>' +
+      '<div style="font-size:11px;color:var(--text-muted,#9ca3af);margin-top:4px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px">' + label + '</div>' +
+    '</div>';
+  }
+  function thD(label) {
+    return '<th style="padding:10px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--text-muted,#9ca3af);text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap">' + label + '</th>';
+  }
+  function tdD(content) {
+    return '<td style="padding:10px 12px;white-space:nowrap">' + content + '</td>';
+  }
+  function timeAgo(dateStr) {
+    if (!dateStr) return '—';
+    var diff = Date.now() - new Date(dateStr).getTime();
+    var mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return mins + 'm ago';
+    var hrs = Math.floor(mins / 60);
+    if (hrs < 24) return hrs + 'h ago';
+    var days = Math.floor(hrs / 24);
+    if (days === 1) return 'Yesterday';
+    if (days < 7) return days + 'd ago';
+    return fmtDate(dateStr);
   }
 
   // ============================================================
@@ -1441,7 +1657,10 @@
     addMember: addMember,
     editMember: editMember,
     deleteMember: deleteMember,
-    setTool: setActiveTool
+    setTool: setActiveTool,
+    openDashboard: openDashboard,
+    closeDashboard: closeDashboard,
+    refreshDashboard: refreshDashboard
   };
 
   // ============================================================

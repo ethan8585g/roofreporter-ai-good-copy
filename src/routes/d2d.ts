@@ -410,6 +410,8 @@ d2dRoutes.get('/pins', async (c) => {
   const turfId = c.req.query('turf_id')
   const status = c.req.query('status')
   const memberId = c.req.query('member_id')
+  const sortRecent = c.req.query('sort') === 'recent'
+  const limitN = c.req.query('limit') ? parseInt(c.req.query('limit')!) : null
 
   let q = `SELECT p.*, tm.name as knocked_by_name, t.name as turf_name
      FROM d2d_pins p
@@ -427,7 +429,8 @@ d2dRoutes.get('/pins', async (c) => {
   if (turfId) { q += ' AND p.turf_id = ?'; params.push(turfId) }
   if (status) { q += ' AND p.status = ?'; params.push(status) }
   if (memberId) { q += ' AND p.knocked_by = ?'; params.push(memberId) }
-  q += ' ORDER BY p.updated_at DESC'
+  q += sortRecent ? ' ORDER BY p.knocked_at DESC' : ' ORDER BY p.updated_at DESC'
+  if (limitN && limitN > 0) { q += ' LIMIT ?'; params.push(limitN) }
 
   const pins = await c.env.DB.prepare(q).bind(...params).all()
   return c.json({ pins: pins.results })
