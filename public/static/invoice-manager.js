@@ -23,7 +23,8 @@ document.addEventListener('DOMContentLoaded', () => {
     filter: 'all',
     searchTerm: '',
     form: resetForm(),
-    squareStatus: null
+    squareStatus: null,
+    gmailStatus: null
   };
 
   function imToast(msg, type) {
@@ -67,18 +68,20 @@ document.addEventListener('DOMContentLoaded', () => {
     state.loading = true;
     render();
     try {
-      const [invRes, custRes, propRes, rptRes, sqRes] = await Promise.all([
+      const [invRes, custRes, propRes, rptRes, sqRes, gmailRes] = await Promise.all([
         fetch('/api/invoices', { headers: headers() }),
         fetch('/api/invoices/customers/list', { headers: headers() }),
         fetch('/api/invoices?document_type=proposal', { headers: headers() }).catch(() => ({ ok: false })),
         fetch('/api/reports/list', { headers: headers() }).catch(() => ({ ok: false })),
-        fetch('/api/square/oauth/status', { headers: headers() }).catch(() => ({ ok: false }))
+        fetch('/api/square/oauth/status', { headers: headers() }).catch(() => ({ ok: false })),
+        fetch('/api/auth/gmail/status', { headers: headers() }).catch(() => ({ ok: false }))
       ]);
       if (invRes.ok) { const d = await invRes.json(); state.invoices = d.invoices || []; state.stats = d.stats || {}; }
       if (custRes.ok) { const d = await custRes.json(); state.customers = d.customers || []; }
       if (propRes.ok) { const d = await propRes.json(); state.proposals = (d.invoices || []).filter(p => p.status !== 'cancelled'); }
       if (rptRes.ok) { const d = await rptRes.json(); state.reports = (d.reports || []).filter(r => r.status === 'completed' || r.status === 'enhancing'); }
       if (sqRes.ok) { state.squareStatus = await sqRes.json(); }
+      if (gmailRes.ok) { const d = await gmailRes.json(); state.gmailStatus = d.gmail_oauth2 || null; }
     } catch (e) { console.warn('Load error', e); }
     state.loading = false;
     render();
@@ -117,7 +120,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     return `<div class="rounded-xl border border-blue-500/20 p-4 mb-5 flex items-center justify-between" style="background:var(--bg-card)">
       <div class="flex items-center gap-3">
-        <div class="w-10 h-10 bg-blue-500/15 rounded-lg flex items-center justify-center"><i class="fab fa-stripe-s text-blue-400 text-lg"></i></div>
+        <div class="w-10 h-10 bg-blue-500/15 rounded-lg flex items-center justify-center"><i class="fas fa-square text-blue-400 text-lg"></i></div>
         <div>
           <div class="font-semibold text-sm" style="color:var(--text-primary)">Connect Square for Online Payments</div>
           <div class="text-xs" style="color:var(--text-muted)">Accept credit card, debit, Apple Pay & Google Pay on your invoices</div>
@@ -126,6 +129,29 @@ document.addEventListener('DOMContentLoaded', () => {
       <button onclick="window._im.connectSquare()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition-colors">
         <i class="fas fa-plug mr-1.5"></i>Connect Square
       </button>
+    </div>`;
+  }
+
+  function renderGmailConnectBanner() {
+    const gm = state.gmailStatus;
+    if (gm && gm.ready) {
+      return `<div class="rounded-xl border border-emerald-500/20 p-3 mb-5 flex items-center gap-2" style="background:var(--bg-card)">
+        <i class="fas fa-check-circle text-emerald-400"></i>
+        <span class="text-emerald-400 text-sm font-medium">Gmail Connected${gm && gm.sender_email ? ' — ' + gm.sender_email : ''}</span>
+        <span class="text-xs" style="color:var(--text-muted)">— Invoices will be sent from your Gmail account</span>
+      </div>`;
+    }
+    return `<div class="rounded-xl border border-amber-500/20 p-4 mb-5 flex items-center justify-between" style="background:var(--bg-card)">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 bg-amber-500/15 rounded-lg flex items-center justify-center"><i class="fab fa-google text-amber-400 text-lg"></i></div>
+        <div>
+          <div class="font-semibold text-sm" style="color:var(--text-primary)">Connect Gmail to Send Invoices</div>
+          <div class="text-xs" style="color:var(--text-muted)">Link your Gmail account so invoices are delivered from your address</div>
+        </div>
+      </div>
+      <a href="${gm ? (gm.authorize_url || '/api/auth/gmail') : '/api/auth/gmail'}" class="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-sm font-semibold transition-colors">
+        <i class="fab fa-google mr-1.5"></i>Connect Gmail
+      </a>
     </div>`;
   }
 
@@ -195,6 +221,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     <!-- Square Merchant Connect Banner -->
     ${renderSquareConnectBanner()}
+    <!-- Gmail Connect Banner -->
+    ${renderGmailConnectBanner()}
 
     <!-- Search & Filter Bar -->
     <div class="rounded-xl p-3 mb-4 flex items-center gap-3 flex-wrap" style="background:var(--bg-card);border:1px solid var(--border-color)">
@@ -208,6 +236,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ${filterBtn('All', 'all', '', allInvoices.length, 'gray')}
         ${filterBtn('Draft', 'draft', 'edit', allInvoices.filter(i => i.status === 'draft').length, 'gray')}
         ${filterBtn('Sent', 'sent', 'paper-plane', allInvoices.filter(i => i.status === 'sent').length, 'blue')}
+        ${filterBtn('Outstanding', 'outstanding', 'hourglass-half', allInvoices.filter(i => ['sent','viewed'].includes(i.status)).length, 'blue')}
         ${filterBtn('Paid', 'paid', 'check-circle', allInvoices.filter(i => i.status === 'paid').length, 'green')}
         ${filterBtn('Overdue', 'overdue', 'exclamation-circle', allInvoices.filter(i => i.status === 'overdue').length, 'red')}
       </div>
@@ -605,7 +634,13 @@ document.addEventListener('DOMContentLoaded', () => {
       const invId = state.editId || data.invoice?.id;
 
       if (andSend && invId) {
-        await fetch('/api/invoices/' + invId + '/send', { method: 'POST', headers: headers() });
+        const sendRes = await fetch('/api/invoices/' + invId + '/send', { method: 'POST', headers: headers() });
+        if (!sendRes.ok) {
+          const sendErr = await sendRes.json().catch(() => ({}));
+          imToast('Invoice saved but send failed: ' + (sendErr.error || 'Email error'), 'error');
+          state.mode = 'list'; state.editId = null; state.form = resetForm(); load();
+          return;
+        }
       }
 
       imToast(andSend ? 'Invoice saved and sent!' : 'Invoice saved as draft!', 'success');
@@ -791,7 +826,8 @@ document.addEventListener('DOMContentLoaded', () => {
             tax_rate: fullInv.tax_rate || 5,
             notes: fullInv.notes || '',
             terms: fullInv.terms || '',
-            attached_report_id: fullInv.attached_report_id || null
+            attached_report_id: fullInv.attached_report_id || null,
+            order_id: fullInv.order_id || null
           };
           state.mode = 'create';
           state.editId = null;

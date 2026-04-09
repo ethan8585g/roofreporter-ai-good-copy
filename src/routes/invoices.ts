@@ -98,21 +98,35 @@ invoiceRoutes.get('/', async (c) => {
 
     if (status) { query += ' AND i.status = ?'; params.push(status) }
     if (customerId) { query += ' AND i.customer_id = ?'; params.push(customerId) }
-    if (docType) { query += ' AND i.document_type = ?'; params.push(docType) }
-    else { query += " AND (i.document_type IS NULL OR i.document_type = 'invoice')" }
+    // M-3: treat document_type=invoice the same as no filter — include legacy NULL rows
+    if (docType === 'invoice' || !docType) { query += " AND (i.document_type IS NULL OR i.document_type = 'invoice')" }
+    else { query += ' AND i.document_type = ?'; params.push(docType) }
 
     query += ' ORDER BY i.created_at DESC'
     const invoices = await c.env.DB.prepare(query).bind(...params).all()
 
-    const stats = await c.env.DB.prepare(`
-      SELECT
-        COUNT(*) as total_invoices,
-        SUM(CASE WHEN status = 'paid' THEN total ELSE 0 END) as total_paid,
-        SUM(CASE WHEN status IN ('sent','viewed') THEN total ELSE 0 END) as total_outstanding,
-        SUM(CASE WHEN status = 'overdue' THEN total ELSE 0 END) as total_overdue,
-        SUM(CASE WHEN status = 'draft' THEN total ELSE 0 END) as total_draft
-      FROM invoices
-    `).first()
+    // C-7: Scope stats by customer when request comes from a customer session
+    const user = c.get('admin' as any)
+    const isCustomer = user?.role === 'customer'
+    const stats = isCustomer
+      ? await c.env.DB.prepare(`
+          SELECT
+            COUNT(*) as total_invoices,
+            SUM(CASE WHEN status = 'paid' THEN total ELSE 0 END) as total_paid,
+            SUM(CASE WHEN status IN ('sent','viewed') THEN total ELSE 0 END) as total_outstanding,
+            SUM(CASE WHEN status = 'overdue' THEN total ELSE 0 END) as total_overdue,
+            SUM(CASE WHEN status = 'draft' THEN total ELSE 0 END) as total_draft
+          FROM invoices WHERE customer_id = ?
+        `).bind(user.id).first()
+      : await c.env.DB.prepare(`
+          SELECT
+            COUNT(*) as total_invoices,
+            SUM(CASE WHEN status = 'paid' THEN total ELSE 0 END) as total_paid,
+            SUM(CASE WHEN status IN ('sent','viewed') THEN total ELSE 0 END) as total_outstanding,
+            SUM(CASE WHEN status = 'overdue' THEN total ELSE 0 END) as total_overdue,
+            SUM(CASE WHEN status = 'draft' THEN total ELSE 0 END) as total_draft
+          FROM invoices
+        `).first()
 
     return c.json({ invoices: invoices.results, stats })
   } catch (err: any) {

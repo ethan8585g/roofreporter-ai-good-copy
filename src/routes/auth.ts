@@ -843,7 +843,10 @@ authRoutes.get('/gmail/callback', async (c) => {
   if (!tokenResp.ok) {
     return c.html(`<html><body style="font-family:sans-serif;padding:40px;max-width:600px;margin:auto">
       <h2 style="color:#dc2626">Token Exchange Failed</h2>
-      <p>Error: ${tokenData.error_description || tokenData.error || 'Unknown error'}</p>
+      <p><strong>Error:</strong> ${tokenData.error || 'unknown'}</p>
+      <p><strong>Description:</strong> ${tokenData.error_description || '(none)'}</p>
+      <p><strong>Redirect URI used:</strong> ${redirectUri}</p>
+      <p style="font-size:12px;color:#666">Make sure this exact URI is listed under "Authorized redirect URIs" in GCP Console for your OAuth client.</p>
       <a href="/api/auth/gmail" style="color:#2563eb">Try again</a>
     </body></html>`)
   }

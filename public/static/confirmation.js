@@ -1178,7 +1178,7 @@ async function generateProposalFromReport(reportId, address, customerName, custo
 
   try {
     // Step 1: Generate tiered pricing from the report
-    const token = localStorage.getItem('auth_token') || '';
+    const token = localStorage.getItem('rc_token') || localStorage.getItem('rc_customer_token') || '';
     const pipelineRes = await fetch('/api/crm/proposals/from-report', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },

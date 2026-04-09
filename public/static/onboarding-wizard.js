@@ -453,7 +453,7 @@
     renderContent();
 
     try {
-      var res = await fetch('/api/admin/superadmin/secretary-manager/onboard', {
+      var res = await fetch('/api/admin/superadmin/onboarding/create', {
         method: 'POST',
         headers: { ...saHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify({

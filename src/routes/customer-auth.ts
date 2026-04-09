@@ -1007,6 +1007,76 @@ customerAuthRoutes.put('/branding', async (c) => {
 })
 
 // ============================================================
+// C-5: UPLOAD LOGO (stores base64 data URI in brand_logo_url)
+// ============================================================
+customerAuthRoutes.post('/branding/logo', async (c) => {
+  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  if (!token) return c.json({ error: 'Not authenticated' }, 401)
+
+  const session = await c.env.DB.prepare(`
+    SELECT customer_id FROM customer_sessions
+    WHERE session_token = ? AND expires_at > datetime('now')
+  `).bind(token).first<any>()
+  if (!session) return c.json({ error: 'Session expired' }, 401)
+
+  const { logo_data } = await c.req.json()
+  if (!logo_data) return c.json({ error: 'logo_data is required' }, 400)
+
+  await c.env.DB.prepare(
+    `UPDATE customers SET brand_logo_url = ?, updated_at = datetime('now') WHERE id = ?`
+  ).bind(logo_data, session.customer_id).run()
+
+  return c.json({ success: true })
+})
+
+// ============================================================
+// C-5: SAVE AD SETTINGS (stores as JSON in brand_ads_json)
+// ============================================================
+customerAuthRoutes.put('/branding/ads', async (c) => {
+  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  if (!token) return c.json({ error: 'Not authenticated' }, 401)
+
+  const session = await c.env.DB.prepare(`
+    SELECT customer_id FROM customer_sessions
+    WHERE session_token = ? AND expires_at > datetime('now')
+  `).bind(token).first<any>()
+  if (!session) return c.json({ error: 'Session expired' }, 401)
+
+  const ads = await c.req.json()
+
+  await c.env.DB.prepare(
+    `UPDATE customers SET brand_ads_json = ?, updated_at = datetime('now') WHERE id = ?`
+  ).bind(JSON.stringify(ads), session.customer_id).run()
+
+  return c.json({ success: true })
+})
+
+// ============================================================
+// C-6: SET SUBSCRIPTION TIER (called from signup wizard)
+// ============================================================
+customerAuthRoutes.post('/set-tier', async (c) => {
+  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  if (!token) return c.json({ error: 'Not authenticated' }, 401)
+
+  const session = await c.env.DB.prepare(`
+    SELECT customer_id FROM customer_sessions
+    WHERE session_token = ? AND expires_at > datetime('now')
+  `).bind(token).first<any>()
+  if (!session) return c.json({ error: 'Session expired' }, 401)
+
+  const { tier, city, province } = await c.req.json()
+
+  await c.env.DB.prepare(
+    `UPDATE customers SET subscription_tier = ?,
+      city = COALESCE(?, city), province = COALESCE(?, province),
+      updated_at = datetime('now')
+     WHERE id = ?`
+  ).bind(tier || 'starter', city || null, province || null, session.customer_id).run()
+
+  return c.json({ success: true })
+})
+
+// ============================================================
 // CHANGE PASSWORD
 // ============================================================
 customerAuthRoutes.post('/change-password', async (c) => {
@@ -1676,7 +1746,9 @@ customerAuthRoutes.get('/gcal/callback', async (c) => {
 <body class="bg-[#0a0a0a] min-h-screen flex items-center justify-center"><div class="bg-[#111] border border-white/10 rounded-2xl shadow-xl p-8 max-w-md text-center">
 <div class="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-4"><span class="text-red-400 text-2xl">⚠</span></div>
 <h2 class="text-xl font-bold text-white mb-2">Token Exchange Failed</h2>
-<p class="text-gray-400 mb-4">${tokenData.error_description || 'Could not obtain refresh token'}</p>
+<p class="text-gray-400 mb-1"><strong>Error:</strong> ${tokenData.error || (tokenData.refresh_token === undefined ? 'no_refresh_token' : 'unknown')}</p>
+<p class="text-gray-400 mb-1"><strong>Description:</strong> ${tokenData.error_description || '(none)'}</p>
+<p class="text-gray-500 text-xs mb-4"><strong>Redirect URI:</strong> ${redirectUri}</p>
 <button onclick="window.close()" class="bg-blue-600 text-white px-6 py-2 rounded-lg font-semibold">Close</button>
 </div></body></html>`)
   }

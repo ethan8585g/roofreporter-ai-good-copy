@@ -704,8 +704,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // ============================================================
   function renderGmailConnectBanner() {
     const gm = state.gmailStatus;
-    if (!gm) return '';
-    if (gm.ready) {
+    if (gm && gm.ready) {
       return `<div class="rounded-xl border border-emerald-200 p-3 mb-5 flex items-center gap-2 bg-white">
         <i class="fas fa-check-circle text-emerald-500"></i>
         <span class="text-emerald-600 text-sm font-medium">Gmail Connected${gm.sender_email ? ' — ' + gm.sender_email : ''}</span>
@@ -720,7 +719,7 @@ document.addEventListener('DOMContentLoaded', () => {
           <div class="text-xs text-gray-500">Link your Gmail account so proposals are delivered from your address</div>
         </div>
       </div>
-      <a href="${gm.authorize_url || '/api/auth/gmail'}" class="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-sm font-semibold transition-colors">
+      <a href="${gm ? (gm.authorize_url || '/api/auth/gmail') : '/api/auth/gmail'}" class="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-sm font-semibold transition-colors">
         <i class="fab fa-google mr-1.5"></i>Connect Gmail
       </a>
     </div>`;

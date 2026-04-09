@@ -761,7 +761,7 @@ function renderActionBar() {
   return '<div id="mc-action-bar" class="mb-8 mc-no-print">' +
     '<div class="flex flex-wrap gap-2 mb-2">' +
       btn('mcAddToInvoice()', '#059669', '<i class="fas fa-file-invoice-dollar"></i> Add to Invoice') +
-      btn('mcCreateProposal()', '#059669', '<i class="fas fa-file-signature"></i> Create Proposal') +
+      btn('mcCreateProposal()', '#7c3aed', '<i class="fas fa-file-signature"></i> Create Proposal') +
       btn('mcSaveClientPDF()', '#6366f1', '<i class="fas fa-file-pdf"></i> Client PDF') +
       btn('mcSaveInternalPDF()', null, '<i class="fas fa-clipboard-list"></i> Internal PDF', true) +
     '</div>' +

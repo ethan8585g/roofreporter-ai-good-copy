@@ -695,6 +695,58 @@ crmRoutes.get('/proposals/:id', async (c) => {
   return c.json({ proposal, items: items.results })
 })
 
+// C-4: Generate tiered pricing from a report (used by confirmation page)
+crmRoutes.post('/proposals/from-report', async (c) => {
+  const ownerId = await getOwnerId(c)
+  if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
+  try {
+    const { report_id } = await c.req.json()
+    const report = await c.env.DB.prepare(
+      'SELECT * FROM reports WHERE id = ?'
+    ).bind(report_id).first<any>()
+    const totalArea = report?.total_area || report?.roof_area || 0
+    const tiers = [
+      { label: 'Basic', scope: '3-tab shingles, standard installation', price_per_sq: 280, total: Math.round(totalArea * 280 / 100) },
+      { label: 'Standard', scope: 'Architectural shingles, ice/water shield, ridge cap', price_per_sq: 380, total: Math.round(totalArea * 380 / 100) },
+      { label: 'Premium', scope: 'Impact-resistant shingles, full synthetic underlay, lifetime warranty', price_per_sq: 520, total: Math.round(totalArea * 520 / 100) },
+    ]
+    return c.json({ tiers, measurements: { total_area: totalArea } })
+  } catch (err: any) {
+    return c.json({ error: 'Failed to generate tiers: ' + err.message }, 500)
+  }
+})
+
+// C-4: Create one proposal per pricing tier (used by confirmation page)
+crmRoutes.post('/proposals/create-tiered', async (c) => {
+  const ownerId = await getOwnerId(c)
+  if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
+  try {
+    const { customer_id, property_address, scope_of_work, report_id, tiers } = await c.req.json()
+    const created: { id: number; label: string; total: number }[] = []
+    for (const tier of (tiers || [])) {
+      const propNum = genProposalNum()
+      const total = tier.total || 0
+      const taxAmount = Math.round(total * 0.05 * 100) / 100
+      const result = await c.env.DB.prepare(`
+        INSERT INTO crm_proposals (owner_id, crm_customer_id, proposal_number, title, property_address,
+          scope_of_work, subtotal, tax_rate, tax_amount, total_amount, source_report_id, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 5, ?, ?, ?, 'draft')
+      `).bind(
+        ownerId, customer_id || null, propNum,
+        tier.label + (property_address ? ' — ' + property_address : ''),
+        property_address || null,
+        tier.scope || scope_of_work || null,
+        total, taxAmount, Math.round((total + taxAmount) * 100) / 100,
+        report_id || null
+      ).run()
+      created.push({ id: result.meta.last_row_id as number, label: tier.label, total })
+    }
+    return c.json({ success: true, proposals: created })
+  } catch (err: any) {
+    return c.json({ error: 'Failed to create tiered proposals: ' + err.message }, 500)
+  }
+})
+
 // CREATE proposal with line items
 crmRoutes.post('/proposals', async (c) => {
   const ownerId = await getOwnerId(c)

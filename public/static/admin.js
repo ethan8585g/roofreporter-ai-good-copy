@@ -626,10 +626,23 @@ function renderInvoicing() {
         <div class="grid md:grid-cols-2 gap-4 mb-4">
           <div>
             <label class="block text-xs font-semibold text-gray-500 mb-1 uppercase">Customer *</label>
-            <select id="invCust" class="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500">
-              <option value="">Select customer...</option>
-              ${custs.map(c => `<option value="${c.id}">${c.name}${c.company_name ? ' — ' + c.company_name : ''} (${c.email})</option>`).join('')}
-            </select>
+            <div class="flex gap-1 mb-2 bg-gray-100 rounded-lg p-0.5 w-fit">
+              <button type="button" id="invCustTabExisting" onclick="setInvCustMode('existing')" class="px-3 py-1.5 rounded-md text-xs font-medium transition-colors bg-white shadow text-gray-700">Existing Customer</button>
+              <button type="button" id="invCustTabNew" onclick="setInvCustMode('new')" class="px-3 py-1.5 rounded-md text-xs font-medium transition-colors text-gray-400 hover:text-gray-600">+ New Customer</button>
+            </div>
+            <div id="invCustExisting">
+              <select id="invCust" class="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500">
+                <option value="">Select customer...</option>
+                ${custs.map(c => `<option value="${c.id}">${c.name}${c.company_name ? ' — ' + c.company_name : ''} (${c.email})</option>`).join('')}
+              </select>
+            </div>
+            <div id="invCustNew" style="display:none" class="grid grid-cols-2 gap-2">
+              <input type="text" id="invNewName" class="px-3 py-2 border border-gray-200 rounded-xl text-sm" placeholder="Full Name *">
+              <input type="email" id="invNewEmail" class="px-3 py-2 border border-gray-200 rounded-xl text-sm" placeholder="Email *">
+              <input type="tel" id="invNewPhone" class="px-3 py-2 border border-gray-200 rounded-xl text-sm" placeholder="Phone">
+              <input type="text" id="invNewCompany" class="px-3 py-2 border border-gray-200 rounded-xl text-sm" placeholder="Company">
+            </div>
+            <input type="hidden" id="invCustMode" value="existing">
           </div>
           <div>
             <label class="block text-xs font-semibold text-gray-500 mb-1 uppercase">
@@ -669,7 +682,7 @@ function renderInvoicing() {
         <div class="grid grid-cols-3 gap-4 mb-4">
           <div><label class="block text-xs font-semibold text-gray-500 mb-1">GST %</label><input type="number" id="invTax" value="5" class="w-full px-3 py-2 border rounded-lg text-sm"></div>
           <div><label class="block text-xs font-semibold text-gray-500 mb-1">Discount $</label><input type="number" id="invDisc" value="0" class="w-full px-3 py-2 border rounded-lg text-sm"></div>
-          <div><label class="block text-xs font-semibold text-gray-500 mb-1">${invSubTab === 'proposal' ? 'Valid (days)' : 'Due (days)'}</label><input type="number" id="invDue" value="30" class="w-full px-3 py-2 border rounded-lg text-sm"></div>
+          <div><label class="block text-xs font-semibold text-gray-500 mb-1">${invSubTab === 'proposals' ? 'Valid (days)' : 'Due (days)'}</label><input type="number" id="invDue" value="30" class="w-full px-3 py-2 border rounded-lg text-sm"></div>
         </div>
 
         <div id="invErr" class="hidden mb-3 p-3 bg-red-50 text-red-700 rounded-lg text-sm"></div>
@@ -937,7 +950,7 @@ async function generateReport(id) {
   try {
     const r = await fetch('/api/reports/' + id + '/generate', { method:'POST' });
     if (r.ok) { window.rmToast('Report generated!', 'info'); await loadAll(); render(); }
-    else { const d = await r.json(); window.rmToast('Failed: ' + (d.error||'', 'error')); }
+    else { const d = await r.json(); window.rmToast('Failed: ' + (d.error||''), 'error'); }
   } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
 }
 
@@ -948,7 +961,7 @@ async function emailReport(id) {
     const r = await fetch('/api/reports/' + id + '/email', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({to_email:to}) });
     const d = await r.json();
     if (r.ok && d.success) window.rmToast('Sent to ' + to + ' via ' + d.email_method, 'success');
-    else window.rmToast('Failed: ' + (d.error||'', 'error'));
+    else window.rmToast('Failed: ' + (d.error||''), 'error');
   } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
 }
 
@@ -962,7 +975,7 @@ async function emailReport(id) {
 async function openSegmentToggle(orderId) {
   try {
     const r = await fetch('/api/reports/' + orderId + '/segments');
-    if (!r.ok) { const d = await r.json(); window.rmToast('Error: ' + (d.error||'', 'error')); return; }
+    if (!r.ok) { const d = await r.json(); window.rmToast('Error: ' + (d.error||''), 'error'); return; }
     const data = await r.json();
 
     // Build modal HTML
@@ -1112,6 +1125,7 @@ function addInvLine() {
 
 function createInvoiceFor(id, name) {
   setTab('invoicing');
+  setInvCustMode('existing');
   setTimeout(() => {
     document.getElementById('invFormWrap')?.classList.remove('hidden');
     const sel = document.getElementById('invCust');
@@ -1119,13 +1133,39 @@ function createInvoiceFor(id, name) {
   }, 100);
 }
 
+function setInvCustMode(mode) {
+  const modeEl = document.getElementById('invCustMode');
+  if (modeEl) modeEl.value = mode;
+  const existingEl = document.getElementById('invCustExisting');
+  const newEl = document.getElementById('invCustNew');
+  const tabEx = document.getElementById('invCustTabExisting');
+  const tabNew = document.getElementById('invCustTabNew');
+  if (existingEl) existingEl.style.display = mode === 'existing' ? '' : 'none';
+  if (newEl) newEl.style.display = mode === 'new' ? '' : 'none';
+  if (tabEx) tabEx.className = mode === 'existing' ? 'px-3 py-1.5 rounded-md text-xs font-medium transition-colors bg-white shadow text-gray-700' : 'px-3 py-1.5 rounded-md text-xs font-medium transition-colors text-gray-400 hover:text-gray-600';
+  if (tabNew) tabNew.className = mode === 'new' ? 'px-3 py-1.5 rounded-md text-xs font-medium transition-colors bg-white shadow text-gray-700' : 'px-3 py-1.5 rounded-md text-xs font-medium transition-colors text-gray-400 hover:text-gray-600';
+  if (mode === 'new') { setTimeout(() => { const n = document.getElementById('invNewName'); if (n) n.focus(); }, 50); }
+}
+
 async function createInvoice() {
-  const cid = document.getElementById('invCust').value;
+  const custMode = document.getElementById('invCustMode')?.value || 'existing';
   const oid = document.getElementById('invOrder').value;
   const err = document.getElementById('invErr');
   const docType = document.getElementById('invDocType')?.value || 'invoice';
   err.classList.add('hidden');
-  if (!cid) { err.textContent = 'Select a customer.'; err.classList.remove('hidden'); return; }
+
+  let customerPayload = {};
+  if (custMode === 'new') {
+    const name = document.getElementById('invNewName')?.value?.trim();
+    const email = document.getElementById('invNewEmail')?.value?.trim();
+    if (!name || !email) { err.textContent = 'New customer name and email are required.'; err.classList.remove('hidden'); return; }
+    customerPayload = { new_customer: { name, email, phone: document.getElementById('invNewPhone')?.value?.trim() || null, company_name: document.getElementById('invNewCompany')?.value?.trim() || null } };
+  } else {
+    const cid = document.getElementById('invCust').value;
+    if (!cid) { err.textContent = 'Select a customer.'; err.classList.remove('hidden'); return; }
+    customerPayload = { customer_id: parseInt(cid) };
+  }
+
   const rows = document.querySelectorAll('.inv-line');
   const items = [];
   rows.forEach(r => {
@@ -1138,7 +1178,7 @@ async function createInvoice() {
   const proposalNote = docType === 'proposal' ? (document.getElementById('invProposalNote')?.value?.trim() || null) : null;
   try {
     const r = await fetch('/api/invoices', { method:'POST', headers:{ ...adminHeaders(), 'Content-Type':'application/json' }, body: JSON.stringify({
-      customer_id: parseInt(cid), order_id: oid ? parseInt(oid) : null, items,
+      ...customerPayload, order_id: oid ? parseInt(oid) : null, items,
       tax_rate: parseFloat(document.getElementById('invTax').value)||5,
       discount_amount: parseFloat(document.getElementById('invDisc').value)||0,
       due_days: parseInt(document.getElementById('invDue').value)||30,
@@ -1156,8 +1196,8 @@ async function sendInvoice(id) {
   try {
     const r = await fetch('/api/invoices/' + id + '/send', { method:'POST', headers: adminHeaders() });
     const d = await r.json();
-    if (r.ok) { window.rmToast('Invoice sent to ' + (d.customer_email||'customer', 'success')); await loadAll(); render(); }
-    else window.rmToast('Failed: ' + (d.error||'Unknown error', 'error'));
+    if (r.ok) { window.rmToast('Invoice sent to ' + (d.customer_email||'customer'), 'success'); await loadAll(); render(); }
+    else window.rmToast('Failed: ' + (d.error||'Unknown error'), 'error');
   } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
 }
 
@@ -1166,8 +1206,8 @@ async function resendInvoice(id) {
   try {
     const r = await fetch('/api/invoices/' + id + '/send', { method:'POST', headers: adminHeaders() });
     const d = await r.json();
-    if (r.ok) { window.rmToast('Invoice resent to ' + (d.customer_email||'customer', 'success')); await loadAll(); render(); }
-    else window.rmToast('Resend failed: ' + (d.error||'Unknown error', 'error'));
+    if (r.ok) { window.rmToast('Invoice resent to ' + (d.customer_email||'customer'), 'success'); await loadAll(); render(); }
+    else window.rmToast('Resend failed: ' + (d.error||'Unknown error'), 'error');
   } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
 }
 
@@ -1401,7 +1441,7 @@ async function saveBlogPost(status) {
       await loadBlogPosts();
       render();
     } else {
-      window.rmToast('Error: ' + (d.error || 'Failed to save', 'error'));
+      window.rmToast('Error: ' + (d.error || 'Failed to save'), 'error');
     }
   } catch(e) {
     window.rmToast('Error: ' + e.message, 'error');
@@ -2260,7 +2300,7 @@ async function deleteSipTrunk(trunkId, name) {
       sipData = null;
       loadSipData();
     } else {
-      window.rmToast('Failed to delete: ' + (data.error || 'Unknown error', 'error'));
+      window.rmToast('Failed to delete: ' + (data.error || 'Unknown error'), 'error');
     }
   } catch(e) {
     window.rmToast('Error: ' + e.message, 'error');
