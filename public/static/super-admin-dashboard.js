@@ -77,6 +77,19 @@ async function loadView(view) {
         if (salesRes && salesRes.ok) SA.data.sales = await salesRes.json();
         else if (salesRes) console.error('Failed to load sales:', salesRes.status);
         break;
+      case 'report-requests':
+        const [reportReqRes, needsTraceRes2] = await Promise.all([
+          saFetch(`/api/admin/superadmin/orders?limit=200&status=${SA.reportReqFilter || ''}`),
+          saFetch('/api/admin/superadmin/orders/needs-trace')
+        ]);
+        if (reportReqRes && reportReqRes.ok) SA.data.reportRequests = await reportReqRes.json();
+        if (needsTraceRes2 && needsTraceRes2.ok) {
+          SA.data.needsTrace = await needsTraceRes2.json();
+          var ntCount = (SA.data.needsTrace.orders || []).length;
+          var badge = document.getElementById('sa-report-req-badge');
+          if (badge) { badge.textContent = ntCount; badge.style.display = ntCount > 0 ? '' : 'none'; }
+        }
+        break;
       case 'orders':
         const [ordersRes, needsTraceRes] = await Promise.all([
           saFetch(`/api/admin/superadmin/orders?limit=100&status=${SA.ordersFilter}`),
@@ -361,6 +374,7 @@ function renderContent() {
   switch (SA.view) {
     case 'users': root.innerHTML = renderUsersView(); break;
     case 'sales': root.innerHTML = renderSalesView(); break;
+    case 'report-requests': root.innerHTML = renderReportRequestsView(); break;
     case 'orders': root.innerHTML = renderOrdersView(); break;
     case 'signups': root.innerHTML = renderSignupsView(); break;
     case 'marketing': root.innerHTML = renderMarketingView(); break;
@@ -616,6 +630,115 @@ function renderSalesView() {
       </div>`}
     `)}
   `;
+}
+
+// ============================================================
+// VIEW: REPORT REQUESTS
+// ============================================================
+SA.reportReqFilter = SA.reportReqFilter || '';
+
+window.saFilterReportReq = function(s) { SA.reportReqFilter = s; loadView('report-requests'); };
+
+function renderReportRequestsView() {
+  var d = SA.data.reportRequests || {};
+  var orders = d.orders || [];
+  var counts = d.counts || {};
+  var needsTrace = (SA.data.needsTrace || {}).orders || [];
+
+  var statusColor = function(s) {
+    return { completed: '#22c55e', processing: '#0ea5e9', pending: '#f59e0b', failed: '#ef4444', cancelled: '#6b7280' }[s] || '#6b7280';
+  };
+  var statusBg = function(s) {
+    return { completed: 'rgba(34,197,94,0.12)', processing: 'rgba(14,165,233,0.12)', pending: 'rgba(245,158,11,0.12)', failed: 'rgba(239,68,68,0.12)', cancelled: 'rgba(107,114,128,0.12)' }[s] || 'rgba(107,114,128,0.12)';
+  };
+
+  var html = '<div class="mb-6 flex items-center justify-between flex-wrap gap-3">' +
+    '<div>' +
+      '<h2 style="font-size:22px;font-weight:800;color:#f9fafb"><i class="fas fa-satellite-dish mr-2" style="color:#0ea5e9"></i>Report Requests</h2>' +
+      '<p style="font-size:13px;color:#6b7280;margin-top:2px">All measurement report orders — review, trace, and deliver</p>' +
+    '</div>' +
+    '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+      '<select onchange="saFilterReportReq(this.value)" style="font-size:12px;border:1px solid #374151;border-radius:8px;padding:6px 12px;background:#1f2937;color:#d1d5db">' +
+        ['', 'pending', 'processing', 'completed', 'failed', 'cancelled'].map(function(s) {
+          var labels = { '': 'All', pending: 'Pending', processing: 'Processing', completed: 'Completed', failed: 'Failed', cancelled: 'Cancelled' };
+          return '<option value="' + s + '"' + (SA.reportReqFilter === s ? ' selected' : '') + '>' + labels[s] + '</option>';
+        }).join('') +
+      '</select>' +
+      '<button onclick="saLoadData(\'report-requests\')" style="font-size:12px;border:1px solid #374151;border-radius:8px;padding:6px 12px;background:#1f2937;color:#9ca3af;cursor:pointer"><i class="fas fa-sync-alt mr-1"></i>Refresh</button>' +
+    '</div>' +
+  '</div>';
+
+  // Stat cards
+  html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-bottom:24px">';
+  [['Total', counts.total || 0, '#0ea5e9', 'fa-clipboard-list'],
+   ['Completed', counts.completed || 0, '#22c55e', 'fa-check-circle'],
+   ['Processing', counts.processing || 0, '#0ea5e9', 'fa-spinner'],
+   ['Pending', counts.pending || 0, '#f59e0b', 'fa-clock'],
+   ['Failed', counts.failed || 0, '#ef4444', 'fa-times-circle'],
+   ['Needs Trace', needsTrace.length, '#f59e0b', 'fa-drafting-compass']
+  ].forEach(function(c) {
+    html += '<div style="background:#1e293b;border:1px solid #334155;border-radius:12px;padding:14px;text-align:center">' +
+      '<i class="fas ' + c[3] + '" style="color:' + c[2] + ';font-size:18px;margin-bottom:6px;display:block"></i>' +
+      '<div style="font-size:22px;font-weight:800;color:#f9fafb">' + c[1] + '</div>' +
+      '<div style="font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:0.5px">' + c[0] + '</div>' +
+    '</div>';
+  });
+  html += '</div>';
+
+  // Needs Trace queue
+  if (needsTrace.length > 0) {
+    html += '<div style="background:#1a1200;border:2px solid #f59e0b;border-radius:14px;padding:16px;margin-bottom:20px">' +
+      '<div style="color:#fbbf24;font-size:14px;font-weight:800;margin-bottom:12px"><i class="fas fa-drafting-compass mr-2"></i>Pending Manual Traces (' + needsTrace.length + ')</div>' +
+      needsTrace.map(function(o) {
+        return '<div style="background:#111827;border:1px solid #374151;border-radius:10px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px;flex-wrap:wrap">' +
+          '<div style="flex:1;min-width:0">' +
+            '<div style="color:#f9fafb;font-weight:600;font-size:13px">' + (o.property_address || 'Unknown') + '</div>' +
+            '<div style="color:#6b7280;font-size:11px;margin-top:2px">' + (o.customer_name || o.customer_email || '') + ' · ' + (o.order_number || '#' + o.id) + ' · ' + new Date(o.created_at).toLocaleString() + '</div>' +
+          '</div>' +
+          '<button onclick="saOpenTraceModal(' + o.id + ',' + (o.latitude || 0) + ',' + (o.longitude || 0) + ',\'' + (o.property_address || '').replace(/'/g, "\\'") + '\',\'' + (o.order_number || '') + '\')" ' +
+            'style="padding:8px 16px;background:#f59e0b;color:#111;font-size:12px;font-weight:700;border:none;border-radius:8px;cursor:pointer;white-space:nowrap">' +
+            '<i class="fas fa-drafting-compass mr-1.5"></i>Trace & Submit' +
+          '</button>' +
+        '</div>';
+      }).join('') +
+    '</div>';
+  }
+
+  // Orders table
+  if (orders.length === 0) {
+    html += '<div style="text-align:center;padding:48px;color:#4b5563"><i class="fas fa-inbox" style="font-size:40px;margin-bottom:12px;display:block"></i>No report requests found</div>';
+  } else {
+    html += '<div style="background:#1e293b;border:1px solid #334155;border-radius:14px;overflow:hidden">' +
+      '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">' +
+        '<thead><tr style="background:#0f172a;border-bottom:1px solid #334155">' +
+          ['Order #', 'Customer', 'Property Address', 'Date', 'Status', 'Report', 'Actions'].map(function(h) {
+            return '<th style="padding:12px 14px;text-align:left;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap">' + h + '</th>';
+          }).join('') +
+        '</tr></thead><tbody>';
+
+    orders.forEach(function(o, i) {
+      var rs = o.report_status || 'pending';
+      var os = o.status || 'pending';
+      html += '<tr style="border-bottom:1px solid #1e293b;background:' + (i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)') + '">' +
+        '<td style="padding:11px 14px;font-family:monospace;font-size:12px;color:#94a3b8;white-space:nowrap">' + (o.order_number || '#' + o.id) + '</td>' +
+        '<td style="padding:11px 14px;color:#cbd5e1;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (o.homeowner_name || o.requester_name || '—') + '</td>' +
+        '<td style="padding:11px 14px;color:#e2e8f0;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + (o.property_address || '') + '">' + (o.property_address || '—') + '</td>' +
+        '<td style="padding:11px 14px;color:#64748b;white-space:nowrap;font-size:12px">' + (o.created_at || '').slice(0, 10) + '</td>' +
+        '<td style="padding:11px 14px"><span style="padding:3px 10px;border-radius:999px;font-size:11px;font-weight:700;background:' + statusBg(os) + ';color:' + statusColor(os) + '">' + os + '</span></td>' +
+        '<td style="padding:11px 14px"><span style="padding:3px 10px;border-radius:999px;font-size:11px;font-weight:700;background:' + statusBg(rs) + ';color:' + statusColor(rs) + '">' + rs + '</span></td>' +
+        '<td style="padding:11px 14px;white-space:nowrap">' +
+          (o.needs_admin_trace ?
+            '<button onclick="saOpenTraceModal(' + o.id + ',' + (o.latitude || 0) + ',' + (o.longitude || 0) + ',\'' + (o.property_address || '').replace(/'/g, "\\'") + '\',\'' + (o.order_number || '') + '\')" style="padding:5px 12px;background:#f59e0b;color:#111;font-size:11px;font-weight:700;border:none;border-radius:6px;cursor:pointer"><i class="fas fa-drafting-compass mr-1"></i>Trace</button>' :
+            '<a href="/api/reports/' + o.id + '/html" target="_blank" style="padding:5px 12px;background:rgba(14,165,233,0.15);color:#38bdf8;font-size:11px;font-weight:600;border:none;border-radius:6px;text-decoration:none;display:inline-block"><i class="fas fa-file-alt mr-1"></i>View</a>'
+          ) +
+        '</td>' +
+      '</tr>';
+    });
+
+    html += '</tbody></table></div></div>';
+  }
+
+  return html;
 }
 
 // ============================================================

@@ -2929,6 +2929,11 @@ function getSuperAdminDashboardHTML() {
           <i class="fas fa-credit-card w-5 text-center"></i>
           <span class="label text-sm font-medium">Credit Pack Sales</span>
         </div>
+        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('report-requests', this)">
+          <i class="fas fa-satellite-dish w-5 text-center"></i>
+          <span class="label text-sm font-medium">Report Requests</span>
+          <span id="sa-report-req-badge" style="margin-left:auto;background:#f59e0b;color:#111;font-size:10px;font-weight:800;padding:2px 7px;border-radius:999px;display:none"></span>
+        </div>
         <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('orders', this)">
           <i class="fas fa-clipboard-list w-5 text-center"></i>
           <span class="label text-sm font-medium">Order History</span>
