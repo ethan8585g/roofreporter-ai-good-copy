@@ -80,7 +80,10 @@ invoiceRoutes.get('/', async (c) => {
     const docType = c.req.query('document_type')
 
     let query = `
-      SELECT i.*, c.name as customer_name, c.email as customer_email, c.company_name as customer_company,
+      SELECT i.*,
+             COALESCE(NULLIF(i.crm_customer_name,''), c.name) as customer_name,
+             COALESCE(NULLIF(i.crm_customer_email,''), c.email) as customer_email,
+             c.company_name as customer_company,
              o.order_number, o.property_address,
              CASE WHEN o.id IS NOT NULL THEN (
                SELECT COUNT(*) FROM reports r WHERE r.order_id = o.id AND r.status IN ('completed','enhancing')
@@ -126,7 +129,10 @@ invoiceRoutes.get('/:id', async (c) => {
     if (id === 'stats' || id === 'customers') return c.json({ error: 'Use specific endpoint' }, 400)
 
     const invoice = await c.env.DB.prepare(`
-      SELECT i.*, c.name as customer_name, c.email as customer_email, c.phone as customer_phone,
+      SELECT i.*,
+             COALESCE(NULLIF(i.crm_customer_name,''), c.name) as customer_name,
+             COALESCE(NULLIF(i.crm_customer_email,''), c.email) as customer_email,
+             COALESCE(NULLIF(i.crm_customer_phone,''), c.phone) as customer_phone,
              c.company_name as customer_company, c.address as customer_address,
              c.city as customer_city, c.province as customer_province, c.postal_code as customer_postal,
              o.order_number, o.property_address
@@ -176,12 +182,12 @@ invoiceRoutes.post('/', async (c) => {
   try {
     const body = await c.req.json()
     const {
-      customer_id, order_id, items, notes, terms, due_days, tax_rate, discount_amount,
+      customer_id, crm_customer_id, order_id, items, notes, terms, due_days, tax_rate, discount_amount,
       discount_type, document_type, scope_of_work, warranty_terms, payment_terms_text,
       valid_until, attached_report_id, proposal_tier, proposal_group_id, my_cost
     } = body
 
-    if (!customer_id) return c.json({ error: 'customer_id is required' }, 400)
+    if (!customer_id && !crm_customer_id) return c.json({ error: 'customer_id is required' }, 400)
     if (!items || !items.length) return c.json({ error: 'At least one line item is required' }, 400)
 
     const docType = ['invoice', 'proposal', 'estimate'].includes(document_type) ? document_type : 'invoice'
@@ -189,8 +195,22 @@ invoiceRoutes.post('/', async (c) => {
     const number = generateNumber(prefix)
     const shareToken = generateShareToken()
 
-    const customer = await c.env.DB.prepare('SELECT id, name FROM customers WHERE id = ?').bind(customer_id).first()
-    if (!customer) return c.json({ error: 'Customer not found' }, 404)
+    // Resolve customer — from main customers table or from crm_customers
+    let resolvedCustomerId = customer_id
+    let crmName = '', crmEmail = '', crmPhone = ''
+    if (crm_customer_id) {
+      const crmCust = await c.env.DB.prepare(
+        'SELECT id, owner_id, name, email, phone FROM crm_customers WHERE id = ?'
+      ).bind(crm_customer_id).first<any>()
+      if (!crmCust) return c.json({ error: 'CRM customer not found' }, 404)
+      resolvedCustomerId = crmCust.owner_id
+      crmName = crmCust.name || ''
+      crmEmail = crmCust.email || ''
+      crmPhone = crmCust.phone || ''
+    } else {
+      const customer = await c.env.DB.prepare('SELECT id, name FROM customers WHERE id = ?').bind(customer_id).first()
+      if (!customer) return c.json({ error: 'Customer not found' }, 404)
+    }
 
     const taxRateVal = tax_rate != null ? tax_rate : 5.0
     const discountVal = discount_amount || 0
@@ -206,14 +226,17 @@ invoiceRoutes.post('/', async (c) => {
         : 'Payment due within 30 days of invoice date.'
 
     const result = await c.env.DB.prepare(`
-      INSERT INTO invoices (invoice_number, customer_id, order_id, subtotal, tax_rate, tax_amount,
-                            discount_amount, total, status, due_date, notes, terms, created_by, document_type,
+      INSERT INTO invoices (invoice_number, customer_id, crm_customer_id, crm_customer_name,
+                            crm_customer_email, crm_customer_phone,
+                            order_id, subtotal, tax_rate, tax_amount,
+                            discount_amount, discount_type, total, status, due_date, notes, terms, created_by, document_type,
                             share_token, scope_of_work, warranty_terms, payment_terms_text, valid_until,
                             attached_report_id, proposal_tier, proposal_group_id, my_cost)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
-      number, customer_id, order_id || null,
-      subtotal, taxRateVal, taxAmount, discount, total,
+      number, resolvedCustomerId, crm_customer_id || null, crmName, crmEmail, crmPhone,
+      order_id || null,
+      subtotal, taxRateVal, taxAmount, discountVal, discount_type || 'fixed', total,
       dueDate.toISOString().slice(0, 10),
       notes || null, terms || defaultTerms, 'admin', docType,
       shareToken, scope_of_work || '', warranty_terms || '', payment_terms_text || '',
@@ -266,7 +289,7 @@ invoiceRoutes.put('/:id', async (c) => {
 
     const body = await c.req.json()
     const {
-      customer_id, order_id, items, notes, terms, due_days, tax_rate, discount_amount,
+      customer_id, crm_customer_id, order_id, items, notes, terms, due_days, tax_rate, discount_amount,
       discount_type, document_type, scope_of_work, warranty_terms, payment_terms_text,
       valid_until, attached_report_id, my_cost
     } = body
@@ -284,14 +307,32 @@ invoiceRoutes.put('/:id', async (c) => {
     const dueDate = new Date()
     dueDate.setDate(dueDate.getDate() + (due_days || 30))
 
+    // Resolve customer info for CRM contacts
+    let resolvedCustomerId = customer_id
+    let crmName = '', crmEmail = '', crmPhone = ''
+    if (crm_customer_id) {
+      const crmCust = await c.env.DB.prepare(
+        'SELECT id, owner_id, name, email, phone FROM crm_customers WHERE id = ?'
+      ).bind(crm_customer_id).first<any>()
+      if (crmCust) {
+        resolvedCustomerId = crmCust.owner_id
+        crmName = crmCust.name || ''
+        crmEmail = crmCust.email || ''
+        crmPhone = crmCust.phone || ''
+      }
+    }
+
     await c.env.DB.prepare(`
-      UPDATE invoices SET customer_id = ?, order_id = ?, subtotal = ?, tax_rate = ?,
-        tax_amount = ?, discount_amount = ?, total = ?, due_date = ?, notes = ?, terms = ?,
+      UPDATE invoices SET customer_id = ?, crm_customer_id = ?, crm_customer_name = ?,
+        crm_customer_email = ?, crm_customer_phone = ?,
+        order_id = ?, subtotal = ?, tax_rate = ?,
+        tax_amount = ?, discount_amount = ?, discount_type = ?, total = ?, due_date = ?, notes = ?, terms = ?,
         document_type = ?, scope_of_work = ?, warranty_terms = ?, payment_terms_text = ?,
         valid_until = ?, attached_report_id = ?, my_cost = ?, updated_at = datetime('now')
       WHERE id = ?
     `).bind(
-      customer_id || null, order_id || null, subtotal, taxRateVal, taxAmount, discount, total,
+      resolvedCustomerId || null, crm_customer_id || null, crmName, crmEmail, crmPhone,
+      order_id || null, subtotal, taxRateVal, taxAmount, discountVal, discount_type || 'fixed', total,
       dueDate.toISOString().slice(0, 10), notes || null, terms || null, docType,
       scope_of_work || '', warranty_terms || '', payment_terms_text || '',
       valid_until || '', attached_report_id || null, my_cost != null ? my_cost : null, id
@@ -347,11 +388,14 @@ invoiceRoutes.post('/:id/send', async (c) => {
   try {
     const id = c.req.param('id')
     const invoice = await c.env.DB.prepare(`
-      SELECT i.*, c.email as customer_email, c.name as customer_name, c.phone as customer_phone,
+      SELECT i.*,
+             COALESCE(NULLIF(i.crm_customer_email,''), c.email) as customer_email,
+             COALESCE(NULLIF(i.crm_customer_name,''), c.name) as customer_name,
+             COALESCE(NULLIF(i.crm_customer_phone,''), c.phone) as customer_phone,
              c.company_name as customer_company,
              o.order_number, o.property_address, o.id as linked_order_id
       FROM invoices i
-      JOIN customers c ON c.id = i.customer_id
+      LEFT JOIN customers c ON c.id = i.customer_id
       LEFT JOIN orders o ON o.id = i.order_id
       WHERE i.id = ?
     `).bind(id).first<any>()
@@ -687,15 +731,28 @@ invoiceRoutes.get('/stats/summary', async (c) => {
 // ============================================================
 invoiceRoutes.get('/customers/list', async (c) => {
   try {
-    const customers = await c.env.DB.prepare(`
+    const portalCustomers = await c.env.DB.prepare(`
       SELECT c.*,
         (SELECT COUNT(*) FROM orders WHERE customer_id = c.id) as order_count,
         (SELECT SUM(price) FROM orders WHERE customer_id = c.id AND payment_status = 'paid') as total_spent,
         (SELECT COUNT(*) FROM invoices WHERE customer_id = c.id) as invoice_count,
-        (SELECT SUM(total) FROM invoices WHERE customer_id = c.id AND status = 'paid') as invoices_paid
+        (SELECT SUM(total) FROM invoices WHERE customer_id = c.id AND status = 'paid') as invoices_paid,
+        'portal' as source
       FROM customers c WHERE c.is_active = 1 ORDER BY c.created_at DESC
     `).all()
-    return c.json({ customers: customers.results })
+
+    // Also include CRM contacts owned by the authenticated user
+    const user = c.get('admin' as any) as any
+    let crmCustomers: any[] = []
+    if (user?.role === 'customer' && user?.id) {
+      const res = await c.env.DB.prepare(
+        `SELECT id, name, email, phone, company as company_name, address, 'crm' as source
+         FROM crm_customers WHERE owner_id = ? ORDER BY name ASC`
+      ).bind(user.id).all()
+      crmCustomers = res.results as any[]
+    }
+
+    return c.json({ customers: [...(portalCustomers.results as any[]), ...crmCustomers] })
   } catch (err: any) {
     return c.json({ error: 'Failed to fetch customers', details: err.message }, 500)
   }

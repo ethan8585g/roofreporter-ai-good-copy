@@ -94,6 +94,7 @@ document.addEventListener('DOMContentLoaded', () => {
     validUntil.setDate(validUntil.getDate() + 30);
     return {
       customer_id: '',
+      crm_customer_id: '',
       customer_name: '',
       customer_email: '',
       customer_phone: '',
@@ -821,7 +822,22 @@ document.addEventListener('DOMContentLoaded', () => {
       ${!f.isNewCustomer ? `
         <select id="pb-customer" onchange="window._pb.selectCustomer(this.value)" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
           <option value="">Select a customer...</option>
-          ${state.customers.map(c => `<option value="${c.id}" ${f.customer_id == c.id ? 'selected' : ''}>${c.name || c.email} ${c.company_name ? '(' + c.company_name + ')' : ''}</option>`).join('')}
+          ${(() => {
+            const portal = state.customers.filter(c => c.source !== 'crm');
+            const crm = state.customers.filter(c => c.source === 'crm');
+            let html = '';
+            if (portal.length) {
+              html += '<optgroup label="Portal Customers">' +
+                portal.map(c => `<option value="${c.id}" ${f.customer_id == c.id ? 'selected' : ''}>${c.name || c.email}${c.company_name ? ' (' + c.company_name + ')' : ''}</option>`).join('') +
+                '</optgroup>';
+            }
+            if (crm.length) {
+              html += '<optgroup label="My CRM Contacts">' +
+                crm.map(c => `<option value="crm:${c.id}" ${f.crm_customer_id == c.id ? 'selected' : ''}>${c.name || c.email}${c.company_name ? ' (' + c.company_name + ')' : ''}</option>`).join('') +
+                '</optgroup>';
+            }
+            return html;
+          })()}
         </select>
       ` : `
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -866,7 +882,25 @@ document.addEventListener('DOMContentLoaded', () => {
     <div class="bg-white rounded-xl border border-gray-200 p-6 mb-6">
       <div class="flex items-center justify-between mb-4">
         <h3 class="text-lg font-bold text-gray-900"><i class="fas fa-list text-brand-500 mr-2"></i>Line Items</h3>
-        <button onclick="window._pb.addItem()" class="px-3 py-1.5 bg-brand-50 text-brand-600 rounded-lg text-xs font-medium hover:bg-brand-100"><i class="fas fa-plus mr-1"></i>Add Row</button>
+        <div class="flex items-center gap-2">
+          <button onclick="window._pb.addItem()" class="px-3 py-1.5 bg-brand-50 text-brand-600 rounded-lg text-xs font-medium hover:bg-brand-100"><i class="fas fa-plus mr-1"></i>Add Row</button>
+          <button onclick="window._pb.addSectionHeader()" class="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-lg text-xs font-medium hover:bg-gray-200"><i class="fas fa-heading mr-1"></i>Section</button>
+          <div style="position:relative">
+            <button onclick="window._pb.toggleLibrary()" class="px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-lg text-xs font-medium hover:bg-indigo-100"><i class="fas fa-book-open mr-1"></i>Library</button>
+            <div id="pb-lib-picker" style="display:none;position:absolute;right:0;top:calc(100% + 6px);width:310px;background:white;border:1px solid #e5e7eb;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.12);z-index:200;overflow:hidden">
+              <div style="padding:10px 12px;border-bottom:1px solid #f3f4f6;display:flex;align-items:center;justify-content:space-between">
+                <span style="font-size:12px;font-weight:700;color:#374151">Saved Line Items</span>
+                <button onclick="window._pb.openNewLibraryItemModal();event.stopPropagation()" style="font-size:11px;color:#4f46e5;background:#eef2ff;border:none;cursor:pointer;font-weight:600;padding:3px 8px;border-radius:4px">+ New Item</button>
+              </div>
+              <div style="max-height:240px;overflow-y:auto">
+                ${state.itemLibrary.length === 0
+                  ? '<div style="padding:20px;text-align:center;color:#9ca3af;font-size:13px">No saved items yet.<br><span style="font-size:12px">Click <strong>+ New Item</strong> to add one.</span></div>'
+                  : state.itemLibrary.map((item, li) => '<div onclick="window._pb.addFromLibrary(' + li + ');event.stopPropagation()" style="padding:10px 12px;cursor:pointer;border-bottom:1px solid #f9fafb" onmouseover="this.style.background=\'#f5f3ff\'" onmouseout="this.style.background=\'\'"><div style="font-size:13px;font-weight:600;color:#1f2937">' + item.name + '</div><div style="font-size:11px;color:#9ca3af;margin-top:2px">' + (item.category || 'general') + ' &middot; ' + (item.default_unit || 'each') + ' &middot; $' + parseFloat(item.default_unit_price||0).toFixed(2) + '</div></div>').join('')
+                }
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
@@ -957,6 +991,14 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function renderItemRow(item, i) {
+    if (item._isHeader) {
+      return `<tr style="background:#f8fafc;border-bottom:2px solid #e5e7eb">
+        <td colspan="6" class="px-2 py-1.5">
+          <input type="text" value="${item.description || ''}" onchange="window._pb.updateItem(${i},'description',this.value)" style="width:100%;background:transparent;border:none;outline:none;font-size:13px;font-weight:700;color:#374151;letter-spacing:0.03em;text-transform:uppercase" placeholder="SECTION NAME (e.g. MATERIALS, LABOUR)">
+        </td>
+        <td class="px-2 py-1 text-center"><button onclick="window._pb.removeItem(${i})" class="text-red-300 hover:text-red-500 text-xs"><i class="fas fa-times"></i></button></td>
+      </tr>`;
+    }
     const amt = (item.quantity || 0) * (item.unit_price || 0);
     return `<tr class="border-b border-gray-100">
       <td class="px-2 py-1"><input type="text" value="${item.description || ''}" onchange="window._pb.updateItem(${i},'description',this.value)" class="w-full border border-gray-200 rounded px-2 py-1.5 text-sm" placeholder="Shingle installation"></td>
@@ -1284,7 +1326,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // CALCULATIONS
   // ============================================================
   function calcSubtotal() {
-    return state.form.items.reduce((s, i) => s + (i.quantity || 0) * (i.unit_price || 0), 0);
+    return state.form.items.filter(i => !i._isHeader).reduce((s, i) => s + (i.quantity || 0) * (i.unit_price || 0), 0);
   }
   function calcDiscountAmount() {
     const f = state.form;
@@ -1294,7 +1336,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function calcTax() {
     const sub = calcSubtotal();
     const disc = calcDiscountAmount();
-    const taxableItems = state.form.items.filter(i => i.is_taxable);
+    const taxableItems = state.form.items.filter(i => !i._isHeader && i.is_taxable);
     const taxableSubtotal = taxableItems.reduce((s, i) => s + (i.quantity || 0) * (i.unit_price || 0), 0);
     const discRatio = sub > 0 ? (sub - disc) / sub : 1;
     return Math.round(taxableSubtotal * discRatio * (state.form.tax_rate / 100) * 100) / 100;
@@ -1364,13 +1406,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const f = state.form;
 
     // If coming from dashboard, use customer_name/email as new customer
-    if (state.createStep === 3 && f.customer_name && !f.customer_id) {
+    if (state.createStep === 3 && f.customer_name && !f.customer_id && !f.crm_customer_id) {
       f.isNewCustomer = true;
       f.newCustomer = { name: f.customer_name, email: f.customer_email || '', phone: f.customer_phone || '', address: f.property_address || '' };
     }
 
     // Validate
-    if (!f.isNewCustomer && !f.customer_id) { pbToast('Please select or enter a customer', 'error'); return; }
+    if (!f.isNewCustomer && !f.customer_id && !f.crm_customer_id) { pbToast('Please select or enter a customer', 'error'); return; }
     if (f.isNewCustomer && (!f.newCustomer.name)) { pbToast('Customer name is required', 'error'); return; }
     // Auto-create line item from per-square pricing
     if (state.pricingMethod === 'per_square' && state.selectedReport && state.pricePerSquare > 0) {
@@ -1391,10 +1433,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!f.items.some(i => i.description)) { pbToast('Add at least one line item', 'error'); return; }
 
     try {
-      // If new customer, create first
-      let customerId = f.customer_id;
+      // Resolve customer IDs — portal customers use customer_id, CRM contacts use crm_customer_id
+      let portalCustomerId = f.customer_id || null;
+      let crmCustomerId = f.crm_customer_id || null;
       if (f.isNewCustomer) {
-        // Use the CRM customer creation endpoint
+        // Create a new CRM contact and use crm_customer_id
         const custRes = await fetch('/api/crm/customers', {
           method: 'POST',
           headers: headers(),
@@ -1402,7 +1445,8 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         if (custRes.ok) {
           const custData = await custRes.json();
-          customerId = custData.id || custData.customer_id;
+          crmCustomerId = custData.id || custData.customer_id;
+          portalCustomerId = null;
         } else {
           pbToast('Failed to create customer. Please try again.', 'error');
           return;
@@ -1410,10 +1454,14 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       const payload = {
-        customer_id: customerId,
+        customer_id: crmCustomerId ? null : portalCustomerId,
+        crm_customer_id: crmCustomerId || null,
         order_id: f.order_id || null,
         document_type: 'proposal',
-        items: f.items.filter(i => i.description).map(i => {
+        items: f.items.filter(i => i.description || i._isHeader).map(i => {
+          if (i._isHeader) {
+            return { description: i.description || '', quantity: 0, unit_price: 0, unit: 'each', is_taxable: false, category: '__section__' };
+          }
           var costPrice = parseFloat(i.unit_price) || 0;
           var customerPrice;
           if (state.pricingEngineMode === 'per_square_customer') {
@@ -1547,7 +1595,15 @@ document.addEventListener('DOMContentLoaded', () => {
     setFilter(f) { state.filter = f; render(); },
     setSearch(term) { state.searchTerm = term; render(); },
     toggleCustMode(isNew) { state.form.isNewCustomer = isNew; render(); },
-    selectCustomer(id) { state.form.customer_id = id; },
+    selectCustomer(id) {
+      if (id && id.toString().startsWith('crm:')) {
+        state.form.crm_customer_id = id.toString().replace('crm:', '');
+        state.form.customer_id = '';
+      } else {
+        state.form.customer_id = id;
+        state.form.crm_customer_id = '';
+      }
+    },
     addItem() {
       state.form.items.push({ description: '', quantity: 1, unit: 'sq ft', unit_price: 0, is_taxable: true, category: '' });
       render();
@@ -1621,10 +1677,10 @@ document.addEventListener('DOMContentLoaded', () => {
           created_date: (inv.created_at || '').slice(0, 10),
           valid_until: inv.valid_until || inv.due_date || '',
           scope_of_work: inv.scope_of_work || '',
-          items: items.length > 0 ? items.map(i => ({
-            description: i.description, quantity: i.quantity, unit: i.unit || 'each',
-            unit_price: i.unit_price, is_taxable: i.is_taxable !== 0, category: i.category || ''
-          })) : [{ description: '', quantity: 1, unit: 'sq ft', unit_price: 0, is_taxable: true, category: '' }],
+          items: items.length > 0 ? items.map(i => i.category === '__section__'
+            ? { description: i.description, quantity: 0, unit_price: 0, unit: 'each', is_taxable: false, category: '__section__', _isHeader: true }
+            : { description: i.description, quantity: i.quantity, unit: i.unit || 'each', unit_price: i.unit_price, is_taxable: i.is_taxable !== 0, category: i.category || '' }
+          ) : [{ description: '', quantity: 1, unit: 'sq ft', unit_price: 0, is_taxable: true, category: '' }],
           discount_type: inv.discount_type || 'fixed',
           discount_amount: inv.discount_amount || 0,
           tax_rate: inv.tax_rate || 5.0,
