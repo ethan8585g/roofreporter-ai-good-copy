@@ -61,7 +61,7 @@
     overlay.id = 'crmModal';
     overlay.innerHTML = '<div class="bg-[#111111] rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto mx-4 sm:mx-auto">' +
       '<div class="px-6 py-4 border-b border-white/5 flex items-center justify-between"><h3 class="font-bold text-gray-100">' + title + '</h3><button onclick="document.getElementById(\'crmModal\').remove()" class="text-gray-400 hover:text-gray-400 text-lg">&times;</button></div>' +
-      '<div class="p-6" id="modalBody">' + bodyHtml + '</div>' +
+      '<div class="p-6" id="modalBody" style="color:#e5e7eb">' + bodyHtml + '</div>' +
       (onSave ? '<div class="px-6 py-4 border-t border-white/5 flex justify-end gap-2"><button onclick="document.getElementById(\'crmModal\').remove()" class="px-4 py-2 text-gray-400 hover:bg-[#111111]/10 rounded-lg text-sm">Cancel</button><button id="modalSaveBtn" class="px-6 py-2 bg-brand-600 text-white rounded-lg text-sm font-semibold hover:bg-brand-700">' + (saveLabel || 'Save') + '</button></div>' : '') +
       '</div>';
     document.body.appendChild(overlay);
@@ -225,7 +225,7 @@
       } else {
         buttons = '<span class="px-4 py-2 rounded-lg text-xs font-medium" style="background:var(--bg-elevated);color:var(--text-muted)">' + (o.status || 'pending') + '</span>';
       }
-      html += '<div style="background:var(--bg-card);border:1px solid var(--border-color)" class="rounded-xl p-4 hover:shadow-md transition-shadow"><div class="flex items-start justify-between"><div class="min-w-0"><div class="flex items-center gap-2 mb-1"><span class="font-mono text-xs font-bold text-brand-600">' + o.order_number + '</span>' + badge(o.status) + '</div><p class="font-medium text-sm" style="color:var(--text-secondary)"><i class="fas fa-map-marker-alt text-red-400 mr-1"></i>' + o.property_address + '</p><div class="flex items-center gap-3 mt-2 text-xs" style="color:var(--text-muted)"><span><i class="fas fa-calendar mr-1"></i>' + fmtDate(o.created_at) + '</span>' + (o.roof_area_sqft ? '<span><i class="fas fa-ruler-combined mr-1"></i>' + Math.round(o.roof_area_sqft) + ' sq ft</span>' : '') + '</div></div><div class="flex flex-col items-end gap-2 flex-shrink-0 ml-4">' + buttons + '</div></div></div>';
+      html += '<div style="background:var(--bg-card);border:1px solid var(--border-color)" class="rounded-xl p-4 hover:shadow-md transition-shadow"><div class="flex items-start justify-between"><div class="min-w-0"><div class="flex items-center gap-2 mb-1"><span class="font-mono text-xs font-bold" style="color:var(--accent)">' + o.order_number + '</span>' + badge(o.status) + '</div><p class="font-medium text-sm" style="color:var(--text-secondary)"><i class="fas fa-map-marker-alt text-red-400 mr-1"></i>' + o.property_address + '</p><div class="flex items-center gap-3 mt-2 text-xs" style="color:var(--text-muted)"><span><i class="fas fa-calendar mr-1"></i>' + fmtDate(o.created_at) + '</span>' + (o.roof_area_sqft ? '<span><i class="fas fa-ruler-combined mr-1"></i>' + Math.round(o.roof_area_sqft) + ' sq ft</span>' : '') + '</div></div><div class="flex flex-col items-end gap-2 flex-shrink-0 ml-4">' + buttons + '</div></div></div>';
     }
     html += '</div>';
     root.innerHTML = html;
