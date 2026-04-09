@@ -278,7 +278,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
 
   <!-- Footer bar -->
   <div style="position:absolute;bottom:0;left:0;right:0;height:28px;background:linear-gradient(90deg,${TEAL},${TEAL_DARK});display:flex;align-items:center;justify-content:space-between;padding:0 28px">
-    <span style="color:#fff;font-size:9px;font-weight:700">Roof Reporter AI</span>
+    <span style="color:#fff;font-size:9px;font-weight:700">Roof Manager</span>
     <span style="color:#E0F2F1;font-size:7.5px">roofmanager.ca &bull; Report: ${reportNum} &bull; ${reportDate} &bull; p.1</span>
   </div>
 </div>
@@ -443,7 +443,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
 
   <!-- Footer bar -->
   <div style="position:absolute;bottom:0;left:0;right:0;height:28px;background:${RED};display:flex;align-items:center;justify-content:space-between;padding:0 28px">
-    <span style="color:#fff;font-size:9px;font-weight:700">Roof Reporter AI</span>
+    <span style="color:#fff;font-size:9px;font-weight:700">Roof Manager</span>
     <span style="color:#ffcdd2;font-size:7.5px">roofmanager.ca &bull; Report: ${reportNum} &bull; ${reportDate} &bull; p.2</span>
   </div>
 </div>
@@ -575,7 +575,7 @@ ${report.segments.length >= 2 ? `
 
   <!-- Footer bar -->
   <div style="position:absolute;bottom:0;left:0;right:0;height:28px;background:linear-gradient(90deg,#4338ca,#6366f1);display:flex;align-items:center;justify-content:space-between;padding:0 28px">
-    <span style="color:#fff;font-size:9px;font-weight:700">Roof Reporter AI</span>
+    <span style="color:#fff;font-size:9px;font-weight:700">Roof Manager</span>
     <span style="color:#c7d2fe;font-size:7.5px">roofmanager.ca &bull; Report: ${reportNum} &bull; ${reportDate} &bull; Pitch Analysis</span>
   </div>
 </div>
@@ -1014,7 +1014,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
       </div>
       <span style="font-size:9px;font-weight:800;color:#00838F">ROOF REPORTER AI</span>
     </div>
-    <div style="font-size:6.5px;color:#999">&copy; Roof Reporter AI &bull; ${reportDate} &bull; p.1/2</div>
+    <div style="font-size:6.5px;color:#999">&copy; Roof Manager &bull; ${reportDate} &bull; p.1/2</div>
   </div>
 </div>
 
@@ -1136,8 +1136,8 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
 
   <!-- Page 2 Footer -->
   <div style="position:absolute;bottom:0;left:0;right:0;background:linear-gradient(135deg,#00696B,#00838F);padding:8px 22px;display:flex;justify-content:space-between;align-items:center">
-    <span style="font-size:9px;font-weight:700;color:#fff">Roof Reporter AI</span>
-    <span style="font-size:7px;color:rgba(255,255,255,0.7)">&copy; Roof Reporter AI &bull; ${fullAddress} &bull; ${reportDate} &bull; p.2/2</span>
+    <span style="font-size:9px;font-weight:700;color:#fff">Roof Manager</span>
+    <span style="font-size:7px;color:rgba(255,255,255,0.7)">&copy; Roof Manager &bull; ${fullAddress} &bull; ${reportDate} &bull; p.2/2</span>
   </div>
 </div>
 
@@ -1276,7 +1276,7 @@ function buildMaterialTakeoffPage(report: RoofReport, reportNum: string, reportD
 
   <!-- Footer bar -->
   <div style="position:absolute;bottom:0;left:0;right:0;height:28px;background:linear-gradient(90deg,${TEAL},#26a69a);display:flex;align-items:center;justify-content:space-between;padding:0 28px">
-    <span style="color:#fff;font-size:9px;font-weight:700">Roof Reporter AI</span>
+    <span style="color:#fff;font-size:9px;font-weight:700">Roof Manager</span>
     <span style="color:#E0F2F1;font-size:7.5px">roofmanager.ca &bull; Report: ${reportNum} &bull; ${reportDate} &bull; Material Take-Off</span>
   </div>
 </div>`
@@ -1401,7 +1401,7 @@ function buildEdgeBreakdownPage(report: RoofReport, reportNum: string, reportDat
 
   <!-- Footer bar -->
   <div style="position:absolute;bottom:0;left:0;right:0;height:28px;background:linear-gradient(90deg,${AMBER},#f59e0b);display:flex;align-items:center;justify-content:space-between;padding:0 28px">
-    <span style="color:#fff;font-size:9px;font-weight:700">Roof Reporter AI</span>
+    <span style="color:#fff;font-size:9px;font-weight:700">Roof Manager</span>
     <span style="color:#fef3c7;font-size:7.5px">roofmanager.ca &bull; Report: ${reportNum} &bull; ${reportDate} &bull; Edge Breakdown</span>
   </div>
 </div>`
@@ -1518,7 +1518,7 @@ function buildCrossCheckAndAdvisoryPage(report: RoofReport, reportNum: string, r
 
   <!-- Footer bar -->
   <div style="position:absolute;bottom:0;left:0;right:0;height:28px;background:linear-gradient(90deg,${NAVY},#334155);display:flex;align-items:center;justify-content:space-between;padding:0 28px">
-    <span style="color:#fff;font-size:9px;font-weight:700">Roof Reporter AI</span>
+    <span style="color:#fff;font-size:9px;font-weight:700">Roof Manager</span>
     <span style="color:#94a3b8;font-size:7.5px">roofmanager.ca &bull; Report: ${reportNum} &bull; ${reportDate} &bull; Cross-Check &amp; Advisory</span>
   </div>
 </div>`
