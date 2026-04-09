@@ -2381,7 +2381,7 @@ export function generateTraceBasedDiagramSVG(
 
   // Professional edge colors (EagleView standard)
   const EDGE_COLOR: Record<string, string> = {
-    'RIDGE': '#C62828', 'HIP': '#C62828', 'VALLEY': '#1565C0',
+    'RIDGE': '#C62828', 'HIP': '#EA580C', 'VALLEY': '#1565C0',
     'EAVE': '#1a1a1a', 'RAKE': '#1a1a1a',
   }
 
@@ -2743,7 +2743,7 @@ export function generateTraceBasedDiagramSVG(
     svg += `<line x1="${tx(l.start.x).toFixed(1)}" y1="${ty(l.start.y).toFixed(1)}" x2="${tx(l.end.x).toFixed(1)}" y2="${ty(l.end.y).toFixed(1)}" stroke="${EDGE_COLOR['RIDGE']}" stroke-width="2.2" stroke-linecap="round"/>`
   })
 
-  // ── HIP LINES (red, thinner) ──
+  // ── HIP LINES (orange, thinner) ──
   internalLines.filter(l => l.type === 'HIP').forEach(l => {
     svg += `<line x1="${tx(l.start.x).toFixed(1)}" y1="${ty(l.start.y).toFixed(1)}" x2="${tx(l.end.x).toFixed(1)}" y2="${ty(l.end.y).toFixed(1)}" stroke="${EDGE_COLOR['HIP']}" stroke-width="1.6" stroke-linecap="round"/>`
   })
@@ -2896,9 +2896,9 @@ export function generateTraceBasedDiagramSVG(
     { label: 'Eave', color: '#1a1a1a', totalFt: Math.round(edgeSummary.total_eave_ft) },
   ]
   if (roofTrace.ridges?.length) legendItems.push({ label: 'Ridge', color: '#C62828', totalFt: Math.round(edgeSummary.total_ridge_ft) })
-  if (roofTrace.hips?.length) legendItems.push({ label: 'Hip', color: '#C62828', totalFt: Math.round(edgeSummary.total_hip_ft) })
+  if (roofTrace.hips?.length) legendItems.push({ label: 'Hip', color: '#EA580C', totalFt: Math.round(edgeSummary.total_hip_ft) })
   if (roofTrace.valleys?.length) legendItems.push({ label: 'Valley', color: '#1565C0', dash: true, totalFt: Math.round(edgeSummary.total_valley_ft) })
-  if (edgeSummary.total_rake_ft > 0) legendItems.push({ label: 'Rake', color: '#1565C0', totalFt: Math.round(edgeSummary.total_rake_ft) })
+  if (edgeSummary.total_rake_ft > 0) legendItems.push({ label: 'Rake', color: '#1a1a1a', totalFt: Math.round(edgeSummary.total_rake_ft) })
 
   const lgX = 8, lgY = 8
   const lgW = 120
