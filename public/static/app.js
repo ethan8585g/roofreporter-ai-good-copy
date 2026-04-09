@@ -486,31 +486,28 @@ function renderStep2PinPhase() {
         <div id="pin-map" style="height: 500px; cursor: crosshair; background: #1a1a2e;"></div>
       </div>
 
-      <!-- Instructions + Action Buttons -->
-      <div class="mt-4">
-        <div class="flex items-center gap-4 text-xs text-gray-500 mb-3">
-          <span><i class="fas fa-mouse-pointer mr-1"></i>Click = Place pin</span>
-          <span><i class="fas fa-hand-rock mr-1"></i>Drag pin = Adjust</span>
-          <span><i class="fas fa-search-plus mr-1"></i>Scroll = Zoom</span>
-        </div>
-        <div class="flex items-center gap-3 flex-wrap">
-          <button onclick="confirmPinAndProceed()" id="confirm-pin-btn"
-            class="px-6 py-3 rounded-lg font-semibold text-sm transition-all shadow-md flex items-center gap-2
-              ${state.formData.pinPlaced ? 'bg-brand-600 hover:bg-brand-700 text-white' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}"
-            ${!state.formData.pinPlaced ? 'disabled' : ''}>
-            <i class="fas fa-draw-polygon"></i>
-            Next: Trace Roof Outline
-            <i class="fas fa-arrow-right"></i>
-          </button>
-          <button onclick="chooseAdminMeasure()" id="admin-measure-btn"
-            class="px-6 py-3 rounded-lg font-semibold text-sm transition-all shadow-md flex items-center gap-2
-              ${state.formData.pinPlaced ? 'bg-amber-500 hover:bg-amber-600 text-white' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}"
-            ${!state.formData.pinPlaced ? 'disabled' : ''}>
-            <i class="fas fa-hard-hat"></i>
-            Order Measurement Report Now
-            <span class="text-xs font-normal opacity-90">(1–2 hr arrival)</span>
-          </button>
-        </div>
+      <!-- Instructions -->
+      <div class="flex items-center gap-4 text-xs text-gray-500 mt-3 mb-4">
+        <span><i class="fas fa-mouse-pointer mr-1"></i>Click = Place pin</span>
+        <span><i class="fas fa-hand-rock mr-1"></i>Drag pin = Adjust</span>
+        <span><i class="fas fa-search-plus mr-1"></i>Scroll = Zoom</span>
+      </div>
+
+      <!-- Two delivery option buttons stacked -->
+      <div style="display:flex;flex-direction:column;gap:10px;max-width:420px">
+        <button onclick="confirmPinAndProceed()" id="confirm-pin-btn"
+          style="display:flex;align-items:center;justify-content:center;gap:8px;padding:12px 20px;border-radius:10px;font-size:14px;font-weight:600;border:none;cursor:${state.formData.pinPlaced ? 'pointer' : 'not-allowed'};background:${state.formData.pinPlaced ? '#16a34a' : '#d1d5db'};color:${state.formData.pinPlaced ? '#ffffff' : '#9ca3af'};transition:opacity 0.2s"
+          ${!state.formData.pinPlaced ? 'disabled' : ''}>
+          <i class="fas fa-draw-polygon"></i>
+          Next: Trace Roof Outline
+          <i class="fas fa-arrow-right"></i>
+        </button>
+        <button onclick="chooseAdminMeasure()" id="admin-measure-btn"
+          style="display:flex;align-items:center;justify-content:center;gap:8px;padding:12px 20px;border-radius:10px;font-size:14px;font-weight:600;border:none;cursor:${state.formData.pinPlaced ? 'pointer' : 'not-allowed'};background:${state.formData.pinPlaced ? '#f59e0b' : '#d1d5db'};color:#ffffff;transition:opacity 0.2s"
+          ${!state.formData.pinPlaced ? 'disabled' : ''}>
+          <i class="fas fa-hard-hat"></i>
+          Order Measurement Report Now&nbsp;<span style="font-weight:400;font-size:12px">(1–2 hr arrival)</span>
+        </button>
       </div>
     </div>
   `;
