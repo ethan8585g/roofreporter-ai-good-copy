@@ -182,15 +182,14 @@ pipelineRoutes.post('/followups/check', async (c) => {
     let executed = 0
     for (const task of dueTasks.results || []) {
       if (task.task_type === 'proposal_followup') {
-        // Create notification
-        await c.env.DB.prepare(
-          "INSERT INTO notifications (owner_id, type, title, message, link) VALUES (?, 'followup_due', ?, ?, ?)"
-        ).bind(
-          task.owner_id,
+        // Create notification + push
+        await createNotification(
+          c.env.DB, task.owner_id, 'followup_due',
           `Follow-up due: ${task.proposal_title || 'Proposal'}`,
           `${task.customer_name} hasn't responded to proposal ${task.proposal_number} ($${task.total_amount}). Time to follow up!`,
-          task.share_token ? `/proposal/view/${task.share_token}` : ''
-        ).run()
+          task.share_token ? `/proposal/view/${task.share_token}` : '',
+          c.env, c.executionCtx
+        )
 
         // Update follow-up count on proposal
         if (task.target_id) {
@@ -199,9 +198,12 @@ pipelineRoutes.post('/followups/check', async (c) => {
           ).bind(task.target_id).run()
         }
       } else if (task.task_type === 'invoice_overdue_reminder') {
-        await c.env.DB.prepare(
-          "INSERT INTO notifications (owner_id, type, title, message) VALUES (?, 'invoice_overdue', 'Invoice overdue reminder', ?)"
-        ).bind(task.owner_id, `Invoice is overdue. Consider sending a reminder.`).run()
+        await createNotification(
+          c.env.DB, task.owner_id, 'invoice_overdue',
+          'Invoice overdue reminder',
+          'Invoice is overdue. Consider sending a reminder.',
+          '', c.env, c.executionCtx
+        )
       }
 
       // Mark as executed
@@ -240,13 +242,34 @@ export async function fireWebhooks(db: D1Database, ownerId: number, eventType: s
 }
 
 // ============================================================
-// HELPER: Create notification
+// HELPER: Create notification + trigger push delivery
 // ============================================================
-export async function createNotification(db: D1Database, ownerId: number, type: string, title: string, message: string, link: string = '') {
+import { sendPushToUser } from '../services/push-service'
+import type { Bindings } from '../types'
+
+export async function createNotification(
+  db: D1Database,
+  ownerId: number,
+  type: string,
+  title: string,
+  message: string,
+  link: string = '',
+  env?: Bindings,
+  ctx?: ExecutionContext
+) {
   try {
     await db.prepare(
       "INSERT INTO notifications (owner_id, type, title, message, link) VALUES (?, ?, ?, ?, ?)"
     ).bind(ownerId, type, title, message, link).run()
+
+    // Fire-and-forget push notification to all registered devices
+    if (env) {
+      const pushPromise = sendPushToUser(db, env, 'admin', ownerId, {
+        title, body: message, link, type, tag: type
+      })
+      if (ctx) ctx.waitUntil(pushPromise)
+      else await pushPromise
+    }
   } catch {}
 }
 

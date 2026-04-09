@@ -197,6 +197,23 @@
   body { background: white !important; }
 }
 
+/* ── Input contrast fix ───────────────────────────────────────────
+   Browsers default input text to black. In dark mode this becomes
+   invisible. Use CSS variables so both themes are handled at once.
+   Light-theme !important rules in index.tsx take precedence there.
+------------------------------------------------------------------ */
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
+textarea,
+select {
+  color: var(--text-primary, #ffffff);
+  background-color: var(--bg-elevated, #1a1a1a);
+  border-color: var(--border-color, rgba(255,255,255,0.1));
+}
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"])::placeholder,
+textarea::placeholder {
+  color: var(--text-muted, #9ca3af);
+}
+
 /* ── Brand color utilities (sky palette) ──────────────────────────
    Tailwind v4 pre-compiled CSS doesn't include dynamically-used
    classes from JS files. These are defined here so all JS-generated

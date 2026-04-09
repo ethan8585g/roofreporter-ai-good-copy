@@ -125,14 +125,17 @@ function renderInvoiceView(inv, items) {
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-100">
-            ${items.map(item => `
+            ${items.map(item => item.category === '__section__' ? `
+              <tr style="background:#f8fafc">
+                <td colspan="4" style="padding:10px 0;font-size:11px;font-weight:700;color:#9ca3af;letter-spacing:0.08em;text-transform:uppercase">${item.description || ''}</td>
+              </tr>` : `
               <tr>
                 <td class="py-4 text-gray-700">${item.description}</td>
                 <td class="py-4 text-center text-gray-600">${item.quantity}</td>
                 <td class="py-4 text-right text-gray-600">$${(item.unit_price || 0).toFixed(2)}</td>
                 <td class="py-4 text-right font-medium text-gray-800">$${(item.amount || 0).toFixed(2)}</td>
-              </tr>
-            `).join('')}
+              </tr>`
+            ).join('')}
           </tbody>
         </table>
 

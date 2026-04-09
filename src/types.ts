@@ -131,6 +131,15 @@ export type Bindings = {
   // Sign up at: https://adsense.google.com
   // Format: "ca-pub-XXXXXXXXXXXXXXXXX"
   ADSENSE_PUBLISHER_ID: string     // Publisher ID from AdSense dashboard
+
+  // ── Push Notifications — FCM + Web Push VAPID ─────────────
+  // FCM: Firebase service account for sending push via FCM HTTP v1 API
+  // Uses same GCP auth pattern as GCP_SERVICE_ACCOUNT_KEY with firebase.messaging scope
+  FCM_SERVICE_ACCOUNT_JSON: string  // Full JSON of Firebase/GCP service account key
+  FCM_PROJECT_ID: string            // Firebase project ID (e.g. "roof-manager-push")
+  // VAPID: Web Push keys (generate with: npx web-push generate-vapid-keys)
+  VAPID_PUBLIC_KEY: string          // Base64url-encoded ECDSA P-256 public key
+  VAPID_PRIVATE_KEY: string         // Base64url-encoded ECDSA P-256 private key
 }
 
 // ============================================================

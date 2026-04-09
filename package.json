@@ -20,6 +20,7 @@
     "@capacitor/cli": "^8.3.0",
     "@capacitor/core": "^8.3.0",
     "@capacitor/ios": "^8.3.0",
+    "@capacitor/push-notifications": "^8.0.3",
     "better-sqlite3": "^12.8.0",
     "geotiff": "^3.0.3",
     "geotiff-geokeys-to-proj4": "^2024.4.13",

@@ -35,7 +35,6 @@
     'suppliers': { init: initSuppliers, title: 'Supplier Management' },
     'catalog': { init: initCatalog, title: 'Material Catalog' },
     'referrals': { init: initReferrals, title: 'Referral Program' },
-    'crew': { init: initCrewManager, title: 'Crew Manager' }
   };
 
   const mod = modules[MODULE];
@@ -1442,8 +1441,27 @@
   };
 
   // ============================================================
-  // MODULE: JOBS — Calendar Dashboard + Google Calendar Integration
+  // MODULE: JOBS + CREW (merged)
   // ============================================================
+  var _jobsTab = 'jobs'; // 'jobs' or 'crew'
+
+  function _jobsCrewTabBar(active) {
+    return '<div class="flex gap-1 bg-[#111111] rounded-xl border border-white/10 p-1 mb-5 self-start">' +
+      '<button onclick="window._crmSwitchJobsTab(\'jobs\')" class="px-4 py-2 rounded-lg text-sm font-semibold transition-colors ' + (active === 'jobs' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:bg-white/5') + '"><i class="fas fa-hard-hat mr-1.5"></i>Jobs</button>' +
+      '<button onclick="window._crmSwitchJobsTab(\'crew\')" class="px-4 py-2 rounded-lg text-sm font-semibold transition-colors ' + (active === 'crew' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:bg-white/5') + '"><i class="fas fa-users mr-1.5"></i>Crew</button>' +
+    '</div>';
+  }
+
+  window._crmSwitchJobsTab = function(tab) {
+    _jobsTab = tab;
+    if (tab === 'jobs') {
+      checkCalendarStatus();
+      loadJobsForMonth(_calYear, _calMonth);
+    } else {
+      initCrewManager();
+    }
+  };
+
   // Restore persisted calendar state from localStorage
   var _calView = localStorage.getItem('crm_cal_view') || 'month';
   var _calConnected = localStorage.getItem('crm_cal_connected') === '1';
@@ -1456,6 +1474,7 @@
   var _googleCalEvents = [];
 
   function initJobs() {
+    _jobsTab = 'jobs';
     root.innerHTML = '<div class="text-center py-12"><div class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-brand-500 mx-auto mb-3"></div></div>';
     checkCalendarStatus();
     loadJobsForMonth(_calYear, _calMonth);
@@ -1525,7 +1544,7 @@
 
   function renderJobsDashboard() {
     var stats = _allJobStats;
-    var html = '';
+    var html = _jobsCrewTabBar('jobs');
 
     // A. Header bar
     html += '<div class="flex items-center justify-between mb-5 flex-wrap gap-3">';
@@ -2419,7 +2438,7 @@
     var upcomingJobs = jobs.filter(function(j) { return j.scheduled_date > today && (j.status === 'scheduled' || j.status === 'in_progress'); });
     var pastJobs = jobs.filter(function(j) { return j.scheduled_date < today || j.status === 'completed'; });
 
-    var html = '';
+    var html = _jobsCrewTabBar('crew');
 
     // Offline banner
     if (!navigator.onLine) {
@@ -2901,8 +2920,8 @@
       return !j.scheduled_date && j.status !== 'completed' && j.status !== 'cancelled';
     });
 
-    var html = '<div class="flex items-center justify-between mb-5 flex-wrap gap-3">';
-    html += '<div><h2 class="text-xl font-bold text-gray-100"><i class="fas fa-hard-hat text-emerald-400 mr-2"></i>Crew Manager</h2><p class="text-xs text-gray-500 mt-0.5">Drag jobs onto the schedule to dispatch your crew</p></div>';
+    var html = _jobsCrewTabBar('crew') + '<div class="flex items-center justify-between mb-5 flex-wrap gap-3">';
+    html += '<div><h2 class="text-xl font-bold text-gray-100"><i class="fas fa-users text-emerald-400 mr-2"></i>Crew Manager</h2><p class="text-xs text-gray-500 mt-0.5">Dispatch your crew and track job progress</p></div>';
     html += '<div class="flex gap-2"><a href="/customer/team" class="bg-emerald-500/15 text-emerald-400 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-emerald-500/25 transition-colors"><i class="fas fa-user-plus mr-1"></i>Invite Crew</a>' +
       '<a href="/customer/jobs" class="bg-blue-500/15 text-blue-400 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-500/25 transition-colors"><i class="fas fa-plus mr-1"></i>New Job</a></div>';
     html += '</div>';

@@ -29,6 +29,7 @@
 import { Hono } from 'hono'
 import type { Bindings } from '../types'
 import { resolveTeamOwner } from './team'
+import { createNotification } from './pipeline'
 
 export const salesRoutes = new Hono<{ Bindings: Bindings }>()
 
@@ -499,12 +500,13 @@ salesRoutes.post('/leads/:id/advance', async (c) => {
     } catch {}
   }
 
-  // Create notification
-  try {
-    await c.env.DB.prepare(
-      "INSERT INTO notifications (owner_id, type, title, message) VALUES (?, 'lead_advanced', ?, ?)"
-    ).bind(ownerId, `Lead Advanced: ${lead.name}`, `${lead.name} moved to "${targetStage}" stage`).run()
-  } catch {}
+  // Create notification + push
+  await createNotification(
+    c.env.DB, ownerId, 'lead_advanced',
+    `Lead Advanced: ${lead.name}`,
+    `${lead.name} moved to "${targetStage}" stage`,
+    '', c.env, c.executionCtx
+  )
 
   return c.json({
     success: true,

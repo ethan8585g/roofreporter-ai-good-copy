@@ -1,4 +1,4 @@
-const CACHE_NAME = 'roofmanager-v1';
+const CACHE_NAME = 'roofmanager-v2';
 
 const PRECACHE_URLS = [
   '/',
@@ -78,5 +78,53 @@ self.addEventListener('fetch', (event) => {
         return response;
       })
       .catch(() => caches.match(request))
+  );
+});
+
+// ============================================================
+// PUSH NOTIFICATIONS — Receive and display push messages
+// ============================================================
+self.addEventListener('push', (event) => {
+  if (!event.data) return;
+
+  let data;
+  try {
+    data = event.data.json();
+  } catch {
+    data = { title: 'Roof Manager', body: event.data.text() };
+  }
+
+  const options = {
+    body: data.body || '',
+    icon: data.icon || '/static/icons/icon-192x192.png',
+    badge: data.badge || '/static/icons/icon-192x192.png',
+    tag: data.tag || 'default',
+    data: { link: data.link || '/', type: data.type || '' },
+    requireInteraction: true
+  };
+
+  event.waitUntil(
+    self.registration.showNotification(data.title || 'Roof Manager', options)
+  );
+});
+
+// Handle notification click — open the relevant page
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const link = event.notification.data?.link || '/';
+
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true })
+      .then((windowClients) => {
+        // Focus existing tab if open
+        for (const client of windowClients) {
+          if (client.url.includes(self.location.origin) && 'focus' in client) {
+            client.navigate(link);
+            return client.focus();
+          }
+        }
+        // Open new window
+        return clients.openWindow(link);
+      })
   );
 });

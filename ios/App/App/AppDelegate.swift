@@ -1,14 +1,38 @@
 import UIKit
 import Capacitor
+import UserNotifications
 
 @UIApplicationMain
-class AppDelegate: UIResponder, UIApplicationDelegate {
+class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterDelegate {
 
     var window: UIWindow?
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // Override point for customization after application launch.
+        // Set notification delegate for foreground push notifications
+        UNUserNotificationCenter.current().delegate = self
         return true
+    }
+
+    // Forward push token to Capacitor Push Notifications plugin
+    func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        NotificationCenter.default.post(
+            name: .capacitorDidRegisterForRemoteNotifications,
+            object: deviceToken
+        )
+    }
+
+    func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
+        NotificationCenter.default.post(
+            name: .capacitorDidFailToRegisterForRemoteNotifications,
+            object: error
+        )
+    }
+
+    // Show push notifications when app is in foreground
+    func userNotificationCenter(_ center: UNUserNotificationCenter,
+                                willPresent notification: UNNotification,
+                                withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        completionHandler([.badge, .sound, .banner])
     }
 
     func applicationWillResignActive(_ application: UIApplication) {
