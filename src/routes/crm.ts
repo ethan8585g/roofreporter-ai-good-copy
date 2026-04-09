@@ -257,8 +257,8 @@ crmRoutes.post('/invoices', async (c) => {
         const it = items[i]
         const amt = (it.quantity || 1) * (it.unit_price || 0)
         await c.env.DB.prepare(
-          'INSERT INTO crm_invoice_items (invoice_id, description, quantity, unit_price, amount, sort_order) VALUES (?,?,?,?,?,?)'
-        ).bind(invoiceId, it.description || '', it.quantity || 1, it.unit_price || 0, amt, i).run()
+          'INSERT INTO crm_invoice_items (invoice_id, description, quantity, unit, unit_price, amount, sort_order) VALUES (?,?,?,?,?,?,?)'
+        ).bind(invoiceId, it.description || '', it.quantity || 1, it.unit || 'each', it.unit_price || 0, amt, i).run()
       }
     }
     return c.json({ success: true, id: invoiceId, invoice_number: invNum })
@@ -302,8 +302,8 @@ crmRoutes.put('/invoices/:id', async (c) => {
     for (let i = 0; i < body.items.length; i++) {
       const it = body.items[i]
       await c.env.DB.prepare(
-        'INSERT INTO crm_invoice_items (invoice_id, description, quantity, unit_price, amount, sort_order) VALUES (?,?,?,?,?,?)'
-      ).bind(id, it.description || '', it.quantity || 1, it.unit_price || 0, (it.quantity || 1) * (it.unit_price || 0), i).run()
+        'INSERT INTO crm_invoice_items (invoice_id, description, quantity, unit, unit_price, amount, sort_order) VALUES (?,?,?,?,?,?,?)'
+      ).bind(id, it.description || '', it.quantity || 1, it.unit || 'each', it.unit_price || 0, (it.quantity || 1) * (it.unit_price || 0), i).run()
     }
   }
   return c.json({ success: true })

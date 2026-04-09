@@ -321,7 +321,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <td class="px-2 py-1"><input type="text" value="${item.description || ''}" onchange="window._im.updateItem(${i},'description',this.value)" class="w-full border border-white/10 rounded px-2 py-1.5 text-sm"></td>
                 <td class="px-2 py-1"><input type="number" value="${item.quantity}" onchange="window._im.updateItem(${i},'quantity',this.value)" class="w-full border border-white/10 rounded px-2 py-1.5 text-sm text-center" min="0" step="0.01"></td>
                 <td class="px-2 py-1"><select onchange="window._im.updateItem(${i},'unit',this.value)" class="w-full border border-white/10 rounded px-1 py-1.5 text-xs">
-                  ${['each','sq ft','sq','bundle','roll','LF','piece','hour','day','lot'].map(u => `<option value="${u}" ${item.unit === u ? 'selected' : ''}>${u}</option>`).join('')}
+                  ${['each','pcs','sq ft','m²','sq','LF','m','bundle','roll','box','hour','day','lot'].map(u => `<option value="${u}" ${item.unit === u ? 'selected' : ''}>${u}</option>`).join('')}
                 </select></td>
                 <td class="px-2 py-1"><input type="number" value="${item.unit_price}" onchange="window._im.updateItem(${i},'unit_price',this.value)" class="w-full border border-white/10 rounded px-2 py-1.5 text-sm text-right" min="0" step="0.01"></td>
                 <td class="px-2 py-1 text-right font-medium text-sm">$${amt.toFixed(2)}</td>

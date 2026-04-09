@@ -1004,7 +1004,7 @@ document.addEventListener('DOMContentLoaded', () => {
       <td class="px-2 py-1"><input type="text" value="${item.description || ''}" onchange="window._pb.updateItem(${i},'description',this.value)" class="w-full border border-gray-200 rounded px-2 py-1.5 text-sm" placeholder="Shingle installation"></td>
       <td class="px-2 py-1"><input type="number" value="${item.quantity}" onchange="window._pb.updateItem(${i},'quantity',this.value)" class="w-full border border-gray-200 rounded px-2 py-1.5 text-sm text-center" min="0" step="0.01"></td>
       <td class="px-2 py-1"><select onchange="window._pb.updateItem(${i},'unit',this.value)" class="w-full border border-gray-200 rounded px-1 py-1.5 text-xs">
-        ${['each','sq ft','sq','bundle','roll','LF','piece','hour','day','lot'].map(u => `<option value="${u}" ${item.unit === u ? 'selected' : ''}>${u}</option>`).join('')}
+        ${['each','pcs','sq ft','m²','sq','LF','m','bundle','roll','box','hour','day','lot'].map(u => `<option value="${u}" ${item.unit === u ? 'selected' : ''}>${u}</option>`).join('')}
       </select></td>
       <td class="px-2 py-1"><input type="number" value="${item.unit_price}" onchange="window._pb.updateItem(${i},'unit_price',this.value)" class="w-full border border-gray-200 rounded px-2 py-1.5 text-sm text-right" min="0" step="0.01"></td>
       <td class="px-2 py-1 text-right font-medium text-sm">$${amt.toFixed(2)}</td>
@@ -1100,6 +1100,9 @@ document.addEventListener('DOMContentLoaded', () => {
           </thead>
           <tbody>
             ${f.items.map(item => {
+              if (item._isHeader) {
+                return `<tr style="background:#f8fafc"><td colspan="5" style="padding:10px 16px;font-size:11px;font-weight:700;color:#6b7280;letter-spacing:0.08em;text-transform:uppercase;border-bottom:1px solid #e5e7eb">${item.description || ''}</td></tr>`;
+              }
               var markupPct = state.markupPercent || 30;
               var custUnitPrice, custAmount;
               if (state.pricingEngineMode === 'per_square_customer') {
@@ -1608,6 +1611,78 @@ document.addEventListener('DOMContentLoaded', () => {
       state.form.items.push({ description: '', quantity: 1, unit: 'sq ft', unit_price: 0, is_taxable: true, category: '' });
       render();
     },
+    addSectionHeader() {
+      state.form.items.push({ description: '', quantity: 0, unit_price: 0, unit: 'each', is_taxable: false, category: '__section__', _isHeader: true });
+      render();
+    },
+    toggleLibrary() {
+      const picker = document.getElementById('pb-lib-picker');
+      if (!picker) return;
+      picker.style.display = picker.style.display === 'none' ? 'block' : 'none';
+    },
+    addFromLibrary(li) {
+      const item = state.itemLibrary[li];
+      if (!item) return;
+      state.form.items.push({ description: item.name + (item.description ? ' — ' + item.description : ''), quantity: parseFloat(item.default_quantity) || 1, unit: item.default_unit || 'each', unit_price: parseFloat(item.default_unit_price) || 0, is_taxable: item.is_taxable !== 0, category: item.category || '' });
+      const picker = document.getElementById('pb-lib-picker');
+      if (picker) picker.style.display = 'none';
+      render();
+    },
+    openNewLibraryItemModal() {
+      const picker = document.getElementById('pb-lib-picker');
+      if (picker) picker.style.display = 'none';
+      var overlay = document.createElement('div');
+      overlay.id = 'pb-lib-modal';
+      overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center';
+      overlay.innerHTML = '<div style="background:white;border-radius:16px;padding:28px;max-width:420px;width:90%;box-shadow:0 20px 40px rgba(0,0,0,0.2)">' +
+        '<h3 style="font-size:16px;font-weight:700;color:#111;margin:0 0 16px">New Library Item</h3>' +
+        '<div style="display:grid;gap:10px">' +
+          '<div><label style="font-size:11px;font-weight:600;color:#6b7280;display:block;margin-bottom:3px">Item Name *</label><input id="lib-name" type="text" placeholder="e.g. Remove & Replace Shingles" style="width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:7px;font-size:13px;box-sizing:border-box"></div>' +
+          '<div><label style="font-size:11px;font-weight:600;color:#6b7280;display:block;margin-bottom:3px">Description</label><input id="lib-desc" type="text" placeholder="Optional details" style="width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:7px;font-size:13px;box-sizing:border-box"></div>' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
+            '<div><label style="font-size:11px;font-weight:600;color:#6b7280;display:block;margin-bottom:3px">Category</label><select id="lib-cat" style="width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:7px;font-size:13px"><option value="roofing">Roofing</option><option value="materials">Materials</option><option value="labour">Labour</option><option value="permits">Permits</option><option value="disposal">Disposal</option><option value="other">Other</option></select></div>' +
+            '<div><label style="font-size:11px;font-weight:600;color:#6b7280;display:block;margin-bottom:3px">Unit</label><select id="lib-unit" style="width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:7px;font-size:13px"><option>each</option><option>pcs</option><option>sq ft</option><option>m²</option><option>sq</option><option>LF</option><option>m</option><option>bundle</option><option>roll</option><option>box</option><option>hour</option><option>day</option><option>lot</option></select></div>' +
+          '</div>' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
+            '<div><label style="font-size:11px;font-weight:600;color:#6b7280;display:block;margin-bottom:3px">Default Price ($)</label><input id="lib-price" type="number" value="0" min="0" step="0.01" style="width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:7px;font-size:13px;box-sizing:border-box"></div>' +
+            '<div><label style="font-size:11px;font-weight:600;color:#6b7280;display:block;margin-bottom:3px">Default Qty</label><input id="lib-qty" type="number" value="1" min="0" step="0.01" style="width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:7px;font-size:13px;box-sizing:border-box"></div>' +
+          '</div>' +
+          '<label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#374151;cursor:pointer"><input id="lib-tax" type="checkbox" checked> Taxable</label>' +
+        '</div>' +
+        '<div style="display:flex;gap:8px;margin-top:18px">' +
+          '<button onclick="document.getElementById(\'pb-lib-modal\').remove()" style="flex:1;padding:9px;background:#f3f4f6;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;color:#374151">Cancel</button>' +
+          '<button onclick="window._pb.saveNewLibraryItem()" style="flex:2;padding:9px;background:#4f46e5;color:white;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">Save to Library</button>' +
+        '</div>' +
+      '</div>';
+      document.body.appendChild(overlay);
+      overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
+      var nameInput = overlay.querySelector('#lib-name');
+      if (nameInput) nameInput.focus();
+    },
+    async saveNewLibraryItem() {
+      const name = (document.getElementById('lib-name') || {}).value?.trim();
+      if (!name) { pbToast('Item name is required', 'error'); return; }
+      const payload = {
+        name,
+        description: (document.getElementById('lib-desc') || {}).value || '',
+        category: (document.getElementById('lib-cat') || {}).value || 'roofing',
+        default_unit: (document.getElementById('lib-unit') || {}).value || 'each',
+        default_unit_price: parseFloat((document.getElementById('lib-price') || {}).value) || 0,
+        default_quantity: parseFloat((document.getElementById('lib-qty') || {}).value) || 1,
+        is_taxable: (document.getElementById('lib-tax') || {}).checked !== false
+      };
+      try {
+        const res = await fetch('/api/customer/item-library', { method: 'POST', headers: headers(), body: JSON.stringify(payload) });
+        if (!res.ok) throw new Error('Save failed');
+        const modal = document.getElementById('pb-lib-modal');
+        if (modal) modal.remove();
+        // Reload library
+        const libRes = await fetch('/api/customer/item-library', { headers: headers() }).catch(() => ({ ok: false }));
+        if (libRes.ok) { const d = await libRes.json(); state.itemLibrary = d.items || []; }
+        pbToast('Item saved to library!', 'success');
+        render();
+      } catch(e) { pbToast('Failed to save item: ' + e.message, 'error'); }
+    },
     removeItem(i) {
       if (state.form.items.length > 1) { state.form.items.splice(i, 1); render(); }
     },
@@ -1843,4 +1918,15 @@ document.addEventListener('DOMContentLoaded', () => {
       render();
     }
   };
+
+  // Close library picker when clicking outside
+  document.addEventListener('click', function(e) {
+    const picker = document.getElementById('pb-lib-picker');
+    if (picker && picker.style.display !== 'none') {
+      const btn = picker.previousElementSibling;
+      if (!picker.contains(e.target) && e.target !== btn) {
+        picker.style.display = 'none';
+      }
+    }
+  });
 });

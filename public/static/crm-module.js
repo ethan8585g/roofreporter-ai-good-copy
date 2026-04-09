@@ -956,17 +956,23 @@
   var _propLineItems = [];
 
   function propItemRowHTML(idx, item) {
-    item = item || { description: '', quantity: 1, unit: 'ea', unit_price: 0 };
+    item = item || { description: '', quantity: 1, unit: 'each', unit_price: 0 };
     return '<tr data-idx="' + idx + '">' +
       '<td class="py-1 pr-1"><input type="text" class="w-full px-2 py-1.5 border border-white/15 rounded-lg text-sm prop-item-desc" value="' + (item.description || '') + '" placeholder="Description"></td>' +
       '<td class="py-1 pr-1 w-16"><input type="number" class="w-full px-2 py-1.5 border border-white/15 rounded-lg text-sm text-center prop-item-qty" value="' + (item.quantity || 1) + '" min="0.01" step="0.01"></td>' +
       '<td class="py-1 pr-1 w-16"><select class="w-full px-1 py-1.5 border border-white/15 rounded-lg text-xs prop-item-unit">' +
-        '<option value="ea"' + (item.unit === 'ea' ? ' selected' : '') + '>ea</option>' +
+        '<option value="each"' + (item.unit === 'each' ? ' selected' : '') + '>each</option>' +
+        '<option value="pcs"' + (item.unit === 'pcs' ? ' selected' : '') + '>pcs</option>' +
         '<option value="sq ft"' + (item.unit === 'sq ft' ? ' selected' : '') + '>sq ft</option>' +
+        '<option value="m²"' + (item.unit === 'm²' ? ' selected' : '') + '>m²</option>' +
         '<option value="sq"' + (item.unit === 'sq' ? ' selected' : '') + '>sq</option>' +
-        '<option value="lin ft"' + (item.unit === 'lin ft' ? ' selected' : '') + '>lin ft</option>' +
-        '<option value="hr"' + (item.unit === 'hr' ? ' selected' : '') + '>hr</option>' +
+        '<option value="LF"' + (item.unit === 'LF' ? ' selected' : '') + '>LF</option>' +
+        '<option value="m"' + (item.unit === 'm' ? ' selected' : '') + '>m</option>' +
         '<option value="bundle"' + (item.unit === 'bundle' ? ' selected' : '') + '>bundle</option>' +
+        '<option value="roll"' + (item.unit === 'roll' ? ' selected' : '') + '>roll</option>' +
+        '<option value="box"' + (item.unit === 'box' ? ' selected' : '') + '>box</option>' +
+        '<option value="hour"' + (item.unit === 'hour' ? ' selected' : '') + '>hour</option>' +
+        '<option value="day"' + (item.unit === 'day' ? ' selected' : '') + '>day</option>' +
         '<option value="lot"' + (item.unit === 'lot' ? ' selected' : '') + '>lot</option>' +
       '</select></td>' +
       '<td class="py-1 pr-1 w-24"><input type="number" class="w-full px-2 py-1.5 border border-white/15 rounded-lg text-sm text-right prop-item-price" value="' + (item.unit_price || 0) + '" min="0" step="0.01"></td>' +
