@@ -993,12 +993,18 @@
         var body = '<div class="space-y-3">' +
           '<div><label class="block text-xs font-medium text-gray-400 mb-1">Customer *</label>' + customerSelectHTML(custs, '', 'propCustomer') + '</div>' +
           '<div><label class="block text-xs font-medium text-gray-400 mb-1">Title *</label><input type="text" id="propTitle" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm" placeholder="e.g. Full Roof Replacement – 2,200 sq ft"></div>' +
+          '<div style="background:#1e3a5f;border:2px solid #3b82f6;border-radius:10px;padding:12px">' +
+            '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">' +
+              '<div style="width:28px;height:28px;background:#3b82f6;border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="fas fa-satellite" style="color:#fff;font-size:13px"></i></div>' +
+              '<div>' +
+                '<div style="color:#93c5fd;font-size:12px;font-weight:700">Link Roof Report</div>' +
+                '<div style="color:#60a5fa;font-size:10px;opacity:0.8">Measurements will appear in the customer preview</div>' +
+              '</div>' +
+            '</div>' +
+            '<select id="propLinkedReport" style="width:100%;padding:9px 12px;border:1px solid #3b82f6;border-radius:8px;font-size:13px;background:#0f2744;color:#e2e8f0"><option value="">— Select a completed roof report —</option></select>' +
+          '</div>' +
           '<div><label class="block text-xs font-medium text-gray-400 mb-1">Property Address</label><input type="text" id="propAddress" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm"></div>' +
-          '<div><label class="block text-xs font-medium text-gray-400 mb-1">Scope of Work</label><textarea id="propScope" rows="3" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm" placeholder="Remove existing shingles, inspect decking, install new underlayment and architectural shingles..."></textarea></div>' +
-          '<div style="border:1px solid #3b82f6;border-radius:10px;padding:10px 12px;background:rgba(59,130,246,0.07)">' +
-            '<label style="display:block;font-size:11px;font-weight:700;color:#60a5fa;margin-bottom:6px"><i class="fas fa-file-alt mr-1.5"></i>Attach Roof Report <span style="font-weight:400;opacity:0.7">(optional — shows measurements in preview)</span></label>' +
-            '<select id="propLinkedReport" style="width:100%;padding:8px 10px;border:1px solid #3b82f6;border-radius:8px;font-size:13px;background:var(--bg-elevated);color:var(--text-primary)"><option value="">— No report attached —</option></select>' +
-          '</div>';
+          '<div><label class="block text-xs font-medium text-gray-400 mb-1">Scope of Work</label><textarea id="propScope" rows="3" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm" placeholder="Remove existing shingles, inspect decking, install new underlayment and architectural shingles..."></textarea></div>';
 
         // Populate the roof report dropdown
         fetch('/api/customer/orders', { headers: authHeadersOnly() })
