@@ -1818,7 +1818,7 @@ app.get('/proposal/view/:token', async (c) => {
       <div class="mb-8">${itemsHtml}</div>
       <div class="flex justify-end"><div class="w-72 space-y-2">
         <div class="flex justify-between text-sm"><span class="text-gray-500">Subtotal</span><span class="font-medium">$${Number(invProposal.subtotal).toFixed(2)} CAD</span></div>
-        ${invProposal.discount_amount > 0 ? `<div class="flex justify-between text-sm"><span class="text-gray-500">Discount</span><span class="text-green-600">-$${Number(invProposal.discount_amount).toFixed(2)}</span></div>` : ''}
+        ${invProposal.discount_amount > 0 ? `<div class="flex justify-between text-sm"><span class="text-gray-500">${invProposal.discount_type === 'percentage' ? `Discount (${invProposal.discount_amount}%)` : 'Discount'}</span><span class="text-green-600">-$${(invProposal.discount_type === 'percentage' ? Math.round(Number(invProposal.subtotal) * Number(invProposal.discount_amount) / 100 * 100) / 100 : Number(invProposal.discount_amount)).toFixed(2)}</span></div>` : ''}
         <div class="flex justify-between text-sm"><span class="text-gray-500">Tax (${invProposal.tax_rate || 5}%)</span><span>$${Number(invProposal.tax_amount).toFixed(2)}</span></div>
         <div class="flex justify-between text-lg font-bold border-t-2 border-gray-200 pt-2 mt-2"><span>Total</span><span class="text-blue-600">$${Number(invProposal.total).toFixed(2)} CAD</span></div>
       </div></div>

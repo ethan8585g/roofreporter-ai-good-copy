@@ -21,6 +21,13 @@ const SA = {
 
 document.addEventListener('DOMContentLoaded', () => {
   loadView('users');
+
+  // Auto-prompt for push notifications after dashboard loads
+  setTimeout(() => {
+    if (window.RoofPush && localStorage.getItem('rc_token')) {
+      window.RoofPush.autoPrompt();
+    }
+  }, 3000);
 });
 
 window.saDashboardSetView = function(v) {
@@ -3366,6 +3373,20 @@ window.showCreateInvoiceModal = function() {
         '<div><label class="block text-xs font-medium text-gray-500 mb-1">Tax Rate (%)</label>' +
           '<input id="inv-tax-rate" type="number" step="0.01" value="5.00" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm max-w-[200px]"></div>' +
 
+        '<div class="border border-gray-200 rounded-xl p-4">' +
+          '<h4 class="font-semibold text-gray-700 text-sm mb-3"><i class="fas fa-tag mr-1 text-green-500"></i>Discount <span class="text-xs text-gray-400 font-normal">(optional)</span></h4>' +
+          '<div class="grid grid-cols-2 gap-3">' +
+            '<div><label class="block text-xs font-medium text-gray-500 mb-1">Type</label>' +
+              '<select id="inv-discount-type" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" onchange="toggleInvDiscountInput()">' +
+                '<option value="none">No Discount</option>' +
+                '<option value="fixed">Fixed Amount ($)</option>' +
+                '<option value="percentage">Percentage (%)</option>' +
+              '</select></div>' +
+            '<div id="inv-discount-input-wrap" style="display:none"><label id="inv-discount-label" class="block text-xs font-medium text-gray-500 mb-1">Amount</label>' +
+              '<input id="inv-discount-amount" type="number" step="0.01" min="0" placeholder="0.00" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></div>' +
+          '</div>' +
+        '</div>' +
+
         // Line items
         '<div class="border border-gray-200 rounded-xl p-4">' +
           '<div class="flex items-center justify-between mb-3">' +
@@ -3418,6 +3439,15 @@ window.closeInvModal = function() {
   if (detail) detail.innerHTML = '';
 };
 
+window.toggleInvDiscountInput = function() {
+  var type = document.getElementById('inv-discount-type')?.value;
+  var wrap = document.getElementById('inv-discount-input-wrap');
+  var label = document.getElementById('inv-discount-label');
+  if (!wrap) return;
+  if (type === 'none') { wrap.style.display = 'none'; }
+  else { wrap.style.display = ''; if (label) label.textContent = type === 'percentage' ? 'Percentage (%)' : 'Amount ($)'; }
+};
+
 window.createInvoice = async function() {
   var customerId = document.getElementById('inv-customer').value;
   if (!customerId) { window.rmToast('Please select a customer', 'warning'); return; }
@@ -3433,12 +3463,14 @@ window.createInvoice = async function() {
   var taxRate = parseFloat(document.getElementById('inv-tax-rate').value) || 5;
   var dueDays = parseInt(document.getElementById('inv-due-days').value) || 30;
   var notes = document.getElementById('inv-notes').value;
+  var discountType = document.getElementById('inv-discount-type')?.value || 'none';
+  var discountAmount = (discountType !== 'none') ? (parseFloat(document.getElementById('inv-discount-amount')?.value) || 0) : 0;
 
   try {
     var resp = await saFetch('/api/invoices', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ customer_id: parseInt(customerId), items: items, tax_rate: taxRate, due_days: dueDays, notes: notes })
+      body: JSON.stringify({ customer_id: parseInt(customerId), items: items, tax_rate: taxRate, due_days: dueDays, notes: notes, discount_amount: discountAmount, discount_type: discountType !== 'none' ? discountType : 'fixed' })
     });
     var data = await resp.json();
     if (data.success) {
@@ -3496,7 +3528,7 @@ window.viewInvoiceDetail = async function(id) {
             '<div class="bg-gray-50 px-4 py-3 space-y-1">' +
               '<div class="flex justify-between text-sm"><span class="text-gray-500">Subtotal</span><span class="text-gray-800">$' + parseFloat(inv.subtotal || 0).toFixed(2) + '</span></div>' +
               '<div class="flex justify-between text-sm"><span class="text-gray-500">Tax (' + (inv.tax_rate || 5) + '%)</span><span class="text-gray-800">$' + parseFloat(inv.tax_amount || 0).toFixed(2) + '</span></div>' +
-              (inv.discount_amount ? '<div class="flex justify-between text-sm"><span class="text-gray-500">Discount</span><span class="text-green-600">-$' + parseFloat(inv.discount_amount).toFixed(2) + '</span></div>' : '') +
+              (inv.discount_amount > 0 ? (function(){ var dt=inv.discount_type||'fixed'; var dl=dt==='percentage'?'Discount ('+inv.discount_amount+'%)':'Discount'; var dd=dt==='percentage'?parseFloat(inv.subtotal||0)*parseFloat(inv.discount_amount)/100:parseFloat(inv.discount_amount); return '<div class="flex justify-between text-sm"><span class="text-gray-500">'+dl+'</span><span class="text-green-600">-$'+dd.toFixed(2)+'</span></div>'; })() : '') +
               '<div class="flex justify-between text-lg font-bold border-t border-gray-200 pt-2 mt-2"><span class="text-gray-900">Total</span><span class="text-green-700">$' + parseFloat(inv.total || 0).toFixed(2) + ' CAD</span></div>' +
             '</div>' +
           '</div>' +
@@ -3683,10 +3715,13 @@ window.downloadInvoicePdf = async function(id) {
     doc.text('$' + parseFloat(inv.tax_amount || 0).toFixed(2), 195, finalY, { align: 'right' });
     finalY += 6;
 
-    if (inv.discount_amount) {
+    if (inv.discount_amount > 0) {
+      var pdfDiscType = inv.discount_type || 'fixed';
+      var pdfDiscDollar = pdfDiscType === 'percentage' ? parseFloat(inv.subtotal || 0) * parseFloat(inv.discount_amount) / 100 : parseFloat(inv.discount_amount);
+      var pdfDiscLabel = pdfDiscType === 'percentage' ? 'Discount (' + inv.discount_amount + '%):' : 'Discount:';
       doc.setTextColor(22, 163, 74);
-      doc.text('Discount:', totalsX, finalY);
-      doc.text('-$' + parseFloat(inv.discount_amount).toFixed(2), 195, finalY, { align: 'right' });
+      doc.text(pdfDiscLabel, totalsX, finalY);
+      doc.text('-$' + pdfDiscDollar.toFixed(2), 195, finalY, { align: 'right' });
       finalY += 6;
     }
 
