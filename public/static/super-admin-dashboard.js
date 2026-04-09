@@ -664,7 +664,7 @@ function renderReportRequestsView() {
           return '<option value="' + s + '"' + (SA.reportReqFilter === s ? ' selected' : '') + '>' + labels[s] + '</option>';
         }).join('') +
       '</select>' +
-      '<button onclick="saLoadData(\'report-requests\')" style="font-size:12px;border:1px solid #374151;border-radius:8px;padding:6px 12px;background:#1f2937;color:#9ca3af;cursor:pointer"><i class="fas fa-sync-alt mr-1"></i>Refresh</button>' +
+      '<button onclick="loadView(\'report-requests\')" style="font-size:12px;border:1px solid #374151;border-radius:8px;padding:6px 12px;background:#1f2937;color:#9ca3af;cursor:pointer"><i class="fas fa-sync-alt mr-1"></i>Refresh</button>' +
     '</div>' +
   '</div>';
 
@@ -901,7 +901,7 @@ window.saSubmitTrace = async function(orderId) {
     if (data.success) {
       document.getElementById('sa-trace-modal')?.remove();
       alert('✅ Report generated and delivered to customer!');
-      saLoadData('orders');
+      loadView('orders');
     } else {
       alert('Error: ' + (data.error || 'Failed to generate report'));
       if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-paper-plane mr-1.5"></i>Submit Report to Customer'; }
@@ -930,7 +930,7 @@ function renderOrdersView() {
             <div style="color:#92400e;font-size:12px">${needsTraceOrders.length} order${needsTraceOrders.length !== 1 ? 's' : ''} waiting for your trace</div>
           </div>
         </div>
-        <button onclick="saLoadData(SA.view)" style="font-size:11px;color:#f59e0b;background:none;border:none;cursor:pointer"><i class="fas fa-sync-alt mr-1"></i>Refresh</button>
+        <button onclick="loadView(SA.view)" style="font-size:11px;color:#f59e0b;background:none;border:none;cursor:pointer"><i class="fas fa-sync-alt mr-1"></i>Refresh</button>
       </div>
       <div style="display:flex;flex-direction:column;gap:8px">
         ${needsTraceOrders.map(o => `
