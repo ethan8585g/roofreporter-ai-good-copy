@@ -29,6 +29,7 @@
     invoices: { init: initInvoices, title: 'Invoices' },
     proposals: { init: initProposals, title: 'Proposals & Estimates' },
     jobs: { init: initJobs, title: 'Job Management' },
+    crew: { init: initCrewManager, title: 'Crew Manager' },
     pipeline: { init: initPipeline, title: 'Sales Pipeline' },
     d2d: { init: initD2D, title: 'D2D Manager' },
     'email-outreach': { init: initEmailOutreach, title: 'Email Outreach' },

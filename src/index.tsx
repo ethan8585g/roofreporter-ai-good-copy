@@ -1388,7 +1388,7 @@ app.get('/customer/email-outreach', (c) => c.html(getCrmSubPageHTML('email-outre
 app.get('/customer/suppliers', (c) => c.html(getCrmSubPageHTML('suppliers', 'Supplier Management', 'fa-store')))
 app.get('/customer/catalog', (c) => c.html(getCrmSubPageHTML('catalog', 'Material Catalog', 'fa-box-open')))
 app.get('/customer/referrals', (c) => c.html(getCrmSubPageHTML('referrals', 'Referral Program', 'fa-gift')))
-app.get('/customer/crew', (c) => c.redirect('/customer/jobs', 301))
+app.get('/customer/crew', (c) => c.html(getCrmSubPageHTML('crew', 'Crew Manager', 'fa-users')))
 app.get('/customer/website-builder', (c) => c.html(getWebsiteBuilderPageHTML()))
 app.get('/customer/google-ads', (c) => c.html(getGoogleAdsPageHTML()))
 app.get('/customer/google-business', (c) => c.html(getGoogleBusinessPageHTML()))
@@ -2484,9 +2484,13 @@ html.light-theme{background:#f5f7fa !important}
 .light-theme .bg-brand-600{background-color:#1373e3 !important}
 .light-theme .bg-brand-700{background-color:#0d509f !important}
 .light-theme .hover\:bg-brand-700:hover{background-color:#0d509f !important}
+.light-theme .text-brand-200,.light-theme .text-brand-300,.light-theme .text-brand-400{color:#0369a1 !important}
 .light-theme .text-brand-500,.light-theme .text-brand-600{color:#1373e3 !important}
 .light-theme .text-brand-700{color:#0d509f !important}
 .light-theme .border-brand-500{border-color:#1373e3 !important}
+/* Blue/green light shades — invisible on white without this */
+.light-theme .text-blue-200,.light-theme .text-blue-300{color:#1d4ed8 !important}
+.light-theme .text-green-200,.light-theme .text-green-300{color:#15803d !important}
 .light-theme .focus\:ring-brand-500:focus{--tw-ring-color:#1373e3}
 /* Toggle track unchecked state + other #374151 bg elements */
 .light-theme [style*="background:#374151"],.light-theme [style*="background: #374151"]{background:#c8d0d8 !important}
