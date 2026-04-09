@@ -34,6 +34,7 @@ document.addEventListener('DOMContentLoaded', () => {
     selectedReport: null,
     reportSearch: '',
     selectedReportMaterials: null,
+    materialsExpanded: false,
     markupPercent: 30,
     pricingEngineMode: 'markup',
     customerPricePerSquare: 0,
@@ -227,6 +228,89 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     } catch(e) {}
   })();
+
+  function renderMaterialPanel() {
+    var m = state.selectedReportMaterials;
+    if (typeof m === 'string') { try { m = JSON.parse(m); } catch(e) { m = null; } }
+    var hasItems = m && m.items && Array.isArray(m.items) && m.items.length > 0;
+    var expanded = state.materialsExpanded;
+    // Auto-expand when materials first become available
+    if (hasItems && !state._materialsWasExpanded) { state.materialsExpanded = true; state._materialsWasExpanded = true; expanded = true; }
+
+    var headerHtml =
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:' + (expanded && hasItems ? '12px' : '0') + '">' +
+        '<div style="display:flex;align-items:center;gap:8px">' +
+          '<div style="width:28px;height:28px;background:rgba(16,185,129,0.15);border-radius:6px;display:flex;align-items:center;justify-content:center"><i class="fas fa-calculator" style="color:#10b981;font-size:13px"></i></div>' +
+          '<div>' +
+            '<div style="color:var(--text-primary);font-weight:700;font-size:13px">Material Take-Off</div>' +
+            '<div style="color:var(--text-muted);font-size:11px">' + (hasItems ? m.items.length + ' items' + (m.total_area_sqft ? ' · ' + m.total_area_sqft + ' sq ft' : '') + (m.waste_pct ? ' · ' + m.waste_pct + '% waste' : '') : 'No material data loaded') + '</div>' +
+          '</div>' +
+        '</div>' +
+        '<button onclick="window._pb.toggleMaterials()" style="background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:6px;padding:4px 10px;cursor:pointer;color:var(--text-muted);font-size:11px">' +
+          (expanded ? '<i class="fas fa-chevron-up"></i>' : '<i class="fas fa-chevron-down"></i>') +
+        '</button>' +
+      '</div>';
+
+    var bodyHtml = '';
+    if (expanded) {
+      if (hasItems) {
+        var rows = m.items.map(function(item) {
+          var total = (parseFloat(item.quantity) || 0) * (parseFloat(item.unit_price) || 0);
+          return '<tr style="border-bottom:1px solid var(--border-color)">' +
+            '<td style="padding:6px 8px;color:var(--text-primary);font-size:12px">' + (item.description || '') + '</td>' +
+            '<td style="padding:6px 8px;text-align:center;color:var(--text-secondary);font-size:12px">' + (item.quantity || '') + '</td>' +
+            '<td style="padding:6px 8px;text-align:center;color:var(--text-muted);font-size:11px">' + (item.unit || '') + '</td>' +
+            '<td style="padding:6px 8px;text-align:right;color:var(--text-secondary);font-size:12px">$' + (parseFloat(item.unit_price) || 0).toFixed(2) + '</td>' +
+            '<td style="padding:6px 8px;text-align:right;color:var(--text-primary);font-weight:600;font-size:12px">$' + total.toFixed(2) + '</td>' +
+          '</tr>';
+        }).join('');
+        var grandTotal = m.items.reduce(function(s, item) { return s + (parseFloat(item.quantity) || 0) * (parseFloat(item.unit_price) || 0); }, 0);
+        bodyHtml =
+          '<div style="overflow-x:auto">' +
+            '<table style="width:100%;border-collapse:collapse">' +
+              '<thead><tr style="background:var(--bg-elevated)">' +
+                '<th style="padding:6px 8px;text-align:left;color:var(--text-muted);font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Description</th>' +
+                '<th style="padding:6px 8px;text-align:center;color:var(--text-muted);font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Qty</th>' +
+                '<th style="padding:6px 8px;text-align:center;color:var(--text-muted);font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Unit</th>' +
+                '<th style="padding:6px 8px;text-align:right;color:var(--text-muted);font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Unit Price</th>' +
+                '<th style="padding:6px 8px;text-align:right;color:var(--text-muted);font-size:10px;text-transform:uppercase;letter-spacing:0.5px">Total</th>' +
+              '</tr></thead>' +
+              '<tbody>' + rows + '</tbody>' +
+              '<tfoot><tr style="border-top:2px solid var(--border-color)">' +
+                '<td colspan="4" style="padding:8px;text-align:right;color:var(--text-muted);font-size:12px;font-weight:700">Material Subtotal</td>' +
+                '<td style="padding:8px;text-align:right;color:#10b981;font-size:14px;font-weight:800">$' + grandTotal.toFixed(2) + '</td>' +
+              '</tr></tfoot>' +
+            '</table>' +
+          '</div>';
+      } else if (m) {
+        // Aggregate stats only (non-items format)
+        bodyHtml = '<div style="color:var(--text-muted);font-size:12px;padding:8px 0">Material summary data is available but items list is not structured. Open the calculator to view full breakdown.</div>';
+      } else {
+        bodyHtml =
+          '<div style="display:flex;align-items:center;gap:10px;padding:8px 0">' +
+            '<span style="color:var(--text-muted);font-size:12px">No material data loaded.</span>' +
+            '<a href="/customer/material-calculator" target="_blank" style="color:var(--accent);font-size:12px;font-weight:600">Open Calculator →</a>' +
+          '</div>';
+      }
+    }
+
+    return '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;padding:14px 16px;margin-bottom:16px">' +
+      headerHtml + bodyHtml +
+    '</div>';
+  }
+
+  function ensurePreviewModal() {
+    var modal = document.getElementById('pb-preview-modal');
+    if (modal) return modal;
+    modal = document.createElement('div');
+    modal.id = 'pb-preview-modal';
+    modal.style.cssText = 'display:none;position:fixed;top:0;left:0;width:100%;height:100%;overflow-y:auto;z-index:9999;background:white';
+    document.body.appendChild(modal);
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') { var m = document.getElementById('pb-preview-modal'); if (m) m.style.display = 'none'; }
+    });
+    return modal;
+  }
 
   async function load() {
     state.loading = true;
@@ -436,16 +520,20 @@ document.addEventListener('DOMContentLoaded', () => {
             '<div style="width:36px;height:36px;background:rgba(37,99,235,0.15);border-radius:8px;display:flex;align-items:center;justify-content:center"><i class="fas fa-file-alt" style="color:#3b82f6"></i></div>' +
             '<div><div style="color:var(--text-primary);font-weight:600;font-size:13px">View Roof Report</div><div style="color:var(--text-muted);font-size:11px">' + (state.selectedReport.property_address || 'Attached report').substring(0, 35) + '</div></div>' +
           '</a>' +
-          '<a href="/customer/material-calculator" target="_blank" style="flex:1;display:flex;align-items:center;gap:10px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;padding:12px 16px;text-decoration:none;transition:all 0.2s" onmouseover="this.style.borderColor=\'var(--accent)\'" onmouseout="this.style.borderColor=\'var(--border-color)\'">' +
+          '<button onclick="window._pb.toggleMaterials()" style="flex:1;display:flex;align-items:center;gap:10px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;padding:12px 16px;cursor:pointer;transition:all 0.2s;text-align:left" onmouseover="this.style.borderColor=\'var(--accent)\'" onmouseout="this.style.borderColor=\'var(--border-color)\'">' +
             '<div style="width:36px;height:36px;background:rgba(16,185,129,0.15);border-radius:8px;display:flex;align-items:center;justify-content:center"><i class="fas fa-calculator" style="color:#10b981"></i></div>' +
-            '<div><div style="color:var(--text-primary);font-weight:600;font-size:13px">View Material Calculation</div><div style="color:var(--text-muted);font-size:11px">' + (state.selectedReportMaterials ? 'Materials loaded' : 'Open calculator') + '</div></div>' +
-          '</a>' +
+            '<div style="flex:1"><div style="color:var(--text-primary);font-weight:600;font-size:13px">Material Take-Off</div><div style="color:var(--text-muted);font-size:11px">' + (state.selectedReportMaterials ? 'Materials loaded — click to expand' : 'Open calculator to load') + '</div></div>' +
+            '<i class="fas ' + (state.materialsExpanded ? 'fa-chevron-up' : 'fa-chevron-down') + '" style="color:var(--text-muted);font-size:11px"></i>' +
+          '</button>' +
           '<div style="flex:1;display:flex;align-items:center;gap:10px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:10px;padding:12px 16px">' +
             '<div style="width:36px;height:36px;background:rgba(139,92,246,0.15);border-radius:8px;display:flex;align-items:center;justify-content:center"><i class="fas fa-store" style="color:#8b5cf6"></i></div>' +
             '<div><div style="color:var(--text-primary);font-weight:600;font-size:13px">Supplier</div><div style="color:var(--text-muted);font-size:11px">' + (state.suppliers.length > 0 ? state.suppliers[0].name : 'Not set') + '</div></div>' +
           '</div>' +
         '</div>'
       : '') +
+
+      // Inline material take-off panel
+      renderMaterialPanel() +
 
       // Profit summary bar
       '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;padding:16px;margin-bottom:20px;display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr;gap:12px;text-align:center">' +
@@ -454,6 +542,22 @@ document.addEventListener('DOMContentLoaded', () => {
         '<div><div style="color:var(--text-muted);font-size:10px;text-transform:uppercase;letter-spacing:1px">Customer Price <span style="font-size:8px;opacity:0.6">(editable)</span></div><div style="display:flex;align-items:center;justify-content:center;gap:2px"><span style="color:var(--text-primary);font-size:20px;font-weight:800">$</span><input type="number" value="' + (state.customerPriceOverride !== null ? state.customerPriceOverride : customerTotal).toFixed(2) + '" onchange="window.__pbState.customerPriceOverride=parseFloat(this.value)||null;window.__pbRender()" style="width:90px;background:transparent;border:none;border-bottom:2px solid var(--accent);color:var(--text-primary);font-size:20px;font-weight:800;text-align:center;padding:0"></div></div>' +
         '<div><div style="color:var(--text-muted);font-size:10px;text-transform:uppercase;letter-spacing:1px">Your Profit</div><div style="color:#22c55e;font-size:20px;font-weight:800">$' + profit.toFixed(2) + '</div></div>' +
         '<div><div style="color:var(--text-muted);font-size:10px;text-transform:uppercase;letter-spacing:1px">Margin</div><div style="color:#22c55e;font-size:20px;font-weight:800">' + margin.toFixed(1) + '%</div></div>' +
+      '</div>' +
+
+      // Quick Templates
+      '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;padding:16px;margin-bottom:20px">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">' +
+          '<h4 style="color:var(--text-primary);font-size:14px;font-weight:700;margin:0"><i class="fas fa-layer-group" style="color:var(--accent);margin-right:6px"></i>Quick Templates</h4>' +
+          '<span style="color:var(--text-muted);font-size:11px">Click to pre-fill proposal text</span>' +
+        '</div>' +
+        '<div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px">' +
+          PROPOSAL_TEMPLATES.map(function(t) {
+            return '<button onclick="window._pb.applyTemplate(\'' + t.id + '\')" style="flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 14px;background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:10px;cursor:pointer;min-width:100px" onmouseover="this.style.borderColor=\'var(--accent)\'" onmouseout="this.style.borderColor=\'var(--border-color)\'">' +
+              '<i class="fas ' + t.icon + '" style="color:var(--accent);font-size:16px"></i>' +
+              '<span style="color:var(--text-primary);font-size:11px;font-weight:600;text-align:center;white-space:nowrap">' + t.label + '</span>' +
+            '</button>';
+          }).join('') +
+        '</div>' +
       '</div>' +
 
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">' +
@@ -1560,6 +1664,62 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ============================================================
+  // PROPOSAL TEMPLATES
+  // ============================================================
+  const PROPOSAL_TEMPLATES = [
+    {
+      id: 'standard_replacement',
+      label: 'Standard Replacement',
+      icon: 'fa-home',
+      title: 'Roof Replacement Proposal',
+      description: 'Thank you for the opportunity to provide this estimate for your roofing project. We are committed to delivering quality workmanship and materials.',
+      scope: 'Complete removal and disposal of existing roofing system.\nInstallation of new roofing system including: synthetic underlayment, ice & water shield at eaves and valleys, drip edge, starter strips, architectural shingles, ridge cap, and all necessary flashings.\nAll work performed to manufacturer specifications and local building code.',
+      warranty: 'All workmanship is warranted for a period of 5 years from the date of completion. Manufacturer warranties apply separately to all materials installed. This warranty covers defects in workmanship including but not limited to: improper installation, leaks resulting from installation errors, and flashing failures. Normal wear and tear, acts of God, and damage caused by third parties are excluded.',
+      payment: 'A 30% deposit is required to schedule the work. 40% due at material delivery. Remaining 30% balance due upon satisfactory completion. Accepted payment methods: cheque, e-transfer, credit card. Late payments are subject to 2% monthly interest. All prices are in Canadian Dollars (CAD).'
+    },
+    {
+      id: 'roof_repair',
+      label: 'Roof Repair',
+      icon: 'fa-tools',
+      title: 'Roof Repair Proposal',
+      description: 'We have assessed the damage to your roofing system and prepared this proposal for the necessary repairs.',
+      scope: 'Targeted repair to affected area(s) as identified during site inspection.\nRemoval of damaged materials, installation of new underlayment and shingles to match existing roof system as closely as possible.\nRe-sealing of all flashings, pipe boots, and penetrations in the repair area.\nDebris removal and site cleanup.',
+      warranty: 'All repair workmanship is warranted for 2 years from the date of completion. Warranty covers the repaired area only. Existing roof areas outside the repair zone are not covered under this warranty.',
+      payment: '50% deposit required to schedule. Balance due upon completion. Payment accepted via cheque, e-transfer, or credit card.'
+    },
+    {
+      id: 'insurance_claim',
+      label: 'Insurance Claim',
+      icon: 'fa-file-invoice',
+      title: 'Insurance Roof Replacement Proposal',
+      description: 'This proposal has been prepared in connection with an insurance claim for storm/hail damage to the roofing system. All work is performed to restore the roof to pre-loss condition.',
+      scope: 'Complete removal and disposal of storm-damaged roofing system.\nInstallation of new roofing system to pre-loss condition or better, including all required materials per insurance scope of loss.\nDocumentation of all materials and labour for insurance purposes.\nWork performed to applicable building code and manufacturer installation requirements.',
+      warranty: 'All workmanship is warranted for 5 years from the date of completion. Manufacturer warranties on materials apply as issued. This warranty is in addition to any obligations under the insurance claim.',
+      payment: 'Payment terms subject to insurance claim approval. Deductible due at project start. Insurance proceeds payable directly or by assignment. Supplemental claims will be submitted for any additional damage discovered during work.'
+    },
+    {
+      id: 'flat_tpo',
+      label: 'Flat Roof / TPO',
+      icon: 'fa-building',
+      title: 'Commercial Flat Roof Replacement Proposal',
+      description: 'We are pleased to provide this proposal for the installation of a new TPO/flat roof system on your commercial property.',
+      scope: 'Removal and disposal of existing flat roofing membrane and insulation as applicable.\nInstallation of new TPO single-ply membrane roofing system, mechanically fastened or fully adhered as specified.\nIncludes: coverboard, insulation, TPO membrane, all flashings, terminations, and drain boots.\nWork performed to NRCA guidelines and manufacturer specifications.',
+      warranty: 'Workmanship warranted for 5 years. NDL (No Dollar Limit) manufacturer warranty available upon request at additional cost. All penetrations and flashings warranted against leaks for the workmanship warranty period.',
+      payment: '30% deposit to mobilize. 40% upon membrane completion. 30% upon final inspection and punch-list completion. Net 15 on final invoice. All prices in CAD.'
+    },
+    {
+      id: 'inspection',
+      label: 'Inspection',
+      icon: 'fa-search',
+      title: 'Roof Inspection & Assessment Report',
+      description: 'This proposal covers a professional roof inspection and written assessment of the current condition of your roofing system.',
+      scope: 'Full visual inspection of roofing system including field, eaves, rakes, ridges, valleys, flashings, penetrations, skylights, and gutters.\nPhotographic documentation of all observed conditions.\nWritten summary report with condition ratings and recommended actions.\nPriority ranking of repairs with estimated timelines.',
+      warranty: 'Inspection findings represent conditions at time of inspection. This assessment is non-destructive and limited to visible components.',
+      payment: 'Inspection fee due upon delivery of written report. Payment accepted via cheque, e-transfer, or credit card.'
+    }
+  ];
+
+  // ============================================================
   // PUBLIC API
   // ============================================================
   window._pb = {
@@ -1599,7 +1759,7 @@ document.addEventListener('DOMContentLoaded', () => {
       state.mode = 'supplier-orders';
       render();
     },
-    backToEditor() { state.createStep = 3; state.mode = 'create'; render(); },
+    backToEditor() { window._pb.closePreview(); state.createStep = 3; state.mode = 'create'; render(); },
     setFilter(f) { state.filter = f; render(); },
     setSearch(term) { state.searchTerm = term; render(); },
     toggleCustMode(isNew) { state.form.isNewCustomer = isNew; render(); },
@@ -1865,11 +2025,19 @@ document.addEventListener('DOMContentLoaded', () => {
       render();
     },
     previewProposal() {
-      // Collect dashboard form data first
       window._pb.collectDashboardData();
       pbSaveDraft();
-      state.mode = 'preview';
-      render();
+      // Render preview into overlay modal — state.mode stays unchanged
+      var previewHtml = renderPreview();
+      var modal = ensurePreviewModal();
+      modal.innerHTML =
+        '<div style="position:sticky;top:0;z-index:10000;background:white;border-bottom:1px solid #e5e7eb;padding:12px 20px;display:flex;align-items:center;justify-content:space-between">' +
+          '<span style="font-weight:700;color:#111;font-size:14px"><i class="fas fa-eye" style="color:var(--accent);margin-right:8px"></i>Preview — Customer View</span>' +
+          '<button onclick="window._pb.closePreview()" style="background:#f3f4f6;color:#374151;border:1px solid #d1d5db;padding:8px 16px;border-radius:8px;font-weight:600;font-size:13px;cursor:pointer"><i class="fas fa-times" style="margin-right:6px"></i>Close Preview</button>' +
+        '</div>' +
+        '<div style="padding:20px">' + previewHtml + '</div>';
+      modal.style.display = 'block';
+      modal.scrollTop = 0;
     },
     collectDashboardData() {
       var el;
@@ -1918,6 +2086,26 @@ document.addEventListener('DOMContentLoaded', () => {
       state.mode = 'preview';
       render();
       setTimeout(function() { window.print(); }, 500);
+    },
+    toggleMaterials() {
+      state.materialsExpanded = !state.materialsExpanded;
+      render();
+    },
+    applyTemplate(templateId) {
+      var t = PROPOSAL_TEMPLATES.find(function(tpl) { return tpl.id === templateId; });
+      if (!t) return;
+      window._pb.collectDashboardData();
+      state.form.proposal_title = t.title;
+      state.form.proposal_description = t.description;
+      state.form.scope_of_work = t.scope;
+      state.form.warranty_terms = t.warranty;
+      state.form.payment_terms_text = t.payment;
+      pbToast('Template applied: ' + t.label, 'success');
+      render();
+    },
+    closePreview() {
+      var m = document.getElementById('pb-preview-modal');
+      if (m) m.style.display = 'none';
     },
     updatePerSquare() {
       // Recalculate per-square total
