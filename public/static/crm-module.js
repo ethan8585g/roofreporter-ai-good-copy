@@ -995,7 +995,10 @@
           '<div><label class="block text-xs font-medium text-gray-400 mb-1">Title *</label><input type="text" id="propTitle" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm" placeholder="e.g. Full Roof Replacement – 2,200 sq ft"></div>' +
           '<div><label class="block text-xs font-medium text-gray-400 mb-1">Property Address</label><input type="text" id="propAddress" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm"></div>' +
           '<div><label class="block text-xs font-medium text-gray-400 mb-1">Scope of Work</label><textarea id="propScope" rows="3" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm" placeholder="Remove existing shingles, inspect decking, install new underlayment and architectural shingles..."></textarea></div>' +
-          '<div><label class="block text-xs font-medium text-gray-400 mb-1"><i class="fas fa-file-alt mr-1 text-blue-400"></i>Attach Roof Report <span class="text-gray-400 font-normal">(optional)</span></label><select id="propLinkedReport" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm bg-[#111111]"><option value="">— No report attached —</option></select><p class="text-[10px] text-gray-400 mt-1">Attach a completed roof report to include with this proposal.</p></div>';
+          '<div style="border:1px solid #3b82f6;border-radius:10px;padding:10px 12px;background:rgba(59,130,246,0.07)">' +
+            '<label style="display:block;font-size:11px;font-weight:700;color:#60a5fa;margin-bottom:6px"><i class="fas fa-file-alt mr-1.5"></i>Attach Roof Report <span style="font-weight:400;opacity:0.7">(optional — shows measurements in preview)</span></label>' +
+            '<select id="propLinkedReport" style="width:100%;padding:8px 10px;border:1px solid #3b82f6;border-radius:8px;font-size:13px;background:var(--bg-elevated);color:var(--text-primary)"><option value="">— No report attached —</option></select>' +
+          '</div>';
 
         // Populate the roof report dropdown
         fetch('/api/customer/orders', { headers: authHeadersOnly() })
