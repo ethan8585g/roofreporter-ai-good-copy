@@ -36,6 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
     selectedReportMaterials: null,
     materialsExpanded: false,
     markupPercent: 30,
+    marginPercent: 30,
     pricingEngineMode: 'markup',
     customerPricePerSquare: 0,
     showReportToCustomer: 'partial',
@@ -143,6 +144,7 @@ document.addEventListener('DOMContentLoaded', () => {
         selectedReport: state.selectedReport,
         selectedReportMaterials: state.selectedReportMaterials,
         markupPercent: state.markupPercent,
+        marginPercent: state.marginPercent,
         pricingEngineMode: state.pricingEngineMode,
         customerPricePerSquare: state.customerPricePerSquare,
         customerPriceOverride: state.customerPriceOverride,
@@ -174,6 +176,7 @@ document.addEventListener('DOMContentLoaded', () => {
       state.selectedReport = d.selectedReport || null;
       state.selectedReportMaterials = d.selectedReportMaterials || null;
       state.markupPercent = d.markupPercent != null ? d.markupPercent : 30;
+      state.marginPercent = d.marginPercent != null ? d.marginPercent : 30;
       state.pricingEngineMode = d.pricingEngineMode || 'markup';
       state.customerPricePerSquare = d.customerPricePerSquare || 0;
       state.customerPriceOverride = d.customerPriceOverride != null ? d.customerPriceOverride : null;
@@ -510,9 +513,12 @@ document.addEventListener('DOMContentLoaded', () => {
     var markup = state.markupPercent || 30;
     var reportSquares = state.selectedReport ? Math.ceil((state.selectedReport.roof_area_sqft || 0) / 100) : 0;
     var squares = state.manualSquares !== null ? state.manualSquares : reportSquares;
+    var marginPct = state.marginPercent || 30;
     var customerTotal = state.pricingEngineMode === 'per_square_customer' ?
       squares * (state.customerPricePerSquare || 0) :
-      totalCost * (1 + markup / 100);
+      state.pricingEngineMode === 'margin' ?
+        (marginPct < 100 ? totalCost / (1 - marginPct / 100) : totalCost) :
+        totalCost * (1 + markup / 100);
     // Apply manual override if set
     if (state.customerPriceOverride !== null && state.customerPriceOverride > 0) {
       customerTotal = state.customerPriceOverride;
@@ -621,10 +627,13 @@ document.addEventListener('DOMContentLoaded', () => {
             '<h4 style="color:var(--text-primary);font-size:14px;font-weight:700;margin-bottom:12px"><i class="fas fa-tags" style="color:var(--accent);margin-right:6px"></i>Customer Pricing</h4>' +
             '<div style="display:flex;gap:8px;margin-bottom:12px">' +
               '<button onclick="window.__pbState.pricingEngineMode=\'markup\';window.__pbRender()" style="flex:1;padding:6px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid ' + (state.pricingEngineMode === 'markup' ? 'var(--accent)' : 'var(--border-color)') + ';color:' + (state.pricingEngineMode === 'markup' ? 'var(--accent)' : 'var(--text-muted)') + ';background:transparent">Markup %</button>' +
+              '<button onclick="window.__pbState.pricingEngineMode=\'margin\';window.__pbRender()" style="flex:1;padding:6px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid ' + (state.pricingEngineMode === 'margin' ? 'var(--accent)' : 'var(--border-color)') + ';color:' + (state.pricingEngineMode === 'margin' ? 'var(--accent)' : 'var(--text-muted)') + ';background:transparent">Margin %</button>' +
               '<button onclick="window.__pbState.pricingEngineMode=\'per_square_customer\';window.__pbRender()" style="flex:1;padding:6px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid ' + (state.pricingEngineMode === 'per_square_customer' ? 'var(--accent)' : 'var(--border-color)') + ';color:' + (state.pricingEngineMode === 'per_square_customer' ? 'var(--accent)' : 'var(--text-muted)') + ';background:transparent">$/Square</button>' +
             '</div>' +
             (state.pricingEngineMode === 'markup' ?
-              '<div><label style="color:var(--text-muted);font-size:11px">Markup %</label><input type="number" value="' + markup + '" onchange="window.__pbState.markupPercent=Number(this.value);window.__pbRender()" style="width:100%;background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:8px;padding:8px;color:var(--text-primary);font-weight:700;font-size:18px;margin-top:4px"></div>'
+              '<div><label style="color:var(--text-muted);font-size:11px">Markup % <span style="opacity:0.6">(on cost)</span></label><input type="number" value="' + markup + '" onchange="window.__pbState.markupPercent=Number(this.value);window.__pbRender()" style="width:100%;background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:8px;padding:8px;color:var(--text-primary);font-weight:700;font-size:18px;margin-top:4px" min="0" max="1000" step="1"></div>'
+            : state.pricingEngineMode === 'margin' ?
+              '<div><label style="color:var(--text-muted);font-size:11px">Target Margin % <span style="opacity:0.6">(gross profit / revenue)</span></label><input type="number" value="' + marginPct + '" onchange="window.__pbState.marginPercent=Math.min(99,Math.max(0,Number(this.value)));window.__pbRender()" style="width:100%;background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:8px;padding:8px;color:var(--text-primary);font-weight:700;font-size:18px;margin-top:4px" min="0" max="99" step="1"></div>'
             :
               '<div><label style="color:var(--text-muted);font-size:11px">Customer $/Square</label><input type="number" value="' + (state.customerPricePerSquare || 0) + '" onchange="window.__pbState.customerPricePerSquare=Number(this.value);window.__pbRender()" style="width:100%;background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:8px;padding:8px;color:var(--text-primary);font-weight:700;font-size:18px;margin-top:4px"></div>'
             ) +
