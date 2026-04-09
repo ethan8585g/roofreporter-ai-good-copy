@@ -1215,21 +1215,21 @@ document.addEventListener('DOMContentLoaded', () => {
       <h1 style="text-align:center;color:#1a1a2e;font-size:22px;font-weight:800;margin:16px 0 8px">${state.form.proposal_title || 'Roof Replacement Proposal'}</h1>
       ${state.form.proposal_description ? '<p style="text-align:center;color:#6b7280;font-size:13px;max-width:500px;margin:0 auto 20px;line-height:1.6">' + state.form.proposal_description + '</p>' : ''}
       <!-- Header -->
-      <div class="bg-gradient-to-r from-sky-500 to-blue-600 text-white p-8">
+      <div style="background:${state.accentColor||'#0ea5e9'}" class="text-white p-8">
         <div class="flex justify-between items-start">
           <div>
             <div class="flex items-center gap-3 mb-2">
-              <div class="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center"><i class="fas fa-home text-white text-lg"></i></div>
-              <div><h1 class="text-xl font-bold">Roof Manager</h1><p class="text-blue-200 text-xs">Professional Roof Measurement Reports</p></div>
+              <div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background:rgba(255,255,255,0.2)"><i class="fas fa-home text-white text-lg"></i></div>
+              <div><h1 class="text-xl font-bold">Roof Manager</h1><p class="text-xs" style="color:rgba(255,255,255,0.75)">Professional Roof Measurement Reports</p></div>
             </div>
-            <p class="text-blue-200 text-sm">Alberta, Canada</p>
-            <p class="text-blue-200 text-xs">sales@roofmanager.ca</p>
+            <p class="text-sm" style="color:rgba(255,255,255,0.75)">Alberta, Canada</p>
+            <p class="text-xs" style="color:rgba(255,255,255,0.75)">sales@roofmanager.ca</p>
           </div>
           <div class="text-right">
             <h2 class="text-2xl font-bold">PROPOSAL</h2>
-            <p class="text-blue-200 text-sm mt-1">${f.proposal_number}</p>
-            <p class="text-blue-200 text-xs mt-2">Date: ${f.created_date}</p>
-            <p class="text-blue-200 text-xs">Valid Until: ${f.valid_until}</p>
+            <p class="text-sm mt-1" style="color:rgba(255,255,255,0.75)">${f.proposal_number}</p>
+            <p class="text-xs mt-2" style="color:rgba(255,255,255,0.75)">Date: ${f.created_date}</p>
+            <p class="text-xs" style="color:rgba(255,255,255,0.75)">Valid Until: ${f.valid_until}</p>
           </div>
         </div>
       </div>
@@ -1249,6 +1249,76 @@ document.addEventListener('DOMContentLoaded', () => {
         <h3 class="text-xs font-semibold text-gray-500 uppercase mb-2">Scope of Work</h3>
         <div class="text-gray-700 text-sm whitespace-pre-wrap">${f.scope_of_work}</div>
       </div>` : ''}
+
+      ${(function() {
+        var r = state.selectedReport;
+        if (!r) return '';
+        var sections = '';
+        var m = r.materials || {};
+        var es = r.edge_summary || {};
+        var accentColor = state.accentColor || '#0ea5e9';
+
+        // Page 1: Project Summary
+        if (state.showAreaToCustomer) {
+          sections += '<div class="p-8 border-b border-gray-200">' +
+            '<h3 class="text-xs font-semibold text-gray-500 uppercase mb-4"><i class="fas fa-satellite-dish mr-1"></i>Roof Measurement Summary</h3>' +
+            '<div class="grid grid-cols-2 sm:grid-cols-4 gap-3">' +
+              '<div class="text-center p-4 rounded-xl bg-gray-50 border border-gray-100"><p class="text-2xl font-black text-gray-800">' + Math.round(r.total_true_area_sqft||0) + '</p><p class="text-xs text-gray-500 mt-1">True Area (sq ft)</p></div>' +
+              '<div class="text-center p-4 rounded-xl bg-gray-50 border border-gray-100"><p class="text-2xl font-black text-gray-800">' + (r.roof_pitch_ratio||'—') + '</p><p class="text-xs text-gray-500 mt-1">Roof Pitch</p></div>' +
+              '<div class="text-center p-4 rounded-xl bg-gray-50 border border-gray-100"><p class="text-2xl font-black text-gray-800">' + (m.gross_squares ? m.gross_squares.toFixed(1) : '—') + '</p><p class="text-xs text-gray-500 mt-1">Squares</p></div>' +
+              '<div class="text-center p-4 rounded-xl bg-gray-50 border border-gray-100"><p class="text-xl font-black text-gray-800 capitalize">' + (m.complexity_class||'—') + '</p><p class="text-xs text-gray-500 mt-1">Complexity</p></div>' +
+            '</div>' +
+          '</div>';
+        }
+
+        // Page 2: Edge Measurements
+        if (state.showPitchToCustomer && (es.total_ridge_ft || es.total_eave_ft)) {
+          sections += '<div class="p-8 border-b border-gray-200">' +
+            '<h3 class="text-xs font-semibold text-gray-500 uppercase mb-4"><i class="fas fa-ruler-combined mr-1"></i>Roof Edge Measurements</h3>' +
+            '<div class="grid grid-cols-3 sm:grid-cols-5 gap-3">' +
+              [['Ridge', es.total_ridge_ft], ['Hip', es.total_hip_ft], ['Valley', es.total_valley_ft], ['Eave', es.total_eave_ft], ['Rake', es.total_rake_ft]].map(function(e) {
+                return '<div class="text-center p-3 rounded-xl bg-gray-50 border border-gray-100"><p class="text-lg font-bold text-gray-800">' + Math.round(e[1]||0) + ' ft</p><p class="text-xs text-gray-500">' + e[0] + '</p></div>';
+              }).join('') +
+            '</div>' +
+          '</div>';
+        }
+
+        // Page 3: Material Take-Off
+        if (state.showMaterialsToCustomer && m.line_items && m.line_items.length) {
+          var matRows = m.line_items.slice(0, 10).map(function(item) {
+            return '<tr class="border-b border-gray-100"><td class="py-2 px-3 text-sm text-gray-700">' + (item.description||item.category||'') + '</td><td class="py-2 px-3 text-center text-sm font-semibold">' + (item.order_quantity||0) + '</td><td class="py-2 px-3 text-center text-sm text-gray-500">' + (item.order_unit||'') + '</td></tr>';
+          }).join('');
+          sections += '<div class="p-8 border-b border-gray-200">' +
+            '<h3 class="text-xs font-semibold text-gray-500 uppercase mb-4"><i class="fas fa-boxes mr-1"></i>Material Take-Off</h3>' +
+            '<table class="w-full text-sm"><thead><tr class="bg-gray-50"><th class="py-2 px-3 text-left font-semibold text-gray-600 text-xs uppercase">Material</th><th class="py-2 px-3 text-center font-semibold text-gray-600 text-xs uppercase">Qty</th><th class="py-2 px-3 text-center font-semibold text-gray-600 text-xs uppercase">Unit</th></tr></thead><tbody>' + matRows + '</tbody></table>' +
+          '</div>';
+        }
+
+        // Page 4: Edge Breakdown Details
+        if (state.showEdgesToCustomer && r.edges && r.edges.length) {
+          var edgeRows = r.edges.slice(0, 8).map(function(e) {
+            return '<tr class="border-b border-gray-100"><td class="py-2 px-3 text-sm text-gray-700 capitalize">' + (e.type||'edge') + '</td><td class="py-2 px-3 text-center text-sm font-semibold">' + Math.round(e.length_ft||0) + ' ft</td><td class="py-2 px-3 text-center text-sm text-gray-500">' + (e.pitch||'') + '</td></tr>';
+          }).join('');
+          sections += '<div class="p-8 border-b border-gray-200">' +
+            '<h3 class="text-xs font-semibold text-gray-500 uppercase mb-4"><i class="fas fa-draw-polygon mr-1"></i>Edge Breakdown</h3>' +
+            '<table class="w-full text-sm"><thead><tr class="bg-gray-50"><th class="py-2 px-3 text-left font-semibold text-gray-600 text-xs uppercase">Type</th><th class="py-2 px-3 text-center font-semibold text-gray-600 text-xs uppercase">Length</th><th class="py-2 px-3 text-center font-semibold text-gray-600 text-xs uppercase">Pitch</th></tr></thead><tbody>' + edgeRows + '</tbody></table>' +
+          '</div>';
+        }
+
+        // Page 5: Quality / Validation
+        if (state.showSolarToCustomer) {
+          sections += '<div class="p-8 border-b border-gray-200">' +
+            '<h3 class="text-xs font-semibold text-gray-500 uppercase mb-4"><i class="fas fa-shield-check mr-1"></i>Quality & Validation</h3>' +
+            '<div class="grid grid-cols-1 sm:grid-cols-3 gap-3">' +
+              '<div class="p-4 rounded-xl border border-gray-100 bg-gray-50 flex items-center gap-3"><i class="fas fa-satellite" style="color:' + accentColor + '"></i><div><p class="text-sm font-semibold text-gray-800">Satellite Verified</p><p class="text-xs text-gray-500">GPS-accurate measurements</p></div></div>' +
+              '<div class="p-4 rounded-xl border border-gray-100 bg-gray-50 flex items-center gap-3"><i class="fas fa-brain" style="color:' + accentColor + '"></i><div><p class="text-sm font-semibold text-gray-800">AI-Enhanced</p><p class="text-xs text-gray-500">Machine learning validation</p></div></div>' +
+              '<div class="p-4 rounded-xl border border-gray-100 bg-gray-50 flex items-center gap-3"><i class="fas fa-certificate" style="color:' + accentColor + '"></i><div><p class="text-sm font-semibold text-gray-800">Professional Grade</p><p class="text-xs text-gray-500">Industry-standard accuracy</p></div></div>' +
+            '</div>' +
+          '</div>';
+        }
+
+        return sections;
+      })()}
 
       <!-- Line Items -->
       <div class="p-8 border-b border-gray-200">
