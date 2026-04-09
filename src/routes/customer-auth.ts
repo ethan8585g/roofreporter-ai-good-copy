@@ -5,6 +5,30 @@ import { resolveTeamOwner } from './team'
 
 export const customerAuthRoutes = new Hono<{ Bindings: Bindings }>()
 
+// Seeds the 12 default material catalog items for a new account so users have
+// context on what the Material Catalog section is for when they first open it.
+async function seedDefaultMaterials(db: any, ownerId: number) {
+  const defaults = [
+    { category: 'shingles',      name: 'Architectural Shingles (Laminate)',    unit: 'bundles', unit_price: 42.00,  coverage_per_unit: '33 sq ft per bundle (3 bundles/square)', is_default: 1, sort_order: 1 },
+    { category: 'shingles',      name: '3-Tab Standard Shingles',              unit: 'bundles', unit_price: 32.00,  coverage_per_unit: '33 sq ft per bundle (3 bundles/square)', is_default: 0, sort_order: 2 },
+    { category: 'underlayment',  name: 'Synthetic Underlayment',               unit: 'rolls',   unit_price: 95.00,  coverage_per_unit: '400 sq ft per roll',                     is_default: 1, sort_order: 3 },
+    { category: 'ice_shield',    name: 'Ice & Water Shield Membrane',          unit: 'rolls',   unit_price: 165.00, coverage_per_unit: '200 sq ft per roll',                     is_default: 1, sort_order: 4 },
+    { category: 'starter_strip', name: 'Starter Strip Shingles',              unit: 'boxes',   unit_price: 45.00,  coverage_per_unit: '100 lin ft per box',                     is_default: 1, sort_order: 5 },
+    { category: 'ridge_cap',     name: 'Ridge/Hip Cap Shingles',              unit: 'bundles', unit_price: 65.00,  coverage_per_unit: '35 lin ft per bundle',                   is_default: 1, sort_order: 6 },
+    { category: 'drip_edge',     name: 'Aluminum Drip Edge (Type C/D)',       unit: 'pieces',  unit_price: 8.50,   coverage_per_unit: '10 ft per piece',                        is_default: 1, sort_order: 7 },
+    { category: 'valley_metal',  name: 'W-Valley Flashing (Aluminum)',        unit: 'pieces',  unit_price: 22.00,  coverage_per_unit: '10 ft per piece',                        is_default: 1, sort_order: 8 },
+    { category: 'nails',         name: 'Roofing Nails 1-1/4" Galvanized',    unit: 'boxes',   unit_price: 28.00,  coverage_per_unit: '5 lb box (~2 squares)',                  is_default: 1, sort_order: 9 },
+    { category: 'ventilation',   name: 'Ridge Vent',                          unit: 'pieces',  unit_price: 22.00,  coverage_per_unit: '4 ft per piece',                         is_default: 1, sort_order: 10 },
+    { category: 'custom',        name: 'Roofing Cement / Caulk',             unit: 'tubes',   unit_price: 8.50,   coverage_per_unit: '~1 tube per 5 squares',                  is_default: 1, sort_order: 11 },
+    { category: 'custom',        name: 'Pipe Boot / Collar',                 unit: 'pieces',  unit_price: 18.00,  coverage_per_unit: '~2 per 1000 sq ft',                      is_default: 0, sort_order: 12 },
+  ]
+  for (const d of defaults) {
+    await db.prepare(
+      `INSERT INTO material_catalog (owner_id, category, name, unit, unit_price, coverage_per_unit, supplier, is_default, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(ownerId, d.category, d.name, d.unit, d.unit_price, d.coverage_per_unit, '', d.is_default, d.sort_order).run()
+  }
+}
+
 // ============================================================
 // DEV / TEST ACCOUNT — Only active when DEV_MODE env var is set
 // ============================================================
@@ -471,6 +495,9 @@ customerAuthRoutes.post('/google', async (c) => {
         VALUES (1, 'free_trial_granted', ?)
       `).bind(`3 free trial reports granted to ${email} (Google sign-in)`).run()
 
+      // Seed default material catalog so new account has context on the section (non-blocking)
+      seedDefaultMaterials(c.env.DB, customer.id as number).catch(() => {})
+
       // Track Google signup in GA4 (non-blocking)
       trackUserSignup(c.env as any, String(customer.id), 'google', { email_domain: email.split('@')[1] || 'unknown' }).catch(() => {})
     }
@@ -598,6 +625,9 @@ customerAuthRoutes.post('/register', async (c) => {
       INSERT INTO user_activity_log (company_id, action, details)
       VALUES (1, 'customer_registered', ?)
     `).bind(`New customer: ${name} (${cleanEmail}) — 3 free trial reports granted — email verified`).run()
+
+    // Seed default material catalog so new account has context on the section (non-blocking)
+    seedDefaultMaterials(c.env.DB, result.meta.last_row_id as number).catch(() => {})
 
     // Track signup in GA4 (non-blocking)
     trackUserSignup(c.env as any, String(result.meta.last_row_id), 'email', { email_domain: cleanEmail.split('@')[1] || 'unknown' }).catch(() => {})
