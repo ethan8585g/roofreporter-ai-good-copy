@@ -46,6 +46,7 @@ document.addEventListener('DOMContentLoaded', () => {
     showLineItemsToCustomer: false,
     customerPriceOverride: null,
     myCost: null,
+    manualSquares: null,
     attachments: {
       includeRoofReport: true,
       includeMaterialBOM: true,
@@ -404,8 +405,10 @@ document.addEventListener('DOMContentLoaded', () => {
     var items = f.items || [];
     var totalCost = items.reduce(function(s,i) { return s + (Number(i.quantity||0) * Number(i.unit_price||0)); }, 0);
     var markup = state.markupPercent || 30;
-    var customerTotal = state.pricingEngineMode === 'per_square_customer' && state.selectedReport ?
-      Math.ceil((state.selectedReport.roof_area_sqft || 0) / 100) * (state.customerPricePerSquare || 0) :
+    var reportSquares = state.selectedReport ? Math.ceil((state.selectedReport.roof_area_sqft || 0) / 100) : 0;
+    var squares = state.manualSquares !== null ? state.manualSquares : reportSquares;
+    var customerTotal = state.pricingEngineMode === 'per_square_customer' ?
+      squares * (state.customerPricePerSquare || 0) :
       totalCost * (1 + markup / 100);
     // Apply manual override if set
     if (state.customerPriceOverride !== null && state.customerPriceOverride > 0) {
@@ -414,7 +417,6 @@ document.addEventListener('DOMContentLoaded', () => {
     var effectiveCost = state.myCost !== null ? state.myCost : totalCost;
     var profit = customerTotal - effectiveCost;
     var margin = customerTotal > 0 ? (profit / customerTotal * 100) : 0;
-    var squares = state.selectedReport ? Math.ceil((state.selectedReport.roof_area_sqft || 0) / 100) : 0;
 
     return '<div style="max-width:1100px;margin:0 auto;padding:20px">' +
 
@@ -468,7 +470,7 @@ document.addEventListener('DOMContentLoaded', () => {
             (state.pricingMethod === 'per_square' ?
               '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
                 '<div><label style="color:var(--text-muted);font-size:11px;display:block;margin-bottom:4px">Your Cost/Sq</label><input type="number" value="' + (state.pricePerSquare || 0) + '" onchange="window.__pbState.pricePerSquare=Number(this.value);window.__pbRender()" style="width:100%;background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:8px;padding:8px;color:var(--text-primary);font-weight:700"></div>' +
-                '<div><label style="color:var(--text-muted);font-size:11px;display:block;margin-bottom:4px">Roof Squares</label><div style="padding:8px;color:var(--text-primary);font-weight:700;font-size:16px">' + squares + ' sq</div></div>' +
+                '<div><label style="color:var(--text-muted);font-size:11px;display:block;margin-bottom:4px">Roof Squares</label><input type="number" value="' + squares + '" oninput="window.__pbState.manualSquares=Number(this.value)||0;window.__pbRender()" style="width:100%;background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:8px;padding:8px;color:var(--text-primary);font-weight:700;font-size:16px" min="0" step="0.5"></div>' +
               '</div>'
             :
               // Line items
@@ -871,9 +873,12 @@ document.addEventListener('DOMContentLoaded', () => {
       '<div class="bg-white rounded-xl border border-gray-200 p-6 mb-6">' +
         '<h3 class="text-lg font-bold text-gray-900 mb-4"><i class="fas fa-th text-brand-500 mr-2"></i>Per Square Pricing</h3>' +
         '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;text-align:center">' +
-          '<div style="background:white;border:1px solid #e5e7eb;border-radius:8px;padding:16px"><div style="color:#6b7280;font-size:11px;text-transform:uppercase;margin-bottom:4px">Roof Squares</div><div style="color:#1a1a2e;font-size:28px;font-weight:800">' + (state.selectedReport ? Math.ceil((state.selectedReport.roof_area_sqft || 0) / 100) : '—') + '</div></div>' +
-          '<div style="background:white;border:1px solid #e5e7eb;border-radius:8px;padding:16px"><div style="color:#6b7280;font-size:11px;text-transform:uppercase;margin-bottom:4px">Your Cost Per Square</div><div>$<input id="pps-price" type="number" value="' + (state.pricePerSquare || 350) + '" onchange="window.__pbState.pricePerSquare=Number(this.value);window._pb.updatePerSquare()" style="width:80px;background:transparent;border:none;border-bottom:2px solid #2563eb;color:#1a1a2e;font-size:28px;font-weight:800;text-align:center"></div></div>' +
-          '<div style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;padding:16px"><div style="color:#2563eb;font-size:11px;text-transform:uppercase;margin-bottom:4px">Total Estimate</div><div style="color:#2563eb;font-size:28px;font-weight:800">$' + ((state.selectedReport ? Math.ceil((state.selectedReport.roof_area_sqft || 0) / 100) : 0) * (state.pricePerSquare || 350)).toLocaleString() + '</div></div>' +
+          (function() {
+            var edSq = state.manualSquares !== null ? state.manualSquares : (state.selectedReport ? Math.ceil((state.selectedReport.roof_area_sqft || 0) / 100) : 0);
+            return '<div style="background:white;border:1px solid #e5e7eb;border-radius:8px;padding:16px"><div style="color:#6b7280;font-size:11px;text-transform:uppercase;margin-bottom:4px">Roof Squares</div><input type="number" value="' + edSq + '" oninput="window.__pbState.manualSquares=Number(this.value)||0;window._pb.updatePerSquare()" style="width:100%;background:transparent;border:none;border-bottom:2px solid #1a1a2e;color:#1a1a2e;font-size:28px;font-weight:800;text-align:center;padding:0" min="0" step="0.5"></div>' +
+              '<div style="background:white;border:1px solid #e5e7eb;border-radius:8px;padding:16px"><div style="color:#6b7280;font-size:11px;text-transform:uppercase;margin-bottom:4px">Your Cost Per Square</div><div>$<input id="pps-price" type="number" value="' + (state.pricePerSquare || 350) + '" oninput="window.__pbState.pricePerSquare=Number(this.value);window._pb.updatePerSquare()" style="width:80px;background:transparent;border:none;border-bottom:2px solid #2563eb;color:#1a1a2e;font-size:28px;font-weight:800;text-align:center" min="0" step="0.01"></div></div>' +
+              '<div style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;padding:16px"><div style="color:#2563eb;font-size:11px;text-transform:uppercase;margin-bottom:4px">Total Estimate</div><div style="color:#2563eb;font-size:28px;font-weight:800">$' + (edSq * (state.pricePerSquare || 350)).toLocaleString() + '</div></div>';
+          })() +
         '</div>' +
       '</div>'
     : ''}
@@ -1107,7 +1112,7 @@ document.addEventListener('DOMContentLoaded', () => {
               var custUnitPrice, custAmount;
               if (state.pricingEngineMode === 'per_square_customer') {
                 // In per-square mode, the customer price is the per-square rate, not line item cost
-                var squares = state.selectedReport ? Math.ceil((state.selectedReport.roof_area_sqft || 0) / 100) : 1;
+                var squares = state.manualSquares !== null ? state.manualSquares : (state.selectedReport ? Math.ceil((state.selectedReport.roof_area_sqft || 0) / 100) : 1);
                 var perSquareCustomerPrice = state.customerPricePerSquare || 0;
                 custUnitPrice = perSquareCustomerPrice;
                 custAmount = squares * perSquareCustomerPrice;
@@ -1418,8 +1423,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!f.isNewCustomer && !f.customer_id && !f.crm_customer_id) { pbToast('Please select or enter a customer', 'error'); return; }
     if (f.isNewCustomer && (!f.newCustomer.name)) { pbToast('Customer name is required', 'error'); return; }
     // Auto-create line item from per-square pricing
-    if (state.pricingMethod === 'per_square' && state.selectedReport && state.pricePerSquare > 0) {
-      var squares = Math.ceil((state.selectedReport.roof_area_sqft || 0) / 100);
+    if (state.pricingMethod === 'per_square' && state.pricePerSquare > 0) {
+      var squares = state.manualSquares !== null ? state.manualSquares : (state.selectedReport ? Math.ceil((state.selectedReport.roof_area_sqft || 0) / 100) : 0);
       if (squares > 0) {
         f.items = [{
           description: 'Roof Replacement — ' + squares + ' squares',
@@ -1809,6 +1814,7 @@ document.addEventListener('DOMContentLoaded', () => {
       state.form.attached_report_id = reportId || null;
       state.selectedReport = state.reports.find(function(r) { return String(r.id) === String(reportId); }) || null;
       state.selectedReportMaterials = null;
+      state.manualSquares = null; // reset so report value is used when a new report is picked
 
       if (state.selectedReport) {
         state.form.property_address = state.selectedReport.property_address || '';

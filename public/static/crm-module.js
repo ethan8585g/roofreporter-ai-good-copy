@@ -959,7 +959,7 @@
     item = item || { description: '', quantity: 1, unit: 'each', unit_price: 0 };
     return '<tr data-idx="' + idx + '">' +
       '<td class="py-1 pr-1"><input type="text" class="w-full px-2 py-1.5 border border-white/15 rounded-lg text-sm prop-item-desc" value="' + (item.description || '') + '" placeholder="Description"></td>' +
-      '<td class="py-1 pr-1 w-16"><input type="number" class="w-full px-2 py-1.5 border border-white/15 rounded-lg text-sm text-center prop-item-qty" value="' + (item.quantity || 1) + '" min="0.01" step="0.01"></td>' +
+      '<td class="py-1 pr-1 w-16"><input type="number" class="w-full px-2 py-1.5 border border-white/15 rounded-lg text-sm text-center prop-item-qty" value="' + (item.quantity || 1) + '" min="0" step="any"></td>' +
       '<td class="py-1 pr-1 w-16"><select class="w-full px-1 py-1.5 border border-white/15 rounded-lg text-xs prop-item-unit">' +
         '<option value="each"' + (item.unit === 'each' ? ' selected' : '') + '>each</option>' +
         '<option value="pcs"' + (item.unit === 'pcs' ? ' selected' : '') + '>pcs</option>' +
