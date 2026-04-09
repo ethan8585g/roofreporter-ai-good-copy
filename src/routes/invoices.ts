@@ -229,10 +229,35 @@ invoiceRoutes.post('/', async (c) => {
         'SELECT id, owner_id, name, email, phone FROM crm_customers WHERE id = ?'
       ).bind(crm_customer_id).first<any>()
       if (!crmCust) return c.json({ error: 'CRM customer not found' }, 404)
-      resolvedCustomerId = crmCust.owner_id
       crmName = crmCust.name || ''
       crmEmail = crmCust.email || ''
       crmPhone = crmCust.phone || ''
+      if (crmCust.owner_id < 1000000) {
+        // Portal customer owns this CRM contact — use their ID directly
+        resolvedCustomerId = crmCust.owner_id
+      } else {
+        // Admin-owned CRM contact (owner_id = 1000000 + admin_id).
+        // invoices.customer_id is NOT NULL so we find/create a real customers row
+        // linked to the admin's email address.
+        const adminId = crmCust.owner_id - 1000000
+        const adminUser = await c.env.DB.prepare(
+          'SELECT email, name FROM admin_users WHERE id = ?'
+        ).bind(adminId).first<any>()
+        if (adminUser?.email) {
+          const adminEmail = adminUser.email.toLowerCase()
+          const existingCust = await c.env.DB.prepare(
+            'SELECT id FROM customers WHERE email = ?'
+          ).bind(adminEmail).first<any>()
+          if (existingCust) {
+            resolvedCustomerId = existingCust.id
+          } else {
+            const ins = await c.env.DB.prepare(
+              'INSERT INTO customers (email, name, is_active) VALUES (?, ?, 1)'
+            ).bind(adminEmail, adminUser.name || adminEmail).run()
+            resolvedCustomerId = ins.meta.last_row_id
+          }
+        }
+      }
     } else {
       const customer = await c.env.DB.prepare('SELECT id, name FROM customers WHERE id = ?').bind(customer_id).first()
       if (!customer) return c.json({ error: 'Customer not found' }, 404)

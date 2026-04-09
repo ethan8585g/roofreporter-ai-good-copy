@@ -137,8 +137,29 @@ async function mcSelectOrder(orderId) {
   }
 
   if (!fullReport || !fullReport.materials || !fullReport.materials.line_items) {
-    if (area) area.innerHTML = '<div style="background:var(--bg-card);border:1px solid var(--border-color)" class="rounded-2xl p-8 text-center"><p style="color:var(--text-muted)">Material data not available for this report.</p></div>';
-    return;
+    // Synthesize basic materials from roof area if available
+    var sqft = (row && row.roof_area_sqft) ? Math.round(row.roof_area_sqft) : 0;
+    if (!sqft) {
+      if (area) area.innerHTML = '<div style="background:var(--bg-card);border:1px solid var(--border-color)" class="rounded-2xl p-8 text-center"><p style="color:var(--text-muted)">Material data not available for this report.</p></div>';
+      return;
+    }
+    var sq = Math.ceil(sqft / 100);
+    fullReport = fullReport || {};
+    fullReport.total_true_area_sqft = sqft;
+    fullReport.property = fullReport.property || { address: (row && row.property_address) || '' };
+    fullReport.materials = {
+      net_area_sqft: sqft,
+      complexity_class: 'moderate',
+      line_items: [
+        { category: 'shingles',      description: 'Architectural Shingles',     order_quantity: Math.ceil(sq * 3 * 1.15), unit: 'bundle', unit_price_cad: 45 },
+        { category: 'underlayment',  description: 'Synthetic Underlayment',     order_quantity: Math.ceil(sq * 1.1),     unit: 'roll',   unit_price_cad: 65 },
+        { category: 'ice_shield',    description: 'Ice & Water Shield',         order_quantity: Math.ceil(sqft * 0.15 / 75), unit: 'roll', unit_price_cad: 95 },
+        { category: 'starter',       description: 'Starter Strip Shingles',     order_quantity: Math.ceil(sq * 1.1),     unit: 'bundle', unit_price_cad: 35 },
+        { category: 'ridge_cap',     description: 'Ridge Cap Shingles',         order_quantity: Math.ceil(sq * 0.5),     unit: 'bundle', unit_price_cad: 55 },
+        { category: 'nails',         description: 'Roofing Nails (1-3/4")',     order_quantity: Math.ceil(sq / 4),       unit: 'box',    unit_price_cad: 75 }
+      ],
+      waste_table: []
+    };
   }
 
   mcState.report = fullReport;

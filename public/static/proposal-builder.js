@@ -393,7 +393,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     var searchBar = all.length > 0
       ? '<div style="margin-bottom:12px">' +
-          '<input type="text" placeholder="Search address\u2026" value="' + (term || '') + '" ' +
+          '<input id="pb-report-search" type="text" placeholder="Search address\u2026" value="' + (term || '') + '" ' +
             'oninput="window._pb.setReportSearch(this.value)" ' +
             'style="width:100%;padding:10px 14px;border-radius:8px;border:1px solid var(--border-color);background:var(--bg-card);color:var(--text-primary);font-size:14px;box-sizing:border-box">' +
         '</div>'
@@ -1401,10 +1401,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 custUnitPrice = Number(item.unit_price || 0) * (1 + markupPct / 100);
                 custAmount = Number(item.quantity || 0) * custUnitPrice;
               }
+              var displayQty = state.pricingEngineMode === 'per_square_customer' ? squares : item.quantity;
+              var displayUnit = state.pricingEngineMode === 'per_square_customer' ? 'sq' : item.unit;
               return `<tr class="border-b border-gray-100">
                 <td class="px-4 py-2">${item.description || ''}</td>
-                <td class="px-4 py-2 text-center">${item.quantity}</td>
-                <td class="px-4 py-2 text-center">${item.unit}</td>
+                <td class="px-4 py-2 text-center">${displayQty}</td>
+                <td class="px-4 py-2 text-center">${displayUnit}</td>
                 <td class="px-4 py-2 text-right">$${custUnitPrice.toFixed(2)}</td>
                 <td class="px-4 py-2 text-right font-medium">$${custAmount.toFixed(2)}</td>
               </tr>`;
@@ -1488,7 +1490,7 @@ document.addEventListener('DOMContentLoaded', () => {
         '</div>' +
         '<div style="display:flex;gap:12px;margin-top:16px">' +
           '<button onclick="saveSupplier()" style="flex:1;background:#2563eb;color:white;border:none;padding:14px;border-radius:10px;font-weight:800;font-size:15px;cursor:pointer">Save Supplier & Continue</button>' +
-          (state.suppliers.length > 0 ? '<button onclick="window.__pbState.showNewSupplierForm=false;window.__pbRender()" style="flex:0.5;background:transparent;color:#9ca3af;border:1px solid #374151;padding:14px;border-radius:10px;font-weight:600;font-size:14px;cursor:pointer">Cancel</button>' : '') +
+          (state.suppliers.length > 0 ? '<button onclick="window.__pbState.showNewSupplierForm=false;window.__pbRender()" style="flex:0.5;background:transparent;color:#9ca3af;border:1px solid #374151;padding:14px;border-radius:10px;font-weight:600;font-size:14px;cursor:pointer">Cancel</button>' : '<button onclick="window.skipSupplier()" style="flex:0.5;background:transparent;color:#9ca3af;border:1px solid #374151;padding:14px;border-radius:10px;font-weight:600;font-size:14px;cursor:pointer">Skip for Now</button>') +
           '</div>' +
           (state.suppliers.length === 0 ? '<p style="color:#9ca3af;font-size:12px;text-align:center;margin-top:8px">Set up a supplier to generate material orders with your proposals</p>' : '') +
           '<div style="display:none">' + // hidden placeholder
@@ -2262,6 +2264,10 @@ document.addEventListener('DOMContentLoaded', () => {
     setReportSearch(term) {
       state.reportSearch = (term || '').toLowerCase().trim();
       render();
+      setTimeout(function() {
+        var el = document.getElementById('pb-report-search');
+        if (el) { el.focus(); var len = el.value.length; el.setSelectionRange(len, len); }
+      }, 0);
     },
     goToSupplier() {
       // Collect customer address from report
