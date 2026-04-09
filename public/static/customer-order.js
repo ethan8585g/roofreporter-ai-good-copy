@@ -260,6 +260,12 @@ function placeMarker(lat, lng) {
     nextBtn.disabled = false;
     nextBtn.className = 'flex-1 py-3 bg-emerald-600 hover:bg-brand-700 text-white font-bold rounded-xl transition-all shadow-lg text-base';
   }
+  const adminBtn = document.getElementById('adminMeasureBtn');
+  if (adminBtn) {
+    adminBtn.disabled = false;
+    adminBtn.style.background = '#f59e0b';
+    adminBtn.style.cursor = 'pointer';
+  }
 
   const msgEl = document.getElementById('orderMsg');
   if (msgEl) msgEl.classList.add('hidden');
