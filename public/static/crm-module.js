@@ -65,10 +65,11 @@
       (onSave ? '<div class="px-6 py-4 border-t border-white/5 flex justify-end gap-2"><button onclick="document.getElementById(\'crmModal\').remove()" class="px-4 py-2 text-gray-400 hover:bg-[#111111]/10 rounded-lg text-sm">Cancel</button><button id="modalSaveBtn" class="px-6 py-2 bg-brand-600 text-white rounded-lg text-sm font-semibold hover:bg-brand-700">' + (saveLabel || 'Save') + '</button></div>' : '') +
       '</div>';
     document.body.appendChild(overlay);
-    // Force white text on all inputs/selects/textareas inside the dark modal
+    // Force readable text on all inputs/selects/textareas inside the modal
+    var isLight = document.body.classList.contains('light-theme');
     overlay.querySelectorAll('input, select, textarea').forEach(function(el) {
-      el.style.color = '#fff';
-      el.style.backgroundColor = '#0A0A0A';
+      el.style.color = isLight ? '#0B0F12' : '#fff';
+      el.style.backgroundColor = isLight ? '#ffffff' : '#0A0A0A';
     });
     overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
     if (onSave) { document.getElementById('modalSaveBtn').addEventListener('click', function() { onSave(); }); }
@@ -3185,45 +3186,45 @@
 
     // Stats
     html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">';
-    html += '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-gray-100">' + totalReferred + '</p><p class="text-[10px] text-gray-500">Referred Users</p></div>';
-    html += '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-emerald-400">$' + totalEarned.toFixed(2) + '</p><p class="text-[10px] text-gray-500">Total Earned</p></div>';
-    html += '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-gray-400">$' + totalPending.toFixed(2) + '</p><p class="text-[10px] text-gray-500">Pending</p></div>';
-    html += '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-blue-400">10%</p><p class="text-[10px] text-gray-500">Commission Rate</p></div>';
+    html += '<div class="bg-[#111111] rounded-xl border border-white/10 p-4 text-center"><p class="text-2xl font-black text-gray-100">' + totalReferred + '</p><p class="text-[10px] text-gray-400">Referred Users</p></div>';
+    html += '<div class="bg-[#111111] rounded-xl border border-white/10 p-4 text-center"><p class="text-2xl font-black text-emerald-400">$' + totalEarned.toFixed(2) + '</p><p class="text-[10px] text-gray-400">Total Earned</p></div>';
+    html += '<div class="bg-[#111111] rounded-xl border border-white/10 p-4 text-center"><p class="text-2xl font-black text-gray-300">$' + totalPending.toFixed(2) + '</p><p class="text-[10px] text-gray-400">Pending</p></div>';
+    html += '<div class="bg-[#111111] rounded-xl border border-white/10 p-4 text-center"><p class="text-2xl font-black text-blue-400">10%</p><p class="text-[10px] text-gray-400">Commission Rate</p></div>';
     html += '</div>';
 
     // Share link card
     html += '<div class="bg-gradient-to-r from-blue-600 to-blue-700 rounded-2xl p-6 mb-5 text-white">';
     html += '<h3 class="font-bold text-lg mb-1"><i class="fas fa-share-alt mr-2"></i>Your Referral Link</h3>';
-    html += '<p class="text-blue-400 text-sm mb-4">Share this link with other roofing contractors. When they sign up and buy reports, you earn 10% of every purchase.</p>';
+    html += '<p class="text-blue-100 text-sm mb-4">Share this link with other roofing contractors. When they sign up and buy reports, you earn 10% of every purchase.</p>';
     html += '<div class="flex gap-2 mb-3">';
     html += '<input type="text" id="refLinkInput" value="' + shareUrl + '" readonly class="flex-1 bg-[#111111]/20 border border-white/30 rounded-xl px-4 py-3 text-sm font-mono text-white placeholder-white/50">';
-    html += '<button onclick="navigator.clipboard.writeText(document.getElementById(\'refLinkInput\').value);toast(\'Link copied!\')" class="px-5 py-3 bg-[#111111] text-blue-400 rounded-xl font-bold text-sm hover:bg-blue-500/15 flex-shrink-0"><i class="fas fa-copy mr-1"></i>Copy</button>';
+    html += '<button onclick="navigator.clipboard.writeText(document.getElementById(\'refLinkInput\').value);toast(\'Link copied!\')" class="px-5 py-3 bg-white/10 text-white rounded-xl font-bold text-sm hover:bg-white/20 flex-shrink-0"><i class="fas fa-copy mr-1"></i>Copy</button>';
     html += '</div>';
     html += '<div class="flex gap-2">';
-    html += '<div class="bg-[#111111]/10 rounded-lg px-3 py-2"><p class="text-[10px] text-blue-400">Your Code</p><p class="font-mono font-bold text-sm">' + refCode + '</p></div>';
-    html += '<button onclick="window._refShareEmail()" class="px-4 py-2 bg-[#111111]/10 hover:bg-[#111111]/20 rounded-lg text-sm font-medium border border-white/20"><i class="fas fa-envelope mr-1"></i>Email to a Friend</button>';
+    html += '<div class="bg-white/10 rounded-lg px-3 py-2"><p class="text-[10px] text-blue-100">Your Code</p><p class="font-mono font-bold text-sm text-white">' + refCode + '</p></div>';
+    html += '<button onclick="window._refShareEmail()" class="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-sm font-medium text-white border border-white/20"><i class="fas fa-envelope mr-1"></i>Email to a Friend</button>';
     html += '</div>';
     html += '</div>';
 
     // How it works
-    html += '<div class="bg-[#111111] rounded-2xl border shadow-sm p-6 mb-5">';
-    html += '<h3 class="font-bold text-gray-100 text-sm mb-4"><i class="fas fa-question-circle text-blue-500 mr-2"></i>How It Works</h3>';
+    html += '<div class="bg-[#111111] rounded-2xl border border-white/10 shadow-sm p-6 mb-5">';
+    html += '<h3 class="font-bold text-gray-100 text-sm mb-4"><i class="fas fa-question-circle text-blue-400 mr-2"></i>How It Works</h3>';
     html += '<div class="grid md:grid-cols-3 gap-4">';
-    html += '<div class="text-center"><div class="w-10 h-10 bg-blue-500/15 rounded-full flex items-center justify-center mx-auto mb-2"><span class="font-bold text-blue-400">1</span></div><p class="text-sm font-semibold text-gray-100">Share Your Link</p><p class="text-xs text-gray-500 mt-1">Send your unique referral link to other roofing contractors</p></div>';
-    html += '<div class="text-center"><div class="w-10 h-10 bg-blue-500/15 rounded-full flex items-center justify-center mx-auto mb-2"><span class="font-bold text-blue-400">2</span></div><p class="text-sm font-semibold text-gray-100">They Sign Up</p><p class="text-xs text-gray-500 mt-1">When they create an account through your link, they\'re linked to you</p></div>';
-    html += '<div class="text-center"><div class="w-10 h-10 bg-blue-500/15 rounded-full flex items-center justify-center mx-auto mb-2"><span class="font-bold text-blue-400">3</span></div><p class="text-sm font-semibold text-gray-100">You Earn 10%</p><p class="text-xs text-gray-500 mt-1">Every time they buy reports or credit packs, you earn 10% commission</p></div>';
+    html += '<div class="text-center"><div class="w-10 h-10 bg-blue-500/15 rounded-full flex items-center justify-center mx-auto mb-2"><span class="font-bold text-blue-400">1</span></div><p class="text-sm font-semibold text-gray-100">Share Your Link</p><p class="text-xs text-gray-400 mt-1">Send your unique referral link to other roofing contractors</p></div>';
+    html += '<div class="text-center"><div class="w-10 h-10 bg-blue-500/15 rounded-full flex items-center justify-center mx-auto mb-2"><span class="font-bold text-blue-400">2</span></div><p class="text-sm font-semibold text-gray-100">They Sign Up</p><p class="text-xs text-gray-400 mt-1">When they create an account through your link, they\'re linked to you</p></div>';
+    html += '<div class="text-center"><div class="w-10 h-10 bg-blue-500/15 rounded-full flex items-center justify-center mx-auto mb-2"><span class="font-bold text-blue-400">3</span></div><p class="text-sm font-semibold text-gray-100">You Earn 10%</p><p class="text-xs text-gray-400 mt-1">Every time they buy reports or credit packs, you earn 10% commission</p></div>';
     html += '</div></div>';
 
     // Referred users
-    html += '<div class="bg-[#111111] rounded-2xl border shadow-sm overflow-hidden mb-5">';
-    html += '<div class="px-5 py-4 border-b border-white/5"><h3 class="font-bold text-gray-100 text-sm"><i class="fas fa-users text-blue-400 mr-2"></i>Your Referrals (' + totalReferred + ')</h3></div>';
+    html += '<div class="bg-[#111111] rounded-2xl border border-white/10 shadow-sm overflow-hidden mb-5">';
+    html += '<div class="px-5 py-4 border-b border-white/10"><h3 class="font-bold text-gray-100 text-sm"><i class="fas fa-users text-blue-400 mr-2"></i>Your Referrals (' + totalReferred + ')</h3></div>';
     if (referred.length === 0) {
       html += '<div class="p-8 text-center text-gray-400"><i class="fas fa-user-friends text-3xl mb-3 opacity-30 block"></i><p class="text-sm">No referrals yet. Share your link to start earning!</p></div>';
     } else {
-      html += '<div class="overflow-x-auto"><table class="w-full"><thead><tr class="bg-[#0A0A0A] text-xs text-gray-500 uppercase"><th class="px-4 py-3 text-left">User</th><th class="px-4 py-3 text-left">Company</th><th class="px-4 py-3 text-center">Reports</th><th class="px-4 py-3 text-left">Joined</th></tr></thead><tbody>';
+      html += '<div class="overflow-x-auto"><table class="w-full"><thead><tr class="bg-[#0A0A0A] text-xs text-gray-400 uppercase"><th class="px-4 py-3 text-left">User</th><th class="px-4 py-3 text-left">Company</th><th class="px-4 py-3 text-center">Reports</th><th class="px-4 py-3 text-left">Joined</th></tr></thead><tbody>';
       for (var i = 0; i < referred.length; i++) {
         var u = referred[i];
-        html += '<tr class="border-b border-white/5 hover:bg-[#111111]/5"><td class="px-4 py-3 text-sm font-medium text-gray-100">' + (u.name || 'User') + '</td><td class="px-4 py-3 text-sm text-gray-500">' + (u.company_name || '-') + '</td><td class="px-4 py-3 text-center text-sm font-bold text-gray-100">' + (u.reports_ordered || 0) + '</td><td class="px-4 py-3 text-xs text-gray-400">' + fmtDate(u.created_at) + '</td></tr>';
+        html += '<tr class="border-b border-white/5 hover:bg-white/5"><td class="px-4 py-3 text-sm font-medium text-gray-100">' + (u.name || 'User') + '</td><td class="px-4 py-3 text-sm text-gray-400">' + (u.company_name || '-') + '</td><td class="px-4 py-3 text-center text-sm font-bold text-gray-100">' + (u.reports_ordered || 0) + '</td><td class="px-4 py-3 text-xs text-gray-400">' + fmtDate(u.created_at) + '</td></tr>';
       }
       html += '</tbody></table></div>';
     }
@@ -3231,12 +3232,12 @@
 
     // Earnings history
     if (earnings.length > 0) {
-      html += '<div class="bg-[#111111] rounded-2xl border shadow-sm overflow-hidden">';
-      html += '<div class="px-5 py-4 border-b border-white/5"><h3 class="font-bold text-gray-100 text-sm"><i class="fas fa-dollar-sign text-green-500 mr-2"></i>Commission History</h3></div>';
-      html += '<div class="overflow-x-auto"><table class="w-full"><thead><tr class="bg-[#0A0A0A] text-xs text-gray-500 uppercase"><th class="px-4 py-3 text-left">From</th><th class="px-4 py-3 text-right">Payment</th><th class="px-4 py-3 text-right">Commission</th><th class="px-4 py-3 text-center">Status</th><th class="px-4 py-3 text-left">Date</th></tr></thead><tbody>';
+      html += '<div class="bg-[#111111] rounded-2xl border border-white/10 shadow-sm overflow-hidden">';
+      html += '<div class="px-5 py-4 border-b border-white/10"><h3 class="font-bold text-gray-100 text-sm"><i class="fas fa-dollar-sign text-green-400 mr-2"></i>Commission History</h3></div>';
+      html += '<div class="overflow-x-auto"><table class="w-full"><thead><tr class="bg-[#0A0A0A] text-xs text-gray-400 uppercase"><th class="px-4 py-3 text-left">From</th><th class="px-4 py-3 text-right">Payment</th><th class="px-4 py-3 text-right">Commission</th><th class="px-4 py-3 text-center">Status</th><th class="px-4 py-3 text-left">Date</th></tr></thead><tbody>';
       for (var j = 0; j < earnings.length; j++) {
         var e = earnings[j];
-        var statusBg = e.status === 'pending' ? 'bg-blue-500/15/15 text-blue-400' : e.status === 'credited' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-blue-500/15 text-blue-400';
+        var statusBg = e.status === 'pending' ? 'bg-yellow-500/15 text-yellow-400' : e.status === 'credited' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-blue-500/15 text-blue-400';
         html += '<tr class="border-b border-white/5"><td class="px-4 py-3 text-sm text-gray-100">' + (e.referred_name || e.referred_company || 'User') + '</td><td class="px-4 py-3 text-right text-sm text-gray-400">$' + (e.amount_paid || 0).toFixed(2) + '</td><td class="px-4 py-3 text-right text-sm font-bold text-emerald-400">$' + (e.commission_earned || 0).toFixed(2) + '</td><td class="px-4 py-3 text-center"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold ' + statusBg + ' capitalize">' + (e.status || 'pending') + '</span></td><td class="px-4 py-3 text-xs text-gray-400">' + fmtDate(e.created_at) + '</td></tr>';
       }
       html += '</tbody></table></div></div>';

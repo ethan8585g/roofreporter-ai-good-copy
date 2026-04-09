@@ -16,7 +16,8 @@ function applyToggleVisual(id, checked) {
   var track = label && label.querySelector('[data-toggle-track]');
   var knob  = label && label.querySelector('[data-toggle-knob]');
   var onColor = (id === 'gcal-sync-toggle') ? '#3b82f6' : '#10b981';
-  if (track) track.style.background = checked ? onColor : '#374151';
+  var offColor = document.body.classList.contains('light-theme') ? '#c8d0d8' : '#374151';
+  if (track) track.style.background = checked ? onColor : offColor;
   if (knob)  knob.style.transform   = checked ? 'translateX(20px)' : 'translateX(0)';
   cb.checked = checked;
 }
@@ -542,7 +543,7 @@ function initAnalyticsCharts() {
         options: {
           responsive: true,
           maintainAspectRatio: false,
-          plugins: { legend: { display: false }, tooltip: { backgroundColor: '#1f2937', titleColor: '#e5e7eb', bodyColor: '#9ca3af', borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1, cornerRadius: 8, padding: 10, callbacks: { label: function(ctx) { return '$' + (ctx.parsed.y || 0).toLocaleString(); } } } },
+          plugins: { legend: { display: false }, tooltip: (function(){var l=document.body.classList.contains('light-theme');return{backgroundColor:l?'#ffffff':'#1f2937',titleColor:l?'#0B0F12':'#e5e7eb',bodyColor:l?'#5a6b74':'#9ca3af',borderColor:l?'#dde3e9':'rgba(255,255,255,0.1)',borderWidth:1,cornerRadius:8,padding:10,callbacks:{label:function(ctx){return'$'+(ctx.parsed.y||0).toLocaleString();}}};}()) },
           scales: {
             x: { ticks: chartDefaults, grid: { display: false }, border: { display: false } },
             y: { ticks: Object.assign({}, chartDefaults, { callback: function(v) { return '$' + v.toLocaleString(); } }), grid: { color: document.body.classList.contains('light-theme') ? 'rgba(0,0,0,0.07)' : 'rgba(255,255,255,0.04)' }, beginAtZero: true, border: { display: false } }

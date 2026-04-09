@@ -2488,6 +2488,12 @@ html.light-theme{background:#f5f7fa !important}
 .light-theme .text-brand-700{color:#0d509f !important}
 .light-theme .border-brand-500{border-color:#1373e3 !important}
 .light-theme .focus\:ring-brand-500:focus{--tw-ring-color:#1373e3}
+/* Toggle track unchecked state + other #374151 bg elements */
+.light-theme [style*="background:#374151"],.light-theme [style*="background: #374151"]{background:#c8d0d8 !important}
+/* #1a1a1a space variant (style.cssText normalises with space in some browsers) */
+.light-theme [style*="background: #1a1a1a"]{background:#ffffff !important;color:#0B0F12 !important}
+/* Near-white text (#e5e7eb) that renders invisible on light backgrounds */
+.light-theme [style*="color:#e5e7eb"],.light-theme [style*="color: #e5e7eb"]{color:#28373E !important}
 /* Inline style color:white overrides for light mode (on non-colored backgrounds) */
 .light-theme [style*="color:white"]:not([style*="background"]):not([style*="linear-gradient"]){color:#0B0F12 !important}
 .light-theme [style*="color: white"]:not([style*="background"]):not([style*="linear-gradient"]){color:#0B0F12 !important}
@@ -5051,59 +5057,59 @@ function getPricingPageHTML() {
     </div>
 
     <div class="text-center mb-12">
-      <h1 class="text-4xl font-bold text-gray-900 mb-4">Simple, Transparent Pricing</h1>
-      <p class="text-lg text-gray-600 max-w-2xl mx-auto">Start with 3 free reports. After that, buy individual reports or save with credit packs.</p>
+      <h1 class="text-4xl font-bold mb-4" style="color:var(--text-primary)">Simple, Transparent Pricing</h1>
+      <p class="text-lg max-w-2xl mx-auto" style="color:var(--text-secondary)">Start with 3 free reports. After that, buy individual reports or save with credit packs.</p>
     </div>
 
     <!-- How it works -->
-    <div class="bg-white rounded-2xl border border-gray-200 p-8 mb-12">
-      <h2 class="text-xl font-bold text-gray-800 mb-6 text-center"><i class="fas fa-route text-brand-500 mr-2"></i>How It Works</h2>
+    <div class="rounded-2xl border p-8 mb-12" style="background:var(--bg-card);border-color:var(--border-color)">
+      <h2 class="text-xl font-bold mb-6 text-center" style="color:var(--text-primary)"><i class="fas fa-route text-brand-500 mr-2"></i>How It Works</h2>
       <div class="grid md:grid-cols-4 gap-6">
         <div class="text-center">
           <div class="w-14 h-14 bg-brand-100 rounded-xl flex items-center justify-center mx-auto mb-3"><span class="text-brand-700 font-bold text-lg">1</span></div>
-          <h3 class="font-semibold text-gray-800 mb-1">Create Account</h3>
-          <p class="text-sm text-gray-500">Sign up free — get 3 reports instantly</p>
+          <h3 class="font-semibold mb-1" style="color:var(--text-primary)">Create Account</h3>
+          <p class="text-sm" style="color:var(--text-muted)">Sign up free — get 3 reports instantly</p>
         </div>
         <div class="text-center">
           <div class="w-14 h-14 bg-green-100 rounded-xl flex items-center justify-center mx-auto mb-3"><span class="text-green-700 font-bold text-lg">2</span></div>
-          <h3 class="font-semibold text-gray-800 mb-1">Use Free Reports</h3>
-          <p class="text-sm text-gray-500">3 free reports included with every account</p>
+          <h3 class="font-semibold mb-1" style="color:var(--text-primary)">Use Free Reports</h3>
+          <p class="text-sm" style="color:var(--text-muted)">3 free reports included with every account</p>
         </div>
         <div class="text-center">
           <div class="w-14 h-14 bg-brand-100 rounded-xl flex items-center justify-center mx-auto mb-3"><span class="text-brand-700 font-bold text-lg">3</span></div>
-          <h3 class="font-semibold text-gray-800 mb-1">Enter Address</h3>
-          <p class="text-sm text-gray-500">Type the property address and submit</p>
+          <h3 class="font-semibold mb-1" style="color:var(--text-primary)">Enter Address</h3>
+          <p class="text-sm" style="color:var(--text-muted)">Type the property address and submit</p>
         </div>
         <div class="text-center">
           <div class="w-14 h-14 bg-green-100 rounded-xl flex items-center justify-center mx-auto mb-3"><span class="text-green-700 font-bold text-lg">4</span></div>
-          <h3 class="font-semibold text-gray-800 mb-1">Get Your Report</h3>
-          <p class="text-sm text-gray-500">AI-powered analysis with full measurements in seconds</p>
+          <h3 class="font-semibold mb-1" style="color:var(--text-primary)">Get Your Report</h3>
+          <p class="text-sm" style="color:var(--text-muted)">AI-powered analysis with full measurements in seconds</p>
         </div>
       </div>
     </div>
 
     <!-- Per-Report Pricing -->
-    <h2 class="text-2xl font-bold text-gray-800 mb-6 text-center">Individual Report</h2>
+    <h2 class="text-2xl font-bold mb-6 text-center" style="color:var(--text-primary)">Individual Report</h2>
     <div class="max-w-lg mx-auto mb-16">
-      <div class="bg-white rounded-2xl border border-gray-200 p-6 hover:shadow-lg transition-shadow ring-2 ring-brand-500 relative">
+      <div class="rounded-2xl border p-6 hover:shadow-lg transition-shadow ring-2 ring-brand-500 relative" style="background:var(--bg-card);border-color:var(--border-color)">
         <div class="absolute -top-3 left-1/2 -translate-x-1/2 bg-brand-500 text-white px-4 py-1 rounded-full text-xs font-bold">PAY PER REPORT</div>
         <div class="text-center mb-6">
           <div class="w-14 h-14 bg-brand-100 rounded-xl flex items-center justify-center mx-auto mb-3"><i class="fas fa-bolt text-brand-500 text-xl"></i></div>
-          <h3 class="text-xl font-bold text-gray-800">Roof Measurement Report</h3>
-          <p class="text-sm text-gray-500 mt-1">Delivered instantly — no subscription required</p>
+          <h3 class="text-xl font-bold" style="color:var(--text-primary)">Roof Measurement Report</h3>
+          <p class="text-sm mt-1" style="color:var(--text-muted)">Delivered instantly — no subscription required</p>
         </div>
         <div class="text-center mb-6">
-          <span class="text-5xl font-black text-gray-900">$8</span>
-          <span class="text-gray-500 text-sm ml-1">USD / report</span>
+          <span class="text-5xl font-black" style="color:var(--text-primary)">$8</span>
+          <span class="text-sm ml-1" style="color:var(--text-muted)">USD / report</span>
         </div>
         <ul class="space-y-3 mb-6 text-sm">
-          <li class="flex items-center gap-2 text-gray-600"><i class="fas fa-check text-green-500"></i>Satellite-based roof area &amp; perimeter</li>
-          <li class="flex items-center gap-2 text-gray-600"><i class="fas fa-check text-green-500"></i>Pitch &amp; azimuth analysis per facet</li>
-          <li class="flex items-center gap-2 text-gray-600"><i class="fas fa-check text-green-500"></i>Complete material takeoff with CAD pricing</li>
-          <li class="flex items-center gap-2 text-gray-600"><i class="fas fa-check text-green-500"></i>Edge breakdown (ridge, hip, valley, eave, rake)</li>
-          <li class="flex items-center gap-2 text-gray-600"><i class="fas fa-check text-green-500"></i>AI roof geometry overlay with SVG diagram</li>
-          <li class="flex items-center gap-2 text-gray-600"><i class="fas fa-check text-green-500"></i>14-image gallery (overhead, aerial, street-view)</li>
-          <li class="flex items-center gap-2 text-gray-600"><i class="fas fa-check text-green-500"></i>Perimeter side-by-side measurements in ft &amp; in</li>
+          <li class="flex items-center gap-2" style="color:var(--text-secondary)"><i class="fas fa-check text-green-500"></i>Satellite-based roof area &amp; perimeter</li>
+          <li class="flex items-center gap-2" style="color:var(--text-secondary)"><i class="fas fa-check text-green-500"></i>Pitch &amp; azimuth analysis per facet</li>
+          <li class="flex items-center gap-2" style="color:var(--text-secondary)"><i class="fas fa-check text-green-500"></i>Complete material takeoff with CAD pricing</li>
+          <li class="flex items-center gap-2" style="color:var(--text-secondary)"><i class="fas fa-check text-green-500"></i>Edge breakdown (ridge, hip, valley, eave, rake)</li>
+          <li class="flex items-center gap-2" style="color:var(--text-secondary)"><i class="fas fa-check text-green-500"></i>AI roof geometry overlay with SVG diagram</li>
+          <li class="flex items-center gap-2" style="color:var(--text-secondary)"><i class="fas fa-check text-green-500"></i>14-image gallery (overhead, aerial, street-view)</li>
+          <li class="flex items-center gap-2" style="color:var(--text-secondary)"><i class="fas fa-check text-green-500"></i>Perimeter side-by-side measurements in ft &amp; in</li>
         </ul>
         <a href="/customer/login" class="block w-full py-3 text-center font-bold rounded-xl transition-all hover:scale-[1.02] bg-brand-600 hover:bg-brand-700 text-white shadow-lg">
           Get Started
@@ -5112,16 +5118,16 @@ function getPricingPageHTML() {
     </div>
 
     <!-- Credit Packs -->
-    <h2 class="text-2xl font-bold text-gray-800 mb-2 text-center">Credit Packs — Save More</h2>
-    <p class="text-center text-gray-500 mb-8">Buy credits in bulk and use them anytime. Credits never expire.</p>
+    <h2 class="text-2xl font-bold mb-2 text-center" style="color:var(--text-primary)">Credit Packs — Save More</h2>
+    <p class="text-center mb-8" style="color:var(--text-muted)">Buy credits in bulk and use them anytime. Credits never expire.</p>
     <div class="grid md:grid-cols-2 gap-5 mb-16 max-w-2xl mx-auto">
-      <div class="bg-white rounded-xl border border-accent-400 ring-2 ring-accent-200 p-5 text-center hover:shadow-md transition-shadow relative">
+      <div class="rounded-xl border border-accent-400 ring-2 ring-accent-200 p-5 text-center hover:shadow-md transition-shadow relative" style="background:var(--bg-card)">
         <div class="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-accent-500 text-white px-3 py-0.5 rounded-full text-[10px] font-bold">POPULAR</div>
-        <h3 class="font-bold text-gray-800 text-lg mb-1">25-Pack</h3>
-        <div class="text-xs text-gray-500 mb-3">25 reports</div>
+        <h3 class="font-bold text-lg mb-1" style="color:var(--text-primary)">25-Pack</h3>
+        <div class="text-xs mb-3" style="color:var(--text-muted)">25 reports</div>
         <div class="mb-2">
-          <span class="text-3xl font-black text-gray-900">$175</span>
-          <span class="text-gray-400 text-xs ml-1">USD</span>
+          <span class="text-3xl font-black" style="color:var(--text-primary)">$175</span>
+          <span class="text-xs ml-1" style="color:var(--text-muted)">USD</span>
         </div>
         <p class="text-sm font-semibold text-brand-600 mb-1">$7.00/report</p>
         <span class="inline-block bg-green-100 text-green-700 px-2 py-0.5 rounded-full text-xs font-bold mb-3">Save 13%</span>
@@ -5129,13 +5135,13 @@ function getPricingPageHTML() {
           Buy 25 Credits
         </a>
       </div>
-      <div class="bg-white rounded-xl border border-brand-500 ring-2 ring-brand-200 p-5 text-center hover:shadow-md transition-shadow relative">
+      <div class="rounded-xl border border-brand-500 ring-2 ring-brand-200 p-5 text-center hover:shadow-md transition-shadow relative" style="background:var(--bg-card)">
         <div class="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-brand-500 text-white px-3 py-0.5 rounded-full text-[10px] font-bold">BEST VALUE</div>
-        <h3 class="font-bold text-gray-800 text-lg mb-1">100-Pack</h3>
-        <div class="text-xs text-gray-500 mb-3">100 reports</div>
+        <h3 class="font-bold text-lg mb-1" style="color:var(--text-primary)">100-Pack</h3>
+        <div class="text-xs mb-3" style="color:var(--text-muted)">100 reports</div>
         <div class="mb-2">
-          <span class="text-3xl font-black text-gray-900">$595</span>
-          <span class="text-gray-400 text-xs ml-1">USD</span>
+          <span class="text-3xl font-black" style="color:var(--text-primary)">$595</span>
+          <span class="text-xs ml-1" style="color:var(--text-muted)">USD</span>
         </div>
         <p class="text-sm font-semibold text-brand-600 mb-1">$5.95/report</p>
         <span class="inline-block bg-green-100 text-green-700 px-2 py-0.5 rounded-full text-xs font-bold mb-3">Save 26%</span>
@@ -5147,8 +5153,8 @@ function getPricingPageHTML() {
 
     <!-- Add-On Services -->
     <div class="max-w-4xl mx-auto mb-16">
-      <h2 class="text-2xl font-bold text-gray-800 mb-2 text-center">Add-On Services</h2>
-      <p class="text-center text-gray-500 mb-8">Power up your business with AI tools and team management.</p>
+      <h2 class="text-2xl font-bold mb-2 text-center" style="color:var(--text-primary)">Add-On Services</h2>
+      <p class="text-center mb-8" style="color:var(--text-muted)">Power up your business with AI tools and team management.</p>
       <div class="grid md:grid-cols-2 gap-6 mb-8">
         <!-- AI Roofer Secretary -->
         <div class="bg-gradient-to-br from-indigo-900 to-purple-900 rounded-2xl p-8 text-white shadow-xl relative overflow-hidden">
@@ -5199,60 +5205,60 @@ function getPricingPageHTML() {
         </div>
       </div>
       <!-- Team Membership Tiers -->
-      <h3 class="text-xl font-bold text-gray-800 mb-6 text-center">Monthly Membership Plans</h3>
-      <p class="text-center text-gray-500 mb-8 text-sm">After your 3 free reports, a membership is required to continue. Reports are billed separately ($8 each or via credit packs).</p>
+      <h3 class="text-xl font-bold mb-6 text-center" style="color:var(--text-primary)">Monthly Membership Plans</h3>
+      <p class="text-center mb-8 text-sm" style="color:var(--text-muted)">After your 3 free reports, a membership is required to continue. Reports are billed separately ($8 each or via credit packs).</p>
       <div class="grid md:grid-cols-3 gap-6">
         <!-- Starter -->
-        <div class="bg-white rounded-2xl border border-gray-200 p-6 text-center hover:shadow-lg transition-shadow">
+        <div class="rounded-2xl border p-6 text-center hover:shadow-lg transition-shadow" style="background:var(--bg-card);border-color:var(--border-color)">
           <span class="px-3 py-1 bg-brand-100 text-brand-700 rounded-full text-xs font-bold"><i class="fas fa-user-friends mr-1"></i>STARTER</span>
-          <h4 class="text-4xl font-black text-gray-900 mt-4 mb-1">$49.99<span class="text-lg font-normal text-gray-400">/mo</span></h4>
-          <p class="text-sm text-gray-500 mb-6">Up to 5 team/crew members</p>
+          <h4 class="text-4xl font-black mt-4 mb-1" style="color:var(--text-primary)">$49.99<span class="text-lg font-normal" style="color:var(--text-muted)">/mo</span></h4>
+          <p class="text-sm mb-6" style="color:var(--text-muted)">Up to 5 team/crew members</p>
           <ul class="space-y-3 text-sm text-left mb-6">
-            <li class="flex items-center gap-2 text-gray-600"><i class="fas fa-check-circle text-green-500"></i>Full CRM &amp; invoicing</li>
-            <li class="flex items-center gap-2 text-gray-600"><i class="fas fa-check-circle text-green-500"></i>Up to 5 team members</li>
-            <li class="flex items-center gap-2 text-gray-600"><i class="fas fa-check-circle text-green-500"></i>Shared credit pool</li>
-            <li class="flex items-center gap-2 text-gray-600"><i class="fas fa-check-circle text-green-500"></i>Ad-free experience</li>
-            <li class="flex items-center gap-2 text-gray-600"><i class="fas fa-check-circle text-green-500"></i>Cancel anytime</li>
+            <li class="flex items-center gap-2" style="color:var(--text-secondary)"><i class="fas fa-check-circle text-green-500"></i>Full CRM &amp; invoicing</li>
+            <li class="flex items-center gap-2" style="color:var(--text-secondary)"><i class="fas fa-check-circle text-green-500"></i>Up to 5 team members</li>
+            <li class="flex items-center gap-2" style="color:var(--text-secondary)"><i class="fas fa-check-circle text-green-500"></i>Shared credit pool</li>
+            <li class="flex items-center gap-2" style="color:var(--text-secondary)"><i class="fas fa-check-circle text-green-500"></i>Ad-free experience</li>
+            <li class="flex items-center gap-2" style="color:var(--text-secondary)"><i class="fas fa-check-circle text-green-500"></i>Cancel anytime</li>
           </ul>
           <a href="/customer/login" class="block w-full py-3 text-center font-bold rounded-xl bg-brand-600 hover:bg-brand-700 text-white transition-all hover:scale-[1.02] shadow-lg">
             Get Started
           </a>
         </div>
         <!-- Professional -->
-        <div class="bg-white rounded-2xl border-2 border-brand-500 p-6 text-center hover:shadow-lg transition-shadow relative">
+        <div class="rounded-2xl border-2 border-brand-500 p-6 text-center hover:shadow-lg transition-shadow relative" style="background:var(--bg-card)">
           <div class="absolute -top-3 left-1/2 -translate-x-1/2 bg-brand-500 text-white px-4 py-1 rounded-full text-xs font-bold">MOST POPULAR</div>
           <span class="px-3 py-1 bg-brand-100 text-brand-700 rounded-full text-xs font-bold"><i class="fas fa-users mr-1"></i>PROFESSIONAL</span>
-          <h4 class="text-4xl font-black text-gray-900 mt-4 mb-1">$99.99<span class="text-lg font-normal text-gray-400">/mo</span></h4>
-          <p class="text-sm text-gray-500 mb-6">Up to 10 team/crew members</p>
+          <h4 class="text-4xl font-black mt-4 mb-1" style="color:var(--text-primary)">$99.99<span class="text-lg font-normal" style="color:var(--text-muted)">/mo</span></h4>
+          <p class="text-sm mb-6" style="color:var(--text-muted)">Up to 10 team/crew members</p>
           <ul class="space-y-3 text-sm text-left mb-6">
-            <li class="flex items-center gap-2 text-gray-600"><i class="fas fa-check-circle text-green-500"></i>Everything in Starter</li>
-            <li class="flex items-center gap-2 text-gray-600"><i class="fas fa-check-circle text-green-500"></i>Up to 10 team members</li>
-            <li class="flex items-center gap-2 text-gray-600"><i class="fas fa-check-circle text-green-500"></i>Crew management tools</li>
-            <li class="flex items-center gap-2 text-gray-600"><i class="fas fa-check-circle text-green-500"></i>Priority support</li>
-            <li class="flex items-center gap-2 text-gray-600"><i class="fas fa-check-circle text-green-500"></i>Cancel anytime</li>
+            <li class="flex items-center gap-2" style="color:var(--text-secondary)"><i class="fas fa-check-circle text-green-500"></i>Everything in Starter</li>
+            <li class="flex items-center gap-2" style="color:var(--text-secondary)"><i class="fas fa-check-circle text-green-500"></i>Up to 10 team members</li>
+            <li class="flex items-center gap-2" style="color:var(--text-secondary)"><i class="fas fa-check-circle text-green-500"></i>Crew management tools</li>
+            <li class="flex items-center gap-2" style="color:var(--text-secondary)"><i class="fas fa-check-circle text-green-500"></i>Priority support</li>
+            <li class="flex items-center gap-2" style="color:var(--text-secondary)"><i class="fas fa-check-circle text-green-500"></i>Cancel anytime</li>
           </ul>
           <a href="/customer/login" class="block w-full py-3 text-center font-bold rounded-xl bg-brand-600 hover:bg-brand-700 text-white transition-all hover:scale-[1.02] shadow-lg">
             Get Started
           </a>
         </div>
         <!-- Enterprise -->
-        <div class="bg-white rounded-2xl border border-gray-200 p-6 text-center hover:shadow-lg transition-shadow">
+        <div class="rounded-2xl border p-6 text-center hover:shadow-lg transition-shadow" style="background:var(--bg-card);border-color:var(--border-color)">
           <span class="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-bold"><i class="fas fa-building mr-1"></i>ENTERPRISE</span>
-          <h4 class="text-4xl font-black text-gray-900 mt-4 mb-1">$199.99<span class="text-lg font-normal text-gray-400">/mo</span></h4>
-          <p class="text-sm text-gray-500 mb-6">Up to 25 team/crew members</p>
+          <h4 class="text-4xl font-black mt-4 mb-1" style="color:var(--text-primary)">$199.99<span class="text-lg font-normal" style="color:var(--text-muted)">/mo</span></h4>
+          <p class="text-sm mb-6" style="color:var(--text-muted)">Up to 25 team/crew members</p>
           <ul class="space-y-3 text-sm text-left mb-6">
-            <li class="flex items-center gap-2 text-gray-600"><i class="fas fa-check-circle text-green-500"></i>Everything in Professional</li>
-            <li class="flex items-center gap-2 text-gray-600"><i class="fas fa-check-circle text-green-500"></i>Up to 25 team members</li>
-            <li class="flex items-center gap-2 text-gray-600"><i class="fas fa-check-circle text-green-500"></i>Team analytics dashboard</li>
-            <li class="flex items-center gap-2 text-gray-600"><i class="fas fa-check-circle text-green-500"></i>Dedicated account manager</li>
-            <li class="flex items-center gap-2 text-gray-600"><i class="fas fa-check-circle text-green-500"></i>Cancel anytime</li>
+            <li class="flex items-center gap-2" style="color:var(--text-secondary)"><i class="fas fa-check-circle text-green-500"></i>Everything in Professional</li>
+            <li class="flex items-center gap-2" style="color:var(--text-secondary)"><i class="fas fa-check-circle text-green-500"></i>Up to 25 team members</li>
+            <li class="flex items-center gap-2" style="color:var(--text-secondary)"><i class="fas fa-check-circle text-green-500"></i>Team analytics dashboard</li>
+            <li class="flex items-center gap-2" style="color:var(--text-secondary)"><i class="fas fa-check-circle text-green-500"></i>Dedicated account manager</li>
+            <li class="flex items-center gap-2" style="color:var(--text-secondary)"><i class="fas fa-check-circle text-green-500"></i>Cancel anytime</li>
           </ul>
           <a href="/customer/login" class="block w-full py-3 text-center font-bold rounded-xl bg-purple-600 hover:bg-purple-700 text-white transition-all hover:scale-[1.02] shadow-lg">
             Get Started
           </a>
         </div>
       </div>
-      <p class="text-center text-gray-400 text-sm mt-6">Need more than 25 members? <a href="mailto:sales@roofmanager.ca" class="text-brand-600 hover:underline font-semibold">Contact us</a> for custom enterprise pricing.</p>
+      <p class="text-center text-sm mt-6" style="color:var(--text-muted)">Need more than 25 members? <a href="mailto:sales@roofmanager.ca" class="text-brand-600 hover:underline font-semibold">Contact us</a> for custom enterprise pricing.</p>
     </div>
 
     <!-- Every Report Includes -->
@@ -5282,44 +5288,44 @@ function getPricingPageHTML() {
 
     <!-- Pricing Comparison Table -->
     <div class="max-w-4xl mx-auto mb-12">
-      <h2 class="text-xl font-bold text-gray-800 mb-6 text-center">Pricing Comparison</h2>
-      <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <h2 class="text-xl font-bold mb-6 text-center" style="color:var(--text-primary)">Pricing Comparison</h2>
+      <div class="rounded-xl border overflow-hidden" style="background:var(--bg-card);border-color:var(--border-color)">
         <table class="w-full text-sm">
-          <thead class="bg-gray-50 border-b border-gray-200">
+          <thead class="border-b" style="background:var(--bg-elevated);border-color:var(--border-color)">
             <tr>
-              <th class="text-left px-6 py-3 font-semibold text-gray-700">Package</th>
-              <th class="text-center px-4 py-3 font-semibold text-gray-700">Reports</th>
-              <th class="text-center px-4 py-3 font-semibold text-gray-700">Price/Report</th>
-              <th class="text-center px-4 py-3 font-semibold text-gray-700">Total</th>
-              <th class="text-center px-4 py-3 font-semibold text-gray-700">Savings</th>
+              <th class="text-left px-6 py-3 font-semibold" style="color:var(--text-secondary)">Package</th>
+              <th class="text-center px-4 py-3 font-semibold" style="color:var(--text-secondary)">Reports</th>
+              <th class="text-center px-4 py-3 font-semibold" style="color:var(--text-secondary)">Price/Report</th>
+              <th class="text-center px-4 py-3 font-semibold" style="color:var(--text-secondary)">Total</th>
+              <th class="text-center px-4 py-3 font-semibold" style="color:var(--text-secondary)">Savings</th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-gray-100">
+          <tbody class="divide-y" style="border-color:var(--border-color)">
             <tr>
-              <td class="px-6 py-3 font-medium text-gray-800">Individual</td>
-              <td class="text-center px-4 py-3">1</td>
-              <td class="text-center px-4 py-3">$8.00</td>
-              <td class="text-center px-4 py-3 font-semibold">$8</td>
-              <td class="text-center px-4 py-3 text-gray-400">—</td>
+              <td class="px-6 py-3 font-medium" style="color:var(--text-primary)">Individual</td>
+              <td class="text-center px-4 py-3" style="color:var(--text-secondary)">1</td>
+              <td class="text-center px-4 py-3" style="color:var(--text-secondary)">$8.00</td>
+              <td class="text-center px-4 py-3 font-semibold" style="color:var(--text-primary)">$8</td>
+              <td class="text-center px-4 py-3" style="color:var(--text-muted)">—</td>
             </tr>
-            <tr class="bg-gray-50/50">
-              <td class="px-6 py-3 font-medium text-gray-800">25-Pack <span class="text-xs bg-accent-100 text-accent-700 px-1.5 py-0.5 rounded font-bold ml-1">POPULAR</span></td>
-              <td class="text-center px-4 py-3">25</td>
-              <td class="text-center px-4 py-3">$7.00</td>
-              <td class="text-center px-4 py-3 font-semibold">$175</td>
-              <td class="text-center px-4 py-3"><span class="text-green-600 font-semibold">Save 13%</span></td>
+            <tr style="background:var(--bg-elevated)">
+              <td class="px-6 py-3 font-medium" style="color:var(--text-primary)">25-Pack <span class="text-xs bg-accent-100 text-accent-700 px-1.5 py-0.5 rounded font-bold ml-1">POPULAR</span></td>
+              <td class="text-center px-4 py-3" style="color:var(--text-secondary)">25</td>
+              <td class="text-center px-4 py-3" style="color:var(--text-secondary)">$7.00</td>
+              <td class="text-center px-4 py-3 font-semibold" style="color:var(--text-primary)">$175</td>
+              <td class="text-center px-4 py-3"><span class="text-green-400 font-semibold">Save 13%</span></td>
             </tr>
             <tr>
-              <td class="px-6 py-3 font-medium text-gray-800">100-Pack <span class="text-xs bg-brand-100 text-brand-700 px-1.5 py-0.5 rounded font-bold ml-1">BEST VALUE</span></td>
-              <td class="text-center px-4 py-3">100</td>
-              <td class="text-center px-4 py-3">$5.95</td>
-              <td class="text-center px-4 py-3 font-semibold">$595</td>
-              <td class="text-center px-4 py-3"><span class="text-green-600 font-semibold">Save 26%</span></td>
+              <td class="px-6 py-3 font-medium" style="color:var(--text-primary)">100-Pack <span class="text-xs bg-brand-100 text-brand-700 px-1.5 py-0.5 rounded font-bold ml-1">BEST VALUE</span></td>
+              <td class="text-center px-4 py-3" style="color:var(--text-secondary)">100</td>
+              <td class="text-center px-4 py-3" style="color:var(--text-secondary)">$5.95</td>
+              <td class="text-center px-4 py-3 font-semibold" style="color:var(--text-primary)">$595</td>
+              <td class="text-center px-4 py-3"><span class="text-green-400 font-semibold">Save 26%</span></td>
             </tr>
           </tbody>
         </table>
       </div>
-      <p class="text-center text-gray-400 text-xs mt-4">All prices in USD. Credits never expire.</p>
+      <p class="text-center text-xs mt-4" style="color:var(--text-muted)">All prices in USD. Credits never expire.</p>
     </div>
     </div>
   </main>

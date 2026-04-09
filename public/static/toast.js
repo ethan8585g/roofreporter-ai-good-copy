@@ -135,17 +135,18 @@
       type = type || 'info'
       const overlay = _createOverlay()
       const c = COLORS[type] || COLORS.info
+      const isLight = document.body.classList.contains('light-theme')
 
       const box = document.createElement('div')
       box.style.cssText = [
-        'background:#1a1a1a',
-        'border:1px solid ' + c.border,
+        isLight ? 'background:#ffffff' : 'background:#1a1a1a',
+        'border:1px solid ' + (isLight ? '#dde3e9' : c.border),
         'border-radius:16px',
         'padding:32px',
         'max-width:420px',
         'width:90%',
         'text-align:center',
-        'box-shadow:0 20px 60px rgba(0,0,0,0.6)',
+        'box-shadow:0 20px 60px rgba(0,0,0,0.15)',
       ].join(';')
 
       const iconEl = document.createElement('div')
@@ -153,7 +154,7 @@
       iconEl.innerHTML = ICONS[type] || ICONS.info
 
       const msgEl = document.createElement('p')
-      msgEl.style.cssText = 'color:#e5e7eb;font-size:15px;line-height:1.6;margin:0 0 24px'
+      msgEl.style.cssText = 'color:' + (isLight ? '#28373E' : '#e5e7eb') + ';font-size:15px;line-height:1.6;margin:0 0 24px'
       msgEl.textContent = message
 
       const btn = document.createElement('button')
@@ -180,19 +181,20 @@
       cancelLabel = cancelLabel || 'Cancel'
       type = type || 'warning'
       const c = COLORS[type] || COLORS.warning
+      const isLight = document.body.classList.contains('light-theme')
 
       const overlay = _createOverlay()
 
       const box = document.createElement('div')
       box.style.cssText = [
-        'background:#1a1a1a',
-        'border:1px solid ' + c.border,
+        isLight ? 'background:#ffffff' : 'background:#1a1a1a',
+        'border:1px solid ' + (isLight ? '#dde3e9' : c.border),
         'border-radius:16px',
         'padding:32px',
         'max-width:420px',
         'width:90%',
         'text-align:center',
-        'box-shadow:0 20px 60px rgba(0,0,0,0.6)',
+        'box-shadow:0 20px 60px rgba(0,0,0,0.15)',
       ].join(';')
 
       const iconEl = document.createElement('div')
@@ -200,7 +202,7 @@
       iconEl.innerHTML = ICONS[type] || ICONS.warning
 
       const msgEl = document.createElement('p')
-      msgEl.style.cssText = 'color:#e5e7eb;font-size:15px;line-height:1.6;margin:0 0 24px'
+      msgEl.style.cssText = 'color:' + (isLight ? '#28373E' : '#e5e7eb') + ';font-size:15px;line-height:1.6;margin:0 0 24px'
       msgEl.textContent = message
 
       const btnRow = document.createElement('div')
@@ -208,7 +210,7 @@
 
       const cancelBtn = document.createElement('button')
       cancelBtn.textContent = cancelLabel
-      cancelBtn.style.cssText = 'background:#374151;color:#e5e7eb;border:none;border-radius:8px;padding:10px 24px;font-size:14px;font-weight:600;cursor:pointer'
+      cancelBtn.style.cssText = 'background:' + (isLight ? '#e5e7eb' : '#374151') + ';color:' + (isLight ? '#374151' : '#e5e7eb') + ';border:none;border-radius:8px;padding:10px 24px;font-size:14px;font-weight:600;cursor:pointer'
       cancelBtn.addEventListener('click', function () {
         document.body.removeChild(overlay)
         resolve(false)
