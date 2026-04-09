@@ -1978,6 +1978,36 @@ if(new URLSearchParams(location.search).get('print')==='1')setTimeout(function()
     const itemsResult = await c.env.DB.prepare('SELECT * FROM crm_proposal_items WHERE proposal_id = ? ORDER BY sort_order').bind(proposal.id).all()
     const lineItems = itemsResult.results || []
 
+    // Auto-detect attached report: explicit source_report_id first, then match by address
+    let reportRaw: any = null
+    if (proposal.source_report_id) {
+      const rr = await c.env.DB.prepare(
+        'SELECT api_response_raw FROM reports WHERE order_id = ? OR id = ?'
+      ).bind(proposal.source_report_id, proposal.source_report_id).first<any>()
+      if (rr?.api_response_raw) reportRaw = rr.api_response_raw
+    }
+    if (!reportRaw && proposal.property_address) {
+      // Try matching on first line of address (street number + street name)
+      const addrKey = proposal.property_address.split(',')[0].trim()
+      const rr = await c.env.DB.prepare(`
+        SELECT r.api_response_raw FROM reports r
+        JOIN orders o ON o.id = r.order_id
+        WHERE o.property_address LIKE ? AND r.api_response_raw IS NOT NULL AND r.status = 'completed'
+        ORDER BY r.created_at DESC LIMIT 1
+      `).bind('%' + addrKey + '%').first<any>()
+      if (rr?.api_response_raw) reportRaw = rr.api_response_raw
+    }
+    if (!reportRaw) {
+      // Last resort: most recent completed report for this owner
+      const rr = await c.env.DB.prepare(`
+        SELECT r.api_response_raw FROM reports r
+        JOIN orders o ON o.id = r.order_id
+        WHERE o.customer_id = ? AND r.api_response_raw IS NOT NULL AND r.status = 'completed'
+        ORDER BY r.created_at DESC LIMIT 1
+      `).bind(proposal.owner_id).first<any>()
+      if (rr?.api_response_raw) reportRaw = rr.api_response_raw
+    }
+
     const businessName = owner?.brand_business_name || owner?.name || 'Roof Manager'
     const primaryColor = owner?.brand_primary_color || '#0369a1'
     const secondaryColor = owner?.brand_secondary_color || '#0ea5e9'
@@ -2117,13 +2147,9 @@ if(new URLSearchParams(location.search).get('print')==='1')setTimeout(function()
 
       <!-- Roof Report Sections -->
       ${await (async () => {
-        if (!proposal.source_report_id) return ''
+        if (!reportRaw) return ''
         try {
-          const rRow = await c.env.DB.prepare(
-            `SELECT r.api_response_raw FROM reports r WHERE r.order_id = ? OR r.id = ?`
-          ).bind(proposal.source_report_id, proposal.source_report_id).first<any>()
-          if (!rRow?.api_response_raw) return ''
-          const rd: any = JSON.parse(rRow.api_response_raw)
+          const rd: any = JSON.parse(reportRaw)
           const m = rd.materials || {}
           const es = rd.edge_summary || {}
           const ac = primaryColor
