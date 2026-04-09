@@ -276,9 +276,6 @@ function selectTier(tier, price) {
 // Phase B: Satellite Roof Pin Confirmation
 // ============================================================
 function renderStep2() {
-  if (state.addressPhase === 'delivery') {
-    return renderStep2DeliveryPhase();
-  }
   if (state.addressPhase === 'trace') {
     return renderStep2TracePhase();
   }
@@ -489,21 +486,31 @@ function renderStep2PinPhase() {
         <div id="pin-map" style="height: 500px; cursor: crosshair; background: #1a1a2e;"></div>
       </div>
 
-      <!-- Instructions + Confirm -->
-      <div class="mt-4 flex items-center justify-between">
-        <div class="flex items-center gap-4 text-xs text-gray-500">
+      <!-- Instructions + Action Buttons -->
+      <div class="mt-4">
+        <div class="flex items-center gap-4 text-xs text-gray-500 mb-3">
           <span><i class="fas fa-mouse-pointer mr-1"></i>Click = Place pin</span>
           <span><i class="fas fa-hand-rock mr-1"></i>Drag pin = Adjust</span>
           <span><i class="fas fa-search-plus mr-1"></i>Scroll = Zoom</span>
         </div>
-        <button onclick="confirmPinAndProceed()" id="confirm-pin-btn"
-          class="px-6 py-3 rounded-lg font-semibold text-sm transition-all shadow-md flex items-center gap-2
-            ${state.formData.pinPlaced ? 'bg-brand-600 hover:bg-brand-700 text-white' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}"
-          ${!state.formData.pinPlaced ? 'disabled' : ''}>
-          <i class="fas fa-check-circle"></i>
-          Confirm Roof Location
-          <i class="fas fa-arrow-right"></i>
-        </button>
+        <div class="flex items-center gap-3 flex-wrap">
+          <button onclick="confirmPinAndProceed()" id="confirm-pin-btn"
+            class="px-6 py-3 rounded-lg font-semibold text-sm transition-all shadow-md flex items-center gap-2
+              ${state.formData.pinPlaced ? 'bg-brand-600 hover:bg-brand-700 text-white' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}"
+            ${!state.formData.pinPlaced ? 'disabled' : ''}>
+            <i class="fas fa-draw-polygon"></i>
+            Next: Trace Roof Outline
+            <i class="fas fa-arrow-right"></i>
+          </button>
+          <button onclick="chooseAdminMeasure()" id="admin-measure-btn"
+            class="px-6 py-3 rounded-lg font-semibold text-sm transition-all shadow-md flex items-center gap-2
+              ${state.formData.pinPlaced ? 'bg-amber-500 hover:bg-amber-600 text-white' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}"
+            ${!state.formData.pinPlaced ? 'disabled' : ''}>
+            <i class="fas fa-hard-hat"></i>
+            Order Measurement Report Now
+            <span class="text-xs font-normal opacity-90">(1–2 hr arrival)</span>
+          </button>
+        </div>
       </div>
     </div>
   `;
@@ -1472,7 +1479,7 @@ function confirmPinAndProceed() {
     showToast('Please click on the satellite map to pin the exact roof', 'error');
     return;
   }
-  state.addressPhase = 'delivery';
+  state.addressPhase = 'trace';
   render();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -1480,106 +1487,6 @@ function confirmPinAndProceed() {
 function backToPinPhase() {
   state.addressPhase = 'pin';
   render();
-}
-
-// ============================================================
-// PHASE D: Delivery Choice
-// ============================================================
-function renderStep2DeliveryPhase() {
-  return `
-    <div class="max-w-3xl mx-auto">
-      <div class="text-center mb-6">
-        <h2 class="text-2xl font-bold text-gray-800">How would you like your report?</h2>
-        <p class="text-gray-500 mt-2">Choose instant self-tracing or have our team measure it for you</p>
-      </div>
-
-      <!-- Phase indicator -->
-      <div class="flex items-center justify-center gap-3 mb-8">
-        <div class="flex items-center gap-2 px-3 py-1.5 bg-brand-100 text-brand-700 rounded-full text-xs font-medium">
-          <i class="fas fa-check-circle"></i> Address
-        </div>
-        <i class="fas fa-arrow-right text-gray-300 text-xs"></i>
-        <div class="flex items-center gap-2 px-3 py-1.5 bg-brand-100 text-brand-700 rounded-full text-xs font-medium">
-          <i class="fas fa-check-circle"></i> Pin Roof
-        </div>
-        <i class="fas fa-arrow-right text-gray-300 text-xs"></i>
-        <div class="flex items-center gap-2 px-3 py-1.5 bg-amber-100 text-amber-700 rounded-full text-xs font-semibold">
-          <i class="fas fa-shipping-fast"></i> Choose Delivery
-        </div>
-      </div>
-
-      <div class="grid md:grid-cols-2 gap-5">
-
-        <!-- Option 1: Trace yourself -->
-        <button onclick="chooseTraceNow()"
-          class="text-left bg-white border-2 border-gray-200 hover:border-brand-500 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all group">
-          <div class="flex items-start gap-4 mb-4">
-            <div class="w-12 h-12 bg-brand-100 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-brand-200 transition-colors">
-              <i class="fas fa-draw-polygon text-brand-600 text-xl"></i>
-            </div>
-            <div>
-              <div class="font-bold text-gray-900 text-lg">Trace Roof Outline</div>
-              <div class="text-brand-600 font-semibold text-sm mt-0.5">Instant Report</div>
-            </div>
-          </div>
-          <p class="text-gray-500 text-sm mb-4">Draw the roof perimeter yourself on the satellite image. Your report generates immediately after tracing.</p>
-          <div class="flex items-center gap-3">
-            <span class="inline-flex items-center gap-1.5 text-xs font-medium text-green-700 bg-green-100 px-3 py-1 rounded-full">
-              <i class="fas fa-bolt"></i> Instant
-            </span>
-            <span class="inline-flex items-center gap-1.5 text-xs font-medium text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
-              <i class="fas fa-mouse-pointer"></i> You trace it
-            </span>
-          </div>
-          <div class="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between">
-            <span class="text-xs text-gray-400">Included in your order</span>
-            <span class="text-brand-600 font-semibold text-sm group-hover:translate-x-1 transition-transform inline-block">Get Started <i class="fas fa-arrow-right ml-1"></i></span>
-          </div>
-        </button>
-
-        <!-- Option 2: Admin measures -->
-        <button onclick="chooseAdminMeasure()"
-          class="text-left bg-white border-2 border-gray-200 hover:border-amber-500 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all group">
-          <div class="flex items-start gap-4 mb-4">
-            <div class="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-amber-200 transition-colors">
-              <i class="fas fa-hard-hat text-amber-600 text-xl"></i>
-            </div>
-            <div>
-              <div class="font-bold text-gray-900 text-lg">Order Measurement Report</div>
-              <div class="text-amber-600 font-semibold text-sm mt-0.5">1–2 Hour Delivery</div>
-            </div>
-          </div>
-          <p class="text-gray-500 text-sm mb-4">Our team traces and measures the roof for you. Submit now and receive your completed report within 1–2 hours.</p>
-          <div class="flex items-center gap-3">
-            <span class="inline-flex items-center gap-1.5 text-xs font-medium text-amber-700 bg-amber-100 px-3 py-1 rounded-full">
-              <i class="fas fa-clock"></i> 1–2 hours
-            </span>
-            <span class="inline-flex items-center gap-1.5 text-xs font-medium text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
-              <i class="fas fa-user-check"></i> We measure it
-            </span>
-          </div>
-          <div class="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between">
-            <span class="text-xs text-gray-400">Charged on submission</span>
-            <span class="text-amber-600 font-semibold text-sm group-hover:translate-x-1 transition-transform inline-block">Order Now <i class="fas fa-arrow-right ml-1"></i></span>
-          </div>
-        </button>
-
-      </div>
-
-      <div class="mt-5 text-center">
-        <button onclick="backToPinPhase()" class="text-sm text-gray-400 hover:text-gray-600 transition-colors">
-          <i class="fas fa-arrow-left mr-1"></i>Back to Pin Roof
-        </button>
-      </div>
-    </div>
-  `;
-}
-
-function chooseTraceNow() {
-  state.formData.needs_admin_trace = false;
-  state.addressPhase = 'trace';
-  render();
-  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function chooseAdminMeasure() {
@@ -1940,14 +1847,13 @@ function nextStep() {
 function prevStep() {
   if (state.currentStep === 2) {
     if (state.addressPhase === 'pin') { backToAddressPhase(); return; }
-    if (state.addressPhase === 'delivery') { state.addressPhase = 'pin'; render(); return; }
-    if (state.addressPhase === 'trace') { state.addressPhase = 'delivery'; render(); return; }
+    if (state.addressPhase === 'trace') { state.addressPhase = 'pin'; render(); return; }
   }
 
   if (state.currentStep > 1) {
     if (state.currentStep === 3) {
       state.currentStep = 2;
-      state.addressPhase = state.formData.needs_admin_trace ? 'delivery' : 'trace';
+      state.addressPhase = state.formData.needs_admin_trace ? 'pin' : 'trace';
     } else {
       state.currentStep--;
     }
