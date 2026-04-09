@@ -2115,6 +2115,82 @@ if(new URLSearchParams(location.search).get('print')==='1')setTimeout(function()
         <p class="text-gray-700 leading-relaxed whitespace-pre-line">${proposal.scope_of_work}</p>
       </div>` : ''}
 
+      <!-- Roof Report Sections -->
+      ${await (async () => {
+        if (!proposal.source_report_id) return ''
+        try {
+          const rRow = await c.env.DB.prepare(
+            `SELECT r.api_response_raw FROM reports r WHERE r.order_id = ? OR r.id = ?`
+          ).bind(proposal.source_report_id, proposal.source_report_id).first<any>()
+          if (!rRow?.api_response_raw) return ''
+          const rd: any = JSON.parse(rRow.api_response_raw)
+          const m = rd.materials || {}
+          const es = rd.edge_summary || {}
+          const ac = primaryColor
+
+          const sec = (title: string, icon: string, body: string) =>
+            `<div class="px-8 py-5 border-b border-gray-100">
+              <h3 class="text-sm font-bold uppercase tracking-widest text-gray-400 mb-4"><i class="fas ${icon} mr-1.5" style="color:${ac}"></i>${title}</h3>
+              ${body}
+            </div>`
+
+          let html = ''
+
+          // Summary stats
+          if (rd.total_true_area_sqft || m.gross_squares) {
+            const cards = [
+              ['Total Area', Math.round(rd.total_true_area_sqft || 0) + ' sq ft'],
+              ['Pitch', rd.roof_pitch_ratio || '—'],
+              ['Squares', m.gross_squares ? m.gross_squares.toFixed(1) : '—'],
+              ['Complexity', m.complexity_class ? m.complexity_class.charAt(0).toUpperCase() + m.complexity_class.slice(1) : '—'],
+            ].map(([label, val]) =>
+              `<div class="text-center p-4 rounded-xl border border-gray-100 bg-gray-50">
+                <p class="text-2xl font-black text-gray-800">${val}</p>
+                <p class="text-xs text-gray-500 mt-1">${label}</p>
+              </div>`
+            ).join('')
+            html += sec('Roof Measurements', 'fa-ruler-combined',
+              `<div class="grid grid-cols-2 sm:grid-cols-4 gap-3">${cards}</div>`)
+          }
+
+          // Edge measurements
+          if (es.total_ridge_ft || es.total_eave_ft) {
+            const edgeCards = [
+              ['Ridge', es.total_ridge_ft], ['Hip', es.total_hip_ft],
+              ['Valley', es.total_valley_ft], ['Eave', es.total_eave_ft], ['Rake', es.total_rake_ft],
+            ].map(([label, ft]) =>
+              `<div class="text-center p-3 rounded-xl border border-gray-100 bg-gray-50">
+                <p class="text-lg font-bold text-gray-800">${Math.round((ft as number) || 0)} ft</p>
+                <p class="text-xs text-gray-500">${label}</p>
+              </div>`
+            ).join('')
+            html += sec('Edge Measurements', 'fa-draw-polygon',
+              `<div class="grid grid-cols-3 sm:grid-cols-5 gap-3">${edgeCards}</div>`)
+          }
+
+          // Material take-off
+          if (m.line_items?.length) {
+            const matRows = (m.line_items as any[]).map((item: any) =>
+              `<tr class="border-b border-gray-100">
+                <td class="py-2 px-3 text-sm text-gray-700">${item.description || item.category || ''}</td>
+                <td class="py-2 px-3 text-center text-sm font-semibold text-gray-800">${item.order_quantity || 0}</td>
+                <td class="py-2 px-3 text-center text-sm text-gray-500">${item.order_unit || ''}</td>
+              </tr>`
+            ).join('')
+            html += sec('Material Take-Off', 'fa-boxes',
+              `<table class="w-full text-sm">
+                <thead><tr class="bg-gray-50 border-b border-gray-200">
+                  <th class="py-2 px-3 text-left text-xs font-semibold text-gray-500 uppercase">Material</th>
+                  <th class="py-2 px-3 text-center text-xs font-semibold text-gray-500 uppercase">Qty</th>
+                  <th class="py-2 px-3 text-center text-xs font-semibold text-gray-500 uppercase">Unit</th>
+                </tr></thead><tbody>${matRows}</tbody>
+              </table>`)
+          }
+
+          return html
+        } catch(e) { return '' }
+      })()}
+
       <!-- Materials Detail -->
       ${proposal.materials_detail ? `
       <div class="px-8 py-5 border-b border-gray-100">

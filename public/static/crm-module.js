@@ -882,6 +882,9 @@
           html += '<button onclick="window._crmEditProposal(' + p.id + ')" class="text-xs text-gray-500 hover:text-gray-300"><i class="fas fa-edit"></i></button>';
           html += '<button onclick="window._crmSendProposal(' + p.id + ')" class="text-xs text-blue-600 hover:underline font-medium"><i class="fas fa-paper-plane mr-0.5"></i>Send</button>';
         }
+        if (p.status !== 'draft' && p.status !== 'accepted' && p.status !== 'declined') {
+          html += '<button onclick="window._crmMarkProposal(' + p.id + ',\'draft\')" class="text-xs text-gray-400 hover:text-gray-200" title="Revert to draft"><i class="fas fa-rotate-left mr-0.5"></i>Draft</button>';
+        }
         if (p.status === 'sent' || p.status === 'viewed') {
           html += '<button onclick="window._crmCopyProposalLink(' + p.id + ')" class="text-xs text-blue-600 hover:underline"><i class="fas fa-link mr-0.5"></i>Link</button>';
           html += '<button onclick="window._crmSendProposal(' + p.id + ')" class="text-xs text-blue-600 hover:underline"><i class="fas fa-redo mr-0.5"></i>Resend</button>';
@@ -1030,11 +1033,16 @@
           '<div><label class="block text-xs font-medium text-gray-400 mb-1">Payment Terms</label><textarea id="propPayment" rows="2" class="w-full px-2 py-2 border border-white/15 rounded-lg text-sm" placeholder="e.g. 50% deposit upon acceptance, balance due upon completion"></textarea></div>' +
           '<div><label class="block text-xs font-medium text-gray-400 mb-1">Notes</label><textarea id="propNotes" rows="2" class="w-full px-2 py-2 border border-white/15 rounded-lg text-sm"></textarea></div></div>';
 
-        showModal('Create Proposal', body, function() {
+        // Two-button footer: Save Draft + Send Now
+        body += '<div style="display:flex;gap:8px;margin-top:8px">' +
+          '<button onclick="window._crmSubmitProposal(\'draft\')" style="flex:1;padding:10px 0;background:var(--bg-elevated);color:var(--text-primary);border:1px solid var(--border-color);border-radius:10px;font-size:13px;font-weight:600;cursor:pointer"><i class="fas fa-save mr-1.5"></i>Save Draft</button>' +
+          '<button onclick="window._crmSubmitProposal(\'send\')" style="flex:1;padding:10px 0;background:#059669;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer"><i class="fas fa-paper-plane mr-1.5"></i>Send Now</button>' +
+        '</div>';
+
+        window._crmSubmitProposal = function(action) {
           var custData = getCustomerFromSelector('propCustomer');
           var title = document.getElementById('propTitle').value.trim();
           if (!custData || !title) { toast('Customer and title required', 'error'); return; }
-
           var items = getProposalItems();
           var payload = Object.assign({}, custData, {
             title: title,
@@ -1046,13 +1054,25 @@
             warranty_terms: document.getElementById('propWarranty').value.trim() || null,
             payment_terms: document.getElementById('propPayment').value.trim() || null,
             notes: document.getElementById('propNotes').value.trim(),
-            linked_order_id: document.getElementById('propLinkedReport') && document.getElementById('propLinkedReport').value ? parseInt(document.getElementById('propLinkedReport').value) : null
+            source_report_id: document.getElementById('propLinkedReport') && document.getElementById('propLinkedReport').value ? parseInt(document.getElementById('propLinkedReport').value) : null
           });
           fetch('/api/crm/proposals', { method: 'POST', headers: authHeaders(), body: JSON.stringify(payload) })
             .then(function(r) { return r.json(); })
-            .then(function(res) { if (res.success) { closeModal(); toast('Proposal created!'); loadProposals(); } else { toast(res.error || 'Failed', 'error'); } })
+            .then(function(res) {
+              if (res.success) {
+                closeModal();
+                toast(action === 'draft' ? 'Draft saved!' : 'Proposal created!');
+                if (action === 'send' && res.proposal_id) {
+                  window._crmSendProposal(res.proposal_id);
+                } else {
+                  loadProposals();
+                }
+              } else { toast(res.error || 'Failed', 'error'); }
+            })
             .catch(function(e) { toast('Network error: ' + (e.message || 'Unknown'), 'error'); });
-        }, 'Create Proposal');
+        };
+
+        showModal('Create Proposal', body);
 
         // Auto-recalc on input
         setTimeout(function() { window._propRecalc(); }, 100);
