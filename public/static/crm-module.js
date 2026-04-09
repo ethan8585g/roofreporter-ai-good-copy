@@ -60,7 +60,7 @@
     overlay.className = 'fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4';
     overlay.id = 'crmModal';
     overlay.innerHTML = '<div class="bg-[#111111] rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto mx-4 sm:mx-auto">' +
-      '<div class="px-6 py-4 border-b border-white/5 flex items-center justify-between"><h3 class="font-bold text-white">' + title + '</h3><button onclick="document.getElementById(\'crmModal\').remove()" class="text-gray-400 hover:text-gray-400 text-lg">&times;</button></div>' +
+      '<div class="px-6 py-4 border-b border-white/5 flex items-center justify-between"><h3 style="font-weight:700;color:#ffffff">' + title + '</h3><button onclick="document.getElementById(\'crmModal\').remove()" class="text-gray-400 hover:text-gray-400 text-lg">&times;</button></div>' +
       '<div class="p-6" id="modalBody" style="color:#e5e7eb">' + bodyHtml + '</div>' +
       (onSave ? '<div class="px-6 py-4 border-t border-white/5 flex justify-end gap-2"><button onclick="document.getElementById(\'crmModal\').remove()" class="px-4 py-2 text-gray-400 hover:bg-[#111111]/10 rounded-lg text-sm">Cancel</button><button id="modalSaveBtn" class="px-6 py-2 bg-brand-600 text-white rounded-lg text-sm font-semibold hover:bg-brand-700">' + (saveLabel || 'Save') + '</button></div>' : '') +
       '</div>';
@@ -552,7 +552,7 @@
         var body = '<div class="space-y-4">';
         // Header with invoice number and status
         body += '<div class="flex items-center justify-between">';
-        body += '<div><span class="font-mono text-lg font-bold text-white">' + inv.invoice_number + '</span></div>';
+        body += '<div><span style="font-family:monospace;font-size:1.125rem;font-weight:700;color:#ffffff">' + inv.invoice_number + '</span></div>';
         body += '<div class="flex items-center gap-2">' + badge(inv.status);
         if (inv.status === 'draft') body += '<button onclick="closeModal();window._crmEditInvoice(' + id + ')" class="text-xs px-3 py-1 rounded-lg" style="background:var(--bg-elevated);border:1px solid var(--border-color);color:var(--text-secondary)"><i class="fas fa-edit mr-1"></i>Edit</button>';
         body += '</div></div>';
