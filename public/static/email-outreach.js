@@ -22,7 +22,8 @@ const EO = {
   dedupPreview: null,
   search: '',
   contactPage: 0,
-  contactStatusFilter: ''
+  contactStatusFilter: '',
+  gmailStatus: null
 };
 
 function eoHeaders() {
@@ -57,14 +58,16 @@ async function loadEODashboard() {
   if (!root) return;
   root.innerHTML = eoSpinner();
   try {
-    const [statsRes, listsRes, campsRes] = await Promise.all([
+    const [statsRes, listsRes, campsRes, gmailRes] = await Promise.all([
       eoFetch('/api/email-outreach/stats'),
       eoFetch('/api/email-outreach/lists'),
-      eoFetch('/api/email-outreach/campaigns')
+      eoFetch('/api/email-outreach/campaigns'),
+      eoFetch('/api/auth/gmail/status')
     ]);
     if (statsRes) EO.stats = await statsRes.json();
     if (listsRes) { const d = await listsRes.json(); EO.lists = d.lists || []; }
     if (campsRes) { const d = await campsRes.json(); EO.campaigns = d.campaigns || []; }
+    if (gmailRes) { const d = await gmailRes.json(); EO.gmailStatus = d.gmail_oauth2 || null; }
     EO.view = 'dashboard';
     renderEO();
   } catch (e) {
@@ -112,7 +115,7 @@ function eoCard(label, value, icon, color, sub) {
     <div class="flex items-start justify-between">
       <div>
         <p class="text-xs font-medium text-gray-400 uppercase tracking-wider">${label}</p>
-        <p class="text-2xl font-black text-gray-900 mt-1">${value}</p>
+        <p class="text-2xl font-bold text-gray-900 mt-1">${value}</p>
         ${sub ? `<p class="text-xs text-gray-400 mt-1">${sub}</p>` : ''}
       </div>
       <div class="w-10 h-10 bg-${color}-100 rounded-xl flex items-center justify-center"><i class="fas ${icon} text-${color}-500"></i></div>
@@ -176,13 +179,48 @@ function renderEODashboard() {
   const activeContacts = s.active_contacts || 0;
   const bounceRate = s.total_emails_sent > 0 ? ((s.total_bounces || 0) / s.total_emails_sent * 100).toFixed(1) : '0';
 
+  const g = EO.gmailStatus;
+  const gmailReady = g && g.ready;
+  const gmailNeedsSetup = g && g.needs_setup;
+
+  const gmailCard = g ? (gmailReady ? `
+    <div class="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 bg-green-100 rounded-xl flex items-center justify-center flex-shrink-0">
+          <i class="fab fa-google text-green-600 text-base"></i>
+        </div>
+        <div>
+          <p class="text-sm font-semibold text-green-800">Gmail Connected</p>
+          <p class="text-xs text-green-600 mt-0.5">Sending from <span class="font-medium">${escHtml(g.sender_email || 'your Gmail')}</span></p>
+        </div>
+      </div>
+      <span class="px-2.5 py-1 bg-green-100 text-green-700 text-xs font-semibold rounded-full">Active</span>
+    </div>
+  ` : `
+    <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 bg-amber-100 rounded-xl flex items-center justify-center flex-shrink-0">
+          <i class="fab fa-google text-amber-500 text-base"></i>
+        </div>
+        <div>
+          <p class="text-sm font-semibold text-amber-800">Gmail Not Connected</p>
+          <p class="text-xs text-amber-600 mt-0.5">${gmailNeedsSetup === 'client_secret' ? 'OAuth credentials required — go to Email Setup to configure.' : 'Authorization needed — click Connect to link your Gmail account.'}</p>
+        </div>
+      </div>
+      ${gmailNeedsSetup === 'authorize' && g.authorize_url
+        ? `<a href="${g.authorize_url}" class="px-3.5 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold rounded-lg transition-colors inline-flex items-center gap-1.5 whitespace-nowrap"><i class="fab fa-google"></i>Connect Gmail</a>`
+        : `<button onclick="window.location.href='/super-admin#email-setup'" class="px-3.5 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold rounded-lg transition-colors inline-flex items-center gap-1.5 whitespace-nowrap"><i class="fas fa-cog"></i>Email Setup</button>`
+      }
+    </div>
+  `) : '';
+
   return `
   <div class="slide-in">
     <!-- Header -->
     <div class="flex items-center justify-between mb-6">
       <div>
-        <h1 class="text-2xl font-black text-gray-900"><i class="fas fa-envelope-open-text mr-2 text-blue-600"></i>Email Outreach</h1>
-        <p class="text-sm text-gray-500 mt-1">Cold email marketing & campaign management for roofing companies</p>
+        <h1 class="text-xl font-bold text-gray-900 flex items-center gap-2"><i class="fas fa-envelope-open-text text-blue-600"></i>Email Outreach</h1>
+        <p class="text-sm text-gray-400 mt-0.5">Cold email campaigns &amp; contact management</p>
       </div>
       <div class="flex gap-2 flex-wrap">
         ${eoBtn('Campaigns', "eoNav('campaigns')", 'green', 'fa-paper-plane', 'xs')}
@@ -192,6 +230,9 @@ function renderEODashboard() {
       </div>
     </div>
 
+    <!-- Gmail Integration Status -->
+    ${gmailCard ? `<div class="mb-4">${gmailCard}</div>` : ''}
+
     <!-- Stats Cards -->
     <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
       ${eoCard('Active Contacts', activeContacts, 'fa-user-check', 'green', `${s.unique_active_emails || 0} unique`)}
@@ -200,38 +241,35 @@ function renderEODashboard() {
       ${eoCard('Templates', s.total_templates || 0, 'fa-file-alt', 'indigo', 'Reusable templates')}
     </div>
 
-    <!-- Quick Actions -->
-    <div class="grid grid-cols-1 gap-4 mb-6">
-      <!-- Campaigns Panel -->
-      <div class="bg-white rounded-xl border border-gray-100 shadow-sm">
-        <div class="p-4 border-b border-gray-100 flex items-center justify-between">
-          <h3 class="font-bold text-gray-900 text-sm"><i class="fas fa-paper-plane mr-2 text-green-500"></i>Campaigns</h3>
-          ${eoBtn('New Campaign', 'eoCreateCampaign()', 'green', 'fa-plus', 'xs')}
-        </div>
-        <div class="divide-y divide-gray-50 max-h-64 overflow-auto">
-          ${recentCamps.length === 0 ? '<div class="p-6 text-center text-gray-400 text-sm">No campaigns yet</div>' :
-            recentCamps.map(c => `
-              <div class="px-4 py-3 flex items-center justify-between hover:bg-gray-50 cursor-pointer transition-colors" onclick="eoViewCampaign(${c.id})">
-                <div>
-                  <span class="font-semibold text-gray-900 text-sm">${escHtml(c.name)}</span>
-                  <p class="text-xs text-gray-400 mt-0.5">${escHtml(c.subject)}</p>
-                </div>
-                <div class="flex items-center gap-3">
-                  ${eoStatusBadge(c.status)}
-                  <span class="text-xs text-gray-400">${c.sent_count || 0}/${c.total_recipients || 0}</span>
-                </div>
+    <!-- Campaigns Panel -->
+    <div class="bg-white rounded-xl border border-gray-100 shadow-sm mb-4">
+      <div class="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+        <h3 class="text-sm font-semibold text-gray-700"><i class="fas fa-paper-plane mr-2 text-green-500"></i>Recent Campaigns</h3>
+        ${eoBtn('New Campaign', 'eoCreateCampaign()', 'green', 'fa-plus', 'xs')}
+      </div>
+      <div class="divide-y divide-gray-50 max-h-64 overflow-auto">
+        ${recentCamps.length === 0 ? '<div class="p-8 text-center text-gray-400 text-sm">No campaigns yet</div>' :
+          recentCamps.map(c => `
+            <div class="px-4 py-3 flex items-center justify-between hover:bg-gray-50 cursor-pointer transition-colors" onclick="eoViewCampaign(${c.id})">
+              <div>
+                <span class="text-sm font-medium text-gray-800">${escHtml(c.name)}</span>
+                <p class="text-xs text-gray-400 mt-0.5">${escHtml(c.subject)}</p>
               </div>
-            `).join('')}
-        </div>
+              <div class="flex items-center gap-3">
+                ${eoStatusBadge(c.status)}
+                <span class="text-xs text-gray-400">${c.sent_count || 0}/${c.total_recipients || 0}</span>
+              </div>
+            </div>
+          `).join('')}
       </div>
     </div>
 
     <!-- CAN-SPAM Notice -->
     <div class="bg-blue-50 border border-blue-100 rounded-xl p-4 flex items-start gap-3">
-      <i class="fas fa-shield-alt text-blue-500 mt-0.5"></i>
+      <i class="fas fa-shield-alt text-blue-400 mt-0.5 text-sm"></i>
       <div>
-        <p class="text-sm font-semibold text-blue-800">CAN-SPAM & CASL Compliance</p>
-        <p class="text-xs text-blue-600 mt-1">All outbound emails include automatic unsubscribe links and Reuse Canada physical address. Unsubscribe requests are processed instantly. Bounced contacts are flagged for review.</p>
+        <p class="text-xs font-semibold text-blue-800 uppercase tracking-wide">CAN-SPAM &amp; CASL Compliance</p>
+        <p class="text-xs text-blue-600 mt-1 leading-relaxed">All outbound emails include automatic unsubscribe links and a physical address. Unsubscribe requests are processed instantly. Bounced contacts are flagged automatically.</p>
       </div>
     </div>
   </div>`;
@@ -246,7 +284,7 @@ function renderEOLists() {
     <div class="flex items-center justify-between mb-6">
       <div class="flex items-center gap-3">
         ${eoBackBtn('dashboard')}
-        <h1 class="text-xl font-black text-gray-900"><i class="fas fa-list mr-2 text-blue-600"></i>Email Lists</h1>
+        <h1 class="text-xl font-bold text-gray-900"><i class="fas fa-list mr-2 text-blue-600"></i>Email Lists</h1>
         <span class="text-xs text-gray-400">${EO.lists.length} lists</span>
       </div>
       <div class="flex gap-2">
@@ -268,8 +306,8 @@ function renderEOLists() {
             </div>
           </div>
           <div class="flex items-center gap-4 ml-4">
-            <div class="text-center"><div class="text-lg font-black text-blue-600">${l.total_contacts || l.contact_count || 0}</div><div class="text-[10px] text-gray-400">Total</div></div>
-            <div class="text-center"><div class="text-lg font-black text-green-600">${l.active_contacts || 0}</div><div class="text-[10px] text-gray-400">Active</div></div>
+            <div class="text-center"><div class="text-lg font-bold text-blue-600">${l.total_contacts || l.contact_count || 0}</div><div class="text-[10px] text-gray-400">Total</div></div>
+            <div class="text-center"><div class="text-lg font-bold text-green-600">${l.active_contacts || 0}</div><div class="text-[10px] text-gray-400">Active</div></div>
             ${(l.bounced_contacts || 0) > 0 ? `<div class="text-center"><div class="text-sm font-bold text-red-500">${l.bounced_contacts}</div><div class="text-[10px] text-gray-400">Bounced</div></div>` : ''}
             ${(l.unsubscribed_contacts || 0) > 0 ? `<div class="text-center"><div class="text-sm font-bold text-yellow-500">${l.unsubscribed_contacts}</div><div class="text-[10px] text-gray-400">Unsub</div></div>` : ''}
             <div class="flex gap-1">
@@ -300,7 +338,7 @@ function renderEOListDetail() {
       <div class="flex items-center gap-3">
         ${eoBackBtn('lists')}
         <div>
-          <h1 class="text-xl font-black text-gray-900">${escHtml(l.name)}</h1>
+          <h1 class="text-xl font-bold text-gray-900">${escHtml(l.name)}</h1>
           <p class="text-xs text-gray-400">${escHtml(l.description || '')} ${l.tags ? '&bull; Tags: ' + escHtml(l.tags) : ''}</p>
         </div>
       </div>
@@ -392,7 +430,7 @@ function renderEOListDetail() {
     <div id="eoImportModal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
       <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl p-6 max-h-[90vh] overflow-auto">
         <div class="flex items-center justify-between mb-4">
-          <h3 class="text-lg font-black text-gray-900"><i class="fas fa-paste mr-2 text-green-500"></i>Paste CSV Data</h3>
+          <h3 class="text-lg font-semibold text-gray-900"><i class="fas fa-paste mr-2 text-green-500"></i>Paste CSV Data</h3>
           <button onclick="document.getElementById('eoImportModal').classList.add('hidden')" class="text-gray-400 hover:text-gray-600 text-xl"><i class="fas fa-times"></i></button>
         </div>
         <p class="text-xs text-gray-500 mb-3">Paste CSV or tab-separated data. Expected columns: <strong>email</strong> (required), company_name, contact_name, phone, city, province, website.</p>
@@ -409,7 +447,7 @@ function renderEOListDetail() {
     <div id="eoContactModal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
       <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6">
         <div class="flex items-center justify-between mb-4">
-          <h3 class="text-lg font-black text-gray-900" id="eoContactModalTitle"><i class="fas fa-user-plus mr-2 text-blue-500"></i>Add Contact</h3>
+          <h3 class="text-lg font-semibold text-gray-900" id="eoContactModalTitle"><i class="fas fa-user-plus mr-2 text-blue-500"></i>Add Contact</h3>
           <button onclick="document.getElementById('eoContactModal').classList.add('hidden')" class="text-gray-400 hover:text-gray-600 text-xl"><i class="fas fa-times"></i></button>
         </div>
         <div class="grid grid-cols-2 gap-3">
@@ -441,7 +479,7 @@ function renderEOCampaigns() {
     <div class="flex items-center justify-between mb-6">
       <div class="flex items-center gap-3">
         ${eoBackBtn('dashboard')}
-        <h1 class="text-xl font-black text-gray-900"><i class="fas fa-paper-plane mr-2 text-green-600"></i>Email Campaigns</h1>
+        <h1 class="text-xl font-bold text-gray-900"><i class="fas fa-paper-plane mr-2 text-green-600"></i>Email Campaigns</h1>
         <span class="text-xs text-gray-400">${EO.campaigns.length} campaigns</span>
       </div>
       ${eoBtn('Create Campaign', 'eoCreateCampaign()', 'green', 'fa-plus')}
@@ -489,7 +527,7 @@ function renderEOCampaignDetail() {
       <div class="flex items-center gap-3">
         ${eoBackBtn('campaigns')}
         <div>
-          <h1 class="text-xl font-black text-gray-900">${escHtml(c.name)}</h1>
+          <h1 class="text-xl font-bold text-gray-900">${escHtml(c.name)}</h1>
           <p class="text-xs text-gray-400 mt-0.5">Subject: ${escHtml(c.subject)} &bull; ${eoStatusBadge(c.status)}</p>
         </div>
       </div>
@@ -575,7 +613,7 @@ function renderEOCampaignEditor() {
   <div class="slide-in">
     <div class="flex items-center gap-3 mb-6">
       ${eoBackBtn('campaigns')}
-      <h1 class="text-xl font-black text-gray-900">${c.id ? 'Edit Campaign' : 'New Campaign'}</h1>
+      <h1 class="text-xl font-bold text-gray-900">${c.id ? 'Edit Campaign' : 'New Campaign'}</h1>
     </div>
     <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-6 max-w-4xl">
       <div class="grid grid-cols-2 gap-4 mb-4">
@@ -648,7 +686,7 @@ function renderEOTemplates() {
     <div class="flex items-center justify-between mb-6">
       <div class="flex items-center gap-3">
         ${eoBackBtn('dashboard')}
-        <h1 class="text-xl font-black text-gray-900"><i class="fas fa-file-alt mr-2 text-purple-600"></i>Email Templates</h1>
+        <h1 class="text-xl font-bold text-gray-900"><i class="fas fa-file-alt mr-2 text-purple-600"></i>Email Templates</h1>
       </div>
       ${eoBtn('Create Template', 'eoShowTemplateEditor()', 'purple', 'fa-plus')}
     </div>
@@ -679,7 +717,7 @@ function renderEOTemplates() {
     <div id="eoTemplateModal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
       <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl p-6 max-h-[90vh] overflow-auto">
         <div class="flex items-center justify-between mb-4">
-          <h3 class="text-lg font-black text-gray-900"><i class="fas fa-file-alt mr-2 text-purple-500"></i>Create Template</h3>
+          <h3 class="text-lg font-semibold text-gray-900"><i class="fas fa-file-alt mr-2 text-purple-500"></i>Create Template</h3>
           <button onclick="document.getElementById('eoTemplateModal').classList.add('hidden')" class="text-gray-400 hover:text-gray-600 text-xl"><i class="fas fa-times"></i></button>
         </div>
         <div class="space-y-3">
@@ -732,7 +770,7 @@ function renderEOAnalytics() {
     <div class="flex items-center justify-between mb-6">
       <div class="flex items-center gap-3">
         ${eoBackBtn('dashboard')}
-        <h1 class="text-xl font-black text-gray-900"><i class="fas fa-chart-bar mr-2 text-indigo-600"></i>Deliverability Analytics</h1>
+        <h1 class="text-xl font-bold text-gray-900"><i class="fas fa-chart-bar mr-2 text-indigo-600"></i>Deliverability Analytics</h1>
       </div>
       ${eoBtn('Refresh', "eoLoadAnalytics()", 'indigo', 'fa-sync-alt', 'xs')}
     </div>
@@ -837,7 +875,7 @@ function renderEODedup() {
     <div class="flex items-center justify-between mb-6">
       <div class="flex items-center gap-3">
         ${eoBackBtn('dashboard')}
-        <h1 class="text-xl font-black text-gray-900"><i class="fas fa-filter mr-2 text-yellow-600"></i>Contact De-duplication</h1>
+        <h1 class="text-xl font-bold text-gray-900"><i class="fas fa-filter mr-2 text-yellow-600"></i>Contact De-duplication</h1>
       </div>
       <div class="flex gap-2">
         ${eoBtn('Scan for Duplicates', 'eoScanDuplicates()', 'yellow', 'fa-search', 'sm')}
