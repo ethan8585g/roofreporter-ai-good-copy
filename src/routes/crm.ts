@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import type { Bindings } from '../types'
 import { resolveTeamOwner } from './team'
+import { validateAdminSession } from './auth'
 
 function escapeHtml(str: string): string {
   return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -17,14 +18,22 @@ async function getOwnerId(c: any): Promise<number | null> {
   const auth = c.req.header('Authorization')
   if (!auth || !auth.startsWith('Bearer ')) return null
   const token = auth.slice(7)
+
+  // Try customer session first
   const session = await c.env.DB.prepare(
     "SELECT customer_id FROM customer_sessions WHERE session_token = ? AND expires_at > datetime('now')"
   ).bind(token).first<any>()
-  if (!session) return null
+  if (session) {
+    const { ownerId } = await resolveTeamOwner(c.env.DB, session.customer_id)
+    return ownerId
+  }
 
-  // Resolve team membership — if this user is a team member, return owner's ID
-  const { ownerId } = await resolveTeamOwner(c.env.DB, session.customer_id)
-  return ownerId
+  // Fall back to admin session — admin users use a large offset (1,000,000 + admin_id)
+  // to create a distinct owner namespace that never collides with customer IDs
+  const admin = await validateAdminSession(c.env.DB, auth)
+  if (admin) return 1000000 + admin.id
+
+  return null
 }
 
 // ============================================================
@@ -1580,7 +1589,9 @@ crmRoutes.get('/gmail/callback', async (c) => {
 <body class="bg-gray-50 min-h-screen flex items-center justify-center"><div class="bg-white rounded-2xl shadow-xl p-8 max-w-md text-center">
 <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4"><i class="fas fa-exclamation-triangle text-red-500 text-2xl"></i></div>
 <h2 class="text-xl font-bold text-gray-800 mb-2">Token Exchange Failed</h2>
-<p class="text-gray-600 mb-4">${tokenData.error_description || 'Could not obtain refresh token'}</p>
+<p class="text-gray-600 mb-1"><strong>Error:</strong> ${tokenData.error || (tokenData.refresh_token === undefined ? 'no_refresh_token' : 'unknown')}</p>
+<p class="text-gray-600 mb-1"><strong>Description:</strong> ${tokenData.error_description || '(none)'}</p>
+<p class="text-gray-500 text-xs mb-4"><strong>Redirect URI used:</strong> ${redirectUri}</p>
 <button onclick="window.close()" class="bg-sky-600 text-white px-6 py-2 rounded-lg font-semibold">Close</button>
 </div></body></html>`)
   }
