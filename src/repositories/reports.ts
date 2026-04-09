@@ -72,8 +72,8 @@ export async function getReportWithOrder(db: D1Database, orderId: number | strin
            o.homeowner_name, o.requester_name, o.requester_company,
            o.service_tier, o.price, o.latitude, o.longitude
     FROM reports r JOIN orders o ON r.order_id = o.id
-    WHERE r.order_id = ? OR o.order_number = ?
-  `).bind(orderId, orderId).first()
+    WHERE r.order_id = ? OR o.order_number = ? OR r.id = ?
+  `).bind(orderId, orderId, orderId).first()
 }
 
 export async function getReportForEnhance(db: D1Database, orderId: number | string) {

@@ -2139,7 +2139,25 @@ document.addEventListener('DOMContentLoaded', () => {
       state.form.attached_report_id = reportId || null;
       state.selectedReport = state.reports.find(function(r) { return String(r.id) === String(reportId); }) || null;
       state.selectedReportMaterials = null;
-      state.manualSquares = null; // reset so report value is used when a new report is picked
+      state.manualSquares = null;
+
+      // Fetch full report data so preview can render measurement sections
+      if (reportId) {
+        try {
+          var fullRes = await fetch('/api/reports/' + reportId, { headers: headers() });
+          if (fullRes.ok) {
+            var fullData = await fullRes.json();
+            var fullRow = fullData.report;
+            if (fullRow && fullRow.api_response_raw) {
+              var parsed = JSON.parse(fullRow.api_response_raw);
+              // Merge full data onto selectedReport
+              state.selectedReport = Object.assign({}, state.selectedReport, parsed, {
+                property_address: (state.selectedReport && state.selectedReport.property_address) || parsed.property_address || ''
+              });
+            }
+          }
+        } catch(e) {}
+      }
 
       if (state.selectedReport) {
         state.form.property_address = state.selectedReport.property_address || '';
