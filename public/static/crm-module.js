@@ -1437,9 +1437,10 @@
   // ============================================================
   // MODULE: JOBS — Calendar Dashboard + Google Calendar Integration
   // ============================================================
-  var _calConnected = false;
-  var _calEmail = '';
-  var _calView = 'month'; // 'month' or 'week'
+  // Restore persisted calendar state from localStorage
+  var _calView = localStorage.getItem('crm_cal_view') || 'month';
+  var _calConnected = localStorage.getItem('crm_cal_connected') === '1';
+  var _calEmail = localStorage.getItem('crm_cal_email') || '';
   var _calYear = new Date().getFullYear();
   var _calMonth = new Date().getMonth();
   var _calWeekStart = null;
@@ -1459,9 +1460,17 @@
       .then(function(data) {
         _calConnected = !!data.connected;
         _calEmail = data.email || '';
-        // If connected, load Google Calendar events
+        // Persist connection state so it's available immediately on next load
+        localStorage.setItem('crm_cal_connected', _calConnected ? '1' : '0');
+        localStorage.setItem('crm_cal_email', _calEmail);
+        // Re-render header to reflect confirmed connection state, then load events
         if (_calConnected) loadGoogleCalEvents();
-      }).catch(function() { _calConnected = false; });
+        else renderJobsDashboard();
+      }).catch(function() {
+        _calConnected = false;
+        localStorage.setItem('crm_cal_connected', '0');
+        localStorage.setItem('crm_cal_email', '');
+      });
   }
 
   function loadGoogleCalEvents() {
@@ -1774,6 +1783,7 @@
   };
   window._crmSetView = function(mode) {
     _calView = mode;
+    localStorage.setItem('crm_cal_view', mode);
     if (mode === 'week' && !_calWeekStart) {
       var d = new Date(); d.setDate(d.getDate() - d.getDay());
       _calWeekStart = new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -1872,6 +1882,8 @@
         _calConnected = false;
         _calEmail = '';
         _googleCalEvents = [];
+        localStorage.setItem('crm_cal_connected', '0');
+        localStorage.setItem('crm_cal_email', '');
         toast('Google Calendar disconnected');
         renderJobsDashboard();
       }).catch(function() { toast('Failed to disconnect', 'error'); });
