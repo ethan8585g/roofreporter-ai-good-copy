@@ -78,9 +78,13 @@ async function loadView(view) {
         else if (salesRes) console.error('Failed to load sales:', salesRes.status);
         break;
       case 'orders':
-        const ordersRes = await saFetch(`/api/admin/superadmin/orders?limit=100&status=${SA.ordersFilter}`);
+        const [ordersRes, needsTraceRes] = await Promise.all([
+          saFetch(`/api/admin/superadmin/orders?limit=100&status=${SA.ordersFilter}`),
+          saFetch('/api/admin/superadmin/orders/needs-trace')
+        ]);
         if (ordersRes && ordersRes.ok) SA.data.orders = await ordersRes.json();
         else if (ordersRes) console.error('Failed to load orders:', ordersRes.status);
+        if (needsTraceRes && needsTraceRes.ok) SA.data.needsTrace = await needsTraceRes.json();
         break;
       case 'signups':
         const signupsRes = await saFetch(`/api/admin/superadmin/signups?period=${SA.signupsPeriod}`);
@@ -622,13 +626,214 @@ window.saFilterOrders = function(s) {
   loadView('orders');
 };
 
+// ── Manual Trace Tool ──────────────────────────────────────
+window.saOpenTraceModal = function(orderId, lat, lng, address, orderNum) {
+  var existing = document.getElementById('sa-trace-modal');
+  if (existing) existing.remove();
+
+  var overlay = document.createElement('div');
+  overlay.id = 'sa-trace-modal';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;padding:16px';
+  overlay.innerHTML =
+    '<div style="background:#111827;border:1px solid #374151;border-radius:16px;width:100%;max-width:900px;max-height:90vh;display:flex;flex-direction:column;overflow:hidden">' +
+      '<div style="padding:16px 20px;border-bottom:1px solid #374151;display:flex;align-items:center;justify-content:space-between">' +
+        '<div>' +
+          '<div style="color:#f9fafb;font-size:15px;font-weight:700"><i class="fas fa-drafting-compass mr-2" style="color:#f59e0b"></i>Trace Roof — ' + orderNum + '</div>' +
+          '<div style="color:#6b7280;font-size:12px;margin-top:2px">' + address + '</div>' +
+        '</div>' +
+        '<button onclick="document.getElementById(\'sa-trace-modal\').remove()" style="color:#6b7280;background:none;border:none;font-size:20px;cursor:pointer;line-height:1">&times;</button>' +
+      '</div>' +
+      '<div style="padding:12px 20px;background:#1f2937;border-bottom:1px solid #374151;font-size:12px;color:#9ca3af">' +
+        '<span style="margin-right:16px"><span style="display:inline-block;width:12px;height:12px;background:#22c55e;border-radius:2px;margin-right:4px;vertical-align:middle"></span>Eaves (click to draw polygon)</span>' +
+        '<span style="margin-right:16px"><span style="display:inline-block;width:12px;height:3px;background:#dc2626;margin-right:4px;vertical-align:middle"></span>Ridge</span>' +
+        '<span style="margin-right:16px"><span style="display:inline-block;width:12px;height:3px;background:#ea580c;margin-right:4px;vertical-align:middle"></span>Hip</span>' +
+        '<span><span style="display:inline-block;width:12px;height:3px;background:#2563eb;margin-right:4px;vertical-align:middle"></span>Valley</span>' +
+        '<span style="float:right;color:#f59e0b">Draw eaves polygon first, then add ridges/hips/valleys as needed</span>' +
+      '</div>' +
+      '<div id="sa-trace-map" style="flex:1;min-height:400px"></div>' +
+      '<div style="padding:14px 20px;border-top:1px solid #374151;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+          '<button onclick="saTraceSetTool(\'eave\')" id="sa-tool-eave" style="padding:7px 14px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#22c55e;color:#fff;border:none">Eaves</button>' +
+          '<button onclick="saTraceSetTool(\'ridge\')" id="sa-tool-ridge" style="padding:7px 14px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">+ Ridge</button>' +
+          '<button onclick="saTraceSetTool(\'hip\')" id="sa-tool-hip" style="padding:7px 14px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">+ Hip</button>' +
+          '<button onclick="saTraceSetTool(\'valley\')" id="sa-tool-valley" style="padding:7px 14px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">+ Valley</button>' +
+          '<button onclick="saTraceClear()" style="padding:7px 14px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#ef4444;border:1px solid #374151">Clear All</button>' +
+        '</div>' +
+        '<button onclick="saSubmitTrace(' + orderId + ')" style="padding:9px 22px;background:#f59e0b;color:#111;font-size:13px;font-weight:700;border:none;border-radius:10px;cursor:pointer">' +
+          '<i class="fas fa-paper-plane mr-1.5"></i>Submit Report to Customer' +
+        '</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(overlay);
+
+  // Initialize the trace map
+  window._saTraceState = { orderId: orderId, tool: 'eave', eavePoints: [], ridges: [], hips: [], valleys: [], currentLine: null, eavePoly: null };
+  setTimeout(function() { saInitTraceMap(lat, lng); }, 100);
+};
+
+window.saTraceSetTool = function(tool) {
+  window._saTraceState.tool = tool;
+  ['eave','ridge','hip','valley'].forEach(function(t) {
+    var btn = document.getElementById('sa-tool-' + t);
+    if (btn) {
+      var active = t === tool;
+      var colors = { eave: '#22c55e', ridge: '#dc2626', hip: '#ea580c', valley: '#2563eb' };
+      btn.style.background = active ? (colors[t] || '#0ea5e9') : '#1f2937';
+      btn.style.color = active ? '#fff' : '#9ca3af';
+      btn.style.borderColor = active ? 'transparent' : '#374151';
+    }
+  });
+};
+
+window.saTraceClear = function() {
+  var s = window._saTraceState;
+  if (!s || !s.map) return;
+  if (s.eavePoly) { s.eavePoly.setMap(null); s.eavePoly = null; }
+  s.ridges.forEach(function(l) { l.setMap(null); }); s.ridges = [];
+  s.hips.forEach(function(l) { l.setMap(null); }); s.hips = [];
+  s.valleys.forEach(function(l) { l.setMap(null); }); s.valleys = [];
+  if (s.currentLine) { s.currentLine.setMap(null); s.currentLine = null; }
+  s.eavePoints = [];
+};
+
+function saInitTraceMap(lat, lng) {
+  var s = window._saTraceState;
+  if (!s || !window.google || !window.google.maps) {
+    setTimeout(function() { saInitTraceMap(lat, lng); }, 500);
+    return;
+  }
+  var mapEl = document.getElementById('sa-trace-map');
+  if (!mapEl) return;
+
+  var center = { lat: lat || 53.5, lng: lng || -113.5 };
+  var map = new google.maps.Map(mapEl, {
+    center: center, zoom: 20,
+    mapTypeId: 'satellite', tilt: 0, rotateControl: false,
+    mapTypeControl: false, streetViewControl: false, fullscreenControl: false
+  });
+  s.map = map;
+
+  // Track click position for drawing
+  var drawingPoints = [];
+  var drawingPoly = null;
+  var currentSegStart = null;
+
+  map.addListener('click', function(e) {
+    var pt = { lat: e.latLng.lat(), lng: e.latLng.lng() };
+    var tool = s.tool;
+
+    if (tool === 'eave') {
+      drawingPoints.push(e.latLng);
+      if (drawingPoly) drawingPoly.setMap(null);
+      drawingPoly = new google.maps.Polyline({
+        path: drawingPoints.concat([drawingPoints[0]]),
+        strokeColor: '#22c55e', strokeWeight: 2.5, map: map
+      });
+      s.eavePoints = drawingPoints.map(function(p) { return { lat: p.lat(), lng: p.lng() }; });
+    } else {
+      if (!currentSegStart) {
+        currentSegStart = e.latLng;
+      } else {
+        var color = tool === 'ridge' ? '#dc2626' : tool === 'hip' ? '#ea580c' : '#2563eb';
+        var line = new google.maps.Polyline({
+          path: [currentSegStart, e.latLng],
+          strokeColor: color, strokeWeight: 2, map: map
+        });
+        var seg = [
+          { lat: currentSegStart.lat(), lng: currentSegStart.lng() },
+          { lat: e.latLng.lat(), lng: e.latLng.lng() }
+        ];
+        if (tool === 'ridge') s.ridges.push(line);
+        else if (tool === 'hip') s.hips.push(line);
+        else s.valleys.push(line);
+        // Store segment data
+        if (!s._ridgeData) s._ridgeData = [];
+        if (!s._hipData) s._hipData = [];
+        if (!s._valleyData) s._valleyData = [];
+        if (tool === 'ridge') s._ridgeData.push(seg);
+        else if (tool === 'hip') s._hipData.push(seg);
+        else s._valleyData.push(seg);
+        currentSegStart = null;
+      }
+    }
+  });
+}
+
+window.saSubmitTrace = async function(orderId) {
+  var s = window._saTraceState;
+  if (!s || !s.eavePoints || s.eavePoints.length < 3) {
+    alert('Please draw the eaves polygon first (at least 3 points).');
+    return;
+  }
+  var traceJson = {
+    eaves: s.eavePoints,
+    ridges: s._ridgeData || [],
+    hips: s._hipData || [],
+    valleys: s._valleyData || [],
+    traced_at: new Date().toISOString()
+  };
+
+  var btn = document.querySelector('#sa-trace-modal button[onclick*="saSubmitTrace"]');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1.5"></i>Generating report...'; }
+
+  try {
+    var token = localStorage.getItem('rc_token') || '';
+    var res = await fetch('/api/admin/superadmin/orders/' + orderId + '/submit-trace', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ roof_trace_json: traceJson })
+    });
+    var data = await res.json();
+    if (data.success) {
+      document.getElementById('sa-trace-modal')?.remove();
+      alert('✅ Report generated and delivered to customer!');
+      saLoadData('orders');
+    } else {
+      alert('Error: ' + (data.error || 'Failed to generate report'));
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-paper-plane mr-1.5"></i>Submit Report to Customer'; }
+    }
+  } catch(e) {
+    alert('Network error: ' + e.message);
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-paper-plane mr-1.5"></i>Submit Report to Customer'; }
+  }
+};
+
 function renderOrdersView() {
   const d = SA.data.orders || {};
   const orders = d.orders || [];
   const counts = d.counts || {};
   const avgSec = d.avg_processing_seconds || 0;
+  const needsTraceOrders = (SA.data.needsTrace || {}).orders || [];
 
   return `
+    ${needsTraceOrders.length > 0 ? `
+    <div style="background:#1a1200;border:2px solid #f59e0b;border-radius:14px;padding:20px;margin-bottom:24px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="width:36px;height:36px;background:rgba(245,158,11,0.2);border-radius:8px;display:flex;align-items:center;justify-content:center"><i class="fas fa-drafting-compass" style="color:#f59e0b;font-size:16px"></i></div>
+          <div>
+            <div style="color:#fbbf24;font-size:15px;font-weight:800">⏱ Pending Manual Traces</div>
+            <div style="color:#92400e;font-size:12px">${needsTraceOrders.length} order${needsTraceOrders.length !== 1 ? 's' : ''} waiting for your trace</div>
+          </div>
+        </div>
+        <button onclick="saLoadData(SA.view)" style="font-size:11px;color:#f59e0b;background:none;border:none;cursor:pointer"><i class="fas fa-sync-alt mr-1"></i>Refresh</button>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        ${needsTraceOrders.map(o => `
+          <div style="background:#111;border:1px solid #374151;border-radius:10px;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+            <div style="flex:1;min-width:0">
+              <div style="color:#f9fafb;font-size:13px;font-weight:700">${o.property_address || 'Unknown address'}</div>
+              <div style="color:#9ca3af;font-size:11px;margin-top:2px">${o.customer_name || o.customer_email || ''} · ${o.order_number || 'Order #' + o.id} · ${new Date(o.created_at).toLocaleString()}</div>
+            </div>
+            <button onclick="saOpenTraceModal(${o.id}, ${o.latitude || 0}, ${o.longitude || 0}, '${(o.property_address || '').replace(/'/g, "\\'")}', '${o.order_number || ''}')"
+              style="padding:8px 18px;background:#f59e0b;color:#111;font-size:12px;font-weight:700;border:none;border-radius:8px;cursor:pointer;white-space:nowrap;flex-shrink:0">
+              <i class="fas fa-drafting-compass mr-1.5"></i>Trace & Submit
+            </button>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+    ` : ''}
     <div class="mb-6 flex items-center justify-between">
       <div>
         <h2 class="text-2xl font-black text-gray-900"><i class="fas fa-clipboard-list mr-2 text-teal-500"></i>Order History & Logistics</h2>

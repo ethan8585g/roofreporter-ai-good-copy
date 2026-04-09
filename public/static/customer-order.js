@@ -1406,6 +1406,32 @@ function goToTrace() {
 }
 
 function skipTrace() {
+  // Show warning modal before skipping — this order will be manually traced by admin
+  var overlay = document.createElement('div');
+  overlay.id = 'skip-trace-modal';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;padding:16px';
+  overlay.innerHTML =
+    '<div style="background:#111827;border:1px solid #374151;border-radius:16px;padding:28px;max-width:440px;width:100%;box-shadow:0 25px 60px rgba(0,0,0,0.5)">' +
+      '<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">' +
+        '<div style="width:44px;height:44px;background:rgba(245,158,11,0.15);border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="fas fa-clock" style="color:#f59e0b;font-size:20px"></i></div>' +
+        '<div><h3 style="color:#f9fafb;font-size:17px;font-weight:700;margin:0">Manual Trace Required</h3><p style="color:#9ca3af;font-size:12px;margin:2px 0 0">Our team will trace this roof for you</p></div>' +
+      '</div>' +
+      '<p style="color:#d1d5db;font-size:14px;line-height:1.6;margin-bottom:8px">Since you\'re skipping the trace, <strong style="color:#f9fafb">our team will manually trace this roof</strong> to ensure accurate measurements.</p>' +
+      '<p style="color:#d1d5db;font-size:14px;line-height:1.6;margin-bottom:20px">Your report will be ready within <strong style="color:#f59e0b">1–2 hours</strong>. You\'ll receive a notification when it\'s done.</p>' +
+      '<div style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);border-radius:8px;padding:10px 12px;margin-bottom:20px;font-size:12px;color:#fbbf24">' +
+        '<i class="fas fa-info-circle mr-1.5"></i>This uses one report credit. Manual trace ensures the highest accuracy.' +
+      '</div>' +
+      '<div style="display:flex;gap:10px">' +
+        '<button onclick="document.getElementById(\'skip-trace-modal\').remove()" style="flex:1;padding:11px;background:#1f2937;color:#9ca3af;border:1px solid #374151;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer">Cancel</button>' +
+        '<button onclick="confirmSkipTrace()" style="flex:1;padding:11px;background:#f59e0b;color:#111;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer"><i class="fas fa-check mr-1.5"></i>Yes, Submit for Manual Trace</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(overlay);
+}
+
+function confirmSkipTrace() {
+  document.getElementById('skip-trace-modal')?.remove();
+  orderState.needsAdminTrace = true;
   orderState.roofTraceJson = null;
   orderState.measurementResult = null;
   orderState.measurementError = null;
@@ -1516,6 +1542,9 @@ function buildOrderPayload() {
   // Attach pre-calculated measurement data so the report engine can use it
   if (orderState.measurementResult) {
     payload.trace_measurement_json = JSON.stringify(orderState.measurementResult.full_report);
+  }
+  if (orderState.needsAdminTrace) {
+    payload.needs_admin_trace = 1;
   }
   return payload;
 }

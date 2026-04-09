@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import type { Bindings } from '../types'
 import { validateAdminSession, requireSuperadmin } from './auth'
+import { generateReportForOrder } from './reports'
 
 export const adminRoutes = new Hono<{ Bindings: Bindings }>()
 
@@ -2233,6 +2234,72 @@ adminRoutes.get('/superadmin/onboarding/config', async (c) => {
     const row = await c.env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key = 'onboarding_config' AND master_company_id = 1").first<any>()
     return c.json({ config: row?.setting_value ? JSON.parse(row.setting_value) : { free_trial_reports: 3, require_phone: false, enable_secretary: true, default_plan: 'free' } })
   } catch { return c.json({ config: { free_trial_reports: 3, require_phone: false, enable_secretary: true, default_plan: 'free' } }) }
+})
+
+// ============================================================
+// MANUAL TRACE QUEUE — Get orders waiting for admin trace
+// ============================================================
+adminRoutes.get('/superadmin/orders/needs-trace', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
+  try {
+    const orders = await c.env.DB.prepare(`
+      SELECT o.id, o.order_number, o.property_address, o.latitude, o.longitude,
+             o.created_at, o.customer_id,
+             c.name as customer_name, c.email as customer_email
+      FROM orders o
+      LEFT JOIN customers c ON c.id = o.customer_id
+      WHERE o.needs_admin_trace = 1
+        AND (o.status = 'processing' OR o.status = 'pending')
+      ORDER BY o.created_at ASC
+    `).all()
+    return c.json({ orders: orders.results || [] })
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500)
+  }
+})
+
+// ============================================================
+// SUBMIT TRACE — Admin saves trace + triggers report generation
+// ============================================================
+adminRoutes.post('/superadmin/orders/:id/submit-trace', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
+  const orderId = parseInt(c.req.param('id'))
+  if (isNaN(orderId)) return c.json({ error: 'Invalid order ID' }, 400)
+  try {
+    const { roof_trace_json } = await c.req.json()
+    if (!roof_trace_json) return c.json({ error: 'roof_trace_json is required' }, 400)
+
+    // Save the trace
+    const traceStr = typeof roof_trace_json === 'string' ? roof_trace_json : JSON.stringify(roof_trace_json)
+    await c.env.DB.prepare(
+      "UPDATE orders SET roof_trace_json = ?, needs_admin_trace = 0, updated_at = datetime('now') WHERE id = ?"
+    ).bind(traceStr, orderId).run()
+
+    // Generate the report (this is admin submitting so we call synchronously within worker timeout)
+    const result = await generateReportForOrder(orderId, c.env)
+
+    // Notify the customer via push (best-effort)
+    try {
+      const order = await c.env.DB.prepare(
+        'SELECT customer_id, property_address, order_number FROM orders WHERE id = ?'
+      ).bind(orderId).first<any>()
+      if (order?.customer_id) {
+        const subs = await c.env.DB.prepare(
+          'SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE customer_id = ?'
+        ).bind(order.customer_id).all()
+        // Log the activity — customer will see report in dashboard via polling
+        await c.env.DB.prepare(
+          "INSERT INTO user_activity_log (company_id, action, details) VALUES (1, 'manual_trace_completed', ?)"
+        ).bind(`Admin traced order ${order.order_number} — ${order.property_address}`).run()
+      }
+    } catch(e) { /* non-fatal */ }
+
+    return c.json({ success: true, result })
+  } catch (err: any) {
+    return c.json({ error: 'Failed to submit trace: ' + err.message }, 500)
+  }
 })
 
 // LiveKit SIP API helper for admin
