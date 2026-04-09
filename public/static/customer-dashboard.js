@@ -198,7 +198,7 @@ function renderDashboard() {
           navLink('/customer/invoices', 'fa-file-invoice-dollar', 'Invoices', invBadge || null, 'bg-blue-600') +
           navLink('/customer/proposals', 'fa-file-signature', 'Proposals', propBadge || null, 'bg-blue-600') +
           navLink('/customer/jobs', 'fa-hard-hat', 'Jobs', jobBadge || null, 'bg-gray-800') +
-          navLink('/customer/pipeline', 'fa-funnel-dollar', 'Pipeline', 'Soon', 'bg-gray-300') +
+          navLink('/customer/pipeline', 'fa-funnel-dollar', 'Pipeline', null, 'bg-gray-800') +
         '</div>' +
         // Team
         '<div>' +
