@@ -1306,10 +1306,14 @@ document.addEventListener('DOMContentLoaded', () => {
         var es = r.edge_summary || {};
         var accentColor = state.accentColor || '#0ea5e9';
 
-        // Page 1: Project Summary
+        // Page 1: Project Summary & Satellite Image
         if (state.showAreaToCustomer) {
+          var satUrl = (r.imagery && (r.imagery.satellite_overhead_url || r.imagery.satellite_url)) || r.satellite_image_url || '';
+          var propAddr = r.property_address || (r.property && r.property.address) || '';
           sections += '<div class="p-8 border-b border-gray-200">' +
             '<h3 class="text-xs font-semibold text-gray-500 uppercase mb-4"><i class="fas fa-satellite-dish mr-1"></i>Roof Measurement Summary</h3>' +
+            (propAddr ? '<p class="text-sm text-gray-600 mb-4"><i class="fas fa-map-marker-alt mr-1 text-gray-400"></i>' + propAddr + '</p>' : '') +
+            (satUrl ? '<img src="' + satUrl + '" alt="Satellite roof view" style="width:100%;max-height:320px;object-fit:cover;border-radius:12px;margin-bottom:16px;border:1px solid #e5e7eb" onerror="this.style.display=\'none\'">' : '') +
             '<div class="grid grid-cols-2 sm:grid-cols-4 gap-3">' +
               '<div class="text-center p-4 rounded-xl bg-gray-50 border border-gray-100"><p class="text-2xl font-black text-gray-800">' + Math.round(r.total_true_area_sqft||0) + '</p><p class="text-xs text-gray-500 mt-1">True Area (sq ft)</p></div>' +
               '<div class="text-center p-4 rounded-xl bg-gray-50 border border-gray-100"><p class="text-2xl font-black text-gray-800">' + (r.roof_pitch_ratio||'—') + '</p><p class="text-xs text-gray-500 mt-1">Roof Pitch</p></div>' +
@@ -2140,6 +2144,12 @@ document.addEventListener('DOMContentLoaded', () => {
               const rRow = rData.report;
               if (rRow && rRow.api_response_raw) {
                 state.selectedReport = JSON.parse(rRow.api_response_raw);
+                // Pull satellite image URL from DB column (not always in api_response_raw)
+                if (rRow.satellite_image_url) state.selectedReport.satellite_image_url = rRow.satellite_image_url;
+                // Pull property address from DB join
+                if (!state.selectedReport.property_address && rRow.property_address) {
+                  state.selectedReport.property_address = rRow.property_address;
+                }
               }
             }
           } catch(e) {}
@@ -2205,7 +2215,8 @@ document.addEventListener('DOMContentLoaded', () => {
               var parsed = JSON.parse(fullRow.api_response_raw);
               // Merge full data onto selectedReport
               state.selectedReport = Object.assign({}, state.selectedReport, parsed, {
-                property_address: (state.selectedReport && state.selectedReport.property_address) || parsed.property_address || ''
+                property_address: (state.selectedReport && state.selectedReport.property_address) || parsed.property_address || fullRow.property_address || '',
+                satellite_image_url: fullRow.satellite_image_url || (parsed.imagery && (parsed.imagery.satellite_overhead_url || parsed.imagery.satellite_url)) || ''
               });
             }
           }
