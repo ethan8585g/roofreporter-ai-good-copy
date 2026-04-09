@@ -1575,7 +1575,8 @@ crmRoutes.get('/gmail/connect', async (c) => {
   authUrl.searchParams.set('response_type', 'code')
   authUrl.searchParams.set('scope', 'https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/calendar.events')
   authUrl.searchParams.set('access_type', 'offline')
-  authUrl.searchParams.set('prompt', 'consent')
+  const forceSelect = c.req.query('select') === '1'
+  authUrl.searchParams.set('prompt', forceSelect ? 'select_account consent' : 'consent')
   authUrl.searchParams.set('state', state)
 
   return c.json({ auth_url: authUrl.toString() })
@@ -2093,7 +2094,7 @@ crmRoutes.post('/catalog/seed-defaults', async (c) => {
     { category: 'shingles', name: '3-Tab Standard Shingles', unit: 'bundles', unit_price: 32.00, coverage_per_unit: '33 sq ft per bundle (3 bundles/square)', supplier: '', is_default: 0, sort_order: 2 },
     { category: 'underlayment', name: 'Synthetic Underlayment', unit: 'rolls', unit_price: 95.00, coverage_per_unit: '400 sq ft per roll', supplier: '', is_default: 1, sort_order: 3 },
     { category: 'ice_shield', name: 'Ice & Water Shield Membrane', unit: 'rolls', unit_price: 165.00, coverage_per_unit: '200 sq ft per roll', supplier: '', is_default: 1, sort_order: 4 },
-    { category: 'starter_strip', name: 'Starter Strip Shingles', unit: 'boxes', unit_price: 45.00, coverage_per_unit: '100 lin ft per box', supplier: '', is_default: 1, sort_order: 5 },
+    { category: 'starter', name: 'Starter Strip Shingles', unit: 'boxes', unit_price: 45.00, coverage_per_unit: '100 lin ft per box', supplier: '', is_default: 1, sort_order: 5 },
     { category: 'ridge_cap', name: 'Ridge/Hip Cap Shingles', unit: 'bundles', unit_price: 65.00, coverage_per_unit: '35 lin ft per bundle', supplier: '', is_default: 1, sort_order: 6 },
     { category: 'drip_edge', name: 'Aluminum Drip Edge (Type C/D)', unit: 'pieces', unit_price: 8.50, coverage_per_unit: '10 ft per piece', supplier: '', is_default: 1, sort_order: 7 },
     { category: 'valley_metal', name: 'W-Valley Flashing (Aluminum)', unit: 'pieces', unit_price: 22.00, coverage_per_unit: '10 ft per piece', supplier: '', is_default: 1, sort_order: 8 },

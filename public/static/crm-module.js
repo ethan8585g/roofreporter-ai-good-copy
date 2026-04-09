@@ -920,6 +920,7 @@
         '<p class="font-semibold text-green-800">Gmail Connected</p>' +
         '<p class="text-sm text-emerald-400">' + _gmailEmail + '</p></div>';
       body += '<p class="text-sm text-gray-400">Proposals will be emailed from your connected Gmail account when you click "Send".</p>';
+      body += '<button onclick="window._crmChangeGmail()" class="w-full py-2.5 bg-brand-600 text-white rounded-lg text-sm font-semibold hover:bg-brand-700 mb-2"><i class="fab fa-google mr-2"></i>Change Gmail Account</button>';
       body += '<button onclick="window._crmDisconnectGmail()" class="w-full py-2 border border-red-200 text-red-600 rounded-lg text-sm hover:bg-red-50">Disconnect Gmail</button>';
     } else {
       body += '<div class="bg-[#0A0A0A] border border-white/10 rounded-xl p-4 text-center">' +
@@ -938,6 +939,19 @@
     closeModal();
     var w = window.open('about:blank', 'gmailOAuth', 'width=600,height=700');
     fetch('/api/crm/gmail/connect', { headers: authHeadersOnly() })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.auth_url && w) { w.location.href = data.auth_url; }
+        else if (data.auth_url) { window.open(data.auth_url, 'gmailOAuth', 'width=600,height=700'); }
+        else { if (w) w.close(); toast(data.error || 'Gmail not configured', 'error'); }
+      }).catch(function(e) { if (w) w.close(); toast('Failed: ' + (e.message || 'Network error'), 'error'); });
+    var timer = setInterval(function() { if (w && w.closed) { clearInterval(timer); checkGmailStatus(); loadProposals(window._propFilter); } }, 800);
+  };
+
+  window._crmChangeGmail = function() {
+    closeModal();
+    var w = window.open('about:blank', 'gmailOAuth', 'width=600,height=700');
+    fetch('/api/crm/gmail/connect?select=1', { headers: authHeadersOnly() })
       .then(function(r) { return r.json(); })
       .then(function(data) {
         if (data.auth_url && w) { w.location.href = data.auth_url; }
@@ -1938,6 +1952,7 @@
       body += '<div class="space-y-3">';
       body += '<button onclick="window._crmSyncAllJobs(); closeModal();" class="w-full px-4 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700"><i class="fas fa-sync-alt mr-2"></i>Sync All Jobs to Google Calendar</button>';
       body += '<p class="text-xs text-gray-500 text-center">This will create/update Google Calendar events for all scheduled and in-progress jobs.</p>';
+      body += '<button onclick="window._crmChangeCalendarAccount()" class="w-full px-4 py-2.5 bg-brand-600 text-white rounded-lg text-sm font-semibold hover:bg-brand-700"><i class="fab fa-google mr-2"></i>Change Google Account</button>';
       body += '<hr class="my-3">';
       body += '<button onclick="window._crmDisconnectCalendar()" class="w-full px-4 py-2 bg-[#111111] border border-red-300 text-red-600 rounded-lg text-sm font-medium hover:bg-red-50"><i class="fas fa-unlink mr-2"></i>Disconnect Calendar</button>';
       body += '<p class="text-[10px] text-gray-400 text-center">Note: This will also disconnect Gmail email sending.</p>';
@@ -1977,6 +1992,26 @@
             checkCalendarStatus();
             loadJobsForMonth(_calYear, _calMonth);
           }, 1000);
+        }
+      } catch(e) {}
+    }, 500);
+  };
+
+  window._crmChangeCalendarAccount = function() {
+    closeModal();
+    var popup = window.open('about:blank', 'calOAuth', 'width=600,height=700');
+    fetch('/api/crm/gmail/connect?select=1', { headers: authHeadersOnly() })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.auth_url && popup) { popup.location.href = data.auth_url; }
+        else if (data.auth_url) { popup = window.open(data.auth_url, 'calOAuth', 'width=600,height=700'); }
+        else { if (popup) popup.close(); toast(data.error || 'Not configured', 'error'); }
+      }).catch(function() { if (popup) popup.close(); toast('Failed to connect', 'error'); });
+    var poll = setInterval(function() {
+      try {
+        if (!popup || popup.closed) {
+          clearInterval(poll);
+          setTimeout(function() { checkCalendarStatus(); loadJobsForMonth(_calYear, _calMonth); }, 1000);
         }
       } catch(e) {}
     }, 500);
@@ -3370,7 +3405,7 @@
     shingles: { label: 'Shingles', icon: 'fa-home', color: 'blue' },
     underlayment: { label: 'Underlayment', icon: 'fa-layer-group', color: 'sky' },
     ice_shield: { label: 'Ice & Water Shield', icon: 'fa-snowflake', color: 'blue' },
-    starter_strip: { label: 'Starter Strip', icon: 'fa-grip-lines', color: 'blue' },
+    starter: { label: 'Starter Strip', icon: 'fa-grip-lines', color: 'blue' },
     ridge_cap: { label: 'Ridge/Hip Cap', icon: 'fa-mountain', color: 'blue' },
     drip_edge: { label: 'Drip Edge', icon: 'fa-ruler', color: 'gray' },
     valley_metal: { label: 'Valley Flashing', icon: 'fa-arrows-alt-v', color: 'emerald' },
@@ -3383,7 +3418,15 @@
     root.innerHTML = '<div class="text-center py-8"><div class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-brand-500 mx-auto mb-3"></div></div>';
     fetch('/api/crm/catalog', { headers: authHeadersOnly() })
       .then(function(r) { return r.json(); })
-      .then(function(data) { _catalogProducts = data.products || []; renderCatalog(); })
+      .then(function(data) {
+        _catalogProducts = data.products || [];
+        if (_catalogProducts.length === 0) {
+          fetch('/api/crm/catalog/seed-defaults', { method: 'POST', headers: authHeaders() })
+            .then(function(r) { return r.json(); })
+            .then(function(res) { if (res.success) { return fetch('/api/crm/catalog', { headers: authHeadersOnly() }).then(function(r2) { return r2.json(); }).then(function(d2) { _catalogProducts = d2.products || []; renderCatalog(); }); } else { renderCatalog(); } })
+            .catch(function() { renderCatalog(); });
+        } else { renderCatalog(); }
+      })
       .catch(function() { root.innerHTML = '<p class="text-red-500 p-4">Failed to load catalog.</p>'; });
   }
 
@@ -3417,7 +3460,7 @@
         grouped[p.category].push(p);
       });
       var _catColorMap = { blue: 'rgba(59,130,246,0.12)', sky: 'rgba(14,165,233,0.12)', gray: 'rgba(107,114,128,0.1)', emerald: 'rgba(16,185,129,0.12)', green: 'rgba(34,197,94,0.12)' };
-      var catOrder = ['shingles', 'underlayment', 'ice_shield', 'starter_strip', 'ridge_cap', 'drip_edge', 'valley_metal', 'nails', 'ventilation', 'custom'];
+      var catOrder = ['shingles', 'underlayment', 'ice_shield', 'starter', 'ridge_cap', 'drip_edge', 'valley_metal', 'nails', 'ventilation', 'custom'];
       for (var ci = 0; ci < catOrder.length; ci++) {
         var catKey = catOrder[ci];
         var catItems = grouped[catKey];
