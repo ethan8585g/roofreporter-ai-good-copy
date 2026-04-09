@@ -1659,7 +1659,10 @@ app.get('/proposal/view/:token', async (c) => {
 
       // Fallback 2: check invoices table (proposal builder creates proposals there)
       const invProposal = crmInvoice || await c.env.DB.prepare(`
-        SELECT i.*, c.name as customer_name, c.email as customer_email, c.phone as customer_phone,
+        SELECT i.*,
+               COALESCE(NULLIF(i.crm_customer_name,''), c.name) as customer_name,
+               COALESCE(NULLIF(i.crm_customer_email,''), c.email) as customer_email,
+               COALESCE(NULLIF(i.crm_customer_phone,''), c.phone) as customer_phone,
                c.company_name, c.address as customer_address, c.city as customer_city,
                c.province as customer_province, c.postal_code as customer_postal
         FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id
@@ -3917,8 +3920,8 @@ function getLandingPageHTML(latestPosts: any[] = []) {
           </div>
           <p class="text-sm leading-relaxed text-gray-500">Professional AI-powered roof measurement reports, CRM, and business management for roofing companies across Canada.</p>
           <div class="flex items-center gap-4 mt-6">
-            <a href="#" class="text-gray-500 hover:text-[#00FF88] transition-colors"><i class="fab fa-facebook text-lg"></i></a>
-            <a href="#" class="text-gray-500 hover:text-[#00FF88] transition-colors"><i class="fab fa-instagram text-lg"></i></a>
+            <a href="https://www.facebook.com/roofmanager" target="_blank" rel="noopener noreferrer" class="text-gray-500 hover:text-[#00FF88] transition-colors"><i class="fab fa-facebook text-lg"></i></a>
+            <a href="https://www.instagram.com/roofmanager" target="_blank" rel="noopener noreferrer" class="text-gray-500 hover:text-[#00FF88] transition-colors"><i class="fab fa-instagram text-lg"></i></a>
             <a href="#" class="text-gray-500 hover:text-[#00FF88] transition-colors"><i class="fab fa-linkedin text-lg"></i></a>
           </div>
         </div>
@@ -4937,7 +4940,11 @@ function getServicesPageHTML() {
       </div>
       <div class="border-t border-white/5 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
         <p class="text-xs text-gray-600">&copy; 2026 Roof Manager. All rights reserved.</p>
-        <span class="text-xs text-gray-600"><i class="fas fa-map-marker-alt text-[#00FF88] mr-1"></i>Alberta, Canada</span>
+        <div class="flex items-center gap-4">
+          <a href="https://www.facebook.com/roofmanager" target="_blank" rel="noopener noreferrer" class="text-gray-500 hover:text-[#00FF88] transition-colors"><i class="fab fa-facebook text-base"></i></a>
+          <a href="https://www.instagram.com/roofmanager" target="_blank" rel="noopener noreferrer" class="text-gray-500 hover:text-[#00FF88] transition-colors"><i class="fab fa-instagram text-base"></i></a>
+          <span class="text-xs text-gray-600"><i class="fas fa-map-marker-alt text-[#00FF88] mr-1"></i>Alberta, Canada</span>
+        </div>
       </div>
     </div>
   </footer>
@@ -5191,7 +5198,11 @@ function getCoveragePageHTML() {
       </div>
       <div class="border-t border-white/5 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
         <p class="text-xs text-gray-600">&copy; 2026 Roof Manager. All rights reserved.</p>
-        <span class="text-xs text-gray-600"><i class="fas fa-map-marker-alt text-[#00FF88] mr-1"></i>Alberta, Canada</span>
+        <div class="flex items-center gap-4">
+          <a href="https://www.facebook.com/roofmanager" target="_blank" rel="noopener noreferrer" class="text-gray-500 hover:text-[#00FF88] transition-colors"><i class="fab fa-facebook text-base"></i></a>
+          <a href="https://www.instagram.com/roofmanager" target="_blank" rel="noopener noreferrer" class="text-gray-500 hover:text-[#00FF88] transition-colors"><i class="fab fa-instagram text-base"></i></a>
+          <span class="text-xs text-gray-600"><i class="fas fa-map-marker-alt text-[#00FF88] mr-1"></i>Alberta, Canada</span>
+        </div>
       </div>
     </div>
   </footer>
@@ -5733,7 +5744,11 @@ function getBlogListingHTML(posts: any[] = []) {
       </div>
       <div class="border-t border-white/5 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
         <p class="text-xs text-gray-600">&copy; 2026 Roof Manager. All rights reserved.</p>
-        <div class="flex items-center gap-1.5 text-xs text-gray-600"><i class="fas fa-map-marker-alt text-[#00FF88]"></i> Alberta, Canada</div>
+        <div class="flex items-center gap-4">
+          <a href="https://www.facebook.com/roofmanager" target="_blank" rel="noopener noreferrer" class="text-gray-500 hover:text-[#00FF88] transition-colors"><i class="fab fa-facebook text-base"></i></a>
+          <a href="https://www.instagram.com/roofmanager" target="_blank" rel="noopener noreferrer" class="text-gray-500 hover:text-[#00FF88] transition-colors"><i class="fab fa-instagram text-base"></i></a>
+          <div class="flex items-center gap-1.5 text-xs text-gray-600"><i class="fas fa-map-marker-alt text-[#00FF88]"></i> Alberta, Canada</div>
+        </div>
       </div>
     </div>
   </footer>
@@ -5960,7 +5975,11 @@ function getBlogPostHTML(post?: any, slug?: string) {
       </div>
       <div class="border-t border-white/5 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
         <p class="text-xs text-gray-600">&copy; 2026 Roof Manager. All rights reserved.</p>
-        <div class="flex items-center gap-1.5 text-xs text-gray-600"><i class="fas fa-map-marker-alt text-[#00FF88]"></i> Alberta, Canada</div>
+        <div class="flex items-center gap-4">
+          <a href="https://www.facebook.com/roofmanager" target="_blank" rel="noopener noreferrer" class="text-gray-500 hover:text-[#00FF88] transition-colors"><i class="fab fa-facebook text-base"></i></a>
+          <a href="https://www.instagram.com/roofmanager" target="_blank" rel="noopener noreferrer" class="text-gray-500 hover:text-[#00FF88] transition-colors"><i class="fab fa-instagram text-base"></i></a>
+          <div class="flex items-center gap-1.5 text-xs text-gray-600"><i class="fas fa-map-marker-alt text-[#00FF88]"></i> Alberta, Canada</div>
+        </div>
       </div>
     </div>
   </footer>

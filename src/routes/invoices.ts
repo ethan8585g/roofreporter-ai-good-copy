@@ -281,16 +281,17 @@ invoiceRoutes.post('/', async (c) => {
                             crm_customer_email, crm_customer_phone,
                             order_id, subtotal, tax_rate, tax_amount,
                             discount_amount, discount_type, total, status, due_date, notes, terms, created_by, document_type,
-                            share_token, scope_of_work, warranty_terms, payment_terms_text, valid_until,
+                            share_token, share_url, scope_of_work, warranty_terms, payment_terms_text, valid_until,
                             attached_report_id, proposal_tier, proposal_group_id, my_cost, accent_color, show_report_sections)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       number, resolvedCustomerId, crm_customer_id || null, crmName, crmEmail, crmPhone,
       order_id || null,
       subtotal, taxRateVal, taxAmount, discountVal, discount_type || 'fixed', total,
       dueDate.toISOString().slice(0, 10),
       notes || null, terms || defaultTerms, 'admin', docType,
-      shareToken, scope_of_work || '', warranty_terms || '', payment_terms_text || '',
+      shareToken, `/proposal/view/${shareToken}`,
+      scope_of_work || '', warranty_terms || '', payment_terms_text || '',
       valid_until || '', attached_report_id || null, proposal_tier || '', proposal_group_id || '',
       my_cost != null ? my_cost : null,
       accent_color || null,
