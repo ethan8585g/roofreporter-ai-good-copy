@@ -1684,10 +1684,107 @@ app.get('/proposal/view/:token', async (c) => {
           itemsHtml += '</tbody></table>'
         }
 
-        // Get attached report link
+        // Fetch attached report + build inline sections
         let reportLink = ''
+        let reportSectionsHtml = ''
         if (invProposal.attached_report_id) {
-          reportLink = `<a href="/api/reports/${invProposal.attached_report_id}/html" target="_blank" class="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-100"><i class="fas fa-file-alt"></i>View Roof Report</a>`
+          reportLink = `<a href="/api/reports/${invProposal.attached_report_id}/html" target="_blank" class="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-100"><i class="fas fa-file-alt"></i>View Full Roof Report</a>`
+          try {
+            const rRow = await c.env.DB.prepare(
+              `SELECT r.api_response_raw FROM reports r WHERE r.id = ? OR r.order_id = ?`
+            ).bind(invProposal.attached_report_id, invProposal.attached_report_id).first<any>()
+
+            if (rRow?.api_response_raw) {
+              const rd: any = JSON.parse(rRow.api_response_raw)
+              const sec = invProposal.show_report_sections ? JSON.parse(invProposal.show_report_sections) : { area: true, pitch: true }
+              const m = rd.materials || {}
+              const es = rd.edge_summary || {}
+              const accentHex = invProposal.accent_color || '#0ea5e9'
+
+              const sectionCard = (title: string, icon: string, body: string) =>
+                `<div class="mb-6 rounded-2xl border border-gray-200 overflow-hidden">
+                  <div class="px-6 py-4 border-b border-gray-100" style="background:#f9fafb">
+                    <h3 class="text-sm font-bold text-gray-700"><i class="fas ${icon} mr-2" style="color:${accentHex}"></i>${title}</h3>
+                  </div>
+                  <div class="p-6">${body}</div>
+                </div>`
+
+              // Page 1: Project Summary
+              if (sec.area !== false) {
+                const cards = [
+                  ['Total Area', Math.round(rd.total_true_area_sqft || 0) + ' sq ft'],
+                  ['Roof Pitch', rd.roof_pitch_ratio || '—'],
+                  ['Squares', m.gross_squares ? m.gross_squares.toFixed(1) : '—'],
+                  ['Complexity', m.complexity_class ? m.complexity_class.charAt(0).toUpperCase() + m.complexity_class.slice(1) : '—'],
+                ].map(([label, val]) =>
+                  `<div class="text-center p-4 rounded-xl border border-gray-100 bg-gray-50">
+                    <p class="text-2xl font-black text-gray-800">${val}</p>
+                    <p class="text-xs text-gray-500 mt-1">${label}</p>
+                  </div>`
+                ).join('')
+                reportSectionsHtml += sectionCard('Roof Measurement Summary', 'fa-ruler-combined', `<div class="grid grid-cols-2 sm:grid-cols-4 gap-3">${cards}</div>`)
+              }
+
+              // Page 2: Edge Measurements
+              if (sec.pitch !== false && (es.total_ridge_ft || es.total_eave_ft)) {
+                const edgeCards = [
+                  ['Ridge', es.total_ridge_ft],
+                  ['Hip', es.total_hip_ft],
+                  ['Valley', es.total_valley_ft],
+                  ['Eave', es.total_eave_ft],
+                  ['Rake', es.total_rake_ft],
+                ].map(([label, ft]) =>
+                  `<div class="text-center p-3 rounded-xl border border-gray-100 bg-gray-50">
+                    <p class="text-lg font-bold text-gray-800">${Math.round((ft as number) || 0)} ft</p>
+                    <p class="text-xs text-gray-500">${label}</p>
+                  </div>`
+                ).join('')
+                reportSectionsHtml += sectionCard('Edge Measurements', 'fa-draw-polygon', `<div class="grid grid-cols-3 sm:grid-cols-5 gap-3">${edgeCards}</div>`)
+              }
+
+              // Page 3: Material Take-Off
+              if (sec.materials && m.line_items?.length) {
+                const matRows = (m.line_items as any[]).map((item: any) =>
+                  `<tr class="border-b border-gray-100">
+                    <td class="py-2 px-3 text-sm text-gray-700">${item.description || item.category || ''}</td>
+                    <td class="py-2 px-3 text-center text-sm font-semibold text-gray-800">${item.order_quantity || 0}</td>
+                    <td class="py-2 px-3 text-center text-sm text-gray-500">${item.order_unit || ''}</td>
+                  </tr>`
+                ).join('')
+                reportSectionsHtml += sectionCard('Material Take-Off', 'fa-boxes',
+                  `<table class="w-full text-sm">
+                    <thead><tr class="bg-gray-50"><th class="py-2 px-3 text-left text-xs font-semibold text-gray-500 uppercase">Material</th><th class="py-2 px-3 text-center text-xs font-semibold text-gray-500 uppercase">Qty</th><th class="py-2 px-3 text-center text-xs font-semibold text-gray-500 uppercase">Unit</th></tr></thead>
+                    <tbody>${matRows}</tbody>
+                  </table>`)
+              }
+
+              // Page 4: Edge Breakdown
+              if (sec.edges && rd.edges?.length) {
+                const edgeRows = (rd.edges as any[]).slice(0, 10).map((e: any) =>
+                  `<tr class="border-b border-gray-100">
+                    <td class="py-2 px-3 text-sm text-gray-700 capitalize">${e.type || 'edge'}</td>
+                    <td class="py-2 px-3 text-center text-sm font-semibold text-gray-800">${Math.round(e.length_ft || 0)} ft</td>
+                    <td class="py-2 px-3 text-center text-sm text-gray-500">${e.pitch || ''}</td>
+                  </tr>`
+                ).join('')
+                reportSectionsHtml += sectionCard('Edge Breakdown', 'fa-list',
+                  `<table class="w-full text-sm">
+                    <thead><tr class="bg-gray-50"><th class="py-2 px-3 text-left text-xs font-semibold text-gray-500 uppercase">Type</th><th class="py-2 px-3 text-center text-xs font-semibold text-gray-500 uppercase">Length</th><th class="py-2 px-3 text-center text-xs font-semibold text-gray-500 uppercase">Pitch</th></tr></thead>
+                    <tbody>${edgeRows}</tbody>
+                  </table>`)
+              }
+
+              // Page 5: Quality Badges
+              if (sec.solar) {
+                reportSectionsHtml += sectionCard('Quality & Validation', 'fa-shield-alt',
+                  `<div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div class="p-4 rounded-xl border border-gray-100 bg-gray-50 flex items-center gap-3"><i class="fas fa-satellite text-2xl" style="color:${accentHex}"></i><div><p class="text-sm font-semibold text-gray-800">Satellite Verified</p><p class="text-xs text-gray-500">GPS-accurate measurements</p></div></div>
+                    <div class="p-4 rounded-xl border border-gray-100 bg-gray-50 flex items-center gap-3"><i class="fas fa-brain text-2xl" style="color:${accentHex}"></i><div><p class="text-sm font-semibold text-gray-800">AI-Enhanced</p><p class="text-xs text-gray-500">Machine learning validation</p></div></div>
+                    <div class="p-4 rounded-xl border border-gray-100 bg-gray-50 flex items-center gap-3"><i class="fas fa-certificate text-2xl" style="color:${accentHex}"></i><div><p class="text-sm font-semibold text-gray-800">Professional Grade</p><p class="text-xs text-gray-500">Industry-standard accuracy</p></div></div>
+                  </div>`)
+              }
+            }
+          } catch(e) { /* silently skip — link still shows */ }
         }
 
         const invIsAccepted = invProposal.status === 'accepted'
@@ -1823,6 +1920,7 @@ app.get('/proposal/view/:token', async (c) => {
         <div class="text-right"><h3 class="text-xs font-bold text-gray-400 uppercase mb-2">${docLabel} Details</h3><p class="text-sm text-gray-600"><strong>Status:</strong> <span class="px-2 py-0.5 rounded-full text-xs font-bold ${invStatusBadge}">${invStatusLabel}</span></p>${invProposal.due_date ? `<p class="text-sm text-gray-600 mt-1"><strong>Due:</strong> ${new Date(invProposal.due_date).toLocaleDateString('en-CA')}</p>` : ''}${invProposal.valid_until ? `<p class="text-sm text-gray-600 mt-1"><strong>Valid Until:</strong> ${invProposal.valid_until}</p>` : ''}</div>
       </div>
       ${invProposal.scope_of_work ? `<div class="mb-8 bg-gray-50 rounded-xl p-6"><h3 class="text-sm font-bold text-gray-700 mb-2"><i class="fas fa-clipboard-list mr-1 text-blue-500"></i>Scope of Work</h3><div class="text-sm text-gray-600 whitespace-pre-wrap">${invProposal.scope_of_work}</div></div>` : ''}
+      ${reportSectionsHtml ? `<div class="mb-8">${reportSectionsHtml}</div>` : ''}
       ${reportLink ? `<div class="mb-6">${reportLink}</div>` : ''}
       <div class="mb-8">${itemsHtml}</div>
       <div class="flex justify-end"><div class="w-72 space-y-2">
