@@ -47,6 +47,7 @@ document.addEventListener('DOMContentLoaded', () => {
     due.setDate(due.getDate() + 30);
     return {
       customer_id: '',
+      customer_address: '',
       from_proposal_id: null,
       invoice_number: 'INV-' + today.toISOString().slice(0, 10).replace(/-/g, '') + '-' + Math.floor(Math.random() * 9999).toString().padStart(4, '0'),
       created_date: today.toISOString().slice(0, 10),
@@ -54,7 +55,8 @@ document.addEventListener('DOMContentLoaded', () => {
       items: [{ description: '', quantity: 1, unit: 'each', unit_price: 0, is_taxable: true }],
       discount_type: 'fixed',
       discount_amount: 0,
-      tax_rate: 5.0,
+      gst_rate: 5.0,
+      pst_rate: 0.0,
       notes: '',
       terms: 'Payment due within 30 days of invoice date. Late payments subject to 2% monthly interest.',
       order_id: null,
@@ -325,20 +327,59 @@ document.addEventListener('DOMContentLoaded', () => {
     <!-- Header -->
     <div class="rounded-xl p-6 mb-6" style="background:var(--bg-card);border:1px solid var(--border-color)">
       <h3 class="text-lg font-bold mb-4" style="color:var(--text-primary)"><i class="fas fa-file-invoice text-emerald-400 mr-2"></i>${state.editId ? 'Edit' : 'New'} Invoice</h3>
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
         <div><label class="block text-xs font-semibold mb-1" style="color:var(--text-muted)">Invoice Number</label><input type="text" id="im-number" value="${f.invoice_number}" class="w-full rounded-lg px-3 py-2 text-sm" style="border:1px solid var(--border-color);background:var(--bg-elevated);color:var(--text-primary)" readonly></div>
         <div><label class="block text-xs font-semibold mb-1" style="color:var(--text-muted)">Created Date</label><input type="date" id="im-date" value="${f.created_date}" class="w-full rounded-lg px-3 py-2 text-sm" style="border:1px solid var(--border-color);background:var(--bg-elevated);color:var(--text-primary)"></div>
         <div><label class="block text-xs font-semibold mb-1" style="color:var(--text-muted)">Due Date</label><input type="date" id="im-due" value="${f.due_date}" class="w-full rounded-lg px-3 py-2 text-sm" style="border:1px solid var(--border-color);background:var(--bg-elevated);color:var(--text-primary)"></div>
+        <div class="rounded-xl p-3 text-right" style="background:var(--bg-elevated);border:1px solid var(--border-color)">
+          <div class="text-xs font-semibold mb-1" style="color:var(--text-muted)">Invoice Total</div>
+          <div id="im-header-total" class="text-2xl font-black text-emerald-400">$${calcTotal().toFixed(2)}</div>
+        </div>
       </div>
     </div>
 
     <!-- Customer -->
     <div class="rounded-xl p-6 mb-6" style="background:var(--bg-card);border:1px solid var(--border-color)">
       <h3 class="text-lg font-bold mb-4" style="color:var(--text-primary)"><i class="fas fa-user text-emerald-400 mr-2"></i>Customer</h3>
-      <select id="im-customer" class="w-full rounded-lg px-3 py-2 text-sm" style="border:1px solid var(--border-color);background:var(--bg-elevated);color:var(--text-primary)">
-        <option value="">Select a customer...</option>
-        ${state.customers.map(c => `<option value="${c.id}" ${f.customer_id == c.id ? 'selected' : ''}>${c.name || c.email} ${c.company_name ? '(' + c.company_name + ')' : ''}</option>`).join('')}
-      </select>
+      ${(() => {
+        // Recent customers: last 4 unique customers from invoice history
+        const recentIds = [];
+        const seen = new Set();
+        for (const inv of state.invoices) {
+          if (inv.customer_id && !seen.has(String(inv.customer_id))) {
+            seen.add(String(inv.customer_id));
+            const cust = state.customers.find(c => c.id == inv.customer_id);
+            if (cust) recentIds.push(cust);
+            if (recentIds.length >= 4) break;
+          }
+        }
+        const selectedCust = f.customer_id ? state.customers.find(c => c.id == f.customer_id) : null;
+        const selectedName = selectedCust ? (selectedCust.name || selectedCust.email || '') : '';
+        return `
+        ${recentIds.length > 0 ? `<div class="flex flex-wrap gap-2 mb-3">
+          <span class="text-xs font-semibold self-center" style="color:var(--text-muted)">Recent:</span>
+          ${recentIds.map(c => `<button onclick="window._im.selectCustomer('${c.id}')" data-customer-id="${c.id}"
+            class="im-customer-chip px-3 py-1 rounded-full text-xs font-medium transition-all"
+            style="${f.customer_id == c.id ? 'background:#10b981;color:white;border:1px solid #10b981' : 'background:var(--bg-elevated);border:1px solid var(--border-color);color:var(--text-secondary)'}"
+          >${c.name || c.email}${c.company_name ? ' · ' + c.company_name : ''}</button>`).join('')}
+        </div>` : ''}
+        <div class="relative">
+          <div class="flex items-center gap-2 rounded-lg px-3 py-2" style="border:1px solid var(--border-color);background:var(--bg-elevated)">
+            <i class="fas fa-search text-xs flex-shrink-0" style="color:var(--text-muted)"></i>
+            <input type="text" id="im-customer-search" value="${selectedName.replace(/"/g, '&quot;')}"
+              placeholder="Search customers..."
+              autocomplete="off"
+              oninput="window._im.filterCustomers(this.value)"
+              onfocus="window._im.openCustomerDropdown()"
+              onblur="setTimeout(()=>{const d=document.getElementById('im-customer-dropdown');if(d)d.style.display='none';},200)"
+              class="flex-1 bg-transparent outline-none text-sm" style="color:var(--text-primary)">
+            ${f.customer_id ? `<button onclick="window._im.clearCustomer()" class="flex-shrink-0 text-xs" style="color:var(--text-muted)" title="Clear"><i class="fas fa-times"></i></button>` : ''}
+          </div>
+          <div id="im-customer-dropdown" style="display:none;position:absolute;z-index:50;width:100%;margin-top:4px;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.2);background:var(--bg-card);border:1px solid var(--border-color);max-height:240px;overflow-y:auto"></div>
+        </div>
+        ${f.customer_address ? `<div id="im-cust-address-display" class="mt-3 flex items-center gap-2 text-sm" style="color:var(--text-muted)"><i class="fas fa-map-marker-alt text-xs text-emerald-400"></i><span>${f.customer_address}</span></div>` : `<div id="im-cust-address-display" style="display:none"></div>`}
+        `;
+      })()}
     </div>
 
     <!-- Line Items -->
@@ -391,7 +432,22 @@ document.addEventListener('DOMContentLoaded', () => {
               <input type="number" id="im-discount" value="${f.discount_amount}" onchange="window._im.updTotals()" class="rounded px-2 py-0.5 text-xs w-20 text-right" style="border:1px solid var(--border-color);background:var(--bg-elevated);color:var(--text-primary)" step="0.01">
             </div>
           </div>
-          <div class="flex justify-between text-sm"><span style="color:var(--text-muted)">Tax (${f.tax_rate}% GST)</span><span style="color:var(--text-primary)" id="im-tax">$${calcTax().toFixed(2)}</span></div>
+          <div class="flex justify-between text-sm items-center gap-2">
+            <div class="flex items-center gap-1.5">
+              <span class="text-xs font-medium w-8" style="color:var(--text-muted)">GST</span>
+              <input type="number" id="im-gst-rate" value="${f.gst_rate}" step="0.1" min="0" max="30" onchange="window._im.updTotals()" class="w-14 rounded px-1 py-0.5 text-xs text-center" style="border:1px solid var(--border-color);background:var(--bg-elevated);color:var(--text-primary)">
+              <span class="text-xs" style="color:var(--text-muted)">%</span>
+            </div>
+            <span style="color:var(--text-primary)" id="im-gst">$${calcGst().toFixed(2)}</span>
+          </div>
+          <div class="flex justify-between text-sm items-center gap-2">
+            <div class="flex items-center gap-1.5">
+              <span class="text-xs font-medium w-8" style="color:var(--text-muted)">PST</span>
+              <input type="number" id="im-pst-rate" value="${f.pst_rate}" step="0.1" min="0" max="30" onchange="window._im.updTotals()" class="w-14 rounded px-1 py-0.5 text-xs text-center" style="border:1px solid var(--border-color);background:var(--bg-elevated);color:var(--text-primary)">
+              <span class="text-xs" style="color:var(--text-muted)">%</span>
+            </div>
+            <span style="color:var(--text-primary)" id="im-pst">$${calcPst().toFixed(2)}</span>
+          </div>
           <div class="flex justify-between text-lg font-bold pt-2 mt-1" style="border-top:2px solid var(--border-color)"><span style="color:var(--text-primary)">Total (CAD)</span><span class="text-emerald-500" id="im-total">$${calcTotal().toFixed(2)}</span></div>
         </div>
       </div>
@@ -420,7 +476,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <button onclick="document.getElementById('im-notes').value='This invoice covers materials and labor for the roof replacement at the property address listed above.';window._im.updTotals()" class="text-[10px] px-2 py-0.5 rounded" style="background:var(--bg-elevated);color:var(--text-secondary)">Scope</button>
           </div>
         </div>
-        <textarea id="im-notes" rows="3" class="w-full rounded-lg px-3 py-2 text-sm" style="border:1px solid var(--border-color);background:var(--bg-elevated);color:var(--text-primary)" placeholder="Additional notes...">${f.notes}</textarea>
+        <textarea id="im-notes" rows="3" class="w-full rounded-lg px-3 py-2 text-sm" style="border:1px solid var(--border-color);background:var(--bg-elevated);color:var(--text-primary)" placeholder="Visible to customer on the invoice (e.g. thank you message, special instructions)">${f.notes}</textarea>
       </div>
       <div class="rounded-xl p-6" style="background:var(--bg-card);border:1px solid var(--border-color)">
         <h3 class="text-lg font-bold mb-3" style="color:var(--text-primary)"><i class="fas fa-gavel text-emerald-400 mr-2"></i>Payment Terms</h3>
@@ -521,7 +577,8 @@ document.addEventListener('DOMContentLoaded', () => {
           <div class="w-72 space-y-1">
             <div class="flex justify-between text-sm"><span style="color:var(--text-muted)">Subtotal</span><span style="color:var(--text-primary)">$${sub.toFixed(2)}</span></div>
             ${disc > 0 ? `<div class="flex justify-between text-sm text-red-500"><span>Discount</span><span>-$${disc.toFixed(2)}</span></div>` : ''}
-            <div class="flex justify-between text-sm"><span style="color:var(--text-muted)">GST (${f.tax_rate}%)</span><span style="color:var(--text-primary)">$${tax.toFixed(2)}</span></div>
+            ${(f.gst_rate || 0) > 0 ? `<div class="flex justify-between text-sm"><span style="color:var(--text-muted)">GST (${f.gst_rate}%)</span><span style="color:var(--text-primary)">$${calcGst().toFixed(2)}</span></div>` : ''}
+            ${(f.pst_rate || 0) > 0 ? `<div class="flex justify-between text-sm"><span style="color:var(--text-muted)">PST (${f.pst_rate}%)</span><span style="color:var(--text-primary)">$${calcPst().toFixed(2)}</span></div>` : ''}
             <div class="flex justify-between text-lg font-bold pt-2 mt-1" style="border-top:2px solid var(--border-color)"><span style="color:var(--text-primary)">Total (CAD)</span><span class="text-emerald-500">$${total.toFixed(2)}</span></div>
           </div>
         </div>
@@ -559,35 +616,49 @@ document.addEventListener('DOMContentLoaded', () => {
     const sub = calcSub();
     return f.discount_type === 'percentage' ? sub * (f.discount_amount / 100) : (f.discount_amount || 0);
   }
-  function calcTax() {
+  function calcTaxable() {
     const sub = calcSub();
     const disc = calcDisc();
     const taxable = state.form.items.filter(i => i.is_taxable).reduce((s, i) => s + (i.quantity || 0) * (i.unit_price || 0), 0);
     const ratio = sub > 0 ? (sub - disc) / sub : 1;
-    return Math.round(taxable * ratio * (state.form.tax_rate / 100) * 100) / 100;
+    return taxable * ratio;
   }
+  function calcGst() { return Math.round(calcTaxable() * (state.form.gst_rate / 100) * 100) / 100; }
+  function calcPst() { return Math.round(calcTaxable() * (state.form.pst_rate / 100) * 100) / 100; }
+  function calcTax() { return calcGst() + calcPst(); }
   function calcTotal() { return Math.round((calcSub() - calcDisc() + calcTax()) * 100) / 100; }
 
   function updTotals() {
     state.form.discount_type = (document.getElementById('im-disc-type') || {}).value || 'fixed';
     state.form.discount_amount = parseFloat((document.getElementById('im-discount') || {}).value) || 0;
+    const gstRateEl = document.getElementById('im-gst-rate');
+    const pstRateEl = document.getElementById('im-pst-rate');
+    if (gstRateEl) state.form.gst_rate = parseFloat(gstRateEl.value) || 0;
+    if (pstRateEl) state.form.pst_rate = parseFloat(pstRateEl.value) || 0;
     const s = document.getElementById('im-subtotal');
-    const t = document.getElementById('im-tax');
-    const g = document.getElementById('im-total');
+    const gstEl = document.getElementById('im-gst');
+    const pstEl = document.getElementById('im-pst');
+    const tot = document.getElementById('im-total');
+    const hdrTot = document.getElementById('im-header-total');
     if (s) s.textContent = '$' + calcSub().toFixed(2);
-    if (t) t.textContent = '$' + calcTax().toFixed(2);
-    if (g) g.textContent = '$' + calcTotal().toFixed(2);
+    if (gstEl) gstEl.textContent = '$' + calcGst().toFixed(2);
+    if (pstEl) pstEl.textContent = '$' + calcPst().toFixed(2);
+    if (tot) tot.textContent = '$' + calcTotal().toFixed(2);
+    if (hdrTot) hdrTot.textContent = '$' + calcTotal().toFixed(2);
   }
 
   function collectForm() {
     const f = state.form;
-    f.customer_id = (document.getElementById('im-customer') || {}).value || '';
+    // customer_id is set by selectCustomer() directly on state.form, not from a select element
     f.created_date = (document.getElementById('im-date') || {}).value || f.created_date;
     f.due_date = (document.getElementById('im-due') || {}).value || f.due_date;
     f.notes = (document.getElementById('im-notes') || {}).value || '';
     f.terms = (document.getElementById('im-terms') || {}).value || '';
     f.discount_type = (document.getElementById('im-disc-type') || {}).value || 'fixed';
     f.discount_amount = parseFloat((document.getElementById('im-discount') || {}).value) || 0;
+    f.gst_rate = parseFloat((document.getElementById('im-gst-rate') || {}).value) || 0;
+    f.pst_rate = parseFloat((document.getElementById('im-pst-rate') || {}).value) || 0;
+    f.tax_rate = f.gst_rate + f.pst_rate;
     var reportSelect = document.getElementById('im-report');
     if (reportSelect) f.attached_report_id = reportSelect.value || null;
     return f;
@@ -601,6 +672,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const f = state.form;
     if (!f.customer_id) { imToast('Please select a customer', 'error'); return; }
     if (!f.items.some(i => i.description)) { imToast('Add at least one line item', 'error'); return; }
+    if (!f.items.some(i => i.description && (i.quantity || 0) * (i.unit_price || 0) > 0)) { imToast('At least one line item must have a non-zero amount', 'error'); return; }
+    if (f.due_date && f.created_date && f.due_date < f.created_date) { imToast('Due date must be on or after the invoice date', 'error'); return; }
 
     try {
       const payload = {
@@ -697,6 +770,76 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     },
     updTotals,
+    filterCustomers(term) {
+      state.customerSearch = term;
+      const dropdown = document.getElementById('im-customer-dropdown');
+      if (!dropdown) return;
+      const lc = (term || '').toLowerCase();
+      const filtered = lc.length > 0
+        ? state.customers.filter(c =>
+            (c.name || '').toLowerCase().includes(lc) ||
+            (c.email || '').toLowerCase().includes(lc) ||
+            (c.company_name || '').toLowerCase().includes(lc)
+          ).slice(0, 12)
+        : state.customers.slice(0, 12);
+      dropdown.style.display = 'block';
+      dropdown.innerHTML = filtered.map(c => `
+        <div onclick="window._im.selectCustomer('${c.id}')" class="px-4 py-2.5 cursor-pointer flex items-center justify-between" style="border-bottom:1px solid var(--border-color)" onmouseenter="this.style.background='rgba(16,185,129,0.08)'" onmouseleave="this.style.background=''">
+          <div>
+            <div class="text-sm font-medium" style="color:var(--text-primary)">${c.name || c.email || ''}</div>
+            ${c.company_name ? `<div class="text-xs" style="color:var(--text-muted)">${c.company_name}</div>` : ''}
+          </div>
+          ${c.source === 'crm' ? `<span class="text-[10px] px-1.5 py-0.5 rounded" style="background:var(--bg-elevated);color:var(--text-muted)">CRM</span>` : ''}
+        </div>
+      `).join('') + `
+        <div onclick="window._im.promptNewCustomer()" class="px-4 py-2.5 cursor-pointer flex items-center gap-2 text-emerald-400 font-medium text-sm" onmouseenter="this.style.background='rgba(16,185,129,0.08)'" onmouseleave="this.style.background=''">
+          <i class="fas fa-plus text-xs"></i><span>New Customer</span>
+        </div>
+      `;
+    },
+    openCustomerDropdown() {
+      const term = (document.getElementById('im-customer-search') || {}).value || '';
+      window._im.filterCustomers(term);
+    },
+    selectCustomer(id) {
+      const c = state.customers.find(c => c.id == id);
+      if (!c) return;
+      state.form.customer_id = id;
+      state.form.customer_address = c.address || '';
+      const input = document.getElementById('im-customer-search');
+      if (input) input.value = c.name || c.email || '';
+      const dropdown = document.getElementById('im-customer-dropdown');
+      if (dropdown) dropdown.style.display = 'none';
+      const addrEl = document.getElementById('im-cust-address-display');
+      if (addrEl) {
+        if (c.address) {
+          addrEl.innerHTML = `<i class="fas fa-map-marker-alt text-xs text-emerald-400"></i><span style="margin-left:6px">${c.address}</span>`;
+          addrEl.style.display = 'flex';
+        } else {
+          addrEl.style.display = 'none';
+        }
+      }
+      document.querySelectorAll('.im-customer-chip').forEach(chip => {
+        const chipId = chip.dataset.customerId;
+        if (String(chipId) === String(id)) {
+          chip.style.cssText = 'background:#10b981;color:white;border:1px solid #10b981;padding:4px 12px;border-radius:9999px;font-size:12px;font-weight:500';
+        } else {
+          chip.style.cssText = 'background:var(--bg-elevated);color:var(--text-secondary);border:1px solid var(--border-color);padding:4px 12px;border-radius:9999px;font-size:12px;font-weight:500';
+        }
+      });
+    },
+    clearCustomer() {
+      state.form.customer_id = '';
+      state.form.customer_address = '';
+      const input = document.getElementById('im-customer-search');
+      if (input) input.value = '';
+      const dropdown = document.getElementById('im-customer-dropdown');
+      if (dropdown) dropdown.style.display = 'none';
+      render();
+    },
+    promptNewCustomer() {
+      imToast('To add a new customer, go to the Customers section in the main menu.', 'info');
+    },
     saveDraft() { saveInvoice(false); },
     saveAndSend() { saveInvoice(true); },
     async edit(id) {
@@ -708,9 +851,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const items = data.items || [];
         const payLinks = data.payment_links || [];
         const activeLink = payLinks.find(l => l.status !== 'cancelled') || {};
+        const storedTaxRate = inv.tax_rate || 5.0;
+        const editGst = storedTaxRate <= 5 ? storedTaxRate : 5;
+        const editPst = storedTaxRate > 5 ? Math.round((storedTaxRate - 5) * 10) / 10 : 0;
+        const editCust = state.customers.find(c => c.id == inv.customer_id);
         state.editId = id;
         state.form = {
           customer_id: inv.customer_id,
+          customer_address: (editCust && editCust.address) || inv.customer_address || '',
           from_proposal_id: null,
           invoice_number: inv.invoice_number,
           created_date: (inv.created_at || '').slice(0, 10),
@@ -721,7 +869,8 @@ document.addEventListener('DOMContentLoaded', () => {
           })) : [{ description: '', quantity: 1, unit: 'each', unit_price: 0, is_taxable: true }],
           discount_type: inv.discount_type || 'fixed',
           discount_amount: inv.discount_amount || 0,
-          tax_rate: inv.tax_rate || 5.0,
+          gst_rate: editGst,
+          pst_rate: editPst,
           notes: inv.notes || '',
           terms: inv.terms || '',
           order_id: inv.order_id || null,
@@ -815,15 +964,21 @@ document.addEventListener('DOMContentLoaded', () => {
         .then(data => {
           const fullInv = data.invoice;
           const items = data.items || [];
+          const cloneTax = fullInv.tax_rate || 5;
+          const cloneGst = cloneTax <= 5 ? cloneTax : 5;
+          const clonePst = cloneTax > 5 ? Math.round((cloneTax - 5) * 10) / 10 : 0;
+          const cloneCust = state.customers.find(c => c.id == fullInv.customer_id);
           state.form = {
             customer_id: fullInv.customer_id || '',
+            customer_address: (cloneCust && cloneCust.address) || '',
             invoice_number: 'INV-' + new Date().toISOString().slice(0,10).replace(/-/g,'') + '-' + Math.random().toString(36).slice(2,6).toUpperCase(),
             created_date: new Date().toISOString().slice(0,10),
             due_date: new Date(Date.now() + 30*24*60*60*1000).toISOString().slice(0,10),
             items: items.length > 0 ? items.map(function(item) { return { description: item.description, quantity: item.quantity, unit: item.unit || 'each', unit_price: item.unit_price, is_taxable: item.is_taxable !== 0 }; }) : [{ description: '', quantity: 1, unit: 'each', unit_price: 0, is_taxable: true }],
             discount_type: fullInv.discount_type || 'fixed',
             discount_amount: fullInv.discount_amount || 0,
-            tax_rate: fullInv.tax_rate || 5,
+            gst_rate: cloneGst,
+            pst_rate: clonePst,
             notes: fullInv.notes || '',
             terms: fullInv.terms || '',
             attached_report_id: fullInv.attached_report_id || null,
@@ -870,8 +1025,13 @@ document.addEventListener('DOMContentLoaded', () => {
         state.editId = null;
         const today = new Date();
         const due = new Date(today); due.setDate(due.getDate() + 30);
+        const fpTax = inv.tax_rate || 5.0;
+        const fpGst = fpTax <= 5 ? fpTax : 5;
+        const fpPst = fpTax > 5 ? Math.round((fpTax - 5) * 10) / 10 : 0;
+        const fpCust = state.customers.find(c => c.id == inv.customer_id);
         state.form = {
           customer_id: inv.customer_id,
+          customer_address: (fpCust && fpCust.address) || '',
           from_proposal_id: inv.id,
           invoice_number: 'INV-' + today.toISOString().slice(0, 10).replace(/-/g, '') + '-' + Math.floor(Math.random() * 9999).toString().padStart(4, '0'),
           created_date: today.toISOString().slice(0, 10),
@@ -882,7 +1042,8 @@ document.addEventListener('DOMContentLoaded', () => {
           })),
           discount_type: inv.discount_type || 'fixed',
           discount_amount: inv.discount_amount || 0,
-          tax_rate: inv.tax_rate || 5.0,
+          gst_rate: fpGst,
+          pst_rate: fpPst,
           notes: 'Created from proposal ' + inv.invoice_number,
           terms: inv.terms || 'Payment due within 30 days.',
           order_id: inv.order_id || null,
