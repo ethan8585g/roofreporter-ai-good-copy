@@ -223,12 +223,6 @@ function renderDashboard() {
           navLink('/customer/email-outreach', 'fa-envelope-open-text', 'Email Outreach', null, '') +
           navLink('/customer/website-builder', 'fa-globe', 'AI Website Builder', 'New', 'bg-emerald-500') +
         '</div>' +
-        // Marketing
-        '<div>' +
-          '<p class="px-3 mb-1 text-[10px] font-bold uppercase tracking-wider" style="color:var(--text-muted)">Marketing</p>' +
-          navLink('/customer/google-ads', 'fa-bullhorn', 'Google Ads', 'New', 'bg-blue-500/100') +
-          navLink('/customer/google-business', 'fa-store', 'Business Profile', 'New', 'bg-emerald-500/100') +
-        '</div>' +
         (c.is_dev ? '<div><p class="px-3 mb-1 text-[10px] font-bold uppercase tracking-wider" style="color:var(--text-muted)">Dev</p>' + navLink('/customer/property-imagery', 'fa-satellite', 'Property Imagery', 'Dev', 'bg-gray-800') + '</div>' : '') +
       '</nav>' +
       // Credits footer
