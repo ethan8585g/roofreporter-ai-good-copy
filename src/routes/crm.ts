@@ -820,6 +820,11 @@ crmRoutes.put('/proposals/:id', async (c) => {
       await c.env.DB.prepare("UPDATE crm_proposals SET status = ?, updated_at = datetime('now') WHERE id = ? AND owner_id = ?").bind(body.status, id, ownerId).run()
       return c.json({ success: true })
     }
+    // Quick source_report_id-only update
+    if ('source_report_id' in body && Object.keys(body).length === 1) {
+      await c.env.DB.prepare("UPDATE crm_proposals SET source_report_id = ?, updated_at = datetime('now') WHERE id = ? AND owner_id = ?").bind(body.source_report_id ?? null, id, ownerId).run()
+      return c.json({ success: true })
+    }
 
     // Resolve customer — either existing or auto-create new
     const custResult = await resolveCustomerId(c, ownerId, body)
@@ -839,13 +844,13 @@ crmRoutes.put('/proposals/:id', async (c) => {
     await c.env.DB.prepare(`
       UPDATE crm_proposals SET crm_customer_id=?, title=?, property_address=?, scope_of_work=?, materials_detail=?,
         labor_cost=?, material_cost=?, other_cost=?, subtotal=?, tax_rate=?, tax_amount=?, total_amount=?,
-        valid_until=?, notes=?, warranty_terms=?, payment_terms=?, status=?, updated_at=datetime('now')
+        valid_until=?, notes=?, warranty_terms=?, payment_terms=?, status=?, source_report_id=?, updated_at=datetime('now')
       WHERE id=? AND owner_id=?
     `).bind(customerId, body.title, body.property_address || null, body.scope_of_work || null,
       body.materials_detail || null, body.labor_cost || 0, body.material_cost || 0, body.other_cost || 0,
       subtotal, taxRate, taxAmount, total, body.valid_until || null, body.notes || null,
       body.warranty_terms || null, body.payment_terms || null,
-      body.status || 'draft', id, ownerId).run()
+      body.status || 'draft', body.source_report_id ?? null, id, ownerId).run()
 
     // Replace line items
     if (body.items) {

@@ -1655,7 +1655,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // ============================================================
   // API ACTIONS
   // ============================================================
-  async function saveProposal(andSend = false) {
+  async function saveProposal(andSend = false, silent = false) {
     // Collect from dashboard if we're on step 3, otherwise from editor
     if (state.createStep === 3 && typeof window._pb.collectDashboardData === 'function') {
       window._pb.collectDashboardData();
@@ -1784,6 +1784,9 @@ document.addEventListener('DOMContentLoaded', () => {
       const data = await res.json();
       const proposalId = state.editId || data.invoice?.id;
       const shareUrl = data.invoice?.share_url || '';
+
+      // silent=true means caller will handle state reset and UI (e.g. saveAndCreateSupplierOrder)
+      if (silent) return proposalId;
 
       if (andSend && proposalId) {
         const sendRes = await fetch('/api/invoices/' + proposalId + '/send', {
@@ -2266,20 +2269,21 @@ document.addEventListener('DOMContentLoaded', () => {
       saveProposal(true);
     },
     async saveAndCreateSupplierOrder() {
-      // Save proposal first to get an ID, then create supplier order
+      // Save proposal first (silent=true skips the confirm dialog + state reset),
+      // then create supplier order linked to the saved proposal ID.
       window._pb.collectDashboardData();
       if (!state.form.customer_name) { pbToast('Please enter customer name first', 'error'); return; }
       pbToast('Saving proposal & generating supplier order...', 'info');
       try {
-        await saveProposal(false);
-        // After save, editId should be set
-        var proposalId = state.editId;
-        if (proposalId) {
-          await createSupplierOrder(proposalId);
-        } else {
-          // If no editId, create supplier order without proposal link
-          await createSupplierOrder(null);
-        }
+        var proposalId = await saveProposal(false, true);  // silent — returns proposalId
+        if (!proposalId) return;  // saveProposal already showed an error toast
+        await createSupplierOrder(proposalId);
+        // Go back to list after supplier order created
+        pbClearDraft();
+        state.mode = 'list';
+        state.editId = null;
+        state.form = resetForm();
+        load();
       } catch(e) {
         pbToast('Error: ' + (e.message || 'Failed to create supplier order'), 'error');
       }

@@ -878,6 +878,7 @@
         html += '<span class="text-lg font-black text-white">' + money(p.total_amount) + '</span>';
         html += '<div class="flex items-center gap-1.5 flex-wrap justify-end">';
         html += '<button onclick="window._crmViewProposal(' + p.id + ')" class="text-xs text-brand-600 hover:underline font-medium"><i class="fas fa-eye mr-0.5"></i>View</button>';
+        html += '<button onclick="window._crmLinkReport(' + p.id + ')" class="text-xs text-purple-400 hover:underline" title="' + (p.source_report_id ? 'Report linked ✓' : 'Link roof report') + '"><i class="fas fa-' + (p.source_report_id ? 'link text-emerald-400' : 'file-medical') + ' mr-0.5"></i>' + (p.source_report_id ? '' : 'Link Report') + '</button>';
         if (p.status === 'draft') {
           html += '<button onclick="window._crmEditProposal(' + p.id + ')" class="text-xs text-gray-500 hover:text-gray-300"><i class="fas fa-edit"></i></button>';
           html += '<button onclick="window._crmSendProposal(' + p.id + ')" class="text-xs text-blue-600 hover:underline font-medium"><i class="fas fa-paper-plane mr-0.5"></i>Send</button>';
@@ -1241,6 +1242,37 @@
 
       setTimeout(function() { window._propRecalc(); }, 100);
     }).catch(function(e) { toast('Failed to load proposal: ' + (e.message || 'Network error'), 'error'); });
+  };
+
+  window._crmLinkReport = function(id) {
+    fetch('/api/customer/orders', { headers: authHeadersOnly() })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        var orders = (data.orders || []).filter(function(o) { return o.status === 'completed' || o.report_id; });
+        var opts = '<option value="">— No report —</option>';
+        orders.forEach(function(o) {
+          opts += '<option value="' + o.id + '">' + (o.address || o.property_address || 'Order #' + o.id) + (o.created_at ? ' — ' + o.created_at.substring(0, 10) : '') + '</option>';
+        });
+        var body = '<div class="space-y-3">' +
+          '<p class="text-sm" style="color:var(--text-muted)">Select the roof measurement report to include in this proposal\'s preview.</p>' +
+          '<div><label class="block text-xs font-medium text-gray-400 mb-1"><i class="fas fa-file-alt mr-1 text-blue-400"></i>Roof Report</label>' +
+          '<select id="linkReportSel" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm" style="background:var(--bg-elevated);color:var(--text-primary)">' + opts + '</select></div>' +
+        '</div>';
+        showModal('Link Roof Report', body, function() {
+          var val = document.getElementById('linkReportSel').value;
+          fetch('/api/crm/proposals/' + id, {
+            method: 'PUT', headers: authHeaders(),
+            body: JSON.stringify({ source_report_id: val ? parseInt(val) : null })
+          })
+          .then(function(r) { return r.json(); })
+          .then(function(res) {
+            if (res.success) { closeModal(); toast('Report linked! Preview will now show measurement data.', 'success'); loadProposals(window._propFilter); }
+            else { toast(res.error || 'Failed', 'error'); }
+          })
+          .catch(function(e) { toast('Network error', 'error'); });
+        }, 'Link Report');
+      })
+      .catch(function() { toast('Could not load reports', 'error'); });
   };
 
   window._crmMarkProposal = function(id, status) {
