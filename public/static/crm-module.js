@@ -3681,21 +3681,54 @@
   // MODULE: PIPELINE
   // ============================================================
   function renderPipeCard(item, type) {
-    var html = '<div class="pipe-card bg-[#111111] rounded-xl border border-white/10 p-3 shadow-sm hover:shadow-md transition-shadow cursor-grab active:cursor-grabbing"';
-    html += ' data-id="' + item.id + '" data-type="' + type + '">';
-    if (type === 'customer') {
-      html += '<p class="font-semibold text-sm text-gray-100 truncate">' + (item.name || 'Unknown') + '</p>';
-      if (item.company) html += '<p class="text-xs text-gray-500 truncate"><i class="fas fa-building mr-1"></i>' + item.company + '</p>';
-      if (item.phone) html += '<p class="text-xs text-gray-500"><i class="fas fa-phone mr-1"></i>' + item.phone + '</p>';
-      if (item.address) html += '<p class="text-xs text-gray-400 truncate"><i class="fas fa-map-marker-alt mr-1"></i>' + item.address + '</p>';
-      if (item.lifetime_value > 0) html += '<p class="text-xs font-semibold text-green-700 mt-1">' + money(item.lifetime_value) + ' lifetime</p>';
-    } else {
-      html += '<p class="font-semibold text-sm text-gray-100 truncate">' + (item.title || item.proposal_number || 'Proposal') + '</p>';
-      if (item.customer_name) html += '<p class="text-xs text-gray-500 truncate"><i class="fas fa-user mr-1"></i>' + item.customer_name + '</p>';
-      if (item.property_address) html += '<p class="text-xs text-gray-400 truncate"><i class="fas fa-map-marker-alt mr-1"></i>' + item.property_address + '</p>';
-      if (item.total_amount) html += '<p class="text-xs font-semibold text-brand-700 mt-1">' + money(item.total_amount) + '</p>';
+    var now = new Date();
+    var lastContact = new Date(item.updated_at || item.created_at);
+    var daysDiff = Math.floor((now - lastContact) / (1000 * 60 * 60 * 24));
+    var dotColor = daysDiff <= 2 ? '#22c55e' : daysDiff <= 7 ? '#f59e0b' : '#ef4444';
+    var dotTitle = daysDiff <= 2 ? 'Hot' : daysDiff <= 7 ? 'Warm' : 'Cold — ' + daysDiff + 'd ago';
+    var name = type === 'customer' ? (item.name || 'Unknown') : (item.customer_name || item.name || 'Unknown');
+    var value = type === 'proposal' && item.total_amount ? money(item.total_amount) : (parseFloat(item.lifetime_value) > 0 ? money(item.lifetime_value) : null);
+    var address = item.property_address || item.address || '';
+    var phone = item.phone || item.customer_phone || '';
+    var dealId = item.proposal_number || ('#' + item.id);
+
+    var html = '<div class="pipe-card rounded-xl border border-white/10 p-3 shadow-sm hover:shadow-md hover:border-white/20 transition-all cursor-grab active:cursor-grabbing"';
+    html += ' style="background:var(--bg-card)" data-id="' + item.id + '" data-type="' + type + '">';
+
+    // Name + Value
+    html += '<div class="flex items-start justify-between gap-2 mb-1.5">';
+    html += '<p class="font-bold text-sm truncate flex-1" style="color:var(--text-primary)">' + name + '</p>';
+    if (value) html += '<span class="text-xs font-bold text-emerald-400 shrink-0">' + value + '</span>';
+    html += '</div>';
+
+    // Address
+    if (address) html += '<p class="text-[11px] truncate mb-1.5" style="color:var(--text-muted)"><i class="fas fa-map-marker-alt mr-1"></i>' + address + '</p>';
+
+    // Phone + freshness dot
+    html += '<div class="flex items-center justify-between mb-2">';
+    html += '<span class="text-[11px]" style="color:var(--text-muted)">' + (phone ? '<i class="fas fa-phone mr-1"></i>' + phone : '') + '</span>';
+    html += '<span style="display:inline-flex;align-items:center;gap:3px">';
+    html += '<span style="width:7px;height:7px;border-radius:50%;background:' + dotColor + '" title="' + dotTitle + '"></span>';
+    html += '<span class="text-[10px]" style="color:var(--text-muted)">' + (daysDiff === 0 ? 'Today' : daysDiff + 'd ago') + '</span>';
+    html += '</span></div>';
+
+    // Status badge + deposit + deal ID
+    html += '<div class="flex items-center gap-1 flex-wrap">';
+    html += badge(item.status);
+    if (type === 'proposal' && parseFloat(item.deposit_paid) > 0) {
+      html += '<span class="text-[10px] px-1.5 py-0.5 rounded font-medium" style="background:rgba(245,158,11,0.15);color:#f59e0b">Dep: ' + money(item.deposit_paid) + '</span>';
     }
-    html += '<div class="mt-1.5 flex items-center gap-2">' + badge(item.status) + '<span class="text-[10px] text-gray-400">' + fmtDate(item.updated_at || item.created_at) + '</span></div>';
+    html += '<span class="text-[10px] ml-auto" style="color:var(--text-muted)">' + dealId + '</span>';
+    html += '</div>';
+
+    // Quick actions for lead cards
+    if (type === 'customer' && item.status === 'lead') {
+      html += '<div class="mt-2 flex gap-1.5">';
+      html += '<button onclick="event.stopPropagation();window._pipeQuickMove(' + item.id + ',\'active\')" class="flex-1 text-[11px] py-1 rounded-lg font-semibold" style="background:rgba(59,130,246,0.2);color:#60a5fa">Move to Active</button>';
+      if (phone) html += '<a href="tel:' + phone + '" onclick="event.stopPropagation()" class="text-center px-3 text-[11px] py-1 rounded-lg font-semibold" style="background:rgba(34,197,94,0.2);color:#4ade80"><i class="fas fa-phone"></i></a>';
+      html += '</div>';
+    }
+
     html += '</div>';
     return html;
   }
@@ -3704,50 +3737,74 @@
     window._pipelineCustomers = customers;
     window._pipelineProposals = proposals;
 
+    // Exclude from Active Leads any customer who already has an open/won proposal
+    var customersWithProposals = new Set(proposals
+      .filter(function(p) { return p.status === 'draft' || p.status === 'sent' || p.status === 'viewed' || p.status === 'accepted'; })
+      .map(function(p) { return String(p.crm_customer_id); }));
+
+    var leadItems     = customers.filter(function(c) { return c.status === 'lead'; });
+    var activeItems   = customers.filter(function(c) { return c.status === 'active' && !customersWithProposals.has(String(c.id)); });
+    var proposalItems = proposals.filter(function(p) { return p.status === 'draft' || p.status === 'sent' || p.status === 'viewed'; });
+    var wonItems      = proposals.filter(function(p) { return p.status === 'accepted'; });
+    var lostProposals = proposals.filter(function(p) { return p.status === 'declined'; });
+    var lostCustomers = customers.filter(function(c) { return c.status === 'lost'; }).map(function(c) { return Object.assign({}, c, { _lostCust: true }); });
+    var lostItems     = lostProposals.concat(lostCustomers);
+
+    var pipelineValue = proposalItems.reduce(function(s, p) { return s + (parseFloat(p.total_amount) || 0); }, 0);
+    var wonValue      = wonItems.reduce(function(s, p) { return s + (parseFloat(p.total_amount) || 0); }, 0);
+    var closeRate     = (wonItems.length + lostItems.length) > 0 ? Math.round(wonItems.length / (wonItems.length + lostItems.length) * 100) : 0;
+
     var cols = [
-      { id: 'leads', title: 'Lead Capture', icon: 'fa-bullseye', bgClass: 'bg-blue-500', lightClass: 'bg-blue-50', borderClass: 'border-blue-200', ringClass: 'ring-blue-300', textClass: 'text-blue-700', items: customers.filter(function(c) { return c.status === 'lead'; }), type: 'customer', dropStatus: 'lead' },
-      { id: 'contacted', title: 'Contact Made', icon: 'fa-phone-alt', bgClass: 'bg-white/10', lightClass: 'bg-white/10', borderClass: 'border-white/15', ringClass: 'ring-gray-300', textClass: 'text-gray-400', items: customers.filter(function(c) { return c.status === 'active'; }), type: 'customer', dropStatus: 'active' },
-      { id: 'proposals', title: 'Proposal Sent', icon: 'fa-file-signature', bgClass: 'bg-blue-500/15', lightClass: 'bg-blue-500/15', borderClass: 'border-blue-500/20', ringClass: 'ring-blue-400', textClass: 'text-blue-400', items: proposals.filter(function(p) { return p.status === 'draft' || p.status === 'sent' || p.status === 'viewed'; }), type: 'proposal', dropStatus: 'sent' },
-      { id: 'won', title: 'Won / Closed', icon: 'fa-handshake', bgClass: 'bg-green-500', lightClass: 'bg-green-50', borderClass: 'border-green-200', ringClass: 'ring-green-300', textClass: 'text-green-700', items: proposals.filter(function(p) { return p.status === 'accepted'; }), type: 'proposal', dropStatus: 'accepted' }
+      { id: 'leads',     title: 'Lead Capture',  icon: 'fa-bullseye',       hdrBg: '#1e3a5f', ringClass: 'ring-blue-500',    items: leadItems,     type: 'customer', dropStatus: 'lead',     acceptType: 'customer' },
+      { id: 'active',    title: 'Active Leads',   icon: 'fa-phone-alt',      hdrBg: '#312e81', ringClass: 'ring-indigo-400',  items: activeItems,   type: 'customer', dropStatus: 'active',   acceptType: 'customer' },
+      { id: 'proposals', title: 'Proposal Sent',  icon: 'fa-file-signature', hdrBg: '#1e3a8a', ringClass: 'ring-blue-400',   items: proposalItems, type: 'proposal', dropStatus: 'sent',     acceptType: 'proposal' },
+      { id: 'won',       title: 'Won / Closed',   icon: 'fa-handshake',      hdrBg: '#14532d', ringClass: 'ring-emerald-400', items: wonItems,      type: 'proposal', dropStatus: 'accepted', acceptType: 'proposal' },
+      { id: 'lost',      title: 'Lost',           icon: 'fa-times-circle',   hdrBg: '#450a0a', ringClass: 'ring-red-400',    items: lostItems,     type: 'mixed',    dropStatus: 'declined', acceptType: 'both' }
     ];
 
-    var openValue = cols[2].items.reduce(function(s, p) { return s + (parseFloat(p.total_amount) || 0); }, 0);
-    var wonValue = cols[3].items.reduce(function(s, p) { return s + (parseFloat(p.total_amount) || 0); }, 0);
+    // Header
+    var html = '<div class="mb-4 flex items-center justify-between flex-wrap gap-3">' +
+      '<div><h2 class="text-lg font-bold" style="color:var(--text-primary)"><i class="fas fa-funnel-dollar text-blue-400 mr-2"></i>Sales Pipeline</h2>' +
+      '<p class="text-xs mt-0.5" style="color:var(--text-muted)">Drag cards between stages · ' + (leadItems.length + activeItems.length + proposalItems.length) + ' active deals</p></div>' +
+      '<button onclick="window._crmAddLead()" style="background:#2563eb;color:white" class="px-4 py-2 rounded-lg text-sm font-semibold hover:opacity-90 transition-opacity"><i class="fas fa-user-plus mr-1.5"></i>Add Lead</button></div>';
 
-    var html = '<div class="mb-5 flex items-center justify-between flex-wrap gap-3">' +
-      '<div><h2 class="text-lg font-bold text-gray-100"><i class="fas fa-funnel-dollar text-brand-500 mr-2"></i>Sales Pipeline</h2>' +
-      '<p class="text-xs text-gray-500 mt-0.5">Drag cards between stages to update status</p></div>' +
-      '<button onclick="window._crmAddLead()" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-700"><i class="fas fa-user-plus mr-1"></i>Add Lead</button></div>';
+    // Summary bar
+    html += '<div class="rounded-xl border border-white/10 p-4 mb-5 grid grid-cols-2 md:grid-cols-4 gap-4" style="background:var(--bg-card)">' +
+      '<div><p class="text-[10px] uppercase font-semibold tracking-wider mb-1" style="color:var(--text-muted)">Total Pipeline</p><p class="text-xl font-black text-blue-400">' + money(pipelineValue) + '</p></div>' +
+      '<div><p class="text-[10px] uppercase font-semibold tracking-wider mb-1" style="color:var(--text-muted)">Forecast (Won)</p><p class="text-xl font-black text-emerald-400">' + money(wonValue) + '</p></div>' +
+      '<div><p class="text-[10px] uppercase font-semibold tracking-wider mb-1" style="color:var(--text-muted)">Close Rate</p><p class="text-xl font-black" style="color:var(--text-primary)">' + closeRate + '%</p></div>' +
+      '<div><p class="text-[10px] uppercase font-semibold tracking-wider mb-1" style="color:var(--text-muted)">Open Proposals</p><p class="text-xl font-black text-indigo-400">' + proposalItems.length + '</p></div>' +
+      '</div>';
 
-    html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">' +
-      '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-blue-600">' + (cols[0].items.length + cols[1].items.length) + '</p><p class="text-[10px] text-gray-500">Active Leads</p></div>' +
-      '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-blue-400">' + cols[2].items.length + '</p><p class="text-[10px] text-gray-500">Open Proposals</p></div>' +
-      '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-gray-300">' + money(openValue) + '</p><p class="text-[10px] text-gray-500">Pipeline Value</p></div>' +
-      '<div class="bg-[#111111] rounded-xl border p-4 text-center"><p class="text-2xl font-black text-emerald-400">' + money(wonValue) + '</p><p class="text-[10px] text-gray-500">Won Value</p></div></div>';
+    // Kanban board — horizontally scrollable on mobile
+    html += '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -4px;padding:0 4px 8px">';
+    html += '<div style="display:grid;grid-template-columns:repeat(5,minmax(210px,1fr));gap:12px;min-width:1060px">';
 
-    html += '<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">';
     cols.forEach(function(col) {
-      var colValue = col.type === 'proposal' ? col.items.reduce(function(s, p) { return s + (parseFloat(p.total_amount) || 0); }, 0) : 0;
+      var colValue = col.items.reduce(function(s, p) { return s + (parseFloat(p.total_amount) || 0); }, 0);
       html += '<div class="flex flex-col">';
-      html += '<div class="' + col.bgClass + ' text-white rounded-t-xl px-4 py-3 flex items-center justify-between">' +
-        '<div class="flex items-center gap-2"><i class="fas ' + col.icon + '"></i><span class="font-semibold text-sm">' + col.title + '</span></div>' +
-        '<span class="bg-[#111111]/20 text-white text-xs font-bold px-2 py-0.5 rounded-full">' + col.items.length + '</span></div>';
+      html += '<div class="rounded-t-xl px-3 py-2.5 flex items-center justify-between" style="background:' + col.hdrBg + '">' +
+        '<div class="flex items-center gap-1.5"><i class="fas ' + col.icon + ' text-xs opacity-80" style="color:#fff"></i><span class="font-semibold text-xs text-white">' + col.title + '</span></div>' +
+        '<span class="text-white text-[11px] font-bold px-2 py-0.5 rounded-full" style="background:rgba(0,0,0,0.35)">' + col.items.length + '</span></div>';
       if (colValue > 0) {
-        html += '<div class="' + col.lightClass + ' border-x ' + col.borderClass + ' px-4 py-1 text-xs font-semibold ' + col.textClass + '">' + money(colValue) + ' value</div>';
+        html += '<div class="px-3 py-1 text-[11px] font-semibold text-emerald-400 border-x border-white/10" style="background:rgba(16,185,129,0.08)">' + money(colValue) + ' total</div>';
       }
       html += '<div id="pipe-col-' + col.id + '" data-col-type="' + col.type + '" data-col-status="' + col.dropStatus + '"';
-      html += ' class="flex-1 ' + col.lightClass + ' border border-t-0 ' + col.borderClass + ' rounded-b-xl p-3 space-y-2 min-h-[200px]"';
-      html += ' ondragover="event.preventDefault(); this.classList.add(\'ring-2\', \'' + col.ringClass + '\')"';
-      html += ' ondragleave="this.classList.remove(\'ring-2\', \'' + col.ringClass + '\')"';
-      html += ' ondrop="window._pipeDrop(event, \'' + col.id + '\', \'' + col.type + '\', \'' + col.dropStatus + '\')">';
+      html += ' class="flex-1 rounded-b-xl border border-t-0 border-white/10 p-2.5 space-y-2 min-h-[240px]" style="background:rgba(255,255,255,0.02)"';
+      html += ' ondragover="event.preventDefault();this.classList.add(\'ring-2\',\'' + col.ringClass + '\')"';
+      html += ' ondragleave="this.classList.remove(\'ring-2\',\'' + col.ringClass + '\')"';
+      html += ' ondrop="window._pipeDrop(event,\'' + col.id + '\',\'' + col.type + '\',\'' + col.dropStatus + '\',\'' + col.acceptType + '\')">';
       if (col.items.length === 0) {
-        html += '<div class="text-center py-8 text-gray-300"><i class="fas ' + col.icon + ' text-2xl mb-2 block"></i><p class="text-xs">No items yet</p></div>';
+        html += '<div class="text-center py-10"><i class="fas ' + col.icon + ' text-2xl mb-2 block opacity-10" style="color:#fff"></i><p class="text-[11px]" style="color:var(--text-muted)">Drop here</p></div>';
       } else {
-        col.items.forEach(function(item) { html += renderPipeCard(item, col.type); });
+        col.items.forEach(function(item) {
+          var cardType = item._lostCust ? 'customer' : (col.type === 'mixed' ? 'proposal' : col.type);
+          html += renderPipeCard(item, cardType);
+        });
       }
       html += '</div></div>';
     });
-    html += '</div>';
+    html += '</div></div>';
 
     root.innerHTML = html;
 
@@ -3762,7 +3819,7 @@
   }
 
   function initPipeline() {
-    root.innerHTML = '<div class="text-center py-8"><div class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-brand-500 mx-auto mb-3"></div><p class="text-sm text-gray-500">Loading pipeline...</p></div>';
+    root.innerHTML = '<div class="text-center py-8"><div class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500 mx-auto mb-3"></div><p class="text-sm" style="color:var(--text-muted)">Loading pipeline...</p></div>';
     Promise.all([
       fetch('/api/crm/customers', { headers: authHeadersOnly() }).then(function(r) { return r.json(); }),
       fetch('/api/crm/proposals', { headers: authHeadersOnly() }).then(function(r) { return r.json(); })
@@ -3773,7 +3830,7 @@
     });
   }
 
-  window._pipeDrop = function(event, colId, colType, newStatus) {
+  window._pipeDrop = function(event, colId, colType, newStatus, acceptType) {
     event.preventDefault();
     var col = document.getElementById('pipe-col-' + colId);
     if (col) col.classList.remove('ring-2');
@@ -3782,7 +3839,20 @@
     var parts = dragData.split('|');
     var itemId = parts[0];
     var itemType = parts[1];
-    if (itemType !== colType) { toast('Cannot drop here — wrong card type', 'error'); return; }
+
+    // Type enforcement — 'both' (Lost column) accepts any card
+    if (acceptType !== 'both' && itemType !== acceptType) {
+      toast('Drop proposals here from Proposal Sent — customers go in Lead Capture / Active Leads', 'error');
+      return;
+    }
+
+    // Lost column — prompt for reason
+    if (colId === 'lost') { window._pipeMarkLost(itemId, itemType); return; }
+
+    // Won column — prompt for deposit
+    if (colId === 'won' && itemType === 'proposal') { window._pipeMarkWon(itemId); return; }
+
+    // Standard move
     if (itemType === 'customer') {
       var cust = (window._pipelineCustomers || []).find(function(c) { return String(c.id) === String(itemId); });
       if (!cust) return;
@@ -3799,18 +3869,90 @@
     }
   };
 
+  window._pipeQuickMove = function(customerId, newStatus) {
+    var cust = (window._pipelineCustomers || []).find(function(c) { return String(c.id) === String(customerId); });
+    if (!cust) return;
+    var payload = { name: cust.name, email: cust.email || null, phone: cust.phone || null, company: cust.company || null, address: cust.address || null, city: cust.city || null, province: cust.province || null, postal_code: cust.postal_code || null, notes: cust.notes || null, tags: cust.tags || null, status: newStatus };
+    fetch('/api/crm/customers/' + customerId, { method: 'PUT', headers: authHeaders(), body: JSON.stringify(payload) })
+      .then(function(r) { return r.json(); })
+      .then(function(res) { if (res.success) { toast('Moved to Active Leads'); initPipeline(); } else toast(res.error || 'Update failed', 'error'); })
+      .catch(function() { toast('Network error', 'error'); });
+  };
+
+  window._pipeMarkWon = function(proposalId) {
+    var proposal = (window._pipelineProposals || []).find(function(p) { return String(p.id) === String(proposalId); });
+    var body = '<div class="space-y-3">' +
+      '<div class="text-sm rounded-lg px-3 py-2.5" style="background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.3);color:#4ade80"><i class="fas fa-handshake mr-2"></i>Mark this deal as Won / Closed</div>' +
+      (proposal ? '<p class="text-sm font-semibold" style="color:var(--text-secondary)">' + (proposal.customer_name || '') + ' — ' + money(proposal.total_amount) + '</p>' : '') +
+      '<div><label class="block text-xs font-medium mb-1" style="color:var(--text-muted)">Deposit Received ($)</label>' +
+      '<input type="number" id="wonDeposit" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm" placeholder="0.00" min="0"></div>' +
+      '<div><label class="block text-xs font-medium mb-1" style="color:var(--text-muted)">Scheduled Install Date (optional)</label>' +
+      '<input type="date" id="wonDate" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm"></div>' +
+      '</div>';
+    showModal('Mark as Won', body, function() {
+      var deposit = parseFloat(document.getElementById('wonDeposit').value) || 0;
+      var payload = { status: 'accepted' };
+      if (deposit > 0) { payload.deposit_amount = deposit; payload.deposit_paid = deposit; }
+      fetch('/api/crm/proposals/' + proposalId, { method: 'PUT', headers: authHeaders(), body: JSON.stringify(payload) })
+        .then(function(r) { return r.json(); })
+        .then(function(res) { if (res.success) { closeModal(); toast('Deal marked as Won!'); initPipeline(); } else toast(res.error || 'Update failed', 'error'); })
+        .catch(function() { toast('Network error', 'error'); });
+    }, 'Confirm Won');
+  };
+
+  window._pipeMarkLost = function(itemId, itemType) {
+    var reasons = ['Price', 'Timing', 'Competitor', 'No Response', 'Out of Area', 'Other'];
+    var body = '<div class="space-y-3">' +
+      '<div class="text-sm rounded-lg px-3 py-2.5" style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);color:#f87171"><i class="fas fa-times-circle mr-2"></i>Select a reason for losing this deal</div>' +
+      '<div class="grid grid-cols-2 gap-2">';
+    reasons.forEach(function(r) {
+      body += '<button type="button" onclick="document.querySelectorAll(\'.lost-reason-btn\').forEach(function(b){b.style.background=\'\'});this.style.background=\'rgba(239,68,68,0.25)\';document.getElementById(\'lostReasonVal\').value=\'' + r + '\'" class="lost-reason-btn text-sm py-2 px-3 rounded-lg border border-white/15 font-medium transition-all" style="color:var(--text-secondary)">' + r + '</button>';
+    });
+    body += '</div><input type="hidden" id="lostReasonVal" value="">' +
+      '<div><label class="block text-xs font-medium mb-1" style="color:var(--text-muted)">Notes (optional)</label>' +
+      '<textarea id="lostNotes" rows="2" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm" placeholder="Any additional context..."></textarea></div>' +
+      '</div>';
+    showModal('Mark as Lost', body, function() {
+      var reason = document.getElementById('lostReasonVal').value;
+      if (!reason) { toast('Please select a reason', 'error'); return; }
+      if (itemType === 'proposal') {
+        fetch('/api/crm/proposals/' + itemId, { method: 'PUT', headers: authHeaders(), body: JSON.stringify({ status: 'declined' }) })
+          .then(function(r) { return r.json(); })
+          .then(function(res) { if (res.success) { closeModal(); toast('Marked as Lost — ' + reason); initPipeline(); } else toast(res.error || 'Update failed', 'error'); })
+          .catch(function() { toast('Network error', 'error'); });
+      } else {
+        var cust = (window._pipelineCustomers || []).find(function(c) { return String(c.id) === String(itemId); });
+        if (!cust) return;
+        var payload = { name: cust.name, email: cust.email || null, phone: cust.phone || null, company: cust.company || null, address: cust.address || null, city: cust.city || null, province: cust.province || null, postal_code: cust.postal_code || null, notes: cust.notes || null, tags: cust.tags || null, status: 'lost' };
+        fetch('/api/crm/customers/' + itemId, { method: 'PUT', headers: authHeaders(), body: JSON.stringify(payload) })
+          .then(function(r) { return r.json(); })
+          .then(function(res) { if (res.success) { closeModal(); toast('Marked as Lost — ' + reason); initPipeline(); } else toast(res.error || 'Update failed', 'error'); })
+          .catch(function() { toast('Network error', 'error'); });
+      }
+    }, 'Confirm Lost');
+  };
+
   window._crmAddLead = function() {
     var body = '<div class="space-y-3">' +
-      '<div><label class="block text-xs font-medium text-gray-400 mb-1">Full Name *</label><input type="text" id="leadName" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm" placeholder="Jane Smith"></div>' +
-      '<div class="grid grid-cols-1 sm:grid-cols-2 gap-3"><div><label class="block text-xs font-medium text-gray-400 mb-1">Phone</label><input type="tel" id="leadPhone" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm"></div>' +
-      '<div><label class="block text-xs font-medium text-gray-400 mb-1">Email</label><input type="email" id="leadEmail" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm"></div></div>' +
-      '<div><label class="block text-xs font-medium text-gray-400 mb-1">Property Address</label><input type="text" id="leadAddress" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm"></div>' +
-      '<div><label class="block text-xs font-medium text-gray-400 mb-1">Notes</label><textarea id="leadNotes" rows="2" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm" placeholder="How did they find you? What are they looking for?"></textarea></div>' +
+      '<div><label class="block text-xs font-medium mb-1" style="color:var(--text-muted)">Full Name *</label><input type="text" id="leadName" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm" placeholder="Jane Smith"></div>' +
+      '<div class="grid grid-cols-2 gap-3">' +
+        '<div><label class="block text-xs font-medium mb-1" style="color:var(--text-muted)">Phone</label><input type="tel" id="leadPhone" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm"></div>' +
+        '<div><label class="block text-xs font-medium mb-1" style="color:var(--text-muted)">Email</label><input type="email" id="leadEmail" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm"></div>' +
+      '</div>' +
+      '<div><label class="block text-xs font-medium mb-1" style="color:var(--text-muted)">Property Address</label><input type="text" id="leadAddress" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm"></div>' +
+      '<div class="grid grid-cols-2 gap-3">' +
+        '<div><label class="block text-xs font-medium mb-1" style="color:var(--text-muted)">Job Type</label><select id="leadJobType" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm"><option value="">Select...</option><option>Full Replacement</option><option>Partial Repair</option><option>Storm Damage</option><option>Insurance Claim</option><option>Commercial</option><option>Other</option></select></div>' +
+        '<div><label class="block text-xs font-medium mb-1" style="color:var(--text-muted)">Lead Source</label><select id="leadSourceType" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm"><option value="">Select...</option><option>Referral</option><option>Door Knock</option><option>Google</option><option>Social Media</option><option>Returning Client</option><option>Other</option></select></div>' +
+      '</div>' +
+      '<div><label class="block text-xs font-medium mb-1" style="color:var(--text-muted)">Notes</label><textarea id="leadNotes" rows="2" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm" placeholder="What are they looking for?"></textarea></div>' +
     '</div>';
     showModal('Add New Lead', body, function() {
       var name = document.getElementById('leadName').value.trim();
       if (!name) { toast('Name is required', 'error'); return; }
-      var payload = { name: name, phone: document.getElementById('leadPhone').value.trim() || null, email: document.getElementById('leadEmail').value.trim() || null, address: document.getElementById('leadAddress').value.trim() || null, notes: document.getElementById('leadNotes').value.trim() || null, status: 'lead' };
+      var jobType = document.getElementById('leadJobType').value;
+      var sourceType = document.getElementById('leadSourceType').value;
+      var noteParts = [document.getElementById('leadNotes').value.trim(), jobType ? 'Job: ' + jobType : '', sourceType ? 'Source: ' + sourceType : ''].filter(Boolean);
+      var payload = { name: name, phone: document.getElementById('leadPhone').value.trim() || null, email: document.getElementById('leadEmail').value.trim() || null, address: document.getElementById('leadAddress').value.trim() || null, notes: noteParts.join(' | ') || null, status: 'lead' };
       fetch('/api/crm/customers', { method: 'POST', headers: authHeaders(), body: JSON.stringify(payload) })
         .then(function(r) { return r.json(); })
         .then(function(res) { if (res.success) { closeModal(); toast('Lead added!'); initPipeline(); } else toast(res.error || 'Failed to add lead', 'error'); })
