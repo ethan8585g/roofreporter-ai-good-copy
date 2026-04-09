@@ -569,9 +569,9 @@
 
         // Dates row
         body += '<div class="grid grid-cols-3 gap-3">';
-        body += '<div class="bg-blue-500/10 rounded-xl p-3 text-center"><p class="text-xs text-blue-500 mb-1">Created</p><p class="text-sm font-semibold text-blue-500">' + fmtDate(inv.created_at) + '</p></div>';
+        body += '<div class="rounded-xl p-3 text-center" style="background:var(--bg-elevated);border:1px solid var(--border-color)"><p class="text-xs mb-1" style="color:var(--text-muted)">Created</p><p class="text-sm font-semibold" style="color:var(--text-primary)">' + fmtDate(inv.created_at) + '</p></div>';
         body += '<div class="rounded-xl p-3 text-center" style="background:var(--bg-elevated);border:1px solid var(--border-color)"><p class="text-xs mb-1" style="color:var(--text-muted)">Due Date</p><p class="text-sm font-semibold" style="color:var(--text-primary)">' + fmtDate(inv.due_date) + '</p></div>';
-        body += '<div class="bg-green-500/10 rounded-xl p-3 text-center"><p class="text-xs text-emerald-500 mb-1">Paid</p><p class="text-sm font-semibold text-emerald-500">' + (inv.paid_date ? fmtDate(inv.paid_date) : '—') + '</p></div>';
+        body += '<div class="rounded-xl p-3 text-center" style="background:var(--bg-elevated);border:1px solid var(--border-color)"><p class="text-xs mb-1" style="color:var(--text-muted)">Paid</p><p class="text-sm font-semibold" style="color:' + (inv.paid_date ? '#22c55e' : 'var(--text-muted)') + '">' + (inv.paid_date ? fmtDate(inv.paid_date) : '—') + '</p></div>';
         body += '</div>';
 
         // Line items table
@@ -593,17 +593,17 @@
         body += '</div>';
 
         // Notes & Terms
-        if (inv.notes) body += '<div class="bg-blue-500/10 rounded-xl p-3"><h4 class="text-xs font-semibold text-blue-500 uppercase mb-1"><i class="fas fa-sticky-note mr-1"></i>Notes</h4><p class="text-sm text-blue-600">' + inv.notes + '</p></div>';
+        if (inv.notes) body += '<div class="rounded-xl p-3" style="background:var(--bg-elevated);border:1px solid var(--border-color)"><h4 class="text-xs font-semibold uppercase mb-1" style="color:var(--text-muted)"><i class="fas fa-sticky-note mr-1"></i>Notes</h4><p class="text-sm" style="color:var(--text-secondary)">' + inv.notes + '</p></div>';
         if (inv.terms) body += '<div class="rounded-xl p-3" style="background:var(--bg-elevated);border:1px solid var(--border-color)"><h4 class="text-xs font-semibold uppercase mb-1" style="color:var(--text-muted)"><i class="fas fa-file-contract mr-1"></i>Terms</h4><p class="text-sm" style="color:var(--text-secondary)">' + inv.terms + '</p></div>';
 
         // Title + address (if present)
-        if (inv.title) body += '<div class="bg-sky-500/10 rounded-xl p-3"><p class="text-xs font-semibold text-sky-500 uppercase mb-1"><i class="fas fa-tag mr-1"></i>Project</p><p class="text-sm font-semibold text-sky-600">' + inv.title + '</p>' + (inv.property_address ? '<p class="text-xs text-sky-500 mt-0.5"><i class="fas fa-map-marker-alt mr-1"></i>' + inv.property_address + '</p>' : '') + '</div>';
+        if (inv.title) body += '<div class="rounded-xl p-3" style="background:var(--bg-elevated);border:1px solid var(--border-color)"><p class="text-xs font-semibold uppercase mb-1" style="color:var(--text-muted)"><i class="fas fa-tag mr-1"></i>Project</p><p class="text-sm font-semibold" style="color:var(--text-primary)">' + inv.title + '</p>' + (inv.property_address ? '<p class="text-xs mt-0.5" style="color:var(--text-muted)"><i class="fas fa-map-marker-alt mr-1"></i>' + inv.property_address + '</p>' : '') + '</div>';
 
         // Share link
-        if (inv.share_token) body += '<div class="rounded-xl p-3 flex items-center justify-between gap-2" style="background:var(--bg-elevated);border:1px solid var(--border-color)"><div class="min-w-0"><p class="text-xs font-semibold mb-0.5" style="color:var(--text-muted)">Customer Link</p><p class="text-xs text-brand-600 truncate font-mono">/invoice/view/' + inv.share_token + '</p></div><button onclick="navigator.clipboard.writeText(window.location.origin+\'/invoice/view/' + inv.share_token + '\').then(function(){toast(\'Link copied!\');})" class="shrink-0 text-xs px-2 py-1 rounded-lg" style="background:var(--bg-card);border:1px solid var(--border-color);color:var(--text-primary)"><i class="fas fa-copy mr-1"></i>Copy</button></div>';
+        if (inv.share_token) body += '<div class="rounded-xl p-3 flex items-center justify-between gap-2" style="background:var(--bg-elevated);border:1px solid var(--border-color)"><div class="min-w-0"><p class="text-xs font-semibold mb-0.5" style="color:var(--text-muted)">Customer Link</p><p class="text-xs truncate font-mono" style="color:var(--text-secondary)">/invoice/view/' + inv.share_token + '</p></div><button onclick="navigator.clipboard.writeText(window.location.origin+\'/invoice/view/' + inv.share_token + '\').then(function(){toast(\'Link copied!\');})" class="shrink-0 text-xs px-2 py-1 rounded-lg" style="background:var(--bg-card);border:1px solid var(--border-color);color:var(--text-primary)"><i class="fas fa-copy mr-1"></i>Copy</button></div>';
 
         // Square payment link
-        if (inv.square_payment_link_url) body += '<div class="bg-green-500/10 rounded-xl p-3 flex items-center justify-between gap-2"><div><p class="text-xs font-semibold text-emerald-500 mb-0.5"><i class="fas fa-credit-card mr-1"></i>Square Payment Link</p><p class="text-xs text-emerald-600 truncate">Ready to pay</p></div><div class="flex gap-2 shrink-0"><a href="' + inv.square_payment_link_url + '" target="_blank" class="text-xs bg-green-600 text-white px-2 py-1 rounded-lg hover:bg-green-700">Open</a><button onclick="navigator.clipboard.writeText(\'' + inv.square_payment_link_url + '\').then(function(){toast(\'Link copied!\');})" class="text-xs px-2 py-1 rounded-lg" style="background:var(--bg-card);border:1px solid var(--border-color);color:var(--text-primary)">Copy</button></div></div>';
+        if (inv.square_payment_link_url) body += '<div class="rounded-xl p-3 flex items-center justify-between gap-2" style="background:var(--bg-elevated);border:1px solid var(--border-color)"><div><p class="text-xs font-semibold mb-0.5" style="color:var(--text-muted)"><i class="fas fa-credit-card mr-1"></i>Square Payment Link</p><p class="text-xs" style="color:var(--text-muted)">Ready to pay</p></div><div class="flex gap-2 shrink-0"><a href="' + inv.square_payment_link_url + '" target="_blank" class="text-xs bg-green-600 text-white px-2 py-1 rounded-lg">Open</a><button onclick="navigator.clipboard.writeText(\'' + inv.square_payment_link_url + '\').then(function(){toast(\'Link copied!\');})" class="text-xs px-2 py-1 rounded-lg" style="background:var(--bg-card);border:1px solid var(--border-color);color:var(--text-primary)">Copy</button></div></div>';
 
         // Action buttons
         body += '<div class="flex gap-2 pt-2 flex-wrap">';
@@ -1442,26 +1442,8 @@
   };
 
   // ============================================================
-  // MODULE: JOBS + CREW (merged)
+  // MODULE: JOBS
   // ============================================================
-  var _jobsTab = 'jobs'; // 'jobs' or 'crew'
-
-  function _jobsCrewTabBar(active) {
-    return '<div class="flex gap-1 bg-[#111111] rounded-xl border border-white/10 p-1 mb-5 self-start">' +
-      '<button onclick="window._crmSwitchJobsTab(\'jobs\')" class="px-4 py-2 rounded-lg text-sm font-semibold transition-colors ' + (active === 'jobs' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:bg-white/5') + '"><i class="fas fa-hard-hat mr-1.5"></i>Jobs</button>' +
-      '<button onclick="window._crmSwitchJobsTab(\'crew\')" class="px-4 py-2 rounded-lg text-sm font-semibold transition-colors ' + (active === 'crew' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:bg-white/5') + '"><i class="fas fa-users mr-1.5"></i>Crew</button>' +
-    '</div>';
-  }
-
-  window._crmSwitchJobsTab = function(tab) {
-    _jobsTab = tab;
-    if (tab === 'jobs') {
-      checkCalendarStatus();
-      loadJobsForMonth(_calYear, _calMonth);
-    } else {
-      initCrewManager();
-    }
-  };
 
   // Restore persisted calendar state from localStorage
   var _calView = localStorage.getItem('crm_cal_view') || 'month';
@@ -1475,7 +1457,6 @@
   var _googleCalEvents = [];
 
   function initJobs() {
-    _jobsTab = 'jobs';
     root.innerHTML = '<div class="text-center py-12"><div class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-brand-500 mx-auto mb-3"></div></div>';
     checkCalendarStatus();
     loadJobsForMonth(_calYear, _calMonth);
@@ -1547,7 +1528,7 @@
 
   function renderJobsDashboard() {
     var stats = _allJobStats;
-    var html = _jobsCrewTabBar('jobs');
+    var html = '';
 
     // A. Header bar
     html += '<div class="flex items-center justify-between mb-5 flex-wrap gap-3">';
@@ -2478,7 +2459,7 @@
     var upcomingJobs = jobs.filter(function(j) { return j.scheduled_date > today && (j.status === 'scheduled' || j.status === 'in_progress'); });
     var pastJobs = jobs.filter(function(j) { return j.scheduled_date < today || j.status === 'completed'; });
 
-    var html = _jobsCrewTabBar('crew');
+    var html = '';
 
     // Offline banner
     if (!navigator.onLine) {
@@ -2960,7 +2941,7 @@
       return !j.scheduled_date && j.status !== 'completed' && j.status !== 'cancelled';
     });
 
-    var html = _jobsCrewTabBar('crew') + '<div class="flex items-center justify-between mb-5 flex-wrap gap-3">';
+    var html = '<div class="flex items-center justify-between mb-5 flex-wrap gap-3">';
     html += '<div><h2 class="text-xl font-bold text-gray-100"><i class="fas fa-users text-emerald-400 mr-2"></i>Crew Manager</h2><p class="text-xs text-gray-500 mt-0.5">Dispatch your crew and track job progress</p></div>';
     html += '<div class="flex gap-2"><a href="/customer/team" class="bg-emerald-500/15 text-emerald-400 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-emerald-500/25 transition-colors"><i class="fas fa-user-plus mr-1"></i>Invite Crew</a>' +
       '<a href="/customer/jobs" class="bg-blue-500/15 text-blue-400 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-500/25 transition-colors"><i class="fas fa-plus mr-1"></i>New Job</a></div>';
