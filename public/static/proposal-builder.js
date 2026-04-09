@@ -1036,6 +1036,19 @@ document.addEventListener('DOMContentLoaded', () => {
       <p class="text-xs text-gray-400 mt-2"><i class="fas fa-info-circle mr-1"></i>Attach a completed roof measurement report to this proposal. The report will be viewable by the customer.</p>
     </div>
 
+    <!-- Header Color -->
+    <div class="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+      <h3 class="text-lg font-bold text-gray-900 mb-4"><i class="fas fa-palette text-brand-500 mr-2"></i>Proposal Header Color</h3>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        ${['#0ea5e9','#2563eb','#7c3aed','#16a34a','#dc2626','#f97316','#0d9488','#1e293b'].map(c => {
+          const isSel = (state.accentColor || '#0ea5e9') === c;
+          return `<button onclick="window.__pbState.accentColor='${c}';window.__pbRender()" title="${c}" style="width:28px;height:28px;border-radius:50%;background:${c};border:${isSel ? '3px solid white;box-shadow:0 0 0 2px ' + c : '2px solid transparent'};cursor:pointer;transition:all 0.15s"></button>`;
+        }).join('')}
+        <input type="color" value="${state.accentColor || '#0ea5e9'}" oninput="window.__pbState.accentColor=this.value;window.__pbRender()" title="Custom color" style="width:28px;height:28px;border:1px solid #d1d5db;border-radius:50%;cursor:pointer;padding:2px;background:none">
+        <div style="width:48px;height:28px;border-radius:6px;background:${state.accentColor || '#0ea5e9'};display:flex;align-items:center;justify-content:center"><span style="color:white;font-size:9px;font-weight:700">Preview</span></div>
+      </div>
+    </div>
+
     <!-- Per Square Pricing (if selected) -->
     ${state.pricingMethod === 'per_square' ?
       '<div class="bg-white rounded-xl border border-gray-200 p-6 mb-6">' +
