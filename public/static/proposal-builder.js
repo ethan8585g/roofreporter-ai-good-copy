@@ -212,13 +212,6 @@ document.addEventListener('DOMContentLoaded', () => {
             var md = state.pendingMaterialData;
             state.mode = 'create';
             state.createStep = 1; // start at report selection
-            // Pre-select the report if we have an ID
-            if (md.source_report_id) {
-              state.form.attached_report_id = md.source_report_id;
-              // Find matching report in state.reports
-              var match = state.reports.find(function(r) { return String(r.id) === String(md.source_report_id); });
-              if (match) state.selectedReport = match;
-            }
             // Pre-fill items from material calc
             if (md.items && md.items.length > 0) {
               state.form.items = md.items.map(function(item) {
@@ -227,7 +220,12 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             if (md.address) state.form.property_address = md.address;
             state.pendingMaterialData = null;
-            render();
+            // Pre-select the report — use pickReport so the full api_response_raw is fetched
+            if (md.source_report_id) {
+              window._pb.pickReport(md.source_report_id); // async: fetches full report + renders
+            } else {
+              render();
+            }
           }
         }, 1500); // wait for load() to finish fetching reports
       }
@@ -346,7 +344,14 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     } catch (e) { console.warn('Load error', e); }
     state.loading = false;
-    render();
+    // If a draft was restored with an attached report but no full measurement data, fetch it now
+    var needsFullReport = state.form.attached_report_id &&
+      state.selectedReport && !state.selectedReport.total_true_area_sqft;
+    if (needsFullReport) {
+      window._pb.pickReport(state.form.attached_report_id);
+    } else {
+      render();
+    }
   }
 
   function render() {
