@@ -499,7 +499,7 @@ document.addEventListener('DOMContentLoaded', () => {
         '<div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">' +
           '<button onclick="window.__pbState.createStep=1;window.__pbRender()" style="color:var(--text-muted);background:var(--bg-card);border:1px solid var(--border-color);padding:12px 24px;border-radius:999px;cursor:pointer;font-weight:600">&larr; Back</button>' +
           '<button onclick="window.__pbState.showNewSupplierForm=true;window.__pbRender()" style="color:var(--text-primary);background:var(--bg-card);border:1px solid var(--border-color);padding:12px 24px;border-radius:999px;cursor:pointer;font-weight:600"><i class="fas fa-plus" style="margin-right:6px"></i>New Supplier</button>' +
-          '<button onclick="window.__pbState.createStep=3;window.__pbRender()" style="background:var(--accent);color:#0a0a0a;border:none;padding:12px 40px;border-radius:999px;font-weight:800;font-size:15px;cursor:pointer">Confirm & Build Proposal &rarr;</button>' +
+          '<button onclick="window.__pbState.createStep=3;window.__pbState.form.isNewCustomer=true;window.__pbRender()" style="background:var(--accent);color:#0a0a0a;border:none;padding:12px 40px;border-radius:999px;font-weight:800;font-size:15px;cursor:pointer">Confirm & Build Proposal &rarr;</button>' +
         '</div>' +
         (state.showNewSupplierForm ? '<div style="margin-top:24px">' + renderSupplierSetup() + '</div>' : '') +
       '</div>';
@@ -513,6 +513,23 @@ document.addEventListener('DOMContentLoaded', () => {
   // ============================================================
   function renderProposalDashboard() {
     var f = state.form;
+    // Build customer dropdown HTML for existing-customer mode
+    var custDropdownHtml = (function() {
+      var html = '';
+      var portal = state.customers.filter(function(c) { return c.source !== 'crm'; });
+      var crm = state.customers.filter(function(c) { return c.source === 'crm'; });
+      if (portal.length) {
+        html += '<optgroup label="Portal Customers">' +
+          portal.map(function(c) { return '<option value="' + c.id + '" ' + (f.customer_id == c.id ? 'selected' : '') + '>' + (c.name || c.email || '').replace(/</g,'&lt;').replace(/>/g,'&gt;') + (c.company_name ? ' (' + c.company_name + ')' : '') + '</option>'; }).join('') +
+          '</optgroup>';
+      }
+      if (crm.length) {
+        html += '<optgroup label="CRM Contacts">' +
+          crm.map(function(c) { return '<option value="crm:' + c.id + '" ' + (f.crm_customer_id == c.id ? 'selected' : '') + '>' + (c.name || c.email || '').replace(/</g,'&lt;').replace(/>/g,'&gt;') + (c.company_name ? ' (' + c.company_name + ')' : '') + '</option>'; }).join('') +
+          '</optgroup>';
+      }
+      return html || '<option value="" disabled>No customers yet</option>';
+    })();
     var items = f.items || [];
     var totalCost = items.reduce(function(s,i) { return s + (Number(i.quantity||0) * Number(i.unit_price||0)); }, 0);
     var markup = state.markupPercent || 30;
@@ -708,14 +725,27 @@ document.addEventListener('DOMContentLoaded', () => {
 
           // Customer details
           '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;padding:16px;margin-bottom:16px">' +
-            '<h4 style="color:var(--text-primary);font-size:14px;font-weight:700;margin-bottom:12px"><i class="fas fa-user" style="color:var(--accent);margin-right:6px"></i>Customer Info</h4>' +
-            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
-              '<input id="dash-cust-name" value="' + (f.customer_name||'') + '" placeholder="Customer Name" style="background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:8px;padding:8px;color:var(--text-primary);font-size:13px">' +
-              '<input id="dash-cust-email" value="' + (f.customer_email||'') + '" placeholder="Email" style="background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:8px;padding:8px;color:var(--text-primary);font-size:13px">' +
-              '<input id="dash-cust-phone" value="' + (f.customer_phone||'') + '" placeholder="Phone" style="background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:8px;padding:8px;color:var(--text-primary);font-size:13px">' +
-              '<input id="dash-cust-address" value="' + (f.property_address||'') + '" placeholder="Address" style="background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:8px;padding:8px;color:var(--text-primary);font-size:13px">' +
+            '<h4 style="color:var(--text-primary);font-size:14px;font-weight:700;margin-bottom:10px"><i class="fas fa-user" style="color:var(--accent);margin-right:6px"></i>Customer Info</h4>' +
+            // Mode toggle
+            '<div style="display:flex;gap:6px;margin-bottom:12px">' +
+              '<button onclick="window.__pbState.form.isNewCustomer=true;window.__pbRender()" style="flex:1;padding:6px 8px;border-radius:7px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid ' + (f.isNewCustomer !== false ? 'var(--accent)' : 'var(--border-color)') + ';background:' + (f.isNewCustomer !== false ? 'rgba(0,255,136,0.08)' : 'transparent') + ';color:' + (f.isNewCustomer !== false ? 'var(--accent)' : 'var(--text-muted)') + '"><i class="fas fa-user-plus" style="margin-right:4px"></i>New Customer</button>' +
+              '<button onclick="window.__pbState.form.isNewCustomer=false;window.__pbRender()" style="flex:1;padding:6px 8px;border-radius:7px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid ' + (f.isNewCustomer === false ? 'var(--accent)' : 'var(--border-color)') + ';background:' + (f.isNewCustomer === false ? 'rgba(0,255,136,0.08)' : 'transparent') + ';color:' + (f.isNewCustomer === false ? 'var(--accent)' : 'var(--text-muted)') + '"><i class="fas fa-users" style="margin-right:4px"></i>Existing Customer</button>' +
             '</div>' +
-            '<textarea id="dash-scope" placeholder="Scope of work..." style="width:100%;margin-top:8px;background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:8px;padding:8px;color:var(--text-primary);font-size:13px;height:60px;resize:vertical">' + (f.scope_of_work||'') + '</textarea>' +
+            (f.isNewCustomer === false
+              ? // Existing customer dropdown
+                '<select onchange="window._pb.selectCustomer(this.value)" style="width:100%;background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:8px;padding:9px 10px;color:var(--text-primary);font-size:13px;margin-bottom:8px">' +
+                  '<option value="">— Select a customer —</option>' +
+                  custDropdownHtml +
+                '</select>'
+              : // New customer text fields
+                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
+                  '<input id="dash-cust-name" type="text" value="' + (f.customer_name||'').replace(/"/g,'&quot;') + '" placeholder="Customer Name" oninput="window.__pbState.form.customer_name=this.value" style="background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:8px;padding:8px;color:var(--text-primary);font-size:13px">' +
+                  '<input id="dash-cust-email" type="email" value="' + (f.customer_email||'').replace(/"/g,'&quot;') + '" placeholder="Email" oninput="window.__pbState.form.customer_email=this.value" style="background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:8px;padding:8px;color:var(--text-primary);font-size:13px">' +
+                  '<input id="dash-cust-phone" type="tel" value="' + (f.customer_phone||'').replace(/"/g,'&quot;') + '" placeholder="Phone" oninput="window.__pbState.form.customer_phone=this.value" style="background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:8px;padding:8px;color:var(--text-primary);font-size:13px">' +
+                  '<input id="dash-cust-address" type="text" value="' + (f.property_address||'').replace(/"/g,'&quot;') + '" placeholder="Address" oninput="window.__pbState.form.property_address=this.value" style="background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:8px;padding:8px;color:var(--text-primary);font-size:13px">' +
+                '</div>'
+            ) +
+            '<textarea id="dash-scope" placeholder="Scope of work..." oninput="window.__pbState.form.scope_of_work=this.value" style="width:100%;margin-top:8px;background:var(--bg-elevated);border:1px solid var(--border-color);border-radius:8px;padding:8px;color:var(--text-primary);font-size:13px;height:60px;resize:vertical">' + (f.scope_of_work||'') + '</textarea>' +
           '</div>' +
 
           // Certifications
@@ -1956,12 +1986,32 @@ document.addEventListener('DOMContentLoaded', () => {
     setSearch(term) { state.searchTerm = term; render(); },
     toggleCustMode(isNew) { state.form.isNewCustomer = isNew; render(); },
     selectCustomer(id) {
-      if (id && id.toString().startsWith('crm:')) {
-        state.form.crm_customer_id = id.toString().replace('crm:', '');
+      if (!id) {
         state.form.customer_id = '';
+        state.form.crm_customer_id = '';
+        state.form.customer_name = '';
+        state.form.customer_email = '';
+        return;
+      }
+      if (id.toString().startsWith('crm:')) {
+        var crmId = parseInt(id.toString().replace('crm:', ''));
+        state.form.crm_customer_id = crmId;
+        state.form.customer_id = '';
+        var cust = state.customers.find(function(c) { return c.source === 'crm' && c.id == crmId; });
+        if (cust) {
+          state.form.customer_name = cust.name || cust.email || '';
+          state.form.customer_email = cust.email || '';
+          state.form.customer_phone = cust.phone || '';
+        }
       } else {
         state.form.customer_id = id;
         state.form.crm_customer_id = '';
+        var cust2 = state.customers.find(function(c) { return c.source !== 'crm' && c.id == id; });
+        if (cust2) {
+          state.form.customer_name = cust2.name || cust2.email || '';
+          state.form.customer_email = cust2.email || '';
+          state.form.customer_phone = cust2.phone || '';
+        }
       }
     },
     addItem() {
@@ -2309,15 +2359,17 @@ document.addEventListener('DOMContentLoaded', () => {
     },
     collectDashboardAndSend() {
       window._pb.collectDashboardData();
-      if (!state.form.customer_name) { pbToast('Please enter customer name', 'error'); return; }
-      if (!state.form.customer_email) { pbToast('Please enter customer email', 'error'); return; }
+      var hasExisting = !!(state.form.customer_id || state.form.crm_customer_id);
+      if (!state.form.customer_name && !hasExisting) { pbToast('Please enter customer name', 'error'); return; }
+      if (!state.form.customer_email && !hasExisting) { pbToast('Please enter customer email', 'error'); return; }
       saveProposal(true);
     },
     async saveAndCreateSupplierOrder() {
       // Save proposal first (silent=true skips the confirm dialog + state reset),
       // then create supplier order linked to the saved proposal ID.
       window._pb.collectDashboardData();
-      if (!state.form.customer_name) { pbToast('Please enter customer name first', 'error'); return; }
+      var hasExisting2 = !!(state.form.customer_id || state.form.crm_customer_id);
+      if (!state.form.customer_name && !hasExisting2) { pbToast('Please enter customer name first', 'error'); return; }
       pbToast('Saving proposal & generating supplier order...', 'info');
       try {
         var proposalId = await saveProposal(false, true);  // silent — returns proposalId

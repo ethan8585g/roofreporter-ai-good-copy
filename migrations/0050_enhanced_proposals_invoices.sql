@@ -113,5 +113,4 @@ CREATE TABLE IF NOT EXISTS cc_script_variants (
   FOREIGN KEY (persona_id) REFERENCES cc_agent_personas(id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_cc_cost_call ON cc_cost_tracking(call_log_id);
 CREATE INDEX IF NOT EXISTS idx_cc_script_persona ON cc_script_variants(persona_id);

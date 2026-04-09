@@ -106,11 +106,7 @@ CREATE TABLE IF NOT EXISTS cc_cost_tracking (
   created_at TEXT DEFAULT (datetime('now'))
 );
 
--- Add missing columns to cc_campaigns used by platform-admin routes
-ALTER TABLE cc_campaigns ADD COLUMN operating_days TEXT DEFAULT 'mon,tue,wed,thu,fri';
-ALTER TABLE cc_campaigns ADD COLUMN max_concurrent_calls INTEGER DEFAULT 1;
-ALTER TABLE cc_campaigns ADD COLUMN auto_dial INTEGER DEFAULT 0;
-ALTER TABLE cc_campaigns ADD COLUMN dnc_list TEXT DEFAULT '';
+-- cc_campaigns columns already added in 0049 migration
 
 -- Indexes for CC tables
 CREATE INDEX IF NOT EXISTS idx_cc_campaigns_persona ON cc_campaigns(agent_persona_id);

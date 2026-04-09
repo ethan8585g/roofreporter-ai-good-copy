@@ -67,7 +67,7 @@ INSERT OR IGNORE INTO blog_posts (slug, title, excerpt, content, cover_image_url
     <button type="submit" style="width:100%;padding:16px;border-radius:12px;border:none;background:#00FF88;color:#0A0A0A;font-weight:800;font-size:16px;cursor:pointer;transition:all 0.2s">📅 Réserver Ma Démo Gratuite</button>
   </form>
   <div style="text-align:center;margin-top:16px">
-    <a href="https://calendar.app.google/CE5iBMV1Fu4K2ve38" target="_blank" style="color:#00FF88;font-size:14px;text-decoration:underline">Ou réservez directement dans notre calendrier →</a>
+    <a href="https://calendar.app.google/KNLFST4CNxViPPN3A" target="_blank" style="color:#00FF88;font-size:14px;text-decoration:underline">Ou réservez directement dans notre calendrier →</a>
   </div>
 </div>
 
@@ -127,7 +127,7 @@ function submitBlogLead(e, slug) {
   }).then(function(r){return r.json()}).then(function(){
     btn.textContent = "✅ Merci ! Redirection...";
     btn.style.background = "#10b981";
-    setTimeout(function(){ window.open("https://calendar.app.google/CE5iBMV1Fu4K2ve38","_blank"); }, 1500);
+    setTimeout(function(){ window.open("https://calendar.app.google/KNLFST4CNxViPPN3A","_blank"); }, 1500);
   }).catch(function(){
     btn.textContent = origText;
     btn.disabled = false;
@@ -217,7 +217,7 @@ INSERT OR IGNORE INTO blog_posts (slug, title, excerpt, content, cover_image_url
     <button type="submit" style="width:100%;padding:16px;border-radius:12px;border:none;background:#00FF88;color:#0A0A0A;font-weight:800;font-size:16px;cursor:pointer;transition:all 0.2s">📅 Réserver Ma Démo Gratuite</button>
   </form>
   <div style="text-align:center;margin-top:16px">
-    <a href="https://calendar.app.google/CE5iBMV1Fu4K2ve38" target="_blank" style="color:#00FF88;font-size:14px;text-decoration:underline">Ou réservez directement dans notre calendrier →</a>
+    <a href="https://calendar.app.google/KNLFST4CNxViPPN3A" target="_blank" style="color:#00FF88;font-size:14px;text-decoration:underline">Ou réservez directement dans notre calendrier →</a>
   </div>
 </div>
 
@@ -275,7 +275,7 @@ function submitBlogLead(e, slug) {
   }).then(function(r){return r.json()}).then(function(){
     btn.textContent = "✅ Merci ! Redirection...";
     btn.style.background = "#10b981";
-    setTimeout(function(){ window.open("https://calendar.app.google/CE5iBMV1Fu4K2ve38","_blank"); }, 1500);
+    setTimeout(function(){ window.open("https://calendar.app.google/KNLFST4CNxViPPN3A","_blank"); }, 1500);
   }).catch(function(){
     btn.textContent = origText; btn.disabled = false;
     alert("Erreur — veuillez réessayer.");
@@ -366,7 +366,7 @@ INSERT OR IGNORE INTO blog_posts (slug, title, excerpt, content, cover_image_url
     <button type="submit" style="width:100%;padding:16px;border-radius:12px;border:none;background:#00FF88;color:#0A0A0A;font-weight:800;font-size:16px;cursor:pointer;transition:all 0.2s">📅 Boka Min Kostnadsfria Demo</button>
   </form>
   <div style="text-align:center;margin-top:16px">
-    <a href="https://calendar.app.google/CE5iBMV1Fu4K2ve38" target="_blank" style="color:#00FF88;font-size:14px;text-decoration:underline">Eller boka direkt i vår kalender →</a>
+    <a href="https://calendar.app.google/KNLFST4CNxViPPN3A" target="_blank" style="color:#00FF88;font-size:14px;text-decoration:underline">Eller boka direkt i vår kalender →</a>
   </div>
 </div>
 
@@ -424,7 +424,7 @@ function submitBlogLead(e, slug) {
   }).then(function(r){return r.json()}).then(function(){
     btn.textContent = "✅ Tack! Omdirigerar...";
     btn.style.background = "#10b981";
-    setTimeout(function(){ window.open("https://calendar.app.google/CE5iBMV1Fu4K2ve38","_blank"); }, 1500);
+    setTimeout(function(){ window.open("https://calendar.app.google/KNLFST4CNxViPPN3A","_blank"); }, 1500);
   }).catch(function(){
     btn.textContent = origText; btn.disabled = false;
     alert("Fel — försök igen.");
@@ -525,7 +525,7 @@ INSERT OR IGNORE INTO blog_posts (slug, title, excerpt, content, cover_image_url
     <button type="submit" style="width:100%;padding:16px;border-radius:12px;border:none;background:#00FF88;color:#0A0A0A;font-weight:800;font-size:16px;cursor:pointer;transition:all 0.2s">📅 Reservar Mi Demo Gratuita</button>
   </form>
   <div style="text-align:center;margin-top:16px">
-    <a href="https://calendar.app.google/CE5iBMV1Fu4K2ve38" target="_blank" style="color:#00FF88;font-size:14px;text-decoration:underline">O reserva directamente en nuestro calendario →</a>
+    <a href="https://calendar.app.google/KNLFST4CNxViPPN3A" target="_blank" style="color:#00FF88;font-size:14px;text-decoration:underline">O reserva directamente en nuestro calendario →</a>
   </div>
 </div>
 
@@ -583,7 +583,7 @@ function submitBlogLead(e, slug) {
   }).then(function(r){return r.json()}).then(function(){
     btn.textContent = "✅ ¡Gracias! Redirigiendo...";
     btn.style.background = "#10b981";
-    setTimeout(function(){ window.open("https://calendar.app.google/CE5iBMV1Fu4K2ve38","_blank"); }, 1500);
+    setTimeout(function(){ window.open("https://calendar.app.google/KNLFST4CNxViPPN3A","_blank"); }, 1500);
   }).catch(function(){
     btn.textContent = origText; btn.disabled = false;
     alert("Error — inténtalo de nuevo.");
@@ -676,7 +676,7 @@ INSERT OR IGNORE INTO blog_posts (slug, title, excerpt, content, cover_image_url
     <button type="submit" style="width:100%;padding:16px;border-radius:12px;border:none;background:#00FF88;color:#0A0A0A;font-weight:800;font-size:16px;cursor:pointer;transition:all 0.2s">📅 Varaa Maksuton Demo</button>
   </form>
   <div style="text-align:center;margin-top:16px">
-    <a href="https://calendar.app.google/CE5iBMV1Fu4K2ve38" target="_blank" style="color:#00FF88;font-size:14px;text-decoration:underline">Tai varaa suoraan kalenteristamme →</a>
+    <a href="https://calendar.app.google/KNLFST4CNxViPPN3A" target="_blank" style="color:#00FF88;font-size:14px;text-decoration:underline">Tai varaa suoraan kalenteristamme →</a>
   </div>
 </div>
 
@@ -734,7 +734,7 @@ function submitBlogLead(e, slug) {
   }).then(function(r){return r.json()}).then(function(){
     btn.textContent = "✅ Kiitos! Uudelleenohjataan...";
     btn.style.background = "#10b981";
-    setTimeout(function(){ window.open("https://calendar.app.google/CE5iBMV1Fu4K2ve38","_blank"); }, 1500);
+    setTimeout(function(){ window.open("https://calendar.app.google/KNLFST4CNxViPPN3A","_blank"); }, 1500);
   }).catch(function(){
     btn.textContent = origText; btn.disabled = false;
     alert("Virhe — yritä uudelleen.");

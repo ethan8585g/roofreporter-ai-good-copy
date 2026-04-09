@@ -497,7 +497,7 @@
           '<textarea id="bc-message" rows="4" placeholder="How can we help? Tell us about your roofing business..." class="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-sm text-white placeholder-blue-300 focus:ring-2 focus:ring-sky-400 focus:border-sky-400 resize-none"></textarea>' +
           '<button type="submit" id="bc-submit" class="w-full py-3.5 bg-sky-500 hover:bg-sky-400 text-white font-bold rounded-xl text-sm transition-all shadow-lg"><i class="fas fa-paper-plane mr-2"></i>Send Message</button>' +
           '<div class="text-center my-3"><span class="text-blue-400 text-xs">— or —</span></div>' +
-          '<a href="https://calendar.app.google/CE5iBMV1Fu4K2ve38" target="_blank" class="block w-full py-3.5 bg-white/10 hover:bg-white/20 text-white font-bold rounded-xl text-sm transition-all text-center border border-white/20"><i class="fas fa-calendar-check mr-2"></i>Book a 30-Min Demo Meeting</a>' +
+          '<a href="https://calendar.app.google/KNLFST4CNxViPPN3A" target="_blank" class="block w-full py-3.5 bg-white/10 hover:bg-white/20 text-white font-bold rounded-xl text-sm transition-all text-center border border-white/20"><i class="fas fa-calendar-check mr-2"></i>Book a 30-Min Demo Meeting</a>' +
           '<p class="text-center text-xs text-blue-300 mt-3">We\'ll get back to you within 24 hours. No spam, ever.</p>' +
         '</form>' +
         '<div id="bc-success" class="hidden text-center py-6"><i class="fas fa-check-circle text-green-400 text-3xl mb-3 block"></i><p class="text-lg font-bold">Message Sent!</p><p class="text-blue-200 text-sm mt-1">We\'ll be in touch shortly.</p></div>' +
