@@ -819,12 +819,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 <td class="px-4 py-3 text-gray-500">${(p.created_at || '').slice(0, 10)}</td>
                 <td class="px-4 py-3 font-semibold">$${(p.total || 0).toFixed(2)}</td>
                 <td class="px-4 py-3"><span class="px-2 py-0.5 rounded-full text-xs font-medium ${sc}">${p.status}</span>${p.viewed_count > 0 ? '<span class="text-[10px] text-gray-500 ml-2" title="Viewed ' + p.viewed_count + ' times"><i class="fas fa-eye text-gray-600"></i> ' + p.viewed_count + '</span>' : ''}</td>
-                <td class="px-4 py-3 text-right space-x-1">
-                  <button onclick="window._pb.preview(${p.id})" class="text-brand-500 hover:text-brand-700 text-xs" title="Preview"><i class="fas fa-eye"></i></button>
-                  ${p.status === 'draft' ? `<button onclick="window._pb.edit(${p.id})" class="text-gray-500 hover:text-gray-700 text-xs" title="Edit"><i class="fas fa-edit"></i></button>` : ''}
-                  <button onclick="window._pb.send(${p.id})" class="text-green-500 hover:text-green-700 text-xs" title="Send"><i class="fas fa-paper-plane"></i></button>
-                  <button onclick="window._pb.shareLink(${p.id}, '${p.share_token || ''}')" class="text-purple-500 hover:text-purple-700 text-xs" title="Share Link"><i class="fas fa-link"></i></button>
-                  <button onclick="window._pb.convertToInvoice(${p.id})" class="text-emerald-500 hover:text-emerald-600 text-xs" title="Convert to Invoice"><i class="fas fa-file-invoice-dollar"></i></button>
+                <td class="px-4 py-3 text-right" style="white-space:nowrap">
+                  ${p.share_token ? `<a href="/proposal/view/${p.share_token}" target="_blank" style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;border-radius:6px;font-size:11px;font-weight:600;text-decoration:none;margin-right:4px" title="Preview as customer"><i class="fas fa-eye"></i> Preview</a>` : ''}
+                  ${p.status === 'draft' ? `<button onclick="window._pb.edit(${p.id})" class="text-gray-500 hover:text-gray-700 text-xs mr-2" title="Edit"><i class="fas fa-edit"></i></button>` : ''}
+                  <button onclick="window._pb.send(${p.id})" class="text-green-500 hover:text-green-700 text-xs mr-2" title="Send"><i class="fas fa-paper-plane"></i></button>
+                  <button onclick="window._pb.shareLink(${p.id}, '${p.share_token || ''}')" class="text-purple-500 hover:text-purple-700 text-xs mr-2" title="Share Link"><i class="fas fa-link"></i></button>
+                  <button onclick="window._pb.convertToInvoice(${p.id})" class="text-emerald-500 hover:text-emerald-600 text-xs mr-2" title="Convert to Invoice"><i class="fas fa-file-invoice-dollar"></i></button>
                   ${p.status === 'draft' ? `<button onclick="window._pb.del(${p.id})" class="text-red-400 hover:text-red-600 text-xs" title="Delete"><i class="fas fa-trash"></i></button>` : ''}
                 </td>
               </tr>`;
