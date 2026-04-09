@@ -500,6 +500,12 @@ function renderPinStep(root, progressBar) {
             ${!orderState.pinPlaced ? 'disabled' : ''}>
             <i class="fas fa-arrow-right mr-2"></i>Next: Trace Roof Outline
           </button>
+          <button onclick="skipTrace()" id="adminMeasureBtn"
+            style="width:100%;padding:12px;font-size:15px;font-weight:700;border:none;border-radius:12px;cursor:${orderState.pinPlaced ? 'pointer' : 'not-allowed'};background:${orderState.pinPlaced ? '#f59e0b' : '#e5e7eb'};color:#ffffff;margin-top:2px;transition:background 0.2s"
+            ${!orderState.pinPlaced ? 'disabled' : ''}>
+            <i class="fas fa-hard-hat" style="margin-right:8px"></i>Order Measurement Report Now
+            <span style="font-size:12px;font-weight:400;opacity:0.9">&nbsp;(1–2 hr arrival)</span>
+          </button>
         </div>
       </div>
     </div>
