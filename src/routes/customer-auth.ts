@@ -550,7 +550,7 @@ customerAuthRoutes.post('/google', async (c) => {
 // ============================================================
 customerAuthRoutes.post('/register', async (c) => {
   try {
-    const { email, password, name, phone, company_name, verification_token } = await c.req.json()
+    const { email, password, name, phone, company_name, verification_token, referred_by_code } = await c.req.json()
 
     if (!email || !password || !name) {
       return c.json({ error: 'Email, password, and name are required' }, 400)
@@ -595,8 +595,7 @@ customerAuthRoutes.post('/register', async (c) => {
     // Generate referral code
     const refCode = 'REF-' + crypto.randomUUID().replace(/-/g, '').substring(0, 6).toUpperCase()
 
-    // Check for referral — referred_by from request body or query param
-    const { referred_by_code } = body as any
+    // Check for referral — referred_by from request body
     let referredBy: number | null = null
     if (referred_by_code) {
       const referrer = await c.env.DB.prepare('SELECT id FROM customers WHERE referral_code = ? AND is_active = 1').bind(referred_by_code).first<any>()
