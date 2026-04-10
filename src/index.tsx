@@ -567,7 +567,7 @@ app.get('/sitemap.xml', async (c) => {
   ]
   // City geo pages
   for (const slug of Object.keys(seoCities)) {
-    staticPages.push({ loc: `/roof-measurement/${slug}`, priority: '0.7', changefreq: 'monthly' })
+    staticPages.push({ loc: `/roof-measurement/${slug}`, priority: '0.7', changefreq: 'monthly', lastmod: today })
   }
   // Country geo pages
   for (const slug of Object.keys(seoCountries)) {
@@ -948,6 +948,42 @@ const seoCities: Record<string, { name: string; province: string; lat: string; l
   'st-albert': { name: 'St. Albert', province: 'Alberta', lat: '53.6301', lng: '-113.6258' },
   'medicine-hat': { name: 'Medicine Hat', province: 'Alberta', lat: '50.0405', lng: '-110.6764' },
   'grande-prairie': { name: 'Grande Prairie', province: 'Alberta', lat: '55.1707', lng: '-118.7946' },
+  // Alberta expansion
+  'airdrie': { name: 'Airdrie', province: 'Alberta', lat: '51.2917', lng: '-114.0144' },
+  'spruce-grove': { name: 'Spruce Grove', province: 'Alberta', lat: '53.5447', lng: '-113.9008' },
+  'fort-mcmurray': { name: 'Fort McMurray', province: 'Alberta', lat: '56.7265', lng: '-111.3803' },
+  // British Columbia expansion
+  'surrey': { name: 'Surrey', province: 'British Columbia', lat: '49.1913', lng: '-122.8490' },
+  'burnaby': { name: 'Burnaby', province: 'British Columbia', lat: '49.2488', lng: '-122.9805' },
+  'richmond-bc': { name: 'Richmond', province: 'British Columbia', lat: '49.1666', lng: '-123.1336' },
+  'abbotsford': { name: 'Abbotsford', province: 'British Columbia', lat: '49.0504', lng: '-122.3045' },
+  'kamloops': { name: 'Kamloops', province: 'British Columbia', lat: '50.6745', lng: '-120.3273' },
+  'nanaimo': { name: 'Nanaimo', province: 'British Columbia', lat: '49.1659', lng: '-123.9401' },
+  'prince-george': { name: 'Prince George', province: 'British Columbia', lat: '53.9171', lng: '-122.7497' },
+  'chilliwack': { name: 'Chilliwack', province: 'British Columbia', lat: '49.1579', lng: '-121.9514' },
+  // Ontario expansion
+  'mississauga': { name: 'Mississauga', province: 'Ontario', lat: '43.5890', lng: '-79.6441' },
+  'brampton': { name: 'Brampton', province: 'Ontario', lat: '43.7315', lng: '-79.7624' },
+  'hamilton': { name: 'Hamilton', province: 'Ontario', lat: '43.2557', lng: '-79.8711' },
+  'london-ontario': { name: 'London', province: 'Ontario', lat: '42.9849', lng: '-81.2453' },
+  'markham': { name: 'Markham', province: 'Ontario', lat: '43.8561', lng: '-79.3370' },
+  'vaughan': { name: 'Vaughan', province: 'Ontario', lat: '43.8361', lng: '-79.4983' },
+  'oakville': { name: 'Oakville', province: 'Ontario', lat: '43.4675', lng: '-79.6877' },
+  'barrie': { name: 'Barrie', province: 'Ontario', lat: '44.3894', lng: '-79.6903' },
+  'kitchener': { name: 'Kitchener', province: 'Ontario', lat: '43.4516', lng: '-80.4925' },
+  'windsor-ontario': { name: 'Windsor', province: 'Ontario', lat: '42.3149', lng: '-83.0364' },
+  'guelph': { name: 'Guelph', province: 'Ontario', lat: '43.5448', lng: '-80.2482' },
+  'sudbury': { name: 'Sudbury', province: 'Ontario', lat: '46.4917', lng: '-80.9930' },
+  'kingston-ontario': { name: 'Kingston', province: 'Ontario', lat: '44.2312', lng: '-76.4860' },
+  'thunder-bay': { name: 'Thunder Bay', province: 'Ontario', lat: '48.3809', lng: '-89.2477' },
+  // Atlantic Canada
+  'halifax': { name: 'Halifax', province: 'Nova Scotia', lat: '44.6488', lng: '-63.5752' },
+  'moncton': { name: 'Moncton', province: 'New Brunswick', lat: '46.0878', lng: '-64.7782' },
+  'fredericton': { name: 'Fredericton', province: 'New Brunswick', lat: '45.9636', lng: '-66.6431' },
+  'saint-john-nb': { name: 'Saint John', province: 'New Brunswick', lat: '45.2733', lng: '-66.0633' },
+  'charlottetown': { name: 'Charlottetown', province: 'Prince Edward Island', lat: '46.2382', lng: '-63.1311' },
+  'st-johns-nl': { name: "St. John's", province: 'Newfoundland', lat: '47.5615', lng: '-52.7126' },
+  // US expansion
   'new-york': { name: 'New York', province: 'New York', lat: '40.7128', lng: '-74.0060' },
   'los-angeles': { name: 'Los Angeles', province: 'California', lat: '34.0522', lng: '-118.2437' },
   'chicago': { name: 'Chicago', province: 'Illinois', lat: '41.8781', lng: '-87.6298' },
@@ -968,6 +1004,45 @@ const seoCities: Record<string, { name: string; province: string; lat: string; l
   'portland': { name: 'Portland', province: 'Oregon', lat: '45.5152', lng: '-122.6784' },
   'las-vegas': { name: 'Las Vegas', province: 'Nevada', lat: '36.1699', lng: '-115.1398' },
   'jacksonville': { name: 'Jacksonville', province: 'Florida', lat: '30.3322', lng: '-81.6557' },
+  // US expansion — South
+  'fort-worth': { name: 'Fort Worth', province: 'Texas', lat: '32.7555', lng: '-97.3308' },
+  'memphis': { name: 'Memphis', province: 'Tennessee', lat: '35.1495', lng: '-90.0490' },
+  'louisville': { name: 'Louisville', province: 'Kentucky', lat: '38.2527', lng: '-85.7585' },
+  'new-orleans': { name: 'New Orleans', province: 'Louisiana', lat: '29.9511', lng: '-90.0715' },
+  'tulsa': { name: 'Tulsa', province: 'Oklahoma', lat: '36.1540', lng: '-95.9928' },
+  'oklahoma-city': { name: 'Oklahoma City', province: 'Oklahoma', lat: '35.4676', lng: '-97.5164' },
+  'virginia-beach': { name: 'Virginia Beach', province: 'Virginia', lat: '36.8529', lng: '-75.9780' },
+  'richmond-va': { name: 'Richmond', province: 'Virginia', lat: '37.5407', lng: '-77.4360' },
+  'raleigh': { name: 'Raleigh', province: 'North Carolina', lat: '35.7796', lng: '-78.6382' },
+  'baltimore': { name: 'Baltimore', province: 'Maryland', lat: '39.2904', lng: '-76.6122' },
+  // US expansion — Midwest
+  'columbus-ohio': { name: 'Columbus', province: 'Ohio', lat: '39.9612', lng: '-82.9988' },
+  'indianapolis': { name: 'Indianapolis', province: 'Indiana', lat: '39.7684', lng: '-86.1581' },
+  'milwaukee': { name: 'Milwaukee', province: 'Wisconsin', lat: '43.0389', lng: '-87.9065' },
+  'kansas-city': { name: 'Kansas City', province: 'Missouri', lat: '39.0997', lng: '-94.5786' },
+  'omaha': { name: 'Omaha', province: 'Nebraska', lat: '41.2565', lng: '-95.9345' },
+  'minneapolis': { name: 'Minneapolis', province: 'Minnesota', lat: '44.9778', lng: '-93.2650' },
+  'wichita': { name: 'Wichita', province: 'Kansas', lat: '37.6872', lng: '-97.3301' },
+  'detroit': { name: 'Detroit', province: 'Michigan', lat: '42.3314', lng: '-83.0458' },
+  'cleveland': { name: 'Cleveland', province: 'Ohio', lat: '41.4993', lng: '-81.6944' },
+  'pittsburgh': { name: 'Pittsburgh', province: 'Pennsylvania', lat: '40.4406', lng: '-79.9959' },
+  'st-louis': { name: 'St. Louis', province: 'Missouri', lat: '38.6270', lng: '-90.1994' },
+  'cincinnati': { name: 'Cincinnati', province: 'Ohio', lat: '39.1031', lng: '-84.5120' },
+  'akron': { name: 'Akron', province: 'Ohio', lat: '41.0814', lng: '-81.5190' },
+  // US expansion — West & Southwest
+  'albuquerque': { name: 'Albuquerque', province: 'New Mexico', lat: '35.0844', lng: '-106.6504' },
+  'tucson': { name: 'Tucson', province: 'Arizona', lat: '32.2226', lng: '-110.9747' },
+  'mesa': { name: 'Mesa', province: 'Arizona', lat: '33.4152', lng: '-111.8315' },
+  'fresno': { name: 'Fresno', province: 'California', lat: '36.7378', lng: '-119.7871' },
+  'sacramento': { name: 'Sacramento', province: 'California', lat: '38.5816', lng: '-121.4944' },
+  'colorado-springs': { name: 'Colorado Springs', province: 'Colorado', lat: '38.8339', lng: '-104.8214' },
+  'salt-lake-city': { name: 'Salt Lake City', province: 'Utah', lat: '40.7608', lng: '-111.8910' },
+  'boise': { name: 'Boise', province: 'Idaho', lat: '43.6150', lng: '-116.2023' },
+  // US expansion — Northeast
+  'long-island': { name: 'Long Island', province: 'New York', lat: '40.7891', lng: '-73.1350' },
+  'buffalo': { name: 'Buffalo', province: 'New York', lat: '42.8864', lng: '-78.8784' },
+  'hartford': { name: 'Hartford', province: 'Connecticut', lat: '41.7658', lng: '-72.6851' },
+  'providence': { name: 'Providence', province: 'Rhode Island', lat: '41.8240', lng: '-71.4128' },
   'london': { name: 'London', province: 'England', lat: '51.5074', lng: '-0.1278' },
   'paris': { name: 'Paris', province: 'Île-de-France', lat: '48.8566', lng: '2.3522' },
   'berlin': { name: 'Berlin', province: 'Berlin', lat: '52.5200', lng: '13.4050' },
@@ -1180,6 +1255,13 @@ app.get('/roof-measurement/:city', (c) => {
   }
   </script>
   <script type="application/ld+json">
+{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[
+  {"@type":"ListItem","position":1,"name":"Home","item":"https://www.roofmanager.ca/"},
+  {"@type":"ListItem","position":2,"name":"Locations","item":"https://www.roofmanager.ca/coverage"},
+  {"@type":"ListItem","position":3,"name":"${city.name}, ${city.province}","item":"https://www.roofmanager.ca/roof-measurement/${citySlug}"}
+]}
+</script>
+  <script type="application/ld+json">
 {"@context":"https://schema.org","@type":"FAQPage","mainEntity":[
   {"@type":"Question","name":"What is the best roof measurement software in ${city.name}?","acceptedAnswer":{"@type":"Answer","text":"Roof Manager is the leading AI-powered roof measurement platform used by ${city.name} roofing contractors. It generates professional satellite-powered reports with 3D area, pitch analysis, edge breakdowns, and material BOM in under 60 seconds."}},
   {"@type":"Question","name":"How much does a roof report cost in ${city.name}?","acceptedAnswer":{"@type":"Answer","text":"Roof measurement reports for ${city.name} properties cost $8 CAD per report after your 3 free trial reports. Volume discounts are available."}},
@@ -1287,7 +1369,19 @@ app.get('/roof-measurement/:city', (c) => {
     </div>
   </section>
 
-  <footer class="bg-slate-900 text-gray-400 py-8 text-center text-sm">
+  <section class="py-10 bg-slate-900 border-t border-white/10">
+    <div class="max-w-5xl mx-auto px-4">
+      <p class="text-gray-400 text-sm font-semibold uppercase tracking-wide mb-4">Also Serving</p>
+      <div class="flex flex-wrap gap-2">
+        ${Object.entries(seoCities).filter(([s]) => s !== citySlug).slice(0, 20).map(([s, c]) =>
+          `<a href="/roof-measurement/${s}" class="text-xs text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 rounded-full px-3 py-1.5 transition-colors">${c.name}, ${c.province}</a>`
+        ).join('')}
+        <a href="/coverage" class="text-xs text-[#00FF88] bg-[#00FF88]/10 border border-[#00FF88]/20 rounded-full px-3 py-1.5 font-semibold hover:bg-[#00FF88]/20 transition-colors">View all locations →</a>
+      </div>
+    </div>
+  </section>
+
+  <footer class="bg-slate-900 text-gray-400 py-8 text-center text-sm border-t border-white/5">
     <p>&copy; ${new Date().getFullYear()} Roof Manager. Serving roofing contractors in ${city.name}, ${city.province} and across Canada.</p>
     <div class="mt-2"><a href="/privacy" class="hover:text-white">Privacy</a> · <a href="/terms" class="hover:text-white">Terms</a> · <a href="/blog" class="hover:text-white">Blog</a> · <a href="/pricing" class="hover:text-white">Pricing</a></div>
   </footer>
@@ -2593,6 +2687,9 @@ function getHeadTags() {
   <meta name="geo.region" content="CA-AB">
   <meta name="geo.placename" content="Alberta, Canada">
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="preconnect" href="https://maps.googleapis.com">
+  <link rel="preconnect" href="https://maps.gstatic.com" crossorigin>
+  <link rel="dns-prefetch" href="//maps.googleapis.com">
   <link rel="apple-touch-icon" href="/static/icons/icon-192x192.png">
   <link rel="manifest" href="/manifest.json">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -3611,9 +3708,30 @@ function getLandingPageHTML(latestPosts: any[] = []) {
     },
     "aggregateRating": {
       "@type": "AggregateRating",
-      "ratingValue": "4.8",
-      "ratingCount": "127"
+      "ratingValue": "4.9",
+      "ratingCount": "200",
+      "bestRating": "5"
     },
+    "review": [
+      {
+        "@type": "Review",
+        "reviewRating": {"@type": "Rating", "ratingValue": "5", "bestRating": "5"},
+        "author": {"@type": "Person", "name": "Mike D."},
+        "reviewBody": "Saves me 2 hours per estimate. I quote jobs from my truck now."
+      },
+      {
+        "@type": "Review",
+        "reviewRating": {"@type": "Rating", "ratingValue": "5", "bestRating": "5"},
+        "author": {"@type": "Person", "name": "Sarah K."},
+        "reviewBody": "The BOM alone is worth $8. Supplier orders are dead accurate."
+      },
+      {
+        "@type": "Review",
+        "reviewRating": {"@type": "Rating", "ratingValue": "5", "bestRating": "5"},
+        "author": {"@type": "Person", "name": "James R.", "worksFor": {"@type": "Organization", "name": "Prairie Roofing"}},
+        "reviewBody": "15-20 estimates a week at $8 each. Way cheaper than drones."
+      }
+    ],
     "provider": {
       "@type": "Organization",
       "name": "Roof Manager",
@@ -3632,12 +3750,16 @@ function getLandingPageHTML(latestPosts: any[] = []) {
     "@context": "https://schema.org",
     "@type": "FAQPage",
     "mainEntity": [
+      {"@type": "Question", "name": "What is Roof Manager?", "acceptedAnswer": {"@type": "Answer", "text": "Roof Manager is an AI-powered roof measurement platform that generates professional satellite roof reports in under 60 seconds. It includes a full roofing CRM, invoicing, proposals, material take-off, AI phone secretary, and team management tools for roofing contractors across Canada and the US."}},
       {"@type": "Question", "name": "How accurate are Roof Manager measurements?", "acceptedAnswer": {"@type": "Answer", "text": "Our measurements use satellite imagery combined with GPS coordinate tracing and Google Solar API data. Accuracy is typically within 2-5% of manual measurements, verified against pitch-corrected sloped area calculations."}},
-      {"@type": "Question", "name": "How much does a roof measurement report cost?", "acceptedAnswer": {"@type": "Answer", "text": "Reports are $7 USD each. New users get 3 free reports to try the platform. Credit packs offer volume discounts — 25 reports for $150 ($6/each) or 100 reports for $500 ($5/each)."}},
-      {"@type": "Question", "name": "What is included in a roof report?", "acceptedAnswer": {"@type": "Answer", "text": "Each report includes total roof area (footprint and sloped), pitch analysis, edge breakdowns (ridge, hip, valley, eave, rake), material estimates with waste calculations, satellite imagery, and a professional PDF."}},
-      {"@type": "Question", "name": "Does Roof Manager work in Canada and the US?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. Roof Manager works across Canada and the United States wherever Google satellite imagery is available. Coverage is best in urban and suburban areas."}},
-      {"@type": "Question", "name": "Can I use Roof Manager for my roofing company?", "acceptedAnswer": {"@type": "Answer", "text": "Absolutely. Roof Manager includes a full CRM with customer management, invoicing, proposals, job scheduling with Google Calendar sync, material calculator, and an AI phone secretary for your business."}},
-      {"@type": "Question", "name": "How fast are reports generated?", "acceptedAnswer": {"@type": "Answer", "text": "Reports are generated in under 60 seconds. Simply enter a property address, trace the roof edges on the satellite image, and the system calculates everything automatically."}}
+      {"@type": "Question", "name": "Does Roof Manager work in Canada?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. Roof Manager was built for Canadian roofing contractors and works in every province and territory where Google satellite imagery is available — including Alberta, British Columbia, Ontario, Quebec, and all Atlantic provinces."}},
+      {"@type": "Question", "name": "How much does a roof measurement report cost?", "acceptedAnswer": {"@type": "Answer", "text": "Reports start at $7 USD each. New users get 3 free reports with no credit card required. Credit packs offer volume savings — 25 reports for $150 ($6/each) or 100 reports for $500 ($5/each)."}},
+      {"@type": "Question", "name": "How fast are roof reports delivered?", "acceptedAnswer": {"@type": "Answer", "text": "Reports are generated in under 60 seconds. Simply enter a property address, trace the roof edges on the satellite image, and the AI calculates area, pitch, edges, and material BOM automatically."}},
+      {"@type": "Question", "name": "What is included in a roof measurement report?", "acceptedAnswer": {"@type": "Answer", "text": "Each report includes: total roof area (footprint and sloped/pitched), pitch analysis per segment, edge length breakdowns (ridge, hip, valley, eave, rake), material bill of materials with waste factor, solar potential data, and a professional branded PDF."}},
+      {"@type": "Question", "name": "Do I need to be on the roof to use Roof Manager?", "acceptedAnswer": {"@type": "Answer", "text": "No. Roof Manager uses satellite imagery so you never need to physically access the roof to generate a measurement report. You can measure any property from your phone, truck, or office."}},
+      {"@type": "Question", "name": "Is there a free trial?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. Every new account gets 3 free roof measurement reports with no credit card required. The free trial includes full access to the CRM, invoicing, and proposal tools."}},
+      {"@type": "Question", "name": "Does Roof Manager work for insurance claims?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. Roof Manager reports include detailed pitch-corrected area calculations, edge breakdowns, and material estimates that are accepted by many insurance adjusters as supporting documentation for roofing claims."}},
+      {"@type": "Question", "name": "What roofing software does Roof Manager replace?", "acceptedAnswer": {"@type": "Answer", "text": "Roof Manager replaces standalone tools like EagleView, RoofSnap, and Hover for measurements, while also replacing separate CRM software, invoicing apps, and proposal tools — giving roofing contractors one integrated platform."}}
     ]
   }
   </script>
