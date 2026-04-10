@@ -3063,6 +3063,10 @@ function getSuperAdminDashboardHTML(mapsApiKey: string = '') {
           <i class="fas fa-chart-line w-5 text-center"></i>
           <span class="label text-sm font-medium">Site Analytics</span>
         </div>
+        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('blog-manager', this)">
+          <i class="fas fa-pen-nib w-5 text-center"></i>
+          <span class="label text-sm font-medium">Blog Manager</span>
+        </div>
         <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('ga4', this)">
           <i class="fab fa-google w-5 text-center"></i>
           <span class="label text-sm font-medium">Google Analytics</span>
@@ -5980,6 +5984,18 @@ function getBlogPostHTML(post?: any, slug?: string) {
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tailwindcss/typography@0.5.0/dist/typography.min.css">
 </head>
 <body class="min-h-screen" style="background:var(--bg-page)">
+  <!-- Reading progress bar -->
+  <div id="rm-read-progress" style="position:fixed;top:0;left:0;height:3px;background:#00FF88;width:0%;z-index:9999;transition:width 0.15s linear;pointer-events:none;"></div>
+  <!-- Breadcrumb bar -->
+  <div style="background:#111111;border-bottom:1px solid rgba(255,255,255,0.06)">
+    <div class="max-w-4xl mx-auto px-4 py-2 text-xs text-gray-500 flex items-center gap-2">
+      <a href="/" class="hover:text-white transition-colors">Home</a>
+      <i class="fas fa-chevron-right" style="font-size:8px"></i>
+      <a href="/blog" class="hover:text-white transition-colors">Blog</a>
+      <i class="fas fa-chevron-right" style="font-size:8px"></i>
+      <span class="text-gray-400 truncate" id="bc-post-title" style="max-width:280px">Article</span>
+    </div>
+  </div>
   <!-- Navigation — Dark theme -->
   <nav style="background:#0A0A0A" class="text-white sticky top-0 z-50 border-b border-white/5">
     <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
@@ -6109,6 +6125,12 @@ function getBlogPostHTML(post?: any, slug?: string) {
   </footer>
 
   <script src="/static/blog.js"></script>
+  <script>
+  (function(){
+    var bar=document.getElementById('rm-read-progress');
+    if(bar){window.addEventListener('scroll',function(){var h=document.documentElement;var pct=(h.scrollTop||document.body.scrollTop)/(h.scrollHeight-h.clientHeight)*100;bar.style.width=Math.min(100,pct)+'%';},{passive:true});}
+  })();
+  </script>
   ${getRoverWidget()}
 </body>
 </html>`

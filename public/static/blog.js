@@ -14,14 +14,22 @@
 
   // ── CATEGORY DISPLAY CONFIG ──
   var categoryConfig = {
-    'roofing': { label: 'Roofing', icon: 'fa-home', color: 'sky' },
-    'technology': { label: 'Technology', icon: 'fa-microchip', color: 'purple' },
-    'business': { label: 'Business', icon: 'fa-briefcase', color: 'emerald' },
-    'guides': { label: 'Guides', icon: 'fa-book', color: 'amber' },
-    'industry': { label: 'Industry News', icon: 'fa-newspaper', color: 'blue' },
-    'tips': { label: 'Tips & Tricks', icon: 'fa-lightbulb', color: 'yellow' },
-    'case-studies': { label: 'Case Studies', icon: 'fa-chart-line', color: 'rose' },
-    'product': { label: 'Product Updates', icon: 'fa-rocket', color: 'indigo' }
+    'roofing':        { label: 'Roofing',         icon: 'fa-home',           color: 'sky' },
+    'technology':     { label: 'Technology',       icon: 'fa-microchip',      color: 'purple' },
+    'business':       { label: 'Business',         icon: 'fa-briefcase',      color: 'emerald' },
+    'guides':         { label: 'Guides',           icon: 'fa-book',           color: 'amber' },
+    'industry':       { label: 'Industry News',    icon: 'fa-newspaper',      color: 'blue' },
+    'tips':           { label: 'Tips & Tricks',    icon: 'fa-lightbulb',      color: 'yellow' },
+    'case-studies':   { label: 'Case Studies',     icon: 'fa-chart-line',     color: 'rose' },
+    'product':        { label: 'Product Updates',  icon: 'fa-rocket',         color: 'indigo' },
+    'city-guides':    { label: 'City Guides',      icon: 'fa-map-marker-alt', color: 'teal' },
+    'international':  { label: 'International',    icon: 'fa-globe',          color: 'cyan' },
+    'ai-voice':       { label: 'AI Voice',         icon: 'fa-microphone',     color: 'violet' },
+    'storm-response': { label: 'Storm Response',   icon: 'fa-cloud-bolt',     color: 'slate' },
+    'commercial':     { label: 'Commercial',       icon: 'fa-building',       color: 'stone' },
+    'marketing':      { label: 'Marketing',        icon: 'fa-bullhorn',       color: 'orange' },
+    'insurance':      { label: 'Insurance',        icon: 'fa-shield-alt',     color: 'green' },
+    'sales':          { label: 'Sales',            icon: 'fa-handshake',      color: 'pink' }
   };
 
   // ── UTILITY FUNCTIONS ──
@@ -39,15 +47,23 @@
   }
 
   var categoryDarkColors = {
-    'sky': 'bg-sky-500/10 text-sky-400',
+    'sky':    'bg-sky-500/10 text-sky-400',
     'purple': 'bg-purple-500/10 text-purple-400',
-    'emerald': 'bg-emerald-500/10 text-emerald-400',
-    'amber': 'bg-amber-500/10 text-amber-400',
-    'blue': 'bg-blue-500/10 text-blue-400',
+    'emerald':'bg-emerald-500/10 text-emerald-400',
+    'amber':  'bg-amber-500/10 text-amber-400',
+    'blue':   'bg-blue-500/10 text-blue-400',
     'yellow': 'bg-yellow-500/10 text-yellow-400',
-    'rose': 'bg-rose-500/10 text-rose-400',
+    'rose':   'bg-rose-500/10 text-rose-400',
     'indigo': 'bg-indigo-500/10 text-indigo-400',
-    'gray': 'bg-white/10 text-gray-400'
+    'teal':   'bg-teal-500/10 text-teal-400',
+    'cyan':   'bg-cyan-500/10 text-cyan-400',
+    'violet': 'bg-violet-500/10 text-violet-400',
+    'slate':  'bg-slate-500/10 text-slate-300',
+    'stone':  'bg-stone-400/10 text-stone-300',
+    'orange': 'bg-orange-500/10 text-orange-400',
+    'green':  'bg-green-500/10 text-green-400',
+    'pink':   'bg-pink-500/10 text-pink-400',
+    'gray':   'bg-white/10 text-gray-400'
   };
 
   function getCategoryBadge(cat) {
@@ -272,6 +288,8 @@
         if (metaDesc) metaDesc.setAttribute('content', post.meta_description || post.excerpt || '');
         var breadcrumb = document.getElementById('breadcrumb-title');
         if (breadcrumb) breadcrumb.textContent = post.title;
+        var bcTitle = document.getElementById('bc-post-title');
+        if (bcTitle) bcTitle.textContent = post.title;
 
         // Render article
         renderArticle(post);
@@ -432,6 +450,57 @@
     });
   }
 
+  // ── IN-CONTENT CTA + TABLE OF CONTENTS ──
+  var IN_CONTENT_CTA = '<div class="rm-incontent-cta not-prose my-8 rounded-2xl p-6 text-center" style="background:rgba(0,255,136,0.07);border:1px solid rgba(0,255,136,0.2)">' +
+    '<p class="font-black text-white text-lg mb-1">Measure any roof in under 60 seconds</p>' +
+    '<p class="text-gray-400 text-sm mb-4">Join 5,000+ contractors using Roof Manager — no credit card needed</p>' +
+    '<a href="/customer/login" style="background:#00FF88;color:#0A0A0A;font-weight:800;padding:12px 32px;border-radius:12px;display:inline-block;text-decoration:none;transition:background 0.2s" onmouseover="this.style.background=\'#00e67a\'" onmouseout="this.style.background=\'#00FF88\'">Start 3 Free Reports →</a>' +
+  '</div>';
+
+  function enhancePostContent(html, readTime) {
+    // 1. Inject in-content CTA after the 2nd </h2>, or after 3rd </p> if fewer than 2 h2s
+    var h2count = (html.match(/<\/h2>/gi) || []).length;
+    if (h2count >= 2) {
+      var n = 0;
+      html = html.replace(/<\/h2>/gi, function(m) { n++; return n === 2 ? '</h2>' + IN_CONTENT_CTA : m; });
+    } else {
+      var p = 0;
+      html = html.replace(/<\/p>/gi, function(m) { p++; return p === 3 ? '</p>' + IN_CONTENT_CTA : m; });
+    }
+
+    // 2. Auto-generate TOC for long posts (>= 8 min read)
+    if (readTime >= 8) {
+      var headings = [];
+      var idxRe = /<h2[^>]*>(.*?)<\/h2>/gi;
+      var hm;
+      while ((hm = idxRe.exec(html)) !== null) {
+        var text = hm[1].replace(/<[^>]+>/g, '').trim();
+        var id = text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').substring(0, 60);
+        headings.push({ text: text, id: id });
+      }
+      if (headings.length >= 3) {
+        // Add IDs to h2s
+        var idx2 = 0;
+        html = html.replace(/<h2([^>]*)>(.*?)<\/h2>/gi, function(m, attrs, inner) {
+          var h = headings[idx2++];
+          return '<h2' + attrs + ' id="' + (h ? h.id : '') + '">' + inner + '</h2>';
+        });
+        var tocItems = headings.map(function(h, i) {
+          return '<li><a href="#' + h.id + '" style="color:#9ca3af;text-decoration:none;font-size:13px" onmouseover="this.style.color=\'#00FF88\'" onmouseout="this.style.color=\'#9ca3af\'">' + (i+1) + '. ' + escapeHtml(h.text) + '</a></li>';
+        }).join('');
+        var toc = '<div class="rm-toc not-prose my-6 rounded-xl p-5" style="background:#111111;border:1px solid rgba(255,255,255,0.08)">' +
+          '<details open>' +
+          '<summary style="cursor:pointer;font-size:14px;font-weight:700;color:#fff;list-style:none;display:flex;align-items:center;gap:8px"><span style="color:#00FF88"><i class="fas fa-list" style="font-size:11px"></i></span> Table of Contents</summary>' +
+          '<ol style="margin-top:12px;padding-left:20px;space-y:4px">' + tocItems + '</ol>' +
+          '</details>' +
+        '</div>';
+        // Insert TOC before first h2
+        html = html.replace(/<h2/, toc + '<h2');
+      }
+    }
+    return html;
+  }
+
   function renderArticle(post) {
     var contentEl = document.getElementById('blog-post-content');
     if (!contentEl) return;
@@ -477,7 +546,7 @@
       '</div>' +
       tagsHtml +
       '<div class="prose prose-lg prose-invert max-w-none blog-content">' +
-        post.content +
+        enhancePostContent(post.content || '', post.read_time_minutes || 0) +
       '</div>' +
       // Contact Us form at bottom of every blog post
       '<div class="mt-12 bg-gradient-to-br from-slate-900 to-blue-900 rounded-2xl p-8 text-white">' +

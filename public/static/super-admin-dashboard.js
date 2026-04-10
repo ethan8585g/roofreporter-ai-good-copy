@@ -121,6 +121,14 @@ async function loadView(view) {
         const gmailStatusRes = await saFetch('/api/auth/gmail/status');
         if (gmailStatusRes) SA.data.emailSetup = await gmailStatusRes.json();
         break;
+      case 'blog-manager':
+        const [bmPostsRes, bmCatsRes] = await Promise.all([
+          saFetch('/api/blog/admin/posts?limit=200'),
+          saFetch('/api/blog/categories')
+        ]);
+        if (bmPostsRes && bmPostsRes.ok) SA.data.blog_posts = await bmPostsRes.json();
+        if (bmCatsRes && bmCatsRes.ok) SA.data.blog_categories = await bmCatsRes.json();
+        break;
       case 'analytics':
         const analyticsRes = await saFetch(`/api/analytics/dashboard?period=${SA.analyticsPeriod}`);
         if (analyticsRes) SA.data.analytics = await analyticsRes.json();
@@ -381,6 +389,7 @@ function renderContent() {
     case 'email-outreach': break; // Handled by email-outreach.js
     case 'email-setup': root.innerHTML = renderEmailSetupView(); break;
     case 'analytics': root.innerHTML = renderAnalyticsView(); break;
+    case 'blog-manager': root.innerHTML = renderBlogManagerView(); break;
     case 'ga4': root.innerHTML = renderGA4View(); break;
     case 'pricing': root.innerHTML = renderPricingView(); break;
     case 'call-center': break; // Handled by call-center.js
@@ -1849,6 +1858,263 @@ window.saTestGA4Event = function() {
     window.rmToast(d.success ? 'Test event sent successfully to GA4!' : 'Event send failed: ' + JSON.stringify(d, 'info'));
   });
 };
+
+// ============================================================
+// VIEW: BLOG MANAGER — Full CRUD for blog posts
+// ============================================================
+var BM = { editingId: null, filter: 'all' };
+
+window.bmOpenCreate = function() {
+  BM.editingId = null;
+  document.getElementById('bm-modal-title').textContent = 'New Post';
+  document.getElementById('bm-form').reset();
+  document.getElementById('bm-slug').value = '';
+  document.getElementById('bm-modal').classList.remove('hidden');
+};
+
+window.bmOpenEdit = async function(id) {
+  BM.editingId = id;
+  document.getElementById('bm-modal-title').textContent = 'Edit Post';
+  const res = await saFetch('/api/blog/admin/posts?limit=200');
+  if (!res || !res.ok) return;
+  const d = await res.json();
+  const post = (d.posts || d).find(function(p) { return p.id === id; });
+  if (!post) return;
+  document.getElementById('bm-title').value = post.title || '';
+  document.getElementById('bm-slug').value = post.slug || '';
+  document.getElementById('bm-category').value = post.category || 'roofing';
+  document.getElementById('bm-status').value = post.status || 'draft';
+  document.getElementById('bm-featured').checked = !!post.is_featured;
+  document.getElementById('bm-cover').value = post.cover_image_url || '';
+  document.getElementById('bm-excerpt').value = post.excerpt || '';
+  document.getElementById('bm-meta-desc').value = post.meta_description || '';
+  document.getElementById('bm-tags').value = post.tags || '';
+  document.getElementById('bm-author').value = post.author_name || 'Roof Manager Team';
+  document.getElementById('bm-read-time').value = post.read_time_minutes || 5;
+  document.getElementById('bm-content').value = post.content || '';
+  document.getElementById('bm-modal').classList.remove('hidden');
+};
+
+window.bmCloseModal = function() {
+  document.getElementById('bm-modal').classList.add('hidden');
+  BM.editingId = null;
+};
+
+window.bmAutoSlug = function() {
+  var t = document.getElementById('bm-title').value;
+  if (!BM.editingId) {
+    document.getElementById('bm-slug').value = t.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').substring(0,100);
+  }
+};
+
+window.bmSave = async function() {
+  var payload = {
+    title: document.getElementById('bm-title').value.trim(),
+    slug: document.getElementById('bm-slug').value.trim(),
+    category: document.getElementById('bm-category').value,
+    status: document.getElementById('bm-status').value,
+    is_featured: document.getElementById('bm-featured').checked ? 1 : 0,
+    cover_image_url: document.getElementById('bm-cover').value.trim(),
+    excerpt: document.getElementById('bm-excerpt').value.trim(),
+    meta_description: document.getElementById('bm-meta-desc').value.trim(),
+    tags: document.getElementById('bm-tags').value.trim(),
+    author_name: document.getElementById('bm-author').value.trim() || 'Roof Manager Team',
+    read_time_minutes: parseInt(document.getElementById('bm-read-time').value) || 5,
+    content: document.getElementById('bm-content').value.trim()
+  };
+  if (!payload.title) { window.rmToast('Title is required', 'error'); return; }
+  var url = BM.editingId ? '/api/blog/admin/posts/' + BM.editingId : '/api/blog/admin/posts';
+  var method = BM.editingId ? 'PUT' : 'POST';
+  const res = await saFetch(url, { method: method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+  if (!res) return;
+  const d = await res.json();
+  if (d.error) { window.rmToast('Error: ' + d.error, 'error'); return; }
+  window.rmToast(BM.editingId ? 'Post updated!' : 'Post created!');
+  bmCloseModal();
+  loadView('blog-manager');
+};
+
+window.bmDelete = async function(id, title) {
+  if (!confirm('Delete "' + title + '"?\nThis cannot be undone.')) return;
+  const res = await saFetch('/api/blog/admin/posts/' + id, { method: 'DELETE' });
+  if (!res) return;
+  const d = await res.json();
+  if (d.error) { window.rmToast('Error: ' + d.error, 'error'); return; }
+  window.rmToast('Post deleted');
+  loadView('blog-manager');
+};
+
+window.bmToggleStatus = async function(id, currentStatus) {
+  var newStatus = currentStatus === 'published' ? 'draft' : 'published';
+  const res = await saFetch('/api/blog/admin/posts/' + id, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ status: newStatus }) });
+  if (!res) return;
+  window.rmToast('Status changed to ' + newStatus);
+  loadView('blog-manager');
+};
+
+window.bmSetFilter = function(f, el) {
+  BM.filter = f;
+  document.querySelectorAll('.bm-filter-btn').forEach(function(b){ b.classList.remove('bg-[#00FF88]','text-black'); b.classList.add('bg-white/5','text-gray-400'); });
+  if(el){ el.classList.add('bg-[#00FF88]','text-black'); el.classList.remove('bg-white/5','text-gray-400'); }
+  renderContent();
+};
+
+function renderBlogManagerView() {
+  var allPosts = (SA.data.blog_posts && (SA.data.blog_posts.posts || SA.data.blog_posts)) || [];
+  var published = allPosts.filter(function(p){ return p.status === 'published'; });
+  var drafts = allPosts.filter(function(p){ return p.status === 'draft'; });
+  var featured = allPosts.filter(function(p){ return p.is_featured; });
+
+  var filtered = BM.filter === 'published' ? published : BM.filter === 'drafts' ? drafts : allPosts;
+
+  var CATS = ['roofing','technology','business','guides','industry','tips','case-studies','product','city-guides','international','ai-voice','storm-response','commercial','marketing','insurance','sales'];
+
+  var categoryBadge = function(cat) {
+    var colors = { roofing:'bg-sky-500/20 text-sky-400', technology:'bg-purple-500/20 text-purple-400', business:'bg-emerald-500/20 text-emerald-400', guides:'bg-amber-500/20 text-amber-400', industry:'bg-blue-500/20 text-blue-400', tips:'bg-yellow-500/20 text-yellow-400', 'case-studies':'bg-rose-500/20 text-rose-400', product:'bg-indigo-500/20 text-indigo-400', 'city-guides':'bg-teal-500/20 text-teal-400', international:'bg-cyan-500/20 text-cyan-400', 'ai-voice':'bg-violet-500/20 text-violet-400', 'storm-response':'bg-slate-400/20 text-slate-300', commercial:'bg-stone-400/20 text-stone-300', marketing:'bg-orange-500/20 text-orange-400', insurance:'bg-green-500/20 text-green-400', sales:'bg-pink-500/20 text-pink-400' };
+    var cls = colors[cat] || 'bg-white/10 text-gray-400';
+    return '<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold ' + cls + '">' + cat + '</span>';
+  };
+
+  var rows = filtered.map(function(p) {
+    var statusBadge = p.status === 'published'
+      ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-green-500/20 text-green-400">Published</span>'
+      : '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-gray-500/20 text-gray-400">Draft</span>';
+    var featuredStar = p.is_featured ? '<i class="fas fa-star text-amber-400 text-xs"></i>' : '<i class="far fa-star text-gray-700 text-xs"></i>';
+    var date = p.published_at ? p.published_at.substring(0,10) : '—';
+    return '<tr class="border-t border-white/5 hover:bg-white/[0.02] transition-colors">' +
+      '<td class="px-4 py-3 text-center">' + featuredStar + '</td>' +
+      '<td class="px-4 py-3"><p class="text-sm font-semibold text-white leading-tight max-w-xs">' + (p.title || '') + '</p><p class="text-[10px] text-gray-500 mt-0.5 font-mono">' + (p.slug || '') + '</p></td>' +
+      '<td class="px-4 py-3">' + categoryBadge(p.category || '') + '</td>' +
+      '<td class="px-4 py-3">' + statusBadge + '</td>' +
+      '<td class="px-4 py-3 text-xs text-gray-400 text-center">' + (p.read_time_minutes || '—') + 'm</td>' +
+      '<td class="px-4 py-3 text-xs text-gray-500">' + date + '</td>' +
+      '<td class="px-4 py-3">' +
+        '<div class="flex items-center gap-2">' +
+          '<button onclick="bmOpenEdit(' + p.id + ')" class="text-xs px-2.5 py-1 bg-white/5 hover:bg-white/10 text-gray-300 rounded-lg transition-colors">Edit</button>' +
+          '<button onclick="bmToggleStatus(' + p.id + ',\'' + p.status + '\')" class="text-xs px-2.5 py-1 ' + (p.status==='published' ? 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-400' : 'bg-green-500/10 hover:bg-green-500/20 text-green-400') + ' rounded-lg transition-colors">' + (p.status==='published' ? 'Unpublish' : 'Publish') + '</button>' +
+          '<button onclick="bmDelete(' + p.id + ',\'' + (p.title||'').replace(/'/g,"\\'").substring(0,40) + '\')" class="text-xs px-2.5 py-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg transition-colors"><i class="fas fa-trash"></i></button>' +
+        '</div>' +
+      '</td>' +
+    '</tr>';
+  }).join('');
+
+  var catOptions = CATS.map(function(c){ return '<option value="'+c+'">'+c+'</option>'; }).join('');
+
+  return `
+    <div class="mb-6 flex items-center justify-between">
+      <div>
+        <h2 class="text-2xl font-black text-gray-900"><i class="fas fa-pen-nib mr-2 text-teal-500"></i>Blog Manager</h2>
+        <p class="text-sm text-gray-500 mt-1">Create, edit, and publish blog posts</p>
+      </div>
+      <button onclick="bmOpenCreate()" class="flex items-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-black font-bold px-5 py-2.5 rounded-xl text-sm transition-colors">
+        <i class="fas fa-plus"></i> New Post
+      </button>
+    </div>
+
+    <div class="grid grid-cols-4 gap-4 mb-6">
+      ${samc('Total Posts', allPosts.length, 'fa-file-alt', 'blue')}
+      ${samc('Published', published.length, 'fa-check-circle', 'green')}
+      ${samc('Drafts', drafts.length, 'fa-edit', 'amber')}
+      ${samc('Featured', featured.length, 'fa-star', 'indigo')}
+    </div>
+
+    <div class="flex items-center gap-2 mb-4">
+      <button class="bm-filter-btn text-xs px-3 py-1.5 rounded-full font-semibold transition-colors bg-[#00FF88] text-black" onclick="bmSetFilter('all',this)">All (${allPosts.length})</button>
+      <button class="bm-filter-btn text-xs px-3 py-1.5 rounded-full font-semibold transition-colors bg-white/5 text-gray-400" onclick="bmSetFilter('published',this)">Published (${published.length})</button>
+      <button class="bm-filter-btn text-xs px-3 py-1.5 rounded-full font-semibold transition-colors bg-white/5 text-gray-400" onclick="bmSetFilter('drafts',this)">Drafts (${drafts.length})</button>
+    </div>
+
+    <div class="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="bg-gray-50">
+            <tr>
+              <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase w-8"><i class="fas fa-star text-amber-400"></i></th>
+              <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Title / Slug</th>
+              <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Category</th>
+              <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Status</th>
+              <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Read Time</th>
+              <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Published</th>
+              <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows || '<tr><td colspan="7" class="px-4 py-8 text-center text-gray-400 text-sm">No posts found</td></tr>'}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Create / Edit Modal -->
+    <div id="bm-modal" class="hidden fixed inset-0 z-50 flex items-start justify-center pt-8 px-4" style="background:rgba(0,0,0,0.7);overflow-y:auto">
+      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-3xl mb-8">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <h3 id="bm-modal-title" class="text-lg font-black text-gray-900">New Post</h3>
+          <button onclick="bmCloseModal()" class="text-gray-400 hover:text-gray-600 text-xl"><i class="fas fa-times"></i></button>
+        </div>
+        <form id="bm-form" class="px-6 py-5 space-y-4" onsubmit="event.preventDefault();bmSave()">
+          <div class="grid grid-cols-2 gap-4">
+            <div class="col-span-2">
+              <label class="block text-xs font-semibold text-gray-600 mb-1">Title *</label>
+              <input id="bm-title" type="text" oninput="bmAutoSlug()" placeholder="Post title..." class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none" required>
+            </div>
+            <div class="col-span-2">
+              <label class="block text-xs font-semibold text-gray-600 mb-1">Slug (URL)</label>
+              <input id="bm-slug" type="text" placeholder="auto-generated-from-title" class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-gray-600 mb-1">Category</label>
+              <select id="bm-category" class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none">${catOptions}</select>
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-gray-600 mb-1">Status</label>
+              <select id="bm-status" class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none">
+                <option value="draft">Draft</option>
+                <option value="published">Published</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-gray-600 mb-1">Cover Image URL</label>
+              <input id="bm-cover" type="url" placeholder="https://..." class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-gray-600 mb-1">Author Name</label>
+              <input id="bm-author" type="text" placeholder="Roof Manager Team" class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-gray-600 mb-1">Read Time (mins)</label>
+              <input id="bm-read-time" type="number" min="1" max="60" value="5" class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none">
+            </div>
+            <div class="flex items-center gap-2 pt-4">
+              <input id="bm-featured" type="checkbox" class="w-4 h-4 accent-teal-500">
+              <label for="bm-featured" class="text-sm text-gray-700 font-medium">Featured post</label>
+            </div>
+            <div class="col-span-2">
+              <label class="block text-xs font-semibold text-gray-600 mb-1">Excerpt (150 chars)</label>
+              <textarea id="bm-excerpt" rows="2" maxlength="300" placeholder="Short summary shown on blog listing..." class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none resize-none"></textarea>
+            </div>
+            <div class="col-span-2">
+              <label class="block text-xs font-semibold text-gray-600 mb-1">Meta Description (SEO)</label>
+              <textarea id="bm-meta-desc" rows="2" maxlength="160" placeholder="SEO description (160 chars max)..." class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none resize-none"></textarea>
+            </div>
+            <div class="col-span-2">
+              <label class="block text-xs font-semibold text-gray-600 mb-1">Tags (comma-separated)</label>
+              <input id="bm-tags" type="text" placeholder="roofing, measurement, CRM, Alberta" class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none">
+            </div>
+            <div class="col-span-2">
+              <label class="block text-xs font-semibold text-gray-600 mb-1">Content (HTML)</label>
+              <textarea id="bm-content" rows="16" placeholder="<h2>Section</h2><p>Content here...</p>" class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none resize-y" style="min-height:300px"></textarea>
+            </div>
+          </div>
+          <div class="flex items-center gap-3 pt-2 border-t border-gray-100">
+            <button type="submit" class="flex-1 bg-[#00FF88] hover:bg-[#00e67a] text-black font-bold py-2.5 rounded-xl text-sm transition-colors">Save Post</button>
+            <button type="button" onclick="bmCloseModal()" class="px-6 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-xl text-sm transition-colors">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+}
 
 function renderGA4View() {
   const status = SA.data.ga4_status || {};
