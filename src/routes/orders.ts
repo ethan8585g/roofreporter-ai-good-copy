@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import type { Bindings } from '../types'
 import { validateAdminSession } from './auth'
+import { notifyNewReportRequest } from '../services/email'
 
 export const ordersRoutes = new Hono<{ Bindings: Bindings }>()
 
@@ -94,6 +95,16 @@ ordersRoutes.post('/', async (c) => {
       INSERT INTO user_activity_log (company_id, action, details)
       VALUES (?, 'order_created', ?)
     `).bind(masterCompanyId, `Order ${orderNumber} created - ${service_tier} tier - $${price}`).run()
+
+    // Notify sales of new report request (fire-and-forget)
+    const resendKey = (c.env as any).RESEND_API_KEY
+    if (resendKey) {
+      notifyNewReportRequest(resendKey, {
+        order_number: orderNumber, property_address,
+        requester_name: requester_name, requester_email: requester_email || '',
+        service_tier, price, is_trial: false
+      }).catch(() => {})
+    }
 
     return c.json({
       success: true,

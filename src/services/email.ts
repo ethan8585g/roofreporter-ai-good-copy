@@ -223,6 +223,38 @@ export async function sendViaResend(
 }
 
 // ============================================================
+// SALES NOTIFICATION — Sent to sales@roofmanager.ca on new report requests
+// ============================================================
+export async function notifyNewReportRequest(
+  resendApiKey: string,
+  order: {
+    order_number: string
+    property_address: string
+    requester_name: string
+    requester_email: string
+    service_tier: string
+    price: number
+    is_trial: boolean
+  }
+): Promise<void> {
+  const typeLabel = order.is_trial ? 'Free Trial' : `Paid — $${order.price.toFixed(2)}`
+  const html = `
+<div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:24px">
+  <h2 style="color:#111;margin-bottom:4px">New Report Request</h2>
+  <p style="color:#555;margin-top:0">${order.order_number}</p>
+  <table style="width:100%;border-collapse:collapse;margin:16px 0">
+    <tr><td style="padding:8px 0;color:#888;width:140px">Property</td><td style="padding:8px 0;font-weight:600">${order.property_address}</td></tr>
+    <tr><td style="padding:8px 0;color:#888">Customer</td><td style="padding:8px 0">${order.requester_name} &lt;${order.requester_email}&gt;</td></tr>
+    <tr><td style="padding:8px 0;color:#888">Tier</td><td style="padding:8px 0">${order.service_tier}</td></tr>
+    <tr><td style="padding:8px 0;color:#888">Type</td><td style="padding:8px 0">${typeLabel}</td></tr>
+  </table>
+  <a href="https://www.roofmanager.ca/admin/superadmin" style="display:inline-block;background:#111;color:#fff;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:600">View in Super Admin →</a>
+</div>`
+
+  await sendViaResend(resendApiKey, 'sales@roofmanager.ca', `New Report Request — ${order.order_number}`, html)
+}
+
+// ============================================================
 // GMAIL OAUTH2 — Send email using OAuth2 refresh token
 // Works with personal Gmail. One-time consent at /api/auth/gmail
 // ============================================================

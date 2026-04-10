@@ -5,6 +5,7 @@ import { isDevAccount } from './customer-auth'
 import { trackPaymentCompleted, trackCreditPurchase } from '../services/ga4-events'
 import { resolveTeamOwner } from './team'
 import { validateAdminSession } from './auth'
+import { notifyNewReportRequest } from '../services/email'
 
 export const squareRoutes = new Hono<{ Bindings: Bindings }>()
 
@@ -481,6 +482,15 @@ squareRoutes.post('/use-credit', async (c) => {
       needs_admin_trace ? 1 : 0
     ).run()
 
+    // Notify sales of new report request (fire-and-forget)
+    const resendKey = (c.env as any).RESEND_API_KEY
+    if (resendKey) {
+      notifyNewReportRequest(resendKey, {
+        order_number: orderNumber, property_address, requester_name: customer.name,
+        requester_email: customer.email, service_tier: tier, price, is_trial: isTrial
+      }).catch(() => {})
+    }
+
     // Atomic deduct: WHERE clause prevents overselling even with concurrent requests
     if (!isDev) {
       if (isTrial) {
@@ -734,6 +744,16 @@ squareRoutes.post('/webhook', async (c) => {
 
           const webhookOrderId = orderResult.meta.last_row_id as number
 
+          // Notify sales of new report request (fire-and-forget)
+          const resendKeyWh = (c.env as any).RESEND_API_KEY
+          if (resendKeyWh) {
+            notifyNewReportRequest(resendKeyWh, {
+              order_number: orderNumber, property_address: address,
+              requester_name: custData?.name || '', requester_email: custData?.email || '',
+              service_tier: tier, price, is_trial: false
+            }).catch(() => {})
+          }
+
           // Update square payment with order_id
           await c.env.DB.prepare(
             'UPDATE square_payments SET order_id = ? WHERE square_order_id = ?'
@@ -957,6 +977,16 @@ squareRoutes.get('/verify-payment', async (c) => {
           ).run()
 
           const newOrderId = orderResult.meta.last_row_id as number
+
+          // Notify sales of new report request (fire-and-forget)
+          const resendKeyVp = (c.env as any).RESEND_API_KEY
+          if (resendKeyVp) {
+            notifyNewReportRequest(resendKeyVp, {
+              order_number: orderNumber, property_address: address,
+              requester_name: custData?.name || '', requester_email: custData?.email || '',
+              service_tier: tier, price, is_trial: false
+            }).catch(() => {})
+          }
 
           await c.env.DB.prepare(
             'UPDATE square_payments SET order_id = ? WHERE square_order_id = ?'
