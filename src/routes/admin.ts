@@ -1456,12 +1456,16 @@ adminRoutes.post('/superadmin/onboarding/create', async (c) => {
     .bind(email.toLowerCase()).first<any>()
   if (existing) return c.json({ error: 'A customer with that email already exists' }, 409)
 
-  // Hash password using same pattern as customer-auth.ts
-  const saltBytes = crypto.getRandomValues(new Uint8Array(16))
-  const salt = Array.from(saltBytes).map((b: number) => b.toString(16).padStart(2, '0')).join('')
-  const hashBuf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${salt}:${password}`))
-  const hash = Array.from(new Uint8Array(hashBuf)).map((b: number) => b.toString(16).padStart(2, '0')).join('')
-  const password_hash = `${salt}:${hash}`
+  // Hash password using PBKDF2 — matches verifyPassword() in customer-auth.ts (pbkdf2:<salt>:<hash>)
+  const pwSalt = crypto.randomUUID()
+  const enc2 = new TextEncoder()
+  const keyMaterial = await crypto.subtle.importKey('raw', enc2.encode(password), { name: 'PBKDF2' }, false, ['deriveBits'])
+  const hashBuffer = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', salt: enc2.encode(pwSalt), iterations: 100000, hash: 'SHA-256' },
+    keyMaterial, 256
+  )
+  const hashHex = Array.from(new Uint8Array(hashBuffer)).map((b: number) => b.toString(16).padStart(2, '0')).join('')
+  const password_hash = `pbkdf2:${pwSalt}:${hashHex}`
 
   // Trial + subscription setup
   const trialDaysNum = parseInt(trial_days) || 30
