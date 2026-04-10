@@ -777,7 +777,7 @@ adminRoutes.get('/superadmin/users', async (c) => {
     const summary = await c.env.DB.prepare(`
       SELECT
         COUNT(*) as total_users,
-        SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END) as active_users,
+        SUM(CASE WHEN is_active = 1 OR is_active IS NULL THEN 1 ELSE 0 END) as active_users,
         SUM(CASE WHEN google_id IS NOT NULL THEN 1 ELSE 0 END) as google_users,
         SUM(CASE WHEN report_credits > 0 OR credits_used > 0 THEN 1 ELSE 0 END) as paying_users,
         SUM(report_credits) as total_credits_available,

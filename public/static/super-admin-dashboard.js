@@ -466,7 +466,7 @@ function renderUsersView() {
                   <div class="flex items-center gap-2">
                     ${u.google_avatar ? `<img src="${u.google_avatar}" class="w-8 h-8 rounded-full border-2 border-white shadow-sm">` : `<div class="w-8 h-8 bg-gradient-to-br from-teal-500 to-teal-600 rounded-full flex items-center justify-center text-white text-xs font-bold">${(u.name||'?')[0].toUpperCase()}</div>`}
                     <div>
-                      <p class="font-semibold text-gray-800 text-sm">${u.name || '-'}</p>
+                      <p class="font-semibold text-gray-800 text-sm">${u.name || '-'} ${new Date(u.created_at) > new Date(Date.now() - 7*86400000) ? '<span class="ml-1 px-1.5 py-0.5 bg-green-100 text-green-700 text-[9px] font-bold rounded-full uppercase">New</span>' : ''}</p>
                       <p class="text-[10px] text-gray-400">${u.email}</p>
                     </div>
                   </div>
