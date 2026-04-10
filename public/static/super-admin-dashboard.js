@@ -434,7 +434,7 @@ function renderUsersView() {
 
     <div class="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
       ${samc('Total Users', s.total_users || users.length, 'fa-users', 'blue')}
-      ${samc('Active Users', s.active_users || 0, 'fa-user-check', 'green', (s.new_signups_7d || 0) + ' new this week')}
+      ${samc('Active Users', s.active_users || 0, 'fa-user-check', 'green', (s.new_signups_7d || 0) + ' new (7d) · ' + (s.new_signups_30d || 0) + ' new (30d)')}
       ${samc('Google Sign-In', s.google_users || 0, 'fa-google', 'red')}
       ${samc('Paying Customers', s.paying_users || 0, 'fa-credit-card', 'amber')}
       ${samc('Credits Available', s.total_credits_available || 0, 'fa-coins', 'indigo', (s.total_credits_used || 0) + ' used')}
@@ -3442,7 +3442,7 @@ window.pnPurchase = async function(phoneNumber) {
     if (!res) return;
     var data = await res.json();
     if (data.success) { window.rmToast('Number purchased: ' + data.phone_number, 'info'); loadView('phone-marketplace'); }
-    else window.rmToast('Purchase failed: ' + (data.error || 'Unknown error', 'error'));
+    else window.rmToast('Purchase failed: ' + (data.error || 'Unknown error'), 'error');
   } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
 };
 
