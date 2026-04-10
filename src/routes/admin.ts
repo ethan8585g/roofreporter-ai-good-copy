@@ -1240,7 +1240,7 @@ adminRoutes.get('/superadmin/secretary/subscribers', async (c) => {
         c.name as customer_name,
         c.email as customer_email,
         c.phone as customer_phone,
-        c.company as customer_company,
+        c.company_name as customer_company,
         sc.business_phone,
         sc.is_active as service_active,
         sc.greeting_script,
@@ -1313,7 +1313,7 @@ adminRoutes.get('/superadmin/secretary/revenue', async (c) => {
         ss.current_period_end,
         c.name as customer_name,
         c.email as customer_email,
-        c.company as customer_company
+        c.company_name as customer_company
       FROM secretary_subscriptions ss
       LEFT JOIN customers c ON c.id = ss.customer_id
       WHERE ss.status = 'active'
@@ -1385,7 +1385,7 @@ adminRoutes.get('/superadmin/secretary/calls', async (c) => {
         cl.*,
         c.name as customer_name,
         c.email as customer_email,
-        c.company as customer_company
+        c.company_name as customer_company
       FROM secretary_call_logs cl
       LEFT JOIN customers c ON c.id = cl.customer_id
       ${whereClause}

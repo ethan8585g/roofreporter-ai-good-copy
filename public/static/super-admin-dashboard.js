@@ -4147,7 +4147,7 @@ window.sendInvoiceGmail = async function(id) {
     var resp = await saFetch('/api/invoices/' + id + '/send-gmail', { method: 'POST' });
     var data = await resp.json();
     if (data.success) {
-      window.rmToast('Invoice sent successfully to ' + (data.message || 'customer', 'success'));
+      window.rmToast('Invoice sent successfully to ' + (data.message || 'customer'), 'success');
       closeInvModal();
       loadView('invoices');
     } else {
@@ -5541,7 +5541,7 @@ async function sendQuickInvoice() {
     var data = await res.json();
     if (data.success || data.invoice_id) {
       await saFetch('/api/admin/superadmin/service-invoices/' + (data.invoice_id || data.id) + '/send', { method: 'POST' });
-      window.rmToast('Invoice ' + (data.invoice_number || '', 'info') + ' created and sent to ' + email);
+      window.rmToast('Invoice ' + (data.invoice_number || '') + ' created and sent to ' + email, 'success');
       loadView('marketing');
     } else { window.rmToast(data.error || 'Failed to create invoice', 'info'); }
   } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
@@ -5591,7 +5591,7 @@ async function deployLiveKitAgent(customerId) {
       window.rmToast('LiveKit Agent Deployed!\n\nTrunk ID: ' + data.trunk_id + '\nDispatch Rule: ' + data.dispatch_rule_id + '\n\n' + data.message, 'info');
       loadView('customer-onboarding');
     } else {
-      window.rmToast('Deploy failed: ' + (data.error || 'Unknown error', 'error') + (data.details ? '\n\nDetails: ' + data.details : ''));
+      window.rmToast('Deploy failed: ' + (data.error || 'Unknown error') + (data.details ? '\n\nDetails: ' + data.details : ''), 'error');
     }
   } catch(e) { window.rmToast('Error deploying LiveKit agent: ' + e.message, 'error'); }
 }
@@ -6294,7 +6294,7 @@ async function lkCreateTrunk() {
     });
     var data = await res.json();
     if (data.success) { window.rmToast('Trunk created: ' + data.trunk_id, 'success'); document.getElementById('lk-modal').innerHTML = ''; loadView('livekit-agents'); }
-    else window.rmToast('Error: ' + (data.error || 'Unknown', 'error'));
+    else window.rmToast('Error: ' + (data.error || 'Unknown'), 'error');
   } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
 }
 
@@ -6328,7 +6328,7 @@ async function lkCreateDispatch() {
     });
     var data = await res.json();
     if (data.success) { window.rmToast('Dispatch rule created: ' + data.dispatch_rule_id, 'success'); document.getElementById('lk-modal').innerHTML = ''; loadView('livekit-agents'); }
-    else window.rmToast('Error: ' + (data.error || 'Unknown', 'error'));
+    else window.rmToast('Error: ' + (data.error || 'Unknown'), 'error');
   } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
 }
 
@@ -6394,7 +6394,7 @@ async function lkToggleConfig(customerId) {
     var data = await res.json();
     if (data.success) {
       loadView('livekit-agents');
-    } else { window.rmToast('Error: ' + (data.error || 'Unknown', 'error')); }
+    } else { window.rmToast('Error: ' + (data.error || 'Unknown'), 'error'); }
   } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
 }
 
@@ -6408,9 +6408,9 @@ async function lkBulkToggle(activate) {
     });
     var data = await res.json();
     if (data.success) {
-      window.rmToast(data.message + ' (' + (data.rows_changed || 0, 'info') + ' rows changed)');
+      window.rmToast(data.message + ' (' + (data.rows_changed || 0) + ' rows changed)', 'info');
       loadView('livekit-agents');
-    } else { window.rmToast('Error: ' + (data.error || 'Unknown', 'error')); }
+    } else { window.rmToast('Error: ' + (data.error || 'Unknown'), 'error'); }
   } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
 }
 
@@ -6472,7 +6472,7 @@ async function lkSaveConfig(customerId) {
     if (data.success) {
       document.getElementById('lk-modal').innerHTML = '';
       loadView('livekit-agents');
-    } else { window.rmToast('Error: ' + (data.error || 'Unknown', 'error')); }
+    } else { window.rmToast('Error: ' + (data.error || 'Unknown'), 'error'); }
   } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
 }
 
@@ -6489,7 +6489,7 @@ async function lkAddToPool() {
     if (data.success) {
       document.getElementById('lk-pool-number').value = '';
       loadView('livekit-agents');
-    } else { window.rmToast('Error: ' + (data.error || 'Unknown', 'error')); }
+    } else { window.rmToast('Error: ' + (data.error || 'Unknown'), 'error'); }
   } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
 }
 
@@ -6501,7 +6501,7 @@ async function lkReleaseNumber(number) {
     });
     var data = await res.json();
     if (data.success) { loadView('livekit-agents'); }
-    else { window.rmToast('Error: ' + (data.error || 'Unknown', 'error')); }
+    else { window.rmToast('Error: ' + (data.error || 'Unknown'), 'error'); }
   } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
 }
 
@@ -6512,7 +6512,7 @@ async function lkDeleteNumber(encodedNumber) {
     var res = await saFetch('/api/admin/superadmin/livekit/phone-pool/' + encodedNumber, { method: 'DELETE' });
     var data = await res.json();
     if (data.success) { loadView('livekit-agents'); }
-    else { window.rmToast('Error: ' + (data.error || 'Unknown', 'error')); }
+    else { window.rmToast('Error: ' + (data.error || 'Unknown'), 'error'); }
   } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
 }
 
@@ -6960,7 +6960,7 @@ async function smSaveConfig(customerId) {
       window.rmToast('Secretary AI configuration saved for customer #' + customerId, 'success');
       smOpenDetail(customerId);
     } else {
-      window.rmToast('Error: ' + (data.error || 'Failed to save', 'error'));
+      window.rmToast('Error: ' + (data.error || 'Failed to save'), 'error');
     }
   } catch(e) {
     window.rmToast('Error saving config: ' + e.message, 'error');
@@ -6977,7 +6977,7 @@ async function smQuickToggle(customerId) {
     var data = await res.json();
     if (data.success) {
       loadView('secretary-manager');
-    } else { window.rmToast('Error: ' + (data.error || 'Unknown', 'error')); }
+    } else { window.rmToast('Error: ' + (data.error || 'Unknown'), 'error'); }
   } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
 }
 
@@ -6992,9 +6992,9 @@ async function smBulkToggle(activate) {
     });
     var data = await res.json();
     if (data.success) {
-      window.rmToast(data.message + ' (' + (data.rows_changed || 0, 'info') + ' customers affected)');
+      window.rmToast(data.message + ' (' + (data.rows_changed || 0) + ' customers affected)', 'info');
       loadView('secretary-manager');
-    } else { window.rmToast('Error: ' + (data.error || 'Unknown', 'error')); }
+    } else { window.rmToast('Error: ' + (data.error || 'Unknown'), 'error'); }
   } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
 }
 
