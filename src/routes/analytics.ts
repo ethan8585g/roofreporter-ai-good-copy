@@ -96,14 +96,23 @@ analyticsRoutes.post('/track', async (c) => {
 analyticsRoutes.get('/dashboard', async (c) => {
   const db = c.env.DB
   const period = c.req.query('period') || '7d'
-  
+
   const daysBack = period === '30d' ? 30 : period === '90d' ? 90 : period === '24h' ? 1 : 7
   const since = new Date(Date.now() - daysBack * 86400000).toISOString()
+  // Prior period window — same length, immediately before current period
+  const prevSince = new Date(Date.now() - daysBack * 2 * 86400000).toISOString()
 
-  const [overview, topPages, topCountries, topReferrers, recentVisitors, hourlyTraffic, deviceBreakdown] = await Promise.all([
-    // KPI overview
+  const [
+    overview, prevOverview,
+    topPages,
+    topCountries, topReferrers,
+    recentVisitors, hourlyTraffic, deviceBreakdown,
+    utmSources, utmMediums, utmCampaigns,
+    signupsInPeriod
+  ] = await Promise.all([
+    // KPI overview — current period
     db.prepare(`
-      SELECT 
+      SELECT
         COUNT(*) as total_events,
         COUNT(CASE WHEN event_type = 'pageview' THEN 1 END) as pageviews,
         COUNT(CASE WHEN event_type = 'click' THEN 1 END) as clicks,
@@ -115,21 +124,53 @@ analyticsRoutes.get('/dashboard', async (c) => {
       FROM site_analytics WHERE created_at >= ?
     `).bind(since).first(),
 
-    // Top pages by pageviews
+    // KPI overview — prior period (for trend comparison)
     db.prepare(`
-      SELECT page_url, 
-             COUNT(*) as views, 
-             COUNT(DISTINCT visitor_id) as unique_visitors,
-             ROUND(AVG(CASE WHEN time_on_page > 0 THEN time_on_page END), 1) as avg_time
-      FROM site_analytics 
-      WHERE event_type = 'pageview' AND created_at >= ?
-      GROUP BY page_url ORDER BY views DESC LIMIT 20
-    `).bind(since).all(),
+      SELECT
+        COUNT(CASE WHEN event_type = 'pageview' THEN 1 END) as pageviews,
+        COUNT(CASE WHEN event_type = 'click' THEN 1 END) as clicks,
+        COUNT(DISTINCT visitor_id) as unique_visitors,
+        COUNT(DISTINCT session_id) as sessions,
+        ROUND(AVG(CASE WHEN time_on_page > 0 THEN time_on_page END), 1) as avg_time_on_page
+      FROM site_analytics WHERE created_at >= ? AND created_at < ?
+    `).bind(prevSince, since).first(),
+
+    // Top pages with bounce rate
+    // bounce_rate = % of sessions that only visited this one page
+    db.prepare(`
+      SELECT
+        p.page_url,
+        p.views,
+        p.unique_visitors,
+        p.avg_time,
+        ROUND(
+          100.0 * SUM(CASE WHEN sess.page_count = 1 THEN 1 ELSE 0 END) / COUNT(*),
+          0
+        ) as bounce_rate
+      FROM (
+        SELECT page_url,
+               COUNT(*) as views,
+               COUNT(DISTINCT visitor_id) as unique_visitors,
+               ROUND(AVG(CASE WHEN time_on_page > 0 THEN time_on_page END), 1) as avg_time,
+               session_id
+        FROM site_analytics
+        WHERE event_type = 'pageview' AND created_at >= ?
+        GROUP BY page_url, session_id
+      ) p
+      JOIN (
+        SELECT session_id, COUNT(DISTINCT page_url) as page_count
+        FROM site_analytics
+        WHERE event_type = 'pageview' AND created_at >= ?
+        GROUP BY session_id
+      ) sess ON sess.session_id = p.session_id
+      GROUP BY p.page_url
+      ORDER BY views DESC LIMIT 20
+    `).bind(since, since).all(),
 
     // Top countries
     db.prepare(`
       SELECT country, COUNT(*) as hits, COUNT(DISTINCT visitor_id) as visitors
-      FROM site_analytics 
+      FROM site_analytics
       WHERE country IS NOT NULL AND created_at >= ?
       GROUP BY country ORDER BY hits DESC LIMIT 15
     `).bind(since).all(),
@@ -137,7 +178,7 @@ analyticsRoutes.get('/dashboard', async (c) => {
     // Top referrers
     db.prepare(`
       SELECT referrer, COUNT(*) as hits, COUNT(DISTINCT visitor_id) as visitors
-      FROM site_analytics 
+      FROM site_analytics
       WHERE referrer IS NOT NULL AND referrer != '' AND event_type = 'pageview' AND created_at >= ?
       GROUP BY referrer ORDER BY hits DESC LIMIT 15
     `).bind(since).all(),
@@ -153,7 +194,7 @@ analyticsRoutes.get('/dashboard', async (c) => {
              screen_width, screen_height, language,
              scroll_depth, time_on_page,
              created_at
-      FROM site_analytics 
+      FROM site_analytics
       ORDER BY created_at DESC LIMIT 50
     `).all(),
 
@@ -174,18 +215,52 @@ analyticsRoutes.get('/dashboard', async (c) => {
       FROM site_analytics
       WHERE device_type IS NOT NULL AND created_at >= ?
       GROUP BY device_type ORDER BY count DESC
-    `).bind(since).all()
+    `).bind(since).all(),
+
+    // UTM Sources
+    db.prepare(`
+      SELECT utm_source as value, COUNT(*) as hits, COUNT(DISTINCT visitor_id) as visitors
+      FROM site_analytics
+      WHERE utm_source IS NOT NULL AND utm_source != '' AND created_at >= ?
+      GROUP BY utm_source ORDER BY hits DESC LIMIT 10
+    `).bind(since).all(),
+
+    // UTM Mediums
+    db.prepare(`
+      SELECT utm_medium as value, COUNT(*) as hits, COUNT(DISTINCT visitor_id) as visitors
+      FROM site_analytics
+      WHERE utm_medium IS NOT NULL AND utm_medium != '' AND created_at >= ?
+      GROUP BY utm_medium ORDER BY hits DESC LIMIT 10
+    `).bind(since).all(),
+
+    // UTM Campaigns
+    db.prepare(`
+      SELECT utm_campaign as value, COUNT(*) as hits, COUNT(DISTINCT visitor_id) as visitors
+      FROM site_analytics
+      WHERE utm_campaign IS NOT NULL AND utm_campaign != '' AND created_at >= ?
+      GROUP BY utm_campaign ORDER BY hits DESC LIMIT 10
+    `).bind(since).all(),
+
+    // New signups in current period (for conversion rate)
+    db.prepare(`
+      SELECT COUNT(*) as count FROM customers WHERE created_at >= ?
+    `).bind(since).first()
   ])
 
   return c.json({
     period,
     overview,
+    prev_overview: prevOverview,
+    signups_in_period: (signupsInPeriod as any)?.count ?? 0,
     top_pages: topPages.results,
     top_countries: topCountries.results,
     top_referrers: topReferrers.results,
     recent_visitors: recentVisitors.results,
     hourly_traffic: hourlyTraffic.results,
-    device_breakdown: deviceBreakdown.results
+    device_breakdown: deviceBreakdown.results,
+    utm_sources: utmSources.results,
+    utm_mediums: utmMediums.results,
+    utm_campaigns: utmCampaigns.results
   })
 })
 

@@ -1481,12 +1481,17 @@ window.saChangeAnalyticsPeriod = function(p) {
 function renderAnalyticsView() {
   const d = SA.data.analytics || {};
   const o = d.overview || {};
+  const prev = d.prev_overview || {};
   const pages = d.top_pages || [];
   const countries = d.top_countries || [];
   const referrers = d.top_referrers || [];
   const visitors = d.recent_visitors || [];
   const hourly = d.hourly_traffic || [];
   const devices = d.device_breakdown || [];
+  const utmSources = d.utm_sources || [];
+  const utmMediums = d.utm_mediums || [];
+  const utmCampaigns = d.utm_campaigns || [];
+  const signupsInPeriod = d.signups_in_period || 0;
 
   // Country flag emoji helper
   function countryFlag(code) {
@@ -1515,6 +1520,17 @@ function renderAnalyticsView() {
     return '<i class="fas fa-desktop text-gray-700"></i>';
   }
 
+  // Trend badge: compare current vs previous period value
+  function trendBadge(current, previous) {
+    if (!previous || previous === 0) return '<span class="text-[10px] text-gray-400 ml-1">—</span>';
+    const pct = Math.round(((current - previous) / previous) * 100);
+    if (pct === 0) return '<span class="text-[10px] text-gray-400 ml-1">~0%</span>';
+    const up = pct > 0;
+    return '<span class="text-[10px] font-semibold ml-1 ' + (up ? 'text-green-600' : 'text-red-500') + '">' +
+      (up ? '▲' : '▼') + ' ' + Math.abs(pct) + '%' +
+    '</span>';
+  }
+
   // Sparkline-style hourly bar chart
   const maxHourly = Math.max(...hourly.map(h => h.pageviews || 0), 1);
   const hourlyBars = hourly.slice(-24).map(h => {
@@ -1529,9 +1545,34 @@ function renderAnalyticsView() {
   }).join('');
 
   // Device totals
-  const totalDeviceHits = devices.reduce((s, d) => s + (d.count || 0), 0) || 1;
+  const totalDeviceHits = devices.reduce((s, dv) => s + (dv.count || 0), 0) || 1;
+
+  // Signup conversion rate
+  const convRate = (o.unique_visitors || 0) > 0
+    ? ((signupsInPeriod / o.unique_visitors) * 100).toFixed(2) + '%'
+    : '—';
 
   const periodLabels = { '24h': 'Last 24 Hours', '7d': 'Last 7 Days', '30d': 'Last 30 Days', '90d': 'Last 90 Days' };
+
+  // UTM table builder
+  function utmTable(rows, label) {
+    if (!rows.length) return '<p class="text-gray-400 text-xs py-2">No ' + label + ' data yet</p>';
+    return '<div class="space-y-1">' + rows.map(function(r) {
+      const maxHits = rows[0].hits || 1;
+      const pct = Math.round((r.hits / maxHits) * 100);
+      return '<div class="flex items-center gap-2 py-1">' +
+        '<span class="text-xs text-gray-700 truncate w-32 flex-shrink-0" title="' + r.value + '">' + r.value + '</span>' +
+        '<div class="flex-1 bg-gray-100 rounded-full h-1.5"><div class="bg-indigo-500 h-1.5 rounded-full" style="width:' + pct + '%"></div></div>' +
+        '<span class="text-xs font-bold text-gray-800 w-8 text-right flex-shrink-0">' + r.hits + '</span>' +
+      '</div>';
+    }).join('') + '</div>';
+  }
+
+  // Auto-refresh countdown display
+  const arActive = SA._arActive || false;
+  const arLabel = arActive
+    ? '<span id="sa-ar-countdown" class="text-xs text-teal-600 font-medium">Auto-refresh on</span>'
+    : '';
 
   return `
     <div class="mb-6 flex items-center justify-between">
@@ -1550,45 +1591,98 @@ function renderAnalyticsView() {
       </div>
     </div>
 
-    <!-- KPI Cards -->
-    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-      ${samc('Total Pageviews', (o.pageviews || 0).toLocaleString(), 'fa-eye', 'blue', (o.total_events || 0).toLocaleString() + ' total events')}
-      ${samc('Unique Visitors', (o.unique_visitors || 0).toLocaleString(), 'fa-users', 'green', (o.sessions || 0).toLocaleString() + ' sessions')}
-      ${samc('Total Clicks', (o.clicks || 0).toLocaleString(), 'fa-mouse-pointer', 'amber', (o.unique_ips || 0).toLocaleString() + ' unique IPs')}
-      ${samc('Avg Time on Page', (o.avg_time_on_page || 0) + 's', 'fa-clock', 'purple', 'Avg scroll: ' + (o.avg_scroll_depth || 0) + '%')}
+    <!-- KPI Cards — 5-col with trend indicators -->
+    <div class="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+      <div class="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Pageviews</span>
+          <i class="fas fa-eye text-blue-400 text-sm"></i>
+        </div>
+        <div class="flex items-baseline gap-1">
+          <span class="text-2xl font-black text-gray-900">${(o.pageviews || 0).toLocaleString()}</span>
+          ${trendBadge(o.pageviews || 0, prev.pageviews || 0)}
+        </div>
+        <p class="text-[10px] text-gray-400 mt-1">${(o.total_events || 0).toLocaleString()} total events</p>
+      </div>
+      <div class="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Unique Visitors</span>
+          <i class="fas fa-users text-green-400 text-sm"></i>
+        </div>
+        <div class="flex items-baseline gap-1">
+          <span class="text-2xl font-black text-gray-900">${(o.unique_visitors || 0).toLocaleString()}</span>
+          ${trendBadge(o.unique_visitors || 0, prev.unique_visitors || 0)}
+        </div>
+        <p class="text-[10px] text-gray-400 mt-1">${(o.sessions || 0).toLocaleString()} sessions</p>
+      </div>
+      <div class="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Clicks</span>
+          <i class="fas fa-mouse-pointer text-amber-400 text-sm"></i>
+        </div>
+        <div class="flex items-baseline gap-1">
+          <span class="text-2xl font-black text-gray-900">${(o.clicks || 0).toLocaleString()}</span>
+          ${trendBadge(o.clicks || 0, prev.clicks || 0)}
+        </div>
+        <p class="text-[10px] text-gray-400 mt-1">${(o.unique_ips || 0).toLocaleString()} unique IPs</p>
+      </div>
+      <div class="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Avg Time on Page</span>
+          <i class="fas fa-clock text-purple-400 text-sm"></i>
+        </div>
+        <div class="flex items-baseline gap-1">
+          <span class="text-2xl font-black text-gray-900">${(o.avg_time_on_page || 0)}s</span>
+          ${trendBadge(o.avg_time_on_page || 0, prev.avg_time_on_page || 0)}
+        </div>
+        <p class="text-[10px] text-gray-400 mt-1">Avg scroll: ${(o.avg_scroll_depth || 0)}%</p>
+      </div>
+      <div class="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Signup Conversion</span>
+          <i class="fas fa-user-plus text-teal-500 text-sm"></i>
+        </div>
+        <div class="flex items-baseline gap-1">
+          <span class="text-2xl font-black text-gray-900">${convRate}</span>
+        </div>
+        <p class="text-[10px] text-gray-400 mt-1">${signupsInPeriod} new signups this period</p>
+      </div>
     </div>
 
     <!-- Hourly Traffic -->
-    ${saSection('Traffic (Last 24 Hours)', 'fa-chart-bar', hourly.length === 0 
+    ${saSection('Traffic (Last 24 Hours)', 'fa-chart-bar', hourly.length === 0
       ? '<p class="text-gray-400 text-sm text-center py-4">No traffic data yet. Events will appear here once visitors interact with your site.</p>'
       : '<div class="flex items-end gap-0.5 justify-between h-16">' + hourlyBars + '</div>'
     )}
 
     <div class="grid lg:grid-cols-2 gap-6 mb-6">
-      <!-- Top Pages -->
-      ${saSection('Top Pages', 'fa-file-alt', pages.length === 0 
-        ? '<p class="text-gray-400 text-sm">No page data yet</p>' 
-        : '<div class="space-y-1.5 max-h-80 overflow-y-auto">' + pages.map(function(p) {
-            const maxViews = pages[0]?.views || 1;
-            const pct = Math.round((p.views / maxViews) * 100);
-            return '<div class="flex items-center gap-3 py-1.5 px-2 rounded-lg hover:bg-gray-50">' +
-              '<div class="flex-1 min-w-0">' +
-                '<div class="flex items-center gap-2">' +
-                  '<span class="text-xs font-mono text-gray-700 truncate max-w-[200px]" title="' + p.page_url + '">' + p.page_url + '</span>' +
-                '</div>' +
-                '<div class="w-full bg-gray-100 rounded-full h-1.5 mt-1"><div class="bg-teal-500 h-1.5 rounded-full" style="width:' + pct + '%"></div></div>' +
-              '</div>' +
-              '<div class="text-right flex-shrink-0">' +
-                '<span class="text-sm font-bold text-gray-800">' + p.views + '</span>' +
-                '<span class="text-[10px] text-gray-400 block">' + (p.unique_visitors || 0) + ' uniq</span>' +
-              '</div>' +
-            '</div>';
-          }).join('') + '</div>'
+      <!-- Top Pages with Bounce Rate -->
+      ${saSection('Top Pages', 'fa-file-alt', pages.length === 0
+        ? '<p class="text-gray-400 text-sm">No page data yet</p>'
+        : '<div class="overflow-x-auto"><table class="w-full text-xs"><thead><tr class="text-[10px] text-gray-400 uppercase border-b border-gray-100">' +
+            '<th class="pb-1.5 text-left font-semibold">Page</th>' +
+            '<th class="pb-1.5 text-right font-semibold">Views</th>' +
+            '<th class="pb-1.5 text-right font-semibold">Uniq</th>' +
+            '<th class="pb-1.5 text-right font-semibold">Bounce</th>' +
+            '<th class="pb-1.5 text-right font-semibold">Avg Time</th>' +
+          '</tr></thead><tbody class="divide-y divide-gray-50">' +
+          pages.map(function(p) {
+            const br = p.bounce_rate != null ? p.bounce_rate + '%' : '—';
+            const brColor = p.bounce_rate > 70 ? 'text-red-500' : p.bounce_rate > 40 ? 'text-amber-600' : 'text-green-600';
+            return '<tr class="hover:bg-gray-50 transition-colors">' +
+              '<td class="py-1.5 pr-2 font-mono text-gray-700 max-w-[180px] truncate" title="' + p.page_url + '">' + p.page_url + '</td>' +
+              '<td class="py-1.5 text-right font-bold text-gray-800">' + (p.views || 0) + '</td>' +
+              '<td class="py-1.5 text-right text-gray-500">' + (p.unique_visitors || 0) + '</td>' +
+              '<td class="py-1.5 text-right font-semibold ' + brColor + '">' + br + '</td>' +
+              '<td class="py-1.5 text-right text-gray-500">' + (p.avg_time ? p.avg_time + 's' : '—') + '</td>' +
+            '</tr>';
+          }).join('') +
+          '</tbody></table></div>'
       )}
 
       <!-- Top Countries -->
-      ${saSection('Visitors by Country', 'fa-globe', countries.length === 0 
-        ? '<p class="text-gray-400 text-sm">No country data yet</p>' 
+      ${saSection('Visitors by Country', 'fa-globe', countries.length === 0
+        ? '<p class="text-gray-400 text-sm">No country data yet</p>'
         : '<div class="space-y-1.5 max-h-80 overflow-y-auto">' + countries.map(function(c) {
             return '<div class="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-gray-50">' +
               '<div class="flex items-center gap-2">' +
@@ -1606,7 +1700,7 @@ function renderAnalyticsView() {
 
     <div class="grid lg:grid-cols-2 gap-6 mb-6">
       <!-- Top Referrers -->
-      ${saSection('Top Referrers', 'fa-external-link-alt', referrers.length === 0 
+      ${saSection('Top Referrers', 'fa-external-link-alt', referrers.length === 0
         ? '<p class="text-gray-400 text-sm">No referrer data yet — visitors are arriving directly</p>'
         : '<div class="space-y-1.5 max-h-60 overflow-y-auto">' + referrers.map(function(r) {
             let domain = r.referrer;
@@ -1624,16 +1718,16 @@ function renderAnalyticsView() {
       )}
 
       <!-- Device Breakdown -->
-      ${saSection('Devices & Browsers', 'fa-laptop', devices.length === 0 
+      ${saSection('Devices & Browsers', 'fa-laptop', devices.length === 0
         ? '<p class="text-gray-400 text-sm">No device data yet</p>'
-        : '<div class="space-y-3">' + devices.map(function(d) {
-            const pct = Math.round((d.count / totalDeviceHits) * 100);
+        : '<div class="space-y-3">' + devices.map(function(dv) {
+            const pct = Math.round((dv.count / totalDeviceHits) * 100);
             return '<div class="flex items-center gap-3">' +
-              '<div class="w-8 text-center">' + deviceIcon(d.device_type) + '</div>' +
+              '<div class="w-8 text-center">' + deviceIcon(dv.device_type) + '</div>' +
               '<div class="flex-1">' +
                 '<div class="flex justify-between mb-0.5">' +
-                  '<span class="text-sm font-medium text-gray-700 capitalize">' + (d.device_type || 'unknown') + '</span>' +
-                  '<span class="text-xs text-gray-500">' + d.count + ' (' + pct + '%)</span>' +
+                  '<span class="text-sm font-medium text-gray-700 capitalize">' + (dv.device_type || 'unknown') + '</span>' +
+                  '<span class="text-xs text-gray-500">' + dv.count + ' (' + pct + '%)</span>' +
                 '</div>' +
                 '<div class="w-full bg-gray-100 rounded-full h-2"><div class="bg-gradient-to-r from-teal-500 to-teal-400 h-2 rounded-full" style="width:' + pct + '%"></div></div>' +
               '</div>' +
@@ -1641,6 +1735,17 @@ function renderAnalyticsView() {
           }).join('') + '</div>'
       )}
     </div>
+
+    <!-- UTM Campaign Attribution -->
+    ${saSection('UTM Campaign Attribution', 'fa-bullseye', (() => {
+      const hasAny = utmSources.length || utmMediums.length || utmCampaigns.length;
+      if (!hasAny) return '<p class="text-gray-400 text-sm">No UTM-tagged traffic yet. Add <code class="bg-gray-100 px-1 rounded text-xs">?utm_source=...</code> to your campaign links to track attribution here.</p>';
+      return '<div class="grid grid-cols-3 gap-4">' +
+        '<div><p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2"><i class="fas fa-tag mr-1 text-indigo-400"></i>Source</p>' + utmTable(utmSources, 'source') + '</div>' +
+        '<div><p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2"><i class="fas fa-layer-group mr-1 text-indigo-400"></i>Medium</p>' + utmTable(utmMediums, 'medium') + '</div>' +
+        '<div><p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2"><i class="fas fa-flag mr-1 text-indigo-400"></i>Campaign</p>' + utmTable(utmCampaigns, 'campaign') + '</div>' +
+      '</div>';
+    })())}
 
     <!-- Live Event Feed -->
     ${saSection('Live Event Feed (Last 50)', 'fa-stream', visitors.length === 0
@@ -1655,9 +1760,9 @@ function renderAnalyticsView() {
           '<th class="px-3 py-2 text-left text-[10px] font-semibold text-gray-500 uppercase">IP</th>' +
         '</tr></thead><tbody class="divide-y divide-gray-50">' +
         visitors.map(function(v) {
-          const detail = v.event_type === 'click' 
+          const detail = v.event_type === 'click'
             ? '<span class="text-[10px] text-amber-700" title="' + (v.click_element||'') + '">' + (v.click_text || v.click_element || '-').substring(0,40) + '</span>'
-            : v.event_type === 'page_exit' 
+            : v.event_type === 'page_exit'
               ? '<span class="text-[10px] text-gray-500">' + (v.time_on_page || 0) + 's / ' + (v.scroll_depth || 0) + '% scroll</span>'
               : '<span class="text-[10px] text-gray-400">' + (v.referrer ? 'from ' + v.referrer.substring(0,30) : '-') + '</span>';
           return '<tr class="hover:bg-teal-50/30 transition-colors">' +
@@ -1665,7 +1770,7 @@ function renderAnalyticsView() {
             '<td class="px-3 py-1.5">' + eventBadge(v.event_type) + '</td>' +
             '<td class="px-3 py-1.5 text-xs font-mono text-gray-700 max-w-[150px] truncate" title="' + v.page_url + '">' + (v.page_url || '/') + '</td>' +
             '<td class="px-3 py-1.5">' + detail + '</td>' +
-            '<td class="px-3 py-1.5 text-[10px] text-gray-600">' + 
+            '<td class="px-3 py-1.5 text-[10px] text-gray-600">' +
               (v.country ? countryFlag(v.country) + ' ' : '') + (v.city || '') + (v.region ? ', ' + v.region : '') +
             '</td>' +
             '<td class="px-3 py-1.5 text-[10px] text-gray-500">' + deviceIcon(v.device_type) + ' ' + (v.browser || '') + ' / ' + (v.os || '') + '</td>' +
@@ -1673,13 +1778,42 @@ function renderAnalyticsView() {
           '</tr>';
         }).join('') +
         '</tbody></table></div>',
-      '<button onclick="saRefreshAnalytics()" class="text-xs text-teal-600 hover:text-teal-800 font-medium"><i class="fas fa-sync-alt mr-1"></i>Refresh</button>'
+      // Live feed header actions: auto-refresh toggle + manual refresh
+      '<div class="flex items-center gap-3">' +
+        arLabel +
+        '<button onclick="saToggleAutoRefresh()" class="text-xs px-2.5 py-1 rounded-lg border ' + (arActive ? 'border-teal-500 text-teal-600 bg-teal-50' : 'border-gray-200 text-gray-500 hover:border-teal-400 hover:text-teal-600') + ' font-medium transition-colors">' +
+          '<i class="fas fa-sync-alt mr-1"></i>' + (arActive ? 'Auto On' : 'Auto Off') +
+        '</button>' +
+        '<button onclick="saRefreshAnalytics()" class="text-xs text-teal-600 hover:text-teal-800 font-medium"><i class="fas fa-sync-alt mr-1"></i>Refresh</button>' +
+      '</div>'
     )}
   `;
 }
 
 window.saRefreshAnalytics = function() {
   loadView('analytics');
+};
+
+// Auto-refresh: 30-second interval for the live feed
+window.saToggleAutoRefresh = function() {
+  SA._arActive = !SA._arActive;
+  if (SA._arActive) {
+    SA._arCountdown = 30;
+    SA._arInterval = setInterval(function() {
+      SA._arCountdown--;
+      const el = document.getElementById('sa-ar-countdown');
+      if (el) el.textContent = 'Refreshing in ' + SA._arCountdown + 's';
+      if (SA._arCountdown <= 0) {
+        SA._arCountdown = 30;
+        loadView('analytics');
+      }
+    }, 1000);
+  } else {
+    clearInterval(SA._arInterval);
+    SA._arInterval = null;
+    SA._arCountdown = 30;
+  }
+  renderContent();
 };
 
 // ============================================================
