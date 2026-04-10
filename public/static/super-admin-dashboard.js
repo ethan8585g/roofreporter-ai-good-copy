@@ -434,7 +434,7 @@ function renderUsersView() {
 
     <div class="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
       ${samc('Total Users', s.total_users || users.length, 'fa-users', 'blue')}
-      ${samc('Active Users', s.active_users || 0, 'fa-user-check', 'green')}
+      ${samc('Active Users', s.active_users || 0, 'fa-user-check', 'green', (s.new_signups_7d || 0) + ' new this week')}
       ${samc('Google Sign-In', s.google_users || 0, 'fa-google', 'red')}
       ${samc('Paying Customers', s.paying_users || 0, 'fa-credit-card', 'amber')}
       ${samc('Credits Available', s.total_credits_available || 0, 'fa-coins', 'indigo', (s.total_credits_used || 0) + ' used')}

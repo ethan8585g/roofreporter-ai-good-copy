@@ -783,7 +783,9 @@ adminRoutes.get('/superadmin/users', async (c) => {
         SUM(report_credits) as total_credits_available,
         SUM(credits_used) as total_credits_used,
         SUM(free_trial_used) as total_trial_used,
-        SUM(free_trial_total) as total_trial_available
+        SUM(free_trial_total) as total_trial_available,
+        SUM(CASE WHEN created_at >= date('now', '-7 days') THEN 1 ELSE 0 END) as new_signups_7d,
+        SUM(CASE WHEN created_at >= date('now', '-30 days') THEN 1 ELSE 0 END) as new_signups_30d
       FROM customers
     `).first()
 
