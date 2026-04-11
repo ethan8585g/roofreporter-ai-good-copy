@@ -119,7 +119,8 @@ analyticsRoutes.get('/dashboard', async (c) => {
     topCountries, topReferrers,
     recentVisitors, hourlyTraffic, deviceBreakdown,
     utmSources, utmMediums, utmCampaigns,
-    signupsInPeriod
+    signupsInPeriod,
+    geoQuality
   ] = await Promise.all([
     // KPI overview — current period (exclude admin/internal pages)
     db.prepare(`
@@ -196,19 +197,19 @@ analyticsRoutes.get('/dashboard', async (c) => {
       ORDER BY views DESC LIMIT 20
     `).bind(since, since).all(),
 
-    // Top countries — pageviews only, exclude admin pages
+    // Top countries — pageviews only, exclude admin pages, include NULL as "(Unknown)"
     db.prepare(`
-      SELECT country,
+      SELECT COALESCE(country, '(Unknown)') as country,
              COUNT(*) as hits,
              COUNT(DISTINCT visitor_id) as visitors,
              COUNT(DISTINCT session_id) as sessions
       FROM site_analytics
-      WHERE country IS NOT NULL AND event_type = 'pageview' AND created_at >= ?
+      WHERE event_type = 'pageview' AND created_at >= ?
         AND page_url NOT LIKE '/super-admin%'
         AND page_url NOT LIKE '/admin%'
         AND page_url NOT LIKE '/login%'
         AND page_url NOT LIKE '/api/%'
-      GROUP BY country ORDER BY visitors DESC LIMIT 15
+      GROUP BY COALESCE(country, '(Unknown)') ORDER BY visitors DESC LIMIT 15
     `).bind(since).all(),
 
     // Top referrers
@@ -270,6 +271,10 @@ analyticsRoutes.get('/dashboard', async (c) => {
       SELECT utm_source as value, COUNT(*) as hits, COUNT(DISTINCT visitor_id) as visitors
       FROM site_analytics
       WHERE utm_source IS NOT NULL AND utm_source != '' AND created_at >= ?
+        AND page_url NOT LIKE '/super-admin%'
+        AND page_url NOT LIKE '/admin%'
+        AND page_url NOT LIKE '/login%'
+        AND page_url NOT LIKE '/api/%'
       GROUP BY utm_source ORDER BY hits DESC LIMIT 10
     `).bind(since).all(),
 
@@ -278,6 +283,10 @@ analyticsRoutes.get('/dashboard', async (c) => {
       SELECT utm_medium as value, COUNT(*) as hits, COUNT(DISTINCT visitor_id) as visitors
       FROM site_analytics
       WHERE utm_medium IS NOT NULL AND utm_medium != '' AND created_at >= ?
+        AND page_url NOT LIKE '/super-admin%'
+        AND page_url NOT LIKE '/admin%'
+        AND page_url NOT LIKE '/login%'
+        AND page_url NOT LIKE '/api/%'
       GROUP BY utm_medium ORDER BY hits DESC LIMIT 10
     `).bind(since).all(),
 
@@ -286,12 +295,29 @@ analyticsRoutes.get('/dashboard', async (c) => {
       SELECT utm_campaign as value, COUNT(*) as hits, COUNT(DISTINCT visitor_id) as visitors
       FROM site_analytics
       WHERE utm_campaign IS NOT NULL AND utm_campaign != '' AND created_at >= ?
+        AND page_url NOT LIKE '/super-admin%'
+        AND page_url NOT LIKE '/admin%'
+        AND page_url NOT LIKE '/login%'
+        AND page_url NOT LIKE '/api/%'
       GROUP BY utm_campaign ORDER BY hits DESC LIMIT 10
     `).bind(since).all(),
 
     // New signups in current period (for conversion rate)
     db.prepare(`
       SELECT COUNT(*) as count FROM customers WHERE created_at >= ?
+    `).bind(since).first(),
+
+    // Geo data quality — % of pageviews with country data
+    db.prepare(`
+      SELECT
+        COUNT(CASE WHEN event_type = 'pageview' THEN 1 END) as total_pageviews,
+        COUNT(CASE WHEN event_type = 'pageview' AND country IS NOT NULL THEN 1 END) as geo_pageviews
+      FROM site_analytics
+      WHERE created_at >= ?
+        AND page_url NOT LIKE '/super-admin%'
+        AND page_url NOT LIKE '/admin%'
+        AND page_url NOT LIKE '/login%'
+        AND page_url NOT LIKE '/api/%'
     `).bind(since).first()
   ])
 
@@ -308,7 +334,13 @@ analyticsRoutes.get('/dashboard', async (c) => {
     device_breakdown: deviceBreakdown.results,
     utm_sources: utmSources.results,
     utm_mediums: utmMediums.results,
-    utm_campaigns: utmCampaigns.results
+    utm_campaigns: utmCampaigns.results,
+    geo_coverage: (() => {
+      const g = geoQuality as any
+      const total = g?.total_pageviews || 0
+      const geo = g?.geo_pageviews || 0
+      return { total_pageviews: total, geo_pageviews: geo, pct: total > 0 ? Math.round((geo / total) * 100) : 0 }
+    })()
   })
 })
 

@@ -1491,6 +1491,7 @@ function renderAnalyticsView() {
   const d = SA.data.analytics || {};
   const o = d.overview || {};
   const prev = d.prev_overview || {};
+  const geo = d.geo_coverage || {};
   const pages = d.top_pages || [];
   const countries = d.top_countries || [];
   const referrers = d.top_referrers || [];
@@ -1703,7 +1704,11 @@ function renderAnalyticsView() {
                 '<span class="text-[10px] text-gray-400 block">' + (c.hits || 0) + ' pageviews, ' + (c.sessions || 0) + ' sessions</span>' +
               '</div>' +
             '</div>';
-          }).join('') + '</div>'
+          }).join('') + '</div>' +
+          (geo.pct != null ? '<div class="mt-3 pt-2 border-t border-gray-100 flex items-center gap-1.5">' +
+            '<i class="fas fa-info-circle text-gray-300 text-xs"></i>' +
+            '<span class="text-[10px] text-gray-400">Geo data coverage: <strong class="' + (geo.pct >= 90 ? 'text-green-600' : geo.pct >= 70 ? 'text-amber-600' : 'text-red-500') + '">' + geo.pct + '%</strong> of ' + (geo.total_pageviews || 0).toLocaleString() + ' pageviews</span>' +
+          '</div>' : '')
       )}
     </div>
 
