@@ -473,6 +473,30 @@
       { phrase: 'RoofSnap alternative',     url: '/roofsnap-vs-roofmanager',          color: '#00FF88', title: 'RoofSnap vs RoofManager for Canada' },
       { phrase: 'EagleView alternative',    url: '/cheaper-alternative-to-eagleview', color: '#00FF88', title: 'Cheaper EagleView Alternative' },
       { phrase: 'cheaper than EagleView',   url: '/cheaper-alternative-to-eagleview', color: '#00FF88', title: 'Cheaper EagleView Alternative' },
+      // Blog-to-blog phrase triggers — measurement cluster
+      { phrase: 'how to measure a roof without climbing', url: '/blog/how-to-measure-a-roof-without-climbing-2026', color: '#22d3ee', title: 'How to Measure a Roof Without Climbing (2026)' },
+      { phrase: 'measure a roof without climbing',        url: '/blog/how-to-measure-a-roof-without-climbing-2026', color: '#22d3ee', title: 'How to Measure a Roof Without Climbing (2026)' },
+      { phrase: 'roof pitch calculator',   url: '/blog/roof-pitch-calculator-guide',   color: '#22d3ee', title: 'Roof Pitch Calculator Guide' },
+      { phrase: 'pitch factor',            url: '/blog/roof-pitch-calculator-guide',   color: '#22d3ee', title: 'Roof Pitch Calculator Guide' },
+      { phrase: 'material takeoff',        url: '/blog/what-is-a-material-takeoff-roofing', color: '#22d3ee', title: 'What Is a Material Takeoff in Roofing?' },
+      { phrase: 'estimate accuracy',       url: '/blog/roofing-estimate-accuracy-guide', color: '#22d3ee', title: 'Why Your Roofing Estimates Are Off' },
+      // Blog-to-blog — storm / insurance cluster
+      { phrase: 'storm damage inspection', url: '/blog/storm-damage-roof-inspection-checklist-2026', color: '#f59e0b', title: 'Storm Damage Roof Inspection Checklist' },
+      { phrase: 'hail damage inspection',  url: '/blog/storm-damage-roof-inspection-checklist-2026', color: '#f59e0b', title: 'Storm Damage Roof Inspection Checklist' },
+      { phrase: 'insurance claim documentation', url: '/blog/insurance-roof-claim-documentation-guide', color: '#f59e0b', title: 'Roof Insurance Claim Documentation Guide' },
+      { phrase: 'document roof damage',    url: '/blog/insurance-roof-claim-documentation-guide', color: '#f59e0b', title: 'How to Document Roof Damage for Insurance' },
+      // Blog-to-blog — Alberta / city cluster
+      { phrase: 'Alberta hail',            url: '/blog/alberta-hail-wind-roofing-estimate-automation', color: '#a78bfa', title: 'Alberta Hail & Wind Roofing Estimates' },
+      { phrase: 'hail damage estimate',    url: '/blog/alberta-hail-wind-roofing-estimate-automation', color: '#a78bfa', title: 'Alberta Hail & Wind Roofing Estimates' },
+      { phrase: 'ice dam',                 url: '/blog/quebec-ice-dam-prevention-roofing', color: '#a78bfa', title: 'Ice Dam Prevention Estimating in Quebec' },
+      { phrase: 'flat roof drainage',      url: '/blog/vancouver-flat-roof-drainage-measurement', color: '#a78bfa', title: 'Vancouver Flat Roof Drainage Guide' },
+      { phrase: 'coastal roofing',         url: '/blog/atlantic-canada-coastal-roofing-estimates', color: '#a78bfa', title: 'Coastal Roofing in Atlantic Canada' },
+      { phrase: 'salt air',                url: '/blog/atlantic-canada-coastal-roofing-estimates', color: '#a78bfa', title: 'Coastal Roofing in Atlantic Canada' },
+      // Blog-to-blog — EagleView cluster
+      { phrase: 'EagleView cost',          url: '/blog/eagleview-cost-2026-alternatives', color: '#00FF88', title: 'How Much Does EagleView Cost in 2026?' },
+      { phrase: 'EagleView pricing',       url: '/blog/eagleview-cost-2026-alternatives', color: '#00FF88', title: 'How Much Does EagleView Cost in 2026?' },
+      { phrase: 'AI measurement accuracy', url: '/blog/ai-roof-measurement-accuracy-explained', color: '#00FF88', title: 'How Accurate Are AI Roof Measurement Reports?' },
+      { phrase: 'AI phone receptionist',   url: '/blog/how-ai-phone-receptionist-works-roofing', color: '#f59e0b', title: 'How an AI Phone Receptionist Works for Roofing' },
     ];
 
     productLinks.forEach(function(item) {
