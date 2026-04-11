@@ -3875,7 +3875,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
   }
   </script>
   <script type="application/ld+json">
-{"@context":"https://schema.org","@type":"Organization","name":"Roof Manager","url":"https://www.roofmanager.ca","logo":"https://www.roofmanager.ca/static/logo.png","description":"AI-powered satellite roof measurement reports for roofing professionals worldwide","address":{"@type":"PostalAddress","addressRegion":"Alberta","addressCountry":"CA"},"contactPoint":{"@type":"ContactPoint","email":"sales@roofmanager.ca","contactType":"sales"},"sameAs":[]}
+{"@context":"https://schema.org","@type":"Organization","name":"Roof Manager","url":"https://www.roofmanager.ca","logo":"https://www.roofmanager.ca/static/logo.png","description":"AI-powered satellite roof measurement reports for roofing professionals worldwide","address":{"@type":"PostalAddress","addressRegion":"Alberta","addressCountry":"CA"},"contactPoint":{"@type":"ContactPoint","email":"sales@roofmanager.ca","contactType":"sales"},"sameAs":["https://www.facebook.com/roofmanager","https://www.instagram.com/roofmanager","https://www.linkedin.com/company/roofmanager","https://www.g2.com/products/roof-manager","https://www.capterra.com/p/roof-manager","https://www.crunchbase.com/organization/roof-manager","https://www.trustpilot.com/review/roofmanager.ca"]}
   </script>
   <script type="application/ld+json">
 {"@context":"https://schema.org","@type":"WebSite","name":"Roof Manager","url":"https://www.roofmanager.ca","potentialAction":{"@type":"SearchAction","target":"https://www.roofmanager.ca/blog?q={search_term_string}","query-input":"required name=search_term_string"}}

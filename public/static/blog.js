@@ -448,24 +448,98 @@
         }
       });
     });
+
+    // Third pass: auto-link product phrases to feature hub pages
+    var productLinks = [
+      // Order matters — longer phrases first to avoid partial matches
+      { phrase: 'AI roof measurement reports', url: '/features/measurements', color: '#00FF88', title: 'AI Roof Measurement Reports — Roof Manager' },
+      { phrase: 'AI roof measurement report', url: '/features/measurements', color: '#00FF88', title: 'AI Roof Measurement Reports — Roof Manager' },
+      { phrase: 'satellite roof measurements', url: '/features/measurements', color: '#00FF88', title: 'Satellite Roof Measurement Reports' },
+      { phrase: 'satellite roof measurement', url: '/features/measurements', color: '#00FF88', title: 'Satellite Roof Measurement Reports' },
+      { phrase: 'roof measurement reports', url: '/features/measurements', color: '#00FF88', title: 'AI Roof Measurement Reports — Roof Manager' },
+      { phrase: 'roof measurement report', url: '/features/measurements', color: '#00FF88', title: 'AI Roof Measurement Reports — Roof Manager' },
+      { phrase: 'material bill of materials', url: '/features/measurements', color: '#00FF88', title: 'Material BOM in Roof Measurement Reports' },
+      { phrase: 'material BOM', url: '/features/measurements', color: '#00FF88', title: 'Material BOM in Roof Measurement Reports' },
+      { phrase: 'roofing CRM software', url: '/features/crm', color: '#22d3ee', title: 'Roofing CRM — Roof Manager' },
+      { phrase: 'roofing CRM', url: '/features/crm', color: '#22d3ee', title: 'Roofing CRM — Roof Manager' },
+      { phrase: 'AI Roofer Secretary', url: '/features/ai-secretary', color: '#f59e0b', title: 'AI Roofer Secretary — 24/7 Phone Receptionist' },
+      { phrase: 'AI phone secretary', url: '/features/ai-secretary', color: '#f59e0b', title: 'AI Roofer Secretary — 24/7 Phone Receptionist' },
+      { phrase: 'AI receptionist', url: '/features/ai-secretary', color: '#f59e0b', title: 'AI Roofer Secretary — 24/7 Phone Receptionist' },
+      { phrase: 'virtual roof try-on', url: '/features/virtual-try-on', color: '#a78bfa', title: 'Virtual Roof Try-On — AI Visualization' },
+      { phrase: 'roof visualization', url: '/features/virtual-try-on', color: '#a78bfa', title: 'Virtual Roof Try-On — AI Visualization' },
+    ];
+
+    productLinks.forEach(function(item) {
+      var walker3 = document.createTreeWalker(containerEl, NodeFilter.SHOW_TEXT, null, false);
+      var tnodes = [];
+      while (walker3.nextNode()) tnodes.push(walker3.currentNode);
+      tnodes.forEach(function(node) {
+        if (node.parentElement && node.parentElement.closest('a')) return;
+        var text = node.textContent;
+        if (text.indexOf(item.phrase) !== -1) {
+          var parts = text.split(item.phrase);
+          if (parts.length > 1) {
+            var fragment = document.createDocumentFragment();
+            parts.forEach(function(part, i) {
+              if (i > 0) {
+                var link = document.createElement('a');
+                link.href = item.url;
+                link.textContent = item.phrase;
+                link.style.color = item.color;
+                link.style.textDecoration = 'underline';
+                link.style.fontWeight = '600';
+                link.title = item.title;
+                fragment.appendChild(link);
+              }
+              fragment.appendChild(document.createTextNode(part));
+            });
+            node.parentNode.replaceChild(fragment, node);
+          }
+        }
+      });
+    });
+  }
+
+  // ── CATEGORY → FEATURE HUB MAPPING ──
+  var featureByCategory = {
+    'storm-response': { url: '/features/ai-secretary',  color: '#f59e0b', icon: 'fas fa-headset',  name: 'AI Roofer Secretary',          headline: 'Capture every storm lead — even at 2am',            sub: '24/7 AI phone receptionist that never misses a call', cta: 'Set Up AI Secretary' },
+    'ai-voice':       { url: '/features/ai-secretary',  color: '#f59e0b', icon: 'fas fa-headset',  name: 'AI Roofer Secretary',          headline: 'Your 24/7 AI phone receptionist',                   sub: 'Books appointments, qualifies leads, sends call summaries', cta: 'Try AI Secretary' },
+    'business':       { url: '/features/crm',           color: '#22d3ee', icon: 'fas fa-users',    name: 'Roofing CRM',                  headline: 'Stop losing leads in spreadsheets',                 sub: 'Full pipeline management — free with every account', cta: 'Open Free CRM' },
+    'sales':          { url: '/features/crm',           color: '#22d3ee', icon: 'fas fa-users',    name: 'Roofing CRM',                  headline: 'Manage your pipeline from lead to final invoice',    sub: 'Built specifically for roofing contractors', cta: 'Open Free CRM' },
+    'marketing':      { url: '/features/crm',           color: '#22d3ee', icon: 'fas fa-users',    name: 'Roofing CRM',                  headline: 'Automate your follow-ups and close more jobs',       sub: 'Reminders at day 3, 7, and 14 after every estimate', cta: 'Open Free CRM' },
+    'insurance':      { url: '/features/measurements',  color: '#00FF88', icon: 'fas fa-satellite', name: 'AI Measurement Reports',      headline: 'Reports accepted by most insurance adjusters',      sub: '99% accuracy · Includes edge breakdowns + material BOM', cta: 'Get Free Report' },
+    'commercial':     { url: '/features/measurements',  color: '#00FF88', icon: 'fas fa-satellite', name: 'AI Measurement Reports',      headline: 'Accurate commercial roof measurements in 60s',      sub: 'LiDAR-calibrated 3D models from Google satellite data', cta: 'Get Free Report' },
+  };
+  function getFeatureForCategory(cat) {
+    return featureByCategory[cat] || {
+      url: '/features/measurements', color: '#00FF88', icon: 'fas fa-satellite',
+      name: 'AI Measurement Reports',
+      headline: 'Get the measurement — quote from your truck',
+      sub: '99% accuracy in under 60 seconds · No credit card needed',
+      cta: 'Start 3 Free Reports'
+    };
+  }
+
+  function getInContentCTA(category) {
+    var f = getFeatureForCategory(category);
+    return '<div class="rm-incontent-cta not-prose my-8 rounded-2xl p-6 text-center" style="background:' + f.color + '0f;border:1px solid ' + f.color + '33">' +
+      '<p class="font-black text-white text-lg mb-1">' + f.headline + '</p>' +
+      '<p class="text-gray-400 text-sm mb-4">' + f.sub + '</p>' +
+      '<a href="' + f.url + '" style="background:' + f.color + ';color:#0A0A0A;font-weight:800;padding:12px 32px;border-radius:12px;display:inline-block;text-decoration:none">' + f.cta + ' →</a>' +
+    '</div>';
   }
 
   // ── IN-CONTENT CTA + TABLE OF CONTENTS ──
-  var IN_CONTENT_CTA = '<div class="rm-incontent-cta not-prose my-8 rounded-2xl p-6 text-center" style="background:rgba(0,255,136,0.07);border:1px solid rgba(0,255,136,0.2)">' +
-    '<p class="font-black text-white text-lg mb-1">Measure any roof in under 60 seconds</p>' +
-    '<p class="text-gray-400 text-sm mb-4">Join 5,000+ contractors using Roof Manager — no credit card needed</p>' +
-    '<a href="/customer/login" style="background:#00FF88;color:#0A0A0A;font-weight:800;padding:12px 32px;border-radius:12px;display:inline-block;text-decoration:none;transition:background 0.2s" onmouseover="this.style.background=\'#00e67a\'" onmouseout="this.style.background=\'#00FF88\'">Start 3 Free Reports →</a>' +
-  '</div>';
-
-  function enhancePostContent(html, readTime) {
+  function enhancePostContent(html, readTime, category) {
+    var cta = getInContentCTA(category || 'roofing');
     // 1. Inject in-content CTA after the 2nd </h2>, or after 3rd </p> if fewer than 2 h2s
     var h2count = (html.match(/<\/h2>/gi) || []).length;
     if (h2count >= 2) {
       var n = 0;
-      html = html.replace(/<\/h2>/gi, function(m) { n++; return n === 2 ? '</h2>' + IN_CONTENT_CTA : m; });
+      html = html.replace(/<\/h2>/gi, function(m) { n++; return n === 2 ? '</h2>' + cta : m; });
     } else {
       var p = 0;
-      html = html.replace(/<\/p>/gi, function(m) { p++; return p === 3 ? '</p>' + IN_CONTENT_CTA : m; });
+      html = html.replace(/<\/p>/gi, function(m) { p++; return p === 3 ? '</p>' + cta : m; });
     }
 
     // 2. Auto-generate TOC for long posts (>= 8 min read)
@@ -546,30 +620,56 @@
       '</div>' +
       tagsHtml +
       '<div class="prose prose-lg prose-invert max-w-none blog-content">' +
-        enhancePostContent(post.content || '', post.read_time_minutes || 0) +
+        enhancePostContent(post.content || '', post.read_time_minutes || 0, post.category) +
       '</div>' +
-      // Contact Us form at bottom of every blog post
-      '<div class="mt-12 bg-gradient-to-br from-slate-900 to-blue-900 rounded-2xl p-8 text-white">' +
+      // Related Feature section — hub-and-spoke link after content
+      (function() {
+        var f = getFeatureForCategory(post.category);
+        var cityGuideLink = '';
+        if (post.category === 'city-guides') {
+          var knownCities = {'calgary':'calgary','edmonton':'edmonton','toronto':'toronto','vancouver':'vancouver','new-york':'new-york','los-angeles':'los-angeles','houston':'houston','dallas':'dallas','denver':'denver','miami':'miami','seattle':'seattle','chicago':'chicago','ottawa':'ottawa','winnipeg':'winnipeg','saskatoon':'saskatoon'};
+          var slug2 = (window.location.pathname.split('/').pop() || '');
+          for (var c in knownCities) {
+            if (slug2.indexOf(c) !== -1) {
+              cityGuideLink = '<a href="/features/measurements/' + c + '" style="color:' + f.color + ';font-weight:700;text-decoration:underline">View the measurement platform for ' + (c.charAt(0).toUpperCase()+c.slice(1).replace(/-/g,' ')) + ' →</a>';
+              break;
+            }
+          }
+        }
+        return '<div class="not-prose mt-10 mb-4 rounded-2xl p-6" style="background:' + f.color + '08;border:1px solid ' + f.color + '25">' +
+          '<div class="flex items-start gap-4">' +
+            '<div class="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0" style="background:' + f.color + '18">' +
+              '<i class="' + f.icon + '" style="color:' + f.color + ';font-size:15px"></i>' +
+            '</div>' +
+            '<div class="flex-1">' +
+              '<div class="text-xs font-bold mb-1" style="color:' + f.color + '">RELATED PLATFORM FEATURE</div>' +
+              '<p class="font-black text-white text-base mb-0.5">' + f.name + '</p>' +
+              '<p class="text-gray-400 text-sm mb-3">' + f.sub + '</p>' +
+              (cityGuideLink ? '<p class="text-sm mb-3">' + cityGuideLink + '</p>' : '') +
+              '<a href="' + f.url + '" style="background:' + f.color + ';color:#0A0A0A;font-weight:800;padding:10px 24px;border-radius:10px;display:inline-block;text-decoration:none;font-size:13px">' + f.cta + ' →</a>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+      })() +
+      // Contact form — 3 fields, no phone, calendar booking on success
+      '<div class="mt-8 rounded-2xl p-8 text-white" style="background:linear-gradient(135deg,#0d1117,#0a0f1a)">' +
         '<div class="text-center mb-6">' +
-          '<h2 class="text-2xl font-black mb-2">Contact Us Now</h2>' +
-          '<p class="text-blue-200 text-sm">Have questions about roof measurement reports? Get in touch — we respond within hours.</p>' +
+          '<h2 class="text-2xl font-black mb-2">Get Started with Roof Manager</h2>' +
+          '<p class="text-gray-400 text-sm">Tell us about your business and we\'ll have you set up in minutes.</p>' +
         '</div>' +
         '<form onsubmit="submitBlogContact(event)" class="max-w-lg mx-auto space-y-4">' +
+          '<input type="text" id="bc-name" placeholder="Your Name *" required class="w-full px-4 py-3 bg-white/10 border border-white/10 rounded-xl text-sm text-white placeholder-gray-500 focus:ring-2 focus:ring-[#00FF88] focus:border-transparent outline-none">' +
           '<div class="grid grid-cols-2 gap-4">' +
-            '<input type="text" id="bc-name" placeholder="Your Name *" required class="px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-sm text-white placeholder-blue-300 focus:ring-2 focus:ring-sky-400 focus:border-sky-400">' +
-            '<input type="text" id="bc-company" placeholder="Company Name" class="px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-sm text-white placeholder-blue-300 focus:ring-2 focus:ring-sky-400 focus:border-sky-400">' +
+            '<input type="text" id="bc-company" placeholder="Company Name" class="px-4 py-3 bg-white/10 border border-white/10 rounded-xl text-sm text-white placeholder-gray-500 focus:ring-2 focus:ring-[#00FF88] focus:border-transparent outline-none">' +
+            '<input type="email" id="bc-email" placeholder="Email Address *" required class="px-4 py-3 bg-white/10 border border-white/10 rounded-xl text-sm text-white placeholder-gray-500 focus:ring-2 focus:ring-[#00FF88] focus:border-transparent outline-none">' +
           '</div>' +
-          '<div class="grid grid-cols-2 gap-4">' +
-            '<input type="email" id="bc-email" placeholder="Email Address *" required class="px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-sm text-white placeholder-blue-300 focus:ring-2 focus:ring-sky-400 focus:border-sky-400">' +
-            '<input type="tel" id="bc-phone" placeholder="Phone Number" class="px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-sm text-white placeholder-blue-300 focus:ring-2 focus:ring-sky-400 focus:border-sky-400">' +
-          '</div>' +
-          '<textarea id="bc-message" rows="4" placeholder="How can we help? Tell us about your roofing business..." class="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-sm text-white placeholder-blue-300 focus:ring-2 focus:ring-sky-400 focus:border-sky-400 resize-none"></textarea>' +
-          '<button type="submit" id="bc-submit" class="w-full py-3.5 bg-sky-500 hover:bg-sky-400 text-white font-bold rounded-xl text-sm transition-all shadow-lg"><i class="fas fa-paper-plane mr-2"></i>Send Message</button>' +
-          '<div class="text-center my-3"><span class="text-blue-400 text-xs">— or —</span></div>' +
-          '<a href="https://calendar.app.google/KNLFST4CNxViPPN3A" target="_blank" class="block w-full py-3.5 bg-white/10 hover:bg-white/20 text-white font-bold rounded-xl text-sm transition-all text-center border border-white/20"><i class="fas fa-calendar-check mr-2"></i>Book a 30-Min Demo Meeting</a>' +
-          '<p class="text-center text-xs text-blue-300 mt-3">We\'ll get back to you within 24 hours. No spam, ever.</p>' +
+          '<textarea id="bc-message" rows="3" placeholder="Tell us about your roofing business..." class="w-full px-4 py-3 bg-white/10 border border-white/10 rounded-xl text-sm text-white placeholder-gray-500 focus:ring-2 focus:ring-[#00FF88] focus:border-transparent outline-none resize-none"></textarea>' +
+          '<div id="bc-msg" class="hidden text-sm font-medium px-4 py-3 rounded-lg"></div>' +
+          '<button type="submit" id="bc-submit" class="w-full py-4 font-extrabold rounded-xl text-lg transition-all shadow-xl" style="background:#00FF88;color:#0A0A0A"><i class="fas fa-rocket mr-2"></i>Get My Free Reports</button>' +
+          '<p class="text-center text-xs text-gray-600 mt-1"><i class="fas fa-lock mr-1" style="color:#00FF88"></i>No credit card required &middot; 3 free reports included</p>' +
+          '<div class="text-center my-3"><span class="text-gray-600 text-xs">— or skip the form —</span></div>' +
+          '<a href="https://calendar.app.google/KNLFST4CNxViPPN3A" target="_blank" class="block w-full py-4 font-bold rounded-xl text-sm transition-all text-center border border-white/10 hover:border-white/20" style="background:rgba(255,255,255,0.05);color:#fff"><i class="fas fa-calendar-check mr-2" style="color:#00FF88"></i>Book a Free 15-Min Demo Instead</a>' +
         '</form>' +
-        '<div id="bc-success" class="hidden text-center py-6"><i class="fas fa-check-circle text-green-400 text-3xl mb-3 block"></i><p class="text-lg font-bold">Message Sent!</p><p class="text-blue-200 text-sm mt-1">We\'ll be in touch shortly.</p></div>' +
       '</div>';
 
     // Auto-link country names to /coverage page
@@ -587,22 +687,32 @@
     var data = {
       name: name,
       email: email,
-      company: document.getElementById('bc-company').value.trim(),
-      phone: document.getElementById('bc-phone').value.trim(),
-      message: document.getElementById('bc-message').value.trim(),
-      source: 'blog_contact_form',
-      page: window.location.pathname
+      company_name: (document.getElementById('bc-company') || {}).value || '',
+      message: (document.getElementById('bc-message') || {}).value || '',
+      source_page: 'blog:' + window.location.pathname
     };
     var btn = document.getElementById('bc-submit');
-    if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
+    var msg = document.getElementById('bc-msg');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Submitting...'; }
+    if (msg) msg.className = 'hidden';
     fetch('/api/agents/leads', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) })
-      .then(function() {
-        var form = document.querySelector('#bc-success')?.closest('div')?.querySelector('form');
-        if (form) form.classList.add('hidden');
-        var success = document.getElementById('bc-success');
-        if (success) success.classList.remove('hidden');
+      .then(function(r) { return r.json(); })
+      .then(function(res) {
+        if (msg) {
+          msg.className = 'text-sm font-medium px-4 py-3 rounded-lg';
+          msg.style.background = 'rgba(0,255,136,0.1)';
+          msg.style.color = '#6ee7b7';
+          msg.style.border = '1px solid rgba(0,255,136,0.2)';
+          msg.innerHTML = '<i class="fas fa-check-circle mr-2"></i>You\'re in! <a href="https://calendar.app.google/KNLFST4CNxViPPN3A" target="_blank" style="font-weight:700;text-decoration:underline">Book your free onboarding call</a> while we set up your account.';
+        }
+        var form = e.target;
+        if (form) { Array.from(form.querySelectorAll('input,textarea')).forEach(function(el) { el.value = ''; }); }
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-rocket mr-2"></i>Get My Free Reports'; }
       })
-      .catch(function() { if (btn) { btn.disabled = false; btn.textContent = 'Send Message'; } window.rmToast('Failed to send. Please try again.', 'error'); });
+      .catch(function() {
+        if (msg) { msg.className = 'text-sm font-medium px-4 py-3 rounded-lg'; msg.style.background = 'rgba(239,68,68,0.1)'; msg.style.color = '#fca5a5'; msg.innerHTML = '<i class="fas fa-exclamation-circle mr-2"></i>Network error. Please try again.'; }
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-rocket mr-2"></i>Get My Free Reports'; }
+      });
   }
 
   window.shareBlog = function () {
