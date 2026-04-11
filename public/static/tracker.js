@@ -11,9 +11,12 @@
   
   // Don't track bots
   var ua = navigator.userAgent || '';
-  if (/bot|crawl|spider|slurp|mediapartners|lighthouse|pagespeed|GTmetrix/i.test(ua)) return;
-  
+  if (/bot|crawl|spider|slurp|mediapartners|lighthouse|pagespeed|GTmetrix|headlesschrome|phantomjs|selenium/i.test(ua)) return;
+
   var path = location.pathname;
+
+  // Don't track admin/internal pages — only track public-facing traffic
+  if (/^\/(super-admin|admin|login|api\/)/.test(path)) return;
   
   // ── Visitor & Session IDs ──
   function uuid() {
@@ -447,12 +450,16 @@
     });
   };
   
-  // ── 9. PAGE EXIT — send everything on unload ──
+  // ── 9. PAGE EXIT — send everything on unload (once only) ──
+  var exitSent = false;
   function sendExitEvent() {
+    if (exitSent) return;
+    exitSent = true;
+
     var currentActive = activeTime;
     if (isVisible) currentActive += (Date.now() - lastActive);
     var timeOnPage = Math.round(currentActive / 1000);
-    
+
     // Send detailed exit event to internal analytics
     var exitEvent = [{
       event_type: 'page_exit',
@@ -467,11 +474,11 @@
       screen_height: screen.height,
       language: navigator.language
     }];
-    
+
     if (navigator.sendBeacon) {
       navigator.sendBeacon('/api/analytics/track', JSON.stringify(exitEvent));
     }
-    
+
     // Send exit event to GA4 with full engagement data
     sendToGA4('page_exit', {
       page_path: path,
@@ -480,12 +487,12 @@
       session_page_count: pageCount,
       engaged: timeOnPage > 10 && maxScroll > 25 // Was visitor engaged?
     });
-    
+
     // Clean up
     if (engagementTimer) clearInterval(engagementTimer);
   }
-  
-  // Use multiple exit handlers for maximum reliability
+
+  // Use multiple exit handlers for maximum reliability (guard prevents duplicates)
   window.addEventListener('pagehide', sendExitEvent);
   window.addEventListener('beforeunload', sendExitEvent);
   document.addEventListener('visibilitychange', function() {

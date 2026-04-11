@@ -1699,8 +1699,8 @@ function renderAnalyticsView() {
                 '<span class="text-sm font-medium text-gray-700">' + (c.country || 'Unknown') + '</span>' +
               '</div>' +
               '<div class="text-right">' +
-                '<span class="text-sm font-bold text-gray-800">' + c.hits + '</span>' +
-                '<span class="text-[10px] text-gray-400 block">' + (c.visitors || 0) + ' visitors</span>' +
+                '<span class="text-sm font-bold text-gray-800">' + (c.visitors || 0) + '</span>' +
+                '<span class="text-[10px] text-gray-400 block">' + (c.hits || 0) + ' pageviews, ' + (c.sessions || 0) + ' sessions</span>' +
               '</div>' +
             '</div>';
           }).join('') + '</div>'

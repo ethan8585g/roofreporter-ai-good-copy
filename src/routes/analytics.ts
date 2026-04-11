@@ -37,9 +37,14 @@ analyticsRoutes.post('/track', async (c) => {
     const ip = c.req.header('CF-Connecting-IP') || c.req.header('X-Forwarded-For')?.split(',')[0]?.trim() || 'unknown'
     const ua = c.req.header('User-Agent') || ''
     
+    // Filter bots server-side
+    if (/bot|crawl|spider|slurp|mediapartners|lighthouse|pagespeed|GTmetrix|headlesschrome|phantomjs|selenium/i.test(ua)) {
+      return c.body(null, 204)
+    }
+
     // Parse browser/OS from UA
     const { browser, browserVersion, os, deviceType } = parseUserAgent(ua)
-    
+
     const stmt = c.env.DB.prepare(`
       INSERT INTO site_analytics (
         event_type, session_id, visitor_id, user_id,
@@ -116,7 +121,7 @@ analyticsRoutes.get('/dashboard', async (c) => {
     utmSources, utmMediums, utmCampaigns,
     signupsInPeriod
   ] = await Promise.all([
-    // KPI overview — current period
+    // KPI overview — current period (exclude admin/internal pages)
     db.prepare(`
       SELECT
         COUNT(*) as total_events,
@@ -127,7 +132,12 @@ analyticsRoutes.get('/dashboard', async (c) => {
         COUNT(DISTINCT ip_address) as unique_ips,
         ROUND(AVG(CASE WHEN time_on_page > 0 THEN time_on_page END), 1) as avg_time_on_page,
         ROUND(AVG(CASE WHEN scroll_depth > 0 THEN scroll_depth END), 1) as avg_scroll_depth
-      FROM site_analytics WHERE created_at >= ?
+      FROM site_analytics
+      WHERE created_at >= ?
+        AND page_url NOT LIKE '/super-admin%'
+        AND page_url NOT LIKE '/admin%'
+        AND page_url NOT LIKE '/login%'
+        AND page_url NOT LIKE '/api/%'
     `).bind(since).first(),
 
     // KPI overview — prior period (for trend comparison)
@@ -138,7 +148,12 @@ analyticsRoutes.get('/dashboard', async (c) => {
         COUNT(DISTINCT visitor_id) as unique_visitors,
         COUNT(DISTINCT session_id) as sessions,
         ROUND(AVG(CASE WHEN time_on_page > 0 THEN time_on_page END), 1) as avg_time_on_page
-      FROM site_analytics WHERE created_at >= ? AND created_at < ?
+      FROM site_analytics
+      WHERE created_at >= ? AND created_at < ?
+        AND page_url NOT LIKE '/super-admin%'
+        AND page_url NOT LIKE '/admin%'
+        AND page_url NOT LIKE '/login%'
+        AND page_url NOT LIKE '/api/%'
     `).bind(prevSince, since).first(),
 
     // Top pages with bounce rate
@@ -161,24 +176,39 @@ analyticsRoutes.get('/dashboard', async (c) => {
                session_id
         FROM site_analytics
         WHERE event_type = 'pageview' AND created_at >= ?
+          AND page_url NOT LIKE '/super-admin%'
+          AND page_url NOT LIKE '/admin%'
+          AND page_url NOT LIKE '/login%'
+          AND page_url NOT LIKE '/api/%'
         GROUP BY page_url, session_id
       ) p
       JOIN (
         SELECT session_id, COUNT(DISTINCT page_url) as page_count
         FROM site_analytics
         WHERE event_type = 'pageview' AND created_at >= ?
+          AND page_url NOT LIKE '/super-admin%'
+          AND page_url NOT LIKE '/admin%'
+          AND page_url NOT LIKE '/login%'
+          AND page_url NOT LIKE '/api/%'
         GROUP BY session_id
       ) sess ON sess.session_id = p.session_id
       GROUP BY p.page_url
       ORDER BY views DESC LIMIT 20
     `).bind(since, since).all(),
 
-    // Top countries
+    // Top countries — pageviews only, exclude admin pages
     db.prepare(`
-      SELECT country, COUNT(*) as hits, COUNT(DISTINCT visitor_id) as visitors
+      SELECT country,
+             COUNT(*) as hits,
+             COUNT(DISTINCT visitor_id) as visitors,
+             COUNT(DISTINCT session_id) as sessions
       FROM site_analytics
-      WHERE country IS NOT NULL AND created_at >= ?
-      GROUP BY country ORDER BY hits DESC LIMIT 15
+      WHERE country IS NOT NULL AND event_type = 'pageview' AND created_at >= ?
+        AND page_url NOT LIKE '/super-admin%'
+        AND page_url NOT LIKE '/admin%'
+        AND page_url NOT LIKE '/login%'
+        AND page_url NOT LIKE '/api/%'
+      GROUP BY country ORDER BY visitors DESC LIMIT 15
     `).bind(since).all(),
 
     // Top referrers
@@ -186,6 +216,10 @@ analyticsRoutes.get('/dashboard', async (c) => {
       SELECT referrer, COUNT(*) as hits, COUNT(DISTINCT visitor_id) as visitors
       FROM site_analytics
       WHERE referrer IS NOT NULL AND referrer != '' AND event_type = 'pageview' AND created_at >= ?
+        AND page_url NOT LIKE '/super-admin%'
+        AND page_url NOT LIKE '/admin%'
+        AND page_url NOT LIKE '/login%'
+        AND page_url NOT LIKE '/api/%'
       GROUP BY referrer ORDER BY hits DESC LIMIT 15
     `).bind(since).all(),
 
@@ -212,6 +246,10 @@ analyticsRoutes.get('/dashboard', async (c) => {
              COUNT(DISTINCT visitor_id) as visitors
       FROM site_analytics
       WHERE created_at >= datetime('now', '-48 hours')
+        AND page_url NOT LIKE '/super-admin%'
+        AND page_url NOT LIKE '/admin%'
+        AND page_url NOT LIKE '/login%'
+        AND page_url NOT LIKE '/api/%'
       GROUP BY hour ORDER BY hour
     `).all(),
 
@@ -220,6 +258,10 @@ analyticsRoutes.get('/dashboard', async (c) => {
       SELECT device_type, COUNT(*) as count, COUNT(DISTINCT visitor_id) as visitors
       FROM site_analytics
       WHERE device_type IS NOT NULL AND created_at >= ?
+        AND page_url NOT LIKE '/super-admin%'
+        AND page_url NOT LIKE '/admin%'
+        AND page_url NOT LIKE '/login%'
+        AND page_url NOT LIKE '/api/%'
       GROUP BY device_type ORDER BY count DESC
     `).bind(since).all(),
 
