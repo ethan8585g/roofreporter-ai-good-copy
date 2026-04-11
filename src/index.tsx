@@ -4279,7 +4279,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
     <section id="faq" class="py-24" style="background:#0A0A0A"><div class="max-w-3xl mx-auto px-4"><div class="text-center mb-12 scroll-animate"><div class="inline-flex items-center gap-2 bg-white/10 text-gray-300 rounded-full px-4 py-1.5 text-sm font-semibold mb-4"><i class="fas fa-question-circle"></i> FAQ</div><h2 class="text-3xl lg:text-4xl font-black text-white tracking-tight">Frequently Asked Questions</h2></div><div class="space-y-3"><div class="scroll-animate bg-[#111111] rounded-xl border border-white/10 overflow-hidden" style="transition-delay:0ms"><button onclick="toggleFAQ(this)" class="w-full text-left p-5 flex items-center justify-between hover:bg-white/5 transition-colors min-h-[56px]"><span class="font-semibold text-gray-300 text-sm pr-4">What data source do you use?</span><i class="fas fa-chevron-down text-gray-500 transition-transform duration-300 faq-icon flex-shrink-0"></i></button><div class="faq-answer hidden px-5 pb-5"><p class="text-sm text-gray-400 leading-relaxed">We use Google's Solar API, providing high-resolution satellite imagery with LiDAR-calibrated 3D building models. This is the same data Google uses for their solar panel recommendations &mdash; the most accurate publicly available roof geometry data.</p></div></div><div class="scroll-animate bg-[#111111] rounded-xl border border-white/10 overflow-hidden" style="transition-delay:50ms"><button onclick="toggleFAQ(this)" class="w-full text-left p-5 flex items-center justify-between hover:bg-white/5 transition-colors min-h-[56px]"><span class="font-semibold text-gray-300 text-sm pr-4">How accurate are the measurements?</span><i class="fas fa-chevron-down text-gray-500 transition-transform duration-300 faq-icon flex-shrink-0"></i></button><div class="faq-answer hidden px-5 pb-5"><p class="text-sm text-gray-400 leading-relaxed">For buildings with HIGH quality imagery (most urban Canadian addresses), accuracy is typically within 2-5% of manual measurements. We display confidence scores and imagery quality on every report.</p></div></div><div class="scroll-animate bg-[#111111] rounded-xl border border-white/10 overflow-hidden" style="transition-delay:100ms"><button onclick="toggleFAQ(this)" class="w-full text-left p-5 flex items-center justify-between hover:bg-white/5 transition-colors min-h-[56px]"><span class="font-semibold text-gray-300 text-sm pr-4">How fast do I get my report?</span><i class="fas fa-chevron-down text-gray-500 transition-transform duration-300 faq-icon flex-shrink-0"></i></button><div class="faq-answer hidden px-5 pb-5"><p class="text-sm text-gray-400 leading-relaxed">Most reports are generated in under 60 seconds. You receive an email with a download link and can also access all reports from your dashboard.</p></div></div><div class="scroll-animate bg-[#111111] rounded-xl border border-white/10 overflow-hidden" style="transition-delay:150ms"><button onclick="toggleFAQ(this)" class="w-full text-left p-5 flex items-center justify-between hover:bg-white/5 transition-colors min-h-[56px]"><span class="font-semibold text-gray-300 text-sm pr-4">What is the AI Roofer Secretary?</span><i class="fas fa-chevron-down text-gray-500 transition-transform duration-300 faq-icon flex-shrink-0"></i></button><div class="faq-answer hidden px-5 pb-5"><p class="text-sm text-gray-400 leading-relaxed">A 24/7 AI phone answering service for your roofing business. It answers calls in a natural human voice, books appointments, qualifies leads, and sends you detailed call summaries. Currently $149/month.</p></div></div><div class="scroll-animate bg-[#111111] rounded-xl border border-white/10 overflow-hidden" style="transition-delay:200ms"><button onclick="toggleFAQ(this)" class="w-full text-left p-5 flex items-center justify-between hover:bg-white/5 transition-colors min-h-[56px]"><span class="font-semibold text-gray-300 text-sm pr-4">Is my data secure?</span><i class="fas fa-chevron-down text-gray-500 transition-transform duration-300 faq-icon flex-shrink-0"></i></button><div class="faq-answer hidden px-5 pb-5"><p class="text-sm text-gray-400 leading-relaxed">Absolutely. Built on Cloudflare's edge network with 256-bit encryption, PCI DSS compliant payments, and Canadian PIPEDA privacy compliance.</p></div></div><div class="scroll-animate bg-[#111111] rounded-xl border border-white/10 overflow-hidden" style="transition-delay:250ms"><button onclick="toggleFAQ(this)" class="w-full text-left p-5 flex items-center justify-between hover:bg-white/5 transition-colors min-h-[56px]"><span class="font-semibold text-gray-300 text-sm pr-4">Can I cancel anytime?</span><i class="fas fa-chevron-down text-gray-500 transition-transform duration-300 faq-icon flex-shrink-0"></i></button><div class="faq-answer hidden px-5 pb-5"><p class="text-sm text-gray-400 leading-relaxed">Of course. Pay-per-report has zero commitments. Add-on services like AI Secretary are month-to-month with no contracts.</p></div></div></div><div class="text-center mt-8"><p class="text-sm text-gray-500">Still have questions? <a href="mailto:reports@reusecanada.ca" class="text-[#00FF88] hover:underline font-semibold">Contact us</a></p></div></div></section>
 
     <!-- FINAL CTA -->
-    <section class="relative py-28 overflow-hidden"><div class="absolute inset-0"><img src="https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=1920&q=80&auto=format&fit=crop&t=20260405" alt="Modern building" class="w-full h-full object-cover" loading="lazy" /><div class="absolute inset-0 bg-gradient-to-r from-slate-900/95 via-slate-900/90 to-cyan-900/80"></div></div><div class="relative max-w-4xl mx-auto px-4 text-center scroll-animate"><h2 class="text-4xl lg:text-5xl font-black text-white mb-6 tracking-tight leading-tight">Ready to Save Hours<br/>on Every Estimate?</h2><p class="text-xl text-gray-300 mb-10 max-w-2xl mx-auto font-light">Stop climbing roofs. Stop guessing measurements. Start quoting faster with satellite-powered precision.</p><div class="flex flex-col sm:flex-row gap-4 justify-center mb-8"><a href="/signup" onclick="rrTrack('cta_click',{location:'final_cta'})" class="group inline-flex items-center justify-center gap-3 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-10 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/30 transition-all duration-300 hover:scale-[1.03] min-h-[56px]"><i class="fas fa-rocket"></i> Start Free &mdash; 3 Reports On Us <i class="fas fa-arrow-right text-sm group-hover:translate-x-1 transition-transform"></i></a><a href="https://calendar.app.google/KNLFST4CNxViPPN3A" target="_blank" onclick="rrTrack('cta_click',{location:'final_cta_demo'})" class="group inline-flex items-center justify-center gap-3 bg-white/10 hover:bg-white/20 text-white font-bold py-4 px-10 rounded-xl text-lg border border-white/20 hover:border-white/30 transition-all duration-300 min-h-[56px]"><i class="fas fa-calendar-check"></i> Book a Demo Meeting</a></div><p class="text-sm text-gray-400">No credit card required. 3 free reports. Then $7 USD per report.<br/>Questions? <a href="mailto:reports@reusecanada.ca" class="text-cyan-400 hover:underline">reports@reusecanada.ca</a></p></div></section>
+    <section class="relative py-28 overflow-hidden"><div class="absolute inset-0"><img src="https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=1920&q=80&auto=format&fit=crop" alt="Aerial satellite roof view" class="w-full h-full object-cover" loading="lazy" /><div class="absolute inset-0 bg-gradient-to-r from-slate-900/95 via-slate-900/90 to-cyan-900/80"></div></div><div class="relative max-w-4xl mx-auto px-4 text-center scroll-animate"><h2 class="text-4xl lg:text-5xl font-black text-white mb-6 tracking-tight leading-tight">Ready to Save Hours<br/>on Every Estimate?</h2><p class="text-xl text-gray-300 mb-10 max-w-2xl mx-auto font-light">Stop climbing roofs. Stop guessing measurements. Start quoting faster with satellite-powered precision.</p><div class="flex flex-col sm:flex-row gap-4 justify-center mb-8"><a href="/signup" onclick="rrTrack('cta_click',{location:'final_cta'})" class="group inline-flex items-center justify-center gap-3 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-10 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/30 transition-all duration-300 hover:scale-[1.03] min-h-[56px]"><i class="fas fa-rocket"></i> Start Free &mdash; 3 Reports On Us <i class="fas fa-arrow-right text-sm group-hover:translate-x-1 transition-transform"></i></a><a href="https://calendar.app.google/KNLFST4CNxViPPN3A" target="_blank" onclick="rrTrack('cta_click',{location:'final_cta_demo'})" class="group inline-flex items-center justify-center gap-3 bg-white/10 hover:bg-white/20 text-white font-bold py-4 px-10 rounded-xl text-lg border border-white/20 hover:border-white/30 transition-all duration-300 min-h-[56px]"><i class="fas fa-calendar-check"></i> Book a Demo Meeting</a></div><p class="text-sm text-gray-400">No credit card required. 3 free reports. Then $7 USD per report.<br/>Questions? <a href="mailto:reports@reusecanada.ca" class="text-cyan-400 hover:underline">reports@reusecanada.ca</a></p></div></section>
 
     <!-- FOOTER CROSS-LINKS -->
     <section style="background:#0A0A0A" class="py-16 border-t border-white/5"><div class="max-w-7xl mx-auto px-4"><div class="grid md:grid-cols-2 gap-12"><div><h4 class="text-white font-bold text-sm uppercase tracking-wider mb-4"><i class="fas fa-map-marker-alt text-[#00FF88] mr-2"></i>Roof Measurements by City</h4><div class="flex flex-wrap gap-x-4 gap-y-2"><a href="/roof-measurement/new-york" class="text-gray-500 hover:text-[#00FF88] text-xs transition-colors">New York</a><a href="/roof-measurement/los-angeles" class="text-gray-500 hover:text-[#00FF88] text-xs transition-colors">Los Angeles</a><a href="/roof-measurement/chicago" class="text-gray-500 hover:text-[#00FF88] text-xs transition-colors">Chicago</a><a href="/roof-measurement/houston" class="text-gray-500 hover:text-[#00FF88] text-xs transition-colors">Houston</a><a href="/roof-measurement/dallas" class="text-gray-500 hover:text-[#00FF88] text-xs transition-colors">Dallas</a><a href="/roof-measurement/miami" class="text-gray-500 hover:text-[#00FF88] text-xs transition-colors">Miami</a><a href="/roof-measurement/atlanta" class="text-gray-500 hover:text-[#00FF88] text-xs transition-colors">Atlanta</a><a href="/roof-measurement/denver" class="text-gray-500 hover:text-[#00FF88] text-xs transition-colors">Denver</a><a href="/roof-measurement/phoenix" class="text-gray-500 hover:text-[#00FF88] text-xs transition-colors">Phoenix</a><a href="/roof-measurement/seattle" class="text-gray-500 hover:text-[#00FF88] text-xs transition-colors">Seattle</a><a href="/roof-measurement/nashville" class="text-gray-500 hover:text-[#00FF88] text-xs transition-colors">Nashville</a><a href="/roof-measurement/austin" class="text-gray-500 hover:text-[#00FF88] text-xs transition-colors">Austin</a><a href="/roof-measurement/calgary" class="text-gray-500 hover:text-[#00FF88] text-xs transition-colors">Calgary</a><a href="/roof-measurement/toronto" class="text-gray-500 hover:text-[#00FF88] text-xs transition-colors">Toronto</a><a href="/roof-measurement/vancouver" class="text-gray-500 hover:text-[#00FF88] text-xs transition-colors">Vancouver</a><a href="/roof-measurement/edmonton" class="text-gray-500 hover:text-[#00FF88] text-xs transition-colors">Edmonton</a></div></div><div><h4 class="text-white font-bold text-sm uppercase tracking-wider mb-4"><i class="fas fa-globe text-[#22d3ee] mr-2"></i>Coverage by Country</h4><div class="flex flex-wrap gap-x-4 gap-y-2"><a href="/roof-measurement/united-states" class="text-gray-500 hover:text-[#22d3ee] text-xs transition-colors">United States</a><a href="/roof-measurement/canada" class="text-gray-500 hover:text-[#22d3ee] text-xs transition-colors">Canada</a><a href="/roof-measurement/united-kingdom" class="text-gray-500 hover:text-[#22d3ee] text-xs transition-colors">United Kingdom</a><a href="/roof-measurement/australia" class="text-gray-500 hover:text-[#22d3ee] text-xs transition-colors">Australia</a><a href="/roof-measurement/germany" class="text-gray-500 hover:text-[#22d3ee] text-xs transition-colors">Germany</a><a href="/roof-measurement/france" class="text-gray-500 hover:text-[#22d3ee] text-xs transition-colors">France</a><a href="/roof-measurement/spain" class="text-gray-500 hover:text-[#22d3ee] text-xs transition-colors">Spain</a><a href="/roof-measurement/italy" class="text-gray-500 hover:text-[#22d3ee] text-xs transition-colors">Italy</a><a href="/roof-measurement/japan" class="text-gray-500 hover:text-[#22d3ee] text-xs transition-colors">Japan</a><a href="/roof-measurement/brazil" class="text-gray-500 hover:text-[#22d3ee] text-xs transition-colors">Brazil</a><a href="/roof-measurement/mexico" class="text-gray-500 hover:text-[#22d3ee] text-xs transition-colors">Mexico</a><a href="/roof-measurement/new-zealand" class="text-gray-500 hover:text-[#22d3ee] text-xs transition-colors">New Zealand</a></div><a href="/coverage" class="text-[#00FF88] text-xs font-semibold mt-3 inline-block hover:underline">View all 40+ countries &rarr;</a></div></div></div></section>
@@ -5089,7 +5089,11 @@ function getComparisonPageHTML(slug: string): string {
   <meta property="og:description" content="${cfg.metaDesc}">
   <meta property="og:type" content="website">
   <meta property="og:url" content="${base}${cfg.canonicalPath}">
-  <meta property="og:image" content="${base}/static/logo.png">
+  <meta property="og:image" content="https://images.unsplash.com/photo-1513467535987-fd81bc7d62f8?w=1200&q=80&auto=format&fit=crop">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://images.unsplash.com/photo-1513467535987-fd81bc7d62f8?w=1200&q=80&auto=format&fit=crop">
   <script type="application/ld+json">${breadcrumb}</script>
   <script type="application/ld+json">${faqSchema}</script>
   <script type="application/ld+json">${softwareSchema}</script>
@@ -5098,7 +5102,7 @@ function getComparisonPageHTML(slug: string): string {
   <nav class="sticky top-0 z-50 backdrop-blur-2xl border-b border-white/5" style="background:rgba(10,10,10,0.95)">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
       <a href="/" class="flex items-center gap-3">
-        <img src="/static/logo.png" alt="Roof Manager" class="w-9 h-9 rounded-xl object-cover ring-1 ring-white/10">
+        <img src="/static/logo.png" alt="Roof Manager" class="w-9 h-9 rounded-xl object-cover ring-1 ring-white/10" width="36" height="36" loading="eager">
         <span class="text-white font-extrabold text-lg tracking-tight">Roof Manager</span>
       </a>
       <div class="flex items-center gap-5">
@@ -5120,9 +5124,11 @@ function getComparisonPageHTML(slug: string): string {
     </nav>
   </div>
 
-  <!-- Hero -->
-  <section class="py-16 lg:py-20" style="background:#0A0A0A">
-    <div class="max-w-5xl mx-auto px-4 text-center">
+  <!-- Hero — with background aerial image -->
+  <section class="relative overflow-hidden" style="background:#0A0A0A;min-height:420px">
+    <img src="https://images.unsplash.com/photo-1513467535987-fd81bc7d62f8?w=1920&q=80&auto=format&fit=crop" alt="Aerial rooftop view" class="absolute inset-0 w-full h-full object-cover" style="opacity:0.08" loading="eager" width="1920" height="1080">
+    <div class="absolute inset-0" style="background:linear-gradient(to bottom,rgba(10,10,10,0.92) 0%,rgba(10,10,10,0.85) 100%)"></div>
+    <div class="relative max-w-5xl mx-auto px-4 py-16 lg:py-20 text-center">
       <div class="inline-flex items-center gap-2 bg-red-500/10 text-red-400 rounded-full px-4 py-1.5 text-sm font-semibold mb-6"><i class="fas fa-balance-scale"></i> ${cfg.competitor} vs RoofManager</div>
       <h1 class="text-4xl lg:text-6xl font-black text-white mb-6 leading-tight tracking-tight">${cfg.h1}</h1>
       <p class="text-xl text-gray-400 mb-8 max-w-3xl mx-auto leading-relaxed">${cfg.savings60s}</p>
@@ -5313,6 +5319,7 @@ function getComparisonPageHTML(slug: string): string {
 const featureHubConfig: Record<string, {
   slug: string; title: string; headline: string; subhead: string;
   metaDesc: string; icon: string; accentColor: string;
+  heroImage: string; ogImage: string;
   capabilities: string[]; faq: { q: string; a: string }[];
   relatedFeatures: { slug: string; name: string; icon: string }[];
   topCities: string[];
@@ -5320,6 +5327,8 @@ const featureHubConfig: Record<string, {
 }> = {
   'measurements': {
     slug: 'measurements', title: 'AI Roof Measurement Reports', icon: 'fas fa-satellite', accentColor: '#00FF88',
+    heroImage: 'https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=1920&q=80&auto=format&fit=crop',
+    ogImage: 'https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=1200&q=80&auto=format&fit=crop',
     headline: 'Professional Roof Measurement Reports in Under 60 Seconds',
     subhead: 'Satellite-powered 3D analysis with 99% accuracy. Stop climbing roofs — measure from your truck.',
     metaDesc: 'AI-powered satellite roof measurement reports for roofing contractors. Full 3D area, pitch, edges, and material BOM in under 60 seconds. 99% accuracy. Try free.',
@@ -5348,6 +5357,8 @@ const featureHubConfig: Record<string, {
   },
   'crm': {
     slug: 'crm', title: 'Roofing CRM & Business Management', icon: 'fas fa-users', accentColor: '#22d3ee',
+    heroImage: 'https://images.unsplash.com/photo-1600880292203-757bb62b4baf?w=1920&q=80&auto=format&fit=crop',
+    ogImage: 'https://images.unsplash.com/photo-1600880292203-757bb62b4baf?w=1200&q=80&auto=format&fit=crop',
     headline: 'The CRM Built Specifically for Roofing Contractors',
     subhead: 'Stop losing leads in spreadsheets. Manage your entire pipeline from first call to final invoice.',
     metaDesc: 'Roofing CRM software for contractors. Pipeline management, automated follow-ups, invoicing, proposals, and job scheduling in one platform. Free to start.',
@@ -5376,6 +5387,8 @@ const featureHubConfig: Record<string, {
   },
   'ai-secretary': {
     slug: 'ai-secretary', title: 'AI Roofer Secretary — 24/7 Phone Receptionist', icon: 'fas fa-headset', accentColor: '#f59e0b',
+    heroImage: 'https://images.unsplash.com/photo-1553877522-43269d4ea984?w=1920&q=80&auto=format&fit=crop',
+    ogImage: 'https://images.unsplash.com/photo-1553877522-43269d4ea984?w=1200&q=80&auto=format&fit=crop',
     headline: 'Never Miss a Roofing Lead Again — Even at 2am',
     subhead: 'Your AI phone receptionist answers every call, books appointments, and qualifies leads around the clock.',
     metaDesc: 'AI phone receptionist for roofing contractors. Answers calls 24/7, books appointments, qualifies leads (retail/storm/insurance), sends call summaries. $149/month.',
@@ -5404,6 +5417,8 @@ const featureHubConfig: Record<string, {
   },
   'virtual-try-on': {
     slug: 'virtual-try-on', title: 'Virtual Roof Try-On — AI Visualization', icon: 'fas fa-home', accentColor: '#a78bfa',
+    heroImage: 'https://images.unsplash.com/photo-1570129477492-be5b3c576e78?w=1920&q=80&auto=format&fit=crop',
+    ogImage: 'https://images.unsplash.com/photo-1570129477492-be5b3c576e78?w=1200&q=80&auto=format&fit=crop',
     headline: 'Let Homeowners See Their New Roof Before Signing',
     subhead: 'AI-powered visualization tool that overlays shingle colors and styles on the actual home photo.',
     metaDesc: 'Virtual roof try-on tool for roofing contractors. Show homeowners how different shingle colors and styles look on their home using AI visualization. Boosts close rates.',
@@ -5484,9 +5499,12 @@ function getFeatureHubPageHTML(featureSlug: string): string {
   <meta property="og:description" content="${f.metaDesc}">
   <meta property="og:type" content="website">
   <meta property="og:url" content="${base}/features/${f.slug}">
-  <meta property="og:image" content="${base}/static/logo.png">
+  <meta property="og:image" content="${f.ogImage}">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
   <meta property="og:site_name" content="Roof Manager">
-  <meta name="twitter:card" content="summary">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="${f.ogImage}">
   <script type="application/ld+json">${breadcrumbSchema}</script>
   <script type="application/ld+json">${softwareSchema}</script>
   <script type="application/ld+json">${faqSchema}</script>
@@ -5495,7 +5513,7 @@ function getFeatureHubPageHTML(featureSlug: string): string {
   <nav class="sticky top-0 z-50 backdrop-blur-2xl border-b border-white/5" style="background:rgba(10,10,10,0.95)">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
       <a href="/" class="flex items-center gap-3">
-        <img src="/static/logo.png" alt="Roof Manager" class="w-9 h-9 rounded-xl object-cover ring-1 ring-white/10">
+        <img src="/static/logo.png" alt="Roof Manager" class="w-9 h-9 rounded-xl object-cover ring-1 ring-white/10" width="36" height="36">
         <span class="text-white font-extrabold text-lg tracking-tight">Roof Manager</span>
       </a>
       <div class="flex items-center gap-5">
@@ -5518,17 +5536,52 @@ function getFeatureHubPageHTML(featureSlug: string): string {
     </nav>
   </div>
 
-  <!-- Hero -->
-  <section class="py-20 lg:py-28" style="background:#0A0A0A">
-    <div class="max-w-5xl mx-auto px-4 text-center">
-      <div class="inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-sm font-semibold mb-6" style="background:${f.accentColor}15;color:${f.accentColor}"><i class="${f.icon}"></i> ${f.title}</div>
-      <h1 class="text-4xl lg:text-6xl font-black text-white mb-6 leading-tight tracking-tight">${f.headline}</h1>
-      <p class="text-xl text-gray-400 mb-10 max-w-3xl mx-auto leading-relaxed">${f.subhead}</p>
-      <div class="flex flex-col sm:flex-row gap-4 justify-center mb-6">
-        <a href="/signup" onclick="rrTrack('cta_click',{location:'feature_hub_${f.slug}_hero'})" class="inline-flex items-center justify-center gap-2 font-extrabold py-4 px-10 rounded-xl text-lg shadow-2xl transition-all hover:scale-[1.03]" style="background:${f.accentColor};color:#0A0A0A"><i class="fas fa-rocket"></i> Start Free — 3 Reports On Us</a>
-        <a href="https://calendar.app.google/KNLFST4CNxViPPN3A" target="_blank" class="inline-flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 text-white font-bold py-4 px-8 rounded-xl text-lg border border-white/10 hover:border-white/20 transition-all"><i class="fas fa-calendar-check" style="color:${f.accentColor}"></i> Book a Demo</a>
+  <!-- Hero — with background image + product UI preview -->
+  <section class="relative overflow-hidden" style="background:#0A0A0A;min-height:520px">
+    <img src="${f.heroImage}" alt="${f.title} — Roof Manager" class="absolute inset-0 w-full h-full object-cover" style="opacity:0.08" loading="eager" width="1920" height="1080">
+    <div class="absolute inset-0" style="background:linear-gradient(135deg,rgba(10,10,10,0.97) 0%,rgba(10,10,10,0.85) 60%,rgba(10,10,10,0.7) 100%)"></div>
+    <div class="relative max-w-7xl mx-auto px-4 py-20 lg:py-28">
+      <div class="grid lg:grid-cols-2 gap-12 items-center">
+        <div>
+          <div class="inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-sm font-semibold mb-6" style="background:${f.accentColor}18;color:${f.accentColor}"><i class="${f.icon}"></i> ${f.title}</div>
+          <h1 class="text-4xl lg:text-5xl font-black text-white mb-6 leading-tight tracking-tight">${f.headline}</h1>
+          <p class="text-lg text-gray-400 mb-8 leading-relaxed">${f.subhead}</p>
+          <div class="flex flex-col sm:flex-row gap-3 mb-4">
+            <a href="/signup" onclick="rrTrack('cta_click',{location:'feature_hub_${f.slug}_hero'})" class="inline-flex items-center justify-center gap-2 font-extrabold py-3.5 px-8 rounded-xl text-base shadow-2xl transition-all hover:scale-[1.03]" style="background:${f.accentColor};color:#0A0A0A"><i class="fas fa-rocket"></i> Start Free — 3 Reports On Us</a>
+            <a href="https://calendar.app.google/KNLFST4CNxViPPN3A" target="_blank" class="inline-flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 text-white font-bold py-3.5 px-6 rounded-xl text-base border border-white/10 hover:border-white/20 transition-all"><i class="fas fa-calendar-check" style="color:${f.accentColor}"></i> Book a Demo</a>
+          </div>
+          <p class="text-xs text-gray-600"><i class="fas fa-lock mr-1" style="color:${f.accentColor}"></i>No credit card required &middot; 3 free reports included</p>
+        </div>
+        <!-- Product UI Mockup -->
+        <div class="hidden lg:block">
+          ${f.slug === 'measurements' ? `
+          <div class="space-y-3">
+            <div class="bg-[#111] border border-white/10 rounded-xl p-4 shadow-2xl"><div class="text-xs text-gray-500 mb-1 font-medium">Total Sloped Area — Calgary, AB</div><div class="text-3xl font-black text-white">2,847 <span class="text-lg text-gray-400">ft²</span></div><div class="text-xs mt-1 font-semibold" style="color:${f.accentColor}"><i class="fas fa-check-circle mr-1"></i>High confidence &middot; 4/12 pitch &middot; Delivered in 47s</div></div>
+            <div class="grid grid-cols-2 gap-3">
+              <div class="bg-[#111] border border-white/10 rounded-xl p-3"><div class="text-xs text-gray-500 mb-1">Ridge</div><div class="text-xl font-black text-white">48.2 ft</div></div>
+              <div class="bg-[#111] border border-white/10 rounded-xl p-3"><div class="text-xs text-gray-500 mb-1">Hip</div><div class="text-xl font-black text-white">32.6 ft</div></div>
+              <div class="bg-[#111] border border-white/10 rounded-xl p-3"><div class="text-xs text-gray-500 mb-1">Eave</div><div class="text-xl font-black text-white">96.4 ft</div></div>
+              <div class="bg-[#111] border border-white/10 rounded-xl p-3"><div class="text-xs text-gray-500 mb-1">Valley</div><div class="text-xl font-black text-white">18.1 ft</div></div>
+            </div>
+            <div class="bg-[#111] rounded-xl p-4 shadow-xl" style="border:1px solid ${f.accentColor}30"><div class="text-xs font-bold mb-2" style="color:${f.accentColor}"><i class="fas fa-boxes mr-1"></i>Material BOM</div><div class="space-y-1.5 text-xs text-gray-400"><div class="flex justify-between"><span>Shingles (3-tab)</span><span class="text-white font-semibold">32 sq</span></div><div class="flex justify-between"><span>Underlayment</span><span class="text-white font-semibold">4 rolls</span></div><div class="flex justify-between"><span>Ridge cap</span><span class="text-white font-semibold">48 lin ft</span></div><div class="flex justify-between"><span>I&amp;W Shield</span><span class="text-white font-semibold">192 sq ft</span></div></div></div>
+          </div>` : f.slug === 'crm' ? `
+          <div class="space-y-2 shadow-2xl">
+            <div class="bg-[#111] border border-white/10 rounded-xl px-4 py-2 text-xs text-gray-400 font-semibold uppercase tracking-wider">Pipeline — Active Jobs</div>
+            ${[{n:'Thomas M.',a:'142 Oak Ave, Calgary',s:'New Lead',c:'#22d3ee'},{n:'Rebecca S.',a:'89 Pine St, Edmonton',s:'Quoted',c:'#00FF88'},{n:'David K.',a:'331 Maple Dr, Vancouver',s:'Approved',c:'#a78bfa'},{n:'Laura B.',a:'17 Elm Rd, Toronto',s:'Scheduled',c:'#f59e0b'},{n:'James W.',a:'55 Cedar Blvd, Ottawa',s:'Complete',c:'#6b7280'}].map(l=>`<div class="bg-[#111] border border-white/10 rounded-xl p-3 flex items-center gap-3"><div class="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs flex-shrink-0" style="background:${l.c}30;color:${l.c}">${l.n.split(' ').map((x:string)=>x[0]).join('')}</div><div class="flex-1 min-w-0"><div class="text-xs font-semibold text-white truncate">${l.n}</div><div class="text-[10px] text-gray-500 truncate">${l.a}</div></div><div class="text-[10px] font-bold px-2 py-1 rounded-full flex-shrink-0" style="background:${l.c}18;color:${l.c}">${l.s}</div></div>`).join('')}
+          </div>` : f.slug === 'ai-secretary' ? `
+          <div class="space-y-3 shadow-2xl">
+            <div class="bg-[#111] border border-white/10 rounded-xl p-4"><div class="text-xs font-bold mb-2" style="color:#f59e0b"><i class="fas fa-phone-alt mr-1"></i>Incoming Call — Just Now</div><div class="text-sm font-semibold text-white mb-1">+1 (403) 555-0192 · Calgary</div><div class="text-xs text-gray-400">"Hi, I have hail damage on my roof from last night's storm..."</div></div>
+            <div class="bg-[#111] rounded-xl p-4" style="border:1px solid #f59e0b25"><div class="text-xs text-gray-500 mb-2">AI Secretary Response</div><div class="text-xs text-gray-300 leading-relaxed">"I'm so sorry to hear that. I can get one of our inspectors out to assess the damage. Can I get your address and the best time to stop by?"</div></div>
+            <div class="bg-[#111] border border-white/10 rounded-xl p-4"><div class="text-xs font-bold mb-2" style="color:#00FF88"><i class="fas fa-calendar-check mr-1"></i>Appointment Booked Automatically</div><div class="text-xs text-gray-400">Tuesday, Apr 15 · 9:00 AM<br/>1428 Willow Cres, Calgary AB T2Y 3K1<br/><span class="text-white font-medium">Hail damage assessment · Est. 45 min</span></div></div>
+            <div class="bg-[#111] border border-white/10 rounded-xl p-3 flex items-center gap-3"><div class="w-7 h-7 bg-[#00FF88]/10 rounded-lg flex items-center justify-center"><i class="fas fa-envelope text-[#00FF88] text-xs"></i></div><div><div class="text-xs font-semibold text-white">Call Summary Sent to You</div><div class="text-[10px] text-gray-500">3 leads captured tonight while you slept</div></div></div>
+          </div>` : `
+          <div class="space-y-3 shadow-2xl">
+            <div class="bg-[#111] border border-white/10 rounded-xl overflow-hidden"><div class="p-3 border-b border-white/5"><div class="text-xs text-gray-500 font-medium">Before — Current Roof</div></div><div class="h-28 flex items-center justify-center" style="background:linear-gradient(135deg,#1a1a1a,#222)"><div class="text-center"><i class="fas fa-home text-gray-600 text-3xl mb-1"></i><div class="text-xs text-gray-600">Original shingle · Medium grey</div></div></div></div>
+            <div class="bg-[#111] rounded-xl overflow-hidden" style="border:1px solid #a78bfa40"><div class="p-3 border-b" style="border-color:#a78bfa20"><div class="text-xs font-bold" style="color:#a78bfa">After — GAF Timberline HDZ · Charcoal</div></div><div class="h-28 flex items-center justify-center" style="background:linear-gradient(135deg,#1a0f2e,#2d1b4e)"><div class="text-center"><i class="fas fa-home text-purple-400 text-3xl mb-1"></i><div class="text-xs" style="color:#a78bfa">AI visualization · Charcoal</div></div></div></div>
+            <div class="flex gap-2">${['Charcoal','Barkwood','Pewter Grey','Birchwood','Shakewood'].map((c,i)=>`<div class="flex-1 h-6 rounded-lg cursor-pointer border-2 ${i===0?'border-[#a78bfa]':'border-transparent'}" style="background:${['#3d3d3d','#6b5a3e','#7a7a7a','#c4b49a','#5c4a2a'][i]}"></div>`).join('')}</div>
+          </div>`}
+        </div>
       </div>
-      <p class="text-xs text-gray-600"><i class="fas fa-lock mr-1" style="color:${f.accentColor}"></i>No credit card required &middot; 3 free reports included</p>
     </div>
   </section>
 
@@ -5685,7 +5738,7 @@ function getFeatureCityPageHTML(slug: string, city: { name: string; province: st
   <nav class="sticky top-0 z-50 backdrop-blur-2xl border-b border-white/5" style="background:rgba(10,10,10,0.95)">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
       <a href="/" class="flex items-center gap-3">
-        <img src="/static/logo.png" alt="Roof Manager" class="w-9 h-9 rounded-xl object-cover ring-1 ring-white/10">
+        <img src="/static/logo.png" alt="Roof Manager" class="w-9 h-9 rounded-xl object-cover ring-1 ring-white/10" width="36" height="36" loading="eager">
         <span class="text-white font-extrabold text-lg tracking-tight">Roof Manager</span>
       </a>
       <div class="flex items-center gap-5">
