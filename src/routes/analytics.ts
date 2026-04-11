@@ -27,7 +27,13 @@ analyticsRoutes.post('/track', async (c) => {
     const events = Array.isArray(body) ? body : [body]
     
     // Extract Cloudflare geo data from the request
+    // cf object is primary source; CF-IPCountry / CF-IPCity headers are fallbacks
     const cf = (c.req.raw as any).cf || {}
+    const country = cf.country || c.req.header('CF-IPCountry') || c.req.header('X-Country-Code') || null
+    const city    = cf.city    || c.req.header('CF-IPCity')    || null
+    const region  = cf.region  || c.req.header('CF-IPRegion')  || null
+    const timezone = cf.timezone || null
+    const asn     = cf.asn ? String(cf.asn) : null
     const ip = c.req.header('CF-Connecting-IP') || c.req.header('X-Forwarded-For')?.split(',')[0]?.trim() || 'unknown'
     const ua = c.req.header('User-Agent') || ''
     
@@ -65,11 +71,11 @@ analyticsRoutes.post('/track', async (c) => {
       e.utm_term || null,
       e.utm_content || null,
       ip,
-      cf.country || null,
-      cf.city || null,
-      cf.region || null,
-      cf.timezone || null,
-      cf.asn ? String(cf.asn) : null,
+      country,
+      city,
+      region,
+      timezone,
+      asn,
       ua.substring(0, 500),
       browser,
       browserVersion,
