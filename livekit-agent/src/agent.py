@@ -28,11 +28,8 @@ from dotenv import load_dotenv
 from livekit import rtc
 from livekit.agents import (
     Agent,
-    AgentServer,
     AgentSession,
     JobContext,
-    JobProcess,
-    cli,
     inference,
     function_tool,
     RunContext,
@@ -388,23 +385,8 @@ class RooferSecretaryAgent(Agent):
         return "Thank you for calling! Have a great day. Goodbye!"
 
 
-# ============================================================
-# Agent Server — lifecycle
-# ============================================================
-server = AgentServer()
-
-
-def prewarm(proc: JobProcess):
-    """Preload VAD model once per worker process."""
-    proc.userdata["vad"] = silero.VAD.load()
-
-
-server.setup_fnc = prewarm
-
-
-@server.rtc_session(agent_name="roofer-secretary")
-async def entrypoint(ctx: JobContext):
-    """Main entrypoint — called for each inbound call."""
+async def run_secretary_session(ctx: JobContext, vad):
+    """Entrypoint for the roofer-secretary agent — called from main.py."""
     call_start = time.time()
 
     ctx.log_context_fields = {
@@ -422,26 +404,19 @@ async def entrypoint(ctx: JobContext):
 
     # Build the voice pipeline — optimized for LOW LATENCY + FASTER SPEECH
     session = AgentSession(
-        # STT: Deepgram Nova-3 for accurate phone audio transcription
         stt=inference.STT(model="deepgram/nova-3", language="en"),
-        # LLM: GPT-4.1-mini for fast, smart responses
         llm=inference.LLM(model="openai/gpt-4.1-mini"),
-        # TTS: Cartesia Sonic-3 — professional female voice, FASTER speaking
         tts=inference.TTS(
             model="cartesia/sonic-3",
             voice="9626c31c-bec5-4cca-baa8-f8ba9e84c8bc",
         ),
-        # Turn detection for natural conversation flow
         turn_detection=MultilingualModel(),
-        vad=ctx.proc.userdata["vad"],
-        # Allow LLM to start generating before user finishes for lower latency
+        vad=vad,
         preemptive_generation=True,
     )
 
-    # Create agent with customer config
     agent = RooferSecretaryAgent(config, call_start)
 
-    # Start session with SIP-optimized noise cancellation
     await session.start(
         agent=agent,
         room=ctx.room,
@@ -456,12 +431,9 @@ async def entrypoint(ctx: JobContext):
         ),
     )
 
-    # Connect to the room (joins the call)
     await ctx.connect()
-
     logger.info(f"Agent connected: room={ctx.room.name}")
 
-    # Track caller phone from SIP attributes
     caller_phone = "Unknown"
     for p in ctx.room.remote_participants.values():
         attrs = p.attributes or {}
@@ -470,7 +442,6 @@ async def entrypoint(ctx: JobContext):
             caller_phone = phone
             break
 
-    # Handle call completion — log to Roof Manager
     @ctx.room.on("participant_disconnected")
     def on_participant_left(participant):
         if participant.kind == rtc.ParticipantKind.PARTICIPANT_KIND_SIP:
@@ -483,7 +454,6 @@ async def entrypoint(ctx: JobContext):
             )
 
             if customer_id:
-                # Fire-and-forget the API call
                 asyncio.create_task(
                     log_call_complete(
                         customer_id=customer_id,
@@ -492,12 +462,8 @@ async def entrypoint(ctx: JobContext):
                         duration_seconds=duration,
                         directory_routed=agent._directory_routed,
                         summary=summary,
-                        transcript="",  # Transcript collection requires additional setup
+                        transcript="",
                         outcome=agent._outcome,
                         room_id=ctx.room.name,
                     )
                 )
-
-
-if __name__ == "__main__":
-    cli.run_app(server)

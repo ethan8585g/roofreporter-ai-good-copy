@@ -17,8 +17,8 @@ import aiohttp
 from dotenv import load_dotenv
 from livekit import rtc
 from livekit.agents import (
-    Agent, AgentServer, AgentSession, JobContext, JobProcess,
-    cli, inference, function_tool, RunContext, room_io,
+    Agent, AgentSession, JobContext,
+    inference, function_tool, RunContext, room_io,
 )
 from livekit.plugins import noise_cancellation, silero
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
@@ -130,27 +130,17 @@ class ReportGuideAgent(Agent):
         return f"Your roof is {area} square feet total, which equals {sq} roofing squares. One square covers 100 square feet. To put it in perspective, that's roughly the size of {round(float(area or 0) / 200, 1)} average living rooms."
 
 
-server = AgentServer()
+async def run_report_guide_session(ctx: JobContext, vad):
+    """Entrypoint for the report-guide agent — called from main.py."""
+    import re
 
-
-def prewarm(proc: JobProcess):
-    proc.userdata["vad"] = silero.VAD.load()
-
-server.setup_fnc = prewarm
-
-
-@server.rtc_session(agent_name="report-guide")
-async def entrypoint(ctx: JobContext):
     ctx.log_context_fields = {"room": ctx.room.name}
 
-    # Extract order_id from room name: report-guide-{orderId}
     order_id = None
-    import re
     match = re.match(r"report-guide-(\w+)", ctx.room.name)
     if match:
         order_id = match.group(1)
 
-    # Also check room metadata
     report_data = {}
     if ctx.room.metadata:
         try:
@@ -162,7 +152,6 @@ async def entrypoint(ctx: JobContext):
         except:
             pass
 
-    # Fetch report data from API if not in metadata
     if order_id and not report_data:
         report_data = await fetch_report_data(order_id) or {}
 
@@ -176,14 +165,10 @@ async def entrypoint(ctx: JobContext):
         llm=inference.LLM(model="openai/gpt-4.1-mini"),
         tts=inference.TTS(model="cartesia/sonic-3", voice="9626c31c-bec5-4cca-baa8-f8ba9e84c8bc"),
         turn_detection=MultilingualModel(),
-        vad=ctx.proc.userdata["vad"],
+        vad=vad,
         preemptive_generation=True,
     )
 
     agent = ReportGuideAgent(report_data)
     await session.start(agent=agent, room=ctx.room)
     await ctx.connect()
-
-
-if __name__ == "__main__":
-    cli.run_app(server)

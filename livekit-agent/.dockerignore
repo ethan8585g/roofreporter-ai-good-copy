@@ -16,10 +16,7 @@ docker-compose.yml
 deploy.sh
 README.md
 livekit.toml
-pyproject.toml
-src/
 *.md
 *.yml
 *.yaml
-*.toml
 *.cjs
