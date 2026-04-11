@@ -387,6 +387,75 @@ squareRoutes.post('/checkout/report', async (c) => {
 })
 
 // ============================================================
+// SUBSCRIBE — Monthly membership checkout via Square
+// After 3 free trial reports, users must subscribe ($49/month)
+// ============================================================
+squareRoutes.post('/checkout/subscription', async (c) => {
+  try {
+    const accessToken = c.env.SQUARE_ACCESS_TOKEN
+    const locationId = c.env.SQUARE_LOCATION_ID
+    if (!accessToken || !locationId) return c.json({ error: 'Square is not configured. Contact admin.' }, 503)
+
+    const token = c.req.header('Authorization')?.replace('Bearer ', '')
+    const customer = await getCustomerFromToken(c.env.DB, token)
+    if (!customer) return c.json({ error: 'Not authenticated' }, 401)
+
+    // Already subscribed?
+    if (customer.subscription_status === 'active') {
+      return c.json({ error: 'You already have an active subscription.' }, 400)
+    }
+
+    // Fetch subscription price from settings (default $49/month = 4900 cents)
+    const priceSetting = await c.env.DB.prepare(
+      "SELECT setting_value FROM settings WHERE master_company_id = 1 AND setting_key = 'subscription_monthly_price_cents'"
+    ).first<any>()
+    const priceCents = parseInt(priceSetting?.setting_value || '4900')
+
+    const origin = new URL(c.req.url).origin
+    const successUrl = `${origin}/customer/dashboard?payment=success&type=subscription`
+    const cancelUrl = `${origin}/customer/dashboard?payment=cancelled`
+
+    const idempotencyKey = `sub-${customer.customer_id}-${Date.now()}`
+    const paymentLink = await squareRequest(accessToken, 'POST', '/online-checkout/payment-links', {
+      idempotency_key: idempotencyKey,
+      quick_pay: {
+        name: 'Roof Manager Pro — Monthly Membership',
+        price_money: {
+          amount: priceCents,
+          currency: 'USD',
+        },
+        location_id: locationId,
+      },
+      checkout_options: {
+        redirect_url: successUrl,
+        ask_for_shipping_address: false,
+      },
+      payment_note: `Monthly membership for ${customer.email}`,
+    })
+
+    const link = paymentLink.payment_link
+    const squareOrderId = link?.order_id || ''
+
+    // Record the pending subscription payment
+    await c.env.DB.prepare(`
+      INSERT INTO square_payments (customer_id, square_order_id, square_payment_link_id, amount, currency, status, payment_type, description, metadata_json)
+      VALUES (?, ?, ?, ?, 'usd', 'pending', 'subscription', ?, ?)
+    `).bind(
+      customer.customer_id, squareOrderId, link?.id || '', priceCents,
+      `Monthly membership — ${customer.email}`,
+      JSON.stringify({ type: 'subscription', plan: 'pro', duration_days: 30 })
+    ).run()
+
+    return c.json({
+      checkout_url: link?.url || link?.long_url,
+      payment_link_id: link?.id,
+    })
+  } catch (err: any) {
+    return c.json({ error: 'Subscription checkout failed', details: err.message }, 500)
+  }
+})
+
+// ============================================================
 // USE CREDITS — Free trial first, then paid credits
 // New users get 3 free trial reports. After that, paid credits.
 // ============================================================
@@ -403,6 +472,16 @@ squareRoutes.post('/use-credit', async (c) => {
     const freeTrialRemaining = isDev ? 999999 : Math.max(0, (customer.free_trial_total || 0) - (customer.free_trial_used || 0))
     const paidRemaining = isDev ? 999999 : Math.max(0, (customer.report_credits || 0) - (customer.credits_used || 0))
     const totalRemaining = freeTrialRemaining + paidRemaining
+
+    // After free trial is exhausted, require active subscription to continue
+    if (!isDev && freeTrialRemaining <= 0 && customer.subscription_status !== 'active') {
+      return c.json({
+        error: 'Your 3 free trial reports have been used. Subscribe to continue generating reports.',
+        subscription_required: true,
+        free_trial_remaining: 0,
+        paid_credits_remaining: paidRemaining
+      }, 402)
+    }
 
     if (totalRemaining <= 0) {
       return c.json({
@@ -795,6 +874,25 @@ squareRoutes.post('/webhook', async (c) => {
             VALUES (1, 'square_report_purchased', ?)
           `).bind(`${custData?.email || 'Customer'} purchased report for ${address} via Square ($${price})`).run()
 
+        } else if (pendingPayment.payment_type === 'subscription') {
+          // Subscription payment — activate membership for 30 days
+          const subEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+          await c.env.DB.prepare(`
+            UPDATE customers SET
+              subscription_status = 'active',
+              subscription_plan = 'pro',
+              subscription_start = datetime('now'),
+              subscription_end = ?,
+              report_credits = report_credits + 10,
+              updated_at = datetime('now')
+            WHERE id = ?
+          `).bind(subEnd, customerId).run()
+
+          await c.env.DB.prepare(`
+            INSERT INTO user_activity_log (company_id, action, details)
+            VALUES (1, 'subscription_activated', ?)
+          `).bind(`Customer #${customerId} subscribed to Pro monthly — active until ${subEnd}`).run()
+
         } else {
           // Credit pack purchase — add credits
           // Try metadata first, fallback to description parsing
@@ -1021,6 +1119,24 @@ squareRoutes.get('/verify-payment', async (c) => {
           } catch (e: any) {
             console.warn(`[verify-payment] Auto-generate error (non-fatal): ${e.message}`)
           }
+        } else if (pendingPayment.payment_type === 'subscription') {
+          // Subscription payment — activate membership for 30 days
+          const subEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+          await c.env.DB.prepare(`
+            UPDATE customers SET
+              subscription_status = 'active',
+              subscription_plan = 'pro',
+              subscription_start = datetime('now'),
+              subscription_end = ?,
+              report_credits = report_credits + 10,
+              updated_at = datetime('now')
+            WHERE id = ?
+          `).bind(subEnd, customer.customer_id).run()
+
+          await c.env.DB.prepare(`
+            INSERT INTO user_activity_log (company_id, action, details)
+            VALUES (1, 'subscription_activated', ?)
+          `).bind(`Customer #${customer.customer_id} subscribed to Pro monthly via verify-payment`).run()
         }
 
         // Track payment completion in GA4 (non-blocking)
@@ -1036,6 +1152,8 @@ squareRoutes.get('/verify-payment', async (c) => {
       return c.json({
         success: true,
         payment_status: 'paid',
+        payment_type: pendingPayment.payment_type,
+        subscription_status: updatedCustomer?.subscription_status || 'none',
         credits_remaining: (updatedCustomer?.report_credits || 0) - (updatedCustomer?.credits_used || 0),
         credits_total: updatedCustomer?.report_credits || 0,
       })

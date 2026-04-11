@@ -883,7 +883,10 @@ customerAuthRoutes.get('/me', async (c) => {
       company_type: session.company_type || null,
       solar_panel_wattage_w: session.solar_panel_wattage_w || 400,
       onboarding_completed: session.onboarding_completed || 0,
-      onboarding_step: session.onboarding_step || 0
+      onboarding_step: session.onboarding_step || 0,
+      subscription_status: isDev ? 'active' : (session.subscription_status || 'none'),
+      subscription_plan: isDev ? 'dev_unlimited' : (session.subscription_plan || 'free'),
+      subscription_end: session.subscription_end || null
     }
   })
 })

@@ -32,11 +32,28 @@ function setToggle(id, val) {
 function getToken() { return localStorage.getItem('rc_customer_token') || ''; }
 function authHeaders() { return { 'Authorization': 'Bearer ' + getToken(), 'Content-Type': 'application/json' }; }
 
+// Subscribe to monthly membership ($49/month)
+async function subscribeToMembership() {
+  try {
+    var res = await fetch('/api/square/checkout/subscription', {
+      method: 'POST',
+      headers: authHeaders()
+    });
+    var data = await res.json();
+    if (data.checkout_url) {
+      window.location.href = data.checkout_url;
+    } else {
+      alert(data.error || 'Subscription checkout failed. Please try again.');
+    }
+  } catch (e) {
+    alert('Network error. Please check your connection and try again.');
+  }
+}
+
 document.addEventListener('DOMContentLoaded', async function() {
   var params = new URLSearchParams(window.location.search);
   if (params.get('payment') === 'success') {
-    var sid = params.get('session_id');
-    if (sid) { try { await fetch('/api/square/verify-payment', { headers: authHeaders() }); } catch(e) {} }
+    try { await fetch('/api/square/verify-payment', { headers: authHeaders() }); } catch(e) {}
     window.history.replaceState({}, '', '/customer/dashboard');
   }
   await loadDashData();
@@ -232,7 +249,9 @@ function renderDashboard() {
         (paidCredits > 0
           ? '<div class="flex items-center justify-between mb-2"><span class="text-xs" style="color:var(--text-muted)">Report credits</span><span class="text-xs font-bold text-blue-400">' + paidCredits + '</span></div>'
           : '') +
-        '<a href="/pricing" class="block w-full text-center py-2 bg-emerald-600 hover:bg-brand-700 text-white text-xs font-semibold rounded-lg transition-colors">Buy Credits</a>' +
+        (trialsExhausted && c.subscription_status !== 'active'
+          ? '<button onclick="subscribeToMembership()" class="block w-full text-center py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer border-0"><i class="fas fa-crown mr-1"></i>Subscribe — $49/mo</button>'
+          : '<a href="/pricing" class="block w-full text-center py-2 bg-emerald-600 hover:bg-brand-700 text-white text-xs font-semibold rounded-lg transition-colors">Buy Credits</a>') +
         '<a href="/customer/profile" class="block w-full text-center py-1.5 mt-1.5 text-xs transition-colors" style="color:var(--text-muted)">Account Settings</a>' +
         // Sidebar ad unit — shown only to non-subscribers
         '<div class="rra-ad-container" data-ad-slot="" data-ad-format="auto" style="display:none; margin-top:12px; min-height:120px; background:#f1f5f9; border:1px solid #e2e8f0; border-radius:8px; overflow:hidden; padding:4px;"></div>' +
@@ -275,18 +294,17 @@ function renderDashboard() {
         '</div>' +
       '</div>' +
 
-      // Trial exhausted banner
-      (trialsExhausted ?
+      // Trial exhausted banner — require subscription
+      (trialsExhausted && c.subscription_status !== 'active' ?
         '<div class="bg-gradient-to-r from-brand-800 to-brand-900 rounded-2xl p-5 mb-5 shadow-xl border border-brand-700">' +
           '<div class="flex flex-col sm:flex-row items-center gap-4">' +
             '<div class="w-12 h-12 bg-blue-500/15 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0"><i class="fas fa-crown text-white text-xl"></i></div>' +
             '<div class="flex-1 text-center sm:text-left">' +
               '<h3 class="text-white font-black text-base">Your 3 Free Trial Reports Are Used Up!</h3>' +
-              '<p class="text-brand-200 text-xs mt-1">Upgrade to a credit pack — packs from <strong class="text-gray-400">$5.00/report (100-pack)</strong>, save up to 38%.</p>' +
+              '<p class="text-brand-200 text-xs mt-1">Subscribe to <strong class="text-emerald-300">Roof Manager Pro</strong> to continue generating unlimited reports — just <strong class="text-white">$49/month</strong>.</p>' +
             '</div>' +
             '<div class="flex gap-2 flex-shrink-0">' +
-              '<a href="/pricing" class="px-4 py-2 bg-blue-500/15 hover:bg-white/10 text-white font-black rounded-xl shadow text-xs"><i class="fas fa-tags mr-1"></i>View Packs</a>' +
-              '<a href="/customer/order" class="px-4 py-2 bg-[#111111]/10 hover:bg-[#111111]/20 text-white font-semibold rounded-xl text-xs border border-white/20"><i class="fas fa-credit-card mr-1"></i>Pay Per Report</a>' +
+              '<button onclick="subscribeToMembership()" class="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white font-black rounded-xl shadow text-sm transition-colors"><i class="fas fa-crown mr-1.5"></i>Subscribe Now</button>' +
             '</div>' +
           '</div>' +
         '</div>' : '') +

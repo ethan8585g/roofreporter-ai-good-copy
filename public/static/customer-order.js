@@ -1791,6 +1791,10 @@ async function useCredit() {
       // Order placed! Backend generates report in background via waitUntil.
       // Redirect to dashboard IMMEDIATELY — polling will show the report when ready.
       showOrderSuccessOverlay(data.order);
+    } else if (data.subscription_required) {
+      // Free trials exhausted — must subscribe
+      showSubscriptionRequiredOverlay();
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-coins mr-2"></i>Use Credit'; }
     } else {
       showMsg('error', '<i class="fas fa-exclamation-triangle mr-1"></i>' + (data.error || 'Failed to use credit'));
       if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-coins mr-2"></i>Use Credit'; }
@@ -1840,6 +1844,69 @@ function showOrderSuccessOverlay(order) {
 
   // Redirect to dashboard after 1.5 seconds
   setTimeout(() => { window.location.href = '/customer/dashboard'; }, 1500);
+}
+
+// ============================================================
+// SUBSCRIPTION REQUIRED OVERLAY — Shown when free trials are used up
+// ============================================================
+function showSubscriptionRequiredOverlay() {
+  const existing = document.getElementById('subscriptionOverlay');
+  if (existing) existing.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'subscriptionOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);backdrop-filter:blur(8px);animation:fadeIn 0.3s ease-out';
+  overlay.innerHTML = `
+    <div style="background:white;border-radius:24px;padding:48px 40px;max-width:480px;width:90%;text-align:center;box-shadow:0 25px 60px rgba(0,0,0,0.3);animation:scaleIn 0.4s ease-out">
+      <div style="width:80px;height:80px;margin:0 auto 20px;background:linear-gradient(135deg,#f59e0b,#d97706);border-radius:50%;display:flex;align-items:center;justify-content:center;animation:popIn 0.5s ease-out 0.2s both">
+        <i class="fas fa-crown" style="color:white;font-size:36px"></i>
+      </div>
+      <h2 style="font-size:22px;font-weight:800;color:#111;margin-bottom:8px">Subscription Required</h2>
+      <p style="color:#6b7280;font-size:14px;margin-bottom:20px">Your 3 free trial reports have been used. Subscribe to <strong>Roof Manager Pro</strong> to continue generating reports.</p>
+      <div style="background:linear-gradient(135deg,#ecfdf5,#d1fae5);border:1px solid #6ee7b7;border-radius:16px;padding:20px;margin-bottom:24px;text-align:left">
+        <div style="font-size:28px;font-weight:900;color:#059669;margin-bottom:4px">$49<span style="font-size:14px;font-weight:500;color:#6b7280">/month</span></div>
+        <ul style="list-style:none;padding:0;margin:8px 0 0 0;font-size:13px;color:#374151">
+          <li style="padding:4px 0"><i class="fas fa-check" style="color:#10b981;margin-right:8px"></i>10 reports included per month</li>
+          <li style="padding:4px 0"><i class="fas fa-check" style="color:#10b981;margin-right:8px"></i>AI-powered roof analysis</li>
+          <li style="padding:4px 0"><i class="fas fa-check" style="color:#10b981;margin-right:8px"></i>Full CRM access</li>
+          <li style="padding:4px 0"><i class="fas fa-check" style="color:#10b981;margin-right:8px"></i>Cancel anytime</li>
+        </ul>
+      </div>
+      <button onclick="subscribeFromOrder()" id="subOverlayBtn" style="width:100%;background:linear-gradient(135deg,#10b981,#059669);color:white;border:none;padding:16px;border-radius:14px;font-size:16px;font-weight:800;cursor:pointer;margin-bottom:12px;transition:opacity 0.2s">
+        <i class="fas fa-crown" style="margin-right:8px"></i>Subscribe Now
+      </button>
+      <button onclick="document.getElementById('subscriptionOverlay').remove()" style="width:100%;background:none;border:1px solid #e5e7eb;padding:12px;border-radius:14px;font-size:13px;color:#6b7280;cursor:pointer">
+        Maybe Later
+      </button>
+    </div>
+    <style>
+      @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
+      @keyframes scaleIn { from { transform: scale(0.8); opacity: 0 } to { transform: scale(1); opacity: 1 } }
+      @keyframes popIn { from { transform: scale(0); opacity: 0 } to { transform: scale(1); opacity: 1 } }
+    </style>
+  `;
+  document.body.appendChild(overlay);
+}
+
+async function subscribeFromOrder() {
+  const btn = document.getElementById('subOverlayBtn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin" style="margin-right:8px"></i>Redirecting...'; }
+  try {
+    const res = await fetch('/api/square/checkout/subscription', {
+      method: 'POST',
+      headers: authHeaders()
+    });
+    const data = await res.json();
+    if (data.checkout_url) {
+      window.location.href = data.checkout_url;
+    } else {
+      showMsg('error', data.error || 'Subscription checkout failed.');
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-crown" style="margin-right:8px"></i>Subscribe Now'; }
+    }
+  } catch (e) {
+    showMsg('error', 'Network error. Please try again.');
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-crown" style="margin-right:8px"></i>Subscribe Now'; }
+  }
 }
 
 async function payWithSquare() {
