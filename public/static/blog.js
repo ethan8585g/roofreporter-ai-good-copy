@@ -467,6 +467,12 @@
       { phrase: 'AI receptionist', url: '/features/ai-secretary', color: '#f59e0b', title: 'AI Roofer Secretary — 24/7 Phone Receptionist' },
       { phrase: 'virtual roof try-on', url: '/features/virtual-try-on', color: '#a78bfa', title: 'Virtual Roof Try-On — AI Visualization' },
       { phrase: 'roof visualization', url: '/features/virtual-try-on', color: '#a78bfa', title: 'Virtual Roof Try-On — AI Visualization' },
+      // Comparison page deep-links
+      { phrase: 'Roofr alternative',        url: '/roofr-alternative',                color: '#00FF88', title: 'Roofr Alternative for Canadian Contractors' },
+      { phrase: 'Roofr pricing',            url: '/roofr-pricing-complaints',         color: '#00FF88', title: 'Is Roofr Too Expensive for Canada?' },
+      { phrase: 'RoofSnap alternative',     url: '/roofsnap-vs-roofmanager',          color: '#00FF88', title: 'RoofSnap vs RoofManager for Canada' },
+      { phrase: 'EagleView alternative',    url: '/cheaper-alternative-to-eagleview', color: '#00FF88', title: 'Cheaper EagleView Alternative' },
+      { phrase: 'cheaper than EagleView',   url: '/cheaper-alternative-to-eagleview', color: '#00FF88', title: 'Cheaper EagleView Alternative' },
     ];
 
     productLinks.forEach(function(item) {

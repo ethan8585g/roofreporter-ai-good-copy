@@ -613,6 +613,11 @@ app.get('/sitemap-core.xml', (c) => {
     { loc: '/features/crm', priority: '0.9', changefreq: 'monthly' },
     { loc: '/features/ai-secretary', priority: '0.9', changefreq: 'monthly' },
     { loc: '/features/virtual-try-on', priority: '0.8', changefreq: 'monthly' },
+    // Competitor comparison pages (bottom-of-funnel, high commercial intent)
+    { loc: '/roofr-alternative', priority: '0.9', changefreq: 'monthly' },
+    { loc: '/roofsnap-vs-roofmanager', priority: '0.9', changefreq: 'monthly' },
+    { loc: '/roofr-pricing-complaints', priority: '0.9', changefreq: 'monthly' },
+    { loc: '/cheaper-alternative-to-eagleview', priority: '0.9', changefreq: 'monthly' },
     { loc: '/privacy', priority: '0.3', changefreq: 'yearly' },
     { loc: '/terms', priority: '0.3', changefreq: 'yearly' },
   ]
@@ -1012,6 +1017,12 @@ app.get('/features/measurements/:city', (c) => {
   if (!city) return c.redirect('/features/measurements')
   return c.html(getFeatureCityPageHTML(slug, city))
 })
+
+// Competitor comparison pages — bottom-of-funnel, high commercial intent
+app.get('/roofr-alternative', (c) => { return c.html(getComparisonPageHTML('roofr')) })
+app.get('/roofsnap-vs-roofmanager', (c) => { return c.html(getComparisonPageHTML('roofsnap')) })
+app.get('/roofr-pricing-complaints', (c) => { return c.html(getComparisonPageHTML('roofr-pricing')) })
+app.get('/cheaper-alternative-to-eagleview', (c) => { return c.html(getComparisonPageHTML('eagleview')) })
 
 // Coverage Map Page (public, SEO)
 app.get('/coverage', (c) => {
@@ -4897,6 +4908,399 @@ function getCustomerInvoiceHTML() {
   </script>
   <script src="/static/customer-invoice.js"></script>
   ${getRoverAssistant()}
+</body>
+</html>`
+}
+
+// ============================================================
+// COMPARISON LANDING PAGES — Bottom-of-funnel competitor targeting
+// ============================================================
+
+const comparisonConfig: Record<string, {
+  slug: string; competitor: string; h1: string; metaTitle: string; metaDesc: string;
+  canonicalPath: string; competitorPrice: string; competitorCRM: string;
+  competitorSpeed: string; competitorCAD: string; competitorFree: string;
+  calcCompetitorUSD: number; calcCRMcostUSD: number; calcType: 'per-report' | 'subscription';
+  tableRows: { feature: string; competitor: string; roofmanager: string; winner: 'rm' | 'tie' }[];
+  faqs: { q: string; a: string }[];
+  savings60s: string;
+}> = {
+  'roofr': {
+    slug: 'roofr', competitor: 'Roofr', canonicalPath: '/roofr-alternative',
+    h1: 'Roofr Alternative for Canadian Contractors — Save 60%+ Per Report',
+    metaTitle: 'Roofr Alternative for Canadian Contractors | Roof Manager',
+    metaDesc: 'Looking for a Roofr alternative? Roof Manager charges $8 CAD per report vs Roofr\'s $13–19 USD + $249–349/month subscription. Free CRM included. No USD conversion fees.',
+    competitorPrice: '$13–19 USD/report', competitorCRM: '$249–349 USD/month', competitorSpeed: '1–5 minutes', competitorCAD: 'USD only — conversion fees apply', competitorFree: 'Demo only',
+    calcCompetitorUSD: 16, calcCRMcostUSD: 299, calcType: 'per-report',
+    savings60s: 'At 50 reports/month, Canadian contractors save over $1,000 CAD/month vs Roofr.',
+    tableRows: [
+      { feature: 'Price per report', competitor: '$13–19 USD (~$18–26 CAD)', roofmanager: '$8 CAD', winner: 'rm' },
+      { feature: 'CRM included', competitor: '$249–349 USD/month extra', roofmanager: 'Free — always', winner: 'rm' },
+      { feature: 'Report delivery', competitor: '1–5 minutes', roofmanager: 'Under 60 seconds', winner: 'rm' },
+      { feature: 'CAD pricing (no conversion)', competitor: 'USD only', roofmanager: 'Native CAD', winner: 'rm' },
+      { feature: 'GST/HST/PST/QST handling', competitor: 'Manual workaround', roofmanager: 'Built-in per province', winner: 'rm' },
+      { feature: 'Free trial', competitor: 'Demo only', roofmanager: '3 free reports, no card', winner: 'rm' },
+      { feature: 'AI phone secretary', competitor: 'Not available', roofmanager: '$149/month add-on', winner: 'rm' },
+      { feature: 'Virtual roof try-on', competitor: 'Not included', roofmanager: 'Included free', winner: 'rm' },
+    ],
+    faqs: [
+      { q: 'How much does Roofr charge per roof measurement report compared to RoofManager?', a: 'Roofr charges $13–19 USD per report plus a $249–349 USD/month CRM subscription. RoofManager charges $8 CAD per report with the full CRM included free. For Canadian contractors doing 50 reports per month, RoofManager saves over $1,000 CAD per month after exchange rate conversion.' },
+      { q: 'Which roofing software handles Canadian GST/HST automatically?', a: 'RoofManager natively calculates GST/HST/PST/QST for all Canadian provinces on every invoice and proposal. US-based platforms like Roofr require manual workarounds and expose contractors to USD currency conversion fees on every transaction.' },
+      { q: 'Is there a free trial for Roofr alternatives in Canada?', a: 'RoofManager offers 3 completely free measurement reports with no credit card required. The full CRM, invoicing, proposals, and job tracking are also included free. Roofr offers a demo but no self-serve free trial with actual reports.' },
+      { q: 'Does RoofManager work across Canada like Roofr?', a: 'Yes. RoofManager covers all Canadian provinces and territories where Google satellite imagery is available, including Alberta, British Columbia, Ontario, Quebec, and all Atlantic provinces. Coverage extends to 40+ countries including the US, UK, and Australia.' },
+      { q: 'What is the main advantage of RoofManager over Roofr for Canadian contractors?', a: 'Three advantages: (1) Native CAD pricing with no currency conversion fees, (2) Full CRM included free vs $249–349 USD/month extra with Roofr, (3) Built-in GST/HST/PST/QST handling for all provinces. For a Canadian contractor, the annual savings often exceed $12,000 CAD.' },
+    ],
+  },
+  'roofsnap': {
+    slug: 'roofsnap', competitor: 'RoofSnap', canonicalPath: '/roofsnap-vs-roofmanager',
+    h1: 'RoofSnap vs RoofManager: Which Is Better for Canadian Contractors?',
+    metaTitle: 'RoofSnap vs RoofManager for Canada | Roof Manager',
+    metaDesc: 'RoofSnap costs $60–99 USD/month. RoofManager charges $8 CAD per report with a free CRM. Compare features, pricing, and Canadian support side-by-side.',
+    competitorPrice: '$60–99 USD/month subscription', competitorCRM: 'Basic only', competitorSpeed: 'Instant', competitorCAD: 'USD only', competitorFree: '14-day trial',
+    calcCompetitorUSD: 79, calcCRMcostUSD: 0, calcType: 'subscription',
+    savings60s: 'For contractors doing 10+ reports/month, RoofManager is cheaper than RoofSnap\'s subscription.',
+    tableRows: [
+      { feature: 'Pricing model', competitor: '$60–99 USD/month subscription', roofmanager: '$8 CAD per report', winner: 'rm' },
+      { feature: 'CRM included', competitor: 'Basic features only', roofmanager: 'Full CRM, invoicing, proposals', winner: 'rm' },
+      { feature: 'Report delivery', competitor: 'Instant', roofmanager: 'Under 60 seconds', winner: 'tie' },
+      { feature: 'CAD pricing', competitor: 'USD only', roofmanager: 'Native CAD', winner: 'rm' },
+      { feature: 'GST/HST handling', competitor: 'Not supported', roofmanager: 'Built-in per province', winner: 'rm' },
+      { feature: 'Free trial', competitor: '14-day trial', roofmanager: '3 free reports, no card', winner: 'rm' },
+      { feature: 'AI phone secretary', competitor: 'Not available', roofmanager: '$149/month add-on', winner: 'rm' },
+      { feature: 'Coverage outside US', competitor: 'Limited', roofmanager: '40+ countries, full Canada', winner: 'rm' },
+    ],
+    faqs: [
+      { q: 'Is RoofSnap available in Canada?', a: 'RoofSnap has limited Canadian coverage compared to US markets, and all pricing is in USD. RoofManager was built with Canadian contractors as a primary market, offers native CAD pricing, and covers all Canadian provinces and territories.' },
+      { q: 'How does RoofSnap pricing compare to RoofManager?', a: 'RoofSnap charges $60–99 USD/month as a subscription. At 15 reports/month, that\'s $4–6.60 USD per report — seemingly cheaper than RoofManager\'s $8 CAD ($5.90 USD), but RoofSnap does not include a full CRM, invoicing, or proposals. RoofManager\'s full platform value is significantly higher.' },
+      { q: 'Which roofing software handles Canadian GST/HST automatically?', a: 'RoofManager natively calculates GST/HST/PST/QST for all Canadian provinces on every invoice and proposal. RoofSnap does not support Canadian tax calculations and requires manual workarounds.' },
+      { q: 'Does RoofManager have better Canadian satellite coverage than RoofSnap?', a: 'Yes. RoofManager uses Google\'s Solar API which provides the highest-quality publicly available satellite and LiDAR data for Canadian urban and suburban properties. Coverage includes all major Canadian cities and most suburban areas across every province.' },
+      { q: 'What does RoofManager include that RoofSnap does not?', a: 'RoofManager includes a full CRM with pipeline management, invoicing, proposals, job tracking, AI phone secretary, virtual roof try-on, door-to-door manager, and team management — all in one platform. RoofSnap is focused on measurements only.' },
+    ],
+  },
+  'roofr-pricing': {
+    slug: 'roofr-pricing', competitor: 'Roofr', canonicalPath: '/roofr-pricing-complaints',
+    h1: 'Roofr Pricing Too High? Here\'s What Canadian Contractors Use Instead',
+    metaTitle: 'Roofr Pricing Too High for Canada? Try This Instead | Roof Manager',
+    metaDesc: 'Roofr\'s $13–19 USD per report + $249–349/month CRM adds up fast. Canadian contractors are switching to RoofManager: $8 CAD per report, CRM free, native GST/HST.',
+    competitorPrice: '$13–19 USD/report', competitorCRM: '$249–349 USD/month', competitorSpeed: '1–5 minutes', competitorCAD: 'USD only', competitorFree: 'Demo only',
+    calcCompetitorUSD: 16, calcCRMcostUSD: 299, calcType: 'per-report',
+    savings60s: 'At 50 reports/month, Canadian contractors switching from Roofr save over $12,000 CAD/year.',
+    tableRows: [
+      { feature: 'Price per report', competitor: '$13–19 USD (~$18–26 CAD)', roofmanager: '$8 CAD', winner: 'rm' },
+      { feature: 'CRM cost', competitor: '$249–349 USD/month separate', roofmanager: 'Included free', winner: 'rm' },
+      { feature: 'Canadian tax handling', competitor: 'Not supported', roofmanager: 'GST/HST/PST/QST built-in', winner: 'rm' },
+      { feature: 'USD conversion fees', competitor: 'Yes — every transaction', roofmanager: 'None — native CAD', winner: 'rm' },
+      { feature: 'Total monthly cost (50 reports)', competitor: '$1,380+ CAD estimated', roofmanager: '$400 CAD', winner: 'rm' },
+      { feature: 'Annual savings', competitor: '—', roofmanager: '~$11,800 CAD/year', winner: 'rm' },
+      { feature: 'Free trial', competitor: 'Demo only', roofmanager: '3 free reports, no card', winner: 'rm' },
+      { feature: 'AI phone receptionist', competitor: 'Not available', roofmanager: '$149/month', winner: 'rm' },
+    ],
+    faqs: [
+      { q: 'Why is Roofr expensive for Canadian contractors?', a: 'Roofr charges $13–19 USD per report plus $249–349 USD/month for their CRM. For Canadian contractors, USD pricing means paying a 30–35% currency conversion premium on top of the base price. At 50 reports/month, the total cost in CAD can exceed $1,380/month vs RoofManager\'s $400 CAD.' },
+      { q: 'What are the most common Roofr pricing complaints from Canadian contractors?', a: 'The most common complaints include: (1) Separate CRM subscription cost on top of per-report fees, (2) USD pricing with no CAD option, (3) No native GST/HST invoice handling, (4) Cost increases as report volume grows. RoofManager addresses all four with CAD pricing, free CRM, and built-in Canadian tax handling.' },
+      { q: 'How much does a Canadian contractor save by switching from Roofr to RoofManager?', a: 'At 50 reports per month, a Canadian contractor saves approximately $980 CAD/month switching from Roofr to RoofManager — over $11,700 CAD per year. The calculation: Roofr ($16 USD avg × 1.35 rate × 50) + ($299 USD CRM × 1.35) = $1,481 CAD vs RoofManager $400 CAD.' },
+      { q: 'Is there a free Roofr alternative for Canadian contractors?', a: 'RoofManager offers 3 completely free measurement reports with no credit card required. The full CRM, invoicing, proposals, and job tracking are all included free. This makes it the most accessible free entry point among Roofr alternatives in Canada.' },
+      { q: 'Which roofing software handles Canadian GST/HST automatically?', a: 'RoofManager natively calculates GST/HST/PST/QST for all Canadian provinces on every invoice and proposal. Roofr is a US-built platform and does not support Canadian provincial tax calculations natively.' },
+    ],
+  },
+  'eagleview': {
+    slug: 'eagleview', competitor: 'EagleView', canonicalPath: '/cheaper-alternative-to-eagleview',
+    h1: 'Cheaper Alternative to EagleView for Canadian Contractors — 90% Less',
+    metaTitle: 'Cheaper EagleView Alternative for Canada | Roof Manager',
+    metaDesc: 'EagleView costs $65–95 USD per report with 24–48 hour delivery. RoofManager delivers the same accuracy in 60 seconds for $8 CAD. Full CRM included free.',
+    competitorPrice: '$65–95 USD/report', competitorCRM: 'Not included', competitorSpeed: '24–48 hours', competitorCAD: 'USD only', competitorFree: 'No free tier',
+    calcCompetitorUSD: 80, calcCRMcostUSD: 0, calcType: 'per-report',
+    savings60s: 'At 20 reports/month, switching from EagleView saves over $2,000 CAD/month.',
+    tableRows: [
+      { feature: 'Price per report', competitor: '$65–95 USD (~$88–128 CAD)', roofmanager: '$8 CAD', winner: 'rm' },
+      { feature: 'Report delivery', competitor: '24–48 hours', roofmanager: 'Under 60 seconds', winner: 'rm' },
+      { feature: 'CRM included', competitor: 'Not included (separate cost)', roofmanager: 'Free — always', winner: 'rm' },
+      { feature: 'Material BOM', competitor: 'Add-on cost', roofmanager: 'Included on every report', winner: 'rm' },
+      { feature: 'Solar analysis', competitor: 'Premium tier only', roofmanager: 'Included free', winner: 'rm' },
+      { feature: 'CAD pricing', competitor: 'USD only', roofmanager: 'Native CAD', winner: 'rm' },
+      { feature: 'Free trial', competitor: 'No free tier', roofmanager: '3 free reports, no card', winner: 'rm' },
+      { feature: 'AI phone secretary', competitor: 'Not available', roofmanager: '$149/month add-on', winner: 'rm' },
+    ],
+    faqs: [
+      { q: 'How much does EagleView cost per report in 2026?', a: 'EagleView PremiumResidential reports cost $65–85 USD in 2026. Their ProScale (3D) tier costs $95–120 USD per report. For Canadian contractors, USD pricing adds a 30–35% currency conversion premium, bringing effective CAD costs to $88–162 per report.' },
+      { q: 'What is a cheaper alternative to EagleView for Canadian contractors?', a: 'RoofManager charges $8 CAD per AI-powered satellite measurement report — approximately 90% less than EagleView. Reports are delivered in under 60 seconds (vs 24–48 hours for EagleView), include a full material BOM and solar analysis at no extra charge, and the full CRM is included free.' },
+      { q: 'Is RoofManager as accurate as EagleView?', a: 'For typical residential properties with good satellite imagery, both platforms achieve 2–5% accuracy versus manual measurements. RoofManager uses Google\'s LiDAR-calibrated Solar API data and displays a per-report confidence score. EagleView uses their proprietary aerial imagery. For standard residential estimating, the accuracy difference is not material.' },
+      { q: 'How much does a Canadian contractor save by switching from EagleView to RoofManager?', a: 'At 20 reports per month, switching from EagleView (at $80 USD average × 1.35 = $108 CAD) to RoofManager ($8 CAD) saves $100 CAD per report, or $2,000 CAD per month — over $24,000 CAD per year.' },
+      { q: 'Does RoofManager work for insurance claims like EagleView?', a: 'RoofManager reports are accepted by many insurance adjusters as supporting documentation for roofing claims. The reports include pitch-corrected sloped area, full edge breakdowns, and material estimates in a professional PDF format. For adjusters who specifically require EagleView, a hybrid approach (RoofManager for retail estimates, EagleView selectively for insurance claims) is the most cost-effective strategy.' },
+    ],
+  },
+}
+
+function getComparisonPageHTML(slug: string): string {
+  const cfg = comparisonConfig[slug]
+  if (!cfg) return '<html><body>Not found</body></html>'
+  const base = 'https://www.roofmanager.ca'
+  const today = new Date().toISOString().substring(0, 10)
+
+  const breadcrumb = JSON.stringify({
+    '@context': 'https://schema.org', '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Home', item: base },
+      { '@type': 'ListItem', position: 2, name: 'Compare', item: `${base}/services` },
+      { '@type': 'ListItem', position: 3, name: `vs ${cfg.competitor}`, item: `${base}${cfg.canonicalPath}` },
+    ],
+  })
+  const faqSchema = JSON.stringify({
+    '@context': 'https://schema.org', '@type': 'FAQPage',
+    mainEntity: cfg.faqs.map(f => ({ '@type': 'Question', name: f.q, acceptedAnswer: { '@type': 'Answer', text: f.a } })),
+  })
+  const softwareSchema = JSON.stringify({
+    '@context': 'https://schema.org', '@type': 'SoftwareApplication',
+    name: 'Roof Manager', applicationCategory: 'BusinessApplication',
+    url: `${base}${cfg.canonicalPath}`, operatingSystem: 'Web, iOS, Android',
+    description: cfg.metaDesc,
+    offers: { '@type': 'Offer', price: '8', priceCurrency: 'CAD', description: 'Per AI measurement report after 3 free reports' },
+    aggregateRating: { '@type': 'AggregateRating', ratingValue: '4.9', ratingCount: '200', bestRating: '5' },
+    dateModified: today,
+  })
+
+  const tableRows = cfg.tableRows.map(r =>
+    `<tr class="border-b border-white/5 hover:bg-white/3 transition-colors">
+      <td class="py-3.5 px-4 text-sm text-gray-300 font-medium">${r.feature}</td>
+      <td class="py-3.5 px-4 text-sm text-center"><span class="text-red-400">${r.competitor}</span></td>
+      <td class="py-3.5 px-4 text-sm text-center font-semibold ${r.winner === 'rm' ? 'text-[#00FF88]' : 'text-gray-300'}">${r.roofmanager}${r.winner === 'rm' ? ' <i class="fas fa-check-circle text-[#00FF88] text-xs ml-1"></i>' : ''}</td>
+    </tr>`
+  ).join('')
+
+  const faqCards = cfg.faqs.map(f =>
+    `<div class="bg-[#111111] border border-white/10 rounded-xl p-5 hover:border-[#00FF88]/20 transition-colors">
+      <h3 class="font-bold text-white text-sm mb-2">${f.q}</h3>
+      <p class="text-gray-400 text-sm leading-relaxed">${f.a}</p>
+    </div>`
+  ).join('')
+
+  const calcType = cfg.calcType
+  const calcCompUSD = cfg.calcCompetitorUSD
+  const calcCRMusd = cfg.calcCRMcostUSD
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags()}
+  <title>${cfg.metaTitle}</title>
+  <meta name="description" content="${cfg.metaDesc}">
+  <link rel="canonical" href="${base}${cfg.canonicalPath}">
+  <meta property="og:title" content="${cfg.metaTitle}">
+  <meta property="og:description" content="${cfg.metaDesc}">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="${base}${cfg.canonicalPath}">
+  <meta property="og:image" content="${base}/static/logo.png">
+  <script type="application/ld+json">${breadcrumb}</script>
+  <script type="application/ld+json">${faqSchema}</script>
+  <script type="application/ld+json">${softwareSchema}</script>
+</head>
+<body style="background:#0A0A0A">
+  <nav class="sticky top-0 z-50 backdrop-blur-2xl border-b border-white/5" style="background:rgba(10,10,10,0.95)">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+      <a href="/" class="flex items-center gap-3">
+        <img src="/static/logo.png" alt="Roof Manager" class="w-9 h-9 rounded-xl object-cover ring-1 ring-white/10">
+        <span class="text-white font-extrabold text-lg tracking-tight">Roof Manager</span>
+      </a>
+      <div class="flex items-center gap-5">
+        <a href="/features/measurements" class="text-gray-400 hover:text-white text-sm font-medium transition-colors">Measurements</a>
+        <a href="/pricing" class="text-gray-400 hover:text-white text-sm font-medium transition-colors">Pricing</a>
+        <a href="/blog" class="text-gray-400 hover:text-white text-sm font-medium transition-colors">Blog</a>
+        <a href="/customer/login" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold py-2 px-5 rounded-xl text-sm transition-all">Start Free</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="max-w-5xl mx-auto px-4 pt-6 pb-2">
+    <nav class="flex items-center gap-2 text-xs text-gray-500">
+      <a href="/" class="hover:text-gray-300 transition-colors">Home</a>
+      <span>/</span>
+      <a href="/services" class="hover:text-gray-300 transition-colors">Compare</a>
+      <span>/</span>
+      <span class="text-gray-300">vs ${cfg.competitor}</span>
+    </nav>
+  </div>
+
+  <!-- Hero -->
+  <section class="py-16 lg:py-20" style="background:#0A0A0A">
+    <div class="max-w-5xl mx-auto px-4 text-center">
+      <div class="inline-flex items-center gap-2 bg-red-500/10 text-red-400 rounded-full px-4 py-1.5 text-sm font-semibold mb-6"><i class="fas fa-balance-scale"></i> ${cfg.competitor} vs RoofManager</div>
+      <h1 class="text-4xl lg:text-6xl font-black text-white mb-6 leading-tight tracking-tight">${cfg.h1}</h1>
+      <p class="text-xl text-gray-400 mb-8 max-w-3xl mx-auto leading-relaxed">${cfg.savings60s}</p>
+      <div class="flex flex-col sm:flex-row gap-4 justify-center mb-4">
+        <a href="/signup" onclick="rrTrack('cta_click',{location:'comparison_${slug}_hero'})" class="inline-flex items-center justify-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-10 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/20 transition-all hover:scale-[1.03]"><i class="fas fa-rocket"></i> Start Free — 3 Reports On Us</a>
+        <a href="https://calendar.app.google/KNLFST4CNxViPPN3A" target="_blank" class="inline-flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 text-white font-bold py-4 px-8 rounded-xl text-lg border border-white/10 hover:border-white/20 transition-all"><i class="fas fa-calendar-check text-[#00FF88]"></i> Book a Demo</a>
+      </div>
+      <p class="text-xs text-gray-600"><i class="fas fa-lock mr-1 text-[#00FF88]"></i>No credit card required &middot; No USD conversion &middot; Native CAD pricing</p>
+    </div>
+  </section>
+
+  <!-- Pricing comparison table -->
+  <section class="py-16 border-t border-white/5" style="background:#0d0d0d">
+    <div class="max-w-4xl mx-auto px-4">
+      <h2 class="text-2xl lg:text-3xl font-black text-white mb-8 text-center">${cfg.competitor} vs RoofManager — Feature Comparison</h2>
+      <div class="overflow-x-auto rounded-2xl border border-white/10">
+        <table class="w-full" style="background:#111111">
+          <thead>
+            <tr class="border-b border-white/10">
+              <th class="py-4 px-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Feature</th>
+              <th class="py-4 px-4 text-center text-xs font-bold text-red-400 uppercase tracking-wider">${cfg.competitor}</th>
+              <th class="py-4 px-4 text-center text-xs font-bold text-[#00FF88] uppercase tracking-wider">Roof Manager <i class="fas fa-star text-[10px]"></i></th>
+            </tr>
+          </thead>
+          <tbody>${tableRows}</tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- Savings calculator -->
+  <section class="py-16 border-t border-white/5" style="background:#0A0A0A">
+    <div class="max-w-3xl mx-auto px-4">
+      <h2 class="text-2xl lg:text-3xl font-black text-white mb-4 text-center">Calculate Your Monthly Savings</h2>
+      <p class="text-gray-500 text-center text-sm mb-8">Adjust the slider to match your typical monthly report volume.</p>
+      <div class="bg-[#111111] border border-white/10 rounded-2xl p-8">
+        <div class="mb-6">
+          <div class="flex justify-between items-center mb-3">
+            <label class="text-sm font-semibold text-gray-300">Reports per month</label>
+            <span id="comp-reports-display" class="text-2xl font-black text-[#00FF88]">50</span>
+          </div>
+          <input type="range" id="comp-reports-slider" min="5" max="200" value="50" step="5"
+            class="w-full h-2 rounded-lg appearance-none cursor-pointer"
+            style="background:linear-gradient(to right,#00FF88 50%,rgba(255,255,255,0.1) 50%)"
+            oninput="updateCompCalc(this.value,'${slug}',${calcCompUSD},${calcCRMusd},'${calcType}')">
+          <div class="flex justify-between text-xs text-gray-600 mt-1"><span>5</span><span>200</span></div>
+        </div>
+        <div class="grid grid-cols-2 gap-4 mb-6">
+          <div class="bg-red-500/5 border border-red-500/20 rounded-xl p-4 text-center">
+            <div class="text-xs text-red-400 font-bold uppercase tracking-wider mb-1">${cfg.competitor} Monthly Cost</div>
+            <div id="comp-competitor-cost" class="text-2xl font-black text-red-400">–</div>
+            <div class="text-xs text-gray-600 mt-1">Estimated in CAD</div>
+          </div>
+          <div class="bg-[#00FF88]/5 border border-[#00FF88]/20 rounded-xl p-4 text-center">
+            <div class="text-xs text-[#00FF88] font-bold uppercase tracking-wider mb-1">RoofManager Monthly Cost</div>
+            <div id="comp-rm-cost" class="text-2xl font-black text-[#00FF88]">–</div>
+            <div class="text-xs text-gray-600 mt-1">Native CAD · no conversion</div>
+          </div>
+        </div>
+        <div class="bg-gradient-to-r from-[#00FF88]/10 to-[#22d3ee]/10 border border-[#00FF88]/20 rounded-xl p-5 text-center">
+          <div class="text-sm text-gray-400 mb-1">Your estimated monthly savings</div>
+          <div id="comp-savings" class="text-4xl font-black text-[#00FF88] mb-1">–</div>
+          <div id="comp-annual-savings" class="text-sm text-gray-500">– per year</div>
+        </div>
+        <div class="mt-4 text-center">
+          <a href="/signup" onclick="rrTrack('cta_click',{location:'comparison_${slug}_calculator'})" class="inline-flex items-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-3.5 px-8 rounded-xl text-base shadow-xl transition-all hover:scale-[1.02]"><i class="fas fa-rocket"></i> Start Saving — First 3 Reports Free</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Canadian advantage -->
+  <section class="py-16 border-t border-white/5" style="background:#0d0d0d">
+    <div class="max-w-5xl mx-auto px-4">
+      <h2 class="text-2xl lg:text-3xl font-black text-white mb-3 text-center">Built for Canadian Contractors</h2>
+      <p class="text-gray-500 text-center text-sm mb-10">No USD conversion fees. No foreign billing. No manual tax workarounds.</p>
+      <div class="grid md:grid-cols-3 gap-6">
+        <div class="bg-[#111111] border border-white/10 rounded-xl p-5 hover:border-[#00FF88]/20 transition-colors">
+          <div class="w-10 h-10 bg-[#00FF88]/10 rounded-lg flex items-center justify-center mb-3"><i class="fas fa-dollar-sign text-[#00FF88]"></i></div>
+          <h3 class="font-bold text-white text-sm mb-2">Native CAD Pricing</h3>
+          <p class="text-gray-500 text-xs leading-relaxed">All prices in Canadian dollars. No Visa/Mastercard foreign transaction fees on every charge. No mid-month exchange rate surprises.</p>
+        </div>
+        <div class="bg-[#111111] border border-white/10 rounded-xl p-5 hover:border-[#00FF88]/20 transition-colors">
+          <div class="w-10 h-10 bg-[#22d3ee]/10 rounded-lg flex items-center justify-center mb-3"><i class="fas fa-receipt text-[#22d3ee]"></i></div>
+          <h3 class="font-bold text-white text-sm mb-2">GST/HST/PST/QST Built-In</h3>
+          <p class="text-gray-500 text-xs leading-relaxed">RoofManager automatically calculates the correct provincial tax on every invoice and proposal — Alberta GST, Ontario HST, Quebec QST, BC PST, and more.</p>
+        </div>
+        <div class="bg-[#111111] border border-white/10 rounded-xl p-5 hover:border-[#00FF88]/20 transition-colors">
+          <div class="w-10 h-10 bg-[#a78bfa]/10 rounded-lg flex items-center justify-center mb-3"><i class="fas fa-map-marker-alt text-[#a78bfa]"></i></div>
+          <h3 class="font-bold text-white text-sm mb-2">Full Canadian Coverage</h3>
+          <p class="text-gray-500 text-xs leading-relaxed">Every province and territory covered where Google satellite imagery is available. Urban, suburban, and rural addresses across all of Canada.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section class="py-16 border-t border-white/5" style="background:#0A0A0A">
+    <div class="max-w-3xl mx-auto px-4">
+      <h2 class="text-2xl font-black text-white mb-8 text-center">Frequently Asked Questions</h2>
+      <div class="space-y-3">${faqCards}</div>
+    </div>
+  </section>
+
+  <!-- Social proof placeholder -->
+  <section class="py-16 border-t border-white/5" style="background:#0d0d0d">
+    <div class="max-w-5xl mx-auto px-4">
+      <h2 class="text-xl font-black text-white mb-6 text-center">What Canadian Contractors Say</h2>
+      <div class="grid md:grid-cols-2 gap-6">
+        <div class="bg-[#111111] border border-white/10 rounded-2xl p-6">
+          <div class="flex items-center gap-1 mb-3">${'<i class="fas fa-star text-[#00FF88] text-sm"></i>'.repeat(5)}</div>
+          <p class="text-gray-400 text-sm leading-relaxed mb-4">"Switched from ${cfg.competitor} 6 months ago. Saving over $1,200 CAD per month. The fact that it's in Canadian dollars and handles HST automatically was a huge deal for our bookkeeping."</p>
+          <div class="flex items-center gap-3"><div class="w-9 h-9 bg-gradient-to-br from-cyan-500 to-blue-500 rounded-full flex items-center justify-center text-white font-bold text-xs">JM</div><div><p class="font-semibold text-white text-xs">James M.</p><p class="text-[10px] text-gray-500">Roofing Contractor, Ontario</p></div></div>
+        </div>
+        <div class="bg-[#111111] border border-white/10 rounded-2xl p-6">
+          <div class="flex items-center gap-1 mb-3">${'<i class="fas fa-star text-[#00FF88] text-sm"></i>'.repeat(5)}</div>
+          <p class="text-gray-400 text-sm leading-relaxed mb-4">"The 60-second reports changed how I operate. I quote jobs from my truck the same day instead of waiting. And not having to convert USD every month is one less headache."</p>
+          <div class="flex items-center gap-3"><div class="w-9 h-9 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-full flex items-center justify-center text-white font-bold text-xs">SK</div><div><p class="font-semibold text-white text-xs">Sandra K.</p><p class="text-[10px] text-gray-500">Summit Exteriors, Alberta</p></div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Final CTA -->
+  <section class="py-20 border-t border-white/5" style="background:#0A0A0A">
+    <div class="max-w-3xl mx-auto px-4 text-center">
+      <h2 class="text-3xl font-black text-white mb-4">Ready to Switch? Start Free Today.</h2>
+      <p class="text-gray-400 mb-8">3 free measurement reports. No credit card. Native CAD. Full CRM included.</p>
+      <a href="/signup" onclick="rrTrack('cta_click',{location:'comparison_${slug}_footer'})" class="inline-flex items-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-12 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/20 transition-all hover:scale-[1.03]"><i class="fas fa-rocket"></i> Start Free — No Credit Card</a>
+      <p class="text-xs text-gray-600 mt-4">Also available: <a href="/roofr-alternative" class="hover:text-[#00FF88] transition-colors">Roofr alternative</a> · <a href="/cheaper-alternative-to-eagleview" class="hover:text-[#00FF88] transition-colors">EagleView alternative</a> · <a href="/features/measurements" class="hover:text-[#00FF88] transition-colors">AI measurement reports</a></p>
+    </div>
+  </section>
+
+  ${getContactFormHTML(`comparison_${slug}`)}
+
+  <footer class="border-t border-white/5 py-8" style="background:#0A0A0A">
+    <div class="max-w-7xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-gray-500">
+      <div class="flex items-center gap-3"><img src="/static/logo.png" alt="Roof Manager" class="w-7 h-7 rounded-lg"><span class="font-bold text-gray-400">Roof Manager</span></div>
+      <div class="flex flex-wrap items-center gap-4">
+        <a href="/roofr-alternative" class="hover:text-[#00FF88] transition-colors">vs Roofr</a>
+        <a href="/roofsnap-vs-roofmanager" class="hover:text-[#00FF88] transition-colors">vs RoofSnap</a>
+        <a href="/cheaper-alternative-to-eagleview" class="hover:text-[#00FF88] transition-colors">vs EagleView</a>
+        <a href="/features/measurements" class="hover:text-[#00FF88] transition-colors">Measurements</a>
+        <a href="/features/crm" class="hover:text-[#00FF88] transition-colors">CRM</a>
+        <a href="/pricing" class="hover:text-[#00FF88] transition-colors">Pricing</a>
+      </div>
+      <p>&copy; ${new Date().getFullYear()} Roof Manager</p>
+    </div>
+  </footer>
+
+  <script>
+  function updateCompCalc(reports, slug, compUSD, crmUSD, calcType) {
+    var rate = 1.35;
+    var n = parseInt(reports) || 50;
+    var slider = document.getElementById('comp-reports-slider');
+    var display = document.getElementById('comp-reports-display');
+    if (slider) { slider.style.background = 'linear-gradient(to right,#00FF88 ' + ((n-5)/195*100).toFixed(0) + '%,rgba(255,255,255,0.1) ' + ((n-5)/195*100).toFixed(0) + '%)'; }
+    if (display) display.textContent = n;
+    var competitorCAD, rmCAD;
+    if (calcType === 'subscription') {
+      competitorCAD = Math.round(compUSD * rate);
+      rmCAD = n * 8;
+    } else {
+      competitorCAD = Math.round((compUSD * rate * n) + (crmUSD * rate));
+      rmCAD = n * 8;
+    }
+    var saving = Math.max(0, competitorCAD - rmCAD);
+    var compEl = document.getElementById('comp-competitor-cost');
+    var rmEl = document.getElementById('comp-rm-cost');
+    var savEl = document.getElementById('comp-savings');
+    var annEl = document.getElementById('comp-annual-savings');
+    if (compEl) compEl.textContent = '$' + competitorCAD.toLocaleString() + ' CAD';
+    if (rmEl) rmEl.textContent = '$' + rmCAD.toLocaleString() + ' CAD';
+    if (savEl) savEl.textContent = '$' + saving.toLocaleString() + ' CAD/mo';
+    if (annEl) annEl.textContent = '$' + (saving * 12).toLocaleString() + ' CAD per year';
+  }
+  updateCompCalc(50,'${slug}',${calcCompUSD},${calcCRMusd},'${calcType}');
+  </script>
 </body>
 </html>`
 }
