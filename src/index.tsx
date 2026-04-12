@@ -4782,10 +4782,15 @@ function getLandingPageHTML(latestPosts: any[] = []) {
         </a>
       </div>
 
-      <!-- Mobile menu button -->
-      <button id="mobile-menu-btn" class="md:hidden text-white text-xl p-2" onclick="document.getElementById('mobile-menu').classList.toggle('hidden')">
-        <i class="fas fa-bars"></i>
-      </button>
+      <!-- Mobile: visible Login + menu button -->
+      <div class="md:hidden flex items-center gap-2">
+        <a href="/customer/login" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold py-2 px-4 rounded-xl text-sm shadow-lg shadow-[#00FF88]/20">
+          <i class="fas fa-user mr-1"></i>Login
+        </a>
+        <button id="mobile-menu-btn" class="text-white text-xl p-2" onclick="document.getElementById('mobile-menu').classList.toggle('hidden')">
+          <i class="fas fa-bars"></i>
+        </button>
+      </div>
     </div>
 
     <!-- Mobile menu -->
