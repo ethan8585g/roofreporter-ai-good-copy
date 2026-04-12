@@ -47,6 +47,14 @@ function computeGeoPolygonAreaSqft(points: { lat: number; lng: number }[]): numb
   return areaM2 * 10.7639
 }
 
+// Same zoom logic as generateEnhancedImagery — exported so the panel layout
+// metadata can record the zoom used for the satellite_overhead_url, allowing
+// the designer to project lat/lng → pixel without parsing the URL.
+export function roofZoomFor(footprintSqft: number = 1500): number {
+  const m2 = footprintSqft / 10.7639
+  return m2 > 2000 ? 19 : m2 > 800 ? 19 : m2 > 400 ? 20 : m2 > 100 ? 20 : 21
+}
+
 export function generateEnhancedImagery(lat: number, lng: number, apiKey: string, footprintSqft: number = 1500) {
   // Calculate zoom based on roof size — ZOOMED IN but entire roof visible.
   // Google Maps zoom at scale=2 (1280px actual):
@@ -784,6 +792,36 @@ export async function callGoogleSolarAPI(
   const maxSunshine = solarPotential.maxSunshineHoursPerYear || 0
   const yearlyEnergy = solarPotential.solarPanelConfigs?.[0]?.yearlyEnergyDcKwh || (maxPanels * 400)
 
+  // ── PANEL LAYOUT (Phase 2): suggested-panel positions for the designer canvas ──
+  // Google's solarPotential.solarPanels is an array of all candidate panel positions
+  // (lat/lng + orientation + segmentIndex + yearlyEnergyDcKwh per panel).
+  // The "best" config picks the top-N panels for that target system size.
+  const allPanels: any[] = Array.isArray(solarPotential.solarPanels) ? solarPotential.solarPanels : []
+  const configs: any[] = Array.isArray(solarPotential.solarPanelConfigs) ? solarPotential.solarPanelConfigs : []
+  const bestConfig = configs.length > 0 ? configs[configs.length - 1] : null  // largest config = max panels
+  const bestPanelCount = bestConfig?.panelsCount || allPanels.length
+  const suggestedPanels = allPanels.slice(0, bestPanelCount).map((p: any) => ({
+    lat: p.center?.latitude,
+    lng: p.center?.longitude,
+    orientation: p.orientation || 'PORTRAIT',
+    segment_index: p.segmentIndex ?? 0,
+    yearly_energy_kwh: p.yearlyEnergyDcKwh || 0,
+  })).filter(p => typeof p.lat === 'number' && typeof p.lng === 'number')
+
+  const solarPanelLayout = suggestedPanels.length > 0 ? {
+    suggested_panels: suggestedPanels,
+    user_panels: null as null | any[],   // hydrated client-side once user edits
+    panel_capacity_watts: solarPotential.panelCapacityWatts || 400,
+    panel_height_meters: solarPotential.panelHeightMeters || 1.879,
+    panel_width_meters: solarPotential.panelWidthMeters || 1.045,
+    image_center: { lat, lng },
+    image_zoom: roofZoomFor(totalFootprintSqft),
+    image_size_px: 1600,                  // 800px @ scale=2
+    yearly_energy_kwh: bestConfig?.yearlyEnergyDcKwh || yearlyEnergy,
+    panel_count: bestPanelCount,
+    roof_segment_summaries: bestConfig?.roofSegmentSummaries || [],
+  } : null
+
   // Imagery quality
   const imageryQuality = data.imageryQuality || 'BASE'
   const imageryDate = data.imageryDate
@@ -851,6 +889,9 @@ export async function callGoogleSolarAPI(
     // Provides real roof geometry from Google's building model WITHOUT needing Gemini Vision.
     // Gemini can override this later with higher-quality vision-based geometry.
     ai_geometry: solarGeometry || undefined,
+
+    // Suggested panel layout for the solar designer canvas (hydrated from Google).
+    solar_panel_layout: solarPanelLayout || undefined,
 
     // ── PROPERTY OVERLAP DETECTION ──
     // If Google Solar's building bounding box exceeds 60 ft in any dimension,

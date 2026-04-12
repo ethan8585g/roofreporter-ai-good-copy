@@ -1187,7 +1187,7 @@ customerAuthRoutes.get('/orders', async (c) => {
     SELECT o.*, r.status as report_status, r.roof_area_sqft, r.total_material_cost_cad,
            r.complexity_class, r.confidence_score,
            r.enhancement_status, r.enhancement_version, r.enhancement_sent_at,
-           r.ai_imagery_status, r.satellite_image_url
+           r.ai_imagery_status, r.satellite_image_url, r.solar_panel_layout
     FROM orders o
     LEFT JOIN reports r ON r.order_id = o.id
     WHERE o.customer_id = ?
@@ -1195,6 +1195,49 @@ customerAuthRoutes.get('/orders', async (c) => {
   `).bind(ownerId).all()
 
   return c.json({ orders: orders.results })
+})
+
+// ============================================================
+// PATCH /api/customer/reports/:id/panel-layout
+// Persist user-edited solar panel positions for a report.
+// Body: { user_panels: [{lat,lng,orientation}, ...] }
+// ============================================================
+customerAuthRoutes.patch('/reports/:id/panel-layout', async (c) => {
+  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  if (!token) return c.json({ error: 'Not authenticated' }, 401)
+  const session = await c.env.DB.prepare(`
+    SELECT customer_id FROM customer_sessions
+    WHERE session_token = ? AND expires_at > datetime('now')
+  `).bind(token).first<any>()
+  if (!session) return c.json({ error: 'Session expired' }, 401)
+
+  const orderId = c.req.param('id')
+  const { ownerId } = await resolveTeamOwner(c.env.DB, session.customer_id)
+
+  const order = await c.env.DB.prepare(
+    `SELECT id FROM orders WHERE id = ? AND customer_id = ?`
+  ).bind(orderId, ownerId).first<any>()
+  if (!order) return c.json({ error: 'Order not found' }, 404)
+
+  const body = await c.req.json().catch(() => ({}))
+  const userPanels = Array.isArray(body.user_panels) ? body.user_panels : []
+
+  const existing = await c.env.DB.prepare(
+    `SELECT solar_panel_layout FROM reports WHERE order_id = ?`
+  ).bind(orderId).first<any>()
+  let layout: any = {}
+  if (existing?.solar_panel_layout) {
+    try { layout = JSON.parse(existing.solar_panel_layout) } catch {}
+  }
+  layout.user_panels = userPanels
+  layout.user_panel_count = userPanels.length
+  layout.user_updated_at = new Date().toISOString()
+
+  await c.env.DB.prepare(
+    `UPDATE reports SET solar_panel_layout = ?, updated_at = datetime('now') WHERE order_id = ?`
+  ).bind(JSON.stringify(layout), orderId).run()
+
+  return c.json({ success: true, panel_count: userPanels.length })
 })
 
 // ============================================================

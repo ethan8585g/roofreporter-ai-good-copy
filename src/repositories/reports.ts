@@ -174,6 +174,7 @@ export async function saveCompletedReport(
     html, version, JSON.stringify(reportData),
     satUrl,
     reportData.vision_findings ? JSON.stringify(reportData.vision_findings) : null,
+    reportData.solar_panel_layout ? JSON.stringify(reportData.solar_panel_layout) : null,
     orderId
   ]
 
@@ -208,6 +209,7 @@ export async function saveCompletedReport(
       api_response_raw = ?,
       satellite_image_url = ?,
       vision_findings_json = ?,
+      solar_panel_layout = ?,
       status = 'completed', generation_completed_at = datetime('now'), updated_at = datetime('now')
     WHERE order_id = ?
   `).bind(...bindValues).run()

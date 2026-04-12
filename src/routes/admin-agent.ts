@@ -154,7 +154,7 @@ adminAgentRoutes.post('/chat', async (c) => {
       if (!res.ok) {
         const txt = await res.text()
         console.error('[admin-agent] API error', res.status, txt.slice(0, 500))
-        return c.json({ thread_id: threadId, reply: `AI service error ${res.status}`, actions }, 200)
+        return c.json({ thread_id: threadId, reply: `AI service error ${res.status}: ${txt.slice(0, 400)}`, actions }, 200)
       }
       const data = await res.json() as any
       const msg = data.choices?.[0]?.message

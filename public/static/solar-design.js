@@ -29,7 +29,51 @@
     imgDrawH: 0,
     hoverX: null,
     hoverY: null,
+    layout: null,     // { suggested_panels, image_center, image_zoom, image_size_px, panel_*_meters, ... }
+    hydrated: false,
+    saving: false,
   };
+
+  // ── Web Mercator projection (Google Maps tile system) ──────
+  // Converts lat/lng → pixel coords on a Google Static Maps image of known
+  // center/zoom/size. Mirrors Google's tile math (256px tile @ zoom 0).
+  function latLngToPixel(lat, lng, centerLat, centerLng, zoom, sizePx) {
+    var scale = Math.pow(2, zoom);
+    function project(la, ln) {
+      var siny = Math.sin(la * Math.PI / 180);
+      siny = Math.min(Math.max(siny, -0.9999), 0.9999);
+      return {
+        x: 256 * (0.5 + ln / 360),
+        y: 256 * (0.5 - Math.log((1 + siny) / (1 - siny)) / (4 * Math.PI)),
+      };
+    }
+    var p = project(lat, lng);
+    var c = project(centerLat, centerLng);
+    var dx = (p.x - c.x) * scale;
+    var dy = (p.y - c.y) * scale;
+    return { x: dx + sizePx / 2, y: dy + sizePx / 2 };
+  }
+
+  function hydrateFromLayout() {
+    if (state.hydrated || !state.layout || !state.img || !state.canvas) return;
+    var L = state.layout;
+    var src = (L.user_panels && L.user_panels.length) ? L.user_panels : (L.suggested_panels || []);
+    if (!src.length) { state.hydrated = true; return; }
+    var srcSize = L.image_size_px || 1600;
+    var scaleToCanvas = state.imgDrawW / srcSize;
+    var newPanels = [];
+    for (var i = 0; i < src.length; i++) {
+      var p = src[i];
+      if (typeof p.lat !== 'number' || typeof p.lng !== 'number') continue;
+      var px = latLngToPixel(p.lat, p.lng, L.image_center.lat, L.image_center.lng, L.image_zoom, srcSize);
+      var cx = px.x * scaleToCanvas;
+      var cy = px.y * scaleToCanvas;
+      newPanels.push({ x: Math.round(cx - state.panelW / 2), y: Math.round(cy - state.panelH / 2) });
+    }
+    state.panels = newPanels;
+    state.hydrated = true;
+    drawCanvas();
+  }
 
   // ── Bootstrap ──────────────────────────────────────────────
   var params = new URLSearchParams(window.location.search);
@@ -68,6 +112,16 @@
           return;
         }
         state.satelliteUrl = order.satellite_image_url || null;
+        if (order.solar_panel_layout) {
+          try {
+            state.layout = typeof order.solar_panel_layout === 'string'
+              ? JSON.parse(order.solar_panel_layout)
+              : order.solar_panel_layout;
+            if (state.layout && state.layout.panel_capacity_watts) {
+              state.panelWattage = state.layout.panel_capacity_watts;
+            }
+          } catch(e) { console.warn('Failed to parse solar_panel_layout', e); }
+        }
         if (!state.satelliteUrl) {
           root.innerHTML = '<div class="bg-amber-50 border border-amber-200 rounded-xl p-8 text-center text-amber-800"><i class="fas fa-satellite text-3xl mb-3"></i><p class="font-semibold">No satellite image available for this report.</p><p class="text-sm mt-1">The image is attached once the report finishes processing.</p><a href="/customer/reports" class="mt-3 inline-block text-blue-600 hover:underline">Back to Reports</a></div>';
           return;
@@ -124,7 +178,8 @@
             '<div class="space-y-2 pt-1">' +
               '<button onclick="window._sdUndo()" class="w-full bg-gray-700 hover:bg-gray-600 text-white py-2 rounded-lg text-sm font-medium transition-colors"><i class="fas fa-undo mr-1"></i>Undo</button>' +
               '<button onclick="window._sdClearAll()" class="w-full bg-red-700 hover:bg-red-600 text-white py-2 rounded-lg text-sm font-medium transition-colors"><i class="fas fa-trash mr-1"></i>Clear All</button>' +
-              '<button onclick="window._sdDownload()" class="w-full bg-amber-500 hover:bg-amber-400 text-white py-2 rounded-lg text-sm font-bold transition-colors"><i class="fas fa-download mr-1"></i>Save Design (PNG)</button>' +
+              '<button onclick="window._sdSaveLayout()" id="sdSaveBtn" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-2 rounded-lg text-sm font-bold transition-colors"><i class="fas fa-cloud-upload-alt mr-1"></i>Save to Report</button>' +
+              '<button onclick="window._sdDownload()" class="w-full bg-amber-500 hover:bg-amber-400 text-white py-2 rounded-lg text-sm font-bold transition-colors"><i class="fas fa-download mr-1"></i>Download PNG</button>' +
             '</div>' +
             '<p class="text-xs text-gray-500 leading-relaxed">Click on the roof to place panels. Each click places one panel.</p>' +
           '</div>' +
@@ -184,6 +239,7 @@
 
     drawCanvas();
     attachCanvasEvents();
+    hydrateFromLayout();
   }
 
   // ── Draw ───────────────────────────────────────────────────
@@ -300,6 +356,61 @@
     state.panelW = parseInt(document.getElementById('sdPanelW').value) || 40;
     state.panelH = parseInt(document.getElementById('sdPanelH').value) || 68;
     drawCanvas();
+  };
+
+  function pixelToLatLng(px, py, centerLat, centerLng, zoom, sizePx) {
+    var scale = Math.pow(2, zoom);
+    function project(la, ln) {
+      var siny = Math.sin(la * Math.PI / 180);
+      siny = Math.min(Math.max(siny, -0.9999), 0.9999);
+      return { x: 256 * (0.5 + ln / 360), y: 256 * (0.5 - Math.log((1 + siny) / (1 - siny)) / (4 * Math.PI)) };
+    }
+    var c = project(centerLat, centerLng);
+    var wx = c.x + (px - sizePx / 2) / scale;
+    var wy = c.y + (py - sizePx / 2) / scale;
+    var lng = (wx / 256 - 0.5) * 360;
+    var n = Math.PI - 2 * Math.PI * (wy / 256);
+    var lat = (180 / Math.PI) * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n)));
+    return { lat: lat, lng: lng };
+  }
+
+  window._sdSaveLayout = function() {
+    if (state.saving) return;
+    var btn = document.getElementById('sdSaveBtn');
+    var layout = state.layout;
+    var userPanels;
+    if (layout && layout.image_center && state.imgDrawW > 0) {
+      var srcSize = layout.image_size_px || 1600;
+      var scaleToSrc = srcSize / state.imgDrawW;
+      userPanels = state.panels.map(function(p) {
+        var cx = (p.x + state.panelW / 2) * scaleToSrc;
+        var cy = (p.y + state.panelH / 2) * scaleToSrc;
+        var ll = pixelToLatLng(cx, cy, layout.image_center.lat, layout.image_center.lng, layout.image_zoom, srcSize);
+        return { lat: ll.lat, lng: ll.lng, orientation: 'PORTRAIT' };
+      });
+    } else {
+      userPanels = state.panels.map(function(p) { return { x: p.x, y: p.y, canvas_w: state.canvas && state.canvas.width, canvas_h: state.canvas && state.canvas.height, orientation: 'PORTRAIT' }; });
+    }
+    state.saving = true;
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Saving...'; }
+    fetch('/api/customer/reports/' + state.reportId + '/panel-layout', {
+      method: 'PATCH', headers: authHeaders(),
+      body: JSON.stringify({ user_panels: userPanels })
+    })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        state.saving = false;
+        if (data.success) {
+          if (btn) { btn.innerHTML = '<i class="fas fa-check mr-1"></i>Saved (' + data.panel_count + ')'; }
+          setTimeout(function() { if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-cloud-upload-alt mr-1"></i>Save to Report'; } }, 1800);
+        } else {
+          if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-exclamation-triangle mr-1"></i>Save failed'; }
+        }
+      })
+      .catch(function() {
+        state.saving = false;
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-exclamation-triangle mr-1"></i>Save failed'; }
+      });
   };
 
   window._sdDownload = function() {

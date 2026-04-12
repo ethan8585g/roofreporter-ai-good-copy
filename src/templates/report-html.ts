@@ -612,6 +612,8 @@ ${buildEdgeBreakdownPage(report, reportNum, reportDate, fullAddress)}
 
 ${buildCrossCheckAndAdvisoryPage(report, reportNum, reportDate, fullAddress)}
 
+${report.solar_panel_layout ? buildSolarProposalPage(report, reportNum, reportDate, fullAddress) : ''}
+
 ${report.vision_findings ? buildVisionFindingsHTML(report.vision_findings) : ''}
 
 </body>
@@ -1652,6 +1654,99 @@ function buildCustomerPricingHTML(report: RoofReport): string {
   <!-- Disclaimer -->
   <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:14px 16px;font-size:9px;color:#92400e;line-height:1.6">
     <strong style="font-size:10px">ESTIMATE DISCLAIMER:</strong> This cost estimate is based on the client-provided rate of $${pricePerBundle}/square and AI-measured roof area with 15% waste factor. Actual costs may vary depending on: roof complexity, existing material removal, structural repairs, flashing details, code requirements, and regional pricing. This estimate does not include additional materials (underlayment, flashing, vents, etc.). A professional on-site assessment is recommended for a final quote.
+  </div>
+</div>`
+}
+
+// ============================================================
+// SOLAR PROPOSAL PAGE — Renders user-edited (or suggested) panel layout
+// over the satellite image, plus system size, annual production, savings.
+// ============================================================
+function buildSolarProposalPage(report: RoofReport, reportNum: string, reportDate: string, fullAddress: string): string {
+  const layout = report.solar_panel_layout!
+  const panels = (layout.user_panels && layout.user_panels.length ? layout.user_panels : layout.suggested_panels) || []
+  const panelCount = panels.length
+  const watts = layout.panel_capacity_watts || 400
+  const systemKw = (panelCount * watts / 1000)
+  const annualKwh = layout.yearly_energy_kwh || (panelCount * watts * 1.4)  // rough fallback
+  const co2TonsPerYear = (annualKwh * 0.0004).toFixed(1)  // ~0.4 kg CO2/kWh grid avg
+
+  // Project lat/lng → pixel on the satellite image overlay (SVG, viewBox=image_size_px)
+  const cLat = layout.image_center?.lat
+  const cLng = layout.image_center?.lng
+  const zoom = layout.image_zoom || 20
+  const sizePx = layout.image_size_px || 1600
+  const project = (lat: number, lng: number) => {
+    const scale = Math.pow(2, zoom)
+    const sin = Math.max(-0.9999, Math.min(0.9999, Math.sin(lat * Math.PI / 180)))
+    const px = 256 * (0.5 + lng / 360)
+    const py = 256 * (0.5 - Math.log((1 + sin) / (1 - sin)) / (4 * Math.PI))
+    const sin2 = Math.max(-0.9999, Math.min(0.9999, Math.sin(cLat * Math.PI / 180)))
+    const cx = 256 * (0.5 + cLng / 360)
+    const cy = 256 * (0.5 - Math.log((1 + sin2) / (1 - sin2)) / (4 * Math.PI))
+    return { x: (px - cx) * scale + sizePx / 2, y: (py - cy) * scale + sizePx / 2 }
+  }
+
+  // Panel rectangle size in pixels at this zoom (Web Mercator: meters/px varies with lat)
+  const metersPerPx = (156543.03392 * Math.cos((cLat || 0) * Math.PI / 180)) / Math.pow(2, zoom) / 2  // /2 for scale=2
+  const panelWpx = (layout.panel_width_meters || 1.045) / metersPerPx
+  const panelHpx = (layout.panel_height_meters || 1.879) / metersPerPx
+
+  const satUrl = report.imagery?.satellite_overhead_url || ''
+  const panelRects = (cLat && cLng) ? panels.map((p: any) => {
+    const xy = project(p.lat, p.lng)
+    const isLandscape = (p.orientation || 'PORTRAIT') === 'LANDSCAPE'
+    const w = isLandscape ? panelHpx : panelWpx
+    const h = isLandscape ? panelWpx : panelHpx
+    return `<rect x="${xy.x - w/2}" y="${xy.y - h/2}" width="${w}" height="${h}" fill="rgba(59,130,246,0.55)" stroke="rgba(255,255,255,0.95)" stroke-width="3"/>`
+  }).join('') : ''
+
+  const NAVY = '#1e3a5f'
+  return `
+<!-- ==================== SOLAR PROPOSAL PAGE ==================== -->
+<div class="page">
+  <div style="height:4px;background:linear-gradient(90deg,#f59e0b,#d97706)"></div>
+  <div style="padding:12px 28px 8px">
+    <div style="font-size:14px;font-weight:800;color:#222"><span style="color:#f59e0b">&#9728;</span> Solar Proposal</div>
+    <div style="font-size:10px;color:#555">${fullAddress}</div>
+  </div>
+
+  <div style="padding:0 28px 10px;display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
+    <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:10px;text-align:center">
+      <div style="font-size:7px;font-weight:700;color:#92400e;text-transform:uppercase">Panels</div>
+      <div style="font-size:20px;font-weight:900;color:#b45309">${panelCount}</div>
+    </div>
+    <div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:6px;padding:10px;text-align:center">
+      <div style="font-size:7px;font-weight:700;color:#92400e;text-transform:uppercase">System Size</div>
+      <div style="font-size:20px;font-weight:900;color:#b45309">${systemKw.toFixed(2)} kW</div>
+    </div>
+    <div style="background:#ecfdf5;border:1px solid #a7f3d0;border-radius:6px;padding:10px;text-align:center">
+      <div style="font-size:7px;font-weight:700;color:#065f46;text-transform:uppercase">Annual Production</div>
+      <div style="font-size:20px;font-weight:900;color:#047857">${Math.round(annualKwh).toLocaleString()} kWh</div>
+    </div>
+    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:10px;text-align:center">
+      <div style="font-size:7px;font-weight:700;color:#1e40af;text-transform:uppercase">CO&#8322; Offset</div>
+      <div style="font-size:20px;font-weight:900;color:#1d4ed8">${co2TonsPerYear} t/yr</div>
+    </div>
+  </div>
+
+  <div style="padding:0 28px 10px">
+    <div style="font-size:11px;font-weight:800;color:${NAVY};text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;border-bottom:2px solid #f59e0b;padding-bottom:3px">
+      Panel Layout
+    </div>
+    <div style="position:relative;border:1px solid #e2e8f0;border-radius:6px;overflow:hidden;background:#000">
+      ${satUrl ? `<img src="${satUrl}" style="display:block;width:100%;height:auto" />` : ''}
+      <svg viewBox="0 0 ${sizePx} ${sizePx}" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none">
+        ${panelRects}
+      </svg>
+    </div>
+    <div style="font-size:8px;color:#64748b;margin-top:4px">
+      ${layout.user_panels && layout.user_panels.length ? 'User-designed layout' : 'Google Solar API suggested layout'} &middot; Panel: ${watts}W &middot; Source: Google Solar API
+    </div>
+  </div>
+
+  <div style="position:absolute;bottom:0;left:0;right:0;background:#1e3a5f;padding:6px 14px">
+    <span style="color:#fef3c7;font-size:7.5px">roofmanager.ca &bull; Report: ${reportNum} &bull; ${reportDate} &bull; Solar Proposal</span>
   </div>
 </div>`
 }

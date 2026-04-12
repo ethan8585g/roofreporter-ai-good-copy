@@ -704,6 +704,9 @@ function initAnalyticsCharts() {
 
 function renderRecentOrders() {
   var orders = custState.orders.slice(0, 5);
+  var _custRaw = localStorage.getItem('rc_customer');
+  var _isSolarCust = false;
+  try { _isSolarCust = (_custRaw && JSON.parse(_custRaw).company_type === 'solar') || false; } catch(e) {}
   if (orders.length === 0) {
     return '<div class="text-center py-8">' +
       '<div class="w-12 h-12 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-3"><i class="fas fa-clipboard-list text-gray-400 text-lg"></i></div>' +
@@ -726,6 +729,7 @@ function renderRecentOrders() {
         '<span class="px-2 py-0.5 ' + statusClass + ' rounded-full text-[10px] font-bold capitalize">' + (isProcessing ? '<i class="fas fa-spinner fa-spin mr-1"></i>' : '') + (isProcessing ? 'generating' : o.status) + '</span>' +
         (reportReady ? '<a href="/api/reports/' + o.id + '/html" target="_blank" class="px-2.5 py-1 bg-emerald-600 text-white rounded-lg text-xs font-medium hover:bg-brand-700"><i class="fas fa-eye mr-1"></i>View</a>' : '') +
         (reportReady ? '<a href="/customer/material-calculator?order_id=' + o.id + '" class="px-2.5 py-1 bg-sky-100 text-sky-700 rounded-lg text-xs font-medium hover:bg-sky-200"><i class="fas fa-calculator mr-1"></i>Materials</a>' : '') +
+        (reportReady && _isSolarCust ? '<a href="/customer/solar-design?report_id=' + o.id + '" class="px-2.5 py-1 bg-amber-500 text-white rounded-lg text-xs font-medium hover:bg-amber-400"><i class="fas fa-solar-panel mr-1"></i>Design Panels</a>' : '') +
         (o.status === 'failed' ? '<button onclick="retryReport(' + o.id + ', this)" class="px-2.5 py-1 bg-red-500/15 text-red-400 rounded-lg text-xs font-medium hover:bg-red-200"><i class="fas fa-redo mr-1"></i>Retry</button>' : '') +
       '</div>' +
     '</div>';

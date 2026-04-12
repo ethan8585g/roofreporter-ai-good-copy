@@ -569,6 +569,21 @@ export interface RoofReport {
   // ---- AI GEOMETRY OVERLAY — Gemini Vision facet polygons for satellite image overlay ----
   ai_geometry?: AIMeasurementAnalysis | null
 
+  // ---- SOLAR PANEL LAYOUT — suggested + user-edited solar panel positions ----
+  solar_panel_layout?: {
+    suggested_panels: { lat: number; lng: number; orientation: string; segment_index: number; yearly_energy_kwh: number }[]
+    user_panels: null | { lat: number; lng: number; orientation: string }[]
+    panel_capacity_watts: number
+    panel_height_meters: number
+    panel_width_meters: number
+    image_center: { lat: number; lng: number }
+    image_zoom: number
+    image_size_px: number
+    yearly_energy_kwh: number
+    panel_count: number
+    roof_segment_summaries?: any[]
+  }
+
   // ---- SOLAR FLUX ANALYSIS (Annual kWh/m² exposure) ----
   flux_analysis?: {
     mean_kwh_m2: number

@@ -1816,6 +1816,12 @@ async function useCredit() {
 function showOrderSuccessOverlay(order) {
   const address = order?.property_address || orderState.address || 'your property';
   const orderNum = order?.order_number || '';
+  let _isSolarCust = false;
+  try { const _c = JSON.parse(localStorage.getItem('rc_customer') || '{}'); _isSolarCust = _c.company_type === 'solar'; } catch(e) {}
+  const orderId = order?.id || order?.order_id || '';
+  const designBtn = (_isSolarCust && orderId)
+    ? '<a href="/customer/solar-design?report_id=' + orderId + '" style="display:inline-block;margin-top:10px;background:linear-gradient(135deg,#f59e0b,#d97706);color:white;padding:12px 22px;border-radius:12px;font-weight:700;font-size:14px;text-decoration:none;box-shadow:0 6px 18px rgba(245,158,11,0.35)"><i class="fas fa-solar-panel" style="margin-right:6px"></i>Design Solar Panels</a>'
+    : '';
   
   // Create full-screen overlay
   const overlay = document.createElement('div');
@@ -1836,7 +1842,8 @@ function showOrderSuccessOverlay(order) {
         </div>
         <p style="color:#3b82f6;font-size:12px;margin-top:6px">This takes 20-40 seconds. You'll see it on your dashboard.</p>
       </div>
-      <p style="color:#9ca3af;font-size:12px;margin-top:12px"><i class="fas fa-arrow-right mr-1"></i>Redirecting to dashboard...</p>
+      ${designBtn}
+      <p style="color:#9ca3af;font-size:12px;margin-top:12px"><i class="fas fa-arrow-right mr-1"></i>${_isSolarCust ? 'Or wait — redirecting to dashboard...' : 'Redirecting to dashboard...'}</p>
     </div>
     <style>
       @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
