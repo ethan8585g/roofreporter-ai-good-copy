@@ -956,6 +956,7 @@ customerAuthRoutes.get('/profile', async (c) => {
            brand_tagline, brand_phone, brand_email, brand_website, brand_address,
            brand_license_number, brand_insurance_info,
            onboarding_completed, onboarding_step,
+           company_type, solar_panel_wattage_w,
            created_at, last_login
     FROM customers WHERE id = ?
   `).bind(session.customer_id).first()
