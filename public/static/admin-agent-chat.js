@@ -53,7 +53,7 @@
   ];
 
   function getToken() {
-    return localStorage.getItem('admin_token') || localStorage.getItem('sa_token') || '';
+    return localStorage.getItem('rc_token') || localStorage.getItem('admin_token') || localStorage.getItem('sa_token') || '';
   }
 
   let threadId = null;
