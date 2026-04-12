@@ -37,6 +37,7 @@ import { pipelineRoutes } from './routes/pipeline'
 import { widgetRoutes } from './routes/widget'
 import { pushRoutes } from './routes/push-notifications'
 import { aiAdminChatRoutes } from './routes/ai-admin-chat'
+import { adminAgentRoutes } from './routes/admin-agent'
 import { homeDesignerRoutes } from './routes/home-designer'
 import { sam3Routes } from './routes/sam3-analysis'
 import { platformAdmin } from './routes/platform-admin'
@@ -215,6 +216,7 @@ app.route('/api/pipeline', pipelineRoutes)
 app.route('/api/widget', widgetRoutes)
 app.route('/api/push', pushRoutes)
 app.route('/api/ai-admin', aiAdminChatRoutes)
+app.route('/api/admin-agent', adminAgentRoutes)
 app.route('/api/home-designer', homeDesignerRoutes)
 app.route('/api/sam3', sam3Routes)
 app.route('/api/admin/platform', platformAdmin)
