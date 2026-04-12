@@ -288,6 +288,7 @@ function renderDashboard() {
         '<div>' +
           '<p class="px-3 mb-1 text-[10px] font-bold uppercase tracking-wider" style="color:var(--text-muted)">Reports</p>' +
           navLink('/customer/order', 'fa-plus-circle', isSolar ? 'Order New Solar Proposal' : 'Order New Report', creditBadge || null, creditBadgeColor) +
+          (isSolar ? navLink('/customer/design-builder', 'fa-drafting-compass', 'Design Builder', null, 'bg-amber-600') : '') +
           navLink('/customer/reports', 'fa-file-alt', 'Report History', completedReports > 0 ? completedReports + '' : null, 'bg-gray-800') +
         '</div>' +
         // CRM
@@ -447,6 +448,10 @@ function renderDashboard() {
               '<div class="w-9 h-9 bg-blue-600 rounded-lg flex items-center justify-center flex-shrink-0"><i class="fas fa-plus text-white text-sm"></i></div>' +
               '<div><p class="font-semibold text-sm" style="color:var(--text-primary)">Order Roof Report</p><p class="text-xs" style="color:var(--text-muted)">' + (freeTrialRemaining > 0 ? freeTrialRemaining + ' free remaining' : (paidCredits > 0 ? paidCredits + ' credits' : 'Pay per report')) + '</p></div>' +
             '</a>' +
+            (isSolar ? ('<a href="/customer/design-builder" class="flex items-center gap-3 p-3 bg-amber-500/10 hover:bg-amber-100 rounded-xl transition-colors">' +
+              '<div class="w-9 h-9 bg-amber-500 rounded-lg flex items-center justify-center flex-shrink-0"><i class="fas fa-drafting-compass text-white text-sm"></i></div>' +
+              '<div><p class="font-semibold text-sm" style="color:var(--text-primary)">Launch Design Builder</p><p class="text-xs" style="color:var(--text-muted)">Pick a report, design panels, export proposal</p></div>' +
+            '</a>') : '') +
             '<a href="/customer/customers" class="flex items-center gap-3 p-3 rounded-xl transition-colors" style="background:var(--bg-elevated)">' +
               '<div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style="background:var(--bg-card);border:1px solid var(--border-color)"><i class="fas fa-user-plus text-white text-sm"></i></div>' +
               '<div><p class="font-semibold text-sm" style="color:var(--text-primary)">Add Customer</p><p class="text-xs" style="color:var(--text-muted)">Build your CRM database</p></div>' +

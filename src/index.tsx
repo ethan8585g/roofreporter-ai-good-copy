@@ -1658,6 +1658,9 @@ app.get('/customer/select-type', (c) => c.html(getSelectTypePageHTML()))
 // Solar Panel Design Tool — canvas-based panel placement on satellite image
 app.get('/customer/solar-design', (c) => c.html(getSolarDesignPageHTML()))
 
+// Design Builder — solar customers: pick a completed report → enter designer
+app.get('/customer/design-builder', (c) => c.html(getDesignBuilderPageHTML()))
+
 // Solar Sales Pipeline — kanban board for solar companies only
 app.get('/customer/solar-pipeline', (c) => c.html(getSolarPipelinePageHTML()))
 
@@ -9592,6 +9595,52 @@ function getSolarDesignPageHTML() {
   </script>
   <script src="/static/solar-design.js"></script>
   ${getRoverAssistant()}
+</body>
+</html>`
+}
+
+// ============================================================
+// Design Builder Page (solar customers)
+// ============================================================
+function getDesignBuilderPageHTML() {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags()}
+  <title>Design Builder - Roof Manager</title>
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <header class="bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-lg">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+      <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
+        <img src="/static/logo.png" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
+        <div>
+          <h1 class="text-lg font-bold">Design Builder</h1>
+          <p class="text-amber-100 text-xs">Select a report to start your solar design</p>
+        </div>
+      </a>
+      <nav class="flex items-center space-x-3">
+        <a href="/customer/dashboard" class="text-amber-100 hover:text-white text-sm"><i class="fas fa-th-large mr-1"></i>Dashboard</a>
+        <button onclick="custLogout()" class="text-amber-100 hover:text-white text-sm"><i class="fas fa-sign-out-alt mr-1"></i>Logout</button>
+      </nav>
+    </div>
+  </header>
+  <main class="max-w-7xl mx-auto px-4 py-6">
+    <div id="design-builder-root"></div>
+  </main>
+  <script>
+    (function() {
+      var c = localStorage.getItem('rc_customer');
+      if (!c) { window.location.href = '/customer/login'; return; }
+    })();
+    function custLogout() {
+      var token = localStorage.getItem('rc_customer_token');
+      if (token) fetch('/api/customer/logout', { method: 'POST', headers: { 'Authorization': 'Bearer ' + token } })['catch'](function(){});
+      localStorage.removeItem('rc_customer'); localStorage.removeItem('rc_customer_token');
+      window.location.href = '/customer/login';
+    }
+  </script>
+  <script src="/static/design-builder.js"></script>
 </body>
 </html>`
 }

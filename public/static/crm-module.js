@@ -866,9 +866,9 @@
         html += '<div class="flex items-center gap-2 mb-1 flex-wrap">';
         html += '<span class="font-mono text-xs font-bold text-gray-200">' + p.proposal_number + '</span>';
         html += badge(p.status);
-        if (p.view_count > 0) {
-          html += '<button onclick="window._crmViewTracking(' + p.id + ')" class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-500/15/15 text-blue-400 hover:bg-blue-500/15 cursor-pointer"><i class="fas fa-eye mr-1"></i>' + p.view_count + ' view' + (p.view_count !== 1 ? 's' : '') + '</button>';
-        }
+        var vc = p.view_count || 0;
+        var vcStyle = vc > 0 ? 'bg-blue-500/15 text-blue-400 hover:bg-blue-500/25' : 'bg-white/5 text-gray-400 hover:bg-white/10';
+        html += '<button onclick="window._crmViewTracking(' + p.id + ')" title="View open tracking" class="px-2 py-0.5 rounded-full text-[10px] font-semibold cursor-pointer ' + vcStyle + '"><i class="fas fa-eye mr-1"></i>' + vc + ' open' + (vc !== 1 ? 's' : '') + '</button>';
         if (p.customer_email) html += '<span class="text-[10px] text-gray-400"><i class="fas fa-envelope mr-0.5"></i>' + p.customer_email + '</span>';
         html += '</div>';
         html += '<p class="text-gray-100 font-medium text-sm">' + p.title + '</p>';
