@@ -3275,6 +3275,7 @@ function getSuperAdminDashboardHTML(mapsApiKey: string = '') {
     }
   </script>
   <script src="/static/super-admin-dashboard.js?v=${Date.now()}"></script>
+  <script src="/static/admin-agent-chat.js?v=${Date.now()}"></script>
   <script src="/static/call-center.js"></script>
   <script src="/static/meta-connect.js"></script>
   <script src="/static/heygen.js"></script>
