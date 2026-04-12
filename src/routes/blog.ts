@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import type { Bindings } from '../types'
+import { runOnce, seedDefaultKeywords } from '../services/blog-agent'
 
 export const blogRoutes = new Hono<{ Bindings: Bindings }>()
 
@@ -288,4 +289,82 @@ blogRoutes.post('/admin/init', async (c) => {
   } catch (e: any) {
     return c.json({ error: e.message }, 500)
   }
+})
+
+// ============================================================
+// BLOG AGENT: Autonomous SEO/GEO content generation
+// ============================================================
+
+// Admin: seed default keyword queue
+blogRoutes.post('/admin/agent/seed', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin) return c.json({ error: 'Unauthorized' }, 401)
+  try {
+    const inserted = await seedDefaultKeywords(c.env.DB)
+    return c.json({ success: true, inserted })
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500)
+  }
+})
+
+// Admin: add custom keyword
+blogRoutes.post('/admin/agent/keywords', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin) return c.json({ error: 'Unauthorized' }, 401)
+  try {
+    const { keyword, geo_modifier, intent, priority, target_category } = await c.req.json()
+    if (!keyword) return c.json({ error: 'keyword required' }, 400)
+    await c.env.DB.prepare(
+      `INSERT OR IGNORE INTO blog_keyword_queue (keyword, geo_modifier, intent, priority, target_category) VALUES (?, ?, ?, ?, ?)`
+    ).bind(keyword, geo_modifier || null, intent || 'informational', priority || 5, target_category || 'roofing').run()
+    return c.json({ success: true })
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500)
+  }
+})
+
+// Admin: queue + log status
+blogRoutes.get('/admin/agent/status', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin) return c.json({ error: 'Unauthorized' }, 401)
+  try {
+    const queue = await c.env.DB.prepare(
+      `SELECT status, COUNT(*) as n FROM blog_keyword_queue GROUP BY status`
+    ).all()
+    const recent = await c.env.DB.prepare(
+      `SELECT id, keyword, geo_modifier, status, attempts, post_id, last_error, updated_at
+       FROM blog_keyword_queue ORDER BY updated_at DESC LIMIT 20`
+    ).all()
+    const logs = await c.env.DB.prepare(
+      `SELECT id, queue_id, post_id, stage, quality_score, passed_gate, duration_ms, error, created_at
+       FROM blog_generation_log ORDER BY id DESC LIMIT 20`
+    ).all()
+    return c.json({ queue: queue.results, recent: recent.results, logs: logs.results })
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500)
+  }
+})
+
+// Admin: manually trigger one run
+blogRoutes.post('/admin/agent/run', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin) return c.json({ error: 'Unauthorized' }, 401)
+  const result = await runOnce(c.env)
+  return c.json(result, result.ok ? 200 : 200)
+})
+
+// Cron: external scheduler hits this. Protect with BLOG_AGENT_CRON_SECRET.
+blogRoutes.post('/cron/run', async (c) => {
+  const secret = c.req.header('X-Cron-Secret') || c.req.query('secret')
+  const expected = (c.env as any).BLOG_AGENT_CRON_SECRET
+  if (!expected || secret !== expected) return c.json({ error: 'Unauthorized' }, 401)
+  // Allow ?n=2 to run multiple posts per invocation
+  const n = Math.min(parseInt(c.req.query('n') || '1'), 3)
+  const results = []
+  for (let i = 0; i < n; i++) {
+    const r = await runOnce(c.env)
+    results.push(r)
+    if (r.skipped) break
+  }
+  return c.json({ results })
 })
