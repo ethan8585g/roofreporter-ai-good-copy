@@ -601,20 +601,22 @@ stripeRoutes.post('/webhook', async (c) => {
   try {
     const rawBody = await c.req.text()
     const webhookSecret = (c.env as any).STRIPE_WEBHOOK_SECRET
-    
-    // Verify Stripe webhook signature if secret is configured
-    if (webhookSecret) {
-      const sigHeader = c.req.header('Stripe-Signature')
-      if (!sigHeader) {
-        console.warn('[Webhook] Missing Stripe-Signature header')
-        return c.json({ error: 'Missing Stripe-Signature header' }, 400)
-      }
-      
-      const isValid = await verifyStripeSignature(rawBody, sigHeader, webhookSecret)
-      if (!isValid) {
-        console.warn('[Webhook] Invalid Stripe-Signature')
-        return c.json({ error: 'Invalid signature' }, 400)
-      }
+
+    // Fail closed: webhook must be signed. If the secret is unset, refuse so
+    // attackers can't forge checkout.session.completed events.
+    if (!webhookSecret) {
+      console.error('[Webhook] STRIPE_WEBHOOK_SECRET not configured — rejecting')
+      return c.json({ error: 'Webhook signing not configured' }, 500)
+    }
+    const sigHeader = c.req.header('Stripe-Signature')
+    if (!sigHeader) {
+      console.warn('[Webhook] Missing Stripe-Signature header')
+      return c.json({ error: 'Missing Stripe-Signature header' }, 400)
+    }
+    const isValid = await verifyStripeSignature(rawBody, sigHeader, webhookSecret)
+    if (!isValid) {
+      console.warn('[Webhook] Invalid Stripe-Signature')
+      return c.json({ error: 'Invalid signature' }, 400)
     }
     
     // Parse the event

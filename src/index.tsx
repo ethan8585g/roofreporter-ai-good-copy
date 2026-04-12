@@ -3319,15 +3319,27 @@ function getCrewTodayHTML() {
 
     async function downscale(file, maxDim, quality){
       maxDim = maxDim || 1600; quality = quality || 0.82;
-      var img = await new Promise(function(res, rej){
-        var fr = new FileReader();
-        fr.onload = function(){ var im = new Image(); im.onload = function(){ res(im); }; im.onerror = rej; im.src = fr.result; };
-        fr.onerror = rej; fr.readAsDataURL(file);
-      });
-      var scale = Math.min(1, maxDim / Math.max(img.width, img.height));
-      var w = Math.round(img.width * scale), h = Math.round(img.height * scale);
+      // Prefer createImageBitmap — honors EXIF orientation natively (Safari 16+, Chrome 98+, Firefox 103+)
+      var source = null;
+      try {
+        if (typeof createImageBitmap === 'function') {
+          source = await createImageBitmap(file, { imageOrientation: 'from-image' });
+        }
+      } catch(e) { source = null; }
+      if (!source) {
+        source = await new Promise(function(res, rej){
+          var fr = new FileReader();
+          fr.onload = function(){ var im = new Image(); im.onload = function(){ res(im); }; im.onerror = rej; im.src = fr.result; };
+          fr.onerror = rej; fr.readAsDataURL(file);
+        });
+      }
+      var sw = source.width || source.naturalWidth;
+      var sh = source.height || source.naturalHeight;
+      var scale = Math.min(1, maxDim / Math.max(sw, sh));
+      var w = Math.round(sw * scale), h = Math.round(sh * scale);
       var cv = document.createElement('canvas'); cv.width = w; cv.height = h;
-      cv.getContext('2d').drawImage(img, 0, 0, w, h);
+      cv.getContext('2d').drawImage(source, 0, 0, w, h);
+      if (source.close) try { source.close(); } catch(e){}
       return cv.toDataURL('image/jpeg', quality);
     }
 

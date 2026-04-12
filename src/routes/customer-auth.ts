@@ -67,6 +67,16 @@ async function hashPassword(password: string, salt?: string): Promise<{ hash: st
   return { hash: hashHex, salt: s }
 }
 
+// Constant-time string comparison — avoids timing leaks on password verify.
+function timingSafeEq(a: string, b: string): boolean {
+  const len = Math.max(a.length, b.length)
+  let diff = a.length ^ b.length
+  for (let i = 0; i < len; i++) {
+    diff |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0)
+  }
+  return diff === 0
+}
+
 async function verifyPassword(password: string, storedHash: string): Promise<boolean> {
   // New PBKDF2 format: pbkdf2:<salt>:<hash>
   if (storedHash.startsWith('pbkdf2:')) {
@@ -76,7 +86,7 @@ async function verifyPassword(password: string, storedHash: string): Promise<boo
     const salt = inner.slice(0, idx)
     const hash = inner.slice(idx + 1)
     const result = await hashPassword(password, salt)
-    return result.hash === hash
+    return timingSafeEq(result.hash, hash)
   }
   // Legacy SHA-256 format: <salt>:<hash> — allow login, upgrade on next save
   const parts = storedHash.split(':')
@@ -86,7 +96,7 @@ async function verifyPassword(password: string, storedHash: string): Promise<boo
   const data = enc.encode(password + salt)
   const hashBuffer = await crypto.subtle.digest('SHA-256', data)
   const hashHex = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('')
-  return hashHex === hash
+  return timingSafeEq(hashHex, hash)
 }
 
 function serializeHash(hash: string, salt: string): string {

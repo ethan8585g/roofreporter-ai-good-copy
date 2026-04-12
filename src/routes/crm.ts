@@ -956,17 +956,14 @@ crmRoutes.post('/jobs/schedule', async (c) => {
   const job = await c.env.DB.prepare('SELECT id FROM crm_jobs WHERE id = ? AND owner_id = ?').bind(jobId, ownerId).first()
   if (!job) return c.json({ error: 'Job not found' }, 404)
 
-  // Update job schedule
+  // Update job schedule — clear stale route_order since any reassignment invalidates it
   await c.env.DB.prepare(
-    `UPDATE crm_jobs SET scheduled_date = ?, scheduled_time = ?, status = CASE WHEN status IN ('', 'cancelled', 'postponed') THEN 'scheduled' ELSE status END, updated_at = datetime('now') WHERE id = ?`
+    `UPDATE crm_jobs SET scheduled_date = ?, scheduled_time = ?, route_order = NULL, status = CASE WHEN status IN ('', 'cancelled', 'postponed') THEN 'scheduled' ELSE status END, updated_at = datetime('now') WHERE id = ?`
   ).bind(scheduledDate, scheduledTime || null, jobId).run()
 
-  // Assign crew member if provided (prevent duplicates)
+  // Assign crew member if provided — UNIQUE index on (job_id, crew_member_id) prevents duplicates
   if (crewMemberId) {
-    const existing = await c.env.DB.prepare('SELECT id FROM job_crew_assignments WHERE job_id = ? AND crew_member_id = ?').bind(jobId, crewMemberId).first()
-    if (!existing) {
-      await c.env.DB.prepare('INSERT INTO job_crew_assignments (job_id, crew_member_id, role) VALUES (?, ?, ?)').bind(jobId, crewMemberId, 'crew').run()
-    }
+    await c.env.DB.prepare('INSERT OR IGNORE INTO job_crew_assignments (job_id, crew_member_id, role) VALUES (?, ?, ?)').bind(jobId, crewMemberId, 'crew').run()
   }
   return c.json({ success: true })
 })
@@ -1237,10 +1234,8 @@ crmRoutes.post('/jobs/:id/crew', async (c) => {
   const jobId = parseInt(c.req.param('id'))
   const { crew_member_id, role } = await c.req.json()
   if (!crew_member_id) return c.json({ error: 'crew_member_id required' }, 400)
-  // Prevent duplicates
-  const existing = await c.env.DB.prepare('SELECT id FROM job_crew_assignments WHERE job_id = ? AND crew_member_id = ?').bind(jobId, crew_member_id).first()
-  if (existing) return c.json({ error: 'Already assigned' }, 400)
-  await c.env.DB.prepare('INSERT INTO job_crew_assignments (job_id, crew_member_id, role) VALUES (?, ?, ?)').bind(jobId, crew_member_id, role || 'crew').run()
+  // UNIQUE index on (job_id, crew_member_id) guarantees idempotency
+  await c.env.DB.prepare('INSERT OR IGNORE INTO job_crew_assignments (job_id, crew_member_id, role) VALUES (?, ?, ?)').bind(jobId, crew_member_id, role || 'crew').run()
   return c.json({ success: true })
 })
 
@@ -2322,10 +2317,13 @@ crmRoutes.get('/dispatch/board', async (c) => {
     assignments = r.results || []
   }
 
-  // Live clock-in status per crew member
+  // Live clock-in status per crew member — scoped to this account's jobs
   const activeClockIns = await c.env.DB.prepare(
-    `SELECT crew_member_id, job_id, clock_in FROM crew_time_logs WHERE clock_out IS NULL`
-  ).all()
+    `SELECT ctl.crew_member_id, ctl.job_id, ctl.clock_in
+     FROM crew_time_logs ctl
+     JOIN crm_jobs j ON j.id = ctl.job_id
+     WHERE ctl.clock_out IS NULL AND j.owner_id = ?`
+  ).bind(ownerId).all()
 
   return c.json({
     start, end, days,
@@ -2342,7 +2340,7 @@ crmRoutes.post('/jobs/:id/geocode', async (c) => {
   const ownerId = await getOwnerId(c)
   if (!ownerId) return c.json({ error: 'Unauthorized' }, 401)
   const id = parseInt(c.req.param('id'), 10)
-  const apiKey = (c.env as any).GOOGLE_MAPS_API_KEY
+  const apiKey = c.env.GOOGLE_MAPS_API_KEY
   if (!apiKey) return c.json({ error: 'GOOGLE_MAPS_API_KEY not configured' }, 500)
   const job = await c.env.DB.prepare(
     `SELECT id, property_address FROM crm_jobs WHERE id = ? AND owner_id = ?`
@@ -2360,7 +2358,7 @@ crmRoutes.post('/jobs/:id/geocode', async (c) => {
 crmRoutes.post('/dispatch/geocode-missing', async (c) => {
   const ownerId = await getOwnerId(c)
   if (!ownerId) return c.json({ error: 'Unauthorized' }, 401)
-  const apiKey = (c.env as any).GOOGLE_MAPS_API_KEY
+  const apiKey = c.env.GOOGLE_MAPS_API_KEY
   if (!apiKey) return c.json({ error: 'GOOGLE_MAPS_API_KEY not configured' }, 500)
   const rows = await c.env.DB.prepare(
     `SELECT id, property_address FROM crm_jobs
@@ -2385,7 +2383,7 @@ crmRoutes.post('/dispatch/optimize', async (c) => {
   if (!ownerId) return c.json({ error: 'Unauthorized' }, 401)
   const { crewMemberId, date, origin } = await c.req.json() as { crewMemberId: number; date: string; origin?: LatLng }
   if (!crewMemberId || !date) return c.json({ error: 'crewMemberId and date required' }, 400)
-  const apiKey = (c.env as any).GOOGLE_MAPS_API_KEY
+  const apiKey = c.env.GOOGLE_MAPS_API_KEY
   if (!apiKey) return c.json({ error: 'GOOGLE_MAPS_API_KEY not configured' }, 500)
 
   const jobs = await c.env.DB.prepare(
@@ -2527,7 +2525,8 @@ crmRoutes.get('/crew/today', async (c) => {
   if (!session) return c.json({ error: 'Unauthorized' }, 401)
   const myId = session.customer_id
   const me = await c.env.DB.prepare('SELECT id, name, email FROM customers WHERE id = ?').bind(myId).first<any>()
-  const today = c.req.query('date') || new Date().toISOString().slice(0,10)
+  const qDate = c.req.query('date')
+  const today = (qDate && /^\d{4}-\d{2}-\d{2}$/.test(qDate)) ? qDate : new Date().toISOString().slice(0,10)
 
   const jobs = await c.env.DB.prepare(
     `SELECT j.id, j.job_number, j.title, j.property_address, j.job_type, j.status,
