@@ -82,10 +82,12 @@
           '<div class="d2d-tab active" data-tab="turfs"><i class="fas fa-map"></i>Turfs</div>' +
           '<div class="d2d-tab" data-tab="pins"><i class="fas fa-map-pin"></i>Pins</div>' +
           '<div class="d2d-tab" data-tab="team"><i class="fas fa-users"></i>Team</div>' +
+          '<div class="d2d-tab d2d-tab-admin" data-tab="admin" style="display:none"><i class="fas fa-chart-line"></i>Admin</div>' +
         '</div>' +
         '<div class="d2d-panel active" id="panelTurfs"></div>' +
         '<div class="d2d-panel" id="panelPins"></div>' +
         '<div class="d2d-panel" id="panelTeam"></div>' +
+        '<div class="d2d-panel" id="panelAdmin"></div>' +
       '</div>' +
       '<div class="d2d-map-area">' +
         '<div id="d2dMap" style="width:100%;height:100%"></div>' +
@@ -659,6 +661,7 @@
       viewerRole = results[3].viewer_role || 'owner';
       renderAll();
       renderMapObjects();
+      if (viewerRole === 'owner') loadAdminData();
     }).catch(function(err) {
       console.error('[D2D] Load error:', err);
     });
@@ -691,6 +694,146 @@
     renderTurfsPanel();
     renderPinsPanel();
     renderTeamPanel();
+    // Show admin tab only for owners
+    var adminTab = document.querySelector('.d2d-tab-admin');
+    if (adminTab) adminTab.style.display = (viewerRole === 'owner') ? '' : 'none';
+    renderAdminPanel();
+  }
+
+  // ============================================================
+  // ADMIN TRACKING PANEL — owner-only live view of team progress
+  // ============================================================
+  var adminPeriod = 'today'; // today | week | month | all
+  var adminData = null;
+
+  function renderAdminPanel() {
+    var panel = document.getElementById('panelAdmin');
+    if (!panel) return;
+    if (viewerRole !== 'owner') { panel.innerHTML = ''; return; }
+
+    var periods = [['today','Today'],['week','7 Days'],['month','30 Days'],['all','All Time']];
+    var periodBar = '<div style="display:flex;gap:4px;margin-bottom:10px;background:rgba(255,255,255,0.04);padding:4px;border-radius:8px">';
+    for (var i = 0; i < periods.length; i++) {
+      var p = periods[i][0], label = periods[i][1];
+      var active = p === adminPeriod;
+      periodBar += '<button onclick="window.d2d.setAdminPeriod(\'' + p + '\')" style="flex:1;padding:6px 4px;border:none;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;' +
+        (active ? 'background:#6366f1;color:#fff' : 'background:transparent;color:#9ca3af') + '">' + label + '</button>';
+    }
+    periodBar += '</div>';
+
+    var content;
+    if (!adminData) {
+      content = '<div class="d2d-empty"><i class="fas fa-spinner fa-spin"></i><p>Loading admin data…</p></div>';
+    } else {
+      var t = adminData.totals || {};
+      var knocked = (t.total_knocks||0);
+      var conv = knocked > 0 ? Math.round((t.yes_count||0) / knocked * 100) : 0;
+
+      // Compact KPI strip
+      var kpis = '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px">' +
+        adminKpi(knocked, 'Knocks', '#0ea5e9') +
+        adminKpi(t.yes_count||0, 'Yes', '#22c55e') +
+        adminKpi(t.no_count||0, 'No', '#ef4444') +
+        adminKpi(conv + '%', 'Conv', '#a78bfa') +
+      '</div>';
+
+      // Per-member cards
+      var members = adminData.members || [];
+      var memberCards = '<div style="font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.5px;margin:12px 0 6px"><i class="fas fa-users mr-1"></i>Team Activity (' + members.length + ')</div>';
+      if (members.length === 0) {
+        memberCards += '<div class="d2d-empty"><p>No team members yet.</p></div>';
+      } else {
+        for (var mi = 0; mi < members.length; mi++) {
+          var m = members[mi];
+          var mk = (m.total_knocks||0);
+          var mc = mk > 0 ? Math.round((m.yes_count||0) / mk * 100) : 0;
+          var convColor = mc >= 30 ? '#22c55e' : mc >= 15 ? '#f59e0b' : '#9ca3af';
+          var active = m.last_activity ? timeAgo(m.last_activity) : 'No activity';
+          var dotColor = m.last_activity && (Date.now() - new Date(m.last_activity).getTime()) < 15*60*1000 ? '#22c55e' : '#6b7280';
+          memberCards += '<div class="d2d-card" style="margin-bottom:8px">' +
+            '<div class="flex items-center justify-between">' +
+              '<div class="flex items-center gap-2">' +
+                '<div style="position:relative;width:32px;height:32px;border-radius:50%;background:' + (m.color||'#6366f1') + ';display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:12px;flex-shrink:0">' +
+                  (m.name||'?').charAt(0).toUpperCase() +
+                  '<div style="position:absolute;bottom:-1px;right:-1px;width:10px;height:10px;border-radius:50%;background:' + dotColor + ';border:2px solid #1a1a1a"></div>' +
+                '</div>' +
+                '<div><div class="font-semibold text-gray-100 text-sm">' + escH(m.name||'') + '</div>' +
+                  '<div class="text-[10px] text-gray-400"><i class="fas fa-clock mr-1"></i>' + active + '</div></div>' +
+              '</div>' +
+              '<span style="font-size:16px;font-weight:800;color:' + convColor + '">' + mc + '%</span>' +
+            '</div>' +
+            '<div class="mt-2 grid grid-cols-4 gap-1 text-center text-[10px]">' +
+              '<div class="bg-[#0A0A0A] text-gray-300 rounded px-1 py-1"><div class="font-bold text-sm">' + mk + '</div><div>Knocks</div></div>' +
+              '<div class="bg-emerald-500/10 text-green-400 rounded px-1 py-1"><div class="font-bold text-sm">' + (m.yes_count||0) + '</div><div>Yes</div></div>' +
+              '<div class="bg-red-500/10 text-red-400 rounded px-1 py-1"><div class="font-bold text-sm">' + (m.no_count||0) + '</div><div>No</div></div>' +
+              '<div class="bg-amber-500/10 text-amber-400 rounded px-1 py-1"><div class="font-bold text-sm">' + (m.no_answer_count||0) + '</div><div>N/A</div></div>' +
+            '</div>' +
+            (mk > 0 ? '<button class="mt-2 w-full d2d-btn d2d-btn-outline d2d-btn-sm" onclick="window.d2d.filterPinsByMember(' + m.id + ',\'' + escAttr(m.name) + '\')"><i class="fas fa-map-pin mr-1"></i>View on Map</button>' : '') +
+          '</div>';
+        }
+      }
+
+      // Recent activity feed
+      var recent = adminData.recent || [];
+      var feed = '<div style="font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.5px;margin:16px 0 6px"><i class="fas fa-bolt mr-1"></i>Live Activity (' + recent.length + ')</div>';
+      if (recent.length === 0) {
+        feed += '<div class="d2d-empty"><p>No knocks recorded in this period.</p></div>';
+      } else {
+        feed += '<div style="max-height:260px;overflow-y:auto">';
+        var sCfg = { yes:{c:'#22c55e',i:'fa-thumbs-up'}, no:{c:'#ef4444',i:'fa-thumbs-down'}, no_answer:{c:'#f59e0b',i:'fa-question-circle'} };
+        for (var ri = 0; ri < recent.length; ri++) {
+          var r = recent[ri];
+          var sc = sCfg[r.status] || { c:'#6b7280', i:'fa-circle' };
+          feed += '<div onclick="window.d2d.focusPin(' + r.id + ')" style="display:flex;align-items:center;gap:8px;padding:8px;border-bottom:1px solid rgba(255,255,255,0.05);cursor:pointer">' +
+            '<i class="fas ' + sc.i + '" style="color:' + sc.c + ';font-size:14px;width:16px;text-align:center"></i>' +
+            '<div style="flex:1;min-width:0">' +
+              '<div style="color:#f1f5f9;font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escH(r.address || ('Pin #' + r.id)) + '</div>' +
+              '<div style="color:#9ca3af;font-size:10px">' +
+                (r.knocked_by_name ? escH(r.knocked_by_name) + ' · ' : '') + timeAgo(r.knocked_at) +
+                (r.turf_name ? ' · ' + escH(r.turf_name) : '') +
+              '</div>' +
+            '</div>' +
+          '</div>';
+        }
+        feed += '</div>';
+      }
+
+      content = kpis + memberCards + feed;
+    }
+
+    var refreshBtn = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
+      '<h3 class="font-bold text-gray-100 text-sm"><i class="fas fa-chart-line mr-1" style="color:#6366f1"></i>Team Tracking</h3>' +
+      '<button onclick="window.d2d.refreshAdmin()" class="d2d-btn d2d-btn-outline d2d-btn-sm" title="Refresh"><i class="fas fa-sync-alt"></i></button>' +
+    '</div>';
+
+    panel.innerHTML = refreshBtn + periodBar + content;
+  }
+
+  function adminKpi(value, label, color) {
+    return '<div style="background:var(--bg-card,#1a1a1a);border:1px solid var(--border-color,#333);border-radius:8px;padding:8px 6px;text-align:center">' +
+      '<div style="font-size:18px;font-weight:900;color:' + color + '">' + value + '</div>' +
+      '<div style="font-size:9px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:0.3px">' + label + '</div>' +
+    '</div>';
+  }
+
+  function loadAdminData() {
+    if (viewerRole !== 'owner') return;
+    api('GET', '/admin/tracking?period=' + adminPeriod).then(function(r) {
+      if (r && !r.error) { adminData = r; renderAdminPanel(); }
+    });
+  }
+
+  function setAdminPeriod(p) {
+    adminPeriod = p;
+    adminData = null;
+    renderAdminPanel();
+    loadAdminData();
+  }
+
+  function refreshAdmin() {
+    adminData = null;
+    renderAdminPanel();
+    loadAdminData();
   }
 
   // ============================================================
@@ -1660,7 +1803,9 @@
     setTool: setActiveTool,
     openDashboard: openDashboard,
     closeDashboard: closeDashboard,
-    refreshDashboard: refreshDashboard
+    refreshDashboard: refreshDashboard,
+    setAdminPeriod: setAdminPeriod,
+    refreshAdmin: refreshAdmin
   };
 
   // ============================================================

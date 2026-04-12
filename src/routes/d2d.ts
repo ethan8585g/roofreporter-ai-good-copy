@@ -484,6 +484,71 @@ d2dRoutes.delete('/pins/:id', async (c) => {
 })
 
 // ============================================================
+// ADMIN TRACKING — Time-scoped per-member activity for sales admin
+// period = today | week | month | all
+// ============================================================
+d2dRoutes.get('/admin/tracking', async (c) => {
+  const user = await getUser(c)
+  if (!user) return c.json({ error: 'Not authenticated' }, 401)
+  if (user.isTeamMember) return c.json({ error: 'Forbidden' }, 403)
+  await ensureD2DTables(c.env.DB)
+
+  const period = (c.req.query('period') || 'today').toLowerCase()
+  let cutoff: string | null = null
+  if (period === 'today') cutoff = "datetime('now', '-1 day')"
+  else if (period === 'week') cutoff = "datetime('now', '-7 days')"
+  else if (period === 'month') cutoff = "datetime('now', '-30 days')"
+
+  const timeClause = cutoff ? `AND p.knocked_at >= ${cutoff}` : ''
+
+  // Per-member stats within period
+  const members = await c.env.DB.prepare(`
+    SELECT tm.id, tm.name, tm.color, tm.email, tm.phone, tm.role,
+      COUNT(DISTINCT p.id) as total_knocks,
+      SUM(CASE WHEN p.status = 'yes' THEN 1 ELSE 0 END) as yes_count,
+      SUM(CASE WHEN p.status = 'no' THEN 1 ELSE 0 END) as no_count,
+      SUM(CASE WHEN p.status = 'no_answer' THEN 1 ELSE 0 END) as no_answer_count,
+      MAX(p.knocked_at) as last_activity,
+      MIN(p.knocked_at) as first_activity,
+      (SELECT COUNT(*) FROM d2d_turfs t WHERE t.assigned_to = tm.id AND t.owner_id = ?) as turf_count
+    FROM d2d_team_members tm
+    LEFT JOIN d2d_pins p ON p.knocked_by = tm.id AND p.owner_id = ? ${timeClause}
+    WHERE tm.owner_id = ? AND tm.is_active = 1
+    GROUP BY tm.id
+    ORDER BY total_knocks DESC
+  `).bind(user.id, user.id, user.id).all()
+
+  // Totals within period
+  const totals = await c.env.DB.prepare(`
+    SELECT
+      COUNT(*) as total_knocks,
+      SUM(CASE WHEN status = 'yes' THEN 1 ELSE 0 END) as yes_count,
+      SUM(CASE WHEN status = 'no' THEN 1 ELSE 0 END) as no_count,
+      SUM(CASE WHEN status = 'no_answer' THEN 1 ELSE 0 END) as no_answer_count
+    FROM d2d_pins p WHERE p.owner_id = ? ${cutoff ? `AND p.knocked_at >= ${cutoff}` : 'AND p.knocked_at IS NOT NULL'}
+  `).bind(user.id).first()
+
+  // Recent knocks within period
+  const recent = await c.env.DB.prepare(`
+    SELECT p.id, p.lat, p.lng, p.address, p.status, p.notes, p.knocked_at,
+      tm.name as knocked_by_name, tm.color as member_color, t.name as turf_name
+    FROM d2d_pins p
+    LEFT JOIN d2d_team_members tm ON tm.id = p.knocked_by
+    LEFT JOIN d2d_turfs t ON t.id = p.turf_id
+    WHERE p.owner_id = ? AND p.knocked_at IS NOT NULL ${cutoff ? `AND p.knocked_at >= ${cutoff}` : ''}
+    ORDER BY p.knocked_at DESC
+    LIMIT 50
+  `).bind(user.id).all()
+
+  return c.json({
+    period,
+    members: members.results,
+    totals,
+    recent: recent.results
+  })
+})
+
+// ============================================================
 // STATS — Dashboard summary
 // ============================================================
 d2dRoutes.get('/stats', async (c) => {

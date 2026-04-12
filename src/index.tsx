@@ -10,6 +10,7 @@ import { adminRoutes } from './routes/admin'
 import { aiAnalysisRoutes } from './routes/ai-analysis'
 import { authRoutes } from './routes/auth'
 import { customerAuthRoutes } from './routes/customer-auth'
+import { solarPipelineRoutes } from './routes/solar-pipeline'
 import { invoiceRoutes } from './routes/invoices'
 import { squareRoutes } from './routes/square'
 import { crmRoutes } from './routes/crm'
@@ -189,6 +190,7 @@ app.route('/api/admin', adminRoutes)
 app.route('/api/ai', aiAnalysisRoutes)
 app.route('/api/auth', authRoutes)
 app.route('/api/customer', customerAuthRoutes)
+app.route('/api/customer/solar-pipeline', solarPipelineRoutes)
 app.route('/api/invoices', invoiceRoutes)
 app.route('/api/square', squareRoutes)
 app.route('/api/crm', crmRoutes)
@@ -1635,6 +1637,9 @@ app.get('/customer/select-type', (c) => c.html(getSelectTypePageHTML()))
 
 // Solar Panel Design Tool — canvas-based panel placement on satellite image
 app.get('/customer/solar-design', (c) => c.html(getSolarDesignPageHTML()))
+
+// Solar Sales Pipeline — kanban board for solar companies only
+app.get('/customer/solar-pipeline', (c) => c.html(getSolarPipelinePageHTML()))
 
 // Customer Profile / Account Settings
 app.get('/customer/profile', (c) => c.html(getCustomerProfilePageHTML()))
@@ -8638,6 +8643,52 @@ function getSolarDesignPageHTML() {
   </script>
   <script src="/static/solar-design.js"></script>
   ${getRoverAssistant()}
+</body>
+</html>`
+}
+
+// ============================================================
+// Solar Sales Pipeline Page
+// ============================================================
+function getSolarPipelinePageHTML() {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags()}
+  <title>Solar Sales Pipeline - Roof Manager</title>
+</head>
+<body class="bg-gray-900 min-h-screen">
+  <header class="bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-lg">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+      <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
+        <img src="/static/logo.png" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
+        <div>
+          <h1 class="text-lg font-bold">Solar Sales Pipeline</h1>
+          <p class="text-amber-100 text-xs">Track leads, deals, and commission splits</p>
+        </div>
+      </a>
+      <nav class="flex items-center space-x-3">
+        <a href="/customer/dashboard" class="text-amber-100 hover:text-white text-sm"><i class="fas fa-th-large mr-1"></i>Dashboard</a>
+        <button onclick="custLogout()" class="text-amber-100 hover:text-white text-sm"><i class="fas fa-sign-out-alt mr-1"></i>Logout</button>
+      </nav>
+    </div>
+  </header>
+  <main class="max-w-[1400px] mx-auto px-4 py-6">
+    <div id="solar-pipeline-root"></div>
+  </main>
+  <script>
+    (function() {
+      var c = localStorage.getItem('rc_customer');
+      if (!c) { window.location.href = '/customer/login'; return; }
+    })();
+    function custLogout() {
+      var token = localStorage.getItem('rc_customer_token');
+      if (token) fetch('/api/customer/logout', { method: 'POST', headers: { 'Authorization': 'Bearer ' + token } })['catch'](function(){});
+      localStorage.removeItem('rc_customer'); localStorage.removeItem('rc_customer_token');
+      window.location.href = '/customer/login';
+    }
+  </script>
+  <script src="/static/solar-pipeline.js"></script>
 </body>
 </html>`
 }

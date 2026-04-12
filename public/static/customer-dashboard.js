@@ -299,6 +299,7 @@ function renderDashboard() {
           navLink('/customer/jobs', 'fa-hard-hat', 'Jobs', jobBadge || null, 'bg-gray-800') +
           navLink('/customer/crew', 'fa-users', 'Crew Manager', null, 'bg-gray-800') +
           navLink('/customer/pipeline', 'fa-funnel-dollar', 'Pipeline', null, 'bg-gray-800') +
+          (isSolar ? navLink('/customer/solar-pipeline', 'fa-solar-panel', 'Solar Sales Pipeline', null, 'bg-amber-600') : '') +
         '</div>' +
         // Team
         '<div>' +
