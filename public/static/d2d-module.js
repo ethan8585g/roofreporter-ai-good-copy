@@ -82,11 +82,13 @@
           '<div class="d2d-tab active" data-tab="turfs"><i class="fas fa-map"></i>Turfs</div>' +
           '<div class="d2d-tab" data-tab="pins"><i class="fas fa-map-pin"></i>Pins</div>' +
           '<div class="d2d-tab" data-tab="team"><i class="fas fa-users"></i>Team</div>' +
+          '<div class="d2d-tab" data-tab="leads"><i class="fas fa-handshake"></i>Leads</div>' +
           '<div class="d2d-tab d2d-tab-admin" data-tab="admin" style="display:none"><i class="fas fa-chart-line"></i>Admin</div>' +
         '</div>' +
         '<div class="d2d-panel active" id="panelTurfs"></div>' +
         '<div class="d2d-panel" id="panelPins"></div>' +
         '<div class="d2d-panel" id="panelTeam"></div>' +
+        '<div class="d2d-panel" id="panelLeads"></div>' +
         '<div class="d2d-panel" id="panelAdmin"></div>' +
       '</div>' +
       '<div class="d2d-map-area">' +
@@ -114,7 +116,9 @@
         document.querySelectorAll('.d2d-tab').forEach(function(t) { t.classList.remove('active'); });
         document.querySelectorAll('.d2d-panel').forEach(function(p) { p.classList.remove('active'); });
         tab.classList.add('active');
-        document.getElementById('panel' + capitalize(tab.getAttribute('data-tab'))).classList.add('active');
+        var tabName = tab.getAttribute('data-tab');
+        document.getElementById('panel' + capitalize(tabName)).classList.add('active');
+        if (tabName === 'leads') loadLeads();
       });
     });
 
@@ -1781,6 +1785,159 @@
   function fmtDate(d) { return d ? new Date(d).toLocaleDateString() : ''; }
 
   // ============================================================
+  // LEADS / APPOINTMENTS
+  // ============================================================
+  var leadsCache = [];
+  var leadsMembersCache = [];
+  function esc(s) { return (s == null ? '' : String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+  function loadLeads() {
+    var panel = document.getElementById('panelLeads');
+    if (!panel) return;
+    panel.innerHTML =
+      '<div class="d2d-panel-header">' +
+        '<h3>Leads / Appointments</h3>' +
+        '<button class="d2d-btn d2d-btn-primary d2d-btn-sm" onclick="window.d2d.openBookApptModal()"><i class="fas fa-plus mr-1"></i>Book Appointment</button>' +
+      '</div>' +
+      '<div id="leadsList" style="font-size:13px;color:var(--text-muted,#9ca3af);padding:10px">Loading...</div>';
+
+    Promise.all([
+      api('GET', '/appointments'),
+      viewerRole === 'owner' ? api('GET', '/team') : Promise.resolve({ members: [] })
+    ]).then(function(results) {
+      leadsCache = (results[0] && results[0].appointments) || [];
+      leadsMembersCache = (results[1] && results[1].members) || [];
+      renderLeadsList();
+    });
+  }
+
+  function renderLeadsList() {
+    var el = document.getElementById('leadsList');
+    if (!el) return;
+    if (!leadsCache.length) {
+      el.innerHTML = '<div class="d2d-empty"><i class="fas fa-handshake"></i><p>No appointments yet.<br>Click <b>Book Appointment</b> after a successful door knock.</p></div>';
+      return;
+    }
+    var statusColors = { new: '#6366f1', assigned: '#0ea5e9', processing: '#f59e0b', completed: '#22c55e', lost: '#ef4444' };
+    var html = '';
+    leadsCache.forEach(function(a) {
+      var color = statusColors[a.status] || '#9ca3af';
+      var assignOpts = '';
+      if (viewerRole === 'owner') {
+        assignOpts = '<option value="">— Unassigned —</option>';
+        leadsMembersCache.forEach(function(m) {
+          var sel = (m.id == a.assigned_to_member_id) ? ' selected' : '';
+          assignOpts += '<option value="' + m.id + '"' + sel + '>' + esc(m.name) + '</option>';
+        });
+      }
+      html += '<div style="background:var(--bg-card,#1a1a1a);border:1px solid var(--border-color,#333);border-radius:10px;padding:12px;margin-bottom:8px">' +
+        '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">' +
+          '<div>' +
+            '<div style="font-weight:700;color:var(--text-primary,#f1f5f9);font-size:14px">' + esc(a.customer_name) + '</div>' +
+            '<div style="font-size:12px;color:var(--text-muted,#9ca3af);margin-top:2px"><i class="fas fa-map-marker-alt mr-1"></i>' + esc(a.address) + '</div>' +
+            '<div style="font-size:12px;color:var(--text-muted,#9ca3af);margin-top:2px"><i class="far fa-calendar mr-1"></i>' + esc(a.appointment_date) + ' @ ' + esc(a.appointment_time) + '</div>' +
+            (a.notes ? '<div style="font-size:12px;color:var(--text-muted,#9ca3af);margin-top:4px;font-style:italic">"' + esc(a.notes) + '"</div>' : '') +
+            '<div style="font-size:11px;color:var(--text-muted,#9ca3af);margin-top:4px">By ' + esc(a.created_by_name || 'Owner') + ' · ' + (a.company_type || 'roofing') + '</div>' +
+          '</div>' +
+          '<span style="background:' + color + ';color:#fff;padding:3px 8px;border-radius:6px;font-size:10px;font-weight:700;text-transform:uppercase">' + a.status + '</span>' +
+        '</div>' +
+        '<div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">' +
+          (viewerRole === 'owner'
+            ? '<select onchange="window.d2d.assignLead(' + a.id + ', this.value)" style="flex:1;min-width:120px;padding:5px 8px;background:var(--bg-elevated,#0f0f0f);color:var(--text-primary,#f1f5f9);border:1px solid var(--border-color,#333);border-radius:6px;font-size:11px">' + assignOpts + '</select>'
+            : '') +
+          '<select onchange="window.d2d.updateLeadStatus(' + a.id + ', this.value)" style="padding:5px 8px;background:var(--bg-elevated,#0f0f0f);color:var(--text-primary,#f1f5f9);border:1px solid var(--border-color,#333);border-radius:6px;font-size:11px">' +
+            ['new','assigned','processing','completed','lost'].map(function(s) {
+              return '<option value="' + s + '"' + (s === a.status ? ' selected' : '') + '>' + s + '</option>';
+            }).join('') +
+          '</select>' +
+          (viewerRole === 'owner'
+            ? '<button onclick="window.d2d.deleteLead(' + a.id + ')" style="padding:5px 10px;background:#991b1b;color:#fff;border:none;border-radius:6px;font-size:11px;cursor:pointer"><i class="fas fa-trash"></i></button>'
+            : '') +
+        '</div>' +
+      '</div>';
+    });
+    el.innerHTML = html;
+  }
+
+  function openBookApptModal() {
+    var overlay = document.createElement('div');
+    overlay.id = 'd2d-appt-modal';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+    overlay.innerHTML =
+      '<div style="background:var(--bg-card,#1a1a1a);border:1px solid var(--border-color,#333);border-radius:12px;padding:24px;max-width:480px;width:100%;max-height:90vh;overflow-y:auto">' +
+        '<h2 style="color:var(--text-primary,#f1f5f9);font-size:18px;font-weight:800;margin-bottom:16px;display:flex;align-items:center;gap:8px"><i class="fas fa-handshake" style="color:#6366f1"></i>Book Appointment</h2>' +
+        '<form id="apptForm" onsubmit="return window.d2d.submitAppt(event)">' +
+          '<label style="display:block;margin-bottom:12px"><span style="font-size:12px;font-weight:600;color:var(--text-muted,#9ca3af)">Customer Name *</span>' +
+            '<input required name="customer_name" style="width:100%;margin-top:4px;padding:8px 10px;background:var(--bg-elevated,#0f0f0f);color:var(--text-primary,#f1f5f9);border:1px solid var(--border-color,#333);border-radius:6px;font-size:13px"></label>' +
+          '<label style="display:block;margin-bottom:12px"><span style="font-size:12px;font-weight:600;color:var(--text-muted,#9ca3af)">Address *</span>' +
+            '<input required name="address" style="width:100%;margin-top:4px;padding:8px 10px;background:var(--bg-elevated,#0f0f0f);color:var(--text-primary,#f1f5f9);border:1px solid var(--border-color,#333);border-radius:6px;font-size:13px"></label>' +
+          '<div style="display:flex;gap:10px;margin-bottom:12px">' +
+            '<label style="flex:1"><span style="font-size:12px;font-weight:600;color:var(--text-muted,#9ca3af)">Date *</span>' +
+              '<input required type="date" name="appointment_date" style="width:100%;margin-top:4px;padding:8px 10px;background:var(--bg-elevated,#0f0f0f);color:var(--text-primary,#f1f5f9);border:1px solid var(--border-color,#333);border-radius:6px;font-size:13px"></label>' +
+            '<label style="flex:1"><span style="font-size:12px;font-weight:600;color:var(--text-muted,#9ca3af)">Time *</span>' +
+              '<input required type="time" name="appointment_time" style="width:100%;margin-top:4px;padding:8px 10px;background:var(--bg-elevated,#0f0f0f);color:var(--text-primary,#f1f5f9);border:1px solid var(--border-color,#333);border-radius:6px;font-size:13px"></label>' +
+          '</div>' +
+          '<label style="display:block;margin-bottom:16px"><span style="font-size:12px;font-weight:600;color:var(--text-muted,#9ca3af)">Notes</span>' +
+            '<textarea name="notes" rows="3" placeholder="Roof condition, homeowner concerns, best contact method..." style="width:100%;margin-top:4px;padding:8px 10px;background:var(--bg-elevated,#0f0f0f);color:var(--text-primary,#f1f5f9);border:1px solid var(--border-color,#333);border-radius:6px;font-size:13px;resize:vertical"></textarea></label>' +
+          '<div style="display:flex;gap:10px;justify-content:flex-end">' +
+            '<button type="button" onclick="window.d2d.closeApptModal()" style="padding:9px 16px;background:var(--bg-elevated,#0f0f0f);color:var(--text-muted,#9ca3af);border:1px solid var(--border-color,#333);border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">Cancel</button>' +
+            '<button type="submit" style="padding:9px 18px;background:#6366f1;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer"><i class="fas fa-check mr-1"></i>Book & Notify Admin</button>' +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    document.body.appendChild(overlay);
+  }
+
+  function closeApptModal() {
+    var m = document.getElementById('d2d-appt-modal');
+    if (m) m.remove();
+  }
+
+  function submitAppt(e) {
+    e.preventDefault();
+    var f = e.target;
+    var body = {
+      customer_name: f.customer_name.value.trim(),
+      address: f.address.value.trim(),
+      appointment_date: f.appointment_date.value,
+      appointment_time: f.appointment_time.value,
+      notes: f.notes.value.trim()
+    };
+    api('POST', '/appointments', body).then(function(r) {
+      if (r && r.success) {
+        toast('Appointment booked — admin notified');
+        closeApptModal();
+        loadLeads();
+      } else {
+        toast((r && r.error) || 'Failed to book', 'error');
+      }
+    });
+    return false;
+  }
+
+  function assignLead(id, memberId) {
+    api('PATCH', '/appointments/' + id + '/assign', { assigned_to_member_id: memberId ? parseInt(memberId) : null }).then(function(r) {
+      if (r && r.success) { toast('Assigned'); loadLeads(); }
+      else toast((r && r.error) || 'Failed', 'error');
+    });
+  }
+
+  function updateLeadStatus(id, status) {
+    api('PATCH', '/appointments/' + id + '/status', { status: status }).then(function(r) {
+      if (r && r.success) { toast('Status updated'); loadLeads(); }
+      else toast((r && r.error) || 'Failed', 'error');
+    });
+  }
+
+  function deleteLead(id) {
+    if (!confirm('Delete this appointment?')) return;
+    api('DELETE', '/appointments/' + id).then(function(r) {
+      if (r && r.success) { toast('Deleted'); loadLeads(); }
+      else toast((r && r.error) || 'Failed', 'error');
+    });
+  }
+
+  // ============================================================
   // GLOBAL API (exposed for onclick handlers)
   // ============================================================
   window.d2d = {
@@ -1805,7 +1962,14 @@
     closeDashboard: closeDashboard,
     refreshDashboard: refreshDashboard,
     setAdminPeriod: setAdminPeriod,
-    refreshAdmin: refreshAdmin
+    refreshAdmin: refreshAdmin,
+    openBookApptModal: openBookApptModal,
+    closeApptModal: closeApptModal,
+    submitAppt: submitAppt,
+    assignLead: assignLead,
+    updateLeadStatus: updateLeadStatus,
+    deleteLead: deleteLead,
+    loadLeads: loadLeads
   };
 
   // ============================================================

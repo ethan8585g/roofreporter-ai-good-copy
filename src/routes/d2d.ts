@@ -1,8 +1,37 @@
 import { Hono } from 'hono'
 import type { Bindings } from '../types'
 import { resolveTeamOwner } from './team'
+import { sendGmailEmail } from '../services/email'
 
 export const d2dRoutes = new Hono<{ Bindings: Bindings }>()
+
+// ============================================================
+// APPOINTMENT VALIDATION (exported for tests)
+// ============================================================
+export const APPT_VALID_STATUSES = ['new', 'assigned', 'processing', 'completed', 'lost'] as const
+export type D2DAppointmentStatus = typeof APPT_VALID_STATUSES[number]
+
+export function validateAppointmentInput(input: {
+  customer_name?: any; address?: any; appointment_date?: any; appointment_time?: any;
+}): { ok: boolean; error?: string } {
+  if (!input.customer_name || typeof input.customer_name !== 'string' || !input.customer_name.trim()) {
+    return { ok: false, error: 'customer_name is required' }
+  }
+  if (!input.address || typeof input.address !== 'string' || !input.address.trim()) {
+    return { ok: false, error: 'address is required' }
+  }
+  if (!input.appointment_date || !/^\d{4}-\d{2}-\d{2}$/.test(String(input.appointment_date))) {
+    return { ok: false, error: 'appointment_date must be YYYY-MM-DD' }
+  }
+  if (!input.appointment_time || !/^\d{2}:\d{2}$/.test(String(input.appointment_time))) {
+    return { ok: false, error: 'appointment_time must be HH:MM (24h)' }
+  }
+  return { ok: true }
+}
+
+export function isValidApptStatus(s: any): s is D2DAppointmentStatus {
+  return typeof s === 'string' && (APPT_VALID_STATUSES as readonly string[]).includes(s)
+}
 
 // ============================================================
 // PASSWORD HASHING — same algo as customer-auth.ts
@@ -137,6 +166,31 @@ async function ensureD2DTables(db: any) {
         FOREIGN KEY (knocked_by) REFERENCES d2d_team_members(id)
       )
     `).run()
+
+    // Appointments (leads) — door knockers book, owner disperses to closer
+    await db.prepare(`
+      CREATE TABLE IF NOT EXISTS d2d_appointments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        owner_id INTEGER NOT NULL,
+        created_by_member_id INTEGER,
+        assigned_to_member_id INTEGER,
+        customer_name TEXT NOT NULL,
+        address TEXT NOT NULL,
+        appointment_date TEXT NOT NULL,
+        appointment_time TEXT NOT NULL,
+        notes TEXT,
+        company_type TEXT DEFAULT 'roofing',
+        status TEXT NOT NULL DEFAULT 'new',
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now')),
+        FOREIGN KEY (owner_id) REFERENCES customers(id),
+        FOREIGN KEY (created_by_member_id) REFERENCES d2d_team_members(id),
+        FOREIGN KEY (assigned_to_member_id) REFERENCES d2d_team_members(id)
+      )
+    `).run()
+    try { await db.prepare('CREATE INDEX IF NOT EXISTS idx_d2d_appt_owner ON d2d_appointments(owner_id)').run() } catch(e) {}
+    try { await db.prepare('CREATE INDEX IF NOT EXISTS idx_d2d_appt_assigned ON d2d_appointments(assigned_to_member_id)').run() } catch(e) {}
+    try { await db.prepare('CREATE INDEX IF NOT EXISTS idx_d2d_appt_status ON d2d_appointments(status)').run() } catch(e) {}
 
     // Indexes
     try { await db.prepare('CREATE INDEX IF NOT EXISTS idx_d2d_turfs_owner ON d2d_turfs(owner_id)').run() } catch(e) {}
@@ -568,4 +622,168 @@ d2dRoutes.get('/stats', async (c) => {
   `).bind(user.id, user.id, user.id, user.id, user.id, user.id, user.id).first()
 
   return c.json({ stats, viewer_role: user.isTeamMember ? 'member' : 'owner' })
+})
+
+// ============================================================
+// APPOINTMENTS / LEADS
+// Door knockers book appointments; they auto-route to team owner as leads.
+// Owner can process themselves or assign ("disperse") to a closer.
+// ============================================================
+
+// CREATE appointment — any authenticated team member OR owner
+d2dRoutes.post('/appointments', async (c) => {
+  const user = await getUser(c)
+  if (!user) return c.json({ error: 'Not authenticated' }, 401)
+  await ensureD2DTables(c.env.DB)
+
+  const body = await c.req.json().catch(() => ({}))
+  const v = validateAppointmentInput(body)
+  if (!v.ok) return c.json({ error: v.error }, 400)
+
+  const { customer_name, address, appointment_date, appointment_time, notes, company_type } = body
+
+  // Determine company_type: prefer explicit input, else owner's customers.company_type, else 'roofing'
+  let ct = (company_type === 'solar' || company_type === 'roofing') ? company_type : null
+  if (!ct) {
+    try {
+      const cust = await c.env.DB.prepare('SELECT company_type FROM customers WHERE id = ?').bind(user.id).first<any>()
+      ct = (cust?.company_type === 'solar') ? 'solar' : 'roofing'
+    } catch (e) { ct = 'roofing' }
+  }
+
+  const result = await c.env.DB.prepare(
+    `INSERT INTO d2d_appointments
+      (owner_id, created_by_member_id, customer_name, address, appointment_date, appointment_time, notes, company_type, status)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'new')`
+  ).bind(
+    user.id,
+    user.d2dMemberId,
+    String(customer_name).trim(),
+    String(address).trim(),
+    appointment_date,
+    appointment_time,
+    notes ? String(notes).trim() : null,
+    ct
+  ).run()
+
+  const apptId = result.meta.last_row_id
+
+  // Fire-and-forget email to team owner
+  try {
+    const owner = await c.env.DB.prepare('SELECT email, name FROM customers WHERE id = ?').bind(user.id).first<any>()
+    let bookerName = 'A team member'
+    if (user.d2dMemberId) {
+      const bm = await c.env.DB.prepare('SELECT name FROM d2d_team_members WHERE id = ?').bind(user.d2dMemberId).first<any>()
+      if (bm?.name) bookerName = bm.name
+    } else if (owner?.name) {
+      bookerName = owner.name
+    }
+    if (owner?.email && c.env.GCP_SERVICE_ACCOUNT_JSON) {
+      const subject = `New D2D Lead: ${customer_name} — ${appointment_date} ${appointment_time}`
+      const html = `
+        <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px">
+          <h2 style="color:#6366f1">New Appointment Booked</h2>
+          <p><strong>${bookerName}</strong> booked an appointment (${ct} lead).</p>
+          <table style="width:100%;border-collapse:collapse">
+            <tr><td style="padding:6px;border-bottom:1px solid #eee"><b>Customer</b></td><td style="padding:6px;border-bottom:1px solid #eee">${customer_name}</td></tr>
+            <tr><td style="padding:6px;border-bottom:1px solid #eee"><b>Address</b></td><td style="padding:6px;border-bottom:1px solid #eee">${address}</td></tr>
+            <tr><td style="padding:6px;border-bottom:1px solid #eee"><b>Date</b></td><td style="padding:6px;border-bottom:1px solid #eee">${appointment_date}</td></tr>
+            <tr><td style="padding:6px;border-bottom:1px solid #eee"><b>Time</b></td><td style="padding:6px;border-bottom:1px solid #eee">${appointment_time}</td></tr>
+            ${notes ? `<tr><td style="padding:6px;border-bottom:1px solid #eee"><b>Notes</b></td><td style="padding:6px;border-bottom:1px solid #eee">${String(notes).replace(/</g,'&lt;')}</td></tr>` : ''}
+          </table>
+          <p style="margin-top:20px"><a href="https://www.roofmanager.ca/customer/d2d" style="background:#6366f1;color:#fff;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:600">Open Leads Dashboard</a></p>
+        </div>`
+      await sendGmailEmail(c.env.GCP_SERVICE_ACCOUNT_JSON, owner.email, subject, html, owner.email).catch(() => {})
+    }
+  } catch (e) { console.log('[D2D appt email]', (e as any).message) }
+
+  return c.json({ success: true, id: apptId })
+})
+
+// LIST appointments — owner sees all; members see only ones assigned to them
+d2dRoutes.get('/appointments', async (c) => {
+  const user = await getUser(c)
+  if (!user) return c.json({ error: 'Not authenticated' }, 401)
+  await ensureD2DTables(c.env.DB)
+
+  const status = c.req.query('status')
+  let q = `SELECT a.*,
+      creator.name as created_by_name,
+      assignee.name as assigned_to_name,
+      assignee.color as assigned_color
+    FROM d2d_appointments a
+    LEFT JOIN d2d_team_members creator ON creator.id = a.created_by_member_id
+    LEFT JOIN d2d_team_members assignee ON assignee.id = a.assigned_to_member_id
+    WHERE a.owner_id = ?`
+  const params: any[] = [user.id]
+
+  if (user.isTeamMember && user.d2dMemberId) {
+    q += ' AND a.assigned_to_member_id = ?'
+    params.push(user.d2dMemberId)
+  }
+  if (status && isValidApptStatus(status)) {
+    q += ' AND a.status = ?'
+    params.push(status)
+  }
+  q += ' ORDER BY a.created_at DESC LIMIT 200'
+
+  const rows = await c.env.DB.prepare(q).bind(...params).all()
+  return c.json({ appointments: rows.results, viewer_role: user.isTeamMember ? 'member' : 'owner' })
+})
+
+// ASSIGN / DISPERSE appointment to a closer — owner only
+d2dRoutes.patch('/appointments/:id/assign', async (c) => {
+  const user = await getUser(c)
+  if (!user) return c.json({ error: 'Not authenticated' }, 401)
+  if (user.isTeamMember) return c.json({ error: 'Forbidden' }, 403)
+  const id = c.req.param('id')
+  const { assigned_to_member_id } = await c.req.json().catch(() => ({}))
+
+  if (assigned_to_member_id) {
+    const member = await c.env.DB.prepare(
+      'SELECT id FROM d2d_team_members WHERE id = ? AND owner_id = ? AND is_active = 1'
+    ).bind(assigned_to_member_id, user.id).first<any>()
+    if (!member) return c.json({ error: 'Invalid team member' }, 400)
+  }
+
+  await c.env.DB.prepare(
+    `UPDATE d2d_appointments SET assigned_to_member_id = ?, status = CASE WHEN status = 'new' THEN 'assigned' ELSE status END,
+     updated_at = datetime('now') WHERE id = ? AND owner_id = ?`
+  ).bind(assigned_to_member_id || null, id, user.id).run()
+
+  return c.json({ success: true })
+})
+
+// UPDATE status — owner or the assigned member
+d2dRoutes.patch('/appointments/:id/status', async (c) => {
+  const user = await getUser(c)
+  if (!user) return c.json({ error: 'Not authenticated' }, 401)
+  const id = c.req.param('id')
+  const { status } = await c.req.json().catch(() => ({}))
+  if (!isValidApptStatus(status)) return c.json({ error: 'Invalid status' }, 400)
+
+  const appt = await c.env.DB.prepare(
+    'SELECT assigned_to_member_id FROM d2d_appointments WHERE id = ? AND owner_id = ?'
+  ).bind(id, user.id).first<any>()
+  if (!appt) return c.json({ error: 'Not found' }, 404)
+
+  if (user.isTeamMember && appt.assigned_to_member_id !== user.d2dMemberId) {
+    return c.json({ error: 'Forbidden' }, 403)
+  }
+
+  await c.env.DB.prepare(
+    `UPDATE d2d_appointments SET status = ?, updated_at = datetime('now') WHERE id = ? AND owner_id = ?`
+  ).bind(status, id, user.id).run()
+
+  return c.json({ success: true })
+})
+
+// DELETE — owner only
+d2dRoutes.delete('/appointments/:id', async (c) => {
+  const user = await getUser(c)
+  if (!user) return c.json({ error: 'Not authenticated' }, 401)
+  if (user.isTeamMember) return c.json({ error: 'Forbidden' }, 403)
+  const id = c.req.param('id')
+  await c.env.DB.prepare('DELETE FROM d2d_appointments WHERE id = ? AND owner_id = ?').bind(id, user.id).run()
+  return c.json({ success: true })
 })
