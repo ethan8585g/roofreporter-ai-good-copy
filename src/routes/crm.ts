@@ -2285,7 +2285,9 @@ crmRoutes.get('/dispatch/board', async (c) => {
     `SELECT j.id, j.job_number, j.title, j.property_address, j.job_type, j.status,
             j.scheduled_date, j.scheduled_time, j.estimated_duration, j.crew_size,
             j.notes, j.lat, j.lng, j.route_order,
-            cc.name as customer_name, cc.phone as customer_phone
+            cc.name as customer_name, cc.phone as customer_phone,
+            (SELECT COUNT(*) FROM job_photos WHERE job_id = j.id) as photo_count,
+            (SELECT COUNT(*) FROM crew_messages WHERE job_id = j.id) as note_count
      FROM crm_jobs j
      LEFT JOIN crm_customers cc ON cc.id = j.crm_customer_id
      WHERE j.owner_id = ?
@@ -2432,4 +2434,104 @@ crmRoutes.post('/jobs/:id/unassign', async (c) => {
     await c.env.DB.prepare(`UPDATE crm_jobs SET scheduled_date = NULL, scheduled_time = NULL, route_order = NULL, updated_at = datetime('now') WHERE id = ?`).bind(id).run()
   }
   return c.json({ success: true })
+})
+
+// ============================================================
+// JOB PHOTOS — crew uploads progress photos tied to jobs
+// ============================================================
+
+async function resolveAuthor(c: any): Promise<{ id: number | null; name: string; ownerId: number | null }> {
+  const auth = c.req.header('Authorization')
+  if (!auth || !auth.startsWith('Bearer ')) return { id: null, name: '', ownerId: null }
+  const token = auth.slice(7)
+  const session = await c.env.DB.prepare(
+    "SELECT customer_id FROM customer_sessions WHERE session_token = ? AND expires_at > datetime('now')"
+  ).bind(token).first<any>()
+  if (session) {
+    const cust = await c.env.DB.prepare('SELECT id, name FROM customers WHERE id = ?').bind(session.customer_id).first<any>()
+    const { ownerId } = await resolveTeamOwner(c.env.DB, session.customer_id)
+    return { id: session.customer_id, name: cust?.name || '', ownerId }
+  }
+  const admin = await validateAdminSession(c.env.DB, auth)
+  if (admin) return { id: null, name: admin.email || 'Admin', ownerId: 1000000 + admin.id }
+  return { id: null, name: '', ownerId: null }
+}
+
+// Upload a photo (base64 data URL) for a job
+crmRoutes.post('/jobs/:id/photos', async (c) => {
+  const author = await resolveAuthor(c)
+  if (!author.ownerId) return c.json({ error: 'Unauthorized' }, 401)
+  const jobId = parseInt(c.req.param('id'), 10)
+  const job = await c.env.DB.prepare('SELECT id FROM crm_jobs WHERE id = ? AND owner_id = ?').bind(jobId, author.ownerId).first()
+  if (!job) return c.json({ error: 'Job not found' }, 404)
+  const body = await c.req.json() as { data_url?: string; caption?: string; phase?: string; lat?: number; lng?: number }
+  if (!body.data_url || !body.data_url.startsWith('data:image/')) return c.json({ error: 'Valid image data_url required' }, 400)
+  if (body.data_url.length > 3_000_000) return c.json({ error: 'Image too large (max ~2MB after downscale)' }, 413)
+  const phase = ['before','during','after','damage','material_delivery'].includes(body.phase || '') ? body.phase : 'during'
+  const result = await c.env.DB.prepare(
+    `INSERT INTO job_photos (job_id, crew_member_id, author_name, data_url, caption, phase, lat, lng)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(jobId, author.id, author.name, body.data_url, body.caption || '', phase, body.lat ?? null, body.lng ?? null).run()
+  return c.json({ success: true, id: result.meta.last_row_id })
+})
+
+// List photos for a job
+crmRoutes.get('/jobs/:id/photos', async (c) => {
+  const author = await resolveAuthor(c)
+  if (!author.ownerId) return c.json({ error: 'Unauthorized' }, 401)
+  const jobId = parseInt(c.req.param('id'), 10)
+  const job = await c.env.DB.prepare('SELECT id FROM crm_jobs WHERE id = ? AND owner_id = ?').bind(jobId, author.ownerId).first()
+  if (!job) return c.json({ error: 'Job not found' }, 404)
+  const phase = c.req.query('phase')
+  const rows = phase
+    ? await c.env.DB.prepare('SELECT * FROM job_photos WHERE job_id = ? AND phase = ? ORDER BY created_at DESC').bind(jobId, phase).all()
+    : await c.env.DB.prepare('SELECT * FROM job_photos WHERE job_id = ? ORDER BY created_at DESC').bind(jobId).all()
+  return c.json({ photos: rows.results || [] })
+})
+
+// Delete a photo (author or account owner only)
+crmRoutes.delete('/photos/:id', async (c) => {
+  const author = await resolveAuthor(c)
+  if (!author.ownerId) return c.json({ error: 'Unauthorized' }, 401)
+  const photoId = parseInt(c.req.param('id'), 10)
+  const row = await c.env.DB.prepare(
+    `SELECT p.id, p.crew_member_id, j.owner_id FROM job_photos p JOIN crm_jobs j ON j.id = p.job_id WHERE p.id = ?`
+  ).bind(photoId).first<any>()
+  if (!row) return c.json({ error: 'Not found' }, 404)
+  if (row.owner_id !== author.ownerId && row.crew_member_id !== author.id) return c.json({ error: 'Forbidden' }, 403)
+  await c.env.DB.prepare('DELETE FROM job_photos WHERE id = ?').bind(photoId).run()
+  return c.json({ success: true })
+})
+
+// Summary for crew mobile: today's jobs with photo count + latest note
+crmRoutes.get('/crew/today', async (c) => {
+  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  if (!token) return c.json({ error: 'Unauthorized' }, 401)
+  const session = await c.env.DB.prepare(
+    "SELECT customer_id FROM customer_sessions WHERE session_token = ? AND expires_at > datetime('now')"
+  ).bind(token).first<any>()
+  if (!session) return c.json({ error: 'Unauthorized' }, 401)
+  const myId = session.customer_id
+  const me = await c.env.DB.prepare('SELECT id, name, email FROM customers WHERE id = ?').bind(myId).first<any>()
+  const today = c.req.query('date') || new Date().toISOString().slice(0,10)
+
+  const jobs = await c.env.DB.prepare(
+    `SELECT j.id, j.job_number, j.title, j.property_address, j.job_type, j.status,
+            j.scheduled_date, j.scheduled_time, j.estimated_duration, j.crew_size,
+            j.notes, j.lat, j.lng, j.route_order,
+            cc.name as customer_name, cc.phone as customer_phone,
+            (SELECT COUNT(*) FROM job_photos WHERE job_id = j.id) as photo_count,
+            (SELECT COUNT(*) FROM crew_messages WHERE job_id = j.id) as note_count
+     FROM crm_jobs j
+     JOIN job_crew_assignments jca ON jca.job_id = j.id AND jca.crew_member_id = ?
+     LEFT JOIN crm_customers cc ON cc.id = j.crm_customer_id
+     WHERE j.scheduled_date = ?
+     ORDER BY COALESCE(j.route_order, 999), j.scheduled_time, j.id`
+  ).bind(myId, today).all()
+
+  const active = await c.env.DB.prepare(
+    `SELECT id, job_id, clock_in FROM crew_time_logs WHERE crew_member_id = ? AND clock_out IS NULL LIMIT 1`
+  ).bind(myId).first()
+
+  return c.json({ me, date: today, jobs: jobs.results || [], active_clock_in: active || null })
 })

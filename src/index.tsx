@@ -518,6 +518,11 @@ app.get('/admin/dispatch', (c) => {
   return c.html(getDispatchBoardHTML(c.env.GOOGLE_MAPS_API_KEY || ''))
 })
 
+// Crew mobile — today's jobs, photo upload, notes, clock in/out
+app.get('/crew/today', (c) => {
+  return c.html(getCrewTodayHTML())
+})
+
 // Order Confirmation Page
 app.get('/order/:id', (c) => {
   return c.html(getOrderConfirmationHTML())
@@ -3112,6 +3117,283 @@ function getMainPageHTML(mapsApiKey: string) {
 </html>`
 }
 
+function getCrewTodayHTML() {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags()}
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+  <title>My Day — Roof Manager</title>
+  <style>
+    :root { --bg-page:#0A0A0A; --bg-card:#141414; --bg-card-2:#1b1b1b; --border:#262626; --text-primary:#fff; --text-muted:#9ca3af; --accent:#22d3ee; --accent-2:#00FF88; --danger:#ef4444; --warn:#f59e0b; }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body { margin:0; background: var(--bg-page); color: var(--text-primary); font-family: -apple-system, system-ui, sans-serif; padding-bottom: env(safe-area-inset-bottom); }
+    .hdr { position: sticky; top: 0; z-index: 5; background: var(--bg-card); border-bottom: 1px solid var(--border); padding: 12px 16px; padding-top: calc(12px + env(safe-area-inset-top)); display:flex; align-items:center; justify-content:space-between; gap:8px; }
+    .hdr h1 { font-size: 17px; margin: 0; font-weight: 700; }
+    .hdr .sub { font-size: 11px; color: var(--text-muted); }
+    .clock-pill { background: rgba(0,255,136,0.12); border: 1px solid var(--accent-2); color: var(--accent-2); padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; display: none; animation: pulse 2s infinite; }
+    .clock-pill.on { display: inline-flex; align-items: center; gap: 6px; }
+    @keyframes pulse { 50% { opacity: .6; } }
+    .container { padding: 12px; max-width: 640px; margin: 0 auto; }
+    .job { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 14px; margin-bottom: 12px; }
+    .job.expanded { border-color: var(--accent); }
+    .job-head { display: flex; gap: 10px; align-items: flex-start; }
+    .num { width: 32px; height: 32px; border-radius: 50%; background: var(--accent); color: #000; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; flex-shrink: 0; }
+    .num.done { background: var(--accent-2); }
+    .num.active { background: var(--warn); color: #000; }
+    .job-meta { flex: 1; min-width: 0; }
+    .job-title { font-weight: 600; font-size: 15px; margin: 0 0 3px; }
+    .job-cust { font-size: 13px; color: var(--text-muted); }
+    .job-addr { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+    .job-badges { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+    .badge { font-size: 11px; padding: 3px 8px; background: var(--bg-card-2); border: 1px solid var(--border); border-radius: 4px; color: var(--text-muted); }
+    .badge.go { background: rgba(0,255,136,.1); border-color: var(--accent-2); color: var(--accent-2); }
+    .btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+    .btn { padding: 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-card-2); color: var(--text-primary); font-size: 13px; font-weight: 600; cursor: pointer; text-align: center; text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 6px; }
+    .btn.primary { background: linear-gradient(135deg, var(--accent), #0ea5e9); border-color: transparent; color: #000; }
+    .btn.success { background: linear-gradient(135deg, var(--accent-2), #10b981); border-color: transparent; color: #000; }
+    .btn.danger { background: var(--danger); border-color: transparent; }
+    .btn.full { grid-column: 1/3; }
+    .details { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); display: none; }
+    .details.on { display: block; }
+    .phase-row { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 6px; margin-bottom: 10px; }
+    .phase-chip { padding: 6px 12px; border-radius: 20px; background: var(--bg-card-2); border: 1px solid var(--border); font-size: 12px; white-space: nowrap; cursor: pointer; }
+    .phase-chip.on { background: var(--accent); color: #000; border-color: var(--accent); font-weight: 600; }
+    .photo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+    .photo-thumb { aspect-ratio: 1; background: var(--bg-card-2); border-radius: 6px; overflow: hidden; position: relative; cursor: pointer; }
+    .photo-thumb img { width: 100%; height: 100%; object-fit: cover; }
+    .photo-thumb .p { position: absolute; top: 3px; left: 3px; font-size: 9px; background: rgba(0,0,0,.7); padding: 2px 5px; border-radius: 3px; color: #fff; }
+    .notes { margin-top: 12px; }
+    .note { background: var(--bg-card-2); padding: 8px 10px; border-radius: 8px; margin-bottom: 6px; font-size: 13px; }
+    .note .by { font-size: 10px; color: var(--text-muted); margin-bottom: 2px; }
+    .note-input { display: flex; gap: 6px; margin-top: 8px; }
+    .note-input input { flex: 1; background: var(--bg-card-2); border: 1px solid var(--border); color: #fff; padding: 9px 12px; border-radius: 8px; font-size: 14px; }
+    .empty { text-align: center; color: var(--text-muted); padding: 40px 20px; font-size: 14px; }
+    .fab-cam { position: relative; }
+    .fab-cam input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+    .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.92); display: none; align-items: center; justify-content: center; z-index: 50; padding: 20px; }
+    .modal.on { display: flex; }
+    .modal img { max-width: 100%; max-height: 100%; border-radius: 8px; }
+    .modal .x { position: absolute; top: 20px; right: 20px; width: 40px; height: 40px; border-radius: 50%; background: #222; color: #fff; border: 0; font-size: 20px; cursor: pointer; }
+    .uploader { display: none; align-items: center; gap: 8px; padding: 8px; background: rgba(34,211,238,0.08); border: 1px solid var(--accent); border-radius: 8px; margin-top: 10px; font-size: 12px; color: var(--accent); }
+    .uploader.on { display: flex; }
+    .spin { width: 14px; height: 14px; border: 2px solid rgba(34,211,238,.3); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="hdr">
+    <div>
+      <h1 id="hdrName">My Day</h1>
+      <div class="sub" id="hdrDate"></div>
+    </div>
+    <div class="clock-pill" id="clockPill"><i class="fas fa-circle" style="font-size:6px"></i> <span>Clocked in</span></div>
+  </div>
+
+  <div class="container" id="jobList">
+    <div class="empty"><i class="fas fa-spinner fa-spin"></i> Loading today...</div>
+  </div>
+
+  <div class="modal" id="photoModal" onclick="this.classList.remove('on')">
+    <button class="x" onclick="document.getElementById('photoModal').classList.remove('on')">×</button>
+    <img id="photoModalImg" src="" />
+  </div>
+
+  <script>
+    (function(){
+      var u = localStorage.getItem('rc_user') || localStorage.getItem('rc_customer');
+      if (!u) { window.location.href = '/login'; }
+    })();
+    var token = localStorage.getItem('rc_token') || localStorage.getItem('rc_customer_token') || '';
+    function H(){ return { 'Authorization':'Bearer '+token, 'Content-Type':'application/json' }; }
+
+    var state = { me:null, jobs:[], active:null, expanded:{}, photos:{}, notes:{}, phase:{}, coords:null };
+
+    function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+    function fmtDate(iso){ var d=new Date(iso+'T00:00:00Z'); return d.toLocaleDateString(undefined,{weekday:'long',month:'short',day:'numeric'}); }
+
+    async function load(){
+      var res = await fetch('/api/crm/crew/today', { headers: H() });
+      if (!res.ok) { document.getElementById('jobList').innerHTML = '<div class="empty">Session expired. <a href="/login" style="color:var(--accent)">Log in</a></div>'; return; }
+      var data = await res.json();
+      state.me = data.me;
+      state.jobs = data.jobs || [];
+      state.active = data.active_clock_in;
+      document.getElementById('hdrName').textContent = (state.me?.name || 'Crew') + ' — ' + state.jobs.length + ' job' + (state.jobs.length===1?'':'s');
+      document.getElementById('hdrDate').textContent = fmtDate(data.date);
+      document.getElementById('clockPill').classList.toggle('on', !!state.active);
+      render();
+    }
+
+    function render(){
+      var el = document.getElementById('jobList');
+      if (!state.jobs.length) { el.innerHTML = '<div class="empty"><i class="fas fa-check-circle" style="font-size:40px;color:var(--accent-2);display:block;margin-bottom:10px"></i>No jobs scheduled today. Enjoy the day off.</div>'; return; }
+      el.innerHTML = state.jobs.map(renderJob).join('');
+    }
+
+    function renderJob(j, i){
+      var isActive = state.active && state.active.job_id === j.id;
+      var numCls = j.status==='completed' ? 'done' : (isActive ? 'active' : '');
+      var mapsUrl = (j.lat && j.lng) ? ('https://www.google.com/maps/dir/?api=1&destination='+j.lat+','+j.lng)
+                    : ('https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent(j.property_address||''));
+      var expanded = state.expanded[j.id] ? 'expanded' : '';
+      var detailsOn = state.expanded[j.id] ? 'on' : '';
+      var currentPhase = state.phase[j.id] || 'during';
+      var phases = ['before','during','after','damage','material_delivery'];
+      var phaseRow = phases.map(function(p){ return '<div class="phase-chip '+(currentPhase===p?'on':'')+'" onclick="setPhase('+j.id+',\\''+p+'\\')">'+p.replace('_',' ')+'</div>'; }).join('');
+      var photos = state.photos[j.id] || null;
+      var photoGrid = photos
+        ? (photos.length ? '<div class="photo-grid">' + photos.map(function(p){ return '<div class="photo-thumb" onclick="showPhoto(\\''+p.id+'\\')"><img src="'+p.data_url+'" /><span class="p">'+esc(p.phase)+'</span></div>'; }).join('') + '</div>' : '<div class="empty" style="padding:20px">No photos yet</div>')
+        : '<div class="empty" style="padding:20px"><i class="fas fa-spinner fa-spin"></i></div>';
+      var notes = state.notes[j.id] || null;
+      var notesList = notes
+        ? (notes.length ? notes.map(function(n){ return '<div class="note"><div class="by">'+esc(n.author_name||'Crew')+' · '+esc((n.created_at||'').slice(5,16).replace('T',' '))+'</div>'+esc(n.content)+'</div>'; }).join('') : '<div style="color:var(--text-muted);font-size:12px;padding:6px 0">No notes yet</div>')
+        : '<div style="color:var(--text-muted);font-size:12px;padding:6px 0"><i class="fas fa-spinner fa-spin"></i></div>';
+
+      return '<div class="job '+expanded+'" data-job="'+j.id+'">'
+        + '<div class="job-head" onclick="toggle('+j.id+')">'
+        +   '<div class="num '+numCls+'">'+(j.route_order || (i+1))+'</div>'
+        +   '<div class="job-meta">'
+        +     '<p class="job-title">'+esc(j.title)+'</p>'
+        +     '<div class="job-cust">'+esc(j.customer_name||'—')+(j.customer_phone ? ' · <a href="tel:'+esc(j.customer_phone)+'" style="color:var(--accent)" onclick="event.stopPropagation()">'+esc(j.customer_phone)+'</a>':'')+'</div>'
+        +     '<div class="job-addr"><i class="fas fa-map-marker-alt" style="color:var(--text-muted)"></i> '+esc(j.property_address||'No address')+'</div>'
+        +     '<div class="job-badges">'
+        +       '<span class="badge">'+esc(j.job_type||'install')+'</span>'
+        +       (j.scheduled_time ? '<span class="badge"><i class="far fa-clock"></i> '+esc(j.scheduled_time)+'</span>':'')
+        +       (j.photo_count ? '<span class="badge"><i class="fas fa-camera"></i> '+j.photo_count+'</span>':'')
+        +       (j.note_count ? '<span class="badge"><i class="fas fa-comment"></i> '+j.note_count+'</span>':'')
+        +       (j.status==='completed' ? '<span class="badge go"><i class="fas fa-check"></i> Done</span>':'')
+        +     '</div>'
+        +   '</div>'
+        + '</div>'
+        + '<div class="btn-row">'
+        +   '<a class="btn" href="'+mapsUrl+'" target="_blank" onclick="event.stopPropagation()"><i class="fas fa-location-arrow"></i> Navigate</a>'
+        +   (isActive
+              ? '<button class="btn danger" onclick="event.stopPropagation(); clockOut('+j.id+')"><i class="fas fa-stop-circle"></i> Clock Out</button>'
+              : '<button class="btn success" onclick="event.stopPropagation(); clockIn('+j.id+')"><i class="fas fa-play-circle"></i> Clock In</button>')
+        + '</div>'
+        + '<div class="details '+detailsOn+'">'
+        +   '<div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.1em">Phase</div>'
+        +   '<div class="phase-row">'+phaseRow+'</div>'
+        +   '<div class="btn-row">'
+        +     '<label class="btn primary fab-cam full"><i class="fas fa-camera"></i> Take / Upload Photo<input type="file" accept="image/*" capture="environment" onchange="upload('+j.id+',this)"/></label>'
+        +   '</div>'
+        +   '<div class="uploader" id="up-'+j.id+'"><div class="spin"></div> Uploading photo...</div>'
+        +   '<div style="font-size:11px;color:var(--text-muted);margin:12px 0 6px;text-transform:uppercase;letter-spacing:.1em">Photos</div>'
+        +   photoGrid
+        +   '<div style="font-size:11px;color:var(--text-muted);margin:12px 0 6px;text-transform:uppercase;letter-spacing:.1em">Notes</div>'
+        +   '<div class="notes">'+notesList+'</div>'
+        +   '<div class="note-input"><input type="text" id="ni-'+j.id+'" placeholder="Add a note..." onkeydown="if(event.key===\\'Enter\\')sendNote('+j.id+')"/><button class="btn primary" onclick="sendNote('+j.id+')"><i class="fas fa-paper-plane"></i></button></div>'
+        + '</div>'
+        + '</div>';
+    }
+
+    function setPhase(jobId, p){ state.phase[jobId] = p; render(); }
+    function showPhoto(id){
+      var p = null;
+      Object.keys(state.photos).forEach(function(k){ (state.photos[k]||[]).forEach(function(ph){ if (String(ph.id)===String(id)) p = ph; }); });
+      if (!p) return;
+      document.getElementById('photoModalImg').src = p.data_url;
+      document.getElementById('photoModal').classList.add('on');
+    }
+
+    async function toggle(jobId){
+      state.expanded[jobId] = !state.expanded[jobId];
+      if (state.expanded[jobId]) {
+        render();
+        await Promise.all([loadPhotos(jobId), loadNotes(jobId)]);
+        render();
+      } else {
+        render();
+      }
+    }
+
+    async function loadPhotos(jobId){
+      var r = await fetch('/api/crm/jobs/'+jobId+'/photos', { headers: H() });
+      if (r.ok) { var d = await r.json(); state.photos[jobId] = d.photos || []; }
+    }
+    async function loadNotes(jobId){
+      var r = await fetch('/api/crm/jobs/'+jobId+'/messages', { headers: H() });
+      if (r.ok) { var d = await r.json(); state.notes[jobId] = d.messages || d.results || []; }
+    }
+
+    async function downscale(file, maxDim, quality){
+      maxDim = maxDim || 1600; quality = quality || 0.82;
+      var img = await new Promise(function(res, rej){
+        var fr = new FileReader();
+        fr.onload = function(){ var im = new Image(); im.onload = function(){ res(im); }; im.onerror = rej; im.src = fr.result; };
+        fr.onerror = rej; fr.readAsDataURL(file);
+      });
+      var scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+      var w = Math.round(img.width * scale), h = Math.round(img.height * scale);
+      var cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+      cv.getContext('2d').drawImage(img, 0, 0, w, h);
+      return cv.toDataURL('image/jpeg', quality);
+    }
+
+    async function getCoords(){
+      if (!navigator.geolocation) return null;
+      return new Promise(function(res){
+        navigator.geolocation.getCurrentPosition(
+          function(p){ res({ lat:p.coords.latitude, lng:p.coords.longitude }); },
+          function(){ res(null); },
+          { timeout: 4000, maximumAge: 600000 }
+        );
+      });
+    }
+
+    async function upload(jobId, input){
+      var file = input.files && input.files[0];
+      if (!file) return;
+      var up = document.getElementById('up-'+jobId);
+      up.classList.add('on');
+      try {
+        var dataUrl = await downscale(file, 1600, 0.82);
+        var coords = await getCoords();
+        var phase = state.phase[jobId] || 'during';
+        var res = await fetch('/api/crm/jobs/'+jobId+'/photos', {
+          method:'POST', headers:H(),
+          body: JSON.stringify({ data_url: dataUrl, phase: phase, lat: coords?.lat, lng: coords?.lng })
+        });
+        if (!res.ok) { var e = await res.json().catch(function(){return{};}); alert('Upload failed: '+(e.error||res.status)); return; }
+        await loadPhotos(jobId);
+        await load();
+      } finally {
+        up.classList.remove('on');
+        input.value = '';
+      }
+    }
+
+    async function sendNote(jobId){
+      var inp = document.getElementById('ni-'+jobId);
+      var content = (inp.value || '').trim();
+      if (!content) return;
+      var res = await fetch('/api/crm/jobs/'+jobId+'/messages', { method:'POST', headers:H(), body: JSON.stringify({ content: content }) });
+      if (!res.ok) { alert('Failed to send note'); return; }
+      inp.value = '';
+      await loadNotes(jobId);
+      render();
+    }
+
+    async function clockIn(jobId){
+      var coords = await getCoords();
+      var res = await fetch('/api/crm/jobs/'+jobId+'/check-in', { method:'POST', headers:H(), body: JSON.stringify({ lat: coords?.lat, lng: coords?.lng }) });
+      if (!res.ok) { var e = await res.json().catch(function(){return{};}); alert(e.error || 'Clock-in failed'); return; }
+      await load();
+    }
+    async function clockOut(jobId){
+      var res = await fetch('/api/crm/jobs/'+jobId+'/check-out', { method:'POST', headers:H() });
+      if (!res.ok) { var e = await res.json().catch(function(){return{};}); alert(e.error || 'Clock-out failed'); return; }
+      await load();
+    }
+
+    load();
+    setInterval(load, 90000);
+  </script>
+</body>
+</html>`
+}
+
 function getDispatchBoardHTML(mapsApiKey: string = '') {
   const mapsScript = mapsApiKey
     ? `<script src="https://maps.googleapis.com/maps/api/js?key=${mapsApiKey}&libraries=geometry" async defer></script>`
@@ -3218,6 +3500,23 @@ function getDispatchBoardHTML(mapsApiKey: string = '') {
     </div>
   </div>
 
+  <div id="jobDrawer" style="position:fixed; top:0; right:0; height:100vh; width:420px; max-width:100vw; background:var(--bg-card); border-left:1px solid var(--border); box-shadow:-10px 0 30px rgba(0,0,0,0.5); transform:translateX(100%); transition:transform .25s; z-index:20; overflow-y:auto;">
+    <div style="padding:14px 16px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; background:var(--bg-card); z-index:2;">
+      <div><div id="drawerTitle" style="font-weight:700; font-size:14px"></div><div id="drawerSub" class="stat"></div></div>
+      <button class="btn" onclick="dbCloseDrawer()"><i class="fas fa-times"></i></button>
+    </div>
+    <div style="padding:14px 16px;">
+      <div class="panel-title">Photos <span id="drawerPhotoCount" style="color:var(--accent)"></span></div>
+      <div id="drawerPhotos" style="display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-bottom:16px;"></div>
+      <div class="panel-title">Notes <span id="drawerNoteCount" style="color:var(--accent)"></span></div>
+      <div id="drawerNotes" style="margin-bottom:12px"></div>
+      <div style="display:flex; gap:6px"><input type="text" id="drawerNoteInput" placeholder="Add a note..." style="flex:1;background:var(--bg-card-2);border:1px solid var(--border);color:#fff;padding:8px 10px;border-radius:6px;font-size:12px"/><button class="btn primary" onclick="dbDrawerSendNote()"><i class="fas fa-paper-plane"></i></button></div>
+    </div>
+  </div>
+  <div id="photoModal" style="position:fixed;inset:0;background:rgba(0,0,0,.92);display:none;align-items:center;justify-content:center;z-index:60;padding:20px" onclick="this.style.display='none'">
+    <img id="photoModalImg" style="max-width:100%;max-height:100%;border-radius:8px"/>
+  </div>
+
   <script>
     // Auth
     (function(){
@@ -3312,20 +3611,26 @@ function getDispatchBoardHTML(mapsApiKey: string = '') {
     }
 
     function renderCard(j){
-      return '<div class="job-card" draggable="true" data-job="'+j.id+'">'
+      return '<div class="job-card" draggable="true" data-job="'+j.id+'" onclick="dbOpenJob('+j.id+', event)">'
         + '<p class="title">'+esc(j.title)+'</p>'
         + '<div class="meta">'+esc(j.customer_name||'—')+'</div>'
         + '<div class="meta" style="margin-top:3px">'+esc(j.property_address||'No address')+'</div>'
         + '<div style="margin-top:5px"><span class="badge '+esc(j.job_type||'')+'">'+esc(j.job_type||'install')+'</span>'
         + (j.crew_size ? '<span class="badge"><i class="fas fa-users"></i> '+j.crew_size+'</span>' : '')
+        + (j.photo_count ? '<span class="badge"><i class="fas fa-camera" style="color:var(--accent-2)"></i> '+j.photo_count+'</span>' : '')
+        + (j.note_count ? '<span class="badge"><i class="fas fa-comment" style="color:var(--accent)"></i> '+j.note_count+'</span>' : '')
         + (j.lat ? '<span class="badge"><i class="fas fa-map-marker-alt" style="color:var(--accent-2)"></i></span>' : '<span class="badge" style="color:#f59e0b">No geo</span>')
         + '</div></div>';
     }
     function renderChip(j){
-      return '<div class="chip status-'+esc(j.status||'scheduled')+'" draggable="true" data-job="'+j.id+'" title="'+esc(j.title+' — '+(j.property_address||''))+'">'
+      var meta = '';
+      if (j.photo_count) meta += '<i class="fas fa-camera" style="color:var(--accent-2)"></i> '+j.photo_count+' ';
+      if (j.note_count) meta += '<i class="fas fa-comment" style="color:var(--accent)"></i> '+j.note_count;
+      return '<div class="chip status-'+esc(j.status||'scheduled')+'" draggable="true" data-job="'+j.id+'" onclick="dbOpenJob('+j.id+', event)" title="'+esc(j.title+' — '+(j.property_address||''))+'">'
         + (j.route_order ? '<span style="color:var(--accent);font-weight:700">#'+j.route_order+' </span>' : '')
         + '<span class="t">'+esc(j.title.slice(0,24))+'</span>'
         + (j.scheduled_time ? '<div class="a">'+esc(j.scheduled_time)+'</div>' : '')
+        + (meta ? '<div class="a">'+meta+'</div>' : '')
         + '</div>';
     }
 
@@ -3444,6 +3749,63 @@ function getDispatchBoardHTML(mapsApiKey: string = '') {
       } finally {
         btn.disabled = false; btn.innerHTML = '<i class="fas fa-route"></i> Optimize Route';
       }
+    }
+
+    // Job drawer — photos + notes
+    var drawerJobId = null;
+    async function dbOpenJob(jobId, ev){
+      if (ev) { ev.stopPropagation(); if (ev.target && ev.target.closest && ev.target.closest('[draggable]') && ev.type === 'dragstart') return; }
+      drawerJobId = jobId;
+      var job = state.jobs.find(function(j){ return j.id === jobId; });
+      if (!job) return;
+      document.getElementById('drawerTitle').textContent = job.title;
+      document.getElementById('drawerSub').textContent = (job.customer_name||'') + ' · ' + (job.property_address||'');
+      document.getElementById('jobDrawer').style.transform = 'translateX(0)';
+      await Promise.all([dbLoadPhotos(jobId), dbLoadNotes(jobId)]);
+    }
+    function dbCloseDrawer(){ drawerJobId = null; document.getElementById('jobDrawer').style.transform = 'translateX(100%)'; }
+    async function dbLoadPhotos(jobId){
+      var r = await fetch('/api/crm/jobs/'+jobId+'/photos', { headers: authHeaders() });
+      if (!r.ok) return;
+      var d = await r.json();
+      var photos = d.photos || [];
+      document.getElementById('drawerPhotoCount').textContent = '('+photos.length+')';
+      document.getElementById('drawerPhotos').innerHTML = photos.length
+        ? photos.map(function(p){ return '<div data-pid="'+p.id+'" style="aspect-ratio:1;background:var(--bg-card-2);border-radius:6px;overflow:hidden;position:relative;cursor:pointer"><img src="'+p.data_url+'" style="width:100%;height:100%;object-fit:cover"/><span style="position:absolute;top:3px;left:3px;font-size:9px;background:rgba(0,0,0,.7);padding:2px 5px;border-radius:3px;color:#fff">'+esc(p.phase)+'</span><button data-del="'+p.id+'" style="position:absolute;top:3px;right:3px;background:rgba(239,68,68,.9);border:0;color:#fff;width:20px;height:20px;border-radius:50%;cursor:pointer;font-size:10px">×</button></div>'; }).join('')
+        : '<div class="empty" style="grid-column:1/-1">No photos yet</div>';
+      document.querySelectorAll('#drawerPhotos [data-pid]').forEach(function(div){
+        div.onclick = function(e){
+          if (e.target && e.target.getAttribute && e.target.getAttribute('data-del')) { e.stopPropagation(); dbDeletePhoto(parseInt(e.target.getAttribute('data-del'),10)); return; }
+          var img = div.querySelector('img');
+          if (img) { document.getElementById('photoModalImg').src = img.src; document.getElementById('photoModal').style.display = 'flex'; }
+        };
+      });
+    }
+    async function dbDeletePhoto(id){
+      if (!confirm('Delete this photo?')) return;
+      await fetch('/api/crm/photos/'+id, { method:'DELETE', headers: authHeaders() });
+      if (drawerJobId) dbLoadPhotos(drawerJobId);
+      dbLoad();
+    }
+    async function dbLoadNotes(jobId){
+      var r = await fetch('/api/crm/jobs/'+jobId+'/messages', { headers: authHeaders() });
+      if (!r.ok) return;
+      var d = await r.json();
+      var notes = d.messages || d.results || [];
+      document.getElementById('drawerNoteCount').textContent = '('+notes.length+')';
+      document.getElementById('drawerNotes').innerHTML = notes.length
+        ? notes.map(function(n){ return '<div style="background:var(--bg-card-2);padding:8px 10px;border-radius:6px;margin-bottom:6px;font-size:12px"><div style="font-size:10px;color:var(--text-muted);margin-bottom:2px">'+esc(n.author_name||'Crew')+' · '+esc((n.created_at||'').slice(5,16).replace('T',' '))+'</div>'+esc(n.content)+'</div>'; }).join('')
+        : '<div style="color:var(--text-muted);font-size:11px;padding:6px 0">No notes yet</div>';
+    }
+    async function dbDrawerSendNote(){
+      var inp = document.getElementById('drawerNoteInput');
+      var content = (inp.value||'').trim();
+      if (!content || !drawerJobId) return;
+      var r = await fetch('/api/crm/jobs/'+drawerJobId+'/messages', { method:'POST', headers: authHeaders(), body: JSON.stringify({ content: content }) });
+      if (!r.ok) { alert('Failed'); return; }
+      inp.value = '';
+      dbLoadNotes(drawerJobId);
+      dbLoad();
     }
 
     dbLoad();
