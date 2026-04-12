@@ -33,20 +33,101 @@ function getToken() { return localStorage.getItem('rc_customer_token') || ''; }
 function authHeaders() { return { 'Authorization': 'Bearer ' + getToken(), 'Content-Type': 'application/json' }; }
 
 // Subscribe to monthly membership ($49/month)
-async function subscribeToMembership() {
+function subscribeToMembership() {
+  showSubscriptionTierPicker();
+}
+
+function showSubscriptionTierPicker() {
+  var existing = document.getElementById('subscriptionOverlay');
+  if (existing) existing.remove();
+
+  var overlay = document.createElement('div');
+  overlay.id = 'subscriptionOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);backdrop-filter:blur(8px);animation:fadeIn 0.3s ease-out;overflow-y:auto;padding:20px';
+  overlay.innerHTML =
+    '<div style="background:white;border-radius:24px;padding:36px 28px;max-width:820px;width:95%;box-shadow:0 25px 60px rgba(0,0,0,0.3);animation:scaleIn 0.4s ease-out">' +
+      '<div style="text-align:center;margin-bottom:24px">' +
+        '<div style="width:64px;height:64px;margin:0 auto 16px;background:linear-gradient(135deg,#f59e0b,#d97706);border-radius:50%;display:flex;align-items:center;justify-content:center">' +
+          '<i class="fas fa-crown" style="color:white;font-size:28px"></i>' +
+        '</div>' +
+        '<h2 style="font-size:22px;font-weight:800;color:#111;margin-bottom:6px">Choose Your Membership</h2>' +
+        '<p style="color:#6b7280;font-size:14px">Your 3 free trial reports have been used. Subscribe to continue generating reports.</p>' +
+      '</div>' +
+      '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px">' +
+        // Starter
+        '<div style="border:2px solid #e5e7eb;border-radius:16px;padding:20px 16px;text-align:center">' +
+          '<div style="font-size:12px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Starter</div>' +
+          '<div style="font-size:32px;font-weight:900;color:#111">$49<span style="font-size:14px;font-weight:500;color:#6b7280">.99/mo</span></div>' +
+          '<div style="margin:12px 0;font-size:13px;color:#374151">' +
+            '<div style="padding:4px 0"><i class="fas fa-users" style="color:#10b981;margin-right:6px;width:14px"></i>Up to <strong>5</strong> team members</div>' +
+            '<div style="padding:4px 0"><i class="fas fa-chart-line" style="color:#10b981;margin-right:6px;width:14px"></i>Full CRM access</div>' +
+            '<div style="padding:4px 0"><i class="fas fa-robot" style="color:#10b981;margin-right:6px;width:14px"></i>AI roof analysis</div>' +
+            '<div style="padding:4px 0"><i class="fas fa-times" style="color:#d1d5db;margin-right:6px;width:14px"></i><span style="color:#9ca3af">Reports sold separately</span></div>' +
+          '</div>' +
+          '<button onclick="checkoutTier(\'starter\')" class="sub-tier-btn" data-tier="starter" style="width:100%;background:#10b981;color:white;border:none;padding:12px;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer">Subscribe</button>' +
+        '</div>' +
+        // Professional
+        '<div style="border:2px solid #10b981;border-radius:16px;padding:20px 16px;text-align:center;position:relative;box-shadow:0 4px 20px rgba(16,185,129,0.15)">' +
+          '<div style="position:absolute;top:-11px;left:50%;transform:translateX(-50%);background:#10b981;color:white;font-size:10px;font-weight:800;padding:3px 12px;border-radius:20px;text-transform:uppercase;letter-spacing:0.5px">Most Popular</div>' +
+          '<div style="font-size:12px;font-weight:700;color:#059669;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Professional</div>' +
+          '<div style="font-size:32px;font-weight:900;color:#111">$99<span style="font-size:14px;font-weight:500;color:#6b7280">.99/mo</span></div>' +
+          '<div style="margin:12px 0;font-size:13px;color:#374151">' +
+            '<div style="padding:4px 0"><i class="fas fa-users" style="color:#10b981;margin-right:6px;width:14px"></i>Up to <strong>10</strong> team members</div>' +
+            '<div style="padding:4px 0"><i class="fas fa-chart-line" style="color:#10b981;margin-right:6px;width:14px"></i>Full CRM access</div>' +
+            '<div style="padding:4px 0"><i class="fas fa-robot" style="color:#10b981;margin-right:6px;width:14px"></i>AI roof analysis</div>' +
+            '<div style="padding:4px 0"><i class="fas fa-times" style="color:#d1d5db;margin-right:6px;width:14px"></i><span style="color:#9ca3af">Reports sold separately</span></div>' +
+          '</div>' +
+          '<button onclick="checkoutTier(\'professional\')" class="sub-tier-btn" data-tier="professional" style="width:100%;background:linear-gradient(135deg,#10b981,#059669);color:white;border:none;padding:12px;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer">Subscribe</button>' +
+        '</div>' +
+        // Enterprise
+        '<div style="border:2px solid #e5e7eb;border-radius:16px;padding:20px 16px;text-align:center">' +
+          '<div style="font-size:12px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Enterprise</div>' +
+          '<div style="font-size:32px;font-weight:900;color:#111">$199<span style="font-size:14px;font-weight:500;color:#6b7280">.99/mo</span></div>' +
+          '<div style="margin:12px 0;font-size:13px;color:#374151">' +
+            '<div style="padding:4px 0"><i class="fas fa-users" style="color:#10b981;margin-right:6px;width:14px"></i>Up to <strong>25</strong> team members</div>' +
+            '<div style="padding:4px 0"><i class="fas fa-chart-line" style="color:#10b981;margin-right:6px;width:14px"></i>Full CRM access</div>' +
+            '<div style="padding:4px 0"><i class="fas fa-robot" style="color:#10b981;margin-right:6px;width:14px"></i>AI roof analysis</div>' +
+            '<div style="padding:4px 0"><i class="fas fa-times" style="color:#d1d5db;margin-right:6px;width:14px"></i><span style="color:#9ca3af">Reports sold separately</span></div>' +
+          '</div>' +
+          '<button onclick="checkoutTier(\'enterprise\')" class="sub-tier-btn" data-tier="enterprise" style="width:100%;background:#10b981;color:white;border:none;padding:12px;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer">Subscribe</button>' +
+        '</div>' +
+      '</div>' +
+      '<div style="text-align:center;padding:12px;background:#f9fafb;border-radius:12px;margin-bottom:16px">' +
+        '<p style="font-size:13px;color:#6b7280;margin:0">Need more than 25 team members? <a href="mailto:sales@roofmanager.ca" style="color:#059669;font-weight:700;text-decoration:none">Contact sales@roofmanager.ca</a></p>' +
+      '</div>' +
+      '<button onclick="document.getElementById(\'subscriptionOverlay\').remove()" style="width:100%;background:none;border:1px solid #e5e7eb;padding:10px;border-radius:12px;font-size:13px;color:#6b7280;cursor:pointer">Maybe Later</button>' +
+    '</div>' +
+    '<style>' +
+      '@keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }' +
+      '@keyframes scaleIn { from { transform: scale(0.8); opacity: 0 } to { transform: scale(1); opacity: 1 } }' +
+      '@media (max-width: 640px) { #subscriptionOverlay > div > div:nth-child(2) { grid-template-columns: 1fr !important; } }' +
+    '</style>';
+  document.body.appendChild(overlay);
+}
+
+async function checkoutTier(tier) {
+  var btns = document.querySelectorAll('.sub-tier-btn');
+  btns.forEach(function(b) { b.disabled = true; });
+  var btn = document.querySelector('[data-tier="' + tier + '"]');
+  if (btn) btn.innerHTML = '<i class="fas fa-spinner fa-spin" style="margin-right:6px"></i>Redirecting...';
   try {
     var res = await fetch('/api/square/checkout/subscription', {
       method: 'POST',
-      headers: authHeaders()
+      headers: authHeaders(),
+      body: JSON.stringify({ tier: tier })
     });
     var data = await res.json();
     if (data.checkout_url) {
       window.location.href = data.checkout_url;
     } else {
       alert(data.error || 'Subscription checkout failed. Please try again.');
+      btns.forEach(function(b) { b.disabled = false; });
+      if (btn) btn.innerHTML = 'Subscribe';
     }
   } catch (e) {
     alert('Network error. Please check your connection and try again.');
+    btns.forEach(function(b) { b.disabled = false; });
+    if (btn) btn.innerHTML = 'Subscribe';
   }
 }
 
@@ -250,7 +331,7 @@ function renderDashboard() {
           ? '<div class="flex items-center justify-between mb-2"><span class="text-xs" style="color:var(--text-muted)">Report credits</span><span class="text-xs font-bold text-blue-400">' + paidCredits + '</span></div>'
           : '') +
         (trialsExhausted && c.subscription_status !== 'active'
-          ? '<button onclick="subscribeToMembership()" class="block w-full text-center py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer border-0"><i class="fas fa-crown mr-1"></i>Subscribe — $49/mo</button>'
+          ? '<button onclick="subscribeToMembership()" class="block w-full text-center py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer border-0"><i class="fas fa-crown mr-1"></i>Subscribe — from $49.99/mo</button>'
           : '<a href="/pricing" class="block w-full text-center py-2 bg-emerald-600 hover:bg-brand-700 text-white text-xs font-semibold rounded-lg transition-colors">Buy Credits</a>') +
         '<a href="/customer/profile" class="block w-full text-center py-1.5 mt-1.5 text-xs transition-colors" style="color:var(--text-muted)">Account Settings</a>' +
         // Sidebar ad unit — shown only to non-subscribers
@@ -301,10 +382,10 @@ function renderDashboard() {
             '<div class="w-12 h-12 bg-blue-500/15 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0"><i class="fas fa-crown text-white text-xl"></i></div>' +
             '<div class="flex-1 text-center sm:text-left">' +
               '<h3 class="text-white font-black text-base">Your 3 Free Trial Reports Are Used Up!</h3>' +
-              '<p class="text-brand-200 text-xs mt-1">Subscribe to <strong class="text-emerald-300">Roof Manager Pro</strong> to continue generating unlimited reports — just <strong class="text-white">$49/month</strong>.</p>' +
+              '<p class="text-brand-200 text-xs mt-1">Subscribe to <strong class="text-emerald-300">Roof Manager</strong> to continue — plans from <strong class="text-white">$49.99/month</strong>.</p>' +
             '</div>' +
             '<div class="flex gap-2 flex-shrink-0">' +
-              '<button onclick="subscribeToMembership()" class="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white font-black rounded-xl shadow text-sm transition-colors"><i class="fas fa-crown mr-1.5"></i>Subscribe Now</button>' +
+              '<button onclick="subscribeToMembership()" class="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white font-black rounded-xl shadow text-sm transition-colors"><i class="fas fa-crown mr-1.5"></i>View Plans</button>' +
             '</div>' +
           '</div>' +
         '</div>' : '') +

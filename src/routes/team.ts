@@ -129,6 +129,25 @@ teamRoutes.post('/invite', async (c) => {
     return c.json({ error: 'Only account owners or team admins can invite members' }, 403)
   }
 
+  // Enforce team size limit based on subscription tier
+  const owner = await c.env.DB.prepare('SELECT subscription_tier, tier_features FROM customers WHERE id = ?').bind(ownerId).first<any>()
+  const tierLimits: Record<string, number> = { starter: 5, professional: 10, enterprise: 25 }
+  const ownerTier = owner?.subscription_tier || 'starter'
+  let maxTeamSize = tierLimits[ownerTier] || 5
+  // Allow override from tier_features JSON
+  try { const tf = JSON.parse(owner?.tier_features || '{}'); if (tf.team_limit) maxTeamSize = tf.team_limit } catch {}
+
+  const activeCount = await c.env.DB.prepare(
+    "SELECT COUNT(*) as cnt FROM team_members WHERE owner_id = ? AND status = 'active'"
+  ).bind(ownerId).first<any>()
+  if ((activeCount?.cnt || 0) >= maxTeamSize) {
+    return c.json({
+      error: `Your ${ownerTier} plan supports up to ${maxTeamSize} team members. Upgrade your membership to add more.`,
+      team_limit: maxTeamSize,
+      current_count: activeCount?.cnt || 0
+    }, 402)
+  }
+
   const body = await c.req.json()
   const email = (body.email || '').toLowerCase().trim()
   const name = (body.name || '').trim()

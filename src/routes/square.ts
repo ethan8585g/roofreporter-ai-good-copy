@@ -397,9 +397,17 @@ squareRoutes.post('/checkout/report', async (c) => {
 })
 
 // ============================================================
-// SUBSCRIBE — Monthly membership checkout via Square
-// After 3 free trial reports, users must subscribe ($49/month)
+// SUBSCRIBE — Tiered monthly membership checkout via Square
+// After 3 free trial reports, users must subscribe to continue.
+// Tiers: starter ($49.99/5 team), professional ($99.99/10 team),
+//        enterprise ($199.99/25 team)
 // ============================================================
+const SUBSCRIPTION_TIERS: Record<string, { name: string; priceCents: number; teamLimit: number }> = {
+  starter:      { name: 'Starter',      priceCents: 4999,  teamLimit: 5 },
+  professional: { name: 'Professional', priceCents: 9999,  teamLimit: 10 },
+  enterprise:   { name: 'Enterprise',   priceCents: 19999, teamLimit: 25 },
+}
+
 squareRoutes.post('/checkout/subscription', async (c) => {
   try {
     const accessToken = c.env.SQUARE_ACCESS_TOKEN
@@ -415,23 +423,22 @@ squareRoutes.post('/checkout/subscription', async (c) => {
       return c.json({ error: 'You already have an active subscription.' }, 400)
     }
 
-    // Fetch subscription price from settings (default $49/month = 4900 cents)
-    const priceSetting = await c.env.DB.prepare(
-      "SELECT setting_value FROM settings WHERE master_company_id = 1 AND setting_key = 'subscription_monthly_price_cents'"
-    ).first<any>()
-    const priceCents = parseInt(priceSetting?.setting_value || '4900')
+    const { tier } = await c.req.json().catch(() => ({ tier: 'starter' }))
+    const tierConfig = SUBSCRIPTION_TIERS[tier || 'starter']
+    if (!tierConfig) {
+      return c.json({ error: 'Invalid tier. Choose starter, professional, or enterprise.' }, 400)
+    }
 
     const origin = new URL(c.req.url).origin
     const successUrl = `${origin}/customer/dashboard?payment=success&type=subscription`
-    const cancelUrl = `${origin}/customer/dashboard?payment=cancelled`
 
-    const idempotencyKey = `sub-${customer.customer_id}-${Date.now()}`
+    const idempotencyKey = `sub-${customer.customer_id}-${tier}-${Date.now()}`
     const paymentLink = await squareRequest(accessToken, 'POST', '/online-checkout/payment-links', {
       idempotency_key: idempotencyKey,
       quick_pay: {
-        name: 'Roof Manager Pro — Monthly Membership',
+        name: `Roof Manager ${tierConfig.name} — Monthly Membership`,
         price_money: {
-          amount: priceCents,
+          amount: tierConfig.priceCents,
           currency: 'USD',
         },
         location_id: locationId,
@@ -440,7 +447,7 @@ squareRoutes.post('/checkout/subscription', async (c) => {
         redirect_url: successUrl,
         ask_for_shipping_address: false,
       },
-      payment_note: `Monthly membership for ${customer.email}`,
+      payment_note: `${tierConfig.name} membership ($${(tierConfig.priceCents / 100).toFixed(2)}/mo) for ${customer.email}`,
     })
 
     const link = paymentLink.payment_link
@@ -451,9 +458,9 @@ squareRoutes.post('/checkout/subscription', async (c) => {
       INSERT INTO square_payments (customer_id, square_order_id, square_payment_link_id, amount, currency, status, payment_type, description, metadata_json)
       VALUES (?, ?, ?, ?, 'usd', 'pending', 'subscription', ?, ?)
     `).bind(
-      customer.customer_id, squareOrderId, link?.id || '', priceCents,
-      `Monthly membership — ${customer.email}`,
-      JSON.stringify({ type: 'subscription', plan: 'pro', duration_days: 30 })
+      customer.customer_id, squareOrderId, link?.id || '', tierConfig.priceCents,
+      `${tierConfig.name} monthly membership — ${customer.email}`,
+      JSON.stringify({ type: 'subscription', tier, plan: tierConfig.name.toLowerCase(), team_limit: tierConfig.teamLimit, duration_days: 30 })
     ).run()
 
     return c.json({
@@ -886,22 +893,27 @@ squareRoutes.post('/webhook', async (c) => {
 
         } else if (pendingPayment.payment_type === 'subscription') {
           // Subscription payment — activate membership for 30 days
+          let subMeta: any = {}
+          try { subMeta = JSON.parse(pendingPayment.metadata_json || '{}') } catch {}
+          const tier = subMeta.tier || 'starter'
+          const teamLimit = subMeta.team_limit || 5
           const subEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
           await c.env.DB.prepare(`
             UPDATE customers SET
               subscription_status = 'active',
-              subscription_plan = 'pro',
+              subscription_plan = ?,
+              subscription_tier = ?,
               subscription_start = datetime('now'),
               subscription_end = ?,
-              report_credits = report_credits + 10,
+              tier_features = ?,
               updated_at = datetime('now')
             WHERE id = ?
-          `).bind(subEnd, customerId).run()
+          `).bind(tier, tier, subEnd, JSON.stringify({ team_limit: teamLimit }), customerId).run()
 
           await c.env.DB.prepare(`
             INSERT INTO user_activity_log (company_id, action, details)
             VALUES (1, 'subscription_activated', ?)
-          `).bind(`Customer #${customerId} subscribed to Pro monthly — active until ${subEnd}`).run()
+          `).bind(`Customer #${customerId} subscribed to ${tier} membership (team limit: ${teamLimit}) — active until ${subEnd}`).run()
 
         } else {
           // Credit pack purchase — add credits
@@ -1131,22 +1143,27 @@ squareRoutes.get('/verify-payment', async (c) => {
           }
         } else if (pendingPayment.payment_type === 'subscription') {
           // Subscription payment — activate membership for 30 days
+          let subMeta: any = {}
+          try { subMeta = JSON.parse(pendingPayment.metadata_json || '{}') } catch {}
+          const tier = subMeta.tier || 'starter'
+          const teamLimit = subMeta.team_limit || 5
           const subEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
           await c.env.DB.prepare(`
             UPDATE customers SET
               subscription_status = 'active',
-              subscription_plan = 'pro',
+              subscription_plan = ?,
+              subscription_tier = ?,
               subscription_start = datetime('now'),
               subscription_end = ?,
-              report_credits = report_credits + 10,
+              tier_features = ?,
               updated_at = datetime('now')
             WHERE id = ?
-          `).bind(subEnd, customer.customer_id).run()
+          `).bind(tier, tier, subEnd, JSON.stringify({ team_limit: teamLimit }), customer.customer_id).run()
 
           await c.env.DB.prepare(`
             INSERT INTO user_activity_log (company_id, action, details)
             VALUES (1, 'subscription_activated', ?)
-          `).bind(`Customer #${customer.customer_id} subscribed to Pro monthly via verify-payment`).run()
+          `).bind(`Customer #${customer.customer_id} subscribed to ${tier} membership (team limit: ${teamLimit}) via verify-payment`).run()
         }
 
         // Track payment completion in GA4 (non-blocking)
