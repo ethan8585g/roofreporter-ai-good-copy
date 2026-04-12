@@ -17,6 +17,7 @@ import { crmRoutes } from './routes/crm'
 import { propertyImageryRoutes } from './routes/property-imagery'
 import { blogRoutes } from './routes/blog'
 import { d2dRoutes } from './routes/d2d'
+import { leadCaptureRoutes } from './routes/lead-capture'
 import { secretaryRoutes } from './routes/secretary'
 import { roverRoutes } from './routes/rover'
 import { emailOutreachRoutes } from './routes/email-outreach'
@@ -198,6 +199,7 @@ app.route('/api/crm', crmRoutes)
 app.route('/api/property-imagery', propertyImageryRoutes)
 app.route('/api/blog', blogRoutes)
 app.route('/api/d2d', d2dRoutes)
+app.route('/api', leadCaptureRoutes)
 app.route('/api/secretary', secretaryRoutes)
 app.route('/api/rover', roverRoutes)
 app.route('/api/email-outreach', emailOutreachRoutes)
@@ -1547,6 +1549,13 @@ app.get('/lander', (c) => {
 app.get('/demo', (c) => {
   return c.html(getDemoLandingPageHTML())
 })
+
+// Condo / Reserve Fund Cheat Sheet — lead magnet
+app.get('/condo-reserve-fund-cheat-sheet', (c) => c.html(getCondoCheatSheetHTML()))
+app.get('/condo-reserve-fund-cheat-sheet/thank-you', (c) => c.html(getCondoThankYouHTML()))
+
+// Demo Client Portal — interactive lead-capture widget
+app.get('/demo-portal', (c) => c.html(getDemoPortalHTML()))
 
 // Lead capture API — public, no auth required
 app.post('/api/demo/lead', async (c) => {
@@ -3799,8 +3808,8 @@ function getLandingPageHTML(latestPosts: any[] = []) {
 <html lang="en">
 <head>
   ${getHeadTags()}
-  <title>Roof Manager — Professional Roof Measurement Reports & CRM for Roofing Companies</title>
-  <meta name="description" content="Get accurate roof area, pitch analysis, edge breakdowns, material estimates, and solar potential from satellite imagery in under 60 seconds. Full CRM, AI Secretary, team management. Start with 3 free reports.">
+  <title>RoofManager | Commercial Roof Asset Management Software Canada</title>
+  <meta name="description" content="The centralized command center for Facility Managers, Condo Boards, and Commercial Portfolios — track work orders, warranty expirations, and capital planning budgets. Free Asset Report available.">
   <meta property="og:title" content="Roof Manager — Precision Roof Measurement Reports">
   <meta property="og:description" content="Professional satellite-powered roof measurement reports in under 60 seconds. Full CRM, AI phone secretary, and team management for roofing businesses.">
   <meta property="og:type" content="website">
@@ -4043,6 +4052,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
             <div class="border-t border-white/5 mt-1 pt-1"><a href="/services" class="flex items-center gap-2.5 px-4 py-2.5 text-gray-500 hover:text-white hover:bg-white/5 text-xs transition-colors"><i class="fas fa-th-large w-4"></i>All 12 Features &rarr;</a></div>
           </div>
         </div>
+        <a href="/condo-reserve-fund-cheat-sheet" class="text-[#00FF88] hover:text-white text-sm font-semibold transition-colors duration-200">Commercial / Condo Boards</a>
         <a href="#pricing" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">Pricing</a>
         <a href="/blog" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">Blog</a>
         <a href="/coverage" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">Coverage</a>
@@ -4066,6 +4076,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
         <a href="/features/crm" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')"><i class="fas fa-users text-[#22d3ee] mr-2 text-xs"></i>CRM</a>
         <a href="/features/ai-secretary" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')"><i class="fas fa-headset text-[#f59e0b] mr-2 text-xs"></i>AI Secretary</a>
         <a href="/services" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')">All Features</a>
+        <a href="/condo-reserve-fund-cheat-sheet" class="text-[#00FF88] hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-semibold" onclick="document.getElementById('mobile-menu').classList.add('hidden')"><i class="fas fa-building mr-2 text-xs"></i>Commercial / Condo Boards</a>
         <a href="#pricing" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')">Pricing</a>
         <a href="/blog" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')">Blog</a>
         <a href="/coverage" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')">Coverage</a>
@@ -4091,11 +4102,11 @@ function getLandingPageHTML(latestPosts: any[] = []) {
               <span class="relative flex h-2.5 w-2.5"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#00FF88] opacity-75"></span><span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#00FF88]"></span></span>
               <span class="text-sm font-semibold text-[#00FF88] tracking-wide">Trusted by 5,000+ Roofers — US &amp; Canada</span>
             </div>
-            <h1 class="text-5xl sm:text-6xl lg:text-7xl font-black leading-[1.05] text-white mb-8 tracking-tight">Stop Guessing.<br/><span class="neon-text">Start Quoting</span><br/><span class="neon-text">With Certainty.</span></h1>
-            <p class="text-lg lg:text-xl text-gray-400 mb-10 max-w-xl leading-relaxed">AI-powered roof measurements from satellite imagery. <span class="text-white font-medium">99% accuracy</span> in under <span class="text-white font-medium">60 seconds.</span></p>
+            <h1 class="text-5xl sm:text-6xl lg:text-7xl font-black leading-[1.05] text-white mb-8 tracking-tight">Stop Chasing Leaks.<br/><span class="neon-text">Start Managing Assets.</span></h1>
+            <h2 class="text-lg lg:text-xl text-gray-400 mb-10 max-w-xl leading-relaxed font-normal">The centralized command center for <span class="text-white font-semibold">Facility Managers, Condo Boards, and Commercial Portfolios</span> to track work orders, warranty expirations, and capital planning budgets.</h2>
             <div class="flex flex-col sm:flex-row gap-4 mb-10">
-              <a href="/signup" onclick="rrTrack('cta_click',{location:'hero_primary',variant:'neon'})" class="group inline-flex items-center justify-center gap-3 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-10 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/20 transition-all duration-300 hover:scale-[1.03] min-h-[56px]"><i class="fas fa-rocket"></i> Start 3 Free Reports <i class="fas fa-arrow-right text-sm group-hover:translate-x-1.5 transition-transform"></i></a>
-              <a href="https://calendar.app.google/KNLFST4CNxViPPN3A" target="_blank" onclick="rrTrack('cta_click',{location:'hero_demo'})" class="inline-flex items-center justify-center gap-2.5 bg-white/5 hover:bg-white/10 backdrop-blur-md text-white font-bold py-4 px-8 rounded-xl text-lg border border-white/10 hover:border-white/20 transition-all duration-300 min-h-[56px]"><i class="fas fa-calendar-check text-[#00FF88]"></i> Book a Demo</a>
+              <button type="button" onclick="window.openAssetReportModal && window.openAssetReportModal(); rrTrack('cta_click',{location:'hero_primary',variant:'asset_report'});" class="group inline-flex items-center justify-center gap-3 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-10 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/20 transition-all duration-300 hover:scale-[1.03] min-h-[56px]"><i class="fas fa-file-pdf"></i> Get Free Asset Report <i class="fas fa-arrow-right text-sm group-hover:translate-x-1.5 transition-transform"></i></button>
+              <a href="/signup" onclick="rrTrack('cta_click',{location:'hero_secondary'})" class="inline-flex items-center justify-center gap-2.5 bg-white/5 hover:bg-white/10 backdrop-blur-md text-white font-bold py-4 px-8 rounded-xl text-lg border border-white/10 hover:border-white/20 transition-all duration-300 min-h-[56px]"><i class="fas fa-rocket text-[#00FF88]"></i> Contractors: Start Free</a>
             </div>
             <div class="flex items-center gap-4 mb-4">
               <div class="flex items-center gap-0.5"><i class="fas fa-star text-[#00FF88] text-sm"></i><i class="fas fa-star text-[#00FF88] text-sm"></i><i class="fas fa-star text-[#00FF88] text-sm"></i><i class="fas fa-star text-[#00FF88] text-sm"></i><i class="fas fa-star text-[#00FF88] text-sm"></i></div>
@@ -4618,6 +4629,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
           <a href="/privacy" class="hover:text-[#00FF88] transition-colors">Privacy Policy</a>
           <a href="/terms" class="hover:text-[#00FF88] transition-colors">Terms of Service</a>
           <span class="flex items-center gap-1.5"><i class="fas fa-map-marker-alt text-[#00FF88]"></i> Alberta, Canada</span>
+          <a href="/condo-reserve-fund-cheat-sheet" class="flex items-center gap-1.5 hover:text-[#00FF88] transition-colors"><i class="fas fa-shield-alt text-[#00FF88]"></i> Trusted by Canadian Property Managers</a>
           <a href="mailto:sales@roofmanager.ca" class="flex items-center gap-1.5 hover:text-[#00FF88] transition-colors"><i class="fas fa-envelope text-[#00FF88]"></i> sales@roofmanager.ca</a>
         </div>
       </div>
@@ -4647,6 +4659,217 @@ function getLandingPageHTML(latestPosts: any[] = []) {
     s0.parentNode.insertBefore(s1,s0);})();
   </script>
   -->
+
+  <!-- Asset Report Lead-Capture Modal -->
+  <div id="assetReportModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(6px)">
+    <div style="background:#111;border:1px solid rgba(255,255,255,0.1);border-radius:16px;padding:28px;max-width:460px;width:100%;box-shadow:0 20px 60px rgba(0,255,136,0.15)">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px">
+        <div>
+          <div style="color:#00FF88;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:6px">Free Asset Report</div>
+          <h3 style="color:#fff;font-size:22px;font-weight:800;margin:0;line-height:1.2">See a sample report for your property</h3>
+        </div>
+        <button onclick="window.closeAssetReportModal()" style="background:none;border:none;color:#9ca3af;font-size:22px;cursor:pointer;padding:0;line-height:1">&times;</button>
+      </div>
+      <form id="assetReportForm" onsubmit="return window.submitAssetReport(event)">
+        <label style="display:block;margin-bottom:14px"><span style="font-size:12px;font-weight:600;color:#9ca3af;display:block;margin-bottom:6px">Property Address *</span>
+          <input required name="address" type="text" placeholder="123 King St W, Toronto ON" style="width:100%;padding:11px 14px;background:#0A0A0A;color:#fff;border:1px solid rgba(255,255,255,0.1);border-radius:8px;font-size:14px"></label>
+        <label style="display:block;margin-bottom:14px"><span style="font-size:12px;font-weight:600;color:#9ca3af;display:block;margin-bottom:6px">Number of Buildings / Roof Sections *</span>
+          <input required name="building_count" type="number" min="1" placeholder="1" style="width:100%;padding:11px 14px;background:#0A0A0A;color:#fff;border:1px solid rgba(255,255,255,0.1);border-radius:8px;font-size:14px"></label>
+        <label style="display:block;margin-bottom:14px"><span style="font-size:12px;font-weight:600;color:#9ca3af;display:block;margin-bottom:6px">Your Email *</span>
+          <input required name="email" type="email" placeholder="you@company.com" style="width:100%;padding:11px 14px;background:#0A0A0A;color:#fff;border:1px solid rgba(255,255,255,0.1);border-radius:8px;font-size:14px"></label>
+        <button type="submit" style="width:100%;padding:13px;background:#00FF88;color:#0A0A0A;border:none;border-radius:10px;font-size:15px;font-weight:800;cursor:pointer;margin-top:4px"><i class="fas fa-paper-plane" style="margin-right:8px"></i>Send My Sample Report</button>
+        <p style="font-size:11px;color:#6b7280;text-align:center;margin-top:12px;margin-bottom:0">We'll email you a sample report instantly. No spam.</p>
+      </form>
+      <div id="assetReportSuccess" style="display:none;text-align:center;padding:20px 0">
+        <i class="fas fa-check-circle" style="color:#00FF88;font-size:48px;margin-bottom:12px"></i>
+        <h3 style="color:#fff;font-size:20px;font-weight:800;margin:0 0 6px">Check your inbox!</h3>
+        <p style="color:#9ca3af;font-size:14px;margin:0">Your sample Active Management Report is on the way.</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    window.openAssetReportModal = function() { var m = document.getElementById('assetReportModal'); if (m) m.style.display = 'flex'; };
+    window.closeAssetReportModal = function() { var m = document.getElementById('assetReportModal'); if (m) m.style.display = 'none'; };
+    window.submitAssetReport = function(e) {
+      e.preventDefault();
+      var f = e.target;
+      var payload = { address: f.address.value.trim(), building_count: parseInt(f.building_count.value, 10), email: f.email.value.trim(), source: f.dataset.source || 'homepage_cta' };
+      if (typeof gtag === 'function') gtag('event', 'lead_capture', { source: payload.source });
+      if (typeof rrTrack === 'function') rrTrack('lead_capture', { source: payload.source });
+      fetch('/api/asset-report/lead', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+        .then(function(r) { return r.json(); })
+        .then(function() { document.getElementById('assetReportForm').style.display = 'none'; document.getElementById('assetReportSuccess').style.display = 'block'; })
+        .catch(function() { document.getElementById('assetReportForm').style.display = 'none'; document.getElementById('assetReportSuccess').style.display = 'block'; });
+      return false;
+    };
+  </script>
+</body>
+</html>`
+}
+
+function getCondoCheatSheetHTML() {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags()}
+  <title>2026 Condo Reserve Fund Study Cheat Sheet for Roofing | RoofManager</title>
+  <meta name="description" content="Don't let roofing costs blindside your reserve fund. Free cheat sheet for Ontario condo boards — Bill 106 compliance, useful-life data, capital planning templates.">
+</head>
+<body style="background:#0A0A0A;color:#fff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;margin:0">
+  <div style="max-width:780px;margin:0 auto;padding:60px 24px">
+    <a href="/" style="color:#00FF88;text-decoration:none;font-size:14px;font-weight:600"><i class="fas fa-arrow-left" style="margin-right:6px"></i>Back to RoofManager</a>
+    <div style="margin-top:40px;text-align:center">
+      <div style="color:#00FF88;font-size:12px;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:12px">Free Download &middot; Condo Boards &amp; Commercial</div>
+      <h1 style="font-size:44px;font-weight:900;line-height:1.1;margin:0 0 18px">Don't Let Roofing Costs Blindside Your Reserve Fund.</h1>
+      <p style="font-size:18px;color:#9ca3af;line-height:1.6;max-width:620px;margin:0 auto">The 2026 Condo Reserve Fund Study Cheat Sheet for Roofing — everything property managers and condo boards need to plan with confidence.</p>
+    </div>
+
+    <div style="background:#111;border:1px solid rgba(255,255,255,0.1);border-radius:16px;padding:32px;margin-top:48px">
+      <h2 style="font-size:20px;font-weight:800;margin:0 0 20px">What's inside:</h2>
+      <ul style="list-style:none;padding:0;margin:0;font-size:15px;line-height:1.9;color:#d1d5db">
+        <li><i class="fas fa-check" style="color:#00FF88;margin-right:10px"></i>How Ontario's <b>Bill 106</b> changes the way roof data must be documented for reserve fund studies</li>
+        <li><i class="fas fa-check" style="color:#00FF88;margin-right:10px"></i>Useful-life benchmarks for modified bitumen, TPO, EPDM, and shingle systems</li>
+        <li><i class="fas fa-check" style="color:#00FF88;margin-right:10px"></i>Warranty expiration tracking template (CSV + PDF)</li>
+        <li><i class="fas fa-check" style="color:#00FF88;margin-right:10px"></i>Capital-planning budget worksheet for 5, 10, and 25-year horizons</li>
+        <li><i class="fas fa-check" style="color:#00FF88;margin-right:10px"></i>Red flags that signal premature roof failure (and cost your reserve)</li>
+      </ul>
+    </div>
+
+    <form id="condoForm" onsubmit="return submitCondo(event)" style="background:#111;border:1px solid rgba(0,255,136,0.2);border-radius:16px;padding:32px;margin-top:24px">
+      <h3 style="font-size:22px;font-weight:800;margin:0 0 18px">Get your free copy</h3>
+      <label style="display:block;margin-bottom:14px"><span style="font-size:12px;font-weight:600;color:#9ca3af;display:block;margin-bottom:6px">Name *</span>
+        <input required name="name" style="width:100%;padding:12px 14px;background:#0A0A0A;color:#fff;border:1px solid rgba(255,255,255,0.1);border-radius:8px;font-size:14px"></label>
+      <label style="display:block;margin-bottom:14px"><span style="font-size:12px;font-weight:600;color:#9ca3af;display:block;margin-bottom:6px">Email *</span>
+        <input required type="email" name="email" style="width:100%;padding:12px 14px;background:#0A0A0A;color:#fff;border:1px solid rgba(255,255,255,0.1);border-radius:8px;font-size:14px"></label>
+      <label style="display:block;margin-bottom:18px"><span style="font-size:12px;font-weight:600;color:#9ca3af;display:block;margin-bottom:6px">Company / Property Name (optional)</span>
+        <input name="company" style="width:100%;padding:12px 14px;background:#0A0A0A;color:#fff;border:1px solid rgba(255,255,255,0.1);border-radius:8px;font-size:14px"></label>
+      <button type="submit" style="width:100%;padding:14px;background:#00FF88;color:#0A0A0A;border:none;border-radius:10px;font-size:15px;font-weight:800;cursor:pointer"><i class="fas fa-download" style="margin-right:8px"></i>Download the Cheat Sheet</button>
+      <p style="font-size:11px;color:#6b7280;text-align:center;margin:12px 0 0">No spam. Unsubscribe anytime.</p>
+    </form>
+  </div>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" onload="this.rel='stylesheet'" rel="preload" as="style"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script>
+    function submitCondo(e) {
+      e.preventDefault();
+      var f = e.target;
+      var payload = { name: f.name.value.trim(), email: f.email.value.trim(), company: f.company.value.trim() };
+      if (typeof gtag === 'function') gtag('event', 'lead_capture', { source: 'condo_cheat_sheet' });
+      if (typeof rrTrack === 'function') rrTrack('lead_capture', { source: 'condo_cheat_sheet' });
+      fetch('/api/condo-lead', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) })
+        .then(function(r){return r.json();})
+        .then(function(res){ window.location.href = (res && res.redirect) || '/condo-reserve-fund-cheat-sheet/thank-you'; })
+        .catch(function(){ window.location.href = '/condo-reserve-fund-cheat-sheet/thank-you'; });
+      return false;
+    }
+  </script>
+</body>
+</html>`
+}
+
+function getCondoThankYouHTML() {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags()}
+  <title>Thank You — Your Cheat Sheet Is Downloading | RoofManager</title>
+</head>
+<body style="background:#0A0A0A;color:#fff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px">
+  <div style="max-width:560px;text-align:center">
+    <div style="width:80px;height:80px;background:rgba(0,255,136,0.1);border:2px solid #00FF88;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;margin-bottom:24px">
+      <i class="fas fa-check" style="color:#00FF88;font-size:32px"></i>
+    </div>
+    <h1 style="font-size:36px;font-weight:900;margin:0 0 14px">Thank you!</h1>
+    <p style="font-size:17px;color:#9ca3af;line-height:1.6;margin:0 0 28px">Your download should start automatically. We've also emailed you a copy. Keep an eye out for more property-manager resources from us.</p>
+    <a id="dlLink" href="/static/RoofManager-Reserve-Fund-Cheat-Sheet.pdf" download style="display:inline-block;padding:14px 28px;background:#00FF88;color:#0A0A0A;border-radius:10px;font-weight:800;text-decoration:none"><i class="fas fa-download" style="margin-right:8px"></i>Download Again</a>
+    <div style="margin-top:40px"><a href="/" style="color:#00FF88;text-decoration:none;font-size:14px">&larr; Back to RoofManager</a></div>
+  </div>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script>setTimeout(function(){ var a = document.getElementById('dlLink'); if (a) a.click(); }, 600);</script>
+</body>
+</html>`
+}
+
+function getDemoPortalHTML() {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags()}
+  <title>Client Portal Demo — Riverview Condominiums | RoofManager</title>
+  <meta name="description" content="See how property managers access work orders, warranty documents, and service requests inside the RoofManager client portal. Interactive demo.">
+</head>
+<body style="background:#0A0A0A;color:#fff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;margin:0">
+  <div style="max-width:1100px;margin:0 auto;padding:40px 24px">
+    <a href="/" style="color:#00FF88;text-decoration:none;font-size:14px;font-weight:600"><i class="fas fa-arrow-left" style="margin-right:6px"></i>Back to RoofManager</a>
+    <div style="margin:28px 0 8px;color:#00FF88;font-size:11px;font-weight:700;letter-spacing:0.15em;text-transform:uppercase">Interactive Demo</div>
+    <h1 style="font-size:34px;font-weight:900;margin:0 0 10px">Riverview Condominiums — Client Portal</h1>
+    <p style="color:#9ca3af;margin:0 0 32px">This is a live preview of what your board sees 24/7. Click "Request Service" to see the workflow.</p>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px">
+      <div style="background:#111;border:1px solid rgba(255,255,255,0.1);border-radius:14px;padding:22px">
+        <div style="color:#f59e0b;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:12px"><i class="fas fa-tools" style="margin-right:6px"></i>Active Work Orders</div>
+        <div style="font-size:15px;font-weight:700;margin-bottom:4px">Leak Investigation — Unit 4B</div>
+        <div style="color:#9ca3af;font-size:13px;margin-bottom:10px">Assigned to Mike T. &middot; In Progress</div>
+        <div style="background:rgba(245,158,11,0.1);color:#f59e0b;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:700;display:inline-block">IN PROGRESS</div>
+      </div>
+      <div style="background:#111;border:1px solid rgba(255,255,255,0.1);border-radius:14px;padding:22px">
+        <div style="color:#22c55e;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:12px"><i class="fas fa-check-circle" style="margin-right:6px"></i>Completed</div>
+        <div style="font-size:15px;font-weight:700;margin-bottom:4px">Annual Inspection — Oct 2025</div>
+        <div style="color:#9ca3af;font-size:13px;margin-bottom:10px">12-page report &middot; No deficiencies</div>
+        <div style="background:rgba(34,197,94,0.1);color:#22c55e;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:700;display:inline-block">COMPLETE</div>
+      </div>
+      <div style="background:#111;border:1px solid rgba(255,255,255,0.1);border-radius:14px;padding:22px">
+        <div style="color:#22d3ee;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:12px"><i class="fas fa-folder" style="margin-right:6px"></i>Document Vault</div>
+        <div style="font-size:14px;margin-bottom:8px"><i class="fas fa-file-pdf" style="color:#ef4444;margin-right:8px"></i>Warranty Certificate — IKO Shingles.pdf</div>
+        <div style="font-size:14px;margin-bottom:8px"><i class="fas fa-file-pdf" style="color:#ef4444;margin-right:8px"></i>Reserve Fund Study 2024.pdf</div>
+        <div style="font-size:14px"><i class="fas fa-file-image" style="color:#22d3ee;margin-right:8px"></i>Drone Inspection — Oct 2025.zip</div>
+      </div>
+    </div>
+
+    <div style="background:linear-gradient(135deg,#111,#0d1117);border:1px solid rgba(0,255,136,0.2);border-radius:16px;padding:28px;margin-top:24px;text-align:center">
+      <h3 style="font-size:22px;font-weight:800;margin:0 0 10px">Need roof service right now?</h3>
+      <p style="color:#9ca3af;margin:0 0 20px">Submit a request and your property manager is notified instantly.</p>
+      <button onclick="openReqModal()" style="padding:14px 32px;background:#00FF88;color:#0A0A0A;border:none;border-radius:10px;font-size:15px;font-weight:800;cursor:pointer"><i class="fas fa-bolt" style="margin-right:8px"></i>Request Service</button>
+    </div>
+  </div>
+
+  <div id="reqModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;align-items:center;justify-content:center;padding:20px">
+    <div style="background:#111;border:1px solid rgba(255,255,255,0.1);border-radius:16px;padding:28px;max-width:440px;width:100%">
+      <h3 id="reqTitle" style="color:#fff;font-size:20px;font-weight:800;margin:0 0 10px">Simulate a Service Request</h3>
+      <p id="reqBlurb" style="color:#9ca3af;font-size:14px;margin:0 0 18px">Enter your email to simulate a tenant service request and see how the notification workflow functions.</p>
+      <form id="reqForm" onsubmit="return submitReq(event)">
+        <input required type="email" name="email" placeholder="you@company.com" style="width:100%;padding:12px 14px;background:#0A0A0A;color:#fff;border:1px solid rgba(255,255,255,0.1);border-radius:8px;font-size:14px;margin-bottom:14px">
+        <button type="submit" style="width:100%;padding:13px;background:#00FF88;color:#0A0A0A;border:none;border-radius:10px;font-size:15px;font-weight:800;cursor:pointer">Submit Request</button>
+        <button type="button" onclick="closeReqModal()" style="width:100%;padding:10px;background:none;color:#9ca3af;border:none;font-size:13px;cursor:pointer;margin-top:8px">Cancel</button>
+      </form>
+      <div id="reqSuccess" style="display:none;text-align:center;padding:20px 0">
+        <i class="fas fa-check-circle" style="color:#00FF88;font-size:44px;margin-bottom:12px"></i>
+        <h3 style="color:#fff;font-size:18px;font-weight:800;margin:0 0 6px">Request submitted!</h3>
+        <p style="color:#9ca3af;font-size:13px;margin:0 0 16px">In a real scenario, the property manager would receive this instantly.</p>
+        <button onclick="closeReqModal()" style="padding:10px 20px;background:#00FF88;color:#0A0A0A;border:none;border-radius:8px;font-weight:800;cursor:pointer">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script>
+    function openReqModal(){ document.getElementById('reqModal').style.display='flex'; }
+    function closeReqModal(){ document.getElementById('reqModal').style.display='none'; document.getElementById('reqForm').style.display=''; document.getElementById('reqSuccess').style.display='none'; document.getElementById('reqTitle').style.display=''; document.getElementById('reqBlurb').style.display=''; }
+    function submitReq(e){
+      e.preventDefault();
+      var email = e.target.email.value.trim();
+      if (typeof gtag === 'function') gtag('event', 'lead_capture', { source: 'demo_portal' });
+      if (typeof rrTrack === 'function') rrTrack('lead_capture', { source: 'demo_portal' });
+      fetch('/api/asset-report/lead', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email: email, source: 'demo_portal' }) })
+        .then(function(r){return r.json();}).catch(function(){});
+      document.getElementById('reqForm').style.display='none';
+      document.getElementById('reqTitle').style.display='none';
+      document.getElementById('reqBlurb').style.display='none';
+      document.getElementById('reqSuccess').style.display='block';
+      return false;
+    }
+  </script>
 </body>
 </html>`
 }

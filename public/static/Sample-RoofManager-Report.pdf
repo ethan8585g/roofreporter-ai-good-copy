@@ -1,0 +1,43 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>
+endobj
+4 0 obj
+<< /Length 655 >>
+stream
+BT /F1 24 Tf 72 740 Td (Sample RoofManager Asset Report) Tj ET
+BT /F1 12 Tf 72 700 Td (This is a sample preview. Full reports include:) Tj ET
+BT /F1 12 Tf 72 680 Td () Tj ET
+BT /F1 12 Tf 72 660 Td (- Active work order log) Tj ET
+BT /F1 12 Tf 72 640 Td (- Maintenance schedule 5 / 10 / 25 year) Tj ET
+BT /F1 12 Tf 72 620 Td (- Warranty expiration tracker) Tj ET
+BT /F1 12 Tf 72 600 Td (- Client portal screenshots) Tj ET
+BT /F1 12 Tf 72 580 Td (- Capital planning budget projections) Tj ET
+BT /F1 12 Tf 72 560 Td () Tj ET
+BT /F1 12 Tf 72 540 Td (Contact sales@roofmanager.ca for a live walkthrough.) Tj ET
+BT /F1 12 Tf 72 520 Td (www.roofmanager.ca) Tj ET
+
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000000947 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+1017
+%%EOF
