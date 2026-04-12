@@ -14,11 +14,11 @@ adminAgentRoutes.use('/*', async (c, next) => {
   if (!token) return c.json({ error: 'Unauthorized' }, 401)
   const session = await c.env.DB.prepare(
     `SELECT s.*, a.email, a.name, a.role FROM admin_sessions s
-     JOIN admin_users a ON s.admin_user_id = a.id
+     JOIN admin_users a ON s.admin_id = a.id
      WHERE s.session_token = ? AND s.expires_at > datetime('now')`
   ).bind(token).first<any>()
   if (!session || session.role !== 'superadmin') return c.json({ error: 'Forbidden' }, 403)
-  c.set('adminId' as any, session.admin_user_id)
+  c.set('adminId' as any, session.admin_id)
   await next()
 })
 
