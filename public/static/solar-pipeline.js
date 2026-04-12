@@ -34,7 +34,7 @@
 
   function load() {
     Promise.all([
-      fetch('/api/customer/solar-pipeline/', { headers: authHeaders() }).then(function(r){return r.json();}),
+      fetch('/api/customer/solar-pipeline', { headers: authHeaders() }).then(function(r){return r.json();}),
       fetch('/api/customer/solar-pipeline/stats', { headers: authHeaders() }).then(function(r){return r.json();}),
     ]).then(function(results) {
       state.deals = (results[0] && results[0].deals) || [];
@@ -235,7 +235,7 @@
     var payload = {};
     fd.forEach(function(v, k) { payload[k] = v; });
     var isNew = !state.editing || !state.editing.id;
-    var url = isNew ? '/api/customer/solar-pipeline/' : '/api/customer/solar-pipeline/' + state.editing.id;
+    var url = isNew ? '/api/customer/solar-pipeline' : '/api/customer/solar-pipeline/' + state.editing.id;
     var method = isNew ? 'POST' : 'PATCH';
     fetch(url, { method: method, headers: authHeaders(), body: JSON.stringify(payload) })
       .then(function(r) { return r.json(); })

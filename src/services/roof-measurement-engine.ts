@@ -109,6 +109,8 @@ export interface TracePayload {
   slope_map?: Record<string, string>
   // Small eave corner threshold: edges shorter than this (ft) are flagged as corners
   small_corner_threshold_ft?: number
+  // Optional external footprint for engine vs source variance cross-check
+  cross_check?: { source: string; footprint_ft2: number }
 }
 
 export interface EaveEdge {
@@ -179,6 +181,41 @@ export interface EaveCornerDetail {
   angle_change_deg: number  // interior angle change from previous edge
 }
 
+export interface WasteBreakdownDriver {
+  label: string
+  pct: number
+}
+
+export interface WasteBreakdown {
+  base_pct: number
+  steep_pitch_pct: number
+  valley_pct: number
+  obstruction_pct: number
+  multi_section_pct: number
+  total_pct: number
+  drivers: WasteBreakdownDriver[]
+}
+
+export interface LaborEstimate {
+  crew_size: number
+  pitch_multiplier: number
+  complexity_multiplier: number
+  tear_off_hours: number
+  install_hours: number
+  total_crew_hours: number
+  est_days_min: number
+  est_days_max: number
+  notes: string
+}
+
+export interface CrossCheck {
+  source: string
+  external_footprint_ft2: number
+  engine_footprint_ft2: number
+  variance_pct: number
+  verdict: 'aligned' | 'minor_variance' | 'significant_variance'
+}
+
 export interface TraceReport {
   report_meta: {
     address: string
@@ -194,6 +231,8 @@ export interface TraceReport {
     total_squares_net: number
     total_squares_gross_w_waste: number
     waste_factor_pct: number
+    waste_breakdown?: WasteBreakdown
+    labor_estimate?: LaborEstimate
     num_roof_faces: number
     num_eave_points: number
     num_ridges: number
@@ -205,6 +244,8 @@ export interface TraceReport {
     obstruction_deduction_ft2: number
     num_obstructions: number
   }
+  cross_check?: CrossCheck
+  geometry_warnings?: string[]
   linear_measurements: {
     eaves_total_ft: number
     ridges_total_ft: number
@@ -628,12 +669,135 @@ function categoriseLine(type: string): LineCategory {
 // ═══════════════════════════════════════════════════════════════
 
 function wastePct(rise: number, complexity: string = 'medium'): number {
-  // Base waste: simple=15%, medium=20%, complex=25% (includes 5% additional safety margin)
+  // Back-compat scalar: simple=15%, medium=20%, complex=25% + steep-pitch bump
   const bases: Record<string, number> = { simple: 0.15, medium: 0.20, complex: 0.25 }
   let base = bases[complexity] ?? 0.20
   if (rise >= 9) base += 0.05
   else if (rise >= 7) base += 0.02
   return base
+}
+
+function wasteBreakdown(
+  rise: number,
+  complexity: string,
+  valleyFt: number,
+  obstructionCount: number,
+  sectionCount: number
+): WasteBreakdown {
+  const bases: Record<string, number> = { simple: 15, medium: 20, complex: 25 }
+  const basePct = bases[complexity] ?? 20
+  const steepPct = rise >= 9 ? 5 : rise >= 7 ? 2 : 0
+  const valleyPct = Math.min(5, Math.floor(valleyFt / 40))
+  const obstructionPct = Math.min(3, Math.round(obstructionCount * 0.5 * 10) / 10)
+  const multiSectionPct = sectionCount >= 2 ? 2 : 0
+  const totalPct = basePct + steepPct + valleyPct + obstructionPct + multiSectionPct
+
+  const drivers: WasteBreakdownDriver[] = [
+    { label: `Base (${complexity})`, pct: basePct },
+  ]
+  if (steepPct > 0) drivers.push({ label: `Steep pitch ${round(rise, 1)}:12`, pct: steepPct })
+  if (valleyPct > 0) drivers.push({ label: `Valleys (${round(valleyFt, 0)} ft)`, pct: valleyPct })
+  if (obstructionPct > 0) drivers.push({ label: `Obstructions (${obstructionCount})`, pct: obstructionPct })
+  if (multiSectionPct > 0) drivers.push({ label: `Multi-section roof (${sectionCount} polygons)`, pct: multiSectionPct })
+
+  return {
+    base_pct: basePct,
+    steep_pitch_pct: steepPct,
+    valley_pct: valleyPct,
+    obstruction_pct: obstructionPct,
+    multi_section_pct: multiSectionPct,
+    total_pct: totalPct,
+    drivers,
+  }
+}
+
+function laborEstimate(
+  slopedAreaFt2: number,
+  rise: number,
+  complexity: string,
+  crewSize: number = 3
+): LaborEstimate {
+  const pitchMul = rise >= 11 ? 1.6 : rise >= 9 ? 1.35 : rise >= 7 ? 1.15 : 1.0
+  const cxMul: Record<string, number> = { simple: 0.9, medium: 1.0, complex: 1.15 }
+  const complexityMul = cxMul[complexity] ?? 1.0
+
+  // Base productivity rates (crew-hours per sq ft):
+  //   tear-off ≈ 1 hr / 400 sqft
+  //   install  ≈ 1 hr / 250 sqft
+  const tearOffHrs = (slopedAreaFt2 / 400) * pitchMul * complexityMul
+  const installHrs = (slopedAreaFt2 / 250) * pitchMul * complexityMul
+  const totalCrewHrs = tearOffHrs + installHrs
+
+  const crewDays = totalCrewHrs / (crewSize * 8)
+  const estMin = Math.max(1, Math.floor(crewDays))
+  const estMax = Math.max(estMin + 1, Math.ceil(crewDays * 1.25))
+
+  return {
+    crew_size: crewSize,
+    pitch_multiplier: round(pitchMul, 2),
+    complexity_multiplier: round(complexityMul, 2),
+    tear_off_hours: round(tearOffHrs, 1),
+    install_hours: round(installHrs, 1),
+    total_crew_hours: round(totalCrewHrs, 1),
+    est_days_min: estMin,
+    est_days_max: estMax,
+    notes: `Crew of ${crewSize}, 8-hr days. Rates: tear-off ~1 hr/400 sqft, install ~1 hr/250 sqft. Multipliers: pitch ${pitchMul.toFixed(2)}×, complexity ${complexityMul.toFixed(2)}×. Excludes mobilization, permits, structural repair.`,
+  }
+}
+
+// Return human-readable geometry warnings ("" if OK).
+function validateEaveGeometry(pts: { x: number; y: number }[]): string[] {
+  const warnings: string[] = []
+  if (pts.length < 3) return warnings
+  // Drop trailing closure duplicate if present
+  const closed = pts.length > 3 &&
+    Math.abs(pts[0].x - pts[pts.length - 1].x) < 0.01 &&
+    Math.abs(pts[0].y - pts[pts.length - 1].y) < 0.01
+  const ring = closed ? pts.slice(0, -1) : pts.slice()
+  const n = ring.length
+  if (n < 3) return warnings
+
+  // Duplicate points (<0.3 m)
+  for (let i = 0; i < n; i++) {
+    const a = ring[i], b = ring[(i + 1) % n]
+    const dx = a.x - b.x, dy = a.y - b.y
+    if (Math.sqrt(dx * dx + dy * dy) < 0.3) {
+      warnings.push(`Duplicate or near-duplicate eave points at vertices ${i + 1} and ${(i + 1) % n + 1} (< 0.3 m apart).`)
+      break
+    }
+  }
+
+  // Collinear triples (cross product magnitude in local meters)
+  for (let i = 0; i < n; i++) {
+    const a = ring[i], b = ring[(i + 1) % n], c = ring[(i + 2) % n]
+    const cross = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)
+    if (Math.abs(cross) < 1e-3) {
+      warnings.push(`Three collinear eave points detected near vertex ${(i + 1) % n + 1} — this edge adds no area.`)
+      break
+    }
+  }
+
+  // Self-intersection (O(n²) on non-adjacent edges)
+  const segIntersect = (p1: {x:number;y:number}, p2: {x:number;y:number}, p3: {x:number;y:number}, p4: {x:number;y:number}) => {
+    const d = (p2.x - p1.x) * (p4.y - p3.y) - (p2.y - p1.y) * (p4.x - p3.x)
+    if (Math.abs(d) < 1e-9) return false
+    const t = ((p3.x - p1.x) * (p4.y - p3.y) - (p3.y - p1.y) * (p4.x - p3.x)) / d
+    const u = ((p3.x - p1.x) * (p2.y - p1.y) - (p3.y - p1.y) * (p2.x - p1.x)) / d
+    return t > 1e-6 && t < 1 - 1e-6 && u > 1e-6 && u < 1 - 1e-6
+  }
+  outer: for (let i = 0; i < n; i++) {
+    const a = ring[i], b = ring[(i + 1) % n]
+    for (let j = i + 2; j < n; j++) {
+      if (i === 0 && j === n - 1) continue  // adjacent wrap
+      const c = ring[j], d = ring[(j + 1) % n]
+      if (segIntersect(a, b, c, d)) {
+        warnings.push(`Self-intersecting eave polygon — edges ${i + 1} and ${j + 1} cross. Retrace without crossing lines.`)
+        break outer
+      }
+    }
+  }
+
+  return warnings
 }
 
 function materialsEstimate(
@@ -688,6 +852,8 @@ export class RoofMeasurementEngine {
   private obstructions: Obstruction[]
   // Small corner threshold (ft)
   private smallCornerThresholdFt: number
+  // Optional external-source footprint for cross-check
+  private crossCheckSource: { source: string; footprint_ft2: number } | null
 
   // Raw WGS84 inputs
   private rawEaves: TracePt[]
@@ -723,6 +889,9 @@ export class RoofMeasurementEngine {
     this.obstructions = payload.obstructions || []
     // Small eave corner threshold (default 2 ft — edges shorter than this get flagged)
     this.smallCornerThresholdFt = payload.small_corner_threshold_ft ?? 2.0
+    this.crossCheckSource = payload.cross_check && payload.cross_check.footprint_ft2 > 0
+      ? { source: payload.cross_check.source, footprint_ft2: payload.cross_check.footprint_ft2 }
+      : null
 
     // Normalise default slope (rise:12 → radians)
     this.defThetaRad = pitchAngleRad(this.defPitch)
@@ -1396,8 +1565,15 @@ export class RoofMeasurementEngine {
 
     const netSquares  = totalSloped / SQFT_PER_SQUARE
 
-    const wFrac = this.incWaste ? wastePct(domPitch, this.complexity) : 0
+    const wasteBd = wasteBreakdown(
+      domPitch, this.complexity,
+      totalValleyFt,
+      obstructionDetails.length,
+      1 + this.rawEavesSections.length
+    )
+    const wFrac = this.incWaste ? wasteBd.total_pct / 100 : 0
     const grossSquares = netSquares * (1 + wFrac)
+    const labor = laborEstimate(totalSloped, domPitch, this.complexity)
 
     // ── EAVE DEPTH LAYER ICE & WATER SHIELD ──
     // If multi-layer eave depths are provided, compute ice shield per layer
@@ -1490,6 +1666,49 @@ export class RoofMeasurementEngine {
     if (biSlopeSegs.length > 0)
       notes.push(`${biSlopeSegs.length} bi-slope junction(s) detected — slope angles averaged at intersection.`)
 
+    // Geometry warnings — validate primary eave ring + sections
+    const geometryWarnings: string[] = []
+    geometryWarnings.push(...validateEaveGeometry(this.eavesCart.map(p => ({ x: p.x, y: p.y }))))
+    for (let si = 0; si < this.rawEavesSections.length; si++) {
+      const secPts = this.rawEavesSections[si]
+      const { projected: secCart } = projectToCartesian(secPts)
+      const secWarn = validateEaveGeometry(secCart.map(p => ({ x: p.x, y: p.y })))
+      for (const w of secWarn) geometryWarnings.push(`Section ${si + 2}: ${w}`)
+    }
+    // Tiny-section warning
+    if (this.rawEavesSections.length > 0) {
+      for (let si = 0; si < this.rawEavesSections.length; si++) {
+        const secPts = this.rawEavesSections[si]
+        const { projected: secCart } = projectToCartesian(secPts)
+        let area = 0
+        for (let i = 0; i < secCart.length; i++) {
+          const a = secCart[i], b = secCart[(i + 1) % secCart.length]
+          area += (a.x * b.y - b.x * a.y)
+        }
+        const areaFt2 = Math.abs(area / 2) * M_TO_FT * M_TO_FT
+        if (areaFt2 > 0 && areaFt2 < 20) {
+          geometryWarnings.push(`Section ${si + 2}: projected area ${round(areaFt2, 1)} sq ft is very small — check for stray points.`)
+        }
+      }
+    }
+    for (const w of geometryWarnings) notes.push(`⚠ GEOMETRY: ${w}`)
+
+    // Cross-check against external source (Solar API, EagleView, etc.)
+    let crossCheck: CrossCheck | undefined
+    if (this.crossCheckSource && totalProj > 0) {
+      const ext = this.crossCheckSource.footprint_ft2
+      const variance = Math.abs(totalProj - ext) / ext * 100
+      const verdict: CrossCheck['verdict'] =
+        variance <= 3 ? 'aligned' : variance <= 8 ? 'minor_variance' : 'significant_variance'
+      crossCheck = {
+        source: this.crossCheckSource.source,
+        external_footprint_ft2: round(ext, 1),
+        engine_footprint_ft2: round(totalProj, 1),
+        variance_pct: round(variance, 1),
+        verdict,
+      }
+    }
+
     // Pitch multiplier advisory
     const domMultiplier = slopeFactor(domPitch)
     const isLookup = Math.floor(domPitch) === domPitch && domPitch >= 0 && domPitch <= 24
@@ -1514,6 +1733,8 @@ export class RoofMeasurementEngine {
         total_squares_net:             round(netSquares, 2),
         total_squares_gross_w_waste:   round(grossSquares, 2),
         waste_factor_pct:              round(wFrac * 100, 1),
+        waste_breakdown:               wasteBd,
+        labor_estimate:                labor,
         num_roof_faces:                facesData.length,
         num_eave_points:               Math.max(0, this.eavesCart.length - 1),
         num_ridges:                    this.ridgesCart.length,
@@ -1545,6 +1766,8 @@ export class RoofMeasurementEngine {
       face_details:        facesData,
       materials_estimate:  mat,
       advisory_notes:      notes,
+      cross_check:         crossCheck,
+      geometry_warnings:   geometryWarnings.length > 0 ? geometryWarnings : undefined,
     }
   }
 }
@@ -1575,7 +1798,8 @@ export function traceUiToEnginePayload(
     longitude?: number
     price_per_bundle?: number
   },
-  defaultPitch: number = 4.0
+  defaultPitch: number = 4.0,
+  crossCheck?: { source: string; footprint_ft2: number }
 ): TracePayload {
   // Resolve multi-section eaves: prefer eaves_sections, fall back to eaves (which may be
   // a flat array [old single-section] or an array of arrays [new multi-section format])
@@ -1664,6 +1888,7 @@ export function traceUiToEnginePayload(
     valleys,
     rakes:          [],
     faces:          [],
+    cross_check:    crossCheck,
   }
 }
 

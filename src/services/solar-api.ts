@@ -179,6 +179,8 @@ export interface SolarPitchAndImagery {
   imagery_date?: string
   /** API call duration */
   api_duration_ms: number
+  /** Whole-roof footprint (sqft) — sum of segment projected areas. 0 if unavailable. */
+  roof_footprint_ft2: number
 }
 
 export async function fetchSolarPitchAndImagery(
@@ -261,6 +263,11 @@ export async function fetchSolarPitchAndImagery(
     `${segmentPitches.length} segments, quality=${imageryQuality}, ` +
     `${Date.now() - startTime}ms`)
 
+  // Whole-roof footprint for cross-check. Prefer wholeRoofStats; fall back to summed segment areas.
+  const wholeRoofM2 = solarPotential.wholeRoofStats?.areaMeters2 ||
+    rawSegments.reduce((s: number, seg: any) => s + (seg.stats?.areaMeters2 || 0), 0)
+  const roofFootprintFt2 = wholeRoofM2 > 0 ? Math.round(wholeRoofM2 * 10.7639 * 10) / 10 : 0
+
   return {
     pitch_degrees: Math.round(avgPitch * 10) / 10,
     pitch_ratio: pitchRatio,
@@ -269,6 +276,7 @@ export async function fetchSolarPitchAndImagery(
     imagery_quality: imageryQuality,
     imagery_date: imageryDate,
     api_duration_ms: Date.now() - startTime,
+    roof_footprint_ft2: roofFootprintFt2,
   }
 }
 

@@ -881,6 +881,7 @@ reportsRoutes.post('/calculate-from-trace', async (c) => {
     // Fetch real pitch from Google Solar API using centroid of traced eave points
     let pitchRise = default_pitch || 5.0
     let pitchSource = 'default'
+    let solarFootprintFt2 = 0
     const solarApiKey = c.env.GOOGLE_SOLAR_API_KEY || c.env.GOOGLE_MAPS_API_KEY
     if (solarApiKey && trace.eaves.length >= 3) {
       try {
@@ -893,6 +894,9 @@ reportsRoutes.post('/calculate-from-trace', async (c) => {
           pitchRise = Math.round(12 * Math.tan(solarResult.pitch_degrees * Math.PI / 180) * 10) / 10
           pitchSource = 'solar_api'
           console.log(`[CalculateFromTrace] Solar API pitch: ${solarResult.pitch_degrees}° → ${pitchRise}:12 (${solarResult.api_duration_ms}ms)`)
+        }
+        if (solarResult.roof_footprint_ft2 > 0) {
+          solarFootprintFt2 = solarResult.roof_footprint_ft2
         }
       } catch (e: any) {
         console.warn(`[CalculateFromTrace] Solar API pitch fetch failed (using default ${pitchRise}:12): ${e.message}`)
@@ -907,7 +911,8 @@ reportsRoutes.post('/calculate-from-trace', async (c) => {
         homeowner_name: '',
         order_number: 'PRE-ORDER',
       },
-      pitchRise
+      pitchRise,
+      solarFootprintFt2 > 0 ? { source: 'google_solar', footprint_ft2: solarFootprintFt2 } : undefined
     )
 
     // Run the measurement engine
@@ -2238,6 +2243,7 @@ async function _generateReportForOrderInner(
     // ═══════════════════════════════════════════════════════════
     if (!traceResult && traceData && traceData.eaves && traceData.eaves.length >= 3) {
       try {
+        const solarFootprint = solarPitch?.roof_footprint_ft2 || 0
         const enginePayload = traceUiToEnginePayload(
           traceData,
           {
@@ -2245,7 +2251,8 @@ async function _generateReportForOrderInner(
             homeowner_name: order.homeowner_name,
             order_number: order.order_number,
           },
-          solarPitchRise
+          solarPitchRise,
+          solarFootprint > 0 ? { source: 'google_solar', footprint_ft2: solarFootprint } : undefined
         )
         const engine = new RoofMeasurementEngine(enginePayload)
         traceResult = engine.run()
