@@ -5390,6 +5390,7 @@ function renderCustomerOnboardingView() {
     var lkBadge = lkDeployed ? '<span class="px-2 py-0.5 bg-green-100 text-green-800 rounded-full text-[10px] font-bold"><i class="fas fa-check mr-0.5"></i>Deployed</span>' : '<span class="px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full text-[10px] font-medium">Not Deployed</span>';
     var hasAgentPhone = c.agent_phone_number || c.secretary_phone_number;
     var deployBtn = lkDeployed ? '' : (hasAgentPhone ? '<button onclick="deployLiveKitAgent(' + c.id + ')" class="text-xs bg-violet-600 hover:bg-violet-700 text-white px-2.5 py-1 rounded-lg font-medium ml-1"><i class="fas fa-rocket mr-1"></i>Deploy</button>' : '');
+    var testBtn = lkDeployed ? '<button onclick="testSecretaryCall(' + c.id + ')" class="text-xs bg-amber-500 hover:bg-amber-600 text-white px-2.5 py-1 rounded-lg font-medium ml-1"><i class="fas fa-vial mr-1"></i>Test</button>' : '';
     return '<tr class="border-b border-gray-100 hover:bg-gray-50">' +
       '<td class="px-4 py-3"><div class="font-bold text-gray-800 text-sm">' + (c.business_name || c.contact_name || 'N/A') + '</div><div class="text-xs text-gray-500">' + (c.email || '') + '</div></td>' +
       '<td class="px-4 py-3 text-sm text-gray-600"><div>' + (c.personal_phone || c.phone || '-') + '</div><div class="text-[10px] text-gray-400">Personal Cell</div></td>' +
@@ -5399,7 +5400,7 @@ function renderCustomerOnboardingView() {
       '<td class="px-4 py-3 text-center">' + modeBadge + '</td>' +
       '<td class="px-4 py-3 text-center">' + lkBadge + '</td>' +
       '<td class="px-4 py-3 text-xs text-gray-400">' + fmtDate(c.created_at) + '</td>' +
-      '<td class="px-4 py-3 whitespace-nowrap"><button onclick="toggleSecretaryMode(' + c.id + ', ' + (c.secretary_enabled ? 0 : 1) + ')" class="text-xs ' + (c.secretary_enabled ? 'text-red-600 hover:text-red-800' : 'text-green-600 hover:text-green-800') + ' font-medium">' + (c.secretary_enabled ? '<i class="fas fa-power-off mr-1"></i>Disable' : '<i class="fas fa-play mr-1"></i>Enable') + '</button>' + deployBtn + '</td>' +
+      '<td class="px-4 py-3 whitespace-nowrap"><button onclick="toggleSecretaryMode(' + c.id + ', ' + (c.secretary_enabled ? 0 : 1) + ')" class="text-xs ' + (c.secretary_enabled ? 'text-red-600 hover:text-red-800' : 'text-green-600 hover:text-green-800') + ' font-medium">' + (c.secretary_enabled ? '<i class="fas fa-power-off mr-1"></i>Disable' : '<i class="fas fa-play mr-1"></i>Enable') + '</button>' + deployBtn + testBtn + '</td>' +
       '</tr>';
   }).join('');
 
@@ -5534,6 +5535,25 @@ function renderCustomerOnboardingView() {
     '</div>' +
     '</div>' +
 
+    // Row 3b: SIP Bridge Configuration
+    '<div class="bg-gradient-to-r from-violet-50 to-purple-50 rounded-xl p-4 border border-violet-200">' +
+    '<h4 class="text-sm font-bold text-violet-800 mb-3"><i class="fas fa-network-wired mr-1"></i>SIP Bridge / Forwarding Method</h4>' +
+    '<div class="grid grid-cols-1 md:grid-cols-2 gap-4">' +
+    '<div><label class="text-xs text-gray-600 font-bold block mb-1">Forwarding Method</label>' +
+    '<select id="ob-forwarding-method" class="w-full border-2 border-violet-200 rounded-lg px-3 py-2.5 text-sm" onchange="updateForwardingMethodUI()">' +
+    '<option value="livekit_number">LiveKit-issued number (auto-provision)</option>' +
+    '<option value="call_forwarding">Call forwarding from existing line</option>' +
+    '<option value="sip_trunk">SIP trunk (BYO carrier credentials)</option>' +
+    '</select></div>' +
+    '<div id="ob-fwd-help" class="text-xs text-gray-600 self-end pb-1">Customer forwards their personal cell to the assigned LiveKit number.</div>' +
+    '</div>' +
+    '<div id="ob-sip-fields" class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3 hidden">' +
+    '<div><label class="text-xs text-gray-600 font-bold block mb-1">SIP URI</label><input id="ob-sip-uri" class="w-full border rounded-lg px-3 py-2 text-sm font-mono" placeholder="sip:trunk.carrier.com"></div>' +
+    '<div><label class="text-xs text-gray-600 font-bold block mb-1">SIP Auth Username</label><input id="ob-sip-username" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="trunk-user"></div>' +
+    '<div><label class="text-xs text-gray-600 font-bold block mb-1">SIP Auth Password</label><input id="ob-sip-password" type="password" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="********"></div>' +
+    '</div>' +
+    '</div>' +
+
     // Row 4: Notes + Enable toggle
     '<div class="grid grid-cols-1 md:grid-cols-2 gap-4">' +
     '<div><label class="text-xs text-gray-500 font-medium block mb-1">Notes</label><input id="ob-notes" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Optional notes about this customer"></div>' +
@@ -5592,8 +5612,8 @@ window.saCreateRoofAccount = async function() {
     window.rmToast('Contact Name, Email, and Password are required', 'warning');
     return;
   }
-  if (password.length < 6) {
-    window.rmToast('Password must be at least 6 characters', 'warning');
+  if (password.length < 8) {
+    window.rmToast('Password must be at least 8 characters', 'warning');
     return;
   }
 
@@ -5602,34 +5622,24 @@ window.saCreateRoofAccount = async function() {
   resultEl.textContent = 'Creating account...';
 
   try {
-    var res = await saFetch('/api/admin/superadmin/onboarding/create', {
+    var res = await saFetch('/api/admin/superadmin/users/create', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         email: email,
         password: password,
-        contact_name: name,
-        business_name: business || name,
-        enable_secretary: false,
-        subscription_tier: 'starter',
-        trial_days: '30',
-        credit_pack: 'none',
-        send_invoice: false,
-        _override_credits: credits
+        name: name,
+        company_name: business || name
       })
     });
     var data = await res.json();
     if (data.success) {
-      // If extra credits requested beyond the default 3, patch them in
-      if (credits !== 3 && data.customer_id) {
-        var diff = credits - 3;
-        if (diff !== 0) {
-          await saFetch('/api/admin/superadmin/users/' + data.customer_id + '/adjust-credits', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ amount: diff, reason: 'Onboarding grant' })
-          });
-        }
+      if (credits > 0 && data.customer_id) {
+        await saFetch('/api/admin/superadmin/users/' + data.customer_id + '/adjust-credits', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ amount: credits, reason: 'Onboarding grant' })
+        });
       }
       resultEl.className = 'mt-3 p-3 rounded-lg bg-green-50 border border-green-200 text-sm text-green-800';
       resultEl.innerHTML =
@@ -5749,6 +5759,10 @@ async function createOnboardingCustomer() {
     call_forwarding_number: personalPhone,
     notes: document.getElementById('ob-notes').value,
     enable_secretary: document.getElementById('ob-enable-sec').checked,
+    forwarding_method: (document.getElementById('ob-forwarding-method') || {}).value || 'livekit_number',
+    sip_uri: (document.getElementById('ob-sip-uri') || {}).value || '',
+    sip_username: (document.getElementById('ob-sip-username') || {}).value || '',
+    sip_password: (document.getElementById('ob-sip-password') || {}).value || '',
     // Subscription & billing
     subscription_tier: document.getElementById('ob-sub-tier') ? document.getElementById('ob-sub-tier').value : 'starter',
     trial_days: document.getElementById('ob-trial-days') ? document.getElementById('ob-trial-days').value : '30',
@@ -5780,6 +5794,8 @@ async function createOnboardingCustomer() {
         msg += 'Personal Phone: ' + (data.personal_phone || personalPhone) + '\n';
         if (data.livekit_deployed) {
           msg += '\nLiveKit Agent: DEPLOYED (trunk: ' + data.livekit_trunk_id + ')\n';
+        } else if (data.livekit_error) {
+          msg += '\nLiveKit Agent: NOT DEPLOYED — ' + data.livekit_error + '\n';
         }
       }
       window.rmToast(msg, 'info');
@@ -5789,6 +5805,29 @@ async function createOnboardingCustomer() {
     }
   } catch(e) { window.rmToast('Error creating customer: ' + e.message, 'error'); }
 }
+
+function updateForwardingMethodUI() {
+  var sel = document.getElementById('ob-forwarding-method');
+  var sipBox = document.getElementById('ob-sip-fields');
+  var help = document.getElementById('ob-fwd-help');
+  if (!sel) return;
+  var m = sel.value;
+  if (sipBox) sipBox.classList.toggle('hidden', m !== 'sip_trunk');
+  if (help) {
+    if (m === 'livekit_number') help.textContent = 'Customer forwards their personal cell to the assigned LiveKit number.';
+    else if (m === 'call_forwarding') help.textContent = 'Customer keeps existing carrier number and forwards busy/no-answer to LiveKit.';
+    else help.textContent = 'Bring-your-own SIP trunk: enter the carrier URI + auth credentials below.';
+  }
+}
+
+window.testSecretaryCall = async function(customerId) {
+  window.rmToast('Running trunk health test...', 'info');
+  try {
+    var res = await saFetch('/api/admin/superadmin/secretary/' + customerId + '/test-call', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+    var data = await res.json();
+    window.rmToast((data.success ? 'PASS — ' : 'FAIL — ') + (data.details || data.result), data.success ? 'success' : 'error');
+  } catch (e) { window.rmToast('Test failed: ' + e.message, 'error'); }
+};
 
 function updateTrialEndDate() {
   var el = document.getElementById('ob-trial-end-display');
@@ -5883,7 +5922,7 @@ function renderServiceInvoicesView() {
       '<td class="px-4 py-3 text-xs text-gray-400">' + fmtDate(inv.created_at) + '</td>' +
       '<td class="px-4 py-3">' +
         (inv.status === 'draft' ? '<button onclick="sendServiceInvoice(' + inv.id + ')" class="text-xs text-blue-600 hover:text-blue-800 font-medium mr-2"><i class="fas fa-paper-plane mr-1"></i>Send</button>' : '') +
-        (inv.payment_link ? '<a href="' + inv.payment_link + '" target="_blank" class="text-xs text-green-600 hover:text-green-800 font-medium"><i class="fas fa-external-link-alt mr-1"></i>Payment Link</a>' : '') +
+        ((inv.payment_link || inv.square_payment_link_url) ? '<a href="' + (inv.payment_link || inv.square_payment_link_url) + '" target="_blank" class="text-xs text-green-600 hover:text-green-800 font-medium"><i class="fas fa-external-link-alt mr-1"></i>Payment Link</a>' : '') +
       '</td></tr>';
   }).join('');
 
@@ -5930,7 +5969,7 @@ async function createServiceInvoice() {
   document.querySelectorAll('.si-item').forEach(function(row) {
     var desc = row.querySelector('.si-desc').value;
     var price = parseFloat(row.querySelector('.si-price').value) || 0;
-    if (desc && price > 0) items.push({ description: desc, price: price });
+    if (desc && price > 0) items.push({ description: desc, quantity: 1, unit_price: price });
   });
   if (items.length === 0) { window.rmToast('At least one line item is required', 'warning'); return; }
 
@@ -5951,7 +5990,9 @@ async function createServiceInvoice() {
     });
     var data = await res.json();
     if (data.success) {
-      window.rmToast('Invoice ' + data.invoice_number + ' created! Total: $' + parseFloat(data.total, 'success').toFixed(2));
+      var totalStr = data.total != null ? parseFloat(data.total).toFixed(2) : '0.00';
+      var linkMsg = data.checkout_url ? ' (payment link ready)' : '';
+      window.rmToast('Invoice ' + data.invoice_number + ' created! Total: $' + totalStr + linkMsg, 'success');
       loadView('service-invoices');
     } else {
       window.rmToast(data.error || 'Failed to create invoice', 'info');

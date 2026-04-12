@@ -1448,26 +1448,21 @@ adminRoutes.post('/superadmin/onboarding/create', async (c) => {
   const { email, password, contact_name, business_name, phone, personal_phone,
           agent_phone_number, secretary_mode, phone_provider, notes, enable_secretary,
           call_forwarding_number, secretary_phone_number,
+          forwarding_method, sip_uri, sip_username, sip_password,
           subscription_tier, trial_days, credit_pack, send_invoice } = body
 
   if (!email || !password || !contact_name) {
     return c.json({ error: 'email, password, and contact_name are required' }, 400)
+  }
+  if (typeof password !== 'string' || password.length < 8) {
+    return c.json({ error: 'password must be at least 8 characters' }, 400)
   }
 
   const existing = await c.env.DB.prepare(`SELECT id FROM customers WHERE email = ?`)
     .bind(email.toLowerCase()).first<any>()
   if (existing) return c.json({ error: 'A customer with that email already exists' }, 409)
 
-  // Hash password using PBKDF2 — matches verifyPassword() in customer-auth.ts (pbkdf2:<salt>:<hash>)
-  const pwSalt = crypto.randomUUID()
-  const enc2 = new TextEncoder()
-  const keyMaterial = await crypto.subtle.importKey('raw', enc2.encode(password), { name: 'PBKDF2' }, false, ['deriveBits'])
-  const hashBuffer = await crypto.subtle.deriveBits(
-    { name: 'PBKDF2', salt: enc2.encode(pwSalt), iterations: 100000, hash: 'SHA-256' },
-    keyMaterial, 256
-  )
-  const hashHex = Array.from(new Uint8Array(hashBuffer)).map((b: number) => b.toString(16).padStart(2, '0')).join('')
-  const password_hash = `pbkdf2:${pwSalt}:${hashHex}`
+  const password_hash = await hashCustomerPassword(password)
 
   // Trial + subscription setup
   const trialDaysNum = parseInt(trial_days) || 30
@@ -1507,12 +1502,15 @@ adminRoutes.post('/superadmin/onboarding/create', async (c) => {
       `).bind(customerId).run()
 
       // Create secretary config
+      const fwdMethod = ['livekit_number', 'call_forwarding', 'sip_trunk'].includes(forwarding_method)
+        ? forwarding_method : 'livekit_number'
       await c.env.DB.prepare(`
         INSERT INTO secretary_config (
           customer_id, business_phone, greeting_script, common_qa, general_notes,
           secretary_mode, is_active, connection_status, assigned_phone_number,
-          forwarding_method, created_at, updated_at
-        ) VALUES (?, ?, '', '', ?, ?, ?, ?, ?, 'forward', datetime('now'), datetime('now'))
+          forwarding_method, livekit_sip_uri, sip_username, sip_password,
+          created_at, updated_at
+        ) VALUES (?, ?, '', '', ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
       `).bind(
         customerId,
         personal_phone || phone || '',
@@ -1520,7 +1518,11 @@ adminRoutes.post('/superadmin/onboarding/create', async (c) => {
         secretary_mode || 'full',
         agentPhone ? 1 : 0,
         agentPhone ? 'pending_forwarding' : 'not_connected',
-        agentPhone || ''
+        agentPhone || '',
+        fwdMethod,
+        sip_uri || '',
+        sip_username || '',
+        sip_password || ''
       ).run()
 
       // If agent phone provided, mark in pool or insert
@@ -1545,16 +1547,23 @@ adminRoutes.post('/superadmin/onboarding/create', async (c) => {
     let livekitDeployed = false
     let livekitTrunkId = ''
     let livekitDispatchId = ''
+    let livekitError = ''
     if (agentPhone && secretarySetup) {
       try {
-        const result = await deployLiveKitForCustomer(c.env, customerId, agentPhone)
+        const result = await deployLiveKitForCustomer(c.env, customerId, agentPhone, {
+          sip_username: sip_username || undefined,
+          sip_password: sip_password || undefined,
+        })
         if (result.success) {
           livekitDeployed = true
           livekitTrunkId = result.trunk_id
           livekitDispatchId = result.dispatch_rule_id
+        } else {
+          livekitError = result.error || 'Unknown LiveKit deploy error'
         }
       } catch (e: any) {
-        console.warn(`[Onboarding] LiveKit auto-deploy failed for ${customerId}: ${e.message}`)
+        livekitError = e.message || String(e)
+        console.warn(`[Onboarding] LiveKit auto-deploy failed for ${customerId}: ${livekitError}`)
       }
     }
 
@@ -1585,28 +1594,8 @@ adminRoutes.post('/superadmin/onboarding/create', async (c) => {
               'INSERT INTO invoice_items (invoice_id, description, quantity, unit_price, amount, sort_order) VALUES (?, ?, ?, ?, ?, 0)'
             ).bind(invoiceId, pack.desc, pack.qty, pack.price / pack.qty, pack.price).run()
 
-            // Create Square payment link
-            let checkoutUrl = ''
-            const sqToken = (c.env as any).SQUARE_ACCESS_TOKEN
-            const sqLocation = (c.env as any).SQUARE_LOCATION_ID
-            if (sqToken && sqLocation) {
-              try {
-                const sqResp = await fetch('https://connect.squareup.com/v2/online-checkout/payment-links', {
-                  method: 'POST',
-                  headers: { 'Authorization': `Bearer ${sqToken}`, 'Content-Type': 'application/json', 'Square-Version': '2024-01-18' },
-                  body: JSON.stringify({
-                    idempotency_key: `ob-${invoiceId}-${Date.now()}`,
-                    quick_pay: { name: `Invoice ${invoiceNumber}`, price_money: { amount: Math.round(pack.price * 100), currency: 'USD' }, location_id: sqLocation }
-                  })
-                })
-                const sqData: any = await sqResp.json()
-                if (sqData.payment_link?.url) {
-                  checkoutUrl = sqData.payment_link.url
-                  await c.env.DB.prepare("UPDATE invoices SET square_payment_link_url = ?, square_payment_link_id = ?, updated_at = datetime('now') WHERE id = ?")
-                    .bind(checkoutUrl, sqData.payment_link.id, invoiceId).run()
-                }
-              } catch (sqErr: any) { console.warn('[Onboarding] Square link creation failed:', sqErr.message) }
-            }
+            const sq = await createSquarePaymentLink(c.env, invoiceId, invoiceNumber, pack.price)
+            const checkoutUrl = sq?.url || ''
 
             // Send invoice email
             try {
@@ -1632,6 +1621,7 @@ adminRoutes.post('/superadmin/onboarding/create', async (c) => {
       personal_phone: personal_phone || phone || null,
       livekit_deployed: livekitDeployed,
       livekit_trunk_id: livekitTrunkId,
+      livekit_error: livekitError || undefined,
       subscription_tier: selectedTier,
       trial_ends_at: new Date(Date.now() + trialDaysNum * 86400000).toISOString(),
       invoice: invoiceResult,
@@ -1642,22 +1632,28 @@ adminRoutes.post('/superadmin/onboarding/create', async (c) => {
 })
 
 // ── LiveKit deployment helper — creates SIP trunk + dispatch rule ──
-async function deployLiveKitForCustomer(env: any, customerId: number, phoneNumber: string): Promise<{ success: boolean; trunk_id: string; dispatch_rule_id: string }> {
+async function deployLiveKitForCustomer(
+  env: any,
+  customerId: number,
+  phoneNumber: string,
+  opts: { sip_username?: string; sip_password?: string; reuse_existing?: boolean } = {}
+): Promise<{ success: boolean; trunk_id: string; dispatch_rule_id: string; error?: string }> {
   const apiKey = env.LIVEKIT_API_KEY
   const apiSecret = env.LIVEKIT_API_SECRET
   const livekitUrl = env.LIVEKIT_URL
   const livekitSipUri = env.LIVEKIT_SIP_URI || ''
 
   if (!apiKey || !apiSecret || !livekitUrl) {
-    return { success: false, trunk_id: '', dispatch_rule_id: '' }
+    return { success: false, trunk_id: '', dispatch_rule_id: '', error: 'LiveKit env vars not configured (LIVEKIT_API_KEY/SECRET/URL)' }
   }
 
-  // Check if already deployed
-  const existing = await env.DB.prepare(
-    'SELECT livekit_inbound_trunk_id, livekit_dispatch_rule_id FROM secretary_config WHERE customer_id = ?'
-  ).bind(customerId).first<any>()
-  if (existing?.livekit_inbound_trunk_id && existing?.livekit_dispatch_rule_id) {
-    return { success: true, trunk_id: existing.livekit_inbound_trunk_id, dispatch_rule_id: existing.livekit_dispatch_rule_id }
+  if (opts.reuse_existing !== false) {
+    const existing = await env.DB.prepare(
+      'SELECT livekit_inbound_trunk_id, livekit_dispatch_rule_id FROM secretary_config WHERE customer_id = ?'
+    ).bind(customerId).first<any>()
+    if (existing?.livekit_inbound_trunk_id && existing?.livekit_dispatch_rule_id) {
+      return { success: true, trunk_id: existing.livekit_inbound_trunk_id, dispatch_rule_id: existing.livekit_dispatch_rule_id }
+    }
   }
 
   // Create JWT for LiveKit SIP API
@@ -1679,11 +1675,15 @@ async function deployLiveKitForCustomer(env: any, customerId: number, phoneNumbe
     return resp.json() as Promise<any>
   }
 
-  // Step 1: Create inbound trunk
-  const trunkResult = await lkApi('/twirp/livekit.SIP/CreateSIPInboundTrunk', {
-    trunk: { name: `secretary-${customerId}`, numbers: [phoneNumber], krisp_enabled: true, metadata: JSON.stringify({ customer_id: customerId, service: 'roofer_secretary' }) }
-  })
+  // Step 1: Create inbound trunk (with optional BYO SIP auth)
+  const trunkBody: any = { name: `secretary-${customerId}`, numbers: [phoneNumber], krisp_enabled: true, metadata: JSON.stringify({ customer_id: customerId, service: 'roofer_secretary' }) }
+  if (opts.sip_username) trunkBody.auth_username = opts.sip_username
+  if (opts.sip_password) trunkBody.auth_password = opts.sip_password
+  const trunkResult = await lkApi('/twirp/livekit.SIP/CreateSIPInboundTrunk', { trunk: trunkBody })
   const trunkId = trunkResult?.sip_trunk_id || trunkResult?.trunk?.sip_trunk_id || ''
+  if (!trunkId) {
+    return { success: false, trunk_id: '', dispatch_rule_id: '', error: `LiveKit trunk creation failed: ${JSON.stringify(trunkResult).slice(0, 200)}` }
+  }
 
   // Step 2: Create dispatch rule
   const dispatchResult = await lkApi('/twirp/livekit.SIP/CreateSIPDispatchRule', {
@@ -1709,6 +1709,159 @@ async function deployLiveKitForCustomer(env: any, customerId: number, phoneNumbe
   console.log(`[LiveKit Deploy] Customer ${customerId}: trunk=${trunkId}, dispatch=${dispatchId}`)
   return { success: !!trunkId, trunk_id: trunkId, dispatch_rule_id: dispatchId }
 }
+
+// PBKDF2 password hashing — matches verifyPassword() in customer-auth.ts
+async function hashCustomerPassword(password: string): Promise<string> {
+  const pwSalt = crypto.randomUUID()
+  const enc = new TextEncoder()
+  const keyMaterial = await crypto.subtle.importKey('raw', enc.encode(password), { name: 'PBKDF2' }, false, ['deriveBits'])
+  const hashBuffer = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', salt: enc.encode(pwSalt), iterations: 100000, hash: 'SHA-256' },
+    keyMaterial, 256
+  )
+  const hashHex = Array.from(new Uint8Array(hashBuffer)).map((b: number) => b.toString(16).padStart(2, '0')).join('')
+  return `pbkdf2:${pwSalt}:${hashHex}`
+}
+
+// Square payment-link helper. Returns { url, id } or null on failure.
+async function createSquarePaymentLink(env: any, invoiceId: number, invoiceNumber: string, totalDollars: number): Promise<{ url: string; id: string } | null> {
+  const sqToken = env.SQUARE_ACCESS_TOKEN
+  const sqLocation = env.SQUARE_LOCATION_ID
+  if (!sqToken || !sqLocation) return null
+  try {
+    const sqResp = await fetch('https://connect.squareup.com/v2/online-checkout/payment-links', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${sqToken}`, 'Content-Type': 'application/json', 'Square-Version': '2024-01-18' },
+      body: JSON.stringify({
+        idempotency_key: `inv-${invoiceId}-${Date.now()}`,
+        quick_pay: { name: `Invoice ${invoiceNumber}`, price_money: { amount: Math.round(totalDollars * 100), currency: 'USD' }, location_id: sqLocation }
+      })
+    })
+    const sqData: any = await sqResp.json()
+    if (sqData.payment_link?.url) {
+      await env.DB.prepare("UPDATE invoices SET square_payment_link_url = ?, square_payment_link_id = ?, updated_at = datetime('now') WHERE id = ?")
+        .bind(sqData.payment_link.url, sqData.payment_link.id, invoiceId).run()
+      return { url: sqData.payment_link.url, id: sqData.payment_link.id }
+    }
+  } catch (e: any) {
+    console.warn('[Square] payment link creation failed:', e.message)
+  }
+  return null
+}
+
+// POST /superadmin/users/create — Standalone create-user (no secretary, no invoice)
+adminRoutes.post('/superadmin/users/create', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
+
+  const { email, password, name, company_name, phone } = await c.req.json()
+  if (!email || !password || !name) return c.json({ error: 'email, password, and name are required' }, 400)
+  if (typeof password !== 'string' || password.length < 8) return c.json({ error: 'password must be at least 8 characters' }, 400)
+
+  const existing = await c.env.DB.prepare('SELECT id FROM customers WHERE email = ?').bind(email.toLowerCase()).first<any>()
+  if (existing) return c.json({ error: 'A customer with that email already exists' }, 409)
+
+  const password_hash = await hashCustomerPassword(password)
+  try {
+    const result = await c.env.DB.prepare(`
+      INSERT INTO customers (email, password_hash, name, company_name, phone,
+        is_active, email_verified, free_trial_total, free_trial_used, report_credits,
+        subscription_plan, subscription_status, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, 1, 1, 0, 0, 0, 'starter', 'inactive', datetime('now'), datetime('now'))
+    `).bind(email.toLowerCase(), password_hash, name, company_name || name, phone || '').run()
+    const customerId = (result as any).meta?.last_row_id
+    return c.json({ success: true, customer_id: customerId, email: email.toLowerCase() })
+  } catch (err: any) {
+    return c.json({ error: 'Failed to create user', details: err.message }, 500)
+  }
+})
+
+// POST /superadmin/secretary/:customerId/sip-config — Update SIP fields without re-onboarding
+adminRoutes.post('/superadmin/secretary/:customerId/sip-config', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
+
+  const customerId = parseInt(c.req.param('customerId'))
+  const { forwarding_method, sip_uri, sip_username, sip_password, assigned_phone_number, redeploy } = await c.req.json()
+
+  const fwdMethod = ['livekit_number', 'call_forwarding', 'sip_trunk'].includes(forwarding_method) ? forwarding_method : null
+  const updates: string[] = []
+  const binds: any[] = []
+  if (fwdMethod) { updates.push('forwarding_method = ?'); binds.push(fwdMethod) }
+  if (typeof sip_uri === 'string') { updates.push('livekit_sip_uri = ?'); binds.push(sip_uri) }
+  if (typeof sip_username === 'string') { updates.push('sip_username = ?'); binds.push(sip_username) }
+  if (typeof sip_password === 'string') { updates.push('sip_password = ?'); binds.push(sip_password) }
+  if (typeof assigned_phone_number === 'string') { updates.push('assigned_phone_number = ?'); binds.push(assigned_phone_number) }
+  if (!updates.length) return c.json({ error: 'No fields to update' }, 400)
+  updates.push("updated_at = datetime('now')")
+  binds.push(customerId)
+  await c.env.DB.prepare(`UPDATE secretary_config SET ${updates.join(', ')} WHERE customer_id = ?`).bind(...binds).run()
+
+  let deploy: any = null
+  if (redeploy) {
+    const cfg = await c.env.DB.prepare('SELECT assigned_phone_number, sip_username, sip_password FROM secretary_config WHERE customer_id = ?').bind(customerId).first<any>()
+    if (cfg?.assigned_phone_number) {
+      deploy = await deployLiveKitForCustomer(c.env, customerId, cfg.assigned_phone_number, {
+        sip_username: cfg.sip_username || undefined,
+        sip_password: cfg.sip_password || undefined,
+        reuse_existing: false,
+      })
+    }
+  }
+  return c.json({ success: true, deploy })
+})
+
+// POST /superadmin/secretary/:customerId/test-call — Verify trunk health via LiveKit list API
+adminRoutes.post('/superadmin/secretary/:customerId/test-call', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
+
+  const customerId = parseInt(c.req.param('customerId'))
+  const cfg = await c.env.DB.prepare('SELECT livekit_inbound_trunk_id, assigned_phone_number FROM secretary_config WHERE customer_id = ?').bind(customerId).first<any>()
+  if (!cfg) return c.json({ error: 'No secretary config' }, 404)
+
+  const apiKey = c.env.LIVEKIT_API_KEY
+  const apiSecret = c.env.LIVEKIT_API_SECRET
+  const livekitUrl = c.env.LIVEKIT_URL
+  if (!apiKey || !apiSecret || !livekitUrl) {
+    const details = 'LiveKit env vars not configured'
+    await c.env.DB.prepare("UPDATE secretary_config SET last_test_at = datetime('now'), last_test_result = 'failed', last_test_details = ? WHERE customer_id = ?").bind(details, customerId).run()
+    return c.json({ success: false, result: 'failed', details })
+  }
+
+  function b64url(data: Uint8Array | string): string {
+    let str: string
+    if (typeof data === 'string') { str = btoa(data) } else { let b = ''; for (let i = 0; i < data.length; i++) b += String.fromCharCode(data[i]); str = btoa(b) }
+    return str.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+  }
+  const now = Math.floor(Date.now() / 1000)
+  const header = b64url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))
+  const payload = b64url(JSON.stringify({ iss: apiKey, sub: 'server', iat: now, exp: now + 300, nbf: now, sip: { admin: true, call: true } }))
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(apiSecret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
+  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(`${header}.${payload}`))
+  const jwt = `${header}.${payload}.${b64url(new Uint8Array(sig))}`
+  const httpUrl = livekitUrl.replace('wss://', 'https://').replace(/\/$/, '')
+
+  try {
+    const resp = await fetch(`${httpUrl}/twirp/livekit.SIP/ListSIPInboundTrunk`, {
+      method: 'POST', headers: { 'Authorization': `Bearer ${jwt}`, 'Content-Type': 'application/json' }, body: '{}'
+    })
+    const data: any = await resp.json()
+    const items: any[] = data?.items || []
+    const found = items.find((t: any) => t?.sip_trunk_id === cfg.livekit_inbound_trunk_id)
+    const ok = !!found
+    const details = ok
+      ? `Trunk ${cfg.livekit_inbound_trunk_id} active, numbers=${(found.numbers || []).join(',')}`
+      : `Trunk ${cfg.livekit_inbound_trunk_id || '(none)'} not found in LiveKit (got ${items.length} trunks)`
+    await c.env.DB.prepare("UPDATE secretary_config SET last_test_at = datetime('now'), last_test_result = ?, last_test_details = ? WHERE customer_id = ?")
+      .bind(ok ? 'success' : 'failed', details, customerId).run()
+    return c.json({ success: ok, result: ok ? 'success' : 'failed', details })
+  } catch (err: any) {
+    const details = `LiveKit API error: ${err.message}`
+    await c.env.DB.prepare("UPDATE secretary_config SET last_test_at = datetime('now'), last_test_result = 'failed', last_test_details = ? WHERE customer_id = ?").bind(details, customerId).run()
+    return c.json({ success: false, result: 'failed', details })
+  }
+})
 
 // POST /superadmin/deploy-secretary/:customerId — Deploy LiveKit agent for existing customer
 adminRoutes.post('/superadmin/deploy-secretary/:customerId', async (c) => {
@@ -2121,9 +2274,14 @@ adminRoutes.post('/superadmin/service-invoices/create', async (c) => {
     customer = { id: result.meta.last_row_id, name: customer_email.split('@')[0], email: customer_email.toLowerCase() }
   }
 
-  // Calculate totals
+  // Normalize line items (UI may send `price` instead of `unit_price`)
+  const normItems = items.map((it: any) => ({
+    description: it.description || 'Service',
+    quantity: it.quantity || 1,
+    unit_price: it.unit_price != null ? Number(it.unit_price) : Number(it.price || 0),
+  }))
   let subtotal = 0
-  for (const it of items) { subtotal += (it.quantity || 1) * (it.unit_price || 0) }
+  for (const it of normItems) { subtotal += it.quantity * it.unit_price }
   const taxRate = 0
   const total = subtotal
 
@@ -2139,12 +2297,13 @@ adminRoutes.post('/superadmin/service-invoices/create', async (c) => {
   ).bind(invoiceNumber, customer.id, subtotal, taxRate, total, notes || '', shareToken, due_date || null).run()
   const invoiceId = invResult.meta.last_row_id as number
 
-  for (let i = 0; i < items.length; i++) {
-    const it = items[i]
-    await c.env.DB.prepare('INSERT INTO invoice_items (invoice_id, description, quantity, unit_price, amount, sort_order) VALUES (?, ?, ?, ?, ?, ?)').bind(invoiceId, it.description || 'Service', it.quantity || 1, it.unit_price || 0, (it.quantity || 1) * (it.unit_price || 0), i).run()
+  for (let i = 0; i < normItems.length; i++) {
+    const it = normItems[i]
+    await c.env.DB.prepare('INSERT INTO invoice_items (invoice_id, description, quantity, unit_price, amount, sort_order) VALUES (?, ?, ?, ?, ?, ?)').bind(invoiceId, it.description, it.quantity, it.unit_price, it.quantity * it.unit_price, i).run()
   }
 
-  return c.json({ success: true, invoice_id: invoiceId, invoice_number: invoiceNumber, share_token: shareToken, customer_id: customer.id })
+  const sq = await createSquarePaymentLink(c.env, invoiceId, invoiceNumber, total)
+  return c.json({ success: true, invoice_id: invoiceId, invoice_number: invoiceNumber, share_token: shareToken, customer_id: customer.id, total, checkout_url: sq?.url || '' })
 })
 
 // Service invoice — send via email
