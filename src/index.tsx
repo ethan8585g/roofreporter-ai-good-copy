@@ -513,6 +513,11 @@ app.get('/admin', (c) => {
   return c.html(getAdminPageHTML())
 })
 
+// Dispatch Board — crew scheduling + route optimization
+app.get('/admin/dispatch', (c) => {
+  return c.html(getDispatchBoardHTML(c.env.GOOGLE_MAPS_API_KEY || ''))
+})
+
 // Order Confirmation Page
 app.get('/order/:id', (c) => {
   return c.html(getOrderConfirmationHTML())
@@ -3103,6 +3108,347 @@ function getMainPageHTML(mapsApiKey: string) {
     </div>
   </footer>
   <script src="/static/app.js?v=${Date.now()}"></script>
+</body>
+</html>`
+}
+
+function getDispatchBoardHTML(mapsApiKey: string = '') {
+  const mapsScript = mapsApiKey
+    ? `<script src="https://maps.googleapis.com/maps/api/js?key=${mapsApiKey}&libraries=geometry" async defer></script>`
+    : ''
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags()}
+  ${mapsScript}
+  <title>Dispatch Board — Roof Manager</title>
+  <style>
+    :root { --bg-page:#0A0A0A; --bg-card:#141414; --bg-card-2:#1b1b1b; --border:#262626; --text-primary:#fff; --text-muted:#9ca3af; --accent:#22d3ee; --accent-2:#00FF88; --danger:#ef4444; }
+    body { background: var(--bg-page); color: var(--text-primary); font-family: ui-sans-serif, system-ui, -apple-system; margin:0; }
+    .topbar { display:flex; align-items:center; justify-content:space-between; padding:10px 16px; background:var(--bg-card); border-bottom:1px solid var(--border); }
+    .topbar h1 { font-size:15px; font-weight:700; margin:0; display:flex; align-items:center; gap:10px; }
+    .topbar .ctrls { display:flex; gap:8px; align-items:center; }
+    .btn { background:var(--bg-card-2); border:1px solid var(--border); color:var(--text-primary); padding:6px 12px; border-radius:6px; font-size:12px; cursor:pointer; }
+    .btn:hover { border-color:var(--accent); }
+    .btn.primary { background:linear-gradient(135deg,var(--accent),#0ea5e9); border-color:transparent; font-weight:600; }
+    .btn.success { background:linear-gradient(135deg,var(--accent-2),#10b981); border-color:transparent; font-weight:600; color:#000; }
+    input.date, select.sel { background:var(--bg-card-2); border:1px solid var(--border); color:var(--text-primary); padding:6px 10px; border-radius:6px; font-size:12px; }
+    .layout { display:grid; grid-template-columns: 280px 1fr 380px; height: calc(100vh - 51px); }
+    .col { border-right:1px solid var(--border); overflow-y:auto; padding:12px; }
+    .col:last-child { border-right:0; }
+    .panel-title { font-size:11px; text-transform:uppercase; letter-spacing:.12em; color:var(--text-muted); margin-bottom:8px; font-weight:700; }
+    .job-card { background:var(--bg-card); border:1px solid var(--border); border-radius:8px; padding:10px; margin-bottom:8px; cursor:grab; transition:all .15s; }
+    .job-card:hover { border-color:var(--accent); transform:translateY(-1px); }
+    .job-card.dragging { opacity:.4; }
+    .job-card .title { font-size:13px; font-weight:600; margin:0 0 4px; }
+    .job-card .meta { font-size:11px; color:var(--text-muted); }
+    .job-card .badge { display:inline-block; padding:1px 6px; border-radius:4px; font-size:10px; background:var(--bg-card-2); border:1px solid var(--border); margin-right:4px; }
+    .job-card .badge.install { background:rgba(34,211,238,.1); border-color:var(--accent); color:var(--accent); }
+    .job-card .badge.repair { background:rgba(245,158,11,.1); border-color:#f59e0b; color:#f59e0b; }
+    .job-card .badge.inspection { background:rgba(167,139,250,.1); border-color:#a78bfa; color:#a78bfa; }
+    .grid-wrap { padding:12px; }
+    .week-grid { display:grid; gap:6px; min-width:900px; }
+    .week-head { display:grid; grid-template-columns:160px repeat(var(--days,7), minmax(110px,1fr)); gap:6px; position:sticky; top:0; background:var(--bg-page); z-index:5; padding-bottom:6px; }
+    .day-head { background:var(--bg-card); border:1px solid var(--border); border-radius:6px; padding:6px 8px; font-size:11px; }
+    .day-head .d { font-weight:700; }
+    .day-head .m { color:var(--text-muted); font-size:10px; }
+    .day-head.today { border-color:var(--accent); background:rgba(34,211,238,.07); }
+    .crew-row { display:grid; grid-template-columns:160px repeat(var(--days,7), minmax(110px,1fr)); gap:6px; }
+    .crew-cell-name { background:var(--bg-card); border:1px solid var(--border); border-radius:6px; padding:8px; font-size:12px; font-weight:600; display:flex; flex-direction:column; gap:3px; }
+    .crew-cell-name .clock { font-size:10px; color:var(--accent-2); font-weight:500; }
+    .day-cell { background:var(--bg-card); border:1px dashed var(--border); border-radius:6px; padding:5px; min-height:90px; transition:background .1s; }
+    .day-cell.drop-hover { background:rgba(34,211,238,.1); border-color:var(--accent); border-style:solid; }
+    .chip { background:var(--bg-card-2); border:1px solid var(--border); border-radius:4px; padding:4px 6px; margin-bottom:4px; font-size:11px; cursor:grab; }
+    .chip:hover { border-color:var(--accent); }
+    .chip .t { font-weight:600; }
+    .chip .a { color:var(--text-muted); font-size:10px; }
+    .chip.status-in_progress { border-left:3px solid var(--accent-2); }
+    .chip.status-completed { opacity:.55; }
+    .chip.status-scheduled { border-left:3px solid var(--accent); }
+    #map { width:100%; height:320px; border-radius:8px; background:#0b0b0b; }
+    .route-item { display:flex; gap:8px; align-items:center; padding:7px; border:1px solid var(--border); border-radius:6px; margin-bottom:6px; background:var(--bg-card); font-size:12px; }
+    .route-item .num { width:22px; height:22px; border-radius:50%; background:var(--accent); color:#000; font-weight:700; display:flex; align-items:center; justify-content:center; font-size:11px; }
+    .stat { font-size:11px; color:var(--text-muted); }
+    .stat b { color:var(--text-primary); font-weight:700; }
+    .empty { color:var(--text-muted); font-size:11px; font-style:italic; padding:8px; text-align:center; }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <h1><i class="fas fa-truck-pickup" style="color:var(--accent)"></i> Dispatch Board <span style="font-size:10px; color:var(--text-muted); font-weight:400; margin-left:6px">Crew scheduling · drag-drop · route optimization</span></h1>
+    <div class="ctrls">
+      <a href="/admin" class="btn"><i class="fas fa-arrow-left"></i> Admin</a>
+      <button class="btn" onclick="dbShiftWeek(-7)"><i class="fas fa-chevron-left"></i></button>
+      <input type="date" class="date" id="dbStart" />
+      <button class="btn" onclick="dbShiftWeek(7)"><i class="fas fa-chevron-right"></i></button>
+      <select class="sel" id="dbDays"><option value="7" selected>Week</option><option value="1">Day</option><option value="3">3-Day</option><option value="14">2-Week</option></select>
+      <button class="btn" onclick="dbGeocodeMissing()"><i class="fas fa-map-marker-alt"></i> Geocode missing</button>
+      <button class="btn primary" onclick="dbLoad()"><i class="fas fa-sync"></i> Refresh</button>
+    </div>
+  </div>
+
+  <div class="layout">
+    <!-- Left: Unassigned queue -->
+    <div class="col" id="colUnassigned">
+      <div class="panel-title">Unassigned <span id="unassignedCount" style="color:var(--accent)"></span></div>
+      <div style="margin-bottom:8px"><select class="sel" id="filterType" style="width:100%" onchange="dbRender()"><option value="">All job types</option><option>install</option><option>repair</option><option>inspection</option><option>tear_off</option></select></div>
+      <div id="unassignedList"></div>
+    </div>
+
+    <!-- Center: Week grid -->
+    <div class="col" style="padding:0">
+      <div class="grid-wrap">
+        <div class="week-grid" id="weekGrid"></div>
+      </div>
+    </div>
+
+    <!-- Right: Map + route -->
+    <div class="col">
+      <div class="panel-title">Route Map</div>
+      <div style="display:flex; gap:6px; margin-bottom:8px">
+        <select class="sel" id="routeCrew" style="flex:1"></select>
+        <input type="date" class="date" id="routeDate" />
+      </div>
+      <div id="map"></div>
+      <div style="display:flex; gap:6px; margin-top:8px">
+        <button class="btn success" style="flex:1" onclick="dbOptimize()"><i class="fas fa-route"></i> Optimize Route</button>
+      </div>
+      <div id="routeStats" class="stat" style="margin-top:10px"></div>
+      <div id="routeList" style="margin-top:8px"></div>
+    </div>
+  </div>
+
+  <script>
+    // Auth
+    (function(){
+      var u = localStorage.getItem('rc_user');
+      if (!u) { window.location.href='/login'; return; }
+    })();
+    var token = localStorage.getItem('rc_token') || '';
+    function authHeaders(){ return { 'Authorization': 'Bearer ' + token, 'Content-Type':'application/json' }; }
+
+    // State
+    var state = { start:'', days:7, crew:[], owner:null, jobs:[], assignments:[], clocks:[], currentRoute:null, map:null, markers:[], routePoly:null };
+
+    function todayISO(){ var d=new Date(); d.setHours(0,0,0,0); return d.toISOString().slice(0,10); }
+    function addDays(iso, n){ var d=new Date(iso+'T00:00:00Z'); d.setUTCDate(d.getUTCDate()+n); return d.toISOString().slice(0,10); }
+    function fmtDay(iso){ var d=new Date(iso+'T00:00:00Z'); return ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getUTCDay()]; }
+    function fmtMon(iso){ var d=new Date(iso+'T00:00:00Z'); return (d.getUTCMonth()+1)+'/'+d.getUTCDate(); }
+
+    document.getElementById('dbStart').value = todayISO();
+    document.getElementById('routeDate').value = todayISO();
+    document.getElementById('dbStart').addEventListener('change', dbLoad);
+    document.getElementById('dbDays').addEventListener('change', dbLoad);
+    document.getElementById('routeCrew').addEventListener('change', dbRefreshMap);
+    document.getElementById('routeDate').addEventListener('change', dbRefreshMap);
+
+    function dbShiftWeek(n){ var el=document.getElementById('dbStart'); el.value = addDays(el.value || todayISO(), n); dbLoad(); }
+
+    async function dbLoad(){
+      state.start = document.getElementById('dbStart').value || todayISO();
+      state.days = parseInt(document.getElementById('dbDays').value, 10) || 7;
+      var res = await fetch('/api/crm/dispatch/board?start='+state.start+'&days='+state.days, { headers: authHeaders() });
+      if (!res.ok) { alert('Failed to load dispatch board: ' + res.status); return; }
+      var data = await res.json();
+      state.crew = data.crew || [];
+      state.owner = data.owner;
+      state.jobs = data.jobs || [];
+      state.assignments = data.assignments || [];
+      state.clocks = data.active_clock_ins || [];
+
+      // Populate route crew dropdown
+      var sel = document.getElementById('routeCrew');
+      var cur = sel.value;
+      sel.innerHTML = state.crew.map(function(c){ return '<option value="'+c.id+'">'+esc(c.name)+'</option>'; }).join('');
+      if (cur) sel.value = cur;
+      dbRender();
+    }
+
+    function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, function(ch){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch]; }); }
+
+    function assignmentsFor(jobId){ return state.assignments.filter(function(a){ return a.job_id === jobId; }); }
+
+    function dbRender(){
+      // Unassigned: jobs with no scheduled_date OR no crew assignment
+      var typeFilter = document.getElementById('filterType').value;
+      var unassigned = state.jobs.filter(function(j){
+        var hasCrew = assignmentsFor(j.id).length > 0;
+        var unsched = !j.scheduled_date || !hasCrew;
+        return unsched && (!typeFilter || j.job_type === typeFilter);
+      });
+      document.getElementById('unassignedCount').textContent = '('+unassigned.length+')';
+      document.getElementById('unassignedList').innerHTML = unassigned.length
+        ? unassigned.map(renderCard).join('')
+        : '<div class="empty">No unassigned jobs</div>';
+
+      // Week grid
+      var days = [];
+      for (var i=0; i<state.days; i++) days.push(addDays(state.start, i));
+      var today = todayISO();
+      var head = '<div class="week-head" style="--days:'+state.days+'"><div></div>' + days.map(function(d){
+        return '<div class="day-head '+(d===today?'today':'')+'"><div class="d">'+fmtDay(d)+'</div><div class="m">'+fmtMon(d)+'</div></div>';
+      }).join('') + '</div>';
+
+      var crewRows = state.crew.map(function(crew){
+        var clockedIn = state.clocks.find(function(cl){ return cl.crew_member_id === crew.id; });
+        var nameCell = '<div class="crew-cell-name"><div>'+esc(crew.name)+'</div>'
+          + (clockedIn ? '<div class="clock"><i class="fas fa-circle" style="font-size:6px"></i> Clocked in</div>' : '<div style="font-size:10px;color:var(--text-muted)">'+esc(crew.role||'crew')+'</div>')
+          + '</div>';
+        var cells = days.map(function(d){
+          var cellJobs = state.jobs.filter(function(j){
+            if (j.scheduled_date !== d) return false;
+            return assignmentsFor(j.id).some(function(a){ return a.crew_member_id === crew.id; });
+          });
+          cellJobs.sort(function(a,b){ return (a.route_order||999)-(b.route_order||999); });
+          return '<div class="day-cell" data-crew="'+crew.id+'" data-date="'+d+'" ondragover="dbDragOver(event)" ondragleave="dbDragLeave(event)" ondrop="dbDrop(event)">'
+            + cellJobs.map(renderChip).join('') + '</div>';
+        }).join('');
+        return '<div class="crew-row" style="--days:'+state.days+'">'+nameCell+cells+'</div>';
+      }).join('');
+
+      document.getElementById('weekGrid').innerHTML = head + crewRows;
+      wireDrag();
+      dbRefreshMap();
+    }
+
+    function renderCard(j){
+      return '<div class="job-card" draggable="true" data-job="'+j.id+'">'
+        + '<p class="title">'+esc(j.title)+'</p>'
+        + '<div class="meta">'+esc(j.customer_name||'—')+'</div>'
+        + '<div class="meta" style="margin-top:3px">'+esc(j.property_address||'No address')+'</div>'
+        + '<div style="margin-top:5px"><span class="badge '+esc(j.job_type||'')+'">'+esc(j.job_type||'install')+'</span>'
+        + (j.crew_size ? '<span class="badge"><i class="fas fa-users"></i> '+j.crew_size+'</span>' : '')
+        + (j.lat ? '<span class="badge"><i class="fas fa-map-marker-alt" style="color:var(--accent-2)"></i></span>' : '<span class="badge" style="color:#f59e0b">No geo</span>')
+        + '</div></div>';
+    }
+    function renderChip(j){
+      return '<div class="chip status-'+esc(j.status||'scheduled')+'" draggable="true" data-job="'+j.id+'" title="'+esc(j.title+' — '+(j.property_address||''))+'">'
+        + (j.route_order ? '<span style="color:var(--accent);font-weight:700">#'+j.route_order+' </span>' : '')
+        + '<span class="t">'+esc(j.title.slice(0,24))+'</span>'
+        + (j.scheduled_time ? '<div class="a">'+esc(j.scheduled_time)+'</div>' : '')
+        + '</div>';
+    }
+
+    function wireDrag(){
+      document.querySelectorAll('[draggable="true"][data-job]').forEach(function(el){
+        el.addEventListener('dragstart', function(e){
+          e.dataTransfer.setData('text/plain', el.getAttribute('data-job'));
+          el.classList.add('dragging');
+        });
+        el.addEventListener('dragend', function(){ el.classList.remove('dragging'); });
+      });
+      // Unassigned column as drop target
+      var col = document.getElementById('colUnassigned');
+      col.ondragover = function(e){ e.preventDefault(); };
+      col.ondrop = async function(e){
+        e.preventDefault();
+        var jobId = parseInt(e.dataTransfer.getData('text/plain'),10);
+        if (!jobId) return;
+        await fetch('/api/crm/jobs/'+jobId+'/unassign', { method:'POST', headers:authHeaders(), body: JSON.stringify({ clear_schedule:true }) });
+        dbLoad();
+      };
+    }
+
+    function dbDragOver(e){ e.preventDefault(); e.currentTarget.classList.add('drop-hover'); }
+    function dbDragLeave(e){ e.currentTarget.classList.remove('drop-hover'); }
+    async function dbDrop(e){
+      e.preventDefault();
+      var cell = e.currentTarget;
+      cell.classList.remove('drop-hover');
+      var jobId = parseInt(e.dataTransfer.getData('text/plain'),10);
+      var crewId = parseInt(cell.getAttribute('data-crew'),10);
+      var date = cell.getAttribute('data-date');
+      if (!jobId || !date) return;
+      var res = await fetch('/api/crm/jobs/schedule', { method:'POST', headers:authHeaders(), body: JSON.stringify({ jobId:jobId, crewMemberId:crewId, scheduledDate:date }) });
+      if (!res.ok) { alert('Schedule failed'); return; }
+      dbLoad();
+    }
+
+    async function dbGeocodeMissing(){
+      var btn = event.target.closest('button');
+      btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Geocoding...';
+      try {
+        var res = await fetch('/api/crm/dispatch/geocode-missing', { method:'POST', headers:authHeaders() });
+        var data = await res.json();
+        alert('Geocoded: '+data.geocoded+' · Failed: '+data.failed+' · Total: '+data.total);
+        dbLoad();
+      } finally {
+        btn.disabled = false; btn.innerHTML = '<i class="fas fa-map-marker-alt"></i> Geocode missing';
+      }
+    }
+
+    // Map
+    function ensureMap(){
+      if (state.map || !window.google || !window.google.maps) return state.map;
+      state.map = new google.maps.Map(document.getElementById('map'), {
+        center: { lat: 43.65, lng: -79.38 }, zoom: 10, mapTypeId: 'roadmap',
+        styles: [{ elementType:'geometry', stylers:[{color:'#1b1b1b'}] },{ elementType:'labels.text.fill', stylers:[{color:'#9ca3af'}] },{ elementType:'labels.text.stroke', stylers:[{color:'#0a0a0a'}] },{ featureType:'road', elementType:'geometry', stylers:[{color:'#262626'}] },{ featureType:'water', elementType:'geometry', stylers:[{color:'#0b1220'}] }]
+      });
+      return state.map;
+    }
+
+    function dbRefreshMap(){
+      var m = ensureMap();
+      if (!m) { setTimeout(dbRefreshMap, 400); return; }
+      // Clear
+      state.markers.forEach(function(mk){ mk.setMap(null); }); state.markers = [];
+      if (state.routePoly){ state.routePoly.setMap(null); state.routePoly = null; }
+
+      var crewId = parseInt(document.getElementById('routeCrew').value, 10);
+      var date = document.getElementById('routeDate').value;
+      var jobs = state.jobs.filter(function(j){
+        return j.scheduled_date === date && assignmentsFor(j.id).some(function(a){ return a.crew_member_id === crewId; });
+      });
+      jobs.sort(function(a,b){ return (a.route_order||999)-(b.route_order||999); });
+
+      var bounds = new google.maps.LatLngBounds();
+      jobs.filter(function(j){ return j.lat && j.lng; }).forEach(function(j, i){
+        var pos = { lat: j.lat, lng: j.lng };
+        var mk = new google.maps.Marker({ position: pos, map: m, label: { text: String(i+1), color: '#000', fontWeight: '700' }, title: j.title });
+        state.markers.push(mk); bounds.extend(pos);
+      });
+      if (state.markers.length) m.fitBounds(bounds, 40);
+
+      // Route list
+      var list = document.getElementById('routeList');
+      list.innerHTML = jobs.length
+        ? jobs.map(function(j,i){ return '<div class="route-item"><div class="num">'+(i+1)+'</div><div style="flex:1"><div style="font-weight:600">'+esc(j.title)+'</div><div class="stat">'+esc(j.property_address||'')+'</div></div></div>'; }).join('')
+        : '<div class="empty">No scheduled jobs for this crew/day</div>';
+
+      if (state.currentRoute && state.currentRoute.crew === crewId && state.currentRoute.date === date) {
+        drawPolyline(state.currentRoute.polyline);
+        document.getElementById('routeStats').innerHTML = 'Distance: <b>'+state.currentRoute.total_km+' km</b> · Drive time: <b>'+state.currentRoute.total_minutes+' min</b>';
+      } else {
+        document.getElementById('routeStats').innerHTML = '';
+      }
+    }
+
+    function drawPolyline(encoded){
+      if (!encoded || !window.google || !google.maps.geometry) return;
+      var path = google.maps.geometry.encoding.decodePath(encoded);
+      state.routePoly = new google.maps.Polyline({ path: path, geodesic: false, strokeColor: '#22d3ee', strokeOpacity: 0.9, strokeWeight: 3, map: state.map });
+    }
+
+    async function dbOptimize(){
+      var crewId = parseInt(document.getElementById('routeCrew').value, 10);
+      var date = document.getElementById('routeDate').value;
+      if (!crewId || !date) { alert('Pick a crew and date'); return; }
+      var btn = event.target.closest('button');
+      btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Optimizing...';
+      try {
+        var res = await fetch('/api/crm/dispatch/optimize', { method:'POST', headers:authHeaders(), body: JSON.stringify({ crewMemberId:crewId, date:date }) });
+        var data = await res.json();
+        if (!res.ok) { alert(data.error || 'Optimize failed'); return; }
+        state.currentRoute = { crew: crewId, date: date, polyline: data.polyline, total_km: data.total_km, total_minutes: data.total_minutes };
+        await dbLoad();
+      } finally {
+        btn.disabled = false; btn.innerHTML = '<i class="fas fa-route"></i> Optimize Route';
+      }
+    }
+
+    dbLoad();
+    setInterval(dbLoad, 60000);
+  </script>
 </body>
 </html>`
 }
