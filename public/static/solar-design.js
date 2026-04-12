@@ -32,7 +32,46 @@
     layout: null,     // { suggested_panels, image_center, image_zoom, image_size_px, panel_*_meters, ... }
     hydrated: false,
     saving: false,
+    mode: 'place',    // 'place' | 'obstruct'
+    obstructionType: 'vent',  // vent (1ft) | chimney (3ft) | skylight (4ft)
+    obstructions: [], // [{x, y, size, type}] in canvas pixels (size = side length)
+    selectedSegment: null,  // index of clicked segment
+    inverter: { type: 'micro', sku: 'IQ8M', count: 0 },
+    battery: { sku: '', count: 0 },
+    showSegments: true,
   };
+
+  // ── Equipment catalog (hardcoded common SKUs) ──────────────
+  var EQUIP = {
+    micro: [
+      { sku: 'IQ8+',  name: 'Enphase IQ8+',  ac_w: 290 },
+      { sku: 'IQ8M',  name: 'Enphase IQ8M',  ac_w: 330 },
+      { sku: 'IQ8A',  name: 'Enphase IQ8A',  ac_w: 366 },
+    ],
+    string: [
+      { sku: 'SE3000H',  name: 'SolarEdge SE3000H-US',  kw_ac: 3.0 },
+      { sku: 'SE5000H',  name: 'SolarEdge SE5000H-US',  kw_ac: 5.0 },
+      { sku: 'SE7600H',  name: 'SolarEdge SE7600H-US',  kw_ac: 7.6 },
+      { sku: 'SE10000H', name: 'SolarEdge SE10000H-US', kw_ac: 10.0 },
+      { sku: 'SE11400H', name: 'SolarEdge SE11400H-US', kw_ac: 11.4 },
+    ],
+    battery: [
+      { sku: 'PW3',   name: 'Tesla Powerwall 3',         kwh: 13.5, kw_peak: 11.5, max_count: 4 },
+      { sku: 'IQ5P',  name: 'Enphase IQ Battery 5P',     kwh: 5.0,  kw_peak: 3.84, max_count: 4 },
+    ],
+  };
+
+  // Pick the smallest string inverter where DC:AC ratio is ≤ 1.30, prefer 1.10–1.20.
+  function recommendStringInverter(systemKwDc) {
+    if (systemKwDc <= 0) return EQUIP.string[0];
+    var best = null;
+    for (var i = 0; i < EQUIP.string.length; i++) {
+      var inv = EQUIP.string[i];
+      var ratio = systemKwDc / inv.kw_ac;
+      if (ratio >= 1.05 && ratio <= 1.30) { best = inv; break; }
+    }
+    return best || EQUIP.string[EQUIP.string.length - 1];  // fallback to largest
+  }
 
   // ── Web Mercator projection (Google Maps tile system) ──────
   // Converts lat/lng → pixel coords on a Google Static Maps image of known
@@ -71,6 +110,25 @@
       newPanels.push({ x: Math.round(cx - state.panelW / 2), y: Math.round(cy - state.panelH / 2) });
     }
     state.panels = newPanels;
+
+    // Hydrate obstructions (lat/lng → canvas px). size_meters → px.
+    if (Array.isArray(L.obstructions)) {
+      var mpp = metersPerCanvasPx();
+      state.obstructions = L.obstructions.map(function(o) {
+        if (typeof o.lat === 'number' && typeof o.lng === 'number' && mpp > 0) {
+          var pp = latLngToPixel(o.lat, o.lng, L.image_center.lat, L.image_center.lng, L.image_zoom, srcSize);
+          var sizePx = (o.size_meters || 0.3048) / mpp;
+          return { x: Math.round(pp.x * scaleToCanvas - sizePx / 2), y: Math.round(pp.y * scaleToCanvas - sizePx / 2), size: Math.round(sizePx), type: o.type || 'vent' };
+        }
+        return null;
+      }).filter(Boolean);
+    }
+
+    // Hydrate inverter / battery
+    if (L.inverter_config && L.inverter_config.sku) state.inverter = Object.assign({ count: 0 }, L.inverter_config);
+    if (L.battery_config && L.battery_config.sku) state.battery = Object.assign({ count: 1 }, L.battery_config);
+    populateEquipmentUI();
+
     state.hydrated = true;
     drawCanvas();
   }
@@ -174,6 +232,47 @@
                 '<span class="font-bold text-amber-400" id="sdCapacity">0.00 kW</span>' +
               '</div>' +
             '</div>' +
+            // Mode toggle
+            '<div>' +
+              '<p class="text-xs font-bold text-gray-400 uppercase mb-2">Mode</p>' +
+              '<div class="grid grid-cols-2 gap-1.5">' +
+                '<button id="sdModePlace" onclick="window._sdSetMode(\'place\')" class="py-1.5 rounded text-xs font-semibold bg-blue-600 text-white"><i class="fas fa-th mr-1"></i>Panels</button>' +
+                '<button id="sdModeObs" onclick="window._sdSetMode(\'obstruct\')" class="py-1.5 rounded text-xs font-semibold bg-gray-700 text-gray-300"><i class="fas fa-ban mr-1"></i>Obstruct</button>' +
+              '</div>' +
+              '<select id="sdObsType" onchange="window._sdSetObsType(this.value)" class="hidden mt-2 w-full px-2 py-1 bg-gray-700 border border-gray-600 rounded text-xs text-white">' +
+                '<option value="vent">Vent (1 ft)</option>' +
+                '<option value="chimney">Chimney (3 ft)</option>' +
+                '<option value="skylight">Skylight (4 ft)</option>' +
+              '</select>' +
+            '</div>' +
+            // Auto-fill
+            '<div>' +
+              '<p class="text-xs font-bold text-gray-400 uppercase mb-2">Auto-Fill (3 ft setback)</p>' +
+              '<div class="space-y-1.5">' +
+                '<button onclick="window._sdAutofillAll()" class="w-full bg-amber-600 hover:bg-amber-500 text-white py-1.5 rounded text-xs font-semibold"><i class="fas fa-magic mr-1"></i>Fill All Segments</button>' +
+                '<button onclick="window._sdAutofillSelected()" id="sdAutofillSelBtn" class="w-full bg-gray-700 hover:bg-gray-600 text-white py-1.5 rounded text-xs font-semibold disabled:opacity-50" disabled><i class="fas fa-magic mr-1"></i>Fill Selected</button>' +
+                '<p class="text-[10px] text-gray-500 leading-tight">Click a roof segment outline to select it.</p>' +
+              '</div>' +
+            '</div>' +
+            // Equipment
+            '<div>' +
+              '<p class="text-xs font-bold text-gray-400 uppercase mb-2">Equipment</p>' +
+              '<div class="space-y-2">' +
+                '<select id="sdInvType" onchange="window._sdInvTypeChange(this.value)" class="w-full px-2 py-1 bg-gray-700 border border-gray-600 rounded text-xs text-white">' +
+                  '<option value="micro">Microinverters</option>' +
+                  '<option value="string">String Inverter</option>' +
+                '</select>' +
+                '<select id="sdInvSku" onchange="window._sdInvSkuChange(this.value)" class="w-full px-2 py-1 bg-gray-700 border border-gray-600 rounded text-xs text-white"></select>' +
+                '<div class="border-t border-gray-700 pt-2">' +
+                  '<label class="flex items-center gap-2 text-xs text-gray-300"><input type="checkbox" id="sdBatteryOn" onchange="window._sdBatteryToggle(this.checked)"> Battery storage</label>' +
+                  '<div id="sdBatteryRow" class="hidden mt-2 grid grid-cols-3 gap-1.5">' +
+                    '<select id="sdBatterySku" onchange="window._sdBatteryChange()" class="col-span-2 px-2 py-1 bg-gray-700 border border-gray-600 rounded text-xs text-white"></select>' +
+                    '<input type="number" id="sdBatteryQty" value="1" min="1" max="4" onchange="window._sdBatteryChange()" class="px-2 py-1 bg-gray-700 border border-gray-600 rounded text-xs text-center text-white">' +
+                  '</div>' +
+                '</div>' +
+                '<div id="sdInvSummary" class="text-[10px] text-gray-400 leading-tight"></div>' +
+              '</div>' +
+            '</div>' +
             // Actions
             '<div class="space-y-2 pt-1">' +
               '<button onclick="window._sdUndo()" class="w-full bg-gray-700 hover:bg-gray-600 text-white py-2 rounded-lg text-sm font-medium transition-colors"><i class="fas fa-undo mr-1"></i>Undo</button>' +
@@ -181,7 +280,7 @@
               '<button onclick="window._sdSaveLayout()" id="sdSaveBtn" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-2 rounded-lg text-sm font-bold transition-colors"><i class="fas fa-cloud-upload-alt mr-1"></i>Save to Report</button>' +
               '<button onclick="window._sdDownload()" class="w-full bg-amber-500 hover:bg-amber-400 text-white py-2 rounded-lg text-sm font-bold transition-colors"><i class="fas fa-download mr-1"></i>Download PNG</button>' +
             '</div>' +
-            '<p class="text-xs text-gray-500 leading-relaxed">Click on the roof to place panels. Each click places one panel.</p>' +
+            '<p class="text-xs text-gray-500 leading-relaxed">Panels mode: click to place. Obstruct mode: click to mark vents/chimneys.</p>' +
           '</div>' +
         '</div>' +
         // Canvas area
@@ -239,8 +338,223 @@
 
     drawCanvas();
     attachCanvasEvents();
+    populateEquipmentUI();
     hydrateFromLayout();
   }
+
+  // ── Equipment UI population & handlers ─────────────────────
+  function populateEquipmentUI() {
+    var typeSel = document.getElementById('sdInvType');
+    var skuSel = document.getElementById('sdInvSku');
+    var batSel = document.getElementById('sdBatterySku');
+    if (!typeSel || !skuSel || !batSel) return;
+    typeSel.value = state.inverter.type;
+    refreshInverterSkus();
+    skuSel.value = state.inverter.sku;
+    batSel.innerHTML = '';
+    EQUIP.battery.forEach(function(b) {
+      var opt = document.createElement('option');
+      opt.value = b.sku; opt.textContent = b.name + ' (' + b.kwh + ' kWh)';
+      batSel.appendChild(opt);
+    });
+    if (state.battery.sku) {
+      batSel.value = state.battery.sku;
+      document.getElementById('sdBatteryOn').checked = true;
+      document.getElementById('sdBatteryRow').classList.remove('hidden');
+      document.getElementById('sdBatteryQty').value = state.battery.count || 1;
+    }
+    updateInverterSummary();
+  }
+
+  function refreshInverterSkus() {
+    var skuSel = document.getElementById('sdInvSku');
+    if (!skuSel) return;
+    skuSel.innerHTML = '';
+    var list = EQUIP[state.inverter.type] || [];
+    list.forEach(function(inv) {
+      var opt = document.createElement('option');
+      opt.value = inv.sku;
+      opt.textContent = inv.name + (inv.kw_ac ? ' (' + inv.kw_ac + ' kW)' : ' (' + inv.ac_w + ' W)');
+      skuSel.appendChild(opt);
+    });
+    // Auto-recommend for current panel count
+    var systemKw = state.panels.length * (parseInt(document.getElementById('sdWattage').value) || state.panelWattage) / 1000;
+    if (state.inverter.type === 'string' && systemKw > 0) {
+      state.inverter.sku = recommendStringInverter(systemKw).sku;
+    } else if (!list.find(function(i) { return i.sku === state.inverter.sku; })) {
+      state.inverter.sku = list[0].sku;
+    }
+    skuSel.value = state.inverter.sku;
+  }
+
+  function updateInverterSummary() {
+    var el = document.getElementById('sdInvSummary');
+    if (!el) return;
+    var watt = parseInt((document.getElementById('sdWattage') || {}).value) || state.panelWattage;
+    var systemKwDc = state.panels.length * watt / 1000;
+    var line = '';
+    if (state.inverter.type === 'micro') {
+      var inv = EQUIP.micro.find(function(i) { return i.sku === state.inverter.sku; }) || EQUIP.micro[0];
+      var totalAcW = state.panels.length * inv.ac_w;
+      state.inverter.count = state.panels.length;
+      line = state.panels.length + '× ' + inv.name + ' = ' + (totalAcW / 1000).toFixed(2) + ' kW AC';
+    } else {
+      var inv2 = EQUIP.string.find(function(i) { return i.sku === state.inverter.sku; }) || EQUIP.string[0];
+      var ratio = inv2.kw_ac > 0 ? (systemKwDc / inv2.kw_ac).toFixed(2) : '–';
+      state.inverter.count = 1;
+      line = '1× ' + inv2.name + ' &middot; DC:AC ' + ratio;
+    }
+    if (state.battery.sku && state.battery.count > 0) {
+      var b = EQUIP.battery.find(function(x) { return x.sku === state.battery.sku; });
+      if (b) line += '<br>' + state.battery.count + '× ' + b.name + ' = ' + (b.kwh * state.battery.count).toFixed(1) + ' kWh';
+    }
+    el.innerHTML = line;
+  }
+
+  window._sdInvTypeChange = function(t) {
+    state.inverter.type = t;
+    refreshInverterSkus();
+    updateInverterSummary();
+  };
+  window._sdInvSkuChange = function(s) { state.inverter.sku = s; updateInverterSummary(); };
+  window._sdBatteryToggle = function(on) {
+    var row = document.getElementById('sdBatteryRow');
+    if (on) {
+      row.classList.remove('hidden');
+      state.battery.sku = EQUIP.battery[0].sku;
+      state.battery.count = 1;
+    } else {
+      row.classList.add('hidden');
+      state.battery = { sku: '', count: 0 };
+    }
+    updateInverterSummary();
+  };
+  window._sdBatteryChange = function() {
+    state.battery.sku = document.getElementById('sdBatterySku').value;
+    state.battery.count = parseInt(document.getElementById('sdBatteryQty').value) || 1;
+    updateInverterSummary();
+  };
+  window._sdSetMode = function(m) {
+    state.mode = m;
+    document.getElementById('sdModePlace').className = 'py-1.5 rounded text-xs font-semibold ' + (m === 'place' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300');
+    document.getElementById('sdModeObs').className = 'py-1.5 rounded text-xs font-semibold ' + (m === 'obstruct' ? 'bg-red-600 text-white' : 'bg-gray-700 text-gray-300');
+    var obsType = document.getElementById('sdObsType');
+    if (m === 'obstruct') obsType.classList.remove('hidden'); else obsType.classList.add('hidden');
+    if (state.canvas) state.canvas.style.cursor = m === 'obstruct' ? 'cell' : 'crosshair';
+  };
+  window._sdSetObsType = function(t) { state.obstructionType = t; };
+
+  // ── Auto-fill ──────────────────────────────────────────────
+  // Project a segment bbox (lat/lng SW + NE) → axis-aligned canvas rect.
+  function segmentToCanvasRect(seg) {
+    if (!state.layout || !seg.sw || !seg.ne) return null;
+    var L = state.layout;
+    var srcSize = L.image_size_px || 1600;
+    var scaleToCanvas = state.imgDrawW / srcSize;
+    var sw = latLngToPixel(seg.sw.lat, seg.sw.lng, L.image_center.lat, L.image_center.lng, L.image_zoom, srcSize);
+    var ne = latLngToPixel(seg.ne.lat, seg.ne.lng, L.image_center.lat, L.image_center.lng, L.image_zoom, srcSize);
+    // sw has lower lng + lower lat (lat→y inverted in mercator)
+    var x = Math.min(sw.x, ne.x) * scaleToCanvas;
+    var y = Math.min(sw.y, ne.y) * scaleToCanvas;
+    var w = Math.abs(ne.x - sw.x) * scaleToCanvas;
+    var h = Math.abs(ne.y - sw.y) * scaleToCanvas;
+    return { x: x, y: y, w: w, h: h };
+  }
+
+  // Meters/pixel at current view (Web Mercator, scale=2 because Static Maps).
+  function metersPerCanvasPx() {
+    if (!state.layout) return 0.05;
+    var L = state.layout;
+    var lat = L.image_center.lat || 0;
+    var srcMpp = (156543.03392 * Math.cos(lat * Math.PI / 180)) / Math.pow(2, L.image_zoom) / 2; // /2 for scale=2
+    var srcSize = L.image_size_px || 1600;
+    return srcMpp * (srcSize / state.imgDrawW);
+  }
+
+  function rectsOverlap(a, b) {
+    return !(a.x + a.w <= b.x || b.x + b.w <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y);
+  }
+
+  function autofillSegment(seg, accumulated) {
+    var rect = segmentToCanvasRect(seg);
+    if (!rect || rect.w < 10 || rect.h < 10) return [];
+    var mpp = metersPerCanvasPx();
+    if (mpp <= 0) return [];
+
+    // Setbacks: 3 ft (0.914 m) from segment edges; 1.5 ft (0.457 m) from obstructions.
+    var setbackPx = 0.914 / mpp;
+    var inset = {
+      x: rect.x + setbackPx,
+      y: rect.y + setbackPx,
+      w: Math.max(0, rect.w - 2 * setbackPx),
+      h: Math.max(0, rect.h - 2 * setbackPx),
+    };
+    if (inset.w < state.panelW || inset.h < state.panelH) return [];
+
+    // Tile size in true meters; convert to canvas px using mpp.
+    var L = state.layout;
+    var pw = (L.panel_width_meters || 1.045) / mpp;
+    var ph = (L.panel_height_meters || 1.879) / mpp;
+    var gap = 0.152 / mpp;  // 0.5 ft inter-panel gap
+
+    // Override the visual panelW/H so drawn panels match real-world size.
+    state.panelW = Math.max(8, Math.round(pw));
+    state.panelH = Math.max(12, Math.round(ph));
+
+    var obsBuffer = 0.457 / mpp;  // 1.5 ft from obstructions
+    var allObs = (accumulated || []).concat(state.obstructions || []);
+    var newPanels = [];
+    for (var py = inset.y; py + ph <= inset.y + inset.h + 0.5; py += ph + gap) {
+      for (var px = inset.x; px + pw <= inset.x + inset.w + 0.5; px += pw + gap) {
+        var cand = { x: Math.round(px), y: Math.round(py), w: pw, h: ph };
+        // Skip if intersects any obstruction (with buffer)
+        var blocked = false;
+        for (var oi = 0; oi < allObs.length; oi++) {
+          var o = allObs[oi];
+          var ob = { x: o.x - obsBuffer, y: o.y - obsBuffer, w: o.size + 2 * obsBuffer, h: o.size + 2 * obsBuffer };
+          if (rectsOverlap(cand, ob)) { blocked = true; break; }
+        }
+        if (!blocked) newPanels.push({ x: cand.x, y: cand.y });
+      }
+    }
+    return newPanels;
+  }
+
+  window._sdAutofillAll = function() {
+    if (!state.layout || !state.layout.segments || !state.layout.segments.length) {
+      window.rmConfirm && window.rmConfirm('No roof segments available for this report.');
+      return;
+    }
+    state.panels = [];
+    var all = [];
+    for (var i = 0; i < state.layout.segments.length; i++) {
+      var added = autofillSegment(state.layout.segments[i], all);
+      all = all.concat(added);
+    }
+    state.panels = all;
+    drawCanvas();
+    refreshInverterSkus();
+    updateInverterSummary();
+  };
+
+  window._sdAutofillSelected = function() {
+    if (state.selectedSegment === null || !state.layout || !state.layout.segments) return;
+    var seg = state.layout.segments[state.selectedSegment];
+    if (!seg) return;
+    // Remove existing panels inside this segment's rect, then add new ones
+    var rect = segmentToCanvasRect(seg);
+    if (rect) {
+      state.panels = state.panels.filter(function(p) {
+        var pr = { x: p.x, y: p.y, w: state.panelW, h: state.panelH };
+        return !rectsOverlap(pr, rect);
+      });
+    }
+    var added = autofillSegment(seg, state.panels);
+    state.panels = state.panels.concat(added);
+    drawCanvas();
+    refreshInverterSkus();
+    updateInverterSummary();
+  };
 
   // ── Draw ───────────────────────────────────────────────────
   function drawCanvas() {
@@ -255,19 +569,71 @@
       ctx.drawImage(state.img, state.imgOffsetX, state.imgOffsetY, state.imgDrawW, state.imgDrawH);
     }
 
+    // Draw segment outlines (selectable for "Fill Selected")
+    if (state.layout && state.layout.segments && state.showSegments) {
+      for (var si = 0; si < state.layout.segments.length; si++) {
+        var seg = state.layout.segments[si];
+        var r = segmentToCanvasRect(seg);
+        if (!r) continue;
+        var isSel = state.selectedSegment === si;
+        ctx.strokeStyle = isSel ? 'rgba(251,191,36,0.95)' : 'rgba(251,191,36,0.45)';
+        ctx.setLineDash(isSel ? [] : [6, 4]);
+        ctx.lineWidth = isSel ? 3 : 1.5;
+        ctx.strokeRect(r.x, r.y, r.w, r.h);
+        ctx.setLineDash([]);
+        ctx.fillStyle = 'rgba(251,191,36,0.85)';
+        ctx.font = 'bold 11px sans-serif';
+        ctx.fillText('S' + (seg.index + 1), r.x + 4, r.y + 14);
+      }
+    }
+
     // Draw placed panels
     for (var i = 0; i < state.panels.length; i++) {
       drawPanel(ctx, state.panels[i].x, state.panels[i].y, false);
     }
 
+    // Draw obstructions
+    for (var oi = 0; oi < state.obstructions.length; oi++) {
+      var o = state.obstructions[oi];
+      drawObstruction(ctx, o);
+    }
+
     // Draw hover ghost
     if (state.hoverX !== null && state.hoverY !== null) {
       ctx.globalAlpha = 0.5;
-      drawPanel(ctx, state.hoverX - state.panelW / 2, state.hoverY - state.panelH / 2, true);
+      if (state.mode === 'obstruct') {
+        var sz = obstructionSizePx(state.obstructionType);
+        ctx.fillStyle = 'rgba(220,38,38,0.4)';
+        ctx.fillRect(state.hoverX - sz / 2, state.hoverY - sz / 2, sz, sz);
+        ctx.strokeStyle = 'rgba(248,113,113,0.9)';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(state.hoverX - sz / 2, state.hoverY - sz / 2, sz, sz);
+      } else {
+        drawPanel(ctx, state.hoverX - state.panelW / 2, state.hoverY - state.panelH / 2, true);
+      }
       ctx.globalAlpha = 1.0;
     }
 
     updateStats();
+  }
+
+  function obstructionSizePx(type) {
+    var ft = type === 'chimney' ? 3 : type === 'skylight' ? 4 : 1;
+    var meters = ft * 0.3048;
+    var mpp = metersPerCanvasPx();
+    return Math.max(10, Math.round(meters / (mpp || 0.05)));
+  }
+
+  function drawObstruction(ctx, o) {
+    ctx.fillStyle = 'rgba(220,38,38,0.55)';
+    ctx.fillRect(o.x, o.y, o.size, o.size);
+    ctx.strokeStyle = 'rgba(254,202,202,0.95)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(o.x, o.y, o.size, o.size);
+    ctx.fillStyle = 'white';
+    ctx.font = 'bold 9px sans-serif';
+    var label = o.type === 'chimney' ? 'CH' : o.type === 'skylight' ? 'SK' : 'V';
+    ctx.fillText(label, o.x + 3, o.y + 11);
   }
 
   function drawPanel(ctx, x, y, ghost) {
@@ -318,8 +684,44 @@
       var scaleY = canvas.height / rect.height;
       var cx = (e.clientX - rect.left) * scaleX;
       var cy = (e.clientY - rect.top) * scaleY;
+
+      if (state.mode === 'obstruct') {
+        var sz = obstructionSizePx(state.obstructionType);
+        state.obstructions.push({
+          x: Math.round(cx - sz / 2),
+          y: Math.round(cy - sz / 2),
+          size: sz,
+          type: state.obstructionType,
+        });
+        drawCanvas();
+        return;
+      }
+
+      // Segment selection: if click hits a segment outline (not inside a panel),
+      // select it for "Fill Selected" — otherwise place a panel.
+      if (state.layout && state.layout.segments) {
+        for (var si = 0; si < state.layout.segments.length; si++) {
+          var r = segmentToCanvasRect(state.layout.segments[si]);
+          if (!r) continue;
+          // Click within 8px of segment border = select segment, not place panel.
+          var border = 8;
+          var nearBorder = (
+            Math.abs(cx - r.x) < border || Math.abs(cx - (r.x + r.w)) < border ||
+            Math.abs(cy - r.y) < border || Math.abs(cy - (r.y + r.h)) < border
+          ) && cx >= r.x - border && cx <= r.x + r.w + border && cy >= r.y - border && cy <= r.y + r.h + border;
+          if (nearBorder) {
+            state.selectedSegment = si;
+            var btn = document.getElementById('sdAutofillSelBtn');
+            if (btn) { btn.disabled = false; btn.className = 'w-full bg-amber-600 hover:bg-amber-500 text-white py-1.5 rounded text-xs font-semibold'; }
+            drawCanvas();
+            return;
+          }
+        }
+      }
+
       state.panels.push({ x: Math.round(cx - state.panelW / 2), y: Math.round(cy - state.panelH / 2) });
       drawCanvas();
+      updateInverterSummary();
     });
 
     canvas.addEventListener('mousemove', function(e) {
@@ -393,9 +795,27 @@
     }
     state.saving = true;
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Saving...'; }
+    // Convert obstructions → lat/lng + size_meters
+    var obstructions = [];
+    if (layout && layout.image_center && state.imgDrawW > 0) {
+      var srcSize2 = layout.image_size_px || 1600;
+      var scaleToSrc2 = srcSize2 / state.imgDrawW;
+      var mpp = metersPerCanvasPx();
+      obstructions = state.obstructions.map(function(o) {
+        var ccx = (o.x + o.size / 2) * scaleToSrc2;
+        var ccy = (o.y + o.size / 2) * scaleToSrc2;
+        var ll = pixelToLatLng(ccx, ccy, layout.image_center.lat, layout.image_center.lng, layout.image_zoom, srcSize2);
+        return { lat: ll.lat, lng: ll.lng, size_meters: o.size * mpp, type: o.type };
+      });
+    }
     fetch('/api/customer/reports/' + state.reportId + '/panel-layout', {
       method: 'PATCH', headers: authHeaders(),
-      body: JSON.stringify({ user_panels: userPanels })
+      body: JSON.stringify({
+        user_panels: userPanels,
+        obstructions: obstructions,
+        inverter_config: state.inverter,
+        battery_config: state.battery && state.battery.sku ? state.battery : null,
+      })
     })
       .then(function(r) { return r.json(); })
       .then(function(data) {

@@ -808,9 +808,24 @@ export async function callGoogleSolarAPI(
     yearly_energy_kwh: p.yearlyEnergyDcKwh || 0,
   })).filter(p => typeof p.lat === 'number' && typeof p.lng === 'number')
 
-  const solarPanelLayout = suggestedPanels.length > 0 ? {
+  // Per-segment bboxes for designer auto-fill (3ft setback tiling).
+  // rawSegments comes from solarPotential.roofSegmentStats earlier in this fn.
+  const layoutSegments = (rawSegments || []).map((seg: any, i: number) => ({
+    index: i,
+    pitch_degrees: seg.pitchDegrees || 0,
+    azimuth_degrees: seg.azimuthDegrees || 0,
+    plane_height_meters: seg.planeHeightAtCenterMeters || 0,
+    sw: seg.boundingBox ? { lat: seg.boundingBox.sw?.latitude, lng: seg.boundingBox.sw?.longitude } : null,
+    ne: seg.boundingBox ? { lat: seg.boundingBox.ne?.latitude, lng: seg.boundingBox.ne?.longitude } : null,
+  })).filter((s: any) => s.sw && s.ne)
+
+  const solarPanelLayout = (suggestedPanels.length > 0 || layoutSegments.length > 0) ? {
     suggested_panels: suggestedPanels,
     user_panels: null as null | any[],   // hydrated client-side once user edits
+    obstructions: [] as any[],            // user-placed vents/chimneys/skylights
+    inverter_config: null as null | { type: string; sku: string; count: number },
+    battery_config: null as null | { sku: string; count: number },
+    segments: layoutSegments,             // for per-segment auto-fill
     panel_capacity_watts: solarPotential.panelCapacityWatts || 400,
     panel_height_meters: solarPotential.panelHeightMeters || 1.879,
     panel_width_meters: solarPotential.panelWidthMeters || 1.045,

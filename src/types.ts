@@ -573,6 +573,10 @@ export interface RoofReport {
   solar_panel_layout?: {
     suggested_panels: { lat: number; lng: number; orientation: string; segment_index: number; yearly_energy_kwh: number }[]
     user_panels: null | { lat: number; lng: number; orientation: string }[]
+    obstructions?: { lat: number; lng: number; size_meters: number; type: string }[]
+    inverter_config?: null | { type: string; sku: string; count: number }
+    battery_config?: null | { sku: string; count: number }
+    segments?: { index: number; pitch_degrees: number; azimuth_degrees: number; plane_height_meters: number; sw: { lat: number; lng: number }; ne: { lat: number; lng: number } }[]
     panel_capacity_watts: number
     panel_height_meters: number
     panel_width_meters: number

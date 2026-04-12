@@ -1232,6 +1232,10 @@ customerAuthRoutes.patch('/reports/:id/panel-layout', async (c) => {
   layout.user_panels = userPanels
   layout.user_panel_count = userPanels.length
   layout.user_updated_at = new Date().toISOString()
+  if (Array.isArray(body.obstructions)) layout.obstructions = body.obstructions
+  if (body.inverter_config && typeof body.inverter_config === 'object') layout.inverter_config = body.inverter_config
+  if (body.battery_config && typeof body.battery_config === 'object') layout.battery_config = body.battery_config
+  else if (body.battery_config === null) layout.battery_config = null
 
   await c.env.DB.prepare(
     `UPDATE reports SET solar_panel_layout = ?, updated_at = datetime('now') WHERE order_id = ?`
