@@ -77,7 +77,7 @@ async function validateAdminOrCustomer(db: D1Database, authHeader: string | unde
 
 reportsRoutes.use('/*', async (c, next) => {
   const path = c.req.path
-  if (path.endsWith('/html') || path.endsWith('/simple') || path.endsWith('/proposal') || path.endsWith('/pdf') || path.endsWith('/webhook-update') || path.endsWith('/enhancement-status') || path.endsWith('/calculate-from-trace') || path.endsWith('/pitch-multipliers') || path.endsWith('/calculate-roof-specs')) return next()
+  if (path.endsWith('/html') || path.endsWith('/simple') || path.endsWith('/proposal') || path.endsWith('/pdf') || path.endsWith('/webhook-update') || path.endsWith('/enhancement-status') || path.endsWith('/calculate-from-trace') || path.endsWith('/pitch-multipliers') || path.endsWith('/calculate-roof-specs') || path.endsWith('/export.json') || path.endsWith('/export.csv')) return next()
   const user = await validateAdminOrCustomer(c.env.DB, c.req.header('Authorization'))
   if (!user) return c.json({ error: 'Authentication required' }, 401)
   c.set('user' as any, user)
@@ -294,6 +294,92 @@ reportsRoutes.get('/:orderId/simple', async (c) => {
   } catch (e: any) {
     return c.json({ error: 'Failed to render simple report: ' + (e.message || 'unknown error') }, 500)
   }
+})
+
+// ============================================================
+// GET /:orderId/export.json — full measurement report JSON
+// GET /:orderId/export.csv  — flat CSV for estimator import
+// ============================================================
+reportsRoutes.get('/:orderId/export.json', async (c) => {
+  const orderId = c.req.param('orderId')
+  const row = await repo.getReportRawData(c.env.DB, orderId)
+  if (!row || !row.api_response_raw) return c.json({ error: 'Report not found' }, 404)
+  let data: any
+  try { data = typeof row.api_response_raw === 'string' ? JSON.parse(row.api_response_raw) : row.api_response_raw }
+  catch { return c.json({ error: 'Report data corrupt' }, 500) }
+  const body = JSON.stringify(data.trace_measurement || data, null, 2)
+  return new Response(body, {
+    headers: {
+      'content-type': 'application/json',
+      'content-disposition': `attachment; filename="roof-report-${orderId}.json"`,
+    },
+  })
+})
+
+reportsRoutes.get('/:orderId/export.csv', async (c) => {
+  const orderId = c.req.param('orderId')
+  const row = await repo.getReportRawData(c.env.DB, orderId)
+  if (!row || !row.api_response_raw) return c.json({ error: 'Report not found' }, 404)
+  let data: any
+  try { data = typeof row.api_response_raw === 'string' ? JSON.parse(row.api_response_raw) : row.api_response_raw }
+  catch { return c.json({ error: 'Report data corrupt' }, 500) }
+  const tm = data.trace_measurement
+  if (!tm) return c.json({ error: 'No measurement data on this report' }, 404)
+
+  const esc = (v: any) => {
+    const s = v == null ? '' : String(v)
+    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s
+  }
+  const rows: string[] = []
+  rows.push('section,type,label,length_ft,area_ft2,pitch,notes')
+  const km = tm.key_measurements || {}
+  const lm = tm.linear_measurements || {}
+  rows.push(['summary', 'footprint', 'Projected footprint', '', km.total_projected_footprint_ft2 ?? '', km.dominant_pitch_label ?? '', ''].map(esc).join(','))
+  rows.push(['summary', 'sloped_area', 'True sloped area', '', km.total_roof_area_sloped_ft2 ?? '', km.dominant_pitch_label ?? '', ''].map(esc).join(','))
+  rows.push(['summary', 'gross_squares', 'Gross squares (w/waste)', '', km.total_squares_gross_w_waste ?? '', '', `${km.waste_factor_pct ?? ''}% waste`].map(esc).join(','))
+
+  rows.push(['linear', 'eaves', 'Total eaves', lm.eaves_total_ft ?? '', '', '', ''].map(esc).join(','))
+  rows.push(['linear', 'ridges', 'Total ridges', lm.ridges_total_ft ?? '', '', '', ''].map(esc).join(','))
+  rows.push(['linear', 'hips', 'Total hips', lm.hips_total_ft ?? '', '', '', ''].map(esc).join(','))
+  rows.push(['linear', 'valleys', 'Total valleys', lm.valleys_total_ft ?? '', '', '', ''].map(esc).join(','))
+  rows.push(['linear', 'rakes', 'Total rakes', lm.rakes_total_ft ?? '', '', '', ''].map(esc).join(','))
+
+  for (const f of tm.face_details || []) {
+    rows.push(['face', 'face', f.label || f.face_id || '', '', f.sloped_area_ft2 ?? '', `${f.pitch ?? ''}:12`, ''].map(esc).join(','))
+  }
+  for (const e of tm.eave_edge_breakdown || []) {
+    rows.push(['edge', 'eave', `Edge #${e.edge_num}`, e.length_ft ?? e.length_2d_ft ?? '', '', '', `bearing ${e.bearing_deg ?? ''}°`].map(esc).join(','))
+  }
+  for (const o of tm.obstruction_details || []) {
+    rows.push(['obstruction', o.type || 'other', o.label || '', '', o.sloped_area_ft2 ?? '', '', 'deducted'].map(esc).join(','))
+  }
+  const mat = tm.materials_estimate || {}
+  const matLines: [string, string, any, any][] = [
+    ['shingles_squares_net', 'Shingles (net squares)', '', mat.shingles_squares_net],
+    ['shingles_squares_gross', 'Shingles (gross squares w/waste)', '', mat.shingles_squares_gross],
+    ['shingles_bundles', 'Shingle bundles', '', mat.shingles_bundles],
+    ['underlayment_rolls', 'Underlayment rolls', '', mat.underlayment_rolls],
+    ['ice_water_shield_sqft', 'Ice & water shield (sqft)', '', mat.ice_water_shield_sqft],
+    ['ridge_cap_lf', 'Ridge cap (lf)', mat.ridge_cap_lf, ''],
+    ['starter_strip_lf', 'Starter strip (lf)', mat.starter_strip_lf, ''],
+    ['drip_edge_total_lf', 'Drip edge (lf)', mat.drip_edge_total_lf, ''],
+    ['valley_flashing_lf', 'Valley flashing (lf)', mat.valley_flashing_lf, ''],
+    ['roofing_nails_lbs', 'Roofing nails (lbs)', '', mat.roofing_nails_lbs],
+  ]
+  for (const [k, label, lf, qty] of matLines) {
+    rows.push(['material', k, label, lf, qty, '', ''].map(esc).join(','))
+  }
+  const le = km.labor_estimate
+  if (le) rows.push(['labor', 'crew_hours', `Labor (crew of ${le.crew_size})`, '', le.total_crew_hours, '', `${le.est_days_min}-${le.est_days_max} days`].map(esc).join(','))
+  const cc = tm.cross_check
+  if (cc) rows.push(['cross_check', cc.source, 'External cross-check', '', cc.external_footprint_ft2, '', `engine ${cc.engine_footprint_ft2} sqft, ${cc.variance_pct}% variance (${cc.verdict})`].map(esc).join(','))
+
+  return new Response(rows.join('\n') + '\n', {
+    headers: {
+      'content-type': 'text/csv; charset=utf-8',
+      'content-disposition': `attachment; filename="roof-report-${orderId}.csv"`,
+    },
+  })
 })
 
 // ============================================================

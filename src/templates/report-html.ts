@@ -1519,6 +1519,44 @@ function buildCrossCheckAndAdvisoryPage(report: RoofReport, reportNum: string, r
     </div>
   </div>` : ''}
 
+  ${(() => {
+    const cc = tm?.cross_check
+    const wb = tm?.key_measurements?.waste_breakdown
+    const le = tm?.key_measurements?.labor_estimate
+    const gw: string[] = tm?.geometry_warnings || []
+    if (!cc && !wb && !le && gw.length === 0) return ''
+    const ccPill = cc && (cc.verdict === 'aligned'
+      ? { bg: '#dcfce7', fg: '#166534', label: 'Aligned' }
+      : cc.verdict === 'minor_variance'
+      ? { bg: '#fef3c7', fg: '#92400e', label: 'Minor' }
+      : { bg: '#fee2e2', fg: '#991b1b', label: '>8%' })
+    const sourceLabel = cc ? (cc.source === 'google_solar' ? 'Google Solar' : cc.source) : ''
+    const cols = [cc && '1.3fr', wb && '1fr', le && '1fr'].filter(Boolean).join(' ')
+    return `
+  <div style="padding:0 28px 6px">
+    <div style="display:grid;grid-template-columns:${cols};gap:6px">
+      ${cc ? `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:5px;padding:6px 8px">
+        <div style="font-size:7px;font-weight:800;color:${NAVY};text-transform:uppercase;letter-spacing:0.4px;margin-bottom:2px">Cross-check vs ${sourceLabel}</div>
+        <div style="display:flex;align-items:center;gap:6px;font-size:8.5px;color:#0f172a;flex-wrap:wrap">
+          <span><b>${Math.round(cc.engine_footprint_ft2).toLocaleString()}</b> ours</span>
+          <span style="color:#94a3b8">vs</span>
+          <span><b>${Math.round(cc.external_footprint_ft2).toLocaleString()}</b> ${sourceLabel}</span>
+          <span style="margin-left:auto;background:${ccPill!.bg};color:${ccPill!.fg};padding:1px 5px;border-radius:3px;font-weight:800;font-size:8px">${cc.variance_pct}% ${ccPill!.label}</span>
+        </div>
+      </div>` : ''}
+      ${wb ? `<div style="background:#faf5ff;border:1px solid #e9d5ff;border-radius:5px;padding:6px 8px">
+        <div style="font-size:7px;font-weight:800;color:#5b21b6;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:2px">Waste ${wb.total_pct}% — drivers</div>
+        <div style="font-size:8px;color:#4c1d95;line-height:1.35">${wb.drivers.map((d: any) => `${d.label} <b>+${d.pct}%</b>`).join(' &middot; ')}</div>
+      </div>` : ''}
+      ${le ? `<div style="background:#ecfdf5;border:1px solid #a7f3d0;border-radius:5px;padding:6px 8px">
+        <div style="font-size:7px;font-weight:800;color:#065f46;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:2px">Labor est.</div>
+        <div style="font-size:8.5px;color:#065f46;line-height:1.35">Crew ${le.crew_size} &middot; <b>${le.est_days_min}&ndash;${le.est_days_max} days</b> &middot; ${le.total_crew_hours} crew-hrs &middot; pitch ×${le.pitch_multiplier}</div>
+      </div>` : ''}
+    </div>
+    ${gw.length > 0 ? `<div style="margin-top:4px;background:#fef2f2;border:1px solid #fca5a5;border-radius:5px;padding:4px 8px;font-size:8px;color:#7f1d1d;line-height:1.35"><b style="color:#b91c1c">&#9888; Geometry:</b> ${gw.join(' &middot; ')}</div>` : ''}
+  </div>`
+  })()}
+
   ${advisoryNotes.length > 0 ? `
   <!-- Advisory Notes -->
   <div style="padding:0 28px">
