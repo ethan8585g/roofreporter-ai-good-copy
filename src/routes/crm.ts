@@ -1369,38 +1369,52 @@ crmRoutes.post('/jobs/:jobId/check-out', async (c) => {
   return c.json({ success: true, duration_minutes: durationMinutes })
 })
 
-// Send a crew message for a job
+// Send a crew message for a job — accepts customer OR admin sessions
 crmRoutes.post('/jobs/:jobId/messages', async (c) => {
-  const token = c.req.header('Authorization')?.replace('Bearer ', '')
-  if (!token) return c.json({ error: 'Not authenticated' }, 401)
+  const auth = c.req.header('Authorization')
+  if (!auth) return c.json({ error: 'Not authenticated' }, 401)
+  const token = auth.replace('Bearer ', '')
+  let authorId: number | null = null
+  let authorName = 'Unknown'
   const session = await c.env.DB.prepare("SELECT customer_id FROM customer_sessions WHERE session_token = ? AND expires_at > datetime('now')").bind(token).first<any>()
-  if (!session) return c.json({ error: 'Session expired' }, 401)
-  const authorId = session.customer_id
+  if (session) {
+    authorId = session.customer_id
+    const cust = await c.env.DB.prepare('SELECT name FROM customers WHERE id = ?').bind(authorId).first<any>()
+    authorName = cust?.name || 'Unknown'
+  } else {
+    const admin = await validateAdminSession(c.env.DB, auth)
+    if (!admin) return c.json({ error: 'Session expired' }, 401)
+    authorId = admin.id
+    authorName = admin.email || 'Admin'
+  }
   const jobId = parseInt(c.req.param('jobId'))
   const { content } = await c.req.json()
   if (!content || !content.trim()) return c.json({ error: 'Message content required' }, 400)
-
-  // Resolve author name
-  const cust = await c.env.DB.prepare('SELECT name FROM customers WHERE id = ?').bind(authorId).first<any>()
-  const authorName = cust?.name || 'Unknown'
-
   const result = await c.env.DB.prepare(
     'INSERT INTO crew_messages (job_id, author_id, author_name, content) VALUES (?, ?, ?, ?)'
   ).bind(jobId, authorId, authorName, content.trim()).run()
   return c.json({ success: true, id: result.meta.last_row_id })
 })
 
-// Get messages for a job
+// Get messages for a job — accepts customer OR admin sessions
 crmRoutes.get('/jobs/:jobId/messages', async (c) => {
-  const token = c.req.header('Authorization')?.replace('Bearer ', '')
-  if (!token) return c.json({ error: 'Not authenticated' }, 401)
+  const auth = c.req.header('Authorization')
+  if (!auth) return c.json({ error: 'Not authenticated' }, 401)
+  const token = auth.replace('Bearer ', '')
   const session = await c.env.DB.prepare("SELECT customer_id FROM customer_sessions WHERE session_token = ? AND expires_at > datetime('now')").bind(token).first<any>()
-  if (!session) return c.json({ error: 'Session expired' }, 401)
+  let myId: number | null = null
+  if (session) {
+    myId = session.customer_id
+  } else {
+    const admin = await validateAdminSession(c.env.DB, auth)
+    if (!admin) return c.json({ error: 'Session expired' }, 401)
+    myId = admin.id
+  }
   const jobId = parseInt(c.req.param('jobId'))
   const messages = await c.env.DB.prepare(
     'SELECT * FROM crew_messages WHERE job_id = ? ORDER BY created_at ASC'
   ).bind(jobId).all<any>()
-  return c.json({ messages: messages.results || [], my_id: session.customer_id })
+  return c.json({ messages: messages.results || [], my_id: myId })
 })
 
 // ============================================================
