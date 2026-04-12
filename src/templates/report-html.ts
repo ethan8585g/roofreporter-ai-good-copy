@@ -73,6 +73,9 @@ export function generateProfessionalReportHTML(report: RoofReport): string {
     || ''
   const satelliteUrl = report.imagery?.satellite_url || ''
   const overheadUrl = eagleViewUrl || report.imagery?.satellite_overhead_url || satelliteUrl
+  const fluxUrl = (report.imagery as any)?.flux_data_url || null
+  const maskUrl = (report.imagery as any)?.mask_overlay_data_url || null
+  const hasExtraImgs = !!(fluxUrl || maskUrl)
 
   // ── Waste factor table (4% through 15%) — in square feet ──
   const wastePercentages = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
@@ -254,14 +257,29 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
       ${wallFlashingFt > 0 ? `<div class="pt-row"><span class="pt-label" style="font-weight:700">Headwall Flashing</span><span class="pt-value">${wallFlashingFt} LF</span></div>` : ''}
     </div>
 
-    <!-- RIGHT COLUMN: Aerial Satellite Image (~58%) -->
+    <!-- RIGHT COLUMN: Aerial Satellite Image (~58%) + Solar API extras -->
     <div style="flex:1;display:flex;flex-direction:column">
-      <div style="border:1px solid #ccc;border-radius:4px;overflow:hidden;background:#1a2332;height:480px;display:flex;align-items:center;justify-content:center">
+      <div style="border:1px solid #ccc;border-radius:4px;overflow:hidden;background:#1a2332;height:${hasExtraImgs ? 320 : 480}px;display:flex;align-items:center;justify-content:center">
         ${overheadUrl
-          ? `<img src="${overheadUrl}" alt="Aerial View" style="max-width:100%;max-height:100%;object-fit:contain;display:block" onerror="this.parentElement.innerHTML='<div style=\\'height:480px;display:flex;align-items:center;justify-content:center;color:#999;font-size:13px\\'>Satellite imagery not available</div>'">`
-          : '<div style="height:480px;display:flex;align-items:center;justify-content:center;color:#999;font-size:13px">Satellite imagery not available</div>'}
+          ? `<img src="${overheadUrl}" alt="Aerial View" style="max-width:100%;max-height:100%;object-fit:contain;display:block" onerror="this.parentElement.innerHTML='<div style=\\'display:flex;align-items:center;justify-content:center;color:#999;font-size:13px;width:100%;height:100%\\'>Satellite imagery not available</div>'">`
+          : '<div style="display:flex;align-items:center;justify-content:center;color:#999;font-size:13px;width:100%;height:100%">Satellite imagery not available</div>'}
       </div>
-      <div style="font-size:7px;color:#888;text-align:right;margin-top:2px">&copy; Google Maps &mdash; Imagery for measurement reference only</div>
+      ${hasExtraImgs ? `
+      <div style="display:grid;grid-template-columns:${fluxUrl && maskUrl ? '1fr 1fr' : '1fr'};gap:4px;margin-top:4px;height:150px">
+        ${fluxUrl ? `<div style="display:flex;flex-direction:column">
+          <div style="border:1px solid #ccc;border-radius:4px;overflow:hidden;background:#0f172a;flex:1;display:flex;align-items:center;justify-content:center">
+            <img src="${fluxUrl}" alt="Annual sun flux" style="max-width:100%;max-height:100%;object-fit:contain;display:block">
+          </div>
+          <div style="font-size:6.5px;color:#475569;text-align:center;margin-top:1px;font-weight:700">Annual Sun Flux &mdash; Google Solar</div>
+        </div>` : ''}
+        ${maskUrl ? `<div style="display:flex;flex-direction:column">
+          <div style="border:1px solid #ccc;border-radius:4px;overflow:hidden;background:#0f172a;flex:1;display:flex;align-items:center;justify-content:center">
+            <img src="${maskUrl}" alt="Roof footprint mask" style="max-width:100%;max-height:100%;object-fit:contain;display:block">
+          </div>
+          <div style="font-size:6.5px;color:#475569;text-align:center;margin-top:1px;font-weight:700">Roof Footprint Segmentation</div>
+        </div>` : ''}
+      </div>` : ''}
+      <div style="font-size:7px;color:#888;text-align:right;margin-top:2px">&copy; Google Maps / Google Solar &mdash; Imagery for reference</div>
     </div>
   </div>
 
@@ -813,6 +831,9 @@ export function generateSimpleTwoPageReport(report: RoofReport): string {
 
   // Satellite imagery
   const overheadUrl = report.imagery?.satellite_overhead_url || report.imagery?.satellite_url || ''
+  const fluxUrl = (report.imagery as any)?.flux_data_url || null
+  const maskUrl = (report.imagery as any)?.mask_overlay_data_url || null
+  const hasExtraImgs = !!(fluxUrl || maskUrl)
 
   // Slope breakdown (classify segments)
   // Industry-standard ranges: Flat 0-2:12, Low 2-4:12, Standard 4-9:12, Steep 9:12+
@@ -1118,15 +1139,30 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
       </div>
     </div>
 
-    <!-- RIGHT COLUMN: Satellite Image -->
+    <!-- RIGHT COLUMN: Satellite Image + Solar extras -->
     <div>
-      <div style="border:1px solid #ddd;border-radius:4px;overflow:hidden;background:#1a2332;height:380px;display:flex;align-items:center;justify-content:center">
+      <div style="border:1px solid #ddd;border-radius:4px;overflow:hidden;background:#1a2332;height:${hasExtraImgs ? 250 : 380}px;display:flex;align-items:center;justify-content:center">
         ${overheadUrl
           ? `<img src="${overheadUrl}" alt="Aerial View" style="max-width:100%;max-height:100%;object-fit:contain;display:block" onerror="this.style.display='none'">`
-          : `<div style="height:380px;background:#e8ecf1;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:12px">Satellite imagery not available</div>`
+          : `<div style="background:#e8ecf1;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:12px;width:100%;height:100%">Satellite imagery not available</div>`
         }
       </div>
-      <div style="font-size:7px;color:#999;text-align:right;margin-top:2px">Aerial satellite imagery &copy; Google Maps</div>
+      ${hasExtraImgs ? `
+      <div style="display:grid;grid-template-columns:${fluxUrl && maskUrl ? '1fr 1fr' : '1fr'};gap:4px;margin-top:4px;height:126px">
+        ${fluxUrl ? `<div style="display:flex;flex-direction:column">
+          <div style="border:1px solid #ddd;border-radius:4px;overflow:hidden;background:#0f172a;flex:1;display:flex;align-items:center;justify-content:center">
+            <img src="${fluxUrl}" alt="Annual sun flux" style="max-width:100%;max-height:100%;object-fit:contain;display:block">
+          </div>
+          <div style="font-size:6.5px;color:#475569;text-align:center;margin-top:1px;font-weight:700">Annual Sun Flux &mdash; Google Solar</div>
+        </div>` : ''}
+        ${maskUrl ? `<div style="display:flex;flex-direction:column">
+          <div style="border:1px solid #ddd;border-radius:4px;overflow:hidden;background:#0f172a;flex:1;display:flex;align-items:center;justify-content:center">
+            <img src="${maskUrl}" alt="Roof footprint mask" style="max-width:100%;max-height:100%;object-fit:contain;display:block">
+          </div>
+          <div style="font-size:6.5px;color:#475569;text-align:center;margin-top:1px;font-weight:700">Roof Footprint Segmentation</div>
+        </div>` : ''}
+      </div>` : ''}
+      <div style="font-size:7px;color:#999;text-align:right;margin-top:2px">Imagery &copy; Google Maps / Google Solar</div>
     </div>
   </div>
 

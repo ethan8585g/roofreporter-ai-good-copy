@@ -1312,3 +1312,60 @@ function analyzeAnnualFlux(
     fluxHeatmapDataUrl
   }
 }
+
+// ============================================================
+// fetchSolarImageryOnly — SLIM imagery-only data layer fetch
+// Skips DSM slope / area pipeline. Returns just the two extra
+// report images as base64 data URLs (flux heatmap + mask overlay).
+// Safe to call in parallel with the measurement engine.
+// Resolves to nulls on any failure (Solar coverage missing, timeout, etc.).
+// ============================================================
+export async function fetchSolarImageryOnly(
+  lat: number,
+  lng: number,
+  apiKey: string,
+  options?: { radiusMeters?: number; timeoutMs?: number }
+): Promise<{
+  flux_data_url: string | null
+  mask_overlay_data_url: string | null
+  imagery_quality: string | null
+  imagery_date: string | null
+  duration_ms: number
+}> {
+  const start = Date.now()
+  const result = {
+    flux_data_url: null as string | null,
+    mask_overlay_data_url: null as string | null,
+    imagery_quality: null as string | null,
+    imagery_date: null as string | null,
+    duration_ms: 0,
+  }
+  try {
+    const dl = await getDataLayerUrls(lat, lng, apiKey, options?.radiusMeters ?? 50)
+    result.imagery_quality = dl.imageryQuality || null
+    result.imagery_date = dl.imageryDate
+      ? `${dl.imageryDate.year}-${String(dl.imageryDate.month).padStart(2, '0')}-${String(dl.imageryDate.day).padStart(2, '0')}`
+      : null
+
+    // DSM + mask downloads needed for overlay/flux visualizations
+    const dsmPromise = dl.dsmUrl ? downloadGeoTIFF(dl.dsmUrl, apiKey).catch(() => null) : Promise.resolve(null)
+    const maskPromise = dl.maskUrl ? downloadGeoTIFF(dl.maskUrl, apiKey).catch(() => null) : Promise.resolve(null)
+    const fluxPromise = dl.annualFluxUrl ? downloadGeoTIFF(dl.annualFluxUrl, apiKey).catch(() => null) : Promise.resolve(null)
+    const [dsmTiff, maskTiff, fluxTiff] = await Promise.all([dsmPromise, maskPromise, fluxPromise])
+
+    if (maskTiff && dsmTiff) {
+      try { result.mask_overlay_data_url = generateMaskOverlayBMP(maskTiff, dsmTiff) || null }
+      catch (e: any) { console.warn(`[SolarImagery] Mask overlay failed: ${e.message}`) }
+    }
+    if (fluxTiff) {
+      try {
+        const fluxAnalysis = analyzeAnnualFlux(fluxTiff, maskTiff, dsmTiff?.pixelSizeMeters ?? 0.5)
+        result.flux_data_url = fluxAnalysis.fluxHeatmapDataUrl || null
+      } catch (e: any) { console.warn(`[SolarImagery] Flux analysis failed: ${e.message}`) }
+    }
+  } catch (e: any) {
+    console.warn(`[SolarImagery] fetchSolarImageryOnly failed: ${e.message}`)
+  }
+  result.duration_ms = Date.now() - start
+  return result
+}

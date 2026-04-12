@@ -20,7 +20,7 @@ import {
 } from '../services/solar-api'
 import { buildSolarGeometry, solarGeometryToTracePayload, getZoomForFootprint } from '../services/solar-geometry'
 import { buildDataLayersReport, generateSegmentsFromDLAnalysis, generateSegmentsFromAIGeometry } from '../services/report-engine'
-import { executeRoofOrder, type DataLayersAnalysis } from '../services/solar-datalayers'
+import { executeRoofOrder, fetchSolarImageryOnly, type DataLayersAnalysis } from '../services/solar-datalayers'
 import { generateProfessionalReportHTML, buildVisionFindingsHTML, generateSimpleTwoPageReport } from '../templates/report-html'
 import { generateSolarProposalHTML } from '../templates/solar-proposal'
 import { generateTraceBasedDiagramSVG } from '../templates/svg-diagrams'
@@ -2304,17 +2304,24 @@ async function _generateReportForOrderInner(
     let solarPitch: SolarPitchAndImagery | null = null
     let solarPitchDeg = 20 // sensible default if Solar unavailable
     let solarPitchRise = 4.4 // ~20°
+    let extraImagery: Awaited<ReturnType<typeof fetchSolarImageryOnly>> | null = null
 
     if (solarApiKey && order.latitude && order.longitude) {
       try {
         const footprintHint = traceResult?.key_measurements?.total_projected_footprint_ft2 || 1500
-        solarPitch = await fetchSolarPitchAndImagery(
-          order.latitude, order.longitude, solarApiKey, mapsApiKey || solarApiKey, footprintHint
-        )
+        // Fetch pitch + the two extra report images (flux heatmap, mask overlay) in parallel.
+        // Imagery failure is non-fatal and falls back to the single-image layout.
+        const [pitchRes, imgRes] = await Promise.all([
+          fetchSolarPitchAndImagery(order.latitude, order.longitude, solarApiKey, mapsApiKey || solarApiKey, footprintHint),
+          fetchSolarImageryOnly(order.latitude, order.longitude, solarApiKey).catch(() => null),
+        ])
+        solarPitch = pitchRes
+        extraImagery = imgRes
         solarPitchDeg = solarPitch.pitch_degrees
         solarPitchRise = Math.round(12 * Math.tan(solarPitchDeg * Math.PI / 180) * 10) / 10
         await repo.logApiRequest(env.DB, orderId, 'google_solar_api', 'buildingInsights:findClosest (pitch+imagery only)', 200, solarPitch.api_duration_ms)
-        console.log(`[Generate] Order ${orderId}: Solar pitch=${solarPitchDeg}° (${solarPitchRise}:12), quality=${solarPitch.imagery_quality}, ${solarPitch.api_duration_ms}ms`)
+        console.log(`[Generate] Order ${orderId}: Solar pitch=${solarPitchDeg}° (${solarPitchRise}:12), quality=${solarPitch.imagery_quality}, ${solarPitch.api_duration_ms}ms` +
+          (extraImagery ? ` · extra-imagery flux=${!!extraImagery.flux_data_url} mask=${!!extraImagery.mask_overlay_data_url} in ${extraImagery.duration_ms}ms` : ''))
       } catch (e: any) {
         console.warn(`[Generate] Order ${orderId}: Solar API failed (non-critical, using default pitch): ${e.message}`)
         await repo.logApiRequest(env.DB, orderId, 'google_solar_api', 'buildingInsights:findClosest (pitch+imagery only)', 500, Date.now() - startTime, e.message.substring(0, 500))
@@ -2456,15 +2463,19 @@ async function _generateReportForOrderInner(
       }
 
       // Imagery: prefer Solar API, fallback to basic Maps Static
-      const imagery = solarPitch
-        ? { ...solarPitch.imagery, dsm_url: null, mask_url: null }
-        : {
-            ...generateEnhancedImagery(
-              order.latitude || 0, order.longitude || 0,
-              mapsApiKey || '', km.total_projected_footprint_ft2
-            ),
-            dsm_url: null, mask_url: null,
-          }
+      const imagery = {
+        ...(solarPitch
+          ? { ...solarPitch.imagery, dsm_url: null, mask_url: null }
+          : {
+              ...generateEnhancedImagery(
+                order.latitude || 0, order.longitude || 0,
+                mapsApiKey || '', km.total_projected_footprint_ft2
+              ),
+              dsm_url: null, mask_url: null,
+            }),
+        flux_data_url: extraImagery?.flux_data_url || null,
+        mask_overlay_data_url: extraImagery?.mask_overlay_data_url || null,
+      }
 
       reportData = {
         order_id: typeof orderId === 'string' ? parseInt(orderId) : orderId as number,

@@ -550,6 +550,11 @@ export interface RoofReport {
 
     // Medium-zoom bridge view (between overhead and context)
     satellite_medium_url: string | null
+
+    /** Base64 data URL: Solar API annual flux heatmap (adds to report as 2nd image) */
+    flux_data_url?: string | null
+    /** Base64 data URL: Solar API roof mask overlay (adds to report as 3rd image) */
+    mask_overlay_data_url?: string | null
   }
 
   // ---- DATA QUALITY ----
