@@ -318,6 +318,16 @@ squareRoutes.post('/checkout/report', async (c) => {
     const customer = await getCustomerFromToken(c.env.DB, token)
     if (!customer) return c.json({ error: 'Not authenticated' }, 401)
 
+    // Require active subscription after free trial is exhausted
+    const isDev = isDevAccount(customer.email || '', c.env)
+    const freeTrialRemaining = isDev ? 999999 : Math.max(0, (customer.free_trial_total || 0) - (customer.free_trial_used || 0))
+    if (!isDev && freeTrialRemaining <= 0 && customer.subscription_status !== 'active') {
+      return c.json({
+        error: 'Your 3 free trial reports have been used. Subscribe to continue generating reports.',
+        subscription_required: true
+      }, 402)
+    }
+
     const { property_address, property_city, property_province, property_postal_code,
             service_tier, latitude, longitude, success_url, cancel_url } = await c.req.json()
 

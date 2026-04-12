@@ -429,10 +429,10 @@ function renderPinStep(root, progressBar) {
               <div class="w-12 h-12 bg-blue-500/15/100 rounded-xl flex items-center justify-center shadow"><i class="fas fa-crown text-white text-xl"></i></div>
               <div>
                 <p class="font-bold text-white text-base">Your 3 Free Trials Are Used Up!</p>
-                <p class="text-sm text-brand-200 mt-0.5">Credit packs start at <strong class="text-gray-400">$5.00/report (100-pack)</strong></p>
+                <p class="text-sm text-brand-200 mt-0.5">Subscribe to <strong class="text-emerald-300">Roof Manager Pro</strong> for just <strong class="text-white">$49/month</strong></p>
               </div>
             </div>
-            <a href="/pricing" class="bg-blue-500/15/100 hover:bg-white/10 text-white px-5 py-2.5 rounded-xl text-sm font-black transition-all shadow-lg"><i class="fas fa-tags mr-1.5"></i>Buy Credits</a>
+            <button onclick="showSubscriptionRequiredOverlay()" class="bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2.5 rounded-xl text-sm font-black transition-all shadow-lg border-0 cursor-pointer"><i class="fas fa-crown mr-1.5"></i>Subscribe</button>
           </div>
         </div>
       `}
@@ -811,13 +811,17 @@ function renderReviewStep(root, progressBar) {
               <button onclick="useCredit()" id="creditBtn" class="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-all shadow-lg text-base">
                 <i class="fas fa-gift mr-2"></i>Use Free Trial (${freeTrialRemaining} left)
               </button>
-            ` : paidCredits > 0 ? `
+            ` : (b.status === 'active') && paidCredits > 0 ? `
               <button onclick="useCredit()" id="creditBtn" class="flex-1 py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl transition-all shadow-lg text-base">
                 <i class="fas fa-coins mr-2"></i>Use Credit (${paidCredits} left)
               </button>
+            ` : (b.status === 'active') ? `
+              <button onclick="useCredit()" id="creditBtn" class="flex-1 py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl transition-all shadow-lg text-base">
+                <i class="fas fa-coins mr-2"></i>Generate Report
+              </button>
             ` : `
-              <button onclick="payWithSquare()" id="squareBtn" class="flex-1 py-3 bg-emerald-600 hover:bg-brand-700 text-white font-bold rounded-xl transition-all shadow-lg text-base">
-                <i class="fas fa-credit-card mr-2"></i>Pay $5 with Square
+              <button onclick="showSubscriptionRequiredOverlay()" class="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition-all shadow-lg text-base">
+                <i class="fas fa-crown mr-2"></i>Subscribe to Generate Reports — $49/mo
               </button>
             `}
           </div>
@@ -1924,7 +1928,10 @@ async function payWithSquare() {
       body: JSON.stringify(buildOrderPayload())
     });
     const data = await res.json();
-    if (data.checkout_url) {
+    if (data.subscription_required) {
+      showSubscriptionRequiredOverlay();
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-credit-card mr-2"></i>Pay with Square'; }
+    } else if (data.checkout_url) {
       window.location.href = data.checkout_url;
     } else {
       showMsg('error', '<i class="fas fa-exclamation-triangle mr-1"></i>' + (data.error || 'Checkout failed'));
