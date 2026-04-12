@@ -647,7 +647,8 @@ function renderTraceStep(root, progressBar) {
       <div class="mt-4 flex items-center justify-between">
         <div class="flex items-center gap-4 text-xs text-gray-500">
           <span><i class="fas fa-mouse-pointer mr-1"></i>Click = Add point</span>
-          <span><i class="fas fa-draw-polygon mr-1" style="color:#22c55e"></i>Click 1st point to close a section — trace multiple eaves layers for multi-story roofs</span>
+          <span><i class="fas fa-draw-polygon mr-1" style="color:#22c55e"></i>Click 1st point to close a section</span>
+          <span><i class="fas fa-layer-group mr-1" style="color:#22c55e"></i>2-story? After closing lower eaves, click inside it to start the upper eaves layer</span>
           <span><i class="fas fa-expand-arrows-alt mr-1 text-blue-400"></i>Trace the outermost roof edge (drip line), not the walls</span>
         </div>
         <div class="flex items-center gap-3">

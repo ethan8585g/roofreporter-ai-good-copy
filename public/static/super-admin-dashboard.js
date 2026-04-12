@@ -776,20 +776,27 @@ window.saOpenTraceModal = function(orderId, lat, lng, address, orderNum) {
         '<button onclick="document.getElementById(\'sa-trace-modal\').remove()" style="color:#6b7280;background:none;border:none;font-size:20px;cursor:pointer;line-height:1">&times;</button>' +
       '</div>' +
       '<div style="padding:10px 20px;background:#1f2937;border-bottom:1px solid #374151;font-size:12px;color:#9ca3af;flex-shrink:0">' +
-        '<span style="margin-right:16px"><span style="display:inline-block;width:12px;height:12px;background:#22c55e;border-radius:2px;margin-right:4px;vertical-align:middle"></span>Eaves (click to draw polygon)</span>' +
-        '<span style="margin-right:16px"><span style="display:inline-block;width:12px;height:3px;background:#dc2626;margin-right:4px;vertical-align:middle"></span>Ridge</span>' +
-        '<span style="margin-right:16px"><span style="display:inline-block;width:12px;height:3px;background:#ea580c;margin-right:4px;vertical-align:middle"></span>Hip</span>' +
-        '<span><span style="display:inline-block;width:12px;height:3px;background:#2563eb;margin-right:4px;vertical-align:middle"></span>Valley</span>' +
-        '<span style="float:right;color:#f59e0b">Draw eaves polygon first, then add ridges/hips/valleys as needed</span>' +
+        '<span style="margin-right:12px"><span style="display:inline-block;width:12px;height:12px;background:#22c55e;border-radius:2px;margin-right:4px;vertical-align:middle"></span>Eaves</span>' +
+        '<span style="margin-right:12px"><span style="display:inline-block;width:12px;height:3px;background:#dc2626;margin-right:4px;vertical-align:middle"></span>Ridge</span>' +
+        '<span style="margin-right:12px"><span style="display:inline-block;width:12px;height:3px;background:#ea580c;margin-right:4px;vertical-align:middle"></span>Hip</span>' +
+        '<span style="margin-right:12px"><span style="display:inline-block;width:12px;height:3px;background:#2563eb;margin-right:4px;vertical-align:middle"></span>Valley</span>' +
+        '<span style="margin-right:12px"><span style="display:inline-block;width:10px;height:10px;background:#a855f7;border-radius:50%;margin-right:4px;vertical-align:middle"></span>Vent</span>' +
+        '<span style="margin-right:12px"><span style="display:inline-block;width:10px;height:10px;background:#eab308;border-radius:50%;margin-right:4px;vertical-align:middle"></span>Skylight</span>' +
+        '<span><span style="display:inline-block;width:10px;height:10px;background:#dc2626;border-radius:50%;margin-right:4px;vertical-align:middle"></span>Chimney</span>' +
+        '<span style="float:right;color:#f59e0b">2-story? Close lower eaves (click 1st point), then trace upper eaves inside it.</span>' +
       '</div>' +
       '<div id="sa-trace-map" style="flex:1;min-height:0"></div>' +
       '<div style="padding:14px 20px;border-top:1px solid #374151;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;flex-shrink:0">' +
-        '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
-          '<button onclick="saTraceSetTool(\'eave\')" id="sa-tool-eave" style="padding:7px 14px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#22c55e;color:#fff;border:none">Eaves</button>' +
-          '<button onclick="saTraceSetTool(\'ridge\')" id="sa-tool-ridge" style="padding:7px 14px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">+ Ridge</button>' +
-          '<button onclick="saTraceSetTool(\'hip\')" id="sa-tool-hip" style="padding:7px 14px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">+ Hip</button>' +
-          '<button onclick="saTraceSetTool(\'valley\')" id="sa-tool-valley" style="padding:7px 14px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">+ Valley</button>' +
-          '<button onclick="saTraceClear()" style="padding:7px 14px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#ef4444;border:1px solid #374151">Clear All</button>' +
+        '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
+          '<button onclick="saTraceSetTool(\'eave\')" id="sa-tool-eave" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#22c55e;color:#fff;border:none">Eaves</button>' +
+          '<button onclick="saTraceSetTool(\'ridge\')" id="sa-tool-ridge" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">+ Ridge</button>' +
+          '<button onclick="saTraceSetTool(\'hip\')" id="sa-tool-hip" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">+ Hip</button>' +
+          '<button onclick="saTraceSetTool(\'valley\')" id="sa-tool-valley" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">+ Valley</button>' +
+          '<button onclick="saTraceSetTool(\'vent\')" id="sa-tool-vent" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">+ Vent</button>' +
+          '<button onclick="saTraceSetTool(\'skylight\')" id="sa-tool-skylight" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">+ Skylight</button>' +
+          '<button onclick="saTraceSetTool(\'chimney\')" id="sa-tool-chimney" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">+ Chimney</button>' +
+          '<button onclick="saTraceUndo()" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#9ca3af;border:1px solid #374151">Undo</button>' +
+          '<button onclick="saTraceClear()" style="padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#1f2937;color:#ef4444;border:1px solid #374151">Clear All</button>' +
         '</div>' +
         '<button onclick="saSubmitTrace(' + orderId + ')" style="padding:9px 22px;background:#f59e0b;color:#111;font-size:13px;font-weight:700;border:none;border-radius:10px;cursor:pointer">' +
           '<i class="fas fa-paper-plane mr-1.5"></i>Submit Report to Customer' +
@@ -799,17 +806,32 @@ window.saOpenTraceModal = function(orderId, lat, lng, address, orderNum) {
   document.body.appendChild(overlay);
 
   // Initialize the trace map
-  window._saTraceState = { orderId: orderId, tool: 'eave', eavePoints: [], eavePoly: null, ridges: [], hips: [], valleys: [], _ridgeData: [], _hipData: [], _valleyData: [] };
+  window._saTraceState = {
+    orderId: orderId, tool: 'eave',
+    eaveSections: [],            // [{points, polygon}] closed sections
+    eavePoints: [], eavePoly: null, _eaveLatLngs: [], _eaveMarkers: [],
+    ridges: [], hips: [], valleys: [],
+    _ridgeData: [], _hipData: [], _valleyData: [],
+    _segStart: null, _segStartMarker: null,
+    vents: [], skylights: [], chimneys: [],
+    _ventMarkers: [], _skylightMarkers: [], _chimneyMarkers: []
+  };
   setTimeout(function() { saInitTraceMap(lat, lng, address); }, 100);
 };
 
 window.saTraceSetTool = function(tool) {
-  window._saTraceState.tool = tool;
-  ['eave','ridge','hip','valley'].forEach(function(t) {
+  var s = window._saTraceState; if (!s) return;
+  // Cancel any dangling line-segment start when switching tools
+  if (s._segStart && tool !== s.tool) {
+    if (s._segStartMarker) { s._segStartMarker.setMap(null); s._segStartMarker = null; }
+    s._segStart = null;
+  }
+  s.tool = tool;
+  ['eave','ridge','hip','valley','vent','skylight','chimney'].forEach(function(t) {
     var btn = document.getElementById('sa-tool-' + t);
     if (btn) {
       var active = t === tool;
-      var colors = { eave: '#22c55e', ridge: '#dc2626', hip: '#ea580c', valley: '#2563eb' };
+      var colors = { eave: '#22c55e', ridge: '#dc2626', hip: '#ea580c', valley: '#2563eb', vent: '#a855f7', skylight: '#eab308', chimney: '#dc2626' };
       btn.style.background = active ? (colors[t] || '#0ea5e9') : '#1f2937';
       btn.style.color = active ? '#fff' : '#9ca3af';
       btn.style.borderColor = active ? 'transparent' : '#374151';
@@ -821,10 +843,55 @@ window.saTraceClear = function() {
   var s = window._saTraceState;
   if (!s || !s.map) return;
   if (s.eavePoly) { s.eavePoly.setMap(null); s.eavePoly = null; }
+  (s.eaveSections || []).forEach(function(sec) { if (sec.polygon) sec.polygon.setMap(null); });
+  s.eaveSections = [];
+  (s._eaveMarkers || []).forEach(function(m) { m.setMap(null); }); s._eaveMarkers = [];
   s.ridges.forEach(function(l) { l.setMap(null); }); s.ridges = [];
   s.hips.forEach(function(l) { l.setMap(null); }); s.hips = [];
   s.valleys.forEach(function(l) { l.setMap(null); }); s.valleys = [];
-  s.eavePoints = []; s._ridgeData = []; s._hipData = []; s._valleyData = [];
+  (s._ventMarkers || []).forEach(function(m) { m.setMap(null); }); s._ventMarkers = [];
+  (s._skylightMarkers || []).forEach(function(m) { m.setMap(null); }); s._skylightMarkers = [];
+  (s._chimneyMarkers || []).forEach(function(m) { m.setMap(null); }); s._chimneyMarkers = [];
+  if (s._segStartMarker) { s._segStartMarker.setMap(null); s._segStartMarker = null; }
+  s.eavePoints = []; s._eaveLatLngs = []; s._segStart = null;
+  s._ridgeData = []; s._hipData = []; s._valleyData = [];
+  s.vents = []; s.skylights = []; s.chimneys = [];
+};
+
+window.saTraceUndo = function() {
+  var s = window._saTraceState; if (!s) return;
+  // Priority: partial segment start → last draft eave pt → last annotation → last line → last closed eave section
+  if (s._segStart) {
+    if (s._segStartMarker) { s._segStartMarker.setMap(null); s._segStartMarker = null; }
+    s._segStart = null; return;
+  }
+  if (s.tool === 'eave' && s._eaveLatLngs && s._eaveLatLngs.length > 0) {
+    s._eaveLatLngs.pop(); s.eavePoints.pop();
+    var m = s._eaveMarkers.pop(); if (m) m.setMap(null);
+    if (s.eavePoly) s.eavePoly.setMap(null);
+    if (s._eaveLatLngs.length >= 2) {
+      s.eavePoly = new google.maps.Polyline({ path: s._eaveLatLngs.concat([s._eaveLatLngs[0]]), strokeColor: '#22c55e', strokeWeight: 2.5, map: s.map });
+    } else { s.eavePoly = null; }
+    return;
+  }
+  if ((s.tool === 'vent' || s.tool === 'skylight' || s.tool === 'chimney')) {
+    var arr = s[s.tool + 's']; var marr = s['_' + s.tool + 'Markers'];
+    if (arr && arr.length > 0) { arr.pop(); var mk = marr.pop(); if (mk) mk.setMap(null); return; }
+  }
+  if (s.tool === 'ridge' || s.tool === 'hip' || s.tool === 'valley') {
+    var key = s.tool + 's'; var dataKey = '_' + s.tool.charAt(0).toUpperCase() + s.tool.slice(1) + 'Data';
+    // dataKey needs to match _ridgeData / _hipData / _valleyData
+    dataKey = '_' + s.tool + 'Data';
+    if (s[key] && s[key].length > 0) {
+      var line = s[key].pop(); if (line) line.setMap(null);
+      s[dataKey].pop(); return;
+    }
+  }
+  // Fall back to popping a closed eaves section
+  if (s.eaveSections && s.eaveSections.length > 0) {
+    var last = s.eaveSections.pop();
+    if (last.polygon) last.polygon.setMap(null);
+  }
 };
 
 function saInitTraceMap(lat, lng, address) {
@@ -859,16 +926,46 @@ function saInitTraceMap(lat, lng, address) {
     var tool = s.tool;
     if (tool === 'eave') {
       var pts = s._eaveLatLngs || (s._eaveLatLngs = []);
+      // Close section on click near first point (>=3 pts)
+      if (pts.length >= 3) {
+        var first = pts[0];
+        var dLat = (first.lat() - e.latLng.lat()) * 111320;
+        var dLng = (first.lng() - e.latLng.lng()) * 111320 * Math.cos(first.lat() * Math.PI / 180);
+        var distM = Math.sqrt(dLat * dLat + dLng * dLng);
+        if (distM < 1.5) { saCloseEaveSection(); return; }
+      }
       pts.push(e.latLng);
+      // Numbered marker
+      var mk = new google.maps.Marker({
+        position: e.latLng, map: map,
+        icon: { path: google.maps.SymbolPath.CIRCLE, scale: 5, fillColor: '#22c55e', fillOpacity: 1, strokeColor: '#fff', strokeWeight: 1.5 },
+        label: { text: String(pts.length), color: '#fff', fontSize: '10px', fontWeight: '700' }
+      });
+      s._eaveMarkers.push(mk);
       if (s.eavePoly) s.eavePoly.setMap(null);
       s.eavePoly = new google.maps.Polyline({
         path: pts.concat([pts[0]]),
         strokeColor: '#22c55e', strokeWeight: 2.5, map: map
       });
       s.eavePoints = pts.map(function(p) { return { lat: p.lat(), lng: p.lng() }; });
+    } else if (tool === 'vent' || tool === 'skylight' || tool === 'chimney') {
+      var colors = { vent: '#a855f7', skylight: '#eab308', chimney: '#dc2626' };
+      var annMk = new google.maps.Marker({
+        position: e.latLng, map: map,
+        icon: { path: google.maps.SymbolPath.CIRCLE, scale: 7, fillColor: colors[tool], fillOpacity: 0.9, strokeColor: '#fff', strokeWeight: 2 },
+        title: tool
+      });
+      var pt = { lat: e.latLng.lat(), lng: e.latLng.lng() };
+      s[tool + 's'].push(pt);
+      s['_' + tool + 'Markers'].push(annMk);
     } else {
       if (!s._segStart) {
         s._segStart = e.latLng;
+        var colorMap = { ridge: '#dc2626', hip: '#ea580c', valley: '#2563eb' };
+        s._segStartMarker = new google.maps.Marker({
+          position: e.latLng, map: map,
+          icon: { path: google.maps.SymbolPath.CIRCLE, scale: 4, fillColor: colorMap[tool] || '#fff', fillOpacity: 1, strokeColor: '#fff', strokeWeight: 1 }
+        });
       } else {
         var color = tool === 'ridge' ? '#dc2626' : tool === 'hip' ? '#ea580c' : '#2563eb';
         var line = new google.maps.Polyline({ path: [s._segStart, e.latLng], strokeColor: color, strokeWeight: 2, map: map });
@@ -876,23 +973,55 @@ function saInitTraceMap(lat, lng, address) {
         if (tool === 'ridge') { s.ridges.push(line); s._ridgeData.push(seg); }
         else if (tool === 'hip') { s.hips.push(line); s._hipData.push(seg); }
         else { s.valleys.push(line); s._valleyData.push(seg); }
+        if (s._segStartMarker) { s._segStartMarker.setMap(null); s._segStartMarker = null; }
         s._segStart = null;
       }
     }
   });
 }
 
+function saCloseEaveSection() {
+  var s = window._saTraceState; if (!s || !s.map) return;
+  var pts = s._eaveLatLngs || [];
+  if (pts.length < 3) return;
+  if (s.eavePoly) { s.eavePoly.setMap(null); s.eavePoly = null; }
+  (s._eaveMarkers || []).forEach(function(m) { m.setMap(null); }); s._eaveMarkers = [];
+  var poly = new google.maps.Polygon({
+    paths: pts.slice(),
+    strokeColor: '#22c55e', strokeWeight: 3, strokeOpacity: 0.9,
+    fillColor: '#22c55e', fillOpacity: 0.15,
+    clickable: false, editable: false, draggable: false,
+    map: s.map, zIndex: 1
+  });
+  var sectionPoints = pts.map(function(p) { return { lat: p.lat(), lng: p.lng() }; });
+  s.eaveSections.push({ points: sectionPoints, polygon: poly });
+  s._eaveLatLngs = [];
+  s.eavePoints = [];
+}
+
 window.saSubmitTrace = async function(orderId) {
   var s = window._saTraceState;
-  if (!s || !s.eavePoints || s.eavePoints.length < 3) {
-    alert('Please draw the eaves polygon first (at least 3 points).');
+  if (!s) return;
+  // Auto-close current eave draft if it has >=3 points and no closed sections yet
+  if ((!s.eaveSections || s.eaveSections.length === 0) && s._eaveLatLngs && s._eaveLatLngs.length >= 3) {
+    saCloseEaveSection();
+  }
+  if (!s.eaveSections || s.eaveSections.length === 0) {
+    alert('Please draw the eaves polygon first (at least 3 points). Click the first point again to close it.');
     return;
   }
+  var eaves_sections = s.eaveSections.map(function(sec) { return sec.points; });
   var traceJson = {
-    eaves: s.eavePoints,
+    eaves: eaves_sections[0],
+    eaves_sections: eaves_sections,
     ridges: s._ridgeData || [],
     hips: s._hipData || [],
     valleys: s._valleyData || [],
+    annotations: {
+      vents: s.vents || [],
+      skylights: s.skylights || [],
+      chimneys: s.chimneys || []
+    },
     traced_at: new Date().toISOString()
   };
 

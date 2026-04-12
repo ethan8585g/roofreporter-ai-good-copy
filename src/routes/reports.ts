@@ -22,6 +22,7 @@ import { buildSolarGeometry, solarGeometryToTracePayload, getZoomForFootprint } 
 import { buildDataLayersReport, generateSegmentsFromDLAnalysis, generateSegmentsFromAIGeometry } from '../services/report-engine'
 import { executeRoofOrder, type DataLayersAnalysis } from '../services/solar-datalayers'
 import { generateProfessionalReportHTML, buildVisionFindingsHTML, generateSimpleTwoPageReport } from '../templates/report-html'
+import { generateSolarProposalHTML } from '../templates/solar-proposal'
 import { generateTraceBasedDiagramSVG } from '../templates/svg-diagrams'
 import { RoofMeasurementEngine, traceUiToEnginePayload, calculateRoofSpecs, ROOF_PITCH_MULTIPLIERS, HIP_VALLEY_MULTIPLIERS, type TraceReport } from '../services/roof-measurement-engine'
 import { enhanceReportViaGemini } from '../services/gemini-enhance'
@@ -76,7 +77,7 @@ async function validateAdminOrCustomer(db: D1Database, authHeader: string | unde
 
 reportsRoutes.use('/*', async (c, next) => {
   const path = c.req.path
-  if (path.endsWith('/html') || path.endsWith('/simple') || path.endsWith('/pdf') || path.endsWith('/webhook-update') || path.endsWith('/enhancement-status') || path.endsWith('/calculate-from-trace') || path.endsWith('/pitch-multipliers') || path.endsWith('/calculate-roof-specs')) return next()
+  if (path.endsWith('/html') || path.endsWith('/simple') || path.endsWith('/proposal') || path.endsWith('/pdf') || path.endsWith('/webhook-update') || path.endsWith('/enhancement-status') || path.endsWith('/calculate-from-trace') || path.endsWith('/pitch-multipliers') || path.endsWith('/calculate-roof-specs')) return next()
   const user = await validateAdminOrCustomer(c.env.DB, c.req.header('Authorization'))
   if (!user) return c.json({ error: 'Authentication required' }, 401)
   c.set('user' as any, user)
@@ -226,6 +227,54 @@ reportsRoutes.get('/:orderId/html', async (c) => {
   if (!row) return c.json({ error: 'Report not found' }, 404)
   const html = resolveHtml(row.professional_report_html, row.api_response_raw)
   if (!html) return c.json({ error: 'Report data not available' }, 404)
+  return c.html(html)
+})
+
+// ============================================================
+// ============================================================
+// GET /:orderId/proposal — Branded solar proposal (HTML, print-friendly)
+// Open to any viewer with the link (matches /html semantics).
+// Pulls customer branding + active variants from solar_panel_layout.
+// ============================================================
+reportsRoutes.get('/:orderId/proposal', async (c) => {
+  const orderId = c.req.param('orderId')
+  // Load order + report + customer branding in a single query.
+  const row = await c.env.DB.prepare(`
+    SELECT o.id, o.property_address, o.property_city, o.property_province, o.property_postal_code,
+           o.homeowner_name, o.requester_name, o.requester_company, o.latitude, o.longitude,
+           r.solar_panel_layout, r.satellite_image_url,
+           c.brand_business_name, c.brand_logo_url, c.brand_primary_color, c.brand_secondary_color,
+           c.brand_tagline, c.brand_phone, c.brand_email, c.brand_website, c.brand_license_number
+    FROM orders o
+    LEFT JOIN reports r ON r.order_id = o.id
+    LEFT JOIN customers c ON c.id = o.customer_id
+    WHERE o.id = ?
+  `).bind(orderId).first<any>()
+
+  if (!row) return c.json({ error: 'Order not found' }, 404)
+  if (!row.solar_panel_layout) {
+    return c.html(`<html><body style="font-family:sans-serif;padding:40px"><h1>Proposal not ready</h1><p>No solar design has been saved for this report yet. <a href="/customer/solar-design?report_id=${orderId}">Open designer</a>.</p></body></html>`, 200)
+  }
+
+  let layout: any
+  try { layout = JSON.parse(row.solar_panel_layout) } catch { return c.json({ error: 'Corrupt layout data' }, 500) }
+
+  const html = generateSolarProposalHTML({
+    brand: {
+      business_name: row.brand_business_name,
+      logo_url: row.brand_logo_url,
+      primary_color: row.brand_primary_color,
+      secondary_color: row.brand_secondary_color,
+      tagline: row.brand_tagline,
+      phone: row.brand_phone,
+      email: row.brand_email,
+      website: row.brand_website,
+      license_number: row.brand_license_number,
+    },
+    order: row,
+    layout,
+    satelliteUrl: row.satellite_image_url,
+  })
   return c.html(html)
 })
 

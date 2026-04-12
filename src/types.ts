@@ -576,6 +576,8 @@ export interface RoofReport {
     obstructions?: { lat: number; lng: number; size_meters: number; type: string }[]
     inverter_config?: null | { type: string; sku: string; count: number }
     battery_config?: null | { sku: string; count: number }
+    variants?: { name: string; panels: { lat: number; lng: number; orientation: string }[]; obstructions?: any[]; inverter_config?: any; battery_config?: any; created_at?: string }[]
+    active_variant_index?: number
     segments?: { index: number; pitch_degrees: number; azimuth_degrees: number; plane_height_meters: number; sw: { lat: number; lng: number }; ne: { lat: number; lng: number } }[]
     panel_capacity_watts: number
     panel_height_meters: number

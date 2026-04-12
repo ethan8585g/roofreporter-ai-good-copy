@@ -39,6 +39,8 @@
     inverter: { type: 'micro', sku: 'IQ8M', count: 0 },
     battery: { sku: '', count: 0 },
     showSegments: true,
+    variants: [],            // [{name, panels:[{lat,lng,orientation}], obstructions, inverter_config, battery_config}]
+    activeVariantIndex: 0,
   };
 
   // ── Equipment catalog (hardcoded common SKUs) ──────────────
@@ -129,9 +131,150 @@
     if (L.battery_config && L.battery_config.sku) state.battery = Object.assign({ count: 1 }, L.battery_config);
     populateEquipmentUI();
 
+    // Hydrate variants. If no variants, create a single "Default" variant from current state.
+    if (Array.isArray(L.variants) && L.variants.length > 0) {
+      state.variants = L.variants;
+      state.activeVariantIndex = Math.min(L.active_variant_index || 0, state.variants.length - 1);
+      loadVariant(state.activeVariantIndex);
+    } else {
+      state.variants = [{
+        name: 'Default',
+        panels: src.map(function(p) { return { lat: p.lat, lng: p.lng, orientation: p.orientation || 'PORTRAIT' }; }),
+        obstructions: (L.obstructions || []).slice(),
+        inverter_config: state.inverter,
+        battery_config: state.battery,
+      }];
+      state.activeVariantIndex = 0;
+    }
+    renderVariantTabs();
+    updateProposalLink();
+
     state.hydrated = true;
     drawCanvas();
   }
+
+  // ── Variant management ─────────────────────────────────────
+  function snapshotCurrentVariant() {
+    var L = state.layout;
+    if (!L || !L.image_center || state.imgDrawW <= 0) return null;
+    var srcSize = L.image_size_px || 1600;
+    var scaleToSrc = srcSize / state.imgDrawW;
+    var mpp = metersPerCanvasPx();
+    var panels = state.panels.map(function(p) {
+      var cx = (p.x + state.panelW / 2) * scaleToSrc;
+      var cy = (p.y + state.panelH / 2) * scaleToSrc;
+      var ll = pixelToLatLng(cx, cy, L.image_center.lat, L.image_center.lng, L.image_zoom, srcSize);
+      return { lat: ll.lat, lng: ll.lng, orientation: 'PORTRAIT' };
+    });
+    var obstructions = state.obstructions.map(function(o) {
+      var ccx = (o.x + o.size / 2) * scaleToSrc;
+      var ccy = (o.y + o.size / 2) * scaleToSrc;
+      var ll = pixelToLatLng(ccx, ccy, L.image_center.lat, L.image_center.lng, L.image_zoom, srcSize);
+      return { lat: ll.lat, lng: ll.lng, size_meters: o.size * mpp, type: o.type };
+    });
+    return {
+      panels: panels,
+      obstructions: obstructions,
+      inverter_config: Object.assign({}, state.inverter),
+      battery_config: state.battery && state.battery.sku ? Object.assign({}, state.battery) : null,
+    };
+  }
+
+  function commitCurrentVariant() {
+    var snap = snapshotCurrentVariant();
+    if (!snap || !state.variants[state.activeVariantIndex]) return;
+    var v = state.variants[state.activeVariantIndex];
+    v.panels = snap.panels;
+    v.obstructions = snap.obstructions;
+    v.inverter_config = snap.inverter_config;
+    v.battery_config = snap.battery_config;
+  }
+
+  function loadVariant(i) {
+    var v = state.variants[i];
+    if (!v) return;
+    state.activeVariantIndex = i;
+    var L = state.layout;
+    if (!L) return;
+    var srcSize = L.image_size_px || 1600;
+    var scaleToCanvas = state.imgDrawW / srcSize;
+    state.panels = (v.panels || []).map(function(p) {
+      var px = latLngToPixel(p.lat, p.lng, L.image_center.lat, L.image_center.lng, L.image_zoom, srcSize);
+      return { x: Math.round(px.x * scaleToCanvas - state.panelW / 2), y: Math.round(px.y * scaleToCanvas - state.panelH / 2) };
+    });
+    var mpp = metersPerCanvasPx();
+    state.obstructions = (v.obstructions || []).map(function(o) {
+      var pp = latLngToPixel(o.lat, o.lng, L.image_center.lat, L.image_center.lng, L.image_zoom, srcSize);
+      var sizePx = (o.size_meters || 0.3048) / (mpp || 0.05);
+      return { x: Math.round(pp.x * scaleToCanvas - sizePx / 2), y: Math.round(pp.y * scaleToCanvas - sizePx / 2), size: Math.round(sizePx), type: o.type || 'vent' };
+    });
+    if (v.inverter_config && v.inverter_config.sku) state.inverter = Object.assign({ count: 0 }, v.inverter_config);
+    if (v.battery_config && v.battery_config.sku) state.battery = Object.assign({ count: 1 }, v.battery_config);
+    else state.battery = { sku: '', count: 0 };
+    populateEquipmentUI();
+    renderVariantTabs();
+    drawCanvas();
+  }
+
+  function renderVariantTabs() {
+    var wrap = document.getElementById('sdVariantTabs');
+    if (!wrap) return;
+    wrap.innerHTML = '';
+    for (var i = 0; i < state.variants.length; i++) {
+      var btn = document.createElement('button');
+      var active = i === state.activeVariantIndex;
+      btn.className = 'px-3 py-1 rounded text-xs font-semibold ' + (active ? 'bg-amber-500 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600');
+      btn.textContent = state.variants[i].name + ' (' + (state.variants[i].panels || []).length + ')';
+      btn.dataset.idx = i;
+      btn.onclick = (function(idx) { return function() { commitCurrentVariant(); loadVariant(idx); }; })(i);
+      wrap.appendChild(btn);
+    }
+  }
+
+  function updateProposalLink() {
+    var a = document.getElementById('sdProposalLink');
+    if (a && state.reportId) a.href = '/api/reports/' + state.reportId + '/proposal';
+  }
+
+  window._sdNewVariant = function() {
+    commitCurrentVariant();
+    var name = prompt('Variant name (e.g. Better, Best, Battery+):', 'Variant ' + (state.variants.length + 1));
+    if (!name) return;
+    state.variants.push({ name: name, panels: [], obstructions: [], inverter_config: state.inverter, battery_config: null });
+    state.activeVariantIndex = state.variants.length - 1;
+    state.panels = []; state.obstructions = []; state.battery = { sku: '', count: 0 };
+    populateEquipmentUI();
+    renderVariantTabs();
+    drawCanvas();
+  };
+
+  window._sdCloneVariant = function() {
+    commitCurrentVariant();
+    var src = state.variants[state.activeVariantIndex];
+    if (!src) return;
+    var name = prompt('Clone name:', src.name + ' copy');
+    if (!name) return;
+    state.variants.push(JSON.parse(JSON.stringify(Object.assign({}, src, { name: name }))));
+    state.activeVariantIndex = state.variants.length - 1;
+    loadVariant(state.activeVariantIndex);
+  };
+
+  window._sdRenameVariant = function() {
+    var v = state.variants[state.activeVariantIndex];
+    if (!v) return;
+    var name = prompt('Rename variant:', v.name);
+    if (!name) return;
+    v.name = name;
+    renderVariantTabs();
+  };
+
+  window._sdDeleteVariant = function() {
+    if (state.variants.length <= 1) { alert('At least one variant is required.'); return; }
+    if (!confirm('Delete variant "' + state.variants[state.activeVariantIndex].name + '"?')) return;
+    state.variants.splice(state.activeVariantIndex, 1);
+    state.activeVariantIndex = Math.max(0, state.activeVariantIndex - 1);
+    loadVariant(state.activeVariantIndex);
+  };
 
   // ── Bootstrap ──────────────────────────────────────────────
   var params = new URLSearchParams(window.location.search);
@@ -285,6 +428,17 @@
         '</div>' +
         // Canvas area
         '<div class="flex-1 min-w-0">' +
+          // Variants strip
+          '<div class="bg-gray-800 rounded-xl p-3 mb-3 flex items-center gap-2 flex-wrap" id="sdVariantStrip">' +
+            '<span class="text-xs font-bold text-gray-400 uppercase mr-1">Variants:</span>' +
+            '<div id="sdVariantTabs" class="flex flex-wrap gap-1.5"></div>' +
+            '<div class="flex-1"></div>' +
+            '<button onclick="window._sdNewVariant()" class="px-2.5 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs font-semibold"><i class="fas fa-plus mr-1"></i>New</button>' +
+            '<button onclick="window._sdCloneVariant()" class="px-2.5 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded text-xs font-semibold"><i class="fas fa-clone mr-1"></i>Clone</button>' +
+            '<button onclick="window._sdRenameVariant()" class="px-2.5 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded text-xs font-semibold"><i class="fas fa-pen mr-1"></i>Rename</button>' +
+            '<button onclick="window._sdDeleteVariant()" class="px-2.5 py-1 bg-red-700 hover:bg-red-600 text-white rounded text-xs font-semibold"><i class="fas fa-trash mr-1"></i>Delete</button>' +
+            '<a id="sdProposalLink" href="#" target="_blank" class="px-2.5 py-1 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 text-white rounded text-xs font-bold"><i class="fas fa-file-pdf mr-1"></i>View Proposal</a>' +
+          '</div>' +
           '<div class="bg-gray-800 rounded-xl overflow-hidden relative" id="sdCanvasWrapper">' +
             '<canvas id="sdCanvas" class="block w-full cursor-crosshair"></canvas>' +
           '</div>' +
@@ -808,6 +962,7 @@
         return { lat: ll.lat, lng: ll.lng, size_meters: o.size * mpp, type: o.type };
       });
     }
+    commitCurrentVariant();
     fetch('/api/customer/reports/' + state.reportId + '/panel-layout', {
       method: 'PATCH', headers: authHeaders(),
       body: JSON.stringify({
@@ -815,6 +970,8 @@
         obstructions: obstructions,
         inverter_config: state.inverter,
         battery_config: state.battery && state.battery.sku ? state.battery : null,
+        variants: state.variants,
+        active_variant_index: state.activeVariantIndex,
       })
     })
       .then(function(r) { return r.json(); })

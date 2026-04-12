@@ -1236,6 +1236,8 @@ customerAuthRoutes.patch('/reports/:id/panel-layout', async (c) => {
   if (body.inverter_config && typeof body.inverter_config === 'object') layout.inverter_config = body.inverter_config
   if (body.battery_config && typeof body.battery_config === 'object') layout.battery_config = body.battery_config
   else if (body.battery_config === null) layout.battery_config = null
+  if (Array.isArray(body.variants)) layout.variants = body.variants
+  if (typeof body.active_variant_index === 'number') layout.active_variant_index = body.active_variant_index
 
   await c.env.DB.prepare(
     `UPDATE reports SET solar_panel_layout = ?, updated_at = datetime('now') WHERE order_id = ?`

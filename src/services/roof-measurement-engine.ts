@@ -1560,6 +1560,11 @@ export function traceUiToEnginePayload(
     ridges?: { lat: number; lng: number }[][]
     hips?: { lat: number; lng: number }[][]
     valleys?: { lat: number; lng: number }[][]
+    annotations?: {
+      vents?: { lat: number; lng: number }[]
+      skylights?: { lat: number; lng: number }[]
+      chimneys?: { lat: number; lng: number }[]
+    }
     traced_at?: string
   },
   order: {
@@ -1616,6 +1621,32 @@ export function traceUiToEnginePayload(
     pts: line.map(p => ({ lat: p.lat, lng: p.lng, elevation: null }))
   }))
 
+  // Convert point annotations (vents/skylights/chimneys) to obstruction polygons.
+  // Each marker becomes a small rectangle centered on the clicked lat/lng.
+  const FT_PER_DEG_LAT = 364000  // ~ 1 deg lat ≈ 364,000 ft
+  const makeRectPoly = (pt: { lat: number; lng: number }, widthFt: number, lengthFt: number): TracePt[] => {
+    const dLat = (lengthFt / 2) / FT_PER_DEG_LAT
+    const ftPerDegLng = FT_PER_DEG_LAT * Math.cos(pt.lat * Math.PI / 180)
+    const dLng = (widthFt / 2) / Math.max(ftPerDegLng, 1)
+    return [
+      { lat: pt.lat - dLat, lng: pt.lng - dLng, elevation: null },
+      { lat: pt.lat - dLat, lng: pt.lng + dLng, elevation: null },
+      { lat: pt.lat + dLat, lng: pt.lng + dLng, elevation: null },
+      { lat: pt.lat + dLat, lng: pt.lng - dLng, elevation: null },
+    ]
+  }
+  const obstructions: Obstruction[] = []
+  const ann = traceJson.annotations || {}
+  for (const pt of ann.chimneys || []) {
+    obstructions.push({ type: 'chimney', poly: makeRectPoly(pt, 3, 3), width_ft: 3, length_ft: 3 })
+  }
+  for (const pt of ann.skylights || []) {
+    obstructions.push({ type: 'skylight', poly: makeRectPoly(pt, 2, 4), width_ft: 2, length_ft: 4 })
+  }
+  for (const pt of ann.vents || []) {
+    obstructions.push({ type: 'vent', poly: makeRectPoly(pt, 1, 1), width_ft: 1, length_ft: 1 })
+  }
+
   return {
     address:        order.property_address || 'Unknown Address',
     homeowner:      order.homeowner_name || 'Unknown',
@@ -1627,6 +1658,7 @@ export function traceUiToEnginePayload(
     eaves_sections: extraSections.length > 0
       ? extraSections.map(sec => sec.map(p => ({ lat: p.lat, lng: p.lng })))
       : undefined,
+    obstructions:   obstructions.length > 0 ? obstructions : undefined,
     ridges,
     hips,
     valleys,

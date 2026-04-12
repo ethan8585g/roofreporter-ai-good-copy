@@ -730,6 +730,7 @@ function renderRecentOrders() {
         (reportReady ? '<a href="/api/reports/' + o.id + '/html" target="_blank" class="px-2.5 py-1 bg-emerald-600 text-white rounded-lg text-xs font-medium hover:bg-brand-700"><i class="fas fa-eye mr-1"></i>View</a>' : '') +
         (reportReady ? '<a href="/customer/material-calculator?order_id=' + o.id + '" class="px-2.5 py-1 bg-sky-100 text-sky-700 rounded-lg text-xs font-medium hover:bg-sky-200"><i class="fas fa-calculator mr-1"></i>Materials</a>' : '') +
         (reportReady && _isSolarCust ? '<a href="/customer/solar-design?report_id=' + o.id + '" class="px-2.5 py-1 bg-amber-500 text-white rounded-lg text-xs font-medium hover:bg-amber-400"><i class="fas fa-solar-panel mr-1"></i>Design Panels</a>' : '') +
+        (reportReady && _isSolarCust ? '<a href="/api/reports/' + o.id + '/proposal" target="_blank" class="px-2.5 py-1 bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-lg text-xs font-medium hover:from-orange-400"><i class="fas fa-file-pdf mr-1"></i>Proposal</a>' : '') +
         (o.status === 'failed' ? '<button onclick="retryReport(' + o.id + ', this)" class="px-2.5 py-1 bg-red-500/15 text-red-400 rounded-lg text-xs font-medium hover:bg-red-200"><i class="fas fa-redo mr-1"></i>Retry</button>' : '') +
       '</div>' +
     '</div>';
