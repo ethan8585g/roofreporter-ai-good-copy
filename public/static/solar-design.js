@@ -350,6 +350,20 @@
               '<p class="text-xs font-bold text-gray-400 uppercase mb-2">Property</p>' +
               '<p class="text-sm text-gray-200 leading-snug">' + (order.property_address || '') + '</p>' +
             '</div>' +
+            '<div class="bg-gray-700/50 border border-gray-600 rounded-lg p-3">' +
+              '<p class="text-xs font-bold text-amber-400 uppercase mb-2"><i class="fas fa-bolt mr-1"></i>Power Usage (kWh)</p>' +
+              '<div class="grid grid-cols-3 gap-1 mb-2">' +
+                ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].map(function(m,i){
+                  return '<div><label class="text-[9px] text-gray-400 uppercase">'+m+'</label><input type="number" id="sdUsage'+i+'" min="0" step="1" placeholder="0" class="w-full px-1 py-1 bg-gray-800 border border-gray-600 rounded text-[11px] text-center text-white"></div>';
+                }).join('') +
+              '</div>' +
+              '<div class="flex items-center gap-2 mb-2">' +
+                '<label class="text-[10px] text-gray-400 uppercase flex-1">Offset %</label>' +
+                '<input type="number" id="sdOffsetPct" value="110" min="50" max="200" step="1" class="w-16 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-xs text-center text-white">' +
+              '</div>' +
+              '<button onclick="window._sdCalcPanels()" class="w-full bg-amber-600 hover:bg-amber-500 text-white py-1.5 rounded text-xs font-semibold"><i class="fas fa-calculator mr-1"></i>Calculate</button>' +
+              '<div id="sdUsageResult" class="mt-2 text-[11px] text-gray-300 leading-tight hidden"></div>' +
+            '</div>' +
             '<div>' +
               '<p class="text-xs font-bold text-gray-400 uppercase mb-2">Panel Wattage</p>' +
               '<div class="flex items-center gap-2">' +
@@ -905,6 +919,30 @@
     if (await window.rmConfirm('Remove all ' + state.panels.length + ' panels?')) {
       state.panels = [];
       drawCanvas();
+    }
+  };
+
+  window._sdCalcPanels = function() {
+    var total = 0;
+    for (var i = 0; i < 12; i++) {
+      var v = parseFloat((document.getElementById('sdUsage'+i) || {}).value) || 0;
+      total += v;
+    }
+    var offset = parseFloat((document.getElementById('sdOffsetPct') || {}).value) || 110;
+    var wattage = parseInt((document.getElementById('sdWattage') || {}).value) || state.panelWattage || 400;
+    var PROD_KWH_PER_KW = 1200; // annual kWh produced per 1 kW installed (regional avg)
+    var targetKwh = total * (offset / 100);
+    var requiredKw = targetKwh / PROD_KWH_PER_KW;
+    var panels = wattage > 0 ? Math.ceil((requiredKw * 1000) / wattage) : 0;
+    var systemKw = (panels * wattage) / 1000;
+    var out = document.getElementById('sdUsageResult');
+    if (out) {
+      out.classList.remove('hidden');
+      out.innerHTML =
+        '<div class="flex justify-between"><span class="text-gray-400">Annual usage</span><span class="font-bold text-white">' + total.toLocaleString() + ' kWh</span></div>' +
+        '<div class="flex justify-between"><span class="text-gray-400">Target (' + offset + '%)</span><span class="font-bold text-white">' + Math.round(targetKwh).toLocaleString() + ' kWh</span></div>' +
+        '<div class="flex justify-between"><span class="text-gray-400">Panels needed</span><span class="font-bold text-amber-400">' + panels + ' × ' + wattage + 'W</span></div>' +
+        '<div class="flex justify-between"><span class="text-gray-400">System size</span><span class="font-bold text-amber-400">' + systemKw.toFixed(2) + ' kW</span></div>';
     }
   };
 
