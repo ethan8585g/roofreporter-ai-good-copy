@@ -5570,7 +5570,7 @@ function renderCustomerOnboardingView() {
     '<input type="checkbox" id="inv-10pack" class="rounded" value="10-pack"><div><div class="text-sm font-semibold text-gray-800">10 Report Credits</div><div class="text-xs text-gray-500">$55.00 ($5.50 each)</div></div>' +
     '</label>' +
     '<label class="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50 has-[:checked]:border-green-400 has-[:checked]:bg-green-50">' +
-    '<input type="checkbox" id="inv-25pack" class="rounded" value="25-pack"><div><div class="text-sm font-semibold text-gray-800">25 Report Credits</div><div class="text-xs text-gray-500">$125.00 ($5.00 each)</div></div>' +
+    '<input type="checkbox" id="inv-25pack" class="rounded" value="25-pack"><div><div class="text-sm font-semibold text-gray-800">25 Report Credits</div><div class="text-xs text-gray-500">$175.00 ($7.00 each)</div></div>' +
     '</label>' +
     '<label class="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50 has-[:checked]:border-green-400 has-[:checked]:bg-green-50">' +
     '<input type="checkbox" id="inv-100pack" class="rounded" value="100-pack"><div><div class="text-sm font-semibold text-gray-800">100 Report Credits</div><div class="text-xs text-gray-500">$475.00 ($4.75 each)</div></div>' +
@@ -5710,7 +5710,7 @@ function renderCustomerOnboardingView() {
     '<select id="ob-credit-pack" class="w-full border-2 border-green-200 rounded-lg px-3 py-2.5 text-sm">' +
     '<option value="none">No credits (trial only)</option>' +
     '<option value="10-pack">10-pack — $55</option>' +
-    '<option value="25-pack">25-pack — $125</option>' +
+    '<option value="25-pack">25-pack — $175</option>' +
     '<option value="100-pack">100-pack — $475</option>' +
     '</select></div>' +
     '<div class="flex items-end pb-1"><label class="flex items-center gap-2 text-sm"><input type="checkbox" id="ob-send-invoice" class="rounded"> Send Invoice with Payment Link</label></div>' +
@@ -5797,7 +5797,7 @@ window.saSendOnboardingInvoice = async function() {
 
   var items = [];
   if (document.getElementById('inv-10pack').checked)  items.push({ description: '10 Roof Report Credits',  quantity: 10,  unit_price: 5.50 });
-  if (document.getElementById('inv-25pack').checked)  items.push({ description: '25 Roof Report Credits',  quantity: 25,  unit_price: 5.00 });
+  if (document.getElementById('inv-25pack').checked)  items.push({ description: '25 Roof Report Credits',  quantity: 25,  unit_price: 7.00 });
   if (document.getElementById('inv-100pack').checked) items.push({ description: '100 Roof Report Credits', quantity: 100, unit_price: 4.75 });
   if (document.getElementById('inv-annual').checked)  items.push({ description: 'Annual Membership — 12 months (2 months free)', quantity: 1, unit_price: 499.00 });
 
@@ -5850,7 +5850,7 @@ document.addEventListener('change', function(e) {
   if (!t) return;
   var ids = ['inv-10pack','inv-25pack','inv-100pack','inv-annual'];
   if (ids.indexOf(t.id) === -1 && t.id !== 'inv-custom-price') return;
-  var prices = { 'inv-10pack': 55, 'inv-25pack': 125, 'inv-100pack': 475, 'inv-annual': 499 };
+  var prices = { 'inv-10pack': 55, 'inv-25pack': 175, 'inv-100pack': 475, 'inv-annual': 499 };
   var total = 0;
   ids.forEach(function(id) { var el = document.getElementById(id); if (el && el.checked) total += prices[id]; });
   var cp = parseFloat((document.getElementById('inv-custom-price') || {}).value) || 0;

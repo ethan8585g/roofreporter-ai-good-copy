@@ -1572,7 +1572,7 @@ adminRoutes.post('/superadmin/onboarding/create', async (c) => {
     if (send_invoice && credit_pack && credit_pack !== 'none') {
       const packs: Record<string, { qty: number; price: number; desc: string }> = {
         '10-pack':  { qty: 10,  price: 55,   desc: '10 Roof Report Credits' },
-        '25-pack':  { qty: 25,  price: 125,  desc: '25 Roof Report Credits' },
+        '25-pack':  { qty: 25,  price: 175,  desc: '25 Roof Report Credits' },
         '100-pack': { qty: 100, price: 475,  desc: '100 Roof Report Credits' },
       }
       const pack = packs[credit_pack]
