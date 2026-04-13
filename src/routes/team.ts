@@ -49,6 +49,45 @@ export async function resolveTeamOwner(db: D1Database, customerId: number): Prom
 }
 
 // ============================================================
+// GATING HELPER — Evaluates subscription tier + seat usage
+// Shared by POST /invite (enforcement) and GET /gating (UI)
+// ============================================================
+export async function evaluateTeamGating(db: D1Database, ownerId: number) {
+  const tierLimits: Record<string, number> = { starter: 5, professional: 10, enterprise: 25 }
+  const tierPrices: Record<string, string> = { starter: '$49.99', professional: '$99.99', enterprise: '$199.99' }
+  const nextTier: Record<string, string> = { starter: 'professional', professional: 'enterprise' }
+
+  const owner = await db.prepare(
+    'SELECT subscription_tier, subscription_status, tier_features FROM customers WHERE id = ?'
+  ).bind(ownerId).first<any>()
+
+  const ownerTier = owner?.subscription_tier || 'starter'
+  const isSubscribed = owner?.subscription_status === 'active'
+
+  let teamLimit = tierLimits[ownerTier] || 5
+  try { const tf = JSON.parse(owner?.tier_features || '{}'); if (tf.team_limit) teamLimit = tf.team_limit } catch {}
+
+  const activeRow = await db.prepare(
+    "SELECT COUNT(*) as cnt FROM team_members WHERE owner_id = ? AND status = 'active'"
+  ).bind(ownerId).first<any>()
+  const activeSeats = activeRow?.cnt || 0
+  const upgrade = nextTier[ownerTier] || null
+
+  return {
+    subscribed: isSubscribed,
+    tier: ownerTier,
+    tier_price: tierPrices[ownerTier] || null,
+    team_limit: teamLimit,
+    active_seats: activeSeats,
+    remaining_seats: Math.max(0, teamLimit - activeSeats),
+    at_cap: activeSeats >= teamLimit,
+    next_tier: upgrade,
+    next_price: upgrade ? tierPrices[upgrade] : null,
+    next_team_limit: upgrade ? tierLimits[upgrade] : null
+  }
+}
+
+// ============================================================
 // MIDDLEWARE — Require auth + extract customer
 // ============================================================
 async function requireAuth(c: any): Promise<{ customer: any; customerId: number } | null> {
@@ -130,15 +169,9 @@ teamRoutes.post('/invite', async (c) => {
   }
 
   // Enforce subscription + team size limit based on tier
-  const owner = await c.env.DB.prepare('SELECT subscription_tier, subscription_status, tier_features FROM customers WHERE id = ?').bind(ownerId).first<any>()
-  const tierLimits: Record<string, number> = { starter: 5, professional: 10, enterprise: 25 }
-  const tierPrices: Record<string, string> = { starter: '$49.99', professional: '$99.99', enterprise: '$199.99' }
-  const nextTier: Record<string, string> = { starter: 'professional', professional: 'enterprise' }
-  const ownerTier = owner?.subscription_tier || 'starter'
-  const isSubscribed = owner?.subscription_status === 'active'
+  const gating = await evaluateTeamGating(c.env.DB, ownerId)
 
-  // No active subscription → require Starter membership ($49.99/mo, includes 5 team members)
-  if (!isSubscribed) {
+  if (!gating.subscribed) {
     return c.json({
       error: 'A Starter membership ($49.99/month) is required to add team members. Your plan includes up to 5 team members.',
       subscription_required: true,
@@ -148,25 +181,18 @@ teamRoutes.post('/invite', async (c) => {
     }, 402)
   }
 
-  let maxTeamSize = tierLimits[ownerTier] || 5
-  try { const tf = JSON.parse(owner?.tier_features || '{}'); if (tf.team_limit) maxTeamSize = tf.team_limit } catch {}
-
-  const activeCount = await c.env.DB.prepare(
-    "SELECT COUNT(*) as cnt FROM team_members WHERE owner_id = ? AND status = 'active'"
-  ).bind(ownerId).first<any>()
-  if ((activeCount?.cnt || 0) >= maxTeamSize) {
-    const upgrade = nextTier[ownerTier]
+  if (gating.at_cap) {
     return c.json({
-      error: upgrade
-        ? `Your ${ownerTier} plan includes ${maxTeamSize} team members. Upgrade to ${upgrade} (${tierPrices[upgrade]}/month) for ${tierLimits[upgrade]} team members.`
-        : `Your ${ownerTier} plan supports up to ${maxTeamSize} team members. Contact sales for more.`,
-      upgrade_required: !!upgrade,
-      current_tier: ownerTier,
-      next_tier: upgrade || null,
-      next_price: upgrade ? tierPrices[upgrade] : null,
-      next_team_limit: upgrade ? tierLimits[upgrade] : null,
-      team_limit: maxTeamSize,
-      current_count: activeCount?.cnt || 0
+      error: gating.next_tier
+        ? `Your ${gating.tier} plan includes ${gating.team_limit} team members. Upgrade to ${gating.next_tier} (${gating.next_price}/month) for ${gating.next_team_limit} team members.`
+        : `Your ${gating.tier} plan supports up to ${gating.team_limit} team members. Contact sales for more.`,
+      upgrade_required: !!gating.next_tier,
+      current_tier: gating.tier,
+      next_tier: gating.next_tier,
+      next_price: gating.next_price,
+      next_team_limit: gating.next_team_limit,
+      team_limit: gating.team_limit,
+      current_count: gating.active_seats
     }, 402)
   }
 
@@ -565,6 +591,89 @@ teamRoutes.get('/billing', async (c) => {
       recent_charges: recentBilling.results
     }
   })
+})
+
+// ============================================================
+// GET /team/gating — Subscription + seat usage (owner-only)
+// ============================================================
+teamRoutes.get('/gating', async (c) => {
+  const auth = await requireAuth(c)
+  if (!auth) return c.json({ error: 'Not authenticated' }, 401)
+  const { customerId } = auth
+  const { ownerId, isTeamMember } = await resolveTeamOwner(c.env.DB, customerId)
+  if (isTeamMember) return c.json({ error: 'Owner only' }, 403)
+  return c.json(await evaluateTeamGating(c.env.DB, ownerId))
+})
+
+// ============================================================
+// GET /team/activity-summary — Per-member activity lite (owner-only)
+// v1: last_login, seat_age_days, status, role, pending invite age
+// ============================================================
+teamRoutes.get('/activity-summary', async (c) => {
+  const auth = await requireAuth(c)
+  if (!auth) return c.json({ error: 'Not authenticated' }, 401)
+  const { customerId } = auth
+  const { ownerId, isTeamMember } = await resolveTeamOwner(c.env.DB, customerId)
+  if (isTeamMember) return c.json({ error: 'Owner only' }, 403)
+
+  const members = await c.env.DB.prepare(`
+    SELECT tm.id, tm.name, tm.email, tm.role, tm.status, tm.joined_at,
+           tm.member_customer_id, c.last_login as member_last_login,
+           CAST((julianday('now') - julianday(tm.joined_at)) AS INTEGER) as seat_age_days
+    FROM team_members tm
+    LEFT JOIN customers c ON c.id = tm.member_customer_id
+    WHERE tm.owner_id = ?
+    ORDER BY tm.status, tm.role DESC, tm.name
+  `).bind(ownerId).all()
+
+  const invitations = await c.env.DB.prepare(`
+    SELECT id, email, name, role, created_at, expires_at,
+           CAST((julianday('now') - julianday(created_at)) AS INTEGER) as invite_age_days
+    FROM team_invitations
+    WHERE owner_id = ? AND status = 'pending' AND expires_at > datetime('now')
+    ORDER BY created_at DESC
+  `).bind(ownerId).all()
+
+  const totals = {
+    active: 0, suspended: 0, removed: 0, pending: invitations.results?.length || 0
+  }
+  ;(members.results || []).forEach((m: any) => {
+    if (m.status === 'active') totals.active++
+    else if (m.status === 'suspended') totals.suspended++
+    else if (m.status === 'removed') totals.removed++
+  })
+
+  return c.json({ members: members.results, invitations: invitations.results, totals })
+})
+
+// ============================================================
+// POST /team/invite/:id/resend — Refresh token + resend email
+// ============================================================
+teamRoutes.post('/invite/:id/resend', async (c) => {
+  const auth = await requireAuth(c)
+  if (!auth) return c.json({ error: 'Not authenticated' }, 401)
+  const { customerId, customer } = auth
+  const { ownerId, isTeamMember } = await resolveTeamOwner(c.env.DB, customerId)
+  if (isTeamMember) return c.json({ error: 'Owner only' }, 403)
+
+  const inviteId = c.req.param('id')
+  const invite = await c.env.DB.prepare(
+    `SELECT * FROM team_invitations WHERE id = ? AND owner_id = ? AND status = 'pending'`
+  ).bind(inviteId, ownerId).first<any>()
+  if (!invite) return c.json({ error: 'Invitation not found' }, 404)
+
+  const newToken = crypto.randomUUID() + '-' + crypto.randomUUID()
+  const newExpires = new Date(Date.now() + INVITE_EXPIRY_DAYS * 24 * 60 * 60 * 1000).toISOString()
+
+  await c.env.DB.prepare(
+    `UPDATE team_invitations SET invite_token = ?, expires_at = ? WHERE id = ?`
+  ).bind(newToken, newExpires, inviteId).run()
+
+  const ownerName = customer.name || customer.company_name || 'Your colleague'
+  const inviteUrl = `${new URL(c.req.url).origin}/customer/join-team?token=${newToken}`
+  await sendTeamInviteEmail(c.env, invite.email, invite.name, ownerName, customer.company_name || 'Roof Manager', inviteUrl, invite.role)
+
+  return c.json({ success: true, message: `Invitation resent to ${invite.email}`, invite_url: inviteUrl, expires_at: newExpires })
 })
 
 // ============================================================
