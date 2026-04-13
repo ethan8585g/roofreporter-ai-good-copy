@@ -112,7 +112,7 @@ function renderTeam() {
     html += '<div class="bg-[#111111] rounded-xl shadow-sm border p-8 text-center mb-6">';
     html += '  <i class="fas fa-users text-gray-300 text-5xl mb-4"></i>';
     html += '  <h3 class="text-lg font-bold text-gray-300 mb-2">No team members yet</h3>';
-    html += '  <p class="text-gray-500 mb-4 max-w-md mx-auto">Invite your sales team to access all platform features including roof reports, CRM, and AI Secretary.</p>';
+    html += '  <p class="text-gray-500 mb-4 max-w-md mx-auto">Invite your sales team to access all platform features including roof reports and CRM.</p>';
     html += '  <button onclick="showInviteModal()" class="bg-emerald-500/15 hover:bg-emerald-500/15 text-white font-semibold py-2.5 px-5 rounded-lg text-sm transition-all"><i class="fas fa-user-plus mr-2"></i>Invite Your First Member</button>';
     html += '</div>';
   }
@@ -173,8 +173,6 @@ function renderTeam() {
   html += '        <ul class="text-sm text-gray-400 space-y-1">';
   html += '          <li><i class="fas fa-check text-emerald-400 mr-1"></i>Order roof reports</li>';
   html += '          <li><i class="fas fa-check text-emerald-400 mr-1"></i>Full CRM access</li>';
-  html += '          <li><i class="fas fa-check text-emerald-400 mr-1"></i>AI Roofer Secretary</li>';
-  html += '          <li><i class="fas fa-check text-emerald-400 mr-1"></i>Virtual Try-On</li>';
   html += '          <li><i class="fas fa-check text-emerald-400 mr-1"></i>D2D Manager</li>';
   html += '        </ul>';
   html += '      </div>';
@@ -287,12 +285,10 @@ var PERM_LABELS = [
   { key: 'orders',       label: 'Order Reports',       icon: 'fa-plus-circle' },
   { key: 'reports',      label: 'View Reports',         icon: 'fa-file-alt' },
   { key: 'crm',          label: 'CRM (Customers, Invoices, Proposals, Jobs)', icon: 'fa-users' },
-  { key: 'secretary',    label: 'AI Secretary',         icon: 'fa-headset' },
-  { key: 'virtual_tryon',label: 'Roof Visualizer',      icon: 'fa-magic' },
 ];
 
 function renderPermCheckboxes(idPrefix, perms) {
-  var defaultPerms = { orders: true, reports: true, crm: true, secretary: true, virtual_tryon: true };
+  var defaultPerms = { orders: true, reports: true, crm: true };
   var effective = Object.assign({}, defaultPerms, perms || {});
   var html = '<div class="border border-white/10 rounded-lg p-3 bg-[#0A0A0A]">';
   html += '<p class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Access Permissions</p>';
