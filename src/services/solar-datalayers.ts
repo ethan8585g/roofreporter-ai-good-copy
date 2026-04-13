@@ -1235,9 +1235,34 @@ function analyzeAnnualFlux(
   // Generate flux heatmap BMP visualization
   let fluxHeatmapDataUrl = ''
   if (width <= 500 && height <= 500 && count > 0) {
+    // Compute tight crop window around actual roof pixels (mask or valid flux),
+    // plus a small margin. Falls back to full raster if no signal found.
+    let minX = width, minY = height, maxX = -1, maxY = -1
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const idx = y * width + x
+        const v = flux[idx]
+        const isMasked = mask ? mask[idx] <= 0 : false
+        if (!isNaN(v) && isFinite(v) && v > 0 && !isMasked) {
+          if (x < minX) minX = x
+          if (x > maxX) maxX = x
+          if (y < minY) minY = y
+          if (y > maxY) maxY = y
+        }
+      }
+    }
+    let cropX = 0, cropY = 0, cropW = width, cropH = height
+    if (maxX >= minX && maxY >= minY) {
+      const marginPx = Math.max(4, Math.round(2 / Math.max(pixelSizeMeters, 0.1))) // ~2m
+      cropX = Math.max(0, minX - marginPx)
+      cropY = Math.max(0, minY - marginPx)
+      cropW = Math.min(width - cropX, (maxX - minX + 1) + marginPx * 2)
+      cropH = Math.min(height - cropY, (maxY - minY + 1) + marginPx * 2)
+    }
+
     const fluxRange = (maxFlux - minFlux) || 1
-    const rowSize = Math.ceil(width * 3 / 4) * 4
-    const pixDataSize = rowSize * height
+    const rowSize = Math.ceil(cropW * 3 / 4) * 4
+    const pixDataSize = rowSize * cropH
     const fSize = 54 + pixDataSize
     const bmp = new Uint8Array(fSize)
     const dv = new DataView(bmp.buffer)
@@ -1246,19 +1271,21 @@ function analyzeAnnualFlux(
     dv.setUint32(2, fSize, true)
     dv.setUint32(10, 54, true)
     dv.setUint32(14, 40, true)
-    dv.setInt32(18, width, true)
-    dv.setInt32(22, height, true)
+    dv.setInt32(18, cropW, true)
+    dv.setInt32(22, cropH, true)
     dv.setUint16(26, 1, true)
     dv.setUint16(28, 24, true)
     dv.setUint32(34, pixDataSize, true)
 
-    for (let y = 0; y < height; y++) {
-      const bmpRow = height - 1 - y
-      for (let x = 0; x < width; x++) {
+    for (let cy = 0; cy < cropH; cy++) {
+      const y = cy + cropY
+      const bmpRow = cropH - 1 - cy
+      for (let cx = 0; cx < cropW; cx++) {
+        const x = cx + cropX
         const idx = y * width + x
         const v = flux[idx]
         const isMasked = mask ? mask[idx] <= 0 : false
-        const dstIdx = 54 + bmpRow * rowSize + x * 3
+        const dstIdx = 54 + bmpRow * rowSize + cx * 3
 
         if (isNaN(v) || !isFinite(v) || v <= 0 || isMasked) {
           // Dark background for non-roof
