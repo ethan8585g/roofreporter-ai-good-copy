@@ -453,6 +453,7 @@
             '<button onclick="window._sdDeleteVariant()" class="px-2.5 py-1 bg-red-700 hover:bg-red-600 text-white rounded text-xs font-semibold"><i class="fas fa-trash mr-1"></i>Delete</button>' +
             '<a id="sdProposalLink" href="#" target="_blank" class="px-2.5 py-1 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 text-white rounded text-xs font-bold"><i class="fas fa-file-pdf mr-1"></i>View Proposal</a>' +
           '</div>' +
+          '<div class="bg-amber-500/20 border border-amber-500/50 text-amber-100 rounded-lg px-3 py-2 mb-2 text-sm font-semibold text-center"><i class="fas fa-hand-pointer mr-1"></i>Click anywhere on the roof below to place a solar panel. Use "Fill All Segments" in the sidebar to auto-fill.</div>' +
           '<div class="bg-gray-800 rounded-xl overflow-hidden relative" id="sdCanvasWrapper">' +
             '<canvas id="sdCanvas" class="block w-full cursor-crosshair"></canvas>' +
           '</div>' +
