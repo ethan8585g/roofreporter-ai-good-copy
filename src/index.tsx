@@ -3046,14 +3046,22 @@ function getContactFormHTML(sourcePage: string = 'unknown') {
           message: document.getElementById('lead-message').value.trim()
         })
       });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
       var data = await res.json();
       if (data.success) {
         msg.className = 'text-sm font-medium px-4 py-3 rounded-lg bg-green-500/20 text-green-300 border border-green-500/30';
-        msg.innerHTML = '<i class="fas fa-check-circle mr-2"></i>You\\'re in! <a href="https://calendar.app.google/KNLFST4CNxViPPN3A" target="_blank" class="underline font-bold">Book your free onboarding call</a> while we set up your account.';
+        msg.textContent = '';
+        var icon = document.createElement('i'); icon.className = 'fas fa-check-circle mr-2'; msg.appendChild(icon);
+        msg.appendChild(document.createTextNode("You're in! "));
+        var a = document.createElement('a'); a.href = 'https://calendar.app.google/KNLFST4CNxViPPN3A'; a.target = '_blank'; a.rel = 'noopener'; a.className = 'underline font-bold'; a.textContent = 'Book your free onboarding call';
+        msg.appendChild(a);
+        msg.appendChild(document.createTextNode(' while we set up your account.'));
         document.getElementById('lead-capture-form').reset();
       } else {
         msg.className = 'text-sm font-medium px-4 py-3 rounded-lg bg-red-500/20 text-red-300 border border-red-500/30';
-        msg.innerHTML = '<i class="fas fa-exclamation-circle mr-2"></i>' + (data.error || 'Something went wrong');
+        msg.textContent = '';
+        var ic = document.createElement('i'); ic.className = 'fas fa-exclamation-circle mr-2'; msg.appendChild(ic);
+        msg.appendChild(document.createTextNode(String(data.error || 'Something went wrong')));
       }
     } catch(err) {
       msg.className = 'text-sm font-medium px-4 py-3 rounded-lg bg-red-500/20 text-red-300 border border-red-500/30';
@@ -5387,7 +5395,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
           <div class="flex items-center gap-4 mt-6">
             <a href="https://www.facebook.com/roofmanager" target="_blank" rel="noopener noreferrer" class="text-gray-500 hover:text-[#00FF88] transition-colors"><i class="fab fa-facebook text-lg"></i></a>
             <a href="https://www.instagram.com/roofmanager" target="_blank" rel="noopener noreferrer" class="text-gray-500 hover:text-[#00FF88] transition-colors"><i class="fab fa-instagram text-lg"></i></a>
-            <a href="#" class="text-gray-500 hover:text-[#00FF88] transition-colors"><i class="fab fa-linkedin text-lg"></i></a>
+            <a href="https://www.linkedin.com/company/roofmanager" target="_blank" rel="noopener noreferrer" class="text-gray-500 hover:text-[#00FF88] transition-colors"><i class="fab fa-linkedin text-lg"></i></a>
           </div>
         </div>
         <div>
@@ -9663,7 +9671,7 @@ function getSolarDesignPageHTML() {
       window.location.href = '/customer/login';
     }
   </script>
-  <script src="/static/solar-design.js"></script>
+  <script src="/static/solar-design.js?v=20260413b"></script>
   ${getRoverAssistant()}
 </body>
 </html>`
@@ -11364,10 +11372,10 @@ function getWidgetViewHTML(mapsApiKey: string) {
 
       <div id="cta-section" class="text-center pt-2 border-t border-gray-100">
         <p class="text-sm text-gray-500 mb-3">Ready for a detailed quote?</p>
-        <a id="cta-phone" href="#" class="inline-block w-full py-3 rounded-lg text-white font-semibold text-sm mb-2" style="background:#1e3a5f;">
+        <a id="cta-phone" href="#" onclick="if(this.getAttribute('href')==='#'){event.preventDefault();return false;}" class="inline-block w-full py-3 rounded-lg text-white font-semibold text-sm mb-2" style="background:#1e3a5f;">
           Call Us Now
         </a>
-        <a id="cta-email" href="#" class="inline-block text-sm text-blue-600 hover:underline">Or send us an email</a>
+        <a id="cta-email" href="#" onclick="if(this.getAttribute('href')==='#'){event.preventDefault();return false;}" class="inline-block text-sm text-blue-600 hover:underline">Or send us an email</a>
       </div>
 
       <div id="powered-by" class="text-center mt-4">
@@ -11614,7 +11622,7 @@ function getWidgetSettingsPageHTML() {
           <button onclick="copyEmbed()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition">Copy</button>
         </div>
         <p class="text-gray-500 text-xs mt-2">For a floating button instead, add <code class="text-green-400">data-mode="floating"</code> to the script tag.</p>
-        <a id="preview-link" href="#" target="_blank" class="inline-block mt-3 text-blue-400 hover:text-blue-300 text-sm"><i class="fas fa-external-link-alt mr-1"></i>Preview Widget</a>
+        <a id="preview-link" href="#" target="_blank" onclick="if(this.getAttribute('href')==='#'){event.preventDefault();return false;}" class="inline-block mt-3 text-blue-400 hover:text-blue-300 text-sm"><i class="fas fa-external-link-alt mr-1"></i>Preview Widget</a>
       </div>
 
       <!-- Branding -->

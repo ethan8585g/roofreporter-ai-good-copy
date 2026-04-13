@@ -3,6 +3,14 @@
 import * as esbuild from 'esbuild'
 import { cpSync, mkdirSync, existsSync, writeFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
+import { execSync } from 'node:child_process'
+
+// 0. Compile Tailwind CSS (scans src/** via @source in tailwind.input.css)
+try {
+  execSync('npx @tailwindcss/cli -i ./tailwind.input.css -o ./public/static/tailwind.css --minify', { stdio: 'inherit' })
+} catch (e) {
+  console.warn('⚠️  Tailwind build failed — using existing public/static/tailwind.css')
+}
 
 const DIST = 'dist'
 const PUBLIC = 'public'

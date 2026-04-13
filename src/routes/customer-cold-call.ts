@@ -46,8 +46,15 @@ async function getCustomerInfo(c: any): Promise<{ id: number; email: string; eff
 }
 
 customerCallsRoutes.use('/*', async (c, next) => {
-  // Allow webhook endpoint without auth
-  if (c.req.method === 'POST' && c.req.path.endsWith('/call-complete')) return next()
+  // Webhook endpoint: require shared secret instead of user auth (when secret is configured)
+  if (c.req.method === 'POST' && c.req.path.endsWith('/call-complete')) {
+    const expected = (c.env as any).CUSTOMER_WEBHOOK_SECRET
+    if (expected) {
+      const provided = c.req.header('X-Webhook-Secret') || ''
+      if (provided !== expected) return c.json({ error: 'Invalid webhook signature' }, 401)
+    }
+    return next()
+  }
   const info = await getCustomerInfo(c)
   if (!info) return c.json({ error: 'Authentication required' }, 401)
   c.set('customerId' as any, info.effectiveOwnerId)
@@ -219,7 +226,10 @@ function parseCSVLine(line: string): string[] {
   let inQuotes = false
   for (let i = 0; i < line.length; i++) {
     const ch = line[i]
-    if (ch === '"') { inQuotes = !inQuotes; continue }
+    if (ch === '"') {
+      if (inQuotes && line[i + 1] === '"') { current += '"'; i++; continue }
+      inQuotes = !inQuotes; continue
+    }
     if (ch === ',' && !inQuotes) { result.push(current.trim()); current = ''; continue }
     current += ch
   }

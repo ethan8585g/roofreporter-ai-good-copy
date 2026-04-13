@@ -506,10 +506,10 @@ customerAuthRoutes.post('/google', async (c) => {
       `).bind(`3 free trial reports granted to ${email} (Google sign-in)`).run()
 
       // Seed default material catalog so new account has context on the section (non-blocking)
-      seedDefaultMaterials(c.env.DB, customer.id as number).catch(() => {})
+      seedDefaultMaterials(c.env.DB, customer.id as number).catch((e) => console.warn('[customer-auth] seedDefaultMaterials failed (google):', e?.message || e))
 
       // Track Google signup in GA4 (non-blocking)
-      trackUserSignup(c.env as any, String(customer.id), 'google', { email_domain: email.split('@')[1] || 'unknown' }).catch(() => {})
+      trackUserSignup(c.env as any, String(customer.id), 'google', { email_domain: email.split('@')[1] || 'unknown' }).catch((e) => console.warn('[customer-auth] GA4 trackUserSignup failed (google):', e?.message || e))
     }
 
     // Create session
@@ -636,10 +636,10 @@ customerAuthRoutes.post('/register', async (c) => {
     `).bind(`New customer: ${name} (${cleanEmail}) — 3 free trial reports granted — email verified`).run()
 
     // Seed default material catalog so new account has context on the section (non-blocking)
-    seedDefaultMaterials(c.env.DB, result.meta.last_row_id as number).catch(() => {})
+    seedDefaultMaterials(c.env.DB, result.meta.last_row_id as number).catch((e) => console.warn('[customer-auth] seedDefaultMaterials failed (email):', e?.message || e))
 
     // Track signup in GA4 (non-blocking)
-    trackUserSignup(c.env as any, String(result.meta.last_row_id), 'email', { email_domain: cleanEmail.split('@')[1] || 'unknown' }).catch(() => {})
+    trackUserSignup(c.env as any, String(result.meta.last_row_id), 'email', { email_domain: cleanEmail.split('@')[1] || 'unknown' }).catch((e) => console.warn('[customer-auth] GA4 trackUserSignup failed (email):', e?.message || e))
 
     return c.json({
       success: true,
@@ -685,12 +685,12 @@ customerAuthRoutes.post('/login', async (c) => {
       }
       await c.env.DB.prepare("INSERT INTO login_attempts (ip, email) VALUES (?, ?)").bind(clientIp, email.toLowerCase().trim()).run()
       // Cleanup old attempts (non-blocking)
-      c.env.DB.prepare("DELETE FROM login_attempts WHERE created_at < datetime('now', '-1 hour')").run().catch(() => {})
-    } catch {}
+      c.env.DB.prepare("DELETE FROM login_attempts WHERE created_at < datetime('now', '-1 hour')").run().catch((e) => console.warn('[customer-auth] login_attempts cleanup failed:', e?.message || e))
+    } catch (e: any) { console.warn('[customer-auth] rate-limit check failed:', e?.message || e) }
 
     // Session + verification code cleanup (piggyback, non-blocking)
-    c.env.DB.prepare("DELETE FROM customer_sessions WHERE expires_at < datetime('now')").run().catch(() => {})
-    c.env.DB.prepare("DELETE FROM email_verification_codes WHERE expires_at < datetime('now') AND used = 1").run().catch(() => {})
+    c.env.DB.prepare("DELETE FROM customer_sessions WHERE expires_at < datetime('now')").run().catch((e) => console.warn('[customer-auth] session cleanup failed:', e?.message || e))
+    c.env.DB.prepare("DELETE FROM email_verification_codes WHERE expires_at < datetime('now') AND used = 1").run().catch((e) => console.warn('[customer-auth] verification-code cleanup failed:', e?.message || e))
 
     const cleanEmail = email.toLowerCase().trim()
 
@@ -1877,7 +1877,6 @@ customerAuthRoutes.get('/gcal/callback', async (c) => {
   <h2 class="text-xl font-bold text-white mb-2">Calendar Connected!</h2>
   <p class="text-gray-400 mb-1">Successfully connected:</p>
   <p class="text-blue-400 font-semibold mb-4">${gcalEmail}</p>
-  <p class="text-xs text-gray-600 mb-2">DEBUG: customerId=${customerId}, dbChanges=${dbResult?.meta?.changes}, verified=${!!verify?.gmail_refresh_token}, verifyEmail=${verify?.gmail_connected_email}</p>
   <p class="text-sm text-gray-500 mb-6">Your Google Calendar events will now appear on your dashboard. This window will close automatically.</p>
   <button onclick="window.close()" class="bg-blue-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-blue-700">Close Window</button>
 </div>
