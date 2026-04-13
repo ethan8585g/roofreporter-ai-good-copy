@@ -9731,7 +9731,7 @@ function getSolarDesignPageHTML() {
       window.location.href = '/customer/login';
     }
   </script>
-  <script src="/static/solar-design.js?v=20260413e"></script>
+  <script src="/static/solar-design.js?v=20260413f"></script>
   ${getRoverAssistant()}
 </body>
 </html>`

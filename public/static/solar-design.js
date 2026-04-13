@@ -18,7 +18,8 @@
     // Panel display size in canvas pixels (can be adjusted)
     panelW: 40,
     panelH: 68,
-    panels: [],       // [{x, y}] — top-left canvas coords of each panel
+    panels: [],       // [{x, y, rot}] — top-left canvas coords + rotation (deg)
+    panelRot: 0,      // current rotation for new panels (degrees, 0-359)
     placing: false,   // drag-place mode active
     img: null,
     canvas: null,
@@ -32,7 +33,7 @@
     layout: null,     // { suggested_panels, image_center, image_zoom, image_size_px, panel_*_meters, ... }
     hydrated: false,
     saving: false,
-    mode: 'place',    // 'place' | 'obstruct'
+    mode: 'place',    // 'place' | 'obstruct' | 'erase'
     obstructionType: 'vent',  // vent (1ft) | chimney (3ft) | skylight (4ft)
     obstructions: [], // [{x, y, size, type}] in canvas pixels (size = side length)
     selectedSegment: null,  // index of clicked segment
@@ -200,7 +201,7 @@
     var scaleToCanvas = state.imgDrawW / srcSize;
     state.panels = (v.panels || []).map(function(p) {
       var px = latLngToPixel(p.lat, p.lng, L.image_center.lat, L.image_center.lng, L.image_zoom, srcSize);
-      return { x: Math.round(px.x * scaleToCanvas - state.panelW / 2), y: Math.round(px.y * scaleToCanvas - state.panelH / 2) };
+      return { x: Math.round(px.x * scaleToCanvas - state.panelW / 2), y: Math.round(px.y * scaleToCanvas - state.panelH / 2), rot: p.rotation_deg || 0 };
     });
     var mpp = metersPerCanvasPx();
     state.obstructions = (v.obstructions || []).map(function(o) {
@@ -392,9 +393,25 @@
             // Mode toggle
             '<div>' +
               '<p class="text-xs font-bold text-gray-400 uppercase mb-2">Mode</p>' +
-              '<div class="grid grid-cols-2 gap-1.5">' +
-                '<button id="sdModePlace" onclick="window._sdSetMode(\'place\')" class="py-1.5 rounded text-xs font-semibold bg-blue-600 text-white"><i class="fas fa-th mr-1"></i>Panels</button>' +
-                '<button id="sdModeObs" onclick="window._sdSetMode(\'obstruct\')" class="py-1.5 rounded text-xs font-semibold bg-gray-700 text-gray-300"><i class="fas fa-ban mr-1"></i>Obstruct</button>' +
+              '<div class="grid grid-cols-3 gap-1">' +
+                '<button id="sdModePlace" onclick="window._sdSetMode(\'place\')" class="py-1.5 rounded text-[10px] font-semibold bg-blue-600 text-white"><i class="fas fa-th mr-0.5"></i>Place</button>' +
+                '<button id="sdModeErase" onclick="window._sdSetMode(\'erase\')" class="py-1.5 rounded text-[10px] font-semibold bg-gray-700 text-gray-300"><i class="fas fa-eraser mr-0.5"></i>Erase</button>' +
+                '<button id="sdModeObs" onclick="window._sdSetMode(\'obstruct\')" class="py-1.5 rounded text-[10px] font-semibold bg-gray-700 text-gray-300"><i class="fas fa-ban mr-0.5"></i>Obstruct</button>' +
+              '</div>' +
+              '<p class="text-[10px] text-gray-500 mt-1 leading-tight">Tip: right-click a panel to delete it.</p>' +
+              '<div class="mt-3">' +
+                '<div class="flex justify-between items-center mb-1">' +
+                  '<span class="text-xs font-bold text-gray-400 uppercase">Panel Angle</span>' +
+                  '<span id="sdRotLabel" class="text-xs text-amber-400 font-bold">0°</span>' +
+                '</div>' +
+                '<input type="range" id="sdRotation" min="0" max="359" step="1" value="0" oninput="window._sdSetRotation(this.value)" class="w-full">' +
+                '<div class="grid grid-cols-4 gap-1 mt-1">' +
+                  '<button onclick="window._sdNudgeRotation(-15)" class="py-1 bg-gray-700 hover:bg-gray-600 rounded text-[10px] text-white">-15°</button>' +
+                  '<button onclick="window._sdNudgeRotation(-1)" class="py-1 bg-gray-700 hover:bg-gray-600 rounded text-[10px] text-white">-1°</button>' +
+                  '<button onclick="window._sdNudgeRotation(1)" class="py-1 bg-gray-700 hover:bg-gray-600 rounded text-[10px] text-white">+1°</button>' +
+                  '<button onclick="window._sdNudgeRotation(15)" class="py-1 bg-gray-700 hover:bg-gray-600 rounded text-[10px] text-white">+15°</button>' +
+                '</div>' +
+                '<label class="flex items-center gap-1.5 mt-2 text-[10px] text-gray-300"><input type="checkbox" id="sdApplyAll" onchange="window._sdApplyRotationAll(this.checked)">Apply angle to all existing panels</label>' +
               '</div>' +
               '<select id="sdObsType" onchange="window._sdSetObsType(this.value)" class="hidden mt-2 w-full px-2 py-1 bg-gray-700 border border-gray-600 rounded text-xs text-white">' +
                 '<option value="vent">Vent (1 ft)</option>' +
@@ -605,13 +622,41 @@
   };
   window._sdSetMode = function(m) {
     state.mode = m;
-    document.getElementById('sdModePlace').className = 'py-1.5 rounded text-xs font-semibold ' + (m === 'place' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300');
-    document.getElementById('sdModeObs').className = 'py-1.5 rounded text-xs font-semibold ' + (m === 'obstruct' ? 'bg-red-600 text-white' : 'bg-gray-700 text-gray-300');
+    var cls = 'py-1.5 rounded text-[10px] font-semibold ';
+    var placeBtn = document.getElementById('sdModePlace');
+    var eraseBtn = document.getElementById('sdModeErase');
+    var obsBtn = document.getElementById('sdModeObs');
+    if (placeBtn) placeBtn.className = cls + (m === 'place' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300');
+    if (eraseBtn) eraseBtn.className = cls + (m === 'erase' ? 'bg-red-600 text-white' : 'bg-gray-700 text-gray-300');
+    if (obsBtn) obsBtn.className = cls + (m === 'obstruct' ? 'bg-amber-600 text-white' : 'bg-gray-700 text-gray-300');
     var obsType = document.getElementById('sdObsType');
-    if (m === 'obstruct') obsType.classList.remove('hidden'); else obsType.classList.add('hidden');
-    if (state.canvas) state.canvas.style.cursor = m === 'obstruct' ? 'cell' : 'crosshair';
+    if (obsType) { if (m === 'obstruct') obsType.classList.remove('hidden'); else obsType.classList.add('hidden'); }
+    if (state.canvas) state.canvas.style.cursor = m === 'obstruct' ? 'cell' : (m === 'erase' ? 'not-allowed' : 'crosshair');
   };
   window._sdSetObsType = function(t) { state.obstructionType = t; };
+
+  window._sdSetRotation = function(v) {
+    var deg = ((parseInt(v) || 0) % 360 + 360) % 360;
+    state.panelRot = deg;
+    var label = document.getElementById('sdRotLabel');
+    if (label) label.textContent = deg + '°';
+    var slider = document.getElementById('sdRotation');
+    if (slider && parseInt(slider.value) !== deg) slider.value = deg;
+    var applyAll = document.getElementById('sdApplyAll');
+    if (applyAll && applyAll.checked) {
+      for (var i = 0; i < state.panels.length; i++) state.panels[i].rot = deg;
+    }
+    drawCanvas();
+  };
+  window._sdNudgeRotation = function(delta) {
+    window._sdSetRotation(state.panelRot + delta);
+  };
+  window._sdApplyRotationAll = function(checked) {
+    if (checked) {
+      for (var i = 0; i < state.panels.length; i++) state.panels[i].rot = state.panelRot;
+      drawCanvas();
+    }
+  };
 
   // ── Auto-fill ──────────────────────────────────────────────
   // Project a segment bbox (lat/lng SW + NE) → axis-aligned canvas rect.
@@ -758,7 +803,7 @@
 
     // Draw placed panels
     for (var i = 0; i < state.panels.length; i++) {
-      drawPanel(ctx, state.panels[i].x, state.panels[i].y, false);
+      drawPanel(ctx, state.panels[i].x, state.panels[i].y, false, state.panels[i].rot || 0);
     }
 
     // Draw obstructions
@@ -777,8 +822,12 @@
         ctx.strokeStyle = 'rgba(248,113,113,0.9)';
         ctx.lineWidth = 2;
         ctx.strokeRect(state.hoverX - sz / 2, state.hoverY - sz / 2, sz, sz);
+      } else if (state.mode === 'erase') {
+        ctx.strokeStyle = 'rgba(248,113,113,0.9)';
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(state.hoverX, state.hoverY, 10, 0, Math.PI * 2); ctx.stroke();
       } else {
-        drawPanel(ctx, state.hoverX - state.panelW / 2, state.hoverY - state.panelH / 2, true);
+        drawPanel(ctx, state.hoverX - state.panelW / 2, state.hoverY - state.panelH / 2, true, state.panelRot);
       }
       ctx.globalAlpha = 1.0;
     }
@@ -805,32 +854,45 @@
     ctx.fillText(label, o.x + 3, o.y + 11);
   }
 
-  function drawPanel(ctx, x, y, ghost) {
+  function drawPanel(ctx, x, y, ghost, rot) {
     var w = state.panelW;
     var h = state.panelH;
+    var r = (rot || 0) * Math.PI / 180;
 
-    // Panel fill
+    ctx.save();
+    ctx.translate(x + w / 2, y + h / 2);
+    ctx.rotate(r);
+    var lx = -w / 2, ly = -h / 2;
+
     ctx.fillStyle = ghost ? 'rgba(59,130,246,0.3)' : 'rgba(59,130,246,0.45)';
-    ctx.fillRect(x, y, w, h);
+    ctx.fillRect(lx, ly, w, h);
 
-    // Border
     ctx.strokeStyle = ghost ? 'rgba(147,197,253,0.8)' : 'rgba(255,255,255,0.9)';
     ctx.lineWidth = 1.5;
-    ctx.strokeRect(x, y, w, h);
+    ctx.strokeRect(lx, ly, w, h);
 
-    // Grid lines inside panel (simulate cells)
     ctx.strokeStyle = ghost ? 'rgba(147,197,253,0.4)' : 'rgba(255,255,255,0.35)';
     ctx.lineWidth = 0.5;
-    // 2 vertical divisions
     var colW = w / 3;
     for (var ci = 1; ci < 3; ci++) {
-      ctx.beginPath(); ctx.moveTo(x + colW * ci, y); ctx.lineTo(x + colW * ci, y + h); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(lx + colW * ci, ly); ctx.lineTo(lx + colW * ci, ly + h); ctx.stroke();
     }
-    // 5 horizontal divisions
     var rowH = h / 6;
     for (var ri = 1; ri < 6; ri++) {
-      ctx.beginPath(); ctx.moveTo(x, y + rowH * ri); ctx.lineTo(x + w, y + rowH * ri); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(lx, ly + rowH * ri); ctx.lineTo(lx + w, ly + rowH * ri); ctx.stroke();
     }
+    ctx.restore();
+  }
+
+  // Hit-test: is (px,py) inside panel p? (accounts for rotation)
+  function pointInPanel(px, py, p) {
+    var w = state.panelW, h = state.panelH;
+    var cx = p.x + w / 2, cy = p.y + h / 2;
+    var r = -((p.rot || 0) * Math.PI / 180);
+    var dx = px - cx, dy = py - cy;
+    var lx = dx * Math.cos(r) - dy * Math.sin(r);
+    var ly = dx * Math.sin(r) + dy * Math.cos(r);
+    return lx >= -w / 2 && lx <= w / 2 && ly >= -h / 2 && ly <= h / 2;
   }
 
   function updateStats() {
@@ -866,6 +928,18 @@
         return;
       }
 
+      if (state.mode === 'erase') {
+        for (var ei = state.panels.length - 1; ei >= 0; ei--) {
+          if (pointInPanel(cx, cy, state.panels[ei])) {
+            state.panels.splice(ei, 1);
+            drawCanvas();
+            updateInverterSummary();
+            return;
+          }
+        }
+        return;
+      }
+
       // Segment selection: if click hits a segment outline (not inside a panel),
       // select it for "Fill Selected" — otherwise place a panel.
       if (state.layout && state.layout.segments) {
@@ -888,9 +962,27 @@
         }
       }
 
-      state.panels.push({ x: Math.round(cx - state.panelW / 2), y: Math.round(cy - state.panelH / 2) });
+      state.panels.push({ x: Math.round(cx - state.panelW / 2), y: Math.round(cy - state.panelH / 2), rot: state.panelRot });
       drawCanvas();
       updateInverterSummary();
+    });
+
+    // Right-click to remove panel under cursor
+    canvas.addEventListener('contextmenu', function(e) {
+      e.preventDefault();
+      var rect = canvas.getBoundingClientRect();
+      var scaleX = canvas.width / rect.width;
+      var scaleY = canvas.height / rect.height;
+      var cx = (e.clientX - rect.left) * scaleX;
+      var cy = (e.clientY - rect.top) * scaleY;
+      for (var ei = state.panels.length - 1; ei >= 0; ei--) {
+        if (pointInPanel(cx, cy, state.panels[ei])) {
+          state.panels.splice(ei, 1);
+          drawCanvas();
+          updateInverterSummary();
+          return;
+        }
+      }
     });
 
     canvas.addEventListener('mousemove', function(e) {
@@ -984,10 +1076,10 @@
         var cx = (p.x + state.panelW / 2) * scaleToSrc;
         var cy = (p.y + state.panelH / 2) * scaleToSrc;
         var ll = pixelToLatLng(cx, cy, layout.image_center.lat, layout.image_center.lng, layout.image_zoom, srcSize);
-        return { lat: ll.lat, lng: ll.lng, orientation: 'PORTRAIT' };
+        return { lat: ll.lat, lng: ll.lng, orientation: 'PORTRAIT', rotation_deg: p.rot || 0 };
       });
     } else {
-      userPanels = state.panels.map(function(p) { return { x: p.x, y: p.y, canvas_w: state.canvas && state.canvas.width, canvas_h: state.canvas && state.canvas.height, orientation: 'PORTRAIT' }; });
+      userPanels = state.panels.map(function(p) { return { x: p.x, y: p.y, canvas_w: state.canvas && state.canvas.width, canvas_h: state.canvas && state.canvas.height, orientation: 'PORTRAIT', rotation_deg: p.rot || 0 }; });
     }
     state.saving = true;
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Saving...'; }
