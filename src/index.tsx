@@ -4861,49 +4861,78 @@ function getLandingPageHTML(latestPosts: any[] = []) {
                   </div>
                   <span class="text-[10px] text-gray-500 font-mono">123 Maple Ave, Calgary AB</span>
                 </div>
-                <!-- Animated SVG roof -->
+                <!-- Satellite-style top-down roof measurement -->
                 <div class="relative px-6 pt-6 pb-2" style="background:linear-gradient(180deg,#0d1117 0%,#111 100%);">
                   <svg viewBox="0 0 400 240" class="w-full h-auto" xmlns="http://www.w3.org/2000/svg">
-                    <!-- Grid background -->
                     <defs>
-                      <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
-                        <path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(255,255,255,0.04)" stroke-width="1"/>
+                      <pattern id="satGrid" width="16" height="16" patternUnits="userSpaceOnUse">
+                        <path d="M 16 0 L 0 0 0 16" fill="none" stroke="rgba(0,255,136,0.05)" stroke-width="1"/>
                       </pattern>
+                      <radialGradient id="satVignette" cx="50%" cy="50%" r="70%">
+                        <stop offset="0%" stop-color="#1a2332" stop-opacity="1"/>
+                        <stop offset="100%" stop-color="#0a0e14" stop-opacity="1"/>
+                      </radialGradient>
+                      <linearGradient id="roofTone" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stop-color="#3d4656"/>
+                        <stop offset="100%" stop-color="#262c38"/>
+                      </linearGradient>
                     </defs>
-                    <rect width="400" height="240" fill="url(#grid)"/>
-                    <!-- Roof footprint (isometric) -->
-                    <polygon points="80,160 200,90 320,160 200,210" fill="rgba(0,255,136,0.06)" stroke="rgba(0,255,136,0.25)" stroke-width="1.5"/>
-                    <!-- Ridge line (top) -->
-                    <line x1="140" y1="125" x2="260" y2="125" stroke="#00FF88" stroke-width="2.5" class="roof-svg-line delay-1"/>
-                    <!-- Hip lines -->
-                    <line x1="80" y1="160" x2="140" y2="125" stroke="#22d3ee" stroke-width="2.5" class="roof-svg-line delay-2"/>
-                    <line x1="320" y1="160" x2="260" y2="125" stroke="#22d3ee" stroke-width="2.5" class="roof-svg-line delay-2"/>
-                    <line x1="200" y1="90" x2="140" y2="125" stroke="#22d3ee" stroke-width="2.5" class="roof-svg-line delay-2"/>
-                    <line x1="200" y1="90" x2="260" y2="125" stroke="#22d3ee" stroke-width="2.5" class="roof-svg-line delay-2"/>
-                    <!-- Eave lines -->
-                    <line x1="80" y1="160" x2="200" y2="210" stroke="#a78bfa" stroke-width="2" class="roof-svg-line delay-3"/>
-                    <line x1="320" y1="160" x2="200" y2="210" stroke="#a78bfa" stroke-width="2" class="roof-svg-line delay-3"/>
-                    <!-- Valley -->
-                    <line x1="200" y1="90" x2="200" y2="210" stroke="rgba(255,255,255,0.15)" stroke-width="1" stroke-dasharray="3,3" class="roof-svg-line delay-4"/>
+                    <rect width="400" height="240" fill="url(#satVignette)"/>
+                    <rect width="400" height="240" fill="url(#satGrid)"/>
+                    <!-- Surrounding property context -->
+                    <rect x="30" y="30" width="40" height="60" fill="#1e2530" opacity="0.8" rx="2"/>
+                    <rect x="330" y="40" width="50" height="45" fill="#1e2530" opacity="0.8" rx="2"/>
+                    <rect x="340" y="170" width="40" height="55" fill="#1e2530" opacity="0.7" rx="2"/>
+                    <path d="M 0 105 Q 200 100 400 108" stroke="#2a3140" stroke-width="14" fill="none" opacity="0.6"/>
+                    <circle cx="50" cy="180" r="8" fill="#1a3a2a" opacity="0.6"/>
+                    <circle cx="75" cy="200" r="6" fill="#1a3a2a" opacity="0.6"/>
+                    <circle cx="350" cy="130" r="7" fill="#1a3a2a" opacity="0.6"/>
+                    <!-- Roof footprint (top-down) -->
+                    <polygon points="120,70 280,70 300,170 100,170" fill="url(#roofTone)" stroke="rgba(0,0,0,0.4)" stroke-width="1"/>
+                    <!-- Ridge -->
+                    <line x1="140" y1="120" x2="260" y2="120" stroke="#00FF88" stroke-width="2.5" class="roof-svg-line delay-1"/>
+                    <!-- Hips -->
+                    <line x1="120" y1="70" x2="140" y2="120" stroke="#22d3ee" stroke-width="2.5" class="roof-svg-line delay-2"/>
+                    <line x1="280" y1="70" x2="260" y2="120" stroke="#22d3ee" stroke-width="2.5" class="roof-svg-line delay-2"/>
+                    <line x1="100" y1="170" x2="140" y2="120" stroke="#22d3ee" stroke-width="2.5" class="roof-svg-line delay-2"/>
+                    <line x1="300" y1="170" x2="260" y2="120" stroke="#22d3ee" stroke-width="2.5" class="roof-svg-line delay-2"/>
+                    <!-- Eaves -->
+                    <line x1="120" y1="70" x2="280" y2="70" stroke="#a78bfa" stroke-width="2" class="roof-svg-line delay-3"/>
+                    <line x1="100" y1="170" x2="300" y2="170" stroke="#a78bfa" stroke-width="2" class="roof-svg-line delay-3"/>
+                    <line x1="120" y1="70" x2="100" y2="170" stroke="#a78bfa" stroke-width="2" class="roof-svg-line delay-3"/>
+                    <line x1="280" y1="70" x2="300" y2="170" stroke="#a78bfa" stroke-width="2" class="roof-svg-line delay-3"/>
+                    <!-- Measurement vertices -->
+                    <circle cx="120" cy="70" r="3" fill="#00FF88"/>
+                    <circle cx="280" cy="70" r="3" fill="#00FF88"/>
+                    <circle cx="100" cy="170" r="3" fill="#00FF88"/>
+                    <circle cx="300" cy="170" r="3" fill="#00FF88"/>
+                    <circle cx="140" cy="120" r="3" fill="#00FF88"/>
+                    <circle cx="260" cy="120" r="3" fill="#00FF88"/>
                     <!-- Labels -->
                     <g class="roof-label delay-1">
-                      <rect x="170" y="108" width="60" height="18" rx="4" fill="#00FF88"/>
-                      <text x="200" y="121" text-anchor="middle" fill="#0A0A0A" font-size="10" font-weight="800">Ridge 48.2 ft</text>
+                      <rect x="170" y="104" width="60" height="18" rx="4" fill="#00FF88"/>
+                      <text x="200" y="117" text-anchor="middle" fill="#0A0A0A" font-size="10" font-weight="800">Ridge 48.2 ft</text>
                     </g>
                     <g class="roof-label delay-2">
-                      <rect x="92" y="138" width="50" height="16" rx="4" fill="#22d3ee"/>
-                      <text x="117" y="150" text-anchor="middle" fill="#0A0A0A" font-size="9" font-weight="800">Hip 32.6</text>
+                      <rect x="95" y="88" width="50" height="16" rx="4" fill="#22d3ee"/>
+                      <text x="120" y="100" text-anchor="middle" fill="#0A0A0A" font-size="9" font-weight="800">Hip 32.6</text>
                     </g>
                     <g class="roof-label delay-3">
-                      <rect x="244" y="178" width="56" height="16" rx="4" fill="#a78bfa"/>
-                      <text x="272" y="190" text-anchor="middle" fill="#0A0A0A" font-size="9" font-weight="800">Eave 96.4 ft</text>
+                      <rect x="170" y="176" width="60" height="16" rx="4" fill="#a78bfa"/>
+                      <text x="200" y="188" text-anchor="middle" fill="#0A0A0A" font-size="9" font-weight="800">Eave 96.4 ft</text>
                     </g>
-                    <!-- Pin -->
-                    <circle cx="200" cy="90" r="5" fill="#00FF88"/>
-                    <circle cx="200" cy="90" r="10" fill="none" stroke="#00FF88" stroke-width="1.5" opacity="0.5">
-                      <animate attributeName="r" from="5" to="14" dur="1.6s" repeatCount="indefinite"/>
-                      <animate attributeName="opacity" from="0.6" to="0" dur="1.6s" repeatCount="indefinite"/>
+                    <!-- Scanning pin -->
+                    <circle cx="200" cy="120" r="5" fill="#00FF88"/>
+                    <circle cx="200" cy="120" r="10" fill="none" stroke="#00FF88" stroke-width="1.5" opacity="0.5">
+                      <animate attributeName="r" from="5" to="18" dur="1.6s" repeatCount="indefinite"/>
+                      <animate attributeName="opacity" from="0.7" to="0" dur="1.6s" repeatCount="indefinite"/>
                     </circle>
+                    <!-- Compass -->
+                    <g transform="translate(365,30)">
+                      <circle r="12" fill="rgba(0,0,0,0.5)" stroke="rgba(255,255,255,0.15)"/>
+                      <text y="-3" text-anchor="middle" fill="#00FF88" font-size="9" font-weight="800">N</text>
+                      <path d="M 0 -8 L 3 0 L 0 -2 L -3 0 Z" fill="#00FF88"/>
+                    </g>
                   </svg>
                 </div>
                 <!-- Report summary card -->
