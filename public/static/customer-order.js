@@ -531,7 +531,7 @@ function renderPinStep(root, progressBar) {
 // ============================================================
 function renderTraceStep(root, progressBar) {
   const modeInfo = {
-    eaves:   { color: '#22c55e', icon: 'fa-draw-polygon', label: 'Eaves Outline', desc: 'Trace each eaves layer — click corners, click first point to close. Multi-story roofs can have multiple layers.' },
+    eaves:   { color: '#22c55e', icon: 'fa-draw-polygon', label: 'Eaves Outline', desc: 'Trace each eaves layer — click corners, click first point to close. Multi-story roofs or detached structures (e.g. a garage) can be added as additional buildings.' },
     ridge:   { color: '#3b82f6', icon: 'fa-grip-lines',   label: 'Ridges',     desc: 'Click start and end of each ridge line.' },
     hip:     { color: '#f59e0b', icon: 'fa-slash',         label: 'Hips',       desc: 'Click start and end of each hip line.' },
     valley:  { color: '#ef4444', icon: 'fa-angle-down',    label: 'Valleys',    desc: 'Click start and end of each valley.' },
@@ -652,6 +652,11 @@ function renderTraceStep(root, progressBar) {
           <span><i class="fas fa-expand-arrows-alt mr-1 text-blue-400"></i>Trace the outermost roof edge (drip line), not the walls</span>
         </div>
         <div class="flex items-center gap-3">
+          <button onclick="startNewBuilding()" id="addBuildingBtn"
+            class="px-4 py-2 rounded-lg text-sm font-semibold border border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 ${eavesClosed && orderState.traceMode === 'eaves' ? '' : 'hidden'}"
+            title="Trace another structure such as a detached garage">
+            <i class="fas fa-plus mr-1"></i>Add another building
+          </button>
           <button onclick="skipTrace()" class="px-4 py-2 text-sm font-medium" style="color:var(--text-secondary)">
             Order Report <i class="fas fa-file-alt ml-1"></i>
           </button>
@@ -957,7 +962,7 @@ function closeEavesPolygon() {
   restoreLineOverlays();
 
   const n = orderState.traceEavesSections.length;
-  showMsg('success', `<i class="fas fa-check-circle mr-1"></i>Section ${n} closed! Add another eaves layer or switch to Ridges.`);
+  showMsg('success', `<i class="fas fa-check-circle mr-1"></i>Section ${n} closed! Use “+ Add another building” for a detached structure, add another eaves layer, or switch to Ridges.`);
   updateTraceUI();
 }
 
@@ -1280,6 +1285,42 @@ function undoLastTrace() {
   updateTraceUI();
 }
 
+// Start a new building: cancel any half-drawn draft polygon and prime the map for a fresh eaves outline.
+// All previously closed sections (e.g. the main house) are kept; the next click on the map starts the new building.
+function startNewBuilding() {
+  if (orderState.traceEavesSections.length === 0) {
+    showMsg('error', '<i class="fas fa-exclamation-triangle mr-1"></i>Close at least one building first by clicking back to the first eave point.');
+    return;
+  }
+  if (orderState.traceEavesSections.length >= 5) {
+    showMsg('error', '<i class="fas fa-exclamation-triangle mr-1"></i>Maximum of 5 buildings per report. Contact support if you need more.');
+    return;
+  }
+  // Discard any in-progress draft points/markers/polygon (keeps closed sections intact).
+  orderState.traceEavesPoints = [];
+  if (orderState.traceEavesPolygon) {
+    orderState.traceEavesPolygon.setMap(null);
+    orderState.traceEavesPolygon = null;
+  }
+  // Draft point markers live in traceMarkers when in eaves mode; clear them but restore section labels.
+  orderState.traceMarkers.forEach(m => m.setMap(null));
+  orderState.traceMarkers = [];
+  // Re-draw section centroid labels (S1, S2, ...) since we just cleared all markers.
+  orderState.traceEavesSections.forEach((section, idx) => {
+    const pts = section.points;
+    if (pts.length === 0) return;
+    const cx = pts.reduce((s, p) => s + p.lat, 0) / pts.length;
+    const cy = pts.reduce((s, p) => s + p.lng, 0) / pts.length;
+    addTraceMarker({ lat: cx, lng: cy }, '#22c55e', `S${idx + 1}`);
+  });
+  if (orderState.traceMode !== 'eaves') {
+    setTraceMode('eaves');
+  }
+  const next = orderState.traceEavesSections.length + 1;
+  showMsg('info', `<i class="fas fa-info-circle mr-1"></i>Click on the map to begin tracing building #${next}. Click the first point to close it.`);
+  updateTraceUI();
+}
+
 async function clearAllTraces() {
   if (!(await window.rmConfirm('Clear all traces?'))) return
   orderState.traceEavesPoints = [];
@@ -1314,10 +1355,19 @@ function updateTraceUI() {
   const eavesClosed = eavesSections > 0;
 
   // ── Live area/perimeter computation from eaves points ──
-  const metricsPts = eavesCount >= 3 ? orderState.traceEavesPoints :
-    (eavesSections > 0 ? orderState.traceEavesSections[0].points : null);
-  if (metricsPts && metricsPts.length >= 3) {
-    computeLiveTraceMetrics(metricsPts);
+  // Aggregate across every closed section + the in-progress draft polygon (if it has 3+ points).
+  const allPolys = orderState.traceEavesSections.map(s => s.points);
+  if (eavesCount >= 3) allPolys.push(orderState.traceEavesPoints);
+  if (allPolys.length > 0) {
+    let totalArea = 0;
+    let totalPerim = 0;
+    for (const pts of allPolys) {
+      const m = computeLiveTraceMetrics(pts);
+      totalArea += m.areaFt2 || 0;
+      totalPerim += m.perimeterFt || 0;
+    }
+    orderState.liveFootprintSqft = Math.round(totalArea);
+    orderState.livePerimeterFt = Math.round(totalPerim);
   } else {
     orderState.liveFootprintSqft = null;
     orderState.livePerimeterFt = null;
@@ -1383,6 +1433,13 @@ function updateTraceUI() {
       metricsPanel.innerHTML = '<p class="text-xs text-gray-400 text-center italic">Place 3+ eave points to see live measurements</p>';
       metricsPanel.classList.remove('hidden');
     }
+  }
+
+  // Show the "Add another building" button only when in eaves mode and at least one section is closed.
+  const addBuildingBtn = document.getElementById('addBuildingBtn');
+  if (addBuildingBtn) {
+    const showAdd = eavesClosed && orderState.traceMode === 'eaves' && eavesSections < 5;
+    addBuildingBtn.classList.toggle('hidden', !showAdd);
   }
 
   // Update mode bar text
@@ -1561,9 +1618,15 @@ async function confirmTrace() {
     showMsg('error', '<i class="fas fa-exclamation-triangle mr-1"></i>Close the eaves polygon by clicking the first point.');
     return;
   }
+  // Pick the largest closed section (by point count) as the primary `eaves` for back-compat.
+  // The backend prefers `eaves_sections` when present, so every traced building is included regardless.
+  const _sections = orderState.traceEavesSections.map(s => s.points);
+  const _primary = _sections.length > 0
+    ? _sections.reduce((best, s) => (s.length > best.length ? s : best), _sections[0])
+    : orderState.traceEavesPoints;
   orderState.roofTraceJson = {
-    eaves: orderState.traceEavesSections.length > 0 ? orderState.traceEavesSections[0].points : orderState.traceEavesPoints,
-    eaves_sections: orderState.traceEavesSections.map(s => s.points),
+    eaves: _primary,
+    eaves_sections: _sections,
     ridges: orderState.traceRidgeLines,
     hips: orderState.traceHipLines,
     valleys: orderState.traceValleyLines,
