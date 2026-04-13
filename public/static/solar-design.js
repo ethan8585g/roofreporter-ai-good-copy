@@ -939,10 +939,13 @@
     if (out) {
       out.classList.remove('hidden');
       out.innerHTML =
+        '<div class="bg-amber-500/10 border border-amber-500/40 rounded-lg p-2 mb-2 text-center">' +
+          '<div class="text-[10px] uppercase text-amber-300 font-bold">Panels needed for ' + offset + '% offset</div>' +
+          '<div class="text-2xl font-extrabold text-amber-400 leading-tight">' + panels + '</div>' +
+          '<div class="text-[10px] text-gray-300">@ ' + wattage + 'W each = ' + systemKw.toFixed(2) + ' kW</div>' +
+        '</div>' +
         '<div class="flex justify-between"><span class="text-gray-400">Annual usage</span><span class="font-bold text-white">' + total.toLocaleString() + ' kWh</span></div>' +
-        '<div class="flex justify-between"><span class="text-gray-400">Target (' + offset + '%)</span><span class="font-bold text-white">' + Math.round(targetKwh).toLocaleString() + ' kWh</span></div>' +
-        '<div class="flex justify-between"><span class="text-gray-400">Panels needed</span><span class="font-bold text-amber-400">' + panels + ' × ' + wattage + 'W</span></div>' +
-        '<div class="flex justify-between"><span class="text-gray-400">System size</span><span class="font-bold text-amber-400">' + systemKw.toFixed(2) + ' kW</span></div>';
+        '<div class="flex justify-between"><span class="text-gray-400">Target (' + offset + '%)</span><span class="font-bold text-white">' + Math.round(targetKwh).toLocaleString() + ' kWh</span></div>';
     }
   };
 
