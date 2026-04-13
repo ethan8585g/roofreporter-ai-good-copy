@@ -344,7 +344,7 @@
     root.innerHTML =
       '<div class="flex flex-col lg:flex-row gap-4 h-full">' +
         // Sidebar
-        '<div class="lg:w-56 flex-shrink-0">' +
+        '<div class="lg:w-56 flex-shrink-0 lg:sticky lg:top-2 lg:self-start lg:max-h-[calc(100vh-1rem)] lg:overflow-y-auto">' +
           '<div class="bg-gray-800 rounded-xl p-4 text-white space-y-4">' +
             '<div>' +
               '<p class="text-xs font-bold text-gray-400 uppercase mb-2">Property</p>' +
