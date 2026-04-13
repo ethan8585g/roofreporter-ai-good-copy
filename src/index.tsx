@@ -4764,6 +4764,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
       <!-- Desktop nav -->
       <div class="hidden md:flex items-center gap-7">
         <a href="#how-it-works" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">How It Works</a>
+        <a href="#tutorials" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">Tutorials</a>
         <!-- Features dropdown -->
         <div class="relative group/nav">
           <button class="flex items-center gap-1 text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">Features <i class="fas fa-chevron-down text-[10px] group-hover/nav:rotate-180 transition-transform duration-200"></i></button>
@@ -4800,6 +4801,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
     <div id="mobile-menu" class="hidden md:hidden bg-[#0A0A0A]/98 backdrop-blur-2xl border-t border-white/5">
       <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col gap-1">
         <a href="#how-it-works" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')">How It Works</a>
+        <a href="#tutorials" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')">Tutorials</a>
         <a href="/features/measurements" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')"><i class="fas fa-satellite text-[#00FF88] mr-2 text-xs"></i>Measurements</a>
         <a href="/features/crm" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')"><i class="fas fa-users text-[#22d3ee] mr-2 text-xs"></i>CRM</a>
         <a href="/features/ai-secretary" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')"><i class="fas fa-headset text-[#f59e0b] mr-2 text-xs"></i>AI Secretary</a>
@@ -5273,6 +5275,44 @@ function getLandingPageHTML(latestPosts: any[] = []) {
   <!-- Contact Us Lead Capture -->
   ${getContactFormHTML('homepage')}
 
+  <!-- How-To Tutorials -->
+  <section id="tutorials" style="background:#0A0A0A" class="py-20 border-t border-white/5">
+    <div class="max-w-7xl mx-auto px-4">
+      <div class="flex items-center justify-between mb-10 flex-wrap gap-4">
+        <div>
+          <h2 class="text-2xl md:text-3xl font-black text-white">How-To Tutorials</h2>
+          <p class="text-gray-500 text-sm mt-1">Quick video walkthroughs to get the most out of Roof Manager</p>
+        </div>
+        <a href="#contact-section" class="text-[#00FF88] text-sm font-semibold hover:underline">Request a topic &rarr;</a>
+      </div>
+      <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+        ${[
+          { title: 'Getting Started', desc: 'Create your account and run your first measurement report.', icon: 'fa-rocket', youtubeId: '' },
+          { title: 'Measuring a Roof', desc: 'Trace eaves, ridges, hips and valleys for pinpoint accuracy.', icon: 'fa-ruler-combined', youtubeId: '' },
+          { title: 'Using the CRM', desc: 'Track leads, jobs and invoices from one dashboard.', icon: 'fa-users', youtubeId: '' },
+          { title: 'AI Roofer Secretary', desc: 'Set up the voice receptionist to book jobs 24/7.', icon: 'fa-headset', youtubeId: '' },
+          { title: 'Sending Reports', desc: 'Email branded PDF reports directly to your customers.', icon: 'fa-file-pdf', youtubeId: '' },
+          { title: 'Virtual Roof Try-On', desc: 'Show customers what their new roof will look like.', icon: 'fa-image', youtubeId: '' },
+        ].map(t => `
+          <article class="bg-[#111111] border border-white/10 rounded-xl overflow-hidden hover:border-[#00FF88]/30 transition-all duration-300 hover:-translate-y-1 flex flex-col">
+            <div class="aspect-video bg-black relative overflow-hidden">
+              ${t.youtubeId
+                ? `<iframe class="w-full h-full" src="https://www.youtube.com/embed/${t.youtubeId}" title="${t.title}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen loading="lazy"></iframe>`
+                : `<div class="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-[#111] to-[#1a1a1a]">
+                     <i class="fas ${t.icon} text-4xl text-[#00FF88]/40 mb-3"></i>
+                     <span class="text-xs text-gray-600 uppercase tracking-wider">Video coming soon</span>
+                   </div>`}
+            </div>
+            <div class="p-5 flex flex-col flex-1">
+              <h3 class="font-bold text-white text-base mb-2">${t.title}</h3>
+              <p class="text-gray-500 text-sm leading-relaxed flex-1">${t.desc}</p>
+            </div>
+          </article>
+        `).join('')}
+      </div>
+    </div>
+  </section>
+
   <!-- Latest from the Blog — SSR for Google indexing -->
   ${latestPosts.length > 0 ? `
   <section style="background:#0d0d0d" class="py-20 border-t border-white/5">
@@ -5335,6 +5375,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
           <h4 class="text-white font-semibold mb-4 text-sm uppercase tracking-wider">Resources</h4>
           <ul class="space-y-2.5 text-sm">
             <li><a href="/blog" class="hover:text-[#00FF88] transition-colors">Blog</a></li>
+            <li><a href="#tutorials" class="hover:text-[#00FF88] transition-colors">Tutorials</a></li>
             <li><a href="#how-it-works" class="hover:text-[#00FF88] transition-colors">How It Works</a></li>
             <li><a href="#faq" class="hover:text-[#00FF88] transition-colors">FAQ</a></li>
             <li><a href="/lander" class="hover:text-[#00FF88] transition-colors">Get Started Guide</a></li>
