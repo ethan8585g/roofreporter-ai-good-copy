@@ -382,6 +382,29 @@ async function sendInvite(e) {
     if (res.ok && data.success) {
       msg.innerHTML = '<div class="bg-emerald-500/10 border border-green-200 rounded-lg p-3 text-green-700 text-sm"><i class="fas fa-check-circle mr-1"></i>' + data.message + '</div>';
       setTimeout(async function() { hideInviteModal(); await loadTeamData(); renderTeam(); }, 1500);
+    } else if (res.status === 402 && (data.subscription_required || data.upgrade_required)) {
+      var tier = data.subscription_required ? 'starter' : data.next_tier;
+      var label = data.subscription_required
+        ? 'Subscribe to Starter (' + data.price + '/month) to unlock 5 team members.'
+        : 'Upgrade to ' + data.next_tier + ' (' + data.next_price + '/month) for ' + data.next_team_limit + ' team members.';
+      msg.innerHTML =
+        '<div class="bg-amber-500/10 border border-amber-300/30 rounded-lg p-3 text-amber-200 text-sm mb-2">' + (data.error || label) + '</div>' +
+        '<button type="button" id="invSubBtn" class="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-2.5 rounded-lg text-sm">' +
+          (data.subscription_required ? 'Subscribe Now' : 'Upgrade Now') +
+        '</button>';
+      document.getElementById('invSubBtn').onclick = async function() {
+        this.disabled = true; this.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Loading...';
+        try {
+          var r = await fetch('/api/square/checkout/subscription', {
+            method: 'POST', headers: authHeaders(), body: JSON.stringify({ tier: tier })
+          });
+          var d = await r.json();
+          if (d.checkout_url) { window.location.href = d.checkout_url; }
+          else { msg.innerHTML = '<div class="bg-red-500/10 border border-red-200 rounded-lg p-3 text-red-700 text-sm">' + (d.error || 'Could not start checkout') + '</div>'; }
+        } catch(e) {
+          msg.innerHTML = '<div class="bg-red-500/10 border border-red-200 rounded-lg p-3 text-red-700 text-sm">Network error starting checkout</div>';
+        }
+      };
     } else {
       msg.innerHTML = '<div class="bg-red-500/10 border border-red-200 rounded-lg p-3 text-red-700 text-sm">' + (data.error || 'Failed to send invite') + '</div>';
     }

@@ -129,20 +129,42 @@ teamRoutes.post('/invite', async (c) => {
     return c.json({ error: 'Only account owners or team admins can invite members' }, 403)
   }
 
-  // Enforce team size limit based on subscription tier
-  const owner = await c.env.DB.prepare('SELECT subscription_tier, tier_features FROM customers WHERE id = ?').bind(ownerId).first<any>()
+  // Enforce subscription + team size limit based on tier
+  const owner = await c.env.DB.prepare('SELECT subscription_tier, subscription_status, tier_features FROM customers WHERE id = ?').bind(ownerId).first<any>()
   const tierLimits: Record<string, number> = { starter: 5, professional: 10, enterprise: 25 }
+  const tierPrices: Record<string, string> = { starter: '$49.99', professional: '$99.99', enterprise: '$199.99' }
+  const nextTier: Record<string, string> = { starter: 'professional', professional: 'enterprise' }
   const ownerTier = owner?.subscription_tier || 'starter'
+  const isSubscribed = owner?.subscription_status === 'active'
+
+  // No active subscription → require Starter membership ($49.99/mo, includes 5 team members)
+  if (!isSubscribed) {
+    return c.json({
+      error: 'A Starter membership ($49.99/month) is required to add team members. Your plan includes up to 5 team members.',
+      subscription_required: true,
+      tier: 'starter',
+      price: '$49.99',
+      team_limit: 5
+    }, 402)
+  }
+
   let maxTeamSize = tierLimits[ownerTier] || 5
-  // Allow override from tier_features JSON
   try { const tf = JSON.parse(owner?.tier_features || '{}'); if (tf.team_limit) maxTeamSize = tf.team_limit } catch {}
 
   const activeCount = await c.env.DB.prepare(
     "SELECT COUNT(*) as cnt FROM team_members WHERE owner_id = ? AND status = 'active'"
   ).bind(ownerId).first<any>()
   if ((activeCount?.cnt || 0) >= maxTeamSize) {
+    const upgrade = nextTier[ownerTier]
     return c.json({
-      error: `Your ${ownerTier} plan supports up to ${maxTeamSize} team members. Upgrade your membership to add more.`,
+      error: upgrade
+        ? `Your ${ownerTier} plan includes ${maxTeamSize} team members. Upgrade to ${upgrade} (${tierPrices[upgrade]}/month) for ${tierLimits[upgrade]} team members.`
+        : `Your ${ownerTier} plan supports up to ${maxTeamSize} team members. Contact sales for more.`,
+      upgrade_required: !!upgrade,
+      current_tier: ownerTier,
+      next_tier: upgrade || null,
+      next_price: upgrade ? tierPrices[upgrade] : null,
+      next_team_limit: upgrade ? tierLimits[upgrade] : null,
       team_limit: maxTeamSize,
       current_count: activeCount?.cnt || 0
     }, 402)
