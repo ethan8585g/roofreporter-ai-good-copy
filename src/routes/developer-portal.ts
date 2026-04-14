@@ -201,22 +201,35 @@ interface DashboardData {
   jobs: any[]
   balance: number
   packages: any[]
+  completedReports: any[]
 }
 
 async function loadDashboardData(db: D1Database, accountId: string): Promise<DashboardData> {
-  const [keysResult, jobsResult, balanceRow, pkgsResult] = await Promise.all([
+  const [keysResult, jobsResult, balanceRow, pkgsResult, reportsResult] = await Promise.all([
     db.prepare('SELECT id, key_prefix, name, last_used_at, revoked_at, created_at FROM api_keys WHERE account_id = ? ORDER BY created_at DESC')
       .bind(accountId).all<any>(),
     db.prepare('SELECT id, status, address, created_at, finalized_at FROM api_jobs WHERE account_id = ? ORDER BY created_at DESC LIMIT 10')
       .bind(accountId).all<any>(),
     db.prepare('SELECT credit_balance FROM api_accounts WHERE id = ?').bind(accountId).first<{ credit_balance: number }>(),
     db.prepare('SELECT * FROM credit_packages WHERE is_active = 1 ORDER BY credits ASC').all<any>(),
+    db.prepare(`
+      SELECT j.id as job_id, j.address, j.created_at, j.finalized_at, j.order_id,
+             o.order_number,
+             r.roof_area_sqft, r.roof_pitch_degrees, r.complexity_class
+      FROM api_jobs j
+      LEFT JOIN orders o ON o.id = j.order_id
+      LEFT JOIN reports r ON r.order_id = j.order_id
+      WHERE j.account_id = ? AND j.status = 'ready'
+      ORDER BY j.finalized_at DESC
+      LIMIT 100
+    `).bind(accountId).all<any>(),
   ])
   return {
     keys: keysResult.results ?? [],
     jobs: jobsResult.results ?? [],
     balance: balanceRow?.credit_balance ?? 0,
     packages: pkgsResult.results ?? [],
+    completedReports: reportsResult.results ?? [],
   }
 }
 
@@ -226,7 +239,7 @@ function buildDashboardHtml(
   baseUrl: string,
   opts: { newKey?: string; welcome?: boolean; bought?: boolean } = {}
 ): string {
-  const { keys, jobs, balance, packages } = data
+  const { keys, jobs, balance, packages, completedReports } = data
   const { newKey = '', welcome = false, bought = false } = opts
   const activeKeys = keys.filter(k => !k.revoked_at)
 
@@ -288,7 +301,7 @@ function buildDashboardHtml(
         <div style="color:var(--text-muted);font-size:.85rem;margin-top:4px;">Active Keys</div>
       </div>
       <div class="card p-5 text-center">
-        <div style="font-size:2rem;font-weight:800;">${jobs.filter(j => j.status === 'ready').length}</div>
+        <div style="font-size:2rem;font-weight:800;">${completedReports.length}</div>
         <div style="color:var(--text-muted);font-size:.85rem;margin-top:4px;">Reports Delivered</div>
       </div>
     </div>
@@ -300,8 +313,12 @@ function buildDashboardHtml(
         <div class="flex items-center justify-between mb-4">
           <h2 style="font-size:1.1rem;font-weight:700;">API Keys</h2>
           <form method="POST" action="/developer/keys/new" style="display:inline;">
-            <button type="submit" class="btn btn-secondary" style="padding:6px 14px;font-size:.8rem;">+ New Key</button>
+            <button type="submit" class="btn btn-secondary" style="padding:6px 14px;font-size:.8rem;">+ Generate New Secret Key</button>
           </form>
+        </div>
+        <div style="background:var(--bg-card);border:1px solid #f59e0b44;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:.8rem;color:#92400e;display:flex;align-items:flex-start;gap:8px;">
+          <span style="font-size:1rem;margin-top:1px;">🔒</span>
+          <span><strong>Key compromised or lost?</strong> Revoke it immediately below — it stops working within seconds. Then generate a new key above.</span>
         </div>
         <div class="card" style="overflow:hidden;">
           ${keys.length === 0 ? `<div style="padding:24px;text-align:center;color:var(--text-muted);">No API keys yet.</div>` :
@@ -315,11 +332,12 @@ function buildDashboardHtml(
                 <div style="font-size:.78rem;color:var(--text-muted);">${esc(k.name || 'Unnamed')} · Last used: ${timeAgo(k.last_used_at)}</div>
               </div>
               ${!k.revoked_at ? `
-              <form method="POST" action="/developer/keys/${esc(k.id)}/revoke" onsubmit="return confirm('Revoke this key? API calls using it will stop working immediately.');">
-                <button type="submit" class="btn btn-danger" style="padding:5px 12px;font-size:.78rem;">Revoke</button>
+              <form method="POST" action="/developer/keys/${esc(k.id)}/revoke" onsubmit="return confirm('Revoke this key? Any API calls using it will stop working immediately. You can generate a new key after.');">
+                <button type="submit" class="btn btn-danger" style="padding:5px 12px;font-size:.78rem;" title="Revoke this key if it was compromised or leaked">🚫 Revoke Key</button>
               </form>` : ''}
             </div>`).join('')}
         </div>
+        <p style="font-size:.75rem;color:var(--text-muted);margin-top:8px;">Only the key prefix is shown (rm_live_XXXX…). The full key was displayed once at creation and is not stored.</p>
       </div>
 
       <!-- Buy Credits -->
@@ -343,6 +361,48 @@ function buildDashboardHtml(
                 </button>
               </form>`).join('')}
             </div>`}
+      </div>
+    </div>
+
+    <!-- Report History -->
+    <div style="margin-top:32px;">
+      <div class="flex items-center justify-between mb-4">
+        <h2 style="font-size:1.1rem;font-weight:700;">Report History</h2>
+        <span style="font-size:.82rem;color:var(--text-muted);">${completedReports.length} completed report${completedReports.length !== 1 ? 's' : ''}</span>
+      </div>
+      <div class="card" style="overflow:hidden;">
+        ${completedReports.length === 0
+          ? `<div style="padding:32px;text-align:center;color:var(--text-muted);">
+               <div style="font-size:2rem;margin-bottom:8px;">📋</div>
+               <div style="font-weight:600;margin-bottom:4px;">No completed reports yet</div>
+               <div style="font-size:.85rem;">Reports appear here once your submitted jobs are traced and finalized by our team.</div>
+             </div>`
+          : `<table style="width:100%;border-collapse:collapse;">
+              <thead>
+                <tr style="border-bottom:1px solid var(--border);">
+                  <th style="text-align:left;padding:10px 16px;font-size:.78rem;color:var(--text-muted);font-weight:600;">ADDRESS</th>
+                  <th style="text-align:right;padding:10px 16px;font-size:.78rem;color:var(--text-muted);font-weight:600;">AREA (SQFT)</th>
+                  <th style="text-align:right;padding:10px 16px;font-size:.78rem;color:var(--text-muted);font-weight:600;">PITCH</th>
+                  <th style="text-align:right;padding:10px 16px;font-size:.78rem;color:var(--text-muted);font-weight:600;">COMPLETED</th>
+                  <th style="text-align:right;padding:10px 16px;font-size:.78rem;color:var(--text-muted);font-weight:600;">DOWNLOAD</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${completedReports.map(r => `
+                <tr style="border-bottom:1px solid var(--border);">
+                  <td style="padding:10px 16px;font-size:.88rem;max-width:260px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(r.address)}</td>
+                  <td style="padding:10px 16px;text-align:right;font-size:.88rem;font-weight:600;">${r.roof_area_sqft ? Number(r.roof_area_sqft).toLocaleString('en-CA', { maximumFractionDigits: 0 }) : '—'}</td>
+                  <td style="padding:10px 16px;text-align:right;font-size:.88rem;">${r.roof_pitch_degrees ? `${Math.round(r.roof_pitch_degrees)}°` : '—'}</td>
+                  <td style="padding:10px 16px;text-align:right;font-size:.85rem;color:var(--text-muted);">${timeAgo(r.finalized_at)}</td>
+                  <td style="padding:10px 16px;text-align:right;">
+                    <a href="/developer/reports/${esc(r.job_id)}/pdf" target="_blank"
+                       style="display:inline-block;padding:5px 12px;background:var(--accent);color:#fff;border-radius:6px;font-size:.78rem;font-weight:600;text-decoration:none;">
+                      ⬇ PDF
+                    </a>
+                  </td>
+                </tr>`).join('')}
+              </tbody>
+            </table>`}
       </div>
     </div>
 
@@ -761,6 +821,56 @@ developerPortalRoutes.post('/checkout', async (c) => {
 })
 
 // ── GET /developer/usage — Credit ledger ──────────────────────────────────────
+
+// ── GET /developer/reports/:jobId/pdf — Session-authenticated PDF download ─────
+
+developerPortalRoutes.get('/reports/:jobId/pdf', async (c) => {
+  const account = await requireAuth(c)
+  if (!account) return c.redirect('/developer/login')
+
+  const jobId = c.req.param('jobId')
+  const db = c.env.DB
+
+  const job = await db.prepare(`
+    SELECT id, order_id, status FROM api_jobs WHERE id = ? AND account_id = ? AND status = 'ready'
+  `).bind(jobId, account.id).first<any>()
+
+  if (!job || !job.order_id) {
+    return c.html(page('Not Found', `
+      ${navBar(account)}
+      <div style="max-width:600px;margin:80px auto;padding:0 24px;text-align:center;">
+        <div style="font-size:2rem;margin-bottom:12px;">📄</div>
+        <h2 style="font-size:1.2rem;font-weight:700;margin-bottom:8px;">Report not found</h2>
+        <p style="color:var(--text-muted);margin-bottom:20px;">This report does not exist or does not belong to your account.</p>
+        <a href="/developer/dashboard" class="btn btn-primary">← Back to Dashboard</a>
+      </div>
+    `), 404)
+  }
+
+  const baseUrl = new URL(c.req.url).origin
+  const pdfRes = await fetch(`${baseUrl}/api/reports/${job.order_id}/pdf`)
+
+  if (!pdfRes.ok) {
+    return c.html(page('Error', `
+      ${navBar(account)}
+      <div style="max-width:600px;margin:80px auto;padding:0 24px;text-align:center;">
+        <div style="font-size:2rem;margin-bottom:12px;">⚠️</div>
+        <h2 style="font-size:1.2rem;font-weight:700;margin-bottom:8px;">Could not load report</h2>
+        <p style="color:var(--text-muted);margin-bottom:20px;">The report PDF is temporarily unavailable. Please try again.</p>
+        <a href="/developer/dashboard" class="btn btn-primary">← Back to Dashboard</a>
+      </div>
+    `), 502)
+  }
+
+  return new Response(pdfRes.body, {
+    headers: {
+      'Content-Type': pdfRes.headers.get('Content-Type') ?? 'text/html',
+      'Content-Disposition': `inline; filename="roof-report-${jobId.slice(0, 8)}.pdf"`,
+    }
+  })
+})
+
+// ── GET /developer/usage ──────────────────────────────────────────────────────
 
 developerPortalRoutes.get('/usage', async (c) => {
   const account = await requireAuth(c)

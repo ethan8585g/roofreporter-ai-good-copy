@@ -149,6 +149,15 @@ async function loadView(view) {
         const squareRes = await saFetch('/api/settings/square/status');
         if (squareRes) SA.data.square = await squareRes.json();
         break;
+      case 'api-users':
+        var apiUsersRes = await saFetch('/api/admin/superadmin/api-accounts');
+        if (apiUsersRes && apiUsersRes.ok) {
+          SA.data.apiUsers = await apiUsersRes.json();
+          var badge = document.getElementById('sa-api-badge');
+          var activeJobs = (SA.data.apiUsers.accounts || []).reduce(function(s, a) { return s + (a.active_jobs || 0); }, 0);
+          if (badge) { badge.textContent = activeJobs; badge.style.display = activeJobs > 0 ? '' : 'none'; }
+        }
+        break;
       case 'call-center':
         // Handled by call-center.js module
         if (typeof window.loadCallCenter === 'function') {
@@ -392,6 +401,7 @@ function renderContent() {
     case 'blog-manager': root.innerHTML = renderBlogManagerView(); break;
     case 'ga4': root.innerHTML = renderGA4View(); break;
     case 'pricing': root.innerHTML = renderPricingView(); break;
+    case 'api-users': root.innerHTML = renderApiUsersView(); break;
     case 'call-center': break; // Handled by call-center.js
     case 'meta-connect': break; // Handled by meta-connect.js
     case 'secretary-admin': root.innerHTML = renderSecretaryAdminView(); break;
@@ -8287,3 +8297,164 @@ function smTimeAgo(dateStr) {
   if (diff < 86400) return Math.floor(diff / 3600) + 'h ago'; if (diff < 604800) return Math.floor(diff / 86400) + 'd ago';
   return fmtDate(dateStr);
 }
+
+// ── API Users View ────────────────────────────────────────────────────────────
+
+function renderApiUsersView() {
+  var d = (SA.data.apiUsers && SA.data.apiUsers.accounts) ? SA.data.apiUsers : { accounts: [] };
+  var accounts = d.accounts || [];
+  var totalAccounts = accounts.length;
+  var activeJobs = accounts.reduce(function(s, a) { return s + (a.active_jobs || 0); }, 0);
+  var jobsThisMonth = accounts.reduce(function(s, a) { return s + (a.jobs_this_month || 0); }, 0);
+  var lowCredit = accounts.filter(function(a) { return (a.credit_balance || 0) < 5; }).length;
+
+  var kpis = '<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">' +
+    samc('API Accounts', totalAccounts, 'fa-key', 'teal', 'registered') +
+    samc('Active Jobs', activeJobs, 'fa-spinner', 'amber', 'in queue / tracing') +
+    samc('Reports This Month', jobsThisMonth, 'fa-file-alt', 'blue', 'all accounts') +
+    samc('Low Credit', lowCredit, 'fa-exclamation-triangle', 'red', '< 5 credits') +
+  '</div>';
+
+  if (accounts.length === 0) {
+    return kpis + '<div class="bg-white rounded-2xl p-12 text-center text-gray-400"><i class="fas fa-key text-4xl mb-3 block opacity-30"></i><p class="font-medium">No API accounts yet</p><p class="text-sm mt-1">Accounts appear here once someone signs up via the Developer Portal</p></div>';
+  }
+
+  var rows = accounts.map(function(a) {
+    var statusColor = a.status === 'active' ? 'green' : a.status === 'suspended' ? 'yellow' : 'red';
+    var statusLabel = a.status || 'active';
+    var balanceCls = (a.credit_balance || 0) < 5 ? 'font-bold text-red-600' : 'font-bold text-slate-800';
+    var toggleLabel = a.status === 'active' ? 'Suspend' : 'Activate';
+    var toggleAction = a.status === 'active' ? 'suspended' : 'active';
+    var toggleCls = a.status === 'active' ? 'bg-yellow-50 text-yellow-700 border-yellow-200 hover:bg-yellow-100' : 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100';
+    return '<tr class="border-b border-gray-100 hover:bg-slate-50 transition-colors">' +
+      '<td class="px-4 py-3">' +
+        '<div class="font-semibold text-slate-800 text-sm">' + esc(a.company_name || '') + '</div>' +
+        '<div class="text-xs text-slate-400 mt-0.5">' + esc(a.contact_email || '') + '</div>' +
+      '</td>' +
+      '<td class="px-4 py-3 text-center">' +
+        '<span class="px-2 py-0.5 bg-' + statusColor + '-100 text-' + statusColor + '-700 rounded-full text-xs font-medium capitalize">' + statusLabel + '</span>' +
+      '</td>' +
+      '<td class="px-4 py-3 text-center"><span class="' + balanceCls + '">' + (a.credit_balance || 0) + '</span></td>' +
+      '<td class="px-4 py-3 text-center text-slate-600 text-sm">' + (a.total_jobs || 0) + '</td>' +
+      '<td class="px-4 py-3 text-center text-slate-600 text-sm">' + (a.jobs_this_month || 0) + '</td>' +
+      '<td class="px-4 py-3 text-center text-slate-500 text-xs">' + (a.last_purchase_at ? fmtDate(a.last_purchase_at) : '<span class="text-gray-300">—</span>') + '</td>' +
+      '<td class="px-4 py-3 text-center text-slate-500 text-xs">' + smTimeAgo(a.last_job_at) + '</td>' +
+      '<td class="px-4 py-3 text-center">' +
+        '<span class="text-xs ' + (a.active_key_count > 0 ? 'text-teal-600 font-semibold' : 'text-gray-400') + '">' + (a.active_key_count || 0) + ' key' + ((a.active_key_count || 0) !== 1 ? 's' : '') + '</span>' +
+      '</td>' +
+      '<td class="px-4 py-3">' +
+        '<div class="flex items-center gap-1.5 justify-end flex-wrap">' +
+          '<button onclick="apiUserTopUp(\'' + a.id + '\', \'' + esc(a.company_name || '') + '\')" class="px-2.5 py-1 text-xs font-medium bg-teal-50 text-teal-700 border border-teal-200 rounded-lg hover:bg-teal-100 transition-colors"><i class="fas fa-plus mr-1"></i>Credits</button>' +
+          '<button onclick="apiUserToggleStatus(\'' + a.id + '\', \'' + toggleAction + '\', this)" class="px-2.5 py-1 text-xs font-medium border rounded-lg transition-colors ' + toggleCls + '">' + toggleLabel + '</button>' +
+          '<button onclick="apiUserLedger(\'' + a.id + '\', \'' + esc(a.company_name || '') + '\')" class="px-2.5 py-1 text-xs font-medium bg-slate-50 text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors"><i class="fas fa-list mr-1"></i>Ledger</button>' +
+        '</div>' +
+      '</td>' +
+    '</tr>';
+  }).join('');
+
+  var table = '<div class="overflow-x-auto">' +
+    '<table class="w-full text-sm">' +
+      '<thead class="bg-slate-50 border-b border-slate-200">' +
+        '<tr>' +
+          '<th class="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Account</th>' +
+          '<th class="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wide">Status</th>' +
+          '<th class="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wide">Credits</th>' +
+          '<th class="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wide">Total Reports</th>' +
+          '<th class="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wide">This Month</th>' +
+          '<th class="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wide">Last Purchase</th>' +
+          '<th class="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wide">Last Job</th>' +
+          '<th class="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wide">Keys</th>' +
+          '<th class="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wide">Actions</th>' +
+        '</tr>' +
+      '</thead>' +
+      '<tbody>' + rows + '</tbody>' +
+    '</table>' +
+  '</div>';
+
+  var refreshBtn = '<button onclick="saSetView(\'api-users\', null)" class="px-3 py-1.5 text-xs font-medium bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 transition-colors"><i class="fas fa-sync-alt mr-1"></i>Refresh</button>';
+
+  return '<div class="p-6 space-y-6">' +
+    kpis +
+    saSection('API Users', 'fa-key', table, refreshBtn) +
+  '</div>';
+}
+
+function esc(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+window.apiUserTopUp = async function(accountId, companyName) {
+  var amtStr = prompt('Add credits to ' + companyName + ':\nHow many credits to add?', '10');
+  if (!amtStr) return;
+  var amt = parseInt(amtStr, 10);
+  if (isNaN(amt) || amt < 1) { window.rmToast('Enter a valid number of credits', 'error'); return; }
+  var res = await saFetch('/api/admin/api-accounts/' + accountId, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ add_credits: String(amt) }) });
+  if (!res) return;
+  if (res.ok) {
+    window.rmToast('Added ' + amt + ' credits to ' + companyName, 'success');
+    saSetView('api-users', null);
+  } else {
+    var err = await res.json().catch(function() { return {}; });
+    window.rmToast('Error: ' + (err.error || res.status), 'error');
+  }
+};
+
+window.apiUserToggleStatus = async function(accountId, newStatus, btn) {
+  var label = newStatus === 'active' ? 'activate' : 'suspend';
+  if (!confirm('Are you sure you want to ' + label + ' this account?')) return;
+  var res = await saFetch('/api/admin/api-accounts/' + accountId, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: newStatus }) });
+  if (!res) return;
+  if (res.ok) {
+    window.rmToast('Account ' + label + 'd', 'success');
+    saSetView('api-users', null);
+  } else {
+    var err = await res.json().catch(function() { return {}; });
+    window.rmToast('Error: ' + (err.error || res.status), 'error');
+  }
+};
+
+window.apiUserLedger = async function(accountId, companyName) {
+  var res = await saFetch('/api/admin/superadmin/api-accounts/' + accountId + '/ledger');
+  if (!res) return;
+  var data = await res.json().catch(function() { return { entries: [] }; });
+  var entries = data.entries || [];
+  var rows = entries.length === 0
+    ? '<tr><td colspan="5" class="px-4 py-8 text-center text-gray-400 text-sm">No ledger entries</td></tr>'
+    : entries.map(function(e) {
+        var deltaColor = e.delta > 0 ? 'text-green-600' : 'text-red-600';
+        var deltaSign = e.delta > 0 ? '+' : '';
+        return '<tr class="border-b border-gray-100">' +
+          '<td class="px-4 py-2 text-xs text-slate-500">' + fmtDateTime(e.created_at) + '</td>' +
+          '<td class="px-4 py-2 text-xs capitalize">' + (e.reason || '') + '</td>' +
+          '<td class="px-4 py-2 text-xs font-bold ' + deltaColor + '">' + deltaSign + e.delta + '</td>' +
+          '<td class="px-4 py-2 text-xs text-slate-600 font-medium">' + (e.balance_after || 0) + '</td>' +
+          '<td class="px-4 py-2 text-xs text-slate-400">' + esc(e.ref_id || '') + '</td>' +
+        '</tr>';
+      }).join('');
+
+  var modal = document.createElement('div');
+  modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm';
+  modal.id = 'apiLedgerModal';
+  modal.innerHTML = '<div class="bg-white rounded-2xl shadow-2xl max-w-2xl w-full mx-4 max-h-[85vh] overflow-hidden flex flex-col">' +
+    '<div class="bg-gradient-to-r from-teal-600 to-cyan-700 px-6 py-4 flex items-center justify-between">' +
+      '<div><h3 class="text-white font-bold text-lg"><i class="fas fa-list mr-2"></i>Credit Ledger</h3><p class="text-teal-200 text-xs">' + esc(companyName) + '</p></div>' +
+      '<button onclick="document.getElementById(\'apiLedgerModal\').remove()" class="text-white/70 hover:text-white"><i class="fas fa-times text-lg"></i></button>' +
+    '</div>' +
+    '<div class="overflow-y-auto flex-1">' +
+      '<table class="w-full text-sm">' +
+        '<thead class="bg-gray-50 sticky top-0"><tr>' +
+          '<th class="px-4 py-2 text-left text-xs text-gray-500">Date</th>' +
+          '<th class="px-4 py-2 text-left text-xs text-gray-500">Reason</th>' +
+          '<th class="px-4 py-2 text-left text-xs text-gray-500">Delta</th>' +
+          '<th class="px-4 py-2 text-left text-xs text-gray-500">Balance After</th>' +
+          '<th class="px-4 py-2 text-left text-xs text-gray-500">Ref</th>' +
+        '</tr></thead>' +
+        '<tbody>' + rows + '</tbody>' +
+      '</table>' +
+    '</div>' +
+    '<div class="px-6 py-3 border-t bg-gray-50 flex justify-end"><button onclick="document.getElementById(\'apiLedgerModal\').remove()" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg text-sm font-medium">Close</button></div>' +
+  '</div>';
+  document.body.appendChild(modal);
+  modal.addEventListener('click', function(e) { if (e.target === modal) modal.remove(); });
+};
