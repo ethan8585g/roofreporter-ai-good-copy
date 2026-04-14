@@ -6884,6 +6884,7 @@ const guidesConfig: Record<string, GuideConfig> = {
     readTime: 4,
     icon: 'fa-ruler-combined',
     intro: 'Ordering a measurement report through Roof Manager is the fastest way to put an accurate square-count, edge list, and material BOM in front of your crew or your customer. You never climb, you never guess, and every report is branded with your logo and delivered as a PDF you can forward straight from your phone.',
+    videoId: 'u3Xa0FaviGY',
     steps: [
       { title: 'Sign in to your Roof Manager account', body: 'Head to <a href="/customer/login" class="text-[#00FF88] hover:underline">roofmanager.ca/customer/login</a>. New accounts get 3 free reports — no credit card required. If your company already has an account, ask your admin to invite you so your reports sit in one shared dashboard.' },
       { title: 'Click "Order Report" and enter the address', body: 'Type the street address. Google\'s autocomplete locks in the correct parcel. Double-check the satellite thumbnail that appears — if the wrong building is highlighted (common on corner lots or multi-unit sites), drag the pin onto the correct structure.' },
@@ -7082,6 +7083,14 @@ function getGuideHTML(slug: string): string | null {
     <div class="mb-10">
       <p class="text-gray-300 text-lg leading-relaxed">${g.intro}</p>
     </div>
+    ${(g as any).videoId ? `
+    <div class="mb-10">
+      <div class="relative rounded-2xl overflow-hidden border border-white/10 shadow-2xl" style="padding-bottom:56.25%;height:0;">
+        <iframe class="absolute top-0 left-0 w-full h-full" src="https://www.youtube.com/embed/${(g as any).videoId}" title="${g.title}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+      </div>
+      <p class="text-xs text-gray-500 mt-3 text-center">Watch the full walkthrough — then follow the steps below.</p>
+    </div>
+    ` : ''}
     ${stepsHTML}
     <div class="mt-12 bg-gradient-to-br from-[#00FF88]/10 to-transparent border border-[#00FF88]/30 rounded-2xl p-8 md:p-10 text-center">
       <h2 class="text-2xl md:text-3xl font-black text-white mb-3">Ready to get started?</h2>
