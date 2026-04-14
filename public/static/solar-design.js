@@ -470,7 +470,17 @@
             '<button onclick="window._sdDeleteVariant()" class="px-2.5 py-1 bg-red-700 hover:bg-red-600 text-white rounded text-xs font-semibold"><i class="fas fa-trash mr-1"></i>Delete</button>' +
             '<a id="sdProposalLink" href="#" target="_blank" class="px-2.5 py-1 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 text-white rounded text-xs font-bold"><i class="fas fa-file-pdf mr-1"></i>View Proposal</a>' +
           '</div>' +
-          '<div class="bg-amber-500/20 border border-amber-500/50 text-amber-100 rounded-lg px-3 py-2 mb-2 text-sm font-semibold text-center"><i class="fas fa-hand-pointer mr-1"></i>Click anywhere on the roof below to place a solar panel. Use "Fill All Segments" in the sidebar to auto-fill.</div>' +
+          '<div class="bg-amber-500/20 border border-amber-500/50 text-amber-100 rounded-lg px-3 py-2 mb-2 text-sm font-semibold text-center"><i class="fas fa-hand-pointer mr-1"></i>Click the roof to place a panel. Right-click a panel to erase it.</div>' +
+          '<div class="bg-gray-800 rounded-xl p-3 mb-2 flex items-center gap-3 flex-wrap">' +
+            '<span class="text-xs font-bold text-gray-400 uppercase whitespace-nowrap"><i class="fas fa-sync-alt mr-1"></i>Rotate panels</span>' +
+            '<input type="range" id="sdRotationTop" min="0" max="359" step="1" value="0" oninput="window._sdSetRotation(this.value)" class="flex-1 min-w-[200px]">' +
+            '<span id="sdRotLabelTop" class="text-sm font-extrabold text-amber-400 w-14 text-center">0°</span>' +
+            '<button onclick="window._sdNudgeRotation(-15)" class="px-2 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded text-xs">-15°</button>' +
+            '<button onclick="window._sdNudgeRotation(-1)" class="px-2 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded text-xs">-1°</button>' +
+            '<button onclick="window._sdNudgeRotation(1)" class="px-2 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded text-xs">+1°</button>' +
+            '<button onclick="window._sdNudgeRotation(15)" class="px-2 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded text-xs">+15°</button>' +
+            '<button onclick="window._sdNudgeRotation(90)" class="px-2 py-1 bg-blue-700 hover:bg-blue-600 text-white rounded text-xs font-semibold">90°</button>' +
+          '</div>' +
           '<div class="bg-gray-800 rounded-xl overflow-hidden relative" id="sdCanvasWrapper">' +
             '<canvas id="sdCanvas" class="block w-full cursor-crosshair"></canvas>' +
           '</div>' +
@@ -638,14 +648,14 @@
   window._sdSetRotation = function(v) {
     var deg = ((parseInt(v) || 0) % 360 + 360) % 360;
     state.panelRot = deg;
-    var label = document.getElementById('sdRotLabel');
-    if (label) label.textContent = deg + '°';
-    var slider = document.getElementById('sdRotation');
-    if (slider && parseInt(slider.value) !== deg) slider.value = deg;
-    var applyAll = document.getElementById('sdApplyAll');
-    if (applyAll && applyAll.checked) {
-      for (var i = 0; i < state.panels.length; i++) state.panels[i].rot = deg;
-    }
+    ['sdRotLabel', 'sdRotLabelTop'].forEach(function(id) {
+      var el = document.getElementById(id); if (el) el.textContent = deg + '°';
+    });
+    ['sdRotation', 'sdRotationTop'].forEach(function(id) {
+      var el = document.getElementById(id); if (el && parseInt(el.value) !== deg) el.value = deg;
+    });
+    // Always rotate all existing panels to match — this is what users expect
+    for (var i = 0; i < state.panels.length; i++) state.panels[i].rot = deg;
     drawCanvas();
   };
   window._sdNudgeRotation = function(delta) {
