@@ -342,10 +342,10 @@ authRoutes.post('/forgot-password', async (c) => {
 
     if (admin) {
       const recent = await c.env.DB.prepare(
-        "SELECT COUNT(*) as cnt FROM password_reset_tokens WHERE email = ? AND account_type = 'admin' AND created_at > datetime('now', '-1 hour')"
+        "SELECT COUNT(*) as cnt FROM password_reset_tokens WHERE email = ? AND account_type = 'admin' AND created_at > datetime('now', '-30 minutes')"
       ).bind(cleanEmail).first<any>()
 
-      if (!recent || recent.cnt < 3) {
+      if (!recent || recent.cnt < 1) {
         const token = crypto.randomUUID() + '-' + crypto.randomUUID()
         const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString()
 
@@ -957,4 +957,16 @@ authRoutes.get('/gmail/status', async (c) => {
       setup_url: '/api/auth/gmail/setup'
     }
   })
+})
+
+// POST /api/auth/gmail/disconnect — Remove stored Gmail refresh token + sender email
+authRoutes.post('/gmail/disconnect', async (c) => {
+  try {
+    await c.env.DB.prepare(
+      "DELETE FROM settings WHERE master_company_id = 1 AND setting_key IN ('gmail_refresh_token','gmail_sender_email')"
+    ).run()
+    return c.json({ success: true })
+  } catch (e: any) {
+    return c.json({ error: e?.message || 'Failed to disconnect Gmail' }, 500)
+  }
 })

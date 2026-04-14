@@ -269,13 +269,34 @@ function renderOverview() {
   `;
 }
 
+async function disconnectGmail() {
+  if (!confirm('Disconnect Gmail? Emails will stop sending until you reconnect.')) return;
+  try {
+    const r = await fetch('/api/auth/gmail/disconnect', { method: 'POST', headers: authHeaders() });
+    const d = await r.json();
+    if (d.success) {
+      if (A.gmailStatus && A.gmailStatus.gmail_oauth2) {
+        A.gmailStatus.gmail_oauth2.ready = false;
+        A.gmailStatus.gmail_oauth2.sender_email = '';
+      }
+      render();
+    } else {
+      alert(d.error || 'Failed to disconnect Gmail');
+    }
+  } catch (e) {
+    alert('Failed to disconnect Gmail: ' + e.message);
+  }
+}
+window.disconnectGmail = disconnectGmail;
+
 function renderGmailCard() {
   const gs = A.gmailStatus?.gmail_oauth2;
   if (!gs) return '<p class="text-xs text-gray-400">Gmail status unavailable</p>';
   if (gs.ready) {
     return `<div class="flex items-center gap-3 p-3 bg-green-50 border border-green-200 rounded-xl">
       <i class="fas fa-envelope-circle-check text-green-600"></i>
-      <div><p class="text-sm font-semibold text-green-800">Gmail Connected</p><p class="text-xs text-green-600">${gs.sender_email}</p></div>
+      <div class="flex-1"><p class="text-sm font-semibold text-green-800">Gmail Connected</p><p class="text-xs text-green-600">${gs.sender_email}</p></div>
+      <button onclick="disconnectGmail()" class="text-xs px-3 py-1.5 border border-red-200 text-red-600 rounded-lg hover:bg-red-50 font-semibold">Disconnect</button>
     </div>`;
   }
   return `<div class="flex items-center gap-3 p-3 bg-amber-50 border border-amber-200 rounded-xl">
