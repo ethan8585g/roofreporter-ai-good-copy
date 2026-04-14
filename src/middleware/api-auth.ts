@@ -134,6 +134,7 @@ export async function logApiRequest(
 
 export function apiAuthMiddleware() {
   return async (c: Context<{ Bindings: Bindings }>, next: Next) => {
+    try {
     const startMs = Date.now()
     const db = c.env.DB
     const ip = c.req.header('cf-connecting-ip') ?? c.req.header('x-forwarded-for') ?? null
@@ -141,12 +142,12 @@ export function apiAuthMiddleware() {
 
     const authHeader = c.req.header('authorization') ?? ''
     if (!authHeader.startsWith('Bearer rm_live_')) {
-      await logApiRequest(db, {
+      logApiRequest(db, {
         accountId: null, apiKeyId: null,
         method: c.req.method, path: c.req.path,
         statusCode: 401, ip, userAgent: ua,
         durationMs: Date.now() - startMs
-      })
+      }).catch(() => {})
       return c.json({ error: 'Missing or invalid Authorization header. Use: Bearer rm_live_…' }, 401)
     }
 
@@ -167,47 +168,27 @@ export function apiAuthMiddleware() {
     `).bind(prefix).first<any>()
 
     if (!keyRow) {
-      await logApiRequest(db, {
-        accountId: null, apiKeyId: null,
-        method: c.req.method, path: c.req.path,
-        statusCode: 401, ip, userAgent: ua,
-        durationMs: Date.now() - startMs
-      })
+      logApiRequest(db, { accountId: null, apiKeyId: null, method: c.req.method, path: c.req.path, statusCode: 401, ip, userAgent: ua, durationMs: Date.now() - startMs }).catch(() => {})
       return c.json({ error: 'Invalid API key' }, 401)
     }
 
     // Verify full key hash
     const valid = await verifyApiKey(rawKey, keyRow.key_hash)
     if (!valid) {
-      await logApiRequest(db, {
-        accountId: keyRow.account_id, apiKeyId: keyRow.id,
-        method: c.req.method, path: c.req.path,
-        statusCode: 401, ip, userAgent: ua,
-        durationMs: Date.now() - startMs
-      })
+      logApiRequest(db, { accountId: keyRow.account_id, apiKeyId: keyRow.id, method: c.req.method, path: c.req.path, statusCode: 401, ip, userAgent: ua, durationMs: Date.now() - startMs }).catch(() => {})
       return c.json({ error: 'Invalid API key' }, 401)
     }
 
     // Check account status
     if (keyRow.acct_status !== 'active') {
-      await logApiRequest(db, {
-        accountId: keyRow.account_id, apiKeyId: keyRow.id,
-        method: c.req.method, path: c.req.path,
-        statusCode: 403, ip, userAgent: ua,
-        durationMs: Date.now() - startMs
-      })
+      logApiRequest(db, { accountId: keyRow.account_id, apiKeyId: keyRow.id, method: c.req.method, path: c.req.path, statusCode: 403, ip, userAgent: ua, durationMs: Date.now() - startMs }).catch(() => {})
       return c.json({ error: 'Account is suspended. Contact support@roofmanager.ca' }, 403)
     }
 
     // Rate limit check
     const rateResult = await checkRateLimit(db, keyRow.account_id, keyRow.id)
     if (!rateResult.allowed) {
-      await logApiRequest(db, {
-        accountId: keyRow.account_id, apiKeyId: keyRow.id,
-        method: c.req.method, path: c.req.path,
-        statusCode: 429, ip, userAgent: ua,
-        durationMs: Date.now() - startMs
-      })
+      logApiRequest(db, { accountId: keyRow.account_id, apiKeyId: keyRow.id, method: c.req.method, path: c.req.path, statusCode: 429, ip, userAgent: ua, durationMs: Date.now() - startMs }).catch(() => {})
       return c.json(
         { error: 'Rate limit exceeded', retry_after: rateResult.retryAfter },
         429,
@@ -243,21 +224,26 @@ export function apiAuthMiddleware() {
       created_at: keyRow.created_at
     }
 
-    c.set('apiAccount', account)
-    c.set('apiKey', apiKey)
+    c.set('apiAccount' as any, account)
+    c.set('apiKey' as any, apiKey)
 
     await next()
 
-    // Post-response: log outcome
-    await logApiRequest(db, {
+    // Post-response: log outcome (fire-and-forget)
+    logApiRequest(db, {
       accountId: account.id,
       apiKeyId: apiKey.id,
       method: c.req.method,
       path: c.req.path,
-      statusCode: c.res.status,
+      statusCode: c.res?.status ?? 200,
       ip, userAgent: ua,
       durationMs: Date.now() - startMs
-    })
+    }).catch(() => {})
+
+    } catch (err: any) {
+      console.error('[api-auth] middleware error:', err?.message ?? err)
+      return c.json({ error: 'Internal error', detail: err?.message }, 500)
+    }
   }
 }
 
