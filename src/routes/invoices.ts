@@ -46,7 +46,7 @@ invoiceRoutes.use('/*', async (c, next) => {
 // Scope helper: returns the effective data owner for a request.
 // - Admin/superadmin: { isAdmin: true, ownerId: null } → full access
 // - Customer (incl. team member): { isAdmin: false, ownerId: effective team owner id }
-function getScope(c: any): { isAdmin: boolean; ownerId: number | null } {
+export function getScope(c: any): { isAdmin: boolean; ownerId: number | null } {
   const user = c.get('admin' as any) as any
   if (!user) return { isAdmin: false, ownerId: null }
   if (user.role === 'customer') {
@@ -73,7 +73,7 @@ function generateShareToken(): string {
   return token
 }
 
-function calculateTotals(items: any[], taxRate: number, discountAmount: number, discountType: string = 'fixed') {
+export function calculateTotals(items: any[], taxRate: number, discountAmount: number, discountType: string = 'fixed') {
   let subtotal = 0
   let taxableSubtotal = 0
   for (const item of items) {

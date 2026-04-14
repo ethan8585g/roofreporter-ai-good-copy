@@ -98,7 +98,7 @@ async function squareRequest(accessToken: string, method: string, path: string, 
 // Square uses HMAC-SHA256 over: notificationUrl + body
 // Header: x-square-hmacsha256-signature (base64)
 // ============================================================
-async function verifySquareSignature(body: string, signature: string, signatureKey: string, notificationUrl: string): Promise<boolean> {
+export async function verifySquareSignature(body: string, signature: string, signatureKey: string, notificationUrl: string): Promise<boolean> {
   try {
     if (!signature || !signatureKey) return false
 
