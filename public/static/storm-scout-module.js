@@ -8,6 +8,13 @@
   var root = document.getElementById('storm-scout-app');
   if (!root) return;
 
+  // Race guard: the Google Maps callback (onStormScoutMapsReady) may fire
+  // before this module finishes parsing and replaces the real function
+  // below. Install a stub so the early call is a no-op, and set a flag so
+  // we can run init ourselves once we're ready.
+  var earlyReadyFire = false;
+  window.initStormScoutMap = function () { earlyReadyFire = true; };
+
   var map = null;
   var infoWindow = null;
   var polygons = {};   // id -> google.maps.Polygon
@@ -206,7 +213,9 @@
     });
     root.querySelectorAll('input[data-layer]').forEach(function (el) {
       el.addEventListener('change', function () {
-        layers[el.getAttribute('data-layer')] = el.checked;
+        var name = el.getAttribute('data-layer');
+        layers[name] = el.checked;
+        ssTrack('layer_toggle', { layer: name, enabled: el.checked });
         renderAlertsOnMap();
         renderHeatmap();
         renderSatellite();
@@ -534,12 +543,14 @@
   function showSatelliteAttribution(date) {
     var el = document.getElementById('ssSatAttr');
     if (!el) {
+      var wrap = document.querySelector('.ss-map-wrap');
+      if (!wrap) return;
       el = document.createElement('div');
       el.id = 'ssSatAttr';
       el.className = 'ss-sat-attr';
-      document.querySelector('.ss-map-wrap').appendChild(el);
+      wrap.appendChild(el);
     }
-    el.innerHTML = 'Imagery: NASA GIBS / EOSDIS • ' + date;
+    el.textContent = 'Imagery: NASA GIBS / EOSDIS • ' + date;
   }
 
   // --- Before/After modal ---
@@ -688,6 +699,7 @@
   }
 
   function loadHistory(date) {
+    ssTrack('history_load', { date: date });
     return api('/history?date=' + encodeURIComponent(date)).then(function (snap) {
       alerts = snap.alerts || [];
       hailReports = snap.hailReports || [];
@@ -757,17 +769,18 @@
     var wind = parseInt(prompt('Minimum wind gust to alert on (km/h). 0 = never:', '0') || '0', 10);
     if (!Number.isFinite(wind)) wind = 0;
 
-    poly.setMap(null); // will be re-rendered from DB
     alertsApi('POST', '/areas', {
       name: name, polygon: pts, min_hail_inches: hail, min_wind_kmh: wind,
       types: ['hail', 'wind', 'tornado', 'thunderstorm'],
       notify_email: true, notify_push: false
     }).then(function () {
+      poly.setMap(null); // remove the draft — the DB-backed render takes over
       toast('Territory saved', 'info');
       ssTrack('territory_create', { name: name, min_hail_inches: hail, min_wind_kmh: wind });
       loadTerritories();
     }).catch(function (err) {
-      toast('Save failed: ' + (err.message || err), 'error');
+      toast('Save failed: ' + (err.message || err) + ' — your drawing is still on the map; fix thresholds and try again, or click it to delete.', 'error');
+      // Keep poly on map so user can see/edit/delete their draft.
     });
   }
 
@@ -810,8 +823,8 @@
         fillColor: '#60a5fa', fillOpacity: 0.1, map: map, zIndex: 2
       });
       poly.addListener('click', function () {
-        var center = computeCentroid(t.polygon);
-        map.panTo(center);
+        if (!map) return;
+        map.panTo(computeCentroid(t.polygon));
       });
       territoryPolygons[t.id] = poly;
     });
@@ -829,7 +842,7 @@
       item.addEventListener('click', function () {
         var id = parseInt(item.getAttribute('data-id'), 10);
         var t = territories.find(function (x) { return x.id === id; });
-        if (t && t.polygon && t.polygon.length) {
+        if (t && t.polygon && t.polygon.length && map) {
           var c = computeCentroid(t.polygon);
           map.panTo(c); map.setZoom(Math.max(map.getZoom(), 10));
         }
@@ -881,7 +894,7 @@
           var lat = parseFloat(item.getAttribute('data-lat'));
           var lng = parseFloat(item.getAttribute('data-lng'));
           ssTrack('match_click', { lat: lat, lng: lng });
-          if (Number.isFinite(lat) && Number.isFinite(lng)) {
+          if (Number.isFinite(lat) && Number.isFinite(lng) && map) {
             map.panTo({ lat: lat, lng: lng }); map.setZoom(Math.max(map.getZoom(), 10));
           }
         });
@@ -958,5 +971,6 @@
     loadMatches();
     renderRoi();
   };
-  if (window.googleMapsReady) window.initStormScoutMap();
+  // If Maps already loaded (and fired the early-stub), or flag is set, run now.
+  if (window.googleMapsReady || earlyReadyFire) window.initStormScoutMap();
 })();

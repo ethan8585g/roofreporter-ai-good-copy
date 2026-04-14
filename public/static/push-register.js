@@ -43,7 +43,13 @@
       return { ok: true, reused: true };
     }
 
-    var keyRes = await fetchJson('/api/storm-push/vapid-public-key');
+    var keyRes;
+    try {
+      keyRes = await fetchJson('/api/storm-push/vapid-public-key');
+    } catch (e) {
+      if (/503/.test(String(e && e.message))) throw new Error('Push is not configured yet by the administrator.');
+      throw e;
+    }
     var sub = await reg.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey: urlBase64ToUint8Array(keyRes.publicKey)

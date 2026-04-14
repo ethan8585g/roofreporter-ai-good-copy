@@ -8,7 +8,8 @@ export const stormAnalyticsRoutes = new Hono<{ Bindings: Bindings }>()
 
 const ALLOWED_EVENTS = new Set([
   'map_open', 'alert_view', 'match_click', 'before_after_open',
-  'territory_create', 'match_sent', 'lead_created_from_storm'
+  'territory_create', 'match_sent', 'lead_created_from_storm',
+  'layer_toggle', 'history_load'
 ])
 
 async function requireCustomer(c: any): Promise<number | null> {
