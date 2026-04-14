@@ -2,7 +2,7 @@ import { Hono } from 'hono'
 import type { Bindings } from '../types'
 import { getActiveAlerts, getHailReports, stormCacheClear } from '../services/storm-data'
 import { buildDailySnapshot, writeSnapshot, readSnapshot, listSnapshotDates, pruneOldSnapshots, matchSnapshotAndNotify } from '../services/storm-ingest'
-import { GIBS_LAYERS, getGibsTileUrl, getGibsMaxZoom, buildGoogleStaticMapUrl } from '../services/satellite-imagery'
+import { GIBS_LAYERS, getGibsTileUrl, getGibsMaxZoom, buildGoogleStaticMapUrl, BASEMAP_PROVIDERS } from '../services/satellite-imagery'
 
 export const stormScoutRoutes = new Hono<{ Bindings: Bindings }>()
 
@@ -107,6 +107,34 @@ stormScoutRoutes.post('/ingest', async (c) => {
 // Satellite — list available GIBS layers (client uses this to build
 // ImageMapType overlays) + proxy-free direct URL helper.
 // ------------------------------------------------------------
+// ------------------------------------------------------------
+// Basemap providers — hands the client a list of enabled alt-satellite
+// providers (Esri, Mapbox, Nearmap …) with tile URL templates. Tokens
+// are only included for providers whose secret is actually set in env.
+// ------------------------------------------------------------
+stormScoutRoutes.get('/basemaps', async (c) => {
+  const customerId = await requireCustomer(c)
+  if (!customerId) return c.json({ error: 'Not authenticated' }, 401)
+  const env: any = c.env
+  const out: any[] = []
+  for (const p of Object.values(BASEMAP_PROVIDERS)) {
+    if (!p.requiresToken) {
+      out.push({ id: p.id, name: p.name, maxZoom: p.maxZoom, attribution: p.attribution, urlTemplate: p.urlTemplate, enabled: true })
+      continue
+    }
+    let token: string | undefined
+    if (p.id === 'mapbox_satellite') token = env.MAPBOX_ACCESS_TOKEN
+    if (p.id === 'nearmap') token = env.NEARMAP_API_KEY
+    if (!token) continue
+    out.push({
+      id: p.id, name: p.name, maxZoom: p.maxZoom, attribution: p.attribution,
+      urlTemplate: p.urlTemplate.replace('{token}', token),
+      enabled: true
+    })
+  }
+  return c.json({ providers: out })
+})
+
 stormScoutRoutes.get('/satellite/layers', async (c) => {
   const customerId = await requireCustomer(c)
   if (!customerId) return c.json({ error: 'Not authenticated' }, 401)

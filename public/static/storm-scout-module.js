@@ -360,14 +360,79 @@
     map = new google.maps.Map(el, {
       center: { lat: 45.0, lng: -90.0 },
       zoom: 4,
-      mapTypeId: 'terrain',
+      mapTypeId: 'hybrid',
       streetViewControl: false,
       mapTypeControl: true,
-      fullscreenControl: true
+      fullscreenControl: true,
+      mapTypeControlOptions: {
+        style: google.maps.MapTypeControlStyle.DROPDOWN_MENU,
+        mapTypeIds: ['roadmap', 'hybrid', 'satellite', 'terrain']
+      }
     });
     infoWindow = new google.maps.InfoWindow();
     ssTrack('map_open');
+    loadBasemapProviders();
     loadAll(false);
+  }
+
+  // Register higher-resolution basemap providers (Esri, Mapbox, Nearmap…)
+  // as selectable MapTypes. Attribution shown in a small overlay when
+  // the active basemap comes from a non-Google provider.
+  function loadBasemapProviders() {
+    api('/basemaps').then(function (res) {
+      var providers = (res && res.providers) || [];
+      if (!providers.length) return;
+      var controlIds = ['roadmap', 'hybrid', 'satellite', 'terrain'];
+
+      providers.forEach(function (p) {
+        var layer = new google.maps.ImageMapType({
+          name: p.name,
+          tileSize: new google.maps.Size(256, 256),
+          minZoom: 1,
+          maxZoom: p.maxZoom,
+          getTileUrl: function (coord, zoom) {
+            if (zoom > p.maxZoom) return null;
+            // Esri uses z/y/x; Mapbox/Nearmap use z/x/y — drive from the template.
+            return p.urlTemplate
+              .replace('{z}', String(zoom))
+              .replace('{x}', String(coord.x))
+              .replace('{y}', String(coord.y));
+          }
+        });
+        map.mapTypes.set(p.id, layer);
+        controlIds.push(p.id);
+      });
+
+      map.setOptions({
+        mapTypeControlOptions: {
+          style: google.maps.MapTypeControlStyle.DROPDOWN_MENU,
+          mapTypeIds: controlIds
+        }
+      });
+
+      // Attribution badge that swaps in/out based on active basemap
+      map.addListener('maptypeid_changed', function () {
+        var id = map.getMapTypeId();
+        var match = providers.find(function (x) { return x.id === id; });
+        showBasemapAttribution(match ? match.attribution : '');
+      });
+    }).catch(function (err) {
+      console.warn('[StormScout] basemaps', err);
+    });
+  }
+
+  function showBasemapAttribution(text) {
+    var el = document.getElementById('ssBasemapAttr');
+    if (!text) { if (el) el.remove(); return; }
+    if (!el) {
+      var wrap = document.querySelector('.ss-map-wrap');
+      if (!wrap) return;
+      el = document.createElement('div');
+      el.id = 'ssBasemapAttr';
+      el.className = 'ss-basemap-attr';
+      wrap.appendChild(el);
+    }
+    el.textContent = text;
   }
 
   function clearAlertLayers() {

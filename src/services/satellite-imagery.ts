@@ -48,6 +48,47 @@ export interface SnapshotOptions {
   mapType?: 'satellite' | 'hybrid' | 'roadmap'
 }
 
+// ------------------------------------------------------------
+// Basemap providers — higher-quality alternatives to Google Satellite
+// ------------------------------------------------------------
+export interface BasemapProvider {
+  id: string
+  name: string
+  maxZoom: number
+  attribution: string
+  urlTemplate: string     // {z}/{x}/{y} placeholders (Mapbox) or {z}/{y}/{x} (Esri). Token may be {token}.
+  requiresToken: boolean
+}
+
+export const BASEMAP_PROVIDERS: Record<string, BasemapProvider> = {
+  esri_world_imagery: {
+    id: 'esri_world_imagery',
+    name: 'Esri World Imagery',
+    maxZoom: 19,
+    attribution: 'Source: Esri, Maxar, Earthstar Geographics, USDA, USGS, AeroGRID, IGN, GIS User Community',
+    // Esri uses z/y/x ordering
+    urlTemplate: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    requiresToken: false
+  },
+  mapbox_satellite: {
+    id: 'mapbox_satellite',
+    name: 'Mapbox Satellite',
+    maxZoom: 22,
+    attribution: '© Mapbox © Maxar',
+    urlTemplate: 'https://api.mapbox.com/styles/v1/mapbox/satellite-v9/tiles/{z}/{x}/{y}?access_token={token}',
+    requiresToken: true
+  },
+  nearmap: {
+    // Placeholder for the future Nearmap integration (Phase B upgrade).
+    id: 'nearmap',
+    name: 'Nearmap (5.8 cm)',
+    maxZoom: 22,
+    attribution: '© Nearmap',
+    urlTemplate: 'https://api.nearmap.com/tiles/v3/Vert/{z}/{x}/{y}.jpg?apikey={token}',
+    requiresToken: true
+  }
+}
+
 export function buildGoogleStaticMapUrl(apiKey: string, opts: SnapshotOptions): string {
   const zoom = opts.zoom ?? 19
   const size = opts.size ?? '640x640'
