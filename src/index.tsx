@@ -6961,6 +6961,7 @@ const guidesConfig: Record<string, GuideConfig> = {
     subtitle: 'Turn a measurement report into a branded, signable proposal in under 5 minutes.',
     readTime: 5,
     icon: 'fa-file-signature',
+    videoId: 'm-Q0ZqPr3R8',
     tldr: 'To build a winning roofing proposal in Roof Manager: open the measurement report, click "Create Proposal", pick a template (residential asphalt, metal, flat commercial, or repair), set your per-square price, add upsells or good-better-best tiers, attach photos, and send for e-signature. Homeowners can read, ask questions, and sign from their phone — typical turnaround is under 5 minutes from inspection to signed contract.',
     faqs: [
       { q: 'How long does it take to build a roofing proposal?', a: 'Under 5 minutes for an experienced user. Measurements and material quantities flow in from the report automatically, and pricing multiplies against your saved presets.' },
