@@ -112,6 +112,11 @@ const FINANCIAL_FIELDS = [
   'my_cost', 'amount', 'total_collected', 'total_outstanding',
   'total_overdue', 'total_paid', 'total_draft', 'grand_total',
   'invoices_paid', 'total_spent',
+  // CRM
+  'lifetime_value', 'revenue', 'open_value', 'sold_value', 'total_owing',
+  'total_amount', 'paid_count_value',
+  // Reports / jobs
+  'total_material_cost_cad', 'price', 'profit',
 ]
 
 export function redactFinancials<T extends Record<string, any>>(row: T): T {

@@ -1,7 +1,15 @@
 import { Hono } from 'hono'
 import type { Bindings } from '../types'
-import { getActivityFeed } from '../lib/team-activity'
+import { getActivityFeed, logFromContext } from '../lib/team-activity'
 import { sanitizePermissions } from '../lib/permissions'
+
+// Returns the keys whose value changed between two sanitized permission blobs.
+function diffPermissionKeys(before: Record<string, boolean>, after: Record<string, boolean>): string[] {
+  const changed: string[] = []
+  const keys = new Set([...Object.keys(before || {}), ...Object.keys(after || {})])
+  for (const k of keys) if (before?.[k] !== after?.[k]) changed.push(k)
+  return changed
+}
 
 export const teamRoutes = new Hono<{ Bindings: Bindings }>()
 
@@ -254,6 +262,15 @@ teamRoutes.post('/invite', async (c) => {
   const inviteUrl = `${new URL(c.req.url).origin}/customer/join-team?token=${inviteToken}`
   await sendTeamInviteEmail(c.env, email, name, ownerName, customer.company_name || 'Roof Manager', inviteUrl, role)
 
+  // Audit: someone on this team invited a new member at a specific role +
+  // permission set. Captures who-invited-whom with what access, durable
+  // evidence if a member later disputes what they were granted.
+  await logFromContext(c, {
+    entity_type: 'team_invitation',
+    action: 'invited',
+    metadata: { email, name, role, permissions },
+  })
+
   return c.json({
     success: true,
     message: `Invitation sent to ${email}`,
@@ -368,6 +385,15 @@ teamRoutes.post('/accept', async (c) => {
     `).bind(customerId, now, now, now, existingMember.id).run()
   }
 
+  // Audit: the invitee accepted. Separate from 'invited' so we can prove
+  // consent and pin the exact permissions snapshot at accept time.
+  await logFromContext(c, {
+    entity_type: 'team_member',
+    entity_id: Number(teamMemberId),
+    action: 'accepted',
+    metadata: { role: invite.role, permissions: invitePermissions, email: invite.email },
+  })
+
   return c.json({
     success: true,
     message: 'You have joined the team!',
@@ -402,17 +428,26 @@ teamRoutes.put('/members/:id', async (c) => {
   const updates: string[] = []
   const values: any[] = []
 
+  // Capture before-state for audit diffs.
+  const beforeRole = member.role as string
+  const beforePerms = sanitizePermissions(member.permissions)
+  let afterPerms = beforePerms
+  let roleChanged = false
+  let newRole = beforeRole
+
   if (body.role && ['admin', 'member'].includes(body.role)) {
     updates.push('role = ?')
     values.push(body.role)
+    if (body.role !== beforeRole) { roleChanged = true; newRole = body.role }
   }
   if (body.name) {
     updates.push('name = ?')
     values.push(body.name.trim())
   }
   if (body.permissions) {
+    afterPerms = sanitizePermissions(body.permissions)
     updates.push('permissions = ?')
-    values.push(JSON.stringify(sanitizePermissions(body.permissions)))
+    values.push(JSON.stringify(afterPerms))
   }
 
   if (updates.length === 0) return c.json({ error: 'No changes provided' }, 400)
@@ -423,6 +458,32 @@ teamRoutes.put('/members/:id', async (c) => {
   await c.env.DB.prepare(`
     UPDATE team_members SET ${updates.join(', ')} WHERE id = ? AND owner_id = ?
   `).bind(...values).run()
+
+  // Audit permission and role changes separately so the feed reads as
+  // "Alice changed Bob's permissions" vs "Alice promoted Bob to admin".
+  const permDiff = body.permissions ? diffPermissionKeys(beforePerms, afterPerms) : []
+  if (permDiff.length) {
+    await logFromContext(c, {
+      entity_type: 'team_member',
+      entity_id: Number(memberId),
+      action: 'permissions_changed',
+      metadata: {
+        member_name: member.name,
+        member_email: member.email,
+        changed_keys: permDiff,
+        before: Object.fromEntries(permDiff.map(k => [k, beforePerms[k as keyof typeof beforePerms]])),
+        after: Object.fromEntries(permDiff.map(k => [k, afterPerms[k as keyof typeof afterPerms]])),
+      },
+    })
+  }
+  if (roleChanged) {
+    await logFromContext(c, {
+      entity_type: 'team_member',
+      entity_id: Number(memberId),
+      action: 'role_changed',
+      metadata: { member_name: member.name, member_email: member.email, before: beforeRole, after: newRole },
+    })
+  }
 
   return c.json({ success: true, message: 'Team member updated' })
 })
@@ -454,6 +515,13 @@ teamRoutes.delete('/members/:id', async (c) => {
     UPDATE team_members SET status = 'removed', billing_paused_at = datetime('now'), updated_at = datetime('now')
     WHERE id = ? AND owner_id = ?
   `).bind(memberId, ownerId).run()
+
+  await logFromContext(c, {
+    entity_type: 'team_member',
+    entity_id: Number(memberId),
+    action: 'removed',
+    metadata: { member_name: member.name, member_email: member.email, prior_role: member.role },
+  })
 
   return c.json({ success: true, message: `${member.name} has been removed from the team` })
 })

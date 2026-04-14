@@ -10,6 +10,8 @@ export type TeamActivityEntity =
   | 'crm_customer'
   | 'proposal'
   | 'pipeline_lead'
+  | 'team_member'
+  | 'team_invitation'
 
 export type TeamActivityAction =
   | 'created'
@@ -17,6 +19,11 @@ export type TeamActivityAction =
   | 'completed'
   | 'sent'
   | 'deleted'
+  | 'invited'
+  | 'accepted'
+  | 'permissions_changed'
+  | 'role_changed'
+  | 'removed'
 
 export interface TeamActivityInput {
   ownerId: number

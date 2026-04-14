@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import type { Bindings } from '../types'
 import { resolveTeamOwner } from './team'
+import { loadPermissionContext, can, redactFinancials } from '../lib/permissions'
 import { validateAdminSession } from './auth'
 import { logFromContext } from '../lib/team-activity'
 import { geocodeAddress, optimizeRoute, type LatLng } from '../services/geocoding'
@@ -17,23 +18,28 @@ export const crmRoutes = new Hono<{ Bindings: Bindings }>()
 // so team members see/manage the owner's CRM data.
 // ============================================================
 async function getOwnerId(c: any): Promise<number | null> {
+  const info = await getOwnerAndPerms(c)
+  return info?.ownerId ?? null
+}
+
+// Returns owner id AND whether financial fields should be hidden for this caller.
+// Admin sessions never hide; customer sessions hide when the user lacks view_financials.
+async function getOwnerAndPerms(c: any): Promise<{ ownerId: number; hideMoney: boolean } | null> {
   const auth = c.req.header('Authorization')
   if (!auth || !auth.startsWith('Bearer ')) return null
   const token = auth.slice(7)
 
-  // Try customer session first
   const session = await c.env.DB.prepare(
     "SELECT customer_id FROM customer_sessions WHERE session_token = ? AND expires_at > datetime('now')"
   ).bind(token).first<any>()
   if (session) {
     const { ownerId } = await resolveTeamOwner(c.env.DB, session.customer_id)
-    return ownerId
+    const perms = await loadPermissionContext(c.env.DB, session.customer_id)
+    return { ownerId, hideMoney: !can(perms, 'view_financials') }
   }
 
-  // Fall back to admin session — admin users use a large offset (1,000,000 + admin_id)
-  // to create a distinct owner namespace that never collides with customer IDs
   const admin = await validateAdminSession(c.env.DB, auth)
-  if (admin) return 1000000 + admin.id
+  if (admin) return { ownerId: 1000000 + admin.id, hideMoney: false }
 
   return null
 }
@@ -78,8 +84,9 @@ async function resolveCustomerId(c: any, ownerId: number, body: any): Promise<{ 
 
 // LIST customers for this owner
 crmRoutes.get('/customers', async (c) => {
-  const ownerId = await getOwnerId(c)
-  if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
+  const info = await getOwnerAndPerms(c)
+  if (!info) return c.json({ error: 'Not authenticated' }, 401)
+  const { ownerId, hideMoney } = info
   const search = c.req.query('search') || ''
   const status = c.req.query('status') || ''
 
@@ -101,7 +108,9 @@ crmRoutes.get('/customers', async (c) => {
     FROM crm_customers WHERE owner_id = ?
   `).bind(ownerId).first()
 
-  return c.json({ customers: customers.results, stats })
+  const rows = customers.results as any[]
+  const safeCustomers = hideMoney ? rows.map(r => redactFinancials(r)) : rows
+  return c.json({ customers: safeCustomers, stats, financials_hidden: hideMoney })
 })
 
 // GET single customer + history
@@ -1105,8 +1114,9 @@ crmRoutes.delete('/jobs/:id', async (c) => {
 // ============================================================
 
 crmRoutes.get('/analytics', async (c) => {
-  const ownerId = await getOwnerId(c)
-  if (!ownerId) return c.json({ error: 'Not authenticated' }, 401)
+  const info = await getOwnerAndPerms(c)
+  if (!info) return c.json({ error: 'Not authenticated' }, 401)
+  const { ownerId, hideMoney } = info
 
   // Jobs completed by month (last 6 months)
   const jobsByMonth = await c.env.DB.prepare(`
@@ -1153,23 +1163,29 @@ crmRoutes.get('/analytics', async (c) => {
     GROUP BY ctl.crew_member_id ORDER BY total_minutes DESC
   `).bind(ownerId).all<any>()
 
+  // Strip revenue numbers for callers without view_financials. Job counts
+  // and crew hours stay visible — those aren't sensitive financial data.
+  const revenuePayload = hideMoney
+    ? { by_month: [], total_paid: null, total_owing: null, total_overdue: null,
+        paid_count: revTotals?.paid_count || 0, total_count: revTotals?.total_count || 0 }
+    : { by_month: (revenueByMonth.results || []).reverse(),
+        total_paid: revTotals?.total_paid || 0,
+        total_owing: revTotals?.total_owing || 0,
+        total_overdue: revTotals?.total_overdue || 0,
+        paid_count: revTotals?.paid_count || 0,
+        total_count: revTotals?.total_count || 0 }
+
   return c.json({
     jobs: {
       by_month: (jobsByMonth.results || []).reverse(),
       by_status: jobsByStatus.results || [],
       by_type: jobsByType.results || []
     },
-    revenue: {
-      by_month: (revenueByMonth.results || []).reverse(),
-      total_paid: revTotals?.total_paid || 0,
-      total_owing: revTotals?.total_owing || 0,
-      total_overdue: revTotals?.total_overdue || 0,
-      paid_count: revTotals?.paid_count || 0,
-      total_count: revTotals?.total_count || 0
-    },
+    revenue: revenuePayload,
     crew: {
       hours: crewHours.results || []
-    }
+    },
+    financials_hidden: hideMoney,
   })
 })
 

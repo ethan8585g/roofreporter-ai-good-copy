@@ -281,25 +281,66 @@ async function savePermissions() {
 }
 
 // ── Permission labels ──
-var PERM_LABELS = [
-  { key: 'orders',       label: 'Order Reports',       icon: 'fa-plus-circle' },
-  { key: 'reports',      label: 'View Reports',         icon: 'fa-file-alt' },
-  { key: 'crm',          label: 'CRM (Customers, Invoices, Proposals, Jobs)', icon: 'fa-users' },
+// Mirrors src/lib/permissions.ts ALL_PERMISSION_KEYS. Module keys default on
+// (backward compat with pre-RBAC invites); sensitive caps default off so they
+// must be explicitly granted.
+var MODULE_PERMS = [
+  { key: 'orders',     label: 'Order Reports',           icon: 'fa-plus-circle' },
+  { key: 'reports',    label: 'View Reports',             icon: 'fa-file-alt' },
+  { key: 'crm',        label: 'CRM (Customers)',          icon: 'fa-users' },
+  { key: 'pipeline',   label: 'Sales Pipeline',           icon: 'fa-stream' },
+  { key: 'jobs',       label: 'Jobs',                     icon: 'fa-briefcase' },
+  { key: 'invoices',   label: 'Invoices',                 icon: 'fa-file-invoice-dollar' },
+  { key: 'proposals',  label: 'Proposals',                icon: 'fa-file-signature' },
+  { key: 'secretary',  label: 'AI Secretary',             icon: 'fa-robot' },
+  { key: 'cold_call',  label: 'Cold Call Center',         icon: 'fa-phone' },
+  { key: 'd2d',        label: 'Door-to-Door',             icon: 'fa-map-marker-alt' },
+  { key: 'billing',    label: 'Billing',                  icon: 'fa-credit-card' },
+  { key: 'settings',   label: 'Settings',                 icon: 'fa-cog' },
+  { key: 'team',       label: 'Team Management',          icon: 'fa-user-friends' },
 ];
+var SENSITIVE_PERMS = [
+  { key: 'view_financials', label: 'View Financial Amounts', icon: 'fa-dollar-sign',
+    hint: 'See totals, revenue, costs, and profit.' },
+  { key: 'export_reports',  label: 'Export Data (CSV / JSON)', icon: 'fa-download',
+    hint: 'Download reports, invoices, customer lists.' },
+  { key: 'delete_records',  label: 'Delete Records',         icon: 'fa-trash',
+    hint: 'Permanently remove invoices, customers, jobs.' },
+];
+// Keep a flat list for backward compat with any external caller.
+var PERM_LABELS = MODULE_PERMS.concat(SENSITIVE_PERMS);
 
 function renderPermCheckboxes(idPrefix, perms) {
-  var defaultPerms = { orders: true, reports: true, crm: true };
-  var effective = Object.assign({}, defaultPerms, perms || {});
-  var html = '<div class="border border-white/10 rounded-lg p-3 bg-[#0A0A0A]">';
-  html += '<p class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Access Permissions</p>';
-  PERM_LABELS.forEach(function (p) {
-    var checked = effective[p.key] !== false;
-    html += '<label class="flex items-center gap-2 py-1 cursor-pointer">' +
-      '<input type="checkbox" id="' + idPrefix + '_' + p.key + '"' + (checked ? ' checked' : '') + ' class="rounded border-white/15 text-emerald-400 focus:ring-emerald-500">' +
-      '<i class="fas ' + p.icon + ' text-gray-400 text-xs w-4 text-center"></i>' +
-      '<span class="text-sm text-gray-300">' + p.label + '</span>' +
+  // Effective defaults: modules on, sensitive off.
+  var effective = {};
+  MODULE_PERMS.forEach(function(p){ effective[p.key] = true; });
+  SENSITIVE_PERMS.forEach(function(p){ effective[p.key] = false; });
+  if (perms) for (var k in perms) { if (perms[k] === true) effective[k] = true; else if (perms[k] === false) effective[k] = false; }
+
+  function renderRow(p, section) {
+    var checked = effective[p.key] === true;
+    var hint = p.hint ? '<span class="block text-[11px] text-gray-500 ml-6">' + p.hint + '</span>' : '';
+    return '<label class="block py-1 cursor-pointer">' +
+      '<span class="flex items-center gap-2">' +
+        '<input type="checkbox" id="' + idPrefix + '_' + p.key + '"' + (checked ? ' checked' : '') +
+          ' data-perm-section="' + section + '"' +
+          ' class="rounded border-white/15 text-emerald-400 focus:ring-emerald-500">' +
+        '<i class="fas ' + p.icon + ' text-gray-400 text-xs w-4 text-center"></i>' +
+        '<span class="text-sm text-gray-300">' + p.label + '</span>' +
+      '</span>' + hint +
     '</label>';
-  });
+  }
+
+  var html = '<div class="border border-white/10 rounded-lg p-3 bg-[#0A0A0A] space-y-3">';
+  html += '<div>';
+  html += '<p class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Module Access</p>';
+  MODULE_PERMS.forEach(function(p){ html += renderRow(p, 'module'); });
+  html += '</div>';
+  html += '<div class="pt-2 border-t border-white/10">';
+  html += '<p class="text-xs font-bold text-amber-500 uppercase tracking-wider mb-2"><i class="fas fa-shield-alt mr-1"></i>Sensitive Capabilities</p>';
+  html += '<p class="text-[11px] text-gray-500 mb-2">Off by default. Only grant to trusted members.</p>';
+  SENSITIVE_PERMS.forEach(function(p){ html += renderRow(p, 'sensitive'); });
+  html += '</div>';
   html += '</div>';
   return html;
 }
@@ -308,7 +349,9 @@ function collectPerms(idPrefix) {
   var perms = {};
   PERM_LABELS.forEach(function (p) {
     var el = document.getElementById(idPrefix + '_' + p.key);
-    perms[p.key] = el ? el.checked : true;
+    // Default-false for sensitive so missing checkbox never grants.
+    var def = SENSITIVE_PERMS.some(function(sp){ return sp.key === p.key; }) ? false : true;
+    perms[p.key] = el ? el.checked : def;
   });
   return perms;
 }
