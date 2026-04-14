@@ -5479,18 +5479,27 @@ function getLandingPageHTML(latestPosts: any[] = []) {
       </div>
       <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
         ${[
-          { slug: 'order-measurement-report', title: 'How to Order a Measurement Report', desc: 'Get a surveyor-grade PDF for any roof in under 60 seconds.', icon: 'fa-ruler-combined', read: 4 },
-          { slug: 'door-to-door-with-manager', title: 'How to Run D2D Sales with Roof Manager', desc: 'Turn door-knocking into a closed-loop sales machine — territory maps, measurement on the porch, instant booking.', icon: 'fa-map-marked-alt', read: 6 },
-          { slug: 'create-a-proposal', title: 'How to Build a Winning Proposal', desc: 'Turn a measurement report into a branded, signable proposal in under 5 minutes.', icon: 'fa-file-signature', read: 5 },
-          { slug: 'create-an-invoice', title: 'How to Send an Invoice', desc: 'Invoice the deposit, progress draw, and final payment — all from your phone.', icon: 'fa-file-invoice-dollar', read: 4 },
-          { slug: 'setup-ai-secretary', title: 'How to Get Your AI Secretary Running', desc: 'Deploy a 24/7 AI phone receptionist that answers calls and books appointments while you\'re on the roof.', icon: 'fa-headset', read: 5 },
-          { slug: 'build-a-solar-design', title: 'How to Build a Solar Design', desc: 'Lay real-world-scale solar panels onto any roof and generate a branded solar proposal in minutes.', icon: 'fa-solar-panel', read: 5 },
+          { slug: 'order-measurement-report', title: 'How to Order a Measurement Report', desc: 'Get a surveyor-grade PDF for any roof in under 60 seconds.', icon: 'fa-ruler-combined', read: 4, video: 'u3Xa0FaviGY' },
+          { slug: 'door-to-door-with-manager', title: 'How to Run D2D Sales with Roof Manager', desc: 'Turn door-knocking into a closed-loop sales machine — territory maps, measurement on the porch, instant booking.', icon: 'fa-map-marked-alt', read: 6, video: '' },
+          { slug: 'create-a-proposal', title: 'How to Build a Winning Proposal', desc: 'Turn a measurement report into a branded, signable proposal in under 5 minutes.', icon: 'fa-file-signature', read: 5, video: 'm-Q0ZqPr3R8' },
+          { slug: 'create-an-invoice', title: 'How to Send an Invoice', desc: 'Invoice the deposit, progress draw, and final payment — all from your phone.', icon: 'fa-file-invoice-dollar', read: 4, video: '' },
+          { slug: 'setup-ai-secretary', title: 'How to Get Your AI Secretary Running', desc: 'Deploy a 24/7 AI phone receptionist that answers calls and books appointments while you\'re on the roof.', icon: 'fa-headset', read: 5, video: '' },
+          { slug: 'build-a-solar-design', title: 'How to Build a Solar Design', desc: 'Lay real-world-scale solar panels onto any roof and generate a branded solar proposal in minutes.', icon: 'fa-solar-panel', read: 5, video: 'v3Z-RK9zArQ' },
         ].map(t => `
           <a href="/guides/${t.slug}" class="block group">
             <article class="bg-[#111111] border border-white/10 rounded-xl overflow-hidden hover:border-[#00FF88]/40 transition-all duration-300 hover:-translate-y-1 h-full flex flex-col">
-              <div class="aspect-video bg-black relative overflow-hidden flex flex-col items-center justify-center bg-gradient-to-br from-[#111] to-[#1a1a1a]">
-                <i class="fas ${t.icon} text-5xl text-[#00FF88] mb-3 group-hover:scale-110 transition-transform"></i>
-                <span class="text-[10px] text-gray-600 uppercase tracking-widest font-semibold">${t.read} min read</span>
+              <div class="aspect-video bg-black relative overflow-hidden ${t.video ? '' : 'flex flex-col items-center justify-center bg-gradient-to-br from-[#111] to-[#1a1a1a]'}">
+                ${t.video ? `
+                  <img src="https://i.ytimg.com/vi/${t.video}/hqdefault.jpg" alt="${t.title}" class="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
+                  <div class="absolute inset-0 bg-black/30 group-hover:bg-black/10 transition-colors"></div>
+                  <div class="absolute inset-0 flex items-center justify-center">
+                    <div class="w-14 h-14 rounded-full flex items-center justify-center bg-[#00FF88] text-[#0A0A0A] shadow-2xl group-hover:scale-110 transition-transform"><i class="fas fa-play ml-1"></i></div>
+                  </div>
+                  <span class="absolute bottom-2 right-2 text-[10px] text-white/80 uppercase tracking-widest font-semibold bg-black/60 rounded px-2 py-0.5">${t.read} min</span>
+                ` : `
+                  <i class="fas ${t.icon} text-5xl text-[#00FF88] mb-3 group-hover:scale-110 transition-transform"></i>
+                  <span class="text-[10px] text-gray-600 uppercase tracking-widest font-semibold">${t.read} min read</span>
+                `}
               </div>
               <div class="p-5 flex flex-col flex-1">
                 <h3 class="font-bold text-white text-base mb-2 group-hover:text-[#00FF88] transition-colors leading-snug">${t.title}</h3>
@@ -7440,15 +7449,28 @@ function getGuidesIndexHTML(): string {
   const base = 'https://www.roofmanager.ca'
   const cards = guidesOrder.map(slug => {
     const g = guidesConfig[slug]
+    const vid = (g as any).videoId as string | undefined
     return `
-      <a href="/guides/${g.slug}" class="block bg-[#111111] border border-white/10 hover:border-[#00FF88]/40 rounded-2xl p-6 transition-all hover:-translate-y-1 group">
-        <div class="flex items-center gap-3 mb-4">
-          <div class="w-11 h-11 rounded-xl flex items-center justify-center" style="background:#00FF8818"><i class="fas ${g.icon} text-[#00FF88] text-lg"></i></div>
-          <span class="text-xs text-gray-500 uppercase tracking-wider font-semibold">${g.readTime} min read</span>
+      <a href="/guides/${g.slug}" class="block bg-[#111111] border border-white/10 hover:border-[#00FF88]/40 rounded-2xl overflow-hidden transition-all hover:-translate-y-1 group">
+        ${vid ? `
+          <div class="aspect-video relative overflow-hidden bg-black">
+            <img src="https://i.ytimg.com/vi/${vid}/hqdefault.jpg" alt="${g.title}" class="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
+            <div class="absolute inset-0 bg-black/30 group-hover:bg-black/10 transition-colors"></div>
+            <div class="absolute inset-0 flex items-center justify-center">
+              <div class="w-14 h-14 rounded-full flex items-center justify-center bg-[#00FF88] text-[#0A0A0A] shadow-2xl group-hover:scale-110 transition-transform"><i class="fas fa-play ml-1"></i></div>
+            </div>
+            <span class="absolute top-2 left-2 text-[10px] uppercase tracking-widest font-bold bg-[#00FF88] text-[#0A0A0A] rounded px-2 py-1"><i class="fas fa-play mr-1"></i>Video</span>
+          </div>
+        ` : ''}
+        <div class="p-6">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="w-11 h-11 rounded-xl flex items-center justify-center" style="background:#00FF8818"><i class="fas ${g.icon} text-[#00FF88] text-lg"></i></div>
+            <span class="text-xs text-gray-500 uppercase tracking-wider font-semibold">${g.readTime} min read</span>
+          </div>
+          <h2 class="text-lg md:text-xl font-extrabold text-white mb-2 leading-snug group-hover:text-[#00FF88] transition-colors">${g.title}</h2>
+          <p class="text-sm text-gray-500 leading-relaxed">${g.subtitle}</p>
+          <div class="mt-5 text-[#00FF88] text-sm font-semibold">${vid ? 'Watch &amp; read' : 'Read guide'} <i class="fas fa-arrow-right ml-1 text-xs"></i></div>
         </div>
-        <h2 class="text-lg md:text-xl font-extrabold text-white mb-2 leading-snug group-hover:text-[#00FF88] transition-colors">${g.title}</h2>
-        <p class="text-sm text-gray-500 leading-relaxed">${g.subtitle}</p>
-        <div class="mt-5 text-[#00FF88] text-sm font-semibold">Read guide <i class="fas fa-arrow-right ml-1 text-xs"></i></div>
       </a>
     `
   }).join('')
