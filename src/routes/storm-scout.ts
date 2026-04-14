@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import type { Bindings } from '../types'
 import { getActiveAlerts, getHailReports } from '../services/storm-data'
 import { buildDailySnapshot, writeSnapshot, readSnapshot, listSnapshotDates, pruneOldSnapshots } from '../services/storm-ingest'
+import { GIBS_LAYERS, getGibsTileUrl, getGibsMaxZoom, buildGoogleStaticMapUrl } from '../services/satellite-imagery'
 
 export const stormScoutRoutes = new Hono<{ Bindings: Bindings }>()
 
@@ -85,6 +86,61 @@ stormScoutRoutes.post('/ingest', async (c) => {
   } catch (err: any) {
     return c.json({ error: 'Ingest failed', detail: err?.message || String(err) }, 500)
   }
+})
+
+// ------------------------------------------------------------
+// Satellite — list available GIBS layers (client uses this to build
+// ImageMapType overlays) + proxy-free direct URL helper.
+// ------------------------------------------------------------
+stormScoutRoutes.get('/satellite/layers', async (c) => {
+  const customerId = await requireCustomer(c)
+  if (!customerId) return c.json({ error: 'Not authenticated' }, 401)
+  const layers = Object.entries(GIBS_LAYERS).map(([key, id]) => ({
+    key, id, maxZoom: getGibsMaxZoom(id),
+    attribution: 'Imagery courtesy of NASA GIBS / EOSDIS'
+  }))
+  return c.json({ layers })
+})
+
+// Proxy a single GIBS tile — used when we want to cache at the edge
+// and avoid mixed-content or referer issues. Direct GIBS URLs work
+// too (no key needed), so the client may call them directly.
+stormScoutRoutes.get('/satellite/gibs/:layer/:date/:z/:x/:y', async (c) => {
+  const customerId = await requireCustomer(c)
+  if (!customerId) return c.json({ error: 'Not authenticated' }, 401)
+  const { layer, date, z, x, y } = c.req.param()
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return c.json({ error: 'Bad date' }, 400)
+  const yClean = y.replace(/\.(jpg|png)$/, '')
+  const url = getGibsTileUrl(layer, date, parseInt(z, 10), parseInt(x, 10), parseInt(yClean, 10))
+  const upstream = await fetch(url)
+  if (!upstream.ok) return c.json({ error: 'Tile not found', status: upstream.status }, upstream.status as any)
+  const body = await upstream.arrayBuffer()
+  return new Response(body, {
+    status: 200,
+    headers: {
+      'Content-Type': upstream.headers.get('Content-Type') || 'image/jpeg',
+      'Cache-Control': 'public, max-age=86400'
+    }
+  })
+})
+
+// Before/after roof-level snapshot — returns a signed-ish Google Static
+// Maps URL. API key is kept server-side; response includes the full URL
+// so the client can render it in <img>. Google doesn't expose historical
+// imagery selection via Static Maps, so the `date` param is returned as
+// a label for documentation purposes only.
+stormScoutRoutes.get('/satellite/snapshot', async (c) => {
+  const customerId = await requireCustomer(c)
+  if (!customerId) return c.json({ error: 'Not authenticated' }, 401)
+  const lat = parseFloat(c.req.query('lat') || '')
+  const lng = parseFloat(c.req.query('lng') || '')
+  const zoom = parseInt(c.req.query('zoom') || '19', 10)
+  const date = c.req.query('date') || ''
+  if (isNaN(lat) || isNaN(lng)) return c.json({ error: 'lat/lng required' }, 400)
+  const key = c.env.GOOGLE_MAPS_API_KEY
+  if (!key) return c.json({ error: 'Maps API key not configured' }, 503)
+  const url = buildGoogleStaticMapUrl(key, { lat, lng, zoom, mapType: 'satellite' })
+  return c.json({ url, lat, lng, zoom, date, note: 'Google Static Maps shows current imagery; date is for documentation only.' })
 })
 
 stormScoutRoutes.get('/health', (c) => c.json({ ok: true, service: 'storm-scout', r2: !!c.env.STORM_R2 }))

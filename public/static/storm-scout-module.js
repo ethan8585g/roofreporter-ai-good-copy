@@ -17,7 +17,9 @@
   var alerts = [];
   var hailReports = [];
   var filter = { hail: true, wind: true, tornado: true, thunderstorm: true, other: true };
-  var layers = { alerts: true, heatmap: true };
+  var layers = { alerts: true, heatmap: true, satellite: false };
+  var satelliteLayer = null;
+  var satelliteType = 'modis_true_color'; // GIBS layer key
   var daysBack = 7;
   var historyMode = false;
   var historyDate = null;
@@ -73,6 +75,12 @@
             '<div class="ss-section-title">Layers</div>' +
             '<label><input type="checkbox" data-layer="alerts" checked> <i class="fas fa-triangle-exclamation" style="color:#ef4444"></i> Active alerts</label>' +
             '<label><input type="checkbox" data-layer="heatmap" checked> <i class="fas fa-fire" style="color:#f97316"></i> Hail heatmap</label>' +
+            '<label><input type="checkbox" data-layer="satellite"> <i class="fas fa-satellite" style="color:#60a5fa"></i> NASA satellite (storm-day)</label>' +
+            '<select id="ssSatType" class="ss-sat-type">' +
+              '<option value="modis_true_color" selected>MODIS true-color (day)</option>' +
+              '<option value="viirs_true_color">VIIRS true-color (day)</option>' +
+              '<option value="precip_rate">IMERG precipitation</option>' +
+            '</select>' +
           '</div>' +
           '<div class="ss-section">' +
             '<div class="ss-section-title">Alert type filters</div>' +
@@ -143,7 +151,12 @@
         layers[el.getAttribute('data-layer')] = el.checked;
         renderAlertsOnMap();
         renderHeatmap();
+        renderSatellite();
       });
+    });
+    document.getElementById('ssSatType').addEventListener('change', function (e) {
+      satelliteType = e.target.value;
+      if (layers.satellite) renderSatellite();
     });
     root.querySelectorAll('.ss-timebar-btns button').forEach(function (btn) {
       btn.addEventListener('click', function () {
@@ -404,6 +417,106 @@
     });
   }
 
+  var GIBS_LAYER_IDS = {
+    modis_true_color: { id: 'MODIS_Terra_CorrectedReflectance_TrueColor', ext: 'jpg', set: 'GoogleMapsCompatible_Level9', max: 9 },
+    viirs_true_color: { id: 'VIIRS_SNPP_CorrectedReflectance_TrueColor',  ext: 'jpg', set: 'GoogleMapsCompatible_Level9', max: 9 },
+    precip_rate:      { id: 'IMERG_Precipitation_Rate',                   ext: 'png', set: 'GoogleMapsCompatible_Level6', max: 6 }
+  };
+
+  function activeImageryDate() {
+    // Use the loaded history date if we're in snapshot mode; otherwise yesterday
+    // (GIBS daily composites lag ~24h behind realtime).
+    if (historyMode && historyDate) return historyDate;
+    var d = new Date(Date.now() - 24 * 3600 * 1000);
+    return d.toISOString().slice(0, 10);
+  }
+
+  function renderSatellite() {
+    if (!map) return;
+    if (satelliteLayer) {
+      map.overlayMapTypes.removeAt(map.overlayMapTypes.getArray().indexOf(satelliteLayer));
+      satelliteLayer = null;
+    }
+    if (!layers.satellite) return;
+    var conf = GIBS_LAYER_IDS[satelliteType] || GIBS_LAYER_IDS.modis_true_color;
+    var date = activeImageryDate();
+    satelliteLayer = new google.maps.ImageMapType({
+      name: 'NASA GIBS',
+      tileSize: new google.maps.Size(256, 256),
+      minZoom: 1,
+      maxZoom: conf.max,
+      opacity: 0.6,
+      getTileUrl: function (coord, zoom) {
+        if (zoom > conf.max) return null;
+        return 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/' +
+               conf.id + '/default/' + date + '/' + conf.set + '/' +
+               zoom + '/' + coord.y + '/' + coord.x + '.' + conf.ext;
+      }
+    });
+    map.overlayMapTypes.push(satelliteLayer);
+    // Attribution (NASA TOU requires visible credit)
+    showSatelliteAttribution(date);
+  }
+
+  function showSatelliteAttribution(date) {
+    var el = document.getElementById('ssSatAttr');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'ssSatAttr';
+      el.className = 'ss-sat-attr';
+      document.querySelector('.ss-map-wrap').appendChild(el);
+    }
+    el.innerHTML = 'Imagery: NASA GIBS / EOSDIS • ' + date;
+  }
+
+  // --- Before/After modal ---
+  function openBeforeAfter(center, stormDate) {
+    var existing = document.getElementById('ssBAModal');
+    if (existing) existing.remove();
+    var dBefore = shiftDate(stormDate, -7);
+    var dAfter = shiftDate(stormDate, 1);
+    var modal = document.createElement('div');
+    modal.id = 'ssBAModal';
+    modal.className = 'ss-ba-modal';
+    modal.innerHTML =
+      '<div class="ss-ba-inner">' +
+        '<div class="ss-ba-head">' +
+          '<h3><i class="fas fa-image"></i> Before / After — storm of ' + escapeHtml(stormDate) + '</h3>' +
+          '<button class="ss-ba-close" aria-label="Close">&times;</button>' +
+        '</div>' +
+        '<div class="ss-ba-grid">' +
+          '<div class="ss-ba-col"><div class="ss-ba-label">Before (' + escapeHtml(dBefore) + ')</div><div class="ss-ba-img" id="ssBABefore"><i class="fas fa-spinner fa-spin"></i></div></div>' +
+          '<div class="ss-ba-col"><div class="ss-ba-label">After (' + escapeHtml(dAfter) + ')</div><div class="ss-ba-img" id="ssBAAfter"><i class="fas fa-spinner fa-spin"></i></div></div>' +
+        '</div>' +
+        '<p class="ss-ba-note"><i class="fas fa-circle-info"></i> Roof-level imagery is Google Static Maps (current). Dates are documentation labels. Historical roof-level pre/post imagery ships with the premium tier.</p>' +
+      '</div>';
+    document.body.appendChild(modal);
+    modal.querySelector('.ss-ba-close').addEventListener('click', function () { modal.remove(); });
+    modal.addEventListener('click', function (e) { if (e.target === modal) modal.remove(); });
+
+    loadSnapshot(center.lat(), center.lng(), dBefore, 'ssBABefore');
+    loadSnapshot(center.lat(), center.lng(), dAfter, 'ssBAAfter');
+  }
+
+  function loadSnapshot(lat, lng, date, elId) {
+    api('/satellite/snapshot?lat=' + lat + '&lng=' + lng + '&zoom=19&date=' + encodeURIComponent(date))
+      .then(function (res) {
+        var el = document.getElementById(elId);
+        if (!el) return;
+        el.innerHTML = '<img src="' + res.url + '" alt="Satellite snapshot">';
+      })
+      .catch(function (err) {
+        var el = document.getElementById(elId);
+        if (el) el.innerHTML = '<span class="ss-err">Snapshot failed: ' + escapeHtml(err.message || '') + '</span>';
+      });
+  }
+
+  function shiftDate(isoDate, deltaDays) {
+    var d = new Date(isoDate + 'T12:00:00Z');
+    d.setUTCDate(d.getUTCDate() + deltaDays);
+    return d.toISOString().slice(0, 10);
+  }
+
   function openInfo(a, pos) {
     var icon = TYPE_ICONS[a.type] || TYPE_ICONS.other;
     var color = SEVERITY_COLORS[a.severity] || '#6b7280';
@@ -422,10 +535,27 @@
         hail + wind +
         (when ? '<div style="font-size:12px"><b>Issued:</b> ' + when + '</div>' : '') + exp +
         '<div style="font-size:11px;color:#888;margin-top:4px">Source: ' + a.source.toUpperCase() + '</div>' +
+        '<button class="ss-ba-btn" data-lat="' + pos.lat() + '" data-lng="' + pos.lng() + '" data-date="' + (a.timestamp || '').slice(0,10) + '"><i class="fas fa-image"></i> Before / After</button>' +
       '</div>'
     );
     infoWindow.setPosition(pos);
     infoWindow.open(map);
+    attachBeforeAfterHandler();
+  }
+
+  function attachBeforeAfterHandler() {
+    setTimeout(function () {
+      document.querySelectorAll('.ss-ba-btn').forEach(function (btn) {
+        if (btn.__wired) return;
+        btn.__wired = true;
+        btn.addEventListener('click', function () {
+          var lat = parseFloat(btn.getAttribute('data-lat'));
+          var lng = parseFloat(btn.getAttribute('data-lng'));
+          var date = btn.getAttribute('data-date') || new Date().toISOString().slice(0, 10);
+          openBeforeAfter({ lat: function () { return lat; }, lng: function () { return lng; } }, date);
+        });
+      });
+    }, 50);
   }
 
   function openHailInfo(r, pos) {
@@ -438,10 +568,12 @@
         (when ? '<div style="font-size:12px;color:#444">' + when + '</div>' : '') +
         (r.remarks ? '<div style="font-size:12px;margin-top:4px">' + escapeHtml(String(r.remarks).slice(0, 200)) + '</div>' : '') +
         '<div style="font-size:11px;color:#888;margin-top:4px">Source: NWS LSR via IEM</div>' +
+        '<button class="ss-ba-btn" data-lat="' + r.lat + '" data-lng="' + r.lng + '" data-date="' + (r.timestamp || '').slice(0,10) + '"><i class="fas fa-image"></i> Before / After</button>' +
       '</div>'
     );
     infoWindow.setPosition(pos);
     infoWindow.open(map);
+    attachBeforeAfterHandler();
   }
 
   function loadAlerts(force) {
