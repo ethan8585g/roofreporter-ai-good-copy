@@ -226,7 +226,7 @@ export async function sendViaResend(
 // SALES NOTIFICATION — Sent to sales@roofmanager.ca on new report requests
 // ============================================================
 export async function notifyNewReportRequest(
-  resendApiKey: string,
+  envOrResendKey: any,
   order: {
     order_number: string
     property_address: string
@@ -238,6 +238,7 @@ export async function notifyNewReportRequest(
   }
 ): Promise<void> {
   const typeLabel = order.is_trial ? 'Free Trial' : `Paid — $${order.price.toFixed(2)}`
+  const subject = `New Report Request — ${order.order_number}`
   const html = `
 <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:24px">
   <h2 style="color:#111;margin-bottom:4px">New Report Request</h2>
@@ -251,7 +252,23 @@ export async function notifyNewReportRequest(
   <a href="https://www.roofmanager.ca/admin/superadmin" style="display:inline-block;background:#111;color:#fff;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:600">View in Super Admin →</a>
 </div>`
 
-  await sendViaResend(resendApiKey, 'sales@roofmanager.ca', `New Report Request — ${order.order_number}`, html)
+  const env = (envOrResendKey && typeof envOrResendKey === 'object') ? envOrResendKey : null
+  const resendKey = env ? env.RESEND_API_KEY : (typeof envOrResendKey === 'string' ? envOrResendKey : null)
+
+  if (resendKey) {
+    await sendViaResend(resendKey, 'sales@roofmanager.ca', subject, html)
+    return
+  }
+
+  if (env && env.GMAIL_CLIENT_ID && env.GMAIL_CLIENT_SECRET && env.GMAIL_REFRESH_TOKEN) {
+    await sendGmailOAuth2(
+      env.GMAIL_CLIENT_ID, env.GMAIL_CLIENT_SECRET, env.GMAIL_REFRESH_TOKEN,
+      'sales@roofmanager.ca', subject, html, env.GMAIL_SENDER_EMAIL || null
+    )
+    return
+  }
+
+  console.warn('[notifyNewReportRequest] No email provider configured (RESEND_API_KEY or Gmail OAuth)')
 }
 
 // ============================================================

@@ -97,14 +97,11 @@ ordersRoutes.post('/', async (c) => {
     `).bind(masterCompanyId, `Order ${orderNumber} created - ${service_tier} tier - $${price}`).run()
 
     // Notify sales of new report request (fire-and-forget)
-    const resendKey = (c.env as any).RESEND_API_KEY
-    if (resendKey) {
-      notifyNewReportRequest(resendKey, {
-        order_number: orderNumber, property_address,
-        requester_name: requester_name, requester_email: requester_email || '',
-        service_tier, price, is_trial: false
-      }).catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
-    }
+    notifyNewReportRequest(c.env, {
+      order_number: orderNumber, property_address,
+      requester_name: requester_name, requester_email: requester_email || '',
+      service_tier, price, is_trial: false
+    }).catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
 
     return c.json({
       success: true,
