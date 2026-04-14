@@ -1834,23 +1834,34 @@ export function traceUiToEnginePayload(
     lat: p.lat, lng: p.lng, elevation: null
   }))
 
-  const ridges: TraceLine[] = (traceJson.ridges || []).map((line, i) => ({
-    id: `ridge_${i + 1}`,
-    pitch: null,
-    pts: line.map(p => ({ lat: p.lat, lng: p.lng, elevation: null }))
-  }))
+  // Normalize a UI trace line (bare array OR {pts,pitch,id}) into an engine TraceLine.
+  const normalizeLine = (line: UiTraceLine, prefix: string, i: number): TraceLine => {
+    const isObj = !Array.isArray(line) && line && typeof line === 'object' && Array.isArray((line as any).pts)
+    const pts = (isObj ? (line as any).pts : (line as { lat: number; lng: number }[]))
+    const id = isObj && (line as any).id ? (line as any).id : `${prefix}_${i + 1}`
+    const rawPitch = isObj ? (line as any).pitch : null
+    let pitch: number | null = null
+    if (rawPitch != null) {
+      if (typeof rawPitch === 'number' && !isNaN(rawPitch)) pitch = rawPitch
+      else {
+        const m = String(rawPitch).match(/^(\d+(?:\.\d+)?)\s*[:/]\s*12$/)
+        if (m) pitch = parseFloat(m[1])
+        else {
+          const n = parseFloat(String(rawPitch))
+          if (!isNaN(n)) pitch = n
+        }
+      }
+    }
+    return {
+      id,
+      pitch,
+      pts: (pts || []).map(p => ({ lat: p.lat, lng: p.lng, elevation: null })),
+    }
+  }
 
-  const hips: TraceLine[] = (traceJson.hips || []).map((line, i) => ({
-    id: `hip_${i + 1}`,
-    pitch: null,
-    pts: line.map(p => ({ lat: p.lat, lng: p.lng, elevation: null }))
-  }))
-
-  const valleys: TraceLine[] = (traceJson.valleys || []).map((line, i) => ({
-    id: `valley_${i + 1}`,
-    pitch: null,
-    pts: line.map(p => ({ lat: p.lat, lng: p.lng, elevation: null }))
-  }))
+  const ridges: TraceLine[]  = (traceJson.ridges  || []).map((l, i) => normalizeLine(l, 'ridge',  i))
+  const hips: TraceLine[]    = (traceJson.hips    || []).map((l, i) => normalizeLine(l, 'hip',    i))
+  const valleys: TraceLine[] = (traceJson.valleys || []).map((l, i) => normalizeLine(l, 'valley', i))
 
   // Convert point annotations (vents/skylights/chimneys) to obstruction polygons.
   // Each marker becomes a small rectangle centered on the clicked lat/lng.
@@ -1895,6 +1906,9 @@ export function traceUiToEnginePayload(
     valleys,
     rakes:          [],
     faces:          [],
+    slope_map:      traceJson.slope_map && Object.keys(traceJson.slope_map).length > 0
+      ? traceJson.slope_map
+      : undefined,
     cross_check:    crossCheck,
   }
 }

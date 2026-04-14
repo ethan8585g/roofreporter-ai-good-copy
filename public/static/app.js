@@ -67,6 +67,9 @@ const state = {
   traceChimneys: [],
   traceAnnotationMarkers: [], // [{marker, type}]
   traceLayers: { eaves: true, ridge: true, hip: true, valley: true }, // per-layer visibility
+  // Redo stack — each entry is {mode, action: 'eave_pt'|'eave_section'|'line'|'ann', payload}
+  traceRedoStack: [],
+  traceKeyboardBound: false,
   dbInitialized: false,
   submitting: false
 };
@@ -950,9 +953,14 @@ function renderStep2TracePhase() {
                 Next — Trace Ridges &amp; Hips <i class="fas fa-arrow-right ml-1"></i>
               </button>
             ` : ''}
-            <button onclick="undoLastTrace()" class="w-full px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg text-sm font-medium transition-all">
-              <i class="fas fa-undo mr-1"></i>Undo Last
-            </button>
+            <div class="grid grid-cols-2 gap-2">
+              <button onclick="undoLastTrace()" class="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg text-sm font-medium transition-all" title="Undo (Ctrl+Z)">
+                <i class="fas fa-undo mr-1"></i>Undo
+              </button>
+              <button onclick="redoLastTrace()" class="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg text-sm font-medium transition-all" title="Redo (Ctrl+Y)">
+                <i class="fas fa-redo mr-1"></i>Redo
+              </button>
+            </div>
             <button onclick="clearCurrentMode()" class="w-full px-3 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-sm font-medium transition-all">
               <i class="fas fa-trash mr-1"></i>Clear Mode
             </button>
@@ -1005,6 +1013,7 @@ function renderStep2TracePhase() {
 function initTraceMap() {
   const mapDiv = document.getElementById('trace-map');
   if (!mapDiv || typeof google === 'undefined' || !google.maps) return;
+  bindTraceKeyboardShortcuts();
 
   const center = { lat: state.formData.latitude, lng: state.formData.longitude };
 
@@ -1067,6 +1076,7 @@ function handleTraceClick(pt) {
     }
 
     state.traceEavesPoints.push(pt);
+    clearTraceRedoStack();
     addTraceMarker(pt, '#22c55e', state.traceEavesPoints.length);
 
     // Draw polyline as user traces
@@ -1077,6 +1087,7 @@ function handleTraceClick(pt) {
     // Single-click annotation placement
     const arrays = { vent: state.traceVents, skylight: state.traceSkylights, chimney: state.traceChimneys };
     arrays[mode].push(pt);
+    clearTraceRedoStack();
     addAnnotationMarkerAdmin(pt, mode);
     showToast(`${mode.charAt(0).toUpperCase() + mode.slice(1)} marked`, 'success');
   } else {
@@ -1136,6 +1147,7 @@ function finishCurrentLine() {
   } else if (mode === 'valley') {
     state.traceValleyLines.push(line);
   }
+  clearTraceRedoStack();
 
   // Draw permanent line
   drawTracePolyline(line, colors[mode], 2.5, false);
@@ -1309,34 +1321,104 @@ function setTraceMode(mode) {
 
 function undoLastTrace() {
   const mode = state.traceMode;
+  let popped = null;
   if (mode === 'eaves') {
     if (state.traceEavesPoints.length > 0) {
-      // Undo last point in current in-progress section
-      state.traceEavesPoints.pop();
+      popped = { mode, action: 'eave_pt', payload: state.traceEavesPoints.pop() };
     } else if (state.traceEavesSections.length > 0) {
-      // Undo last completed section
-      state.traceEavesSections.pop();
+      popped = { mode, action: 'eave_section', payload: state.traceEavesSections.pop() };
     }
-  } else if (mode === 'ridge') {
-    if (state.traceCurrentLine.length > 0) state.traceCurrentLine = [];
-    else if (state.traceRidgeLines.length > 0) state.traceRidgeLines.pop();
-  } else if (mode === 'hip') {
-    if (state.traceCurrentLine.length > 0) state.traceCurrentLine = [];
-    else if (state.traceHipLines.length > 0) state.traceHipLines.pop();
-  } else if (mode === 'valley') {
-    if (state.traceCurrentLine.length > 0) state.traceCurrentLine = [];
-    else if (state.traceValleyLines.length > 0) state.traceValleyLines.pop();
-  } else if (mode === 'vent') {
-    if (state.traceVents.length > 0) state.traceVents.pop();
-  } else if (mode === 'skylight') {
-    if (state.traceSkylights.length > 0) state.traceSkylights.pop();
-  } else if (mode === 'chimney') {
-    if (state.traceChimneys.length > 0) state.traceChimneys.pop();
+  } else if (mode === 'ridge' || mode === 'hip' || mode === 'valley') {
+    if (state.traceCurrentLine.length > 0) {
+      popped = { mode, action: 'current_line', payload: state.traceCurrentLine };
+      state.traceCurrentLine = [];
+    } else {
+      const arr = { ridge: state.traceRidgeLines, hip: state.traceHipLines, valley: state.traceValleyLines }[mode];
+      if (arr && arr.length > 0) popped = { mode, action: 'line', payload: arr.pop() };
+    }
+  } else if (mode === 'vent' && state.traceVents.length > 0) {
+    popped = { mode, action: 'ann', payload: state.traceVents.pop() };
+  } else if (mode === 'skylight' && state.traceSkylights.length > 0) {
+    popped = { mode, action: 'ann', payload: state.traceSkylights.pop() };
+  } else if (mode === 'chimney' && state.traceChimneys.length > 0) {
+    popped = { mode, action: 'ann', payload: state.traceChimneys.pop() };
+  }
+
+  if (popped) {
+    state.traceRedoStack.push(popped);
+    if (state.traceRedoStack.length > 50) state.traceRedoStack.shift();
   }
 
   redrawActiveModeOverlays();
   updateTraceSummaryUI();
-  showToast('Undo complete', 'info');
+  showToast(popped ? 'Undo — press Ctrl+Y to redo' : 'Nothing to undo', popped ? 'info' : 'warning');
+}
+
+function redoLastTrace() {
+  if (state.traceRedoStack.length === 0) {
+    showToast('Nothing to redo', 'warning');
+    return;
+  }
+  const entry = state.traceRedoStack.pop();
+  // Switch to the mode the action originated in
+  if (entry.mode !== state.traceMode) state.traceMode = entry.mode;
+  const m = entry.mode;
+  if (entry.action === 'eave_pt') {
+    state.traceEavesPoints.push(entry.payload);
+  } else if (entry.action === 'eave_section') {
+    state.traceEavesSections.push(entry.payload);
+  } else if (entry.action === 'current_line') {
+    state.traceCurrentLine = entry.payload;
+  } else if (entry.action === 'line') {
+    if (m === 'ridge') state.traceRidgeLines.push(entry.payload);
+    else if (m === 'hip') state.traceHipLines.push(entry.payload);
+    else if (m === 'valley') state.traceValleyLines.push(entry.payload);
+  } else if (entry.action === 'ann') {
+    if (m === 'vent') state.traceVents.push(entry.payload);
+    else if (m === 'skylight') state.traceSkylights.push(entry.payload);
+    else if (m === 'chimney') state.traceChimneys.push(entry.payload);
+  }
+  redrawActiveModeOverlays();
+  updateTraceSummaryUI();
+  showToast('Redo complete', 'info');
+}
+
+// Clear redo stack whenever a fresh action is recorded (preserves standard redo semantics).
+function clearTraceRedoStack() {
+  if (state.traceRedoStack.length > 0) state.traceRedoStack = [];
+}
+
+function bindTraceKeyboardShortcuts() {
+  if (state.traceKeyboardBound) return;
+  state.traceKeyboardBound = true;
+  document.addEventListener('keydown', (e) => {
+    // Only active while in the trace phase
+    if (state.addressPhase !== 'trace') return;
+    // Ignore shortcuts while typing in form controls
+    const tag = (e.target && e.target.tagName) || '';
+    if (/INPUT|TEXTAREA|SELECT/.test(tag)) return;
+    const meta = e.metaKey || e.ctrlKey;
+    if (meta && e.key.toLowerCase() === 'z' && !e.shiftKey) {
+      e.preventDefault(); undoLastTrace();
+    } else if (meta && (e.key.toLowerCase() === 'y' || (e.shiftKey && e.key.toLowerCase() === 'z'))) {
+      e.preventDefault(); redoLastTrace();
+    } else if (e.key === 'Escape') {
+      if (state.traceCurrentLine.length > 0) {
+        state.traceCurrentLine = [];
+        redrawActiveModeOverlays();
+        showToast('Current line cancelled', 'info');
+      }
+    } else if (e.key === 'Enter') {
+      if (state.traceMode === 'eaves' && state.traceEavesPoints.length >= 3) {
+        closeEavesPolygon();
+      } else if (state.traceCurrentLine.length >= 2) {
+        finishCurrentLine();
+      }
+    } else if (/^[1-7]$/.test(e.key)) {
+      const modes = ['eaves','ridge','hip','valley','vent','skylight','chimney'];
+      setTraceMode(modes[parseInt(e.key,10) - 1]);
+    }
+  });
 }
 
 async function clearCurrentMode() {

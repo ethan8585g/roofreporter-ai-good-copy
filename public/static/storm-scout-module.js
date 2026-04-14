@@ -22,6 +22,18 @@
   var historyMode = false;
   var historyDate = null;
 
+  // Playback state
+  var playback = {
+    playing: false,
+    cursor: null,        // ms epoch — cutoff time for visible hail
+    windowStart: null,   // ms epoch
+    windowEnd: null,     // ms epoch
+    speed: 2,            // animation multiplier (1/2/5/10)
+    durationMs: 8000,    // wall-clock duration for 1× of full window
+    lastTick: 0,
+    rafId: 0
+  };
+
   function getToken() { return localStorage.getItem('rc_customer_token') || ''; }
   function authHeaders() { return { 'Authorization': 'Bearer ' + getToken(), 'Content-Type': 'application/json' }; }
 
@@ -105,6 +117,18 @@
               '<button id="ssHistoryLive" class="ss-live">Live</button>' +
             '</div>' +
           '</div>' +
+          '<div class="ss-playback">' +
+            '<button id="ssPlayBtn" class="ss-pb-btn" title="Play/Pause"><i class="fas fa-play"></i></button>' +
+            '<button id="ssResetBtn" class="ss-pb-btn" title="Reset"><i class="fas fa-rotate-left"></i></button>' +
+            '<input type="range" id="ssScrubber" class="ss-scrubber" min="0" max="1000" value="1000">' +
+            '<span id="ssCursor" class="ss-cursor-label">—</span>' +
+            '<select id="ssSpeed" class="ss-speed">' +
+              '<option value="1">1×</option>' +
+              '<option value="2" selected>2×</option>' +
+              '<option value="5">5×</option>' +
+              '<option value="10">10×</option>' +
+            '</select>' +
+          '</div>' +
         '</div>' +
       '</div>';
 
@@ -144,6 +168,102 @@
       document.getElementById('ssHistoryDate').value = '';
       loadAll(true);
     });
+
+    document.getElementById('ssPlayBtn').addEventListener('click', togglePlayback);
+    document.getElementById('ssResetBtn').addEventListener('click', resetPlayback);
+    document.getElementById('ssScrubber').addEventListener('input', function (e) {
+      if (playback.windowStart == null) return;
+      var frac = parseInt(e.target.value, 10) / 1000;
+      playback.cursor = playback.windowStart + frac * (playback.windowEnd - playback.windowStart);
+      if (playback.playing) pausePlayback();
+      renderHeatmap();
+      updateCursorLabel();
+    });
+    document.getElementById('ssSpeed').addEventListener('change', function (e) {
+      playback.speed = parseFloat(e.target.value) || 1;
+    });
+  }
+
+  function computePlaybackWindow() {
+    if (!hailReports.length) { playback.windowStart = playback.windowEnd = playback.cursor = null; return; }
+    var min = Infinity, max = -Infinity;
+    for (var i = 0; i < hailReports.length; i++) {
+      var t = new Date(hailReports[i].timestamp).getTime();
+      if (!isNaN(t)) { if (t < min) min = t; if (t > max) max = t; }
+    }
+    if (!isFinite(min)) { playback.windowStart = playback.windowEnd = null; return; }
+    // If window collapses (single point), widen ±30 min so playback has range.
+    if (max - min < 60000) { min -= 30 * 60000; max += 30 * 60000; }
+    playback.windowStart = min;
+    playback.windowEnd = max;
+    if (playback.cursor == null || playback.cursor < min || playback.cursor > max) {
+      playback.cursor = max; // default: show everything
+    }
+    updateScrubber();
+    updateCursorLabel();
+  }
+
+  function updateScrubber() {
+    var sc = document.getElementById('ssScrubber');
+    if (!sc || playback.windowStart == null) return;
+    var frac = (playback.cursor - playback.windowStart) / (playback.windowEnd - playback.windowStart || 1);
+    sc.value = String(Math.round(frac * 1000));
+  }
+
+  function updateCursorLabel() {
+    var el = document.getElementById('ssCursor');
+    if (!el) return;
+    if (playback.cursor == null) { el.textContent = '—'; return; }
+    el.textContent = new Date(playback.cursor).toLocaleString();
+  }
+
+  function togglePlayback() {
+    if (playback.windowStart == null) return;
+    if (playback.playing) pausePlayback(); else startPlayback();
+  }
+
+  function startPlayback() {
+    if (playback.windowStart == null) return;
+    // If at the end, rewind to start before playing
+    if (playback.cursor >= playback.windowEnd) playback.cursor = playback.windowStart;
+    playback.playing = true;
+    playback.lastTick = performance.now();
+    document.getElementById('ssPlayBtn').innerHTML = '<i class="fas fa-pause"></i>';
+    tick();
+  }
+
+  function pausePlayback() {
+    playback.playing = false;
+    if (playback.rafId) cancelAnimationFrame(playback.rafId);
+    document.getElementById('ssPlayBtn').innerHTML = '<i class="fas fa-play"></i>';
+  }
+
+  function resetPlayback() {
+    pausePlayback();
+    if (playback.windowStart == null) return;
+    playback.cursor = playback.windowEnd;
+    updateScrubber();
+    updateCursorLabel();
+    renderHeatmap();
+  }
+
+  function tick() {
+    if (!playback.playing) return;
+    var now = performance.now();
+    var delta = now - playback.lastTick;
+    playback.lastTick = now;
+    var totalWallMs = playback.durationMs / playback.speed;
+    var rangeMs = playback.windowEnd - playback.windowStart;
+    var advance = (delta / totalWallMs) * rangeMs;
+    playback.cursor += advance;
+    if (playback.cursor >= playback.windowEnd) {
+      playback.cursor = playback.windowEnd;
+      pausePlayback();
+    }
+    updateScrubber();
+    updateCursorLabel();
+    renderHeatmap();
+    if (playback.playing) playback.rafId = requestAnimationFrame(tick);
   }
 
   function initMap() {
@@ -232,11 +352,19 @@
     clearHeatmap();
     var countEl = document.getElementById('ssHailCount');
     var summaryEl = document.getElementById('ssHailSummary');
-    var hail = hailReports.filter(function (r) { return r.type === 'hail'; });
-    countEl.textContent = String(hail.length);
+    var allHail = hailReports.filter(function (r) { return r.type === 'hail'; });
+    var hail = allHail;
+    if (playback.cursor != null) {
+      var cutoff = playback.cursor;
+      hail = allHail.filter(function (r) {
+        var t = new Date(r.timestamp).getTime();
+        return isNaN(t) ? true : t <= cutoff;
+      });
+    }
+    countEl.textContent = hail.length + (hail.length !== allHail.length ? ' / ' + allHail.length : '');
 
     if (!layers.heatmap || !hail.length) {
-      summaryEl.textContent = hail.length ? 'Heatmap hidden' : 'No hail reports in window';
+      summaryEl.textContent = allHail.length ? (layers.heatmap ? 'No hail up to cursor' : 'Heatmap hidden') : 'No hail reports in window';
       return;
     }
 
@@ -330,6 +458,9 @@
   function loadHail() {
     return api('/heatmap?days=' + daysBack).then(function (res) {
       hailReports = res.reports || [];
+      pausePlayback();
+      playback.cursor = null;
+      computePlaybackWindow();
       renderHeatmap();
       return res;
     }).catch(function (err) {
@@ -349,6 +480,9 @@
     return api('/history?date=' + encodeURIComponent(date)).then(function (snap) {
       alerts = snap.alerts || [];
       hailReports = snap.hailReports || [];
+      pausePlayback();
+      playback.cursor = null;
+      computePlaybackWindow();
       renderAlertsOnMap();
       renderHeatmap();
       var updated = document.getElementById('ssUpdated');

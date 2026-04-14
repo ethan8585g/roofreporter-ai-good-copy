@@ -67,6 +67,16 @@
 .ss-history-picker button.ss-live { background:#059669; }
 .ss-history-picker button.ss-live:hover { background:#047857; }
 
+.ss-playback {
+  display:flex; align-items:center; gap:8px; width:100%;
+  margin-top:6px; padding-top:8px; border-top:1px solid rgba(255,255,255,0.08);
+}
+.ss-pb-btn { background:#2563eb; color:#fff; border:0; padding:6px 10px; border-radius:6px; cursor:pointer; font-size:12px; min-width:32px; }
+.ss-pb-btn:hover { background:#1d4ed8; }
+.ss-scrubber { flex:1; min-width:140px; accent-color:#2563eb; }
+.ss-cursor-label { font-size:11px; color:#cbd5e1; font-variant-numeric:tabular-nums; min-width:160px; text-align:right; }
+.ss-speed { background:#1f2937; color:#e5e7eb; border:1px solid rgba(255,255,255,0.1); padding:4px 6px; border-radius:6px; font-size:12px; }
+
 @media (max-width: 768px) {
   .ss-container { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
   .ss-sidebar { max-height: 40vh; }
