@@ -193,6 +193,30 @@ gtag('get','${ga4Id}','client_id',function(cid){
 window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}
 gtag('js', new Date());
 gtag('config', 'AW-18080319225');
+// Conversion labels — replace the XXX strings with the actual labels from Google Ads > Tools > Conversions
+window.GOOGLE_ADS_CONVERSIONS = {
+  lead:     'AW-18080319225/XXX_LEAD_LABEL',
+  signup:   'AW-18080319225/XXX_SIGNUP_LABEL',
+  purchase: 'AW-18080319225/XXX_PURCHASE_LABEL'
+};
+window.trackAdsConversion = function(kind, params) {
+  try {
+    var sendTo = window.GOOGLE_ADS_CONVERSIONS && window.GOOGLE_ADS_CONVERSIONS[kind];
+    if (!sendTo || sendTo.indexOf('XXX_') !== -1) return; // not configured yet
+    var payload = Object.assign({ send_to: sendTo }, params || {});
+    if (typeof gtag === 'function') gtag('event', 'conversion', payload);
+  } catch(e) { /* no-op */ }
+};
+// Fire purchase conversion when returning from Square checkout
+(function(){
+  try {
+    var p = new URLSearchParams(window.location.search);
+    if (p.get('payment') === 'success' && !sessionStorage.getItem('_ads_purchase_fired')) {
+      sessionStorage.setItem('_ads_purchase_fired', '1');
+      window.trackAdsConversion('purchase', { value: Number(p.get('amount') || 0) || undefined, currency: 'USD', transaction_id: p.get('order_id') || undefined });
+    }
+  } catch(e) {}
+})();
 </script>`
       const injected = body.replace('</body>', `${ga4Script}${googleAdsScript}
 <script src="/static/toast.js"></script>
@@ -3093,6 +3117,7 @@ function getContactFormHTML(sourcePage: string = 'unknown') {
       if (!res.ok) throw new Error('HTTP ' + res.status);
       var data = await res.json();
       if (data.success) {
+        if (typeof window.trackAdsConversion === 'function') window.trackAdsConversion('lead', { value: 1.0, currency: 'USD' });
         msg.className = 'text-sm font-medium px-4 py-3 rounded-lg bg-green-500/20 text-green-300 border border-green-500/30';
         msg.textContent = '';
         var icon = document.createElement('i'); icon.className = 'fas fa-check-circle mr-2'; msg.appendChild(icon);
@@ -6006,6 +6031,7 @@ function getCustomerLoginHTML() {
         if (res.ok && data.success) {
           localStorage.setItem('rc_customer', JSON.stringify(data.customer));
           localStorage.setItem('rc_customer_token', data.token);
+          if (typeof window.trackAdsConversion === 'function') window.trackAdsConversion('signup', { value: 1.0, currency: 'USD' });
           window.location.href = '/customer/dashboard';
         } else {
           err.textContent = data.error || 'Login failed.';
@@ -6126,6 +6152,7 @@ function getCustomerLoginHTML() {
         if (res.ok && data.success) {
           localStorage.setItem('rc_customer', JSON.stringify(data.customer));
           localStorage.setItem('rc_customer_token', data.token);
+          if (typeof window.trackAdsConversion === 'function') window.trackAdsConversion('signup', { value: 1.0, currency: 'USD' });
           window.location.href = '/customer/dashboard';
         } else {
           err.textContent = data.error || 'Registration failed.';

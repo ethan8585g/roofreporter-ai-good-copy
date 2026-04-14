@@ -739,6 +739,7 @@
       // Save auth tokens
       localStorage.setItem('rc_customer', JSON.stringify(regData.customer));
       localStorage.setItem('rc_customer_token', regData.token);
+      if (typeof window.trackAdsConversion === 'function') window.trackAdsConversion('signup', { value: 1.0, currency: 'USD' });
 
       // Step 2: Set subscription tier
       try {

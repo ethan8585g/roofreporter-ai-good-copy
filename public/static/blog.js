@@ -728,6 +728,7 @@
     fetch('/api/agents/leads', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) })
       .then(function(r) { return r.json(); })
       .then(function(res) {
+        if (typeof window.trackAdsConversion === 'function') window.trackAdsConversion('lead', { value: 1.0, currency: 'USD' });
         if (msg) {
           msg.className = 'text-sm font-medium px-4 py-3 rounded-lg';
           msg.style.background = 'rgba(0,255,136,0.1)';
