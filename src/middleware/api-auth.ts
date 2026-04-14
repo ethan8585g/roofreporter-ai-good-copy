@@ -133,7 +133,7 @@ export async function logApiRequest(
 // ── Main middleware factory ──────────────────────────────────────────────────
 
 export function apiAuthMiddleware() {
-  return async (c: Context<{ Bindings: Bindings }>, next: Next) => {
+  return async (c: any, next: Next) => {
     try {
     const startMs = Date.now()
     const db = c.env.DB
