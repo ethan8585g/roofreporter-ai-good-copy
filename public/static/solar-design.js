@@ -468,6 +468,7 @@
             '<button onclick="window._sdCloneVariant()" class="px-2.5 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded text-xs font-semibold"><i class="fas fa-clone mr-1"></i>Clone</button>' +
             '<button onclick="window._sdRenameVariant()" class="px-2.5 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded text-xs font-semibold"><i class="fas fa-pen mr-1"></i>Rename</button>' +
             '<button onclick="window._sdDeleteVariant()" class="px-2.5 py-1 bg-red-700 hover:bg-red-600 text-white rounded text-xs font-semibold"><i class="fas fa-trash mr-1"></i>Delete</button>' +
+            '<button onclick="window._sdSaveLayout()" id="sdSaveBtnTop" class="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs font-bold"><i class="fas fa-cloud-upload-alt mr-1"></i>Save Design</button>' +
             '<a id="sdProposalLink" href="#" target="_blank" class="px-2.5 py-1 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 text-white rounded text-xs font-bold"><i class="fas fa-file-pdf mr-1"></i>View Proposal</a>' +
           '</div>' +
           '<div class="bg-amber-500/20 border border-amber-500/50 text-amber-100 rounded-lg px-3 py-2 mb-2 text-sm font-semibold text-center"><i class="fas fa-hand-pointer mr-1"></i>Click the roof to place a panel. Right-click a panel to erase it.</div>' +
@@ -1077,6 +1078,11 @@
   window._sdSaveLayout = function() {
     if (state.saving) return;
     var btn = document.getElementById('sdSaveBtn');
+    var btnTop = document.getElementById('sdSaveBtnTop');
+    function setBtn(html, disabled) {
+      if (btn) { btn.disabled = !!disabled; btn.innerHTML = html; }
+      if (btnTop) { btnTop.disabled = !!disabled; btnTop.innerHTML = html; }
+    }
     var layout = state.layout;
     var userPanels;
     if (layout && layout.image_center && state.imgDrawW > 0) {
@@ -1092,7 +1098,7 @@
       userPanels = state.panels.map(function(p) { return { x: p.x, y: p.y, canvas_w: state.canvas && state.canvas.width, canvas_h: state.canvas && state.canvas.height, orientation: 'PORTRAIT', rotation_deg: p.rot || 0 }; });
     }
     state.saving = true;
-    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Saving...'; }
+    setBtn('<i class="fas fa-spinner fa-spin mr-1"></i>Saving...', true);
     // Convert obstructions → lat/lng + size_meters
     var obstructions = [];
     if (layout && layout.image_center && state.imgDrawW > 0) {
@@ -1122,15 +1128,15 @@
       .then(function(data) {
         state.saving = false;
         if (data.success) {
-          if (btn) { btn.innerHTML = '<i class="fas fa-check mr-1"></i>Saved (' + data.panel_count + ')'; }
-          setTimeout(function() { if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-cloud-upload-alt mr-1"></i>Save to Report'; } }, 1800);
+          setBtn('<i class="fas fa-check mr-1"></i>Saved (' + data.panel_count + ')', true);
+          setTimeout(function() { setBtn('<i class="fas fa-cloud-upload-alt mr-1"></i>Save Design', false); }, 1800);
         } else {
-          if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-exclamation-triangle mr-1"></i>Save failed'; }
+          setBtn('<i class="fas fa-exclamation-triangle mr-1"></i>Save failed', false);
         }
       })
       .catch(function() {
         state.saving = false;
-        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-exclamation-triangle mr-1"></i>Save failed'; }
+        setBtn('<i class="fas fa-exclamation-triangle mr-1"></i>Save failed', false);
       });
   };
 
