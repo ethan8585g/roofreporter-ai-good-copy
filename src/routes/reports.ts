@@ -77,7 +77,7 @@ async function validateAdminOrCustomer(db: D1Database, authHeader: string | unde
 
 reportsRoutes.use('/*', async (c, next) => {
   const path = c.req.path
-  if (path.endsWith('/html') || path.endsWith('/simple') || path.endsWith('/proposal') || path.endsWith('/pdf') || path.endsWith('/webhook-update') || path.endsWith('/enhancement-status') || path.endsWith('/calculate-from-trace') || path.endsWith('/pitch-multipliers') || path.endsWith('/calculate-roof-specs') || path.endsWith('/export.json') || path.endsWith('/export.csv')) return next()
+  if (path.endsWith('/html') || path.endsWith('/simple') || path.endsWith('/proposal') || path.endsWith('/pdf') || path.endsWith('/webhook-update') || path.endsWith('/webhooks/resend') || path.endsWith('/enhancement-status') || path.endsWith('/calculate-from-trace') || path.endsWith('/pitch-multipliers') || path.endsWith('/calculate-roof-specs') || path.endsWith('/export.json') || path.endsWith('/export.csv')) return next()
   const user = await validateAdminOrCustomer(c.env.DB, c.req.header('Authorization'))
   if (!user) return c.json({ error: 'Authentication required' }, 401)
   c.set('user' as any, user)
@@ -1750,10 +1750,25 @@ reportsRoutes.post('/:orderId/email', async (c) => {
   const subject = body?.subject_override || `Roof Measurement Report - ${order.property_address} [${reportNum}]`
   const emailHtml = buildEmailWrapper(reportHtml, order.property_address || 'Property', reportNum, recipient)
 
+  // Create a pending delivery row up front so every send attempt is auditable,
+  // even if the request crashes or times out between here and the provider call.
+  let deliveryId: number | null = null
+  try {
+    const ins = await c.env.DB.prepare(
+      `INSERT INTO email_deliveries (order_id, recipient, subject, status, attempts, last_attempt_at)
+       VALUES (?, ?, ?, 'pending', 0, datetime('now'))`
+    ).bind(orderId, recipient, subject).run()
+    deliveryId = Number(ins.meta.last_row_id) || null
+  } catch (e: any) {
+    console.warn(`[Email] Failed to create delivery row for order ${orderId}: ${e.message}`)
+  }
+
   let method = 'none'
   let senderEmail = ''
+  let providerMessageId = ''
+  const errors: string[] = []
 
-  // Priority 1: Try customer's own connected Gmail (roofer sends from their own email)
+  // Priority 1: customer's own connected Gmail
   try {
     const custGmail = await c.env.DB.prepare(
       `SELECT c.gmail_refresh_token, c.gmail_connected_email, c.brand_business_name, c.name
@@ -1762,50 +1777,123 @@ reportsRoutes.post('/:orderId/email', async (c) => {
 
     if (custGmail?.gmail_refresh_token && custGmail?.gmail_connected_email) {
       const ci = (c.env as any).GMAIL_CLIENT_ID
-      let cs = (c.env as any).GMAIL_CLIENT_SECRET || await repo.getSettingValue(c.env.DB, 'gmail_client_secret')
+      const cs = (c.env as any).GMAIL_CLIENT_SECRET || await repo.getSettingValue(c.env.DB, 'gmail_client_secret')
       if (ci && cs) {
-        await sendGmailOAuth2(ci, cs, custGmail.gmail_refresh_token, recipient, subject, emailHtml, custGmail.gmail_connected_email)
+        const res = await sendGmailOAuth2(ci, cs, custGmail.gmail_refresh_token, recipient, subject, emailHtml, custGmail.gmail_connected_email)
         method = 'customer_gmail'
         senderEmail = custGmail.gmail_connected_email
-        console.log(`[Email] Report ${orderId} sent via customer Gmail: ${senderEmail}`)
+        providerMessageId = res.id
       }
     }
   } catch (e: any) {
+    errors.push(`customer_gmail: ${e.message}`)
     console.warn(`[Email] Customer Gmail failed for order ${orderId}: ${e.message}`)
   }
 
-  // Priority 2: Platform Gmail OAuth2 (admin configured)
+  // Priority 2: platform Gmail OAuth2
   if (method === 'none') {
-    let rt = (c.env as any).GMAIL_REFRESH_TOKEN || await repo.getSettingValue(c.env.DB, 'gmail_refresh_token')
-    const ci = (c.env as any).GMAIL_CLIENT_ID
-    let cs = (c.env as any).GMAIL_CLIENT_SECRET || await repo.getSettingValue(c.env.DB, 'gmail_client_secret')
-    const sender = body?.from_email || c.env.GMAIL_SENDER_EMAIL || null
-    if (rt && ci && cs) {
-      await sendGmailOAuth2(ci, cs, rt, recipient, subject, emailHtml, sender)
-      method = 'gmail_oauth2'
-      senderEmail = sender || 'platform'
+    try {
+      const rt = (c.env as any).GMAIL_REFRESH_TOKEN || await repo.getSettingValue(c.env.DB, 'gmail_refresh_token')
+      const ci = (c.env as any).GMAIL_CLIENT_ID
+      const cs = (c.env as any).GMAIL_CLIENT_SECRET || await repo.getSettingValue(c.env.DB, 'gmail_client_secret')
+      const sender = body?.from_email || c.env.GMAIL_SENDER_EMAIL || null
+      if (rt && ci && cs) {
+        const res = await sendGmailOAuth2(ci, cs, rt, recipient, subject, emailHtml, sender)
+        method = 'gmail_oauth2'
+        senderEmail = sender || 'platform'
+        providerMessageId = res.id
+      }
+    } catch (e: any) {
+      errors.push(`gmail_oauth2: ${e.message}`)
+      console.warn(`[Email] Platform Gmail failed for order ${orderId}: ${e.message}`)
     }
   }
 
-  // Priority 3: Resend API
+  // Priority 3: Resend (final fallback — carries webhook-based delivery tracking)
   if (method === 'none') {
-    const resendKey = (c.env as any).RESEND_API_KEY
-    const sender = body?.from_email || c.env.GMAIL_SENDER_EMAIL || null
-    if (resendKey) {
-      await sendViaResend(resendKey, recipient, subject, emailHtml, sender)
-      method = 'resend'
-      senderEmail = sender || 'resend'
+    try {
+      const resendKey = (c.env as any).RESEND_API_KEY
+      const sender = body?.from_email || c.env.GMAIL_SENDER_EMAIL || null
+      if (resendKey) {
+        const res = await sendViaResend(resendKey, recipient, subject, emailHtml, sender)
+        method = 'resend'
+        senderEmail = sender || 'resend'
+        providerMessageId = res.id
+      }
+    } catch (e: any) {
+      errors.push(`resend: ${e.message}`)
+      console.warn(`[Email] Resend failed for order ${orderId}: ${e.message}`)
     }
   }
 
+  // All providers failed — mark delivery row and tell the caller.
   if (method === 'none') {
-    return c.json({ error: 'No email provider configured. Connect your Gmail at Dashboard → Settings, or ask admin to configure email.', fallback_url: `/api/reports/${orderId}/html` }, 400)
+    if (deliveryId) {
+      await c.env.DB.prepare(
+        `UPDATE email_deliveries SET status = 'failed', method = 'none', error_message = ?, attempts = attempts + 1, last_attempt_at = datetime('now'), updated_at = datetime('now') WHERE id = ?`
+      ).bind(errors.join(' | ') || 'No email provider configured', deliveryId).run().catch(() => {})
+    }
+    return c.json({
+      error: errors.length
+        ? 'All email providers failed. Admin should check Gmail OAuth and Resend API key.'
+        : 'No email provider configured. Connect your Gmail at Dashboard → Settings, or ask admin to configure email.',
+      details: errors,
+      fallback_url: `/api/reports/${orderId}/html`,
+      delivery_id: deliveryId,
+    }, 502)
   }
 
-  await repo.logApiRequest(c.env.DB, orderId, 'email_sent', method, 200, 0, JSON.stringify({ to: recipient, from: senderEmail, method }))
-  // Track email event in GA4 (non-blocking)
+  // Success — mark as sent. Resend webhook will later advance to delivered/bounced/complained.
+  if (deliveryId) {
+    await c.env.DB.prepare(
+      `UPDATE email_deliveries SET status = 'sent', method = ?, sender_email = ?, provider_message_id = ?, attempts = attempts + 1, last_attempt_at = datetime('now'), updated_at = datetime('now'), error_message = ? WHERE id = ?`
+    ).bind(method, senderEmail, providerMessageId || null, errors.length ? errors.join(' | ') : null, deliveryId).run().catch(() => {})
+  }
+
+  await repo.logApiRequest(c.env.DB, orderId, 'email_sent', method, 200, 0, JSON.stringify({ to: recipient, from: senderEmail, method, delivery_id: deliveryId }))
   trackEmailSent(c.env as any, 'report_email', recipient, { order_id: orderId, method }).catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
-  return c.json({ success: true, to: recipient, method, from: senderEmail })
+  return c.json({ success: true, to: recipient, method, from: senderEmail, delivery_id: deliveryId, provider_message_id: providerMessageId || null })
+})
+
+// ============================================================
+// POST /webhooks/resend — Delivery status callbacks from Resend
+// Events: email.sent, email.delivered, email.bounced, email.complained, email.opened, email.clicked
+// Docs: https://resend.com/docs/dashboard/webhooks/introduction
+// ============================================================
+reportsRoutes.post('/webhooks/resend', async (c) => {
+  const raw = await c.req.text()
+  const provided = c.req.header('x-roofmanager-webhook-secret') || c.req.header('x-webhook-secret') || ''
+  const expected = (c.env as any).RESEND_WEBHOOK_SECRET || ''
+  if (expected && provided !== expected) return c.json({ error: 'Invalid signature' }, 401)
+
+  let payload: any
+  try { payload = JSON.parse(raw) } catch { return c.json({ error: 'Invalid JSON' }, 400) }
+
+  const eventType: string = payload?.type || payload?.event || ''
+  const data = payload?.data || payload || {}
+  const providerMessageId: string = data?.email_id || data?.id || ''
+  const recipient: string = Array.isArray(data?.to) ? data.to[0] : (data?.to || '')
+
+  await c.env.DB.prepare(
+    `INSERT INTO resend_webhook_events (event_type, provider_message_id, recipient, payload) VALUES (?, ?, ?, ?)`
+  ).bind(eventType, providerMessageId, recipient, raw).run().catch(() => {})
+
+  // Map event → status. "sent" is the initial provider ack; we already set it.
+  let newStatus: string | null = null
+  if (eventType === 'email.delivered') newStatus = 'delivered'
+  else if (eventType === 'email.bounced') newStatus = 'bounced'
+  else if (eventType === 'email.complained') newStatus = 'complained'
+  else if (eventType === 'email.opened') newStatus = 'opened'
+
+  if (newStatus && providerMessageId) {
+    const errMsg = newStatus === 'bounced' ? (data?.bounce?.message || data?.reason || 'bounced') : null
+    await c.env.DB.prepare(
+      `UPDATE email_deliveries SET status = ?, error_message = COALESCE(?, error_message), updated_at = datetime('now')
+       WHERE provider_message_id = ? AND status NOT IN ('bounced','complained')`
+    ).bind(newStatus, errMsg, providerMessageId).run().catch(() => {})
+  }
+
+  return c.json({ ok: true })
 })
 
 // ============================================================

@@ -195,7 +195,7 @@ export async function sendGmailEmail(serviceAccountJson: string, to: string, sub
 export async function sendViaResend(
   apiKey: string, to: string, subject: string,
   htmlBody: string, fromEmail?: string | null
-): Promise<void> {
+): Promise<{ id: string }> {
   // Resend free tier sends from onboarding@resend.dev
   // With verified domain, send from your own email
   const from = fromEmail
@@ -220,6 +220,9 @@ export async function sendViaResend(
     const errBody = await response.text()
     throw new Error(`Resend API error (${response.status}): ${errBody}`)
   }
+
+  const data: any = await response.json().catch(() => ({}))
+  return { id: data?.id || '' }
 }
 
 // ============================================================
@@ -279,7 +282,7 @@ export async function sendGmailOAuth2(
   clientId: string, clientSecret: string, refreshToken: string,
   to: string, subject: string, htmlBody: string,
   senderEmail?: string | null
-): Promise<void> {
+): Promise<{ id: string }> {
   // Exchange refresh token for access token
   const tokenResp = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
@@ -361,6 +364,8 @@ export async function sendGmailOAuth2(
     const err = await sendResp.text()
     throw new Error(`Gmail send failed (${sendResp.status}): ${err}`)
   }
+  const data: any = await sendResp.json().catch(() => ({}))
+  return { id: data?.id || '' }
 }
 
 // ============================================================
