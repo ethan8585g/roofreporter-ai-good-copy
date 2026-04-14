@@ -725,7 +725,7 @@ developerPortalRoutes.post('/checkout', async (c) => {
         idempotency_key: idempotencyKey,
         quick_pay: {
           name: `${pkg.name} — Roof Manager API Credits`,
-          price_money: { amount: pkg.price_cents, currency: 'CAD' },
+          price_money: { amount: pkg.price_cents, currency: 'USD' },
           location_id: locationId,
         },
         checkout_options: { redirect_url: successUrl, ask_for_shipping_address: false },
@@ -744,10 +744,12 @@ developerPortalRoutes.post('/checkout', async (c) => {
 
   const squareOrderId = link.order_id || ''
 
-  // Record pending payment — api_account_id populated, customer_id NULL
+  // Record pending payment.
+  // customer_id = 0 is a sentinel for API-account purchases (satisfies NOT NULL; D1 does not
+  // enforce the FK constraint, so 0 is safe even though no customers row with id=0 exists).
   await db.prepare(`
     INSERT INTO square_payments (customer_id, api_account_id, square_order_id, square_payment_link_id, amount, currency, status, payment_type, description, metadata_json)
-    VALUES (NULL, ?, ?, ?, ?, 'cad', 'pending', 'api_credits', ?, ?)
+    VALUES (0, ?, ?, ?, ?, 'usd', 'pending', 'api_credits', ?, ?)
   `).bind(
     account.id, squareOrderId, link.id || '',
     pkg.price_cents,
