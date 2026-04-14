@@ -5571,7 +5571,7 @@ function renderCustomerOnboardingView() {
     '<div class="grid grid-cols-1 md:grid-cols-3 gap-4">' +
     '<div><label class="text-xs text-gray-500 font-medium block mb-1">Password *</label><div class="relative"><input id="qa-password" type="password" class="w-full border rounded-lg px-3 py-2 text-sm pr-9" placeholder="Set a secure password"><button type="button" onclick="var f=document.getElementById(\'qa-password\');f.type=f.type===\'password\'?\'text\':\'password\'" class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs"><i class="fas fa-eye"></i></button></div></div>' +
     '<div><label class="text-xs text-gray-500 font-medium block mb-1">Starter Report Credits</label><select id="qa-credits" class="w-full border rounded-lg px-3 py-2 text-sm"><option value="0">0 — trial only</option><option value="3" selected>3 — free trial</option><option value="5">5 credits</option><option value="10">10 credits</option></select></div>' +
-    '<div class="flex items-end"><button onclick="saCreateRoofAccount()" class="w-full bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-bold text-sm transition-all"><i class="fas fa-user-plus mr-2"></i>Create Account</button></div>' +
+    '<div class="flex items-end"><button id="qa-create-btn" type="button" class="w-full bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-bold text-sm transition-all cursor-pointer"><i class="fas fa-user-plus mr-2"></i>Create Account</button></div>' +
     '</div>' +
     '<div id="qa-result" class="mt-3 hidden"></div>' +
     '</div>' +
@@ -5777,6 +5777,12 @@ function renderCustomerOnboardingView() {
 }
 
 // ── Quick Account Setup ──────────────────────────────────────
+// Delegate clicks — robust to re-renders and inline-onclick issues
+document.addEventListener('click', function(ev) {
+  var btn = ev.target && ev.target.closest && ev.target.closest('#qa-create-btn');
+  if (btn) { ev.preventDefault(); window.saCreateRoofAccount(); }
+});
+
 window.saCreateRoofAccount = async function() {
   var email = (document.getElementById('qa-email').value || '').trim();
   var password = (document.getElementById('qa-password').value || '').trim();
