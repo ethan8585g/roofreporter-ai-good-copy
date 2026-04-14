@@ -39,16 +39,16 @@
 
     var existing = await reg.pushManager.getSubscription();
     if (existing) {
-      await fetchJson('/api/push/subscribe', { method: 'POST', body: JSON.stringify(existing.toJSON()) });
+      await fetchJson('/api/storm-push/subscribe', { method: 'POST', body: JSON.stringify(existing.toJSON()) });
       return { ok: true, reused: true };
     }
 
-    var keyRes = await fetchJson('/api/push/vapid-public-key');
+    var keyRes = await fetchJson('/api/storm-push/vapid-public-key');
     var sub = await reg.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey: urlBase64ToUint8Array(keyRes.publicKey)
     });
-    await fetchJson('/api/push/subscribe', { method: 'POST', body: JSON.stringify(sub.toJSON()) });
+    await fetchJson('/api/storm-push/subscribe', { method: 'POST', body: JSON.stringify(sub.toJSON()) });
     return { ok: true, reused: false };
   };
 
@@ -58,11 +58,11 @@
     if (!reg) return;
     var sub = await reg.pushManager.getSubscription();
     if (!sub) return;
-    await fetchJson('/api/push/subscribe', { method: 'DELETE', body: JSON.stringify({ endpoint: sub.endpoint }) }).catch(function(){});
+    await fetchJson('/api/storm-push/subscribe', { method: 'DELETE', body: JSON.stringify({ endpoint: sub.endpoint }) }).catch(function(){});
     await sub.unsubscribe();
   };
 
   window.ssTestPush = function () {
-    return fetchJson('/api/push/test', { method: 'POST' });
+    return fetchJson('/api/storm-push/test', { method: 'POST' });
   };
 })();
