@@ -8,14 +8,23 @@
 import { Hono } from 'hono'
 import type { Bindings } from '../types'
 import { generateApiKey } from '../middleware/api-auth'
-import { addCredits } from '../services/api-billing'
-import { getLedgerPage } from '../services/api-billing'
+import { addCredits, getLedgerPage } from '../services/api-billing'
 
 export const developerPortalRoutes = new Hono<{ Bindings: Bindings }>()
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const SESSION_TTL = 30 * 24 * 60 * 60  // 30 days (seconds)
 const SESSION_COOKIE = 'dp_session'
+
+// ── HTML escape — prevents XSS when interpolating user data into templates ────
+function esc(s: unknown): string {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
 
 // ── Password helpers (PBKDF2, same constants as auth.ts) ──────────────────────
 
@@ -90,18 +99,14 @@ function getSessionToken(c: any): string | undefined {
   return undefined
 }
 
-function setSessionCookie(c: any, token: string) {
-  c.res.headers.append(
+// Sets the session cookie on a Response object (not a Hono context).
+// Pass the raw Response returned by c.redirect() or new Response().
+function attachSessionCookie(resp: Response, token: string): Response {
+  resp.headers.set(
     'Set-Cookie',
     `${SESSION_COOKIE}=${token}; Path=/developer; HttpOnly; Secure; SameSite=Lax; Max-Age=${SESSION_TTL}`
   )
-}
-
-function clearSessionCookie(c: any) {
-  c.res.headers.append(
-    'Set-Cookie',
-    `${SESSION_COOKIE}=; Path=/developer; HttpOnly; Secure; SameSite=Lax; Max-Age=0`
-  )
+  return resp
 }
 
 // ── Auth guard ────────────────────────────────────────────────────────────────
@@ -119,7 +124,7 @@ function page(title: string, body: string, extraHead = '') {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${title} — Roof Manager API</title>
+  <title>${esc(title)} — Roof Manager API</title>
   <link rel="stylesheet" href="/static/tailwind.css">
   ${extraHead}
   <style>
@@ -181,10 +186,216 @@ function navBar(account: any) {
       <span style="font-weight:700;font-size:1.1rem;">Roof Manager <span style="color:var(--text-muted);font-weight:400;">API Portal</span></span>
     </div>
     <div class="flex items-center gap-4">
-      <span style="color:var(--text-muted);font-size:.9rem;">${account.company_name}</span>
+      <span style="color:var(--text-muted);font-size:.9rem;">${esc(account.company_name)}</span>
       <a href="/developer/logout" class="btn btn-secondary" style="padding:6px 16px;font-size:.85rem;">Sign Out</a>
     </div>
   </nav>`
+}
+
+// ── Dashboard data + HTML helpers ─────────────────────────────────────────────
+// Extracted so POST /signup and POST /keys/new can render the page inline
+// (without a redirect) — this keeps the raw API key out of URLs and logs.
+
+interface DashboardData {
+  keys: any[]
+  jobs: any[]
+  balance: number
+  packages: any[]
+}
+
+async function loadDashboardData(db: D1Database, accountId: string): Promise<DashboardData> {
+  const [keysResult, jobsResult, balanceRow, pkgsResult] = await Promise.all([
+    db.prepare('SELECT id, key_prefix, name, last_used_at, revoked_at, created_at FROM api_keys WHERE account_id = ? ORDER BY created_at DESC')
+      .bind(accountId).all<any>(),
+    db.prepare('SELECT id, status, address, created_at, finalized_at FROM api_jobs WHERE account_id = ? ORDER BY created_at DESC LIMIT 10')
+      .bind(accountId).all<any>(),
+    db.prepare('SELECT credit_balance FROM api_accounts WHERE id = ?').bind(accountId).first<{ credit_balance: number }>(),
+    db.prepare('SELECT * FROM credit_packages WHERE is_active = 1 ORDER BY credits ASC').all<any>(),
+  ])
+  return {
+    keys: keysResult.results ?? [],
+    jobs: jobsResult.results ?? [],
+    balance: balanceRow?.credit_balance ?? 0,
+    packages: pkgsResult.results ?? [],
+  }
+}
+
+function buildDashboardHtml(
+  account: any,
+  data: DashboardData,
+  baseUrl: string,
+  opts: { newKey?: string; welcome?: boolean; bought?: boolean } = {}
+): string {
+  const { keys, jobs, balance, packages } = data
+  const { newKey = '', welcome = false, bought = false } = opts
+  const activeKeys = keys.filter(k => !k.revoked_at)
+
+  function statusBadge(s: string) {
+    const map: Record<string, string> = {
+      queued: 'badge-yellow', tracing: 'badge-yellow', generating: 'badge-yellow',
+      ready: 'badge-green', failed: 'badge-red', cancelled: 'badge-red'
+    }
+    return `<span class="badge ${map[s] ?? 'badge-yellow'}">${esc(s)}</span>`
+  }
+
+  function timeAgo(unixSec: number) {
+    if (!unixSec) return '—'
+    const diff = Math.floor(Date.now() / 1000) - unixSec
+    if (diff < 60) return 'just now'
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
+    return `${Math.floor(diff / 86400)}d ago`
+  }
+
+  // newKey is the raw API key — it is alphanumeric + base64url chars only, safe to embed
+  // in a JS string literal and in a <code> element. We still esc() all other user values.
+  const newKeyBanner = newKey ? `
+    <div style="background:#4f8ef718;border:1px solid #4f8ef744;border-radius:10px;padding:18px 20px;margin-bottom:24px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+        <div>
+          <div style="font-weight:700;margin-bottom:4px;">Your API Key (shown once — copy it now)</div>
+          <code class="mono" id="newApiKey" style="font-size:.9rem;word-break:break-all;color:#93c5fd;">${esc(newKey)}</code>
+        </div>
+        <button onclick="navigator.clipboard.writeText(document.getElementById('newApiKey').textContent).then(()=>this.textContent='Copied!')"
+          class="btn btn-primary" style="white-space:nowrap;padding:8px 16px;font-size:.85rem;">Copy</button>
+      </div>
+    </div>` : ''
+
+  return page('Dashboard', `
+  ${navBar(account)}
+
+  <div style="max-width:960px;margin:0 auto;padding:32px 24px;">
+
+    ${welcome ? `<div class="alert-success" style="margin-bottom:24px;">
+      <strong>Welcome to Roof Manager API!</strong> Your account is set up and your first API key is shown below.
+      <strong>Copy it now — it will not be shown again.</strong>
+    </div>` : ''}
+
+    ${bought ? `<div class="alert-success" style="margin-bottom:24px;">
+      <strong>Payment successful!</strong> Your credits have been added to your account.
+    </div>` : ''}
+
+    ${newKeyBanner}
+
+    <!-- Stats row -->
+    <div class="grid grid-cols-3 gap-4 mb-8">
+      <div class="card p-5 text-center">
+        <div style="font-size:2rem;font-weight:800;color:var(--accent);">${balance}</div>
+        <div style="color:var(--text-muted);font-size:.85rem;margin-top:4px;">API Credits</div>
+      </div>
+      <div class="card p-5 text-center">
+        <div style="font-size:2rem;font-weight:800;">${activeKeys.length}</div>
+        <div style="color:var(--text-muted);font-size:.85rem;margin-top:4px;">Active Keys</div>
+      </div>
+      <div class="card p-5 text-center">
+        <div style="font-size:2rem;font-weight:800;">${jobs.filter(j => j.status === 'ready').length}</div>
+        <div style="color:var(--text-muted);font-size:.85rem;margin-top:4px;">Reports Delivered</div>
+      </div>
+    </div>
+
+    <div class="grid gap-8" style="grid-template-columns:1fr 1fr;">
+
+      <!-- API Keys -->
+      <div>
+        <div class="flex items-center justify-between mb-4">
+          <h2 style="font-size:1.1rem;font-weight:700;">API Keys</h2>
+          <form method="POST" action="/developer/keys/new" style="display:inline;">
+            <button type="submit" class="btn btn-secondary" style="padding:6px 14px;font-size:.8rem;">+ New Key</button>
+          </form>
+        </div>
+        <div class="card" style="overflow:hidden;">
+          ${keys.length === 0 ? `<div style="padding:24px;text-align:center;color:var(--text-muted);">No API keys yet.</div>` :
+            keys.map(k => `
+            <div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:8px;">
+              <div style="min-width:0;">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px;">
+                  <code class="mono" style="font-size:.85rem;">rm_live_${esc(k.key_prefix)}…</code>
+                  ${k.revoked_at ? `<span class="badge badge-red">Revoked</span>` : `<span class="badge badge-green">Active</span>`}
+                </div>
+                <div style="font-size:.78rem;color:var(--text-muted);">${esc(k.name || 'Unnamed')} · Last used: ${timeAgo(k.last_used_at)}</div>
+              </div>
+              ${!k.revoked_at ? `
+              <form method="POST" action="/developer/keys/${esc(k.id)}/revoke" onsubmit="return confirm('Revoke this key? API calls using it will stop working immediately.');">
+                <button type="submit" class="btn btn-danger" style="padding:5px 12px;font-size:.78rem;">Revoke</button>
+              </form>` : ''}
+            </div>`).join('')}
+        </div>
+      </div>
+
+      <!-- Buy Credits -->
+      <div>
+        <h2 style="font-size:1.1rem;font-weight:700;margin-bottom:4px;">Buy Credits</h2>
+        <p style="color:var(--text-muted);font-size:.85rem;margin-bottom:16px;">1 credit = 1 roof measurement report</p>
+        ${packages.length === 0
+          ? `<div class="card p-6 text-center" style="color:var(--text-muted);">No credit packages available. Contact sales@roofmanager.ca</div>`
+          : `<div style="display:flex;flex-direction:column;gap:12px;">
+              ${packages.map(pkg => `
+              <form method="POST" action="/developer/checkout">
+                <input type="hidden" name="package_id" value="${esc(pkg.id)}">
+                <button type="submit" class="card" style="width:100%;text-align:left;padding:16px;cursor:pointer;transition:border-color .15s;" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+                  <div style="display:flex;align-items:center;justify-content:space-between;">
+                    <div>
+                      <div style="font-weight:700;">${esc(pkg.name)}</div>
+                      <div style="color:var(--text-muted);font-size:.85rem;margin-top:2px;">${esc(pkg.credits)} credits</div>
+                    </div>
+                    <div style="font-size:1.2rem;font-weight:800;color:var(--accent);">$${(pkg.price_cents / 100).toFixed(2)}</div>
+                  </div>
+                </button>
+              </form>`).join('')}
+            </div>`}
+      </div>
+    </div>
+
+    <!-- Recent Jobs -->
+    <div style="margin-top:32px;">
+      <div class="flex items-center justify-between mb-4">
+        <h2 style="font-size:1.1rem;font-weight:700;">Recent Jobs</h2>
+        <a href="/developer/usage" style="color:var(--accent);font-size:.85rem;">View full history →</a>
+      </div>
+      <div class="card" style="overflow:hidden;">
+        ${jobs.length === 0
+          ? `<div style="padding:24px;text-align:center;color:var(--text-muted);">No jobs submitted yet. Use <code class="mono" style="font-size:.85em;background:var(--bg-base);padding:1px 6px;border-radius:4px;">POST /v1/reports</code> to submit your first address.</div>`
+          : `<table style="width:100%;border-collapse:collapse;">
+            <thead>
+              <tr style="border-bottom:1px solid var(--border);">
+                <th style="text-align:left;padding:10px 16px;font-size:.78rem;color:var(--text-muted);font-weight:600;">JOB ID</th>
+                <th style="text-align:left;padding:10px 16px;font-size:.78rem;color:var(--text-muted);font-weight:600;">ADDRESS</th>
+                <th style="text-align:left;padding:10px 16px;font-size:.78rem;color:var(--text-muted);font-weight:600;">STATUS</th>
+                <th style="text-align:right;padding:10px 16px;font-size:.78rem;color:var(--text-muted);font-weight:600;">SUBMITTED</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${jobs.map(j => `
+              <tr style="border-bottom:1px solid var(--border);">
+                <td style="padding:10px 16px;"><code class="mono" style="font-size:.8rem;color:var(--text-muted);">${esc(j.id.slice(0, 8))}…</code></td>
+                <td style="padding:10px 16px;font-size:.88rem;max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(j.address)}</td>
+                <td style="padding:10px 16px;">${statusBadge(j.status)}</td>
+                <td style="padding:10px 16px;text-align:right;font-size:.85rem;color:var(--text-muted);">${timeAgo(j.created_at)}</td>
+              </tr>`).join('')}
+            </tbody>
+          </table>`}
+      </div>
+    </div>
+
+    <!-- Quick Start -->
+    <div style="margin-top:32px;" class="card p-6">
+      <h2 style="font-size:1.1rem;font-weight:700;margin-bottom:16px;">Quick Start</h2>
+      <div style="margin-bottom:12px;">
+        <div class="label" style="margin-bottom:8px;">Submit a report request</div>
+        <pre class="mono" style="background:var(--bg-base);border:1px solid var(--border);border-radius:8px;padding:14px;font-size:.82rem;overflow-x:auto;color:#93c5fd;white-space:pre;"><code>curl -X POST ${esc(baseUrl)}/v1/reports \\
+  -H "Authorization: Bearer &lt;your-api-key&gt;" \\
+  -H "Content-Type: application/json" \\
+  -d '{"address": "123 Main St, Toronto, ON"}'</code></pre>
+      </div>
+      <div>
+        <div class="label" style="margin-bottom:8px;">Poll for results</div>
+        <pre class="mono" style="background:var(--bg-base);border:1px solid var(--border);border-radius:8px;padding:14px;font-size:.82rem;overflow-x:auto;color:#93c5fd;white-space:pre;"><code>curl ${esc(baseUrl)}/v1/reports/&lt;job_id&gt; \\
+  -H "Authorization: Bearer &lt;your-api-key&gt;"</code></pre>
+      </div>
+    </div>
+
+  </div>
+  `)
 }
 
 // ── GET /developer — Landing / signup prompt ──────────────────────────────────
@@ -325,28 +536,25 @@ developerPortalRoutes.post('/signup', async (c) => {
 
   // Issue first API key
   const { raw, prefix, hash: keyHash } = await generateApiKey()
-  const keyId = crypto.randomUUID()
   await db.prepare(`
     INSERT INTO api_keys (id, account_id, key_prefix, key_hash, name, created_at)
     VALUES (?, ?, ?, ?, 'Default Key', ?)
-  `).bind(keyId, accountId, prefix, keyHash, now).run()
+  `).bind(crypto.randomUUID(), accountId, prefix, keyHash, now).run()
 
   // Create session
   const token = await createSession(db, accountId)
 
-  // Show the API key once — redirect to a one-time display page via cookie
-  // We pass the raw key in session storage to display once; after shown, it's gone from server
-  const showId = crypto.randomUUID()
-  await db.prepare(`
-    INSERT INTO api_account_sessions (id, account_id, session_token, expires_at, created_at)
-    VALUES (?, ?, ?, ?, ?)
-  `).bind(showId, accountId, `show:${showId}:${raw}`, now + 300, now).run()
+  // Render dashboard directly — raw key stays in the HTTP response body only,
+  // never in a URL (which would appear in server logs and browser history).
+  const account = { id: accountId, company_name, contact_email: email }
+  const data = await loadDashboardData(db, accountId)
+  const baseUrl = new URL(c.req.url).origin
+  const html = buildDashboardHtml(account, data, baseUrl, { newKey: raw, welcome: true })
 
-  const resp = c.redirect(`/developer/dashboard?newkey=${encodeURIComponent(raw)}&welcome=1`)
-  setSessionCookie(resp as any, token)
-  ;(resp as any).headers.set('Set-Cookie',
-    `${SESSION_COOKIE}=${token}; Path=/developer; HttpOnly; Secure; SameSite=Lax; Max-Age=${SESSION_TTL}`)
-  return resp
+  return attachSessionCookie(
+    new Response(html, { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } }),
+    token
+  )
 })
 
 // ── GET /developer/login ──────────────────────────────────────────────────────
@@ -409,10 +617,7 @@ developerPortalRoutes.post('/login', async (c) => {
   if (account.status !== 'active') return c.redirect('/developer/login?error=suspended')
 
   const token = await createSession(db, account.id)
-  const resp = c.redirect('/developer/dashboard')
-  ;(resp as any).headers.set('Set-Cookie',
-    `${SESSION_COOKIE}=${token}; Path=/developer; HttpOnly; Secure; SameSite=Lax; Max-Age=${SESSION_TTL}`)
-  return resp
+  return attachSessionCookie(c.redirect('/developer/dashboard'), token)
 })
 
 // ── GET /developer/logout ─────────────────────────────────────────────────────
@@ -423,8 +628,10 @@ developerPortalRoutes.get('/logout', async (c) => {
     c.env.DB.prepare('DELETE FROM api_account_sessions WHERE session_token = ?').bind(token).run().catch(() => {})
   }
   const resp = c.redirect('/developer/login')
-  ;(resp as any).headers.set('Set-Cookie',
-    `${SESSION_COOKIE}=; Path=/developer; HttpOnly; Secure; SameSite=Lax; Max-Age=0`)
+  ;(resp as any).headers.set(
+    'Set-Cookie',
+    `${SESSION_COOKIE}=; Path=/developer; HttpOnly; Secure; SameSite=Lax; Max-Age=0`
+  )
   return resp
 })
 
@@ -435,202 +642,15 @@ developerPortalRoutes.get('/dashboard', async (c) => {
   if (!account) return c.redirect('/developer/login')
 
   const db = c.env.DB
-  const newKey = c.req.query('newkey') ?? ''
-  const welcome = c.req.query('welcome') === '1'
   const bought = c.req.query('payment') === 'success'
-
-  // Fetch API keys
-  const keysResult = await db.prepare(`
-    SELECT id, key_prefix, name, last_used_at, revoked_at, created_at
-    FROM api_keys WHERE account_id = ? ORDER BY created_at DESC
-  `).bind(account.id).all<any>()
-  const keys = keysResult.results ?? []
-
-  // Fetch recent jobs
-  const jobsResult = await db.prepare(`
-    SELECT id, status, address, created_at, finalized_at
-    FROM api_jobs WHERE account_id = ? ORDER BY created_at DESC LIMIT 10
-  `).bind(account.id).all<any>()
-  const jobs = jobsResult.results ?? []
-
-  // Fetch credit balance (fresh)
-  const balanceRow = await db.prepare('SELECT credit_balance FROM api_accounts WHERE id = ?')
-    .bind(account.id).first<{ credit_balance: number }>()
-  const balance = balanceRow?.credit_balance ?? 0
-
-  // Fetch credit packages for purchase
-  const pkgsResult = await db.prepare(
-    'SELECT * FROM credit_packages WHERE is_active = 1 ORDER BY credits ASC'
-  ).all<any>()
-  const packages = pkgsResult.results ?? []
-
-  function statusBadge(s: string) {
-    const map: Record<string, string> = {
-      queued: 'badge-yellow', tracing: 'badge-yellow', generating: 'badge-yellow',
-      ready: 'badge-green', failed: 'badge-red', cancelled: 'badge-red'
-    }
-    return `<span class="badge ${map[s] ?? 'badge-yellow'}">${s}</span>`
-  }
-
-  function timeAgo(unixSec: number) {
-    if (!unixSec) return '—'
-    const diff = Math.floor(Date.now() / 1000) - unixSec
-    if (diff < 60) return 'just now'
-    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
-    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
-    return `${Math.floor(diff / 86400)}d ago`
-  }
-
-  const activeKeys = keys.filter(k => !k.revoked_at)
   const baseUrl = new URL(c.req.url).origin
+  const data = await loadDashboardData(db, account.id)
 
-  return c.html(page('Dashboard', `
-  ${navBar(account)}
-
-  <div style="max-width:960px;margin:0 auto;padding:32px 24px;">
-
-    ${welcome ? `<div class="alert-success" style="margin-bottom:24px;">
-      <strong>Welcome to Roof Manager API!</strong> Your account is set up and your first API key is shown below.
-      <strong>Copy it now — it will not be shown again.</strong>
-    </div>` : ''}
-
-    ${bought ? `<div class="alert-success" style="margin-bottom:24px;">
-      <strong>Payment successful!</strong> Your credits have been added to your account.
-    </div>` : ''}
-
-    ${newKey ? `<div style="background:#4f8ef718;border:1px solid #4f8ef744;border-radius:10px;padding:18px 20px;margin-bottom:24px;">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
-        <div>
-          <div style="font-weight:700;margin-bottom:4px;">Your API Key (shown once — save it now)</div>
-          <code class="mono" style="font-size:.9rem;word-break:break-all;color:#93c5fd;">${newKey}</code>
-        </div>
-        <button onclick="navigator.clipboard.writeText('${newKey}').then(()=>this.textContent='Copied!')"
-          class="btn btn-primary" style="white-space:nowrap;padding:8px 16px;font-size:.85rem;">Copy</button>
-      </div>
-    </div>` : ''}
-
-    <!-- Stats row -->
-    <div class="grid grid-cols-3 gap-4 mb-8">
-      <div class="card p-5 text-center">
-        <div style="font-size:2rem;font-weight:800;color:var(--accent);">${balance}</div>
-        <div style="color:var(--text-muted);font-size:.85rem;margin-top:4px;">API Credits</div>
-      </div>
-      <div class="card p-5 text-center">
-        <div style="font-size:2rem;font-weight:800;">${activeKeys.length}</div>
-        <div style="color:var(--text-muted);font-size:.85rem;margin-top:4px;">Active Keys</div>
-      </div>
-      <div class="card p-5 text-center">
-        <div style="font-size:2rem;font-weight:800;">${jobs.filter(j => j.status === 'ready').length}</div>
-        <div style="color:var(--text-muted);font-size:.85rem;margin-top:4px;">Reports Delivered</div>
-      </div>
-    </div>
-
-    <div class="grid gap-8" style="grid-template-columns:1fr 1fr;">
-
-      <!-- API Keys -->
-      <div>
-        <div class="flex items-center justify-between mb-4">
-          <h2 style="font-size:1.1rem;font-weight:700;">API Keys</h2>
-          <form method="POST" action="/developer/keys/new" style="display:inline;">
-            <button type="submit" class="btn btn-secondary" style="padding:6px 14px;font-size:.8rem;">+ New Key</button>
-          </form>
-        </div>
-        <div class="card" style="overflow:hidden;">
-          ${keys.length === 0 ? `<div style="padding:24px;text-align:center;color:var(--text-muted);">No API keys yet.</div>` :
-            keys.map(k => `
-            <div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:8px;">
-              <div style="min-width:0;">
-                <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px;">
-                  <code class="mono" style="font-size:.85rem;">rm_live_${k.key_prefix}…</code>
-                  ${k.revoked_at ? `<span class="badge badge-red">Revoked</span>` : `<span class="badge badge-green">Active</span>`}
-                </div>
-                <div style="font-size:.78rem;color:var(--text-muted);">${k.name || 'Unnamed'} · Last used: ${timeAgo(k.last_used_at)}</div>
-              </div>
-              ${!k.revoked_at ? `
-              <form method="POST" action="/developer/keys/${k.id}/revoke" onsubmit="return confirm('Revoke this key? API calls using it will stop working immediately.');">
-                <button type="submit" class="btn btn-danger" style="padding:5px 12px;font-size:.78rem;">Revoke</button>
-              </form>` : ''}
-            </div>`).join('')}
-        </div>
-      </div>
-
-      <!-- Buy Credits -->
-      <div>
-        <h2 style="font-size:1.1rem;font-weight:700;margin-bottom:4px;">Buy Credits</h2>
-        <p style="color:var(--text-muted);font-size:.85rem;margin-bottom:16px;">1 credit = 1 roof measurement report</p>
-        ${packages.length === 0
-          ? `<div class="card p-6 text-center" style="color:var(--text-muted);">No credit packages available. Contact sales@roofmanager.ca</div>`
-          : `<div style="display:flex;flex-direction:column;gap:12px;">
-              ${packages.map(pkg => `
-              <form method="POST" action="/developer/checkout">
-                <input type="hidden" name="package_id" value="${pkg.id}">
-                <button type="submit" class="card" style="width:100%;text-align:left;padding:16px;cursor:pointer;transition:border-color .15s;" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
-                  <div style="display:flex;align-items:center;justify-content:space-between;">
-                    <div>
-                      <div style="font-weight:700;">${pkg.name}</div>
-                      <div style="color:var(--text-muted);font-size:.85rem;margin-top:2px;">${pkg.credits} credits</div>
-                    </div>
-                    <div style="font-size:1.2rem;font-weight:800;color:var(--accent);">$${(pkg.price_cents / 100).toFixed(2)}</div>
-                  </div>
-                </button>
-              </form>`).join('')}
-            </div>`}
-      </div>
-    </div>
-
-    <!-- Recent Jobs -->
-    <div style="margin-top:32px;">
-      <div class="flex items-center justify-between mb-4">
-        <h2 style="font-size:1.1rem;font-weight:700;">Recent Jobs</h2>
-        <a href="/developer/usage" style="color:var(--accent);font-size:.85rem;">View full history →</a>
-      </div>
-      <div class="card" style="overflow:hidden;">
-        ${jobs.length === 0
-          ? `<div style="padding:24px;text-align:center;color:var(--text-muted);">No jobs submitted yet. Use <code class="mono" style="font-size:.85em;background:var(--bg-base);padding:1px 6px;border-radius:4px;">POST /v1/reports</code> to submit your first address.</div>`
-          : `<table style="width:100%;border-collapse:collapse;">
-            <thead>
-              <tr style="border-bottom:1px solid var(--border);">
-                <th style="text-align:left;padding:10px 16px;font-size:.78rem;color:var(--text-muted);font-weight:600;">JOB ID</th>
-                <th style="text-align:left;padding:10px 16px;font-size:.78rem;color:var(--text-muted);font-weight:600;">ADDRESS</th>
-                <th style="text-align:left;padding:10px 16px;font-size:.78rem;color:var(--text-muted);font-weight:600;">STATUS</th>
-                <th style="text-align:right;padding:10px 16px;font-size:.78rem;color:var(--text-muted);font-weight:600;">SUBMITTED</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${jobs.map(j => `
-              <tr style="border-bottom:1px solid var(--border);">
-                <td style="padding:10px 16px;"><code class="mono" style="font-size:.8rem;color:var(--text-muted);">${j.id.slice(0, 8)}…</code></td>
-                <td style="padding:10px 16px;font-size:.88rem;max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${j.address}</td>
-                <td style="padding:10px 16px;">${statusBadge(j.status)}</td>
-                <td style="padding:10px 16px;text-align:right;font-size:.85rem;color:var(--text-muted);">${timeAgo(j.created_at)}</td>
-              </tr>`).join('')}
-            </tbody>
-          </table>`}
-      </div>
-    </div>
-
-    <!-- Quick Start -->
-    <div style="margin-top:32px;" class="card p-6">
-      <h2 style="font-size:1.1rem;font-weight:700;margin-bottom:16px;">Quick Start</h2>
-      <div style="margin-bottom:12px;">
-        <div class="label" style="margin-bottom:8px;">Submit a report request</div>
-        <pre class="mono" style="background:var(--bg-base);border:1px solid var(--border);border-radius:8px;padding:14px;font-size:.82rem;overflow-x:auto;color:#93c5fd;white-space:pre;"><code>curl -X POST ${baseUrl}/v1/reports \\
-  -H "Authorization: Bearer &lt;your-api-key&gt;" \\
-  -H "Content-Type: application/json" \\
-  -d '{"address": "123 Main St, Toronto, ON"}'</code></pre>
-      </div>
-      <div>
-        <div class="label" style="margin-bottom:8px;">Poll for results</div>
-        <pre class="mono" style="background:var(--bg-base);border:1px solid var(--border);border-radius:8px;padding:14px;font-size:.82rem;overflow-x:auto;color:#93c5fd;white-space:pre;"><code>curl ${baseUrl}/v1/reports/&lt;job_id&gt; \\
-  -H "Authorization: Bearer &lt;your-api-key&gt;"</code></pre>
-      </div>
-    </div>
-
-  </div>
-  `))
+  return c.html(buildDashboardHtml(account, data, baseUrl, { bought }))
 })
 
 // ── POST /developer/keys/new — Generate a new API key ─────────────────────────
+// Renders the dashboard inline so the raw key never appears in a URL.
 
 developerPortalRoutes.post('/keys/new', async (c) => {
   const account = await requireAuth(c)
@@ -638,15 +658,16 @@ developerPortalRoutes.post('/keys/new', async (c) => {
 
   const db = c.env.DB
   const { raw, prefix, hash: keyHash } = await generateApiKey()
-  const keyId = crypto.randomUUID()
   const now = Math.floor(Date.now() / 1000)
 
   await db.prepare(`
     INSERT INTO api_keys (id, account_id, key_prefix, key_hash, name, created_at)
     VALUES (?, ?, ?, ?, 'New Key', ?)
-  `).bind(keyId, account.id, prefix, keyHash, now).run()
+  `).bind(crypto.randomUUID(), account.id, prefix, keyHash, now).run()
 
-  return c.redirect(`/developer/dashboard?newkey=${encodeURIComponent(raw)}`)
+  const baseUrl = new URL(c.req.url).origin
+  const data = await loadDashboardData(db, account.id)
+  return c.html(buildDashboardHtml(account, data, baseUrl, { newKey: raw }))
 })
 
 // ── POST /developer/keys/:keyId/revoke ────────────────────────────────────────
@@ -689,8 +710,6 @@ developerPortalRoutes.post('/checkout', async (c) => {
 
   const origin = new URL(c.req.url).origin
   const successUrl = `${origin}/developer/dashboard?payment=success`
-  const cancelUrl = `${origin}/developer/dashboard`
-
   const idempotencyKey = `api-credits-${account.id}-${pkg.id}-${Date.now()}`
 
   let paymentLink: any
@@ -715,7 +734,7 @@ developerPortalRoutes.post('/checkout', async (c) => {
     })
     paymentLink = await resp.json()
   } catch (err: any) {
-    return c.html(page('Checkout Error', `<div style="padding:48px;text-align:center;"><div class="alert-error">Checkout failed: ${err.message}</div><a href="/developer/dashboard" class="btn btn-secondary" style="margin-top:16px;">Back</a></div>`))
+    return c.html(page('Checkout Error', `<div style="padding:48px;text-align:center;"><div class="alert-error">Checkout failed: ${esc(err.message)}</div><a href="/developer/dashboard" class="btn btn-secondary" style="margin-top:16px;">Back</a></div>`))
   }
 
   const link = paymentLink.payment_link
@@ -755,7 +774,10 @@ developerPortalRoutes.get('/usage', async (c) => {
   }
 
   function timeStr(unix: number) {
-    return new Date(unix * 1000).toLocaleString('en-CA', { timeZone: 'America/Toronto', month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+    return new Date(unix * 1000).toLocaleString('en-CA', {
+      timeZone: 'America/Toronto', month: 'short', day: 'numeric',
+      year: 'numeric', hour: '2-digit', minute: '2-digit'
+    })
   }
 
   return c.html(page('Usage History', `
@@ -783,7 +805,7 @@ developerPortalRoutes.get('/usage', async (c) => {
             ${entries.map((e: any) => `
             <tr style="border-bottom:1px solid var(--border);">
               <td style="padding:10px 16px;font-size:.85rem;color:var(--text-muted);">${timeStr(e.created_at)}</td>
-              <td style="padding:10px 16px;font-size:.88rem;text-transform:capitalize;">${e.reason}${e.ref_id ? ` <span style="color:var(--text-muted);font-size:.8rem;">(${e.ref_id.slice(0, 8)}…)</span>` : ''}</td>
+              <td style="padding:10px 16px;font-size:.88rem;text-transform:capitalize;">${esc(e.reason)}${e.ref_id ? ` <span style="color:var(--text-muted);font-size:.8rem;">(${esc(e.ref_id.slice(0, 8))}…)</span>` : ''}</td>
               <td style="padding:10px 16px;text-align:right;font-weight:700;${deltaColor(e.delta)};">${e.delta > 0 ? '+' : ''}${e.delta}</td>
               <td style="padding:10px 16px;text-align:right;font-size:.88rem;">${e.balance_after}</td>
             </tr>`).join('')}
