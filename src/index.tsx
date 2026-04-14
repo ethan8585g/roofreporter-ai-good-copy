@@ -5443,6 +5443,17 @@ function getLandingPageHTML(latestPosts: any[] = []) {
         </div>
         <a href="/guides" class="text-[#00FF88] text-sm font-semibold hover:underline">View all guides &rarr;</a>
       </div>
+      <div class="mb-10 grid md:grid-cols-5 gap-6 items-center bg-[#111111] border border-white/10 rounded-2xl overflow-hidden">
+        <div class="md:col-span-3 relative" style="padding-bottom:33.75%;height:0;">
+          <iframe class="absolute top-0 left-0 w-full h-full" src="https://www.youtube.com/embed/u3Xa0FaviGY" title="How to Order a Roof Measurement Report" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+        </div>
+        <div class="md:col-span-2 p-6 md:p-8">
+          <div class="inline-flex items-center gap-2 rounded-full px-3 py-1 text-[10px] font-semibold mb-3 uppercase tracking-widest" style="background:#00FF8818;color:#00FF88"><i class="fas fa-play"></i> Featured Tutorial</div>
+          <h3 class="text-xl md:text-2xl font-black text-white mb-2 leading-tight">How to Order a Roof Measurement Report</h3>
+          <p class="text-gray-400 text-sm leading-relaxed mb-4">Watch a full walkthrough — from address entry to branded PDF in under a minute.</p>
+          <a href="/guides/order-measurement-report" class="inline-flex items-center gap-2 text-[#00FF88] text-sm font-semibold hover:underline">Read the step-by-step guide <i class="fas fa-arrow-right"></i></a>
+        </div>
+      </div>
       <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
         ${[
           { slug: 'order-measurement-report', title: 'How to Order a Measurement Report', desc: 'Get a surveyor-grade PDF for any roof in under 60 seconds.', icon: 'fa-ruler-combined', read: 4 },
