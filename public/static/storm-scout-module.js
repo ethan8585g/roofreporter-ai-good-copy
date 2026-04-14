@@ -24,6 +24,13 @@
   var historyMode = false;
   var historyDate = null;
 
+  // Territory (Phase 3) state
+  var territories = [];
+  var territoryPolygons = {};   // id -> google.maps.Polygon
+  var drawingManager = null;
+  var drawingActive = false;
+  var pendingEditAreaId = null;
+
   // Playback state
   var playback = {
     playing: false,
@@ -38,6 +45,22 @@
 
   function getToken() { return localStorage.getItem('rc_customer_token') || ''; }
   function authHeaders() { return { 'Authorization': 'Bearer ' + getToken(), 'Content-Type': 'application/json' }; }
+
+  function alertsApi(method, path, body) {
+    var opts = { method: method, headers: authHeaders() };
+    if (body) opts.body = JSON.stringify(body);
+    return fetch('/api/storm-alerts' + path, opts).then(function (r) {
+      return r.text().then(function (text) {
+        var parsed = null;
+        try { parsed = text ? JSON.parse(text) : null; } catch (e) {}
+        if (!r.ok) {
+          var msg = (parsed && parsed.error) ? parsed.error : ('HTTP ' + r.status + (text ? ': ' + text.slice(0, 120) : ''));
+          throw new Error(msg);
+        }
+        return parsed;
+      });
+    });
+  }
 
   function api(path) {
     return fetch('/api/storm-scout' + path, { headers: authHeaders() }).then(function (r) {
@@ -106,6 +129,15 @@
           '<div class="ss-section">' +
             '<div class="ss-section-title">Hail reports <span id="ssHailCount" class="ss-count">0</span></div>' +
             '<div id="ssHailSummary" class="ss-sub" style="font-size:11px"></div>' +
+          '</div>' +
+          '<div class="ss-section">' +
+            '<div class="ss-section-title">My territory <span id="ssTerrCount" class="ss-count">0</span></div>' +
+            '<button id="ssDrawTerr" class="ss-btn ss-btn-secondary"><i class="fas fa-draw-polygon mr-1"></i> Draw new area</button>' +
+            '<div id="ssTerrList" class="ss-terr-list"></div>' +
+          '</div>' +
+          '<div class="ss-section">' +
+            '<div class="ss-section-title">Recent matches <span id="ssMatchCount" class="ss-count">0</span></div>' +
+            '<div id="ssMatchList" class="ss-match-list"></div>' +
           '</div>' +
           '<div class="ss-section ss-footer">' +
             '<button id="ssRefresh" class="ss-btn"><i class="fas fa-rotate mr-1"></i>Refresh</button>' +
@@ -658,7 +690,207 @@
   function escapeHtml(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]; }); }
   function escapeAttr(s) { return escapeHtml(s); }
 
+  // ============================================================
+  // TERRITORY (Phase 3) — draw, save, list, delete, matches feed
+  // ============================================================
+  function setupDrawingManager() {
+    if (!map || !google.maps.drawing || drawingManager) return;
+    drawingManager = new google.maps.drawing.DrawingManager({
+      drawingMode: null,
+      drawingControl: false,
+      polygonOptions: {
+        strokeColor: '#2563eb', strokeWeight: 2, fillColor: '#2563eb', fillOpacity: 0.18,
+        editable: true, zIndex: 5
+      }
+    });
+    drawingManager.setMap(map);
+    google.maps.event.addListener(drawingManager, 'polygoncomplete', function (poly) {
+      drawingManager.setDrawingMode(null);
+      drawingActive = false;
+      var drawBtn = document.getElementById('ssDrawTerr');
+      if (drawBtn) drawBtn.classList.remove('active');
+      promptAndSaveTerritory(poly);
+    });
+  }
+
+  function startDrawing() {
+    if (!drawingManager) { toast('Drawing library not ready yet', 'info'); return; }
+    drawingActive = true;
+    drawingManager.setDrawingMode(google.maps.drawing.OverlayType.POLYGON);
+    var drawBtn = document.getElementById('ssDrawTerr');
+    if (drawBtn) drawBtn.classList.add('active');
+    toast('Click the map to add points. Double-click or close the polygon to finish.', 'info');
+  }
+
+  function promptAndSaveTerritory(poly) {
+    var path = poly.getPath();
+    var pts = [];
+    for (var i = 0; i < path.getLength(); i++) {
+      var p = path.getAt(i);
+      pts.push({ lat: p.lat(), lng: p.lng() });
+    }
+    if (pts.length < 3) { poly.setMap(null); toast('Need at least 3 points', 'error'); return; }
+
+    var name = (prompt('Name this territory (e.g. "North Oakville"):') || '').trim();
+    if (!name) { poly.setMap(null); return; }
+    var hail = parseFloat(prompt('Minimum hail size to alert on (inches). 0 = never, 1.0 = golf-ball-ish:', '1.0') || '1');
+    if (!Number.isFinite(hail)) hail = 1;
+    var wind = parseInt(prompt('Minimum wind gust to alert on (km/h). 0 = never:', '0') || '0', 10);
+    if (!Number.isFinite(wind)) wind = 0;
+
+    poly.setMap(null); // will be re-rendered from DB
+    alertsApi('POST', '/areas', {
+      name: name, polygon: pts, min_hail_inches: hail, min_wind_kmh: wind,
+      types: ['hail', 'wind', 'tornado', 'thunderstorm'],
+      notify_email: true, notify_push: false
+    }).then(function () {
+      toast('Territory saved', 'info');
+      loadTerritories();
+    }).catch(function (err) {
+      toast('Save failed: ' + (err.message || err), 'error');
+    });
+  }
+
+  function clearTerritoryPolygons() {
+    Object.keys(territoryPolygons).forEach(function (k) {
+      territoryPolygons[k].setMap(null);
+    });
+    territoryPolygons = {};
+  }
+
+  function renderTerritories() {
+    var listEl = document.getElementById('ssTerrList');
+    var countEl = document.getElementById('ssTerrCount');
+    countEl.textContent = String(territories.length);
+    clearTerritoryPolygons();
+
+    if (!territories.length) {
+      listEl.innerHTML = '<div class="ss-empty">No territories yet. Draw one to start getting storm alerts.</div>';
+      return;
+    }
+
+    listEl.innerHTML = territories.map(function (t) {
+      return '<div class="ss-terr-item" data-id="' + t.id + '">' +
+        '<div class="ss-terr-head">' +
+          '<span class="ss-terr-name">' + escapeHtml(t.name) + '</span>' +
+          '<button class="ss-terr-del" title="Delete">&times;</button>' +
+        '</div>' +
+        '<div class="ss-terr-meta">≥ ' + t.min_hail_inches.toFixed(2) + '" hail' +
+          (t.min_wind_kmh > 0 ? ' • ≥ ' + t.min_wind_kmh + ' km/h' : '') +
+          (t.notify_email ? ' • email on' : '') +
+        '</div>' +
+      '</div>';
+    }).join('');
+
+    territories.forEach(function (t) {
+      if (!Array.isArray(t.polygon) || t.polygon.length < 3) return;
+      var poly = new google.maps.Polygon({
+        paths: t.polygon,
+        strokeColor: '#60a5fa', strokeWeight: 2, strokeOpacity: 0.9,
+        fillColor: '#60a5fa', fillOpacity: 0.1, map: map, zIndex: 2
+      });
+      poly.addListener('click', function () {
+        var center = computeCentroid(t.polygon);
+        map.panTo(center);
+      });
+      territoryPolygons[t.id] = poly;
+    });
+
+    listEl.querySelectorAll('.ss-terr-del').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var item = btn.closest('.ss-terr-item');
+        var id = parseInt(item.getAttribute('data-id'), 10);
+        if (!confirm('Delete this territory?')) return;
+        alertsApi('DELETE', '/areas/' + id).then(function () { loadTerritories(); }).catch(function (err) { toast(err.message, 'error'); });
+      });
+    });
+    listEl.querySelectorAll('.ss-terr-item').forEach(function (item) {
+      item.addEventListener('click', function () {
+        var id = parseInt(item.getAttribute('data-id'), 10);
+        var t = territories.find(function (x) { return x.id === id; });
+        if (t && t.polygon && t.polygon.length) {
+          var c = computeCentroid(t.polygon);
+          map.panTo(c); map.setZoom(Math.max(map.getZoom(), 10));
+        }
+      });
+    });
+  }
+
+  function computeCentroid(ring) {
+    var lat = 0, lng = 0;
+    for (var i = 0; i < ring.length; i++) { lat += ring[i].lat; lng += ring[i].lng; }
+    return { lat: lat / ring.length, lng: lng / ring.length };
+  }
+
+  function loadTerritories() {
+    return alertsApi('GET', '/areas').then(function (res) {
+      territories = res.areas || [];
+      renderTerritories();
+    }).catch(function (err) {
+      console.error('[StormScout] territories', err);
+      var listEl = document.getElementById('ssTerrList');
+      if (listEl) listEl.innerHTML = '<div class="ss-empty">Could not load territories: ' + escapeHtml(err.message || '') + '</div>';
+    });
+  }
+
+  function loadMatches() {
+    return alertsApi('GET', '/notifications?limit=20').then(function (res) {
+      var list = res.notifications || [];
+      var countEl = document.getElementById('ssMatchCount');
+      var listEl = document.getElementById('ssMatchList');
+      countEl.textContent = String(list.length);
+      if (!list.length) {
+        listEl.innerHTML = '<div class="ss-empty">No matches yet. You\u2019ll get an email when a storm hits your territory.</div>';
+        return;
+      }
+      listEl.innerHTML = list.map(function (m) {
+        var when = m.matched_at ? new Date(m.matched_at + 'Z').toLocaleString() : '';
+        var size = m.hail_inches ? m.hail_inches.toFixed(2) + '" hail' : m.wind_kmh ? m.wind_kmh + ' km/h wind' : m.event_type;
+        return '<div class="ss-match-item" data-lat="' + m.lat + '" data-lng="' + m.lng + '">' +
+          '<div class="ss-match-head">' +
+            '<b>' + escapeHtml(m.area_name || '') + '</b>' +
+            '<span class="ss-match-badge">' + escapeHtml(m.event_type || '') + '</span>' +
+          '</div>' +
+          '<div class="ss-match-meta">' + escapeHtml(size) + ' • ' + when + '</div>' +
+          (m.description ? '<div class="ss-match-desc">' + escapeHtml(String(m.description).slice(0, 140)) + '</div>' : '') +
+        '</div>';
+      }).join('');
+      listEl.querySelectorAll('.ss-match-item').forEach(function (item) {
+        item.addEventListener('click', function () {
+          var lat = parseFloat(item.getAttribute('data-lat'));
+          var lng = parseFloat(item.getAttribute('data-lng'));
+          if (Number.isFinite(lat) && Number.isFinite(lng)) {
+            map.panTo({ lat: lat, lng: lng }); map.setZoom(Math.max(map.getZoom(), 10));
+          }
+        });
+      });
+    }).catch(function (err) {
+      console.warn('[StormScout] matches load failed', err);
+    });
+  }
+
+  // Hook draw button
+  function wireTerritoryControls() {
+    var drawBtn = document.getElementById('ssDrawTerr');
+    if (drawBtn) drawBtn.addEventListener('click', function () {
+      if (drawingActive) {
+        drawingManager && drawingManager.setDrawingMode(null);
+        drawingActive = false;
+        drawBtn.classList.remove('active');
+      } else {
+        startDrawing();
+      }
+    });
+  }
+
   renderLayout();
-  window.initStormScoutMap = initMap;
-  if (window.googleMapsReady) initMap();
+  wireTerritoryControls();
+  window.initStormScoutMap = function () {
+    initMap();
+    setupDrawingManager();
+    loadTerritories();
+    loadMatches();
+  };
+  if (window.googleMapsReady) window.initStormScoutMap();
 })();

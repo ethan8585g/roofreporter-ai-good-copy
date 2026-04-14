@@ -523,7 +523,16 @@ squareRoutes.post('/use-credit', async (c) => {
 
     const { property_address, property_city, property_province, property_postal_code,
             service_tier, latitude, longitude, roof_trace_json, price_per_bundle, trace_measurement_json,
-            needs_admin_trace } = await c.req.json()
+            needs_admin_trace, crm_customer_id } = await c.req.json()
+
+    // If a CRM customer was selected, verify it belongs to this user
+    let attachedCrmCustomerId: number | null = null
+    if (crm_customer_id) {
+      const owned = await c.env.DB.prepare(
+        'SELECT id FROM crm_customers WHERE id = ? AND owner_id = ?'
+      ).bind(crm_customer_id, customer.customer_id).first<{ id: number }>()
+      if (owned) attachedCrmCustomerId = owned.id
+    }
 
     if (!property_address) return c.json({ error: 'Property address is required' }, 400)
 
@@ -562,8 +571,9 @@ squareRoutes.post('/use-credit', async (c) => {
         homeowner_name, homeowner_email,
         requester_name, requester_email,
         service_tier, price, status, payment_status, estimated_delivery,
-        notes, is_trial, roof_trace_json, price_per_bundle, trace_measurement_json, needs_admin_trace
-      ) VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'processing', ?, ?, ?, ?, ?, ?, ?, ?)
+        notes, is_trial, roof_trace_json, price_per_bundle, trace_measurement_json, needs_admin_trace,
+        crm_customer_id
+      ) VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'processing', ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       orderNumber, customer.customer_id,
       property_address, property_city || null, property_province || null, property_postal_code || null,
@@ -575,7 +585,8 @@ squareRoutes.post('/use-credit', async (c) => {
       roof_trace_json ? (typeof roof_trace_json === 'string' ? roof_trace_json : JSON.stringify(roof_trace_json)) : null,
       price_per_bundle || null,
       trace_measurement_json ? (typeof trace_measurement_json === 'string' ? trace_measurement_json : JSON.stringify(trace_measurement_json)) : null,
-      needs_admin_trace ? 1 : 0
+      needs_admin_trace ? 1 : 0,
+      attachedCrmCustomerId
     ).run()
 
     // Notify sales of new report request (fire-and-forget)

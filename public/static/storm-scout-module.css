@@ -38,6 +38,26 @@
 .ss-footer { margin-top:auto; }
 .ss-btn { background:#2563eb; color:#fff; border:0; padding:8px 12px; border-radius:6px; font-size:13px; cursor:pointer; width:100%; }
 .ss-btn:hover { background:#1d4ed8; }
+.ss-btn-secondary { background:#374151; }
+.ss-btn-secondary:hover { background:#4b5563; }
+.ss-btn-secondary.active { background:#059669; }
+
+.ss-terr-list { display:flex; flex-direction:column; gap:6px; margin-top:8px; }
+.ss-terr-item { background:#1a1a1a; border:1px solid rgba(255,255,255,0.05); border-radius:8px; padding:8px 10px; cursor:pointer; }
+.ss-terr-item:hover { background:#222; }
+.ss-terr-head { display:flex; align-items:center; justify-content:space-between; }
+.ss-terr-name { font-size:13px; font-weight:600; color:#fff; }
+.ss-terr-del { background:transparent; color:#9ca3af; border:0; font-size:18px; line-height:1; padding:0 4px; cursor:pointer; }
+.ss-terr-del:hover { color:#ef4444; }
+.ss-terr-meta { font-size:11px; color:#9ca3af; margin-top:4px; }
+
+.ss-match-list { display:flex; flex-direction:column; gap:6px; margin-top:6px; max-height:240px; overflow-y:auto; }
+.ss-match-item { background:#1a1a1a; border:1px solid rgba(255,255,255,0.05); border-radius:8px; padding:8px 10px; cursor:pointer; }
+.ss-match-item:hover { background:#222; }
+.ss-match-head { display:flex; align-items:center; justify-content:space-between; font-size:13px; color:#fff; }
+.ss-match-badge { background:#1f2937; color:#cbd5e1; font-size:10px; padding:2px 6px; border-radius:4px; text-transform:uppercase; letter-spacing:0.05em; }
+.ss-match-meta { font-size:11px; color:#9ca3af; margin-top:4px; }
+.ss-match-desc { font-size:11px; color:#cbd5e1; margin-top:4px; line-height:1.4; }
 .ss-updated { font-size:11px; color:#6b7280; margin-top:8px; text-align:center; }
 .ss-map-wrap { position:relative; }
 .ss-map { width:100%; height:100%; }

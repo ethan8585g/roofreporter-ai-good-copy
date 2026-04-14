@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import type { Bindings } from '../types'
 import { getActiveAlerts, getHailReports, stormCacheClear } from '../services/storm-data'
-import { buildDailySnapshot, writeSnapshot, readSnapshot, listSnapshotDates, pruneOldSnapshots } from '../services/storm-ingest'
+import { buildDailySnapshot, writeSnapshot, readSnapshot, listSnapshotDates, pruneOldSnapshots, matchSnapshotAndNotify } from '../services/storm-ingest'
 import { GIBS_LAYERS, getGibsTileUrl, getGibsMaxZoom, buildGoogleStaticMapUrl } from '../services/satellite-imagery'
 
 export const stormScoutRoutes = new Hono<{ Bindings: Bindings }>()
@@ -82,7 +82,14 @@ stormScoutRoutes.post('/ingest', async (c) => {
       const pruned = await pruneOldSnapshots(c.env.STORM_R2, 30)
       // Invalidate in-memory caches so next /alerts + /heatmap refetch fresh.
       stormCacheClear()
-      return c.json({ ok: true, key, date: snapshot.date, summary: snapshot.summary, sources: snapshot.sources, pruned })
+      // Run territory matcher + email digests.
+      let matchResult: any = null
+      try {
+        matchResult = await matchSnapshotAndNotify(c.env.DB, snapshot, (c.env as any).GCP_SERVICE_ACCOUNT_JSON || c.env.GCP_SERVICE_ACCOUNT_KEY)
+      } catch (e: any) {
+        matchResult = { error: e?.message || String(e) }
+      }
+      return c.json({ ok: true, key, date: snapshot.date, summary: snapshot.summary, sources: snapshot.sources, pruned, matcher: matchResult })
     }
     return c.json({ ok: true, dryRun: true, date: snapshot.date, summary: snapshot.summary, sources: snapshot.sources })
   } catch (err: any) {

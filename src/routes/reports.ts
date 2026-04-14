@@ -27,6 +27,7 @@ import { generateTraceBasedDiagramSVG } from '../templates/svg-diagrams'
 import { RoofMeasurementEngine, traceUiToEnginePayload, calculateRoofSpecs, ROOF_PITCH_MULTIPLIERS, HIP_VALLEY_MULTIPLIERS, type TraceReport } from '../services/roof-measurement-engine'
 import { validateTraceUi, resolveEaves, allEavePoints } from '../utils/trace-validation'
 import { resolvePitch } from '../services/pitch-resolver'
+import { generatePanelLayout } from '../services/solar-panel-layout'
 import { enhanceReportViaGemini } from '../services/gemini-enhance'
 import { segmentWithGemini, geminiOutlineToTracePayload } from '../services/sam3-segmentation'
 import { generateReportImagery, buildAIImageryHTML } from '../services/ai-image-generation'
@@ -79,7 +80,7 @@ async function validateAdminOrCustomer(db: D1Database, authHeader: string | unde
 
 reportsRoutes.use('/*', async (c, next) => {
   const path = c.req.path
-  if (path.endsWith('/html') || path.endsWith('/simple') || path.endsWith('/proposal') || path.endsWith('/pdf') || path.endsWith('/webhook-update') || path.endsWith('/webhooks/resend') || path.endsWith('/enhancement-status') || path.endsWith('/calculate-from-trace') || path.endsWith('/pitch-multipliers') || path.endsWith('/calculate-roof-specs') || path.endsWith('/export.json') || path.endsWith('/export.csv')) return next()
+  if (path.endsWith('/html') || path.endsWith('/simple') || path.endsWith('/proposal') || path.endsWith('/pdf') || path.endsWith('/webhook-update') || path.endsWith('/webhooks/resend') || path.endsWith('/enhancement-status') || path.endsWith('/calculate-from-trace') || path.endsWith('/pitch-multipliers') || path.endsWith('/calculate-roof-specs') || path.endsWith('/export.json') || path.endsWith('/export.csv') || path.endsWith('/solar-panel-layout')) return next()
   const user = await validateAdminOrCustomer(c.env.DB, c.req.header('Authorization'))
   if (!user) return c.json({ error: 'Authentication required' }, 401)
   c.set('user' as any, user)
@@ -1105,6 +1106,110 @@ reportsRoutes.post('/calculate-from-trace', async (c) => {
   } catch (err: any) {
     console.error(`[CalculateFromTrace] Error:`, err.message)
     return c.json({ error: 'Measurement calculation failed', details: err.message }, 500)
+  }
+})
+
+// ============================================================
+// POST /solar-panel-layout — Algorithmic panel placement.
+//
+// Produces panel lat/lng positions the solar-proposal template can
+// render directly. Works in THREE input modes (most specific wins):
+//   1) `segments: [{index, pitch_deg, azimuth_deg, polygon|bbox}]`
+//   2) `lat`, `lng` → fetch Google Solar segments (roofSegmentStats)
+//   3) Both — caller can augment Solar segments with custom faces
+//
+// Unlike Google's pre-placed `solarPanels[]` (which is available only
+// when Solar has a building model AND ignores user-placed obstructions),
+// this endpoint respects caller-supplied obstructions and setback rules.
+// ============================================================
+reportsRoutes.post('/solar-panel-layout', async (c) => {
+  const startTime = Date.now()
+  try {
+    const body = await c.req.json()
+    const {
+      segments: providedSegments,
+      obstructions = [],
+      lat, lng,
+      house_sqft,
+      options = {},
+    } = body || {}
+
+    let segmentsIn: any[] = Array.isArray(providedSegments) ? providedSegments : []
+    let solarYearlyKwh: number | null = null
+    let solarPanelCount: number | null = null
+    let panelWatts: number | undefined
+    let panelHeightM: number | undefined
+    let panelWidthM: number | undefined
+
+    // If no segments provided, pull them from Solar API.
+    if (segmentsIn.length === 0 && isFinite(lat) && isFinite(lng)) {
+      const solarKey = c.env.GOOGLE_SOLAR_API_KEY || c.env.GOOGLE_MAPS_API_KEY
+      const mapsKey  = c.env.GOOGLE_MAPS_API_KEY
+      if (!solarKey) {
+        return c.json({ error: 'GOOGLE_SOLAR_API_KEY not configured' }, 500)
+      }
+      const raw = await fetchBuildingInsightsRaw(lat, lng, solarKey)
+      const sp: any = raw?.solarPotential
+      if (!sp || !Array.isArray(sp.roofSegmentStats)) {
+        return c.json({ error: 'Google Solar has no building model for this location.' }, 422)
+      }
+      panelWatts    = sp.panelCapacityWatts
+      panelHeightM  = sp.panelHeightMeters
+      panelWidthM   = sp.panelWidthMeters
+      const bestConfig = Array.isArray(sp.solarPanelConfigs) && sp.solarPanelConfigs.length > 0
+        ? sp.solarPanelConfigs[sp.solarPanelConfigs.length - 1] : null
+      solarPanelCount = bestConfig?.panelsCount || sp.maxArrayPanelsCount || null
+      solarYearlyKwh  = bestConfig?.yearlyEnergyDcKwh || null
+      segmentsIn = sp.roofSegmentStats.map((s: any, i: number) => ({
+        index: i,
+        pitch_deg: s.pitchDegrees || 0,
+        azimuth_deg: s.azimuthDegrees || 0,
+        bbox: s.boundingBox ? {
+          sw: { lat: s.boundingBox.sw?.latitude, lng: s.boundingBox.sw?.longitude },
+          ne: { lat: s.boundingBox.ne?.latitude, lng: s.boundingBox.ne?.longitude },
+        } : undefined,
+      })).filter((s: any) => s.bbox)
+    }
+
+    if (segmentsIn.length === 0) {
+      return c.json({ error: 'No roof segments to place panels on. Provide `segments` or `lat`+`lng`.' }, 400)
+    }
+
+    // Reference per-panel kWh when Google provides it
+    const referencePanelKwh = solarYearlyKwh && solarPanelCount && solarPanelCount > 0
+      ? solarYearlyKwh / solarPanelCount
+      : 0
+
+    const layout = generatePanelLayout(
+      segmentsIn,
+      obstructions,
+      {
+        ...options,
+        panel_height_m:      options.panel_height_m      ?? panelHeightM,
+        panel_width_m:       options.panel_width_m       ?? panelWidthM,
+        panel_watts:         options.panel_watts         ?? panelWatts,
+        reference_panel_kwh: options.reference_panel_kwh ?? referencePanelKwh,
+        site_latitude:       options.site_latitude       ?? lat ?? 45,
+      }
+    )
+
+    const elapsed = Date.now() - startTime
+    console.log(`[SolarPanelLayout] placed=${layout.panel_count} segments=${segmentsIn.length} kWh=${layout.yearly_energy_kwh} in ${elapsed}ms`)
+
+    return c.json({
+      success: true,
+      calculation_ms: elapsed,
+      layout,
+      solar_reference: {
+        google_panel_count: solarPanelCount,
+        google_yearly_kwh: solarYearlyKwh ? Math.round(solarYearlyKwh) : null,
+        panel_watts: panelWatts ?? layout.panel_capacity_watts,
+      },
+      image_center: isFinite(lat) && isFinite(lng) ? { lat, lng } : null,
+    })
+  } catch (err: any) {
+    console.error(`[SolarPanelLayout] Error: ${err.message}`)
+    return c.json({ error: 'Panel layout failed', details: err.message }, 500)
   }
 })
 

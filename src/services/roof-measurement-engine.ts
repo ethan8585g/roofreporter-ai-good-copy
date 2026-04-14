@@ -151,6 +151,14 @@ export interface FaceDetail {
   projected_area_ft2: number
   sloped_area_ft2: number
   squares: number
+  // Face polygon vertices in lat/lng — exposed for downstream
+  // consumers (e.g. solar panel layout). May be omitted when the
+  // engine used proportional splitting rather than geometric faces.
+  polygon?: { lat: number; lng: number }[]
+  // Approximate azimuth (compass bearing of the downslope normal,
+  // 0 = N, 90 = E, 180 = S). Derived from the face polygon's
+  // principal axis; null when undetermined.
+  azimuth_deg?: number | null
 }
 
 export interface TraceMaterialEstimate {
@@ -585,6 +593,34 @@ function pitchAngleRad(rise: number): number {
  * @param rise - pitch rise per 12" run
  * @returns true sloped area in sqft
  */
+// Estimate the compass bearing of a face polygon's "downslope normal"
+// (the direction from ridge toward eave) as an approximation using 2D
+// principal-axis analysis. Without DSM data we can't know which side
+// is downhill; callers should treat this as a hint and override when
+// authoritative azimuth data is available (e.g. Solar API roofSegmentStats).
+// Returns 0–360 degrees, or null for degenerate polygons.
+function estimateFaceAzimuth(poly: { x: number; y: number }[]): number | null {
+  if (!poly || poly.length < 3) return null
+  const n = poly.length
+  const cx = poly.reduce((s, p) => s + p.x, 0) / n
+  const cy = poly.reduce((s, p) => s + p.y, 0) / n
+  let sxx = 0, syy = 0, sxy = 0
+  for (const p of poly) {
+    const dx = p.x - cx, dy = p.y - cy
+    sxx += dx * dx
+    syy += dy * dy
+    sxy += dx * dy
+  }
+  // Principal axis angle (radians, CCW from +x)
+  const theta = 0.5 * Math.atan2(2 * sxy, sxx - syy)
+  // Normal to principal axis, converted to compass bearing
+  // (engine +y = north, +x = east; bearing = atan2(east, north))
+  const nx = -Math.sin(theta)
+  const ny =  Math.cos(theta)
+  let bearing = (Math.atan2(nx, ny) * 180 / Math.PI + 360) % 360
+  return Math.round(bearing * 10) / 10
+}
+
 function slopedFromProjected(proj: number, rise: number): number {
   return proj * slopeFactor(rise)
 }
@@ -1266,6 +1302,7 @@ export class RoofMeasurementEngine {
         const projM2 = shoelaceAreaM2(face.poly)
         const projFt2 = projM2 * M2_TO_FT2
         const sloped = slopedFromProjected(projFt2, face.pitch)
+        const polygonLL = face.poly.map(p => ({ lat: p.lat, lng: p.lng }))
         results.push({
           face_id:            face.face_id,
           pitch_rise:         face.pitch,
@@ -1275,6 +1312,8 @@ export class RoofMeasurementEngine {
           projected_area_ft2: round(projFt2, 1),
           sloped_area_ft2:    round(sloped, 1),
           squares:            round(sloped / SQFT_PER_SQUARE, 3),
+          polygon:            polygonLL,
+          azimuth_deg:        estimateFaceAzimuth(face.poly),
         })
       }
     } else if (this.eavesCart.length >= 4) {
