@@ -912,6 +912,32 @@ app.get('/llms.txt', (c) => {
 - [RSS Feed](https://www.roofmanager.ca/feed.xml)
 - [Sitemap Index](https://www.roofmanager.ca/sitemap-index.xml)
 - [Sitemap](https://www.roofmanager.ca/sitemap.xml)
+
+## Frequently Asked Questions
+
+### How accurate is Roof Manager?
+Roof Manager delivers measurements within 2-5% of manual/ground-truth measurements for properties with HIGH quality satellite imagery (most urban North American and European addresses). Reports use Google's LiDAR-calibrated 3D building models, and every report shows the imagery quality and confidence score.
+
+### How long does a roof measurement take?
+Most reports are generated in under 60 seconds. You enter an address, configure options, click order, and receive a full PDF report with 3D area, pitch, edges, and material BOM — all delivered via email and accessible from your dashboard.
+
+### How much does a roof measurement cost?
+After 3 free reports (no credit card required), reports are $8 CAD (~$5.95-$7.50 USD) each. Volume packs lower the cost: 10-pack $75 ($7.50/ea), 25-pack $175 ($7.00/ea), and 100-pack $595 ($5.95/ea). The CRM, proposals, and invoicing are always free.
+
+### Is Roof Manager available in my city?
+Roof Manager works in 40+ countries and 60+ Canadian cities, plus most of the US, UK, Australia, and Europe. As long as the address has Google satellite/Solar API coverage (95%+ of North American buildings), you can generate a report. See the Coverage page for the full list.
+
+### How do I measure a roof without going on it?
+Enter the property address in Roof Manager. The platform pulls satellite imagery and Google's LiDAR 3D building model, runs AI geometry extraction, and produces a full measurement report — no ladder, no drone, no site visit required. Most reports complete in under 60 seconds.
+
+### What's included in a roof measurement report?
+Every report includes total 3D (sloped) roof area, footprint area, pitch analysis per segment, edge breakdowns (ridge, hip, valley, eave, rake in linear feet), complete material BOM (shingles, underlayment, starter, ridge cap, drip edge, ice & water), segment-by-segment analysis, solar potential data, a complexity rating, and a branded PDF download.
+
+### How does Roof Manager compare to EagleView?
+Roof Manager is roughly 85-95% cheaper than EagleView ($8 vs $60-90+ per report) with comparable accuracy on most residential properties, faster turnaround (60 seconds vs hours/days), and includes a full CRM, proposals, invoicing, and an AI phone secretary — features EagleView does not offer. See the EagleView alternative page for a side-by-side.
+
+### Do I need a drone?
+No. Roof Manager is 100% satellite-based. You only need a web browser and the property address. Drones, ladders, and site visits are not required to generate a measurement report.
 `, 200, { 'Content-Type': 'text/markdown; charset=utf-8' })
 })
 
@@ -2206,7 +2232,7 @@ app.get('/proposal/view/:token', async (c) => {
           </div>
           <h3 class="text-lg font-bold ${invIsAccepted ? 'text-green-800' : 'text-red-800'}">${docLabel} ${invIsAccepted ? acceptedLabel : 'Declined'}</h3>
           <p class="text-sm ${invIsAccepted ? 'text-green-600' : 'text-red-600'} mt-1">${invProposal.signed_at ? 'on ' + new Date(invProposal.signed_at).toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' }) : ''}</p>
-          ${invProposal.customer_signature && invProposal.customer_signature.startsWith('data:image/') ? `<div class="mt-4"><p class="text-xs text-gray-400 mb-1">Signature</p><img src="${invProposal.customer_signature}" alt="Signature" class="max-h-16 mx-auto"></div>` : ''}
+          ${invProposal.customer_signature && invProposal.customer_signature.startsWith('data:image/') ? `<div class="mt-4"><p class="text-xs text-gray-400 mb-1">Signature</p><img src="${invProposal.customer_signature}" alt="Signature" loading="lazy" class="max-h-16 mx-auto"></div>` : ''}
         </div>
       </div>`
         }
@@ -2465,7 +2491,7 @@ if(new URLSearchParams(location.search).get('print')==='1')setTimeout(function()
       <div class="absolute bottom-0 left-0 w-48 h-48 bg-white/5 rounded-full translate-y-24 -translate-x-24"></div>
       <div class="relative z-10 flex items-start justify-between">
         <div>
-          ${logoUrl ? `<img src="${logoUrl}" alt="${businessName}" class="h-14 mb-3 rounded-lg bg-white/20 p-1">` : ''}
+          ${logoUrl ? `<img src="${logoUrl}" alt="${businessName}" loading="lazy" class="h-14 mb-3 rounded-lg bg-white/20 p-1">` : ''}
           <h1 class="text-2xl md:text-3xl font-bold tracking-tight">${businessName}</h1>
           ${brandTagline ? `<p class="text-white/70 text-sm mt-1">${brandTagline}</p>` : ''}
         </div>
@@ -2691,7 +2717,7 @@ if(new URLSearchParams(location.search).get('print')==='1')setTimeout(function()
           </div>
           <h3 class="text-lg font-bold ${isAccepted ? 'text-green-800' : 'text-red-800'}">Proposal ${isAccepted ? 'Accepted' : 'Declined'}</h3>
           <p class="text-sm ${isAccepted ? 'text-green-600' : 'text-red-600'} mt-1">${isAccepted ? (proposal.accepted_at ? 'on ' + new Date(proposal.accepted_at).toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' }) : '') : (proposal.declined_at ? 'on ' + new Date(proposal.declined_at).toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' }) : '')}</p>
-          ${proposal.customer_signature && proposal.customer_signature.startsWith('data:image/') ? `<div class="mt-4"><p class="text-xs text-gray-400 mb-1">Signature</p><img src="${proposal.customer_signature}" alt="Signature" class="max-h-16 mx-auto"></div>` : ''}
+          ${proposal.customer_signature && proposal.customer_signature.startsWith('data:image/') ? `<div class="mt-4"><p class="text-xs text-gray-400 mb-1">Signature</p><img src="${proposal.customer_signature}" alt="Signature" loading="lazy" class="max-h-16 mx-auto"></div>` : ''}
         </div>
       </div>`}
 
@@ -2970,7 +2996,8 @@ function getHeadTags() {
   <meta name="apple-mobile-web-app-title" content="Roof Manager">
   <meta name="mobile-web-app-capable" content="yes">
   <link rel="stylesheet" href="/static/tailwind.css">
-  <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" media="print" onload="this.media='all'">
+  <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"></noscript>
   ${getTailwindConfig()}
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
   <link rel="alternate" type="application/rss+xml" title="Roof Manager Blog" href="https://www.roofmanager.ca/feed.xml">
@@ -4872,15 +4899,6 @@ function getLandingPageHTML(latestPosts: any[] = []) {
     .live-pulse::before { content: ''; position: absolute; inset: -4px; border-radius: 50%; background: #00FF88; opacity: 0.4; animation: pulse-ring 1.6s ease-out infinite; }
   </style>
   <noscript><style>.scroll-animate { opacity: 1 !important; transform: none !important; }</style></noscript>
-  <!-- Microsoft Clarity — Heatmaps & session recordings -->
-  <!-- Create a free project at clarity.microsoft.com, then replace CLARITY_PROJECT_ID below -->
-  <script type="text/javascript">
-    (function(c,l,a,r,i,t,y){
-      c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
-      t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
-      y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
-    })(window,document,"clarity","script","CLARITY_PROJECT_ID");
-  </script>
 </head>
 <body class="min-h-screen" style="background:var(--bg-page)">
   <!-- Sticky Navigation — Dark premium, starts transparent -->
@@ -6706,7 +6724,7 @@ function getComparisonPageHTML(slug: string): string {
 
   <footer class="border-t border-white/5 py-8" style="background:#0A0A0A">
     <div class="max-w-7xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-gray-500">
-      <div class="flex items-center gap-3"><img src="/static/logo.png" alt="Roof Manager" class="w-7 h-7 rounded-lg"><span class="font-bold text-gray-400">Roof Manager</span></div>
+      <div class="flex items-center gap-3"><img src="/static/logo.png" alt="Roof Manager" loading="lazy" class="w-7 h-7 rounded-lg"><span class="font-bold text-gray-400">Roof Manager</span></div>
       <div class="flex flex-wrap items-center gap-4">
         <a href="/roofr-alternative" class="hover:text-[#00FF88] transition-colors">vs Roofr</a>
         <a href="/roofsnap-vs-roofmanager" class="hover:text-[#00FF88] transition-colors">vs RoofSnap</a>
@@ -7782,7 +7800,7 @@ function getFeatureHubPageHTML(featureSlug: string): string {
 
   <footer class="border-t border-white/5 py-8" style="background:#0A0A0A">
     <div class="max-w-7xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-gray-500">
-      <div class="flex items-center gap-3"><img src="/static/logo.png" alt="Roof Manager" class="w-7 h-7 rounded-lg"><span class="font-bold text-gray-400">Roof Manager</span></div>
+      <div class="flex items-center gap-3"><img src="/static/logo.png" alt="Roof Manager" loading="lazy" class="w-7 h-7 rounded-lg"><span class="font-bold text-gray-400">Roof Manager</span></div>
       <div class="flex flex-wrap items-center gap-4">
         <a href="/features/measurements" class="hover:text-[#00FF88] transition-colors">Measurements</a>
         <a href="/features/crm" class="hover:text-[#00FF88] transition-colors">CRM</a>
@@ -7976,7 +7994,7 @@ function getFeatureCityPageHTML(slug: string, city: { name: string; province: st
 
   <footer class="border-t border-white/5 py-8" style="background:#0A0A0A">
     <div class="max-w-7xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-gray-500">
-      <div class="flex items-center gap-3"><img src="/static/logo.png" alt="Roof Manager" class="w-7 h-7 rounded-lg"><span class="font-bold text-gray-400">Roof Manager</span></div>
+      <div class="flex items-center gap-3"><img src="/static/logo.png" alt="Roof Manager" loading="lazy" class="w-7 h-7 rounded-lg"><span class="font-bold text-gray-400">Roof Manager</span></div>
       <div class="flex flex-wrap items-center gap-4">
         <a href="/features/measurements" class="hover:text-[#00FF88] transition-colors">Measurements</a>
         <a href="/features/crm" class="hover:text-[#00FF88] transition-colors">CRM</a>
@@ -9295,6 +9313,9 @@ function getBlogPostHTML(post?: any, slug?: string) {
   const author = post?.author_name || 'Roof Manager Team'
   const blogSchema = post ? `<script type="application/ld+json">
   {"@context":"https://schema.org","@type":"BlogPosting","headline":"${(post.title || '').replace(/"/g, '\\"')}","description":"${(desc).replace(/"/g, '\\"')}","image":"${image}","datePublished":"${published}","dateModified":"${updated || published}","author":{"@type":"Organization","name":"${author}"},"publisher":{"@type":"Organization","name":"Roof Manager","logo":{"@type":"ImageObject","url":"https://www.roofmanager.ca/static/logo.png"}}}
+  </script>
+  <script type="application/ld+json">
+  {"@context":"https://schema.org","@type":"Article","headline":"${(post.title || '').replace(/"/g, '\\"')}","description":"${(desc).replace(/"/g, '\\"')}","image":"${image}","datePublished":"${published}","dateModified":"${updated || published}","author":{"@type":"Organization","name":"Roof Manager"},"publisher":{"@type":"Organization","name":"Roof Manager","logo":{"@type":"ImageObject","url":"https://www.roofmanager.ca/static/logo.png"}},"mainEntityOfPage":{"@type":"WebPage","@id":"https://www.roofmanager.ca/blog/${slug || ''}"}}
   </script>` : ''
   const breadcrumbSchema = slug ? `<script type="application/ld+json">
 {"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.roofmanager.ca/"},{"@type":"ListItem","position":2,"name":"Blog","item":"https://www.roofmanager.ca/blog"},{"@type":"ListItem","position":3,"name":"${(post?.title || '').replace(/"/g, '\\"')}","item":"https://www.roofmanager.ca/blog/${slug}"}]}
@@ -9746,7 +9767,7 @@ function getLanderFunnelHTML() {
   <footer class="bg-slate-900 text-gray-500 py-8 border-t border-gray-800">
     <div class="max-w-4xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4">
       <div class="flex items-center gap-2">
-        <img src="/static/logo.png" alt="Roof Manager" class="w-6 h-6 rounded object-cover">
+        <img src="/static/logo.png" alt="Roof Manager" loading="lazy" class="w-6 h-6 rounded object-cover">
         <span class="text-sm font-semibold text-gray-400">Roof Manager</span>
       </div>
       <div class="flex flex-wrap items-center gap-3 sm:gap-6 text-sm">
@@ -9949,7 +9970,7 @@ function getDemoLandingPageHTML() {
           <p class="text-gray-400 text-sm mb-6">Pick a 15-minute slot — we'll walk you through the entire platform live.</p>
           <div class="flex-1 flex flex-col items-center justify-center">
             <div class="w-20 h-20 bg-cyan-500/10 rounded-2xl flex items-center justify-center mb-6 float-anim">
-              <img src="https://www.gstatic.com/images/branding/product/1x/calendar_48dp.png" alt="Google Calendar" class="w-10 h-10">
+              <img src="https://www.gstatic.com/images/branding/product/1x/calendar_48dp.png" alt="Google Calendar" loading="lazy" class="w-10 h-10">
             </div>
             <a href="https://calendar.app.google/KNLFST4CNxViPPN3A" target="_blank" rel="noopener" class="inline-flex items-center gap-3 bg-white text-gray-900 font-bold py-4 px-8 rounded-xl text-lg hover:bg-gray-100 transition-all hover:scale-[1.02] shadow-xl">
               <i class="fas fa-calendar-plus"></i>
