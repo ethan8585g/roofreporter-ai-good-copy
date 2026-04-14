@@ -86,10 +86,11 @@ app.use('*', async (c, next) => {
   // Don't fire GA4 on authenticated admin surfaces — keeps staff activity out of analytics
   // and avoids leaking admin URLs into GA4 reports.
   const isAdminSurface = url.pathname.startsWith('/admin') || url.pathname.startsWith('/super-admin') || url.pathname === '/login'
+  if (isAdminSurface) return
 
   try {
     const body = await c.res.text()
-    if (body.includes('</body>') && !body.includes('tracker.js') && !isAdminSurface) {
+    if (body.includes('</body>') && !body.includes('tracker.js')) {
       // Build GA4 gtag.js snippet if measurement ID is configured
       const ga4Id = (c.env as any).GA4_MEASUREMENT_ID || ''
       const ga4Script = ga4Id ? `
@@ -223,6 +224,12 @@ window.trackAdsConversion = function(kind, params) {
 <script src="/static/tracker.js" defer></script>
 </body>`)
       c.res = new Response(injected, {
+        status: c.res.status,
+        headers: c.res.headers
+      })
+    } else {
+      // Body was consumed by .text() above; rebuild response so the stream isn't empty.
+      c.res = new Response(body, {
         status: c.res.status,
         headers: c.res.headers
       })

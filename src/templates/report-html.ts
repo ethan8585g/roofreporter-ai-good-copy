@@ -77,6 +77,43 @@ export function generateProfessionalReportHTML(report: RoofReport): string {
   const maskUrl = (report.imagery as any)?.mask_overlay_data_url || null
   const hasExtraImgs = !!(fluxUrl || maskUrl)
 
+  // ── Per-structure breakdown (house + detached garage/shed/etc.) ──
+  // Computed from roof_trace GPS coordinates so each traced building gets its own measurement row.
+  const rt: any = (report as any).roof_trace
+  const structuresBreakdown: { label: string; footprint_sf: number; true_area_sf: number; perimeter_ft: number; squares: number }[] = []
+  if (rt && Array.isArray(rt.eaves_sections) && rt.eaves_sections.length >= 1) {
+    const allSections: { lat: number; lng: number }[][] = rt.eaves_sections.filter((s: any) => Array.isArray(s) && s.length >= 3)
+    if (allSections.length >= 2) {
+      const meanLat = allSections[0].reduce((s, p) => s + p.lat, 0) / allSections[0].length
+      const FT_PER_DEG_LAT = 364000
+      const ftPerDegLng = FT_PER_DEG_LAT * Math.cos(meanLat * Math.PI / 180)
+      const slopeMult = report.area_multiplier && report.area_multiplier > 0 ? report.area_multiplier : 1
+      const sorted = allSections
+        .map(pts => {
+          const xy = pts.map(p => ({ x: (p.lng - allSections[0][0].lng) * ftPerDegLng, y: (p.lat - meanLat) * FT_PER_DEG_LAT }))
+          let a = 0, perim = 0
+          for (let i = 0; i < xy.length; i++) {
+            const j = (i + 1) % xy.length
+            a += xy[i].x * xy[j].y - xy[j].x * xy[i].y
+            perim += Math.hypot(xy[j].x - xy[i].x, xy[j].y - xy[i].y)
+          }
+          return { footprint: Math.abs(a) / 2, perim }
+        })
+        .sort((a, b) => b.footprint - a.footprint)
+      const structureNames = ['Main House', 'Detached Structure', 'Additional Structure', 'Additional Structure', 'Additional Structure']
+      sorted.forEach((s, i) => {
+        const trueArea = s.footprint * slopeMult
+        structuresBreakdown.push({
+          label: `Structure ${i + 1} — ${structureNames[i] || 'Additional Structure'}`,
+          footprint_sf: Math.round(s.footprint),
+          true_area_sf: Math.round(trueArea),
+          perimeter_ft: Math.round(s.perim * 10) / 10,
+          squares: Math.round(trueArea / 100 * 10) / 10,
+        })
+      })
+    }
+  }
+
   // ── Waste factor table (4% through 15%) — in square feet ──
   const wastePercentages = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
   const wasteTable = wastePercentages.map(pct => ({
@@ -311,7 +348,7 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
 
   <!-- Title -->
   <div style="padding:10px 28px 6px">
-    <div style="font-size:14px;font-weight:800;color:#222">Roof Area Analysis — Structure 1</div>
+    <div style="font-size:14px;font-weight:800;color:#222">Roof Area Analysis${structuresBreakdown.length >= 2 ? ` — All Structures (${structuresBreakdown.length})` : ' — Structure 1'}</div>
     <div style="font-size:11px;color:#555">${fullAddress}</div>
   </div>
 
@@ -455,6 +492,40 @@ body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#fff;colo
     </div>
   </div>
 
+  <!-- Per-Structure Measurement Breakdown (house + detached garage, etc.) -->
+  ${structuresBreakdown.length >= 2 ? `
+  <div style="padding:6px 28px 0">
+    <div style="font-size:10px;font-weight:800;color:${TEAL_DARK};text-transform:uppercase;letter-spacing:0.8px;margin-bottom:4px;border-bottom:1.5px solid ${TEAL};padding-bottom:3px">Per-Structure Breakdown — ${structuresBreakdown.length} Buildings</div>
+    <table style="width:100%;border-collapse:collapse;font-size:8px">
+      <thead>
+        <tr style="background:#1a1a2e;color:#fff">
+          <th style="padding:4px 8px;text-align:left;font-size:7.5px;font-weight:700">Structure</th>
+          <th style="padding:4px 8px;text-align:right;font-size:7.5px;font-weight:700">Footprint (SF)</th>
+          <th style="padding:4px 8px;text-align:right;font-size:7.5px;font-weight:700">Roof Area (SF)</th>
+          <th style="padding:4px 8px;text-align:right;font-size:7.5px;font-weight:700">Squares</th>
+          <th style="padding:4px 8px;text-align:right;font-size:7.5px;font-weight:700">Perimeter (LF)</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${structuresBreakdown.map((s, i) => `<tr style="${i % 2 === 0 ? 'background:#fafafa' : ''}">
+          <td style="padding:4px 8px;border-bottom:1px solid #eee;font-weight:700">${s.label}</td>
+          <td style="padding:4px 8px;border-bottom:1px solid #eee;text-align:right">${s.footprint_sf.toLocaleString()}</td>
+          <td style="padding:4px 8px;border-bottom:1px solid #eee;text-align:right;font-weight:700;color:${TEAL_DARK}">${s.true_area_sf.toLocaleString()}</td>
+          <td style="padding:4px 8px;border-bottom:1px solid #eee;text-align:right">${s.squares}</td>
+          <td style="padding:4px 8px;border-bottom:1px solid #eee;text-align:right">${s.perimeter_ft.toLocaleString()}</td>
+        </tr>`).join('')}
+        <tr style="background:#eee;font-weight:800">
+          <td style="padding:5px 8px;border-top:2px solid #333">Combined Total</td>
+          <td style="padding:5px 8px;border-top:2px solid #333;text-align:right">${structuresBreakdown.reduce((s, x) => s + x.footprint_sf, 0).toLocaleString()}</td>
+          <td style="padding:5px 8px;border-top:2px solid #333;text-align:right;color:${TEAL_DARK}">${structuresBreakdown.reduce((s, x) => s + x.true_area_sf, 0).toLocaleString()}</td>
+          <td style="padding:5px 8px;border-top:2px solid #333;text-align:right">${Math.round(structuresBreakdown.reduce((s, x) => s + x.squares, 0) * 10) / 10}</td>
+          <td style="padding:5px 8px;border-top:2px solid #333;text-align:right">${Math.round(structuresBreakdown.reduce((s, x) => s + x.perimeter_ft, 0) * 10) / 10}</td>
+        </tr>
+      </tbody>
+    </table>
+    <div style="font-size:6.5px;color:#888;margin-top:3px;font-style:italic">Per-structure areas derived from individual traced eave polygons; dominant pitch multiplier applied for sloped area.</div>
+  </div>` : ''}
+
   <!-- Roof Annotations (vents, skylights, chimneys) from trace -->
   ${(() => {
     const rt = (report as any).roof_trace
@@ -496,7 +567,7 @@ ${report.segments.length >= 2 ? `
 
   <!-- Title -->
   <div style="padding:12px 28px 6px">
-    <div style="font-size:14px;font-weight:800;color:#222">Pitch &amp; Slope Analysis<span style="font-weight:400;color:#555"> &mdash; Structure 1</span></div>
+    <div style="font-size:14px;font-weight:800;color:#222">Pitch &amp; Slope Analysis<span style="font-weight:400;color:#555"> &mdash; ${structuresBreakdown.length >= 2 ? `All ${structuresBreakdown.length} Structures` : 'Structure 1'}</span></div>
     <div style="font-size:11px;color:#555">${fullAddress}</div>
   </div>
 
