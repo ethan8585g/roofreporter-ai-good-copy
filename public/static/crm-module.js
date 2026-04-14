@@ -836,6 +836,7 @@
     html += '<i class="' + (_gmailConnected ? 'fas fa-check-circle text-green-500' : 'fab fa-google text-gray-400') + ' mr-1.5"></i>';
     html += _gmailConnected ? 'Gmail Connected' : 'Connect Gmail';
     html += '</button>';
+    html += '<button onclick="window._crmBrandingSettings()" class="px-3 py-2 rounded-lg text-xs font-medium border bg-[#0A0A0A] border-white/10 text-gray-300 hover:bg-[#111111]/10"><i class="fas fa-image mr-1.5"></i>Company Logo</button>';
     html += '<button onclick="window._crmNewProposal()" class="bg-white/10 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-white/10"><i class="fas fa-plus mr-1"></i>New Proposal</button>';
     html += '</div></div>';
 
@@ -997,6 +998,67 @@
       '<td class="py-1 w-8 text-center"><button onclick="this.closest(\'tr\').remove();window._propRecalc()" class="text-gray-400 hover:text-red-500"><i class="fas fa-times"></i></button></td>' +
       '</tr>';
   }
+
+  window._crmBrandingSettings = function() {
+    fetch('/api/customer/profile', { headers: authHeadersOnly() })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        var c = (data && (data.customer || data)) || {};
+        var currentLogo = c.brand_logo_url || '';
+        var currentName = c.brand_business_name || c.name || '';
+        var body = '<div class="space-y-4">' +
+          '<p class="text-xs text-gray-400">Your logo and business name are automatically attached to every proposal you send — both roofing and solar.</p>' +
+          '<div><label class="block text-xs font-medium text-gray-400 mb-1">Business Name</label>' +
+          '<input type="text" id="brandBizName" class="w-full px-3 py-2 border border-white/15 rounded-lg text-sm" value="' + (currentName.replace(/"/g, '&quot;')) + '" placeholder="Your Roofing Co."></div>' +
+          '<div><label class="block text-xs font-medium text-gray-400 mb-2">Company Logo</label>' +
+          '<div id="brandLogoPreview" class="mb-2 p-3 rounded-lg border border-white/10 bg-[#0A0A0A] text-center">' +
+          (currentLogo ? '<img src="' + currentLogo + '" alt="Logo" style="max-height:80px;max-width:240px;margin:0 auto;object-fit:contain">' : '<p class="text-xs text-gray-500">No logo uploaded yet</p>') +
+          '</div>' +
+          '<input type="file" id="brandLogoFile" accept="image/png,image/jpeg,image/svg+xml,image/webp" class="w-full text-xs text-gray-400">' +
+          '<p class="text-[10px] text-gray-500 mt-1">PNG, JPG, SVG or WebP. Recommended: transparent PNG, at least 400px wide.</p>' +
+          '</div>' +
+          '<div id="brandLogoStatus" class="text-xs text-gray-400 hidden"></div>' +
+          '</div>';
+        showModal('Company Branding', body, function() {
+          var name = document.getElementById('brandBizName').value.trim();
+          var file = document.getElementById('brandLogoFile').files[0];
+          var status = document.getElementById('brandLogoStatus');
+          status.classList.remove('hidden');
+          status.textContent = 'Saving...';
+          var savedName = fetch('/api/customer/branding', {
+            method: 'PUT', headers: authHeaders(),
+            body: JSON.stringify({ brand_business_name: name })
+          }).then(function(r) { return r.json(); });
+          var savedLogo = Promise.resolve({ success: true });
+          if (file) {
+            savedLogo = new Promise(function(resolve, reject) {
+              var reader = new FileReader();
+              reader.onload = function() {
+                fetch('/api/customer/branding/logo', {
+                  method: 'POST', headers: authHeaders(),
+                  body: JSON.stringify({ logo_data: reader.result })
+                }).then(function(r) { return r.json(); }).then(resolve).catch(reject);
+              };
+              reader.onerror = reject;
+              reader.readAsDataURL(file);
+            });
+          }
+          Promise.all([savedName, savedLogo]).then(function(results) {
+            if (results[0].success && results[1].success) {
+              closeModal();
+              toast('Branding saved — will appear on all future proposals');
+            } else {
+              toast((results[0].error || results[1].error || 'Failed to save'), 'error');
+              status.textContent = '';
+            }
+          }).catch(function(e) {
+            toast('Network error: ' + (e.message || 'Unknown'), 'error');
+            status.textContent = '';
+          });
+        }, 'Save Branding');
+      })
+      .catch(function() { toast('Could not load branding settings', 'error'); });
+  };
 
   window._crmNewProposal = function() {
     _propLineItems = [];
