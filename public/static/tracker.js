@@ -17,6 +17,14 @@
 
   // Don't track admin/internal pages — only track public-facing traffic
   if (/^\/(super-admin|admin|login|api\/)/.test(path)) return;
+
+  // Don't track admin/internal users browsing public pages either.
+  // Admins have rc_user in localStorage, or an explicit opt-out cookie/flag.
+  try {
+    if (localStorage.getItem('rc_user')) return;
+    if (localStorage.getItem('rm_skip_analytics') === '1') return;
+    if (/(^|;\s*)rm_skip_analytics=1/.test(document.cookie || '')) return;
+  } catch(e) {}
   
   // ── Visitor & Session IDs ──
   function uuid() {

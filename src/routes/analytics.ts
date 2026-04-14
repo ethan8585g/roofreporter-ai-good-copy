@@ -58,7 +58,11 @@ analyticsRoutes.post('/track', async (c) => {
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
 
-    const batch = events.slice(0, 20).map(e => stmt.bind(
+    // Skip events from logged-in admins (user_id prefixed with 'admin_' by tracker.js)
+    const filteredEvents = events.filter(e => !(e && typeof e.user_id === 'string' && e.user_id.indexOf('admin_') === 0))
+    if (filteredEvents.length === 0) return c.body(null, 204)
+
+    const batch = filteredEvents.slice(0, 20).map(e => stmt.bind(
       e.event_type || 'pageview',
       e.session_id || null,
       e.visitor_id || null,

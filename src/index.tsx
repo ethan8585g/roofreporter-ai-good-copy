@@ -570,8 +570,17 @@ app.get('/', async (c) => {
 // /order redirect — users may type /order directly
 app.get('/order', (c) => c.redirect('/customer/order'))
 
-// /signup redirect — SEO: consolidate signup URLs to customer login
-app.get('/signup', (c) => c.redirect('/customer/login', 301))
+// /signup redirect — send visitors to the signup-first view of the customer login page
+app.get('/signup', (c) => {
+  const email = c.req.query('email') || ''
+  const qs = email ? `?mode=signup&email=${encodeURIComponent(email)}` : '?mode=signup'
+  return c.redirect('/customer/login' + qs, 302)
+})
+
+// Public sample report — static preview for visitors evaluating the product
+app.get('/sample-report', (c) => {
+  return c.html(getSampleReportHTML())
+})
 
 // Order Form page (new route)
 app.get('/order/new', (c) => {
@@ -709,6 +718,7 @@ app.get('/sitemap-core.xml', (c) => {
     // Standalone info pages
     { loc: '/how-it-works', priority: '0.7', changefreq: 'monthly' },
     { loc: '/faq', priority: '0.7', changefreq: 'monthly' },
+    { loc: '/sample-report', priority: '0.8', changefreq: 'monthly' },
     // How-to guides
     { loc: '/guides', priority: '0.8', changefreq: 'monthly' },
     { loc: '/guides/order-measurement-report', priority: '0.8', changefreq: 'monthly' },
@@ -4695,6 +4705,139 @@ function getCustomerResetPasswordHTML() {
 </html>`
 }
 
+function getSampleReportHTML() {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags()}
+  <title>Sample Roof Measurement Report — Roof Manager</title>
+  <meta name="description" content="See a real example of a Roof Manager measurement report — 3D area, pitch, edge breakdown, and full material BOM. Create your free account to generate your own in 60 seconds.">
+  <link rel="canonical" href="https://www.roofmanager.ca/sample-report">
+  <style>
+    body { background:#0A0A0A; color:#e5e7eb; font-family:Inter,system-ui,sans-serif; margin:0; }
+    .banner { background:linear-gradient(90deg,#00FF88,#22d3ee); color:#0A0A0A; padding:14px 20px; text-align:center; font-weight:800; font-size:14px; }
+    .banner a { background:#0A0A0A; color:#00FF88; padding:8px 16px; border-radius:8px; margin-left:14px; text-decoration:none; font-weight:800; display:inline-block; }
+    .container { max-width:960px; margin:0 auto; padding:32px 20px 80px; }
+    .report-card { background:#fff; color:#111827; border-radius:16px; padding:36px; box-shadow:0 20px 60px rgba(0,0,0,0.4); }
+    .report-card h1 { font-size:28px; font-weight:900; margin:0 0 6px; color:#0A0A0A; }
+    .report-card .meta { color:#6b7280; font-size:13px; margin-bottom:24px; }
+    .grid-2 { display:grid; grid-template-columns: 1fr 1fr; gap:24px; margin-bottom:24px; }
+    @media(max-width:720px){ .grid-2 { grid-template-columns:1fr; } }
+    .diagram { background:#f9fafb; border:1px solid #e5e7eb; border-radius:12px; padding:16px; }
+    .stats { background:#f9fafb; border:1px solid #e5e7eb; border-radius:12px; padding:18px; }
+    .stats h3 { margin:0 0 12px; font-size:12px; text-transform:uppercase; letter-spacing:0.08em; color:#6b7280; font-weight:700; }
+    .stats .row { display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px dashed #e5e7eb; font-size:14px; }
+    .stats .row:last-child { border-bottom:none; }
+    .stats .row b { color:#0A0A0A; font-weight:700; }
+    .hero-stat { background:linear-gradient(135deg,#00FF88,#22d3ee); color:#0A0A0A; border-radius:12px; padding:20px; margin-bottom:16px; }
+    .hero-stat .label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; opacity:0.8; }
+    .hero-stat .value { font-size:32px; font-weight:900; line-height:1; margin-top:4px; }
+    table.bom { width:100%; border-collapse:collapse; margin-top:12px; font-size:14px; }
+    table.bom th { text-align:left; background:#f3f4f6; color:#374151; font-weight:700; padding:10px; font-size:12px; text-transform:uppercase; letter-spacing:0.04em; }
+    table.bom td { padding:10px; border-bottom:1px solid #f3f4f6; }
+    table.bom tr:last-child td { border-bottom:none; font-weight:700; background:#f9fafb; }
+    .cta-block { background:#111; border:1px solid rgba(0,255,136,0.2); border-radius:16px; padding:28px; margin-top:28px; text-align:center; }
+    .cta-block h2 { color:#fff; font-size:22px; font-weight:800; margin:0 0 10px; }
+    .cta-block p { color:#9ca3af; margin:0 0 18px; }
+    .cta-block a { display:inline-block; background:#00FF88; color:#0A0A0A; padding:14px 28px; border-radius:10px; text-decoration:none; font-weight:800; }
+    .back-link { display:inline-block; color:#9ca3af; text-decoration:none; font-size:13px; margin-bottom:16px; }
+    .back-link:hover { color:#00FF88; }
+  </style>
+</head>
+<body>
+  <div class="banner">
+    This is a sample report — Create your free account to generate your own in 60 seconds.
+    <a href="/signup">Start Free</a>
+  </div>
+  <div class="container">
+    <a href="/" class="back-link"><i class="fas fa-arrow-left"></i> Back to homepage</a>
+    <div class="report-card">
+      <h1>Roof Measurement Report</h1>
+      <div class="meta"><b>Property:</b> 1247 Maple Ridge Dr, Calgary, AB &middot; <b>Report ID:</b> RM-SAMPLE-0001 &middot; <b>Generated:</b> Sample Preview</div>
+
+      <div class="hero-stat">
+        <div class="label">Total Roof Area (Pitch-Adjusted)</div>
+        <div class="value">2,847 sq ft</div>
+      </div>
+
+      <div class="grid-2">
+        <div class="diagram">
+          <h3 style="margin:0 0 10px;font-size:12px;text-transform:uppercase;letter-spacing:0.08em;color:#6b7280;font-weight:700">Roof Diagram</h3>
+          <svg viewBox="0 0 320 240" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;">
+            <rect x="0" y="0" width="320" height="240" fill="#ffffff"/>
+            <!-- Main roof footprint -->
+            <polygon points="40,60 280,60 280,200 40,200" fill="#e0f2fe" stroke="#0369a1" stroke-width="2"/>
+            <!-- Ridge (horizontal center line) -->
+            <line x1="60" y1="130" x2="260" y2="130" stroke="#dc2626" stroke-width="3"/>
+            <!-- Hips (diagonals to corners) -->
+            <line x1="40" y1="60" x2="60" y2="130" stroke="#a855f7" stroke-width="2"/>
+            <line x1="280" y1="60" x2="260" y2="130" stroke="#a855f7" stroke-width="2"/>
+            <line x1="40" y1="200" x2="60" y2="130" stroke="#a855f7" stroke-width="2"/>
+            <line x1="280" y1="200" x2="260" y2="130" stroke="#a855f7" stroke-width="2"/>
+            <!-- Valley (secondary gable addition) -->
+            <polygon points="180,60 240,20 260,60" fill="#fef3c7" stroke="#0369a1" stroke-width="1.5"/>
+            <line x1="180" y1="60" x2="210" y2="40" stroke="#22c55e" stroke-width="2" stroke-dasharray="4,2"/>
+            <line x1="260" y1="60" x2="240" y2="40" stroke="#22c55e" stroke-width="2" stroke-dasharray="4,2"/>
+            <!-- Labels -->
+            <text x="160" y="125" text-anchor="middle" font-size="10" fill="#dc2626" font-weight="700">RIDGE</text>
+            <text x="50" y="95" font-size="9" fill="#a855f7" font-weight="700">HIP</text>
+            <text x="220" y="55" font-size="9" fill="#22c55e" font-weight="700">VALLEY</text>
+            <text x="160" y="215" text-anchor="middle" font-size="10" fill="#0369a1" font-weight="700">EAVE</text>
+          </svg>
+          <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:10px;font-size:11px;color:#6b7280">
+            <span><span style="display:inline-block;width:12px;height:3px;background:#dc2626;vertical-align:middle"></span> Ridge</span>
+            <span><span style="display:inline-block;width:12px;height:3px;background:#a855f7;vertical-align:middle"></span> Hip</span>
+            <span><span style="display:inline-block;width:12px;height:3px;background:#22c55e;vertical-align:middle"></span> Valley</span>
+            <span><span style="display:inline-block;width:12px;height:3px;background:#0369a1;vertical-align:middle"></span> Eave</span>
+          </div>
+        </div>
+
+        <div class="stats">
+          <h3>Key Measurements</h3>
+          <div class="row"><span>Predominant Pitch</span><b>6/12</b></div>
+          <div class="row"><span>Number of Facets</span><b>8</b></div>
+          <div class="row"><span>Eaves</span><b>184 ft</b></div>
+          <div class="row"><span>Ridges</span><b>92 ft</b></div>
+          <div class="row"><span>Hips</span><b>48 ft</b></div>
+          <div class="row"><span>Valleys</span><b>36 ft</b></div>
+          <div class="row"><span>Rakes</span><b>72 ft</b></div>
+          <div class="row"><span>Complexity Rating</span><b>Moderate</b></div>
+        </div>
+      </div>
+
+      <div class="stats" style="margin-bottom:0">
+        <h3>Material Take-Off (Shingle System)</h3>
+        <table class="bom">
+          <thead>
+            <tr><th>Material</th><th>Quantity</th><th>Unit</th><th style="text-align:right">Coverage / Notes</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Architectural Shingles (3-tab equivalent)</td><td>96</td><td>bundles</td><td style="text-align:right">2,847 sq ft + 10% waste</td></tr>
+            <tr><td>Synthetic Underlayment</td><td>7</td><td>rolls</td><td style="text-align:right">10 sq per roll</td></tr>
+            <tr><td>Ice &amp; Water Shield</td><td>4</td><td>rolls</td><td style="text-align:right">Eave &amp; valley protection</td></tr>
+            <tr><td>Starter Strip</td><td>184</td><td>lin ft</td><td style="text-align:right">Eaves + rakes</td></tr>
+            <tr><td>Ridge Cap Shingles</td><td>176</td><td>lin ft</td><td style="text-align:right">Ridges + hips</td></tr>
+            <tr><td>Drip Edge (aluminum)</td><td>256</td><td>lin ft</td><td style="text-align:right">Eaves + rakes</td></tr>
+            <tr><td>Roofing Nails (1-1/4" galv)</td><td>4</td><td>boxes</td><td style="text-align:right">30 lb boxes</td></tr>
+            <tr><td>Pipe Boots (1.5" &amp; 3")</td><td>3</td><td>units</td><td style="text-align:right">Vent penetrations</td></tr>
+            <tr><td>Roof Vents (ridge vent, 4')</td><td>5</td><td>units</td><td style="text-align:right">Attic ventilation</td></tr>
+            <tr><td colspan="3"><b>Estimated Material Cost (retail)</b></td><td style="text-align:right"><b>$4,420 CAD</b></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="cta-block">
+      <h2>Generate your own report in 60 seconds</h2>
+      <p>Pitch-adjusted 3D area, edge breakdown, and full material BOM — from any address. First 3 reports free.</p>
+      <a href="/signup">Create Free Account <i class="fas fa-arrow-right"></i></a>
+    </div>
+  </div>
+  <script src="/static/tracker.js" defer></script>
+</body>
+</html>`
+}
+
 function getLandingPageHTML(latestPosts: any[] = []) {
   return `<!DOCTYPE html>
 <html lang="en">
@@ -4996,7 +5139,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
             <h2 class="text-lg lg:text-xl text-gray-400 mb-10 max-w-xl leading-relaxed font-normal">Accurate satellite roof measurements from <span class="text-white font-semibold">$5/report</span>. No drone, no ladder, no climbing. Trusted by roofing contractors, facility managers, and condo boards across Canada &amp; the US.</h2>
             <div class="flex flex-col sm:flex-row gap-4 mb-10">
               <a href="/signup" onclick="rrTrack('cta_click',{location:'hero_primary',variant:'contractor_signup'})" class="group inline-flex items-center justify-center gap-3 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-10 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/20 transition-all duration-300 hover:scale-[1.03] min-h-[56px]"><i class="fas fa-rocket"></i> Measure Your First Roof Free <i class="fas fa-arrow-right text-sm group-hover:translate-x-1.5 transition-transform"></i></a>
-              <a href="#tutorials" onclick="rrTrack('cta_click',{location:'hero_secondary',variant:'sample_report'})" class="inline-flex items-center justify-center gap-2.5 bg-white/5 hover:bg-white/10 backdrop-blur-md text-white font-bold py-4 px-8 rounded-xl text-lg border border-white/10 hover:border-white/20 transition-all duration-300 min-h-[56px]"><i class="fas fa-play-circle text-[#00FF88]"></i> See Sample Report</a>
+              <a href="/sample-report" onclick="rrTrack('cta_click',{location:'hero_secondary',variant:'sample_report'})" class="inline-flex items-center justify-center gap-2.5 bg-white/5 hover:bg-white/10 backdrop-blur-md text-white font-bold py-4 px-8 rounded-xl text-lg border border-white/10 hover:border-white/20 transition-all duration-300 min-h-[56px]"><i class="fas fa-play-circle text-[#00FF88]"></i> See Sample Report</a>
             </div>
             <p class="text-xs text-gray-500 mb-6 -mt-4">Free to start &middot; No credit card &middot; 60-second setup</p>
             <div class="flex items-center gap-4 mb-4">
@@ -5716,6 +5859,73 @@ function getLandingPageHTML(latestPosts: any[] = []) {
       return false;
     };
   </script>
+
+  <!-- Exit-Intent Modal (desktop only, once per session) -->
+  <div id="exitIntentModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:10000;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(6px)">
+    <div style="background:#111;border:1px solid rgba(0,255,136,0.25);border-radius:16px;padding:28px;max-width:420px;width:100%;box-shadow:0 20px 60px rgba(0,255,136,0.15);position:relative">
+      <button id="exitIntentClose" aria-label="Dismiss" style="position:absolute;top:10px;right:12px;background:none;border:none;color:#9ca3af;font-size:24px;cursor:pointer;line-height:1">&times;</button>
+      <div style="color:#00FF88;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:6px">Before you go</div>
+      <h3 style="color:#fff;font-size:22px;font-weight:800;margin:0 0 8px;line-height:1.2">Wait — try one free measurement</h3>
+      <p style="color:#9ca3af;font-size:14px;margin:0 0 16px">Drop your email and we'll set you up with a free trial report. Takes 60 seconds.</p>
+      <form id="exitIntentForm" onsubmit="return window.submitExitIntent(event)">
+        <input required name="email" type="email" placeholder="you@company.com" style="width:100%;padding:12px 14px;background:#0A0A0A;color:#fff;border:1px solid rgba(255,255,255,0.12);border-radius:8px;font-size:14px;margin-bottom:12px;box-sizing:border-box">
+        <button type="submit" style="width:100%;padding:13px;background:#00FF88;color:#0A0A0A;border:none;border-radius:10px;font-size:15px;font-weight:800;cursor:pointer"><i class="fas fa-rocket" style="margin-right:8px"></i>Get My Free Measurement</button>
+      </form>
+      <p style="font-size:11px;color:#6b7280;text-align:center;margin:12px 0 0">No credit card. 3 free reports.</p>
+    </div>
+  </div>
+  <script>
+    (function(){
+      try {
+        // Desktop only — no touch/mobile
+        var isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+        if (isTouch) return;
+        if (window.innerWidth < 900) return;
+        if (sessionStorage.getItem('rm_exit_intent_shown') === '1') return;
+      } catch(e) { return; }
+
+      var modal = document.getElementById('exitIntentModal');
+      if (!modal) return;
+      var shown = false;
+
+      function show() {
+        if (shown) return;
+        shown = true;
+        try { sessionStorage.setItem('rm_exit_intent_shown','1'); } catch(e){}
+        modal.style.display = 'flex';
+        if (typeof rrTrack === 'function') rrTrack('exit_intent_shown', {});
+      }
+      function hide() { modal.style.display = 'none'; }
+
+      document.addEventListener('mouseleave', function(e){
+        if (e.clientY < 10 && (e.relatedTarget === null || e.relatedTarget === undefined)) {
+          show();
+        }
+      });
+
+      document.getElementById('exitIntentClose').addEventListener('click', hide);
+      modal.addEventListener('click', function(e){ if (e.target === modal) hide(); });
+
+      window.submitExitIntent = function(e) {
+        e.preventDefault();
+        var email = e.target.email.value.trim();
+        if (!email) return false;
+        if (typeof rrTrack === 'function') rrTrack('exit_intent_submit', {});
+        if (typeof gtag === 'function') gtag('event', 'lead_capture', { source: 'exit_intent' });
+        // Fire-and-forget to reuse existing asset-report lead endpoint
+        try {
+          fetch('/api/asset-report/lead', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: email, source: 'homepage_cta', tag: 'exit_intent' }),
+            keepalive: true
+          }).catch(function(){});
+        } catch(err){}
+        window.location.href = '/signup?email=' + encodeURIComponent(email);
+        return false;
+      };
+    })();
+  </script>
 </body>
 </html>`
 }
@@ -5948,8 +6158,8 @@ function getCustomerLoginHTML() {
     <!-- Auth Card -->
     <div class="bg-white rounded-2xl shadow-2xl overflow-hidden">
       <div class="p-8">
-        <h2 class="text-xl font-bold text-gray-800 mb-1">Welcome</h2>
-        <p class="text-sm text-gray-500 mb-6">Sign in to view your roof reports, invoices, and order history</p>
+        <h2 id="custAuthHeadline" class="text-xl font-bold text-gray-800 mb-1">Welcome</h2>
+        <p id="custAuthSubhead" class="text-sm text-gray-500 mb-6">Sign in to view your roof reports, invoices, and order history</p>
 
         <!-- Tabs -->
         <div class="flex border border-gray-200 rounded-lg overflow-hidden mb-5">
@@ -6090,6 +6300,30 @@ function getCustomerLoginHTML() {
     (function() {
       const c = localStorage.getItem('rc_customer');
       if (c) window.location.href = '/customer/dashboard';
+    })();
+
+    // Signup-first mode: /customer/login?mode=signup or ref from /signup
+    (function() {
+      try {
+        var sp = new URLSearchParams(location.search);
+        var mode = sp.get('mode');
+        var ref = (document.referrer || '');
+        var wantSignup = (mode === 'signup') || /\/signup(\b|\/|\?|$)/.test(ref);
+        if (wantSignup) {
+          var h = document.getElementById('custAuthHeadline');
+          var s = document.getElementById('custAuthSubhead');
+          if (h) h.textContent = 'Start measuring — free';
+          if (s) s.textContent = 'Create your account and get 3 free reports. No credit card required.';
+          // Prefill email if passed
+          var em = sp.get('email');
+          if (em) {
+            var emEl = document.getElementById('custRegEmail');
+            if (emEl) emEl.value = em;
+          }
+          // Default to register tab
+          setTimeout(function(){ try { showCustTab('register'); } catch(e){} }, 0);
+        }
+      } catch(e) {}
     })();
 
     function showCustTab(tab) {
