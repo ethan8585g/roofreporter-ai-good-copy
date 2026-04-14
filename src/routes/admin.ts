@@ -1425,7 +1425,11 @@ adminRoutes.get('/superadmin/onboarding/list', async (c) => {
         c.is_active, c.created_at,
         sc.is_active as secretary_enabled, sc.secretary_mode,
         sc.assigned_phone_number as agent_phone_number,
-        sc.secretary_mode as phone_provider,
+        CASE
+          WHEN sc.livekit_inbound_trunk_id IS NOT NULL AND sc.livekit_inbound_trunk_id != '' THEN 'livekit'
+          WHEN sc.assigned_phone_number IS NOT NULL AND sc.assigned_phone_number != '' THEN 'twilio'
+          ELSE NULL
+        END as phone_provider,
         sc.connection_status, sc.livekit_inbound_trunk_id
       FROM customers c
       LEFT JOIN secretary_config sc ON sc.customer_id = c.id

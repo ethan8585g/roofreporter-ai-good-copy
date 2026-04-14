@@ -174,7 +174,7 @@ async function paSubmitOnboarding() {
     if (data.success) {
       window.rmToast('Customer onboarded!\n\n' + data.message + '\nTeam members created: ' + data.team_members_created, 'success');
       loadView('secretary-manager');
-    } else { window.rmToast('Error: ' + (data.error || 'Unknown error', 'error')); }
+    } else { window.rmToast('Error: ' + (data.error || 'Unknown error'), 'error'); }
   } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
   if (btn) btn.disabled = false;
 }
