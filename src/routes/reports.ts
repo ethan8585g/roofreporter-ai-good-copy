@@ -309,8 +309,13 @@ reportsRoutes.get('/:orderId/export.json', async (c) => {
   const row = await repo.getReportRawData(c.env.DB, orderId)
   if (!row || !row.api_response_raw) return c.json({ error: 'Report not found' }, 404)
   let data: any
-  try { data = typeof row.api_response_raw === 'string' ? JSON.parse(row.api_response_raw) : row.api_response_raw }
-  catch { return c.json({ error: 'Report data corrupt' }, 500) }
+  try {
+    data = typeof row.api_response_raw === 'string' ? JSON.parse(row.api_response_raw) : row.api_response_raw
+  } catch (e: any) {
+    const snippet = typeof row.api_response_raw === 'string' ? row.api_response_raw.slice(0, 200) : ''
+    console.error(`[report-export] Corrupt JSON for order ${orderId}: ${e.message}. First 200 chars: ${snippet}`)
+    return c.json({ error: 'Report data corrupt', details: e.message }, 500)
+  }
   const body = JSON.stringify(data.trace_measurement || data, null, 2)
   return new Response(body, {
     headers: {
@@ -325,8 +330,13 @@ reportsRoutes.get('/:orderId/export.csv', async (c) => {
   const row = await repo.getReportRawData(c.env.DB, orderId)
   if (!row || !row.api_response_raw) return c.json({ error: 'Report not found' }, 404)
   let data: any
-  try { data = typeof row.api_response_raw === 'string' ? JSON.parse(row.api_response_raw) : row.api_response_raw }
-  catch { return c.json({ error: 'Report data corrupt' }, 500) }
+  try {
+    data = typeof row.api_response_raw === 'string' ? JSON.parse(row.api_response_raw) : row.api_response_raw
+  } catch (e: any) {
+    const snippet = typeof row.api_response_raw === 'string' ? row.api_response_raw.slice(0, 200) : ''
+    console.error(`[report-export] Corrupt JSON for order ${orderId}: ${e.message}. First 200 chars: ${snippet}`)
+    return c.json({ error: 'Report data corrupt', details: e.message }, 500)
+  }
   const tm = data.trace_measurement
   if (!tm) return c.json({ error: 'No measurement data on this report' }, 404)
 
@@ -1037,6 +1047,9 @@ reportsRoutes.post('/calculate-from-trace', async (c) => {
       pitch_confidence: pitchConfidence,
       pitch_audit: pitchAudit,
       pitch_solar_deg: solarPitchDeg,
+      solar_imagery_quality:     resolved.solar_imagery_quality,
+      solar_imagery_reliability: resolved.solar_imagery_reliability,
+      solar_imagery_warning:     resolved.solar_imagery_warning,
       solar_cross_check: enhancedSolarCheck,
       calculation_ms: elapsed,
       engine_version: report.report_meta.engine_version,

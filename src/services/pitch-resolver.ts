@@ -20,6 +20,9 @@ export interface ResolvedPitch {
   solar_pitch_rise: number | null
   solar_pitch_deg: number | null
   solar_footprint_ft2: number     // 0 when unavailable
+  solar_imagery_quality: string | null   // 'HIGH' | 'MEDIUM' | 'BASE' | null
+  solar_imagery_reliability: 'high' | 'medium' | 'low' | null
+  solar_imagery_warning: string | null
   /**
    * Non-null when Solar API pitch disagreed with the user-supplied default
    * by ≥ 1.5 rise — surface this in the UI so the customer can acknowledge.
@@ -63,6 +66,9 @@ export async function resolvePitch(input: PitchResolverInput): Promise<ResolvedP
   let solar_pitch_rise: number | null = null
   let solar_pitch_deg:  number | null = null
   let solar_footprint_ft2 = 0
+  let solar_imagery_quality: string | null = null
+  let solar_imagery_reliability: 'high' | 'medium' | 'low' | null = null
+  let solar_imagery_warning: string | null = null
 
   if (apiKey && isFinite(centroidLat) && isFinite(centroidLng)) {
     try {
@@ -78,6 +84,20 @@ export async function resolvePitch(input: PitchResolverInput): Promise<ResolvedP
       }
       if (result.roof_footprint_ft2 > 0) {
         solar_footprint_ft2 = result.roof_footprint_ft2
+      }
+      if (result.imagery_quality) {
+        solar_imagery_quality = result.imagery_quality
+        // HIGH = 0.1 m/px (confident), MEDIUM = 0.25 m/px (acceptable),
+        // BASE = 1 m/px (coarse — field verification recommended)
+        if (result.imagery_quality === 'HIGH') {
+          solar_imagery_reliability = 'high'
+        } else if (result.imagery_quality === 'MEDIUM') {
+          solar_imagery_reliability = 'medium'
+          solar_imagery_warning = 'Satellite imagery is MEDIUM resolution (0.25 m/px). Measurements are usable for estimates; field verify before ordering materials.'
+        } else {
+          solar_imagery_reliability = 'low'
+          solar_imagery_warning = `Satellite imagery is ${result.imagery_quality} resolution — considerably coarser than HIGH (0.1 m/px). Field verification strongly recommended before committing material orders.`
+        }
       }
     } catch (e: any) {
       console.warn(`[${logTag}] Solar API failed: ${e.message}`)
@@ -122,6 +142,9 @@ export async function resolvePitch(input: PitchResolverInput): Promise<ResolvedP
     solar_pitch_rise,
     solar_pitch_deg,
     solar_footprint_ft2,
+    solar_imagery_quality,
+    solar_imagery_reliability,
+    solar_imagery_warning,
     audit,
   }
 }

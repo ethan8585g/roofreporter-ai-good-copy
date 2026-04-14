@@ -20,6 +20,8 @@ import { blogRoutes } from './routes/blog'
 import { d2dRoutes } from './routes/d2d'
 import { stormScoutRoutes } from './routes/storm-scout'
 import { stormAlertsRoutes } from './routes/storm-alerts'
+import { stormAnalyticsRoutes } from './routes/storm-analytics'
+import { pushRoutes } from './routes/push'
 import { leadCaptureRoutes } from './routes/lead-capture'
 import { secretaryRoutes } from './routes/secretary'
 import { roverRoutes } from './routes/rover'
@@ -263,6 +265,8 @@ app.route('/api/blog', blogRoutes)
 app.route('/api/d2d', d2dRoutes)
 app.route('/api/storm-scout', stormScoutRoutes)
 app.route('/api/storm-alerts', stormAlertsRoutes)
+app.route('/api/storm-analytics', stormAnalyticsRoutes)
+app.route('/api/push', pushRoutes)
 app.route('/api', leadCaptureRoutes)
 app.route('/api/secretary', secretaryRoutes)
 app.route('/api/rover', roverRoutes)
@@ -10489,6 +10493,7 @@ function getStormScoutPageHTML(mapsApiKey: string) {
       window.location.href = '/customer/login';
     }
   </script>
+  <script src="/static/push-register.js?v=${Date.now()}"></script>
   <script src="/static/storm-scout-module.js?v=${Date.now()}"></script>
   ${getRoverAssistant()}
 </body>

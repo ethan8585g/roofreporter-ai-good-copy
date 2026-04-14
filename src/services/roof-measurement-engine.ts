@@ -710,10 +710,13 @@ function categoriseLine(type: string): LineCategory {
 // ═══════════════════════════════════════════════════════════════
 
 function wastePct(rise: number, complexity: string = 'medium'): number {
-  // Back-compat scalar: simple=15%, medium=20%, complex=25% + steep-pitch bump
+  // Back-compat scalar: simple=15%, medium=20%, complex=25% + steep-pitch bump.
+  // Low-slope roofs (<2:12 uses rolled membrane; 2:12–4:12 short cuts) waste less.
   const bases: Record<string, number> = { simple: 0.15, medium: 0.20, complex: 0.25 }
   let base = bases[complexity] ?? 0.20
-  if (rise >= 9) base += 0.05
+  if (rise < 2)      base = Math.min(base, 0.08)   // rolled/modified bitumen
+  else if (rise < 4) base = Math.min(base, 0.12)   // low-slope asphalt
+  if (rise >= 9)      base += 0.05
   else if (rise >= 7) base += 0.02
   return base
 }
@@ -726,7 +729,10 @@ function wasteBreakdown(
   sectionCount: number
 ): WasteBreakdown {
   const bases: Record<string, number> = { simple: 15, medium: 20, complex: 25 }
-  const basePct = bases[complexity] ?? 20
+  let basePct = bases[complexity] ?? 20
+  // Low-slope tier: cap base before steep-pitch / complexity bumps
+  if (rise < 2)      basePct = Math.min(basePct, 8)
+  else if (rise < 4) basePct = Math.min(basePct, 12)
   const steepPct = rise >= 9 ? 5 : rise >= 7 ? 2 : 0
   const valleyPct = Math.min(5, Math.floor(valleyFt / 40))
   const obstructionPct = Math.min(3, Math.round(obstructionCount * 0.5 * 10) / 10)

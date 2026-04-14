@@ -62,6 +62,17 @@
     });
   }
 
+  function ssTrack(event_type, meta) {
+    try {
+      fetch('/api/storm-analytics/event', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ event_type: event_type, meta: meta || null })
+      }).catch(function(){});
+    } catch (e) {}
+  }
+  window.ssTrack = ssTrack;
+
   function api(path) {
     return fetch('/api/storm-scout' + path, { headers: authHeaders() }).then(function (r) {
       return r.text().then(function (text) {
@@ -133,7 +144,12 @@
           '<div class="ss-section">' +
             '<div class="ss-section-title">My territory <span id="ssTerrCount" class="ss-count">0</span></div>' +
             '<button id="ssDrawTerr" class="ss-btn ss-btn-secondary"><i class="fas fa-draw-polygon mr-1"></i> Draw new area</button>' +
+            '<button id="ssEnablePush" class="ss-btn ss-btn-secondary" style="margin-top:6px"><i class="fas fa-bell mr-1"></i> Enable push alerts</button>' +
             '<div id="ssTerrList" class="ss-terr-list"></div>' +
+          '</div>' +
+          '<div class="ss-section">' +
+            '<div class="ss-section-title">ROI — last 30 days</div>' +
+            '<div id="ssRoi" class="ss-roi"><div class="ss-empty">Loading\u2026</div></div>' +
           '</div>' +
           '<div class="ss-section">' +
             '<div class="ss-section-title">Recent matches <span id="ssMatchCount" class="ss-count">0</span></div>' +
@@ -341,6 +357,7 @@
       fullscreenControl: true
     });
     infoWindow = new google.maps.InfoWindow();
+    ssTrack('map_open');
     loadAll(false);
   }
 
@@ -597,6 +614,7 @@
     infoWindow.close();
     infoWindow.setPosition(pos);
     infoWindow.open(map);
+    ssTrack('alert_view', { source: a.source, type: a.type, severity: a.severity });
     attachBeforeAfterHandler();
   }
 
@@ -613,6 +631,7 @@
       var lng = parseFloat(btn.getAttribute('data-lng'));
       var date = btn.getAttribute('data-date') || new Date().toISOString().slice(0, 10);
       if (isNaN(lat) || isNaN(lng)) return;
+      ssTrack('before_after_open', { date: date });
       openBeforeAfter({ lat: function () { return lat; }, lng: function () { return lng; } }, date);
     });
   }
@@ -745,6 +764,7 @@
       notify_email: true, notify_push: false
     }).then(function () {
       toast('Territory saved', 'info');
+      ssTrack('territory_create', { name: name, min_hail_inches: hail, min_wind_kmh: wind });
       loadTerritories();
     }).catch(function (err) {
       toast('Save failed: ' + (err.message || err), 'error');
@@ -860,6 +880,7 @@
         item.addEventListener('click', function () {
           var lat = parseFloat(item.getAttribute('data-lat'));
           var lng = parseFloat(item.getAttribute('data-lng'));
+          ssTrack('match_click', { lat: lat, lng: lng });
           if (Number.isFinite(lat) && Number.isFinite(lng)) {
             map.panTo({ lat: lat, lng: lng }); map.setZoom(Math.max(map.getZoom(), 10));
           }
@@ -870,7 +891,7 @@
     });
   }
 
-  // Hook draw button
+  // Hook draw + push buttons
   function wireTerritoryControls() {
     var drawBtn = document.getElementById('ssDrawTerr');
     if (drawBtn) drawBtn.addEventListener('click', function () {
@@ -882,6 +903,50 @@
         startDrawing();
       }
     });
+
+    var pushBtn = document.getElementById('ssEnablePush');
+    if (pushBtn) {
+      if (!window.ssPushSupported || !window.ssPushSupported()) {
+        pushBtn.textContent = 'Push not supported in this browser';
+        pushBtn.disabled = true;
+        pushBtn.style.opacity = '0.5';
+      } else {
+        pushBtn.addEventListener('click', function () {
+          pushBtn.disabled = true;
+          pushBtn.textContent = 'Requesting permission\u2026';
+          window.ssEnablePush().then(function () {
+            toast('Push alerts enabled on this device', 'info');
+            pushBtn.innerHTML = '<i class="fas fa-check mr-1"></i> Push enabled';
+          }).catch(function (err) {
+            toast('Push failed: ' + (err.message || err), 'error');
+            pushBtn.disabled = false;
+            pushBtn.innerHTML = '<i class="fas fa-bell mr-1"></i> Enable push alerts';
+          });
+        });
+      }
+    }
+  }
+
+  function renderRoi() {
+    var el = document.getElementById('ssRoi');
+    if (!el) return;
+    fetch('/api/storm-analytics/summary?days=30', { headers: authHeaders() })
+      .then(function (r) { return r.json(); })
+      .then(function (res) {
+        if (!res || !res.kpis) { el.innerHTML = '<div class="ss-empty">No data yet.</div>'; return; }
+        var k = res.kpis, rv = res.revenue;
+        el.innerHTML =
+          '<div class="ss-roi-grid">' +
+            '<div class="ss-roi-cell"><div class="ss-roi-n">' + k.matches_sent + '</div><div class="ss-roi-l">Alerts matched</div></div>' +
+            '<div class="ss-roi-cell"><div class="ss-roi-n">' + k.leads_from_storm + '</div><div class="ss-roi-l">Leads</div></div>' +
+            '<div class="ss-roi-cell"><div class="ss-roi-n">$' + (rv.estimated_from_storm_scout || 0).toLocaleString() + '</div><div class="ss-roi-l">Est. revenue</div></div>' +
+            '<div class="ss-roi-cell"><div class="ss-roi-n">' + k.territories_active + '</div><div class="ss-roi-l">Territories</div></div>' +
+            '<div class="ss-roi-cell"><div class="ss-roi-n">' + k.days_active + '</div><div class="ss-roi-l">Days active</div></div>' +
+            '<div class="ss-roi-cell"><div class="ss-roi-n">' + k.alert_views + '</div><div class="ss-roi-l">Alert views</div></div>' +
+          '</div>' +
+          '<div class="ss-roi-note">Est. revenue = leads × $' + rv.avg_job_value.toLocaleString() + ' avg job.</div>';
+      })
+      .catch(function () { el.innerHTML = '<div class="ss-empty">ROI unavailable.</div>'; });
   }
 
   renderLayout();
@@ -891,6 +956,7 @@
     setupDrawingManager();
     loadTerritories();
     loadMatches();
+    renderRoi();
   };
   if (window.googleMapsReady) window.initStormScoutMap();
 })();

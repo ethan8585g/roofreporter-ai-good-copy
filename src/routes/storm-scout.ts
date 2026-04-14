@@ -85,7 +85,13 @@ stormScoutRoutes.post('/ingest', async (c) => {
       // Run territory matcher + email digests.
       let matchResult: any = null
       try {
-        matchResult = await matchSnapshotAndNotify(c.env.DB, snapshot, (c.env as any).GCP_SERVICE_ACCOUNT_JSON || c.env.GCP_SERVICE_ACCOUNT_KEY)
+        const { getVapidFromEnv } = await import('../services/web-push')
+        matchResult = await matchSnapshotAndNotify(
+          c.env.DB,
+          snapshot,
+          (c.env as any).GCP_SERVICE_ACCOUNT_JSON || c.env.GCP_SERVICE_ACCOUNT_KEY,
+          getVapidFromEnv(c.env as any)
+        )
       } catch (e: any) {
         matchResult = { error: e?.message || String(e) }
       }

@@ -219,6 +219,27 @@ export function validateTraceUi(trace: any): TraceValidationResult {
     if (polygonSelfIntersects(sec)) {
       errors.push({ severity: 'error', code: 'self_intersecting', message: `Eave section ${sIdx + 1} is self-intersecting. Edges must not cross.`, at: `eaves_sections[${sIdx}]` })
     }
+    // Sparse-trace warning: if an edge > ~20 ft has zero intermediate
+    // points, the tracer probably skipped a corner. 20 ft in latitude
+    // ≈ 0.0000548 deg; we compare squared great-circle approximations
+    // to avoid importing geodesy here.
+    const FT_PER_DEG_LAT = 364_000
+    for (let i = 0; i < sec.length; i++) {
+      const a = sec[i], b = sec[(i + 1) % sec.length]
+      if (!isFiniteLatLng(a) || !isFiniteLatLng(b)) continue
+      const ftPerDegLng = FT_PER_DEG_LAT * Math.cos(a.lat * Math.PI / 180)
+      const dLatFt = (b.lat - a.lat) * FT_PER_DEG_LAT
+      const dLngFt = (b.lng - a.lng) * ftPerDegLng
+      const lenFt = Math.sqrt(dLatFt * dLatFt + dLngFt * dLngFt)
+      if (lenFt > 22) {
+        warnings.push({
+          severity: 'warning',
+          code: 'sparse_trace_edge',
+          message: `Eave section ${sIdx + 1} edge ${i + 1} is ${Math.round(lenFt)} ft with no intermediate points — you may have skipped a corner.`,
+          at: `eaves_sections[${sIdx}][${i}]`,
+        })
+      }
+    }
   })
   result.sections_count = sections.length
 

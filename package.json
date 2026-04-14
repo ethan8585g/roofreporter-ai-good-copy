@@ -13,14 +13,17 @@
     "db:seed": "wrangler d1 execute roofing-production --local --file=./seed.sql",
     "db:reset": "rm -rf .wrangler/state/v3/d1 && npm run db:migrate:local && npm run db:seed",
     "db:console:local": "wrangler d1 execute roofing-production --local",
-    "clean-port": "fuser -k 3000/tcp 2>/dev/null || true"
+    "clean-port": "fuser -k 3000/tcp 2>/dev/null || true",
+    "cap:sync": "npx cap sync",
+    "cap:ios": "npx cap open ios",
+    "cap:android": "npx cap open android"
   },
   "dependencies": {
     "@capacitor-community/admob": "^8.0.0",
     "@capacitor/cli": "^8.3.0",
-    "@capacitor/core": "^8.3.0",
-    "@capacitor/ios": "^8.3.0",
-    "@capacitor/push-notifications": "^8.0.3",
+    "@capacitor/core": "^6.1.2",
+    "@capacitor/ios": "^6.1.2",
+    "@capacitor/push-notifications": "^6.0.3",
     "better-sqlite3": "^12.8.0",
     "geotiff": "^3.0.3",
     "geotiff-geokeys-to-proj4": "^2024.4.13",
@@ -28,7 +31,11 @@
     "jsonwebtoken": "^9.0.3",
     "livekit-server-sdk": "^2.15.0",
     "proj4": "^2.20.2",
-    "zod": "^4.3.6"
+    "zod": "^4.3.6",
+    "@capacitor/android": "^6.1.2",
+    "@capacitor/app": "^6.0.1",
+    "@capacitor/status-bar": "^6.0.1",
+    "@capacitor/splash-screen": "^6.0.2"
   },
   "devDependencies": {
     "@hono/vite-build": "^1.2.0",
@@ -39,6 +46,7 @@
     "tailwindcss": "^4.2.2",
     "vite": "^6.3.5",
     "vitest": "^4.0.18",
-    "wrangler": "^4.4.0"
+    "wrangler": "^4.4.0",
+    "@capacitor/cli": "^6.1.2"
   }
 }

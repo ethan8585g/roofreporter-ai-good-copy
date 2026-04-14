@@ -9,6 +9,7 @@ import { fetchECCCAlerts } from './storm-data'
 import { fetchNWSAlerts, fetchIEMLocalStormReports } from './nws-data'
 import { matchEvents, type ServiceArea, type Ring, type Match } from './storm-matcher'
 import { sendGmailEmail } from './email'
+import { sendWebPush, type VapidKeys } from './web-push'
 
 export interface DailySnapshot {
   date: string                // YYYY-MM-DD (UTC)
@@ -101,8 +102,9 @@ export interface MatchRunResult {
 export async function matchSnapshotAndNotify(
   db: D1Database,
   snapshot: DailySnapshot,
-  serviceAccountJson?: string
-): Promise<MatchRunResult> {
+  serviceAccountJson?: string,
+  vapid?: VapidKeys | null
+): Promise<MatchRunResult & { pushesSent: number; pushErrors: number }> {
   const areasRs = await db.prepare(
     'SELECT * FROM storm_service_areas WHERE is_active = 1'
   ).all<any>()
@@ -128,9 +130,10 @@ export async function matchSnapshotAndNotify(
 
   const matches: Match[] = matchEvents(areas, snapshot.alerts as any, snapshot.hailReports as any)
 
-  let newNotifications = 0, emailsSent = 0, emailErrors = 0
-  // Group by customer for digest email.
+  let newNotifications = 0, emailsSent = 0, emailErrors = 0, pushesSent = 0, pushErrors = 0
+  // Group by customer for digest email/push.
   const byCustomer: Record<number, Match[]> = {}
+  const pushByCustomer: Record<number, Match[]> = {}
 
   for (const m of matches) {
     try {
@@ -150,6 +153,10 @@ export async function matchSnapshotAndNotify(
         if (m.area.notify_email) {
           if (!byCustomer[m.area.customer_id]) byCustomer[m.area.customer_id] = []
           byCustomer[m.area.customer_id].push(m)
+        }
+        if (m.area.notify_push) {
+          if (!pushByCustomer[m.area.customer_id]) pushByCustomer[m.area.customer_id] = []
+          pushByCustomer[m.area.customer_id].push(m)
         }
       }
     } catch (err) {
@@ -209,7 +216,56 @@ export async function matchSnapshotAndNotify(
     }
   }
 
-  return { areasChecked: areas.length, matches: matches.length, newNotifications, emailsSent, emailErrors }
+  // --- Web Push dispatch ---
+  if (vapid) {
+    for (const [cidStr, ms] of Object.entries(pushByCustomer)) {
+      const cid = parseInt(cidStr, 10)
+      try {
+        const subs = await db.prepare(
+          'SELECT endpoint, keys_p256dh, keys_auth FROM push_subscriptions WHERE customer_id = ? AND disabled = 0'
+        ).bind(cid).all<any>()
+        if (!subs.results?.length) continue
+        const top = ms[0]
+        const size = top.hailInches ? `${top.hailInches.toFixed(2)}" hail` : top.windKmh ? `${top.windKmh} km/h wind` : top.eventType
+        const payload = {
+          title: `Storm Scout: ${ms.length} match${ms.length === 1 ? '' : 'es'}`,
+          body: `${top.area.name} — ${size} (${top.eventType})`,
+          url: '/customer/storm-scout',
+          tag: `storm-${cid}`
+        }
+        for (const s of subs.results) {
+          const r = await sendWebPush(s as any, payload, vapid).catch((e: any) => ({ ok: false, status: 0, body: e?.message }))
+          if (r.ok) pushesSent++
+          else {
+            pushErrors++
+            if (r.status === 404 || r.status === 410) {
+              await db.prepare('UPDATE push_subscriptions SET disabled = 1 WHERE endpoint = ?').bind((s as any).endpoint).run()
+            }
+          }
+        }
+        // Mark push_sent on these dedupe keys
+        const keys = ms.map(m => m.dedupeKey)
+        if (keys.length) {
+          const placeholders = keys.map(() => '?').join(',')
+          await db.prepare(`UPDATE storm_notifications SET push_sent = 1 WHERE dedupe_key IN (${placeholders})`).bind(...keys).run()
+        }
+      } catch (err) {
+        pushErrors++
+        console.warn('[storm-ingest] push failed:', (err as any)?.message)
+      }
+    }
+  }
+
+  // --- Fire synthetic analytics event per new match for ROI tracking ---
+  for (const m of matches) {
+    try {
+      await db.prepare(
+        "INSERT INTO storm_scout_events (customer_id, event_type, meta_json) VALUES (?, 'match_sent', ?)"
+      ).bind(m.area.customer_id, JSON.stringify({ area_id: m.area.id, type: m.eventType, hail: m.hailInches, wind: m.windKmh })).run()
+    } catch { /* table may not exist on fresh setups */ }
+  }
+
+  return { areasChecked: areas.length, matches: matches.length, newNotifications, emailsSent, emailErrors, pushesSent, pushErrors }
 }
 
 function escape(s: string): string {
