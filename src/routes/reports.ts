@@ -28,6 +28,7 @@ import { RoofMeasurementEngine, traceUiToEnginePayload, calculateRoofSpecs, ROOF
 import { validateTraceUi, resolveEaves, allEavePoints } from '../utils/trace-validation'
 import { resolvePitch } from '../services/pitch-resolver'
 import { generatePanelLayout } from '../services/solar-panel-layout'
+import { estimateMaterials, generateAccuLynxCSV, generateXactimateXML, type DetailedMaterialBOM } from '../services/material-estimation-engine'
 import { enhanceReportViaGemini } from '../services/gemini-enhance'
 import { segmentWithGemini, geminiOutlineToTracePayload } from '../services/sam3-segmentation'
 import { generateReportImagery, buildAIImageryHTML } from '../services/ai-image-generation'
@@ -80,7 +81,7 @@ async function validateAdminOrCustomer(db: D1Database, authHeader: string | unde
 
 reportsRoutes.use('/*', async (c, next) => {
   const path = c.req.path
-  if (path.endsWith('/html') || path.endsWith('/simple') || path.endsWith('/proposal') || path.endsWith('/pdf') || path.endsWith('/webhook-update') || path.endsWith('/webhooks/resend') || path.endsWith('/enhancement-status') || path.endsWith('/calculate-from-trace') || path.endsWith('/pitch-multipliers') || path.endsWith('/calculate-roof-specs') || path.endsWith('/export.json') || path.endsWith('/export.csv') || path.endsWith('/solar-panel-layout')) return next()
+  if (path.endsWith('/html') || path.endsWith('/simple') || path.endsWith('/proposal') || path.endsWith('/pdf') || path.endsWith('/webhook-update') || path.endsWith('/webhooks/resend') || path.endsWith('/enhancement-status') || path.endsWith('/calculate-from-trace') || path.endsWith('/pitch-multipliers') || path.endsWith('/calculate-roof-specs') || path.endsWith('/export.json') || path.endsWith('/export.csv') || path.endsWith('/solar-panel-layout') || path.endsWith('/bom') || path.endsWith('/bom.csv') || path.endsWith('/bom.xml')) return next()
   const user = await validateAdminOrCustomer(c.env.DB, c.req.header('Authorization'))
   if (!user) return c.json({ error: 'Authentication required' }, 401)
   c.set('user' as any, user)
@@ -1068,8 +1069,29 @@ reportsRoutes.post('/calculate-from-trace', async (c) => {
         total_linear_ft: report.linear_measurements.eaves_total_ft + report.linear_measurements.ridges_total_ft + report.linear_measurements.hips_total_ft + report.linear_measurements.valleys_total_ft + report.linear_measurements.rakes_total_ft,
       },
 
-      // Material estimates
+      // Material estimates (engine summary — totals only)
       materials: report.materials_estimate,
+
+      // Full itemized Bill of Materials (line items + costs)
+      material_bom: (() => {
+        try {
+          return estimateMaterials({
+            address: address || '',
+            net_area_sqft:    report.key_measurements.total_roof_area_sloped_ft2,
+            waste_factor_pct: report.key_measurements.waste_factor_pct,
+            total_eave_lf:    report.linear_measurements.eaves_total_ft,
+            total_ridge_lf:   report.linear_measurements.ridges_total_ft,
+            total_hip_lf:     report.linear_measurements.hips_total_ft,
+            total_valley_lf:  report.linear_measurements.valleys_total_ft,
+            total_rake_lf:    report.linear_measurements.rakes_total_ft,
+            pitch_rise:       pitchRise,
+            complexity:       'medium',
+          })
+        } catch (e: any) {
+          console.warn(`[CalculateFromTrace] BOM generation failed: ${e.message}`)
+          return null
+        }
+      })(),
 
       // Eave edge breakdown (individual edge lengths)
       // Include length_ft alias for backward compat with frontend
@@ -1211,6 +1233,79 @@ reportsRoutes.post('/solar-panel-layout', async (c) => {
     console.error(`[SolarPanelLayout] Error: ${err.message}`)
     return c.json({ error: 'Panel layout failed', details: err.message }, 500)
   }
+})
+
+// ============================================================
+// GET /api/reports/:id/bom[.csv|.xml] — Detailed Bill of Materials
+//
+// Reads the stored trace measurement (or falls back to the report's
+// materials summary) and produces an itemized BOM suitable for
+// insurance estimating and contractor pricing. Supports JSON,
+// AccuLynx CSV, and Xactimate XML output formats.
+// ============================================================
+async function buildBomForOrder(env: any, orderId: number): Promise<DetailedMaterialBOM | null> {
+  const order: any = await env.DB.prepare(
+    'SELECT id, property_address, trace_measurement_json FROM orders WHERE id = ?'
+  ).bind(orderId).first()
+  if (!order) return null
+  if (!order.trace_measurement_json) return null
+  let tm: any
+  try {
+    tm = typeof order.trace_measurement_json === 'string'
+      ? JSON.parse(order.trace_measurement_json)
+      : order.trace_measurement_json
+  } catch {
+    return null
+  }
+  const km = tm.key_measurements || {}
+  const lm = tm.linear_measurements || {}
+  if (!km.total_roof_area_sloped_ft2) return null
+  return estimateMaterials({
+    address:          order.property_address || '',
+    net_area_sqft:    km.total_roof_area_sloped_ft2,
+    waste_factor_pct: km.waste_factor_pct ?? 15,
+    total_eave_lf:    lm.eaves_total_ft || 0,
+    total_ridge_lf:   lm.ridges_total_ft || 0,
+    total_hip_lf:     lm.hips_total_ft || 0,
+    total_valley_lf:  lm.valleys_total_ft || 0,
+    total_rake_lf:    lm.rakes_total_ft || 0,
+    pitch_rise:       Math.round((km.dominant_pitch_rise ?? 5) * 10) / 10 || 5,
+    complexity:       'medium',
+  })
+}
+
+reportsRoutes.get('/:id/bom', async (c) => {
+  const id = parseInt(c.req.param('id'))
+  if (isNaN(id)) return c.json({ error: 'Invalid order ID' }, 400)
+  const bom = await buildBomForOrder(c.env, id)
+  if (!bom) return c.json({ error: 'No trace measurements available for this order.' }, 404)
+  return c.json({ success: true, bom })
+})
+
+reportsRoutes.get('/:id/bom.csv', async (c) => {
+  const id = parseInt(c.req.param('id'))
+  if (isNaN(id)) return c.text('Invalid order ID', 400)
+  const bom = await buildBomForOrder(c.env, id)
+  if (!bom) return c.text('No trace measurements available for this order.', 404)
+  return new Response(generateAccuLynxCSV(bom), {
+    headers: {
+      'Content-Type': 'text/csv; charset=utf-8',
+      'Content-Disposition': `attachment; filename="bom-order-${id}.csv"`,
+    },
+  })
+})
+
+reportsRoutes.get('/:id/bom.xml', async (c) => {
+  const id = parseInt(c.req.param('id'))
+  if (isNaN(id)) return c.text('Invalid order ID', 400)
+  const bom = await buildBomForOrder(c.env, id)
+  if (!bom) return c.text('No trace measurements available for this order.', 404)
+  return new Response(generateXactimateXML(bom), {
+    headers: {
+      'Content-Type': 'application/xml; charset=utf-8',
+      'Content-Disposition': `attachment; filename="bom-order-${id}.xml"`,
+    },
+  })
 })
 
 // ============================================================

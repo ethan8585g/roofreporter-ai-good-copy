@@ -20,6 +20,9 @@ const orderState = {
   marker: null,
   map: null,
   pinPlaced: false,
+  // Optional CRM customer attachment
+  attachedCrmCustomerId: null,
+  attachedCrmCustomerName: '',
   // Tracing state
   traceMap: null,
   traceMode: 'eaves',
@@ -780,6 +783,31 @@ function renderReviewStep(root, progressBar) {
               <div class="flex items-start gap-2"><i class="fas fa-check text-green-500 mt-0.5"></i><span class="text-gray-300">Pitch & slope analysis per plane</span></div>
               <div class="flex items-start gap-2"><i class="fas fa-check text-green-500 mt-0.5"></i><span class="text-gray-300">Waste calculations & advisory notes</span></div>
             </div>
+          </div>
+
+          <!-- Attach to CRM customer (optional) -->
+          <div class="bg-[#0A0A0A] rounded-xl border border-white/10 p-5">
+            <h4 class="font-semibold text-gray-300 mb-1 flex items-center">
+              <i class="fas fa-user-tag text-blue-400 mr-2"></i>Attach to Customer
+            </h4>
+            <p class="text-xs text-gray-500 mb-3">Optional — link this report to a customer in your CRM so it appears on their profile.</p>
+            ${orderState.attachedCrmCustomerId ? `
+              <div class="flex items-center justify-between bg-emerald-500/10 border border-emerald-500/30 rounded-lg px-3 py-2">
+                <div class="text-sm text-emerald-300">
+                  <i class="fas fa-check-circle mr-1"></i>
+                  <span class="font-semibold">${(orderState.attachedCrmCustomerName || 'Customer').replace(/</g,'&lt;')}</span>
+                </div>
+                <button onclick="clearAttachedCustomer()" class="text-xs text-gray-400 hover:text-red-400"><i class="fas fa-times mr-1"></i>Remove</button>
+              </div>
+            ` : `
+              <div class="relative">
+                <input type="text" id="crmCustomerSearch" oninput="searchCrmCustomers(this.value)"
+                  placeholder="Search by name, email, phone, or address…"
+                  class="w-full px-4 py-2.5 bg-[#111111] border border-white/15 rounded-lg text-sm text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+                <div id="crmCustomerResults" class="hidden absolute z-20 mt-1 w-full bg-[#111111] border border-white/15 rounded-lg shadow-xl max-h-64 overflow-auto"></div>
+              </div>
+              <p class="text-xs text-gray-500 mt-2">Leave blank to order the report without attaching it to a customer.</p>
+            `}
           </div>
 
           <!-- Price per square input (optional) -->
@@ -1715,6 +1743,7 @@ function buildOrderPayload() {
     roof_trace_json: orderState.roofTraceJson ? JSON.stringify(orderState.roofTraceJson) : null,
     price_per_bundle: orderState.pricePerBundle || null,
     house_sqft: orderState.houseSqft || null,
+    crm_customer_id: orderState.attachedCrmCustomerId || null,
   };
   // Attach pre-calculated measurement data so the report engine can use it
   if (orderState.measurementResult) {
@@ -2080,4 +2109,52 @@ async function buyPackage(pkgId) {
   } catch (e) {
     showMsg('error', 'Network error. Please check your connection and try again.');
   }
+}
+
+// ============================================================
+// CRM CUSTOMER ATTACHMENT (optional)
+// ============================================================
+let _crmSearchTimer = null;
+function searchCrmCustomers(q) {
+  const resultsEl = document.getElementById('crmCustomerResults');
+  if (!resultsEl) return;
+  const query = (q || '').trim();
+  if (query.length < 2) {
+    resultsEl.classList.add('hidden');
+    resultsEl.innerHTML = '';
+    return;
+  }
+  clearTimeout(_crmSearchTimer);
+  _crmSearchTimer = setTimeout(async () => {
+    try {
+      const res = await fetch('/api/crm/customers?search=' + encodeURIComponent(query), { headers: authHeaders() });
+      const data = await res.json();
+      const list = (data.customers || []).slice(0, 8);
+      if (!list.length) {
+        resultsEl.innerHTML = '<div class="px-3 py-2 text-xs text-gray-500">No matches. Leave blank to skip.</div>';
+      } else {
+        resultsEl.innerHTML = list.map(c => {
+          const name = (c.name || 'Unnamed').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+          const meta = [c.email, c.phone, c.address].filter(Boolean).join(' · ').replace(/</g,'&lt;');
+          return '<button type="button" onclick="attachCrmCustomer(' + c.id + ', \'' + name.replace(/'/g,"\\'") + '\')" class="w-full text-left px-3 py-2 hover:bg-white/5 border-b border-white/5"><div class="text-sm text-gray-100 font-medium">' + name + '</div><div class="text-xs text-gray-500">' + meta + '</div></button>';
+        }).join('');
+      }
+      resultsEl.classList.remove('hidden');
+    } catch (e) {
+      resultsEl.innerHTML = '<div class="px-3 py-2 text-xs text-red-400">Search failed.</div>';
+      resultsEl.classList.remove('hidden');
+    }
+  }, 200);
+}
+
+function attachCrmCustomer(id, name) {
+  orderState.attachedCrmCustomerId = id;
+  orderState.attachedCrmCustomerName = name;
+  renderOrderPage();
+}
+
+function clearAttachedCustomer() {
+  orderState.attachedCrmCustomerId = null;
+  orderState.attachedCrmCustomerName = '';
+  renderOrderPage();
 }
