@@ -137,6 +137,9 @@ export type Bindings = {
   // Format: "ca-pub-XXXXXXXXXXXXXXXXX"
   ADSENSE_PUBLISHER_ID: string     // Publisher ID from AdSense dashboard
 
+  // JWT signing secret — used for admin sessions and signed PDF URLs
+  JWT_SECRET: string
+
   // ── Push Notifications — FCM + Web Push VAPID ─────────────
   // FCM: Firebase service account for sending push via FCM HTTP v1 API
   // Uses same GCP auth pattern as GCP_SERVICE_ACCOUNT_KEY with firebase.messaging scope

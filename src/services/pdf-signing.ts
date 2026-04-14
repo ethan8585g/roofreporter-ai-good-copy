@@ -60,12 +60,14 @@ export async function signPdfUrl(
  * Returns the jobId if valid, null if expired or tampered.
  */
 export async function verifyPdfUrl(
-  secret: string,
+  secret: string | undefined,
   jobId: string,
   exp: string | null,
   sig: string | null
 ): Promise<boolean> {
-  if (!exp || !sig) return false
+  if (!secret || !exp || !sig) return false
+  // sig must be a valid hex string of exactly 64 chars (32 bytes = SHA-256 output)
+  if (!/^[0-9a-f]{64}$/i.test(sig)) return false
 
   const expiry = parseInt(exp, 10)
   if (isNaN(expiry)) return false
@@ -73,15 +75,19 @@ export async function verifyPdfUrl(
   // Reject expired
   if (Math.floor(Date.now() / 1000) > expiry) return false
 
-  const message = buildMessage(jobId, expiry)
-  const key = await importHmacKey(secret)
+  try {
+    const message = buildMessage(jobId, expiry)
+    const key = await importHmacKey(secret)
 
-  // Decode hex sig back to buffer for constant-time verify
-  const sigBytes = new Uint8Array(sig.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)))
-  const valid = await crypto.subtle.verify(
-    'HMAC', key,
-    sigBytes,
-    new TextEncoder().encode(message)
-  )
-  return valid
+    // Decode hex sig back to buffer for constant-time verify
+    const sigBytes = new Uint8Array(sig.match(/.{2}/g)!.map(byte => parseInt(byte, 16)))
+    const valid = await crypto.subtle.verify(
+      'HMAC', key,
+      sigBytes,
+      new TextEncoder().encode(message)
+    )
+    return valid
+  } catch {
+    return false
+  }
 }
