@@ -185,7 +185,15 @@ gtag('get','${ga4Id}','client_id',function(cid){
 })();
 </script>` : ''
       
-      const injected = body.replace('</body>', `${ga4Script}
+      const googleAdsScript = `
+<!-- Google Ads (AW-18080319225) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=AW-18080319225"></script>
+<script>
+window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'AW-18080319225');
+</script>`
+      const injected = body.replace('</body>', `${ga4Script}${googleAdsScript}
 <script src="/static/toast.js"></script>
 <script src="/static/tracker.js" defer></script>
 </body>`)
