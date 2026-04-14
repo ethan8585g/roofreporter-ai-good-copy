@@ -700,6 +700,9 @@ app.get('/sitemap-core.xml', (c) => {
     { loc: '/features/crm', priority: '0.9', changefreq: 'monthly' },
     { loc: '/features/ai-secretary', priority: '0.9', changefreq: 'monthly' },
     { loc: '/features/virtual-try-on', priority: '0.8', changefreq: 'monthly' },
+    // Standalone info pages
+    { loc: '/how-it-works', priority: '0.7', changefreq: 'monthly' },
+    { loc: '/faq', priority: '0.7', changefreq: 'monthly' },
     // How-to guides
     { loc: '/guides', priority: '0.8', changefreq: 'monthly' },
     { loc: '/guides/order-measurement-report', priority: '0.8', changefreq: 'monthly' },
@@ -1115,6 +1118,9 @@ app.get('/features/virtual-try-on', (c) => { return c.html(getFeatureHubPageHTML
 
 // How-To Guides — SSR blog-style guides
 app.get('/guides', (c) => c.html(getGuidesIndexHTML()))
+app.get('/tutorials', (c) => c.redirect('/guides', 301))
+app.get('/how-it-works', (c) => c.html(getHowItWorksPageHTML()))
+app.get('/faq', (c) => c.html(getFAQPageHTML()))
 app.get('/guides/:slug', (c) => {
   const html = getGuideHTML(c.req.param('slug'))
   if (!html) return c.notFound()
@@ -4889,8 +4895,8 @@ function getLandingPageHTML(latestPosts: any[] = []) {
 
       <!-- Desktop nav -->
       <div class="hidden md:flex items-center gap-7">
-        <a href="#how-it-works" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">How It Works</a>
-        <a href="#tutorials" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">Tutorials</a>
+        <a href="/how-it-works" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">How It Works</a>
+        <a href="/guides" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">Tutorials</a>
         <!-- Features dropdown -->
         <div class="relative group/nav">
           <button class="flex items-center gap-1 text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">Features <i class="fas fa-chevron-down text-[10px] group-hover/nav:rotate-180 transition-transform duration-200"></i></button>
@@ -4903,10 +4909,10 @@ function getLandingPageHTML(latestPosts: any[] = []) {
           </div>
         </div>
         <a href="/condo-reserve-fund-cheat-sheet" class="text-[#00FF88] hover:text-white text-sm font-semibold transition-colors duration-200">Commercial / Condo Boards</a>
-        <a href="#pricing" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">Pricing</a>
+        <a href="/pricing" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">Pricing</a>
         <a href="/blog" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">Blog</a>
         <a href="/coverage" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">Coverage</a>
-        <a href="#faq" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">FAQ</a>
+        <a href="/faq" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">FAQ</a>
         <a href="/customer/login" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold py-2.5 px-6 rounded-xl text-sm transition-all duration-200 hover:scale-105 shadow-lg shadow-[#00FF88]/20">
           <i class="fas fa-rocket mr-1.5"></i>Start Free / Login
         </a>
@@ -4926,18 +4932,18 @@ function getLandingPageHTML(latestPosts: any[] = []) {
     <!-- Mobile menu -->
     <div id="mobile-menu" class="hidden md:hidden bg-[#0A0A0A]/98 backdrop-blur-2xl border-t border-white/5">
       <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col gap-1">
-        <a href="#how-it-works" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')">How It Works</a>
-        <a href="#tutorials" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')">Tutorials</a>
+        <a href="/how-it-works" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')">How It Works</a>
+        <a href="/guides" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')">Tutorials</a>
         <a href="/features/measurements" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')"><i class="fas fa-satellite text-[#00FF88] mr-2 text-xs"></i>Measurements</a>
         <a href="/features/crm" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')"><i class="fas fa-users text-[#22d3ee] mr-2 text-xs"></i>CRM</a>
         <a href="/features/ai-secretary" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')"><i class="fas fa-headset text-[#f59e0b] mr-2 text-xs"></i>AI Secretary</a>
         <a href="/services" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')">All Features</a>
         <a href="/condo-reserve-fund-cheat-sheet" class="text-[#00FF88] hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-semibold" onclick="document.getElementById('mobile-menu').classList.add('hidden')"><i class="fas fa-building mr-2 text-xs"></i>Commercial / Condo Boards</a>
-        <a href="#pricing" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')">Pricing</a>
+        <a href="/pricing" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')">Pricing</a>
         <a href="/blog" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')">Blog</a>
         <a href="/coverage" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')">Coverage</a>
         <a href="/lander" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')">Get Started</a>
-        <a href="#faq" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')">FAQ</a>
+        <a href="/faq" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')">FAQ</a>
         <a href="/customer/login" class="bg-[#00FF88] text-[#0A0A0A] font-bold py-3 px-6 rounded-xl text-sm text-center mt-3 shadow-lg"><i class="fas fa-rocket mr-1.5"></i>Start Free &mdash; No Demo Needed</a>
       </div>
     </div>
@@ -5535,7 +5541,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
             <li><a href="/features/ai-secretary" class="hover:text-[#00FF88] transition-colors">AI Roofer Secretary</a></li>
             <li><a href="/features/crm" class="hover:text-[#00FF88] transition-colors">CRM &amp; Invoicing</a></li>
             <li><a href="/features/virtual-try-on" class="hover:text-[#00FF88] transition-colors">Virtual Roof Try-On</a></li>
-            <li><a href="#pricing" class="hover:text-[#00FF88] transition-colors">Pricing</a></li>
+            <li><a href="/pricing" class="hover:text-[#00FF88] transition-colors">Pricing</a></li>
           </ul>
         </div>
         <div>
@@ -5543,9 +5549,9 @@ function getLandingPageHTML(latestPosts: any[] = []) {
           <ul class="space-y-2.5 text-sm">
             <li><a href="/blog" class="hover:text-[#00FF88] transition-colors">Blog</a></li>
             <li><a href="/guides" class="hover:text-[#00FF88] transition-colors">How-To Guides</a></li>
-            <li><a href="#tutorials" class="hover:text-[#00FF88] transition-colors">Tutorials</a></li>
-            <li><a href="#how-it-works" class="hover:text-[#00FF88] transition-colors">How It Works</a></li>
-            <li><a href="#faq" class="hover:text-[#00FF88] transition-colors">FAQ</a></li>
+            <li><a href="/guides" class="hover:text-[#00FF88] transition-colors">Tutorials</a></li>
+            <li><a href="/how-it-works" class="hover:text-[#00FF88] transition-colors">How It Works</a></li>
+            <li><a href="/faq" class="hover:text-[#00FF88] transition-colors">FAQ</a></li>
             <li><a href="/lander" class="hover:text-[#00FF88] transition-colors">Get Started Guide</a></li>
             <li><a href="mailto:sales@roofmanager.ca" class="hover:text-[#00FF88] transition-colors">Contact</a></li>
             <li><a href="/privacy" class="hover:text-[#00FF88] transition-colors">Privacy Policy</a></li>
@@ -6874,14 +6880,18 @@ const featureHubConfig: Record<string, {
 // How-To Guides — static SSR guides under /guides/:slug
 // ─────────────────────────────────────────────────────────────
 type GuideStep = { title: string; body: string; tip?: string }
+type GuideFAQ = { q: string; a: string }
 type GuideConfig = {
   slug: string
   title: string
   subtitle: string
   readTime: number
   icon: string
+  tldr: string
   intro: string
+  videoId?: string
   steps: GuideStep[]
+  faqs: GuideFAQ[]
   ctaLabel: string
   ctaHref: string
   closing: string
@@ -6894,8 +6904,16 @@ const guidesConfig: Record<string, GuideConfig> = {
     subtitle: 'Get a surveyor-grade PDF for any roof in under 60 seconds.',
     readTime: 4,
     icon: 'fa-ruler-combined',
+    tldr: 'To order a roof measurement report on Roof Manager: sign in, click "Order Report", type the address, confirm the satellite trace, and place the order. A branded PDF with total area, eave/ridge/hip/valley lengths, pitch, and material takeoff arrives in about 45 seconds. First 3 reports are free; after that, pricing starts at $7 per report.',
     intro: 'Ordering a measurement report through Roof Manager is the fastest way to put an accurate square-count, edge list, and material BOM in front of your crew or your customer. You never climb, you never guess, and every report is branded with your logo and delivered as a PDF you can forward straight from your phone.',
     videoId: 'u3Xa0FaviGY',
+    faqs: [
+      { q: 'How long does it take to get a roof measurement report?', a: 'Reports are delivered in about 45 seconds after you place the order. The PDF appears in your dashboard and is emailed to you simultaneously.' },
+      { q: 'How accurate are Roof Manager measurement reports?', a: 'Reports are surveyor-grade, typically within 1-2% of hand-measured values. We use Google Solar API data cross-checked against our own geodesic measurement engine that traces eaves, ridges, hips, and valleys directly from satellite imagery.' },
+      { q: 'How much does a roof measurement report cost?', a: 'Your first 3 reports are free with no credit card required. After that, pay-as-you-go pricing starts at $7 per report — significantly cheaper than EagleView or Hover.' },
+      { q: 'Can I use Roof Manager reports for insurance claims?', a: 'Yes. Every report is a branded PDF with total sloped area, projected area, edge-by-edge lengths, pitch, and waste factor — the exact data adjusters expect.' },
+      { q: 'Do I need to climb the roof?', a: 'No. All measurements come from satellite imagery and elevation data. You never climb, and you never guess.' },
+    ],
     steps: [
       { title: 'Sign in to your Roof Manager account', body: 'Head to <a href="/customer/login" class="text-[#00FF88] hover:underline">roofmanager.ca/customer/login</a>. New accounts get 3 free reports — no credit card required. If your company already has an account, ask your admin to invite you so your reports sit in one shared dashboard.' },
       { title: 'Click "Order Report" and enter the address', body: 'Type the street address. Google\'s autocomplete locks in the correct parcel. Double-check the satellite thumbnail that appears — if the wrong building is highlighted (common on corner lots or multi-unit sites), drag the pin onto the correct structure.' },
@@ -6915,6 +6933,14 @@ const guidesConfig: Record<string, GuideConfig> = {
     subtitle: 'Turn door-knocking into a closed-loop sales machine with live territory maps, instant measurements, and CRM hand-off.',
     readTime: 6,
     icon: 'fa-map-marked-alt',
+    tldr: 'To run door-to-door roofing sales with Roof Manager: draw a territory on the map, assign reps, knock and log each door with one tap (Not Home, Follow-Up, Appointment, Sold), measure any roof on the porch in under 60 seconds, and book inspections directly onto your calendar. Reps who measure on the porch book 2.4× more inspections than reps who say "I\'ll email you later".',
+    faqs: [
+      { q: 'What is the best app for door-to-door roofing sales?', a: 'Roof Manager\'s D2D module combines territory mapping, instant satellite measurements, disposition logging, and calendar booking in one mobile app — purpose-built for roofers rather than a generic CRM.' },
+      { q: 'Can I measure a roof from a homeowner\'s porch?', a: 'Yes. Tap "Measure this roof" on your phone and you get total area, pitch, and a rough material list in under 60 seconds, straight from satellite imagery. No drone, no ladder.' },
+      { q: 'How do I stop reps from double-knocking the same house?', a: 'Every door pin changes colour based on its disposition. Reps see in real time which houses have already been knocked by teammates, so no street gets hit twice.' },
+      { q: 'Can Roof Manager overlay hail storm data on the map?', a: 'Yes. Import hail swaths from your weather feed or the Storm Scout module and only knock confirmed impact zones — the highest-converting leads in roofing.' },
+      { q: 'How does the hand-off from canvasser to closer work?', a: 'When a rep books an appointment, a Pipeline card is created automatically with the address, roof measurements, photos, disposition history, and notes. The closer walks up already fully briefed.' },
+    ],
     intro: 'Door-to-door is still the highest-ROI channel in roofing — if (and only if) reps are knocking the right streets, logging every conversation, and handing warm leads to ops without paper slipping through the cracks. Roof Manager\'s D2D module gives every rep a live map, measurement on tap, and a one-tap path from "Not Home" to signed proposal.',
     steps: [
       { title: 'Define your territory', body: 'Open the D2D dashboard and draw a polygon around the neighbourhood you\'re canvassing, or select by postal code. Assign reps to specific territories so no one overlaps and every street gets covered.' },
@@ -6935,6 +6961,14 @@ const guidesConfig: Record<string, GuideConfig> = {
     subtitle: 'Turn a measurement report into a branded, signable proposal in under 5 minutes.',
     readTime: 5,
     icon: 'fa-file-signature',
+    tldr: 'To build a winning roofing proposal in Roof Manager: open the measurement report, click "Create Proposal", pick a template (residential asphalt, metal, flat commercial, or repair), set your per-square price, add upsells or good-better-best tiers, attach photos, and send for e-signature. Homeowners can read, ask questions, and sign from their phone — typical turnaround is under 5 minutes from inspection to signed contract.',
+    faqs: [
+      { q: 'How long does it take to build a roofing proposal?', a: 'Under 5 minutes for an experienced user. Measurements and material quantities flow in from the report automatically, and pricing multiplies against your saved presets.' },
+      { q: 'Can homeowners sign the proposal on their phone?', a: 'Yes. Every proposal is sent as a live link with e-signature built in. Homeowners read, ask questions, and sign from any device. You get a push notification the moment they open it and again when they sign.' },
+      { q: 'Does Roof Manager support good-better-best proposal tiers?', a: 'Yes. Add three side-by-side tiers in one click. Homeowners pick the middle option about 60% of the time — you increase average ticket without scaring anyone off.' },
+      { q: 'Can I include photos and insurance certificates in the proposal?', a: 'Yes. Drag in drone photos, the measurement PDF, your insurance certificate, and Google reviews. Proposals with photos close at nearly 2× the rate of text-only proposals.' },
+      { q: 'What happens after a proposal is signed?', a: 'A job card is created in your Pipeline automatically, the deposit invoice is scheduled, and your ops manager is notified. No manual hand-off needed.' },
+    ],
     intro: 'The proposal is where the sale is won or lost. A clean, itemised, professionally branded document closes at 2–3× the rate of a hand-scribbled quote on the back of a business card. Roof Manager\'s proposal builder pulls measurements, materials, and pricing straight from the report so you can go from inspection to signature in one sitting.',
     steps: [
       { title: 'Start from the measurement report', body: 'In your dashboard, open the report for the job and click "Create Proposal". Measurements, pitch, and material quantities flow in automatically — no re-typing, no arithmetic errors.' },
@@ -6955,6 +6989,14 @@ const guidesConfig: Record<string, GuideConfig> = {
     subtitle: 'Invoice the deposit, the progress draw, and the final payment — all from your phone.',
     readTime: 4,
     icon: 'fa-file-invoice-dollar',
+    tldr: 'To send a roofing invoice in Roof Manager: open the job, choose the invoice type (deposit, progress, or final), add any change-order line items, toggle the payment methods (Square card or e-transfer), and tap "Send". Customers get a branded email with a one-click payment link. You get notified the moment payment lands and the job card updates automatically.',
+    faqs: [
+      { q: 'What payment methods can I accept through Roof Manager invoices?', a: 'Square card payments and direct e-transfer. About 18% of homeowners pick e-transfer and 12% prefer credit card — leaving both on maximises conversion.' },
+      { q: 'Can I send deposit, progress, and final invoices separately?', a: 'Yes. Every job supports a three-stage payment schedule: deposit (10–30% at signing), progress (e.g. at tear-off), and final (at completion). Amounts pre-fill from the signed proposal.' },
+      { q: 'Does Roof Manager automatically chase overdue invoices?', a: 'Yes. Polite reminder emails go out automatically on day 7, 14, and 30 after the due date. You can turn automated reminders off per invoice or globally.' },
+      { q: 'Can I send a roofing invoice by text message?', a: 'Yes. Every invoice can be sent by email, SMS, or both — with the same one-click payment link.' },
+      { q: 'How is sales tax calculated on invoices?', a: 'Tax is auto-calculated based on the job\'s province or state. You can override it per line item for tax-exempt or mixed-rate jobs.' },
+    ],
     intro: 'Most roofing companies lose 2–5% of revenue to invoices that never get sent, get sent late, or get sent without the right payment link. Roof Manager ties invoicing directly to the job card so the only thing between you and getting paid is tapping "Send".',
     steps: [
       { title: 'Open the job', body: 'From the pipeline, open the job you want to invoice. If the job came from a signed proposal, the contract total and payment schedule are already on the card.' },
@@ -6974,6 +7016,15 @@ const guidesConfig: Record<string, GuideConfig> = {
     subtitle: 'A 24/7 AI phone receptionist that answers every call, books appointments, and hands you qualified leads while you\'re on the roof.',
     readTime: 5,
     icon: 'fa-headset',
+    tldr: 'To set up the Roof Manager AI Secretary: subscribe ($149/month, unlimited calls), pick or port a phone number, train the AI on your services and pricing via a short questionnaire, connect Google or Outlook Calendar, pick a voice, and set escalation rules. Every inbound call is answered in 2 rings, 24/7 — the AI qualifies callers, books inspections on your calendar, and texts you a summary before the caller hangs up.',
+    faqs: [
+      { q: 'How much does the Roof Manager AI Secretary cost?', a: '$149 per month for unlimited answered calls. No per-minute charges, no setup fees, no contracts.' },
+      { q: 'Can the AI Secretary book appointments on my calendar?', a: 'Yes. It connects directly to Google Calendar or Outlook. Set your inspection windows and the AI only offers slots you\'re actually available for.' },
+      { q: 'Does the AI sound like a robot?', a: 'No. You can choose from 6 natural-sounding voices (male/female, various accents). Most callers cannot tell they are speaking to an AI.' },
+      { q: 'Can I transfer urgent calls to my cell phone?', a: 'Yes. Set escalation rules like "transfer if caller says emergency", "transfer if caller mentions insurance claim", or "text me immediately if estimate > $20k". Everything else, the AI handles.' },
+      { q: 'Can I keep my existing business phone number?', a: 'Yes. Porting takes 5–7 business days and your old number stays live the whole time. You can also get a brand-new local number in any area code for free.' },
+      { q: 'How many calls do roofers miss on average?', a: 'Industry data shows roofing companies miss about 1 in 3 inbound calls — and a missed call almost always becomes a lead for the next company on Google. The AI Secretary eliminates that leak.' },
+    ],
     intro: 'The average roofing company misses 1 in 3 inbound calls — and a missed call is a missed lead that usually goes straight to the next company on Google. The AI Secretary answers every call, speaks naturally, asks qualifying questions, books inspections on your calendar, and texts you a summary before the caller has even hung up.',
     steps: [
       { title: 'Subscribe to AI Secretary', body: 'Open <a href="/features/ai-secretary" class="text-[#00FF88] hover:underline">the AI Secretary page</a> and start your plan. $149/month for unlimited answered calls. No per-minute charges, no setup fees, no contracts.' },
@@ -7018,6 +7069,23 @@ function getGuideHTML(slug: string): string | null {
     totalTime: `PT${g.readTime}M`,
     step: g.steps.map((s, i) => ({ '@type': 'HowToStep', position: i + 1, name: s.title, text: s.body.replace(/<[^>]+>/g, '') })),
   })
+  const faqSchema = g.faqs && g.faqs.length ? JSON.stringify({
+    '@context': 'https://schema.org', '@type': 'FAQPage',
+    mainEntity: g.faqs.map(f => ({
+      '@type': 'Question', name: f.q,
+      acceptedAnswer: { '@type': 'Answer', text: f.a },
+    })),
+  }) : null
+  const videoSchema = g.videoId ? JSON.stringify({
+    '@context': 'https://schema.org', '@type': 'VideoObject',
+    name: g.title,
+    description: g.tldr || g.subtitle,
+    thumbnailUrl: [`https://i.ytimg.com/vi/${g.videoId}/maxresdefault.jpg`],
+    uploadDate: today,
+    contentUrl: `https://www.youtube.com/watch?v=${g.videoId}`,
+    embedUrl: `https://www.youtube.com/embed/${g.videoId}`,
+    publisher: { '@type': 'Organization', name: 'Roof Manager', logo: { '@type': 'ImageObject', url: `${base}/static/logo.png` } },
+  }) : null
   const related = guidesOrder.filter(s => s !== g.slug).slice(0, 3).map(s => guidesConfig[s])
   const stepsHTML = g.steps.map((s, i) => `
     <div class="bg-[#111111] border border-white/10 rounded-2xl p-6 md:p-8 mb-5">
@@ -7055,6 +7123,8 @@ function getGuideHTML(slug: string): string | null {
   <meta name="twitter:card" content="summary_large_image">
   <script type="application/ld+json">${breadcrumbSchema}</script>
   <script type="application/ld+json">${howToSchema}</script>
+  ${faqSchema ? `<script type="application/ld+json">${faqSchema}</script>` : ''}
+  ${videoSchema ? `<script type="application/ld+json">${videoSchema}</script>` : ''}
 </head>
 <body style="background:#0A0A0A">
   <nav class="sticky top-0 z-50 backdrop-blur-2xl border-b border-white/5" style="background:rgba(10,10,10,0.95)">
@@ -7091,10 +7161,19 @@ function getGuideHTML(slug: string): string | null {
       <span class="flex items-center gap-2"><i class="far fa-clock"></i> ${g.readTime} min read</span>
       <span class="flex items-center gap-2"><i class="far fa-calendar"></i> Updated ${today}</span>
     </div>
+    ${g.tldr ? `
+    <div class="mb-10 bg-gradient-to-br from-[#00FF88]/10 to-transparent border border-[#00FF88]/25 rounded-2xl p-6 md:p-7">
+      <div class="flex items-center gap-2 mb-3">
+        <i class="fas fa-bolt text-[#00FF88]"></i>
+        <span class="text-[#00FF88] text-xs font-bold uppercase tracking-widest">Quick Answer</span>
+      </div>
+      <p class="text-gray-200 text-base md:text-lg leading-relaxed">${g.tldr}</p>
+    </div>
+    ` : ''}
     <div class="mb-10">
       <p class="text-gray-300 text-lg leading-relaxed">${g.intro}</p>
     </div>
-    ${(g as any).videoId ? `
+    ${g.videoId ? `
     <div class="mb-10">
       <div class="relative rounded-2xl overflow-hidden border border-white/10 shadow-2xl" style="padding-bottom:56.25%;height:0;">
         <iframe class="absolute top-0 left-0 w-full h-full" src="https://www.youtube.com/embed/${(g as any).videoId}" title="${g.title}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
@@ -7103,6 +7182,18 @@ function getGuideHTML(slug: string): string | null {
     </div>
     ` : ''}
     ${stepsHTML}
+    ${g.faqs && g.faqs.length ? `
+    <section class="mt-14 pt-10 border-t border-white/5">
+      <h2 class="text-2xl md:text-3xl font-black text-white mb-6">Frequently Asked Questions</h2>
+      <div class="space-y-4">
+        ${g.faqs.map(f => `
+        <div class="bg-[#111111] border border-white/10 rounded-2xl p-6">
+          <h3 class="text-lg md:text-xl font-bold text-white mb-2 leading-snug">${f.q}</h3>
+          <p class="text-gray-400 leading-relaxed">${f.a}</p>
+        </div>`).join('')}
+      </div>
+    </section>
+    ` : ''}
     <div class="mt-12 bg-gradient-to-br from-[#00FF88]/10 to-transparent border border-[#00FF88]/30 rounded-2xl p-8 md:p-10 text-center">
       <h2 class="text-2xl md:text-3xl font-black text-white mb-3">Ready to get started?</h2>
       <p class="text-gray-400 mb-6 max-w-xl mx-auto">${g.closing}</p>
@@ -7123,6 +7214,172 @@ function getGuideHTML(slug: string): string | null {
         <a href="/blog" class="hover:text-[#00FF88] transition-colors">Blog</a>
         <a href="/pricing" class="hover:text-[#00FF88] transition-colors">Pricing</a>
         <a href="mailto:sales@roofmanager.ca" class="hover:text-[#00FF88] transition-colors">Contact</a>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>`
+}
+
+function getHowItWorksPageHTML(): string {
+  const base = 'https://www.roofmanager.ca'
+  const steps = [
+    { n: 1, color: '#00FF88', icon: 'fa-search-location', title: 'Enter the Address', desc: 'Search any address worldwide. Google Maps pinpoints the exact roof instantly — no ladders, no drones, no tape measures.' },
+    { n: 2, color: '#22d3ee', icon: 'fa-sliders-h', title: 'Configure Details', desc: 'Add homeowner info, company details, pitch overrides, and delivery options. Takes about 30 seconds.' },
+    { n: 3, color: '#a78bfa', icon: 'fa-credit-card', title: 'Order Instantly', desc: 'First 3 reports are FREE. After that just $8 CAD per report, or save with volume packs as low as $5.95/report.' },
+    { n: 4, color: '#00FF88', icon: 'fa-file-pdf', title: 'Get Your PDF', desc: 'Professional branded report with 3D area, pitch, edges, BOM, and solar data. Delivered in under 60 seconds.' },
+  ]
+  const howToSchema = JSON.stringify({
+    '@context': 'https://schema.org', '@type': 'HowTo',
+    name: 'How to Get a Roof Measurement Report',
+    description: 'Get a professional AI-powered roof measurement report from satellite imagery in 4 simple steps',
+    totalTime: 'PT1M',
+    step: steps.map(s => ({ '@type': 'HowToStep', position: s.n, name: s.title, text: s.desc })),
+  })
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags()}
+  <title>How It Works — Address to Roof Report in 4 Steps | Roof Manager</title>
+  <meta name="description" content="See how Roof Manager turns any address into a surveyor-grade roof measurement report in under 60 seconds. Four simple steps, zero ladders.">
+  <link rel="canonical" href="${base}/how-it-works">
+  <meta property="og:title" content="How Roof Manager Works">
+  <meta property="og:description" content="Address to report in 4 steps. No ladders, no drones.">
+  <meta property="og:url" content="${base}/how-it-works">
+  <script type="application/ld+json">${howToSchema}</script>
+</head>
+<body style="background:#0A0A0A">
+  <nav class="sticky top-0 z-50 backdrop-blur-2xl border-b border-white/5" style="background:rgba(10,10,10,0.95)">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+      <a href="/" class="flex items-center gap-3">
+        <img src="/static/logo.png" alt="Roof Manager" class="w-9 h-9 rounded-xl object-cover ring-1 ring-white/10" width="36" height="36">
+        <span class="text-white font-extrabold text-lg tracking-tight">Roof Manager</span>
+      </a>
+      <div class="flex items-center gap-5">
+        <a href="/services" class="text-gray-400 hover:text-white text-sm font-medium hidden sm:inline">Features</a>
+        <a href="/pricing" class="text-gray-400 hover:text-white text-sm font-medium hidden sm:inline">Pricing</a>
+        <a href="/guides" class="text-gray-400 hover:text-white text-sm font-medium hidden sm:inline">Tutorials</a>
+        <a href="/blog" class="text-gray-400 hover:text-white text-sm font-medium hidden sm:inline">Blog</a>
+        <a href="/customer/login" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold py-2 px-5 rounded-xl text-sm">Start Free</a>
+      </div>
+    </div>
+  </nav>
+  <section class="max-w-5xl mx-auto px-4 py-14 md:py-20">
+    <div class="inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-semibold mb-6" style="background:#22d3ee18;color:#22d3ee"><i class="fas fa-route"></i> Simple Process</div>
+    <h1 class="text-4xl md:text-6xl font-black text-white leading-tight tracking-tight mb-5">Address to Report in 4 Steps</h1>
+    <p class="text-lg text-gray-400 max-w-2xl mb-12">No ladders. No drones. No tape measures. Just enter an address and get a professional, branded PDF in under a minute.</p>
+    <div class="grid md:grid-cols-2 gap-5 mb-12">
+      ${steps.map(s => `
+        <div class="bg-[#111111] border border-white/10 rounded-2xl p-7 hover:border-white/20 transition-all">
+          <div class="flex items-center gap-4 mb-4">
+            <div class="w-14 h-14 rounded-2xl flex items-center justify-center border border-white/10" style="background:#0A0A0A;box-shadow:0 0 20px ${s.color}30">
+              <i class="fas ${s.icon} text-xl" style="color:${s.color}"></i>
+            </div>
+            <div>
+              <div class="text-[11px] font-bold uppercase tracking-widest" style="color:${s.color}">Step ${s.n}</div>
+              <h2 class="text-xl font-bold text-white">${s.title}</h2>
+            </div>
+          </div>
+          <p class="text-gray-400 leading-relaxed text-sm">${s.desc}</p>
+        </div>
+      `).join('')}
+    </div>
+    <div class="bg-gradient-to-br from-[#00FF88]/10 to-transparent border border-[#00FF88]/30 rounded-2xl p-8 md:p-10 text-center">
+      <h2 class="text-2xl md:text-3xl font-black text-white mb-3">Ready to try it?</h2>
+      <p class="text-gray-400 mb-6 max-w-xl mx-auto">First 3 reports are free — no credit card required. Set up in under 2 minutes.</p>
+      <a href="/signup" class="inline-flex items-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-3.5 px-8 rounded-xl text-base shadow-2xl transition-all hover:scale-[1.03]"><i class="fas fa-rocket"></i> Start Free</a>
+    </div>
+  </section>
+  <footer class="text-gray-400" style="background:#0A0A0A">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-10 border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-4">
+      <p class="text-sm text-gray-500">&copy; 2026 Roof Manager. All rights reserved.</p>
+      <div class="flex items-center gap-5 text-sm">
+        <a href="/guides" class="hover:text-[#00FF88]">Tutorials</a>
+        <a href="/faq" class="hover:text-[#00FF88]">FAQ</a>
+        <a href="/pricing" class="hover:text-[#00FF88]">Pricing</a>
+        <a href="/blog" class="hover:text-[#00FF88]">Blog</a>
+        <a href="mailto:sales@roofmanager.ca" class="hover:text-[#00FF88]">Contact</a>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>`
+}
+
+function getFAQPageHTML(): string {
+  const base = 'https://www.roofmanager.ca'
+  const faqs = [
+    { q: 'What data source do you use?', a: "We use Google's Solar API, which provides high-resolution satellite imagery with LiDAR-calibrated 3D building models. This is the same data Google uses for their solar panel recommendations — the most accurate publicly available roof geometry data." },
+    { q: 'How accurate are the measurements?', a: 'For buildings with HIGH quality imagery (most urban Canadian and US addresses), accuracy is typically within 2-5% of manual measurements. We display confidence scores and imagery quality on every report.' },
+    { q: 'How fast do I get my report?', a: 'Most reports are generated in under 60 seconds. You receive an email with a download link and can also access all reports from your dashboard.' },
+    { q: 'What is the AI Roofer Secretary?', a: 'A 24/7 AI phone answering service for your roofing business. It answers calls in a natural human voice, books appointments, qualifies leads, and sends you detailed call summaries. Currently $149/month.' },
+    { q: 'Is my data secure?', a: "Absolutely. Built on Cloudflare's edge network with 256-bit encryption, PCI DSS compliant payments, and Canadian PIPEDA privacy compliance." },
+    { q: 'Can I cancel anytime?', a: 'Of course. Pay-per-report has zero commitments. Add-on services like AI Secretary are month-to-month with no contracts.' },
+    { q: 'Do I need any equipment or a drone?', a: "No. Every measurement is generated from satellite imagery. All you need is a web browser and the property's address." },
+    { q: 'What countries do you cover?', a: 'We cover 40+ countries including the US, Canada, UK, Australia, most of Europe, and more. See the Coverage page for the full list.' },
+  ]
+  const faqSchema = JSON.stringify({
+    '@context': 'https://schema.org', '@type': 'FAQPage',
+    mainEntity: faqs.map(f => ({ '@type': 'Question', name: f.q, acceptedAnswer: { '@type': 'Answer', text: f.a } })),
+  })
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags()}
+  <title>Frequently Asked Questions | Roof Manager</title>
+  <meta name="description" content="Answers to the most common questions about Roof Manager — accuracy, data sources, pricing, security, and cancellation.">
+  <link rel="canonical" href="${base}/faq">
+  <meta property="og:title" content="Frequently Asked Questions | Roof Manager">
+  <meta property="og:description" content="Accuracy, pricing, security, cancellation — all the answers.">
+  <meta property="og:url" content="${base}/faq">
+  <script type="application/ld+json">${faqSchema}</script>
+</head>
+<body style="background:#0A0A0A">
+  <nav class="sticky top-0 z-50 backdrop-blur-2xl border-b border-white/5" style="background:rgba(10,10,10,0.95)">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+      <a href="/" class="flex items-center gap-3">
+        <img src="/static/logo.png" alt="Roof Manager" class="w-9 h-9 rounded-xl object-cover ring-1 ring-white/10" width="36" height="36">
+        <span class="text-white font-extrabold text-lg tracking-tight">Roof Manager</span>
+      </a>
+      <div class="flex items-center gap-5">
+        <a href="/how-it-works" class="text-gray-400 hover:text-white text-sm font-medium hidden sm:inline">How It Works</a>
+        <a href="/pricing" class="text-gray-400 hover:text-white text-sm font-medium hidden sm:inline">Pricing</a>
+        <a href="/guides" class="text-gray-400 hover:text-white text-sm font-medium hidden sm:inline">Tutorials</a>
+        <a href="/blog" class="text-gray-400 hover:text-white text-sm font-medium hidden sm:inline">Blog</a>
+        <a href="/customer/login" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold py-2 px-5 rounded-xl text-sm">Start Free</a>
+      </div>
+    </div>
+  </nav>
+  <section class="max-w-3xl mx-auto px-4 py-14 md:py-20">
+    <div class="inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-semibold mb-6" style="background:#ffffff14;color:#d1d5db"><i class="fas fa-question-circle"></i> FAQ</div>
+    <h1 class="text-4xl md:text-5xl font-black text-white leading-tight tracking-tight mb-5">Frequently Asked Questions</h1>
+    <p class="text-lg text-gray-400 max-w-2xl mb-10">Can't find what you're looking for? <a href="mailto:sales@roofmanager.ca" class="text-[#00FF88] hover:underline">Email us</a> and we'll get back to you fast.</p>
+    <div class="space-y-3">
+      ${faqs.map((f, i) => `
+        <details class="group bg-[#111111] rounded-xl border border-white/10 overflow-hidden" ${i === 0 ? 'open' : ''}>
+          <summary class="cursor-pointer list-none p-5 flex items-center justify-between hover:bg-white/5 transition-colors">
+            <span class="font-semibold text-gray-200 text-sm md:text-base pr-4">${f.q}</span>
+            <i class="fas fa-chevron-down text-gray-500 transition-transform duration-300 group-open:rotate-180 flex-shrink-0"></i>
+          </summary>
+          <div class="px-5 pb-5"><p class="text-sm text-gray-400 leading-relaxed">${f.a}</p></div>
+        </details>
+      `).join('')}
+    </div>
+    <div class="mt-12 bg-gradient-to-br from-[#00FF88]/10 to-transparent border border-[#00FF88]/30 rounded-2xl p-8 md:p-10 text-center">
+      <h2 class="text-2xl md:text-3xl font-black text-white mb-3">Ready to try Roof Manager?</h2>
+      <p class="text-gray-400 mb-6 max-w-xl mx-auto">3 free reports, no credit card, no contracts.</p>
+      <a href="/signup" class="inline-flex items-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-3.5 px-8 rounded-xl text-base shadow-2xl transition-all hover:scale-[1.03]"><i class="fas fa-rocket"></i> Start Free</a>
+    </div>
+  </section>
+  <footer class="text-gray-400" style="background:#0A0A0A">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-10 border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-4">
+      <p class="text-sm text-gray-500">&copy; 2026 Roof Manager. All rights reserved.</p>
+      <div class="flex items-center gap-5 text-sm">
+        <a href="/how-it-works" class="hover:text-[#00FF88]">How It Works</a>
+        <a href="/guides" class="hover:text-[#00FF88]">Tutorials</a>
+        <a href="/pricing" class="hover:text-[#00FF88]">Pricing</a>
+        <a href="/blog" class="hover:text-[#00FF88]">Blog</a>
+        <a href="mailto:sales@roofmanager.ca" class="hover:text-[#00FF88]">Contact</a>
       </div>
     </div>
   </footer>
