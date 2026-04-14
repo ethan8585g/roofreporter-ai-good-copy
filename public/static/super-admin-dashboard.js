@@ -5605,7 +5605,7 @@ function renderCustomerOnboardingView() {
     '<input type="checkbox" id="inv-25pack" class="rounded" value="25-pack"><div><div class="text-sm font-semibold text-gray-800">25 Report Credits</div><div class="text-xs text-gray-500">$175.00 ($7.00 each)</div></div>' +
     '</label>' +
     '<label class="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50 has-[:checked]:border-green-400 has-[:checked]:bg-green-50">' +
-    '<input type="checkbox" id="inv-100pack" class="rounded" value="100-pack"><div><div class="text-sm font-semibold text-gray-800">100 Report Credits</div><div class="text-xs text-gray-500">$475.00 ($4.75 each)</div></div>' +
+    '<input type="checkbox" id="inv-100pack" class="rounded" value="100-pack"><div><div class="text-sm font-semibold text-gray-800">100 Report Credits</div><div class="text-xs text-gray-500">$595.00 ($5.95 each)</div></div>' +
     '</label>' +
     '<label class="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50 has-[:checked]:border-green-400 has-[:checked]:bg-green-50">' +
     '<input type="checkbox" id="inv-annual" class="rounded" value="annual"><div><div class="text-sm font-semibold text-gray-800">Annual Membership <span class="ml-1 px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded text-[10px] font-bold">SAVE 2 MONTHS</span></div><div class="text-xs text-gray-500">$499.00/yr (equiv. $41.58/mo)</div></div>' +
@@ -5859,7 +5859,7 @@ window.saSendOnboardingInvoice = async function() {
   var items = [];
   if (document.getElementById('inv-10pack').checked)  items.push({ description: '10 Roof Report Credits',  quantity: 10,  unit_price: 5.50 });
   if (document.getElementById('inv-25pack').checked)  items.push({ description: '25 Roof Report Credits',  quantity: 25,  unit_price: 7.00 });
-  if (document.getElementById('inv-100pack').checked) items.push({ description: '100 Roof Report Credits', quantity: 100, unit_price: 4.75 });
+  if (document.getElementById('inv-100pack').checked) items.push({ description: '100 Roof Report Credits', quantity: 100, unit_price: 5.95 });
   if (document.getElementById('inv-annual').checked)  items.push({ description: 'Annual Membership — 12 months (2 months free)', quantity: 1, unit_price: 499.00 });
   var secEl = document.getElementById('inv-secretary-1mo');       if (secEl && secEl.checked) items.push({ description: 'AI Secretary — 1st Month Subscription', quantity: 1, unit_price: 149.00 });
   var msEl = document.getElementById('inv-mem-starter');           if (msEl && msEl.checked) items.push({ description: 'Monthly Membership — Starter (1 month)', quantity: 1, unit_price: 49.99 });
@@ -5958,7 +5958,7 @@ window.saPreviewOnboardingInvoice = async function() {
   var items = [];
   if (document.getElementById('inv-10pack').checked)  items.push({ description: '10 Roof Report Credits',  quantity: 10,  unit_price: 5.50 });
   if (document.getElementById('inv-25pack').checked)  items.push({ description: '25 Roof Report Credits',  quantity: 25,  unit_price: 7.00 });
-  if (document.getElementById('inv-100pack').checked) items.push({ description: '100 Roof Report Credits', quantity: 100, unit_price: 4.75 });
+  if (document.getElementById('inv-100pack').checked) items.push({ description: '100 Roof Report Credits', quantity: 100, unit_price: 5.95 });
   if (document.getElementById('inv-annual').checked)  items.push({ description: 'Annual Membership — 12 months (2 months free)', quantity: 1, unit_price: 499.00 });
   var secEl = document.getElementById('inv-secretary-1mo');       if (secEl && secEl.checked) items.push({ description: 'AI Secretary — 1st Month Subscription', quantity: 1, unit_price: 149.00 });
   var msEl = document.getElementById('inv-mem-starter');           if (msEl && msEl.checked) items.push({ description: 'Monthly Membership — Starter (1 month)', quantity: 1, unit_price: 49.99 });
