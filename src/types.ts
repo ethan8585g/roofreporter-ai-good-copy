@@ -24,6 +24,11 @@ export type Bindings = {
   GOOGLE_SOLAR_API_KEY: string
   GOOGLE_MAPS_API_KEY: string
 
+  // Storm Scout — R2 bucket for daily snapshots and shared secret for the
+  // external cron job (GitHub Actions) that triggers ingestion.
+  STORM_R2?: R2Bucket
+  STORM_INGEST_SECRET?: string
+
   // Google Vertex AI / Gemini API - for AI roof geometry analysis
   // GOOGLE_VERTEX_API_KEY: Standard Gemini REST API key (AIzaSy... format)
   //   Used with: https://generativelanguage.googleapis.com/v1beta/models/...

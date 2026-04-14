@@ -15,5 +15,14 @@
   // measurement validation, and report enhancement at the edge.
   "ai": {
     "binding": "AI"
-  }
+  },
+  // R2 bucket for Storm Scout daily snapshots (Phase 2.5).
+  // Bucket must exist in the account; create with:
+  //   wrangler r2 bucket create storm-scout-snapshots
+  "r2_buckets": [
+    {
+      "binding": "STORM_R2",
+      "bucket_name": "storm-scout-snapshots"
+    }
+  ]
 }

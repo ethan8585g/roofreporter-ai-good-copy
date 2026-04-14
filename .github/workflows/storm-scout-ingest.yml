@@ -1,0 +1,31 @@
+name: Storm Scout Nightly Ingest
+
+# Runs daily at 04:00 UTC — aggregates previous 24h of storm alerts +
+# hail reports into an R2-stored daily snapshot. Pages has no native
+# cron support, so GitHub Actions calls the authenticated ingest endpoint.
+on:
+  schedule:
+    - cron: '0 4 * * *'
+  workflow_dispatch:
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger storm ingest
+        env:
+          INGEST_SECRET: ${{ secrets.STORM_INGEST_SECRET }}
+        run: |
+          if [ -z "$INGEST_SECRET" ]; then
+            echo "::error::STORM_INGEST_SECRET not set in repo secrets"
+            exit 1
+          fi
+          response=$(curl -sS -w "\n%{http_code}" -X POST \
+            "https://www.roofmanager.ca/api/storm-scout/ingest" \
+            -H "X-Storm-Ingest-Secret: $INGEST_SECRET" \
+            -H "Content-Type: application/json")
+          body=$(echo "$response" | head -n -1)
+          status=$(echo "$response" | tail -n 1)
+          echo "HTTP $status"
+          echo "$body"
+          if [ "$status" != "200" ]; then exit 1; fi

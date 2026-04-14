@@ -19,6 +19,8 @@
   var filter = { hail: true, wind: true, tornado: true, thunderstorm: true, other: true };
   var layers = { alerts: true, heatmap: true };
   var daysBack = 7;
+  var historyMode = false;
+  var historyDate = null;
 
   function getToken() { return localStorage.getItem('rc_customer_token') || ''; }
   function authHeaders() { return { 'Authorization': 'Bearer ' + getToken(), 'Content-Type': 'application/json' }; }
@@ -96,6 +98,12 @@
               '<span class="ss-legend-item"><span class="ss-dot" style="background:#eab308"></span>1–2"</span>' +
               '<span class="ss-legend-item"><span class="ss-dot" style="background:#ef4444"></span>&gt;2"</span>' +
             '</div>' +
+            '<div class="ss-history-picker">' +
+              '<span class="ss-timebar-label">History:</span>' +
+              '<input type="date" id="ssHistoryDate" class="ss-date-input">' +
+              '<button id="ssHistoryGo">Load</button>' +
+              '<button id="ssHistoryLive" class="ss-live">Live</button>' +
+            '</div>' +
           '</div>' +
         '</div>' +
       '</div>';
@@ -122,6 +130,20 @@
       });
     });
     document.getElementById('ssRefresh').addEventListener('click', function () { loadAll(true); });
+
+    document.getElementById('ssHistoryGo').addEventListener('click', function () {
+      var val = document.getElementById('ssHistoryDate').value;
+      if (!val) { toast('Pick a date first', 'info'); return; }
+      historyMode = true;
+      historyDate = val;
+      loadHistory(val);
+    });
+    document.getElementById('ssHistoryLive').addEventListener('click', function () {
+      historyMode = false;
+      historyDate = null;
+      document.getElementById('ssHistoryDate').value = '';
+      loadAll(true);
+    });
   }
 
   function initMap() {
@@ -319,7 +341,21 @@
   function loadAll(force) {
     Promise.all([loadAlerts(force), loadHail()]).then(function () {
       var updated = document.getElementById('ssUpdated');
-      if (updated) updated.textContent = 'Updated: ' + new Date().toLocaleTimeString();
+      if (updated) updated.textContent = 'Live — ' + new Date().toLocaleTimeString();
+    });
+  }
+
+  function loadHistory(date) {
+    return api('/history?date=' + encodeURIComponent(date)).then(function (snap) {
+      alerts = snap.alerts || [];
+      hailReports = snap.hailReports || [];
+      renderAlertsOnMap();
+      renderHeatmap();
+      var updated = document.getElementById('ssUpdated');
+      if (updated) updated.textContent = 'Snapshot: ' + snap.date + ' (' + snap.summary.hailCount + ' hail, ' + snap.summary.alertCount + ' alerts)';
+      toast('Loaded snapshot for ' + snap.date, 'info');
+    }).catch(function (err) {
+      toast('No snapshot for ' + date + ': ' + (err.message || err), 'error');
     });
   }
 
