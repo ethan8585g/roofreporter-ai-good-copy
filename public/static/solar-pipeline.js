@@ -211,6 +211,12 @@
         '</div>' +
         '<div><label class="block text-[11px] font-bold text-gray-400 uppercase mb-1">Notes</label><textarea name="notes" rows="3" class="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white">' + esc(d.notes || '') + '</textarea></div>' +
 
+        (isNew ? '' :
+          '<div class="pt-4 border-t border-gray-700 flex flex-wrap gap-2">' +
+            '<a href="/customer/solar-documents?deal=' + d.id + '" class="inline-flex items-center px-3 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm text-amber-300"><i class="fas fa-folder mr-2"></i>Contracts & Paperwork</a>' +
+            '<a href="/customer/solar-permits?deal=' + d.id + '" class="inline-flex items-center px-3 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm text-amber-300"><i class="fas fa-file-signature mr-2"></i>Permits</a>' +
+          '</div>') +
+
         '<div class="flex items-center justify-between pt-4 border-t border-gray-700">' +
           (isNew ? '<span></span>' : '<button type="button" onclick="window._spDelete(' + d.id + ')" class="text-red-400 hover:text-red-300 text-sm font-semibold"><i class="fas fa-trash mr-1"></i>Delete</button>') +
           '<div class="flex gap-2">' +

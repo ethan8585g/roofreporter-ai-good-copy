@@ -11,6 +11,9 @@ import { aiAnalysisRoutes } from './routes/ai-analysis'
 import { authRoutes } from './routes/auth'
 import { customerAuthRoutes } from './routes/customer-auth'
 import { solarPipelineRoutes } from './routes/solar-pipeline'
+import { solarPresentationRoutes } from './routes/solar-presentation'
+import { solarDocumentsRoutes } from './routes/solar-documents'
+import { solarPermitsRoutes } from './routes/solar-permits'
 import { invoiceRoutes } from './routes/invoices'
 import { squareRoutes } from './routes/square'
 import { crmRoutes } from './routes/crm'
@@ -255,6 +258,9 @@ app.route('/api/ai', aiAnalysisRoutes)
 app.route('/api/auth', authRoutes)
 // More-specific route MUST register first — Hono matches in order.
 app.route('/api/customer/solar-pipeline', solarPipelineRoutes)
+app.route('/api/customer/solar-presentation', solarPresentationRoutes)
+app.route('/api/customer/solar-documents', solarDocumentsRoutes)
+app.route('/api/customer/solar-permits', solarPermitsRoutes)
 app.route('/api/customer', customerAuthRoutes)
 app.route('/api/invoices', invoiceRoutes)
 app.route('/api/square', squareRoutes)
@@ -1796,6 +1802,9 @@ app.get('/customer/design-builder', (c) => c.html(getDesignBuilderPageHTML()))
 
 // Solar Sales Pipeline — kanban board for solar companies only
 app.get('/customer/solar-pipeline', (c) => c.html(getSolarPipelinePageHTML()))
+app.get('/customer/solar-presentation', (c) => c.html(getSolarPresentationPageHTML()))
+app.get('/customer/solar-documents', (c) => c.html(getSolarDocumentsPageHTML()))
+app.get('/customer/solar-permits', (c) => c.html(getSolarPermitsPageHTML()))
 
 // Customer Profile / Account Settings
 app.get('/customer/profile', (c) => c.html(getCustomerProfilePageHTML()))
@@ -4983,12 +4992,13 @@ function getLandingPageHTML(latestPosts: any[] = []) {
               <span class="relative flex h-2.5 w-2.5"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#00FF88] opacity-75"></span><span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#00FF88]"></span></span>
               <span class="text-sm font-semibold text-[#00FF88] tracking-wide">Trusted by 5,000+ Roofers — US &amp; Canada</span>
             </div>
-            <h1 class="text-5xl sm:text-6xl lg:text-7xl font-black leading-[1.05] text-white mb-8 tracking-tight">Stop Chasing Leaks.<br/><span class="neon-text">Start Managing Assets.</span></h1>
-            <h2 class="text-lg lg:text-xl text-gray-400 mb-10 max-w-xl leading-relaxed font-normal">The centralized command center for <span class="text-white font-semibold">Facility Managers, Condo Boards, and Commercial Portfolios</span> to track work orders, warranty expirations, and capital planning budgets.</h2>
+            <h1 class="text-5xl sm:text-6xl lg:text-7xl font-black leading-[1.05] text-white mb-8 tracking-tight">Measure Any Roof.<br/><span class="neon-text">In 60 Seconds.</span></h1>
+            <h2 class="text-lg lg:text-xl text-gray-400 mb-10 max-w-xl leading-relaxed font-normal">Accurate satellite roof measurements from <span class="text-white font-semibold">$5/report</span>. No drone, no ladder, no climbing. Trusted by roofing contractors, facility managers, and condo boards across Canada &amp; the US.</h2>
             <div class="flex flex-col sm:flex-row gap-4 mb-10">
-              <button type="button" onclick="window.openAssetReportModal && window.openAssetReportModal(); rrTrack('cta_click',{location:'hero_primary',variant:'asset_report'});" class="group inline-flex items-center justify-center gap-3 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-10 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/20 transition-all duration-300 hover:scale-[1.03] min-h-[56px]"><i class="fas fa-file-pdf"></i> Get Free Asset Report <i class="fas fa-arrow-right text-sm group-hover:translate-x-1.5 transition-transform"></i></button>
-              <a href="/signup" onclick="rrTrack('cta_click',{location:'hero_secondary'})" class="inline-flex items-center justify-center gap-2.5 bg-white/5 hover:bg-white/10 backdrop-blur-md text-white font-bold py-4 px-8 rounded-xl text-lg border border-white/10 hover:border-white/20 transition-all duration-300 min-h-[56px]"><i class="fas fa-rocket text-[#00FF88]"></i> Contractors: Start Free</a>
+              <a href="/signup" onclick="rrTrack('cta_click',{location:'hero_primary',variant:'contractor_signup'})" class="group inline-flex items-center justify-center gap-3 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-10 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/20 transition-all duration-300 hover:scale-[1.03] min-h-[56px]"><i class="fas fa-rocket"></i> Measure Your First Roof Free <i class="fas fa-arrow-right text-sm group-hover:translate-x-1.5 transition-transform"></i></a>
+              <a href="#tutorials" onclick="rrTrack('cta_click',{location:'hero_secondary',variant:'sample_report'})" class="inline-flex items-center justify-center gap-2.5 bg-white/5 hover:bg-white/10 backdrop-blur-md text-white font-bold py-4 px-8 rounded-xl text-lg border border-white/10 hover:border-white/20 transition-all duration-300 min-h-[56px]"><i class="fas fa-play-circle text-[#00FF88]"></i> See Sample Report</a>
             </div>
+            <p class="text-xs text-gray-500 mb-6 -mt-4">Free to start &middot; No credit card &middot; 60-second setup</p>
             <div class="flex items-center gap-4 mb-4">
               <div class="flex items-center gap-0.5"><i class="fas fa-star text-[#00FF88] text-sm"></i><i class="fas fa-star text-[#00FF88] text-sm"></i><i class="fas fa-star text-[#00FF88] text-sm"></i><i class="fas fa-star text-[#00FF88] text-sm"></i><i class="fas fa-star text-[#00FF88] text-sm"></i></div>
               <span class="text-sm text-gray-500"><strong class="text-white font-semibold">4.9/5</strong> from 200+ reviews</span>
@@ -5636,6 +5646,20 @@ function getLandingPageHTML(latestPosts: any[] = []) {
     });
   </script>
   <script src="/static/landing.js?v=20260408a" defer></script>
+  <!-- Mobile sticky floating CTA -->
+  <div id="mobileStickyCta" class="md:hidden" style="position:fixed;bottom:16px;right:16px;z-index:60;display:none">
+    <a href="/signup" onclick="rrTrack('cta_click',{location:'sticky_mobile'})" style="display:inline-flex;align-items:center;gap:8px;background:#00FF88;color:#0A0A0A;font-weight:800;padding:12px 18px;border-radius:999px;font-size:14px;box-shadow:0 12px 32px rgba(0,255,136,0.35);text-decoration:none"><i class="fas fa-rocket"></i>Start Free</a>
+    <button aria-label="Dismiss" onclick="document.getElementById('mobileStickyCta').style.display='none';try{sessionStorage.setItem('rm_sticky_dismiss','1')}catch(e){}" style="position:absolute;top:-8px;right:-8px;width:22px;height:22px;border-radius:999px;background:#111;color:#9ca3af;border:1px solid rgba(255,255,255,0.15);font-size:12px;line-height:1;cursor:pointer">&times;</button>
+  </div>
+  <script>
+    (function(){
+      try{if(sessionStorage.getItem('rm_sticky_dismiss')==='1')return;}catch(e){}
+      var el=document.getElementById('mobileStickyCta');if(!el)return;
+      window.addEventListener('scroll',function(){
+        if(window.scrollY>600){el.style.display='block';}
+      },{passive:true});
+    })();
+  </script>
   ${getRoverWidget()}
   <!-- Tawk.to Live Chat — Sign up at tawk.to and replace TAWK_PROPERTY_ID/TAWK_WIDGET_ID below -->
   <!--
@@ -10608,6 +10632,9 @@ function getSolarDesignPageHTML() {
       </div>
       <nav class="flex items-center space-x-3">
         <span id="custGreeting" class="text-amber-100 text-sm hidden"><i class="fas fa-user-circle mr-1"></i><span id="custName"></span></span>
+        <a href="/customer/solar-documents" class="text-amber-100 hover:text-white text-sm"><i class="fas fa-folder mr-1"></i>Contracts & Paperwork</a>
+        <a href="/customer/solar-permits" class="text-amber-100 hover:text-white text-sm"><i class="fas fa-file-signature mr-1"></i>Permits</a>
+        <a href="/customer/solar-presentation" class="text-amber-100 hover:text-white text-sm"><i class="fas fa-play-circle mr-1"></i>Presentation</a>
         <a href="/customer/dashboard" class="text-amber-100 hover:text-white text-sm"><i class="fas fa-th-large mr-1"></i>Dashboard</a>
         <button onclick="custLogout()" class="text-amber-100 hover:text-white text-sm"><i class="fas fa-sign-out-alt mr-1"></i>Logout</button>
       </nav>
@@ -10708,6 +10735,9 @@ function getSolarPipelinePageHTML() {
         </div>
       </a>
       <nav class="flex items-center space-x-3">
+        <a href="/customer/solar-presentation" class="text-amber-100 hover:text-white text-sm"><i class="fas fa-play-circle mr-1"></i>Presentation</a>
+        <a href="/customer/solar-documents" class="text-amber-100 hover:text-white text-sm"><i class="fas fa-folder mr-1"></i>Documents</a>
+        <a href="/customer/solar-permits" class="text-amber-100 hover:text-white text-sm"><i class="fas fa-file-signature mr-1"></i>Permits</a>
         <a href="/customer/dashboard" class="text-amber-100 hover:text-white text-sm"><i class="fas fa-th-large mr-1"></i>Dashboard</a>
         <button onclick="custLogout()" class="text-amber-100 hover:text-white text-sm"><i class="fas fa-sign-out-alt mr-1"></i>Logout</button>
       </nav>
@@ -10729,6 +10759,144 @@ function getSolarPipelinePageHTML() {
     }
   </script>
   <script src="/static/solar-pipeline.js"></script>
+</body>
+</html>`
+}
+
+// ============================================================
+// Solar Presentation Page — homeowner-facing pre-set slide deck
+// ============================================================
+function getSolarPresentationPageHTML() {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags()}
+  <title>Solar Presentation - Roof Manager</title>
+</head>
+<body class="bg-gray-900 min-h-screen">
+  <header class="bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-lg">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+      <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
+        <img src="/static/logo.png" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
+        <div>
+          <h1 class="text-lg font-bold">Solar Presentation</h1>
+          <p class="text-amber-100 text-xs">Build the deck you show at the door</p>
+        </div>
+      </a>
+      <nav class="flex items-center space-x-3">
+        <a href="/customer/solar-pipeline" class="text-amber-100 hover:text-white text-sm"><i class="fas fa-columns mr-1"></i>Pipeline</a>
+        <a href="/customer/solar-permits" class="text-amber-100 hover:text-white text-sm"><i class="fas fa-file-signature mr-1"></i>Permits</a>
+        <a href="/customer/solar-documents" class="text-amber-100 hover:text-white text-sm"><i class="fas fa-folder mr-1"></i>Documents</a>
+        <a href="/customer/dashboard" class="text-amber-100 hover:text-white text-sm"><i class="fas fa-th-large mr-1"></i>Dashboard</a>
+        <button onclick="custLogout()" class="text-amber-100 hover:text-white text-sm"><i class="fas fa-sign-out-alt mr-1"></i>Logout</button>
+      </nav>
+    </div>
+  </header>
+  <main class="max-w-[1200px] mx-auto px-4 py-6">
+    <div id="solar-presentation-root"></div>
+  </main>
+  <script>
+    (function(){ if (!localStorage.getItem('rc_customer')) window.location.href = '/customer/login'; })();
+    function custLogout() {
+      var t = localStorage.getItem('rc_customer_token');
+      if (t) fetch('/api/customer/logout',{method:'POST',headers:{'Authorization':'Bearer '+t}})['catch'](function(){});
+      localStorage.removeItem('rc_customer'); localStorage.removeItem('rc_customer_token');
+      window.location.href = '/customer/login';
+    }
+  </script>
+  <script src="/static/solar-presentation.js"></script>
+</body>
+</html>`
+}
+
+// ============================================================
+// Solar Documents Page — contracts & paperwork library + per-deal
+// ============================================================
+function getSolarDocumentsPageHTML() {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags()}
+  <title>Solar Documents - Roof Manager</title>
+</head>
+<body class="bg-gray-900 min-h-screen">
+  <header class="bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-lg">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+      <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
+        <img src="/static/logo.png" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
+        <div>
+          <h1 class="text-lg font-bold">Solar Contracts & Paperwork</h1>
+          <p class="text-amber-100 text-xs">Attach agreements and install paperwork to any deal</p>
+        </div>
+      </a>
+      <nav class="flex items-center space-x-3">
+        <a href="/customer/solar-presentation" class="text-amber-100 hover:text-white text-sm"><i class="fas fa-presentation mr-1"></i>Presentation</a>
+        <a href="/customer/solar-pipeline" class="text-amber-100 hover:text-white text-sm"><i class="fas fa-columns mr-1"></i>Pipeline</a>
+        <a href="/customer/solar-permits" class="text-amber-100 hover:text-white text-sm"><i class="fas fa-file-signature mr-1"></i>Permits</a>
+        <a href="/customer/dashboard" class="text-amber-100 hover:text-white text-sm"><i class="fas fa-th-large mr-1"></i>Dashboard</a>
+        <button onclick="custLogout()" class="text-amber-100 hover:text-white text-sm"><i class="fas fa-sign-out-alt mr-1"></i>Logout</button>
+      </nav>
+    </div>
+  </header>
+  <main class="max-w-[1200px] mx-auto px-4 py-6">
+    <div id="solar-documents-root"></div>
+  </main>
+  <script>
+    (function(){ if (!localStorage.getItem('rc_customer')) window.location.href = '/customer/login'; })();
+    function custLogout() {
+      var t = localStorage.getItem('rc_customer_token');
+      if (t) fetch('/api/customer/logout',{method:'POST',headers:{'Authorization':'Bearer '+t}})['catch'](function(){});
+      localStorage.removeItem('rc_customer'); localStorage.removeItem('rc_customer_token');
+      window.location.href = '/customer/login';
+    }
+  </script>
+  <script src="/static/solar-documents.js"></script>
+</body>
+</html>`
+}
+
+// ============================================================
+// Solar Permits Page — permitting management module
+// ============================================================
+function getSolarPermitsPageHTML() {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags()}
+  <title>Solar Permits - Roof Manager</title>
+</head>
+<body class="bg-gray-900 min-h-screen">
+  <header class="bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-lg">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+      <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
+        <img src="/static/logo.png" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
+        <div>
+          <h1 class="text-lg font-bold">Solar Permitting</h1>
+          <p class="text-amber-100 text-xs">Submissions, reviews, inspections, and fees</p>
+        </div>
+      </a>
+      <nav class="flex items-center space-x-3">
+        <a href="/customer/solar-presentation" class="text-amber-100 hover:text-white text-sm"><i class="fas fa-presentation mr-1"></i>Presentation</a>
+        <a href="/customer/solar-pipeline" class="text-amber-100 hover:text-white text-sm"><i class="fas fa-columns mr-1"></i>Pipeline</a>
+        <a href="/customer/solar-documents" class="text-amber-100 hover:text-white text-sm"><i class="fas fa-folder mr-1"></i>Documents</a>
+        <a href="/customer/dashboard" class="text-amber-100 hover:text-white text-sm"><i class="fas fa-th-large mr-1"></i>Dashboard</a>
+        <button onclick="custLogout()" class="text-amber-100 hover:text-white text-sm"><i class="fas fa-sign-out-alt mr-1"></i>Logout</button>
+      </nav>
+    </div>
+  </header>
+  <main class="max-w-[1400px] mx-auto px-4 py-6">
+    <div id="solar-permits-root"></div>
+  </main>
+  <script>
+    (function(){ if (!localStorage.getItem('rc_customer')) window.location.href = '/customer/login'; })();
+    function custLogout() {
+      var t = localStorage.getItem('rc_customer_token');
+      if (t) fetch('/api/customer/logout',{method:'POST',headers:{'Authorization':'Bearer '+t}})['catch'](function(){});
+      localStorage.removeItem('rc_customer'); localStorage.removeItem('rc_customer_token');
+      window.location.href = '/customer/login';
+    }
+  </script>
+  <script src="/static/solar-permits.js"></script>
 </body>
 </html>`
 }
