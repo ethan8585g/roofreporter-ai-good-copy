@@ -5208,7 +5208,6 @@ async function loadPaywallStatus() {
         <h3 class="font-bold text-gray-800 mb-3"><i class="fas fa-credit-card mr-2 text-blue-500"></i>Payment Gateway</h3>
         <ul class="space-y-2 text-sm">
           <li class="flex items-center gap-2">${checkIcon(d.payment_gateway.square_configured)} Square</li>
-          <li class="flex items-center gap-2">${checkIcon(d.payment_gateway.stripe_configured)} Stripe</li>
         </ul>
       </div>
       <div class="bg-white border border-gray-200 rounded-xl p-6">

@@ -2819,7 +2819,6 @@ app.get('/customer/d2d', (c) => {
 
 // Roofer Secretary — AI Phone Answering Service
 app.get('/customer/secretary', (c) => {
-  const stripeKey = '' // No longer needed — Square uses server-side only
   return c.html(getSecretaryPageHTML())
 })
 
@@ -5288,7 +5287,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
                 <ul class="space-y-3 mb-8">
                   <li class="flex items-start gap-3 text-sm text-gray-400"><i class="fas fa-check text-[#a78bfa] mt-0.5 text-xs flex-shrink-0"></i>Professional branded invoices &amp; proposals in seconds</li>
                   <li class="flex items-start gap-3 text-sm text-gray-400"><i class="fas fa-check text-[#a78bfa] mt-0.5 text-xs flex-shrink-0"></i>Auto-populate line items from your measurement report</li>
-                  <li class="flex items-start gap-3 text-sm text-gray-400"><i class="fas fa-check text-[#a78bfa] mt-0.5 text-xs flex-shrink-0"></i>Online payment via Stripe or Square — customer pays from a link</li>
+                  <li class="flex items-start gap-3 text-sm text-gray-400"><i class="fas fa-check text-[#a78bfa] mt-0.5 text-xs flex-shrink-0"></i>Online payment via Square — customer pays from a link</li>
                   <li class="flex items-start gap-3 text-sm text-gray-400"><i class="fas fa-check text-[#a78bfa] mt-0.5 text-xs flex-shrink-0"></i>Proposal acceptance tracking &amp; e-signature</li>
                   <li class="flex items-start gap-3 text-sm text-gray-400"><i class="fas fa-check text-[#a78bfa] mt-0.5 text-xs flex-shrink-0"></i>Automated payment reminders</li>
                 </ul>
@@ -6927,7 +6926,7 @@ const guidesConfig: Record<string, GuideConfig> = {
       { title: 'Open the job', body: 'From the pipeline, open the job you want to invoice. If the job came from a signed proposal, the contract total and payment schedule are already on the card.' },
       { title: 'Choose the invoice type', body: 'Deposit (typically 10–30% at signing), progress (e.g. at tear-off), or final (at completion). Pick the one you\'re sending — the amounts are pre-filled from the proposal\'s payment schedule but stay editable.' },
       { title: 'Add line items (optional)', body: 'For change-orders or out-of-scope work, click "Add Line". Each line gets a description, quantity, and unit price. Tax is auto-calculated based on the job\'s province/state.', tip: 'Add a note explaining any change order in plain English. Customers pay faster when they understand what they\'re looking at.' },
-      { title: 'Attach the payment method', body: 'Roof Manager supports Stripe, Square, and direct e-transfer. Toggle which methods the customer sees. We recommend leaving all of them on — 18% of homeowners pick e-transfer and another 12% prefer credit card for the points.' },
+      { title: 'Attach the payment method', body: 'Roof Manager supports Square card payments and direct e-transfer. Toggle which methods the customer sees. We recommend leaving both on — 18% of homeowners pick e-transfer and 12% prefer credit card for the points.' },
       { title: 'Send', body: 'Click "Send Invoice". The customer gets a branded email with a one-click payment link. You can also send via SMS from the same screen.' },
       { title: 'Track payment', body: 'The invoice card shows "Sent → Viewed → Paid". You get a notification the moment payment lands, and the job card updates automatically so your books stay in sync. Overdue invoices trigger polite reminder emails on day 7, 14, and 30 unless you turn them off.' },
     ],

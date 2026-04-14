@@ -44,8 +44,7 @@ self.addEventListener('fetch', (event) => {
       url.pathname.startsWith('/api/admin/auth') ||
       url.pathname.startsWith('/api/customer/auth') ||
       url.pathname.startsWith('/api/payments') ||
-      url.pathname.startsWith('/api/square') ||
-      url.pathname.startsWith('/api/stripe')) {
+      url.pathname.startsWith('/api/square')) {
     return;
   }
 

@@ -32,7 +32,7 @@ const TOOLS = [
       parameters: {
         type: 'object',
         properties: {
-          sql: { type: 'string', description: 'A SELECT SQL query. Tables: orders, customers, admin_users, settings, blog_posts, reports, invoices, invoice_items, crm_customers, crm_invoices, crm_jobs, crm_proposals, secretary_config, rover_conversations, credit_packages, payments, stripe_payments, square_payments, user_activity_log' },
+          sql: { type: 'string', description: 'A SELECT SQL query. Tables: orders, customers, admin_users, settings, blog_posts, reports, invoices, invoice_items, crm_customers, crm_invoices, crm_jobs, crm_proposals, secretary_config, rover_conversations, credit_packages, payments, square_payments, user_activity_log' },
           params: { type: 'array', items: { type: 'string' }, description: 'Bind parameters for the query' }
         },
         required: ['sql']
@@ -470,7 +470,7 @@ const SYSTEM_PROMPT = `You are the **Roof Manager Admin Assistant** — an intel
 - invoices, invoice_items: customer invoicing
 - crm_customers, crm_invoices, crm_jobs, crm_proposals: CRM module
 - secretary_config: AI secretary settings per customer
-- payments, stripe_payments, square_payments: payment records
+- payments, square_payments: payment records
 - credit_packages: pricing packages
 
 You are speaking with the site administrator. Be helpful, proactive, and efficient.`

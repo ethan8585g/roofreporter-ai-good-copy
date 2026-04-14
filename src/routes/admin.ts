@@ -443,30 +443,6 @@ adminRoutes.post('/init-db', async (c) => {
     // No DROP TABLE or destructive operations remain in init-db.
     // Kept as comment for historical reference only.
 
-    // Stripe tables (legacy — kept for historical data)
-    await c.env.DB.prepare(`
-      CREATE TABLE IF NOT EXISTS stripe_payments (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        customer_id INTEGER, order_id INTEGER,
-        stripe_checkout_session_id TEXT, stripe_payment_intent_id TEXT,
-        amount INTEGER DEFAULT 0, currency TEXT DEFAULT 'cad',
-        status TEXT DEFAULT 'pending', payment_type TEXT,
-        description TEXT,
-        created_at TEXT DEFAULT (datetime('now')), updated_at TEXT DEFAULT (datetime('now')),
-        FOREIGN KEY (customer_id) REFERENCES customers(id),
-        FOREIGN KEY (order_id) REFERENCES orders(id)
-      )
-    `).run()
-
-    await c.env.DB.prepare(`
-      CREATE TABLE IF NOT EXISTS stripe_webhook_events (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        stripe_event_id TEXT UNIQUE NOT NULL,
-        event_type TEXT, payload TEXT, processed INTEGER DEFAULT 0,
-        created_at TEXT DEFAULT (datetime('now'))
-      )
-    `).run()
-
     // Square tables (current payment processor)
     await c.env.DB.prepare(`
       CREATE TABLE IF NOT EXISTS square_payments (
