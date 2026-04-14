@@ -51,7 +51,7 @@ const orderState = {
   measurementError: null,
 };
 
-function getToken() { return localStorage.getItem('rc_customer_token') || localStorage.getItem('rc_token') || ''; }
+function getToken() { return localStorage.getItem('rc_customer_token') || ''; }
 function authHeaders() { return { 'Authorization': 'Bearer ' + getToken(), 'Content-Type': 'application/json' }; }
 
 document.addEventListener('DOMContentLoaded', async () => {

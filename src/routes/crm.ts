@@ -265,13 +265,14 @@ crmRoutes.post('/invoices', async (c) => {
     }
 
     if (items && items.length > 0) {
-      for (let i = 0; i < items.length; i++) {
-        const it = items[i]
+      // batch() so line-item inserts commit atomically with each other.
+      const stmts = items.map((it: any, i: number) => {
         const amt = (it.quantity || 1) * (it.unit_price || 0)
-        await c.env.DB.prepare(
+        return c.env.DB.prepare(
           'INSERT INTO crm_invoice_items (invoice_id, description, quantity, unit, unit_price, amount, sort_order) VALUES (?,?,?,?,?,?,?)'
-        ).bind(invoiceId, it.description || '', it.quantity || 1, it.unit || 'each', it.unit_price || 0, amt, i).run()
-      }
+        ).bind(invoiceId, it.description || '', it.quantity || 1, it.unit || 'each', it.unit_price || 0, amt, i)
+      })
+      await c.env.DB.batch(stmts)
     }
     return c.json({ success: true, id: invoiceId, invoice_number: invNum })
   } catch (err: any) {
@@ -308,16 +309,18 @@ crmRoutes.put('/invoices/:id', async (c) => {
     WHERE id=? AND owner_id=?
   `).bind(body.crm_customer_id, body.title || null, body.property_address || null, subtotal, taxR, taxAmt, total, body.due_date || null, body.notes || null, body.terms || null, id, ownerId).run()
 
-  // Replace items
-  await c.env.DB.prepare('DELETE FROM crm_invoice_items WHERE invoice_id = ?').bind(id).run()
+  // Replace items atomically: delete + re-insert in a single batch.
+  const stmts: any[] = [
+    c.env.DB.prepare('DELETE FROM crm_invoice_items WHERE invoice_id = ?').bind(id)
+  ]
   if (body.items && body.items.length > 0) {
-    for (let i = 0; i < body.items.length; i++) {
-      const it = body.items[i]
-      await c.env.DB.prepare(
+    body.items.forEach((it: any, i: number) => {
+      stmts.push(c.env.DB.prepare(
         'INSERT INTO crm_invoice_items (invoice_id, description, quantity, unit, unit_price, amount, sort_order) VALUES (?,?,?,?,?,?,?)'
-      ).bind(id, it.description || '', it.quantity || 1, it.unit || 'each', it.unit_price || 0, (it.quantity || 1) * (it.unit_price || 0), i).run()
-    }
+      ).bind(id, it.description || '', it.quantity || 1, it.unit || 'each', it.unit_price || 0, (it.quantity || 1) * (it.unit_price || 0), i))
+    })
   }
+  await c.env.DB.batch(stmts)
   return c.json({ success: true })
 })
 

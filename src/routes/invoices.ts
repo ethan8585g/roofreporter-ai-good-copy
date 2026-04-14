@@ -131,7 +131,7 @@ invoiceRoutes.get('/', async (c) => {
 
     return c.json({ invoices: invoices.results, stats })
   } catch (err: any) {
-    return c.json({ error: 'Failed to fetch invoices', details: err.message }, 500)
+    console.error("[error]", err && err.message); return c.json({ error: 'Failed to fetch invoices' }, 500)
   }
 })
 
@@ -186,7 +186,7 @@ invoiceRoutes.get('/:id', async (c) => {
 
     return c.json({ invoice, items: items.results, payment_links: paymentLinks, attached_report: attachedReport })
   } catch (err: any) {
-    return c.json({ error: 'Failed to fetch invoice', details: err.message }, 500)
+    console.error("[error]", err && err.message); return c.json({ error: 'Failed to fetch invoice' }, 500)
   }
 })
 
@@ -330,7 +330,7 @@ invoiceRoutes.post('/', async (c) => {
       }
     }, 201)
   } catch (err: any) {
-    return c.json({ error: 'Failed to create document', details: err.message }, 500)
+    console.error("[error]", err && err.message); return c.json({ error: 'Failed to create document' }, 500)
   }
 })
 
@@ -435,7 +435,7 @@ invoiceRoutes.put('/:id', async (c) => {
 
     return c.json({ success: true, invoice: { id, total, status: 'draft', document_type: docType } })
   } catch (err: any) {
-    return c.json({ error: 'Failed to update document', details: err.message }, 500)
+    console.error("[error]", err && err.message); return c.json({ error: 'Failed to update document' }, 500)
   }
 })
 
@@ -458,7 +458,7 @@ invoiceRoutes.patch('/:id/status', async (c) => {
 
     return c.json({ success: true, status })
   } catch (err: any) {
-    return c.json({ error: 'Failed to update status', details: err.message }, 500)
+    console.error("[error]", err && err.message); return c.json({ error: 'Failed to update status' }, 500)
   }
 })
 
@@ -573,7 +573,7 @@ invoiceRoutes.post('/:id/send', async (c) => {
       attached_report: attachedReport
     })
   } catch (err: any) {
-    return c.json({ error: 'Failed to send document', details: err.message }, 500)
+    console.error("[error]", err && err.message); return c.json({ error: 'Failed to send document' }, 500)
   }
 })
 
@@ -623,7 +623,7 @@ invoiceRoutes.post('/:id/convert-to-invoice', async (c) => {
       message: `Invoice ${invNumber} created from proposal ${proposal.invoice_number}`
     }, 201)
   } catch (err: any) {
-    return c.json({ error: 'Failed to convert proposal', details: err.message }, 500)
+    console.error("[error]", err && err.message); return c.json({ error: 'Failed to convert proposal' }, 500)
   }
 })
 
@@ -704,7 +704,7 @@ invoiceRoutes.post('/:id/payment-link', async (c) => {
       payment_link: { id: linkId, url: linkUrl, amount: invoice.total, currency: invoice.currency || 'CAD' }
     })
   } catch (err: any) {
-    return c.json({ error: 'Failed to create payment link', details: err.message }, 500)
+    console.error("[error]", err && err.message); return c.json({ error: 'Failed to create payment link' }, 500)
   }
 })
 
@@ -780,7 +780,7 @@ invoiceRoutes.delete('/:id', async (c) => {
 
     return c.json({ success: true })
   } catch (err: any) {
-    return c.json({ error: 'Failed to delete document', details: err.message }, 500)
+    console.error("[error]", err && err.message); return c.json({ error: 'Failed to delete document' }, 500)
   }
 })
 
@@ -803,7 +803,7 @@ invoiceRoutes.get('/stats/summary', async (c) => {
     `).first()
     return c.json({ stats })
   } catch (err: any) {
-    return c.json({ error: 'Failed to fetch stats', details: err.message }, 500)
+    console.error("[error]", err && err.message); return c.json({ error: 'Failed to fetch stats' }, 500)
   }
 })
 
@@ -835,7 +835,7 @@ invoiceRoutes.get('/customers/list', async (c) => {
 
     return c.json({ customers: [...(portalCustomers.results as any[]), ...crmCustomers] })
   } catch (err: any) {
-    return c.json({ error: 'Failed to fetch customers', details: err.message }, 500)
+    console.error("[error]", err && err.message); return c.json({ error: 'Failed to fetch customers' }, 500)
   }
 })
 
@@ -855,7 +855,7 @@ invoiceRoutes.get('/customers/:id', async (c) => {
     const invoices = await c.env.DB.prepare('SELECT * FROM invoices WHERE customer_id = ? ORDER BY created_at DESC').bind(id).all()
     return c.json({ customer, orders: orders.results, invoices: invoices.results })
   } catch (err: any) {
-    return c.json({ error: 'Failed to fetch customer', details: err.message }, 500)
+    console.error("[error]", err && err.message); return c.json({ error: 'Failed to fetch customer' }, 500)
   }
 })
 

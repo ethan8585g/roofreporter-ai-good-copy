@@ -169,6 +169,16 @@ teamRoutes.post('/invite', async (c) => {
     return c.json({ error: 'Only account owners or team admins can invite members' }, 403)
   }
 
+  // Rate limit: max 5 invites per owner per hour — blocks spammy blast-invite abuse.
+  try {
+    const recent = await c.env.DB.prepare(
+      "SELECT COUNT(*) as cnt FROM team_invitations WHERE owner_id = ? AND created_at > datetime('now', '-1 hour')"
+    ).bind(ownerId).first<any>()
+    if (recent && recent.cnt >= 5) {
+      return c.json({ error: 'Too many invitations sent in the last hour. Please wait before sending more.' }, 429)
+    }
+  } catch (e: any) { console.warn('[team/invite] rate-limit check failed:', e?.message || e) }
+
   // Enforce subscription + team size limit based on tier
   const gating = await evaluateTeamGating(c.env.DB, ownerId)
 
@@ -303,6 +313,17 @@ teamRoutes.post('/accept', async (c) => {
   const inviteToken = body.invite_token
 
   if (!inviteToken) return c.json({ error: 'Invite token is required' }, 400)
+
+  // Rate limit token-guessing: max 10 /accept attempts per IP per hour.
+  try {
+    const clientIp = c.req.header('cf-connecting-ip') || c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
+    await c.env.DB.prepare("CREATE TABLE IF NOT EXISTS invite_accept_attempts (id INTEGER PRIMARY KEY AUTOINCREMENT, ip TEXT, created_at TEXT DEFAULT (datetime('now')))").run()
+    const attempts = await c.env.DB.prepare("SELECT COUNT(*) as cnt FROM invite_accept_attempts WHERE ip = ? AND created_at > datetime('now', '-1 hour')").bind(clientIp).first<any>()
+    if (attempts && attempts.cnt >= 10) {
+      return c.json({ error: 'Too many invite-acceptance attempts. Please wait and try again.' }, 429)
+    }
+    await c.env.DB.prepare("INSERT INTO invite_accept_attempts (ip) VALUES (?)").bind(clientIp).run()
+  } catch (e: any) { console.warn('[team/accept] rate-limit check failed:', e?.message || e) }
 
   const invite = await c.env.DB.prepare(`
     SELECT * FROM team_invitations

@@ -223,28 +223,13 @@ ordersRoutes.post('/:id/pay', async (c) => {
     if (!order) return c.json({ error: 'Order not found' }, 404)
     if (order.payment_status === 'paid') return c.json({ error: 'Order already paid' }, 400)
 
-    // Update order
-    await c.env.DB.prepare(`
-      UPDATE orders SET payment_status = 'paid', status = 'processing', updated_at = datetime('now')
-      WHERE id = ?
-    `).bind(id).run()
-
-    // Create payment record
-    await c.env.DB.prepare(`
-      INSERT INTO payments (order_id, amount, currency, status, payment_method)
-      VALUES (?, ?, 'CAD', 'succeeded', 'card_simulated')
-    `).bind(id, order.price).run()
-
-    // Create placeholder report
-    await c.env.DB.prepare(`
-      INSERT OR IGNORE INTO reports (order_id, status) VALUES (?, 'pending')
-    `).bind(id).run()
-
-    // Log activity
-    await c.env.DB.prepare(`
-      INSERT INTO user_activity_log (company_id, action, details)
-      VALUES (1, 'payment_received', ?)
-    `).bind(`Payment of $${order.price} for order ${order.order_number}`).run()
+    // Commit order-update, payment-record, placeholder-report, and activity-log atomically.
+    await c.env.DB.batch([
+      c.env.DB.prepare(`UPDATE orders SET payment_status = 'paid', status = 'processing', updated_at = datetime('now') WHERE id = ?`).bind(id),
+      c.env.DB.prepare(`INSERT INTO payments (order_id, amount, currency, status, payment_method) VALUES (?, ?, 'CAD', 'succeeded', 'card_simulated')`).bind(id, order.price),
+      c.env.DB.prepare(`INSERT OR IGNORE INTO reports (order_id, status) VALUES (?, 'pending')`).bind(id),
+      c.env.DB.prepare(`INSERT INTO user_activity_log (company_id, action, details) VALUES (1, 'payment_received', ?)`).bind(`Payment of $${order.price} for order ${order.order_number}`)
+    ])
 
     return c.json({
       success: true,

@@ -116,6 +116,7 @@ async function checkoutTier(tier) {
       headers: authHeaders(),
       body: JSON.stringify({ tier: tier })
     });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
     var data = await res.json();
     if (data.checkout_url) {
       window.location.href = data.checkout_url;
@@ -168,7 +169,7 @@ async function loadDashData() {
       custState.showAds = pd.show_ads === true;
       localStorage.setItem('rc_customer', JSON.stringify(pd.customer));
     } else {
-      localStorage.removeItem('rc_customer'); localStorage.removeItem('rc_customer_token');
+      localStorage.removeItem('rc_customer'); localStorage.removeItem('rc_customer_token'); localStorage.removeItem('rc_token');
       window.location.href = '/customer/login'; return;
     }
     if (ordersRes.ok) custState.orders = (await ordersRes.json()).orders || [];

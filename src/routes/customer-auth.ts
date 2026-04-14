@@ -347,13 +347,24 @@ customerAuthRoutes.post('/send-verification', async (c) => {
       return c.json({ error: 'An account with this email already exists. Please sign in instead.' }, 409)
     }
 
-    // Rate limit: max 3 codes per email per hour
+    // Rate limit: max 1 code per email per 30 minutes (6-digit codes are brute-forceable,
+    // so we also keep per-IP throttling at the signup endpoint).
     const recentCodes = await c.env.DB.prepare(
-      "SELECT COUNT(*) as cnt FROM email_verification_codes WHERE email = ? AND created_at > datetime('now', '-1 hour')"
+      "SELECT COUNT(*) as cnt FROM email_verification_codes WHERE email = ? AND created_at > datetime('now', '-30 minutes')"
     ).bind(cleanEmail).first<any>()
-    if (recentCodes && recentCodes.cnt >= 3) {
-      return c.json({ error: 'Too many verification requests. Please wait before trying again.' }, 429)
+    if (recentCodes && recentCodes.cnt >= 1) {
+      return c.json({ error: 'A verification code was already sent recently. Please wait 30 minutes before requesting another.' }, 429)
     }
+    // Per-IP throttle to slow brute-force enumeration
+    const clientIp = c.req.header('cf-connecting-ip') || c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
+    try {
+      await c.env.DB.prepare("CREATE TABLE IF NOT EXISTS verification_attempts (id INTEGER PRIMARY KEY AUTOINCREMENT, ip TEXT, email TEXT, created_at TEXT DEFAULT (datetime('now')))").run()
+      const ipAttempts = await c.env.DB.prepare("SELECT COUNT(*) as cnt FROM verification_attempts WHERE ip = ? AND created_at > datetime('now', '-1 hour')").bind(clientIp).first<any>()
+      if (ipAttempts && ipAttempts.cnt >= 10) {
+        return c.json({ error: 'Too many verification requests from this network. Please wait and try again.' }, 429)
+      }
+      await c.env.DB.prepare("INSERT INTO verification_attempts (ip, email) VALUES (?, ?)").bind(clientIp, cleanEmail).run()
+    } catch (e: any) { console.warn('[verification] rate-limit check failed:', e?.message || e) }
 
     // Generate code
     const code = generateVerificationCode()
@@ -373,16 +384,14 @@ customerAuthRoutes.post('/send-verification', async (c) => {
     const sent = await sendVerificationEmail(c.env, cleanEmail, code, c.env.DB)
 
     if (!sent) {
-      // Email delivery failed — return the code directly so registration can proceed
-      // This is a graceful degradation: registration still works even without email configured
-      console.error(`[Verification] Email send failed for ${cleanEmail}, code: ${code}`)
+      // Email delivery failed. NEVER return the code to an unauthenticated client —
+      // doing so lets an attacker complete verification without controlling the inbox.
+      console.error(`[Verification] Email send failed for ${cleanEmail}`)
       return c.json({
-        success: true,
+        success: false,
         email_sent: false,
-        fallback_code: code,
-        message: 'Email delivery is temporarily unavailable. Your verification code is shown below.',
-        setup_hint: 'Admin: Set up email at /api/auth/gmail or configure RESEND_API_KEY for production email delivery.'
-      })
+        error: 'Email delivery is temporarily unavailable. Please try again in a few minutes or contact support.'
+      }, 503)
     }
 
     return c.json({
@@ -570,6 +579,17 @@ customerAuthRoutes.post('/register', async (c) => {
     }
 
     const cleanEmail = email.toLowerCase().trim()
+
+    // Rate limit signups: max 5 per IP per hour (verification already rate-limits per-email).
+    try {
+      const clientIp = c.req.header('cf-connecting-ip') || c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
+      await c.env.DB.prepare("CREATE TABLE IF NOT EXISTS signup_attempts (id INTEGER PRIMARY KEY AUTOINCREMENT, ip TEXT, email TEXT, created_at TEXT DEFAULT (datetime('now')))").run()
+      const attempts = await c.env.DB.prepare("SELECT COUNT(*) as cnt FROM signup_attempts WHERE ip = ? AND created_at > datetime('now', '-1 hour')").bind(clientIp).first<any>()
+      if (attempts && attempts.cnt >= 5) {
+        return c.json({ error: 'Too many signup attempts from this network. Please wait and try again.' }, 429)
+      }
+      await c.env.DB.prepare("INSERT INTO signup_attempts (ip, email) VALUES (?, ?)").bind(clientIp, cleanEmail).run()
+    } catch (e: any) { console.warn('[register] rate-limit check failed:', e?.message || e) }
 
     // Verify the email verification token (unless email config is not set up)
     if (verification_token) {
@@ -1513,12 +1533,12 @@ customerAuthRoutes.post('/forgot-password', async (c) => {
     ).bind(cleanEmail).first<any>()
 
     if (customer) {
-      // Rate limit: max 3 reset emails per hour
+      // Rate limit: max 1 reset email per 30 minutes (tightened to slow password-reset phishing).
       const recent = await c.env.DB.prepare(
-        "SELECT COUNT(*) as cnt FROM password_reset_tokens WHERE email = ? AND account_type = 'customer' AND created_at > datetime('now', '-1 hour')"
+        "SELECT COUNT(*) as cnt FROM password_reset_tokens WHERE email = ? AND account_type = 'customer' AND created_at > datetime('now', '-30 minutes')"
       ).bind(cleanEmail).first<any>()
 
-      if (!recent || recent.cnt < 3) {
+      if (!recent || recent.cnt < 1) {
         const token = crypto.randomUUID() + '-' + crypto.randomUUID()
         const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString()
 

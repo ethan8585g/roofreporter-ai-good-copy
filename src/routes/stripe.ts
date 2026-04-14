@@ -169,7 +169,7 @@ stripeRoutes.get('/packages', async (c) => {
     ).all()
     return c.json({ packages: packages.results })
   } catch (err: any) {
-    return c.json({ error: 'Failed to fetch packages', details: err.message }, 500)
+    console.error("[error]", err && err.message); return c.json({ error: 'Failed to fetch packages' }, 500)
   }
 })
 
@@ -307,7 +307,7 @@ stripeRoutes.post('/checkout', async (c) => {
       session_id: session.id
     })
   } catch (err: any) {
-    return c.json({ error: 'Checkout failed', details: err.message }, 500)
+    console.error("[error]", err && err.message); return c.json({ error: 'Checkout failed' }, 500)
   }
 })
 
@@ -396,7 +396,7 @@ stripeRoutes.post('/checkout/report', async (c) => {
       session_id: session.id
     })
   } catch (err: any) {
-    return c.json({ error: 'Checkout failed', details: err.message }, 500)
+    console.error("[error]", err && err.message); return c.json({ error: 'Checkout failed' }, 500)
   }
 })
 
@@ -589,7 +589,7 @@ stripeRoutes.post('/use-credit', async (c) => {
       paid_credits_remaining: newPaidRemaining
     })
   } catch (err: any) {
-    return c.json({ error: 'Failed to use credit', details: err.message }, 500)
+    console.error("[error]", err && err.message); return c.json({ error: 'Failed to use credit' }, 500)
   }
 })
 
@@ -862,7 +862,7 @@ stripeRoutes.get('/verify-session/:sessionId', async (c) => {
       payment_status: session.payment_status,
     })
   } catch (err: any) {
-    return c.json({ error: 'Failed to verify session', details: err.message }, 500)
+    console.error("[error]", err && err.message); return c.json({ error: 'Failed to verify session' }, 500)
   }
 })
 
@@ -907,7 +907,7 @@ stripeRoutes.get('/admin/stats', async (c) => {
 
     return c.json({ stats, payments: recentPayments.results, monthly: monthly.results })
   } catch (err: any) {
-    return c.json({ error: 'Failed to fetch stats', details: err.message }, 500)
+    console.error("[error]", err && err.message); return c.json({ error: 'Failed to fetch stats' }, 500)
   }
 })
 
@@ -930,6 +930,6 @@ stripeRoutes.post('/admin/add-credits', async (c) => {
 
     return c.json({ success: true, credits_added: credits })
   } catch (err: any) {
-    return c.json({ error: 'Failed to add credits', details: err.message }, 500)
+    console.error("[error]", err && err.message); return c.json({ error: 'Failed to add credits' }, 500)
   }
 })

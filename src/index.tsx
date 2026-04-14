@@ -47,6 +47,19 @@ import type { Bindings } from './types'
 
 const app = new Hono<{ Bindings: Bindings }>()
 
+// Baseline security headers on every response.
+// CSP kept permissive enough for inline scripts we still emit from the SSR layer,
+// but tightens framing, referrer, content-sniffing, and HSTS.
+app.use('*', async (c, next) => {
+  await next()
+  const headers = c.res.headers
+  if (!headers.has('X-Content-Type-Options')) headers.set('X-Content-Type-Options', 'nosniff')
+  if (!headers.has('X-Frame-Options')) headers.set('X-Frame-Options', 'SAMEORIGIN')
+  if (!headers.has('Referrer-Policy')) headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
+  if (!headers.has('Strict-Transport-Security')) headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
+  if (!headers.has('Permissions-Policy')) headers.set('Permissions-Policy', 'geolocation=(self), camera=(), microphone=(), payment=(self)')
+})
+
 // CORS for API routes
 app.use('/api/*', cors({
   origin: ['https://www.roofmanager.ca', 'https://roofmanager.ca', 'http://localhost:3000', 'http://0.0.0.0:3000'],
@@ -68,10 +81,14 @@ app.use('*', async (c, next) => {
   
   const url = new URL(c.req.url)
   if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/static/')) return
-  
+
+  // Don't fire GA4 on authenticated admin surfaces — keeps staff activity out of analytics
+  // and avoids leaking admin URLs into GA4 reports.
+  const isAdminSurface = url.pathname.startsWith('/admin') || url.pathname.startsWith('/super-admin') || url.pathname === '/login'
+
   try {
     const body = await c.res.text()
-    if (body.includes('</body>') && !body.includes('tracker.js')) {
+    if (body.includes('</body>') && !body.includes('tracker.js') && !isAdminSurface) {
       // Build GA4 gtag.js snippet if measurement ID is configured
       const ga4Id = (c.env as any).GA4_MEASUREMENT_ID || ''
       const ga4Script = ga4Id ? `
@@ -684,11 +701,16 @@ app.get('/feed.xml', async (c) => {
   let items = ''
   try {
     const posts = await c.env.DB.prepare("SELECT slug, title, excerpt, content, cover_image_url, author_name, published_at, updated_at, category FROM blog_posts WHERE status = 'published' ORDER BY published_at DESC LIMIT 50").all()
+    const xmlText = (s: any) => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    const xmlAttr = (s: any) => xmlText(s).replace(/"/g,'&quot;').replace(/'/g,'&apos;')
     for (const p of (posts.results || []) as any[]) {
       const pubDate = p.published_at ? new Date(p.published_at).toUTCString() : new Date().toUTCString()
-      const desc = (p.excerpt || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-      const title = (p.title || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-      items += `<item><title>${title}</title><link>${base}/blog/${p.slug}</link><guid isPermaLink="true">${base}/blog/${p.slug}</guid><pubDate>${pubDate}</pubDate><description>${desc}</description><category>${p.category || 'roofing'}</category><author>sales@roofmanager.ca (${p.author_name || 'Roof Manager Team'})</author>${p.cover_image_url ? `<enclosure url="${p.cover_image_url}" type="image/jpeg"/>` : ''}</item>\n`
+      const desc = xmlText(p.excerpt || '')
+      const title = xmlText(p.title || '')
+      const author = xmlText(p.author_name || 'Roof Manager Team')
+      const category = xmlText(p.category || 'roofing')
+      const slug = xmlText(p.slug || '')
+      items += `<item><title>${title}</title><link>${base}/blog/${slug}</link><guid isPermaLink="true">${base}/blog/${slug}</guid><pubDate>${pubDate}</pubDate><description>${desc}</description><category>${category}</category><author>sales@roofmanager.ca (${author})</author>${p.cover_image_url ? `<enclosure url="${xmlAttr(p.cover_image_url)}" type="image/jpeg"/>` : ''}</item>\n`
     }
   } catch {}
   const rss = `<?xml version="1.0" encoding="UTF-8"?>
@@ -713,9 +735,12 @@ app.get('/image-sitemap.xml', async (c) => {
   let urls = `<url><loc>${base}/</loc><image:image><image:loc>${base}/static/logo.png</image:loc><image:title>Roof Manager Logo</image:title></image:image></url>\n`
   try {
     const posts = await c.env.DB.prepare("SELECT slug, title, cover_image_url FROM blog_posts WHERE status = 'published' AND cover_image_url IS NOT NULL AND cover_image_url != '' ORDER BY published_at DESC LIMIT 100").all()
+    const xmlText = (s: any) => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    const xmlAttr = (s: any) => xmlText(s).replace(/"/g,'&quot;').replace(/'/g,'&apos;')
     for (const p of (posts.results || []) as any[]) {
-      const title = (p.title || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
-      urls += `<url><loc>${base}/blog/${p.slug}</loc><image:image><image:loc>${p.cover_image_url}</image:loc><image:title>${title}</image:title></image:image></url>\n`
+      const title = xmlText(p.title || '')
+      const slug = xmlText(p.slug || '')
+      urls += `<url><loc>${base}/blog/${slug}</loc><image:image><image:loc>${xmlText(p.cover_image_url)}</image:loc><image:title>${title}</image:title></image:image></url>\n`
     }
   } catch {}
   const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">\n${urls}</urlset>`
