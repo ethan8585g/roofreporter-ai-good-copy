@@ -4,6 +4,8 @@ import { validateAdminSession, requireSuperadmin } from './auth'
 import { generateReportForOrder } from './reports'
 import { validateTraceUi } from '../utils/trace-validation'
 import { RoofMeasurementEngine, traceUiToEnginePayload } from '../services/roof-measurement-engine'
+import { generateApiKey } from '../middleware/api-auth'
+import { addCredits } from '../services/api-billing'
 
 export const adminRoutes = new Hono<{ Bindings: Bindings }>()
 
@@ -2626,3 +2628,187 @@ async function adminLivekitAPI(apiKey: string, apiSecret: string, livekitUrl: st
   const resp = await fetch(`${httpUrl}${path}`, { method: 'POST', headers: { 'Authorization': `Bearer ${jwt}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
   return resp.json()
 }
+
+// ============================================================
+// PUBLIC API ADMIN ROUTES
+// Superadmin management of API accounts, keys, and queue.
+// All routes require superadmin role.
+// ============================================================
+
+// ── GET /api/admin/api-queue — Jobs awaiting tracing ────────────────────────
+adminRoutes.get('/api-queue', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin) return c.json({ error: 'Admin auth required' }, 401)
+  if (admin.role !== 'superadmin') return c.json({ error: 'Superadmin required' }, 403)
+
+  const jobs = await c.env.DB.prepare(`
+    SELECT j.*, a.company_name, a.contact_email,
+           o.order_number, o.status as order_status,
+           (strftime('%s','now') - j.created_at) as age_seconds
+    FROM api_jobs j
+    JOIN api_accounts a ON a.id = j.account_id
+    LEFT JOIN orders o ON o.id = j.order_id
+    WHERE j.status IN ('queued','tracing','generating')
+    ORDER BY j.created_at ASC
+    LIMIT 100
+  `).all()
+
+  return c.json({ jobs: jobs.results })
+})
+
+// ── GET /api/admin/api-accounts — List all API accounts ────────────────────
+adminRoutes.get('/api-accounts', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin) return c.json({ error: 'Admin auth required' }, 401)
+  if (admin.role !== 'superadmin') return c.json({ error: 'Superadmin required' }, 403)
+
+  const accounts = await c.env.DB.prepare(`
+    SELECT a.*,
+      (SELECT COUNT(*) FROM api_keys k WHERE k.account_id = a.id AND k.revoked_at IS NULL) as active_key_count,
+      (SELECT COUNT(*) FROM api_jobs j WHERE j.account_id = a.id) as total_jobs,
+      (SELECT COUNT(*) FROM api_jobs j WHERE j.account_id = a.id AND j.status = 'ready') as completed_jobs
+    FROM api_accounts a
+    ORDER BY a.created_at DESC
+  `).all()
+
+  return c.json({ accounts: accounts.results })
+})
+
+// ── POST /api/admin/api-accounts — Create a new API account ─────────────────
+adminRoutes.post('/api-accounts', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin) return c.json({ error: 'Admin auth required' }, 401)
+  if (admin.role !== 'superadmin') return c.json({ error: 'Superadmin required' }, 403)
+
+  const body = await c.req.json()
+  const { company_name, contact_email, initial_credits } = body
+
+  if (!company_name || !contact_email) {
+    return c.json({ error: 'company_name and contact_email are required' }, 400)
+  }
+
+  const id = crypto.randomUUID()
+  const now = Math.floor(Date.now() / 1000)
+  const credits = Math.max(0, parseInt(initial_credits ?? '0', 10))
+
+  await c.env.DB.prepare(`
+    INSERT INTO api_accounts (id, company_name, contact_email, credit_balance, status, created_at)
+    VALUES (?, ?, ?, ?, 'active', ?)
+  `).bind(id, company_name, contact_email, credits, now).run()
+
+  // Record initial credits if any
+  if (credits > 0) {
+    await addCredits(c.env.DB, id, credits, 'admin_adjustment', 'initial_grant')
+  }
+
+  return c.json({ success: true, account_id: id }, 201)
+})
+
+// ── PATCH /api/admin/api-accounts/:accountId — Update account ───────────────
+adminRoutes.patch('/api-accounts/:accountId', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin) return c.json({ error: 'Admin auth required' }, 401)
+  if (admin.role !== 'superadmin') return c.json({ error: 'Superadmin required' }, 403)
+
+  const accountId = c.req.param('accountId')
+  const body = await c.req.json()
+  const { status, add_credits } = body
+
+  if (status && !['active','suspended','banned'].includes(status)) {
+    return c.json({ error: 'Invalid status' }, 400)
+  }
+
+  if (status) {
+    await c.env.DB.prepare('UPDATE api_accounts SET status = ? WHERE id = ?')
+      .bind(status, accountId).run()
+  }
+
+  if (add_credits && parseInt(add_credits, 10) > 0) {
+    await addCredits(c.env.DB, accountId, parseInt(add_credits, 10), 'admin_adjustment', 'admin_topup')
+  }
+
+  return c.json({ success: true })
+})
+
+// ── POST /api/admin/api-accounts/:accountId/keys — Issue a new API key ──────
+adminRoutes.post('/api-accounts/:accountId/keys', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin) return c.json({ error: 'Admin auth required' }, 401)
+  if (admin.role !== 'superadmin') return c.json({ error: 'Superadmin required' }, 403)
+
+  const accountId = c.req.param('accountId')
+  const body = await c.req.json().catch(() => ({}))
+  const keyName = (body as any).name ?? null
+
+  const account = await c.env.DB.prepare('SELECT id FROM api_accounts WHERE id = ?')
+    .bind(accountId).first()
+  if (!account) return c.json({ error: 'Account not found' }, 404)
+
+  const { raw, prefix, hash } = await generateApiKey()
+  const keyId = crypto.randomUUID()
+  const now = Math.floor(Date.now() / 1000)
+
+  await c.env.DB.prepare(`
+    INSERT INTO api_keys (id, account_id, key_prefix, key_hash, name, created_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).bind(keyId, accountId, prefix, hash, keyName, now).run()
+
+  return c.json({
+    key_id: keyId,
+    api_key: raw,
+    prefix,
+    message: 'Save this API key — it will not be shown again.'
+  }, 201)
+})
+
+// ── DELETE /api/admin/api-accounts/:accountId/keys/:keyId — Revoke key ──────
+adminRoutes.delete('/api-accounts/:accountId/keys/:keyId', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin) return c.json({ error: 'Admin auth required' }, 401)
+  if (admin.role !== 'superadmin') return c.json({ error: 'Superadmin required' }, 403)
+
+  const { accountId, keyId } = c.req.param()
+  const now = Math.floor(Date.now() / 1000)
+
+  await c.env.DB.prepare(
+    'UPDATE api_keys SET revoked_at = ? WHERE id = ? AND account_id = ?'
+  ).bind(now, keyId, accountId).run()
+
+  return c.json({ success: true })
+})
+
+// ── GET /api/admin/api-accounts/:accountId/keys — List keys for account ─────
+adminRoutes.get('/api-accounts/:accountId/keys', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin) return c.json({ error: 'Admin auth required' }, 401)
+  if (admin.role !== 'superadmin') return c.json({ error: 'Superadmin required' }, 403)
+
+  const accountId = c.req.param('accountId')
+  const keys = await c.env.DB.prepare(`
+    SELECT id, account_id, key_prefix, name, last_used_at, revoked_at, created_at
+    FROM api_keys WHERE account_id = ? ORDER BY created_at DESC
+  `).bind(accountId).all()
+
+  return c.json({ keys: keys.results })
+})
+
+// ── GET /api/admin/api-stats — Dashboard summary ────────────────────────────
+adminRoutes.get('/api-stats', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin) return c.json({ error: 'Admin auth required' }, 401)
+  if (admin.role !== 'superadmin') return c.json({ error: 'Superadmin required' }, 403)
+
+  const [queueSize, totalAccounts, totalJobs, recentErrors] = await Promise.all([
+    c.env.DB.prepare(`SELECT COUNT(*) as cnt FROM api_jobs WHERE status IN ('queued','tracing','generating')`).first<any>(),
+    c.env.DB.prepare(`SELECT COUNT(*) as cnt FROM api_accounts WHERE status = 'active'`).first<any>(),
+    c.env.DB.prepare(`SELECT COUNT(*) as cnt FROM api_jobs`).first<any>(),
+    c.env.DB.prepare(`SELECT COUNT(*) as cnt FROM api_jobs WHERE status = 'failed' AND created_at > strftime('%s','now') - 86400`).first<any>()
+  ])
+
+  return c.json({
+    queue_depth: queueSize?.cnt ?? 0,
+    active_accounts: totalAccounts?.cnt ?? 0,
+    total_jobs: totalJobs?.cnt ?? 0,
+    errors_last_24h: recentErrors?.cnt ?? 0
+  })
+})

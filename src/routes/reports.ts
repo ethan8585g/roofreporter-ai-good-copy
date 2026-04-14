@@ -33,6 +33,9 @@ import { enhanceReportViaGemini } from '../services/gemini-enhance'
 import { segmentWithGemini, geminiOutlineToTracePayload } from '../services/sam3-segmentation'
 import { generateReportImagery, buildAIImageryHTML } from '../services/ai-image-generation'
 import { buildEmailWrapper, sendGmailEmail, sendViaResend, sendGmailOAuth2 } from '../services/email'
+import { signPdfUrl } from '../services/pdf-signing'
+import { debitCredit, refundCredit } from '../services/api-billing'
+import { deliverWebhook, buildWebhookPayload } from '../services/api-webhook'
 
 // Cloud Run Custom AI (Colab-trained model)
 import {
@@ -418,6 +421,11 @@ reportsRoutes.post('/:orderId/generate', async (c) => {
   // They caused Cloudflare Workers to timeout (>30s).
   // The dashboard polls /enhancement-status and the client
   // can trigger /enhance or /ai-imagery in separate requests.
+
+  // ── API Order: finalize job, sign PDF URL, fire webhook ─────────────────
+  finalizeApiJobIfNeeded(orderId, c.env).catch(err =>
+    console.error('[API-finalize] Error finalizing API job for order', orderId, err)
+  )
 
   return c.json({
     success: true,
@@ -3075,4 +3083,65 @@ async function _generateReportForOrderInner(
     try { await repo.markReportFailed(env.DB, orderId, err.message); await repo.markOrderStatus(env.DB, orderId, 'failed') } catch {}
     return { success: false, error: err.message }
   }
+}
+
+
+// ============================================================
+// API Order Finalization Hook
+// Called after report generation succeeds for API-sourced orders.
+// Flips api_jobs status to 'ready', signs PDF URL, fires webhook.
+// ============================================================
+async function finalizeApiJobIfNeeded(orderId: number | string, env: Bindings): Promise<void> {
+  // Look up the order to check if it came from the API
+  const order = await env.DB.prepare(
+    'SELECT source, api_job_id FROM orders WHERE id = ?'
+  ).bind(orderId).first<{ source: string; api_job_id: string | null }>()
+
+  if (!order || order.source !== 'api' || !order.api_job_id) return
+
+  const jobId = order.api_job_id
+
+  // Fetch the job + account for webhook delivery
+  const job = await env.DB.prepare(`
+    SELECT j.*, a.webhook_url, a.webhook_secret
+    FROM api_jobs j
+    JOIN api_accounts a ON a.id = j.account_id
+    WHERE j.id = ?
+  `).bind(jobId).first<any>()
+
+  if (!job) {
+    console.warn(`[API-finalize] api_job ${jobId} not found`)
+    return
+  }
+
+  if (job.status !== 'queued' && job.status !== 'tracing' && job.status !== 'generating') {
+    // Already finalized (retry scenario)
+    return
+  }
+
+  // Sign a fresh PDF URL
+  const baseUrl = 'https://www.roofmanager.ca'
+  const { url: pdfUrl, expiresAt } = await signPdfUrl(baseUrl, env.JWT_SECRET, jobId)
+
+  const now = Math.floor(Date.now() / 1000)
+
+  // Update job to ready
+  await env.DB.prepare(`
+    UPDATE api_jobs
+    SET status = 'ready', pdf_signed_url = ?, pdf_expires_at = ?, finalized_at = ?
+    WHERE id = ?
+  `).bind(pdfUrl, expiresAt, now, jobId).run()
+
+  // Record the debit (hold already decremented balance)
+  await debitCredit(env.DB, job.account_id, jobId)
+
+  // Fire webhook if registered
+  if (job.webhook_url && job.webhook_secret) {
+    const updatedJob = { ...job, status: 'ready', pdf_signed_url: pdfUrl, pdf_expires_at: expiresAt }
+    const payload = buildWebhookPayload(updatedJob)
+    deliverWebhook(env.DB, jobId, job.webhook_url, job.webhook_secret, payload, 0)
+      .catch(err => console.error('[API-finalize] Webhook delivery error:', err))
+  }
+
+  console.log(`[API-finalize] Job ${jobId} finalized for order ${orderId} — PDF signed, webhook queued`)
 }

@@ -53,6 +53,7 @@ import { homeDesignerRoutes } from './routes/home-designer'
 import { sam3Routes } from './routes/sam3-analysis'
 import { platformAdmin } from './routes/platform-admin'
 import { fieldRoutes, fieldUiRoutes } from './routes/field'
+import { publicApiRoutes } from './routes/public-api'
 import type { Bindings } from './types'
 
 const app = new Hono<{ Bindings: Bindings }>()
@@ -247,6 +248,9 @@ window.trackAdsConversion = function(kind, params) {
     // If body read fails, pass through original response
   }
 })
+
+// ── Public API service (third-party integrations) ──
+app.route('/v1', publicApiRoutes)
 
 // Mount API routes
 app.route('/api/orders', ordersRoutes)

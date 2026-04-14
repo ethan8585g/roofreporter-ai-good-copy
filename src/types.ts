@@ -885,3 +885,72 @@ export {
   hipValleyFactor, rakeFactor, classifyComplexity,
   computeMaterialEstimate, computeRASYieldAnalysis
 } from './utils/geo-math'
+
+// ============================================================
+// PUBLIC API SERVICE TYPES
+// ============================================================
+
+export type ApiAccountStatus = 'active' | 'suspended' | 'banned'
+export type ApiJobStatus = 'queued' | 'tracing' | 'generating' | 'ready' | 'failed' | 'cancelled'
+export type ApiCreditReason = 'purchase' | 'hold' | 'debit' | 'refund' | 'admin_adjustment'
+
+export interface ApiAccount {
+  id: string
+  company_name: string
+  contact_email: string
+  credit_balance: number
+  status: ApiAccountStatus
+  webhook_url: string | null
+  webhook_secret: string | null
+  created_at: number
+  stripe_customer_id: string | null
+}
+
+export interface ApiKey {
+  id: string
+  account_id: string
+  key_prefix: string
+  key_hash: string
+  name: string | null
+  last_used_at: number | null
+  revoked_at: number | null
+  created_at: number
+}
+
+export interface ApiCreditLedgerEntry {
+  id: string
+  account_id: string
+  delta: number
+  balance_after: number
+  reason: ApiCreditReason
+  ref_type: string | null
+  ref_id: string | null
+  created_at: number
+}
+
+export interface ApiJob {
+  id: string
+  account_id: string
+  api_key_id: string
+  order_id: number | null
+  status: ApiJobStatus
+  address: string
+  lat: number | null
+  lng: number | null
+  client_reference: string | null
+  credits_held: number
+  error_code: string | null
+  error_message: string | null
+  pdf_signed_url: string | null
+  pdf_expires_at: number | null
+  webhook_delivered_at: number | null
+  webhook_attempts: number
+  created_at: number
+  finalized_at: number | null
+}
+
+/** Context object attached to Hono request by api-auth middleware */
+export interface ApiAuthContext {
+  account: ApiAccount
+  apiKey: ApiKey
+}
