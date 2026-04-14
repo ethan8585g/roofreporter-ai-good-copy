@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import type { Bindings } from '../types'
 import { getActivityFeed } from '../lib/team-activity'
+import { sanitizePermissions } from '../lib/permissions'
 
 export const teamRoutes = new Hono<{ Bindings: Bindings }>()
 
@@ -212,15 +213,10 @@ teamRoutes.post('/invite', async (c) => {
   const name = (body.name || '').trim()
   const role = body.role === 'admin' ? 'admin' : 'member'
 
-  // Validate and sanitize permissions — only known keys allowed
-  const ALLOWED_PERM_KEYS = ['orders', 'reports', 'crm', 'secretary', 'virtual_tryon']
-  const defaultPerms = { orders: true, reports: true, crm: true, secretary: true, virtual_tryon: true }
-  let permissions = defaultPerms
-  if (body.permissions && typeof body.permissions === 'object') {
-    permissions = Object.fromEntries(
-      ALLOWED_PERM_KEYS.map(k => [k, body.permissions[k] !== false])
-    ) as typeof defaultPerms
-  }
+  // Validate and sanitize permissions — unified key list lives in lib/permissions.
+  // Prior bug: invite stored 5 keys, accept stored 13, so members silently got
+  // defaults for keys the inviter never saw.
+  const permissions = sanitizePermissions(body.permissions)
 
   if (!email || !name) {
     return c.json({ error: 'Email and name are required' }, 400)
@@ -347,18 +343,8 @@ teamRoutes.post('/accept', async (c) => {
     return c.json({ error: 'You are already a member of this team' }, 409)
   }
 
-  // Carry permissions from the invitation (if stored), else full access default.
-  // Enforce a strict shape — a corrupted or hostile `permissions` JSON blob must not
-  // be able to grant modules the inviter did not authorize.
-  const ALLOWED_PERM_KEYS = ['orders','reports','crm','pipeline','jobs','invoices','proposals','secretary','cold_call','d2d','billing','settings','team']
-  const sanitizePermissions = (raw: any) => {
-    let obj: any = {}
-    if (raw && typeof raw === 'object' && !Array.isArray(raw)) obj = raw
-    else { try { const p = JSON.parse(String(raw || '{}')); if (p && typeof p === 'object' && !Array.isArray(p)) obj = p } catch {} }
-    const out: Record<string, boolean> = {}
-    for (const k of ALLOWED_PERM_KEYS) out[k] = obj[k] === true
-    return out
-  }
+  // Carry permissions from the invitation (sanitized via the shared lib so
+  // unknown keys can't sneak through from a forged or corrupted JSON blob).
   const invitePermissions = sanitizePermissions(invite.permissions)
 
   // Create team member record
@@ -425,12 +411,8 @@ teamRoutes.put('/members/:id', async (c) => {
     values.push(body.name.trim())
   }
   if (body.permissions) {
-    const ALLOWED_PERM_KEYS = ['orders','reports','crm','pipeline','jobs','invoices','proposals','secretary','cold_call','d2d','billing','settings','team']
-    const raw = body.permissions && typeof body.permissions === 'object' && !Array.isArray(body.permissions) ? body.permissions : {}
-    const safe: Record<string, boolean> = {}
-    for (const k of ALLOWED_PERM_KEYS) safe[k] = raw[k] === true
     updates.push('permissions = ?')
-    values.push(JSON.stringify(safe))
+    values.push(JSON.stringify(sanitizePermissions(body.permissions)))
   }
 
   if (updates.length === 0) return c.json({ error: 'No changes provided' }, 400)

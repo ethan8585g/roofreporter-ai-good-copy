@@ -4,6 +4,7 @@ import { validateAdminSession } from './auth'
 import { sendGmailOAuth2 } from '../services/email'
 import { logFromContext } from '../lib/team-activity'
 import { resolveTeamOwner } from './team'
+import { loadPermissionContext, can, redactFinancials, type PermissionContext } from '../lib/permissions'
 
 export const invoiceRoutes = new Hono<{ Bindings: Bindings }>()
 
@@ -29,6 +30,7 @@ invoiceRoutes.use('/*', async (c, next) => {
     `).bind(token).first<any>()
     if (session) {
       const teamInfo = await resolveTeamOwner(c.env.DB, session.customer_id)
+      const perms = await loadPermissionContext(c.env.DB, session.customer_id)
       c.set('admin' as any, {
         id: session.customer_id,
         email: session.email,
@@ -36,6 +38,7 @@ invoiceRoutes.use('/*', async (c, next) => {
         role: 'customer',
         ownerCustomerId: teamInfo.ownerId,
       })
+      c.set('perms' as any, perms)
       return next()
     }
   }
@@ -53,6 +56,12 @@ export function getScope(c: any): { isAdmin: boolean; ownerId: number | null } {
     return { isAdmin: false, ownerId: (user.ownerCustomerId ?? user.id) as number }
   }
   return { isAdmin: true, ownerId: null }
+}
+
+// Pulls the PermissionContext loaded by the auth middleware. Super-admins
+// (non-customer sessions) have no context; they bypass everything.
+function getPerms(c: any): PermissionContext | null {
+  return (c.get('perms' as any) as PermissionContext | undefined) || null
 }
 
 // ── Helpers ──────────────────────────────────────────────────
@@ -157,7 +166,14 @@ invoiceRoutes.get('/', async (c) => {
           FROM invoices
         `).first()
 
-    return c.json({ invoices: invoices.results, stats })
+    // Team members without view_financials see rows but not dollar amounts.
+    const perms = getPerms(c)
+    const hideMoney = perms ? !can(perms, 'view_financials') : false
+    const rows = invoices.results as any[]
+    const safeInvoices = hideMoney ? rows.map(r => redactFinancials(r)) : rows
+    const safeStats = hideMoney && stats ? redactFinancials(stats as any) : stats
+
+    return c.json({ invoices: safeInvoices, stats: safeStats, financials_hidden: hideMoney })
   } catch (err: any) {
     console.error("[error]", err && err.message); return c.json({ error: 'Failed to fetch invoices' }, 500)
   }
@@ -217,7 +233,11 @@ invoiceRoutes.get('/:id', async (c) => {
       } catch {}
     }
 
-    return c.json({ invoice, items: items.results, payment_links: paymentLinks, attached_report: attachedReport })
+    const perms = getPerms(c)
+    const hideMoney = perms ? !can(perms, 'view_financials') : false
+    const safeInvoice = hideMoney ? redactFinancials(invoice as any) : invoice
+    const safeItems = hideMoney ? (items.results as any[]).map(r => redactFinancials(r)) : items.results
+    return c.json({ invoice: safeInvoice, items: safeItems, payment_links: paymentLinks, attached_report: attachedReport, financials_hidden: hideMoney })
   } catch (err: any) {
     console.error("[error]", err && err.message); return c.json({ error: 'Failed to fetch invoice' }, 500)
   }
@@ -237,6 +257,12 @@ invoiceRoutes.post('/', async (c) => {
 
     if (!customer_id && !crm_customer_id && !new_customer) return c.json({ error: 'customer_id or new_customer is required' }, 400)
     if (!items || !items.length) return c.json({ error: 'At least one line item is required' }, 400)
+
+    // RBAC: creating documents requires the 'invoices' module permission.
+    const perms = getPerms(c)
+    if (perms && !can(perms, 'invoices')) {
+      return c.json({ error: 'You do not have permission to create invoices or proposals' }, 403)
+    }
 
     // For non-admin sessions, reject cross-customer writes up front.
     const scope = getScope(c)
@@ -851,6 +877,10 @@ invoiceRoutes.post('/webhook/square', async (c) => {
 invoiceRoutes.delete('/:id', async (c) => {
   try {
     const id = c.req.param('id')
+    const perms = getPerms(c)
+    if (perms && !can(perms, 'delete_records')) {
+      return c.json({ error: 'You do not have permission to delete records' }, 403)
+    }
     const invoice = await c.env.DB.prepare("SELECT id, status, customer_id FROM invoices WHERE id = ?").bind(id).first<any>()
     if (!invoice) return c.json({ error: 'Invoice not found' }, 404)
     const scope = getScope(c)
@@ -888,7 +918,9 @@ invoiceRoutes.get('/stats/summary', async (c) => {
     const stats = scope.isAdmin
       ? await c.env.DB.prepare(base).first()
       : await c.env.DB.prepare(base + ' WHERE customer_id = ?').bind(scope.ownerId).first()
-    return c.json({ stats })
+    const perms = getPerms(c)
+    const hideMoney = perms ? !can(perms, 'view_financials') : false
+    return c.json({ stats: hideMoney && stats ? redactFinancials(stats as any) : stats, financials_hidden: hideMoney })
   } catch (err: any) {
     console.error("[error]", err && err.message); return c.json({ error: 'Failed to fetch stats' }, 500)
   }

@@ -83,7 +83,8 @@ function render() {
     { id:'blog', label:'Blog', icon:'fa-blog' },
     { id:'activity', label:'Activity Log', icon:'fa-history' },
     { id:'sip', label:'SIP Bridge', icon:'fa-phone-volume' },
-    { id:'search', label:'Report Search', icon:'fa-search' }
+    { id:'search', label:'Report Search', icon:'fa-search' },
+    { id:'claims', label:'Claims', icon:'fa-file-shield' }
   ];
 
   root.innerHTML = `
@@ -110,6 +111,354 @@ function render() {
       ${A.tab === 'activity' ? renderActivity() : ''}
       ${A.tab === 'sip' ? renderSipBridge() : ''}
       ${A.tab === 'search' ? renderReportSearch() : ''}
+      ${A.tab === 'claims' ? renderClaims() : ''}
+    </div>
+  `;
+}
+
+// ============================================================
+// INSURANCE CLAIMS (MVP)
+// ============================================================
+const Claims = {
+  list: [],
+  stats: null,
+  customers: [],
+  loading: false,
+  selected: null,
+  detail: null,
+  error: null
+};
+
+async function loadClaims() {
+  Claims.loading = true;
+  Claims.error = null;
+  try {
+    const [cr, custRes] = await Promise.all([
+      adminFetch('/api/claims'),
+      adminFetch('/api/crm/customers')
+    ]);
+    if (cr && cr.ok) { const d = await cr.json(); Claims.list = d.claims || []; Claims.stats = d.stats; }
+    if (custRes && custRes.ok) { const d = await custRes.json(); Claims.customers = d.customers || []; }
+  } catch (e) { Claims.error = e.message; }
+  Claims.loading = false;
+  render();
+}
+
+async function openClaim(id) {
+  Claims.selected = id;
+  Claims.detail = null;
+  render();
+  const r = await adminFetch('/api/claims/' + id);
+  if (r && r.ok) { Claims.detail = await r.json(); render(); }
+}
+
+function closeClaim() { Claims.selected = null; Claims.detail = null; render(); }
+
+async function createClaim() {
+  const customerId = document.getElementById('nc_customer').value;
+  if (!customerId) { alert('Select a customer'); return; }
+  const body = {
+    crm_customer_id: Number(customerId),
+    claim_number: document.getElementById('nc_number').value.trim() || null,
+    insurance_company: document.getElementById('nc_company').value.trim() || null,
+    policy_number: document.getElementById('nc_policy').value.trim() || null,
+    date_of_loss: document.getElementById('nc_dol').value || null,
+    loss_type: document.getElementById('nc_losstype').value || null,
+    deductible: Number(document.getElementById('nc_deductible').value || 0),
+    rcv_amount: Number(document.getElementById('nc_rcv').value || 0),
+    depreciation: Number(document.getElementById('nc_depr').value || 0),
+    adjuster_name: document.getElementById('nc_adj_name').value.trim() || null,
+    adjuster_email: document.getElementById('nc_adj_email').value.trim() || null,
+    adjuster_phone: document.getElementById('nc_adj_phone').value.trim() || null
+  };
+  const r = await fetch('/api/claims', { method:'POST', headers:{...adminHeaders(),'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  const d = await r.json();
+  if (!d.success) { alert(d.error || 'Failed'); return; }
+  await loadClaims();
+  openClaim(d.id);
+}
+
+async function updateClaimField(id, field, value) {
+  const d = Claims.detail && Claims.detail.claim;
+  if (!d) return;
+  const patch = { ...d, [field]: value };
+  await fetch('/api/claims/' + id, { method:'PUT', headers:{...adminHeaders(),'Content-Type':'application/json'}, body: JSON.stringify(patch) });
+  openClaim(id);
+}
+
+async function deleteClaim(id) {
+  if (!confirm('Delete this claim? This cannot be undone.')) return;
+  await fetch('/api/claims/' + id, { method:'DELETE', headers: adminHeaders() });
+  closeClaim();
+  loadClaims();
+}
+
+async function addLineItem(claimId) {
+  const desc = prompt('Description (e.g. "Remove and replace asphalt shingles"):');
+  if (!desc) return;
+  const qty = Number(prompt('Quantity:', '1') || 1);
+  const unit = prompt('Unit (SQ, LF, EA):', 'SQ') || 'EA';
+  const price = Number(prompt('Unit price ($):', '0') || 0);
+  await fetch('/api/claims/' + claimId + '/line-items', {
+    method:'POST', headers:{...adminHeaders(),'Content-Type':'application/json'},
+    body: JSON.stringify({ description: desc, quantity: qty, unit, unit_price: price, rcv: qty*price })
+  });
+  openClaim(claimId);
+}
+
+async function deleteLineItem(claimId, itemId) {
+  if (!confirm('Delete line item?')) return;
+  await fetch('/api/claims/'+claimId+'/line-items/'+itemId, { method:'DELETE', headers: adminHeaders() });
+  openClaim(claimId);
+}
+
+async function addSupplement(claimId) {
+  const reason = prompt('Reason for supplement:');
+  if (!reason) return;
+  const amount = Number(prompt('Requested amount ($):', '0') || 0);
+  await fetch('/api/claims/'+claimId+'/supplements', {
+    method:'POST', headers:{...adminHeaders(),'Content-Type':'application/json'},
+    body: JSON.stringify({ reason, requested_amount: amount, status: 'draft' })
+  });
+  openClaim(claimId);
+}
+
+async function updateSupplementStatus(claimId, supId, sup, status) {
+  const body = { ...sup, status, submitted_date: status==='submitted' ? new Date().toISOString().slice(0,10) : sup.submitted_date, response_date: (status==='approved'||status==='denied'||status==='partially_approved') ? new Date().toISOString().slice(0,10) : sup.response_date };
+  await fetch('/api/claims/'+claimId+'/supplements/'+supId, { method:'PUT', headers:{...adminHeaders(),'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  openClaim(claimId);
+}
+
+async function uploadXactimate(claimId) {
+  const input = document.getElementById('xact_file');
+  const file = input && input.files && input.files[0];
+  if (!file) { alert('Choose a PDF first'); return; }
+  if (file.size > 6 * 1024 * 1024) { alert('Max 6MB'); return; }
+  const reader = new FileReader();
+  reader.onload = async () => {
+    await fetch('/api/claims/'+claimId+'/xactimate', {
+      method:'POST', headers:{...adminHeaders(),'Content-Type':'application/json'},
+      body: JSON.stringify({ data_url: reader.result, filename: file.name })
+    });
+    openClaim(claimId);
+  };
+  reader.readAsDataURL(file);
+}
+
+function fmtMoney(n) { return '$' + Number(n||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}); }
+
+function claimStatusBadge(status) {
+  const map = {
+    'open':'bg-blue-100 text-blue-700',
+    'inspection_scheduled':'bg-purple-100 text-purple-700',
+    'approved':'bg-green-100 text-green-700',
+    'supplement_pending':'bg-amber-100 text-amber-700',
+    'closed':'bg-gray-200 text-gray-700',
+    'denied':'bg-red-100 text-red-700'
+  };
+  const c = map[status] || 'bg-gray-100 text-gray-600';
+  return '<span class="text-xs px-2 py-0.5 rounded-full font-semibold '+c+'">'+(status||'open').replace(/_/g,' ')+'</span>';
+}
+
+function renderClaims() {
+  if (!Claims.list.length && !Claims.loading && Claims.stats === null) {
+    // First view — kick off load
+    setTimeout(loadClaims, 0);
+    return '<div class="text-center py-12 text-gray-500"><div class="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto"></div><p class="mt-3 text-sm">Loading claims...</p></div>';
+  }
+
+  if (Claims.selected && Claims.detail) return renderClaimDetail();
+
+  const s = Claims.stats || {};
+  return `
+    <div class="mb-6 grid grid-cols-2 md:grid-cols-4 gap-4">
+      ${mc('Total Claims', s.total||0, 'fa-file-shield', 'blue')}
+      ${mc('Open', s.open_count||0, 'fa-folder-open', 'amber')}
+      ${mc('Approved', s.approved_count||0, 'fa-check-circle', 'green')}
+      ${mc('Total RCV', fmtMoney(s.total_rcv||0), 'fa-dollar-sign', 'purple')}
+    </div>
+
+    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mb-6">
+      <h3 class="text-sm font-bold text-gray-700 mb-4"><i class="fas fa-plus-circle mr-1 text-blue-500"></i>New Claim</h3>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+        <select id="nc_customer" class="px-3 py-2 border border-gray-200 rounded-lg">
+          <option value="">Select customer...</option>
+          ${Claims.customers.map(c => `<option value="${c.id}">${c.name}${c.address ? ' — '+c.address : ''}</option>`).join('')}
+        </select>
+        <input id="nc_number" placeholder="Claim number" class="px-3 py-2 border border-gray-200 rounded-lg">
+        <input id="nc_company" placeholder="Insurance company" class="px-3 py-2 border border-gray-200 rounded-lg">
+        <input id="nc_policy" placeholder="Policy number" class="px-3 py-2 border border-gray-200 rounded-lg">
+        <input id="nc_dol" type="date" placeholder="Date of loss" class="px-3 py-2 border border-gray-200 rounded-lg">
+        <select id="nc_losstype" class="px-3 py-2 border border-gray-200 rounded-lg">
+          <option value="">Loss type...</option><option>hail</option><option>wind</option><option>fire</option><option>hurricane</option><option>other</option>
+        </select>
+        <input id="nc_deductible" type="number" step="0.01" placeholder="Deductible" class="px-3 py-2 border border-gray-200 rounded-lg">
+        <input id="nc_rcv" type="number" step="0.01" placeholder="RCV amount" class="px-3 py-2 border border-gray-200 rounded-lg">
+        <input id="nc_depr" type="number" step="0.01" placeholder="Depreciation" class="px-3 py-2 border border-gray-200 rounded-lg">
+        <input id="nc_adj_name" placeholder="Adjuster name" class="px-3 py-2 border border-gray-200 rounded-lg">
+        <input id="nc_adj_email" placeholder="Adjuster email" class="px-3 py-2 border border-gray-200 rounded-lg">
+        <input id="nc_adj_phone" placeholder="Adjuster phone" class="px-3 py-2 border border-gray-200 rounded-lg">
+      </div>
+      <button onclick="createClaim()" class="mt-4 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold"><i class="fas fa-plus mr-1"></i>Create Claim</button>
+    </div>
+
+    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+      <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
+        <h3 class="text-sm font-bold text-gray-700"><i class="fas fa-list mr-1 text-blue-500"></i>Claims</h3>
+        <button onclick="loadClaims()" class="text-xs text-gray-500 hover:text-gray-700"><i class="fas fa-sync mr-1"></i>Refresh</button>
+      </div>
+      ${Claims.list.length === 0 ? `
+        <div class="p-12 text-center text-gray-400 text-sm"><i class="fas fa-inbox text-3xl mb-3 block"></i>No claims yet</div>
+      ` : `
+        <table class="w-full text-sm">
+          <thead class="bg-gray-50 text-xs uppercase text-gray-500">
+            <tr>
+              <th class="text-left px-4 py-3">Claim #</th>
+              <th class="text-left px-4 py-3">Customer</th>
+              <th class="text-left px-4 py-3">Insurance</th>
+              <th class="text-left px-4 py-3">Adjuster</th>
+              <th class="text-right px-4 py-3">RCV</th>
+              <th class="text-right px-4 py-3">Net</th>
+              <th class="text-left px-4 py-3">Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            ${Claims.list.map(c => `
+              <tr class="border-t border-gray-100 hover:bg-gray-50 cursor-pointer" onclick="openClaim(${c.id})">
+                <td class="px-4 py-3 font-mono text-xs">${c.claim_number || '—'}</td>
+                <td class="px-4 py-3"><div class="font-semibold">${c.customer_name||'—'}</div><div class="text-xs text-gray-400">${c.customer_address||''}</div></td>
+                <td class="px-4 py-3">${c.insurance_company || '—'}</td>
+                <td class="px-4 py-3 text-xs">${c.adjuster_name || '—'}${c.adjuster_phone ? '<br><span class="text-gray-400">'+c.adjuster_phone+'</span>' : ''}</td>
+                <td class="px-4 py-3 text-right">${fmtMoney(c.rcv_amount)}</td>
+                <td class="px-4 py-3 text-right font-semibold">${fmtMoney(c.net_claim)}</td>
+                <td class="px-4 py-3">${claimStatusBadge(c.status)}</td>
+                <td class="px-4 py-3 text-right"><i class="fas fa-chevron-right text-gray-300"></i></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `}
+    </div>
+  `;
+}
+
+function renderClaimDetail() {
+  const { claim, line_items, supplements } = Claims.detail;
+  const lineTotal = (line_items||[]).reduce((s,li)=>s+Number(li.rcv||0),0);
+  const supTotal = (supplements||[]).filter(s=>s.status!=='denied').reduce((s,x)=>s+Number(x.approved_amount||x.requested_amount||0),0);
+
+  return `
+    <div class="mb-4 flex items-center gap-3">
+      <button onclick="closeClaim()" class="text-gray-500 hover:text-gray-700"><i class="fas fa-arrow-left mr-1"></i>Back to claims</button>
+      <span class="ml-auto">${claimStatusBadge(claim.status)}</span>
+      <button onclick="deleteClaim(${claim.id})" class="text-xs text-red-500 hover:text-red-700"><i class="fas fa-trash mr-1"></i>Delete</button>
+    </div>
+
+    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mb-6">
+      <div class="flex items-start justify-between mb-4">
+        <div>
+          <h2 class="text-xl font-black text-gray-900">Claim ${claim.claim_number || '#'+claim.id}</h2>
+          <p class="text-sm text-gray-500 mt-0.5">${claim.customer_name || ''} ${claim.customer_address ? '— '+claim.customer_address : ''}</p>
+        </div>
+        <select onchange="updateClaimField(${claim.id},'status',this.value)" class="px-3 py-2 border border-gray-200 rounded-lg text-sm">
+          ${['open','inspection_scheduled','approved','supplement_pending','closed','denied'].map(s=>`<option value="${s}" ${claim.status===s?'selected':''}>${s.replace(/_/g,' ')}</option>`).join('')}
+        </select>
+      </div>
+
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+        <div><p class="text-xs text-gray-400 uppercase">Insurance</p><p class="font-semibold">${claim.insurance_company||'—'}</p></div>
+        <div><p class="text-xs text-gray-400 uppercase">Policy</p><p class="font-semibold">${claim.policy_number||'—'}</p></div>
+        <div><p class="text-xs text-gray-400 uppercase">Date of loss</p><p class="font-semibold">${claim.date_of_loss||'—'}</p></div>
+        <div><p class="text-xs text-gray-400 uppercase">Loss type</p><p class="font-semibold capitalize">${claim.loss_type||'—'}</p></div>
+      </div>
+
+      <div class="mt-6 pt-6 border-t border-gray-100 grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
+        <div><p class="text-xs text-gray-400 uppercase">RCV</p><p class="text-lg font-bold">${fmtMoney(claim.rcv_amount)}</p></div>
+        <div><p class="text-xs text-gray-400 uppercase">ACV</p><p class="text-lg font-bold">${fmtMoney(claim.acv_amount)}</p></div>
+        <div><p class="text-xs text-gray-400 uppercase">Deductible</p><p class="text-lg font-bold">${fmtMoney(claim.deductible)}</p></div>
+        <div><p class="text-xs text-gray-400 uppercase">Depreciation</p><p class="text-lg font-bold">${fmtMoney(claim.depreciation)}</p></div>
+        <div><p class="text-xs text-gray-400 uppercase">Net claim</p><p class="text-lg font-bold text-green-600">${fmtMoney(claim.net_claim)}</p></div>
+      </div>
+
+      <div class="mt-6 pt-6 border-t border-gray-100">
+        <p class="text-xs text-gray-400 uppercase mb-2">Adjuster</p>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+          <div><i class="fas fa-user mr-1 text-gray-400"></i>${claim.adjuster_name||'—'}</div>
+          <div><i class="fas fa-envelope mr-1 text-gray-400"></i>${claim.adjuster_email ? '<a class="text-blue-600" href="mailto:'+claim.adjuster_email+'">'+claim.adjuster_email+'</a>' : '—'}</div>
+          <div><i class="fas fa-phone mr-1 text-gray-400"></i>${claim.adjuster_phone ? '<a class="text-blue-600" href="tel:'+claim.adjuster_phone+'">'+claim.adjuster_phone+'</a>' : '—'}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mb-6">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-sm font-bold text-gray-700"><i class="fas fa-file-upload mr-1 text-blue-500"></i>Xactimate estimate</h3>
+        ${claim.xactimate_file_url ? `<a href="${claim.xactimate_file_url}" download="${claim.xactimate_filename||'estimate.pdf'}" class="text-xs text-blue-600 hover:underline"><i class="fas fa-download mr-1"></i>${claim.xactimate_filename||'Download'}</a>` : ''}
+      </div>
+      <div class="flex items-center gap-3">
+        <input id="xact_file" type="file" accept="application/pdf,.esx,.pdf" class="text-sm flex-1">
+        <button onclick="uploadXactimate(${claim.id})" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold">Upload</button>
+      </div>
+      <p class="text-xs text-gray-400 mt-2">Upload the adjuster's Xactimate PDF (max 6MB). ESX parsing coming soon.</p>
+    </div>
+
+    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mb-6">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-sm font-bold text-gray-700"><i class="fas fa-list-ol mr-1 text-blue-500"></i>Scope line items</h3>
+        <button onclick="addLineItem(${claim.id})" class="text-xs px-3 py-1.5 bg-blue-600 text-white rounded-lg"><i class="fas fa-plus mr-1"></i>Add</button>
+      </div>
+      ${(line_items||[]).length === 0 ? '<p class="text-sm text-gray-400 text-center py-6">No line items yet</p>' : `
+        <table class="w-full text-sm">
+          <thead class="text-xs uppercase text-gray-400">
+            <tr><th class="text-left py-2">Description</th><th class="text-center">Qty</th><th class="text-center">Unit</th><th class="text-right">Unit $</th><th class="text-right">RCV</th><th></th></tr>
+          </thead>
+          <tbody>
+            ${line_items.map(li => `<tr class="border-t border-gray-100">
+              <td class="py-2">${li.description}</td>
+              <td class="text-center">${li.quantity}</td>
+              <td class="text-center">${li.unit||''}</td>
+              <td class="text-right">${fmtMoney(li.unit_price)}</td>
+              <td class="text-right font-semibold">${fmtMoney(li.rcv)}</td>
+              <td class="text-right"><button onclick="deleteLineItem(${claim.id},${li.id})" class="text-red-400 hover:text-red-600 text-xs"><i class="fas fa-times"></i></button></td>
+            </tr>`).join('')}
+            <tr class="border-t-2 border-gray-200 font-bold"><td colspan="4" class="py-2 text-right">Total RCV</td><td class="text-right">${fmtMoney(lineTotal)}</td><td></td></tr>
+          </tbody>
+        </table>
+      `}
+    </div>
+
+    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-sm font-bold text-gray-700"><i class="fas fa-plus-square mr-1 text-amber-500"></i>Supplements</h3>
+        <button onclick="addSupplement(${claim.id})" class="text-xs px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg"><i class="fas fa-plus mr-1"></i>New supplement</button>
+      </div>
+      ${(supplements||[]).length === 0 ? '<p class="text-sm text-gray-400 text-center py-6">No supplements submitted</p>' : `
+        <div class="space-y-3">
+          ${supplements.map(s => `
+            <div class="border border-gray-100 rounded-xl p-4">
+              <div class="flex items-start justify-between mb-2">
+                <div>
+                  <p class="text-sm font-bold">Supplement #${s.supplement_number}</p>
+                  <p class="text-xs text-gray-500 mt-0.5">${s.reason||''}</p>
+                </div>
+                ${claimStatusBadge(s.status)}
+              </div>
+              <div class="grid grid-cols-3 gap-3 text-sm mt-3">
+                <div><p class="text-xs text-gray-400 uppercase">Requested</p><p class="font-semibold">${fmtMoney(s.requested_amount)}</p></div>
+                <div><p class="text-xs text-gray-400 uppercase">Approved</p><p class="font-semibold text-green-600">${fmtMoney(s.approved_amount)}</p></div>
+                <div><p class="text-xs text-gray-400 uppercase">Submitted</p><p class="font-semibold">${s.submitted_date||'—'}</p></div>
+              </div>
+              <div class="mt-3 flex gap-2 flex-wrap">
+                ${['draft','submitted','approved','partially_approved','denied'].map(st => `<button onclick='updateSupplementStatus(${claim.id},${s.id},${JSON.stringify(s).replace(/'/g,"&#39;")},"${st}")' class="text-xs px-2 py-1 rounded-lg ${s.status===st?'bg-blue-600 text-white':'bg-gray-100 text-gray-600 hover:bg-gray-200'}">${st.replace(/_/g,' ')}</button>`).join('')}
+              </div>
+            </div>
+          `).join('')}
+          <div class="pt-3 border-t border-gray-100 text-right text-sm">
+            <span class="text-gray-400">Total supplement value:</span> <span class="font-bold ml-2">${fmtMoney(supTotal)}</span>
+          </div>
+        </div>
+      `}
     </div>
   `;
 }

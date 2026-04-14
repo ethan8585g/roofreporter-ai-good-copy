@@ -959,21 +959,33 @@ reportsRoutes.post('/calculate-from-trace', async (c) => {
       }, 400)
     }
 
-    // Fetch real pitch from Google Solar API using centroid of traced eave points
+    // Fetch real pitch from Google Solar API using centroid of traced eave points.
+    // Track confidence (solar_api > trace_derived > default) so downstream reports
+    // can warn customers when pitch is best-guess.
     let pitchRise = default_pitch || 5.0
     let pitchSource = 'default'
+    let pitchConfidence: 'high' | 'medium' | 'low' = 'low'
+    let solarPitchRise: number | null = null
+    let solarPitchDeg: number | null = null
     let solarFootprintFt2 = 0
     const solarApiKey = c.env.GOOGLE_SOLAR_API_KEY || c.env.GOOGLE_MAPS_API_KEY
-    if (solarApiKey && trace.eaves.length >= 3) {
+    // Pick centroid source: sections if provided, else flat eaves array
+    const centroidPts: any[] = Array.isArray(trace.eaves_sections) && trace.eaves_sections.length > 0
+      ? trace.eaves_sections.flat()
+      : (Array.isArray(trace.eaves) ? trace.eaves : [])
+    if (solarApiKey && centroidPts.length >= 3) {
       try {
-        const centroidLat = trace.eaves.reduce((s: number, p: any) => s + p.lat, 0) / trace.eaves.length
-        const centroidLng = trace.eaves.reduce((s: number, p: any) => s + p.lng, 0) / trace.eaves.length
+        const centroidLat = centroidPts.reduce((s: number, p: any) => s + p.lat, 0) / centroidPts.length
+        const centroidLng = centroidPts.reduce((s: number, p: any) => s + p.lng, 0) / centroidPts.length
         const solarResult = await fetchSolarPitchAndImagery(
           centroidLat, centroidLng, solarApiKey, solarApiKey, house_sqft || 1500
         )
         if (solarResult.pitch_degrees > 0) {
-          pitchRise = Math.round(12 * Math.tan(solarResult.pitch_degrees * Math.PI / 180) * 10) / 10
+          solarPitchDeg = solarResult.pitch_degrees
+          solarPitchRise = Math.round(12 * Math.tan(solarResult.pitch_degrees * Math.PI / 180) * 10) / 10
+          pitchRise = solarPitchRise
           pitchSource = 'solar_api'
+          pitchConfidence = 'high'
           console.log(`[CalculateFromTrace] Solar API pitch: ${solarResult.pitch_degrees}° → ${pitchRise}:12 (${solarResult.api_duration_ms}ms)`)
         }
         if (solarResult.roof_footprint_ft2 > 0) {
@@ -982,6 +994,9 @@ reportsRoutes.post('/calculate-from-trace', async (c) => {
       } catch (e: any) {
         console.warn(`[CalculateFromTrace] Solar API pitch fetch failed (using default ${pitchRise}:12): ${e.message}`)
       }
+    }
+    if (pitchSource === 'default' && default_pitch) {
+      pitchConfidence = 'medium'  // user supplied, but not verified
     }
 
     // Convert trace UI format to engine payload
@@ -1009,9 +1024,50 @@ reportsRoutes.post('/calculate-from-trace', async (c) => {
       `pitch_source=${pitchSource}`)
 
     // Return structured response for the order form UI
+    // Pitch audit: compare Solar API vs. user default when both available.
+    // Flags homes where the Solar pitch diverges sharply from a user-provided
+    // default, letting the customer acknowledge/override before report gen.
+    const pitchAudit = (() => {
+      if (solarPitchRise != null && default_pitch && Math.abs(solarPitchRise - default_pitch) >= 1.5) {
+        return {
+          status: 'mismatch' as const,
+          solar_rise: solarPitchRise,
+          user_default_rise: default_pitch,
+          delta: Math.round((solarPitchRise - default_pitch) * 10) / 10,
+          msg: `Google Solar pitch (${solarPitchRise}:12) differs from provided default (${default_pitch}:12) by ${Math.abs(solarPitchRise - default_pitch).toFixed(1)} rise. Using Solar value — review if this looks wrong.`,
+        }
+      }
+      return null
+    })()
+
+    // Enhanced Solar cross-check: compare traced footprint against BOTH the
+    // user-declared house_sqft and Google Solar's roof-footprint estimate.
+    const enhancedSolarCheck = (() => {
+      if (solarFootprintFt2 <= 0) return null
+      const traced = report.key_measurements.total_projected_footprint_ft2
+      const diff = Math.abs(traced - solarFootprintFt2)
+      const pct = solarFootprintFt2 > 0 ? (diff / solarFootprintFt2) * 100 : 0
+      const verdict = pct <= 8 ? 'aligned' : pct <= 20 ? 'minor_variance' : 'significant_variance'
+      return {
+        solar_footprint_ft2: Math.round(solarFootprintFt2),
+        traced_footprint_ft2: Math.round(traced),
+        variance_pct: Math.round(pct * 10) / 10,
+        verdict,
+        msg: verdict === 'aligned'
+          ? `Traced footprint matches Google Solar's estimate within ${pct.toFixed(1)}%.`
+          : verdict === 'minor_variance'
+            ? `Traced footprint differs from Google Solar's estimate by ${pct.toFixed(1)}% — reasonable.`
+            : `Traced footprint differs from Google Solar's estimate by ${pct.toFixed(1)}%. Double-check the trace.`,
+      }
+    })()
+
     return c.json({
       success: true,
       pitch_source: pitchSource,
+      pitch_confidence: pitchConfidence,
+      pitch_audit: pitchAudit,
+      pitch_solar_deg: solarPitchDeg,
+      solar_cross_check: enhancedSolarCheck,
       calculation_ms: elapsed,
       engine_version: report.report_meta.engine_version,
       validation_warnings: validation.warnings,
@@ -1193,10 +1249,20 @@ reportsRoutes.post('/auto-trace', async (c) => {
     const lm = result.linear_measurements
     const mat = result.materials_estimate
 
+    // Flag low-confidence auto-traces so the UI can prompt the user to
+    // switch to manual mode instead of silently accepting a rough outline.
+    const qualityScore = geminiResult.image_quality_score || 0
+    const lowConfidence = qualityScore < 60
+    const qualityWarning = lowConfidence
+      ? `Auto-detection confidence is ${qualityScore}/100 — below the 60 threshold for a reliable trace. Recommended: switch to manual tracing and refine the outline.`
+      : null
+
     return c.json({
       success: true,
       auto_trace_source: 'gemini',
-      gemini_confidence: geminiResult.image_quality_score || 0,
+      gemini_confidence: qualityScore,
+      gemini_low_confidence: lowConfidence,
+      quality_warning: qualityWarning,
       pitch_rise: finalPitchRise,
       pitch_label: km.dominant_pitch_label,
       trace: traceJson,

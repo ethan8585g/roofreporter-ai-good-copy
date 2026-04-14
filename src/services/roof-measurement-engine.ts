@@ -135,6 +135,11 @@ export interface LineDetail {
   slope_factor: number
   is_bi_slope: boolean
   auto_classified: boolean
+  // Confidence of the eave-edge projection used for common-run
+  // (1 = clearly nearest, 0 = ambiguous between multiple sections).
+  // Always 1 for horizontal lines (not projected).
+  projection_confidence: number
+  projection_section_index: number  // -1 if not applicable
 }
 
 export interface FaceDetail {
@@ -868,6 +873,10 @@ export class RoofMeasurementEngine {
   private origin: { lat: number; lng: number }
   private snapper: VertexSnapper
   private eavesCart: CartesianPt[]
+  // Extra eave sections (garage, porch, etc.) projected to Cartesian so the
+  // common-run algorithm can project hips/valleys to the *nearest* section,
+  // not only the primary polygon. Index 0 is always this.eavesCart.
+  private allEavesCart: CartesianPt[][] = []
   private ridgesCart: { id: string; pts: CartesianPt[]; pitch: number | null; slope_ref: string }[]
   private hipsCart: { id: string; pts: CartesianPt[]; pitch: number | null; slope_ref: string }[]
   private valleysCart: { id: string; pts: CartesianPt[]; pitch: number | null; slope_ref: string }[]
@@ -938,6 +947,24 @@ export class RoofMeasurementEngine {
       const last = this.eavesCart[this.eavesCart.length - 1]
       if (dist2D(first, last) > 0.01) {
         this.eavesCart.push({ ...first })
+      }
+    }
+
+    // Project extra eave sections (garage, porch, additions) into Cartesian.
+    // Used by common-run projection so hips/valleys over a secondary roof
+    // don't get pulled toward an unrelated primary-polygon edge.
+    this.allEavesCart = [this.eavesCart]
+    for (let si = 0; si < this.rawEavesSections.length; si++) {
+      const sec = this.rawEavesSections[si]
+      const projSec = sec.map((p, i) => {
+        const cp = projectPoint(p, this.origin.lat, this.origin.lng)
+        const snapped = this.snapper.snap(cp.x, cp.y, cp.z, `eave_sec${si}_${i}`)
+        return { ...cp, x: snapped.x, y: snapped.y, z: snapped.z }
+      })
+      if (projSec.length >= 3) {
+        const f = projSec[0], l = projSec[projSec.length - 1]
+        if (dist2D(f, l) > 0.01) projSec.push({ ...f })
+        this.allEavesCart.push(projSec)
       }
     }
 
@@ -1050,19 +1077,49 @@ export class RoofMeasurementEngine {
   }
 
   // ── COMMON RUN: project point onto nearest eave ────────
+  //
+  // Searches across ALL eave sections (primary + extras) to handle
+  // multi-structure roofs (garage + main house). Returns the distance to
+  // the best edge plus a confidence score:
+  //   confidence = 1 - (best / secondBest)   → 0 when two edges are
+  //   equidistant (ambiguous), ≈1 when best clearly wins.
 
   private computeCommonRunFt(px: number, py: number): number {
-    if (this.eavesCart.length < 2) return 0
+    return this.computeCommonRun(px, py).runFt
+  }
 
-    let bestDist = Infinity
-    const n = this.eavesCart.length - 1
-    for (let i = 0; i < n; i++) {
-      const a = this.eavesCart[i], b = this.eavesCart[i + 1]
-      const { projX, projY } = pointToLineProjection(px, py, a.x, a.y, b.x, b.y)
-      const d = Math.sqrt((px - projX) ** 2 + (py - projY) ** 2)
-      if (d < bestDist) bestDist = d
+  private computeCommonRun(px: number, py: number): {
+    runFt: number
+    confidence: number
+    section_index: number
+  } {
+    const sections = this.allEavesCart
+    if (!sections.length || sections[0].length < 2) {
+      return { runFt: 0, confidence: 0, section_index: -1 }
     }
-    return bestDist * M_TO_FT
+    let best = Infinity
+    let second = Infinity
+    let bestSection = 0
+    for (let s = 0; s < sections.length; s++) {
+      const ring = sections[s]
+      const n = ring.length - 1
+      for (let i = 0; i < n; i++) {
+        const a = ring[i], b = ring[i + 1]
+        const { projX, projY } = pointToLineProjection(px, py, a.x, a.y, b.x, b.y)
+        const d = Math.sqrt((px - projX) ** 2 + (py - projY) ** 2)
+        if (d < best) {
+          second = best
+          best = d
+          bestSection = s
+        } else if (d < second) {
+          second = d
+        }
+      }
+    }
+    const confidence = second === Infinity || second < 1e-9
+      ? 1
+      : Math.max(0, Math.min(1, 1 - best / second))
+    return { runFt: best * M_TO_FT, confidence, section_index: bestSection }
   }
 
   // ── TRUE LENGTH with common-run algorithm ──────────────
@@ -1073,18 +1130,18 @@ export class RoofMeasurementEngine {
     kind: string,
     pts: CartesianPt[],
     hasZ: boolean
-  ): { sloped: number; commonRunFt: number; deltaZFt: number } {
+  ): { sloped: number; commonRunFt: number; deltaZFt: number; projectionConfidence: number; projectionSection: number } {
     const cat = categoriseLine(kind)
     const horizFt = horizM * M_TO_FT
 
     if (cat === 'horizontal') {
-      return { sloped: horizFt, commonRunFt: 0, deltaZFt: 0 }
+      return { sloped: horizFt, commonRunFt: 0, deltaZFt: 0, projectionConfidence: 1, projectionSection: -1 }
     }
 
     // If we have DSM elevation data, use true 3D distance
     if (hasZ) {
       const sloped3D = polyline3DLengthM(pts) * M_TO_FT
-      return { sloped: sloped3D, commonRunFt: 0, deltaZFt: 0 }
+      return { sloped: sloped3D, commonRunFt: 0, deltaZFt: 0, projectionConfidence: 1, projectionSection: -1 }
     }
 
     // ── Apply formulas from Python engine ──
@@ -1095,26 +1152,32 @@ export class RoofMeasurementEngine {
       if (cosT < 1e-9) {
         throw new Error(`Vertical slope produces infinite rake length`)
       }
-      return { sloped: horizFt / cosT, commonRunFt: 0, deltaZFt: 0 }
+      return { sloped: horizFt / cosT, commonRunFt: 0, deltaZFt: 0, projectionConfidence: 1, projectionSection: -1 }
     }
 
     if (kind === 'hip' || kind === 'valley') {
-      // Common run: project endpoint onto nearest eave
-      // Use the endpoint farthest from eave (ridge end)
+      // Common run: project endpoint farthest from eave onto the nearest
+      // eave edge ACROSS ALL SECTIONS (primary + extras).
       let maxR = 0
+      let conf = 1
+      let sec = -1
       for (const pt of pts) {
-        const r = this.computeCommonRunFt(pt.x, pt.y)
-        if (r > maxR) maxR = r
+        const r = this.computeCommonRun(pt.x, pt.y)
+        if (r.runFt > maxR) {
+          maxR = r.runFt
+          conf = r.confidence
+          sec = r.section_index
+        }
       }
       const deltaZ = maxR * Math.tan(theta)
       const slopedFt = Math.sqrt(horizFt * horizFt + deltaZ * deltaZ)
-      return { sloped: slopedFt, commonRunFt: maxR, deltaZFt: deltaZ }
+      return { sloped: slopedFt, commonRunFt: maxR, deltaZFt: deltaZ, projectionConfidence: conf, projectionSection: sec }
     }
 
     // Default: slope factor
     const rise = this.defPitch
     const sf = slopeFactor(rise)
-    return { sloped: horizFt * sf, commonRunFt: 0, deltaZFt: 0 }
+    return { sloped: horizFt * sf, commonRunFt: 0, deltaZFt: 0, projectionConfidence: 1, projectionSection: -1 }
   }
 
   // ── 2D FOOTPRINT AREA (Shoelace) ──────────────────────
@@ -1168,7 +1231,7 @@ export class RoofMeasurementEngine {
       const hasZ = seg.pts.length >= 2 &&
         Math.abs(seg.pts[0].z) > 0.001 && Math.abs(seg.pts[seg.pts.length - 1].z) > 0.001
 
-      const { sloped, commonRunFt, deltaZFt } = this.computeTrueLength(
+      const { sloped, commonRunFt, deltaZFt, projectionConfidence, projectionSection } = this.computeTrueLength(
         horizM, theta, kind, seg.pts, hasZ
       )
 
@@ -1187,6 +1250,8 @@ export class RoofMeasurementEngine {
         slope_factor:     round(sf, 4),
         is_bi_slope:      isBiSlope,
         auto_classified:  false,
+        projection_confidence:    round(projectionConfidence, 3),
+        projection_section_index: projectionSection,
       }
     })
   }
@@ -1692,6 +1757,22 @@ export class RoofMeasurementEngine {
       }
     }
     for (const w of geometryWarnings) notes.push(`⚠ GEOMETRY: ${w}`)
+
+    // Flag hip/valley lines whose common-run projection was ambiguous
+    // (two or more eave edges from different sections were nearly equidistant).
+    // This most often means the line was drawn between two roof structures
+    // (main house / garage) and may be measuring the wrong one.
+    const ambiguousProjections: string[] = []
+    const allLines = [...hipSegs, ...valleySegs]
+    for (const line of allLines) {
+      if (line.common_run_ft > 0 && line.projection_confidence < 0.7) {
+        ambiguousProjections.push(
+          `${line.type} "${line.id}" projected with low confidence ` +
+          `(${Math.round(line.projection_confidence * 100)}%) — verify it belongs to the intended eave section.`
+        )
+      }
+    }
+    for (const w of ambiguousProjections) notes.push(`⚠ PROJECTION: ${w}`)
 
     // Cross-check against external source (Solar API, EagleView, etc.)
     let crossCheck: CrossCheck | undefined

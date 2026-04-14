@@ -14,6 +14,7 @@ import { solarPipelineRoutes } from './routes/solar-pipeline'
 import { invoiceRoutes } from './routes/invoices'
 import { squareRoutes } from './routes/square'
 import { crmRoutes } from './routes/crm'
+import { claimsRoutes } from './routes/claims'
 import { propertyImageryRoutes } from './routes/property-imagery'
 import { blogRoutes } from './routes/blog'
 import { d2dRoutes } from './routes/d2d'
@@ -254,6 +255,7 @@ app.route('/api/customer', customerAuthRoutes)
 app.route('/api/invoices', invoiceRoutes)
 app.route('/api/square', squareRoutes)
 app.route('/api/crm', crmRoutes)
+app.route('/api/claims', claimsRoutes)
 app.route('/api/property-imagery', propertyImageryRoutes)
 app.route('/api/blog', blogRoutes)
 app.route('/api/d2d', d2dRoutes)
