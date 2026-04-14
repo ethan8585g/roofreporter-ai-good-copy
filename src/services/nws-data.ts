@@ -146,11 +146,17 @@ export async function fetchIEMLocalStormReports(daysBack: number): Promise<HailR
   for (const f of features) {
     try {
     const p = f.properties || {}
-    const typeRaw: string = String(p.type || p.typetext || '').toLowerCase()
+    // IEM LSRs encode type as a single-letter code (p.type) OR full text (p.typetext).
+    // Codes: H=hail, G=tstm wind gust, D=tstm wind damage, M=marine tstm wind,
+    // T=tornado, F=flash flood, R=rain, S=snow, etc. We only care about storm-damage
+    // causing events.
+    const code = String(p.type || '').toUpperCase()
+    const text = String(p.typetext || '').toLowerCase()
     let type: HailReport['type'] | null = null
-    if (typeRaw.includes('hail')) type = 'hail'
-    else if (typeRaw.includes('tornado')) type = 'tornado'
-    else if (typeRaw.includes('wind') || typeRaw.includes('tstm wnd') || typeRaw.includes('gust')) type = 'wind'
+    if (code === 'H' || text.includes('hail')) type = 'hail'
+    else if (code === 'T' || text.includes('tornado')) type = 'tornado'
+    else if (code === 'G' || code === 'D' || code === 'M' ||
+             text.includes('wind') || text.includes('tstm wnd') || text.includes('gust')) type = 'wind'
     if (!type) continue
 
     const geom = f.geometry
@@ -161,8 +167,8 @@ export async function fetchIEMLocalStormReports(daysBack: number): Promise<HailR
     const mag = p.magnitude != null ? parseFloat(String(p.magnitude)) : NaN
     const sizeInches = type === 'hail' && !isNaN(mag) ? mag : 0
 
-    // Skip tiny hail (< 0.5") — too small to cause roof damage
-    if (type === 'hail' && sizeInches < 0.5) continue
+    // Skip pea-sized hail (< 0.25") — below that threshold reports are noise.
+    if (type === 'hail' && sizeInches < 0.25) continue
 
     reports.push({
       id: `iem:${p.valid}_${lat}_${lng}_${type}`,
