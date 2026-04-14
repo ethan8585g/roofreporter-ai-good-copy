@@ -99,6 +99,7 @@
   function hydrateFromLayout() {
     if (state.hydrated || !state.layout || !state.img || !state.canvas) return;
     var L = state.layout;
+    recomputePanelSizeFromScale();
     var src = (L.user_panels && L.user_panels.length) ? L.user_panels : (L.suggested_panels || []);
     if (!src.length) { state.hydrated = true; return; }
     var srcSize = L.image_size_px || 1600;
@@ -375,8 +376,8 @@
             '<div>' +
               '<p class="text-xs font-bold text-gray-400 uppercase mb-2">Panel Size</p>' +
               '<div class="grid grid-cols-2 gap-2">' +
-                '<div><label class="text-xs text-gray-500">W (px)</label><input type="number" id="sdPanelW" value="' + state.panelW + '" min="10" max="200" class="w-full px-2 py-1 bg-gray-700 border border-gray-600 rounded text-xs text-center text-white" onchange="window._sdUpdatePanelSize()"></div>' +
-                '<div><label class="text-xs text-gray-500">H (px)</label><input type="number" id="sdPanelH" value="' + state.panelH + '" min="10" max="200" class="w-full px-2 py-1 bg-gray-700 border border-gray-600 rounded text-xs text-center text-white" onchange="window._sdUpdatePanelSize()"></div>' +
+                '<div><label class="text-xs text-gray-500">W (px, to scale)</label><input type="number" id="sdPanelW" value="' + state.panelW + '" readonly class="w-full px-2 py-1 bg-gray-700 border border-gray-600 rounded text-xs text-center text-white opacity-70 cursor-not-allowed"></div>' +
+                '<div><label class="text-xs text-gray-500">H (px, to scale)</label><input type="number" id="sdPanelH" value="' + state.panelH + '" readonly class="w-full px-2 py-1 bg-gray-700 border border-gray-600 rounded text-xs text-center text-white opacity-70 cursor-not-allowed"></div>' +
               '</div>' +
             '</div>' +
             // Stats
@@ -533,6 +534,7 @@
     state.imgDrawW = canvasW;
     state.imgDrawH = canvasH;
 
+    recomputePanelSizeFromScale();
     drawCanvas();
     attachCanvasEvents();
     populateEquipmentUI();
@@ -694,6 +696,22 @@
     var srcMpp = (156543.03392 * Math.cos(lat * Math.PI / 180)) / Math.pow(2, L.image_zoom) / 2; // /2 for scale=2
     var srcSize = L.image_size_px || 1600;
     return srcMpp * (srcSize / state.imgDrawW);
+  }
+
+  // Lock panelW/H to real-world meters at the current image scale.
+  // Default module: 1.045 m × 1.879 m (typical residential 400 W panel).
+  function recomputePanelSizeFromScale() {
+    var mpp = metersPerCanvasPx();
+    if (!mpp || mpp <= 0) return;
+    var L = state.layout || {};
+    var wM = L.panel_width_meters || 1.045;
+    var hM = L.panel_height_meters || 1.879;
+    state.panelW = Math.max(6, Math.round(wM / mpp));
+    state.panelH = Math.max(10, Math.round(hM / mpp));
+    var wi = document.getElementById('sdPanelW');
+    var hi = document.getElementById('sdPanelH');
+    if (wi) wi.value = state.panelW;
+    if (hi) hi.value = state.panelH;
   }
 
   function rectsOverlap(a, b) {
@@ -1053,9 +1071,10 @@
     }
   };
 
+  // Panel size is locked to real-world scale; inputs are readonly. Kept as a no-op
+  // so any stale DOM references don't throw.
   window._sdUpdatePanelSize = function() {
-    state.panelW = parseInt(document.getElementById('sdPanelW').value) || 40;
-    state.panelH = parseInt(document.getElementById('sdPanelH').value) || 68;
+    recomputePanelSizeFromScale();
     drawCanvas();
   };
 
