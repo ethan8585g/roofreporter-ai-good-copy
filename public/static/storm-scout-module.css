@@ -77,6 +77,42 @@
 .ss-cursor-label { font-size:11px; color:#cbd5e1; font-variant-numeric:tabular-nums; min-width:160px; text-align:right; }
 .ss-speed { background:#1f2937; color:#e5e7eb; border:1px solid rgba(255,255,255,0.1); padding:4px 6px; border-radius:6px; font-size:12px; }
 
+.ss-sat-type { width:100%; margin-top:6px; background:#1f2937; color:#e5e7eb; border:1px solid rgba(255,255,255,0.1); padding:4px 6px; border-radius:6px; font-size:12px; }
+.ss-sat-attr {
+  position:absolute; left:10px; bottom:90px; background:rgba(17,17,17,0.8);
+  color:#cbd5e1; padding:4px 8px; border-radius:4px; font-size:10px;
+  pointer-events:none; z-index:4;
+}
+
+.ss-ba-btn {
+  display:block; width:100%; margin-top:8px; padding:6px 10px;
+  background:#2563eb; color:#fff; border:0; border-radius:6px;
+  font-size:12px; cursor:pointer;
+}
+.ss-ba-btn:hover { background:#1d4ed8; }
+
+.ss-ba-modal {
+  position:fixed; inset:0; background:rgba(0,0,0,0.75); z-index:9000;
+  display:flex; align-items:center; justify-content:center; padding:20px;
+}
+.ss-ba-inner {
+  background:#111; color:#e5e7eb; border:1px solid rgba(255,255,255,0.1);
+  border-radius:12px; width:100%; max-width:900px; max-height:92vh;
+  overflow:auto; box-shadow:0 20px 60px rgba(0,0,0,0.6);
+}
+.ss-ba-head { display:flex; align-items:center; justify-content:space-between; padding:14px 18px; border-bottom:1px solid rgba(255,255,255,0.08); }
+.ss-ba-head h3 { margin:0; font-size:16px; font-weight:700; }
+.ss-ba-close { background:transparent; color:#9ca3af; border:0; font-size:28px; cursor:pointer; line-height:1; padding:0 6px; }
+.ss-ba-close:hover { color:#fff; }
+.ss-ba-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; padding:14px; }
+.ss-ba-col { background:#0b0b0b; border-radius:8px; overflow:hidden; }
+.ss-ba-label { padding:8px 10px; font-size:12px; color:#9ca3af; border-bottom:1px solid rgba(255,255,255,0.06); }
+.ss-ba-img { display:flex; align-items:center; justify-content:center; min-height:280px; background:#000; }
+.ss-ba-img img { width:100%; height:auto; display:block; }
+.ss-err { color:#fca5a5; font-size:12px; padding:10px; }
+.ss-ba-note { font-size:11px; color:#9ca3af; padding:0 18px 14px; margin:0; }
+@media (max-width: 720px) { .ss-ba-grid { grid-template-columns:1fr; } }
+
 @media (max-width: 768px) {
   .ss-container { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
   .ss-sidebar { max-height: 40vh; }

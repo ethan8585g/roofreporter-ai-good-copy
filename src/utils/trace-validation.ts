@@ -6,6 +6,81 @@
 // absurd coordinates, empty lines, duplicate points.
 // ============================================================
 
+// ─── Shared UI-trace types ──────────────────────────────────────────────
+// Public, reusable types so route handlers and services stop re-declaring
+// the same `{eaves, eaves_sections, ridges,...}` shape inline.
+
+export interface LatLng { lat: number; lng: number }
+
+/** A traced line may be a bare point array (legacy) OR `{pts, pitch?, id?}`. */
+export type UiTraceLine = LatLng[] | { pts: LatLng[]; pitch?: number | string | null; id?: string }
+
+export interface UiTrace {
+  eaves?: LatLng[] | LatLng[][]
+  eaves_sections?: LatLng[][]
+  ridges?: UiTraceLine[]
+  hips?: UiTraceLine[]
+  valleys?: UiTraceLine[]
+  slope_map?: Record<string, string>
+  annotations?: {
+    vents?: LatLng[]
+    skylights?: LatLng[]
+    chimneys?: LatLng[]
+  }
+  traced_at?: string
+}
+
+/**
+ * Discriminated union — the explicit answer to "how is this trace storing
+ * eave sections?". Call `resolveEaves(trace)` and switch on `.kind` instead
+ * of poking `Array.isArray(trace.eaves[0])` at every call site.
+ */
+export type ResolvedEaves =
+  | { kind: 'none'; sections: [] }
+  | { kind: 'single'; sections: [LatLng[]] }
+  | { kind: 'multi';  sections: LatLng[][] }
+
+/**
+ * Resolve a UI trace's eave data into a uniform multi-section array.
+ * Prefers `eaves_sections` when present, falls back to nested `eaves[][]`,
+ * then to flat `eaves[]`. Filters out any section with < 3 points.
+ */
+export function resolveEaves(trace: any): ResolvedEaves {
+  if (!trace || typeof trace !== 'object') return { kind: 'none', sections: [] }
+  const collect = (raw: any): LatLng[][] => {
+    if (!Array.isArray(raw)) return []
+    return raw.filter((s: any) => Array.isArray(s) && s.length >= 3)
+  }
+  if (Array.isArray(trace.eaves_sections) && trace.eaves_sections.length > 0) {
+    const secs = collect(trace.eaves_sections)
+    if (secs.length > 1) return { kind: 'multi',  sections: secs }
+    if (secs.length === 1) return { kind: 'single', sections: [secs[0]] }
+  }
+  if (Array.isArray(trace.eaves)) {
+    if (trace.eaves.length > 0 && Array.isArray(trace.eaves[0])) {
+      const secs = collect(trace.eaves)
+      if (secs.length > 1) return { kind: 'multi',  sections: secs }
+      if (secs.length === 1) return { kind: 'single', sections: [secs[0]] }
+    } else if (trace.eaves.length >= 3) {
+      return { kind: 'single', sections: [trace.eaves as LatLng[]] }
+    }
+  }
+  return { kind: 'none', sections: [] }
+}
+
+/** Pick the largest section by point count — what the engine treats as "primary". */
+export function primaryEaveSection(trace: any): LatLng[] {
+  const r = resolveEaves(trace)
+  if (r.kind === 'none') return []
+  return r.sections.reduce((best, s) => s.length > best.length ? s : best, r.sections[0])
+}
+
+/** Flat array of all eave points across all sections — useful for centroids. */
+export function allEavePoints(trace: any): LatLng[] {
+  const r = resolveEaves(trace)
+  return r.sections.flat()
+}
+
 export type TraceIssueSeverity = 'error' | 'warning'
 
 export interface TraceIssue {
@@ -105,7 +180,10 @@ export function validateTraceUi(trace: any): TraceValidationResult {
     return result
   }
 
-  // ---- Resolve eave sections ----------------------------------------------
+  // ---- Resolve eave sections (via shared helper) --------------------------
+  // Sections here may still contain < 3-point entries — the structural
+  // checks below report those as specific errors. So we pull the raw
+  // arrays directly rather than calling resolveEaves (which drops them).
   let sections: { lat: number; lng: number }[][] = []
   if (Array.isArray(trace.eaves_sections) && trace.eaves_sections.length > 0) {
     sections = trace.eaves_sections.filter((s: any) => Array.isArray(s))

@@ -617,6 +617,7 @@
       computePlaybackWindow();
       renderAlertsOnMap();
       renderHeatmap();
+      if (layers.satellite) renderSatellite();
       var updated = document.getElementById('ssUpdated');
       if (updated) updated.textContent = 'Snapshot: ' + snap.date + ' (' + snap.summary.hailCount + ' hail, ' + snap.summary.alertCount + ' alerts)';
       toast('Loaded snapshot for ' + snap.date, 'info');
