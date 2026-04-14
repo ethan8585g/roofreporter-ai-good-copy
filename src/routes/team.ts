@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import type { Bindings } from '../types'
+import { getActivityFeed } from '../lib/team-activity'
 
 export const teamRoutes = new Hono<{ Bindings: Bindings }>()
 
@@ -325,10 +326,19 @@ teamRoutes.post('/accept', async (c) => {
     return c.json({ error: 'You are already a member of this team' }, 409)
   }
 
-  // Carry permissions from the invitation (if stored), else full access default
-  const invitePermissions = (() => {
-    try { return JSON.parse(invite.permissions || '{}') } catch { return {} }
-  })()
+  // Carry permissions from the invitation (if stored), else full access default.
+  // Enforce a strict shape — a corrupted or hostile `permissions` JSON blob must not
+  // be able to grant modules the inviter did not authorize.
+  const ALLOWED_PERM_KEYS = ['orders','reports','crm','pipeline','jobs','invoices','proposals','secretary','cold_call','d2d','billing','settings','team']
+  const sanitizePermissions = (raw: any) => {
+    let obj: any = {}
+    if (raw && typeof raw === 'object' && !Array.isArray(raw)) obj = raw
+    else { try { const p = JSON.parse(String(raw || '{}')); if (p && typeof p === 'object' && !Array.isArray(p)) obj = p } catch {} }
+    const out: Record<string, boolean> = {}
+    for (const k of ALLOWED_PERM_KEYS) out[k] = obj[k] === true
+    return out
+  }
+  const invitePermissions = sanitizePermissions(invite.permissions)
 
   // Create team member record
   const now = new Date().toISOString()
@@ -394,8 +404,12 @@ teamRoutes.put('/members/:id', async (c) => {
     values.push(body.name.trim())
   }
   if (body.permissions) {
+    const ALLOWED_PERM_KEYS = ['orders','reports','crm','pipeline','jobs','invoices','proposals','secretary','cold_call','d2d','billing','settings','team']
+    const raw = body.permissions && typeof body.permissions === 'object' && !Array.isArray(body.permissions) ? body.permissions : {}
+    const safe: Record<string, boolean> = {}
+    for (const k of ALLOWED_PERM_KEYS) safe[k] = raw[k] === true
     updates.push('permissions = ?')
-    values.push(JSON.stringify(body.permissions))
+    values.push(JSON.stringify(safe))
   }
 
   if (updates.length === 0) return c.json({ error: 'No changes provided' }, 400)
@@ -644,6 +658,33 @@ teamRoutes.get('/activity-summary', async (c) => {
   })
 
   return c.json({ members: members.results, invitations: invitations.results, totals })
+})
+
+// ============================================================
+// GET /team/activity — Paginated audit feed (owner-only)
+// Query: member_id (0 = owner only), entity_type, limit, before
+// ============================================================
+teamRoutes.get('/activity', async (c) => {
+  const auth = await requireAuth(c)
+  if (!auth) return c.json({ error: 'Not authenticated' }, 401)
+  const { customerId } = auth
+  const { ownerId, isTeamMember } = await resolveTeamOwner(c.env.DB, customerId)
+  if (isTeamMember) return c.json({ error: 'Owner only' }, 403)
+
+  const url = new URL(c.req.url)
+  const memberIdParam = url.searchParams.get('member_id')
+  const memberId = memberIdParam != null && memberIdParam !== '' ? parseInt(memberIdParam, 10) : null
+  const entityType = (url.searchParams.get('entity_type') || '') as any
+  const limit = parseInt(url.searchParams.get('limit') || '50', 10)
+  const before = url.searchParams.get('before') || undefined
+
+  const feed = await getActivityFeed(c.env.DB, ownerId, {
+    memberId: memberId != null && !isNaN(memberId) ? memberId : null,
+    entityType: entityType || undefined,
+    limit,
+    before
+  })
+  return c.json(feed)
 })
 
 // ============================================================

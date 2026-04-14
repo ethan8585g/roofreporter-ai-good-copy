@@ -45,7 +45,7 @@ platformAdmin.post('/membership-tiers', async (c) => {
 })
 
 platformAdmin.put('/membership-tiers/:id', async (c) => {
-  const id = parseInt(c.req.param('id'))
+  const id = parseInt(c.req.param('id')); if (isNaN(id)) return c.json({ error: "Invalid id" }, 400);
   const b = await c.req.json()
   try {
     await c.env.DB.prepare(`UPDATE membership_tiers SET name=?, description=?, monthly_price_cents=?, included_reports=?, included_minutes=?, secretary_included=?, cold_call_included=?, features=?, welcome_credits=?, welcome_discount_pct=?, sort_order=? WHERE id=?`).bind(
@@ -58,7 +58,7 @@ platformAdmin.put('/membership-tiers/:id', async (c) => {
 })
 
 platformAdmin.delete('/membership-tiers/:id', async (c) => {
-  const id = parseInt(c.req.param('id'))
+  const id = parseInt(c.req.param('id')); if (isNaN(id)) return c.json({ error: "Invalid id" }, 400);
   try {
     await c.env.DB.prepare('UPDATE membership_tiers SET is_active = 0 WHERE id = ?').bind(id).run()
     return c.json({ success: true })
@@ -147,7 +147,7 @@ platformAdmin.post('/onboard-customer', async (c) => {
 
 // ── TEAM MEMBERS ──────────────────────────────────────────────
 platformAdmin.get('/customers/:customerId/team', async (c) => {
-  const cid = parseInt(c.req.param('customerId'))
+  const cid = parseInt(c.req.param('customerId')); if (isNaN(cid)) return c.json({ error: "Invalid id" }, 400);
   try {
     const members = await c.env.DB.prepare('SELECT id, customer_id, name, email, role, phone, is_active, permissions, created_at FROM customer_team_members WHERE customer_id = ? ORDER BY created_at').bind(cid).all()
     return c.json({ team: members.results })
@@ -155,7 +155,7 @@ platformAdmin.get('/customers/:customerId/team', async (c) => {
 })
 
 platformAdmin.post('/customers/:customerId/team', async (c) => {
-  const cid = parseInt(c.req.param('customerId'))
+  const cid = parseInt(c.req.param('customerId')); if (isNaN(cid)) return c.json({ error: "Invalid id" }, 400);
   const b = await c.req.json()
   if (!b.email || !b.name) return c.json({ error: 'Name and email required' }, 400)
   try {
@@ -171,7 +171,7 @@ platformAdmin.post('/customers/:customerId/team', async (c) => {
 })
 
 platformAdmin.delete('/customers/:customerId/team/:memberId', async (c) => {
-  const mid = parseInt(c.req.param('memberId'))
+  const mid = parseInt(c.req.param('memberId')); if (isNaN(mid)) return c.json({ error: "Invalid id" }, 400);
   try {
     await c.env.DB.prepare('UPDATE customer_team_members SET is_active = 0 WHERE id = ?').bind(mid).run()
     return c.json({ success: true })
@@ -180,7 +180,7 @@ platformAdmin.delete('/customers/:customerId/team/:memberId', async (c) => {
 
 // ── VOICE SECRETARY SETUP (voice, speed, pause, TTS, STT, test) ──
 platformAdmin.get('/customers/:customerId/voice-config', async (c) => {
-  const cid = parseInt(c.req.param('customerId'))
+  const cid = parseInt(c.req.param('customerId')); if (isNaN(cid)) return c.json({ error: "Invalid id" }, 400);
   try {
     const config = await c.env.DB.prepare(`SELECT customer_id, agent_name, agent_voice, agent_language, secretary_mode,
       greeting_script, common_qa, general_notes,
@@ -199,7 +199,7 @@ platformAdmin.get('/customers/:customerId/voice-config', async (c) => {
 })
 
 platformAdmin.put('/customers/:customerId/voice-config', async (c) => {
-  const cid = parseInt(c.req.param('customerId'))
+  const cid = parseInt(c.req.param('customerId')); if (isNaN(cid)) return c.json({ error: "Invalid id" }, 400);
   const b = await c.req.json()
   try {
     const allowed = [
@@ -228,7 +228,7 @@ platformAdmin.put('/customers/:customerId/voice-config', async (c) => {
 
 // Test agent endpoint — triggers a test via LiveKit or returns config for testing
 platformAdmin.post('/customers/:customerId/test-agent', async (c) => {
-  const cid = parseInt(c.req.param('customerId'))
+  const cid = parseInt(c.req.param('customerId')); if (isNaN(cid)) return c.json({ error: "Invalid id" }, 400);
   try {
     const config = await c.env.DB.prepare('SELECT * FROM secretary_config WHERE customer_id = ?').bind(cid).first<any>()
     if (!config) return c.json({ error: 'No config' }, 404)
@@ -253,7 +253,7 @@ platformAdmin.get('/agent-personas', async (c) => {
 })
 
 platformAdmin.get('/agent-personas/:id', async (c) => {
-  const id = parseInt(c.req.param('id'))
+  const id = parseInt(c.req.param('id')); if (isNaN(id)) return c.json({ error: "Invalid id" }, 400);
   try {
     const persona = await c.env.DB.prepare('SELECT * FROM cc_agent_personas WHERE id = ?').bind(id).first<any>()
     if (!persona) return c.json({ error: 'Not found' }, 404)
@@ -281,7 +281,7 @@ platformAdmin.post('/agent-personas', async (c) => {
 })
 
 platformAdmin.put('/agent-personas/:id', async (c) => {
-  const id = parseInt(c.req.param('id'))
+  const id = parseInt(c.req.param('id')); if (isNaN(id)) return c.json({ error: "Invalid id" }, 400);
   const b = await c.req.json()
   try {
     await c.env.DB.prepare(`UPDATE cc_agent_personas SET name=?, description=?, llm_provider=?, llm_model=?, llm_temperature=?, system_prompt=?, tts_provider=?, tts_voice_id=?, tts_speed=?, stt_provider=?, endpointing_ms=?, interruption_sensitivity=?, pause_before_reply_ms=?, script_opening=?, script_value_prop=?, script_objections=?, script_closing=?, script_voicemail=?, knowledge_docs=?, dynamic_variables=?, updated_at=datetime('now') WHERE id=?`).bind(
@@ -298,7 +298,7 @@ platformAdmin.put('/agent-personas/:id', async (c) => {
 })
 
 platformAdmin.delete('/agent-personas/:id', async (c) => {
-  const id = parseInt(c.req.param('id'))
+  const id = parseInt(c.req.param('id')); if (isNaN(id)) return c.json({ error: "Invalid id" }, 400);
   try {
     await c.env.DB.prepare('UPDATE cc_agent_personas SET is_active = 0, updated_at = datetime(\'now\') WHERE id = ?').bind(id).run()
     return c.json({ success: true })
@@ -314,7 +314,7 @@ platformAdmin.get('/sip-mapping', async (c) => {
 })
 
 platformAdmin.put('/sip-mapping/:phoneId', async (c) => {
-  const id = parseInt(c.req.param('phoneId'))
+  const id = parseInt(c.req.param('phoneId')); if (isNaN(id)) return c.json({ error: "Invalid id" }, 400);
   const b = await c.req.json()
   try {
     await c.env.DB.prepare(`UPDATE cc_phone_config SET agent_persona_id=?, agent_type=?, agent_system_prompt=?, agent_voice_id=?, agent_speed=?, agent_pause_ms=?, linked_customer_id=?, ai_greeting=?, ai_persona=?, updated_at=datetime('now') WHERE id=?`).bind(
@@ -348,7 +348,7 @@ platformAdmin.post('/campaigns', async (c) => {
 })
 
 platformAdmin.put('/campaigns/:id', async (c) => {
-  const id = parseInt(c.req.param('id'))
+  const id = parseInt(c.req.param('id')); if (isNaN(id)) return c.json({ error: "Invalid id" }, 400);
   const b = await c.req.json()
   try {
     const fields: string[] = []
@@ -366,7 +366,7 @@ platformAdmin.put('/campaigns/:id', async (c) => {
 
 // CSV Upload for prospects
 platformAdmin.post('/campaigns/:id/upload-csv', async (c) => {
-  const campId = parseInt(c.req.param('id'))
+  const campId = parseInt(c.req.param('id')); if (isNaN(campId)) return c.json({ error: "Invalid id" }, 400);
   const b = await c.req.json()
   const { prospects, dnc_phones } = b // array of { company_name, contact_name, phone, email, ... }
   if (!prospects || !Array.isArray(prospects)) return c.json({ error: 'prospects array required' }, 400)
@@ -409,7 +409,7 @@ platformAdmin.post('/transcript-flags', async (c) => {
 
 // One-click apply flag fix to persona prompt
 platformAdmin.post('/transcript-flags/:id/apply', async (c) => {
-  const id = parseInt(c.req.param('id'))
+  const id = parseInt(c.req.param('id')); if (isNaN(id)) return c.json({ error: "Invalid id" }, 400);
   try {
     const flag = await c.env.DB.prepare('SELECT * FROM cc_transcript_flags WHERE id = ?').bind(id).first<any>()
     if (!flag || !flag.suggested_fix) return c.json({ error: 'No fix available' }, 400)
@@ -421,7 +421,7 @@ platformAdmin.post('/transcript-flags/:id/apply', async (c) => {
 
 // Script variants (A/B testing)
 platformAdmin.get('/agent-personas/:personaId/variants', async (c) => {
-  const pid = parseInt(c.req.param('personaId'))
+  const pid = parseInt(c.req.param('personaId')); if (isNaN(pid)) return c.json({ error: "Invalid id" }, 400);
   try {
     const variants = await c.env.DB.prepare('SELECT * FROM cc_script_variants WHERE persona_id = ? ORDER BY created_at DESC').bind(pid).all()
     return c.json({ variants: variants.results })
@@ -429,7 +429,7 @@ platformAdmin.get('/agent-personas/:personaId/variants', async (c) => {
 })
 
 platformAdmin.post('/agent-personas/:personaId/variants', async (c) => {
-  const pid = parseInt(c.req.param('personaId'))
+  const pid = parseInt(c.req.param('personaId')); if (isNaN(pid)) return c.json({ error: "Invalid id" }, 400);
   const b = await c.req.json()
   try {
     const r = await c.env.DB.prepare('INSERT INTO cc_script_variants (persona_id, variant_name, script_opening, script_value_prop, script_objections, script_closing) VALUES (?,?,?,?,?,?)').bind(
@@ -519,7 +519,7 @@ platformAdmin.get('/service-panel', async (c) => {
 
 // Service panel — edit individual customer's script/speed/voice
 platformAdmin.put('/service-panel/:customerId/quick-edit', async (c) => {
-  const cid = parseInt(c.req.param('customerId'))
+  const cid = parseInt(c.req.param('customerId')); if (isNaN(cid)) return c.json({ error: "Invalid id" }, 400);
   const b = await c.req.json()
   try {
     const fields: string[] = []

@@ -1839,7 +1839,7 @@ secretaryRoutes.post('/sip/outbound-trunk', async (c) => {
     await c.env.DB.prepare(
       `INSERT OR REPLACE INTO sip_trunks (trunk_id, trunk_type, name, phone_number, address, country_code, status, created_at)
        VALUES (?, 'outbound', ?, ?, ?, ?, 'active', datetime('now'))`
-    ).bind(trunkId, name, phone_number, address, country_code).run().catch(() => {})
+    ).bind(trunkId, name, phone_number, address, country_code).run().catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
 
     return c.json({
       success: true,
@@ -1914,7 +1914,7 @@ secretaryRoutes.post('/sip/inbound-trunk', async (c) => {
     await c.env.DB.prepare(
       `INSERT OR REPLACE INTO sip_trunks (trunk_id, trunk_type, name, phone_number, address, country_code, dispatch_rule_id, status, created_at)
        VALUES (?, 'inbound', ?, ?, '', 'CA', ?, 'active', datetime('now'))`
-    ).bind(trunkId, name, phone_number, dispatchId).run().catch(() => {})
+    ).bind(trunkId, name, phone_number, dispatchId).run().catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
 
     return c.json({
       success: true,
@@ -2025,7 +2025,7 @@ secretaryRoutes.delete('/sip/trunk/:trunkId', async (c) => {
     await livekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST',
       '/twirp/livekit.SIP/DeleteSIPTrunk', { sip_trunk_id: trunkId })
 
-    await c.env.DB.prepare(`DELETE FROM sip_trunks WHERE trunk_id = ?`).bind(trunkId).run().catch(() => {})
+    await c.env.DB.prepare(`DELETE FROM sip_trunks WHERE trunk_id = ?`).bind(trunkId).run().catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
     console.log(`[SIP] Deleted trunk: ${trunkId}`)
 
     return c.json({ success: true, deleted: trunkId })
@@ -2213,7 +2213,7 @@ secretaryRoutes.post('/sip/dispatch-rule', async (c) => {
     await c.env.DB.prepare(
       `INSERT OR REPLACE INTO sip_dispatch_rules (dispatch_rule_id, name, rule_type, trunk_ids, room_prefix, room_name, pin, metadata, status, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', datetime('now'))`
-    ).bind(dispatchId, name, rule_type, JSON.stringify(trunk_ids), room_prefix, room_name, pin, finalMetadata).run().catch(() => {})
+    ).bind(dispatchId, name, rule_type, JSON.stringify(trunk_ids), room_prefix, room_name, pin, finalMetadata).run().catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
 
     return c.json({
       success: true,
@@ -2247,7 +2247,7 @@ secretaryRoutes.delete('/sip/dispatch-rule/:ruleId', async (c) => {
     await livekitSipAPI(apiKey, apiSecret, livekitUrl, 'POST',
       '/twirp/livekit.SIP/DeleteSIPDispatchRule', { sip_dispatch_rule_id: ruleId })
 
-    await c.env.DB.prepare(`DELETE FROM sip_dispatch_rules WHERE dispatch_rule_id = ?`).bind(ruleId).run().catch(() => {})
+    await c.env.DB.prepare(`DELETE FROM sip_dispatch_rules WHERE dispatch_rule_id = ?`).bind(ruleId).run().catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
     console.log(`[SIP] Deleted dispatch rule: ${ruleId}`)
 
     return c.json({ success: true, deleted: ruleId })
@@ -2344,12 +2344,12 @@ secretaryRoutes.post('/sip/deploy-agent', async (c) => {
     await c.env.DB.prepare(
       `INSERT OR REPLACE INTO sip_trunks (trunk_id, trunk_type, name, phone_number, address, country_code, dispatch_rule_id, status, created_at)
        VALUES (?, 'inbound', ?, ?, '', 'CA', ?, 'active', datetime('now'))`
-    ).bind(trunkId, `${name} - Trunk`, phone_number, dispatchId).run().catch(() => {})
+    ).bind(trunkId, `${name} - Trunk`, phone_number, dispatchId).run().catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
 
     await c.env.DB.prepare(
       `INSERT OR REPLACE INTO sip_dispatch_rules (dispatch_rule_id, name, rule_type, trunk_ids, room_prefix, room_name, pin, metadata, status, created_at)
        VALUES (?, ?, ?, ?, ?, ?, '', ?, 'active', datetime('now'))`
-    ).bind(dispatchId, `${name} - Dispatch`, rule_type, JSON.stringify([trunkId]), room_prefix, destinationRoom, agentMetadata).run().catch(() => {})
+    ).bind(dispatchId, `${name} - Dispatch`, rule_type, JSON.stringify([trunkId]), room_prefix, destinationRoom, agentMetadata).run().catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
 
     console.log(`[SIP] Agent deployed: trunk=${trunkId}, dispatch=${dispatchId}, phone=${phone_number}`)
 

@@ -272,7 +272,8 @@ export async function sendGmailOAuth2(
       client_id: clientId,
       client_secret: clientSecret,
       refresh_token: refreshToken
-    }).toString()
+    }).toString(),
+    signal: AbortSignal.timeout(10000)
   })
 
   if (!tokenResp.ok) {

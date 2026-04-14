@@ -693,7 +693,7 @@ d2dRoutes.post('/appointments', async (c) => {
           </table>
           <p style="margin-top:20px"><a href="https://www.roofmanager.ca/customer/d2d" style="background:#6366f1;color:#fff;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:600">Open Leads Dashboard</a></p>
         </div>`
-      await sendGmailEmail(c.env.GCP_SERVICE_ACCOUNT_JSON, owner.email, subject, html, owner.email).catch(() => {})
+      await sendGmailEmail(c.env.GCP_SERVICE_ACCOUNT_JSON, owner.email, subject, html, owner.email).catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
     }
   } catch (e) { console.log('[D2D appt email]', (e as any).message) }
 

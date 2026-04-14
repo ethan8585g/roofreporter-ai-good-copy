@@ -45,7 +45,7 @@ agentsRoutes.post('/leads', async (c) => {
       lead_name: String(name).trim().substring(0, 50),
       lead_company: company_name ? String(company_name).trim().substring(0, 50) : '',
       lead_email_domain: emailClean.split('@')[1] || 'unknown'
-    }).catch(() => {})
+    }).catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
 
     // Email notification to sales@roofmanager.ca
     const clientId = (c.env as any).GMAIL_CLIENT_ID

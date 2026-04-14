@@ -787,7 +787,7 @@ customerAuthRoutes.post('/login', async (c) => {
     `).bind(customer.id, token, expiresAt).run()
 
     // Track login event in GA4
-    trackUserLogin(c.env as any, String(customer.id), 'email', { email_domain: customer.email.split('@')[1] || 'unknown' }).catch(() => {})
+    trackUserLogin(c.env as any, String(customer.id), 'email', { email_domain: customer.email.split('@')[1] || 'unknown' }).catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
 
     return c.json({
       success: true,
@@ -1539,7 +1539,7 @@ customerAuthRoutes.post('/forgot-password', async (c) => {
     }
 
     // Cleanup expired/used tokens (non-blocking)
-    c.env.DB.prepare("DELETE FROM password_reset_tokens WHERE (expires_at < datetime('now') OR used = 1) AND created_at < datetime('now', '-1 day')").run().catch(() => {})
+    c.env.DB.prepare("DELETE FROM password_reset_tokens WHERE (expires_at < datetime('now') OR used = 1) AND created_at < datetime('now', '-1 day')").run().catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
 
     return c.json({ success: true, message: 'If an account with that email exists, a password reset link has been sent.' })
   } catch (err: any) {
@@ -1744,7 +1744,7 @@ customerAuthRoutes.get('/gcal/auth-url', async (c) => {
     "UPDATE customers SET gcal_oauth_state = ? WHERE id = ?"
   ).bind(state, customerId).run().catch(async () => {
     // Column may not exist yet — add it
-    await c.env.DB.prepare("ALTER TABLE customers ADD COLUMN gcal_oauth_state TEXT").run().catch(() => {})
+    await c.env.DB.prepare("ALTER TABLE customers ADD COLUMN gcal_oauth_state TEXT").run().catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
     await c.env.DB.prepare("UPDATE customers SET gcal_oauth_state = ? WHERE id = ?").bind(state, customerId).run()
   })
 

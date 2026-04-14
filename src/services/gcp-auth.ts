@@ -168,10 +168,19 @@ export async function getAccessToken(serviceAccountJson: string): Promise<string
   const jwt = await createJWT(sa, scopes)
   const tokenResponse = await exchangeJWTForToken(jwt)
 
-  // Cache the token (refresh 10 min before expiry)
+  // Basic validation of Google's token response
+  if (!tokenResponse.access_token || typeof tokenResponse.access_token !== 'string') {
+    throw new Error('GCP token exchange returned invalid access_token')
+  }
+  if (tokenResponse.token_type && tokenResponse.token_type !== 'Bearer') {
+    throw new Error(`GCP token exchange returned unexpected token_type: ${tokenResponse.token_type}`)
+  }
+
+  // Cache the token (refresh 10 min before expiry, floor 60s so TTL never goes negative)
+  const ttlSeconds = Math.max(60, (tokenResponse.expires_in || 3600) - 600)
   tokenCache = {
     accessToken: tokenResponse.access_token,
-    expiresAt: Date.now() + (tokenResponse.expires_in - 600) * 1000
+    expiresAt: Date.now() + ttlSeconds * 1000
   }
 
   console.log(`[GCP Auth] Token generated, expires in ${tokenResponse.expires_in}s`)

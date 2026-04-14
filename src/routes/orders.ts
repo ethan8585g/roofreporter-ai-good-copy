@@ -103,7 +103,7 @@ ordersRoutes.post('/', async (c) => {
         order_number: orderNumber, property_address,
         requester_name: requester_name, requester_email: requester_email || '',
         service_tier, price, is_trial: false
-      }).catch(() => {})
+      }).catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
     }
 
     return c.json({

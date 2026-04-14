@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import type { Bindings } from '../types'
 import { resolveTeamOwner } from './team'
 import { validateAdminSession } from './auth'
+import { logFromContext } from '../lib/team-activity'
 import { geocodeAddress, optimizeRoute, type LatLng } from '../services/geocoding'
 
 function escapeHtml(str: string): string {
@@ -152,6 +153,7 @@ crmRoutes.post('/customers', async (c) => {
       return c.json({ error: 'Data was not persisted. Please contact support.' }, 500)
     }
 
+    await logFromContext(c, { entity_type: 'crm_customer', entity_id: Number(result.meta.last_row_id), action: 'created', metadata: { name } })
     return c.json({ success: true, id: result.meta.last_row_id, verified: true })
   } catch (err: any) {
     console.error('[CRM] Customer create failed:', err.message)
@@ -790,6 +792,8 @@ crmRoutes.post('/proposals', async (c) => {
 
     const proposalId = result.meta.last_row_id
     if (!proposalId) return c.json({ error: 'Failed to create proposal' }, 500)
+
+    await logFromContext(c, { entity_type: 'proposal', entity_id: Number(proposalId), action: 'created', metadata: { proposal_number: propNum, title: body.title, total } })
 
     // Insert line items
     if (body.items && body.items.length > 0) {
@@ -1576,7 +1580,7 @@ crmRoutes.get('/gmail/connect', async (c) => {
     // If settings table doesn't have this key, create it
     await c.env.DB.prepare(`
       CREATE TABLE IF NOT EXISTS customer_gmail_state (id INTEGER PRIMARY KEY, customer_id INTEGER, state TEXT, created_at TEXT DEFAULT (datetime('now')))
-    `).run().catch(() => {})
+    `).run().catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
   }
 
   const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth')
@@ -1981,7 +1985,7 @@ crmRoutes.post('/proposals/respond/:token', async (c) => {
   </div>
 </div>`
         const { sendGmailOAuth2 } = await import('../services/email')
-        sendGmailOAuth2(clientId, clientSecret, refreshToken, owner.email, `${emoji} Proposal ${statusText}: ${proposal.title || proposal.proposal_number} — $${Number(proposal.total_amount || 0).toFixed(2)}`, notifHtml, owner.email).catch(() => {})
+        sendGmailOAuth2(clientId, clientSecret, refreshToken, owner.email, `${emoji} Proposal ${statusText}: ${proposal.title || proposal.proposal_number} — $${Number(proposal.total_amount || 0).toFixed(2)}`, notifHtml, owner.email).catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
       }
     }
   } catch {}

@@ -73,7 +73,7 @@ leadCaptureRoutes.post('/asset-report/lead', async (c) => {
           <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0">
           <p style="color:#9ca3af;font-size:12px">RoofManager &middot; Commercial Roof Asset Management &middot; Canada</p>
         </div>`
-      await sendGmailEmail(c.env.GCP_SERVICE_ACCOUNT_JSON, String(body.email), subject, html, 'sales@roofmanager.ca').catch(() => {})
+      await sendGmailEmail(c.env.GCP_SERVICE_ACCOUNT_JSON, String(body.email), subject, html, 'sales@roofmanager.ca').catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
     }
   } catch (e) { console.log('[asset-report email]', (e as any).message) }
 
@@ -104,7 +104,7 @@ leadCaptureRoutes.post('/condo-lead', async (c) => {
           <p style="margin:24px 0"><a href="https://www.roofmanager.ca/static/RoofManager-Reserve-Fund-Cheat-Sheet.pdf" style="background:#00FF88;color:#0A0A0A;padding:12px 22px;border-radius:10px;text-decoration:none;font-weight:800">Download Cheat Sheet (PDF)</a></p>
           <p style="color:#6b7280;font-size:13px">We'll be in touch with more property-manager focused resources.</p>
         </div>`
-      await sendGmailEmail(c.env.GCP_SERVICE_ACCOUNT_JSON, String(body.email), subject, html, 'sales@roofmanager.ca').catch(() => {})
+      await sendGmailEmail(c.env.GCP_SERVICE_ACCOUNT_JSON, String(body.email), subject, html, 'sales@roofmanager.ca').catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
     }
   } catch (e) { console.log('[condo-lead email]', (e as any).message) }
 

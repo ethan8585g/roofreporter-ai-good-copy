@@ -149,12 +149,15 @@ export async function callGemini(opts: GeminiCallOptions): Promise<any> {
 
     // Priority 3: API key auth (fallback — may not work for all models)
     if (opts.apiKey && !controller.signal.aborted) {
-      const url = `${GEMINI_REST_BASE}/${model}:generateContent?key=${opts.apiKey}`
+      const url = `${GEMINI_REST_BASE}/${model}:generateContent`
       console.log(`[Gemini] Calling REST API with API key (fallback): ${model}`)
-      
+
       const response = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': opts.apiKey
+        },
         body: JSON.stringify(requestBody),
         signal: controller.signal
       })

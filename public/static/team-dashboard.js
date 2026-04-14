@@ -11,6 +11,10 @@ var tdState = {
   billing: null,
   gating: null,
   activity: null,
+  feed: null,
+  feedLoading: false,
+  feedMemberFilter: '',
+  feedEntityFilter: '',
   ownerOnly: false,
   error: null
 };
@@ -146,7 +150,33 @@ function tdRenderTabs() {
   return html;
 }
 
-function tdSetTab(id) { tdState.tab = id; tdRender(); }
+function tdSetTab(id) {
+  tdState.tab = id;
+  tdRender();
+  if (id === 'activity' && !tdState.feed && !tdState.feedLoading) tdLoadFeed();
+}
+
+async function tdLoadFeed() {
+  tdState.feedLoading = true;
+  tdRender();
+  try {
+    var q = new URLSearchParams();
+    if (tdState.feedMemberFilter) q.set('member_id', tdState.feedMemberFilter);
+    if (tdState.feedEntityFilter) q.set('entity_type', tdState.feedEntityFilter);
+    q.set('limit', '100');
+    var res = await fetch('/api/team/activity?' + q.toString(), { headers: tdHeaders() });
+    if (res.ok) tdState.feed = await res.json();
+  } catch (e) { console.error('feed load', e); }
+  tdState.feedLoading = false;
+  tdRender();
+}
+
+function tdSetFeedFilter(kind, value) {
+  if (kind === 'member') tdState.feedMemberFilter = value;
+  else if (kind === 'entity') tdState.feedEntityFilter = value;
+  tdState.feed = null;
+  tdLoadFeed();
+}
 
 // ── Overview tab ──
 function tdRenderOverview() {
@@ -260,41 +290,104 @@ function tdRenderMembers() {
   return html;
 }
 
-// ── Activity tab (v1 lite) ──
+// ── Activity tab (v2 — real audit feed) ──
+var TD_ENTITY_META = {
+  crm_customer:  { label: 'CRM Customer',  icon: 'fa-user-tag',    color: 'text-purple-400' },
+  proposal:      { label: 'Proposal',      icon: 'fa-file-signature', color: 'text-blue-400' },
+  invoice:       { label: 'Invoice',       icon: 'fa-file-invoice-dollar', color: 'text-emerald-400' },
+  pipeline_lead: { label: 'Pipeline Lead', icon: 'fa-bullseye',    color: 'text-amber-400' },
+  order:         { label: 'Order',         icon: 'fa-shopping-cart', color: 'text-cyan-400' },
+  report:        { label: 'Report',        icon: 'fa-file-alt',    color: 'text-indigo-400' }
+};
+
 function tdRenderActivity() {
-  var rows = (tdState.activity && tdState.activity.members) || [];
+  var members = (tdState.activity && tdState.activity.members) || [];
+  var feed = tdState.feed;
+
   var html = '';
-  html += '<div class="rounded-xl p-4 mb-4 bg-blue-500/10 border border-blue-500/20 text-sm text-blue-200">';
-  html += '<i class="fas fa-info-circle mr-1"></i>Activity Lite shows sign-in and seat lifecycle events. Full per-action audit (orders, reports, CRM) is coming in v2.';
+
+  // Filters
+  html += '<div class="flex flex-wrap gap-3 items-center mb-4">';
+  html += '  <div class="flex items-center gap-2">';
+  html += '    <label class="text-xs text-gray-500">Member:</label>';
+  html += '    <select onchange="tdSetFeedFilter(\'member\', this.value)" class="bg-black/30 border border-white/15 text-gray-200 text-xs rounded-lg px-2 py-1.5">';
+  html += '      <option value="">All</option>';
+  html += '      <option value="0"' + (tdState.feedMemberFilter === '0' ? ' selected' : '') + '>Owner only</option>';
+  members.forEach(function(m) {
+    var sel = String(tdState.feedMemberFilter) === String(m.id) ? ' selected' : '';
+    html += '      <option value="' + m.id + '"' + sel + '>' + tdEsc(m.name) + '</option>';
+  });
+  html += '    </select>';
+  html += '  </div>';
+  html += '  <div class="flex items-center gap-2">';
+  html += '    <label class="text-xs text-gray-500">Type:</label>';
+  html += '    <select onchange="tdSetFeedFilter(\'entity\', this.value)" class="bg-black/30 border border-white/15 text-gray-200 text-xs rounded-lg px-2 py-1.5">';
+  html += '      <option value="">All</option>';
+  Object.keys(TD_ENTITY_META).forEach(function(k) {
+    var sel = tdState.feedEntityFilter === k ? ' selected' : '';
+    html += '      <option value="' + k + '"' + sel + '>' + TD_ENTITY_META[k].label + '</option>';
+  });
+  html += '    </select>';
+  html += '  </div>';
+  html += '  <button onclick="tdLoadFeed()" class="text-xs bg-white/5 hover:bg-white/10 text-gray-300 py-1.5 px-3 rounded-lg"><i class="fas fa-sync mr-1"></i>Refresh</button>';
   html += '</div>';
 
-  if (rows.length === 0) {
-    html += '<div class="rounded-xl p-10 text-center" style="background:var(--bg-card);border:1px solid rgba(255,255,255,0.08)"><i class="fas fa-history text-gray-600 text-4xl mb-3"></i><p class="text-gray-400">No activity yet.</p></div>';
+  if (tdState.feedLoading) {
+    html += '<div class="flex items-center justify-center py-10"><div class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-emerald-500"></div></div>';
+    return html;
+  }
+
+  var events = (feed && feed.events) || [];
+  if (events.length === 0) {
+    html += '<div class="rounded-xl p-10 text-center" style="background:var(--bg-card);border:1px solid rgba(255,255,255,0.08)"><i class="fas fa-history text-gray-600 text-4xl mb-3"></i><p class="text-gray-400">No activity recorded yet.</p><p class="text-xs text-gray-500 mt-2">Events appear here as team members create CRM customers, proposals, invoices, and pipeline leads.</p></div>';
     return html;
   }
 
   html += '<div class="rounded-xl overflow-hidden" style="background:var(--bg-card);border:1px solid rgba(255,255,255,0.08)">';
-  rows.forEach(function(m) {
-    var last = m.member_last_login ? new Date(m.member_last_login).toLocaleString() : 'Never signed in';
-    var age = m.seat_age_days != null ? m.seat_age_days + ' day' + (m.seat_age_days === 1 ? '' : 's') : '—';
-    html += '<div class="px-4 py-4 border-b border-white/5 last:border-0">';
-    html += '  <div class="flex items-center justify-between gap-3 flex-wrap">';
-    html += '    <div class="flex items-center gap-3">';
-    html += '      <div class="w-9 h-9 rounded-full bg-emerald-500/15 flex items-center justify-center"><span class="text-emerald-400 font-bold text-sm">' + (m.name || 'U').charAt(0).toUpperCase() + '</span></div>';
-    html += '      <div>';
-    html += '        <div class="font-semibold text-gray-200 text-sm">' + tdEsc(m.name) + ' <span class="text-xs text-gray-500 ml-1">' + tdEsc(m.email) + '</span></div>';
-    html += '        <div class="text-xs text-gray-500 mt-0.5">Status: <span class="' + (m.status === 'active' ? 'text-emerald-400' : 'text-gray-400') + '">' + m.status + '</span> &middot; Role: ' + m.role + '</div>';
-    html += '      </div>';
-    html += '    </div>';
-    html += '    <div class="text-right text-xs text-gray-400">';
-    html += '      <div><i class="fas fa-clock mr-1"></i>Last login: <span class="text-gray-300">' + last + '</span></div>';
-    html += '      <div class="mt-1"><i class="fas fa-calendar mr-1"></i>Seat age: <span class="text-gray-300">' + age + '</span></div>';
-    html += '    </div>';
+  events.forEach(function(ev) {
+    var meta = TD_ENTITY_META[ev.entity_type] || { label: ev.entity_type, icon: 'fa-circle', color: 'text-gray-400' };
+    var when = ev.created_at ? new Date(ev.created_at + 'Z').toLocaleString() : '';
+    var actor = ev.actor_name || (ev.actor_team_member_id ? 'Team member #' + ev.actor_team_member_id : 'Owner');
+    var summary = tdSummarizeEvent(ev);
+    html += '<div class="flex items-start gap-3 px-4 py-3 border-b border-white/5 last:border-0">';
+    html += '  <div class="w-9 h-9 rounded-full bg-white/5 flex items-center justify-center flex-shrink-0"><i class="fas ' + meta.icon + ' ' + meta.color + '"></i></div>';
+    html += '  <div class="flex-1 min-w-0">';
+    html += '    <div class="text-sm text-gray-200"><span class="font-semibold">' + tdEsc(actor) + '</span> <span class="text-gray-400">' + tdEsc(ev.action) + ' ' + meta.label.toLowerCase() + '</span>' + (summary ? ' <span class="text-gray-300">&middot; ' + summary + '</span>' : '') + '</div>';
+    html += '    <div class="text-xs text-gray-500 mt-0.5">' + when + (ev.actor_role ? ' &middot; ' + ev.actor_role : '') + '</div>';
     html += '  </div>';
     html += '</div>';
   });
   html += '</div>';
+
+  if (feed && feed.next_cursor) {
+    html += '<div class="text-center mt-4"><button onclick="tdLoadMoreFeed()" class="text-xs bg-white/5 hover:bg-white/10 text-gray-300 py-2 px-4 rounded-lg">Load more</button></div>';
+  }
   return html;
+}
+
+function tdSummarizeEvent(ev) {
+  var m = ev.metadata || {};
+  if (ev.entity_type === 'crm_customer' && m.name) return tdEsc(m.name);
+  if (ev.entity_type === 'proposal') return (m.proposal_number ? tdEsc(m.proposal_number) + ' ' : '') + (m.title ? tdEsc(m.title) : '') + (m.total != null ? ' ($' + m.total + ')' : '');
+  if (ev.entity_type === 'invoice') return (m.invoice_number ? tdEsc(m.invoice_number) + ' ' : '') + (m.customer_name ? '&rarr; ' + tdEsc(m.customer_name) : '') + (m.total != null ? ' ($' + m.total + ')' : '');
+  if (ev.entity_type === 'pipeline_lead') return (m.name ? tdEsc(m.name) : '') + (m.source ? ' &middot; ' + tdEsc(m.source) : '');
+  return '';
+}
+
+async function tdLoadMoreFeed() {
+  if (!tdState.feed || !tdState.feed.next_cursor) return;
+  var q = new URLSearchParams();
+  if (tdState.feedMemberFilter) q.set('member_id', tdState.feedMemberFilter);
+  if (tdState.feedEntityFilter) q.set('entity_type', tdState.feedEntityFilter);
+  q.set('before', tdState.feed.next_cursor);
+  q.set('limit', '100');
+  var res = await fetch('/api/team/activity?' + q.toString(), { headers: tdHeaders() });
+  if (res.ok) {
+    var more = await res.json();
+    tdState.feed.events = tdState.feed.events.concat(more.events || []);
+    tdState.feed.next_cursor = more.next_cursor;
+    tdRender();
+  }
 }
 
 // ── Billing tab ──

@@ -1489,7 +1489,7 @@ adminRoutes.post('/superadmin/onboarding/create', async (c) => {
     if (!customerId) return c.json({ error: 'Failed to create customer account' }, 500)
 
     // Seed default material catalog so new account has context on the section (non-blocking)
-    seedDefaultMaterials(c.env.DB, customerId).catch(() => {})
+    seedDefaultMaterials(c.env.DB, customerId).catch((e) => console.warn("[admin] seedDefaultMaterials failed:", e?.message || e))
 
     let secretarySetup = false
     const agentPhone = agent_phone_number || secretary_phone_number || ''

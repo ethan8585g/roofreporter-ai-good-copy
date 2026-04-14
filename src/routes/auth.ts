@@ -94,7 +94,7 @@ export async function validateAdminSession(db: D1Database, authHeader: string | 
   // Rolling renewal: extend session by 30 days on each valid use
   if (session) {
     const newExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
-    db.prepare('UPDATE admin_sessions SET expires_at = ? WHERE session_token = ?').bind(newExpiry, token).run().catch(() => {})
+    db.prepare('UPDATE admin_sessions SET expires_at = ? WHERE session_token = ?').bind(newExpiry, token).run().catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
   }
 
   return session

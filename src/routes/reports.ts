@@ -1477,7 +1477,7 @@ reportsRoutes.post('/:orderId/generate-enhanced', async (c) => {
     has_vision: !!reportData.vision_findings,
     roof_area: reportData.roof_area_sqft || 0,
     roof_pitch: reportData.roof_pitch_degrees || 0
-  }).catch(() => {})
+  }).catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
 
   // Always save base report as 'completed' first — customer can see it immediately
   await repo.saveCompletedReport(c.env.DB, orderId, reportData, baseHtml, baseVer)
@@ -1517,7 +1517,7 @@ reportsRoutes.post('/:orderId/generate-enhanced', async (c) => {
         await repo.saveEnhancedReport(c.env.DB, orderId, enhHtml, JSON.stringify(enhanced), enhVer, 0)
         await c.env.DB.prepare(`UPDATE reports SET status = 'completed', updated_at = datetime('now') WHERE order_id = ?`).bind(orderId).run()
         console.log(`[Enhanced-Inline] Order ${orderId}: ✅ Polished (v${enhVer})`)
-        trackReportEnhanced(c.env, String(orderId), { version: enhVer, enhanced: true }).catch(() => {})
+        trackReportEnhanced(c.env, String(orderId), { version: enhVer, enhanced: true }).catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
 
         // Send email with polished report — try customer Gmail first, then platform
         if (email_report || autoEmailEnabled) {
@@ -1567,7 +1567,7 @@ reportsRoutes.post('/:orderId/generate-enhanced', async (c) => {
       }
     } catch (enhErr: any) {
       console.warn(`[Enhanced-Inline] Order ${orderId}: Enhancement failed — base report stands: ${enhErr.message}`)
-      await repo.markEnhancementFailed(c.env.DB, orderId, enhErr.message).catch(() => {})
+      await repo.markEnhancementFailed(c.env.DB, orderId, enhErr.message).catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
     }
   }
 
@@ -1804,7 +1804,7 @@ reportsRoutes.post('/:orderId/email', async (c) => {
 
   await repo.logApiRequest(c.env.DB, orderId, 'email_sent', method, 200, 0, JSON.stringify({ to: recipient, from: senderEmail, method }))
   // Track email event in GA4 (non-blocking)
-  trackEmailSent(c.env as any, 'report_email', recipient, { order_id: orderId, method }).catch(() => {})
+  trackEmailSent(c.env as any, 'report_email', recipient, { order_id: orderId, method }).catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
   return c.json({ success: true, to: recipient, method, from: senderEmail })
 })
 
@@ -2108,7 +2108,7 @@ export async function enhanceReportInline(
       // Report is already 'completed' — just ensure it stays that way
       await env.DB.prepare(`UPDATE reports SET status = 'completed', updated_at = datetime('now') WHERE order_id = ?`).bind(orderId).run()
       console.log(`[Enhance-Inline] Order ${orderId}: ✅ Polished (v${version}, ${html.length} chars)`)
-      trackReportEnhanced(env, String(orderId), { version, enhanced: true }).catch(() => {})
+      trackReportEnhanced(env, String(orderId), { version, enhanced: true }).catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
       return version
     } else {
       console.warn(`[Enhance-Inline] Order ${orderId}: Gemini returned null — base report stands`)
@@ -2117,7 +2117,7 @@ export async function enhanceReportInline(
     }
   } catch (err: any) {
     console.warn(`[Enhance-Inline] Order ${orderId}: Failed — base report stands: ${err.message}`)
-    await repo.markEnhancementFailed(env.DB, orderId, err.message).catch(() => {})
+    await repo.markEnhancementFailed(env.DB, orderId, err.message).catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
     return null
   }
 }
@@ -2185,7 +2185,7 @@ export async function generateAIImageryForReport(
     }
   } catch (err: any) {
     console.error(`[AIImagery] Order ${orderId}: Failed — ${err.message}`)
-    await repo.markAIImageryFailed(env.DB, orderId, err.message).catch(() => {})
+    await repo.markAIImageryFailed(env.DB, orderId, err.message).catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
     return false
   }
 }

@@ -83,7 +83,7 @@ virtualTryonRoutes.post('/generate', async (c) => {
     processing_time_ms INTEGER,
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
-  )`).run().catch(() => {})
+  )`).run().catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
 
   try {
     const body = await c.req.json()
@@ -681,7 +681,7 @@ async function generateWithGemini(c: any, opts: {
       INSERT INTO roof_jobs (job_id, customer_id, order_id, status, prompt, roof_style, roof_color,
                               original_image_url, mask_image_url, replicate_model, error_message, created_at, updated_at)
       VALUES (?, ?, ?, 'failed', ?, ?, ?, '[base64_uploaded]', '[base64_uploaded]', 'gemini-2.0-flash', ?, datetime('now'), datetime('now'))
-    `).bind(jobId, customerId, order_id, prompt, roof_style, roof_color, err.message).run().catch(() => {})
+    `).bind(jobId, customerId, order_id, prompt, roof_style, roof_color, err.message).run().catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
     return c.json({ success: false, error: err.message }, 500)
   }
 }

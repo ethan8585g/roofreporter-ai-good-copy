@@ -584,7 +584,7 @@ squareRoutes.post('/use-credit', async (c) => {
       notifyNewReportRequest(resendKey, {
         order_number: orderNumber, property_address, requester_name: customer.name,
         requester_email: customer.email, service_tier: tier, price, is_trial: isTrial
-      }).catch(() => {})
+      }).catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
     }
 
     // Atomic deduct: WHERE clause prevents overselling even with concurrent requests
@@ -847,7 +847,7 @@ squareRoutes.post('/webhook', async (c) => {
               order_number: orderNumber, property_address: address,
               requester_name: custData?.name || '', requester_email: custData?.email || '',
               service_tier: tier, price, is_trial: false
-            }).catch(() => {})
+            }).catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
           }
 
           // Update square payment with order_id
@@ -1054,7 +1054,7 @@ squareRoutes.get('/verify-payment', async (c) => {
             await c.env.DB.prepare(
               'UPDATE customers SET report_credits = report_credits + ?, subscription_plan = CASE WHEN subscription_plan = "free" THEN "credits" ELSE subscription_plan END, updated_at = datetime("now") WHERE id = ?'
             ).bind(credits, customer.customer_id).run()
-            trackCreditPurchase(c.env as any, String(customer.customer_id), credits, pendingPayment.amount || 0).catch(() => {})
+            trackCreditPurchase(c.env as any, String(customer.customer_id), credits, pendingPayment.amount || 0).catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
           }
         } else if (pendingPayment.payment_type === 'one_time_report') {
           // Single report purchase — create order + trigger generation
@@ -1105,7 +1105,7 @@ squareRoutes.get('/verify-payment', async (c) => {
               order_number: orderNumber, property_address: address,
               requester_name: custData?.name || '', requester_email: custData?.email || '',
               service_tier: tier, price, is_trial: false
-            }).catch(() => {})
+            }).catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
           }
 
           await c.env.DB.prepare(
@@ -1170,7 +1170,7 @@ squareRoutes.get('/verify-payment', async (c) => {
         trackPaymentCompleted(c.env as any, pendingPayment.square_order_id || '', pendingPayment.amount || 0, {
           payment_type: pendingPayment.payment_type || 'unknown',
           customer_id: String(customer.customer_id)
-        }).catch(() => {})
+        }).catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
       }
 
       // Get updated customer data

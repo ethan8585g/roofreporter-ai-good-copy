@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import type { Bindings } from '../types'
 import { validateAdminSession } from './auth'
 import { sendGmailOAuth2 } from '../services/email'
+import { logFromContext } from '../lib/team-activity'
 
 export const invoiceRoutes = new Hono<{ Bindings: Bindings }>()
 
@@ -300,6 +301,8 @@ invoiceRoutes.post('/', async (c) => {
 
     const invoiceId = result.meta.last_row_id
 
+    await logFromContext(c, { entity_type: 'invoice', entity_id: Number(invoiceId), action: 'created', metadata: { invoice_number: number, document_type: docType, total, customer_name: crmName } })
+
     // Insert line items with unit and taxable flag
     for (let i = 0; i < items.length; i++) {
       const item = items[i]
@@ -315,7 +318,7 @@ invoiceRoutes.post('/', async (c) => {
     await c.env.DB.prepare(`
       INSERT INTO user_activity_log (company_id, action, details)
       VALUES (1, 'document_created', ?)
-    `).bind(`${docType.charAt(0).toUpperCase() + docType.slice(1)} ${number} for $${total} CAD`).run().catch(() => {})
+    `).bind(`${docType.charAt(0).toUpperCase() + docType.slice(1)} ${number} for $${total} CAD`).run().catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
 
     const shareUrl = `/proposal/view/${shareToken}`
 
@@ -451,7 +454,7 @@ invoiceRoutes.patch('/:id/status', async (c) => {
     if (status === 'paid') updates.push("paid_date = date('now')")
 
     await c.env.DB.prepare(`UPDATE invoices SET ${updates.join(', ')} WHERE id = ?`).bind(id).run()
-    await c.env.DB.prepare(`INSERT INTO user_activity_log (company_id, action, details) VALUES (1, 'status_updated', ?)`).bind(`Document #${id} → ${status}`).run().catch(() => {})
+    await c.env.DB.prepare(`INSERT INTO user_activity_log (company_id, action, details) VALUES (1, 'status_updated', ?)`).bind(`Document #${id} → ${status}`).run().catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
 
     return c.json({ success: true, status })
   } catch (err: any) {
@@ -552,7 +555,7 @@ invoiceRoutes.post('/:id/send', async (c) => {
 
     await c.env.DB.prepare(`UPDATE invoices SET status = 'sent', sent_date = date('now'), updated_at = datetime('now') WHERE id = ?`).bind(id).run()
 
-    await c.env.DB.prepare(`INSERT INTO user_activity_log (company_id, action, details) VALUES (1, 'document_sent', ?)`).bind(`${docLabel} ${invoice.invoice_number} sent to ${invoice.customer_email}`).run().catch(() => {})
+    await c.env.DB.prepare(`INSERT INTO user_activity_log (company_id, action, details) VALUES (1, 'document_sent', ?)`).bind(`${docLabel} ${invoice.invoice_number} sent to ${invoice.customer_email}`).run().catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
 
     return c.json({
       success: true,
@@ -718,7 +721,7 @@ invoiceRoutes.post('/webhook/square', async (c) => {
     await c.env.DB.prepare(`
       INSERT INTO webhook_logs (source, event_type, event_id, payload, processed)
       VALUES ('square', ?, ?, ?, 0)
-    `).bind(eventType, payload.event_id || '', body).run().catch(() => {})
+    `).bind(eventType, payload.event_id || '', body).run().catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
 
     if (eventType === 'payment.completed' || eventType === 'payment.updated') {
       const payment = payload.data?.object?.payment
@@ -748,9 +751,9 @@ invoiceRoutes.post('/webhook/square', async (c) => {
         // Log webhook processed
         await c.env.DB.prepare(`
           UPDATE webhook_logs SET processed = 1, invoice_id = ? WHERE event_id = ?
-        `).bind(link.invoice_id, payload.event_id || '').run().catch(() => {})
+        `).bind(link.invoice_id, payload.event_id || '').run().catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
 
-        await c.env.DB.prepare(`INSERT INTO user_activity_log (company_id, action, details) VALUES (1, 'payment_received', ?)`).bind(`Square payment $${(payment.amount_money?.amount || 0) / 100} for invoice #${link.invoice_id}`).run().catch(() => {})
+        await c.env.DB.prepare(`INSERT INTO user_activity_log (company_id, action, details) VALUES (1, 'payment_received', ?)`).bind(`Square payment $${(payment.amount_money?.amount || 0) / 100} for invoice #${link.invoice_id}`).run().catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
       }
     }
 
@@ -772,7 +775,7 @@ invoiceRoutes.delete('/:id', async (c) => {
     if (invoice.status !== 'draft') return c.json({ error: 'Only draft documents can be deleted' }, 400)
 
     await c.env.DB.prepare('DELETE FROM invoice_items WHERE invoice_id = ?').bind(id).run()
-    await c.env.DB.prepare('DELETE FROM square_payment_links WHERE invoice_id = ?').bind(id).run().catch(() => {})
+    await c.env.DB.prepare('DELETE FROM square_payment_links WHERE invoice_id = ?').bind(id).run().catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
     await c.env.DB.prepare('DELETE FROM invoices WHERE id = ?').bind(id).run()
 
     return c.json({ success: true })
@@ -1016,7 +1019,7 @@ invoiceRoutes.post('/respond/:token', async (c) => {
     ${signature && signature.startsWith('data:image/') ? `<div style="margin-top:16px;padding:12px;background:#f8fafc;border-radius:8px;text-align:center"><p style="font-size:11px;color:#94a3b8;margin:0 0 8px">Customer Signature</p><img src="${signature}" alt="Signature" style="max-height:60px"></div>` : ''}
   </div>
 </div>`
-        sendGmailOAuth2(clientId, clientSecret, refreshToken, owner.email, `${emoji} ${docLabel} ${statusText}: ${proposal.invoice_number} — $${Number(proposal.total || 0).toFixed(2)}`, notifHtml, owner.email).catch(() => {})
+        sendGmailOAuth2(clientId, clientSecret, refreshToken, owner.email, `${emoji} ${docLabel} ${statusText}: ${proposal.invoice_number} — $${Number(proposal.total || 0).toFixed(2)}`, notifHtml, owner.email).catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
       }
     }
   } catch {}

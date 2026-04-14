@@ -487,7 +487,7 @@ stripeRoutes.post('/use-credit', async (c) => {
       notifyNewReportRequest(resendKey, {
         order_number: orderNumber, property_address, requester_name: customer.name,
         requester_email: customer.email, service_tier: tier, price, is_trial: isTrial
-      }).catch(() => {})
+      }).catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
     }
 
     // Deduct from the correct bucket (DEV ACCOUNT: skip deduction)
@@ -707,7 +707,7 @@ stripeRoutes.post('/webhook', async (c) => {
               order_number: orderNumber, property_address: address,
               requester_name: custData?.name || '', requester_email: custData?.email || '',
               service_tier: tier, price, is_trial: false
-            }).catch(() => {})
+            }).catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
           }
 
           // Update stripe payment with order_id

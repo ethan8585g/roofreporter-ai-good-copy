@@ -122,7 +122,7 @@ callCenterRoutes.post('/campaigns', async (c) => {
 })
 
 callCenterRoutes.put('/campaigns/:id', async (c) => {
-  const id = parseInt(c.req.param('id'))
+  const id = parseInt(c.req.param('id')); if (isNaN(id)) return c.json({ error: "Invalid id" }, 400);
   const body = await c.req.json()
   const fields: string[] = []
   const values: any[] = []
@@ -146,7 +146,7 @@ callCenterRoutes.put('/campaigns/:id', async (c) => {
 })
 
 callCenterRoutes.delete('/campaigns/:id', async (c) => {
-  const id = parseInt(c.req.param('id'))
+  const id = parseInt(c.req.param('id')); if (isNaN(id)) return c.json({ error: "Invalid id" }, 400);
   await c.env.DB.prepare('DELETE FROM cc_campaigns WHERE id=?').bind(id).run()
   return c.json({ success: true })
 })
@@ -249,7 +249,7 @@ callCenterRoutes.post('/prospects/import', async (c) => {
 })
 
 callCenterRoutes.put('/prospects/:id', async (c) => {
-  const id = parseInt(c.req.param('id'))
+  const id = parseInt(c.req.param('id')); if (isNaN(id)) return c.json({ error: "Invalid id" }, 400);
   const body = await c.req.json()
   const allowed = ['company_name', 'contact_name', 'phone', 'email', 'website', 'city', 'province_state', 'country', 'company_size', 'status', 'priority', 'tags', 'notes', 'campaign_id', 'next_call_at', 'assigned_agent_id']
   const fields: string[] = []
@@ -267,7 +267,7 @@ callCenterRoutes.put('/prospects/:id', async (c) => {
 })
 
 callCenterRoutes.delete('/prospects/:id', async (c) => {
-  const id = parseInt(c.req.param('id'))
+  const id = parseInt(c.req.param('id')); if (isNaN(id)) return c.json({ error: "Invalid id" }, 400);
   await c.env.DB.prepare('DELETE FROM cc_prospects WHERE id=?').bind(id).run()
   return c.json({ success: true })
 })
@@ -291,7 +291,7 @@ callCenterRoutes.post('/agents', async (c) => {
 })
 
 callCenterRoutes.put('/agents/:id', async (c) => {
-  const id = parseInt(c.req.param('id'))
+  const id = parseInt(c.req.param('id')); if (isNaN(id)) return c.json({ error: "Invalid id" }, 400);
   const body = await c.req.json()
   const allowed = ['name', 'voice_id', 'persona', 'status', 'livekit_room_prefix']
   const fields: string[] = []
@@ -309,7 +309,7 @@ callCenterRoutes.put('/agents/:id', async (c) => {
 })
 
 callCenterRoutes.delete('/agents/:id', async (c) => {
-  const id = parseInt(c.req.param('id'))
+  const id = parseInt(c.req.param('id')); if (isNaN(id)) return c.json({ error: "Invalid id" }, 400);
   await c.env.DB.prepare('DELETE FROM cc_agents WHERE id=?').bind(id).run()
   return c.json({ success: true })
 })
@@ -318,7 +318,7 @@ callCenterRoutes.delete('/agents/:id', async (c) => {
 // AGENT CONTROL — Start/Stop dialing
 // ============================================================
 callCenterRoutes.post('/agents/:id/start', async (c) => {
-  const id = parseInt(c.req.param('id'))
+  const id = parseInt(c.req.param('id')); if (isNaN(id)) return c.json({ error: "Invalid id" }, 400);
   const { campaign_id } = await c.req.json()
 
   const agent = await c.env.DB.prepare('SELECT * FROM cc_agents WHERE id=?').bind(id).first<any>()
@@ -333,7 +333,7 @@ callCenterRoutes.post('/agents/:id/start', async (c) => {
 })
 
 callCenterRoutes.post('/agents/:id/stop', async (c) => {
-  const id = parseInt(c.req.param('id'))
+  const id = parseInt(c.req.param('id')); if (isNaN(id)) return c.json({ error: "Invalid id" }, 400);
   await c.env.DB.prepare(
     `UPDATE cc_agents SET status='idle', current_prospect_id=NULL, current_room_name='', updated_at=datetime('now') WHERE id=?`
   ).bind(id).run()
@@ -344,7 +344,7 @@ callCenterRoutes.post('/agents/:id/stop', async (c) => {
 // NEXT PROSPECT — Pull next number to dial
 // ============================================================
 callCenterRoutes.get('/next-prospect/:agentId', async (c) => {
-  const agentId = parseInt(c.req.param('agentId'))
+  const agentId = parseInt(c.req.param('agentId')); if (isNaN(agentId)) return c.json({ error: "Invalid id" }, 400);
   const campaignId = c.req.query('campaign_id')
 
   let where = `(status='new' OR status='queued') AND (next_call_at IS NULL OR next_call_at <= datetime('now'))`
@@ -812,7 +812,7 @@ callCenterRoutes.get('/call-logs', async (c) => {
 // GET /call-logs/:id — Single call log with full transcript
 // ============================================================
 callCenterRoutes.get('/call-logs/:id', async (c) => {
-  const id = parseInt(c.req.param('id'))
+  const id = parseInt(c.req.param('id')); if (isNaN(id)) return c.json({ error: "Invalid id" }, 400);
   const row = await c.env.DB.prepare(
     `SELECT cl.*, p.company_name, p.contact_name, p.city, p.province_state FROM cc_call_logs cl LEFT JOIN cc_prospects p ON p.id = cl.prospect_id WHERE cl.id = ?`
   ).bind(id).first<any>()
@@ -949,7 +949,7 @@ callCenterRoutes.post('/contact-lists', async (c) => {
 
 // PUT /contact-lists/:id — Update a contact list
 callCenterRoutes.put('/contact-lists/:id', async (c) => {
-  const id = parseInt(c.req.param('id'))
+  const id = parseInt(c.req.param('id')); if (isNaN(id)) return c.json({ error: "Invalid id" }, 400);
   const body = await c.req.json()
   const allowed = ['name', 'description', 'area', 'province_state', 'country', 'tags', 'status']
   const fields: string[] = []
@@ -968,14 +968,14 @@ callCenterRoutes.put('/contact-lists/:id', async (c) => {
 
 // DELETE /contact-lists/:id — Archive a contact list
 callCenterRoutes.delete('/contact-lists/:id', async (c) => {
-  const id = parseInt(c.req.param('id'))
+  const id = parseInt(c.req.param('id')); if (isNaN(id)) return c.json({ error: "Invalid id" }, 400);
   await c.env.DB.prepare("UPDATE cc_contact_lists SET status='archived', updated_at=datetime('now') WHERE id=?").bind(id).run()
   return c.json({ success: true })
 })
 
 // GET /contact-lists/:id/members — Get members of a contact list
 callCenterRoutes.get('/contact-lists/:id/members', async (c) => {
-  const id = parseInt(c.req.param('id'))
+  const id = parseInt(c.req.param('id')); if (isNaN(id)) return c.json({ error: "Invalid id" }, 400);
   const page = parseInt(c.req.query('page') || '1')
   const limit = Math.min(parseInt(c.req.query('limit') || '100'), 500)
   const offset = (page - 1) * limit
@@ -1000,7 +1000,7 @@ callCenterRoutes.get('/contact-lists/:id/members', async (c) => {
 
 // POST /contact-lists/:id/add — Add prospects to a list (by IDs)
 callCenterRoutes.post('/contact-lists/:id/add', async (c) => {
-  const listId = parseInt(c.req.param('id'))
+  const listId = parseInt(c.req.param('id')); if (isNaN(listId)) return c.json({ error: "Invalid id" }, 400);
   const { prospect_ids } = await c.req.json()
   if (!Array.isArray(prospect_ids) || prospect_ids.length === 0) return c.json({ error: 'prospect_ids array required' }, 400)
 
@@ -1024,7 +1024,7 @@ callCenterRoutes.post('/contact-lists/:id/add', async (c) => {
 
 // POST /contact-lists/:id/remove — Remove prospects from a list
 callCenterRoutes.post('/contact-lists/:id/remove', async (c) => {
-  const listId = parseInt(c.req.param('id'))
+  const listId = parseInt(c.req.param('id')); if (isNaN(listId)) return c.json({ error: "Invalid id" }, 400);
   const { prospect_ids } = await c.req.json()
   if (!Array.isArray(prospect_ids)) return c.json({ error: 'prospect_ids array required' }, 400)
 
@@ -1041,7 +1041,7 @@ callCenterRoutes.post('/contact-lists/:id/remove', async (c) => {
 
 // POST /contact-lists/:id/import — Bulk import contacts directly into a list
 callCenterRoutes.post('/contact-lists/:id/import', async (c) => {
-  const listId = parseInt(c.req.param('id'))
+  const listId = parseInt(c.req.param('id')); if (isNaN(listId)) return c.json({ error: "Invalid id" }, 400);
   try {
     const { csv_data } = await c.req.json()
     if (!csv_data) return c.json({ error: 'csv_data required' }, 400)
@@ -1621,7 +1621,7 @@ callCenterRoutes.post('/phone-lines', async (c) => {
 
 // PUT /phone-lines/:id — Update phone line
 callCenterRoutes.put('/phone-lines/:id', async (c) => {
-  const id = parseInt(c.req.param('id'))
+  const id = parseInt(c.req.param('id')); if (isNaN(id)) return c.json({ error: "Invalid id" }, 400);
   try {
     const body = await c.req.json()
     const allowed = ['label', 'business_phone', 'dispatch_type', 'dispatch_description', 'owner_name', 'assigned_email', 'ai_greeting', 'ai_persona', 'max_ring_seconds', 'voicemail_enabled', 'agent_voice_id', 'agent_speed', 'agent_pause_ms']
@@ -1644,7 +1644,7 @@ callCenterRoutes.put('/phone-lines/:id', async (c) => {
 
 // DELETE /phone-lines/:id — Remove phone line
 callCenterRoutes.delete('/phone-lines/:id', async (c) => {
-  const id = parseInt(c.req.param('id'))
+  const id = parseInt(c.req.param('id')); if (isNaN(id)) return c.json({ error: "Invalid id" }, 400);
   try {
     await c.env.DB.prepare('DELETE FROM cc_phone_config WHERE id=?').bind(id).run()
     return c.json({ success: true })
@@ -1655,7 +1655,7 @@ callCenterRoutes.delete('/phone-lines/:id', async (c) => {
 
 // POST /phone-lines/:id/toggle — Toggle phone line active/inactive
 callCenterRoutes.post('/phone-lines/:id/toggle', async (c) => {
-  const id = parseInt(c.req.param('id'))
+  const id = parseInt(c.req.param('id')); if (isNaN(id)) return c.json({ error: "Invalid id" }, 400);
   try {
     const line = await c.env.DB.prepare('SELECT is_active FROM cc_phone_config WHERE id=?').bind(id).first<any>()
     if (!line) return c.json({ error: 'Phone line not found' }, 404)
@@ -1671,7 +1671,7 @@ callCenterRoutes.post('/phone-lines/:id/toggle', async (c) => {
 
 // POST /phone-lines/:id/set-forwarding — Toggle call forwarding
 callCenterRoutes.post('/phone-lines/:id/set-forwarding', async (c) => {
-  const id = parseInt(c.req.param('id'))
+  const id = parseInt(c.req.param('id')); if (isNaN(id)) return c.json({ error: "Invalid id" }, 400);
   try {
     const line = await c.env.DB.prepare('SELECT call_forwarding_active FROM cc_phone_config WHERE id=?').bind(id).first<any>()
     if (!line) return c.json({ error: 'Phone line not found' }, 404)

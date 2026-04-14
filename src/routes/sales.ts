@@ -30,6 +30,7 @@ import { Hono } from 'hono'
 import type { Bindings } from '../types'
 import { resolveTeamOwner } from './team'
 import { createNotification } from './pipeline'
+import { logFromContext } from '../lib/team-activity'
 
 export const salesRoutes = new Hono<{ Bindings: Bindings }>()
 
@@ -398,6 +399,8 @@ salesRoutes.post('/leads', async (c) => {
   ).run()
 
   const leadId = result.meta.last_row_id
+
+  await logFromContext(c, { entity_type: 'pipeline_lead', entity_id: Number(leadId), action: 'created', metadata: { name: body.name, source: body.source || 'website', score } })
 
   // Auto-create first follow-up action
   await c.env.DB.prepare(`
