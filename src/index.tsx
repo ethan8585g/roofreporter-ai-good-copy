@@ -46,6 +46,7 @@ import { adminAgentRoutes } from './routes/admin-agent'
 import { homeDesignerRoutes } from './routes/home-designer'
 import { sam3Routes } from './routes/sam3-analysis'
 import { platformAdmin } from './routes/platform-admin'
+import { fieldRoutes, fieldUiRoutes } from './routes/field'
 import type { Bindings } from './types'
 
 const app = new Hono<{ Bindings: Bindings }>()
@@ -286,6 +287,8 @@ app.route('/api/admin-agent', adminAgentRoutes)
 app.route('/api/home-designer', homeDesignerRoutes)
 app.route('/api/sam3', sam3Routes)
 app.route('/api/admin/platform', platformAdmin)
+app.route('/api/field', fieldRoutes)
+app.route('/field', fieldUiRoutes)
 
 // Health check
 app.get('/api/health', (c) => {
