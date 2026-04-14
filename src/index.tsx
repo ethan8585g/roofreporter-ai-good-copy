@@ -54,6 +54,7 @@ import { sam3Routes } from './routes/sam3-analysis'
 import { platformAdmin } from './routes/platform-admin'
 import { fieldRoutes, fieldUiRoutes } from './routes/field'
 import { publicApiRoutes } from './routes/public-api'
+import { developerPortalRoutes } from './routes/developer-portal'
 import type { Bindings } from './types'
 
 const app = new Hono<{ Bindings: Bindings }>()
@@ -251,6 +252,9 @@ window.trackAdsConversion = function(kind, params) {
 
 // ── Public API service (third-party integrations) ──
 app.route('/v1', publicApiRoutes)
+
+// ── Developer portal (self-serve API account signup + dashboard) ──
+app.route('/developer', developerPortalRoutes)
 
 // Mount API routes
 app.route('/api/orders', ordersRoutes)

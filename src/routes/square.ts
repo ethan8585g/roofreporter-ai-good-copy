@@ -6,6 +6,7 @@ import { trackPaymentCompleted, trackCreditPurchase } from '../services/ga4-even
 import { resolveTeamOwner } from './team'
 import { validateAdminSession } from './auth'
 import { notifyNewReportRequest } from '../services/email'
+import { addCredits } from '../services/api-billing'
 
 export const squareRoutes = new Hono<{ Bindings: Bindings }>()
 
@@ -920,8 +921,25 @@ squareRoutes.post('/webhook', async (c) => {
             VALUES (1, 'subscription_activated', ?)
           `).bind(`Customer #${customerId} subscribed to ${tier} membership (team limit: ${teamLimit}) — active until ${subEnd}`).run()
 
+        } else if (pendingPayment.payment_type === 'api_credits') {
+          // API account credit purchase from developer portal
+          let credits = 0
+          let apiAccountId: string | null = null
+          try {
+            const meta = pendingPayment.metadata_json ? JSON.parse(pendingPayment.metadata_json) : {}
+            if (meta.credits) credits = parseInt(meta.credits)
+            if (meta.account_id) apiAccountId = meta.account_id
+          } catch {}
+          // Fallback: api_account_id column
+          if (!apiAccountId) apiAccountId = pendingPayment.api_account_id ?? null
+
+          if (credits > 0 && apiAccountId) {
+            await addCredits(c.env.DB, apiAccountId, credits, 'square_payment', squareOrderId)
+            console.log(`[Square Webhook] API account ${apiAccountId} credited ${credits} API credits`)
+          }
+
         } else {
-          // Credit pack purchase — add credits
+          // Credit pack purchase — add credits to customer account
           // Try metadata first, fallback to description parsing
           let credits = 0
           try {
@@ -1166,6 +1184,21 @@ squareRoutes.get('/verify-payment', async (c) => {
             INSERT INTO user_activity_log (company_id, action, details)
             VALUES (1, 'subscription_activated', ?)
           `).bind(`Customer #${customer.customer_id} subscribed to ${tier} membership (team limit: ${teamLimit}) via verify-payment`).run()
+
+        } else if (pendingPayment.payment_type === 'api_credits') {
+          // API account credit purchase (developer portal)
+          let credits = 0
+          let apiAccountId: string | null = null
+          try {
+            const meta = pendingPayment.metadata_json ? JSON.parse(pendingPayment.metadata_json) : {}
+            if (meta.credits) credits = parseInt(meta.credits)
+            if (meta.account_id) apiAccountId = meta.account_id
+          } catch {}
+          if (!apiAccountId) apiAccountId = pendingPayment.api_account_id ?? null
+
+          if (credits > 0 && apiAccountId) {
+            await addCredits(c.env.DB, apiAccountId, credits, 'square_payment', pendingPayment.square_order_id)
+          }
         }
 
         // Track payment completion in GA4 (non-blocking)
