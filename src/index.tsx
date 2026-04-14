@@ -5096,6 +5096,22 @@ function getLandingPageHTML(latestPosts: any[] = []) {
       <div class="absolute bottom-8 left-1/2 -translate-x-1/2 z-10"><div class="w-6 h-10 border-2 border-white/10 rounded-full flex justify-center pt-2"><div class="w-1 h-3 bg-[#00FF88]/40 rounded-full animate-bounce"></div></div></div>
     </section>
 
+    <!-- PRODUCT DEMO VIDEO -->
+    <section id="product-demo" class="relative z-20 py-16 lg:py-20" style="background:#0A0A0A">
+      <div class="max-w-5xl mx-auto px-4">
+        <div class="text-center mb-10">
+          <div class="inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-[11px] font-semibold mb-4 uppercase tracking-widest" style="background:#00FF8818;color:#00FF88"><i class="fas fa-play-circle"></i> Product Tutorial</div>
+          <h2 class="text-3xl md:text-4xl font-black text-white mb-3">See Roof Manager in Action</h2>
+          <p class="text-gray-400 text-base md:text-lg max-w-2xl mx-auto">A quick product walkthrough — everything Roof Manager does in one short video.</p>
+        </div>
+        <div class="bg-[#111111] border border-white/10 rounded-2xl overflow-hidden shadow-2xl shadow-black/50 neon-glow">
+          <div class="relative" style="padding-bottom:56.25%;height:0;">
+            <iframe class="absolute top-0 left-0 w-full h-full" src="https://www.youtube.com/embed/NQW3EgEhldA" title="Roof Manager — Product Tutorial" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- TRUST BAR — Stats grid + single marquee -->
     <section class="relative z-20 pt-8 pb-6" style="background:#0A0A0A">
       <div class="max-w-6xl mx-auto px-4">
