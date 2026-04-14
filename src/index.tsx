@@ -710,6 +710,7 @@ app.get('/sitemap-core.xml', (c) => {
     { loc: '/guides/create-a-proposal', priority: '0.8', changefreq: 'monthly' },
     { loc: '/guides/create-an-invoice', priority: '0.8', changefreq: 'monthly' },
     { loc: '/guides/setup-ai-secretary', priority: '0.8', changefreq: 'monthly' },
+    { loc: '/guides/build-a-solar-design', priority: '0.8', changefreq: 'monthly' },
     // Competitor comparison pages (bottom-of-funnel, high commercial intent)
     { loc: '/roofr-alternative', priority: '0.9', changefreq: 'monthly' },
     { loc: '/roofsnap-vs-roofmanager', priority: '0.9', changefreq: 'monthly' },
@@ -5483,6 +5484,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
           { slug: 'create-a-proposal', title: 'How to Build a Winning Proposal', desc: 'Turn a measurement report into a branded, signable proposal in under 5 minutes.', icon: 'fa-file-signature', read: 5 },
           { slug: 'create-an-invoice', title: 'How to Send an Invoice', desc: 'Invoice the deposit, progress draw, and final payment — all from your phone.', icon: 'fa-file-invoice-dollar', read: 4 },
           { slug: 'setup-ai-secretary', title: 'How to Get Your AI Secretary Running', desc: 'Deploy a 24/7 AI phone receptionist that answers calls and books appointments while you\'re on the roof.', icon: 'fa-headset', read: 5 },
+          { slug: 'build-a-solar-design', title: 'How to Build a Solar Design', desc: 'Lay real-world-scale solar panels onto any roof and generate a branded solar proposal in minutes.', icon: 'fa-solar-panel', read: 5 },
         ].map(t => `
           <a href="/guides/${t.slug}" class="block group">
             <article class="bg-[#111111] border border-white/10 rounded-xl overflow-hidden hover:border-[#00FF88]/40 transition-all duration-300 hover:-translate-y-1 h-full flex flex-col">
@@ -7056,6 +7058,35 @@ const guidesConfig: Record<string, GuideConfig> = {
     ctaHref: '/features/ai-secretary',
     closing: 'Every call answered. Every lead captured. Every appointment booked — even at 2am, even on Sundays, even while you\'re re-shingling. That\'s what a 24/7 AI receptionist buys you.',
   },
+  'build-a-solar-design': {
+    slug: 'build-a-solar-design',
+    title: 'How to Build a Solar Design',
+    subtitle: 'Lay real-world-scale solar panels onto any roof and generate a branded solar proposal in minutes.',
+    readTime: 5,
+    icon: 'fa-solar-panel',
+    videoId: 'v3Z-RK9zArQ',
+    tldr: 'To build a solar design in Roof Manager: open the Solar Design builder, enter the address, pick your panel model (size locks to real-world scale automatically), drag panels onto each roof face, tune tilt and azimuth, and the engine estimates annual production, offset, and payback. Click "Save Design" to generate a branded proposal with production estimates, financing, and a signable agreement.',
+    faqs: [
+      { q: 'Are the solar panels drawn to real-world scale?', a: 'Yes. Panels are locked to real-world dimensions (e.g. 1.7m × 1.0m for a 400W residential module) so the count you see on screen is the count that will physically fit on the roof.' },
+      { q: 'Does the solar design tool estimate annual production?', a: 'Yes. Production is estimated per panel using pitch, azimuth, local irradiance from the Google Solar API, and any shading detected from the satellite imagery.' },
+      { q: 'Can I send the solar design as a proposal?', a: 'Yes. Click "Save Design" then "Create Proposal" — the design, production estimate, and financing tiers flow into a branded, e-signable proposal.' },
+      { q: 'Can I lay panels on multiple roof faces?', a: 'Yes. Each roof face is detected separately. Drag panels onto any face — the tool tracks per-face tilt and azimuth for accurate production math.' },
+      { q: 'Does Roof Manager support different panel wattages and brands?', a: 'Yes. Pick from the built-in library (REC, Q Cells, Canadian Solar, Silfab, Tesla, etc.) or add a custom panel with your own wattage and dimensions.' },
+    ],
+    intro: 'Selling solar starts with a design the homeowner can actually see. Roof Manager\'s Solar Design builder lets you drop real-world-scale panels onto any roof in seconds, estimate annual production from Google Solar API data, and hand the homeowner a branded proposal before you leave the driveway.',
+    steps: [
+      { title: 'Open the Solar Design builder', body: 'From your dashboard, click "Solar Design" (or open an existing measurement report and click "Design Solar"). Enter the address and the satellite view loads with roof faces already detected.' },
+      { title: 'Pick your panel', body: 'Choose your panel model from the library — REC, Q Cells, Canadian Solar, Silfab, Tesla, and others are built in. Each panel has real wattage and dimensions baked in, so counts and production estimates stay truthful.', tip: 'Standardise on 1–2 panels you actually stock. It speeds up design and keeps procurement clean.' },
+      { title: 'Drag panels onto the roof', body: 'Panels are locked to real-world scale — drag them onto any roof face, rotate to match the face orientation, and snap them into rows. What you see on screen is exactly what will fit on the roof.' },
+      { title: 'Tune tilt and azimuth per face', body: 'Each roof face auto-populates its tilt and azimuth from the measurement report. Override if you\'re using tilt racks on a flat roof, or ground mounts. Production recalculates live.' },
+      { title: 'Review production and offset', body: 'The sidebar shows estimated annual kWh, percent offset of the homeowner\'s bill, and simple payback. Numbers use Google Solar API irradiance plus detected shading — not a national average.' },
+      { title: 'Save the design', body: 'Click "Save Design" in the top bar. The design is attached to the job card and available to pull into a proposal with one click.' },
+      { title: 'Send the proposal', body: 'Click "Create Proposal" from the saved design. Production, panel count, system size, financing tiers, and warranty language flow in automatically. Send for e-signature from your phone.' },
+    ],
+    ctaLabel: 'Open Solar Design',
+    ctaHref: '/customer/login',
+    closing: 'Homeowners buy solar when they can see the panels on their own roof. Real-scale design + honest production numbers = more signatures, fewer tire-kickers.',
+  },
 }
 
 const guidesOrder = [
@@ -7064,6 +7095,7 @@ const guidesOrder = [
   'create-a-proposal',
   'create-an-invoice',
   'setup-ai-secretary',
+  'build-a-solar-design',
 ]
 
 function getGuideHTML(slug: string): string | null {
