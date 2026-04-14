@@ -345,3 +345,68 @@ export async function sendGmailOAuth2(
     throw new Error(`Gmail send failed (${sendResp.status}): ${err}`)
   }
 }
+
+// ============================================================
+// Notify sales@roofmanager.ca of a new web-form lead.
+// Resolves Gmail OAuth2 creds from env, with DB fallback.
+// Non-throwing — safe to fire-and-forget from any handler.
+// ============================================================
+export async function notifySalesNewLead(env: any, data: {
+  source: string
+  name?: string | null
+  email?: string | null
+  phone?: string | null
+  company?: string | null
+  message?: string | null
+  extra?: Record<string, string | number | null | undefined>
+}): Promise<void> {
+  try {
+    const clientId = env.GMAIL_CLIENT_ID
+    let clientSecret = env.GMAIL_CLIENT_SECRET || ''
+    let refreshToken = env.GMAIL_REFRESH_TOKEN || ''
+    if (!refreshToken || !clientSecret) {
+      try {
+        const r = await env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key='gmail_refresh_token' AND master_company_id=1").first<any>()
+        if (r?.setting_value) refreshToken = r.setting_value
+        const s = await env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key='gmail_client_secret' AND master_company_id=1").first<any>()
+        if (s?.setting_value) clientSecret = s.setting_value
+      } catch {}
+    }
+    if (!clientId || !clientSecret || !refreshToken) return
+
+    const esc = (v: any) => String(v ?? '').replace(/[&<>"']/g, (m) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' } as any)[m])
+    const rows: string[] = []
+    const push = (label: string, val: any, link?: 'mailto' | 'tel') => {
+      if (val === null || val === undefined || val === '') return
+      const v = esc(val)
+      const cell = link === 'mailto' ? `<a href="mailto:${v}" style="color:#0ea5e9">${v}</a>`
+        : link === 'tel' ? `<a href="tel:${v}" style="color:#0ea5e9">${v}</a>`
+        : v
+      rows.push(`<tr><td style="padding:8px 0;color:#64748b;font-size:13px;width:110px;vertical-align:top"><strong>${esc(label)}</strong></td><td style="padding:8px 0;font-size:14px;color:#1e293b">${cell}</td></tr>`)
+    }
+    push('Name', data.name)
+    push('Email', data.email, 'mailto')
+    push('Phone', data.phone, 'tel')
+    push('Company', data.company)
+    push('Message', data.message)
+    if (data.extra) for (const [k, v] of Object.entries(data.extra)) push(k, v)
+
+    const html = `
+<div style="max-width:600px;margin:0 auto;font-family:Inter,system-ui,sans-serif">
+  <div style="background:#0f172a;padding:24px;border-radius:12px 12px 0 0">
+    <h1 style="color:#38bdf8;font-size:18px;margin:0">🔔 New Lead from Roof Manager</h1>
+    <p style="color:#94a3b8;font-size:13px;margin:4px 0 0">Source: ${esc(data.source)}</p>
+  </div>
+  <div style="background:white;padding:24px;border:1px solid #e2e8f0;border-top:none">
+    <table style="width:100%;border-collapse:collapse">${rows.join('')}</table>
+  </div>
+  <div style="background:#f8fafc;padding:16px;border-radius:0 0 12px 12px;border:1px solid #e2e8f0;border-top:none;text-align:center">
+    <a href="https://www.roofmanager.ca/super-admin" style="color:#0ea5e9;font-size:12px;font-weight:600">View in Super Admin Dashboard</a>
+  </div>
+</div>`
+    const subject = `🔔 New Lead: ${data.name || data.email || 'anonymous'} — ${data.source}`
+    await sendGmailOAuth2(clientId, clientSecret, refreshToken, 'sales@roofmanager.ca', subject, html, 'sales@roofmanager.ca')
+  } catch (e: any) {
+    console.warn('[notifySalesNewLead] failed:', e?.message || e)
+  }
+}

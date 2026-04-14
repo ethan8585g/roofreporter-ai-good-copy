@@ -21,6 +21,7 @@ import { leadCaptureRoutes } from './routes/lead-capture'
 import { secretaryRoutes } from './routes/secretary'
 import { roverRoutes } from './routes/rover'
 import { emailOutreachRoutes } from './routes/email-outreach'
+import { notifySalesNewLead } from './services/email'
 import { analyticsRoutes } from './routes/analytics'
 import { virtualTryonRoutes } from './routes/virtual-tryon'
 import { teamRoutes } from './routes/team'
@@ -1639,6 +1640,12 @@ app.post('/api/demo/lead', async (c) => {
       name, email, phone || '', company || '', message || '',
       utm_source || '', utm_medium || '', utm_campaign || '', utm_content || ''
     ).run()
+
+    notifySalesNewLead(c.env, {
+      source: 'demo_portal',
+      name, email, phone, company, message,
+      extra: { utm_source, utm_medium, utm_campaign, utm_content }
+    }).catch(() => {})
 
     return c.json({ success: true })
   } catch (e: any) {
@@ -5334,6 +5341,9 @@ function getLandingPageHTML(latestPosts: any[] = []) {
           var em=document.getElementById('final-cta-email-input').value.trim();
           if(!em) return false;
           try{rrTrack('cta_click',{location:'final_cta_email'});}catch(_){ }
+          try{
+            fetch('/api/agents/leads',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:em.split('@')[0],email:em,source_page:'final_cta_email'}),keepalive:true}).catch(function(){});
+          }catch(_){ }
           window.location.href='/signup?email='+encodeURIComponent(em);
           return false;
         }

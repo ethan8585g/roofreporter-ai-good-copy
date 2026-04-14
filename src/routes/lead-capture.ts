@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import type { Bindings } from '../types'
-import { sendGmailEmail } from '../services/email'
+import { sendGmailEmail, notifySalesNewLead } from '../services/email'
 
 export const leadCaptureRoutes = new Hono<{ Bindings: Bindings }>()
 
@@ -77,6 +77,12 @@ leadCaptureRoutes.post('/asset-report/lead', async (c) => {
     }
   } catch (e) { console.log('[asset-report email]', (e as any).message) }
 
+  notifySalesNewLead(c.env, {
+    source: `asset_report:${source}`,
+    email: body.email,
+    extra: { address, building_count: buildings }
+  }).catch(() => {})
+
   return c.json({ success: true })
 })
 
@@ -107,6 +113,11 @@ leadCaptureRoutes.post('/condo-lead', async (c) => {
       await sendGmailEmail(c.env.GCP_SERVICE_ACCOUNT_JSON, String(body.email), subject, html, 'sales@roofmanager.ca').catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
     }
   } catch (e) { console.log('[condo-lead email]', (e as any).message) }
+
+  notifySalesNewLead(c.env, {
+    source: 'condo_cheat_sheet',
+    name, email: body.email, company
+  }).catch(() => {})
 
   return c.json({ success: true, redirect: '/condo-reserve-fund-cheat-sheet/thank-you' })
 })
