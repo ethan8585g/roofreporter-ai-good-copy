@@ -3,6 +3,7 @@ import type { Bindings } from '../types'
 import { validateAdminSession } from './auth'
 import { sendGmailOAuth2 } from '../services/email'
 import { logFromContext } from '../lib/team-activity'
+import { resolveTeamOwner } from './team'
 
 export const invoiceRoutes = new Hono<{ Bindings: Bindings }>()
 
@@ -12,7 +13,7 @@ invoiceRoutes.use('/*', async (c, next) => {
   const path = c.req.path
   // Allow public access to shared proposals/invoices and Square webhooks
   if (path.includes('/view/') || path.includes('/webhook') || path.includes('/respond/')) return next()
-  
+
   // Try admin auth first
   const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
   if (admin) { c.set('admin' as any, admin); return next() }
@@ -26,11 +27,33 @@ invoiceRoutes.use('/*', async (c, next) => {
       JOIN customers c ON c.id = cs.customer_id
       WHERE cs.session_token = ? AND cs.expires_at > datetime('now')
     `).bind(token).first<any>()
-    if (session) { c.set('admin' as any, { id: session.customer_id, email: session.email, name: session.name, role: 'customer' }); return next() }
+    if (session) {
+      const teamInfo = await resolveTeamOwner(c.env.DB, session.customer_id)
+      c.set('admin' as any, {
+        id: session.customer_id,
+        email: session.email,
+        name: session.name,
+        role: 'customer',
+        ownerCustomerId: teamInfo.ownerId,
+      })
+      return next()
+    }
   }
 
   return c.json({ error: 'Authentication required' }, 401)
 })
+
+// Scope helper: returns the effective data owner for a request.
+// - Admin/superadmin: { isAdmin: true, ownerId: null } → full access
+// - Customer (incl. team member): { isAdmin: false, ownerId: effective team owner id }
+function getScope(c: any): { isAdmin: boolean; ownerId: number | null } {
+  const user = c.get('admin' as any) as any
+  if (!user) return { isAdmin: false, ownerId: null }
+  if (user.role === 'customer') {
+    return { isAdmin: false, ownerId: (user.ownerCustomerId ?? user.id) as number }
+  }
+  return { isAdmin: true, ownerId: null }
+}
 
 // ── Helpers ──────────────────────────────────────────────────
 function generateNumber(prefix: string): string {
@@ -79,6 +102,7 @@ invoiceRoutes.get('/', async (c) => {
     const status = c.req.query('status')
     const customerId = c.req.query('customer_id')
     const docType = c.req.query('document_type')
+    const scope = getScope(c)
 
     let query = `
       SELECT i.*,
@@ -97,6 +121,12 @@ invoiceRoutes.get('/', async (c) => {
     `
     const params: any[] = []
 
+    // Enforce per-customer scoping for non-admin sessions
+    if (!scope.isAdmin) {
+      if (scope.ownerId == null) return c.json({ error: 'Authentication required' }, 401)
+      query += ' AND i.customer_id = ?'; params.push(scope.ownerId)
+    }
+
     if (status) { query += ' AND i.status = ?'; params.push(status) }
     if (customerId) { query += ' AND i.customer_id = ?'; params.push(customerId) }
     // M-3: treat document_type=invoice the same as no filter — include legacy NULL rows
@@ -107,9 +137,7 @@ invoiceRoutes.get('/', async (c) => {
     const invoices = await c.env.DB.prepare(query).bind(...params).all()
 
     // C-7: Scope stats by customer when request comes from a customer session
-    const user = c.get('admin' as any)
-    const isCustomer = user?.role === 'customer'
-    const stats = isCustomer
+    const stats = !scope.isAdmin
       ? await c.env.DB.prepare(`
           SELECT
             COUNT(*) as total_invoices,
@@ -118,7 +146,7 @@ invoiceRoutes.get('/', async (c) => {
             SUM(CASE WHEN status = 'overdue' THEN total ELSE 0 END) as total_overdue,
             SUM(CASE WHEN status = 'draft' THEN total ELSE 0 END) as total_draft
           FROM invoices WHERE customer_id = ?
-        `).bind(user.id).first()
+        `).bind(scope.ownerId).first()
       : await c.env.DB.prepare(`
           SELECT
             COUNT(*) as total_invoices,
@@ -155,9 +183,14 @@ invoiceRoutes.get('/:id', async (c) => {
       LEFT JOIN customers c ON c.id = i.customer_id
       LEFT JOIN orders o ON o.id = i.order_id
       WHERE i.id = ?
-    `).bind(id).first()
+    `).bind(id).first() as any
 
     if (!invoice) return c.json({ error: 'Invoice not found' }, 404)
+
+    const scope = getScope(c)
+    if (!scope.isAdmin && invoice.customer_id !== scope.ownerId) {
+      return c.json({ error: 'Invoice not found' }, 404)
+    }
 
     const items = await c.env.DB.prepare(
       'SELECT * FROM invoice_items WHERE invoice_id = ? ORDER BY sort_order'
@@ -204,6 +237,21 @@ invoiceRoutes.post('/', async (c) => {
 
     if (!customer_id && !crm_customer_id && !new_customer) return c.json({ error: 'customer_id or new_customer is required' }, 400)
     if (!items || !items.length) return c.json({ error: 'At least one line item is required' }, 400)
+
+    // For non-admin sessions, reject cross-customer writes up front.
+    const scope = getScope(c)
+    if (!scope.isAdmin) {
+      if (scope.ownerId == null) return c.json({ error: 'Authentication required' }, 401)
+      if (customer_id && Number(customer_id) !== scope.ownerId) {
+        return c.json({ error: 'Cannot create document for another customer' }, 403)
+      }
+      if (crm_customer_id) {
+        const crm = await c.env.DB.prepare('SELECT owner_id FROM crm_customers WHERE id = ?').bind(crm_customer_id).first<any>()
+        if (!crm || crm.owner_id !== scope.ownerId) {
+          return c.json({ error: 'CRM contact not found' }, 404)
+        }
+      }
+    }
 
     const docType = ['invoice', 'proposal', 'estimate'].includes(document_type) ? document_type : 'invoice'
     const prefix = docType === 'proposal' ? 'PROP' : docType === 'estimate' ? 'EST' : 'INV'
@@ -340,8 +388,12 @@ invoiceRoutes.post('/', async (c) => {
 invoiceRoutes.put('/:id', async (c) => {
   try {
     const id = c.req.param('id')
-    const invoice = await c.env.DB.prepare("SELECT id, status FROM invoices WHERE id = ?").bind(id).first<any>()
+    const invoice = await c.env.DB.prepare("SELECT id, status, customer_id FROM invoices WHERE id = ?").bind(id).first<any>()
     if (!invoice) return c.json({ error: 'Invoice not found' }, 404)
+    const scope = getScope(c)
+    if (!scope.isAdmin && invoice.customer_id !== scope.ownerId) {
+      return c.json({ error: 'Invoice not found' }, 404)
+    }
     if (invoice.status !== 'draft') return c.json({ error: 'Only draft documents can be edited' }, 400)
 
     const body = await c.req.json()
@@ -350,6 +402,18 @@ invoiceRoutes.put('/:id', async (c) => {
       discount_type, document_type, scope_of_work, warranty_terms, payment_terms_text,
       valid_until, attached_report_id, my_cost, accent_color, show_report_sections
     } = body
+
+    if (!scope.isAdmin) {
+      if (customer_id && Number(customer_id) !== scope.ownerId) {
+        return c.json({ error: 'Cannot reassign document to another customer' }, 403)
+      }
+      if (crm_customer_id) {
+        const crm = await c.env.DB.prepare('SELECT owner_id FROM crm_customers WHERE id = ?').bind(crm_customer_id).first<any>()
+        if (!crm || crm.owner_id !== scope.ownerId) {
+          return c.json({ error: 'CRM contact not found' }, 404)
+        }
+      }
+    }
 
     const docType = ['invoice', 'proposal', 'estimate'].includes(document_type) ? document_type : 'invoice'
     const taxRateVal = tax_rate != null ? tax_rate : 5.0
@@ -449,6 +513,11 @@ invoiceRoutes.patch('/:id/status', async (c) => {
     const validStatuses = ['draft', 'sent', 'viewed', 'paid', 'overdue', 'cancelled', 'refunded', 'accepted', 'declined']
     if (!validStatuses.includes(status)) return c.json({ error: 'Invalid status' }, 400)
 
+    const own = await c.env.DB.prepare('SELECT customer_id FROM invoices WHERE id = ?').bind(id).first<any>()
+    if (!own) return c.json({ error: 'Invoice not found' }, 404)
+    const scope = getScope(c)
+    if (!scope.isAdmin && own.customer_id !== scope.ownerId) return c.json({ error: 'Invoice not found' }, 404)
+
     const updates: string[] = [`status = '${status}'`, "updated_at = datetime('now')"]
     if (status === 'sent') updates.push("sent_date = date('now')")
     if (status === 'paid') updates.push("paid_date = date('now')")
@@ -481,6 +550,10 @@ invoiceRoutes.post('/:id/send', async (c) => {
       WHERE i.id = ?
     `).bind(id).first<any>()
     if (!invoice) return c.json({ error: 'Document not found' }, 404)
+    {
+      const scope = getScope(c)
+      if (!scope.isAdmin && invoice.customer_id !== scope.ownerId) return c.json({ error: 'Document not found' }, 404)
+    }
 
     const items = await c.env.DB.prepare('SELECT * FROM invoice_items WHERE invoice_id = ? ORDER BY sort_order').bind(id).all()
 
@@ -585,6 +658,10 @@ invoiceRoutes.post('/:id/convert-to-invoice', async (c) => {
     const id = c.req.param('id')
     const proposal = await c.env.DB.prepare('SELECT * FROM invoices WHERE id = ? AND document_type = ?').bind(id, 'proposal').first<any>()
     if (!proposal) return c.json({ error: 'Proposal not found' }, 404)
+    {
+      const scope = getScope(c)
+      if (!scope.isAdmin && proposal.customer_id !== scope.ownerId) return c.json({ error: 'Proposal not found' }, 404)
+    }
 
     const items = await c.env.DB.prepare('SELECT * FROM invoice_items WHERE invoice_id = ? ORDER BY sort_order').bind(id).all()
 
@@ -635,6 +712,10 @@ invoiceRoutes.post('/:id/payment-link', async (c) => {
     const id = c.req.param('id')
     const invoice = await c.env.DB.prepare('SELECT * FROM invoices WHERE id = ?').bind(id).first<any>()
     if (!invoice) return c.json({ error: 'Invoice not found' }, 404)
+    {
+      const scope = getScope(c)
+      if (!scope.isAdmin && invoice.customer_id !== scope.ownerId) return c.json({ error: 'Invoice not found' }, 404)
+    }
     if (invoice.status === 'paid') return c.json({ error: 'Invoice already paid' }, 400)
 
     // Try per-user Square OAuth first (from admin/customer who created the invoice), then env fallback
@@ -770,8 +851,10 @@ invoiceRoutes.post('/webhook/square', async (c) => {
 invoiceRoutes.delete('/:id', async (c) => {
   try {
     const id = c.req.param('id')
-    const invoice = await c.env.DB.prepare("SELECT id, status FROM invoices WHERE id = ?").bind(id).first<any>()
+    const invoice = await c.env.DB.prepare("SELECT id, status, customer_id FROM invoices WHERE id = ?").bind(id).first<any>()
     if (!invoice) return c.json({ error: 'Invoice not found' }, 404)
+    const scope = getScope(c)
+    if (!scope.isAdmin && invoice.customer_id !== scope.ownerId) return c.json({ error: 'Invoice not found' }, 404)
     if (invoice.status !== 'draft') return c.json({ error: 'Only draft documents can be deleted' }, 400)
 
     await c.env.DB.prepare('DELETE FROM invoice_items WHERE invoice_id = ?').bind(id).run()
@@ -789,7 +872,8 @@ invoiceRoutes.delete('/:id', async (c) => {
 // ============================================================
 invoiceRoutes.get('/stats/summary', async (c) => {
   try {
-    const stats = await c.env.DB.prepare(`
+    const scope = getScope(c)
+    const base = `
       SELECT
         COUNT(*) as total_invoices,
         SUM(CASE WHEN status = 'paid' THEN 1 ELSE 0 END) as paid_count,
@@ -800,7 +884,10 @@ invoiceRoutes.get('/stats/summary', async (c) => {
         SUM(CASE WHEN status = 'overdue' THEN total ELSE 0 END) as total_overdue,
         SUM(total) as grand_total
       FROM invoices
-    `).first()
+    `
+    const stats = scope.isAdmin
+      ? await c.env.DB.prepare(base).first()
+      : await c.env.DB.prepare(base + ' WHERE customer_id = ?').bind(scope.ownerId).first()
     return c.json({ stats })
   } catch (err: any) {
     console.error("[error]", err && err.message); return c.json({ error: 'Failed to fetch stats' }, 500)
@@ -812,24 +899,37 @@ invoiceRoutes.get('/stats/summary', async (c) => {
 // ============================================================
 invoiceRoutes.get('/customers/list', async (c) => {
   try {
-    const portalCustomers = await c.env.DB.prepare(`
-      SELECT c.*,
-        (SELECT COUNT(*) FROM orders WHERE customer_id = c.id) as order_count,
-        (SELECT SUM(price) FROM orders WHERE customer_id = c.id AND payment_status = 'paid') as total_spent,
-        (SELECT COUNT(*) FROM invoices WHERE customer_id = c.id) as invoice_count,
-        (SELECT SUM(total) FROM invoices WHERE customer_id = c.id AND status = 'paid') as invoices_paid,
-        'portal' as source
-      FROM customers c WHERE c.is_active = 1 ORDER BY c.created_at DESC
-    `).all()
+    const scope = getScope(c)
 
-    // Also include CRM contacts owned by the authenticated user
-    const user = c.get('admin' as any) as any
+    // Admins see the full portal customer list; customers only see their own row.
+    const portalCustomers = scope.isAdmin
+      ? await c.env.DB.prepare(`
+          SELECT c.*,
+            (SELECT COUNT(*) FROM orders WHERE customer_id = c.id) as order_count,
+            (SELECT SUM(price) FROM orders WHERE customer_id = c.id AND payment_status = 'paid') as total_spent,
+            (SELECT COUNT(*) FROM invoices WHERE customer_id = c.id) as invoice_count,
+            (SELECT SUM(total) FROM invoices WHERE customer_id = c.id AND status = 'paid') as invoices_paid,
+            'portal' as source
+          FROM customers c WHERE c.is_active = 1 ORDER BY c.created_at DESC
+        `).all()
+      : await c.env.DB.prepare(`
+          SELECT c.*,
+            (SELECT COUNT(*) FROM orders WHERE customer_id = c.id) as order_count,
+            (SELECT SUM(price) FROM orders WHERE customer_id = c.id AND payment_status = 'paid') as total_spent,
+            (SELECT COUNT(*) FROM invoices WHERE customer_id = c.id) as invoice_count,
+            (SELECT SUM(total) FROM invoices WHERE customer_id = c.id AND status = 'paid') as invoices_paid,
+            'portal' as source
+          FROM customers c WHERE c.is_active = 1 AND c.id = ?
+        `).bind(scope.ownerId).all()
+
+    // CRM contacts owned by the authenticated user (by team owner for team members)
+    const ownerIdForCrm = scope.isAdmin ? (c.get('admin' as any) as any)?.id : scope.ownerId
     let crmCustomers: any[] = []
-    if (user?.role === 'customer' && user?.id) {
+    if (ownerIdForCrm) {
       const res = await c.env.DB.prepare(
         `SELECT id, name, email, phone, company as company_name, address, 'crm' as source
          FROM crm_customers WHERE owner_id = ? ORDER BY name ASC`
-      ).bind(user.id).all()
+      ).bind(ownerIdForCrm).all()
       crmCustomers = res.results as any[]
     }
 
@@ -845,6 +945,8 @@ invoiceRoutes.get('/customers/list', async (c) => {
 invoiceRoutes.get('/customers/:id', async (c) => {
   try {
     const id = c.req.param('id')
+    const scope = getScope(c)
+    if (!scope.isAdmin && Number(id) !== scope.ownerId) return c.json({ error: 'Customer not found' }, 404)
     const customer = await c.env.DB.prepare('SELECT * FROM customers WHERE id = ?').bind(id).first()
     if (!customer) return c.json({ error: 'Customer not found' }, 404)
     const orders = await c.env.DB.prepare(`
@@ -867,6 +969,10 @@ invoiceRoutes.post('/:id/send-gmail', async (c) => {
     const id = parseInt(c.req.param('id'))
     const invoice = await c.env.DB.prepare('SELECT i.*, c.name as customer_name, c.email as customer_email FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id WHERE i.id = ?').bind(id).first<any>()
     if (!invoice) return c.json({ error: 'Invoice not found' }, 404)
+    {
+      const scope = getScope(c)
+      if (!scope.isAdmin && invoice.customer_id !== scope.ownerId) return c.json({ error: 'Invoice not found' }, 404)
+    }
     if (!invoice.customer_email) return c.json({ error: 'Customer has no email address' }, 400)
 
     const items = await c.env.DB.prepare('SELECT * FROM invoice_items WHERE invoice_id = ? ORDER BY sort_order').bind(id).all<any>()
