@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import type { Bindings } from '../types'
-import { getActiveAlerts, getHailReports } from '../services/storm-data'
+import { getActiveAlerts, getHailReports, stormCacheClear } from '../services/storm-data'
 import { buildDailySnapshot, writeSnapshot, readSnapshot, listSnapshotDates, pruneOldSnapshots } from '../services/storm-ingest'
 import { GIBS_LAYERS, getGibsTileUrl, getGibsMaxZoom, buildGoogleStaticMapUrl } from '../services/satellite-imagery'
 
@@ -80,6 +80,8 @@ stormScoutRoutes.post('/ingest', async (c) => {
     if (!dryRun) {
       const key = await writeSnapshot(c.env.STORM_R2, snapshot)
       const pruned = await pruneOldSnapshots(c.env.STORM_R2, 30)
+      // Invalidate in-memory caches so next /alerts + /heatmap refetch fresh.
+      stormCacheClear()
       return c.json({ ok: true, key, date: snapshot.date, summary: snapshot.summary, sources: snapshot.sources, pruned })
     }
     return c.json({ ok: true, dryRun: true, date: snapshot.date, summary: snapshot.summary, sources: snapshot.sources })
@@ -110,18 +112,39 @@ stormScoutRoutes.get('/satellite/gibs/:layer/:date/:z/:x/:y', async (c) => {
   if (!customerId) return c.json({ error: 'Not authenticated' }, 401)
   const { layer, date, z, x, y } = c.req.param()
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return c.json({ error: 'Bad date' }, 400)
+  const zi = parseInt(z, 10), xi = parseInt(x, 10)
   const yClean = y.replace(/\.(jpg|png)$/, '')
-  const url = getGibsTileUrl(layer, date, parseInt(z, 10), parseInt(x, 10), parseInt(yClean, 10))
-  const upstream = await fetch(url)
-  if (!upstream.ok) return c.json({ error: 'Tile not found', status: upstream.status }, upstream.status as any)
-  const body = await upstream.arrayBuffer()
-  return new Response(body, {
-    status: 200,
-    headers: {
-      'Content-Type': upstream.headers.get('Content-Type') || 'image/jpeg',
-      'Cache-Control': 'public, max-age=86400'
-    }
-  })
+  const yi = parseInt(yClean, 10)
+  if (!Number.isFinite(zi) || !Number.isFinite(xi) || !Number.isFinite(yi)) {
+    return c.json({ error: 'Bad tile coords' }, 400)
+  }
+  if (zi < 0 || zi > 12 || xi < 0 || yi < 0 || xi >= Math.pow(2, zi) || yi >= Math.pow(2, zi)) {
+    return c.json({ error: 'Tile out of range' }, 400)
+  }
+
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 8000)
+  try {
+    const url = getGibsTileUrl(layer, date, zi, xi, yi)
+    const upstream = await fetch(url, {
+      signal: controller.signal,
+      headers: { 'User-Agent': 'RoofManager-StormScout/1.0 (support@roofmanager.ca)' }
+    })
+    if (!upstream.ok) return c.json({ error: 'Tile not found', status: upstream.status }, 404)
+    const body = await upstream.arrayBuffer()
+    return new Response(body, {
+      status: 200,
+      headers: {
+        'Content-Type': upstream.headers.get('Content-Type') || 'image/jpeg',
+        'Cache-Control': 'public, max-age=86400'
+      }
+    })
+  } catch (err: any) {
+    const isAbort = err?.name === 'AbortError'
+    return c.json({ error: isAbort ? 'Tile fetch timeout' : 'Tile fetch failed', detail: err?.message || String(err) }, isAbort ? 504 : 502)
+  } finally {
+    clearTimeout(timer)
+  }
 })
 
 // Before/after roof-level snapshot — returns a signed-ish Google Static
@@ -141,6 +164,15 @@ stormScoutRoutes.get('/satellite/snapshot', async (c) => {
   if (!key) return c.json({ error: 'Maps API key not configured' }, 503)
   const url = buildGoogleStaticMapUrl(key, { lat, lng, zoom, mapType: 'satellite' })
   return c.json({ url, lat, lng, zoom, date, note: 'Google Static Maps shows current imagery; date is for documentation only.' })
+})
+
+stormScoutRoutes.post('/cache/clear', async (c) => {
+  const secret = c.req.header('X-Storm-Ingest-Secret')
+  if (!c.env.STORM_INGEST_SECRET || secret !== c.env.STORM_INGEST_SECRET) {
+    return c.json({ error: 'Unauthorized' }, 401)
+  }
+  stormCacheClear()
+  return c.json({ ok: true, cleared: true })
 })
 
 stormScoutRoutes.get('/health', (c) => c.json({ ok: true, service: 'storm-scout', r2: !!c.env.STORM_R2 }))

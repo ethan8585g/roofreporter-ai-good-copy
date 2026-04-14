@@ -53,16 +53,19 @@ function classifySeverity(text: string): StormSeverity {
 }
 
 function flattenPolygon(geom: any): Array<{ lat: number; lng: number }> | undefined {
-  if (!geom || !geom.type) return undefined
-  // GeoJSON is [lng, lat]
-  const toLL = (c: any) => ({ lat: c[1], lng: c[0] })
-  if (geom.type === 'Polygon' && Array.isArray(geom.coordinates?.[0])) {
-    return geom.coordinates[0].map(toLL)
+  if (!geom || !geom.type || !Array.isArray(geom.coordinates)) return undefined
+  const toLL = (c: any) => (Array.isArray(c) && c.length >= 2 && Number.isFinite(c[0]) && Number.isFinite(c[1]))
+    ? { lat: c[1], lng: c[0] } : null
+  try {
+    let ring: any[] | null = null
+    if (geom.type === 'Polygon' && Array.isArray(geom.coordinates[0])) ring = geom.coordinates[0]
+    else if (geom.type === 'MultiPolygon' && Array.isArray(geom.coordinates[0]?.[0])) ring = geom.coordinates[0][0]
+    if (!ring || ring.length < 3) return undefined
+    const pts = ring.map(toLL).filter((p: any) => p) as Array<{ lat: number; lng: number }>
+    return pts.length >= 3 ? pts : undefined
+  } catch {
+    return undefined
   }
-  if (geom.type === 'MultiPolygon' && Array.isArray(geom.coordinates?.[0]?.[0])) {
-    return geom.coordinates[0][0].map(toLL)
-  }
-  return undefined
 }
 
 function centroidOf(pts: Array<{ lat: number; lng: number }>): { lat: number; lng: number } {
@@ -84,6 +87,7 @@ export async function fetchECCCAlerts(): Promise<StormEvent[]> {
 
   const events: StormEvent[] = []
   for (const f of features) {
+    try {
     const p = f.properties || {}
     const headline: string = p.headline || p.event || p.alert_type || 'Weather alert'
     const desc: string = p.descrip_en || p.description || p.summary || headline
@@ -108,6 +112,9 @@ export async function fetchECCCAlerts(): Promise<StormEvent[]> {
       description: desc,
       headline
     })
+    } catch (err) {
+      console.warn('[storm-scout] ECCC feature parse failed:', (err as any)?.message)
+    }
   }
   return events
 }

@@ -663,14 +663,11 @@ reportsRoutes.post('/:orderId/trace-insights', async (c) => {
 
   const trace = typeof order.roof_trace_json === 'string' ? JSON.parse(order.roof_trace_json) : order.roof_trace_json
 
-  // Resolve eaves sections — supports single-polygon (legacy) and multi-section (new) formats
-  const rawEaves = trace.eaves_sections && trace.eaves_sections.length > 0
-    ? (trace.eaves_sections as { lat: number; lng: number }[][]).filter((s: any[]) => s.length >= 3)
-    : Array.isArray(trace.eaves) && trace.eaves.length > 0 && Array.isArray(trace.eaves[0])
-      ? (trace.eaves as { lat: number; lng: number }[][]).filter((s: any[]) => s.length >= 3)
-      : trace.eaves && (trace.eaves as any[]).length >= 3 ? [trace.eaves as { lat: number; lng: number }[]] : []
+  // Resolve eaves sections via shared helper (handles single/multi/legacy shapes)
+  const resolved = resolveEaves(trace)
+  const rawEaves = resolved.sections
 
-  if (rawEaves.length === 0) {
+  if (resolved.kind === 'none') {
     return c.json({ error: 'Invalid trace data — eaves polygon requires at least 3 points' }, 400)
   }
 
@@ -960,45 +957,28 @@ reportsRoutes.post('/calculate-from-trace', async (c) => {
       }, 400)
     }
 
-    // Fetch real pitch from Google Solar API using centroid of traced eave points.
-    // Track confidence (solar_api > trace_derived > default) so downstream reports
-    // can warn customers when pitch is best-guess.
-    let pitchRise = default_pitch || 5.0
-    let pitchSource = 'default'
-    let pitchConfidence: 'high' | 'medium' | 'low' = 'low'
-    let solarPitchRise: number | null = null
-    let solarPitchDeg: number | null = null
-    let solarFootprintFt2 = 0
-    const solarApiKey = c.env.GOOGLE_SOLAR_API_KEY || c.env.GOOGLE_MAPS_API_KEY
-    // Pick centroid source: sections if provided, else flat eaves array
-    const centroidPts: any[] = Array.isArray(trace.eaves_sections) && trace.eaves_sections.length > 0
-      ? trace.eaves_sections.flat()
-      : (Array.isArray(trace.eaves) ? trace.eaves : [])
-    if (solarApiKey && centroidPts.length >= 3) {
-      try {
-        const centroidLat = centroidPts.reduce((s: number, p: any) => s + p.lat, 0) / centroidPts.length
-        const centroidLng = centroidPts.reduce((s: number, p: any) => s + p.lng, 0) / centroidPts.length
-        const solarResult = await fetchSolarPitchAndImagery(
-          centroidLat, centroidLng, solarApiKey, solarApiKey, house_sqft || 1500
-        )
-        if (solarResult.pitch_degrees > 0) {
-          solarPitchDeg = solarResult.pitch_degrees
-          solarPitchRise = Math.round(12 * Math.tan(solarResult.pitch_degrees * Math.PI / 180) * 10) / 10
-          pitchRise = solarPitchRise
-          pitchSource = 'solar_api'
-          pitchConfidence = 'high'
-          console.log(`[CalculateFromTrace] Solar API pitch: ${solarResult.pitch_degrees}° → ${pitchRise}:12 (${solarResult.api_duration_ms}ms)`)
-        }
-        if (solarResult.roof_footprint_ft2 > 0) {
-          solarFootprintFt2 = solarResult.roof_footprint_ft2
-        }
-      } catch (e: any) {
-        console.warn(`[CalculateFromTrace] Solar API pitch fetch failed (using default ${pitchRise}:12): ${e.message}`)
-      }
-    }
-    if (pitchSource === 'default' && default_pitch) {
-      pitchConfidence = 'medium'  // user supplied, but not verified
-    }
+    // Resolve pitch via centralized helper (Solar API → user default → engine default)
+    const centroidPts = allEavePoints(trace)
+    const centroidLat = centroidPts.length > 0
+      ? centroidPts.reduce((s, p) => s + p.lat, 0) / centroidPts.length : NaN
+    const centroidLng = centroidPts.length > 0
+      ? centroidPts.reduce((s, p) => s + p.lng, 0) / centroidPts.length : NaN
+
+    const resolved = await resolvePitch({
+      centroidLat, centroidLng,
+      solarApiKey: c.env.GOOGLE_SOLAR_API_KEY || c.env.GOOGLE_MAPS_API_KEY,
+      mapsApiKey:  c.env.GOOGLE_MAPS_API_KEY,
+      houseSqftHint: house_sqft || 1500,
+      userDefaultRise: default_pitch,
+      logTag: 'CalculateFromTrace',
+    })
+    const pitchRise        = resolved.pitch_rise
+    const pitchSource      = resolved.pitch_source === 'solar_api' ? 'solar_api'
+                             : resolved.pitch_source === 'user_default' ? 'default' : 'default'
+    const pitchConfidence  = resolved.pitch_confidence
+    const solarPitchRise   = resolved.solar_pitch_rise
+    const solarPitchDeg    = resolved.solar_pitch_deg
+    const solarFootprintFt2 = resolved.solar_footprint_ft2
 
     // Convert trace UI format to engine payload
     const enginePayload = traceUiToEnginePayload(
@@ -1025,21 +1005,8 @@ reportsRoutes.post('/calculate-from-trace', async (c) => {
       `pitch_source=${pitchSource}`)
 
     // Return structured response for the order form UI
-    // Pitch audit: compare Solar API vs. user default when both available.
-    // Flags homes where the Solar pitch diverges sharply from a user-provided
-    // default, letting the customer acknowledge/override before report gen.
-    const pitchAudit = (() => {
-      if (solarPitchRise != null && default_pitch && Math.abs(solarPitchRise - default_pitch) >= 1.5) {
-        return {
-          status: 'mismatch' as const,
-          solar_rise: solarPitchRise,
-          user_default_rise: default_pitch,
-          delta: Math.round((solarPitchRise - default_pitch) * 10) / 10,
-          msg: `Google Solar pitch (${solarPitchRise}:12) differs from provided default (${default_pitch}:12) by ${Math.abs(solarPitchRise - default_pitch).toFixed(1)} rise. Using Solar value — review if this looks wrong.`,
-        }
-      }
-      return null
-    })()
+    // Pitch audit — surfaced from the centralized resolver
+    const pitchAudit = resolved.audit
 
     // Enhanced Solar cross-check: compare traced footprint against BOTH the
     // user-declared house_sqft and Google Solar's roof-footprint estimate.
@@ -1215,20 +1182,16 @@ reportsRoutes.post('/auto-trace', async (c) => {
       }, 422)
     }
 
-    // Step 4: Fetch Solar API pitch (override Gemini pitch estimate)
-    let finalPitchRise = tracePayload.default_pitch || 4.0
-    if (solarApiKey) {
-      try {
-        const solarPitch = await fetchSolarPitchAndImagery(
-          lat, lng, solarApiKey, mapsApiKey, house_sqft || 1500
-        )
-        finalPitchRise = Math.round(12 * Math.tan(solarPitch.pitch_degrees * Math.PI / 180) * 10) / 10
-        tracePayload.default_pitch = finalPitchRise
-        console.log(`[auto-trace] Solar pitch override: ${solarPitch.pitch_degrees}° → ${finalPitchRise}:12`)
-      } catch (e: any) {
-        console.warn(`[auto-trace] Solar pitch fetch failed, using Gemini estimate (${finalPitchRise}:12): ${e.message}`)
-      }
-    }
+    // Step 4: Resolve final pitch via centralized helper (Solar > Gemini > fallback)
+    const resolved = await resolvePitch({
+      centroidLat: lat, centroidLng: lng,
+      solarApiKey, mapsApiKey,
+      houseSqftHint: house_sqft || 1500,
+      userDefaultRise: tracePayload.default_pitch ?? 4.0,
+      logTag: 'auto-trace',
+    })
+    const finalPitchRise = resolved.pitch_rise
+    tracePayload.default_pitch = finalPitchRise
 
     // Step 5: Run measurement engine
     const engine = new RoofMeasurementEngine(tracePayload)

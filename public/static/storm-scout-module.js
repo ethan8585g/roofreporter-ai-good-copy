@@ -41,8 +41,16 @@
 
   function api(path) {
     return fetch('/api/storm-scout' + path, { headers: authHeaders() }).then(function (r) {
-      if (!r.ok) return r.json().then(function (j) { throw new Error(j.error || ('HTTP ' + r.status)); });
-      return r.json();
+      return r.text().then(function (text) {
+        var parsed = null;
+        try { parsed = text ? JSON.parse(text) : null; } catch (e) { /* non-JSON body */ }
+        if (!r.ok) {
+          var msg = (parsed && parsed.error) ? parsed.error : ('HTTP ' + r.status + (text ? ': ' + text.slice(0, 120) : ''));
+          throw new Error(msg);
+        }
+        if (parsed == null) throw new Error('Invalid JSON from server');
+        return parsed;
+      });
     });
   }
 
@@ -66,10 +74,12 @@
   function renderLayout() {
     root.innerHTML =
       '<div class="ss-container">' +
-        '<aside class="ss-sidebar">' +
+        '<button id="ssMobileToggle" class="ss-mobile-toggle" aria-label="Toggle sidebar"><i class="fas fa-bars"></i></button>' +
+        '<aside class="ss-sidebar" id="ssSidebar">' +
           '<div class="ss-sidebar-header">' +
             '<h2><i class="fas fa-cloud-showers-heavy mr-2"></i>Storm Scout</h2>' +
             '<p class="ss-sub">Live alerts + hail reports</p>' +
+            '<button class="ss-sidebar-close" id="ssSidebarClose" aria-label="Close"><i class="fas fa-xmark"></i></button>' +
           '</div>' +
           '<div class="ss-section">' +
             '<div class="ss-section-title">Layers</div>' +
@@ -195,6 +205,12 @@
     document.getElementById('ssSpeed').addEventListener('change', function (e) {
       playback.speed = parseFloat(e.target.value) || 1;
     });
+
+    var sidebar = document.getElementById('ssSidebar');
+    var mobileToggle = document.getElementById('ssMobileToggle');
+    var sidebarClose = document.getElementById('ssSidebarClose');
+    if (mobileToggle) mobileToggle.addEventListener('click', function () { sidebar.classList.toggle('ss-open'); });
+    if (sidebarClose) sidebarClose.addEventListener('click', function () { sidebar.classList.remove('ss-open'); });
   }
 
   function computePlaybackWindow() {
@@ -262,21 +278,23 @@
 
   function tick() {
     if (!playback.playing) return;
+    if (playback.windowStart == null || playback.windowEnd == null || playback.windowEnd <= playback.windowStart) {
+      pausePlayback();
+      return;
+    }
     var now = performance.now();
-    var delta = now - playback.lastTick;
+    var delta = Math.max(0, now - playback.lastTick);
     playback.lastTick = now;
-    var totalWallMs = playback.durationMs / playback.speed;
+    var totalWallMs = Math.max(500, playback.durationMs / Math.max(0.1, playback.speed));
     var rangeMs = playback.windowEnd - playback.windowStart;
     var advance = (delta / totalWallMs) * rangeMs;
-    playback.cursor += advance;
-    if (playback.cursor >= playback.windowEnd) {
-      playback.cursor = playback.windowEnd;
-      pausePlayback();
-    }
+    playback.cursor = Math.min(playback.windowEnd, (playback.cursor || playback.windowStart) + advance);
+    var atEnd = playback.cursor >= playback.windowEnd;
     updateScrubber();
     updateCursorLabel();
     renderHeatmap();
-    if (playback.playing) playback.rafId = requestAnimationFrame(tick);
+    if (atEnd) { pausePlayback(); return; }
+    playback.rafId = requestAnimationFrame(tick);
   }
 
   function initMap() {
@@ -434,10 +452,16 @@
   function renderSatellite() {
     if (!map) return;
     if (satelliteLayer) {
-      map.overlayMapTypes.removeAt(map.overlayMapTypes.getArray().indexOf(satelliteLayer));
+      var arr = map.overlayMapTypes.getArray();
+      var idx = arr.indexOf(satelliteLayer);
+      if (idx >= 0) map.overlayMapTypes.removeAt(idx);
       satelliteLayer = null;
     }
-    if (!layers.satellite) return;
+    if (!layers.satellite) {
+      var attr = document.getElementById('ssSatAttr');
+      if (attr) attr.remove();
+      return;
+    }
     var conf = GIBS_LAYER_IDS[satelliteType] || GIBS_LAYER_IDS.modis_true_color;
     var date = activeImageryDate();
     satelliteLayer = new google.maps.ImageMapType({
@@ -538,24 +562,27 @@
         '<button class="ss-ba-btn" data-lat="' + pos.lat() + '" data-lng="' + pos.lng() + '" data-date="' + (a.timestamp || '').slice(0,10) + '"><i class="fas fa-image"></i> Before / After</button>' +
       '</div>'
     );
+    infoWindow.close();
     infoWindow.setPosition(pos);
     infoWindow.open(map);
     attachBeforeAfterHandler();
   }
 
+  var baDelegationWired = false;
   function attachBeforeAfterHandler() {
-    setTimeout(function () {
-      document.querySelectorAll('.ss-ba-btn').forEach(function (btn) {
-        if (btn.__wired) return;
-        btn.__wired = true;
-        btn.addEventListener('click', function () {
-          var lat = parseFloat(btn.getAttribute('data-lat'));
-          var lng = parseFloat(btn.getAttribute('data-lng'));
-          var date = btn.getAttribute('data-date') || new Date().toISOString().slice(0, 10);
-          openBeforeAfter({ lat: function () { return lat; }, lng: function () { return lng; } }, date);
-        });
-      });
-    }, 50);
+    // Use a single document-level delegated handler so infowindow re-renders
+    // don't create duplicate listeners or miss buttons mounted late.
+    if (baDelegationWired) return;
+    baDelegationWired = true;
+    document.addEventListener('click', function (e) {
+      var btn = e.target && (e.target.closest ? e.target.closest('.ss-ba-btn') : null);
+      if (!btn) return;
+      var lat = parseFloat(btn.getAttribute('data-lat'));
+      var lng = parseFloat(btn.getAttribute('data-lng'));
+      var date = btn.getAttribute('data-date') || new Date().toISOString().slice(0, 10);
+      if (isNaN(lat) || isNaN(lng)) return;
+      openBeforeAfter({ lat: function () { return lat; }, lng: function () { return lng; } }, date);
+    });
   }
 
   function openHailInfo(r, pos) {
@@ -571,6 +598,7 @@
         '<button class="ss-ba-btn" data-lat="' + r.lat + '" data-lng="' + r.lng + '" data-date="' + (r.timestamp || '').slice(0,10) + '"><i class="fas fa-image"></i> Before / After</button>' +
       '</div>'
     );
+    infoWindow.close();
     infoWindow.setPosition(pos);
     infoWindow.open(map);
     attachBeforeAfterHandler();

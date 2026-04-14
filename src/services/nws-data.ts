@@ -77,6 +77,7 @@ export async function fetchNWSAlerts(): Promise<StormEvent[]> {
 
   const out: StormEvent[] = []
   for (const f of features) {
+    try {
     const p = f.properties || {}
     const eventStr: string = p.event || ''
     const type = classifyNWSType(eventStr)
@@ -86,17 +87,23 @@ export async function fetchNWSAlerts(): Promise<StormEvent[]> {
     const centroid = centroidOfGeoJSON(f.geometry)
     if (!centroid) continue
 
-    // Extract hail size / wind from parameters or description
+    // Extract hail size / wind from parameters or description — tolerant of
+    // shape changes (NWS occasionally ships scalars instead of arrays).
     let hailSize: number | undefined
     let windKmh: number | undefined
     const params = p.parameters || {}
-    if (Array.isArray(params.maxHailSize) && params.maxHailSize[0]) {
-      const n = parseFloat(String(params.maxHailSize[0]))
-      if (!isNaN(n)) hailSize = n
+    const rawHail = Array.isArray(params.maxHailSize) ? params.maxHailSize[0] : params.maxHailSize
+    if (rawHail != null) {
+      const n = parseFloat(String(rawHail))
+      if (Number.isFinite(n) && n > 0 && n < 20) hailSize = n
     }
-    if (Array.isArray(params.maxWindGust) && params.maxWindGust[0]) {
-      const m = String(params.maxWindGust[0]).match(/(\d+)/)
-      if (m) windKmh = Math.round(parseInt(m[1], 10) * 1.609)
+    const rawWind = Array.isArray(params.maxWindGust) ? params.maxWindGust[0] : params.maxWindGust
+    if (rawWind != null) {
+      const m = String(rawWind).match(/(\d+)/)
+      if (m) {
+        const mph = parseInt(m[1], 10)
+        if (Number.isFinite(mph) && mph > 0 && mph < 400) windKmh = Math.round(mph * 1.609)
+      }
     }
 
     out.push({
@@ -113,6 +120,9 @@ export async function fetchNWSAlerts(): Promise<StormEvent[]> {
       description: p.description || p.headline || eventStr,
       headline: p.headline || eventStr
     })
+    } catch (err) {
+      console.warn('[storm-scout] NWS feature parse failed:', (err as any)?.message)
+    }
   }
   return out
 }
@@ -134,6 +144,7 @@ export async function fetchIEMLocalStormReports(daysBack: number): Promise<HailR
 
   const reports: HailReport[] = []
   for (const f of features) {
+    try {
     const p = f.properties || {}
     const typeRaw: string = String(p.type || p.typetext || '').toLowerCase()
     let type: HailReport['type'] | null = null
@@ -165,6 +176,9 @@ export async function fetchIEMLocalStormReports(daysBack: number): Promise<HailR
       city: p.city,
       state: p.st || p.state
     })
+    } catch (err) {
+      console.warn('[storm-scout] IEM LSR parse failed:', (err as any)?.message)
+    }
   }
   return reports
 }
