@@ -2,6 +2,8 @@ import { Hono } from 'hono'
 import type { Bindings } from '../types'
 import { validateAdminSession, requireSuperadmin } from './auth'
 import { generateReportForOrder } from './reports'
+import { validateTraceUi } from '../utils/trace-validation'
+import { RoofMeasurementEngine, traceUiToEnginePayload } from '../services/roof-measurement-engine'
 
 export const adminRoutes = new Hono<{ Bindings: Bindings }>()
 
@@ -2432,6 +2434,105 @@ adminRoutes.get('/superadmin/orders/needs-trace', async (c) => {
 })
 
 // ============================================================
+// PREVIEW TRACE — Dry-run the engine on a proposed trace without saving.
+// Returns validation issues + a before/after delta vs the currently-stored
+// trace (if any). Used by the admin review panel to QA an override.
+// ============================================================
+adminRoutes.post('/superadmin/orders/:id/preview-trace', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Unauthorized' }, 403)
+  const orderId = parseInt(c.req.param('id'))
+  if (isNaN(orderId)) return c.json({ error: 'Invalid order ID' }, 400)
+  try {
+    const { roof_trace_json, default_pitch } = await c.req.json()
+    if (!roof_trace_json) return c.json({ error: 'roof_trace_json is required' }, 400)
+
+    let traceObj: any
+    try {
+      traceObj = typeof roof_trace_json === 'string' ? JSON.parse(roof_trace_json) : roof_trace_json
+    } catch (e: any) {
+      return c.json({ error: 'roof_trace_json is not valid JSON', details: e.message }, 400)
+    }
+
+    const validation = validateTraceUi(traceObj)
+
+    // Fetch order for context and previously stored trace
+    const order = await c.env.DB.prepare(
+      'SELECT id, order_number, property_address, roof_trace_json, house_sqft FROM orders WHERE id = ?'
+    ).bind(orderId).first<any>()
+    if (!order) return c.json({ error: 'Order not found' }, 404)
+
+    const runEngine = (t: any) => {
+      try {
+        const payload = traceUiToEnginePayload(t, {
+          property_address: order.property_address || '',
+          order_number: order.order_number || '',
+        }, Number(default_pitch) || 5.0)
+        const engine = new RoofMeasurementEngine(payload)
+        const report = engine.run()
+        return {
+          footprint_ft2: report.key_measurements.total_projected_footprint_ft2,
+          sloped_ft2:    report.key_measurements.total_roof_area_sloped_ft2,
+          squares_net:   report.key_measurements.total_squares_net,
+          squares_gross: report.key_measurements.total_squares_gross_w_waste,
+          dominant_pitch: report.key_measurements.dominant_pitch_label,
+          num_faces:     report.key_measurements.num_roof_faces,
+          num_eave_points: report.key_measurements.num_eave_points,
+          num_ridges:    report.key_measurements.num_ridges,
+          num_hips:      report.key_measurements.num_hips,
+          num_valleys:   report.key_measurements.num_valleys,
+          eaves_ft:      report.linear_measurements.eaves_total_ft,
+          ridges_ft:     report.linear_measurements.ridges_total_ft,
+          hips_ft:       report.linear_measurements.hips_total_ft,
+          valleys_ft:    report.linear_measurements.valleys_total_ft,
+          advisory_notes: report.advisory_notes,
+        }
+      } catch (e: any) {
+        return { error: e.message }
+      }
+    }
+
+    let proposed: any = null
+    if (validation.valid) proposed = runEngine(traceObj)
+
+    let previous: any = null
+    if (order.roof_trace_json) {
+      try {
+        const prev = typeof order.roof_trace_json === 'string'
+          ? JSON.parse(order.roof_trace_json)
+          : order.roof_trace_json
+        const prevValidation = validateTraceUi(prev)
+        if (prevValidation.valid) previous = runEngine(prev)
+      } catch { /* ignore — previous trace is corrupt */ }
+    }
+
+    // Compute a simple diff summary for the UI
+    let delta: any = null
+    if (proposed && previous && !proposed.error && !previous.error) {
+      delta = {
+        footprint_ft2: proposed.footprint_ft2 - previous.footprint_ft2,
+        sloped_ft2:    proposed.sloped_ft2 - previous.sloped_ft2,
+        squares_gross: proposed.squares_gross - previous.squares_gross,
+        footprint_pct: previous.footprint_ft2 > 0
+          ? Math.round(((proposed.footprint_ft2 - previous.footprint_ft2) / previous.footprint_ft2) * 1000) / 10
+          : null,
+      }
+    }
+
+    return c.json({
+      success: true,
+      validation,
+      proposed,
+      previous,
+      delta,
+      order: { id: order.id, order_number: order.order_number, property_address: order.property_address, house_sqft: order.house_sqft },
+    })
+  } catch (err: any) {
+    return c.json({ error: 'Preview failed: ' + err.message }, 500)
+  }
+})
+
+// ============================================================
 // SUBMIT TRACE — Admin saves trace + triggers report generation
 // ============================================================
 adminRoutes.post('/superadmin/orders/:id/submit-trace', async (c) => {
@@ -2440,11 +2541,45 @@ adminRoutes.post('/superadmin/orders/:id/submit-trace', async (c) => {
   const orderId = parseInt(c.req.param('id'))
   if (isNaN(orderId)) return c.json({ error: 'Invalid order ID' }, 400)
   try {
-    const { roof_trace_json } = await c.req.json()
+    const { roof_trace_json, force } = await c.req.json()
     if (!roof_trace_json) return c.json({ error: 'roof_trace_json is required' }, 400)
 
+    // Parse if string, then validate structure + geometry before anything hits the DB
+    let traceObj: any
+    try {
+      traceObj = typeof roof_trace_json === 'string' ? JSON.parse(roof_trace_json) : roof_trace_json
+    } catch (e: any) {
+      return c.json({ error: 'roof_trace_json is not valid JSON', details: e.message }, 400)
+    }
+    const validation = validateTraceUi(traceObj)
+    if (!validation.valid && !force) {
+      return c.json({
+        error: 'Trace validation failed. Re-submit with force=true to override.',
+        validation_errors: validation.errors,
+        validation_warnings: validation.warnings,
+      }, 400)
+    }
+
+    // Audit: capture the previous trace (if any) so overrides are reversible
+    try {
+      const prev = await c.env.DB.prepare(
+        'SELECT roof_trace_json FROM orders WHERE id = ?'
+      ).bind(orderId).first<any>()
+      const prevJson = prev?.roof_trace_json || null
+      await c.env.DB.prepare(
+        "INSERT INTO user_activity_log (company_id, action, details) VALUES (1, 'admin_trace_override', ?)"
+      ).bind(JSON.stringify({
+        order_id: orderId,
+        admin_id: admin.id,
+        validation_warnings: validation.warnings.length,
+        validation_errors: validation.errors.length,
+        forced: !!force,
+        previous_trace_existed: !!prevJson,
+      })).run()
+    } catch (e) { /* non-fatal audit */ }
+
     // Save the trace
-    const traceStr = typeof roof_trace_json === 'string' ? roof_trace_json : JSON.stringify(roof_trace_json)
+    const traceStr = JSON.stringify(traceObj)
     await c.env.DB.prepare(
       "UPDATE orders SET roof_trace_json = ?, needs_admin_trace = 0, updated_at = datetime('now') WHERE id = ?"
     ).bind(traceStr, orderId).run()

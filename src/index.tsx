@@ -2139,14 +2139,17 @@ app.get('/proposal/view/:token', async (c) => {
         const invStatusLabel = invIsAccepted ? 'ACCEPTED' : invIsDeclined ? 'DECLINED' : (invProposal.status || 'draft').toUpperCase()
         const headerColor = invProposal.accent_color || '#0ea5e9'
 
-        // Build accept/sign section for proposals/estimates
+        // Build accept/sign section for proposals/estimates/invoices
+        const acceptVerb = docType === 'invoice' ? 'Approve' : 'Accept'
+        const acceptHeading = docType === 'invoice' ? `Approve this ${docLabel.toLowerCase()}?` : 'Ready to proceed?'
+        const acceptSub = docType === 'invoice' ? `Sign below to approve and acknowledge this ${docLabel.toLowerCase()}` : `Accept this ${docLabel.toLowerCase()} to get your roofing project started`
         let signatureSection = ''
-        if (invIsProposalType && !invIsResponded) {
+        if (!invIsResponded) {
           signatureSection = `
       <div class="px-8 py-8 no-print" id="actionSection">
         <div class="bg-gray-50 rounded-2xl p-6 border border-gray-200">
-          <h3 class="text-center text-lg font-bold text-gray-800 mb-2">Ready to proceed?</h3>
-          <p class="text-center text-sm text-gray-500 mb-6">Accept this ${docLabel.toLowerCase()} to get your roofing project started</p>
+          <h3 class="text-center text-lg font-bold text-gray-800 mb-2">${acceptHeading}</h3>
+          <p class="text-center text-sm text-gray-500 mb-6">${acceptSub}</p>
           <div class="mb-4">
             <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Your Signature <span class="text-red-400">*</span></label>
             <canvas id="signaturePad" class="w-full bg-white" style="border:2px dashed #d1d5db;border-radius:12px;height:100px;cursor:crosshair;touch-action:none" width="600" height="100"></canvas>
@@ -2167,7 +2170,7 @@ app.get('/proposal/view/:token', async (c) => {
           </div>
           <div class="flex gap-3">
             <button onclick="respondProposal('accept')" class="flex-1 text-white py-3.5 rounded-xl font-bold text-sm transition-all hover:shadow-lg" style="background:${headerColor}">
-              <i class="fas fa-check-circle mr-2"></i>Accept &amp; Sign ${docLabel}
+              <i class="fas fa-check-circle mr-2"></i>${acceptVerb} &amp; Sign ${docLabel}
             </button>
             <button onclick="respondProposal('decline')" class="px-6 py-3.5 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-xl font-semibold text-sm transition-all">
               Decline
@@ -2175,14 +2178,15 @@ app.get('/proposal/view/:token', async (c) => {
           </div>
         </div>
       </div>`
-        } else if (invIsProposalType && invIsResponded) {
+        } else if (invIsResponded) {
+          const acceptedLabel = docType === 'invoice' ? 'Approved' : 'Accepted'
           signatureSection = `
       <div class="px-8 py-8">
         <div class="rounded-2xl p-6 text-center ${invIsAccepted ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}">
           <div class="w-16 h-16 mx-auto mb-3 rounded-full flex items-center justify-center ${invIsAccepted ? 'bg-green-100' : 'bg-red-100'}">
             <i class="fas ${invIsAccepted ? 'fa-check-circle text-green-600' : 'fa-times-circle text-red-600'} text-2xl"></i>
           </div>
-          <h3 class="text-lg font-bold ${invIsAccepted ? 'text-green-800' : 'text-red-800'}">${docLabel} ${invIsAccepted ? 'Accepted' : 'Declined'}</h3>
+          <h3 class="text-lg font-bold ${invIsAccepted ? 'text-green-800' : 'text-red-800'}">${docLabel} ${invIsAccepted ? acceptedLabel : 'Declined'}</h3>
           <p class="text-sm ${invIsAccepted ? 'text-green-600' : 'text-red-600'} mt-1">${invProposal.signed_at ? 'on ' + new Date(invProposal.signed_at).toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' }) : ''}</p>
           ${invProposal.customer_signature && invProposal.customer_signature.startsWith('data:image/') ? `<div class="mt-4"><p class="text-xs text-gray-400 mb-1">Signature</p><img src="${invProposal.customer_signature}" alt="Signature" class="max-h-16 mx-auto"></div>` : ''}
         </div>
@@ -2190,7 +2194,7 @@ app.get('/proposal/view/:token', async (c) => {
         }
 
         // Build signature pad script
-        const sigScript = invIsProposalType && !invIsResponded ? `
+        const sigScript = !invIsResponded ? `
     var canvas = document.getElementById('signaturePad');
     var ctx = canvas ? canvas.getContext('2d') : null;
     var drawing = false;

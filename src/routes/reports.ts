@@ -25,6 +25,7 @@ import { generateProfessionalReportHTML, buildVisionFindingsHTML, generateSimple
 import { generateSolarProposalHTML } from '../templates/solar-proposal'
 import { generateTraceBasedDiagramSVG } from '../templates/svg-diagrams'
 import { RoofMeasurementEngine, traceUiToEnginePayload, calculateRoofSpecs, ROOF_PITCH_MULTIPLIERS, HIP_VALLEY_MULTIPLIERS, type TraceReport } from '../services/roof-measurement-engine'
+import { validateTraceUi } from '../utils/trace-validation'
 import { enhanceReportViaGemini } from '../services/gemini-enhance'
 import { segmentWithGemini, geminiOutlineToTracePayload } from '../services/sam3-segmentation'
 import { generateReportImagery, buildAIImageryHTML } from '../services/ai-image-generation'
@@ -948,20 +949,14 @@ reportsRoutes.post('/calculate-from-trace', async (c) => {
     const body = await c.req.json()
     const { trace, address, default_pitch, house_sqft } = body
 
-    if (!trace || !trace.eaves || !Array.isArray(trace.eaves)) {
-      return c.json({ error: 'Missing or invalid trace data. trace.eaves[] is required.' }, 400)
-    }
-
-    if (trace.eaves.length < 3) {
-      return c.json({ error: `Need at least 3 eave points to form a polygon. You have ${trace.eaves.length}. Trace every corner of the roof.` }, 400)
-    }
-
-    // Validate that eave points have lat/lng
-    for (let i = 0; i < trace.eaves.length; i++) {
-      const pt = trace.eaves[i]
-      if (pt.lat == null || pt.lng == null || isNaN(pt.lat) || isNaN(pt.lng)) {
-        return c.json({ error: `Eave point ${i + 1} has invalid coordinates.` }, 400)
-      }
+    // Shared validator: structure, coords, self-intersection, degenerate polygons
+    const validation = validateTraceUi(trace)
+    if (!validation.valid) {
+      return c.json({
+        error: 'Trace validation failed',
+        validation_errors: validation.errors,
+        validation_warnings: validation.warnings,
+      }, 400)
     }
 
     // Fetch real pitch from Google Solar API using centroid of traced eave points
@@ -1019,6 +1014,7 @@ reportsRoutes.post('/calculate-from-trace', async (c) => {
       pitch_source: pitchSource,
       calculation_ms: elapsed,
       engine_version: report.report_meta.engine_version,
+      validation_warnings: validation.warnings,
 
       // Key numbers for the order form display
       measurements: {
