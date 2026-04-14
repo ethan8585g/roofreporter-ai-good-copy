@@ -1776,13 +1776,20 @@ export class RoofMeasurementEngine {
 // CONVENIENCE: Convert existing trace UI format to engine payload
 // ═══════════════════════════════════════════════════════════════
 
+// A single traced line may be either a bare array of points
+// (legacy UI format) OR an object `{pts, pitch?, id?}`.
+type UiTraceLine =
+  | { lat: number; lng: number }[]
+  | { pts: { lat: number; lng: number }[]; pitch?: number | string | null; id?: string }
+
 export function traceUiToEnginePayload(
   traceJson: {
     eaves?: { lat: number; lng: number }[] | { lat: number; lng: number }[][]
     eaves_sections?: { lat: number; lng: number }[][]
-    ridges?: { lat: number; lng: number }[][]
-    hips?: { lat: number; lng: number }[][]
-    valleys?: { lat: number; lng: number }[][]
+    ridges?: UiTraceLine[]
+    hips?: UiTraceLine[]
+    valleys?: UiTraceLine[]
+    slope_map?: Record<string, string>
     annotations?: {
       vents?: { lat: number; lng: number }[]
       skylights?: { lat: number; lng: number }[]
