@@ -5582,9 +5582,20 @@ function renderCustomerOnboardingView() {
     '<div class="w-9 h-9 bg-green-100 rounded-xl flex items-center justify-center"><i class="fas fa-file-invoice-dollar text-green-600"></i></div>' +
     '<div><h3 class="font-bold text-gray-800 text-lg">Send Invoice</h3><p class="text-xs text-gray-500">Invoice a customer for report packs, annual membership, or custom items</p></div>' +
     '</div>' +
-    '<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">' +
+    '<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">' +
     '<div><label class="text-xs text-gray-500 font-medium block mb-1">Customer Email *</label><input id="inv-email" type="email" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="john@abcroofing.ca"></div>' +
-    '<div><label class="text-xs text-gray-500 font-medium block mb-1">Notes (optional)</label><input id="inv-notes" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="e.g. Welcome package, annual renewal..."></div>' +
+    '<div><label class="text-xs text-gray-500 font-medium block mb-1">Customer Name *</label><input id="inv-name" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="John Smith"></div>' +
+    '<div><label class="text-xs text-gray-500 font-medium block mb-1">Business Name</label><input id="inv-business" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="ABC Roofing Ltd"></div>' +
+    '</div>' +
+    '<div class="mb-4"><label class="text-xs text-gray-500 font-medium block mb-1">Notes (optional)</label><input id="inv-notes" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="e.g. Welcome package, annual renewal..."></div>' +
+    // Inline account creation
+    '<div class="bg-blue-50 border border-blue-200 rounded-xl p-3 mb-4">' +
+    '<label class="flex items-center gap-2 text-sm font-semibold text-blue-800 cursor-pointer"><input type="checkbox" id="inv-create-account" class="rounded" onchange="document.getElementById(\'inv-acct-fields\').classList.toggle(\'hidden\', !this.checked)"> <i class="fas fa-user-plus"></i> Also create a customer account with login</label>' +
+    '<div id="inv-acct-fields" class="hidden grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">' +
+    '<div><label class="text-xs text-gray-600 font-medium block mb-1">Password *</label><input id="inv-acct-password" type="text" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Secure password (min 8 chars)"></div>' +
+    '<div><label class="text-xs text-gray-600 font-medium block mb-1">Starter Credits</label><select id="inv-acct-credits" class="w-full border rounded-lg px-3 py-2 text-sm"><option value="0">0 — trial only</option><option value="3" selected>3 — free trial</option><option value="5">5 credits</option><option value="10">10 credits</option></select></div>' +
+    '</div>' +
+    '<p class="text-[10px] text-blue-700 mt-2"><i class="fas fa-info-circle mr-1"></i>Account will be created using the Customer Email / Name / Business above, then the invoice will be sent.</p>' +
     '</div>' +
     '<p class="text-xs text-gray-500 font-medium mb-2">Select items to include:</p>' +
     '<div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">' +
@@ -5830,7 +5841,15 @@ window.saCreateRoofAccount = async function() {
 // ── Send Invoice ─────────────────────────────────────────────
 window.saSendOnboardingInvoice = async function() {
   var email = (document.getElementById('inv-email').value || '').trim();
+  var name = (document.getElementById('inv-name').value || '').trim();
+  var business = (document.getElementById('inv-business').value || '').trim();
   if (!email) { window.rmToast('Customer email is required', 'warning'); return; }
+  if (!name) { window.rmToast('Customer name is required', 'warning'); return; }
+
+  var createAcct = document.getElementById('inv-create-account') && document.getElementById('inv-create-account').checked;
+  var acctPassword = createAcct ? (document.getElementById('inv-acct-password').value || '').trim() : '';
+  var acctCredits = createAcct ? (parseInt(document.getElementById('inv-acct-credits').value) || 0) : 0;
+  if (createAcct && acctPassword.length < 8) { window.rmToast('Account password must be at least 8 characters', 'warning'); return; }
 
   var items = [];
   if (document.getElementById('inv-10pack').checked)  items.push({ description: '10 Roof Report Credits',  quantity: 10,  unit_price: 5.50 });
@@ -5852,13 +5871,37 @@ window.saSendOnboardingInvoice = async function() {
   var resultEl = document.getElementById('inv-result');
   resultEl.className = 'mt-3 text-xs text-gray-500 italic';
   resultEl.classList.remove('hidden');
-  resultEl.textContent = 'Creating invoice...';
+  resultEl.textContent = createAcct ? 'Creating account...' : 'Creating invoice...';
 
   try {
+    var acctMsg = '';
+    if (createAcct) {
+      var acctRes = await saFetch('/api/admin/superadmin/users/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email, password: acctPassword, name: name, company_name: business || name })
+      });
+      var acctData = await acctRes.json();
+      if (acctData.success) {
+        if (acctCredits > 0 && acctData.customer_id) {
+          await saFetch('/api/admin/superadmin/users/' + acctData.customer_id + '/adjust-credits', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ amount: acctCredits, reason: 'Onboarding grant via Send Invoice' })
+          });
+        }
+        acctMsg = ' Account created for <b>' + email + '</b>.';
+      } else if (acctData.error && /exists|duplicate/i.test(acctData.error)) {
+        acctMsg = ' (Account already existed — continuing.)';
+      } else {
+        throw new Error('Account creation failed: ' + (acctData.error || 'unknown'));
+      }
+    }
+    resultEl.textContent = 'Creating invoice...';
     var res = await saFetch('/api/admin/superadmin/service-invoices/create', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ customer_email: email, items: items, notes: notes })
+      body: JSON.stringify({ customer_email: email, customer_name: name, business_name: business, items: items, notes: notes })
     });
     var data = await res.json();
     if (!data.invoice_id && !data.success) throw new Error(data.error || 'Create failed');
@@ -5871,7 +5914,7 @@ window.saSendOnboardingInvoice = async function() {
     resultEl.className = 'mt-3 p-3 rounded-lg bg-green-50 border border-green-200 text-sm text-green-800';
     resultEl.innerHTML =
       '<i class="fas fa-check-circle mr-2 text-green-600"></i>Invoice <b>' + (data.invoice_number || '#' + invoiceId) + '</b> ' +
-      'for <b>$' + total.toFixed(2) + '</b> sent to <b>' + email + '</b>!';
+      'for <b>$' + total.toFixed(2) + '</b> sent to <b>' + email + '</b>!' + acctMsg;
     // Clear form
     ['inv-10pack','inv-25pack','inv-100pack','inv-annual','inv-secretary-1mo','inv-mem-starter','inv-mem-pro','inv-mem-enterprise'].forEach(function(id) {
       var el = document.getElementById(id); if (el) el.checked = false;
@@ -5903,6 +5946,8 @@ document.addEventListener('change', function(e) {
 // ── Preview Invoice (creates draft, opens public view in new tab) ──
 window.saPreviewOnboardingInvoice = async function() {
   var email = (document.getElementById('inv-email').value || '').trim();
+  var name = (document.getElementById('inv-name').value || '').trim();
+  var business = (document.getElementById('inv-business').value || '').trim();
   if (!email) { window.rmToast('Customer email is required', 'warning'); return; }
 
   var items = [];
@@ -5931,7 +5976,7 @@ window.saPreviewOnboardingInvoice = async function() {
     var res = await saFetch('/api/admin/superadmin/service-invoices/create', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ customer_email: email, items: items, notes: notes })
+      body: JSON.stringify({ customer_email: email, customer_name: name, business_name: business, items: items, notes: notes })
     });
     var data = await res.json();
     if (!data.invoice_id && !data.success) throw new Error(data.error || 'Preview failed');
