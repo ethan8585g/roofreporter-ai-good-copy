@@ -2421,10 +2421,14 @@ adminRoutes.get('/superadmin/orders/needs-trace', async (c) => {
   try {
     const orders = await c.env.DB.prepare(`
       SELECT o.id, o.order_number, o.property_address, o.latitude, o.longitude,
-             o.created_at, o.customer_id,
-             c.name as customer_name, c.email as customer_email
+             o.created_at, o.customer_id, o.source, o.api_job_id,
+             c.name as customer_name, c.email as customer_email,
+             a.company_name as api_company_name
       FROM orders o
       LEFT JOIN customers c ON c.id = o.customer_id
+      LEFT JOIN api_accounts a ON a.id = (
+        SELECT account_id FROM api_jobs WHERE id = o.api_job_id LIMIT 1
+      )
       WHERE o.needs_admin_trace = 1
         AND (o.status = 'processing' OR o.status = 'pending')
       ORDER BY o.created_at ASC
@@ -2790,6 +2794,59 @@ adminRoutes.get('/api-accounts/:accountId/keys', async (c) => {
   `).bind(accountId).all()
 
   return c.json({ keys: keys.results })
+})
+
+// ── GET /api/admin/superadmin/api-accounts — Enriched list for super admin UI ─
+adminRoutes.get('/superadmin/api-accounts', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin) return c.json({ error: 'Admin auth required' }, 401)
+  if (admin.role !== 'superadmin') return c.json({ error: 'Superadmin required' }, 403)
+
+  const now = Math.floor(Date.now() / 1000)
+  const thirtyDaysAgo = now - 30 * 86400
+
+  const accounts = await c.env.DB.prepare(`
+    SELECT
+      a.*,
+      (SELECT COUNT(*) FROM api_keys k
+         WHERE k.account_id = a.id AND k.revoked_at IS NULL)               AS active_key_count,
+      (SELECT COUNT(*) FROM api_jobs j WHERE j.account_id = a.id)          AS total_jobs,
+      (SELECT COUNT(*) FROM api_jobs j
+         WHERE j.account_id = a.id AND j.status = 'ready')                 AS completed_jobs,
+      (SELECT COUNT(*) FROM api_jobs j
+         WHERE j.account_id = a.id
+         AND j.status IN ('queued','tracing','generating'))                 AS active_jobs,
+      (SELECT COUNT(*) FROM api_jobs j
+         WHERE j.account_id = a.id AND j.created_at >= ?)                  AS jobs_this_month,
+      (SELECT COALESCE(SUM(delta),0) FROM api_credit_ledger l
+         WHERE l.account_id = a.id AND l.delta > 0)                        AS total_credits_purchased,
+      (SELECT created_at FROM api_credit_ledger l
+         WHERE l.account_id = a.id AND l.reason = 'purchase'
+         ORDER BY created_at DESC LIMIT 1)                                 AS last_purchase_at,
+      (SELECT created_at FROM api_jobs j
+         WHERE j.account_id = a.id
+         ORDER BY created_at DESC LIMIT 1)                                 AS last_job_at
+    FROM api_accounts a
+    ORDER BY a.created_at DESC
+  `).bind(thirtyDaysAgo).all()
+
+  return c.json({ accounts: accounts.results ?? [] })
+})
+
+// ── GET /api/admin/superadmin/api-accounts/:id/ledger — Per-account ledger ───
+adminRoutes.get('/superadmin/api-accounts/:accountId/ledger', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin) return c.json({ error: 'Admin auth required' }, 401)
+  if (admin.role !== 'superadmin') return c.json({ error: 'Superadmin required' }, 403)
+
+  const accountId = c.req.param('accountId')
+  const entries = await c.env.DB.prepare(`
+    SELECT * FROM api_credit_ledger
+    WHERE account_id = ?
+    ORDER BY created_at DESC LIMIT 50
+  `).bind(accountId).all()
+
+  return c.json({ entries: entries.results ?? [] })
 })
 
 // ── GET /api/admin/api-stats — Dashboard summary ────────────────────────────

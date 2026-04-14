@@ -176,15 +176,32 @@ publicApiRoutes.post('/reports', async (c) => {
     return c.json({ error: holdResult.error ?? 'Insufficient credits' }, 402)
   }
 
+  // Geocode the address so the admin trace modal opens on the right property
+  let lat: number | null = null
+  let lng: number | null = null
+  try {
+    const geoRes = await fetch(
+      `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address.trim())}&key=${c.env.GOOGLE_MAPS_API_KEY}`
+    )
+    if (geoRes.ok) {
+      const geoData: any = await geoRes.json()
+      const loc = geoData?.results?.[0]?.geometry?.location
+      if (loc?.lat && loc?.lng) {
+        lat = loc.lat
+        lng = loc.lng
+      }
+    }
+  } catch { /* geocoding failure is non-fatal; admin can still trace manually */ }
+
   const now = Math.floor(Date.now() / 1000)
 
   await db.prepare(`
     INSERT INTO api_jobs
-      (id, account_id, api_key_id, status, address, client_reference, credits_held, created_at)
-    VALUES (?, ?, ?, 'queued', ?, ?, 1, ?)
+      (id, account_id, api_key_id, status, address, lat, lng, client_reference, credits_held, created_at)
+    VALUES (?, ?, ?, 'queued', ?, ?, ?, ?, 1, ?)
   `).bind(
     jobId, account.id, apiKey.id,
-    address.trim(),
+    address.trim(), lat, lng,
     client_reference ? String(client_reference) : null,
     now
   ).run()
@@ -196,12 +213,12 @@ publicApiRoutes.post('/reports', async (c) => {
       homeowner_name, requester_name, requester_company,
       service_tier, price, status, payment_status,
       estimated_delivery, needs_admin_trace,
-      source, api_job_id
-    ) VALUES (?, 1, ?, ?, ?, ?, 'standard', 0, 'processing', 'paid', datetime('now', '+4 hours'), 1, 'api', ?)
+      source, api_job_id, latitude, longitude
+    ) VALUES (?, 1, ?, ?, ?, ?, 'standard', 0, 'processing', 'paid', datetime('now', '+4 hours'), 1, 'api', ?, ?, ?)
   `).bind(
     orderNumber, address.trim(),
     account.company_name, account.company_name, 'API Client',
-    jobId
+    jobId, lat, lng
   ).run()
 
   await db.prepare('UPDATE api_jobs SET order_id = ? WHERE id = ?')

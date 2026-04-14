@@ -709,13 +709,21 @@ function renderReportRequestsView() {
     html += '<div style="background:#1a1200;border:2px solid #f59e0b;border-radius:14px;padding:16px;margin-bottom:20px">' +
       '<div style="color:#fbbf24;font-size:14px;font-weight:800;margin-bottom:12px"><i class="fas fa-drafting-compass mr-2"></i>Pending Manual Traces (' + needsTrace.length + ')</div>' +
       needsTrace.map(function(o) {
-        return '<div style="background:#111827;border:1px solid #374151;border-radius:10px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px;flex-wrap:wrap">' +
+        var isApi = o.source === 'api';
+        var sourceBadge = isApi
+          ? '<span style="display:inline-block;padding:2px 7px;background:#7c3aed;color:#fff;font-size:10px;font-weight:800;border-radius:4px;margin-left:6px;vertical-align:middle">⚡ API</span>'
+          : '';
+        var subLabel = isApi
+          ? (o.api_company_name || 'API Client') + ' · ' + (o.order_number || '#' + o.id) + ' · ' + new Date(o.created_at).toLocaleString()
+          : (o.customer_name || o.customer_email || '') + ' · ' + (o.order_number || '#' + o.id) + ' · ' + new Date(o.created_at).toLocaleString();
+        var borderColor = isApi ? '#7c3aed44' : '#374151';
+        return '<div style="background:#111827;border:1px solid ' + borderColor + ';border-radius:10px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px;flex-wrap:wrap">' +
           '<div style="flex:1;min-width:0">' +
-            '<div style="color:#f9fafb;font-weight:600;font-size:13px">' + (o.property_address || 'Unknown') + '</div>' +
-            '<div style="color:#6b7280;font-size:11px;margin-top:2px">' + (o.customer_name || o.customer_email || '') + ' · ' + (o.order_number || '#' + o.id) + ' · ' + new Date(o.created_at).toLocaleString() + '</div>' +
+            '<div style="color:#f9fafb;font-weight:600;font-size:13px">' + (o.property_address || 'Unknown') + sourceBadge + '</div>' +
+            '<div style="color:#6b7280;font-size:11px;margin-top:2px">' + subLabel + '</div>' +
           '</div>' +
           '<button onclick="saOpenTraceModal(' + o.id + ',' + (o.latitude || 0) + ',' + (o.longitude || 0) + ',\'' + (o.property_address || '').replace(/'/g, "\\'") + '\',\'' + (o.order_number || '') + '\')" ' +
-            'style="padding:8px 16px;background:#f59e0b;color:#111;font-size:12px;font-weight:700;border:none;border-radius:8px;cursor:pointer;white-space:nowrap">' +
+            'style="padding:8px 16px;background:' + (isApi ? '#7c3aed' : '#f59e0b') + ';color:#fff;font-size:12px;font-weight:700;border:none;border-radius:8px;cursor:pointer;white-space:nowrap">' +
             '<i class="fas fa-drafting-compass mr-1.5"></i>Trace & Submit' +
           '</button>' +
         '</div>';
