@@ -308,6 +308,10 @@ function renderDashboard() {
           '<p class="px-3 mb-1 text-[10px] font-bold uppercase tracking-wider" style="color:var(--text-muted)">Team</p>' +
           navLink('/customer/team', 'fa-users-cog', 'Sales Team', teamBadge || null, 'bg-gray-800') +
           navLink('/customer/d2d', 'fa-door-open', 'D2D Manager', null, '') +
+        '</div>' +
+        // Storm Scout
+        '<div>' +
+          '<p class="px-3 mb-1 text-[10px] font-bold uppercase tracking-wider" style="color:var(--text-muted)">Storm Scout</p>' +
           navLink('/customer/storm-scout', 'fa-cloud-bolt', 'Storm Scout', 'New', 'bg-emerald-500') +
         '</div>' +
         // Services
