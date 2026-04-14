@@ -73,9 +73,6 @@ export function generateProfessionalReportHTML(report: RoofReport): string {
     || ''
   const satelliteUrl = report.imagery?.satellite_url || ''
   const overheadUrl = eagleViewUrl || report.imagery?.satellite_overhead_url || satelliteUrl
-  const fluxUrl = (report.imagery as any)?.flux_data_url || null
-  const maskUrl = (report.imagery as any)?.mask_overlay_data_url || null
-  const hasExtraImgs = !!(fluxUrl || maskUrl)
 
   // ── Per-structure breakdown (house + detached garage/shed/etc.) ──
   // Computed from roof_trace GPS coordinates so each traced building gets its own measurement row.
@@ -887,9 +884,6 @@ export function generateSimpleTwoPageReport(report: RoofReport): string {
 
   // Satellite imagery
   const overheadUrl = report.imagery?.satellite_overhead_url || report.imagery?.satellite_url || ''
-  const fluxUrl = (report.imagery as any)?.flux_data_url || null
-  const maskUrl = (report.imagery as any)?.mask_overlay_data_url || null
-  const hasExtraImgs = !!(fluxUrl || maskUrl)
 
   // Slope breakdown (classify segments)
   // Industry-standard ranges: Flat 0-2:12, Low 2-4:12, Standard 4-9:12, Steep 9:12+
