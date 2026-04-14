@@ -6750,23 +6750,39 @@ const featureHubConfig: Record<string, {
     slug: 'ai-secretary', title: 'AI Roofer Secretary — 24/7 Phone Receptionist', icon: 'fas fa-headset', accentColor: '#f59e0b',
     heroImage: 'https://images.unsplash.com/photo-1553877522-43269d4ea984?w=1920&q=80&auto=format&fit=crop',
     ogImage: 'https://images.unsplash.com/photo-1553877522-43269d4ea984?w=1200&q=80&auto=format&fit=crop',
-    headline: 'Never Miss a Roofing Lead Again — Even at 2am',
-    subhead: 'Your AI phone receptionist answers every call, books appointments, and qualifies leads around the clock.',
-    metaDesc: 'AI phone receptionist for roofing contractors. Answers calls 24/7, books appointments, qualifies leads (retail/storm/insurance), sends call summaries. $149/month.',
+    headline: 'Never Miss a Roofing Lead Again — 24/7 AI Receptionist That Answers Inbound Calls, Books Appointments & Qualifies Leads',
+    subhead: 'Your AI phone receptionist answers every inbound call, captures every storm lead, books appointments into your calendar, and manages your new leads around the clock — nights, weekends, holidays, and peak storm season included.',
+    metaDesc: 'AI receptionist & virtual answering service for roofing contractors. 24/7 inbound call answering, automated lead capture, appointment booking, insurance claim intake, hail storm lead qualification & CRM lead management. Serving roofers across Canada and the US — Calgary, Edmonton, Toronto, Vancouver, Ottawa, Dallas, Houston, Miami, Denver, Phoenix, and more. $149/month, no per-call fees.',
     capabilities: [
-      'Answers every inbound call in a natural, professional voice',
-      'Books appointments directly into your Google Calendar',
-      'Qualifies leads by type: retail, storm damage, or insurance claim',
-      'Sends you a detailed call summary by email after each call',
-      'Handles objections and follows your custom call script',
-      'Never misses a lead — nights, weekends, and holidays covered',
+      'Answers every inbound roofing call in a natural, professional human-sounding voice — no robotic IVR menus',
+      'Captures new leads 24/7 — nights, weekends, holidays, storm surges, and while you\'re on the roof',
+      'Books appointments automatically into your Google Calendar with buffer time and travel routing',
+      'Qualifies leads by job type: retail re-roof, storm & hail damage, insurance claim, repair, maintenance, or inspection',
+      'Collects full lead details: name, address, phone, email, roof age, damage type, insurance carrier, and adjuster info',
+      'Recognizes insurance claim language and logs claim numbers, deductibles, and carrier names for faster intake',
+      'Pushes every caller directly into your Roof Manager CRM pipeline as a new lead — no manual data entry',
+      'Sends instant SMS and email call summaries to your team after every call',
+      'Handles common objections, pricing questions, and FAQs using your custom call script',
+      'Routes urgent emergency leaks, storm damage, and insurance adjusters to a human on-call number',
+      'Bilingual support — English and French — ideal for Quebec, Ontario, and bilingual markets',
+      'Local area code phone number provisioning in any Canadian or US market',
+      'Missed-call text-back automation recovers leads that hang up before the AI picks up',
+      'Detailed analytics: call volume, answer rate, lead conversion, source attribution, and after-hours capture rate',
+      'Unlimited minutes with no per-call, per-minute, or overage fees — flat $149/month',
     ],
     faq: [
-      { q: 'How does the AI Roofer Secretary work?', a: 'When a customer calls your business number, the AI answers in a natural voice, follows your custom script, collects the caller\'s information and job details, books an appointment if requested, and sends you a complete summary within minutes.' },
-      { q: 'Can it handle insurance claim calls?', a: 'Yes. The AI is trained to recognize insurance claim language, collect adjuster information, note the insurance carrier and claim number, and route urgent claims appropriately.' },
-      { q: 'How much does the AI Roofer Secretary cost?', a: 'The AI Roofer Secretary is $149/month as an add-on to any Roof Manager plan. There are no per-call fees and no setup costs.' },
-      { q: 'Will callers know they\'re talking to an AI?', a: 'The AI sounds natural and professional. You can choose to disclose or not disclose AI use. Most contractors configure a brief "You\'ve reached [Company] — I\'m our scheduling assistant" introduction.' },
-      { q: 'What happens if the AI can\'t answer a question?', a: 'The AI is configured with your specific business rules. If it encounters a request outside its scope, it politely offers to take a message and ensure a human team member follows up.' },
+      { q: 'How does the AI Roofer Secretary work for a roofing business?', a: 'When a homeowner or insurance adjuster calls your roofing company\'s business number, the AI receptionist answers on the first ring in a natural voice, follows your custom call script, collects the caller\'s name, address, phone number, and job details (retail re-roof, storm damage, insurance claim, repair, or inspection), books an appointment directly into your Google Calendar if requested, logs the lead into your Roof Manager CRM pipeline, and sends you a complete call summary by SMS and email within minutes.' },
+      { q: 'Is the AI receptionist a full answering service for roofing contractors?', a: 'Yes. The AI Roofer Secretary replaces traditional roofing answering services and virtual receptionists — but unlike human call centers that charge $1–$3 per minute, our AI is a flat $149/month with unlimited minutes. It answers 24/7, never takes a sick day, never puts callers on hold, and integrates directly with your Roof Manager CRM, calendar, and lead pipeline.' },
+      { q: 'Can the AI handle insurance claim calls and storm damage intake?', a: 'Absolutely. The AI is trained on roofing insurance terminology and storm response workflows. It recognizes claim language ("hail damage," "wind damage," "adjuster appointment," "ACV," "RCV," "deductible"), collects the insurance carrier (State Farm, Allstate, Intact, TD Insurance, etc.), claim number, adjuster name and phone, date of loss, and schedules an inspection. Urgent claims and active leaks can be routed to your on-call team.' },
+      { q: 'How does the AI Secretary capture and manage inbound leads?', a: 'Every inbound call becomes a fully-qualified lead in your CRM automatically. The AI tags leads by source (Google, Facebook, referral, direct, yard sign, door hanger), job type, urgency, and estimated value. Leads flow straight into the Roof Manager pipeline where you can assign sales reps, trigger follow-up sequences, send measurement reports, and generate proposals — all without touching a keyboard.' },
+      { q: 'Does it answer after-hours, weekend, and storm-surge calls?', a: 'Yes — this is where most roofers see the biggest ROI. Industry data shows 60–80% of inbound roofing calls happen outside 9-to-5 business hours, especially during hail and wind storm events. The AI answers every single call at 2am, on Sunday, on Christmas, and during a 500-call storm surge with zero hold times. No missed calls, no lost leads, no lost revenue.' },
+      { q: 'How much does the AI Roofer Secretary cost compared to a human receptionist?', a: 'The AI Roofer Secretary is $149/month flat with unlimited minutes, no per-call fees, no overage charges, and no setup costs. A human receptionist costs $35,000–$55,000/year plus benefits. A traditional roofing answering service typically charges $250–$800/month with per-minute overages. The AI pays for itself by capturing 1–2 additional leads per month.' },
+      { q: 'Will callers know they\'re talking to an AI receptionist?', a: 'The AI sounds natural, warm, and professional — most homeowners do not realize they are speaking with an AI. You can choose to disclose or not disclose AI use based on your jurisdiction (required in some US states). A typical intro is "Thanks for calling [Company] — this is Sarah, your scheduling assistant. How can I help?"' },
+      { q: 'What happens if the AI can\'t answer a specific question about my business?', a: 'The AI is configured with your specific services, pricing, service area, warranty terms, and business rules. If a caller asks something outside its scope, it politely offers to take a detailed message and ensures a human team member follows up within your target response time (usually under 30 minutes).' },
+      { q: 'Which cities and service areas does the AI receptionist support?', a: 'The AI Roofer Secretary works for roofing contractors anywhere in Canada and the United States. We actively serve roofers in Calgary, Edmonton, Red Deer, Lethbridge, Toronto, Ottawa, Mississauga, Hamilton, Vancouver, Surrey, Winnipeg, Saskatoon, Regina, Halifax, Montreal, Quebec City, Dallas, Houston, Austin, Oklahoma City, Denver, Colorado Springs, Phoenix, Tampa, Miami, Orlando, Atlanta, Nashville, Kansas City, Minneapolis, Chicago, Detroit, and every other hail- and storm-prone market. Local area code phone numbers are provisioned on request.' },
+      { q: 'Does the AI Secretary integrate with my Roof Manager CRM and calendar?', a: 'Yes — it is deeply native to Roof Manager. Every call creates a lead in your pipeline, appointments sync bidirectionally with Google Calendar, SMS and email notifications fire automatically, and follow-up tasks are generated for your sales reps. There is nothing to install, configure, or connect via Zapier.' },
+      { q: 'How fast can I get my AI receptionist live?', a: 'Most roofing contractors are live in under 24 hours. You provide your business info, service area, pricing, and preferred call flow during a 15-minute onboarding call. We provision a local phone number, forward your existing business line, and your AI is taking real inbound calls the next business day.' },
+      { q: 'Can the AI handle multiple inbound calls at the same time during a hail storm?', a: 'Yes. Unlike a human receptionist who can only talk to one caller at a time, the AI answers unlimited simultaneous inbound calls. During a major hail event when roofers typically see 10–50x call volume, no caller waits on hold and every lead is captured.' },
     ],
     relatedFeatures: [
       { slug: 'measurements', name: 'Measurement Reports', icon: 'fas fa-satellite' },
@@ -6955,6 +6971,72 @@ function getFeatureHubPageHTML(featureSlug: string): string {
       </div>
     </div>
   </section>
+
+  ${f.slug === 'ai-secretary' ? `
+  <!-- AI Secretary long-form SEO / GEO content -->
+  <section class="py-20 border-t border-white/5" style="background:#0A0A0A">
+    <div class="max-w-4xl mx-auto px-4 space-y-12">
+      <div>
+        <h2 class="text-2xl lg:text-3xl font-black text-white mb-4">The 24/7 AI Receptionist Built for Roofing Contractors</h2>
+        <p class="text-gray-400 text-base leading-relaxed mb-4">Roof Manager's AI Roofer Secretary is a purpose-built <strong class="text-white">virtual receptionist for roofing companies</strong> — a 24/7 AI call answering service that handles every inbound phone call to your business, captures every new lead, qualifies retail re-roof and storm-damage inquiries, books inspection appointments directly into your Google Calendar, and pushes fully-qualified leads into your CRM pipeline automatically. Unlike traditional answering services or call centers that charge per minute, our AI receptionist is a flat $149/month with unlimited minutes, zero per-call fees, and no setup cost.</p>
+        <p class="text-gray-400 text-base leading-relaxed">Missed calls are the single largest source of lost revenue for roofing contractors. Industry research shows the average roofer misses <strong class="text-white">35–60% of inbound calls</strong>, and that number spikes to over 80% during hail and wind storm events. Every missed call is a homeowner who immediately calls the next roofer on Google. The AI Secretary closes that leak entirely — it answers every call on the first ring, day or night, holiday or hail storm, and ensures you never lose another lead to voicemail.</p>
+      </div>
+
+      <div>
+        <h2 class="text-2xl lg:text-3xl font-black text-white mb-4">Inbound Call Answering Built for the Way Roofers Actually Work</h2>
+        <p class="text-gray-400 text-base leading-relaxed mb-4">Generic AI answering services don't understand the roofing industry. Our AI is trained on real roofing conversations — shingle systems (GAF Timberline HDZ, Owens Corning Duration, CertainTeed Landmark, IKO Dynasty, Malarkey Legacy), metal and flat roofing, ice & water shield, underlayment, ridge venting, drip edge, flashing, soffit & fascia, gutters, skylights, and attic ventilation. It recognizes when a caller says "I have granules in my gutter" or "my roof is cupping" and correctly tags the lead as a storm or aging-asphalt inspection.</p>
+        <p class="text-gray-400 text-base leading-relaxed">It also speaks the language of <strong class="text-white">insurance restoration</strong> — ACV, RCV, depreciation, Xactimate, supplements, adjuster appointments, loss dates, deductibles, and carrier-specific workflows for State Farm, Allstate, Intact, TD Insurance, Aviva, Farmers, Liberty Mutual, Travelers, USAA, and more. When a homeowner calls about a hail or wind claim, the AI collects all the intake data your production team needs to open a file before the inspector is even dispatched.</p>
+      </div>
+
+      <div>
+        <h2 class="text-2xl lg:text-3xl font-black text-white mb-4">Automated Lead Management — From First Ring to Signed Contract</h2>
+        <p class="text-gray-400 text-base leading-relaxed mb-4">The AI Secretary is not just a call answering service — it is a full <strong class="text-white">lead management system</strong> for your roofing business. Every inbound call becomes a structured lead in the Roof Manager CRM pipeline, tagged by job type, source, urgency, and estimated value. From there, the platform automatically fires the right next step: sending the homeowner a satellite measurement report, generating a branded proposal, triggering SMS follow-up sequences, assigning a sales rep, or scheduling a virtual roof try-on.</p>
+        <p class="text-gray-400 text-base leading-relaxed">This end-to-end automation is why Roof Manager customers typically see lead-to-appointment conversion jump from under 40% (with voicemail and missed calls) to over 85% (with the AI receptionist + CRM + auto-follow-up). <a href="/features/crm" class="text-[#f59e0b] hover:underline">See how it feeds the CRM pipeline →</a></p>
+      </div>
+
+      <div>
+        <h2 class="text-2xl lg:text-3xl font-black text-white mb-4">Built for Storm Season Call Surges</h2>
+        <p class="text-gray-400 text-base leading-relaxed">When a major hail or wind event hits a market, inbound call volume for local roofers can spike <strong class="text-white">10x to 50x overnight</strong>. A human receptionist — or even a team of three — physically cannot answer those calls in parallel. The AI Secretary handles unlimited simultaneous inbound calls, so during a 500-call surge every homeowner speaks to a live voice, every lead is captured, and every appointment goes on the calendar. This is the single highest-ROI feature for roofers operating in hail-prone markets like Calgary, Denver, Dallas, Oklahoma City, Kansas City, Minneapolis, San Antonio, and Colorado Springs.</p>
+      </div>
+
+      <div>
+        <h2 class="text-2xl lg:text-3xl font-black text-white mb-4">Serving Roofing Contractors Across Canada and the United States</h2>
+        <p class="text-gray-400 text-base leading-relaxed mb-4">The AI Roofer Secretary is available to roofing businesses anywhere in North America, with local area code phone numbers provisioned in every major market. Canadian coverage includes <strong class="text-white">Calgary, Edmonton, Red Deer, Lethbridge, Medicine Hat, Fort McMurray, Grande Prairie (Alberta); Toronto, Ottawa, Mississauga, Brampton, Hamilton, London, Kitchener-Waterloo, Windsor (Ontario); Vancouver, Surrey, Burnaby, Victoria, Kelowna (British Columbia); Winnipeg (Manitoba); Saskatoon, Regina (Saskatchewan); Montreal, Quebec City, Laval, Gatineau (Quebec); Halifax, Moncton, Saint John, Fredericton (Atlantic Canada)</strong>.</p>
+        <p class="text-gray-400 text-base leading-relaxed">US coverage includes all 50 states, with particularly strong adoption in hail-alley markets: <strong class="text-white">Dallas–Fort Worth, Houston, San Antonio, Austin (Texas); Oklahoma City, Tulsa (Oklahoma); Denver, Colorado Springs, Fort Collins (Colorado); Kansas City, St. Louis (Missouri); Minneapolis–Saint Paul (Minnesota); Chicago (Illinois); Atlanta (Georgia); Nashville, Memphis (Tennessee); Tampa, Orlando, Miami, Jacksonville (Florida); Phoenix, Tucson (Arizona); Las Vegas (Nevada); Omaha (Nebraska); Des Moines (Iowa); Indianapolis (Indiana); Columbus, Cleveland (Ohio); Detroit, Grand Rapids (Michigan)</strong> and every other city in between.</p>
+      </div>
+
+      <div>
+        <h2 class="text-2xl lg:text-3xl font-black text-white mb-4">How the AI Receptionist Compares to a Human Answering Service</h2>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm border border-white/10 rounded-xl overflow-hidden" style="background:#111">
+            <thead style="background:#0A0A0A">
+              <tr class="text-left text-xs text-gray-500 uppercase tracking-wider">
+                <th class="p-4">Capability</th>
+                <th class="p-4">AI Roofer Secretary</th>
+                <th class="p-4">Human Answering Service</th>
+                <th class="p-4">In-House Receptionist</th>
+              </tr>
+            </thead>
+            <tbody class="text-gray-300">
+              <tr class="border-t border-white/5"><td class="p-4 font-semibold text-white">Monthly cost</td><td class="p-4 text-[#f59e0b] font-bold">$149 flat</td><td class="p-4">$250–$800 + per-minute</td><td class="p-4">$3,500–$5,000 + benefits</td></tr>
+              <tr class="border-t border-white/5"><td class="p-4 font-semibold text-white">24/7 coverage</td><td class="p-4 text-[#00FF88]">Yes, always</td><td class="p-4">Extra cost</td><td class="p-4">No</td></tr>
+              <tr class="border-t border-white/5"><td class="p-4 font-semibold text-white">Simultaneous calls</td><td class="p-4 text-[#00FF88]">Unlimited</td><td class="p-4">1–3</td><td class="p-4">1</td></tr>
+              <tr class="border-t border-white/5"><td class="p-4 font-semibold text-white">Storm-surge handling</td><td class="p-4 text-[#00FF88]">Scales instantly</td><td class="p-4">Overflow to voicemail</td><td class="p-4">Overwhelmed</td></tr>
+              <tr class="border-t border-white/5"><td class="p-4 font-semibold text-white">CRM integration</td><td class="p-4 text-[#00FF88]">Native to Roof Manager</td><td class="p-4">Manual data entry</td><td class="p-4">Manual data entry</td></tr>
+              <tr class="border-t border-white/5"><td class="p-4 font-semibold text-white">Calendar booking</td><td class="p-4 text-[#00FF88]">Automatic</td><td class="p-4">Rare</td><td class="p-4">Manual</td></tr>
+              <tr class="border-t border-white/5"><td class="p-4 font-semibold text-white">Insurance claim intake</td><td class="p-4 text-[#00FF88]">Trained &amp; structured</td><td class="p-4">Generic</td><td class="p-4">Varies</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div>
+        <h2 class="text-2xl lg:text-3xl font-black text-white mb-4">Who It's For</h2>
+        <p class="text-gray-400 text-base leading-relaxed">Residential and commercial roofing contractors, storm-chasers and restoration specialists, insurance-focused roofers, metal roofing companies, flat &amp; commercial TPO/EPDM contractors, solar roofing installers, gutter and exteriors companies, and general exterior remodelers who want to <strong class="text-white">stop losing leads to voicemail</strong>, <strong class="text-white">scale inbound call capacity without hiring</strong>, and <strong class="text-white">convert more calls into booked inspections</strong>. Whether you're a one-truck owner-operator handling calls between ladders or a 50-crew storm operation, the AI Secretary eliminates the bottleneck at the front door of your business.</p>
+      </div>
+    </div>
+  </section>
+  ` : ''}
 
   <!-- City Grid — hub→spoke links -->
   <section class="py-20 border-t border-white/5" style="background:#0A0A0A">
