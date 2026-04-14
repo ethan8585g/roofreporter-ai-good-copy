@@ -5600,14 +5600,29 @@ function renderCustomerOnboardingView() {
     '<label class="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50 has-[:checked]:border-green-400 has-[:checked]:bg-green-50">' +
     '<input type="checkbox" id="inv-annual" class="rounded" value="annual"><div><div class="text-sm font-semibold text-gray-800">Annual Membership <span class="ml-1 px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded text-[10px] font-bold">SAVE 2 MONTHS</span></div><div class="text-xs text-gray-500">$499.00/yr (equiv. $41.58/mo)</div></div>' +
     '</label>' +
+    '<label class="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50 has-[:checked]:border-violet-400 has-[:checked]:bg-violet-50">' +
+    '<input type="checkbox" id="inv-secretary-1mo" class="rounded" value="secretary-1mo"><div><div class="text-sm font-semibold text-gray-800">AI Secretary — 1st Month</div><div class="text-xs text-gray-500">$149.00 (first month of Secretary AI subscription)</div></div>' +
+    '</label>' +
+    '<label class="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50 has-[:checked]:border-blue-400 has-[:checked]:bg-blue-50">' +
+    '<input type="checkbox" id="inv-mem-starter" class="rounded" value="mem-starter"><div><div class="text-sm font-semibold text-gray-800">Monthly Membership — Starter</div><div class="text-xs text-gray-500">$49.99/mo</div></div>' +
+    '</label>' +
+    '<label class="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50 has-[:checked]:border-blue-400 has-[:checked]:bg-blue-50">' +
+    '<input type="checkbox" id="inv-mem-pro" class="rounded" value="mem-pro"><div><div class="text-sm font-semibold text-gray-800">Monthly Membership — Pro</div><div class="text-xs text-gray-500">$149.00/mo</div></div>' +
+    '</label>' +
+    '<label class="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50 has-[:checked]:border-blue-400 has-[:checked]:bg-blue-50">' +
+    '<input type="checkbox" id="inv-mem-enterprise" class="rounded" value="mem-enterprise"><div><div class="text-sm font-semibold text-gray-800">Monthly Membership — Enterprise</div><div class="text-xs text-gray-500">$499.00/mo</div></div>' +
+    '</label>' +
     '</div>' +
     '<div class="border rounded-xl p-3 mb-4 bg-gray-50">' +
     '<p class="text-xs text-gray-500 font-medium mb-2"><i class="fas fa-plus mr-1"></i>Custom Line Item</p>' +
     '<div class="flex gap-3"><input id="inv-custom-desc" class="flex-1 border rounded-lg px-3 py-2 text-sm bg-white" placeholder="Description (e.g. Setup fee)"><input id="inv-custom-price" type="number" min="0" step="0.01" class="w-28 border rounded-lg px-3 py-2 text-sm bg-white" placeholder="$0.00"></div>' +
     '</div>' +
-    '<div class="flex items-center justify-between">' +
+    '<div class="flex items-center justify-between gap-3 flex-wrap">' +
     '<div id="inv-total-display" class="text-sm font-bold text-gray-700"></div>' +
+    '<div class="flex gap-2">' +
+    '<button onclick="saPreviewOnboardingInvoice()" class="bg-white border-2 border-gray-300 hover:border-blue-500 hover:text-blue-600 text-gray-700 px-6 py-2.5 rounded-lg font-bold text-sm transition-all"><i class="fas fa-eye mr-2"></i>Preview Invoice</button>' +
     '<button onclick="saSendOnboardingInvoice()" class="bg-green-600 hover:bg-green-700 text-white px-8 py-2.5 rounded-lg font-bold text-sm transition-all"><i class="fas fa-paper-plane mr-2"></i>Create &amp; Send Invoice</button>' +
+    '</div>' +
     '</div>' +
     '<div id="inv-result" class="mt-3 hidden"></div>' +
     '</div>' +
@@ -5822,6 +5837,10 @@ window.saSendOnboardingInvoice = async function() {
   if (document.getElementById('inv-25pack').checked)  items.push({ description: '25 Roof Report Credits',  quantity: 25,  unit_price: 7.00 });
   if (document.getElementById('inv-100pack').checked) items.push({ description: '100 Roof Report Credits', quantity: 100, unit_price: 4.75 });
   if (document.getElementById('inv-annual').checked)  items.push({ description: 'Annual Membership — 12 months (2 months free)', quantity: 1, unit_price: 499.00 });
+  var secEl = document.getElementById('inv-secretary-1mo');       if (secEl && secEl.checked) items.push({ description: 'AI Secretary — 1st Month Subscription', quantity: 1, unit_price: 149.00 });
+  var msEl = document.getElementById('inv-mem-starter');           if (msEl && msEl.checked) items.push({ description: 'Monthly Membership — Starter (1 month)', quantity: 1, unit_price: 49.99 });
+  var mpEl = document.getElementById('inv-mem-pro');               if (mpEl && mpEl.checked) items.push({ description: 'Monthly Membership — Pro (1 month)', quantity: 1, unit_price: 149.00 });
+  var meEl = document.getElementById('inv-mem-enterprise');        if (meEl && meEl.checked) items.push({ description: 'Monthly Membership — Enterprise (1 month)', quantity: 1, unit_price: 499.00 });
 
   var customDesc  = (document.getElementById('inv-custom-desc').value || '').trim();
   var customPrice = parseFloat(document.getElementById('inv-custom-price').value) || 0;
@@ -5854,8 +5873,8 @@ window.saSendOnboardingInvoice = async function() {
       '<i class="fas fa-check-circle mr-2 text-green-600"></i>Invoice <b>' + (data.invoice_number || '#' + invoiceId) + '</b> ' +
       'for <b>$' + total.toFixed(2) + '</b> sent to <b>' + email + '</b>!';
     // Clear form
-    ['inv-10pack','inv-25pack','inv-100pack','inv-annual'].forEach(function(id) {
-      document.getElementById(id).checked = false;
+    ['inv-10pack','inv-25pack','inv-100pack','inv-annual','inv-secretary-1mo','inv-mem-starter','inv-mem-pro','inv-mem-enterprise'].forEach(function(id) {
+      var el = document.getElementById(id); if (el) el.checked = false;
     });
     document.getElementById('inv-custom-desc').value = '';
     document.getElementById('inv-custom-price').value = '';
@@ -5870,9 +5889,9 @@ window.saSendOnboardingInvoice = async function() {
 document.addEventListener('change', function(e) {
   var t = e.target;
   if (!t) return;
-  var ids = ['inv-10pack','inv-25pack','inv-100pack','inv-annual'];
+  var ids = ['inv-10pack','inv-25pack','inv-100pack','inv-annual','inv-secretary-1mo','inv-mem-starter','inv-mem-pro','inv-mem-enterprise'];
   if (ids.indexOf(t.id) === -1 && t.id !== 'inv-custom-price') return;
-  var prices = { 'inv-10pack': 55, 'inv-25pack': 175, 'inv-100pack': 475, 'inv-annual': 499 };
+  var prices = { 'inv-10pack': 55, 'inv-25pack': 175, 'inv-100pack': 475, 'inv-annual': 499, 'inv-secretary-1mo': 149, 'inv-mem-starter': 49.99, 'inv-mem-pro': 149, 'inv-mem-enterprise': 499 };
   var total = 0;
   ids.forEach(function(id) { var el = document.getElementById(id); if (el && el.checked) total += prices[id]; });
   var cp = parseFloat((document.getElementById('inv-custom-price') || {}).value) || 0;
@@ -5881,7 +5900,56 @@ document.addEventListener('change', function(e) {
   if (disp) disp.textContent = total > 0 ? 'Total: $' + total.toFixed(2) : '';
 });
 
-async function createOnboardingCustomer() {
+// ── Preview Invoice (creates draft, opens public view in new tab) ──
+window.saPreviewOnboardingInvoice = async function() {
+  var email = (document.getElementById('inv-email').value || '').trim();
+  if (!email) { window.rmToast('Customer email is required', 'warning'); return; }
+
+  var items = [];
+  if (document.getElementById('inv-10pack').checked)  items.push({ description: '10 Roof Report Credits',  quantity: 10,  unit_price: 5.50 });
+  if (document.getElementById('inv-25pack').checked)  items.push({ description: '25 Roof Report Credits',  quantity: 25,  unit_price: 7.00 });
+  if (document.getElementById('inv-100pack').checked) items.push({ description: '100 Roof Report Credits', quantity: 100, unit_price: 4.75 });
+  if (document.getElementById('inv-annual').checked)  items.push({ description: 'Annual Membership — 12 months (2 months free)', quantity: 1, unit_price: 499.00 });
+  var secEl = document.getElementById('inv-secretary-1mo');       if (secEl && secEl.checked) items.push({ description: 'AI Secretary — 1st Month Subscription', quantity: 1, unit_price: 149.00 });
+  var msEl = document.getElementById('inv-mem-starter');           if (msEl && msEl.checked) items.push({ description: 'Monthly Membership — Starter (1 month)', quantity: 1, unit_price: 49.99 });
+  var mpEl = document.getElementById('inv-mem-pro');               if (mpEl && mpEl.checked) items.push({ description: 'Monthly Membership — Pro (1 month)', quantity: 1, unit_price: 149.00 });
+  var meEl = document.getElementById('inv-mem-enterprise');        if (meEl && meEl.checked) items.push({ description: 'Monthly Membership — Enterprise (1 month)', quantity: 1, unit_price: 499.00 });
+
+  var customDesc  = (document.getElementById('inv-custom-desc').value || '').trim();
+  var customPrice = parseFloat(document.getElementById('inv-custom-price').value) || 0;
+  if (customDesc && customPrice > 0) items.push({ description: customDesc, quantity: 1, unit_price: customPrice });
+
+  if (!items.length) { window.rmToast('Select at least one item to preview', 'warning'); return; }
+
+  var notes = document.getElementById('inv-notes').value || '';
+  var resultEl = document.getElementById('inv-result');
+  resultEl.className = 'mt-3 text-xs text-gray-500 italic';
+  resultEl.classList.remove('hidden');
+  resultEl.textContent = 'Building preview...';
+
+  try {
+    var res = await saFetch('/api/admin/superadmin/service-invoices/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ customer_email: email, items: items, notes: notes })
+    });
+    var data = await res.json();
+    if (!data.invoice_id && !data.success) throw new Error(data.error || 'Preview failed');
+    if (!data.share_token) throw new Error('No share token returned');
+
+    var url = '/invoice/view/' + data.share_token;
+    window.open(url, '_blank');
+    resultEl.className = 'mt-3 p-3 rounded-lg bg-blue-50 border border-blue-200 text-sm text-blue-800';
+    resultEl.innerHTML =
+      '<i class="fas fa-eye mr-2"></i>Draft invoice <b>' + (data.invoice_number || '#' + data.invoice_id) + '</b> opened in new tab. ' +
+      'It has <b>not</b> been emailed yet — click "Create &amp; Send Invoice" to send it, or edit selections and preview again.';
+  } catch(e) {
+    resultEl.className = 'mt-3 p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-800';
+    resultEl.innerHTML = '<i class="fas fa-exclamation-circle mr-2"></i>Preview failed: ' + e.message;
+  }
+};
+
+window.createOnboardingCustomer = async function() {
   var email = document.getElementById('ob-email').value;
   var password = document.getElementById('ob-password').value;
   var contactName = document.getElementById('ob-name').value;
@@ -7480,7 +7548,7 @@ async function smSetupLiveKit(customerId) {
   } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
 }
 
-async function smOnboardCustomer() {
+window.smOnboardCustomer = async function() {
   var email = (document.getElementById('smo-email') || {}).value || '';
   var password = (document.getElementById('smo-password') || {}).value || '';
   var contactName = (document.getElementById('smo-name') || {}).value || '';
@@ -7491,34 +7559,27 @@ async function smOnboardCustomer() {
     return;
   }
 
-  // Gather directories
-  var directories = [];
-  for (var i = 0; i < 4; i++) {
-    var dn = (document.getElementById('smo-dir' + i + '-name') || {}).value || '';
-    var dp = (document.getElementById('smo-dir' + i + '-phone') || {}).value || '';
-    var dno = (document.getElementById('smo-dir' + i + '-notes') || {}).value || '';
-    if (dn.trim()) directories.push({ name: dn.trim(), phone_or_action: dp, special_notes: dno });
-  }
+  var agentPhone = (document.getElementById('smo-agent-phone') || {}).value || '';
+  var personalPhone = (document.getElementById('smo-phone') || {}).value || '';
 
   var payload = {
     business_name: businessName,
     contact_name: contactName,
     email: email,
-    phone: (document.getElementById('smo-phone') || {}).value || '',
+    phone: personalPhone,
+    personal_phone: personalPhone,
     password: password,
-    agent_name: (document.getElementById('smo-agent-name') || {}).value || 'Sarah',
-    agent_voice: (document.getElementById('smo-voice') || {}).value || 'alloy',
-    greeting_script: (document.getElementById('smo-greeting') || {}).value || '',
-    common_qa: (document.getElementById('smo-qa') || {}).value || '',
-    general_notes: (document.getElementById('smo-notes') || {}).value || '',
-    secretary_mode: (document.getElementById('smo-mode') || {}).value || 'full',
-    assigned_phone_number: (document.getElementById('smo-agent-phone') || {}).value || '',
-    carrier_name: (document.getElementById('smo-carrier') || {}).value || '',
-    directories: directories
+    secretary_mode: (document.getElementById('smo-mode') || {}).value || 'receptionist',
+    agent_phone_number: agentPhone,
+    secretary_phone_number: agentPhone,
+    call_forwarding_number: personalPhone,
+    phone_provider: 'twilio',
+    enable_secretary: true,
+    notes: (document.getElementById('smo-notes') || {}).value || ''
   };
 
   try {
-    var res = await saFetch('/api/admin/superadmin/secretary-manager/onboard', {
+    var res = await saFetch('/api/admin/superadmin/onboarding/create', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -7527,7 +7588,7 @@ async function smOnboardCustomer() {
     if (data.success) {
       var msg = 'Customer onboarded successfully!\n\n';
       msg += 'Customer ID: ' + data.customer_id + '\n';
-      msg += 'Email/Login: ' + data.email + '\n\n';
+      msg += 'Email/Login: ' + email + '\n\n';
       msg += 'NEXT STEPS:\n';
       msg += '1. Open their profile (click OK, then their row in the list)\n';
       msg += '2. Click "Setup LiveKit" to create their SIP trunk\n';
@@ -7536,12 +7597,12 @@ async function smOnboardCustomer() {
       SA.smView = 'list';
       loadView('secretary-manager');
     } else {
-      window.rmToast('Error: ' + (data.error || 'Failed to create customer', 'error'));
+      window.rmToast('Error: ' + (data.error || 'Failed to create customer'), 'error');
     }
   } catch(e) {
     window.rmToast('Error creating customer: ' + e.message, 'error');
   }
-}
+};
 
 // ============================================================
 // GEMINI AI COMMAND TERMINAL
@@ -7893,7 +7954,7 @@ function scrollGeminiToBottom() {
 // Called from the Onboard New Customer form
 // ============================================================
 
-async function geminiAutoGenerateConfig() {
+window.geminiAutoGenerateConfig = async function() {
   var biz = document.getElementById('smo-business')?.value || '';
   var contact = document.getElementById('smo-name')?.value || '';
   if (!biz) { window.rmToast('Enter a business name first', 'info'); return; }
@@ -7962,7 +8023,7 @@ async function geminiAutoGenerateConfig() {
   }
 }
 
-async function geminiGenerateGreeting() {
+window.geminiGenerateGreeting = async function() {
   var biz = document.getElementById('smo-business')?.value || 'Roofing Company';
   var agentName = document.getElementById('smo-agent-name')?.value || 'Sarah';
 
@@ -7999,7 +8060,7 @@ async function geminiGenerateGreeting() {
   btn.innerHTML = '<i class="fas fa-magic mr-1"></i>AI Generate';
 }
 
-async function geminiGenerateQA() {
+window.geminiGenerateQA = async function() {
   var biz = document.getElementById('smo-business')?.value || 'Roofing Company';
   var services = document.getElementById('smo-notes')?.value || '';
 
