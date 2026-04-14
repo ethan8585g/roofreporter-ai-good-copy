@@ -1,6 +1,6 @@
 // ============================================================
 // Storm Scout — Real-time storm damage map for roofers
-// Phase 1: ECCC severe-weather alerts as colored polygons
+// Phase 2: ECCC + NWS alerts, NWS LSR hail heatmap, time slider
 // ============================================================
 (function () {
   'use strict';
@@ -11,9 +11,14 @@
   var map = null;
   var infoWindow = null;
   var polygons = {};   // id -> google.maps.Polygon
-  var markers = {};    // id -> google.maps.Marker (for polygon-less alerts)
+  var markers = {};    // id -> google.maps.Marker
+  var heatmapLayer = null;
+  var hailMarkers = [];
   var alerts = [];
+  var hailReports = [];
   var filter = { hail: true, wind: true, tornado: true, thunderstorm: true, other: true };
+  var layers = { alerts: true, heatmap: true };
+  var daysBack = 7;
 
   function getToken() { return localStorage.getItem('rc_customer_token') || ''; }
   function authHeaders() { return { 'Authorization': 'Bearer ' + getToken(), 'Content-Type': 'application/json' }; }
@@ -35,18 +40,11 @@
   }
 
   var SEVERITY_COLORS = {
-    advisory: '#eab308',
-    watch:    '#f97316',
-    warning:  '#ef4444',
-    extreme:  '#7f1d1d'
+    advisory: '#eab308', watch: '#f97316', warning: '#ef4444', extreme: '#7f1d1d'
   };
-
   var TYPE_ICONS = {
-    hail:         'fa-cloud-meatball',
-    wind:         'fa-wind',
-    tornado:      'fa-tornado',
-    thunderstorm: 'fa-bolt',
-    other:        'fa-triangle-exclamation'
+    hail: 'fa-cloud-meatball', wind: 'fa-wind', tornado: 'fa-tornado',
+    thunderstorm: 'fa-bolt', other: 'fa-triangle-exclamation'
   };
 
   function renderLayout() {
@@ -55,10 +53,15 @@
         '<aside class="ss-sidebar">' +
           '<div class="ss-sidebar-header">' +
             '<h2><i class="fas fa-cloud-showers-heavy mr-2"></i>Storm Scout</h2>' +
-            '<p class="ss-sub">Live severe-weather alerts</p>' +
+            '<p class="ss-sub">Live alerts + hail reports</p>' +
           '</div>' +
           '<div class="ss-section">' +
-            '<div class="ss-section-title">Filters</div>' +
+            '<div class="ss-section-title">Layers</div>' +
+            '<label><input type="checkbox" data-layer="alerts" checked> <i class="fas fa-triangle-exclamation" style="color:#ef4444"></i> Active alerts</label>' +
+            '<label><input type="checkbox" data-layer="heatmap" checked> <i class="fas fa-fire" style="color:#f97316"></i> Hail heatmap</label>' +
+          '</div>' +
+          '<div class="ss-section">' +
+            '<div class="ss-section-title">Alert type filters</div>' +
             '<label><input type="checkbox" data-filter="tornado" checked> <i class="fas fa-tornado" style="color:#7f1d1d"></i> Tornado</label>' +
             '<label><input type="checkbox" data-filter="hail" checked> <i class="fas fa-cloud-meatball" style="color:#ef4444"></i> Hail</label>' +
             '<label><input type="checkbox" data-filter="wind" checked> <i class="fas fa-wind" style="color:#f97316"></i> Wind</label>' +
@@ -68,12 +71,33 @@
             '<div class="ss-section-title">Active alerts <span id="ssCount" class="ss-count">0</span></div>' +
             '<div id="ssList" class="ss-list"></div>' +
           '</div>' +
+          '<div class="ss-section">' +
+            '<div class="ss-section-title">Hail reports <span id="ssHailCount" class="ss-count">0</span></div>' +
+            '<div id="ssHailSummary" class="ss-sub" style="font-size:11px"></div>' +
+          '</div>' +
           '<div class="ss-section ss-footer">' +
             '<button id="ssRefresh" class="ss-btn"><i class="fas fa-rotate mr-1"></i>Refresh</button>' +
             '<div id="ssUpdated" class="ss-updated"></div>' +
           '</div>' +
         '</aside>' +
-        '<div class="ss-map-wrap"><div id="ssMap" class="ss-map"></div></div>' +
+        '<div class="ss-map-wrap">' +
+          '<div id="ssMap" class="ss-map"></div>' +
+          '<div class="ss-timebar">' +
+            '<span class="ss-timebar-label">Hail history:</span>' +
+            '<div class="ss-timebar-btns">' +
+              '<button data-days="1">1d</button>' +
+              '<button data-days="3">3d</button>' +
+              '<button data-days="7" class="active">7d</button>' +
+              '<button data-days="14">14d</button>' +
+              '<button data-days="30">30d</button>' +
+            '</div>' +
+            '<div class="ss-legend">' +
+              '<span class="ss-legend-item"><span class="ss-dot" style="background:#22c55e"></span>&lt;1"</span>' +
+              '<span class="ss-legend-item"><span class="ss-dot" style="background:#eab308"></span>1–2"</span>' +
+              '<span class="ss-legend-item"><span class="ss-dot" style="background:#ef4444"></span>&gt;2"</span>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
       '</div>';
 
     root.querySelectorAll('input[data-filter]').forEach(function (el) {
@@ -82,14 +106,29 @@
         renderAlertsOnMap();
       });
     });
-    document.getElementById('ssRefresh').addEventListener('click', function () { loadAlerts(true); });
+    root.querySelectorAll('input[data-layer]').forEach(function (el) {
+      el.addEventListener('change', function () {
+        layers[el.getAttribute('data-layer')] = el.checked;
+        renderAlertsOnMap();
+        renderHeatmap();
+      });
+    });
+    root.querySelectorAll('.ss-timebar-btns button').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        daysBack = parseInt(btn.getAttribute('data-days'), 10);
+        root.querySelectorAll('.ss-timebar-btns button').forEach(function (b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+        loadHail();
+      });
+    });
+    document.getElementById('ssRefresh').addEventListener('click', function () { loadAll(true); });
   }
 
   function initMap() {
     var el = document.getElementById('ssMap');
     if (!el || !window.google || !google.maps) return;
     map = new google.maps.Map(el, {
-      center: { lat: 56.1, lng: -96.8 }, // Canada-ish
+      center: { lat: 45.0, lng: -90.0 },
       zoom: 4,
       mapTypeId: 'terrain',
       streetViewControl: false,
@@ -97,22 +136,27 @@
       fullscreenControl: true
     });
     infoWindow = new google.maps.InfoWindow();
-    loadAlerts(false);
+    loadAll(false);
   }
 
-  function clearLayers() {
+  function clearAlertLayers() {
     Object.keys(polygons).forEach(function (k) { polygons[k].setMap(null); });
     Object.keys(markers).forEach(function (k) { markers[k].setMap(null); });
-    polygons = {};
-    markers = {};
+    polygons = {}; markers = {};
+  }
+
+  function clearHeatmap() {
+    if (heatmapLayer) { heatmapLayer.setMap(null); heatmapLayer = null; }
+    hailMarkers.forEach(function (m) { m.setMap(null); });
+    hailMarkers = [];
   }
 
   function renderAlertsOnMap() {
     if (!map) return;
-    clearLayers();
+    clearAlertLayers();
     var listEl = document.getElementById('ssList');
     var countEl = document.getElementById('ssCount');
-    var visible = alerts.filter(function (a) { return filter[a.type] !== false; });
+    var visible = layers.alerts ? alerts.filter(function (a) { return filter[a.type] !== false; }) : [];
     countEl.textContent = String(visible.length);
 
     var itemsHtml = '';
@@ -120,30 +164,19 @@
       var color = SEVERITY_COLORS[a.severity] || '#6b7280';
       if (a.polygon && a.polygon.length >= 3) {
         var poly = new google.maps.Polygon({
-          paths: a.polygon,
-          strokeColor: color,
-          strokeOpacity: 0.9,
-          strokeWeight: 2,
-          fillColor: color,
-          fillOpacity: 0.28,
-          map: map
+          paths: a.polygon, strokeColor: color, strokeOpacity: 0.9, strokeWeight: 2,
+          fillColor: color, fillOpacity: 0.28, map: map
         });
         poly.addListener('click', function (e) { openInfo(a, e.latLng); });
         polygons[a.id] = poly;
       } else if (a.coordinates && a.coordinates.lat && a.coordinates.lng) {
         var m = new google.maps.Marker({
-          position: a.coordinates,
-          map: map,
-          title: a.headline || a.description,
-          icon: {
-            path: google.maps.SymbolPath.CIRCLE,
-            scale: 8, fillColor: color, fillOpacity: 0.9, strokeColor: '#fff', strokeWeight: 2
-          }
+          position: a.coordinates, map: map, title: a.headline || a.description,
+          icon: { path: google.maps.SymbolPath.CIRCLE, scale: 8, fillColor: color, fillOpacity: 0.9, strokeColor: '#fff', strokeWeight: 2 }
         });
         m.addListener('click', function () { openInfo(a, m.getPosition()); });
         markers[a.id] = m;
       }
-
       var icon = TYPE_ICONS[a.type] || TYPE_ICONS.other;
       itemsHtml +=
         '<div class="ss-item" data-id="' + escapeAttr(a.id) + '">' +
@@ -155,7 +188,6 @@
         '</div>';
     });
     listEl.innerHTML = itemsHtml || '<div class="ss-empty">No active alerts match your filters.</div>';
-
     listEl.querySelectorAll('.ss-item').forEach(function (el) {
       el.addEventListener('click', function () {
         var id = el.getAttribute('data-id');
@@ -167,11 +199,68 @@
     });
   }
 
+  function colorForHailSize(size) {
+    if (size >= 2) return '#ef4444';
+    if (size >= 1) return '#eab308';
+    return '#22c55e';
+  }
+
+  function renderHeatmap() {
+    if (!map) return;
+    clearHeatmap();
+    var countEl = document.getElementById('ssHailCount');
+    var summaryEl = document.getElementById('ssHailSummary');
+    var hail = hailReports.filter(function (r) { return r.type === 'hail'; });
+    countEl.textContent = String(hail.length);
+
+    if (!layers.heatmap || !hail.length) {
+      summaryEl.textContent = hail.length ? 'Heatmap hidden' : 'No hail reports in window';
+      return;
+    }
+
+    // Summary stats
+    var maxSize = 0, severe = 0;
+    hail.forEach(function (r) { if (r.sizeInches > maxSize) maxSize = r.sizeInches; if (r.sizeInches >= 1) severe++; });
+    summaryEl.textContent = 'Max: ' + maxSize.toFixed(2) + '" • ≥1": ' + severe + ' • window: ' + daysBack + 'd';
+
+    if (window.google && google.maps && google.maps.visualization && google.maps.visualization.HeatmapLayer) {
+      var points = hail.map(function (r) {
+        return { location: new google.maps.LatLng(r.lat, r.lng), weight: Math.pow(r.sizeInches || 0.5, 2) };
+      });
+      heatmapLayer = new google.maps.visualization.HeatmapLayer({
+        data: points,
+        radius: 28,
+        opacity: 0.75,
+        gradient: [
+          'rgba(0,0,0,0)', 'rgba(34,197,94,0.6)', 'rgba(234,179,8,0.75)',
+          'rgba(249,115,22,0.85)', 'rgba(239,68,68,0.95)', 'rgba(127,29,29,1)'
+        ]
+      });
+      heatmapLayer.setMap(map);
+    }
+
+    // Clickable markers (small) for individual hail reports — so user can see size/timestamp
+    hail.forEach(function (r) {
+      var m = new google.maps.Marker({
+        position: { lat: r.lat, lng: r.lng }, map: map,
+        title: r.sizeInches.toFixed(2) + '" hail',
+        icon: {
+          path: google.maps.SymbolPath.CIRCLE, scale: Math.max(4, Math.min(12, 3 + r.sizeInches * 2)),
+          fillColor: colorForHailSize(r.sizeInches), fillOpacity: 0.85, strokeColor: '#fff', strokeWeight: 1
+        }
+      });
+      m.addListener('click', function () { openHailInfo(r, m.getPosition()); });
+      hailMarkers.push(m);
+    });
+  }
+
   function openInfo(a, pos) {
     var icon = TYPE_ICONS[a.type] || TYPE_ICONS.other;
     var color = SEVERITY_COLORS[a.severity] || '#6b7280';
     var when = a.timestamp ? new Date(a.timestamp).toLocaleString() : '';
     var exp = a.expiresAt ? '<div><b>Expires:</b> ' + new Date(a.expiresAt).toLocaleString() + '</div>' : '';
+    var hail = a.hailSizeInches ? '<div><b>Hail:</b> ' + a.hailSizeInches + '"</div>' : '';
+    var wind = a.windSpeedKmh ? '<div><b>Wind:</b> ' + a.windSpeedKmh + ' km/h</div>' : '';
     infoWindow.setContent(
       '<div style="max-width:320px;font-family:system-ui">' +
         '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">' +
@@ -180,8 +269,8 @@
         '</div>' +
         '<div style="font-weight:600;margin-bottom:4px">' + escapeHtml(a.headline || '') + '</div>' +
         '<div style="font-size:12px;color:#444;margin-bottom:6px">' + escapeHtml((a.description || '').slice(0, 400)) + '</div>' +
-        (when ? '<div style="font-size:12px"><b>Issued:</b> ' + when + '</div>' : '') +
-        exp +
+        hail + wind +
+        (when ? '<div style="font-size:12px"><b>Issued:</b> ' + when + '</div>' : '') + exp +
         '<div style="font-size:11px;color:#888;margin-top:4px">Source: ' + a.source.toUpperCase() + '</div>' +
       '</div>'
     );
@@ -189,16 +278,48 @@
     infoWindow.open(map);
   }
 
+  function openHailInfo(r, pos) {
+    var when = r.timestamp ? new Date(r.timestamp).toLocaleString() : '';
+    var loc = [r.city, r.state].filter(Boolean).join(', ');
+    infoWindow.setContent(
+      '<div style="max-width:280px;font-family:system-ui">' +
+        '<b><i class="fas fa-cloud-meatball"></i> ' + r.sizeInches.toFixed(2) + '" hail report</b>' +
+        (loc ? '<div style="margin-top:4px">' + escapeHtml(loc) + '</div>' : '') +
+        (when ? '<div style="font-size:12px;color:#444">' + when + '</div>' : '') +
+        (r.remarks ? '<div style="font-size:12px;margin-top:4px">' + escapeHtml(String(r.remarks).slice(0, 200)) + '</div>' : '') +
+        '<div style="font-size:11px;color:#888;margin-top:4px">Source: NWS LSR via IEM</div>' +
+      '</div>'
+    );
+    infoWindow.setPosition(pos);
+    infoWindow.open(map);
+  }
+
   function loadAlerts(force) {
-    var url = '/alerts' + (force ? '?t=' + Date.now() : '');
-    api(url).then(function (res) {
+    return api('/alerts' + (force ? '?t=' + Date.now() : '')).then(function (res) {
       alerts = res.alerts || [];
-      var updated = document.getElementById('ssUpdated');
-      if (updated) updated.textContent = 'Updated: ' + new Date(res.fetchedAt || Date.now()).toLocaleTimeString() + (res.cached ? ' (cached)' : '');
       renderAlertsOnMap();
+      return res;
     }).catch(function (err) {
-      console.error('[StormScout] load error', err);
+      console.error('[StormScout] alerts', err);
       toast('Failed to load alerts: ' + (err.message || err), 'error');
+    });
+  }
+
+  function loadHail() {
+    return api('/heatmap?days=' + daysBack).then(function (res) {
+      hailReports = res.reports || [];
+      renderHeatmap();
+      return res;
+    }).catch(function (err) {
+      console.error('[StormScout] hail', err);
+      toast('Failed to load hail reports: ' + (err.message || err), 'error');
+    });
+  }
+
+  function loadAll(force) {
+    Promise.all([loadAlerts(force), loadHail()]).then(function () {
+      var updated = document.getElementById('ssUpdated');
+      if (updated) updated.textContent = 'Updated: ' + new Date().toLocaleTimeString();
     });
   }
 
@@ -206,7 +327,6 @@
   function escapeHtml(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]; }); }
   function escapeAttr(s) { return escapeHtml(s); }
 
-  // Entry points
   renderLayout();
   window.initStormScoutMap = initMap;
   if (window.googleMapsReady) initMap();

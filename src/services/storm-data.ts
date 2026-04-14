@@ -23,15 +23,17 @@ export interface StormEvent {
   headline?: string
 }
 
-interface CacheEntry {
-  data: StormEvent[]
+interface CacheEntry<T> {
+  data: T
   expiresAt: number
 }
 
 const ALERT_TTL_MS = 15 * 60 * 1000
-let cache: CacheEntry | null = null
+const HAIL_TTL_MS = 2 * 60 * 60 * 1000
+let cache: CacheEntry<StormEvent[]> | null = null
+let hailCache: Record<number, CacheEntry<any[]>> = {}
 
-export function stormCacheClear() { cache = null }
+export function stormCacheClear() { cache = null; hailCache = {} }
 
 function classifyType(text: string): StormType {
   const t = text.toLowerCase()
@@ -113,17 +115,36 @@ export async function fetchECCCAlerts(): Promise<StormEvent[]> {
 // ------------------------------------------------------------
 // Cached fetcher — single entry point for the route layer
 // ------------------------------------------------------------
-export async function getActiveAlerts(): Promise<{ events: StormEvent[]; cached: boolean; fetchedAt: string }> {
+export async function getActiveAlerts(): Promise<{ events: StormEvent[]; cached: boolean; fetchedAt: string; sources: Record<string, number | string> }> {
   if (cache && Date.now() < cache.expiresAt) {
-    return { events: cache.data, cached: true, fetchedAt: new Date(cache.expiresAt - ALERT_TTL_MS).toISOString() }
+    return { events: cache.data, cached: true, fetchedAt: new Date(cache.expiresAt - ALERT_TTL_MS).toISOString(), sources: { cache: 'hit' } }
   }
-  let events: StormEvent[] = []
-  try {
-    events = await fetchECCCAlerts()
-  } catch (err) {
-    if (cache) return { events: cache.data, cached: true, fetchedAt: new Date(cache.expiresAt - ALERT_TTL_MS).toISOString() }
-    throw err
+  const { fetchNWSAlerts } = await import('./nws-data')
+  const results = await Promise.allSettled([fetchECCCAlerts(), fetchNWSAlerts()])
+  const events: StormEvent[] = []
+  const sources: Record<string, number | string> = {}
+  const eccc = results[0]
+  const nws = results[1]
+  if (eccc.status === 'fulfilled') { events.push(...eccc.value); sources.eccc = eccc.value.length }
+  else sources.eccc = 'error: ' + (eccc.reason?.message || 'unknown')
+  if (nws.status === 'fulfilled') { events.push(...nws.value); sources.nws = nws.value.length }
+  else sources.nws = 'error: ' + (nws.reason?.message || 'unknown')
+
+  if (events.length === 0 && cache) {
+    return { events: cache.data, cached: true, fetchedAt: new Date(cache.expiresAt - ALERT_TTL_MS).toISOString(), sources }
   }
   cache = { data: events, expiresAt: Date.now() + ALERT_TTL_MS }
-  return { events, cached: false, fetchedAt: new Date().toISOString() }
+  return { events, cached: false, fetchedAt: new Date().toISOString(), sources }
+}
+
+export async function getHailReports(daysBack: number): Promise<{ reports: any[]; cached: boolean; fetchedAt: string }> {
+  const days = Math.max(1, Math.min(30, Math.round(daysBack)))
+  const entry = hailCache[days]
+  if (entry && Date.now() < entry.expiresAt) {
+    return { reports: entry.data, cached: true, fetchedAt: new Date(entry.expiresAt - HAIL_TTL_MS).toISOString() }
+  }
+  const { fetchIEMLocalStormReports } = await import('./nws-data')
+  const reports = await fetchIEMLocalStormReports(days)
+  hailCache[days] = { data: reports, expiresAt: Date.now() + HAIL_TTL_MS }
+  return { reports, cached: false, fetchedAt: new Date().toISOString() }
 }
