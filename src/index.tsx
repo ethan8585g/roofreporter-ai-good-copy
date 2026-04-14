@@ -17,6 +17,7 @@ import { crmRoutes } from './routes/crm'
 import { propertyImageryRoutes } from './routes/property-imagery'
 import { blogRoutes } from './routes/blog'
 import { d2dRoutes } from './routes/d2d'
+import { stormScoutRoutes } from './routes/storm-scout'
 import { leadCaptureRoutes } from './routes/lead-capture'
 import { secretaryRoutes } from './routes/secretary'
 import { roverRoutes } from './routes/rover'
@@ -256,6 +257,7 @@ app.route('/api/crm', crmRoutes)
 app.route('/api/property-imagery', propertyImageryRoutes)
 app.route('/api/blog', blogRoutes)
 app.route('/api/d2d', d2dRoutes)
+app.route('/api/storm-scout', stormScoutRoutes)
 app.route('/api', leadCaptureRoutes)
 app.route('/api/secretary', secretaryRoutes)
 app.route('/api/rover', roverRoutes)
@@ -2815,6 +2817,11 @@ app.get('/invoice/view/:token', async (c) => {
 app.get('/customer/d2d', (c) => {
   const mapsKey = c.env.GOOGLE_MAPS_API_KEY || ''
   return c.html(getD2DPageHTML(mapsKey))
+})
+
+app.get('/customer/storm-scout', (c) => {
+  const mapsKey = c.env.GOOGLE_MAPS_API_KEY || ''
+  return c.html(getStormScoutPageHTML(mapsKey))
 })
 
 // Roofer Secretary — AI Phone Answering Service
@@ -10406,6 +10413,72 @@ function getD2DPageHTML(mapsApiKey: string) {
     }
   </script>
   <script src="/static/d2d-module.js?v=${Date.now()}"></script>
+  ${getRoverAssistant()}
+</body>
+</html>`
+}
+
+function getStormScoutPageHTML(mapsApiKey: string) {
+  const mapsScript = mapsApiKey
+    ? `<script>
+      var googleMapsReady = false;
+      function onStormScoutMapsReady() {
+        googleMapsReady = true;
+        console.log('[Maps] Storm Scout Maps loaded');
+        if (typeof initStormScoutMap === 'function') initStormScoutMap();
+      }
+    </script>
+    <script src="https://maps.googleapis.com/maps/api/js?key=${mapsApiKey}&libraries=geometry,drawing,visualization&callback=onStormScoutMapsReady" async defer></script>`
+    : '<!-- Google Maps: No API key configured. -->'
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags()}
+  <title>Storm Scout - Roof Manager</title>
+  ${mapsScript}
+  <link rel="stylesheet" href="/static/storm-scout-module.css?v=${Date.now()}">
+</head>
+<body class="min-h-screen" style="background:var(--bg-page)">
+  <header style="background:#111111;border-bottom:1px solid rgba(255,255,255,0.1)" class="text-white shadow-lg">
+    <div class="max-w-full mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <a href="/customer/dashboard" class="flex items-center space-x-3 hover:opacity-90">
+          <img src="/static/logo.png" alt="Roof Manager" class="w-10 h-10 rounded-lg object-cover">
+          <div>
+            <h1 class="text-lg font-bold">Storm Scout</h1>
+            <p class="text-brand-200 text-xs">Roof Manager</p>
+          </div>
+        </a>
+      </div>
+      <nav class="flex items-center space-x-3">
+        <span id="custGreeting" class="text-brand-200 text-sm hidden"><i class="fas fa-user-circle mr-1"></i><span id="custName"></span></span>
+        <a href="/customer/dashboard" class="text-brand-200 hover:text-white text-sm"><i class="fas fa-th-large mr-1"></i>Dashboard</a>
+        <button onclick="custLogout()" class="text-brand-200 hover:text-white text-sm"><i class="fas fa-sign-out-alt mr-1"></i>Logout</button>
+      </nav>
+    </div>
+  </header>
+  <div id="storm-scout-app"></div>
+  <script>
+    (function() {
+      var c = localStorage.getItem('rc_customer');
+      if (!c) { window.location.href = '/customer/login'; return; }
+      try {
+        var u = JSON.parse(c);
+        var g = document.getElementById('custGreeting');
+        var n = document.getElementById('custName');
+        if (g && n) { n.textContent = u.name || u.email; g.classList.remove('hidden'); }
+      } catch(e) {}
+    })();
+    function custLogout() {
+      var token = localStorage.getItem('rc_customer_token');
+      if (token) fetch('/api/customer/logout', { method: 'POST', headers: { 'Authorization': 'Bearer ' + token } })['catch'](function(){});
+      localStorage.removeItem('rc_customer');
+      localStorage.removeItem('rc_customer_token');
+      window.location.href = '/customer/login';
+    }
+  </script>
+  <script src="/static/storm-scout-module.js?v=${Date.now()}"></script>
   ${getRoverAssistant()}
 </body>
 </html>`
