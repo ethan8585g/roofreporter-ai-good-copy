@@ -257,6 +257,9 @@ async function loadView(view) {
           const obRes = await saFetch('/api/admin/superadmin/onboarding/list');
           if (obRes) SA.data.onboarding = await obRes.json();
         } catch(e) { SA.data.onboarding = { customers: [] }; }
+        // Also pre-fetch deployment status and phone pool in background (non-blocking)
+        saFetch('/api/admin/superadmin/secretary/deployment-status').then(function(r) { return r ? r.json() : null; }).then(function(d) { if (d) { SA.data.deployments = d; obRenderDeployments(); } }).catch(function(){});
+        saFetch('/api/admin/superadmin/phone-numbers/owned').then(function(r) { return r ? r.json() : null; }).then(function(d) { if (d) { SA.data.phonePool = d; obRenderPhonePool(); } }).catch(function(){});
         break;
       case 'service-invoices':
         try {
@@ -421,7 +424,7 @@ function renderContent() {
     case 'notifications-admin': root.innerHTML = renderNotificationsAdminView(); loadNotifications(); break;
     case 'webhooks': root.innerHTML = renderWebhooksView(); loadWebhooks(); break;
     case 'paywall': root.innerHTML = renderPaywallView(); loadPaywallStatus(); break;
-    case 'customer-onboarding': root.innerHTML = renderCustomerOnboardingView(); break;
+    case 'customer-onboarding': root.innerHTML = renderCustomerOnboardingView(); obLoadDeployments(); obLoadPhonePool(); break;
     case 'service-invoices': root.innerHTML = renderServiceInvoicesView(); break;
     case 'call-center-manage': root.innerHTML = renderCallCenterManageView(); break;
     case 'gemini-command': root.innerHTML = renderGeminiCommandView(); break;
@@ -748,7 +751,10 @@ function renderReportRequestsView() {
       var os = o.status || 'pending';
       html += '<tr style="border-bottom:1px solid #1e293b;background:' + (i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)') + '">' +
         '<td style="padding:11px 14px;font-family:monospace;font-size:12px;color:#94a3b8;white-space:nowrap">' + (o.order_number || '#' + o.id) + '</td>' +
-        '<td style="padding:11px 14px;color:#cbd5e1;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (o.homeowner_name || o.requester_name || '—') + '</td>' +
+        '<td style="padding:11px 14px;color:#cbd5e1;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
+          (o.source === 'api' ? '<span style="display:inline-block;padding:1px 6px;background:#7c3aed;color:#fff;font-size:10px;font-weight:800;border-radius:4px;margin-right:5px;vertical-align:middle">⚡ API</span>' : '') +
+          (o.homeowner_name || o.requester_name || '—') +
+        '</td>' +
         '<td style="padding:11px 14px;color:#e2e8f0;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + (o.property_address || '') + '">' + (o.property_address || '—') + '</td>' +
         '<td style="padding:11px 14px;color:#64748b;white-space:nowrap;font-size:12px">' + (o.created_at || '').slice(0, 10) + '</td>' +
         '<td style="padding:11px 14px"><span style="padding:3px 10px;border-radius:999px;font-size:11px;font-weight:700;background:' + statusBg(os) + ';color:' + statusColor(os) + '">' + os + '</span></td>' +
@@ -5776,13 +5782,48 @@ function renderCustomerOnboardingView() {
     '<option value="none">No credits (trial only)</option>' +
     '<option value="10-pack">10-pack — $55</option>' +
     '<option value="25-pack">25-pack — $175</option>' +
-    '<option value="100-pack">100-pack — $475</option>' +
+    '<option value="100-pack">100-pack — $595</option>' +
     '</select></div>' +
     '<div class="flex items-end pb-1"><label class="flex items-center gap-2 text-sm"><input type="checkbox" id="ob-send-invoice" class="rounded"> Send Invoice with Payment Link</label></div>' +
     '</div></div>' +
 
     '</div>' +
     '<button onclick="createOnboardingCustomer()" class="mt-5 bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3 rounded-xl font-bold text-sm transition-all shadow-md hover:shadow-lg"><i class="fas fa-user-plus mr-2"></i>Create Account & Setup Secretary AI</button>' +
+    '</div>' +
+
+    // --- LiveKit Deployment Center ---
+    '<div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-6">' +
+    '<div class="p-5 border-b bg-gradient-to-r from-violet-50 to-purple-50 flex items-center justify-between">' +
+    '<div class="flex items-center gap-3"><div class="w-9 h-9 bg-violet-100 rounded-xl flex items-center justify-center"><i class="fas fa-satellite-dish text-violet-600"></i></div>' +
+    '<div><h3 class="font-bold text-gray-800 text-lg">LiveKit Deployment Center</h3><p class="text-xs text-gray-500">Configure SIP trunks, phone numbers, and deploy the Roofer Secretary AI per customer</p></div></div>' +
+    '<button onclick="obLoadDeployments()" class="text-xs text-violet-600 hover:text-violet-800 font-medium px-3 py-1.5 bg-white border border-violet-200 rounded-lg"><i class="fas fa-sync mr-1"></i>Refresh</button>' +
+    '</div>' +
+    '<div id="ob-deployment-center" class="p-5">' +
+    '<div class="text-center text-gray-400 py-6"><i class="fas fa-spinner fa-spin text-2xl mb-2"></i><p class="text-sm">Loading deployment status...</p></div>' +
+    '</div>' +
+    '</div>' +
+
+    // --- Phone Pool Management ---
+    '<div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-6">' +
+    '<div class="p-5 border-b bg-gradient-to-r from-green-50 to-teal-50 flex items-center justify-between">' +
+    '<div class="flex items-center gap-3"><div class="w-9 h-9 bg-green-100 rounded-xl flex items-center justify-center"><i class="fas fa-phone-square-alt text-green-600"></i></div>' +
+    '<div><h3 class="font-bold text-gray-800 text-lg">Phone Pool</h3><p class="text-xs text-gray-500">Purchased numbers available to assign to Secretary AI customers</p></div></div>' +
+    '<div class="flex gap-2">' +
+    '<button onclick="loadView(\'phone-marketplace\')" class="text-xs text-green-700 hover:text-green-900 font-medium px-3 py-1.5 bg-white border border-green-200 rounded-lg"><i class="fas fa-cart-plus mr-1"></i>Buy Number</button>' +
+    '<button onclick="obLoadPhonePool()" class="text-xs text-green-600 hover:text-green-800 font-medium px-3 py-1.5 bg-white border border-green-200 rounded-lg"><i class="fas fa-sync mr-1"></i>Refresh</button>' +
+    '</div></div>' +
+    // Add number to pool manually
+    '<div class="p-5 border-b">' +
+    '<p class="text-xs font-bold text-gray-600 mb-2"><i class="fas fa-plus-circle mr-1 text-green-500"></i>Add Number to Pool (manual entry)</p>' +
+    '<div class="flex gap-3">' +
+    '<input id="ob-pool-phone" class="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono" placeholder="+1 780 555 1234">' +
+    '<button onclick="obAddToPool()" class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-bold whitespace-nowrap"><i class="fas fa-plus mr-1"></i>Add to Pool</button>' +
+    '</div>' +
+    '<p class="text-[10px] text-gray-400 mt-1">Enter a number you\'ve already purchased from Twilio/LiveKit and want to track in the pool.</p>' +
+    '</div>' +
+    '<div id="ob-phone-pool-table" class="p-5">' +
+    '<div class="text-center text-gray-400 py-4"><i class="fas fa-spinner fa-spin text-xl mb-1"></i><p class="text-sm">Loading phone pool...</p></div>' +
+    '</div>' +
     '</div>' +
 
     // --- Onboarded Customers Table ---
@@ -6192,6 +6233,286 @@ async function deployLiveKitAgent(customerId) {
     }
   } catch(e) { window.rmToast('Error deploying LiveKit agent: ' + e.message, 'error'); }
 }
+
+// ============================================================
+// LIVEKIT DEPLOYMENT CENTER — render / reload helpers
+// ============================================================
+
+window.obLoadDeployments = async function() {
+  try {
+    var res = await saFetch('/api/admin/superadmin/secretary/deployment-status');
+    if (!res) return;
+    SA.data.deployments = await res.json();
+    obRenderDeployments();
+  } catch(e) { window.rmToast('Error loading deployments: ' + e.message, 'error'); }
+};
+
+function obRenderDeployments() {
+  var el = document.getElementById('ob-deployment-center');
+  if (!el) return;
+  var d = SA.data.deployments || {};
+  var deps = d.deployments || [];
+  if (d.error) { el.innerHTML = '<p class="text-red-500 text-sm p-2"><i class="fas fa-exclamation-triangle mr-1"></i>' + d.error + '</p>'; return; }
+  if (deps.length === 0) { el.innerHTML = '<p class="text-gray-400 text-sm text-center py-4">No Secretary AI customers yet. Create one above.</p>'; return; }
+
+  var html = '<div class="overflow-x-auto"><table class="w-full text-sm">' +
+    '<thead><tr class="border-b text-xs text-gray-400 uppercase">' +
+    '<th class="pb-2 text-left">Customer</th>' +
+    '<th class="pb-2 text-left">Agent Phone</th>' +
+    '<th class="pb-2 text-left">Trunk ID</th>' +
+    '<th class="pb-2 text-center">Status</th>' +
+    '<th class="pb-2 text-center">Last Test</th>' +
+    '<th class="pb-2 text-right">Actions</th>' +
+    '</tr></thead><tbody>';
+
+  deps.forEach(function(dep) {
+    var deployed = dep.trunk_id && dep.trunk_id !== '';
+    var statusBadge = dep.connection_status === 'connected'
+      ? '<span class="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-[10px] font-bold">Connected</span>'
+      : dep.connection_status === 'pending_forwarding'
+      ? '<span class="px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full text-[10px] font-bold">Pending</span>'
+      : dep.connection_status === 'failed'
+      ? '<span class="px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-[10px] font-bold">Failed</span>'
+      : '<span class="px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full text-[10px]">Not Set</span>';
+
+    var lastTest = dep.last_test_result
+      ? (dep.last_test_result === 'passed' ? '<span class="text-green-600 text-[10px]"><i class="fas fa-check mr-0.5"></i>Pass</span>' : '<span class="text-red-500 text-[10px]"><i class="fas fa-times mr-0.5"></i>Fail</span>')
+      : '<span class="text-gray-300 text-[10px]">—</span>';
+
+    var trunkDisplay = deployed ? '<span class="font-mono text-[10px] text-violet-700 bg-violet-50 px-1.5 py-0.5 rounded">' + dep.trunk_id.substring(0, 16) + '…</span>' : '<span class="text-gray-300 text-[10px]">—</span>';
+
+    var phoneDisplay = dep.agent_phone ? '<span class="font-mono text-gray-800">' + dep.agent_phone + '</span>' : '<span class="text-gray-300 text-xs italic">No number set</span>';
+
+    html += '<tr class="border-b border-gray-50 hover:bg-gray-50">' +
+      '<td class="py-3 pr-3"><div class="font-semibold text-gray-800">' + (dep.business_name || dep.contact_name || dep.email) + '</div><div class="text-[10px] text-gray-400">' + dep.email + '</div></td>' +
+      '<td class="py-3 pr-3">' + phoneDisplay + '</td>' +
+      '<td class="py-3 pr-3">' + trunkDisplay + '</td>' +
+      '<td class="py-3 pr-3 text-center">' + statusBadge + '</td>' +
+      '<td class="py-3 pr-3 text-center">' + lastTest + '</td>' +
+      '<td class="py-3 text-right whitespace-nowrap">' +
+        '<button onclick="obOpenSipConfig(' + dep.id + ', \'' + encodeURIComponent(JSON.stringify({id: dep.id, business_name: dep.business_name||dep.contact_name, email: dep.email, agent_phone: dep.agent_phone||'', sip_uri: dep.sip_uri||'', sip_username: dep.sip_username||'', trunk_id: dep.trunk_id||'', dispatch_id: dep.dispatch_id||''})) + '\')" class="text-xs bg-violet-600 hover:bg-violet-700 text-white px-2.5 py-1 rounded-lg font-medium mr-1"><i class="fas fa-cog mr-1"></i>Configure</button>' +
+        (deployed ? '<button onclick="testSecretaryCall(' + dep.id + ')" class="text-xs bg-amber-500 hover:bg-amber-600 text-white px-2.5 py-1 rounded-lg font-medium"><i class="fas fa-vial mr-1"></i>Test</button>' : '') +
+      '</td>' +
+      '</tr>';
+  });
+
+  html += '</tbody></table></div>';
+  el.innerHTML = html;
+}
+
+window.obOpenSipConfig = function(customerId, encodedData) {
+  var data = JSON.parse(decodeURIComponent(encodedData));
+  var deployed = data.trunk_id && data.trunk_id !== '';
+
+  // Remove any existing modal
+  var existing = document.getElementById('ob-sip-modal');
+  if (existing) existing.remove();
+
+  var modal = document.createElement('div');
+  modal.id = 'ob-sip-modal';
+  modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4';
+  modal.innerHTML =
+    '<div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg">' +
+    '<div class="p-5 border-b flex items-center justify-between">' +
+    '<div><h3 class="font-bold text-gray-900 text-lg"><i class="fas fa-satellite-dish mr-2 text-violet-500"></i>SIP Trunk Config</h3>' +
+    '<p class="text-xs text-gray-500">' + (data.business_name || data.email) + '</p></div>' +
+    '<button onclick="document.getElementById(\'ob-sip-modal\').remove()" class="text-gray-400 hover:text-gray-600 text-xl">&times;</button>' +
+    '</div>' +
+    '<div class="p-5 space-y-4">' +
+
+    // Agent phone
+    '<div><label class="text-xs font-bold text-gray-600 block mb-1"><i class="fas fa-phone mr-1 text-purple-500"></i>Agent Phone Number (SIP)</label>' +
+    '<input id="sip-agent-phone" class="w-full border-2 border-purple-200 rounded-lg px-3 py-2.5 text-sm font-mono focus:border-purple-500" value="' + (data.agent_phone || '') + '" placeholder="+1 780 555 1234">' +
+    '<p class="text-[10px] text-gray-400 mt-1">The number the AI agent answers on (purchased from Twilio/LiveKit)</p></div>' +
+
+    // SIP URI
+    '<div><label class="text-xs font-bold text-gray-600 block mb-1"><i class="fas fa-network-wired mr-1 text-blue-500"></i>SIP URI <span class="font-normal text-gray-400">(optional — for BYO trunk)</span></label>' +
+    '<input id="sip-uri" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono" value="' + (data.sip_uri || '') + '" placeholder="sip:trunk.carrier.com"></div>' +
+
+    // SIP auth
+    '<div class="grid grid-cols-2 gap-3">' +
+    '<div><label class="text-xs font-bold text-gray-600 block mb-1">SIP Username</label><input id="sip-username" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" value="' + (data.sip_username || '') + '" placeholder="trunk-user"></div>' +
+    '<div><label class="text-xs font-bold text-gray-600 block mb-1">SIP Password</label><input id="sip-password" type="password" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="leave blank to keep current"></div>' +
+    '</div>' +
+
+    // Current trunk info
+    (deployed ? '<div class="bg-violet-50 border border-violet-200 rounded-xl p-3 text-xs space-y-1">' +
+    '<p class="font-bold text-violet-700"><i class="fas fa-check-circle mr-1"></i>LiveKit Trunk Deployed</p>' +
+    '<p class="font-mono text-violet-600">Trunk: ' + data.trunk_id + '</p>' +
+    '<p class="font-mono text-violet-600">Dispatch: ' + (data.dispatch_id || '—') + '</p>' +
+    '</div>' : '<div class="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs"><p class="font-bold text-amber-700"><i class="fas fa-exclamation-triangle mr-1"></i>No LiveKit trunk deployed yet</p><p class="text-amber-600 mt-1">Save the agent phone number then click "Save &amp; Deploy" to create the SIP trunk.</p></div>') +
+
+    '<div id="sip-config-result" class="hidden"></div>' +
+
+    '</div>' +
+    '<div class="p-5 border-t flex gap-3 justify-end">' +
+    '<button onclick="document.getElementById(\'ob-sip-modal\').remove()" class="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50">Cancel</button>' +
+    '<button onclick="obSaveSipConfig(' + customerId + ', false)" class="px-5 py-2 bg-gray-800 hover:bg-gray-900 text-white rounded-lg text-sm font-bold"><i class="fas fa-save mr-1"></i>Save Only</button>' +
+    '<button onclick="obSaveSipConfig(' + customerId + ', true)" class="px-5 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-bold"><i class="fas fa-rocket mr-1"></i>Save &amp; Deploy</button>' +
+    '</div>' +
+    '</div>';
+
+  document.body.appendChild(modal);
+};
+
+window.obSaveSipConfig = async function(customerId, deploy) {
+  var phone = (document.getElementById('sip-agent-phone').value || '').trim();
+  var sipUri = (document.getElementById('sip-uri').value || '').trim();
+  var sipUser = (document.getElementById('sip-username').value || '').trim();
+  var sipPass = (document.getElementById('sip-password').value || '').trim();
+  var resultEl = document.getElementById('sip-config-result');
+
+  if (!phone) { window.rmToast('Agent phone number is required', 'warning'); return; }
+
+  resultEl.className = 'text-xs text-gray-500 italic p-2';
+  resultEl.classList.remove('hidden');
+  resultEl.textContent = deploy ? 'Saving config and deploying LiveKit trunk...' : 'Saving SIP config...';
+
+  try {
+    var body = { agent_phone_number: phone, deploy_livekit: deploy };
+    if (sipUri)  body.sip_uri = sipUri;
+    if (sipUser) body.sip_username = sipUser;
+    if (sipPass) body.sip_password = sipPass;
+
+    var res = await saFetch('/api/admin/superadmin/secretary/' + customerId + '/update-phone', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    var data = await res.json();
+    if (data.success) {
+      if (deploy && data.livekit) {
+        if (data.livekit.success) {
+          resultEl.className = 'text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg p-3';
+          resultEl.innerHTML = '<i class="fas fa-check-circle mr-1"></i><b>Deployed!</b> Trunk: <span class="font-mono">' + data.livekit.trunk_id + '</span>';
+        } else {
+          resultEl.className = 'text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-3';
+          resultEl.innerHTML = '<i class="fas fa-exclamation-circle mr-1"></i>Config saved but LiveKit deploy failed: ' + (data.livekit.error || 'Unknown error');
+        }
+      } else {
+        resultEl.className = 'text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg p-3';
+        resultEl.innerHTML = '<i class="fas fa-check-circle mr-1"></i>SIP config saved successfully.';
+      }
+      obLoadDeployments();
+    } else {
+      resultEl.className = 'text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-3';
+      resultEl.innerHTML = '<i class="fas fa-exclamation-circle mr-1"></i>' + (data.error || 'Save failed');
+    }
+  } catch(e) {
+    resultEl.className = 'text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-3';
+    resultEl.innerHTML = '<i class="fas fa-exclamation-circle mr-1"></i>Error: ' + e.message;
+  }
+};
+
+// ============================================================
+// PHONE POOL — render / reload / assign helpers
+// ============================================================
+
+window.obLoadPhonePool = async function() {
+  try {
+    var res = await saFetch('/api/admin/superadmin/phone-numbers/owned');
+    if (!res) return;
+    SA.data.phonePool = await res.json();
+    obRenderPhonePool();
+  } catch(e) { window.rmToast('Error loading phone pool: ' + e.message, 'error'); }
+};
+
+function obRenderPhonePool() {
+  var el = document.getElementById('ob-phone-pool-table');
+  if (!el) return;
+  var d = SA.data.phonePool || {};
+  // The owned endpoint returns either `phones` or `numbers`
+  var pool = d.phones || d.numbers || [];
+
+  if (pool.length === 0) {
+    el.innerHTML = '<div class="text-center text-gray-400 py-4"><i class="fas fa-phone-slash text-2xl mb-2 opacity-30"></i><p class="text-sm">No numbers in pool yet.</p>' +
+      '<button onclick="loadView(\'phone-marketplace\')" class="mt-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-bold"><i class="fas fa-cart-plus mr-1"></i>Buy a Number</button></div>';
+    return;
+  }
+
+  // Build customer options for assign dropdown (from onboarding data)
+  var customers = (SA.data.onboarding || {}).customers || [];
+  var custOptions = '<option value="">— Select customer —</option>' + customers.map(function(c) {
+    return '<option value="' + c.id + '">' + (c.business_name || c.contact_name) + ' (' + c.email + ')</option>';
+  }).join('');
+
+  var html = '<div class="overflow-x-auto"><table class="w-full text-sm">' +
+    '<thead><tr class="border-b text-xs text-gray-400 uppercase">' +
+    '<th class="pb-2 text-left">Number</th><th class="pb-2 text-center">Status</th><th class="pb-2 text-left">Assigned To</th><th class="pb-2 text-right">Action</th>' +
+    '</tr></thead><tbody>';
+
+  pool.forEach(function(p) {
+    var statusBadge = p.status === 'assigned'
+      ? '<span class="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-[10px] font-bold">Assigned</span>'
+      : '<span class="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-[10px] font-bold">Available</span>';
+
+    var assignedTo = p.customer_name ? ('<span class="text-xs text-gray-600">' + p.customer_name + '</span>') : '<span class="text-gray-300 text-xs">—</span>';
+
+    var actionCell = p.status !== 'assigned'
+      ? '<div class="flex items-center gap-2 justify-end">' +
+        '<select id="pool-assign-cust-' + p.id + '" class="border border-gray-300 rounded-lg px-2 py-1 text-xs">' + custOptions + '</select>' +
+        '<button onclick="obAssignFromPool(' + p.id + ', \'' + (p.phone_number || '') + '\')" class="px-2.5 py-1 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-[10px] font-bold whitespace-nowrap"><i class="fas fa-link mr-0.5"></i>Assign + Deploy</button>' +
+        '</div>'
+      : '<span class="text-xs text-gray-300">In use</span>';
+
+    html += '<tr class="border-b border-gray-50 hover:bg-gray-50">' +
+      '<td class="py-3 pr-3 font-mono font-bold text-gray-800">' + (p.phone_number || '—') + '</td>' +
+      '<td class="py-3 pr-3 text-center">' + statusBadge + '</td>' +
+      '<td class="py-3 pr-3">' + assignedTo + '</td>' +
+      '<td class="py-3">' + actionCell + '</td>' +
+      '</tr>';
+  });
+
+  html += '</tbody></table></div>';
+  el.innerHTML = html;
+}
+
+window.obAddToPool = async function() {
+  var phone = (document.getElementById('ob-pool-phone').value || '').trim();
+  if (!phone) { window.rmToast('Enter a phone number', 'warning'); return; }
+  try {
+    var res = await saFetch('/api/admin/superadmin/phone-pool/add', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone_number: phone })
+    });
+    var data = await res.json();
+    if (data.success) {
+      window.rmToast('Number added to pool: ' + phone, 'success');
+      document.getElementById('ob-pool-phone').value = '';
+      obLoadPhonePool();
+    } else {
+      window.rmToast('Error: ' + (data.error || 'Unknown'), 'error');
+    }
+  } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
+};
+
+window.obAssignFromPool = async function(poolId, phoneNumber) {
+  var sel = document.getElementById('pool-assign-cust-' + poolId);
+  var customerId = sel ? sel.value : '';
+  if (!customerId) { window.rmToast('Select a customer to assign to', 'warning'); return; }
+  if (!(await window.rmConfirm('Assign ' + phoneNumber + ' to this customer and deploy LiveKit SIP trunk?\n\nThis will create an inbound trunk and dispatch rule in LiveKit Cloud.'))) return;
+  try {
+    var res = await saFetch('/api/admin/superadmin/phone-pool/assign', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone_number: phoneNumber, customer_id: parseInt(customerId), deploy_livekit: true })
+    });
+    var data = await res.json();
+    if (data.success) {
+      if (data.livekit_deployed) {
+        window.rmToast('Number assigned and LiveKit trunk deployed!\n\nTrunk: ' + (data.livekit && data.livekit.trunk_id ? data.livekit.trunk_id : 'see deployment center'), 'info');
+      } else {
+        window.rmToast('Number assigned. LiveKit deploy may have failed — check the Deployment Center.', 'info');
+      }
+      obLoadPhonePool();
+      obLoadDeployments();
+      loadView('customer-onboarding');
+    } else {
+      window.rmToast('Assign failed: ' + (data.error || 'Unknown'), 'error');
+    }
+  } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
+};
 
 // ============================================================
 // SERVICE INVOICES — Cold-call customer invoicing
@@ -7940,7 +8261,7 @@ function geminiQuickAction(action) {
     'summarize': 'Give me a comprehensive platform status summary: active customers, total orders, revenue trends, active secretary agents, recent signups, and top 3 priorities for this week.',
     'secretary-strategy': 'Analyze our Roofer Secretary AI product. What is the growth strategy? How do we get more roofing companies to subscribe at $249/month? Give me 5 specific, actionable ideas with expected ROI.',
     'marketing-ideas': 'Generate 5 marketing campaign ideas for Roof Manager targeting roofing contractors in Alberta and Ontario. Include Google Ads headlines, Facebook ad concepts, and email subject lines.',
-    'pricing-advice': 'Review our pricing structure: Express reports (1 credit), Standard reports (2 credits), Pro reports (3 credits). Secretary AI is $249/month. Credit packs range from $29 (5 credits) to $499 (100 credits). What adjustments would maximize revenue?',
+    'pricing-advice': 'Review our pricing structure: Express reports (1 credit), Standard reports (2 credits), Pro reports (3 credits). Secretary AI is $249/month. Credit packs range from $29 (5 credits) to $595 (100 credits). What adjustments would maximize revenue?',
     'generate-config': 'I need to onboard a new customer. Their business is "Maple Leaf Roofing" in Calgary, Alberta. They do residential re-roofing, siding, and gutter installation. Generate a complete AI secretary configuration including greeting, Q&A, directories, and agent settings.',
     'blog-post': 'Write a 600-word SEO blog post titled "Why Every Roofing Company Needs an AI Phone Secretary in 2026". Target keywords: AI roofing secretary, automated phone answering for roofers, roofing business automation. Include a compelling intro, 4 key benefits, and a call-to-action.',
     'analyze-calls': 'Analyze the overall performance of our AI secretary agents across all customers. What are the common call patterns? What improvements should we make to the greeting scripts, Q&A banks, and call routing? Provide specific optimization suggestions.',

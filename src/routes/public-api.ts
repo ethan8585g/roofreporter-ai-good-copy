@@ -214,7 +214,7 @@ publicApiRoutes.post('/reports', async (c) => {
       service_tier, price, status, payment_status,
       estimated_delivery, needs_admin_trace,
       source, api_job_id, latitude, longitude
-    ) VALUES (?, 1, ?, ?, ?, ?, 'standard', 0, 'processing', 'paid', datetime('now', '+4 hours'), 1, 'api', ?, ?, ?)
+    ) VALUES (?, 1, ?, ?, ?, ?, 'standard', 0, 'processing', 'paid', datetime('now', '+4 hours'), 0, 'api', ?, ?, ?)
   `).bind(
     orderNumber, address.trim(),
     account.company_name, account.company_name, 'API Client',
