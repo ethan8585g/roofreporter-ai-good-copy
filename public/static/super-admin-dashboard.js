@@ -760,8 +760,8 @@ function renderReportRequestsView() {
         '<td style="padding:11px 14px"><span style="padding:3px 10px;border-radius:999px;font-size:11px;font-weight:700;background:' + statusBg(os) + ';color:' + statusColor(os) + '">' + os + '</span></td>' +
         '<td style="padding:11px 14px"><span style="padding:3px 10px;border-radius:999px;font-size:11px;font-weight:700;background:' + statusBg(rs) + ';color:' + statusColor(rs) + '">' + rs + '</span></td>' +
         '<td style="padding:11px 14px;white-space:nowrap">' +
-          (o.needs_admin_trace ?
-            '<button onclick="saOpenTraceModal(' + o.id + ',' + (o.latitude || 0) + ',' + (o.longitude || 0) + ',\'' + (o.property_address || '').replace(/'/g, "\\'") + '\',\'' + (o.order_number || '') + '\')" style="padding:5px 12px;background:#f59e0b;color:#111;font-size:11px;font-weight:700;border:none;border-radius:6px;cursor:pointer"><i class="fas fa-drafting-compass mr-1"></i>Trace</button>' :
+          (o.needs_admin_trace || (o.source === 'api' && (os === 'processing' || os === 'pending')) ?
+            '<button onclick="saOpenTraceModal(' + o.id + ',' + (o.latitude || 0) + ',' + (o.longitude || 0) + ',\'' + (o.property_address || '').replace(/'/g, "\\'") + '\',\'' + (o.order_number || '') + '\')" style="padding:5px 12px;background:' + (o.source === 'api' ? '#7c3aed' : '#f59e0b') + ';color:#fff;font-size:11px;font-weight:700;border:none;border-radius:6px;cursor:pointer"><i class="fas fa-drafting-compass mr-1"></i>Trace</button>' :
             '<a href="/api/reports/' + o.id + '/html" target="_blank" style="padding:5px 12px;background:rgba(14,165,233,0.15);color:#38bdf8;font-size:11px;font-weight:600;border:none;border-radius:6px;text-decoration:none;display:inline-block"><i class="fas fa-file-alt mr-1"></i>View</a>'
           ) +
         '</td>' +
@@ -7006,14 +7006,13 @@ function renderLKConfigsTab() {
 // ── Phone Pool Tab ──
 function renderLKPhonePoolTab() {
   var poolData = SA.data.livekitPool || {};
-  var numbers = poolData.numbers || [];
-  var poolStats = poolData.stats || [];
+  var numbers = poolData.phones || poolData.numbers || [];
 
   var statCards = '<div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">';
   var available = 0, assigned = 0, total = numbers.length;
-  poolStats.forEach(function(s) {
-    if (s.status === 'available') available = s.count;
-    if (s.status === 'assigned') assigned = s.count;
+  numbers.forEach(function(n) {
+    if (n.status === 'available') available++;
+    if (n.status === 'assigned') assigned++;
   });
   statCards += lkStatCard('Total Numbers', total, 'fa-phone-square', 'bg-gray-50 text-gray-700');
   statCards += lkStatCard('Available', available, 'fa-check-circle', 'bg-green-50 text-green-700');
