@@ -4129,6 +4129,10 @@ function getSuperAdminDashboardHTML(mapsApiKey: string = '') {
           <i class="fas fa-user-cog w-5 text-center"></i>
           <span class="label text-sm font-medium">Customer Onboarding</span>
         </div>
+        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('phone-marketplace', this)">
+          <i class="fas fa-phone-square-alt w-5 text-center"></i>
+          <span class="label text-sm font-medium">Phone Pool / Numbers</span>
+        </div>
         <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('secretary-admin', this)">
           <i class="fas fa-phone-volume w-5 text-center"></i>
           <span class="label text-sm font-medium">Roofer Secretary AI</span>
@@ -4144,6 +4148,11 @@ function getSuperAdminDashboardHTML(mapsApiKey: string = '') {
         <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('pricing', this)">
           <i class="fas fa-dollar-sign w-5 text-center"></i>
           <span class="label text-sm font-medium">Pricing & Billing</span>
+        </div>
+        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('api-users', this)">
+          <i class="fas fa-key w-5 text-center"></i>
+          <span class="label text-sm font-medium">API Users</span>
+          <span id="sa-api-badge" style="margin-left:auto;background:#3b82f6;color:#fff;font-size:10px;font-weight:800;padding:2px 7px;border-radius:999px;display:none"></span>
         </div>
         <div class="border-t border-gray-800 my-3"></div>
         <a href="/admin" class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400 no-underline">
@@ -6201,7 +6210,7 @@ function getCustomerLoginHTML() {
             </div>
           </div>
           <div id="custLoginError" class="hidden mt-4 p-3 bg-red-50 text-red-700 rounded-lg text-sm"></div>
-          <button onclick="doCustLogin()" class="w-full mt-5 py-3 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl transition-all hover:scale-[1.02] shadow-lg shadow-brand-500/25">
+          <button id="custLoginBtn" onclick="doCustLogin()" class="w-full mt-5 py-3 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl transition-all hover:scale-[1.02] shadow-lg shadow-brand-500/25">
             <i class="fas fa-sign-in-alt mr-2"></i>Sign In
           </button>
           <div class="text-center mt-3">
@@ -6402,8 +6411,10 @@ function getCustomerLoginHTML() {
       const email = document.getElementById('custLoginEmail').value.trim();
       const password = document.getElementById('custLoginPassword').value;
       const err = document.getElementById('custLoginError');
+      const btn = document.getElementById('custLoginBtn');
       err.classList.add('hidden');
       if (!email || !password) { err.textContent = 'Email and password required.'; err.classList.remove('hidden'); return; }
+      btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Signing in...';
       try {
         const res = await fetch('/api/customer/login', {
           method: 'POST',
@@ -6414,13 +6425,19 @@ function getCustomerLoginHTML() {
         if (res.ok && data.success) {
           localStorage.setItem('rc_customer', JSON.stringify(data.customer));
           localStorage.setItem('rc_customer_token', data.token);
+          btn.innerHTML = '<i class="fas fa-check mr-2"></i>Success!';
           if (typeof window.trackAdsConversion === 'function') window.trackAdsConversion('signup', { value: 1.0, currency: 'USD' });
           window.location.href = '/customer/dashboard';
         } else {
           err.textContent = data.error || 'Login failed.';
           err.classList.remove('hidden');
+          btn.disabled = false; btn.innerHTML = '<i class="fas fa-sign-in-alt mr-2"></i>Sign In';
         }
-      } catch(e) { err.textContent = 'Network error.'; err.classList.remove('hidden'); }
+      } catch(e) {
+        err.textContent = 'Network error. Please check your connection and try again.';
+        err.classList.remove('hidden');
+        btn.disabled = false; btn.innerHTML = '<i class="fas fa-sign-in-alt mr-2"></i>Sign In';
+      }
     }
 
     var _regVerificationToken = null;
@@ -8371,7 +8388,7 @@ function getServicesPageHTML() {
       <h1 class="text-5xl md:text-6xl font-black text-white mb-6 tracking-tight leading-tight">
         Everything Your Roofing<br/><span class="neon-text">Business Needs</span>
       </h1>
-      <p class="text-lg text-gray-400 max-w-3xl mx-auto leading-relaxed mb-8">12+ integrated tools — from satellite roof measurements to CRM, AI secretary, website builder, and more. One platform, zero climbing.</p>
+      <p class="text-lg text-gray-400 max-w-3xl mx-auto leading-relaxed mb-8">13+ integrated tools — from satellite roof measurements to CRM, AI secretary, website builder, API access, and more. One platform, zero climbing.</p>
       <div class="flex flex-wrap justify-center gap-3 text-xs text-gray-500">
         <a href="#reports" class="bg-white/5 hover:bg-[#00FF88]/10 hover:text-[#00FF88] rounded-full px-4 py-2 transition-all">Measurement Reports</a>
         <a href="#solar" class="bg-white/5 hover:bg-[#00FF88]/10 hover:text-[#00FF88] rounded-full px-4 py-2 transition-all">Solar Analysis</a>
@@ -8385,6 +8402,7 @@ function getServicesPageHTML() {
         <a href="#team" class="bg-white/5 hover:bg-[#00FF88]/10 hover:text-[#00FF88] rounded-full px-4 py-2 transition-all">Team</a>
         <a href="#calendar" class="bg-white/5 hover:bg-[#00FF88]/10 hover:text-[#00FF88] rounded-full px-4 py-2 transition-all">Calendar</a>
         <a href="#materials" class="bg-white/5 hover:bg-[#00FF88]/10 hover:text-[#00FF88] rounded-full px-4 py-2 transition-all">Materials</a>
+        <a href="#api" class="bg-white/5 hover:bg-[#00FF88]/10 hover:text-[#00FF88] rounded-full px-4 py-2 transition-all">API & Integrations</a>
       </div>
     </div>
   </section>
@@ -8683,6 +8701,46 @@ function getServicesPageHTML() {
         </div>
       </div>
 
+      <!-- 13. API & Integrations -->
+      <div id="api" class="scroll-animate grid lg:grid-cols-2 gap-12 items-center">
+        <div>
+          <div class="inline-flex items-center gap-2 bg-[#00FF88]/10 text-[#00FF88] rounded-full px-4 py-1.5 text-xs font-bold mb-4"><i class="fas fa-code mr-1"></i>Developer</div>
+          <h2 class="text-3xl font-black text-white mb-4">API Access & Integrations</h2>
+          <p class="text-gray-400 leading-relaxed mb-6">Embed Roof Manager's measurement engine directly into your own software, estimating tools, or customer portal. Generate API keys from your developer dashboard, call our REST endpoints, and get structured JSON back — pitch-adjusted roof area, edge lengths, material BOM, solar data, and more. Build once, power any workflow.</p>
+          <ul class="space-y-2 mb-6">
+            <li class="flex items-center gap-2 text-sm text-gray-300"><i class="fas fa-check-circle text-[#00FF88] text-xs"></i>REST API with JSON responses — no SDK required</li>
+            <li class="flex items-center gap-2 text-sm text-gray-300"><i class="fas fa-check-circle text-[#00FF88] text-xs"></i>Self-serve API key generation & management</li>
+            <li class="flex items-center gap-2 text-sm text-gray-300"><i class="fas fa-check-circle text-[#00FF88] text-xs"></i>Per-key usage tracking & credit balance</li>
+            <li class="flex items-center gap-2 text-sm text-gray-300"><i class="fas fa-check-circle text-[#00FF88] text-xs"></i>Webhook support for async report delivery</li>
+            <li class="flex items-center gap-2 text-sm text-gray-300"><i class="fas fa-check-circle text-[#00FF88] text-xs"></i>Same measurement data powering our platform</li>
+            <li class="flex items-center gap-2 text-sm text-gray-300"><i class="fas fa-check-circle text-[#00FF88] text-xs"></i>Zapier-compatible via webhooks for no-code flows</li>
+          </ul>
+          <div class="flex items-center gap-3 mb-6">
+            <span class="bg-[#00FF88]/10 text-[#00FF88] font-bold px-4 py-2 rounded-lg text-sm">Pay-per-report — same $8 CAD rate</span>
+          </div>
+          <a href="/developer" class="inline-flex items-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold py-3 px-6 rounded-xl text-sm transition-all hover:scale-[1.02]"><i class="fas fa-key"></i> Get Your API Key</a>
+        </div>
+        <div class="bg-[#111111] border border-white/10 rounded-2xl p-8">
+          <div class="flex items-center gap-3 mb-5">
+            <i class="fas fa-terminal text-[#00FF88] text-2xl"></i>
+            <span class="text-white font-bold">Example Request</span>
+          </div>
+          <pre class="text-xs text-gray-400 bg-black/40 rounded-xl p-4 overflow-x-auto leading-relaxed mb-5"><code>POST /v1/reports
+Authorization: Bearer rm_live_xxxx
+
+{
+  "address": "123 Main St, Toronto ON",
+  "include_solar": true
+}</code></pre>
+          <div class="grid grid-cols-2 gap-3">
+            <div class="bg-white/5 rounded-xl p-3 text-center"><div class="text-[#00FF88] font-bold text-sm">&lt;60s</div><div class="text-gray-500 text-xs mt-0.5">Response time</div></div>
+            <div class="bg-white/5 rounded-xl p-3 text-center"><div class="text-[#00FF88] font-bold text-sm">JSON</div><div class="text-gray-500 text-xs mt-0.5">Structured output</div></div>
+            <div class="bg-white/5 rounded-xl p-3 text-center"><div class="text-[#00FF88] font-bold text-sm">REST</div><div class="text-gray-500 text-xs mt-0.5">Standard HTTP</div></div>
+            <div class="bg-white/5 rounded-xl p-3 text-center"><div class="text-[#00FF88] font-bold text-sm">Webhooks</div><div class="text-gray-500 text-xs mt-0.5">Async delivery</div></div>
+          </div>
+        </div>
+      </div>
+
     </div>
   </section>
 
@@ -8716,6 +8774,7 @@ function getServicesPageHTML() {
             <li><a href="/services#reports" class="hover:text-[#00FF88] transition-colors">Measurement Reports</a></li>
             <li><a href="/services#secretary" class="hover:text-[#00FF88] transition-colors">AI Secretary</a></li>
             <li><a href="/services#website" class="hover:text-[#00FF88] transition-colors">Website Builder</a></li>
+            <li><a href="/services#api" class="hover:text-[#00FF88] transition-colors">API & Integrations</a></li>
             <li><a href="/#pricing" class="hover:text-[#00FF88] transition-colors">Pricing</a></li>
           </ul>
         </div>
