@@ -6352,7 +6352,7 @@ function getCustomerLoginHTML() {
         var sp = new URLSearchParams(location.search);
         var mode = sp.get('mode');
         var ref = (document.referrer || '');
-        var wantSignup = (mode === 'signup') || /\/signup(\b|\/|\?|$)/.test(ref);
+        var wantSignup = (mode === 'signup') || new RegExp('/signup(\\b|/|\\?|$)').test(ref);
         if (wantSignup) {
           var h = document.getElementById('custAuthHeadline');
           var s = document.getElementById('custAuthSubhead');
