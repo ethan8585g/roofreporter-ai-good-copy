@@ -6199,20 +6199,22 @@ function getCustomerLoginHTML() {
 
         <!-- Login Form -->
         <div id="custLoginForm">
+          <form id="custLoginFormEl" onsubmit="event.preventDefault(); doCustLogin();" autocomplete="on">
           <div class="space-y-4">
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Email or Username</label>
-              <input type="text" id="custLoginEmail" placeholder="you@company.com" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-sm">
+              <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+              <input type="email" id="custLoginEmail" name="email" autocomplete="email" placeholder="you@company.com" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-sm">
             </div>
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">Password</label>
-              <input type="password" id="custLoginPassword" placeholder="Enter your password" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-sm" onkeyup="if(event.key==='Enter')doCustLogin()">
+              <input type="password" id="custLoginPassword" name="password" autocomplete="current-password" placeholder="Enter your password" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-sm">
             </div>
           </div>
-          <div id="custLoginError" class="hidden mt-4 p-3 bg-red-50 text-red-700 rounded-lg text-sm"></div>
-          <button id="custLoginBtn" onclick="doCustLogin()" class="w-full mt-5 py-3 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl transition-all hover:scale-[1.02] shadow-lg shadow-brand-500/25">
+          <div id="custLoginError" class="hidden mt-4 p-3 bg-red-100 border border-red-400 text-red-800 rounded-lg text-sm font-medium"></div>
+          <button id="custLoginBtn" type="submit" class="w-full mt-5 py-3 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl transition-all hover:scale-[1.02] shadow-lg shadow-brand-500/25">
             <i class="fas fa-sign-in-alt mr-2"></i>Sign In
           </button>
+          </form>
           <div class="text-center mt-3">
             <button onclick="showForgot()" class="text-sm text-sky-600 hover:text-sky-800 hover:underline transition-colors">
               <i class="fas fa-key mr-1"></i>Forgot your password?
@@ -6408,13 +6410,18 @@ function getCustomerLoginHTML() {
     }
 
     async function doCustLogin() {
-      const email = document.getElementById('custLoginEmail').value.trim();
-      const password = document.getElementById('custLoginPassword').value;
+      const emailEl = document.getElementById('custLoginEmail');
+      const passwordEl = document.getElementById('custLoginPassword');
       const err = document.getElementById('custLoginError');
       const btn = document.getElementById('custLoginBtn');
-      err.classList.add('hidden');
-      if (!email || !password) { err.textContent = 'Email and password required.'; err.classList.remove('hidden'); return; }
-      btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Signing in...';
+      const email = emailEl ? emailEl.value.trim() : '';
+      const password = passwordEl ? passwordEl.value : '';
+      if (err) err.classList.add('hidden');
+      if (!email || !password) {
+        if (err) { err.textContent = 'Email and password required.'; err.classList.remove('hidden'); }
+        return;
+      }
+      if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Signing in...'; }
       try {
         const res = await fetch('/api/customer/login', {
           method: 'POST',
@@ -6425,18 +6432,16 @@ function getCustomerLoginHTML() {
         if (res.ok && data.success) {
           localStorage.setItem('rc_customer', JSON.stringify(data.customer));
           localStorage.setItem('rc_customer_token', data.token);
-          btn.innerHTML = '<i class="fas fa-check mr-2"></i>Success!';
+          if (btn) btn.innerHTML = '<i class="fas fa-check mr-2"></i>Success!';
           if (typeof window.trackAdsConversion === 'function') window.trackAdsConversion('signup', { value: 1.0, currency: 'USD' });
           window.location.href = '/customer/dashboard';
         } else {
-          err.textContent = data.error || 'Login failed.';
-          err.classList.remove('hidden');
-          btn.disabled = false; btn.innerHTML = '<i class="fas fa-sign-in-alt mr-2"></i>Sign In';
+          if (err) { err.textContent = data.error || 'Login failed.'; err.classList.remove('hidden'); }
+          if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-sign-in-alt mr-2"></i>Sign In'; }
         }
       } catch(e) {
-        err.textContent = 'Network error. Please check your connection and try again.';
-        err.classList.remove('hidden');
-        btn.disabled = false; btn.innerHTML = '<i class="fas fa-sign-in-alt mr-2"></i>Sign In';
+        if (err) { err.textContent = 'Network error. Please check your connection and try again.'; err.classList.remove('hidden'); }
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-sign-in-alt mr-2"></i>Sign In'; }
       }
     }
 
