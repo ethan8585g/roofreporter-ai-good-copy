@@ -6328,10 +6328,22 @@ function getCustomerLoginHTML() {
   </div>
 
   <script>
-    // Check if already logged in
+    // Check if already logged in — verify session is valid before redirecting
     (function() {
       const c = localStorage.getItem('rc_customer');
-      if (c) window.location.href = '/customer/dashboard';
+      const t = localStorage.getItem('rc_customer_token');
+      if (!c || !t) return;
+      fetch('/api/customer/me', { headers: { 'Authorization': 'Bearer ' + t } })
+        .then(function(r) {
+          if (r.ok) {
+            window.location.href = '/customer/dashboard';
+          } else {
+            localStorage.removeItem('rc_customer');
+            localStorage.removeItem('rc_customer_token');
+            localStorage.removeItem('rc_token');
+          }
+        })
+        .catch(function() {});
     })();
 
     // Signup-first mode: /customer/login?mode=signup or ref from /signup
