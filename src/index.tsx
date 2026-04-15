@@ -4860,8 +4860,8 @@ function getLandingPageHTML(latestPosts: any[] = []) {
 <html lang="en">
 <head>
   ${getHeadTags()}
-  <title>RoofManager | Commercial Roof Asset Management Software Canada</title>
-  <meta name="description" content="The centralized command center for Facility Managers, Condo Boards, and Commercial Portfolios — track work orders, warranty expirations, and capital planning budgets. Free Asset Report available.">
+  <title>Roof Manager | CRM, Satellite Roof Reports &amp; Solar Design Software for Roofing &amp; Solar Companies</title>
+  <meta name="description" content="The all-in-one CRM built for roofing and solar companies — satellite roof measurement reports, solar design tools, workflow automations, invoicing, and pipeline management. Trusted by contractors big and small across Canada &amp; the US.">
   <meta property="og:title" content="Roof Manager — Precision Roof Measurement Reports">
   <meta property="og:description" content="Professional satellite-powered roof measurement reports in under 60 seconds. Full CRM, AI phone secretary, and team management for roofing businesses.">
   <meta property="og:type" content="website">
@@ -5077,7 +5077,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
         <img src="/static/logo.png" alt="Roof Manager" class="w-10 h-10 rounded-xl object-cover shadow-lg ring-1 ring-white/10">
         <div class="leading-tight">
           <span class="text-white font-extrabold text-lg tracking-tight">Roof Manager</span>
-          <span class="hidden sm:block text-gray-500 text-[10px] -mt-0.5 font-medium tracking-wide">Measurement Reports & Business CRM</span>
+          <span class="hidden sm:block text-gray-500 text-[10px] -mt-0.5 font-medium tracking-wide">CRM &amp; Reports for Roofing &amp; Solar Companies</span>
         </div>
       </a>
 
@@ -5156,7 +5156,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
               <span class="text-sm font-semibold text-[#00FF88] tracking-wide">Trusted by 5,000+ Roofers — US &amp; Canada</span>
             </div>
             <h1 class="text-5xl sm:text-6xl lg:text-7xl font-black leading-[1.05] text-white mb-8 tracking-tight">Measure Any Roof.<br/><span class="neon-text">In 60 Seconds.</span></h1>
-            <h2 class="text-lg lg:text-xl text-gray-400 mb-10 max-w-xl leading-relaxed font-normal">Accurate satellite roof measurements from <span class="text-white font-semibold">$5/report</span>. No drone, no ladder, no climbing. Trusted by roofing contractors, facility managers, and condo boards across Canada &amp; the US.</h2>
+            <h2 class="text-lg lg:text-xl text-gray-400 mb-10 max-w-xl leading-relaxed font-normal">The full CRM built for <span class="text-white font-semibold">roofing &amp; solar companies</span> — satellite roof measurement reports, solar design tools, and workflow automations. From solo contractors to large crews.</h2>
             <div class="flex flex-col sm:flex-row gap-4 mb-10">
               <a href="/signup" onclick="rrTrack('cta_click',{location:'hero_primary',variant:'contractor_signup'})" class="group inline-flex items-center justify-center gap-3 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-10 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/20 transition-all duration-300 hover:scale-[1.03] min-h-[56px]"><i class="fas fa-rocket"></i> Measure Your First Roof Free <i class="fas fa-arrow-right text-sm group-hover:translate-x-1.5 transition-transform"></i></a>
               <a href="/sample-report" onclick="rrTrack('cta_click',{location:'hero_secondary',variant:'sample_report'})" class="inline-flex items-center justify-center gap-2.5 bg-white/5 hover:bg-white/10 backdrop-blur-md text-white font-bold py-4 px-8 rounded-xl text-lg border border-white/10 hover:border-white/20 transition-all duration-300 min-h-[56px]"><i class="fas fa-play-circle text-[#00FF88]"></i> See Sample Report</a>
@@ -5352,9 +5352,9 @@ function getLandingPageHTML(latestPosts: any[] = []) {
     <section class="py-28" style="background:#0A0A0A">
       <div class="max-w-7xl mx-auto px-4">
         <div class="text-center mb-20 scroll-animate">
-          <div class="inline-flex items-center gap-2 bg-[#00FF88]/10 text-[#00FF88] rounded-full px-5 py-2 text-sm font-semibold mb-6"><i class="fas fa-sparkles"></i> Why 5,000+ Roofers Choose Us</div>
-          <h2 class="text-4xl lg:text-6xl font-black text-white mb-6 tracking-tight leading-tight">Stop Guessing.<br/><span class="neon-text">Start Quoting With Certainty.</span></h2>
-          <p class="text-lg text-gray-400 max-w-2xl mx-auto leading-relaxed">Every minute on a ladder is a minute you could spend closing deals. Roof Manager handles the measurement so you can focus on revenue.</p>
+          <div class="inline-flex items-center gap-2 bg-[#00FF88]/10 text-[#00FF88] rounded-full px-5 py-2 text-sm font-semibold mb-6"><i class="fas fa-sparkles"></i> Built for Roofing &amp; Solar Companies — Big &amp; Small</div>
+          <h2 class="text-4xl lg:text-6xl font-black text-white mb-6 tracking-tight leading-tight">One Platform.<br/><span class="neon-text">Every Tool You Need.</span></h2>
+          <p class="text-lg text-gray-400 max-w-2xl mx-auto leading-relaxed">Satellite roof measurement reports, solar design software, full CRM, invoicing, and n8n-powered automations — everything a roofing or solar company needs to run and grow.</p>
         </div>
         <div class="grid lg:grid-cols-3 gap-6">
           <!-- Pillar 1: Confidence -->
@@ -5421,8 +5421,8 @@ function getLandingPageHTML(latestPosts: any[] = []) {
                   <div class="w-14 h-14 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300" style="background:#a78bfa15;"><i class="fas fa-users-cog text-xl" style="color:#a78bfa"></i></div>
                   <div class="text-right"><div class="text-2xl font-black" style="color:#a78bfa">24/7</div><div class="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Always Online</div></div>
                 </div>
-                <h3 class="text-xl font-bold text-white mb-3">AI Admin That Never Sleeps</h3>
-                <p class="text-gray-400 text-sm leading-relaxed mb-4 flex-1">AI Secretary answers every call, books appointments, and qualifies leads. Run your whole roofing operation from one platform.</p>
+                <h3 class="text-xl font-bold text-white mb-3">Solar Design, CRM &amp; Automations</h3>
+                <p class="text-gray-400 text-sm leading-relaxed mb-4 flex-1">Build solar panel layouts, run your full sales pipeline, automate follow-ups with n8n, and let the AI Secretary handle inbound calls — all in one platform built for roofing and solar companies.</p>
                 <!-- LIVE indicator -->
                 <div class="flex items-center gap-2 mb-4 px-3 py-2 bg-white/5 border border-[#a78bfa]/20 rounded-lg">
                   <span class="live-pulse"><span class="relative inline-flex w-2 h-2 rounded-full" style="background:#00FF88"></span></span>
@@ -5431,9 +5431,9 @@ function getLandingPageHTML(latestPosts: any[] = []) {
                 </div>
                 <div class="pillar-detail mb-2">
                   <ul class="space-y-1.5 text-xs text-gray-400 border-t border-white/5 pt-3">
-                    <li class="flex items-center gap-2"><i class="fas fa-check text-[#a78bfa] text-[10px]"></i>Answers every call 24/7</li>
-                    <li class="flex items-center gap-2"><i class="fas fa-check text-[#a78bfa] text-[10px]"></i>Books appointments to your calendar</li>
-                    <li class="flex items-center gap-2"><i class="fas fa-check text-[#a78bfa] text-[10px]"></i>Qualifies leads automatically</li>
+                    <li class="flex items-center gap-2"><i class="fas fa-check text-[#a78bfa] text-[10px]"></i>Solar panel layout &amp; design tools</li>
+                    <li class="flex items-center gap-2"><i class="fas fa-check text-[#a78bfa] text-[10px]"></i>n8n workflow automations built in</li>
+                    <li class="flex items-center gap-2"><i class="fas fa-check text-[#a78bfa] text-[10px]"></i>Full CRM, invoicing &amp; AI secretary</li>
                   </ul>
                 </div>
                 <a href="#features" onclick="rrTrack('cta_click',{location:'value_prop',card:'AI Admin That Never Sleeps'})" class="inline-flex items-center gap-2 font-semibold text-sm group/link transition-colors mt-2" style="color:#a78bfa">Explore Platform <i class="fas fa-arrow-right text-xs group-hover/link:translate-x-1 transition-transform"></i></a>
@@ -8914,7 +8914,7 @@ function getCoveragePageHTML() {
         <img src="/static/logo.png" alt="Roof Manager" class="w-10 h-10 rounded-xl object-cover shadow-lg ring-1 ring-white/10">
         <div class="leading-tight">
           <span class="text-white font-extrabold text-lg tracking-tight">Roof Manager</span>
-          <span class="hidden sm:block text-gray-500 text-[10px] -mt-0.5 font-medium tracking-wide">Measurement Reports & Business CRM</span>
+          <span class="hidden sm:block text-gray-500 text-[10px] -mt-0.5 font-medium tracking-wide">CRM &amp; Reports for Roofing &amp; Solar Companies</span>
         </div>
       </a>
       <div class="hidden md:flex items-center gap-7">
