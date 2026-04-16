@@ -587,11 +587,17 @@ app.get('/', async (c) => {
 // /order redirect — users may type /order directly
 app.get('/order', (c) => c.redirect('/customer/order'))
 
-// /signup redirect — send visitors to the signup-first view of the customer login page
+// /register — standalone signup page (first-class funnel entry)
+app.get('/register', (c) => {
+  const email = c.req.query('email') || ''
+  return c.html(getCustomerRegisterPageHTML(email))
+})
+
+// /signup redirect — keep backward compat, now points to /register
 app.get('/signup', (c) => {
   const email = c.req.query('email') || ''
-  const qs = email ? `?mode=signup&email=${encodeURIComponent(email)}` : '?mode=signup'
-  return c.redirect('/customer/login' + qs, 302)
+  const qs = email ? `?email=${encodeURIComponent(email)}` : ''
+  return c.redirect('/register' + qs, 302)
 })
 
 // Public sample report — static preview for visitors evaluating the product
@@ -5244,8 +5250,9 @@ function getLandingPageHTML(latestPosts: any[] = []) {
 <body class="min-h-screen" style="background:var(--bg-page)">
   <!-- Announcement Bar — free trial push -->
   <div id="announcement-bar">
-    <span>&#127881; <strong>4 FREE Roof Reports</strong> on every new account &mdash; register yourself in 60 seconds, no credit card &mdash; </span>
-    <a href="/signup" onclick="rrTrack('cta_click',{location:'announcement_bar'})">Start for free &rarr;</a>
+    <span id="ab-text-a">&#127881; <strong>4 FREE Roof Reports</strong> on every new account &mdash; register yourself in 60 seconds, no credit card &mdash; </span>
+    <span id="ab-text-b" style="display:none">&#128197; <strong>Book a free 20-min demo</strong> &mdash; see it on your own address &mdash; </span>
+    <a id="ab-link" href="/register" onclick="rrTrack('cta_click',{location:'announcement_bar'})">Start for free &rarr;</a>
     <button class="close-bar" onclick="document.getElementById('announcement-bar').style.display='none';document.getElementById('landing-nav').classList.add('bar-hidden');" aria-label="Dismiss">&times;</button>
   </div>
   <!-- Sticky Navigation — Dark premium, starts transparent -->
@@ -5467,7 +5474,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
                       <div><div class="text-[9px] text-gray-500 uppercase tracking-wider">Shingles</div><div class="text-lg font-black text-white">32<span class="text-xs text-gray-400 ml-1">sq</span></div></div>
                     </div>
                   </div>
-                  <a href="/signup" onclick="rrTrack('cta_click',{location:'hero_card_signup'})" class="flex items-center justify-center gap-3 w-full bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-3.5 rounded-xl text-base shadow-xl shadow-[#00FF88]/20 transition-all duration-300 hover:scale-[1.02]"><i class="fas fa-gift"></i> Get 4 FREE Reports <i class="fas fa-arrow-right text-sm"></i></a>
+                  <a href="/register" onclick="rrTrack('cta_click',{location:'hero_card_signup'})" class="flex items-center justify-center gap-3 w-full bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-3.5 rounded-xl text-base shadow-xl shadow-[#00FF88]/20 transition-all duration-300 hover:scale-[1.02]"><i class="fas fa-gift"></i> Get 4 FREE Reports <i class="fas fa-arrow-right text-sm"></i></a>
                 </div>
                 <div class="px-6 py-3 bg-[#080c10] border-t border-white/5 flex items-center justify-center gap-3">
                   <div class="flex items-center gap-0.5"><i class="fas fa-star text-[#00FF88] text-[10px]"></i><i class="fas fa-star text-[#00FF88] text-[10px]"></i><i class="fas fa-star text-[#00FF88] text-[10px]"></i><i class="fas fa-star text-[#00FF88] text-[10px]"></i><i class="fas fa-star text-[#00FF88] text-[10px]"></i></div>
@@ -5556,7 +5563,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
               <div class="text-gray-400 text-sm mt-0.5">No sales call. No demo request. Just sign up and your <strong class="text-white">4 free reports</strong> are instantly available.</div>
             </div>
           </div>
-          <a href="/signup" onclick="rrTrack('cta_click',{location:'self_serve_strip'})" class="flex-shrink-0 inline-flex items-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-3.5 px-8 rounded-xl text-sm transition-all hover:scale-105 shadow-lg shadow-[#00FF88]/20 whitespace-nowrap min-h-[48px]">
+          <a href="/register" onclick="rrTrack('cta_click',{location:'self_serve_strip'})" class="flex-shrink-0 inline-flex items-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-3.5 px-8 rounded-xl text-sm transition-all hover:scale-105 shadow-lg shadow-[#00FF88]/20 whitespace-nowrap min-h-[48px]">
             <i class="fas fa-rocket"></i> Register Free Now &rarr;
           </a>
         </div>
@@ -5948,7 +5955,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
           try{
             fetch('/api/agents/leads',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:em.split('@')[0],email:em,source_page:'final_cta_email'}),keepalive:true}).catch(function(){});
           }catch(_){ }
-          window.location.href='/signup?email='+encodeURIComponent(em);
+          window.location.href='/register?email='+encodeURIComponent(em);
           return false;
         }
       </script>
@@ -6277,7 +6284,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
             keepalive: true
           }).catch(function(){});
         } catch(err){}
-        window.location.href = '/signup?email=' + encodeURIComponent(email);
+        window.location.href = '/register?email=' + encodeURIComponent(email);
         return false;
       };
     })();
@@ -6771,6 +6778,206 @@ function getSettingsPageHTML() {
 // ============================================================
 // CUSTOMER PAGES
 // ============================================================
+
+function getCustomerRegisterPageHTML(prefillEmail = '') {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags()}
+  <title>Create Your Free Account | Roof Manager</title>
+  <meta name="description" content="Start free with 4 roof measurement reports. No credit card required. Full CRM included.">
+  <link rel="canonical" href="https://www.roofmanager.ca/register">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    * { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    .reg-input { width:100%;padding:11px 14px;border:1px solid #d1d5db;border-radius:10px;font-size:14px;box-sizing:border-box;outline:none;transition:border-color 0.2s,box-shadow 0.2s;background:#fff;color:#111; }
+    .reg-input:focus { border-color:#00CC70;box-shadow:0 0 0 3px rgba(0,204,112,0.12); }
+    .strength-bar { height:4px;border-radius:2px;transition:width 0.3s,background-color 0.3s; }
+  </style>
+</head>
+<body style="background:#f8fafc;margin:0;min-height:100vh">
+
+  <!-- Minimal top nav -->
+  <nav style="background:#fff;border-bottom:1px solid #e5e7eb;padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between">
+    <a href="/" style="display:flex;align-items:center;gap:10px;text-decoration:none">
+      <img src="/static/logo.png" alt="Roof Manager" style="width:32px;height:32px;border-radius:8px;object-fit:cover">
+      <span style="font-weight:800;font-size:16px;color:#111">Roof Manager</span>
+    </a>
+    <span style="color:#6b7280;font-size:13px">Already have an account? <a href="/customer/login" style="color:#00CC70;font-weight:600;text-decoration:none">Sign in</a></span>
+  </nav>
+
+  <main>
+    <div style="max-width:1100px;margin:0 auto;padding:40px 24px 80px;display:grid;grid-template-columns:1fr;gap:40px" id="reg-grid">
+      <style>@media(min-width:800px){#reg-grid{grid-template-columns:1.2fr 1fr}}</style>
+
+      <!-- LEFT: Registration form -->
+      <div style="background:#fff;border:1px solid #e5e7eb;border-radius:20px;padding:36px;box-shadow:0 1px 3px rgba(0,0,0,0.06)">
+        <div style="margin-bottom:28px">
+          <div style="display:inline-flex;align-items:center;gap:8px;background:#00FF8820;border:1px solid #00FF8840;border-radius:999px;padding:4px 14px;font-size:12px;font-weight:700;color:#00997A;margin-bottom:14px;letter-spacing:0.03em">
+            <i class="fas fa-gift"></i> 4 FREE Reports — No Card Required
+          </div>
+          <h1 style="font-size:26px;font-weight:900;color:#111;margin:0 0 6px">Create your free account</h1>
+          <p style="color:#6b7280;font-size:14px;margin:0">Takes 60 seconds. 4 free roof reports waiting.</p>
+        </div>
+
+        <form id="reg-form" onsubmit="return submitRegForm(event)" autocomplete="on">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+            <label>
+              <span style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:5px">Full Name *</span>
+              <input required id="reg-name" name="name" type="text" placeholder="Jane Smith" class="reg-input" autocomplete="name" minlength="2" maxlength="100">
+            </label>
+            <label>
+              <span style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:5px">Work Email *</span>
+              <input required id="reg-email" name="email" type="email" placeholder="jane@yourcompany.com" class="reg-input" autocomplete="email" value="${prefillEmail.replace(/"/g, '&quot;')}">
+            </label>
+          </div>
+          <div style="margin-bottom:14px">
+            <label>
+              <span style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:5px">Password *</span>
+              <input required id="reg-password" name="password" type="password" placeholder="Min. 8 characters" class="reg-input" autocomplete="new-password" minlength="8" oninput="updateStrength(this.value)">
+            </label>
+            <div style="margin-top:6px;height:4px;background:#e5e7eb;border-radius:2px">
+              <div id="strength-bar" class="strength-bar" style="width:0%;background:#ef4444"></div>
+            </div>
+            <div id="strength-label" style="font-size:11px;color:#9ca3af;margin-top:4px"></div>
+          </div>
+          <div style="margin-bottom:14px">
+            <label>
+              <span style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:5px">Company Name (optional)</span>
+              <input id="reg-company" name="company_name" type="text" placeholder="ABC Roofing Inc." class="reg-input" autocomplete="organization">
+            </label>
+          </div>
+          <div style="margin-bottom:20px">
+            <label>
+              <span style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:5px">Phone (optional)</span>
+              <input id="reg-phone" name="phone" type="tel" placeholder="(403) 555-0100" class="reg-input" autocomplete="tel">
+            </label>
+          </div>
+          <label style="display:flex;align-items:flex-start;gap:10px;margin-bottom:20px;cursor:pointer">
+            <input required type="checkbox" name="terms" style="margin-top:2px;width:16px;height:16px;accent-color:#00CC70;flex-shrink:0">
+            <span style="font-size:13px;color:#6b7280;line-height:1.5">I agree to the <a href="/terms" style="color:#00CC70;text-decoration:none" target="_blank">Terms of Service</a> and <a href="/privacy" style="color:#00CC70;text-decoration:none" target="_blank">Privacy Policy</a></span>
+          </label>
+          <div id="reg-error" style="display:none;background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:14px"></div>
+          <button type="submit" id="reg-submit-btn" style="width:100%;padding:14px;background:#00FF88;color:#0A0A0A;border:none;border-radius:12px;font-size:16px;font-weight:800;cursor:pointer;transition:opacity 0.2s">
+            <i class="fas fa-rocket" style="margin-right:8px"></i>Create Free Account
+          </button>
+        </form>
+        <p style="text-align:center;color:#9ca3af;font-size:12px;margin:14px 0 0"><i class="fas fa-lock" style="margin-right:5px"></i>256-bit SSL encrypted &nbsp;&middot;&nbsp; Hosted in Canada</p>
+      </div>
+
+      <!-- RIGHT: Social-proof sidebar -->
+      <aside>
+        <!-- 4 Free Reports card -->
+        <div style="background:linear-gradient(135deg,#0A0A0A 0%,#1a1a2e 100%);border-radius:20px;padding:28px;margin-bottom:20px;border:1px solid rgba(0,255,136,0.2)">
+          <div style="text-align:center;margin-bottom:20px">
+            <div style="font-size:36px;font-weight:900;color:#00FF88;margin-bottom:2px">4 Free Reports</div>
+            <div style="font-size:28px;font-weight:900;color:#fff">$0</div>
+            <div style="color:#9ca3af;font-size:13px;margin-top:4px">No credit card, no commitment</div>
+          </div>
+          ${[
+            'Satellite roof measurement reports',
+            'Full pitch-corrected area + edge lengths',
+            'Material BOM (shingles, underlayment)',
+            'Branded PDF download',
+            'Full CRM + invoicing — free forever',
+          ].map(f=>`<div style="display:flex;align-items:center;gap:10px;margin-bottom:9px;font-size:13px;color:#d1d5db"><i class="fas fa-check-circle" style="color:#00FF88;font-size:14px;flex-shrink:0"></i>${f}</div>`).join('')}
+        </div>
+
+        <!-- Testimonials -->
+        <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:20px">
+          ${[
+            { name:'Mike D.', role:'Roofing Contractor', quote:'Saves me 2 hours per estimate. I quote jobs from my truck now.', init:'M' },
+            { name:'Sarah K.', role:'Estimator', quote:'The BOM alone is worth $8. Supplier orders are dead accurate.', init:'S' },
+            { name:'James R.', role:'Owner, Prairie Roofing', quote:'15–20 estimates a week at $8 each. Way cheaper than drones.', init:'J' },
+          ].map(t=>`
+          <div style="background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:16px">
+            <div style="display:flex;gap:2px;margin-bottom:7px">${'<i class="fas fa-star" style="color:#00CC70;font-size:11px"></i>'.repeat(5)}</div>
+            <p style="color:#374151;font-size:13px;line-height:1.5;margin:0 0 10px">"${t.quote}"</p>
+            <div style="display:flex;align-items:center;gap:8px">
+              <div style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#00FF88,#22d3ee);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#0A0A0A">${t.init}</div>
+              <div><div style="color:#111;font-size:12px;font-weight:600">${t.name}</div><div style="color:#9ca3af;font-size:11px">${t.role}</div></div>
+            </div>
+          </div>`).join('')}
+        </div>
+
+        <!-- Trust strip -->
+        <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:7px">
+          <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:#6b7280"><i class="fas fa-star" style="color:#00CC70"></i> 4.9/5 from 200+ reviews</div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:#6b7280"><i class="fas fa-users" style="color:#00CC70"></i> 5,000+ contractors US &amp; CA</div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:#6b7280"><i class="fas fa-shield-alt" style="color:#00CC70"></i> SOC-grade security, PIPEDA compliant</div>
+        </div>
+      </aside>
+    </div>
+  </main>
+
+  <script>
+    // Password strength meter
+    function updateStrength(val) {
+      var bar = document.getElementById('strength-bar');
+      var lbl = document.getElementById('strength-label');
+      var score = 0;
+      if (val.length >= 8) score++;
+      if (/[A-Z]/.test(val)) score++;
+      if (/[0-9]/.test(val)) score++;
+      if (/[^A-Za-z0-9]/.test(val)) score++;
+      var pct = [0, 25, 50, 75, 100][score];
+      var colors = ['#ef4444','#f97316','#eab308','#22c55e','#00FF88'];
+      var labels = ['','Weak','Fair','Good','Strong'];
+      bar.style.width = pct + '%';
+      bar.style.background = colors[score];
+      lbl.textContent = labels[score];
+    }
+
+    function submitRegForm(e) {
+      e.preventDefault();
+      var form = e.target;
+      var btn = document.getElementById('reg-submit-btn');
+      var errEl = document.getElementById('reg-error');
+      errEl.style.display = 'none';
+      btn.disabled = true; btn.textContent = 'Creating account…';
+
+      var payload = {
+        name: form.name.value.trim(),
+        email: form.email.value.trim(),
+        password: form.password.value,
+        company_name: form.company_name.value.trim() || '',
+        phone: form.phone.value.trim() || '',
+      };
+
+      // Preserve referral code
+      try { var ref = localStorage.getItem('_ref_code'); if (ref) payload.referred_by_code = ref; } catch(_){}
+
+      fetch('/api/customer/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        credentials: 'include'
+      })
+      .then(function(r){ return r.json().then(function(d){ return {ok:r.ok,d:d}; }); })
+      .then(function(res){
+        if (!res.ok) {
+          errEl.textContent = res.d.error || 'Registration failed. Please try again.';
+          errEl.style.display = 'block';
+          btn.disabled = false; btn.innerHTML = '<i class="fas fa-rocket" style="margin-right:8px"></i>Create Free Account';
+          return;
+        }
+        try { rrTrack('lead_capture', { source: 'register' }); } catch(_){}
+        try { gtag('event', 'sign_up', { method: 'email' }); } catch(_){}
+        window.location.href = '/customer/dashboard?welcome=1';
+      })
+      .catch(function(){
+        errEl.textContent = 'Network error — please try again.';
+        errEl.style.display = 'block';
+        btn.disabled = false; btn.innerHTML = '<i class="fas fa-rocket" style="margin-right:8px"></i>Create Free Account';
+      });
+      return false;
+    }
+  </script>
+</body>
+</html>`
+}
 
 function getCustomerLoginHTML() {
 
