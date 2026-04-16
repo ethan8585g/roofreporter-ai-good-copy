@@ -1,0 +1,21 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "roofmanager-agent-cron",
+  "main": "src/cron-worker.ts",
+  "compatibility_date": "2026-02-09",
+  "compatibility_flags": ["nodejs_compat"],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "roofing-production",
+      "database_id": "e64c0cf3-43fa-4f41-ac75-ed12694a26c5"
+    }
+  ],
+  "triggers": {
+    "crons": ["*/10 * * * *"]
+  }
+  // Secrets shared with the main app — must also be set on this worker:
+  //   wrangler secret put ANTHROPIC_API_KEY --config wrangler-cron.jsonc
+  //   wrangler secret put GEMINI_API_KEY --config wrangler-cron.jsonc
+  //   (and any other secrets the agent services use)
+}
