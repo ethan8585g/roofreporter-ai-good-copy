@@ -2158,6 +2158,22 @@ customerAuthRoutes.post('/magic-link', async (c) => {
 })
 
 // ============================================================
+// SIGNUP RECOVERY OPT-OUT
+// GET /api/customer/signup-optout?email=...
+// ============================================================
+customerAuthRoutes.get('/signup-optout', async (c) => {
+  const email = (c.req.query('email') || '').trim().toLowerCase()
+  if (!email) return c.html('<p>Invalid link.</p>', 400)
+  const db = (c.env as any).DB
+  try {
+    await db.prepare('INSERT OR IGNORE INTO signup_recovery_optouts (email) VALUES (?)').bind(email).run()
+  } catch (err: any) {
+    console.warn('[signup-optout] DB error:', err?.message || err)
+  }
+  return c.html(`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Unsubscribed</title></head><body style="font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0"><div style="text-align:center;max-width:400px;padding:32px"><h2 style="color:#0A0A0A">You're unsubscribed</h2><p style="color:#6b7280">You won't receive any more signup reminder emails from Roof Manager.</p><a href="/" style="color:#00CC6A;text-decoration:none;font-weight:600">← Back to Roof Manager</a></div></body></html>`)
+})
+
+// ============================================================
 // SIGNUP STARTED — abandoned signup capture
 // ============================================================
 customerAuthRoutes.post('/signup-started', async (c) => {

@@ -13,6 +13,80 @@ import { runEmailAgent } from './services/email-agent'
 import { runMonitorAgent } from './services/monitor-agent'
 import { runTrafficAgent } from './services/traffic-agent'
 
+// ── Abandoned signup recovery ─────────────────────────────────────────────────
+async function runAbandonedSignupRecovery(env: Bindings): Promise<{ sent: number; skipped: number }> {
+  const db = (env as any).DB
+  const resendKey = (env as any).RESEND_API_KEY
+  if (!resendKey) return { sent: 0, skipped: 0 }
+
+  // Find attempts ≥1 hour old, not completed, not already recovered, not opted out
+  let rows: any[] = []
+  try {
+    const result = await db.prepare(`
+      SELECT sa.id, sa.email, sa.preview_id
+      FROM signup_attempts sa
+      WHERE sa.completed = 0
+        AND sa.recovery_sent = 0
+        AND sa.created_at < datetime('now', '-1 hour')
+        AND NOT EXISTS (
+          SELECT 1 FROM signup_recovery_optouts sro WHERE sro.email = sa.email
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM customers c WHERE c.email = sa.email
+        )
+      LIMIT 50
+    `).all<any>()
+    rows = result.results || []
+  } catch (err: any) {
+    console.warn('[recovery] query failed (tables may not exist):', err?.message)
+    return { sent: 0, skipped: 0 }
+  }
+
+  let sent = 0
+  let skipped = 0
+  for (const row of rows) {
+    const optoutUrl = `https://www.roofmanager.ca/api/customer/signup-optout?email=${encodeURIComponent(row.email)}`
+    const registerUrl = `https://www.roofmanager.ca/register?email=${encodeURIComponent(row.email)}${row.preview_id ? `&preview_id=${row.preview_id}` : ''}`
+    const html = `
+      <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px">
+        <h2 style="color:#0A0A0A;margin-bottom:8px">You left before finishing — here's your roof report</h2>
+        <p style="color:#374151;margin-bottom:24px">
+          We noticed you started setting up your Roof Manager account but didn't finish.
+          Your free roof preview is waiting — complete your registration to access it.
+        </p>
+        <a href="${registerUrl}" style="display:inline-block;background:#00FF88;color:#0A0A0A;font-weight:700;padding:14px 28px;border-radius:10px;text-decoration:none;font-size:16px;margin-bottom:24px">
+          Complete My Registration →
+        </a>
+        <p style="color:#6b7280;font-size:12px">
+          <a href="${optoutUrl}" style="color:#9ca3af">Unsubscribe</a> · Roof Manager, roofmanager.ca
+        </p>
+      </div>
+    `
+    try {
+      const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          from: 'Roof Manager <noreply@roofmanager.ca>',
+          to: [row.email],
+          subject: 'You left before finishing — your roof preview is waiting',
+          html,
+        }),
+      })
+      if (res.ok) {
+        await db.prepare(`UPDATE signup_attempts SET recovery_sent = 1, recovery_sent_at = datetime('now') WHERE id = ?`).bind(row.id).run()
+        sent++
+      } else {
+        skipped++
+      }
+    } catch (err: any) {
+      console.error('[recovery] email send error:', err?.message)
+      skipped++
+    }
+  }
+  return { sent, skipped }
+}
+
 export default {
   // No-op fetch handler — this worker only exists for cron
   async fetch(): Promise<Response> {
@@ -126,6 +200,18 @@ export default {
         } catch (err: any) {
           console.error('[CRON:monitor] Error:', err.message)
           await logRun('monitor', 'error', err.message, {}, Date.now() - t0)
+        }
+      })())
+    }
+
+    // ── Abandoned Signup Recovery (every hour on :00 tick) ──
+    if (minute === 0) {
+      ctx.waitUntil((async () => {
+        try {
+          const result = await runAbandonedSignupRecovery(env)
+          console.log(`[CRON:signup-recovery] Sent ${result.sent}, skipped ${result.skipped}`)
+        } catch (err: any) {
+          console.error('[CRON:signup-recovery] Error:', err.message)
         }
       })())
     }
