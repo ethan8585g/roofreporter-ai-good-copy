@@ -288,6 +288,7 @@ app.route('/api/customer/solar-presentation', solarPresentationRoutes)
 app.route('/api/customer/solar-documents', solarDocumentsRoutes)
 app.route('/api/customer/solar-permits', solarPermitsRoutes)
 app.route('/api/customer', customerAuthRoutes)
+app.route('/api/customer-auth', customerAuthRoutes)
 app.route('/api/invoices', invoiceRoutes)
 app.route('/api/square', squareRoutes)
 app.route('/api/crm', crmRoutes)
@@ -7421,47 +7422,63 @@ ${previewId ? `
   &#x2705; Your roof preview is saved — complete signup to download the full report.
 </div>
 ` : ''}
-        <form id="reg-form" onsubmit="return submitRegForm(event)" autocomplete="on">
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
-            <label>
-              <span style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:5px">Full Name *</span>
-              <input required id="reg-name" name="name" type="text" placeholder="Jane Smith" class="reg-input" autocomplete="name" minlength="2" maxlength="100">
-            </label>
-            <label>
-              <span style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:5px">Work Email *</span>
-              <input required id="reg-email" name="email" type="email" placeholder="jane@yourcompany.com" class="reg-input" autocomplete="email" value="${prefillEmail.replace(/"/g, '&quot;')}">
-            </label>
+        <!-- Progress indicator -->
+        <div style="display:flex;gap:8px;margin-bottom:20px" id="reg-progress">
+          <div id="prog1" style="flex:1;height:4px;background:#00FF88;border-radius:2px"></div>
+          <div id="prog2" style="flex:1;height:4px;background:#e5e7eb;border-radius:2px;transition:background 0.3s"></div>
+        </div>
+
+        <div id="reg-error" style="display:none;background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:14px"></div>
+
+        <form id="reg-form" autocomplete="on">
+          <!-- Step 1: email only -->
+          <div id="step1">
+            <label for="reg-email" style="display:block;font-weight:600;margin-bottom:6px;font-size:14px;color:#374151">Work Email</label>
+            <input id="reg-email" type="email" name="email" autocomplete="email" required
+              placeholder="you@company.com"
+              value="${prefillEmail.replace(/"/g, '&quot;')}"
+              style="width:100%;padding:12px 16px;border:1.5px solid #d1d5db;border-radius:10px;font-size:15px;outline:none;box-sizing:border-box"
+              onfocus="this.style.borderColor='#00CC70'"
+              onblur="onEmailBlur(this.value);this.style.borderColor='#d1d5db'">
+            <button type="button" onclick="goToStep2()"
+              style="width:100%;margin-top:12px;padding:14px;background:#00FF88;color:#0A0A0A;font-weight:800;border:none;border-radius:10px;font-size:16px;cursor:pointer">
+              Continue &#x2192;
+            </button>
+            <p style="text-align:center;margin-top:10px;font-size:13px;color:#6b7280">&#x1F512; No credit card &nbsp;&middot;&nbsp; &#x1F1E8;&#x1F1E6; Canadian data &nbsp;&middot;&nbsp; &#x26A1; 60-sec setup</p>
           </div>
-          <div style="margin-bottom:14px">
-            <label>
-              <span style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:5px">Password *</span>
-              <input required id="reg-password" name="password" type="password" placeholder="Min. 8 characters" class="reg-input" autocomplete="new-password" minlength="8" oninput="updateStrength(this.value)">
-            </label>
-            <div style="margin-top:6px;height:4px;background:#e5e7eb;border-radius:2px">
-              <div id="strength-bar" class="strength-bar" style="width:0%;background:#ef4444"></div>
+
+          <!-- Step 2: password + name -->
+          <div id="step2" style="display:none">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;font-size:14px;color:#6b7280">
+              <button type="button" onclick="goToStep1()" style="background:none;border:none;cursor:pointer;color:#00CC70;font-weight:600;font-size:14px;padding:0">&#x2190; Back</button>
+              <span>Step 2 of 2</span>
             </div>
-            <div id="strength-label" style="font-size:11px;color:#9ca3af;margin-top:4px"></div>
+            <div id="step2-email-display" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:14px;color:#374151"></div>
+            <label style="display:block;font-weight:600;margin-bottom:6px;font-size:14px;color:#374151">Full Name</label>
+            <input id="reg-name" type="text" name="name" autocomplete="name" required
+              placeholder="Jane Smith"
+              style="width:100%;padding:12px 16px;border:1.5px solid #d1d5db;border-radius:10px;font-size:15px;outline:none;box-sizing:border-box;margin-bottom:12px"
+              onfocus="this.style.borderColor='#00CC70'" onblur="this.style.borderColor='#d1d5db'">
+            <label style="display:block;font-weight:600;margin-bottom:6px;font-size:14px;color:#374151">Password</label>
+            <input id="reg-password" type="password" name="password" autocomplete="new-password" required minlength="8"
+              data-clarity-mask="true"
+              placeholder="Min. 8 characters"
+              style="width:100%;padding:12px 16px;border:1.5px solid #d1d5db;border-radius:10px;font-size:15px;outline:none;box-sizing:border-box;margin-bottom:6px"
+              onfocus="this.style.borderColor='#00CC70'" onblur="this.style.borderColor='#d1d5db'"
+              oninput="updateStrengthMeter(this.value)">
+            <div id="strength-meter" style="height:4px;background:#e5e7eb;border-radius:2px;margin-bottom:12px;overflow:hidden">
+              <div id="strength-bar" style="height:100%;width:0%;transition:width 0.3s,background 0.3s;border-radius:2px"></div>
+            </div>
+            <label style="display:block;font-weight:600;margin-bottom:6px;font-size:14px;color:#374151">Company <span style="font-weight:400;color:#9ca3af">(optional)</span></label>
+            <input id="reg-company" type="text" name="company_name" autocomplete="organization"
+              placeholder="Acme Roofing"
+              style="width:100%;padding:12px 16px;border:1.5px solid #d1d5db;border-radius:10px;font-size:15px;outline:none;box-sizing:border-box;margin-bottom:16px"
+              onfocus="this.style.borderColor='#00CC70'" onblur="this.style.borderColor='#d1d5db'">
+            <button type="button" onclick="submitRegForm()"
+              style="width:100%;padding:14px;background:#00FF88;color:#0A0A0A;font-weight:800;border:none;border-radius:10px;font-size:16px;cursor:pointer">
+              Create Account &#x2192;
+            </button>
           </div>
-          <div style="margin-bottom:14px">
-            <label>
-              <span style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:5px">Company Name (optional)</span>
-              <input id="reg-company" name="company_name" type="text" placeholder="ABC Roofing Inc." class="reg-input" autocomplete="organization">
-            </label>
-          </div>
-          <div style="margin-bottom:20px">
-            <label>
-              <span style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:5px">Phone (optional)</span>
-              <input id="reg-phone" name="phone" type="tel" placeholder="(403) 555-0100" class="reg-input" autocomplete="tel">
-            </label>
-          </div>
-          <label style="display:flex;align-items:flex-start;gap:10px;margin-bottom:20px;cursor:pointer">
-            <input required type="checkbox" name="terms" style="margin-top:2px;width:16px;height:16px;accent-color:#00CC70;flex-shrink:0">
-            <span style="font-size:13px;color:#6b7280;line-height:1.5">I agree to the <a href="/terms" style="color:#00CC70;text-decoration:none" target="_blank">Terms of Service</a> and <a href="/privacy" style="color:#00CC70;text-decoration:none" target="_blank">Privacy Policy</a></span>
-          </label>
-          <div id="reg-error" style="display:none;background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:14px"></div>
-          <button type="submit" id="reg-submit-btn" style="width:100%;padding:14px;background:#00FF88;color:#0A0A0A;border:none;border-radius:12px;font-size:16px;font-weight:800;cursor:pointer;transition:opacity 0.2s">
-            <i class="fas fa-rocket" style="margin-right:8px"></i>Create Free Account
-          </button>
         </form>
         <p style="text-align:center;color:#9ca3af;font-size:12px;margin:14px 0 0"><i class="fas fa-lock" style="margin-right:5px"></i>256-bit SSL encrypted &nbsp;&middot;&nbsp; Hosted in Canada</p>
       </div>
@@ -7512,66 +7529,104 @@ ${previewId ? `
   </main>
 
   <script>
-    // Password strength meter
-    function updateStrength(val) {
+    function goToStep2(silent) {
+      var email = document.getElementById('reg-email').value.trim();
+      if (!silent && (!email || !email.includes('@'))) {
+        document.getElementById('reg-email').focus();
+        return;
+      }
+      document.getElementById('step1').style.display = 'none';
+      document.getElementById('step2').style.display = 'block';
+      document.getElementById('prog2').style.background = '#00FF88';
+      var d = document.getElementById('step2-email-display');
+      if (d) d.textContent = '\uD83D\uDCE7 ' + (email || document.getElementById('reg-email').value);
+      if (!silent) rrTrack('signup_field_complete', {field: 'email'});
+    }
+    function goToStep1() {
+      document.getElementById('step2').style.display = 'none';
+      document.getElementById('step1').style.display = 'block';
+      document.getElementById('prog2').style.background = '#e5e7eb';
+    }
+    function onEmailBlur(email) {
+      if (!email || !email.includes('@')) return;
+      var draft = JSON.parse(localStorage.getItem('rr_signup_draft') || '{}');
+      draft.email = email;
+      localStorage.setItem('rr_signup_draft', JSON.stringify(draft));
+      fetch('/api/customer-auth/signup-started', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          email: email,
+          utm: Object.fromEntries(new URLSearchParams(sessionStorage.getItem('rr_utm') || '')),
+          preview_id: new URLSearchParams(window.location.search).get('preview_id') || ''
+        })
+      }).catch(function(){});
+      rrTrack('signup_started', {});
+    }
+    function updateStrengthMeter(pw) {
       var bar = document.getElementById('strength-bar');
-      var lbl = document.getElementById('strength-label');
+      if (!bar) return;
       var score = 0;
-      if (val.length >= 8) score++;
-      if (/[A-Z]/.test(val)) score++;
-      if (/[0-9]/.test(val)) score++;
-      if (/[^A-Za-z0-9]/.test(val)) score++;
+      if (pw.length >= 8) score++;
+      if (/[A-Z]/.test(pw)) score++;
+      if (/[0-9]/.test(pw)) score++;
+      if (/[^A-Za-z0-9]/.test(pw)) score++;
       var pct = [0, 25, 50, 75, 100][score];
-      var colors = ['#ef4444','#f97316','#eab308','#22c55e','#00FF88'];
-      var labels = ['','Weak','Fair','Good','Strong'];
+      var colors = ['#e5e7eb', '#ef4444', '#f97316', '#eab308', '#22c55e'];
       bar.style.width = pct + '%';
       bar.style.background = colors[score];
-      lbl.textContent = labels[score];
     }
-
-    function submitRegForm(e) {
-      e.preventDefault();
-      var form = e.target;
-      var btn = document.getElementById('reg-submit-btn');
-      var errEl = document.getElementById('reg-error');
-      errEl.style.display = 'none';
-      btn.disabled = true; btn.textContent = 'Creating account…';
-
-      var payload = {
-        name: form.name.value.trim(),
-        email: form.email.value.trim(),
-        password: form.password.value,
-        company_name: form.company_name.value.trim() || '',
-        phone: form.phone.value.trim() || '',
-      };
-
-      // Preserve referral code
-      try { var ref = localStorage.getItem('_ref_code'); if (ref) payload.referred_by_code = ref; } catch(_){}
-
-      fetch('/api/customer/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-        credentials: 'include'
-      })
-      .then(function(r){ return r.json().then(function(d){ return {ok:r.ok,d:d}; }); })
-      .then(function(res){
-        if (!res.ok) {
-          errEl.textContent = res.d.error || 'Registration failed. Please try again.';
-          errEl.style.display = 'block';
-          btn.disabled = false; btn.innerHTML = '<i class="fas fa-rocket" style="margin-right:8px"></i>Create Free Account';
-          return;
+    // On page load: rehydrate draft
+    (function() {
+      var draft = JSON.parse(localStorage.getItem('rr_signup_draft') || '{}');
+      if (draft.email) {
+        var el = document.getElementById('reg-email');
+        if (el) { el.value = draft.email; goToStep2(true); }
+      }
+      var params = new URLSearchParams(window.location.search);
+      if (params.get('resume') === '1') {
+        var em = params.get('email') || draft.email || '';
+        if (em) {
+          var el2 = document.getElementById('reg-email');
+          if (el2) el2.value = em;
+          goToStep2(true);
+          rrTrack('signup_resumed', {});
         }
-        try { rrTrack('lead_capture', { source: 'register' }); } catch(_){}
-        try { gtag('event', 'sign_up', { method: 'email' }); } catch(_){}
-        window.location.href = '/customer/dashboard?welcome=1';
-      })
-      .catch(function(){
-        errEl.textContent = 'Network error — please try again.';
-        errEl.style.display = 'block';
-        btn.disabled = false; btn.innerHTML = '<i class="fas fa-rocket" style="margin-right:8px"></i>Create Free Account';
+      }
+    })();
+
+    async function submitRegForm(e) {
+      if (e) e.preventDefault();
+      var email = document.getElementById('reg-email').value.trim();
+      var password = document.getElementById('reg-password').value;
+      var name = document.getElementById('reg-name').value.trim();
+      var company = (document.getElementById('reg-company') || {}).value || '';
+      if (!email || !password || !name) {
+        var err2 = document.getElementById('reg-error');
+        if (err2) { err2.textContent = 'Please fill in all required fields.'; err2.style.display = 'block'; }
+        return;
+      }
+      rrTrack('signup_submit_attempt', {});
+      var refCode = localStorage.getItem('rr_ref_code') || new URLSearchParams(window.location.search).get('ref') || '';
+      var res = await fetch('/api/customer-auth/register', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({email: email, password: password, name: name, company_name: company, referred_by_code: refCode})
       });
-      return false;
+      var data = await res.json();
+      if (data.success) {
+        rrTrack('signup_submit_success', {});
+        localStorage.removeItem('rr_signup_draft');
+        fetch('/api/customer-auth/signup-started', {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({email: email, completed: true})
+        }).catch(function(){});
+        window.location.href = '/customer/dashboard?welcome=1';
+      } else {
+        rrTrack('signup_submit_error', {reason: data.error});
+        var errEl = document.getElementById('reg-error');
+        if (errEl) { errEl.textContent = data.error || 'Registration failed. Please try again.'; errEl.style.display = 'block'; }
+      }
     }
 
     async function handleGoogleCredential(response) {
