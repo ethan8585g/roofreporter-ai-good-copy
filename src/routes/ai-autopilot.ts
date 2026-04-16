@@ -218,9 +218,9 @@ aiAutopilotRoutes.put('/config', async (c) => {
 aiAutopilotRoutes.post('/toggle', async (c) => {
   try {
     const current = await c.env.DB.prepare(
-      "SELECT value FROM settings WHERE key = 'agent_auto_process_enabled'"
-    ).first<any>()
-    const newValue = current?.value === '1' ? '0' : '1'
+      "SELECT setting_value FROM settings WHERE master_company_id = ? AND setting_key = 'agent_auto_process_enabled'"
+    ).bind(PLATFORM_COMPANY_ID).first<any>()
+    const newValue = current?.setting_value === '1' ? '0' : '1'
     await upsertSetting(c.env.DB, 'agent_auto_process_enabled', newValue)
 
     return c.json({
@@ -238,10 +238,13 @@ aiAutopilotRoutes.post('/toggle', async (c) => {
 // HELPERS
 // ============================================================
 
+// Platform-level agent settings use master_company_id = 0 (no real company)
+const PLATFORM_COMPANY_ID = 0
+
 async function getAgentConfig(db: D1Database): Promise<Record<string, any>> {
   const settings = await db.prepare(
-    "SELECT key, value FROM settings WHERE key LIKE 'agent_%'"
-  ).all<any>()
+    "SELECT setting_key, setting_value FROM settings WHERE master_company_id = ? AND setting_key LIKE 'agent_%'"
+  ).bind(PLATFORM_COMPANY_ID).all<any>()
 
   const config: Record<string, any> = {
     auto_process_enabled: false,
@@ -251,18 +254,18 @@ async function getAgentConfig(db: D1Database): Promise<Record<string, any>> {
   }
 
   for (const row of settings.results || []) {
-    switch (row.key) {
+    switch (row.setting_key) {
       case 'agent_auto_process_enabled':
-        config.auto_process_enabled = row.value === '1'
+        config.auto_process_enabled = row.setting_value === '1'
         break
       case 'agent_confidence_threshold':
-        config.confidence_threshold = parseInt(row.value) || 60
+        config.confidence_threshold = parseInt(row.setting_value) || 60
         break
       case 'agent_max_daily_auto':
-        config.max_daily_auto = parseInt(row.value) || 50
+        config.max_daily_auto = parseInt(row.setting_value) || 50
         break
       case 'agent_notify_on_complete':
-        config.notify_on_complete = row.value !== '0'
+        config.notify_on_complete = row.setting_value !== '0'
         break
     }
   }
@@ -271,7 +274,10 @@ async function getAgentConfig(db: D1Database): Promise<Record<string, any>> {
 }
 
 async function upsertSetting(db: D1Database, key: string, value: string) {
-  await db.prepare(
-    "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = ?, updated_at = datetime('now')"
-  ).bind(key, value, value).run()
+  await db.prepare(`
+    INSERT INTO settings (master_company_id, setting_key, setting_value)
+    VALUES (?, ?, ?)
+    ON CONFLICT(master_company_id, setting_key)
+    DO UPDATE SET setting_value = ?, updated_at = datetime('now')
+  `).bind(PLATFORM_COMPANY_ID, key, value, value).run()
 }
