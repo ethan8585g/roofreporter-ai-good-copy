@@ -1857,6 +1857,332 @@ app.get('/roof-measurement/:city', (c) => {
 </html>`)
 })
 
+// Roof Replacement Cost — programmatic city landing pages (Canada + US)
+app.get('/roof-replacement-cost/:city', (c) => {
+  const citySlug = c.req.param('city').toLowerCase()
+  const city = seoCities[citySlug]
+  if (!city) return c.redirect('/')
+  const country = getCityCountry(city)
+  const isCanada = country === 'CA'
+  const currency = isCanada ? 'CAD' : 'USD'
+  const stateOrProvince = isCanada ? 'province' : 'state'
+  const buildingCode = isCanada ? 'National Building Code of Canada (NBC 2020)' : 'International Residential Code (IRC 2021)'
+  // City-specific cost data
+  const costData: Record<string, { low: string; high: string; avg: string; notes: string }> = {
+    'calgary': { low: '$8,000', high: '$18,000', avg: '$12,500', notes: 'Hail damage is among the most frequent in Canada. Class 4 impact-resistant shingles are strongly recommended. Ice & water shield required per NBC.' },
+    'edmonton': { low: '$7,500', high: '$17,000', avg: '$11,500', notes: 'Extreme freeze-thaw cycles cause ice dam damage. Proper ventilation and ice & water shield membranes are critical. 50-year architectural shingles recommended.' },
+    'toronto': { low: '$9,000', high: '$22,000', avg: '$14,000', notes: 'High GTA labour costs. Ontario Building Code requires ice & water shield for the first 2m from eave. Permit required for full replacement in most municipalities.' },
+    'ottawa': { low: '$8,500', high: '$20,000', avg: '$13,000', notes: 'High snowload region. 50-year architectural shingles and enhanced attic insulation recommended. Ottawa requires building permits for roof replacement.' },
+    'vancouver': { low: '$10,000', high: '$24,000', avg: '$16,000', notes: 'Cedar shake and metal roofing common due to rain. Moss growth is a major issue — biocide treatment recommended. BC Building Code applies.' },
+    'winnipeg': { low: '$7,000', high: '$16,000', avg: '$11,000', notes: 'Most extreme temperature swings in Canada (-40°C to +38°C). Class 4 shingles and superior underlayment are essential. Low labour costs relative to other major cities.' },
+    'hamilton': { low: '$8,000', high: '$19,000', avg: '$12,500', notes: 'Ontario Building Code applies. Proximity to Lake Ontario increases freeze-thaw frequency. Ice & water shield required from eave.' },
+    'mississauga': { low: '$9,000', high: '$21,000', avg: '$13,500', notes: 'GTA labour rates. Ontario Building Code applies. Most contractors operate on the Peel Region permit system.' },
+    'brampton': { low: '$8,500', high: '$20,000', avg: '$13,000', notes: 'GTA labour rates. Ontario Building Code. High-density housing increases contractor demand seasonally.' },
+    'markham': { low: '$9,000', high: '$21,500', avg: '$14,000', notes: 'York Region, Ontario. High-pitch residential roofs are common. Ontario Building Code ice & water shield requirements apply.' },
+    'oakville': { low: '$9,500', high: '$23,000', avg: '$15,000', notes: 'Premium GTA suburb. Higher material quality expectations. Ontario Building Code. Permits required through Town of Oakville.' },
+    'barrie': { low: '$8,500', high: '$19,500', avg: '$13,000', notes: 'Snowbelt region — heaviest snowloads in Southern Ontario. Enhanced structural assessment recommended. Ontario Building Code.' },
+    'kitchener': { low: '$8,000', high: '$18,500', avg: '$12,500', notes: 'Waterloo Region. Ontario Building Code. Competitive contractor market keeps labour costs moderate.' },
+    'guelph': { low: '$8,000', high: '$19,000', avg: '$12,500', notes: 'Wellington County. Ontario Building Code. Growing market with moderate labour costs.' },
+    'windsor-ontario': { low: '$7,500', high: '$17,000', avg: '$11,500', notes: 'Southernmost Ontario city — milder winters but still requires ice & water shield. Competitive contractor market.' },
+    'sudbury': { low: '$8,000', high: '$17,500', avg: '$12,000', notes: 'Northern Ontario. Long winter season. Increased snowload requirements. Fewer contractors = higher labour premium.' },
+    'kingston-ontario': { low: '$8,500', high: '$19,000', avg: '$13,000', notes: 'Eastern Ontario. High snowloads. Ontario Building Code. Limestone Belt climate increases freeze-thaw damage.' },
+    'thunder-bay': { low: '$8,500', high: '$19,500', avg: '$13,000', notes: 'Northwestern Ontario. Extreme cold and snowload. Limited contractor base increases labour costs.' },
+    'halifax': { low: '$8,500', high: '$19,000', avg: '$13,000', notes: 'Coastal salt exposure accelerates shingle degradation. High wind loads common. NS Building Code.' },
+    'moncton': { low: '$7,500', high: '$17,000', avg: '$11,500', notes: 'New Brunswick. Moderate snowload. Coastal influence. NB Building Code.' },
+    'fredericton': { low: '$7,500', high: '$16,500', avg: '$11,000', notes: 'Inland New Brunswick. Moderate climate. Competitive contractor market.' },
+    'charlottetown': { low: '$8,000', high: '$18,000', avg: '$12,000', notes: 'PEI. High wind exposure. Island logistics increase material costs slightly.' },
+    'st-johns-nl': { low: '$9,000', high: '$21,000', avg: '$14,000', notes: "Canada's windiest city. High wind-rated shingles essential. Limited contractor market increases labour costs." },
+    'saskatoon': { low: '$7,000', high: '$15,500', avg: '$10,500', notes: 'Prairie climate with high UV and hail risk. Low labour costs. Saskatchewan Building Code.' },
+    'regina': { low: '$7,000', high: '$15,000', avg: '$10,000', notes: 'Prairie hail corridor. High wind. Low labour costs. Saskatchewan Building Code.' },
+    'red-deer': { low: '$7,500', high: '$16,500', avg: '$11,000', notes: 'Central Alberta. High hail frequency. Class 4 shingles recommended. Alberta Building Code.' },
+    // US cities
+    'dallas': { low: '$7,500', high: '$18,000', avg: '$12,000', notes: 'One of the highest hail frequencies in the US. Class 4 impact-resistant shingles qualify for insurance discounts. IRC 2021 adopted in most DFW municipalities.' },
+    'houston': { low: '$8,000', high: '$20,000', avg: '$13,000', notes: 'Hurricane season prep essential. IRC 2021 with additional wind uplift requirements. High humidity increases substrate rot risk.' },
+    'fort-worth': { low: '$7,500', high: '$18,000', avg: '$12,000', notes: 'High hail frequency. Class 4 shingles recommended. Tarrant County permit required. IRC 2021.' },
+    'san-antonio': { low: '$7,000', high: '$17,000', avg: '$11,500', notes: 'Lower hail frequency than Dallas/Fort Worth. Heat cycling causes premature shingle aging. IRC 2021.' },
+    'austin': { low: '$7,500', high: '$18,500', avg: '$12,500', notes: 'High-growth market, competitive contractors. Hail risk increasing. IRC 2021. Travis County permit required.' },
+    'miami': { low: '$9,000', high: '$22,000', avg: '$14,500', notes: 'Florida Building Code (FBC) requires highest wind resistance in US — 160+ mph rated materials in some zones. Hurricane impact ratings essential.' },
+    'tampa': { low: '$8,000', high: '$20,000', avg: '$13,000', notes: 'FBC wind requirements. Hurricane prep season. Hillsborough County permit required. Metal roofing increasingly popular.' },
+    'orlando': { low: '$7,500', high: '$19,000', avg: '$12,500', notes: 'FBC applies. Frequent afternoon thunderstorms. Orange County permit required. High UV degradation.' },
+    'jacksonville': { low: '$7,500', high: '$18,500', avg: '$12,000', notes: 'FBC applies. Hurricane exposure. Duval County permit required. High humidity increases underlayment importance.' },
+    'denver': { low: '$8,000', high: '$19,000', avg: '$13,000', notes: 'Hail belt — Colorado averages $2.5B in hail damage annually. Class 4 shingles qualify for insurance discounts. IRC 2021. Denver permit required.' },
+    'colorado-springs': { low: '$7,500', high: '$18,000', avg: '$12,000', notes: 'Front Range hail corridor. Class 4 impact-resistant shingles strongly recommended. El Paso County permit required.' },
+    'phoenix': { low: '$7,000', high: '$16,000', avg: '$11,000', notes: 'Monsoon season hail. Extreme UV (310+ sunny days/year). Flat and low-slope roofs common. Maricopa County permit.' },
+    'tucson': { low: '$6,500', high: '$15,000', avg: '$10,500', notes: 'Monsoon hail. Extreme UV. Flat roofs dominate. Pima County permit. Lower labour costs than Phoenix.' },
+    'atlanta': { low: '$7,000', high: '$17,000', avg: '$11,500', notes: 'Severe thunderstorm hail common. High humidity causes moss and algae growth. IRC 2021. Fulton/DeKalb County permit.' },
+    'charlotte': { low: '$7,500', high: '$18,000', avg: '$12,000', notes: 'Frequent hail and wind events. Hurricane remnants reach inland. IRC 2021. Mecklenburg County permit.' },
+    'raleigh': { low: '$7,500', high: '$18,000', avg: '$12,000', notes: 'Atlantic hurricane exposure. Wake County permit required. IRC 2021 with NC amendments.' },
+    'nashville': { low: '$7,500', high: '$18,000', avg: '$12,000', notes: 'Severe storm corridor. High wind and hail. Davidson County permit. IRC 2021.' },
+    'memphis': { low: '$7,000', high: '$16,500', avg: '$11,500', notes: 'Tornado risk. High humidity. Shelby County permit. IRC 2021.' },
+    'chicago': { low: '$8,500', high: '$21,000', avg: '$14,000', notes: 'Severe freeze-thaw cycles. High labour costs. City of Chicago permit required. Illinois Energy Code.' },
+    'milwaukee': { low: '$8,000', high: '$19,500', avg: '$13,000', notes: 'Lake effect snowloads. Freeze-thaw damage common. Milwaukee County permit. WI Energy Code.' },
+    'minneapolis': { low: '$8,500', high: '$20,000', avg: '$14,000', notes: 'Extreme cold, heavy snowloads, ice dams. Enhanced ice & water shield required. Minneapolis permit. IRC 2021 with MN amendments.' },
+    'kansas-city': { low: '$7,500', high: '$17,500', avg: '$12,000', notes: 'Hail belt — frequent large hail events. High wind. Jackson County permit. IRC 2021.' },
+    'omaha': { low: '$7,500', high: '$17,500', avg: '$12,000', notes: 'Hail belt. Tornado risk. Douglas County permit. Nebraska Energy Code.' },
+    'wichita': { low: '$7,000', high: '$16,500', avg: '$11,500', notes: 'High hail frequency. Sedgwick County permit. Kansas Energy Code.' },
+    'oklahoma-city': { low: '$7,000', high: '$16,500', avg: '$11,500', notes: 'Tornado alley. Extremely high hail frequency. Class 4 shingles essential. Oklahoma City permit.' },
+    'tulsa': { low: '$7,000', high: '$16,000', avg: '$11,000', notes: 'Tornado alley. High hail frequency. Tulsa County permit. IRC 2021.' },
+    'indianapolis': { low: '$7,500', high: '$18,000', avg: '$12,000', notes: 'Hail and tornado risk. Marion County permit. Indiana Energy Code.' },
+    'columbus-ohio': { low: '$7,500', high: '$18,000', avg: '$12,000', notes: 'Freeze-thaw cycles. Hail risk. Franklin County permit. Ohio Building Code.' },
+    'cleveland': { low: '$8,000', high: '$19,000', avg: '$12,500', notes: 'Lake effect snowloads. Heavy ice dam risk. Cuyahoga County permit.' },
+    'pittsburgh': { low: '$8,500', high: '$20,000', avg: '$13,500', notes: 'High-pitch complex roofs common. Freeze-thaw damage. Allegheny County permit.' },
+    'detroit': { low: '$8,000', high: '$19,000', avg: '$12,500', notes: 'Freeze-thaw cycles. Lake effect snow. Wayne County permit. Michigan Building Code.' },
+    'seattle': { low: '$9,000', high: '$22,000', avg: '$14,500', notes: 'High labour market. Heavy rain, moss growth. Cedar shake common. Seattle DCI permit required.' },
+    'portland': { low: '$8,500', high: '$21,000', avg: '$14,000', notes: 'High rain, moss growth. Cedar shake popular. Multnomah County permit. Oregon Energy Code.' },
+    'las-vegas': { low: '$6,500', high: '$15,000', avg: '$10,500', notes: 'Extreme UV. Low precipitation. Tile roofing dominant. Clark County permit. NV Energy Code.' },
+    'salt-lake-city': { low: '$7,500', high: '$18,000', avg: '$12,000', notes: 'Mountain snowloads. Freeze-thaw. Salt Lake County permit. Utah Energy Code.' },
+    'albuquerque': { low: '$6,500', high: '$15,500', avg: '$10,500', notes: 'Low humidity, high UV. Flat and low-slope roofs common. Bernalillo County permit.' },
+    'buffalo': { low: '$8,500', high: '$20,000', avg: '$13,500', notes: 'Heaviest lake effect snow in eastern US. High snowload requirements. Erie County permit.' },
+    'baltimore': { low: '$8,000', high: '$19,500', avg: '$13,000', notes: 'Freeze-thaw cycles. Hail risk. Baltimore City/County permit. Maryland Energy Code.' },
+    'richmond-va': { low: '$7,500', high: '$18,000', avg: '$12,000', notes: 'Mid-Atlantic climate. Hail and wind. Henrico/Chesterfield County permit.' },
+    'virginia-beach': { low: '$8,000', high: '$19,500', avg: '$13,000', notes: 'Hurricane exposure. Coastal wind load requirements. Virginia Beach permit. VA UBC.' },
+    'new-york': { low: '$10,000', high: '$28,000', avg: '$17,000', notes: 'Highest labour costs in US. NYC DOB permit required. NYC Building Code. Complex brownstone and flat roof inventory.' },
+    'long-island': { low: '$9,500', high: '$25,000', avg: '$16,000', notes: 'Coastal wind exposure. Hurricane risk. Nassau/Suffolk County permit. NY State Building Code.' },
+    'new-orleans': { low: '$8,500', high: '$21,000', avg: '$14,000', notes: 'Category 4/5 hurricane risk. FBC-equivalent wind ratings required. Orleans Parish permit. High humidity.' },
+    'sacramento': { low: '$8,000', high: '$20,000', avg: '$13,000', notes: 'High UV. Fire risk — Class A materials required in WUI zones. Sacramento County permit. CALGreen code.' },
+    'fresno': { low: '$7,000', high: '$17,000', avg: '$11,500', notes: 'High UV. Valley heat. Fire risk. Fresno County permit. CALGreen.' },
+    'boise': { low: '$7,500', high: '$18,000', avg: '$12,000', notes: 'Mountain climate. Freeze-thaw. Ada County permit. Idaho Building Code.' },
+  }
+  const cost = costData[citySlug] || {
+    low: isCanada ? '$8,000' : '$7,500',
+    high: isCanada ? '$20,000' : '$19,000',
+    avg: isCanada ? '$13,000' : '$12,500',
+    notes: `${buildingCode} applies. A licensed roofing contractor will assess pitch complexity, current condition, and local permit requirements before providing a final quote.`
+  }
+  const geoRegion = isCanada ? `CA-${city.province.substring(0,2).toUpperCase()}` : `US-${US_STATE_CODES[city.province] || 'XX'}`
+  const canonical = `https://www.roofmanager.ca/roof-replacement-cost/${citySlug}`
+  const pageTitle = `Roof Replacement Cost in ${city.name}, ${city.province} 2026 — ${currency} Pricing Guide`
+  const metaDesc = `How much does roof replacement cost in ${city.name} in 2026? Average ${cost.low}–${cost.high} ${currency} for a typical home. Materials, labour, permits, and ${isCanada ? 'Canadian Building Code' : 'IRC'} requirements explained.`
+
+  const faqSchema = JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      { "@type": "Question", "name": `How much does roof replacement cost in ${city.name} in 2026?`, "acceptedAnswer": { "@type": "Answer", "text": `Roof replacement in ${city.name}, ${city.province} costs ${cost.low}–${cost.high} ${currency} in 2026 for a typical 1,500–2,500 sq ft home using asphalt shingles. The average is around ${cost.avg} ${currency}. Metal roofing costs 2–3x more. Prices depend on roof pitch, complexity, current condition, and materials chosen.` } },
+      { "@type": "Question", "name": `What roofing materials are best for ${city.name}?`, "acceptedAnswer": { "@type": "Answer", "text": `${cost.notes} Most contractors in ${city.name} recommend 30–50 year architectural asphalt shingles as the best value. Metal roofing offers longer life (50+ years) at higher upfront cost.` } },
+      { "@type": "Question", "name": `Do I need a permit for roof replacement in ${city.name}?`, "acceptedAnswer": { "@type": "Answer", "text": `Yes — most municipalities in ${city.province} require a building permit for full roof replacement. Your licensed roofing contractor typically handles the permit application. Permits ensure the work meets ${buildingCode} requirements.` } },
+      { "@type": "Question", "name": `How long does a roof replacement take in ${city.name}?`, "acceptedAnswer": { "@type": "Answer", "text": `Most residential roof replacements in ${city.name} take 1–3 days for a standard asphalt shingle roof. Complex roofs with multiple pitches, dormers, or skylights may take 3–5 days. Weather delays are common during spring and fall seasons.` } },
+      { "@type": "Question", "name": `How do I get an accurate roof measurement in ${city.name}?`, "acceptedAnswer": { "@type": "Answer", "text": `Satellite roof measurement tools like Roof Manager generate accurate measurements (3D area, pitch, edges, material BOM) for any ${city.name} address in under 60 seconds for $8 ${currency}. Results are within 2–5% of manual measurement, accepted by most insurers and contractors.` } }
+    ]
+  })
+
+  const articleSchema = JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "headline": pageTitle,
+    "description": metaDesc,
+    "datePublished": "2026-01-01",
+    "dateModified": "2026-04-16",
+    "author": { "@type": "Organization", "name": "Roof Manager" },
+    "publisher": { "@type": "Organization", "name": "Roof Manager", "logo": { "@type": "ImageObject", "url": "https://www.roofmanager.ca/static/logo.png" } },
+    "mainEntityOfPage": { "@type": "WebPage", "@id": canonical }
+  })
+
+  const breadcrumbSchema = JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://www.roofmanager.ca/" },
+      { "@type": "ListItem", "position": 2, "name": "Roof Replacement Cost", "item": "https://www.roofmanager.ca/blog?category=business" },
+      { "@type": "ListItem", "position": 3, "name": `${city.name} 2026`, "item": canonical }
+    ]
+  })
+
+  return c.html(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${pageTitle}</title>
+  <meta name="description" content="${metaDesc}">
+  <link rel="canonical" href="${canonical}">
+  <meta property="og:title" content="${pageTitle}">
+  <meta property="og:description" content="${metaDesc}">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="${canonical}">
+  <meta property="og:image" content="https://www.roofmanager.ca/static/logo.png">
+  <meta property="og:site_name" content="Roof Manager">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="${pageTitle}">
+  <meta name="twitter:description" content="${metaDesc}">
+  <meta name="geo.region" content="${geoRegion}">
+  <meta name="geo.placename" content="${city.name}, ${city.province}">
+  <meta name="geo.position" content="${city.lat};${city.lng}">
+  <script type="application/ld+json">${articleSchema}</script>
+  <script type="application/ld+json">${faqSchema}</script>
+  <script type="application/ld+json">${breadcrumbSchema}</script>
+  <link rel="stylesheet" href="/static/tailwind.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    :root{--bg-page:#0A0A0A;--bg-card:#111111;--accent:#00FF88;}
+    body{background:var(--bg-page);color:#e5e7eb;font-family:system-ui,sans-serif;}
+    .cost-card{background:#111111;border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:1.5rem;}
+    .faq-item details summary{cursor:pointer;list-style:none;padding:1rem 0;border-bottom:1px solid rgba(255,255,255,0.06);}
+    .faq-item details[open] summary{color:#00FF88;}
+    .faq-item details p{padding:0.75rem 0 1rem;color:#9ca3af;line-height:1.7;}
+  </style>
+</head>
+<body>
+  <nav style="background:#0A0A0A;border-bottom:1px solid rgba(255,255,255,0.05);" class="sticky top-0 z-50">
+    <div class="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
+      <a href="/" class="flex items-center gap-3">
+        <img src="/static/logo.png" alt="Roof Manager" class="w-9 h-9 rounded-lg object-cover">
+        <span class="text-white font-bold text-lg">Roof Manager</span>
+      </a>
+      <div class="hidden md:flex items-center gap-5">
+        <a href="/blog" class="text-gray-400 hover:text-white text-sm">Blog</a>
+        <a href="/pricing" class="text-gray-400 hover:text-white text-sm">Pricing</a>
+        <a href="/free-roof-estimate" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold py-2 px-4 rounded-lg text-sm">Free Estimate</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Breadcrumb -->
+  <div class="max-w-5xl mx-auto px-4 py-3 text-xs text-gray-500 flex items-center gap-2">
+    <a href="/" class="hover:text-white">Home</a>
+    <span>/</span>
+    <a href="/blog" class="hover:text-white">Blog</a>
+    <span>/</span>
+    <span class="text-gray-300">Roof Replacement Cost ${city.name} 2026</span>
+  </div>
+
+  <main class="max-w-5xl mx-auto px-4 pb-24">
+    <!-- Hero -->
+    <div class="py-10 border-b border-white/5 mb-10">
+      <div class="flex items-center gap-2 mb-3">
+        <span style="background:#00FF88;color:#0A0A0A;" class="text-xs font-bold px-2 py-0.5 rounded">2026 Guide</span>
+        <span class="text-gray-500 text-xs">${isCanada ? 'Canadian Pricing' : 'US Pricing'} · Updated April 2026</span>
+      </div>
+      <h1 class="text-3xl md:text-4xl font-black text-white mb-4">Roof Replacement Cost in ${city.name}, ${city.province} — 2026</h1>
+      <!-- TL;DR -->
+      <div style="background:#111111;border-left:4px solid #00FF88;padding:1.25rem 1.5rem;margin-bottom:1.5rem;border-radius:0 8px 8px 0;">
+        <p style="font-weight:700;color:#00FF88;margin:0 0 0.5rem;font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;">TL;DR</p>
+        <p style="margin:0;color:#d1d5db;line-height:1.7;">Asphalt shingle roof replacement in ${city.name}, ${city.province} costs <strong style="color:white;">${cost.low}–${cost.high} ${currency}</strong> in 2026 for a typical 1,500–2,500 sq ft home. The average is <strong style="color:white;">${cost.avg} ${currency}</strong>. Costs vary by pitch complexity, current condition, materials, and permit requirements under the ${buildingCode}. Get a free satellite measurement before calling contractors.</p>
+      </div>
+    </div>
+
+    <!-- Cost cards -->
+    <div class="grid md:grid-cols-3 gap-4 mb-12">
+      <div class="cost-card text-center">
+        <p class="text-gray-500 text-xs uppercase tracking-widest mb-2">Low End</p>
+        <p class="text-3xl font-black text-white">${cost.low}</p>
+        <p class="text-gray-500 text-xs mt-1">${currency} · Simple roof, basic materials</p>
+      </div>
+      <div class="cost-card text-center" style="border-color:#00FF88;background:rgba(0,255,136,0.04);">
+        <p style="color:#00FF88;" class="text-xs uppercase tracking-widest mb-2">Average</p>
+        <p class="text-3xl font-black text-white">${cost.avg}</p>
+        <p class="text-gray-500 text-xs mt-1">${currency} · 1,500–2,500 sq ft, standard materials</p>
+      </div>
+      <div class="cost-card text-center">
+        <p class="text-gray-500 text-xs uppercase tracking-widest mb-2">High End</p>
+        <p class="text-3xl font-black text-white">${cost.high}</p>
+        <p class="text-gray-500 text-xs mt-1">${currency} · Complex roof, premium materials</p>
+      </div>
+    </div>
+
+    <!-- What affects cost -->
+    <section class="mb-12">
+      <h2 class="text-2xl font-bold text-white mb-6">What Affects Roof Replacement Cost in ${city.name}?</h2>
+      <div class="grid md:grid-cols-2 gap-4">
+        ${[
+          ['Roof Size & Pitch', 'A steeper pitch requires more material and safer scaffolding — adding 10–30% to labour costs. A 2,500 sq ft roof at 8/12 pitch costs significantly more than the same footprint at 4/12.'],
+          ['Materials', `Architectural asphalt shingles (30–50 year): ${isCanada ? '$80–$130' : '$90–$150'}/square. Metal standing seam: ${isCanada ? '$200–$400' : '$250–$500'}/square. Cedar shake: ${isCanada ? '$250–$500' : '$300–$600'}/square. Prices in ${currency}.`],
+          ['Tear-Off vs Overlay', 'Full tear-off (required by most building codes) adds $1,000–$3,000 vs overlaying a second layer, but is required when existing layers exceed 2 or when decking needs inspection.'],
+          ['Local Permits', `${buildingCode} compliance is mandatory. Permit fees in ${city.name} typically run ${isCanada ? '$150–$500 CAD' : '$100–$500 USD'} depending on municipality.`],
+          ['Decking Condition', 'Rotted or damaged plywood decking adds $2–$5/sq ft to replace. A satellite measurement report can help identify areas of concern before the contractor arrives.'],
+          ['Seasonality', `Roofing in ${city.name} is most expensive in spring (peak demand). Late summer and fall often offer 10–15% savings as contractors fill their schedules.`]
+        ].map(([title, body]) => `
+          <div class="cost-card">
+            <h3 class="font-bold text-white mb-2 text-sm">${title}</h3>
+            <p class="text-gray-400 text-sm leading-relaxed">${body}</p>
+          </div>`).join('')}
+      </div>
+    </section>
+
+    <!-- Local notes -->
+    <section class="mb-12">
+      <h2 class="text-2xl font-bold text-white mb-4">Roofing Notes for ${city.name}, ${city.province}</h2>
+      <div class="cost-card">
+        <p class="text-gray-300 leading-relaxed">${cost.notes}</p>
+        <p class="text-gray-300 leading-relaxed mt-4">Before calling contractors, get a free satellite roof measurement at <a href="/free-roof-estimate" style="color:#00FF88;" class="hover:underline">roofmanager.ca/free-roof-estimate</a> — you'll have the exact area, pitch, and material quantities ready to share, which prevents inflated estimates and speeds up the quoting process.</p>
+      </div>
+    </section>
+
+    <!-- How to save money -->
+    <section class="mb-12">
+      <h2 class="text-2xl font-bold text-white mb-6">How to Save on Roof Replacement in ${city.name}</h2>
+      <ol class="space-y-4">
+        ${[
+          ['Get 3+ quotes', `Get at least 3 licensed contractor quotes. Prices in ${city.name} can vary 20–40% between contractors for the same scope of work.`],
+          ['Use a satellite measurement report', `Know your exact roof size before calling contractors. Contractors who measure themselves often add a 10–15% buffer. A $8 ${currency} Roof Manager report gives you independent measurements to verify quotes.`],
+          ['Book in fall', `Roofing demand drops in late summer and fall in ${city.province}. Contractors are more willing to negotiate on labour when filling their schedule.`],
+          ['Check insurance coverage', `If ${isCanada ? 'hail, ice, or wind damage is involved' : 'storm, hail, or wind damage is present'}, your homeowner's insurance may cover most or all of the replacement cost. Get a professional damage assessment and measurement report first.`],
+          ['Choose right materials', `50-year architectural shingles cost only 10–20% more than 30-year options but last significantly longer. In ${city.name}'s climate, the upgrade typically pays back within the first full replacement cycle.`]
+        ].map(([title, body], i) => `
+          <li class="flex gap-4">
+            <span style="background:#00FF88;color:#0A0A0A;" class="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center font-bold text-sm">${i + 1}</span>
+            <div>
+              <h3 class="font-semibold text-white mb-1">${title}</h3>
+              <p class="text-gray-400 text-sm leading-relaxed">${body}</p>
+            </div>
+          </li>`).join('')}
+      </ol>
+    </section>
+
+    <!-- FAQ -->
+    <section class="mb-12">
+      <h2 class="text-2xl font-bold text-white mb-6">Frequently Asked Questions — Roof Replacement in ${city.name}</h2>
+      <div class="faq-item space-y-1">
+        ${[
+          [`How much does roof replacement cost in ${city.name} in 2026?`, `Roof replacement in ${city.name}, ${city.province} costs ${cost.low}–${cost.high} ${currency} in 2026 for a typical 1,500–2,500 sq ft home with asphalt shingles. The average is around ${cost.avg} ${currency}. Metal roofing costs 2–3x more. Your actual quote depends on roof size, pitch complexity, current decking condition, and materials.`],
+          [`Do I need a permit for roof replacement in ${city.name}?`, `Yes — most municipalities in ${city.province} require a building permit for full roof replacement. Your licensed contractor typically applies for the permit on your behalf. Permits ensure compliance with ${buildingCode}.`],
+          [`What roofing material is best for ${city.name}?`, `${cost.notes.split('.')[0]}. Most contractors recommend 50-year architectural asphalt shingles as the best value for ${city.name}'s climate. Metal roofing (standing seam or corrugated) offers a 50+ year lifespan at roughly 2–3x the upfront cost of asphalt.`],
+          [`How long does a roof replacement take in ${city.name}?`, `Most residential roof replacements in ${city.name} take 1–3 days. Complex roofs with multiple pitches, skylights, or chimneys take 3–5 days. Weather (rain, wind, frost) may extend the timeline.`],
+          [`How do I measure my roof before getting quotes in ${city.name}?`, `Use a satellite measurement tool like Roof Manager — enter your ${city.name} address and receive a full PDF report (3D area, pitch, edges, material BOM) in under 60 seconds for $8 ${currency}. Having your own measurement prevents inflated contractor estimates.`],
+          [`Does insurance cover roof replacement in ${city.name}?`, `${isCanada ? 'Most Canadian home insurance policies cover roof damage caused by hail, wind, ice, or fire.' : 'Most US homeowner policies cover storm, hail, and wind damage to roofs.'} Gradual wear and tear is excluded. Document damage with photos immediately after a storm and file your claim within your policy's reporting window (usually 30–60 days).`]
+        ].map(([q, a]) => `
+          <details class="cost-card mb-2">
+            <summary class="font-semibold text-white text-sm">${q}</summary>
+            <p class="text-gray-400 text-sm leading-relaxed">${a}</p>
+          </details>`).join('')}
+      </div>
+    </section>
+
+    <!-- CTA -->
+    <div class="cost-card text-center py-10" style="border-color:#00FF88;background:rgba(0,255,136,0.03);">
+      <h2 class="text-2xl font-bold text-white mb-3">Get Your Free ${city.name} Roof Measurement</h2>
+      <p class="text-gray-400 mb-6 max-w-lg mx-auto text-sm">Know your exact roof size, pitch, and materials before calling contractors. Satellite measurement in 60 seconds — no ladder required.</p>
+      <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
+        <a href="/free-roof-estimate" style="background:#00FF88;color:#0A0A0A;" class="font-bold py-3 px-8 rounded-lg hover:opacity-90 transition-opacity text-sm"><i class="fas fa-satellite-dish mr-2"></i>Measure My Roof Free</a>
+        <a href="/pricing" class="text-[#00FF88] text-sm font-semibold hover:opacity-80"><i class="fas fa-tag mr-1"></i>Contractor Reports from $8 ${currency}</a>
+      </div>
+    </div>
+
+    <!-- Related cities -->
+    <div class="mt-16">
+      <h3 class="text-lg font-bold text-white mb-4">Roof Replacement Cost in Other Cities</h3>
+      <div class="flex flex-wrap gap-2">
+        ${Object.entries(seoCities).filter(([s, c]) => s !== citySlug && (getCityCountry(c) === 'CA' || getCityCountry(c) === 'US')).slice(0, 24).map(([s, c]) =>
+          `<a href="/roof-replacement-cost/${s}" style="color:#9ca3af;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);border-radius:9999px;padding:0.35rem 0.85rem;font-size:0.75rem;" class="hover:text-white transition-colors">${c.name}, ${c.province}</a>`
+        ).join('')}
+      </div>
+    </div>
+  </main>
+
+  <footer style="background:#0A0A0A;border-top:1px solid rgba(255,255,255,0.05);" class="text-gray-500 py-8 text-center text-sm">
+    <p>&copy; ${new Date().getFullYear()} Roof Manager. Roof replacement cost data for ${city.name}, ${city.province} — last updated April 2026.</p>
+    <div class="mt-2 flex flex-wrap justify-center gap-4">
+      <a href="/blog" class="hover:text-white">Blog</a>
+      <a href="/pricing" class="hover:text-white">Pricing</a>
+      <a href="/features/measurements" class="hover:text-white">Measurement Software</a>
+      <a href="/free-roof-estimate" class="hover:text-white">Free Estimate</a>
+      <a href="/privacy" class="hover:text-white">Privacy</a>
+    </div>
+  </footer>
+</body>
+</html>`)
+})
+
 // Material Calculator — BOM tool from completed report data
 app.get('/customer/material-calculator', (c) => {
   return c.html(getMaterialCalculatorPageHTML())
