@@ -10808,15 +10808,64 @@ function getBlogPostHTML(post?: any, slug?: string) {
     if (!post?.content) return ''
     const content = post.content
     const faqMatches = content.match(/<h[23][^>]*>([^<]*(?:FAQ|Frequently Asked|Common Questions)[^<]*)<\/h[23]>/i)
-    if (!faqMatches) return ''
 
     // Extract Q&A pairs: look for <h3>Question</h3> followed by <p>Answer</p> patterns
     const qaRegex = /<h3[^>]*>([^<]+)\?<\/h3>\s*<p[^>]*>([^<]+(?:<[^>]+>[^<]+)*)<\/p>/gi
     const pairs: {q: string, a: string}[] = []
     let match
-    while ((match = qaRegex.exec(content)) !== null && pairs.length < 10) {
-      pairs.push({ q: match[1].trim() + '?', a: match[2].replace(/<[^>]+>/g, '').trim().substring(0, 300) })
+    if (faqMatches) {
+      while ((match = qaRegex.exec(content)) !== null && pairs.length < 10) {
+        pairs.push({ q: match[1].trim() + '?', a: match[2].replace(/<[^>]+>/g, '').trim().substring(0, 300) })
+      }
     }
+
+    // Fallback FAQs by category when no FAQ section detected in content
+    if (pairs.length === 0) {
+      const cat = (post.category || '').toLowerCase()
+      if (cat.includes('storm') || cat.includes('hail') || cat.includes('insurance')) {
+        pairs.push(
+          { q: 'How do I file a roof insurance claim after hail damage?', a: 'Document all damage with photos, contact your insurer within 24-48 hours, request a claims adjuster inspection, and get a professional roof measurement report to support your estimate. Most insurance policies require a licensed contractor estimate before approval.' },
+          { q: 'How long does a hail damage insurance claim take?', a: 'Most residential hail damage claims take 2–6 weeks from filing to payout. Turnaround depends on insurer workload, adjuster availability, and whether a supplemental claim is needed. Having a detailed roof measurement report speeds up the process significantly.' },
+          { q: 'What does hail damage look like on a roof?', a: 'Hail damage appears as circular bruises or dents on asphalt shingles (often with granule loss), dents on metal flashing, cracked or broken ridge caps, and pock marks on soft metals like gutters and fascia. Damage is most visible from above at low sun angles.' },
+          { q: 'Can I measure a damaged roof without climbing on it?', a: 'Yes — satellite roof measurement tools like Roof Manager generate full measurements (area, pitch, edges, material BOM) from satellite imagery in under 60 seconds, no ladder or site visit required. Results are within 2–5% of manual measurement for most properties.' },
+          { q: 'How much does storm damage roof repair cost in Canada vs the US?', a: 'In Canada, storm damage roof repairs cost $3,000–$12,000 CAD for partial repairs and $8,000–$22,000 CAD for full replacement. In the US, costs range from $2,500–$10,000 USD for repairs and $7,000–$20,000 USD for full replacement, varying by state and damage severity.' }
+        )
+      } else if (cat.includes('tech') || cat.includes('software') || cat.includes('ai') || cat.includes('satellite')) {
+        pairs.push(
+          { q: 'How accurate are satellite roof measurements?', a: 'Satellite roof measurements using Google\'s Solar API and LiDAR-calibrated 3D models are within 2–5% of manual ground-truth measurements for most urban North American properties. Every Roof Manager report includes an imagery quality score and confidence rating.' },
+          { q: 'How does AI roof measurement software work?', a: 'AI roof measurement software pulls satellite imagery and LiDAR elevation data for the property address, runs computer vision to identify roof segments and edges, then applies geospatial math to calculate 3D sloped area, pitch, and edge lengths. The entire process takes under 60 seconds.' },
+          { q: 'What is the Google Solar API and how does it help roofers?', a: 'The Google Solar API provides LiDAR-calibrated 3D building models and high-resolution satellite imagery for most North American properties. Roofing software uses it to generate accurate roof measurements (area, pitch, edges) without site visits, enabling contractors to quote faster.' },
+          { q: 'Is satellite roof measurement accurate enough for insurance claims?', a: 'Yes — satellite measurements within 2–5% of manual measurements are generally accepted by insurance adjusters for initial claim documentation. Most insurers require a licensed contractor to verify on-site before final approval, but satellite reports dramatically speed up the claims process.' },
+          { q: 'How does Roof Manager compare to EagleView for roof measurements?', a: 'Roof Manager is 85–95% cheaper than EagleView ($8 vs $60–90 per report), delivers reports in 60 seconds vs hours/days, and includes a full CRM, invoicing, and AI phone secretary. Accuracy is comparable for most residential properties in North America.' }
+        )
+      } else if (cat.includes('solar')) {
+        pairs.push(
+          { q: 'How do I know if my roof is suitable for solar panels?', a: 'A roof is suitable for solar if it has south, southwest, or southeast-facing sections with less than 45% shading, a pitch between 10–40 degrees, and structural capacity to support panel weight (typically 3–4 lbs/sq ft). Roof Manager\'s solar suitability report grades each segment automatically.' },
+          { q: 'What roof pitch is best for solar panels in Canada?', a: 'In Canada, the optimal roof pitch for solar panels is 30–45 degrees — matching the latitude for maximum annual energy production. Flatter pitches (15–20 degrees) still work and improve self-cleaning. The National Building Code requires verification of structural load capacity before installation.' },
+          { q: 'How long should my roof last before adding solar?', a: 'Roofing experts recommend a roof have at least 10–15 years of remaining life before solar installation. Replacing panels to do roof work later costs $3,000–$5,000 in additional labour. A roof measurement report identifies remaining life indicators including shingle condition and flashing integrity.' },
+          { q: 'What is a solar suitability report?', a: 'A solar suitability report grades each roof segment by solar irradiance, shade factor, pitch, and orientation, and estimates annual kWh production per panel placement. Roof Manager generates these alongside the standard measurement report using Google Solar API data.' },
+          { q: 'How much does a solar-ready roof measurement report cost?', a: 'Roof Manager\'s solar-inclusive measurement reports are $8 CAD each (Canada) with 3 free reports for new users. The report includes full roof area, pitch analysis, edge breakdowns, material BOM, and solar suitability grading — all from satellite in under 60 seconds.' }
+        )
+      } else if (cat.includes('business') || cat.includes('crm') || cat.includes('sales')) {
+        pairs.push(
+          { q: 'What is the best CRM software for roofing contractors?', a: 'The best roofing CRMs combine lead management, job tracking, invoicing, proposals, and measurement report integration. Roof Manager is a free roofing CRM that includes all of these plus an AI phone secretary, door-to-door sales tracker, and satellite roof measurement reports from the same platform.' },
+          { q: 'How can roofing contractors win more insurance jobs?', a: 'The fastest way to win insurance jobs is to be first with a professional roof measurement report. Contractors who deliver accurate estimates within hours of a storm event win up to 78% of insurance jobs. Satellite measurement tools like Roof Manager generate reports in 60 seconds with no site visit.' },
+          { q: 'How much should a roofing contractor charge for an estimate?', a: 'Most residential roofing estimates are free in North America. The cost of generating the estimate (measurement report, material BOM, proposal) is typically $8–$90 CAD/USD depending on the tool used. Roof Manager reduces per-estimate costs to $8 CAD while delivering professional branded proposals.' },
+          { q: 'What should a roofing proposal include?', a: 'A professional roofing proposal should include the scope of work (materials, labour), measured quantities (total area, edges, pitch per section), line-item material BOM, warranty terms, payment schedule, timeline, and contractor licence number. Roof Manager generates proposals directly from measurement reports.' },
+          { q: 'How do roofing contractors manage multiple jobs?', a: 'Roofing contractors with multiple active jobs benefit from CRM software with pipeline views, crew assignment, job scheduling synced to Google Calendar, and automated customer follow-ups. Roof Manager\'s CRM is purpose-built for roofing workflows and is always free.' }
+        )
+      } else {
+        // Generic roofing fallback
+        pairs.push(
+          { q: 'How much does a new roof cost in Canada in 2026?', a: 'A new asphalt shingle roof in Canada costs $8,000–$22,000 CAD in 2026 for a 1,500–2,500 sq ft home. Calgary and Edmonton average $8,000–$18,000 CAD. Toronto and Vancouver run $9,000–$24,000 CAD. Metal roofs cost 2–3x more. Prices vary by city, pitch complexity, and materials.' },
+          { q: 'How much does a new roof cost in the US in 2026?', a: 'A new asphalt shingle roof in the US costs $7,000–$20,000 USD in 2026 for a 1,500–2,500 sq ft home. Texas and Oklahoma average $7,500–$18,000 USD. Florida homes require FBC-compliant materials adding 10–20% to costs. Class 4 impact-resistant shingles are recommended in hail-prone states.' },
+          { q: 'How long does a roof replacement take?', a: 'Most residential roof replacements take 1–3 days for standard asphalt shingle roofs. Complex roofs with multiple pitches, skylights, or chimneys may take 3–5 days. Weather delays are the most common cause of extended timelines. Most contractors provide a firm schedule after the measurement report is complete.' },
+          { q: 'What is the best roofing material for Canadian winters?', a: 'For Canadian winters, architectural asphalt shingles (50-year grade) with a Class 4 impact resistance rating are the top choice. Ice & water shield membrane is required under the National Building Code for the first 2 metres from the eave. Metal roofing excels in snowload areas like Barrie and Kingston.' },
+          { q: 'How do I get an accurate roof measurement?', a: 'The fastest and most accurate method is satellite measurement using tools like Roof Manager — enter the address, receive a full PDF report (3D area, pitch, edges, material BOM) in 60 seconds for $8 CAD. Results are within 2–5% of manual measurement for most North American properties.' }
+        )
+      }
+    }
+
     if (pairs.length === 0) return ''
 
     return '<script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[' +
