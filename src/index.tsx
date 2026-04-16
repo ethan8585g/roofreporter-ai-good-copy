@@ -605,6 +605,9 @@ app.get('/', async (c) => {
 // /order redirect — users may type /order directly
 app.get('/order', (c) => c.redirect('/customer/order'))
 
+// /dashboard redirect — users may type /dashboard directly
+app.get('/dashboard', (c) => c.redirect('/customer/dashboard'))
+
 // /register — standalone signup page (first-class funnel entry)
 app.get('/register', (c) => {
   const email = c.req.query('email') || ''
