@@ -267,9 +267,9 @@ window.trackAdsConversion = function(kind, params) {
   }
 })
 
-// ── US SEO/GEO expansion routes ──
-app.route('/us', usStatesRoutes)
+// ── US SEO/GEO expansion routes ── (verticals before states — specific paths must precede /:state/:city catch-alls)
 app.route('/us', usVerticalsRoutes)
+app.route('/us', usStatesRoutes)
 // US comparison pages (specific slugs, must come before catch-alls)
 app.route('/', usComparisonsRoutes)
 
