@@ -10993,7 +10993,7 @@ function getSolarDesignPageHTML() {
       window.location.href = '/customer/login';
     }
   </script>
-  <script src="/static/solar-design.js?v=20260413g"></script>
+  <script src="/static/solar-design.js?v=20260416a"></script>
   ${getRoverAssistant()}
 </body>
 </html>`
@@ -11161,7 +11161,7 @@ function getSolarDocumentsPageHTML() {
         </div>
       </a>
       <nav class="flex items-center space-x-3">
-        <a href="/customer/solar-presentation" class="text-amber-100 hover:text-white text-sm"><i class="fas fa-presentation mr-1"></i>Presentation</a>
+        <a href="/customer/solar-presentation" class="text-amber-100 hover:text-white text-sm"><i class="fas fa-play-circle mr-1"></i>Presentation</a>
         <a href="/customer/solar-pipeline" class="text-amber-100 hover:text-white text-sm"><i class="fas fa-columns mr-1"></i>Pipeline</a>
         <a href="/customer/solar-permits" class="text-amber-100 hover:text-white text-sm"><i class="fas fa-file-signature mr-1"></i>Permits</a>
         <a href="/customer/dashboard" class="text-amber-100 hover:text-white text-sm"><i class="fas fa-th-large mr-1"></i>Dashboard</a>
@@ -11207,7 +11207,7 @@ function getSolarPermitsPageHTML() {
         </div>
       </a>
       <nav class="flex items-center space-x-3">
-        <a href="/customer/solar-presentation" class="text-amber-100 hover:text-white text-sm"><i class="fas fa-presentation mr-1"></i>Presentation</a>
+        <a href="/customer/solar-presentation" class="text-amber-100 hover:text-white text-sm"><i class="fas fa-play-circle mr-1"></i>Presentation</a>
         <a href="/customer/solar-pipeline" class="text-amber-100 hover:text-white text-sm"><i class="fas fa-columns mr-1"></i>Pipeline</a>
         <a href="/customer/solar-documents" class="text-amber-100 hover:text-white text-sm"><i class="fas fa-folder mr-1"></i>Documents</a>
         <a href="/customer/dashboard" class="text-amber-100 hover:text-white text-sm"><i class="fas fa-th-large mr-1"></i>Dashboard</a>
