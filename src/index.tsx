@@ -9825,6 +9825,8 @@ function getBlogListingHTML(posts: any[] = []) {
           <h4 class="text-white font-semibold mb-4 text-sm uppercase tracking-wider">Resources</h4>
           <ul class="space-y-2.5 text-sm">
             <li><a href="/blog" class="text-[#00FF88] font-semibold">Blog</a></li>
+            <li><a href="/tools" class="hover:text-[#00FF88] transition-colors">Free Tools</a></li>
+            <li><a href="/tools/pitch-calculator" class="hover:text-[#00FF88] transition-colors">Pitch Calculator</a></li>
             <li><a href="/#how-it-works" class="hover:text-[#00FF88] transition-colors">How It Works</a></li>
             <li><a href="/#faq" class="hover:text-[#00FF88] transition-colors">FAQ</a></li>
             <li><a href="/lander" class="hover:text-[#00FF88] transition-colors">Get Started</a></li>
@@ -9833,9 +9835,10 @@ function getBlogListingHTML(posts: any[] = []) {
         <div>
           <h4 class="text-white font-semibold mb-4 text-sm uppercase tracking-wider">Company</h4>
           <ul class="space-y-2.5 text-sm">
+            <li><a href="/press" class="hover:text-[#00FF88] transition-colors">Press &amp; Media</a></li>
             <li><a href="/privacy" class="hover:text-[#00FF88] transition-colors">Privacy Policy</a></li>
             <li><a href="/terms" class="hover:text-[#00FF88] transition-colors">Terms of Service</a></li>
-            <li><a href="mailto:sales@roofmanager.ca" class="hover:text-[#00FF88] transition-colors">Contact</a></li>
+            <li><a href="mailto:hello@roofmanager.ca" class="hover:text-[#00FF88] transition-colors">Contact</a></li>
             <li><a href="/customer/login" class="hover:text-[#00FF88] transition-colors">Login</a></li>
           </ul>
         </div>
@@ -10071,6 +10074,8 @@ function getBlogPostHTML(post?: any, slug?: string) {
           <h4 class="text-white font-semibold mb-4 text-sm uppercase tracking-wider">Resources</h4>
           <ul class="space-y-2.5 text-sm">
             <li><a href="/blog" class="text-[#00FF88] font-semibold">Blog</a></li>
+            <li><a href="/tools" class="hover:text-[#00FF88] transition-colors">Free Tools</a></li>
+            <li><a href="/tools/pitch-calculator" class="hover:text-[#00FF88] transition-colors">Pitch Calculator</a></li>
             <li><a href="/#how-it-works" class="hover:text-[#00FF88] transition-colors">How It Works</a></li>
             <li><a href="/#faq" class="hover:text-[#00FF88] transition-colors">FAQ</a></li>
             <li><a href="/lander" class="hover:text-[#00FF88] transition-colors">Get Started</a></li>
@@ -10079,9 +10084,10 @@ function getBlogPostHTML(post?: any, slug?: string) {
         <div>
           <h4 class="text-white font-semibold mb-4 text-sm uppercase tracking-wider">Company</h4>
           <ul class="space-y-2.5 text-sm">
+            <li><a href="/press" class="hover:text-[#00FF88] transition-colors">Press &amp; Media</a></li>
             <li><a href="/privacy" class="hover:text-[#00FF88] transition-colors">Privacy Policy</a></li>
             <li><a href="/terms" class="hover:text-[#00FF88] transition-colors">Terms of Service</a></li>
-            <li><a href="mailto:sales@roofmanager.ca" class="hover:text-[#00FF88] transition-colors">Contact</a></li>
+            <li><a href="mailto:hello@roofmanager.ca" class="hover:text-[#00FF88] transition-colors">Contact</a></li>
             <li><a href="/customer/login" class="hover:text-[#00FF88] transition-colors">Login</a></li>
           </ul>
         </div>
