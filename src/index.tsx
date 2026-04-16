@@ -5811,6 +5811,42 @@ function getLandingPageHTML(latestPosts: any[] = []) {
     }
     </script>
 
+    <!-- SOCIAL-PROOF TESTIMONIAL STRIP — between How It Works and Pricing -->
+    <section class="py-20" style="background:#0d0d0d">
+      <div class="max-w-7xl mx-auto px-4">
+        <div class="text-center mb-12 scroll-animate">
+          <div class="inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-sm font-semibold mb-4" style="background:rgba(0,255,136,0.1);color:#00FF88"><i class="fas fa-star"></i> Contractor Reviews</div>
+          <h2 class="text-3xl lg:text-4xl font-black text-white mb-3 tracking-tight">What roofers are saying</h2>
+          <div class="flex items-center justify-center gap-2 mt-2">
+            <div class="flex items-center gap-0.5">${'<i class="fas fa-star text-[#00FF88]"></i>'.repeat(5)}</div>
+            <span class="text-white font-bold">4.9/5</span><span class="text-gray-500">&mdash; 200+ reviews</span>
+          </div>
+        </div>
+        <div class="grid md:grid-cols-3 gap-6">
+          ${[
+            { name: 'Mike D.', role: 'Roofing Contractor · Calgary, AB', quote: 'Saves me 2 hours per estimate. I quote jobs from my truck now.', init: 'MD', badge: '2h saved per estimate' },
+            { name: 'Sarah K.', role: 'Estimator · Edmonton, AB', quote: 'The BOM alone is worth $8. Supplier orders are dead accurate.', init: 'SK', badge: '99% material accuracy' },
+            { name: 'James R.', role: 'Owner, Prairie Roofing · Vancouver, BC', quote: '15–20 estimates a week at $8 each. Way cheaper than drones.', init: 'JR', badge: '$5.95/report vs $80+ drones' },
+          ].map(t => `
+          <div class="scroll-animate h-full bg-[#111111] border border-white/10 rounded-2xl p-6 hover:shadow-xl hover:border-[#00FF88]/30 transition-all duration-300 flex flex-col">
+            <div class="bg-[#00FF88]/10 rounded-lg px-3 py-2 mb-4 flex items-center gap-2 self-start">
+              <i class="fas fa-check-circle text-[#00FF88] text-sm"></i>
+              <span class="text-sm font-bold text-[#00FF88]">${t.badge}</span>
+            </div>
+            <div class="flex items-center gap-0.5 mb-3">${'<i class="fas fa-star text-[#00FF88] text-xs"></i>'.repeat(5)}</div>
+            <p class="text-gray-300 text-sm leading-relaxed mb-5 flex-1">"${t.quote}"</p>
+            <div class="flex items-center gap-3 pt-4 border-t border-white/10">
+              <div class="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0" style="background:linear-gradient(135deg,#00FF88,#22d3ee);color:#0A0A0A">${t.init}</div>
+              <div><p class="font-semibold text-white text-sm">${t.name}</p><p class="text-xs text-gray-500">${t.role}</p></div>
+            </div>
+          </div>`).join('')}
+        </div>
+        <div class="text-center mt-10 scroll-animate">
+          <a href="/register" onclick="rrTrack('cta_click',{location:'testimonial_strip_cta'})" class="inline-flex items-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-3.5 px-8 rounded-xl text-sm transition-all hover:scale-[1.02]"><i class="fas fa-gift"></i> Join 5,000+ contractors — 4 free reports</a>
+        </div>
+      </div>
+    </section>
+
     <!-- PRICING -->
     <section id="pricing" class="py-24" style="background:#0A0A0A"><div class="max-w-6xl mx-auto px-4"><div class="text-center mb-16 scroll-animate"><div class="inline-flex items-center gap-2 bg-[#00FF88]/10 text-[#00FF88] rounded-full px-4 py-1.5 text-sm font-semibold mb-4"><i class="fas fa-tag"></i> Simple Pricing</div><h2 class="text-3xl lg:text-5xl font-black text-white mb-4 tracking-tight">Plans That Scale With You</h2><p class="text-lg text-gray-400 max-w-2xl mx-auto">Start free, pay per report, or save big with volume packs. CRM always included.</p></div><div class="grid lg:grid-cols-3 gap-6 items-start mb-16"><div class="scroll-animate bg-[#111111] rounded-2xl border border-white/10 p-8 hover:shadow-xl transition-shadow"><div class="text-sm font-bold text-[#00FF88] uppercase tracking-wider mb-2">Free Trial</div><div class="flex items-baseline gap-1 mb-2"><span class="text-5xl font-black text-white">$0</span></div><p class="text-sm text-gray-400 mb-6">3 free reports + full platform access</p><ul class="space-y-3 mb-8"><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>3 professional PDF reports</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Full CRM &amp; invoicing</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Customer management</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Proposals &amp; job tracking</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Door-to-door manager</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Virtual roof try-on</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Team collaboration</li></ul><a href="/signup" onclick="rrTrack('cta_click',{location:'pricing',plan:'free'})" class="block text-center py-3.5 rounded-xl font-bold border-2 border-white/20 text-white hover:bg-white hover:text-[#0A0A0A] transition-all min-h-[48px]">Start Free Trial</a></div><div class="scroll-animate relative" style="transition-delay:100ms"><div class="absolute -top-4 left-1/2 -translate-x-1/2 bg-[#00FF88] text-[#0A0A0A] text-xs font-extrabold px-5 py-1.5 rounded-full shadow-lg z-10">MOST POPULAR</div><div class="bg-[#111111] rounded-2xl border-2 border-[#00FF88]/50 shadow-xl shadow-[#00FF88]/10 p-8"><div class="text-sm font-bold text-[#00FF88] uppercase tracking-wider mb-2">Per Report</div><div class="flex items-baseline gap-1 mb-2"><span class="text-5xl font-black text-white">$8</span><span class="text-xl text-gray-500">CAD</span><span class="text-sm text-gray-500 ml-1">/ report</span></div><div class="flex items-center gap-2 mb-1"><span class="text-sm text-gray-500 line-through">$50&ndash;100 EagleView</span><span class="text-xs font-bold text-[#00FF88] bg-[#00FF88]/10 px-2 py-0.5 rounded-full">Save 90%+</span></div><p class="text-xs text-[#00FF88] font-semibold mb-6"><i class="fas fa-gift mr-1"></i>First 3 reports FREE</p><ul class="space-y-3 mb-8"><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Full 3D area with pitch adjustment</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Complete edge breakdown</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Material BOM with pricing</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Solar potential analysis</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Professional PDF download</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#00FF88] mt-0.5 text-xs"></i>Instant delivery (&lt;60s)</li></ul><a href="/signup" onclick="rrTrack('cta_click',{location:'pricing',plan:'per_report'})" class="block text-center py-3.5 rounded-xl font-extrabold bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] shadow-lg transition-all hover:scale-[1.02] min-h-[48px]">Get Started Free</a></div></div><div class="scroll-animate relative" style="transition-delay:200ms"><div class="absolute -top-4 left-1/2 -translate-x-1/2 bg-gradient-to-r from-[#a78bfa] to-[#8b5cf6] text-white text-xs font-bold px-5 py-1.5 rounded-full shadow-lg z-10">BEST VALUE</div><div class="bg-[#111111] rounded-2xl border-2 border-[#a78bfa]/50 p-8"><div class="text-sm font-bold text-[#a78bfa] uppercase tracking-wider mb-2">Volume Packs</div><div class="flex items-baseline gap-1 mb-2"><span class="text-5xl font-black text-white">$5.95</span><span class="text-xl text-gray-500">USD</span><span class="text-sm text-gray-500 ml-1">/ report</span></div><p class="text-sm text-gray-400 mb-1">Best rate on the 100-Pack — credits never expire</p><ul class="space-y-3 mb-8"><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#a78bfa] mt-0.5 text-xs"></i>10-Pack — $75 ($7.50/report)</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#a78bfa] mt-0.5 text-xs"></i>25-Pack — $175 ($7.00/report)</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#a78bfa] mt-0.5 text-xs"></i>100-Pack — $595 ($5.95/report)</li><li class="flex items-start gap-2.5 text-sm text-gray-400"><i class="fas fa-check text-[#a78bfa] mt-0.5 text-xs"></i>Credits never expire</li></ul><a href="https://calendar.app.google/KNLFST4CNxViPPN3A" target="_blank" onclick="rrTrack('cta_click',{location:'pricing',plan:'b2b'})" class="block text-center py-3.5 rounded-xl font-bold bg-gradient-to-r from-[#a78bfa] to-[#8b5cf6] text-white shadow-lg transition-all hover:scale-[1.02] min-h-[48px]">Book a Volume Demo</a></div></div></div></div></section>
 
@@ -6223,6 +6259,26 @@ function getLandingPageHTML(latestPosts: any[] = []) {
     };
   </script>
 
+  <!-- A/B split: announcement bar — 50/50 localStorage-sticky -->
+  <script>
+    (function(){
+      try {
+        var KEY = 'rr_ab_announcement';
+        var variant = localStorage.getItem(KEY);
+        if (!variant) { variant = Math.random() < 0.5 ? 'A' : 'B'; localStorage.setItem(KEY, variant); }
+        try { rrTrack('ab_exposure', { test: 'announcement_bar', variant: variant }); } catch(_){}
+        if (variant === 'B') {
+          var textA = document.getElementById('ab-text-a');
+          var textB = document.getElementById('ab-text-b');
+          var link = document.getElementById('ab-link');
+          if (textA) textA.style.display = 'none';
+          if (textB) textB.style.display = 'inline';
+          if (link) { link.href = '/demo'; link.textContent = 'Book demo \u2192'; }
+        }
+      } catch(e){}
+    })();
+  </script>
+
   <!-- Exit-Intent Modal (desktop only, once per session) -->
   <div id="exitIntentModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:10000;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(6px)">
     <div style="background:#111;border:1px solid rgba(0,255,136,0.25);border-radius:16px;padding:28px;max-width:420px;width:100%;box-shadow:0 20px 60px rgba(0,255,136,0.15);position:relative">
@@ -6268,6 +6324,25 @@ function getLandingPageHTML(latestPosts: any[] = []) {
 
       document.getElementById('exitIntentClose').addEventListener('click', hide);
       modal.addEventListener('click', function(e){ if (e.target === modal) hide(); });
+
+      // Mobile engagement trigger: ≥45s on page + >50% scroll depth + no CTA clicked
+      var isTouch2 = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+      if (isTouch2 && window.innerWidth < 900) {
+        var ctaClicked = false;
+        document.querySelectorAll('a[href="/register"],a[href="/demo"]').forEach(function(a){
+          a.addEventListener('click',function(){ ctaClicked=true; },{passive:true});
+        });
+        var engTimer = setTimeout(function(){
+          var scrollPct = window.scrollY / (document.documentElement.scrollHeight - window.innerHeight || 1);
+          if (!ctaClicked && scrollPct > 0.5) {
+            modal.style.display = 'flex';
+            try { rrTrack('exit_intent_shown', { trigger: 'mobile_engagement' }); } catch(_){}
+            shown = true;
+            try { sessionStorage.setItem('rm_exit_intent_shown','1'); } catch(e){}
+          }
+        }, 45000);
+        window.addEventListener('beforeunload', function(){ clearTimeout(engTimer); });
+      }
 
       window.submitExitIntent = function(e) {
         e.preventDefault();
