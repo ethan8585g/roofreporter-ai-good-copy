@@ -55,6 +55,8 @@ import { platformAdmin } from './routes/platform-admin'
 import { fieldRoutes, fieldUiRoutes } from './routes/field'
 import { publicApiRoutes } from './routes/public-api'
 import { developerPortalRoutes } from './routes/developer-portal'
+import { aiAutopilotRoutes } from './routes/ai-autopilot'
+import { processOrderQueue } from './services/ai-agent'
 import type { Bindings } from './types'
 
 const app = new Hono<{ Bindings: Bindings }>()
@@ -307,6 +309,7 @@ app.route('/api/admin-agent', adminAgentRoutes)
 app.route('/api/home-designer', homeDesignerRoutes)
 app.route('/api/sam3', sam3Routes)
 app.route('/api/admin/platform', platformAdmin)
+app.route('/api/ai-autopilot', aiAutopilotRoutes)
 app.route('/api/field', fieldRoutes)
 app.route('/field', fieldUiRoutes)
 
@@ -2971,7 +2974,55 @@ app.get('/sites/:subdomain/:slug', async (c) => {
   return c.html(page.html_snapshot)
 })
 
-export default app
+// ============================================================
+// EXPORT — Cloudflare Workers module with fetch + scheduled handlers
+// ============================================================
+export default {
+  // Standard HTTP handler — delegates to Hono app
+  fetch: app.fetch,
+
+  // Scheduled (CRON) handler — AI Agent queue processor
+  // Runs every 10 minutes when enabled. Checks for pending orders
+  // that need auto-tracing and processes them autonomously.
+  async scheduled(event: ScheduledEvent, env: Bindings, ctx: ExecutionContext) {
+    // Check if auto-processing is enabled
+    const setting = await env.DB.prepare(
+      "SELECT value FROM settings WHERE key = 'agent_auto_process_enabled'"
+    ).first<{ value: string }>()
+
+    if (setting?.value !== '1') {
+      console.log('[AI Agent CRON] Auto-processing is disabled. Skipping.')
+      return
+    }
+
+    // Check daily limit
+    const today = new Date().toISOString().slice(0, 10)
+    const dailyCount = await env.DB.prepare(
+      "SELECT COUNT(*) as c FROM agent_jobs WHERE success = 1 AND created_at >= ?"
+    ).bind(today).first<{ c: number }>()
+
+    const maxDaily = await env.DB.prepare(
+      "SELECT value FROM settings WHERE key = 'agent_max_daily_auto'"
+    ).first<{ value: string }>()
+    const limit = parseInt(maxDaily?.value || '50')
+
+    if ((dailyCount?.c || 0) >= limit) {
+      console.log(`[AI Agent CRON] Daily limit reached (${dailyCount?.c}/${limit}). Skipping.`)
+      return
+    }
+
+    // Process the queue (uses waitUntil for async cleanup)
+    ctx.waitUntil(
+      processOrderQueue(env)
+        .then((result) => {
+          console.log(`[AI Agent CRON] Processed ${result.processed.length} orders. Stats:`, JSON.stringify(result.stats))
+        })
+        .catch((err) => {
+          console.error(`[AI Agent CRON] Error: ${err.message}`)
+        })
+    )
+  },
+}
 
 // ============================================================
 // HTML Templates

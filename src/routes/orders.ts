@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import type { Bindings } from '../types'
 import { validateAdminSession } from './auth'
 import { notifyNewReportRequest } from '../services/email'
+import { autoProcessOrder } from '../services/ai-agent'
 
 export const ordersRoutes = new Hono<{ Bindings: Bindings }>()
 
@@ -96,12 +97,39 @@ ordersRoutes.post('/', async (c) => {
       VALUES (?, 'order_created', ?)
     `).bind(masterCompanyId, `Order ${orderNumber} created - ${service_tier} tier - $${price}`).run()
 
-    // Notify sales of new report request (fire-and-forget)
+    // Notify sales@roofmanager.ca of new report request (fire-and-forget)
     notifyNewReportRequest(c.env, {
       order_number: orderNumber, property_address,
       requester_name: requester_name, requester_email: requester_email || '',
       service_tier, price, is_trial: false
     }).catch((e) => console.warn("[silent-catch]", (e && e.message) || e))
+
+    // ── AI Agent Auto-Trigger ──
+    // If this order needs admin tracing and has coordinates, check if
+    // the AI agent is enabled and fire off auto-processing (non-blocking).
+    if (needs_admin_trace && latitude && longitude) {
+      const agentEnabled = await c.env.DB.prepare(
+        "SELECT value FROM settings WHERE key = 'agent_auto_process_enabled'"
+      ).first<{ value: string }>().catch(() => null)
+
+      if (agentEnabled?.value === '1') {
+        const newOrderId = result.meta.last_row_id
+        // Fire-and-forget — don't block the order response
+        autoProcessOrder(newOrderId, c.env)
+          .then((agentResult) => {
+            console.log(`[AI Agent] Auto-process order ${newOrderId}: ${agentResult.action} (${agentResult.processing_ms}ms)`)
+            return c.env.DB.prepare(`
+              INSERT INTO agent_jobs (order_id, action, success, confidence, processing_ms, error, details, agent_version)
+              VALUES (?, ?, ?, ?, ?, ?, ?, '1.0.0')
+            `).bind(
+              newOrderId, agentResult.action, agentResult.success ? 1 : 0,
+              agentResult.confidence || null, agentResult.processing_ms,
+              agentResult.error || null, agentResult.details || null
+            ).run()
+          })
+          .catch((e) => console.warn(`[AI Agent] Auto-process failed for order ${newOrderId}:`, e?.message || e))
+      }
+    }
 
     return c.json({
       success: true,
