@@ -1784,7 +1784,8 @@ function buildSolarProposalPage(report: RoofReport, reportNum: string, reportDat
   const cLat = layout.image_center?.lat
   const cLng = layout.image_center?.lng
   const zoom = layout.image_zoom || 20
-  const sizePx = layout.image_size_px || 1600
+  // Use logical pixel size (physical image_size_px is scale=2, so logical = physical/2)
+  const sizePx = (layout.image_size_px || 1600) / 2
   const project = (lat: number, lng: number) => {
     const scale = Math.pow(2, zoom)
     const sin = Math.max(-0.9999, Math.min(0.9999, Math.sin(lat * Math.PI / 180)))
@@ -1796,8 +1797,8 @@ function buildSolarProposalPage(report: RoofReport, reportNum: string, reportDat
     return { x: (px - cx) * scale + sizePx / 2, y: (py - cy) * scale + sizePx / 2 }
   }
 
-  // Panel rectangle size in pixels at this zoom (Web Mercator: meters/px varies with lat)
-  const metersPerPx = (156543.03392 * Math.cos((cLat || 0) * Math.PI / 180)) / Math.pow(2, zoom) / 2  // /2 for scale=2
+  // Panel rectangle size in logical pixels (Web Mercator: meters/logical_px varies with lat)
+  const metersPerPx = (156543.03392 * Math.cos((cLat || 0) * Math.PI / 180)) / Math.pow(2, zoom)
   const panelWpx = (layout.panel_width_meters || 1.045) / metersPerPx
   const panelHpx = (layout.panel_height_meters || 1.879) / metersPerPx
 

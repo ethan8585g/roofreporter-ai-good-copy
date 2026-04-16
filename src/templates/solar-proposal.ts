@@ -85,8 +85,9 @@ function renderVariantPage(
   const cLat = layout.image_center?.lat
   const cLng = layout.image_center?.lng
   const zoom = layout.image_zoom || 20
-  const sizePx = layout.image_size_px || 1600
-  const metersPerPx = cLat ? (156543.03392 * Math.cos(cLat * Math.PI / 180)) / Math.pow(2, zoom) / 2 : 0.05
+  // Use logical pixel size (physical image_size_px is scale=2, so logical = physical/2)
+  const sizePx = (layout.image_size_px || 1600) / 2
+  const metersPerPx = cLat ? (156543.03392 * Math.cos(cLat * Math.PI / 180)) / Math.pow(2, zoom) : 0.1
   const panelWpx = (layout.panel_width_meters || 1.045) / metersPerPx
   const panelHpx = (layout.panel_height_meters || 1.879) / metersPerPx
 
