@@ -718,6 +718,7 @@ app.get('/sitemap-core.xml', (c) => {
     { loc: '/blog', priority: '0.8', changefreq: 'daily' },
     { loc: '/coverage', priority: '0.8', changefreq: 'monthly' },
     { loc: '/lander', priority: '0.7', changefreq: 'monthly' },
+    { loc: '/free-roof-estimate', priority: '0.9', changefreq: 'monthly' },
     // Feature hub pages (dedicated, authority-accumulating URLs)
     { loc: '/features/measurements', priority: '0.9', changefreq: 'monthly' },
     { loc: '/features/crm', priority: '0.9', changefreq: 'monthly' },
@@ -1710,6 +1711,9 @@ app.get('/lander', (c) => {
 app.get('/demo', (c) => {
   return c.html(getDemoLandingPageHTML())
 })
+
+// Homeowner-focused landing page — captures mobile/organic traffic from homeowners searching for estimates
+app.get('/free-roof-estimate', (c) => c.html(getHomeownerEstimatePageHTML()))
 
 // Condo / Reserve Fund Cheat Sheet — lead magnet
 app.get('/condo-reserve-fund-cheat-sheet', (c) => c.html(getCondoCheatSheetHTML()))
@@ -13777,6 +13781,275 @@ function getWidgetLeadsPageHTML() {
     loadStats();
   <\/script>
   ${getRoverAssistant()}
+</body>
+</html>`
+}
+
+function getHomeownerEstimatePageHTML(): string {
+  const base = 'https://www.roofmanager.ca'
+  const faqSchema = JSON.stringify({
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: [
+      { '@type': 'Question', name: 'How much does a roof replacement cost in Canada?', acceptedAnswer: { '@type': 'Answer', text: 'Roof replacement in Canada typically costs between $8,000 and $25,000+ depending on size, pitch, material, and region. Asphalt shingles average $4–$8 per sq ft installed. Metal roofing runs $10–$20 per sq ft. Getting an accurate measurement report first ensures every quote you receive is based on the same numbers.' } },
+      { '@type': 'Question', name: 'How do I get a free roof estimate?', acceptedAnswer: { '@type': 'Answer', text: "Enter your address to get a free satellite roof measurement report. The report includes your roof's total area, pitch, edge lengths, and a full materials take-off. Share it with any roofer to get consistent, apples-to-apples quotes." } },
+      { '@type': 'Question', name: 'How accurate is a satellite roof measurement?', acceptedAnswer: { '@type': 'Answer', text: "Our satellite measurements use Google's Solar API with LiDAR-calibrated 3D building models and are typically accurate within 2–5% of a manual measurement. We display a confidence score on every report." } },
+      { '@type': 'Question', name: 'Do I need to be home for a roof estimate?', acceptedAnswer: { '@type': 'Answer', text: 'No. Satellite roof measurement reports are generated from aerial imagery — no one needs to visit your home. You receive a PDF within 60 seconds of entering your address.' } },
+    ]
+  })
+  const costs = [
+    { material: 'Asphalt Shingles', range: '$8,000 – $16,000', icon: 'fa-home', color: '#00FF88', note: 'Most common, 20–30 yr lifespan' },
+    { material: 'Metal Roofing', range: '$14,000 – $30,000', icon: 'fa-layer-group', color: '#22d3ee', note: '40–70 yr lifespan, energy efficient' },
+    { material: 'Cedar Shake', range: '$16,000 – $28,000', icon: 'fa-tree', color: '#a78bfa', note: 'Natural look, 25–35 yr lifespan' },
+    { material: 'Flat / TPO', range: '$6,000 – $18,000', icon: 'fa-square', color: '#fbbf24', note: 'Commercial & low-slope roofs' },
+  ]
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags()}
+  <title>Free Roof Estimate — Get an Accurate Satellite Roof Report | Roof Manager</title>
+  <meta name="description" content="Get a free satellite roof measurement report in 60 seconds. See your roof's exact size, pitch, and materials needed — then share it with roofers to get fair, accurate quotes.">
+  <link rel="canonical" href="${base}/free-roof-estimate">
+  <meta property="og:title" content="Free Roof Estimate — Satellite Measurement Report">
+  <meta property="og:description" content="Know exactly what your roof costs before any roofer sets foot on your property. Free report in 60 seconds.">
+  <meta property="og:url" content="${base}/free-roof-estimate">
+  <meta name="keywords" content="free roof estimate, roof replacement cost, how much does a new roof cost, roof estimate near me, satellite roof measurement, free roof inspection, roofing quote canada">
+  <script type="application/ld+json">${faqSchema}</script>
+</head>
+<body style="background:#0A0A0A">
+
+  <!-- Nav -->
+  <nav class="sticky top-0 z-50 backdrop-blur-2xl border-b border-white/5" style="background:rgba(10,10,10,0.97)">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 flex items-center justify-between" style="height:64px">
+      <a href="/" class="flex items-center gap-3">
+        <img src="/static/logo.png" alt="Roof Manager" class="w-9 h-9 rounded-xl object-cover ring-1 ring-white/10" width="36" height="36">
+        <span class="text-white font-extrabold text-lg tracking-tight">Roof Manager</span>
+      </a>
+      <div class="flex items-center gap-3">
+        <a href="/sample-report" class="text-gray-400 hover:text-white text-sm font-medium hidden sm:inline transition-colors">See Sample Report</a>
+        <a href="/customer/login" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold py-2.5 px-5 rounded-xl text-sm min-h-[44px] inline-flex items-center transition-colors">Start Free</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="relative overflow-hidden" style="background:#0A0A0A">
+    <div class="absolute top-0 left-1/4 w-96 h-96 rounded-full opacity-10 pointer-events-none" style="background:radial-gradient(circle,#00FF88 0%,transparent 70%)"></div>
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 pt-14 pb-10 md:pt-20 md:pb-16">
+      <div class="max-w-2xl">
+        <div class="inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-bold mb-6" style="background:#00FF8818;color:#00FF88;border:1px solid #00FF8830">
+          <span class="relative flex h-2 w-2"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#00FF88] opacity-75"></span><span class="relative inline-flex rounded-full h-2 w-2 bg-[#00FF88]"></span></span>
+          Free for Homeowners — US &amp; Canada
+        </div>
+        <h1 class="text-4xl sm:text-5xl md:text-6xl font-black text-white leading-[1.08] tracking-tight mb-5">
+          Know Your Roof's<br><span style="color:#00FF88">Exact Size &amp; Cost</span><br>Before You Call Anyone.
+        </h1>
+        <p class="text-lg text-gray-400 mb-8 max-w-xl leading-relaxed">
+          Get a free satellite roof measurement report in 60 seconds — no ladder, no appointment, no pressure. See your roof's total area, pitch, edge lengths, and estimated materials. Then share it with any roofer to get <strong class="text-white">fair, accurate quotes based on real numbers.</strong>
+        </p>
+        <div class="flex flex-col sm:flex-row gap-3 mb-6">
+          <a href="/customer/login?mode=signup" class="flex items-center justify-center gap-2.5 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-8 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/20 min-h-[56px] transition-all hover:scale-[1.02]">
+            <i class="fas fa-satellite-dish"></i> Get My Free Roof Report <i class="fas fa-arrow-right text-sm"></i>
+          </a>
+          <a href="/sample-report" class="flex items-center justify-center gap-2.5 bg-white/5 hover:bg-white/10 text-white font-bold py-4 px-7 rounded-xl text-base border border-white/10 hover:border-white/20 min-h-[56px] transition-all">
+            <i class="fas fa-eye text-[#00FF88]"></i> See a Sample Report
+          </a>
+        </div>
+        <p class="text-xs text-gray-500">Free to start &middot; No credit card &middot; Report delivered in under 60 seconds</p>
+        <div class="flex flex-wrap items-center gap-3 mt-6">
+          <div class="flex items-center gap-1.5 text-xs text-gray-400 bg-white/5 rounded-full px-3 py-1.5"><i class="fas fa-star text-[#00FF88] text-[10px]"></i><i class="fas fa-star text-[#00FF88] text-[10px]"></i><i class="fas fa-star text-[#00FF88] text-[10px]"></i><i class="fas fa-star text-[#00FF88] text-[10px]"></i><i class="fas fa-star text-[#00FF88] text-[10px]"></i> 4.9/5 rating</div>
+          <div class="flex items-center gap-1.5 text-xs text-gray-400 bg-white/5 rounded-full px-3 py-1.5"><i class="fas fa-check text-[#00FF88] text-[10px]"></i> Used by 5,000+ roofers</div>
+          <div class="flex items-center gap-1.5 text-xs text-gray-400 bg-white/5 rounded-full px-3 py-1.5"><i class="fas fa-shield-alt text-[#00FF88] text-[10px]"></i> No sales pressure</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- How it works for homeowners -->
+  <section style="background:#0d0d0d">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 py-14 md:py-20">
+      <div class="text-center mb-10">
+        <div class="inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-bold mb-4" style="background:#22d3ee18;color:#22d3ee">How It Works</div>
+        <h2 class="text-3xl md:text-4xl font-black text-white mb-3">Three steps to a smarter roof decision</h2>
+        <p class="text-gray-400 max-w-xl mx-auto">Stop guessing. Stop getting lowballed. Get the facts first.</p>
+      </div>
+      <div class="grid md:grid-cols-3 gap-5">
+        <div class="bg-[#111] border border-white/10 rounded-2xl p-6 hover:border-[#00FF88]/30 transition-all">
+          <div class="w-12 h-12 rounded-xl flex items-center justify-center mb-4" style="background:#00FF8818;border:1px solid #00FF8830">
+            <i class="fas fa-map-marker-alt text-xl" style="color:#00FF88"></i>
+          </div>
+          <div class="text-[10px] font-bold uppercase tracking-widest mb-1" style="color:#00FF88">Step 1</div>
+          <h3 class="text-lg font-bold text-white mb-2">Enter Your Address</h3>
+          <p class="text-gray-400 text-sm leading-relaxed">Sign up free and enter your home's address. Our system pulls satellite imagery and 3D data for your exact roof.</p>
+        </div>
+        <div class="bg-[#111] border border-white/10 rounded-2xl p-6 hover:border-[#22d3ee]/30 transition-all">
+          <div class="w-12 h-12 rounded-xl flex items-center justify-center mb-4" style="background:#22d3ee18;border:1px solid #22d3ee30">
+            <i class="fas fa-file-pdf text-xl" style="color:#22d3ee"></i>
+          </div>
+          <div class="text-[10px] font-bold uppercase tracking-widest mb-1" style="color:#22d3ee">Step 2</div>
+          <h3 class="text-lg font-bold text-white mb-2">Get Your Report</h3>
+          <p class="text-gray-400 text-sm leading-relaxed">In under 60 seconds you receive a professional PDF with your roof's total area, pitch, edge lengths, and materials breakdown.</p>
+        </div>
+        <div class="bg-[#111] border border-white/10 rounded-2xl p-6 hover:border-[#a78bfa]/30 transition-all">
+          <div class="w-12 h-12 rounded-xl flex items-center justify-center mb-4" style="background:#a78bfa18;border:1px solid #a78bfa30">
+            <i class="fas fa-handshake text-xl" style="color:#a78bfa"></i>
+          </div>
+          <div class="text-[10px] font-bold uppercase tracking-widest mb-1" style="color:#a78bfa">Step 3</div>
+          <h3 class="text-lg font-bold text-white mb-2">Get Fair Quotes</h3>
+          <p class="text-gray-400 text-sm leading-relaxed">Share the report with 2–3 roofers and ask them to quote based on those exact measurements. No more guessing or inflated numbers.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Cost guide -->
+  <section style="background:#0A0A0A">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 py-14 md:py-20">
+      <div class="text-center mb-10">
+        <div class="inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-bold mb-4" style="background:#fbbf2418;color:#fbbf24">2025 Cost Guide</div>
+        <h2 class="text-3xl md:text-4xl font-black text-white mb-3">How much does a roof replacement cost?</h2>
+        <p class="text-gray-400 max-w-xl mx-auto">Canadian average pricing ranges by material. Actual cost depends on your roof's size — that's why you measure first.</p>
+      </div>
+      <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        ${costs.map(c => `
+        <div class="bg-[#111] border border-white/10 rounded-2xl p-5 text-center hover:border-white/20 transition-all">
+          <div class="w-10 h-10 rounded-xl flex items-center justify-center mx-auto mb-3" style="background:${c.color}18;border:1px solid ${c.color}30">
+            <i class="fas ${c.icon} text-sm" style="color:${c.color}"></i>
+          </div>
+          <div class="text-white font-bold text-base mb-0.5">${c.material}</div>
+          <div class="text-xl font-black mb-1" style="color:${c.color}">${c.range}</div>
+          <div class="text-[11px] text-gray-500">${c.note}</div>
+        </div>`).join('')}
+      </div>
+      <div class="bg-[#111] border border-[#00FF88]/20 rounded-2xl p-6 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+        <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style="background:#00FF8818">
+          <i class="fas fa-lightbulb text-[#00FF88]"></i>
+        </div>
+        <div>
+          <div class="text-white font-semibold mb-0.5">The measurement is the most important number</div>
+          <p class="text-gray-400 text-sm">Without knowing your exact roof size, roofers pad their estimates by 15–30% "just in case." A satellite report puts the real number on the table before anyone shows up.</p>
+        </div>
+        <a href="/customer/login?mode=signup" class="flex-shrink-0 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold py-3 px-6 rounded-xl text-sm min-h-[48px] inline-flex items-center gap-2 transition-colors whitespace-nowrap">
+          <i class="fas fa-ruler-combined"></i> Measure My Roof Free
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- What's in the report -->
+  <section style="background:#0d0d0d">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 py-14 md:py-20">
+      <div class="grid md:grid-cols-2 gap-12 items-center">
+        <div>
+          <div class="inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-bold mb-5" style="background:#00FF8818;color:#00FF88">What You Get</div>
+          <h2 class="text-3xl md:text-4xl font-black text-white mb-5">Everything a roofer needs to quote accurately</h2>
+          <p class="text-gray-400 mb-7 leading-relaxed">Your free report is the same professional document roofing companies order for their own customers — now available directly to homeowners.</p>
+          <ul class="space-y-3">
+            ${[
+              ['fa-expand-arrows-alt','#00FF88','Total roof area','Measured in sq ft and squares'],
+              ['fa-chart-line','#22d3ee','Roof pitch &amp; slope','Per plane, with 3D breakdown'],
+              ['fa-ruler-horizontal','#a78bfa','Edge &amp; ridge lengths','Eaves, rakes, hips, valleys, ridges'],
+              ['fa-boxes','#fbbf24','Full materials take-off','Shingles, underlayment, ice &amp; water'],
+              ['fa-map','#00FF88','Satellite overview','Aerial photo with your roof outlined'],
+            ].map(([icon, color, title, sub]) => `
+            <li class="flex items-start gap-3">
+              <div class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5" style="background:${color}18">
+                <i class="fas ${icon} text-xs" style="color:${color}"></i>
+              </div>
+              <div>
+                <div class="text-white font-semibold text-sm">${title}</div>
+                <div class="text-gray-500 text-xs">${sub}</div>
+              </div>
+            </li>`).join('')}
+          </ul>
+        </div>
+        <div class="bg-[#111] border border-white/10 rounded-2xl p-8 text-center">
+          <div class="text-5xl font-black text-white mb-2">60<span style="color:#00FF88">s</span></div>
+          <div class="text-gray-400 text-sm mb-6">average delivery time</div>
+          <div class="grid grid-cols-2 gap-4 mb-6 text-left">
+            <div class="bg-white/5 rounded-xl p-4">
+              <div class="text-2xl font-black" style="color:#00FF88">Free</div>
+              <div class="text-gray-400 text-xs mt-0.5">First report</div>
+            </div>
+            <div class="bg-white/5 rounded-xl p-4">
+              <div class="text-2xl font-black text-white">2–5%</div>
+              <div class="text-gray-400 text-xs mt-0.5">Typical accuracy</div>
+            </div>
+            <div class="bg-white/5 rounded-xl p-4">
+              <div class="text-2xl font-black" style="color:#22d3ee">PDF</div>
+              <div class="text-gray-400 text-xs mt-0.5">Shareable format</div>
+            </div>
+            <div class="bg-white/5 rounded-xl p-4">
+              <div class="text-2xl font-black text-white">US &amp; CA</div>
+              <div class="text-gray-400 text-xs mt-0.5">Full coverage</div>
+            </div>
+          </div>
+          <a href="/customer/login?mode=signup" class="flex items-center justify-center gap-2 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-8 rounded-xl text-base min-h-[52px] transition-all hover:scale-[1.02] w-full">
+            <i class="fas fa-satellite-dish"></i> Get My Free Report
+          </a>
+          <p class="text-xs text-gray-500 mt-3">No credit card &middot; No commitment</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section style="background:#0A0A0A">
+    <div class="max-w-3xl mx-auto px-4 sm:px-6 py-14 md:py-20">
+      <div class="text-center mb-10">
+        <h2 class="text-3xl md:text-4xl font-black text-white mb-3">Common questions</h2>
+        <p class="text-gray-400">Everything homeowners ask before ordering their first report.</p>
+      </div>
+      <div class="space-y-3">
+        ${[
+          ['How much does a roof replacement cost in Canada?', "Roof replacement in Canada typically costs between $8,000 and $25,000+ depending on size, pitch, material, and region. Asphalt shingles average $4–$8 per sq ft installed. Metal roofing runs $10–$20 per sq ft. Getting an accurate measurement report first ensures every quote you receive is based on the same numbers."],
+          ['Do I need to be home for a roof estimate?', 'No. Satellite roof measurement reports are generated entirely from aerial imagery — no one needs to visit your property. You receive your PDF report within 60 seconds of entering your address.'],
+          ['How accurate is a satellite roof measurement?', "Our reports use Google's Solar API with LiDAR-calibrated 3D building models, typically accurate within 2–5% of a manual measurement. Every report includes a confidence score and imagery quality rating."],
+          ['Can I use this report to get multiple roofer quotes?', "Yes — that's exactly the point. Share the PDF with 2–3 local roofers and ask them to quote based on the measurements. This eliminates the guesswork and makes quotes genuinely comparable."],
+          ['Is the first report really free?', 'Yes. Your first report is completely free, no credit card required. If you need more reports in the future (for a rental property, for example), additional reports are $8 CAD each.'],
+        ].map(([q, a]) => `
+        <details class="bg-[#111] border border-white/10 rounded-2xl group" open>
+          <summary class="flex items-center justify-between gap-3 px-6 py-5 cursor-pointer text-white font-semibold text-sm md:text-base list-none select-none">
+            ${q}
+            <i class="fas fa-chevron-down text-gray-500 text-xs flex-shrink-0 group-open:rotate-180 transition-transform duration-200"></i>
+          </summary>
+          <div class="px-6 pb-5 text-gray-400 text-sm leading-relaxed border-t border-white/5 pt-4">${a}</div>
+        </details>`).join('')}
+      </div>
+    </div>
+  </section>
+
+  <!-- Final CTA -->
+  <section style="background:#0d0d0d">
+    <div class="max-w-3xl mx-auto px-4 sm:px-6 py-14 md:py-20 text-center">
+      <div class="bg-gradient-to-br from-[#00FF88]/10 to-transparent border border-[#00FF88]/20 rounded-2xl p-10 md:p-14">
+        <h2 class="text-3xl md:text-4xl font-black text-white mb-4">Know before you negotiate.</h2>
+        <p class="text-gray-400 mb-8 max-w-lg mx-auto leading-relaxed">Homeowners with accurate measurements save an average of $1,200–$3,500 on their roof replacement by getting comparable quotes. Your free report takes 60 seconds.</p>
+        <a href="/customer/login?mode=signup" class="inline-flex items-center justify-center gap-3 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-10 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/20 min-h-[56px] transition-all hover:scale-[1.03]">
+          <i class="fas fa-satellite-dish"></i> Get My Free Roof Report <i class="fas fa-arrow-right text-sm"></i>
+        </a>
+        <p class="text-xs text-gray-500 mt-4">Free &middot; No credit card &middot; US &amp; Canada</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer style="background:#0A0A0A">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 py-10 border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <img src="/static/logo.png" alt="Roof Manager" class="w-8 h-8 rounded-lg object-cover ring-1 ring-white/10" width="32" height="32">
+        <span class="text-gray-400 text-sm">&copy; 2026 Roof Manager. All rights reserved.</span>
+      </div>
+      <div class="flex items-center gap-5 text-sm text-gray-500">
+        <a href="/" class="hover:text-[#00FF88] transition-colors">Home</a>
+        <a href="/sample-report" class="hover:text-[#00FF88] transition-colors">Sample Report</a>
+        <a href="/pricing" class="hover:text-[#00FF88] transition-colors">Pricing</a>
+        <a href="/faq" class="hover:text-[#00FF88] transition-colors">FAQ</a>
+        <a href="/privacy" class="hover:text-[#00FF88] transition-colors">Privacy</a>
+      </div>
+    </div>
+  </footer>
+
 </body>
 </html>`
 }
