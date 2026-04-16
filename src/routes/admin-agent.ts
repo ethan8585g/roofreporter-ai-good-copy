@@ -165,7 +165,7 @@ async function executeTool(name: string, args: any, db: D1Database) {
         return { success: true, active: args.active }
       }
       case 'manage_customer': {
-        if (args.action === 'add_credits') await db.prepare(`UPDATE customers SET credits_remaining = credits_remaining + ?, updated_at = datetime('now') WHERE id = ?`).bind(args.credits || 0, args.customer_id).run()
+        if (args.action === 'add_credits') await db.prepare(`UPDATE customers SET report_credits = report_credits + ?, updated_at = datetime('now') WHERE id = ?`).bind(args.credits || 0, args.customer_id).run()
         else if (args.action === 'toggle_active') await db.prepare(`UPDATE customers SET is_active = CASE WHEN is_active = 1 THEN 0 ELSE 1 END WHERE id = ?`).bind(args.customer_id).run()
         return { success: true, customer_id: args.customer_id, action: args.action }
       }

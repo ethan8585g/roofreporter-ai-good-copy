@@ -586,12 +586,12 @@ customerAuthRoutes.post('/register', async (c) => {
     // Rate limit signups: max 5 per IP per hour (verification already rate-limits per-email).
     try {
       const clientIp = c.req.header('cf-connecting-ip') || c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
-      await c.env.DB.prepare("CREATE TABLE IF NOT EXISTS signup_attempts (id INTEGER PRIMARY KEY AUTOINCREMENT, ip TEXT, email TEXT, created_at TEXT DEFAULT (datetime('now')))").run()
-      const attempts = await c.env.DB.prepare("SELECT COUNT(*) as cnt FROM signup_attempts WHERE ip = ? AND created_at > datetime('now', '-1 hour')").bind(clientIp).first<any>()
+      await c.env.DB.prepare("CREATE TABLE IF NOT EXISTS register_attempts (id INTEGER PRIMARY KEY AUTOINCREMENT, ip TEXT, email TEXT, created_at TEXT DEFAULT (datetime('now')))").run()
+      const attempts = await c.env.DB.prepare("SELECT COUNT(*) as cnt FROM register_attempts WHERE ip = ? AND created_at > datetime('now', '-1 hour')").bind(clientIp).first<any>()
       if (attempts && attempts.cnt >= 5) {
         return c.json({ error: 'Too many signup attempts from this network. Please wait and try again.' }, 429)
       }
-      await c.env.DB.prepare("INSERT INTO signup_attempts (ip, email) VALUES (?, ?)").bind(clientIp, cleanEmail).run()
+      await c.env.DB.prepare("INSERT INTO register_attempts (ip, email) VALUES (?, ?)").bind(clientIp, cleanEmail).run()
     } catch (e: any) { console.warn('[register] rate-limit check failed:', e?.message || e) }
 
     // Verify the email verification token (unless email config is not set up)
@@ -1158,7 +1158,7 @@ customerAuthRoutes.post('/change-password', async (c) => {
   if (!token) return c.json({ error: 'Not authenticated' }, 401)
 
   const session = await c.env.DB.prepare(`
-    SELECT cs.customer_id, cu.password_hash, cu.password_salt
+    SELECT cs.customer_id, cu.password_hash
     FROM customer_sessions cs
     JOIN customers cu ON cu.id = cs.customer_id
     WHERE cs.session_token = ? AND cs.expires_at > datetime('now')
@@ -1175,24 +1175,23 @@ customerAuthRoutes.post('/change-password', async (c) => {
     return c.json({ error: 'New password must be at least 8 characters' }, 400)
   }
 
-  // Verify current password using SHA-256 + salt (same as login flow)
-  const encoder = new TextEncoder()
-  const currentHashBuf = await crypto.subtle.digest('SHA-256', encoder.encode(current_password + (session.password_salt || '')))
-  const currentHash = Array.from(new Uint8Array(currentHashBuf)).map(b => b.toString(16).padStart(2, '0')).join('')
-
-  if (currentHash !== session.password_hash) {
+  // Verify current password using the established verifyPassword helper (PBKDF2 + legacy SHA-256)
+  if (!session.password_hash) {
+    return c.json({ error: 'This account uses Google Sign-In and has no password to change.' }, 400)
+  }
+  const valid = await verifyPassword(current_password, session.password_hash)
+  if (!valid) {
     return c.json({ error: 'Current password is incorrect' }, 400)
   }
 
-  // Hash new password
-  const newSalt = crypto.randomUUID()
-  const newHashBuf = await crypto.subtle.digest('SHA-256', encoder.encode(new_password + newSalt))
-  const newHash = Array.from(new Uint8Array(newHashBuf)).map(b => b.toString(16).padStart(2, '0')).join('')
+  // Hash new password using PBKDF2 and store as serialized pbkdf2:<salt>:<hash>
+  const { hash, salt } = await hashPassword(new_password)
+  const storedHash = serializeHash(hash, salt)
 
   await c.env.DB.prepare(`
-    UPDATE customers SET password_hash = ?, password_salt = ?, updated_at = datetime('now')
+    UPDATE customers SET password_hash = ?, updated_at = datetime('now')
     WHERE id = ?
-  `).bind(newHash, newSalt, session.customer_id).run()
+  `).bind(storedHash, session.customer_id).run()
 
   return c.json({ success: true })
 })
