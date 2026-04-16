@@ -1595,7 +1595,7 @@ app.get('/roof-measurement/:city', (c) => {
       <h1 class="text-4xl md:text-5xl font-black text-white mb-6 leading-tight">Satellite Roof Measurements<br>in <span class="text-[#00FF88]">${country.name}</span></h1>
       <p class="text-lg text-gray-400 max-w-2xl mx-auto mb-8">Get accurate AI-powered roof measurement reports for any property in ${country.name}. Area, pitch, ridge, hip, valley, and eave lengths — plus full material takeoff — in under 60 seconds.</p>
       <div class="flex flex-col sm:flex-row gap-4 justify-center">
-        <a href="/customer/login" class="px-8 py-3.5 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold rounded-xl text-lg shadow-xl shadow-[#00FF88]/20">Get 3 Free Reports <i class="fas fa-arrow-right ml-2"></i></a>
+        <a href="/register" class="px-8 py-3.5 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold rounded-xl text-lg shadow-xl shadow-[#00FF88]/20">Get 3 Free Reports <i class="fas fa-arrow-right ml-2"></i></a>
         <a href="/pricing" class="px-8 py-3.5 bg-white/5 hover:bg-white/10 text-white font-semibold rounded-xl text-lg border border-white/10">View Pricing</a>
       </div>
       <p class="text-sm text-gray-500 mt-4">No credit card required. Works on any address with Google satellite coverage.</p>
@@ -1633,7 +1633,7 @@ app.get('/roof-measurement/:city', (c) => {
     <div class="max-w-3xl mx-auto px-4">
       <h2 class="text-3xl font-black text-white mb-4">Ready to Measure Roofs in ${country.name}?</h2>
       <p class="text-lg text-gray-300 mb-8">Join roofing contractors across ${country.region} who use Roof Manager to measure faster, quote smarter, and win more jobs.</p>
-      <a href="/customer/login" class="inline-block px-10 py-4 bg-[#00FF88] text-[#0A0A0A] font-black rounded-xl text-lg shadow-xl shadow-[#00FF88]/20 hover:bg-[#00e67a]">Start Free — 3 Reports on Us <i class="fas fa-arrow-right ml-2"></i></a>
+      <a href="/register" class="inline-block px-10 py-4 bg-[#00FF88] text-[#0A0A0A] font-black rounded-xl text-lg shadow-xl shadow-[#00FF88]/20 hover:bg-[#00e67a]">Start Free — 3 Reports on Us <i class="fas fa-arrow-right ml-2"></i></a>
     </div>
   </section>
 
@@ -1744,7 +1744,7 @@ app.get('/roof-measurement/:city', (c) => {
       <h1 class="text-4xl md:text-5xl font-black mb-6 leading-tight">Roof Measurement Reports<br>in <span class="text-sky-400">${city.name}</span></h1>
       <p class="text-lg text-blue-200 max-w-2xl mx-auto mb-8">Get accurate satellite-powered roof measurements for any property in ${city.name}. Area, pitch, edges, material estimates — all in under 60 seconds.</p>
       <div class="flex flex-col sm:flex-row gap-4 justify-center">
-        <a href="/customer/login" class="px-8 py-3.5 bg-sky-500 hover:bg-sky-400 text-white font-bold rounded-xl text-lg shadow-xl">Get 3 Free Reports <i class="fas fa-arrow-right ml-2"></i></a>
+        <a href="/register" class="px-8 py-3.5 bg-sky-500 hover:bg-sky-400 text-white font-bold rounded-xl text-lg shadow-xl">Get 3 Free Reports <i class="fas fa-arrow-right ml-2"></i></a>
         <a href="/pricing" class="px-8 py-3.5 bg-white/10 hover:bg-white/20 text-white font-semibold rounded-xl text-lg border border-white/20">View Pricing</a>
       </div>
       <p class="text-sm text-blue-300 mt-4">No credit card required. Instant setup.</p>
@@ -1821,7 +1821,7 @@ app.get('/roof-measurement/:city', (c) => {
     <div class="max-w-3xl mx-auto px-4">
       <h2 class="text-3xl font-black mb-4">Ready to Grow Your ${city.name} Roofing Business?</h2>
       <p class="text-lg text-blue-100 mb-8">Join roofing contractors across ${city.province} who use Roof Manager to measure faster, quote smarter, and win more jobs.</p>
-      <a href="/customer/login" class="inline-block px-10 py-4 bg-white text-blue-700 font-black rounded-xl text-lg shadow-xl hover:bg-blue-50">Start Free — 3 Reports on Us <i class="fas fa-arrow-right ml-2"></i></a>
+      <a href="/register" class="inline-block px-10 py-4 bg-white text-blue-700 font-black rounded-xl text-lg shadow-xl hover:bg-blue-50">Start Free — 3 Reports on Us <i class="fas fa-arrow-right ml-2"></i></a>
     </div>
   </section>
 
@@ -5782,6 +5782,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
         <a href="/blog" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">Blog</a>
         <a href="/coverage" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">Coverage</a>
         <a href="/faq" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">FAQ</a>
+        <!-- TODO(Ethan): Replace +1XXXXXXXXXX with your real sales phone number before going live -->
         <!-- TODO(Ethan): confirm sales phone number and replace placeholder below -->
         <a href="tel:+1XXXXXXXXXX" class="hidden md:inline-flex items-center gap-1.5 text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200" aria-label="Call sales"><i class="fas fa-phone text-[10px] text-[#00FF88]"></i>(XXX) XXX-XXXX</a>
         <a href="/contact" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">Contact</a>
@@ -10539,7 +10540,7 @@ function getPricingPageHTML() {
       </a>
       <div class="flex items-center gap-4">
         <a href="/" class="text-brand-200 hover:text-white text-sm">Home</a>
-        <a href="/customer/login" class="bg-accent-500 hover:bg-accent-600 text-white font-semibold py-2 px-5 rounded-lg text-sm"><i class="fas fa-sign-in-alt mr-1"></i>Get Started</a>
+        <a href="/register" class="bg-accent-500 hover:bg-accent-600 text-white font-semibold py-2 px-5 rounded-lg text-sm"><i class="fas fa-sign-in-alt mr-1"></i>Get Started</a>
       </div>
     </div>
   </nav>
@@ -10552,7 +10553,7 @@ function getPricingPageHTML() {
         <h2 class="text-3xl font-extrabold">3 Free Reports When You Sign Up</h2>
       </div>
       <p class="text-green-100 text-lg mb-6">No credit card required. Create an account and get 3 professional roof measurement reports — completely free.</p>
-      <a href="/customer/login" class="inline-flex items-center gap-2 bg-white text-green-700 font-bold py-3 px-8 rounded-xl text-lg shadow-lg transition-all hover:scale-105 hover:bg-green-50">
+      <a href="/register" onclick="rrTrack('cta_click',{location:'pricing_signup'})" class="inline-flex items-center gap-2 bg-white text-green-700 font-bold py-3 px-8 rounded-xl text-lg shadow-lg transition-all hover:scale-105 hover:bg-green-50">
         <i class="fas fa-user-plus"></i>
         Sign Up Free
       </a>
@@ -10613,7 +10614,7 @@ function getPricingPageHTML() {
           <li class="flex items-center gap-2" style="color:var(--text-secondary)"><i class="fas fa-check text-green-500"></i>14-image gallery (overhead, aerial, street-view)</li>
           <li class="flex items-center gap-2" style="color:var(--text-secondary)"><i class="fas fa-check text-green-500"></i>Perimeter side-by-side measurements in ft &amp; in</li>
         </ul>
-        <a href="/customer/login" class="block w-full py-3 text-center font-bold rounded-xl transition-all hover:scale-[1.02] bg-brand-600 hover:bg-brand-700 text-white shadow-lg">
+        <a href="/register" onclick="rrTrack('cta_click',{location:'pricing_signup'})" class="block w-full py-3 text-center font-bold rounded-xl transition-all hover:scale-[1.02] bg-brand-600 hover:bg-brand-700 text-white shadow-lg">
           Get Started
         </a>
       </div>
@@ -10632,7 +10633,7 @@ function getPricingPageHTML() {
         </div>
         <p class="text-sm font-semibold text-brand-600 mb-1">$7.50/report</p>
         <span class="inline-block bg-green-100 text-green-700 px-2 py-0.5 rounded-full text-xs font-bold mb-3">Save 6%</span>
-        <a href="/customer/login" class="block w-full py-2.5 bg-sky-600 hover:bg-sky-700 text-white font-bold rounded-lg text-sm transition-all hover:scale-[1.02]">
+        <a href="/register" onclick="rrTrack('cta_click',{location:'pricing_signup'})" class="block w-full py-2.5 bg-sky-600 hover:bg-sky-700 text-white font-bold rounded-lg text-sm transition-all hover:scale-[1.02]">
           Buy 10 Credits
         </a>
       </div>
@@ -10646,7 +10647,7 @@ function getPricingPageHTML() {
         </div>
         <p class="text-sm font-semibold text-brand-600 mb-1">$7.00/report</p>
         <span class="inline-block bg-green-100 text-green-700 px-2 py-0.5 rounded-full text-xs font-bold mb-3">Save 13%</span>
-        <a href="/customer/login" class="block w-full py-2.5 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-lg text-sm transition-all hover:scale-[1.02]">
+        <a href="/register" onclick="rrTrack('cta_click',{location:'pricing_signup'})" class="block w-full py-2.5 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-lg text-sm transition-all hover:scale-[1.02]">
           Buy 25 Credits
         </a>
       </div>
@@ -10660,7 +10661,7 @@ function getPricingPageHTML() {
         </div>
         <p class="text-sm font-semibold text-brand-600 mb-1">$5.95/report</p>
         <span class="inline-block bg-green-100 text-green-700 px-2 py-0.5 rounded-full text-xs font-bold mb-3">Save 26%</span>
-        <a href="/customer/login" class="block w-full py-2.5 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-lg text-sm transition-all hover:scale-[1.02]">
+        <a href="/register" onclick="rrTrack('cta_click',{location:'pricing_signup'})" class="block w-full py-2.5 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-lg text-sm transition-all hover:scale-[1.02]">
           Buy 100 Credits
         </a>
       </div>
@@ -10691,7 +10692,7 @@ function getPricingPageHTML() {
             <li class="flex items-center gap-2"><i class="fas fa-check-circle text-green-400"></i>Sends call summaries with transcripts</li>
             <li class="flex items-center gap-2"><i class="fas fa-check-circle text-green-400"></i>First month free — cancel anytime</li>
           </ul>
-          <a href="/customer/login" class="block w-full py-3 text-center font-bold rounded-xl bg-white text-indigo-900 hover:bg-purple-50 transition-all hover:scale-[1.02] shadow-lg">
+          <a href="/register" onclick="rrTrack('cta_click',{location:'pricing_signup'})" class="block w-full py-3 text-center font-bold rounded-xl bg-white text-indigo-900 hover:bg-purple-50 transition-all hover:scale-[1.02] shadow-lg">
             Start Free Trial
           </a>
         </div>
@@ -10714,7 +10715,7 @@ function getPricingPageHTML() {
             <li class="flex items-center gap-2"><i class="fas fa-check-circle text-green-400"></i>Captures leads directly to your CRM</li>
             <li class="flex items-center gap-2"><i class="fas fa-check-circle text-green-400"></i>+$74/mo to add embeddable widget for your site</li>
           </ul>
-          <a href="/customer/login" class="block w-full py-3 text-center font-bold rounded-xl bg-white text-emerald-900 hover:bg-emerald-50 transition-all hover:scale-[1.02] shadow-lg">
+          <a href="/register" class="block w-full py-3 text-center font-bold rounded-xl bg-white text-emerald-900 hover:bg-emerald-50 transition-all hover:scale-[1.02] shadow-lg">
             Get Started
           </a>
         </div>
@@ -10735,7 +10736,7 @@ function getPricingPageHTML() {
             <li class="flex items-center gap-2" style="color:var(--text-secondary)"><i class="fas fa-check-circle text-green-500"></i>Ad-free experience</li>
             <li class="flex items-center gap-2" style="color:var(--text-secondary)"><i class="fas fa-check-circle text-green-500"></i>Cancel anytime</li>
           </ul>
-          <a href="/customer/login" class="block w-full py-3 text-center font-bold rounded-xl bg-brand-600 hover:bg-brand-700 text-white transition-all hover:scale-[1.02] shadow-lg">
+          <a href="/register" class="block w-full py-3 text-center font-bold rounded-xl bg-brand-600 hover:bg-brand-700 text-white transition-all hover:scale-[1.02] shadow-lg">
             Get Started
           </a>
         </div>
@@ -10752,7 +10753,7 @@ function getPricingPageHTML() {
             <li class="flex items-center gap-2" style="color:var(--text-secondary)"><i class="fas fa-check-circle text-green-500"></i>Priority support</li>
             <li class="flex items-center gap-2" style="color:var(--text-secondary)"><i class="fas fa-check-circle text-green-500"></i>Cancel anytime</li>
           </ul>
-          <a href="/customer/login" class="block w-full py-3 text-center font-bold rounded-xl bg-brand-600 hover:bg-brand-700 text-white transition-all hover:scale-[1.02] shadow-lg">
+          <a href="/register" class="block w-full py-3 text-center font-bold rounded-xl bg-brand-600 hover:bg-brand-700 text-white transition-all hover:scale-[1.02] shadow-lg">
             Get Started
           </a>
         </div>
@@ -10768,7 +10769,7 @@ function getPricingPageHTML() {
             <li class="flex items-center gap-2" style="color:var(--text-secondary)"><i class="fas fa-check-circle text-green-500"></i>Dedicated account manager</li>
             <li class="flex items-center gap-2" style="color:var(--text-secondary)"><i class="fas fa-check-circle text-green-500"></i>Cancel anytime</li>
           </ul>
-          <a href="/customer/login" class="block w-full py-3 text-center font-bold rounded-xl bg-purple-600 hover:bg-purple-700 text-white transition-all hover:scale-[1.02] shadow-lg">
+          <a href="/register" class="block w-full py-3 text-center font-bold rounded-xl bg-purple-600 hover:bg-purple-700 text-white transition-all hover:scale-[1.02] shadow-lg">
             Get Started
           </a>
         </div>
@@ -10796,7 +10797,7 @@ function getPricingPageHTML() {
           <p class="text-gray-300 text-sm">Full bill of materials with Canadian pricing</p>
         </div>
       </div>
-      <a href="/customer/login" class="inline-block mt-8 bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-8 rounded-xl text-lg transition-all hover:scale-105 shadow-lg">
+      <a href="/register" class="inline-block mt-8 bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-8 rounded-xl text-lg transition-all hover:scale-105 shadow-lg">
         <i class="fas fa-gift mr-2"></i>Sign Up — 3 Free Reports
       </a>
     </div>
@@ -11299,7 +11300,7 @@ function getBlogPostHTML(post?: any, slug?: string) {
       <h3 class="text-xl font-bold text-white mb-2">Ready to streamline your roof measurements?</h3>
       <p class="text-gray-400 mb-6 max-w-lg mx-auto">Join hundreds of roofing professionals who save hours on every estimate with AI-powered measurement reports.</p>
       <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
-        <a href="/customer/login" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold py-3 px-8 rounded-lg transition-all hover:scale-105 shadow-lg"><i class="fas fa-rocket mr-2"></i>Start Free Trial</a>
+        <a href="/register" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold py-3 px-8 rounded-lg transition-all hover:scale-105 shadow-lg"><i class="fas fa-rocket mr-2"></i>Start Free Trial</a>
         <a href="/pricing" class="text-[#00FF88] hover:text-[#00e67a] font-semibold text-sm"><i class="fas fa-tag mr-1"></i>View Pricing</a>
       </div>
     </div>
@@ -11417,7 +11418,7 @@ function getLanderFunnelHTML() {
         <img src="/static/logo.png" alt="Roof Manager" class="w-7 h-7 rounded-md object-cover">
         <span class="text-white font-bold text-sm">Roof Manager</span>
       </a>
-      <a href="/customer/login" class="bg-gradient-to-r from-cyan-500 to-blue-500 text-white text-sm font-semibold py-1.5 px-4 rounded-lg hover:opacity-90 transition-opacity">Sign Up Free</a>
+      <a href="/register" class="bg-gradient-to-r from-cyan-500 to-blue-500 text-white text-sm font-semibold py-1.5 px-4 rounded-lg hover:opacity-90 transition-opacity">Sign Up Free</a>
     </div>
   </nav>
 
@@ -11445,7 +11446,7 @@ function getLanderFunnelHTML() {
           </p>
 
           <div class="flex flex-col sm:flex-row gap-4 mb-6">
-            <a href="/customer/login" class="group inline-flex items-center gap-3 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-400 hover:to-emerald-400 text-white font-bold py-4 px-10 rounded-xl text-lg shadow-2xl shadow-green-500/25 transition-all hover:scale-[1.02]">
+            <a href="/register" class="group inline-flex items-center gap-3 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-400 hover:to-emerald-400 text-white font-bold py-4 px-10 rounded-xl text-lg shadow-2xl shadow-green-500/25 transition-all hover:scale-[1.02]">
               <i class="fas fa-rocket"></i>
               Claim Your 3 Free Reports
               <i class="fas fa-arrow-right text-sm group-hover:translate-x-1 transition-transform"></i>
@@ -11573,7 +11574,7 @@ function getLanderFunnelHTML() {
         Sign up in 30 seconds, get 3 free professional roof measurement reports, and access the full CRM — no credit card required.
       </p>
       <div class="flex flex-col sm:flex-row gap-4 justify-center">
-        <a href="/customer/login" class="group inline-flex items-center gap-3 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-400 hover:to-emerald-400 text-white font-bold py-4 px-12 rounded-xl text-lg shadow-2xl shadow-green-500/25 transition-all hover:scale-[1.02]">
+        <a href="/register" class="group inline-flex items-center gap-3 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-400 hover:to-emerald-400 text-white font-bold py-4 px-12 rounded-xl text-lg shadow-2xl shadow-green-500/25 transition-all hover:scale-[1.02]">
           <i class="fas fa-rocket"></i>
           Start Free Now
           <i class="fas fa-arrow-right text-sm group-hover:translate-x-1 transition-transform"></i>
@@ -15245,7 +15246,7 @@ function getHomeownerEstimatePageHTML(): string {
       </a>
       <div class="flex items-center gap-3">
         <a href="/sample-report" class="text-gray-400 hover:text-white text-sm font-medium hidden sm:inline transition-colors">See Sample Report</a>
-        <a href="/customer/login" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold py-2.5 px-5 rounded-xl text-sm min-h-[44px] inline-flex items-center transition-colors">Start Free</a>
+        <a href="/register" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold py-2.5 px-5 rounded-xl text-sm min-h-[44px] inline-flex items-center transition-colors">Start Free</a>
       </div>
     </div>
   </nav>
@@ -15266,7 +15267,7 @@ function getHomeownerEstimatePageHTML(): string {
           Get a free satellite roof measurement report in 60 seconds — no ladder, no appointment, no pressure. See your roof's total area, pitch, edge lengths, and estimated materials. Then share it with any roofer to get <strong class="text-white">fair, accurate quotes based on real numbers.</strong>
         </p>
         <div class="flex flex-col sm:flex-row gap-3 mb-6">
-          <a href="/customer/login?mode=signup" class="flex items-center justify-center gap-2.5 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-8 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/20 min-h-[56px] transition-all hover:scale-[1.02]">
+          <a href="/register" class="flex items-center justify-center gap-2.5 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-8 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/20 min-h-[56px] transition-all hover:scale-[1.02]">
             <i class="fas fa-satellite-dish"></i> Get My Free Roof Report <i class="fas fa-arrow-right text-sm"></i>
           </a>
           <a href="/sample-report" class="flex items-center justify-center gap-2.5 bg-white/5 hover:bg-white/10 text-white font-bold py-4 px-7 rounded-xl text-base border border-white/10 hover:border-white/20 min-h-[56px] transition-all">
@@ -15443,7 +15444,7 @@ function getHomeownerEstimatePageHTML(): string {
       <div class="bg-gradient-to-br from-[#00FF88]/10 to-transparent border border-[#00FF88]/20 rounded-2xl p-10 md:p-14">
         <h2 class="text-3xl md:text-4xl font-black text-white mb-4">Know before you negotiate.</h2>
         <p class="text-gray-400 mb-8 max-w-lg mx-auto leading-relaxed">Homeowners with accurate measurements save an average of $1,200–$3,500 on their roof replacement by getting comparable quotes. Your free report takes 60 seconds.</p>
-        <a href="/customer/login?mode=signup" class="inline-flex items-center justify-center gap-3 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-10 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/20 min-h-[56px] transition-all hover:scale-[1.03]">
+        <a href="/register" class="inline-flex items-center justify-center gap-3 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-10 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/20 min-h-[56px] transition-all hover:scale-[1.03]">
           <i class="fas fa-satellite-dish"></i> Get My Free Roof Report <i class="fas fa-arrow-right text-sm"></i>
         </a>
         <p class="text-xs text-gray-500 mt-4">Free &middot; No credit card &middot; US &amp; Canada</p>
