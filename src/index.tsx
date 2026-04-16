@@ -3103,8 +3103,11 @@ export default {
       })())
     }
 
-    // ── Traffic Analyst Agent (every 12 hours: 0, 12 UTC) ────
-    if (hour % 12 === 0 && await isAgentEnabled('traffic')) {
+    // ── Traffic Analyst Agent — hourly fallback ───────────────
+    // Primary trigger is event-driven (fires via /api/analytics/track
+    // whenever a page_exit arrives, rate-limited to 10 min cooldown).
+    // This hourly cron is a safety net for low-traffic periods.
+    if (await isAgentEnabled('traffic')) {
       ctx.waitUntil((async () => {
         const t0 = Date.now()
         try {

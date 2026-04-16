@@ -5,6 +5,7 @@
 // ============================================================
 
 import { Hono } from 'hono'
+import { runTrafficAgent } from '../services/traffic-agent'
 
 type Bindings = {
   DB: D1Database
@@ -12,8 +13,12 @@ type Bindings = {
   GA4_MEASUREMENT_ID: string
   GA4_API_SECRET: string
   GA4_PROPERTY_ID: string
+  ANTHROPIC_API_KEY: string
   [key: string]: any
 }
+
+// Minimum gap between event-triggered analysis runs (10 minutes)
+const LIVE_ANALYSIS_COOLDOWN_MS = 10 * 60 * 1000
 
 export const analyticsRoutes = new Hono<{ Bindings: Bindings }>()
 
@@ -98,6 +103,56 @@ analyticsRoutes.post('/track', async (c) => {
     ))
 
     await c.env.DB.batch(batch)
+
+    // ── Live traffic analysis trigger ─────────────────────────
+    // If this batch contains a page_exit event and the traffic agent is
+    // enabled, fire a background analysis (waitUntil — doesn't delay 204).
+    // Rate-limited to once per LIVE_ANALYSIS_COOLDOWN_MS so we don't call
+    // Claude on every single exit during a busy traffic period.
+    const hasExit = filteredEvents.some(e => e.event_type === 'page_exit' || e.event_type === 'pageview')
+    if (hasExit && c.env.ANTHROPIC_API_KEY) {
+      c.executionCtx.waitUntil((async () => {
+        try {
+          // Check cooldown: only run if last_run_at is older than cooldown threshold
+          const config = await c.env.DB.prepare(
+            `SELECT enabled, last_run_at FROM agent_configs WHERE agent_type = 'traffic'`
+          ).first<{ enabled: number; last_run_at: string | null }>()
+
+          if (!config || config.enabled !== 1) return  // agent disabled
+
+          const lastRun = config.last_run_at ? new Date(config.last_run_at).getTime() : 0
+          if (Date.now() - lastRun < LIVE_ANALYSIS_COOLDOWN_MS) return  // still in cooldown
+
+          // Update last_run_at immediately to claim the slot (prevents parallel runs)
+          await c.env.DB.prepare(
+            `UPDATE agent_configs SET last_run_at = datetime('now'), updated_at = datetime('now') WHERE agent_type = 'traffic'`
+          ).run()
+
+          const t0 = Date.now()
+          const result = await runTrafficAgent(c.env as any)
+          const duration = Date.now() - t0
+          const status = result.ok ? 'success' : 'error'
+          const summary = result.sessions_analyzed === 0
+            ? 'No visitor sessions to analyse yet'
+            : `Analysed ${result.sessions_analyzed} sessions — ${result.insights_found} UX finding(s), ${result.bounce_rate_pct}% bounce rate${result.top_exit_page ? `, top exit: ${result.top_exit_page}` : ''}`
+
+          await c.env.DB.prepare(
+            `INSERT INTO agent_runs (agent_type, status, summary, details_json, duration_ms) VALUES (?, ?, ?, ?, ?)`
+          ).bind('traffic', status, summary, JSON.stringify({ sessions: result.sessions_analyzed, insights: result.insights_found }).slice(0, 4000), duration).run()
+
+          await c.env.DB.prepare(
+            `UPDATE agent_configs SET last_run_status = ?, last_run_details = ?, run_count = run_count + 1,
+             error_count = error_count + CASE WHEN ? = 'error' THEN 1 ELSE 0 END, updated_at = datetime('now')
+             WHERE agent_type = 'traffic'`
+          ).bind(status, summary.slice(0, 500), status).run()
+
+          console.log(`[LIVE:traffic] ${summary} (${duration}ms)`)
+        } catch (err: any) {
+          console.error('[LIVE:traffic] Analysis error:', err.message)
+        }
+      })())
+    }
+
     return c.body(null, 204)
   } catch (err: any) {
     console.error('[Analytics] Track error:', err.message)
