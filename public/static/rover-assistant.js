@@ -221,6 +221,32 @@
       30% { transform: translateY(-6px); }
     }
 
+    /* ── Thinking indicator (tool execution) ── */
+    .ra-thinking {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      align-self: flex-start;
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 12px;
+      font-size: 12px;
+      color: #1d4ed8;
+      font-weight: 500;
+    }
+    .ra-thinking-spinner {
+      width: 14px; height: 14px;
+      border: 2px solid #bfdbfe;
+      border-top-color: #1d4ed8;
+      border-radius: 50%;
+      animation: raSpinThink 0.7s linear infinite;
+      flex-shrink: 0;
+    }
+    @keyframes raSpinThink {
+      to { transform: rotate(360deg); }
+    }
+
     /* ── Input ── */
     .ra-input-area {
       padding: 12px 16px 16px;
@@ -454,8 +480,22 @@
     }
   };
 
+  // Show/hide thinking indicator (shown while tools execute between phase 1 and phase 2)
+  function showThinking() {
+    var t = document.createElement('div');
+    t.className = 'ra-thinking';
+    t.id = 'ra-thinking';
+    t.innerHTML = '<div class="ra-thinking-spinner"></div>Looking up your data…';
+    messagesEl.appendChild(t);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+  function hideThinking() {
+    var t = document.getElementById('ra-thinking');
+    if (t) t.remove();
+  }
+
   // ============================================================
-  // SEND
+  // SEND — SSE streaming with tool-call support
   // ============================================================
   window.__roverAssistantSend = async function(overrideMsg) {
     var msg = overrideMsg || inputEl.value.trim();
@@ -469,19 +509,18 @@
     sendBtn.disabled = true;
     showTyping();
 
+    var msgEl = null;    // streaming bubble
+    var fullContent = '';
+
     try {
-      var res = await fetch('/api/rover/assistant', {
+      var res = await fetch('/api/rover/assistant/stream', {
         method: 'POST',
         headers: authHeaders(),
-        body: JSON.stringify({
-          session_id: state.sessionId,
-          message: msg
-        })
+        body: JSON.stringify({ session_id: state.sessionId, message: msg })
       });
 
-      hideTyping();
-
       if (res.status === 401) {
+        hideTyping();
         addMessage('assistant', 'Your session has expired. Please log in again at /customer/login.');
         state.loading = false;
         inputEl.disabled = false;
@@ -489,19 +528,83 @@
         return;
       }
 
-      if (res.ok) {
-        var data = await res.json();
-        if (data.reply) {
-          addMessage('assistant', data.reply);
-        } else if (data.error) {
-          addMessage('assistant', data.error);
-        }
-      } else {
-        addMessage('assistant', 'I had a hiccup processing that. Try again or check your dashboard for what you need.');
-      }
-    } catch(e) {
+      if (!res.ok || !res.body) throw new Error('stream unavailable');
+
       hideTyping();
-      addMessage('assistant', 'Connection issue — please check your internet and try again. Your dashboard is still accessible.');
+
+      var reader = res.body.getReader();
+      var decoder = new TextDecoder();
+      var buf = '';
+
+      while (true) {
+        var chunk = await reader.read();
+        if (chunk.done) break;
+
+        buf += decoder.decode(chunk.value, { stream: true });
+        var lines = buf.split('\n');
+        buf = lines.pop();
+
+        for (var i = 0; i < lines.length; i++) {
+          var line = lines[i];
+          if (!line.startsWith('data: ')) continue;
+          var raw = line.slice(6).trim();
+          if (!raw) continue;
+          try {
+            var data = JSON.parse(raw);
+
+            if (data.thinking) {
+              // Tool execution in progress — show thinking indicator
+              showThinking();
+            }
+
+            if (data.delta) {
+              // Hide thinking indicator on first token of the real answer
+              hideThinking();
+              if (!msgEl) {
+                msgEl = document.createElement('div');
+                msgEl.className = 'ra-msg assistant';
+                messagesEl.appendChild(msgEl);
+              }
+              fullContent += data.delta;
+              msgEl.innerHTML = formatContent(fullContent);
+              messagesEl.scrollTop = messagesEl.scrollHeight;
+            }
+
+            if (data.done) {
+              hideThinking();
+              // Final re-render for any remaining formatting
+              if (msgEl) msgEl.innerHTML = formatContent(fullContent);
+            }
+          } catch (e) { /* malformed chunk */ }
+        }
+      }
+
+      if (!fullContent) {
+        addMessage('assistant', 'I had a hiccup processing that. Try again or check your dashboard directly.');
+      }
+
+    } catch (e) {
+      hideTyping();
+      hideThinking();
+
+      // Fall back to non-streaming endpoint
+      try {
+        var fallback = await fetch('/api/rover/assistant', {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify({ session_id: state.sessionId, message: msg })
+        });
+        if (fallback.status === 401) {
+          addMessage('assistant', 'Your session has expired. Please log in again at /customer/login.');
+        } else if (fallback.ok) {
+          var fd = await fallback.json();
+          if (fd.reply) addMessage('assistant', fd.reply);
+        } else {
+          addMessage('assistant', 'Connection issue — please check your internet and try again.');
+        }
+      } catch (e2) {
+        addMessage('assistant', 'Connection issue — please check your internet and try again.');
+      }
     }
 
     state.loading = false;

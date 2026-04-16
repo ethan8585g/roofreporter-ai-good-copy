@@ -534,19 +534,19 @@
     return d.innerHTML;
   }
 
+  function formatRoverContent(text) {
+    return esc(text)
+      .replace(/\n/g, '<br>')
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/(\/customer\/login|\/customer\/[a-z-]+|\/pricing|\/blog|\/coverage)/g, '<a href="$1" style="color:inherit;text-decoration:underline;font-weight:600" target="_blank">$1</a>')
+      .replace(/(sales@roofmanager\.ca)/g, '<a href="mailto:$1" style="color:inherit;text-decoration:underline;font-weight:600">$1</a>');
+  }
+
   function addMessage(role, content, withActions) {
     state.messages.push({ role, content });
     const msg = document.createElement('div');
     msg.className = 'rover-msg ' + role;
-
-    // Process content: convert links and line breaks
-    let html = esc(content)
-      .replace(/\n/g, '<br>')
-      .replace(/(\/customer\/login|\/pricing|\/blog)/g, '<a href="$1" style="color:inherit;text-decoration:underline;font-weight:600" target="_blank">$1</a>')
-      .replace(/(reports@reusecanada\.ca)/g, '<a href="mailto:$1" style="color:inherit;text-decoration:underline;font-weight:600">$1</a>')
-      .replace(/(roofreporterai\.com)/g, '<a href="https://$1" style="color:inherit;text-decoration:underline;font-weight:600" target="_blank">$1</a>');
-    
-    msg.innerHTML = html;
+    msg.innerHTML = formatRoverContent(content);
 
     // Add quick action buttons for first message
     if (withActions) {
@@ -721,13 +721,10 @@
     sessionStorage.setItem('rover_greeting_dismissed', '1');
   };
 
-  // Send message
+  // Send message — uses SSE streaming endpoint, falls back to JSON endpoint
   window.__roverSend = async function() {
     var msg = inputEl.value.trim();
-    if (!msg) return;
-
-    // Force reset loading state in case it's stuck
-    state.loading = false;
+    if (!msg || state.loading) return;
 
     inputEl.value = '';
     addMessage('user', msg);
@@ -736,17 +733,20 @@
     document.getElementById('rover-send').disabled = true;
     showTyping();
 
-    // Safety timeout — reset everything after 15s no matter what
+    // Safety timeout — 30s for streaming
     var safetyTimeout = setTimeout(function() {
       state.loading = false;
       inputEl.disabled = false;
       document.getElementById('rover-send').disabled = false;
       hideTyping();
       addMessage('assistant', "Sorry, that took too long! Please try again or email sales@roofmanager.ca");
-    }, 15000);
+    }, 30000);
+
+    var msgEl = null;   // streaming bubble element
+    var fullContent = '';
 
     try {
-      var res = await fetch('/api/rover/chat', {
+      var res = await fetch('/api/rover/chat/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -757,42 +757,87 @@
       });
 
       clearTimeout(safetyTimeout);
+
+      if (!res.ok || !res.body) throw new Error('stream unavailable');
+
       hideTyping();
 
-      if (res.ok) {
-        var data = await res.json();
+      var reader = res.body.getReader();
+      var decoder = new TextDecoder();
+      var buf = '';
 
-        if (data.reply) {
-          addMessage('assistant', data.reply);
-        } else if (data.error) {
-          addMessage('assistant', data.error);
-        }
+      while (true) {
+        var chunk = await reader.read();
+        if (chunk.done) break;
 
-        if (data.show_contact_form) {
-          showContactForm();
-        }
+        buf += decoder.decode(chunk.value, { stream: true });
+        var lines = buf.split('\n');
+        buf = lines.pop();
 
-        if (data.reply && (
-          data.reply.includes('fill out the contact form') ||
-          data.reply.includes('contact form below')
-        )) {
-          showContactForm();
-        }
+        for (var i = 0; i < lines.length; i++) {
+          var line = lines[i];
+          if (!line.startsWith('data: ')) continue;
+          var raw = line.slice(6).trim();
+          if (!raw) continue;
+          try {
+            var data = JSON.parse(raw);
 
-        if (!state.open) {
-          state.unread++;
-          badgeEl.textContent = state.unread;
-          badgeEl.classList.add('show');
+            if (data.delta) {
+              if (!msgEl) {
+                // Create the assistant bubble on first token
+                msgEl = document.createElement('div');
+                msgEl.className = 'rover-msg assistant';
+                messagesEl.appendChild(msgEl);
+              }
+              fullContent += data.delta;
+              msgEl.innerHTML = formatRoverContent(fullContent);
+              messagesEl.scrollTop = messagesEl.scrollHeight;
+            }
+
+            if (data.done) {
+              if (data.show_contact_form) showContactForm();
+              // Final re-render with full formatting
+              if (msgEl) msgEl.innerHTML = formatRoverContent(fullContent);
+            }
+          } catch (e) { /* malformed SSE chunk — skip */ }
         }
-      } else {
-        addMessage('assistant', "I'm having a quick technical hiccup! You can reach us at sales@roofmanager.ca or sign up at /customer/login for 3 free reports. 😊");
+      }
+
+      // If the stream returned nothing at all, show a fallback
+      if (!fullContent) {
+        addMessage('assistant', "I'm having a quick technical hiccup! You can reach us at sales@roofmanager.ca or sign up at /customer/login for 3 free reports.");
         showContactForm();
       }
+
+      if (!state.open) {
+        state.unread++;
+        badgeEl.textContent = state.unread;
+        badgeEl.classList.add('show');
+      }
+
     } catch (e) {
       clearTimeout(safetyTimeout);
       hideTyping();
-      addMessage('assistant', "Oops, connection issue! You can email us at sales@roofmanager.ca or try again in a moment.");
-      showContactForm();
+
+      // Streaming failed — fall back to the non-streaming JSON endpoint
+      try {
+        var fallback = await fetch('/api/rover/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session_id: state.sessionId, message: msg, page_url: window.location.pathname })
+        });
+        if (fallback.ok) {
+          var fd = await fallback.json();
+          if (fd.reply) addMessage('assistant', fd.reply);
+          if (fd.show_contact_form) showContactForm();
+        } else {
+          addMessage('assistant', "Oops, connection issue! You can email us at sales@roofmanager.ca or try again in a moment.");
+          showContactForm();
+        }
+      } catch (e2) {
+        addMessage('assistant', "Oops, connection issue! You can email us at sales@roofmanager.ca or try again in a moment.");
+        showContactForm();
+      }
     } finally {
       state.loading = false;
       inputEl.disabled = false;
@@ -822,10 +867,7 @@
             state.messages.push({ role: m.role, content: m.content });
             var msgEl = document.createElement('div');
             msgEl.className = 'rover-msg ' + m.role;
-            msgEl.innerHTML = esc(m.content)
-              .replace(/\n/g, '<br>')
-              .replace(/(\/customer\/login|\/pricing|\/blog)/g, '<a href="$1" style="color:inherit;text-decoration:underline;font-weight:600" target="_blank">$1</a>')
-              .replace(/(reports@reusecanada\.ca)/g, '<a href="mailto:$1" style="color:inherit;text-decoration:underline;font-weight:600">$1</a>');
+            msgEl.innerHTML = formatRoverContent(m.content);
             messagesEl.appendChild(msgEl);
           });
         }

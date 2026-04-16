@@ -299,6 +299,180 @@ async function callAI(
 }
 
 // ============================================================
+// STREAMING AI CALL — Returns raw OpenAI SSE Response
+// Used by the /chat/stream and /assistant/stream endpoints
+// ============================================================
+async function callAIStreamRaw(
+  env: any,
+  messages: any[],
+  maxTokens: number = 1000,
+  temperature: number = 0.7
+): Promise<Response> {
+  const apiKey = env.OPENAI_API_KEY
+  if (!apiKey) throw new Error('No OPENAI_API_KEY configured')
+
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o-mini',
+      messages,
+      max_tokens: maxTokens,
+      temperature,
+      stream: true,
+    }),
+  })
+
+  if (!response.ok) {
+    const errText = await response.text()
+    throw new Error(`OpenAI ${response.status}: ${errText.slice(0, 300)}`)
+  }
+
+  return response
+}
+
+// ============================================================
+// TOOL DEFINITIONS — Authenticated assistant function calls
+// ============================================================
+const ASSISTANT_TOOLS = [
+  {
+    type: 'function',
+    function: {
+      name: 'get_account_status',
+      description: "Get the customer's current account status: free trial credits, paid credits, total reports ordered, and completed reports.",
+      parameters: { type: 'object', properties: {}, required: [] },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'search_reports',
+      description: "Search for the customer's roof measurement reports by property address.",
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'Address or partial address to search for' },
+        },
+        required: ['query'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_report_details',
+      description: 'Get the full measurement details for a specific report by its order ID.',
+      parameters: {
+        type: 'object',
+        properties: {
+          order_id: { type: 'number', description: 'The numeric order/report ID' },
+        },
+        required: ['order_id'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_crm_summary',
+      description: "Get a live summary of the customer's CRM: total customers, outstanding invoice amount, and active job count.",
+      parameters: { type: 'object', properties: {}, required: [] },
+    },
+  },
+]
+
+// Execute a tool call from the assistant and return the result
+async function executeAssistantTool(
+  toolName: string,
+  toolArgs: any,
+  customer: any,
+  db: D1Database
+): Promise<any> {
+  switch (toolName) {
+    case 'get_account_status': {
+      const orders = await db.prepare(
+        "SELECT COUNT(*) as total, SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed FROM orders WHERE customer_id = ?"
+      ).bind(customer.customer_id).first<any>().catch(() => null)
+      return {
+        name: customer.name,
+        email: customer.email,
+        company: customer.company_name || 'Not set',
+        free_trial_remaining: customer.free_trial_remaining ?? 0,
+        paid_credits_remaining: customer.paid_credits_remaining ?? 0,
+        total_orders: orders?.total || 0,
+        completed_reports: orders?.completed || 0,
+      }
+    }
+
+    case 'search_reports': {
+      const { query } = toolArgs
+      if (!query) return { error: 'query parameter is required' }
+      const results = await db.prepare(
+        "SELECT id, property_address, roof_area_sqft, roof_pitch, status, created_at FROM orders WHERE customer_id = ? AND property_address LIKE ? ORDER BY created_at DESC LIMIT 5"
+      ).bind(customer.customer_id, `%${query}%`).all().catch(() => ({ results: [] }))
+      const reports = (results.results || []) as any[]
+      return {
+        count: reports.length,
+        reports: reports.map((r: any) => ({
+          id: r.id,
+          address: r.property_address,
+          area_sqft: r.roof_area_sqft ? Math.round(r.roof_area_sqft) : null,
+          pitch: r.roof_pitch,
+          status: r.status,
+          date: r.created_at,
+        })),
+      }
+    }
+
+    case 'get_report_details': {
+      const { order_id } = toolArgs
+      if (!order_id) return { error: 'order_id is required' }
+      const report = await db.prepare(
+        'SELECT * FROM orders WHERE id = ? AND customer_id = ?'
+      ).bind(order_id, customer.customer_id).first<any>().catch(() => null)
+      if (!report) return { error: 'Report not found or access denied' }
+      return {
+        id: report.id,
+        address: report.property_address,
+        status: report.status,
+        roof_area_sqft: report.roof_area_sqft ? Math.round(report.roof_area_sqft) : null,
+        roof_area_sqm: report.roof_area_sqm ? Number(report.roof_area_sqm).toFixed(1) : null,
+        roof_pitch: report.roof_pitch,
+        ridge_length_ft: report.ridge_length,
+        hip_length_ft: report.hip_length,
+        valley_length_ft: report.valley_length,
+        eave_length_ft: report.eave_length,
+        rake_length_ft: report.rake_length,
+        squares: report.roof_squares,
+        created_at: report.created_at,
+      }
+    }
+
+    case 'get_crm_summary': {
+      const [customers, invoices] = await Promise.all([
+        db.prepare(
+          'SELECT COUNT(*) as total FROM crm_customers WHERE master_company_id = (SELECT id FROM master_companies WHERE owner_customer_id = ?)'
+        ).bind(customer.customer_id).first<any>().catch(() => null),
+        db.prepare(
+          "SELECT COUNT(*) as total, COALESCE(SUM(CASE WHEN status IN ('sent','viewed','overdue') THEN total ELSE 0 END), 0) as owing FROM crm_invoices WHERE master_company_id = (SELECT id FROM master_companies WHERE owner_customer_id = ?)"
+        ).bind(customer.customer_id).first<any>().catch(() => null),
+      ])
+      return {
+        total_customers: customers?.total || 0,
+        total_invoices: invoices?.total || 0,
+        amount_owing: Number(invoices?.owing || 0).toFixed(2),
+      }
+    }
+
+    default:
+      return { error: `Unknown tool: ${toolName}` }
+  }
+}
+
+// ============================================================
 // PUBLIC ENDPOINTS — No auth required (visitor-facing)
 // ============================================================
 
@@ -683,6 +857,343 @@ roverRoutes.get('/history', async (c) => {
       status: conversation.status
     })
   } catch (err: any) {
+    return c.json({ error: err.message }, 500)
+  }
+})
+
+// ============================================================
+// POST /api/rover/chat/stream — SSE streaming public chatbot
+// Streams tokens as they arrive from OpenAI; falls back to
+// keyword response if AI fails. Same DB persistence as /chat.
+// ============================================================
+roverRoutes.post('/chat/stream', async (c) => {
+  try {
+    const body = await c.req.json()
+    const { session_id, message, page_url } = body
+
+    if (!session_id || !message) {
+      return c.json({ error: 'session_id and message are required' }, 400)
+    }
+
+    // Get or create conversation (identical logic to /chat)
+    let conversation = await c.env.DB.prepare(
+      'SELECT * FROM rover_conversations WHERE session_id = ?'
+    ).bind(session_id).first()
+
+    if (!conversation) {
+      const ip = c.req.header('cf-connecting-ip') || c.req.header('x-forwarded-for') || 'unknown'
+      const ua = c.req.header('user-agent') || 'unknown'
+      await c.env.DB.prepare(`
+        INSERT INTO rover_conversations (session_id, visitor_ip, visitor_user_agent, page_url, status, first_message_at, last_message_at)
+        VALUES (?, ?, ?, ?, 'active', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      `).bind(session_id, ip, ua, page_url || null).run()
+      conversation = await c.env.DB.prepare(
+        'SELECT * FROM rover_conversations WHERE session_id = ?'
+      ).bind(session_id).first()
+    }
+
+    if (!conversation) return c.json({ error: 'Failed to create conversation' }, 500)
+
+    const conversationId = conversation.id as number
+
+    await c.env.DB.prepare(
+      "INSERT INTO rover_messages (conversation_id, role, content) VALUES (?, 'user', ?)"
+    ).bind(conversationId, message).run()
+
+    const history = await c.env.DB.prepare(
+      'SELECT role, content FROM rover_messages WHERE conversation_id = ? ORDER BY created_at ASC LIMIT 20'
+    ).bind(conversationId).all()
+
+    const messages: any[] = [{ role: 'system', content: ROVER_SYSTEM_PROMPT }]
+    const isFirstMessage = (history.results || []).filter((m: any) => m.role === 'user').length <= 1
+    if (isFirstMessage) {
+      messages.push({ role: 'assistant', content: "Hey there! 🐕 I'm Rover, your Roof Manager expert helper! How can I help you today?" })
+    }
+    for (const msg of (history.results || [])) {
+      messages.push({ role: msg.role as string, content: msg.content as string })
+    }
+
+    const { readable, writable } = new TransformStream()
+    const writer = writable.getWriter()
+    const encoder = new TextEncoder()
+    const startTime = Date.now()
+
+    // Run the stream in background — response headers are sent immediately
+    ;(async () => {
+      let fullContent = ''
+      let useFallback = false
+
+      try {
+        const openaiRes = await callAIStreamRaw(c.env, messages, 1000, 0.7)
+        const reader = openaiRes.body!.getReader()
+        const decoder = new TextDecoder()
+        let buf = ''
+
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+
+          buf += decoder.decode(value, { stream: true })
+          const lines = buf.split('\n')
+          buf = lines.pop() ?? ''
+
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue
+            const raw = line.slice(6).trim()
+            if (raw === '[DONE]') continue
+            try {
+              const parsed = JSON.parse(raw)
+              const delta = parsed.choices?.[0]?.delta?.content
+              if (delta) {
+                fullContent += delta
+                await writer.write(encoder.encode(`data: ${JSON.stringify({ delta })}\n\n`))
+              }
+            } catch { /* malformed chunk — skip */ }
+          }
+        }
+      } catch {
+        useFallback = true
+        fullContent = getFallbackResponse(message)
+        // Stream the fallback word-by-word so the UI handles it the same way
+        const words = fullContent.split(' ')
+        for (let i = 0; i < words.length; i++) {
+          await writer.write(encoder.encode(`data: ${JSON.stringify({ delta: (i === 0 ? '' : ' ') + words[i] })}\n\n`))
+        }
+      }
+
+      // Persist the assistant reply
+      try {
+        const responseTimeMs = Date.now() - startTime
+        await c.env.DB.prepare(
+          "INSERT INTO rover_messages (conversation_id, role, content, model, response_time_ms) VALUES (?, 'assistant', ?, ?, ?)"
+        ).bind(conversationId, fullContent, useFallback ? 'fallback-smart' : 'gpt-4o-mini', responseTimeMs).run()
+        await c.env.DB.prepare(
+          'UPDATE rover_conversations SET message_count = message_count + 2, last_message_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+        ).bind(conversationId).run()
+        await extractLeadInfo(c.env.DB, conversationId, message)
+      } catch { /* best-effort */ }
+
+      const showContactForm =
+        useFallback ||
+        fullContent.includes('fill out the contact form') ||
+        fullContent.includes('contact form below')
+
+      await writer.write(encoder.encode(`data: ${JSON.stringify({ done: true, show_contact_form: showContactForm })}\n\n`))
+      await writer.close()
+    })()
+
+    return new Response(readable, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no',
+      },
+    })
+  } catch (err: any) {
+    console.error('[Rover] /chat/stream error:', err)
+    return c.json({ error: err.message }, 500)
+  }
+})
+
+// ============================================================
+// POST /api/rover/assistant/stream — SSE streaming authenticated assistant
+// Phase 1: non-streaming call with tool definitions (may trigger tool execution)
+// Phase 2: streaming call for the final answer after tools run
+// ============================================================
+roverRoutes.post('/assistant/stream', async (c) => {
+  try {
+    const customer = await validateCustomerSession(c.env.DB, c.req.header('Authorization'))
+    if (!customer) return c.json({ error: 'Authentication required' }, 401)
+
+    const body = await c.req.json()
+    const { session_id, message } = body
+    if (!session_id || !message) return c.json({ error: 'session_id and message are required' }, 400)
+
+    // Gather context — same parallel queries as /assistant
+    const [ordersResult, crmCustResult, crmInvResult, secResult, teamResult] = await Promise.all([
+      c.env.DB.prepare("SELECT COUNT(*) as total, SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed FROM orders WHERE customer_id = ?").bind(customer.customer_id).first().catch(() => null),
+      c.env.DB.prepare('SELECT COUNT(*) as total FROM crm_customers WHERE master_company_id = (SELECT id FROM master_companies WHERE owner_customer_id = ?)').bind(customer.customer_id).first().catch(() => null),
+      c.env.DB.prepare("SELECT COALESCE(SUM(CASE WHEN status IN ('sent','viewed','overdue') THEN total ELSE 0 END), 0) as owing FROM crm_invoices WHERE master_company_id = (SELECT id FROM master_companies WHERE owner_customer_id = ?)").bind(customer.customer_id).first().catch(() => null),
+      c.env.DB.prepare("SELECT COUNT(*) as active FROM secretary_subscriptions WHERE customer_id = ? AND status = 'active'").bind(customer.customer_id).first().catch(() => null),
+      c.env.DB.prepare("SELECT COUNT(*) as total FROM team_members WHERE owner_customer_id = ? AND status = 'active'").bind(customer.customer_id).first().catch(() => null),
+    ])
+
+    const recentReports = await c.env.DB.prepare(
+      'SELECT property_address, roof_area_sqft, roof_pitch, status, created_at FROM orders WHERE customer_id = ? ORDER BY created_at DESC LIMIT 5'
+    ).bind(customer.customer_id).all().catch(() => ({ results: [] }))
+
+    const context = {
+      totalOrders: (ordersResult as any)?.total || 0,
+      completedReports: (ordersResult as any)?.completed || 0,
+      crmCustomers: (crmCustResult as any)?.total || 0,
+      invoicesOwing: Number((crmInvResult as any)?.owing || 0).toFixed(2),
+      secretaryActive: ((secResult as any)?.active || 0) > 0,
+      secretaryCalls: 0,
+      teamMembers: (teamResult as any)?.total || 0,
+      recentReports: (recentReports.results || []).map((r: any) => ({
+        address: r.property_address,
+        area: r.roof_area_sqft ? Math.round(r.roof_area_sqft) + ' sq ft' : 'N/A',
+        pitch: r.roof_pitch || 'N/A',
+        status: r.status,
+        date: r.created_at,
+      })),
+    }
+
+    const assistantSessionId = `ast_${customer.customer_id}_${session_id}`
+    let conversation = await c.env.DB.prepare(
+      'SELECT * FROM rover_conversations WHERE session_id = ?'
+    ).bind(assistantSessionId).first()
+
+    if (!conversation) {
+      await c.env.DB.prepare(`
+        INSERT INTO rover_conversations (session_id, visitor_name, visitor_email, visitor_company, status, lead_status, lead_score, first_message_at, last_message_at, tags)
+        VALUES (?, ?, ?, ?, 'active', 'customer', 100, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'assistant,authenticated')
+      `).bind(assistantSessionId, customer.name || null, customer.email, customer.company_name || null).run()
+      conversation = await c.env.DB.prepare(
+        'SELECT * FROM rover_conversations WHERE session_id = ?'
+      ).bind(assistantSessionId).first()
+    }
+
+    if (!conversation) return c.json({ error: 'Failed to create conversation' }, 500)
+
+    const conversationId = conversation.id as number
+
+    await c.env.DB.prepare(
+      "INSERT INTO rover_messages (conversation_id, role, content) VALUES (?, 'user', ?)"
+    ).bind(conversationId, message).run()
+
+    const history = await c.env.DB.prepare(
+      'SELECT role, content FROM rover_messages WHERE conversation_id = ? ORDER BY created_at ASC LIMIT 30'
+    ).bind(conversationId).all()
+
+    let contextNote = ''
+    if (context.recentReports.length > 0) {
+      contextNote = '\n\nRECENT REPORTS:\n' + context.recentReports.map((r: any, i: number) =>
+        `${i + 1}. ${r.address} — ${r.area}, pitch ${r.pitch}, ${r.status} (${r.date})`
+      ).join('\n')
+    }
+
+    let messages: any[] = [
+      { role: 'system', content: buildAssistantSystemPrompt(customer, context) + contextNote },
+    ]
+    for (const msg of (history.results || [])) {
+      messages.push({ role: msg.role as string, content: msg.content as string })
+    }
+
+    const { readable, writable } = new TransformStream()
+    const writer = writable.getWriter()
+    const encoder = new TextEncoder()
+    const startTime = Date.now()
+
+    ;(async () => {
+      let fullContent = ''
+
+      try {
+        // Phase 1 — non-streaming call with tools so we can handle tool_calls finish_reason
+        const phase1 = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${c.env.OPENAI_API_KEY}`,
+          },
+          body: JSON.stringify({
+            model: 'gpt-4o-mini',
+            messages,
+            tools: ASSISTANT_TOOLS,
+            tool_choice: 'auto',
+            max_tokens: 1500,
+            temperature: 0.6,
+          }),
+        })
+
+        if (!phase1.ok) throw new Error(`OpenAI phase1 ${phase1.status}`)
+        const p1data: any = await phase1.json()
+        const p1choice = p1data.choices?.[0]
+
+        if (p1choice?.finish_reason === 'tool_calls') {
+          // Signal frontend that tool execution is in progress
+          await writer.write(encoder.encode(`data: ${JSON.stringify({ thinking: true })}\n\n`))
+
+          // Append the assistant's tool_calls message
+          messages.push(p1choice.message)
+
+          // Execute each tool call
+          for (const tc of (p1choice.message.tool_calls || [])) {
+            let args: any = {}
+            try { args = JSON.parse(tc.function.arguments || '{}') } catch { /**/ }
+            const result = await executeAssistantTool(tc.function.name, args, customer, c.env.DB)
+            messages.push({
+              role: 'tool',
+              tool_call_id: tc.id,
+              content: JSON.stringify(result),
+            })
+          }
+
+          // Phase 2 — stream the final answer with tool results in context
+          const phase2 = await callAIStreamRaw(c.env, messages, 1500, 0.6)
+          const reader = phase2.body!.getReader()
+          const decoder = new TextDecoder()
+          let buf = ''
+
+          while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
+            buf += decoder.decode(value, { stream: true })
+            const lines = buf.split('\n')
+            buf = lines.pop() ?? ''
+            for (const line of lines) {
+              if (!line.startsWith('data: ')) continue
+              const raw = line.slice(6).trim()
+              if (raw === '[DONE]') continue
+              try {
+                const parsed = JSON.parse(raw)
+                const delta = parsed.choices?.[0]?.delta?.content
+                if (delta) {
+                  fullContent += delta
+                  await writer.write(encoder.encode(`data: ${JSON.stringify({ delta })}\n\n`))
+                }
+              } catch { /**/ }
+            }
+          }
+        } else {
+          // No tool calls — send the already-fetched content as a single delta
+          fullContent = p1choice?.message?.content || ''
+          if (fullContent) {
+            await writer.write(encoder.encode(`data: ${JSON.stringify({ delta: fullContent })}\n\n`))
+          }
+        }
+      } catch (err: any) {
+        console.error('[Rover Assistant Stream] error:', err)
+        fullContent = `I'm having a technical hiccup! Try refreshing, or email sales@roofmanager.ca if this persists.`
+        await writer.write(encoder.encode(`data: ${JSON.stringify({ delta: fullContent })}\n\n`))
+      }
+
+      // Persist reply
+      try {
+        const responseTimeMs = Date.now() - startTime
+        await c.env.DB.prepare(
+          "INSERT INTO rover_messages (conversation_id, role, content, model, response_time_ms) VALUES (?, 'assistant', ?, ?, ?)"
+        ).bind(conversationId, fullContent, 'gpt-4o-mini', responseTimeMs).run()
+        await c.env.DB.prepare(
+          'UPDATE rover_conversations SET message_count = message_count + 2, last_message_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+        ).bind(conversationId).run()
+      } catch { /* best-effort */ }
+
+      await writer.write(encoder.encode(`data: ${JSON.stringify({ done: true })}\n\n`))
+      await writer.close()
+    })()
+
+    return new Response(readable, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no',
+      },
+    })
+  } catch (err: any) {
+    console.error('[Rover] /assistant/stream error:', err)
     return c.json({ error: err.message }, 500)
   }
 })
