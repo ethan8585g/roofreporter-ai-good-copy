@@ -16,10 +16,24 @@ import { buildEmailWrapper, sendViaResend, sendGmailOAuth2 } from './email'
 import { trackReportGenerated } from './ga4-events'
 
 // ── CONSTANTS ──
-const AUTO_TRACE_CONFIDENCE_THRESHOLD = 60   // Gemini quality score minimum
-const AUTO_TRACE_TIMEOUT_MS = 23_000         // Stay under CF Workers 25s budget
-const MAX_AUTO_ATTEMPTS = 2                   // Max auto-trace retries before flagging for human
+export const DEFAULT_CONFIDENCE_THRESHOLD = 60  // Fallback if not set in agent_configs
+const AUTO_TRACE_TIMEOUT_MS = 23_000             // Stay under CF Workers 25s budget
+const MAX_AUTO_ATTEMPTS = 2                       // Max auto-trace retries before flagging for human
 const AGENT_VERSION = '1.0.0'
+
+/** Read the current confidence threshold from agent_configs (Monitor can adjust this) */
+async function getConfidenceThreshold(db: D1Database): Promise<number> {
+  try {
+    const row = await db.prepare(
+      `SELECT config_json FROM agent_configs WHERE agent_type = 'tracing'`
+    ).first<{ config_json: string | null }>()
+    if (row?.config_json) {
+      const cfg = JSON.parse(row.config_json)
+      if (typeof cfg.confidence_threshold === 'number') return cfg.confidence_threshold
+    }
+  } catch {}
+  return DEFAULT_CONFIDENCE_THRESHOLD
+}
 
 // ── TYPES ──
 export interface AgentJobResult {
@@ -55,7 +69,8 @@ export interface AgentQueueStats {
 // ============================================================
 export async function autoProcessOrder(
   orderId: number | string,
-  env: Bindings
+  env: Bindings,
+  confidenceThreshold?: number
 ): Promise<AgentJobResult> {
   const startTime = Date.now()
 
@@ -116,14 +131,16 @@ export async function autoProcessOrder(
     }
 
     // ── Step 3: Check confidence threshold ──
-    if (autoTraceResult.confidence !== undefined && autoTraceResult.confidence < AUTO_TRACE_CONFIDENCE_THRESHOLD) {
+    const threshold = confidenceThreshold ?? DEFAULT_CONFIDENCE_THRESHOLD
+    if (autoTraceResult.confidence !== undefined && autoTraceResult.confidence < threshold) {
       await logAgentAction(env.DB, orderId, 'flagged_for_review',
-        `Confidence ${autoTraceResult.confidence}/100 below threshold ${AUTO_TRACE_CONFIDENCE_THRESHOLD}`)
+        `Confidence ${autoTraceResult.confidence}/100 below threshold ${threshold}`)
       await env.DB.prepare(
-        "UPDATE orders SET roof_trace_json = ?, needs_admin_trace = 1, notes = COALESCE(notes, '') || '\n[AI Agent] Low confidence (' || ? || '/100) — auto-trace saved but flagged for review' WHERE id = ?"
+        "UPDATE orders SET roof_trace_json = ?, needs_admin_trace = 1, notes = COALESCE(notes, '') || '\n[AI Agent] Low confidence (' || ? || '/100, threshold ' || ? || ') — auto-trace saved but flagged for review' WHERE id = ?"
       ).bind(
         JSON.stringify(autoTraceResult.trace),
         String(autoTraceResult.confidence),
+        String(threshold),
         orderId
       ).run()
 
@@ -131,7 +148,7 @@ export async function autoProcessOrder(
         success: false, order_id: Number(orderId), action: 'flagged_for_review',
         confidence: autoTraceResult.confidence,
         processing_ms: Date.now() - startTime,
-        details: `Low confidence: ${autoTraceResult.confidence}/100. Trace saved for manual review.`
+        details: `Low confidence: ${autoTraceResult.confidence}/100 (threshold ${threshold}). Trace saved for manual review.`
       }
     }
 
@@ -436,10 +453,13 @@ export async function processOrderQueue(env: Bindings): Promise<{
     return { processed: [], stats }
   }
 
+  // Read the Monitor-adjustable confidence threshold once for this batch
+  const confidenceThreshold = await getConfidenceThreshold(env.DB)
+
   // Process each order (sequentially to stay within CPU budget)
   for (const order of pendingOrders.results) {
     try {
-      const result = await autoProcessOrder(order.id, env)
+      const result = await autoProcessOrder(order.id, env, confidenceThreshold)
       results.push(result)
 
       // Log the job result

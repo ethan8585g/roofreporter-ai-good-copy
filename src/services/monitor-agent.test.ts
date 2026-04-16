@@ -3,10 +3,30 @@ import {
   buildMonitorPrompt,
   parseMonitorFindings,
   computeHealthScore,
+  autoAdjustTracingThreshold,
   type PlatformMetrics,
+  type TracingAccuracyMetrics,
 } from './monitor-agent'
 
 // ── Fixtures ──────────────────────────────────────────────────
+
+const healthyTracing: TracingAccuracyMetrics = {
+  avg_confidence_7d: 82,
+  avg_confidence_prev_7d: 80,
+  flagged_rate_7d: 0.08,
+  success_rate_7d: 0.92,
+  total_jobs_7d: 25,
+  current_threshold: 60,
+}
+
+const poorTracing: TracingAccuracyMetrics = {
+  avg_confidence_7d: 55,
+  avg_confidence_prev_7d: 72,
+  flagged_rate_7d: 0.5,
+  success_rate_7d: 0.5,
+  total_jobs_7d: 20,
+  current_threshold: 60,
+}
 
 const healthyMetrics: PlatformMetrics = {
   failed_orders_24h: 0,
@@ -20,6 +40,7 @@ const healthyMetrics: PlatformMetrics = {
   avg_report_duration_sec: 8,
   open_issues_count: 0,
   recent_errors: [],
+  tracing: healthyTracing,
 }
 
 const degradedMetrics: PlatformMetrics = {
@@ -34,6 +55,7 @@ const degradedMetrics: PlatformMetrics = {
   avg_report_duration_sec: 120,
   open_issues_count: 7,
   recent_errors: ['Agent crash: ANTHROPIC_API_KEY not set', 'D1 query timeout'],
+  tracing: poorTracing,
 }
 
 // ── buildMonitorPrompt ────────────────────────────────────────
@@ -227,5 +249,99 @@ describe('computeHealthScore', () => {
     const noPostsScore  = computeHealthScore(base)
     const withPostsScore = computeHealthScore({ ...base, blog_posts_this_week: 4 })
     expect(withPostsScore).toBeGreaterThan(noPostsScore)
+  })
+
+  it('deducts for poor tracing accuracy', () => {
+    const good = computeHealthScore({ ...healthyMetrics, tracing: healthyTracing })
+    const poor = computeHealthScore({ ...healthyMetrics, tracing: poorTracing })
+    expect(poor).toBeLessThan(good)
+  })
+})
+
+// ── autoAdjustTracingThreshold ────────────────────────────────
+
+describe('autoAdjustTracingThreshold', () => {
+  // Minimal stub DB that handles both .prepare().first() and .prepare().bind(...).run()
+  function makeDb(configJson: string | null = null) {
+    let stored: string | null = configJson
+    return {
+      prepare(_sql: string) {
+        return {
+          // Direct call without bind (SELECT without params)
+          first: async () => stored !== null ? { config_json: stored } : null,
+          // Chained: .bind(...).run() or .bind(...).first()
+          bind: (...args: any[]) => ({
+            first: async () => stored !== null ? { config_json: stored } : null,
+            run:   async () => { if (args[0] != null) stored = String(args[0]) },
+          }),
+          run: async () => {},
+        }
+      },
+      _getStored: () => stored,
+    } as any
+  }
+
+  it('raises threshold when accuracy is declining', async () => {
+    const db = makeDb(JSON.stringify({ confidence_threshold: 60 }))
+    const tracing: TracingAccuracyMetrics = {
+      ...poorTracing,
+      avg_confidence_7d: 60,
+      avg_confidence_prev_7d: 75,  // dropped 15 points
+      flagged_rate_7d: 0.3,
+      total_jobs_7d: 20,
+      current_threshold: 60,
+    }
+    const result = await autoAdjustTracingThreshold(db, tracing)
+    expect(result.adjusted).toBe(true)
+    expect(result.new_threshold).toBeGreaterThan(result.old_threshold)
+  })
+
+  it('raises threshold when flag rate is too high (>40%)', async () => {
+    const db = makeDb(JSON.stringify({ confidence_threshold: 60 }))
+    const tracing: TracingAccuracyMetrics = {
+      ...healthyTracing,
+      flagged_rate_7d: 0.45,
+      avg_confidence_7d: 65,
+      avg_confidence_prev_7d: 66,  // stable (no trend trigger)
+      total_jobs_7d: 20,
+      current_threshold: 60,
+    }
+    const result = await autoAdjustTracingThreshold(db, tracing)
+    expect(result.adjusted).toBe(true)
+    expect(result.new_threshold).toBe(65)
+  })
+
+  it('does not adjust when less than 3 jobs', async () => {
+    const db = makeDb(null)
+    const tracing: TracingAccuracyMetrics = { ...poorTracing, total_jobs_7d: 2 }
+    const result = await autoAdjustTracingThreshold(db, tracing)
+    expect(result.adjusted).toBe(false)
+  })
+
+  it('does not raise above max threshold (85)', async () => {
+    const db = makeDb(JSON.stringify({ confidence_threshold: 85 }))
+    const tracing: TracingAccuracyMetrics = {
+      ...poorTracing,
+      avg_confidence_prev_7d: 90,
+      avg_confidence_7d: 50,
+      total_jobs_7d: 10,
+      current_threshold: 85,
+    }
+    const result = await autoAdjustTracingThreshold(db, tracing)
+    expect(result.new_threshold).toBeLessThanOrEqual(85)
+  })
+
+  it('does not adjust when already at default and accuracy is stable', async () => {
+    const db = makeDb(null)
+    const tracing: TracingAccuracyMetrics = {
+      ...healthyTracing,
+      avg_confidence_7d:      80,
+      avg_confidence_prev_7d: 79,  // stable, no decline trigger
+      flagged_rate_7d:        0.08, // < 40%
+      total_jobs_7d:          15,
+      current_threshold:      60,   // already at default
+    }
+    const result = await autoAdjustTracingThreshold(db, tracing)
+    expect(result.adjusted).toBe(false)
   })
 })
