@@ -11,10 +11,11 @@ import { runContentAgent } from '../services/content-agent'
 import { runLeadAgent } from '../services/lead-agent'
 import { runEmailAgent } from '../services/email-agent'
 import { runMonitorAgent } from '../services/monitor-agent'
+import { runTrafficAgent } from '../services/traffic-agent'
 
 export const agentHubRoutes = new Hono<{ Bindings: Bindings }>()
 
-const VALID_AGENTS = new Set(['tracing', 'content', 'email', 'lead', 'monitor'])
+const VALID_AGENTS = new Set(['tracing', 'content', 'email', 'lead', 'monitor', 'traffic'])
 
 // ── Auth middleware ───────────────────────────────────────────
 
@@ -131,6 +132,9 @@ agentHubRoutes.post('/:agent/run', async (c) => {
         break
       case 'monitor':
         result = await runMonitorAgent(c.env)
+        break
+      case 'traffic':
+        result = await runTrafficAgent(c.env)
         break
     }
 
@@ -311,6 +315,10 @@ function buildSummary(agent: string, result: any): string {
     case 'monitor':
       if (!result.ok) return `Monitor scan failed: ${result.error || 'unknown error'}`
       return `Health score ${result.health_score}/100 — ${result.issues_found} finding(s)${result.critical_count > 0 ? ` (${result.critical_count} critical)` : ''}`
+    case 'traffic':
+      if (!result.ok) return `Traffic scan failed: ${result.error || 'unknown error'}`
+      if (result.sessions_analyzed === 0) return 'No visitor sessions to analyze yet'
+      return `Analyzed ${result.sessions_analyzed} sessions — ${result.insights_found} UX finding(s), ${result.bounce_rate_pct}% bounce rate${result.top_exit_page ? `, top exit: ${result.top_exit_page}` : ''}`
     default:
       return `${agent} completed`
   }

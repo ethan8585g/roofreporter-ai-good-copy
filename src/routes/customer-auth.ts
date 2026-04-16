@@ -515,7 +515,7 @@ customerAuthRoutes.post('/google', async (c) => {
       await c.env.DB.prepare(`
         INSERT INTO user_activity_log (company_id, action, details)
         VALUES (1, 'free_trial_granted', ?)
-      `).bind(`3 free trial reports granted to ${email} (Google sign-in)`).run()
+      `).bind(`4 free trial reports granted to ${email} (Google sign-in)`).run()
 
       // Seed default material catalog so new account has context on the section (non-blocking)
       seedDefaultMaterials(c.env.DB, customer.id as number).catch((e) => console.warn('[customer-auth] seedDefaultMaterials failed (google):', e?.message || e))
@@ -541,7 +541,7 @@ customerAuthRoutes.post('/google', async (c) => {
 
     const isNew = customer.is_new_signup || false
     const paidCreditsRemaining = (customer.report_credits || 0) - (customer.credits_used || 0)
-    const freeTrialRemaining = (customer.free_trial_total || 3) - (customer.free_trial_used || 0)
+    const freeTrialRemaining = (customer.free_trial_total || 4) - (customer.free_trial_used || 0)
     const totalRemaining = Math.max(0, freeTrialRemaining) + Math.max(0, paidCreditsRemaining)
 
     return c.json({
@@ -556,11 +556,11 @@ customerAuthRoutes.post('/google', async (c) => {
         role: 'customer',
         credits_remaining: totalRemaining,
         free_trial_remaining: Math.max(0, freeTrialRemaining),
-        free_trial_total: customer.free_trial_total || 3,
+        free_trial_total: customer.free_trial_total || 4,
         paid_credits_remaining: Math.max(0, paidCreditsRemaining)
       },
       token,
-      ...(isNew ? { welcome: true, message: 'Welcome! You have 3 free trial roof reports to get started.' } : {})
+      ...(isNew ? { welcome: true, message: 'Welcome! You have 4 free trial roof reports to get started.' } : {})
     })
   } catch (err: any) {
     return c.json({ error: 'Google sign-in failed', details: err.message }, 500)
@@ -673,14 +673,14 @@ customerAuthRoutes.post('/register', async (c) => {
         company_name,
         phone,
         role: 'customer',
-        credits_remaining: 3,
-        free_trial_remaining: 3,
-        free_trial_total: 3,
+        credits_remaining: 4,
+        free_trial_remaining: 4,
+        free_trial_total: 4,
         paid_credits_remaining: 0
       },
       token,
       welcome: true,
-      message: 'Welcome! You have 3 free trial roof reports to get started.'
+      message: 'Welcome! You have 4 free trial roof reports to get started.'
     })
   } catch (err: any) {
     return c.json({ error: 'Registration failed', details: err.message }, 500)

@@ -9209,6 +9209,7 @@ var HUB_AGENTS = [
   { key: 'email',   label: 'Email Marketing Agent',   icon: 'fa-envelope-open-text',color: 'blue',   desc: 'Generates and sends weekly educational campaigns to unengaged contacts.',   schedule: 'Tuesdays 10am UTC' },
   { key: 'lead',    label: 'Lead Response Agent',     icon: 'fa-bolt',              color: 'amber',  desc: 'Personalizes and sends outreach emails to new contact form leads.',    schedule: 'Every 2 hours' },
   { key: 'monitor', label: 'Platform Monitor Agent',  icon: 'fa-shield-alt',        color: 'rose',   desc: 'Scans for bugs, errors, and improvements. Accumulates platform knowledge.', schedule: 'Every 6 hours' },
+  { key: 'traffic', label: 'Traffic Analyst Agent',   icon: 'fa-chart-line',        color: 'cyan',   desc: 'Analyzes visitor behaviour, exit patterns, scroll depth, and click paths to find UX improvements.', schedule: 'Every 12 hours' },
 ];
 
 function renderAgentHubView() {
@@ -9298,6 +9299,24 @@ function renderAgentHubView() {
       <div id="hub-insights"><div class="text-sm text-slate-400 py-6 text-center"><i class="fas fa-circle-notch fa-spin mr-2"></i>Loading insights...</div></div>
     </div>
 
+    <!-- Traffic Insights panel (from traffic analyst agent) -->
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mt-5">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-base font-bold text-gray-700 flex items-center gap-2">
+          <i class="fas fa-chart-line text-cyan-400"></i>Traffic & UX Insights
+          <span id="hub-traffic-count" class="px-2 py-0.5 bg-cyan-50 text-cyan-600 rounded-full text-xs font-bold hidden"></span>
+        </h3>
+        <div class="flex items-center gap-2">
+          <select id="hub-traffic-status" onchange="loadTrafficInsights(this.value)" class="text-xs border border-slate-200 rounded-lg px-3 py-1.5 bg-white text-slate-600 focus:ring-2 focus:ring-cyan-400">
+            <option value="open">Open</option>
+            <option value="acknowledged">Acknowledged</option>
+            <option value="resolved">Resolved</option>
+          </select>
+        </div>
+      </div>
+      <div id="hub-traffic-insights"><div class="text-sm text-slate-400 py-6 text-center"><i class="fas fa-circle-notch fa-spin mr-2"></i>Loading traffic insights...</div></div>
+    </div>
+
     <!-- Config modal -->
     <div id="hub-config-modal" class="fixed inset-0 bg-black/40 z-50 hidden flex items-center justify-center p-4">
       <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
@@ -9342,8 +9361,9 @@ async function loadAgentHubDashboard() {
       samc('Platform Health',  healthScore,                               'fa-shield-alt',        'rose',   'latest scan');
   }
 
-  // Also kick off insights load
+  // Also kick off platform insights + traffic insights
   loadHubInsights('open');
+  loadTrafficInsights('open');
 
   HUB_AGENTS.forEach(function(a) {
     var info = (d.agents || {})[a.key] || {};
@@ -9530,6 +9550,66 @@ async function hubResolveInsight(id, btn) {
   }
 }
 
+// ── Traffic Insights (Traffic Analyst Agent) ──────────────────
+
+async function loadTrafficInsights(status) {
+  var el = document.getElementById('hub-traffic-insights');
+  if (!el) return;
+  // Traffic insights are stored in platform_insights with category='traffic'
+  // Reuse the same endpoint but filter by category client-side
+  var res = await saFetch('/api/agent-hub/monitor/insights?status=' + (status || 'open') + '&limit=100');
+  if (!res || !res.ok) {
+    el.innerHTML = '<div class="text-sm text-slate-400 py-4 text-center">Could not load traffic insights.</div>';
+    return;
+  }
+  var d = await res.json();
+  var all = d.insights || [];
+  var insights = all.filter(function(i) { return i.category === 'traffic'; });
+  var countEl = document.getElementById('hub-traffic-count');
+  if (countEl) {
+    if (insights.length > 0 && status !== 'resolved') {
+      countEl.textContent = insights.length;
+      countEl.classList.remove('hidden');
+    } else {
+      countEl.classList.add('hidden');
+    }
+  }
+  if (insights.length === 0) {
+    el.innerHTML = '<div class="flex flex-col items-center py-8 text-slate-400">' +
+      '<i class="fas fa-chart-line text-3xl mb-2 text-cyan-200"></i>' +
+      '<p class="text-sm">No ' + (status || 'open') + ' traffic insights yet.</p>' +
+      '<p class="text-xs mt-1 text-slate-400">Enable and run the Traffic Analyst Agent to start analysis.</p>' +
+      '</div>';
+    return;
+  }
+  var severityColors = { critical: 'rose', high: 'orange', medium: 'amber', low: 'slate' };
+  el.innerHTML = '<div class="space-y-3">' + insights.map(function(ins) {
+    var sc = severityColors[ins.severity] || 'cyan';
+    var actionBtns = ins.status === 'open'
+      ? '<button onclick="hubAckInsight(' + ins.id + ', this); loadTrafficInsights(document.getElementById(\'hub-traffic-status\').value)" class="text-xs px-2 py-1 bg-amber-50 text-amber-700 rounded-lg hover:bg-amber-100 transition-colors">Acknowledge</button>' +
+        '<button onclick="hubResolveInsight(' + ins.id + ', this); loadTrafficInsights(document.getElementById(\'hub-traffic-status\').value)" class="text-xs px-2 py-1 bg-teal-50 text-teal-700 rounded-lg hover:bg-teal-100 transition-colors">Resolve</button>'
+      : ins.status === 'acknowledged'
+      ? '<button onclick="hubResolveInsight(' + ins.id + ', this); loadTrafficInsights(document.getElementById(\'hub-traffic-status\').value)" class="text-xs px-2 py-1 bg-teal-50 text-teal-700 rounded-lg hover:bg-teal-100 transition-colors">Resolve</button>'
+      : '<span class="text-xs text-slate-400">Resolved</span>';
+    return '<div class="flex items-start gap-3 p-4 rounded-xl border border-' + sc + '-100 bg-' + sc + '-50/30">' +
+      '<div class="w-8 h-8 bg-cyan-100 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">' +
+        '<i class="fas fa-chart-line text-cyan-500 text-xs"></i>' +
+      '</div>' +
+      '<div class="flex-1 min-w-0">' +
+        '<div class="flex items-center gap-2 flex-wrap mb-1">' +
+          '<span class="text-xs font-bold px-2 py-0.5 bg-' + sc + '-100 text-' + sc + '-700 rounded-full capitalize">' + ins.severity + '</span>' +
+          '<span class="text-xs text-slate-400">UX / Traffic</span>' +
+          '<span class="text-xs text-slate-400 ml-auto">' + hubTimeAgo(ins.created_at) + '</span>' +
+        '</div>' +
+        '<div class="text-sm font-bold text-slate-700 mb-1">' + (ins.title || '') + '</div>' +
+        '<div class="text-xs text-slate-500 mb-2 leading-relaxed">' + (ins.description || '') + '</div>' +
+        (ins.suggested_fix ? '<div class="text-xs text-cyan-700 bg-cyan-50 rounded-lg px-3 py-2 mb-2"><i class="fas fa-wrench mr-1.5 text-cyan-400"></i>' + ins.suggested_fix + '</div>' : '') +
+        '<div class="flex items-center gap-2">' + actionBtns + '</div>' +
+      '</div>' +
+    '</div>';
+  }).join('') + '</div>';
+}
+
 // Config modal
 var _hubConfigAgent = null;
 var HUB_CONFIG_FIELDS = {
@@ -9554,6 +9634,11 @@ var HUB_CONFIG_FIELDS = {
   monitor: [
     { key: 'alert_on_critical',     label: 'Alert on Critical Issues', type: 'toggle', hint: 'Highlight critical findings prominently in dashboard.' },
     { key: 'max_insights_per_run',  label: 'Max Findings per Scan',    type: 'number', min: 1, max: 20, hint: 'Max platform insights stored per scan.' },
+  ],
+  traffic: [
+    { key: 'lookback_hours',        label: 'Lookback Window (hours)',  type: 'number', min: 6, max: 168, hint: 'Hours of traffic data to analyse per run. Default: 24.' },
+    { key: 'min_sessions',          label: 'Min Sessions to Run',      type: 'number', min: 1, max: 50,  hint: 'Skip run if fewer sessions than this were recorded.' },
+    { key: 'max_events_analyzed',   label: 'Max Events per Run',       type: 'number', min: 100, max: 2000, hint: 'Cap on raw events fed to Claude. Keeps cost low.' },
   ],
 };
 

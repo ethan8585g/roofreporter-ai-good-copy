@@ -226,10 +226,10 @@ export async function sendViaResend(
 }
 
 // ============================================================
-// SALES NOTIFICATION — Sent to sales@roofmanager.ca on new report requests
+// SALES NOTIFICATION — Sent to super admin on new report requests
 // ============================================================
 export async function notifyNewReportRequest(
-  envOrResendKey: any,
+  env: any,
   order: {
     order_number: string
     property_address: string
@@ -240,6 +240,7 @@ export async function notifyNewReportRequest(
     is_trial: boolean
   }
 ): Promise<void> {
+  const recipient = 'sales@roofmanager.ca'
   const typeLabel = order.is_trial ? 'Free Trial' : `Paid — $${order.price.toFixed(2)}`
   const subject = `New Report Request — ${order.order_number}`
   const html = `
@@ -255,23 +256,35 @@ export async function notifyNewReportRequest(
   <a href="https://www.roofmanager.ca/admin/superadmin" style="display:inline-block;background:#111;color:#fff;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:600">View in Super Admin →</a>
 </div>`
 
-  const env = (envOrResendKey && typeof envOrResendKey === 'object') ? envOrResendKey : null
-  const resendKey = env ? env.RESEND_API_KEY : (typeof envOrResendKey === 'string' ? envOrResendKey : null)
+  try {
+    if (env?.RESEND_API_KEY) {
+      await sendViaResend(env.RESEND_API_KEY, recipient, subject, html)
+      return
+    }
 
-  if (resendKey) {
-    await sendViaResend(resendKey, 'sales@roofmanager.ca', subject, html)
-    return
+    const clientId = env?.GMAIL_CLIENT_ID
+    let clientSecret = env?.GMAIL_CLIENT_SECRET || ''
+    let refreshToken = env?.GMAIL_REFRESH_TOKEN || ''
+
+    // DB fallback for Gmail credentials
+    if (env?.DB && (!clientSecret || !refreshToken)) {
+      try {
+        const r = await env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key='gmail_refresh_token' AND master_company_id=1").first<any>()
+        if (r?.setting_value) refreshToken = r.setting_value
+        const s = await env.DB.prepare("SELECT setting_value FROM settings WHERE setting_key='gmail_client_secret' AND master_company_id=1").first<any>()
+        if (s?.setting_value) clientSecret = s.setting_value
+      } catch {}
+    }
+
+    if (clientId && clientSecret && refreshToken) {
+      await sendGmailOAuth2(clientId, clientSecret, refreshToken, recipient, subject, html, env?.GMAIL_SENDER_EMAIL || null)
+      return
+    }
+
+    console.warn('[notifyNewReportRequest] No email provider configured (RESEND_API_KEY or Gmail OAuth)')
+  } catch (e: any) {
+    console.warn('[notifyNewReportRequest] Failed to send notification:', e?.message || e)
   }
-
-  if (env && env.GMAIL_CLIENT_ID && env.GMAIL_CLIENT_SECRET && env.GMAIL_REFRESH_TOKEN) {
-    await sendGmailOAuth2(
-      env.GMAIL_CLIENT_ID, env.GMAIL_CLIENT_SECRET, env.GMAIL_REFRESH_TOKEN,
-      'sales@roofmanager.ca', subject, html, env.GMAIL_SENDER_EMAIL || null
-    )
-    return
-  }
-
-  console.warn('[notifyNewReportRequest] No email provider configured (RESEND_API_KEY or Gmail OAuth)')
 }
 
 // ============================================================

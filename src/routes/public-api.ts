@@ -9,6 +9,7 @@ import type { Bindings, ApiAccount, ApiKey } from '../types'
 import { checkConcurrentJobLimit, generateApiKey, logApiRequest } from '../middleware/api-auth'
 import { holdCredit, refundCredit, getLedgerPage } from '../services/api-billing'
 import { signPdfUrl, verifyPdfUrl } from '../services/pdf-signing'
+import { notifyNewReportRequest } from '../services/email'
 
 export const publicApiRoutes = new Hono<{ Bindings: Bindings }>()
 
@@ -223,6 +224,17 @@ publicApiRoutes.post('/reports', async (c) => {
 
   await db.prepare('UPDATE api_jobs SET order_id = ? WHERE id = ?')
     .bind(orderResult.meta.last_row_id, jobId).run()
+
+  // Notify sales@roofmanager.ca of new API report request (fire-and-forget)
+  notifyNewReportRequest(c.env, {
+    order_number: orderNumber,
+    property_address: address.trim(),
+    requester_name: account.company_name || 'API Client',
+    requester_email: account.email || '',
+    service_tier: 'api',
+    price: 0,
+    is_trial: false
+  }).catch((e: any) => console.warn('[silent-catch]', e?.message || e))
 
   const job = await db.prepare('SELECT * FROM api_jobs WHERE id = ?')
     .bind(jobId).first<any>()

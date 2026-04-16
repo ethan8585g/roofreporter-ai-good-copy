@@ -6,6 +6,7 @@ import { validateTraceUi } from '../utils/trace-validation'
 import { RoofMeasurementEngine, traceUiToEnginePayload } from '../services/roof-measurement-engine'
 import { generateApiKey } from '../middleware/api-auth'
 import { addCredits } from '../services/api-billing'
+import { notifyNewReportRequest } from '../services/email'
 
 export const adminRoutes = new Hono<{ Bindings: Bindings }>()
 
@@ -54,6 +55,28 @@ adminRoutes.use('/*', async (c, next) => {
   // Store admin info in context for downstream use
   c.set('admin' as any, admin)
   return next()
+})
+
+// Test notification email — superadmin only
+adminRoutes.post('/superadmin/test-notification', async (c) => {
+  try {
+    const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+    if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
+
+    await notifyNewReportRequest(c.env, {
+      order_number: 'RM-TEST-0000',
+      property_address: '123 Test Street, Toronto, ON',
+      requester_name: 'Test User',
+      requester_email: 'test@example.com',
+      service_tier: 'standard',
+      price: 10.00,
+      is_trial: false
+    })
+
+    return c.json({ success: true, sent_to: 'sales@roofmanager.ca' })
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500)
+  }
 })
 
 // Dashboard stats
@@ -1557,7 +1580,7 @@ adminRoutes.post('/superadmin/onboarding/create', async (c) => {
       const packs: Record<string, { qty: number; price: number; desc: string }> = {
         '10-pack':  { qty: 10,  price: 55,   desc: '10 Roof Report Credits' },
         '25-pack':  { qty: 25,  price: 175,  desc: '25 Roof Report Credits' },
-        '100-pack': { qty: 100, price: 475,  desc: '100 Roof Report Credits' },
+        '100-pack': { qty: 100, price: 595,  desc: '100 Roof Report Credits' },
       }
       const pack = packs[credit_pack]
       if (pack) {
@@ -1895,6 +1918,211 @@ adminRoutes.post('/superadmin/onboarding/:id/toggle-secretary', async (c) => {
     return c.json({ success: true, enabled: !!enabled })
   } catch (err: any) {
     return c.json({ error: 'Failed to toggle secretary', details: err.message }, 500)
+  }
+})
+
+// ============================================================
+// SUPERADMIN: PHONE NUMBER MANAGEMENT
+// ============================================================
+
+// GET /superadmin/phone-numbers/available — Search Twilio available numbers
+adminRoutes.get('/superadmin/phone-numbers/available', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
+
+  const country = c.req.query('country') || 'CA'
+  const areaCode = c.req.query('area_code') || ''
+
+  const twilioSid = (c.env as any).TWILIO_ACCOUNT_SID
+  const twilioAuth = (c.env as any).TWILIO_AUTH_TOKEN
+  if (!twilioSid || !twilioAuth) {
+    return c.json({ error: 'Twilio not configured — set TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN', numbers: [] })
+  }
+
+  try {
+    let path = `/AvailablePhoneNumbers/${country}/Local?VoiceEnabled=true&PageSize=10`
+    if (areaCode) path += `&AreaCode=${areaCode}`
+    const url = `https://api.twilio.com/2010-04-01/Accounts/${twilioSid}${path}.json`
+    const resp = await fetch(url, { headers: { 'Authorization': `Basic ${btoa(`${twilioSid}:${twilioAuth}`)}` } })
+    const data = await resp.json() as any
+    if (data.status >= 400) return c.json({ error: data.message || 'Twilio API error', numbers: [] })
+    const numbers = (data.available_phone_numbers || []).map((n: any) => ({
+      phone_number: n.phone_number,
+      friendly_name: n.friendly_name,
+      locality: n.locality,
+      region: n.region,
+    }))
+    return c.json({ numbers })
+  } catch (err: any) {
+    return c.json({ error: 'Failed to search numbers: ' + err.message, numbers: [] }, 500)
+  }
+})
+
+// POST /superadmin/phone-numbers/purchase — Buy from Twilio + add to phone pool
+adminRoutes.post('/superadmin/phone-numbers/purchase', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
+
+  const { phone_number, purpose } = await c.req.json()
+  if (!phone_number) return c.json({ error: 'phone_number is required' }, 400)
+
+  const twilioSid = (c.env as any).TWILIO_ACCOUNT_SID
+  const twilioAuth = (c.env as any).TWILIO_AUTH_TOKEN
+  if (!twilioSid || !twilioAuth) return c.json({ error: 'Twilio not configured' }, 503)
+
+  try {
+    const params = new URLSearchParams({
+      PhoneNumber: phone_number,
+      FriendlyName: 'Roof Manager Secretary - Pool',
+    })
+    const url = `https://api.twilio.com/2010-04-01/Accounts/${twilioSid}/IncomingPhoneNumbers.json`
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Basic ${btoa(`${twilioSid}:${twilioAuth}`)}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: params.toString(),
+    })
+    const data = await resp.json() as any
+    if (!resp.ok) return c.json({ error: data.message || 'Twilio purchase failed' }, 400)
+
+    const sid = data.sid || ''
+    await c.env.DB.prepare(
+      `INSERT OR IGNORE INTO secretary_phone_pool (phone_number, phone_sid, region, status, monthly_cost_cents, created_at, updated_at)
+       VALUES (?, ?, 'CA', 'available', 200, datetime('now'), datetime('now'))`
+    ).bind(phone_number, sid).run()
+
+    return c.json({ success: true, phone_number, phone_sid: sid })
+  } catch (err: any) {
+    return c.json({ error: 'Purchase failed: ' + err.message }, 500)
+  }
+})
+
+// POST /superadmin/phone-pool/add — Manually add a number to the pool without Twilio purchase
+adminRoutes.post('/superadmin/phone-pool/add', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
+
+  const { phone_number, region } = await c.req.json()
+  if (!phone_number) return c.json({ error: 'phone_number is required' }, 400)
+
+  try {
+    await c.env.DB.prepare(
+      `INSERT OR IGNORE INTO secretary_phone_pool (phone_number, region, status, monthly_cost_cents, created_at, updated_at)
+       VALUES (?, ?, 'available', 200, datetime('now'), datetime('now'))`
+    ).bind(phone_number, region || 'CA').run()
+    return c.json({ success: true, phone_number })
+  } catch (err: any) {
+    return c.json({ error: 'Failed to add number: ' + err.message }, 500)
+  }
+})
+
+// POST /superadmin/phone-pool/assign — Assign pool number to a customer + optional LiveKit deploy
+adminRoutes.post('/superadmin/phone-pool/assign', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
+
+  const { phone_number, customer_id, deploy_livekit } = await c.req.json()
+  if (!phone_number || !customer_id) return c.json({ error: 'phone_number and customer_id are required' }, 400)
+
+  try {
+    await c.env.DB.prepare(
+      `UPDATE secretary_phone_pool SET status = 'assigned', assigned_to_customer_id = ?, assigned_at = datetime('now'), updated_at = datetime('now') WHERE phone_number = ?`
+    ).bind(customer_id, phone_number).run()
+
+    const existing = await c.env.DB.prepare('SELECT id FROM secretary_config WHERE customer_id = ?').bind(customer_id).first<any>()
+    if (existing) {
+      await c.env.DB.prepare(
+        `UPDATE secretary_config SET assigned_phone_number = ?, is_active = 1, updated_at = datetime('now') WHERE customer_id = ?`
+      ).bind(phone_number, customer_id).run()
+    } else {
+      await c.env.DB.prepare(
+        `INSERT INTO secretary_config (customer_id, assigned_phone_number, business_phone, greeting_script, is_active, connection_status, forwarding_method, created_at, updated_at)
+         VALUES (?, ?, '', '', 1, 'pending_forwarding', 'livekit_number', datetime('now'), datetime('now'))`
+      ).bind(customer_id, phone_number).run()
+    }
+
+    let livekit: any = null
+    if (deploy_livekit) {
+      livekit = await deployLiveKitForCustomer(c.env, customer_id, phone_number, { reuse_existing: false })
+    }
+
+    return c.json({ success: true, phone_number, customer_id, livekit_deployed: livekit?.success || false, livekit })
+  } catch (err: any) {
+    return c.json({ error: 'Assign failed: ' + err.message }, 500)
+  }
+})
+
+// POST /superadmin/secretary/:customerId/update-phone — Set/change agent phone number + optional redeploy
+adminRoutes.post('/superadmin/secretary/:customerId/update-phone', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
+
+  const customerId = parseInt(c.req.param('customerId'))
+  const { agent_phone_number, deploy_livekit, sip_uri, sip_username, sip_password } = await c.req.json()
+  if (!agent_phone_number) return c.json({ error: 'agent_phone_number is required' }, 400)
+
+  try {
+    const existing = await c.env.DB.prepare('SELECT id FROM secretary_config WHERE customer_id = ?').bind(customerId).first<any>()
+    if (existing) {
+      const updates: string[] = [`assigned_phone_number = ?`, `updated_at = datetime('now')`]
+      const binds: any[] = [agent_phone_number]
+      if (sip_uri !== undefined) { updates.push('livekit_sip_uri = ?'); binds.push(sip_uri) }
+      if (sip_username !== undefined) { updates.push('sip_username = ?'); binds.push(sip_username) }
+      if (sip_password !== undefined) { updates.push('sip_password = ?'); binds.push(sip_password) }
+      binds.push(customerId)
+      await c.env.DB.prepare(`UPDATE secretary_config SET ${updates.join(', ')} WHERE customer_id = ?`).bind(...binds).run()
+    } else {
+      await c.env.DB.prepare(
+        `INSERT INTO secretary_config (customer_id, assigned_phone_number, livekit_sip_uri, sip_username, sip_password, business_phone, greeting_script, is_active, connection_status, forwarding_method, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, '', '', 1, 'pending_forwarding', 'livekit_number', datetime('now'), datetime('now'))`
+      ).bind(customerId, agent_phone_number, sip_uri || '', sip_username || '', sip_password || '').run()
+    }
+
+    await c.env.DB.prepare(
+      `INSERT OR IGNORE INTO secretary_phone_pool (phone_number, region, status, assigned_to_customer_id, assigned_at) VALUES (?, 'CA', 'assigned', ?, datetime('now'))`
+    ).bind(agent_phone_number, customerId).run()
+
+    let livekit: any = null
+    if (deploy_livekit) {
+      livekit = await deployLiveKitForCustomer(c.env, customerId, agent_phone_number, {
+        sip_username: sip_username || undefined,
+        sip_password: sip_password || undefined,
+        reuse_existing: false,
+      })
+    }
+
+    return c.json({ success: true, customer_id: customerId, agent_phone_number, livekit })
+  } catch (err: any) {
+    return c.json({ error: 'Update failed: ' + err.message }, 500)
+  }
+})
+
+// GET /superadmin/secretary/deployment-status — All customers' LiveKit SIP trunk deployment status
+adminRoutes.get('/superadmin/secretary/deployment-status', async (c) => {
+  const admin = await validateAdminSession(c.env.DB, c.req.header('Authorization'))
+  if (!admin || !requireSuperadmin(admin)) return c.json({ error: 'Superadmin required' }, 403)
+
+  try {
+    const rows = await c.env.DB.prepare(`
+      SELECT
+        c.id, c.name as contact_name, c.email, c.company_name as business_name,
+        sc.is_active as secretary_active, sc.secretary_mode,
+        sc.assigned_phone_number as agent_phone,
+        sc.livekit_inbound_trunk_id as trunk_id,
+        sc.livekit_dispatch_rule_id as dispatch_id,
+        sc.livekit_sip_uri as sip_uri,
+        sc.sip_username, sc.connection_status, sc.forwarding_method,
+        sc.last_test_at, sc.last_test_result
+      FROM customers c
+      INNER JOIN secretary_config sc ON sc.customer_id = c.id
+      WHERE c.is_active = 1
+      ORDER BY c.created_at DESC
+    `).all<any>()
+    return c.json({ deployments: rows.results || [] })
+  } catch (err: any) {
+    return c.json({ error: err.message, deployments: [] }, 500)
   }
 })
 
