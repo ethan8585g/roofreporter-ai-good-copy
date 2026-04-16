@@ -12,6 +12,7 @@ import {
   processOrderQueue,
   retryFailedOrders,
   getQueueStats,
+  getConfidenceThreshold,
 } from '../services/ai-agent'
 
 export const aiAutopilotRoutes = new Hono<{ Bindings: Bindings }>()
@@ -96,7 +97,8 @@ aiAutopilotRoutes.post('/process-queue', async (c) => {
 aiAutopilotRoutes.post('/process-order/:orderId', async (c) => {
   const orderId = c.req.param('orderId')
   try {
-    const result = await autoProcessOrder(orderId, c.env)
+    const threshold = await getConfidenceThreshold(c.env.DB)
+    const result = await autoProcessOrder(orderId, c.env, threshold)
 
     // Log the job
     await c.env.DB.prepare(`

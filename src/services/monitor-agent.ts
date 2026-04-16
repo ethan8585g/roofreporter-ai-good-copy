@@ -248,6 +248,10 @@ export async function autoAdjustTracingThreshold(
 // ── Main runner ───────────────────────────────────────────────
 
 export async function runMonitorAgent(env: Bindings): Promise<MonitorRunResult> {
+  if (!env.ANTHROPIC_API_KEY) {
+    return { ok: false, health_score: 0, issues_found: 0, critical_count: 0, insights: [], error: 'ANTHROPIC_API_KEY not configured' }
+  }
+
   const db = env.DB
   const now24h   = new Date(Date.now() -  1 * 86400 * 1000).toISOString()
   const now7d    = new Date(Date.now() -  7 * 86400 * 1000).toISOString()
@@ -397,25 +401,13 @@ export async function runMonitorAgent(env: Bindings): Promise<MonitorRunResult> 
   const { health_score, insights, memory_update } = parseMonitorFindings(text)
 
   // Persist insights to platform_insights table
-  if (insights.length > 0) {
-    // Get the run id we'll insert
-    const runInsert = await db.prepare(
-      `INSERT INTO agent_runs (agent_type, status, summary, details_json, duration_ms)
-       VALUES ('monitor', 'success', ?, ?, 0)`
-    ).bind(
-      `Health score ${health_score}/100 — ${insights.length} finding(s)`,
-      JSON.stringify({ health_score, issues_found: insights.length }).slice(0, 4000)
-    ).run()
-
-    const runId = runInsert.meta?.last_row_id ?? null
-
-    // Batch insert insights (D1 doesn't support bulk inserts, loop it)
-    for (const ins of insights) {
-      await db.prepare(
-        `INSERT INTO platform_insights (category, severity, title, description, suggested_fix, source_run_id)
-         VALUES (?, ?, ?, ?, ?, ?)`
-      ).bind(ins.category, ins.severity, ins.title, ins.description, ins.suggested_fix, runId).run()
-    }
+  // (agent_runs logging is handled by agent-hub or the cron handler, not here)
+  for (const ins of insights) {
+    await db.prepare(
+      `INSERT INTO platform_insights (category, severity, title, description, suggested_fix)
+       VALUES (?, ?, ?, ?, ?)`
+    ).bind(ins.category, ins.severity, ins.title, ins.description, ins.suggested_fix).run()
+      .catch(() => {})
   }
 
   // ── Auto-correct tracing confidence threshold if needed ──────

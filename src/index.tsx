@@ -66,6 +66,7 @@ import { runContentAgent } from './services/content-agent'
 import { runLeadAgent } from './services/lead-agent'
 import { runEmailAgent } from './services/email-agent'
 import { runMonitorAgent } from './services/monitor-agent'
+import { runTrafficAgent } from './services/traffic-agent'
 import type { Bindings } from './types'
 
 const app = new Hono<{ Bindings: Bindings }>()
@@ -3602,6 +3603,24 @@ export default {
         } catch (err: any) {
           console.error('[CRON:monitor] Error:', err.message)
           await logRun('monitor', 'error', err.message, {}, Date.now() - t0)
+        }
+      })())
+    }
+
+    // ── Traffic Analyst Agent (every 12 hours: 0, 12 UTC) ────
+    if (hour % 12 === 0 && await isAgentEnabled('traffic')) {
+      ctx.waitUntil((async () => {
+        const t0 = Date.now()
+        try {
+          const result = await runTrafficAgent(env)
+          const summary = result.sessions_analyzed === 0 ? 'No visitor sessions to analyze'
+            : result.insights_found === 0 ? `Analyzed ${result.sessions_analyzed} session(s) — no new findings`
+            : `Analyzed ${result.sessions_analyzed} sessions — ${result.insights_found} UX finding(s), ${result.bounce_rate_pct}% bounce rate`
+          console.log(`[CRON:traffic] ${summary}`)
+          await logRun('traffic', result.ok ? (result.sessions_analyzed < 3 ? 'skipped' : 'success') : 'error', summary, { sessions_analyzed: result.sessions_analyzed, insights_found: result.insights_found }, Date.now() - t0)
+        } catch (err: any) {
+          console.error('[CRON:traffic] Error:', err.message)
+          await logRun('traffic', 'error', err.message, {}, Date.now() - t0)
         }
       })())
     }

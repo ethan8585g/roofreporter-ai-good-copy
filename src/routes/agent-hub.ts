@@ -331,7 +331,7 @@ function buildSummary(agent: string, result: any): string {
       return `Email campaign failed: ${result.errors?.[0] || 'unknown error'}`
     case 'monitor':
       if (!result.ok) return `Monitor scan failed: ${result.error || 'unknown error'}`
-      return `Health score ${result.health_score}/100 — ${result.issues_found} finding(s)${result.critical_count > 0 ? ` (${result.critical_count} critical)` : ''}`
+      return `Health ${result.health_score}/100 — ${result.issues_found} finding(s)${result.critical_count > 0 ? ` (${result.critical_count} critical)` : ''}`
     case 'traffic':
       if (!result.ok) return `Traffic scan failed: ${result.error || 'unknown error'}`
       if (result.sessions_analyzed === 0) return 'No visitor sessions to analyze yet'

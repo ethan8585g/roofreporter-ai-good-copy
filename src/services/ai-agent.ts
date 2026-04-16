@@ -22,7 +22,7 @@ const MAX_AUTO_ATTEMPTS = 2                       // Max auto-trace retries befo
 const AGENT_VERSION = '1.0.0'
 
 /** Read the current confidence threshold from agent_configs (Monitor can adjust this) */
-async function getConfidenceThreshold(db: D1Database): Promise<number> {
+export async function getConfidenceThreshold(db: D1Database): Promise<number> {
   try {
     const row = await db.prepare(
       `SELECT config_json FROM agent_configs WHERE agent_type = 'tracing'`
