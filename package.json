@@ -19,11 +19,16 @@
     "cap:android": "npx cap open android"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.89.0",
     "@capacitor-community/admob": "^8.0.0",
+    "@capacitor/android": "^6.1.2",
+    "@capacitor/app": "^6.0.1",
     "@capacitor/cli": "^8.3.0",
     "@capacitor/core": "^6.1.2",
     "@capacitor/ios": "^6.1.2",
     "@capacitor/push-notifications": "^6.0.3",
+    "@capacitor/splash-screen": "^6.0.2",
+    "@capacitor/status-bar": "^6.0.1",
     "better-sqlite3": "^12.8.0",
     "geotiff": "^3.0.3",
     "geotiff-geokeys-to-proj4": "^2024.4.13",
@@ -31,13 +36,10 @@
     "jsonwebtoken": "^9.0.3",
     "livekit-server-sdk": "^2.15.0",
     "proj4": "^2.20.2",
-    "zod": "^4.3.6",
-    "@capacitor/android": "^6.1.2",
-    "@capacitor/app": "^6.0.1",
-    "@capacitor/status-bar": "^6.0.1",
-    "@capacitor/splash-screen": "^6.0.2"
+    "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@capacitor/cli": "^6.1.2",
     "@hono/vite-build": "^1.2.0",
     "@hono/vite-dev-server": "^0.18.2",
     "@tailwindcss/cli": "^4.2.2",
@@ -46,7 +48,6 @@
     "tailwindcss": "^4.2.2",
     "vite": "^6.3.5",
     "vitest": "^4.0.18",
-    "wrangler": "^4.4.0",
-    "@capacitor/cli": "^6.1.2"
+    "wrangler": "^4.4.0"
   }
 }

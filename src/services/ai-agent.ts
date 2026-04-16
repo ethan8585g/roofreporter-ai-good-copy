@@ -4,9 +4,10 @@
 // Phase 2: Super Admin autopilot (CRON-driven queue management)
 // ============================================================
 
+import Anthropic from '@anthropic-ai/sdk'
 import type { Bindings, RoofReport } from '../types'
 import { RoofMeasurementEngine, traceUiToEnginePayload, type TraceReport } from './roof-measurement-engine'
-import { segmentWithGemini, geminiOutlineToTracePayload } from './sam3-segmentation'
+import { geminiOutlineToTracePayload } from './sam3-segmentation'
 import { resolvePitch } from './pitch-resolver'
 import { generateProfessionalReportHTML } from '../templates/report-html'
 import { generateTraceBasedDiagramSVG } from '../templates/svg-diagrams'
@@ -225,42 +226,102 @@ async function runAutoTrace(
 ): Promise<AutoTraceResult> {
   const solarApiKey = env.GOOGLE_SOLAR_API_KEY
   const mapsApiKey = (env as any).GOOGLE_MAPS_API_KEY || solarApiKey
-  const geminiKey = (env as any).GEMINI_API_KEY || (env as any).GEMINI_ENHANCE_API_KEY
+  const anthropicKey = (env as any).anthropic_key
 
-  if (!mapsApiKey || !geminiKey) {
-    return { success: false, error: 'Missing API keys (GOOGLE_MAPS_API_KEY or GEMINI_API_KEY)' }
+  if (!mapsApiKey) {
+    return { success: false, error: 'Missing GOOGLE_MAPS_API_KEY' }
+  }
+  if (!anthropicKey) {
+    return { success: false, error: 'Missing anthropic_key secret — set it via wrangler secret put' }
   }
 
   const zoom = 20
   const imgW = 640
   const imgH = 640
 
-  // Step 1: Build satellite image URL
+  // Step 1: Fetch satellite image as base64
   const satelliteUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=${zoom}&size=${imgW}x${imgH}&scale=2&maptype=satellite&key=${mapsApiKey}`
 
-  // Step 2: Run Gemini segmentation with timeout protection
-  let geminiResult: any
+  let imageBase64: string
   try {
-    geminiResult = await segmentWithGemini(
-      { GEMINI_API_KEY: geminiKey } as any,
-      satelliteUrl, imgW, imgH
-    )
+    const imgResp = await fetch(satelliteUrl)
+    if (!imgResp.ok) throw new Error(`Satellite image fetch failed: HTTP ${imgResp.status}`)
+    const buffer = await imgResp.arrayBuffer()
+    const bytes = new Uint8Array(buffer)
+    let binary = ''
+    for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i])
+    imageBase64 = btoa(binary)
   } catch (err: any) {
-    return { success: false, error: `Gemini segmentation failed: ${err.message}` }
+    return { success: false, error: `Could not fetch satellite image: ${err.message}` }
   }
 
-  if (!geminiResult || geminiResult.segments.length === 0) {
-    return { success: false, error: 'Gemini could not detect a roof in the satellite image' }
+  // Step 2: Ask Claude claude-sonnet-4-6 to segment the roof
+  const client = new Anthropic({ apiKey: anthropicKey })
+
+  const systemPrompt = `You are an expert roofing measurement AI. Analyze overhead satellite imagery and extract precise roof geometry as JSON.
+
+RULES:
+- roof_outline: polygon tracing the OUTER PERIMETER of the entire roof at the eave line. Must have at least 4 points.
+- segments: each distinct roof plane (facet). Simple gable = 2. Hip = 4. Complex = 8+.
+- edges: all structural lines (ridges, hips, valleys, eaves, rakes).
+- image_quality_score: 0-100. How clearly is the roof visible? Penalize for trees, shadows, low resolution.
+- All coordinates in PIXEL SPACE (0,0 = top-left, ${imgW}x${imgH} image).
+- Return ONLY valid JSON matching the schema. No markdown, no explanation.`
+
+  const userPrompt = `Segment this satellite roof image. Image is ${imgW}x${imgH} pixels at zoom ${zoom}.
+Address: ${address}
+Coordinates: ${lat}, ${lng}
+
+Return JSON with this exact structure:
+{
+  "segments": [{ "segment_id": 1, "type": "main_facet", "polygon_pixels": [{"x":0,"y":0}], "estimated_pitch_deg": 18, "estimated_azimuth_deg": 180, "confidence": 85 }],
+  "roof_outline": [{"x":100,"y":80}, {"x":540,"y":80}, {"x":540,"y":560}, {"x":100,"y":560}],
+  "edges": [{ "type": "ridge", "start": {"x":320,"y":100}, "end": {"x":320,"y":540}, "length_pixels": 440 }],
+  "obstructions": [],
+  "overall_complexity": "simple",
+  "estimated_stories": 1,
+  "image_quality_score": 75
+}`
+
+  let claudeResult: any
+  try {
+    const response = await client.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 4096,
+      messages: [{
+        role: 'user',
+        content: [
+          {
+            type: 'image',
+            source: { type: 'base64', media_type: 'image/jpeg', data: imageBase64 },
+          },
+          { type: 'text', text: systemPrompt + '\n\n' + userPrompt },
+        ],
+      }],
+    })
+
+    const text = response.content[0]?.type === 'text' ? response.content[0].text : ''
+    if (!text) throw new Error('Claude returned empty response')
+
+    // Strip markdown code fences if present
+    const jsonText = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim()
+    claudeResult = JSON.parse(jsonText)
+  } catch (err: any) {
+    return { success: false, error: `Claude vision failed: ${err.message}` }
   }
 
-  const qualityScore = geminiResult.image_quality_score || 0
+  if (!claudeResult || !claudeResult.segments || claudeResult.segments.length === 0) {
+    return { success: false, error: 'Claude could not detect a roof in the satellite image' }
+  }
+
+  const qualityScore = claudeResult.image_quality_score || 0
   if (qualityScore < 40) {
     return { success: false, confidence: qualityScore, error: `Image quality too low: ${qualityScore}/100` }
   }
 
-  // Step 3: Convert Gemini output → TracePayload (pixel coords → GPS)
+  // Step 3: Convert Claude output → TracePayload (reuses existing pixel→GPS converter)
   const tracePayload = geminiOutlineToTracePayload(
-    geminiResult, lat, lng, zoom, imgW, imgH,
+    claudeResult, lat, lng, zoom, imgW, imgH,
     { property_address: address }
   )
 

@@ -16,6 +16,9 @@
   "ai": {
     "binding": "AI"
   },
+  // Secrets are set via: wrangler secret put ANTHROPIC_API_KEY
+  // See CLAUDE.md for full list of required secrets.
+
   // R2 bucket for Storm Scout daily snapshots (Phase 2.5).
   // TODO: after creating the bucket in the Cloudflare dashboard
   // (https://dash.cloudflare.com → R2 → Create bucket → "storm-scout-snapshots"),

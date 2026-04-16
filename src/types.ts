@@ -99,6 +99,9 @@ export type Bindings = {
   default_gemini_googleaistudio_key: string // Alternate Google AI Studio key
   google_ai_studio_secret_key: string       // Alternate Google AI Studio key
 
+  // Anthropic Claude — AI autopilot agent for autonomous roof tracing
+  anthropic_key: string         // Anthropic API key (saved in Cloudflare secrets as "anthropic_key")
+
   // OpenAI-compatible API (legacy Genspark proxy — unused)
   OPENAI_API_KEY: string        // GenSpark LLM proxy key
   OPENAI_BASE_URL: string       // e.g. "https://www.genspark.ai/api/llm_proxy/v1"
@@ -148,6 +151,11 @@ export type Bindings = {
   // VAPID: Web Push keys (generate with: npx web-push generate-vapid-keys)
   VAPID_PUBLIC_KEY: string          // Base64url-encoded ECDSA P-256 public key
   VAPID_PRIVATE_KEY: string         // Base64url-encoded ECDSA P-256 private key
+
+  // ── Anthropic Claude — Autonomous Agent Platform ───────────
+  // Set via: wrangler secret put ANTHROPIC_API_KEY
+  // Used by: Agent Hub (content, lead, email, admin agents)
+  ANTHROPIC_API_KEY: string
 }
 
 // ============================================================
