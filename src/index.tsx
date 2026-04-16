@@ -601,7 +601,9 @@ app.get('/order', (c) => c.redirect('/customer/order'))
 // /register — standalone signup page (first-class funnel entry)
 app.get('/register', (c) => {
   const email = c.req.query('email') || ''
-  return c.html(getCustomerRegisterPageHTML(email))
+  const googleClientId = (c.env as any).GOOGLE_OAUTH_CLIENT_ID || ''
+  const previewId = c.req.query('preview_id') || ''
+  return c.html(getCustomerRegisterPageHTML(email, googleClientId, previewId))
 })
 
 // /signup redirect — keep backward compat, now points to /register
@@ -664,7 +666,8 @@ app.get('/reset-password', (c) => {
 
 // Customer Login/Register Page (email/password)
 app.get('/customer/login', (c) => {
-  return c.html(getCustomerLoginHTML())
+  const googleClientId = (c.env as any).GOOGLE_OAUTH_CLIENT_ID || ''
+  return c.html(getCustomerLoginHTML(googleClientId))
 })
 
 // Customer Password Reset Page (linked from reset email)
@@ -7348,7 +7351,7 @@ function getSettingsPageHTML() {
 // CUSTOMER PAGES
 // ============================================================
 
-function getCustomerRegisterPageHTML(prefillEmail = '') {
+function getCustomerRegisterPageHTML(prefillEmail = '', googleClientId = '', previewId = '') {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -7365,6 +7368,7 @@ function getCustomerRegisterPageHTML(prefillEmail = '') {
     .reg-input:focus { border-color:#00CC70;box-shadow:0 0 0 3px rgba(0,204,112,0.12); }
     .strength-bar { height:4px;border-radius:2px;transition:width 0.3s,background-color 0.3s; }
   </style>
+  ${googleClientId ? '<script src="https://accounts.google.com/gsi/client" async defer><\/script>' : ''}
 </head>
 <body style="background:#f8fafc;margin:0;min-height:100vh">
 
@@ -7391,6 +7395,32 @@ function getCustomerRegisterPageHTML(prefillEmail = '') {
           <p style="color:#6b7280;font-size:14px;margin:0">Takes 60 seconds. 4 free roof reports waiting.</p>
         </div>
 
+        ${googleClientId ? `
+<div id="g_id_onload"
+  data-client_id="${googleClientId}"
+  data-callback="handleGoogleCredential"
+  data-auto_prompt="false">
+</div>
+<div class="g_id_signin"
+  data-type="standard"
+  data-shape="rectangular"
+  data-theme="outline"
+  data-text="continue_with"
+  data-size="large"
+  data-width="100%"
+  onclick="rrTrack('oauth_click',{provider:'google'})">
+</div>
+<div style="display:flex;align-items:center;gap:12px;margin:16px 0">
+  <div style="flex:1;height:1px;background:#e5e7eb"></div>
+  <span style="font-size:13px;color:#6b7280;white-space:nowrap">or continue with email</span>
+  <div style="flex:1;height:1px;background:#e5e7eb"></div>
+</div>
+` : ''}
+${previewId ? `
+<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:14px;color:#15803d">
+  &#x2705; Your roof preview is saved — complete signup to download the full report.
+</div>
+` : ''}
         <form id="reg-form" onsubmit="return submitRegForm(event)" autocomplete="on">
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
             <label>
@@ -7543,18 +7573,39 @@ function getCustomerRegisterPageHTML(prefillEmail = '') {
       });
       return false;
     }
+
+    async function handleGoogleCredential(response) {
+      rrTrack('oauth_click', {provider: 'google'});
+      const refCode = localStorage.getItem('rr_ref_code') || '';
+      const previewId = new URLSearchParams(window.location.search).get('preview_id') || '';
+      const res = await fetch('/api/customer-auth/google', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({credential: response.credential, referred_by_code: refCode, preview_id: previewId})
+      });
+      const data = await res.json();
+      if (data.success) {
+        rrTrack('oauth_success', {provider: 'google'});
+        window.location.href = '/customer/dashboard?welcome=1';
+      } else {
+        rrTrack('oauth_error', {provider: 'google', reason: data.error});
+        const errEl = document.getElementById('reg-error');
+        if (errEl) { errEl.textContent = data.error || 'Google sign-in failed. Try email instead.'; errEl.style.display = 'block'; }
+      }
+    }
   </script>
 </body>
 </html>`
 }
 
-function getCustomerLoginHTML() {
+function getCustomerLoginHTML(googleClientId = '') {
 
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   ${getHeadTags()}
   <title>Customer Login - Roof Manager</title>
+  ${googleClientId ? '<script src="https://accounts.google.com/gsi/client" async defer><\/script>' : ''}
 </head>
 <body class="bg-gradient-to-br from-sky-100 via-blue-50 to-white min-h-screen flex items-center justify-center">
   <script>var _rp=new URLSearchParams(location.search).get('ref');if(_rp)localStorage.setItem('_ref_code',_rp);</script>
@@ -7579,11 +7630,32 @@ function getCustomerLoginHTML() {
         <!-- Tabs -->
         <div class="flex border border-gray-200 rounded-lg overflow-hidden mb-5">
           <button id="custLoginTab" onclick="showCustTab('login')" class="flex-1 py-2.5 text-center text-sm font-medium bg-brand-50 text-brand-700 border-b-2 border-brand-500">Sign In</button>
-          <button id="custRegTab" onclick="showCustTab('register')" class="flex-1 py-2.5 text-center text-sm font-medium text-gray-500 hover:text-gray-700">Register</button>
+          <button id="custRegTab" onclick="window.location.href='/register'" class="flex-1 py-2.5 text-center text-sm font-medium text-gray-500 hover:text-gray-700">Register</button>
         </div>
 
         <!-- Login Form -->
         <div id="custLoginForm">
+          ${googleClientId ? `
+<div id="g_id_onload"
+  data-client_id="${googleClientId}"
+  data-callback="handleGoogleCredential"
+  data-auto_prompt="false">
+</div>
+<div class="g_id_signin"
+  data-type="standard"
+  data-shape="rectangular"
+  data-theme="outline"
+  data-text="continue_with"
+  data-size="large"
+  data-width="100%"
+  onclick="rrTrack('oauth_click',{provider:'google'})">
+</div>
+<div style="display:flex;align-items:center;gap:12px;margin:16px 0">
+  <div style="flex:1;height:1px;background:#e5e7eb"></div>
+  <span style="font-size:13px;color:#6b7280;white-space:nowrap">or continue with email</span>
+  <div style="flex:1;height:1px;background:#e5e7eb"></div>
+</div>
+` : ''}
           <form id="custLoginFormEl" onsubmit="event.preventDefault(); doCustLogin();" autocomplete="on">
           <div class="space-y-4">
             <div>
@@ -7969,6 +8041,25 @@ function getCustomerLoginHTML() {
           err.classList.remove('hidden');
         }
       } catch(e) { err.textContent = 'Network error.'; err.classList.remove('hidden'); }
+    }
+
+    async function handleGoogleCredential(response) {
+      rrTrack('oauth_click', {provider: 'google'});
+      const refCode = localStorage.getItem('rr_ref_code') || '';
+      const res = await fetch('/api/customer-auth/google', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({credential: response.credential, referred_by_code: refCode})
+      });
+      const data = await res.json();
+      if (data.success) {
+        rrTrack('oauth_success', {provider: 'google'});
+        window.location.href = '/customer/dashboard?welcome=1';
+      } else {
+        rrTrack('oauth_error', {provider: 'google', reason: data.error});
+        const errEl = document.getElementById('custLoginError');
+        if (errEl) { errEl.textContent = data.error || 'Google sign-in failed. Try email instead.'; errEl.classList.remove('hidden'); }
+      }
     }
   </script>
   ${getRoverWidget()}
