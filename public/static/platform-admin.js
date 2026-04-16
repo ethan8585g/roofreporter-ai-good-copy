@@ -20,7 +20,8 @@ window.PA = window.PA || {
   tiers: [], personas: [], campaigns: [], sipMap: [], flags: [],
   servicePanel: null, liveDash: null, voiceConfig: null,
   currentPersona: null, currentCampaign: null,
-  view: 'main', subView: null, editCustomerId: null
+  view: 'main', subView: null, editCustomerId: null,
+  billingCycle: 'monthly'
 };
 
 function paFetch(path, opts) { return saFetch('/api/admin/platform' + path, opts); }
@@ -38,7 +39,15 @@ function renderEnhancedOnboardingView() {
 
     // Membership Tier Selector
     '<div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">' +
-      '<h3 class="text-lg font-bold text-gray-700 mb-4"><i class="fas fa-crown mr-2 text-amber-500"></i>Membership Tier</h3>' +
+      '<div class="flex items-center justify-between mb-4">' +
+        '<h3 class="text-lg font-bold text-gray-700"><i class="fas fa-crown mr-2 text-amber-500"></i>Membership Tier</h3>' +
+        '<div class="flex items-center gap-1 bg-gray-100 rounded-xl p-1">' +
+          '<button id="pa-billing-monthly" onclick="PA.billingCycle=\'monthly\';paUpdateBillingToggle()" class="px-4 py-1.5 rounded-lg text-sm font-semibold transition-all bg-white text-gray-800 shadow">Monthly</button>' +
+          '<button id="pa-billing-annual" onclick="PA.billingCycle=\'annual\';paUpdateBillingToggle()" class="px-4 py-1.5 rounded-lg text-sm font-semibold transition-all text-gray-500 hover:text-gray-700">' +
+            'Annual <span class="ml-1 px-1.5 py-0.5 bg-green-100 text-green-700 rounded text-xs font-bold">Save 15%</span>' +
+          '</button>' +
+        '</div>' +
+      '</div>' +
       '<div id="pa-tier-cards" class="grid grid-cols-3 gap-4 mb-4">' +
         '<div class="animate-pulse bg-gray-100 rounded-xl h-32"></div>'.repeat(3) +
       '</div>' +
@@ -120,13 +129,24 @@ async function paLoadTiers() {
     var el = document.getElementById('pa-tier-cards');
     if (!el) return;
     if (PA.tiers.length === 0) { el.innerHTML = '<p class="col-span-3 text-gray-400 text-sm">No tiers configured. <a href="#" onclick="loadView(\'membership-config\')" class="text-teal-600 underline">Create tiers</a></p>'; return; }
+    var isAnnual = PA.billingCycle === 'annual';
     el.innerHTML = PA.tiers.map(function(t) {
+      var monthlyPrice = t.monthly_price_cents / 100;
+      var annualMonthlyPrice = monthlyPrice * 0.85;
+      var annualTotalPrice = annualMonthlyPrice * 12;
+      var priceLabel = isAnnual
+        ? '$' + annualMonthlyPrice.toFixed(0) + '/mo'
+        : '$' + monthlyPrice.toFixed(0) + '/mo';
+      var subLabel = isAnnual
+        ? '<div class="text-xs text-green-600 font-medium">$' + annualTotalPrice.toFixed(0) + ' billed annually</div>'
+        : '';
       return '<div class="border-2 rounded-xl p-4 cursor-pointer transition-all hover:shadow-md ' +
         (PA.selectedTier == t.id ? 'border-teal-500 bg-teal-50 shadow-md' : 'border-gray-200 bg-white') +
         '" onclick="PA.selectedTier=' + t.id + ';paLoadTiers()">' +
-        '<div class="flex items-center justify-between mb-2"><span class="font-bold text-gray-800">' + t.name + '</span>' +
-        '<span class="text-lg font-bold text-teal-600">$' + (t.monthly_price_cents / 100).toFixed(0) + '/mo</span></div>' +
-        '<p class="text-xs text-gray-500">' + t.description + '</p>' +
+        '<div class="flex items-center justify-between mb-1"><span class="font-bold text-gray-800">' + t.name + '</span>' +
+        '<span class="text-lg font-bold text-teal-600">' + priceLabel + '</span></div>' +
+        subLabel +
+        '<p class="text-xs text-gray-500 mt-1">' + t.description + '</p>' +
         '<div class="mt-2 flex flex-wrap gap-1">' +
           '<span class="px-2 py-0.5 bg-blue-50 text-blue-600 rounded text-xs">' + t.included_reports + ' reports</span>' +
           '<span class="px-2 py-0.5 bg-green-50 text-green-600 rounded text-xs">' + t.included_minutes + ' min</span>' +
@@ -136,6 +156,20 @@ async function paLoadTiers() {
       '</div>';
     }).join('');
   } catch(e) { console.error('tiers load error', e); }
+}
+
+function paUpdateBillingToggle() {
+  var mBtn = document.getElementById('pa-billing-monthly');
+  var aBtn = document.getElementById('pa-billing-annual');
+  if (!mBtn || !aBtn) return;
+  if (PA.billingCycle === 'annual') {
+    mBtn.className = 'px-4 py-1.5 rounded-lg text-sm font-semibold transition-all text-gray-500 hover:text-gray-700';
+    aBtn.className = 'px-4 py-1.5 rounded-lg text-sm font-semibold transition-all bg-white text-gray-800 shadow';
+  } else {
+    mBtn.className = 'px-4 py-1.5 rounded-lg text-sm font-semibold transition-all bg-white text-gray-800 shadow';
+    aBtn.className = 'px-4 py-1.5 rounded-lg text-sm font-semibold transition-all text-gray-500 hover:text-gray-700';
+  }
+  paLoadTiers();
 }
 
 async function paSubmitOnboarding() {
@@ -161,6 +195,7 @@ async function paSubmitOnboarding() {
         email: gv('pa-ob-email'), password: gv('pa-ob-password'),
         phone: gv('pa-ob-phone'), carrier: gv('pa-ob-carrier'),
         membership_tier_id: PA.selectedTier || null,
+        billing_cycle: PA.billingCycle || 'monthly',
         agent_name: gv('pa-ob-agent-name') || 'Sarah',
         agent_voice: gv('pa-ob-agent-voice') || 'alloy',
         secretary_mode: gv('pa-ob-mode') || 'full',
@@ -345,7 +380,7 @@ async function paSaveVoiceConfig() {
     });
     var data = await res.json();
     if (data.success) window.rmToast('Voice config saved!', 'success');
-    else window.rmToast('Error: ' + (data.error || 'Unknown', 'error'));
+    else window.rmToast('Error: ' + (data.error || 'Unknown error'), 'error');
   } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
 }
 
@@ -516,7 +551,7 @@ async function paSavePersona() {
     var res = await paFetch(url, { method: p.id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     var data = await res.json();
     if (data.success || data.id) { window.rmToast('Persona saved!', 'success'); paLoadPersonas(); }
-    else window.rmToast('Error: ' + (data.error || 'Unknown', 'error'));
+    else window.rmToast('Error: ' + (data.error || 'Unknown error'), 'error');
   } catch(e) { window.rmToast('Error: ' + e.message, 'error'); }
 }
 
@@ -631,7 +666,7 @@ async function paSaveSipMapping(phoneId) {
     });
     var data = await res.json();
     if (data.success) paLoadSipMapping();
-    else window.rmToast('Error: ' + (data.error || 'Unknown', 'error'));
+    else window.rmToast('Error: ' + (data.error || 'Unknown error'), 'error');
   } catch(e) { window.rmToast(e.message, 'info'); }
 }
 
@@ -697,7 +732,7 @@ async function paSaveCampaign(campId) {
     var res = await paFetch(url, { method: campId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     var data = await res.json();
     if (data.success || data.id) paLoadCampaigns();
-    else window.rmToast('Error: ' + (data.error || 'Unknown', 'error'));
+    else window.rmToast('Error: ' + (data.error || 'Unknown error'), 'error');
   } catch(e) { window.rmToast(e.message, 'info'); }
 }
 
@@ -852,7 +887,7 @@ async function paSaveAgent(agentId) {
     var res = await saFetch(url, { method: agentId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     var data = await res.json();
     if (data.success || data.id) { paLoadCCAgents(); }
-    else window.rmToast('Error: ' + (data.error || 'Unknown', 'error'));
+    else window.rmToast('Error: ' + (data.error || 'Unknown error'), 'error');
   } catch(e) { window.rmToast(e.message, 'info'); }
 }
 
@@ -1372,7 +1407,7 @@ async function paSubmitFlag() {
     });
     var data = await res.json();
     if (data.success) paLoadFlags();
-    else window.rmToast('Error: ' + (data.error || 'Unknown', 'error'));
+    else window.rmToast('Error: ' + (data.error || 'Unknown error'), 'error');
   } catch(e) { window.rmToast(e.message, 'info'); }
 }
 
@@ -1489,7 +1524,7 @@ async function paSaveQuickEdit(customerId) {
     });
     var data = await res.json();
     if (data.success) paLoadServicePanel();
-    else window.rmToast('Error: ' + (data.error || 'Unknown', 'error'));
+    else window.rmToast('Error: ' + (data.error || 'Unknown error'), 'error');
   } catch(e) { window.rmToast(e.message, 'info'); }
 }
 
@@ -1616,7 +1651,7 @@ async function paSaveTier(tierId) {
     var res = await paFetch(url, { method: tierId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     var data = await res.json();
     if (data.success || data.id) paLoadMembershipConfig();
-    else window.rmToast('Error: ' + (data.error || 'Unknown', 'error'));
+    else window.rmToast('Error: ' + (data.error || 'Unknown error'), 'error');
   } catch(e) { window.rmToast(e.message, 'info'); }
 }
 

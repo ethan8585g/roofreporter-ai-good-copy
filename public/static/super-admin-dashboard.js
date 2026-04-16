@@ -9449,7 +9449,7 @@ async function hubRun(agentKey, btn) {
   if (res && res.ok) {
     var d = await res.json();
     var ok = d.success !== false;
-    hubShowResult(agentKey, ok ? 'Done — ' + (d.result?.summary || 'completed') : (d.error || 'Failed'), !ok);
+    hubShowResult(agentKey, ok ? 'Completed in ' + ((d.duration_ms || 0) / 1000).toFixed(1) + 's' : (d.error || 'Failed'), !ok);
     loadAgentHubDashboard();
   } else {
     hubShowResult(agentKey, 'Run failed', true);

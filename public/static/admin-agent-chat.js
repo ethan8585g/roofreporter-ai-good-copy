@@ -101,7 +101,7 @@
         fresh.forEach(a => window._aa_seen_actions.add(a.id));
         fresh.reverse().forEach(a => {
           const ok = a.success ? 'OK' : 'FAIL';
-          addMsg('action', `[${ok}] ${a.tool_name} ${(a.args || '').slice(0, 120)}`);
+          addMsg('action', `[${ok}] ${a.tool} ${JSON.stringify(a.args || {}).slice(0, 120)}`);
         });
       }
       addMsg('assistant', data.reply || '(no reply)');
