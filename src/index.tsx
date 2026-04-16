@@ -4209,6 +4209,11 @@ function getSuperAdminDashboardHTML(mapsApiKey: string = '') {
           <span class="label text-sm font-medium">API Users</span>
           <span id="sa-api-badge" style="margin-left:auto;background:#3b82f6;color:#fff;font-size:10px;font-weight:800;padding:2px 7px;border-radius:999px;display:none"></span>
         </div>
+        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('ai-agent', this)">
+          <i class="fas fa-robot w-5 text-center"></i>
+          <span class="label text-sm font-medium">AI Agent</span>
+          <span id="sa-agent-badge" style="margin-left:auto;background:#10b981;color:#fff;font-size:10px;font-weight:800;padding:2px 7px;border-radius:999px;display:none">ON</span>
+        </div>
         <div class="border-t border-gray-800 my-3"></div>
         <a href="/admin" class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400 no-underline">
           <i class="fas fa-tachometer-alt w-5 text-center"></i>

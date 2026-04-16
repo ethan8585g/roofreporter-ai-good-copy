@@ -158,6 +158,9 @@ async function loadView(view) {
           if (badge) { badge.textContent = activeJobs; badge.style.display = activeJobs > 0 ? '' : 'none'; }
         }
         break;
+      case 'ai-agent':
+        SA.data.aiAgent = null; // loaded async by loadAiAgentDashboard()
+        break;
       case 'call-center':
         // Handled by call-center.js module
         if (typeof window.loadCallCenter === 'function') {
@@ -428,6 +431,7 @@ function renderContent() {
     case 'service-invoices': root.innerHTML = renderServiceInvoicesView(); break;
     case 'call-center-manage': root.innerHTML = renderCallCenterManageView(); break;
     case 'gemini-command': root.innerHTML = renderGeminiCommandView(); break;
+    case 'ai-agent': root.innerHTML = renderAiAgentView(); loadAiAgentDashboard(); break;
     // Platform Admin modules
     case 'enhanced-onboarding': root.innerHTML = (typeof renderEnhancedOnboardingView === 'function') ? renderEnhancedOnboardingView() : '<div class="p-8 text-gray-500">Module loading...</div>'; paLoadTiers(); break;
     case 'service-panel': root.innerHTML = (typeof renderServicePanelView === 'function') ? renderServicePanelView() : '<div class="p-8 text-gray-500">Module loading...</div>'; paLoadServicePanel(); break;
@@ -8786,3 +8790,244 @@ window.apiUserLedger = async function(accountId, companyName) {
   document.body.appendChild(modal);
   modal.addEventListener('click', function(e) { if (e.target === modal) modal.remove(); });
 };
+
+// ============================================================
+// AI AGENT DASHBOARD
+// ============================================================
+
+function renderAiAgentView() {
+  return `
+    <div class="mb-6">
+      <div class="flex items-center justify-between">
+        <div>
+          <h1 class="text-2xl font-bold text-slate-800 flex items-center gap-3">
+            <i class="fas fa-robot text-teal-500"></i> AI Autopilot Agent
+          </h1>
+          <p class="text-sm text-slate-500 mt-1">Autonomous roof tracing — monitors incoming orders and auto-processes traces using Gemini vision.</p>
+        </div>
+        <button onclick="loadAiAgentDashboard()" class="px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-medium hover:bg-slate-50 transition-colors">
+          <i class="fas fa-sync-alt mr-1.5"></i>Refresh
+        </button>
+      </div>
+    </div>
+
+    <!-- Stats row -->
+    <div id="ai-stats" class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div class="metric-card bg-white rounded-2xl p-5 animate-pulse"><div class="h-4 bg-slate-200 rounded w-20 mb-3"></div><div class="h-7 bg-slate-100 rounded w-12"></div></div>
+      <div class="metric-card bg-white rounded-2xl p-5 animate-pulse"><div class="h-4 bg-slate-200 rounded w-20 mb-3"></div><div class="h-7 bg-slate-100 rounded w-12"></div></div>
+      <div class="metric-card bg-white rounded-2xl p-5 animate-pulse"><div class="h-4 bg-slate-200 rounded w-20 mb-3"></div><div class="h-7 bg-slate-100 rounded w-12"></div></div>
+      <div class="metric-card bg-white rounded-2xl p-5 animate-pulse"><div class="h-4 bg-slate-200 rounded w-20 mb-3"></div><div class="h-7 bg-slate-100 rounded w-12"></div></div>
+    </div>
+
+    <!-- Controls -->
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6">
+      <h3 class="text-base font-bold text-gray-700 mb-4"><i class="fas fa-sliders-h mr-2 text-teal-500"></i>Agent Controls</h3>
+      <div class="flex flex-wrap items-center gap-3">
+        <button id="ai-toggle-btn" onclick="aiToggle()" class="px-5 py-2.5 rounded-xl text-sm font-semibold transition-all bg-slate-100 text-slate-600 hover:bg-slate-200">
+          <i class="fas fa-circle-notch fa-spin mr-2"></i>Loading...
+        </button>
+        <button onclick="aiProcessQueue()" class="px-5 py-2.5 bg-teal-500 hover:bg-teal-600 text-white rounded-xl text-sm font-semibold transition-all">
+          <i class="fas fa-play mr-2"></i>Process Queue Now
+        </button>
+        <button onclick="aiRetryFailed()" class="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-sm font-semibold transition-all">
+          <i class="fas fa-redo mr-2"></i>Retry Failed
+        </button>
+        <div class="flex items-center gap-2 ml-auto">
+          <label class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Confidence threshold</label>
+          <input id="ai-threshold" type="number" min="30" max="95" value="60" class="w-16 border border-gray-200 rounded-lg px-2 py-1.5 text-sm text-center font-bold">
+          <button onclick="aiSaveConfig()" class="px-3 py-1.5 bg-slate-700 hover:bg-slate-800 text-white rounded-lg text-xs font-semibold transition-all">Save</button>
+        </div>
+      </div>
+      <div id="ai-action-result" class="mt-3 text-sm text-slate-500 hidden"></div>
+    </div>
+
+    <!-- Pending Orders -->
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6">
+      <h3 class="text-base font-bold text-gray-700 mb-4"><i class="fas fa-clock mr-2 text-amber-500"></i>Pending Orders <span id="ai-pending-count" class="text-xs font-normal text-slate-400 ml-1"></span></h3>
+      <div id="ai-pending-table"><div class="text-sm text-slate-400 py-4 text-center"><i class="fas fa-circle-notch fa-spin mr-2"></i>Loading...</div></div>
+    </div>
+
+    <!-- Recent Jobs -->
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+      <h3 class="text-base font-bold text-gray-700 mb-4"><i class="fas fa-history mr-2 text-blue-500"></i>Recent Agent Jobs</h3>
+      <div id="ai-jobs-table"><div class="text-sm text-slate-400 py-4 text-center"><i class="fas fa-circle-notch fa-spin mr-2"></i>Loading...</div></div>
+    </div>
+  `;
+}
+
+async function loadAiAgentDashboard() {
+  var res = await saFetch('/api/ai-autopilot/dashboard');
+  if (!res || !res.ok) {
+    document.getElementById('ai-action-result') && showAiResult('Failed to load dashboard', true);
+    return;
+  }
+  var d = await res.json();
+  SA.data.aiAgent = d;
+
+  // Stats
+  var s = d.stats || {};
+  var successRate = s.total_jobs > 0 ? Math.round((s.successful_jobs / s.total_jobs) * 100) : 0;
+  document.getElementById('ai-stats').innerHTML =
+    samc('Pending', s.pending_orders || 0, 'fa-hourglass-half', 'amber', 'awaiting auto-trace') +
+    samc('Processed Today', s.today_jobs || 0, 'fa-check-circle', 'teal', 'agent jobs run') +
+    samc('Success Rate', successRate + '%', 'fa-bullseye', 'green', s.total_jobs + ' total jobs') +
+    samc('Failed', s.failed_jobs || 0, 'fa-exclamation-triangle', 'red', 'need retry');
+
+  // Toggle button
+  var cfg = d.config || {};
+  var enabled = cfg.auto_process_enabled;
+  var toggleBtn = document.getElementById('ai-toggle-btn');
+  if (toggleBtn) {
+    toggleBtn.innerHTML = enabled
+      ? '<i class="fas fa-toggle-on mr-2 text-lg"></i>Auto-Process: ON'
+      : '<i class="fas fa-toggle-off mr-2 text-lg"></i>Auto-Process: OFF';
+    toggleBtn.className = 'px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ' +
+      (enabled ? 'bg-teal-500 text-white hover:bg-teal-600' : 'bg-slate-200 text-slate-600 hover:bg-slate-300');
+  }
+
+  // Agent badge in sidebar
+  var agentBadge = document.getElementById('sa-agent-badge');
+  if (agentBadge) {
+    agentBadge.style.display = enabled ? '' : 'none';
+  }
+
+  // Confidence threshold
+  var thresholdInput = document.getElementById('ai-threshold');
+  if (thresholdInput) thresholdInput.value = cfg.confidence_threshold || 60;
+
+  // Pending orders table
+  var pending = d.pending_orders || [];
+  var pendingCount = document.getElementById('ai-pending-count');
+  if (pendingCount) pendingCount.textContent = '(' + pending.length + ')';
+  var pendingHtml = pending.length === 0
+    ? '<p class="text-sm text-slate-400 text-center py-4">No orders pending auto-trace.</p>'
+    : '<div class="overflow-x-auto"><table class="w-full text-sm">' +
+        '<thead class="bg-gray-50"><tr>' +
+          '<th class="px-4 py-2 text-left text-xs text-gray-500 font-semibold">Order #</th>' +
+          '<th class="px-4 py-2 text-left text-xs text-gray-500 font-semibold">Address</th>' +
+          '<th class="px-4 py-2 text-left text-xs text-gray-500 font-semibold">Status</th>' +
+          '<th class="px-4 py-2 text-left text-xs text-gray-500 font-semibold">Created</th>' +
+          '<th class="px-4 py-2 text-left text-xs text-gray-500 font-semibold">Action</th>' +
+        '</tr></thead><tbody>' +
+        pending.map(function(o) {
+          return '<tr class="border-t border-gray-100 hover:bg-gray-50">' +
+            '<td class="px-4 py-3 font-mono text-xs text-slate-600">' + (o.order_number || o.id) + '</td>' +
+            '<td class="px-4 py-3 text-slate-700 max-w-[200px] truncate">' + (o.property_address || '-') + '</td>' +
+            '<td class="px-4 py-3">' + statusBadge(o.status) + '</td>' +
+            '<td class="px-4 py-3 text-xs text-slate-400">' + fmtDate(o.created_at) + '</td>' +
+            '<td class="px-4 py-3"><button onclick="aiRunOrder(' + o.id + ', this)" class="px-3 py-1 bg-teal-500 hover:bg-teal-600 text-white rounded-lg text-xs font-semibold transition-all"><i class="fas fa-play mr-1"></i>Run Agent</button></td>' +
+          '</tr>';
+        }).join('') +
+        '</tbody></table></div>';
+  document.getElementById('ai-pending-table').innerHTML = pendingHtml;
+
+  // Recent jobs table
+  var jobs = d.recent_jobs || [];
+  var jobsHtml = jobs.length === 0
+    ? '<p class="text-sm text-slate-400 text-center py-4">No agent jobs yet.</p>'
+    : '<div class="overflow-x-auto"><table class="w-full text-sm">' +
+        '<thead class="bg-gray-50"><tr>' +
+          '<th class="px-4 py-2 text-left text-xs text-gray-500 font-semibold">Order #</th>' +
+          '<th class="px-4 py-2 text-left text-xs text-gray-500 font-semibold">Address</th>' +
+          '<th class="px-4 py-2 text-left text-xs text-gray-500 font-semibold">Action</th>' +
+          '<th class="px-4 py-2 text-left text-xs text-gray-500 font-semibold">Result</th>' +
+          '<th class="px-4 py-2 text-left text-xs text-gray-500 font-semibold">Confidence</th>' +
+          '<th class="px-4 py-2 text-left text-xs text-gray-500 font-semibold">Duration</th>' +
+          '<th class="px-4 py-2 text-left text-xs text-gray-500 font-semibold">Time</th>' +
+        '</tr></thead><tbody>' +
+        jobs.map(function(j) {
+          var rowClass = j.success ? 'bg-green-50/40' : (j.action === 'flagged_for_review' ? 'bg-amber-50/40' : 'bg-red-50/40');
+          var resultBadge = j.success
+            ? '<span class="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-medium">Success</span>'
+            : '<span class="px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-xs font-medium">Failed</span>';
+          return '<tr class="border-t border-gray-100 ' + rowClass + '">' +
+            '<td class="px-4 py-3 font-mono text-xs text-slate-600">' + (j.order_number || j.order_id) + '</td>' +
+            '<td class="px-4 py-3 text-slate-700 max-w-[160px] truncate">' + (j.property_address || '-') + '</td>' +
+            '<td class="px-4 py-3"><span class="px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full text-xs font-mono">' + (j.action || '-') + '</span></td>' +
+            '<td class="px-4 py-3">' + resultBadge + '</td>' +
+            '<td class="px-4 py-3 text-xs text-slate-500">' + (j.confidence != null ? j.confidence + '%' : '-') + '</td>' +
+            '<td class="px-4 py-3 text-xs text-slate-400">' + (j.processing_ms ? (j.processing_ms / 1000).toFixed(1) + 's' : '-') + '</td>' +
+            '<td class="px-4 py-3 text-xs text-slate-400">' + fmtDateTime(j.created_at) + '</td>' +
+          '</tr>';
+        }).join('') +
+        '</tbody></table></div>';
+  document.getElementById('ai-jobs-table').innerHTML = jobsHtml;
+}
+
+async function aiToggle() {
+  var btn = document.getElementById('ai-toggle-btn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-circle-notch fa-spin mr-2"></i>Updating...'; }
+  var res = await saFetch('/api/ai-autopilot/toggle', { method: 'POST' });
+  if (res && res.ok) {
+    var d = await res.json();
+    showAiResult(d.message || 'Updated', false);
+    loadAiAgentDashboard();
+  } else {
+    showAiResult('Toggle failed — check console', true);
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function aiProcessQueue() {
+  showAiResult('Processing queue...', false);
+  var res = await saFetch('/api/ai-autopilot/process-queue', { method: 'POST' });
+  if (res && res.ok) {
+    var d = await res.json();
+    showAiResult('Processed ' + (d.processed_count || 0) + ' order(s)', false);
+    loadAiAgentDashboard();
+  } else {
+    showAiResult('Process queue failed', true);
+  }
+}
+
+async function aiRetryFailed() {
+  showAiResult('Retrying failed orders...', false);
+  var res = await saFetch('/api/ai-autopilot/retry-failed', { method: 'POST' });
+  if (res && res.ok) {
+    var d = await res.json();
+    showAiResult('Retried ' + (d.retried_count || 0) + ' order(s)', false);
+    loadAiAgentDashboard();
+  } else {
+    showAiResult('Retry failed', true);
+  }
+}
+
+async function aiRunOrder(orderId, btn) {
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-circle-notch fa-spin mr-1"></i>Running...'; }
+  var res = await saFetch('/api/ai-autopilot/process-order/' + orderId, { method: 'POST' });
+  if (res && res.ok) {
+    var d = await res.json();
+    showAiResult('Order ' + orderId + ': ' + (d.result && d.result.action ? d.result.action : (d.success ? 'done' : 'failed')), !d.success);
+    loadAiAgentDashboard();
+  } else {
+    showAiResult('Failed to run agent on order ' + orderId, true);
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-play mr-1"></i>Run Agent'; }
+  }
+}
+
+async function aiSaveConfig() {
+  var threshold = parseInt(document.getElementById('ai-threshold').value);
+  if (isNaN(threshold) || threshold < 30 || threshold > 95) {
+    showAiResult('Threshold must be 30–95', true);
+    return;
+  }
+  var res = await saFetch('/api/ai-autopilot/config', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ confidence_threshold: threshold })
+  });
+  if (res && res.ok) {
+    showAiResult('Config saved', false);
+  } else {
+    showAiResult('Save failed', true);
+  }
+}
+
+function showAiResult(msg, isError) {
+  var el = document.getElementById('ai-action-result');
+  if (!el) return;
+  el.textContent = msg;
+  el.className = 'mt-3 text-sm px-3 py-2 rounded-lg ' + (isError ? 'bg-red-50 text-red-600' : 'bg-teal-50 text-teal-700');
+  el.classList.remove('hidden');
+  setTimeout(function() { el && el.classList.add('hidden'); }, 4000);
+}
