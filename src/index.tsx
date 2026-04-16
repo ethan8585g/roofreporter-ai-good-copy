@@ -1739,6 +1739,9 @@ app.get('/demo', (c) => {
   return c.html(getDemoLandingPageHTML())
 })
 
+// Demo booked confirmation — Google Calendar can redirect here
+app.get('/demo/booked', (c) => c.html(getDemoBookedHTML()))
+
 // Homeowner-focused landing page — captures mobile/organic traffic from homeowners searching for estimates
 app.get('/free-roof-estimate', (c) => c.html(getHomeownerEstimatePageHTML()))
 
@@ -5912,8 +5915,8 @@ function getLandingPageHTML(latestPosts: any[] = []) {
           </div>
         </form>
         <div class="flex flex-col sm:flex-row gap-4 justify-center mb-8">
-          <a href="/signup" onclick="rrTrack('cta_click',{location:'final_cta'})" class="group inline-flex items-center justify-center gap-3 bg-white/5 hover:bg-white/15 text-white font-bold py-3.5 px-8 rounded-xl text-base border border-white/20 hover:border-white/30 backdrop-blur-md transition-all duration-300 min-h-[52px]"><i class="fas fa-bolt text-[#00FF88]"></i> Skip &mdash; Sign Up Now</a>
-          <a href="https://calendar.app.google/KNLFST4CNxViPPN3A" target="_blank" onclick="rrTrack('cta_click',{location:'final_cta_demo'})" class="group inline-flex items-center justify-center gap-3 bg-white/5 hover:bg-white/15 text-white font-bold py-3.5 px-8 rounded-xl text-base border border-white/20 hover:border-white/30 backdrop-blur-md transition-all duration-300 min-h-[52px]"><i class="fas fa-calendar-check"></i> Book a Demo Meeting</a>
+          <a href="/register" onclick="rrTrack('cta_click',{location:'final_cta',variant:'start_free'})" class="group inline-flex items-center justify-center gap-3 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-3.5 px-8 rounded-xl text-base transition-all duration-300 hover:scale-[1.03] min-h-[52px] shadow-lg shadow-[#00FF88]/20"><i class="fas fa-bolt"></i> Start Free &mdash; 4 Reports</a>
+          <a href="/demo" onclick="rrTrack('cta_click',{location:'final_cta',variant:'book_demo'})" class="group inline-flex items-center justify-center gap-3 bg-white/5 hover:bg-white/15 text-white font-bold py-3.5 px-8 rounded-xl text-base border border-white/20 hover:border-white/30 backdrop-blur-md transition-all duration-300 min-h-[52px]"><i class="fas fa-calendar-check text-[#00FF88]"></i> Book a 20-min Demo</a>
         </div>
         <!-- Trust pills row -->
         <div class="flex flex-wrap items-center justify-center gap-2.5 mb-6">
@@ -10760,319 +10763,264 @@ function getLanderFunnelHTML() {
 }
 
 // ============================================================
-// DEMO LANDING PAGE — Facebook group marketing funnel
+// DEMO BOOKED CONFIRMATION — noindex, fires conversion pixel
+// ============================================================
+function getDemoBookedHTML() {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags()}
+  <title>Demo Booked! | Roof Manager</title>
+  <meta name="robots" content="noindex">
+  <style>* { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }</style>
+  <script>
+    window.addEventListener('load', function(){
+      try { gtag('event', 'conversion', { send_to: 'AW-18080319225/demo_booked' }); } catch(_){}
+      try { rrTrack('lead_capture', { source: 'demo_booked' }); } catch(_){}
+    });
+  </script>
+</head>
+<body style="background:#0A0A0A;color:#fff;margin:0;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 24px;text-align:center">
+  <div style="width:72px;height:72px;border-radius:50%;background:rgba(0,255,136,0.12);display:flex;align-items:center;justify-content:center;margin:0 auto 24px">
+    <i class="fas fa-calendar-check" style="color:#00FF88;font-size:36px"></i>
+  </div>
+  <h1 style="font-size:28px;font-weight:900;margin:0 0 12px">Demo confirmed!</h1>
+  <p style="color:#9ca3af;font-size:16px;max-width:400px;line-height:1.6;margin:0 0 36px">Check your email for the calendar invite. While you wait, start your free account — 4 reports ready instantly.</p>
+  <div style="display:flex;flex-direction:column;gap:12px;align-items:center">
+    <a href="/register" style="display:inline-flex;align-items:center;gap:10px;background:#00FF88;color:#0A0A0A;font-weight:800;padding:14px 28px;border-radius:14px;text-decoration:none;font-size:16px"><i class="fas fa-gift"></i>Get 4 Free Reports Now</a>
+    <a href="/" style="color:#6b7280;font-size:13px;text-decoration:none">← Back to homepage</a>
+  </div>
+</body>
+</html>`
+}
+
+// ============================================================
+// DEMO LANDING PAGE v2 — Embedded calendar, on-domain funnel
 // ============================================================
 function getDemoLandingPageHTML() {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   ${getHeadTags()}
-  <title>Book a Demo - Roof Manager | AI-Powered Roof Measurement Platform</title>
-  <meta name="description" content="See how Roof Manager generates professional roof measurement reports in under 60 seconds using satellite imagery and AI. Book a free demo today.">
-  <meta property="og:title" content="Book a Demo - Roof Manager">
-  <meta property="og:description" content="AI-powered roof measurement reports in 60 seconds. See it in action — book a free demo.">
+  <title>Book a Live Demo — Roof Manager</title>
+  <meta name="description" content="See Roof Manager live in 20 minutes. Walk through measurements, CRM, invoicing, and the AI secretary on a real roof you pick. No slides.">
+  <meta property="og:title" content="Book a Demo — Roof Manager">
+  <meta property="og:description" content="See Roof Manager live in 20 minutes on a real address you pick.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://www.roofmanager.ca/demo">
   <meta property="og:image" content="https://www.roofmanager.ca/static/logo.png">
   <meta property="og:site_name" content="Roof Manager">
   <link rel="canonical" href="https://www.roofmanager.ca/demo">
   <style>
+    * { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
     html { scroll-behavior: smooth; }
-    .scroll-animate { opacity: 0; transform: translateY(20px); transition: all 0.7s cubic-bezier(0.4, 0, 0.2, 1); }
-    .scroll-animate.animate-in { opacity: 1 !important; transform: translateY(0) !important; }
-    @keyframes pulse-glow { 0%, 100% { box-shadow: 0 0 20px rgba(34,211,238,0.2); } 50% { box-shadow: 0 0 40px rgba(34,211,238,0.4); } }
-    .pulse-glow { animation: pulse-glow 2s ease-in-out infinite; }
-    @keyframes float { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-8px); } }
-    .float-anim { animation: float 3s ease-in-out infinite; }
+    .demo-input { width:100%;padding:11px 14px;background:#0A0A0A;color:#fff;border:1px solid rgba(255,255,255,0.1);border-radius:8px;font-size:14px;box-sizing:border-box;outline:none;transition:border-color 0.2s; }
+    .demo-input:focus { border-color:rgba(0,255,136,0.5); }
+    #cal-wrapper { display:none; }
+    #cal-wrapper.visible { display:block; }
+    .scroll-animate { opacity:0;transform:translateY(20px);transition:all 0.7s cubic-bezier(0.4,0,0.2,1); }
+    .scroll-animate.animate-in { opacity:1!important;transform:translateY(0)!important; }
   </style>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 </head>
-<body class="bg-[#0a0a0a] min-h-screen text-white">
+<body style="background:#0A0A0A;color:#fff;margin:0;min-height:100vh">
   <!-- Nav -->
-  <nav class="bg-[#0a0a0a] border-b border-white/5">
-    <div class="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
-      <a href="/" class="flex items-center gap-2">
-        <img src="/static/logo.png" alt="Roof Manager" class="w-7 h-7 rounded-md object-cover">
-        <span class="text-white font-bold text-sm">Roof Manager</span>
+  <nav style="background:#0A0A0A;border-bottom:1px solid rgba(255,255,255,0.06);position:sticky;top:0;z-index:50">
+    <div style="max-width:1100px;margin:0 auto;padding:0 24px;height:64px;display:flex;align-items:center;justify-content:space-between">
+      <a href="/" style="display:flex;align-items:center;gap:10px;text-decoration:none">
+        <img src="/static/logo.png" alt="Roof Manager" style="width:34px;height:34px;border-radius:9px;object-fit:cover">
+        <span style="color:#fff;font-weight:800;font-size:16px">Roof Manager</span>
       </a>
-      <a href="/customer/login" class="bg-gradient-to-r from-cyan-500 to-blue-500 text-white text-sm font-semibold py-1.5 px-4 rounded-lg hover:opacity-90 transition-opacity">Try Free</a>
+      <div style="display:flex;align-items:center;gap:16px">
+        <a href="/contact" style="color:#9ca3af;font-size:13px;text-decoration:none">Contact</a>
+        <a href="/register" style="background:#00FF88;color:#0A0A0A;font-weight:800;padding:9px 18px;border-radius:10px;font-size:13px;text-decoration:none"><i class="fas fa-gift" style="margin-right:6px"></i>4 Free Reports</a>
+      </div>
     </div>
   </nav>
 
-  <!-- HERO -->
-  <section class="relative overflow-hidden py-20 lg:py-28">
-    <div class="absolute inset-0 opacity-10">
-      <div class="absolute inset-0" style="background-image: radial-gradient(circle, rgba(34,211,238,0.3) 1px, transparent 1px); background-size: 30px 30px;"></div>
-    </div>
-    <div class="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-gradient-to-b from-cyan-500/10 to-transparent rounded-full blur-3xl"></div>
-
-    <div class="relative max-w-4xl mx-auto px-4 text-center">
-      <div class="inline-flex items-center gap-2 bg-cyan-500/10 border border-cyan-400/20 rounded-full px-4 py-1.5 mb-6">
-        <i class="fas fa-play-circle text-cyan-400 text-sm"></i>
-        <span class="text-sm font-medium text-cyan-300">Free Live Demo — No Strings Attached</span>
+  <main>
+    <!-- Hero -->
+    <section style="text-align:center;padding:60px 24px 40px;background:linear-gradient(180deg,#0d1117 0%,#0A0A0A 100%)">
+      <!-- Trust strip above fold -->
+      <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:12px 24px;margin-bottom:28px">
+        <span style="color:#9ca3af;font-size:13px"><i class="fas fa-check" style="color:#00FF88;margin-right:6px"></i>Free 20-min call</span>
+        <span style="color:#9ca3af;font-size:13px"><i class="fas fa-check" style="color:#00FF88;margin-right:6px"></i>No slides</span>
+        <span style="color:#9ca3af;font-size:13px"><i class="fas fa-check" style="color:#00FF88;margin-right:6px"></i>Bring a real address</span>
+        <span style="color:#9ca3af;font-size:13px"><i class="fas fa-check" style="color:#00FF88;margin-right:6px"></i>Recording + notes sent after</span>
       </div>
-
-      <h1 class="text-4xl lg:text-6xl font-black leading-tight mb-6 tracking-tight">
-        Measure Any Roof in<br/>
-        <span class="bg-clip-text text-transparent bg-gradient-to-r from-cyan-300 to-blue-400">Under 60 Seconds</span>
-      </h1>
-
-      <p class="text-lg text-gray-400 mb-10 max-w-2xl mx-auto leading-relaxed">
-        See how contractors are ditching tape measures and drones for <strong class="text-white">satellite-powered AI reports</strong> — accurate area, pitch, edges, and full material BOMs delivered instantly.
-      </p>
-
-      <a href="#book" class="inline-flex items-center gap-3 bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-white font-bold py-4 px-10 rounded-xl text-lg shadow-2xl shadow-cyan-500/20 transition-all hover:scale-[1.02] pulse-glow">
-        <i class="fas fa-calendar-check"></i>
-        Book Your Free Demo
-        <i class="fas fa-arrow-down text-sm"></i>
-      </a>
-    </div>
-  </section>
-
-  <!-- SOCIAL PROOF -->
-  <section class="py-12 border-y border-white/5">
-    <div class="max-w-5xl mx-auto px-4">
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
-        <div>
-          <div class="text-3xl font-black text-cyan-400">500+</div>
-          <div class="text-sm text-gray-500 mt-1">Contractors Using It</div>
-        </div>
-        <div>
-          <div class="text-3xl font-black text-cyan-400">60s</div>
-          <div class="text-sm text-gray-500 mt-1">Average Report Time</div>
-        </div>
-        <div>
-          <div class="text-3xl font-black text-cyan-400">98%</div>
-          <div class="text-sm text-gray-500 mt-1">Measurement Accuracy</div>
-        </div>
-        <div>
-          <div class="text-3xl font-black text-cyan-400">$2.99</div>
-          <div class="text-sm text-gray-500 mt-1">Per Report</div>
-        </div>
+      <h1 style="font-size:clamp(28px,5vw,48px);font-weight:900;color:#fff;margin:0 0 16px;line-height:1.1">See Roof Manager live — in 20 minutes</h1>
+      <p style="color:#9ca3af;font-size:17px;max-width:540px;margin:0 auto 28px;line-height:1.6">Walk through measurements, CRM, invoicing, and the AI secretary on a real roof you pick. No slides.</p>
+      <!-- Social proof avatars -->
+      <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:16px;margin-bottom:16px">
+        ${[{n:'Mike D.',r:'Roofing Contractor'},{n:'Sarah K.',r:'Estimator'},{n:'James R.',r:'Prairie Roofing'}].map(t=>`
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#00FF88,#22d3ee);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#0A0A0A">${t.n[0]}</div>
+          <div style="text-align:left"><div style="color:#fff;font-size:12px;font-weight:600">${t.n}</div><div style="color:#6b7280;font-size:11px">${t.r}</div></div>
+        </div>`).join('')}
       </div>
-    </div>
-  </section>
+    </section>
 
-  <!-- WHAT YOU GET -->
-  <section class="py-20 scroll-animate">
-    <div class="max-w-5xl mx-auto px-4">
-      <h2 class="text-3xl font-bold text-center mb-4">What You'll See in the Demo</h2>
-      <p class="text-gray-400 text-center mb-12 max-w-xl mx-auto">A quick walkthrough of everything Roof Manager does for your business.</p>
-      <div class="grid md:grid-cols-3 gap-6">
-        <div class="bg-[#111] border border-white/10 rounded-2xl p-6">
-          <div class="w-12 h-12 bg-cyan-500/10 rounded-xl flex items-center justify-center mb-4">
-            <i class="fas fa-satellite text-cyan-400 text-xl"></i>
-          </div>
-          <h3 class="font-bold text-lg mb-2">Satellite Roof Reports</h3>
-          <p class="text-gray-400 text-sm leading-relaxed">Enter an address, get a full roof measurement report — area, pitch, edge lengths, segments, and a material BOM. No climbing required.</p>
-        </div>
-        <div class="bg-[#111] border border-white/10 rounded-2xl p-6">
-          <div class="w-12 h-12 bg-blue-500/10 rounded-xl flex items-center justify-center mb-4">
-            <i class="fas fa-brain text-blue-400 text-xl"></i>
-          </div>
-          <h3 class="font-bold text-lg mb-2">AI Vision Analysis</h3>
-          <p class="text-gray-400 text-sm leading-relaxed">Our Gemini AI examines roof imagery to detect damage, aging, and condition issues — giving you a head start on every inspection.</p>
-        </div>
-        <div class="bg-[#111] border border-white/10 rounded-2xl p-6">
-          <div class="w-12 h-12 bg-green-500/10 rounded-xl flex items-center justify-center mb-4">
-            <i class="fas fa-users-cog text-green-400 text-xl"></i>
-          </div>
-          <h3 class="font-bold text-lg mb-2">Built-in CRM</h3>
-          <p class="text-gray-400 text-sm leading-relaxed">Manage customers, send proposals and invoices, schedule jobs, and track your revenue pipeline — all in one platform, free forever.</p>
-        </div>
-      </div>
-    </div>
-  </section>
+    <!-- Two-column: form + calendar -->
+    <section id="book" style="max-width:1100px;margin:0 auto;padding:40px 24px 80px">
+      <div style="display:grid;grid-template-columns:1fr;gap:32px" id="demo-grid">
+        <style>@media(min-width:760px){#demo-grid{grid-template-columns:1fr 1fr}}</style>
 
-  <!-- LEAD CAPTURE + BOOKING -->
-  <section id="book" class="py-20 scroll-animate">
-    <div class="max-w-5xl mx-auto px-4">
-      <div class="grid lg:grid-cols-2 gap-10">
-        <!-- Lead Capture Form -->
-        <div class="bg-[#111] border border-white/10 rounded-2xl p-8">
-          <h2 class="text-2xl font-bold mb-2">Get in Touch</h2>
-          <p class="text-gray-400 text-sm mb-6">Drop your info and we'll send you a personalized walkthrough.</p>
+        <!-- LEFT: Qualifying form -->
+        <div style="background:#111;border:1px solid rgba(255,255,255,0.08);border-radius:20px;padding:32px">
+          <h2 style="font-size:20px;font-weight:800;color:#fff;margin:0 0 6px">Step 1 — Tell us about yourself</h2>
+          <p style="color:#9ca3af;font-size:14px;margin:0 0 22px">Submit your info, then pick a time that works for you below.</p>
+
           <form id="demo-lead-form" onsubmit="return submitDemoLead(event)">
-            <div class="space-y-4">
-              <div>
-                <label class="block text-sm font-medium text-gray-300 mb-1">Full Name *</label>
-                <input type="text" name="name" required class="w-full bg-[#0a0a0a] border border-white/10 rounded-lg px-4 py-3 text-white text-sm focus:outline-none focus:border-cyan-500/50 transition-colors" placeholder="John Smith">
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-gray-300 mb-1">Email *</label>
-                <input type="email" name="email" required class="w-full bg-[#0a0a0a] border border-white/10 rounded-lg px-4 py-3 text-white text-sm focus:outline-none focus:border-cyan-500/50 transition-colors" placeholder="john@yourcompany.com">
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-gray-300 mb-1">Phone</label>
-                <input type="tel" name="phone" class="w-full bg-[#0a0a0a] border border-white/10 rounded-lg px-4 py-3 text-white text-sm focus:outline-none focus:border-cyan-500/50 transition-colors" placeholder="(555) 123-4567">
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-gray-300 mb-1">Company Name</label>
-                <input type="text" name="company" class="w-full bg-[#0a0a0a] border border-white/10 rounded-lg px-4 py-3 text-white text-sm focus:outline-none focus:border-cyan-500/50 transition-colors" placeholder="ABC Roofing Inc.">
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-gray-300 mb-1">What are you looking for?</label>
-                <textarea name="message" rows="3" class="w-full bg-[#0a0a0a] border border-white/10 rounded-lg px-4 py-3 text-white text-sm focus:outline-none focus:border-cyan-500/50 transition-colors resize-none" placeholder="Tell us about your business and what you need..."></textarea>
-              </div>
-              <button type="submit" id="demo-submit-btn" class="w-full bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-white font-bold py-3 px-6 rounded-xl transition-all hover:scale-[1.01]">
-                <i class="fas fa-paper-plane mr-2"></i>Submit & Book Demo
-              </button>
-              <div id="demo-lead-error" class="hidden text-sm font-medium px-4 py-3 rounded-lg bg-red-500/20 text-red-300 border border-red-500/30"></div>
+            <div style="margin-bottom:14px">
+              <label for="demo-name" style="display:block;font-size:12px;font-weight:600;color:#9ca3af;margin-bottom:6px">Full Name *</label>
+              <input id="demo-name" required name="name" type="text" placeholder="John Smith" class="demo-input" autocomplete="name">
             </div>
+            <div style="margin-bottom:14px">
+              <label for="demo-email" style="display:block;font-size:12px;font-weight:600;color:#9ca3af;margin-bottom:6px">Work Email *</label>
+              <input id="demo-email" required name="email" type="email" placeholder="john@yourcompany.com" class="demo-input" autocomplete="email">
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+              <div>
+                <label for="demo-phone" style="display:block;font-size:12px;font-weight:600;color:#9ca3af;margin-bottom:6px">Phone</label>
+                <input id="demo-phone" name="phone" type="tel" placeholder="(403) 555-0100" class="demo-input" autocomplete="tel">
+              </div>
+              <div>
+                <label for="demo-company" style="display:block;font-size:12px;font-weight:600;color:#9ca3af;margin-bottom:6px">Company</label>
+                <input id="demo-company" name="company" type="text" placeholder="ABC Roofing" class="demo-input" autocomplete="organization">
+              </div>
+            </div>
+            <div style="margin-bottom:20px">
+              <label for="demo-message" style="display:block;font-size:12px;font-weight:600;color:#9ca3af;margin-bottom:6px">What are you looking for?</label>
+              <textarea id="demo-message" name="message" rows="3" placeholder="Measurements, CRM, invoicing, solar…" class="demo-input" style="resize:vertical;min-height:80px"></textarea>
+            </div>
+            <div id="demo-lead-error" style="display:none;background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);color:#fca5a5;border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:14px"></div>
+            <button type="submit" id="demo-submit-btn" style="width:100%;padding:14px;background:#00FF88;color:#0A0A0A;border:none;border-radius:12px;font-size:15px;font-weight:800;cursor:pointer">
+              <i class="fas fa-paper-plane" style="margin-right:8px"></i>Submit &amp; Pick a Time
+            </button>
           </form>
-          <div id="demo-lead-success" class="hidden text-center py-8">
-            <div class="w-16 h-16 bg-green-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
-              <i class="fas fa-check text-green-400 text-2xl"></i>
+
+          <!-- Success banner (hidden until submit) -->
+          <div id="demo-success-banner" style="display:none;background:rgba(0,255,136,0.08);border:1px solid rgba(0,255,136,0.25);border-radius:12px;padding:16px 20px;margin-top:20px;display:none;align-items:center;gap:12px">
+            <i class="fas fa-check-circle" style="color:#00FF88;font-size:22px;flex-shrink:0"></i>
+            <div>
+              <div style="color:#fff;font-weight:700;font-size:14px">You're in — pick a time below.</div>
+              <div style="color:#9ca3af;font-size:13px">We'll confirm over email and send a calendar invite.</div>
             </div>
-            <h3 class="text-xl font-bold mb-2">You're In!</h3>
-            <p class="text-gray-400 text-sm">We've got your info. Now book a time that works for you below.</p>
           </div>
         </div>
 
-        <!-- Google Calendar Booking -->
-        <div class="bg-[#111] border border-white/10 rounded-2xl p-8 flex flex-col">
-          <h2 class="text-2xl font-bold mb-2">Book a Time</h2>
-          <p class="text-gray-400 text-sm mb-6">Pick a 15-minute slot — we'll walk you through the entire platform live.</p>
-          <div class="flex-1 flex flex-col items-center justify-center">
-            <div class="w-20 h-20 bg-cyan-500/10 rounded-2xl flex items-center justify-center mb-6 float-anim">
-              <img src="https://www.gstatic.com/images/branding/product/1x/calendar_48dp.png" alt="Google Calendar" loading="lazy" class="w-10 h-10">
+        <!-- RIGHT: Embedded calendar (revealed after form submit) -->
+        <div style="background:#111;border:1px solid rgba(255,255,255,0.08);border-radius:20px;padding:32px;display:flex;flex-direction:column">
+          <h2 style="font-size:20px;font-weight:800;color:#fff;margin:0 0 6px">Step 2 — Pick a time</h2>
+          <p style="color:#9ca3af;font-size:14px;margin:0 0 20px">20-min call. We'll run a live report on an address you choose.</p>
+
+          <!-- Pre-submit placeholder -->
+          <div id="cal-placeholder" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:40px 20px">
+            <div style="width:56px;height:56px;border-radius:50%;background:rgba(0,255,136,0.08);border:1px solid rgba(0,255,136,0.2);display:flex;align-items:center;justify-content:center;margin:0 auto 16px">
+              <i class="fas fa-calendar-check" style="color:#00FF88;font-size:22px"></i>
             </div>
-            <a href="https://calendar.app.google/KNLFST4CNxViPPN3A" target="_blank" rel="noopener" class="inline-flex items-center gap-3 bg-white text-gray-900 font-bold py-4 px-8 rounded-xl text-lg hover:bg-gray-100 transition-all hover:scale-[1.02] shadow-xl">
-              <i class="fas fa-calendar-plus"></i>
-              Open Booking Calendar
-              <i class="fas fa-external-link-alt text-sm text-gray-400"></i>
-            </a>
-            <p class="text-gray-500 text-xs mt-4 text-center">Opens Google Calendar appointment scheduling.<br/>Pick any available 15-min slot.</p>
+            <p style="color:#6b7280;font-size:14px;max-width:220px;line-height:1.5">Complete the form on the left and the booking calendar will appear here.</p>
+          </div>
+
+          <!-- Calendar iframe (hidden until form submit) -->
+          <div id="cal-wrapper">
+            <iframe
+              id="cal-iframe"
+              src=""
+              title="Book a demo — Roof Manager"
+              loading="lazy"
+              style="width:100%;height:700px;border:none;border-radius:12px"
+              allow="payment">
+            </iframe>
+          </div>
+
+          <!-- What happens next -->
+          <div id="cal-next-steps" style="display:none;margin-top:20px;padding:16px;background:#0A0A0A;border-radius:12px;border:1px solid rgba(255,255,255,0.06)">
+            <div style="color:#9ca3af;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:10px">What happens next</div>
+            ${[
+              'Calendar invite sent to your email',
+              'We\'ll run a live report on your address',
+              'Walk through CRM, invoicing & AI Secretary',
+              'Recording + notes emailed after',
+            ].map(s=>`<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:7px;font-size:13px;color:#d1d5db"><i class="fas fa-check-circle" style="color:#00FF88;font-size:13px;margin-top:2px;flex-shrink:0"></i>${s}</div>`).join('')}
           </div>
         </div>
       </div>
-    </div>
-  </section>
+    </section>
+  </main>
 
-  <!-- FAQ -->
-  <section class="py-16 border-t border-white/5 scroll-animate">
-    <div class="max-w-3xl mx-auto px-4">
-      <h2 class="text-2xl font-bold text-center mb-10">Common Questions</h2>
-      <div class="space-y-4">
-        <div class="bg-[#111] border border-white/10 rounded-xl p-5">
-          <h3 class="font-semibold mb-1">Is there really a free trial?</h3>
-          <p class="text-gray-400 text-sm">Yes — every new account gets 3 free roof reports plus full CRM access. No credit card required.</p>
-        </div>
-        <div class="bg-[#111] border border-white/10 rounded-xl p-5">
-          <h3 class="font-semibold mb-1">How accurate are the measurements?</h3>
-          <p class="text-gray-400 text-sm">We use Google Solar API satellite data cross-referenced with our geodesic measurement engine. Accuracy is within 2-3% of manual measurements on most structures.</p>
-        </div>
-        <div class="bg-[#111] border border-white/10 rounded-xl p-5">
-          <h3 class="font-semibold mb-1">What does the demo cover?</h3>
-          <p class="text-gray-400 text-sm">We'll run a live report on a property of your choice, walk through the CRM, proposals, invoicing, and answer any questions — all in 15 minutes.</p>
-        </div>
-        <div class="bg-[#111] border border-white/10 rounded-xl p-5">
-          <h3 class="font-semibold mb-1">Do I need to install anything?</h3>
-          <p class="text-gray-400 text-sm">Nope. Roof Manager is fully web-based — works on any device with a browser. Nothing to download or install.</p>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- CTA FOOTER -->
-  <section class="py-16 bg-gradient-to-t from-cyan-900/10 to-transparent">
-    <div class="max-w-3xl mx-auto px-4 text-center">
-      <h2 class="text-3xl font-bold mb-4">Ready to Measure Smarter?</h2>
-      <p class="text-gray-400 mb-8">Start with 3 free reports or book a demo — either way, you'll never climb a roof to measure again.</p>
-      <div class="flex flex-col sm:flex-row gap-4 justify-center">
-        <a href="/customer/login" class="inline-flex items-center gap-2 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-400 hover:to-emerald-400 text-white font-bold py-3 px-8 rounded-xl shadow-lg transition-all hover:scale-[1.02]">
-          <i class="fas fa-rocket"></i>
-          Start Free — 3 Reports
-        </a>
-        <a href="#book" class="inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white font-bold py-3 px-8 rounded-xl border border-white/20 transition-all">
-          <i class="fas fa-calendar-check"></i>
-          Book a Demo
-        </a>
-      </div>
-    </div>
-  </section>
-
-  <footer class="border-t border-white/5 py-8">
-    <div class="max-w-6xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between text-sm text-gray-500">
-      <span>&copy; ${new Date().getFullYear()} Roof Manager. All rights reserved.</span>
-      <div class="flex gap-4 mt-2 sm:mt-0">
-        <a href="/privacy" class="hover:text-white transition-colors">Privacy</a>
-        <a href="/terms" class="hover:text-white transition-colors">Terms</a>
-        <a href="/" class="hover:text-white transition-colors">Home</a>
-      </div>
-    </div>
+  <footer style="background:#0A0A0A;border-top:1px solid rgba(255,255,255,0.06);padding:24px;text-align:center">
+    <p style="color:#6b7280;font-size:13px;margin:0">&copy; 2026 Roof Manager &middot; <a href="/privacy" style="color:#6b7280">Privacy</a> &middot; <a href="/terms" style="color:#6b7280">Terms</a></p>
   </footer>
 
   <script>
-    // UTM parameter tracking
     var _utmParams = {};
-    (function() {
-      var params = new URLSearchParams(window.location.search);
-      ['utm_source','utm_medium','utm_campaign','utm_content'].forEach(function(k) {
-        if (params.get(k)) _utmParams[k] = params.get(k);
-      });
+    (function(){
+      var p = new URLSearchParams(location.search);
+      ['utm_source','utm_medium','utm_campaign','utm_content'].forEach(function(k){ if(p.get(k)) _utmParams[k]=p.get(k); });
     })();
 
-    // Lead form submission
     function submitDemoLead(e) {
       e.preventDefault();
-      var form = document.getElementById('demo-lead-form');
+      var form = e.target;
       var btn = document.getElementById('demo-submit-btn');
-      var errDiv = document.getElementById('demo-lead-error');
-      var fd = new FormData(form);
-      btn.disabled = true;
-      btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Submitting...';
-      errDiv.classList.add('hidden');
+      var errEl = document.getElementById('demo-lead-error');
+      errEl.style.display = 'none';
+      btn.disabled = true; btn.textContent = 'Submitting…';
 
       var payload = {
-        name: fd.get('name'),
-        email: fd.get('email'),
-        phone: fd.get('phone') || '',
-        company: fd.get('company') || '',
-        message: fd.get('message') || '',
+        name: form.name.value.trim(),
+        email: form.email.value.trim(),
+        phone: form.phone.value.trim() || '',
+        company: form.company.value.trim() || '',
+        message: form.message.value.trim() || '',
         utm_source: _utmParams.utm_source || '',
         utm_medium: _utmParams.utm_medium || '',
         utm_campaign: _utmParams.utm_campaign || '',
         utm_content: _utmParams.utm_content || ''
       };
 
-      fetch('/api/demo/lead', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      })
-      .then(function(r) { return r.json(); })
-      .then(function(data) {
-        if (data.success) {
-          form.classList.add('hidden');
-          document.getElementById('demo-lead-success').classList.remove('hidden');
-        } else {
-          btn.disabled = false;
-          btn.innerHTML = '<i class="fas fa-paper-plane mr-2"></i>Submit & Book Demo';
-          errDiv.innerHTML = '<i class="fas fa-exclamation-circle mr-2"></i>' + (data.error || 'Something went wrong. Please try again.');
-          errDiv.classList.remove('hidden');
-        }
-      })
-      .catch(function() {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-paper-plane mr-2"></i>Submit & Book Demo';
-        errDiv.innerHTML = '<i class="fas fa-exclamation-circle mr-2"></i>Network error. Please try again.';
-        errDiv.classList.remove('hidden');
-      });
+      fetch('/api/demo/lead', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) })
+        .then(function(r){ return r.json().then(function(d){ return {ok:r.ok,d:d}; }); })
+        .then(function(res){
+          if (!res.ok) {
+            errEl.textContent = res.d.error || 'Something went wrong. Please try again.';
+            errEl.style.display = 'block';
+            btn.disabled = false; btn.innerHTML = '<i class="fas fa-paper-plane" style="margin-right:8px"></i>Submit &amp; Pick a Time';
+            return;
+          }
+          // Fire analytics
+          try { rrTrack('lead_capture', { source: 'demo_portal', step: 'form_submit' }); } catch(_){}
+          try { gtag('event', 'generate_lead', { form: 'demo' }); } catch(_){}
 
+          // Hide form, show success banner
+          form.style.display = 'none';
+          var banner = document.getElementById('demo-success-banner');
+          banner.style.display = 'flex';
+
+          // Reveal calendar
+          document.getElementById('cal-placeholder').style.display = 'none';
+          var wrapper = document.getElementById('cal-wrapper');
+          wrapper.classList.add('visible');
+          document.getElementById('cal-iframe').src = 'https://calendar.app.google/KNLFST4CNxViPPN3A';
+          document.getElementById('cal-next-steps').style.display = 'block';
+
+          // Scroll to calendar
+          setTimeout(function(){ document.getElementById('cal-wrapper').scrollIntoView({ behavior:'smooth', block:'start' }); }, 200);
+        })
+        .catch(function(){
+          errEl.textContent = 'Network error — please try again.';
+          errEl.style.display = 'block';
+          btn.disabled = false; btn.innerHTML = '<i class="fas fa-paper-plane" style="margin-right:8px"></i>Submit &amp; Pick a Time';
+        });
       return false;
     }
 
     // Scroll animations
-    var observer = new IntersectionObserver(function(entries) {
-      entries.forEach(function(entry) {
-        if (entry.isIntersecting) {
-          entry.target.classList.add('animate-in');
-        }
-      });
-    }, { threshold: 0.1 });
-    document.querySelectorAll('.scroll-animate').forEach(function(el) {
-      observer.observe(el);
-    });
+    var obs = new IntersectionObserver(function(e){ e.forEach(function(en){ if(en.isIntersecting){ en.target.classList.add('animate-in'); obs.unobserve(en.target); } }); }, {threshold:0.1});
+    document.querySelectorAll('.scroll-animate').forEach(function(el){ obs.observe(el); });
   </script>
 </body>
 </html>`
