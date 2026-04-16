@@ -606,7 +606,8 @@ app.get('/register', (c) => {
   const email = c.req.query('email') || ''
   const googleClientId = (c.env as any).GOOGLE_OAUTH_CLIENT_ID || ''
   const previewId = c.req.query('preview_id') || ''
-  return c.html(getCustomerRegisterPageHTML(email, googleClientId, previewId))
+  const refCode = c.req.query('ref') || ''
+  return c.html(getCustomerRegisterPageHTML(email, googleClientId, previewId, refCode))
 })
 
 // Magic link auth handler
@@ -687,6 +688,19 @@ app.get('/forgot-password', (c) => {
     }
     </script>
   </body></html>`)
+})
+
+// /r/:code — referral landing page
+app.get('/r/:code', async (c) => {
+  const code = c.req.param('code') || ''
+  const db = (c.env as any).DB
+  // Look up the referrer name (non-fatal if table/column missing)
+  let referrerName = ''
+  try {
+    const row = await db.prepare("SELECT name, company_name FROM customers WHERE referral_code = ? AND is_active = 1").bind(code).first() as any
+    if (row) referrerName = row.company_name || row.name || ''
+  } catch {}
+  return c.html(getReferralLandingHTML(code, referrerName))
 })
 
 // /onboarding — activation wizard (post-signup)
@@ -5614,6 +5628,53 @@ function getSampleReportHTML() {
 </html>`
 }
 
+function getReferralLandingHTML(code: string, referrerName: string): string {
+  const referrerDisplay = referrerName ? `<strong>${referrerName}</strong> invited you to` : 'You\'ve been invited to'
+  const registerUrl = `/register?ref=${encodeURIComponent(code)}`
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>You've been invited — Roof Manager</title>
+  <link rel="icon" href="/static/favicon.ico">
+  <link rel="stylesheet" href="/static/tailwind.css">
+  <style>body { background:#0A0A0A; color:#fff; font-family:'Inter',sans-serif; }</style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-center px-4">
+  <div class="w-full max-w-md text-center">
+    <div style="font-size:64px;margin-bottom:16px">&#x1F4E8;</div>
+    <h1 class="text-3xl font-black mb-3">
+      ${referrerDisplay} <span style="color:#00FF88">Roof Manager</span>
+    </h1>
+    <p class="text-gray-400 text-lg mb-8">
+      The #1 roofing measurement and CRM platform for contractors.<br>
+      Sign up now and get <span class="text-white font-bold">4 free reports</span> — no credit card required.
+    </p>
+    <div style="background:#111111;border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:24px;margin-bottom:28px;text-align:left">
+      <h3 style="color:#00FF88;font-weight:700;font-size:13px;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:12px">What you get for free:</h3>
+      <ul class="space-y-2">
+        <li class="flex items-start gap-2 text-sm text-gray-300"><span style="color:#00FF88">&#x2713;</span> 4 professional roof measurement reports</li>
+        <li class="flex items-start gap-2 text-sm text-gray-300"><span style="color:#00FF88">&#x2713;</span> Full CRM, invoicing &amp; job tracking</li>
+        <li class="flex items-start gap-2 text-sm text-gray-300"><span style="color:#00FF88">&#x2713;</span> Customer portal &amp; proposal templates</li>
+        <li class="flex items-start gap-2 text-sm text-gray-300"><span style="color:#00FF88">&#x2713;</span> AI vision analysis &amp; solar potential</li>
+      </ul>
+    </div>
+    <a href="${registerUrl}" style="display:block;padding:18px;background:#00FF88;color:#0A0A0A;font-weight:800;border-radius:14px;font-size:18px;text-decoration:none;box-shadow:0 8px 32px rgba(0,255,136,0.25)">
+      Claim My 4 Free Reports &#x2192;
+    </a>
+    <p style="color:#4b5563;font-size:12px;margin-top:16px">No credit card. Cancel anytime.</p>
+  </div>
+  <script>
+    // Store referral code so register page can pick it up
+    if ('${code}') {
+      try { localStorage.setItem('rr_ref_code', '${code}'); } catch(e) {}
+    }
+  </script>
+</body>
+</html>`
+}
+
 function getOnboardingPageHTML(sessionToken = ''): string {
   return `<!DOCTYPE html>
 <html lang="en">
@@ -7720,7 +7781,7 @@ function getSettingsPageHTML() {
 // CUSTOMER PAGES
 // ============================================================
 
-function getCustomerRegisterPageHTML(prefillEmail = '', googleClientId = '', previewId = '') {
+function getCustomerRegisterPageHTML(prefillEmail = '', googleClientId = '', previewId = '', refCode = '') {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -7989,7 +8050,8 @@ ${previewId ? `
           method: 'POST', headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({email: email, completed: true})
         }).catch(function(){});
-        window.location.href = '/customer/dashboard?welcome=1';
+        if (data.token) localStorage.setItem('rc_customer_token', data.token);
+        window.location.href = '/onboarding';
       } else {
         rrTrack('signup_submit_error', {reason: data.error});
         var errEl = document.getElementById('reg-error');
@@ -8009,7 +8071,8 @@ ${previewId ? `
       const data = await res.json();
       if (data.success) {
         rrTrack('oauth_success', {provider: 'google'});
-        window.location.href = '/customer/dashboard?welcome=1';
+        if (data.token) localStorage.setItem('rc_customer_token', data.token);
+        window.location.href = data.is_new ? '/onboarding' : '/customer/dashboard';
       } else {
         rrTrack('oauth_error', {provider: 'google', reason: data.error});
         const errEl = document.getElementById('reg-error');
