@@ -3,6 +3,7 @@ import { cors } from 'hono/cors'
 import { getAccessToken, getProjectId, getServiceAccountEmail } from './services/gcp-auth'
 import { trackProposalViewed } from './services/ga4-events'
 import { buildClientAnalyticsScript } from './services/analytics-events'
+import { AB_SCRIPT } from './lib/ab'
 import { ordersRoutes } from './routes/orders'
 import { companiesRoutes } from './routes/companies'
 import { settingsRoutes } from './routes/settings'
@@ -246,7 +247,7 @@ window.trackAdsConversion = function(kind, params) {
 </script>`
       const clarityId = (c.env as any).CLARITY_PROJECT_ID || ''
       const claritySnippet = buildClientAnalyticsScript(clarityId)
-      const injected = body.replace('</body>', `${ga4Script}${googleAdsScript}${claritySnippet}
+      const injected = body.replace('</body>', `${ga4Script}${googleAdsScript}${claritySnippet}${AB_SCRIPT}
 <script src="/static/toast.js"></script>
 <script src="/static/tracker.js" defer></script>
 </body>`)
