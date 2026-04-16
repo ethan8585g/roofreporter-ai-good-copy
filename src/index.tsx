@@ -54,6 +54,7 @@ import { adminAgentRoutes } from './routes/admin-agent'
 import { homeDesignerRoutes } from './routes/home-designer'
 import { sam3Routes } from './routes/sam3-analysis'
 import { platformAdmin } from './routes/platform-admin'
+import { superAdminBi } from './routes/super-admin-bi'
 import { fieldRoutes, fieldUiRoutes } from './routes/field'
 import { publicApiRoutes } from './routes/public-api'
 import { publicPreviewRoutes } from './routes/public-preview'
@@ -332,6 +333,7 @@ app.route('/api/admin-agent', adminAgentRoutes)
 app.route('/api/home-designer', homeDesignerRoutes)
 app.route('/api/sam3', sam3Routes)
 app.route('/api/admin/platform', platformAdmin)
+app.route('/api/admin/bi', superAdminBi)
 app.route('/api/ai-autopilot', aiAutopilotRoutes)
 app.route('/api/agent-hub', agentHubRoutes)
 app.route('/api/field', fieldRoutes)
@@ -737,6 +739,11 @@ app.get('/order/new', (c) => {
 // Super Admin Dashboard (post-login landing)
 app.get('/super-admin', (c) => {
   return c.html(getSuperAdminDashboardHTML(c.env.GOOGLE_MAPS_API_KEY || ''))
+})
+
+// BI Analytics Hub (unified super admin analytics)
+app.get('/admin/super', (c) => {
+  return c.html(getSuperAdminBiHTML())
 })
 
 // Admin Dashboard (legacy + operational)
@@ -4939,6 +4946,11 @@ function getSuperAdminDashboardHTML(mapsApiKey: string = '') {
           <span id="sa-agent-badge" style="margin-left:auto;background:#10b981;color:#fff;font-size:10px;font-weight:800;padding:2px 7px;border-radius:999px;display:none">ON</span>
         </div>
         <div class="border-t border-gray-800 my-3"></div>
+        <a href="/admin/super" class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400 no-underline">
+          <i class="fas fa-chart-bar w-5 text-center"></i>
+          <span class="label text-sm font-medium">BI Analytics Hub</span>
+          <span style="margin-left:auto;background:#6366f1;color:#fff;font-size:10px;font-weight:800;padding:2px 7px;border-radius:999px">NEW</span>
+        </a>
         <a href="/admin" class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400 no-underline">
           <i class="fas fa-tachometer-alt w-5 text-center"></i>
           <span class="label text-sm font-medium">Operations Panel</span>
@@ -16856,6 +16868,115 @@ function getMaterialEstimatorEmbedHTML(): string {
   <script>
     function c(){const a=parseFloat(document.getElementById('aI').value)||2000,m=parseFloat(document.getElementById('pS').value),w=parseInt(document.getElementById('wS').value);document.getElementById('wL').textContent=w+'%';const sl=a*m,wa=sl*(1+w/100),sq=wa/100;document.getElementById('sA').textContent=Math.round(sl).toLocaleString()+' sq ft';document.getElementById('wA').textContent=Math.round(wa).toLocaleString()+' sq ft';document.getElementById('sq').textContent=sq.toFixed(1);document.getElementById('bu').textContent=Math.ceil(sq*3);document.getElementById('ul').textContent=Math.ceil(wa/400);document.getElementById('ri').textContent=Math.ceil(Math.sqrt(a)*0.5/35);}c()
   </script>
+</body>
+</html>`
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BI Analytics Hub — unified super admin analytics dashboard
+// ─────────────────────────────────────────────────────────────────────────────
+function getSuperAdminBiHTML(): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags()}
+  <title>BI Analytics Hub — Roof Manager</title>
+  <style>
+    .bi-nav-item { transition: all 0.2s ease; cursor: pointer; }
+    .bi-nav-item:hover { background: rgba(255,255,255,0.08); }
+    .bi-nav-item.active { background: linear-gradient(135deg,#4f46e5,#6366f1); color:#fff; box-shadow: 0 4px 12px rgba(99,102,241,0.35); }
+    @keyframes bi-fadein { from { opacity:0; transform:translateY(8px) } to { opacity:1; transform:translateY(0) } }
+    #bi-main > * { animation: bi-fadein 0.3s ease-out; }
+    @keyframes spin { to { transform: rotate(360deg) } }
+    .animate-spin { animation: spin 1s linear infinite; }
+    @keyframes ping { 75%,100% { transform:scale(2); opacity:0 } }
+    .animate-ping { animation: ping 1s cubic-bezier(0,0,0.2,1) infinite; }
+    .bg-slate-750 { background: rgba(30,41,59,0.7); }
+  </style>
+  <script>
+    // Auth guard — superadmin only
+    (function(){
+      var u=localStorage.getItem('rc_user');
+      if(!u){window.location.href='/login';return;}
+      try{
+        var p=JSON.parse(u);
+        if(p.role!=='superadmin'){localStorage.removeItem('rc_user');localStorage.removeItem('rc_token');window.location.href='/login';}
+      }catch(e){window.location.href='/login';}
+    })();
+  </script>
+</head>
+<body class="bg-gray-950 text-gray-100 min-h-screen flex flex-col">
+
+  <!-- Top Bar -->
+  <header class="bg-slate-800 border-b border-slate-700 sticky top-0 z-50 shadow-xl">
+    <div class="max-w-full mx-auto px-5 h-14 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
+          <i class="fas fa-chart-bar text-white text-sm"></i>
+        </div>
+        <div class="leading-tight">
+          <span class="text-white font-bold text-sm">Roof Manager</span>
+          <span class="text-gray-500 text-[10px] block -mt-0.5">BI Analytics Hub</span>
+        </div>
+        <span class="ml-2 px-2 py-0.5 bg-indigo-600/30 text-indigo-300 rounded text-[10px] font-bold border border-indigo-700">SUPER ADMIN</span>
+      </div>
+      <div class="flex items-center gap-4">
+        <a href="/super-admin" class="text-gray-400 hover:text-white text-xs transition-colors"><i class="fas fa-crown mr-1 text-yellow-400"></i>Command Center</a>
+        <a href="/admin" class="text-gray-400 hover:text-white text-xs transition-colors"><i class="fas fa-tachometer-alt mr-1"></i>Ops Panel</a>
+        <a href="/" target="_blank" class="text-gray-400 hover:text-white text-xs transition-colors"><i class="fas fa-external-link-alt mr-1"></i>View Site</a>
+      </div>
+    </div>
+  </header>
+
+  <div class="flex flex-1 min-h-0">
+    <!-- Sidebar -->
+    <aside class="w-52 bg-slate-900 border-r border-slate-800 shrink-0 flex flex-col">
+      <nav class="p-3 space-y-1 flex-1">
+        <div class="bi-nav-item active rounded-xl px-4 py-3 flex items-center gap-3" data-view="overview" onclick="biSetView('overview')">
+          <i class="fas fa-crown w-5 text-center text-yellow-400"></i>
+          <span class="text-sm font-medium">Overview</span>
+        </div>
+        <div class="bi-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" data-view="traffic" onclick="biSetView('traffic')">
+          <i class="fas fa-chart-area w-5 text-center"></i>
+          <span class="text-sm font-medium">Site Traffic</span>
+        </div>
+        <div class="bi-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" data-view="revenue" onclick="biSetView('revenue')">
+          <i class="fas fa-dollar-sign w-5 text-center"></i>
+          <span class="text-sm font-medium">Revenue</span>
+        </div>
+        <div class="bi-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" data-view="funnel" onclick="biSetView('funnel')">
+          <i class="fas fa-filter w-5 text-center"></i>
+          <span class="text-sm font-medium">Conversion Funnel</span>
+        </div>
+        <div class="bi-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" data-view="health" onclick="biSetView('health')">
+          <i class="fas fa-heartbeat w-5 text-center"></i>
+          <span class="text-sm font-medium">Customer Health</span>
+        </div>
+        <div class="bi-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" data-view="live" onclick="biSetView('live')">
+          <i class="fas fa-circle text-green-500 w-5 text-center" style="font-size:8px"></i>
+          <span class="text-sm font-medium">Live Visitors</span>
+        </div>
+      </nav>
+      <div class="p-3 border-t border-slate-800">
+        <a href="/super-admin" class="bi-nav-item rounded-xl px-4 py-2.5 flex items-center gap-3 text-gray-500 no-underline text-xs">
+          <i class="fas fa-arrow-left w-5 text-center"></i>
+          <span>Back to Command Center</span>
+        </a>
+      </div>
+    </aside>
+
+    <!-- Main content -->
+    <main id="bi-main" class="flex-1 p-6 overflow-y-auto min-h-0">
+      <div class="flex items-center justify-center h-64">
+        <div class="text-center">
+          <div class="inline-block w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mb-3"></div>
+          <p class="text-gray-500 text-sm">Loading...</p>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="/static/super-admin-bi.js?v=1"></script>
 </body>
 </html>`
 }
