@@ -54,6 +54,7 @@ import { sam3Routes } from './routes/sam3-analysis'
 import { platformAdmin } from './routes/platform-admin'
 import { fieldRoutes, fieldUiRoutes } from './routes/field'
 import { publicApiRoutes } from './routes/public-api'
+import { publicPreviewRoutes } from './routes/public-preview'
 import { developerPortalRoutes } from './routes/developer-portal'
 import { aiAutopilotRoutes } from './routes/ai-autopilot'
 import { agentHubRoutes } from './routes/agent-hub'
@@ -270,6 +271,7 @@ app.route('/', usComparisonsRoutes)
 
 // ── Public API service (third-party integrations) ──
 app.route('/v1', publicApiRoutes)
+app.route('/api/public', publicPreviewRoutes)
 
 // ── Developer portal (self-serve API account signup + dashboard) ──
 app.route('/developer', developerPortalRoutes)
@@ -5846,6 +5848,38 @@ function getLandingPageHTML(latestPosts: any[] = []) {
             </div>
             <h1 class="text-5xl sm:text-6xl lg:text-7xl font-black leading-[1.05] text-white mb-8 tracking-tight">Measure Any Roof.<br/><span class="neon-text">In 60 Seconds.</span></h1>
             <h2 class="text-lg lg:text-xl text-gray-400 mb-10 max-w-xl leading-relaxed font-normal">The full CRM built for <span class="text-white font-semibold">roofing &amp; solar companies</span> — satellite roof measurement reports, solar design tools, and workflow automations. From solo contractors to large crews.</h2>
+            <!-- Address-first hero preview -->
+            <div id="hero-preview-form" style="margin-bottom:16px">
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <input id="hero-address" type="text" placeholder="Enter a property address&#x2026;"
+                  autocomplete="off"
+                  style="flex:1;min-width:200px;padding:14px 16px;border:2px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.07);color:#fff;border-radius:12px;font-size:15px;outline:none;box-sizing:border-box"
+                  onfocus="this.style.borderColor='#00FF88'"
+                  onblur="this.style.borderColor='rgba(255,255,255,0.15)'">
+                <button type="button" id="hero-preview-btn" onclick="startPreview()"
+                  style="padding:14px 20px;background:#00FF88;color:#0A0A0A;font-weight:800;border:none;border-radius:12px;font-size:14px;cursor:pointer;white-space:nowrap;flex-shrink:0">
+                  Measure this roof &#x2192;
+                </button>
+              </div>
+              <p style="font-size:12px;color:rgba(255,255,255,0.4);margin-top:6px">Free sample &#xB7; No account needed &#xB7; or</p>
+            </div>
+
+            <!-- Preview result panel -->
+            <div id="hero-preview-result" style="display:none;margin-bottom:16px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:14px;padding:16px">
+              <div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap">
+                <img id="preview-sat-img" src="" alt="Satellite view of roof"
+                  style="width:130px;height:90px;object-fit:cover;border-radius:8px;flex-shrink:0;background:#1a1a1a">
+                <div style="flex:1;min-width:160px">
+                  <div id="preview-stats" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px"></div>
+                  <a id="preview-cta-register" href="/register"
+                    style="display:inline-block;background:#00FF88;color:#0A0A0A;font-weight:800;padding:9px 16px;border-radius:8px;font-size:13px;text-decoration:none;margin-right:8px">
+                    Create account to download &#x2192;
+                  </a>
+                  <a href="/demo" style="font-size:12px;color:rgba(255,255,255,0.5);text-decoration:none">Book demo</a>
+                </div>
+              </div>
+            </div>
+
             <div class="flex flex-col gap-4 mb-6">
               <a href="/register" onclick="rrTrack('cta_click',{location:'hero_primary',variant:'contractor_signup'})" class="group inline-flex items-center justify-center gap-3 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-10 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/20 transition-all duration-300 hover:scale-[1.03] min-h-[56px]"><i class="fas fa-gift"></i> Get 4 FREE Reports &mdash; No Card Required <i class="fas fa-arrow-right text-sm group-hover:translate-x-1.5 transition-transform"></i></a>
               <p class="text-xs text-gray-500"><i class="fas fa-lock text-[#00FF88] mr-1"></i>No credit card &nbsp;&middot;&nbsp; <span>&#127464;&#127462;</span> Hosted in Canada &nbsp;&middot;&nbsp; <i class="fas fa-bolt text-[#00FF88] mr-1"></i>60-sec signup</p>
@@ -6859,6 +6893,44 @@ function getLandingPageHTML(latestPosts: any[] = []) {
         } catch(err){}
         window.location.href = '/register?email=' + encodeURIComponent(email);
         return false;
+      };
+
+      window.startPreview = function() {
+        var addr = document.getElementById('hero-address').value.trim();
+        if (!addr) { document.getElementById('hero-address').focus(); return; }
+        rrTrack('hero_cta_click', {variant: 'address_start'});
+        var btn = document.getElementById('hero-preview-btn');
+        btn.disabled = true; btn.textContent = 'Measuring\u2026';
+        var utm = {};
+        try { utm = Object.fromEntries(new URLSearchParams(sessionStorage.getItem('rr_utm') || '')); } catch(e) {}
+        fetch('/api/public/preview', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({address: addr, utm: utm})
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          btn.disabled = false; btn.textContent = 'Measure this roof \u2192';
+          if (data.error === 'preview_limit') {
+            document.getElementById('hero-address').placeholder = 'Rate limit reached \u2014 create a free account for unlimited access';
+            return;
+          }
+          if (data.error) {
+            document.getElementById('hero-address').placeholder = data.message || 'Could not find that address';
+            return;
+          }
+          rrTrack('preview_rendered', {area: data.estimated_area_sqft, pitch: data.pitch_deg});
+          document.getElementById('preview-sat-img').src = data.satellite_tile_url;
+          document.getElementById('preview-stats').innerHTML =
+            '<div style="text-align:center"><div style="font-size:18px;font-weight:800;color:#00FF88">' + (data.estimated_area_sqft ? data.estimated_area_sqft.toLocaleString() : '\u2014') + '</div><div style="font-size:10px;color:rgba(255,255,255,0.5)">sq ft</div></div>' +
+            '<div style="text-align:center"><div style="font-size:18px;font-weight:800;color:#00FF88">' + (data.pitch_deg ? data.pitch_deg + '\u00b0' : '\u2014') + '</div><div style="font-size:10px;color:rgba(255,255,255,0.5)">pitch</div></div>' +
+            '<div style="text-align:center"><div style="font-size:18px;font-weight:800;color:#00FF88">' + (data.segment_count || '\u2014') + '</div><div style="font-size:10px;color:rgba(255,255,255,0.5)">segments</div></div>';
+          var cta = document.getElementById('preview-cta-register');
+          if (cta && data.preview_id) cta.href = '/register?preview_id=' + encodeURIComponent(data.preview_id);
+          document.getElementById('hero-preview-result').style.display = 'block';
+          document.getElementById('hero-preview-form').style.display = 'none';
+        })
+        .catch(function() { btn.disabled = false; btn.textContent = 'Measure this roof \u2192'; });
       };
     })();
   </script>
