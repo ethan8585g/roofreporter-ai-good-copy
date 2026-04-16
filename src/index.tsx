@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { getAccessToken, getProjectId, getServiceAccountEmail } from './services/gcp-auth'
 import { trackProposalViewed } from './services/ga4-events'
+import { buildClientAnalyticsScript } from './services/analytics-events'
 import { ordersRoutes } from './routes/orders'
 import { companiesRoutes } from './routes/companies'
 import { settingsRoutes } from './routes/settings'
@@ -243,7 +244,9 @@ window.trackAdsConversion = function(kind, params) {
   } catch(e) {}
 })();
 </script>`
-      const injected = body.replace('</body>', `${ga4Script}${googleAdsScript}
+      const clarityId = (c.env as any).CLARITY_PROJECT_ID || ''
+      const claritySnippet = buildClientAnalyticsScript(clarityId)
+      const injected = body.replace('</body>', `${ga4Script}${googleAdsScript}${claritySnippet}
 <script src="/static/toast.js"></script>
 <script src="/static/tracker.js" defer></script>
 </body>`)
@@ -8150,7 +8153,7 @@ function getCustomerLoginHTML(googleClientId = '') {
             </div>
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">Password</label>
-              <input type="password" id="custLoginPassword" name="password" autocomplete="current-password" placeholder="Enter your password" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-sm">
+              <input type="password" id="custLoginPassword" name="password" autocomplete="current-password" placeholder="Enter your password" data-clarity-mask="true" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-sm">
             </div>
           </div>
           <div id="custLoginError" class="hidden mt-4 p-3 bg-red-100 border border-red-400 text-red-800 rounded-lg text-sm font-medium"></div>
