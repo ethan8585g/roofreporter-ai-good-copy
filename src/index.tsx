@@ -1020,6 +1020,10 @@ app.get('/sitemap-us-verticals.xml', (c) => {
       urls += `<url><loc>${base}/us/${v}/${slug}</loc><changefreq>monthly</changefreq><priority>0.7</priority><lastmod>${today}</lastmod></url>\n`
     }
   }
+  // City-level roof replacement cost pages (highest-intent query per metro)
+  for (const city of US_CITIES_DATA) {
+    urls += `<url><loc>${base}/us/roof-replacement-cost/${city.stateSlug}/${city.slug}</loc><changefreq>monthly</changefreq><priority>0.8</priority><lastmod>${today}</lastmod></url>\n`
+  }
   return c.text(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}</urlset>`, 200, { 'Content-Type': 'application/xml' })
 })
 

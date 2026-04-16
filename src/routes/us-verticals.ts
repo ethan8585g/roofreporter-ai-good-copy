@@ -1,6 +1,22 @@
 import { Hono } from 'hono'
 import type { Env } from '../types'
-import { US_STATES, ALL_STATE_SLUGS } from '../data/us-states'
+import { US_STATES, ALL_STATE_SLUGS, US_CITIES } from '../data/us-states'
+
+const STORM_CLUSTERS: Record<string, string[]> = {
+  'hail-belt': ['colorado','texas','oklahoma','kansas','nebraska','south-dakota','north-dakota','minnesota','iowa','missouri'],
+  'hurricane-coast': ['florida','texas','louisiana','north-carolina','south-carolina','georgia','alabama','mississippi'],
+  'tornado-alley': ['texas','oklahoma','kansas','nebraska','iowa','missouri','arkansas','tennessee'],
+  'northeast': ['new-york','new-jersey','pennsylvania','massachusetts','connecticut','maryland'],
+  'northwest': ['washington','oregon','idaho','montana'],
+}
+function getRelatedStates(stateSlug: string): string[] {
+  for (const cluster of Object.values(STORM_CLUSTERS)) {
+    if (cluster.includes(stateSlug)) {
+      return cluster.filter(s => s !== stateSlug && US_STATES[s]).slice(0, 5)
+    }
+  }
+  return []
+}
 
 const app = new Hono<{ Bindings: Env }>()
 
@@ -200,6 +216,12 @@ app.get('/storm-damage/:state', (c) => {
       <a href="/customer/login" class="inline-block px-10 py-4 bg-white text-blue-700 font-black rounded-xl text-lg">Start Free — 3 Reports on Us</a>
     </div>
   </section>
+  ${getRelatedStates(stateSlug).length > 0 ? `<section class="py-12" style="background:#0d0d0d">
+    <div class="max-w-5xl mx-auto px-4">
+      <h2 class="text-xl font-bold mb-4">Related Storm Risk States</h2>
+      <div class="flex flex-wrap gap-3">${getRelatedStates(stateSlug).map(s => `<a href="/us/storm-damage/${s}" class="px-4 py-2 rounded-lg text-sm font-medium text-sky-300 hover:text-white" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1)">${US_STATES[s].name} — ${US_STATES[s].stormProfile.primaryPeril} →</a>`).join('')}</div>
+    </div>
+  </section>` : ''}
   ${footer()}</body></html>`
   return c.html(html)
 })
@@ -281,6 +303,12 @@ app.get('/hail-damage/:state', (c) => {
       <a href="/customer/login" class="inline-block px-10 py-4 bg-white text-blue-700 font-black rounded-xl text-lg">Start Free — 3 Reports on Us</a>
     </div>
   </section>
+  ${getRelatedStates(stateSlug).length > 0 ? `<section class="py-12" style="background:#0d0d0d">
+    <div class="max-w-5xl mx-auto px-4">
+      <h2 class="text-xl font-bold mb-4">Related Storm Risk States</h2>
+      <div class="flex flex-wrap gap-3">${getRelatedStates(stateSlug).map(s => `<a href="/us/hail-damage/${s}" class="px-4 py-2 rounded-lg text-sm font-medium text-sky-300 hover:text-white" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1)">${US_STATES[s].name} — ${US_STATES[s].stormProfile.hailDaysPerYear} hail days/yr →</a>`).join('')}</div>
+    </div>
+  </section>` : ''}
   ${footer()}</body></html>`
   return c.html(html)
 })
@@ -389,6 +417,46 @@ const STATE_ROOF_COSTS: Record<string, { low: number; avg: number; high: number 
   'illinois': { low: 8000, avg: 11500, high: 18000 },
   'ohio': { low: 7500, avg: 10500, high: 16000 },
   'washington': { low: 9000, avg: 13000, high: 20000 },
+  'alabama': { low: 7000, avg: 10000, high: 16000 },
+  'alaska': { low: 14000, avg: 20000, high: 32000 },
+  'arkansas': { low: 6500, avg: 9500, high: 15000 },
+  'connecticut': { low: 10000, avg: 14500, high: 22000 },
+  'delaware': { low: 9000, avg: 13000, high: 20000 },
+  'hawaii': { low: 14000, avg: 21000, high: 35000 },
+  'idaho': { low: 7500, avg: 11000, high: 17000 },
+  'indiana': { low: 7000, avg: 10000, high: 16000 },
+  'iowa': { low: 7000, avg: 10000, high: 16000 },
+  'kansas': { low: 7000, avg: 10500, high: 17000 },
+  'kentucky': { low: 6500, avg: 9500, high: 15000 },
+  'louisiana': { low: 9500, avg: 14000, high: 23000 },
+  'maine': { low: 9000, avg: 13000, high: 20000 },
+  'maryland': { low: 10000, avg: 14500, high: 22000 },
+  'massachusetts': { low: 11000, avg: 16000, high: 25000 },
+  'michigan': { low: 7500, avg: 11000, high: 17000 },
+  'minnesota': { low: 8000, avg: 11500, high: 18000 },
+  'mississippi': { low: 6500, avg: 9500, high: 15000 },
+  'missouri': { low: 7500, avg: 11000, high: 17000 },
+  'montana': { low: 8000, avg: 12000, high: 19000 },
+  'nebraska': { low: 7000, avg: 10500, high: 17000 },
+  'nevada': { low: 8000, avg: 12000, high: 19000 },
+  'new-hampshire': { low: 9500, avg: 14000, high: 21000 },
+  'new-jersey': { low: 11000, avg: 16000, high: 25000 },
+  'new-mexico': { low: 7500, avg: 11000, high: 17000 },
+  'north-carolina': { low: 7500, avg: 11000, high: 17000 },
+  'north-dakota': { low: 7500, avg: 11000, high: 17000 },
+  'oklahoma': { low: 7000, avg: 10500, high: 17000 },
+  'oregon': { low: 9000, avg: 13000, high: 20000 },
+  'pennsylvania': { low: 9000, avg: 13000, high: 20000 },
+  'rhode-island': { low: 10000, avg: 14500, high: 22000 },
+  'south-carolina': { low: 7500, avg: 11000, high: 17000 },
+  'south-dakota': { low: 7500, avg: 11000, high: 17000 },
+  'tennessee': { low: 7000, avg: 10000, high: 16000 },
+  'utah': { low: 8000, avg: 12000, high: 19000 },
+  'vermont': { low: 9500, avg: 14000, high: 21000 },
+  'virginia': { low: 9000, avg: 13000, high: 20000 },
+  'west-virginia': { low: 7000, avg: 10000, high: 16000 },
+  'wisconsin': { low: 7500, avg: 11000, high: 17000 },
+  'wyoming': { low: 8000, avg: 12000, high: 19000 },
 }
 function getStateCost(slug: string) {
   return STATE_ROOF_COSTS[slug] || { low: 7000, avg: 11000, high: 18000 }
@@ -450,6 +518,73 @@ app.get('/roof-replacement-cost/:state', (c) => {
     <div class="max-w-3xl mx-auto px-4">
       <h2 class="text-3xl font-black mb-4">Get Accurate ${state.name} Material Estimates</h2>
       <p class="text-blue-200 mb-8">Roof Manager generates a complete material BOM for any ${state.name} property in under 60 seconds. Free to start.</p>
+      <a href="/customer/login" class="inline-block px-10 py-4 bg-white text-blue-700 font-black rounded-xl text-lg">Start Free — 3 Reports on Us</a>
+    </div>
+  </section>
+  ${footer()}</body></html>`
+  return c.html(html)
+})
+
+// ─── ROOF REPLACEMENT COST — CITY LEVEL ──────────────────────────────────────
+
+app.get('/roof-replacement-cost/:state/:city', (c) => {
+  const stateSlug = c.req.param('state').toLowerCase()
+  const citySlug = c.req.param('city').toLowerCase()
+  const state = US_STATES[stateSlug]
+  if (!state) return c.redirect('/us/roof-replacement-cost')
+  const city = US_CITIES.find(ci => ci.slug === citySlug && ci.stateSlug === stateSlug)
+  if (!city) return c.redirect(`/us/roof-replacement-cost/${stateSlug}`)
+  const base = getStateCost(stateSlug)
+  const multiplier = city.population > 1000000 ? 1.10 : city.population > 500000 ? 1.05 : 1.0
+  const cost = {
+    low: Math.round(base.low * multiplier / 100) * 100,
+    avg: Math.round(base.avg * multiplier / 100) * 100,
+    high: Math.round(base.high * multiplier / 100) * 100,
+  }
+  const siblings = US_CITIES.filter(ci => ci.stateSlug === stateSlug && ci.slug !== citySlug).slice(0, 4)
+
+  const html = `<!DOCTYPE html><html lang="en-US"><head>
+  ${head(`Roof Replacement Cost in ${city.name}, ${state.name} 2026 | Roof Manager`, `Average roof replacement cost in ${city.name}, ${state.code} in 2026. Ranges from $${cost.low.toLocaleString()} to $${cost.high.toLocaleString()}. Roof Manager helps ${city.name} contractors generate accurate estimates.`, state.code)}
+  <link rel="canonical" href="https://www.roofmanager.ca/us/roof-replacement-cost/${stateSlug}/${citySlug}">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.roofmanager.ca/"},{"@type":"ListItem","position":2,"name":"Roof Replacement Cost","item":"https://www.roofmanager.ca/us/roof-replacement-cost"},{"@type":"ListItem","position":3,"name":"${state.name}","item":"https://www.roofmanager.ca/us/roof-replacement-cost/${stateSlug}"},{"@type":"ListItem","position":4,"name":"${city.name}","item":"https://www.roofmanager.ca/us/roof-replacement-cost/${stateSlug}/${citySlug}"}]}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"How much does a roof replacement cost in ${city.name}?","acceptedAnswer":{"@type":"Answer","text":"The average roof replacement cost in ${city.name}, ${state.name} ranges from $${cost.low.toLocaleString()} to $${cost.high.toLocaleString()} for a 2,000 sq ft home in 2026, with a midpoint of approximately $${cost.avg.toLocaleString()}. Costs vary by material, pitch complexity, and local labor rates."}},{"@type":"Question","name":"What is the cheapest roof replacement option in ${city.name}?","acceptedAnswer":{"@type":"Answer","text":"The most affordable roof replacement in ${city.name} uses 3-tab asphalt shingles on a simple gable roof, typically starting around $${cost.low.toLocaleString()} for a 2,000 sq ft home. Architectural shingles average $${cost.avg.toLocaleString()}."}},{"@type":"Question","name":"Does ${city.name} weather affect roof replacement costs?","acceptedAnswer":{"@type":"Answer","text":"Yes. ${city.stormNarrative} This directly impacts replacement frequency and material specifications."}}]}</script>
+  </head>
+  <body class="min-h-screen" style="background:#0A0A0A;color:#fff">${nav()}
+  <section class="py-20 text-center" style="background:linear-gradient(135deg,#0f172a,#1e3a5f)">
+    <div class="max-w-4xl mx-auto px-4">
+      <p class="text-sky-400 text-sm font-semibold mb-2 uppercase tracking-wider">${state.name} · Roof Replacement Cost</p>
+      <h1 class="text-4xl font-black mb-6">Roof Replacement Cost in <span class="text-sky-400">${city.name}</span>, ${state.code} — 2026</h1>
+      <p class="text-xl text-blue-200 mb-8">The average cost to replace a roof on a 2,000 sq ft home in ${city.name} ranges from <strong>$${cost.low.toLocaleString()}</strong> to <strong>$${cost.high.toLocaleString()}</strong>, with a midpoint of approximately <strong>$${cost.avg.toLocaleString()}</strong> as of 2026. Roof Manager generates accurate material take-offs in under 60 seconds, helping ${city.name} contractors price jobs competitively.</p>
+      <a href="/customer/login" class="px-8 py-4 bg-sky-500 hover:bg-sky-400 text-white font-bold rounded-xl text-lg inline-block">Generate Accurate BOM — Free</a>
+    </div>
+  </section>
+  <section class="py-16" style="background:#111">
+    <div class="max-w-5xl mx-auto px-4">
+      <div class="grid md:grid-cols-3 gap-5 mb-10">
+        <div class="bg-white/5 border border-white/10 rounded-xl p-6 text-center"><div class="text-3xl font-black text-sky-400 mb-1">$${cost.low.toLocaleString()}</div><div class="text-white font-semibold">Low Estimate</div><div class="text-gray-500 text-xs mt-1">3-tab shingle, simple gable</div></div>
+        <div class="bg-white/5 rounded-xl p-6 text-center" style="border:1px solid rgba(56,189,248,0.4)"><div class="text-3xl font-black text-sky-400 mb-1">$${cost.avg.toLocaleString()}</div><div class="text-white font-semibold">Average Estimate</div><div class="text-gray-500 text-xs mt-1">Architectural shingle, moderate complexity</div></div>
+        <div class="bg-white/5 border border-white/10 rounded-xl p-6 text-center"><div class="text-3xl font-black text-sky-400 mb-1">$${cost.high.toLocaleString()}</div><div class="text-white font-semibold">High Estimate</div><div class="text-gray-500 text-xs mt-1">Premium materials or complex roofline</div></div>
+      </div>
+      <h2 class="text-2xl font-black mb-6">${city.name} Roofing Profile</h2>
+      <ul class="space-y-3 text-gray-300 mb-6">
+        <li class="flex items-start gap-3"><i class="fas fa-check text-sky-400 mt-1"></i><span><strong>Storm profile:</strong> ${city.stormNarrative}</span></li>
+        <li class="flex items-start gap-3"><i class="fas fa-check text-sky-400 mt-1"></i><span><strong>Insurance landscape:</strong> ${city.insuranceNote}</span></li>
+        <li class="flex items-start gap-3"><i class="fas fa-check text-sky-400 mt-1"></i><span><strong>Primary peril:</strong> ${state.stormProfile.primaryPeril} — can qualify replacement for insurance coverage</span></li>
+        <li class="flex items-start gap-3"><i class="fas fa-check text-sky-400 mt-1"></i><span><strong>Building code:</strong> ${state.buildingCode.adoptedIRC} — ${state.buildingCode.notes}</span></li>
+      </ul>
+      <p class="text-gray-500 text-sm">Source: National contractor survey data, Angi/HomeAdvisor published averages, and Roof Manager contractor-submitted data, as of 2026. Estimates are for a 2,000 sq ft residential home. Individual quotes may vary.</p>
+    </div>
+  </section>
+  ${siblings.length > 0 ? `<section class="py-12" style="background:#0d0d0d">
+    <div class="max-w-5xl mx-auto px-4">
+      <h2 class="text-xl font-bold mb-5">Other ${state.name} Cities</h2>
+      <div class="flex flex-wrap gap-3">${siblings.map(sc => `<a href="/us/roof-replacement-cost/${sc.stateSlug}/${sc.slug}" class="px-4 py-2 rounded-lg text-sm font-medium text-sky-300 hover:text-white" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1)">${sc.name} →</a>`).join('')}</div>
+    </div>
+  </section>` : ''}
+  <section class="py-16 text-center" style="background:linear-gradient(135deg,#0c4a6e,#1e3a5f)">
+    <div class="max-w-3xl mx-auto px-4">
+      <h2 class="text-3xl font-black mb-4">Get an Accurate ${city.name} Estimate</h2>
+      <p class="text-blue-200 mb-8">Roof Manager generates a complete material BOM for any ${city.name} property in under 60 seconds. Free to start.</p>
       <a href="/customer/login" class="inline-block px-10 py-4 bg-white text-blue-700 font-black rounded-xl text-lg">Start Free — 3 Reports on Us</a>
     </div>
   </section>

@@ -322,6 +322,12 @@ app.get('/:state/:city', (c) => {
     .map(c2 => `<a href="/us/${stateSlug}/${c2.slug}" class="text-xs text-sky-400 hover:text-sky-300 bg-sky-400/10 border border-sky-400/20 rounded-full px-3 py-1">${c2.name}</a>`)
     .join('')
 
+  const siblingCitySchemas = US_CITIES
+    .filter(c2 => c2.stateSlug === stateSlug && c2.slug !== citySlug)
+    .slice(0, 5)
+    .map(c2 => `{"@type":"City","name":"${c2.name}"}`)
+    .join(',')
+
   const faqSchema = JSON.stringify({
     "@context": "https://schema.org",
     "@type": "FAQPage",
@@ -351,7 +357,7 @@ app.get('/:state/:city', (c) => {
   <link rel="alternate" hreflang="en" href="https://www.roofmanager.ca/">
   <link rel="alternate" hreflang="x-default" href="https://www.roofmanager.ca/">
   <script type="application/ld+json">
-  {"@context":"https://schema.org","@type":"LocalBusiness","name":"Roof Manager — ${cityData.name}","description":"Satellite roof measurement reports and CRM for roofing contractors in ${cityData.name}, ${state.name}.","url":"https://www.roofmanager.ca/us/${stateSlug}/${citySlug}","image":"https://www.roofmanager.ca/static/logo.png","address":{"@type":"PostalAddress","addressLocality":"${cityData.name}","addressRegion":"${state.code}","addressCountry":"US"},"geo":{"@type":"GeoCoordinates","latitude":"${cityData.lat}","longitude":"${cityData.lng}"},"areaServed":[{"@type":"City","name":"${cityData.name}"},{"@type":"GeoCircle","geoMidpoint":{"@type":"GeoCoordinates","latitude":"${cityData.lat}","longitude":"${cityData.lng}"},"geoRadius":"80000"}],"priceRange":"$5-$500"}
+  {"@context":"https://schema.org","@type":"LocalBusiness","name":"Roof Manager — ${cityData.name}","description":"Satellite roof measurement reports and CRM for roofing contractors in ${cityData.name}, ${state.name}.","url":"https://www.roofmanager.ca/us/${stateSlug}/${citySlug}","image":"https://www.roofmanager.ca/static/logo.png","address":{"@type":"PostalAddress","addressLocality":"${cityData.name}","addressRegion":"${state.code}","addressCountry":"US"},"geo":{"@type":"GeoCoordinates","latitude":"${cityData.lat}","longitude":"${cityData.lng}"},"areaServed":[{"@type":"City","name":"${cityData.name}"}${siblingCitySchemas ? `,${siblingCitySchemas}` : ''},{"@type":"GeoCircle","geoMidpoint":{"@type":"GeoCoordinates","latitude":"${cityData.lat}","longitude":"${cityData.lng}"},"geoRadius":"80000"}],"priceRange":"$5-$500"}
   </script>
   <script type="application/ld+json">
   {"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.roofmanager.ca/"},{"@type":"ListItem","position":2,"name":"United States","item":"https://www.roofmanager.ca/us"},{"@type":"ListItem","position":3,"name":"${state.name}","item":"https://www.roofmanager.ca/us/${stateSlug}"},{"@type":"ListItem","position":4,"name":"${cityData.name}","item":"https://www.roofmanager.ca/us/${stateSlug}/${citySlug}"}]}
