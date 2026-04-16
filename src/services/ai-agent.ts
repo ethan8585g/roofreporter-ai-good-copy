@@ -243,13 +243,13 @@ async function runAutoTrace(
 ): Promise<AutoTraceResult> {
   const solarApiKey = env.GOOGLE_SOLAR_API_KEY
   const mapsApiKey = (env as any).GOOGLE_MAPS_API_KEY || solarApiKey
-  const anthropicKey = (env as any).anthropic_key
+  const anthropicKey = env.ANTHROPIC_API_KEY
 
   if (!mapsApiKey) {
     return { success: false, error: 'Missing GOOGLE_MAPS_API_KEY' }
   }
   if (!anthropicKey) {
-    return { success: false, error: 'Missing anthropic_key secret — set it via wrangler secret put' }
+    return { success: false, error: 'Missing ANTHROPIC_API_KEY secret — set it via wrangler secret put ANTHROPIC_API_KEY' }
   }
 
   const zoom = 20

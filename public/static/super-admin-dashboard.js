@@ -9160,7 +9160,8 @@ async function aiRunOrder(orderId, btn) {
   if (res && res.ok) {
     var d = await res.json();
     var action = d.result && d.result.action ? d.result.action : (d.success ? 'done' : 'failed');
-    showAiResult('Order ' + orderId + ': ' + action, !d.success);
+    var errDetail = (!d.success && d.result && d.result.error) ? ' — ' + d.result.error : '';
+    showAiResult('Order ' + orderId + ': ' + action + errDetail, !d.success);
     loadAiAgentDashboard();
   } else {
     showAiResult('Failed to run agent on order ' + orderId, true);
