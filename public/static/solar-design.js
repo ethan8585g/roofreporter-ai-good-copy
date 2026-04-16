@@ -102,7 +102,7 @@
     recomputePanelSizeFromScale();
     var src = (L.user_panels && L.user_panels.length) ? L.user_panels : (L.suggested_panels || []);
     if (!src.length) { state.hydrated = true; return; }
-    var srcSize = L.image_size_px || 1600;
+    var srcSize = (L.image_size_px || 1600) / 2;  // logical px (image is scale=2: physical/2)
     var scaleToCanvas = state.imgDrawW / srcSize;
     var newPanels = [];
     for (var i = 0; i < src.length; i++) {
@@ -159,7 +159,7 @@
   function snapshotCurrentVariant() {
     var L = state.layout;
     if (!L || !L.image_center || state.imgDrawW <= 0) return null;
-    var srcSize = L.image_size_px || 1600;
+    var srcSize = (L.image_size_px || 1600) / 2;  // logical px
     var scaleToSrc = srcSize / state.imgDrawW;
     var mpp = metersPerCanvasPx();
     var panels = state.panels.map(function(p) {
@@ -198,7 +198,7 @@
     state.activeVariantIndex = i;
     var L = state.layout;
     if (!L) return;
-    var srcSize = L.image_size_px || 1600;
+    var srcSize = (L.image_size_px || 1600) / 2;  // logical px
     var scaleToCanvas = state.imgDrawW / srcSize;
     state.panels = (v.panels || []).map(function(p) {
       var px = latLngToPixel(p.lat, p.lng, L.image_center.lat, L.image_center.lng, L.image_zoom, srcSize);
@@ -235,7 +235,11 @@
 
   function updateProposalLink() {
     var a = document.getElementById('sdProposalLink');
-    if (a && state.reportId) a.href = '/api/reports/' + state.reportId + '/proposal';
+    var a2 = document.getElementById('sdProposalLink2');
+    if (state.reportId) {
+      if (a) a.href = '/api/reports/' + state.reportId + '/proposal';
+      if (a2) a2.href = '/api/reports/' + state.reportId + '/proposal';
+    }
   }
 
   window._sdNewVariant = function() {
@@ -483,6 +487,10 @@
             '<button onclick="window._sdNudgeRotation(15)" class="px-2 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded text-xs">+15°</button>' +
             '<button onclick="window._sdNudgeRotation(90)" class="px-2 py-1 bg-blue-700 hover:bg-blue-600 text-white rounded text-xs font-semibold">90°</button>' +
           '</div>' +
+          '<div class="flex items-center gap-3 mb-2">' +
+            '<button onclick="window._sdSaveLayout()" id="sdSaveBtnCanvas" class="flex-1 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white py-3 rounded-xl text-sm font-bold transition-colors shadow-lg shadow-emerald-900/30"><i class="fas fa-cloud-upload-alt mr-2"></i>Save Design</button>' +
+            '<a id="sdProposalLink2" href="#" target="_blank" class="px-4 py-3 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 text-white rounded-xl text-sm font-bold whitespace-nowrap"><i class="fas fa-file-pdf mr-2"></i>View Proposal</a>' +
+          '</div>' +
           '<div class="bg-gray-800 rounded-xl overflow-hidden relative" id="sdCanvasWrapper">' +
             '<canvas id="sdCanvas" class="block w-full cursor-crosshair"></canvas>' +
           '</div>' +
@@ -676,7 +684,7 @@
   function segmentToCanvasRect(seg) {
     if (!state.layout || !seg.sw || !seg.ne) return null;
     var L = state.layout;
-    var srcSize = L.image_size_px || 1600;
+    var srcSize = (L.image_size_px || 1600) / 2;  // logical px
     var scaleToCanvas = state.imgDrawW / srcSize;
     var sw = latLngToPixel(seg.sw.lat, seg.sw.lng, L.image_center.lat, L.image_center.lng, L.image_zoom, srcSize);
     var ne = latLngToPixel(seg.ne.lat, seg.ne.lng, L.image_center.lat, L.image_center.lng, L.image_zoom, srcSize);
@@ -1098,14 +1106,16 @@
     if (state.saving) return;
     var btn = document.getElementById('sdSaveBtn');
     var btnTop = document.getElementById('sdSaveBtnTop');
+    var btnCanvas = document.getElementById('sdSaveBtnCanvas');
     function setBtn(html, disabled) {
       if (btn) { btn.disabled = !!disabled; btn.innerHTML = html; }
       if (btnTop) { btnTop.disabled = !!disabled; btnTop.innerHTML = html; }
+      if (btnCanvas) { btnCanvas.disabled = !!disabled; btnCanvas.innerHTML = html; }
     }
     var layout = state.layout;
     var userPanels;
     if (layout && layout.image_center && state.imgDrawW > 0) {
-      var srcSize = layout.image_size_px || 1600;
+      var srcSize = (layout.image_size_px || 1600) / 2;  // logical px
       var scaleToSrc = srcSize / state.imgDrawW;
       userPanels = state.panels.map(function(p) {
         var cx = (p.x + state.panelW / 2) * scaleToSrc;
@@ -1121,7 +1131,7 @@
     // Convert obstructions → lat/lng + size_meters
     var obstructions = [];
     if (layout && layout.image_center && state.imgDrawW > 0) {
-      var srcSize2 = layout.image_size_px || 1600;
+      var srcSize2 = (layout.image_size_px || 1600) / 2;  // logical px
       var scaleToSrc2 = srcSize2 / state.imgDrawW;
       var mpp = metersPerCanvasPx();
       obstructions = state.obstructions.map(function(o) {
