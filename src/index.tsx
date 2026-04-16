@@ -745,6 +745,11 @@ app.get('/sitemap-core.xml', (c) => {
     { loc: '/guides/create-an-invoice', priority: '0.8', changefreq: 'monthly' },
     { loc: '/guides/setup-ai-secretary', priority: '0.8', changefreq: 'monthly' },
     { loc: '/guides/build-a-solar-design', priority: '0.8', changefreq: 'monthly' },
+    // Free tools (backlink magnets — embeddable calculator)
+    { loc: '/tools', priority: '0.8', changefreq: 'monthly' },
+    { loc: '/tools/pitch-calculator', priority: '0.9', changefreq: 'monthly' },
+    // Press / media kit
+    { loc: '/press', priority: '0.6', changefreq: 'monthly' },
     // Competitor comparison pages (bottom-of-funnel, high commercial intent)
     { loc: '/roofr-alternative', priority: '0.9', changefreq: 'monthly' },
     { loc: '/roofsnap-vs-roofmanager', priority: '0.9', changefreq: 'monthly' },
@@ -1182,6 +1187,12 @@ app.get('/guides', (c) => c.html(getGuidesIndexHTML()))
 app.get('/tutorials', (c) => c.redirect('/guides', 301))
 app.get('/how-it-works', (c) => c.html(getHowItWorksPageHTML()))
 app.get('/faq', (c) => c.html(getFAQPageHTML()))
+// Free tools hub + embeddable pitch calculator (backlink magnets)
+app.get('/tools', (c) => c.html(getToolsHubHTML()))
+app.get('/tools/pitch-calculator', (c) => c.html(getPitchCalculatorHTML()))
+app.get('/tools/pitch-calculator/embed', (c) => c.html(getPitchCalculatorEmbedHTML()))
+// Press / media kit
+app.get('/press', (c) => c.html(getPressPageHTML()))
 app.get('/guides/:slug', (c) => {
   const html = getGuideHTML(c.req.param('slug'))
   if (!html) return c.notFound()
@@ -14237,6 +14248,591 @@ function getHomeownerEstimatePageHTML(): string {
     </div>
   </footer>
 
+</body>
+</html>`
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FREE TOOLS HUB — /tools
+// Linkable resource page; journalists and bloggers cite "free roofing tools" lists
+// ─────────────────────────────────────────────────────────────────────────────
+function getToolsHubHTML(): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Free Roofing Tools & Calculators | Roof Manager</title>
+  <meta name="description" content="Free roofing tools for contractors, estimators, and homeowners. Roof pitch calculator, pitch-to-degrees converter, sloped area estimator, and material take-off calculator — no account required.">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Free Roofing Tools & Calculators | Roof Manager">
+  <meta property="og:description" content="Free roofing tools for contractors, estimators, and homeowners. Pitch calculator, area estimator, and more — no account required.">
+  <meta property="og:image" content="https://www.roofmanager.ca/static/logo.png">
+  <meta property="og:url" content="https://www.roofmanager.ca/tools">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="canonical" href="https://www.roofmanager.ca/tools">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"CollectionPage","name":"Free Roofing Tools","description":"Free roofing calculators and tools for contractors and homeowners","url":"https://www.roofmanager.ca/tools","publisher":{"@type":"Organization","name":"Roof Manager","url":"https://www.roofmanager.ca"}}</script>
+  <link rel="stylesheet" href="/static/tailwind.css">
+  <style>
+    body { background:#0a0f1a; color:#e2e8f0; font-family: system-ui, sans-serif; }
+    .tool-card { background:#111827; border:1px solid #1e293b; border-radius:16px; padding:28px; transition:border-color .2s,box-shadow .2s; }
+    .tool-card:hover { border-color:#f59e0b; box-shadow:0 0 24px rgba(245,158,11,.12); }
+  </style>
+</head>
+<body>
+  <nav style="background:#0f172a;border-bottom:1px solid #1e293b;padding:16px 24px;display:flex;align-items:center;justify-content:space-between;">
+    <a href="/" style="font-size:20px;font-weight:800;color:#f59e0b;text-decoration:none;">Roof Manager</a>
+    <div style="display:flex;gap:20px;font-size:14px;">
+      <a href="/blog" style="color:#94a3b8;text-decoration:none;">Blog</a>
+      <a href="/guides" style="color:#94a3b8;text-decoration:none;">Guides</a>
+      <a href="/tools" style="color:#f59e0b;text-decoration:none;font-weight:700;">Free Tools</a>
+      <a href="/lander" style="background:#f59e0b;color:#0f172a;padding:8px 18px;border-radius:8px;text-decoration:none;font-weight:700;">Get Free Reports</a>
+    </div>
+  </nav>
+
+  <main style="max-width:960px;margin:0 auto;padding:60px 24px;">
+    <div style="text-align:center;margin-bottom:56px;">
+      <span style="background:#f59e0b22;color:#f59e0b;font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:6px 14px;border-radius:20px;">Free Tools</span>
+      <h1 style="font-size:40px;font-weight:800;margin:20px 0 16px;line-height:1.2;">Free Roofing Calculators<br>& Estimators</h1>
+      <p style="color:#94a3b8;font-size:18px;max-width:600px;margin:0 auto;">Built for roofing contractors, estimators, adjusters, and homeowners. No account required. Embed any tool on your own site for free.</p>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:24px;margin-bottom:60px;">
+
+      <a href="/tools/pitch-calculator" style="text-decoration:none;">
+        <div class="tool-card">
+          <div style="font-size:36px;margin-bottom:16px;">📐</div>
+          <h2 style="font-size:20px;font-weight:700;color:#f1f5f9;margin-bottom:8px;">Roof Pitch Calculator</h2>
+          <p style="color:#94a3b8;font-size:14px;line-height:1.6;margin-bottom:16px;">Convert roof pitch (rise:12) to degrees and calculate the pitch multiplier for true sloped area. Covers every pitch from 1:12 to 24:12.</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <span style="background:#1e293b;color:#64748b;font-size:11px;padding:4px 10px;border-radius:20px;">Pitch → Degrees</span>
+            <span style="background:#1e293b;color:#64748b;font-size:11px;padding:4px 10px;border-radius:20px;">Pitch Multiplier</span>
+            <span style="background:#1e293b;color:#64748b;font-size:11px;padding:4px 10px;border-radius:20px;">Embeddable</span>
+          </div>
+          <div style="margin-top:20px;color:#f59e0b;font-size:14px;font-weight:700;">Use Calculator →</div>
+        </div>
+      </a>
+
+      <a href="/blog/roof-pitch-complete-guide-2026" style="text-decoration:none;">
+        <div class="tool-card">
+          <div style="font-size:36px;margin-bottom:16px;">📊</div>
+          <h2 style="font-size:20px;font-weight:700;color:#f1f5f9;margin-bottom:8px;">Pitch Conversion Chart</h2>
+          <p style="color:#94a3b8;font-size:14px;line-height:1.6;margin-bottom:16px;">Complete reference chart: every pitch from 1:12 to 24:12 converted to degrees and pitch multiplier. Classification by slope type included.</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <span style="background:#1e293b;color:#64748b;font-size:11px;padding:4px 10px;border-radius:20px;">1:12 to 24:12</span>
+            <span style="background:#1e293b;color:#64748b;font-size:11px;padding:4px 10px;border-radius:20px;">All Multipliers</span>
+          </div>
+          <div style="margin-top:20px;color:#f59e0b;font-size:14px;font-weight:700;">View Chart →</div>
+        </div>
+      </a>
+
+      <a href="/free-roof-estimate" style="text-decoration:none;">
+        <div class="tool-card">
+          <div style="font-size:36px;margin-bottom:16px;">🛰️</div>
+          <h2 style="font-size:20px;font-weight:700;color:#f1f5f9;margin-bottom:8px;">Free Satellite Roof Estimate</h2>
+          <p style="color:#94a3b8;font-size:14px;line-height:1.6;margin-bottom:16px;">Get instant pitch detection, footprint area, and sloped area for any address in North America — powered by the Google Solar API and AI.</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <span style="background:#1e293b;color:#64748b;font-size:11px;padding:4px 10px;border-radius:20px;">No Account Needed</span>
+            <span style="background:#1e293b;color:#64748b;font-size:11px;padding:4px 10px;border-radius:20px;">Any Address</span>
+            <span style="background:#f59e0b22;color:#f59e0b;font-size:11px;padding:4px 10px;border-radius:20px;">Free</span>
+          </div>
+          <div style="margin-top:20px;color:#f59e0b;font-size:14px;font-weight:700;">Get Free Estimate →</div>
+        </div>
+      </a>
+
+      <a href="/blog/what-is-a-material-takeoff-roofing" style="text-decoration:none;">
+        <div class="tool-card">
+          <div style="font-size:36px;margin-bottom:16px;">📦</div>
+          <h2 style="font-size:20px;font-weight:700;color:#f1f5f9;margin-bottom:8px;">Material Take-Off Guide</h2>
+          <p style="color:#94a3b8;font-size:14px;line-height:1.6;margin-bottom:16px;">Step-by-step guide to calculating shingles, underlayment, drip edge, and flashing quantities from roof area — with waste factor formulas.</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <span style="background:#1e293b;color:#64748b;font-size:11px;padding:4px 10px;border-radius:20px;">Shingles</span>
+            <span style="background:#1e293b;color:#64748b;font-size:11px;padding:4px 10px;border-radius:20px;">Waste Factor</span>
+          </div>
+          <div style="margin-top:20px;color:#f59e0b;font-size:14px;font-weight:700;">Read Guide →</div>
+        </div>
+      </a>
+
+      <a href="/sample-report" style="text-decoration:none;">
+        <div class="tool-card">
+          <div style="font-size:36px;margin-bottom:16px;">📄</div>
+          <h2 style="font-size:20px;font-weight:700;color:#f1f5f9;margin-bottom:8px;">Sample Measurement Report</h2>
+          <p style="color:#94a3b8;font-size:14px;line-height:1.6;margin-bottom:16px;">See exactly what a professional roof measurement report looks like — pitch per facet, sloped area, material estimates, AccuLynx/Xactimate export.</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <span style="background:#1e293b;color:#64748b;font-size:11px;padding:4px 10px;border-radius:20px;">Per-Facet Pitch</span>
+            <span style="background:#1e293b;color:#64748b;font-size:11px;padding:4px 10px;border-radius:20px;">Xactimate Export</span>
+          </div>
+          <div style="margin-top:20px;color:#f59e0b;font-size:14px;font-weight:700;">View Sample →</div>
+        </div>
+      </a>
+
+      <a href="/guides" style="text-decoration:none;">
+        <div class="tool-card">
+          <div style="font-size:36px;margin-bottom:16px;">📚</div>
+          <h2 style="font-size:20px;font-weight:700;color:#f1f5f9;margin-bottom:8px;">How-To Guides</h2>
+          <p style="color:#94a3b8;font-size:14px;line-height:1.6;margin-bottom:16px;">Step-by-step guides for ordering reports, building proposals, creating invoices, setting up the AI secretary, and designing solar systems.</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <span style="background:#1e293b;color:#64748b;font-size:11px;padding:4px 10px;border-radius:20px;">6 Guides</span>
+            <span style="background:#1e293b;color:#64748b;font-size:11px;padding:4px 10px;border-radius:20px;">Video Walkthroughs</span>
+          </div>
+          <div style="margin-top:20px;color:#f59e0b;font-size:14px;font-weight:700;">Browse Guides →</div>
+        </div>
+      </a>
+
+    </div>
+
+    <div style="background:linear-gradient(135deg,#1e3a5f,#0f2440);border-radius:16px;padding:40px;text-align:center;">
+      <h2 style="font-size:26px;font-weight:800;color:#f59e0b;margin-bottom:12px;">Need a Full Professional Measurement?</h2>
+      <p style="color:#cbd5e1;margin-bottom:24px;max-width:500px;margin-left:auto;margin-right:auto;">Satellite AI report — exact pitch per facet, true sloped area, material estimates, AccuLynx/Xactimate export. Flat $10. No subscription.</p>
+      <a href="/lander" style="display:inline-block;background:#f59e0b;color:#0f172a;padding:14px 36px;border-radius:12px;font-weight:800;text-decoration:none;font-size:16px;margin-right:12px;">Start Free (3 Reports)</a>
+      <a href="/order/new" style="display:inline-block;background:transparent;color:#f59e0b;border:2px solid #f59e0b;padding:12px 28px;border-radius:12px;font-weight:700;text-decoration:none;font-size:15px;">Order a Report — $10</a>
+    </div>
+  </main>
+
+  <footer style="border-top:1px solid #1e293b;padding:32px 24px;text-align:center;color:#475569;font-size:13px;margin-top:60px;">
+    <div style="margin-bottom:12px;display:flex;justify-content:center;gap:24px;flex-wrap:wrap;">
+      <a href="/" style="color:#475569;text-decoration:none;">Home</a>
+      <a href="/blog" style="color:#475569;text-decoration:none;">Blog</a>
+      <a href="/tools" style="color:#475569;text-decoration:none;">Free Tools</a>
+      <a href="/press" style="color:#475569;text-decoration:none;">Press</a>
+      <a href="/privacy" style="color:#475569;text-decoration:none;">Privacy</a>
+    </div>
+    <p>© ${new Date().getFullYear()} Roof Manager. Free tools provided for educational and estimating use.</p>
+  </footer>
+</body>
+</html>`
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PITCH CALCULATOR — /tools/pitch-calculator (full-page)
+// Primary backlink magnet — embed code prominently displayed
+// ─────────────────────────────────────────────────────────────────────────────
+function getPitchCalculatorHTML(): string {
+  const embedCode = `<iframe src="https://www.roofmanager.ca/tools/pitch-calculator/embed" width="100%" height="580" style="border:none;border-radius:12px;display:block;" title="Free Roof Pitch Calculator by Roof Manager" loading="lazy"></iframe><p style="margin:8px 0 0;font-size:12px;text-align:center;"><a href="https://www.roofmanager.ca/tools/pitch-calculator" target="_blank" rel="noopener">Free Roof Pitch Calculator</a> by <a href="https://www.roofmanager.ca" target="_blank" rel="noopener">Roof Manager</a></p>`
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Roof Pitch Calculator — Convert Pitch to Degrees & Multiplier | Roof Manager</title>
+  <meta name="description" content="Free roof pitch calculator. Enter any rise:12 pitch to instantly get degrees, pitch multiplier, and true sloped area. Covers 1:12 to 24:12. Embed on your website free.">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Free Roof Pitch Calculator | Roof Manager">
+  <meta property="og:description" content="Convert any roof pitch to degrees and calculate the pitch multiplier for sloped area. Free, embeddable, no account required.">
+  <meta property="og:image" content="https://www.roofmanager.ca/static/logo.png">
+  <meta property="og:url" content="https://www.roofmanager.ca/tools/pitch-calculator">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="canonical" href="https://www.roofmanager.ca/tools/pitch-calculator">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Roof Pitch Calculator","description":"Free roof pitch calculator — convert rise:12 pitch to degrees and calculate pitch multiplier for sloped area","url":"https://www.roofmanager.ca/tools/pitch-calculator","applicationCategory":"UtilitiesApplication","operatingSystem":"Web","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"publisher":{"@type":"Organization","name":"Roof Manager","url":"https://www.roofmanager.ca"}}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"How do I convert roof pitch to degrees?","acceptedAnswer":{"@type":"Answer","text":"Use the formula degrees = arctan(rise ÷ 12). For a 6:12 pitch: arctan(0.5) = 26.57°. This calculator does it instantly for any pitch from 1:12 to 24:12."}},{"@type":"Question","name":"What is a pitch multiplier?","acceptedAnswer":{"@type":"Answer","text":"The pitch multiplier is √(rise² + 144) ÷ 12. Multiply your roof footprint area by this number to get the true sloped surface area — what you actually need to order material for."}},{"@type":"Question","name":"What is the most common roof pitch?","acceptedAnswer":{"@type":"Answer","text":"The most common residential roof pitch is 6:12 (26.57°), followed by 4:12 and 5:12. Pitches between 4:12 and 8:12 are considered conventional slope."}}]}</script>
+  <link rel="stylesheet" href="/static/tailwind.css">
+  <style>
+    body { background:#0a0f1a; color:#e2e8f0; font-family: system-ui, sans-serif; }
+    input[type=range] { -webkit-appearance:none; width:100%; height:6px; border-radius:3px; background:#1e293b; outline:none; }
+    input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:22px; height:22px; border-radius:50%; background:#f59e0b; cursor:pointer; box-shadow:0 0 8px rgba(245,158,11,.5); }
+    .result-card { background:#111827; border:1px solid #1e293b; border-radius:12px; padding:20px 24px; text-align:center; }
+    .embed-box { background:#0f172a; border:1px solid #1e293b; border-radius:10px; padding:16px; font-family:monospace; font-size:12px; color:#94a3b8; word-break:break-all; white-space:pre-wrap; line-height:1.6; }
+  </style>
+</head>
+<body>
+  <nav style="background:#0f172a;border-bottom:1px solid #1e293b;padding:16px 24px;display:flex;align-items:center;justify-content:space-between;">
+    <a href="/" style="font-size:20px;font-weight:800;color:#f59e0b;text-decoration:none;">Roof Manager</a>
+    <div style="display:flex;gap:20px;font-size:14px;">
+      <a href="/tools" style="color:#94a3b8;text-decoration:none;">Free Tools</a>
+      <a href="/blog" style="color:#94a3b8;text-decoration:none;">Blog</a>
+      <a href="/lander" style="background:#f59e0b;color:#0f172a;padding:8px 18px;border-radius:8px;text-decoration:none;font-weight:700;">Get Free Reports</a>
+    </div>
+  </nav>
+
+  <main style="max-width:800px;margin:0 auto;padding:48px 24px;">
+    <nav aria-label="breadcrumb" style="font-size:13px;color:#475569;margin-bottom:32px;">
+      <a href="/" style="color:#475569;text-decoration:none;">Home</a> /
+      <a href="/tools" style="color:#475569;text-decoration:none;">Free Tools</a> /
+      <span style="color:#94a3b8;">Pitch Calculator</span>
+    </nav>
+
+    <div style="text-align:center;margin-bottom:40px;">
+      <span style="background:#f59e0b22;color:#f59e0b;font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:6px 14px;border-radius:20px;">Free Tool</span>
+      <h1 style="font-size:36px;font-weight:800;margin:20px 0 12px;">Roof Pitch Calculator</h1>
+      <p style="color:#94a3b8;font-size:16px;">Convert any roof pitch to degrees, calculate the pitch multiplier, and estimate true sloped area from your footprint.</p>
+    </div>
+
+    <!-- Calculator -->
+    <div style="background:#111827;border:1px solid #1e293b;border-radius:20px;padding:36px;margin-bottom:40px;">
+      <div style="margin-bottom:32px;">
+        <label style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+          <span style="font-size:16px;font-weight:600;">Roof Pitch (rise : 12)</span>
+          <span id="pitchLabel" style="font-size:28px;font-weight:800;color:#f59e0b;">6 : 12</span>
+        </label>
+        <input type="range" id="riseSlider" min="1" max="24" value="6" oninput="calcPitch(this.value)">
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:#475569;margin-top:6px;"><span>1:12 (nearly flat)</span><span>12:12 (45°)</span><span>24:12 (gothic)</span></div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:28px;">
+        <div class="result-card">
+          <div style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Degrees</div>
+          <div id="degResult" style="font-size:30px;font-weight:800;color:#f59e0b;">26.57°</div>
+        </div>
+        <div class="result-card">
+          <div style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Pitch Multiplier</div>
+          <div id="multResult" style="font-size:30px;font-weight:800;color:#38bdf8;">1.118</div>
+        </div>
+        <div class="result-card">
+          <div style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Classification</div>
+          <div id="classResult" style="font-size:16px;font-weight:700;color:#4ade80;padding-top:6px;">Conventional</div>
+        </div>
+      </div>
+
+      <div style="background:#0f172a;border:1px solid #1e293b;border-radius:12px;padding:20px;">
+        <label style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+          <span style="font-size:14px;font-weight:600;">Footprint area (sq ft)</span>
+          <span id="footprintLabel" style="font-size:16px;font-weight:700;color:#94a3b8;">2,000 sq ft</span>
+        </label>
+        <input type="range" id="footprintSlider" min="200" max="10000" step="100" value="2000" oninput="calcPitch(document.getElementById('riseSlider').value)">
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:#475569;margin-top:6px;"><span>200 sq ft</span><span>10,000 sq ft</span></div>
+        <div style="margin-top:16px;display:flex;justify-content:space-between;align-items:center;background:#111827;border-radius:10px;padding:14px 18px;">
+          <span style="color:#94a3b8;font-size:14px;">True sloped surface area:</span>
+          <span id="areaResult" style="font-size:20px;font-weight:800;color:#f59e0b;">2,236 sq ft</span>
+        </div>
+        <div style="margin-top:8px;display:flex;justify-content:space-between;align-items:center;background:#111827;border-radius:10px;padding:14px 18px;">
+          <span style="color:#94a3b8;font-size:14px;">Roofing squares needed:</span>
+          <span id="squaresResult" style="font-size:20px;font-weight:800;color:#38bdf8;">22.4 squares</span>
+        </div>
+        <div style="margin-top:8px;display:flex;justify-content:space-between;align-items:center;background:#111827;border-radius:10px;padding:14px 18px;">
+          <span style="color:#94a3b8;font-size:14px;">Bundles (3 per square, no waste):</span>
+          <span id="bundlesResult" style="font-size:20px;font-weight:800;color:#a78bfa;">67.1 bundles</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Embed section — the key backlink driver -->
+    <div style="background:#111827;border:1px solid #f59e0b33;border-radius:20px;padding:32px;margin-bottom:40px;">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+        <span style="font-size:24px;">🔗</span>
+        <div>
+          <h2 style="font-size:20px;font-weight:700;margin:0 0 4px;">Embed This Calculator on Your Website — Free</h2>
+          <p style="color:#94a3b8;font-size:13px;margin:0;">Copy and paste the code below. Works on any website, WordPress, Squarespace, or HTML page. No API key or account needed.</p>
+        </div>
+      </div>
+      <div class="embed-box">&lt;iframe src="https://www.roofmanager.ca/tools/pitch-calculator/embed" width="100%" height="580" style="border:none;border-radius:12px;display:block;" title="Free Roof Pitch Calculator by Roof Manager" loading="lazy"&gt;&lt;/iframe&gt;
+&lt;p style="margin:8px 0 0;font-size:12px;text-align:center;"&gt;&lt;a href="https://www.roofmanager.ca/tools/pitch-calculator"&gt;Free Roof Pitch Calculator&lt;/a&gt; by &lt;a href="https://www.roofmanager.ca"&gt;Roof Manager&lt;/a&gt;&lt;/p&gt;</div>
+      <button onclick="navigator.clipboard.writeText(document.querySelector('.embed-box').textContent.trim());this.textContent='Copied!';setTimeout(()=>this.textContent='Copy Embed Code',2000)" style="margin-top:14px;background:#f59e0b;color:#0f172a;border:none;padding:10px 24px;border-radius:8px;font-weight:700;cursor:pointer;font-size:14px;">Copy Embed Code</button>
+      <p style="color:#475569;font-size:12px;margin-top:12px;">By embedding this tool, you agree to include the "by Roof Manager" attribution link. That's it — no fees, no tracking of your visitors.</p>
+    </div>
+
+    <!-- Related content -->
+    <div style="margin-bottom:40px;">
+      <h2 style="font-size:22px;font-weight:700;margin-bottom:20px;">Related Resources</h2>
+      <div style="display:grid;gap:12px;">
+        <a href="/blog/roof-pitch-complete-guide-2026" style="background:#111827;border:1px solid #1e293b;border-radius:12px;padding:16px 20px;text-decoration:none;display:flex;justify-content:space-between;align-items:center;transition:border-color .2s;" onmouseover="this.style.borderColor='#f59e0b'" onmouseout="this.style.borderColor='#1e293b'">
+          <div><div style="color:#f1f5f9;font-weight:600;margin-bottom:4px;">Complete Guide to Roof Pitch (2026 Edition)</div><div style="color:#64748b;font-size:13px;">Every formula, chart, and measurement method explained</div></div>
+          <span style="color:#f59e0b;font-size:20px;">→</span>
+        </a>
+        <a href="/blog/how-to-measure-a-roof-without-climbing-2026" style="background:#111827;border:1px solid #1e293b;border-radius:12px;padding:16px 20px;text-decoration:none;display:flex;justify-content:space-between;align-items:center;transition:border-color .2s;" onmouseover="this.style.borderColor='#f59e0b'" onmouseout="this.style.borderColor='#1e293b'">
+          <div><div style="color:#f1f5f9;font-weight:600;margin-bottom:4px;">How to Measure a Roof Without Climbing</div><div style="color:#64748b;font-size:13px;">Satellite AI, smartphone apps, and attic measurement methods</div></div>
+          <span style="color:#f59e0b;font-size:20px;">→</span>
+        </a>
+        <a href="/blog/ai-roof-measurement-accuracy-explained" style="background:#111827;border:1px solid #1e293b;border-radius:12px;padding:16px 20px;text-decoration:none;display:flex;justify-content:space-between;align-items:center;transition:border-color .2s;" onmouseover="this.style.borderColor='#f59e0b'" onmouseout="this.style.borderColor='#1e293b'">
+          <div><div style="color:#f1f5f9;font-weight:600;margin-bottom:4px;">How Accurate Is AI Roof Measurement?</div><div style="color:#64748b;font-size:13px;">Accuracy benchmarks vs EagleView and manual measurement</div></div>
+          <span style="color:#f59e0b;font-size:20px;">→</span>
+        </a>
+      </div>
+    </div>
+
+    <div style="background:linear-gradient(135deg,#1e3a5f,#0f2440);border-radius:16px;padding:36px;text-align:center;">
+      <h2 style="font-size:24px;font-weight:800;color:#f59e0b;margin-bottom:10px;">Need the Actual Roof Measured?</h2>
+      <p style="color:#cbd5e1;margin-bottom:24px;max-width:500px;margin-left:auto;margin-right:auto;">Our satellite AI reports give you exact pitch per facet, true sloped area, and a full material take-off for any address — in under 60 seconds, from $10.</p>
+      <a href="/lander" style="display:inline-block;background:#f59e0b;color:#0f172a;padding:14px 32px;border-radius:12px;font-weight:800;text-decoration:none;font-size:16px;margin-right:10px;">Try 3 Free Reports</a>
+      <a href="/order/new" style="display:inline-block;background:transparent;color:#f59e0b;border:2px solid #f59e0b;padding:12px 24px;border-radius:12px;font-weight:700;text-decoration:none;font-size:15px;">Order Now — $10</a>
+    </div>
+  </main>
+
+  <footer style="border-top:1px solid #1e293b;padding:32px 24px;text-align:center;color:#475569;font-size:13px;margin-top:60px;">
+    <div style="margin-bottom:12px;display:flex;justify-content:center;gap:24px;flex-wrap:wrap;">
+      <a href="/" style="color:#475569;text-decoration:none;">Home</a>
+      <a href="/tools" style="color:#475569;text-decoration:none;">Free Tools</a>
+      <a href="/blog" style="color:#475569;text-decoration:none;">Blog</a>
+      <a href="/press" style="color:#475569;text-decoration:none;">Press</a>
+      <a href="/privacy" style="color:#475569;text-decoration:none;">Privacy</a>
+    </div>
+    <p>© ${new Date().getFullYear()} Roof Manager · <a href="https://www.roofmanager.ca" style="color:#475569;">www.roofmanager.ca</a></p>
+  </footer>
+
+  <script>
+    const classifications = {
+      1:'Low-slope (membrane only)',2:'Low-slope (min. for shingles)',3:'Low-slope',
+      4:'Conventional',5:'Conventional',6:'Conventional',7:'Conventional',8:'Conventional (walkable limit)',
+      9:'Steep-slope',10:'Steep-slope',11:'Steep-slope',12:'Steep-slope (45°)',
+      13:'Steep-slope',14:'Steep-slope',15:'Steep-slope',16:'Very steep',
+      17:'Very steep',18:'Very steep (historical)',19:'Extreme',20:'Extreme (rare)',
+      21:'Extreme',22:'Extreme',23:'Extreme',24:'Extreme (gothic)'
+    }
+    const classColors = {
+      1:'#94a3b8',2:'#94a3b8',3:'#94a3b8',
+      4:'#4ade80',5:'#4ade80',6:'#4ade80',7:'#4ade80',8:'#4ade80',
+      9:'#fbbf24',10:'#fbbf24',11:'#fbbf24',12:'#fbbf24',
+      13:'#fbbf24',14:'#fbbf24',15:'#fbbf24',16:'#f87171',
+      17:'#f87171',18:'#f87171',19:'#f87171',20:'#f87171',
+      21:'#f87171',22:'#f87171',23:'#f87171',24:'#f87171'
+    }
+    function calcPitch(rise) {
+      rise = parseInt(rise)
+      const fp = parseInt(document.getElementById('footprintSlider').value)
+      const deg = Math.atan(rise / 12) * 180 / Math.PI
+      const mult = Math.sqrt(rise * rise + 144) / 12
+      const area = fp * mult
+      const squares = area / 100
+      const bundles = squares * 3
+      document.getElementById('pitchLabel').textContent = rise + ' : 12'
+      document.getElementById('degResult').textContent = deg.toFixed(2) + '°'
+      document.getElementById('multResult').textContent = mult.toFixed(3)
+      document.getElementById('classResult').textContent = classifications[rise] || 'Extreme'
+      document.getElementById('classResult').style.color = classColors[rise] || '#f87171'
+      document.getElementById('footprintLabel').textContent = fp.toLocaleString() + ' sq ft'
+      document.getElementById('areaResult').textContent = Math.round(area).toLocaleString() + ' sq ft'
+      document.getElementById('squaresResult').textContent = squares.toFixed(1) + ' squares'
+      document.getElementById('bundlesResult').textContent = bundles.toFixed(1) + ' bundles'
+    }
+    calcPitch(6)
+  </script>
+</body>
+</html>`
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PITCH CALCULATOR EMBED — /tools/pitch-calculator/embed
+// Stripped iframe-embeddable version (no site nav/footer)
+// ─────────────────────────────────────────────────────────────────────────────
+function getPitchCalculatorEmbedHTML(): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Roof Pitch Calculator — Roof Manager</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{background:#111827;color:#e2e8f0;font-family:system-ui,sans-serif;padding:20px;min-height:100vh;}
+    input[type=range]{-webkit-appearance:none;width:100%;height:6px;border-radius:3px;background:#1e293b;outline:none;}
+    input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;border-radius:50%;background:#f59e0b;cursor:pointer;}
+    .rc{background:#0f172a;border:1px solid #1e293b;border-radius:10px;padding:14px;text-align:center;flex:1;}
+    .rl{font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px;}
+    .rv{font-size:24px;font-weight:800;}
+    .row{background:#0f172a;border-radius:8px;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;margin-top:8px;}
+  </style>
+</head>
+<body>
+  <div style="font-size:13px;font-weight:700;color:#f59e0b;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;">
+    <span>Roof Pitch Calculator</span>
+    <a href="https://www.roofmanager.ca" target="_blank" style="color:#475569;text-decoration:none;font-size:11px;font-weight:400;">by Roof Manager</a>
+  </div>
+
+  <div style="margin-bottom:20px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+      <span style="font-size:14px;font-weight:600;">Pitch (rise : 12)</span>
+      <span id="pitchLabel" style="font-size:22px;font-weight:800;color:#f59e0b;">6 : 12</span>
+    </div>
+    <input type="range" id="riseSlider" min="1" max="24" value="6" oninput="calc(this.value)">
+    <div style="display:flex;justify-content:space-between;font-size:10px;color:#475569;margin-top:4px;"><span>1:12</span><span>12:12 (45°)</span><span>24:12</span></div>
+  </div>
+
+  <div style="display:flex;gap:10px;margin-bottom:16px;">
+    <div class="rc"><div class="rl">Degrees</div><div class="rv" id="degR" style="color:#f59e0b;">26.57°</div></div>
+    <div class="rc"><div class="rl">Multiplier</div><div class="rv" id="multR" style="color:#38bdf8;">1.118</div></div>
+    <div class="rc"><div class="rl">Type</div><div class="rv" id="classR" style="font-size:12px;color:#4ade80;padding-top:4px;">Conventional</div></div>
+  </div>
+
+  <div style="margin-bottom:12px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+      <span style="font-size:13px;font-weight:600;">Footprint</span>
+      <span id="fpLabel" style="font-size:14px;font-weight:700;color:#94a3b8;">2,000 sq ft</span>
+    </div>
+    <input type="range" id="fpSlider" min="200" max="10000" step="100" value="2000" oninput="calc(document.getElementById('riseSlider').value)">
+  </div>
+
+  <div class="row"><span style="color:#94a3b8;font-size:13px;">Sloped area</span><span id="areaR" style="font-size:16px;font-weight:800;color:#f59e0b;">2,236 sq ft</span></div>
+  <div class="row"><span style="color:#94a3b8;font-size:13px;">Squares</span><span id="sqR" style="font-size:16px;font-weight:800;color:#38bdf8;">22.4</span></div>
+  <div class="row"><span style="color:#94a3b8;font-size:13px;">Bundles (3/sq)</span><span id="bunR" style="font-size:16px;font-weight:800;color:#a78bfa;">67.1</span></div>
+
+  <div style="margin-top:16px;text-align:center;">
+    <a href="https://www.roofmanager.ca/lander" target="_blank" style="display:inline-block;background:#f59e0b;color:#0f172a;padding:10px 24px;border-radius:8px;font-weight:800;text-decoration:none;font-size:13px;">Get a Full Satellite Report — Free</a>
+  </div>
+
+  <script>
+    const cls={1:'Low-slope',2:'Low-slope',3:'Low-slope',4:'Conventional',5:'Conventional',6:'Conventional',7:'Conventional',8:'Conv. (limit)',9:'Steep',10:'Steep',11:'Steep',12:'Steep 45°',13:'Steep',14:'Steep',15:'Steep',16:'Very steep',17:'Very steep',18:'Very steep',19:'Extreme',20:'Extreme',21:'Extreme',22:'Extreme',23:'Extreme',24:'Extreme'}
+    const clc={1:'#94a3b8',2:'#94a3b8',3:'#94a3b8',4:'#4ade80',5:'#4ade80',6:'#4ade80',7:'#4ade80',8:'#4ade80',9:'#fbbf24',10:'#fbbf24',11:'#fbbf24',12:'#fbbf24',13:'#fbbf24',14:'#fbbf24',15:'#fbbf24',16:'#f87171',17:'#f87171',18:'#f87171',19:'#f87171',20:'#f87171',21:'#f87171',22:'#f87171',23:'#f87171',24:'#f87171'}
+    function calc(r){
+      r=parseInt(r);const fp=parseInt(document.getElementById('fpSlider').value)
+      const d=Math.atan(r/12)*180/Math.PI,m=Math.sqrt(r*r+144)/12,a=fp*m
+      document.getElementById('pitchLabel').textContent=r+' : 12'
+      document.getElementById('degR').textContent=d.toFixed(2)+'°'
+      document.getElementById('multR').textContent=m.toFixed(3)
+      document.getElementById('classR').textContent=cls[r]||'Extreme'
+      document.getElementById('classR').style.color=clc[r]||'#f87171'
+      document.getElementById('fpLabel').textContent=fp.toLocaleString()+' sq ft'
+      document.getElementById('areaR').textContent=Math.round(a).toLocaleString()+' sq ft'
+      document.getElementById('sqR').textContent=(a/100).toFixed(1)
+      document.getElementById('bunR').textContent=(a/100*3).toFixed(1)
+    }
+    calc(6)
+  </script>
+</body>
+</html>`
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PRESS / MEDIA KIT — /press
+// Journalists and bloggers need this to cite stats, grab assets, find contacts
+// ─────────────────────────────────────────────────────────────────────────────
+function getPressPageHTML(): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Press & Media Kit | Roof Manager</title>
+  <meta name="description" content="Roof Manager press kit — company overview, key stats, brand assets, and press contact for journalists and bloggers covering roofing technology, AI, and construction tech.">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Press & Media Kit | Roof Manager">
+  <meta property="og:description" content="Company overview, key stats, brand assets, and press contact for Roof Manager — Canada's AI-powered roofing measurement platform.">
+  <meta property="og:image" content="https://www.roofmanager.ca/static/logo.png">
+  <meta property="og:url" content="https://www.roofmanager.ca/press">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="canonical" href="https://www.roofmanager.ca/press">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"Organization","name":"Roof Manager","url":"https://www.roofmanager.ca","logo":"https://www.roofmanager.ca/static/logo.png","description":"Canadian AI-powered roofing measurement and CRM platform for residential and commercial roofing contractors","foundingDate":"2024","areaServed":["Canada","United States"],"contactPoint":[{"@type":"ContactPoint","contactType":"Press","email":"hello@roofmanager.ca","availableLanguage":"English"}]}</script>
+  <link rel="stylesheet" href="/static/tailwind.css">
+  <style>body{background:#0a0f1a;color:#e2e8f0;font-family:system-ui,sans-serif;} .stat-card{background:#111827;border:1px solid #1e293b;border-radius:14px;padding:24px;text-align:center;}</style>
+</head>
+<body>
+  <nav style="background:#0f172a;border-bottom:1px solid #1e293b;padding:16px 24px;display:flex;align-items:center;justify-content:space-between;">
+    <a href="/" style="font-size:20px;font-weight:800;color:#f59e0b;text-decoration:none;">Roof Manager</a>
+    <div style="display:flex;gap:20px;font-size:14px;">
+      <a href="/tools" style="color:#94a3b8;text-decoration:none;">Free Tools</a>
+      <a href="/blog" style="color:#94a3b8;text-decoration:none;">Blog</a>
+      <a href="/lander" style="background:#f59e0b;color:#0f172a;padding:8px 18px;border-radius:8px;text-decoration:none;font-weight:700;">Get Free Reports</a>
+    </div>
+  </nav>
+
+  <main style="max-width:900px;margin:0 auto;padding:60px 24px;">
+    <div style="text-align:center;margin-bottom:56px;">
+      <span style="background:#f59e0b22;color:#f59e0b;font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:6px 14px;border-radius:20px;">Press & Media</span>
+      <h1 style="font-size:40px;font-weight:800;margin:20px 0 16px;">Roof Manager Media Kit</h1>
+      <p style="color:#94a3b8;font-size:17px;max-width:600px;margin:0 auto;">Resources for journalists, bloggers, and analysts covering roofing technology, construction AI, and Canadian proptech.</p>
+    </div>
+
+    <!-- Quick stats -->
+    <section style="margin-bottom:56px;">
+      <h2 style="font-size:22px;font-weight:700;margin-bottom:24px;border-bottom:1px solid #1e293b;padding-bottom:12px;">Key Numbers</h2>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px;">
+        <div class="stat-card"><div style="font-size:32px;font-weight:800;color:#f59e0b;">$10</div><div style="color:#94a3b8;font-size:13px;margin-top:6px;">Per professional report (flat rate)</div></div>
+        <div class="stat-card"><div style="font-size:32px;font-weight:800;color:#38bdf8;">60s</div><div style="color:#94a3b8;font-size:13px;margin-top:6px;">Typical report turnaround time</div></div>
+        <div class="stat-card"><div style="font-size:32px;font-weight:800;color:#4ade80;">3</div><div style="color:#94a3b8;font-size:13px;margin-top:6px;">Free reports on signup — no card</div></div>
+        <div class="stat-card"><div style="font-size:32px;font-weight:800;color:#a78bfa;">AI</div><div style="color:#94a3b8;font-size:13px;margin-top:6px;">Gemini 2.0/2.5 + Google Solar API</div></div>
+        <div class="stat-card"><div style="font-size:32px;font-weight:800;color:#f59e0b;">CA+US</div><div style="color:#94a3b8;font-size:13px;margin-top:6px;">Coverage across North America</div></div>
+        <div class="stat-card"><div style="font-size:32px;font-weight:800;color:#38bdf8;">0</div><div style="color:#94a3b8;font-size:13px;margin-top:6px;">Subscriptions required</div></div>
+      </div>
+    </section>
+
+    <!-- Company overview -->
+    <section style="margin-bottom:56px;">
+      <h2 style="font-size:22px;font-weight:700;margin-bottom:20px;border-bottom:1px solid #1e293b;padding-bottom:12px;">Company Overview</h2>
+      <div style="background:#111827;border:1px solid #1e293b;border-radius:16px;padding:32px;line-height:1.8;color:#cbd5e1;">
+        <p style="margin-bottom:16px;"><strong style="color:#f1f5f9;">Roof Manager</strong> is a Canadian roofing technology company providing AI-powered roof measurement reports, CRM pipeline management, AI phone receptionist services, and solar proposal tools to residential and commercial roofing contractors across Canada and the United States.</p>
+        <p style="margin-bottom:16px;">Our core product is a professional roof measurement report delivered in under 60 seconds from any North American address. Reports use satellite imagery processed through the <strong style="color:#f1f5f9;">Google Solar API</strong> and proprietary AI models (Gemini 2.0/2.5) to calculate exact pitch per facet, true sloped area, material take-offs with waste factor, and AccuLynx/Xactimate-compatible exports — all for a flat $10 per report with no subscription.</p>
+        <p style="margin-bottom:16px;">The platform includes a full roofing CRM with lead pipeline, job tracking, proposal builder, invoice manager, and a voice AI receptionist that answers calls 24/7, qualifies leads, and books appointments. Contractors access the platform through a web dashboard; homeowners receive a read-only portal for their report and documentation.</p>
+        <p>Roof Manager was purpose-built for the Canadian roofing market, where roofing contractors face unique challenges including high-pitch roofs from heavy snowfall climates, complex insurance claim documentation workflows, and the need for accurate measurements without dangerous site visits in adverse weather conditions.</p>
+      </div>
+    </section>
+
+    <!-- What we cover -->
+    <section style="margin-bottom:56px;">
+      <h2 style="font-size:22px;font-weight:700;margin-bottom:20px;border-bottom:1px solid #1e293b;padding-bottom:12px;">What We Cover (Story Angles)</h2>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;">
+        ${[
+          ['🏗️ Construction Technology','AI-powered measurement replacing manual roof inspection — safety, speed, and accuracy implications for the roofing trade.'],
+          ['🛰️ Satellite AI & Remote Sensing','How Google Solar API elevation data and computer vision extract roof geometry from overhead imagery.'],
+          ['🤖 Voice AI for Trades','AI phone receptionists answering calls for small roofing contractors — 24/7 lead capture without hiring staff.'],
+          ['☀️ Solar Roofing & Proposals','How pitch-accurate satellite measurements improve solar panel layout, production estimates, and installation planning.'],
+          ['🌩️ Storm & Insurance Claims','AI-assisted storm damage documentation and insurance scope writing — how technology is changing claims processing.'],
+          ['🇨🇦 Canadian Proptech','Canadian-built SaaS for the roofing industry — market context, pricing in CAD, coverage across provinces.']
+        ].map(([title, desc]) => `<div style="background:#111827;border:1px solid #1e293b;border-radius:12px;padding:20px;"><div style="font-size:20px;margin-bottom:10px;">${title.split(' ')[0]}</div><h3 style="font-size:15px;font-weight:700;color:#f1f5f9;margin-bottom:8px;">${title.substring(2)}</h3><p style="color:#94a3b8;font-size:13px;line-height:1.6;">${desc}</p></div>`).join('')}
+      </div>
+    </section>
+
+    <!-- Brand assets -->
+    <section style="margin-bottom:56px;">
+      <h2 style="font-size:22px;font-weight:700;margin-bottom:20px;border-bottom:1px solid #1e293b;padding-bottom:12px;">Brand Assets</h2>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;">
+        <div style="background:#111827;border:1px solid #1e293b;border-radius:12px;padding:24px;text-align:center;">
+          <div style="background:#0f172a;border-radius:10px;padding:20px;margin-bottom:14px;">
+            <div style="font-size:28px;font-weight:800;color:#f59e0b;">Roof Manager</div>
+          </div>
+          <div style="font-size:13px;color:#64748b;margin-bottom:12px;">Primary wordmark</div>
+          <div style="font-size:12px;color:#475569;font-family:monospace;">Brand colour: #f59e0b<br>Background: #0a0f1a<br>Font: System UI / Inter</div>
+        </div>
+        <div style="background:#111827;border:1px solid #1e293b;border-radius:12px;padding:24px;text-align:center;">
+          <div style="background:#f59e0b;border-radius:10px;padding:20px;margin-bottom:14px;">
+            <div style="font-size:28px;font-weight:800;color:#0f172a;">Roof Manager</div>
+          </div>
+          <div style="font-size:13px;color:#64748b;margin-bottom:12px;">Reversed (light background)</div>
+          <div style="font-size:12px;color:#475569;font-family:monospace;">Use on white or light<br>backgrounds only</div>
+        </div>
+        <div style="background:#111827;border:1px solid #1e293b;border-radius:12px;padding:24px;">
+          <h3 style="font-size:14px;font-weight:700;margin-bottom:12px;">Usage Guidelines</h3>
+          <ul style="font-size:13px;color:#94a3b8;line-height:2;">
+            <li>✓ "Roof Manager" (two words, both capitalized)</li>
+            <li>✗ "RoofManager" (no space)</li>
+            <li>✗ "roofmanager" (lowercase)</li>
+            <li>✓ roofmanager.ca (URL, lowercase)</li>
+            <li>✓ www.roofmanager.ca (with www)</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- Press contact -->
+    <section style="margin-bottom:56px;">
+      <h2 style="font-size:22px;font-weight:700;margin-bottom:20px;border-bottom:1px solid #1e293b;padding-bottom:12px;">Press Contact</h2>
+      <div style="background:#111827;border:1px solid #1e293b;border-radius:16px;padding:32px;display:flex;gap:32px;flex-wrap:wrap;align-items:center;">
+        <div>
+          <div style="font-size:18px;font-weight:700;color:#f1f5f9;margin-bottom:4px;">Media Inquiries</div>
+          <div style="color:#94a3b8;font-size:15px;margin-bottom:16px;">For press, interview requests, and fact-checking</div>
+          <a href="mailto:hello@roofmanager.ca" style="display:inline-block;background:#f59e0b;color:#0f172a;padding:12px 28px;border-radius:10px;font-weight:800;text-decoration:none;font-size:15px;">hello@roofmanager.ca</a>
+        </div>
+        <div style="flex:1;min-width:200px;">
+          <div style="font-size:14px;color:#64748b;margin-bottom:8px;">Please include in your inquiry:</div>
+          <ul style="font-size:13px;color:#94a3b8;line-height:2;">
+            <li>• Your publication and article topic</li>
+            <li>• Deadline (we respond within 24h)</li>
+            <li>• Whether you need a spokesperson quote, data, or demo access</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- Boilerplate -->
+    <section>
+      <h2 style="font-size:22px;font-weight:700;margin-bottom:20px;border-bottom:1px solid #1e293b;padding-bottom:12px;">Approved Boilerplate</h2>
+      <div style="background:#111827;border:1px solid #1e293b;border-radius:14px;padding:24px;">
+        <p style="color:#94a3b8;font-size:13px;margin-bottom:12px;">Use the following description when referencing Roof Manager in articles and publications:</p>
+        <blockquote style="border-left:3px solid #f59e0b;padding:16px 20px;background:#0f172a;border-radius:0 10px 10px 0;color:#cbd5e1;font-size:14px;line-height:1.8;font-style:italic;">
+          "Roof Manager (roofmanager.ca) is a Canadian roofing technology platform providing AI-powered satellite roof measurement reports, CRM pipeline management, and voice AI receptionist services to roofing contractors across Canada and the United States. Professional measurement reports are available for $10 per report with no subscription required."
+        </blockquote>
+        <button onclick="navigator.clipboard.writeText('Roof Manager (roofmanager.ca) is a Canadian roofing technology platform providing AI-powered satellite roof measurement reports, CRM pipeline management, and voice AI receptionist services to roofing contractors across Canada and the United States. Professional measurement reports are available for $10 per report with no subscription required.');this.textContent='Copied!';setTimeout(()=>this.textContent='Copy Boilerplate',2000)" style="margin-top:14px;background:#1e293b;color:#94a3b8;border:1px solid #334155;padding:8px 20px;border-radius:8px;font-weight:600;cursor:pointer;font-size:13px;">Copy Boilerplate</button>
+      </div>
+    </section>
+  </main>
+
+  <footer style="border-top:1px solid #1e293b;padding:32px 24px;text-align:center;color:#475569;font-size:13px;margin-top:60px;">
+    <div style="margin-bottom:12px;display:flex;justify-content:center;gap:24px;flex-wrap:wrap;">
+      <a href="/" style="color:#475569;text-decoration:none;">Home</a>
+      <a href="/blog" style="color:#475569;text-decoration:none;">Blog</a>
+      <a href="/tools" style="color:#475569;text-decoration:none;">Free Tools</a>
+      <a href="/press" style="color:#f59e0b;text-decoration:none;">Press</a>
+      <a href="/privacy" style="color:#475569;text-decoration:none;">Privacy</a>
+    </div>
+    <p>© ${new Date().getFullYear()} Roof Manager · <a href="https://www.roofmanager.ca" style="color:#475569;">www.roofmanager.ca</a></p>
+  </footer>
 </body>
 </html>`
 }
