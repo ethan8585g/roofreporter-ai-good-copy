@@ -21,6 +21,7 @@ export default {
   async scheduled(event: ScheduledEvent, env: Bindings, ctx: ExecutionContext) {
     const now = new Date()
     const hour = now.getUTCHours()
+    const minute = now.getUTCMinutes()
     const dayOfWeek = now.getUTCDay() // 0=Sun, 2=Tue
 
     async function isAgentEnabled(agentType: string): Promise<boolean> {
@@ -77,8 +78,8 @@ export default {
       })())
     }
 
-    // ── Lead Agent (every 2 hours) ────────────────────────────
-    if (hour % 2 === 0 && await isAgentEnabled('lead')) {
+    // ── Lead Agent (every 5 minutes — every cron tick) ───────
+    if (await isAgentEnabled('lead')) {
       ctx.waitUntil((async () => {
         const t0 = Date.now()
         try {
@@ -112,8 +113,8 @@ export default {
       })())
     }
 
-    // ── Monitor Agent (every 6 hours: 0, 6, 12, 18 UTC) ──────
-    if (hour % 6 === 0 && await isAgentEnabled('monitor')) {
+    // ── Monitor Agent (every hour — fires on the :00 tick) ───
+    if (minute === 0 && await isAgentEnabled('monitor')) {
       ctx.waitUntil((async () => {
         const t0 = Date.now()
         try {
