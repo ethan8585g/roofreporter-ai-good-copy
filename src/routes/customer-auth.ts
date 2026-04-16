@@ -497,17 +497,17 @@ customerAuthRoutes.post('/google', async (c) => {
         WHERE id = ?
       `).bind(googleId, avatar, name, customer.id).run()
     } else {
-      // Create new customer with 3 free trial reports (NOT paid credits)
+      // Create new customer with 4 free trial reports (NOT paid credits)
       const result = await c.env.DB.prepare(`
         INSERT INTO customers (email, name, google_id, google_avatar, email_verified, is_active, report_credits, credits_used, free_trial_total, free_trial_used)
-        VALUES (?, ?, ?, ?, 1, 1, 0, 0, 3, 0)
+        VALUES (?, ?, ?, ?, 1, 1, 0, 0, 4, 0)
       `).bind(email, name, googleId, avatar).run()
-      
+
       customer = {
         id: result.meta.last_row_id,
         email, name, google_id: googleId, google_avatar: avatar,
         report_credits: 0, credits_used: 0,
-        free_trial_total: 3, free_trial_used: 0,
+        free_trial_total: 4, free_trial_used: 0,
         is_new_signup: true
       }
 
@@ -635,10 +635,10 @@ customerAuthRoutes.post('/register', async (c) => {
       if (referrer) referredBy = referrer.id
     }
 
-    // Insert with 3 free trial reports (NOT paid credits) — email_verified = 1 since we verified
+    // Insert with 4 free trial reports (NOT paid credits) — email_verified = 1 since we verified
     const result = await c.env.DB.prepare(`
       INSERT INTO customers (email, name, phone, company_name, password_hash, email_verified, is_active, report_credits, credits_used, free_trial_total, free_trial_used, referral_code, referred_by)
-      VALUES (?, ?, ?, ?, ?, 1, 1, 0, 0, 3, 0, ?, ?)
+      VALUES (?, ?, ?, ?, ?, 1, 1, 0, 0, 4, 0, ?, ?)
     `).bind(cleanEmail, name, phone || null, company_name || null, storedHash, refCode, referredBy).run()
 
     if (!result.meta.last_row_id) {
@@ -656,7 +656,7 @@ customerAuthRoutes.post('/register', async (c) => {
     await c.env.DB.prepare(`
       INSERT INTO user_activity_log (company_id, action, details)
       VALUES (1, 'customer_registered', ?)
-    `).bind(`New customer: ${name} (${cleanEmail}) — 3 free trial reports granted — email verified`).run()
+    `).bind(`New customer: ${name} (${cleanEmail}) — 4 free trial reports granted — email verified`).run()
 
     // Seed default material catalog so new account has context on the section (non-blocking)
     seedDefaultMaterials(c.env.DB, result.meta.last_row_id as number).catch((e) => console.warn('[customer-auth] seedDefaultMaterials failed (email):', e?.message || e))

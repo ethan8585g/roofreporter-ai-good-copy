@@ -5018,7 +5018,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
   <meta property="og:locale" content="en_CA">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Roof Manager — Satellite Roof Measurements in 60 Seconds">
-  <meta name="twitter:description" content="AI-powered roof measurement reports, full CRM & team management for roofing companies. 3 free reports.">
+  <meta name="twitter:description" content="AI-powered roof measurement reports, full CRM & team management for roofing companies. 4 free reports, no credit card.">
   <meta name="twitter:image" content="https://www.roofmanager.ca/static/logo.png">
   <meta name="keywords" content="roof measurement software, roofing CRM, satellite roof reports, roof area calculator, roofing estimate tool, roof pitch analysis, material takeoff, roofing contractor software, AI roof measurement, Canadian roofing software">
   <link rel="canonical" href="https://www.roofmanager.ca/">
@@ -5041,7 +5041,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
       "@type": "Offer",
       "price": "7.00",
       "priceCurrency": "USD",
-      "description": "Per report after 3 free reports"
+      "description": "Per report after 4 free reports"
     },
     "aggregateRating": {
       "@type": "AggregateRating",
@@ -5090,11 +5090,11 @@ function getLandingPageHTML(latestPosts: any[] = []) {
       {"@type": "Question", "name": "What is Roof Manager?", "acceptedAnswer": {"@type": "Answer", "text": "Roof Manager is an AI-powered roof measurement platform that generates professional satellite roof reports in under 60 seconds. It includes a full roofing CRM, invoicing, proposals, material take-off, AI phone secretary, and team management tools for roofing contractors across Canada and the US."}},
       {"@type": "Question", "name": "How accurate are Roof Manager measurements?", "acceptedAnswer": {"@type": "Answer", "text": "Our measurements use satellite imagery combined with GPS coordinate tracing and Google Solar API data. Accuracy is typically within 2-5% of manual measurements, verified against pitch-corrected sloped area calculations."}},
       {"@type": "Question", "name": "Does Roof Manager work in Canada?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. Roof Manager was built for Canadian roofing contractors and works in every province and territory where Google satellite imagery is available — including Alberta, British Columbia, Ontario, Quebec, and all Atlantic provinces."}},
-      {"@type": "Question", "name": "How much does a roof measurement report cost?", "acceptedAnswer": {"@type": "Answer", "text": "Reports are $8 USD each after the 3 free trial reports. Credit packs offer volume savings — 10 for $75 ($7.50/each), 25 for $175 ($7.00/each), or 100 for $595 ($5.95/each)."}},
+      {"@type": "Question", "name": "How much does a roof measurement report cost?", "acceptedAnswer": {"@type": "Answer", "text": "Reports are $8 USD each after the 4 free trial reports. Credit packs offer volume savings — 10 for $75 ($7.50/each), 25 for $175 ($7.00/each), or 100 for $595 ($5.95/each)."}},
       {"@type": "Question", "name": "How fast are roof reports delivered?", "acceptedAnswer": {"@type": "Answer", "text": "Reports are generated in under 60 seconds. Simply enter a property address, trace the roof edges on the satellite image, and the AI calculates area, pitch, edges, and material BOM automatically."}},
       {"@type": "Question", "name": "What is included in a roof measurement report?", "acceptedAnswer": {"@type": "Answer", "text": "Each report includes: total roof area (footprint and sloped/pitched), pitch analysis per segment, edge length breakdowns (ridge, hip, valley, eave, rake), material bill of materials with waste factor, solar potential data, and a professional branded PDF."}},
       {"@type": "Question", "name": "Do I need to be on the roof to use Roof Manager?", "acceptedAnswer": {"@type": "Answer", "text": "No. Roof Manager uses satellite imagery so you never need to physically access the roof to generate a measurement report. You can measure any property from your phone, truck, or office."}},
-      {"@type": "Question", "name": "Is there a free trial?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. Every new account gets 3 free roof measurement reports with no credit card required. The free trial includes full access to the CRM, invoicing, and proposal tools."}},
+      {"@type": "Question", "name": "Is there a free trial?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. Every new account gets 4 free roof measurement reports with no credit card required. The free trial includes full access to the CRM, invoicing, and proposal tools."}},
       {"@type": "Question", "name": "Does Roof Manager work for insurance claims?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. Roof Manager reports include detailed pitch-corrected area calculations, edge breakdowns, and material estimates that are accepted by many insurance adjusters as supporting documentation for roofing claims."}},
       {"@type": "Question", "name": "What roofing software does Roof Manager replace?", "acceptedAnswer": {"@type": "Answer", "text": "Roof Manager replaces standalone tools like EagleView, RoofSnap, and Hover for measurements, while also replacing separate CRM software, invoicing apps, and proposal tools — giving roofing contractors one integrated platform."}}
     ]
@@ -5211,12 +5211,24 @@ function getLandingPageHTML(latestPosts: any[] = []) {
     .group:hover .accuracy-bar-fill, .scroll-animate.animate-in .accuracy-bar-fill { width: 99%; }
     .live-pulse { position: relative; display: inline-flex; }
     .live-pulse::before { content: ''; position: absolute; inset: -4px; border-radius: 50%; background: #00FF88; opacity: 0.4; animation: pulse-ring 1.6s ease-out infinite; }
+    /* Announcement bar */
+    #announcement-bar { position: fixed; top: 0; left: 0; right: 0; z-index: 55; background: #00FF88; color: #0A0A0A; text-align: center; padding: 9px 48px 9px 16px; font-size: 13px; font-weight: 700; line-height: 1.4; }
+    #announcement-bar a { color: #0A0A0A; text-decoration: underline; font-weight: 800; }
+    #announcement-bar .close-bar { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; font-size: 18px; color: #0A0A0A; opacity: 0.6; padding: 4px 6px; line-height: 1; }
+    .landing-nav { top: 40px; }
+    .landing-nav.bar-hidden { top: 0; }
   </style>
   <noscript><style>.scroll-animate { opacity: 1 !important; transform: none !important; }</style></noscript>
 </head>
 <body class="min-h-screen" style="background:var(--bg-page)">
+  <!-- Announcement Bar — free trial push -->
+  <div id="announcement-bar">
+    <span>&#127881; <strong>4 FREE Roof Reports</strong> for every new account &mdash; no credit card, no commitment &mdash; </span>
+    <a href="/signup" onclick="rrTrack('cta_click',{location:'announcement_bar'})">Start for free &rarr;</a>
+    <button class="close-bar" onclick="document.getElementById('announcement-bar').style.display='none';document.getElementById('landing-nav').classList.add('bar-hidden');" aria-label="Dismiss">&times;</button>
+  </div>
   <!-- Sticky Navigation — Dark premium, starts transparent -->
-  <nav id="landing-nav" class="landing-nav fixed top-0 left-0 right-0 z-50">
+  <nav id="landing-nav" class="landing-nav fixed left-0 right-0 z-50">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 h-18 flex items-center justify-between" style="height:72px">
       <a href="/" class="flex items-center gap-3">
         <img src="/static/logo.png" alt="Roof Manager" class="w-10 h-10 rounded-xl object-cover shadow-lg ring-1 ring-white/10">
@@ -5249,15 +5261,15 @@ function getLandingPageHTML(latestPosts: any[] = []) {
         <a href="/blog" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">Blog</a>
         <a href="/coverage" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">Coverage</a>
         <a href="/faq" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">FAQ</a>
-        <a href="/customer/login" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold py-2.5 px-6 rounded-xl text-sm transition-all duration-200 hover:scale-105 shadow-lg shadow-[#00FF88]/20">
-          <i class="fas fa-rocket mr-1.5"></i>Start Free / Login
-        </a>
+        <a href="/customer/login" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200 px-2">Login</a>
+        <a href="/signup" onclick="rrTrack('cta_click',{location:'nav_signup'})" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-2.5 px-5 rounded-xl text-sm transition-all duration-200 hover:scale-105 shadow-lg shadow-[#00FF88]/20 whitespace-nowrap">
+          <i class="fas fa-gift mr-1.5"></i>4 Free Reports &rarr;</a>
       </div>
 
       <!-- Mobile: visible Login + menu button -->
       <div class="md:hidden flex items-center gap-2">
-        <a href="/customer/login" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold py-2 px-4 rounded-xl text-sm shadow-lg shadow-[#00FF88]/20 min-h-[48px] inline-flex items-center">
-          <i class="fas fa-user mr-1"></i>Login
+        <a href="/signup" onclick="rrTrack('cta_click',{location:'nav_mobile_signup'})" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-2 px-4 rounded-xl text-sm shadow-lg shadow-[#00FF88]/20 min-h-[48px] inline-flex items-center whitespace-nowrap">
+          <i class="fas fa-gift mr-1"></i>4 Free
         </a>
         <button id="mobile-menu-btn" class="text-white text-xl p-3 min-h-[48px] min-w-[48px] flex items-center justify-center" onclick="document.getElementById('mobile-menu').classList.toggle('hidden')">
           <i class="fas fa-bars"></i>
@@ -5280,7 +5292,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
         <a href="/coverage" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')">Coverage</a>
         <a href="/lander" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')">Get Started</a>
         <a href="/faq" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')">FAQ</a>
-        <a href="/customer/login" class="bg-[#00FF88] text-[#0A0A0A] font-bold py-3 px-6 rounded-xl text-sm text-center mt-3 shadow-lg"><i class="fas fa-rocket mr-1.5"></i>Start Free &mdash; No Demo Needed</a>
+        <a href="/signup" onclick="rrTrack('cta_click',{location:'mobile_menu_signup'})" class="bg-[#00FF88] text-[#0A0A0A] font-extrabold py-3 px-6 rounded-xl text-sm text-center mt-3 shadow-lg"><i class="fas fa-gift mr-1.5"></i>Get 4 FREE Reports &mdash; No Card Required</a>
       </div>
     </div>
   </nav>
@@ -5303,21 +5315,21 @@ function getLandingPageHTML(latestPosts: any[] = []) {
             <h1 class="text-5xl sm:text-6xl lg:text-7xl font-black leading-[1.05] text-white mb-8 tracking-tight">Measure Any Roof.<br/><span class="neon-text">In 60 Seconds.</span></h1>
             <h2 class="text-lg lg:text-xl text-gray-400 mb-10 max-w-xl leading-relaxed font-normal">The full CRM built for <span class="text-white font-semibold">roofing &amp; solar companies</span> — satellite roof measurement reports, solar design tools, and workflow automations. From solo contractors to large crews.</h2>
             <div class="flex flex-col sm:flex-row gap-4 mb-10">
-              <a href="/signup" onclick="rrTrack('cta_click',{location:'hero_primary',variant:'contractor_signup'})" class="group inline-flex items-center justify-center gap-3 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-10 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/20 transition-all duration-300 hover:scale-[1.03] min-h-[56px]"><i class="fas fa-rocket"></i> Measure Your First Roof Free <i class="fas fa-arrow-right text-sm group-hover:translate-x-1.5 transition-transform"></i></a>
+              <a href="/signup" onclick="rrTrack('cta_click',{location:'hero_primary',variant:'contractor_signup'})" class="group inline-flex items-center justify-center gap-3 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-10 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/20 transition-all duration-300 hover:scale-[1.03] min-h-[56px]"><i class="fas fa-gift"></i> Get 4 FREE Reports &mdash; No Card Required <i class="fas fa-arrow-right text-sm group-hover:translate-x-1.5 transition-transform"></i></a>
               <a href="/sample-report" onclick="rrTrack('cta_click',{location:'hero_secondary',variant:'sample_report'})" class="inline-flex items-center justify-center gap-2.5 bg-white/5 hover:bg-white/10 backdrop-blur-md text-white font-bold py-4 px-8 rounded-xl text-lg border border-white/10 hover:border-white/20 transition-all duration-300 min-h-[56px]"><i class="fas fa-play-circle text-[#00FF88]"></i> See Sample Report</a>
             </div>
-            <p class="text-xs text-gray-500 mb-6 -mt-4">Free to start &middot; No credit card &middot; 60-second setup</p>
+            <p class="text-xs mb-6 -mt-4"><strong style="color:#00FF88">4 free reports included</strong> <span class="text-gray-500">&middot; No credit card &middot; Cancel anytime</span></p>
             <div class="flex items-center gap-4 mb-4">
               <div class="flex items-center gap-0.5"><i class="fas fa-star text-[#00FF88] text-sm"></i><i class="fas fa-star text-[#00FF88] text-sm"></i><i class="fas fa-star text-[#00FF88] text-sm"></i><i class="fas fa-star text-[#00FF88] text-sm"></i><i class="fas fa-star text-[#00FF88] text-sm"></i></div>
               <span class="text-sm text-gray-500"><strong class="text-white font-semibold">4.9/5</strong> from 200+ reviews</span>
             </div>
             <div class="flex flex-wrap items-center gap-3 text-sm">
-              <span class="inline-flex items-center gap-1.5 text-gray-400 bg-white/5 rounded-full px-3 py-1.5"><i class="fas fa-check text-[#00FF88] text-[10px]"></i>No credit card required</span>
-              <span class="inline-flex items-center gap-1.5 text-gray-400 bg-white/5 rounded-full px-3 py-1.5"><i class="fas fa-check text-[#00FF88] text-[10px]"></i>Reports in under 60s</span>
-              <span class="inline-flex items-center gap-1.5 text-gray-400 bg-white/5 rounded-full px-3 py-1.5"><i class="fas fa-check text-[#00FF88] text-[10px]"></i>Full CRM included free</span>
-              <span class="inline-flex items-center gap-1.5 text-gray-400 bg-white/5 rounded-full px-3 py-1.5"><i class="fas fa-flag text-[#00FF88] text-[10px]"></i>Available US &amp; Canada</span>
+              <span class="inline-flex items-center gap-1.5 font-bold rounded-full px-3 py-1.5" style="background:#00FF8820;color:#00FF88;border:1px solid #00FF8840"><i class="fas fa-gift text-[10px]"></i>4 FREE reports on signup</span>
+              <span class="inline-flex items-center gap-1.5 text-gray-400 bg-white/5 rounded-full px-3 py-1.5"><i class="fas fa-credit-card text-[#00FF88] text-[10px]"></i>No credit card</span>
+              <span class="inline-flex items-center gap-1.5 text-gray-400 bg-white/5 rounded-full px-3 py-1.5"><i class="fas fa-bolt text-[#00FF88] text-[10px]"></i>Reports in under 60s</span>
+              <span class="inline-flex items-center gap-1.5 text-gray-400 bg-white/5 rounded-full px-3 py-1.5"><i class="fas fa-check text-[#00FF88] text-[10px]"></i>Full CRM free forever</span>
             </div>
-            <div class="lg:hidden mt-10 flex flex-col gap-3"><a href="/signup" onclick="rrTrack('cta_click',{location:'hero_mobile'})" class="flex items-center justify-center gap-3 bg-[#00FF88] text-[#0A0A0A] font-extrabold py-4 px-8 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/20 min-h-[56px]"><i class="fas fa-rocket"></i> Start Free — US &amp; Canada <i class="fas fa-arrow-right text-sm"></i></a><a href="https://calendar.app.google/KNLFST4CNxViPPN3A" target="_blank" onclick="rrTrack('cta_click',{location:'hero_mobile_demo'})" class="flex items-center justify-center gap-3 bg-white/5 text-white font-bold py-4 px-8 rounded-xl text-base border border-white/10 min-h-[52px]"><i class="fas fa-calendar-check text-[#00FF88]"></i> Book a Free Demo</a></div>
+            <div class="lg:hidden mt-10 flex flex-col gap-3"><a href="/signup" onclick="rrTrack('cta_click',{location:'hero_mobile'})" class="flex items-center justify-center gap-3 bg-[#00FF88] text-[#0A0A0A] font-extrabold py-4 px-8 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/20 min-h-[56px]"><i class="fas fa-gift"></i> Get 4 FREE Reports &mdash; No Card <i class="fas fa-arrow-right text-sm"></i></a><a href="https://calendar.app.google/KNLFST4CNxViPPN3A" target="_blank" onclick="rrTrack('cta_click',{location:'hero_mobile_demo'})" class="flex items-center justify-center gap-3 bg-white/5 text-white font-bold py-4 px-8 rounded-xl text-base border border-white/10 min-h-[52px]"><i class="fas fa-calendar-check text-[#00FF88]"></i> Book a Free Demo</a></div>
           </div>
           <div class="hidden lg:block">
             <div class="relative">
@@ -5417,7 +5429,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
                       <div><div class="text-[9px] text-gray-500 uppercase tracking-wider">Shingles</div><div class="text-lg font-black text-white">32<span class="text-xs text-gray-400 ml-1">sq</span></div></div>
                     </div>
                   </div>
-                  <a href="/signup" onclick="rrTrack('cta_click',{location:'hero_card_signup'})" class="flex items-center justify-center gap-3 w-full bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-3.5 rounded-xl text-base shadow-xl shadow-[#00FF88]/20 transition-all duration-300 hover:scale-[1.02]"><i class="fas fa-rocket"></i> Try It Free <i class="fas fa-arrow-right text-sm"></i></a>
+                  <a href="/signup" onclick="rrTrack('cta_click',{location:'hero_card_signup'})" class="flex items-center justify-center gap-3 w-full bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-3.5 rounded-xl text-base shadow-xl shadow-[#00FF88]/20 transition-all duration-300 hover:scale-[1.02]"><i class="fas fa-gift"></i> Get 4 FREE Reports <i class="fas fa-arrow-right text-sm"></i></a>
                 </div>
                 <div class="px-6 py-3 bg-[#080c10] border-t border-white/5 flex items-center justify-center gap-3">
                   <div class="flex items-center gap-0.5"><i class="fas fa-star text-[#00FF88] text-[10px]"></i><i class="fas fa-star text-[#00FF88] text-[10px]"></i><i class="fas fa-star text-[#00FF88] text-[10px]"></i><i class="fas fa-star text-[#00FF88] text-[10px]"></i><i class="fas fa-star text-[#00FF88] text-[10px]"></i></div>
@@ -6390,6 +6402,14 @@ function getCustomerLoginHTML() {
 
         <!-- Register Form - Step 1: Email Verification -->
         <div id="custRegForm" class="hidden">
+          <!-- Free trial callout -->
+          <div class="mb-4 rounded-xl p-3 flex items-start gap-3" style="background:#f0fdf4;border:1px solid #bbf7d0">
+            <div class="text-2xl leading-none mt-0.5">🎁</div>
+            <div>
+              <div class="font-bold text-green-800 text-sm">4 FREE reports included</div>
+              <div class="text-xs text-green-700 mt-0.5">No credit card required. Full CRM + invoicing free forever.</div>
+            </div>
+          </div>
           <!-- Step 1: Verify Email -->
           <div id="regStep1">
             <div class="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-xl">
@@ -6501,8 +6521,8 @@ function getCustomerLoginHTML() {
         if (wantSignup) {
           var h = document.getElementById('custAuthHeadline');
           var s = document.getElementById('custAuthSubhead');
-          if (h) h.textContent = 'Start measuring — free';
-          if (s) s.textContent = 'Create your account and get 3 free reports. No credit card required.';
+          if (h) h.textContent = 'Get 4 FREE Reports — No Card Required';
+          if (s) s.textContent = 'Create your account and get 4 free roof reports instantly. No credit card, no commitment.';
           // Prefill email if passed
           var em = sp.get('email');
           if (em) {
