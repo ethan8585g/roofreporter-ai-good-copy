@@ -350,7 +350,7 @@ customerAuthRoutes.post('/send-verification', async (c) => {
     // Rate limit: max 1 code per email per 30 minutes (6-digit codes are brute-forceable,
     // so we also keep per-IP throttling at the signup endpoint).
     const recentCodes = await c.env.DB.prepare(
-      "SELECT COUNT(*) as cnt FROM email_verification_codes WHERE email = ? AND created_at > datetime('now', '-30 minutes')"
+      "SELECT COUNT(*) as cnt FROM email_verification_codes WHERE email = ? AND used = 0 AND created_at > datetime('now', '-30 minutes')"
     ).bind(cleanEmail).first<any>()
     if (recentCodes && recentCodes.cnt >= 1) {
       return c.json({ error: 'A verification code was already sent recently. Please wait 30 minutes before requesting another.' }, 429)
@@ -384,13 +384,16 @@ customerAuthRoutes.post('/send-verification', async (c) => {
     const sent = await sendVerificationEmail(c.env, cleanEmail, code, c.env.DB)
 
     if (!sent) {
-      // Email delivery failed. NEVER return the code to an unauthenticated client —
-      // doing so lets an attacker complete verification without controlling the inbox.
+      // Clean up the stored code so the user can retry immediately without hitting the 30-min rate limit.
+      // (Orphaned used=0 codes would otherwise block all retries for 30 minutes.)
+      await c.env.DB.prepare(
+        "DELETE FROM email_verification_codes WHERE email = ? AND used = 0 AND created_at > datetime('now', '-5 minutes')"
+      ).bind(cleanEmail).run().catch(() => {})
       console.error(`[Verification] Email send failed for ${cleanEmail}`)
       return c.json({
         success: false,
         email_sent: false,
-        error: 'Email delivery is temporarily unavailable. Please try again in a few minutes or contact support.'
+        error: 'We couldn\'t send your verification email right now. Please try again, or contact sales@roofmanager.ca if this continues.'
       }, 503)
     }
 
