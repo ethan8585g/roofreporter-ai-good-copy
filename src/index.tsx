@@ -6160,17 +6160,19 @@ function getLandingPageHTML(latestPosts: any[] = []) {
         <!-- TODO(Ethan): confirm sales phone number and replace placeholder below -->
         <a href="tel:+1XXXXXXXXXX" class="hidden md:inline-flex items-center gap-1.5 text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200" aria-label="Call sales"><i class="fas fa-phone text-[10px] text-[#00FF88]"></i>(XXX) XXX-XXXX</a>
         <a href="/contact" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">Contact</a>
-        <a href="/customer/login" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200 px-2">Login</a>
-        <a href="/demo" onclick="rrTrack('cta_click',{location:'nav_book_demo'})" class="bg-white/8 hover:bg-white/15 text-white font-bold py-2.5 px-4 rounded-xl text-sm transition-all duration-200 border border-white/15 whitespace-nowrap">
-          <i class="fas fa-calendar-check mr-1.5 text-[#00FF88]"></i>Book Demo</a>
+        <a href="/customer/login" onclick="rrTrack('cta_click',{location:'nav_login'})" class="border border-white/20 hover:border-white/40 text-white font-bold py-2.5 px-4 rounded-xl text-sm transition-all duration-200 hover:bg-white/5 whitespace-nowrap">
+          <i class="fas fa-sign-in-alt mr-1.5 text-gray-400"></i>Log In</a>
         <a href="/register" onclick="rrTrack('cta_click',{location:'nav_signup'})" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-2.5 px-5 rounded-xl text-sm transition-all duration-200 hover:scale-105 shadow-lg shadow-[#00FF88]/20 whitespace-nowrap">
-          <i class="fas fa-gift mr-1.5"></i>4 Free Reports</a>
+          <i class="fas fa-gift mr-1.5"></i>Start Free</a>
       </div>
 
-      <!-- Mobile: visible Login + menu button -->
+      <!-- Mobile: visible Login + Register + menu button -->
       <div class="md:hidden flex items-center gap-2">
+        <a href="/customer/login" onclick="rrTrack('cta_click',{location:'nav_mobile_login'})" class="border border-white/25 text-white font-bold py-2 px-3 rounded-xl text-sm min-h-[48px] inline-flex items-center whitespace-nowrap">
+          Log In
+        </a>
         <a href="/register" onclick="rrTrack('cta_click',{location:'nav_mobile_signup'})" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-2 px-4 rounded-xl text-sm shadow-lg shadow-[#00FF88]/20 min-h-[48px] inline-flex items-center whitespace-nowrap">
-          <i class="fas fa-gift mr-1"></i>4 Free
+          <i class="fas fa-gift mr-1"></i>Free
         </a>
         <button id="mobile-menu-btn" class="text-white text-xl p-3 min-h-[48px] min-w-[48px] flex items-center justify-center" onclick="document.getElementById('mobile-menu').classList.toggle('hidden')">
           <i class="fas fa-bars"></i>
@@ -6194,7 +6196,10 @@ function getLandingPageHTML(latestPosts: any[] = []) {
         <a href="/lander" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')">Get Started</a>
         <a href="/faq" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')">FAQ</a>
         <a href="/contact" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')"><i class="fas fa-envelope text-[#00FF88] mr-2 text-xs"></i>Contact Us</a>
-        <a href="/register" onclick="rrTrack('cta_click',{location:'mobile_menu_signup'})" class="bg-[#00FF88] text-[#0A0A0A] font-extrabold py-3 px-6 rounded-xl text-sm text-center mt-3 shadow-lg"><i class="fas fa-gift mr-1.5"></i>Get 4 FREE Reports &mdash; No Card Required</a>
+        <div class="border-t border-white/5 mt-2 pt-2 flex flex-col gap-2">
+          <a href="/register" onclick="rrTrack('cta_click',{location:'mobile_menu_signup'})" class="bg-[#00FF88] text-[#0A0A0A] font-extrabold py-3 px-6 rounded-xl text-sm text-center shadow-lg"><i class="fas fa-gift mr-1.5"></i>Get 4 FREE Reports — No Card Required</a>
+          <a href="/customer/login" onclick="rrTrack('cta_click',{location:'mobile_menu_login'})" class="border border-white/20 text-white font-bold py-3 px-6 rounded-xl text-sm text-center hover:bg-white/5 transition-colors"><i class="fas fa-sign-in-alt mr-1.5 text-gray-400"></i>Log In to Your Account</a>
+        </div>
       </div>
     </div>
   </nav>
