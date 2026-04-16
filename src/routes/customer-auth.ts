@@ -2104,3 +2104,93 @@ customerAuthRoutes.get('/referrals/payouts', async (c) => {
     return c.json({ payouts: [], error: err.message })
   }
 })
+
+// ============================================================
+// MAGIC LINK — Send sign-in/sign-up link via email
+// ============================================================
+customerAuthRoutes.post('/magic-link', async (c) => {
+  let body: any
+  try { body = await c.req.json() } catch { return c.json({ error: 'invalid_body' }, 400) }
+  const email = (body.email || '').trim().toLowerCase()
+  if (!email || !email.includes('@')) return c.json({ error: 'invalid_email' }, 400)
+
+  const db = (c.env as any).DB
+  const tokenBytes = Array.from(crypto.getRandomValues(new Uint8Array(32))).map((b: number) => b.toString(16).padStart(2, '0')).join('')
+  const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString()
+
+  // Check if customer exists
+  const existing = await db.prepare('SELECT id FROM customers WHERE email = ?').bind(email).first()
+  const tokenType = existing ? 'signin' : 'signup'
+
+  await db.prepare('INSERT INTO magic_link_tokens (token, email, token_type, expires_at) VALUES (?, ?, ?, ?)')
+    .bind(tokenBytes, email, tokenType, expiresAt).run()
+
+  const magicUrl = `https://www.roofmanager.ca/auth/magic?token=${tokenBytes}`
+  const subject = 'Your Roof Manager sign-in link'
+  const htmlBody = `
+    <div style="font-family:sans-serif;max-width:500px;margin:0 auto;padding:32px">
+      <h2 style="color:#0A0A0A">Sign in to Roof Manager</h2>
+      <p>Click the button below to sign in. This link expires in 15 minutes.</p>
+      <a href="${magicUrl}" style="display:inline-block;background:#00FF88;color:#0A0A0A;font-weight:700;padding:14px 28px;border-radius:10px;text-decoration:none;font-size:16px;margin:16px 0">
+        Sign in to Roof Manager &rarr;
+      </a>
+      <p style="color:#6b7280;font-size:13px">If you didn't request this, you can safely ignore this email.</p>
+    </div>
+  `
+
+  // Send email using Resend if available
+  const resendKey = (c.env as any).RESEND_API_KEY
+  if (resendKey) {
+    try {
+      await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from: 'Roof Manager <noreply@roofmanager.ca>', to: [email], subject, html: htmlBody })
+      })
+    } catch (err: any) {
+      console.error('magic link email error:', err)
+    }
+  } else {
+    console.log('MAGIC LINK (no email service configured):', magicUrl)
+  }
+
+  return c.json({ success: true })
+})
+
+// ============================================================
+// SIGNUP STARTED — abandoned signup capture
+// ============================================================
+customerAuthRoutes.post('/signup-started', async (c) => {
+  let body: any
+  try { body = await c.req.json() } catch { return c.json({ success: true }) }
+  const email = (body.email || '').trim().toLowerCase()
+  if (!email || !email.includes('@')) return c.json({ success: true })
+
+  const db = (c.env as any).DB
+
+  // If completed=true, mark existing attempts as completed
+  if (body.completed) {
+    await db.prepare('UPDATE signup_attempts SET completed = 1 WHERE email = ? AND completed = 0').bind(email).run().catch(() => {})
+    return c.json({ success: true })
+  }
+
+  // Insert or ignore if already exists today
+  try {
+    const existing = await db.prepare(
+      "SELECT id FROM signup_attempts WHERE email = ? AND date(created_at) = date('now')"
+    ).bind(email).first()
+
+    if (!existing) {
+      const utm = body.utm || {}
+      await db.prepare(`
+        INSERT INTO signup_attempts (email, preview_id, utm_source, utm_medium, utm_campaign)
+        VALUES (?, ?, ?, ?, ?)
+      `).bind(email, body.preview_id || '', utm.source || '', utm.medium || '', utm.campaign || '').run()
+    }
+  } catch (err: any) {
+    // signup_attempts table may not exist yet — non-fatal
+    console.warn('[signup-started] DB error (non-fatal):', err?.message || err)
+  }
+
+  return c.json({ success: true })
+})

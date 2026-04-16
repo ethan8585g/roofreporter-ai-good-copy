@@ -609,6 +609,86 @@ app.get('/register', (c) => {
   return c.html(getCustomerRegisterPageHTML(email, googleClientId, previewId))
 })
 
+// Magic link auth handler
+app.get('/auth/magic', async (c) => {
+  const token = c.req.query('token') || ''
+  if (!token) return c.html('<p>Invalid link. <a href="/customer/login">Sign in</a></p>')
+
+  const db = (c.env as any).DB
+  const row = await db.prepare('SELECT * FROM magic_link_tokens WHERE token = ?').bind(token).first() as any
+
+  if (!row) return c.html(getMagicLinkErrorHTML('This link is invalid or has expired.'))
+  if (row.used) return c.html(getMagicLinkErrorHTML('This link has already been used.'))
+  if (new Date(row.expires_at) < new Date()) return c.html(getMagicLinkErrorHTML('This link has expired.'))
+
+  if (row.token_type === 'reset') {
+    return c.html(getPasswordResetFormHTML(token))
+  }
+
+  // Mark used
+  await db.prepare('UPDATE magic_link_tokens SET used = 1 WHERE token = ?').bind(token).run()
+
+  // Find or create customer
+  let customer = await db.prepare('SELECT * FROM customers WHERE email = ?').bind(row.email).first() as any
+  let isNew = false
+  if (!customer) {
+    const referralCode = 'REF-' + Math.random().toString(36).slice(2, 8).toUpperCase()
+    const result = await db.prepare(`
+      INSERT INTO customers (email, name, email_verified, free_trial_total, free_trial_used, report_credits, credits_used, is_active, referral_code, created_at)
+      VALUES (?, ?, 1, 4, 0, 0, 0, 1, ?, datetime('now'))
+    `).bind(row.email, row.email.split('@')[0], referralCode).run()
+    customer = { id: result.meta?.last_row_id || 0, email: row.email }
+    isNew = true
+  }
+
+  // Create session token
+  const sessionToken = Array.from(crypto.getRandomValues(new Uint8Array(32))).map((b: number) => b.toString(16).padStart(2, '0')).join('')
+  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+  await db.prepare('INSERT INTO customer_sessions (customer_id, session_token, expires_at) VALUES (?, ?, ?)')
+    .bind(customer.id, sessionToken, expiresAt).run()
+
+  const redirectUrl = isNew ? '/customer/dashboard?welcome=1' : '/customer/dashboard'
+  // Return a page that stores the token in localStorage and redirects
+  return c.html(`<!DOCTYPE html><html><head><title>Signing in...</title></head>
+<body>
+<script>
+localStorage.setItem('rc_customer_token', '${sessionToken}');
+window.location.href = '${redirectUrl}';
+</script>
+<p>Signing you in...</p>
+</body></html>`)
+})
+
+// Forgot password page
+app.get('/forgot-password', (c) => {
+  return c.html(`<!DOCTYPE html><html><head><title>Forgot password \u2014 Roof Manager</title></head>
+  <body style="font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#f9fafb">
+    <div style="width:100%;max-width:400px;padding:32px;background:#fff;border-radius:16px;box-shadow:0 4px 24px rgba(0,0,0,0.06)">
+      <a href="/customer/login" style="color:#00CC70;font-size:14px;text-decoration:none">\u2190 Back to login</a>
+      <h2 style="margin:16px 0 8px;color:#0A0A0A">Reset your password</h2>
+      <p style="color:#6b7280;font-size:14px;margin-bottom:20px">Enter your email and we'll send a reset link.</p>
+      <input type="email" id="forgot-email" placeholder="you@company.com"
+        style="width:100%;padding:12px 16px;border:1.5px solid #d1d5db;border-radius:10px;font-size:15px;margin-bottom:12px;box-sizing:border-box">
+      <div id="forgot-msg" style="display:none;padding:12px;background:#f0fdf4;border-radius:8px;color:#15803d;font-size:14px;margin-bottom:12px"></div>
+      <button onclick="sendReset()" style="width:100%;padding:14px;background:#00FF88;color:#0A0A0A;font-weight:800;border:none;border-radius:10px;font-size:16px;cursor:pointer">
+        Send reset link
+      </button>
+    </div>
+    <script>
+    async function sendReset() {
+      var email = document.getElementById('forgot-email').value.trim();
+      if (!email) return;
+      await fetch('/api/customer/forgot-password', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({email: email})
+      });
+      document.getElementById('forgot-msg').textContent = "If that email exists, a reset link is on its way. Check your inbox.";
+      document.getElementById('forgot-msg').style.display = 'block';
+    }
+    </script>
+  </body></html>`)
+})
+
 // /signup redirect — keep backward compat, now points to /register
 app.get('/signup', (c) => {
   const email = c.req.query('email') || ''
@@ -5526,6 +5606,49 @@ function getSampleReportHTML() {
   <script src="/static/tracker.js" defer></script>
 </body>
 </html>`
+}
+
+function getMagicLinkErrorHTML(message: string): string {
+  return `<!DOCTYPE html><html><head><title>Link expired</title></head><body style="font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#f9fafb">
+    <div style="text-align:center;padding:32px;max-width:400px">
+      <div style="font-size:48px;margin-bottom:16px">&#x1F517;</div>
+      <h2 style="color:#0A0A0A;margin-bottom:8px">Link expired</h2>
+      <p style="color:#6b7280;margin-bottom:24px">${message}</p>
+      <a href="/customer/login" style="background:#00FF88;color:#0A0A0A;font-weight:700;padding:12px 24px;border-radius:10px;text-decoration:none">Request a new link</a>
+    </div>
+  </body></html>`
+}
+
+function getPasswordResetFormHTML(token: string): string {
+  return `<!DOCTYPE html><html><head><title>Reset password \u2014 Roof Manager</title></head>
+  <body style="font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#f9fafb">
+    <div style="width:100%;max-width:400px;padding:32px;background:#fff;border-radius:16px;box-shadow:0 4px 24px rgba(0,0,0,0.06)">
+      <h2 style="margin-bottom:20px;color:#0A0A0A">Set new password</h2>
+      <input type="password" id="new-pw" placeholder="New password (min 8 chars)" minlength="8" data-clarity-mask="true"
+        style="width:100%;padding:12px 16px;border:1.5px solid #d1d5db;border-radius:10px;font-size:15px;margin-bottom:12px;box-sizing:border-box">
+      <input type="password" id="confirm-pw" placeholder="Confirm new password" minlength="8" data-clarity-mask="true"
+        style="width:100%;padding:12px 16px;border:1.5px solid #d1d5db;border-radius:10px;font-size:15px;margin-bottom:16px;box-sizing:border-box">
+      <div id="reset-error" style="display:none;color:#ef4444;font-size:14px;margin-bottom:12px"></div>
+      <button onclick="doReset()" style="width:100%;padding:14px;background:#00FF88;color:#0A0A0A;font-weight:800;border:none;border-radius:10px;font-size:16px;cursor:pointer">
+        Set new password
+      </button>
+    </div>
+    <script>
+    async function doReset() {
+      var pw = document.getElementById('new-pw').value;
+      var conf = document.getElementById('confirm-pw').value;
+      if (pw !== conf) { document.getElementById('reset-error').textContent = 'Passwords do not match.'; document.getElementById('reset-error').style.display='block'; return; }
+      if (pw.length < 8) { document.getElementById('reset-error').textContent = 'Password must be at least 8 characters.'; document.getElementById('reset-error').style.display='block'; return; }
+      var res = await fetch('/api/customer/reset-password', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({token: '${token}', new_password: pw})
+      });
+      var data = await res.json();
+      if (data.success) { window.location.href = '/customer/login'; }
+      else { document.getElementById('reset-error').textContent = data.error || 'Reset failed.'; document.getElementById('reset-error').style.display='block'; }
+    }
+    </script>
+  </body></html>`
 }
 
 function getLandingPageHTML(latestPosts: any[] = []) {
