@@ -1738,7 +1738,7 @@ async function createSquarePaymentLink(env: any, invoiceId: number, invoiceNumbe
   try {
     const sqResp = await fetch('https://connect.squareup.com/v2/online-checkout/payment-links', {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${sqToken}`, 'Content-Type': 'application/json', 'Square-Version': '2024-01-18' },
+      headers: { 'Authorization': `Bearer ${sqToken}`, 'Content-Type': 'application/json', 'Square-Version': '2025-01-23' },
       body: JSON.stringify({
         idempotency_key: `inv-${invoiceId}-${Date.now()}`,
         quick_pay: { name: `Invoice ${invoiceNumber}`, price_money: { amount: Math.round(totalDollars * 100), currency: 'USD' }, location_id: sqLocation }
@@ -1749,6 +1749,8 @@ async function createSquarePaymentLink(env: any, invoiceId: number, invoiceNumbe
       await env.DB.prepare("UPDATE invoices SET square_payment_link_url = ?, square_payment_link_id = ?, updated_at = datetime('now') WHERE id = ?")
         .bind(sqData.payment_link.url, sqData.payment_link.id, invoiceId).run()
       return { url: sqData.payment_link.url, id: sqData.payment_link.id }
+    } else {
+      console.warn('[Square] payment link not created for invoice', invoiceNumber, '— response:', JSON.stringify(sqData))
     }
   } catch (e: any) {
     console.warn('[Square] payment link creation failed:', e.message)

@@ -1036,7 +1036,9 @@ invoiceRoutes.post('/:id/send-gmail', async (c) => {
             paymentUrl = sqData.payment_link.url
             await c.env.DB.prepare("UPDATE invoices SET square_payment_link_url = ?, square_payment_link_id = ?, updated_at = datetime('now') WHERE id = ?").bind(paymentUrl, sqData.payment_link.id, id).run()
           }
-        } catch {}
+        } catch (sqErr: any) {
+          console.warn('[Square] send-gmail payment link failed:', sqErr.message)
+        }
       }
     }
 
