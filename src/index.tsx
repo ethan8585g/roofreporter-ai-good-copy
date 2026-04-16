@@ -745,9 +745,10 @@ app.get('/sitemap-core.xml', (c) => {
     { loc: '/guides/create-an-invoice', priority: '0.8', changefreq: 'monthly' },
     { loc: '/guides/setup-ai-secretary', priority: '0.8', changefreq: 'monthly' },
     { loc: '/guides/build-a-solar-design', priority: '0.8', changefreq: 'monthly' },
-    // Free tools (backlink magnets — embeddable calculator)
+    // Free tools (backlink magnets — embeddable calculators)
     { loc: '/tools', priority: '0.8', changefreq: 'monthly' },
     { loc: '/tools/pitch-calculator', priority: '0.9', changefreq: 'monthly' },
+    { loc: '/tools/material-estimator', priority: '0.9', changefreq: 'monthly' },
     // Press / media kit
     { loc: '/press', priority: '0.6', changefreq: 'monthly' },
     // Competitor comparison pages (bottom-of-funnel, high commercial intent)
@@ -1187,10 +1188,12 @@ app.get('/guides', (c) => c.html(getGuidesIndexHTML()))
 app.get('/tutorials', (c) => c.redirect('/guides', 301))
 app.get('/how-it-works', (c) => c.html(getHowItWorksPageHTML()))
 app.get('/faq', (c) => c.html(getFAQPageHTML()))
-// Free tools hub + embeddable pitch calculator (backlink magnets)
+// Free tools hub + embeddable calculators (backlink magnets)
 app.get('/tools', (c) => c.html(getToolsHubHTML()))
 app.get('/tools/pitch-calculator', (c) => c.html(getPitchCalculatorHTML()))
 app.get('/tools/pitch-calculator/embed', (c) => c.html(getPitchCalculatorEmbedHTML()))
+app.get('/tools/material-estimator', (c) => c.html(getMaterialEstimatorHTML()))
+app.get('/tools/material-estimator/embed', (c) => c.html(getMaterialEstimatorEmbedHTML()))
 // Press / media kit
 app.get('/press', (c) => c.html(getPressPageHTML()))
 app.get('/guides/:slug', (c) => {
@@ -14457,16 +14460,17 @@ function getToolsHubHTML(): string {
         </div>
       </a>
 
-      <a href="/blog/what-is-a-material-takeoff-roofing" style="text-decoration:none;">
+      <a href="/tools/material-estimator" style="text-decoration:none;">
         <div class="tool-card">
           <div style="font-size:36px;margin-bottom:16px;">📦</div>
-          <h2 style="font-size:20px;font-weight:700;color:#f1f5f9;margin-bottom:8px;">Material Take-Off Guide</h2>
-          <p style="color:#94a3b8;font-size:14px;line-height:1.6;margin-bottom:16px;">Step-by-step guide to calculating shingles, underlayment, drip edge, and flashing quantities from roof area — with waste factor formulas.</p>
+          <h2 style="font-size:20px;font-weight:700;color:#f1f5f9;margin-bottom:8px;">Material Estimator</h2>
+          <p style="color:#94a3b8;font-size:14px;line-height:1.6;margin-bottom:16px;">Enter roof footprint and pitch to calculate shingles, bundles, squares, underlayment, ridge cap, and starter strip with waste factor.</p>
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <span style="background:#1e293b;color:#64748b;font-size:11px;padding:4px 10px;border-radius:20px;">Shingles</span>
+            <span style="background:#1e293b;color:#64748b;font-size:11px;padding:4px 10px;border-radius:20px;">Bundles &amp; Squares</span>
             <span style="background:#1e293b;color:#64748b;font-size:11px;padding:4px 10px;border-radius:20px;">Waste Factor</span>
+            <span style="background:#1e293b;color:#64748b;font-size:11px;padding:4px 10px;border-radius:20px;">Embeddable</span>
           </div>
-          <div style="margin-top:20px;color:#f59e0b;font-size:14px;font-weight:700;">Read Guide →</div>
+          <div style="margin-top:20px;color:#f59e0b;font-size:14px;font-weight:700;">Use Estimator →</div>
         </div>
       </a>
 
@@ -14950,6 +14954,194 @@ function getPressPageHTML(): string {
     </div>
     <p>© ${new Date().getFullYear()} Roof Manager · <a href="https://www.roofmanager.ca" style="color:#475569;">www.roofmanager.ca</a></p>
   </footer>
+</body>
+</html>`
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MATERIAL ESTIMATOR — /tools/material-estimator (full page + embed)
+// ─────────────────────────────────────────────────────────────────────────────
+function getMaterialEstimatorHTML(): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Roofing Material Estimator — Shingles, Bundles &amp; Squares | Roof Manager</title>
+  <meta name="description" content="Free roofing material estimator. Enter roof footprint and pitch to calculate shingles, bundles, squares, underlayment, and ridge cap with waste factor. Embed free.">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Free Roofing Material Estimator | Roof Manager">
+  <meta property="og:description" content="Calculate shingles, bundles, squares, underlayment, and ridge cap from roof area and pitch. Free, embeddable, no account required.">
+  <meta property="og:image" content="https://www.roofmanager.ca/static/logo.png">
+  <meta property="og:url" content="https://www.roofmanager.ca/tools/material-estimator">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="canonical" href="https://www.roofmanager.ca/tools/material-estimator">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Roofing Material Estimator","description":"Free roofing material estimator","url":"https://www.roofmanager.ca/tools/material-estimator","applicationCategory":"UtilitiesApplication","operatingSystem":"Web","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"publisher":{"@type":"Organization","name":"Roof Manager","url":"https://www.roofmanager.ca"}}</script>
+  <link rel="stylesheet" href="/static/tailwind.css">
+  <style>
+    body{background:#0a0f1a;color:#e2e8f0;font-family:system-ui,sans-serif;}
+    input[type=range]{-webkit-appearance:none;width:100%;height:6px;border-radius:3px;background:#1e293b;outline:none;}
+    input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:22px;border-radius:50%;background:#f59e0b;cursor:pointer;box-shadow:0 0 8px rgba(245,158,11,.5);}
+    select{background:#111827;color:#e2e8f0;border:1px solid #1e293b;border-radius:8px;padding:10px 14px;font-size:14px;width:100%;outline:none;}
+    .mat-row{background:#0f172a;border:1px solid #1e293b;border-radius:10px;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
+    .embed-box{background:#0f172a;border:1px solid #1e293b;border-radius:10px;padding:16px;font-family:monospace;font-size:12px;color:#94a3b8;word-break:break-all;white-space:pre-wrap;line-height:1.6;}
+  </style>
+</head>
+<body>
+  <nav style="background:#0f172a;border-bottom:1px solid #1e293b;padding:16px 24px;display:flex;align-items:center;justify-content:space-between;">
+    <a href="/" style="font-size:20px;font-weight:800;color:#f59e0b;text-decoration:none;">Roof Manager</a>
+    <div style="display:flex;gap:20px;font-size:14px;">
+      <a href="/tools" style="color:#94a3b8;text-decoration:none;">Free Tools</a>
+      <a href="/blog" style="color:#94a3b8;text-decoration:none;">Blog</a>
+      <a href="/lander" style="background:#f59e0b;color:#0f172a;padding:8px 18px;border-radius:8px;text-decoration:none;font-weight:700;">Get Free Reports</a>
+    </div>
+  </nav>
+  <main style="max-width:800px;margin:0 auto;padding:48px 24px;">
+    <nav aria-label="breadcrumb" style="font-size:13px;color:#475569;margin-bottom:32px;">
+      <a href="/" style="color:#475569;text-decoration:none;">Home</a> / <a href="/tools" style="color:#475569;text-decoration:none;">Free Tools</a> / <span style="color:#94a3b8;">Material Estimator</span>
+    </nav>
+    <div style="text-align:center;margin-bottom:40px;">
+      <span style="background:#38bdf822;color:#38bdf8;font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:6px 14px;border-radius:20px;">Free Tool</span>
+      <h1 style="font-size:36px;font-weight:800;margin:20px 0 12px;">Roofing Material Estimator</h1>
+      <p style="color:#94a3b8;font-size:16px;max-width:600px;margin:0 auto;">Enter your roof footprint and pitch to calculate shingles, bundles, squares, underlayment, and ridge cap — waste factor included.</p>
+    </div>
+    <div style="background:#111827;border:1px solid #1e293b;border-radius:20px;padding:36px;margin-bottom:40px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:28px;">
+        <div>
+          <label style="display:block;font-size:14px;font-weight:600;margin-bottom:8px;color:#94a3b8;">Footprint Area (sq ft)</label>
+          <input type="number" id="areaInput" value="2000" min="100" max="50000" step="50" oninput="calcMat()" style="background:#0f172a;color:#f1f5f9;border:1px solid #1e293b;border-radius:8px;padding:12px 14px;font-size:16px;font-weight:700;width:100%;outline:none;">
+          <div style="font-size:11px;color:#475569;margin-top:6px;">Flat footprint as seen from above</div>
+        </div>
+        <div>
+          <label style="display:block;font-size:14px;font-weight:600;margin-bottom:8px;color:#94a3b8;">Roof Pitch (rise:12)</label>
+          <select id="pitchSelect" onchange="calcMat()">
+            <option value="1.003">1:12 — 1.003x</option><option value="1.014">2:12 — 1.014x</option>
+            <option value="1.031">3:12 — 1.031x</option><option value="1.054">4:12 — 1.054x</option>
+            <option value="1.083">5:12 — 1.083x</option><option value="1.118" selected>6:12 — 1.118x</option>
+            <option value="1.158">7:12 — 1.158x</option><option value="1.202">8:12 — 1.202x</option>
+            <option value="1.250">9:12 — 1.250x</option><option value="1.302">10:12 — 1.302x</option>
+            <option value="1.357">11:12 — 1.357x</option><option value="1.414">12:12 — 1.414x</option>
+            <option value="1.537">14:12 — 1.537x</option><option value="1.667">16:12 — 1.667x</option>
+            <option value="1.803">18:12 — 1.803x</option>
+          </select>
+        </div>
+      </div>
+      <div style="margin-bottom:24px;">
+        <label style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <span style="font-size:14px;font-weight:600;color:#94a3b8;">Waste Factor</span>
+          <span id="wasteLabel" style="font-size:14px;font-weight:700;color:#f59e0b;">12%</span>
+        </label>
+        <input type="range" id="wasteSlider" min="5" max="25" value="12" oninput="calcMat()">
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:#475569;margin-top:4px;"><span>5% simple gable</span><span>15% standard</span><span>25% complex hip</span></div>
+      </div>
+      <div style="background:#0f172a;border-radius:14px;padding:24px;border:1px solid #1e293b;">
+        <div style="font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:16px;font-weight:700;">Material Quantities</div>
+        <div class="mat-row"><div><div style="color:#f1f5f9;font-weight:600;">True Sloped Area</div><div style="color:#64748b;font-size:12px;">Footprint x pitch multiplier</div></div><span id="slopedArea" style="font-size:20px;font-weight:800;color:#f59e0b;">2,236 sq ft</span></div>
+        <div class="mat-row"><div><div style="color:#f1f5f9;font-weight:600;">Area with Waste</div><div style="color:#64748b;font-size:12px;">Sloped area + waste factor</div></div><span id="wasteArea" style="font-size:20px;font-weight:800;color:#f59e0b;">2,504 sq ft</span></div>
+        <div class="mat-row"><div><div style="color:#f1f5f9;font-weight:600;">Roofing Squares</div><div style="color:#64748b;font-size:12px;">Area divided by 100</div></div><span id="squares" style="font-size:20px;font-weight:800;color:#38bdf8;">25.0 sq</span></div>
+        <div class="mat-row"><div><div style="color:#f1f5f9;font-weight:600;">Shingle Bundles</div><div style="color:#64748b;font-size:12px;">3 bundles per square</div></div><span id="bundles" style="font-size:20px;font-weight:800;color:#4ade80;">75 bundles</span></div>
+        <div class="mat-row"><div><div style="color:#f1f5f9;font-weight:600;">Underlayment Rolls</div><div style="color:#64748b;font-size:12px;">1 roll per 400 sq ft</div></div><span id="underlay" style="font-size:20px;font-weight:800;color:#a78bfa;">7 rolls</span></div>
+        <div class="mat-row"><div><div style="color:#f1f5f9;font-weight:600;">Ridge Cap Bundles</div><div style="color:#64748b;font-size:12px;">Est. ridge length divided by 35 lf per bundle</div></div><span id="ridge" style="font-size:20px;font-weight:800;color:#fb923c;">2 bundles</span></div>
+        <div class="mat-row"><div><div style="color:#f1f5f9;font-weight:600;">Starter Strip</div><div style="color:#64748b;font-size:12px;">Estimated perimeter</div></div><span id="starter" style="font-size:20px;font-weight:800;color:#f59e0b;">— lf</span></div>
+      </div>
+      <div style="background:#1e3a5f22;border:1px solid #1e3a5f;border-radius:10px;padding:14px 18px;margin-top:16px;font-size:13px;color:#94a3b8;line-height:1.7;"><strong style="color:#f59e0b;">Note:</strong> Estimates only. Actual quantities depend on roof complexity and local supplier bundle sizes.</div>
+    </div>
+    <div style="background:#111827;border:1px solid #38bdf833;border-radius:20px;padding:32px;margin-bottom:40px;">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+        <span style="font-size:24px;">🔗</span>
+        <div><h2 style="font-size:20px;font-weight:700;margin:0 0 4px;">Embed This Estimator Free</h2><p style="color:#94a3b8;font-size:13px;margin:0;">Copy and paste into any website. Attribution link required.</p></div>
+      </div>
+      <div class="embed-box">&lt;iframe src="https://www.roofmanager.ca/tools/material-estimator/embed" width="100%" height="540" style="border:none;border-radius:12px;display:block;" title="Free Roofing Material Estimator by Roof Manager" loading="lazy"&gt;&lt;/iframe&gt;
+&lt;p style="margin:8px 0 0;font-size:12px;text-align:center;"&gt;&lt;a href="https://www.roofmanager.ca/tools/material-estimator"&gt;Free Roofing Material Estimator&lt;/a&gt; by &lt;a href="https://www.roofmanager.ca"&gt;Roof Manager&lt;/a&gt;&lt;/p&gt;</div>
+      <button onclick="navigator.clipboard.writeText(document.querySelector('.embed-box').textContent.trim());this.textContent='Copied!';setTimeout(()=>this.textContent='Copy Embed Code',2000)" style="margin-top:14px;background:#38bdf8;color:#0f172a;border:none;padding:10px 24px;border-radius:8px;font-weight:700;cursor:pointer;font-size:14px;">Copy Embed Code</button>
+    </div>
+    <div style="margin-bottom:40px;">
+      <h2 style="font-size:22px;font-weight:700;margin-bottom:20px;">Related Tools</h2>
+      <div style="display:grid;gap:12px;">
+        <a href="/tools/pitch-calculator" style="background:#111827;border:1px solid #1e293b;border-radius:12px;padding:16px 20px;text-decoration:none;display:flex;justify-content:space-between;align-items:center;" onmouseover="this.style.borderColor='#f59e0b'" onmouseout="this.style.borderColor='#1e293b'"><div><div style="color:#f1f5f9;font-weight:600;margin-bottom:4px;">Roof Pitch Calculator</div><div style="color:#64748b;font-size:13px;">Convert pitch to degrees and get the multiplier</div></div><span style="color:#f59e0b;font-size:20px;">→</span></a>
+        <a href="/blog/roof-pitch-complete-guide-2026" style="background:#111827;border:1px solid #1e293b;border-radius:12px;padding:16px 20px;text-decoration:none;display:flex;justify-content:space-between;align-items:center;" onmouseover="this.style.borderColor='#f59e0b'" onmouseout="this.style.borderColor='#1e293b'"><div><div style="color:#f1f5f9;font-weight:600;margin-bottom:4px;">Complete Roof Pitch Guide (2026)</div><div style="color:#64748b;font-size:13px;">Formulas, charts, and measurement methods</div></div><span style="color:#f59e0b;font-size:20px;">→</span></a>
+      </div>
+    </div>
+    <div style="background:linear-gradient(135deg,#1e3a5f,#0f2440);border-radius:16px;padding:36px;text-align:center;">
+      <h2 style="font-size:24px;font-weight:800;color:#f59e0b;margin-bottom:10px;">Need Exact Per-Facet Measurements?</h2>
+      <p style="color:#cbd5e1;margin-bottom:24px;max-width:500px;margin-left:auto;margin-right:auto;">Our satellite AI report gives exact pitch, sloped area, and a full material take-off for every facet. From $10, no subscription.</p>
+      <a href="/lander" style="display:inline-block;background:#f59e0b;color:#0f172a;padding:14px 32px;border-radius:12px;font-weight:800;text-decoration:none;font-size:16px;margin-right:10px;">Try 3 Free Reports</a>
+      <a href="/order/new" style="display:inline-block;background:transparent;color:#f59e0b;border:2px solid #f59e0b;padding:12px 24px;border-radius:12px;font-weight:700;text-decoration:none;font-size:15px;">Order Now — $10</a>
+    </div>
+  </main>
+  <footer style="border-top:1px solid #1e293b;padding:32px 24px;text-align:center;color:#475569;font-size:13px;margin-top:60px;">
+    <div style="margin-bottom:12px;display:flex;justify-content:center;gap:24px;flex-wrap:wrap;">
+      <a href="/" style="color:#475569;text-decoration:none;">Home</a>
+      <a href="/tools" style="color:#475569;text-decoration:none;">Free Tools</a>
+      <a href="/blog" style="color:#475569;text-decoration:none;">Blog</a>
+      <a href="/press" style="color:#475569;text-decoration:none;">Press</a>
+      <a href="/privacy" style="color:#475569;text-decoration:none;">Privacy</a>
+    </div>
+    <p>© ${new Date().getFullYear()} Roof Manager</p>
+  </footer>
+  <script>
+    function calcMat(){
+      const area=parseFloat(document.getElementById('areaInput').value)||2000
+      const mult=parseFloat(document.getElementById('pitchSelect').value)
+      const waste=parseInt(document.getElementById('wasteSlider').value)
+      document.getElementById('wasteLabel').textContent=waste+'%'
+      const sloped=area*mult,withWaste=sloped*(1+waste/100),squares=withWaste/100
+      document.getElementById('slopedArea').textContent=Math.round(sloped).toLocaleString()+' sq ft'
+      document.getElementById('wasteArea').textContent=Math.round(withWaste).toLocaleString()+' sq ft'
+      document.getElementById('squares').textContent=squares.toFixed(1)+' sq'
+      document.getElementById('bundles').textContent=Math.ceil(squares*3)+' bundles'
+      document.getElementById('underlay').textContent=Math.ceil(withWaste/400)+' rolls'
+      document.getElementById('ridge').textContent=Math.ceil(Math.sqrt(area)*0.5/35)+' bundles'
+      document.getElementById('starter').textContent=Math.round(Math.sqrt(area)*4)+' lf'
+    }
+    calcMat()
+  </script>
+</body>
+</html>`
+}
+
+function getMaterialEstimatorEmbedHTML(): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Roofing Material Estimator — Roof Manager</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{background:#111827;color:#e2e8f0;font-family:system-ui,sans-serif;padding:18px;min-height:100vh;}
+    select,input[type=number]{background:#0f172a;color:#e2e8f0;border:1px solid #1e293b;border-radius:8px;padding:9px 12px;font-size:14px;width:100%;outline:none;}
+    input[type=range]{-webkit-appearance:none;width:100%;height:5px;border-radius:3px;background:#1e293b;outline:none;}
+    input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:#f59e0b;cursor:pointer;}
+    .mr{background:#0f172a;border-radius:8px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;}
+  </style>
+</head>
+<body>
+  <div style="font-size:13px;font-weight:700;color:#38bdf8;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;">
+    <span>Roofing Material Estimator</span>
+    <a href="https://www.roofmanager.ca" target="_blank" style="color:#475569;text-decoration:none;font-size:11px;font-weight:400;">by Roof Manager</a>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">
+    <div><div style="font-size:11px;color:#64748b;margin-bottom:6px;font-weight:600;">Footprint (sq ft)</div><input type="number" id="aI" value="2000" min="100" max="50000" step="50" oninput="c()"></div>
+    <div><div style="font-size:11px;color:#64748b;margin-bottom:6px;font-weight:600;">Pitch</div><select id="pS" onchange="c()">
+      <option value="1.003">1:12</option><option value="1.014">2:12</option><option value="1.031">3:12</option>
+      <option value="1.054">4:12</option><option value="1.083">5:12</option><option value="1.118" selected>6:12</option>
+      <option value="1.158">7:12</option><option value="1.202">8:12</option><option value="1.250">9:12</option>
+      <option value="1.302">10:12</option><option value="1.357">11:12</option><option value="1.414">12:12</option>
+      <option value="1.537">14:12</option><option value="1.667">16:12</option><option value="1.803">18:12</option>
+    </select></div>
+  </div>
+  <div style="margin-bottom:14px;"><div style="display:flex;justify-content:space-between;font-size:11px;color:#64748b;margin-bottom:6px;font-weight:600;"><span>Waste Factor</span><span id="wL">12%</span></div><input type="range" id="wS" min="5" max="25" value="12" oninput="c()"></div>
+  <div class="mr"><span style="color:#94a3b8;font-size:13px;">Sloped area</span><span id="sA" style="font-weight:800;color:#f59e0b;">2,236 sq ft</span></div>
+  <div class="mr"><span style="color:#94a3b8;font-size:13px;">Area w/ waste</span><span id="wA" style="font-weight:800;color:#f59e0b;">2,504 sq ft</span></div>
+  <div class="mr"><span style="color:#94a3b8;font-size:13px;">Squares</span><span id="sq" style="font-weight:800;color:#38bdf8;">25.0</span></div>
+  <div class="mr"><span style="color:#94a3b8;font-size:13px;">Bundles (3/sq)</span><span id="bu" style="font-weight:800;color:#4ade80;">75</span></div>
+  <div class="mr"><span style="color:#94a3b8;font-size:13px;">Underlayment rolls</span><span id="ul" style="font-weight:800;color:#a78bfa;">7</span></div>
+  <div class="mr"><span style="color:#94a3b8;font-size:13px;">Ridge cap bundles</span><span id="ri" style="font-weight:800;color:#fb923c;">2</span></div>
+  <div style="margin-top:14px;text-align:center;"><a href="https://www.roofmanager.ca/lander" target="_blank" style="display:inline-block;background:#f59e0b;color:#0f172a;padding:10px 24px;border-radius:8px;font-weight:800;text-decoration:none;font-size:13px;">Get a Full Report Free</a></div>
+  <script>
+    function c(){const a=parseFloat(document.getElementById('aI').value)||2000,m=parseFloat(document.getElementById('pS').value),w=parseInt(document.getElementById('wS').value);document.getElementById('wL').textContent=w+'%';const sl=a*m,wa=sl*(1+w/100),sq=wa/100;document.getElementById('sA').textContent=Math.round(sl).toLocaleString()+' sq ft';document.getElementById('wA').textContent=Math.round(wa).toLocaleString()+' sq ft';document.getElementById('sq').textContent=sq.toFixed(1);document.getElementById('bu').textContent=Math.ceil(sq*3);document.getElementById('ul').textContent=Math.ceil(wa/400);document.getElementById('ri').textContent=Math.ceil(Math.sqrt(a)*0.5/35);}c()
+  </script>
 </body>
 </html>`
 }
