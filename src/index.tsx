@@ -3368,7 +3368,6 @@ function getContactFormHTML(sourcePage: string = 'unknown') {
           message: document.getElementById('lead-message').value.trim()
         })
       });
-      if (!res.ok) throw new Error('HTTP ' + res.status);
       var data = await res.json();
       if (data.success) {
         if (typeof window.trackAdsConversion === 'function') window.trackAdsConversion('lead', { value: 1.0, currency: 'USD' });
@@ -10630,6 +10629,7 @@ function getDemoLandingPageHTML() {
               <button type="submit" id="demo-submit-btn" class="w-full bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-white font-bold py-3 px-6 rounded-xl transition-all hover:scale-[1.01]">
                 <i class="fas fa-paper-plane mr-2"></i>Submit & Book Demo
               </button>
+              <div id="demo-lead-error" class="hidden text-sm font-medium px-4 py-3 rounded-lg bg-red-500/20 text-red-300 border border-red-500/30"></div>
             </div>
           </form>
           <div id="demo-lead-success" class="hidden text-center py-8">
@@ -10730,9 +10730,11 @@ function getDemoLandingPageHTML() {
       e.preventDefault();
       var form = document.getElementById('demo-lead-form');
       var btn = document.getElementById('demo-submit-btn');
+      var errDiv = document.getElementById('demo-lead-error');
       var fd = new FormData(form);
       btn.disabled = true;
       btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Submitting...';
+      errDiv.classList.add('hidden');
 
       var payload = {
         name: fd.get('name'),
@@ -10759,13 +10761,15 @@ function getDemoLandingPageHTML() {
         } else {
           btn.disabled = false;
           btn.innerHTML = '<i class="fas fa-paper-plane mr-2"></i>Submit & Book Demo';
-          alert(data.error || 'Something went wrong. Please try again.');
+          errDiv.innerHTML = '<i class="fas fa-exclamation-circle mr-2"></i>' + (data.error || 'Something went wrong. Please try again.');
+          errDiv.classList.remove('hidden');
         }
       })
       .catch(function() {
         btn.disabled = false;
         btn.innerHTML = '<i class="fas fa-paper-plane mr-2"></i>Submit & Book Demo';
-        alert('Network error. Please try again.');
+        errDiv.innerHTML = '<i class="fas fa-exclamation-circle mr-2"></i>Network error. Please try again.';
+        errDiv.classList.remove('hidden');
       });
 
       return false;
