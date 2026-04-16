@@ -5282,14 +5282,19 @@ function getLandingPageHTML(latestPosts: any[] = []) {
         <a href="/blog" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">Blog</a>
         <a href="/coverage" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">Coverage</a>
         <a href="/faq" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">FAQ</a>
+        <!-- TODO(Ethan): confirm sales phone number and replace placeholder below -->
+        <a href="tel:+1XXXXXXXXXX" class="hidden md:inline-flex items-center gap-1.5 text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200" aria-label="Call sales"><i class="fas fa-phone text-[10px] text-[#00FF88]"></i>(XXX) XXX-XXXX</a>
+        <a href="/contact" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200">Contact</a>
         <a href="/customer/login" class="text-gray-400 hover:text-white text-sm font-medium transition-colors duration-200 px-2">Login</a>
-        <a href="/signup" onclick="rrTrack('cta_click',{location:'nav_signup'})" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-2.5 px-5 rounded-xl text-sm transition-all duration-200 hover:scale-105 shadow-lg shadow-[#00FF88]/20 whitespace-nowrap">
-          <i class="fas fa-gift mr-1.5"></i>4 Free Reports &rarr;</a>
+        <a href="/demo" onclick="rrTrack('cta_click',{location:'nav_book_demo'})" class="bg-white/8 hover:bg-white/15 text-white font-bold py-2.5 px-4 rounded-xl text-sm transition-all duration-200 border border-white/15 whitespace-nowrap">
+          <i class="fas fa-calendar-check mr-1.5 text-[#00FF88]"></i>Book Demo</a>
+        <a href="/register" onclick="rrTrack('cta_click',{location:'nav_signup'})" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-2.5 px-5 rounded-xl text-sm transition-all duration-200 hover:scale-105 shadow-lg shadow-[#00FF88]/20 whitespace-nowrap">
+          <i class="fas fa-gift mr-1.5"></i>4 Free Reports</a>
       </div>
 
       <!-- Mobile: visible Login + menu button -->
       <div class="md:hidden flex items-center gap-2">
-        <a href="/signup" onclick="rrTrack('cta_click',{location:'nav_mobile_signup'})" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-2 px-4 rounded-xl text-sm shadow-lg shadow-[#00FF88]/20 min-h-[48px] inline-flex items-center whitespace-nowrap">
+        <a href="/register" onclick="rrTrack('cta_click',{location:'nav_mobile_signup'})" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-2 px-4 rounded-xl text-sm shadow-lg shadow-[#00FF88]/20 min-h-[48px] inline-flex items-center whitespace-nowrap">
           <i class="fas fa-gift mr-1"></i>4 Free
         </a>
         <button id="mobile-menu-btn" class="text-white text-xl p-3 min-h-[48px] min-w-[48px] flex items-center justify-center" onclick="document.getElementById('mobile-menu').classList.toggle('hidden')">
@@ -5313,7 +5318,8 @@ function getLandingPageHTML(latestPosts: any[] = []) {
         <a href="/coverage" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')">Coverage</a>
         <a href="/lander" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')">Get Started</a>
         <a href="/faq" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')">FAQ</a>
-        <a href="/signup" onclick="rrTrack('cta_click',{location:'mobile_menu_signup'})" class="bg-[#00FF88] text-[#0A0A0A] font-extrabold py-3 px-6 rounded-xl text-sm text-center mt-3 shadow-lg"><i class="fas fa-gift mr-1.5"></i>Get 4 FREE Reports &mdash; No Card Required</a>
+        <a href="/contact" class="text-gray-400 hover:text-white text-sm py-3 px-4 rounded-xl hover:bg-white/5 transition-all font-medium" onclick="document.getElementById('mobile-menu').classList.add('hidden')"><i class="fas fa-envelope text-[#00FF88] mr-2 text-xs"></i>Contact Us</a>
+        <a href="/register" onclick="rrTrack('cta_click',{location:'mobile_menu_signup'})" class="bg-[#00FF88] text-[#0A0A0A] font-extrabold py-3 px-6 rounded-xl text-sm text-center mt-3 shadow-lg"><i class="fas fa-gift mr-1.5"></i>Get 4 FREE Reports &mdash; No Card Required</a>
       </div>
     </div>
   </nav>
@@ -5335,9 +5341,15 @@ function getLandingPageHTML(latestPosts: any[] = []) {
             </div>
             <h1 class="text-5xl sm:text-6xl lg:text-7xl font-black leading-[1.05] text-white mb-8 tracking-tight">Measure Any Roof.<br/><span class="neon-text">In 60 Seconds.</span></h1>
             <h2 class="text-lg lg:text-xl text-gray-400 mb-10 max-w-xl leading-relaxed font-normal">The full CRM built for <span class="text-white font-semibold">roofing &amp; solar companies</span> — satellite roof measurement reports, solar design tools, and workflow automations. From solo contractors to large crews.</h2>
-            <div class="flex flex-col sm:flex-row gap-4 mb-10">
-              <a href="/signup" onclick="rrTrack('cta_click',{location:'hero_primary',variant:'contractor_signup'})" class="group inline-flex items-center justify-center gap-3 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-10 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/20 transition-all duration-300 hover:scale-[1.03] min-h-[56px]"><i class="fas fa-gift"></i> Get 4 FREE Reports &mdash; No Card Required <i class="fas fa-arrow-right text-sm group-hover:translate-x-1.5 transition-transform"></i></a>
-              <a href="/sample-report" onclick="rrTrack('cta_click',{location:'hero_secondary',variant:'sample_report'})" class="inline-flex items-center justify-center gap-2.5 bg-white/5 hover:bg-white/10 backdrop-blur-md text-white font-bold py-4 px-8 rounded-xl text-lg border border-white/10 hover:border-white/20 transition-all duration-300 min-h-[56px]"><i class="fas fa-play-circle text-[#00FF88]"></i> See Sample Report</a>
+            <div class="flex flex-col gap-4 mb-6">
+              <a href="/register" onclick="rrTrack('cta_click',{location:'hero_primary',variant:'contractor_signup'})" class="group inline-flex items-center justify-center gap-3 bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-extrabold py-4 px-10 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/20 transition-all duration-300 hover:scale-[1.03] min-h-[56px]"><i class="fas fa-gift"></i> Get 4 FREE Reports &mdash; No Card Required <i class="fas fa-arrow-right text-sm group-hover:translate-x-1.5 transition-transform"></i></a>
+              <p class="text-xs text-gray-500"><i class="fas fa-lock text-[#00FF88] mr-1"></i>No credit card &nbsp;&middot;&nbsp; <span>&#127464;&#127462;</span> Hosted in Canada &nbsp;&middot;&nbsp; <i class="fas fa-bolt text-[#00FF88] mr-1"></i>60-sec signup</p>
+              <!-- Three tertiary text links — keeps primary CTA dominant -->
+              <div class="flex flex-wrap gap-x-5 gap-y-2 text-sm">
+                <a href="/sample-report" onclick="rrTrack('cta_click',{location:'hero_tertiary',variant:'sample_report'})" class="inline-flex items-center gap-1.5 text-gray-400 hover:text-white transition-colors"><i class="fas fa-play-circle text-[#00FF88] text-xs"></i>See sample report <i class="fas fa-arrow-right text-[10px]"></i></a>
+                <a href="/demo" onclick="rrTrack('cta_click',{location:'hero_tertiary',variant:'book_demo'})" class="inline-flex items-center gap-1.5 text-gray-400 hover:text-white transition-colors"><i class="fas fa-calendar-check text-[#00FF88] text-xs"></i>Book a 20-min demo <i class="fas fa-arrow-right text-[10px]"></i></a>
+                <a href="/contact" onclick="rrTrack('cta_click',{location:'hero_tertiary',variant:'talk_to_us'})" class="inline-flex items-center gap-1.5 text-gray-400 hover:text-white transition-colors"><i class="fas fa-comments text-[#00FF88] text-xs"></i>Talk to us <i class="fas fa-arrow-right text-[10px]"></i></a>
+              </div>
             </div>
             <!-- Self-serve callout — makes it unmistakably clear anyone can sign up right now -->
             <div class="mb-6 -mt-2 flex items-start gap-3 bg-[#00FF88]/8 border border-[#00FF88]/20 rounded-xl px-4 py-3">
@@ -5355,7 +5367,7 @@ function getLandingPageHTML(latestPosts: any[] = []) {
               <span class="inline-flex items-center gap-1.5 text-gray-400 bg-white/5 rounded-full px-3 py-1.5"><i class="fas fa-bolt text-[#00FF88] text-[10px]"></i>Reports in under 60s</span>
               <span class="inline-flex items-center gap-1.5 text-gray-400 bg-white/5 rounded-full px-3 py-1.5"><i class="fas fa-check text-[#00FF88] text-[10px]"></i>Full CRM free forever</span>
             </div>
-            <div class="lg:hidden mt-10 flex flex-col gap-3"><a href="/signup" onclick="rrTrack('cta_click',{location:'hero_mobile'})" class="flex items-center justify-center gap-3 bg-[#00FF88] text-[#0A0A0A] font-extrabold py-4 px-8 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/20 min-h-[56px]"><i class="fas fa-gift"></i> Get 4 FREE Reports &mdash; No Card <i class="fas fa-arrow-right text-sm"></i></a><a href="https://calendar.app.google/KNLFST4CNxViPPN3A" target="_blank" onclick="rrTrack('cta_click',{location:'hero_mobile_demo'})" class="flex items-center justify-center gap-3 bg-white/5 text-white font-bold py-4 px-8 rounded-xl text-base border border-white/10 min-h-[52px]"><i class="fas fa-calendar-check text-[#00FF88]"></i> Book a Free Demo</a></div>
+            <div class="lg:hidden mt-10 flex flex-col gap-3"><a href="/register" onclick="rrTrack('cta_click',{location:'hero_mobile'})" class="flex items-center justify-center gap-3 bg-[#00FF88] text-[#0A0A0A] font-extrabold py-4 px-8 rounded-xl text-lg shadow-2xl shadow-[#00FF88]/20 min-h-[56px]"><i class="fas fa-gift"></i> Get 4 FREE Reports &mdash; No Card <i class="fas fa-arrow-right text-sm"></i></a><a href="/demo" onclick="rrTrack('cta_click',{location:'hero_mobile_demo'})" class="flex items-center justify-center gap-3 bg-white/5 text-white font-bold py-4 px-8 rounded-xl text-base border border-white/10 min-h-[52px]"><i class="fas fa-calendar-check text-[#00FF88]"></i> Book a Free Demo</a></div>
           </div>
           <div class="hidden lg:block">
             <div class="relative">
@@ -6112,18 +6124,39 @@ function getLandingPageHTML(latestPosts: any[] = []) {
     });
   </script>
   <script src="/static/landing.js?v=20260408a" defer></script>
-  <!-- Mobile sticky floating CTA -->
-  <div id="mobileStickyCta" class="md:hidden" style="position:fixed;bottom:16px;right:16px;z-index:60;display:none">
-    <a href="/signup" onclick="rrTrack('cta_click',{location:'sticky_mobile'})" style="display:inline-flex;align-items:center;gap:8px;background:#00FF88;color:#0A0A0A;font-weight:800;padding:12px 18px;border-radius:999px;font-size:14px;box-shadow:0 12px 32px rgba(0,255,136,0.35);text-decoration:none"><i class="fas fa-rocket"></i>Start Free</a>
-    <button aria-label="Dismiss" onclick="document.getElementById('mobileStickyCta').style.display='none';try{sessionStorage.setItem('rm_sticky_dismiss','1')}catch(e){}" style="position:absolute;top:-8px;right:-8px;width:22px;height:22px;border-radius:999px;background:#111;color:#9ca3af;border:1px solid rgba(255,255,255,0.15);font-size:12px;line-height:1;cursor:pointer">&times;</button>
+  <!-- Mobile sticky bottom CTA bar — two buttons, hides inside hero -->
+  <div id="mobileStickyCta" class="md:hidden" style="position:fixed;bottom:0;left:0;right:0;z-index:60;display:none;background:rgba(10,10,10,0.97);backdrop-filter:blur(16px);border-top:1px solid rgba(255,255,255,0.08);padding:12px 16px;gap:10px;flex-direction:row">
+    <a href="/demo" onclick="rrTrack('cta_click',{location:'sticky_mobile_demo'})" style="flex:1;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:rgba(255,255,255,0.07);color:#fff;font-weight:700;padding:12px 10px;border-radius:12px;font-size:14px;text-decoration:none;border:1px solid rgba(255,255,255,0.12);min-height:48px"><i class="fas fa-calendar-check" style="color:#00FF88;font-size:13px"></i>Book Demo</a>
+    <a href="/register" onclick="rrTrack('cta_click',{location:'sticky_mobile_signup'})" style="flex:1;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:#00FF88;color:#0A0A0A;font-weight:800;padding:12px 10px;border-radius:12px;font-size:14px;text-decoration:none;box-shadow:0 8px 24px rgba(0,255,136,0.3);min-height:48px"><i class="fas fa-rocket" style="font-size:13px"></i>Start Free</a>
+    <button aria-label="Dismiss sticky bar" onclick="document.getElementById('mobileStickyCta').style.display='none';try{sessionStorage.setItem('rm_sticky_dismiss','1')}catch(e){}" style="position:absolute;top:-10px;right:10px;width:22px;height:22px;border-radius:999px;background:#111;color:#9ca3af;border:1px solid rgba(255,255,255,0.15);font-size:12px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center">&times;</button>
   </div>
   <script>
     (function(){
       try{if(sessionStorage.getItem('rm_sticky_dismiss')==='1')return;}catch(e){}
       var el=document.getElementById('mobileStickyCta');if(!el)return;
-      window.addEventListener('scroll',function(){
-        if(window.scrollY>600){el.style.display='block';}
-      },{passive:true});
+      var heroEl=document.querySelector('#landing-root section');
+      var shown=false;
+
+      // Fire impression event once per session
+      function fireImpression(){
+        if(shown)return;shown=true;
+        try{if(!sessionStorage.getItem('rm_sticky_impression')){rrTrack('sticky_cta_shown',{page:location.pathname});sessionStorage.setItem('rm_sticky_impression','1');}}catch(e){}
+      }
+
+      // Use IntersectionObserver to hide inside hero, show after hero
+      if(heroEl && 'IntersectionObserver' in window){
+        var inHero=true;
+        var obs=new IntersectionObserver(function(entries){
+          inHero=entries[0].isIntersecting;
+          if(!inHero){el.style.display='flex';fireImpression();}
+          else{el.style.display='none';}
+        },{threshold:0.1});
+        obs.observe(heroEl);
+      } else {
+        window.addEventListener('scroll',function(){
+          if(window.scrollY>600){el.style.display='flex';fireImpression();}
+        },{passive:true});
+      }
     })();
   </script>
   ${getRoverWidget()}
