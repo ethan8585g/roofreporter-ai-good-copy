@@ -158,6 +158,9 @@ async function loadView(view) {
           if (badge) { badge.textContent = activeJobs; badge.style.display = activeJobs > 0 ? '' : 'none'; }
         }
         break;
+      case 'agent-hub':
+        SA.data.agentHub = null; // loaded async by loadAgentHubDashboard()
+        break;
       case 'ai-agent':
         SA.data.aiAgent = null; // loaded async by loadAiAgentDashboard()
         break;
@@ -431,6 +434,7 @@ function renderContent() {
     case 'service-invoices': root.innerHTML = renderServiceInvoicesView(); break;
     case 'call-center-manage': root.innerHTML = renderCallCenterManageView(); break;
     case 'gemini-command': root.innerHTML = renderGeminiCommandView(); break;
+    case 'agent-hub': root.innerHTML = renderAgentHubView(); loadAgentHubDashboard(); break;
     case 'ai-agent': root.innerHTML = renderAiAgentView(); loadAiAgentDashboard(); break;
     // Platform Admin modules
     case 'enhanced-onboarding': root.innerHTML = (typeof renderEnhancedOnboardingView === 'function') ? renderEnhancedOnboardingView() : '<div class="p-8 text-gray-500">Module loading...</div>'; paLoadTiers(); break;
@@ -8795,62 +8799,146 @@ window.apiUserLedger = async function(accountId, companyName) {
 // AI AGENT DASHBOARD
 // ============================================================
 
+// ============================================================
+// AI AUTOPILOT COMMAND CENTER
+// ============================================================
+
 function renderAiAgentView() {
   return `
-    <div class="mb-6">
-      <div class="flex items-center justify-between">
-        <div>
-          <h1 class="text-2xl font-bold text-slate-800 flex items-center gap-3">
-            <i class="fas fa-robot text-teal-500"></i> AI Autopilot Agent
-          </h1>
-          <p class="text-sm text-slate-500 mt-1">Autonomous roof tracing — monitors incoming orders and auto-processes traces using Gemini vision.</p>
-        </div>
-        <button onclick="loadAiAgentDashboard()" class="px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-medium hover:bg-slate-50 transition-colors">
-          <i class="fas fa-sync-alt mr-1.5"></i>Refresh
-        </button>
+    <!-- Header -->
+    <div class="flex items-start justify-between mb-6">
+      <div>
+        <h1 class="text-2xl font-bold text-slate-800 flex items-center gap-3">
+          <div class="w-9 h-9 bg-teal-500 rounded-xl flex items-center justify-center shadow-sm">
+            <i class="fas fa-robot text-white text-base"></i>
+          </div>
+          AI Autopilot Command Center
+        </h1>
+        <p class="text-sm text-slate-500 mt-1.5">Autonomous roof tracing — Gemini vision processes incoming orders without manual intervention.</p>
       </div>
+      <button onclick="loadAiAgentDashboard()" class="px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-medium hover:bg-slate-50 transition-colors flex items-center gap-2">
+        <i class="fas fa-sync-alt"></i>Refresh
+      </button>
+    </div>
+
+    <!-- Agent status hero -->
+    <div id="ai-status-hero" class="rounded-2xl border p-5 mb-6 flex items-center gap-5 bg-slate-50 border-slate-200">
+      <div id="ai-status-dot" class="w-4 h-4 rounded-full bg-slate-300 flex-shrink-0"></div>
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-3 flex-wrap">
+          <span id="ai-status-label" class="text-base font-bold text-slate-500">Loading status...</span>
+          <span id="ai-version-badge" class="px-2 py-0.5 bg-slate-200 text-slate-500 rounded-full text-xs font-mono hidden"></span>
+        </div>
+        <p id="ai-status-sub" class="text-xs text-slate-400 mt-0.5"></p>
+      </div>
+      <button id="ai-toggle-btn" onclick="aiToggle()" class="px-5 py-2.5 rounded-xl text-sm font-bold transition-all flex-shrink-0 bg-slate-200 text-slate-500" disabled>
+        <i class="fas fa-circle-notch fa-spin mr-2"></i>Loading
+      </button>
     </div>
 
     <!-- Stats row -->
     <div id="ai-stats" class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-      <div class="metric-card bg-white rounded-2xl p-5 animate-pulse"><div class="h-4 bg-slate-200 rounded w-20 mb-3"></div><div class="h-7 bg-slate-100 rounded w-12"></div></div>
-      <div class="metric-card bg-white rounded-2xl p-5 animate-pulse"><div class="h-4 bg-slate-200 rounded w-20 mb-3"></div><div class="h-7 bg-slate-100 rounded w-12"></div></div>
-      <div class="metric-card bg-white rounded-2xl p-5 animate-pulse"><div class="h-4 bg-slate-200 rounded w-20 mb-3"></div><div class="h-7 bg-slate-100 rounded w-12"></div></div>
-      <div class="metric-card bg-white rounded-2xl p-5 animate-pulse"><div class="h-4 bg-slate-200 rounded w-20 mb-3"></div><div class="h-7 bg-slate-100 rounded w-12"></div></div>
+      ${[0,1,2,3].map(() => `<div class="metric-card bg-white rounded-2xl p-5 animate-pulse"><div class="h-3 bg-slate-200 rounded w-20 mb-3"></div><div class="h-7 bg-slate-100 rounded w-12"></div></div>`).join('')}
     </div>
 
-    <!-- Controls -->
+    <!-- Two-column: Commands | Config -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+
+      <!-- Commands -->
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+        <h3 class="text-base font-bold text-gray-700 mb-4 flex items-center gap-2">
+          <i class="fas fa-terminal text-teal-500"></i>Commands
+        </h3>
+        <div class="space-y-3">
+          <button onclick="aiProcessQueue()" class="w-full px-4 py-3 bg-teal-500 hover:bg-teal-600 text-white rounded-xl text-sm font-semibold transition-all flex items-center gap-3">
+            <i class="fas fa-play w-4 text-center"></i>
+            <div class="text-left">
+              <div>Process Queue Now</div>
+              <div class="text-xs font-normal opacity-80">Run agent on all pending orders (up to 5)</div>
+            </div>
+          </button>
+          <button onclick="aiRetryFailed()" class="w-full px-4 py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-sm font-semibold transition-all flex items-center gap-3">
+            <i class="fas fa-redo w-4 text-center"></i>
+            <div class="text-left">
+              <div>Retry Failed Orders</div>
+              <div class="text-xs font-normal opacity-80">Re-queue orders that previously errored</div>
+            </div>
+          </button>
+        </div>
+        <div id="ai-action-result" class="mt-4 text-sm px-3 py-2 rounded-lg hidden"></div>
+      </div>
+
+      <!-- Config -->
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+        <h3 class="text-base font-bold text-gray-700 mb-4 flex items-center gap-2">
+          <i class="fas fa-sliders-h text-violet-500"></i>Agent Configuration
+        </h3>
+        <div class="space-y-4">
+          <div class="flex items-center justify-between py-2 border-b border-slate-100">
+            <div>
+              <div class="text-sm font-semibold text-slate-700">Confidence Threshold</div>
+              <div class="text-xs text-slate-400 mt-0.5">Min score to auto-complete (30–95). Lower = more aggressive.</div>
+            </div>
+            <input id="ai-threshold" type="number" min="30" max="95" value="60"
+              class="w-16 border border-gray-200 rounded-lg px-2 py-1.5 text-sm text-center font-bold focus:ring-2 focus:ring-teal-400 focus:border-transparent">
+          </div>
+          <div class="flex items-center justify-between py-2 border-b border-slate-100">
+            <div>
+              <div class="text-sm font-semibold text-slate-700">Max Daily Auto-Process</div>
+              <div class="text-xs text-slate-400 mt-0.5">Safety cap on orders processed per day.</div>
+            </div>
+            <input id="ai-max-daily" type="number" min="1" max="500" value="50"
+              class="w-16 border border-gray-200 rounded-lg px-2 py-1.5 text-sm text-center font-bold focus:ring-2 focus:ring-teal-400 focus:border-transparent">
+          </div>
+          <div class="flex items-center justify-between py-2 border-b border-slate-100">
+            <div>
+              <div class="text-sm font-semibold text-slate-700">Notify on Complete</div>
+              <div class="text-xs text-slate-400 mt-0.5">Send notification when agent finishes an order.</div>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input id="ai-notify" type="checkbox" class="sr-only peer" checked>
+              <div class="w-10 h-6 bg-slate-200 peer-focus:ring-2 peer-focus:ring-teal-400 rounded-full peer peer-checked:bg-teal-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-4"></div>
+            </label>
+          </div>
+        </div>
+        <button onclick="aiSaveConfig()" class="mt-4 w-full px-4 py-2.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-sm font-semibold transition-all">
+          <i class="fas fa-save mr-2"></i>Save Configuration
+        </button>
+      </div>
+    </div>
+
+    <!-- Pending Orders queue -->
     <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6">
-      <h3 class="text-base font-bold text-gray-700 mb-4"><i class="fas fa-sliders-h mr-2 text-teal-500"></i>Agent Controls</h3>
-      <div class="flex flex-wrap items-center gap-3">
-        <button id="ai-toggle-btn" onclick="aiToggle()" class="px-5 py-2.5 rounded-xl text-sm font-semibold transition-all bg-slate-100 text-slate-600 hover:bg-slate-200">
-          <i class="fas fa-circle-notch fa-spin mr-2"></i>Loading...
-        </button>
-        <button onclick="aiProcessQueue()" class="px-5 py-2.5 bg-teal-500 hover:bg-teal-600 text-white rounded-xl text-sm font-semibold transition-all">
-          <i class="fas fa-play mr-2"></i>Process Queue Now
-        </button>
-        <button onclick="aiRetryFailed()" class="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-sm font-semibold transition-all">
-          <i class="fas fa-redo mr-2"></i>Retry Failed
-        </button>
-        <div class="flex items-center gap-2 ml-auto">
-          <label class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Confidence threshold</label>
-          <input id="ai-threshold" type="number" min="30" max="95" value="60" class="w-16 border border-gray-200 rounded-lg px-2 py-1.5 text-sm text-center font-bold">
-          <button onclick="aiSaveConfig()" class="px-3 py-1.5 bg-slate-700 hover:bg-slate-800 text-white rounded-lg text-xs font-semibold transition-all">Save</button>
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-base font-bold text-gray-700 flex items-center gap-2">
+          <i class="fas fa-hourglass-half text-amber-500"></i>
+          Order Queue
+          <span id="ai-pending-count" class="px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full text-xs font-bold hidden"></span>
+        </h3>
+        <span class="text-xs text-slate-400">Orders awaiting auto-trace</span>
+      </div>
+      <div id="ai-pending-table">
+        <div class="text-sm text-slate-400 py-6 text-center"><i class="fas fa-circle-notch fa-spin mr-2"></i>Loading queue...</div>
+      </div>
+    </div>
+
+    <!-- Activity log -->
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-base font-bold text-gray-700 flex items-center gap-2">
+          <i class="fas fa-history text-blue-500"></i>Activity Log
+        </h3>
+        <div class="flex items-center gap-2">
+          <select id="ai-jobs-filter" onchange="aiFilterJobs(this.value)" class="text-xs border border-slate-200 rounded-lg px-3 py-1.5 bg-white text-slate-600 focus:ring-2 focus:ring-teal-400 focus:border-transparent">
+            <option value="">All jobs</option>
+            <option value="1">Successful only</option>
+            <option value="0">Failed only</option>
+          </select>
         </div>
       </div>
-      <div id="ai-action-result" class="mt-3 text-sm text-slate-500 hidden"></div>
-    </div>
-
-    <!-- Pending Orders -->
-    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6">
-      <h3 class="text-base font-bold text-gray-700 mb-4"><i class="fas fa-clock mr-2 text-amber-500"></i>Pending Orders <span id="ai-pending-count" class="text-xs font-normal text-slate-400 ml-1"></span></h3>
-      <div id="ai-pending-table"><div class="text-sm text-slate-400 py-4 text-center"><i class="fas fa-circle-notch fa-spin mr-2"></i>Loading...</div></div>
-    </div>
-
-    <!-- Recent Jobs -->
-    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-      <h3 class="text-base font-bold text-gray-700 mb-4"><i class="fas fa-history mr-2 text-blue-500"></i>Recent Agent Jobs</h3>
-      <div id="ai-jobs-table"><div class="text-sm text-slate-400 py-4 text-center"><i class="fas fa-circle-notch fa-spin mr-2"></i>Loading...</div></div>
+      <div id="ai-jobs-table">
+        <div class="text-sm text-slate-400 py-6 text-center"><i class="fas fa-circle-notch fa-spin mr-2"></i>Loading activity...</div>
+      </div>
     </div>
   `;
 }
@@ -8858,100 +8946,174 @@ function renderAiAgentView() {
 async function loadAiAgentDashboard() {
   var res = await saFetch('/api/ai-autopilot/dashboard');
   if (!res || !res.ok) {
-    document.getElementById('ai-action-result') && showAiResult('Failed to load dashboard', true);
+    showAiResult('Failed to load dashboard', true);
     return;
   }
   var d = await res.json();
   SA.data.aiAgent = d;
 
-  // Stats
   var s = d.stats || {};
+  var cfg = d.config || {};
+  var enabled = cfg.auto_process_enabled;
   var successRate = s.total_jobs > 0 ? Math.round((s.successful_jobs / s.total_jobs) * 100) : 0;
+
+  // Status hero
+  var hero = document.getElementById('ai-status-hero');
+  var dot = document.getElementById('ai-status-dot');
+  var label = document.getElementById('ai-status-label');
+  var sub = document.getElementById('ai-status-sub');
+  var verBadge = document.getElementById('ai-version-badge');
+  if (hero && dot && label && sub) {
+    if (enabled) {
+      hero.className = 'rounded-2xl border p-5 mb-6 flex items-center gap-5 bg-teal-50 border-teal-200';
+      dot.className = 'w-4 h-4 rounded-full bg-teal-500 flex-shrink-0 shadow-[0_0_0_4px_rgba(20,184,166,0.2)] animate-pulse';
+      label.textContent = 'Agent LIVE — Auto-processing enabled';
+      label.className = 'text-base font-bold text-teal-700';
+      sub.textContent = 'Monitoring order queue continuously. ' + (s.pending_orders || 0) + ' order(s) pending.';
+    } else {
+      hero.className = 'rounded-2xl border p-5 mb-6 flex items-center gap-5 bg-slate-50 border-slate-200';
+      dot.className = 'w-4 h-4 rounded-full bg-slate-400 flex-shrink-0';
+      label.textContent = 'Agent PAUSED — Auto-processing disabled';
+      label.className = 'text-base font-bold text-slate-500';
+      sub.textContent = 'Queue is not being processed automatically. Use manual commands below.';
+    }
+  }
+  if (verBadge && d.agent_version) {
+    verBadge.textContent = 'v' + d.agent_version;
+    verBadge.classList.remove('hidden');
+  }
+
+  // Toggle button
+  var toggleBtn = document.getElementById('ai-toggle-btn');
+  if (toggleBtn) {
+    toggleBtn.disabled = false;
+    toggleBtn.innerHTML = enabled
+      ? '<i class="fas fa-toggle-on mr-2 text-lg"></i>Turn OFF'
+      : '<i class="fas fa-toggle-off mr-2 text-lg"></i>Turn ON';
+    toggleBtn.className = 'px-5 py-2.5 rounded-xl text-sm font-bold transition-all flex-shrink-0 ' +
+      (enabled ? 'bg-teal-500 text-white hover:bg-teal-600' : 'bg-slate-200 text-slate-600 hover:bg-slate-300');
+  }
+
+  // Sidebar badge
+  var agentBadge = document.getElementById('sa-agent-badge');
+  if (agentBadge) agentBadge.style.display = enabled ? '' : 'none';
+
+  // Stats
   document.getElementById('ai-stats').innerHTML =
-    samc('Pending', s.pending_orders || 0, 'fa-hourglass-half', 'amber', 'awaiting auto-trace') +
+    samc('In Queue', s.pending_orders || 0, 'fa-hourglass-half', 'amber', 'awaiting auto-trace') +
     samc('Processed Today', s.today_jobs || 0, 'fa-check-circle', 'teal', 'agent jobs run') +
     samc('Success Rate', successRate + '%', 'fa-bullseye', 'green', s.total_jobs + ' total jobs') +
     samc('Failed', s.failed_jobs || 0, 'fa-exclamation-triangle', 'red', 'need retry');
 
-  // Toggle button
-  var cfg = d.config || {};
-  var enabled = cfg.auto_process_enabled;
-  var toggleBtn = document.getElementById('ai-toggle-btn');
-  if (toggleBtn) {
-    toggleBtn.innerHTML = enabled
-      ? '<i class="fas fa-toggle-on mr-2 text-lg"></i>Auto-Process: ON'
-      : '<i class="fas fa-toggle-off mr-2 text-lg"></i>Auto-Process: OFF';
-    toggleBtn.className = 'px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ' +
-      (enabled ? 'bg-teal-500 text-white hover:bg-teal-600' : 'bg-slate-200 text-slate-600 hover:bg-slate-300');
-  }
-
-  // Agent badge in sidebar
-  var agentBadge = document.getElementById('sa-agent-badge');
-  if (agentBadge) {
-    agentBadge.style.display = enabled ? '' : 'none';
-  }
-
-  // Confidence threshold
+  // Config inputs
   var thresholdInput = document.getElementById('ai-threshold');
+  var maxDailyInput = document.getElementById('ai-max-daily');
+  var notifyInput = document.getElementById('ai-notify');
   if (thresholdInput) thresholdInput.value = cfg.confidence_threshold || 60;
+  if (maxDailyInput) maxDailyInput.value = cfg.max_daily_auto || 50;
+  if (notifyInput) notifyInput.checked = cfg.notify_on_complete !== false;
 
-  // Pending orders table
-  var pending = d.pending_orders || [];
-  var pendingCount = document.getElementById('ai-pending-count');
-  if (pendingCount) pendingCount.textContent = '(' + pending.length + ')';
-  var pendingHtml = pending.length === 0
-    ? '<p class="text-sm text-slate-400 text-center py-4">No orders pending auto-trace.</p>'
+  // Pending orders
+  aiRenderPendingTable(d.pending_orders || []);
+
+  // Jobs
+  aiRenderJobsTable(d.recent_jobs || []);
+}
+
+function aiRenderPendingTable(pending) {
+  var countEl = document.getElementById('ai-pending-count');
+  if (countEl) {
+    if (pending.length > 0) {
+      countEl.textContent = pending.length;
+      countEl.classList.remove('hidden');
+    } else {
+      countEl.classList.add('hidden');
+    }
+  }
+
+  var tierColors = { premium: 'bg-violet-100 text-violet-700', standard: 'bg-blue-100 text-blue-700', basic: 'bg-slate-100 text-slate-600' };
+
+  var html = pending.length === 0
+    ? '<div class="flex flex-col items-center py-10 text-slate-400"><i class="fas fa-check-circle text-3xl mb-3 text-teal-300"></i><p class="text-sm font-medium">Queue is empty — no orders pending.</p></div>'
     : '<div class="overflow-x-auto"><table class="w-full text-sm">' +
-        '<thead class="bg-gray-50"><tr>' +
-          '<th class="px-4 py-2 text-left text-xs text-gray-500 font-semibold">Order #</th>' +
-          '<th class="px-4 py-2 text-left text-xs text-gray-500 font-semibold">Address</th>' +
-          '<th class="px-4 py-2 text-left text-xs text-gray-500 font-semibold">Status</th>' +
-          '<th class="px-4 py-2 text-left text-xs text-gray-500 font-semibold">Created</th>' +
-          '<th class="px-4 py-2 text-left text-xs text-gray-500 font-semibold">Action</th>' +
+        '<thead><tr class="border-b border-slate-100">' +
+          '<th class="pb-2 text-left text-xs text-gray-400 font-semibold uppercase tracking-wide px-2">Order</th>' +
+          '<th class="pb-2 text-left text-xs text-gray-400 font-semibold uppercase tracking-wide px-2">Address</th>' +
+          '<th class="pb-2 text-left text-xs text-gray-400 font-semibold uppercase tracking-wide px-2">Tier</th>' +
+          '<th class="pb-2 text-left text-xs text-gray-400 font-semibold uppercase tracking-wide px-2">Status</th>' +
+          '<th class="pb-2 text-left text-xs text-gray-400 font-semibold uppercase tracking-wide px-2">Queued</th>' +
+          '<th class="pb-2 px-2"></th>' +
         '</tr></thead><tbody>' +
-        pending.map(function(o) {
-          return '<tr class="border-t border-gray-100 hover:bg-gray-50">' +
-            '<td class="px-4 py-3 font-mono text-xs text-slate-600">' + (o.order_number || o.id) + '</td>' +
-            '<td class="px-4 py-3 text-slate-700 max-w-[200px] truncate">' + (o.property_address || '-') + '</td>' +
-            '<td class="px-4 py-3">' + statusBadge(o.status) + '</td>' +
-            '<td class="px-4 py-3 text-xs text-slate-400">' + fmtDate(o.created_at) + '</td>' +
-            '<td class="px-4 py-3"><button onclick="aiRunOrder(' + o.id + ', this)" class="px-3 py-1 bg-teal-500 hover:bg-teal-600 text-white rounded-lg text-xs font-semibold transition-all"><i class="fas fa-play mr-1"></i>Run Agent</button></td>' +
+        pending.map(function(o, i) {
+          var tier = (o.service_tier || 'standard').toLowerCase();
+          var tierBadge = '<span class="px-2 py-0.5 ' + (tierColors[tier] || tierColors.standard) + ' rounded-full text-xs font-semibold capitalize">' + tier + '</span>';
+          return '<tr class="border-b border-slate-50 hover:bg-slate-50/60 transition-colors">' +
+            '<td class="py-3 px-2"><span class="font-mono text-xs text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">' + (o.order_number || '#' + o.id) + '</span></td>' +
+            '<td class="py-3 px-2 text-slate-700 max-w-[220px]"><div class="truncate">' + (o.property_address || '—') + '</div></td>' +
+            '<td class="py-3 px-2">' + tierBadge + '</td>' +
+            '<td class="py-3 px-2">' + statusBadge(o.status) + '</td>' +
+            '<td class="py-3 px-2 text-xs text-slate-400 whitespace-nowrap">' + fmtDate(o.created_at) + '</td>' +
+            '<td class="py-3 px-2 text-right"><button onclick="aiRunOrder(' + o.id + ', this)" class="px-3 py-1.5 bg-teal-500 hover:bg-teal-600 text-white rounded-lg text-xs font-semibold transition-all"><i class="fas fa-bolt mr-1"></i>Run Now</button></td>' +
           '</tr>';
         }).join('') +
         '</tbody></table></div>';
-  document.getElementById('ai-pending-table').innerHTML = pendingHtml;
 
-  // Recent jobs table
-  var jobs = d.recent_jobs || [];
-  var jobsHtml = jobs.length === 0
-    ? '<p class="text-sm text-slate-400 text-center py-4">No agent jobs yet.</p>'
+  document.getElementById('ai-pending-table').innerHTML = html;
+}
+
+function aiRenderJobsTable(jobs) {
+  var html = jobs.length === 0
+    ? '<div class="flex flex-col items-center py-10 text-slate-400"><i class="fas fa-history text-3xl mb-3 text-slate-200"></i><p class="text-sm">No agent jobs recorded yet.</p></div>'
     : '<div class="overflow-x-auto"><table class="w-full text-sm">' +
-        '<thead class="bg-gray-50"><tr>' +
-          '<th class="px-4 py-2 text-left text-xs text-gray-500 font-semibold">Order #</th>' +
-          '<th class="px-4 py-2 text-left text-xs text-gray-500 font-semibold">Address</th>' +
-          '<th class="px-4 py-2 text-left text-xs text-gray-500 font-semibold">Action</th>' +
-          '<th class="px-4 py-2 text-left text-xs text-gray-500 font-semibold">Result</th>' +
-          '<th class="px-4 py-2 text-left text-xs text-gray-500 font-semibold">Confidence</th>' +
-          '<th class="px-4 py-2 text-left text-xs text-gray-500 font-semibold">Duration</th>' +
-          '<th class="px-4 py-2 text-left text-xs text-gray-500 font-semibold">Time</th>' +
+        '<thead><tr class="border-b border-slate-100">' +
+          '<th class="pb-2 text-left text-xs text-gray-400 font-semibold uppercase tracking-wide px-2 w-4"></th>' +
+          '<th class="pb-2 text-left text-xs text-gray-400 font-semibold uppercase tracking-wide px-2">Order</th>' +
+          '<th class="pb-2 text-left text-xs text-gray-400 font-semibold uppercase tracking-wide px-2">Address</th>' +
+          '<th class="pb-2 text-left text-xs text-gray-400 font-semibold uppercase tracking-wide px-2">Action</th>' +
+          '<th class="pb-2 text-left text-xs text-gray-400 font-semibold uppercase tracking-wide px-2">Result</th>' +
+          '<th class="pb-2 text-left text-xs text-gray-400 font-semibold uppercase tracking-wide px-2">Confidence</th>' +
+          '<th class="pb-2 text-left text-xs text-gray-400 font-semibold uppercase tracking-wide px-2">Time</th>' +
+          '<th class="pb-2 text-left text-xs text-gray-400 font-semibold uppercase tracking-wide px-2">Duration</th>' +
         '</tr></thead><tbody>' +
         jobs.map(function(j) {
-          var rowClass = j.success ? 'bg-green-50/40' : (j.action === 'flagged_for_review' ? 'bg-amber-50/40' : 'bg-red-50/40');
-          var resultBadge = j.success
-            ? '<span class="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-medium">Success</span>'
-            : '<span class="px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-xs font-medium">Failed</span>';
-          return '<tr class="border-t border-gray-100 ' + rowClass + '">' +
-            '<td class="px-4 py-3 font-mono text-xs text-slate-600">' + (j.order_number || j.order_id) + '</td>' +
-            '<td class="px-4 py-3 text-slate-700 max-w-[160px] truncate">' + (j.property_address || '-') + '</td>' +
-            '<td class="px-4 py-3"><span class="px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full text-xs font-mono">' + (j.action || '-') + '</span></td>' +
-            '<td class="px-4 py-3">' + resultBadge + '</td>' +
-            '<td class="px-4 py-3 text-xs text-slate-500">' + (j.confidence != null ? j.confidence + '%' : '-') + '</td>' +
-            '<td class="px-4 py-3 text-xs text-slate-400">' + (j.processing_ms ? (j.processing_ms / 1000).toFixed(1) + 's' : '-') + '</td>' +
-            '<td class="px-4 py-3 text-xs text-slate-400">' + fmtDateTime(j.created_at) + '</td>' +
+          var isSuccess = !!j.success;
+          var isFlagged = j.action === 'flagged_for_review';
+          var statusDot = isSuccess
+            ? '<div class="w-2 h-2 rounded-full bg-teal-400 mt-1.5"></div>'
+            : (isFlagged
+              ? '<div class="w-2 h-2 rounded-full bg-amber-400 mt-1.5"></div>'
+              : '<div class="w-2 h-2 rounded-full bg-red-400 mt-1.5"></div>');
+          var resultBadge = isSuccess
+            ? '<span class="px-2 py-0.5 bg-teal-100 text-teal-700 rounded-full text-xs font-semibold">Completed</span>'
+            : (isFlagged
+              ? '<span class="px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full text-xs font-semibold">Flagged</span>'
+              : '<span class="px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-xs font-semibold">Failed</span>');
+          var errorNote = (!isSuccess && j.error)
+            ? '<div class="text-xs text-red-500 mt-0.5 max-w-[180px] truncate" title="' + j.error.replace(/"/g, '&quot;') + '">' + j.error + '</div>'
+            : '';
+          return '<tr class="border-b border-slate-50 hover:bg-slate-50/60 transition-colors">' +
+            '<td class="py-3 px-2">' + statusDot + '</td>' +
+            '<td class="py-3 px-2"><span class="font-mono text-xs text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">' + (j.order_number || '#' + j.order_id) + '</span></td>' +
+            '<td class="py-3 px-2 max-w-[180px]"><div class="truncate text-slate-700">' + (j.property_address || '—') + '</div>' + errorNote + '</td>' +
+            '<td class="py-3 px-2"><span class="px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full text-xs font-mono">' + (j.action || '—') + '</span></td>' +
+            '<td class="py-3 px-2">' + resultBadge + '</td>' +
+            '<td class="py-3 px-2">' + (j.confidence != null ? '<div class="flex items-center gap-1.5"><div class="w-16 bg-slate-100 rounded-full h-1.5"><div class="h-1.5 rounded-full ' + (j.confidence >= 70 ? 'bg-teal-400' : j.confidence >= 50 ? 'bg-amber-400' : 'bg-red-400') + '" style="width:' + Math.min(j.confidence, 100) + '%"></div></div><span class="text-xs text-slate-500">' + j.confidence + '%</span></div>' : '<span class="text-xs text-slate-300">—</span>') + '</td>' +
+            '<td class="py-3 px-2 text-xs text-slate-400 whitespace-nowrap">' + fmtDateTime(j.created_at) + '</td>' +
+            '<td class="py-3 px-2 text-xs text-slate-400">' + (j.processing_ms ? (j.processing_ms / 1000).toFixed(1) + 's' : '—') + '</td>' +
           '</tr>';
         }).join('') +
         '</tbody></table></div>';
-  document.getElementById('ai-jobs-table').innerHTML = jobsHtml;
+
+  document.getElementById('ai-jobs-table').innerHTML = html;
+}
+
+async function aiFilterJobs(successVal) {
+  var params = successVal !== '' ? '?success=' + successVal + '&limit=50' : '?limit=50';
+  var res = await saFetch('/api/ai-autopilot/jobs' + params);
+  if (res && res.ok) {
+    var d = await res.json();
+    aiRenderJobsTable(d.jobs || []);
+  }
 }
 
 async function aiToggle() {
@@ -8963,7 +9125,7 @@ async function aiToggle() {
     showAiResult(d.message || 'Updated', false);
     loadAiAgentDashboard();
   } else {
-    showAiResult('Toggle failed — check console', true);
+    showAiResult('Toggle failed', true);
     if (btn) btn.disabled = false;
   }
 }
@@ -8997,27 +9159,32 @@ async function aiRunOrder(orderId, btn) {
   var res = await saFetch('/api/ai-autopilot/process-order/' + orderId, { method: 'POST' });
   if (res && res.ok) {
     var d = await res.json();
-    showAiResult('Order ' + orderId + ': ' + (d.result && d.result.action ? d.result.action : (d.success ? 'done' : 'failed')), !d.success);
+    var action = d.result && d.result.action ? d.result.action : (d.success ? 'done' : 'failed');
+    showAiResult('Order ' + orderId + ': ' + action, !d.success);
     loadAiAgentDashboard();
   } else {
     showAiResult('Failed to run agent on order ' + orderId, true);
-    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-play mr-1"></i>Run Agent'; }
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-bolt mr-1"></i>Run Now'; }
   }
 }
 
 async function aiSaveConfig() {
   var threshold = parseInt(document.getElementById('ai-threshold').value);
+  var maxDaily = parseInt(document.getElementById('ai-max-daily').value);
+  var notify = document.getElementById('ai-notify').checked;
   if (isNaN(threshold) || threshold < 30 || threshold > 95) {
-    showAiResult('Threshold must be 30–95', true);
-    return;
+    showAiResult('Confidence threshold must be 30–95', true); return;
+  }
+  if (isNaN(maxDaily) || maxDaily < 1) {
+    showAiResult('Max daily must be at least 1', true); return;
   }
   var res = await saFetch('/api/ai-autopilot/config', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ confidence_threshold: threshold })
+    body: JSON.stringify({ confidence_threshold: threshold, max_daily_auto: maxDaily, notify_on_complete: notify })
   });
   if (res && res.ok) {
-    showAiResult('Config saved', false);
+    showAiResult('Configuration saved', false);
   } else {
     showAiResult('Save failed', true);
   }
@@ -9027,7 +9194,441 @@ function showAiResult(msg, isError) {
   var el = document.getElementById('ai-action-result');
   if (!el) return;
   el.textContent = msg;
-  el.className = 'mt-3 text-sm px-3 py-2 rounded-lg ' + (isError ? 'bg-red-50 text-red-600' : 'bg-teal-50 text-teal-700');
+  el.className = 'mt-4 text-sm px-3 py-2 rounded-lg ' + (isError ? 'bg-red-50 text-red-600' : 'bg-teal-50 text-teal-700');
   el.classList.remove('hidden');
-  setTimeout(function() { el && el.classList.add('hidden'); }, 4000);
+  setTimeout(function() { el && el.classList.add('hidden'); }, 5000);
+}
+
+// ============================================================
+// AGENT HUB COMMAND CENTER
+// ============================================================
+
+var HUB_AGENTS = [
+  { key: 'tracing', label: 'Tracing Agent',          icon: 'fa-drafting-compass',  color: 'teal',   desc: 'Auto-processes roof measurement orders using Gemini vision.',              schedule: 'Every 10 min' },
+  { key: 'content', label: 'SEO Content Agent',       icon: 'fa-pen-nib',           color: 'violet', desc: 'Writes and publishes SEO blog posts targeting Canadian roofing keywords.',  schedule: 'Daily 8am UTC' },
+  { key: 'email',   label: 'Email Marketing Agent',   icon: 'fa-envelope-open-text',color: 'blue',   desc: 'Generates and sends weekly educational campaigns to unengaged contacts.',   schedule: 'Tuesdays 10am UTC' },
+  { key: 'lead',    label: 'Lead Response Agent',     icon: 'fa-bolt',              color: 'amber',  desc: 'Personalizes and sends outreach emails to new contact form leads.',    schedule: 'Every 2 hours' },
+  { key: 'monitor', label: 'Platform Monitor Agent',  icon: 'fa-shield-alt',        color: 'rose',   desc: 'Scans for bugs, errors, and improvements. Accumulates platform knowledge.', schedule: 'Every 6 hours' },
+];
+
+function renderAgentHubView() {
+  return `
+    <div class="flex items-start justify-between mb-6">
+      <div>
+        <h1 class="text-2xl font-bold text-slate-800 flex items-center gap-3">
+          <div class="w-9 h-9 bg-violet-600 rounded-xl flex items-center justify-center shadow-sm">
+            <i class="fas fa-brain text-white text-base"></i>
+          </div>
+          Agent Hub
+        </h1>
+        <p class="text-sm text-slate-500 mt-1.5">All autonomous agents in one place — Anthropic Claude-powered, runs 24/7.</p>
+      </div>
+      <button onclick="loadAgentHubDashboard()" class="px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-medium hover:bg-slate-50 transition-colors flex items-center gap-2">
+        <i class="fas fa-sync-alt"></i>Refresh
+      </button>
+    </div>
+
+    <!-- Platform metrics -->
+    <div id="hub-metrics" class="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+      ${[0,1,2,3,4].map(function() { return '<div class="metric-card bg-white rounded-2xl p-5 animate-pulse"><div class="h-3 bg-slate-200 rounded w-24 mb-3"></div><div class="h-7 bg-slate-100 rounded w-14"></div></div>'; }).join('')}
+    </div>
+
+    <!-- Agent cards grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 mb-6">
+      ${HUB_AGENTS.map(function(a) {
+        return '<div id="hub-card-' + a.key + '" class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">' +
+          '<div class="flex items-start gap-4">' +
+            '<div class="w-11 h-11 bg-' + a.color + '-50 rounded-xl flex items-center justify-center flex-shrink-0">' +
+              '<i class="fas ' + a.icon + ' text-' + a.color + '-500 text-base"></i>' +
+            '</div>' +
+            '<div class="flex-1 min-w-0">' +
+              '<div class="flex items-center gap-2 flex-wrap">' +
+                '<h3 class="text-sm font-bold text-slate-700">' + a.label + '</h3>' +
+                '<span id="hub-status-' + a.key + '" class="px-2 py-0.5 bg-slate-100 text-slate-400 rounded-full text-xs font-semibold">Loading...</span>' +
+              '</div>' +
+              '<p class="text-xs text-slate-400 mt-1 leading-relaxed">' + a.desc + '</p>' +
+              '<div class="flex items-center gap-1.5 mt-1.5">' +
+                '<i class="fas fa-clock text-slate-300 text-xs"></i>' +
+                '<span class="text-xs text-slate-400">' + a.schedule + '</span>' +
+              '</div>' +
+            '</div>' +
+          '</div>' +
+          '<div id="hub-stats-' + a.key + '" class="mt-4 pt-4 border-t border-slate-50 grid grid-cols-3 gap-3">' +
+            '<div class="animate-pulse"><div class="h-2 bg-slate-100 rounded w-12 mb-1.5"></div><div class="h-4 bg-slate-100 rounded w-8"></div></div>'.repeat(3) +
+          '</div>' +
+          '<div class="mt-4 flex items-center gap-2">' +
+            '<button id="hub-toggle-' + a.key + '" onclick="hubToggle(\'' + a.key + '\')" class="px-4 py-2 rounded-xl text-xs font-bold transition-all bg-slate-100 text-slate-500 hover:bg-slate-200" disabled>Loading</button>' +
+            '<button onclick="hubRun(\'' + a.key + '\', this)" class="px-4 py-2 rounded-xl text-xs font-bold transition-all bg-' + a.color + '-500 hover:bg-' + a.color + '-600 text-white">Run Now</button>' +
+            '<button onclick="hubShowConfig(\'' + a.key + '\')" class="px-3 py-2 rounded-xl text-xs font-semibold transition-all bg-slate-50 text-slate-500 hover:bg-slate-100 ml-auto"><i class="fas fa-cog mr-1"></i>Config</button>' +
+          '</div>' +
+          '<div id="hub-result-' + a.key + '" class="mt-3 text-xs px-3 py-2 rounded-lg hidden"></div>' +
+        '</div>';
+      }).join('')}
+    </div>
+
+    <!-- Combined activity feed -->
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-base font-bold text-gray-700 flex items-center gap-2">
+          <i class="fas fa-stream text-slate-400"></i>Activity Feed
+        </h3>
+        <select id="hub-feed-filter" onchange="hubFilterFeed(this.value)" class="text-xs border border-slate-200 rounded-lg px-3 py-1.5 bg-white text-slate-600 focus:ring-2 focus:ring-violet-400">
+          <option value="">All agents</option>
+          ${HUB_AGENTS.map(function(a) { return '<option value="' + a.key + '">' + a.label + '</option>'; }).join('')}
+        </select>
+      </div>
+      <div id="hub-feed"><div class="text-sm text-slate-400 py-6 text-center"><i class="fas fa-circle-notch fa-spin mr-2"></i>Loading activity...</div></div>
+    </div>
+
+    <!-- Platform Insights panel (from monitor agent) -->
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mt-5">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-base font-bold text-gray-700 flex items-center gap-2">
+          <i class="fas fa-shield-alt text-rose-400"></i>Platform Insights
+          <span id="hub-insights-count" class="px-2 py-0.5 bg-rose-50 text-rose-600 rounded-full text-xs font-bold hidden"></span>
+        </h3>
+        <div class="flex items-center gap-2">
+          <select id="hub-insights-status" onchange="loadHubInsights(this.value)" class="text-xs border border-slate-200 rounded-lg px-3 py-1.5 bg-white text-slate-600 focus:ring-2 focus:ring-rose-400">
+            <option value="open">Open</option>
+            <option value="acknowledged">Acknowledged</option>
+            <option value="resolved">Resolved</option>
+          </select>
+        </div>
+      </div>
+      <div id="hub-insights"><div class="text-sm text-slate-400 py-6 text-center"><i class="fas fa-circle-notch fa-spin mr-2"></i>Loading insights...</div></div>
+    </div>
+
+    <!-- Config modal -->
+    <div id="hub-config-modal" class="fixed inset-0 bg-black/40 z-50 hidden flex items-center justify-center p-4">
+      <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+        <div class="flex items-center justify-between mb-4">
+          <h3 id="hub-modal-title" class="text-base font-bold text-slate-700">Agent Config</h3>
+          <button onclick="hubCloseConfig()" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-400"><i class="fas fa-times"></i></button>
+        </div>
+        <div id="hub-modal-body" class="space-y-4"></div>
+        <div class="mt-5 flex gap-3">
+          <button onclick="hubSaveConfig()" class="flex-1 px-4 py-2.5 bg-violet-600 hover:bg-violet-700 text-white rounded-xl text-sm font-bold transition-all">Save Config</button>
+          <button onclick="hubCloseConfig()" class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-sm font-semibold transition-all">Cancel</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function loadAgentHubDashboard() {
+  var res = await saFetch('/api/agent-hub/dashboard');
+  if (!res || !res.ok) return;
+  var d = await res.json();
+  SA.data.agentHub = d;
+
+  var m = d.metrics || {};
+  // Derive health score from monitor agent's last run
+  var monitorInfo = (d.agents || {}).monitor || {};
+  var lastDetails = monitorInfo.last_run_details || '';
+  var healthScore = '—';
+  try {
+    // last_run_details for monitor is "Health X/100 — N finding(s)"
+    var hm = lastDetails.match(/Health\s+(\d+)\/100/);
+    if (hm) healthScore = hm[1] + '/100';
+  } catch (e) {}
+
+  var metricsEl = document.getElementById('hub-metrics');
+  if (metricsEl) {
+    metricsEl.innerHTML =
+      samc('Traced Today',     m.orders_traced_today       || 0,         'fa-drafting-compass',  'teal',   'roof orders') +
+      samc('Posts (7d)',        m.blog_posts_published_week || 0,         'fa-pen-nib',           'violet', 'SEO blog posts') +
+      samc('Leads Responded',  m.leads_responded_today     || 0,         'fa-bolt',              'amber',  'today') +
+      samc('Emails Sent (7d)', m.emails_sent_week          || 0,         'fa-envelope',          'blue',   'contacts reached') +
+      samc('Platform Health',  healthScore,                               'fa-shield-alt',        'rose',   'latest scan');
+  }
+
+  // Also kick off insights load
+  loadHubInsights('open');
+
+  HUB_AGENTS.forEach(function(a) {
+    var info = (d.agents || {})[a.key] || {};
+    var enabled = !!info.enabled;
+
+    // Status badge
+    var statusEl = document.getElementById('hub-status-' + a.key);
+    if (statusEl) {
+      if (enabled) {
+        statusEl.textContent = 'LIVE';
+        statusEl.className = 'px-2 py-0.5 bg-teal-100 text-teal-700 rounded-full text-xs font-bold';
+      } else {
+        statusEl.textContent = 'PAUSED';
+        statusEl.className = 'px-2 py-0.5 bg-slate-100 text-slate-400 rounded-full text-xs font-semibold';
+      }
+    }
+
+    // Stats row
+    var statsEl = document.getElementById('hub-stats-' + a.key);
+    if (statsEl) {
+      var lastRun = info.last_run_at ? hubTimeAgo(info.last_run_at) : 'Never';
+      var lastStatus = info.last_run_status || '—';
+      var statusColor = lastStatus === 'success' ? 'text-teal-600' : lastStatus === 'error' ? 'text-red-500' : 'text-slate-400';
+      statsEl.innerHTML =
+        '<div><div class="text-xs text-slate-400 font-medium">Last run</div><div class="text-xs font-semibold text-slate-600 mt-0.5 truncate">' + lastRun + '</div></div>' +
+        '<div><div class="text-xs text-slate-400 font-medium">Total runs</div><div class="text-xs font-bold text-slate-700 mt-0.5">' + (info.run_count || 0) + '</div></div>' +
+        '<div><div class="text-xs text-slate-400 font-medium">Last status</div><div class="text-xs font-bold mt-0.5 capitalize ' + statusColor + '">' + lastStatus + '</div></div>';
+    }
+
+    // Toggle button
+    var toggleBtn = document.getElementById('hub-toggle-' + a.key);
+    if (toggleBtn) {
+      toggleBtn.disabled = false;
+      toggleBtn.textContent = enabled ? 'Disable' : 'Enable';
+      toggleBtn.className = 'px-4 py-2 rounded-xl text-xs font-bold transition-all ' +
+        (enabled ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-teal-500 text-white hover:bg-teal-600');
+    }
+  });
+
+  // Sidebar badge: show LIVE if any agent enabled
+  var anyLive = Object.values(d.agents || {}).some(function(a) { return a.enabled; });
+  var badge = document.getElementById('sa-hub-badge');
+  if (badge) badge.style.display = anyLive ? '' : 'none';
+
+  // Activity feed
+  hubRenderFeed(d.recent_activity || []);
+}
+
+function hubRenderFeed(runs) {
+  var feedEl = document.getElementById('hub-feed');
+  if (!feedEl) return;
+  if (runs.length === 0) {
+    feedEl.innerHTML = '<div class="flex flex-col items-center py-10 text-slate-400"><i class="fas fa-stream text-3xl mb-3 text-slate-200"></i><p class="text-sm">No agent activity yet.</p></div>';
+    return;
+  }
+  var agentMeta = {};
+  HUB_AGENTS.forEach(function(a) { agentMeta[a.key] = a; });
+  feedEl.innerHTML = '<div class="space-y-2">' +
+    runs.map(function(r) {
+      var meta = agentMeta[r.agent_type] || { icon: 'fa-robot', color: 'slate', label: r.agent_type };
+      var dot = r.status === 'success' ? 'bg-teal-400' : r.status === 'error' ? 'bg-red-400' : r.status === 'skipped' ? 'bg-slate-300' : 'bg-amber-400';
+      var labelColor = 'bg-' + meta.color + '-100 text-' + meta.color + '-700';
+      return '<div class="flex items-start gap-3 py-2.5 border-b border-slate-50 last:border-0">' +
+        '<div class="w-2 h-2 rounded-full ' + dot + ' mt-1.5 flex-shrink-0"></div>' +
+        '<div class="flex-1 min-w-0">' +
+          '<div class="flex items-center gap-2 flex-wrap">' +
+            '<span class="px-2 py-0.5 ' + labelColor + ' rounded-full text-xs font-semibold">' + meta.label + '</span>' +
+            '<span class="text-xs text-slate-600 truncate">' + (r.summary || '—') + '</span>' +
+          '</div>' +
+          '<div class="text-xs text-slate-400 mt-0.5">' + hubTimeAgo(r.created_at) + (r.duration_ms ? ' · ' + (r.duration_ms/1000).toFixed(1) + 's' : '') + '</div>' +
+        '</div>' +
+      '</div>';
+    }).join('') +
+  '</div>';
+}
+
+async function hubFilterFeed(agentKey) {
+  var url = agentKey ? '/api/agent-hub/' + agentKey + '/runs?limit=50' : '/api/agent-hub/activity?limit=50';
+  var res = await saFetch(url);
+  if (res && res.ok) {
+    var d = await res.json();
+    hubRenderFeed(d.activity || d.runs || []);
+  }
+}
+
+async function hubToggle(agentKey) {
+  var btn = document.getElementById('hub-toggle-' + agentKey);
+  if (btn) { btn.disabled = true; btn.textContent = '...'; }
+  var res = await saFetch('/api/agent-hub/' + agentKey + '/toggle', { method: 'POST' });
+  if (res && res.ok) {
+    var d = await res.json();
+    hubShowResult(agentKey, d.message || 'Updated', false);
+    loadAgentHubDashboard();
+  } else {
+    hubShowResult(agentKey, 'Toggle failed', true);
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function hubRun(agentKey, btn) {
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-circle-notch fa-spin mr-1"></i>Running...'; }
+  var res = await saFetch('/api/agent-hub/' + agentKey + '/run', { method: 'POST' });
+  if (res && res.ok) {
+    var d = await res.json();
+    var ok = d.success !== false;
+    hubShowResult(agentKey, ok ? 'Done — ' + (d.result?.summary || 'completed') : (d.error || 'Failed'), !ok);
+    loadAgentHubDashboard();
+  } else {
+    hubShowResult(agentKey, 'Run failed', true);
+  }
+  if (btn) { btn.disabled = false; btn.innerHTML = 'Run Now'; }
+}
+
+// ── Platform Insights (Monitor Agent) ────────────────────────
+
+async function loadHubInsights(status) {
+  var el = document.getElementById('hub-insights');
+  if (!el) return;
+  var res = await saFetch('/api/agent-hub/monitor/insights?status=' + (status || 'open') + '&limit=50');
+  if (!res || !res.ok) {
+    el.innerHTML = '<div class="text-sm text-slate-400 py-4 text-center">Could not load insights.</div>';
+    return;
+  }
+  var d = await res.json();
+  var insights = d.insights || [];
+  var countEl = document.getElementById('hub-insights-count');
+  if (countEl) {
+    if (insights.length > 0 && status !== 'resolved') {
+      countEl.textContent = insights.length;
+      countEl.classList.remove('hidden');
+    } else {
+      countEl.classList.add('hidden');
+    }
+  }
+  if (insights.length === 0) {
+    el.innerHTML = '<div class="flex flex-col items-center py-8 text-slate-400"><i class="fas fa-check-circle text-3xl mb-2 text-teal-300"></i><p class="text-sm">No ' + (status || 'open') + ' issues found.</p></div>';
+    return;
+  }
+  var severityColors = { critical: 'rose', high: 'orange', medium: 'amber', low: 'slate' };
+  var categoryIcons = { bug: 'fa-bug', error: 'fa-exclamation-circle', improvement: 'fa-lightbulb', health: 'fa-heartbeat', performance: 'fa-tachometer-alt' };
+  el.innerHTML = '<div class="space-y-3">' + insights.map(function(ins) {
+    var sc = severityColors[ins.severity] || 'slate';
+    var ic = categoryIcons[ins.category] || 'fa-info-circle';
+    var actionBtns = ins.status === 'open'
+      ? '<button onclick="hubAckInsight(' + ins.id + ', this)" class="text-xs px-2 py-1 bg-amber-50 text-amber-700 rounded-lg hover:bg-amber-100 transition-colors">Acknowledge</button>' +
+        '<button onclick="hubResolveInsight(' + ins.id + ', this)" class="text-xs px-2 py-1 bg-teal-50 text-teal-700 rounded-lg hover:bg-teal-100 transition-colors">Resolve</button>'
+      : ins.status === 'acknowledged'
+      ? '<button onclick="hubResolveInsight(' + ins.id + ', this)" class="text-xs px-2 py-1 bg-teal-50 text-teal-700 rounded-lg hover:bg-teal-100 transition-colors">Resolve</button>'
+      : '<span class="text-xs text-slate-400">Resolved</span>';
+    return '<div class="flex items-start gap-3 p-4 rounded-xl border border-' + sc + '-100 bg-' + sc + '-50/30">' +
+      '<div class="w-8 h-8 bg-' + sc + '-100 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">' +
+        '<i class="fas ' + ic + ' text-' + sc + '-500 text-xs"></i>' +
+      '</div>' +
+      '<div class="flex-1 min-w-0">' +
+        '<div class="flex items-center gap-2 flex-wrap mb-1">' +
+          '<span class="text-xs font-bold px-2 py-0.5 bg-' + sc + '-100 text-' + sc + '-700 rounded-full capitalize">' + ins.severity + '</span>' +
+          '<span class="text-xs text-slate-400 capitalize">' + ins.category + '</span>' +
+          '<span class="text-xs text-slate-400 ml-auto">' + hubTimeAgo(ins.created_at) + '</span>' +
+        '</div>' +
+        '<div class="text-sm font-bold text-slate-700 mb-1">' + (ins.title || '') + '</div>' +
+        '<div class="text-xs text-slate-500 mb-2 leading-relaxed">' + (ins.description || '') + '</div>' +
+        (ins.suggested_fix ? '<div class="text-xs text-violet-700 bg-violet-50 rounded-lg px-3 py-2 mb-2"><i class="fas fa-wrench mr-1.5 text-violet-400"></i>' + ins.suggested_fix + '</div>' : '') +
+        '<div class="flex items-center gap-2">' + actionBtns + '</div>' +
+      '</div>' +
+    '</div>';
+  }).join('') + '</div>';
+}
+
+async function hubAckInsight(id, btn) {
+  if (btn) btn.disabled = true;
+  var res = await saFetch('/api/agent-hub/monitor/insights/' + id + '/acknowledge', { method: 'POST' });
+  if (res && res.ok) {
+    var status = document.getElementById('hub-insights-status');
+    loadHubInsights(status ? status.value : 'open');
+  }
+}
+
+async function hubResolveInsight(id, btn) {
+  if (btn) btn.disabled = true;
+  var res = await saFetch('/api/agent-hub/monitor/insights/' + id + '/resolve', { method: 'POST' });
+  if (res && res.ok) {
+    var status = document.getElementById('hub-insights-status');
+    loadHubInsights(status ? status.value : 'open');
+  }
+}
+
+// Config modal
+var _hubConfigAgent = null;
+var HUB_CONFIG_FIELDS = {
+  tracing: [
+    { key: 'confidence_threshold', label: 'Confidence Threshold', type: 'number', min: 30, max: 95, hint: '30–95. Lower = more aggressive.' },
+    { key: 'max_daily_auto',       label: 'Max Daily Orders',     type: 'number', min: 1,  max: 500, hint: 'Safety cap per day.' },
+    { key: 'notify_on_complete',   label: 'Notify on Complete',   type: 'toggle', hint: 'Send notification when order finishes.' },
+  ],
+  content: [
+    { key: 'quality_threshold', label: 'Quality Threshold',  type: 'number', min: 0, max: 100, hint: '0–100. Posts below this are retried.' },
+    { key: 'max_attempts',      label: 'Max Retry Attempts', type: 'number', min: 1, max: 5,   hint: 'Retries before marking keyword failed.' },
+    { key: 'auto_publish',      label: 'Auto-Publish',       type: 'toggle', hint: 'Publish immediately without review.' },
+  ],
+  email: [
+    { key: 'max_contacts_per_run',          label: 'Max Contacts per Run',        type: 'number', min: 1, max: 2000, hint: 'Contacts emailed per weekly run.' },
+    { key: 'min_days_between_campaigns',    label: 'Min Days Between Campaigns',  type: 'number', min: 1, max: 30,   hint: 'Prevents over-emailing.' },
+  ],
+  lead: [
+    { key: 'max_leads_per_run',     label: 'Max Leads per Run',    type: 'number', min: 1, max: 100, hint: 'Leads responded to per cron run.' },
+    { key: 'respond_within_hours',  label: 'Respond Within (hrs)', type: 'number', min: 1, max: 48,  hint: 'Target response window.' },
+  ],
+  monitor: [
+    { key: 'alert_on_critical',     label: 'Alert on Critical Issues', type: 'toggle', hint: 'Highlight critical findings prominently in dashboard.' },
+    { key: 'max_insights_per_run',  label: 'Max Findings per Scan',    type: 'number', min: 1, max: 20, hint: 'Max platform insights stored per scan.' },
+  ],
+};
+
+function hubShowConfig(agentKey) {
+  _hubConfigAgent = agentKey;
+  var meta = HUB_AGENTS.find(function(a) { return a.key === agentKey; }) || { label: agentKey };
+  var fields = HUB_CONFIG_FIELDS[agentKey] || [];
+  var currentConfig = ((SA.data.agentHub || {}).agents || {})[agentKey]?.config || {};
+  document.getElementById('hub-modal-title').textContent = meta.label + ' — Configuration';
+  document.getElementById('hub-modal-body').innerHTML = fields.map(function(f) {
+    if (f.type === 'toggle') {
+      var checked = currentConfig[f.key] !== false ? 'checked' : '';
+      return '<div class="flex items-center justify-between py-2 border-b border-slate-100">' +
+        '<div><div class="text-sm font-semibold text-slate-700">' + f.label + '</div>' +
+        '<div class="text-xs text-slate-400 mt-0.5">' + f.hint + '</div></div>' +
+        '<label class="relative inline-flex items-center cursor-pointer">' +
+          '<input id="hub-cfg-' + f.key + '" type="checkbox" class="sr-only peer" ' + checked + '>' +
+          '<div class="w-10 h-6 bg-slate-200 peer-focus:ring-2 peer-focus:ring-violet-400 rounded-full peer peer-checked:bg-violet-500 after:content-[\'\'] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-4"></div>' +
+        '</label>' +
+      '</div>';
+    }
+    var val = currentConfig[f.key] !== undefined ? currentConfig[f.key] : '';
+    return '<div class="flex items-center justify-between py-2 border-b border-slate-100">' +
+      '<div><div class="text-sm font-semibold text-slate-700">' + f.label + '</div>' +
+      '<div class="text-xs text-slate-400 mt-0.5">' + f.hint + '</div></div>' +
+      '<input id="hub-cfg-' + f.key + '" type="number" min="' + (f.min||0) + '" max="' + (f.max||9999) + '" value="' + val + '"' +
+        ' class="w-20 border border-gray-200 rounded-lg px-2 py-1.5 text-sm text-center font-bold focus:ring-2 focus:ring-violet-400 focus:border-transparent">' +
+    '</div>';
+  }).join('');
+  document.getElementById('hub-config-modal').classList.remove('hidden');
+}
+
+function hubCloseConfig() {
+  document.getElementById('hub-config-modal').classList.add('hidden');
+  _hubConfigAgent = null;
+}
+
+async function hubSaveConfig() {
+  if (!_hubConfigAgent) return;
+  var fields = HUB_CONFIG_FIELDS[_hubConfigAgent] || [];
+  var payload = {};
+  fields.forEach(function(f) {
+    var el = document.getElementById('hub-cfg-' + f.key);
+    if (!el) return;
+    if (f.type === 'toggle') payload[f.key] = el.checked;
+    else payload[f.key] = Number(el.value);
+  });
+  var res = await saFetch('/api/agent-hub/' + _hubConfigAgent + '/config', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (res && res.ok) {
+    hubCloseConfig();
+    loadAgentHubDashboard();
+    if (typeof window.rmToast === 'function') window.rmToast('Configuration saved', 'success');
+  } else {
+    if (typeof window.rmToast === 'function') window.rmToast('Save failed', 'error');
+  }
+}
+
+function hubShowResult(agentKey, msg, isError) {
+  var el = document.getElementById('hub-result-' + agentKey);
+  if (!el) return;
+  el.textContent = msg;
+  el.className = 'mt-3 text-xs px-3 py-2 rounded-lg ' + (isError ? 'bg-red-50 text-red-600' : 'bg-teal-50 text-teal-700');
+  el.classList.remove('hidden');
+  setTimeout(function() { el && el.classList.add('hidden'); }, 6000);
+}
+
+function hubTimeAgo(dateStr) {
+  if (!dateStr) return '—';
+  var diff = (Date.now() - new Date(dateStr).getTime()) / 1000;
+  if (diff < 60) return Math.round(diff) + 's ago';
+  if (diff < 3600) return Math.round(diff/60) + 'm ago';
+  if (diff < 86400) return Math.round(diff/3600) + 'h ago';
+  return Math.round(diff/86400) + 'd ago';
 }

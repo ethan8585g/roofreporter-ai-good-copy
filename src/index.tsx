@@ -56,7 +56,12 @@ import { fieldRoutes, fieldUiRoutes } from './routes/field'
 import { publicApiRoutes } from './routes/public-api'
 import { developerPortalRoutes } from './routes/developer-portal'
 import { aiAutopilotRoutes } from './routes/ai-autopilot'
+import { agentHubRoutes } from './routes/agent-hub'
 import { processOrderQueue } from './services/ai-agent'
+import { runContentAgent } from './services/content-agent'
+import { runLeadAgent } from './services/lead-agent'
+import { runEmailAgent } from './services/email-agent'
+import { runMonitorAgent } from './services/monitor-agent'
 import type { Bindings } from './types'
 
 const app = new Hono<{ Bindings: Bindings }>()
@@ -310,6 +315,7 @@ app.route('/api/home-designer', homeDesignerRoutes)
 app.route('/api/sam3', sam3Routes)
 app.route('/api/admin/platform', platformAdmin)
 app.route('/api/ai-autopilot', aiAutopilotRoutes)
+app.route('/api/agent-hub', agentHubRoutes)
 app.route('/api/field', fieldRoutes)
 app.route('/field', fieldUiRoutes)
 
@@ -2981,46 +2987,120 @@ export default {
   // Standard HTTP handler — delegates to Hono app
   fetch: app.fetch,
 
-  // Scheduled (CRON) handler — AI Agent queue processor
-  // Runs every 10 minutes when enabled. Checks for pending orders
-  // that need auto-tracing and processes them autonomously.
+  // Scheduled (CRON) handler — Autonomous Agent Hub
+  // All 5 agents are gated by their agent_configs.enabled flag.
+  // Tracing: every cron tick | Content: 8am UTC | Lead: every 2h | Email: Tuesdays 10am UTC | Monitor: every 6h
   async scheduled(event: ScheduledEvent, env: Bindings, ctx: ExecutionContext) {
-    // Check if auto-processing is enabled
-    const setting = await env.DB.prepare(
-      "SELECT value FROM settings WHERE key = 'agent_auto_process_enabled'"
-    ).first<{ value: string }>()
+    const now = new Date()
+    const hour = now.getUTCHours()
+    const dayOfWeek = now.getUTCDay() // 0=Sun, 2=Tue
 
-    if (setting?.value !== '1') {
-      console.log('[AI Agent CRON] Auto-processing is disabled. Skipping.')
-      return
+    // Helper: check agent_configs.enabled for a given agent type
+    async function isAgentEnabled(agentType: string): Promise<boolean> {
+      const row = await env.DB.prepare(
+        `SELECT enabled FROM agent_configs WHERE agent_type = ?`
+      ).bind(agentType).first<{ enabled: number }>()
+      return row?.enabled === 1
     }
 
-    // Check daily limit
-    const today = new Date().toISOString().slice(0, 10)
-    const dailyCount = await env.DB.prepare(
-      "SELECT COUNT(*) as c FROM agent_jobs WHERE success = 1 AND created_at >= ?"
-    ).bind(today).first<{ c: number }>()
-
-    const maxDaily = await env.DB.prepare(
-      "SELECT value FROM settings WHERE key = 'agent_max_daily_auto'"
-    ).first<{ value: string }>()
-    const limit = parseInt(maxDaily?.value || '50')
-
-    if ((dailyCount?.c || 0) >= limit) {
-      console.log(`[AI Agent CRON] Daily limit reached (${dailyCount?.c}/${limit}). Skipping.`)
-      return
+    // Helper: log run result to agent_runs + update agent_configs stats
+    async function logRun(agentType: string, status: string, summary: string, details: any, durationMs: number) {
+      try {
+        await env.DB.prepare(
+          `INSERT INTO agent_runs (agent_type, status, summary, details_json, duration_ms) VALUES (?, ?, ?, ?, ?)`
+        ).bind(agentType, status, summary, JSON.stringify(details).slice(0, 4000), durationMs).run()
+        await env.DB.prepare(
+          `UPDATE agent_configs SET last_run_at=datetime('now'), last_run_status=?, last_run_details=?,
+           run_count=run_count+1, error_count=error_count+CASE WHEN ?='error' THEN 1 ELSE 0 END,
+           updated_at=datetime('now') WHERE agent_type=?`
+        ).bind(status, summary.slice(0, 500), status, agentType).run()
+      } catch {}
     }
 
-    // Process the queue (uses waitUntil for async cleanup)
-    ctx.waitUntil(
-      processOrderQueue(env)
-        .then((result) => {
-          console.log(`[AI Agent CRON] Processed ${result.processed.length} orders. Stats:`, JSON.stringify(result.stats))
-        })
-        .catch((err) => {
-          console.error(`[AI Agent CRON] Error: ${err.message}`)
-        })
-    )
+    // ── Tracing Agent (every cron tick) ──────────────────────
+    if (await isAgentEnabled('tracing')) {
+      ctx.waitUntil((async () => {
+        const t0 = Date.now()
+        try {
+          const result = await processOrderQueue(env)
+          const summary = `Processed ${result.processed.length} order(s)`
+          console.log(`[CRON:tracing] ${summary}`)
+          await logRun('tracing', 'success', summary, result.stats, Date.now() - t0)
+        } catch (err: any) {
+          console.error('[CRON:tracing] Error:', err.message)
+          await logRun('tracing', 'error', err.message, {}, Date.now() - t0)
+        }
+      })())
+    }
+
+    // ── Content Agent (daily at 8am UTC) ─────────────────────
+    if (hour === 8 && await isAgentEnabled('content')) {
+      ctx.waitUntil((async () => {
+        const t0 = Date.now()
+        try {
+          const result = await runContentAgent(env)
+          const summary = result.skipped ? 'No keywords in queue'
+            : result.ok ? `Published "${result.keyword}" (q=${result.quality?.overall}%)`
+            : `Failed: ${result.error}`
+          console.log(`[CRON:content] ${summary}`)
+          await logRun('content', result.ok ? 'success' : (result.skipped ? 'skipped' : 'error'), summary, result, Date.now() - t0)
+        } catch (err: any) {
+          console.error('[CRON:content] Error:', err.message)
+          await logRun('content', 'error', err.message, {}, Date.now() - t0)
+        }
+      })())
+    }
+
+    // ── Lead Agent (every 2 hours) ────────────────────────────
+    if (hour % 2 === 0 && await isAgentEnabled('lead')) {
+      ctx.waitUntil((async () => {
+        const t0 = Date.now()
+        try {
+          const result = await runLeadAgent(env)
+          const summary = result.responded === 0 ? 'No new leads'
+            : `Responded to ${result.responded} lead(s)`
+          console.log(`[CRON:lead] ${summary}`)
+          await logRun('lead', result.ok ? 'success' : 'error', summary, result, Date.now() - t0)
+        } catch (err: any) {
+          console.error('[CRON:lead] Error:', err.message)
+          await logRun('lead', 'error', err.message, {}, Date.now() - t0)
+        }
+      })())
+    }
+
+    // ── Email Agent (Tuesdays at 10am UTC) ───────────────────
+    if (dayOfWeek === 2 && hour === 10 && await isAgentEnabled('email')) {
+      ctx.waitUntil((async () => {
+        const t0 = Date.now()
+        try {
+          const result = await runEmailAgent(env)
+          const summary = result.skipped ? 'No contacts to email'
+            : result.ok ? `Sent "${result.campaign_name}" to ${result.sent} contact(s)`
+            : `Failed: ${result.errors[0]}`
+          console.log(`[CRON:email] ${summary}`)
+          await logRun('email', result.ok ? 'success' : (result.skipped ? 'skipped' : 'error'), summary, result, Date.now() - t0)
+        } catch (err: any) {
+          console.error('[CRON:email] Error:', err.message)
+          await logRun('email', 'error', err.message, {}, Date.now() - t0)
+        }
+      })())
+    }
+
+    // ── Monitor Agent (every 6 hours: 0, 6, 12, 18 UTC) ──────
+    if (hour % 6 === 0 && await isAgentEnabled('monitor')) {
+      ctx.waitUntil((async () => {
+        const t0 = Date.now()
+        try {
+          const result = await runMonitorAgent(env)
+          const summary = `Health ${result.health_score}/100 — ${result.issues_found} finding(s)${result.critical_count > 0 ? ` (${result.critical_count} critical!)` : ''}`
+          console.log(`[CRON:monitor] ${summary}`)
+          await logRun('monitor', result.ok ? 'success' : 'error', summary, { health_score: result.health_score, issues_found: result.issues_found }, Date.now() - t0)
+        } catch (err: any) {
+          console.error('[CRON:monitor] Error:', err.message)
+          await logRun('monitor', 'error', err.message, {}, Date.now() - t0)
+        }
+      })())
+    }
   },
 }
 
@@ -4208,6 +4288,11 @@ function getSuperAdminDashboardHTML(mapsApiKey: string = '') {
           <i class="fas fa-key w-5 text-center"></i>
           <span class="label text-sm font-medium">API Users</span>
           <span id="sa-api-badge" style="margin-left:auto;background:#3b82f6;color:#fff;font-size:10px;font-weight:800;padding:2px 7px;border-radius:999px;display:none"></span>
+        </div>
+        <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('agent-hub', this)">
+          <i class="fas fa-brain w-5 text-center"></i>
+          <span class="label text-sm font-medium">Agent Hub</span>
+          <span id="sa-hub-badge" style="margin-left:auto;background:#10b981;color:#fff;font-size:10px;font-weight:800;padding:2px 7px;border-radius:999px;display:none">LIVE</span>
         </div>
         <div class="sa-nav-item rounded-xl px-4 py-3 flex items-center gap-3 text-gray-400" onclick="saSetView('ai-agent', this)">
           <i class="fas fa-robot w-5 text-center"></i>
