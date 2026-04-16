@@ -378,10 +378,30 @@
               '</div>' +
             '</div>' +
             '<div>' +
-              '<p class="text-xs font-bold text-gray-400 uppercase mb-2">Panel Size</p>' +
-              '<div class="grid grid-cols-2 gap-2">' +
-                '<div><label class="text-xs text-gray-500">W (px, to scale)</label><input type="number" id="sdPanelW" value="' + state.panelW + '" readonly class="w-full px-2 py-1 bg-gray-700 border border-gray-600 rounded text-xs text-center text-white opacity-70 cursor-not-allowed"></div>' +
-                '<div><label class="text-xs text-gray-500">H (px, to scale)</label><input type="number" id="sdPanelH" value="' + state.panelH + '" readonly class="w-full px-2 py-1 bg-gray-700 border border-gray-600 rounded text-xs text-center text-white opacity-70 cursor-not-allowed"></div>' +
+              '<p class="text-xs font-bold text-gray-400 uppercase mb-2"><i class="fas fa-ruler-combined mr-1 text-blue-400"></i>Panel Dimensions</p>' +
+              '<div class="flex items-center gap-1.5 mb-2">' +
+                '<span class="text-[10px] text-gray-400 whitespace-nowrap">Unit:</span>' +
+                '<select id="sdDimUnit" onchange="window._sdDimUnitChange()" class="flex-1 px-1.5 py-1 bg-gray-700 border border-gray-600 rounded text-[10px] text-white">' +
+                  '<option value="mm">Millimetres (mm)</option>' +
+                  '<option value="in">Inches (in)</option>' +
+                  '<option value="m">Metres (m)</option>' +
+                '</select>' +
+              '</div>' +
+              '<div class="grid grid-cols-2 gap-2 mb-2">' +
+                '<div>' +
+                  '<label class="text-[10px] text-gray-400 block mb-0.5">Width</label>' +
+                  '<input type="number" id="sdDimW" step="1" min="0.001" class="w-full px-2 py-1.5 bg-gray-700 border border-gray-600 rounded text-xs text-center text-white focus:border-blue-500 focus:outline-none">' +
+                '</div>' +
+                '<div>' +
+                  '<label class="text-[10px] text-gray-400 block mb-0.5">Height</label>' +
+                  '<input type="number" id="sdDimH" step="1" min="0.001" class="w-full px-2 py-1.5 bg-gray-700 border border-gray-600 rounded text-xs text-center text-white focus:border-blue-500 focus:outline-none">' +
+                '</div>' +
+              '</div>' +
+              '<button onclick="window._sdApplyPanelDimensions()" class="w-full bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white py-1.5 rounded text-xs font-semibold transition-colors"><i class="fas fa-check mr-1"></i>Apply to Canvas</button>' +
+              '<p class="text-[10px] text-gray-500 mt-1.5 leading-tight">Enter your panel\'s exact size and click Apply. Auto-fill will use these exact dimensions.</p>' +
+              '<div class="grid grid-cols-2 gap-2 mt-2">' +
+                '<div><label class="text-[10px] text-gray-500">W (px)</label><input type="number" id="sdPanelW" value="' + state.panelW + '" readonly class="w-full px-2 py-1 bg-gray-800 border border-gray-700 rounded text-[10px] text-center text-gray-500 cursor-not-allowed"></div>' +
+                '<div><label class="text-[10px] text-gray-500">H (px)</label><input type="number" id="sdPanelH" value="' + state.panelH + '" readonly class="w-full px-2 py-1 bg-gray-800 border border-gray-700 rounded text-[10px] text-center text-gray-500 cursor-not-allowed"></div>' +
               '</div>' +
             '</div>' +
             // Stats
@@ -720,7 +740,79 @@
     var hi = document.getElementById('sdPanelH');
     if (wi) wi.value = state.panelW;
     if (hi) hi.value = state.panelH;
+    syncDimInputsToLayout();
   }
+
+  // Sync the editable dimension inputs to the current layout values.
+  function syncDimInputsToLayout() {
+    var L = state.layout || {};
+    var wM = L.panel_width_meters || 1.045;
+    var hM = L.panel_height_meters || 1.879;
+    var unitEl = document.getElementById('sdDimUnit');
+    var unit = unitEl ? unitEl.value : 'mm';
+    var wVal, hVal, step;
+    if (unit === 'mm') {
+      wVal = Math.round(wM * 1000);
+      hVal = Math.round(hM * 1000);
+      step = 1;
+    } else if (unit === 'in') {
+      wVal = (wM / 0.0254).toFixed(1);
+      hVal = (hM / 0.0254).toFixed(1);
+      step = 0.1;
+    } else {
+      wVal = wM.toFixed(3);
+      hVal = hM.toFixed(3);
+      step = 0.001;
+    }
+    var dimW = document.getElementById('sdDimW');
+    var dimH = document.getElementById('sdDimH');
+    if (dimW) { dimW.value = wVal; dimW.step = step; }
+    if (dimH) { dimH.value = hVal; dimH.step = step; }
+  }
+
+  window._sdDimUnitChange = function() {
+    syncDimInputsToLayout();
+  };
+
+  window._sdApplyPanelDimensions = function() {
+    var unitEl = document.getElementById('sdDimUnit');
+    var unit = unitEl ? unitEl.value : 'mm';
+    var wRaw = parseFloat((document.getElementById('sdDimW') || {}).value) || 0;
+    var hRaw = parseFloat((document.getElementById('sdDimH') || {}).value) || 0;
+    if (wRaw <= 0 || hRaw <= 0) {
+      window.rmConfirm && window.rmConfirm('Please enter valid width and height values.');
+      return;
+    }
+    var wM, hM;
+    if (unit === 'mm') {
+      wM = wRaw / 1000;
+      hM = hRaw / 1000;
+    } else if (unit === 'in') {
+      wM = wRaw * 0.0254;
+      hM = hRaw * 0.0254;
+    } else {
+      wM = wRaw;
+      hM = hRaw;
+    }
+    if (!state.layout) state.layout = {};
+    state.layout.panel_width_meters = wM;
+    state.layout.panel_height_meters = hM;
+    recomputePanelSizeFromScale();
+    drawCanvas();
+    // Flash the apply button to confirm
+    var btn = document.querySelector('button[onclick="window._sdApplyPanelDimensions()"]');
+    if (btn) {
+      var orig = btn.innerHTML;
+      btn.innerHTML = '<i class="fas fa-check mr-1"></i>Applied!';
+      btn.classList.add('bg-emerald-600');
+      btn.classList.remove('bg-blue-600');
+      setTimeout(function() {
+        btn.innerHTML = orig;
+        btn.classList.remove('bg-emerald-600');
+        btn.classList.add('bg-blue-600');
+      }, 1500);
+    }
+  };
 
   function rectsOverlap(a, b) {
     return !(a.x + a.w <= b.x || b.x + b.w <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y);
@@ -1151,6 +1243,8 @@
         battery_config: state.battery && state.battery.sku ? state.battery : null,
         variants: state.variants,
         active_variant_index: state.activeVariantIndex,
+        panel_width_meters: state.layout ? state.layout.panel_width_meters : null,
+        panel_height_meters: state.layout ? state.layout.panel_height_meters : null,
       })
     })
       .then(function(r) { return r.json(); })

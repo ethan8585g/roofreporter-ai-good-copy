@@ -5802,6 +5802,96 @@ function getLandingPageHTML(latestPosts: any[] = []) {
     <!-- FAQ -->
     <section id="faq" class="py-24" style="background:#0A0A0A"><div class="max-w-3xl mx-auto px-4"><div class="text-center mb-12 scroll-animate"><div class="inline-flex items-center gap-2 bg-white/10 text-gray-300 rounded-full px-4 py-1.5 text-sm font-semibold mb-4"><i class="fas fa-question-circle"></i> FAQ</div><h2 class="text-3xl lg:text-4xl font-black text-white tracking-tight">Frequently Asked Questions</h2></div><div class="space-y-3"><div class="scroll-animate bg-[#111111] rounded-xl border border-white/10 overflow-hidden" style="transition-delay:0ms"><button onclick="toggleFAQ(this)" class="w-full text-left p-5 flex items-center justify-between hover:bg-white/5 transition-colors min-h-[56px]"><span class="font-semibold text-gray-300 text-sm pr-4">What data source do you use?</span><i class="fas fa-chevron-down text-gray-500 transition-transform duration-300 faq-icon flex-shrink-0"></i></button><div class="faq-answer hidden px-5 pb-5"><p class="text-sm text-gray-400 leading-relaxed">We use Google's Solar API, providing high-resolution satellite imagery with LiDAR-calibrated 3D building models. This is the same data Google uses for their solar panel recommendations &mdash; the most accurate publicly available roof geometry data.</p></div></div><div class="scroll-animate bg-[#111111] rounded-xl border border-white/10 overflow-hidden" style="transition-delay:50ms"><button onclick="toggleFAQ(this)" class="w-full text-left p-5 flex items-center justify-between hover:bg-white/5 transition-colors min-h-[56px]"><span class="font-semibold text-gray-300 text-sm pr-4">How accurate are the measurements?</span><i class="fas fa-chevron-down text-gray-500 transition-transform duration-300 faq-icon flex-shrink-0"></i></button><div class="faq-answer hidden px-5 pb-5"><p class="text-sm text-gray-400 leading-relaxed">For buildings with HIGH quality imagery (most urban Canadian addresses), accuracy is typically within 2-5% of manual measurements. We display confidence scores and imagery quality on every report.</p></div></div><div class="scroll-animate bg-[#111111] rounded-xl border border-white/10 overflow-hidden" style="transition-delay:100ms"><button onclick="toggleFAQ(this)" class="w-full text-left p-5 flex items-center justify-between hover:bg-white/5 transition-colors min-h-[56px]"><span class="font-semibold text-gray-300 text-sm pr-4">How fast do I get my report?</span><i class="fas fa-chevron-down text-gray-500 transition-transform duration-300 faq-icon flex-shrink-0"></i></button><div class="faq-answer hidden px-5 pb-5"><p class="text-sm text-gray-400 leading-relaxed">Most reports are generated in under 60 seconds. You receive an email with a download link and can also access all reports from your dashboard.</p></div></div><div class="scroll-animate bg-[#111111] rounded-xl border border-white/10 overflow-hidden" style="transition-delay:150ms"><button onclick="toggleFAQ(this)" class="w-full text-left p-5 flex items-center justify-between hover:bg-white/5 transition-colors min-h-[56px]"><span class="font-semibold text-gray-300 text-sm pr-4">What is the AI Roofer Secretary?</span><i class="fas fa-chevron-down text-gray-500 transition-transform duration-300 faq-icon flex-shrink-0"></i></button><div class="faq-answer hidden px-5 pb-5"><p class="text-sm text-gray-400 leading-relaxed">A 24/7 AI phone answering service for your roofing business. It answers calls in a natural human voice, books appointments, qualifies leads, and sends you detailed call summaries. Currently $149/month.</p></div></div><div class="scroll-animate bg-[#111111] rounded-xl border border-white/10 overflow-hidden" style="transition-delay:200ms"><button onclick="toggleFAQ(this)" class="w-full text-left p-5 flex items-center justify-between hover:bg-white/5 transition-colors min-h-[56px]"><span class="font-semibold text-gray-300 text-sm pr-4">Is my data secure?</span><i class="fas fa-chevron-down text-gray-500 transition-transform duration-300 faq-icon flex-shrink-0"></i></button><div class="faq-answer hidden px-5 pb-5"><p class="text-sm text-gray-400 leading-relaxed">Absolutely. Built on Cloudflare's edge network with 256-bit encryption, PCI DSS compliant payments, and Canadian PIPEDA privacy compliance.</p></div></div><div class="scroll-animate bg-[#111111] rounded-xl border border-white/10 overflow-hidden" style="transition-delay:250ms"><button onclick="toggleFAQ(this)" class="w-full text-left p-5 flex items-center justify-between hover:bg-white/5 transition-colors min-h-[56px]"><span class="font-semibold text-gray-300 text-sm pr-4">Can I cancel anytime?</span><i class="fas fa-chevron-down text-gray-500 transition-transform duration-300 faq-icon flex-shrink-0"></i></button><div class="faq-answer hidden px-5 pb-5"><p class="text-sm text-gray-400 leading-relaxed">Of course. Pay-per-report has zero commitments. Add-on services like AI Secretary are month-to-month with no contracts.</p></div></div></div><div class="text-center mt-8"><p class="text-sm text-gray-500">Still have questions? <a href="mailto:reports@reusecanada.ca" class="text-[#00FF88] hover:underline font-semibold">Contact us</a></p></div></div></section>
 
+    <!-- DEVELOPER API -->
+    <section id="developer-api" style="background:#0d0d0d" class="py-24 border-t border-white/5">
+      <div class="max-w-7xl mx-auto px-4">
+        <div class="text-center mb-16 scroll-animate">
+          <div class="inline-flex items-center gap-2 rounded-full px-5 py-2 text-sm font-semibold mb-6" style="background:#00FF8815;color:#00FF88"><i class="fas fa-code"></i> Developer Access</div>
+          <h2 class="text-4xl lg:text-5xl font-black text-white mb-4 tracking-tight">Build With Our Roof Measurement API</h2>
+          <p class="text-lg text-gray-400 max-w-2xl mx-auto">Get an API key, embed professional roof data into your platform, or run bulk reports via REST. White-label PDFs included.</p>
+        </div>
+        <div class="grid lg:grid-cols-3 gap-6 mb-14">
+          <div class="scroll-animate" style="transition-delay:0ms">
+            <div class="rounded-2xl border border-white/10 p-8 h-full hover:border-[#00FF88]/30 transition-all duration-300 hover:-translate-y-1" style="background:#111111">
+              <div class="w-14 h-14 rounded-2xl flex items-center justify-center mb-6" style="background:#00FF8815">
+                <i class="fas fa-plug text-xl" style="color:#00FF88"></i>
+              </div>
+              <h3 class="text-xl font-bold text-white mb-3">REST API Access</h3>
+              <p class="text-gray-400 text-sm leading-relaxed mb-4">Submit any address, receive structured JSON: areas, pitches, edge lengths, full material BOM. Webhooks available for async delivery.</p>
+              <ul class="space-y-2 text-sm text-gray-500">
+                <li class="flex items-center gap-2"><i class="fas fa-check text-xs" style="color:#00FF88"></i>JSON + PDF endpoints</li>
+                <li class="flex items-center gap-2"><i class="fas fa-check text-xs" style="color:#00FF88"></i>Webhook callbacks</li>
+                <li class="flex items-center gap-2"><i class="fas fa-check text-xs" style="color:#00FF88"></i>Bearer token auth</li>
+                <li class="flex items-center gap-2"><i class="fas fa-check text-xs" style="color:#00FF88"></i>Full coverage &mdash; US &amp; Canada</li>
+              </ul>
+            </div>
+          </div>
+          <div class="scroll-animate" style="transition-delay:100ms">
+            <div class="rounded-2xl border border-white/10 p-8 h-full hover:border-[#00FF88]/30 transition-all duration-300 hover:-translate-y-1" style="background:#111111">
+              <div class="w-14 h-14 rounded-2xl flex items-center justify-center mb-6" style="background:#00FF8815">
+                <i class="fas fa-cubes text-xl" style="color:#00FF88"></i>
+              </div>
+              <h3 class="text-xl font-bold text-white mb-3">Bulk &amp; White-Label</h3>
+              <p class="text-gray-400 text-sm leading-relaxed mb-4">Volume pricing from $5.95 USD/report. White-label PDF output with your logo, colors, and domain &mdash; invisible to your end customers.</p>
+              <ul class="space-y-2 text-sm text-gray-500">
+                <li class="flex items-center gap-2"><i class="fas fa-check text-xs" style="color:#00FF88"></i>From $5.95 USD/report</li>
+                <li class="flex items-center gap-2"><i class="fas fa-check text-xs" style="color:#00FF88"></i>Custom branding on PDF</li>
+                <li class="flex items-center gap-2"><i class="fas fa-check text-xs" style="color:#00FF88"></i>Credits never expire</li>
+                <li class="flex items-center gap-2"><i class="fas fa-check text-xs" style="color:#00FF88"></i>No monthly subscription</li>
+              </ul>
+            </div>
+          </div>
+          <div class="scroll-animate" style="transition-delay:200ms">
+            <div class="rounded-2xl border border-white/10 p-8 h-full hover:border-[#00FF88]/30 transition-all duration-300 hover:-translate-y-1" style="background:#111111">
+              <div class="w-14 h-14 rounded-2xl flex items-center justify-center mb-6" style="background:#00FF8815">
+                <i class="fas fa-bolt text-xl" style="color:#00FF88"></i>
+              </div>
+              <h3 class="text-xl font-bold text-white mb-3">Instant &lt;60s Delivery</h3>
+              <p class="text-gray-400 text-sm leading-relaxed mb-4">Powered by Google Solar API and LiDAR-calibrated 3D building models. No human queue. Fully automated AI processing on every request.</p>
+              <ul class="space-y-2 text-sm text-gray-500">
+                <li class="flex items-center gap-2"><i class="fas fa-check text-xs" style="color:#00FF88"></i>Sub-60s median response</li>
+                <li class="flex items-center gap-2"><i class="fas fa-check text-xs" style="color:#00FF88"></i>LiDAR + AI accuracy</li>
+                <li class="flex items-center gap-2"><i class="fas fa-check text-xs" style="color:#00FF88"></i>99%+ uptime SLA</li>
+                <li class="flex items-center gap-2"><i class="fas fa-check text-xs" style="color:#00FF88"></i>Scales to any volume</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        <div class="scroll-animate rounded-2xl border border-white/10 overflow-hidden mb-14" style="background:#0A0A0A">
+          <div class="flex items-center gap-2 px-5 py-3 border-b border-white/10" style="background:#111111">
+            <div class="w-3 h-3 rounded-full" style="background:#ff5f57"></div>
+            <div class="w-3 h-3 rounded-full" style="background:#febc2e"></div>
+            <div class="w-3 h-3 rounded-full" style="background:#28c840"></div>
+            <span class="text-gray-500 text-xs ml-3 font-mono">POST /api/v1/report</span>
+          </div>
+          <div class="p-6 overflow-x-auto">
+            <pre class="text-sm font-mono leading-relaxed"><code><span style="color:#6b7280">// Request</span>
+<span style="color:#00FF88">POST</span> <span style="color:#22d3ee">https://www.roofmanager.ca/api/v1/report</span>
+<span style="color:#a78bfa">Authorization:</span> Bearer <span style="color:#fbbf24">YOUR_API_KEY</span>
+<span style="color:#a78bfa">Content-Type:</span> application/json
+
+{
+  <span style="color:#22d3ee">"address"</span>: <span style="color:#86efac">"123 Main St, Calgary, AB T2P 1J9"</span>,
+  <span style="color:#22d3ee">"format"</span>: <span style="color:#86efac">"json"</span>
+}
+
+<span style="color:#6b7280">// Response (&lt;60s)</span>
+{
+  <span style="color:#22d3ee">"total_area_sqft"</span>: <span style="color:#fbbf24">2847</span>,
+  <span style="color:#22d3ee">"pitch"</span>: <span style="color:#fbbf24">6.2</span>,
+  <span style="color:#22d3ee">"edges"</span>: { <span style="color:#22d3ee">"ridge_ft"</span>: <span style="color:#fbbf24">48.3</span>, <span style="color:#22d3ee">"eave_ft"</span>: <span style="color:#fbbf24">112.7</span> },
+  <span style="color:#22d3ee">"bom"</span>: { <span style="color:#22d3ee">"shingles_squares"</span>: <span style="color:#fbbf24">31.6</span>, <span style="color:#22d3ee">"underlayment_rolls"</span>: <span style="color:#fbbf24">8</span> },
+  <span style="color:#22d3ee">"pdf_url"</span>: <span style="color:#86efac">"https://www.roofmanager.ca/reports/..."</span>
+}</code></pre>
+          </div>
+        </div>
+        <div class="text-center scroll-animate">
+          <a href="https://calendar.app.google/KNLFST4CNxViPPN3A" target="_blank" rel="noopener" onclick="rrTrack('cta_click',{location:'developer_api'})" class="inline-flex items-center gap-3 font-extrabold py-4 px-10 rounded-xl transition-all hover:scale-[1.02]" style="background:#00FF88;color:#0A0A0A;box-shadow:0 0 40px #00FF8830"><i class="fas fa-key"></i> Request API Access <i class="fas fa-arrow-right"></i></a>
+          <p class="text-gray-500 text-sm mt-4">Developer accounts available now &mdash; <a href="/blog/roof-measurement-report-api-developer-access-2026" class="hover:underline" style="color:#00FF88">read the full API guide</a></p>
+        </div>
+      </div>
+    </section>
+
     <!-- FINAL CTA -->
     <section class="relative py-28 overflow-hidden">
       <div class="absolute inset-0"><img src="https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=1920&q=80&auto=format&fit=crop" alt="Aerial satellite roof view" class="w-full h-full object-cover" loading="lazy" /><div class="absolute inset-0 bg-gradient-to-r from-slate-900/95 via-slate-900/90 to-cyan-900/80"></div></div>
@@ -9704,6 +9794,7 @@ function getBlogListingHTML(posts: any[] = []) {
         <a href="/" class="text-gray-400 hover:text-white text-sm font-medium">Home</a>
         <a href="/#pricing" class="text-gray-400 hover:text-white text-sm font-medium">Pricing</a>
         <a href="/blog" class="text-[#00FF88] font-semibold text-sm border-b-2 border-[#00FF88] pb-0.5">Blog</a>
+        <a href="/tools" class="text-gray-400 hover:text-white text-sm font-medium">Free Tools</a>
         <a href="/lander" class="text-gray-400 hover:text-white text-sm font-medium">Get Started</a>
         <a href="/customer/login" class="bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold py-2 px-5 rounded-lg text-sm"><i class="fas fa-sign-in-alt mr-1"></i>Login</a>
       </div>
@@ -9741,6 +9832,26 @@ function getBlogListingHTML(posts: any[] = []) {
         <input type="text" id="blog-search" placeholder="Search articles..." class="w-full pl-10 pr-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-sm text-white placeholder-gray-500 focus:ring-2 focus:ring-[#00FF88]/40 focus:border-[#00FF88]/40 outline-none">
       </div>
       <div class="flex items-center gap-2 flex-wrap" id="blog-category-filters"></div>
+    </div>
+  </div>
+
+  <!-- Free Tools Strip — internal link signal + reader utility -->
+  <div class="max-w-6xl mx-auto px-4 mb-10">
+    <div style="background:#0d1117;border:1px solid #1e293b;border-radius:14px;padding:20px 24px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="font-size:20px;">🛠️</span>
+          <div>
+            <div style="font-size:14px;font-weight:700;color:#f1f5f9;">Free Roofing Tools</div>
+            <div style="font-size:12px;color:#64748b;">No account required — embed on your own site</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+          <a href="/tools/pitch-calculator" style="background:#1e293b;color:#f59e0b;padding:8px 16px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:600;border:1px solid #334155;">📐 Pitch Calculator</a>
+          <a href="/tools/material-estimator" style="background:#1e293b;color:#38bdf8;padding:8px 16px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:600;border:1px solid #334155;">📦 Material Estimator</a>
+          <a href="/tools" style="background:#f59e0b;color:#0f172a;padding:8px 16px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:700;">All Tools →</a>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -11201,7 +11312,7 @@ function getSolarDesignPageHTML() {
       window.location.href = '/customer/login';
     }
   </script>
-  <script src="/static/solar-design.js?v=20260416a"></script>
+  <script src="/static/solar-design.js?v=20260416b"></script>
   ${getRoverAssistant()}
 </body>
 </html>`

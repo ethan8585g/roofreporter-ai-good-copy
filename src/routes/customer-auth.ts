@@ -1280,6 +1280,8 @@ customerAuthRoutes.patch('/reports/:id/panel-layout', async (c) => {
   else if (body.battery_config === null) layout.battery_config = null
   if (Array.isArray(body.variants)) layout.variants = body.variants
   if (typeof body.active_variant_index === 'number') layout.active_variant_index = body.active_variant_index
+  if (typeof body.panel_width_meters === 'number' && body.panel_width_meters > 0) layout.panel_width_meters = body.panel_width_meters
+  if (typeof body.panel_height_meters === 'number' && body.panel_height_meters > 0) layout.panel_height_meters = body.panel_height_meters
 
   await c.env.DB.prepare(
     `UPDATE reports SET solar_panel_layout = ?, updated_at = datetime('now') WHERE order_id = ?`
