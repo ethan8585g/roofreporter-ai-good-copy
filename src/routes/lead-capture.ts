@@ -86,6 +86,51 @@ leadCaptureRoutes.post('/asset-report/lead', async (c) => {
   return c.json({ success: true })
 })
 
+// Contact Us lead — general sales/support inquiry form
+leadCaptureRoutes.post('/contact/lead', async (c) => {
+  let body: any = {}
+  try { body = await c.req.json() } catch { return c.json({ error: 'Invalid JSON body' }, 400) }
+
+  // Required fields
+  const name = body.name ? String(body.name).trim() : ''
+  const email = body.email ? String(body.email).trim() : ''
+  const message = body.message ? String(body.message).trim() : ''
+
+  if (!name || name.length < 2 || name.length > 80) return c.json({ error: 'Name must be 2–80 characters' }, 400)
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return c.json({ error: 'Valid email required' }, 400)
+  if (!message || message.length < 10 || message.length > 2000) return c.json({ error: 'Message must be 10–2000 characters' }, 400)
+
+  // Optional fields
+  const phone = body.phone ? String(body.phone).trim().slice(0, 30) : null
+  const company = body.company ? String(body.company).trim().slice(0, 200) : null
+  const validEmployees = ['1-5', '6-25', '26-100', '100+']
+  const employees = validEmployees.includes(body.employees) ? body.employees : null
+  const validInterests = ['measurements', 'crm', 'solar', 'pricing', 'api', 'other']
+  const interest = validInterests.includes(body.interest) ? body.interest : null
+  const utm_source = body.utm_source ? String(body.utm_source).slice(0, 100) : null
+  const utm_medium = body.utm_medium ? String(body.utm_medium).slice(0, 100) : null
+  const utm_campaign = body.utm_campaign ? String(body.utm_campaign).slice(0, 100) : null
+  const utm_content = body.utm_content ? String(body.utm_content).slice(0, 100) : null
+
+  try {
+    await c.env.DB.prepare(`
+      INSERT INTO contact_leads (name, email, phone, company, employees, interest, message, utm_source, utm_medium, utm_campaign, utm_content)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(name, email.toLowerCase(), phone, company, employees, interest, message, utm_source, utm_medium, utm_campaign, utm_content).run()
+  } catch (e: any) {
+    console.error('[contact/lead insert]', e?.message)
+    return c.json({ error: 'Failed to save lead' }, 500)
+  }
+
+  notifySalesNewLead(c.env, {
+    source: 'contact_form',
+    name, email, phone, company,
+    extra: { employees, interest, message, utm_source, utm_medium, utm_campaign }
+  }).catch(() => {})
+
+  return c.json({ success: true })
+})
+
 // Condo / Reserve Fund Cheat Sheet lead
 leadCaptureRoutes.post('/condo-lead', async (c) => {
   const body = await c.req.json().catch(() => ({}))

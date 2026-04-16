@@ -1730,6 +1730,10 @@ app.get('/lander', (c) => {
   return c.html(getLanderFunnelHTML())
 })
 
+// Contact page — general sales/support inquiry
+app.get('/contact', (c) => c.html(getContactPageHTML()))
+app.get('/contact/thank-you', (c) => c.html(getContactThankYouHTML()))
+
 // Demo Landing Page — For Facebook group posts & social marketing
 app.get('/demo', (c) => {
   return c.html(getDemoLandingPageHTML())
@@ -6067,15 +6071,15 @@ function getLandingPageHTML(latestPosts: any[] = []) {
             <li><a href="/how-it-works" class="hover:text-[#00FF88] transition-colors">How It Works</a></li>
             <li><a href="/faq" class="hover:text-[#00FF88] transition-colors">FAQ</a></li>
             <li><a href="/lander" class="hover:text-[#00FF88] transition-colors">Get Started Guide</a></li>
-            <li><a href="mailto:sales@roofmanager.ca" class="hover:text-[#00FF88] transition-colors">Contact</a></li>
+            <li><a href="/contact" class="hover:text-[#00FF88] transition-colors">Contact Us</a></li>
             <li><a href="/privacy" class="hover:text-[#00FF88] transition-colors">Privacy Policy</a></li>
             <li><a href="/terms" class="hover:text-[#00FF88] transition-colors">Terms of Service</a></li>
           </ul>
         </div>
         <div>
           <h4 class="text-white font-semibold mb-4 text-sm uppercase tracking-wider">Get Started</h4>
-          <p class="text-sm text-gray-500 mb-4">Start with 3 free reports. No credit card required.</p>
-          <a href="/customer/login" class="inline-block bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold py-2.5 px-6 rounded-xl text-sm transition-all shadow-lg shadow-[#00FF88]/10">
+          <p class="text-sm text-gray-500 mb-4">Start with 4 free reports. No credit card required.</p>
+          <a href="/register" class="inline-block bg-[#00FF88] hover:bg-[#00e67a] text-[#0A0A0A] font-bold py-2.5 px-6 rounded-xl text-sm transition-all shadow-lg shadow-[#00FF88]/10">
             Sign Up Free
           </a>
         </div>
@@ -6242,6 +6246,289 @@ function getLandingPageHTML(latestPosts: any[] = []) {
       };
     })();
   </script>
+</body>
+</html>`
+}
+
+// ============================================================
+// CONTACT PAGE
+// ============================================================
+function getContactPageHTML() {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags()}
+  <title>Contact Us | Roof Manager</title>
+  <meta name="description" content="Talk to a roofing software specialist at Roof Manager. Real humans, usually reply within 2 business hours.">
+  <link rel="canonical" href="https://www.roofmanager.ca/contact">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    * { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    html { scroll-behavior: smooth; }
+    .input-field {
+      width: 100%; padding: 11px 14px; background: #0A0A0A; color: #fff;
+      border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; font-size: 14px;
+      box-sizing: border-box; outline: none; transition: border-color 0.2s;
+    }
+    .input-field:focus { border-color: rgba(0,255,136,0.5); }
+    .label-text { display: block; font-size: 12px; font-weight: 600; color: #9ca3af; margin-bottom: 6px; }
+  </style>
+</head>
+<body style="background:#0A0A0A;color:#fff;margin:0">
+
+  <!-- Minimal nav reusing landing page styles -->
+  <nav style="background:#0A0A0A;border-bottom:1px solid rgba(255,255,255,0.06);position:sticky;top:0;z-index:50">
+    <div style="max-width:1200px;margin:0 auto;padding:0 24px;height:64px;display:flex;align-items:center;justify-content:space-between">
+      <a href="/" style="display:flex;align-items:center;gap:10px;text-decoration:none">
+        <img src="/static/logo.png" alt="Roof Manager" style="width:36px;height:36px;border-radius:10px;object-fit:cover">
+        <span style="color:#fff;font-weight:800;font-size:17px">Roof Manager</span>
+      </a>
+      <div style="display:flex;align-items:center;gap:20px">
+        <a href="/pricing" style="color:#9ca3af;font-size:14px;text-decoration:none;font-weight:500">Pricing</a>
+        <a href="/demo" style="color:#9ca3af;font-size:14px;text-decoration:none;font-weight:500">Book Demo</a>
+        <a href="/register" style="background:#00FF88;color:#0A0A0A;font-weight:800;padding:9px 20px;border-radius:10px;font-size:14px;text-decoration:none">Get Started</a>
+      </div>
+    </div>
+  </nav>
+
+  <main>
+    <!-- Hero band -->
+    <section style="background:linear-gradient(180deg,#0d1117 0%,#0A0A0A 100%);padding:64px 24px 40px;text-align:center">
+      <div style="display:inline-flex;align-items:center;gap:8px;background:rgba(0,255,136,0.1);border:1px solid rgba(0,255,136,0.2);border-radius:999px;padding:6px 16px;font-size:12px;font-weight:700;color:#00FF88;margin-bottom:20px;letter-spacing:0.05em;text-transform:uppercase">
+        <i class="fas fa-headset"></i> Sales &amp; Support
+      </div>
+      <h1 style="font-size:clamp(28px,5vw,44px);font-weight:900;color:#fff;margin:0 0 14px;line-height:1.1">Talk to a roofing software specialist</h1>
+      <p style="color:#9ca3af;font-size:17px;max-width:520px;margin:0 auto;line-height:1.6">Real humans, usually reply within 2 business hours. We'll match you to the right plan — no pushy sales.</p>
+    </section>
+
+    <!-- Two-column form + sidebar -->
+    <section style="max-width:1100px;margin:0 auto;padding:48px 24px 80px">
+      <div style="display:grid;grid-template-columns:1fr;gap:40px" id="contact-grid">
+        <style>@media(min-width:760px){#contact-grid{grid-template-columns:1.4fr 1fr}}</style>
+
+        <!-- LEFT: Form -->
+        <div style="background:#111;border:1px solid rgba(255,255,255,0.08);border-radius:20px;padding:36px">
+          <h2 style="font-size:20px;font-weight:800;color:#fff;margin:0 0 24px">Send us a message</h2>
+          <form id="contact-form" onsubmit="return submitContactForm(event)">
+            <!-- Hidden UTM fields -->
+            <input type="hidden" id="cf-utm-source" name="utm_source">
+            <input type="hidden" id="cf-utm-medium" name="utm_medium">
+            <input type="hidden" id="cf-utm-campaign" name="utm_campaign">
+            <input type="hidden" id="cf-utm-content" name="utm_content">
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+              <label>
+                <span class="label-text">Full Name *</span>
+                <input required name="name" type="text" placeholder="Jane Smith" class="input-field" minlength="2" maxlength="80" autocomplete="name" aria-label="Full Name">
+              </label>
+              <label>
+                <span class="label-text">Work Email *</span>
+                <input required name="email" type="email" placeholder="jane@yourcompany.com" class="input-field" autocomplete="email" aria-label="Work Email">
+              </label>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+              <label>
+                <span class="label-text">Phone (optional)</span>
+                <input name="phone" type="tel" placeholder="(403) 555-0100" class="input-field" autocomplete="tel" aria-label="Phone number">
+              </label>
+              <label>
+                <span class="label-text">Company (optional)</span>
+                <input name="company" type="text" placeholder="ABC Roofing Inc." class="input-field" autocomplete="organization" aria-label="Company name">
+              </label>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+              <label>
+                <span class="label-text">Company Size</span>
+                <select name="employees" class="input-field" aria-label="Company size">
+                  <option value="">Select size…</option>
+                  <option value="1-5">1–5 employees</option>
+                  <option value="6-25">6–25 employees</option>
+                  <option value="26-100">26–100 employees</option>
+                  <option value="100+">100+ employees</option>
+                </select>
+              </label>
+              <label>
+                <span class="label-text">What are you interested in?</span>
+                <select name="interest" class="input-field" aria-label="Area of interest">
+                  <option value="">Select topic…</option>
+                  <option value="measurements">Measurement Reports</option>
+                  <option value="crm">CRM &amp; Invoicing</option>
+                  <option value="solar">Solar Design</option>
+                  <option value="pricing">Pricing &amp; Plans</option>
+                  <option value="api">API Access</option>
+                  <option value="other">Other</option>
+                </select>
+              </label>
+            </div>
+            <label style="display:block;margin-bottom:20px">
+              <span class="label-text">Message *</span>
+              <textarea required name="message" rows="5" placeholder="Tell us about your business, your team size, and what you're hoping Roof Manager can help with…" class="input-field" style="resize:vertical;min-height:110px" minlength="10" maxlength="2000" aria-label="Message"></textarea>
+            </label>
+            <div id="contact-form-error" style="display:none;background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);color:#fca5a5;border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:14px"></div>
+            <button type="submit" id="contact-submit-btn" style="width:100%;padding:14px;background:#00FF88;color:#0A0A0A;border:none;border-radius:12px;font-size:16px;font-weight:800;cursor:pointer;transition:opacity 0.2s">
+              <i class="fas fa-paper-plane" style="margin-right:8px"></i>Send Message
+            </button>
+          </form>
+          <div id="contact-form-success" style="display:none;text-align:center;padding:40px 20px">
+            <i class="fas fa-check-circle" style="color:#00FF88;font-size:48px;margin-bottom:16px"></i>
+            <h3 style="color:#fff;font-size:22px;font-weight:800;margin:0 0 8px">Got it — we'll be in touch!</h3>
+            <p style="color:#9ca3af;font-size:15px;margin:0">Usually within 2 business hours. Check your inbox.</p>
+          </div>
+        </div>
+
+        <!-- RIGHT: Sidebar -->
+        <aside>
+          <!-- Contact details -->
+          <div style="background:#111;border:1px solid rgba(255,255,255,0.08);border-radius:20px;padding:28px;margin-bottom:20px">
+            <h3 style="font-size:16px;font-weight:700;color:#fff;margin:0 0 18px">Other ways to reach us</h3>
+            <div style="display:flex;flex-direction:column;gap:14px">
+              <!-- TODO(Ethan): confirm sales phone number and replace placeholder below -->
+              <a href="tel:+1XXXXXXXXXX" style="display:flex;align-items:center;gap:12px;color:#d1d5db;text-decoration:none;font-size:14px;font-weight:500" aria-label="Call sales">
+                <span style="width:36px;height:36px;border-radius:10px;background:rgba(0,255,136,0.1);display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="fas fa-phone" style="color:#00FF88;font-size:15px"></i></span>
+                <span>(XXX) XXX-XXXX<span style="display:block;font-size:11px;color:#6b7280;font-weight:400">Mon–Fri, 7am–6pm MT</span></span>
+              </a>
+              <a href="mailto:sales@roofmanager.ca" style="display:flex;align-items:center;gap:12px;color:#d1d5db;text-decoration:none;font-size:14px;font-weight:500">
+                <span style="width:36px;height:36px;border-radius:10px;background:rgba(0,255,136,0.1);display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="fas fa-envelope" style="color:#00FF88;font-size:15px"></i></span>
+                <span>sales@roofmanager.ca<span style="display:block;font-size:11px;color:#6b7280;font-weight:400">Average first reply: 1h 42m</span></span>
+              </a>
+              <a href="/demo" style="display:flex;align-items:center;gap:12px;color:#d1d5db;text-decoration:none;font-size:14px;font-weight:500">
+                <span style="width:36px;height:36px;border-radius:10px;background:rgba(0,255,136,0.1);display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="fas fa-calendar-check" style="color:#00FF88;font-size:15px"></i></span>
+                <span>Book a 20-min demo<span style="display:block;font-size:11px;color:#6b7280;font-weight:400">Walk through on a real address you pick</span></span>
+              </a>
+            </div>
+          </div>
+
+          <!-- Mini testimonials -->
+          <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:20px">
+            ${[
+              { name: 'Mike D.', role: 'Roofing Contractor', quote: 'Saves me 2 hours per estimate. I quote jobs from my truck now.' },
+              { name: 'Sarah K.', role: 'Estimator', quote: 'The BOM alone is worth $8. Supplier orders are dead accurate.' },
+              { name: 'James R.', role: 'Owner, Prairie Roofing', quote: '15–20 estimates a week at $8 each. Way cheaper than drones.' },
+            ].map(t => `
+            <div style="background:#111;border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:16px">
+              <div style="display:flex;gap:2px;margin-bottom:8px">${'<i class="fas fa-star" style="color:#00FF88;font-size:11px"></i>'.repeat(5)}</div>
+              <p style="color:#d1d5db;font-size:13px;line-height:1.5;margin:0 0 10px">"${t.quote}"</p>
+              <div style="display:flex;align-items:center;gap:8px">
+                <div style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#00FF88,#22d3ee);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#0A0A0A;flex-shrink:0">${t.name[0]}</div>
+                <div><div style="color:#fff;font-size:12px;font-weight:600">${t.name}</div><div style="color:#6b7280;font-size:11px">${t.role}</div></div>
+              </div>
+            </div>`).join('')}
+          </div>
+
+          <!-- Trust strip -->
+          <div style="background:#111;border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:#9ca3af"><i class="fas fa-star" style="color:#00FF88"></i> 4.9/5 from 200+ reviews</div>
+            <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:#9ca3af"><i class="fas fa-users" style="color:#00FF88"></i> 5,000+ contractors US &amp; CA</div>
+            <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:#9ca3af"><i class="fas fa-credit-card" style="color:#00FF88"></i> No credit card to start</div>
+          </div>
+        </aside>
+      </div>
+    </section>
+  </main>
+
+  <footer style="background:#0A0A0A;border-top:1px solid rgba(255,255,255,0.06);padding:28px 24px;text-align:center">
+    <p style="color:#6b7280;font-size:13px;margin:0">&copy; 2026 Roof Manager &middot; <a href="/privacy" style="color:#6b7280">Privacy</a> &middot; <a href="/terms" style="color:#6b7280">Terms</a> &middot; Alberta, Canada</p>
+  </footer>
+
+  <script>
+    // Capture UTM params from URL into hidden fields
+    (function(){
+      try {
+        var params = new URLSearchParams(location.search);
+        ['utm_source','utm_medium','utm_campaign','utm_content'].forEach(function(k){
+          var el = document.getElementById('cf-' + k.replace('_','-'));
+          if (el && params.get(k)) el.value = params.get(k);
+        });
+      } catch(e){}
+    })();
+
+    function submitContactForm(e) {
+      e.preventDefault();
+      var f = e.target;
+      var btn = document.getElementById('contact-submit-btn');
+      var errEl = document.getElementById('contact-form-error');
+      errEl.style.display = 'none';
+      btn.disabled = true; btn.textContent = 'Sending…';
+
+      var payload = {
+        name: f.name.value.trim(),
+        email: f.email.value.trim(),
+        phone: f.phone.value.trim() || undefined,
+        company: f.company.value.trim() || undefined,
+        employees: f.employees.value || undefined,
+        interest: f.interest.value || undefined,
+        message: f.message.value.trim(),
+        utm_source: document.getElementById('cf-utm-source').value || undefined,
+        utm_medium: document.getElementById('cf-utm-medium').value || undefined,
+        utm_campaign: document.getElementById('cf-utm-campaign').value || undefined,
+        utm_content: document.getElementById('cf-utm-content').value || undefined,
+      };
+
+      fetch('/api/contact/lead', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+      .then(function(r){ return r.json().then(function(d){ return {ok:r.ok,d:d}; }); })
+      .then(function(res){
+        if (!res.ok) {
+          errEl.textContent = res.d.error || 'Something went wrong. Please try again.';
+          errEl.style.display = 'block';
+          btn.disabled = false; btn.innerHTML = '<i class="fas fa-paper-plane" style="margin-right:8px"></i>Send Message';
+          return;
+        }
+        try { rrTrack('lead_capture', { source: 'contact_form', interest: payload.interest }); } catch(_){}
+        try { gtag('event', 'generate_lead', { form: 'contact', value: 1 }); } catch(_){}
+        window.location.href = '/contact/thank-you?ref=contact';
+      })
+      .catch(function(){
+        errEl.textContent = 'Network error — please try again.';
+        errEl.style.display = 'block';
+        btn.disabled = false; btn.innerHTML = '<i class="fas fa-paper-plane" style="margin-right:8px"></i>Send Message';
+      });
+      return false;
+    }
+  </script>
+</body>
+</html>`
+}
+
+function getContactThankYouHTML() {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  ${getHeadTags()}
+  <title>Message Received | Roof Manager</title>
+  <meta name="robots" content="noindex">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>* { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }</style>
+  <script>
+    // Fire conversion on load
+    window.addEventListener('load', function(){
+      try { gtag('event', 'conversion', { send_to: 'AW-18080319225/contact_form_submitted' }); } catch(_){}
+      try { rrTrack('lead_capture', { source: 'contact_form_thank_you' }); } catch(_){}
+    });
+  </script>
+</head>
+<body style="background:#0A0A0A;color:#fff;margin:0;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 24px;font-family:Inter,sans-serif">
+  <div style="max-width:480px;text-align:center">
+    <div style="width:72px;height:72px;background:rgba(0,255,136,0.12);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 24px">
+      <i class="fas fa-check-circle" style="color:#00FF88;font-size:36px"></i>
+    </div>
+    <h1 style="font-size:28px;font-weight:900;color:#fff;margin:0 0 12px">Got it. We'll be in touch.</h1>
+    <p style="color:#9ca3af;font-size:16px;line-height:1.6;margin:0 0 36px">Usually within 2 business hours. In the meantime, you can start free with 4 roof measurement reports — no credit card.</p>
+    <div style="display:flex;flex-direction:column;gap:12px;align-items:center">
+      <a href="/register" style="display:inline-flex;align-items:center;gap:10px;background:#00FF88;color:#0A0A0A;font-weight:800;padding:14px 28px;border-radius:14px;text-decoration:none;font-size:16px">
+        <i class="fas fa-gift"></i> Start Free — 4 Reports Waiting
+      </a>
+      <a href="/pricing" style="color:#9ca3af;font-size:14px;text-decoration:none;font-weight:500">View pricing &rarr;</a>
+      <a href="/" style="color:#6b7280;font-size:13px;text-decoration:none">← Back to homepage</a>
+    </div>
+  </div>
 </body>
 </html>`
 }
