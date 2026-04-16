@@ -229,6 +229,7 @@ squareRoutes.get('/billing', async (c) => {
       subscription_end: customer.subscription_end,
       square_customer_id: customer.square_customer_id || null,
       is_dev: isDev || undefined,
+      is_team_member: customer.is_team_member || false,
     },
     payments: payments.results
   })
@@ -320,9 +321,16 @@ squareRoutes.post('/checkout/report', async (c) => {
     if (!customer) return c.json({ error: 'Not authenticated' }, 401)
 
     // Require active subscription after free trial is exhausted
+    // Team members share the owner's credits — they never see the subscribe prompt
     const isDev = isDevAccount(customer.email || '', c.env)
     const freeTrialRemaining = isDev ? 999999 : Math.max(0, (customer.free_trial_total || 0) - (customer.free_trial_used || 0))
     if (!isDev && freeTrialRemaining <= 0 && customer.subscription_status !== 'active') {
+      if (customer.is_team_member) {
+        return c.json({
+          error: 'No report credits available. Ask your team admin to purchase credits or subscribe.',
+          no_credits: true
+        }, 402)
+      }
       return c.json({
         error: 'Your 3 free trial reports have been used. Subscribe to continue generating reports.',
         subscription_required: true
@@ -492,7 +500,16 @@ squareRoutes.post('/use-credit', async (c) => {
     const totalRemaining = freeTrialRemaining + paidRemaining
 
     // After free trial is exhausted, require active subscription to continue
+    // Team members share the owner's credits — they never see the subscribe prompt
     if (!isDev && freeTrialRemaining <= 0 && customer.subscription_status !== 'active') {
+      if (customer.is_team_member) {
+        return c.json({
+          error: 'No report credits available. Ask your team admin to purchase credits or subscribe.',
+          no_credits: true,
+          free_trial_remaining: 0,
+          paid_credits_remaining: paidRemaining
+        }, 402)
+      }
       return c.json({
         error: 'Your 3 free trial reports have been used. Subscribe to continue generating reports.',
         subscription_required: true,
@@ -590,7 +607,7 @@ squareRoutes.post('/use-credit', async (c) => {
       attachedCrmCustomerId
     ).run()
 
-    // Notify sales of new report request (fire-and-forget)
+    // Notify sales@roofmanager.ca of new report request (fire-and-forget)
     notifyNewReportRequest(c.env, {
       order_number: orderNumber, property_address, requester_name: customer.name,
       requester_email: customer.email, service_tier: tier, price, is_trial: isTrial
@@ -849,7 +866,7 @@ squareRoutes.post('/webhook', async (c) => {
 
           const webhookOrderId = orderResult.meta.last_row_id as number
 
-          // Notify sales of new report request (fire-and-forget)
+          // Notify sales@roofmanager.ca of new report request (fire-and-forget)
           notifyNewReportRequest(c.env, {
             order_number: orderNumber, property_address: address,
             requester_name: custData?.name || '', requester_email: custData?.email || '',
@@ -1121,7 +1138,7 @@ squareRoutes.get('/verify-payment', async (c) => {
 
           const newOrderId = orderResult.meta.last_row_id as number
 
-          // Notify sales of new report request (fire-and-forget)
+          // Notify sales@roofmanager.ca of new report request (fire-and-forget)
           notifyNewReportRequest(c.env, {
             order_number: orderNumber, property_address: address,
             requester_name: custData?.name || '', requester_email: custData?.email || '',

@@ -338,7 +338,7 @@ function renderDashboard() {
         (paidCredits > 0
           ? '<div class="flex items-center justify-between mb-2"><span class="text-xs" style="color:var(--text-muted)">Report credits</span><span class="text-xs font-bold text-blue-400">' + paidCredits + '</span></div>'
           : '') +
-        (trialsExhausted && c.subscription_status !== 'active'
+        (!custState.isTeamMember && trialsExhausted && c.subscription_status !== 'active'
           ? '<button onclick="subscribeToMembership()" class="block w-full text-center py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer border-0"><i class="fas fa-crown mr-1"></i>Subscribe — from $49.99/mo</button>'
           : '<a href="/pricing" class="block w-full text-center py-2 bg-emerald-600 hover:bg-brand-700 text-white text-xs font-semibold rounded-lg transition-colors">Buy Credits</a>') +
         '<a href="/customer/profile" class="block w-full text-center py-1.5 mt-1.5 text-xs transition-colors" style="color:var(--text-muted)">Account Settings</a>' +
@@ -384,8 +384,8 @@ function renderDashboard() {
         '</div>' +
       '</div>' +
 
-      // Trial exhausted banner — require subscription
-      (trialsExhausted && c.subscription_status !== 'active' ?
+      // Trial exhausted banner — require subscription (never shown to team members)
+      (!custState.isTeamMember && trialsExhausted && c.subscription_status !== 'active' ?
         '<div class="bg-gradient-to-r from-brand-800 to-brand-900 rounded-2xl p-5 mb-5 shadow-xl border border-brand-700">' +
           '<div class="flex flex-col sm:flex-row items-center gap-4">' +
             '<div class="w-12 h-12 bg-blue-500/15 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0"><i class="fas fa-crown text-white text-xl"></i></div>' +

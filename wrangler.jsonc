@@ -16,11 +16,6 @@
   "ai": {
     "binding": "AI"
   },
-  // AI Agent CRON — processes pending auto-trace orders every 10 minutes.
-  // Disabled by default; enable via PUT /api/ai-autopilot/config or POST /api/ai-autopilot/toggle.
-  "triggers": {
-    "crons": ["*/10 * * * *"]
-  },
   // R2 bucket for Storm Scout daily snapshots (Phase 2.5).
   // TODO: after creating the bucket in the Cloudflare dashboard
   // (https://dash.cloudflare.com → R2 → Create bucket → "storm-scout-snapshots"),

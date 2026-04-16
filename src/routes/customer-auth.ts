@@ -862,14 +862,21 @@ customerAuthRoutes.get('/me', async (c) => {
   let creditSource = session
   let ownerName = ''
   let ownerCompany = ''
+  let ownerSubscriptionStatus = session.subscription_status || 'none'
+  let ownerSubscriptionPlan = session.subscription_plan || 'free'
+  let ownerSubscriptionEnd = session.subscription_end || null
   if (teamInfo.isTeamMember) {
     const owner = await c.env.DB.prepare(`
-      SELECT report_credits, credits_used, free_trial_total, free_trial_used, name, company_name FROM customers WHERE id = ?
+      SELECT report_credits, credits_used, free_trial_total, free_trial_used, name, company_name,
+             subscription_status, subscription_plan, subscription_end FROM customers WHERE id = ?
     `).bind(teamInfo.ownerId).first<any>()
     if (owner) {
       creditSource = owner
       ownerName = owner.name || ''
       ownerCompany = owner.company_name || ''
+      ownerSubscriptionStatus = owner.subscription_status || 'none'
+      ownerSubscriptionPlan = owner.subscription_plan || 'free'
+      ownerSubscriptionEnd = owner.subscription_end || null
     }
   }
 
@@ -917,9 +924,10 @@ customerAuthRoutes.get('/me', async (c) => {
       solar_panel_wattage_w: session.solar_panel_wattage_w || 400,
       onboarding_completed: session.onboarding_completed || 0,
       onboarding_step: session.onboarding_step || 0,
-      subscription_status: isDev ? 'active' : (session.subscription_status || 'none'),
-      subscription_plan: isDev ? 'dev_unlimited' : (session.subscription_plan || 'free'),
-      subscription_end: session.subscription_end || null
+      // For team members, expose the owner's subscription so paywall UI reflects the account that pays
+      subscription_status: isDev ? 'active' : ownerSubscriptionStatus,
+      subscription_plan: isDev ? 'dev_unlimited' : ownerSubscriptionPlan,
+      subscription_end: ownerSubscriptionEnd
     }
   })
 })

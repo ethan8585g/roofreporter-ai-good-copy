@@ -68,11 +68,13 @@ export async function evaluateTeamGating(db: D1Database, ownerId: number) {
   const nextTier: Record<string, string> = { starter: 'professional', professional: 'enterprise' }
 
   const owner = await db.prepare(
-    'SELECT subscription_tier, subscription_status, tier_features FROM customers WHERE id = ?'
+    'SELECT subscription_tier, subscription_status, tier_features, free_trial_total, free_trial_used FROM customers WHERE id = ?'
   ).bind(ownerId).first<any>()
 
   const ownerTier = owner?.subscription_tier || 'starter'
-  const isSubscribed = owner?.subscription_status === 'active'
+  const freeTrialsRemaining = Math.max(0, (owner?.free_trial_total || 0) - (owner?.free_trial_used || 0))
+  // Allow team invites during free trial period — paywall only applies after all 3 free reports are used
+  const isSubscribed = owner?.subscription_status === 'active' || freeTrialsRemaining > 0
 
   let teamLimit = tierLimits[ownerTier] || 5
   try { const tf = JSON.parse(owner?.tier_features || '{}'); if (tf.team_limit) teamLimit = tf.team_limit } catch {}

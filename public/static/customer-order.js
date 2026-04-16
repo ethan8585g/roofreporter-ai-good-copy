@@ -853,6 +853,10 @@ function renderReviewStep(root, progressBar) {
               <button onclick="useCredit()" id="creditBtn" class="flex-1 py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl transition-all shadow-lg text-base">
                 <i class="fas fa-coins mr-2"></i>Generate Report
               </button>
+            ` : b.is_team_member ? `
+              <div class="flex-1 py-3 px-4 bg-gray-800 border border-white/10 rounded-xl text-center text-sm text-gray-400">
+                <i class="fas fa-coins mr-2 text-gray-500"></i>No report credits available — contact your team admin to add credits
+              </div>
             ` : `
               <button onclick="showSubscriptionRequiredOverlay()" class="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition-all shadow-lg text-base">
                 <i class="fas fa-crown mr-2"></i>Subscribe to Generate Reports — $49/mo
@@ -1889,8 +1893,12 @@ async function useCredit() {
       // Redirect to dashboard IMMEDIATELY — polling will show the report when ready.
       showOrderSuccessOverlay(data.order);
     } else if (data.subscription_required) {
-      // Free trials exhausted — must subscribe
+      // Free trials exhausted — must subscribe (only for account owners, not team members)
       showSubscriptionRequiredOverlay();
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-coins mr-2"></i>Use Credit'; }
+    } else if (data.no_credits) {
+      // Team member with no credits — ask admin to add credits
+      showMsg('error', '<i class="fas fa-exclamation-triangle mr-1"></i>' + (data.error || 'No credits available.'));
       if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-coins mr-2"></i>Use Credit'; }
     } else {
       showMsg('error', '<i class="fas fa-exclamation-triangle mr-1"></i>' + (data.error || 'Failed to use credit'));
